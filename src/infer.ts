@@ -126,7 +126,9 @@ const instantiate = (sc: Scheme, f: Fresh): Type => {
 
 // ---- inference -------------------------------------------------------------
 
-type Ctx = { env: Env; subst: Subst; fresh: Fresh };
+// `open` = open-world: unbound refs get a fresh type var instead of erroring.
+// Used when compiling to JS (host globals are legal); strict mode is off.
+type Ctx = { env: Env; subst: Subst; fresh: Fresh; open: boolean };
 
 const u = (a: Type, b: Type, ctx: Ctx): Result<Type, AlangError> => {
   const r = unify(a, b, ctx.subst, ctx.fresh);
@@ -140,7 +142,9 @@ const infer = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
 
     case "ref": {
       const sc = ctx.env.get(e.name);
-      return sc ? ok(instantiate(sc, ctx.fresh)) : err(typeErr(`unbound variable '${e.name}'`));
+      if (sc) return ok(instantiate(sc, ctx.fresh));
+      if (ctx.open) return ok(freshVar(ctx.fresh)); // opaque host global
+      return err(typeErr(`unbound variable '${e.name}'`));
     }
 
     case "lambda": {
@@ -263,15 +267,19 @@ const inferPattern = (p: Pattern, ctx: Ctx): Result<PatResult, AlangError> => {
 const ctorScheme = (typeName: string, c: Ctor): Scheme =>
   mono(c.argTypes.reduceRight((acc, at) => tArrow(primType(at), acc), tCon(typeName)));
 
+export type InferOptions = { open?: boolean };
+
 export function inferProgram(
   prog: Program,
   builtins: Record<string, Type> = {},
+  opts: InferOptions = {},
 ): Result<Env, AlangError> {
   const env: Env = new Map();
   for (const [name, t] of Object.entries(builtins)) env.set(name, mono(t));
 
   const subst = emptySubst();
   const fresh = mkFresh(1000);
+  const open = opts.open ?? false;
 
   // constructors first, so `let`s (in any order after their type) can use them
   for (const s of prog.stmts) {
@@ -281,7 +289,7 @@ export function inferProgram(
 
   for (const s of prog.stmts) {
     if (s.kind !== "let") continue;
-    const t = infer(s.value, { env, subst, fresh });
+    const t = infer(s.value, { env, subst, fresh, open });
     if (isErr(t)) return t;
     env.set(s.name, generalize(env, t.value, subst));
   }

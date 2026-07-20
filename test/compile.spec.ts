@@ -144,6 +144,25 @@ test("line comments are ignored", () => {
   expect(js("// header\nlet x = 1 // trailing\nlet y = x")).toBe("const x = 1;\nconst y = x;\n");
 });
 
+// ---- type inference is wired into compile ----
+
+test("prelude-typed misuse is a compile-time type error", () => {
+  // add : number -> number -> number, but given a record
+  const r = compile("let bad = add(1, { x: 2 })");
+  expect(isErr(r)).toBe(true);
+  expect(unwrapErr(r).kind).toBe("type");
+});
+
+test("field access on a non-record is a type error", () => {
+  const r = compile("let bad = pi.x"); // pi : number
+  expect(isErr(r)).toBe(true);
+  expect(unwrapErr(r).kind).toBe("type");
+});
+
+test("well-typed prelude arithmetic compiles", () => {
+  expect(js("let n = add(mul(2, 3), 4)")).toBe("const n = add(mul(2, 3), 4);\n");
+});
+
 test("lex error is a value, not a throw", () => {
   const r = compile("let x = @");
   expect(isErr(r)).toBe(true);
