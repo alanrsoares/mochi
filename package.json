@@ -1,0 +1,27 @@
+{
+  "name": "alang",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "bin": { "alang": "src/cli.ts" },
+  "scripts": {
+    "alang": "bun src/cli.ts",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "check": "biome check . && tsc --noEmit && bun test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.4",
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@onrails/result": "^0.4.0",
+    "ts-pattern": "^5.9.0"
+  }
+}
