@@ -5,6 +5,7 @@
     "": {
       "name": "alang",
       "dependencies": {
+        "@onrails/pattern": "^0.3.2",
         "@onrails/result": "^0.4.0",
         "ts-pattern": "^5.9.0",
       },
@@ -93,6 +94,8 @@
     "@esbuild/win32-ia32": ["@esbuild/win32-ia32@0.28.1", "", { "os": "win32", "cpu": "ia32" }, "sha512-zvb/mB2bSCoJOpoCBgYKKpX6YM6mJBlBUVUtVj41DlZJVEB6/0CKlRYxP5wWl1C1ILiCoAU5wZZ4q1P3qeS6Eg=="],
 
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.28.1", "", { "os": "win32", "cpu": "x64" }, "sha512-bm4Mowrv+GXMlpWX++EcXw/iLyd1o3+bJkC2DkWXYVvgZCqD/bSj9ctZeAMC3cIxgjRVR2Dufaiu4YPxr5gW1A=="],
+
+    "@onrails/pattern": ["@onrails/pattern@0.3.2", "", {}, "sha512-EF/xmJ7yXzZpfYinLnMVm6M81NplCfENvaDvjgnCiJ+P51m56ExqWzCaATa17Smpm0T1Plyf5WzcHMjrJ6y0Dg=="],
 
     "@onrails/result": ["@onrails/result@0.4.0", "", {}, "sha512-DFdaC5pyLa8WRGg6dF8W3RbckVB2SmSpNTXtCbuFj2FqkcmWpIzJJvAfvrRcpXwVDhpxstxKkAipTRmaBoJHLQ=="],
 

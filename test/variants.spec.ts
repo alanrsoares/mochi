@@ -1,7 +1,7 @@
 // Parametric (generic) variant types + railway-oriented combinators over them.
 import { expect, test } from "bun:test";
+import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
-import { match } from "ts-pattern";
 import { check } from "../src/check";
 import { compile } from "../src/compile";
 import { inferProgram, showScheme } from "../src/infer";
@@ -17,7 +17,7 @@ const schemeOf = (src: string, name: string): string => {
   return showScheme(env.get(name)!);
 };
 
-// Compile and run, injecting ts-pattern's `match` (the codegen import is stripped).
+// Compile and run, injecting @onrails/pattern `match` (the codegen import is stripped).
 const run = (src: string, ret: string): unknown => {
   const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
   return new Function("match", `${preludeJs}\n${js}\nreturn ${ret};`)(match);

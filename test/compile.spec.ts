@@ -55,12 +55,12 @@ test("nullary constructor → value, not function", () => {
   );
 });
 
-test("exhaustive switch → ts-pattern .exhaustive()", () => {
+test("exhaustive switch → @onrails/pattern .exhaustive()", () => {
   const out = js(
     "type Shape = | Circle(float) | Rect(float, float)\n" +
       "let area = shape => switch shape { | Circle(r) => square(r) | Rect(w, h) => mul(w, h) }",
   );
-  expect(out).toContain(`import { match } from "ts-pattern";`);
+  expect(out).toContain(`import { match } from "@onrails/pattern";`);
   expect(out).toContain(`const area = (shape) => match(shape)`);
   expect(out).toContain(`.with({ tag: "Circle" }, ({ _0: r }) => square(r))`);
   expect(out).toContain(`.with({ tag: "Rect" }, ({ _0: w, _1: h }) => mul(w, h))`);

@@ -41,7 +41,11 @@ const genMember = (e: Expr): string =>
 // parses `=> { ... }` as a statement block: `=> ({ x: 1 })`.
 const genLambdaBody = (e: Expr): string => (e.kind === "record" ? `(${genExpr(e)})` : genExpr(e));
 
-// ---- match → ts-pattern chain --------------------------------------------
+// ---- match → @onrails/pattern chain --------------------------------------
+// Emitted `switch` lowers to a match().with().exhaustive() chain. We target
+// @onrails/pattern (ts-pattern-shaped, smaller runtime, pairs with
+// @onrails/result + @onrails/maybe). Each arm is a single pattern, which is the
+// common subset both libraries share.
 
 const genMatch = (m: Extract<Expr, { kind: "match" }>): string => {
   const parts = [`match(${genExpr(m.scrutinee)})`];
@@ -111,7 +115,7 @@ const hasMatch = (e: Expr): boolean =>
 
 export const codegen = (prog: Program): string => {
   const needsMatch = prog.stmts.some((s) => s.kind === "let" && hasMatch(s.value));
-  const header = needsMatch ? `import { match } from "ts-pattern";\n\n` : "";
+  const header = needsMatch ? `import { match } from "@onrails/pattern";\n\n` : "";
   const body = prog.stmts.map(genStmt).join("\n");
   return `${header}${body}\n`;
 };
