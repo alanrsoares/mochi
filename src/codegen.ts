@@ -13,6 +13,16 @@ import type { CtorField, Expr, LamParam, MatchArm, Pattern, Program, Stmt } from
 const keysOf = (fields: CtorField[]): string[] => fields.map((f, i) => f.name ?? `_${i}`);
 let ctorKeys = new Map<string, string[]>();
 
+// The field keys of a module's EXPORTED ctors — threaded into an importer's
+// `codegen` so a pattern on an imported variant destructures the right runtime
+// keys (`Some(value: a)` → `{ value }`, not the positional `{ _0 }`).
+export const exportedCtorKeys = (prog: Program): Map<string, string[]> => {
+  const m = new Map<string, string[]>();
+  for (const s of prog.stmts)
+    if (s.kind === "type" && s.exported) for (const c of s.ctors) m.set(c.name, keysOf(c.fields));
+  return m;
+};
+
 const genExpr = (e: Expr): string =>
   match(e)
     .with({ kind: "num" }, (n) => String(n.value))
@@ -195,8 +205,8 @@ const hasMatch = (e: Expr): boolean =>
     .with({ kind: "field" }, (f) => hasMatch(f.target))
     .exhaustive();
 
-export const codegen = (prog: Program): string => {
-  ctorKeys = new Map();
+export const codegen = (prog: Program, imported?: Map<string, string[]>): string => {
+  ctorKeys = new Map(imported ?? []);
   for (const s of prog.stmts)
     if (s.kind === "type") for (const c of s.ctors) ctorKeys.set(c.name, keysOf(c.fields));
   const needsMatch = prog.stmts.some((s) => s.kind === "let" && hasMatch(s.value));

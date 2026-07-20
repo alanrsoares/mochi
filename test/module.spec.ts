@@ -75,3 +75,26 @@ test("an exported variant's constructors are importable", async () => {
   );
   expect(jsFor(outs, "main.al")).toContain("const x = Some(1);");
 });
+
+const OPT = "export type Option a =\n  | Some(value: a)\n  | None\n";
+
+test("a switch on an imported variant is exhaustiveness-checked and destructures its named field", async () => {
+  const files = {
+    "/p/opt.al": OPT,
+    "/p/main.al":
+      'import { Some, None } from "./opt"\n' +
+      "let get = o => switch o { | Some(v) => v | None => 0 }\n",
+  };
+  const outs = unwrapOk(await build(files, "/p/main.al"));
+  // Pattern must destructure the imported ctor's KEY (`value`), not positional `_0`.
+  expect(jsFor(outs, "main.al")).toContain('.with({ _tag: "Some" }, ({ value: v }) =>');
+});
+
+test("a non-exhaustive switch on an imported variant is rejected", async () => {
+  const files = {
+    "/p/opt.al": OPT,
+    "/p/main.al":
+      'import { Some, None } from "./opt"\n' + "let get = o => switch o { | Some(v) => v }\n", // missing None, no catch-all
+  };
+  expect(isErr(await build(files, "/p/main.al"))).toBe(true);
+});

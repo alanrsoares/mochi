@@ -13,8 +13,20 @@ let circleArea = area(circle)
 let rectArea = area(rect)
 let diagonal = hypot(3.0, 4.0)
 
+// A `switch` on the IMPORTED Shape variant. The checker knows Shape's full ctor
+// set across the module boundary, so this is exhaustiveness-checked here — drop
+// the Rect arm and compilation fails. Named fields destructure by key too.
+let sides = s => switch s {
+  | Circle(radius) => 0.0
+  | Rect(width, height) => 4.0
+}
+let circleSides = sides(circle)
+let rectSides = sides(rect)
+
 // Build the program with `alang build examples/modules/main.al`, then run
 // `bun examples/modules/main.js` — it prints these three values.
 let a = log("circle area:", circleArea)
 let b = log("rect area:", rectArea)
 let c = log("diagonal:", diagonal)
+let d = log("circle sides:", circleSides)
+let e = log("rect sides:", rectSides)

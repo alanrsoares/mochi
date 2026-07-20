@@ -10,8 +10,8 @@
 import { dirname, resolve } from "node:path";
 import { err, isErr, ok, type Result, ResultAsync } from "@onrails/result";
 import type { Program, Stmt } from "./ast";
-import { check } from "./check";
-import { codegen } from "./codegen";
+import { check, exportedRegistry, type Registry } from "./check";
+import { codegen, exportedCtorKeys } from "./codegen";
 import { type AlangError, checkErr } from "./errors";
 import { type Env, inferProgramTypes, type Scheme } from "./infer";
 import { lex } from "./lexer";
@@ -45,13 +45,13 @@ const exportsOf = (prog: Program, env: Env): Env => {
   return out;
 };
 
-// Parse a file to a checked Program (no inference yet — that needs its deps).
+// Parse a file to a Program. Neither `check` nor inference runs here — both
+// need this module's imports resolved first, which only happens in
+// `compileGraph` once the whole graph is loaded.
 const parseModule = (src: string): Result<Program, AlangError> => {
   const lexed = lex(src);
   if (isErr(lexed)) return lexed;
-  const parsed = parse(lexed.value);
-  if (isErr(parsed)) return parsed;
-  return check(parsed.value);
+  return parse(lexed.value);
 };
 
 type Loaded = { path: string; prog: Program };
@@ -93,27 +93,45 @@ const loadGraph = (entry: string, readFile: ReadFile): ResultAsync<Loaded[], Ala
   });
 
 // Compile a resolved graph (synchronous — the I/O already happened). Each module
-// infers with prelude + the schemes its imports resolve to; a missing export is
-// reported against the import site.
+// checks + infers + codegens with prelude plus everything its imports resolve
+// to: their export SCHEMES (inference), their variant REGISTRY (cross-module
+// exhaustiveness), and their ctor field KEYS (pattern destructuring). A missing
+// export is reported against the import site.
 const compileGraph = (graph: Loaded[]): Result<ModuleOutput[], AlangError> => {
   const exportsByPath = new Map<string, Env>();
+  const regByPath = new Map<string, Registry>();
+  const keysByPath = new Map<string, Map<string, string[]>>();
   const outputs: ModuleOutput[] = [];
 
   for (const { path, prog } of graph) {
     const imports: Env = new Map();
+    const importedReg: Registry = { ctor: new Map(), type: new Map() };
+    const importedKeys = new Map<string, string[]>();
     for (const imp of importsOf(prog)) {
-      const depExports = exportsByPath.get(resolveImport(path, imp.from));
+      const depPath = resolveImport(path, imp.from);
+      const depExports = exportsByPath.get(depPath);
       for (const n of imp.names) {
         const sc = depExports?.get(n.name) as Scheme | undefined;
         if (!sc) return err(checkErr(`'${imp.from}' has no export '${n.name}'`, n.span));
         imports.set(n.name, sc);
       }
+      const depReg = regByPath.get(depPath);
+      if (depReg) {
+        for (const [k, v] of depReg.type) importedReg.type.set(k, v);
+        for (const [k, v] of depReg.ctor) importedReg.ctor.set(k, v);
+      }
+      const depKeys = keysByPath.get(depPath);
+      if (depKeys) for (const [k, v] of depKeys) importedKeys.set(k, v);
     }
 
+    const checked = check(prog, importedReg);
+    if (isErr(checked)) return checked;
     const inferred = inferProgramTypes(prog, preludeEnv, { open: true, imports });
     if (isErr(inferred)) return inferred;
     exportsByPath.set(path, exportsOf(prog, inferred.value.env));
-    outputs.push({ path, js: codegen(prog) });
+    regByPath.set(path, exportedRegistry(prog));
+    keysByPath.set(path, exportedCtorKeys(prog));
+    outputs.push({ path, js: codegen(prog, importedKeys) });
   }
   return ok(outputs);
 };

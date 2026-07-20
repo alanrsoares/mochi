@@ -5,9 +5,27 @@ import type { Expr, Pattern, Program } from "./ast";
 import { type AlangError, checkErr } from "./errors";
 
 type CtorInfo = { type: string; arity: number };
-type Registry = {
+export type Registry = {
   ctor: Map<string, CtorInfo>; // ctor name → owning type + arity
   type: Map<string, string[]>; // type name → its ctor names
+};
+
+// The registry a module publishes: only its EXPORTED variant types (and their
+// full ctor sets). Threaded into an importer's `check` so a `switch` on an
+// imported variant is exhaustiveness-checked against every constructor — even
+// ones the importer never imported (those force a catch-all, since it can't
+// name them).
+export const exportedRegistry = (prog: Program): Registry => {
+  const reg: Registry = { ctor: new Map(), type: new Map() };
+  for (const s of prog.stmts) {
+    if (s.kind !== "type" || !s.exported) continue;
+    reg.type.set(
+      s.name,
+      s.ctors.map((c) => c.name),
+    );
+    for (const c of s.ctors) reg.ctor.set(c.name, { type: s.name, arity: c.fields.length });
+  }
+  return reg;
 };
 
 const buildRegistry = (prog: Program): Result<Registry, AlangError> => {
@@ -108,10 +126,17 @@ function checkMatch(m: Extract<Expr, { kind: "match" }>, reg: Registry): AlangEr
     : checkErr(`non-exhaustive switch on '${owningType}': missing ${missing.join(", ")}`, m.span);
 }
 
-export function check(prog: Program): Result<Program, AlangError> {
+// `imported` carries the ctor/type registries of the modules this program
+// imports from; merged UNDER the local registry (local declarations win) so
+// exhaustiveness works across the module boundary.
+export function check(prog: Program, imported?: Registry): Result<Program, AlangError> {
   const built = buildRegistry(prog);
   if (isErr(built)) return built;
   const reg = built.value;
+  if (imported) {
+    for (const [k, v] of imported.type) if (!reg.type.has(k)) reg.type.set(k, v);
+    for (const [k, v] of imported.ctor) if (!reg.ctor.has(k)) reg.ctor.set(k, v);
+  }
 
   for (const s of prog.stmts) {
     if (s.kind !== "let") continue;
