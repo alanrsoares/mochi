@@ -4,6 +4,7 @@ import type { Span } from "./span";
 export type Expr =
   | { kind: "num"; value: number; span: Span }
   | { kind: "bool"; value: boolean; span: Span }
+  | { kind: "str"; value: string; span: Span }
   | { kind: "ref"; name: string; span: Span }
   | { kind: "call"; fn: Expr; args: Expr[]; span: Span }
   | { kind: "lambda"; params: LamParam[]; body: Expr; span: Span } // (x, y) => body, ({a, b}) => body

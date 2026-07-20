@@ -28,6 +28,8 @@ const expr = (e: Expr, ind: string): string => {
       return String(e.value);
     case "bool":
       return String(e.value);
+    case "str":
+      return JSON.stringify(e.value);
     case "ref":
       return e.name;
     case "call":

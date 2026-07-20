@@ -35,6 +35,7 @@ const children = (e: Expr): Expr[] => {
   switch (e.kind) {
     case "num":
     case "bool":
+    case "str":
     case "ref":
       return [];
     case "call":

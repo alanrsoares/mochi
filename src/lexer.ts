@@ -21,6 +21,7 @@ export type Tok =
   | { t: "comma" }
   | { t: "num"; v: number }
   | { t: "bool"; v: boolean } // true / false
+  | { t: "str"; v: string } // "..." (decoded value)
   | { t: "id"; v: string }
   | { t: "eof" };
 
@@ -87,6 +88,26 @@ export function lex(src: string): Result<Located[], AlangError> {
     if (punct) {
       emit(punct, i, i + 1);
       i++;
+      continue;
+    }
+
+    // string literal: "..." with \n \t \\ \" escapes; store the decoded value.
+    if (c === '"') {
+      let j = i + 1;
+      let value = "";
+      while (j < src.length && src[j] !== '"') {
+        if (src[j] === "\\" && j + 1 < src.length) {
+          const n = src[j + 1]!;
+          value += n === "n" ? "\n" : n === "t" ? "\t" : n; // \\ and \" fall through to the char
+          j += 2;
+        } else {
+          value += src[j];
+          j++;
+        }
+      }
+      if (j >= src.length) return err(lexErr("unterminated string literal", span(i, j)));
+      emit({ t: "str", v: value }, i, j + 1);
+      i = j + 1;
       continue;
     }
 

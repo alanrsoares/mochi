@@ -10,6 +10,7 @@ const genExpr = (e: Expr): string =>
   match(e)
     .with({ kind: "num" }, (n) => String(n.value))
     .with({ kind: "bool" }, (b) => String(b.value))
+    .with({ kind: "str" }, (s) => JSON.stringify(s.value))
     .with({ kind: "ref" }, (r) => r.name)
     .with({ kind: "call" }, (c) => `${genCallee(c.fn)}(${c.args.map(genExpr).join(", ")})`)
     .with(
@@ -108,7 +109,7 @@ const genStmt = (s: Stmt): string =>
 
 const hasMatch = (e: Expr): boolean =>
   match(e)
-    .with({ kind: "num" }, { kind: "bool" }, { kind: "ref" }, () => false)
+    .with({ kind: "num" }, { kind: "bool" }, { kind: "str" }, { kind: "ref" }, () => false)
     .with({ kind: "call" }, (c) => hasMatch(c.fn) || c.args.some(hasMatch))
     .with({ kind: "lambda" }, (l) => hasMatch(l.body))
     .with({ kind: "pipe" }, (p) => hasMatch(p.left) || hasMatch(p.right))

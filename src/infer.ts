@@ -160,6 +160,9 @@ const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
     case "bool":
       return ok(tBool);
 
+    case "str":
+      return ok(tString);
+
     case "ref": {
       const sc = ctx.env.get(e.name);
       if (sc) return ok(instantiate(sc, ctx.fresh));

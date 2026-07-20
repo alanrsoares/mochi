@@ -32,6 +32,7 @@ function forEachMatch(e: Expr, visit: (m: Extract<Expr, { kind: "match" }>) => v
   switch (e.kind) {
     case "num":
     case "bool":
+    case "str":
     case "ref":
       return;
     case "call":

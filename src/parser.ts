@@ -139,6 +139,7 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     const tk = next();
     if (tk.t === "num") return { kind: "num", value: tk.v, span: tk.span };
     if (tk.t === "bool") return { kind: "bool", value: tk.v, span: tk.span };
+    if (tk.t === "str") return { kind: "str", value: tk.v, span: tk.span };
     if (tk.t === "id") return { kind: "ref", name: tk.v, span: tk.span };
     if (tk.t === "lparen") {
       const e = parseExpr();
