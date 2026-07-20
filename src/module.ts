@@ -131,7 +131,7 @@ const compileGraph = (graph: Loaded[]): Result<ModuleOutput[], AlangError> => {
     exportsByPath.set(path, exportsOf(prog, inferred.value.env));
     regByPath.set(path, exportedRegistry(prog));
     keysByPath.set(path, exportedCtorKeys(prog));
-    outputs.push({ path, js: codegen(prog, importedKeys) });
+    outputs.push({ path, js: codegen(prog, importedKeys, { runtime: true }) });
   }
   return ok(outputs);
 };

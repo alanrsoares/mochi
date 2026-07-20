@@ -15,7 +15,7 @@ const schemeOf = (src: string, name: string): string => {
 };
 
 const run = (src: string, ret: string): unknown => {
-  const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
+  const js = unwrapOk(compile(src, { runtime: false })).replace(/^import .*$/m, "");
   const prelude = "const hypot=(a,b)=>Math.hypot(a,b);const add=(a,b)=>a+b;";
   return new Function("match", `${prelude}\n${js}\nreturn ${ret};`)(match);
 };

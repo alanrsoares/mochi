@@ -15,5 +15,16 @@ import { preludeEnv } from "./prelude";
 const typecheck = (prog: Program): Result<Program, AlangError> =>
   map(inferProgram(prog, preludeEnv, { open: true }), () => prog);
 
-export const compile = (src: string): Result<string, AlangError> =>
-  pipe(lex(src), flatMap(parse), flatMap(check), flatMap(typecheck), map(codegen));
+// `runtime` (default on): inline the prelude builtins the program uses so the
+// emitted module runs standalone. Off yields prelude-free lowering — for tests
+// that supply their own prelude, or callers that bundle it separately.
+export type CompileOptions = { runtime?: boolean };
+
+export const compile = (src: string, opts: CompileOptions = {}): Result<string, AlangError> =>
+  pipe(
+    lex(src),
+    flatMap(parse),
+    flatMap(check),
+    flatMap(typecheck),
+    map((prog) => codegen(prog, undefined, { runtime: opts.runtime ?? true })),
+  );

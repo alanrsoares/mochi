@@ -17,7 +17,8 @@ const schemeOf = (src: string, name: string): string => {
 };
 
 const run = (src: string, ret: string): unknown => {
-  const body = unwrapOk(compile(src)).replace(/^import .*$/m, "");
+  // runtime off: this harness injects its own `add`, so keep output prelude-free.
+  const body = unwrapOk(compile(src, { runtime: false })).replace(/^import .*$/m, "");
   return new Function("match", "add", `${body}\nreturn ${ret};`)(
     match,
     (a: number, b: number) => a + b,

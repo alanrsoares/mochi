@@ -7,7 +7,7 @@ import { compile } from "../src/compile";
 import { inferProgram, showScheme } from "../src/infer";
 import { lex } from "../src/lexer";
 import { parse } from "../src/parser";
-import { preludeEnv, preludeJs } from "../src/prelude";
+import { preludeEnv } from "../src/prelude";
 
 const RESULT = "type Result a e = | Ok(a) | Err(e)\n";
 
@@ -17,10 +17,11 @@ const schemeOf = (src: string, name: string): string => {
   return showScheme(env.get(name)!);
 };
 
-// Compile and run, injecting @onrails/pattern `match` (the codegen import is stripped).
+// Compile and run, injecting @onrails/pattern `match` (the codegen import is
+// stripped). Output is standalone — compile inlines the prelude it uses.
 const run = (src: string, ret: string): unknown => {
   const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
-  return new Function("match", `${preludeJs}\n${js}\nreturn ${ret};`)(match);
+  return new Function("match", `${js}\nreturn ${ret};`)(match);
 };
 
 test("a type parameter makes constructors polymorphic", () => {

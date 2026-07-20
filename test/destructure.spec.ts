@@ -6,7 +6,7 @@ import { parse } from "../src/parser";
 import { preludeJs } from "../src/prelude";
 
 const run = (src: string): unknown => {
-  const js = unwrapOk(compile(src));
+  const js = unwrapOk(compile(src, { runtime: false }));
   return new Function(`${preludeJs}\n${js}\nreturn last;`)();
 };
 

@@ -3,7 +3,9 @@ import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 import { compile } from "../src/compile";
 import { formatError } from "../src/errors";
 
-const js = (src: string) => unwrapOk(compile(src));
+// These assert pure lowering, so compile prelude-free (runtime off); the
+// standalone prelude-inlining path is covered separately below.
+const js = (src: string) => unwrapOk(compile(src, { runtime: false }));
 
 test("pipeline desugars to nested calls", () => {
   expect(js("let result = 5 |> double |> inc")).toBe("const result = inc(double(5));\n");
@@ -219,4 +221,29 @@ test("a negative literal works as a match pattern", () => {
 
 test("a float literal keeps its form (no int coercion) in the output", () => {
   expect(js("let pi = 3.0")).toBe("const pi = 3.0;\n");
+});
+
+// ---- standalone output: prelude inlining (runtime on, the default) --------
+
+test("standalone output inlines only the prelude builtins used", () => {
+  const out = unwrapOk(compile("let n = add(mul(2, 3), 4)"));
+  expect(out).toContain("const add = (a, b) => a + b;");
+  expect(out).toContain("const mul = (a, b) => a * b;");
+  expect(out).not.toContain("const sub"); // unused builtin not inlined
+  expect(out).toContain("const n = add(mul(2, 3), 4);");
+});
+
+test("standalone output runs without any externally supplied prelude", () => {
+  const out = unwrapOk(compile("let n = add(mul(2, 3), 4)"));
+  const n = new Function(`${out}\nreturn n;`)();
+  expect(n).toBe(10);
+});
+
+test("a user binding shadowing a builtin is not inlined (no duplicate const)", () => {
+  // `hypot` is a prelude builtin; defining it locally must suppress the inline.
+  const out = unwrapOk(compile("let hypot = 1\nlet r = add(hypot, 2)"));
+  expect(out).not.toContain("Math.hypot");
+  expect(out).toContain("const add ="); // add still inlined
+  const r = new Function(`${out}\nreturn r;`)();
+  expect(r).toBe(3);
 });

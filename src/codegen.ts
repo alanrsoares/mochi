@@ -5,6 +5,7 @@
 // node and forget it → TS compile error in the compiler, not a silent gap.
 import { match } from "ts-pattern";
 import type { CtorField, Expr, LamParam, MatchArm, Pattern, Program, Stmt } from "./ast";
+import { preludeJsDefs } from "./prelude";
 
 // A constructor's runtime field keys: a labelled field uses its label, an
 // unlabelled one its position (`_0`, `_1`). Both the factory (`genType`) and the
@@ -205,12 +206,74 @@ const hasMatch = (e: Expr): boolean =>
     .with({ kind: "field" }, (f) => hasMatch(f.target))
     .exhaustive();
 
-export const codegen = (prog: Program, imported?: Map<string, string[]>): string => {
+// Every name referenced anywhere in an expression. Coarse — it counts locally
+// shadowed uses too — but only ever consulted for prelude names, which are never
+// worth shadowing, so the over-count is harmless.
+const exprRefs = (e: Expr, acc: Set<string>): void => {
+  match(e)
+    .with({ kind: "num" }, { kind: "bool" }, { kind: "str" }, () => {})
+    .with({ kind: "ref" }, (r) => acc.add(r.name))
+    .with({ kind: "call" }, (c) => {
+      exprRefs(c.fn, acc);
+      for (const a of c.args) exprRefs(a, acc);
+    })
+    .with({ kind: "lambda" }, (l) => exprRefs(l.body, acc))
+    .with({ kind: "pipe" }, (p) => {
+      exprRefs(p.left, acc);
+      exprRefs(p.right, acc);
+    })
+    .with({ kind: "match" }, (m) => {
+      exprRefs(m.scrutinee, acc);
+      for (const arm of m.arms) exprRefs(arm.body, acc);
+    })
+    .with({ kind: "record" }, (r) => {
+      for (const f of r.fields) exprRefs(f.value, acc);
+    })
+    .with({ kind: "field" }, (f) => exprRefs(f.target, acc))
+    .exhaustive();
+};
+
+// The names a program binds at module scope — anything that would shadow a
+// prelude builtin, so its runtime def must NOT be inlined (else a duplicate
+// `const` and a JS SyntaxError, e.g. a user `let hypot = …`).
+const boundNames = (prog: Program): Set<string> => {
+  const bound = new Set<string>();
+  for (const s of prog.stmts) {
+    if (s.kind === "let" || s.kind === "extern") bound.add(s.name);
+    else if (s.kind === "type") for (const c of s.ctors) bound.add(c.name);
+    else if (s.kind === "import") for (const n of s.names) bound.add(n.name);
+  }
+  return bound;
+};
+
+// The prelude runtime a program needs inlined: every builtin it references and
+// does not itself define, emitted in prelude declaration order for determinism.
+const preludePreamble = (prog: Program): string => {
+  const refs = new Set<string>();
+  for (const s of prog.stmts) if (s.kind === "let") exprRefs(s.value, refs);
+  const bound = boundNames(prog);
+  const defs = Object.entries(preludeJsDefs)
+    .filter(([name]) => refs.has(name) && !bound.has(name))
+    .map(([, def]) => def);
+  return defs.length ? `${defs.join("\n")}\n\n` : "";
+};
+
+// `runtime`: inline the prelude builtins the program uses, so the emitted module
+// runs standalone. Off by default — callers that supply their own prelude (tests
+// via `new Function(preludeJs, …)`) keep prelude-free output.
+export type CodegenOptions = { runtime?: boolean };
+
+export const codegen = (
+  prog: Program,
+  imported?: Map<string, string[]>,
+  opts: CodegenOptions = {},
+): string => {
   ctorKeys = new Map(imported ?? []);
   for (const s of prog.stmts)
     if (s.kind === "type") for (const c of s.ctors) ctorKeys.set(c.name, keysOf(c.fields));
   const needsMatch = prog.stmts.some((s) => s.kind === "let" && hasMatch(s.value));
   const header = needsMatch ? `import { match } from "@onrails/pattern";\n\n` : "";
+  const preamble = opts.runtime ? preludePreamble(prog) : "";
   const body = prog.stmts.map(genStmt).join("\n");
-  return `${header}${body}\n`;
+  return `${header}${preamble}${body}\n`;
 };

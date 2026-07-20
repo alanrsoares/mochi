@@ -22,7 +22,7 @@ test("each destructured name binds the matching field value", () => {
         const rec = `{ ${fields.map((f) => `${f.k}: ${f.v}`).join(", ")} }`;
         const names = fields.map((f) => f.k).join(", ");
         const src = `let r = ${rec}\nlet { ${names} } = r\nlet last = ${chosen.k}`;
-        const js = unwrapOk(compile(src));
+        const js = unwrapOk(compile(src, { runtime: false }));
         expect(new Function(`${preludeJs}\n${js}\nreturn last;`)()).toBe(chosen.v);
       },
     ),

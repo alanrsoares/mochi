@@ -8,7 +8,6 @@ import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
 import { compile } from "../src/compile";
 import { buildModules } from "../src/module";
-import { preludeJs } from "../src/prelude";
 
 const read = (p: string): string => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 const path = (p: string): string => fileURLToPath(new URL(`../${p}`, import.meta.url));
@@ -18,8 +17,10 @@ test("example.al compiles", () => {
 });
 
 test("examples/pipelines.al compiles and produces its documented values", () => {
+  // Output is standalone (prelude inlined) — only the @onrails/pattern import is
+  // stripped, and `match` injected in its place.
   const js = unwrapOk(compile(read("examples/pipelines.al"))).replace(/^import .*$/m, "");
-  const out = new Function("match", `${preludeJs}\n${js}\nreturn { composed, piped, happy, sad };`)(
+  const out = new Function("match", `${js}\nreturn { composed, piped, happy, sad };`)(
     match,
   ) as Record<string, number>;
   expect(out).toEqual({ composed: 22, piped: 81, happy: 20, sad: -1 });
