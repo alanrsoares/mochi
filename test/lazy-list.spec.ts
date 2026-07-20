@@ -114,15 +114,32 @@ test("a lone `@{}` arm is a non-exhaustive error", () => {
   expect(unwrapErr(r).kind).toBe("check");
 });
 
-test("a fixed-length `@{x}` arm is rejected (use Array for that)", () => {
-  const r = compile("let f = xs => switch xs { | @{} => 0 | @{x} => 1 | @{h, ...t} => 2 }");
+test("a fixed-length `@{x}` arm matches an exactly-one-element List", () => {
+  const src = "let f = xs => switch xs {\n | @{} => 0\n | @{x} => x\n | @{h, ...t} => 99\n}\n";
+  expect(run(`${src}let a = f(@{7})`, "a")).toBe(7); // exactly one → @{x}
+  expect(run(`${src}let a = f(@{7, 8})`, "a")).toBe(99); // two → falls to cons
+  expect(run(`${src}let a = f(@{})`, "a")).toBe(0);
+});
+
+test("a multi-head `@{a, b, ...t}` arm binds several heads plus a lazy tail", () => {
+  const src =
+    "let f = xs => switch xs {\n | @{a, b, ...t} => add(add(a, b), sum(t))\n | @{...all} => 0\n}\n";
+  expect(run(`${SUM.join("\n")}\n${src}let a = f(@{1, 2, 3, 4})`, "a")).toBe(10); // 1+2+(3+4)
+  expect(run(`${SUM.join("\n")}\n${src}let a = f(@{5})`, "a")).toBe(0); // <2 → catch-all
+});
+
+test("a fixed multi-head `@{a, b}` alone is non-exhaustive (needs cons or `_`)", () => {
+  const r = compile("let f = xs => switch xs { | @{} => 0 | @{a, b} => 1 }");
   expect(isErr(r)).toBe(true);
   expect(unwrapErr(r).kind).toBe("check");
 });
 
-test("a multi-head `@{a, b}` arm is rejected", () => {
-  const r = compile("let f = xs => switch xs { | @{} => 0 | @{a, b} => 1 }");
-  expect(isErr(r)).toBe(true);
+test("a literal head narrows a lazy-List arm", () => {
+  const src =
+    "let f = xs => switch xs {\n | @{0, ...t} => 100\n | @{h, ...t} => h\n | @{} => -1\n}\n";
+  expect(run(`${src}let a = f(@{0, 9})`, "a")).toBe(100); // starts with 0
+  expect(run(`${src}let a = f(@{5, 9})`, "a")).toBe(5); // generic head
+  expect(run(`${src}let a = f(@{})`, "a")).toBe(-1);
 });
 
 test("`@{...all}` is a catch-all binding the whole List", () => {
@@ -151,5 +168,11 @@ test("List erases to Iterable at the .d.ts boundary", () => {
 
 test("lazy-List literals and patterns survive formatting verbatim", () => {
   const src = "let f = xs => switch xs {\n  | @{} => @{}\n  | @{head, ...tail} => tail\n}\n";
+  expect(unwrapOk(format(src))).toBe(src);
+});
+
+test("fixed-length + multi-head + literal lazy patterns round-trip", () => {
+  const src =
+    "let f = xs => switch xs {\n  | @{0, ...t} => t\n  | @{a, b} => xs\n  | @{...all} => all\n}\n";
   expect(unwrapOk(format(src))).toBe(src);
 });

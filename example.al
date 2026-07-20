@@ -113,6 +113,17 @@ let sumList = xs => switch xs {
 }
 let listSum = sumList(@{1, 2, 3, 4}) // 10
 
+// lazy patterns reach Array parity: fixed-length (`@{x}`), multi-head cons
+// (`@{a, b, ...t}`), and literal heads all work — the matcher pulls only the
+// bounded prefix each arm needs (never forcing the whole sequence).
+let describe = xs => switch xs {
+  | @{} => 0
+  | @{0, ...rest} => 1          // starts with a literal 0
+  | @{only} => 2                // exactly one element
+  | @{a, b, ...t} => 3          // two or more
+}
+let shape = describe(@{5, 6, 7}) // 3
+
 // --- qualified collection namespaces: `List.map`, `Array.map` ---
 // No overloading, so each collection carries its own ops. `List.*` transformers
 // stay lazy and FUSE — `map |> filter` builds no intermediate array; nothing is

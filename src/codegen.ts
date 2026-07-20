@@ -112,25 +112,66 @@ const catchAllParam = (p: Pattern): string => {
 const isListMatch = (m: Extract<Expr, { kind: "match" }>): boolean =>
   m.arms.some((a) => a.pattern.kind === "plist" && !isCatchAll(a.pattern));
 
-// A lazy-List switch → an IIFE that steps the iterator once: done → the `@{}`
-// body; else bind head + the (lazy) tail iterator and run the cons body. Can't
-// use @onrails/pattern here — the sequence is pull-based, not length-indexable.
+// A lazy tail/rest: replay the still-buffered elements from index `from`, then
+// drain whatever's left in the iterator. `_list` makes it re-iterable + lazy.
+const listTail = (from: number): string =>
+  `_list(function* () { for (let _i = ${from}; _i < _b.length; _i++) yield _b[_i]; ` +
+  `if (!_done) { let _s; while (!(_s = _it.next()).done) yield _s.value; } })`;
+
+// One narrowing lazy-List arm → an `if (cond) return call;`. A fixed arm `@{a,
+// b}` must see n+1 pulls to prove length exactly n; a cons arm `@{h, ...t}`
+// needs n pulls (length ≥ n) and binds its tail to a lazy List over the rest.
+// Literal elements add `_b[i] === lit` guards and take a hole in the binding.
+const genListArm = (p: Extract<Pattern, { kind: "plist" }>, body: Expr): string => {
+  const n = p.elems.length;
+  const guards = p.elems.flatMap((ep, i) =>
+    ep.kind === "plit" || ep.kind === "pbool" || ep.kind === "pstr"
+      ? [`_b[${i}] === ${litValue(ep)}`]
+      : [],
+  );
+  const cond = [p.rest ? `_pull(${n})` : `!_pull(${n + 1}) && _b.length === ${n}`, ...guards].join(
+    " && ",
+  );
+  const params: string[] = [];
+  const args: string[] = [];
+  p.elems.forEach((ep, i) => {
+    if (ep.kind === "pbind") {
+      params.push(ep.name);
+      args.push(`_b[${i}]`);
+    }
+  });
+  if (p.rest?.kind === "pbind") {
+    params.push(p.rest.name);
+    args.push(listTail(n));
+  }
+  return `  if (${cond}) return ((${params.join(", ")}) => ${genExpr(body)})(${args.join(", ")});`;
+};
+
+// A lazy-List switch → an IIFE that pulls just enough elements to decide each
+// arm, buffering them so later arms can re-examine a prefix without re-forcing
+// it. Bounded pulls only — a pull-sequence is never fully forced, so this can't
+// use @onrails/pattern (not length-indexable). check.ts proved totality.
 const genListMatch = (m: Extract<Expr, { kind: "match" }>): string => {
-  const isEmpty = (p: Extract<Pattern, { kind: "plist" }>) =>
-    p.elems.length === 0 && p.rest === null;
-  const emptyArm = m.arms.find((a) => a.pattern.kind === "plist" && isEmpty(a.pattern))!;
-  const consArm = m.arms.find(
-    (a) => a.pattern.kind === "plist" && a.pattern.elems.length === 1 && a.pattern.rest !== null,
-  )!;
-  const cp = consArm.pattern as Extract<Pattern, { kind: "plist" }>;
-  const head = cp.elems[0]!;
-  const headName = head.kind === "pbind" ? head.name : "_h";
-  const tailName = cp.rest?.kind === "pbind" ? cp.rest.name : "_t";
-  const cons = `((${headName}, ${tailName}) => ${genExpr(consArm.body)})(_n.value, _it)`;
+  const arms: string[] = [];
+  let fallback = `(() => { throw new Error("non-exhaustive lazy-list switch"); })()`;
+  for (const a of m.arms) {
+    if (a.pattern.kind === "plist" && !isCatchAll(a.pattern)) {
+      arms.push(genListArm(a.pattern, a.body));
+    } else if (isCatchAll(a.pattern)) {
+      // `@{...all}` / `_` / bind matches any list; a named rest binds a lazy
+      // List over the whole thing (leftover buffer + iterator). Terminal arm.
+      const rest =
+        a.pattern.kind === "plist" && a.pattern.rest?.kind === "pbind" ? a.pattern.rest.name : null;
+      fallback = rest ? `((${rest}) => ${genExpr(a.body)})(${listTail(0)})` : genExpr(a.body);
+      break;
+    }
+  }
   return (
-    `((_it) => { const _n = _it.next(); ` +
-    `return _n.done ? (${genExpr(emptyArm.body)}) : ${cons}; })` +
-    `(${genExpr(m.scrutinee)}[Symbol.iterator]())`
+    `((_it) => { const _b = []; let _done = false; ` +
+    `const _pull = (_n) => { while (_b.length < _n && !_done) { const _s = _it.next(); ` +
+    `if (_s.done) _done = true; else _b.push(_s.value); } return _b.length >= _n; };\n` +
+    `${arms.join("\n")}\n  return ${fallback};\n` +
+    `})(${genExpr(m.scrutinee)}[Symbol.iterator]())`
   );
 };
 
@@ -315,6 +356,9 @@ const exprRefs = (e: Expr, acc: Set<string>): void => {
     })
     .with({ kind: "match" }, (m) => {
       exprRefs(m.scrutinee, acc);
+      // A lazy-List arm that binds a tail/rest builds a `_list(...)` at runtime.
+      if (m.arms.some((a) => a.pattern.kind === "plist" && a.pattern.rest?.kind === "pbind"))
+        acc.add("_list");
       for (const arm of m.arms) exprRefs(arm.body, acc);
     })
     .with({ kind: "record" }, (r) => {

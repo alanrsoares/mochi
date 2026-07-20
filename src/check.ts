@@ -112,50 +112,25 @@ const isCatchAll = (p: Pattern): boolean =>
   // `[...all]` / `@{...all}` — a bare rest with no fixed head matches any list.
   ((p.kind === "parr" || p.kind === "plist") && p.elems.length === 0 && p.rest !== null);
 
-// List switches can't be proven total in general, but the canonical ML form —
-// an empty `[]` arm plus a single-head cons `[x, ...xs]` — covers length 0 and
-// length ≥ 1, so it's total. Returns null (exhaustive), an error (a list switch
-// that isn't), or undefined (not a list switch → let the caller decide).
-const checkArrExhaustive = (m: Extract<Expr, { kind: "match" }>): AlangError | null | undefined => {
-  const lists = m.arms.flatMap((a) => (a.pattern.kind === "parr" ? [a.pattern] : []));
-  if (lists.length === 0) return undefined;
-  const hasEmpty = lists.some((p) => p.elems.length === 0 && p.rest === null);
-  const hasCons = lists.some((p) => p.elems.length === 1 && p.rest !== null);
+// Eager Array (`parr`) and lazy List (`plist`) patterns share one exhaustiveness
+// rule: a switch can't be proven total in general, but the canonical ML form —
+// an empty `[]`/`@{}` arm plus a single-head cons `[x, ...xs]`/`@{x, ...xs}` —
+// covers length 0 and length ≥ 1, so it's total. Fixed-length arms (`@{a, b}`)
+// and extra arms are allowed but don't themselves prove totality (need the pair
+// above or a `_`). Returns null (exhaustive), an error (a list switch that
+// isn't), or undefined (not a list switch → let the caller decide).
+const checkSeqExhaustive = (m: Extract<Expr, { kind: "match" }>): AlangError | null | undefined => {
+  const seqs = m.arms.flatMap((a) =>
+    a.pattern.kind === "parr" || a.pattern.kind === "plist" ? [a.pattern] : [],
+  );
+  if (seqs.length === 0) return undefined;
+  const hasEmpty = seqs.some((p) => p.elems.length === 0 && p.rest === null);
+  const hasCons = seqs.some((p) => p.elems.length === 1 && p.rest !== null);
   if (hasEmpty && hasCons) return null;
   return checkErr("non-exhaustive list switch: cover `[]` and `[x, ...xs]` (or add `_`)", m.span);
 };
 
-// A lazy-List switch can't be lowered by length (the sequence is pull-based, so
-// measuring it would force it). Slice 1 therefore accepts exactly the canonical
-// total pair — an empty `@{}` arm and a single-head cons `@{head, ...tail}` —
-// with a bind/wild head, and nothing else. Returns null (valid + total), an
-// error (a malformed lazy-list switch), or undefined (not one → caller decides).
-// A lone `@{...all}` isn't "narrowing", so it falls through to the catch-all path.
-const checkListForms = (m: Extract<Expr, { kind: "match" }>): AlangError | null | undefined => {
-  type Seq = Extract<Pattern, { kind: "plist" }>;
-  const seqs = m.arms.flatMap((a) => (a.pattern.kind === "plist" ? [a.pattern as Seq] : []));
-  if (seqs.length === 0) return undefined;
-  const isAll = (p: Seq): boolean => p.elems.length === 0 && p.rest !== null; // @{...all}
-  if (seqs.every(isAll)) return undefined; // only catch-alls — not a narrowing seq switch
-
-  const empties = seqs.filter((p) => p.elems.length === 0 && p.rest === null);
-  const conses = seqs.filter((p) => p.elems.length === 1 && p.rest !== null);
-  if (m.arms.length !== 2 || empties.length !== 1 || conses.length !== 1)
-    return checkErr(
-      "lazy-list switch must be exactly `@{}` and `@{head, ...tail}` " +
-        "(fixed-length or extra arms not supported — use `toArray` + `[..]` patterns)",
-      m.span,
-    );
-  const head = conses[0]!.elems[0]!;
-  if (head.kind !== "pbind" && head.kind !== "pwild")
-    return checkErr("lazy-list cons head must bind a name or `_`", conses[0]!.span);
-  return null; // canonical pair — total by construction
-};
-
 function checkMatch(m: Extract<Expr, { kind: "match" }>, reg: Registry): AlangError | null {
-  const seqForm = checkListForms(m);
-  if (seqForm !== undefined) return seqForm; // valid canonical lazy-list switch, or malformed
-
   const hasCatchAll = m.arms.some((a) => isCatchAll(a.pattern));
   const ctorArms = m.arms.filter((a) => a.pattern.kind === "pctor");
 
@@ -167,7 +142,7 @@ function checkMatch(m: Extract<Expr, { kind: "match" }>, reg: Registry): AlangEr
       m.arms.flatMap((a) => (a.pattern.kind === "pbool" ? [a.pattern.value] : [])),
     );
     if (bools.has(true) && bools.has(false)) return null;
-    const listErr = checkArrExhaustive(m);
+    const listErr = checkSeqExhaustive(m);
     if (listErr !== undefined) return listErr;
     return checkErr("non-exhaustive switch: add a `_` catch-all arm", m.span);
   }
