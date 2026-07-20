@@ -26,5 +26,8 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false
-  }
+  },
+  // The vscode extension client (editors/**) is bundled by esbuild and relies on
+  // editor-host ambient types; keep it out of the compiler's type gate.
+  "include": ["src", "test"]
 }

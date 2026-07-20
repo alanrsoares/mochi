@@ -5,8 +5,10 @@
   "version": "0.0.1",
   "publisher": "alang",
   "private": true,
-  "engines": { "vscode": "^1.75.0" },
+  "engines": { "vscode": "^1.82.0" },
   "categories": ["Programming Languages"],
+  "main": "./out/extension.js",
+  "activationEvents": ["onLanguage:alang"],
   "contributes": {
     "languages": [
       {

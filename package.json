@@ -3,7 +3,9 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
-  "bin": { "alang": "src/cli.ts" },
+  "bin": {
+    "alang": "src/cli.ts"
+  },
   "scripts": {
     "alang": "bun src/cli.ts",
     "lint": "biome check .",
@@ -11,11 +13,18 @@
     "format": "biome format --write .",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
+    "build:ext": "bun scripts/build-extension.mjs",
     "check": "biome check . && tsc --noEmit && bun test"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.4",
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/vscode": "^1.125.0",
+    "esbuild": "^0.28.1",
+    "fast-check": "^4.9.0",
+    "vscode-languageclient": "^10.1.0",
+    "vscode-languageserver": "^10.1.0",
+    "vscode-languageserver-textdocument": "^1.0.12"
   },
   "peerDependencies": {
     "typescript": "^5"
