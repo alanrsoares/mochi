@@ -4,6 +4,7 @@
 // composites span from their first token/child to the last one consumed.
 import { err, ok, type Result } from "@onrails/result";
 import type {
+  AliasField,
   Ctor,
   CtorField,
   Expr,
@@ -385,6 +386,13 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     const params: string[] = [];
     while (peek().t === "id") params.push(expectId().name);
     expect("eq");
+    // A `{` after `=` starts a transparent record alias; anything else is a
+    // variant. `{` can't begin a constructor (those are Uppercase ids or `|`),
+    // so the two forms never collide.
+    if (peek().t === "lbrace") {
+      const alias = parseAliasBody();
+      return { kind: "type", name, params, ctors: [], alias, span: to(start) };
+    }
     const ctors: Ctor[] = [];
     if (peek().t === "bar") next(); // optional leading bar
     ctors.push(parseCtor());
@@ -393,6 +401,28 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
       ctors.push(parseCtor());
     }
     return { kind: "type", name, params, ctors, span: to(start) };
+  }
+
+  // The `{ x: T, y: U }` body of a record alias. Each field is `name: TypeExpr`;
+  // the empty record `{}` is allowed. No trailing comma.
+  function parseAliasBody(): AliasField[] {
+    expect("lbrace");
+    const fields: AliasField[] = [];
+    if (peek().t !== "rbrace") {
+      fields.push(parseAliasField());
+      while (peek().t === "comma") {
+        next();
+        fields.push(parseAliasField());
+      }
+    }
+    expect("rbrace");
+    return fields;
+  }
+
+  function parseAliasField(): AliasField {
+    const name = expectId().name;
+    expect("colon");
+    return { name, type: parseTypeExpr() };
   }
 
   function parseCtor(): Ctor {

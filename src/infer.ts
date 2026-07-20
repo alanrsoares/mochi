@@ -5,12 +5,15 @@
 // their body is inferred. Field access uses an open row, so a function that
 // reads `p.x` accepts any record that has an `x` — structural duck typing.
 import { err, isErr, map, ok, type Result } from "@onrails/result";
-import type { Ctor, Expr, Pattern, Program, Stmt, TypeExpr } from "./ast";
+import type { AliasField, Ctor, Expr, Pattern, Program, Stmt, TypeExpr } from "./ast";
 import { type AlangError, typeErr } from "./errors";
 import { builtinTypeDecls } from "./prelude";
 import type { Span } from "./span";
 import {
+  type AliasDef,
+  aliasParamId,
   type Fresh,
+  foldAliases,
   freshRowVar,
   freshVar,
   mkFresh,
@@ -25,6 +28,7 @@ import {
   tNumber,
   tRecord,
   tString,
+  tVar,
 } from "./types";
 import { emptySubst, resolve, resolveRow, type Subst, unify, zonk } from "./unify";
 
@@ -426,16 +430,58 @@ const inferPat = (p: Pattern, ctx: Ctx): Result<PatResult, AlangError> => {
 // their type; Uppercase names are nullary constructors; lowercase names are
 // type variables (shared by name within the signature, then generalized).
 const PRIMS = new Set(["number", "int", "float", "string", "bool"]);
-const typeExprToType = (te: TypeExpr, vars: Map<string, Type>, f: Fresh): Type => {
+
+// A transparent record alias, keyed by name, resolved during type-expr → type.
+type AliasInfo = { params: string[]; fields: AliasField[] };
+type AliasMap = Map<string, AliasInfo>;
+
+// Expand a record alias to its structural row. `args` binds its type parameters
+// positionally; params past `args.length` become fresh generic vars. `expanding`
+// breaks reference cycles (`type T = { self: T }`) by falling back to the bare
+// nominal `con(name, args)` — finite, though that field then unifies nominally.
+const aliasRow = (
+  name: string,
+  info: AliasInfo,
+  args: Type[],
+  f: Fresh,
+  aliases: AliasMap,
+  expanding: Set<string>,
+): Type => {
+  if (expanding.has(name)) return tCon(name, args);
+  const local = new Map<string, Type>();
+  info.params.forEach((p, i) => {
+    local.set(p, args[i] ?? freshVar(f));
+  });
+  const next = new Set(expanding).add(name);
+  const row = info.fields.reduceRight<Row>(
+    (rest, fld) => rExtend(fld.name, typeExprToType(fld.type, local, f, aliases, next), rest),
+    rEmpty,
+  );
+  return tRecord(row);
+};
+
+const typeExprToType = (
+  te: TypeExpr,
+  vars: Map<string, Type>,
+  f: Fresh,
+  aliases: AliasMap = new Map(),
+  expanding: Set<string> = new Set(),
+): Type => {
   if (te.kind === "tarrow")
-    return tArrow(typeExprToType(te.from, vars, f), typeExprToType(te.to, vars, f));
-  if (te.kind === "tapp")
-    return tCon(
-      te.ctor,
-      te.args.map((a) => typeExprToType(a, vars, f)),
+    return tArrow(
+      typeExprToType(te.from, vars, f, aliases, expanding),
+      typeExprToType(te.to, vars, f, aliases, expanding),
     );
-  if (te.kind === "tlist") return tCon("Array", [typeExprToType(te.elem, vars, f)]);
+  if (te.kind === "tapp") {
+    const args = te.args.map((a) => typeExprToType(a, vars, f, aliases, expanding));
+    const info = aliases.get(te.ctor);
+    return info ? aliasRow(te.ctor, info, args, f, aliases, expanding) : tCon(te.ctor, args);
+  }
+  if (te.kind === "tlist")
+    return tCon("Array", [typeExprToType(te.elem, vars, f, aliases, expanding)]);
   if (PRIMS.has(te.name)) return primType(te.name);
+  const info = aliases.get(te.name);
+  if (info) return aliasRow(te.name, info, [], f, aliases, expanding);
   if (/^[A-Z]/.test(te.name)) return tCon(te.name);
   let v = vars.get(te.name);
   if (!v) {
@@ -473,7 +519,7 @@ export type InferOptions = {
 
 // An inferred type anchored to its source span — the map hover queries.
 export type TypeAt = { span: Span; type: Type };
-export type InferResult = { env: Env; types: TypeAt[] };
+export type InferResult = { env: Env; types: TypeAt[]; aliases: AliasDef[] };
 
 // The names a pattern binds — excluded from an arm body's free references.
 const patternBinds = (p: Pattern): string[] => {
@@ -610,6 +656,25 @@ function run(
 
   const fresh = mkFresh(1000);
   const open = opts.open ?? false;
+
+  // Transparent record aliases: collect their field lists so extern signatures
+  // can reference them (expanded to rows), and build display templates (params
+  // as marker vars) so tooling can fold matching rows back to the alias name.
+  const aliasMap: AliasMap = new Map();
+  for (const s of prog.stmts)
+    if (s.kind === "type" && s.alias) aliasMap.set(s.name, { params: s.params, fields: s.alias });
+  const aliases: AliasDef[] = [...aliasMap].map(([name, info]) => ({
+    name,
+    params: info.params,
+    template: aliasRow(
+      name,
+      info,
+      info.params.map((_, i) => tVar(aliasParamId(i))),
+      fresh,
+      aliasMap,
+      new Set(),
+    ),
+  }));
   const recorded: TypeAt[] = [];
   const record = (span: Span, t: Type): void => {
     recorded.push({ span, type: t });
@@ -630,7 +695,7 @@ function run(
   // polymorphic signature (e.g. a -> a) instantiates fresh at each use site.
   for (const s of prog.stmts) {
     if (s.kind !== "extern") continue;
-    const t = typeExprToType(s.typeExpr, new Map(), fresh);
+    const t = typeExprToType(s.typeExpr, new Map(), fresh, aliasMap);
     env.set(s.name, generalize(env, t, subst));
   }
 
@@ -677,7 +742,7 @@ function run(
   }
   // Resolve every recorded type now that the whole program's subst is final.
   const types = recorded.map((r) => ({ span: r.span, type: zonk(r.type, subst) }));
-  return ok({ env, types });
+  return ok({ env, types, aliases });
 }
 
 export function inferProgram(
@@ -699,6 +764,7 @@ export function inferProgramTypes(
 
 // Render a binding's scheme for tests / display. Quantified vars appear as
 // 't{id}; the scheme's type is already zonked at generalization time.
-export const showScheme = (sc: Scheme): string => showType(sc.type);
+export const showScheme = (sc: Scheme, aliases: AliasDef[] = []): string =>
+  showType(foldAliases(sc.type, aliases));
 
 export { resolve, resolveRow, zonk };

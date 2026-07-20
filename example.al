@@ -168,6 +168,16 @@ let byMod = Array.sortBy(x => mod(x, 3))([5, 3, 7]) // sort by x % 3
 let unique = Array.dedupe([1, 1, 2, 3, 3])        // [1, 2, 3]
 let member = Array.contains({ id: 2 })([{ id: 1 }, { id: 2 }]) // true
 
+// --- named record types (transparent aliases) ---
+// `type Point = { x, y }` names a structural row. NO nominal identity, NO
+// runtime: inference expands it, and hover / .d.ts FOLD a matching closed
+// record back to the name. So `origin` below reads as `Point` (not `{ x:
+// number, y: number }`) and the emitted .d.ts exports a real `Point` type.
+// Aliases are generic too — `Boxed a` applied shows as `Boxed<number>`.
+type Point = { x: number, y: number }
+type Boxed a = { value: a }
+let boxedNum = { value: 42 } // hovers as Boxed<number>
+
 // --- records + field access (structural / "duck" data) ---
 let origin = { x: 0.0, y: 0.0 }
 let getX = p => p.x

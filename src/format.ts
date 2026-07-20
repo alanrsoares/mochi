@@ -126,6 +126,11 @@ const externStmt = (s: Extract<Stmt, { kind: "extern" }>): string =>
 
 const typeStmt = (s: Extract<Stmt, { kind: "type" }>): string => {
   const head = s.params.length ? `type ${s.name} ${s.params.join(" ")}` : `type ${s.name}`;
+  // Transparent record alias: `type Point = { x: number, y: number }`.
+  if (s.alias) {
+    const fields = s.alias.map((f) => `${f.name}: ${typeExpr(f.type)}`);
+    return fields.length ? `${head} = { ${fields.join(", ")} }` : `${head} = {}`;
+  }
   const arms = s.ctors.map((c) => `${INDENT}| ${ctor(c)}`);
   return `${head} =\n${arms.join("\n")}`;
 };

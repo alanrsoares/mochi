@@ -54,6 +54,11 @@ export type PatField = { label: string; pat: Pattern };
 export type Ctor = { name: string; fields: CtorField[] };
 export type CtorField = { name: string | null; type: string };
 
+// One field of a transparent record-type alias: `type Point = { x: number, y: a }`.
+// The field type is a full `TypeExpr` (unlike a `CtorField`, whose type is a bare
+// name), so aliases can carry generics and applied/nested types.
+export type AliasField = { name: string; type: TypeExpr };
+
 // A surface type expression, used in `extern` signatures. Lowercase names are
 // type variables (generalized); prim names (number/string/bool/...) map to
 // their HM type; others become nullary constructors.
@@ -65,7 +70,19 @@ export type TypeExpr =
 
 export type Stmt =
   | { kind: "let"; name: string; nameSpan: Span; value: Expr; exported?: boolean; span: Span }
-  | { kind: "type"; name: string; params: string[]; ctors: Ctor[]; exported?: boolean; span: Span } // type Result a e = | Ok(a) | ...
+  // A `type` decl is EITHER a variant (`ctors` non-empty, `alias` absent) or a
+  // transparent record alias (`alias` present, `ctors` empty). An alias is pure
+  // structural naming: inference expands it to its row, display folds the row
+  // back to the name — no nominal identity, no runtime.
+  | {
+      kind: "type";
+      name: string;
+      params: string[];
+      ctors: Ctor[];
+      alias?: AliasField[];
+      exported?: boolean;
+      span: Span;
+    } // type Result a e = | Ok(a) | ... ; or type Point = { x: number, y: number }
   // extern name : type = "module" "export"  — bind an external JS/TS function
   | {
       kind: "extern";

@@ -258,6 +258,7 @@ const genStmt = (s: Stmt): string => {
   if (s.kind === "import") return genImport(s);
   if (s.kind === "type") {
     const decls = genType(s);
+    if (decls === "") return ""; // record alias: pure type, no runtime
     return s.exported
       ? decls
           .split("\n")

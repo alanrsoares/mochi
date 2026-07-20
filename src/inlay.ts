@@ -25,17 +25,21 @@ export const inlayHints = (src: string): Inlay[] => {
     flatMap(parse),
     flatMap(check),
     flatMap((prog) =>
-      map(inferProgramTypes(prog, preludeEnv, { open: true }), (res) => ({ prog, env: res.env })),
+      map(inferProgramTypes(prog, preludeEnv, { open: true }), (res) => ({
+        prog,
+        env: res.env,
+        aliases: res.aliases,
+      })),
     ),
   );
   if (isErr(r)) return [];
-  const { prog, env } = r.value;
+  const { prog, env, aliases } = r.value;
   const hints: Inlay[] = [];
   for (const s of prog.stmts) {
     if (s.kind !== "let") continue;
     if (s.name.startsWith("$")) continue; // synthetic destructuring temp
     const sc = env.get(s.name);
-    if (sc) hints.push({ offset: s.nameSpan.end, label: `: ${showScheme(sc)}` });
+    if (sc) hints.push({ offset: s.nameSpan.end, label: `: ${showScheme(sc, aliases)}` });
   }
   return hints;
 };

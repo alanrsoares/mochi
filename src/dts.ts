@@ -16,7 +16,7 @@ import { inferProgramTypes, type Scheme } from "./infer";
 import { lex } from "./lexer";
 import { parse } from "./parser";
 import { builtinTypeDecls, preludeEnv, preludeNamespaces } from "./prelude";
-import type { Row, Type } from "./types";
+import { type AliasDef, aliasParamId, foldAliases, type Row, type Type } from "./types";
 
 // Collect every type-constructor name appearing in a type (for detecting which
 // builtin variant decls an emitted module must include).
@@ -90,17 +90,30 @@ const declType = (t: Type, value: Expr, names: Map<number, string>): string => {
 const genericNames = (sc: Scheme): Map<number, string> =>
   new Map(sc.vars.map((id, i) => [id, LETTERS[i] ?? `T${i}`]));
 
-const letDecl = (name: string, sc: Scheme, value: Expr): string => {
+const letDecl = (name: string, sc: Scheme, value: Expr, aliases: AliasDef[]): string => {
   const names = genericNames(sc);
   const generics = [...names.values()];
+  // Fold structural rows to alias names first, so a binding typed `{ x, y }`
+  // declares as `Point` — reusing the emitted `export type Point`.
+  const folded = foldAliases(sc.type, aliases);
   // Generics can only be introduced on a function type; a polymorphic non-
   // function binding has nowhere to bind them, so those vars fall back to
   // `unknown` (empty names map).
   if (value.kind === "lambda") {
     const head = generics.length ? `<${generics.join(", ")}>` : "";
-    return `export declare const ${name}: ${head}${declType(sc.type, value, names)};`;
+    return `export declare const ${name}: ${head}${declType(folded, value, names)};`;
   }
-  return `export declare const ${name}: ${tsOf(sc.type, new Map())};`;
+  return `export declare const ${name}: ${tsOf(folded, new Map())};`;
+};
+
+// A transparent record alias → an exported TS object type. Field types come from
+// the alias template (an HM record whose params are marker vars); map each marker
+// to a generic letter so `type Box a = { value: a }` emits `type Box<A> = ...`.
+const aliasTsDecl = (def: AliasDef): string => {
+  const names = new Map(def.params.map((_, i) => [aliasParamId(i), LETTERS[i] ?? `T${i}`]));
+  const body = tsOf(def.template, names);
+  const head = def.params.length ? `${def.name}<${[...names.values()].join(", ")}>` : def.name;
+  return `export type ${head} = ${body};`;
 };
 
 // A `type` decl → an exported tagged union matching the runtime shape.
@@ -116,12 +129,20 @@ const typeDecl = (name: string, params: string[], ctors: Ctor[]): string => {
   return `export type ${head} =\n${ctors.map((c) => `  | ${variant(c)}`).join("\n")};`;
 };
 
-const declOf = (s: Stmt, schemeOf: (n: string) => Scheme | undefined): string | null => {
+const declOf = (
+  s: Stmt,
+  schemeOf: (n: string) => Scheme | undefined,
+  aliasByName: Map<string, AliasDef>,
+  aliases: AliasDef[],
+): string | null => {
   if (s.kind === "import") return null; // re-exports live in the sibling module
-  if (s.kind === "type") return typeDecl(s.name, s.params, s.ctors);
+  if (s.kind === "type") {
+    const a = aliasByName.get(s.name);
+    return a ? aliasTsDecl(a) : typeDecl(s.name, s.params, s.ctors);
+  }
   if (s.kind === "extern") return null; // imported, not declared here
   const sc = schemeOf(s.name);
-  return sc && !s.name.startsWith("$") ? letDecl(s.name, sc, s.value) : null;
+  return sc && !s.name.startsWith("$") ? letDecl(s.name, sc, s.value, aliases) : null;
 };
 
 export const emitDts = (src: string): Result<string, AlangError> => {
@@ -135,14 +156,16 @@ export const emitDts = (src: string): Result<string, AlangError> => {
         (res) => ({
           prog,
           env: res.env,
+          aliases: res.aliases,
         }),
       ),
     ),
   );
   if (isErr(r)) return r;
-  const { prog, env } = r.value;
+  const { prog, env, aliases } = r.value;
+  const aliasByName = new Map(aliases.map((a) => [a.name, a]));
   const lines = prog.stmts
-    .map((s) => declOf(s, (n) => env.get(n)))
+    .map((s) => declOf(s, (n) => env.get(n), aliasByName, aliases))
     .filter((l): l is string => l !== null);
   // A builtin variant used in an exported binding's type (e.g. `Option<number>`
   // from `Map.get`) needs its type decl emitted too, unless the program declares

@@ -4,7 +4,7 @@
 // Array ops and the -By family (explicit projection = dictionary-passing by hand).
 import { expect, test } from "bun:test";
 import { match } from "@onrails/pattern";
-import { isErr, unwrapOk } from "@onrails/result";
+import { unwrapOk } from "@onrails/result";
 import { check } from "../src/check";
 import { compile } from "../src/compile";
 import { inferProgram, showScheme } from "../src/infer";

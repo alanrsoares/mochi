@@ -34,6 +34,9 @@ const buildRegistry = (prog: Program): Result<Registry, AlangError> => {
   for (const s of prog.stmts) {
     if (s.kind !== "type") continue;
     if (reg.type.has(s.name)) return err(checkErr(`duplicate type '${s.name}'`, s.span));
+    // A transparent record alias reserves its name (so a later variant can't
+    // reuse it) but registers no constructors — it's structural, never a
+    // `switch` target. An empty ctor list is inert for exhaustiveness.
     reg.type.set(
       s.name,
       s.ctors.map((c) => c.name),

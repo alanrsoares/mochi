@@ -10,7 +10,7 @@ import { inferProgramTypes, type TypeAt } from "./infer";
 import { lex } from "./lexer";
 import { parse } from "./parser";
 import { preludeEnv } from "./prelude";
-import { showType } from "./types";
+import { foldAliases, showType } from "./types";
 
 // The tightest span containing `offset`, or null if none. Ties (nested spans of
 // equal width) are broken toward the first — they denote the same location.
@@ -35,5 +35,5 @@ export const hoverAt = (src: string, offset: number): string | null => {
   );
   if (isErr(r)) return null;
   const hit = tightest(r.value.types, offset);
-  return hit ? showType(hit.type) : null;
+  return hit ? showType(foldAliases(hit.type, r.value.aliases)) : null;
 };
