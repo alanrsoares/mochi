@@ -1,0 +1,12 @@
+// no-promise-result
+//
+// Flag `Promise<Result<T, E>>` in type annotations and return types.
+// Public APIs should expose `ResultAsync<T, E>` instead — the boundary
+// helper (`fromAsync` / `tryAsync`) handles the lift.
+
+engine biome(1.0)
+language js
+
+`Promise<Result<$ok, $err>>` as $t where {
+  register_diagnostic(span=$t, message="Promise<Result<…>> in a type position — use ResultAsync<T, E> at the boundary (fromAsync / tryAsync).", severity="error")
+}

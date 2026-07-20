@@ -6,7 +6,20 @@
 // the parser into a temp binding plus field-access lets, so the printer detects
 // that shape and re-folds it back into `let { x, y } = e`.
 import { flatMap, map, pipe, type Result } from "@onrails/result";
-import type { Ctor, CtorField, Expr, LamParam, PatField, Pattern, Stmt, TypeExpr } from "./ast";
+import type {
+  Ctor,
+  CtorField,
+  Expr,
+  ExternStmt,
+  ImportStmt,
+  LamParam,
+  MatchExpr,
+  PatField,
+  Pattern,
+  Stmt,
+  TypeExpr,
+  TypeStmt,
+} from "./ast";
 import type { AlangError } from "./errors";
 import { lex } from "./lexer";
 import { parse } from "./parser";
@@ -96,7 +109,7 @@ const pattern = (p: Pattern): string => {
 const patField = (f: PatField): string =>
   f.pat.kind === "pbind" && f.pat.name === f.label ? f.label : `${f.label}: ${pattern(f.pat)}`;
 
-const matchExpr = (e: Extract<Expr, { kind: "match" }>, ind: string): string => {
+const matchExpr = (e: MatchExpr, ind: string): string => {
   const inner = ind + INDENT;
   const arms = e.arms.map((a) => `${inner}| ${pattern(a.pattern)} => ${expr(a.body, inner)}`);
   return `switch ${expr(e.scrutinee, ind)} {\n${arms.join("\n")}\n${ind}}`;
@@ -121,10 +134,10 @@ const typeExpr = (te: TypeExpr): string => {
   return `${from} -> ${typeExpr(te.to)}`;
 };
 
-const externStmt = (s: Extract<Stmt, { kind: "extern" }>): string =>
+const externStmt = (s: ExternStmt): string =>
   `extern ${s.name} : ${typeExpr(s.typeExpr)} = ${JSON.stringify(s.module)} ${JSON.stringify(s.imported)}`;
 
-const typeStmt = (s: Extract<Stmt, { kind: "type" }>): string => {
+const typeStmt = (s: TypeStmt): string => {
   const head = s.params.length ? `type ${s.name} ${s.params.join(" ")}` : `type ${s.name}`;
   // Transparent record alias: `type Point = { x: number, y: number }`.
   if (s.alias) {
@@ -141,7 +154,7 @@ const fieldOf = (e: Expr, tmp: string): string | null =>
 
 // Print statements, re-folding a `$d` temp + its field-access lets into a
 // single `let { ... } = e`. Returns the number of statements consumed.
-const importStmt = (s: Extract<Stmt, { kind: "import" }>): string =>
+const importStmt = (s: ImportStmt): string =>
   `import { ${s.names.map((n) => n.name).join(", ")} } from ${JSON.stringify(s.from)}`;
 
 // `export ` prefix for an exported declaration.

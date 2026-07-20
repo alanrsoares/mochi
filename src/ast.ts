@@ -107,6 +107,25 @@ export type Stmt =
   // import { a, b } from "./mod"  — bind exports of another alang module
   | { kind: "import"; names: ImportName[]; from: string; span: Span };
 
+// Named narrowings of the union nodes. Signatures take these instead of an
+// inline `Extract<Expr, { kind: "…" }>` so the discriminant shape stays out of
+// call sites (and the `no-inline-struct-type` lint stays green).
+export type LambdaExpr = Extract<Expr, { kind: "lambda" }>;
+export type MatchExpr = Extract<Expr, { kind: "match" }>;
+export type FieldExpr = Extract<Expr, { kind: "field" }>;
+export type ListExpr = Extract<Expr, { kind: "list" }>;
+
+export type ArrPat = Extract<Pattern, { kind: "parr" }>;
+export type ListPat = Extract<Pattern, { kind: "plist" }>;
+export type RecordPat = Extract<Pattern, { kind: "precord" }>;
+export type CtorPat = Extract<Pattern, { kind: "pctor" }>;
+export type LitPat = Extract<Pattern, { kind: "plit" | "pbool" | "pstr" }>;
+
+export type LetStmt = Extract<Stmt, { kind: "let" }>;
+export type TypeStmt = Extract<Stmt, { kind: "type" }>;
+export type ExternStmt = Extract<Stmt, { kind: "extern" }>;
+export type ImportStmt = Extract<Stmt, { kind: "import" }>;
+
 // A name pulled in by an `import`. `span` anchors it for diagnostics.
 export type ImportName = { name: string; span: Span };
 

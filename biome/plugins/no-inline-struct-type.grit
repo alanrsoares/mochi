@@ -1,0 +1,8 @@
+engine biome(1.0)
+language js(typescript, jsx)
+
+// Inline object types on parameters (including destructured props).
+JsFormalParameter() as $param where {
+  $param <: contains TsObjectType() as $obj,
+  register_diagnostic(span=$obj, message="Avoid inline struct-like object types in signatures; extract a named `type` or `interface`.", severity="error")
+}

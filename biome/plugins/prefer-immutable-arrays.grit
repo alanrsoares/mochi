@@ -1,0 +1,80 @@
+// prefer-immutable-arrays
+//
+// Flag in-place Array mutators that silently mutate their *receiver* — a bug
+// when the array is a prop, shared state, or a function argument. Each has an
+// immutable equivalent:
+//   sort     -> arr.toSorted(...)        reverse  -> arr.toReversed()
+//   splice   -> arr.filter(...) / arr.slice(...) / arr.with(i, x)
+//   shift    -> arr[0] + arr.slice(1)    unshift  -> [x, ...arr]
+//   pop      -> arr.at(-1) + arr.slice(0, -1)
+//
+// `.push` is intentionally NOT flagged — appending to a local accumulator is
+// idiomatic and low-risk. The receiver guard below skips mutators applied to a
+// freshly-produced array (`[...x].sort()`, `Array.from(x).sort()`,
+// `items.map(...).sort()`), which are already immutable. A mutator on a named
+// variable or member (`rows.sort()`, `this.items.reverse()`) is the footgun.
+//
+// When mutation is genuinely required (e.g. an in-place algorithm on a private
+// buffer), suppress with a `// biome-ignore` line documenting why.
+
+engine biome(1.0)
+language js(typescript, jsx)
+
+pattern fresh_array() {
+  or {
+    // A PascalCase receiver is a namespace/util (Collections, Math, Array),
+    // not an array instance — its `.sort(cmp, arr)` is a data-last immutable
+    // helper, not the in-place native method.
+    r"^[A-Z][A-Za-z0-9_]*$",
+    `[$...]`,
+    `Array.from($...)`,
+    `Array.of($...)`,
+    `$x.map($...)`,
+    `$x.filter($...)`,
+    `$x.slice($...)`,
+    `$x.concat($...)`,
+    `$x.flat($...)`,
+    `$x.flatMap($...)`,
+    `$x.toSorted($...)`,
+    `$x.toReversed($...)`,
+    `$x.entries($...)`,
+    `Object.keys($...)`,
+    `Object.values($...)`,
+    `Object.entries($...)`
+  }
+}
+
+// Arg-counts below mirror the native Array.prototype signatures (sort: 0–1,
+// reverse/shift/pop: 0). This excludes comparator-first immutable utilities
+// like `Collections.sort(cmp, arr)` / `Collections.reverse(arr)`, whose extra
+// arg makes them structurally distinct from the in-place native method.
+or {
+  `$arr.sort()` as $n where {
+    $arr <: not fresh_array(),
+    register_diagnostic(span=$n, message="In-place `.sort()` mutates the receiver — prefer `arr.toSorted(...)`.", severity="error")
+  },
+  `$arr.sort($cmp)` as $n where {
+    $arr <: not fresh_array(),
+    register_diagnostic(span=$n, message="In-place `.sort()` mutates the receiver — prefer `arr.toSorted(...)`.", severity="error")
+  },
+  `$arr.reverse()` as $n where {
+    $arr <: not fresh_array(),
+    register_diagnostic(span=$n, message="In-place `.reverse()` mutates the receiver — prefer `arr.toReversed()`.", severity="error")
+  },
+  `$arr.splice($...)` as $n where {
+    $arr <: not fresh_array(),
+    register_diagnostic(span=$n, message="In-place `.splice()` mutates the receiver — prefer `arr.filter(...)`, `arr.slice(...)`, or `arr.with(i, x)`.", severity="error")
+  },
+  `$arr.unshift($...)` as $n where {
+    $arr <: not fresh_array(),
+    register_diagnostic(span=$n, message="In-place `.unshift()` mutates the receiver — prefer `[x, ...arr]`.", severity="error")
+  },
+  `$arr.shift()` as $n where {
+    $arr <: not fresh_array(),
+    register_diagnostic(span=$n, message="In-place `.shift()` mutates the receiver — prefer `arr[0]` + `arr.slice(1)`.", severity="error")
+  },
+  `$arr.pop()` as $n where {
+    $arr <: not fresh_array(),
+    register_diagnostic(span=$n, message="In-place `.pop()` mutates the receiver — prefer `arr.at(-1)` + `arr.slice(0, -1)`.", severity="error")
+  }
+}

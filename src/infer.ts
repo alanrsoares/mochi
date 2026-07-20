@@ -5,7 +5,17 @@
 // their body is inferred. Field access uses an open row, so a function that
 // reads `p.x` accepts any record that has an `x` — structural duck typing.
 import { err, isErr, map, ok, type Result } from "@onrails/result";
-import type { AliasField, Ctor, Expr, Pattern, Program, Stmt, TypeExpr } from "./ast";
+import type {
+  AliasField,
+  Ctor,
+  Expr,
+  LetStmt,
+  MapEntry,
+  MatchExpr,
+  Pattern,
+  Program,
+  TypeExpr,
+} from "./ast";
 import { type AlangError, typeErr } from "./errors";
 import { builtinTypeDecls } from "./prelude";
 import type { Span } from "./span";
@@ -300,10 +310,7 @@ const inferSeqExpr = (
 };
 
 // Keys share one type, values share one type → `Map<k, v>` (native JS Map).
-const inferMapExpr = (
-  entries: { key: Expr; value: Expr }[],
-  ctx: Ctx,
-): Result<Type, AlangError> => {
+const inferMapExpr = (entries: MapEntry[], ctx: Ctx): Result<Type, AlangError> => {
   const k = freshVar(ctx.fresh);
   const v = freshVar(ctx.fresh);
   for (const ent of entries) {
@@ -319,7 +326,7 @@ const inferMapExpr = (
   return ok(tCon("Map", [k, v]));
 };
 
-const inferMatch = (e: Extract<Expr, { kind: "match" }>, ctx: Ctx): Result<Type, AlangError> => {
+const inferMatch = (e: MatchExpr, ctx: Ctx): Result<Type, AlangError> => {
   const scrutT = infer(e.scrutinee, ctx);
   if (isErr(scrutT)) return scrutT;
   const resultT = freshVar(ctx.fresh);
@@ -634,13 +641,12 @@ const stronglyConnected = (adj: number[][]): number[][] => {
       }
     }
     if (low[v] === index[v]) {
-      const comp: number[] = [];
-      for (;;) {
-        const w = stack.pop()!;
-        onStack[w] = false;
-        comp.push(w);
-        if (w === v) break;
-      }
+      // v roots an SCC: the stack suffix from v to the top is exactly that
+      // component. Slice it off and truncate the stack (no in-place `.pop()`).
+      const start = stack.indexOf(v);
+      const comp = stack.slice(start);
+      for (const w of comp) onStack[w] = false;
+      stack.length = start;
       sccs.push(comp);
     }
   };
@@ -723,7 +729,7 @@ function run(
   // graph) and inferred group-by-group in dependency-first order. Within a
   // group every member is pre-bound monomorphically, so `f`/`g` that call each
   // other resolve to these bindings; the group generalizes as a unit afterwards.
-  const lets = prog.stmts.filter((s): s is Extract<Stmt, { kind: "let" }> => s.kind === "let");
+  const lets = prog.stmts.filter((s): s is LetStmt => s.kind === "let");
   const idxOf = new Map(lets.map((s, i) => [s.name, i]));
   const adj = lets.map((s) => {
     const refs = new Set<string>();

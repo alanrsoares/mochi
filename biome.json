@@ -34,5 +34,21 @@
       }
     }
   },
-  "assist": { "actions": { "source": { "organizeImports": "on" } } }
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
+  "overrides": [
+    {
+      "includes": ["**", "!biome/plugins/**"],
+      "plugins": [
+        "./biome/plugins/no-promise-result.grit",
+        "./biome/plugins/no-inline-struct-type.grit"
+      ]
+    },
+    {
+      "includes": ["**", "!test/**", "!**/*.spec.ts", "!biome/plugins/**"],
+      "plugins": [
+        "./biome/plugins/prefer-immutable-arrays.grit",
+        "./biome/plugins/prefer-immutable-objects.grit"
+      ]
+    }
+  ]
 }

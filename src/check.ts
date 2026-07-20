@@ -1,7 +1,7 @@
 // Semantic pass — the Reason superpower: exhaustiveness + constructor checks.
 // Builds a variant registry from `type` decls, then verifies every `switch`.
 import { err, isErr, ok, type Result } from "@onrails/result";
-import type { Expr, Pattern, Program } from "./ast";
+import type { CtorPat, Expr, MatchExpr, Pattern, Program } from "./ast";
 import { type AlangError, checkErr } from "./errors";
 import { builtinTypeDecls, preludeNamespaces } from "./prelude";
 
@@ -61,7 +61,7 @@ const buildRegistry = (prog: Program): Result<Registry, AlangError> => {
 };
 
 // Walk an expression tree, invoking `visit` on every `match` node.
-function forEachMatch(e: Expr, visit: (m: Extract<Expr, { kind: "match" }>) => void): void {
+function forEachMatch(e: Expr, visit: (m: MatchExpr) => void): void {
   switch (e.kind) {
     case "num":
     case "bool":
@@ -119,7 +119,7 @@ const isCatchAll = (p: Pattern): boolean =>
 // and extra arms are allowed but don't themselves prove totality (need the pair
 // above or a `_`). Returns null (exhaustive), an error (a list switch that
 // isn't), or undefined (not a list switch → let the caller decide).
-const checkSeqExhaustive = (m: Extract<Expr, { kind: "match" }>): AlangError | null | undefined => {
+const checkSeqExhaustive = (m: MatchExpr): AlangError | null | undefined => {
   const seqs = m.arms.flatMap((a) =>
     a.pattern.kind === "parr" || a.pattern.kind === "plist" ? [a.pattern] : [],
   );
@@ -130,7 +130,7 @@ const checkSeqExhaustive = (m: Extract<Expr, { kind: "match" }>): AlangError | n
   return checkErr("non-exhaustive list switch: cover `[]` and `[x, ...xs]` (or add `_`)", m.span);
 };
 
-function checkMatch(m: Extract<Expr, { kind: "match" }>, reg: Registry): AlangError | null {
+function checkMatch(m: MatchExpr, reg: Registry): AlangError | null {
   const hasCatchAll = m.arms.some((a) => isCatchAll(a.pattern));
   const ctorArms = m.arms.filter((a) => a.pattern.kind === "pctor");
 
@@ -151,7 +151,7 @@ function checkMatch(m: Extract<Expr, { kind: "match" }>, reg: Registry): AlangEr
   let owningType: string | null = null;
   const covered = new Set<string>();
   for (const arm of ctorArms) {
-    const p = arm.pattern as Extract<Pattern, { kind: "pctor" }>;
+    const p = arm.pattern as CtorPat;
     const info = reg.ctor.get(p.ctor);
     if (!info) return checkErr(`unknown constructor '${p.ctor}'`, p.span);
     if (p.args.length !== info.arity)

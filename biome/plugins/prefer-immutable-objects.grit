@@ -1,0 +1,24 @@
+// prefer-immutable-objects
+//
+// Flag `Object.assign(target, …)` where `target` is not a fresh object literal:
+// it mutates `target` in place, a bug when `target` is shared/passed-in state.
+//   Object.assign(target, patch)  ->  { ...target, ...patch }
+//
+// `Object.assign({}, a, b)` (fresh literal target) is allowed — it produces a
+// new object, the immutable merge pattern.
+//
+// NOTE: bare property reassignment (`obj.field = v`) is deliberately NOT
+// flagged. In this codebase it is dominated by required mutation — class
+// private-field initialization (`this.#x = …`), the Canvas 2D API
+// (`ctx.fillStyle = …`), and React refs (`ref.current = …`) — none of which
+// can be expressed immutably. Flagging it is almost all false positives.
+// `useConst` / `noParameterAssign` (biome recommended) already cover the
+// reassignment shortcuts worth catching.
+
+engine biome(1.0)
+language js(typescript, jsx)
+
+`Object.assign($target, $...)` as $n where {
+  $target <: not `{ $... }`,
+  register_diagnostic(span=$n, message="`Object.assign(target, …)` mutates `target` — prefer `{ ...target, ...patch }` (a fresh `{}` target is fine).", severity="error")
+}

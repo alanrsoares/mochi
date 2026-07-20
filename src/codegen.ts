@@ -4,12 +4,31 @@
 // ts-pattern .exhaustive() forces a case for every Expr kind here: add an AST
 // node and forget it → TS compile error in the compiler, not a silent gap.
 import { match } from "ts-pattern";
-import type { CtorField, Expr, LamParam, MatchArm, Pattern, Program, Stmt } from "./ast";
+import type {
+  ArrPat,
+  CtorField,
+  Expr,
+  ExternStmt,
+  FieldExpr,
+  ImportStmt,
+  LambdaExpr,
+  LamParam,
+  ListExpr,
+  ListPat,
+  LitPat,
+  MatchArm,
+  MatchExpr,
+  Pattern,
+  Program,
+  RecordPat,
+  Stmt,
+  TypeStmt,
+} from "./ast";
 import { builtinTypeDecls, namespaceRuntime, preludeJsDefs, runtimeDeps } from "./prelude";
 
 // A `Ns.member` access on a bare namespace ref (`List.map`) → the JS identifier
 // its runtime is defined under, or null if it isn't a namespace access.
-const nsRuntimeId = (e: Extract<Expr, { kind: "field" }>): string | null =>
+const nsRuntimeId = (e: FieldExpr): string | null =>
   e.target.kind === "ref" ? (namespaceRuntime[e.target.name]?.[e.name] ?? null) : null;
 
 // A constructor's runtime field keys: a labelled field uses its label, an
@@ -34,9 +53,7 @@ export const exportedCtorKeys = (prog: Program): Map<string, string[]> => {
 // `(x, y) => e` and `x => y => e` identically (`a -> b -> c`), so this is sound
 // — it lets a multi-arg function lower to a single `_curry`-wrapped JS function
 // instead of nested closures (CRITIQUE §4.4).
-const collapseLambda = (
-  l: Extract<Expr, { kind: "lambda" }>,
-): { params: LamParam[]; body: Expr } => {
+const collapseLambda = (l: LambdaExpr): { params: LamParam[]; body: Expr } => {
   const params = [...l.params];
   let body: Expr = l.body;
   while (body.kind === "lambda") {
@@ -80,7 +97,7 @@ const genExpr = (e: Expr): string =>
 
 // A `@{...}` literal → a lazy iterable over its (eagerly-evaluated) elements.
 // `_list` wraps a generator factory so the List is re-iterable and lazy.
-const genList = (e: Extract<Expr, { kind: "list" }>): string => {
+const genList = (e: ListExpr): string => {
   const yields = e.elements.map((el) => `yield (${genExpr(el)});`).join(" ");
   return `_list(function* () {${yields ? ` ${yields} ` : ""}})`;
 };
@@ -129,7 +146,7 @@ const catchAllParam = (p: Pattern): string => {
 // A switch is a "lazy-List match" when it has a narrowing `@{}`/`@{h,...t}` arm
 // (a lone `@{...all}` is a catch-all, not narrowing). check.ts guarantees such a
 // switch is exactly the empty + single-head-cons pair, so it lowers directly.
-const isListMatch = (m: Extract<Expr, { kind: "match" }>): boolean =>
+const isListMatch = (m: MatchExpr): boolean =>
   m.arms.some((a) => a.pattern.kind === "plist" && !isCatchAll(a.pattern));
 
 // A lazy tail/rest: replay the still-buffered elements from index `from`, then
@@ -142,7 +159,7 @@ const listTail = (from: number): string =>
 // b}` must see n+1 pulls to prove length exactly n; a cons arm `@{h, ...t}`
 // needs n pulls (length ≥ n) and binds its tail to a lazy List over the rest.
 // Literal elements add `_b[i] === lit` guards and take a hole in the binding.
-const genListArm = (p: Extract<Pattern, { kind: "plist" }>, body: Expr): string => {
+const genListArm = (p: ListPat, body: Expr): string => {
   const n = p.elems.length;
   const guards = p.elems.flatMap((ep, i) =>
     ep.kind === "plit" || ep.kind === "pbool" || ep.kind === "pstr"
@@ -171,7 +188,7 @@ const genListArm = (p: Extract<Pattern, { kind: "plist" }>, body: Expr): string 
 // arm, buffering them so later arms can re-examine a prefix without re-forcing
 // it. Bounded pulls only — a pull-sequence is never fully forced, so this can't
 // use @onrails/pattern (not length-indexable). check.ts proved totality.
-const genListMatch = (m: Extract<Expr, { kind: "match" }>): string => {
+const genListMatch = (m: MatchExpr): string => {
   const arms: string[] = [];
   let fallback = `(() => { throw new Error("non-exhaustive lazy-list switch"); })()`;
   for (const a of m.arms) {
@@ -195,7 +212,7 @@ const genListMatch = (m: Extract<Expr, { kind: "match" }>): string => {
   );
 };
 
-const genMatch = (m: Extract<Expr, { kind: "match" }>): string => {
+const genMatch = (m: MatchExpr): string => {
   if (isListMatch(m)) return genListMatch(m);
   const parts = [`match(${genExpr(m.scrutinee)})`];
   let catchAll: MatchArm | undefined;
@@ -216,13 +233,13 @@ const genMatch = (m: Extract<Expr, { kind: "match" }>): string => {
 
 // Destructuring binds from a record pattern's fields: `{ x }` → `x`, a rename
 // `{ x: y }` → `x: y`. Non-binding sub-patterns (literals, `_`) contribute none.
-const recordBinds = (p: Extract<Pattern, { kind: "precord" }>): string[] =>
+const recordBinds = (p: RecordPat): string[] =>
   p.fields.flatMap((f) =>
     f.pat.kind === "pbind" ? [f.pat.name === f.label ? f.label : `${f.label}: ${f.pat.name}`] : [],
   );
 
 // A literal pattern rendered as a JS value for the matcher object / `.with`.
-const litValue = (p: Extract<Pattern, { kind: "plit" | "pbool" | "pstr" }>): string =>
+const litValue = (p: LitPat): string =>
   p.kind === "pstr" ? JSON.stringify(p.value) : p.kind === "plit" ? p.raw : String(p.value);
 
 // Patterns that narrow (everything a catch-all is not) — routed to `.with(...)`.
@@ -235,7 +252,7 @@ type NarrowingPattern = Extract<
 // handler: `[]` → `v.length === 0`; `[x]` → `v.length === 1`, bind `([x])`;
 // `[h, ...t]` → `v.length >= 1`, bind `([h, ...t])`. Literal elements add
 // `v[i] === lit` to the guard and take a hole in the destructure.
-const genArrArm = (p: Extract<Pattern, { kind: "parr" }>, body: Expr): string => {
+const genArrArm = (p: ArrPat, body: Expr): string => {
   const conds = [`_v.length ${p.rest ? ">=" : "==="} ${p.elems.length}`];
   const slots = p.elems.map((ep, i) => {
     if (ep.kind === "pbind") return ep.name;
@@ -291,7 +308,7 @@ const genWithArm = (p: NarrowingPattern, body: Expr): string => {
 // discriminant key is `_tag`, matching the @onrails ecosystem convention
 // (@onrails/result, @onrails/maybe), so their type guards (isOk/isSome/...)
 // recognize alang values at the JS boundary.
-const genType = (s: Extract<Stmt, { kind: "type" }>): string =>
+const genType = (s: TypeStmt): string =>
   s.ctors
     .map((c) => {
       const tag = JSON.stringify(c.name);
@@ -307,14 +324,14 @@ const genType = (s: Extract<Stmt, { kind: "type" }>): string =>
     .join("\n");
 
 // extern → an ESM import binding the external export to the alang name.
-const genExtern = (s: Extract<Stmt, { kind: "extern" }>): string => {
+const genExtern = (s: ExternStmt): string => {
   const spec = s.imported === s.name ? s.name : `${s.imported} as ${s.name}`;
   return `import { ${spec} } from ${JSON.stringify(s.module)};`;
 };
 
 // import { a, b } from "./mod"  → the compiled sibling `./mod.js`. Source paths
 // name the `.al` module (with or without extension); output targets `.js`.
-const genImport = (s: Extract<Stmt, { kind: "import" }>): string => {
+const genImport = (s: ImportStmt): string => {
   const names = s.names.map((n) => n.name).join(", ");
   const path = `${s.from.replace(/\.al$/, "")}.js`;
   return `import { ${names} } from ${JSON.stringify(path)};`;
@@ -441,14 +458,15 @@ const preludePreamble = (prog: Program): string => {
     else if (s.kind === "type" && s.ctors.some((c) => c.fields.length >= 2)) refs.add("_curry");
   }
   // Transitively pull in each referenced def's runtime deps (`range` → `_list`,
-  // `_Map_get` → Some/None, …).
-  const stack = [...refs];
-  while (stack.length) {
-    const r = stack.pop()!;
+  // `_Map_get` → Some/None, …). A forward cursor over a push-only worklist
+  // drains the growing frontier without an in-place `.pop()`.
+  const queue = [...refs];
+  for (let i = 0; i < queue.length; i++) {
+    const r = queue[i]!;
     for (const d of runtimeDeps[r] ?? [])
       if (!refs.has(d)) {
         refs.add(d);
-        stack.push(d);
+        queue.push(d);
       }
   }
   const bound = boundNames(prog);
