@@ -57,6 +57,24 @@ const PUNCT: Record<string, Tok | undefined> = {
 
 const isSpace = (c: string): boolean => c === " " || c === "\t" || c === "\n" || c === "\r";
 
+// Scan a "..." literal starting at the opening quote `i`. Returns the decoded
+// value and the index just past the closing quote, or null if unterminated.
+const scanString = (src: string, i: number): { value: string; end: number } | null => {
+  let j = i + 1;
+  let value = "";
+  while (j < src.length && src[j] !== '"') {
+    if (src[j] === "\\" && j + 1 < src.length) {
+      const n = src[j + 1]!;
+      value += n === "n" ? "\n" : n === "t" ? "\t" : n; // \\ and \" fall through to the char
+      j += 2;
+    } else {
+      value += src[j];
+      j++;
+    }
+  }
+  return j >= src.length ? null : { value, end: j + 1 };
+};
+
 export function lex(src: string): Result<Located[], AlangError> {
   const toks: Located[] = [];
   let i = 0;
@@ -93,21 +111,10 @@ export function lex(src: string): Result<Located[], AlangError> {
 
     // string literal: "..." with \n \t \\ \" escapes; store the decoded value.
     if (c === '"') {
-      let j = i + 1;
-      let value = "";
-      while (j < src.length && src[j] !== '"') {
-        if (src[j] === "\\" && j + 1 < src.length) {
-          const n = src[j + 1]!;
-          value += n === "n" ? "\n" : n === "t" ? "\t" : n; // \\ and \" fall through to the char
-          j += 2;
-        } else {
-          value += src[j];
-          j++;
-        }
-      }
-      if (j >= src.length) return err(lexErr("unterminated string literal", span(i, j)));
-      emit({ t: "str", v: value }, i, j + 1);
-      i = j + 1;
+      const s = scanString(src, i);
+      if (!s) return err(lexErr("unterminated string literal", span(i, src.length)));
+      emit({ t: "str", v: s.value }, i, s.end);
+      i = s.end;
       continue;
     }
 
