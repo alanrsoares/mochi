@@ -574,6 +574,10 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
   }
 
   function parseStmt(): Stmt[] {
+    // A leading `//` comment block rides on the statement's first token; surface
+    // it as the `let`'s doc. Synthetic destructuring temps ($d…) are skipped
+    // downstream, so attaching to all produced lets is harmless.
+    const doc = peek().doc;
     const t = peek().t;
     if (t === "import") return [parseImport()];
     if (t === "export") {
@@ -581,12 +585,12 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
       const inner = peek().t;
       if (inner === "type") return [{ ...parseType(), exported: true }];
       if (inner === "extern") return [{ ...parseExtern(), exported: true }];
-      if (inner === "let") return parseLet().map((s) => ({ ...s, exported: true }));
+      if (inner === "let") return parseLet().map((s) => ({ ...s, exported: true, doc }));
       return fail("`export` must precede let, type, or extern");
     }
     if (t === "type") return [parseType()];
     if (t === "extern") return [parseExtern()];
-    return parseLet();
+    return parseLet().map((s) => ({ ...s, doc }));
   }
 
   try {

@@ -6,7 +6,7 @@
 // hover popup.
 import { flatMap, isErr, pipe } from "@onrails/result";
 import { check } from "./check";
-import { inferProgramTypes, type TypeAt } from "./infer";
+import { inferProgramTypes, type SymbolInfo, type TypeAt } from "./infer";
 import { lex } from "./lexer";
 import { parse } from "./parser";
 import { preludeEnv } from "./prelude";
@@ -24,9 +24,22 @@ const tightest = (types: TypeAt[], offset: number): TypeAt | null => {
   return best;
 };
 
-// The inferred type at `offset`, rendered, or null when the source doesn't
-// typecheck or nothing sits under the cursor. Open-world so host globals infer.
-export const hoverAt = (src: string, offset: number): string | null => {
+// A hover payload: `code` is the alang-fenced lead line (a bare type, or a
+// TS-style `let x: T` / `(parameter) x: T` / `(property) x: T`), `doc` is an
+// optional prose paragraph (a leading `//` comment) rendered below the fence.
+export type HoverInfo = { code: string; doc?: string };
+
+// TS-style lead: `kind name: type` for a named symbol, bare type otherwise.
+const lead = (type: string, symbol: SymbolInfo | undefined): string => {
+  if (!symbol) return type;
+  if (symbol.kind === "let") return `let ${symbol.name}: ${type}`;
+  if (symbol.kind === "parameter") return `(parameter) ${symbol.name}: ${type}`;
+  return `(property) ${symbol.name}: ${type}`;
+};
+
+// The hover at `offset`, or null when the source doesn't typecheck or nothing
+// sits under the cursor. Open-world so host globals infer.
+export const hoverAt = (src: string, offset: number): HoverInfo | null => {
   const r = pipe(
     lex(src),
     flatMap(parse),
@@ -35,5 +48,7 @@ export const hoverAt = (src: string, offset: number): string | null => {
   );
   if (isErr(r)) return null;
   const hit = tightest(r.value.types, offset);
-  return hit ? showType(foldAliases(hit.type, r.value.aliases)) : null;
+  if (!hit) return null;
+  const type = showType(foldAliases(hit.type, r.value.aliases));
+  return { code: lead(type, hit.symbol), doc: hit.symbol?.doc };
 };

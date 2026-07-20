@@ -154,7 +154,7 @@ type Ctx = {
   fresh: Fresh;
   open: boolean;
   ns: Map<string, Map<string, Scheme>>; // qualified collection namespaces (List.map, ...)
-  record?: (span: Span, t: Type) => void;
+  record?: (span: Span, t: Type, symbol?: SymbolInfo) => void;
 };
 
 const u = (a: Type, b: Type, ctx: Ctx, span?: Span): Result<Type, AlangError> => {
@@ -166,7 +166,12 @@ const u = (a: Type, b: Type, ctx: Ctx, span?: Span): Result<Type, AlangError> =>
 // place, so hover can look up any subexpression's type by span.
 const infer = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
   const r = inferExpr(e, ctx);
-  if (ctx.record && !isErr(r)) ctx.record(e.span, r.value);
+  if (ctx.record && !isErr(r))
+    ctx.record(
+      e.span,
+      r.value,
+      e.kind === "field" ? { kind: "property", name: e.name } : undefined,
+    );
   return r;
 };
 
@@ -340,7 +345,12 @@ type PatResult = { type: Type; bindings: Map<string, Type> };
 // span — the pattern-side analogue of `infer` recording expression nodes.
 const inferPattern = (p: Pattern, ctx: Ctx): Result<PatResult, AlangError> => {
   const r = inferPat(p, ctx);
-  if (ctx.record && !isErr(r)) ctx.record(p.span, r.value.type);
+  if (ctx.record && !isErr(r))
+    ctx.record(
+      p.span,
+      r.value.type,
+      p.kind === "pbind" ? { kind: "parameter", name: p.name } : undefined,
+    );
   return r;
 };
 
@@ -529,8 +539,13 @@ export type InferOptions = {
   namespaces?: Record<string, Record<string, Type>>; // qualified members (List.map, ...)
 };
 
+// The identity of the symbol under a span, when the inferrer knows it is binding
+// or projecting a name — lets hover lead with `let x: T` / `(parameter) x: T` /
+// `(property) x: T`, TS-style, instead of a bare type.
+export type SymbolInfo = { kind: "let" | "parameter" | "property"; name: string; doc?: string };
+
 // An inferred type anchored to its source span — the map hover queries.
-export type TypeAt = { span: Span; type: Type };
+export type TypeAt = { span: Span; type: Type; symbol?: SymbolInfo };
 export type InferResult = { env: Env; types: TypeAt[]; aliases: AliasDef[] };
 
 // The names a pattern binds — excluded from an arm body's free references.
@@ -688,8 +703,8 @@ function run(
     ),
   }));
   const recorded: TypeAt[] = [];
-  const record = (span: Span, t: Type): void => {
-    recorded.push({ span, type: t });
+  const record = (span: Span, t: Type, symbol?: SymbolInfo): void => {
+    recorded.push({ span, type: t, symbol });
   };
 
   // constructors first, so `let`s (in any order after their type) can use them
@@ -745,6 +760,10 @@ function run(
       const uni = unify(selfVars.get(s.name)!, t.value, subst, fresh);
       if (isErr(uni)) return err(typeErr(uni.error.message, s.span));
       bodyTypes.set(s.name, t.value);
+      // Record the binding name itself so hovering it leads with `let x: T`
+      // (+ any doc). Skip synthetic destructuring temps ($d…).
+      if (!s.name.startsWith("$"))
+        record(s.nameSpan, t.value, { kind: "let", name: s.name, doc: s.doc });
     }
     // Generalize the group against the OUTER env — drop the mono self-bindings
     // first, else the group's own type vars look env-bound and stay ungeneralized.
@@ -753,7 +772,11 @@ function run(
     for (const s of group) env.set(s.name, generalize(env, bodyTypes.get(s.name)!, subst));
   }
   // Resolve every recorded type now that the whole program's subst is final.
-  const types = recorded.map((r) => ({ span: r.span, type: zonk(r.type, subst) }));
+  const types = recorded.map((r) => ({
+    span: r.span,
+    type: zonk(r.type, subst),
+    symbol: r.symbol,
+  }));
   return ok({ env, types, aliases });
 }
 

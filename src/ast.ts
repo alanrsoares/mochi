@@ -69,7 +69,17 @@ export type TypeExpr =
   | { kind: "tlist"; elem: TypeExpr; span: Span }; // [a]
 
 export type Stmt =
-  | { kind: "let"; name: string; nameSpan: Span; value: Expr; exported?: boolean; span: Span }
+  // `doc` is a leading `//` comment block attached by the lexer, surfaced in
+  // hover as a prose paragraph below the type (the JSDoc feel).
+  | {
+      kind: "let";
+      name: string;
+      nameSpan: Span;
+      value: Expr;
+      exported?: boolean;
+      doc?: string;
+      span: Span;
+    }
   // A `type` decl is EITHER a variant (`ctors` non-empty, `alias` absent) or a
   // transparent record alias (`alias` present, `ctors` empty). An alias is pure
   // structural naming: inference expands it to its row, display folds the row

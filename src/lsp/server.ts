@@ -34,9 +34,11 @@ connection.onInitialize(() => ({
 connection.onHover(({ textDocument, position }): Hover | null => {
   const doc = documents.get(textDocument.uri);
   if (!doc) return null;
-  const type = hoverAt(doc.getText(), doc.offsetAt(position));
-  if (!type) return null;
-  return { contents: { kind: MarkupKind.Markdown, value: `\`\`\`alang\n${type}\n\`\`\`` } };
+  const info = hoverAt(doc.getText(), doc.offsetAt(position));
+  if (!info) return null;
+  const fence = `\`\`\`alang\n${info.code}\n\`\`\``;
+  const value = info.doc ? `${fence}\n\n${info.doc}` : fence;
+  return { contents: { kind: MarkupKind.Markdown, value } };
 });
 
 // Inlay hints: a `: type` inset after each top-level binding name. Offsets map

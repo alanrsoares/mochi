@@ -34,8 +34,10 @@ export type Tok =
   | { t: "id"; v: string }
   | { t: "eof" };
 
-// A token plus where it came from.
-export type Located = Tok & { span: Span };
+// A token plus where it came from. `doc` carries a leading `//` comment block
+// (own-line, no blank line before the token) so the parser can attach it to the
+// following `let` — surfaced in hover as prose.
+export type Located = Tok & { span: Span; doc?: string };
 
 const KEYWORDS: Record<string, Tok | undefined> = {
   let: { t: "let" },
@@ -95,20 +97,45 @@ const scanString = (src: string, i: number): { value: string; end: number } | nu
 export function lex(src: string): Result<Located[], AlangError> {
   const toks: Located[] = [];
   let i = 0;
+  // Doc-comment state: `pendingDoc` accumulates consecutive own-line `//` lines;
+  // it attaches to the next emitted token and clears. `nlRun` counts newlines
+  // since the last comment (≥2 = a blank line, which breaks attachment);
+  // `lineHasToken` distinguishes an own-line comment from a trailing one.
+  let pendingDoc: string[] = [];
+  let nlRun = 0;
+  let lineHasToken = false;
   // Table tokens are shared singletons; spread to a fresh object + attach span.
   const emit = (tok: Tok, start: number, end: number): void => {
-    toks.push({ ...tok, span: span(start, end) });
+    const t: Located = { ...tok, span: span(start, end) };
+    if (pendingDoc.length) {
+      t.doc = pendingDoc.join("\n");
+      pendingDoc = [];
+    }
+    toks.push(t);
+    lineHasToken = true;
+    nlRun = 0;
   };
 
   while (i < src.length) {
     const c = src[i]!;
     if (isSpace(c)) {
+      if (c === "\n") {
+        lineHasToken = false;
+        if (++nlRun >= 2) pendingDoc = []; // blank line breaks doc attachment
+      }
       i++;
       continue;
     }
-    // line comment: // ... to end of line
+    // line comment: // ... to end of line. An own-line comment (nothing emitted
+    // on this line yet) accumulates as a doc block for the following token; a
+    // trailing comment is discarded.
     if (c === "/" && src[i + 1] === "/") {
+      const from = i + 2;
       while (i < src.length && src[i] !== "\n") i++;
+      if (!lineHasToken) {
+        pendingDoc.push(src.slice(from, i).trim());
+        nlRun = 0;
+      }
       continue;
     }
 

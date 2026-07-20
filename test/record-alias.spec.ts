@@ -42,7 +42,8 @@ test("empty record alias `type Unit = {}` parses", () => {
 
 // ---- hover folds a matching row to the alias name --------------------------
 
-const hover = (src: string, needle: string): string | null => hoverAt(src, src.indexOf(needle) + 1);
+const hover = (src: string, needle: string): string | null =>
+  hoverAt(src, src.indexOf(needle) + 1)?.code ?? null;
 
 test("hover shows the alias name for a matching closed record", () => {
   const src = `${POINT}let origin = { x: 0, y: 0 }`;
