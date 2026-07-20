@@ -104,8 +104,17 @@ const genType = (s: Extract<Stmt, { kind: "type" }>): string =>
     })
     .join("\n");
 
-const genStmt = (s: Stmt): string =>
-  s.kind === "type" ? genType(s) : `const ${s.name} = ${genExpr(s.value)};`;
+// extern → an ESM import binding the external export to the alang name.
+const genExtern = (s: Extract<Stmt, { kind: "extern" }>): string => {
+  const spec = s.imported === s.name ? s.name : `${s.imported} as ${s.name}`;
+  return `import { ${spec} } from ${JSON.stringify(s.module)};`;
+};
+
+const genStmt = (s: Stmt): string => {
+  if (s.kind === "type") return genType(s);
+  if (s.kind === "extern") return genExtern(s);
+  return `const ${s.name} = ${genExpr(s.value)};`;
+};
 
 const hasMatch = (e: Expr): boolean =>
   match(e)

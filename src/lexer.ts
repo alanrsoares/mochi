@@ -7,9 +7,11 @@ import { type Span, span } from "./span";
 export type Tok =
   | { t: "let" }
   | { t: "type" }
+  | { t: "extern" }
   | { t: "switch" }
   | { t: "eq" } // =
   | { t: "arrow" } // =>
+  | { t: "tarrow" } // -> (type arrow)
   | { t: "pipe" } // |>
   | { t: "bar" } // |
   | { t: "lparen" }
@@ -31,6 +33,7 @@ export type Located = Tok & { span: Span };
 const KEYWORDS: Record<string, Tok | undefined> = {
   let: { t: "let" },
   type: { t: "type" },
+  extern: { t: "extern" },
   switch: { t: "switch" },
   true: { t: "bool", v: true },
   false: { t: "bool", v: false },
@@ -40,6 +43,7 @@ const KEYWORDS: Record<string, Tok | undefined> = {
 const DIGRAPHS: Record<string, Tok | undefined> = {
   "|>": { t: "pipe" },
   "=>": { t: "arrow" },
+  "->": { t: "tarrow" }, // type-expression arrow (extern signatures)
 };
 
 // Single-char punctuation → token.

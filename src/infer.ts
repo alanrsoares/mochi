@@ -5,7 +5,7 @@
 // their body is inferred. Field access uses an open row, so a function that
 // reads `p.x` accepts any record that has an `x` — structural duck typing.
 import { err, isErr, map, ok, type Result } from "@onrails/result";
-import type { Ctor, Expr, Pattern, Program } from "./ast";
+import type { Ctor, Expr, Pattern, Program, TypeExpr } from "./ast";
 import { type AlangError, typeErr } from "./errors";
 import type { Span } from "./span";
 import {
@@ -300,6 +300,23 @@ const inferPattern = (p: Pattern, ctx: Ctx): Result<PatResult, AlangError> => {
 
 // ---- program-level inference ----------------------------------------------
 
+// Convert a surface `extern` type expression into an HM type. Prim names map to
+// their type; Uppercase names are nullary constructors; lowercase names are
+// type variables (shared by name within the signature, then generalized).
+const PRIMS = new Set(["number", "int", "float", "string", "bool"]);
+const typeExprToType = (te: TypeExpr, vars: Map<string, Type>, f: Fresh): Type => {
+  if (te.kind === "tarrow")
+    return tArrow(typeExprToType(te.from, vars, f), typeExprToType(te.to, vars, f));
+  if (PRIMS.has(te.name)) return primType(te.name);
+  if (/^[A-Z]/.test(te.name)) return tCon(te.name);
+  let v = vars.get(te.name);
+  if (!v) {
+    v = freshVar(f);
+    vars.set(te.name, v);
+  }
+  return v;
+};
+
 // A variant's constructors become curried functions into that variant type,
 // polymorphic over the type's parameters. `type Result a e = | Ok(a) | Err(e)`
 // gives `Ok : ∀a e. a -> Result<a, e>` — each type param maps to a fresh var
@@ -345,6 +362,14 @@ function run(
   for (const s of prog.stmts) {
     if (s.kind !== "type") continue;
     for (const c of s.ctors) env.set(c.name, ctorScheme(s.name, s.params, c, fresh));
+  }
+
+  // externs next — their declared type is authoritative; generalize so a
+  // polymorphic signature (e.g. a -> a) instantiates fresh at each use site.
+  for (const s of prog.stmts) {
+    if (s.kind !== "extern") continue;
+    const t = typeExprToType(s.typeExpr, new Map(), fresh);
+    env.set(s.name, generalize(env, t, subst));
   }
 
   for (const s of prog.stmts) {

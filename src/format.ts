@@ -6,7 +6,7 @@
 // the parser into a temp binding plus field-access lets, so the printer detects
 // that shape and re-folds it back into `let { x, y } = e`.
 import { flatMap, map, pipe, type Result } from "@onrails/result";
-import type { Ctor, Expr, LamParam, Pattern, Stmt } from "./ast";
+import type { Ctor, Expr, LamParam, Pattern, Stmt, TypeExpr } from "./ast";
 import type { AlangError } from "./errors";
 import { lex } from "./lexer";
 import { parse } from "./parser";
@@ -79,6 +79,17 @@ const matchExpr = (e: Extract<Expr, { kind: "match" }>, ind: string): string => 
 const ctor = (c: Ctor): string =>
   c.argTypes.length === 0 ? c.name : `${c.name}(${c.argTypes.join(", ")})`;
 
+// A type expression; the left side of an arrow is parenthesized when it is
+// itself an arrow ((a -> b) -> c).
+const typeExpr = (te: TypeExpr): string => {
+  if (te.kind === "tname") return te.name;
+  const from = te.from.kind === "tarrow" ? `(${typeExpr(te.from)})` : typeExpr(te.from);
+  return `${from} -> ${typeExpr(te.to)}`;
+};
+
+const externStmt = (s: Extract<Stmt, { kind: "extern" }>): string =>
+  `extern ${s.name} : ${typeExpr(s.typeExpr)} = ${JSON.stringify(s.module)} ${JSON.stringify(s.imported)}`;
+
 const typeStmt = (s: Extract<Stmt, { kind: "type" }>): string => {
   const head = s.params.length ? `type ${s.name} ${s.params.join(" ")}` : `type ${s.name}`;
   const arms = s.ctors.map((c) => `${INDENT}| ${ctor(c)}`);
@@ -94,6 +105,7 @@ const fieldOf = (e: Expr, tmp: string): string | null =>
 const stmtAt = (stmts: Stmt[], i: number): { text: string; consumed: number } => {
   const s = stmts[i]!;
   if (s.kind === "type") return { text: typeStmt(s), consumed: 1 };
+  if (s.kind === "extern") return { text: externStmt(s), consumed: 1 };
 
   if (s.name.startsWith("$")) {
     const fields: string[] = [];

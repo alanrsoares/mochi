@@ -3,7 +3,7 @@
 // Every node is built with its source span: leaves take the token's span,
 // composites span from their first token/child to the last one consumed.
 import { err, ok, type Result } from "@onrails/result";
-import type { Ctor, Expr, LamParam, MatchArm, Pattern, Program, Stmt } from "./ast";
+import type { Ctor, Expr, LamParam, MatchArm, Pattern, Program, Stmt, TypeExpr } from "./ast";
 import { type AlangError, parseErr } from "./errors";
 import type { Located, Tok } from "./lexer";
 import { type Span, spanning } from "./span";
@@ -296,8 +296,48 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     return stmts;
   }
 
+  // Type-expression parser for extern signatures. Arrows are right-associative.
+  function parseTypeAtom(): TypeExpr {
+    if (peek().t === "lparen") {
+      next();
+      const inner = parseTypeExpr();
+      expect("rparen");
+      return inner;
+    }
+    const { name, span } = expectId();
+    return { kind: "tname", name, span };
+  }
+
+  function parseTypeExpr(): TypeExpr {
+    const from = parseTypeAtom();
+    if (peek().t !== "tarrow") return from;
+    next();
+    const to = parseTypeExpr();
+    return { kind: "tarrow", from, to, span: spanning(from.span, to.span) };
+  }
+
+  const expectStr = (): { value: string; span: Span } => {
+    const tk = expect("str") as Located & { t: "str"; v: string };
+    return { value: tk.v, span: tk.span };
+  };
+
+  // extern name : type = "module" "export"
+  function parseExtern(): Stmt {
+    const start = expect("extern").span;
+    const { name, span: nameSpan } = expectId();
+    expect("colon");
+    const typeExpr = parseTypeExpr();
+    expect("eq");
+    const module = expectStr().value;
+    const imported = expectStr().value;
+    return { kind: "extern", name, nameSpan, typeExpr, module, imported, span: to(start) };
+  }
+
   function parseStmt(): Stmt[] {
-    return peek().t === "type" ? [parseType()] : parseLet();
+    const t = peek().t;
+    if (t === "type") return [parseType()];
+    if (t === "extern") return [parseExtern()];
+    return parseLet();
   }
 
   try {

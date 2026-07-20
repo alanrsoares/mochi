@@ -31,9 +31,26 @@ export type Pattern =
 // A variant constructor: name + typed positional fields (types are names for now).
 export type Ctor = { name: string; argTypes: string[] };
 
+// A surface type expression, used in `extern` signatures. Lowercase names are
+// type variables (generalized); prim names (number/string/bool/...) map to
+// their HM type; others become nullary constructors.
+export type TypeExpr =
+  | { kind: "tname"; name: string; span: Span }
+  | { kind: "tarrow"; from: TypeExpr; to: TypeExpr; span: Span };
+
 export type Stmt =
   | { kind: "let"; name: string; nameSpan: Span; value: Expr; span: Span }
-  | { kind: "type"; name: string; params: string[]; ctors: Ctor[]; span: Span }; // type Result a e = | Ok(a) | ...
+  | { kind: "type"; name: string; params: string[]; ctors: Ctor[]; span: Span } // type Result a e = | Ok(a) | ...
+  // extern name : type = "module" "export"  — bind an external JS/TS function
+  | {
+      kind: "extern";
+      name: string;
+      nameSpan: Span;
+      typeExpr: TypeExpr;
+      module: string;
+      imported: string;
+      span: Span;
+    };
 
 export type Program = { stmts: Stmt[] };
 
