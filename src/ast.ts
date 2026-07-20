@@ -13,13 +13,19 @@ export type Expr =
   | { kind: "record"; fields: Field[]; span: Span } // { x: 1, y: 2 }
   | { kind: "field"; target: Expr; name: string; span: Span } // p.x
   | { kind: "arr"; elements: Expr[]; span: Span } // [1, 2, 3] — eager Array
-  | { kind: "list"; elements: Expr[]; span: Span }; // @{1, 2, 3} — lazy List
+  | { kind: "list"; elements: Expr[]; span: Span } // @{1, 2, 3} — lazy List
+  | { kind: "set"; elements: Expr[]; span: Span } // ${1, 2, 3} — Set
+  | { kind: "map"; entries: MapEntry[]; span: Span }; // #{ "a": 1 } — Map
 
 // A lambda parameter: a plain name, or a record-destructuring pattern that
 // binds each named field. `({ x, y }) => ...` pulls x and y out of the argument.
 export type LamParam = { kind: "name"; name: string } | { kind: "precord"; fields: string[] };
 
 export type Field = { name: string; value: Expr };
+
+// One `key: value` pair in a `#{…}` map literal. The key is a full expression
+// (usually a string/number literal), not an identifier like a record field.
+export type MapEntry = { key: Expr; value: Expr };
 
 export type MatchArm = { pattern: Pattern; body: Expr };
 

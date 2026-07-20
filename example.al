@@ -127,6 +127,22 @@ let spread = List.flatMap(x => @{x, x})(@{1, 2}) |> toArray                    /
 // lazy all the way: map over an INFINITE sequence, force only the first 3
 let inf3 = iterate(inc)(0) |> List.map(triple) |> take(3) |> toArray // [0, 3, 6]
 
+// --- Set: `${...}` (native JS Set, deduped, unordered) ---
+// Elements must share a type. Ops are qualified + immutable (return a fresh Set).
+let tags = ${1, 2, 2, 3}                                  // Set number — dedups to {1,2,3}
+let hasTwo = Set.has(2)(tags)                             // true
+let merged = Set.union(${1, 2})(${2, 3}) |> Set.toArray  // [1, 2, 3]
+let shared = Set.intersect(${1, 2, 3})(${2, 3, 4}) |> Set.toArray // [2, 3]
+
+// --- Map: `#{ key: value }` (native JS Map) ---
+// Keys share a type, values share a type → Map k v. `getOr` reads with a
+// fallback (an Option-returning `get` waits on the prelude slice). Immutable.
+let ages = #{ "alice": 30, "bob": 25 }
+let alice = Map.getOr(0)("alice")(ages)   // 30
+let nobody = Map.getOr(0)("carol")(ages)  // 0 — fallback
+let withCarol = Map.set("carol")(41)(ages) // fresh Map; `ages` unchanged
+let names = Map.keys(ages)                 // ["alice", "bob"]
+
 // --- records + field access (structural / "duck" data) ---
 let origin = { x: 0.0, y: 0.0 }
 let getX = p => p.x

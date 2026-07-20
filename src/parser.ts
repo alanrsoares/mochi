@@ -150,6 +150,8 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     if (peek().t === "lbrace") return parseRecord();
     if (peek().t === "lbracket") return parseArr();
     if (peek().t === "at") return parseList();
+    if (peek().t === "dollar") return parseSet();
+    if (peek().t === "hash") return parseMap();
     const tk = next();
     if (tk.t === "num") return { kind: "num", value: tk.v, raw: tk.raw, span: tk.span };
     if (tk.t === "bool") return { kind: "bool", value: tk.v, span: tk.span };
@@ -213,6 +215,45 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     }
     expect("rbrace");
     return { kind: "list", elements, span: to(start) };
+  }
+
+  // A Set literal: `${}`, `${e}`, `${e, e, ...}`. Homogeneous elements.
+  function parseSet(): Expr {
+    const start = expect("dollar").span;
+    expect("lbrace");
+    const elements: Expr[] = [];
+    if (peek().t !== "rbrace") {
+      elements.push(parseExpr());
+      while (peek().t === "comma") {
+        next();
+        elements.push(parseExpr());
+      }
+    }
+    expect("rbrace");
+    return { kind: "set", elements, span: to(start) };
+  }
+
+  // A Map literal: `#{}`, `#{ key: value, ... }`. Keys are full expressions
+  // (usually string/number literals), not identifiers like record fields.
+  function parseMap(): Expr {
+    const start = expect("hash").span;
+    expect("lbrace");
+    const entries: { key: Expr; value: Expr }[] = [];
+    if (peek().t !== "rbrace") {
+      entries.push(parseMapEntry());
+      while (peek().t === "comma") {
+        next();
+        entries.push(parseMapEntry());
+      }
+    }
+    expect("rbrace");
+    return { kind: "map", entries, span: to(start) };
+  }
+
+  function parseMapEntry(): { key: Expr; value: Expr } {
+    const key = parseExpr();
+    expect("colon");
+    return { key, value: parseExpr() };
   }
 
   // ---- pattern matching --------------------------------------------------

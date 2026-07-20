@@ -48,6 +48,12 @@ const expr = (e: Expr, ind: string): string => {
       return `[${e.elements.map((el) => expr(el, ind)).join(", ")}]`;
     case "list":
       return `@{${e.elements.map((el) => expr(el, ind)).join(", ")}}`;
+    case "set":
+      return `\${${e.elements.map((el) => expr(el, ind)).join(", ")}}`;
+    case "map":
+      return e.entries.length === 0
+        ? "#{}"
+        : `#{ ${e.entries.map((en) => `${expr(en.key, ind)}: ${expr(en.value, ind)}`).join(", ")} }`;
     case "match":
       return matchExpr(e, ind);
   }

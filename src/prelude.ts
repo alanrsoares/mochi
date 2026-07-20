@@ -14,6 +14,8 @@ const b = tVar(1);
 const c = tVar(2);
 const arr = (t: Type): Type => tCon("Array", [t]); // [t] — eager JS array
 const list = (t: Type): Type => tCon("List", [t]); // List t — lazy pull-sequence (@{...})
+const set = (t: Type): Type => tCon("Set", [t]); // Set t — native JS Set (${...})
+const mapT = (k: Type, v: Type): Type => tCon("Map", [k, v]); // Map k v — native JS Map (#{...})
 
 // name → type. Monomorphic entries (arithmetic) carry no vars; the collection /
 // function utilities are polymorphic and generalize at bind time. Curried
@@ -101,6 +103,27 @@ export const preludeJsDefs: Record<string, string> = {
     "const _List_concat = (xs) => (ys) => _list(function* () { yield* xs; yield* ys; });",
   _List_flatMap:
     "const _List_flatMap = (f) => (xs) => _list(function* () { for (const x of xs) yield* f(x); });",
+  // --- Set ops (native JS Set; immutable — each returns a fresh Set) ---
+  _Set_has: "const _Set_has = (x) => (s) => s.has(x);",
+  _Set_add: "const _Set_add = (x) => (s) => new Set(s).add(x);",
+  _Set_delete:
+    "const _Set_delete = (x) => (s) => { const n = new Set(s); n.delete(x); return n; };",
+  _Set_size: "const _Set_size = (s) => s.size;",
+  _Set_toArray: "const _Set_toArray = (s) => [...s];",
+  _Set_fromArray: "const _Set_fromArray = (xs) => new Set(xs);",
+  _Set_union: "const _Set_union = (a) => (b) => new Set([...a, ...b]);",
+  _Set_intersect: "const _Set_intersect = (a) => (b) => new Set([...a].filter((x) => b.has(x)));",
+  _Set_diff: "const _Set_diff = (a) => (b) => new Set([...a].filter((x) => !b.has(x)));",
+  // --- Map ops (native JS Map; immutable — each returns a fresh Map) ---
+  _Map_has: "const _Map_has = (k) => (m) => m.has(k);",
+  _Map_getOr: "const _Map_getOr = (d) => (k) => (m) => (m.has(k) ? m.get(k) : d);",
+  _Map_set:
+    "const _Map_set = (k) => (v) => (m) => { const n = new Map(m); n.set(k, v); return n; };",
+  _Map_delete:
+    "const _Map_delete = (k) => (m) => { const n = new Map(m); n.delete(k); return n; };",
+  _Map_size: "const _Map_size = (m) => m.size;",
+  _Map_keys: "const _Map_keys = (m) => [...m.keys()];",
+  _Map_values: "const _Map_values = (m) => [...m.values()];",
 };
 
 // Qualified collection namespaces. alang has no overloading, so each collection
@@ -119,6 +142,29 @@ export const preludeNamespaces: Record<string, Record<string, Type>> = {
     concat: tArrow(list(a), tArrow(list(a), list(a))), // List a -> List a -> List a
     flatMap: tArrow(tArrow(a, list(b)), tArrow(list(a), list(b))), // (a -> List b) -> List a -> List b
   },
+  // Set ops — immutable (return a fresh Set). Keys/elements are primitives.
+  Set: {
+    has: tArrow(a, tArrow(set(a), tBool)), // a -> Set a -> bool
+    add: tArrow(a, tArrow(set(a), set(a))), // a -> Set a -> Set a
+    delete: tArrow(a, tArrow(set(a), set(a))), // a -> Set a -> Set a
+    size: tArrow(set(a), tNumber), // Set a -> number
+    toArray: tArrow(set(a), arr(a)), // Set a -> [a]
+    fromArray: tArrow(arr(a), set(a)), // [a] -> Set a
+    union: tArrow(set(a), tArrow(set(a), set(a))), // Set a -> Set a -> Set a
+    intersect: tArrow(set(a), tArrow(set(a), set(a))), // Set a -> Set a -> Set a
+    diff: tArrow(set(a), tArrow(set(a), set(a))), // Set a -> Set a -> Set a
+  },
+  // Map ops — immutable (return a fresh Map). `getOr` supplies a fallback since
+  // an `Option`-returning `get` waits on a builtin Option (prelude slice).
+  Map: {
+    has: tArrow(a, tArrow(mapT(a, b), tBool)), // k -> Map k v -> bool
+    getOr: tArrow(b, tArrow(a, tArrow(mapT(a, b), b))), // v -> k -> Map k v -> v
+    set: tArrow(a, tArrow(b, tArrow(mapT(a, b), mapT(a, b)))), // k -> v -> Map k v -> Map k v
+    delete: tArrow(a, tArrow(mapT(a, b), mapT(a, b))), // k -> Map k v -> Map k v
+    size: tArrow(mapT(a, b), tNumber), // Map k v -> number
+    keys: tArrow(mapT(a, b), arr(a)), // Map k v -> [k]
+    values: tArrow(mapT(a, b), arr(b)), // Map k v -> [v]
+  },
 };
 
 // `Ns.member` → the JS identifier codegen emits. Array reuses the existing eager
@@ -130,6 +176,26 @@ export const namespaceRuntime: Record<string, Record<string, string>> = {
     filter: "_List_filter",
     concat: "_List_concat",
     flatMap: "_List_flatMap",
+  },
+  Set: {
+    has: "_Set_has",
+    add: "_Set_add",
+    delete: "_Set_delete",
+    size: "_Set_size",
+    toArray: "_Set_toArray",
+    fromArray: "_Set_fromArray",
+    union: "_Set_union",
+    intersect: "_Set_intersect",
+    diff: "_Set_diff",
+  },
+  Map: {
+    has: "_Map_has",
+    getOr: "_Map_getOr",
+    set: "_Map_set",
+    delete: "_Map_delete",
+    size: "_Map_size",
+    keys: "_Map_keys",
+    values: "_Map_values",
   },
 };
 

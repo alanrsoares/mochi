@@ -273,6 +273,35 @@ const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
       return ok(tCon("List", [elem]));
     }
 
+    case "set": {
+      // Homogeneous elements → `Set<elem>` (a native JS Set at runtime).
+      const elem = freshVar(ctx.fresh);
+      for (const el of e.elements) {
+        const et = infer(el, ctx);
+        if (isErr(et)) return et;
+        const uni = u(elem, et.value, ctx, el.span);
+        if (isErr(uni)) return uni;
+      }
+      return ok(tCon("Set", [elem]));
+    }
+
+    case "map": {
+      // Keys share one type, values share one type → `Map<k, v>` (native JS Map).
+      const k = freshVar(ctx.fresh);
+      const v = freshVar(ctx.fresh);
+      for (const ent of e.entries) {
+        const kt = infer(ent.key, ctx);
+        if (isErr(kt)) return kt;
+        const uk = u(k, kt.value, ctx, ent.key.span);
+        if (isErr(uk)) return uk;
+        const vt = infer(ent.value, ctx);
+        if (isErr(vt)) return vt;
+        const uv = u(v, vt.value, ctx, ent.value.span);
+        if (isErr(uv)) return uv;
+      }
+      return ok(tCon("Map", [k, v]));
+    }
+
     case "match":
       return inferMatch(e, ctx);
   }
@@ -511,7 +540,14 @@ const freeRefs = (e: Expr, bound: Set<string>, acc: Set<string>): void => {
       return;
     case "arr":
     case "list":
+    case "set":
       for (const el of e.elements) freeRefs(el, bound, acc);
+      return;
+    case "map":
+      for (const ent of e.entries) {
+        freeRefs(ent.key, bound, acc);
+        freeRefs(ent.value, bound, acc);
+      }
   }
 };
 

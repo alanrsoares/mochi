@@ -51,6 +51,12 @@ const genExpr = (e: Expr): string =>
     .with({ kind: "field" }, (f) => nsRuntimeId(f) ?? `${genMember(f.target)}.${f.name}`)
     .with({ kind: "arr" }, (l) => `[${l.elements.map(genExpr).join(", ")}]`)
     .with({ kind: "list" }, genList)
+    .with({ kind: "set" }, (s) => `new Set([${s.elements.map(genExpr).join(", ")}])`)
+    .with(
+      { kind: "map" },
+      (m) =>
+        `new Map([${m.entries.map((e) => `[${genExpr(e.key)}, ${genExpr(e.value)}]`).join(", ")}])`,
+    )
     .exhaustive();
 
 // A `@{...}` literal → a lazy iterable over its (eagerly-evaluated) elements.
@@ -286,6 +292,10 @@ const usesMatchLib = (e: Expr): boolean =>
     .with({ kind: "field" }, (f) => usesMatchLib(f.target))
     .with({ kind: "arr" }, (l) => l.elements.some(usesMatchLib))
     .with({ kind: "list" }, (l) => l.elements.some(usesMatchLib))
+    .with({ kind: "set" }, (s) => s.elements.some(usesMatchLib))
+    .with({ kind: "map" }, (m) =>
+      m.entries.some((e) => usesMatchLib(e.key) || usesMatchLib(e.value)),
+    )
     .exhaustive();
 
 // Every name referenced anywhere in an expression. Coarse — it counts locally
@@ -326,6 +336,15 @@ const exprRefs = (e: Expr, acc: Set<string>): void => {
     .with({ kind: "list" }, (l) => {
       acc.add("_list"); // a `@{...}` literal calls the List core at runtime
       for (const el of l.elements) exprRefs(el, acc);
+    })
+    .with({ kind: "set" }, (s) => {
+      for (const el of s.elements) exprRefs(el, acc);
+    })
+    .with({ kind: "map" }, (m) => {
+      for (const e of m.entries) {
+        exprRefs(e.key, acc);
+        exprRefs(e.value, acc);
+      }
     })
     .exhaustive();
 };

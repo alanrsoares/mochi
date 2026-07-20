@@ -23,7 +23,9 @@ export type Tok =
   | { t: "lbracket" } // [
   | { t: "rbracket" } // ]
   | { t: "spread" } // ... (list-pattern rest)
-  | { t: "at" } // @ — lazy-List sigil (@{...}); `#`/`$` reserved for Map/Set
+  | { t: "at" } // @ — lazy-List sigil (@{...})
+  | { t: "dollar" } // $ — Set sigil (${...})
+  | { t: "hash" } // # — Map sigil (#{...})
   | { t: "dot" } // .
   | { t: "colon" } // :
   | { t: "comma" }
@@ -68,6 +70,8 @@ const PUNCT: Record<string, Tok | undefined> = {
   ".": { t: "dot" },
   ":": { t: "colon" },
   "@": { t: "at" },
+  $: { t: "dollar" },
+  "#": { t: "hash" },
 };
 
 const isSpace = (c: string): boolean => c === " " || c === "\t" || c === "\n" || c === "\r";
