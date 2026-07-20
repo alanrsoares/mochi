@@ -3,7 +3,17 @@
 // Every node is built with its source span: leaves take the token's span,
 // composites span from their first token/child to the last one consumed.
 import { err, ok, type Result } from "@onrails/result";
-import type { Ctor, Expr, LamParam, MatchArm, Pattern, Program, Stmt, TypeExpr } from "./ast";
+import type {
+  Ctor,
+  Expr,
+  LamParam,
+  MatchArm,
+  PatField,
+  Pattern,
+  Program,
+  Stmt,
+  TypeExpr,
+} from "./ast";
 import { type AlangError, parseErr } from "./errors";
 import type { Located, Tok } from "./lexer";
 import { type Span, spanning } from "./span";
@@ -197,6 +207,23 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
       next();
       return { kind: "pbool", value: tk.v, span: tk.span };
     }
+    if (tk.t === "str") {
+      next();
+      return { kind: "pstr", value: tk.v, span: tk.span };
+    }
+    if (tk.t === "lbrace") {
+      const start = next().span;
+      const fields: PatField[] = [];
+      if (peek().t !== "rbrace") {
+        fields.push(parsePatField());
+        while (peek().t === "comma") {
+          next();
+          fields.push(parsePatField());
+        }
+      }
+      expect("rbrace");
+      return { kind: "precord", fields, span: to(start) };
+    }
     if (tk.t === "id") {
       const { name, span: nameSpan } = expectId();
       if (name === "_") return { kind: "pwild", span: nameSpan };
@@ -218,6 +245,22 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
       return { kind: "pbind", name, span: nameSpan };
     }
     return fail(`unexpected token in pattern: ${tk.t}`);
+  }
+
+  // A record-pattern field: `{ x }` puns to binding `x`; `{ x: pat }` matches
+  // field `x` against `pat`.
+  function parsePatField(): PatField {
+    const { name: label, span } = expectId();
+    if (peek().t === "colon") {
+      next();
+      const pat = parsePattern();
+      // Runtime match is shallow (@onrails object patterns compare by ===), so a
+      // field sub-pattern may bind or narrow on a literal, but not nest.
+      if (pat.kind === "pctor" || pat.kind === "precord")
+        fail("record pattern fields cannot nest; use a name or a literal");
+      return { label, pat };
+    }
+    return { label, pat: { kind: "pbind", name: label, span } };
   }
 
   // ---- statements --------------------------------------------------------

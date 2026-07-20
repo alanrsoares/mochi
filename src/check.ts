@@ -60,7 +60,12 @@ function forEachMatch(e: Expr, visit: (m: Extract<Expr, { kind: "match" }>) => v
   }
 }
 
-const isCatchAll = (p: Pattern): boolean => p.kind === "pwild" || p.kind === "pbind";
+// A pattern is a catch-all when it always matches. A record pattern does so
+// only when every field just binds (no literal field narrows the match).
+const isCatchAll = (p: Pattern): boolean =>
+  p.kind === "pwild" ||
+  p.kind === "pbind" ||
+  (p.kind === "precord" && p.fields.every((f) => isCatchAll(f.pat)));
 
 function checkMatch(m: Extract<Expr, { kind: "match" }>, reg: Registry): AlangError | null {
   const hasCatchAll = m.arms.some((a) => isCatchAll(a.pattern));

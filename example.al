@@ -60,6 +60,22 @@ let dist = (a, b) => hypot(sub(b.x, a.x), sub(b.y, a.y))
 // what else it carries. (Enforced by the HM inferencer, next slice.)
 let distToOrigin = p => hypot(p.x, p.y)
 
+// --- record patterns in switch: bind fields, narrow on literals ---
+// `{ x, y }` puns both fields into scope; a literal field (`x: 0`) narrows the
+// match. Patterns are shallow — a field binds or matches a literal, never nests.
+let quadrant = p => switch p {
+  | { x: 0, y: 0 } => atOrigin
+  | { x, y } => elsewhere
+}
+
+// string + record narrowing: match a tagged record on its string discriminant,
+// binding the rest of the fields on the matched arm.
+let handle = event => switch event {
+  | { kind: "click", x, y } => hypot(x, y)
+  | { kind: "scroll", by } => by
+  | _ => zero
+}
+
 // --- record destructuring in let ---
 // `let { x, y } = r` binds x and y from r's fields. r is evaluated once and
 // field access is structural, so extra fields on the source are fine.

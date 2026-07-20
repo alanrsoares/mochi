@@ -49,31 +49,69 @@ const genLambdaBody = (e: Expr): string => (e.kind === "record" ? `(${genExpr(e)
 // @onrails/result + @onrails/maybe). Each arm is a single pattern, which is the
 // common subset both libraries share.
 
+// A pattern always matches (→ `.otherwise`) when it binds without narrowing: a
+// wildcard, a plain name, or a record whose every field just binds.
+const isCatchAll = (p: Pattern): boolean =>
+  p.kind === "pwild" ||
+  p.kind === "pbind" ||
+  (p.kind === "precord" && p.fields.every((f) => isCatchAll(f.pat)));
+
+// The handler parameter for a catch-all pattern: bind the name, destructure a
+// record's fields, or ignore the value.
+const catchAllParam = (p: Pattern): string => {
+  if (p.kind === "pbind") return `(${p.name})`;
+  if (p.kind === "precord") return `({ ${recordBinds(p).join(", ")} })`;
+  return "()";
+};
+
 const genMatch = (m: Extract<Expr, { kind: "match" }>): string => {
   const parts = [`match(${genExpr(m.scrutinee)})`];
   let catchAll: MatchArm | undefined;
   for (const arm of m.arms) {
-    if (arm.pattern.kind === "pwild" || arm.pattern.kind === "pbind") {
+    if (isCatchAll(arm.pattern)) {
       catchAll ??= arm;
       continue;
     }
-    parts.push(`  ${genWithArm(arm.pattern, arm.body)}`);
+    parts.push(`  ${genWithArm(arm.pattern as NarrowingPattern, arm.body)}`);
   }
   if (catchAll) {
-    const p = catchAll.pattern;
-    const param = p.kind === "pbind" ? `(${p.name})` : "()";
-    parts.push(`  .otherwise(${param} => ${genExpr(catchAll.body)})`);
+    parts.push(`  .otherwise(${catchAllParam(catchAll.pattern)} => ${genExpr(catchAll.body)})`);
   } else {
     parts.push("  .exhaustive()");
   }
   return parts.join("\n");
 };
 
-const genWithArm = (
-  p: Extract<Pattern, { kind: "pctor" | "plit" | "pbool" }>,
-  body: Expr,
-): string => {
-  if (p.kind === "plit" || p.kind === "pbool") return `.with(${p.value}, () => ${genExpr(body)})`;
+// Destructuring binds from a record pattern's fields: `{ x }` → `x`, a rename
+// `{ x: y }` → `x: y`. Non-binding sub-patterns (literals, `_`) contribute none.
+const recordBinds = (p: Extract<Pattern, { kind: "precord" }>): string[] =>
+  p.fields.flatMap((f) =>
+    f.pat.kind === "pbind" ? [f.pat.name === f.label ? f.label : `${f.label}: ${f.pat.name}`] : [],
+  );
+
+// A literal pattern rendered as a JS value for the matcher object / `.with`.
+const litValue = (p: Extract<Pattern, { kind: "plit" | "pbool" | "pstr" }>): string =>
+  p.kind === "pstr" ? JSON.stringify(p.value) : String(p.value);
+
+// Patterns that narrow (everything a catch-all is not) — routed to `.with(...)`.
+type NarrowingPattern = Extract<Pattern, { kind: "pctor" | "plit" | "pbool" | "pstr" | "precord" }>;
+
+const genWithArm = (p: NarrowingPattern, body: Expr): string => {
+  if (p.kind === "plit" || p.kind === "pbool" || p.kind === "pstr")
+    return `.with(${litValue(p)}, () => ${genExpr(body)})`;
+
+  if (p.kind === "precord") {
+    // At least one literal field narrows (else it's a catch-all); those form the
+    // matcher object, binding fields destructure in the handler.
+    const lits = p.fields.flatMap((f) =>
+      f.pat.kind === "plit" || f.pat.kind === "pbool" || f.pat.kind === "pstr"
+        ? [`${f.label}: ${litValue(f.pat)}`]
+        : [],
+    );
+    const bind = recordBinds(p);
+    const param = bind.length ? `({ ${bind.join(", ")} })` : "()";
+    return `.with({ ${lits.join(", ")} }, ${param} => ${genExpr(body)})`;
+  }
 
   const binds: string[] = []; // "_0: r"
   const litFields: string[] = []; // "_0: 5" — narrows further

@@ -6,7 +6,7 @@
 // the parser into a temp binding plus field-access lets, so the printer detects
 // that shape and re-folds it back into `let { x, y } = e`.
 import { flatMap, map, pipe, type Result } from "@onrails/result";
-import type { Ctor, Expr, LamParam, Pattern, Stmt, TypeExpr } from "./ast";
+import type { Ctor, Expr, LamParam, PatField, Pattern, Stmt, TypeExpr } from "./ast";
 import type { AlangError } from "./errors";
 import { lex } from "./lexer";
 import { parse } from "./parser";
@@ -65,10 +65,18 @@ const pattern = (p: Pattern): string => {
       return String(p.value);
     case "pbool":
       return String(p.value);
+    case "pstr":
+      return JSON.stringify(p.value);
+    case "precord":
+      return `{ ${p.fields.map(patField).join(", ")} }`;
     case "pctor":
       return p.args.length === 0 ? p.ctor : `${p.ctor}(${p.args.map(pattern).join(", ")})`;
   }
 };
+
+// `{ x }` when the field puns to its own name, else `{ label: pat }`.
+const patField = (f: PatField): string =>
+  f.pat.kind === "pbind" && f.pat.name === f.label ? f.label : `${f.label}: ${pattern(f.pat)}`;
 
 const matchExpr = (e: Extract<Expr, { kind: "match" }>, ind: string): string => {
   const inner = ind + INDENT;

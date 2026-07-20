@@ -272,9 +272,23 @@ const inferPattern = (p: Pattern, ctx: Ctx): Result<PatResult, AlangError> => {
       return ok({ type: tNumber, bindings: new Map() });
     case "pbool":
       return ok({ type: tBool, bindings: new Map() });
+    case "pstr":
+      return ok({ type: tString, bindings: new Map() });
     case "pbind": {
       const t = freshVar(ctx.fresh);
       return ok({ type: t, bindings: new Map([[p.name, t]]) });
+    }
+    case "precord": {
+      // Open row (duck typing): the scrutinee must have AT LEAST these fields.
+      let row: Row = freshRowVar(ctx.fresh);
+      const bindings = new Map<string, Type>();
+      for (const f of p.fields) {
+        const sub = inferPattern(f.pat, ctx);
+        if (isErr(sub)) return sub;
+        for (const [k, v] of sub.value.bindings) bindings.set(k, v);
+        row = rExtend(f.label, sub.value.type, row);
+      }
+      return ok({ type: tRecord(row), bindings });
     }
     case "pctor": {
       const sc = ctx.env.get(p.ctor);

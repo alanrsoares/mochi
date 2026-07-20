@@ -26,7 +26,13 @@ export type Pattern =
   | { kind: "pbind"; name: string; span: Span } // x
   | { kind: "plit"; value: number; span: Span } // 0
   | { kind: "pbool"; value: boolean; span: Span } // true / false
+  | { kind: "pstr"; value: string; span: Span } // "foo"
+  | { kind: "precord"; fields: PatField[]; span: Span } // { x, status: "err" }
   | { kind: "pctor"; ctor: string; args: Pattern[]; span: Span }; // Circle(r)
+
+// A field inside a record pattern: `{ x }` puns to `pbind x`; `{ x: p }` matches
+// field `x` against sub-pattern `p` (a literal narrows, a name binds).
+export type PatField = { label: string; pat: Pattern };
 
 // A variant constructor: name + typed positional fields (types are names for now).
 export type Ctor = { name: string; argTypes: string[] };
