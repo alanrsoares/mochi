@@ -1,0 +1,27 @@
+{
+  "name": "alang",
+  "displayName": "alang",
+  "description": "Syntax highlighting for the alang language (.al)",
+  "version": "0.0.1",
+  "publisher": "alang",
+  "private": true,
+  "engines": { "vscode": "^1.75.0" },
+  "categories": ["Programming Languages"],
+  "contributes": {
+    "languages": [
+      {
+        "id": "alang",
+        "aliases": ["alang", "Alang"],
+        "extensions": [".al"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "alang",
+        "scopeName": "source.alang",
+        "path": "./syntaxes/alang.tmLanguage.json"
+      }
+    ]
+  }
+}

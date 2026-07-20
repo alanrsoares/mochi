@@ -1,0 +1,101 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "alang",
+  "scopeName": "source.alang",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#declarations" },
+    { "include": "#keywords" },
+    { "include": "#types" },
+    { "include": "#constructors" },
+    { "include": "#numbers" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.alang",
+          "match": "//.*$"
+        }
+      ]
+    },
+    "declarations": {
+      "patterns": [
+        {
+          "comment": "let binding — highlight the bound name",
+          "match": "\\b(let)\\s+([a-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "keyword.declaration.alang" },
+            "2": { "name": "entity.name.function.alang" }
+          }
+        },
+        {
+          "comment": "type declaration — highlight the type name",
+          "match": "\\b(type)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "keyword.declaration.alang" },
+            "2": { "name": "entity.name.type.alang" }
+          }
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.alang",
+          "match": "\\b(switch)\\b"
+        },
+        {
+          "name": "keyword.declaration.alang",
+          "match": "\\b(let|type)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "support.type.primitive.alang",
+          "match": "\\b(float|int|string|bool)\\b"
+        }
+      ]
+    },
+    "constructors": {
+      "patterns": [
+        {
+          "comment": "Uppercase-initial identifiers = variant constructors / types",
+          "name": "entity.name.type.constructor.alang",
+          "match": "\\b[A-Z][A-Za-z0-9_]*\\b"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.alang",
+          "match": "\\b[0-9]+(\\.[0-9]+)?\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.pipeline.alang",
+          "match": "\\|>"
+        },
+        {
+          "name": "keyword.operator.arrow.alang",
+          "match": "=>"
+        },
+        {
+          "name": "keyword.operator.bar.alang",
+          "match": "\\|"
+        },
+        {
+          "name": "keyword.operator.assignment.alang",
+          "match": "="
+        }
+      ]
+    }
+  }
+}
