@@ -492,10 +492,14 @@ function run(
   opts: InferOptions,
 ): Result<InferResult, AlangError> {
   const env: Env = new Map();
-  for (const [name, t] of Object.entries(builtins)) env.set(name, mono(t));
+  const subst = emptySubst();
+  // Builtins are generalized, not monomorphic: a prelude type carrying type vars
+  // (e.g. `map : (a -> b) -> [a] -> [b]`) becomes a scheme that instantiates
+  // fresh at each use site. Monomorphic builtins (`add : number -> ...`) have no
+  // free vars, so generalizing them is a no-op.
+  for (const [name, t] of Object.entries(builtins)) env.set(name, generalize(env, t, subst));
   if (opts.imports) for (const [name, sc] of opts.imports) env.set(name, sc);
 
-  const subst = emptySubst();
   const fresh = mkFresh(1000);
   const open = opts.open ?? false;
   const recorded: TypeAt[] = [];

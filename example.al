@@ -67,6 +67,16 @@ let nums = [1, 2, 3]
 let grid = [[1, 2], [3, 4]]
 let empty = []
 
+// --- prelude list utilities (ported from prelude-js), data-last + curried ---
+// map/filter/reduce/length take the list LAST, so they slot into a `|>` chain.
+// [1,2,3,4] -> double -> [2,4,6,8] -> keep >4 -> [6,8] -> sum -> 14
+let dbl = x => mul(x, 2)
+let over4 = x => gt(x, 4)
+let plus = a => b => add(a, b)
+let total = [1, 2, 3, 4] |> map(dbl) |> filter(over4) |> reduce(plus)(0)
+let count = nums |> length
+let shout = capitalize("hello")
+
 // --- records + field access (structural / "duck" data) ---
 let origin = { x: 0.0, y: 0.0 }
 let getX = p => p.x
