@@ -264,7 +264,16 @@ const inferMatch = (e: Extract<Expr, { kind: "match" }>, ctx: Ctx): Result<Type,
 
 type PatResult = { type: Type; bindings: Map<string, Type> };
 
+// Wrapper over `inferPat`: records every pattern node's span + type, so hover
+// and inlay can look up a pattern-bound name (or a whole constructor pattern) by
+// span — the pattern-side analogue of `infer` recording expression nodes.
 const inferPattern = (p: Pattern, ctx: Ctx): Result<PatResult, AlangError> => {
+  const r = inferPat(p, ctx);
+  if (ctx.record && !isErr(r)) ctx.record(p.span, r.value.type);
+  return r;
+};
+
+const inferPat = (p: Pattern, ctx: Ctx): Result<PatResult, AlangError> => {
   switch (p.kind) {
     case "pwild":
       return ok({ type: freshVar(ctx.fresh), bindings: new Map() });

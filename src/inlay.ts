@@ -3,6 +3,10 @@
 // binding name — the same inferred type hover reports, shown inline. The
 // language server maps each offset onto a Position and each label onto an
 // InlayHint of kind Type.
+//
+// Deliberately kept to top-level bindings: pattern-bound names (switch arms,
+// destructuring) are served by hover instead, so arm-heavy code stays readable
+// rather than peppered with insets — the TypeScript-LSP balance.
 import { flatMap, isErr, map, pipe } from "@onrails/result";
 import { check } from "./check";
 import { inferProgramTypes, showScheme } from "./infer";

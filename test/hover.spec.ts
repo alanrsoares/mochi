@@ -44,3 +44,23 @@ test("hover returns null off any node", () => {
 test("hover returns null when the program does not typecheck", () => {
   expect(hoverAt("let bad = add(1, { x: 2 })", 8)).toBeNull();
 });
+
+test("hover on a pattern-bound name reports its inferred type", () => {
+  const src = "let f = n => switch n {\n  | 0 => n\n  | m => m\n}";
+  const off = src.indexOf("| m") + 2; // the `m` in the pattern position
+  expect(hoverAt(src, off)).toBe("number"); // unified with the numeric scrutinee
+});
+
+test("hover on a constructor pattern binding reports its field type", () => {
+  const src =
+    "type Shape =\n  | Circle(float)\n  | Rect(float, float)\nlet area = s => switch s {\n  | Circle(r) => r\n  | Rect(w, h) => w\n}";
+  const off = src.indexOf("Circle(r)") + 7; // the `r`
+  expect(hoverAt(src, off)).toBe("number");
+});
+
+test("hover on the whole constructor pattern reports the variant type", () => {
+  const src =
+    "type Shape =\n  | Circle(float)\n  | Rect(float, float)\nlet area = s => switch s {\n  | Circle(r) => r\n  | Rect(w, h) => w\n}";
+  const off = src.indexOf("Circle(r)"); // on `C`, outside the inner `r` span
+  expect(hoverAt(src, off)).toBe("Shape");
+});
