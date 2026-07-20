@@ -126,6 +126,18 @@ export const unify = (a: Type, b: Type, s: Subst, f: Fresh): Result<Subst, TypeE
 
   if (ra.kind === "record" && rb.kind === "record") return unifyRows(ra.row, rb.row, s, f);
 
+  // Arity hint (CRITIQUE §4.4): a function type on exactly one side almost
+  // always means a curried call got the wrong number of arguments — a value was
+  // expected but a partially-applied function turned up (too few args), or vice
+  // versa. Say so, instead of the baffling raw `X with A -> B` mismatch.
+  if ((ra.kind === "arrow") !== (rb.kind === "arrow")) {
+    const [fn, val] = ra.kind === "arrow" ? [ra, rb] : [rb, ra];
+    return fail(
+      `cannot unify ${showType(ra)} with ${showType(rb)} — a function (${showType(fn)}) ` +
+        `was used where a ${showType(val)} was expected; a call may be missing an argument`,
+    );
+  }
+
   return fail(`cannot unify ${showType(ra)} with ${showType(rb)}`);
 };
 

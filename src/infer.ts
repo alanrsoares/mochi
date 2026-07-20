@@ -39,6 +39,18 @@ const mono = (t: Type): Scheme => ({ vars: [], rvars: [], type: t });
 
 // alang surface type name → HM type. Unknown names become nullary cons
 // (a reference to a declared variant).
+//
+// NUMERIC DECISION (CRITIQUE §2.3), recorded deliberately: alang has ONE
+// runtime numeric type — JS `number`. `float` and `int` are accepted in surface
+// signatures TODAY as transparent aliases for `number` (they type-check
+// identically, unify freely, and erase to `number` in .d.ts). This keeps the
+// surface JS-faithful — no int/float coercion rules, no literal-defaulting, no
+// overloaded `+` — while RESERVING the two names so a real int/float split
+// (int erasing to integer ops, float to IEEE double, à la ReScript) can land
+// later without breaking existing code. It is NOT a silent lie: the names mean
+// "number, annotated with intent", and that intent is what a future split would
+// harden. Any such split reopens the abstraction question (§2.4) because `+`
+// would then need overloading — so it stays deferred, not accidental.
 const primType = (name: string): Type =>
   ({ float: tNumber, int: tNumber, string: tString, bool: tBool })[name] ?? tCon(name);
 

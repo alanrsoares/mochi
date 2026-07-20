@@ -147,3 +147,18 @@ test("a forward reference to a later binding resolves, keeping its polymorphism"
   expect(typeOf(env, "a")).toBe("number");
   expect(typeOf(env, "id")).toMatch(/^'t\d+ -> 't\d+$/);
 });
+
+// Arity diagnostics (CRITIQUE §4.4): a curried call with a missing argument
+// surfaces a function where a value was expected. Instead of a bare `cannot
+// unify number with number -> number`, the message names the likely cause.
+test("arity mismatch hints at a missing argument", () => {
+  // `add(1)` is a partially applied `number -> number`; passing it as add's
+  // first argument (which wants a `number`) is the classic missing-arg slip.
+  const r = infer("let x = add(add(1), 2)");
+  expect(isErr(r)).toBe(true);
+  if (isErr(r)) {
+    const msg = unwrapErr(r).message;
+    expect(msg).toContain("cannot unify");
+    expect(msg).toContain("a call may be missing an argument");
+  }
+});
