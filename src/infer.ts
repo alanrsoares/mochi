@@ -290,8 +290,15 @@ export function inferProgram(
 
   for (const s of prog.stmts) {
     if (s.kind !== "let") continue;
+    // Bind the name (monomorphic) BEFORE inferring the body, so a self-reference
+    // resolves to this binding — recursion is soundly typed, not open-world luck.
+    const selfT = freshVar(fresh);
+    env.set(s.name, mono(selfT));
     const t = infer(s.value, { env, subst, fresh, open });
     if (isErr(t)) return t;
+    const uni = unify(selfT, t.value, subst, fresh);
+    if (isErr(uni)) return err(typeErr(uni.error.message, s.span));
+    // generalize the result: monomorphic recursion, polymorphic use afterwards
     env.set(s.name, generalize(env, t.value, subst));
   }
   return ok(env);

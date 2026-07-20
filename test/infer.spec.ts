@@ -77,6 +77,19 @@ test("variant constructor has a function type into its variant", () => {
   expect(typeOf(env, "Rect")).toBe("number -> number -> Shape");
 });
 
+test("self-recursive let is typed in strict mode (no open-world)", () => {
+  // fact references itself; strict builtins → recursion must be typed, not
+  // rescued by open-world. sub/mul/eq keep it number -> number.
+  const ops: Record<string, Type> = {
+    mul: tArrow(tNumber, tArrow(tNumber, tNumber)),
+    sub: tArrow(tNumber, tArrow(tNumber, tNumber)),
+  };
+  const env = unwrapOk(
+    infer("let fact = n => switch n { | 0 => 1 | _ => mul(n, fact(sub(n, 1))) }", ops),
+  );
+  expect(typeOf(env, "fact")).toBe("number -> number");
+});
+
 test("match infers a common result type and binds pattern vars", () => {
   const env = unwrapOk(
     infer(
