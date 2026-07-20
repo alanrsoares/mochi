@@ -158,6 +158,16 @@ let flipped = Array.reverse([1, 2, 3]) |> Array.append(0)               // [3, 2
 let lookedUp = Map.get("alice")(ages)      // Option number
 let firstName = Array.head(names)          // Option string
 
+// --- structural eq/compare (polymorphic, no typeclasses) ---
+// eq/compare work at ANY type by deep structural walk — the pragmatic bridge
+// instead of typeclasses (keeps the emitted JS free of hidden dictionaries).
+// The -By family takes an explicit projection = dictionary-passing by hand.
+let sameRec = eq({ x: 1, y: 2 }, { x: 1, y: 2 })  // true — structural, not by ref
+let sorted = Array.sort([3, 1, 2])                // [1, 2, 3]
+let byMod = Array.sortBy(x => mod(x, 3))([5, 3, 7]) // sort by x % 3
+let unique = Array.dedupe([1, 1, 2, 3, 3])        // [1, 2, 3]
+let member = Array.contains({ id: 2 })([{ id: 1 }, { id: 2 }]) // true
+
 // --- records + field access (structural / "duck" data) ---
 let origin = { x: 0.0, y: 0.0 }
 let getX = p => p.x

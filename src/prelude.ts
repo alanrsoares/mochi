@@ -54,7 +54,10 @@ export const preludeEnv: Record<string, Type> = {
   sqrt: tArrow(tNumber, tNumber),
   hypot: num2,
   pi: tNumber,
-  eq: cmp,
+  // eq/compare are STRUCTURAL and polymorphic (deep-equal / deep-order at any
+  // type) — the pragmatic bridge instead of typeclasses. lt/gt stay numeric.
+  eq: tArrow(a, tArrow(a, tBool)), // a -> a -> bool  (structural)
+  compare: tArrow(a, tArrow(a, tNumber)), // a -> a -> number  (-1 | 0 | 1)
   lt: cmp,
   gt: cmp,
   // --- Math (unqualified, like the arithmetic ops) ---
@@ -111,7 +114,13 @@ export const preludeJsDefs: Record<string, string> = {
   sqrt: "const sqrt = (x) => Math.sqrt(x);",
   hypot: "const hypot = (a, b) => Math.hypot(a, b);",
   pi: "const pi = Math.PI;",
-  eq: "const eq = (a, b) => a === b;",
+  // Structural deep equality: primitives by ===, arrays/records/variants by
+  // recursion. Functions/Set/Map fall back to reference identity.
+  eq: 'const eq = (x, y) => { if (x === y) return true; if (typeof x !== "object" || x === null || typeof y !== "object" || y === null) return false; const ax = Array.isArray(x); if (ax !== Array.isArray(y)) return false; if (ax) { if (x.length !== y.length) return false; for (let i = 0; i < x.length; i++) if (!eq(x[i], y[i])) return false; return true; } const kx = Object.keys(x), ky = Object.keys(y); if (kx.length !== ky.length) return false; for (const k of kx) if (!eq(x[k], y[k])) return false; return true; };',
+  // Structural total order → -1 | 0 | 1. Numbers/strings/bools compare directly,
+  // arrays lexicographically, everything else by a stable JSON fallback.
+  compare:
+    'const compare = (x, y) => { if (x === y) return 0; const t = typeof x; if (t === "number" || t === "string" || t === "boolean") return x < y ? -1 : x > y ? 1 : 0; if (Array.isArray(x) && Array.isArray(y)) { const n = Math.min(x.length, y.length); for (let i = 0; i < n; i++) { const c = compare(x[i], y[i]); if (c !== 0) return c; } return compare(x.length, y.length); } const sx = JSON.stringify(x), sy = JSON.stringify(y); return sx < sy ? -1 : sx > sy ? 1 : 0; };',
   lt: "const lt = (a, b) => a < b;",
   gt: "const gt = (a, b) => a > b;",
   // --- Math ---
@@ -191,6 +200,23 @@ export const preludeJsDefs: Record<string, string> = {
   _Array_take: "const _Array_take = (n) => (xs) => xs.slice(0, n);",
   _Array_drop: "const _Array_drop = (n) => (xs) => xs.slice(n);",
   _Array_tail: "const _Array_tail = (xs) => xs.slice(1);",
+  // structural eq/compare-driven ops
+  _Array_contains: "const _Array_contains = (x) => (xs) => xs.some((y) => eq(x, y));",
+  _Array_sort: "const _Array_sort = (xs) => [...xs].sort(compare);",
+  _Array_sortBy:
+    "const _Array_sortBy = (f) => (xs) => [...xs].sort((a, b) => compare(f(a), f(b)));",
+  _Array_dedupe:
+    "const _Array_dedupe = (xs) => xs.filter((x, i) => xs.findIndex((y) => eq(x, y)) === i);",
+  _Array_dedupeBy:
+    "const _Array_dedupeBy = (f) => (xs) => { const seen = []; return xs.filter((x) => { const k = f(x); if (seen.some((s) => eq(s, k))) return false; seen.push(k); return true; }); };",
+  _Array_max:
+    "const _Array_max = (xs) => xs.length ? Some(xs.reduce((a, b) => compare(a, b) >= 0 ? a : b)) : None;",
+  _Array_min:
+    "const _Array_min = (xs) => xs.length ? Some(xs.reduce((a, b) => compare(a, b) <= 0 ? a : b)) : None;",
+  _Array_maxBy:
+    "const _Array_maxBy = (f) => (xs) => xs.length ? Some(xs.reduce((a, b) => compare(f(a), f(b)) >= 0 ? a : b)) : None;",
+  _Array_minBy:
+    "const _Array_minBy = (f) => (xs) => xs.length ? Some(xs.reduce((a, b) => compare(f(a), f(b)) <= 0 ? a : b)) : None;",
   // --- String ops ---
   _Str_length: "const _Str_length = (s) => s.length;",
   _Str_toUpper: "const _Str_toUpper = (s) => s.toUpperCase();",
@@ -225,6 +251,15 @@ export const runtimeDeps: Record<string, string[]> = {
   _List_head: ["Some", "None"],
   _Array_head: ["Some", "None"],
   _Array_find: ["Some", "None"],
+  _Array_contains: ["eq"],
+  _Array_dedupe: ["eq"],
+  _Array_dedupeBy: ["eq"],
+  _Array_sort: ["compare"],
+  _Array_sortBy: ["compare"],
+  _Array_max: ["compare", "Some", "None"],
+  _Array_min: ["compare", "Some", "None"],
+  _Array_maxBy: ["compare", "Some", "None"],
+  _Array_minBy: ["compare", "Some", "None"],
 };
 
 // Qualified collection namespaces. alang has no overloading, so each collection
@@ -245,6 +280,16 @@ export const preludeNamespaces: Record<string, Record<string, Type>> = {
     take: tArrow(tNumber, tArrow(arr(a), arr(a))), // number -> [a] -> [a]
     drop: tArrow(tNumber, tArrow(arr(a), arr(a))), // number -> [a] -> [a]
     tail: tArrow(arr(a), arr(a)), // [a] -> [a]  (drop first; [] stays [])
+    // structural eq/compare-driven ops (the -By family takes a projection)
+    contains: tArrow(a, tArrow(arr(a), tBool)), // a -> [a] -> bool  (structural eq)
+    sort: tArrow(arr(a), arr(a)), // [a] -> [a]  (structural order)
+    sortBy: tArrow(tArrow(a, b), tArrow(arr(a), arr(a))), // (a -> b) -> [a] -> [a]
+    dedupe: tArrow(arr(a), arr(a)), // [a] -> [a]  (structural eq)
+    dedupeBy: tArrow(tArrow(a, b), tArrow(arr(a), arr(a))), // (a -> b) -> [a] -> [a]
+    max: tArrow(arr(a), opt(a)), // [a] -> Option a
+    min: tArrow(arr(a), opt(a)), // [a] -> Option a
+    maxBy: tArrow(tArrow(a, b), tArrow(arr(a), opt(a))), // (a -> b) -> [a] -> Option a
+    minBy: tArrow(tArrow(a, b), tArrow(arr(a), opt(a))), // (a -> b) -> [a] -> Option a
   },
   List: {
     map: tArrow(tArrow(a, b), tArrow(list(a), list(b))), // (a -> b) -> List a -> List b
@@ -310,6 +355,15 @@ export const namespaceRuntime: Record<string, Record<string, string>> = {
     take: "_Array_take",
     drop: "_Array_drop",
     tail: "_Array_tail",
+    contains: "_Array_contains",
+    sort: "_Array_sort",
+    sortBy: "_Array_sortBy",
+    dedupe: "_Array_dedupe",
+    dedupeBy: "_Array_dedupeBy",
+    max: "_Array_max",
+    min: "_Array_min",
+    maxBy: "_Array_maxBy",
+    minBy: "_Array_minBy",
   },
   List: {
     map: "_List_map",
