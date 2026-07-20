@@ -73,6 +73,11 @@ const pattern = (p: Pattern): string => {
       return `{ ${p.fields.map(patField).join(", ")} }`;
     case "pctor":
       return p.args.length === 0 ? p.ctor : `${p.ctor}(${p.args.map(pattern).join(", ")})`;
+    case "plist": {
+      const head = p.elems.map(pattern);
+      const rest = p.rest ? [`...${pattern(p.rest)}`] : [];
+      return `[${[...head, ...rest].join(", ")}]`;
+    }
   }
 };
 

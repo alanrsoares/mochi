@@ -73,13 +73,16 @@ const genLambdaBody = (e: Expr): string => (e.kind === "record" ? `(${genExpr(e)
 const isCatchAll = (p: Pattern): boolean =>
   p.kind === "pwild" ||
   p.kind === "pbind" ||
-  (p.kind === "precord" && p.fields.every((f) => isCatchAll(f.pat)));
+  (p.kind === "precord" && p.fields.every((f) => isCatchAll(f.pat))) ||
+  (p.kind === "plist" && p.elems.length === 0 && p.rest !== null); // [...all]
 
 // The handler parameter for a catch-all pattern: bind the name, destructure a
 // record's fields, or ignore the value.
 const catchAllParam = (p: Pattern): string => {
   if (p.kind === "pbind") return `(${p.name})`;
   if (p.kind === "precord") return `({ ${recordBinds(p).join(", ")} })`;
+  // `[...all]` binds the whole list to the rest name (a `_` rest ignores it).
+  if (p.kind === "plist") return p.rest?.kind === "pbind" ? `(${p.rest.name})` : "()";
   return "()";
 };
 
@@ -113,9 +116,34 @@ const litValue = (p: Extract<Pattern, { kind: "plit" | "pbool" | "pstr" }>): str
   p.kind === "pstr" ? JSON.stringify(p.value) : p.kind === "plit" ? p.raw : String(p.value);
 
 // Patterns that narrow (everything a catch-all is not) — routed to `.with(...)`.
-type NarrowingPattern = Extract<Pattern, { kind: "pctor" | "plit" | "pbool" | "pstr" | "precord" }>;
+type NarrowingPattern = Extract<
+  Pattern,
+  { kind: "pctor" | "plit" | "pbool" | "pstr" | "precord" | "plist" }
+>;
+
+// A fixed/cons list pattern lowers to a length-guard plus a destructuring
+// handler: `[]` → `v.length === 0`; `[x]` → `v.length === 1`, bind `([x])`;
+// `[h, ...t]` → `v.length >= 1`, bind `([h, ...t])`. Literal elements add
+// `v[i] === lit` to the guard and take a hole in the destructure.
+const genListArm = (p: Extract<Pattern, { kind: "plist" }>, body: Expr): string => {
+  const conds = [`_v.length ${p.rest ? ">=" : "==="} ${p.elems.length}`];
+  const slots = p.elems.map((ep, i) => {
+    if (ep.kind === "pbind") return ep.name;
+    if (ep.kind === "plit" || ep.kind === "pbool" || ep.kind === "pstr") {
+      conds.push(`_v[${i}] === ${litValue(ep)}`);
+      return ""; // narrowed, not bound — a hole in the array pattern
+    }
+    return ""; // pwild / unsupported nested — hole
+  });
+  if (p.rest?.kind === "pbind") slots.push(`...${p.rest.name}`);
+  const anyBind = slots.some((s) => s !== "");
+  const param = anyBind ? `([${slots.join(", ")}])` : "()";
+  return `.with((_v) => ${conds.join(" && ")}, ${param} => ${genExpr(body)})`;
+};
 
 const genWithArm = (p: NarrowingPattern, body: Expr): string => {
+  if (p.kind === "plist") return genListArm(p, body);
+
   if (p.kind === "plit" || p.kind === "pbool" || p.kind === "pstr")
     return `.with(${litValue(p)}, () => ${genExpr(body)})`;
 

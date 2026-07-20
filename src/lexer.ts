@@ -22,6 +22,7 @@ export type Tok =
   | { t: "rbrace" } // }
   | { t: "lbracket" } // [
   | { t: "rbracket" } // ]
+  | { t: "spread" } // ... (list-pattern rest)
   | { t: "dot" } // .
   | { t: "colon" } // :
   | { t: "comma" }
@@ -104,6 +105,13 @@ export function lex(src: string): Result<Located[], AlangError> {
     // line comment: // ... to end of line
     if (c === "/" && src[i + 1] === "/") {
       while (i < src.length && src[i] !== "\n") i++;
+      continue;
+    }
+
+    // `...` (list-pattern rest) before the digraph/dot checks, so it isn't split.
+    if (src.slice(i, i + 3) === "...") {
+      emit({ t: "spread" }, i, i + 3);
+      i += 3;
       continue;
     }
 

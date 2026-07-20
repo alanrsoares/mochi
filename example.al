@@ -77,6 +77,23 @@ let total = [1, 2, 3, 4] |> map(dbl) |> filter(over4) |> reduce(plus)(0)
 let count = nums |> length
 let shout = capitalize("hello")
 
+// --- list destructuring in switch: [], [x], [head, ...tail] ---
+// The ML idiom: an empty-list arm plus a single-head cons arm is exhaustive
+// (covers length 0 and length >= 1). `sum` recurses down the tail.
+let sum = xs => switch xs {
+  | [] => 0
+  | [head, ...tail] => add(head, sum(tail))
+}
+let listTotal = sum([1, 2, 3, 4]) // 10
+
+// fixed-length arms narrow by exact length; `_` catches the rest
+let describeList = xs => switch xs {
+  | [] => empty2
+  | [x] => single
+  | [a, b] => pair
+  | _ => many2
+}
+
 // --- records + field access (structural / "duck" data) ---
 let origin = { x: 0.0, y: 0.0 }
 let getX = p => p.x

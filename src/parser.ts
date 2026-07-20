@@ -242,6 +242,7 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
       expect("rbrace");
       return { kind: "precord", fields, span: to(start) };
     }
+    if (tk.t === "lbracket") return parseListPattern();
     if (tk.t === "id") {
       const { name, span: nameSpan } = expectId();
       if (name === "_") return { kind: "pwild", span: nameSpan };
@@ -263,6 +264,30 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
       return { kind: "pbind", name, span: nameSpan };
     }
     return fail(`unexpected token in pattern: ${tk.t}`);
+  }
+
+  // A list pattern: `[]`, `[a, b]`, `[head, ...tail]`. A `...` marks the rest
+  // capture, which must be the LAST element and bind a name (or `_`).
+  function parseListPattern(): Pattern {
+    const start = expect("lbracket").span;
+    const elems: Pattern[] = [];
+    let rest: Pattern | null = null;
+    if (peek().t !== "rbracket") {
+      for (;;) {
+        if (peek().t === "spread") {
+          next();
+          rest = parsePattern();
+          break; // rest is terminal
+        }
+        elems.push(parsePattern());
+        if (peek().t !== "comma") break;
+        next();
+      }
+    }
+    if (rest && rest.kind !== "pbind" && rest.kind !== "pwild")
+      fail("list `...` rest must bind a name or `_`");
+    expect("rbracket");
+    return { kind: "plist", elems, rest, span: to(start) };
   }
 
   // A record-pattern field: `{ x }` puns to binding `x`; `{ x: pat }` matches

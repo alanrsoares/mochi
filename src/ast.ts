@@ -29,7 +29,10 @@ export type Pattern =
   | { kind: "pbool"; value: boolean; span: Span } // true / false
   | { kind: "pstr"; value: string; span: Span } // "foo"
   | { kind: "precord"; fields: PatField[]; span: Span } // { x, status: "err" }
-  | { kind: "pctor"; ctor: string; args: Pattern[]; span: Span }; // Circle(r)
+  | { kind: "pctor"; ctor: string; args: Pattern[]; span: Span } // Circle(r)
+  // [], [x], [x, y], [head, ...tail] — `rest` (a bind/wild) captures the tail
+  // after a `...`; null means the pattern matches a list of exactly `elems.length`.
+  | { kind: "plist"; elems: Pattern[]; rest: Pattern | null; span: Span };
 
 // A field inside a record pattern: `{ x }` puns to `pbind x`; `{ x: p }` matches
 // field `x` against sub-pattern `p` (a literal narrows, a name binds).

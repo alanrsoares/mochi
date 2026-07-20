@@ -332,6 +332,28 @@ const inferPat = (p: Pattern, ctx: Ctx): Result<PatResult, AlangError> => {
       }
       return ok({ type: cur, bindings });
     }
+    case "plist": {
+      // Every element shares the element type; the whole pattern is `Array<elem>`.
+      // A `...rest` capture binds the tail, itself an `Array<elem>`.
+      const elem = freshVar(ctx.fresh);
+      const listT = tCon("Array", [elem]);
+      const bindings = new Map<string, Type>();
+      for (const ep of p.elems) {
+        const sub = inferPattern(ep, ctx);
+        if (isErr(sub)) return sub;
+        for (const [k, v] of sub.value.bindings) bindings.set(k, v);
+        const uni = u(elem, sub.value.type, ctx, ep.span);
+        if (isErr(uni)) return uni;
+      }
+      if (p.rest) {
+        const sub = inferPattern(p.rest, ctx);
+        if (isErr(sub)) return sub;
+        for (const [k, v] of sub.value.bindings) bindings.set(k, v);
+        const uni = u(sub.value.type, listT, ctx, p.rest.span);
+        if (isErr(uni)) return uni;
+      }
+      return ok({ type: listT, bindings });
+    }
   }
 };
 
@@ -391,6 +413,8 @@ const patternBinds = (p: Pattern): string[] => {
   if (p.kind === "pbind") return [p.name];
   if (p.kind === "precord") return p.fields.flatMap((f) => patternBinds(f.pat));
   if (p.kind === "pctor") return p.args.flatMap(patternBinds);
+  if (p.kind === "plist")
+    return [...p.elems.flatMap(patternBinds), ...(p.rest ? patternBinds(p.rest) : [])];
   return [];
 };
 

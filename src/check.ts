@@ -83,7 +83,24 @@ function forEachMatch(e: Expr, visit: (m: Extract<Expr, { kind: "match" }>) => v
 const isCatchAll = (p: Pattern): boolean =>
   p.kind === "pwild" ||
   p.kind === "pbind" ||
-  (p.kind === "precord" && p.fields.every((f) => isCatchAll(f.pat)));
+  (p.kind === "precord" && p.fields.every((f) => isCatchAll(f.pat))) ||
+  // `[...all]` — a bare rest with no fixed head matches any list.
+  (p.kind === "plist" && p.elems.length === 0 && p.rest !== null);
+
+// List switches can't be proven total in general, but the canonical ML form —
+// an empty `[]` arm plus a single-head cons `[x, ...xs]` — covers length 0 and
+// length ≥ 1, so it's total. Returns null (exhaustive), an error (a list switch
+// that isn't), or undefined (not a list switch → let the caller decide).
+const checkListExhaustive = (
+  m: Extract<Expr, { kind: "match" }>,
+): AlangError | null | undefined => {
+  const lists = m.arms.flatMap((a) => (a.pattern.kind === "plist" ? [a.pattern] : []));
+  if (lists.length === 0) return undefined;
+  const hasEmpty = lists.some((p) => p.elems.length === 0 && p.rest === null);
+  const hasCons = lists.some((p) => p.elems.length === 1 && p.rest !== null);
+  if (hasEmpty && hasCons) return null;
+  return checkErr("non-exhaustive list switch: cover `[]` and `[x, ...xs]` (or add `_`)", m.span);
+};
 
 function checkMatch(m: Extract<Expr, { kind: "match" }>, reg: Registry): AlangError | null {
   const hasCatchAll = m.arms.some((a) => isCatchAll(a.pattern));
@@ -97,6 +114,8 @@ function checkMatch(m: Extract<Expr, { kind: "match" }>, reg: Registry): AlangEr
       m.arms.flatMap((a) => (a.pattern.kind === "pbool" ? [a.pattern.value] : [])),
     );
     if (bools.has(true) && bools.has(false)) return null;
+    const listErr = checkListExhaustive(m);
+    if (listErr !== undefined) return listErr;
     return checkErr("non-exhaustive switch: add a `_` catch-all arm", m.span);
   }
 
