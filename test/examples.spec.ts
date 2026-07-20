@@ -25,6 +25,31 @@ test("examples/pipelines.al compiles and produces its documented values", () => 
   expect(out).toEqual({ composed: 22, piped: 81, happy: 20, sad: -1 });
 });
 
+test("examples/async composes a typed Task pipeline that runs to its value", async () => {
+  const js = unwrapOk(compile(read("examples/async/main.al")))
+    .replace(/^import .*$/gm, "")
+    .replace(/^export /gm, "");
+  // Inject the host runtime (mirrors examples/async/task.js) and run the Task.
+  const of = (x: number) => () => Promise.resolve(x);
+  const mapT = (f: (n: number) => number) => (t: () => Promise<number>) => () => t().then(f);
+  const andThen = (f: (n: number) => () => Promise<number>) => (t: () => Promise<number>) => () =>
+    t().then((x) => f(x)());
+  const delay = (ms: number) => (x: number) => () =>
+    new Promise((res) => setTimeout(() => res(x), ms));
+  const run = (t: () => Promise<number>): Promise<number> => t();
+  const add = (a: number) => (b: number) => a + b;
+  const result = new Function(
+    "of",
+    "mapT",
+    "andThen",
+    "delay",
+    "run",
+    "add",
+    `${js}\nreturn result;`,
+  )(of, mapT, andThen, delay, run, add) as Promise<number>;
+  expect(await result).toBe(42); // of(20) -> +1 -> delayed -> doubled
+});
+
 test("examples/modules builds the whole graph and wires imports", async () => {
   const outs = unwrapOk(
     await buildModules(path("examples/modules/main.al"), (p) =>
