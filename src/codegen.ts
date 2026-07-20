@@ -80,7 +80,7 @@ const genWithArm = (
     else if (a.kind === "plit") litFields.push(`_${i}: ${a.value}`);
     // pwild → don't bind; nested pctor is v2
   });
-  const patObj = [`tag: ${JSON.stringify(p.ctor)}`, ...litFields].join(", ");
+  const patObj = [`_tag: ${JSON.stringify(p.ctor)}`, ...litFields].join(", ");
   const param = binds.length ? `({ ${binds.join(", ")} })` : "()";
   return `.with({ ${patObj} }, ${param} => ${genExpr(body)})`;
 };
@@ -88,14 +88,17 @@ const genWithArm = (
 // ---- statements -----------------------------------------------------------
 
 // A variant decl has no runtime type in JS — it lowers to constructor
-// factories only. Nullary → a tagged value; n-ary → a tagging function.
+// factories only. Nullary → a tagged value; n-ary → a tagging function. The
+// discriminant key is `_tag`, matching the @onrails ecosystem convention
+// (@onrails/result, @onrails/maybe), so their type guards (isOk/isSome/...)
+// recognize alang values at the JS boundary.
 const genType = (s: Extract<Stmt, { kind: "type" }>): string =>
   s.ctors
     .map((c) => {
       const tag = JSON.stringify(c.name);
-      if (c.argTypes.length === 0) return `const ${c.name} = { tag: ${tag} };`;
+      if (c.argTypes.length === 0) return `const ${c.name} = { _tag: ${tag} };`;
       const params = c.argTypes.map((_, i) => `_${i}`).join(", ");
-      return `const ${c.name} = (${params}) => ({ tag: ${tag}, ${params} });`;
+      return `const ${c.name} = (${params}) => ({ _tag: ${tag}, ${params} });`;
     })
     .join("\n");
 
