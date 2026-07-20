@@ -3,7 +3,7 @@
 import { err, isErr, ok, type Result } from "@onrails/result";
 import type { Expr, Pattern, Program } from "./ast";
 import { type AlangError, checkErr } from "./errors";
-import { builtinTypeDecls } from "./prelude";
+import { builtinTypeDecls, preludeNamespaces } from "./prelude";
 
 type CtorInfo = { type: string; arity: number };
 export type Registry = {
@@ -198,7 +198,7 @@ function checkMatch(m: Extract<Expr, { kind: "match" }>, reg: Registry): AlangEr
 
 // Collection namespaces are built-in; binding one as a value/type/import would
 // shadow `List.map` and desync codegen (which resolves them by name), so forbid it.
-const RESERVED_NAMES = new Set(["List", "Array", "Set", "Map"]);
+const RESERVED_NAMES = new Set(Object.keys(preludeNamespaces));
 
 const checkReservedNames = (prog: Program): AlangError | null => {
   for (const s of prog.stmts) {

@@ -143,6 +143,20 @@ let nobody = Map.getOr(0)("carol")(ages)  // 0 — fallback
 let withCarol = Map.set("carol")(41)(ages) // fresh Map; `ages` unchanged
 let names = Map.keys(ages)                 // ["alice", "bob"]
 
+// --- prelude: Math, String (`Str.*`), grown Array, builtin Option ---
+// Math ops are unqualified (like add/sub); String is the `Str.*` namespace.
+let clamped = max(0, min(100, 137))        // 100
+let modulo = mod(negate(1), 3)             // 2 — true modulo (sign of divisor)
+let slug = "  Hello World  " |> Str.trim |> Str.toLower |> Str.split(" ") // ["hello","world"]
+let shout2 = Str.join(" ")(["alang", "rocks"]) |> Str.toUpper            // "ALANG ROCKS"
+let flipped = Array.reverse([1, 2, 3]) |> Array.append(0)               // [3, 2, 1, 0]
+
+// builtin Option — `Map.get`/`Array.head` return Option, no `type` decl needed.
+// (This file declares its own Option/Result below; the builtin is used when a
+// program doesn't. Either way Some/None share one runtime shape.)
+let lookedUp = Map.get("alice")(ages)      // Option number
+let firstName = Array.head(names)          // Option string
+
 // --- records + field access (structural / "duck" data) ---
 let origin = { x: 0.0, y: 0.0 }
 let getX = p => p.x

@@ -57,6 +57,17 @@ export const preludeEnv: Record<string, Type> = {
   eq: cmp,
   lt: cmp,
   gt: cmp,
+  // --- Math (unqualified, like the arithmetic ops) ---
+  min: num2, // number -> number -> number
+  max: num2,
+  pow: num2, // base -> exp -> number
+  mod: num2, // a -> b -> number  (true modulo, sign of b)
+  abs: tArrow(tNumber, tNumber),
+  floor: tArrow(tNumber, tNumber),
+  ceil: tArrow(tNumber, tNumber),
+  round: tArrow(tNumber, tNumber),
+  sign: tArrow(tNumber, tNumber),
+  negate: tArrow(tNumber, tNumber),
   // --- Array ops (ported from prelude-js List; a lazy `List` is future work) ---
   length: tArrow(arr(a), tNumber), // [a] -> number
   map: tArrow(tArrow(a, b), tArrow(arr(a), arr(b))), // (a -> b) -> [a] -> [b]
@@ -103,6 +114,17 @@ export const preludeJsDefs: Record<string, string> = {
   eq: "const eq = (a, b) => a === b;",
   lt: "const lt = (a, b) => a < b;",
   gt: "const gt = (a, b) => a > b;",
+  // --- Math ---
+  min: "const min = (a, b) => Math.min(a, b);",
+  max: "const max = (a, b) => Math.max(a, b);",
+  pow: "const pow = (a, b) => a ** b;",
+  mod: "const mod = (a, b) => ((a % b) + b) % b;",
+  abs: "const abs = (x) => Math.abs(x);",
+  floor: "const floor = (x) => Math.floor(x);",
+  ceil: "const ceil = (x) => Math.ceil(x);",
+  round: "const round = (x) => Math.round(x);",
+  sign: "const sign = (x) => Math.sign(x);",
+  negate: "const negate = (x) => -x;",
   // Curried (data-last) to compose with `|>`; each takes the collection last.
   length: "const length = (xs) => xs.length;",
   map: "const map = (f) => (xs) => xs.map((x) => f(x));",
@@ -161,6 +183,26 @@ export const preludeJsDefs: Record<string, string> = {
   _Array_head: "const _Array_head = (xs) => (xs.length > 0 ? Some(xs[0]) : None);",
   _Array_find:
     "const _Array_find = (p) => (xs) => { for (const x of xs) if (p(x)) return Some(x); return None; };",
+  // --- Array growth (eager, immutable) ---
+  _Array_reverse: "const _Array_reverse = (xs) => [...xs].reverse();",
+  _Array_concat: "const _Array_concat = (xs) => (ys) => xs.concat(ys);",
+  _Array_append: "const _Array_append = (x) => (xs) => [...xs, x];",
+  _Array_flatMap: "const _Array_flatMap = (f) => (xs) => xs.flatMap((x) => f(x));",
+  _Array_take: "const _Array_take = (n) => (xs) => xs.slice(0, n);",
+  _Array_drop: "const _Array_drop = (n) => (xs) => xs.slice(n);",
+  _Array_tail: "const _Array_tail = (xs) => xs.slice(1);",
+  // --- String ops ---
+  _Str_length: "const _Str_length = (s) => s.length;",
+  _Str_toUpper: "const _Str_toUpper = (s) => s.toUpperCase();",
+  _Str_toLower: "const _Str_toLower = (s) => s.toLowerCase();",
+  _Str_trim: "const _Str_trim = (s) => s.trim();",
+  _Str_split: "const _Str_split = (sep) => (s) => s.split(sep);",
+  _Str_join: "const _Str_join = (sep) => (xs) => xs.join(sep);",
+  _Str_contains: "const _Str_contains = (needle) => (s) => s.includes(needle);",
+  _Str_startsWith: "const _Str_startsWith = (p) => (s) => s.startsWith(p);",
+  _Str_endsWith: "const _Str_endsWith = (p) => (s) => s.endsWith(p);",
+  _Str_slice: "const _Str_slice = (start) => (end) => (s) => s.slice(start, end);",
+  _Str_replace: "const _Str_replace = (find) => (repl) => (s) => s.replaceAll(find, repl);",
 };
 
 // Runtime-dependency graph: a def name → the other def names its body references.
@@ -196,6 +238,13 @@ export const preludeNamespaces: Record<string, Record<string, Type>> = {
     length: tArrow(arr(a), tNumber),
     head: tArrow(arr(a), opt(a)), // [a] -> Option a
     find: tArrow(tArrow(a, tBool), tArrow(arr(a), opt(a))), // (a -> bool) -> [a] -> Option a
+    reverse: tArrow(arr(a), arr(a)), // [a] -> [a]
+    concat: tArrow(arr(a), tArrow(arr(a), arr(a))), // [a] -> [a] -> [a]
+    append: tArrow(a, tArrow(arr(a), arr(a))), // a -> [a] -> [a]
+    flatMap: tArrow(tArrow(a, arr(b)), tArrow(arr(a), arr(b))), // (a -> [b]) -> [a] -> [b]
+    take: tArrow(tNumber, tArrow(arr(a), arr(a))), // number -> [a] -> [a]
+    drop: tArrow(tNumber, tArrow(arr(a), arr(a))), // number -> [a] -> [a]
+    tail: tArrow(arr(a), arr(a)), // [a] -> [a]  (drop first; [] stays [])
   },
   List: {
     map: tArrow(tArrow(a, b), tArrow(list(a), list(b))), // (a -> b) -> List a -> List b
@@ -228,6 +277,20 @@ export const preludeNamespaces: Record<string, Record<string, Type>> = {
     values: tArrow(mapT(a, b), arr(b)), // Map k v -> [v]
     get: tArrow(a, tArrow(mapT(a, b), opt(b))), // k -> Map k v -> Option v
   },
+  // String ops (`Str.*`). Data-last where a collection/subject is involved.
+  Str: {
+    length: tArrow(tString, tNumber), // string -> number
+    toUpper: tArrow(tString, tString),
+    toLower: tArrow(tString, tString),
+    trim: tArrow(tString, tString),
+    split: tArrow(tString, tArrow(tString, arr(tString))), // sep -> s -> [string]
+    join: tArrow(tString, tArrow(arr(tString), tString)), // sep -> [string] -> string
+    contains: tArrow(tString, tArrow(tString, tBool)), // needle -> haystack -> bool
+    startsWith: tArrow(tString, tArrow(tString, tBool)), // prefix -> s -> bool
+    endsWith: tArrow(tString, tArrow(tString, tBool)), // suffix -> s -> bool
+    slice: tArrow(tNumber, tArrow(tNumber, tArrow(tString, tString))), // start -> end -> s -> string
+    replace: tArrow(tString, tArrow(tString, tArrow(tString, tString))), // find -> repl -> s -> string
+  },
 };
 
 // `Ns.member` → the JS identifier codegen emits. Array reuses the existing eager
@@ -240,6 +303,13 @@ export const namespaceRuntime: Record<string, Record<string, string>> = {
     length: "length",
     head: "_Array_head",
     find: "_Array_find",
+    reverse: "_Array_reverse",
+    concat: "_Array_concat",
+    append: "_Array_append",
+    flatMap: "_Array_flatMap",
+    take: "_Array_take",
+    drop: "_Array_drop",
+    tail: "_Array_tail",
   },
   List: {
     map: "_List_map",
@@ -268,6 +338,19 @@ export const namespaceRuntime: Record<string, Record<string, string>> = {
     keys: "_Map_keys",
     values: "_Map_values",
     get: "_Map_get",
+  },
+  Str: {
+    length: "_Str_length",
+    toUpper: "_Str_toUpper",
+    toLower: "_Str_toLower",
+    trim: "_Str_trim",
+    split: "_Str_split",
+    join: "_Str_join",
+    contains: "_Str_contains",
+    startsWith: "_Str_startsWith",
+    endsWith: "_Str_endsWith",
+    slice: "_Str_slice",
+    replace: "_Str_replace",
   },
 };
 
