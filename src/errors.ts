@@ -2,11 +2,13 @@
 export type AlangError =
   | { kind: "lex"; message: string; pos: number }
   | { kind: "parse"; message: string }
-  | { kind: "check"; message: string };
+  | { kind: "check"; message: string }
+  | { kind: "type"; message: string };
 
 export const lexErr = (message: string, pos: number): AlangError => ({ kind: "lex", message, pos });
 export const parseErr = (message: string): AlangError => ({ kind: "parse", message });
 export const checkErr = (message: string): AlangError => ({ kind: "check", message });
+export const typeErr = (message: string): AlangError => ({ kind: "type", message });
 
 export const formatError = (e: AlangError): string => {
   switch (e.kind) {
@@ -16,5 +18,7 @@ export const formatError = (e: AlangError): string => {
       return `ParseError: ${e.message}`;
     case "check":
       return `CheckError: ${e.message}`;
+    case "type":
+      return `TypeError: ${e.message}`;
   }
 };
