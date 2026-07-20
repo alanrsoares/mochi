@@ -51,6 +51,8 @@ let report = shape => shape |> area |> format
 // --- records + field access (structural / "duck" data) ---
 let origin = { x: 0.0, y: 0.0 }
 let getX = p => p.x
+// destructuring lambda param: pulls x, y straight out of the argument record
+let dist2 = ({ x, y }) => hypot(x, y)
 let translate = (p, dx, dy) => { x: add(p.x, dx), y: add(p.y, dy) }
 let dist = (a, b) => hypot(sub(b.x, a.x), sub(b.y, a.y))
 
