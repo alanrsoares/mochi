@@ -16,6 +16,7 @@ class ParseAbort extends Error {
 
 export function parse(toks: Located[]): Result<Program, AlangError> {
   let pos = 0;
+  let tmpCount = 0; // supplies fresh names for destructuring temporaries
   let last: Located = toks[0]!; // most recently consumed token (for end spans)
   const peek = () => toks[pos]!;
   const next = () => {
@@ -228,21 +229,52 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     return { name, argTypes };
   }
 
-  function parseLet(): Stmt {
+  function parseLet(): Stmt[] {
     const start = expect("let").span;
+    if (peek().t === "lbrace") return parseRecordDestructure(start);
     const { name, span: nameSpan } = expectId();
     expect("eq");
     const value = parseExpr();
-    return { kind: "let", name, nameSpan, value, span: spanning(start, value.span) };
+    return [{ kind: "let", name, nameSpan, value, span: spanning(start, value.span) }];
   }
 
-  function parseStmt(): Stmt {
-    return peek().t === "type" ? parseType() : parseLet();
+  // `let { x, y } = e` desugars to a temp binding of `e` plus one field-access
+  // `let` per name, so it reuses inference/codegen with no downstream changes.
+  // Shorthand only for now (each field binds a variable of the same name); `e`
+  // is evaluated once, via the temp. Spans point at each field's identifier so
+  // hover/inlay/errors land on the binding the user wrote.
+  function parseRecordDestructure(start: Span): Stmt[] {
+    const open = expect("lbrace").span;
+    const fields: { name: string; span: Span }[] = [];
+    if (peek().t !== "rbrace") {
+      fields.push(expectId());
+      while (peek().t === "comma") {
+        next();
+        fields.push(expectId());
+      }
+    }
+    const close = expect("rbrace").span;
+    expect("eq");
+    const value = parseExpr();
+    const whole = spanning(start, value.span);
+    const patSpan = spanning(open, close);
+    const tmp = `$d${tmpCount++}`;
+    const stmts: Stmt[] = [{ kind: "let", name: tmp, nameSpan: patSpan, value, span: whole }];
+    for (const f of fields) {
+      const target: Expr = { kind: "ref", name: tmp, span: f.span };
+      const access: Expr = { kind: "field", target, name: f.name, span: f.span };
+      stmts.push({ kind: "let", name: f.name, nameSpan: f.span, value: access, span: f.span });
+    }
+    return stmts;
+  }
+
+  function parseStmt(): Stmt[] {
+    return peek().t === "type" ? [parseType()] : parseLet();
   }
 
   try {
     const stmts: Stmt[] = [];
-    while (peek().t !== "eof") stmts.push(parseStmt());
+    while (peek().t !== "eof") stmts.push(...parseStmt());
     return ok({ stmts });
   } catch (e) {
     if (e instanceof ParseAbort) return err(e.detail);

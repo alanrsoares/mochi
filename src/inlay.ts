@@ -29,6 +29,7 @@ export const inlayHints = (src: string): Inlay[] => {
   const hints: Inlay[] = [];
   for (const s of prog.stmts) {
     if (s.kind !== "let") continue;
+    if (s.name.startsWith("$")) continue; // synthetic destructuring temp
     const sc = env.get(s.name);
     if (sc) hints.push({ offset: s.nameSpan.end, label: `: ${showScheme(sc)}` });
   }
