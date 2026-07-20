@@ -64,7 +64,7 @@ export const showType = (t: Type): string => {
     case "var":
       return `'t${t.id}`;
     case "con":
-      if (t.name === "List" && t.args.length === 1) return `[${showType(t.args[0]!)}]`;
+      if (t.name === "Array" && t.args.length === 1) return `[${showType(t.args[0]!)}]`;
       return t.args.length === 0 ? t.name : `${t.name}<${t.args.map(showType).join(", ")}>`;
     case "arrow": {
       // parenthesize a left-nested arrow: (a -> b) -> c

@@ -12,7 +12,7 @@ const cmp = bin(tNumber, tNumber, tBool); // number -> number -> bool
 const a = tVar(0);
 const b = tVar(1);
 const c = tVar(2);
-const list = (t: Type): Type => tCon("List", [t]); // [t]
+const list = (t: Type): Type => tCon("Array", [t]); // [t] — eager JS array
 
 // name → type. Monomorphic entries (arithmetic) carry no vars; the collection /
 // function utilities are polymorphic and generalize at bind time. Curried
@@ -29,7 +29,7 @@ export const preludeEnv: Record<string, Type> = {
   eq: cmp,
   lt: cmp,
   gt: cmp,
-  // --- List (ported from prelude-js) ---
+  // --- Array ops (ported from prelude-js List; a lazy `List` is future work) ---
   length: tArrow(list(a), tNumber), // [a] -> number
   map: tArrow(tArrow(a, b), tArrow(list(a), list(b))), // (a -> b) -> [a] -> [b]
   filter: tArrow(tArrow(a, tBool), tArrow(list(a), list(a))), // (a -> bool) -> [a] -> [a]

@@ -237,8 +237,9 @@ const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
     }
 
     case "list": {
-      // Every element shares one type; `List<elem>`. An empty list is fully
-      // polymorphic (`List<'a>`), pinned by later unification / use.
+      // Every element shares one type; `Array<elem>` (the eager JS array — a
+      // future lazy `List` is a separate type). An empty list is fully
+      // polymorphic (`Array<'a>`), pinned by later unification / use.
       const elem = freshVar(ctx.fresh);
       for (const el of e.elements) {
         const et = infer(el, ctx);
@@ -246,7 +247,7 @@ const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
         const uni = u(elem, et.value, ctx, el.span);
         if (isErr(uni)) return uni;
       }
-      return ok(tCon("List", [elem]));
+      return ok(tCon("Array", [elem]));
     }
 
     case "match":
@@ -348,7 +349,7 @@ const typeExprToType = (te: TypeExpr, vars: Map<string, Type>, f: Fresh): Type =
       te.ctor,
       te.args.map((a) => typeExprToType(a, vars, f)),
     );
-  if (te.kind === "tlist") return tCon("List", [typeExprToType(te.elem, vars, f)]);
+  if (te.kind === "tlist") return tCon("Array", [typeExprToType(te.elem, vars, f)]);
   if (PRIMS.has(te.name)) return primType(te.name);
   if (/^[A-Z]/.test(te.name)) return tCon(te.name);
   let v = vars.get(te.name);
