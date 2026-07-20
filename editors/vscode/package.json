@@ -8,7 +8,7 @@
   "engines": { "vscode": "^1.82.0" },
   "categories": ["Programming Languages"],
   "main": "./out/extension.js",
-  "activationEvents": ["onLanguage:alang"],
+  "activationEvents": [],
   "contributes": {
     "languages": [
       {

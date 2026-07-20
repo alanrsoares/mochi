@@ -11,7 +11,8 @@ export type Expr =
   | { kind: "pipe"; left: Expr; right: Expr; span: Span } // a |> f
   | { kind: "match"; scrutinee: Expr; arms: MatchArm[]; span: Span } // switch x { | p => e }
   | { kind: "record"; fields: Field[]; span: Span } // { x: 1, y: 2 }
-  | { kind: "field"; target: Expr; name: string; span: Span }; // p.x
+  | { kind: "field"; target: Expr; name: string; span: Span } // p.x
+  | { kind: "list"; elements: Expr[]; span: Span }; // [1, 2, 3]
 
 // A lambda parameter: a plain name, or a record-destructuring pattern that
 // binds each named field. `({ x, y }) => ...` pulls x and y out of the argument.
@@ -47,7 +48,8 @@ export type CtorField = { name: string | null; type: string };
 export type TypeExpr =
   | { kind: "tname"; name: string; span: Span }
   | { kind: "tarrow"; from: TypeExpr; to: TypeExpr; span: Span }
-  | { kind: "tapp"; ctor: string; args: TypeExpr[]; span: Span }; // Task a, Result a e
+  | { kind: "tapp"; ctor: string; args: TypeExpr[]; span: Span } // Task a, Result a e
+  | { kind: "tlist"; elem: TypeExpr; span: Span }; // [a]
 
 export type Stmt =
   | { kind: "let"; name: string; nameSpan: Span; value: Expr; exported?: boolean; span: Span }

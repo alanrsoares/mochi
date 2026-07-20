@@ -55,29 +55,29 @@ test("occurs check rejects an infinite type", () => {
 
 // ---- deep generics ----
 
-test("List<'a> unifies with List<number> and binds the arg", () => {
-  const r = run(tApp("List", tVar(0)), tApp("List", tNumber));
+test("Vec<'a> unifies with Vec<number> and binds the arg", () => {
+  const r = run(tApp("Vec", tVar(0)), tApp("Vec", tNumber));
   expect(r.ok).toBe(true);
-  expect(r.show).toBe("List<number>");
+  expect(r.show).toBe("Vec<number>");
 });
 
 test("deeply nested generics unify all the way down", () => {
-  // List<Option<'a>>  ~  List<Option<number>>
-  const a = tApp("List", tApp("Option", tVar(0)));
-  const b = tApp("List", tApp("Option", tNumber));
+  // Vec<Option<'a>>  ~  Vec<Option<number>>
+  const a = tApp("Vec", tApp("Option", tVar(0)));
+  const b = tApp("Vec", tApp("Option", tNumber));
   const r = run(a, b);
   expect(r.ok).toBe(true);
-  expect(r.show).toBe("List<Option<number>>");
+  expect(r.show).toBe("Vec<Option<number>>");
 });
 
-test("multi-param generic: Map<'k, 'v> ~ Map<string, List<number>>", () => {
+test("multi-param generic: Map<'k, 'v> ~ Map<string, Vec<number>>", () => {
   const a = tApp("Map", tVar(0), tVar(1));
-  const b = tApp("Map", tString, tApp("List", tNumber));
+  const b = tApp("Map", tString, tApp("Vec", tNumber));
   const s = emptySubst();
   const res = unify(a, b, s, mkFresh(100));
   expect(isOk(res)).toBe(true);
   expect(showType(zonk(tVar(0), s))).toBe("string");
-  expect(showType(zonk(tVar(1), s))).toBe("List<number>");
+  expect(showType(zonk(tVar(1), s))).toBe("Vec<number>");
 });
 
 test("generic arity mismatch fails", () => {
@@ -87,8 +87,8 @@ test("generic arity mismatch fails", () => {
 });
 
 test("nested generic arg conflict fails with a deep message", () => {
-  const a = tApp("List", tApp("Option", tNumber));
-  const b = tApp("List", tApp("Option", tString));
+  const a = tApp("Vec", tApp("Option", tNumber));
+  const b = tApp("Vec", tApp("Option", tString));
   const r = unify(a, b, emptySubst(), mkFresh());
   expect(isErr(r)).toBe(true);
   expect(unwrapErr(r).message).toContain("cannot unify number with string");
@@ -139,10 +139,10 @@ test("two open records merge and share a tail", () => {
 });
 
 test("record holding a generic field unifies deeply", () => {
-  // { items: List<'a> | 'r }  ~  { items: List<number>, size: number }
-  const a = tRecord(rExtend("items", tApp("List", tVar(0)), rVar(1)));
-  const b = tRecord(rExtend("items", tApp("List", tNumber), rExtend("size", tNumber, rEmpty)));
+  // { items: Vec<'a> | 'r }  ~  { items: Vec<number>, size: number }
+  const a = tRecord(rExtend("items", tApp("Vec", tVar(0)), rVar(1)));
+  const b = tRecord(rExtend("items", tApp("Vec", tNumber), rExtend("size", tNumber, rEmpty)));
   const r = run(a, b, a);
   expect(r.ok).toBe(true);
-  expect(r.show).toBe("{ items: List<number>, size: number }");
+  expect(r.show).toBe("{ items: Vec<number>, size: number }");
 });

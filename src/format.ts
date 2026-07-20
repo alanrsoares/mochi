@@ -44,6 +44,8 @@ const expr = (e: Expr, ind: string): string => {
         : `{ ${e.fields.map((f) => `${f.name}: ${expr(f.value, ind)}`).join(", ")} }`;
     case "field":
       return `${member(e.target, ind)}.${e.name}`;
+    case "list":
+      return `[${e.elements.map((el) => expr(el, ind)).join(", ")}]`;
     case "match":
       return matchExpr(e, ind);
   }
@@ -98,6 +100,7 @@ const typeExpr = (te: TypeExpr): string => {
     const arg = (a: TypeExpr): string => (a.kind === "tname" ? typeExpr(a) : `(${typeExpr(a)})`);
     return `${te.ctor} ${te.args.map(arg).join(" ")}`;
   }
+  if (te.kind === "tlist") return `[${typeExpr(te.elem)}]`;
   const from = te.from.kind === "tarrow" ? `(${typeExpr(te.from)})` : typeExpr(te.from);
   return `${from} -> ${typeExpr(te.to)}`;
 };

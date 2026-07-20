@@ -20,6 +20,8 @@ export type Tok =
   | { t: "rparen" }
   | { t: "lbrace" } // {
   | { t: "rbrace" } // }
+  | { t: "lbracket" } // [
+  | { t: "rbracket" } // ]
   | { t: "dot" } // .
   | { t: "colon" } // :
   | { t: "comma" }
@@ -58,6 +60,8 @@ const PUNCT: Record<string, Tok | undefined> = {
   ")": { t: "rparen" },
   "{": { t: "lbrace" },
   "}": { t: "rbrace" },
+  "[": { t: "lbracket" },
+  "]": { t: "rbracket" },
   ",": { t: "comma" },
   ".": { t: "dot" },
   ":": { t: "colon" },

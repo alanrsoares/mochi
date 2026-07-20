@@ -148,6 +148,7 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
   function parseAtom(): Expr {
     if (peek().t === "switch") return parseMatch();
     if (peek().t === "lbrace") return parseRecord();
+    if (peek().t === "lbracket") return parseList();
     const tk = next();
     if (tk.t === "num") return { kind: "num", value: tk.v, raw: tk.raw, span: tk.span };
     if (tk.t === "bool") return { kind: "bool", value: tk.v, span: tk.span };
@@ -179,6 +180,21 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     const name = expectId().name;
     expect("colon");
     return { name, value: parseExpr() };
+  }
+
+  // A list literal: `[]`, `[e]`, `[e, e, ...]`. Elements are full expressions.
+  function parseList(): Expr {
+    const start = expect("lbracket").span;
+    const elements: Expr[] = [];
+    if (peek().t !== "rbracket") {
+      elements.push(parseExpr());
+      while (peek().t === "comma") {
+        next();
+        elements.push(parseExpr());
+      }
+    }
+    expect("rbracket");
+    return { kind: "list", elements, span: to(start) };
   }
 
   // ---- pattern matching --------------------------------------------------
@@ -363,6 +379,12 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
       expect("rparen");
       return inner;
     }
+    if (peek().t === "lbracket") {
+      const start = next().span; // [
+      const elem = parseTypeExpr();
+      const end = expect("rbracket").span;
+      return { kind: "tlist", elem, span: spanning(start, end) };
+    }
     const { name, span } = expectId();
     return { kind: "tname", name, span };
   }
@@ -374,7 +396,8 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     const head = parseTypeAtom();
     if (head.kind !== "tname" || !/^[A-Z]/.test(head.name)) return head;
     const args: TypeExpr[] = [];
-    while (peek().t === "id" || peek().t === "lparen") args.push(parseTypeAtom());
+    while (peek().t === "id" || peek().t === "lparen" || peek().t === "lbracket")
+      args.push(parseTypeAtom());
     const last = args[args.length - 1];
     if (!last) return head;
     return { kind: "tapp", ctor: head.name, args, span: spanning(head.span, last.span) };

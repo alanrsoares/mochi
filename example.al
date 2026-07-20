@@ -60,6 +60,13 @@ let isOdd = n => switch n {
   | _ => isEven(sub(n, 1))
 }
 
+// --- list literals: homogeneous, inferred as [elem] ---
+// `[1, 2, 3]` is a JS array at runtime; the inferencer requires every element
+// to share one type, so `nums : [number]` and `grid : [[number]]`.
+let nums = [1, 2, 3]
+let grid = [[1, 2], [3, 4]]
+let empty = []
+
 // --- records + field access (structural / "duck" data) ---
 let origin = { x: 0.0, y: 0.0 }
 let getX = p => p.x

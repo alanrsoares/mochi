@@ -44,6 +44,7 @@ const genExpr = (e: Expr): string =>
         : `{ ${r.fields.map((f) => `${f.name}: ${genExpr(f.value)}`).join(", ")} }`,
     )
     .with({ kind: "field" }, (f) => `${genMember(f.target)}.${f.name}`)
+    .with({ kind: "list" }, (l) => `[${l.elements.map(genExpr).join(", ")}]`)
     .exhaustive();
 
 // A lambda parameter lowers to JS: a name, or native object destructuring.
@@ -204,6 +205,7 @@ const hasMatch = (e: Expr): boolean =>
     .with({ kind: "match" }, () => true)
     .with({ kind: "record" }, (r) => r.fields.some((f) => hasMatch(f.value)))
     .with({ kind: "field" }, (f) => hasMatch(f.target))
+    .with({ kind: "list" }, (l) => l.elements.some(hasMatch))
     .exhaustive();
 
 // Every name referenced anywhere in an expression. Coarse — it counts locally
@@ -230,6 +232,9 @@ const exprRefs = (e: Expr, acc: Set<string>): void => {
       for (const f of r.fields) exprRefs(f.value, acc);
     })
     .with({ kind: "field" }, (f) => exprRefs(f.target, acc))
+    .with({ kind: "list" }, (l) => {
+      for (const el of l.elements) exprRefs(el, acc);
+    })
     .exhaustive();
 };
 

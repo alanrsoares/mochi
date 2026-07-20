@@ -236,6 +236,19 @@ const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
       return ok(fieldT);
     }
 
+    case "list": {
+      // Every element shares one type; `List<elem>`. An empty list is fully
+      // polymorphic (`List<'a>`), pinned by later unification / use.
+      const elem = freshVar(ctx.fresh);
+      for (const el of e.elements) {
+        const et = infer(el, ctx);
+        if (isErr(et)) return et;
+        const uni = u(elem, et.value, ctx, el.span);
+        if (isErr(uni)) return uni;
+      }
+      return ok(tCon("List", [elem]));
+    }
+
     case "match":
       return inferMatch(e, ctx);
   }
@@ -335,6 +348,7 @@ const typeExprToType = (te: TypeExpr, vars: Map<string, Type>, f: Fresh): Type =
       te.ctor,
       te.args.map((a) => typeExprToType(a, vars, f)),
     );
+  if (te.kind === "tlist") return tCon("List", [typeExprToType(te.elem, vars, f)]);
   if (PRIMS.has(te.name)) return primType(te.name);
   if (/^[A-Z]/.test(te.name)) return tCon(te.name);
   let v = vars.get(te.name);
@@ -420,6 +434,9 @@ const freeRefs = (e: Expr, bound: Set<string>, acc: Set<string>): void => {
       return;
     case "field":
       freeRefs(e.target, bound, acc);
+      return;
+    case "list":
+      for (const el of e.elements) freeRefs(el, bound, acc);
   }
 };
 
