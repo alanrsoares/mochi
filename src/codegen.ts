@@ -5,7 +5,7 @@
 // node and forget it → TS compile error in the compiler, not a silent gap.
 import { match } from "ts-pattern";
 import type { CtorField, Expr, LamParam, MatchArm, Pattern, Program, Stmt } from "./ast";
-import { namespaceRuntime, preludeJsDefs } from "./prelude";
+import { builtinTypeDecls, namespaceRuntime, preludeJsDefs, runtimeDeps } from "./prelude";
 
 // A `Ns.member` access on a bare namespace ref (`List.map`) → the JS identifier
 // its runtime is defined under, or null if it isn't a namespace access.
@@ -324,8 +324,7 @@ const exprRefs = (e: Expr, acc: Set<string>): void => {
     .with({ kind: "field" }, (f) => {
       const rt = nsRuntimeId(f); // `List.map` → `_List_map`, not a field access
       if (rt) {
-        acc.add(rt);
-        if (rt.startsWith("_List_")) acc.add("_list"); // lazy transformers need the core
+        acc.add(rt); // its runtime deps are pulled in by preludePreamble's closure
         return;
       }
       exprRefs(f.target, acc);
@@ -349,19 +348,6 @@ const exprRefs = (e: Expr, acc: Set<string>): void => {
     .exhaustive();
 };
 
-// List producers/slicers are defined in terms of the `_list` core, but a program
-// references them by name, not `_list` — so pull the core in whenever any of them
-// (or a `@{...}` literal, handled in exprRefs) appears.
-const LIST_RUNTIME = new Set([
-  "range",
-  "iterate",
-  "repeat",
-  "take",
-  "takeWhile",
-  "drop",
-  "fromArray",
-]);
-
 // The names a program binds at module scope — anything that would shadow a
 // prelude builtin, so its runtime def must NOT be inlined (else a duplicate
 // `const` and a JS SyntaxError, e.g. a user `let hypot = …`).
@@ -380,7 +366,17 @@ const boundNames = (prog: Program): Set<string> => {
 const preludePreamble = (prog: Program): string => {
   const refs = new Set<string>();
   for (const s of prog.stmts) if (s.kind === "let") exprRefs(s.value, refs);
-  if ([...refs].some((r) => LIST_RUNTIME.has(r))) refs.add("_list");
+  // Transitively pull in each referenced def's runtime deps (`range` → `_list`,
+  // `_Map_get` → Some/None, …).
+  const stack = [...refs];
+  while (stack.length) {
+    const r = stack.pop()!;
+    for (const d of runtimeDeps[r] ?? [])
+      if (!refs.has(d)) {
+        refs.add(d);
+        stack.push(d);
+      }
+  }
   const bound = boundNames(prog);
   const defs = Object.entries(preludeJsDefs)
     .filter(([name]) => refs.has(name) && !bound.has(name))
@@ -401,6 +397,9 @@ export const codegen = (
   ctorKeys = new Map(imported ?? []);
   for (const s of prog.stmts)
     if (s.kind === "type") for (const c of s.ctors) ctorKeys.set(c.name, keysOf(c.fields));
+  // Seed builtin variant ctor keys (Some/Ok/…) unless the program declares its own.
+  for (const bt of builtinTypeDecls)
+    for (const c of bt.ctors) if (!ctorKeys.has(c.name)) ctorKeys.set(c.name, keysOf(c.fields));
   const needsMatch = prog.stmts.some((s) => s.kind === "let" && usesMatchLib(s.value));
   const header = needsMatch ? `import { match } from "@onrails/pattern";\n\n` : "";
   const preamble = opts.runtime ? preludePreamble(prog) : "";

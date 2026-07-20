@@ -15,8 +15,26 @@ import type { AlangError } from "./errors";
 import { inferProgramTypes, type Scheme } from "./infer";
 import { lex } from "./lexer";
 import { parse } from "./parser";
-import { preludeEnv, preludeNamespaces } from "./prelude";
+import { builtinTypeDecls, preludeEnv, preludeNamespaces } from "./prelude";
 import type { Row, Type } from "./types";
+
+// Collect every type-constructor name appearing in a type (for detecting which
+// builtin variant decls an emitted module must include).
+const consIn = (t: Type, acc: Set<string>): void => {
+  if (t.kind === "con") {
+    acc.add(t.name);
+    for (const a of t.args) consIn(a, acc);
+  } else if (t.kind === "arrow") {
+    consIn(t.from, acc);
+    consIn(t.to, acc);
+  } else if (t.kind === "record") {
+    let row = t.row;
+    while (row.kind === "extend") {
+      consIn(row.type, acc);
+      row = row.rest;
+    }
+  }
+};
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const PRIM_TS: Record<string, string> = { number: "number", string: "string", bool: "boolean" };
@@ -126,5 +144,18 @@ export const emitDts = (src: string): Result<string, AlangError> => {
   const lines = prog.stmts
     .map((s) => declOf(s, (n) => env.get(n)))
     .filter((l): l is string => l !== null);
-  return ok(`${lines.join("\n")}\n`);
+  // A builtin variant used in an exported binding's type (e.g. `Option<number>`
+  // from `Map.get`) needs its type decl emitted too, unless the program declares
+  // its own. Prepend so the reference resolves.
+  const declared = new Set(prog.stmts.flatMap((s) => (s.kind === "type" ? [s.name] : [])));
+  const referenced = new Set<string>();
+  for (const s of prog.stmts) {
+    if (s.kind !== "let" || s.name.startsWith("$")) continue;
+    const sc = env.get(s.name);
+    if (sc) consIn(sc.type, referenced);
+  }
+  const builtins = builtinTypeDecls
+    .filter((bt) => referenced.has(bt.name) && !declared.has(bt.name))
+    .map((bt) => typeDecl(bt.name, bt.params, bt.ctors));
+  return ok(`${[...builtins, ...lines].join("\n")}\n`);
 };

@@ -7,6 +7,7 @@
 import { err, isErr, map, ok, type Result } from "@onrails/result";
 import type { Ctor, Expr, Pattern, Program, Stmt, TypeExpr } from "./ast";
 import { type AlangError, typeErr } from "./errors";
+import { builtinTypeDecls } from "./prelude";
 import type { Span } from "./span";
 import {
   type Fresh,
@@ -632,6 +633,11 @@ function run(
     if (s.kind !== "type") continue;
     for (const c of s.ctors) env.set(c.name, ctorScheme(s.name, s.params, c, fresh));
   }
+  // Builtin variant ctors (Some/None/Ok/Err), unless a user type already bound
+  // the name — so `Map.get : ... -> Option v` and hand-written Some/None type-check.
+  for (const bt of builtinTypeDecls)
+    for (const c of bt.ctors)
+      if (!env.has(c.name)) env.set(c.name, ctorScheme(bt.name, bt.params, c, fresh));
 
   // externs next — their declared type is authoritative; generalize so a
   // polymorphic signature (e.g. a -> a) instantiates fresh at each use site.

@@ -3,6 +3,7 @@
 import { err, isErr, ok, type Result } from "@onrails/result";
 import type { Expr, Pattern, Program } from "./ast";
 import { type AlangError, checkErr } from "./errors";
+import { builtinTypeDecls } from "./prelude";
 
 type CtorInfo = { type: string; arity: number };
 export type Registry = {
@@ -41,6 +42,17 @@ const buildRegistry = (prog: Program): Result<Registry, AlangError> => {
       if (reg.ctor.has(c.name)) return err(checkErr(`duplicate constructor '${c.name}'`, s.span));
       reg.ctor.set(c.name, { type: s.name, arity: c.fields.length });
     }
+  }
+  // Seed builtin variant types (Option/Result) unless the program declares its
+  // own type of that name — so user redeclarations win with no duplicate error.
+  for (const bt of builtinTypeDecls) {
+    if (reg.type.has(bt.name)) continue;
+    reg.type.set(
+      bt.name,
+      bt.ctors.map((c) => c.name),
+    );
+    for (const c of bt.ctors)
+      if (!reg.ctor.has(c.name)) reg.ctor.set(c.name, { type: bt.name, arity: c.fields.length });
   }
   return ok(reg);
 };

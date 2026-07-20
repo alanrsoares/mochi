@@ -1,5 +1,6 @@
 // The prelude: builtin signatures the inferencer starts with, plus the JS
 // runtime that backs them. Kept tiny for now — arithmetic and comparison.
+import type { Ctor } from "./ast";
 import { type Type, tArrow, tBool, tCon, tNumber, tString, tVar } from "./types";
 
 const bin = (a: Type, b: Type, r: Type): Type => tArrow(a, tArrow(b, r));
@@ -16,6 +17,30 @@ const arr = (t: Type): Type => tCon("Array", [t]); // [t] — eager JS array
 const list = (t: Type): Type => tCon("List", [t]); // List t — lazy pull-sequence (@{...})
 const set = (t: Type): Type => tCon("Set", [t]); // Set t — native JS Set (${...})
 const mapT = (k: Type, v: Type): Type => tCon("Map", [k, v]); // Map k v — native JS Map (#{...})
+const opt = (t: Type): Type => tCon("Option", [t]); // Option t — builtin variant
+
+// Builtin variant types — seeded into the registry / env / codegen ONLY when a
+// program doesn't declare a type of the same name (so user redeclarations win).
+// Runtime shape matches @onrails/result + @onrails/maybe (`{ _tag, value/error }`),
+// so alang Option/Result values flow straight through their combinators.
+export const builtinTypeDecls: { name: string; params: string[]; ctors: Ctor[] }[] = [
+  {
+    name: "Option",
+    params: ["a"],
+    ctors: [
+      { name: "Some", fields: [{ name: "value", type: "a" }] },
+      { name: "None", fields: [] },
+    ],
+  },
+  {
+    name: "Result",
+    params: ["a", "e"],
+    ctors: [
+      { name: "Ok", fields: [{ name: "value", type: "a" }] },
+      { name: "Err", fields: [{ name: "error", type: "e" }] },
+    ],
+  },
+];
 
 // name → type. Monomorphic entries (arithmetic) carry no vars; the collection /
 // function utilities are polymorphic and generalize at bind time. Curried
@@ -61,6 +86,12 @@ export const preludeJsDefs: Record<string, string> = {
   // List core: a List is an iterable factory `{ [Symbol.iterator]: () => Iterator }`.
   // Force-included by codegen whenever a `@{...}` literal or List producer is used.
   _list: "const _list = (g) => ({ [Symbol.iterator]: g });",
+  // Builtin variant constructors (inlined only when a program uses them and does
+  // not declare its own type of that name). Shape matches the @onrails ecosystem.
+  Some: 'const Some = (value) => ({ _tag: "Some", value });',
+  None: 'const None = { _tag: "None" };',
+  Ok: 'const Ok = (value) => ({ _tag: "Ok", value });',
+  Err: 'const Err = (error) => ({ _tag: "Err", error });',
   add: "const add = (a, b) => a + b;",
   sub: "const sub = (a, b) => a - b;",
   mul: "const mul = (a, b) => a * b;",
@@ -124,6 +155,34 @@ export const preludeJsDefs: Record<string, string> = {
   _Map_size: "const _Map_size = (m) => m.size;",
   _Map_keys: "const _Map_keys = (m) => [...m.keys()];",
   _Map_values: "const _Map_values = (m) => [...m.values()];",
+  _Map_get: "const _Map_get = (k) => (m) => (m.has(k) ? Some(m.get(k)) : None);",
+  // --- Option-returning safe accessors (depend on Some/None) ---
+  _List_head: "const _List_head = (xs) => { for (const x of xs) return Some(x); return None; };",
+  _Array_head: "const _Array_head = (xs) => (xs.length > 0 ? Some(xs[0]) : None);",
+  _Array_find:
+    "const _Array_find = (p) => (xs) => { for (const x of xs) if (p(x)) return Some(x); return None; };",
+};
+
+// Runtime-dependency graph: a def name → the other def names its body references.
+// `preludePreamble` takes the transitive closure over this before inlining, so a
+// referenced op drags in the helpers/constructors it needs (`_Map_get` → Some/None,
+// `range` → `_list`, …). Entries with no deps may be omitted.
+export const runtimeDeps: Record<string, string[]> = {
+  range: ["_list"],
+  iterate: ["_list"],
+  repeat: ["_list"],
+  take: ["_list"],
+  takeWhile: ["_list"],
+  drop: ["_list"],
+  fromArray: ["_list"],
+  _List_map: ["_list"],
+  _List_filter: ["_list"],
+  _List_concat: ["_list"],
+  _List_flatMap: ["_list"],
+  _Map_get: ["Some", "None"],
+  _List_head: ["Some", "None"],
+  _Array_head: ["Some", "None"],
+  _Array_find: ["Some", "None"],
 };
 
 // Qualified collection namespaces. alang has no overloading, so each collection
@@ -135,12 +194,15 @@ export const preludeNamespaces: Record<string, Record<string, Type>> = {
     filter: tArrow(tArrow(a, tBool), tArrow(arr(a), arr(a))),
     reduce: tArrow(tArrow(b, tArrow(a, b)), tArrow(b, tArrow(arr(a), b))),
     length: tArrow(arr(a), tNumber),
+    head: tArrow(arr(a), opt(a)), // [a] -> Option a
+    find: tArrow(tArrow(a, tBool), tArrow(arr(a), opt(a))), // (a -> bool) -> [a] -> Option a
   },
   List: {
     map: tArrow(tArrow(a, b), tArrow(list(a), list(b))), // (a -> b) -> List a -> List b
     filter: tArrow(tArrow(a, tBool), tArrow(list(a), list(a))), // (a -> bool) -> List a -> List a
     concat: tArrow(list(a), tArrow(list(a), list(a))), // List a -> List a -> List a
     flatMap: tArrow(tArrow(a, list(b)), tArrow(list(a), list(b))), // (a -> List b) -> List a -> List b
+    head: tArrow(list(a), opt(a)), // List a -> Option a  (forces one element)
   },
   // Set ops — immutable (return a fresh Set). Keys/elements are primitives.
   Set: {
@@ -164,18 +226,27 @@ export const preludeNamespaces: Record<string, Record<string, Type>> = {
     size: tArrow(mapT(a, b), tNumber), // Map k v -> number
     keys: tArrow(mapT(a, b), arr(a)), // Map k v -> [k]
     values: tArrow(mapT(a, b), arr(b)), // Map k v -> [v]
+    get: tArrow(a, tArrow(mapT(a, b), opt(b))), // k -> Map k v -> Option v
   },
 };
 
 // `Ns.member` → the JS identifier codegen emits. Array reuses the existing eager
 // defs; List points at the lazy `_List_*` generators above.
 export const namespaceRuntime: Record<string, Record<string, string>> = {
-  Array: { map: "map", filter: "filter", reduce: "reduce", length: "length" },
+  Array: {
+    map: "map",
+    filter: "filter",
+    reduce: "reduce",
+    length: "length",
+    head: "_Array_head",
+    find: "_Array_find",
+  },
   List: {
     map: "_List_map",
     filter: "_List_filter",
     concat: "_List_concat",
     flatMap: "_List_flatMap",
+    head: "_List_head",
   },
   Set: {
     has: "_Set_has",
@@ -196,6 +267,7 @@ export const namespaceRuntime: Record<string, Record<string, string>> = {
     size: "_Map_size",
     keys: "_Map_keys",
     values: "_Map_values",
+    get: "_Map_get",
   },
 };
 
