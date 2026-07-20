@@ -9,6 +9,7 @@ import type { Expr, LamParam, MatchArm, Pattern, Program, Stmt } from "./ast";
 const genExpr = (e: Expr): string =>
   match(e)
     .with({ kind: "num" }, (n) => String(n.value))
+    .with({ kind: "bool" }, (b) => String(b.value))
     .with({ kind: "ref" }, (r) => r.name)
     .with({ kind: "call" }, (c) => `${genCallee(c.fn)}(${c.args.map(genExpr).join(", ")})`)
     .with(
@@ -68,10 +69,10 @@ const genMatch = (m: Extract<Expr, { kind: "match" }>): string => {
 };
 
 const genWithArm = (
-  p: Extract<Pattern, { kind: "pctor" }> | Extract<Pattern, { kind: "plit" }>,
+  p: Extract<Pattern, { kind: "pctor" | "plit" | "pbool" }>,
   body: Expr,
 ): string => {
-  if (p.kind === "plit") return `.with(${p.value}, () => ${genExpr(body)})`;
+  if (p.kind === "plit" || p.kind === "pbool") return `.with(${p.value}, () => ${genExpr(body)})`;
 
   const binds: string[] = []; // "_0: r"
   const litFields: string[] = []; // "_0: 5" — narrows further
@@ -107,7 +108,7 @@ const genStmt = (s: Stmt): string =>
 
 const hasMatch = (e: Expr): boolean =>
   match(e)
-    .with({ kind: "num" }, { kind: "ref" }, () => false)
+    .with({ kind: "num" }, { kind: "bool" }, { kind: "ref" }, () => false)
     .with({ kind: "call" }, (c) => hasMatch(c.fn) || c.args.some(hasMatch))
     .with({ kind: "lambda" }, (l) => hasMatch(l.body))
     .with({ kind: "pipe" }, (p) => hasMatch(p.left) || hasMatch(p.right))

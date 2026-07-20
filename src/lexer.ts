@@ -20,6 +20,7 @@ export type Tok =
   | { t: "colon" } // :
   | { t: "comma" }
   | { t: "num"; v: number }
+  | { t: "bool"; v: boolean } // true / false
   | { t: "id"; v: string }
   | { t: "eof" };
 
@@ -30,6 +31,8 @@ const KEYWORDS: Record<string, Tok | undefined> = {
   let: { t: "let" },
   type: { t: "type" },
   switch: { t: "switch" },
+  true: { t: "bool", v: true },
+  false: { t: "bool", v: false },
 };
 
 // Two-char operators, checked before single chars.

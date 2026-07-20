@@ -138,6 +138,7 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     if (peek().t === "lbrace") return parseRecord();
     const tk = next();
     if (tk.t === "num") return { kind: "num", value: tk.v, span: tk.span };
+    if (tk.t === "bool") return { kind: "bool", value: tk.v, span: tk.span };
     if (tk.t === "id") return { kind: "ref", name: tk.v, span: tk.span };
     if (tk.t === "lparen") {
       const e = parseExpr();
@@ -190,6 +191,10 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     if (tk.t === "num") {
       next();
       return { kind: "plit", value: tk.v, span: tk.span };
+    }
+    if (tk.t === "bool") {
+      next();
+      return { kind: "pbool", value: tk.v, span: tk.span };
     }
     if (tk.t === "id") {
       const { name, span: nameSpan } = expectId();

@@ -3,6 +3,7 @@ import type { Span } from "./span";
 
 export type Expr =
   | { kind: "num"; value: number; span: Span }
+  | { kind: "bool"; value: boolean; span: Span }
   | { kind: "ref"; name: string; span: Span }
   | { kind: "call"; fn: Expr; args: Expr[]; span: Span }
   | { kind: "lambda"; params: LamParam[]; body: Expr; span: Span } // (x, y) => body, ({a, b}) => body
@@ -23,6 +24,7 @@ export type Pattern =
   | { kind: "pwild"; span: Span } // _
   | { kind: "pbind"; name: string; span: Span } // x
   | { kind: "plit"; value: number; span: Span } // 0
+  | { kind: "pbool"; value: boolean; span: Span } // true / false
   | { kind: "pctor"; ctor: string; args: Pattern[]; span: Span }; // Circle(r)
 
 // A variant constructor: name + typed positional fields (types are names for now).

@@ -31,6 +31,7 @@ const buildRegistry = (prog: Program): Result<Registry, AlangError> => {
 function forEachMatch(e: Expr, visit: (m: Extract<Expr, { kind: "match" }>) => void): void {
   switch (e.kind) {
     case "num":
+    case "bool":
     case "ref":
       return;
     case "call":
@@ -64,9 +65,15 @@ function checkMatch(m: Extract<Expr, { kind: "match" }>, reg: Registry): AlangEr
   const hasCatchAll = m.arms.some((a) => isCatchAll(a.pattern));
   const ctorArms = m.arms.filter((a) => a.pattern.kind === "pctor");
 
-  // No constructor arms → literal/wildcard switch. Only a catch-all makes it total.
+  // No constructor arms → literal/wildcard/bool switch. A catch-all makes it
+  // total; so does covering both boolean cases (bool is a closed two-case type).
   if (ctorArms.length === 0) {
-    return hasCatchAll ? null : checkErr("non-exhaustive switch: add a `_` catch-all arm", m.span);
+    if (hasCatchAll) return null;
+    const bools = new Set(
+      m.arms.flatMap((a) => (a.pattern.kind === "pbool" ? [a.pattern.value] : [])),
+    );
+    if (bools.has(true) && bools.has(false)) return null;
+    return checkErr("non-exhaustive switch: add a `_` catch-all arm", m.span);
   }
 
   // Validate each constructor pattern: known + right arity.

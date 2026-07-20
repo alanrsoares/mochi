@@ -157,6 +157,9 @@ const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
     case "num":
       return ok(tNumber);
 
+    case "bool":
+      return ok(tBool);
+
     case "ref": {
       const sc = ctx.env.get(e.name);
       if (sc) return ok(instantiate(sc, ctx.fresh));
@@ -264,6 +267,8 @@ const inferPattern = (p: Pattern, ctx: Ctx): Result<PatResult, AlangError> => {
       return ok({ type: freshVar(ctx.fresh), bindings: new Map() });
     case "plit":
       return ok({ type: tNumber, bindings: new Map() });
+    case "pbool":
+      return ok({ type: tBool, bindings: new Map() });
     case "pbind": {
       const t = freshVar(ctx.fresh);
       return ok({ type: t, bindings: new Map([[p.name, t]]) });

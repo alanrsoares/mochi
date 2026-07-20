@@ -26,6 +26,8 @@ const expr = (e: Expr, ind: string): string => {
   switch (e.kind) {
     case "num":
       return String(e.value);
+    case "bool":
+      return String(e.value);
     case "ref":
       return e.name;
     case "call":
@@ -58,6 +60,8 @@ const pattern = (p: Pattern): string => {
     case "pbind":
       return p.name;
     case "plit":
+      return String(p.value);
+    case "pbool":
       return String(p.value);
     case "pctor":
       return p.args.length === 0 ? p.ctor : `${p.ctor}(${p.args.map(pattern).join(", ")})`;
