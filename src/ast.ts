@@ -2,7 +2,7 @@
 import type { Span } from "./span";
 
 export type Expr =
-  | { kind: "num"; value: number; span: Span }
+  | { kind: "num"; value: number; raw: string; span: Span }
   | { kind: "bool"; value: boolean; span: Span }
   | { kind: "str"; value: string; span: Span }
   | { kind: "ref"; name: string; span: Span }
@@ -24,7 +24,7 @@ export type MatchArm = { pattern: Pattern; body: Expr };
 export type Pattern =
   | { kind: "pwild"; span: Span } // _
   | { kind: "pbind"; name: string; span: Span } // x
-  | { kind: "plit"; value: number; span: Span } // 0
+  | { kind: "plit"; value: number; raw: string; span: Span } // 0
   | { kind: "pbool"; value: boolean; span: Span } // true / false
   | { kind: "pstr"; value: string; span: Span } // "foo"
   | { kind: "precord"; fields: PatField[]; span: Span } // { x, status: "err" }

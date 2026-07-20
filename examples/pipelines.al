@@ -63,4 +63,4 @@ let sad = 0
   |> positive
   |> flatMapOk(halve)
   |> mapOk(double)
-  |> unwrapOr(sub(0, 1))
+  |> unwrapOr(-1)

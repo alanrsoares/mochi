@@ -25,7 +25,7 @@ const params = (ps: LamParam[]): string =>
 const expr = (e: Expr, ind: string): string => {
   switch (e.kind) {
     case "num":
-      return String(e.value);
+      return e.raw;
     case "bool":
       return String(e.value);
     case "str":
@@ -62,7 +62,7 @@ const pattern = (p: Pattern): string => {
     case "pbind":
       return p.name;
     case "plit":
-      return String(p.value);
+      return p.raw;
     case "pbool":
       return String(p.value);
     case "pstr":

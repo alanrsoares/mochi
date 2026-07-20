@@ -208,3 +208,15 @@ test("parse error is a value, not a throw", () => {
   expect(isErr(r)).toBe(true);
   expect(unwrapErr(r).kind).toBe("parse");
 });
+
+test("a negative number literal lexes and emits as a signed value", () => {
+  expect(js("let x = -3")).toBe("const x = -3;\n");
+});
+
+test("a negative literal works as a match pattern", () => {
+  expect(js("let f = n => switch n { | -1 => 0 | _ => n }")).toContain(".with(-1, () => 0)");
+});
+
+test("a float literal keeps its form (no int coercion) in the output", () => {
+  expect(js("let pi = 3.0")).toBe("const pi = 3.0;\n");
+});

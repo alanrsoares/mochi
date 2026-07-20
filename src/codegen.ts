@@ -25,7 +25,7 @@ export const exportedCtorKeys = (prog: Program): Map<string, string[]> => {
 
 const genExpr = (e: Expr): string =>
   match(e)
-    .with({ kind: "num" }, (n) => String(n.value))
+    .with({ kind: "num" }, (n) => n.raw)
     .with({ kind: "bool" }, (b) => String(b.value))
     .with({ kind: "str" }, (s) => JSON.stringify(s.value))
     .with({ kind: "ref" }, (r) => r.name)
@@ -108,7 +108,7 @@ const recordBinds = (p: Extract<Pattern, { kind: "precord" }>): string[] =>
 
 // A literal pattern rendered as a JS value for the matcher object / `.with`.
 const litValue = (p: Extract<Pattern, { kind: "plit" | "pbool" | "pstr" }>): string =>
-  p.kind === "pstr" ? JSON.stringify(p.value) : String(p.value);
+  p.kind === "pstr" ? JSON.stringify(p.value) : p.kind === "plit" ? p.raw : String(p.value);
 
 // Patterns that narrow (everything a catch-all is not) — routed to `.with(...)`.
 type NarrowingPattern = Extract<Pattern, { kind: "pctor" | "plit" | "pbool" | "pstr" | "precord" }>;
@@ -136,7 +136,7 @@ const genWithArm = (p: NarrowingPattern, body: Expr): string => {
   p.args.forEach((a, i) => {
     const key = keys?.[i] ?? `_${i}`;
     if (a.kind === "pbind") binds.push(key === a.name ? key : `${key}: ${a.name}`);
-    else if (a.kind === "plit") litFields.push(`${key}: ${a.value}`);
+    else if (a.kind === "plit") litFields.push(`${key}: ${a.raw}`);
     // pwild → don't bind; nested pctor is v2
   });
   const patObj = [`_tag: ${JSON.stringify(p.ctor)}`, ...litFields].join(", ");

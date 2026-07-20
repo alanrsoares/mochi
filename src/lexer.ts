@@ -23,7 +23,7 @@ export type Tok =
   | { t: "dot" } // .
   | { t: "colon" } // :
   | { t: "comma" }
-  | { t: "num"; v: number }
+  | { t: "num"; v: number; raw: string } // raw source lexeme, so `3.0`/`-3` survive re-printing
   | { t: "bool"; v: boolean } // true / false
   | { t: "str"; v: string } // "..." (decoded value)
   | { t: "id"; v: string }
@@ -126,10 +126,14 @@ export function lex(src: string): Result<Located[], AlangError> {
       continue;
     }
 
-    if (c >= "0" && c <= "9") {
-      let j = i;
-      while (j < src.length && ((src[j]! >= "0" && src[j]! <= "9") || src[j] === ".")) j++;
-      emit({ t: "num", v: Number(src.slice(i, j)) }, i, j);
+    // number, with an optional leading `-` for negatives. Safe because alang has
+    // no binary minus operator — a `-` before a digit is always a literal sign.
+    const isDigit = (ch: string | undefined): boolean => ch !== undefined && ch >= "0" && ch <= "9";
+    if (isDigit(c) || (c === "-" && isDigit(src[i + 1]))) {
+      let j = i + 1; // past the first digit or the sign
+      while (j < src.length && (isDigit(src[j]) || src[j] === ".")) j++;
+      const raw = src.slice(i, j);
+      emit({ t: "num", v: Number(raw), raw }, i, j);
       i = j;
       continue;
     }

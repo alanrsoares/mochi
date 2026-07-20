@@ -48,3 +48,7 @@ test("formatting is idempotent", () => {
   const once = fmt("let   m=r=>switch r {|Ok(v)=>Ok(v)|Err(e)=>Err(e)}\nlet {a,b}=rec");
   expect(fmt(once)).toBe(once);
 });
+
+test("negative and float literals survive the formatter verbatim", () => {
+  expect(fmt("let pi=3.0\nlet n= -42")).toBe("let pi = 3.0\nlet n = -42\n");
+});
