@@ -280,9 +280,22 @@ const inferPattern = (p: Pattern, ctx: Ctx): Result<PatResult, AlangError> => {
 
 // ---- program-level inference ----------------------------------------------
 
-// A variant's constructors become curried functions into that variant type.
-const ctorScheme = (typeName: string, c: Ctor): Scheme =>
-  mono(c.argTypes.reduceRight((acc, at) => tArrow(primType(at), acc), tCon(typeName)));
+// A variant's constructors become curried functions into that variant type,
+// polymorphic over the type's parameters. `type Result a e = | Ok(a) | Err(e)`
+// gives `Ok : ∀a e. a -> Result<a, e>` — each type param maps to a fresh var
+// quantified in the scheme; a constructor arg naming a param uses that var, and
+// the result type applies the params so matching connects them.
+const ctorScheme = (typeName: string, params: string[], c: Ctor, f: Fresh): Scheme => {
+  const pvars = new Map(params.map((p) => [p, freshVar(f)]));
+  const argType = (name: string): Type => pvars.get(name) ?? primType(name);
+  const result = tCon(
+    typeName,
+    params.map((p) => pvars.get(p)!),
+  );
+  const type = c.argTypes.reduceRight((acc, at) => tArrow(argType(at), acc), result);
+  const vars = params.map((p) => (pvars.get(p) as Extract<Type, { kind: "var" }>).id);
+  return { vars, rvars: [], type };
+};
 
 export type InferOptions = { open?: boolean };
 
@@ -311,7 +324,7 @@ function run(
   // constructors first, so `let`s (in any order after their type) can use them
   for (const s of prog.stmts) {
     if (s.kind !== "type") continue;
-    for (const c of s.ctors) env.set(c.name, ctorScheme(s.name, c));
+    for (const c of s.ctors) env.set(c.name, ctorScheme(s.name, s.params, c, fresh));
   }
 
   for (const s of prog.stmts) {

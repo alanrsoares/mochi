@@ -26,7 +26,7 @@ export type Ctor = { name: string; argTypes: string[] };
 
 export type Stmt =
   | { kind: "let"; name: string; nameSpan: Span; value: Expr; span: Span }
-  | { kind: "type"; name: string; ctors: Ctor[]; span: Span }; // type Shape = | Circle(float) | ...
+  | { kind: "type"; name: string; params: string[]; ctors: Ctor[]; span: Span }; // type Result a e = | Ok(a) | ...
 
 export type Program = { stmts: Stmt[] };
 

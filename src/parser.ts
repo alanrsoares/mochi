@@ -201,6 +201,10 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
   function parseType(): Stmt {
     const start = expect("type").span;
     const name = expectId().name;
+    // Optional type parameters, ML-style: `type Result a e = ...`. Any ids
+    // before the `=` are parameters the constructors can reference.
+    const params: string[] = [];
+    while (peek().t === "id") params.push(expectId().name);
     expect("eq");
     const ctors: Ctor[] = [];
     if (peek().t === "bar") next(); // optional leading bar
@@ -209,7 +213,7 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
       next();
       ctors.push(parseCtor());
     }
-    return { kind: "type", name, ctors, span: to(start) };
+    return { kind: "type", name, params, ctors, span: to(start) };
   }
 
   function parseCtor(): Ctor {
