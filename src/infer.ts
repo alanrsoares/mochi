@@ -4,7 +4,7 @@
 // generalized (let-polymorphism); lambda parameters stay monomorphic while
 // their body is inferred. Field access uses an open row, so a function that
 // reads `p.x` accepts any record that has an `x` — structural duck typing.
-import { err, isErr, ok, type Result } from "@onrails/result";
+import { err, isErr, map, ok, type Result } from "@onrails/result";
 import type { Ctor, Expr, Pattern, Program } from "./ast";
 import { type AlangError, typeErr } from "./errors";
 import type { Span } from "./span";
@@ -129,14 +129,30 @@ const instantiate = (sc: Scheme, f: Fresh): Type => {
 
 // `open` = open-world: unbound refs get a fresh type var instead of erroring.
 // Used when compiling to JS (host globals are legal); strict mode is off.
-type Ctx = { env: Env; subst: Subst; fresh: Fresh; open: boolean };
+// `record` (optional) captures each expression's span + inferred type for
+// tooling (LSP hover). Types are unzonked here; the caller zonks at the end.
+type Ctx = {
+  env: Env;
+  subst: Subst;
+  fresh: Fresh;
+  open: boolean;
+  record?: (span: Span, t: Type) => void;
+};
 
 const u = (a: Type, b: Type, ctx: Ctx, span?: Span): Result<Type, AlangError> => {
   const r = unify(a, b, ctx.subst, ctx.fresh);
   return isErr(r) ? err(typeErr(r.error.message, span)) : ok(a);
 };
 
+// Wrapper over `inferExpr`: records the type of every expression node in one
+// place, so hover can look up any subexpression's type by span.
 const infer = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
+  const r = inferExpr(e, ctx);
+  if (ctx.record && !isErr(r)) ctx.record(e.span, r.value);
+  return r;
+};
+
+const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
   switch (e.kind) {
     case "num":
       return ok(tNumber);
@@ -270,17 +286,27 @@ const ctorScheme = (typeName: string, c: Ctor): Scheme =>
 
 export type InferOptions = { open?: boolean };
 
-export function inferProgram(
+// An inferred type anchored to its source span — the map hover queries.
+export type TypeAt = { span: Span; type: Type };
+export type InferResult = { env: Env; types: TypeAt[] };
+
+// Shared inference core. Always records per-node types; `inferProgram` drops
+// them, `inferProgramTypes` returns them (zonked against the final subst).
+function run(
   prog: Program,
-  builtins: Record<string, Type> = {},
-  opts: InferOptions = {},
-): Result<Env, AlangError> {
+  builtins: Record<string, Type>,
+  opts: InferOptions,
+): Result<InferResult, AlangError> {
   const env: Env = new Map();
   for (const [name, t] of Object.entries(builtins)) env.set(name, mono(t));
 
   const subst = emptySubst();
   const fresh = mkFresh(1000);
   const open = opts.open ?? false;
+  const recorded: TypeAt[] = [];
+  const record = (span: Span, t: Type): void => {
+    recorded.push({ span, type: t });
+  };
 
   // constructors first, so `let`s (in any order after their type) can use them
   for (const s of prog.stmts) {
@@ -294,14 +320,33 @@ export function inferProgram(
     // resolves to this binding — recursion is soundly typed, not open-world luck.
     const selfT = freshVar(fresh);
     env.set(s.name, mono(selfT));
-    const t = infer(s.value, { env, subst, fresh, open });
+    const t = infer(s.value, { env, subst, fresh, open, record });
     if (isErr(t)) return t;
     const uni = unify(selfT, t.value, subst, fresh);
     if (isErr(uni)) return err(typeErr(uni.error.message, s.span));
     // generalize the result: monomorphic recursion, polymorphic use afterwards
     env.set(s.name, generalize(env, t.value, subst));
   }
-  return ok(env);
+  // Resolve every recorded type now that the whole program's subst is final.
+  const types = recorded.map((r) => ({ span: r.span, type: zonk(r.type, subst) }));
+  return ok({ env, types });
+}
+
+export function inferProgram(
+  prog: Program,
+  builtins: Record<string, Type> = {},
+  opts: InferOptions = {},
+): Result<Env, AlangError> {
+  return map(run(prog, builtins, opts), (r) => r.env);
+}
+
+// Like `inferProgram`, but also returns the span → type map for tooling.
+export function inferProgramTypes(
+  prog: Program,
+  builtins: Record<string, Type> = {},
+  opts: InferOptions = {},
+): Result<InferResult, AlangError> {
+  return run(prog, builtins, opts);
 }
 
 // Render a binding's scheme for tests / display. Quantified vars appear as
