@@ -4,14 +4,17 @@
 // ts-pattern .exhaustive() forces a case for every Expr kind here: add an AST
 // node and forget it → TS compile error in the compiler, not a silent gap.
 import { match } from "ts-pattern";
-import type { Expr, MatchArm, Pattern, Program, Stmt } from "./ast";
+import type { Expr, LamParam, MatchArm, Pattern, Program, Stmt } from "./ast";
 
 const genExpr = (e: Expr): string =>
   match(e)
     .with({ kind: "num" }, (n) => String(n.value))
     .with({ kind: "ref" }, (r) => r.name)
     .with({ kind: "call" }, (c) => `${genCallee(c.fn)}(${c.args.map(genExpr).join(", ")})`)
-    .with({ kind: "lambda" }, (l) => `(${l.params.join(", ")}) => ${genLambdaBody(l.body)}`)
+    .with(
+      { kind: "lambda" },
+      (l) => `(${l.params.map(genParam).join(", ")}) => ${genLambdaBody(l.body)}`,
+    )
     // desugar inline: a |> f  →  f(a)
     .with({ kind: "pipe" }, (p) => `${genCallee(p.right)}(${genExpr(p.left)})`)
     .with({ kind: "match" }, genMatch)
@@ -22,6 +25,10 @@ const genExpr = (e: Expr): string =>
     )
     .with({ kind: "field" }, (f) => `${genMember(f.target)}.${f.name}`)
     .exhaustive();
+
+// A lambda parameter lowers to JS: a name, or native object destructuring.
+const genParam = (p: LamParam): string =>
+  p.kind === "name" ? p.name : `{ ${p.fields.join(", ")} }`;
 
 // A lambda in callee position must be parenthesized: `((x) => ...)(arg)`.
 const genCallee = (e: Expr): string => (e.kind === "lambda" ? `(${genExpr(e)})` : genExpr(e));

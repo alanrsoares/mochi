@@ -5,11 +5,15 @@ export type Expr =
   | { kind: "num"; value: number; span: Span }
   | { kind: "ref"; name: string; span: Span }
   | { kind: "call"; fn: Expr; args: Expr[]; span: Span }
-  | { kind: "lambda"; params: string[]; body: Expr; span: Span } // (x, y) => body
+  | { kind: "lambda"; params: LamParam[]; body: Expr; span: Span } // (x, y) => body, ({a, b}) => body
   | { kind: "pipe"; left: Expr; right: Expr; span: Span } // a |> f
   | { kind: "match"; scrutinee: Expr; arms: MatchArm[]; span: Span } // switch x { | p => e }
   | { kind: "record"; fields: Field[]; span: Span } // { x: 1, y: 2 }
   | { kind: "field"; target: Expr; name: string; span: Span }; // p.x
+
+// A lambda parameter: a plain name, or a record-destructuring pattern that
+// binds each named field. `({ x, y }) => ...` pulls x and y out of the argument.
+export type LamParam = { kind: "name"; name: string } | { kind: "precord"; fields: string[] };
 
 export type Field = { name: string; value: Expr };
 

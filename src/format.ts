@@ -6,14 +6,19 @@
 // the parser into a temp binding plus field-access lets, so the printer detects
 // that shape and re-folds it back into `let { x, y } = e`.
 import { flatMap, map, pipe, type Result } from "@onrails/result";
-import type { Ctor, Expr, Pattern, Stmt } from "./ast";
+import type { Ctor, Expr, LamParam, Pattern, Stmt } from "./ast";
 import type { AlangError } from "./errors";
 import { lex } from "./lexer";
 import { parse } from "./parser";
 
 const INDENT = "  ";
 
-const params = (ps: string[]): string => (ps.length === 1 ? ps[0]! : `(${ps.join(", ")})`);
+const param = (p: LamParam): string => (p.kind === "name" ? p.name : `{ ${p.fields.join(", ")} }`);
+
+// A lone plain-name param drops its parens (`x => ...`); anything else keeps
+// them (`(a, b) => ...`, `({ x }) => ...`).
+const params = (ps: LamParam[]): string =>
+  ps.length === 1 && ps[0]!.kind === "name" ? ps[0]!.name : `(${ps.map(param).join(", ")})`;
 
 // A precedence-light expression printer. `ind` is the current indent (used only
 // by `switch`, the one multi-line form).

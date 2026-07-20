@@ -165,11 +165,23 @@ const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
     }
 
     case "lambda": {
-      // params monomorphic; function type is curried over them
-      const paramTypes = e.params.map(() => freshVar(ctx.fresh));
+      // params monomorphic; function type is curried over them. A record
+      // pattern param types as a record with AT LEAST its fields (open row),
+      // binding each field in the body — structural duck typing.
       const bodyEnv: Env = new Map(ctx.env);
-      e.params.forEach((p, i) => {
-        bodyEnv.set(p, mono(paramTypes[i]!));
+      const paramTypes: Type[] = e.params.map((p) => {
+        if (p.kind === "name") {
+          const t = freshVar(ctx.fresh);
+          bodyEnv.set(p.name, mono(t));
+          return t;
+        }
+        let row: Row = freshRowVar(ctx.fresh);
+        for (const f of p.fields) {
+          const ft = freshVar(ctx.fresh);
+          bodyEnv.set(f, mono(ft));
+          row = rExtend(f, ft, row);
+        }
+        return tRecord(row);
       });
       const bodyT = infer(e.body, { ...ctx, env: bodyEnv });
       if (isErr(bodyT)) return bodyT;

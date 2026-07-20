@@ -3,7 +3,7 @@
 // Every node is built with its source span: leaves take the token's span,
 // composites span from their first token/child to the last one consumed.
 import { err, ok, type Result } from "@onrails/result";
-import type { Ctor, Expr, MatchArm, Pattern, Program, Stmt } from "./ast";
+import type { Ctor, Expr, LamParam, MatchArm, Pattern, Program, Stmt } from "./ast";
 import { type AlangError, parseErr } from "./errors";
 import type { Located, Tok } from "./lexer";
 import { type Span, spanning } from "./span";
@@ -57,18 +57,36 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     return false;
   }
 
+  // One lambda parameter: a name, or a `{ a, b }` record-destructuring pattern.
+  function parseParam(): LamParam {
+    if (peek().t === "lbrace") {
+      next();
+      const fields: string[] = [];
+      if (peek().t !== "rbrace") {
+        fields.push(expectId().name);
+        while (peek().t === "comma") {
+          next();
+          fields.push(expectId().name);
+        }
+      }
+      expect("rbrace");
+      return { kind: "precord", fields };
+    }
+    return { kind: "name", name: expectId().name };
+  }
+
   function parseLambda(): Expr {
     const start = peek().span;
-    const params: string[] = [];
+    const params: LamParam[] = [];
     if (peek().t === "id") {
-      params.push(expectId().name);
+      params.push({ kind: "name", name: expectId().name }); // bare `x => ...`
     } else {
       expect("lparen");
       if (peek().t !== "rparen") {
-        params.push(expectId().name);
+        params.push(parseParam());
         while (peek().t === "comma") {
           next();
-          params.push(expectId().name);
+          params.push(parseParam());
         }
       }
       expect("rparen");
