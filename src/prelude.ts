@@ -91,6 +91,46 @@ export const preludeJsDefs: Record<string, string> = {
   drop: "const drop = (n) => (xs) => _list(function* () { let i = 0; for (const x of xs) { if (i < n) { i++; continue; } yield x; } });",
   fromArray: "const fromArray = (xs) => _list(function* () { yield* xs; });",
   toArray: "const toArray = (xs) => [...xs];",
+  // Lazy List transformers — accessed qualified (`List.map`), never shadow the
+  // eager Array `map`/`filter`. Each stays lazy (fuses, no intermediate arrays).
+  _List_map:
+    "const _List_map = (f) => (xs) => _list(function* () { for (const x of xs) yield f(x); });",
+  _List_filter:
+    "const _List_filter = (p) => (xs) => _list(function* () { for (const x of xs) if (p(x)) yield x; });",
+  _List_concat:
+    "const _List_concat = (xs) => (ys) => _list(function* () { yield* xs; yield* ys; });",
+  _List_flatMap:
+    "const _List_flatMap = (f) => (xs) => _list(function* () { for (const x of xs) yield* f(x); });",
+};
+
+// Qualified collection namespaces. alang has no overloading, so each collection
+// carries its own `Ns.op`; the unqualified `map`/`filter`/… above stay as eager
+// Array aliases for the common case. `Array.map` mirrors them; `List.*` is lazy.
+export const preludeNamespaces: Record<string, Record<string, Type>> = {
+  Array: {
+    map: tArrow(tArrow(a, b), tArrow(arr(a), arr(b))),
+    filter: tArrow(tArrow(a, tBool), tArrow(arr(a), arr(a))),
+    reduce: tArrow(tArrow(b, tArrow(a, b)), tArrow(b, tArrow(arr(a), b))),
+    length: tArrow(arr(a), tNumber),
+  },
+  List: {
+    map: tArrow(tArrow(a, b), tArrow(list(a), list(b))), // (a -> b) -> List a -> List b
+    filter: tArrow(tArrow(a, tBool), tArrow(list(a), list(a))), // (a -> bool) -> List a -> List a
+    concat: tArrow(list(a), tArrow(list(a), list(a))), // List a -> List a -> List a
+    flatMap: tArrow(tArrow(a, list(b)), tArrow(list(a), list(b))), // (a -> List b) -> List a -> List b
+  },
+};
+
+// `Ns.member` → the JS identifier codegen emits. Array reuses the existing eager
+// defs; List points at the lazy `_List_*` generators above.
+export const namespaceRuntime: Record<string, Record<string, string>> = {
+  Array: { map: "map", filter: "filter", reduce: "reduce", length: "length" },
+  List: {
+    map: "_List_map",
+    filter: "_List_filter",
+    concat: "_List_concat",
+    flatMap: "_List_flatMap",
+  },
 };
 
 // The whole runtime as one blob — for tests / tooling that want every builtin in

@@ -15,7 +15,7 @@ import type { AlangError } from "./errors";
 import { inferProgramTypes, type Scheme } from "./infer";
 import { lex } from "./lexer";
 import { parse } from "./parser";
-import { preludeEnv } from "./prelude";
+import { preludeEnv, preludeNamespaces } from "./prelude";
 import type { Row, Type } from "./types";
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -112,7 +112,13 @@ export const emitDts = (src: string): Result<string, AlangError> => {
     flatMap(parse),
     flatMap(check),
     flatMap((prog) =>
-      map(inferProgramTypes(prog, preludeEnv, { open: true }), (res) => ({ prog, env: res.env })),
+      map(
+        inferProgramTypes(prog, preludeEnv, { open: true, namespaces: preludeNamespaces }),
+        (res) => ({
+          prog,
+          env: res.env,
+        }),
+      ),
     ),
   );
   if (isErr(r)) return r;

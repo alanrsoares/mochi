@@ -5,7 +5,12 @@
 // node and forget it → TS compile error in the compiler, not a silent gap.
 import { match } from "ts-pattern";
 import type { CtorField, Expr, LamParam, MatchArm, Pattern, Program, Stmt } from "./ast";
-import { preludeJsDefs } from "./prelude";
+import { namespaceRuntime, preludeJsDefs } from "./prelude";
+
+// A `Ns.member` access on a bare namespace ref (`List.map`) → the JS identifier
+// its runtime is defined under, or null if it isn't a namespace access.
+const nsRuntimeId = (e: Extract<Expr, { kind: "field" }>): string | null =>
+  e.target.kind === "ref" ? (namespaceRuntime[e.target.name]?.[e.name] ?? null) : null;
 
 // A constructor's runtime field keys: a labelled field uses its label, an
 // unlabelled one its position (`_0`, `_1`). Both the factory (`genType`) and the
@@ -43,7 +48,7 @@ const genExpr = (e: Expr): string =>
         ? "{}"
         : `{ ${r.fields.map((f) => `${f.name}: ${genExpr(f.value)}`).join(", ")} }`,
     )
-    .with({ kind: "field" }, (f) => `${genMember(f.target)}.${f.name}`)
+    .with({ kind: "field" }, (f) => nsRuntimeId(f) ?? `${genMember(f.target)}.${f.name}`)
     .with({ kind: "arr" }, (l) => `[${l.elements.map(genExpr).join(", ")}]`)
     .with({ kind: "list" }, genList)
     .exhaustive();
@@ -306,7 +311,15 @@ const exprRefs = (e: Expr, acc: Set<string>): void => {
     .with({ kind: "record" }, (r) => {
       for (const f of r.fields) exprRefs(f.value, acc);
     })
-    .with({ kind: "field" }, (f) => exprRefs(f.target, acc))
+    .with({ kind: "field" }, (f) => {
+      const rt = nsRuntimeId(f); // `List.map` → `_List_map`, not a field access
+      if (rt) {
+        acc.add(rt);
+        if (rt.startsWith("_List_")) acc.add("_list"); // lazy transformers need the core
+        return;
+      }
+      exprRefs(f.target, acc);
+    })
     .with({ kind: "arr" }, (l) => {
       for (const el of l.elements) exprRefs(el, acc);
     })

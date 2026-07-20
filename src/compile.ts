@@ -8,12 +8,12 @@ import type { AlangError } from "./errors";
 import { inferProgram } from "./infer";
 import { lex } from "./lexer";
 import { parse } from "./parser";
-import { preludeEnv } from "./prelude";
+import { preludeEnv, preludeNamespaces } from "./prelude";
 
 // Type-check stage: run HM inference (open-world, so JS host globals are legal)
 // and pass the program through unchanged on success.
 const typecheck = (prog: Program): Result<Program, AlangError> =>
-  map(inferProgram(prog, preludeEnv, { open: true }), () => prog);
+  map(inferProgram(prog, preludeEnv, { open: true, namespaces: preludeNamespaces }), () => prog);
 
 // `runtime` (default on): inline the prelude builtins the program uses so the
 // emitted module runs standalone. Off yields prelude-free lowering — for tests

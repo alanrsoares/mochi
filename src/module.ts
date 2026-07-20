@@ -16,7 +16,7 @@ import { type AlangError, checkErr } from "./errors";
 import { type Env, inferProgramTypes, type Scheme } from "./infer";
 import { lex } from "./lexer";
 import { parse } from "./parser";
-import { preludeEnv } from "./prelude";
+import { preludeEnv, preludeNamespaces } from "./prelude";
 
 export type ModuleOutput = { path: string; js: string };
 type ReadFile = (path: string) => Promise<string>;
@@ -126,7 +126,11 @@ const compileGraph = (graph: Loaded[]): Result<ModuleOutput[], AlangError> => {
 
     const checked = check(prog, importedReg);
     if (isErr(checked)) return checked;
-    const inferred = inferProgramTypes(prog, preludeEnv, { open: true, imports });
+    const inferred = inferProgramTypes(prog, preludeEnv, {
+      open: true,
+      imports,
+      namespaces: preludeNamespaces,
+    });
     if (isErr(inferred)) return inferred;
     exportsByPath.set(path, exportsOf(prog, inferred.value.env));
     regByPath.set(path, exportedRegistry(prog));

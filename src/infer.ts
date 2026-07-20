@@ -136,6 +136,7 @@ type Ctx = {
   subst: Subst;
   fresh: Fresh;
   open: boolean;
+  ns: Map<string, Map<string, Scheme>>; // qualified collection namespaces (List.map, ...)
   record?: (span: Span, t: Type) => void;
 };
 
@@ -226,6 +227,15 @@ const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
     }
 
     case "field": {
+      // Qualified namespace member (`List.map`): when the target is a bare,
+      // unbound reference to a known collection namespace, resolve the member
+      // from the namespace's scheme table (instantiated fresh, like a builtin)
+      // instead of treating it as a record field access.
+      if (e.target.kind === "ref" && ctx.ns.has(e.target.name) && !ctx.env.has(e.target.name)) {
+        const sc = ctx.ns.get(e.target.name)!.get(e.name);
+        if (!sc) return err(typeErr(`'${e.target.name}' has no member '${e.name}'`, e.span));
+        return ok(instantiate(sc, ctx.fresh));
+      }
       // duck typing: target must be a record with AT LEAST field `name`
       const targetT = infer(e.target, ctx);
       if (isErr(targetT)) return targetT;
@@ -437,7 +447,11 @@ const ctorScheme = (typeName: string, params: string[], c: Ctor, f: Fresh): Sche
 // `imports` seeds the initial env with schemes brought in by `import` from other
 // modules — their generalized types, so a polymorphic import instantiates fresh
 // at each use site just like a local binding.
-export type InferOptions = { open?: boolean; imports?: Env };
+export type InferOptions = {
+  open?: boolean;
+  imports?: Env;
+  namespaces?: Record<string, Record<string, Type>>; // qualified members (List.map, ...)
+};
 
 // An inferred type anchored to its source span — the map hover queries.
 export type TypeAt = { span: Span; type: Type };
@@ -561,6 +575,15 @@ function run(
   for (const [name, t] of Object.entries(builtins)) env.set(name, generalize(env, t, subst));
   if (opts.imports) for (const [name, sc] of opts.imports) env.set(name, sc);
 
+  // Qualified-namespace members (`List.map`, …): generalize each like a builtin,
+  // so a use site instantiates it fresh. Resolved in the `field` case.
+  const ns = new Map<string, Map<string, Scheme>>();
+  for (const [nsName, members] of Object.entries(opts.namespaces ?? {})) {
+    const schemes = new Map<string, Scheme>();
+    for (const [m, t] of Object.entries(members)) schemes.set(m, generalize(env, t, subst));
+    ns.set(nsName, schemes);
+  }
+
   const fresh = mkFresh(1000);
   const open = opts.open ?? false;
   const recorded: TypeAt[] = [];
@@ -611,7 +634,7 @@ function run(
     }
     const bodyTypes = new Map<string, Type>();
     for (const s of group) {
-      const t = infer(s.value, { env, subst, fresh, open, record });
+      const t = infer(s.value, { env, subst, fresh, open, ns, record });
       if (isErr(t)) return t;
       const uni = unify(selfVars.get(s.name)!, t.value, subst, fresh);
       if (isErr(uni)) return err(typeErr(uni.error.message, s.span));

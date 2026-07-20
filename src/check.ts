@@ -177,10 +177,34 @@ function checkMatch(m: Extract<Expr, { kind: "match" }>, reg: Registry): AlangEr
     : checkErr(`non-exhaustive switch on '${owningType}': missing ${missing.join(", ")}`, m.span);
 }
 
+// Collection namespaces are built-in; binding one as a value/type/import would
+// shadow `List.map` and desync codegen (which resolves them by name), so forbid it.
+const RESERVED_NAMES = new Set(["List", "Array", "Set", "Map"]);
+
+const checkReservedNames = (prog: Program): AlangError | null => {
+  for (const s of prog.stmts) {
+    if (
+      (s.kind === "let" || s.kind === "type" || s.kind === "extern") &&
+      RESERVED_NAMES.has(s.name)
+    )
+      return checkErr(`'${s.name}' is a reserved collection namespace and cannot be bound`, s.span);
+    if (s.kind === "import")
+      for (const n of s.names)
+        if (RESERVED_NAMES.has(n.name))
+          return checkErr(
+            `'${n.name}' is a reserved collection namespace and cannot be imported`,
+            n.span,
+          );
+  }
+  return null;
+};
+
 // `imported` carries the ctor/type registries of the modules this program
 // imports from; merged UNDER the local registry (local declarations win) so
 // exhaustiveness works across the module boundary.
 export function check(prog: Program, imported?: Registry): Result<Program, AlangError> {
+  const reserved = checkReservedNames(prog);
+  if (reserved) return err(reserved);
   const built = buildRegistry(prog);
   if (isErr(built)) return built;
   const reg = built.value;

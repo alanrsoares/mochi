@@ -113,6 +113,20 @@ let sumList = xs => switch xs {
 }
 let listSum = sumList(@{1, 2, 3, 4}) // 10
 
+// --- qualified collection namespaces: `List.map`, `Array.map` ---
+// No overloading, so each collection carries its own ops. `List.*` transformers
+// stay lazy and FUSE — `map |> filter` builds no intermediate array; nothing is
+// computed until `toArray` (or a `take`) pulls. `Array.*` mirror the eager
+// unqualified `map`/`filter`. `List`/`Array`/`Set`/`Map` are reserved names.
+let triple = x => mul(x, 3)
+let over6 = x => gt(x, 6)
+let fused = @{1, 2, 3, 4} |> List.map(triple) |> List.filter(over6) |> toArray // [9, 12]
+let joined = List.concat(@{1, 2})(@{3, 4}) |> toArray                          // [1,2,3,4]
+let spread = List.flatMap(x => @{x, x})(@{1, 2}) |> toArray                    // [1,1,2,2]
+
+// lazy all the way: map over an INFINITE sequence, force only the first 3
+let inf3 = iterate(inc)(0) |> List.map(triple) |> take(3) |> toArray // [0, 3, 6]
+
 // --- records + field access (structural / "duck" data) ---
 let origin = { x: 0.0, y: 0.0 }
 let getX = p => p.x
