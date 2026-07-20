@@ -131,3 +131,19 @@ test("match arms returning different types is a type error", () => {
   expect(isErr(r)).toBe(true);
   expect(unwrapErr(r).message).toContain("cannot unify");
 });
+
+test("mutually recursive top-level functions type-check (strict, no open-world)", () => {
+  const src = `let isEven = n => switch n { | 0 => true | _ => isOdd(add(n, -1)) }
+let isOdd = n => switch n { | 0 => false | _ => isEven(add(n, -1)) }`;
+  const env = unwrapOk(infer(src));
+  expect(typeOf(env, "isEven")).toBe("number -> bool");
+  expect(typeOf(env, "isOdd")).toBe("number -> bool"); // forward-referenced from isEven
+});
+
+test("a forward reference to a later binding resolves, keeping its polymorphism", () => {
+  // `a` uses `id` before it is defined; SCC ordering infers `id` first and
+  // generalizes it, so `id` stays polymorphic and `a` is a number.
+  const env = unwrapOk(infer("let a = id(1)\nlet id = x => x"));
+  expect(typeOf(env, "a")).toBe("number");
+  expect(typeOf(env, "id")).toMatch(/^'t\d+ -> 't\d+$/);
+});

@@ -48,6 +48,18 @@ let label = color => switch color {
 // --- match feeding a pipeline ---
 let report = shape => shape |> area |> format
 
+// --- mutual recursion: isEven calls isOdd, defined AFTER it ---
+// Top-level bindings are grouped into recursive components and inferred
+// together, so forward and mutual references type-check (both : number -> bool).
+let isEven = n => switch n {
+  | 0 => true
+  | _ => isOdd(sub(n, 1))
+}
+let isOdd = n => switch n {
+  | 0 => false
+  | _ => isEven(sub(n, 1))
+}
+
 // --- records + field access (structural / "duck" data) ---
 let origin = { x: 0.0, y: 0.0 }
 let getX = p => p.x

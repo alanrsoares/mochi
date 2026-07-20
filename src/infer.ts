@@ -5,7 +5,7 @@
 // their body is inferred. Field access uses an open row, so a function that
 // reads `p.x` accepts any record that has an `x` — structural duck typing.
 import { err, isErr, map, ok, type Result } from "@onrails/result";
-import type { Ctor, Expr, Pattern, Program, TypeExpr } from "./ast";
+import type { Ctor, Expr, Pattern, Program, Stmt, TypeExpr } from "./ast";
 import { type AlangError, typeErr } from "./errors";
 import type { Span } from "./span";
 import {
@@ -362,6 +362,102 @@ export type InferOptions = { open?: boolean; imports?: Env };
 export type TypeAt = { span: Span; type: Type };
 export type InferResult = { env: Env; types: TypeAt[] };
 
+// The names a pattern binds — excluded from an arm body's free references.
+const patternBinds = (p: Pattern): string[] => {
+  if (p.kind === "pbind") return [p.name];
+  if (p.kind === "precord") return p.fields.flatMap((f) => patternBinds(f.pat));
+  if (p.kind === "pctor") return p.args.flatMap(patternBinds);
+  return [];
+};
+
+// Collect the free variable references in an expression, minus the locally
+// bound ones (lambda params, pattern binds). Used to build the dependency graph
+// among top-level `let`s so mutually recursive groups infer together.
+const freeRefs = (e: Expr, bound: Set<string>, acc: Set<string>): void => {
+  switch (e.kind) {
+    case "num":
+    case "bool":
+    case "str":
+      return;
+    case "ref":
+      if (!bound.has(e.name)) acc.add(e.name);
+      return;
+    case "call":
+      freeRefs(e.fn, bound, acc);
+      for (const a of e.args) freeRefs(a, bound, acc);
+      return;
+    case "lambda": {
+      const inner = new Set(bound);
+      for (const p of e.params)
+        if (p.kind === "name") inner.add(p.name);
+        else for (const f of p.fields) inner.add(f);
+      freeRefs(e.body, inner, acc);
+      return;
+    }
+    case "pipe":
+      freeRefs(e.left, bound, acc);
+      freeRefs(e.right, bound, acc);
+      return;
+    case "match":
+      freeRefs(e.scrutinee, bound, acc);
+      for (const arm of e.arms) {
+        const inner = new Set(bound);
+        for (const n of patternBinds(arm.pattern)) inner.add(n);
+        freeRefs(arm.body, inner, acc);
+      }
+      return;
+    case "record":
+      for (const f of e.fields) freeRefs(f.value, bound, acc);
+      return;
+    case "field":
+      freeRefs(e.target, bound, acc);
+  }
+};
+
+// Tarjan's SCC over the `let` dependency graph. Returns strongly-connected
+// components (mutually recursive groups) in DEPENDENCY-FIRST order — exactly the
+// order to generalize them, since a group's dependencies are already generalized
+// by the time it's inferred. Tarjan naturally emits SCCs in reverse-topological
+// order, which is that order.
+const stronglyConnected = (adj: number[][]): number[][] => {
+  const n = adj.length;
+  const index = new Array<number>(n).fill(-1);
+  const low = new Array<number>(n).fill(0);
+  const onStack = new Array<boolean>(n).fill(false);
+  const stack: number[] = [];
+  const sccs: number[][] = [];
+  let counter = 0;
+
+  const connect = (v: number): void => {
+    index[v] = counter;
+    low[v] = counter;
+    counter++;
+    stack.push(v);
+    onStack[v] = true;
+    for (const w of adj[v]!) {
+      if (index[w] === -1) {
+        connect(w);
+        low[v] = Math.min(low[v]!, low[w]!);
+      } else if (onStack[w]) {
+        low[v] = Math.min(low[v]!, index[w]!);
+      }
+    }
+    if (low[v] === index[v]) {
+      const comp: number[] = [];
+      for (;;) {
+        const w = stack.pop()!;
+        onStack[w] = false;
+        comp.push(w);
+        if (w === v) break;
+      }
+      sccs.push(comp);
+    }
+  };
+
+  for (let i = 0; i < n; i++) if (index[i] === -1) connect(i);
+  return sccs;
+};
+
 // Shared inference core. Always records per-node types; `inferProgram` drops
 // them, `inferProgramTypes` returns them (zonked against the final subst).
 function run(
@@ -395,18 +491,46 @@ function run(
     env.set(s.name, generalize(env, t, subst));
   }
 
-  for (const s of prog.stmts) {
-    if (s.kind !== "let") continue;
-    // Bind the name (monomorphic) BEFORE inferring the body, so a self-reference
-    // resolves to this binding — recursion is soundly typed, not open-world luck.
-    const selfT = freshVar(fresh);
-    env.set(s.name, mono(selfT));
-    const t = infer(s.value, { env, subst, fresh, open, record });
-    if (isErr(t)) return t;
-    const uni = unify(selfT, t.value, subst, fresh);
-    if (isErr(uni)) return err(typeErr(uni.error.message, s.span));
-    // generalize the result: monomorphic recursion, polymorphic use afterwards
-    env.set(s.name, generalize(env, t.value, subst));
+  // `let`s, grouped into mutually-recursive components (SCCs of the reference
+  // graph) and inferred group-by-group in dependency-first order. Within a
+  // group every member is pre-bound monomorphically, so `f`/`g` that call each
+  // other resolve to these bindings; the group generalizes as a unit afterwards.
+  const lets = prog.stmts.filter((s): s is Extract<Stmt, { kind: "let" }> => s.kind === "let");
+  const idxOf = new Map(lets.map((s, i) => [s.name, i]));
+  const adj = lets.map((s) => {
+    const refs = new Set<string>();
+    freeRefs(s.value, new Set(), refs);
+    const deps: number[] = [];
+    for (const r of refs) {
+      const j = idxOf.get(r);
+      if (j !== undefined) deps.push(j);
+    }
+    return deps;
+  });
+
+  for (const comp of stronglyConnected(adj)) {
+    const group = comp.map((i) => lets[i]!);
+    // Pre-bind every member (monomorphic) BEFORE inferring any body, so mutual
+    // references resolve to these bindings — recursion is soundly typed.
+    const selfVars = new Map<string, Type>();
+    for (const s of group) {
+      const v = freshVar(fresh);
+      selfVars.set(s.name, v);
+      env.set(s.name, mono(v));
+    }
+    const bodyTypes = new Map<string, Type>();
+    for (const s of group) {
+      const t = infer(s.value, { env, subst, fresh, open, record });
+      if (isErr(t)) return t;
+      const uni = unify(selfVars.get(s.name)!, t.value, subst, fresh);
+      if (isErr(uni)) return err(typeErr(uni.error.message, s.span));
+      bodyTypes.set(s.name, t.value);
+    }
+    // Generalize the group against the OUTER env — drop the mono self-bindings
+    // first, else the group's own type vars look env-bound and stay ungeneralized.
+    // Monomorphic recursion within the group, polymorphic use afterwards.
+    for (const s of group) env.delete(s.name);
+    for (const s of group) env.set(s.name, generalize(env, bodyTypes.get(s.name)!, subst));
   }
   // Resolve every recorded type now that the whole program's subst is final.
   const types = recorded.map((r) => ({ span: r.span, type: zonk(r.type, subst) }));
