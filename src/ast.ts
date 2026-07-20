@@ -14,7 +14,6 @@ export type Expr =
   | { kind: "field"; target: Expr; name: string; span: Span } // p.x
   | { kind: "arr"; elements: Expr[]; span: Span } // [1, 2, 3] — eager Array
   | { kind: "list"; elements: Expr[]; span: Span } // @{1, 2, 3} — lazy List
-  | { kind: "set"; elements: Expr[]; span: Span } // ${1, 2, 3} — Set
   | { kind: "map"; entries: MapEntry[]; span: Span }; // #{ "a": 1 } — Map
 
 // A lambda parameter: a plain name, or a record-destructuring pattern that

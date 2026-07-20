@@ -1,8 +1,9 @@
-// Set (`${…}`) and Map (`#{…}`) — backed by native JS Set/Map, so they erase to
-// real `Set<a>`/`Map<k,v>` at the .d.ts boundary. Both are unordered, so there's
-// no destructuring; ops are qualified (`Set.union`, `Map.getOr`) and immutable.
+// Set and Map — backed by native JS Set/Map, so they erase to real
+// `Set<a>`/`Map<k,v>` at the .d.ts boundary. Both are unordered → no
+// destructuring; ops are qualified (`Set.union`, `Map.getOr`) and immutable.
+// Set has no literal sigil (built via `Set.fromArray`); Map keeps `#{…}`.
 import { expect, test } from "bun:test";
-import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
+import { isErr, unwrapOk } from "@onrails/result";
 import { check } from "../src/check";
 import { compile } from "../src/compile";
 import { emitDts } from "../src/dts";
@@ -27,38 +28,41 @@ const schemeOf = (src: string, name: string): string => {
 
 // ---- Set -------------------------------------------------------------------
 
-test("a `${…}` literal builds a Set (deduped)", () => {
-  expect(run("let a = Set.toArray(${1, 2, 2, 3})", "a")).toEqual([1, 2, 3]);
+test("Set.fromArray builds a Set (deduped)", () => {
+  expect(run("let a = Set.toArray(Set.fromArray([1, 2, 2, 3]))", "a")).toEqual([1, 2, 3]);
 });
 
-test("`${}` is the empty Set", () => {
-  expect(run("let a = Set.size(${})", "a")).toBe(0);
+test("an empty Set has size 0", () => {
+  expect(run("let a = Set.size(Set.fromArray([]))", "a")).toBe(0);
 });
 
 test("Set.has / add / delete / size", () => {
-  expect(run("let a = Set.has(2)(${1, 2, 3})", "a")).toBe(true);
-  expect(run("let a = Set.toArray(Set.add(9)(${1}))", "a")).toEqual([1, 9]);
-  expect(run("let a = Set.toArray(Set.delete(1)(${1, 2}))", "a")).toEqual([2]);
-  expect(run("let a = Set.size(${1, 2, 3})", "a")).toBe(3);
+  expect(run("let a = Set.has(2)(Set.fromArray([1, 2, 3]))", "a")).toBe(true);
+  expect(run("let a = Set.toArray(Set.add(9)(Set.fromArray([1])))", "a")).toEqual([1, 9]);
+  expect(run("let a = Set.toArray(Set.delete(1)(Set.fromArray([1, 2])))", "a")).toEqual([2]);
+  expect(run("let a = Set.size(Set.fromArray([1, 2, 3]))", "a")).toBe(3);
 });
 
 test("Set.union / intersect / diff", () => {
-  expect(run("let a = Set.toArray(Set.union(${1, 2})(${2, 3}))", "a")).toEqual([1, 2, 3]);
-  expect(run("let a = Set.toArray(Set.intersect(${1, 2, 3})(${2, 3, 4}))", "a")).toEqual([2, 3]);
-  expect(run("let a = Set.toArray(Set.diff(${1, 2, 3})(${2}))", "a")).toEqual([1, 3]);
+  const u = "Set.toArray(Set.union(Set.fromArray([1, 2]))(Set.fromArray([2, 3])))";
+  const i = "Set.toArray(Set.intersect(Set.fromArray([1, 2, 3]))(Set.fromArray([2, 3, 4])))";
+  const d = "Set.toArray(Set.diff(Set.fromArray([1, 2, 3]))(Set.fromArray([2])))";
+  expect(run(`let a = ${u}`, "a")).toEqual([1, 2, 3]);
+  expect(run(`let a = ${i}`, "a")).toEqual([2, 3]);
+  expect(run(`let a = ${d}`, "a")).toEqual([1, 3]);
 });
 
 test("Set ops are immutable — the source Set is untouched", () => {
-  const src = "let s = ${1, 2}\nlet grown = Set.add(3)(s)\nlet a = Set.size(s)";
+  const src = "let s = Set.fromArray([1, 2])\nlet grown = Set.add(3)(s)\nlet a = Set.size(s)";
   expect(run(src, "a")).toBe(2);
 });
 
-test("a `${…}` literal infers as Set", () => {
-  expect(schemeOf("let s = ${1, 2, 3}", "s")).toBe("Set<number>");
+test("Set.fromArray infers as Set", () => {
+  expect(schemeOf("let s = Set.fromArray([1, 2, 3])", "s")).toBe("Set<number>");
 });
 
 test("Set erases to a native Set in .d.ts", () => {
-  expect(unwrapOk(emitDts("export let s = ${1, 2, 3}")).trim()).toBe(
+  expect(unwrapOk(emitDts("export let s = Set.fromArray([1, 2, 3])")).trim()).toBe(
     "export declare const s: Set<number>;",
   );
 });
@@ -112,20 +116,21 @@ test("Set is distinct from Array", () => {
 
 test("Map keys and values are homogeneous", () => {
   // second entry's value is a string, first is a number → value unification fails
-  const r = compile('let m = #{ "a": 1, "b": "two" }');
-  expect(isErr(r)).toBe(true);
+  expect(isErr(compile('let m = #{ "a": 1, "b": "two" }'))).toBe(true);
 });
 
 // ---- codegen + formatting --------------------------------------------------
 
-test("literals lower to native constructors", () => {
-  expect(unwrapOk(compile("let s = ${1, 2}", { runtime: false }))).toContain("new Set([1, 2])");
+test("Map literal lowers to a native constructor; Set.fromArray to its runtime", () => {
   expect(unwrapOk(compile('let m = #{ "a": 1 }', { runtime: false }))).toContain(
     'new Map([["a", 1]])',
   );
+  expect(unwrapOk(compile("let s = Set.fromArray([1, 2])", { runtime: false }))).toContain(
+    "_Set_fromArray([1, 2])",
+  );
 });
 
-test("Set/Map literals survive formatting verbatim", () => {
-  const src = 'let s = ${1, 2, 3}\nlet m = #{ "a": 1, "b": 2 }\n';
+test("Set.fromArray calls and Map literals survive formatting verbatim", () => {
+  const src = 'let s = Set.fromArray([1, 2, 3])\nlet m = #{ "a": 1, "b": 2 }\n';
   expect(unwrapOk(format(src))).toBe(src);
 });

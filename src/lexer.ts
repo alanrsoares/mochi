@@ -24,7 +24,6 @@ export type Tok =
   | { t: "rbracket" } // ]
   | { t: "spread" } // ... (list-pattern rest)
   | { t: "at" } // @ — lazy-List sigil (@{...})
-  | { t: "dollar" } // $ — Set sigil (${...})
   | { t: "hash" } // # — Map sigil (#{...})
   | { t: "dot" } // .
   | { t: "colon" } // :
@@ -70,7 +69,6 @@ const PUNCT: Record<string, Tok | undefined> = {
   ".": { t: "dot" },
   ":": { t: "colon" },
   "@": { t: "at" },
-  $: { t: "dollar" },
   "#": { t: "hash" },
 };
 

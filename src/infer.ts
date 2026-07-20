@@ -274,18 +274,6 @@ const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
       return ok(tCon("List", [elem]));
     }
 
-    case "set": {
-      // Homogeneous elements → `Set<elem>` (a native JS Set at runtime).
-      const elem = freshVar(ctx.fresh);
-      for (const el of e.elements) {
-        const et = infer(el, ctx);
-        if (isErr(et)) return et;
-        const uni = u(elem, et.value, ctx, el.span);
-        if (isErr(uni)) return uni;
-      }
-      return ok(tCon("Set", [elem]));
-    }
-
     case "map": {
       // Keys share one type, values share one type → `Map<k, v>` (native JS Map).
       const k = freshVar(ctx.fresh);
@@ -541,7 +529,6 @@ const freeRefs = (e: Expr, bound: Set<string>, acc: Set<string>): void => {
       return;
     case "arr":
     case "list":
-    case "set":
       for (const el of e.elements) freeRefs(el, bound, acc);
       return;
     case "map":

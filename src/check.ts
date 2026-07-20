@@ -89,7 +89,6 @@ function forEachMatch(e: Expr, visit: (m: Extract<Expr, { kind: "match" }>) => v
       return;
     case "arr":
     case "list":
-    case "set":
       for (const el of e.elements) forEachMatch(el, visit);
       return;
     case "map":

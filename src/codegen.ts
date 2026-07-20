@@ -51,7 +51,6 @@ const genExpr = (e: Expr): string =>
     .with({ kind: "field" }, (f) => nsRuntimeId(f) ?? `${genMember(f.target)}.${f.name}`)
     .with({ kind: "arr" }, (l) => `[${l.elements.map(genExpr).join(", ")}]`)
     .with({ kind: "list" }, genList)
-    .with({ kind: "set" }, (s) => `new Set([${s.elements.map(genExpr).join(", ")}])`)
     .with(
       { kind: "map" },
       (m) =>
@@ -292,7 +291,6 @@ const usesMatchLib = (e: Expr): boolean =>
     .with({ kind: "field" }, (f) => usesMatchLib(f.target))
     .with({ kind: "arr" }, (l) => l.elements.some(usesMatchLib))
     .with({ kind: "list" }, (l) => l.elements.some(usesMatchLib))
-    .with({ kind: "set" }, (s) => s.elements.some(usesMatchLib))
     .with({ kind: "map" }, (m) =>
       m.entries.some((e) => usesMatchLib(e.key) || usesMatchLib(e.value)),
     )
@@ -335,9 +333,6 @@ const exprRefs = (e: Expr, acc: Set<string>): void => {
     .with({ kind: "list" }, (l) => {
       acc.add("_list"); // a `@{...}` literal calls the List core at runtime
       for (const el of l.elements) exprRefs(el, acc);
-    })
-    .with({ kind: "set" }, (s) => {
-      for (const el of s.elements) exprRefs(el, acc);
     })
     .with({ kind: "map" }, (m) => {
       for (const e of m.entries) {

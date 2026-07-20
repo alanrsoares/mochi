@@ -97,7 +97,7 @@ let describeList = xs => switch xs {
 // --- lazy List: `@{...}` (distinct from the eager Array `[...]`) ---
 // A List is a generator-backed pull-sequence: producers/slicers stay lazy, so
 // infinite streams work as long as you only ever pull a finite prefix. `@` is
-// the List sigil (`#{...}` and `${...}` are reserved for future Map and Set).
+// the List sigil. Map has its own literal `#{...}`; Set has no literal sigil.
 let ns = @{1, 2, 3}                       // List number  (lazy)
 let firstThree = range(0)(100) |> take(3) // 0..99 built lazily, only 3 forced
 let evens = iterate(x => add(x, 2))(0)    // INFINITE: 0, 2, 4, 6, ...
@@ -127,12 +127,13 @@ let spread = List.flatMap(x => @{x, x})(@{1, 2}) |> toArray                    /
 // lazy all the way: map over an INFINITE sequence, force only the first 3
 let inf3 = iterate(inc)(0) |> List.map(triple) |> take(3) |> toArray // [0, 3, 6]
 
-// --- Set: `${...}` (native JS Set, deduped, unordered) ---
+// --- Set: `Set.fromArray([...])` — native JS Set, deduped, unordered ---
+// No literal sigil (dropped `${…}` — it collides with JS template literals).
 // Elements must share a type. Ops are qualified + immutable (return a fresh Set).
-let tags = ${1, 2, 2, 3}                                  // Set number — dedups to {1,2,3}
+let tags = Set.fromArray([1, 2, 2, 3])                                  // Set number — dedups to {1,2,3}
 let hasTwo = Set.has(2)(tags)                             // true
-let merged = Set.union(${1, 2})(${2, 3}) |> Set.toArray  // [1, 2, 3]
-let shared = Set.intersect(${1, 2, 3})(${2, 3, 4}) |> Set.toArray // [2, 3]
+let merged = Set.union(Set.fromArray([1, 2]))(Set.fromArray([2, 3])) |> Set.toArray  // [1, 2, 3]
+let shared = Set.intersect(Set.fromArray([1, 2, 3]))(Set.fromArray([2, 3, 4])) |> Set.toArray // [2, 3]
 
 // --- Map: `#{ key: value }` (native JS Map) ---
 // Keys share a type, values share a type → Map k v. `getOr` reads with a

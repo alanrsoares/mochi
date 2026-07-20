@@ -150,7 +150,6 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     if (peek().t === "lbrace") return parseRecord();
     if (peek().t === "lbracket") return parseArr();
     if (peek().t === "at") return parseList();
-    if (peek().t === "dollar") return parseSet();
     if (peek().t === "hash") return parseMap();
     const tk = next();
     if (tk.t === "num") return { kind: "num", value: tk.v, raw: tk.raw, span: tk.span };
@@ -215,22 +214,6 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     }
     expect("rbrace");
     return { kind: "list", elements, span: to(start) };
-  }
-
-  // A Set literal: `${}`, `${e}`, `${e, e, ...}`. Homogeneous elements.
-  function parseSet(): Expr {
-    const start = expect("dollar").span;
-    expect("lbrace");
-    const elements: Expr[] = [];
-    if (peek().t !== "rbrace") {
-      elements.push(parseExpr());
-      while (peek().t === "comma") {
-        next();
-        elements.push(parseExpr());
-      }
-    }
-    expect("rbrace");
-    return { kind: "set", elements, span: to(start) };
   }
 
   // A Map literal: `#{}`, `#{ key: value, ... }`. Keys are full expressions
