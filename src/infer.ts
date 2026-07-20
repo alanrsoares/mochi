@@ -268,53 +268,55 @@ const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
       return ok(fieldT);
     }
 
-    case "arr": {
-      // Every element shares one type; `Array<elem>` (the eager JS array — a
-      // future lazy `List` is a separate type). An empty list is fully
-      // polymorphic (`Array<'a>`), pinned by later unification / use.
-      const elem = freshVar(ctx.fresh);
-      for (const el of e.elements) {
-        const et = infer(el, ctx);
-        if (isErr(et)) return et;
-        const uni = u(elem, et.value, ctx, el.span);
-        if (isErr(uni)) return uni;
-      }
-      return ok(tCon("Array", [elem]));
-    }
-
-    case "list": {
-      // Lazy List: elements share one type, result is `List<elem>`. Empty `@{}`
-      // is polymorphic (`List<'a>`), pinned by later use.
-      const elem = freshVar(ctx.fresh);
-      for (const el of e.elements) {
-        const et = infer(el, ctx);
-        if (isErr(et)) return et;
-        const uni = u(elem, et.value, ctx, el.span);
-        if (isErr(uni)) return uni;
-      }
-      return ok(tCon("List", [elem]));
-    }
-
-    case "map": {
-      // Keys share one type, values share one type → `Map<k, v>` (native JS Map).
-      const k = freshVar(ctx.fresh);
-      const v = freshVar(ctx.fresh);
-      for (const ent of e.entries) {
-        const kt = infer(ent.key, ctx);
-        if (isErr(kt)) return kt;
-        const uk = u(k, kt.value, ctx, ent.key.span);
-        if (isErr(uk)) return uk;
-        const vt = infer(ent.value, ctx);
-        if (isErr(vt)) return vt;
-        const uv = u(v, vt.value, ctx, ent.value.span);
-        if (isErr(uv)) return uv;
-      }
-      return ok(tCon("Map", [k, v]));
-    }
+    case "arr":
+      // Eager `Array<elem>` (empty is polymorphic, pinned by later use).
+      return inferSeqExpr("Array", e.elements, ctx);
+    case "list":
+      // Lazy `List<elem>`; same element-sharing shape as `arr`.
+      return inferSeqExpr("List", e.elements, ctx);
+    case "map":
+      return inferMapExpr(e.entries, ctx);
 
     case "match":
       return inferMatch(e, ctx);
   }
+};
+
+// Shared element inference for `arr`/`list` (they differ only in the container
+// constructor): every element unifies with one `elem`, result is `con<elem>`.
+const inferSeqExpr = (
+  con: "Array" | "List",
+  elements: Expr[],
+  ctx: Ctx,
+): Result<Type, AlangError> => {
+  const elem = freshVar(ctx.fresh);
+  for (const el of elements) {
+    const et = infer(el, ctx);
+    if (isErr(et)) return et;
+    const uni = u(elem, et.value, ctx, el.span);
+    if (isErr(uni)) return uni;
+  }
+  return ok(tCon(con, [elem]));
+};
+
+// Keys share one type, values share one type → `Map<k, v>` (native JS Map).
+const inferMapExpr = (
+  entries: { key: Expr; value: Expr }[],
+  ctx: Ctx,
+): Result<Type, AlangError> => {
+  const k = freshVar(ctx.fresh);
+  const v = freshVar(ctx.fresh);
+  for (const ent of entries) {
+    const kt = infer(ent.key, ctx);
+    if (isErr(kt)) return kt;
+    const uk = u(k, kt.value, ctx, ent.key.span);
+    if (isErr(uk)) return uk;
+    const vt = infer(ent.value, ctx);
+    if (isErr(vt)) return vt;
+    const uv = u(v, vt.value, ctx, ent.value.span);
+    if (isErr(uv)) return uv;
+  }
+  return ok(tCon("Map", [k, v]));
 };
 
 const inferMatch = (e: Extract<Expr, { kind: "match" }>, ctx: Ctx): Result<Type, AlangError> => {
@@ -399,51 +401,42 @@ const inferPat = (p: Pattern, ctx: Ctx): Result<PatResult, AlangError> => {
       }
       return ok({ type: cur, bindings });
     }
-    case "parr": {
-      // Every element shares the element type; the whole pattern is `Array<elem>`.
-      // A `...rest` capture binds the tail, itself an `Array<elem>`.
-      const elem = freshVar(ctx.fresh);
-      const listT = tCon("Array", [elem]);
-      const bindings = new Map<string, Type>();
-      for (const ep of p.elems) {
-        const sub = inferPattern(ep, ctx);
-        if (isErr(sub)) return sub;
-        for (const [k, v] of sub.value.bindings) bindings.set(k, v);
-        const uni = u(elem, sub.value.type, ctx, ep.span);
-        if (isErr(uni)) return uni;
-      }
-      if (p.rest) {
-        const sub = inferPattern(p.rest, ctx);
-        if (isErr(sub)) return sub;
-        for (const [k, v] of sub.value.bindings) bindings.set(k, v);
-        const uni = u(sub.value.type, listT, ctx, p.rest.span);
-        if (isErr(uni)) return uni;
-      }
-      return ok({ type: listT, bindings });
-    }
-    case "plist": {
-      // Lazy-List pattern: elements share the element type, the whole pattern is
-      // `List<elem>`; a `...rest` capture binds the tail, itself a `List<elem>`.
-      const elem = freshVar(ctx.fresh);
-      const seqT = tCon("List", [elem]);
-      const bindings = new Map<string, Type>();
-      for (const ep of p.elems) {
-        const sub = inferPattern(ep, ctx);
-        if (isErr(sub)) return sub;
-        for (const [k, v] of sub.value.bindings) bindings.set(k, v);
-        const uni = u(elem, sub.value.type, ctx, ep.span);
-        if (isErr(uni)) return uni;
-      }
-      if (p.rest) {
-        const sub = inferPattern(p.rest, ctx);
-        if (isErr(sub)) return sub;
-        for (const [k, v] of sub.value.bindings) bindings.set(k, v);
-        const uni = u(sub.value.type, seqT, ctx, p.rest.span);
-        if (isErr(uni)) return uni;
-      }
-      return ok({ type: seqT, bindings });
-    }
+    case "parr":
+      // Eager `Array<elem>`; every element shares `elem`, `...rest` binds the tail.
+      return inferSeqPat("Array", p.elems, p.rest, ctx);
+    case "plist":
+      // Lazy `List<elem>`; same element/rest shape as `parr`.
+      return inferSeqPat("List", p.elems, p.rest, ctx);
   }
+};
+
+// Shared element/rest inference for `parr`/`plist` (they differ only in the
+// container constructor): every element unifies with one `elem` type, and any
+// `...rest` capture binds the tail — itself a `con<elem>`.
+const inferSeqPat = (
+  con: "Array" | "List",
+  elems: Pattern[],
+  rest: Pattern | null,
+  ctx: Ctx,
+): Result<PatResult, AlangError> => {
+  const elem = freshVar(ctx.fresh);
+  const seqT = tCon(con, [elem]);
+  const bindings = new Map<string, Type>();
+  for (const ep of elems) {
+    const sub = inferPattern(ep, ctx);
+    if (isErr(sub)) return sub;
+    for (const [k, v] of sub.value.bindings) bindings.set(k, v);
+    const uni = u(elem, sub.value.type, ctx, ep.span);
+    if (isErr(uni)) return uni;
+  }
+  if (rest) {
+    const sub = inferPattern(rest, ctx);
+    if (isErr(sub)) return sub;
+    for (const [k, v] of sub.value.bindings) bindings.set(k, v);
+    const uni = u(sub.value.type, seqT, ctx, rest.span);
+    if (isErr(uni)) return uni;
+  }
+  return ok({ type: seqT, bindings });
 };
 
 // ---- program-level inference ----------------------------------------------
