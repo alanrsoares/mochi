@@ -89,7 +89,7 @@ const typeDecl = (name: string, params: string[], ctors: Ctor[]): string => {
   const argTs = (a: string): string =>
     gmap.get(a) ?? PRIM_TS[a] ?? (a === "float" || a === "int" ? "number" : a);
   const variant = (c: Ctor): string => {
-    const fields = c.argTypes.map((a, i) => `_${i}: ${argTs(a)}`);
+    const fields = c.fields.map((fld, i) => `${fld.name ?? `_${i}`}: ${argTs(fld.type)}`);
     return `{ _tag: "${c.name}"${fields.length ? `; ${fields.join("; ")}` : ""} }`;
   };
   const head = params.length ? `${name}<${params.map((p) => gmap.get(p)).join(", ")}>` : name;

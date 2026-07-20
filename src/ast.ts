@@ -34,8 +34,12 @@ export type Pattern =
 // field `x` against sub-pattern `p` (a literal narrows, a name binds).
 export type PatField = { label: string; pat: Pattern };
 
-// A variant constructor: name + typed positional fields (types are names for now).
-export type Ctor = { name: string; argTypes: string[] };
+// A variant constructor: name + ordered fields. Each field has a type (a name
+// for now) and an OPTIONAL label. A labelled field lowers to that runtime key
+// (`Ok(value: a)` → `{ _tag: "Ok", value }`), matching the @onrails ecosystem;
+// an unlabelled field falls back to its positional key `_0`, `_1`, …
+export type Ctor = { name: string; fields: CtorField[] };
+export type CtorField = { name: string | null; type: string };
 
 // A surface type expression, used in `extern` signatures. Lowercase names are
 // type variables (generalized); prim names (number/string/bool/...) map to

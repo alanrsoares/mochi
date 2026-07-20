@@ -4,7 +4,14 @@
 // ts-pattern .exhaustive() forces a case for every Expr kind here: add an AST
 // node and forget it → TS compile error in the compiler, not a silent gap.
 import { match } from "ts-pattern";
-import type { Expr, LamParam, MatchArm, Pattern, Program, Stmt } from "./ast";
+import type { CtorField, Expr, LamParam, MatchArm, Pattern, Program, Stmt } from "./ast";
+
+// A constructor's runtime field keys: a labelled field uses its label, an
+// unlabelled one its position (`_0`, `_1`). Both the factory (`genType`) and the
+// pattern destructure (`genWithArm`) must agree, so patterns consult this
+// registry — populated per `codegen` call from the program's `type` decls.
+const keysOf = (fields: CtorField[]): string[] => fields.map((f, i) => f.name ?? `_${i}`);
+let ctorKeys = new Map<string, string[]>();
 
 const genExpr = (e: Expr): string =>
   match(e)
@@ -113,11 +120,13 @@ const genWithArm = (p: NarrowingPattern, body: Expr): string => {
     return `.with({ ${lits.join(", ")} }, ${param} => ${genExpr(body)})`;
   }
 
-  const binds: string[] = []; // "_0: r"
-  const litFields: string[] = []; // "_0: 5" — narrows further
+  const binds: string[] = []; // "value: r" (or "_0: r" positionally)
+  const litFields: string[] = []; // "value: 5" — narrows further
+  const keys = ctorKeys.get(p.ctor);
   p.args.forEach((a, i) => {
-    if (a.kind === "pbind") binds.push(`_${i}: ${a.name}`);
-    else if (a.kind === "plit") litFields.push(`_${i}: ${a.value}`);
+    const key = keys?.[i] ?? `_${i}`;
+    if (a.kind === "pbind") binds.push(key === a.name ? key : `${key}: ${a.name}`);
+    else if (a.kind === "plit") litFields.push(`${key}: ${a.value}`);
     // pwild → don't bind; nested pctor is v2
   });
   const patObj = [`_tag: ${JSON.stringify(p.ctor)}`, ...litFields].join(", ");
@@ -136,8 +145,8 @@ const genType = (s: Extract<Stmt, { kind: "type" }>): string =>
   s.ctors
     .map((c) => {
       const tag = JSON.stringify(c.name);
-      if (c.argTypes.length === 0) return `const ${c.name} = { _tag: ${tag} };`;
-      const params = c.argTypes.map((_, i) => `_${i}`).join(", ");
+      if (c.fields.length === 0) return `const ${c.name} = { _tag: ${tag} };`;
+      const params = keysOf(c.fields).join(", ");
       return `const ${c.name} = (${params}) => ({ _tag: ${tag}, ${params} });`;
     })
     .join("\n");
@@ -166,6 +175,9 @@ const hasMatch = (e: Expr): boolean =>
     .exhaustive();
 
 export const codegen = (prog: Program): string => {
+  ctorKeys = new Map();
+  for (const s of prog.stmts)
+    if (s.kind === "type") for (const c of s.ctors) ctorKeys.set(c.name, keysOf(c.fields));
   const needsMatch = prog.stmts.some((s) => s.kind === "let" && hasMatch(s.value));
   const header = needsMatch ? `import { match } from "@onrails/pattern";\n\n` : "";
   const body = prog.stmts.map(genStmt).join("\n");

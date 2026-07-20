@@ -6,7 +6,7 @@
 // the parser into a temp binding plus field-access lets, so the printer detects
 // that shape and re-folds it back into `let { x, y } = e`.
 import { flatMap, map, pipe, type Result } from "@onrails/result";
-import type { Ctor, Expr, LamParam, PatField, Pattern, Stmt, TypeExpr } from "./ast";
+import type { Ctor, CtorField, Expr, LamParam, PatField, Pattern, Stmt, TypeExpr } from "./ast";
 import type { AlangError } from "./errors";
 import { lex } from "./lexer";
 import { parse } from "./parser";
@@ -84,8 +84,10 @@ const matchExpr = (e: Extract<Expr, { kind: "match" }>, ind: string): string => 
   return `switch ${expr(e.scrutinee, ind)} {\n${arms.join("\n")}\n${ind}}`;
 };
 
+const ctorField = (f: CtorField): string => (f.name ? `${f.name}: ${f.type}` : f.type);
+
 const ctor = (c: Ctor): string =>
-  c.argTypes.length === 0 ? c.name : `${c.name}(${c.argTypes.join(", ")})`;
+  c.fields.length === 0 ? c.name : `${c.name}(${c.fields.map(ctorField).join(", ")})`;
 
 // A type expression; the left side of an arrow is parenthesized when it is
 // itself an arrow ((a -> b) -> c).

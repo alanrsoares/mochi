@@ -5,6 +5,7 @@
 import { err, ok, type Result } from "@onrails/result";
 import type {
   Ctor,
+  CtorField,
   Expr,
   LamParam,
   MatchArm,
@@ -285,19 +286,31 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
 
   function parseCtor(): Ctor {
     const name = expectId().name;
-    const argTypes: string[] = [];
+    const fields: CtorField[] = [];
     if (peek().t === "lparen") {
       next();
       if (peek().t !== "rparen") {
-        argTypes.push(expectId().name);
+        fields.push(parseCtorField());
         while (peek().t === "comma") {
           next();
-          argTypes.push(expectId().name);
+          fields.push(parseCtorField());
         }
       }
       expect("rparen");
     }
-    return { name, argTypes };
+    return { name, fields };
+  }
+
+  // A constructor field: `type` (positional) or `label: type` (named — its
+  // runtime key). `Ok(value: a)` names the payload `value`; `Circle(float)`
+  // leaves it positional.
+  function parseCtorField(): CtorField {
+    const first = expectId().name;
+    if (peek().t === "colon") {
+      next();
+      return { name: first, type: expectId().name };
+    }
+    return { name: null, type: first };
   }
 
   function parseLet(): Stmt[] {

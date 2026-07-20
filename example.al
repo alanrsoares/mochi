@@ -86,12 +86,15 @@ let cornerDist = hypot(x, y)
 // --- parametric variants: generic sum types ---
 // Type parameters follow the name, ML-style. Constructors are inferred
 // polymorphic: Ok : a -> Result<a, e>, Err : e -> Result<a, e>.
+// Named fields (`value`/`error`) make the runtime shape identical to
+// @onrails/result + @onrails/maybe, so alang values flow straight through
+// their combinators (map/flatMap/unwrapOr) at the JS boundary.
 type Result a e =
-  | Ok(a)
-  | Err(e)
+  | Ok(value: a)
+  | Err(error: e)
 
 type Option a =
-  | Some(a)
+  | Some(value: a)
   | None
 
 // --- railway-oriented programming: combinators over Result ---

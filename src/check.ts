@@ -21,7 +21,7 @@ const buildRegistry = (prog: Program): Result<Registry, AlangError> => {
     );
     for (const c of s.ctors) {
       if (reg.ctor.has(c.name)) return err(checkErr(`duplicate constructor '${c.name}'`, s.span));
-      reg.ctor.set(c.name, { type: s.name, arity: c.argTypes.length });
+      reg.ctor.set(c.name, { type: s.name, arity: c.fields.length });
     }
   }
   return ok(reg);

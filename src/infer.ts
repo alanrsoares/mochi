@@ -343,7 +343,7 @@ const ctorScheme = (typeName: string, params: string[], c: Ctor, f: Fresh): Sche
     typeName,
     params.map((p) => pvars.get(p)!),
   );
-  const type = c.argTypes.reduceRight((acc, at) => tArrow(argType(at), acc), result);
+  const type = c.fields.reduceRight((acc, fld) => tArrow(argType(fld.type), acc), result);
   const vars = params.map((p) => (pvars.get(p) as Extract<Type, { kind: "var" }>).id);
   return { vars, rvars: [], type };
 };
