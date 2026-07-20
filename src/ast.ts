@@ -46,7 +46,8 @@ export type CtorField = { name: string | null; type: string };
 // their HM type; others become nullary constructors.
 export type TypeExpr =
   | { kind: "tname"; name: string; span: Span }
-  | { kind: "tarrow"; from: TypeExpr; to: TypeExpr; span: Span };
+  | { kind: "tarrow"; from: TypeExpr; to: TypeExpr; span: Span }
+  | { kind: "tapp"; ctor: string; args: TypeExpr[]; span: Span }; // Task a, Result a e
 
 export type Stmt =
   | { kind: "let"; name: string; nameSpan: Span; value: Expr; exported?: boolean; span: Span }

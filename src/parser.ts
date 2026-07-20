@@ -367,8 +367,21 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     return { kind: "tname", name, span };
   }
 
+  // Type application by juxtaposition, tighter than `->`: `Task a`, `Result a e`.
+  // Only an Uppercase constructor head takes args; a nested applied arg must be
+  // parenthesized (`Task (Option a)`). Arg atoms are ids or parenthesized types.
+  function parseTypeApp(): TypeExpr {
+    const head = parseTypeAtom();
+    if (head.kind !== "tname" || !/^[A-Z]/.test(head.name)) return head;
+    const args: TypeExpr[] = [];
+    while (peek().t === "id" || peek().t === "lparen") args.push(parseTypeAtom());
+    const last = args[args.length - 1];
+    if (!last) return head;
+    return { kind: "tapp", ctor: head.name, args, span: spanning(head.span, last.span) };
+  }
+
   function parseTypeExpr(): TypeExpr {
-    const from = parseTypeAtom();
+    const from = parseTypeApp();
     if (peek().t !== "tarrow") return from;
     next();
     const to = parseTypeExpr();

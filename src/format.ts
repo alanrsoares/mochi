@@ -93,6 +93,11 @@ const ctor = (c: Ctor): string =>
 // itself an arrow ((a -> b) -> c).
 const typeExpr = (te: TypeExpr): string => {
   if (te.kind === "tname") return te.name;
+  if (te.kind === "tapp") {
+    // A compound arg (arrow or nested application) needs parens: `Task (Option a)`.
+    const arg = (a: TypeExpr): string => (a.kind === "tname" ? typeExpr(a) : `(${typeExpr(a)})`);
+    return `${te.ctor} ${te.args.map(arg).join(" ")}`;
+  }
   const from = te.from.kind === "tarrow" ? `(${typeExpr(te.from)})` : typeExpr(te.from);
   return `${from} -> ${typeExpr(te.to)}`;
 };

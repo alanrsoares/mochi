@@ -321,6 +321,11 @@ const PRIMS = new Set(["number", "int", "float", "string", "bool"]);
 const typeExprToType = (te: TypeExpr, vars: Map<string, Type>, f: Fresh): Type => {
   if (te.kind === "tarrow")
     return tArrow(typeExprToType(te.from, vars, f), typeExprToType(te.to, vars, f));
+  if (te.kind === "tapp")
+    return tCon(
+      te.ctor,
+      te.args.map((a) => typeExprToType(a, vars, f)),
+    );
   if (PRIMS.has(te.name)) return primType(te.name);
   if (/^[A-Z]/.test(te.name)) return tCon(te.name);
   let v = vars.get(te.name);
