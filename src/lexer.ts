@@ -1,6 +1,8 @@
 // Lexer — text → tokens. Returns Result; bad char = Err, not throw.
+// Each emitted token carries its source `span` (half-open [start, end)).
 import { err, ok, type Result } from "@onrails/result";
 import { type AlangError, lexErr } from "./errors";
+import { type Span, span } from "./span";
 
 export type Tok =
   | { t: "let" }
@@ -20,6 +22,9 @@ export type Tok =
   | { t: "num"; v: number }
   | { t: "id"; v: string }
   | { t: "eof" };
+
+// A token plus where it came from.
+export type Located = Tok & { span: Span };
 
 const KEYWORDS: Record<string, Tok | undefined> = {
   let: { t: "let" },
@@ -48,9 +53,13 @@ const PUNCT: Record<string, Tok | undefined> = {
 
 const isSpace = (c: string): boolean => c === " " || c === "\t" || c === "\n" || c === "\r";
 
-export function lex(src: string): Result<Tok[], AlangError> {
-  const toks: Tok[] = [];
+export function lex(src: string): Result<Located[], AlangError> {
+  const toks: Located[] = [];
   let i = 0;
+  // Table tokens are shared singletons; spread to a fresh object + attach span.
+  const emit = (tok: Tok, start: number, end: number): void => {
+    toks.push({ ...tok, span: span(start, end) });
+  };
 
   while (i < src.length) {
     const c = src[i]!;
@@ -66,14 +75,14 @@ export function lex(src: string): Result<Tok[], AlangError> {
 
     const digraph = DIGRAPHS[src.slice(i, i + 2)];
     if (digraph) {
-      toks.push(digraph);
+      emit(digraph, i, i + 2);
       i += 2;
       continue;
     }
 
     const punct = PUNCT[c];
     if (punct) {
-      toks.push(punct);
+      emit(punct, i, i + 1);
       i++;
       continue;
     }
@@ -81,7 +90,7 @@ export function lex(src: string): Result<Tok[], AlangError> {
     if (c >= "0" && c <= "9") {
       let j = i;
       while (j < src.length && ((src[j]! >= "0" && src[j]! <= "9") || src[j] === ".")) j++;
-      toks.push({ t: "num", v: Number(src.slice(i, j)) });
+      emit({ t: "num", v: Number(src.slice(i, j)) }, i, j);
       i = j;
       continue;
     }
@@ -90,13 +99,13 @@ export function lex(src: string): Result<Tok[], AlangError> {
       let j = i;
       while (j < src.length && /[A-Za-z0-9_]/.test(src[j]!)) j++;
       const word = src.slice(i, j);
-      toks.push(KEYWORDS[word] ?? { t: "id", v: word });
+      emit(KEYWORDS[word] ?? { t: "id", v: word }, i, j);
       i = j;
       continue;
     }
 
-    return err(lexErr(`unexpected char '${c}'`, i));
+    return err(lexErr(`unexpected char '${c}'`, span(i, i + 1)));
   }
-  toks.push({ t: "eof" });
+  emit({ t: "eof" }, src.length, src.length);
   return ok(toks);
 }

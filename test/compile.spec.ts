@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 import { compile } from "../src/compile";
+import { formatError } from "../src/errors";
 
 const js = (src: string) => unwrapOk(compile(src));
 
@@ -84,6 +85,7 @@ test("non-exhaustive switch is a compile error naming the missing ctor", () => {
   expect(unwrapErr(r)).toEqual({
     kind: "check",
     message: "non-exhaustive switch on 'Shape': missing Rect",
+    span: { start: 70, end: 111 },
   });
 });
 
@@ -163,10 +165,42 @@ test("well-typed prelude arithmetic compiles", () => {
   expect(js("let n = add(mul(2, 3), 4)")).toBe("const n = add(mul(2, 3), 4);\n");
 });
 
+// ---- errors carry source spans ----
+
+test("type error carries the offending expression's span", () => {
+  const r = compile("let bad = add(1, { x: 2 })");
+  expect(isErr(r)).toBe(true);
+  // the record argument starts at offset 17
+  expect(unwrapErr(r).span).toEqual({ start: 17, end: 25 });
+});
+
+test("parse error carries the offending token's span", () => {
+  const r = compile("let = 5");
+  expect(isErr(r)).toBe(true);
+  expect(unwrapErr(r).span).toEqual({ start: 4, end: 5 });
+});
+
+test("formatError renders line:col when given the source", () => {
+  const src = "let a = 1\nlet b = pi.x"; // pi : number, field access on line 2
+  const r = compile(src);
+  expect(isErr(r)).toBe(true);
+  expect(formatError(unwrapErr(r), src)).toStartWith("TypeError at 2:9: cannot unify number");
+});
+
+test("formatError falls back to raw offset without source", () => {
+  const r = compile("let x = @");
+  expect(isErr(r)).toBe(true);
+  expect(formatError(unwrapErr(r))).toBe("LexError at 8: unexpected char '@'");
+});
+
 test("lex error is a value, not a throw", () => {
   const r = compile("let x = @");
   expect(isErr(r)).toBe(true);
-  expect(unwrapErr(r)).toEqual({ kind: "lex", message: "unexpected char '@'", pos: 8 });
+  expect(unwrapErr(r)).toEqual({
+    kind: "lex",
+    message: "unexpected char '@'",
+    span: { start: 8, end: 9 },
+  });
 });
 
 test("parse error is a value, not a throw", () => {

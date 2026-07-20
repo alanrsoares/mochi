@@ -13,7 +13,7 @@ match(
   compile(src),
   (ts) => process.stdout.write(ts),
   (e) => {
-    console.error(formatError(e));
+    console.error(formatError(e, src));
     process.exit(1);
   },
 );

@@ -14,13 +14,13 @@ const buildRegistry = (prog: Program): Result<Registry, AlangError> => {
   const reg: Registry = { ctor: new Map(), type: new Map() };
   for (const s of prog.stmts) {
     if (s.kind !== "type") continue;
-    if (reg.type.has(s.name)) return err(checkErr(`duplicate type '${s.name}'`));
+    if (reg.type.has(s.name)) return err(checkErr(`duplicate type '${s.name}'`, s.span));
     reg.type.set(
       s.name,
       s.ctors.map((c) => c.name),
     );
     for (const c of s.ctors) {
-      if (reg.ctor.has(c.name)) return err(checkErr(`duplicate constructor '${c.name}'`));
+      if (reg.ctor.has(c.name)) return err(checkErr(`duplicate constructor '${c.name}'`, s.span));
       reg.ctor.set(c.name, { type: s.name, arity: c.argTypes.length });
     }
   }
@@ -66,7 +66,7 @@ function checkMatch(m: Extract<Expr, { kind: "match" }>, reg: Registry): AlangEr
 
   // No constructor arms → literal/wildcard switch. Only a catch-all makes it total.
   if (ctorArms.length === 0) {
-    return hasCatchAll ? null : checkErr("non-exhaustive switch: add a `_` catch-all arm");
+    return hasCatchAll ? null : checkErr("non-exhaustive switch: add a `_` catch-all arm", m.span);
   }
 
   // Validate each constructor pattern: known + right arity.
@@ -75,12 +75,15 @@ function checkMatch(m: Extract<Expr, { kind: "match" }>, reg: Registry): AlangEr
   for (const arm of ctorArms) {
     const p = arm.pattern as Extract<Pattern, { kind: "pctor" }>;
     const info = reg.ctor.get(p.ctor);
-    if (!info) return checkErr(`unknown constructor '${p.ctor}'`);
+    if (!info) return checkErr(`unknown constructor '${p.ctor}'`, p.span);
     if (p.args.length !== info.arity)
-      return checkErr(`constructor '${p.ctor}' expects ${info.arity} arg(s), got ${p.args.length}`);
+      return checkErr(
+        `constructor '${p.ctor}' expects ${info.arity} arg(s), got ${p.args.length}`,
+        p.span,
+      );
     if (owningType === null) owningType = info.type;
     else if (owningType !== info.type)
-      return checkErr(`switch mixes variants of '${owningType}' and '${info.type}'`);
+      return checkErr(`switch mixes variants of '${owningType}' and '${info.type}'`, p.span);
     covered.add(p.ctor);
   }
 
@@ -89,7 +92,7 @@ function checkMatch(m: Extract<Expr, { kind: "match" }>, reg: Registry): AlangEr
   const missing = required.filter((c) => !covered.has(c));
   return missing.length === 0
     ? null
-    : checkErr(`non-exhaustive switch on '${owningType}': missing ${missing.join(", ")}`);
+    : checkErr(`non-exhaustive switch on '${owningType}': missing ${missing.join(", ")}`, m.span);
 }
 
 export function check(prog: Program): Result<Program, AlangError> {

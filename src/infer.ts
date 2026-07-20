@@ -7,6 +7,7 @@
 import { err, isErr, ok, type Result } from "@onrails/result";
 import type { Ctor, Expr, Pattern, Program } from "./ast";
 import { type AlangError, typeErr } from "./errors";
+import type { Span } from "./span";
 import {
   type Fresh,
   freshRowVar,
@@ -130,9 +131,9 @@ const instantiate = (sc: Scheme, f: Fresh): Type => {
 // Used when compiling to JS (host globals are legal); strict mode is off.
 type Ctx = { env: Env; subst: Subst; fresh: Fresh; open: boolean };
 
-const u = (a: Type, b: Type, ctx: Ctx): Result<Type, AlangError> => {
+const u = (a: Type, b: Type, ctx: Ctx, span?: Span): Result<Type, AlangError> => {
   const r = unify(a, b, ctx.subst, ctx.fresh);
-  return isErr(r) ? err(typeErr(r.error.message)) : ok(a);
+  return isErr(r) ? err(typeErr(r.error.message, span)) : ok(a);
 };
 
 const infer = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
@@ -144,7 +145,7 @@ const infer = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
       const sc = ctx.env.get(e.name);
       if (sc) return ok(instantiate(sc, ctx.fresh));
       if (ctx.open) return ok(freshVar(ctx.fresh)); // opaque host global
-      return err(typeErr(`unbound variable '${e.name}'`));
+      return err(typeErr(`unbound variable '${e.name}'`, e.span));
     }
 
     case "lambda": {
@@ -167,7 +168,7 @@ const infer = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
         const argT = infer(arg, ctx);
         if (isErr(argT)) return argT;
         const resultT = freshVar(ctx.fresh);
-        const uni = u(cur, tArrow(argT.value, resultT), ctx);
+        const uni = u(cur, tArrow(argT.value, resultT), ctx, arg.span);
         if (isErr(uni)) return uni;
         cur = resultT;
       }
@@ -176,7 +177,7 @@ const infer = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
 
     case "pipe": {
       // a |> f  ≡  f(a)
-      return infer({ kind: "call", fn: e.right, args: [e.left] }, ctx);
+      return infer({ kind: "call", fn: e.right, args: [e.left], span: e.span }, ctx);
     }
 
     case "record": {
@@ -196,7 +197,7 @@ const infer = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
       if (isErr(targetT)) return targetT;
       const fieldT = freshVar(ctx.fresh);
       const rest = freshRowVar(ctx.fresh);
-      const uni = u(targetT.value, tRecord(rExtend(e.name, fieldT, rest)), ctx);
+      const uni = u(targetT.value, tRecord(rExtend(e.name, fieldT, rest)), ctx, e.span);
       if (isErr(uni)) return uni;
       return ok(fieldT);
     }
@@ -214,14 +215,14 @@ const inferMatch = (e: Extract<Expr, { kind: "match" }>, ctx: Ctx): Result<Type,
   for (const arm of e.arms) {
     const pat = inferPattern(arm.pattern, ctx);
     if (isErr(pat)) return pat;
-    const uScrut = u(scrutT.value, pat.value.type, ctx);
+    const uScrut = u(scrutT.value, pat.value.type, ctx, arm.pattern.span);
     if (isErr(uScrut)) return uScrut;
 
     const armEnv: Env = new Map(ctx.env);
     for (const [name, t] of pat.value.bindings) armEnv.set(name, mono(t));
     const bodyT = infer(arm.body, { ...ctx, env: armEnv });
     if (isErr(bodyT)) return bodyT;
-    const uBody = u(resultT, bodyT.value, ctx);
+    const uBody = u(resultT, bodyT.value, ctx, arm.body.span);
     if (isErr(uBody)) return uBody;
   }
   return ok(resultT);
@@ -241,18 +242,18 @@ const inferPattern = (p: Pattern, ctx: Ctx): Result<PatResult, AlangError> => {
     }
     case "pctor": {
       const sc = ctx.env.get(p.ctor);
-      if (!sc) return err(typeErr(`unknown constructor '${p.ctor}'`));
+      if (!sc) return err(typeErr(`unknown constructor '${p.ctor}'`, p.span));
       // instantiated ctor type: argT1 -> ... -> ResultType
       let cur = instantiate(sc, ctx.fresh);
       const bindings = new Map<string, Type>();
       for (const argPat of p.args) {
         const rc = resolve(cur, ctx.subst);
         if (rc.kind !== "arrow")
-          return err(typeErr(`constructor '${p.ctor}' applied to too many args`));
+          return err(typeErr(`constructor '${p.ctor}' applied to too many args`, p.span));
         const sub = inferPattern(argPat, ctx);
         if (isErr(sub)) return sub;
         for (const [k, v] of sub.value.bindings) bindings.set(k, v);
-        const uni = u(rc.from, sub.value.type, ctx);
+        const uni = u(rc.from, sub.value.type, ctx, argPat.span);
         if (isErr(uni)) return uni;
         cur = rc.to;
       }

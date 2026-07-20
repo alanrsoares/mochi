@@ -1,9 +1,12 @@
 // Parser — Pratt-style. Returns Result at the boundary.
 // Internally throws a typed marker; the public `parse` catches it into an Err.
+// Every node is built with its source span: leaves take the token's span,
+// composites span from their first token/child to the last one consumed.
 import { err, ok, type Result } from "@onrails/result";
 import type { Ctor, Expr, MatchArm, Pattern, Program, Stmt } from "./ast";
 import { type AlangError, parseErr } from "./errors";
-import type { Tok } from "./lexer";
+import type { Located, Tok } from "./lexer";
+import { type Span, spanning } from "./span";
 
 class ParseAbort extends Error {
   constructor(readonly detail: AlangError) {
@@ -11,19 +14,28 @@ class ParseAbort extends Error {
   }
 }
 
-export function parse(toks: Tok[]): Result<Program, AlangError> {
+export function parse(toks: Located[]): Result<Program, AlangError> {
   let pos = 0;
+  let last: Located = toks[0]!; // most recently consumed token (for end spans)
   const peek = () => toks[pos]!;
-  const next = () => toks[pos++]!;
+  const next = () => {
+    last = toks[pos++]!;
+    return last;
+  };
   const fail = (msg: string): never => {
-    throw new ParseAbort(parseErr(msg));
+    throw new ParseAbort(parseErr(msg, peek().span));
   };
   const expect = (t: Tok["t"]) => {
     const tk = next();
-    if (tk.t !== t) fail(`expected ${t}, got ${tk.t}`);
+    if (tk.t !== t) throw new ParseAbort(parseErr(`expected ${t}, got ${tk.t}`, tk.span));
     return tk;
   };
-  const expectId = (): string => (expect("id") as { t: "id"; v: string }).v;
+  const expectId = (): { name: string; span: Span } => {
+    const tk = expect("id") as Located & { t: "id"; v: string };
+    return { name: tk.v, span: tk.span };
+  };
+  // span from a start marker to the last consumed token.
+  const to = (start: Span): Span => spanning(start, last.span);
 
   const PIPE_BP = 1;
 
@@ -45,22 +57,24 @@ export function parse(toks: Tok[]): Result<Program, AlangError> {
   }
 
   function parseLambda(): Expr {
+    const start = peek().span;
     const params: string[] = [];
     if (peek().t === "id") {
-      params.push(expectId());
+      params.push(expectId().name);
     } else {
       expect("lparen");
       if (peek().t !== "rparen") {
-        params.push(expectId());
+        params.push(expectId().name);
         while (peek().t === "comma") {
           next();
-          params.push(expectId());
+          params.push(expectId().name);
         }
       }
       expect("rparen");
     }
     expect("arrow");
-    return { kind: "lambda", params, body: parseExpr() };
+    const body = parseExpr();
+    return { kind: "lambda", params, body, span: spanning(start, body.span) };
   }
 
   function parseExpr(minBp = 0): Expr {
@@ -68,7 +82,8 @@ export function parse(toks: Tok[]): Result<Program, AlangError> {
     let left = parseAtomOrCall();
     while (peek().t === "pipe" && PIPE_BP >= minBp) {
       next(); // consume |>
-      left = { kind: "pipe", left, right: parseAtomOrCall() };
+      const right = parseAtomOrCall();
+      left = { kind: "pipe", left, right, span: spanning(left.span, right.span) };
     }
     return left;
   }
@@ -88,10 +103,11 @@ export function parse(toks: Tok[]): Result<Program, AlangError> {
           }
         }
         expect("rparen");
-        e = { kind: "call", fn: e, args };
+        e = { kind: "call", fn: e, args, span: to(e.span) };
       } else if (peek().t === "dot") {
         next();
-        e = { kind: "field", target: e, name: expectId() };
+        const id = expectId();
+        e = { kind: "field", target: e, name: id.name, span: spanning(e.span, id.span) };
       } else {
         return e;
       }
@@ -102,18 +118,18 @@ export function parse(toks: Tok[]): Result<Program, AlangError> {
     if (peek().t === "switch") return parseMatch();
     if (peek().t === "lbrace") return parseRecord();
     const tk = next();
-    if (tk.t === "num") return { kind: "num", value: tk.v };
-    if (tk.t === "id") return { kind: "ref", name: tk.v };
+    if (tk.t === "num") return { kind: "num", value: tk.v, span: tk.span };
+    if (tk.t === "id") return { kind: "ref", name: tk.v, span: tk.span };
     if (tk.t === "lparen") {
       const e = parseExpr();
       expect("rparen");
       return e;
     }
-    return fail(`unexpected token ${tk.t}`);
+    throw new ParseAbort(parseErr(`unexpected token ${tk.t}`, tk.span));
   }
 
   function parseRecord(): Expr {
-    expect("lbrace");
+    const start = expect("lbrace").span;
     const fields: { name: string; value: Expr }[] = [];
     if (peek().t !== "rbrace") {
       fields.push(parseField());
@@ -123,11 +139,11 @@ export function parse(toks: Tok[]): Result<Program, AlangError> {
       }
     }
     expect("rbrace");
-    return { kind: "record", fields };
+    return { kind: "record", fields, span: to(start) };
   }
 
   function parseField(): { name: string; value: Expr } {
-    const name = expectId();
+    const name = expectId().name;
     expect("colon");
     return { name, value: parseExpr() };
   }
@@ -135,7 +151,7 @@ export function parse(toks: Tok[]): Result<Program, AlangError> {
   // ---- pattern matching --------------------------------------------------
 
   function parseMatch(): Expr {
-    expect("switch");
+    const start = expect("switch").span;
     const scrutinee = parseExpr();
     expect("lbrace");
     const arms: MatchArm[] = [];
@@ -147,18 +163,18 @@ export function parse(toks: Tok[]): Result<Program, AlangError> {
     }
     if (arms.length === 0) fail("switch needs at least one | arm");
     expect("rbrace");
-    return { kind: "match", scrutinee, arms };
+    return { kind: "match", scrutinee, arms, span: to(start) };
   }
 
   function parsePattern(): Pattern {
     const tk = peek();
     if (tk.t === "num") {
       next();
-      return { kind: "plit", value: tk.v };
+      return { kind: "plit", value: tk.v, span: tk.span };
     }
     if (tk.t === "id") {
-      const name = expectId();
-      if (name === "_") return { kind: "pwild" };
+      const { name, span: nameSpan } = expectId();
+      if (name === "_") return { kind: "pwild", span: nameSpan };
       if (/^[A-Z]/.test(name)) {
         const args: Pattern[] = [];
         if (peek().t === "lparen") {
@@ -172,9 +188,9 @@ export function parse(toks: Tok[]): Result<Program, AlangError> {
           }
           expect("rparen");
         }
-        return { kind: "pctor", ctor: name, args };
+        return { kind: "pctor", ctor: name, args, span: to(nameSpan) };
       }
-      return { kind: "pbind", name };
+      return { kind: "pbind", name, span: nameSpan };
     }
     return fail(`unexpected token in pattern: ${tk.t}`);
   }
@@ -182,8 +198,8 @@ export function parse(toks: Tok[]): Result<Program, AlangError> {
   // ---- statements --------------------------------------------------------
 
   function parseType(): Stmt {
-    expect("type");
-    const name = expectId();
+    const start = expect("type").span;
+    const name = expectId().name;
     expect("eq");
     const ctors: Ctor[] = [];
     if (peek().t === "bar") next(); // optional leading bar
@@ -192,19 +208,19 @@ export function parse(toks: Tok[]): Result<Program, AlangError> {
       next();
       ctors.push(parseCtor());
     }
-    return { kind: "type", name, ctors };
+    return { kind: "type", name, ctors, span: to(start) };
   }
 
   function parseCtor(): Ctor {
-    const name = expectId();
+    const name = expectId().name;
     const argTypes: string[] = [];
     if (peek().t === "lparen") {
       next();
       if (peek().t !== "rparen") {
-        argTypes.push(expectId());
+        argTypes.push(expectId().name);
         while (peek().t === "comma") {
           next();
-          argTypes.push(expectId());
+          argTypes.push(expectId().name);
         }
       }
       expect("rparen");
@@ -213,10 +229,11 @@ export function parse(toks: Tok[]): Result<Program, AlangError> {
   }
 
   function parseLet(): Stmt {
-    expect("let");
-    const name = expectId();
+    const start = expect("let").span;
+    const name = expectId().name;
     expect("eq");
-    return { kind: "let", name, value: parseExpr() };
+    const value = parseExpr();
+    return { kind: "let", name, value, span: spanning(start, value.span) };
   }
 
   function parseStmt(): Stmt {

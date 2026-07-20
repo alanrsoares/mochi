@@ -1,24 +1,44 @@
-// alang error union — errors as values, one app-level type
+// alang error union — errors as values, one app-level type.
+// Every kind may carry a source `span`; lex always does.
+import { lineCol, type Span } from "./span";
+
 export type AlangError =
-  | { kind: "lex"; message: string; pos: number }
-  | { kind: "parse"; message: string }
-  | { kind: "check"; message: string }
-  | { kind: "type"; message: string };
+  | { kind: "lex"; message: string; span: Span }
+  | { kind: "parse"; message: string; span?: Span }
+  | { kind: "check"; message: string; span?: Span }
+  | { kind: "type"; message: string; span?: Span };
 
-export const lexErr = (message: string, pos: number): AlangError => ({ kind: "lex", message, pos });
-export const parseErr = (message: string): AlangError => ({ kind: "parse", message });
-export const checkErr = (message: string): AlangError => ({ kind: "check", message });
-export const typeErr = (message: string): AlangError => ({ kind: "type", message });
+export const lexErr = (message: string, span: Span): AlangError => ({ kind: "lex", message, span });
+export const parseErr = (message: string, span?: Span): AlangError => ({
+  kind: "parse",
+  message,
+  span,
+});
+export const checkErr = (message: string, span?: Span): AlangError => ({
+  kind: "check",
+  message,
+  span,
+});
+export const typeErr = (message: string, span?: Span): AlangError => ({
+  kind: "type",
+  message,
+  span,
+});
 
-export const formatError = (e: AlangError): string => {
-  switch (e.kind) {
-    case "lex":
-      return `LexError@${e.pos}: ${e.message}`;
-    case "parse":
-      return `ParseError: ${e.message}`;
-    case "check":
-      return `CheckError: ${e.message}`;
-    case "type":
-      return `TypeError: ${e.message}`;
-  }
+const label: Record<AlangError["kind"], string> = {
+  lex: "LexError",
+  parse: "ParseError",
+  check: "CheckError",
+  type: "TypeError",
+};
+
+// Human-readable diagnostic. With `src`, a span renders as line:col; without
+// it, the raw offset. No span → just the labelled message.
+export const formatError = (e: AlangError, src?: string): string => {
+  const at = e.span
+    ? src
+      ? ((p) => ` at ${p.line}:${p.col}`)(lineCol(src, e.span.start))
+      : ` at ${e.span.start}`
+    : "";
+  return `${label[e.kind]}${at}: ${e.message}`;
 };
