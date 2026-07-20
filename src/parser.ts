@@ -230,10 +230,10 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
 
   function parseLet(): Stmt {
     const start = expect("let").span;
-    const name = expectId().name;
+    const { name, span: nameSpan } = expectId();
     expect("eq");
     const value = parseExpr();
-    return { kind: "let", name, value, span: spanning(start, value.span) };
+    return { kind: "let", name, nameSpan, value, span: spanning(start, value.span) };
   }
 
   function parseStmt(): Stmt {

@@ -1,8 +1,18 @@
-# alang — VSCode syntax highlighting
+# alang — VSCode syntax highlighting + language server
 
 TextMate grammar for `.al` files: comments, `let`/`type`/`switch`, pipeline
 `|>`, arrow `=>`, match bars `|`, variant constructors (Uppercase idents),
-primitive types (`float`/`int`/`string`/`bool`), and numbers.
+primitive types (`float`/`int`/`string`/`bool`), and numbers. Plus a language
+server — diagnostics, hover, and inlay type hints — built with `bun run
+build:ext` from the repo root.
+
+## Operator ligatures
+
+`|>` and `=>` render as combined glyphs with a ligature-capable font. The
+repo's `.vscode/settings.json` turns on `editor.fontLigatures` scoped to
+`[alang]` and lists common ligature fonts (Fira Code, JetBrains Mono, Cascadia
+Code, Victor Mono) — install one and reload. Ligatures are font-shaping, so no
+extension setting can force them without a supporting font.
 
 ## Install locally
 

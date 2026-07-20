@@ -7,6 +7,8 @@ import {
   type Diagnostic,
   DiagnosticSeverity,
   type Hover,
+  type InlayHint,
+  InlayHintKind,
   MarkupKind,
   ProposedFeatures,
   TextDocumentSyncKind,
@@ -15,6 +17,7 @@ import {
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { diagnostics as compute } from "../diagnostics";
 import { hoverAt } from "../hover";
+import { inlayHints } from "../inlay";
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
@@ -23,6 +26,7 @@ connection.onInitialize(() => ({
   capabilities: {
     textDocumentSync: TextDocumentSyncKind.Incremental,
     hoverProvider: true,
+    inlayHintProvider: true,
   },
 }));
 
@@ -33,6 +37,19 @@ connection.onHover(({ textDocument, position }): Hover | null => {
   const type = hoverAt(doc.getText(), doc.offsetAt(position));
   if (!type) return null;
   return { contents: { kind: MarkupKind.Markdown, value: `\`\`\`alang\n${type}\n\`\`\`` } };
+});
+
+// Inlay hints: a `: type` inset after each top-level binding name. Offsets map
+// back to Positions; kind Type renders them faded like a type annotation.
+connection.languages.inlayHint.on(({ textDocument }): InlayHint[] => {
+  const doc = documents.get(textDocument.uri);
+  if (!doc) return [];
+  return inlayHints(doc.getText()).map((h) => ({
+    position: doc.positionAt(h.offset),
+    label: h.label,
+    kind: InlayHintKind.Type,
+    paddingLeft: false,
+  }));
 });
 
 // Compile the document and push diagnostics (0 or 1 — the pipeline stops at the

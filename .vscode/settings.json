@@ -1,0 +1,7 @@
+{
+  "// alang": "Operator ligatures for .al files. |> and => render as combined glyphs with a ligature-capable font. Scoped so it only affects alang, not your other editors.",
+  "[alang]": {
+    "editor.fontLigatures": true,
+    "editor.fontFamily": "'Fira Code', 'JetBrains Mono', 'Cascadia Code', 'Victor Mono', monospace"
+  }
+}
