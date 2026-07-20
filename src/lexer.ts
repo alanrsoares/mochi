@@ -27,13 +27,34 @@ const KEYWORDS: Record<string, Tok | undefined> = {
   switch: { t: "switch" },
 };
 
+// Two-char operators, checked before single chars.
+const DIGRAPHS: Record<string, Tok | undefined> = {
+  "|>": { t: "pipe" },
+  "=>": { t: "arrow" },
+};
+
+// Single-char punctuation → token.
+const PUNCT: Record<string, Tok | undefined> = {
+  "|": { t: "bar" },
+  "=": { t: "eq" },
+  "(": { t: "lparen" },
+  ")": { t: "rparen" },
+  "{": { t: "lbrace" },
+  "}": { t: "rbrace" },
+  ",": { t: "comma" },
+  ".": { t: "dot" },
+  ":": { t: "colon" },
+};
+
+const isSpace = (c: string): boolean => c === " " || c === "\t" || c === "\n" || c === "\r";
+
 export function lex(src: string): Result<Tok[], AlangError> {
   const toks: Tok[] = [];
   let i = 0;
 
   while (i < src.length) {
     const c = src[i]!;
-    if (c === " " || c === "\t" || c === "\n" || c === "\r") {
+    if (isSpace(c)) {
       i++;
       continue;
     }
@@ -42,58 +63,17 @@ export function lex(src: string): Result<Tok[], AlangError> {
       while (i < src.length && src[i] !== "\n") i++;
       continue;
     }
-    if (c === "|" && src[i + 1] === ">") {
-      toks.push({ t: "pipe" });
+
+    const digraph = DIGRAPHS[src.slice(i, i + 2)];
+    if (digraph) {
+      toks.push(digraph);
       i += 2;
       continue;
     }
-    if (c === "|") {
-      toks.push({ t: "bar" });
-      i++;
-      continue;
-    }
-    if (c === "=" && src[i + 1] === ">") {
-      toks.push({ t: "arrow" });
-      i += 2;
-      continue;
-    }
-    if (c === "=") {
-      toks.push({ t: "eq" });
-      i++;
-      continue;
-    }
-    if (c === "(") {
-      toks.push({ t: "lparen" });
-      i++;
-      continue;
-    }
-    if (c === ")") {
-      toks.push({ t: "rparen" });
-      i++;
-      continue;
-    }
-    if (c === "{") {
-      toks.push({ t: "lbrace" });
-      i++;
-      continue;
-    }
-    if (c === "}") {
-      toks.push({ t: "rbrace" });
-      i++;
-      continue;
-    }
-    if (c === ",") {
-      toks.push({ t: "comma" });
-      i++;
-      continue;
-    }
-    if (c === ".") {
-      toks.push({ t: "dot" });
-      i++;
-      continue;
-    }
-    if (c === ":") {
-      toks.push({ t: "colon" });
+
+    const punct = PUNCT[c];
+    if (punct) {
+      toks.push(punct);
       i++;
       continue;
     }
