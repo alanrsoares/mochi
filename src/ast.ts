@@ -12,7 +12,8 @@ export type Expr =
   | { kind: "match"; scrutinee: Expr; arms: MatchArm[]; span: Span } // switch x { | p => e }
   | { kind: "record"; fields: Field[]; span: Span } // { x: 1, y: 2 }
   | { kind: "field"; target: Expr; name: string; span: Span } // p.x
-  | { kind: "list"; elements: Expr[]; span: Span }; // [1, 2, 3]
+  | { kind: "arr"; elements: Expr[]; span: Span } // [1, 2, 3] — eager Array
+  | { kind: "list"; elements: Expr[]; span: Span }; // @{1, 2, 3} — lazy List
 
 // A lambda parameter: a plain name, or a record-destructuring pattern that
 // binds each named field. `({ x, y }) => ...` pulls x and y out of the argument.
@@ -32,6 +33,9 @@ export type Pattern =
   | { kind: "pctor"; ctor: string; args: Pattern[]; span: Span } // Circle(r)
   // [], [x], [x, y], [head, ...tail] — `rest` (a bind/wild) captures the tail
   // after a `...`; null means the pattern matches a list of exactly `elems.length`.
+  | { kind: "parr"; elems: Pattern[]; rest: Pattern | null; span: Span }
+  // @{}, @{head, ...tail} — lazy-List destructuring. Slice 1 supports only the
+  // empty and single-head-cons forms (see check.ts); `rest` is a bind/wild.
   | { kind: "plist"; elems: Pattern[]; rest: Pattern | null; span: Span };
 
 // A field inside a record pattern: `{ x }` puns to `pbind x`; `{ x: p }` matches

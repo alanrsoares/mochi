@@ -94,6 +94,25 @@ let describeList = xs => switch xs {
   | _ => many2
 }
 
+// --- lazy List: `@{...}` (distinct from the eager Array `[...]`) ---
+// A List is a generator-backed pull-sequence: producers/slicers stay lazy, so
+// infinite streams work as long as you only ever pull a finite prefix. `@` is
+// the List sigil (`#{...}` and `${...}` are reserved for future Map and Set).
+let ns = @{1, 2, 3}                       // List number  (lazy)
+let firstThree = range(0)(100) |> take(3) // 0..99 built lazily, only 3 forced
+let evens = iterate(x => add(x, 2))(0)    // INFINITE: 0, 2, 4, 6, ...
+let evens5 = evens |> take(5) |> toArray  // [0, 2, 4, 6, 8] — take makes it safe
+let small = range(0)(100) |> takeWhile(x => lt(x, 4)) |> toArray // [0, 1, 2, 3]
+
+// destructuring a List: the same ML idiom as Array, but pull-based. The empty
+// `@{}` arm plus a single-head cons `@{head, ...tail}` is total; `tail` is the
+// lazy remainder, so recursion consumes the sequence one element at a time.
+let sumList = xs => switch xs {
+  | @{} => 0
+  | @{head, ...tail} => add(head, sumList(tail))
+}
+let listSum = sumList(@{1, 2, 3, 4}) // 10
+
 // --- records + field access (structural / "duck" data) ---
 let origin = { x: 0.0, y: 0.0 }
 let getX = p => p.x

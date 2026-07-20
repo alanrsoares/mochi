@@ -190,17 +190,17 @@ test("formatError renders line:col when given the source", () => {
 });
 
 test("formatError falls back to raw offset without source", () => {
-  const r = compile("let x = @");
+  const r = compile("let x = ?");
   expect(isErr(r)).toBe(true);
-  expect(formatError(unwrapErr(r))).toBe("LexError at 8: unexpected char '@'");
+  expect(formatError(unwrapErr(r))).toBe("LexError at 8: unexpected char '?'");
 });
 
 test("lex error is a value, not a throw", () => {
-  const r = compile("let x = @");
+  const r = compile("let x = ?");
   expect(isErr(r)).toBe(true);
   expect(unwrapErr(r)).toEqual({
     kind: "lex",
-    message: "unexpected char '@'",
+    message: "unexpected char '?'",
     span: { start: 8, end: 9 },
   });
 });

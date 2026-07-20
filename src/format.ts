@@ -44,8 +44,10 @@ const expr = (e: Expr, ind: string): string => {
         : `{ ${e.fields.map((f) => `${f.name}: ${expr(f.value, ind)}`).join(", ")} }`;
     case "field":
       return `${member(e.target, ind)}.${e.name}`;
-    case "list":
+    case "arr":
       return `[${e.elements.map((el) => expr(el, ind)).join(", ")}]`;
+    case "list":
+      return `@{${e.elements.map((el) => expr(el, ind)).join(", ")}}`;
     case "match":
       return matchExpr(e, ind);
   }
@@ -73,10 +75,15 @@ const pattern = (p: Pattern): string => {
       return `{ ${p.fields.map(patField).join(", ")} }`;
     case "pctor":
       return p.args.length === 0 ? p.ctor : `${p.ctor}(${p.args.map(pattern).join(", ")})`;
-    case "plist": {
+    case "parr": {
       const head = p.elems.map(pattern);
       const rest = p.rest ? [`...${pattern(p.rest)}`] : [];
       return `[${[...head, ...rest].join(", ")}]`;
+    }
+    case "plist": {
+      const head = p.elems.map(pattern);
+      const rest = p.rest ? [`...${pattern(p.rest)}`] : [];
+      return `@{${[...head, ...rest].join(", ")}}`;
     }
   }
 };

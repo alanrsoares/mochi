@@ -50,6 +50,7 @@ const children = (e: Expr): Expr[] => {
       return e.fields.map((f) => f.value);
     case "field":
       return [e.target];
+    case "arr":
     case "list":
       return e.elements;
   }

@@ -236,7 +236,7 @@ const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
       return ok(fieldT);
     }
 
-    case "list": {
+    case "arr": {
       // Every element shares one type; `Array<elem>` (the eager JS array — a
       // future lazy `List` is a separate type). An empty list is fully
       // polymorphic (`Array<'a>`), pinned by later unification / use.
@@ -248,6 +248,19 @@ const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
         if (isErr(uni)) return uni;
       }
       return ok(tCon("Array", [elem]));
+    }
+
+    case "list": {
+      // Lazy List: elements share one type, result is `List<elem>`. Empty `@{}`
+      // is polymorphic (`List<'a>`), pinned by later use.
+      const elem = freshVar(ctx.fresh);
+      for (const el of e.elements) {
+        const et = infer(el, ctx);
+        if (isErr(et)) return et;
+        const uni = u(elem, et.value, ctx, el.span);
+        if (isErr(uni)) return uni;
+      }
+      return ok(tCon("List", [elem]));
     }
 
     case "match":
@@ -332,7 +345,7 @@ const inferPat = (p: Pattern, ctx: Ctx): Result<PatResult, AlangError> => {
       }
       return ok({ type: cur, bindings });
     }
-    case "plist": {
+    case "parr": {
       // Every element shares the element type; the whole pattern is `Array<elem>`.
       // A `...rest` capture binds the tail, itself an `Array<elem>`.
       const elem = freshVar(ctx.fresh);
@@ -353,6 +366,28 @@ const inferPat = (p: Pattern, ctx: Ctx): Result<PatResult, AlangError> => {
         if (isErr(uni)) return uni;
       }
       return ok({ type: listT, bindings });
+    }
+    case "plist": {
+      // Lazy-List pattern: elements share the element type, the whole pattern is
+      // `List<elem>`; a `...rest` capture binds the tail, itself a `List<elem>`.
+      const elem = freshVar(ctx.fresh);
+      const seqT = tCon("List", [elem]);
+      const bindings = new Map<string, Type>();
+      for (const ep of p.elems) {
+        const sub = inferPattern(ep, ctx);
+        if (isErr(sub)) return sub;
+        for (const [k, v] of sub.value.bindings) bindings.set(k, v);
+        const uni = u(elem, sub.value.type, ctx, ep.span);
+        if (isErr(uni)) return uni;
+      }
+      if (p.rest) {
+        const sub = inferPattern(p.rest, ctx);
+        if (isErr(sub)) return sub;
+        for (const [k, v] of sub.value.bindings) bindings.set(k, v);
+        const uni = u(sub.value.type, seqT, ctx, p.rest.span);
+        if (isErr(uni)) return uni;
+      }
+      return ok({ type: seqT, bindings });
     }
   }
 };
@@ -413,7 +448,7 @@ const patternBinds = (p: Pattern): string[] => {
   if (p.kind === "pbind") return [p.name];
   if (p.kind === "precord") return p.fields.flatMap((f) => patternBinds(f.pat));
   if (p.kind === "pctor") return p.args.flatMap(patternBinds);
-  if (p.kind === "plist")
+  if (p.kind === "parr" || p.kind === "plist")
     return [...p.elems.flatMap(patternBinds), ...(p.rest ? patternBinds(p.rest) : [])];
   return [];
 };
@@ -460,6 +495,7 @@ const freeRefs = (e: Expr, bound: Set<string>, acc: Set<string>): void => {
     case "field":
       freeRefs(e.target, bound, acc);
       return;
+    case "arr":
     case "list":
       for (const el of e.elements) freeRefs(el, bound, acc);
   }

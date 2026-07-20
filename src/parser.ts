@@ -148,7 +148,8 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
   function parseAtom(): Expr {
     if (peek().t === "switch") return parseMatch();
     if (peek().t === "lbrace") return parseRecord();
-    if (peek().t === "lbracket") return parseList();
+    if (peek().t === "lbracket") return parseArr();
+    if (peek().t === "at") return parseList();
     const tk = next();
     if (tk.t === "num") return { kind: "num", value: tk.v, raw: tk.raw, span: tk.span };
     if (tk.t === "bool") return { kind: "bool", value: tk.v, span: tk.span };
@@ -183,7 +184,7 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
   }
 
   // A list literal: `[]`, `[e]`, `[e, e, ...]`. Elements are full expressions.
-  function parseList(): Expr {
+  function parseArr(): Expr {
     const start = expect("lbracket").span;
     const elements: Expr[] = [];
     if (peek().t !== "rbracket") {
@@ -194,6 +195,23 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
       }
     }
     expect("rbracket");
+    return { kind: "arr", elements, span: to(start) };
+  }
+
+  // A lazy-List literal: `@{}`, `@{e}`, `@{e, e, ...}`. Same shape as a list
+  // literal but braces + the `@` sigil, so it never collides with a record.
+  function parseList(): Expr {
+    const start = expect("at").span;
+    expect("lbrace");
+    const elements: Expr[] = [];
+    if (peek().t !== "rbrace") {
+      elements.push(parseExpr());
+      while (peek().t === "comma") {
+        next();
+        elements.push(parseExpr());
+      }
+    }
+    expect("rbrace");
     return { kind: "list", elements, span: to(start) };
   }
 
@@ -242,7 +260,8 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
       expect("rbrace");
       return { kind: "precord", fields, span: to(start) };
     }
-    if (tk.t === "lbracket") return parseListPattern();
+    if (tk.t === "lbracket") return parseArrPattern();
+    if (tk.t === "at") return parseListPattern();
     if (tk.t === "id") {
       const { name, span: nameSpan } = expectId();
       if (name === "_") return { kind: "pwild", span: nameSpan };
@@ -268,7 +287,7 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
 
   // A list pattern: `[]`, `[a, b]`, `[head, ...tail]`. A `...` marks the rest
   // capture, which must be the LAST element and bind a name (or `_`).
-  function parseListPattern(): Pattern {
+  function parseArrPattern(): Pattern {
     const start = expect("lbracket").span;
     const elems: Pattern[] = [];
     let rest: Pattern | null = null;
@@ -287,6 +306,32 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     if (rest && rest.kind !== "pbind" && rest.kind !== "pwild")
       fail("list `...` rest must bind a name or `_`");
     expect("rbracket");
+    return { kind: "parr", elems, rest, span: to(start) };
+  }
+
+  // A lazy-List pattern: `@{}`, `@{head, ...tail}`. Same grammar as a list
+  // pattern with braces + the `@` sigil. `...rest` must bind a name (or `_`);
+  // check.ts further restricts to the empty and single-head-cons forms.
+  function parseListPattern(): Pattern {
+    const start = expect("at").span;
+    expect("lbrace");
+    const elems: Pattern[] = [];
+    let rest: Pattern | null = null;
+    if (peek().t !== "rbrace") {
+      for (;;) {
+        if (peek().t === "spread") {
+          next();
+          rest = parsePattern();
+          break; // rest is terminal
+        }
+        elems.push(parsePattern());
+        if (peek().t !== "comma") break;
+        next();
+      }
+    }
+    if (rest && rest.kind !== "pbind" && rest.kind !== "pwild")
+      fail("list `...` rest must bind a name or `_`");
+    expect("rbrace");
     return { kind: "plist", elems, rest, span: to(start) };
   }
 
