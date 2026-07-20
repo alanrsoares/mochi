@@ -28,7 +28,10 @@ test("single-param lambda", () => {
 });
 
 test("multi-param lambda", () => {
-  expect(js("let add = (a, b) => plus(a, b)")).toBe("const add = (a, b) => plus(a, b);\n");
+  // Arity ≥ 2 lowers to a `_curry`-wrapped flat function (CRITIQUE §4.4).
+  expect(js("let add = (a, b) => plus(a, b)")).toBe(
+    "const add = _curry(2, (a, b) => plus(a, b));\n",
+  );
 });
 
 test("arrow binds looser than pipe: x => x |> f", () => {
@@ -45,7 +48,8 @@ test("variant decl → constructor factories (plain JS, no type annotations)", (
   expect(js("type Shape = | Circle(float) | Rect(float, float)")).toBe(
     [
       `const Circle = (_0) => ({ _tag: "Circle", _0 });`,
-      `const Rect = (_0, _1) => ({ _tag: "Rect", _0, _1 });`,
+      // Multi-field ctors curry too, so partial application works (§4.4).
+      `const Rect = _curry(2, (_0, _1) => ({ _tag: "Rect", _0, _1 }));`,
       ``,
     ].join("\n"),
   );
@@ -227,8 +231,9 @@ test("a float literal keeps its form (no int coercion) in the output", () => {
 
 test("standalone output inlines only the prelude builtins used", () => {
   const out = unwrapOk(compile("let n = add(mul(2, 3), 4)"));
-  expect(out).toContain("const add = (a, b) => a + b;");
-  expect(out).toContain("const mul = (a, b) => a * b;");
+  expect(out).toContain("const add = _curry(2, (a, b) => a + b);");
+  expect(out).toContain("const mul = _curry(2, (a, b) => a * b);");
+  expect(out).toContain("const _curry ="); // pulled in as a dep of add/mul
   expect(out).not.toContain("const sub"); // unused builtin not inlined
   expect(out).toContain("const n = add(mul(2, 3), 4);");
 });

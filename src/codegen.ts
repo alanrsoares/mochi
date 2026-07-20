@@ -29,6 +29,23 @@ export const exportedCtorKeys = (prog: Program): Map<string, string[]> => {
   return m;
 };
 
+// Collapse a curried lambda chain (`x => y => body`, or a mix with multi-param
+// lambdas) into one flat parameter list plus the final body. alang types treat
+// `(x, y) => e` and `x => y => e` identically (`a -> b -> c`), so this is sound
+// — it lets a multi-arg function lower to a single `_curry`-wrapped JS function
+// instead of nested closures (CRITIQUE §4.4).
+const collapseLambda = (
+  l: Extract<Expr, { kind: "lambda" }>,
+): { params: LamParam[]; body: Expr } => {
+  const params = [...l.params];
+  let body: Expr = l.body;
+  while (body.kind === "lambda") {
+    params.push(...body.params);
+    body = body.body;
+  }
+  return { params, body };
+};
+
 const genExpr = (e: Expr): string =>
   match(e)
     .with({ kind: "num" }, (n) => n.raw)
@@ -36,10 +53,13 @@ const genExpr = (e: Expr): string =>
     .with({ kind: "str" }, (s) => JSON.stringify(s.value))
     .with({ kind: "ref" }, (r) => r.name)
     .with({ kind: "call" }, (c) => `${genCallee(c.fn)}(${c.args.map(genExpr).join(", ")})`)
-    .with(
-      { kind: "lambda" },
-      (l) => `(${l.params.map(genParam).join(", ")}) => ${genLambdaBody(l.body)}`,
-    )
+    .with({ kind: "lambda" }, (l) => {
+      const { params, body } = collapseLambda(l);
+      const arrow = `(${params.map(genParam).join(", ")}) => ${genLambdaBody(body)}`;
+      // Curried type, flat JS impl: arity ≥ 2 lowers to a `_curry`-wrapped
+      // function so any call grouping works (CRITIQUE §4.4). Arity 1 needs none.
+      return params.length >= 2 ? `_curry(${params.length}, ${arrow})` : arrow;
+    })
     // desugar inline: a |> f  →  f(a)
     .with({ kind: "pipe" }, (p) => `${genCallee(p.right)}(${genExpr(p.left)})`)
     .with({ kind: "match" }, genMatch)
@@ -277,7 +297,12 @@ const genType = (s: Extract<Stmt, { kind: "type" }>): string =>
       const tag = JSON.stringify(c.name);
       if (c.fields.length === 0) return `const ${c.name} = { _tag: ${tag} };`;
       const params = keysOf(c.fields).join(", ");
-      return `const ${c.name} = (${params}) => ({ _tag: ${tag}, ${params} });`;
+      const impl = `(${params}) => ({ _tag: ${tag}, ${params} })`;
+      // Constructors are curried too (`a -> b -> Pair`); wrap multi-field ones
+      // so partial application works (CRITIQUE §4.4). Single-field needs none.
+      return c.fields.length >= 2
+        ? `const ${c.name} = _curry(${c.fields.length}, ${impl});`
+        : `const ${c.name} = ${impl};`;
     })
     .join("\n");
 
@@ -349,7 +374,11 @@ const exprRefs = (e: Expr, acc: Set<string>): void => {
       exprRefs(c.fn, acc);
       for (const a of c.args) exprRefs(a, acc);
     })
-    .with({ kind: "lambda" }, (l) => exprRefs(l.body, acc))
+    .with({ kind: "lambda" }, (l) => {
+      const { params, body } = collapseLambda(l);
+      if (params.length >= 2) acc.add("_curry"); // arity ≥ 2 lowers to `_curry(...)`
+      exprRefs(body, acc);
+    })
     .with({ kind: "pipe" }, (p) => {
       exprRefs(p.left, acc);
       exprRefs(p.right, acc);
@@ -405,7 +434,12 @@ const boundNames = (prog: Program): Set<string> => {
 // does not itself define, emitted in prelude declaration order for determinism.
 const preludePreamble = (prog: Program): string => {
   const refs = new Set<string>();
-  for (const s of prog.stmts) if (s.kind === "let") exprRefs(s.value, refs);
+  for (const s of prog.stmts) {
+    if (s.kind === "let") exprRefs(s.value, refs);
+    // A multi-field constructor lowers to `_curry(...)` in genType (which
+    // exprRefs never walks), so seed the dep here.
+    else if (s.kind === "type" && s.ctors.some((c) => c.fields.length >= 2)) refs.add("_curry");
+  }
   // Transitively pull in each referenced def's runtime deps (`range` → `_list`,
   // `_Map_get` → Some/None, …).
   const stack = [...refs];

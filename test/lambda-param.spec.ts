@@ -7,7 +7,7 @@ import { compile } from "../src/compile";
 import { inferProgram, showScheme } from "../src/infer";
 import { lex } from "../src/lexer";
 import { parse } from "../src/parser";
-import { preludeEnv } from "../src/prelude";
+import { preludeEnv, preludeJsDefs } from "../src/prelude";
 
 const schemeOf = (src: string, name: string): string => {
   const prog = unwrapOk(check(unwrapOk(parse(unwrapOk(lex(src))))));
@@ -16,7 +16,8 @@ const schemeOf = (src: string, name: string): string => {
 
 const run = (src: string, ret: string): unknown => {
   const js = unwrapOk(compile(src, { runtime: false })).replace(/^import .*$/m, "");
-  const prelude = "const hypot=(a,b)=>Math.hypot(a,b);const add=(a,b)=>a+b;";
+  // `_curry` from the real prelude — arity-≥2 lambdas now lower to `_curry(...)`.
+  const prelude = `${preludeJsDefs._curry}\nconst hypot=(a,b)=>Math.hypot(a,b);const add=(a,b)=>a+b;`;
   return new Function("match", `${prelude}\n${js}\nreturn ${ret};`)(match);
 };
 

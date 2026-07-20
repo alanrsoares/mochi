@@ -303,6 +303,10 @@ plain-HM core is expensive; decide early whether you care.
   Ergonomics as enforcement.
 
 ### 4.4 Currying-by-default vs the JS target
+**Resolved** — *Uncurry in codegen* (the first alternative below), via a runtime
+`_curry` bridge that also closed a latent soundness bug (partial application and
+mixed call styles type-checked but crashed). See [docs/currying.md](docs/currying.md).
+
 Data-last currying is right for the pipe thesis, but every binary op is
 `a -> b -> c` and lowers to nested closures (`add = (a) => (b) => a + b`).
 That's idiomatic FP but has real allocation cost on a JS runtime for hot paths,

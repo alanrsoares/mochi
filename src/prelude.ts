@@ -100,34 +100,44 @@ export const preludeJsDefs: Record<string, string> = {
   // List core: a List is an iterable factory `{ [Symbol.iterator]: () => Iterator }`.
   // Force-included by codegen whenever a `@{...}` literal or List producer is used.
   _list: "const _list = (g) => ({ [Symbol.iterator]: g });",
+  // Currying bridge (CRITIQUE §4.4): every alang function has a curried type
+  // (`a -> b -> c`), but its runtime impl is a FLAT n-ary JS function. `_curry`
+  // reconciles the two — the result accepts args grouped any way the caller
+  // likes: `f(a, b)` hits the fast path (one flat call, no intermediate
+  // closure), `f(a)(b)` collects one arg at a time, and over-application
+  // (`f(a, b, c)` on a binary that returns a function) is applied by folding
+  // the surplus. Definitions of arity ≥ 2 are wrapped in this; arity-1
+  // functions need no wrapper (a single arg always saturates).
+  _curry:
+    "const _curry = (n, f) => function c(...a) { if (a.length < n) return (...b) => c(...a, ...b); const r = f(...a.slice(0, n)); return a.length === n ? r : a.slice(n).reduce((g, x) => g(x), r); };",
   // Builtin variant constructors (inlined only when a program uses them and does
   // not declare its own type of that name). Shape matches the @onrails ecosystem.
   Some: 'const Some = (value) => ({ _tag: "Some", value });',
   None: 'const None = { _tag: "None" };',
   Ok: 'const Ok = (value) => ({ _tag: "Ok", value });',
   Err: 'const Err = (error) => ({ _tag: "Err", error });',
-  add: "const add = (a, b) => a + b;",
-  sub: "const sub = (a, b) => a - b;",
-  mul: "const mul = (a, b) => a * b;",
-  div: "const div = (a, b) => a / b;",
+  add: "const add = _curry(2, (a, b) => a + b);",
+  sub: "const sub = _curry(2, (a, b) => a - b);",
+  mul: "const mul = _curry(2, (a, b) => a * b);",
+  div: "const div = _curry(2, (a, b) => a / b);",
   square: "const square = (x) => x * x;",
   sqrt: "const sqrt = (x) => Math.sqrt(x);",
-  hypot: "const hypot = (a, b) => Math.hypot(a, b);",
+  hypot: "const hypot = _curry(2, (a, b) => Math.hypot(a, b));",
   pi: "const pi = Math.PI;",
   // Structural deep equality: primitives by ===, arrays/records/variants by
   // recursion. Functions/Set/Map fall back to reference identity.
-  eq: 'const eq = (x, y) => { if (x === y) return true; if (typeof x !== "object" || x === null || typeof y !== "object" || y === null) return false; const ax = Array.isArray(x); if (ax !== Array.isArray(y)) return false; if (ax) { if (x.length !== y.length) return false; for (let i = 0; i < x.length; i++) if (!eq(x[i], y[i])) return false; return true; } const kx = Object.keys(x), ky = Object.keys(y); if (kx.length !== ky.length) return false; for (const k of kx) if (!eq(x[k], y[k])) return false; return true; };',
+  eq: 'const eq = _curry(2, (x, y) => { if (x === y) return true; if (typeof x !== "object" || x === null || typeof y !== "object" || y === null) return false; const ax = Array.isArray(x); if (ax !== Array.isArray(y)) return false; if (ax) { if (x.length !== y.length) return false; for (let i = 0; i < x.length; i++) if (!eq(x[i], y[i])) return false; return true; } const kx = Object.keys(x), ky = Object.keys(y); if (kx.length !== ky.length) return false; for (const k of kx) if (!eq(x[k], y[k])) return false; return true; });',
   // Structural total order → -1 | 0 | 1. Numbers/strings/bools compare directly,
   // arrays lexicographically, everything else by a stable JSON fallback.
   compare:
-    'const compare = (x, y) => { if (x === y) return 0; const t = typeof x; if (t === "number" || t === "string" || t === "boolean") return x < y ? -1 : x > y ? 1 : 0; if (Array.isArray(x) && Array.isArray(y)) { const n = Math.min(x.length, y.length); for (let i = 0; i < n; i++) { const c = compare(x[i], y[i]); if (c !== 0) return c; } return compare(x.length, y.length); } const sx = JSON.stringify(x), sy = JSON.stringify(y); return sx < sy ? -1 : sx > sy ? 1 : 0; };',
-  lt: "const lt = (a, b) => a < b;",
-  gt: "const gt = (a, b) => a > b;",
+    'const compare = _curry(2, (x, y) => { if (x === y) return 0; const t = typeof x; if (t === "number" || t === "string" || t === "boolean") return x < y ? -1 : x > y ? 1 : 0; if (Array.isArray(x) && Array.isArray(y)) { const n = Math.min(x.length, y.length); for (let i = 0; i < n; i++) { const c = compare(x[i], y[i]); if (c !== 0) return c; } return compare(x.length, y.length); } const sx = JSON.stringify(x), sy = JSON.stringify(y); return sx < sy ? -1 : sx > sy ? 1 : 0; });',
+  lt: "const lt = _curry(2, (a, b) => a < b);",
+  gt: "const gt = _curry(2, (a, b) => a > b);",
   // --- Math ---
-  min: "const min = (a, b) => Math.min(a, b);",
-  max: "const max = (a, b) => Math.max(a, b);",
-  pow: "const pow = (a, b) => a ** b;",
-  mod: "const mod = (a, b) => ((a % b) + b) % b;",
+  min: "const min = _curry(2, (a, b) => Math.min(a, b));",
+  max: "const max = _curry(2, (a, b) => Math.max(a, b));",
+  pow: "const pow = _curry(2, (a, b) => a ** b);",
+  mod: "const mod = _curry(2, (a, b) => ((a % b) + b) % b);",
   abs: "const abs = (x) => Math.abs(x);",
   floor: "const floor = (x) => Math.floor(x);",
   ceil: "const ceil = (x) => Math.ceil(x);",
@@ -136,130 +146,172 @@ export const preludeJsDefs: Record<string, string> = {
   negate: "const negate = (x) => -x;",
   // Curried (data-last) to compose with `|>`; each takes the collection last.
   length: "const length = (xs) => xs.length;",
-  map: "const map = (f) => (xs) => xs.map((x) => f(x));",
-  filter: "const filter = (f) => (xs) => xs.filter((x) => f(x));",
-  reduce: "const reduce = (f) => (init) => (xs) => xs.reduce((acc, x) => f(acc)(x), init);",
+  map: "const map = _curry(2, (f, xs) => xs.map((x) => f(x)));",
+  filter: "const filter = _curry(2, (f, xs) => xs.filter((x) => f(x)));",
+  reduce: "const reduce = _curry(3, (f, init, xs) => xs.reduce((acc, x) => f(acc)(x), init));",
   identity: "const identity = (x) => x;",
-  always: "const always = (x) => (_y) => x;",
-  compose: "const compose = (f) => (g) => (x) => f(g(x));",
+  always: "const always = _curry(2, (x, _y) => x);",
+  compose: "const compose = _curry(3, (f, g, x) => f(g(x)));",
   capitalize: "const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);",
   // --- List (lazy sequence) — generator-backed; producers/slicers stay lazy ---
   range:
-    "const range = (lo) => (hi) => _list(function* () { for (let i = lo; i < hi; i++) yield i; });",
+    "const range = _curry(2, (lo, hi) => _list(function* () { for (let i = lo; i < hi; i++) yield i; }));",
   iterate:
-    "const iterate = (f) => (x) => _list(function* () { let v = x; for (;;) { yield v; v = f(v); } });",
+    "const iterate = _curry(2, (f, x) => _list(function* () { let v = x; for (;;) { yield v; v = f(v); } }));",
   repeat: "const repeat = (x) => _list(function* () { for (;;) yield x; });",
-  take: "const take = (n) => (xs) => _list(function* () { let i = 0; for (const x of xs) { if (i >= n) break; yield x; i++; } });",
+  take: "const take = _curry(2, (n, xs) => _list(function* () { let i = 0; for (const x of xs) { if (i >= n) break; yield x; i++; } }));",
   takeWhile:
-    "const takeWhile = (p) => (xs) => _list(function* () { for (const x of xs) { if (!p(x)) break; yield x; } });",
-  drop: "const drop = (n) => (xs) => _list(function* () { let i = 0; for (const x of xs) { if (i < n) { i++; continue; } yield x; } });",
+    "const takeWhile = _curry(2, (p, xs) => _list(function* () { for (const x of xs) { if (!p(x)) break; yield x; } }));",
+  drop: "const drop = _curry(2, (n, xs) => _list(function* () { let i = 0; for (const x of xs) { if (i < n) { i++; continue; } yield x; } }));",
   fromArray: "const fromArray = (xs) => _list(function* () { yield* xs; });",
   toArray: "const toArray = (xs) => [...xs];",
   // Lazy List transformers — accessed qualified (`List.map`), never shadow the
   // eager Array `map`/`filter`. Each stays lazy (fuses, no intermediate arrays).
   _List_map:
-    "const _List_map = (f) => (xs) => _list(function* () { for (const x of xs) yield f(x); });",
+    "const _List_map = _curry(2, (f, xs) => _list(function* () { for (const x of xs) yield f(x); }));",
   _List_filter:
-    "const _List_filter = (p) => (xs) => _list(function* () { for (const x of xs) if (p(x)) yield x; });",
+    "const _List_filter = _curry(2, (p, xs) => _list(function* () { for (const x of xs) if (p(x)) yield x; }));",
   _List_concat:
-    "const _List_concat = (xs) => (ys) => _list(function* () { yield* xs; yield* ys; });",
+    "const _List_concat = _curry(2, (xs, ys) => _list(function* () { yield* xs; yield* ys; }));",
   _List_flatMap:
-    "const _List_flatMap = (f) => (xs) => _list(function* () { for (const x of xs) yield* f(x); });",
+    "const _List_flatMap = _curry(2, (f, xs) => _list(function* () { for (const x of xs) yield* f(x); }));",
   // --- Set ops (native JS Set; immutable — each returns a fresh Set) ---
-  _Set_has: "const _Set_has = (x) => (s) => s.has(x);",
-  _Set_add: "const _Set_add = (x) => (s) => new Set(s).add(x);",
+  _Set_has: "const _Set_has = _curry(2, (x, s) => s.has(x));",
+  _Set_add: "const _Set_add = _curry(2, (x, s) => new Set(s).add(x));",
   _Set_delete:
-    "const _Set_delete = (x) => (s) => { const n = new Set(s); n.delete(x); return n; };",
+    "const _Set_delete = _curry(2, (x, s) => { const n = new Set(s); n.delete(x); return n; });",
   _Set_size: "const _Set_size = (s) => s.size;",
   _Set_toArray: "const _Set_toArray = (s) => [...s];",
   _Set_fromArray: "const _Set_fromArray = (xs) => new Set(xs);",
-  _Set_union: "const _Set_union = (a) => (b) => new Set([...a, ...b]);",
-  _Set_intersect: "const _Set_intersect = (a) => (b) => new Set([...a].filter((x) => b.has(x)));",
-  _Set_diff: "const _Set_diff = (a) => (b) => new Set([...a].filter((x) => !b.has(x)));",
+  _Set_union: "const _Set_union = _curry(2, (a, b) => new Set([...a, ...b]));",
+  _Set_intersect:
+    "const _Set_intersect = _curry(2, (a, b) => new Set([...a].filter((x) => b.has(x))));",
+  _Set_diff: "const _Set_diff = _curry(2, (a, b) => new Set([...a].filter((x) => !b.has(x))));",
   // --- Map ops (native JS Map; immutable — each returns a fresh Map) ---
-  _Map_has: "const _Map_has = (k) => (m) => m.has(k);",
-  _Map_getOr: "const _Map_getOr = (d) => (k) => (m) => (m.has(k) ? m.get(k) : d);",
+  _Map_has: "const _Map_has = _curry(2, (k, m) => m.has(k));",
+  _Map_getOr: "const _Map_getOr = _curry(3, (d, k, m) => (m.has(k) ? m.get(k) : d));",
   _Map_set:
-    "const _Map_set = (k) => (v) => (m) => { const n = new Map(m); n.set(k, v); return n; };",
+    "const _Map_set = _curry(3, (k, v, m) => { const n = new Map(m); n.set(k, v); return n; });",
   _Map_delete:
-    "const _Map_delete = (k) => (m) => { const n = new Map(m); n.delete(k); return n; };",
+    "const _Map_delete = _curry(2, (k, m) => { const n = new Map(m); n.delete(k); return n; });",
   _Map_size: "const _Map_size = (m) => m.size;",
   _Map_keys: "const _Map_keys = (m) => [...m.keys()];",
   _Map_values: "const _Map_values = (m) => [...m.values()];",
-  _Map_get: "const _Map_get = (k) => (m) => (m.has(k) ? Some(m.get(k)) : None);",
+  _Map_get: "const _Map_get = _curry(2, (k, m) => (m.has(k) ? Some(m.get(k)) : None));",
   // --- Option-returning safe accessors (depend on Some/None) ---
   _List_head: "const _List_head = (xs) => { for (const x of xs) return Some(x); return None; };",
   _Array_head: "const _Array_head = (xs) => (xs.length > 0 ? Some(xs[0]) : None);",
   _Array_find:
-    "const _Array_find = (p) => (xs) => { for (const x of xs) if (p(x)) return Some(x); return None; };",
+    "const _Array_find = _curry(2, (p, xs) => { for (const x of xs) if (p(x)) return Some(x); return None; });",
   // --- Array growth (eager, immutable) ---
   _Array_reverse: "const _Array_reverse = (xs) => [...xs].reverse();",
-  _Array_concat: "const _Array_concat = (xs) => (ys) => xs.concat(ys);",
-  _Array_append: "const _Array_append = (x) => (xs) => [...xs, x];",
-  _Array_flatMap: "const _Array_flatMap = (f) => (xs) => xs.flatMap((x) => f(x));",
-  _Array_take: "const _Array_take = (n) => (xs) => xs.slice(0, n);",
-  _Array_drop: "const _Array_drop = (n) => (xs) => xs.slice(n);",
+  _Array_concat: "const _Array_concat = _curry(2, (xs, ys) => xs.concat(ys));",
+  _Array_append: "const _Array_append = _curry(2, (x, xs) => [...xs, x]);",
+  _Array_flatMap: "const _Array_flatMap = _curry(2, (f, xs) => xs.flatMap((x) => f(x)));",
+  _Array_take: "const _Array_take = _curry(2, (n, xs) => xs.slice(0, n));",
+  _Array_drop: "const _Array_drop = _curry(2, (n, xs) => xs.slice(n));",
   _Array_tail: "const _Array_tail = (xs) => xs.slice(1);",
   // structural eq/compare-driven ops
-  _Array_contains: "const _Array_contains = (x) => (xs) => xs.some((y) => eq(x, y));",
+  _Array_contains: "const _Array_contains = _curry(2, (x, xs) => xs.some((y) => eq(x, y)));",
   _Array_sort: "const _Array_sort = (xs) => [...xs].sort(compare);",
   _Array_sortBy:
-    "const _Array_sortBy = (f) => (xs) => [...xs].sort((a, b) => compare(f(a), f(b)));",
+    "const _Array_sortBy = _curry(2, (f, xs) => [...xs].sort((a, b) => compare(f(a), f(b))));",
   _Array_dedupe:
     "const _Array_dedupe = (xs) => xs.filter((x, i) => xs.findIndex((y) => eq(x, y)) === i);",
   _Array_dedupeBy:
-    "const _Array_dedupeBy = (f) => (xs) => { const seen = []; return xs.filter((x) => { const k = f(x); if (seen.some((s) => eq(s, k))) return false; seen.push(k); return true; }); };",
+    "const _Array_dedupeBy = _curry(2, (f, xs) => { const seen = []; return xs.filter((x) => { const k = f(x); if (seen.some((s) => eq(s, k))) return false; seen.push(k); return true; }); });",
   _Array_max:
     "const _Array_max = (xs) => xs.length ? Some(xs.reduce((a, b) => compare(a, b) >= 0 ? a : b)) : None;",
   _Array_min:
     "const _Array_min = (xs) => xs.length ? Some(xs.reduce((a, b) => compare(a, b) <= 0 ? a : b)) : None;",
   _Array_maxBy:
-    "const _Array_maxBy = (f) => (xs) => xs.length ? Some(xs.reduce((a, b) => compare(f(a), f(b)) >= 0 ? a : b)) : None;",
+    "const _Array_maxBy = _curry(2, (f, xs) => xs.length ? Some(xs.reduce((a, b) => compare(f(a), f(b)) >= 0 ? a : b)) : None);",
   _Array_minBy:
-    "const _Array_minBy = (f) => (xs) => xs.length ? Some(xs.reduce((a, b) => compare(f(a), f(b)) <= 0 ? a : b)) : None;",
+    "const _Array_minBy = _curry(2, (f, xs) => xs.length ? Some(xs.reduce((a, b) => compare(f(a), f(b)) <= 0 ? a : b)) : None);",
   // --- String ops ---
   _Str_length: "const _Str_length = (s) => s.length;",
   _Str_toUpper: "const _Str_toUpper = (s) => s.toUpperCase();",
   _Str_toLower: "const _Str_toLower = (s) => s.toLowerCase();",
   _Str_trim: "const _Str_trim = (s) => s.trim();",
-  _Str_split: "const _Str_split = (sep) => (s) => s.split(sep);",
-  _Str_join: "const _Str_join = (sep) => (xs) => xs.join(sep);",
-  _Str_contains: "const _Str_contains = (needle) => (s) => s.includes(needle);",
-  _Str_startsWith: "const _Str_startsWith = (p) => (s) => s.startsWith(p);",
-  _Str_endsWith: "const _Str_endsWith = (p) => (s) => s.endsWith(p);",
-  _Str_slice: "const _Str_slice = (start) => (end) => (s) => s.slice(start, end);",
-  _Str_replace: "const _Str_replace = (find) => (repl) => (s) => s.replaceAll(find, repl);",
+  _Str_split: "const _Str_split = _curry(2, (sep, s) => s.split(sep));",
+  _Str_join: "const _Str_join = _curry(2, (sep, xs) => xs.join(sep));",
+  _Str_contains: "const _Str_contains = _curry(2, (needle, s) => s.includes(needle));",
+  _Str_startsWith: "const _Str_startsWith = _curry(2, (p, s) => s.startsWith(p));",
+  _Str_endsWith: "const _Str_endsWith = _curry(2, (p, s) => s.endsWith(p));",
+  _Str_slice: "const _Str_slice = _curry(3, (start, end, s) => s.slice(start, end));",
+  _Str_replace: "const _Str_replace = _curry(3, (find, repl, s) => s.replaceAll(find, repl));",
 };
 
 // Runtime-dependency graph: a def name → the other def names its body references.
 // `preludePreamble` takes the transitive closure over this before inlining, so a
 // referenced op drags in the helpers/constructors it needs (`_Map_get` → Some/None,
-// `range` → `_list`, …). Entries with no deps may be omitted.
+// `range` → `_list`, …). Entries with no deps may be omitted. Every arity-≥2 def
+// depends on `_curry` (it is wrapped in it).
 export const runtimeDeps: Record<string, string[]> = {
-  range: ["_list"],
-  iterate: ["_list"],
+  add: ["_curry"],
+  sub: ["_curry"],
+  mul: ["_curry"],
+  div: ["_curry"],
+  hypot: ["_curry"],
+  eq: ["_curry"],
+  compare: ["_curry"],
+  lt: ["_curry"],
+  gt: ["_curry"],
+  min: ["_curry"],
+  max: ["_curry"],
+  pow: ["_curry"],
+  mod: ["_curry"],
+  map: ["_curry"],
+  filter: ["_curry"],
+  reduce: ["_curry"],
+  always: ["_curry"],
+  compose: ["_curry"],
+  range: ["_list", "_curry"],
+  iterate: ["_list", "_curry"],
   repeat: ["_list"],
-  take: ["_list"],
-  takeWhile: ["_list"],
-  drop: ["_list"],
+  take: ["_list", "_curry"],
+  takeWhile: ["_list", "_curry"],
+  drop: ["_list", "_curry"],
   fromArray: ["_list"],
-  _List_map: ["_list"],
-  _List_filter: ["_list"],
-  _List_concat: ["_list"],
-  _List_flatMap: ["_list"],
-  _Map_get: ["Some", "None"],
+  _List_map: ["_list", "_curry"],
+  _List_filter: ["_list", "_curry"],
+  _List_concat: ["_list", "_curry"],
+  _List_flatMap: ["_list", "_curry"],
+  _Set_has: ["_curry"],
+  _Set_add: ["_curry"],
+  _Set_delete: ["_curry"],
+  _Set_union: ["_curry"],
+  _Set_intersect: ["_curry"],
+  _Set_diff: ["_curry"],
+  _Map_has: ["_curry"],
+  _Map_getOr: ["_curry"],
+  _Map_set: ["_curry"],
+  _Map_delete: ["_curry"],
+  _Map_get: ["Some", "None", "_curry"],
   _List_head: ["Some", "None"],
   _Array_head: ["Some", "None"],
-  _Array_find: ["Some", "None"],
-  _Array_contains: ["eq"],
+  _Array_find: ["Some", "None", "_curry"],
+  _Array_concat: ["_curry"],
+  _Array_append: ["_curry"],
+  _Array_flatMap: ["_curry"],
+  _Array_take: ["_curry"],
+  _Array_drop: ["_curry"],
+  _Array_contains: ["eq", "_curry"],
   _Array_dedupe: ["eq"],
-  _Array_dedupeBy: ["eq"],
+  _Array_dedupeBy: ["eq", "_curry"],
   _Array_sort: ["compare"],
-  _Array_sortBy: ["compare"],
+  _Array_sortBy: ["compare", "_curry"],
   _Array_max: ["compare", "Some", "None"],
   _Array_min: ["compare", "Some", "None"],
-  _Array_maxBy: ["compare", "Some", "None"],
-  _Array_minBy: ["compare", "Some", "None"],
+  _Array_maxBy: ["compare", "Some", "None", "_curry"],
+  _Array_minBy: ["compare", "Some", "None", "_curry"],
+  _Str_split: ["_curry"],
+  _Str_join: ["_curry"],
+  _Str_contains: ["_curry"],
+  _Str_startsWith: ["_curry"],
+  _Str_endsWith: ["_curry"],
+  _Str_slice: ["_curry"],
+  _Str_replace: ["_curry"],
 };
 
 // Qualified collection namespaces. alang has no overloading, so each collection
