@@ -112,10 +112,18 @@ const fieldOf = (e: Expr, tmp: string): string | null =>
 
 // Print statements, re-folding a `$d` temp + its field-access lets into a
 // single `let { ... } = e`. Returns the number of statements consumed.
+const importStmt = (s: Extract<Stmt, { kind: "import" }>): string =>
+  `import { ${s.names.map((n) => n.name).join(", ")} } from ${JSON.stringify(s.from)}`;
+
+// `export ` prefix for an exported declaration.
+const exp = (s: Stmt, text: string): string =>
+  "exported" in s && s.exported ? `export ${text}` : text;
+
 const stmtAt = (stmts: Stmt[], i: number): { text: string; consumed: number } => {
   const s = stmts[i]!;
-  if (s.kind === "type") return { text: typeStmt(s), consumed: 1 };
-  if (s.kind === "extern") return { text: externStmt(s), consumed: 1 };
+  if (s.kind === "import") return { text: importStmt(s), consumed: 1 };
+  if (s.kind === "type") return { text: exp(s, typeStmt(s)), consumed: 1 };
+  if (s.kind === "extern") return { text: exp(s, externStmt(s)), consumed: 1 };
 
   if (s.name.startsWith("$")) {
     const fields: string[] = [];
@@ -127,10 +135,13 @@ const stmtAt = (stmts: Stmt[], i: number): { text: string; consumed: number } =>
       if (f === null || f !== nxt.name) break; // shorthand only
       fields.push(f);
     }
-    return { text: `let { ${fields.join(", ")} } = ${expr(s.value, "")}`, consumed: j - i };
+    return {
+      text: exp(s, `let { ${fields.join(", ")} } = ${expr(s.value, "")}`),
+      consumed: j - i,
+    };
   }
 
-  return { text: `let ${s.name} = ${expr(s.value, "")}`, consumed: 1 };
+  return { text: exp(s, `let ${s.name} = ${expr(s.value, "")}`), consumed: 1 };
 };
 
 const program = (stmts: Stmt[]): string => {

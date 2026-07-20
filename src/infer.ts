@@ -348,7 +348,10 @@ const ctorScheme = (typeName: string, params: string[], c: Ctor, f: Fresh): Sche
   return { vars, rvars: [], type };
 };
 
-export type InferOptions = { open?: boolean };
+// `imports` seeds the initial env with schemes brought in by `import` from other
+// modules — their generalized types, so a polymorphic import instantiates fresh
+// at each use site just like a local binding.
+export type InferOptions = { open?: boolean; imports?: Env };
 
 // An inferred type anchored to its source span — the map hover queries.
 export type TypeAt = { span: Span; type: Type };
@@ -363,6 +366,7 @@ function run(
 ): Result<InferResult, AlangError> {
   const env: Env = new Map();
   for (const [name, t] of Object.entries(builtins)) env.set(name, mono(t));
+  if (opts.imports) for (const [name, sc] of opts.imports) env.set(name, sc);
 
   const subst = emptySubst();
   const fresh = mkFresh(1000);

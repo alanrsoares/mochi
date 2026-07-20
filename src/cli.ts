@@ -1,8 +1,9 @@
-import { match } from "@onrails/result";
+import { isErr, match } from "@onrails/result";
 import { compile } from "./compile";
 import { emitDts } from "./dts";
 import { formatError } from "./errors";
 import { format } from "./format";
+import { buildModules } from "./module";
 
 const [cmd, ...rest] = process.argv.slice(2);
 
@@ -42,6 +43,23 @@ if (cmd === "fmt") {
       process.exit(1);
     },
   );
+} else if (cmd === "build") {
+  // `build <entry.al>` compiles a module graph, writing a `.js` beside each `.al`.
+  const entry = rest[0];
+  if (!entry) {
+    console.error("usage: bun src/cli.ts build <entry.al>");
+    process.exit(1);
+  }
+  const result = await buildModules(entry, (p) => Bun.file(p).text());
+  if (isErr(result)) {
+    console.error(formatError(result.error));
+    process.exit(1);
+  }
+  for (const { path, js } of result.value) {
+    const out = path.replace(/\.al$/, ".js");
+    await Bun.write(out, js);
+    console.error(`  ${out}`);
+  }
 } else {
   // Default: compile a file to JavaScript.
   const path = cmd;

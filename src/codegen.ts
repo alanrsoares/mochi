@@ -157,10 +157,31 @@ const genExtern = (s: Extract<Stmt, { kind: "extern" }>): string => {
   return `import { ${spec} } from ${JSON.stringify(s.module)};`;
 };
 
+// import { a, b } from "./mod"  → the compiled sibling `./mod.js`. Source paths
+// name the `.al` module (with or without extension); output targets `.js`.
+const genImport = (s: Extract<Stmt, { kind: "import" }>): string => {
+  const names = s.names.map((n) => n.name).join(", ");
+  const path = `${s.from.replace(/\.al$/, "")}.js`;
+  return `import { ${names} } from ${JSON.stringify(path)};`;
+};
+
 const genStmt = (s: Stmt): string => {
-  if (s.kind === "type") return genType(s);
-  if (s.kind === "extern") return genExtern(s);
-  return `const ${s.name} = ${genExpr(s.value)};`;
+  if (s.kind === "import") return genImport(s);
+  if (s.kind === "type") {
+    const decls = genType(s);
+    return s.exported
+      ? decls
+          .split("\n")
+          .map((l) => `export ${l}`)
+          .join("\n")
+      : decls;
+  }
+  if (s.kind === "extern") {
+    // An extern is itself an import; re-export the local binding when exported.
+    return s.exported ? `${genExtern(s)}\nexport { ${s.name} };` : genExtern(s);
+  }
+  const doExport = s.exported && !s.name.startsWith("$"); // never export destructure temps
+  return `${doExport ? "export " : ""}const ${s.name} = ${genExpr(s.value)};`;
 };
 
 const hasMatch = (e: Expr): boolean =>

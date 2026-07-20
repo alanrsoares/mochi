@@ -7,6 +7,7 @@ import type {
   Ctor,
   CtorField,
   Expr,
+  ImportName,
   LamParam,
   MatchArm,
   PatField,
@@ -266,7 +267,7 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
 
   // ---- statements --------------------------------------------------------
 
-  function parseType(): Stmt {
+  function parseType(): Extract<Stmt, { kind: "type" }> {
     const start = expect("type").span;
     const name = expectId().name;
     // Optional type parameters, ML-style: `type Result a e = ...`. Any ids
@@ -313,7 +314,7 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     return { name: null, type: first };
   }
 
-  function parseLet(): Stmt[] {
+  function parseLet(): Extract<Stmt, { kind: "let" }>[] {
     const start = expect("let").span;
     if (peek().t === "lbrace") return parseRecordDestructure(start);
     const { name, span: nameSpan } = expectId();
@@ -327,7 +328,7 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
   // Shorthand only for now (each field binds a variable of the same name); `e`
   // is evaluated once, via the temp. Spans point at each field's identifier so
   // hover/inlay/errors land on the binding the user wrote.
-  function parseRecordDestructure(start: Span): Stmt[] {
+  function parseRecordDestructure(start: Span): Extract<Stmt, { kind: "let" }>[] {
     const open = expect("lbrace").span;
     const fields: { name: string; span: Span }[] = [];
     if (peek().t !== "rbrace") {
@@ -343,7 +344,9 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     const whole = spanning(start, value.span);
     const patSpan = spanning(open, close);
     const tmp = `$d${tmpCount++}`;
-    const stmts: Stmt[] = [{ kind: "let", name: tmp, nameSpan: patSpan, value, span: whole }];
+    const stmts: Extract<Stmt, { kind: "let" }>[] = [
+      { kind: "let", name: tmp, nameSpan: patSpan, value, span: whole },
+    ];
     for (const f of fields) {
       const target: Expr = { kind: "ref", name: tmp, span: f.span };
       const access: Expr = { kind: "field", target, name: f.name, span: f.span };
@@ -378,7 +381,7 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
   };
 
   // extern name : type = "module" "export"
-  function parseExtern(): Stmt {
+  function parseExtern(): Extract<Stmt, { kind: "extern" }> {
     const start = expect("extern").span;
     const { name, span: nameSpan } = expectId();
     expect("colon");
@@ -389,8 +392,38 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     return { kind: "extern", name, nameSpan, typeExpr, module, imported, span: to(start) };
   }
 
+  // import { a, b } from "./mod"  — `from` is contextual (still a valid id).
+  function parseImport(): Stmt {
+    const start = expect("import").span;
+    expect("lbrace");
+    const names: ImportName[] = [];
+    if (peek().t !== "rbrace") {
+      const first = expectId();
+      names.push({ name: first.name, span: first.span });
+      while (peek().t === "comma") {
+        next();
+        const n = expectId();
+        names.push({ name: n.name, span: n.span });
+      }
+    }
+    expect("rbrace");
+    const kw = expectId();
+    if (kw.name !== "from") fail(`expected 'from' in import, got '${kw.name}'`);
+    const from = expectStr().value;
+    return { kind: "import", names, from, span: to(start) };
+  }
+
   function parseStmt(): Stmt[] {
     const t = peek().t;
+    if (t === "import") return [parseImport()];
+    if (t === "export") {
+      next();
+      const inner = peek().t;
+      if (inner === "type") return [{ ...parseType(), exported: true }];
+      if (inner === "extern") return [{ ...parseExtern(), exported: true }];
+      if (inner === "let") return parseLet().map((s) => ({ ...s, exported: true }));
+      return fail("`export` must precede let, type, or extern");
+    }
     if (t === "type") return [parseType()];
     if (t === "extern") return [parseExtern()];
     return parseLet();

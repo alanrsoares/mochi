@@ -97,6 +97,7 @@ const typeDecl = (name: string, params: string[], ctors: Ctor[]): string => {
 };
 
 const declOf = (s: Stmt, schemeOf: (n: string) => Scheme | undefined): string | null => {
+  if (s.kind === "import") return null; // re-exports live in the sibling module
   if (s.kind === "type") return typeDecl(s.name, s.params, s.ctors);
   if (s.kind === "extern") return null; // imported, not declared here
   const sc = schemeOf(s.name);

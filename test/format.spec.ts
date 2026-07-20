@@ -16,6 +16,18 @@ test("a multi-param lambda keeps its parentheses", () => {
   expect(fmt("let g=(a,b)=>add(a,b)")).toBe("let g = (a, b) => add(a, b)\n");
 });
 
+test("normalizes an import statement", () => {
+  expect(fmt('import {a,b}from"./mod"')).toBe('import { a, b } from "./mod"\n');
+});
+
+test("keeps the export prefix on a binding", () => {
+  expect(fmt("export let x=1")).toBe("export let x = 1\n");
+});
+
+test("keeps the export prefix on a variant type", () => {
+  expect(fmt("export type T=|A|B")).toBe("export type T =\n  | A\n  | B\n");
+});
+
 test("switch breaks across lines, one arm per line", () => {
   expect(fmt("let m=r=>switch r {|Ok(v)=>v|Err(e)=>e}")).toBe(
     "let m = r => switch r {\n  | Ok(v) => v\n  | Err(e) => e\n}\n",

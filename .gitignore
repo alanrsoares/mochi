@@ -6,6 +6,10 @@ out
 dist
 *.tgz
 
+# compiled alang example modules (sources are the `.al` + hand-written runtime.js)
+examples/modules/geometry.js
+examples/modules/main.js
+
 # code coverage
 coverage
 *.lcov

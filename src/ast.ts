@@ -49,8 +49,8 @@ export type TypeExpr =
   | { kind: "tarrow"; from: TypeExpr; to: TypeExpr; span: Span };
 
 export type Stmt =
-  | { kind: "let"; name: string; nameSpan: Span; value: Expr; span: Span }
-  | { kind: "type"; name: string; params: string[]; ctors: Ctor[]; span: Span } // type Result a e = | Ok(a) | ...
+  | { kind: "let"; name: string; nameSpan: Span; value: Expr; exported?: boolean; span: Span }
+  | { kind: "type"; name: string; params: string[]; ctors: Ctor[]; exported?: boolean; span: Span } // type Result a e = | Ok(a) | ...
   // extern name : type = "module" "export"  — bind an external JS/TS function
   | {
       kind: "extern";
@@ -59,8 +59,14 @@ export type Stmt =
       typeExpr: TypeExpr;
       module: string;
       imported: string;
+      exported?: boolean;
       span: Span;
-    };
+    }
+  // import { a, b } from "./mod"  — bind exports of another alang module
+  | { kind: "import"; names: ImportName[]; from: string; span: Span };
+
+// A name pulled in by an `import`. `span` anchors it for diagnostics.
+export type ImportName = { name: string; span: Span };
 
 export type Program = { stmts: Stmt[] };
 

@@ -1,0 +1,22 @@
+// A library module. It binds a few host primitives via `extern`, then exports
+// a Shape variant and an `area` function computed over it. Everything the rest
+// of the program needs is `export`ed; the externs stay private to this file.
+extern mul : number -> number -> number = "./runtime.js" "mul"
+extern add : number -> number -> number = "./runtime.js" "add"
+extern sqrt : number -> number = "./runtime.js" "sqrt"
+extern pi : number = "./runtime.js" "pi"
+
+// Named constructor fields make the runtime shape self-describing; a positional
+// field would work too.
+export type Shape =
+  | Circle(radius: number)
+  | Rect(width: number, height: number)
+
+// Exhaustive over Shape — the checker guarantees every case is handled.
+export let area = s => switch s {
+  | Circle(r) => mul(pi, mul(r, r))
+  | Rect(w, h) => mul(w, h)
+}
+
+// Reused by callers that just want the pythagorean distance.
+export let hypot = (a, b) => sqrt(add(mul(a, a), mul(b, b)))
