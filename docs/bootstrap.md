@@ -59,6 +59,10 @@ modules (`import`/`export`), builtin `Result`/`Option`, structural
    expressible. Follow-up: `let`/lambda tuple destructure.
 3. ~~**char/string externs**~~ **DONE** — `Str.get`/`codeAt`/`fromCode`/`chars`/
    `toNumber` added to the prelude (blocker #3).
+3b. ~~**nested patterns**~~ **DONE** (ADR 0012) — `Sm(Sm(n))` had silently
+   miscompiled (free vars in emitted JS); now lowers to a guard-form arm.
+   Conservative exhaustiveness: narrowing arms need a `C(_)`/`_` companion.
+   The check/infer ports can dispatch on nested AST shapes directly.
 4. **Spike: lexer-in-alang** — the smallest real self-host proof. Write alang's
    lexer *in alang*, run it under the current TS host, diff its token stream
    against `src/lexer.ts` on the existing corpus. Validates ergonomics on a

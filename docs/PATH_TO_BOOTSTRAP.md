@@ -5,10 +5,13 @@ What it takes for alang to compile itself. The spec is the existing compiler:
 `dts`/`format`/`module`), all Result-threaded, all pattern-matched — i.e. code
 that is already *shaped* like alang. This doc inventories what the language
 has, what blocks the port, and the slice order to get there.
+(Live status checklist: `docs/bootstrap.md`.)
 
-**Distance, honestly: one language feature + four prelude one-liners, then
-grunt work.** No remaining *design* unknowns — the hard prerequisites are
-already proven in the tree.
+**Distance, honestly (updated 2026-07-21): the wall is down.** Local `let … in`
+(ADR 0009), tuples + binding sugar (ADR 0010/0011), the char cursor, and
+nested patterns (ADR 0012) all landed. What remains before the lexer spike:
+two prelude one-liners (`show`, `Str.concat`), then grunt work. No remaining
+*design* unknowns.
 
 ---
 
@@ -25,46 +28,51 @@ already proven in the tree.
 | Mutually recursive productions | Top-level SCC grouping — parser functions can forward-reference | ✓ |
 | File IO, CLI | `extern` FFI to host shims — every bootstrap in history shims IO through the host; this is normal, not cheating | ✓ |
 | Generic containers of own types | Deep generics: `[Token]`, `Map<string, Scheme>`, `Result<Program, Error>` all unify positionally | ✓ |
+| Local bindings | `let x = e in body` (ADR 0009) — let-polymorphic, `in` contextual keyword, IIFE codegen | ✓ |
+| Tuples | `(a, b)` literal / switch pattern / type (ADR 0010) + binding sugar `((a, b)) => …`, `let (a, b) = e in …` (ADR 0011) | ✓ |
+| Char-level cursor | `Str.get`/`Str.codeAt` (bounds-safe → `Option`), `Str.fromCode`, `Str.chars`, `Str.toNumber` | ✓ |
+| Predicate branching | Boolean-literal patterns: `switch p { \| true => … \| false => … }` | ✓ |
+| String equality | Polymorphic structural `eq : a -> a -> bool` covers ident-vs-ident comparison | ✓ |
 
 ---
 
 ## 2. Gaps, ranked by blockage
 
-### 2.1 Local bindings — THE wall (~80% of the distance)
-Every compiler function binds 3–5 intermediates (peek a token, compute a span,
-build a node, thread a substitution). alang today has only top-level `let`;
-function bodies are single expressions. Without locals, `parseExpr` becomes
-unreadable pipe contortion or an explosion of tiny top-level helpers.
+### 2.1 ~~Local bindings — THE wall~~ DONE (ADR 0009)
+`let x = e in body` shipped: let-polymorphic, non-recursive, `in` a contextual
+keyword, IIFE codegen. Tuple-binding sugar (ADR 0011) followed, so scanner /
+cursor state threads cleanly (`let (tok, rest) = next(cursor) in …`).
 
-This is a real language feature touching parser, inference, and codegen:
-- Surface: either ML-style `let x = e1 in e2` or block bodies
-  `{ let x = e1; e2 }`. Block form reads more natural next to the existing
-  `switch { ... }` braces and JS heritage; `in`-chaining nests badly.
-- Inference: local `let` should generalize like top-level `let`
-  (let-polymorphism) or deliberately stay monomorphic (simpler, and fine for
-  bootstrap purposes — document the choice).
-- Codegen: blocks lower to an IIFE or to statement sequences when the context
-  allows. Statement lowering keeps output readable.
+### 2.2 ~~Nested ctor patterns miscompile~~ DONE (ADR 0012)
+Was: `Sm(Sm(n))` typechecked but silently emitted broken JS (free variables).
+Now: a general pattern compiler lowers nested arms to the guard form
+(`.with((_v) => conds, (slot) => body)`); flat arms keep the readable
+matcher-object emit. Exhaustiveness is conservative (a narrowing arm doesn't
+cover its ctor — add `C(_)` or `_`), nested ctors are validated (known/arity),
+record fields may nest, lazy-List patterns may not. Guard:
+`test/nested-patterns.spec.ts`.
 
-Nothing else in this document matters until this lands.
-
-### 2.2 Prelude one-liners (a day, total)
-1. `Str.toNumber : string -> Option<number>` — the lexer must parse numeric
-   literals. (`Number(s)` + `isNaN` check under the hood.)
+### 2.3 Prelude one-liners (half a day)
+1. ~~`Str.toNumber`~~ **DONE** — shipped with the char cursor
+   (`Str.get`/`codeAt`/`fromCode`/`chars`).
 2. `show : number -> string` (or `Str.fromNumber`) — codegen emits numbers
-   into JS text.
+   into JS text. Still missing.
 3. `Str.concat : string -> string -> string` (or a `++` operator) — codegen is
    string-building all the way down. `Str.join("")([...])` fakes it today but
-   the ergonomics are brutal for emit-heavy code.
-4. `Str.eq : string -> string -> bool` — identifier comparison. Builtin `eq`
-   is `number -> number -> bool`; string-literal *patterns* cover keyword
-   dispatch, but general ident-vs-ident comparison needs a function.
+   the ergonomics are brutal for emit-heavy code. Still missing.
+4. ~~`Str.eq`~~ **DONE by construction** — builtin `eq : a -> a -> bool` is
+   polymorphic structural equality; ident-vs-ident comparison just works.
 
-### 2.3 Nice-to-have, explicitly non-blocking
-- **Tuples** — `(Token, rest)` pairs are fakeable as `{ fst, snd }` records.
-  Add real tuples later; don't gate bootstrap on them.
-- **Pattern guards / or-patterns / nested ctor patterns** — each removes
-  boilerplate in `check`/`infer` ports; none is required.
+### 2.4 Nice-to-have, explicitly non-blocking
+- ~~**Tuples**~~ **DONE** (ADR 0010 + 0011 binding sugar).
+- **do-notation / `let? x = e in …` monadic bind** — the parser port threads
+  `Result` through every production; manual `flatMapOk` nesting is the swamp
+  the TS compiler avoids via early returns. Deliberately deferred until the
+  lexer spike measures the real pain (`docs/bootstrap.md` item 5).
+- **Record update sugar** (`{ ...r, field: v }` as an expression) — `infer`
+  threads state records; rebuilding every field by hand is noise.
+- **Pattern guards / or-patterns** — each removes boilerplate in
+  `check`/`infer` ports; none is required.
 - **String interpolation** — would make codegen pleasant; `Str.concat` is
   sufficient.
 
@@ -93,18 +101,24 @@ Nothing else in this document matters until this lands.
 Each slice is shippable and independently verifiable, in the existing
 one-feature-per-slice style.
 
-### Slice A — prelude one-liners
-`Str.toNumber`, `show`, `Str.concat`, `Str.eq`. Types + runtime + tests.
+### Slice A — prelude one-liners — ½ DONE
+~~`Str.toNumber`~~ ✓, ~~`Str.eq`~~ ✓ (polymorphic `eq`). Remaining: `show`,
+`Str.concat`. Types + runtime + tests.
 *Exit: a `.al` program can round-trip `"42"` → number → string and compare two
 strings.*
 
-### Slice B — local bindings
-Block-bodied expressions with local `let` (monomorphic locals acceptable;
-record the choice). Parser, inference, codegen, formatter, hover.
-*Exit: a nontrivial multi-binding function reads cleanly; all existing tests
-green.*
+### Slice B — local bindings — DONE (ADR 0009, 0011)
+`let … in` (let-polymorphic — generalized, not monomorphic; choice recorded in
+the ADR) + tuple-binding sugar. Parser, inference, codegen, formatter, hover.
+*Exit met: multi-binding functions read cleanly; gate green.*
 
-### Slice C — lexer in alang (first self-hosting artifact)
+### Slice B′ — nested-pattern codegen — DONE (ADR 0012)
+General pattern compiler (`patConds`/`patSlot`) + conservative exhaustiveness
++ nested validation + record-field nesting; lazy-List nesting rejected.
+*Exit met: `Sm(Sm(n)) => n` (and tuple/record/array nestings) evaluate
+correctly; `test/nested-patterns.spec.ts` guards it.*
+
+### Slice C — lexer in alang (first self-hosting artifact) ← NEXT after A
 Port `lexer.ts` (~170 LOC) to `bootstrap/lexer.al`. Token type is a variant;
 lexing is `unfold`-style recursion over a char array. Host test harness: run
 the alang-emitted JS lexer against the TS lexer on the whole test corpus and
@@ -156,9 +170,9 @@ Port codegen + prelude inlining. Then the ceremony:
 
 ## 6. What NOT to do on the way
 
-- Don't add tuples, guards, or typeclasses *as bootstrap prerequisites* — each
-  is a detour dressed as a shortcut. Bootstrap on what exists plus §2.1/§2.2;
-  let the pain collected en route prioritize what comes after.
+- Don't add guards, do-notation, or typeclasses *as bootstrap prerequisites* —
+  each is a detour dressed as a shortcut. Bootstrap on what exists plus
+  §2.2/§2.3; let the pain collected en route prioritize what comes after.
 - Don't chase inference performance before the quadratic subst actually hurts.
 - Don't port `module.ts`/CLI early — host shims via `extern` are fine
   indefinitely; the fixpoint ceremony only needs the four core passes.

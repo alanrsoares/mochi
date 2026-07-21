@@ -265,10 +265,38 @@ let unwrapOr = fallback => r => switch r {
   | Err(e) => fallback
 }
 
+// --- boolean-literal patterns: branch on a predicate ---
+// `switch` arms match `true`/`false` directly, so predicate branching needs no
+// if-expression: exhaustiveness requires both arms (or a catch-all).
+let parity = n => switch eq(mod(n, 2), 0) {
+  | true => even
+  | false => odd
+}
+
+// --- local bindings: `let x = value in body` (ADR 0009) ---
+// Non-recursive, let-polymorphic, scoped to `body`. Chains flatten (each `in`
+// continues at the same depth), so functions can name intermediates.
+let norm = (a, b) =>
+  let a2 = square(a) in
+  let b2 = square(b) in
+  sqrt(add(a2, b2))
+
+// --- tuples: literal, switch pattern, and binding sugar (ADR 0010/0011) ---
+// `(a, b)` is a real product type erasing to a JS array. Destructure in switch,
+// in a lambda param `((a, b)) => …` (double parens: one tuple param, not two
+// params), or via `let (a, b) = value in body`.
+let pairUp = (x, y) => (x, y)
+let swap = ((a, b)) => (b, a)
+let takeFst = p => switch p {
+  | (f, _) => f
+}
+let sumPair = p =>
+  let (a, b) = p in
+  add(a, b)
+
 // --- a railway: chain steps that each may fail, short-circuit on Err ---
 // Each step returns a Result; flatMapOk stays on the happy track and skips the
-// rest the moment a step yields Err. (No boolean-literal patterns yet, so steps
-// build Ok/Err directly rather than branching on a predicate.)
+// rest the moment a step yields Err.
 let addOne = n => Ok(add(n, 1))
 let halve = n => Ok(div(n, 2))
 
