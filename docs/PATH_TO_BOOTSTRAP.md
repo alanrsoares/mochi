@@ -7,17 +7,20 @@ that is already *shaped* like alang. This doc inventories what the language
 has, what blocks the port, and the slice order to get there.
 (Live status checklist: `docs/bootstrap.md`.)
 
-**Distance, honestly (updated 2026-07-21): three of four pipeline stages are
-self-hosted.** Local `let … in` (ADR 0009), tuples + binding sugar (ADR
-0010/0011), the char cursor, nested patterns (ADR 0012), guards (ADR 0013),
-composite ctor fields (ADR 0015), and the prelude pieces all landed — and
-**Slices C and D shipped**: `bootstrap/lexer.al` + `bootstrap/parser.al`
-reproduce the TS lexer's tokens and the TS parser's AST on every `.al` file
-in the repo, including themselves (`test/bootstrap-{lexer,parser}.spec.ts`).
-**Slice E is now DONE**: `bootstrap/check.al` and `bootstrap/infer.al` both
-reproduce the TS checker's verdict and the TS inferrer's schemes on the same
-corpus (`test/bootstrap-check.spec.ts`, `test/bootstrap-infer.spec.ts`). Only
-Slice F — codegen + the fixpoint ceremony — remains.
+**Distance, honestly (updated 2026-07-21): DONE — alang is self-hosting.**
+Local `let … in` (ADR 0009), tuples + binding sugar (ADR 0010/0011), the char
+cursor, nested patterns (ADR 0012), guards (ADR 0013), composite ctor fields
+(ADR 0015), and the prelude pieces all landed. **Slices C and D shipped**:
+`bootstrap/lexer.al` + `bootstrap/parser.al` reproduce the TS lexer's tokens
+and the TS parser's AST on every `.al` file in the repo, including themselves
+(`test/bootstrap-{lexer,parser}.spec.ts`). **Slice E**: `bootstrap/check.al`
+and `bootstrap/infer.al` reproduce the TS checker's verdict and the TS
+inferrer's schemes on the same corpus (`test/bootstrap-{check,infer}.spec.ts`).
+**Slice F is now DONE** (ADR 0019): `bootstrap/codegen.al` emits JS
+byte-identical to the TS codegen on the whole corpus
+(`test/bootstrap-codegen.spec.ts`), and the three-stage fixpoint ceremony
+reaches its fixpoint — `stage2 ≡ stage3` byte-for-byte for all five bootstrap
+modules, with `stage1 ≡ stage2` holding too (`test/bootstrap-fixpoint.spec.ts`).
 
 ---
 
@@ -209,13 +212,25 @@ match).*
   (but structurally equivalent) row types; fixed by recursing into the rest
   of the field list before inferring the current field's value.
 
-### Slice F — codegen + closing the loop
-Port codegen + prelude inlining. Then the ceremony:
-1. **Stage 1:** TS compiler compiles `bootstrap/*.al` → `alangc.js`.
-2. **Stage 2:** `alangc.js` compiles `bootstrap/*.al` → `alangc2.js`.
-3. **Fixpoint:** `alangc2.js` compiles `bootstrap/*.al` → `alangc3.js`;
-   `alangc2.js ≡ alangc3.js` byte-for-byte.
-*Exit: fixpoint reached. alang is self-hosting.*
+### Slice F — codegen + closing the loop ← DONE (ADR 0019)
+Ported codegen + prelude inlining, then ran the ceremony.
+- **codegen DONE** — `bootstrap/codegen.al` (~790 LOC): AST→JS, the three
+  prelude runtime tables passed in as `Map`s (not forked). `usesMatchLib`
+  header, `preludePreamble` transitive dep-closure, the general pattern
+  compiler (nested/guard/lazy-List), all ported.
+  `test/bootstrap-codegen.spec.ts` diffs emitted JS against the TS codegen on
+  every repo `.al` file — including codegen.al itself — plus 13 targeted emit
+  cases. One real bug flushed: `escChar` had a `| "\r" => …` arm, but the lexer
+  decodes only `\n \t \\ \"` (a literal `\r` lexes to `r`), so the arm matched
+  the *letter* `r` and mangled every `Err`; removed (unreachable + wrong).
+- **fixpoint DONE** — `test/bootstrap-fixpoint.spec.ts` composes `lex→parse→
+  codegen` (check/infer are gates that don't alter the emitted JS) and runs:
+  1. **Stage 1:** TS compiler emits each `bootstrap/*.al`.
+  2. **Stage 2:** the stage-1 compiler (evaluated from that JS) re-emits them.
+  3. **Fixpoint:** the stage-2 compiler re-emits them again.
+  `stage2 ≡ stage3` byte-for-byte for all five modules; `stage1 ≡ stage2`
+  (TS emit ≡ bootstrap self-emit) holds too.
+*Exit met: fixpoint reached. alang is self-hosting.*
 
 ---
 
