@@ -7,11 +7,12 @@ that is already *shaped* like alang. This doc inventories what the language
 has, what blocks the port, and the slice order to get there.
 (Live status checklist: `docs/bootstrap.md`.)
 
-**Distance, honestly (updated 2026-07-21): the wall is down.** Local `let … in`
-(ADR 0009), tuples + binding sugar (ADR 0010/0011), the char cursor, nested
-patterns (ADR 0012), and the last prelude pieces (`show`, `Str.concat`,
-`Array.prepend`) all landed. Nothing remains before the lexer spike. No
-remaining *design* unknowns.
+**Distance, honestly (updated 2026-07-21): the first artifact exists.**
+Local `let … in` (ADR 0009), tuples + binding sugar (ADR 0010/0011), the char
+cursor, nested patterns (ADR 0012), guards (ADR 0013), and the prelude pieces
+all landed — and **Slice C shipped**: `bootstrap/lexer.al` lexes every `.al`
+file in the repo identically to the TS lexer, including itself
+(`test/bootstrap-lexer.spec.ts`). Next: the parser (Slice D).
 
 ---
 
@@ -88,10 +89,14 @@ record fields may nest, lazy-List patterns may not. Guard:
   bootstrap survives (modules are small); when it hurts, shim a mutable ref
   via `extern` (host-provided union-find) or add a persistent map. Do not
   redesign the language for this.
-- **Stack depth.** Compiles to JS with no TCO; deeply nested expressions recurse
-  the compiler deeply. JS engines give ~10k frames — fine for realistic
-  modules. If a pathological file breaks it, that's a "known limitation" line,
-  not a blocker.
+- ~~**Stack depth.**~~ **RESOLVED (ADR 0014).** JSC (Bun) does proper tail
+  calls in strict mode, emitted modules are ESM (strict), and `_curry`'s
+  saturated path is now a tail call — so tail-recursive alang functions run in
+  O(1) stack (~2M depth measured). The lexer spike hit this wall on day one
+  (per-token recursion overflowed on the two biggest corpus files) and the
+  `_curry` fix removed it. Caveat: harnesses eval'ing emitted JS via
+  `new Function` must prepend `"use strict"`, and non-tail recursion still
+  costs O(n) frames.
 - ~~**No generic `eq`/`show`.**~~ Both exist now as polymorphic structural
   builtins (ADR 0007 + addendum). Caveat: `show` renders the runtime shape —
   fine for tests/diagnostics; pretty-printers with language-specific syntax
@@ -122,15 +127,18 @@ General pattern compiler (`patConds`/`patSlot`) + conservative exhaustiveness
 *Exit met: `Sm(Sm(n)) => n` (and tuple/record/array nestings) evaluate
 correctly; `test/nested-patterns.spec.ts` guards it.*
 
-### Slice C — lexer in alang (first self-hosting artifact) ← NEXT
-Port `lexer.ts` (~170 LOC) to `bootstrap/lexer.al`. Token type is a variant;
-lexing is `unfold`-style recursion over a char array. Host test harness: run
-the alang-emitted JS lexer against the TS lexer on the whole test corpus and
-diff token streams.
-*Exit: `lexer.al` lexes every `.al` file in the repo identically to the TS
-lexer — including `lexer.al` itself. This is the demo moment; ship it loud.*
+### Slice C — lexer in alang (first self-hosting artifact) — DONE
+`bootstrap/lexer.al` (~250 LOC): `Tok` variant, `go` tail-recursion over the
+char cursor, doc-comment state threaded as parameters, keyword/digraph/punct
+tables as string-literal switches. `test/bootstrap-lexer.spec.ts` diffs
+canonical token streams against the TS lexer on every `.al` file in the repo
+plus 17 edge cases and error parity (same messages, same spans).
+*Exit met: identical streams on the whole corpus — including `lexer.al`
+lexing itself.* The spike also flushed out two compiler bugs (record-literal
+arm bodies emitted unparenthesized; `_curry` breaking tail calls → ADR 0014)
+— differential testing paying for itself on day one.
 
-### Slice D — parser in alang
+### Slice D — parser in alang ← NEXT
 Port recursive descent (~590 LOC). Mutually recursive productions lean on SCC
 inference. Cursor threading via records until tuples exist. Differential-test
 AST output (JSON) against the TS parser.
