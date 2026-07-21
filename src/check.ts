@@ -1,9 +1,10 @@
 // Semantic pass — the Reason superpower: exhaustiveness + constructor checks.
 // Builds a variant registry from `type` decls, then verifies every `switch`.
 import { err, isErr, ok, type Result } from "@onrails/result";
-import type { CtorPat, Expr, MatchExpr, Pattern, Program, TypeExpr } from "./ast";
+import type { CtorPat, Expr, LamParam, MatchExpr, Pattern, Program, TypeExpr } from "./ast";
 import { type AlangError, checkErr } from "./errors";
 import { builtinTypeDecls, preludeNamespaces } from "./prelude";
+import type { Span } from "./span";
 
 type CtorInfo = { type: string; arity: number };
 export type Registry = {
@@ -351,12 +352,183 @@ const checkCtorFieldVars = (prog: Program): AlangError | null => {
   return null;
 };
 
+// JavaScript reserved words. An alang lowercase identifier in a BINDING
+// position (let/extern name, lambda/letin/letbind param, pattern bind, labelled
+// ctor field) lowers to a JS binding of that same name — `const else = …`,
+// `(else) => …`, `{ _tag, else }` — which is a SyntaxError. alang keeps its
+// emitted JS pristine (no mangling — ADR 0020), so reject at check time with a
+// rename hint. Object KEYS and member names (`{ default: 1 }`, `r.default`) are
+// legal JS and are NOT binding positions, so they stay allowed.
+const JS_RESERVED = new Set([
+  "break",
+  "case",
+  "catch",
+  "class",
+  "const",
+  "continue",
+  "debugger",
+  "default",
+  "delete",
+  "do",
+  "else",
+  "enum",
+  "export",
+  "extends",
+  "false",
+  "finally",
+  "for",
+  "function",
+  "if",
+  "import",
+  "in",
+  "instanceof",
+  "new",
+  "null",
+  "return",
+  "super",
+  "switch",
+  "this",
+  "throw",
+  "true",
+  "try",
+  "typeof",
+  "var",
+  "void",
+  "while",
+  "with",
+  "yield",
+  "let",
+  "static",
+  "implements",
+  "interface",
+  "package",
+  "private",
+  "protected",
+  "public",
+  "await",
+]);
+
+const reservedBind = (name: string, span: Span): AlangError | null =>
+  JS_RESERVED.has(name)
+    ? checkErr(
+        `'${name}' is a JavaScript reserved word and can't be used as a binding name; rename it`,
+        span,
+      )
+    : null;
+
+const firstErr = (es: readonly (AlangError | null)[]): AlangError | null =>
+  es.reduce<AlangError | null>((f, e) => f ?? e, null);
+
+// A lambda/letbind parameter binds one or more names; none of its forms carry a
+// per-name span, so offences anchor to the parameter's enclosing span.
+const checkParamBinds = (p: LamParam, span: Span): AlangError | null => {
+  switch (p.kind) {
+    case "name":
+      return reservedBind(p.name, span);
+    case "precord":
+      return firstErr(p.fields.map((n) => reservedBind(n, span)));
+    case "ptuple":
+      return firstErr(p.names.map((n) => reservedBind(n, span)));
+  }
+};
+
+const checkPatBinds = (p: Pattern): AlangError | null => {
+  switch (p.kind) {
+    case "pbind":
+      return reservedBind(p.name, p.span);
+    case "ptuple":
+      return firstErr(p.elems.map(checkPatBinds));
+    case "precord":
+      return firstErr(p.fields.map((f) => checkPatBinds(f.pat)));
+    case "pctor":
+      return firstErr(p.args.map(checkPatBinds));
+    case "parr":
+    case "plist":
+      return firstErr([...p.elems, ...(p.rest ? [p.rest] : [])].map(checkPatBinds));
+    case "pwild":
+    case "plit":
+    case "pbool":
+    case "pstr":
+      return null;
+  }
+};
+
+const checkExprBinds = (e: Expr): AlangError | null => {
+  switch (e.kind) {
+    case "num":
+    case "bool":
+    case "str":
+    case "ref":
+      return null;
+    case "call":
+      return checkExprBinds(e.fn) ?? firstErr(e.args.map(checkExprBinds));
+    case "lambda":
+      return firstErr(e.params.map((p) => checkParamBinds(p, e.span))) ?? checkExprBinds(e.body);
+    case "letin":
+      return reservedBind(e.name, e.nameSpan) ?? checkExprBinds(e.value) ?? checkExprBinds(e.body);
+    case "letbind":
+      return (
+        checkParamBinds(e.param, e.paramSpan) ?? checkExprBinds(e.value) ?? checkExprBinds(e.body)
+      );
+    case "pipe":
+      return checkExprBinds(e.left) ?? checkExprBinds(e.right);
+    case "ternary":
+      return checkExprBinds(e.cond) ?? checkExprBinds(e.then) ?? checkExprBinds(e.else);
+    case "match":
+      return (
+        checkExprBinds(e.scrutinee) ??
+        firstErr(
+          e.arms.map(
+            (a) =>
+              checkPatBinds(a.pattern) ??
+              (a.guard ? checkExprBinds(a.guard) : null) ??
+              checkExprBinds(a.body),
+          ),
+        )
+      );
+    case "record":
+      return firstErr(e.fields.map((f) => checkExprBinds(f.value)));
+    case "field":
+      return checkExprBinds(e.target);
+    case "tuple":
+    case "arr":
+    case "list":
+      return firstErr(e.elements.map(checkExprBinds));
+    case "map":
+      return firstErr(e.entries.map((en) => checkExprBinds(en.key) ?? checkExprBinds(en.value)));
+  }
+};
+
+const checkReservedWords = (prog: Program): AlangError | null => {
+  for (const s of prog.stmts) {
+    if (s.kind === "let") {
+      const e = reservedBind(s.name, s.nameSpan) ?? checkExprBinds(s.value);
+      if (e) return e;
+    } else if (s.kind === "extern") {
+      const e = reservedBind(s.name, s.nameSpan);
+      if (e) return e;
+    } else if (s.kind === "type") {
+      // Type/ctor names are Uppercase (never reserved); a labelled ctor field,
+      // however, lowers to a binding in the factory and destructure.
+      for (const c of s.ctors)
+        for (const f of c.fields)
+          if (f.name) {
+            const e = reservedBind(f.name, f.type.span);
+            if (e) return e;
+          }
+    }
+  }
+  return null;
+};
+
 // `imported` carries the ctor/type registries of the modules this program
 // imports from; merged UNDER the local registry (local declarations win) so
 // exhaustiveness works across the module boundary.
 export function check(prog: Program, imported?: Registry): Result<Program, AlangError> {
   const reserved = checkReservedNames(prog);
   if (reserved) return err(reserved);
+  const reservedWord = checkReservedWords(prog);
+  if (reservedWord) return err(reservedWord);
   const strays = checkCtorFieldVars(prog);
   if (strays) return err(strays);
   const built = buildRegistry(prog);
