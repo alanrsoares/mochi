@@ -95,11 +95,11 @@ const genExpr = (e: Expr): string =>
       (t) => `(${genExpr(t.cond)} ? ${genExpr(t.then)} : ${genExpr(t.else)})`,
     )
     .with({ kind: "match" }, genMatch)
-    .with({ kind: "record" }, (r) =>
-      r.fields.length === 0
-        ? "{}"
-        : `{ ${r.fields.map((f) => `${f.name}: ${genExpr(f.value)}`).join(", ")} }`,
-    )
+    .with({ kind: "record" }, (r) => {
+      const fields = r.fields.map((f) => `${f.name}: ${genExpr(f.value)}`);
+      const parts = r.spread ? [`...${genExpr(r.spread)}`, ...fields] : fields;
+      return parts.length === 0 ? "{}" : `{ ${parts.join(", ")} }`;
+    })
     .with({ kind: "field" }, (f) => nsRuntimeId(f) ?? `${genMember(f.target)}.${f.name}`)
     // A tuple erases to a JS array `[a, b]` (like ReScript); the type system
     // keeps it distinct from an `alang` Array, the runtime shares the shape.
@@ -492,7 +492,11 @@ const usesMatchLib = (e: Expr): boolean =>
           (a) => (a.guard !== undefined && usesMatchLib(a.guard)) || usesMatchLib(a.body),
         ),
     )
-    .with({ kind: "record" }, (r) => r.fields.some((f) => usesMatchLib(f.value)))
+    .with(
+      { kind: "record" },
+      (r) =>
+        (r.spread ? usesMatchLib(r.spread) : false) || r.fields.some((f) => usesMatchLib(f.value)),
+    )
     .with({ kind: "field" }, (f) => usesMatchLib(f.target))
     .with({ kind: "tuple" }, (t) => t.elements.some(usesMatchLib))
     .with({ kind: "arr" }, (l) => l.elements.some(usesMatchLib))
@@ -547,6 +551,7 @@ const exprRefs = (e: Expr, acc: Set<string>): void => {
       }
     })
     .with({ kind: "record" }, (r) => {
+      if (r.spread) exprRefs(r.spread, acc);
       for (const f of r.fields) exprRefs(f.value, acc);
     })
     .with({ kind: "field" }, (f) => {

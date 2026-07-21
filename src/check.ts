@@ -99,6 +99,7 @@ function forEachMatch(e: Expr, visit: (m: MatchExpr) => void): void {
       visit(e);
       return;
     case "record":
+      if (e.spread) forEachMatch(e.spread, visit);
       for (const f of e.fields) forEachMatch(f.value, visit);
       return;
     case "field":
@@ -487,7 +488,10 @@ const checkExprBinds = (e: Expr): AlangError | null => {
         )
       );
     case "record":
-      return firstErr(e.fields.map((f) => checkExprBinds(f.value)));
+      return (
+        (e.spread ? checkExprBinds(e.spread) : null) ??
+        firstErr(e.fields.map((f) => checkExprBinds(f.value)))
+      );
     case "field":
       return checkExprBinds(e.target);
     case "tuple":

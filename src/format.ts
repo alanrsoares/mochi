@@ -62,10 +62,11 @@ const expr = (e: Expr, ind: string): string => {
       const cond = e.cond.kind === "ternary" ? `(${expr(e.cond, ind)})` : expr(e.cond, ind);
       return `${cond} ? ${expr(e.then, ind)} : ${expr(e.else, ind)}`;
     }
-    case "record":
-      return e.fields.length === 0
-        ? "{}"
-        : `{ ${e.fields.map((f) => `${f.name}: ${expr(f.value, ind)}`).join(", ")} }`;
+    case "record": {
+      const fields = e.fields.map((f) => `${f.name}: ${expr(f.value, ind)}`);
+      const parts = e.spread ? [`...${expr(e.spread, ind)}`, ...fields] : fields;
+      return parts.length === 0 ? "{}" : `{ ${parts.join(", ")} }`;
+    }
     case "field":
       return `${member(e.target, ind)}.${e.name}`;
     case "tuple":

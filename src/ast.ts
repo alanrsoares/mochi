@@ -22,7 +22,11 @@ export type Expr =
   // Right-associative, binds looser than `|>`; branches are full expressions.
   | { kind: "ternary"; cond: Expr; then: Expr; else: Expr; span: Span }
   | { kind: "match"; scrutinee: Expr; arms: MatchArm[]; span: Span } // switch x { | p => e }
-  | { kind: "record"; fields: Field[]; span: Span } // { x: 1, y: 2 }
+  // { x: 1, y: 2 } — a record literal. With `spread` (`{ ...base, x: 1 }`,
+  // ADR 0021) it's a functional UPDATE: `base` must already carry each listed
+  // field at a unifiable type, and the result has `base`'s type (fields
+  // replaced in-kind, never added).
+  | { kind: "record"; fields: Field[]; spread?: Expr; span: Span }
   | { kind: "field"; target: Expr; name: string; span: Span } // p.x
   | { kind: "tuple"; elements: Expr[]; span: Span } // (a, b) — heterogeneous product, arity ≥ 2
   | { kind: "arr"; elements: Expr[]; span: Span } // [1, 2, 3] — eager Array

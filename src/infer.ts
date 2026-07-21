@@ -323,14 +323,30 @@ const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
       return inferLetBind(e, ctx);
 
     case "record": {
+      // Field VALUES are inferred right-to-left on purpose (shared open-row
+      // mutation via field access must land in the same order src/infer keeps
+      // — see inferRecordRow). Collect each field's type as we go.
       let row: Row = rEmpty; // a literal is closed — exactly these fields
+      const fieldTs: [string, Type][] = [];
       for (let i = e.fields.length - 1; i >= 0; i--) {
         const f = e.fields[i]!;
         const ft = infer(f.value, ctx);
         if (isErr(ft)) return ft;
         row = rExtend(f.name, ft.value, row);
+        fieldTs.push([f.name, ft.value]);
       }
-      return ok(tRecord(row));
+      if (!e.spread) return ok(tRecord(row));
+      // Update (`{ ...base, f: v }`): the base must already carry each listed
+      // field at its value's type (extra base fields flow through the fresh
+      // tail). Result type = base type — fields are replaced in-kind, so a
+      // wrong-typed value or a field absent from a closed base fails to unify.
+      const baseT = infer(e.spread, ctx);
+      if (isErr(baseT)) return baseT;
+      let req: Row = freshRowVar(ctx.fresh);
+      for (const [name, t] of fieldTs) req = rExtend(name, t, req);
+      const uni = u(baseT.value, tRecord(req), ctx, e.span);
+      if (isErr(uni)) return uni;
+      return ok(baseT.value);
     }
 
     case "field": {
@@ -741,6 +757,7 @@ const freeRefs = (e: Expr, bound: Set<string>, acc: Set<string>): void => {
       }
       return;
     case "record":
+      if (e.spread) freeRefs(e.spread, bound, acc);
       for (const f of e.fields) freeRefs(f.value, bound, acc);
       return;
     case "field":

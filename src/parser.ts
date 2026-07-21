@@ -248,8 +248,16 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
 
   function parseRecord(): Expr {
     const start = expect("lbrace").span;
+    // A leading `...base` makes this a record update (`{ ...r, x: 1 }`). Only
+    // one spread, only at the front; any fields after it need a comma.
+    let spread: Expr | undefined;
+    if (peek().t === "spread") {
+      next();
+      spread = parseExpr();
+    }
     const fields: { name: string; value: Expr }[] = [];
     if (peek().t !== "rbrace") {
+      if (spread) expect("comma");
       fields.push(parseField());
       while (peek().t === "comma") {
         next();
@@ -257,7 +265,9 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
       }
     }
     expect("rbrace");
-    return { kind: "record", fields, span: to(start) };
+    return spread
+      ? { kind: "record", fields, spread, span: to(start) }
+      : { kind: "record", fields, span: to(start) };
   }
 
   function parseField(): { name: string; value: Expr } {
