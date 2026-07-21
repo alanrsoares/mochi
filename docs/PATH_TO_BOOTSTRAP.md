@@ -7,12 +7,14 @@ that is already *shaped* like alang. This doc inventories what the language
 has, what blocks the port, and the slice order to get there.
 (Live status checklist: `docs/bootstrap.md`.)
 
-**Distance, honestly (updated 2026-07-21): the first artifact exists.**
-Local `let … in` (ADR 0009), tuples + binding sugar (ADR 0010/0011), the char
-cursor, nested patterns (ADR 0012), guards (ADR 0013), and the prelude pieces
-all landed — and **Slice C shipped**: `bootstrap/lexer.al` lexes every `.al`
-file in the repo identically to the TS lexer, including itself
-(`test/bootstrap-lexer.spec.ts`). Next: the parser (Slice D).
+**Distance, honestly (updated 2026-07-21): the front half of the pipeline is
+self-hosted.** Local `let … in` (ADR 0009), tuples + binding sugar (ADR
+0010/0011), the char cursor, nested patterns (ADR 0012), guards (ADR 0013),
+composite ctor fields (ADR 0015), and the prelude pieces all landed — and
+**Slices C and D shipped**: `bootstrap/lexer.al` + `bootstrap/parser.al`
+reproduce the TS lexer's tokens and the TS parser's AST on every `.al` file
+in the repo, including themselves (`test/bootstrap-{lexer,parser}.spec.ts`).
+Next: check + infer (Slice E).
 
 ---
 
@@ -72,6 +74,14 @@ record fields may nest, lazy-List patterns may not. Guard:
   `Result` through every production; manual `flatMapOk` nesting is the swamp
   the TS compiler avoids via early returns. Deliberately deferred until the
   lexer spike measures the real pain (`docs/bootstrap.md` item 5).
+  **Slice D verdict:** pain is real but shallow — `Result.flatMap` with
+  tuple-destructure lambdas (`((node, p)) => …`) reads fine at 2–3 steps;
+  the worst chains (`parseExtern`, `parseLetIn`) nest 6–7 continuations of
+  pure position-threading. `let?` would flatten exactly those. Worth doing
+  before Slice E (infer threads two states, not one), not urgent for D.
+  The louder Slice D signal was **bool-switch ceremony**: ~25 of parser.al's
+  switches are `switch cond { | true => … | false => … }` — a ternary /
+  if-expression cuts noise everywhere (requested; next slice).
 - **Record update sugar** (`{ ...r, field: v }` as an expression) — `infer`
   threads state records; rebuilding every field by hand is noise.
 - ~~**Pattern guards**~~ **DONE** (ADR 0013) — `| p when expr => body`; nearly
@@ -138,13 +148,23 @@ lexing itself.* The spike also flushed out two compiler bugs (record-literal
 arm bodies emitted unparenthesized; `_curry` breaking tail calls → ADR 0014)
 — differential testing paying for itself on day one.
 
-### Slice D — parser in alang ← NEXT
-Port recursive descent (~590 LOC). Mutually recursive productions lean on SCC
-inference. Cursor threading via records until tuples exist. Differential-test
-AST output (JSON) against the TS parser.
-*Exit: byte-identical AST JSON on the corpus.*
+### Slice D — parser in alang — DONE
+`bootstrap/parser.al` (~760 LOC): AST as variants, every production
+`(toks, pos) -> Result((node, pos), err)`, mutually recursive productions on
+SCC inference, generic `sepBy`/`listUntil` comma-list machinery.
+`test/bootstrap-parser.spec.ts` maps both ASTs into one canonical JSON shape
+and diffs them on every `.al` file in the repo — including parser.al itself —
+plus edge cases and error parity (same messages, same spans).
+Two prerequisites got built on the way:
+- **ADR 0015** — ctor fields carry full type expressions (`[Expr]`,
+  `Option Expr`, tuples, arrows); the AST was inexpressible without it.
+- **ADR 0014 addendum** — `@onrails/pattern`'s dispatch broke proper tail
+  calls (for..of return + result-sentinel check → ~14.6k ceiling); fixed
+  upstream (`findCase`), pinned here via bun patch. Self-parse flushed it.
+*Exit met: canonical AST JSON identical on the corpus; parser.al parses
+itself.*
 
-### Slice E — check + infer in alang
+### Slice E — check + infer in alang ← NEXT
 The heavy slice. Registry and exhaustiveness port mechanically; inference needs
 substitution threading (immutable `Map` first; extern union-find shim if too
 slow). Differential-test inferred schemes against TS on the corpus.

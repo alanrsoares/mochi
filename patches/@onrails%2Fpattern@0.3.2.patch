@@ -1,0 +1,98 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+index df338c77bb41430faaf4621d84936254b4fa3d31..772b432ef81c09891eacef5b1ffa7bdf79266c4a 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -29,13 +29,12 @@ var matches = (input, pattern) => {
+ };
+ var NO_MATCH = /* @__PURE__ */ Symbol("@onrails/pattern/no-match");
+ var NO_INPUT = /* @__PURE__ */ Symbol("@onrails/pattern/no-input");
+-var runCases = (input, cases) => {
+-  for (const c of cases) {
+-    if (c.test(input)) {
+-      return c.run(input);
+-    }
++var findCase = (input, cases) => {
++  for (let i = 0; i < cases.length; i++) {
++    const c = cases[i];
++    if (c.test(input)) return c;
+   }
+-  return NO_MATCH;
++  return null;
+ };
+ var caseForPatterns = (patterns, handler) => ({
+   test: (input) => patterns.some((pattern) => matches(input, pattern)),
+@@ -190,11 +189,11 @@ var MatchBuilder = class _MatchBuilder {
+     if (value === NO_INPUT) {
+       throw new Error("match.run: no input value");
+     }
+-    const out = runCases(value, this.cases);
+-    if (out === NO_MATCH) {
++    const c = findCase(value, this.cases);
++    if (c === null) {
+       throw new Error("Non-exhaustive match: no case matched input");
+     }
+-    return out;
++    return c.run(value);
+   }
+   /**
+    * Settle the match with a compile-time exhaustiveness guarantee. Only
+@@ -247,8 +246,8 @@ var MatchBuilder = class _MatchBuilder {
+    */
+   otherwise(handler) {
+     const runWithFallback = (value) => {
+-      const out = runCases(value, this.cases);
+-      return out === NO_MATCH ? handler(value) : out;
++      const c = findCase(value, this.cases);
++      return c === null ? handler(value) : c.run(value);
+     };
+     return this.input === NO_INPUT ? runWithFallback : runWithFallback(this.input);
+   }
+diff --git a/dist/index.js b/dist/index.js
+index 961e8966f6835d7089220d367b33316d6151732e..9eab7cc141e02e7403836dce1088bc2735b901e0 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -27,13 +27,12 @@ var matches = (input, pattern) => {
+ };
+ var NO_MATCH = /* @__PURE__ */ Symbol("@onrails/pattern/no-match");
+ var NO_INPUT = /* @__PURE__ */ Symbol("@onrails/pattern/no-input");
+-var runCases = (input, cases) => {
+-  for (const c of cases) {
+-    if (c.test(input)) {
+-      return c.run(input);
+-    }
++var findCase = (input, cases) => {
++  for (let i = 0; i < cases.length; i++) {
++    const c = cases[i];
++    if (c.test(input)) return c;
+   }
+-  return NO_MATCH;
++  return null;
+ };
+ var caseForPatterns = (patterns, handler) => ({
+   test: (input) => patterns.some((pattern) => matches(input, pattern)),
+@@ -188,11 +187,11 @@ var MatchBuilder = class _MatchBuilder {
+     if (value === NO_INPUT) {
+       throw new Error("match.run: no input value");
+     }
+-    const out = runCases(value, this.cases);
+-    if (out === NO_MATCH) {
++    const c = findCase(value, this.cases);
++    if (c === null) {
+       throw new Error("Non-exhaustive match: no case matched input");
+     }
+-    return out;
++    return c.run(value);
+   }
+   /**
+    * Settle the match with a compile-time exhaustiveness guarantee. Only
+@@ -245,8 +244,8 @@ var MatchBuilder = class _MatchBuilder {
+    */
+   otherwise(handler) {
+     const runWithFallback = (value) => {
+-      const out = runCases(value, this.cases);
+-      return out === NO_MATCH ? handler(value) : out;
++      const c = findCase(value, this.cases);
++      return c === null ? handler(value) : c.run(value);
+     };
+     return this.input === NO_INPUT ? runWithFallback : runWithFallback(this.input);
+   }
