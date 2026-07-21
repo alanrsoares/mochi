@@ -57,6 +57,8 @@ const expr = (e: Expr, ind: string): string => {
         : `{ ${e.fields.map((f) => `${f.name}: ${expr(f.value, ind)}`).join(", ")} }`;
     case "field":
       return `${member(e.target, ind)}.${e.name}`;
+    case "tuple":
+      return `(${e.elements.map((el) => expr(el, ind)).join(", ")})`;
     case "arr":
       return `[${e.elements.map((el) => expr(el, ind)).join(", ")}]`;
     case "list":
@@ -65,6 +67,8 @@ const expr = (e: Expr, ind: string): string => {
       return e.entries.length === 0
         ? "#{}"
         : `#{ ${e.entries.map((en) => `${expr(en.key, ind)}: ${expr(en.value, ind)}`).join(", ")} }`;
+    case "letin":
+      return `let ${e.name} = ${expr(e.value, ind)} in ${expr(e.body, ind)}`;
     case "match":
       return matchExpr(e, ind);
   }
@@ -90,6 +94,8 @@ const pattern = (p: Pattern): string => {
       return JSON.stringify(p.value);
     case "precord":
       return `{ ${p.fields.map(patField).join(", ")} }`;
+    case "ptuple":
+      return `(${p.elems.map(pattern).join(", ")})`;
     case "pctor":
       return p.args.length === 0 ? p.ctor : `${p.ctor}(${p.args.map(pattern).join(", ")})`;
     case "parr": {
@@ -129,6 +135,7 @@ const typeExpr = (te: TypeExpr): string => {
     const arg = (a: TypeExpr): string => (a.kind === "tname" ? typeExpr(a) : `(${typeExpr(a)})`);
     return `${te.ctor} ${te.args.map(arg).join(" ")}`;
   }
+  if (te.kind === "ttuple") return `(${te.elems.map(typeExpr).join(", ")})`;
   if (te.kind === "tlist") return `[${typeExpr(te.elem)}]`;
   const from = te.from.kind === "tarrow" ? `(${typeExpr(te.from)})` : typeExpr(te.from);
   return `${from} -> ${typeExpr(te.to)}`;

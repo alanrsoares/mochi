@@ -39,6 +39,13 @@ export const tBool = tCon("bool");
 // generic sugar: applied constructors
 export const tApp = (name: string, ...args: Type[]): Type => tCon(name, args);
 
+// A tuple is an applied constructor under the reserved, unspeakable name
+// `"tuple"` (lowercase → never a user type, which are always Uppercase). Arity
+// is encoded by the number of args, so `(a, b)` and `(a, b, c)` are distinct
+// types that never unify — all for free via the existing con machinery.
+export const TUPLE = "tuple";
+export const tTuple = (elems: Type[]): Type => tCon(TUPLE, elems);
+
 export const rEmpty: Row = { kind: "empty" };
 export const rVar = (id: number): Row => ({ kind: "rvar", id });
 export const rExtend = (label: string, type: Type, rest: Row): Row => ({
@@ -65,6 +72,7 @@ export const showType = (t: Type): string => {
       return `'t${t.id}`;
     case "con":
       if (t.name === "Array" && t.args.length === 1) return `[${showType(t.args[0]!)}]`;
+      if (t.name === TUPLE) return `(${t.args.map(showType).join(", ")})`;
       return t.args.length === 0 ? t.name : `${t.name}<${t.args.map(showType).join(", ")}>`;
     case "arrow": {
       // parenthesize a left-nested arrow: (a -> b) -> c

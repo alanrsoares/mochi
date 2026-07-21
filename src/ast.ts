@@ -8,10 +8,15 @@ export type Expr =
   | { kind: "ref"; name: string; span: Span }
   | { kind: "call"; fn: Expr; args: Expr[]; span: Span }
   | { kind: "lambda"; params: LamParam[]; body: Expr; span: Span } // (x, y) => body, ({a, b}) => body
+  // let x = value in body — a local binding scoped to `body`. Non-recursive:
+  // `x` is NOT in scope in `value`. Generalized (let-polymorphism) like a
+  // top-level `let`. `nameSpan` anchors the bound name for hover/inlay.
+  | { kind: "letin"; name: string; nameSpan: Span; value: Expr; body: Expr; span: Span } // let x = v in b
   | { kind: "pipe"; left: Expr; right: Expr; span: Span } // a |> f
   | { kind: "match"; scrutinee: Expr; arms: MatchArm[]; span: Span } // switch x { | p => e }
   | { kind: "record"; fields: Field[]; span: Span } // { x: 1, y: 2 }
   | { kind: "field"; target: Expr; name: string; span: Span } // p.x
+  | { kind: "tuple"; elements: Expr[]; span: Span } // (a, b) — heterogeneous product, arity ≥ 2
   | { kind: "arr"; elements: Expr[]; span: Span } // [1, 2, 3] — eager Array
   | { kind: "list"; elements: Expr[]; span: Span } // @{1, 2, 3} — lazy List
   | { kind: "map"; entries: MapEntry[]; span: Span }; // #{ "a": 1 } — Map
@@ -34,6 +39,7 @@ export type Pattern =
   | { kind: "plit"; value: number; raw: string; span: Span } // 0
   | { kind: "pbool"; value: boolean; span: Span } // true / false
   | { kind: "pstr"; value: string; span: Span } // "foo"
+  | { kind: "ptuple"; elems: Pattern[]; span: Span } // (x, y) — tuple destructure, arity ≥ 2
   | { kind: "precord"; fields: PatField[]; span: Span } // { x, status: "err" }
   | { kind: "pctor"; ctor: string; args: Pattern[]; span: Span } // Circle(r)
   // [], [x], [x, y], [head, ...tail] — `rest` (a bind/wild) captures the tail
@@ -66,6 +72,7 @@ export type TypeExpr =
   | { kind: "tname"; name: string; span: Span }
   | { kind: "tarrow"; from: TypeExpr; to: TypeExpr; span: Span }
   | { kind: "tapp"; ctor: string; args: TypeExpr[]; span: Span } // Task a, Result a e
+  | { kind: "ttuple"; elems: TypeExpr[]; span: Span } // (a, b) — tuple type, arity ≥ 2
   | { kind: "tlist"; elem: TypeExpr; span: Span }; // [a]
 
 export type Stmt =
@@ -111,10 +118,12 @@ export type Stmt =
 // inline `Extract<Expr, { kind: "…" }>` so the discriminant shape stays out of
 // call sites (and the `no-inline-struct-type` lint stays green).
 export type LambdaExpr = Extract<Expr, { kind: "lambda" }>;
+export type LetInExpr = Extract<Expr, { kind: "letin" }>;
 export type MatchExpr = Extract<Expr, { kind: "match" }>;
 export type FieldExpr = Extract<Expr, { kind: "field" }>;
 export type ListExpr = Extract<Expr, { kind: "list" }>;
 
+export type TuplePat = Extract<Pattern, { kind: "ptuple" }>;
 export type ArrPat = Extract<Pattern, { kind: "parr" }>;
 export type ListPat = Extract<Pattern, { kind: "plist" }>;
 export type RecordPat = Extract<Pattern, { kind: "precord" }>;

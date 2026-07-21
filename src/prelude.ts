@@ -240,6 +240,14 @@ export const preludeJsDefs: Record<string, string> = {
   _Str_endsWith: "const _Str_endsWith = _curry(2, (p, s) => s.endsWith(p));",
   _Str_slice: "const _Str_slice = _curry(3, (start, end, s) => s.slice(start, end));",
   _Str_replace: "const _Str_replace = _curry(3, (find, repl, s) => s.replaceAll(find, repl));",
+  // --- char cursor: bounds-safe indexed access returns Option ---
+  _Str_get: "const _Str_get = _curry(2, (i, s) => (i >= 0 && i < s.length ? Some(s[i]) : None));",
+  _Str_codeAt:
+    "const _Str_codeAt = _curry(2, (i, s) => (i >= 0 && i < s.length ? Some(s.charCodeAt(i)) : None));",
+  _Str_fromCode: "const _Str_fromCode = (n) => String.fromCharCode(n);",
+  _Str_chars: "const _Str_chars = (s) => [...s];",
+  _Str_toNumber:
+    "const _Str_toNumber = (s) => { const n = Number(s); return Number.isNaN(n) ? None : Some(n); };",
 };
 
 // Runtime-dependency graph: a def name → the other def names its body references.
@@ -312,6 +320,9 @@ export const runtimeDeps: Record<string, string[]> = {
   _Str_endsWith: ["_curry"],
   _Str_slice: ["_curry"],
   _Str_replace: ["_curry"],
+  _Str_get: ["Some", "None", "_curry"],
+  _Str_codeAt: ["Some", "None", "_curry"],
+  _Str_toNumber: ["Some", "None"],
 };
 
 // Qualified collection namespaces. alang has no overloading, so each collection
@@ -387,6 +398,12 @@ export const preludeNamespaces: Record<string, Record<string, Type>> = {
     endsWith: tArrow(tString, tArrow(tString, tBool)), // suffix -> s -> bool
     slice: tArrow(tNumber, tArrow(tNumber, tArrow(tString, tString))), // start -> end -> s -> string
     replace: tArrow(tString, tArrow(tString, tArrow(tString, tString))), // find -> repl -> s -> string
+    // --- char cursor (for hand-written scanners / the self-hosted lexer) ---
+    get: tArrow(tNumber, tArrow(tString, opt(tString))), // i -> s -> Option string (1-char)
+    codeAt: tArrow(tNumber, tArrow(tString, opt(tNumber))), // i -> s -> Option number (char code)
+    fromCode: tArrow(tNumber, tString), // code -> string (a 1-char string; no char type)
+    chars: tArrow(tString, arr(tString)), // s -> [string] (code-point split)
+    toNumber: tArrow(tString, opt(tNumber)), // s -> Option number (None if NaN)
   },
 };
 
@@ -457,6 +474,11 @@ export const namespaceRuntime: Record<string, Record<string, string>> = {
     endsWith: "_Str_endsWith",
     slice: "_Str_slice",
     replace: "_Str_replace",
+    get: "_Str_get",
+    codeAt: "_Str_codeAt",
+    fromCode: "_Str_fromCode",
+    chars: "_Str_chars",
+    toNumber: "_Str_toNumber",
   },
 };
 

@@ -109,7 +109,22 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     return { kind: "lambda", params, body, span: spanning(start, body.span) };
   }
 
+  // let x = value in body — a local binding as an expression. `in` is a
+  // contextual keyword (a plain id), never reserved, since an expression never
+  // continues with a bare identifier: the `in` following `value` is unambiguous.
+  function parseLetIn(): Expr {
+    const start = expect("let").span;
+    const { name, span: nameSpan } = expectId();
+    expect("eq");
+    const value = parseExpr();
+    const kw = expectId();
+    if (kw.name !== "in") fail(`expected 'in' after let binding, got '${kw.name}'`);
+    const body = parseExpr();
+    return { kind: "letin", name, nameSpan, value, body, span: spanning(start, body.span) };
+  }
+
   function parseExpr(minBp = 0): Expr {
+    if (peek().t === "let") return parseLetIn();
     if (looksLikeLambda()) return parseLambda();
     let left = parseAtomOrCall();
     while (peek().t === "pipe" && PIPE_BP >= minBp) {
@@ -158,9 +173,19 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     if (tk.t === "str") return { kind: "str", value: tk.v, span: tk.span };
     if (tk.t === "id") return { kind: "ref", name: tk.v, span: tk.span };
     if (tk.t === "lparen") {
-      const e = parseExpr();
+      const first = parseExpr();
+      // `(e, e, …)` is a tuple; a lone `(e)` is just grouping.
+      if (peek().t === "comma") {
+        const elements = [first];
+        while (peek().t === "comma") {
+          next();
+          elements.push(parseExpr());
+        }
+        const end = expect("rparen").span;
+        return { kind: "tuple", elements, span: spanning(tk.span, end) };
+      }
       expect("rparen");
-      return e;
+      return first;
     }
     throw new ParseAbort(parseErr(`unexpected token ${tk.t}`, tk.span));
   }
@@ -271,6 +296,17 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     if (tk.t === "str") {
       next();
       return { kind: "pstr", value: tk.v, span: tk.span };
+    }
+    if (tk.t === "lparen") {
+      const start = next().span;
+      const elems = [parsePattern()];
+      while (peek().t === "comma") {
+        next();
+        elems.push(parsePattern());
+      }
+      const end = expect("rparen").span;
+      // `(p, p, …)` destructures a tuple; a lone `(p)` is just grouping.
+      return elems.length === 1 ? elems[0]! : { kind: "ptuple", elems, span: spanning(start, end) };
     }
     if (tk.t === "lbrace") {
       const start = next().span;
@@ -498,8 +534,18 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
   // Type-expression parser for extern signatures. Arrows are right-associative.
   function parseTypeAtom(): TypeExpr {
     if (peek().t === "lparen") {
-      next();
+      const start = next().span;
       const inner = parseTypeExpr();
+      // `(a, b)` is a tuple type; a lone `(t)` is just grouping.
+      if (peek().t === "comma") {
+        const elems = [inner];
+        while (peek().t === "comma") {
+          next();
+          elems.push(parseTypeExpr());
+        }
+        const end = expect("rparen").span;
+        return { kind: "ttuple", elems, span: spanning(start, end) };
+      }
       expect("rparen");
       return inner;
     }

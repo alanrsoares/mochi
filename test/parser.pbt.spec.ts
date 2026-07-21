@@ -42,6 +42,10 @@ const children = (e: Expr): Expr[] => {
       return [e.fn, ...e.args];
     case "lambda":
       return [e.body];
+    case "letin":
+      return [e.value, e.body];
+    case "tuple":
+      return e.elements;
     case "pipe":
       return [e.left, e.right];
     case "match":

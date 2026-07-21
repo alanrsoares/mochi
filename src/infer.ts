@@ -38,6 +38,7 @@ import {
   tNumber,
   tRecord,
   tString,
+  tTuple,
   tVar,
 } from "./types";
 import { emptySubst, resolve, resolveRow, type Subst, unify, zonk } from "./unify";
@@ -227,6 +228,20 @@ const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
       return ok(paramTypes.reduceRight((acc, pt) => tArrow(pt, acc), bodyT.value));
     }
 
+    case "letin": {
+      // Non-recursive let-polymorphism: infer the value, generalize it against
+      // the current env (so unconstrained vars quantify), then infer the body
+      // with `name` bound to that scheme. `name` is NOT in scope in `value`.
+      const valT = infer(e.value, ctx);
+      if (isErr(valT)) return valT;
+      const scheme = generalize(ctx.env, valT.value, ctx.subst);
+      // Record the binding name so hover leads with `let x: T` on the local.
+      if (ctx.record) ctx.record(e.nameSpan, valT.value, { kind: "let", name: e.name });
+      const bodyEnv: Env = new Map(ctx.env);
+      bodyEnv.set(e.name, scheme);
+      return infer(e.body, { ...ctx, env: bodyEnv });
+    }
+
     case "call": {
       const fnT = infer(e.fn, ctx);
       if (isErr(fnT)) return fnT;
@@ -276,6 +291,17 @@ const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
       const uni = u(targetT.value, tRecord(rExtend(e.name, fieldT, rest)), ctx, e.span);
       if (isErr(uni)) return uni;
       return ok(fieldT);
+    }
+
+    case "tuple": {
+      // Heterogeneous product: each element keeps its own type.
+      const elems: Type[] = [];
+      for (const el of e.elements) {
+        const et = infer(el, ctx);
+        if (isErr(et)) return et;
+        elems.push(et.value);
+      }
+      return ok(tTuple(elems));
     }
 
     case "arr":
@@ -408,6 +434,19 @@ const inferPat = (p: Pattern, ctx: Ctx): Result<PatResult, AlangError> => {
       }
       return ok({ type: cur, bindings });
     }
+    case "ptuple": {
+      // Heterogeneous product: each sub-pattern types its own position.
+      const elems: Type[] = [];
+      const bindings = new Map<string, Type>();
+      for (const ep of p.elems) {
+        const sub = inferPattern(ep, ctx);
+        if (isErr(sub)) return sub;
+        for (const [k, v] of sub.value.bindings) bindings.set(k, v);
+        elems.push(sub.value.type);
+      }
+      return ok({ type: tTuple(elems), bindings });
+    }
+
     case "parr":
       // Eager `Array<elem>`; every element shares `elem`, `...rest` binds the tail.
       return inferSeqPat("Array", p.elems, p.rest, ctx);
@@ -499,6 +538,8 @@ const typeExprToType = (
     const info = aliases.get(te.ctor);
     return info ? aliasRow(te.ctor, info, args, f, aliases, expanding) : tCon(te.ctor, args);
   }
+  if (te.kind === "ttuple")
+    return tTuple(te.elems.map((el) => typeExprToType(el, vars, f, aliases, expanding)));
   if (te.kind === "tlist")
     return tCon("Array", [typeExprToType(te.elem, vars, f, aliases, expanding)]);
   if (PRIMS.has(te.name)) return primType(te.name);
@@ -553,6 +594,7 @@ const patternBinds = (p: Pattern): string[] => {
   if (p.kind === "pbind") return [p.name];
   if (p.kind === "precord") return p.fields.flatMap((f) => patternBinds(f.pat));
   if (p.kind === "pctor") return p.args.flatMap(patternBinds);
+  if (p.kind === "ptuple") return p.elems.flatMap(patternBinds);
   if (p.kind === "parr" || p.kind === "plist")
     return [...p.elems.flatMap(patternBinds), ...(p.rest ? patternBinds(p.rest) : [])];
   return [];
@@ -582,6 +624,14 @@ const freeRefs = (e: Expr, bound: Set<string>, acc: Set<string>): void => {
       freeRefs(e.body, inner, acc);
       return;
     }
+    case "letin": {
+      // `value` is in the outer scope (non-recursive); `body` sees the new name.
+      freeRefs(e.value, bound, acc);
+      const inner = new Set(bound);
+      inner.add(e.name);
+      freeRefs(e.body, inner, acc);
+      return;
+    }
     case "pipe":
       freeRefs(e.left, bound, acc);
       freeRefs(e.right, bound, acc);
@@ -600,6 +650,7 @@ const freeRefs = (e: Expr, bound: Set<string>, acc: Set<string>): void => {
     case "field":
       freeRefs(e.target, bound, acc);
       return;
+    case "tuple":
     case "arr":
     case "list":
       for (const el of e.elements) freeRefs(el, bound, acc);

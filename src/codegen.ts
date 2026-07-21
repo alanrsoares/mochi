@@ -22,6 +22,7 @@ import type {
   Program,
   RecordPat,
   Stmt,
+  TuplePat,
   TypeStmt,
 } from "./ast";
 import { builtinTypeDecls, namespaceRuntime, preludeJsDefs, runtimeDeps } from "./prelude";
@@ -77,6 +78,12 @@ const genExpr = (e: Expr): string =>
       // function so any call grouping works (CRITIQUE §4.4). Arity 1 needs none.
       return params.length >= 2 ? `_curry(${params.length}, ${arrow})` : arrow;
     })
+    // let x = v in b  →  an IIFE binding x: `((x) => b)(v)`. Non-recursive, so
+    // a plain arg-application is enough; nested let-ins chain as curried IIFEs.
+    .with(
+      { kind: "letin" },
+      (l) => `((${l.name}) => ${genLambdaBody(l.body)})(${genExpr(l.value)})`,
+    )
     // desugar inline: a |> f  →  f(a)
     .with({ kind: "pipe" }, (p) => `${genCallee(p.right)}(${genExpr(p.left)})`)
     .with({ kind: "match" }, genMatch)
@@ -86,6 +93,9 @@ const genExpr = (e: Expr): string =>
         : `{ ${r.fields.map((f) => `${f.name}: ${genExpr(f.value)}`).join(", ")} }`,
     )
     .with({ kind: "field" }, (f) => nsRuntimeId(f) ?? `${genMember(f.target)}.${f.name}`)
+    // A tuple erases to a JS array `[a, b]` (like ReScript); the type system
+    // keeps it distinct from an `alang` Array, the runtime shares the shape.
+    .with({ kind: "tuple" }, (t) => `[${t.elements.map(genExpr).join(", ")}]`)
     .with({ kind: "arr" }, (l) => `[${l.elements.map(genExpr).join(", ")}]`)
     .with({ kind: "list" }, genList)
     .with(
@@ -129,14 +139,33 @@ const isCatchAll = (p: Pattern): boolean =>
   p.kind === "pwild" ||
   p.kind === "pbind" ||
   (p.kind === "precord" && p.fields.every((f) => isCatchAll(f.pat))) ||
+  // A tuple always matches when every position does (irrefutable product).
+  (p.kind === "ptuple" && p.elems.every(isCatchAll)) ||
   // [...all] / @{...all} — a bare rest with no fixed head matches anything.
   ((p.kind === "parr" || p.kind === "plist") && p.elems.length === 0 && p.rest !== null);
+
+// A JS array-destructuring target for a catch-all tuple: `[a, b]`. A wildcard
+// or nested narrowing leaves an elision hole (`[a, , c]`); a nested record
+// destructures its binds, a nested tuple recurses.
+const tupleTarget = (p: TuplePat): string =>
+  `[${p.elems
+    .map((e) =>
+      e.kind === "pbind"
+        ? e.name
+        : e.kind === "precord"
+          ? `{ ${recordBinds(e).join(", ")} }`
+          : e.kind === "ptuple"
+            ? tupleTarget(e)
+            : "",
+    )
+    .join(", ")}]`;
 
 // The handler parameter for a catch-all pattern: bind the name, destructure a
 // record's fields, or ignore the value.
 const catchAllParam = (p: Pattern): string => {
   if (p.kind === "pbind") return `(${p.name})`;
   if (p.kind === "precord") return `({ ${recordBinds(p).join(", ")} })`;
+  if (p.kind === "ptuple") return `(${tupleTarget(p)})`;
   // `[...all]` / `@{...all}` binds the whole collection to the rest name.
   if (p.kind === "parr" || p.kind === "plist")
     return p.rest?.kind === "pbind" ? `(${p.rest.name})` : "()";
@@ -245,8 +274,26 @@ const litValue = (p: LitPat): string =>
 // Patterns that narrow (everything a catch-all is not) — routed to `.with(...)`.
 type NarrowingPattern = Extract<
   Pattern,
-  { kind: "pctor" | "plit" | "pbool" | "pstr" | "precord" | "parr" }
+  { kind: "pctor" | "plit" | "pbool" | "pstr" | "precord" | "parr" | "ptuple" }
 >;
+
+// A narrowing tuple arm (at least one literal position) → an index-guard plus a
+// destructuring handler, mirroring the fixed-length array arm: `(a, 0)` →
+// `.with((_v) => _v[1] === 0, ([a]) => …)`. Nested constructor sub-patterns are
+// treated as holes (same limitation as array patterns — bind/wildcard/literal
+// only). Arity is guaranteed by the type, so no length guard is emitted.
+const genTupleArm = (p: TuplePat, body: Expr): string => {
+  const conds: string[] = [];
+  const slots = p.elems.map((ep, i) => {
+    if (ep.kind === "pbind") return ep.name;
+    if (ep.kind === "plit" || ep.kind === "pbool" || ep.kind === "pstr") {
+      conds.push(`_v[${i}] === ${litValue(ep)}`);
+    }
+    return ""; // literal (narrowed), wildcard, or nested — a hole in the binding
+  });
+  const param = slots.some((s) => s !== "") ? `([${slots.join(", ")}])` : "()";
+  return `.with((_v) => ${conds.join(" && ")}, ${param} => ${genExpr(body)})`;
+};
 
 // A fixed/cons list pattern lowers to a length-guard plus a destructuring
 // handler: `[]` → `v.length === 0`; `[x]` → `v.length === 1`, bind `([x])`;
@@ -270,6 +317,7 @@ const genArrArm = (p: ArrPat, body: Expr): string => {
 
 const genWithArm = (p: NarrowingPattern, body: Expr): string => {
   if (p.kind === "parr") return genArrArm(p, body);
+  if (p.kind === "ptuple") return genTupleArm(p, body);
 
   if (p.kind === "plit" || p.kind === "pbool" || p.kind === "pstr")
     return `.with(${litValue(p)}, () => ${genExpr(body)})`;
@@ -365,6 +413,7 @@ const usesMatchLib = (e: Expr): boolean =>
     .with({ kind: "num" }, { kind: "bool" }, { kind: "str" }, { kind: "ref" }, () => false)
     .with({ kind: "call" }, (c) => usesMatchLib(c.fn) || c.args.some(usesMatchLib))
     .with({ kind: "lambda" }, (l) => usesMatchLib(l.body))
+    .with({ kind: "letin" }, (l) => usesMatchLib(l.value) || usesMatchLib(l.body))
     .with({ kind: "pipe" }, (p) => usesMatchLib(p.left) || usesMatchLib(p.right))
     .with(
       { kind: "match" },
@@ -373,6 +422,7 @@ const usesMatchLib = (e: Expr): boolean =>
     )
     .with({ kind: "record" }, (r) => r.fields.some((f) => usesMatchLib(f.value)))
     .with({ kind: "field" }, (f) => usesMatchLib(f.target))
+    .with({ kind: "tuple" }, (t) => t.elements.some(usesMatchLib))
     .with({ kind: "arr" }, (l) => l.elements.some(usesMatchLib))
     .with({ kind: "list" }, (l) => l.elements.some(usesMatchLib))
     .with({ kind: "map" }, (m) =>
@@ -396,6 +446,10 @@ const exprRefs = (e: Expr, acc: Set<string>): void => {
       if (params.length >= 2) acc.add("_curry"); // arity ≥ 2 lowers to `_curry(...)`
       exprRefs(body, acc);
     })
+    .with({ kind: "letin" }, (l) => {
+      exprRefs(l.value, acc);
+      exprRefs(l.body, acc);
+    })
     .with({ kind: "pipe" }, (p) => {
       exprRefs(p.left, acc);
       exprRefs(p.right, acc);
@@ -417,6 +471,9 @@ const exprRefs = (e: Expr, acc: Set<string>): void => {
         return;
       }
       exprRefs(f.target, acc);
+    })
+    .with({ kind: "tuple" }, (t) => {
+      for (const el of t.elements) exprRefs(el, acc);
     })
     .with({ kind: "arr" }, (l) => {
       for (const el of l.elements) exprRefs(el, acc);

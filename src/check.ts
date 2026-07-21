@@ -75,6 +75,10 @@ function forEachMatch(e: Expr, visit: (m: MatchExpr) => void): void {
     case "lambda":
       forEachMatch(e.body, visit);
       return;
+    case "letin":
+      forEachMatch(e.value, visit);
+      forEachMatch(e.body, visit);
+      return;
     case "pipe":
       forEachMatch(e.left, visit);
       forEachMatch(e.right, visit);
@@ -90,6 +94,7 @@ function forEachMatch(e: Expr, visit: (m: MatchExpr) => void): void {
     case "field":
       forEachMatch(e.target, visit);
       return;
+    case "tuple":
     case "arr":
     case "list":
       for (const el of e.elements) forEachMatch(el, visit);
@@ -109,6 +114,8 @@ const isCatchAll = (p: Pattern): boolean =>
   p.kind === "pwild" ||
   p.kind === "pbind" ||
   (p.kind === "precord" && p.fields.every((f) => isCatchAll(f.pat))) ||
+  // A tuple always matches when every position does (irrefutable product).
+  (p.kind === "ptuple" && p.elems.every(isCatchAll)) ||
   // `[...all]` / `@{...all}` — a bare rest with no fixed head matches any list.
   ((p.kind === "parr" || p.kind === "plist") && p.elems.length === 0 && p.rest !== null);
 

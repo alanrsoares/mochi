@@ -40,6 +40,8 @@ What else was on the table and why not.
 | [0006](0006-one-numeric-type.md) | One numeric type; `int`/`float` are aliases | Accepted |
 | [0007](0007-structural-eq-compare.md) | Structural `eq`/`compare`, not typeclasses | Accepted |
 | [0008](0008-drop-set-dollar-sigil.md) | Drop the `${…}` Set literal | Accepted |
+| [0009](0009-let-in-local-bindings.md) | Local `let … in` bindings (non-recursive, let-polymorphic) | Accepted |
+| [0010](0010-tuples.md) | Tuples via a reserved `con("tuple", …)`; erase to JS arrays | Accepted |
 
 ## Backlog (well-evidenced, not yet written)
 

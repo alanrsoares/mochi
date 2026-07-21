@@ -2,12 +2,13 @@
 
 ## Status
 
-**Proposed, not started. North star, not next commit.** alang runs, is
-Turing-complete, and has the hard part done — HM inference, ADTs + exhaustive
-match, row-poly records, Map, mutual recursion, modules, Result/Option,
-structural eq. The type-theory core most languages stall on is shipped. But
-writing the compiler *in alang* needs surface ergonomics it still lacks. This
-doc is the readiness checklist and the incremental path.
+**In progress. North star, not next commit.** alang runs, is Turing-complete,
+and has the hard part done — HM inference, ADTs + exhaustive match, row-poly
+records, Map, mutual recursion, modules, Result/Option, structural eq. The
+type-theory core most languages stall on is shipped. **All three surface-syntax
+blockers are now cleared** (let-in ADR 0009, tuples ADR 0010, char cursor in the
+prelude). Next is the lexer-in-alang spike. This doc is the readiness checklist
+and the incremental path.
 
 ## Why bootstrap at all
 
@@ -20,18 +21,18 @@ in alang today?" — the answer keeps hitting the same missing pieces.
 
 ### Blockers — cannot write a compiler without these
 
-1. **Local `let … in` bindings.** Today `let` is a top-level `Stmt` only
-   (`src/ast.ts:75`); a function body is a single `Expr` with no way to name an
-   intermediate. Every compiler pass names steps (`let toks = lex(src) in …`).
-   Threading intermediates through lambdas or `match` scrutinees is unbearable at
-   compiler scale. **This is #1** — and it's useful everywhere, not just here.
-2. **Tuples.** Flagged open in the roadmap (needed for `zip` too). Recursive
-   descent lives on `(node, rest)` pairs. Records `{ node, rest }` work but cost
-   a named type and verbose construction on every combinator. Parsers want the
-   anonymous product.
-3. **Low-level string/char ops.** A lexer scans char-by-char: `charCodeAt`,
-   `fromCharCode`, index slicing. `Str.slice`/`split` exist but not a char
-   cursor. **Mostly externable** — mechanical FFI, not a language change.
+1. ~~**Local `let … in` bindings.**~~ **DONE** (ADR 0009). `letin` `Expr` node,
+   non-recursive, let-polymorphic, `in` a contextual keyword, codegen to an IIFE.
+   Function bodies can now name intermediates (`let toks = lex(src) in …`). Was
+   #1; the biggest single ergonomic + bootstrap unlock.
+2. ~~**Tuples.**~~ **DONE** (ADR 0010). `(a, b)` literal / pattern / type via a
+   reserved `con("tuple", …)`, erasing to JS arrays. Unblocks `zip`. Caveat:
+   destructuring is `switch`-only so far — no `let (a, b) = e` / `((a,b)) => …`
+   yet (binding ergonomics are the next increment).
+3. ~~**Low-level string/char ops.**~~ **DONE**. Added a char cursor to the `Str`
+   namespace: `Str.get`/`Str.codeAt` (bounds-safe, return `Option`),
+   `Str.fromCode`, `Str.chars`, `Str.toNumber`. A "char" is a 1-char string (no
+   char type). Pure prelude/FFI, no language change — as predicted.
 
 ### Strong ergonomics — painful without, not strictly blocking
 
@@ -50,18 +51,22 @@ modules (`import`/`export`), builtin `Result`/`Option`, structural
 
 ## Path — incremental, not big-bang
 
-1. **let-in** — ship local `let … in` (blocker #1). Biggest single unlock;
-   pays off in all user code, not only the compiler. New `Expr` variant + parser
-   + infer (generalize the bound value in its body scope) + codegen (IIFE or
-   `const` in a block).
-2. **tuples** — ship the anonymous product type (blocker #2). Literal `(a, b)`,
-   pattern `(x, y)`, `tuple` `TypeExpr`. Unblocks `zip` as a bonus.
-3. **char/string externs** — bind `charCodeAt`/`fromCharCode`/index slicing
-   (blocker #3). Mechanical.
+1. ~~**let-in**~~ **DONE** — local `let … in` shipped (ADR 0009). `Expr` variant
+   + parser + infer (generalize the bound value in its body scope) + codegen
+   (IIFE). Next: tuples.
+2. ~~**tuples**~~ **DONE** (ADR 0010) — literal `(a, b)`, pattern `(x, y)`,
+   `ttuple` `TypeExpr`, reserved-con type, JS-array codegen. `zip` now
+   expressible. Follow-up: `let`/lambda tuple destructure.
+3. ~~**char/string externs**~~ **DONE** — `Str.get`/`codeAt`/`fromCode`/`chars`/
+   `toNumber` added to the prelude (blocker #3).
 4. **Spike: lexer-in-alang** — the smallest real self-host proof. Write alang's
    lexer *in alang*, run it under the current TS host, diff its token stream
    against `src/lexer.ts` on the existing corpus. Validates ergonomics on a
-   contained target before committing to parser/infer/codegen.
+   contained target before committing to parser/infer/codegen. ← NEXT.
+   **Likely wants first:** `let (a, b) = e` / `((a, b)) => …` tuple-binding
+   sugar — a char scanner threads `(pos, tok)` state constantly, and
+   `switch`-only destructuring will hurt. Decide during the spike (matches the
+   original plan: let the spike order the next ergonomic pieces).
 5. **Reassess do-notation** — the spike reveals whether manual `Result`
    threading (item 4 above) is tolerable or must be sugared before going further.
 6. **Then** parser → check → infer → codegen in alang, one pass at a time, each
