@@ -8,8 +8,6 @@ import {
   type Diagnostic,
   DiagnosticSeverity,
   type Hover,
-  type InlayHint,
-  InlayHintKind,
   MarkupKind,
   ProposedFeatures,
   TextDocumentSyncKind,
@@ -20,7 +18,6 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import { diagnostics as compute } from "../diagnostics";
 import { format } from "../format";
 import { hoverAt } from "../hover";
-import { inlayHints } from "../inlay";
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
@@ -29,12 +26,13 @@ connection.onInitialize(() => ({
   capabilities: {
     textDocumentSync: TextDocumentSyncKind.Incremental,
     hoverProvider: true,
-    inlayHintProvider: true,
+    inlayHintProvider: false,
     documentFormattingProvider: true,
   },
 }));
 
 // Hover: map the cursor Position → byte offset → inferred type at that node.
+// Hover is the preferred mechanism for inspecting type hints.
 connection.onHover(({ textDocument, position }): Hover | null => {
   const doc = documents.get(textDocument.uri);
   if (!doc) return null;
@@ -43,19 +41,6 @@ connection.onHover(({ textDocument, position }): Hover | null => {
   const fence = `\`\`\`alang\n${info.code}\n\`\`\``;
   const value = info.doc ? `${fence}\n\n${info.doc}` : fence;
   return { contents: { kind: MarkupKind.Markdown, value } };
-});
-
-// Inlay hints: a `: type` inset after each top-level binding name. Offsets map
-// back to Positions; kind Type renders them faded like a type annotation.
-connection.languages.inlayHint.on(({ textDocument }): InlayHint[] => {
-  const doc = documents.get(textDocument.uri);
-  if (!doc) return [];
-  return inlayHints(doc.getText()).map((h) => ({
-    position: doc.positionAt(h.offset),
-    label: h.label,
-    kind: InlayHintKind.Type,
-    paddingLeft: false,
-  }));
 });
 
 // Formatting: run `format(src)` on the document text. If formatting succeeds,
