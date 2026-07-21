@@ -73,8 +73,9 @@ record fields may nest, lazy-List patterns may not. Guard:
   lexer spike measures the real pain (`docs/bootstrap.md` item 5).
 - **Record update sugar** (`{ ...r, field: v }` as an expression) — `infer`
   threads state records; rebuilding every field by hand is noise.
-- **Pattern guards / or-patterns** — each removes boilerplate in
-  `check`/`infer` ports; none is required.
+- ~~**Pattern guards**~~ **DONE** (ADR 0013) — `| p when expr => body`; nearly
+  free on top of ADR 0012's guard-form emission. Guarded arms never count
+  toward exhaustiveness. **Or-patterns** remain future work; not required.
 - **String interpolation** — would make codegen pleasant; `Str.concat` is
   sufficient.
 

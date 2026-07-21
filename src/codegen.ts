@@ -308,6 +308,12 @@ const genMatch = (m: MatchExpr): string => {
   const parts = [`match(${genExpr(m.scrutinee)})`];
   let catchAll: MatchArm | undefined;
   for (const arm of m.arms) {
+    // A guarded arm narrows regardless of its pattern (the guard can be
+    // false), so it always takes the guard form — even `_ when g`.
+    if (arm.guard) {
+      parts.push(`  ${genGuardArm(arm.pattern, arm.body, arm.guard)}`);
+      continue;
+    }
     if (isCatchAll(arm.pattern)) {
       catchAll ??= arm;
       continue;
@@ -344,11 +350,14 @@ const isFlatSub = (p: Pattern): boolean =>
 
 // The general arm: predicate + destructuring handler, built by the pattern
 // compiler. Handles arbitrary nesting (`Sm(Sm(n))`, `Ok((a, b))`, ctors inside
-// tuples/arrays). Narrowing guarantees at least one condition; `true` is a
-// defensive fallback, not an expected path.
-const genGuardArm = (p: Pattern, body: Expr): string => {
+// tuples/arrays) and `when` guards. A guard runs after the structural tests
+// (&&-short-circuit), with the pattern's binds rebound from `_v` by the same
+// destructuring slot the handler uses.
+const genGuardArm = (p: Pattern, body: Expr, guard?: Expr): string => {
   const conds = patConds(p, "_v");
   const slot = patSlot(p);
+  if (guard)
+    conds.push(slot === "" ? `(${genExpr(guard)})` : `((${slot}) => ${genExpr(guard)})(_v)`);
   const test = conds.length ? conds.join(" && ") : "true";
   return `.with((_v) => ${test}, ${slot === "" ? "()" : `(${slot})`} => ${genExpr(body)})`;
 };
@@ -459,7 +468,11 @@ const usesMatchLib = (e: Expr): boolean =>
     .with(
       { kind: "match" },
       (m) =>
-        !isListMatch(m) || usesMatchLib(m.scrutinee) || m.arms.some((a) => usesMatchLib(a.body)),
+        !isListMatch(m) ||
+        usesMatchLib(m.scrutinee) ||
+        m.arms.some(
+          (a) => (a.guard !== undefined && usesMatchLib(a.guard)) || usesMatchLib(a.body),
+        ),
     )
     .with({ kind: "record" }, (r) => r.fields.some((f) => usesMatchLib(f.value)))
     .with({ kind: "field" }, (f) => usesMatchLib(f.target))
@@ -500,7 +513,10 @@ const exprRefs = (e: Expr, acc: Set<string>): void => {
       // A lazy-List arm that binds a tail/rest builds a `_list(...)` at runtime.
       if (m.arms.some((a) => a.pattern.kind === "plist" && a.pattern.rest?.kind === "pbind"))
         acc.add("_list");
-      for (const arm of m.arms) exprRefs(arm.body, acc);
+      for (const arm of m.arms) {
+        if (arm.guard) exprRefs(arm.guard, acc);
+        exprRefs(arm.body, acc);
+      }
     })
     .with({ kind: "record" }, (r) => {
       for (const f of r.fields) exprRefs(f.value, acc);

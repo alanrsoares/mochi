@@ -34,7 +34,9 @@ export type Field = { name: string; value: Expr };
 // (usually a string/number literal), not an identifier like a record field.
 export type MapEntry = { key: Expr; value: Expr };
 
-export type MatchArm = { pattern: Pattern; body: Expr };
+// `guard` is the optional `when <expr>` clause: the arm matches only when the
+// pattern matches AND the guard (with the pattern's binds in scope) is true.
+export type MatchArm = { pattern: Pattern; guard?: Expr; body: Expr };
 
 export type Pattern =
   | { kind: "pwild"; span: Span } // _

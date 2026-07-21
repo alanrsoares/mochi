@@ -310,8 +310,17 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     while (peek().t === "bar") {
       next(); // consume |
       const pattern = parsePattern();
+      // `when <expr>` guard — contextual keyword like `in`: a pattern never
+      // continues with a bare identifier, so `when` after a pattern is
+      // unambiguous (and `| when => …` still binds the name `when`).
+      let guard: Expr | undefined;
+      const tk = peek();
+      if (tk.t === "id" && tk.v === "when") {
+        next();
+        guard = parseExpr();
+      }
       expect("arrow");
-      arms.push({ pattern, body: parseExpr() });
+      arms.push(guard ? { pattern, guard, body: parseExpr() } : { pattern, body: parseExpr() });
     }
     if (arms.length === 0) fail("switch needs at least one | arm");
     expect("rbrace");

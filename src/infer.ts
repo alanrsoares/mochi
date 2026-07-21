@@ -374,6 +374,13 @@ const inferMatch = (e: MatchExpr, ctx: Ctx): Result<Type, AlangError> => {
 
     const armEnv: Env = new Map(ctx.env);
     for (const [name, t] of pat.value.bindings) armEnv.set(name, mono(t));
+    // A `when` guard sees the pattern's binds and must be bool.
+    if (arm.guard) {
+      const guardT = infer(arm.guard, { ...ctx, env: armEnv });
+      if (isErr(guardT)) return guardT;
+      const uGuard = u(tBool, guardT.value, ctx, arm.guard.span);
+      if (isErr(uGuard)) return uGuard;
+    }
     const bodyT = infer(arm.body, { ...ctx, env: armEnv });
     if (isErr(bodyT)) return bodyT;
     const uBody = u(resultT, bodyT.value, ctx, arm.body.span);
@@ -651,6 +658,7 @@ const freeRefs = (e: Expr, bound: Set<string>, acc: Set<string>): void => {
       for (const arm of e.arms) {
         const inner = new Set(bound);
         for (const n of patternBinds(arm.pattern)) inner.add(n);
+        if (arm.guard) freeRefs(arm.guard, inner, acc);
         freeRefs(arm.body, inner, acc);
       }
       return;

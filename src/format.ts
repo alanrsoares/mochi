@@ -122,7 +122,10 @@ const patField = (f: PatField): string =>
 
 const matchExpr = (e: MatchExpr, ind: string): string => {
   const inner = ind + INDENT;
-  const arms = e.arms.map((a) => `${inner}| ${pattern(a.pattern)} => ${expr(a.body, inner)}`);
+  const arms = e.arms.map((a) => {
+    const guard = a.guard ? ` when ${expr(a.guard, inner)}` : "";
+    return `${inner}| ${pattern(a.pattern)}${guard} => ${expr(a.body, inner)}`;
+  });
   return `switch ${expr(e.scrutinee, ind)} {\n${arms.join("\n")}\n${ind}}`;
 };
 

@@ -85,7 +85,10 @@ function forEachMatch(e: Expr, visit: (m: MatchExpr) => void): void {
       return;
     case "match":
       forEachMatch(e.scrutinee, visit);
-      for (const a of e.arms) forEachMatch(a.body, visit);
+      for (const a of e.arms) {
+        if (a.guard) forEachMatch(a.guard, visit);
+        forEachMatch(a.body, visit);
+      }
       visit(e);
       return;
     case "record":
@@ -128,7 +131,8 @@ const isCatchAll = (p: Pattern): boolean =>
 // isn't), or undefined (not a list switch → let the caller decide).
 const checkSeqExhaustive = (m: MatchExpr): AlangError | null | undefined => {
   const seqs = m.arms.flatMap((a) =>
-    a.pattern.kind === "parr" || a.pattern.kind === "plist" ? [a.pattern] : [],
+    // Guarded arms don't prove totality (the guard can be false).
+    (a.pattern.kind === "parr" || a.pattern.kind === "plist") && !a.guard ? [a.pattern] : [],
   );
   if (seqs.length === 0) return undefined;
   const hasEmpty = seqs.some((p) => p.elems.length === 0 && p.rest === null);
@@ -202,7 +206,29 @@ function checkMatch(m: MatchExpr, reg: Registry): AlangError | null {
     const e = checkPattern(arm.pattern, reg, true);
     if (e) return e;
   }
-  const hasCatchAll = m.arms.some((a) => isCatchAll(a.pattern));
+  // Guards vs lazy Lists: a guarded arm still pulls from the sequence to test
+  // its pattern, and `genListMatch`'s buffering discipline has no guard slot —
+  // reject rather than miscompile. (Guards on eager `[...]` arms are fine.)
+  const isListSwitch = m.arms.some((a) => a.pattern.kind === "plist" && !isCatchAll(a.pattern));
+  for (const arm of m.arms) {
+    if (!arm.guard) continue;
+    if (arm.pattern.kind === "plist" || isListSwitch)
+      return checkErr(
+        "`when` guards are unsupported in a lazy-List switch (matching pulls from the sequence)",
+        arm.guard.span,
+      );
+  }
+  // An arm after an unguarded catch-all can never match; with guards in the
+  // mix, silently reordering it at codegen would change semantics — reject.
+  const catchIdx = m.arms.findIndex((a) => isCatchAll(a.pattern) && !a.guard);
+  const afterCatch = catchIdx === -1 ? undefined : m.arms[catchIdx + 1];
+  if (afterCatch)
+    return checkErr(
+      "unreachable arm: a catch-all arm above it matches first",
+      afterCatch.pattern.span,
+    );
+  // A guarded arm never counts toward exhaustiveness — the guard can be false.
+  const hasCatchAll = m.arms.some((a) => isCatchAll(a.pattern) && !a.guard);
   const ctorArms = m.arms.filter((a) => a.pattern.kind === "pctor");
 
   // No constructor arms → literal/wildcard/bool switch. A catch-all makes it
@@ -210,7 +236,7 @@ function checkMatch(m: MatchExpr, reg: Registry): AlangError | null {
   if (ctorArms.length === 0) {
     if (hasCatchAll) return null;
     const bools = new Set(
-      m.arms.flatMap((a) => (a.pattern.kind === "pbool" ? [a.pattern.value] : [])),
+      m.arms.flatMap((a) => (a.pattern.kind === "pbool" && !a.guard ? [a.pattern.value] : [])),
     );
     if (bools.has(true) && bools.has(false)) return null;
     const listErr = checkSeqExhaustive(m);
@@ -233,7 +259,7 @@ function checkMatch(m: MatchExpr, reg: Registry): AlangError | null {
     if (owningType === null) owningType = info.type;
     else if (owningType !== info.type)
       return checkErr(`switch mixes variants of '${owningType}' and '${info.type}'`, p.span);
-    if (coversCtor(p)) covered.add(p.ctor);
+    if (coversCtor(p) && !arm.guard) covered.add(p.ctor);
   }
 
   if (hasCatchAll) return null; // catch-all covers the rest

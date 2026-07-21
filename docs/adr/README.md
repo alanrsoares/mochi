@@ -44,6 +44,7 @@ What else was on the table and why not.
 | [0010](0010-tuples.md) | Tuples via a reserved `con("tuple", …)`; erase to JS arrays | Accepted |
 | [0011](0011-tuple-binding-sugar.md) | Tuple lambda param + `let (a, b) = … in` (desugar) | Accepted |
 | [0012](0012-nested-patterns.md) | Nested patterns: guard-form emission + conservative exhaustiveness | Accepted |
+| [0013](0013-pattern-guards.md) | Pattern guards: `when` clause, guard-form codegen, no coverage credit | Accepted |
 
 ## Backlog (well-evidenced, not yet written)
 
