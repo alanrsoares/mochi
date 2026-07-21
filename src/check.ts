@@ -281,10 +281,16 @@ function checkMatch(m: MatchExpr, reg: Registry): AlangError | null {
 
 // Collection namespaces are built-in; binding one as a value/type/import would
 // shadow `List.map` and desync codegen (which resolves them by name), so forbid it.
+// Exception: `Option`/`Result` are ALSO builtin variant types whose contract is
+// "user redeclarations win" — a `type` statement of those names stays legal
+// (the combinators assume the builtin runtime shape; a same-shape redecl is
+// the only sensible one and predates the namespaces).
 const RESERVED_NAMES = new Set(Object.keys(preludeNamespaces));
+const REDECLARABLE_TYPES = new Set(builtinTypeDecls.map((d) => d.name));
 
 const checkReservedNames = (prog: Program): AlangError | null => {
   for (const s of prog.stmts) {
+    if (s.kind === "type" && REDECLARABLE_TYPES.has(s.name)) continue;
     if (
       (s.kind === "let" || s.kind === "type" || s.kind === "extern") &&
       RESERVED_NAMES.has(s.name)

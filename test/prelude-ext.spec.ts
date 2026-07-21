@@ -1,12 +1,13 @@
 // Prelude extension: Math (unqualified builtins), String ops (`Str.*`), and the
 // grown eager-Array namespace (`Array.reverse/concat/…`). All immutable.
 import { expect, test } from "bun:test";
+import { match } from "@onrails/pattern";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 import { compile } from "../src/compile";
 
 const run = (src: string, ret: string): unknown => {
   const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
-  return new Function(`${js}\nreturn ${ret};`)();
+  return new Function("match", `${js}\nreturn ${ret};`)(match);
 };
 
 // ---- Math ------------------------------------------------------------------
@@ -113,4 +114,84 @@ test("Str is a reserved namespace name", () => {
   const r = compile("let Str = 1");
   expect(isErr(r)).toBe(true);
   expect(unwrapErr(r).message).toContain("reserved collection namespace");
+});
+
+test("Option/Result are reserved as values but redeclarable as types", () => {
+  expect(isErr(compile("let Option = 1"))).toBe(true);
+  expect(isErr(compile("let Result = 1"))).toBe(true);
+  // builtin-type contract: a user `type` redeclaration wins (example.al does this)
+  const redecl = "type Option a = | Some(value: a) | None\nlet a = Some(1)";
+  expect(isErr(compile(redecl))).toBe(false);
+});
+
+// ---- bool combinators (not/and/or) + gte/lte --------------------------------
+
+test("not / and / or", () => {
+  expect(run("let a = not(true)", "a")).toBe(false);
+  expect(run("let a = and(true, false)", "a")).toBe(false);
+  expect(run("let a = and(true, true)", "a")).toBe(true);
+  expect(run("let a = or(false, true)", "a")).toBe(true);
+  expect(run("let a = or(false, false)", "a")).toBe(false);
+});
+
+test("gte / lte", () => {
+  expect(run("let a = [gte(3, 3), gte(2, 3), lte(3, 3), lte(4, 3)]", "a")).toEqual([
+    true,
+    false,
+    true,
+    false,
+  ]);
+});
+
+// ---- Option combinators ------------------------------------------------------
+
+test("Option.map / flatMap / mapOr", () => {
+  const src = `let inc = n => add(n, 1)
+  let half = n => switch mod(n, 2) { | 0 => Some(div(n, 2)) | _ => None }
+  let a = Some(4) |> Option.map(inc)
+  let b = None |> Option.map(inc)
+  let c = Some(4) |> Option.flatMap(half)
+  let d = Some(3) |> Option.flatMap(half)
+  let e = Some(4) |> Option.mapOr(0)(inc)
+  let f = None |> Option.mapOr(0)(inc)
+  let r = [show(a), show(b), show(c), show(d), show(e), show(f)]`;
+  expect(run(src, "r")).toEqual(["Some(5)", "None", "Some(2)", "None", "5", "0"]);
+});
+
+test("Option.exists / contains / isSome / isNone", () => {
+  const src = `let big = n => gt(n, 10)
+  let r = [
+    Some(11) |> Option.exists(big),
+    Some(3) |> Option.exists(big),
+    None |> Option.exists(big),
+    Some("/") |> Option.contains("/"),
+    Some("x") |> Option.contains("/"),
+    None |> Option.contains("/"),
+    Some(1) |> Option.isSome,
+    None |> Option.isNone
+  ]`;
+  expect(run(src, "r")).toEqual([true, false, false, true, false, false, true, true]);
+});
+
+test("Option.unwrapOr / orElse compose with the char cursor", () => {
+  const src = `let a = Str.toNumber("42") |> Option.unwrapOr(0)
+  let b = Str.toNumber("nope") |> Option.unwrapOr(0)
+  let c = Str.get(9, "ab") |> Option.orElse(Some("!")) |> Option.unwrapOr("?")
+  let d = Str.get(0, "ab") |> Option.orElse(Some("!")) |> Option.unwrapOr("?")
+  let r = [show(a), show(b), c, d]`;
+  expect(run(src, "r")).toEqual(["42", "0", "!", "a"]);
+});
+
+// ---- Result combinators -------------------------------------------------------
+
+test("Result.map / mapErr / flatMap / unwrapOr / isOk / isErr", () => {
+  const src = `let inc = n => add(n, 1)
+  let safe = n => switch gt(n, 0) { | true => Ok(n) | false => Err("neg") }
+  let a = Ok(41) |> Result.map(inc) |> Result.unwrapOr(0)
+  let b = Err("boom") |> Result.map(inc) |> Result.unwrapOr(0)
+  let c = Ok(5) |> Result.flatMap(safe) |> Result.isOk
+  let d = Ok(-5) |> Result.flatMap(safe) |> Result.isErr
+  let e = Err("boom") |> Result.mapErr(m => Str.concat(m, "!"))
+  let r = [show(a), show(b), show(c), show(d), show(e)]`;
+  expect(run(src, "r")).toEqual(["42", "0", "true", "true", 'Err("boom!")']);
 });

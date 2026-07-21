@@ -18,6 +18,7 @@ const list = (t: Type): Type => tCon("List", [t]); // List t — lazy pull-seque
 const set = (t: Type): Type => tCon("Set", [t]); // Set t — native JS Set (${...})
 const mapT = (k: Type, v: Type): Type => tCon("Map", [k, v]); // Map k v — native JS Map (#{...})
 const opt = (t: Type): Type => tCon("Option", [t]); // Option t — builtin variant
+const res = (t: Type, e: Type): Type => tCon("Result", [t, e]); // Result t e — builtin variant
 
 // Builtin variant types — seeded into the registry / env / codegen ONLY when a
 // program doesn't declare a type of the same name (so user redeclarations win).
@@ -56,12 +57,19 @@ export const preludeEnv: Record<string, Type> = {
   pi: tNumber,
   // eq/compare/show are STRUCTURAL and polymorphic (deep-equal / deep-order /
   // display at any type) — the pragmatic bridge instead of typeclasses.
-  // lt/gt stay numeric.
+  // lt/gt/gte/lte stay numeric.
   eq: tArrow(a, tArrow(a, tBool)), // a -> a -> bool  (structural)
   compare: tArrow(a, tArrow(a, tNumber)), // a -> a -> number  (-1 | 0 | 1)
   show: tArrow(a, tString), // a -> string  (structural display)
   lt: cmp,
   gt: cmp,
+  gte: cmp,
+  lte: cmp,
+  // --- bool combinators (alang has no operators; these are eager, not
+  // short-circuit — operands are values, so that only matters for cost) ---
+  not: tArrow(tBool, tBool),
+  and: bin(tBool, tBool, tBool),
+  or: bin(tBool, tBool, tBool),
   // --- Math (unqualified, like the arithmetic ops) ---
   min: num2, // number -> number -> number
   max: num2,
@@ -143,6 +151,11 @@ export const preludeJsDefs: Record<string, string> = {
   show: 'const show = (x) => { const t = typeof x; if (t === "string") return JSON.stringify(x); if (t !== "object" || x === null) return String(x); if (Array.isArray(x)) return "[" + x.map(show).join(", ") + "]"; if (typeof x._tag === "string") { const ks = Object.keys(x).filter((k) => k !== "_tag"); return ks.length === 0 ? x._tag : x._tag + "(" + ks.map((k) => show(x[k])).join(", ") + ")"; } const ks = Object.keys(x); if (ks.length === 0) return String(x); return "{ " + ks.map((k) => k + ": " + show(x[k])).join(", ") + " }"; };',
   lt: "const lt = _curry(2, (a, b) => a < b);",
   gt: "const gt = _curry(2, (a, b) => a > b);",
+  gte: "const gte = _curry(2, (a, b) => a >= b);",
+  lte: "const lte = _curry(2, (a, b) => a <= b);",
+  not: "const not = (b) => !b;",
+  and: "const and = _curry(2, (a, b) => a && b);",
+  or: "const or = _curry(2, (a, b) => a || b);",
   // --- Math ---
   min: "const min = _curry(2, (a, b) => Math.min(a, b));",
   max: "const max = _curry(2, (a, b) => Math.max(a, b));",
@@ -208,6 +221,32 @@ export const preludeJsDefs: Record<string, string> = {
   _Map_keys: "const _Map_keys = (m) => [...m.keys()];",
   _Map_values: "const _Map_values = (m) => [...m.values()];",
   _Map_get: "const _Map_get = _curry(2, (k, m) => (m.has(k) ? Some(m.get(k)) : None));",
+  // --- Option combinators (`Option.*`) — data-last, the Option comes final so
+  // they slot into `|>` chains; runtime shape matches @onrails/maybe ---
+  _Option_map:
+    'const _Option_map = _curry(2, (f, o) => (o._tag === "Some" ? Some(f(o.value)) : None));',
+  _Option_flatMap:
+    'const _Option_flatMap = _curry(2, (f, o) => (o._tag === "Some" ? f(o.value) : None));',
+  _Option_mapOr:
+    'const _Option_mapOr = _curry(3, (d, f, o) => (o._tag === "Some" ? f(o.value) : d));',
+  _Option_exists: 'const _Option_exists = _curry(2, (p, o) => o._tag === "Some" && p(o.value));',
+  _Option_contains:
+    'const _Option_contains = _curry(2, (x, o) => o._tag === "Some" && eq(x, o.value));',
+  _Option_unwrapOr:
+    'const _Option_unwrapOr = _curry(2, (d, o) => (o._tag === "Some" ? o.value : d));',
+  _Option_orElse: 'const _Option_orElse = _curry(2, (fb, o) => (o._tag === "Some" ? o : fb));',
+  _Option_isSome: 'const _Option_isSome = (o) => o._tag === "Some";',
+  _Option_isNone: 'const _Option_isNone = (o) => o._tag === "None";',
+  // --- Result combinators (`Result.*`) — railway ops; shape matches @onrails/result ---
+  _Result_map: 'const _Result_map = _curry(2, (f, r) => (r._tag === "Ok" ? Ok(f(r.value)) : r));',
+  _Result_mapErr:
+    'const _Result_mapErr = _curry(2, (f, r) => (r._tag === "Err" ? Err(f(r.error)) : r));',
+  _Result_flatMap:
+    'const _Result_flatMap = _curry(2, (f, r) => (r._tag === "Ok" ? f(r.value) : r));',
+  _Result_unwrapOr:
+    'const _Result_unwrapOr = _curry(2, (d, r) => (r._tag === "Ok" ? r.value : d));',
+  _Result_isOk: 'const _Result_isOk = (r) => r._tag === "Ok";',
+  _Result_isErr: 'const _Result_isErr = (r) => r._tag === "Err";',
   // --- Option-returning safe accessors (depend on Some/None) ---
   _List_head: "const _List_head = (xs) => { for (const x of xs) return Some(x); return None; };",
   _Array_head: "const _Array_head = (xs) => (xs.length > 0 ? Some(xs[0]) : None);",
@@ -308,6 +347,21 @@ export const runtimeDeps: Record<string, string[]> = {
   _Map_set: ["_curry"],
   _Map_delete: ["_curry"],
   _Map_get: ["Some", "None", "_curry"],
+  gte: ["_curry"],
+  lte: ["_curry"],
+  and: ["_curry"],
+  or: ["_curry"],
+  _Option_map: ["Some", "None", "_curry"],
+  _Option_flatMap: ["None", "_curry"],
+  _Option_mapOr: ["_curry"],
+  _Option_exists: ["_curry"],
+  _Option_contains: ["eq", "_curry"],
+  _Option_unwrapOr: ["_curry"],
+  _Option_orElse: ["_curry"],
+  _Result_map: ["Ok", "_curry"],
+  _Result_mapErr: ["Err", "_curry"],
+  _Result_flatMap: ["_curry"],
+  _Result_unwrapOr: ["_curry"],
   _List_head: ["Some", "None"],
   _Array_head: ["Some", "None"],
   _Array_find: ["Some", "None", "_curry"],
@@ -400,6 +454,29 @@ export const preludeNamespaces: Record<string, Record<string, Type>> = {
     values: tArrow(mapT(a, b), arr(b)), // Map k v -> [v]
     get: tArrow(a, tArrow(mapT(a, b), opt(b))), // k -> Map k v -> Option v
   },
+  // Option combinators — data-last (Option comes final) for `|>` chains.
+  // The ctors (Some/None) stay unqualified builtins; only the combinators are
+  // namespaced. `contains` uses structural eq.
+  Option: {
+    map: tArrow(tArrow(a, b), tArrow(opt(a), opt(b))), // (a -> b) -> Option a -> Option b
+    flatMap: tArrow(tArrow(a, opt(b)), tArrow(opt(a), opt(b))), // (a -> Option b) -> Option a -> Option b
+    mapOr: tArrow(b, tArrow(tArrow(a, b), tArrow(opt(a), b))), // fallback -> (a -> b) -> Option a -> b
+    exists: tArrow(tArrow(a, tBool), tArrow(opt(a), tBool)), // (a -> bool) -> Option a -> bool
+    contains: tArrow(a, tArrow(opt(a), tBool)), // a -> Option a -> bool  (structural eq)
+    unwrapOr: tArrow(a, tArrow(opt(a), a)), // fallback -> Option a -> a
+    orElse: tArrow(opt(a), tArrow(opt(a), opt(a))), // fallback -> Option a -> Option a
+    isSome: tArrow(opt(a), tBool), // Option a -> bool
+    isNone: tArrow(opt(a), tBool), // Option a -> bool
+  },
+  // Result combinators — the railway ops the compiler itself lives on.
+  Result: {
+    map: tArrow(tArrow(a, b), tArrow(res(a, c), res(b, c))), // (a -> b) -> Result a e -> Result b e
+    mapErr: tArrow(tArrow(c, b), tArrow(res(a, c), res(a, b))), // (e -> f) -> Result a e -> Result a f
+    flatMap: tArrow(tArrow(a, res(b, c)), tArrow(res(a, c), res(b, c))), // (a -> Result b e) -> Result a e -> Result b e
+    unwrapOr: tArrow(a, tArrow(res(a, c), a)), // fallback -> Result a e -> a
+    isOk: tArrow(res(a, c), tBool), // Result a e -> bool
+    isErr: tArrow(res(a, c), tBool), // Result a e -> bool
+  },
   // String ops (`Str.*`). Data-last where a collection/subject is involved.
   Str: {
     length: tArrow(tString, tNumber), // string -> number
@@ -478,6 +555,25 @@ export const namespaceRuntime: Record<string, Record<string, string>> = {
     keys: "_Map_keys",
     values: "_Map_values",
     get: "_Map_get",
+  },
+  Option: {
+    map: "_Option_map",
+    flatMap: "_Option_flatMap",
+    mapOr: "_Option_mapOr",
+    exists: "_Option_exists",
+    contains: "_Option_contains",
+    unwrapOr: "_Option_unwrapOr",
+    orElse: "_Option_orElse",
+    isSome: "_Option_isSome",
+    isNone: "_Option_isNone",
+  },
+  Result: {
+    map: "_Result_map",
+    mapErr: "_Result_mapErr",
+    flatMap: "_Result_flatMap",
+    unwrapOr: "_Result_unwrapOr",
+    isOk: "_Result_isOk",
+    isErr: "_Result_isErr",
   },
   Str: {
     length: "_Str_length",
