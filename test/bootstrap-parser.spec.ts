@@ -272,6 +272,14 @@ const A_EXPR: Record<string, (e: Al) => Canon> = {
     body: aExpr(e.body),
     span: e.span,
   }),
+  ELetBind: (e) => ({
+    kind: "letbind",
+    param: aParam(e.param),
+    paramSpan: e.paramSpan,
+    value: aExpr(e.value),
+    body: aExpr(e.body),
+    span: e.span,
+  }),
   EPipe: (e) => ({ kind: "pipe", left: aExpr(e.left), right: aExpr(e.right), span: e.span }),
   // al-side fields are `thenE`/`elseE` (`else` is a JS reserved word); canon
   // folds them back to the TS AST's `then`/`else`.
@@ -460,6 +468,8 @@ const cases: Record<string, string> = {
   "empty params lambda calling a ctor": "let mk = () => Some({ tok: 1, at: (2, 3) })",
   "ternary, chained and nested (ADR 0016)":
     'let a = gt(x, 0) ? 1 : lt(x, 0) ? -1 : 0\nlet b = x |> f ? "y" : "n"\nlet c = (p ? q : r) ? 1 : 2\nlet m = #{ true ? 1 : 2 : "v" }',
+  "let? bind, all param forms + chain (ADR 0017)":
+    "let a = let? x = f(1) in Ok(x)\nlet b = let? (l, r) = g(2) in Ok(add(l, r))\nlet c = let? { x, y } = h(3) in Ok(x)\nlet d = let? v = f(4) in let? w = f(v) in Ok(w)\nlet e = let ? sp = f(5) in Ok(sp)",
 };
 
 for (const [name, src] of Object.entries(cases)) {
@@ -497,6 +507,8 @@ const errorCases: Record<string, string> = {
   "unclosed record": "let r = { x: 1",
   "ctor field needs a type": "type T = | K(:)",
   "ternary missing colon": "let r = true ? 1",
+  "let? missing eq": "let r = let? x 1 in Ok(x)",
+  "let? missing in": "let r = let? x = f(1) Ok(x)",
 };
 
 for (const [name, src] of Object.entries(errorCases)) {

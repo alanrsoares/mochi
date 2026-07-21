@@ -81,7 +81,10 @@ record fields may nest, lazy-List patterns may not. Guard:
   tuple-destructure lambdas (`((node, p)) => …`) reads fine at 2–3 steps;
   the worst chains (`parseExtern`, `parseLetIn`) nest 6–7 continuations of
   pure position-threading. `let?` flattens exactly those, shipped before
-  Slice E (infer threads two states, not one).
+  Slice E (infer threads two states, not one). parser.al then migrated:
+  ~31 chain sites became flat `let?` binds (parseExtern is seven lines, one
+  per step); 11 legitimate single-step combinator uses remain. The bootstrap
+  parser gained `ELetBind` for parity; the differential suite pins both.
   The louder Slice D signal was **bool-switch ceremony**: ~25 of parser.al's
   switches were `switch cond { | true => … | false => … }`.
   ~~a ternary / if-expression cuts noise everywhere~~ **DONE** (ADR 0016) —

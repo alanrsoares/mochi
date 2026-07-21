@@ -6,9 +6,9 @@
 // - The mutable cursor (`pos`/`last`) becomes threading: every production takes
 //   `(toks, pos)` and returns `Ok((node, pos))` or `Err({ message, start, end })`.
 //   `to(start)` is derived — the last consumed token is `toks[pos - 1]`.
-// - `ParseAbort` (throw/catch) becomes `Result.flatMap` chains: one nesting
-//   level per sequenced step. This file is the do-notation pain measurement
-//   called for in docs/PATH_TO_BOOTSTRAP.md §2.4.
+// - `ParseAbort` (throw/catch) becomes Result threading: one `let?` bind per
+//   sequenced step (ADR 0017 — this file's original `Result.flatMap` chains
+//   were the pain measurement that motivated it, docs/PATH_TO_BOOTSTRAP.md §2.4).
 // - `Tok` is declared here again (same shape as bootstrap/lexer.al) — modules
 //   arrive with Slice F; until then the differential suite keeps both honest,
 //   and the `_tag` runtime shape makes the two declarations interchangeable.
@@ -72,6 +72,7 @@ type Expr =
   | ECall(fn: Expr, args: [Expr], span: Span)
   | ELambda(params: [LamParam], body: Expr, span: Span)
   | ELetIn(name: string, nameSpan: Span, value: Expr, body: Expr, span: Span)
+  | ELetBind(param: LamParam, paramSpan: Span, value: Expr, body: Expr, span: Span)
   | EPipe(left: Expr, right: Expr, span: Span)
   // `thenE`/`elseE`: `else` is a JS reserved word, and ctor field labels become
   // emitted parameter names (same dodge as CtorField's `fieldType`).
@@ -233,6 +234,7 @@ let exprSpan = e => switch e {
   | ECall(_, _, sp) => sp
   | ELambda(_, _, sp) => sp
   | ELetIn(_, _, _, _, sp) => sp
+  | ELetBind(_, _, _, _, sp) => sp
   | EPipe(_, _, sp) => sp
   | ETernary(_, _, _, sp) => sp
   | EMatch(_, _, sp) => sp
@@ -256,14 +258,16 @@ let tySpan = t => switch t {
 // tuple-destructuring. A lone `(x)` is just grouping, not a 1-tuple.
 let parseParam = (toks, pos) => switch (tokAt(toks, pos)).tok {
   | TLbrace =>
-    listUntil(TRbrace, expectId, toks, add(pos, 1)) |> Result.flatMap(((fields, p)) =>
-      expectTok(TRbrace, toks, p) |> Result.map(p2 => (LPRecord(fields |> map(f => f.name)), p2)))
+    let? (fields, p) = listUntil(TRbrace, expectId, toks, add(pos, 1)) in
+    let? p2 = expectTok(TRbrace, toks, p) in
+    Ok((LPRecord(fields |> map(f => f.name)), p2))
   | TLparen =>
-    sepBy(expectId, toks, add(pos, 1), []) |> Result.flatMap(((names, p)) =>
-      expectTok(TRparen, toks, p) |> Result.map(p2 => switch names {
-        | [single] => (LPName(single.name), p2)
-        | many => (LPTuple(many |> map(n => n.name)), p2)
-      }))
+    let? (names, p) = sepBy(expectId, toks, add(pos, 1), []) in
+    let? p2 = expectTok(TRparen, toks, p) in
+    Ok(switch names {
+      | [single] => (LPName(single.name), p2)
+      | many => (LPTuple(many |> map(n => n.name)), p2)
+    })
   | _ => expectId(toks, pos) |> Result.map(((nm, p)) => (LPName(nm.name), p))
 }
 
@@ -271,58 +275,66 @@ let parseLambda = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in
   switch (tokAt(toks, pos)).tok {
     | TId(name) =>
-      expectTok(TArrow, toks, add(pos, 1)) |> Result.flatMap(p =>
-        parseExpr(toks, p) |> Result.map(((body, p2)) =>
-          (ELambda([LPName(name)], body, spanning(start, exprSpan(body))), p2)))
+      let? p = expectTok(TArrow, toks, add(pos, 1)) in
+      let? (body, p2) = parseExpr(toks, p) in
+      Ok((ELambda([LPName(name)], body, spanning(start, exprSpan(body))), p2))
     | _ =>
-      expectTok(TLparen, toks, pos) |> Result.flatMap(p =>
-        listUntil(TRparen, parseParam, toks, p) |> Result.flatMap(((params, p2)) =>
-        expectTok(TRparen, toks, p2) |> Result.flatMap(p3 =>
-        expectTok(TArrow, toks, p3) |> Result.flatMap(p4 =>
-        parseExpr(toks, p4) |> Result.map(((body, p5)) =>
-          (ELambda(params, body, spanning(start, exprSpan(body))), p5))))))
+      let? p = expectTok(TLparen, toks, pos) in
+      let? (params, p2) = listUntil(TRparen, parseParam, toks, p) in
+      let? p3 = expectTok(TRparen, toks, p2) in
+      let? p4 = expectTok(TArrow, toks, p3) in
+      let? (body, p5) = parseExpr(toks, p4) in
+      Ok((ELambda(params, body, spanning(start, exprSpan(body))), p5))
   }
 
 // let x = value in body — non-recursive local binding. `let (a, b) = v in b`
 // desugars to an applied tuple-param lambda, exactly like the TS parser.
+// `let? param = value in body` is the Result bind (ADR 0017), a first-class node.
 let parseLetIn = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in
-  expectTok(TLet, toks, pos) |> Result.flatMap(p =>
-    eq((tokAt(toks, p)).tok, TLparen)
-      ? let paramStart = spanOf(tokAt(toks, p)) in
-        parseParam(toks, p) |> Result.flatMap(((param, p1)) =>
-        expectTok(TEq, toks, p1) |> Result.flatMap(p2 =>
-        parseExpr(toks, p2) |> Result.flatMap(((value, p3)) =>
-        expectIn(toks, p3) |> Result.flatMap(p4 =>
-        parseExpr(toks, p4) |> Result.map(((body, p5)) =>
-          let fn = ELambda([param], body, spanning(paramStart, exprSpan(body))) in
-          (ECall(fn, [value], spanning(start, exprSpan(body))), p5))))))
-      : expectId(toks, p) |> Result.flatMap(((nm, p1)) =>
-        expectTok(TEq, toks, p1) |> Result.flatMap(p2 =>
-        parseExpr(toks, p2) |> Result.flatMap(((value, p3)) =>
-        expectIn(toks, p3) |> Result.flatMap(p4 =>
-        parseExpr(toks, p4) |> Result.map(((body, p5)) =>
-          (ELetIn(nm.name, nm.span, value, body, spanning(start, exprSpan(body))), p5))))))
-  )
+  let? p = expectTok(TLet, toks, pos) in
+  eq((tokAt(toks, p)).tok, TQuestion)
+    ? let paramSpan = spanOf(tokAt(toks, add(p, 1))) in
+      let? (param, p1) = parseParam(toks, add(p, 1)) in
+      let? p2 = expectTok(TEq, toks, p1) in
+      let? (value, p3) = parseExpr(toks, p2) in
+      let? p4 = expectIn(toks, p3) in
+      let? (body, p5) = parseExpr(toks, p4) in
+      Ok((ELetBind(param, paramSpan, value, body, spanning(start, exprSpan(body))), p5))
+    : eq((tokAt(toks, p)).tok, TLparen)
+    ? let paramStart = spanOf(tokAt(toks, p)) in
+      let? (param, p1) = parseParam(toks, p) in
+      let? p2 = expectTok(TEq, toks, p1) in
+      let? (value, p3) = parseExpr(toks, p2) in
+      let? p4 = expectIn(toks, p3) in
+      let? (body, p5) = parseExpr(toks, p4) in
+      let fn = ELambda([param], body, spanning(paramStart, exprSpan(body))) in
+      Ok((ECall(fn, [value], spanning(start, exprSpan(body))), p5))
+    : let? (nm, p1) = expectId(toks, p) in
+      let? p2 = expectTok(TEq, toks, p1) in
+      let? (value, p3) = parseExpr(toks, p2) in
+      let? p4 = expectIn(toks, p3) in
+      let? (body, p5) = parseExpr(toks, p4) in
+      Ok((ELetIn(nm.name, nm.span, value, body, spanning(start, exprSpan(body))), p5))
 
 let parseExpr = (toks, pos) => switch (tokAt(toks, pos)).tok {
   | TLet => parseLetIn(toks, pos)
   | _ =>
     looksLikeLambda(toks, pos)
       ? parseLambda(toks, pos)
-      : parseAtomOrCall(toks, pos)
-        |> Result.flatMap(((left, p)) => pipeLoop(left, toks, p))
-        |> Result.flatMap(((left, p)) => ternaryTail(left, toks, p))
+      : let? (left, p) = parseAtomOrCall(toks, pos) in
+        let? (left, p) = pipeLoop(left, toks, p) in
+        ternaryTail(left, toks, p)
 }
 
 // cond ? then : else — binds looser than `|>` (checked after the pipe loop),
 // right-associative via the recursive parseExpr in the else branch.
 let ternaryTail = (cond, toks, pos) =>
   eq((tokAt(toks, pos)).tok, TQuestion)
-    ? parseExpr(toks, add(pos, 1)) |> Result.flatMap(((thenE, p1)) =>
-      expectTok(TColon, toks, p1) |> Result.flatMap(p2 =>
-      parseExpr(toks, p2) |> Result.map(((elseE, p3)) =>
-        (ETernary(cond, thenE, elseE, spanning(exprSpan(cond), exprSpan(elseE))), p3))))
+    ? let? (thenE, p1) = parseExpr(toks, add(pos, 1)) in
+      let? p2 = expectTok(TColon, toks, p1) in
+      let? (elseE, p3) = parseExpr(toks, p2) in
+      Ok((ETernary(cond, thenE, elseE, spanning(exprSpan(cond), exprSpan(elseE))), p3))
     : Ok((cond, pos))
 
 let pipeLoop = (left, toks, pos) =>
@@ -334,9 +346,9 @@ let pipeLoop = (left, toks, pos) =>
 // Postfix chain: calls `f(...)` and field access `.name`.
 let postfixLoop = (e, toks, pos) => switch (tokAt(toks, pos)).tok {
   | TLparen =>
-    listUntil(TRparen, parseExpr, toks, add(pos, 1)) |> Result.flatMap(((args, p)) =>
-      expectTok(TRparen, toks, p) |> Result.flatMap(p2 =>
-        postfixLoop(ECall(e, args, toEnd(exprSpan(e), toks, p2)), toks, p2)))
+    let? (args, p) = listUntil(TRparen, parseExpr, toks, add(pos, 1)) in
+    let? p2 = expectTok(TRparen, toks, p) in
+    postfixLoop(ECall(e, args, toEnd(exprSpan(e), toks, p2)), toks, p2)
   | TDot =>
     expectId(toks, add(pos, 1)) |> Result.flatMap(((id, p)) =>
       postfixLoop(EField(e, id.name, spanning(exprSpan(e), id.span)), toks, p))
@@ -360,56 +372,58 @@ let parseAtom = (toks, pos) =>
     | TStr(value) => Ok((EStr(value, sp), add(pos, 1)))
     | TId(name) => Ok((ERef(name, sp), add(pos, 1)))
     | TLparen =>
-      parseExpr(toks, add(pos, 1)) |> Result.flatMap(((first, p)) =>
-        eq((tokAt(toks, p)).tok, TComma)
-          ? sepBy(parseExpr, toks, add(p, 1), [first]) |> Result.flatMap(((elements, p2)) =>
-              expectTok(TRparen, toks, p2) |> Result.map(p3 =>
-                (ETuple(elements, toEnd(sp, toks, p3)), p3)))
-          : expectTok(TRparen, toks, p) |> Result.map(p2 => (first, p2)))
+      let? (first, p) = parseExpr(toks, add(pos, 1)) in
+      eq((tokAt(toks, p)).tok, TComma)
+        ? let? (elements, p2) = sepBy(parseExpr, toks, add(p, 1), [first]) in
+          let? p3 = expectTok(TRparen, toks, p2) in
+          Ok((ETuple(elements, toEnd(sp, toks, p3)), p3))
+        : expectTok(TRparen, toks, p) |> Result.map(p2 => (first, p2))
     | t => errAt(cat(["unexpected token ", tokName(t)]), lt)
   }
 
 let parseField = (toks, pos) =>
-  expectId(toks, pos) |> Result.flatMap(((nm, p)) =>
-    expectTok(TColon, toks, p) |> Result.flatMap(p2 =>
-      parseExpr(toks, p2) |> Result.map(((value, p3)) => ({ name: nm.name, value: value }, p3))))
+  let? (nm, p) = expectId(toks, pos) in
+  let? p2 = expectTok(TColon, toks, p) in
+  let? (value, p3) = parseExpr(toks, p2) in
+  Ok(({ name: nm.name, value: value }, p3))
 
 let parseRecord = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in
-  expectTok(TLbrace, toks, pos) |> Result.flatMap(p =>
-    listUntil(TRbrace, parseField, toks, p) |> Result.flatMap(((fields, p2)) =>
-      expectTok(TRbrace, toks, p2) |> Result.map(p3 =>
-        (ERecord(fields, toEnd(start, toks, p3)), p3))))
+  let? p = expectTok(TLbrace, toks, pos) in
+  let? (fields, p2) = listUntil(TRbrace, parseField, toks, p) in
+  let? p3 = expectTok(TRbrace, toks, p2) in
+  Ok((ERecord(fields, toEnd(start, toks, p3)), p3))
 
 let parseArr = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in
-  expectTok(TLbracket, toks, pos) |> Result.flatMap(p =>
-    listUntil(TRbracket, parseExpr, toks, p) |> Result.flatMap(((elements, p2)) =>
-      expectTok(TRbracket, toks, p2) |> Result.map(p3 =>
-        (EArr(elements, toEnd(start, toks, p3)), p3))))
+  let? p = expectTok(TLbracket, toks, pos) in
+  let? (elements, p2) = listUntil(TRbracket, parseExpr, toks, p) in
+  let? p3 = expectTok(TRbracket, toks, p2) in
+  Ok((EArr(elements, toEnd(start, toks, p3)), p3))
 
 // `@{…}` lazy-List literal — the `@` sigil keeps it clear of records.
 let parseList = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in
-  expectTok(TAt, toks, pos) |> Result.flatMap(p =>
-    expectTok(TLbrace, toks, p) |> Result.flatMap(p1 =>
-    listUntil(TRbrace, parseExpr, toks, p1) |> Result.flatMap(((elements, p2)) =>
-      expectTok(TRbrace, toks, p2) |> Result.map(p3 =>
-        (EList(elements, toEnd(start, toks, p3)), p3)))))
+  let? p = expectTok(TAt, toks, pos) in
+  let? p1 = expectTok(TLbrace, toks, p) in
+  let? (elements, p2) = listUntil(TRbrace, parseExpr, toks, p1) in
+  let? p3 = expectTok(TRbrace, toks, p2) in
+  Ok((EList(elements, toEnd(start, toks, p3)), p3))
 
 let parseMapEntry = (toks, pos) =>
-  parseExpr(toks, pos) |> Result.flatMap(((key, p)) =>
-    expectTok(TColon, toks, p) |> Result.flatMap(p2 =>
-      parseExpr(toks, p2) |> Result.map(((value, p3)) => ({ key: key, value: value }, p3))))
+  let? (key, p) = parseExpr(toks, pos) in
+  let? p2 = expectTok(TColon, toks, p) in
+  let? (value, p3) = parseExpr(toks, p2) in
+  Ok(({ key: key, value: value }, p3))
 
 // `#{ key: value, … }` Map literal — keys are full expressions.
 let parseMap = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in
-  expectTok(THash, toks, pos) |> Result.flatMap(p =>
-    expectTok(TLbrace, toks, p) |> Result.flatMap(p1 =>
-    listUntil(TRbrace, parseMapEntry, toks, p1) |> Result.flatMap(((entries, p2)) =>
-      expectTok(TRbrace, toks, p2) |> Result.map(p3 =>
-        (EMap(entries, toEnd(start, toks, p3)), p3)))))
+  let? p = expectTok(THash, toks, pos) in
+  let? p1 = expectTok(TLbrace, toks, p) in
+  let? (entries, p2) = listUntil(TRbrace, parseMapEntry, toks, p1) in
+  let? p3 = expectTok(TRbrace, toks, p2) in
+  Ok((EMap(entries, toEnd(start, toks, p3)), p3))
 
 // --- pattern matching ---
 
@@ -421,31 +435,31 @@ let parseGuard = (toks, pos) => switch (tokAt(toks, pos)).tok {
 
 let armsLoop = (toks, pos, acc) =>
   eq((tokAt(toks, pos)).tok, TBar)
-    ? parsePattern(toks, add(pos, 1)) |> Result.flatMap(((pattern, p1)) =>
-      parseGuard(toks, p1) |> Result.flatMap(((guard, p2)) =>
-      expectTok(TArrow, toks, p2) |> Result.flatMap(p3 =>
-      parseExpr(toks, p3) |> Result.flatMap(((body, p4)) =>
-        armsLoop(toks, p4, Array.append({ pattern: pattern, guard: guard, body: body }, acc))))))
+    ? let? (pattern, p1) = parsePattern(toks, add(pos, 1)) in
+      let? (guard, p2) = parseGuard(toks, p1) in
+      let? p3 = expectTok(TArrow, toks, p2) in
+      let? (body, p4) = parseExpr(toks, p3) in
+      armsLoop(toks, p4, Array.append({ pattern: pattern, guard: guard, body: body }, acc))
     : Ok((acc, pos))
 
 let parseMatch = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in
-  expectTok(TSwitch, toks, pos) |> Result.flatMap(p =>
-    parseExpr(toks, p) |> Result.flatMap(((scrutinee, p1)) =>
-    expectTok(TLbrace, toks, p1) |> Result.flatMap(p2 =>
-    armsLoop(toks, p2, []) |> Result.flatMap(((arms, p3)) =>
-      switch Array.length(arms) {
-        | 0 => errAt("switch needs at least one | arm", tokAt(toks, p3))
-        | _ => expectTok(TRbrace, toks, p3) |> Result.map(p4 =>
-            (EMatch(scrutinee, arms, toEnd(start, toks, p4)), p4))
-      }))))
+  let? p = expectTok(TSwitch, toks, pos) in
+  let? (scrutinee, p1) = parseExpr(toks, p) in
+  let? p2 = expectTok(TLbrace, toks, p1) in
+  let? (arms, p3) = armsLoop(toks, p2, []) in
+  switch Array.length(arms) {
+    | 0 => errAt("switch needs at least one | arm", tokAt(toks, p3))
+    | _ => expectTok(TRbrace, toks, p3) |> Result.map(p4 =>
+        (EMatch(scrutinee, arms, toEnd(start, toks, p4)), p4))
+  }
 
 // A ctor pattern's argument list, after the (already consumed) ctor name.
 let parseCtorArgs = (ctor, nameSpan, toks, pos) =>
   eq((tokAt(toks, pos)).tok, TLparen)
-    ? listUntil(TRparen, parsePattern, toks, add(pos, 1)) |> Result.flatMap(((args, p)) =>
-        expectTok(TRparen, toks, p) |> Result.map(p2 =>
-          (PCtor(ctor, args, toEnd(nameSpan, toks, p2)), p2)))
+    ? let? (args, p) = listUntil(TRparen, parsePattern, toks, add(pos, 1)) in
+      let? p2 = expectTok(TRparen, toks, p) in
+      Ok((PCtor(ctor, args, toEnd(nameSpan, toks, p2)), p2))
     : Ok((PCtor(ctor, [], nameSpan), pos))
 
 let parsePattern = (toks, pos) =>
@@ -457,15 +471,16 @@ let parsePattern = (toks, pos) =>
     | TStr(value) => Ok((PStr(value, sp), add(pos, 1)))
     | TLparen =>
       // `(p, p, …)` destructures a tuple; a lone `(p)` is just grouping.
-      sepBy(parsePattern, toks, add(pos, 1), []) |> Result.flatMap(((elems, p)) =>
-        expectTok(TRparen, toks, p) |> Result.map(p2 => switch elems {
-          | [single] => (single, p2)
-          | many => (PTuple(many, toEnd(sp, toks, p2)), p2)
-        }))
+      let? (elems, p) = sepBy(parsePattern, toks, add(pos, 1), []) in
+      let? p2 = expectTok(TRparen, toks, p) in
+      Ok(switch elems {
+        | [single] => (single, p2)
+        | many => (PTuple(many, toEnd(sp, toks, p2)), p2)
+      })
     | TLbrace =>
-      listUntil(TRbrace, parsePatField, toks, add(pos, 1)) |> Result.flatMap(((fields, p)) =>
-        expectTok(TRbrace, toks, p) |> Result.map(p2 =>
-          (PRecord(fields, toEnd(sp, toks, p2)), p2)))
+      let? (fields, p) = listUntil(TRbrace, parsePatField, toks, add(pos, 1)) in
+      let? p2 = expectTok(TRbrace, toks, p) in
+      Ok((PRecord(fields, toEnd(sp, toks, p2)), p2))
     | TLbracket => parseArrPattern(toks, pos)
     | TAt => parseListPattern(toks, pos)
     | TId("_") => Ok((PWild(sp), add(pos, 1)))
@@ -498,35 +513,35 @@ let patElemsLoop = (toks, pos, acc) => switch (tokAt(toks, pos)).tok {
 
 let parseArrPattern = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in
-  expectTok(TLbracket, toks, pos) |> Result.flatMap(p =>
-    eq((tokAt(toks, p)).tok, TRbracket)
-      ? Ok((PArr([], None, toEnd(start, toks, add(p, 1))), add(p, 1)))
-      : patElemsLoop(toks, p, []) |> Result.flatMap(((elems, rest, p2)) =>
-          restOk(rest)
-            ? expectTok(TRbracket, toks, p2) |> Result.map(p3 =>
-                (PArr(elems, rest, toEnd(start, toks, p3)), p3))
-            : errAt("list `...` rest must bind a name or `_`", tokAt(toks, p2))))
+  let? p = expectTok(TLbracket, toks, pos) in
+  eq((tokAt(toks, p)).tok, TRbracket)
+    ? Ok((PArr([], None, toEnd(start, toks, add(p, 1))), add(p, 1)))
+    : let? (elems, rest, p2) = patElemsLoop(toks, p, []) in
+      restOk(rest)
+        ? expectTok(TRbracket, toks, p2) |> Result.map(p3 =>
+            (PArr(elems, rest, toEnd(start, toks, p3)), p3))
+        : errAt("list `...` rest must bind a name or `_`", tokAt(toks, p2))
 
 // `@{}` / `@{head, ...tail}` lazy-List pattern; check.ts restricts the forms.
 let parseListPattern = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in
-  expectTok(TAt, toks, pos) |> Result.flatMap(p =>
-    expectTok(TLbrace, toks, p) |> Result.flatMap(p1 =>
-      eq((tokAt(toks, p1)).tok, TRbrace)
-        ? Ok((PList([], None, toEnd(start, toks, add(p1, 1))), add(p1, 1)))
-        : patElemsLoop(toks, p1, []) |> Result.flatMap(((elems, rest, p2)) =>
-            restOk(rest)
-              ? expectTok(TRbrace, toks, p2) |> Result.map(p3 =>
-                  (PList(elems, rest, toEnd(start, toks, p3)), p3))
-              : errAt("list `...` rest must bind a name or `_`", tokAt(toks, p2)))))
+  let? p = expectTok(TAt, toks, pos) in
+  let? p1 = expectTok(TLbrace, toks, p) in
+  eq((tokAt(toks, p1)).tok, TRbrace)
+    ? Ok((PList([], None, toEnd(start, toks, add(p1, 1))), add(p1, 1)))
+    : let? (elems, rest, p2) = patElemsLoop(toks, p1, []) in
+      restOk(rest)
+        ? expectTok(TRbrace, toks, p2) |> Result.map(p3 =>
+            (PList(elems, rest, toEnd(start, toks, p3)), p3))
+        : errAt("list `...` rest must bind a name or `_`", tokAt(toks, p2))
 
 // `{ x }` puns to binding `x`; `{ x: pat }` matches `x` against a full pattern.
 let parsePatField = (toks, pos) =>
-  expectId(toks, pos) |> Result.flatMap(((nm, p)) =>
-    eq((tokAt(toks, p)).tok, TColon)
-      ? parsePattern(toks, add(p, 1)) |> Result.map(((pat, p2)) =>
-          ({ label: nm.name, pat: pat }, p2))
-      : Ok(({ label: nm.name, pat: PBind(nm.name, nm.span) }, p)))
+  let? (nm, p) = expectId(toks, pos) in
+  eq((tokAt(toks, p)).tok, TColon)
+    ? let? (pat, p2) = parsePattern(toks, add(p, 1)) in
+      Ok(({ label: nm.name, pat: pat }, p2))
+    : Ok(({ label: nm.name, pat: PBind(nm.name, nm.span) }, p))
 
 // --- type expressions (extern signatures + ctor fields) ---
 
@@ -536,16 +551,16 @@ let parseTypeAtom = (toks, pos) =>
   switch lt.tok {
     | TLparen =>
       // `(a, b)` is a tuple type; a lone `(t)` is just grouping.
-      parseTypeExpr(toks, add(pos, 1)) |> Result.flatMap(((inner, p)) =>
-        eq((tokAt(toks, p)).tok, TComma)
-          ? sepBy(parseTypeExpr, toks, add(p, 1), [inner]) |> Result.flatMap(((elems, p2)) =>
-              expectTok(TRparen, toks, p2) |> Result.map(p3 =>
-                (TyTuple(elems, toEnd(sp, toks, p3)), p3)))
-          : expectTok(TRparen, toks, p) |> Result.map(p2 => (inner, p2)))
+      let? (inner, p) = parseTypeExpr(toks, add(pos, 1)) in
+      eq((tokAt(toks, p)).tok, TComma)
+        ? let? (elems, p2) = sepBy(parseTypeExpr, toks, add(p, 1), [inner]) in
+          let? p3 = expectTok(TRparen, toks, p2) in
+          Ok((TyTuple(elems, toEnd(sp, toks, p3)), p3))
+        : expectTok(TRparen, toks, p) |> Result.map(p2 => (inner, p2))
     | TLbracket =>
-      parseTypeExpr(toks, add(pos, 1)) |> Result.flatMap(((elem, p)) =>
-        expectTok(TRbracket, toks, p) |> Result.map(p2 =>
-          (TyList(elem, toEnd(sp, toks, p2)), p2)))
+      let? (elem, p) = parseTypeExpr(toks, add(pos, 1)) in
+      let? p2 = expectTok(TRbracket, toks, p) in
+      Ok((TyList(elem, toEnd(sp, toks, p2)), p2))
     | _ => expectId(toks, pos) |> Result.map(((nm, p)) => (TyName(nm.name, nm.span), p))
   }
 
@@ -578,11 +593,11 @@ let parseTypeApp = (toks, pos) =>
 
 // Arrows are right-associative.
 let parseTypeExpr = (toks, pos) =>
-  parseTypeApp(toks, pos) |> Result.flatMap(((from, p)) =>
-    eq((tokAt(toks, p)).tok, TTarrow)
-      ? parseTypeExpr(toks, add(p, 1)) |> Result.map(((to, p2)) =>
-          (TyArrow(from, to, spanning(tySpan(from), tySpan(to))), p2))
-      : Ok((from, p)))
+  let? (from, p) = parseTypeApp(toks, pos) in
+  eq((tokAt(toks, p)).tok, TTarrow)
+    ? parseTypeExpr(toks, add(p, 1)) |> Result.map(((to, p2)) =>
+        (TyArrow(from, to, spanning(tySpan(from), tySpan(to))), p2))
+    : Ok((from, p))
 
 // --- statements ---
 
@@ -594,18 +609,18 @@ let parseCtorField = (toks, pos) =>
     | _ => false
   } in
   isLabel
-    ? expectId(toks, pos) |> Result.flatMap(((nm, p)) =>
-        parseTypeExpr(toks, add(p, 1)) |> Result.map(((t, p2)) =>
-          ({ name: Some(nm.name), fieldType: t }, p2)))
+    ? let? (nm, p) = expectId(toks, pos) in
+      let? (t, p2) = parseTypeExpr(toks, add(p, 1)) in
+      Ok(({ name: Some(nm.name), fieldType: t }, p2))
     : parseTypeExpr(toks, pos) |> Result.map(((t, p)) => ({ name: None, fieldType: t }, p))
 
 let parseCtor = (toks, pos) =>
-  expectId(toks, pos) |> Result.flatMap(((nm, p)) =>
-    eq((tokAt(toks, p)).tok, TLparen)
-      ? listUntil(TRparen, parseCtorField, toks, add(p, 1)) |> Result.flatMap(((fields, p2)) =>
-          expectTok(TRparen, toks, p2) |> Result.map(p3 =>
-            ({ name: nm.name, fields: fields }, p3)))
-      : Ok(({ name: nm.name, fields: [] }, p)))
+  let? (nm, p) = expectId(toks, pos) in
+  eq((tokAt(toks, p)).tok, TLparen)
+    ? let? (fields, p2) = listUntil(TRparen, parseCtorField, toks, add(p, 1)) in
+      let? p3 = expectTok(TRparen, toks, p2) in
+      Ok(({ name: nm.name, fields: fields }, p3))
+    : Ok(({ name: nm.name, fields: [] }, p))
 
 let ctorsLoop = (toks, pos, acc) =>
   parseCtor(toks, pos) |> Result.flatMap(((c, p)) =>
@@ -615,15 +630,17 @@ let ctorsLoop = (toks, pos, acc) =>
       : Ok((cs, p)))
 
 let parseAliasField = (toks, pos) =>
-  expectId(toks, pos) |> Result.flatMap(((nm, p)) =>
-    expectTok(TColon, toks, p) |> Result.flatMap(p2 =>
-      parseTypeExpr(toks, p2) |> Result.map(((t, p3)) => ({ name: nm.name, fieldType: t }, p3))))
+  let? (nm, p) = expectId(toks, pos) in
+  let? p2 = expectTok(TColon, toks, p) in
+  let? (t, p3) = parseTypeExpr(toks, p2) in
+  Ok(({ name: nm.name, fieldType: t }, p3))
 
 // The `{ x: T, y: U }` body of a transparent record alias.
 let parseAliasBody = (toks, pos) =>
-  expectTok(TLbrace, toks, pos) |> Result.flatMap(p =>
-    listUntil(TRbrace, parseAliasField, toks, p) |> Result.flatMap(((fields, p2)) =>
-      expectTok(TRbrace, toks, p2) |> Result.map(p3 => (fields, p3))))
+  let? p = expectTok(TLbrace, toks, pos) in
+  let? (fields, p2) = listUntil(TRbrace, parseAliasField, toks, p) in
+  let? p3 = expectTok(TRbrace, toks, p2) in
+  Ok((fields, p3))
 
 // Optional ML-style type parameters: any ids before the `=`.
 let typeParamsLoop = (toks, pos, acc) => switch (tokAt(toks, pos)).tok {
@@ -634,69 +651,69 @@ let typeParamsLoop = (toks, pos, acc) => switch (tokAt(toks, pos)).tok {
 // `type` decl: a `{` after `=` starts a record alias; anything else a variant.
 let parseType = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in
-  expectTok(TType, toks, pos) |> Result.flatMap(p =>
-    expectId(toks, p) |> Result.flatMap(((nm, p1)) =>
-      let (params, p2) = typeParamsLoop(toks, p1, []) in
-      expectTok(TEq, toks, p2) |> Result.flatMap(p3 =>
-        eq((tokAt(toks, p3)).tok, TLbrace)
-          ? parseAliasBody(toks, p3) |> Result.map(((alias, p4)) =>
-              (SType(nm.name, params, [], Some(alias), false, toEnd(start, toks, p4)), p4))
-          : let afterBar = eq((tokAt(toks, p3)).tok, TBar) ? add(p3, 1) : p3 in
-            ctorsLoop(toks, afterBar, []) |> Result.map(((ctors, p4)) =>
-              (SType(nm.name, params, ctors, None, false, toEnd(start, toks, p4)), p4)))))
+  let? p = expectTok(TType, toks, pos) in
+  let? (nm, p1) = expectId(toks, p) in
+  let (params, p2) = typeParamsLoop(toks, p1, []) in
+  let? p3 = expectTok(TEq, toks, p2) in
+  eq((tokAt(toks, p3)).tok, TLbrace)
+    ? parseAliasBody(toks, p3) |> Result.map(((alias, p4)) =>
+        (SType(nm.name, params, [], Some(alias), false, toEnd(start, toks, p4)), p4))
+    : let afterBar = eq((tokAt(toks, p3)).tok, TBar) ? add(p3, 1) : p3 in
+      ctorsLoop(toks, afterBar, []) |> Result.map(((ctors, p4)) =>
+        (SType(nm.name, params, ctors, None, false, toEnd(start, toks, p4)), p4))
 
 // extern name : type = "module" "export"
 let parseExtern = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in
-  expectTok(TExtern, toks, pos) |> Result.flatMap(p =>
-    expectId(toks, p) |> Result.flatMap(((nm, p1)) =>
-    expectTok(TColon, toks, p1) |> Result.flatMap(p2 =>
-    parseTypeExpr(toks, p2) |> Result.flatMap(((t, p3)) =>
-    expectTok(TEq, toks, p3) |> Result.flatMap(p4 =>
-    expectStr(toks, p4) |> Result.flatMap(((moduleName, p5)) =>
-    expectStr(toks, p5) |> Result.map(((importedName, p6)) =>
-      (SExtern(nm.name, nm.span, t, moduleName, importedName, false, toEnd(start, toks, p6)), p6))))))))
+  let? p = expectTok(TExtern, toks, pos) in
+  let? (nm, p1) = expectId(toks, p) in
+  let? p2 = expectTok(TColon, toks, p1) in
+  let? (t, p3) = parseTypeExpr(toks, p2) in
+  let? p4 = expectTok(TEq, toks, p3) in
+  let? (moduleName, p5) = expectStr(toks, p4) in
+  let? (importedName, p6) = expectStr(toks, p5) in
+  Ok((SExtern(nm.name, nm.span, t, moduleName, importedName, false, toEnd(start, toks, p6)), p6))
 
 // import { a, b } from "./mod" — `from` is contextual (still a valid id).
 let parseImport = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in
-  expectTok(TImport, toks, pos) |> Result.flatMap(p =>
-    expectTok(TLbrace, toks, p) |> Result.flatMap(p1 =>
-    listUntil(TRbrace, expectId, toks, p1) |> Result.flatMap(((names, p2)) =>
-    expectTok(TRbrace, toks, p2) |> Result.flatMap(p3 =>
-    expectId(toks, p3) |> Result.flatMap(((kw, p4)) =>
-      eq(kw.name, "from")
-        ? expectStr(toks, p4) |> Result.map(((path, p5)) =>
-            (SImport(names, path, toEnd(start, toks, p5)), p5))
-        : errAt(cat(["expected 'from' in import, got '", kw.name, "'"]), tokAt(toks, p4)))))))
+  let? p = expectTok(TImport, toks, pos) in
+  let? p1 = expectTok(TLbrace, toks, p) in
+  let? (names, p2) = listUntil(TRbrace, expectId, toks, p1) in
+  let? p3 = expectTok(TRbrace, toks, p2) in
+  let? (kw, p4) = expectId(toks, p3) in
+  eq(kw.name, "from")
+    ? expectStr(toks, p4) |> Result.map(((path, p5)) =>
+        (SImport(names, path, toEnd(start, toks, p5)), p5))
+    : errAt(cat(["expected 'from' in import, got '", kw.name, "'"]), tokAt(toks, p4))
 
 // `let { x, y } = e` desugars to a `$dN` temp binding plus one field-access
 // `let` per name — mirrors the TS parser, including the temp counter.
 let parseRecordDestructure = (start, toks, pos, tmp) =>
   let openSp = spanOf(tokAt(toks, pos)) in
-  expectTok(TLbrace, toks, pos) |> Result.flatMap(p =>
-    listUntil(TRbrace, expectId, toks, p) |> Result.flatMap(((fields, p1)) =>
-      let closeSp = spanOf(tokAt(toks, p1)) in
-      expectTok(TRbrace, toks, p1) |> Result.flatMap(p2 =>
-      expectTok(TEq, toks, p2) |> Result.flatMap(p3 =>
-      parseExpr(toks, p3) |> Result.map(((value, p4)) =>
-        let whole = spanning(start, exprSpan(value)) in
-        let patSpan = spanning(openSp, closeSp) in
-        let tmpName = Str.concat("$d", show(tmp)) in
-        let header = SLet(tmpName, patSpan, value, false, None, whole) in
-        let access = f =>
-          SLet(f.name, f.span, EField(ERef(tmpName, f.span), f.name, f.span), false, None, f.span) in
-        (Array.prepend(header, fields |> map(access)), p4, add(tmp, 1)))))))
+  let? p = expectTok(TLbrace, toks, pos) in
+  let? (fields, p1) = listUntil(TRbrace, expectId, toks, p) in
+  let closeSp = spanOf(tokAt(toks, p1)) in
+  let? p2 = expectTok(TRbrace, toks, p1) in
+  let? p3 = expectTok(TEq, toks, p2) in
+  let? (value, p4) = parseExpr(toks, p3) in
+  let whole = spanning(start, exprSpan(value)) in
+  let patSpan = spanning(openSp, closeSp) in
+  let tmpName = Str.concat("$d", show(tmp)) in
+  let header = SLet(tmpName, patSpan, value, false, None, whole) in
+  let access = f =>
+    SLet(f.name, f.span, EField(ERef(tmpName, f.span), f.name, f.span), false, None, f.span) in
+  Ok((Array.prepend(header, fields |> map(access)), p4, add(tmp, 1)))
 
 let parseLet = (toks, pos, tmp) =>
   let start = spanOf(tokAt(toks, pos)) in
-  expectTok(TLet, toks, pos) |> Result.flatMap(p =>
-    eq((tokAt(toks, p)).tok, TLbrace)
-      ? parseRecordDestructure(start, toks, p, tmp)
-      : expectId(toks, p) |> Result.flatMap(((nm, p1)) =>
-        expectTok(TEq, toks, p1) |> Result.flatMap(p2 =>
-        parseExpr(toks, p2) |> Result.map(((value, p3)) =>
-          ([SLet(nm.name, nm.span, value, false, None, spanning(start, exprSpan(value)))], p3, tmp)))))
+  let? p = expectTok(TLet, toks, pos) in
+  eq((tokAt(toks, p)).tok, TLbrace)
+    ? parseRecordDestructure(start, toks, p, tmp)
+    : let? (nm, p1) = expectId(toks, p) in
+      let? p2 = expectTok(TEq, toks, p1) in
+      let? (value, p3) = parseExpr(toks, p2) in
+      Ok(([SLet(nm.name, nm.span, value, false, None, spanning(start, exprSpan(value)))], p3, tmp))
 
 // Rebuilders for the export/doc metadata the TS parser spreads on.
 let setLetMeta = (exported, doc, s) => switch s {
