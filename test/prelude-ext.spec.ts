@@ -51,6 +51,11 @@ test("Str.slice / replace / length", () => {
   expect(run('let a = Str.length("hello")', "a")).toBe(5);
 });
 
+test("Str.concat concatenates (data-first, like Array.concat)", () => {
+  expect(run('let a = Str.concat("foo")("bar")', "a")).toBe("foobar");
+  expect(run('let a = "world" |> Str.concat("hello ")', "a")).toBe("hello world");
+});
+
 test("Str ops compose in a pipeline", () => {
   const src = 'let a = "  Hello World  " |> Str.trim |> Str.toLower |> Str.split(" ")';
   expect(run(src, "a")).toEqual(["hello", "world"]);
@@ -58,10 +63,34 @@ test("Str ops compose in a pipeline", () => {
 
 // ---- Array growth ----------------------------------------------------------
 
-test("Array.reverse / concat / append", () => {
+test("Array.reverse / concat / append / prepend", () => {
   expect(run("let a = Array.reverse([1, 2, 3])", "a")).toEqual([3, 2, 1]);
   expect(run("let a = Array.concat([1])([2, 3])", "a")).toEqual([1, 2, 3]);
   expect(run("let a = Array.append(9)([1, 2])", "a")).toEqual([1, 2, 9]);
+  expect(run("let a = Array.prepend(0)([1, 2])", "a")).toEqual([0, 1, 2]);
+  expect(run("let a = Array.prepend(1)([])", "a")).toEqual([1]);
+});
+
+// ---- show (structural display, beside eq/compare) ---------------------------
+
+test("show renders primitives", () => {
+  expect(run("let a = show(42)", "a")).toBe("42");
+  expect(run("let a = show(3.5)", "a")).toBe("3.5");
+  expect(run("let a = show(true)", "a")).toBe("true");
+  expect(run('let a = show("hi")', "a")).toBe('"hi"');
+});
+
+test("show renders arrays, records, and variants structurally", () => {
+  expect(run("let a = show([1, 2, 3])", "a")).toBe("[1, 2, 3]");
+  expect(run("let a = show({ x: 1, y: 2 })", "a")).toBe("{ x: 1, y: 2 }");
+  expect(run("let a = show(Some(1))", "a")).toBe("Some(1)");
+  expect(run("let a = show(None)", "a")).toBe("None");
+  expect(run("let a = show(Some([1, 2]))", "a")).toBe("Some([1, 2])");
+});
+
+test("show renders user-declared variants by ctor name", () => {
+  const src = "type Tree = | Leaf(number) | Node(Tree, Tree)\nlet a = show(Node(Leaf(1), Leaf(2)))";
+  expect(run(src, "a")).toBe("Node(Leaf(1), Leaf(2))");
 });
 
 test("Array.flatMap / take / drop / tail", () => {

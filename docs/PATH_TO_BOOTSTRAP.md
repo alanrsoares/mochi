@@ -8,10 +8,10 @@ has, what blocks the port, and the slice order to get there.
 (Live status checklist: `docs/bootstrap.md`.)
 
 **Distance, honestly (updated 2026-07-21): the wall is down.** Local `let … in`
-(ADR 0009), tuples + binding sugar (ADR 0010/0011), the char cursor, and
-nested patterns (ADR 0012) all landed. What remains before the lexer spike:
-two prelude one-liners (`show`, `Str.concat`), then grunt work. No remaining
-*design* unknowns.
+(ADR 0009), tuples + binding sugar (ADR 0010/0011), the char cursor, nested
+patterns (ADR 0012), and the last prelude pieces (`show`, `Str.concat`,
+`Array.prepend`) all landed. Nothing remains before the lexer spike. No
+remaining *design* unknowns.
 
 ---
 
@@ -52,16 +52,18 @@ cover its ctor — add `C(_)` or `_`), nested ctors are validated (known/arity),
 record fields may nest, lazy-List patterns may not. Guard:
 `test/nested-patterns.spec.ts`.
 
-### 2.3 Prelude one-liners (half a day)
+### 2.3 ~~Prelude one-liners~~ DONE
 1. ~~`Str.toNumber`~~ **DONE** — shipped with the char cursor
    (`Str.get`/`codeAt`/`fromCode`/`chars`).
-2. `show : number -> string` (or `Str.fromNumber`) — codegen emits numbers
-   into JS text. Still missing.
-3. `Str.concat : string -> string -> string` (or a `++` operator) — codegen is
-   string-building all the way down. `Str.join("")([...])` fakes it today but
-   the ergonomics are brutal for emit-heavy code. Still missing.
+2. ~~`show`~~ **DONE** — shipped as polymorphic structural `show : a -> string`
+   (ADR 0007 addendum), not the monomorphic `number -> string` this doc first
+   asked for: same cost, covers diagnostics/tests too.
+3. ~~`Str.concat : string -> string -> string`~~ **DONE** — data-first
+   (`Str.concat(a)(b) = a ++ b`), mirroring `Array.concat`.
 4. ~~`Str.eq`~~ **DONE by construction** — builtin `eq : a -> a -> bool` is
    polymorphic structural equality; ident-vs-ident comparison just works.
+5. ~~`Array.prepend`~~ **DONE** — cons (`a -> [a] -> [a]`); found missing by
+   the micro-lexer spike, which had faked it O(n²) via `Array.concat([x])`.
 
 ### 2.4 Nice-to-have, explicitly non-blocking
 - ~~**Tuples**~~ **DONE** (ADR 0010 + 0011 binding sugar).
@@ -89,10 +91,11 @@ record fields may nest, lazy-List patterns may not. Guard:
   the compiler deeply. JS engines give ~10k frames — fine for realistic
   modules. If a pathological file breaks it, that's a "known limitation" line,
   not a blocker.
-- **No generic `eq`/`show`.** The port will want structural equality and
-  printing on every type (tests, error messages, `showType`). Interim answer:
-  hand-written per-type `showExpr`/`eqType` functions — verbose but honest.
-  See "forcing function" below.
+- ~~**No generic `eq`/`show`.**~~ Both exist now as polymorphic structural
+  builtins (ADR 0007 + addendum). Caveat: `show` renders the runtime shape —
+  fine for tests/diagnostics; pretty-printers with language-specific syntax
+  (`showType`'s `a -> b`) are still hand-written per type. See "forcing
+  function" below.
 
 ---
 
@@ -101,11 +104,11 @@ record fields may nest, lazy-List patterns may not. Guard:
 Each slice is shippable and independently verifiable, in the existing
 one-feature-per-slice style.
 
-### Slice A — prelude one-liners — ½ DONE
-~~`Str.toNumber`~~ ✓, ~~`Str.eq`~~ ✓ (polymorphic `eq`). Remaining: `show`,
-`Str.concat`. Types + runtime + tests.
-*Exit: a `.al` program can round-trip `"42"` → number → string and compare two
-strings.*
+### Slice A — prelude one-liners — DONE
+`Str.toNumber` ✓, `Str.eq` ✓ (polymorphic `eq`), `show` ✓ (structural, ADR 0007
+addendum), `Str.concat` ✓, `Array.prepend` ✓ (cons).
+*Exit met: a `.al` program round-trips `"42"` → number → string
+(`Str.toNumber` + `show`) and compares two strings (`eq`).*
 
 ### Slice B — local bindings — DONE (ADR 0009, 0011)
 `let … in` (let-polymorphic — generalized, not monomorphic; choice recorded in
@@ -118,7 +121,7 @@ General pattern compiler (`patConds`/`patSlot`) + conservative exhaustiveness
 *Exit met: `Sm(Sm(n)) => n` (and tuple/record/array nestings) evaluate
 correctly; `test/nested-patterns.spec.ts` guards it.*
 
-### Slice C — lexer in alang (first self-hosting artifact) ← NEXT after A
+### Slice C — lexer in alang (first self-hosting artifact) ← NEXT
 Port `lexer.ts` (~170 LOC) to `bootstrap/lexer.al`. Token type is a variant;
 lexing is `unfold`-style recursion over a char array. Host test harness: run
 the alang-emitted JS lexer against the TS lexer on the whole test corpus and

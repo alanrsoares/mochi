@@ -28,3 +28,14 @@ with no language change.
 
 Typeclasses / dictionary passing (`eq(dict)(a)(b)`) — muddies the JS output; deferred
 until/unless higher-kinded types become part of the thesis.
+
+## Addendum (2026-07-21): `show` joins the structural trio
+
+`show : a -> string` shipped under the same rationale — runtime structural
+display (strings quoted, arrays bracketed, variants as `Ctor(args)`, records as
+`{ k: v }`), not a `Show` class. Bootstrap need was only `number -> string`
+(codegen emits numbers into JS text), but squatting the good name on a
+monomorphic signature would block the structural version later; the polymorphic
+form costs the same and serves diagnostics/tests immediately. Caveats are the
+eq/compare ones: tuples erase to JS arrays so they display as `[a, b]`, and
+`Set`/`Map`/functions fall back to `String(x)`.

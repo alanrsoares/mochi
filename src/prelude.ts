@@ -54,10 +54,12 @@ export const preludeEnv: Record<string, Type> = {
   sqrt: tArrow(tNumber, tNumber),
   hypot: num2,
   pi: tNumber,
-  // eq/compare are STRUCTURAL and polymorphic (deep-equal / deep-order at any
-  // type) — the pragmatic bridge instead of typeclasses. lt/gt stay numeric.
+  // eq/compare/show are STRUCTURAL and polymorphic (deep-equal / deep-order /
+  // display at any type) — the pragmatic bridge instead of typeclasses.
+  // lt/gt stay numeric.
   eq: tArrow(a, tArrow(a, tBool)), // a -> a -> bool  (structural)
   compare: tArrow(a, tArrow(a, tNumber)), // a -> a -> number  (-1 | 0 | 1)
+  show: tArrow(a, tString), // a -> string  (structural display)
   lt: cmp,
   gt: cmp,
   // --- Math (unqualified, like the arithmetic ops) ---
@@ -131,6 +133,11 @@ export const preludeJsDefs: Record<string, string> = {
   // arrays lexicographically, everything else by a stable JSON fallback.
   compare:
     'const compare = _curry(2, (x, y) => { if (x === y) return 0; const t = typeof x; if (t === "number" || t === "string" || t === "boolean") return x < y ? -1 : x > y ? 1 : 0; if (Array.isArray(x) && Array.isArray(y)) { const n = Math.min(x.length, y.length); for (let i = 0; i < n; i++) { const c = compare(x[i], y[i]); if (c !== 0) return c; } return compare(x.length, y.length); } const sx = JSON.stringify(x), sy = JSON.stringify(y); return sx < sy ? -1 : sx > sy ? 1 : 0; });',
+  // Structural display: primitives via String (strings quoted), arrays
+  // bracketed, variants as `Ctor(args)`, records as `{ k: v }`. Tuples are JS
+  // arrays at runtime, so they show as `[a, b]`. Set/Map/functions fall back
+  // to String(x).
+  show: 'const show = (x) => { const t = typeof x; if (t === "string") return JSON.stringify(x); if (t !== "object" || x === null) return String(x); if (Array.isArray(x)) return "[" + x.map(show).join(", ") + "]"; if (typeof x._tag === "string") { const ks = Object.keys(x).filter((k) => k !== "_tag"); return ks.length === 0 ? x._tag : x._tag + "(" + ks.map((k) => show(x[k])).join(", ") + ")"; } const ks = Object.keys(x); if (ks.length === 0) return String(x); return "{ " + ks.map((k) => k + ": " + show(x[k])).join(", ") + " }"; };',
   lt: "const lt = _curry(2, (a, b) => a < b);",
   gt: "const gt = _curry(2, (a, b) => a > b);",
   // --- Math ---
@@ -207,6 +214,7 @@ export const preludeJsDefs: Record<string, string> = {
   _Array_reverse: "const _Array_reverse = (xs) => [...xs].reverse();",
   _Array_concat: "const _Array_concat = _curry(2, (xs, ys) => xs.concat(ys));",
   _Array_append: "const _Array_append = _curry(2, (x, xs) => [...xs, x]);",
+  _Array_prepend: "const _Array_prepend = _curry(2, (x, xs) => [x, ...xs]);",
   _Array_flatMap: "const _Array_flatMap = _curry(2, (f, xs) => xs.flatMap((x) => f(x)));",
   _Array_take: "const _Array_take = _curry(2, (n, xs) => xs.slice(0, n));",
   _Array_drop: "const _Array_drop = _curry(2, (n, xs) => xs.slice(n));",
@@ -230,6 +238,7 @@ export const preludeJsDefs: Record<string, string> = {
     "const _Array_minBy = _curry(2, (f, xs) => xs.length ? Some(xs.reduce((a, b) => compare(f(a), f(b)) <= 0 ? a : b)) : None);",
   // --- String ops ---
   _Str_length: "const _Str_length = (s) => s.length;",
+  _Str_concat: "const _Str_concat = _curry(2, (a, b) => a + b);",
   _Str_toUpper: "const _Str_toUpper = (s) => s.toUpperCase();",
   _Str_toLower: "const _Str_toLower = (s) => s.toLowerCase();",
   _Str_trim: "const _Str_trim = (s) => s.trim();",
@@ -301,6 +310,7 @@ export const runtimeDeps: Record<string, string[]> = {
   _Array_find: ["Some", "None", "_curry"],
   _Array_concat: ["_curry"],
   _Array_append: ["_curry"],
+  _Array_prepend: ["_curry"],
   _Array_flatMap: ["_curry"],
   _Array_take: ["_curry"],
   _Array_drop: ["_curry"],
@@ -313,6 +323,7 @@ export const runtimeDeps: Record<string, string[]> = {
   _Array_min: ["compare", "Some", "None"],
   _Array_maxBy: ["compare", "Some", "None", "_curry"],
   _Array_minBy: ["compare", "Some", "None", "_curry"],
+  _Str_concat: ["_curry"],
   _Str_split: ["_curry"],
   _Str_join: ["_curry"],
   _Str_contains: ["_curry"],
@@ -339,6 +350,7 @@ export const preludeNamespaces: Record<string, Record<string, Type>> = {
     reverse: tArrow(arr(a), arr(a)), // [a] -> [a]
     concat: tArrow(arr(a), tArrow(arr(a), arr(a))), // [a] -> [a] -> [a]
     append: tArrow(a, tArrow(arr(a), arr(a))), // a -> [a] -> [a]
+    prepend: tArrow(a, tArrow(arr(a), arr(a))), // a -> [a] -> [a]  (cons)
     flatMap: tArrow(tArrow(a, arr(b)), tArrow(arr(a), arr(b))), // (a -> [b]) -> [a] -> [b]
     take: tArrow(tNumber, tArrow(arr(a), arr(a))), // number -> [a] -> [a]
     drop: tArrow(tNumber, tArrow(arr(a), arr(a))), // number -> [a] -> [a]
@@ -388,6 +400,7 @@ export const preludeNamespaces: Record<string, Record<string, Type>> = {
   // String ops (`Str.*`). Data-last where a collection/subject is involved.
   Str: {
     length: tArrow(tString, tNumber), // string -> number
+    concat: tArrow(tString, tArrow(tString, tString)), // a -> b -> a ++ b
     toUpper: tArrow(tString, tString),
     toLower: tArrow(tString, tString),
     trim: tArrow(tString, tString),
@@ -420,6 +433,7 @@ export const namespaceRuntime: Record<string, Record<string, string>> = {
     reverse: "_Array_reverse",
     concat: "_Array_concat",
     append: "_Array_append",
+    prepend: "_Array_prepend",
     flatMap: "_Array_flatMap",
     take: "_Array_take",
     drop: "_Array_drop",
@@ -464,6 +478,7 @@ export const namespaceRuntime: Record<string, Record<string, string>> = {
   },
   Str: {
     length: "_Str_length",
+    concat: "_Str_concat",
     toUpper: "_Str_toUpper",
     toLower: "_Str_toLower",
     trim: "_Str_trim",
