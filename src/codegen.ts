@@ -272,7 +272,7 @@ const genListArm = (p: ListPat, body: Expr): string => {
     params.push(p.rest.name);
     args.push(listTail(n));
   }
-  return `  if (${cond}) return ((${params.join(", ")}) => ${genExpr(body)})(${args.join(", ")});`;
+  return `  if (${cond}) return ((${params.join(", ")}) => ${genLambdaBody(body)})(${args.join(", ")});`;
 };
 
 // A lazy-List switch → an IIFE that pulls just enough elements to decide each
@@ -290,7 +290,7 @@ const genListMatch = (m: MatchExpr): string => {
       // List over the whole thing (leftover buffer + iterator). Terminal arm.
       const rest =
         a.pattern.kind === "plist" && a.pattern.rest?.kind === "pbind" ? a.pattern.rest.name : null;
-      fallback = rest ? `((${rest}) => ${genExpr(a.body)})(${listTail(0)})` : genExpr(a.body);
+      fallback = rest ? `((${rest}) => ${genLambdaBody(a.body)})(${listTail(0)})` : genExpr(a.body);
       break;
     }
   }
@@ -321,7 +321,9 @@ const genMatch = (m: MatchExpr): string => {
     parts.push(`  ${genWithArm(arm.pattern as NarrowingPattern, arm.body)}`);
   }
   if (catchAll) {
-    parts.push(`  .otherwise(${catchAllParam(catchAll.pattern)} => ${genExpr(catchAll.body)})`);
+    parts.push(
+      `  .otherwise(${catchAllParam(catchAll.pattern)} => ${genLambdaBody(catchAll.body)})`,
+    );
   } else {
     parts.push("  .exhaustive()");
   }
@@ -359,7 +361,7 @@ const genGuardArm = (p: Pattern, body: Expr, guard?: Expr): string => {
   if (guard)
     conds.push(slot === "" ? `(${genExpr(guard)})` : `((${slot}) => ${genExpr(guard)})(_v)`);
   const test = conds.length ? conds.join(" && ") : "true";
-  return `.with((_v) => ${test}, ${slot === "" ? "()" : `(${slot})`} => ${genExpr(body)})`;
+  return `.with((_v) => ${test}, ${slot === "" ? "()" : `(${slot})`} => ${genLambdaBody(body)})`;
 };
 
 const genWithArm = (p: NarrowingPattern, body: Expr): string => {
@@ -367,7 +369,7 @@ const genWithArm = (p: NarrowingPattern, body: Expr): string => {
   if (p.kind === "parr" || p.kind === "ptuple") return genGuardArm(p, body);
 
   if (p.kind === "plit" || p.kind === "pbool" || p.kind === "pstr")
-    return `.with(${litValue(p)}, () => ${genExpr(body)})`;
+    return `.with(${litValue(p)}, () => ${genLambdaBody(body)})`;
 
   if (p.kind === "precord") {
     if (!p.fields.every((f) => isFlatSub(f.pat))) return genGuardArm(p, body);
@@ -379,7 +381,7 @@ const genWithArm = (p: NarrowingPattern, body: Expr): string => {
         : [],
     );
     const slot = patSlot(p);
-    return `.with({ ${lits.join(", ")} }, ${slot === "" ? "()" : `(${slot})`} => ${genExpr(body)})`;
+    return `.with({ ${lits.join(", ")} }, ${slot === "" ? "()" : `(${slot})`} => ${genLambdaBody(body)})`;
   }
 
   // pctor — flat fast path keeps the readable matcher-object form.
@@ -396,7 +398,7 @@ const genWithArm = (p: NarrowingPattern, body: Expr): string => {
   });
   const patObj = [`_tag: ${JSON.stringify(p.ctor)}`, ...litFields].join(", ");
   const param = binds.length ? `({ ${binds.join(", ")} })` : "()";
-  return `.with({ ${patObj} }, ${param} => ${genExpr(body)})`;
+  return `.with({ ${patObj} }, ${param} => ${genLambdaBody(body)})`;
 };
 
 // ---- statements -----------------------------------------------------------

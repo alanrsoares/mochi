@@ -212,3 +212,25 @@ test("nested patterns format idempotently", () => {
   expect(unwrapOk(format(once))).toBe(once);
   expect(once).toContain("Sm(Sm(Leaf(n)))");
 });
+
+// --- record literals as arm bodies -------------------------------------------
+// Every arm-handler emit site must parenthesize a record-literal body, else JS
+// parses `() => { k: v }` as a statement block. Found by the bootstrap lexer
+// (its `mkTok` returns records from switch arms); covers the flat matcher arm,
+// the guard form, literal arms, and `.otherwise`.
+
+test("record-literal bodies survive every arm form", () => {
+  const src = `let f = o => switch o {
+    | Some(0) => { kind: "zero", n: 0 }
+    | Some(x) when gt(x, 9) => { kind: "big", n: x }
+    | Some(x) => { kind: "some", n: x }
+    | None => { kind: "none", n: -1 }
+  }
+  let r = [f(Some(0)), f(Some(10)), f(Some(5)), f(None)]`;
+  expect(run(src)).toEqual([
+    { kind: "zero", n: 0 },
+    { kind: "big", n: 10 },
+    { kind: "some", n: 5 },
+    { kind: "none", n: -1 },
+  ]);
+});
