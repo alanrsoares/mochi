@@ -71,9 +71,11 @@ test("record patterns type the scrutinee structurally (open row)", () => {
   expect(schemeOf("let f = p => switch p { | { x } => add(x, 1) }", "f")).toContain("number");
 });
 
-test("nested field patterns are rejected at parse time", () => {
-  const err = compile(
-    "type T a = | Some(a)\nlet g = r => switch r { | { v: Some(x) } => x | _ => 0 }",
+test("nested field patterns guard and bind (ADR 0012)", () => {
+  // Formerly rejected at parse time; now lowers to the guard form.
+  const out = run(
+    "type T a = | Sm(a) | Nn\nlet g = r => switch r { | { v: Sm(x) } => x | _ => 0 }\nlet a = g({ v: Sm(7) })\nlet b = g({ v: Nn })",
+    "[a, b]",
   );
-  expect(isErr(err)).toBe(true);
+  expect(out).toEqual([7, 0]);
 });

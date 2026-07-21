@@ -43,6 +43,7 @@ What else was on the table and why not.
 | [0009](0009-let-in-local-bindings.md) | Local `let … in` bindings (non-recursive, let-polymorphic) | Accepted |
 | [0010](0010-tuples.md) | Tuples via a reserved `con("tuple", …)`; erase to JS arrays | Accepted |
 | [0011](0011-tuple-binding-sugar.md) | Tuple lambda param + `let (a, b) = … in` (desugar) | Accepted |
+| [0012](0012-nested-patterns.md) | Nested patterns: guard-form emission + conservative exhaustiveness | Accepted |
 
 ## Backlog (well-evidenced, not yet written)
 

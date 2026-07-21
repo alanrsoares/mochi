@@ -137,7 +137,71 @@ const checkSeqExhaustive = (m: MatchExpr): AlangError | null | undefined => {
   return checkErr("non-exhaustive list switch: cover `[]` and `[x, ...xs]` (or add `_`)", m.span);
 };
 
+// Validate a pattern tree: nested constructors must exist with the right
+// arity (top-level ctor arms are re-validated by checkMatch, which also needs
+// the registry info for exhaustiveness), and a lazy-List pattern cannot nest
+// inside another pattern — matching it pulls from the generator, an effect the
+// emitted guard form must not hide mid-predicate. Top-level `plist` arms are
+// fine (genListMatch owns the pulling discipline).
+const checkPattern = (p: Pattern, reg: Registry, top: boolean): AlangError | null => {
+  switch (p.kind) {
+    case "pctor": {
+      const info = reg.ctor.get(p.ctor);
+      if (!info) return checkErr(`unknown constructor '${p.ctor}'`, p.span);
+      if (p.args.length !== info.arity)
+        return checkErr(
+          `constructor '${p.ctor}' expects ${info.arity} arg(s), got ${p.args.length}`,
+          p.span,
+        );
+      for (const a of p.args) {
+        const e = checkPattern(a, reg, false);
+        if (e) return e;
+      }
+      return null;
+    }
+    case "precord": {
+      for (const f of p.fields) {
+        const e = checkPattern(f.pat, reg, false);
+        if (e) return e;
+      }
+      return null;
+    }
+    case "ptuple": {
+      for (const el of p.elems) {
+        const e = checkPattern(el, reg, false);
+        if (e) return e;
+      }
+      return null;
+    }
+    case "parr":
+    case "plist": {
+      if (p.kind === "plist" && !top)
+        return checkErr(
+          "lazy-List pattern cannot nest inside another pattern (matching pulls from the sequence)",
+          p.span,
+        );
+      for (const el of p.elems) {
+        const e = checkPattern(el, reg, false);
+        if (e) return e;
+      }
+      return p.rest ? checkPattern(p.rest, reg, false) : null;
+    }
+    default:
+      return null;
+  }
+};
+
+// A constructor arm covers its constructor only when every argument is
+// irrefutable (a bind/wildcard or an all-binding record/tuple). A narrowing
+// arm — `Sm(Sm(n))`, `Sm(0)` — matches a strict subset, so it must not count
+// toward exhaustiveness.
+const coversCtor = (p: CtorPat): boolean => p.args.every(isCatchAll);
+
 function checkMatch(m: MatchExpr, reg: Registry): AlangError | null {
+  for (const arm of m.arms) {
+    const e = checkPattern(arm.pattern, reg, true);
+    if (e) return e;
+  }
   const hasCatchAll = m.arms.some((a) => isCatchAll(a.pattern));
   const ctorArms = m.arms.filter((a) => a.pattern.kind === "pctor");
 
@@ -169,15 +233,24 @@ function checkMatch(m: MatchExpr, reg: Registry): AlangError | null {
     if (owningType === null) owningType = info.type;
     else if (owningType !== info.type)
       return checkErr(`switch mixes variants of '${owningType}' and '${info.type}'`, p.span);
-    covered.add(p.ctor);
+    if (coversCtor(p)) covered.add(p.ctor);
   }
 
   if (hasCatchAll) return null; // catch-all covers the rest
   const required = reg.type.get(owningType!)!;
   const missing = required.filter((c) => !covered.has(c));
-  return missing.length === 0
-    ? null
-    : checkErr(`non-exhaustive switch on '${owningType}': missing ${missing.join(", ")}`, m.span);
+  if (missing.length === 0) return null;
+  // A narrowing arm on a missing ctor means the user matched it partially —
+  // point at the fix rather than just naming the gap.
+  const seen = new Set(ctorArms.map((a) => (a.pattern as CtorPat).ctor));
+  const narrowed = missing.filter((c) => seen.has(c));
+  const hint = narrowed.length
+    ? ` (arm(s) on ${narrowed.join(", ")} narrow — add ${narrowed[0]}(_) or a '_' catch-all)`
+    : "";
+  return checkErr(
+    `non-exhaustive switch on '${owningType}': missing ${missing.join(", ")}${hint}`,
+    m.span,
+  );
 }
 
 // Collection namespaces are built-in; binding one as a value/type/import would

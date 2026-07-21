@@ -437,12 +437,10 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     const { name: label, span } = expectId();
     if (peek().t === "colon") {
       next();
-      const pat = parsePattern();
-      // Runtime match is shallow (@onrails object patterns compare by ===), so a
-      // field sub-pattern may bind or narrow on a literal, but not nest.
-      if (pat.kind === "pctor" || pat.kind === "precord")
-        fail("record pattern fields cannot nest; use a name or a literal");
-      return { label, pat };
+      // A field sub-pattern is a full pattern — binds, literals, and nesting
+      // (`{ a: { b } }`, `{ v: Sm(n) }`). Nested arms lower to the guard form
+      // in codegen (matcher objects stay shallow). See ADR 0012.
+      return { label, pat: parsePattern() };
     }
     return { label, pat: { kind: "pbind", name: label, span } };
   }

@@ -5,7 +5,6 @@
 // node and forget it → TS compile error in the compiler, not a silent gap.
 import { match } from "ts-pattern";
 import type {
-  ArrPat,
   CtorField,
   Expr,
   ExternStmt,
@@ -20,9 +19,7 @@ import type {
   MatchExpr,
   Pattern,
   Program,
-  RecordPat,
   Stmt,
-  TuplePat,
   TypeStmt,
 } from "./ast";
 import { builtinTypeDecls, namespaceRuntime, preludeJsDefs, runtimeDeps } from "./prelude";
@@ -148,32 +145,95 @@ const isCatchAll = (p: Pattern): boolean =>
   // [...all] / @{...all} — a bare rest with no fixed head matches anything.
   ((p.kind === "parr" || p.kind === "plist") && p.elems.length === 0 && p.rest !== null);
 
-// A JS array-destructuring target for a catch-all tuple: `[a, b]`. A wildcard
-// or nested narrowing leaves an elision hole (`[a, , c]`); a nested record
-// destructures its binds, a nested tuple recurses.
-const tupleTarget = (p: TuplePat): string =>
-  `[${p.elems
-    .map((e) =>
-      e.kind === "pbind"
-        ? e.name
-        : e.kind === "precord"
-          ? `{ ${recordBinds(e).join(", ")} }`
-          : e.kind === "ptuple"
-            ? tupleTarget(e)
-            : "",
-    )
-    .join(", ")}]`;
+// ---- general pattern compiler ----------------------------------------------
+// Nested patterns can't lower to matcher objects: @onrails/pattern's matcher
+// compares object values shallowly (`!==`), so `{ value: { _tag: "Sm" } }`
+// never matches. An arm with nesting instead lowers to the guard form the
+// array/tuple arms already use — `.with((_v) => conds, (slot) => body)`.
+// `patConds` renders the refutable tests against a path expression; `patSlot`
+// renders the JS destructuring target binding the names ("" = a hole, nothing
+// binds beneath). Lazy `plist` never reaches either: nested occurrences are
+// rejected by check.ts, top-level arms go through `genListMatch`.
+
+// `{ key: sub }` entry, punned when the bound name IS the key.
+const keyedSlot = (key: string, sub: string): string => (sub === key ? key : `${key}: ${sub}`);
+
+const patSlot = (p: Pattern): string => {
+  switch (p.kind) {
+    case "pbind":
+      return p.name;
+    case "pwild":
+    case "plit":
+    case "pbool":
+    case "pstr":
+    case "plist":
+      return "";
+    case "pctor": {
+      const keys = ctorKeys.get(p.ctor);
+      const entries = p.args.flatMap((a, i) => {
+        const s = patSlot(a);
+        return s === "" ? [] : [keyedSlot(keys?.[i] ?? `_${i}`, s)];
+      });
+      return entries.length ? `{ ${entries.join(", ")} }` : "";
+    }
+    case "precord": {
+      const entries = p.fields.flatMap((f) => {
+        const s = patSlot(f.pat);
+        return s === "" ? [] : [keyedSlot(f.label, s)];
+      });
+      return entries.length ? `{ ${entries.join(", ")} }` : "";
+    }
+    case "ptuple": {
+      const slots = p.elems.map(patSlot);
+      return slots.some((s) => s !== "") ? `[${slots.join(", ")}]` : "";
+    }
+    case "parr": {
+      const slots = p.elems.map(patSlot);
+      if (p.rest?.kind === "pbind") slots.push(`...${p.rest.name}`);
+      return slots.some((s) => s !== "") ? `[${slots.join(", ")}]` : "";
+    }
+  }
+};
+
+const patConds = (p: Pattern, path: string): string[] => {
+  switch (p.kind) {
+    case "pwild":
+    case "pbind":
+    case "plist":
+      return [];
+    case "plit":
+    case "pbool":
+    case "pstr":
+      return [`${path} === ${litValue(p)}`];
+    case "pctor": {
+      const keys = ctorKeys.get(p.ctor);
+      return [
+        `${path}._tag === ${JSON.stringify(p.ctor)}`,
+        ...p.args.flatMap((a, i) => patConds(a, `${path}.${keys?.[i] ?? `_${i}`}`)),
+      ];
+    }
+    case "precord":
+      return p.fields.flatMap((f) => patConds(f.pat, `${path}.${f.label}`));
+    case "ptuple":
+      // No length guard — tuple arity is guaranteed by the type.
+      return p.elems.flatMap((e, i) => patConds(e, `${path}[${i}]`));
+    case "parr":
+      return [
+        `${path}.length ${p.rest ? ">=" : "==="} ${p.elems.length}`,
+        ...p.elems.flatMap((e, i) => patConds(e, `${path}[${i}]`)),
+      ];
+  }
+};
 
 // The handler parameter for a catch-all pattern: bind the name, destructure a
-// record's fields, or ignore the value.
+// record's/tuple's binds, or ignore the value.
 const catchAllParam = (p: Pattern): string => {
-  if (p.kind === "pbind") return `(${p.name})`;
-  if (p.kind === "precord") return `({ ${recordBinds(p).join(", ")} })`;
-  if (p.kind === "ptuple") return `(${tupleTarget(p)})`;
-  // `[...all]` / `@{...all}` binds the whole collection to the rest name.
+  // `[...all]` / `@{...all}` binds the whole collection to the rest name — NOT
+  // a destructure: `[...all]` would copy the array and force a lazy List.
   if (p.kind === "parr" || p.kind === "plist")
     return p.rest?.kind === "pbind" ? `(${p.rest.name})` : "()";
-  return "()";
+  const slot = patSlot(p);
+  return slot === "" ? "()" : `(${slot})`;
 };
 
 // A switch is a "lazy-List match" when it has a narrowing `@{}`/`@{h,...t}` arm
@@ -191,22 +251,20 @@ const listTail = (from: number): string =>
 // One narrowing lazy-List arm → an `if (cond) return call;`. A fixed arm `@{a,
 // b}` must see n+1 pulls to prove length exactly n; a cons arm `@{h, ...t}`
 // needs n pulls (length ≥ n) and binds its tail to a lazy List over the rest.
-// Literal elements add `_b[i] === lit` guards and take a hole in the binding.
+// Element sub-patterns guard/bind via the general compiler against the buffer
+// (`_b[i]` is already pulled, so nested tests force nothing extra).
 const genListArm = (p: ListPat, body: Expr): string => {
   const n = p.elems.length;
-  const guards = p.elems.flatMap((ep, i) =>
-    ep.kind === "plit" || ep.kind === "pbool" || ep.kind === "pstr"
-      ? [`_b[${i}] === ${litValue(ep)}`]
-      : [],
-  );
+  const guards = p.elems.flatMap((ep, i) => patConds(ep, `_b[${i}]`));
   const cond = [p.rest ? `_pull(${n})` : `!_pull(${n + 1}) && _b.length === ${n}`, ...guards].join(
     " && ",
   );
   const params: string[] = [];
   const args: string[] = [];
   p.elems.forEach((ep, i) => {
-    if (ep.kind === "pbind") {
-      params.push(ep.name);
+    const slot = patSlot(ep);
+    if (slot !== "") {
+      params.push(slot);
       args.push(`_b[${i}]`);
     }
   });
@@ -264,13 +322,6 @@ const genMatch = (m: MatchExpr): string => {
   return parts.join("\n");
 };
 
-// Destructuring binds from a record pattern's fields: `{ x }` → `x`, a rename
-// `{ x: y }` → `x: y`. Non-binding sub-patterns (literals, `_`) contribute none.
-const recordBinds = (p: RecordPat): string[] =>
-  p.fields.flatMap((f) =>
-    f.pat.kind === "pbind" ? [f.pat.name === f.label ? f.label : `${f.label}: ${f.pat.name}`] : [],
-  );
-
 // A literal pattern rendered as a JS value for the matcher object / `.with`.
 const litValue = (p: LitPat): string =>
   p.kind === "pstr" ? JSON.stringify(p.value) : p.kind === "plit" ? p.raw : String(p.value);
@@ -281,72 +332,58 @@ type NarrowingPattern = Extract<
   { kind: "pctor" | "plit" | "pbool" | "pstr" | "precord" | "parr" | "ptuple" }
 >;
 
-// A narrowing tuple arm (at least one literal position) → an index-guard plus a
-// destructuring handler, mirroring the fixed-length array arm: `(a, 0)` →
-// `.with((_v) => _v[1] === 0, ([a]) => …)`. Nested constructor sub-patterns are
-// treated as holes (same limitation as array patterns — bind/wildcard/literal
-// only). Arity is guaranteed by the type, so no length guard is emitted.
-const genTupleArm = (p: TuplePat, body: Expr): string => {
-  const conds: string[] = [];
-  const slots = p.elems.map((ep, i) => {
-    if (ep.kind === "pbind") return ep.name;
-    if (ep.kind === "plit" || ep.kind === "pbool" || ep.kind === "pstr") {
-      conds.push(`_v[${i}] === ${litValue(ep)}`);
-    }
-    return ""; // literal (narrowed), wildcard, or nested — a hole in the binding
-  });
-  const param = slots.some((s) => s !== "") ? `([${slots.join(", ")}])` : "()";
-  return `.with((_v) => ${conds.join(" && ")}, ${param} => ${genExpr(body)})`;
-};
+// A sub-pattern the flat matcher-object form can express: a bind, wildcard, or
+// primitive literal (the matcher compares values with `!==`, so only
+// primitives are meaningful there). Anything deeper routes to the guard form.
+const isFlatSub = (p: Pattern): boolean =>
+  p.kind === "pbind" ||
+  p.kind === "pwild" ||
+  p.kind === "plit" ||
+  p.kind === "pbool" ||
+  p.kind === "pstr";
 
-// A fixed/cons list pattern lowers to a length-guard plus a destructuring
-// handler: `[]` → `v.length === 0`; `[x]` → `v.length === 1`, bind `([x])`;
-// `[h, ...t]` → `v.length >= 1`, bind `([h, ...t])`. Literal elements add
-// `v[i] === lit` to the guard and take a hole in the destructure.
-const genArrArm = (p: ArrPat, body: Expr): string => {
-  const conds = [`_v.length ${p.rest ? ">=" : "==="} ${p.elems.length}`];
-  const slots = p.elems.map((ep, i) => {
-    if (ep.kind === "pbind") return ep.name;
-    if (ep.kind === "plit" || ep.kind === "pbool" || ep.kind === "pstr") {
-      conds.push(`_v[${i}] === ${litValue(ep)}`);
-      return ""; // narrowed, not bound — a hole in the array pattern
-    }
-    return ""; // pwild / unsupported nested — hole
-  });
-  if (p.rest?.kind === "pbind") slots.push(`...${p.rest.name}`);
-  const anyBind = slots.some((s) => s !== "");
-  const param = anyBind ? `([${slots.join(", ")}])` : "()";
-  return `.with((_v) => ${conds.join(" && ")}, ${param} => ${genExpr(body)})`;
+// The general arm: predicate + destructuring handler, built by the pattern
+// compiler. Handles arbitrary nesting (`Sm(Sm(n))`, `Ok((a, b))`, ctors inside
+// tuples/arrays). Narrowing guarantees at least one condition; `true` is a
+// defensive fallback, not an expected path.
+const genGuardArm = (p: Pattern, body: Expr): string => {
+  const conds = patConds(p, "_v");
+  const slot = patSlot(p);
+  const test = conds.length ? conds.join(" && ") : "true";
+  return `.with((_v) => ${test}, ${slot === "" ? "()" : `(${slot})`} => ${genExpr(body)})`;
 };
 
 const genWithArm = (p: NarrowingPattern, body: Expr): string => {
-  if (p.kind === "parr") return genArrArm(p, body);
-  if (p.kind === "ptuple") return genTupleArm(p, body);
+  // Array/tuple arms always take the guard form (not matcher-object-able).
+  if (p.kind === "parr" || p.kind === "ptuple") return genGuardArm(p, body);
 
   if (p.kind === "plit" || p.kind === "pbool" || p.kind === "pstr")
     return `.with(${litValue(p)}, () => ${genExpr(body)})`;
 
   if (p.kind === "precord") {
-    // At least one literal field narrows (else it's a catch-all); those form the
-    // matcher object, binding fields destructure in the handler.
+    if (!p.fields.every((f) => isFlatSub(f.pat))) return genGuardArm(p, body);
+    // Flat fast path: literal fields form the matcher object (at least one —
+    // else it's a catch-all); binding fields destructure in the handler.
     const lits = p.fields.flatMap((f) =>
       f.pat.kind === "plit" || f.pat.kind === "pbool" || f.pat.kind === "pstr"
         ? [`${f.label}: ${litValue(f.pat)}`]
         : [],
     );
-    const bind = recordBinds(p);
-    const param = bind.length ? `({ ${bind.join(", ")} })` : "()";
-    return `.with({ ${lits.join(", ")} }, ${param} => ${genExpr(body)})`;
+    const slot = patSlot(p);
+    return `.with({ ${lits.join(", ")} }, ${slot === "" ? "()" : `(${slot})`} => ${genExpr(body)})`;
   }
 
+  // pctor — flat fast path keeps the readable matcher-object form.
+  if (!p.args.every(isFlatSub)) return genGuardArm(p, body);
   const binds: string[] = []; // "value: r" (or "_0: r" positionally)
   const litFields: string[] = []; // "value: 5" — narrows further
   const keys = ctorKeys.get(p.ctor);
   p.args.forEach((a, i) => {
     const key = keys?.[i] ?? `_${i}`;
-    if (a.kind === "pbind") binds.push(key === a.name ? key : `${key}: ${a.name}`);
-    else if (a.kind === "plit") litFields.push(`${key}: ${a.raw}`);
-    // pwild → don't bind; nested pctor is v2
+    if (a.kind === "pbind") binds.push(keyedSlot(key, a.name));
+    else if (a.kind === "plit" || a.kind === "pbool" || a.kind === "pstr")
+      litFields.push(`${key}: ${litValue(a)}`);
+    // pwild → don't bind
   });
   const patObj = [`_tag: ${JSON.stringify(p.ctor)}`, ...litFields].join(", ");
   const param = binds.length ? `({ ${binds.join(", ")} })` : "()";
