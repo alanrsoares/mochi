@@ -1,6 +1,6 @@
 // Lexer — text → tokens. Returns Result; bad char = Err, not throw.
 // Each emitted token carries its source `span` (half-open [start, end)).
-import { err, ok, type Result } from "@onrails/result";
+import { err, isErr, ok, type Result } from "@onrails/result";
 import { type AlangError, lexErr } from "./errors";
 import { type Span, span } from "./span";
 
@@ -32,6 +32,13 @@ export type Tok =
   | { t: "num"; v: number; raw: string } // raw source lexeme, so `3.0`/`-3` survive re-printing
   | { t: "bool"; v: boolean } // true / false
   | { t: "str"; v: string } // "..." (decoded value)
+  // ${} interpolation (ADR 0023): the literal chunk before the first hole,
+  // between two holes, and after the last one. A hole's own tokens are
+  // ordinary tokens re-lexed in place between these markers — the parser
+  // reads them back into an alternating `interp` parts array.
+  | { t: "tmplstart"; v: string }
+  | { t: "tmplmid"; v: string }
+  | { t: "tmplend"; v: string }
   | { t: "id"; v: string }
   | { t: "eof" };
 
@@ -78,22 +85,138 @@ const PUNCT: Record<string, Tok | undefined> = {
 
 const isSpace = (c: string): boolean => c === " " || c === "\t" || c === "\n" || c === "\r";
 
-// Scan a "..." literal starting at the opening quote `i`. Returns the decoded
-// value and the index just past the closing quote, or null if unterminated.
-const scanString = (src: string, i: number): { value: string; end: number } | null => {
+// Skip a string literal starting at its opening quote `i`, descending into any
+// `${...}` holes (which may themselves contain strings/holes) so their braces
+// and quotes don't confuse a caller that's only counting braces. Returns the
+// index just past the closing quote, or null if unterminated. Used only by
+// `findHoleEnd`'s prescan — decoding happens later, in `scanTemplate`.
+const skipStringLiteral = (src: string, i: number): number | null => {
+  let j = i + 1;
+  while (j < src.length && src[j] !== '"') {
+    if (src[j] === "\\" && j + 1 < src.length) {
+      j += 2;
+      continue;
+    }
+    if (src[j] === "$" && src[j + 1] === "{") {
+      const end = findHoleEnd(src, j + 2);
+      if (end === null) return null;
+      j = end;
+      continue;
+    }
+    j++;
+  }
+  return j >= src.length ? null : j + 1;
+};
+
+// Find the index just past the `}` that closes a `${` hole whose contents
+// start at `start` (right after the `${`). Tracks brace depth so a nested
+// record literal or `switch` inside the hole doesn't close it early, and
+// descends into nested string literals (which may carry their own holes).
+const findHoleEnd = (src: string, start: number): number | null => {
+  let depth = 1;
+  let j = start;
+  while (j < src.length) {
+    const c = src[j]!;
+    if (c === '"') {
+      const end = skipStringLiteral(src, j);
+      if (end === null) return null;
+      j = end;
+      continue;
+    }
+    if (c === "/" && src[j + 1] === "/") {
+      while (j < src.length && src[j] !== "\n") j++;
+      continue;
+    }
+    if (c === "{") depth++;
+    else if (c === "}") {
+      depth--;
+      if (depth === 0) return j + 1;
+    }
+    j++;
+  }
+  return null;
+};
+
+// One chunk of a scanned "..." literal: a decoded literal run, or the raw
+// source range of a `${...}` hole (tokenized later, by the caller, via a
+// recursive `lex` call — so hole tokens get real spans for free).
+type TemplatePart = { kind: "lit"; value: string } | { kind: "hole"; start: number; end: number };
+
+// Scan a "..." literal (which may contain `${expr}` holes) starting at the
+// opening quote `i`. `\$` escapes a literal `$` (needed only right before a
+// `{`; a lone `$` needs no escape). Returns the alternating lit/hole chunks
+// and the index just past the closing quote, or null if unterminated.
+const scanTemplate = (src: string, i: number): { parts: TemplatePart[]; end: number } | null => {
   let j = i + 1;
   let value = "";
+  const parts: TemplatePart[] = [];
   while (j < src.length && src[j] !== '"') {
+    if (src[j] === "\\" && src[j + 1] === "$") {
+      value += "$";
+      j += 2;
+      continue;
+    }
+    if (src[j] === "$" && src[j + 1] === "{") {
+      parts.push({ kind: "lit", value });
+      value = "";
+      const holeEnd = findHoleEnd(src, j + 2);
+      if (holeEnd === null) return null;
+      parts.push({ kind: "hole", start: j + 2, end: holeEnd - 1 });
+      j = holeEnd;
+      continue;
+    }
     if (src[j] === "\\" && j + 1 < src.length) {
       const n = src[j + 1]!;
       value += n === "n" ? "\n" : n === "t" ? "\t" : n; // \\ and \" fall through to the char
       j += 2;
-    } else {
-      value += src[j];
-      j++;
+      continue;
     }
+    value += src[j];
+    j++;
   }
-  return j >= src.length ? null : { value, end: j + 1 };
+  if (j >= src.length) return null;
+  parts.push({ kind: "lit", value });
+  return { parts, end: j + 1 };
+};
+
+// Shift a span/token by `by` — used to place a hole's recursively-lexed
+// tokens (which `lex()` produced as if the hole source started at 0) at
+// their real position in the enclosing source.
+const offsetSpan = (s: Span, by: number): Span => span(s.start + by, s.end + by);
+const offsetTok = (t: Located, by: number): Located => ({ ...t, span: offsetSpan(t.span, by) });
+
+// Emit the token(s) for a "..." literal starting at its opening quote `i`: a
+// plain `str`, or (ADR 0023) `tmplstart`/spliced-in hole tokens/`tmplmid`s/
+// `tmplend` for one holding `${expr}` interpolations. Returns the index just
+// past the closing quote, or an Err on an unterminated literal or a lex
+// failure inside a hole. Pulled out of `lex`'s main loop to keep it simple.
+const lexString = (
+  src: string,
+  i: number,
+  emit: (tok: Tok, start: number, end: number) => void,
+  toks: Located[],
+): Result<number, AlangError> => {
+  const s = scanTemplate(src, i);
+  if (!s) return err(lexErr("unterminated string literal", span(i, src.length)));
+  if (s.parts.length === 1) {
+    emit({ t: "str", v: (s.parts[0] as { kind: "lit"; value: string }).value }, i, s.end);
+    return ok(s.end);
+  }
+  for (let k = 0; k < s.parts.length; k++) {
+    const p = s.parts[k]!;
+    if (p.kind === "hole") {
+      const holeToks = lex(src.slice(p.start, p.end));
+      if (isErr(holeToks)) {
+        const e = holeToks.error;
+        return err(e.kind === "lex" ? lexErr(e.message, offsetSpan(e.span, p.start)) : e);
+      }
+      for (const ht of holeToks.value) if (ht.t !== "eof") toks.push(offsetTok(ht, p.start));
+      continue;
+    }
+    const kind = k === 0 ? "tmplstart" : k === s.parts.length - 1 ? "tmplend" : "tmplmid";
+    emit({ t: kind, v: p.value } as Tok, i, s.end);
+  }
+  return ok(s.end);
 };
 
 type LineComment = { end: number; doc?: string; breaksDoc: boolean };
@@ -176,12 +299,13 @@ export function lex(src: string): Result<Located[], AlangError> {
       continue;
     }
 
-    // string literal: "..." with \n \t \\ \" escapes; store the decoded value.
+    // string literal: "..." with \n \t \\ \" \$ escapes, optionally holding
+    // `${expr}` interpolations (ADR 0023). A hole-free literal stays a plain
+    // `str` token — zero churn for the common case.
     if (c === '"') {
-      const s = scanString(src, i);
-      if (!s) return err(lexErr("unterminated string literal", span(i, src.length)));
-      emit({ t: "str", v: s.value }, i, s.end);
-      i = s.end;
+      const r = lexString(src, i, emit, toks);
+      if (isErr(r)) return r;
+      i = r.value;
       continue;
     }
 

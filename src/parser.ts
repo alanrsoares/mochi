@@ -223,6 +223,7 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     if (peek().t === "lbracket") return parseArr();
     if (peek().t === "at") return parseList();
     if (peek().t === "hash") return parseMap();
+    if (peek().t === "tmplstart") return parseInterp();
     const tk = next();
     if (tk.t === "num") return { kind: "num", value: tk.v, raw: tk.raw, span: tk.span };
     if (tk.t === "bool") return { kind: "bool", value: tk.v, span: tk.span };
@@ -244,6 +245,27 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
       return first;
     }
     throw new ParseAbort(parseErr(`unexpected token ${tk.t}`, tk.span));
+  }
+
+  // "…${a}…${b}…" (ADR 0023). The lexer already split this into a token
+  // stream of tmplstart <holeTokens> tmplmid <holeTokens> ... tmplend; each
+  // hole's tokens parse as an ordinary expression via `parseExpr`.
+  function parseInterp(): Expr {
+    const start = expect("tmplstart");
+    const parts: (string | Expr)[] = [(start as Located & { t: "tmplstart" }).v];
+    for (;;) {
+      parts.push(parseExpr());
+      const tk = next();
+      if (tk.t === "tmplmid") {
+        parts.push(tk.v);
+        continue;
+      }
+      if (tk.t === "tmplend") {
+        parts.push(tk.v);
+        return { kind: "interp", parts, span: to(start.span) };
+      }
+      throw new ParseAbort(parseErr(`expected \${...} to close, got ${tk.t}`, tk.span));
+    }
   }
 
   function parseRecord(): Expr {

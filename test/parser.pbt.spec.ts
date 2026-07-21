@@ -38,6 +38,8 @@ const children = (e: Expr): Expr[] => {
     case "str":
     case "ref":
       return [];
+    case "interp":
+      return e.parts.filter((p): p is Expr => typeof p !== "string");
     case "call":
       return [e.fn, ...e.args];
     case "lambda":

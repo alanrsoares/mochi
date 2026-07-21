@@ -69,6 +69,9 @@ function forEachMatch(e: Expr, visit: (m: MatchExpr) => void): void {
     case "str":
     case "ref":
       return;
+    case "interp":
+      for (const p of e.parts) if (typeof p !== "string") forEachMatch(p, visit);
+      return;
     case "call":
       forEachMatch(e.fn, visit);
       for (const a of e.args) forEachMatch(a, visit);
@@ -538,6 +541,8 @@ const checkExprBinds = (e: Expr): AlangError | null => {
     case "str":
     case "ref":
       return null;
+    case "interp":
+      return firstErr(e.parts.filter((p): p is Expr => typeof p !== "string").map(checkExprBinds));
     case "call":
       return checkExprBinds(e.fn) ?? firstErr(e.args.map(checkExprBinds));
     case "lambda":

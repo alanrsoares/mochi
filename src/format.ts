@@ -38,6 +38,13 @@ const param = (p: LamParam): string =>
 const params = (ps: LamParam[]): string =>
   ps.length === 1 && ps[0]!.kind === "name" ? ps[0]!.name : `(${ps.map(param).join(", ")})`;
 
+// `JSON.stringify` handles \n \t \\ \" escaping but leaves a literal `${`
+// alone — which would reopen an interpolation hole on re-lex (ADR 0023).
+// Re-escape it so a hole-free string round-trips even when its decoded
+// value happens to contain that sequence.
+const escFragment = (s: string): string => JSON.stringify(s).slice(1, -1).replace(/\$\{/g, "\\${");
+const strLit = (s: string): string => `"${escFragment(s)}"`;
+
 // A precedence-light expression printer. `ind` is the current indent (used only
 // by `switch`, the one multi-line form).
 const expr = (e: Expr, ind: string): string => {
@@ -47,7 +54,10 @@ const expr = (e: Expr, ind: string): string => {
     case "bool":
       return String(e.value);
     case "str":
-      return JSON.stringify(e.value);
+      return strLit(e.value);
+    // "…${x}…" (ADR 0023) — round-trip the sugar rather than the desugared form.
+    case "interp":
+      return `"${e.parts.map((p) => (typeof p === "string" ? escFragment(p) : `\${${expr(p, ind)}}`)).join("")}"`;
     case "ref":
       return e.name;
     case "call":

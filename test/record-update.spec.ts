@@ -5,7 +5,7 @@
 
 import { expect, test } from "bun:test";
 import { match } from "@onrails/pattern";
-import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
+import { isErr, unwrapOk } from "@onrails/result";
 import { compile } from "../src/compile";
 import { format } from "../src/format";
 
@@ -13,8 +13,6 @@ const run = (src: string): unknown => {
   const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
   return new Function("match", `${js}\nreturn r;`)(match);
 };
-
-const errMsg = (src: string): string => unwrapErr(compile(src)).message;
 
 // --- runtime + codegen ------------------------------------------------------
 

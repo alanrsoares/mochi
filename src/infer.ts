@@ -254,6 +254,19 @@ const inferLetBind = (e: LetBindExpr, ctx: Ctx): Result<Type, AlangError> => {
   return ok(tCon("Result", [resT, errT]));
 };
 
+// Every hole of a "…${x}…" unifies with `string` (ADR 0023) — no implicit
+// `show`. Pulled out of `inferExpr`'s switch to keep its complexity down.
+const inferInterp = (parts: (string | Expr)[], ctx: Ctx): Result<Type, AlangError> => {
+  for (const p of parts) {
+    if (typeof p === "string") continue;
+    const pt = infer(p, ctx);
+    if (isErr(pt)) return pt;
+    const uni = u(pt.value, tString, ctx, p.span);
+    if (isErr(uni)) return uni;
+  }
+  return ok(tString);
+};
+
 const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
   switch (e.kind) {
     case "num":
@@ -264,6 +277,9 @@ const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
 
     case "str":
       return ok(tString);
+
+    case "interp":
+      return inferInterp(e.parts, ctx);
 
     case "ref": {
       const sc = ctx.env.get(e.name);
@@ -537,29 +553,32 @@ const inferPat = (p: Pattern, ctx: Ctx): Result<PatResult, AlangError> => {
     case "plist":
       // Lazy `List<elem>`; same element/rest shape as `parr`.
       return inferSeqPat("List", p.elems, p.rest, ctx);
-    case "por": {
-      // Every alternative describes the same scrutinee, so their types unify;
-      // and (guaranteed by check.ts) they bind the same names, whose types unify
-      // too. The arm's binder env is the first alt's, refined by those unions.
-      const first = inferPattern(p.alts[0]!, ctx);
-      if (isErr(first)) return first;
-      const { type: t, bindings } = first.value;
-      for (let i = 1; i < p.alts.length; i++) {
-        const alt = inferPattern(p.alts[i]!, ctx);
-        if (isErr(alt)) return alt;
-        const ut = u(t, alt.value.type, ctx, p.alts[i]!.span);
-        if (isErr(ut)) return ut;
-        for (const [name, ty] of alt.value.bindings) {
-          const prev = bindings.get(name);
-          if (prev) {
-            const ub = u(prev, ty, ctx, p.alts[i]!.span);
-            if (isErr(ub)) return ub;
-          }
-        }
-      }
-      return ok({ type: t, bindings });
+    case "por":
+      return inferOrPat(p.alts, ctx);
+  }
+};
+
+// Every alternative of `A | B | …` describes the same scrutinee, so their
+// types unify; and (guaranteed by check.ts) they bind the same names, whose
+// types unify too. The arm's binder env is the first alt's, refined by those
+// unions. Pulled out of `inferPat`'s switch to keep its complexity down.
+const inferOrPat = (alts: Pattern[], ctx: Ctx): Result<PatResult, AlangError> => {
+  const first = inferPattern(alts[0]!, ctx);
+  if (isErr(first)) return first;
+  const { type: t, bindings } = first.value;
+  for (let i = 1; i < alts.length; i++) {
+    const alt = inferPattern(alts[i]!, ctx);
+    if (isErr(alt)) return alt;
+    const ut = u(t, alt.value.type, ctx, alts[i]!.span);
+    if (isErr(ut)) return ut;
+    for (const [name, ty] of alt.value.bindings) {
+      const prev = bindings.get(name);
+      if (!prev) continue;
+      const ub = u(prev, ty, ctx, alts[i]!.span);
+      if (isErr(ub)) return ub;
     }
   }
+  return ok({ type: t, bindings });
 };
 
 // Shared element/rest inference for `parr`/`plist` (they differ only in the
@@ -727,6 +746,9 @@ const freeRefs = (e: Expr, bound: Set<string>, acc: Set<string>): void => {
     case "num":
     case "bool":
     case "str":
+      return;
+    case "interp":
+      for (const p of e.parts) if (typeof p !== "string") freeRefs(p, bound, acc);
       return;
     case "ref":
       if (!bound.has(e.name)) acc.add(e.name);

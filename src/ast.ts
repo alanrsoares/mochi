@@ -5,6 +5,10 @@ export type Expr =
   | { kind: "num"; value: number; raw: string; span: Span }
   | { kind: "bool"; value: boolean; span: Span }
   | { kind: "str"; value: string; span: Span }
+  // "…${x}…" — string interpolation (ADR 0023). `parts` alternates literal
+  // chunks and hole expressions, always starting and ending on a literal
+  // chunk (free to be ""). A hole-free "…" stays the plain `str` node above.
+  | { kind: "interp"; parts: (string | Expr)[]; span: Span }
   | { kind: "ref"; name: string; span: Span }
   | { kind: "call"; fn: Expr; args: Expr[]; span: Span }
   | { kind: "lambda"; params: LamParam[]; body: Expr; span: Span } // (x, y) => body, ({a, b}) => body

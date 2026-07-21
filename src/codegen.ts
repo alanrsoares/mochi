@@ -61,11 +61,25 @@ const collapseLambda = (l: LambdaExpr): { params: LamParam[]; body: Expr } => {
   return { params, body };
 };
 
+// Re-escape a decoded literal chunk for a JS template literal: backslashes
+// first (else the escapes we're about to insert double-escape), then the
+// two chars that would otherwise reopen JS template syntax.
+const escapeTemplateLiteral = (s: string): string =>
+  s.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
+
 const genExpr = (e: Expr): string =>
   match(e)
     .with({ kind: "num" }, (n) => n.raw)
     .with({ kind: "bool" }, (b) => String(b.value))
     .with({ kind: "str" }, (s) => JSON.stringify(s.value))
+    // "…${x}…" (ADR 0023) → a native JS template literal — emitted JS reads
+    // exactly like the source.
+    .with({ kind: "interp" }, (interp) => {
+      const body = interp.parts
+        .map((p) => (typeof p === "string" ? escapeTemplateLiteral(p) : `\${${genExpr(p)}}`))
+        .join("");
+      return `\`${body}\``;
+    })
     .with({ kind: "ref" }, (r) => r.name)
     .with({ kind: "call" }, (c) => `${genCallee(c.fn)}(${c.args.map(genExpr).join(", ")})`)
     .with({ kind: "lambda" }, (l) => {
@@ -486,6 +500,7 @@ const genStmt = (s: Stmt): string => {
 const usesMatchLib = (e: Expr): boolean =>
   match(e)
     .with({ kind: "num" }, { kind: "bool" }, { kind: "str" }, { kind: "ref" }, () => false)
+    .with({ kind: "interp" }, (i) => i.parts.some((p) => typeof p !== "string" && usesMatchLib(p)))
     .with({ kind: "call" }, (c) => usesMatchLib(c.fn) || c.args.some(usesMatchLib))
     .with({ kind: "lambda" }, (l) => usesMatchLib(l.body))
     .with({ kind: "letin" }, (l) => usesMatchLib(l.value) || usesMatchLib(l.body))
@@ -524,6 +539,9 @@ const usesMatchLib = (e: Expr): boolean =>
 const exprRefs = (e: Expr, acc: Set<string>): void => {
   match(e)
     .with({ kind: "num" }, { kind: "bool" }, { kind: "str" }, () => {})
+    .with({ kind: "interp" }, (i) => {
+      for (const p of i.parts) if (typeof p !== "string") exprRefs(p, acc);
+    })
     .with({ kind: "ref" }, (r) => acc.add(r.name))
     .with({ kind: "call" }, (c) => {
       exprRefs(c.fn, acc);
