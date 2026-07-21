@@ -41,7 +41,7 @@ let cat = parts => Str.join("", parts)
 type Ty =
   | TyVar(id: number)
   | TyCon(name: string, args: [Ty])
-  | TyArrow(from: Ty, to: Ty)
+  | TyFn(from: Ty, to: Ty)
   | TyRecord(row: Row)
 
 type Row =
@@ -51,7 +51,7 @@ type Row =
 
 let tVar = id => TyVar(id)
 let tCon = (name, args) => TyCon(name, args)
-let tArrow = (fromT, toT) => TyArrow(fromT, toT)
+let tArrow = (fromT, toT) => TyFn(fromT, toT)
 let tRecord = row => TyRecord(row)
 let tPrim = name => TyCon(name, [])
 
@@ -77,8 +77,8 @@ let showType = t => switch t {
             ? cat(["(", showTypeArgs(args), ")"])
             : eq(Array.length(args), 0) ? name : cat([name, "<", showTypeArgs(args), ">"])
     }
-  | TyArrow(from, to) =>
-      let fromS = switch from { | TyArrow(_, _) => cat(["(", showType(from), ")"]) | _ => showType(from) } in
+  | TyFn(from, to) =>
+      let fromS = switch from { | TyFn(_, _) => cat(["(", showType(from), ")"]) | _ => showType(from) } in
       cat([fromS, " -> ", showType(to)])
   | TyRecord(row) => showRow(row)
 }
@@ -148,7 +148,7 @@ let resolveRow = (r, st) => switch r {
 let zonk = (t, st) => switch resolve(t, st) {
   | TyVar(id) => tVar(id)
   | TyCon(name, args) => tCon(name, args |> map(a => zonk(a, st)))
-  | TyArrow(from, to) => tArrow(zonk(from, st), zonk(to, st))
+  | TyFn(from, to) => tArrow(zonk(from, st), zonk(to, st))
   | TyRecord(row) => tRecord(zonkRow(row, st))
 }
 
@@ -162,7 +162,7 @@ let zonkRow = (row, st) => switch resolveRow(row, st) {
 let occurs = (id, t, st) => switch resolve(t, st) {
   | TyVar(rid) => eq(rid, id)
   | TyCon(_, args) => someOf(a => occurs(id, a, st), args)
-  | TyArrow(from, to) => or(occurs(id, from, st), occurs(id, to, st))
+  | TyFn(from, to) => or(occurs(id, from, st), occurs(id, to, st))
   | TyRecord(row) => occursRow(id, row, st)
 }
 
@@ -180,7 +180,7 @@ let rowVarOccurs = (id, row, st) => switch resolveRow(row, st) {
 let rowVarOccursInType = (id, t, st) => switch resolve(t, st) {
   | TyVar(_) => false
   | TyCon(_, args) => someOf(a => rowVarOccursInType(id, a, st), args)
-  | TyArrow(from, to) => or(rowVarOccursInType(id, from, st), rowVarOccursInType(id, to, st))
+  | TyFn(from, to) => or(rowVarOccursInType(id, from, st), rowVarOccursInType(id, to, st))
   | TyRecord(row) => rowVarOccurs(id, row, st)
 }
 
@@ -190,7 +190,7 @@ let rowVarOccursInType = (id, t, st) => switch resolve(t, st) {
 // always means a curried call got the wrong number of arguments. Say so
 // instead of a baffling raw `X with A -> B` mismatch.
 
-let isArrowT = t => switch t { | TyArrow(_, _) => true | _ => false }
+let isArrowT = t => switch t { | TyFn(_, _) => true | _ => false }
 
 let unifyMismatch = (ra, rb) =>
   not(eq(isArrowT(ra), isArrowT(rb)))
@@ -224,9 +224,9 @@ let unify = (a, b, st) =>
               : fail(cat(["cannot unify ", showType(ra), " with ", showType(rb)]))
         | _ => unifyMismatch(ra, rb)
       }
-    | TyArrow(afrom, ato) => switch rb {
+    | TyFn(afrom, ato) => switch rb {
         | TyVar(bid) => bindVar(bid, ra, st)
-        | TyArrow(bfrom, bto) => let? s1 = unify(afrom, bfrom, st) in unify(ato, bto, s1)
+        | TyFn(bfrom, bto) => let? s1 = unify(afrom, bfrom, st) in unify(ato, bto, s1)
         | _ => unifyMismatch(ra, rb)
       }
     | TyRecord(arow) => switch rb {
@@ -292,12 +292,13 @@ let bindRowVar = (id, row, st) => switch resolveRow(row, st) {
 // header note on why: modules arrive Slice F, differential harness keeps
 // every duplicate honest via runtime `_tag` shape).
 //
-// Name collision vs section (a): the surface syntax `TypeExpr` has its own
-// arrow constructor. Section (a) already owns `TyArrow` for the internal
-// `Ty` type. Surface variants get a `Te` prefix instead of `Ty` here
-// (TeName/TeArrow/TeApp/TeTuple/TeList) — this is the one place this repo's
-// convention (mirrored 1:1 from src/ast.ts) had to bend for a real name
-// clash, since both type families live in one standalone file.
+// Name collision vs section (a): the surface syntax `TypeExpr` needs the
+// SAME ctor names bootstrap/parser.al actually emits at runtime
+// (TyName/TyArrow/TyApp/TyTuple/TyList) — each .al file compiles to an
+// independent module with literal baked-in `_tag` strings, so this file's
+// pattern matches must agree with parser.al's tags, not just its own
+// internal type decl. That leaves no free `TyArrow` for section (a)'s HM
+// `Ty` type, so its arrow constructor is `TyFn` here instead.
 // ============================================================
 
 type Span = { start: number, end: number }
@@ -345,11 +346,11 @@ type Pattern =
   | PList(elems: [Pattern], rest: Option Pattern, span: Span)
 
 type TypeExpr =
-  | TeName(name: string, span: Span)
-  | TeArrow(from: TypeExpr, to: TypeExpr, span: Span)
-  | TeApp(ctor: string, args: [TypeExpr], span: Span)
-  | TeTuple(elems: [TypeExpr], span: Span)
-  | TeList(elem: TypeExpr, span: Span)
+  | TyName(name: string, span: Span)
+  | TyArrow(from: TypeExpr, to: TypeExpr, span: Span)
+  | TyApp(ctor: string, args: [TypeExpr], span: Span)
+  | TyTuple(elems: [TypeExpr], span: Span)
+  | TyList(elem: TypeExpr, span: Span)
 
 type CtorField = { name: Option string, fieldType: TypeExpr }
 type Ctor = { name: string, fields: [CtorField] }
@@ -439,7 +440,7 @@ let diffVarSets = (a, b) => { tv: Set.diff(a.tv, b.tv), rv: Set.diff(a.rv, b.rv)
 let collect = (t, acc) => switch t {
   | TyVar(id) => { tv: Set.add(id, acc.tv), rv: acc.rv }
   | TyCon(_, args) => collectArgs(args, acc)
-  | TyArrow(fromT, toT) => collect(toT, collect(fromT, acc))
+  | TyFn(fromT, toT) => collect(toT, collect(fromT, acc))
   | TyRecord(row) => collectRow(row, acc)
 }
 let collectArgs = (args, acc) => switch args {
@@ -485,7 +486,7 @@ let instRowMapFrom = (vars, acc, st) => switch vars {
 let instSub = (t, tmap, rmap) => switch t {
   | TyVar(id) => Map.getOr(t, id, tmap)
   | TyCon(name, args) => tCon(name, args |> map(a => instSub(a, tmap, rmap)))
-  | TyArrow(fromT, toT) => tArrow(instSub(fromT, tmap, rmap), instSub(toT, tmap, rmap))
+  | TyFn(fromT, toT) => tArrow(instSub(fromT, tmap, rmap), instSub(toT, tmap, rmap))
   | TyRecord(row) => tRecord(instSubRow(row, tmap, rmap))
 }
 let instSubRow = (row, tmap, rmap) => switch row {
@@ -584,10 +585,13 @@ let inferLetBind = (param, paramSpan, value, body, ctx, st) =>
   Ok((tCon("Result", [resT, errT]), st9))
 
 let inferRecordRow = (fields, ctx, st) => switch fields {
-  | [] => Ok((rEmpty, st))
+  | [] => Ok((RowEmpty, st))
   | [f, ...rest] =>
-      let? (ft, st1) = inferExpr(f.value, ctx, st) in
-      let? (restRow, st2) = inferRecordRow(rest, ctx, st1) in
+      // Field VALUES infer last-to-first (matching src/infer.ts's reverse
+      // loop) so side effects on shared open rows via field access land in
+      // the same order — row DISPLAY order still follows declaration order.
+      let? (restRow, st1) = inferRecordRow(rest, ctx, st) in
+      let? (ft, st2) = inferExpr(f.value, ctx, st1) in
       Ok((rExtend(f.name, ft, restRow), st2))
 }
 
@@ -748,7 +752,7 @@ let inferPatRecord = (fields, ctx, st) =>
 let inferPatCtorArgs = (ctor, curT, args, ctx, st, bindings, sp) => switch args {
   | [] => Ok((curT, bindings, st))
   | [argPat, ...rest] => switch resolve(curT, st) {
-      | TyArrow(fromT, toT) =>
+      | TyFn(fromT, toT) =>
           let? (subT, subBindings, st1) = inferPat(argPat, ctx, st) in
           let? st2 = u(fromT, subT, st1, patSpan(argPat)) in
           inferPatCtorArgs(ctor, toT, rest, ctx, st2, mergeBindingMaps(bindings, subBindings), sp)
@@ -850,11 +854,11 @@ let typeExprName = (name, vars, st, aliases, expanding) =>
 // lowercase names are type variables, shared by name within one signature
 // via the threaded `vars` cache.
 let typeExprToType = (te, vars, st, aliases, expanding) => switch te {
-  | TeArrow(fromTe, toTe, _) =>
+  | TyArrow(fromTe, toTe, _) =>
       let (fromT, vars1, st1) = typeExprToType(fromTe, vars, st, aliases, expanding) in
       let (toT, vars2, st2) = typeExprToType(toTe, vars1, st1, aliases, expanding) in
       (tArrow(fromT, toT), vars2, st2)
-  | TeApp(ctor, argTes, _) =>
+  | TyApp(ctor, argTes, _) =>
       let (args, vars1, st1) = typeExprListToType(argTes, vars, st, aliases, expanding) in
       switch Map.get(ctor, aliases) {
         | Some(info) =>
@@ -862,13 +866,13 @@ let typeExprToType = (te, vars, st, aliases, expanding) => switch te {
             (t, vars1, st2)
         | None => (tCon(ctor, args), vars1, st1)
       }
-  | TeTuple(elemTes, _) =>
+  | TyTuple(elemTes, _) =>
       let (elems, vars1, st1) = typeExprListToType(elemTes, vars, st, aliases, expanding) in
       (tTuple(elems), vars1, st1)
-  | TeList(elemTe, _) =>
+  | TyList(elemTe, _) =>
       let (elemT, vars1, st1) = typeExprToType(elemTe, vars, st, aliases, expanding) in
       (tCon("Array", [elemT]), vars1, st1)
-  | TeName(name, _) => typeExprName(name, vars, st, aliases, expanding)
+  | TyName(name, _) => typeExprName(name, vars, st, aliases, expanding)
 }
 
 let aliasLocalVarsFrom = (params, args, st) => switch params {
@@ -885,7 +889,7 @@ let aliasLocalVarsFrom = (params, args, st) => switch params {
 }
 
 let aliasFieldsFrom = (fields, vars, st, aliases, expanding) => switch fields {
-  | [] => (rEmpty, st)
+  | [] => (RowEmpty, st)
   | [fld, ...rest] =>
       let (ft, vars1, st1) = typeExprToType(fld.fieldType, vars, st, aliases, expanding) in
       let (restRow, st2) = aliasFieldsFrom(rest, vars1, st1, aliases, expanding) in
@@ -1104,11 +1108,11 @@ let stronglyConnected = adj =>
 let builtinSpan = { start: 0, end: 0 }
 let builtinTypeDecls = [
   { name: "Option", params: ["a"],
-    ctors: [ { name: "Some", fields: [{ name: Some("value"), fieldType: TeName("a", builtinSpan) }] },
+    ctors: [ { name: "Some", fields: [{ name: Some("value"), fieldType: TyName("a", builtinSpan) }] },
              { name: "None", fields: [] } ] },
   { name: "Result", params: ["a", "e"],
-    ctors: [ { name: "Ok", fields: [{ name: Some("value"), fieldType: TeName("a", builtinSpan) }] },
-             { name: "Err", fields: [{ name: Some("error"), fieldType: TeName("e", builtinSpan) }] } ] }
+    ctors: [ { name: "Ok", fields: [{ name: Some("value"), fieldType: TyName("a", builtinSpan) }] },
+             { name: "Err", fields: [{ name: Some("error"), fieldType: TyName("e", builtinSpan) }] } ] }
 ]
 
 let seedBuiltinsFrom = (keys, builtins, env, st) => switch keys {

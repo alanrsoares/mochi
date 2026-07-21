@@ -7,16 +7,17 @@ that is already *shaped* like alang. This doc inventories what the language
 has, what blocks the port, and the slice order to get there.
 (Live status checklist: `docs/bootstrap.md`.)
 
-**Distance, honestly (updated 2026-07-21): the front half of the pipeline is
+**Distance, honestly (updated 2026-07-21): three of four pipeline stages are
 self-hosted.** Local `let … in` (ADR 0009), tuples + binding sugar (ADR
 0010/0011), the char cursor, nested patterns (ADR 0012), guards (ADR 0013),
 composite ctor fields (ADR 0015), and the prelude pieces all landed — and
 **Slices C and D shipped**: `bootstrap/lexer.al` + `bootstrap/parser.al`
 reproduce the TS lexer's tokens and the TS parser's AST on every `.al` file
 in the repo, including themselves (`test/bootstrap-{lexer,parser}.spec.ts`).
-Slice E is half done: `bootstrap/check.al` reproduces the TS checker's
-verdict (first error message + span, or ok) on the same corpus
-(`test/bootstrap-check.spec.ts`). Next: infer (Slice E's heavy half).
+**Slice E is now DONE**: `bootstrap/check.al` and `bootstrap/infer.al` both
+reproduce the TS checker's verdict and the TS inferrer's schemes on the same
+corpus (`test/bootstrap-check.spec.ts`, `test/bootstrap-infer.spec.ts`). Only
+Slice F — codegen + the fixpoint ceremony — remains.
 
 ---
 
@@ -176,7 +177,7 @@ Two prerequisites got built on the way:
 *Exit met: canonical AST JSON identical on the corpus; parser.al parses
 itself.*
 
-### Slice E — check + infer in alang ← IN PROGRESS
+### Slice E — check + infer in alang ← DONE
 The heavy slice. Registry and exhaustiveness port mechanically; inference needs
 substitution threading (immutable `Map` first; extern union-find shim if too
 slow). Differential-test inferred schemes against TS on the corpus.
@@ -190,8 +191,23 @@ match).*
   check.al itself — plus 30 targeted parity cases. Green on first run:
   ADR 0017's `let?` threads the registry build, and the parser/lexer
   differential suites had already flushed the shape bugs.
-- **infer NEXT** — types + unify + Algorithm W (~1.4k LOC TS), the real test
-  of two-state (subst + env) threading.
+- **infer DONE** — `bootstrap/infer.al` (~1.3k LOC): `Ty`/`Row` + Algorithm W,
+  substitution threaded as an immutable `{tv, rv, next}` state record, Tarjan
+  SCC for mutual recursion, row-polymorphic records. `test/bootstrap-infer.spec.ts`
+  pins alpha-normalized schemes against the TS inferrer on every repo `.al`
+  file — including infer.al itself — plus 8 targeted strict-mode parity
+  cases. Two real bugs surfaced and got fixed: (1) infer.al's local `TypeExpr`
+  redeclaration used a `Te*` ctor prefix to dodge an internal clash with its
+  own `Ty` type's arrow constructor — but each `.al` file bakes literal
+  `_tag` strings at codegen, so those tags never matched the `Ty*`-tagged
+  nodes `bootstrap/parser.al` actually produces; fixed by renaming the HM
+  type's arrow ctor to `TyFn` (freeing `Ty*` for `TypeExpr` to mirror
+  parser.al exactly). (2) `inferRecordRow` inferred record-literal field
+  values left-to-right, while `src/infer.ts` deliberately infers them
+  right-to-left (line 327's reverse loop) — since field access mutates
+  shared open row variables, the two orders produced differently-ordered
+  (but structurally equivalent) row types; fixed by recursing into the rest
+  of the field list before inferring the current field's value.
 
 ### Slice F — codegen + closing the loop
 Port codegen + prelude inlining. Then the ceremony:

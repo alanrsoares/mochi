@@ -13,6 +13,11 @@ monomorphic-with-`extern`. Structural eq/compare ([0007](0007-structural-eq-comp
 is a tactical answer for equality/ordering only — the general question is open. Decide
 before adding much more prelude surface. Source: `docs/CRITIQUE.md` §2.4; `docs/PATH_TO_BOOTSTRAP.md` §5.
 
+A bounded experiment is proposed in [0018](0018-type-abstraction-traits.md): a single
+toy trait, monomorphic call sites only, no surface syntax, measuring whether a
+constraint solver stays principal/legible before any full trait system is designed.
+Still Proposed, not Accepted — this question stays open until the experiment reports.
+
 ## 2. `map` vs `Array.map` — namespace redundancy
 
 Bare prelude names vs. per-collection namespaces overlap. A symptom of #1; alternatives

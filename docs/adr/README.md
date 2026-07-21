@@ -49,6 +49,8 @@ What else was on the table and why not.
 | [0015](0015-ctor-fields-carry-type-expressions.md) | Constructor fields carry full type expressions (`[Expr]`, `Option a`, tuples, arrows) | Accepted |
 | [0016](0016-ternary-expressions.md) | Ternary expressions: `cond ? then : else`, looser than `\|>`, right-assoc | Accepted |
 | [0017](0017-let-bind.md) | `let? param = value in body` — monadic bind, Result only, first-class node | Accepted |
+| [0018](0018-type-abstraction-traits.md) | Trait constraint prototype (narrowed scope, not a full trait system) | Proposed |
+
 
 ## Backlog (well-evidenced, not yet written)
 

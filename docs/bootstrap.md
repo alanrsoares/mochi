@@ -2,13 +2,18 @@
 
 ## Status
 
-**In progress. North star, not next commit.** alang runs, is Turing-complete,
+**In progress, three of four stages self-hosted.** alang runs, is Turing-complete,
 and has the hard part done — HM inference, ADTs + exhaustive match, row-poly
 records, Map, mutual recursion, modules, Result/Option, structural eq. The
 type-theory core most languages stall on is shipped. **All three surface-syntax
 blockers are now cleared** (let-in ADR 0009, tuples ADR 0010, char cursor in the
-prelude). Next is the lexer-in-alang spike. This doc is the readiness checklist
-and the incremental path.
+prelude), and **lex → parse → check → infer are all ported to alang and
+differentially tested against the TS compiler** on the whole repo corpus
+(`bootstrap/{lexer,parser,check,infer}.al`,
+`test/bootstrap-{lexer,parser,check,infer}.spec.ts` — see
+`docs/PATH_TO_BOOTSTRAP.md` for the slice-by-slice detail). Only Slice F
+(codegen + the fixpoint ceremony) remains. This doc is the readiness checklist
+and the incremental path; see `PATH_TO_BOOTSTRAP.md` for current slice status.
 
 ## Why bootstrap at all
 
@@ -36,10 +41,11 @@ in alang today?" — the answer keeps hitting the same missing pieces.
 
 ### Strong ergonomics — painful without, not strictly blocking
 
-4. **do-notation / `>>=`.** Already flagged FUTURE in the roadmap. Threading
-   `Result` + parser state without bind is a swamp. Bootstrapping is the use case
-   that justifies building it — but defer the decision until the lexer spike
-   (below) shows how much manual `Result` threading actually hurts.
+4. **do-notation / `>>=`.** Already flagged FUTURE in the roadmap. Resolved
+   for bootstrap: the lexer spike showed manual `Result` threading (later
+   `let?`, ADR 0017) was tolerable through lexer/parser/check/infer — not a
+   bootstrap prerequisite (`docs/PATH_TO_BOOTSTRAP.md` §6). Still open as a
+   general ergonomics question independent of bootstrap.
 5. **String interpolation.** Nice for diagnostics. Minor; skip for now.
 
 ### Already have (the load-bearing parts)
@@ -63,23 +69,28 @@ modules (`import`/`export`), builtin `Result`/`Option`, structural
    miscompiled (free vars in emitted JS); now lowers to a guard-form arm.
    Conservative exhaustiveness: narrowing arms need a `C(_)`/`_` companion.
    The check/infer ports can dispatch on nested AST shapes directly.
-4. **Spike: lexer-in-alang** — the smallest real self-host proof. Write alang's
-   lexer *in alang*, run it under the current TS host, diff its token stream
-   against `src/lexer.ts` on the existing corpus. Validates ergonomics on a
-   contained target before committing to parser/infer/codegen. ← NEXT.
-   **Tuple-binding sugar is now in** (ADR 0011): `((a, b)) => …` lambda params
-   and `let (a, b) = value in body`, so scanner state threads cleanly. (Caveat:
-   the `let (a, b)` form desugars at parse time, so the formatter prints the
-   applied lambda rather than the sugar — idempotent, not round-tripping.)
-5. **Reassess do-notation** — the spike reveals whether manual `Result`
-   threading (item 4 above) is tolerable or must be sugared before going further.
-6. **Then** parser → check → infer → codegen in alang, one pass at a time, each
-   diffed against its TS counterpart. Full self-host is the sum of these; do not
-   attempt it as one leap.
+4. ~~**Spike: lexer-in-alang**~~ **DONE** — `bootstrap/lexer.al` reproduces
+   `src/lexer.ts`'s token stream on the full repo corpus
+   (`test/bootstrap-lexer.spec.ts`). Tuple-binding sugar (ADR 0011,
+   `((a, b)) => …` and `let (a, b) = value in body`) let scanner state thread
+   cleanly. The spike's answer: manual `Result` threading was tolerable —
+   do-notation was NOT added as a bootstrap prerequisite (see
+   `docs/PATH_TO_BOOTSTRAP.md` §6).
+5. ~~**parser**~~ **DONE** — `bootstrap/parser.al` reproduces `src/parser.ts`'s
+   AST on the full corpus (`test/bootstrap-parser.spec.ts`).
+6. ~~**check + infer**~~ **DONE** — `bootstrap/check.al` and `bootstrap/infer.al`
+   reproduce the TS checker's verdicts and the TS inferrer's schemes on the
+   full corpus (`test/bootstrap-{check,infer}.spec.ts`).
+7. **Remaining: codegen + the fixpoint ceremony (Slice F)** — port
+   `src/codegen.ts` to alang, diffed against its TS counterpart, then the
+   three-stage fixpoint compile (`docs/PATH_TO_BOOTSTRAP.md` §4, Slice F).
+   This is the only slice left before alang self-hosts.
 
 ## Guardrail
 
-Bootstrapping is the right *direction* but the wrong *next commit*. Start with
-**let-in** (independently valuable), then a **lexer spike** (contained, honest
-signal), and let each step's findings order the next. The type core is ready;
-the surface language needs three concrete pieces first.
+Bootstrapping proceeded direction-first: **let-in** (independently valuable),
+then a **lexer spike** (contained, honest signal) — and each step's findings
+ordered the next, through parser/check/infer. That approach paid off: lex,
+parse, check, and infer are all self-hosted and differentially tested.
+**Codegen (Slice F) is what's left** — see `docs/PATH_TO_BOOTSTRAP.md` for the
+fixpoint-ceremony plan.
