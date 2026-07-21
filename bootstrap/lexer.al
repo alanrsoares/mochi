@@ -47,33 +47,15 @@ type Comment =
   | PlainOwn(stop: number)
   | Trailing(stop: number)
 
-// --- boolean combinators (no `&&`/`||` operators in alang) ---
-let not = b => switch b {
-  | true => false
-  | false => true
-}
-let and = (a, b) => switch a {
-  | true => b
-  | false => false
-}
-let or = (a, b) => switch a {
-  | true => true
-  | false => b
-}
-
 // --- char classes ---
 // `\r` has no escape in alang string literals; build it from its code.
 let cr = Str.fromCode(13)
 let isSpace = c => or(eq(c, " "), or(eq(c, "\t"), or(eq(c, "\n"), eq(c, cr))))
-let inRange = (lo, hi, n) => and(not(lt(n, lo)), not(gt(n, hi)))
-let isDigit = c => switch Str.codeAt(0, c) {
-  | Some(n) => inRange(48, 57, n)
-  | None => false
-}
-let isIdStart = c => switch Str.codeAt(0, c) {
-  | Some(n) => or(inRange(65, 90, n), or(inRange(97, 122, n), eq(n, 95)))
-  | None => false
-}
+let inRange = (lo, hi, n) => and(gte(n, lo), lte(n, hi))
+let isDigit = c => Str.codeAt(0, c) |> Option.exists(inRange(48, 57))
+let isIdStart = c =>
+  Str.codeAt(0, c)
+    |> Option.exists(n => or(inRange(65, 90, n), or(inRange(97, 122, n), eq(n, 95))))
 let isIdChar = c => or(isIdStart(c), isDigit(c))
 let isNumChar = c => or(isDigit(c), eq(c, "."))
 
@@ -89,10 +71,7 @@ let keywordTok = word => switch word {
   | "false" => Some(TBool(false))
   | _ => None
 }
-let identTok = word => switch keywordTok(word) {
-  | Some(t) => t
-  | None => TId(word)
-}
+let identTok = word => keywordTok(word) |> Option.unwrapOr(TId(word))
 
 // Two-char operators, checked before single chars.
 let digraphTok = two => switch two {
@@ -153,10 +132,10 @@ let scanComment = (src, start, lineTok) =>
   let stop = scanWhile(notNewline, src, start) in
   switch lineTok {
     | true => Trailing(stop)
-    | false => switch eq(Str.get(add(start, 2), src), Some("/")) {
+    | false => switch Str.get(add(start, 2), src) |> Option.contains("/") {
       | false => PlainOwn(stop)
       | true =>
-        let textStart = switch eq(Str.get(add(start, 3), src), Some(" ")) {
+        let textStart = switch Str.get(add(start, 3), src) |> Option.contains(" ") {
           | true => add(start, 4)
           | false => add(start, 3)
         } in
@@ -172,22 +151,12 @@ let mkTok = (tok, start, stop, doc) => switch doc {
 
 let lexError = (message, start, stop) => Err({ message: message, start: start, end: stop })
 
-let numValue = raw => switch Str.toNumber(raw) {
-  | Some(n) => n
-  | None => div(0, 0)
-}
+// `Number(raw)` in the TS original can be NaN (e.g. "1.2.3"); div(0, 0) mirrors it.
+let numValue = raw => Str.toNumber(raw) |> Option.unwrapOr(div(0, 0))
 
 // A `-` before a digit is always a literal sign (alang has no binary minus).
-let numStart = (src, i, c) => switch isDigit(c) {
-  | true => true
-  | false => switch eq(c, "-") {
-    | true => switch Str.get(add(i, 1), src) {
-      | Some(d) => isDigit(d)
-      | None => false
-    }
-    | false => false
-  }
-}
+let numStart = (src, i, c) =>
+  or(isDigit(c), and(eq(c, "-"), Str.get(add(i, 1), src) |> Option.exists(isDigit)))
 
 // Emit one token: doc attaches and clears, the line now has a token, the
 // newline run resets. Mutually recursive with `go`.
@@ -210,7 +179,7 @@ let go = (src, i, doc, nlRun, lineTok, toks) => switch Str.get(i, src) {
       } in
       go(src, add(i, 1), kept, n, false, toks)
   }
-  | Some("/") when eq(Str.get(add(i, 1), src), Some("/")) => switch scanComment(src, i, lineTok) {
+  | Some("/") when Str.get(add(i, 1), src) |> Option.contains("/") => switch scanComment(src, i, lineTok) {
     | Trailing(stop) => go(src, stop, doc, nlRun, lineTok, toks)
     | PlainOwn(stop) => go(src, stop, [], 0, lineTok, toks)
     | DocLine(text, stop) => go(src, stop, Array.append(text, doc), 0, lineTok, toks)
