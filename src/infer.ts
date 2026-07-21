@@ -575,16 +575,29 @@ const typeExprToType = (
 // gives `Ok : ∀a e. a -> Result<a, e>` — each type param maps to a fresh var
 // quantified in the scheme; a constructor arg naming a param uses that var, and
 // the result type applies the params so matching connects them.
-const ctorScheme = (typeName: string, params: string[], c: Ctor, f: Fresh): Scheme => {
-  const pvars = new Map(params.map((p) => [p, freshVar(f)]));
-  const argType = (name: string): Type => pvars.get(name) ?? primType(name);
+const ctorScheme = (
+  typeName: string,
+  params: string[],
+  c: Ctor,
+  f: Fresh,
+  aliases: AliasMap,
+): Scheme => {
+  const pvars = new Map<string, Type>(params.map((p) => [p, freshVar(f)]));
   const result = tCon(
     typeName,
     params.map((p) => pvars.get(p)!),
   );
-  const type = c.fields.reduceRight((acc, fld) => tArrow(argType(fld.type), acc), result);
-  const vars = params.map((p) => (pvars.get(p) as Extract<Type, { kind: "var" }>).id);
-  return { vars, rvars: [], type };
+  // Field types are full type expressions (ADR 0015); params resolve through
+  // `pvars`, aliases expand, and `[t]`/`Option t`/arrows/tuples all work.
+  const type = c.fields.reduceRight(
+    (acc, fld) => tArrow(typeExprToType(fld.type, pvars, f, aliases), acc),
+    result,
+  );
+  // Quantify every var the fields introduced (params, plus any the conversion
+  // minted); a ctor scheme is closed by construction, nothing leaks from env.
+  const sets: VarSets = { tv: new Set(), rv: new Set() };
+  collect(type, sets);
+  return { vars: [...sets.tv], rvars: [...sets.rv], type };
 };
 
 // `imports` seeds the initial env with schemes brought in by `import` from other
@@ -778,13 +791,13 @@ function run(
   // constructors first, so `let`s (in any order after their type) can use them
   for (const s of prog.stmts) {
     if (s.kind !== "type") continue;
-    for (const c of s.ctors) env.set(c.name, ctorScheme(s.name, s.params, c, fresh));
+    for (const c of s.ctors) env.set(c.name, ctorScheme(s.name, s.params, c, fresh, aliasMap));
   }
   // Builtin variant ctors (Some/None/Ok/Err), unless a user type already bound
   // the name — so `Map.get : ... -> Option v` and hand-written Some/None type-check.
   for (const bt of builtinTypeDecls)
     for (const c of bt.ctors)
-      if (!env.has(c.name)) env.set(c.name, ctorScheme(bt.name, bt.params, c, fresh));
+      if (!env.has(c.name)) env.set(c.name, ctorScheme(bt.name, bt.params, c, fresh, aliasMap));
 
   // externs next — their declared type is authoritative; generalize so a
   // polymorphic signature (e.g. a -> a) instantiates fresh at each use site.

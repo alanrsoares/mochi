@@ -521,15 +521,17 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
   }
 
   // A constructor field: `type` (positional) or `label: type` (named — its
-  // runtime key). `Ok(value: a)` names the payload `value`; `Circle(float)`
-  // leaves it positional.
+  // runtime key). The type is a full type expression (ADR 0015):
+  // `Ok(value: a)`, `Circle(float)`, `ECall(fn: Expr, args: [Expr])`.
+  // A label is an id followed by `:`, so the two forms need one token of
+  // lookahead — a bare id could also start a positional type.
   function parseCtorField(): CtorField {
-    const first = expectId().name;
-    if (peek().t === "colon") {
-      next();
-      return { name: first, type: expectId().name };
+    if (peek().t === "id" && toks[pos + 1]?.t === "colon") {
+      const name = expectId().name;
+      next(); // consume :
+      return { name, type: parseTypeExpr() };
     }
-    return { name: null, type: first };
+    return { name: null, type: parseTypeExpr() };
   }
 
   function parseLet(): Extract<Stmt, { kind: "let" }>[] {

@@ -58,16 +58,18 @@ export type Pattern =
 // field `x` against sub-pattern `p` (a literal narrows, a name binds).
 export type PatField = { label: string; pat: Pattern };
 
-// A variant constructor: name + ordered fields. Each field has a type (a name
-// for now) and an OPTIONAL label. A labelled field lowers to that runtime key
+// A variant constructor: name + ordered fields. Each field has a full type
+// expression and an OPTIONAL label. A labelled field lowers to that runtime key
 // (`Ok(value: a)` → `{ _tag: "Ok", value }`), matching the @onrails ecosystem;
 // an unlabelled field falls back to its positional key `_0`, `_1`, …
+// The type is a `TypeExpr`, so payloads can be lists, applied types, arrows,
+// and tuples (`ECall(fn: Expr, args: [Expr])`) — see ADR 0015.
 export type Ctor = { name: string; fields: CtorField[] };
-export type CtorField = { name: string | null; type: string };
+export type CtorField = { name: string | null; type: TypeExpr };
 
 // One field of a transparent record-type alias: `type Point = { x: number, y: a }`.
-// The field type is a full `TypeExpr` (unlike a `CtorField`, whose type is a bare
-// name), so aliases can carry generics and applied/nested types.
+// The field type is a full `TypeExpr` (like a `CtorField`'s), so aliases can
+// carry generics and applied/nested types.
 export type AliasField = { name: string; type: TypeExpr };
 
 // A surface type expression, used in `extern` signatures. Lowercase names are

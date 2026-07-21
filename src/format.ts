@@ -129,7 +129,8 @@ const matchExpr = (e: MatchExpr, ind: string): string => {
   return `switch ${expr(e.scrutinee, ind)} {\n${arms.join("\n")}\n${ind}}`;
 };
 
-const ctorField = (f: CtorField): string => (f.name ? `${f.name}: ${f.type}` : f.type);
+const ctorField = (f: CtorField): string =>
+  f.name ? `${f.name}: ${typeExpr(f.type)}` : typeExpr(f.type);
 
 const ctor = (c: Ctor): string =>
   c.fields.length === 0 ? c.name : `${c.name}(${c.fields.map(ctorField).join(", ")})`;

@@ -1,6 +1,6 @@
 // The prelude: builtin signatures the inferencer starts with, plus the JS
 // runtime that backs them. Kept tiny for now â€” arithmetic and comparison.
-import type { Ctor } from "./ast";
+import type { Ctor, TypeExpr } from "./ast";
 import { type Type, tArrow, tBool, tCon, tNumber, tString, tVar } from "./types";
 
 const bin = (a: Type, b: Type, r: Type): Type => tArrow(a, tArrow(b, r));
@@ -24,12 +24,15 @@ const res = (t: Type, e: Type): Type => tCon("Result", [t, e]); // Result t e â€
 // program doesn't declare a type of the same name (so user redeclarations win).
 // Runtime shape matches @onrails/result + @onrails/maybe (`{ _tag, value/error }`),
 // so alang Option/Result values flow straight through their combinators.
+// Ctor field types are TypeExprs (ADR 0015); builtins only need bare names.
+const tn = (name: string): TypeExpr => ({ kind: "tname", name, span: { start: 0, end: 0 } });
+
 export const builtinTypeDecls: { name: string; params: string[]; ctors: Ctor[] }[] = [
   {
     name: "Option",
     params: ["a"],
     ctors: [
-      { name: "Some", fields: [{ name: "value", type: "a" }] },
+      { name: "Some", fields: [{ name: "value", type: tn("a") }] },
       { name: "None", fields: [] },
     ],
   },
@@ -37,8 +40,8 @@ export const builtinTypeDecls: { name: string; params: string[]; ctors: Ctor[] }
     name: "Result",
     params: ["a", "e"],
     ctors: [
-      { name: "Ok", fields: [{ name: "value", type: "a" }] },
-      { name: "Err", fields: [{ name: "error", type: "e" }] },
+      { name: "Ok", fields: [{ name: "value", type: tn("a") }] },
+      { name: "Err", fields: [{ name: "error", type: tn("e") }] },
     ],
   },
 ];
@@ -250,6 +253,8 @@ export const preludeJsDefs: Record<string, string> = {
   // --- Option-returning safe accessors (depend on Some/None) ---
   _List_head: "const _List_head = (xs) => { for (const x of xs) return Some(x); return None; };",
   _Array_head: "const _Array_head = (xs) => (xs.length > 0 ? Some(xs[0]) : None);",
+  _Array_get:
+    "const _Array_get = _curry(2, (i, xs) => (i >= 0 && i < xs.length ? Some(xs[i]) : None));",
   _Array_find:
     "const _Array_find = _curry(2, (p, xs) => { for (const x of xs) if (p(x)) return Some(x); return None; });",
   // --- Array growth (eager, immutable) ---
@@ -364,6 +369,7 @@ export const runtimeDeps: Record<string, string[]> = {
   _Result_unwrapOr: ["_curry"],
   _List_head: ["Some", "None"],
   _Array_head: ["Some", "None"],
+  _Array_get: ["Some", "None", "_curry"],
   _Array_find: ["Some", "None", "_curry"],
   _Array_concat: ["_curry"],
   _Array_append: ["_curry"],
@@ -403,6 +409,7 @@ export const preludeNamespaces: Record<string, Record<string, Type>> = {
     reduce: tArrow(tArrow(b, tArrow(a, b)), tArrow(b, tArrow(arr(a), b))),
     length: tArrow(arr(a), tNumber),
     head: tArrow(arr(a), opt(a)), // [a] -> Option a
+    get: tArrow(tNumber, tArrow(arr(a), opt(a))), // number -> [a] -> Option a (bounds-safe)
     find: tArrow(tArrow(a, tBool), tArrow(arr(a), opt(a))), // (a -> bool) -> [a] -> Option a
     reverse: tArrow(arr(a), arr(a)), // [a] -> [a]
     concat: tArrow(arr(a), tArrow(arr(a), arr(a))), // [a] -> [a] -> [a]
@@ -509,6 +516,7 @@ export const namespaceRuntime: Record<string, Record<string, string>> = {
     reduce: "reduce",
     length: "length",
     head: "_Array_head",
+    get: "_Array_get",
     find: "_Array_find",
     reverse: "_Array_reverse",
     concat: "_Array_concat",

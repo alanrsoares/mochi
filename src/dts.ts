@@ -9,7 +9,7 @@
 // declaration is `(a: A, b: B) => R` — we peel arrows by the lambda's arity,
 // recursing into curried bodies (`f => r => …` stays `(f: F) => (r: R) => …`).
 import { flatMap, isErr, map, ok, pipe, type Result } from "@onrails/result";
-import type { Ctor, Expr, Stmt } from "./ast";
+import type { Ctor, Expr, Stmt, TypeExpr } from "./ast";
 import { check } from "./check";
 import type { AlangError } from "./errors";
 import { inferProgramTypes, type Scheme } from "./infer";
@@ -122,8 +122,24 @@ const typeDecl = (name: string, params: string[], ctors: Ctor[]): string => {
   const gmap = new Map(params.map((p, i) => [p, LETTERS[i] ?? `T${i}`]));
   const argTs = (a: string): string =>
     gmap.get(a) ?? PRIM_TS[a] ?? (a === "float" || a === "int" ? "number" : a);
+  // A ctor field type is a full TypeExpr (ADR 0015); render it in tsOf's style
+  // (`[t]` → `t[]`, applied ctors → generics, arrows → function types).
+  const teTs = (te: TypeExpr): string => {
+    switch (te.kind) {
+      case "tname":
+        return argTs(te.name);
+      case "tarrow":
+        return `(x: ${teTs(te.from)}) => ${teTs(te.to)}`;
+      case "tapp":
+        return `${te.ctor}<${te.args.map(teTs).join(", ")}>`;
+      case "ttuple":
+        return `[${te.elems.map(teTs).join(", ")}]`;
+      case "tlist":
+        return `${teTs(te.elem)}[]`;
+    }
+  };
   const variant = (c: Ctor): string => {
-    const fields = c.fields.map((fld, i) => `${fld.name ?? `_${i}`}: ${argTs(fld.type)}`);
+    const fields = c.fields.map((fld, i) => `${fld.name ?? `_${i}`}: ${teTs(fld.type)}`);
     return `{ _tag: "${c.name}"${fields.length ? `; ${fields.join("; ")}` : ""} }`;
   };
   const head = params.length ? `${name}<${params.map((p) => gmap.get(p)).join(", ")}>` : name;

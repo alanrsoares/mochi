@@ -1,7 +1,7 @@
 // Semantic pass — the Reason superpower: exhaustiveness + constructor checks.
 // Builds a variant registry from `type` decls, then verifies every `switch`.
 import { err, isErr, ok, type Result } from "@onrails/result";
-import type { CtorPat, Expr, MatchExpr, Pattern, Program } from "./ast";
+import type { CtorPat, Expr, MatchExpr, Pattern, Program, TypeExpr } from "./ast";
 import { type AlangError, checkErr } from "./errors";
 import { builtinTypeDecls, preludeNamespaces } from "./prelude";
 
@@ -307,12 +307,52 @@ const checkReservedNames = (prog: Program): AlangError | null => {
   return null;
 };
 
+// Ctor field types are full type expressions (ADR 0015). A lowercase leaf name
+// is a type variable and must be one of the declaration's parameters — a stray
+// var would be existential (matching couldn't recover its type). Prim names
+// (number/string/bool/...) are fine.
+const CTOR_PRIMS = new Set(["number", "int", "float", "string", "bool"]);
+
+const strayTypeVar = (te: TypeExpr, params: ReadonlySet<string>): TypeExpr | null => {
+  switch (te.kind) {
+    case "tname":
+      return /^[A-Z]/.test(te.name) || CTOR_PRIMS.has(te.name) || params.has(te.name) ? null : te;
+    case "tarrow":
+      return strayTypeVar(te.from, params) ?? strayTypeVar(te.to, params);
+    case "tapp":
+      return te.args.reduce<TypeExpr | null>((f, a) => f ?? strayTypeVar(a, params), null);
+    case "ttuple":
+      return te.elems.reduce<TypeExpr | null>((f, e) => f ?? strayTypeVar(e, params), null);
+    case "tlist":
+      return strayTypeVar(te.elem, params);
+  }
+};
+
+const checkCtorFieldVars = (prog: Program): AlangError | null => {
+  for (const s of prog.stmts) {
+    if (s.kind !== "type") continue;
+    const params = new Set(s.params);
+    for (const c of s.ctors)
+      for (const f of c.fields) {
+        const stray = strayTypeVar(f.type, params);
+        if (stray && stray.kind === "tname")
+          return checkErr(
+            `unknown type parameter '${stray.name}' in constructor '${c.name}' — declare it: type ${s.name} ${[...s.params, stray.name].join(" ")} = ...`,
+            stray.span,
+          );
+      }
+  }
+  return null;
+};
+
 // `imported` carries the ctor/type registries of the modules this program
 // imports from; merged UNDER the local registry (local declarations win) so
 // exhaustiveness works across the module boundary.
 export function check(prog: Program, imported?: Registry): Result<Program, AlangError> {
   const reserved = checkReservedNames(prog);
   if (reserved) return err(reserved);
+  const strays = checkCtorFieldVars(prog);
+  if (strays) return err(strays);
   const built = buildRegistry(prog);
   if (isErr(built)) return built;
   const reg = built.value;
