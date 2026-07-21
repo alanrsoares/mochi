@@ -97,21 +97,31 @@ const rowVarOccursInType = (id: number, t: Type, s: Subst): boolean => {
 
 // ---- unification -----------------------------------------------------------
 
-export const unify = (a: Type, b: Type, s: Subst, f: Fresh): Result<Subst, TypeErr> => {
+// `show` renders a type for error messages. It defaults to `showType`, but
+// callers with alias context (infer.ts's `u()` seam) pass a folding renderer so
+// a mismatch reads `… with Point`, not `… with { x: number, y: number }`
+// (CRITIQUE §4.1). It's invoked only on the failure path, so folding is free.
+export const unify = (
+  a: Type,
+  b: Type,
+  s: Subst,
+  f: Fresh,
+  show: (t: Type) => string = showType,
+): Result<Subst, TypeErr> => {
   const ra = resolve(a, s);
   const rb = resolve(b, s);
 
   if (ra.kind === "var" && rb.kind === "var" && ra.id === rb.id) return ok(s);
-  if (ra.kind === "var") return bindVar(ra.id, rb, s);
-  if (rb.kind === "var") return bindVar(rb.id, ra, s);
+  if (ra.kind === "var") return bindVar(ra.id, rb, s, show);
+  if (rb.kind === "var") return bindVar(rb.id, ra, s, show);
 
   if (ra.kind === "con" && rb.kind === "con") {
     if (ra.name !== rb.name || ra.args.length !== rb.args.length)
-      return fail(`cannot unify ${showType(ra)} with ${showType(rb)}`);
+      return fail(`cannot unify ${show(ra)} with ${show(rb)}`);
     // deep generics: unify type arguments position by position
     let cur = s;
     for (let i = 0; i < ra.args.length; i++) {
-      const step = unify(ra.args[i]!, rb.args[i]!, cur, f);
+      const step = unify(ra.args[i]!, rb.args[i]!, cur, f, show);
       if (isErr(step)) return step;
       cur = step.value;
     }
@@ -119,12 +129,12 @@ export const unify = (a: Type, b: Type, s: Subst, f: Fresh): Result<Subst, TypeE
   }
 
   if (ra.kind === "arrow" && rb.kind === "arrow") {
-    const s1 = unify(ra.from, rb.from, s, f);
+    const s1 = unify(ra.from, rb.from, s, f, show);
     if (isErr(s1)) return s1;
-    return unify(ra.to, rb.to, s1.value, f);
+    return unify(ra.to, rb.to, s1.value, f, show);
   }
 
-  if (ra.kind === "record" && rb.kind === "record") return unifyRows(ra.row, rb.row, s, f);
+  if (ra.kind === "record" && rb.kind === "record") return unifyRows(ra.row, rb.row, s, f, show);
 
   // Arity hint (CRITIQUE §4.4): a function type on exactly one side almost
   // always means a curried call got the wrong number of arguments — a value was
@@ -133,23 +143,34 @@ export const unify = (a: Type, b: Type, s: Subst, f: Fresh): Result<Subst, TypeE
   if ((ra.kind === "arrow") !== (rb.kind === "arrow")) {
     const [fn, val] = ra.kind === "arrow" ? [ra, rb] : [rb, ra];
     return fail(
-      `cannot unify ${showType(ra)} with ${showType(rb)} — a function (${showType(fn)}) ` +
-        `was used where a ${showType(val)} was expected; a call may be missing an argument`,
+      `cannot unify ${show(ra)} with ${show(rb)} — a function (${show(fn)}) ` +
+        `was used where a ${show(val)} was expected; a call may be missing an argument`,
     );
   }
 
-  return fail(`cannot unify ${showType(ra)} with ${showType(rb)}`);
+  return fail(`cannot unify ${show(ra)} with ${show(rb)}`);
 };
 
-const bindVar = (id: number, t: Type, s: Subst): Result<Subst, TypeErr> => {
-  if (occurs(id, t, s)) return fail(`infinite type: 't${id} occurs in ${showType(zonk(t, s))}`);
+const bindVar = (
+  id: number,
+  t: Type,
+  s: Subst,
+  show: (t: Type) => string,
+): Result<Subst, TypeErr> => {
+  if (occurs(id, t, s)) return fail(`infinite type: 't${id} occurs in ${show(zonk(t, s))}`);
   s.tvars.set(id, t);
   return ok(s);
 };
 
 // ---- row unification -------------------------------------------------------
 
-const unifyRows = (r1: Row, r2: Row, s: Subst, f: Fresh): Result<Subst, TypeErr> => {
+const unifyRows = (
+  r1: Row,
+  r2: Row,
+  s: Subst,
+  f: Fresh,
+  show: (t: Type) => string = showType,
+): Result<Subst, TypeErr> => {
   const a = resolveRow(r1, s);
   const b = resolveRow(r2, s);
 
@@ -163,9 +184,9 @@ const unifyRows = (r1: Row, r2: Row, s: Subst, f: Fresh): Result<Subst, TypeErr>
   if (a.kind === "extend" && b.kind === "extend") {
     const rw = rewriteRow(b, a.label, s, f);
     if (isErr(rw)) return rw;
-    const s1 = unify(a.type, rw.value.type, s, f);
+    const s1 = unify(a.type, rw.value.type, s, f, show);
     if (isErr(s1)) return s1;
-    return unifyRows(a.rest, rw.value.rest, s1.value, f);
+    return unifyRows(a.rest, rw.value.rest, s1.value, f, show);
   }
 
   return fail("cannot unify records");

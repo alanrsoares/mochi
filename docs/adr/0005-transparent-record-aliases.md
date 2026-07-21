@@ -12,13 +12,20 @@ types) would fight the open-row, duck-typing story that is alang's headline feat
 
 A record-type alias is purely a **name** for a structural row type. Inference and
 unification are untouched — an alias and its expansion are the same type. Only display
-layers (`showType`, hover, `.d.ts`) learn to prefer the alias name: `foldAliases` folds a
-closed record that matches an alias back to the alias name.
+layers (`showType`, hover, `.d.ts`, and **type-error messages**) learn to prefer the alias
+name: `foldAliases` folds a closed record that matches an alias back to the alias name.
+
+The type-error path folds via a display hook: `unify` takes an optional `show:
+(Type) => string` (default `showType`), and infer.ts's `u()` seam passes `t =>
+showType(foldAliases(t, aliases))`. Because `show` is invoked only when a
+unification fails, folding costs nothing on the success path, and `unify` itself
+stays alias-agnostic (it never learns what an alias is — just how to render).
 
 ## Consequences
 
 - No annotations forced, no new type distinctions — structural typing stays intact.
-- Better readouts: tooling shows `Point`, not `{ x: number, y: number }`, when it folds.
+- Better readouts: tooling shows `Point`, not `{ x: number, y: number }`, when it folds —
+  including in a mismatch (`cannot unify number with Point`) and the arity hint.
 - An alias never changes what unifies; it is display sugar over rows.
 
 ## Alternatives rejected

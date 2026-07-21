@@ -168,11 +168,12 @@ type Ctx = {
   fresh: Fresh;
   open: boolean;
   ns: Map<string, Map<string, Scheme>>; // qualified collection namespaces (List.map, ...)
+  aliases: AliasDef[]; // transparent record aliases, for folding types in errors
   record?: (span: Span, t: Type, symbol?: SymbolInfo) => void;
 };
 
 const u = (a: Type, b: Type, ctx: Ctx, span?: Span): Result<Type, AlangError> => {
-  const r = unify(a, b, ctx.subst, ctx.fresh);
+  const r = unify(a, b, ctx.subst, ctx.fresh, (t) => showType(foldAliases(t, ctx.aliases)));
   return isErr(r) ? err(typeErr(r.error.message, span)) : ok(a);
 };
 
@@ -940,9 +941,11 @@ function run(
     }
     const bodyTypes = new Map<string, Type>();
     for (const s of group) {
-      const t = infer(s.value, { env, subst, fresh, open, ns, record });
+      const t = infer(s.value, { env, subst, fresh, open, ns, aliases, record });
       if (isErr(t)) return t;
-      const uni = unify(selfVars.get(s.name)!, t.value, subst, fresh);
+      const uni = unify(selfVars.get(s.name)!, t.value, subst, fresh, (x) =>
+        showType(foldAliases(x, aliases)),
+      );
       if (isErr(uni)) return err(typeErr(uni.error.message, s.span));
       bodyTypes.set(s.name, t.value);
       // Record the binding name itself so hovering it leads with `let x: T`
