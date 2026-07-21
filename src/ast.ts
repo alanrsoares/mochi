@@ -23,7 +23,10 @@ export type Expr =
 
 // A lambda parameter: a plain name, or a record-destructuring pattern that
 // binds each named field. `({ x, y }) => ...` pulls x and y out of the argument.
-export type LamParam = { kind: "name"; name: string } | { kind: "precord"; fields: string[] };
+export type LamParam =
+  | { kind: "name"; name: string }
+  | { kind: "precord"; fields: string[] } // ({ x, y }) => ...
+  | { kind: "ptuple"; names: string[] }; // ((a, b)) => ... — tuple-destructuring param
 
 export type Field = { name: string; value: Expr };
 

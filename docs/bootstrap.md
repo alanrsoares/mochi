@@ -63,10 +63,10 @@ modules (`import`/`export`), builtin `Result`/`Option`, structural
    lexer *in alang*, run it under the current TS host, diff its token stream
    against `src/lexer.ts` on the existing corpus. Validates ergonomics on a
    contained target before committing to parser/infer/codegen. ← NEXT.
-   **Likely wants first:** `let (a, b) = e` / `((a, b)) => …` tuple-binding
-   sugar — a char scanner threads `(pos, tok)` state constantly, and
-   `switch`-only destructuring will hurt. Decide during the spike (matches the
-   original plan: let the spike order the next ergonomic pieces).
+   **Tuple-binding sugar is now in** (ADR 0011): `((a, b)) => …` lambda params
+   and `let (a, b) = value in body`, so scanner state threads cleanly. (Caveat:
+   the `let (a, b)` form desugars at parse time, so the formatter prints the
+   applied lambda rather than the sugar — idempotent, not round-tripping.)
 5. **Reassess do-notation** — the spike reveals whether manual `Result`
    threading (item 4 above) is tolerable or must be sugared before going further.
 6. **Then** parser → check → infer → codegen in alang, one pass at a time, each

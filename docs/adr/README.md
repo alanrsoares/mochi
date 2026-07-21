@@ -42,6 +42,7 @@ What else was on the table and why not.
 | [0008](0008-drop-set-dollar-sigil.md) | Drop the `${…}` Set literal | Accepted |
 | [0009](0009-let-in-local-bindings.md) | Local `let … in` bindings (non-recursive, let-polymorphic) | Accepted |
 | [0010](0010-tuples.md) | Tuples via a reserved `con("tuple", …)`; erase to JS arrays | Accepted |
+| [0011](0011-tuple-binding-sugar.md) | Tuple lambda param + `let (a, b) = … in` (desugar) | Accepted |
 
 ## Backlog (well-evidenced, not yet written)
 

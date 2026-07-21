@@ -70,7 +70,8 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     return false;
   }
 
-  // One lambda parameter: a name, or a `{ a, b }` record-destructuring pattern.
+  // One lambda parameter: a name, a `{ a, b }` record-destructuring pattern, or
+  // an `(a, b)` tuple-destructuring pattern.
   function parseParam(): LamParam {
     if (peek().t === "lbrace") {
       next();
@@ -84,6 +85,17 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
       }
       expect("rbrace");
       return { kind: "precord", fields };
+    }
+    if (peek().t === "lparen") {
+      next();
+      const names = [expectId().name];
+      while (peek().t === "comma") {
+        next();
+        names.push(expectId().name);
+      }
+      expect("rparen");
+      // A lone `(x)` is just grouping, not a 1-tuple.
+      return names.length === 1 ? { kind: "name", name: names[0]! } : { kind: "ptuple", names };
     }
     return { kind: "name", name: expectId().name };
   }
@@ -114,13 +126,36 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
   // continues with a bare identifier: the `in` following `value` is unambiguous.
   function parseLetIn(): Expr {
     const start = expect("let").span;
+    // `let (a, b) = value in body` — tuple destructure, desugared to an applied
+    // lambda `((a, b)) => body` called with `value`. Reuses the tuple lambda
+    // param; the bindings are monomorphic (lambda-bound), like any destructure.
+    if (peek().t === "lparen") {
+      const paramStart = peek().span;
+      const param = parseParam();
+      expect("eq");
+      const value = parseExpr();
+      expectIn();
+      const body = parseExpr();
+      const fn: Expr = {
+        kind: "lambda",
+        params: [param],
+        body,
+        span: spanning(paramStart, body.span),
+      };
+      return { kind: "call", fn, args: [value], span: spanning(start, body.span) };
+    }
     const { name, span: nameSpan } = expectId();
     expect("eq");
     const value = parseExpr();
-    const kw = expectId();
-    if (kw.name !== "in") fail(`expected 'in' after let binding, got '${kw.name}'`);
+    expectIn();
     const body = parseExpr();
     return { kind: "letin", name, nameSpan, value, body, span: spanning(start, body.span) };
+  }
+
+  // Consume the contextual `in` keyword after a let binding's value.
+  function expectIn(): void {
+    const kw = expectId();
+    if (kw.name !== "in") fail(`expected 'in' after let binding, got '${kw.name}'`);
   }
 
   function parseExpr(minBp = 0): Expr {

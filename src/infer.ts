@@ -215,6 +215,15 @@ const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
           bodyEnv.set(p.name, mono(t));
           return t;
         }
+        // ((a, b)) => … — the param is a tuple; each name binds a position.
+        if (p.kind === "ptuple") {
+          const elems = p.names.map((n) => {
+            const t = freshVar(ctx.fresh);
+            bodyEnv.set(n, mono(t));
+            return t;
+          });
+          return tTuple(elems);
+        }
         let row: Row = freshRowVar(ctx.fresh);
         for (const f of p.fields) {
           const ft = freshVar(ctx.fresh);
@@ -620,6 +629,7 @@ const freeRefs = (e: Expr, bound: Set<string>, acc: Set<string>): void => {
       const inner = new Set(bound);
       for (const p of e.params)
         if (p.kind === "name") inner.add(p.name);
+        else if (p.kind === "ptuple") for (const n of p.names) inner.add(n);
         else for (const f of p.fields) inner.add(f);
       freeRefs(e.body, inner, acc);
       return;

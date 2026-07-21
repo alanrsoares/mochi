@@ -114,7 +114,11 @@ const genList = (e: ListExpr): string => {
 
 // A lambda parameter lowers to JS: a name, or native object destructuring.
 const genParam = (p: LamParam): string =>
-  p.kind === "name" ? p.name : `{ ${p.fields.join(", ")} }`;
+  p.kind === "name"
+    ? p.name
+    : p.kind === "ptuple"
+      ? `[${p.names.join(", ")}]`
+      : `{ ${p.fields.join(", ")} }`;
 
 // A lambda in callee position must be parenthesized: `((x) => ...)(arg)`.
 const genCallee = (e: Expr): string => (e.kind === "lambda" ? `(${genExpr(e)})` : genExpr(e));

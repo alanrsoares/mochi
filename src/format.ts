@@ -26,7 +26,12 @@ import { parse } from "./parser";
 
 const INDENT = "  ";
 
-const param = (p: LamParam): string => (p.kind === "name" ? p.name : `{ ${p.fields.join(", ")} }`);
+const param = (p: LamParam): string =>
+  p.kind === "name"
+    ? p.name
+    : p.kind === "ptuple"
+      ? `(${p.names.join(", ")})`
+      : `{ ${p.fields.join(", ")} }`;
 
 // A lone plain-name param drops its parens (`x => ...`); anything else keeps
 // them (`(a, b) => ...`, `({ x }) => ...`).
