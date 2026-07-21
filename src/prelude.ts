@@ -110,8 +110,11 @@ export const preludeJsDefs: Record<string, string> = {
   // (`f(a, b, c)` on a binary that returns a function) is applied by folding
   // the surplus. Definitions of arity ≥ 2 are wrapped in this; arity-1
   // functions need no wrapper (a single arg always saturates).
+  // The saturated case MUST be `return f(...a)` — a proper tail call. Emitted
+  // modules are strict (ESM), and JSC eliminates tail frames; recursive alang
+  // functions (the bootstrap lexer's per-token loop) rely on it for depth.
   _curry:
-    "const _curry = (n, f) => function c(...a) { if (a.length < n) return (...b) => c(...a, ...b); const r = f(...a.slice(0, n)); return a.length === n ? r : a.slice(n).reduce((g, x) => g(x), r); };",
+    "const _curry = (n, f) => function c(...a) { if (a.length < n) return (...b) => c(...a, ...b); if (a.length === n) return f(...a); return a.slice(n).reduce((g, x) => g(x), f(...a.slice(0, n))); };",
   // Builtin variant constructors (inlined only when a program uses them and does
   // not declare its own type of that name). Shape matches the @onrails ecosystem.
   Some: 'const Some = (value) => ({ _tag: "Some", value });',

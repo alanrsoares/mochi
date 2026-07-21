@@ -45,6 +45,7 @@ What else was on the table and why not.
 | [0011](0011-tuple-binding-sugar.md) | Tuple lambda param + `let (a, b) = … in` (desugar) | Accepted |
 | [0012](0012-nested-patterns.md) | Nested patterns: guard-form emission + conservative exhaustiveness | Accepted |
 | [0013](0013-pattern-guards.md) | Pattern guards: `when` clause, guard-form codegen, no coverage credit | Accepted |
+| [0014](0014-recursion-via-proper-tail-calls.md) | Recursion depth via proper tail calls (strict-mode JSC); `_curry` tail path | Accepted |
 
 ## Backlog (well-evidenced, not yet written)
 
