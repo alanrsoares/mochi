@@ -121,6 +121,12 @@ const cases: Record<string, string> = {
   // ADR 0021 — record update -> native JS object spread.
   "record update: bare spread": "let base = { x: 1 }\nlet r = { ...base }",
   "record update: spread with fields": "let base = { x: 1, y: 2 }\nlet r = { ...base, x: 3 }",
+  // ADR 0022 — or-patterns lower to a ||-joined guard, first-alt slot.
+  "or-pattern: literal alts": "let f = n => switch n { | 1 | 2 => 1 | _ => 0 }",
+  "or-pattern: ctor alts with a shared binder":
+    "type P = | Sm(value: number) | Lg(value: number)\nlet f = p => switch p { | Sm(v) | Lg(v) => v }",
+  "or-pattern: nested ctor alts":
+    "type N = | Z | Sm(N)\nlet f = n => switch n { | Z | Sm(Z) => 1 | _ => 0 }",
 };
 
 for (const [name, src] of Object.entries(cases)) {

@@ -47,6 +47,13 @@ type Expr =
   | EArr(elements: [Expr], span: Span)
   | EList(elements: [Expr], span: Span)
   | EMap(entries: [MapEntry], span: Span)
+  | EInterp(parts: [InterpPart], span: Span)
+
+// One chunk of a "…${a}…" interpolation (ADR 0023): a literal run, or a
+// parsed hole expression.
+type InterpPart =
+  | IPLit(value: string)
+  | IPExpr(expr: Expr)
 
 type Pattern =
   | PWild(span: Span)
@@ -59,6 +66,9 @@ type Pattern =
   | PCtor(ctor: string, args: [Pattern], span: Span)
   | PArr(elems: [Pattern], rest: Option Pattern, span: Span)
   | PList(elems: [Pattern], rest: Option Pattern, span: Span)
+  // A | B | … — or-pattern (ADR 0022). Only at an arm's top level (never
+  // nested — the parser only ever produces one here).
+  | POr(alts: [Pattern], span: Span)
 
 type TypeExpr =
   | TyName(name: string, span: Span)
@@ -84,7 +94,6 @@ type CtorInfo = { owner: string, arity: number }
 type Registry = { ctors: Map string CtorInfo, types: Map string [string] }
 
 let checkErr = (message, sp) => { message: message, start: sp.start, end: sp.end }
-let cat = parts => Str.join("", parts)
 
 // --- generic loops (early-exit `for` loops from the TS original) ---
 
@@ -129,6 +138,7 @@ let exprSpan = e => switch e {
   | EArr(_, sp) => sp
   | EList(_, sp) => sp
   | EMap(_, sp) => sp
+  | EInterp(_, sp) => sp
 }
 
 let patSpan = p => switch p {
@@ -142,6 +152,7 @@ let patSpan = p => switch p {
   | PCtor(_, _, sp) => sp
   | PArr(_, _, sp) => sp
   | PList(_, _, sp) => sp
+  | POr(_, sp) => sp
 }
 
 // --- pattern shape predicates ---
@@ -189,7 +200,7 @@ let seedType = (name, cs, reg) =>
 let ctorsInto = (ctors, i, owner, sp, acc) => switch Array.get(i, ctors) {
   | None => Ok(acc)
   | Some(c) => Map.has(c.name, acc)
-      ? Err(checkErr(cat(["duplicate constructor '", c.name, "'"]), sp))
+      ? Err(checkErr("duplicate constructor '${c.name}'", sp))
       : ctorsInto(ctors, add(i, 1), owner, sp,
           Map.set(c.name, { owner: owner, arity: Array.length(c.fields) }, acc))
 }
@@ -198,7 +209,7 @@ let buildLoop = (stmts, i, reg) => switch Array.get(i, stmts) {
   | None => Ok(reg)
   | Some(SType(name, _, ctors, _, _, sp)) =>
       Map.has(name, reg.types)
-        ? Err(checkErr(cat(["duplicate type '", name, "'"]), sp))
+        ? Err(checkErr("duplicate type '${name}'", sp))
         : let? cs = ctorsInto(ctors, 0, name, sp, reg.ctors) in
           buildLoop(stmts, add(i, 1),
             { ctors: cs, types: Map.set(name, ctors |> map(c => c.name), reg.types) })
@@ -215,12 +226,11 @@ let buildRegistry = stmts =>
 
 let checkPattern = (p, reg, top) => switch p {
   | PCtor(ctor, args, sp) => switch Map.get(ctor, reg.ctors) {
-      | None => Some(checkErr(cat(["unknown constructor '", ctor, "'"]), sp))
+      | None => Some(checkErr("unknown constructor '${ctor}'", sp))
       | Some(info) =>
           eq(Array.length(args), info.arity)
             ? firstSome(a => checkPattern(a, reg, false), args)
-            : Some(checkErr(cat(["constructor '", ctor, "' expects ", show(info.arity),
-                " arg(s), got ", show(Array.length(args))]), sp))
+            : Some(checkErr("constructor '${ctor}' expects ${show(info.arity)} arg(s), got ${show(Array.length(args))}", sp))
     }
   | PRecord(fields, _) => firstSome(f => checkPattern(f.pat, reg, false), fields)
   | PTuple(elems, _) => firstSome(el => checkPattern(el, reg, false), elems)
@@ -236,7 +246,83 @@ let checkPattern = (p, reg, top) => switch p {
             | Some(r) => checkPattern(r, reg, false)
             | None => None })
         : Some(checkErr("lazy-List pattern cannot nest inside another pattern (matching pulls from the sequence)", sp))
+  | POr(alts, sp) => checkOrPattern(alts, sp, reg)
   | _ => None
+}
+
+// --- or-patterns (ADR 0022): consistent binds across alternatives ---
+
+// Map each name a pattern binds to a private structural path — internally
+// consistent only, to compare or-pattern alternatives against each other.
+// A name bound twice in one pattern is an error.
+let binderPathsArgs = (args, i, at, acc) => switch Array.get(i, args) {
+  | None => Ok(acc)
+  | Some(a) => let? acc2 = binderPaths(a, "${at}.a${show(i)}", acc) in
+      binderPathsArgs(args, add(i, 1), at, acc2)
+}
+let binderPathsFields = (fields, i, at, acc) => switch Array.get(i, fields) {
+  | None => Ok(acc)
+  | Some(f) => let? acc2 = binderPaths(f.pat, "${at}.${f.label}", acc) in
+      binderPathsFields(fields, add(i, 1), at, acc2)
+}
+let binderPathsElems = (elems, i, at, acc) => switch Array.get(i, elems) {
+  | None => Ok(acc)
+  | Some(e) => let? acc2 = binderPaths(e, "${at}.t${show(i)}", acc) in
+      binderPathsElems(elems, add(i, 1), at, acc2)
+}
+let binderPaths = (p, at, acc) => switch p {
+  | PBind(name, sp) =>
+      Map.has(name, acc)
+        ? Err(checkErr("pattern binds '${name}' more than once", sp))
+        : Ok(Map.set(name, at, acc))
+  | PCtor(_, args, _) => binderPathsArgs(args, 0, at, acc)
+  | PRecord(fields, _) => binderPathsFields(fields, 0, at, acc)
+  | PTuple(elems, _) => binderPathsElems(elems, 0, at, acc)
+  | _ => Ok(acc)
+}
+
+// Validate + collect a binder-path map per alt: no catch-all/array/list alts,
+// each alt itself well-formed (nested ctors exist etc.).
+let altMapsFrom = (alts, i, reg, acc) => switch Array.get(i, alts) {
+  | None => Ok(acc)
+  | Some(alt) =>
+      isCatchAll(alt)
+        ? Err(checkErr("an or-pattern alternative can't be a catch-all (`_` or a bare binding)", patSpan(alt)))
+        : Option.isSome(seqElemsRest(alt))
+          ? Err(checkErr("array/list patterns can't appear as an or-pattern alternative", patSpan(alt)))
+          : switch checkPattern(alt, reg, false) {
+              | Some(e) => Err(e)
+              | None =>
+                  let? m = binderPaths(alt, "", #{}) in
+                  altMapsFrom(alts, add(i, 1), reg, Array.append(m, acc))
+            }
+}
+
+// All alt maps must bind exactly the same names at the same position — the
+// arm's single destructure must serve every alt.
+let missingNameErr = (name, sp) =>
+  checkErr("or-pattern alternatives must bind the same names ('${name}' is missing in an alternative)", sp)
+
+let consistentBindsFrom = (maps, i, ref, sp) => switch Array.get(i, maps) {
+  | None => None
+  | Some(m) =>
+      firstSome(name => Map.has(name, m) ? None : Some(missingNameErr(name, sp)), Map.keys(ref))
+      |> Option.orElse(firstSome(name =>
+          Map.has(name, ref)
+            ? (eq(Map.getOr("", name, ref), Map.getOr("", name, m))
+                ? None
+                : Some(checkErr("or-pattern binds '${name}' at a differing position across alternatives", sp)))
+            : Some(missingNameErr(name, sp)),
+          Map.keys(m)))
+      |> Option.orElse(consistentBindsFrom(maps, add(i, 1), ref, sp))
+}
+
+let checkOrPattern = (alts, sp, reg) => switch altMapsFrom(alts, 0, reg, []) {
+  | Err(e) => Some(e)
+  | Ok(maps) => switch Array.head(maps) {
+    | None => None
+    | Some(ref) => consistentBindsFrom(maps, 1, ref, sp)
+  }
 }
 
 // --- match exhaustiveness ---
@@ -315,14 +401,13 @@ let ctorLoop = (arms, i, reg, owner, covered) => switch Array.get(i, arms) {
   | None => Ok((owner, covered))
   | Some(a) => switch a.pattern {
     | PCtor(ctor, args, sp) => switch Map.get(ctor, reg.ctors) {
-      | None => Err(checkErr(cat(["unknown constructor '", ctor, "'"]), sp))
+      | None => Err(checkErr("unknown constructor '${ctor}'", sp))
       | Some(info) =>
           not(eq(Array.length(args), info.arity))
-            ? Err(checkErr(cat(["constructor '", ctor, "' expects ", show(info.arity),
-                " arg(s), got ", show(Array.length(args))]), sp))
+            ? Err(checkErr("constructor '${ctor}' expects ${show(info.arity)} arg(s), got ${show(Array.length(args))}", sp))
             : switch owner {
               | Some(own) when not(eq(own, info.owner)) =>
-                  Err(checkErr(cat(["switch mixes variants of '", own, "' and '", info.owner, "'"]), sp))
+                  Err(checkErr("switch mixes variants of '${own}' and '${info.owner}'", sp))
               | _ =>
                   let covered2 = and(allOf(isCatchAll, args), Option.isNone(a.guard))
                     ? Set.add(ctor, covered)
@@ -350,12 +435,18 @@ let checkCtorArms = (ctorArms, mSpan, reg, hasCatchAll) =>
               let seen = Set.fromArray(ctorArms |> map(a => ctorNameOf(a.pattern))) in
               let narrowed = missing |> filter(c => Set.has(c, seen)) in
               let hint = switch Array.head(narrowed) {
-                | Some(first) => cat([" (arm(s) on ", Str.join(", ", narrowed),
-                    " narrow — add ", first, "(_) or a '_' catch-all)"])
+                | Some(first) => " (arm(s) on ${Str.join(", ", narrowed)} narrow — add ${first}(_) or a '_' catch-all)"
                 | None => "" } in
-              Some(checkErr(cat(["non-exhaustive switch on '", own, "': missing ",
-                  Str.join(", ", missing), hint]), mSpan))
+              Some(checkErr("non-exhaustive switch on '${own}': missing ${Str.join(", ", missing)}${hint}", mSpan))
   }
+
+// Flatten an or-pattern arm into one leaf per alternative, each sharing the
+// arm's guard (ADR 0022) — dropping `body` normalizes the shape so the array
+// stays homogeneous.
+let leavesOfArm = a => switch a.pattern {
+  | POr(alts, _) => alts |> map(alt => { pattern: alt, guard: a.guard })
+  | _ => [{ pattern: a.pattern, guard: a.guard }]
+}
 
 let checkMatch = (arms, mSpan, reg) =>
   switch firstSome(a => checkPattern(a.pattern, reg, true), arms) {
@@ -368,9 +459,13 @@ let checkMatch = (arms, mSpan, reg) =>
         | Some(e) => Some(e)
         | None =>
             let hasCatchAll = someOf(armUnguardedCatchAll, arms) in
-            let ctorArms = arms |> filter(a => isPCtor(a.pattern)) in
+            // An or-pattern arm contributes each alternative to coverage,
+            // sharing the arm's guard (ADR 0022) — flatten to leaves so the
+            // ctor/bool logic below sees each one.
+            let leaves = arms |> Array.flatMap(leavesOfArm) in
+            let ctorArms = leaves |> filter(a => isPCtor(a.pattern)) in
             eq(Array.length(ctorArms), 0)
-              ? checkNonCtor(arms, mSpan, hasCatchAll)
+              ? checkNonCtor(leaves, mSpan, hasCatchAll)
               : checkCtorArms(ctorArms, mSpan, reg, hasCatchAll)
       } }
   }
@@ -411,6 +506,10 @@ let checkExpr = (e, reg) => switch e {
   | EList(elements, _) => firstSome(el => checkExpr(el, reg), elements)
   | EMap(entries, _) => firstSome(en =>
       checkExpr(en.key, reg) |> Option.orElse(checkExpr(en.value, reg)), entries)
+  | EInterp(parts, _) => firstSome(p => switch p {
+      | IPLit(_) => None
+      | IPExpr(ex) => checkExpr(ex, reg)
+    }, parts)
 }
 
 // --- reserved names + stray ctor-field type vars ---
@@ -422,7 +521,7 @@ let reservedNames = ["Array", "List", "Set", "Map", "Option", "Result", "Str"]
 let redeclarableTypes = ["Option", "Result"]
 
 let reservedErr = (name, sp) =>
-  checkErr(cat(["'", name, "' is a reserved collection namespace and cannot be bound"]), sp)
+  checkErr("'${name}' is a reserved collection namespace and cannot be bound", sp)
 
 let checkReservedNames = stmts => firstSome(s => switch s {
   | SType(name, _, _, _, _, sp) =>
@@ -435,7 +534,7 @@ let checkReservedNames = stmts => firstSome(s => switch s {
       Array.contains(name, reservedNames) ? Some(reservedErr(name, sp)) : None
   | SImport(names, _, _) => firstSome(n =>
       Array.contains(n.name, reservedNames)
-        ? Some(checkErr(cat(["'", n.name, "' is a reserved collection namespace and cannot be imported"]), n.span))
+        ? Some(checkErr("'${n.name}' is a reserved collection namespace and cannot be imported", n.span))
         : None, names)
 }, stmts)
 
@@ -463,9 +562,7 @@ let strayTypeVar = (te, params) => switch te {
 let checkCtorFieldVars = stmts => firstSome(s => switch s {
   | SType(name, params, ctors, _, _, _) =>
       firstSome(c => firstSome(f => switch strayTypeVar(f.fieldType, params) {
-        | Some((vn, vsp)) => Some(checkErr(cat(["unknown type parameter '", vn,
-            "' in constructor '", c.name, "' — declare it: type ", name, " ",
-            Str.join(" ", Array.append(vn, params)), " = ..."]), vsp))
+        | Some((vn, vsp)) => Some(checkErr("unknown type parameter '${vn}' in constructor '${c.name}' — declare it: type ${name} ${Str.join(" ", Array.append(vn, params))} = ...", vsp))
         | None => None
       }, c.fields), ctors)
   | _ => None

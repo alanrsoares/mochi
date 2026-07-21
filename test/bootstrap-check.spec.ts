@@ -176,6 +176,39 @@ const cases: Record<string, { src: string; ok: boolean }> = {
     src: "type C = | R | G\nlet f = c => { ...{ x: switch c { | R => 1 } }, y: 2 }",
     ok: false,
   },
+  // ADR 0022 — or-patterns: coverage flattening + consistent-binds.
+  "or-pattern: alts flatten to cover every ctor": {
+    src: "type C = | R | G | B\nlet f = c => switch c { | R | G => 1 | B => 2 }",
+    ok: true,
+  },
+  "or-pattern: alts leave a ctor uncovered": {
+    src: "type C = | R | G | B\nlet f = c => switch c { | R | G => 1 }",
+    ok: false,
+  },
+  "or-pattern: catch-all alt rejected": {
+    src: "type C = | R | G\nlet f = c => switch c { | R | _ => 1 | G => 2 }",
+    ok: false,
+  },
+  "or-pattern: array pattern alt rejected": {
+    src: "let f = xs => switch xs { | [] | [a, ...r] => 1 }",
+    ok: false,
+  },
+  "or-pattern: consistent binds across alts": {
+    src: "type P = | Sm(value: number) | Lg(value: number)\nlet f = p => switch p { | Sm(v) | Lg(v) => v }",
+    ok: true,
+  },
+  "or-pattern: differing bound names rejected": {
+    src: "type P = | Sm(value: number) | Lg(value: number)\nlet f = p => switch p { | Sm(v) | Lg(w) => v | _ => 0 }",
+    ok: false,
+  },
+  "or-pattern: same name at a differing position rejected": {
+    src: "type T = | Pair(a: number, b: number)\nlet f = t => switch t { | Pair(x, _) | Pair(_, x) => x | _ => 0 }",
+    ok: false,
+  },
+  "or-pattern: name bound twice within one alt rejected": {
+    src: "type T = | Pair(a: number, b: number)\nlet f = t => switch t { | Pair(x, x) | Pair(x, _) => x | _ => 0 }",
+    ok: false,
+  },
 };
 
 for (const [name, { src, ok }] of Object.entries(cases)) {

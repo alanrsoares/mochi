@@ -112,6 +112,8 @@ type Pattern =
   | PCtor(ctor: string, args: [Pattern], span: Span)
   | PArr(elems: [Pattern], rest: Option Pattern, span: Span)
   | PList(elems: [Pattern], rest: Option Pattern, span: Span)
+  // A | B | … — or-pattern (ADR 0022). Only produced at an arm's top level.
+  | POr(alts: [Pattern], span: Span)
 
 type TypeExpr =
   | TyName(name: string, span: Span)
@@ -177,27 +179,26 @@ let spanning = (a, b) => { start: a.start, end: b.end }
 // Span from a start marker to the last consumed token (TS `to(start)`).
 let toEnd = (start, toks, pos) => { start: start.start, end: (tokAt(toks, sub(pos, 1))).end }
 
-let cat = parts => Str.join("", parts)
 let errAt = (message, lt) => Err({ message: message, start: lt.start, end: lt.end })
 
 let expectTok = (t, toks, pos) =>
   let lt = tokAt(toks, pos) in
   eq(lt.tok, t)
     ? Ok(add(pos, 1))
-    : errAt(cat(["expected ", tokName(t), ", got ", tokName(lt.tok)]), lt)
+    : errAt("expected ${tokName(t)}, got ${tokName(lt.tok)}", lt)
 
 let expectId = (toks, pos) =>
   let lt = tokAt(toks, pos) in
   switch lt.tok {
     | TId(name) => Ok(({ name: name, span: spanOf(lt) }, add(pos, 1)))
-    | t => errAt(cat(["expected id, got ", tokName(t)]), lt)
+    | t => errAt("expected id, got ${tokName(t)}", lt)
   }
 
 let expectStr = (toks, pos) =>
   let lt = tokAt(toks, pos) in
   switch lt.tok {
     | TStr(value) => Ok((value, add(pos, 1)))
-    | t => errAt(cat(["expected str, got ", tokName(t)]), lt)
+    | t => errAt("expected str, got ${tokName(t)}", lt)
   }
 
 // Consume the contextual `in` keyword after a let binding's value.
@@ -205,7 +206,7 @@ let expectIn = (toks, pos) =>
   expectId(toks, pos) |> Result.flatMap(((kw, p)) =>
     eq(kw.name, "in")
       ? Ok(p)
-      : errAt(cat(["expected 'in' after let binding, got '", kw.name, "'"]), tokAt(toks, p)))
+      : errAt("expected 'in' after let binding, got '${kw.name}'", tokAt(toks, p)))
 
 let isUpper = s => Str.codeAt(0, s) |> Option.exists(n => and(gte(n, 65), lte(n, 90)))
 
@@ -399,7 +400,7 @@ let parseAtom = (toks, pos) =>
           let? p3 = expectTok(TRparen, toks, p2) in
           Ok((ETuple(elements, toEnd(sp, toks, p3)), p3))
         : expectTok(TRparen, toks, p) |> Result.map(p2 => (first, p2))
-    | t => errAt(cat(["unexpected token ", tokName(t)]), lt)
+    | t => errAt("unexpected token ${tokName(t)}", lt)
   }
 
 // "…${a}…${b}…" (ADR 0023). The lexer already split this into a token stream
@@ -414,14 +415,14 @@ let parseInterpLoop = (toks, pos, start, acc) =>
       parseInterpLoop(toks, add(p, 1), start, Array.append(IPLit(value), acc2))
     | TTmplEnd(value) =>
       Ok((EInterp(Array.append(IPLit(value), acc2), toEnd(start, toks, add(p, 1))), add(p, 1)))
-    | t => errAt(cat(["expected \${...} to close, got ", tokName(t)]), lt)
+    | t => errAt("expected \${...} to close, got ${tokName(t)}", lt)
   }
 
 let parseInterp = (toks, pos) =>
   let lt = tokAt(toks, pos) in
   switch lt.tok {
     | TTmplStart(value) => parseInterpLoop(toks, add(pos, 1), spanOf(lt), [IPLit(value)])
-    | t => errAt(cat(["expected tmplstart, got ", tokName(t)]), lt)
+    | t => errAt("expected tmplstart, got ${tokName(t)}", lt)
   }
 
 let parseField = (toks, pos) =>
@@ -487,13 +488,38 @@ let parseGuard = (toks, pos) => switch (tokAt(toks, pos)).tok {
   | _ => Ok((None, pos))
 }
 
+let patSpan = p => switch p {
+  | PWild(sp) => sp
+  | PBind(_, sp) => sp
+  | PLit(_, _, sp) => sp
+  | PBool(_, sp) => sp
+  | PStr(_, sp) => sp
+  | PTuple(_, sp) => sp
+  | PRecord(_, sp) => sp
+  | PCtor(_, _, sp) => sp
+  | PArr(_, _, sp) => sp
+  | PList(_, _, sp) => sp
+  | POr(_, sp) => sp
+}
+
+// `| B | C | …` alternatives after an arm's first pattern (ADR 0022) — the
+// same `|` token both opens an arm and separates its alts; only the absence
+// of a following bar (next is `when`/`=>`) ends the run.
+let altsLoop = (toks, pos, acc, lastSpan) =>
+  eq((tokAt(toks, pos)).tok, TBar)
+    ? let? (alt, p1) = parsePattern(toks, add(pos, 1)) in
+      altsLoop(toks, p1, Array.append(alt, acc), patSpan(alt))
+    : Ok((acc, pos, lastSpan))
+
 let armsLoop = (toks, pos, acc) =>
   eq((tokAt(toks, pos)).tok, TBar)
-    ? let? (pattern, p1) = parsePattern(toks, add(pos, 1)) in
-      let? (guard, p2) = parseGuard(toks, p1) in
-      let? p3 = expectTok(TArrow, toks, p2) in
-      let? (body, p4) = parseExpr(toks, p3) in
-      armsLoop(toks, p4, Array.append({ pattern: pattern, guard: guard, body: body }, acc))
+    ? let? (first, p1) = parsePattern(toks, add(pos, 1)) in
+      let? (alts, p2, lastSpan) = altsLoop(toks, p1, [first], patSpan(first)) in
+      let pattern = eq(Array.length(alts), 1) ? first : POr(alts, spanning(patSpan(first), lastSpan)) in
+      let? (guard, p3) = parseGuard(toks, p2) in
+      let? p4 = expectTok(TArrow, toks, p3) in
+      let? (body, p5) = parseExpr(toks, p4) in
+      armsLoop(toks, p5, Array.append({ pattern: pattern, guard: guard, body: body }, acc))
     : Ok((acc, pos))
 
 let parseMatch = (toks, pos) =>
@@ -542,7 +568,7 @@ let parsePattern = (toks, pos) =>
       isUpper(name)
         ? parseCtorArgs(name, sp, toks, add(pos, 1))
         : Ok((PBind(name, sp), add(pos, 1)))
-    | t => errAt(cat(["unexpected token in pattern: ", tokName(t)]), lt)
+    | t => errAt("unexpected token in pattern: ${tokName(t)}", lt)
   }
 
 // A `...` rest capture must bind a name or `_`.
@@ -739,7 +765,7 @@ let parseImport = (toks, pos) =>
   eq(kw.name, "from")
     ? expectStr(toks, p4) |> Result.map(((path, p5)) =>
         (SImport(names, path, toEnd(start, toks, p5)), p5))
-    : errAt(cat(["expected 'from' in import, got '", kw.name, "'"]), tokAt(toks, p4))
+    : errAt("expected 'from' in import, got '${kw.name}'", tokAt(toks, p4))
 
 // `let { x, y } = e` desugars to a `$dN` temp binding plus one field-access
 // `let` per name — mirrors the TS parser, including the temp counter.

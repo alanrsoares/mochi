@@ -69,17 +69,17 @@ let rExtend = (label, fieldType, rest) => RowExtend(label, fieldType, rest)
 let showTypeArgs = args => Str.join(", ", args |> map(showType))
 
 let showType = t => switch t {
-  | TyVar(id) => cat(["'t", show(id)])
+  | TyVar(id) => "'t${show(id)}"
   | TyCon(name, args) => switch args {
-      | [elem] when eq(name, "Array") => cat(["[", showType(elem), "]"])
+      | [elem] when eq(name, "Array") => "[${showType(elem)}]"
       | _ =>
           eq(name, TUPLE)
-            ? cat(["(", showTypeArgs(args), ")"])
-            : eq(Array.length(args), 0) ? name : cat([name, "<", showTypeArgs(args), ">"])
+            ? "(${showTypeArgs(args)})"
+            : eq(Array.length(args), 0) ? name : "${name}<${showTypeArgs(args)}>"
     }
   | TyFn(from, to) =>
-      let fromS = switch from { | TyFn(_, _) => cat(["(", showType(from), ")"]) | _ => showType(from) } in
-      cat([fromS, " -> ", showType(to)])
+      let fromS = switch from { | TyFn(_, _) => "(${showType(from)})" | _ => showType(from) } in
+      "${fromS} -> ${showType(to)}"
   | TyRecord(row) => showRow(row)
 }
 
@@ -87,7 +87,7 @@ let showType = t => switch t {
 let showRowFields = row => switch row {
   | RowExtend(label, fieldType, rest) =>
       let (fields, tailId) = showRowFields(rest) in
-      (Array.prepend(cat([label, ": ", showType(fieldType)]), fields), tailId)
+      (Array.prepend("${label}: ${showType(fieldType)}", fields), tailId)
   | RowVar(id) => ([], Some(id))
   | RowEmpty => ([], None)
 }
@@ -95,10 +95,10 @@ let showRowFields = row => switch row {
 let showRow = row =>
   let (fields, tailId) = showRowFields(row) in
   let tail = switch tailId {
-    | Some(id) => cat([eq(Array.length(fields), 0) ? "" : " ", "| 'r", show(id)])
+    | Some(id) => "${eq(Array.length(fields), 0) ? "" : " "}| 'r${show(id)}"
     | None => ""
   } in
-  and(eq(Array.length(fields), 0), eq(tail, "")) ? "{}" : cat(["{ ", Str.join(", ", fields), tail, " }"])
+  and(eq(Array.length(fields), 0), eq(tail, "")) ? "{}" : "{ ${Str.join(", ", fields)}${tail} }"
 
 // ---- generic index-loop helpers (early-exit `for` loops from the TS
 // originals; same style as bootstrap/check.al's firstSome/allOf/someOf) ----
@@ -123,8 +123,8 @@ type TypeErr = { message: string }
 let mkSt = start => { tv: #{}, rv: #{}, next: start }
 let fail = message => Err({ message: message })
 
-let freshVar = st => (tVar(st.next), { tv: st.tv, rv: st.rv, next: add(st.next, 1) })
-let freshRowVar = st => (rVar(st.next), { tv: st.tv, rv: st.rv, next: add(st.next, 1) })
+let freshVar = st => (tVar(st.next), { ...st, next: add(st.next, 1) })
+let freshRowVar = st => (rVar(st.next), { ...st, next: add(st.next, 1) })
 
 // ---- resolution: follow a variable chain one level to a head ----
 
@@ -195,10 +195,8 @@ let isArrowT = t => switch t { | TyFn(_, _) => true | _ => false }
 let unifyMismatch = (ra, rb) =>
   not(eq(isArrowT(ra), isArrowT(rb)))
     ? let (fn, val) = isArrowT(ra) ? (ra, rb) : (rb, ra) in
-      fail(cat(["cannot unify ", showType(ra), " with ", showType(rb), " — a function (",
-        showType(fn), ") was used where a ", showType(val),
-        " was expected; a call may be missing an argument"]))
-    : fail(cat(["cannot unify ", showType(ra), " with ", showType(rb)]))
+      fail("cannot unify ${showType(ra)} with ${showType(rb)} — a function (${showType(fn)}) was used where a ${showType(val)} was expected; a call may be missing an argument")
+    : fail("cannot unify ${showType(ra)} with ${showType(rb)}")
 
 let unifyArgs = (as_, bs, i, st) => switch Array.get(i, as_) {
   | None => Ok(st)
@@ -221,7 +219,7 @@ let unify = (a, b, st) =>
         | TyCon(bname, bargs) =>
             and(eq(aname, bname), eq(Array.length(aargs), Array.length(bargs)))
               ? unifyArgs(aargs, bargs, 0, st)
-              : fail(cat(["cannot unify ", showType(ra), " with ", showType(rb)]))
+              : fail("cannot unify ${showType(ra)} with ${showType(rb)}")
         | _ => unifyMismatch(ra, rb)
       }
     | TyFn(afrom, ato) => switch rb {
@@ -238,8 +236,8 @@ let unify = (a, b, st) =>
 
 let bindVar = (id, t, st) =>
   occurs(id, t, st)
-    ? fail(cat(["infinite type: 't", show(id), " occurs in ", showType(zonk(t, st))]))
-    : Ok({ tv: Map.set(id, t, st.tv), rv: st.rv, next: st.next })
+    ? fail("infinite type: 't${show(id)} occurs in ${showType(zonk(t, st))}")
+    : Ok({ ...st, tv: Map.set(id, t, st.tv) })
 
 // ---- row unification ----
 
@@ -247,7 +245,7 @@ let bindVar = (id, t, st) =>
 // Returns the field's type, the row remaining after removing it, and the
 // (possibly grown) state.
 let rewriteRow = (row, label, st) => switch resolveRow(row, st) {
-  | RowEmpty => fail(cat(["record missing field '", label, "'"]))
+  | RowEmpty => fail("record missing field '${label}'")
   | RowExtend(rlabel, rtype, rrest) =>
       eq(rlabel, label)
         ? Ok((rtype, rrest, st))
@@ -256,7 +254,7 @@ let rewriteRow = (row, label, st) => switch resolveRow(row, st) {
   | RowVar(rid) =>
       let (freshT, st1) = freshVar(st) in
       let (freshTail, st2) = freshRowVar(st1) in
-      Ok((freshT, freshTail, { tv: st2.tv, rv: Map.set(rid, rExtend(label, freshT, freshTail), st2.rv), next: st2.next }))
+      Ok((freshT, freshTail, { ...st2, rv: Map.set(rid, rExtend(label, freshT, freshTail), st2.rv) }))
 }
 
 // both rows extend: pull a's label out of b, unify the field types, recurse
@@ -267,11 +265,11 @@ let unifyRows = (r1, r2, st) =>
     | RowEmpty => switch b {
         | RowEmpty => Ok(st)
         | RowVar(bid) => bindRowVar(bid, a, st)
-        | RowExtend(label, _, _) => fail(cat(["record missing field '", label, "'"]))
+        | RowExtend(label, _, _) => fail("record missing field '${label}'")
       }
     | RowVar(aid) => bindRowVar(aid, b, st)
     | RowExtend(alabel, atype, arest) => switch b {
-        | RowEmpty => fail(cat(["record has extra field '", alabel, "'"]))
+        | RowEmpty => fail("record has extra field '${alabel}'")
         | RowVar(bid) => bindRowVar(bid, a, st)
         | RowExtend(_, _, _) =>
             let? (btype, brest, s1) = rewriteRow(b, alabel, st) in
@@ -332,6 +330,13 @@ type Expr =
   | EArr(elements: [Expr], span: Span)
   | EList(elements: [Expr], span: Span)
   | EMap(entries: [MapEntry], span: Span)
+  | EInterp(parts: [InterpPart], span: Span)
+
+// One chunk of a "…${a}…" interpolation (ADR 0023): a literal run, or a
+// parsed hole expression.
+type InterpPart =
+  | IPLit(value: string)
+  | IPExpr(expr: Expr)
 
 type Pattern =
   | PWild(span: Span)
@@ -344,6 +349,8 @@ type Pattern =
   | PCtor(ctor: string, args: [Pattern], span: Span)
   | PArr(elems: [Pattern], rest: Option Pattern, span: Span)
   | PList(elems: [Pattern], rest: Option Pattern, span: Span)
+  // A | B | … — or-pattern (ADR 0022). Only at an arm's top level.
+  | POr(alts: [Pattern], span: Span)
 
 type TypeExpr =
   | TyName(name: string, span: Span)
@@ -382,6 +389,7 @@ let exprSpan = e => switch e {
   | EArr(_, sp) => sp
   | EList(_, sp) => sp
   | EMap(_, sp) => sp
+  | EInterp(_, sp) => sp
 }
 
 let patSpan = p => switch p {
@@ -395,6 +403,7 @@ let patSpan = p => switch p {
   | PCtor(_, _, sp) => sp
   | PArr(_, _, sp) => sp
   | PList(_, _, sp) => sp
+  | POr(_, sp) => sp
 }
 
 // --- inference-time error + context. unify.ts's span-less TypeErr becomes a
@@ -618,7 +627,18 @@ let inferFieldAccess = (target, name, sp, ctx, st) =>
 
 let inferNsField = (tname, name, sp, ctx, st) => switch Map.get(name, Map.getOr(#{}, tname, ctx.ns)) {
   | Some(sc) => let (t, st1) = instantiate(sc, st) in Ok((t, st1))
-  | None => Err(typeErr(cat(["'", tname, "' has no member '", name, "'"]), sp))
+  | None => Err(typeErr("'${tname}' has no member '${name}'", sp))
+}
+
+// Every hole of a "…${x}…" unifies with `string` (ADR 0023) — no implicit
+// `show`. Literal chunks carry no type information to infer.
+let inferInterpParts = (parts, ctx, st) => switch parts {
+  | [] => Ok(st)
+  | [IPLit(_), ...rest] => inferInterpParts(rest, ctx, st)
+  | [IPExpr(ex), ...rest] =>
+      let? (t, st1) = inferExpr(ex, ctx, st) in
+      let? st2 = u(t, tString, st1, exprSpan(ex)) in
+      inferInterpParts(rest, ctx, st2)
 }
 
 let inferTupleElems = (elements, ctx, st) => switch elements {
@@ -706,7 +726,7 @@ let inferExpr = (e, ctx, st) => switch e {
       | Some(sc) => let (t, st1) = instantiate(sc, st) in Ok((t, st1))
       | None => ctx.open
           ? let (t, st1) = freshVar(st) in Ok((t, st1))
-          : Err(typeErr(cat(["unbound variable '", name, "'"]), sp))
+          : Err(typeErr("unbound variable '${name}'", sp))
     }
   | ELambda(params, body, _) =>
       let (paramTypes, bodyEnv, st1) = bindParamsFrom(params, ctx.env, st) in
@@ -750,6 +770,7 @@ let inferExpr = (e, ctx, st) => switch e {
   | EList(elements, _) => inferSeqExpr("List", elements, ctx, st)
   | EMap(entries, _) => inferMapExpr(entries, ctx, st)
   | EMatch(scrutinee, arms, _) => inferMatch(scrutinee, arms, ctx, st)
+  | EInterp(parts, _) => let? st1 = inferInterpParts(parts, ctx, st) in Ok((tString, st1))
 }
 
 // ============================================================
@@ -779,7 +800,7 @@ let inferPatCtorArgs = (ctor, curT, args, ctx, st, bindings, sp) => switch args 
           let? (subT, subBindings, st1) = inferPat(argPat, ctx, st) in
           let? st2 = u(fromT, subT, st1, patSpan(argPat)) in
           inferPatCtorArgs(ctor, toT, rest, ctx, st2, mergeBindingMaps(bindings, subBindings), sp)
-      | _ => Err(typeErr(cat(["constructor '", ctor, "' applied to too many arguments"]), sp))
+      | _ => Err(typeErr("constructor '${ctor}' applied to too many arguments", sp))
     }
 }
 
@@ -822,7 +843,7 @@ let inferPat = (p, ctx, st) => switch p {
   | PBind(name, _) => let (t, st1) = freshVar(st) in Ok((t, Map.set(name, t, #{}), st1))
   | PRecord(fields, _) => inferPatRecord(fields, ctx, st)
   | PCtor(ctor, args, sp) => switch Map.get(ctor, ctx.env) {
-      | None => Err(typeErr(cat(["unknown constructor '", ctor, "'"]), sp))
+      | None => Err(typeErr("unknown constructor '${ctor}'", sp))
       | Some(sc) =>
           let (curT, st1) = instantiate(sc, st) in
           inferPatCtorArgs(ctor, curT, args, ctx, st1, #{}, sp)
@@ -830,6 +851,40 @@ let inferPat = (p, ctx, st) => switch p {
   | PTuple(elems, _) => inferPatTuple(elems, ctx, st)
   | PArr(elems, rest, _) => inferSeqPat("Array", elems, rest, ctx, st)
   | PList(elems, rest, _) => inferSeqPat("List", elems, rest, ctx, st)
+  | POr(alts, sp) => inferOrPat(alts, sp, ctx, st)
+}
+
+// Every alternative of `A | B | …` describes the same scrutinee, so their
+// types unify; and (guaranteed by check.al) they bind the same names, whose
+// types unify too. The arm's binder env is the FIRST alt's (unified) —
+// mirrors src/infer.ts's inferOrPat exactly.
+let unifyOrPatBinding = (name, altBindings, bindings, st, sp) => switch Map.get(name, bindings) {
+  | None => Ok(st)
+  | Some(prevT) => switch Map.get(name, altBindings) {
+      | None => Ok(st)
+      | Some(ty) => u(prevT, ty, st, sp)
+    }
+}
+let unifyOrPatBindings = (names, altBindings, bindings, st, sp) => switch names {
+  | [] => Ok(st)
+  | [name, ...rest] =>
+      let? st1 = unifyOrPatBinding(name, altBindings, bindings, st, sp) in
+      unifyOrPatBindings(rest, altBindings, bindings, st1, sp)
+}
+let inferOrPatAlts = (alts, i, t, bindings, ctx, st) => switch Array.get(i, alts) {
+  | None => Ok(st)
+  | Some(alt) =>
+      let? (altT, altBindings, st1) = inferPat(alt, ctx, st) in
+      let? st2 = u(t, altT, st1, patSpan(alt)) in
+      let? st3 = unifyOrPatBindings(Map.keys(altBindings), altBindings, bindings, st2, patSpan(alt)) in
+      inferOrPatAlts(alts, add(i, 1), t, bindings, ctx, st3)
+}
+let inferOrPat = (alts, sp, ctx, st) => switch alts {
+  | [] => Err(typeErr("or-pattern needs at least one alternative", sp))
+  | [first, ...rest] =>
+      let? (t, bindings, st1) = inferPat(first, ctx, st) in
+      let? st2 = inferOrPatAlts(rest, 0, t, bindings, ctx, st1) in
+      Ok((t, bindings, st2))
 }
 
 // ============================================================
@@ -979,6 +1034,10 @@ let patternBinds = p => switch p {
   | PTuple(elems, _) => elems |> Array.flatMap(patternBinds)
   | PArr(elems, rest, _) => Array.concat(elems |> Array.flatMap(patternBinds), patternBindsOpt(rest))
   | PList(elems, rest, _) => Array.concat(elems |> Array.flatMap(patternBinds), patternBindsOpt(rest))
+  | POr(alts, _) => switch Array.head(alts) {
+      | Some(first) => patternBinds(first)
+      | None => []
+    }
   | _ => []
 }
 
@@ -1008,6 +1067,11 @@ let freeRefsFields = (fields, bound, acc) => switch fields {
 let freeRefsEntries = (entries, bound, acc) => switch entries {
   | [] => acc
   | [ent, ...rest] => freeRefsEntries(rest, bound, freeRefs(ent.value, bound, freeRefs(ent.key, bound, acc)))
+}
+let freeRefsInterpParts = (parts, bound, acc) => switch parts {
+  | [] => acc
+  | [IPLit(_), ...rest] => freeRefsInterpParts(rest, bound, acc)
+  | [IPExpr(ex), ...rest] => freeRefsInterpParts(rest, bound, freeRefs(ex, bound, acc))
 }
 let freeRefsArms = (arms, bound, acc) => switch arms {
   | [] => acc
@@ -1046,6 +1110,7 @@ let freeRefs = (e, bound, acc) => switch e {
   | EArr(elements, _) => freeRefsList(elements, bound, acc)
   | EList(elements, _) => freeRefsList(elements, bound, acc)
   | EMap(entries, _) => freeRefsEntries(entries, bound, acc)
+  | EInterp(parts, _) => freeRefsInterpParts(parts, bound, acc)
 }
 
 // ============================================================
@@ -1081,27 +1146,26 @@ let visitNeighbors = (v, ws, adj, st) => switch ws {
   | [] => st
   | [w, ...rest] => hasIndex(w, st)
       ? Set.has(w, st.onStack)
-          ? visitNeighbors(v, rest, adj, { index: st.index, low: Map.set(v, min(lowOfV(v, st), indexOfV(w, st)), st.low), onStack: st.onStack, stack: st.stack, counter: st.counter, sccs: st.sccs })
+          ? visitNeighbors(v, rest, adj, { ...st, low: Map.set(v, min(lowOfV(v, st), indexOfV(w, st)), st.low) })
           : visitNeighbors(v, rest, adj, st)
       : let st1 = connect(w, adj, st) in
-        visitNeighbors(v, rest, adj, { index: st1.index, low: Map.set(v, min(lowOfV(v, st1), lowOfV(w, st1)), st1.low), onStack: st1.onStack, stack: st1.stack, counter: st1.counter, sccs: st1.sccs })
+        visitNeighbors(v, rest, adj, { ...st1, low: Map.set(v, min(lowOfV(v, st1), lowOfV(w, st1)), st1.low) })
 }
 
 let connect = (v, adj, st) =>
-  let st1 = { index: Map.set(v, st.counter, st.index),
+  let st1 = { ...st,
+              index: Map.set(v, st.counter, st.index),
               low: Map.set(v, st.counter, st.low),
               onStack: Set.add(v, st.onStack),
               stack: Array.append(v, st.stack),
-              counter: add(st.counter, 1),
-              sccs: st.sccs } in
+              counter: add(st.counter, 1) } in
   let st2 = visitNeighbors(v, neighborsOf(v, adj), adj, st1) in
   eq(lowOfV(v, st2), indexOfV(v, st2))
     ? let start = indexOfFrom(v, st2.stack, 0) in
       let comp = Array.drop(start, st2.stack) in
-      { index: st2.index, low: st2.low,
+      { ...st2,
         onStack: Set.diff(st2.onStack, Set.fromArray(comp)),
         stack: Array.take(start, st2.stack),
-        counter: st2.counter,
         sccs: Array.append(comp, st2.sccs) }
     : st2
 
@@ -1283,7 +1347,7 @@ let inferGroupFrom = (group, ctx, st) => switch group {
                 let? st2 = u(selfSc.ty, t, st1, span) in
                 let? (restTypes, st3) = inferGroupFrom(rest, ctx, st2) in
                 Ok((Map.set(name, t, restTypes), st3))
-            | None => Err(typeErr(cat(["internal: missing self-binding for '", name, "'"]), span))
+            | None => Err(typeErr("internal: missing self-binding for '${name}'", span))
           }
       | _ => inferGroupFrom(rest, ctx, st)
     }

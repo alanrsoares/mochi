@@ -353,6 +353,7 @@ const A_PAT: Record<string, (p: Al) => Canon> = {
     rest: opt(p.rest, aPat),
     span: p.span,
   }),
+  POr: (p) => ({ kind: "por", alts: p.alts.map(aPat), span: p.span }),
 };
 const aPat = (p: Al): Canon => {
   const f = A_PAT[p._tag];
@@ -490,6 +491,8 @@ const cases: Record<string, string> = {
     'let a = "hello ${name}"\nlet b = "${a}-${b}-${c}"\nlet c = "outer ${ "inner ${x}" } end"',
   "record update, bare and with fields (ADR 0021)":
     "let a = { ...base }\nlet b = { ...base, x: 1 }\nlet c = { ...base, x: 1, y: 2 }",
+  "or-patterns, 2 and 3+ alts, with a guard (ADR 0022)":
+    "let f = v => switch v { | A | B => 1 | X | Y | Z when eq(v, 0) => 2 | _ => 3 }",
 };
 
 for (const [name, src] of Object.entries(cases)) {
@@ -531,6 +534,8 @@ const errorCases: Record<string, string> = {
   "let? missing in": "let r = let? x = f(1) Ok(x)",
   "non-leading spread (ADR 0021)": "let r = { x: 1, ...base }",
   "multiple spreads (ADR 0021)": "let r = { ...a, ...b }",
+  "or-pattern can't nest inside a ctor pattern (ADR 0022)":
+    "let f = v => switch v { | Some(A | B) => 1 | _ => 0 }",
 };
 
 for (const [name, src] of Object.entries(errorCases)) {
