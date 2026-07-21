@@ -1,7 +1,7 @@
 // VS Code / Cursor extension entry point. Spawns the bundled alang language
 // server over IPC and wires it to `.al` documents.
 import * as path from "node:path";
-import type { ExtensionContext } from "vscode";
+import { commands, type ExtensionContext } from "vscode";
 import {
   LanguageClient,
   type LanguageClientOptions,
@@ -22,6 +22,10 @@ export function activate(context: ExtensionContext): void {
   };
   client = new LanguageClient("alang", "alang language server", serverOptions, clientOptions);
   client.start();
+
+  context.subscriptions.push(
+    commands.registerCommand("alang.restartLsp", () => client?.restart())
+  );
 }
 
 export function deactivate(): Thenable<void> | undefined {

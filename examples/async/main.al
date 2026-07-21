@@ -14,8 +14,8 @@ extern run : Task a -> Promise a = "./task.js" "run"
 // `mapT` keeps it a Task; `andThen` sequences one Task after another.
 let program =
   of(20)
-  |> mapT(x => add(x)(1))
-  |> andThen(x => delay(10)(x))
+  |> mapT(add(1))
+  |> andThen(delay(10))
   |> mapT(x => add(x)(x))
 
 // `alang build main.al`, then `node demo.mjs` — prints 42.

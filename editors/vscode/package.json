@@ -24,6 +24,12 @@
         "scopeName": "source.alang",
         "path": "./syntaxes/alang.tmLanguage.json"
       }
+    ],
+    "commands": [
+      {
+        "command": "alang.restartLsp",
+        "title": "alang: Restart Language Server"
+      }
     ]
   }
 }

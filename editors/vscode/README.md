@@ -6,6 +6,10 @@ primitive types (`float`/`int`/`string`/`bool`), and numbers. Plus a language
 server — diagnostics, hover, and inlay type hints — built with `bun run
 build:ext` from the repo root.
 
+## Commands
+
+- `alang: Restart Language Server` (`alang.restartLsp`): Restarts the background language server process.
+
 ## Operator ligatures
 
 `|>` and `=>` render as combined glyphs with a ligature-capable font. The
