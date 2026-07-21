@@ -471,7 +471,7 @@ let checkCtorFieldVars = stmts => firstSome(s => switch s {
 
 // --- entry point ---
 
-let check = stmts => switch checkReservedNames(stmts) {
+export let check = stmts => switch checkReservedNames(stmts) {
   | Some(e) => Err(e)
   | None => switch checkCtorFieldVars(stmts) {
     | Some(e) => Err(e)

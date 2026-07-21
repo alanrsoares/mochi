@@ -1,0 +1,25 @@
+// Ticket 0001 demo — host IO through `extern`, end-to-end under Bun.
+// Reads the file named by the first argument and writes its contents to the
+// path named by the second. Tracer for the disk/argv surface cli.al needs.
+extern readFile : string -> Result string string = "./host.js" "readFile"
+extern writeFile : string -> string -> Result string string = "./host.js" "writeFile"
+extern argv : [string] = "./host.js" "argv"
+extern print : string -> string = "./host.js" "print"
+
+// copy : string -> string -> Result string string
+let copy = (src, dst) => switch readFile(src) {
+  | Ok(text) => writeFile(dst, text)
+  | Err(e) => Err(e)
+}
+
+// run over an explicit argument vector, so it's callable from a test.
+export let run = args => switch (Array.get(0, args), Array.get(1, args)) {
+  | (Some(src), Some(dst)) => copy(src, dst)
+  | _ => Err("usage: io-demo <src> <dst>")
+}
+
+// Entry: drive it from the real process argv.
+export let main = switch run(argv) {
+  | Ok(dst) => print(Str.concat("wrote ", dst))
+  | Err(e) => print(Str.concat("error: ", e))
+}

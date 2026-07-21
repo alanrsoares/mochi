@@ -1,0 +1,34 @@
+// Ticket 0005 — the whole pipeline as one alang function.
+// lex → parse → check → infer → codegen, first Err short-circuits, Ok carries
+// the emitted JS. Unlike the fixpoint harness (which composes only
+// lex→parse→codegen), this runs check and infer as REAL gates: a duplicate
+// declaration, a non-exhaustive switch, or a type error is rejected with its
+// span and never reaches codegen. Passes are threaded opaquely (ticket 0002);
+// the prelude tables come from the generated shim (ticket 0004).
+import { lex } from "./lexer.al"
+import { parse } from "./parser.al"
+import { check } from "./check.al"
+import { inferProgram } from "./infer.al"
+import { codegen } from "./codegen.al"
+
+// Prelude tables from the standalone shim. builtins/namespaces carry the
+// inferrer's Ty; compile never inspects them, so a polymorphic `a` lets them
+// unify with whatever inferProgram expects (the opaque threading of 0002).
+extern builtins : Map string a = "./prelude.gen.js" "builtins"
+extern namespaces : Map string (Map string a) = "./prelude.gen.js" "namespaces"
+extern namespaceRuntime : Map string (Map string string) = "./prelude.gen.js" "namespaceRuntime"
+extern preludeJsDefs : Map string string = "./prelude.gen.js" "preludeJsDefs"
+extern runtimeDeps : Map string [string] = "./prelude.gen.js" "runtimeDeps"
+
+// Type-check gate: open-world inference (JS host globals stay legal), program
+// passed through unchanged on success.
+let typecheck = prog =>
+  inferProgram(prog, builtins, namespaces, true) |> Result.map(_ => prog)
+
+// compile : string -> Result string Err
+export let compile = src =>
+  lex(src)
+    |> Result.flatMap(parse)
+    |> Result.flatMap(check)
+    |> Result.flatMap(typecheck)
+    |> Result.map(prog => codegen(prog, #{}, true, namespaceRuntime, preludeJsDefs, runtimeDeps))

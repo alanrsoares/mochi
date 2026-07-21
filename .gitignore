@@ -11,6 +11,13 @@ examples/modules/geometry.js
 examples/modules/main.js
 examples/async/main.js
 
+# compiled bootstrap modules — build artifacts from `alang build`. The sources
+# are the `.al`; host.js is hand-written and prelude.gen.js is the generated
+# (parity-guarded) prelude shim, so both are kept.
+bootstrap/*.js
+!bootstrap/host.js
+!bootstrap/prelude.gen.js
+
 # code coverage
 coverage
 *.lcov
@@ -42,3 +49,4 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .cursor
 
 .serena/
+.fixpoint-work/

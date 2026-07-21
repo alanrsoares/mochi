@@ -1299,7 +1299,7 @@ let processGroupsFrom = (sccs, lets, ctx, st) => switch sccs {
       processGroupsFrom(restSccs, lets, ctxWithEnv(ctx, finalEnv), st2)
 }
 
-let inferProgram = (stmts, builtins, namespaces, openMode) =>
+export let inferProgram = (stmts, builtins, namespaces, openMode) =>
   let st0 = mkSt(1000) in
   let env0 = seedBuiltins(builtins, #{}, st0) in
   let ns0 = seedNs(namespaces, env0, st0) in

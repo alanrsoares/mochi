@@ -783,7 +783,7 @@ let genStmtAllFrom = (stmts, i, ctx) => switch Array.get(i, stmts) {
 // module runs standalone. `ns`/`jsDefs`/`runtimeDeps` are the TS prelude's
 // `namespaceRuntime`/`preludeJsDefs`/`runtimeDeps` tables, converted to
 // alang Maps — the same tables the TS codegen consults, not a fork of them.
-let codegen = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps) =>
+export let codegen = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps) =>
   let keys0 = seedCtorsFromStmts(stmts, 0, imported) in
   let keys = seedBuiltinCtorKeys(keys0) in
   let ctx = { keys: keys, ns: ns } in
