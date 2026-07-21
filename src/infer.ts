@@ -536,6 +536,28 @@ const inferPat = (p: Pattern, ctx: Ctx): Result<PatResult, AlangError> => {
     case "plist":
       // Lazy `List<elem>`; same element/rest shape as `parr`.
       return inferSeqPat("List", p.elems, p.rest, ctx);
+    case "por": {
+      // Every alternative describes the same scrutinee, so their types unify;
+      // and (guaranteed by check.ts) they bind the same names, whose types unify
+      // too. The arm's binder env is the first alt's, refined by those unions.
+      const first = inferPattern(p.alts[0]!, ctx);
+      if (isErr(first)) return first;
+      const { type: t, bindings } = first.value;
+      for (let i = 1; i < p.alts.length; i++) {
+        const alt = inferPattern(p.alts[i]!, ctx);
+        if (isErr(alt)) return alt;
+        const ut = u(t, alt.value.type, ctx, p.alts[i]!.span);
+        if (isErr(ut)) return ut;
+        for (const [name, ty] of alt.value.bindings) {
+          const prev = bindings.get(name);
+          if (prev) {
+            const ub = u(prev, ty, ctx, p.alts[i]!.span);
+            if (isErr(ub)) return ub;
+          }
+        }
+      }
+      return ok({ type: t, bindings });
+    }
   }
 };
 

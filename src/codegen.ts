@@ -203,6 +203,10 @@ const patSlot = (p: Pattern): string => {
       if (p.rest?.kind === "pbind") slots.push(`...${p.rest.name}`);
       return slots.some((s) => s !== "") ? `[${slots.join(", ")}]` : "";
     }
+    // Alternatives bind identical names at identical positions (checked), so any
+    // alt's slot destructures the value for the whole arm.
+    case "por":
+      return patSlot(p.alts[0]!);
   }
 };
 
@@ -233,6 +237,14 @@ const patConds = (p: Pattern, path: string): string[] => {
         `${path}.length ${p.rest ? ">=" : "==="} ${p.elems.length}`,
         ...p.elems.flatMap((e, i) => patConds(e, `${path}[${i}]`)),
       ];
+    case "por": {
+      // `(condsA) || (condsB) || …` — each alt's own conds &&-joined first.
+      const alts = p.alts.map((a) => {
+        const c = patConds(a, path);
+        return c.length ? c.map((x) => `(${x})`).join(" && ") : "true";
+      });
+      return [alts.map((a) => `(${a})`).join(" || ")];
+    }
   }
 };
 
@@ -348,7 +360,7 @@ const litValue = (p: LitPat): string =>
 // Patterns that narrow (everything a catch-all is not) — routed to `.with(...)`.
 type NarrowingPattern = Extract<
   Pattern,
-  { kind: "pctor" | "plit" | "pbool" | "pstr" | "precord" | "parr" | "ptuple" }
+  { kind: "pctor" | "plit" | "pbool" | "pstr" | "precord" | "parr" | "ptuple" | "por" }
 >;
 
 // A sub-pattern the flat matcher-object form can express: a bind, wildcard, or
@@ -376,8 +388,8 @@ const genGuardArm = (p: Pattern, body: Expr, guard?: Expr): string => {
 };
 
 const genWithArm = (p: NarrowingPattern, body: Expr): string => {
-  // Array/tuple arms always take the guard form (not matcher-object-able).
-  if (p.kind === "parr" || p.kind === "ptuple") return genGuardArm(p, body);
+  // Array/tuple/or arms always take the guard form (not matcher-object-able).
+  if (p.kind === "parr" || p.kind === "ptuple" || p.kind === "por") return genGuardArm(p, body);
 
   if (p.kind === "plit" || p.kind === "pbool" || p.kind === "pstr")
     return `.with(${litValue(p)}, () => ${genLambdaBody(body)})`;

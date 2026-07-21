@@ -64,7 +64,10 @@ export type Pattern =
   | { kind: "parr"; elems: Pattern[]; rest: Pattern | null; span: Span }
   // @{}, @{head, ...tail} — lazy-List destructuring. Slice 1 supports only the
   // empty and single-head-cons forms (see check.ts); `rest` is a bind/wild.
-  | { kind: "plist"; elems: Pattern[]; rest: Pattern | null; span: Span };
+  | { kind: "plist"; elems: Pattern[]; rest: Pattern | null; span: Span }
+  // A | B | … — or-pattern (ADR 0022). Only at an arm's top level (never nested).
+  // Every alt binds the same names at the same position, unified in `infer`.
+  | { kind: "por"; alts: Pattern[]; span: Span };
 
 // A field inside a record pattern: `{ x }` puns to `pbind x`; `{ x: p }` matches
 // field `x` against sub-pattern `p` (a literal narrows, a name binds).
@@ -149,6 +152,7 @@ export type ArrPat = Extract<Pattern, { kind: "parr" }>;
 export type ListPat = Extract<Pattern, { kind: "plist" }>;
 export type RecordPat = Extract<Pattern, { kind: "precord" }>;
 export type CtorPat = Extract<Pattern, { kind: "pctor" }>;
+export type OrPat = Extract<Pattern, { kind: "por" }>;
 export type LitPat = Extract<Pattern, { kind: "plit" | "pbool" | "pstr" }>;
 
 export type LetStmt = Extract<Stmt, { kind: "let" }>;

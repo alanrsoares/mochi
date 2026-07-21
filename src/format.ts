@@ -128,6 +128,8 @@ const pattern = (p: Pattern): string => {
       const rest = p.rest ? [`...${pattern(p.rest)}`] : [];
       return `@{${[...head, ...rest].join(", ")}}`;
     }
+    case "por":
+      return p.alts.map(pattern).join(" | ");
   }
 };
 

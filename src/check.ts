@@ -1,7 +1,7 @@
 // Semantic pass — the Reason superpower: exhaustiveness + constructor checks.
 // Builds a variant registry from `type` decls, then verifies every `switch`.
 import { err, isErr, ok, type Result } from "@onrails/result";
-import type { CtorPat, Expr, LamParam, MatchExpr, Pattern, Program, TypeExpr } from "./ast";
+import type { CtorPat, Expr, LamParam, MatchExpr, OrPat, Pattern, Program, TypeExpr } from "./ast";
 import { type AlangError, checkErr } from "./errors";
 import { builtinTypeDecls, preludeNamespaces } from "./prelude";
 import type { Span } from "./span";
@@ -198,9 +198,76 @@ const checkPattern = (p: Pattern, reg: Registry, top: boolean): AlangError | nul
       }
       return p.rest ? checkPattern(p.rest, reg, false) : null;
     }
+    case "por":
+      return checkOrPattern(p, reg);
     default:
       return null;
   }
+};
+
+// Map each name a pattern binds to a private structural path. The scheme need
+// only be internally consistent — it exists to compare or-pattern alternatives.
+// A name bound twice in one pattern is an error.
+const binderPaths = (p: Pattern, at: string, acc: Map<string, string>): AlangError | null => {
+  switch (p.kind) {
+    case "pbind":
+      if (acc.has(p.name)) return checkErr(`pattern binds '${p.name}' more than once`, p.span);
+      acc.set(p.name, at);
+      return null;
+    case "pctor":
+      return firstErr(p.args.map((a, i) => binderPaths(a, `${at}.a${i}`, acc)));
+    case "precord":
+      return firstErr(p.fields.map((f) => binderPaths(f.pat, `${at}.${f.label}`, acc)));
+    case "ptuple":
+      return firstErr(p.elems.map((e, i) => binderPaths(e, `${at}.t${i}`, acc)));
+    default:
+      return null; // pwild/plit/pbool/pstr bind nothing; parr/plist/por barred as alts
+  }
+};
+
+// An or-pattern (`A | B | …`): each alternative must narrow (not a catch-all),
+// must not be an eager/lazy sequence (those need genListMatch/length logic the
+// guard form can't host as an alt), and all alts must bind the same names at the
+// same structural position — so the arm's single destructure serves every alt.
+const checkOrPattern = (p: OrPat, reg: Registry): AlangError | null => {
+  const maps: Map<string, string>[] = [];
+  for (const alt of p.alts) {
+    if (isCatchAll(alt))
+      return checkErr(
+        "an or-pattern alternative can't be a catch-all (`_` or a bare binding)",
+        alt.span,
+      );
+    if (alt.kind === "parr" || alt.kind === "plist")
+      return checkErr("array/list patterns can't appear as an or-pattern alternative", alt.span);
+    const e = checkPattern(alt, reg, false);
+    if (e) return e;
+    const acc = new Map<string, string>();
+    const be = binderPaths(alt, "", acc);
+    if (be) return be;
+    maps.push(acc);
+  }
+  const ref = maps[0]!;
+  for (const m of maps.slice(1)) {
+    for (const name of ref.keys())
+      if (!m.has(name))
+        return checkErr(
+          `or-pattern alternatives must bind the same names ('${name}' is missing in an alternative)`,
+          p.span,
+        );
+    for (const [name, at] of m) {
+      if (!ref.has(name))
+        return checkErr(
+          `or-pattern alternatives must bind the same names ('${name}' is missing in an alternative)`,
+          p.span,
+        );
+      if (ref.get(name) !== at)
+        return checkErr(
+          `or-pattern binds '${name}' at a differing position across alternatives`,
+          p.span,
+        );
+    }
+  }
+  return null;
 };
 
 // A constructor arm covers its constructor only when every argument is
@@ -237,14 +304,22 @@ function checkMatch(m: MatchExpr, reg: Registry): AlangError | null {
     );
   // A guarded arm never counts toward exhaustiveness — the guard can be false.
   const hasCatchAll = m.arms.some((a) => isCatchAll(a.pattern) && !a.guard);
-  const ctorArms = m.arms.filter((a) => a.pattern.kind === "pctor");
+  // An or-pattern arm contributes each alternative to coverage, sharing the
+  // arm's guard — `| Red | Green => …` covers both, `| true | false => …` is
+  // total. Flatten to leaves so the ctor/bool logic below sees each one.
+  const leaves = m.arms.flatMap((a) => {
+    const one = (pattern: Pattern): { pattern: Pattern; guard?: Expr } =>
+      a.guard ? { pattern, guard: a.guard } : { pattern };
+    return a.pattern.kind === "por" ? a.pattern.alts.map(one) : [one(a.pattern)];
+  });
+  const ctorArms = leaves.filter((a) => a.pattern.kind === "pctor");
 
   // No constructor arms → literal/wildcard/bool switch. A catch-all makes it
   // total; so does covering both boolean cases (bool is a closed two-case type).
   if (ctorArms.length === 0) {
     if (hasCatchAll) return null;
     const bools = new Set(
-      m.arms.flatMap((a) => (a.pattern.kind === "pbool" && !a.guard ? [a.pattern.value] : [])),
+      leaves.flatMap((a) => (a.pattern.kind === "pbool" && !a.guard ? [a.pattern.value] : [])),
     );
     if (bools.has(true) && bools.has(false)) return null;
     const listErr = checkSeqExhaustive(m);
@@ -446,6 +521,8 @@ const checkPatBinds = (p: Pattern): AlangError | null => {
     case "parr":
     case "plist":
       return firstErr([...p.elems, ...(p.rest ? [p.rest] : [])].map(checkPatBinds));
+    case "por":
+      return firstErr(p.alts.map(checkPatBinds));
     case "pwild":
     case "plit":
     case "pbool":

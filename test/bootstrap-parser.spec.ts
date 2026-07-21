@@ -165,6 +165,8 @@ const cPat = (p: Pattern): Canon => {
         rest: p.rest ? cPat(p.rest) : null,
         span: cSpan(p.span),
       };
+    case "por":
+      return { kind: "por", alts: p.alts.map(cPat), span: cSpan(p.span) };
   }
 };
 

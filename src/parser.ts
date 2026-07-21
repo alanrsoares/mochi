@@ -340,7 +340,19 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     const arms: MatchArm[] = [];
     while (peek().t === "bar") {
       next(); // consume |
-      const pattern = parsePattern();
+      // An arm may list alternatives: `| A | B => …` (ADR 0022). Collect them
+      // until `=>`/`when`; ≥2 alts becomes a `por`. The leading `|` of the NEXT
+      // arm is safe — each alt stops at `=>`, so no bar remains to over-consume.
+      const first = parsePattern();
+      const alts = [first];
+      while (peek().t === "bar") {
+        next();
+        alts.push(parsePattern());
+      }
+      const pattern: Pattern =
+        alts.length === 1
+          ? first
+          : { kind: "por", alts, span: spanning(first.span, alts[alts.length - 1]!.span) };
       // `when <expr>` guard — contextual keyword like `in`: a pattern never
       // continues with a bare identifier, so `when` after a pattern is
       // unambiguous (and `| when => …` still binds the name `when`).
