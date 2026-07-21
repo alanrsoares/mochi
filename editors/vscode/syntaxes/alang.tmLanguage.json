@@ -4,8 +4,10 @@
   "scopeName": "source.alang",
   "patterns": [
     { "include": "#comments" },
+    { "include": "#strings" },
     { "include": "#declarations" },
     { "include": "#keywords" },
+    { "include": "#namespaces" },
     { "include": "#types" },
     { "include": "#constructors" },
     { "include": "#numbers" },
@@ -15,8 +17,27 @@
     "comments": {
       "patterns": [
         {
+          "name": "comment.block.documentation.alang",
+          "match": "///.*$"
+        },
+        {
           "name": "comment.line.double-slash.alang",
           "match": "//.*$"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.alang",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.alang",
+              "match": "\\\\."
+            }
+          ]
         }
       ]
     },
@@ -37,6 +58,14 @@
             "1": { "name": "keyword.declaration.alang" },
             "2": { "name": "entity.name.type.alang" }
           }
+        },
+        {
+          "comment": "extern declaration — highlight the external name",
+          "match": "\\b(extern)\\s+([a-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "keyword.declaration.alang" },
+            "2": { "name": "entity.name.function.alang" }
+          }
         }
       ]
     },
@@ -44,11 +73,19 @@
       "patterns": [
         {
           "name": "keyword.control.alang",
-          "match": "\\b(switch)\\b"
+          "match": "\\b(switch|import|export|in|when)\\b"
         },
         {
           "name": "keyword.declaration.alang",
-          "match": "\\b(let|type)\\b"
+          "match": "\\b(let|type|extern)\\b"
+        }
+      ]
+    },
+    "namespaces": {
+      "patterns": [
+        {
+          "name": "support.class.namespace.alang",
+          "match": "\\b(Array|List|Set|Map|Str|Math)\\b"
         }
       ]
     },
@@ -56,7 +93,7 @@
       "patterns": [
         {
           "name": "support.type.primitive.alang",
-          "match": "\\b(float|int|string|bool)\\b"
+          "match": "\\b(float|int|string|bool|number)\\b"
         }
       ]
     },
@@ -94,6 +131,10 @@
         {
           "name": "keyword.operator.assignment.alang",
           "match": "="
+        },
+        {
+          "name": "punctuation.definition.sigil.alang",
+          "match": "[@#]"
         }
       ]
     }

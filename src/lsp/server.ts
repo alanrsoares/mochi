@@ -2,6 +2,7 @@
 // and republishes the resulting diagnostics. All real logic lives in the
 // compiler (`src/diagnostics.ts`); this file only speaks LSP.
 
+import { isOk } from "@onrails/result";
 import {
   createConnection,
   type Diagnostic,
@@ -13,9 +14,11 @@ import {
   ProposedFeatures,
   TextDocumentSyncKind,
   TextDocuments,
+  TextEdit,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { diagnostics as compute } from "../diagnostics";
+import { format } from "../format";
 import { hoverAt } from "../hover";
 import { inlayHints } from "../inlay";
 
@@ -27,6 +30,7 @@ connection.onInitialize(() => ({
     textDocumentSync: TextDocumentSyncKind.Incremental,
     hoverProvider: true,
     inlayHintProvider: true,
+    documentFormattingProvider: true,
   },
 }));
 
@@ -52,6 +56,21 @@ connection.languages.inlayHint.on(({ textDocument }): InlayHint[] => {
     kind: InlayHintKind.Type,
     paddingLeft: false,
   }));
+});
+
+// Formatting: run `format(src)` on the document text. If formatting succeeds,
+// return a single full-document replacement edit.
+connection.onDocumentFormatting(({ textDocument }): TextEdit[] => {
+  const doc = documents.get(textDocument.uri);
+  if (!doc) return [];
+  const text = doc.getText();
+  const formatted = format(text);
+  if (!isOk(formatted)) return [];
+  const fullRange = {
+    start: doc.positionAt(0),
+    end: doc.positionAt(text.length),
+  };
+  return [TextEdit.replace(fullRange, formatted.value)];
 });
 
 // Compile the document and push diagnostics (0 or 1 — the pipeline stops at the
