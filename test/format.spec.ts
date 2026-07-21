@@ -28,9 +28,19 @@ test("keeps the export prefix on a variant type", () => {
   expect(fmt("export type T=|A|B")).toBe("export type T =\n  | A\n  | B\n");
 });
 
-test("switch breaks across lines, one arm per line", () => {
+test("a switch that fits stays on one line", () => {
   expect(fmt("let m=r=>switch r {|Ok(v)=>v|Err(e)=>e}")).toBe(
-    "let m = r => switch r {\n  | Ok(v) => v\n  | Err(e) => e\n}\n",
+    "let m = r => switch r { | Ok(v) => v | Err(e) => e }\n",
+  );
+});
+
+test("a switch that overflows 80 columns breaks one arm per line", () => {
+  expect(
+    fmt(
+      'let describe=n=>switch n {|None=>"nothing to report here at all"|Some(x)=>"got a useful value here"}',
+    ),
+  ).toBe(
+    'let describe = n => switch n {\n  | None => "nothing to report here at all"\n  | Some(x) => "got a useful value here"\n}\n',
   );
 });
 
@@ -49,6 +59,81 @@ test("formatting is idempotent", () => {
   expect(fmt(once)).toBe(once);
 });
 
+test("a pipe chain that overflows breaks one stage per line", () => {
+  expect(
+    fmt("let r = source |> transform(config) |> validate(rules) |> persist(database) |> report"),
+  ).toBe(
+    "let r = source\n  |> transform(config)\n  |> validate(rules)\n  |> persist(database)\n  |> report\n",
+  );
+});
+
+test("a pipe that fits stays inline", () => {
+  expect(fmt("let r = a |> b |> c")).toBe("let r = a |> b |> c\n");
+});
+
+test("breaks a two-segment pipe when a segment is itself multi-line", () => {
+  const src =
+    "let build = path => readFile(path) |> Result.flatMap(src => compile(src) |> Result.mapErr(e => formatError(path, src, e)) |> Result.flatMap(js => writeFile(outPath(path), js)))";
+  const out = [
+    "let build = path =>",
+    "  readFile(path)",
+    "    |> Result.flatMap(src =>",
+    "      compile(src)",
+    "        |> Result.mapErr(e => formatError(path, src, e))",
+    "        |> Result.flatMap(js => writeFile(outPath(path), js)))",
+    "",
+  ].join("\n");
+  expect(fmt(src)).toBe(out);
+  expect(fmt(out)).toBe(out);
+});
+
+test("broken pipe chain is idempotent", () => {
+  const once = fmt(
+    "let r = source |> transform(config) |> validate(rules) |> persist(database) |> report",
+  );
+  expect(fmt(once)).toBe(once);
+});
+
+test("keeps parens around a nested pipe operand (associativity)", () => {
+  expect(fmt("let r = a |> (b |> c)")).toBe("let r = a |> (b |> c)\n");
+});
+
+test("keeps parens around a lambda pipe operand (else it fails to reparse)", () => {
+  const out = fmt("let r = a |> (x => x) |> g");
+  expect(out).toBe("let r = a |> (x => x) |> g\n");
+  expect(fmt(out)).toBe(out);
+});
+
+test("collapses a run of blank lines between statements to a single blank", () => {
+  expect(fmt("let a = 1\n\n\n\nlet b = 2")).toBe("let a = 1\n\nlet b = 2\n");
+});
+
+test("preserves a single blank line and keeps adjacent statements adjacent", () => {
+  expect(fmt("let a = 1\nlet b = 2\n\nlet c = 3")).toBe("let a = 1\nlet b = 2\n\nlet c = 3\n");
+});
+
+test("blank-line normalization is idempotent", () => {
+  const once = fmt("let a = 1\n\n\nlet b = 2\nlet c = 3");
+  expect(fmt(once)).toBe(once);
+});
+
 test("negative and float literals survive the formatter verbatim", () => {
   expect(fmt("let pi=3.0\nlet n= -42")).toBe("let pi = 3.0\nlet n = -42\n");
+});
+
+test("preserves leading comments, doc comments, and the blank between blocks", () => {
+  const src = "// header one\n// header two\n\n/// doc for f\nlet f = x => x\n";
+  expect(fmt(src)).toBe(src);
+});
+
+test("keeps an intra-expression comment on its own line above the body", () => {
+  const src = "let g = y =>\n  // choose\n  switch y { | A => 1 | B => 2 }\n";
+  expect(fmt(src)).toBe(src);
+});
+
+test("comment preservation is idempotent", () => {
+  const once = fmt(
+    "// top\nlet a = 1\n\nlet b = y =>\n  // note\n  switch y { | A => 1 | B => 2 }",
+  );
+  expect(fmt(once)).toBe(once);
 });

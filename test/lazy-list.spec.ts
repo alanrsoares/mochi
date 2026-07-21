@@ -167,12 +167,11 @@ test("List erases to Iterable at the .d.ts boundary", () => {
 // ---- formatting ------------------------------------------------------------
 
 test("lazy-List literals and patterns survive formatting verbatim", () => {
-  const src = "let f = xs => switch xs {\n  | @{} => @{}\n  | @{head, ...tail} => tail\n}\n";
+  const src = "let f = xs => switch xs { | @{} => @{} | @{head, ...tail} => tail }\n";
   expect(unwrapOk(format(src))).toBe(src);
 });
 
 test("fixed-length + multi-head + literal lazy patterns round-trip", () => {
-  const src =
-    "let f = xs => switch xs {\n  | @{0, ...t} => t\n  | @{a, b} => xs\n  | @{...all} => all\n}\n";
+  const src = "let f = xs => switch xs { | @{0, ...t} => t | @{a, b} => xs | @{...all} => all }\n";
   expect(unwrapOk(format(src))).toBe(src);
 });

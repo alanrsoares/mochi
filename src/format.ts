@@ -1,22 +1,35 @@
-// alang source formatter: parse to the AST, then pretty-print a canonical
-// rendering. Idempotent — formatting formatted output is a fixed point.
+// alang source formatter: parse to the AST, lower to a Wadler/Prettier-style
+// document IR, then lay it out against an 80-column target (ADR 0025). Every
+// breakable construct — pipe, switch, ternary, `let … in`, record/map literals,
+// call-argument lists — is a `group` that prints flat when it fits the line and
+// breaks otherwise. Formatting is idempotent: the layout is a pure function of
+// the AST and the width, and re-parsing broken output yields the same AST
+// (newlines are insignificant to the lexer).
 //
-// Most expressions print on a single line; only `switch` breaks across lines,
-// one `| pattern => body` arm per line. Record destructuring is desugared by
-// the parser into a temp binding plus field-access lets, so the printer detects
-// that shape and re-folds it back into `let { x, y } = e`.
+// Record destructuring is desugared by the parser into a temp binding plus
+// field-access lets, so the printer detects that shape and re-folds it back
+// into `let { x, y } = e`; a destructuring `let (a, b) = e in body` desugars to
+// an applied lambda, which the printer re-folds too.
 import { flatMap, map, pipe, type Result } from "@onrails/result";
 import type {
+  CallExpr,
   Ctor,
   CtorField,
   Expr,
   ExternStmt,
+  FieldExpr,
   ImportStmt,
+  InterpExpr,
+  LambdaExpr,
   LamParam,
+  MapExpr,
   MatchExpr,
   PatField,
   Pattern,
+  PipeExpr,
+  RecordExpr,
   Stmt,
+  TernaryExpr,
   TypeExpr,
   TypeStmt,
 } from "./ast";
@@ -24,7 +37,148 @@ import type { AlangError } from "./errors";
 import { lex } from "./lexer";
 import { parse } from "./parser";
 
-const INDENT = "  ";
+const WIDTH = 80;
+const INDENT = 2;
+
+// ---- document IR -----------------------------------------------------------
+
+// `line` is a space when its group prints flat, a newline+indent when it
+// breaks; `softline` is nothing when flat; `hardline` always breaks. `group`
+// asks "does the flat rendering fit the rest of this line?" and picks a mode.
+type Doc =
+  | { k: "text"; s: string }
+  | { k: "line"; hard: boolean; soft: boolean }
+  | { k: "cat"; parts: Doc[] }
+  | { k: "indent"; doc: Doc }
+  | { k: "group"; doc: Doc };
+
+const txt = (s: string): Doc => ({ k: "text", s });
+const cat = (parts: Doc[]): Doc => ({ k: "cat", parts });
+const seq = (...parts: Doc[]): Doc => ({ k: "cat", parts });
+const line: Doc = { k: "line", hard: false, soft: false };
+const softline: Doc = { k: "line", hard: false, soft: true };
+const hardline: Doc = { k: "line", hard: true, soft: false };
+const indent = (doc: Doc): Doc => ({ k: "indent", doc });
+const group = (doc: Doc): Doc => ({ k: "group", doc });
+
+const join = (sep: Doc, parts: Doc[]): Doc =>
+  cat(parts.flatMap((p, i) => (i === 0 ? [p] : [sep, p])));
+
+type Mode = "flat" | "break";
+type Item = { i: number; m: Mode; d: Doc };
+// The layout worklist is an immutable cons-list (the head is the next document
+// to process), so pushing work never mutates an array.
+type Cell = { head: Item; tail: Work };
+type Work = Cell | null;
+
+const cons = (head: Item, tail: Work): Work => ({ head, tail });
+
+// Prepend a cat's parts so part[0] ends up at the head (processed first).
+const consParts = (parts: Doc[], i: number, m: Mode, tail: Work): Work => {
+  let w = tail;
+  for (let k = parts.length - 1; k >= 0; k--) w = cons({ i, m, d: parts[k]! }, w);
+  return w;
+};
+
+// Would the documents on `work` (processed head-first, groups forced flat) stay
+// within `width` columns before the line ends? A break-mode line or a hardline
+// ends the line, so we stop and report success there.
+const fits = (width: number, start: Work): boolean => {
+  let rem = width;
+  let work = start;
+  while (rem >= 0) {
+    if (!work) return true;
+    const { i, m, d } = work.head;
+    work = work.tail;
+    switch (d.k) {
+      case "text":
+        rem -= d.s.length;
+        break;
+      case "cat":
+        work = consParts(d.parts, i, m, work);
+        break;
+      case "indent":
+        work = cons({ i: i + INDENT, m, d: d.doc }, work);
+        break;
+      case "group":
+        work = cons({ i, m: "flat", d: d.doc }, work);
+        break;
+      case "line":
+        if (d.hard || m === "break") return true;
+        rem -= d.soft ? 0 : 1;
+        break;
+    }
+  }
+  return false;
+};
+
+// Does this document contain a hardline anywhere in its subtree? If so, every
+// enclosing group must break (a group can never print "flat" across a forced
+// newline). Comments introduce hardlines, so a commented node breaks its
+// parents. Memoized — documents are immutable and shared during layout.
+const breakCache = new WeakMap<Doc, boolean>();
+const forcesBreak = (d: Doc): boolean => {
+  const cached = breakCache.get(d);
+  if (cached !== undefined) return cached;
+  const r =
+    d.k === "line"
+      ? d.hard
+      : d.k === "cat"
+        ? d.parts.some(forcesBreak)
+        : d.k === "indent" || d.k === "group"
+          ? forcesBreak(d.doc)
+          : false;
+  breakCache.set(d, r);
+  return r;
+};
+
+const render = (root: Doc, width: number): string => {
+  const out: string[] = [];
+  let pos = 0;
+  let work: Work = cons({ i: 0, m: "break", d: root }, null);
+  while (work) {
+    const { i, m, d } = work.head;
+    work = work.tail;
+    switch (d.k) {
+      case "text":
+        out.push(d.s);
+        pos += d.s.length;
+        break;
+      case "cat":
+        work = consParts(d.parts, i, m, work);
+        break;
+      case "indent":
+        work = cons({ i: i + INDENT, m, d: d.doc }, work);
+        break;
+      case "line":
+        if (m === "flat" && !d.hard) {
+          const s = d.soft ? "" : " ";
+          out.push(s);
+          pos += s.length;
+        } else {
+          out.push(`\n${" ".repeat(i)}`);
+          pos = i;
+        }
+        break;
+      case "group": {
+        if (forcesBreak(d.doc)) {
+          work = cons({ i, m: "break", d: d.doc }, work);
+          break;
+        }
+        const cand = cons({ i, m: "flat", d: d.doc }, work);
+        work = fits(width - pos, cand) ? cand : cons({ i, m: "break", d: d.doc }, work);
+        break;
+      }
+    }
+  }
+  return out.join("");
+};
+
+// Render a document on a single line (every group flat) — for contexts that
+// never wrap: interpolation holes, `switch` scrutinees, and `when` guards.
+const flat = (d: Doc): string => render(d, Number.POSITIVE_INFINITY);
+
+// ---- leaf renderers (strings) ----------------------------------------------
 
 const param = (p: LamParam): string =>
   p.kind === "name"
@@ -45,70 +199,9 @@ const params = (ps: LamParam[]): string =>
 const escFragment = (s: string): string => JSON.stringify(s).slice(1, -1).replace(/\$\{/g, "\\${");
 const strLit = (s: string): string => `"${escFragment(s)}"`;
 
-// A precedence-light expression printer. `ind` is the current indent (used only
-// by `switch`, the one multi-line form).
-const expr = (e: Expr, ind: string): string => {
-  switch (e.kind) {
-    case "num":
-      return e.raw;
-    case "bool":
-      return String(e.value);
-    case "str":
-      return strLit(e.value);
-    // "…${x}…" (ADR 0023) — round-trip the sugar rather than the desugared form.
-    case "interp":
-      return `"${e.parts.map((p) => (typeof p === "string" ? escFragment(p) : `\${${expr(p, ind)}}`)).join("")}"`;
-    case "ref":
-      return e.name;
-    case "call":
-      return `${callee(e.fn, ind)}(${e.args.map((a) => expr(a, ind)).join(", ")})`;
-    case "lambda":
-      return `${params(e.params)} => ${expr(e.body, ind)}`;
-    case "pipe":
-      return `${operand(e.left, ind)} |> ${operand(e.right, ind)}`;
-    // Right-associative: a bare else-chain reprints flat; a ternary in cond
-    // position must keep its parens or the reprint would reparse differently.
-    case "ternary": {
-      const cond = e.cond.kind === "ternary" ? `(${expr(e.cond, ind)})` : expr(e.cond, ind);
-      return `${cond} ? ${expr(e.then, ind)} : ${expr(e.else, ind)}`;
-    }
-    case "record": {
-      const fields = e.fields.map((f) => `${f.name}: ${expr(f.value, ind)}`);
-      const parts = e.spread ? [`...${expr(e.spread, ind)}`, ...fields] : fields;
-      return parts.length === 0 ? "{}" : `{ ${parts.join(", ")} }`;
-    }
-    case "field":
-      return `${member(e.target, ind)}.${e.name}`;
-    case "tuple":
-      return `(${e.elements.map((el) => expr(el, ind)).join(", ")})`;
-    case "arr":
-      return `[${e.elements.map((el) => expr(el, ind)).join(", ")}]`;
-    case "list":
-      return `@{${e.elements.map((el) => expr(el, ind)).join(", ")}}`;
-    case "map":
-      return e.entries.length === 0
-        ? "#{}"
-        : `#{ ${e.entries.map((en) => `${expr(en.key, ind)}: ${expr(en.value, ind)}`).join(", ")} }`;
-    case "letin":
-      return `let ${e.name} = ${expr(e.value, ind)} in ${expr(e.body, ind)}`;
-    case "letbind":
-      return `let? ${param(e.param)} = ${expr(e.value, ind)} in ${expr(e.body, ind)}`;
-    case "match":
-      return matchExpr(e, ind);
-  }
-};
-
-// A lambda in callee or member position needs parentheses. A ternary does too
-// (it binds looser than everything), and in pipe-operand position — a bare
-// `a ? b : c |> f` would reparse with the ternary swallowing the pipe.
-const callee = (e: Expr, ind: string): string =>
-  e.kind === "lambda" || e.kind === "ternary" ? `(${expr(e, ind)})` : expr(e, ind);
-const member = (e: Expr, ind: string): string =>
-  e.kind === "lambda" || e.kind === "record" || e.kind === "ternary"
-    ? `(${expr(e, ind)})`
-    : expr(e, ind);
-const operand = (e: Expr, ind: string): string =>
-  e.kind === "ternary" ? `(${expr(e, ind)})` : expr(e, ind);
+// "…${x}…" (ADR 0023) — round-trip the sugar; holes render flat.
+const interpText = (e: InterpExpr): string =>
+  `"${e.parts.map((p) => (typeof p === "string" ? escFragment(p) : `\${${flat(exprD(p))}}`)).join("")}"`;
 
 const pattern = (p: Pattern): string => {
   switch (p.kind) {
@@ -147,15 +240,6 @@ const pattern = (p: Pattern): string => {
 const patField = (f: PatField): string =>
   f.pat.kind === "pbind" && f.pat.name === f.label ? f.label : `${f.label}: ${pattern(f.pat)}`;
 
-const matchExpr = (e: MatchExpr, ind: string): string => {
-  const inner = ind + INDENT;
-  const arms = e.arms.map((a) => {
-    const guard = a.guard ? ` when ${expr(a.guard, inner)}` : "";
-    return `${inner}| ${pattern(a.pattern)}${guard} => ${expr(a.body, inner)}`;
-  });
-  return `switch ${expr(e.scrutinee, ind)} {\n${arms.join("\n")}\n${ind}}`;
-};
-
 const ctorField = (f: CtorField): string =>
   f.name ? `${f.name}: ${typeExpr(f.type)}` : typeExpr(f.type);
 
@@ -167,8 +251,10 @@ const ctor = (c: Ctor): string =>
 const typeExpr = (te: TypeExpr): string => {
   if (te.kind === "tname") return te.name;
   if (te.kind === "tapp") {
-    // A compound arg (arrow or nested application) needs parens: `Task (Option a)`.
-    const arg = (a: TypeExpr): string => (a.kind === "tname" ? typeExpr(a) : `(${typeExpr(a)})`);
+    // Only an arrow or a nested application needs parens as an arg
+    // (`Task (Option a)`); `[a]` and `(a, b)` are already self-delimiting.
+    const arg = (a: TypeExpr): string =>
+      a.kind === "tapp" || a.kind === "tarrow" ? `(${typeExpr(a)})` : typeExpr(a);
     return `${te.ctor} ${te.args.map(arg).join(" ")}`;
   }
   if (te.kind === "ttuple") return `(${te.elems.map(typeExpr).join(", ")})`;
@@ -187,28 +273,366 @@ const typeStmt = (s: TypeStmt): string => {
     const fields = s.alias.map((f) => `${f.name}: ${typeExpr(f.type)}`);
     return fields.length ? `${head} = { ${fields.join(", ")} }` : `${head} = {}`;
   }
-  const arms = s.ctors.map((c) => `${INDENT}| ${ctor(c)}`);
+  const arms = s.ctors.map((c) => `${" ".repeat(INDENT)}| ${ctor(c)}`);
   return `${head} =\n${arms.join("\n")}`;
 };
+
+const importStmt = (s: ImportStmt): string =>
+  `import { ${s.names.map((n) => n.name).join(", ")} } from ${JSON.stringify(s.from)}`;
+
+// ---- comments --------------------------------------------------------------
+
+// Comments are not in the AST, so the formatter re-scans the source for them
+// and reattaches them by span. Only own-line `//` / `///` comments are handled
+// (a line that is whitespace-then-comment); trailing comments on a code line
+// are not yet preserved. Each comment attaches to the AST node that most
+// tightly follows it and prints as a leading line above that node.
+type Comment = { start: number; end: number; text: string; blankAfter: boolean };
+
+const collectComments = (src: string): Comment[] => {
+  const out: Comment[] = [];
+  const lines = src.split("\n");
+  let offset = 0;
+  for (let li = 0; li < lines.length; li++) {
+    const raw = lines[li]!;
+    const trimmed = raw.trimStart();
+    if (trimmed.startsWith("//")) {
+      const start = offset + (raw.length - trimmed.length);
+      const blankAfter = (lines[li + 1] ?? "x").trim() === "";
+      out.push({ start, end: offset + raw.length, text: trimmed.trimEnd(), blankAfter });
+    }
+    offset += raw.length + 1; // +1 for the consumed "\n"
+  }
+  return out;
+};
+
+// The node a comment attaches to (leading), keyed by node identity. A fresh AST
+// is parsed per `format` call, so entries never outlive their source.
+const LEADING = new WeakMap<object, Comment[]>();
+
+type Anchor = { node: Expr | Stmt; start: number; end: number };
+
+// Every span-carrying expression under a statement, plus the statement itself.
+const collectAnchors = (stmts: Stmt[]): Anchor[] => {
+  const anchors: Anchor[] = [];
+  const add = (n: Expr | Stmt): void => {
+    anchors.push({ node: n, start: n.span.start, end: n.span.end });
+  };
+  const visit = (e: Expr): void => {
+    add(e);
+    switch (e.kind) {
+      case "call":
+        visit(e.fn);
+        e.args.forEach(visit);
+        break;
+      case "lambda":
+        visit(e.body);
+        break;
+      case "pipe":
+        visit(e.left);
+        visit(e.right);
+        break;
+      case "ternary":
+        visit(e.cond);
+        visit(e.then);
+        visit(e.else);
+        break;
+      case "record":
+        if (e.spread) visit(e.spread);
+        e.fields.forEach((f) => {
+          visit(f.value);
+        });
+        break;
+      case "field":
+        visit(e.target);
+        break;
+      case "tuple":
+      case "arr":
+      case "list":
+        e.elements.forEach(visit);
+        break;
+      case "map":
+        e.entries.forEach((en) => {
+          visit(en.key);
+          visit(en.value);
+        });
+        break;
+      case "letin":
+      case "letbind":
+        visit(e.value);
+        visit(e.body);
+        break;
+      case "match":
+        visit(e.scrutinee);
+        e.arms.forEach((a) => {
+          if (a.guard) visit(a.guard);
+          visit(a.body);
+        });
+        break;
+      case "interp":
+        e.parts.forEach((p) => {
+          if (typeof p !== "string") visit(p);
+        });
+        break;
+    }
+  };
+  for (const s of stmts) {
+    add(s);
+    if (s.kind === "let") visit(s.value);
+  }
+  return anchors;
+};
+
+// Assign each comment to the node that follows it most tightly (smallest start
+// at or after the comment; ties broken toward the outermost node). Comments
+// past the last node (trailing EOF block) have no anchor and are returned to be
+// emitted after the final statement.
+const attachComments = (stmts: Stmt[], comments: Comment[]): Comment[] => {
+  const anchors = collectAnchors(stmts).toSorted((a, b) => a.start - b.start || b.end - a.end);
+  const tail: Comment[] = [];
+  for (const c of comments) {
+    const target = anchors.find((a) => a.start >= c.end);
+    if (!target) {
+      tail.push(c);
+      continue;
+    }
+    const prior = LEADING.get(target.node) ?? [];
+    LEADING.set(target.node, [...prior, c]);
+  }
+  return tail;
+};
+
+// Leading comment lines for a node: each on its own line, a blank line kept
+// after any comment the source separated from what follows.
+const leadingDocs = (node: Expr | Stmt): Doc[] => {
+  const cs = LEADING.get(node);
+  return cs
+    ? cs.flatMap((c) =>
+        c.blankAfter ? [txt(c.text), hardline, hardline] : [txt(c.text), hardline],
+      )
+    : [];
+};
+
+const withComments = (node: Expr | Stmt, doc: Doc): Doc => {
+  const lead = leadingDocs(node);
+  return lead.length ? cat([...lead, doc]) : doc;
+};
+
+const hasLead = (node: Expr): boolean => (LEADING.get(node)?.length ?? 0) > 0;
+
+// ---- expression documents --------------------------------------------------
+
+const parenIf = (cond: boolean, d: Doc): Doc => (cond ? seq(txt("("), d, txt(")")) : d);
+
+// A callee/member/pipe-operand needs parens when dropping them would reparse to
+// a different tree: a lambda or ternary binds looser than application, a record
+// in member position is ambiguous, and a nested pipe would re-associate.
+const calleeD = (e: Expr): Doc =>
+  parenIf(e.kind === "lambda" || e.kind === "ternary" || e.kind === "pipe", exprD(e));
+const memberD = (e: Expr): Doc =>
+  parenIf(
+    e.kind === "lambda" || e.kind === "record" || e.kind === "ternary" || e.kind === "pipe",
+    exprD(e),
+  );
+const operandD = (e: Expr): Doc =>
+  parenIf(e.kind === "lambda" || e.kind === "ternary" || e.kind === "pipe", exprD(e));
+
+// `(a, b)` / `[a, b]` / `@{a, b}` — no inner padding; breaks one element per
+// line when it overflows.
+const bracketed = (open: string, close: string, elems: Expr[]): Doc =>
+  elems.length === 0
+    ? txt(`${open}${close}`)
+    : group(
+        seq(
+          txt(open),
+          indent(seq(softline, join(seq(txt(","), line), elems.map(exprD)))),
+          softline,
+          txt(close),
+        ),
+      );
+
+// `{ a: 1, b: 2 }` / `#{ k: v }` — padded braces; breaks one entry per line.
+const braced = (open: string, close: string, items: Doc[]): Doc =>
+  items.length === 0
+    ? txt(`${open}${close}`)
+    : group(seq(txt(open), indent(seq(line, join(seq(txt(","), line), items))), line, txt(close)));
+
+// `|>` is left-associative, so `a |> b |> c` is pipe(pipe(a, b), c); flatten it
+// back to the source order [a, b, c].
+const pipeSegments = (e: Expr): Expr[] =>
+  e.kind === "pipe" ? [...pipeSegments(e.left), e.right] : [e];
+
+// Inline when it fits, else one `|> stage` per line indented under the head.
+const pipeD = (e: PipeExpr): Doc => {
+  const [head, ...rest] = pipeSegments(e);
+  return group(
+    seq(operandD(head!), indent(cat(rest.map((s) => seq(line, txt("|> "), operandD(s)))))),
+  );
+};
+
+// A multi-line body breaks after `=>` onto its own indented line, so a pipe
+// body reads as a block. A `switch` is the exception: it opens its own block
+// right after the arrow (`xs => switch xs {`), so it stays attached.
+const lambdaD = (e: LambdaExpr): Doc => {
+  const head = txt(`${params(e.params)} =>`);
+  // A switch body attaches to the arrow (`xs => switch xs {`) — unless it
+  // carries a leading comment, which forces it onto its own indented line.
+  return e.body.kind === "match" && !hasLead(e.body)
+    ? seq(head, txt(" "), exprD(e.body))
+    : group(seq(head, indent(seq(line, exprD(e.body)))));
+};
+
+// A ternary branch after its `?` / `:` marker; a commented branch drops to its
+// own indented line so the comment stays own-line (and the layout idempotent).
+const branchD = (marker: string, e: Expr): Doc =>
+  hasLead(e) ? seq(txt(marker), indent(seq(hardline, exprD(e)))) : seq(txt(`${marker} `), exprD(e));
+
+// Inline `c ? t : e`, else break to `c` / `? t` / `: e`. A ternary in cond
+// position keeps its parens (it binds looser than everything else).
+const ternaryD = (e: TernaryExpr): Doc =>
+  group(
+    seq(
+      parenIf(e.cond.kind === "ternary", exprD(e.cond)),
+      indent(seq(line, branchD("?", e.then), line, branchD(":", e.else))),
+    ),
+  );
+
+// `let x = v in body`; when it overflows, `in` stays at the end of the value
+// line and the body drops to the next line at the same indent.
+const letLikeD = (head: string, value: Expr, body: Expr): Doc =>
+  group(seq(txt(`${head} = `), exprD(value), txt(" in"), line, exprD(body)));
+
+const recordD = (e: RecordExpr): Doc => {
+  const fields = e.fields.map((f) => seq(txt(`${f.name}: `), exprD(f.value)));
+  const items = e.spread ? [seq(txt("..."), exprD(e.spread)), ...fields] : fields;
+  return braced("{", "}", items);
+};
+
+const mapD = (e: MapExpr): Doc =>
+  braced(
+    "#{",
+    "}",
+    e.entries.map((en) => seq(exprD(en.key), txt(": "), exprD(en.value))),
+  );
+
+const fieldD = (e: FieldExpr): Doc => seq(memberD(e.target), txt(`.${e.name}`));
+
+// `let (a, b) = e in body` / `let { x } = e in body` desugars to an applied
+// lambda with a destructuring param (ADR 0011). Re-fold that surface `let`
+// rather than leak the IIFE `(((a, b)) => body)(e)`.
+const refoldLetIn = (e: CallExpr): Doc | null => {
+  if (e.args.length !== 1 || e.fn.kind !== "lambda" || e.fn.params.length !== 1) return null;
+  const p = e.fn.params[0]!;
+  return p.kind === "name" ? null : letLikeD(`let ${param(p)}`, e.args[0]!, e.fn.body);
+};
+
+// `f(a, b)`. When the last argument is a lambda, keep `f(…, p =>` on the line
+// and let the lambda body break beneath it (the "trailing lambda hug"), rather
+// than exploding the whole argument list. Otherwise the args are one group that
+// breaks one-per-line when it overflows.
+const callD = (e: CallExpr): Doc => {
+  const refold = refoldLetIn(e);
+  if (refold) return refold;
+  const fn = calleeD(e.fn);
+  if (e.args.length === 0) return seq(fn, txt("()"));
+  if (e.args[e.args.length - 1]!.kind === "lambda") {
+    return seq(fn, txt("("), join(txt(", "), e.args.map(exprD)), txt(")"));
+  }
+  return group(
+    seq(
+      fn,
+      txt("("),
+      indent(seq(softline, join(seq(txt(","), line), e.args.map(exprD)))),
+      softline,
+      txt(")"),
+    ),
+  );
+};
+
+// Inline `switch s { | A => x | _ => y }` when it fits, else one arm per line.
+// A multi-line arm body (a nested `switch`, a broken pipe) nests one level past
+// the arm's `|`, so its own lines never align with the parent's arms.
+const matchD = (e: MatchExpr): Doc => {
+  const arms = e.arms.map((a) => {
+    const guard = a.guard ? ` when ${flat(exprD(a.guard))}` : "";
+    const head = txt(`| ${pattern(a.pattern)}${guard} =>`);
+    // A commented arm body drops to its own indented line so the comment sits
+    // above it rather than trailing the `=>`.
+    return hasLead(a.body)
+      ? seq(head, indent(seq(hardline, exprD(a.body))))
+      : seq(head, txt(" "), indent(exprD(a.body)));
+  });
+  return group(
+    seq(
+      txt(`switch ${flat(exprD(e.scrutinee))} {`),
+      indent(cat(arms.map((arm) => seq(line, arm)))),
+      line,
+      txt("}"),
+    ),
+  );
+};
+
+const exprD = (e: Expr): Doc => withComments(e, exprRaw(e));
+
+const exprRaw = (e: Expr): Doc => {
+  switch (e.kind) {
+    case "num":
+      return txt(e.raw);
+    case "bool":
+      return txt(String(e.value));
+    case "str":
+      return txt(strLit(e.value));
+    case "interp":
+      return txt(interpText(e));
+    case "ref":
+      return txt(e.name);
+    case "call":
+      return callD(e);
+    case "lambda":
+      return lambdaD(e);
+    case "pipe":
+      return pipeD(e);
+    case "ternary":
+      return ternaryD(e);
+    case "record":
+      return recordD(e);
+    case "field":
+      return fieldD(e);
+    case "tuple":
+      return bracketed("(", ")", e.elements);
+    case "arr":
+      return bracketed("[", "]", e.elements);
+    case "list":
+      return bracketed("@{", "}", e.elements);
+    case "map":
+      return mapD(e);
+    case "letin":
+      return letLikeD(`let ${e.name}`, e.value, e.body);
+    case "letbind":
+      return letLikeD(`let? ${param(e.param)}`, e.value, e.body);
+    case "match":
+      return matchD(e);
+  }
+};
+
+// ---- statements ------------------------------------------------------------
+
+// `export ` prefix for an exported declaration.
+const expPrefix = (s: Stmt): string => ("exported" in s && s.exported ? "export " : "");
 
 // Is `e` a field access `<tmp>.<name>` reading the given destructuring temp?
 const fieldOf = (e: Expr, tmp: string): string | null =>
   e.kind === "field" && e.target.kind === "ref" && e.target.name === tmp ? e.name : null;
 
-// Print statements, re-folding a `$d` temp + its field-access lets into a
-// single `let { ... } = e`. Returns the number of statements consumed.
-const importStmt = (s: ImportStmt): string =>
-  `import { ${s.names.map((n) => n.name).join(", ")} } from ${JSON.stringify(s.from)}`;
+type StmtDoc = { doc: Doc; consumed: number };
 
-// `export ` prefix for an exported declaration.
-const exp = (s: Stmt, text: string): string =>
-  "exported" in s && s.exported ? `export ${text}` : text;
-
-const stmtAt = (stmts: Stmt[], i: number): { text: string; consumed: number } => {
+// Print one statement, re-folding a `$d` destructuring temp + its field-access
+// lets back into a single `let { … } = e`. Returns how many stmts it consumed.
+const stmtDoc = (stmts: Stmt[], i: number): StmtDoc => {
   const s = stmts[i]!;
-  if (s.kind === "import") return { text: importStmt(s), consumed: 1 };
-  if (s.kind === "type") return { text: exp(s, typeStmt(s)), consumed: 1 };
-  if (s.kind === "extern") return { text: exp(s, externStmt(s)), consumed: 1 };
+  if (s.kind === "import") return { doc: txt(importStmt(s)), consumed: 1 };
+  if (s.kind === "type") return { doc: txt(expPrefix(s) + typeStmt(s)), consumed: 1 };
+  if (s.kind === "extern") return { doc: txt(expPrefix(s) + externStmt(s)), consumed: 1 };
 
   if (s.name.startsWith("$")) {
     const fields: string[] = [];
@@ -221,27 +645,65 @@ const stmtAt = (stmts: Stmt[], i: number): { text: string; consumed: number } =>
       fields.push(f);
     }
     return {
-      text: exp(s, `let { ${fields.join(", ")} } = ${expr(s.value, "")}`),
+      doc: seq(txt(`${expPrefix(s)}let { ${fields.join(", ")} } = `), exprD(s.value)),
       consumed: j - i,
     };
   }
 
-  return { text: exp(s, `let ${s.name} = ${expr(s.value, "")}`), consumed: 1 };
+  return { doc: seq(txt(`${expPrefix(s)}let ${s.name} = `), exprD(s.value)), consumed: 1 };
 };
 
-const program = (stmts: Stmt[]): string => {
-  const out: string[] = [];
+// A blank separator between two statements: a newline, only whitespace, then
+// another newline anywhere in the source gap between them. Any run of blank
+// lines collapses to exactly one; a doc comment on the following statement is
+// not whitespace, so `let a\n/// doc\nlet b` reads as adjacent (no blank).
+const blankBetween = /\n[^\S\n]*\n/;
+
+// Where a statement's rendering begins in the source: its first leading
+// comment if it has one, else the statement's own token — used so a blank line
+// kept before a statement lands before its comment block, not inside it.
+const anchorStart = (s: Stmt): number => {
+  const lead = LEADING.get(s);
+  return lead && lead.length ? lead[0]!.start : s.span.start;
+};
+
+const program = (stmts: Stmt[], src: string, tail: Comment[]): string => {
+  const parts: Doc[] = [];
+  let prevEnd: number | null = null;
   for (let i = 0; i < stmts.length; ) {
-    const { text, consumed } = stmtAt(stmts, i);
-    out.push(text);
+    const cur = stmts[i]!;
+    if (prevEnd !== null) {
+      parts.push(hardline);
+      if (blankBetween.test(src.slice(prevEnd, anchorStart(cur)))) parts.push(hardline);
+    }
+    const { doc, consumed } = stmtDoc(stmts, i);
+    parts.push(withComments(cur, doc));
+    prevEnd = stmts[i + consumed - 1]!.span.end;
     i += consumed;
   }
-  return `${out.join("\n")}\n`;
+  // Comments after the last statement (no following node to attach to).
+  if (tail.length) {
+    if (prevEnd !== null) {
+      parts.push(hardline);
+      if (blankBetween.test(src.slice(prevEnd, tail[0]!.start))) parts.push(hardline);
+    }
+    parts.push(
+      join(
+        hardline,
+        tail.map((c) => txt(c.text)),
+      ),
+    );
+  }
+  parts.push(hardline);
+  return render(cat(parts), WIDTH);
 };
 
 export const format = (src: string): Result<string, AlangError> =>
   pipe(
     lex(src),
     flatMap(parse),
-    map((prog) => program(prog.stmts)),
+    map((prog) => {
+      const tail = attachComments(prog.stmts, collectComments(src));
+      return program(prog.stmts, src, tail);
+    }),
   );

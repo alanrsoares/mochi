@@ -45,10 +45,11 @@ test("a tuple lambda param round-trips through the formatter", () => {
   expect(unwrapOk(format("let f=((a,b))=>a"))).toBe("let f = ((a, b)) => a\n");
 });
 
-test("let-tuple prints as its desugared applied lambda (idempotent, not sugar-preserving)", () => {
+test("let-tuple re-folds from its desugared applied lambda back to surface sugar", () => {
   // `let (a, b) = v in body` desugars at parse time to a call of a tuple-param
-  // lambda, so the formatter shows that form. Re-formatting is stable.
+  // lambda (ADR 0011); the formatter detects that shape and re-folds the
+  // surface `let … in` (ADR 0025) rather than leaking the IIFE.
   const once = unwrapOk(format("let r=let ( a , b )=(1,2)in a"));
-  expect(once).toBe("let r = (((a, b)) => a)((1, 2))\n");
+  expect(once).toBe("let r = let (a, b) = (1, 2) in a\n");
   expect(unwrapOk(format(once))).toBe(once); // idempotent
 });

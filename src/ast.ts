@@ -150,6 +150,11 @@ export type LetBindExpr = Extract<Expr, { kind: "letbind" }>;
 export type MatchExpr = Extract<Expr, { kind: "match" }>;
 export type FieldExpr = Extract<Expr, { kind: "field" }>;
 export type ListExpr = Extract<Expr, { kind: "list" }>;
+export type CallExpr = Extract<Expr, { kind: "call" }>;
+export type RecordExpr = Extract<Expr, { kind: "record" }>;
+export type MapExpr = Extract<Expr, { kind: "map" }>;
+export type PipeExpr = Extract<Expr, { kind: "pipe" }>;
+export type InterpExpr = Extract<Expr, { kind: "interp" }>;
 
 export type TuplePat = Extract<Pattern, { kind: "ptuple" }>;
 export type ArrPat = Extract<Pattern, { kind: "parr" }>;

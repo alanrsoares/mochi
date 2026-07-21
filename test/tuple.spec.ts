@@ -63,6 +63,6 @@ test("tuple types work in an extern signature", () => {
 test("round-trips through the formatter", () => {
   expect(unwrapOk(format("let t=( 1 ,2 , 3 )"))).toBe("let t = (1, 2, 3)\n");
   expect(unwrapOk(format("let f=p=>switch p{|(a,b)=>a}"))).toBe(
-    "let f = p => switch p {\n  | (a, b) => a\n}\n",
+    "let f = p => switch p { | (a, b) => a }\n",
   );
 });

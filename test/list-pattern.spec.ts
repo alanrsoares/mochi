@@ -87,6 +87,6 @@ test("[...all] is a catch-all", () => {
 });
 
 test("list patterns survive formatting verbatim", () => {
-  const src = "let f = xs => switch xs {\n  | [] => 0\n  | [head, ...tail] => head\n}\n";
+  const src = "let f = xs => switch xs { | [] => 0 | [head, ...tail] => head }\n";
   expect(unwrapOk(format(src))).toBe(src);
 });
