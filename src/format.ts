@@ -80,6 +80,8 @@ const expr = (e: Expr, ind: string): string => {
         : `#{ ${e.entries.map((en) => `${expr(en.key, ind)}: ${expr(en.value, ind)}`).join(", ")} }`;
     case "letin":
       return `let ${e.name} = ${expr(e.value, ind)} in ${expr(e.body, ind)}`;
+    case "letbind":
+      return `let? ${param(e.param)} = ${expr(e.value, ind)} in ${expr(e.body, ind)}`;
     case "match":
       return matchExpr(e, ind);
   }

@@ -81,6 +81,12 @@ const genExpr = (e: Expr): string =>
       { kind: "letin" },
       (l) => `((${l.name}) => ${genLambdaBody(l.body)})(${genExpr(l.value)})`,
     )
+    // let? p = v in b  →  the Result bind: `_Result_flatMap((p) => b)(v)`.
+    .with(
+      { kind: "letbind" },
+      (l) =>
+        `_Result_flatMap((${genParam(l.param)}) => ${genLambdaBody(l.body)})(${genExpr(l.value)})`,
+    )
     // desugar inline: a |> f  →  f(a)
     .with({ kind: "pipe" }, (p) => `${genCallee(p.right)}(${genExpr(p.left)})`)
     // Always parenthesized, so the output nests safely in any JS position.
@@ -471,6 +477,7 @@ const usesMatchLib = (e: Expr): boolean =>
     .with({ kind: "call" }, (c) => usesMatchLib(c.fn) || c.args.some(usesMatchLib))
     .with({ kind: "lambda" }, (l) => usesMatchLib(l.body))
     .with({ kind: "letin" }, (l) => usesMatchLib(l.value) || usesMatchLib(l.body))
+    .with({ kind: "letbind" }, (l) => usesMatchLib(l.value) || usesMatchLib(l.body))
     .with({ kind: "pipe" }, (p) => usesMatchLib(p.left) || usesMatchLib(p.right))
     .with(
       { kind: "ternary" },
@@ -512,6 +519,11 @@ const exprRefs = (e: Expr, acc: Set<string>): void => {
       exprRefs(body, acc);
     })
     .with({ kind: "letin" }, (l) => {
+      exprRefs(l.value, acc);
+      exprRefs(l.body, acc);
+    })
+    .with({ kind: "letbind" }, (l) => {
+      acc.add("_Result_flatMap"); // the bind lowers onto the prelude runtime
       exprRefs(l.value, acc);
       exprRefs(l.body, acc);
     })

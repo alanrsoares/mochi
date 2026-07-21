@@ -88,6 +88,15 @@ const cExpr = (e: Expr): Canon => {
         body: cExpr(e.body),
         span: cSpan(e.span),
       };
+    case "letbind":
+      return {
+        kind: "letbind",
+        param: cParam(e.param),
+        paramSpan: cSpan(e.paramSpan),
+        value: cExpr(e.value),
+        body: cExpr(e.body),
+        span: cSpan(e.span),
+      };
     case "pipe":
       return { kind: "pipe", left: cExpr(e.left), right: cExpr(e.right), span: cSpan(e.span) };
     case "ternary":

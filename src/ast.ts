@@ -12,6 +12,11 @@ export type Expr =
   // `x` is NOT in scope in `value`. Generalized (let-polymorphism) like a
   // top-level `let`. `nameSpan` anchors the bound name for hover/inlay.
   | { kind: "letin"; name: string; nameSpan: Span; value: Expr; body: Expr; span: Span } // let x = v in b
+  // let? x = value in body — monadic bind on Result (ADR 0017). `value` must be
+  // a Result; on Ok its payload binds `param` (monomorphic) and `body` (itself
+  // a Result with the same error type) runs; on Err the whole expression is
+  // that Err. Lowers to `_Result_flatMap((param) => body)(value)`.
+  | { kind: "letbind"; param: LamParam; paramSpan: Span; value: Expr; body: Expr; span: Span }
   | { kind: "pipe"; left: Expr; right: Expr; span: Span } // a |> f
   // cond ? then : else — the boolean conditional as an expression (ADR 0016).
   // Right-associative, binds looser than `|>`; branches are full expressions.
@@ -130,6 +135,7 @@ export type Stmt =
 export type LambdaExpr = Extract<Expr, { kind: "lambda" }>;
 export type TernaryExpr = Extract<Expr, { kind: "ternary" }>;
 export type LetInExpr = Extract<Expr, { kind: "letin" }>;
+export type LetBindExpr = Extract<Expr, { kind: "letbind" }>;
 export type MatchExpr = Extract<Expr, { kind: "match" }>;
 export type FieldExpr = Extract<Expr, { kind: "field" }>;
 export type ListExpr = Extract<Expr, { kind: "list" }>;

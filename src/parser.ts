@@ -126,6 +126,18 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
   // continues with a bare identifier: the `in` following `value` is unambiguous.
   function parseLetIn(): Expr {
     const start = expect("let").span;
+    // let? param = value in body — monadic bind on Result (ADR 0017). The
+    // param is any lambda param form (name, `(a, b)` tuple, `{ a }` record).
+    if (peek().t === "question") {
+      next();
+      const paramSpan = peek().span;
+      const param = parseParam();
+      expect("eq");
+      const value = parseExpr();
+      expectIn();
+      const body = parseExpr();
+      return { kind: "letbind", param, paramSpan, value, body, span: spanning(start, body.span) };
+    }
     // `let (a, b) = value in body` — tuple destructure, desugared to an applied
     // lambda `((a, b)) => body` called with `value`. Reuses the tuple lambda
     // param; the bindings are monomorphic (lambda-bound), like any destructure.

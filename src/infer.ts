@@ -9,6 +9,8 @@ import type {
   AliasField,
   Ctor,
   Expr,
+  LamParam,
+  LetBindExpr,
   LetStmt,
   MapEntry,
   MatchExpr,
@@ -202,6 +204,55 @@ const inferTernary = (e: TernaryExpr, ctx: Ctx): Result<Type, AlangError> => {
   return ok(thenT.value);
 };
 
+// Bind one lambda-param form monomorphically into `env`, returning its type.
+// A record param types as an open row (duck typing), like a lambda's.
+const bindParam = (p: LamParam, env: Env, ctx: Ctx): Type => {
+  if (p.kind === "name") {
+    const t = freshVar(ctx.fresh);
+    env.set(p.name, mono(t));
+    return t;
+  }
+  if (p.kind === "ptuple") {
+    const elems = p.names.map((n) => {
+      const t = freshVar(ctx.fresh);
+      env.set(n, mono(t));
+      return t;
+    });
+    return tTuple(elems);
+  }
+  let row: Row = freshRowVar(ctx.fresh);
+  for (const f of p.fields) {
+    const ft = freshVar(ctx.fresh);
+    env.set(f, mono(ft));
+    row = rExtend(f, ft, row);
+  }
+  return tRecord(row);
+};
+
+// let? param = value in body — monadic bind on Result (ADR 0017). The value is
+// a `Result a e`; the Ok payload binds the param; the body is itself a Result
+// sharing the same error type, and the whole expression has the body's type.
+const inferLetBind = (e: LetBindExpr, ctx: Ctx): Result<Type, AlangError> => {
+  const valT = infer(e.value, ctx);
+  if (isErr(valT)) return valT;
+  const okT = freshVar(ctx.fresh);
+  const errT = freshVar(ctx.fresh);
+  const uv = u(valT.value, tCon("Result", [okT, errT]), ctx, e.value.span);
+  if (isErr(uv)) return uv;
+  const bodyEnv: Env = new Map(ctx.env);
+  const paramT = bindParam(e.param, bodyEnv, ctx);
+  const up = u(paramT, okT, ctx, e.paramSpan);
+  if (isErr(up)) return up;
+  if (ctx.record && e.param.kind === "name")
+    ctx.record(e.paramSpan, okT, { kind: "let", name: e.param.name });
+  const bodyT = infer(e.body, { ...ctx, env: bodyEnv });
+  if (isErr(bodyT)) return bodyT;
+  const resT = freshVar(ctx.fresh);
+  const ub = u(bodyT.value, tCon("Result", [resT, errT]), ctx, e.body.span);
+  if (isErr(ub)) return ub;
+  return ok(tCon("Result", [resT, errT]));
+};
+
 const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
   switch (e.kind) {
     case "num":
@@ -225,29 +276,7 @@ const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
       // pattern param types as a record with AT LEAST its fields (open row),
       // binding each field in the body — structural duck typing.
       const bodyEnv: Env = new Map(ctx.env);
-      const paramTypes: Type[] = e.params.map((p) => {
-        if (p.kind === "name") {
-          const t = freshVar(ctx.fresh);
-          bodyEnv.set(p.name, mono(t));
-          return t;
-        }
-        // ((a, b)) => … — the param is a tuple; each name binds a position.
-        if (p.kind === "ptuple") {
-          const elems = p.names.map((n) => {
-            const t = freshVar(ctx.fresh);
-            bodyEnv.set(n, mono(t));
-            return t;
-          });
-          return tTuple(elems);
-        }
-        let row: Row = freshRowVar(ctx.fresh);
-        for (const f of p.fields) {
-          const ft = freshVar(ctx.fresh);
-          bodyEnv.set(f, mono(ft));
-          row = rExtend(f, ft, row);
-        }
-        return tRecord(row);
-      });
+      const paramTypes: Type[] = e.params.map((p) => bindParam(p, bodyEnv, ctx));
       const bodyT = infer(e.body, { ...ctx, env: bodyEnv });
       if (isErr(bodyT)) return bodyT;
       return ok(paramTypes.reduceRight((acc, pt) => tArrow(pt, acc), bodyT.value));
@@ -289,6 +318,9 @@ const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
 
     case "ternary":
       return inferTernary(e, ctx);
+
+    case "letbind":
+      return inferLetBind(e, ctx);
 
     case "record": {
       let row: Row = rEmpty; // a literal is closed — exactly these fields
@@ -678,6 +710,15 @@ const freeRefs = (e: Expr, bound: Set<string>, acc: Set<string>): void => {
       freeRefs(e.value, bound, acc);
       const inner = new Set(bound);
       inner.add(e.name);
+      freeRefs(e.body, inner, acc);
+      return;
+    }
+    case "letbind": {
+      freeRefs(e.value, bound, acc);
+      const inner = new Set(bound);
+      if (e.param.kind === "name") inner.add(e.param.name);
+      else if (e.param.kind === "ptuple") for (const n of e.param.names) inner.add(n);
+      else for (const f of e.param.fields) inner.add(f);
       freeRefs(e.body, inner, acc);
       return;
     }

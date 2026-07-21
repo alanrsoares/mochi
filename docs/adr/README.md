@@ -48,6 +48,7 @@ What else was on the table and why not.
 | [0014](0014-recursion-via-proper-tail-calls.md) | Recursion depth via proper tail calls (strict-mode JSC); `_curry` tail path | Accepted |
 | [0015](0015-ctor-fields-carry-type-expressions.md) | Constructor fields carry full type expressions (`[Expr]`, `Option a`, tuples, arrows) | Accepted |
 | [0016](0016-ternary-expressions.md) | Ternary expressions: `cond ? then : else`, looser than `\|>`, right-assoc | Accepted |
+| [0017](0017-let-bind.md) | `let? param = value in body` — monadic bind, Result only, first-class node | Accepted |
 
 ## Backlog (well-evidenced, not yet written)
 

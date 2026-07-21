@@ -43,6 +43,7 @@ const children = (e: Expr): Expr[] => {
     case "lambda":
       return [e.body];
     case "letin":
+    case "letbind":
       return [e.value, e.body];
     case "tuple":
       return e.elements;

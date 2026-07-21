@@ -70,15 +70,18 @@ record fields may nest, lazy-List patterns may not. Guard:
 
 ### 2.4 Nice-to-have, explicitly non-blocking
 - ~~**Tuples**~~ **DONE** (ADR 0010 + 0011 binding sugar).
-- **do-notation / `let? x = e in …` monadic bind** — the parser port threads
-  `Result` through every production; manual `flatMapOk` nesting is the swamp
-  the TS compiler avoids via early returns. Deliberately deferred until the
-  lexer spike measures the real pain (`docs/bootstrap.md` item 5).
-  **Slice D verdict:** pain is real but shallow — `Result.flatMap` with
+- ~~**do-notation / `let? x = e in …` monadic bind**~~ **DONE** (ADR 0017) —
+  `let? param = value in body`, Result-only monadic bind, first-class AST node
+  (formatter round-trips it; type errors speak `let?`). Lowers to
+  `_Result_flatMap((param) => body)(value)`.
+  The history: the parser port threads `Result` through every production;
+  manual `flatMapOk` nesting is the swamp the TS compiler avoids via early
+  returns. Deliberately deferred until the lexer spike measured the real pain.
+  **Slice D verdict:** pain real but shallow — `Result.flatMap` with
   tuple-destructure lambdas (`((node, p)) => …`) reads fine at 2–3 steps;
   the worst chains (`parseExtern`, `parseLetIn`) nest 6–7 continuations of
-  pure position-threading. `let?` would flatten exactly those. Worth doing
-  before Slice E (infer threads two states, not one), not urgent for D.
+  pure position-threading. `let?` flattens exactly those, shipped before
+  Slice E (infer threads two states, not one).
   The louder Slice D signal was **bool-switch ceremony**: ~25 of parser.al's
   switches were `switch cond { | true => … | false => … }`.
   ~~a ternary / if-expression cuts noise everywhere~~ **DONE** (ADR 0016) —

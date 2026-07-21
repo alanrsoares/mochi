@@ -76,6 +76,7 @@ function forEachMatch(e: Expr, visit: (m: MatchExpr) => void): void {
       forEachMatch(e.body, visit);
       return;
     case "letin":
+    case "letbind":
       forEachMatch(e.value, visit);
       forEachMatch(e.body, visit);
       return;
