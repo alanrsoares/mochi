@@ -14,7 +14,9 @@ composite ctor fields (ADR 0015), and the prelude pieces all landed — and
 **Slices C and D shipped**: `bootstrap/lexer.al` + `bootstrap/parser.al`
 reproduce the TS lexer's tokens and the TS parser's AST on every `.al` file
 in the repo, including themselves (`test/bootstrap-{lexer,parser}.spec.ts`).
-Next: check + infer (Slice E).
+Slice E is half done: `bootstrap/check.al` reproduces the TS checker's
+verdict (first error message + span, or ok) on the same corpus
+(`test/bootstrap-check.spec.ts`). Next: infer (Slice E's heavy half).
 
 ---
 
@@ -174,12 +176,22 @@ Two prerequisites got built on the way:
 *Exit met: canonical AST JSON identical on the corpus; parser.al parses
 itself.*
 
-### Slice E — check + infer in alang ← NEXT
+### Slice E — check + infer in alang ← IN PROGRESS
 The heavy slice. Registry and exhaustiveness port mechanically; inference needs
 substitution threading (immutable `Map` first; extern union-find shim if too
 slow). Differential-test inferred schemes against TS on the corpus.
 *Exit: same schemes, same errors (message text may differ; codes/spans must
 match).*
+- **check DONE** — `bootstrap/check.al` (~430 LOC): registry as threaded
+  immutable `Map`s, `forEachMatch` becomes a first-error post-order fold,
+  the TS `error | null | undefined` tri-state becomes a `SeqCheck` variant.
+  `test/bootstrap-check.spec.ts` pins the verdict (first error message +
+  span, or ok) against the TS checker on every repo `.al` file — including
+  check.al itself — plus 30 targeted parity cases. Green on first run:
+  ADR 0017's `let?` threads the registry build, and the parser/lexer
+  differential suites had already flushed the shape bugs.
+- **infer NEXT** — types + unify + Algorithm W (~1.4k LOC TS), the real test
+  of two-state (subst + env) threading.
 
 ### Slice F — codegen + closing the loop
 Port codegen + prelude inlining. Then the ceremony:
