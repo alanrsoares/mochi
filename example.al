@@ -12,6 +12,7 @@ type Color =
   | Blue
 
 // --- lambdas + pipelines ---
+/// Doubles a number.
 let double = x => mul(x, 2)
 let inc = x => add(x, 1)
 let pipeline = 5 |> double |> inc |> double

@@ -50,25 +50,38 @@ test("hover on a top-level binding leads with `let name: T`", () => {
   expect(hoverAt(src, 4)?.code).toBe("let pi: number"); // on the name `pi`
 });
 
-test("a leading `//` comment surfaces as the binding's doc", () => {
-  const src = "// The ratio.\nlet pi = 3.14";
+test("a leading `///` comment surfaces as the binding's doc", () => {
+  const src = "/// The ratio.\nlet pi = 3.14";
   const at = src.indexOf("let pi") + 4; // on the name `pi`
   const info = hoverAt(src, at);
   expect(info?.code).toBe("let pi: number");
   expect(info?.doc).toBe("The ratio.");
 });
 
-test("consecutive comment lines join; a blank line breaks attachment", () => {
-  const doc = "// first line\n// second line\nlet a = 1";
+test("consecutive doc lines join; a blank line breaks attachment", () => {
+  const doc = "/// first line\n/// second line\nlet a = 1";
   expect(hoverAt(doc, doc.indexOf("let a") + 4)?.doc).toBe("first line\nsecond line");
 
-  const gap = "// stale\n\nlet a = 1";
+  const gap = "/// stale\n\nlet a = 1";
   expect(hoverAt(gap, gap.indexOf("let a") + 4)?.doc).toBeUndefined();
 });
 
-test("a trailing comment is not attached to the next binding", () => {
+test("ordinary and trailing comments are not attached to bindings", () => {
+  const ordinary = "// local note\nlet a = 1";
+  expect(hoverAt(ordinary, ordinary.indexOf("let a") + 4)?.doc).toBeUndefined();
+
   const src = "let a = 1 // trailing\nlet b = 2";
   expect(hoverAt(src, src.indexOf("let b") + 4)?.doc).toBeUndefined();
+});
+
+test("an ordinary comment breaks a pending doc block", () => {
+  const src = "/// reader-facing\n// local note\nlet a = 1";
+  expect(hoverAt(src, src.indexOf("let a") + 4)?.doc).toBeUndefined();
+});
+
+test("doc margins strip one optional space and preserve intentional indentation", () => {
+  const src = "///   indented\n///\n/// next\nlet a = 1";
+  expect(hoverAt(src, src.indexOf("let a") + 4)?.doc).toBe("  indented\n\nnext");
 });
 
 test("hover on a field access leads with `(property) name: T`", () => {

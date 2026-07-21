@@ -34,7 +34,7 @@ export type Tok =
   | { t: "id"; v: string }
   | { t: "eof" };
 
-// A token plus where it came from. `doc` carries a leading `//` comment block
+// A token plus where it came from. `doc` carries a leading `///` comment block
 // (own-line, no blank line before the token) so the parser can attach it to the
 // following `let` — surfaced in hover as prose.
 export type Located = Tok & { span: Span; doc?: string };
@@ -94,10 +94,22 @@ const scanString = (src: string, i: number): { value: string; end: number } | nu
   return j >= src.length ? null : { value, end: j + 1 };
 };
 
+type LineComment = { end: number; doc?: string; breaksDoc: boolean };
+
+const scanLineComment = (src: string, start: number, lineHasToken: boolean): LineComment => {
+  const isDoc = src[start + 2] === "/";
+  let end = start;
+  while (end < src.length && src[end] !== "\n") end++;
+  if (lineHasToken) return { end, breaksDoc: false };
+  if (!isDoc) return { end, breaksDoc: true };
+  const textStart = src[start + 3] === " " ? start + 4 : start + 3;
+  return { end, doc: src.slice(textStart, end), breaksDoc: false };
+};
+
 export function lex(src: string): Result<Located[], AlangError> {
   const toks: Located[] = [];
   let i = 0;
-  // Doc-comment state: `pendingDoc` accumulates consecutive own-line `//` lines;
+  // Doc-comment state: `pendingDoc` accumulates consecutive own-line `///` lines;
   // it attaches to the next emitted token and clears. `nlRun` counts newlines
   // since the last comment (≥2 = a blank line, which breaks attachment);
   // `lineHasToken` distinguishes an own-line comment from a trailing one.
@@ -126,14 +138,16 @@ export function lex(src: string): Result<Located[], AlangError> {
       i++;
       continue;
     }
-    // line comment: // ... to end of line. An own-line comment (nothing emitted
-    // on this line yet) accumulates as a doc block for the following token; a
-    // trailing comment is discarded.
+    // Line comment: // ... to end of line. Only own-line `///` comments
+    // accumulate as docs; ordinary `//` comments stay invisible to tooling.
     if (c === "/" && src[i + 1] === "/") {
-      const from = i + 2;
-      while (i < src.length && src[i] !== "\n") i++;
-      if (!lineHasToken) {
-        pendingDoc.push(src.slice(from, i).trim());
+      const comment = scanLineComment(src, i, lineHasToken);
+      i = comment.end;
+      if (comment.doc !== undefined) {
+        pendingDoc.push(comment.doc);
+        nlRun = 0;
+      } else if (comment.breaksDoc) {
+        pendingDoc = [];
         nlRun = 0;
       }
       continue;

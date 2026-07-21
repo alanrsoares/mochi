@@ -69,7 +69,7 @@ export type TypeExpr =
   | { kind: "tlist"; elem: TypeExpr; span: Span }; // [a]
 
 export type Stmt =
-  // `doc` is a leading `//` comment block attached by the lexer, surfaced in
+  // `doc` is a leading `///` comment block attached by the lexer, surfaced in
   // hover as a prose paragraph below the type (the JSDoc feel).
   | {
       kind: "let";

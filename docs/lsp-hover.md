@@ -3,8 +3,8 @@
 ## Status
 
 **Steps 1 + 3 shipped.** Hover now leads with the symbol's kind and name
-(`let x: T`, `(parameter) x: T`, `(property) x: T`) and surfaces a leading `//`
-comment block as a prose paragraph below the fence. Steps 2 (render
+(`let x: T`, `(parameter) x: T`, `(property) x: T`) and surfaces a leading `///`
+doc block as a prose paragraph below the fence. Steps 2 (render
 polymorphism), 4 (named params in function types), and lambda-param
 *binding-site* hover remain open — see the per-step notes below.
 
@@ -21,7 +21,7 @@ weight** so the surface reads like TS, rather than adding more always-on inlays.
   (kind `parameter`), and a `field` access (kind `property`).
 - `hoverAt` returns `{ code, doc? }` instead of a bare string; the server fences
   `code` and appends `doc` as a paragraph. Bare types (no symbol) are unchanged.
-- The lexer attaches an own-line leading `//` block to the next token as `doc`
+- The lexer attaches an own-line leading `///` block to the next token as `doc`
   (consecutive lines join; a blank line or a trailing comment breaks it); the
   parser rides it onto the `let` node (`doc?: string` on the AST).
 
@@ -100,8 +100,15 @@ matches the inlay.
 
 ### 3. Doc-comment surfacing — ✅ shipped
 
-A leading `//` comment on a binding becomes a prose paragraph below the code
+A leading `///` doc on a binding becomes a prose paragraph below the code
 fence in the hover markdown — the JSDoc feel:
+
+```alang
+/// The currently authenticated account.
+let user = loadUser()
+```
+
+renders as:
 
 ````
 ```alang
@@ -110,7 +117,7 @@ let user: User
 The currently authenticated account.
 ````
 
-Requires the lexer/parser to attach a leading comment to the following `let`
+Requires the lexer/parser to attach a leading doc block to the following `let`
 (a `doc?: string` on the node), then the server appends it after the fence.
 Cheap, high delight.
 

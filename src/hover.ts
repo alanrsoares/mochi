@@ -26,7 +26,7 @@ const tightest = (types: TypeAt[], offset: number): TypeAt | null => {
 
 // A hover payload: `code` is the alang-fenced lead line (a bare type, or a
 // TS-style `let x: T` / `(parameter) x: T` / `(property) x: T`), `doc` is an
-// optional prose paragraph (a leading `//` comment) rendered below the fence.
+// optional prose paragraph (a leading `///` comment) rendered below the fence.
 export type HoverInfo = { code: string; doc?: string };
 
 // TS-style lead: `kind name: type` for a named symbol, bare type otherwise.

@@ -574,7 +574,7 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
   }
 
   function parseStmt(): Stmt[] {
-    // A leading `//` comment block rides on the statement's first token; surface
+    // A leading `///` comment block rides on the statement's first token; surface
     // it as the `let`'s doc. Synthetic destructuring temps ($d…) are skipped
     // downstream, so attaching to all produced lets is harmless.
     const doc = peek().doc;
