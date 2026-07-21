@@ -44,6 +44,11 @@ type Tok =
   | TNum(value: number, raw: string)
   | TBool(value: bool)
   | TStr(value: string)
+  // ${} interpolation (ADR 0023): tmplstart/tmplmid/tmplend bracket a
+  // literal chunk before/between/after holes.
+  | TTmplStart(value: string)
+  | TTmplMid(value: string)
+  | TTmplEnd(value: string)
   | TId(value: string)
   | TEof
 
@@ -84,6 +89,14 @@ type Expr =
   | EArr(elements: [Expr], span: Span)
   | EList(elements: [Expr], span: Span)
   | EMap(entries: [MapEntry], span: Span)
+  | EInterp(parts: [InterpPart], span: Span)
+
+// One chunk of a "…${a}…" interpolation (ADR 0023): a literal run, or a
+// parsed hole expression. TS: an untagged `string | Expr` union — alang has
+// no raw unions, so this is a proper variant.
+type InterpPart =
+  | IPLit(value: string)
+  | IPExpr(expr: Expr)
 
 type Pattern =
   | PWild(span: Span)
@@ -145,6 +158,9 @@ let tokName = t => switch t {
   | TNum(_, _) => "num"
   | TBool(_) => "bool"
   | TStr(_) => "str"
+  | TTmplStart(_) => "tmplstart"
+  | TTmplMid(_) => "tmplmid"
+  | TTmplEnd(_) => "tmplend"
   | TId(_) => "id"
   | TEof => "eof"
 }
@@ -244,6 +260,7 @@ let exprSpan = e => switch e {
   | EArr(_, sp) => sp
   | EList(_, sp) => sp
   | EMap(_, sp) => sp
+  | EInterp(_, sp) => sp
 }
 
 let tySpan = t => switch t {
@@ -367,6 +384,7 @@ let parseAtom = (toks, pos) =>
     | TLbracket => parseArr(toks, pos)
     | TAt => parseList(toks, pos)
     | THash => parseMap(toks, pos)
+    | TTmplStart(_) => parseInterp(toks, pos)
     | TNum(value, raw) => Ok((ENum(value, raw, sp), add(pos, 1)))
     | TBool(value) => Ok((EBool(value, sp), add(pos, 1)))
     | TStr(value) => Ok((EStr(value, sp), add(pos, 1)))
@@ -379,6 +397,28 @@ let parseAtom = (toks, pos) =>
           Ok((ETuple(elements, toEnd(sp, toks, p3)), p3))
         : expectTok(TRparen, toks, p) |> Result.map(p2 => (first, p2))
     | t => errAt(cat(["unexpected token ", tokName(t)]), lt)
+  }
+
+// "…${a}…${b}…" (ADR 0023). The lexer already split this into a token stream
+// of tmplstart <holeTokens> tmplmid <holeTokens> ... tmplend; each hole's
+// tokens parse as an ordinary expression via `parseExpr`.
+let parseInterpLoop = (toks, pos, start, acc) =>
+  let? (holeExpr, p) = parseExpr(toks, pos) in
+  let acc2 = Array.append(IPExpr(holeExpr), acc) in
+  let lt = tokAt(toks, p) in
+  switch lt.tok {
+    | TTmplMid(value) =>
+      parseInterpLoop(toks, add(p, 1), start, Array.append(IPLit(value), acc2))
+    | TTmplEnd(value) =>
+      Ok((EInterp(Array.append(IPLit(value), acc2), toEnd(start, toks, add(p, 1))), add(p, 1)))
+    | t => errAt(cat(["expected \${...} to close, got ", tokName(t)]), lt)
+  }
+
+let parseInterp = (toks, pos) =>
+  let lt = tokAt(toks, pos) in
+  switch lt.tok {
+    | TTmplStart(value) => parseInterpLoop(toks, add(pos, 1), spanOf(lt), [IPLit(value)])
+    | t => errAt(cat(["expected tmplstart, got ", tokName(t)]), lt)
   }
 
 let parseField = (toks, pos) =>

@@ -83,6 +83,9 @@ const PAYLOAD_TAGS: Record<string, string> = {
   TNum: "num",
   TBool: "bool",
   TStr: "str",
+  TTmplStart: "tmplstart",
+  TTmplMid: "tmplmid",
+  TTmplEnd: "tmplend",
   TId: "id",
 };
 
@@ -146,6 +149,22 @@ const cases: Record<string, string> = {
     "let lettuce = typeof1\nswitch x { | true => import2 | false => exporter }",
   "crlf line endings": "let f = 1\r\nlet g = 2\r\n",
   "ident with underscore and digits": "let _foo_2 = bar_baz9",
+  // ADR 0023 — string interpolation.
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+  "interp: single hole": 'let s = "a ${x} b"',
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+  "interp: multiple holes": 'let s = "${a}-${b}-${c}"',
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+  "interp: nested interpolation in a hole": 'let s = "a ${ "b ${c} d" } e"',
+  "interp: hole containing a switch (brace depth)":
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+    'let s = "v = ${ switch n { | 0 => 1 | _ => 2 } }"',
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+  "interp: hole containing a string with braces": 'let s = "a ${ "{}" } b"',
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+  "interp: escaped hole opener is not a hole": 'let s = "price: \\${amount}"',
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+  "interp: leading and trailing empty literal chunks": 'let s = "${a}"',
 };
 
 for (const [name, src] of Object.entries(cases)) {
@@ -174,4 +193,13 @@ test("unterminated string: same message and span", () => {
 
 test("unexpected char: same message and span", () => {
   expectSameError("let x = ~1");
+});
+
+test("unterminated hole: same message and span", () => {
+  expectSameError('let s = "a ${ 1 + 2 x"');
+});
+
+test("unterminated string after a closed hole: same message and span", () => {
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+  expectSameError('let s = "a ${x} b');
 });

@@ -45,6 +45,14 @@ type Expr =
   | EArr(elements: [Expr], span: Span)
   | EList(elements: [Expr], span: Span)
   | EMap(entries: [MapEntry], span: Span)
+  | EInterp(parts: [InterpPart], span: Span)
+
+// One chunk of a "…${a}…" interpolation (ADR 0023): a literal run, or a
+// hole expression. TS: an untagged `string | Expr` union — alang has no raw
+// unions, so this is a proper variant (mirrors parser.al's own copy).
+type InterpPart =
+  | IPLit(value: string)
+  | IPExpr(expr: Expr)
 
 type Field = { name: string, value: Expr }
 type MapEntry = { key: Expr, value: Expr }
@@ -111,6 +119,19 @@ let escChar = c => switch c {
   | _ => c
 }
 let jsStringLit = s => cat(["\"", cat(Str.chars(s) |> map(escChar)), "\""])
+
+// Re-escape a decoded literal chunk for a JS template literal: backslashes
+// first (else the escapes we're about to insert double-escape), then the
+// two chars that would otherwise reopen JS template syntax.
+let escTemplateLoop = (chars, i, acc) => switch Array.get(i, chars) {
+  | None => acc
+  | Some("\\") => escTemplateLoop(chars, add(i, 1), Str.concat(acc, "\\\\"))
+  | Some("`") => escTemplateLoop(chars, add(i, 1), Str.concat(acc, "\\`"))
+  | Some("$") when Array.get(add(i, 1), chars) |> Option.contains("{") =>
+    escTemplateLoop(chars, add(i, 2), Str.concat(acc, "\\\${"))
+  | Some(c) => escTemplateLoop(chars, add(i, 1), Str.concat(acc, c))
+}
+let escapeTemplateLiteral = s => escTemplateLoop(Str.chars(s), 0, "")
 
 // --- ctor field-key registry (GCtx.keys) ---------------------------------
 
@@ -192,6 +213,13 @@ let genExpr = (e, ctx) => switch e {
   | EList(elements, _) => genList(elements, ctx)
   | EMap(entries, _) =>
       cat(["new Map([", Str.join(", ", entries |> map(en => cat(["[", genExpr(en.key, ctx), ", ", genExpr(en.value, ctx), "]"]))), "])"])
+  // "…${x}…" (ADR 0023) → a native JS template literal — emitted JS reads
+  // exactly like the source.
+  | EInterp(parts, _) =>
+      cat(["`", cat(parts |> map(p => switch p {
+        | IPLit(value) => escapeTemplateLiteral(value)
+        | IPExpr(ex) => cat(["\${", genExpr(ex, ctx), "}"])
+      })), "`"])
 }
 
 // A `@{...}` literal -> a lazy iterable over its (eagerly-evaluated)
@@ -637,6 +665,10 @@ let usesMatchLib = e => switch e {
   | EArr(elements, _) => someOf(usesMatchLib, elements)
   | EList(elements, _) => someOf(usesMatchLib, elements)
   | EMap(entries, _) => someOf(en => or(usesMatchLib(en.key), usesMatchLib(en.value)), entries)
+  | EInterp(parts, _) => someOf(p => switch p {
+      | IPLit(_) => false
+      | IPExpr(ex) => usesMatchLib(ex)
+    }, parts)
 }
 
 // A name referenced anywhere in an expression. Coarse — counts locally
@@ -645,6 +677,13 @@ let usesMatchLib = e => switch e {
 let exprRefsListFrom = (xs, i, ctx, acc) => switch Array.get(i, xs) {
   | None => acc
   | Some(x) => exprRefsListFrom(xs, add(i, 1), ctx, exprRefs(x, ctx, acc))
+}
+let exprRefsInterpPartsFrom = (parts, i, ctx, acc) => switch Array.get(i, parts) {
+  | None => acc
+  | Some(p) => exprRefsInterpPartsFrom(parts, add(i, 1), ctx, switch p {
+      | IPLit(_) => acc
+      | IPExpr(ex) => exprRefs(ex, ctx, acc)
+    })
 }
 let exprRefsArmsFrom = (arms, i, ctx, acc) => switch Array.get(i, arms) {
   | None => acc
@@ -691,6 +730,7 @@ let exprRefs = (e, ctx, acc) => switch e {
   | EArr(elements, _) => exprRefsListFrom(elements, 0, ctx, acc)
   | EList(elements, _) => exprRefsListFrom(elements, 0, ctx, Set.add("_list", acc)) // `@{...}` literal calls List core runtime
   | EMap(entries, _) => exprRefsEntriesFrom(entries, 0, ctx, acc)
+  | EInterp(parts, _) => exprRefsInterpPartsFrom(parts, 0, ctx, acc)
 }
 
 // Names a module binds at top scope — anything here would shadow a

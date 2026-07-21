@@ -68,6 +68,12 @@ const cExpr = (e: Expr): Canon => {
     case "bool":
     case "str":
       return { kind: e.kind, value: e.value, span: cSpan(e.span) };
+    case "interp":
+      return {
+        kind: "interp",
+        parts: e.parts.map((p) => (typeof p === "string" ? p : cExpr(p))),
+        span: cSpan(e.span),
+      };
     case "ref":
       return { kind: "ref", name: e.name, span: cSpan(e.span) };
     case "call":
@@ -313,6 +319,11 @@ const A_EXPR: Record<string, (e: Al) => Canon> = {
     entries: e.entries.map((en: Al) => ({ key: aExpr(en.key), value: aExpr(en.value) })),
     span: e.span,
   }),
+  EInterp: (e) => ({
+    kind: "interp",
+    parts: e.parts.map((p: Al) => (p._tag === "IPLit" ? p.value : aExpr(p.expr))),
+    span: e.span,
+  }),
 };
 const aExpr = (e: Al): Canon => {
   const f = A_EXPR[e._tag];
@@ -472,6 +483,9 @@ const cases: Record<string, string> = {
     'let a = gt(x, 0) ? 1 : lt(x, 0) ? -1 : 0\nlet b = x |> f ? "y" : "n"\nlet c = (p ? q : r) ? 1 : 2\nlet m = #{ true ? 1 : 2 : "v" }',
   "let? bind, all param forms + chain (ADR 0017)":
     "let a = let? x = f(1) in Ok(x)\nlet b = let? (l, r) = g(2) in Ok(add(l, r))\nlet c = let? { x, y } = h(3) in Ok(x)\nlet d = let? v = f(4) in let? w = f(v) in Ok(w)\nlet e = let ? sp = f(5) in Ok(sp)",
+  "string interpolation, nested and multi-hole (ADR 0023)":
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+    'let a = "hello ${name}"\nlet b = "${a}-${b}-${c}"\nlet c = "outer ${ "inner ${x}" } end"',
 };
 
 for (const [name, src] of Object.entries(cases)) {

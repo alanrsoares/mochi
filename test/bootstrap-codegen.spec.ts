@@ -109,6 +109,15 @@ const cases: Record<string, string> = {
   "map literal": 'let m = #{ "a": 1, "b": 2 }',
   "nullary + n-ary ctors": "type T = | A | B(number) | C(number, number)",
   "string escapes": 'let s = "a\\tb\\nc\\"d\\\\e"',
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+  "interp: single hole": 'let s = "a ${x} b"',
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+  "interp: multiple holes and a call": 'let s = "${a}-${add(b, 1)}-${c}"',
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+  "interp: nested interpolation": 'let s = "outer ${ "inner ${x}" } end"',
+  "interp: literal chunk needing re-escaping (backslash/backtick/${)":
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+    'let s = "a\\\\b`c ${x} d\\${e}"',
 };
 
 for (const [name, src] of Object.entries(cases)) {

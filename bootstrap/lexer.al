@@ -38,6 +38,12 @@ type Tok =
   | TNum(value: number, raw: string)
   | TBool(value: bool)
   | TStr(value: string)
+  // ${} interpolation (ADR 0023): tmplstart/tmplmid/tmplend bracket a
+  // literal chunk before/between/after holes; a hole's own tokens are
+  // ordinary tokens spliced in place (mirrors src/lexer.ts).
+  | TTmplStart(value: string)
+  | TTmplMid(value: string)
+  | TTmplEnd(value: string)
   | TId(value: string)
   | TEof
 
@@ -113,17 +119,95 @@ let escChar = n => switch n {
   | c => c
 }
 
-// Scan a "..." literal body starting just past the opening quote. Returns the
-// decoded value and the index just past the closing quote; None if unterminated.
-let scanStr = (src, j, acc) => switch Str.get(j, src) {
+// One chunk of a scanned "..." literal: a decoded literal run, or the raw
+// source range of a `${expr}` hole (tokenized later by `lexParts`, via a
+// recursive `lex` call — so hole tokens get real spans for free).
+type TPart =
+  | PLit(value: string)
+  | PHole(start: number, end: number)
+
+// Skip to (and including) a "..." literal's closing quote, starting at its
+// opening quote `i`. Descends into any `${...}` holes (which may themselves
+// hold strings/holes) so their braces and quotes don't confuse a caller only
+// counting braces. Returns the index just past the closing quote, or None if
+// unterminated. Used only by `findHoleEnd`'s prescan — decoding happens
+// later, in `scanTemplate`.
+let skipStrLoop = (src, j) => switch Str.get(j, src) {
   | None => None
-  | Some("\"") => Some((acc, add(j, 1)))
+  | Some("\"") => Some(add(j, 1))
   | Some("\\") => switch Str.get(add(j, 1), src) {
-    | Some(n) => scanStr(src, add(j, 2), Str.concat(acc, escChar(n)))
-    | None => scanStr(src, add(j, 1), Str.concat(acc, "\\"))
+    | Some(_) => skipStrLoop(src, add(j, 2))
+    | None => skipStrLoop(src, add(j, 1))
   }
-  | Some(c) => scanStr(src, add(j, 1), Str.concat(acc, c))
+  | Some("$") when Str.get(add(j, 1), src) |> Option.contains("{") =>
+    switch findHoleEnd(src, add(j, 2)) {
+      | Some(hEnd) => skipStrLoop(src, hEnd)
+      | None => None
+    }
+  | Some(_) => skipStrLoop(src, add(j, 1))
 }
+let skipStringLiteral = (src, i) => skipStrLoop(src, add(i, 1))
+
+// Skip to (not past) the next newline, or to end of source.
+let skipLineCommentTo = (src, j) => switch Str.get(j, src) {
+  | None => j
+  | Some("\n") => j
+  | Some(_) => skipLineCommentTo(src, add(j, 1))
+}
+
+// Find the index just past the `}` that closes a `${` hole whose contents
+// start at `start` (right after the `${`). Tracks brace depth so a nested
+// record literal or `switch` inside the hole doesn't close it early, and
+// descends into nested string literals (which may carry their own holes).
+// Mutually recursive with `skipStringLiteral`.
+let findHoleLoop = (src, j, depth) => switch Str.get(j, src) {
+  | None => None
+  | Some("\"") => switch skipStringLiteral(src, j) {
+    | Some(stop) => findHoleLoop(src, stop, depth)
+    | None => None
+  }
+  | Some("/") when Str.get(add(j, 1), src) |> Option.contains("/") =>
+    findHoleLoop(src, skipLineCommentTo(src, j), depth)
+  | Some("{") => findHoleLoop(src, add(j, 1), add(depth, 1))
+  | Some("}") =>
+    eq(depth, 1) ? Some(add(j, 1)) : findHoleLoop(src, add(j, 1), sub(depth, 1))
+  | Some(_) => findHoleLoop(src, add(j, 1), depth)
+}
+let findHoleEnd = (src, start) => findHoleLoop(src, start, 1)
+
+// A literal chunk's token kind depends only on position: the sole chunk of a
+// hole-free literal stays a plain `str`; otherwise first/middle/last bracket
+// the holes (ADR 0023).
+let literalTok = (idx, total, value) =>
+  eq(total, 1)
+    ? TStr(value)
+    : eq(idx, 0)
+      ? TTmplStart(value)
+      : eq(idx, sub(total, 1))
+        ? TTmplEnd(value)
+        : TTmplMid(value)
+
+// Scan a "..." literal (which may contain `${expr}` holes) starting at its
+// opening quote `i`. Returns the alternating lit/hole chunks (oldest first)
+// and the index just past the closing quote; None if unterminated.
+let scanTemplateLoop = (src, j, value, parts) => switch Str.get(j, src) {
+  | None => None
+  | Some("\"") => Some({ parts: Array.append(PLit(value), parts), end: add(j, 1) })
+  | Some("\\") => switch Str.get(add(j, 1), src) {
+    | Some(n) => scanTemplateLoop(src, add(j, 2), Str.concat(value, escChar(n)), parts)
+    | None => scanTemplateLoop(src, add(j, 1), Str.concat(value, "\\"), parts)
+  }
+  | Some("$") when Str.get(add(j, 1), src) |> Option.contains("{") =>
+    switch findHoleEnd(src, add(j, 2)) {
+      | None => None
+      | Some(holeEnd) =>
+        let withLit = Array.append(PLit(value), parts) in
+        let withHole = Array.append(PHole(add(j, 2), sub(holeEnd, 1)), withLit) in
+        scanTemplateLoop(src, holeEnd, "", withHole)
+    }
+  | Some(c) => scanTemplateLoop(src, add(j, 1), Str.concat(value, c), parts)
+}
+let scanTemplate = (src, i) => scanTemplateLoop(src, add(i, 1), "", [])
 
 let notNewline = c => not(eq(c, "\n"))
 
@@ -161,6 +245,55 @@ let numStart = (src, i, c) =>
 let emit = (src, tok, start, stop, doc, toks) =>
   go(src, stop, [], 0, true, Array.append(mkTok(tok, start, stop, doc), toks))
 
+// Shift a located token's span by `by` — places a hole's recursively-lexed
+// tokens (produced as if the hole's source started at 0) at their real
+// position in the enclosing source.
+let offsetLocTok = (lt, by) => { tok: lt.tok, start: add(lt.start, by), end: add(lt.end, by), doc: lt.doc }
+
+// Splice a recursively-lexed hole's tokens (minus its trailing `eof`) onto
+// `toks`, each shifted by `by` (the hole's start in the enclosing source).
+let spliceHoleToks = (holeToks, by, toks) => switch Array.head(holeToks) {
+  | None => toks
+  | Some(ht) =>
+    let toks2 = eq(ht.tok, TEof) ? toks : Array.append(offsetLocTok(ht, by), toks) in
+    spliceHoleToks(Array.tail(holeToks), by, toks2)
+}
+
+// Recursively lex one `${...}` hole's own source (start/stop are its extent,
+// exclusive of the braces) and splice its tokens onto `toks`. A nested lex
+// error is offset to a position in the enclosing source.
+let spliceHole = (src, start, stop, toks) => switch lex(Str.slice(start, stop, src)) {
+  | Ok(holeToks) => Ok(spliceHoleToks(holeToks, start, toks))
+  | Err(e) => Err({ message: e.message, start: add(e.start, start), end: add(e.end, start) })
+}
+
+// Emit the token(s) for one scanned "..." literal: a plain `str`, or (ADR
+// 0023) `tmplstart`/spliced hole tokens/`tmplmid`s/`tmplend` for one holding
+// `${expr}` interpolations. All literal-chunk tokens share the template's
+// whole span, matching src/lexer.ts's `lexString`.
+let lexParts = (src, parts, idx, total, wholeStart, wholeEnd, doc, toks) => switch Array.head(parts) {
+  | None => Ok(toks)
+  | Some(part) => switch part {
+    | PLit(value) =>
+      let t = mkTok(literalTok(idx, total, value), wholeStart, wholeEnd, doc) in
+      lexParts(src, Array.tail(parts), add(idx, 1), total, wholeStart, wholeEnd, [], Array.append(t, toks))
+    | PHole(hs, he) => switch spliceHole(src, hs, he, toks) {
+      | Err(e) => Err(e)
+      | Ok(toks2) => lexParts(src, Array.tail(parts), add(idx, 1), total, wholeStart, wholeEnd, doc, toks2)
+    }
+  }
+}
+
+// Top-level entry for a "..." literal starting at its opening quote `i`.
+// Mutually recursive with `go` (continues the outer scan past the literal).
+let lexString = (src, i, doc, toks) => switch scanTemplate(src, i) {
+  | None => lexError("unterminated string literal", i, Str.length(src))
+  | Some(scanned) => switch lexParts(src, scanned.parts, 0, Array.length(scanned.parts), i, scanned.end, doc, toks) {
+    | Err(e) => Err(e)
+    | Ok(toks2) => go(src, scanned.end, [], 0, true, toks2)
+  }
+}
+
 // One step per token. State mirrors the TS locals: `doc` is the pending
 // own-line `///` block, `nlRun` counts newlines since the last comment
 // (>= 2 = a blank line, which breaks doc attachment), `lineTok` says whether
@@ -187,10 +320,7 @@ let go = (src, i, doc, nlRun, lineTok, toks) => switch Str.get(i, src) {
           | Some(t) => emit(src, t, i, add(i, 1), doc, toks)
           | None =>
             eq(c, "\"")
-              ? switch scanStr(src, add(i, 1), "") {
-                  | Some((value, stop)) => emit(src, TStr(value), i, stop, doc, toks)
-                  | None => lexError("unterminated string literal", i, Str.length(src))
-                }
+              ? lexString(src, i, doc, toks)
               : numStart(src, i, c)
                 ? let j = scanWhile(isNumChar, src, add(i, 1)) in
                   let raw = Str.slice(i, j, src) in
