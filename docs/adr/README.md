@@ -47,6 +47,7 @@ What else was on the table and why not.
 | [0013](0013-pattern-guards.md) | Pattern guards: `when` clause, guard-form codegen, no coverage credit | Accepted |
 | [0014](0014-recursion-via-proper-tail-calls.md) | Recursion depth via proper tail calls (strict-mode JSC); `_curry` tail path | Accepted |
 | [0015](0015-ctor-fields-carry-type-expressions.md) | Constructor fields carry full type expressions (`[Expr]`, `Option a`, tuples, arrows) | Accepted |
+| [0016](0016-ternary-expressions.md) | Ternary expressions: `cond ? then : else`, looser than `\|>`, right-assoc | Accepted |
 
 ## Backlog (well-evidenced, not yet written)
 

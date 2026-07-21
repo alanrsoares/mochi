@@ -23,11 +23,11 @@ test("error on a later line reports the right line and column", () => {
 });
 
 test("lex error maps to a single-char range", () => {
-  const d = diagnostics("let x = ?");
+  const d = diagnostics("let x = ^");
   expect(d).toHaveLength(1);
   expect(d[0]!.range).toEqual({
     start: { line: 0, character: 8 },
     end: { line: 0, character: 9 },
   });
-  expect(d[0]!.message).toBe("lex: unexpected char '?'");
+  expect(d[0]!.message).toBe("lex: unexpected char '^'");
 });

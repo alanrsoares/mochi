@@ -90,6 +90,15 @@ const cExpr = (e: Expr): Canon => {
       };
     case "pipe":
       return { kind: "pipe", left: cExpr(e.left), right: cExpr(e.right), span: cSpan(e.span) };
+    case "ternary":
+      return {
+        kind: "ternary",
+        cond: cExpr(e.cond),
+        // biome-ignore lint/suspicious/noThenProperty: mirrors the AST field; plain data, never awaited
+        then: cExpr(e.then),
+        else: cExpr(e.else),
+        span: cSpan(e.span),
+      };
     case "match":
       return {
         kind: "match",
@@ -255,6 +264,16 @@ const A_EXPR: Record<string, (e: Al) => Canon> = {
     span: e.span,
   }),
   EPipe: (e) => ({ kind: "pipe", left: aExpr(e.left), right: aExpr(e.right), span: e.span }),
+  // al-side fields are `thenE`/`elseE` (`else` is a JS reserved word); canon
+  // folds them back to the TS AST's `then`/`else`.
+  ETernary: (e) => ({
+    kind: "ternary",
+    cond: aExpr(e.cond),
+    // biome-ignore lint/suspicious/noThenProperty: mirrors the AST field; plain data, never awaited
+    then: aExpr(e.thenE),
+    else: aExpr(e.elseE),
+    span: e.span,
+  }),
   EMatch: (e) => ({
     kind: "match",
     scrutinee: aExpr(e.scrutinee),
@@ -430,6 +449,8 @@ const cases: Record<string, string> = {
   "nested switch in let-in body":
     "let f = x => let y = switch x { | Some(v) => v | None => 0 } in add(y, 1)",
   "empty params lambda calling a ctor": "let mk = () => Some({ tok: 1, at: (2, 3) })",
+  "ternary, chained and nested (ADR 0016)":
+    'let a = gt(x, 0) ? 1 : lt(x, 0) ? -1 : 0\nlet b = x |> f ? "y" : "n"\nlet c = (p ? q : r) ? 1 : 2\nlet m = #{ true ? 1 : 2 : "v" }',
 };
 
 for (const [name, src] of Object.entries(cases)) {
@@ -466,6 +487,7 @@ const errorCases: Record<string, string> = {
   "export non-decl": "export switch",
   "unclosed record": "let r = { x: 1",
   "ctor field needs a type": "type T = | K(:)",
+  "ternary missing colon": "let r = true ? 1",
 };
 
 for (const [name, src] of Object.entries(errorCases)) {

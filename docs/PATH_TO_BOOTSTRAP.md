@@ -80,8 +80,12 @@ record fields may nest, lazy-List patterns may not. Guard:
   pure position-threading. `let?` would flatten exactly those. Worth doing
   before Slice E (infer threads two states, not one), not urgent for D.
   The louder Slice D signal was **bool-switch ceremony**: ~25 of parser.al's
-  switches are `switch cond { | true => … | false => … }` — a ternary /
-  if-expression cuts noise everywhere (requested; next slice).
+  switches were `switch cond { | true => … | false => … }`.
+  ~~a ternary / if-expression cuts noise everywhere~~ **DONE** (ADR 0016) —
+  `cond ? then : else` shipped; 38 bool-switches across lexer.al/parser.al
+  became ternaries (differential suites pin the behavior). Found in passing:
+  ctor field labels named after JS reserved words (`else`) miscompile — the
+  `thenE`/`elseE` dodge in parser.al, same family as `fieldType`.
 - **Record update sugar** (`{ ...r, field: v }` as an expression) — `infer`
   threads state records; rebuilding every field by hand is noise.
 - ~~**Pattern guards**~~ **DONE** (ADR 0013) — `| p when expr => body`; nearly

@@ -83,6 +83,11 @@ const genExpr = (e: Expr): string =>
     )
     // desugar inline: a |> f  →  f(a)
     .with({ kind: "pipe" }, (p) => `${genCallee(p.right)}(${genExpr(p.left)})`)
+    // Always parenthesized, so the output nests safely in any JS position.
+    .with(
+      { kind: "ternary" },
+      (t) => `(${genExpr(t.cond)} ? ${genExpr(t.then)} : ${genExpr(t.else)})`,
+    )
     .with({ kind: "match" }, genMatch)
     .with({ kind: "record" }, (r) =>
       r.fields.length === 0
@@ -468,6 +473,10 @@ const usesMatchLib = (e: Expr): boolean =>
     .with({ kind: "letin" }, (l) => usesMatchLib(l.value) || usesMatchLib(l.body))
     .with({ kind: "pipe" }, (p) => usesMatchLib(p.left) || usesMatchLib(p.right))
     .with(
+      { kind: "ternary" },
+      (t) => usesMatchLib(t.cond) || usesMatchLib(t.then) || usesMatchLib(t.else),
+    )
+    .with(
       { kind: "match" },
       (m) =>
         !isListMatch(m) ||
@@ -509,6 +518,11 @@ const exprRefs = (e: Expr, acc: Set<string>): void => {
     .with({ kind: "pipe" }, (p) => {
       exprRefs(p.left, acc);
       exprRefs(p.right, acc);
+    })
+    .with({ kind: "ternary" }, (t) => {
+      exprRefs(t.cond, acc);
+      exprRefs(t.then, acc);
+      exprRefs(t.else, acc);
     })
     .with({ kind: "match" }, (m) => {
       exprRefs(m.scrutinee, acc);

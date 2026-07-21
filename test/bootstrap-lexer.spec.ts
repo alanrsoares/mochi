@@ -75,6 +75,7 @@ const TAG_TO_T: Record<string, string> = {
   THash: "hash",
   TDot: "dot",
   TColon: "colon",
+  TQuestion: "question",
   TComma: "comma",
   TEof: "eof",
 };

@@ -27,6 +27,7 @@ export type Tok =
   | { t: "hash" } // # — Map sigil (#{...})
   | { t: "dot" } // .
   | { t: "colon" } // :
+  | { t: "question" } // ? (ternary)
   | { t: "comma" }
   | { t: "num"; v: number; raw: string } // raw source lexeme, so `3.0`/`-3` survive re-printing
   | { t: "bool"; v: boolean } // true / false
@@ -70,6 +71,7 @@ const PUNCT: Record<string, Tok | undefined> = {
   ",": { t: "comma" },
   ".": { t: "dot" },
   ":": { t: "colon" },
+  "?": { t: "question" },
   "@": { t: "at" },
   "#": { t: "hash" },
 };

@@ -55,7 +55,13 @@ const expr = (e: Expr, ind: string): string => {
     case "lambda":
       return `${params(e.params)} => ${expr(e.body, ind)}`;
     case "pipe":
-      return `${expr(e.left, ind)} |> ${expr(e.right, ind)}`;
+      return `${operand(e.left, ind)} |> ${operand(e.right, ind)}`;
+    // Right-associative: a bare else-chain reprints flat; a ternary in cond
+    // position must keep its parens or the reprint would reparse differently.
+    case "ternary": {
+      const cond = e.cond.kind === "ternary" ? `(${expr(e.cond, ind)})` : expr(e.cond, ind);
+      return `${cond} ? ${expr(e.then, ind)} : ${expr(e.else, ind)}`;
+    }
     case "record":
       return e.fields.length === 0
         ? "{}"
@@ -79,11 +85,17 @@ const expr = (e: Expr, ind: string): string => {
   }
 };
 
-// A lambda in callee or member position needs parentheses.
+// A lambda in callee or member position needs parentheses. A ternary does too
+// (it binds looser than everything), and in pipe-operand position — a bare
+// `a ? b : c |> f` would reparse with the ternary swallowing the pipe.
 const callee = (e: Expr, ind: string): string =>
-  e.kind === "lambda" ? `(${expr(e, ind)})` : expr(e, ind);
+  e.kind === "lambda" || e.kind === "ternary" ? `(${expr(e, ind)})` : expr(e, ind);
 const member = (e: Expr, ind: string): string =>
-  e.kind === "lambda" || e.kind === "record" ? `(${expr(e, ind)})` : expr(e, ind);
+  e.kind === "lambda" || e.kind === "record" || e.kind === "ternary"
+    ? `(${expr(e, ind)})`
+    : expr(e, ind);
+const operand = (e: Expr, ind: string): string =>
+  e.kind === "ternary" ? `(${expr(e, ind)})` : expr(e, ind);
 
 const pattern = (p: Pattern): string => {
   switch (p.kind) {

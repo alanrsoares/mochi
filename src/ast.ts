@@ -13,6 +13,9 @@ export type Expr =
   // top-level `let`. `nameSpan` anchors the bound name for hover/inlay.
   | { kind: "letin"; name: string; nameSpan: Span; value: Expr; body: Expr; span: Span } // let x = v in b
   | { kind: "pipe"; left: Expr; right: Expr; span: Span } // a |> f
+  // cond ? then : else — the boolean conditional as an expression (ADR 0016).
+  // Right-associative, binds looser than `|>`; branches are full expressions.
+  | { kind: "ternary"; cond: Expr; then: Expr; else: Expr; span: Span }
   | { kind: "match"; scrutinee: Expr; arms: MatchArm[]; span: Span } // switch x { | p => e }
   | { kind: "record"; fields: Field[]; span: Span } // { x: 1, y: 2 }
   | { kind: "field"; target: Expr; name: string; span: Span } // p.x
@@ -125,6 +128,7 @@ export type Stmt =
 // inline `Extract<Expr, { kind: "…" }>` so the discriminant shape stays out of
 // call sites (and the `no-inline-struct-type` lint stays green).
 export type LambdaExpr = Extract<Expr, { kind: "lambda" }>;
+export type TernaryExpr = Extract<Expr, { kind: "ternary" }>;
 export type LetInExpr = Extract<Expr, { kind: "letin" }>;
 export type MatchExpr = Extract<Expr, { kind: "match" }>;
 export type FieldExpr = Extract<Expr, { kind: "field" }>;

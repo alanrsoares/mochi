@@ -14,6 +14,7 @@ import type {
   MatchExpr,
   Pattern,
   Program,
+  TernaryExpr,
   TypeExpr,
 } from "./ast";
 import { type AlangError, typeErr } from "./errors";
@@ -186,6 +187,21 @@ const infer = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
   return r;
 };
 
+// cond ? then : else — cond is bool, the branches share one type.
+const inferTernary = (e: TernaryExpr, ctx: Ctx): Result<Type, AlangError> => {
+  const condT = infer(e.cond, ctx);
+  if (isErr(condT)) return condT;
+  const condU = u(condT.value, tBool, ctx, e.cond.span);
+  if (isErr(condU)) return condU;
+  const thenT = infer(e.then, ctx);
+  if (isErr(thenT)) return thenT;
+  const elseT = infer(e.else, ctx);
+  if (isErr(elseT)) return elseT;
+  const uni = u(thenT.value, elseT.value, ctx, e.else.span);
+  if (isErr(uni)) return uni;
+  return ok(thenT.value);
+};
+
 const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
   switch (e.kind) {
     case "num":
@@ -270,6 +286,9 @@ const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
       // a |> f  ≡  f(a)
       return infer({ kind: "call", fn: e.right, args: [e.left], span: e.span }, ctx);
     }
+
+    case "ternary":
+      return inferTernary(e, ctx);
 
     case "record": {
       let row: Row = rEmpty; // a literal is closed — exactly these fields
@@ -665,6 +684,11 @@ const freeRefs = (e: Expr, bound: Set<string>, acc: Set<string>): void => {
     case "pipe":
       freeRefs(e.left, bound, acc);
       freeRefs(e.right, bound, acc);
+      return;
+    case "ternary":
+      freeRefs(e.cond, bound, acc);
+      freeRefs(e.then, bound, acc);
+      freeRefs(e.else, bound, acc);
       return;
     case "match":
       freeRefs(e.scrutinee, bound, acc);

@@ -83,6 +83,11 @@ function forEachMatch(e: Expr, visit: (m: MatchExpr) => void): void {
       forEachMatch(e.left, visit);
       forEachMatch(e.right, visit);
       return;
+    case "ternary":
+      forEachMatch(e.cond, visit);
+      forEachMatch(e.then, visit);
+      forEachMatch(e.else, visit);
+      return;
     case "match":
       forEachMatch(e.scrutinee, visit);
       for (const a of e.arms) {

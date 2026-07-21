@@ -167,6 +167,15 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
       const right = parseAtomOrCall();
       left = { kind: "pipe", left, right, span: spanning(left.span, right.span) };
     }
+    // cond ? then : else — binds looser than `|>`, right-associative via the
+    // recursive parseExpr in the else branch (`a ? x : b ? y : z` chains).
+    if (peek().t === "question") {
+      next(); // consume ?
+      const then = parseExpr();
+      expect("colon");
+      const els = parseExpr();
+      return { kind: "ternary", cond: left, then, else: els, span: spanning(left.span, els.span) };
+    }
     return left;
   }
 
