@@ -125,6 +125,7 @@ const cExpr = (e: Expr): Canon => {
       return {
         kind: "record",
         fields: e.fields.map((f) => ({ name: f.name, value: cExpr(f.value) })),
+        spread: e.spread ? cExpr(e.spread) : null,
         span: cSpan(e.span),
       };
     case "field":
@@ -308,6 +309,7 @@ const A_EXPR: Record<string, (e: Al) => Canon> = {
   ERecord: (e) => ({
     kind: "record",
     fields: e.fields.map((f: Al) => ({ name: f.name, value: aExpr(f.value) })),
+    spread: opt(e.spread, aExpr),
     span: e.span,
   }),
   EField: (e) => ({ kind: "field", target: aExpr(e.target), name: e.name, span: e.span }),
@@ -486,6 +488,8 @@ const cases: Record<string, string> = {
   "string interpolation, nested and multi-hole (ADR 0023)":
     // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
     'let a = "hello ${name}"\nlet b = "${a}-${b}-${c}"\nlet c = "outer ${ "inner ${x}" } end"',
+  "record update, bare and with fields (ADR 0021)":
+    "let a = { ...base }\nlet b = { ...base, x: 1 }\nlet c = { ...base, x: 1, y: 2 }",
 };
 
 for (const [name, src] of Object.entries(cases)) {
@@ -525,6 +529,8 @@ const errorCases: Record<string, string> = {
   "ternary missing colon": "let r = true ? 1",
   "let? missing eq": "let r = let? x 1 in Ok(x)",
   "let? missing in": "let r = let? x = f(1) Ok(x)",
+  "non-leading spread (ADR 0021)": "let r = { x: 1, ...base }",
+  "multiple spreads (ADR 0021)": "let r = { ...a, ...b }",
 };
 
 for (const [name, src] of Object.entries(errorCases)) {

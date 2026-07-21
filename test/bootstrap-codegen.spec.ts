@@ -118,6 +118,9 @@ const cases: Record<string, string> = {
   "interp: literal chunk needing re-escaping (backslash/backtick/${)":
     // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
     'let s = "a\\\\b`c ${x} d\\${e}"',
+  // ADR 0021 — record update -> native JS object spread.
+  "record update: bare spread": "let base = { x: 1 }\nlet r = { ...base }",
+  "record update: spread with fields": "let base = { x: 1, y: 2 }\nlet r = { ...base, x: 3 }",
 };
 
 for (const [name, src] of Object.entries(cases)) {

@@ -170,6 +170,12 @@ const cases: Record<string, { src: string; ok: boolean }> = {
     src: "type C = | R | G\nlet f = c => switch c { | R => switch c { | R => 1 } | G => 2 }",
     ok: false,
   },
+  // ADR 0021 — record update: checkExpr must fold into the spread expr, not
+  // just the fields.
+  "record update spread expr checked": {
+    src: "type C = | R | G\nlet f = c => { ...{ x: switch c { | R => 1 } }, y: 2 }",
+    ok: false,
+  },
 };
 
 for (const [name, { src, ok }] of Object.entries(cases)) {

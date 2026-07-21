@@ -237,6 +237,20 @@ const cases: Record<string, { src: string; ok: boolean }> = {
     src: 'extern parseNum : string -> Result number string = "m" "p"\nlet f = s => let? n = parseNum(s) in Ok(add(n, 1))',
     ok: true,
   },
+  // ADR 0021 — record update is update-only: base type returned, wrong-typed
+  // or base-absent fields rejected.
+  "record update: base type returned": {
+    src: "let base = { x: 1, y: 2 }\nlet r = { ...base, x: 3 }",
+    ok: true,
+  },
+  "record update: wrong-typed field rejected": {
+    src: 'let base = { x: 1, y: 2 }\nlet r = { ...base, x: "s" }',
+    ok: false,
+  },
+  "record update: field absent from closed base rejected": {
+    src: "let base = { x: 1 }\nlet r = { ...base, y: 2 }",
+    ok: false,
+  },
 };
 
 for (const [name, { src, ok }] of Object.entries(cases)) {

@@ -326,7 +326,7 @@ type Expr =
   | EPipe(left: Expr, right: Expr, span: Span)
   | ETernary(cond: Expr, thenE: Expr, elseE: Expr, span: Span)
   | EMatch(scrutinee: Expr, arms: [MatchArm], span: Span)
-  | ERecord(fields: [Field], span: Span)
+  | ERecord(fields: [Field], spread: Option Expr, span: Span)
   | EField(target: Expr, name: string, span: Span)
   | ETuple(elements: [Expr], span: Span)
   | EArr(elements: [Expr], span: Span)
@@ -376,7 +376,7 @@ let exprSpan = e => switch e {
   | EPipe(_, _, sp) => sp
   | ETernary(_, _, _, sp) => sp
   | EMatch(_, _, sp) => sp
-  | ERecord(_, sp) => sp
+  | ERecord(_, _, sp) => sp
   | EField(_, _, sp) => sp
   | ETuple(_, sp) => sp
   | EArr(_, sp) => sp
@@ -595,6 +595,17 @@ let inferRecordRow = (fields, ctx, st) => switch fields {
       Ok((rExtend(f.name, ft, restRow), st2))
 }
 
+// Rebuild a closed row (ending `RowEmpty`) onto a different tail — reuses the
+// (label, fieldType) pairs a record literal already inferred rather than
+// re-inferring field values a second time. Used by the update-typing case
+// below to turn the literal's closed row into the open `req` row a `...base`
+// must unify against (ADR 0021).
+let rWithTail = (row, tail) => switch row {
+  | RowEmpty => tail
+  | RowVar(id) => rVar(id)
+  | RowExtend(label, fieldType, rest) => rExtend(label, fieldType, rWithTail(rest, tail))
+}
+
 // duck-typed record field access: target's type unifies against an open row
 // with `name` in it, unless target is a bare namespace ref (`List.map`) —
 // then it's a qualified lookup into ctx.ns, not row inference.
@@ -711,9 +722,21 @@ let inferExpr = (e, ctx, st) => switch e {
       inferCallArgs(fnT, args, ctx, st1)
   | EPipe(left, right, sp) => inferExpr(ECall(right, [left], sp), ctx, st)
   | ETernary(cond, thenE, elseE, _) => inferTernary(cond, thenE, elseE, ctx, st)
-  | ERecord(fields, _) =>
-      let? (row, st1) = inferRecordRow(fields, ctx, st) in
-      Ok((tRecord(row), st1))
+  | ERecord(fields, spread, sp) => switch spread {
+      | None =>
+          let? (row, st1) = inferRecordRow(fields, ctx, st) in
+          Ok((tRecord(row), st1))
+      // Update (`{ ...base, f: v }`): the base must already carry each listed
+      // field at its value's type (extra base fields flow through the fresh
+      // tail). Result type = base type — fields are replaced in-kind, so a
+      // wrong-typed value or a field absent from a closed base fails to unify.
+      | Some(spreadExpr) =>
+          let? (row, st1) = inferRecordRow(fields, ctx, st) in
+          let? (baseT, st2) = inferExpr(spreadExpr, ctx, st1) in
+          let (tailVar, st3) = freshRowVar(st2) in
+          let? st4 = u(baseT, tRecord(rWithTail(row, tailVar)), st3, sp) in
+          Ok((baseT, st4))
+    }
   | EField(target, name, sp) => switch target {
       | ERef(tname, _) => and(Map.has(tname, ctx.ns), not(Map.has(tname, ctx.env)))
           ? inferNsField(tname, name, sp, ctx, st)
@@ -1016,7 +1039,8 @@ let freeRefs = (e, bound, acc) => switch e {
   | EPipe(left, right, _) => freeRefs(right, bound, freeRefs(left, bound, acc))
   | ETernary(cond, thenE, elseE, _) => freeRefs(elseE, bound, freeRefs(thenE, bound, freeRefs(cond, bound, acc)))
   | EMatch(scrutinee, arms, _) => freeRefsArms(arms, bound, freeRefs(scrutinee, bound, acc))
-  | ERecord(fields, _) => freeRefsFields(fields, bound, acc)
+  | ERecord(fields, spread, _) =>
+      freeRefsFields(fields, bound, switch spread { | Some(s) => freeRefs(s, bound, acc) | None => acc })
   | EField(target, _, _) => freeRefs(target, bound, acc)
   | ETuple(elements, _) => freeRefsList(elements, bound, acc)
   | EArr(elements, _) => freeRefsList(elements, bound, acc)

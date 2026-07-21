@@ -83,7 +83,10 @@ type Expr =
   // emitted parameter names (same dodge as CtorField's `fieldType`).
   | ETernary(cond: Expr, thenE: Expr, elseE: Expr, span: Span)
   | EMatch(scrutinee: Expr, arms: [MatchArm], span: Span)
-  | ERecord(fields: [Field], span: Span)
+  // `spread` (ADR 0021): a leading `...base` makes this an update — `{ ...base,
+// x: 1 }`. TS: an optional `spread?: Expr` field — alang has no optional
+// record fields, so `Option Expr`.
+| ERecord(fields: [Field], spread: Option Expr, span: Span)
   | EField(target: Expr, name: string, span: Span)
   | ETuple(elements: [Expr], span: Span)
   | EArr(elements: [Expr], span: Span)
@@ -254,7 +257,7 @@ let exprSpan = e => switch e {
   | EPipe(_, _, sp) => sp
   | ETernary(_, _, _, sp) => sp
   | EMatch(_, _, sp) => sp
-  | ERecord(_, sp) => sp
+  | ERecord(_, _, sp) => sp
   | EField(_, _, sp) => sp
   | ETuple(_, sp) => sp
   | EArr(_, sp) => sp
@@ -427,12 +430,23 @@ let parseField = (toks, pos) =>
   let? (value, p3) = parseExpr(toks, p2) in
   Ok(({ name: nm.name, value: value }, p3))
 
+// A leading `...base` (ADR 0021) makes this a record update: only one spread,
+// only at the front; any fields after it need a comma (mirrors src/parser.ts's
+// parseRecord). A stray/trailing/second `...` falls through to parseField's
+// expectId and fails there — same error + span as the TS parser, no bespoke
+// handling needed.
 let parseRecord = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in
   let? p = expectTok(TLbrace, toks, pos) in
-  let? (fields, p2) = listUntil(TRbrace, parseField, toks, p) in
-  let? p3 = expectTok(TRbrace, toks, p2) in
-  Ok((ERecord(fields, toEnd(start, toks, p3)), p3))
+  eq((tokAt(toks, p)).tok, TSpread)
+    ? let? (spreadExpr, p1) = parseExpr(toks, add(p, 1)) in
+      let? p2 = eq((tokAt(toks, p1)).tok, TRbrace) ? Ok(p1) : expectTok(TComma, toks, p1) in
+      let? (fields, p3) = listUntil(TRbrace, parseField, toks, p2) in
+      let? p4 = expectTok(TRbrace, toks, p3) in
+      Ok((ERecord(fields, Some(spreadExpr), toEnd(start, toks, p4)), p4))
+    : let? (fields, p1) = listUntil(TRbrace, parseField, toks, p) in
+      let? p2 = expectTok(TRbrace, toks, p1) in
+      Ok((ERecord(fields, None, toEnd(start, toks, p2)), p2))
 
 let parseArr = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in

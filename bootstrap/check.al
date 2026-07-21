@@ -41,7 +41,7 @@ type Expr =
   | EPipe(left: Expr, right: Expr, span: Span)
   | ETernary(cond: Expr, thenE: Expr, elseE: Expr, span: Span)
   | EMatch(scrutinee: Expr, arms: [MatchArm], span: Span)
-  | ERecord(fields: [Field], span: Span)
+  | ERecord(fields: [Field], spread: Option Expr, span: Span)
   | EField(target: Expr, name: string, span: Span)
   | ETuple(elements: [Expr], span: Span)
   | EArr(elements: [Expr], span: Span)
@@ -123,7 +123,7 @@ let exprSpan = e => switch e {
   | EPipe(_, _, sp) => sp
   | ETernary(_, _, _, sp) => sp
   | EMatch(_, _, sp) => sp
-  | ERecord(_, sp) => sp
+  | ERecord(_, _, sp) => sp
   | EField(_, _, sp) => sp
   | ETuple(_, sp) => sp
   | EArr(_, sp) => sp
@@ -402,7 +402,9 @@ let checkExpr = (e, reg) => switch e {
           (switch a.guard { | Some(g) => checkExpr(g, reg) | None => None })
           |> Option.orElse(checkExpr(a.body, reg)), arms))
       |> Option.orElse(checkMatch(arms, sp, reg))
-  | ERecord(fields, _) => firstSome(f => checkExpr(f.value, reg), fields)
+  | ERecord(fields, spread, _) =>
+    (switch spread { | Some(s) => checkExpr(s, reg) | None => None })
+      |> Option.orElse(firstSome(f => checkExpr(f.value, reg), fields))
   | EField(target, _, _) => checkExpr(target, reg)
   | ETuple(elements, _) => firstSome(el => checkExpr(el, reg), elements)
   | EArr(elements, _) => firstSome(el => checkExpr(el, reg), elements)

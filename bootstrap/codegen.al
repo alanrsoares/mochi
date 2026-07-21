@@ -39,7 +39,7 @@ type Expr =
   | EPipe(left: Expr, right: Expr, span: Span)
   | ETernary(cond: Expr, thenE: Expr, elseE: Expr, span: Span)
   | EMatch(scrutinee: Expr, arms: [MatchArm], span: Span)
-  | ERecord(fields: [Field], span: Span)
+  | ERecord(fields: [Field], spread: Option Expr, span: Span)
   | EField(target: Expr, name: string, span: Span)
   | ETuple(elements: [Expr], span: Span)
   | EArr(elements: [Expr], span: Span)
@@ -197,10 +197,18 @@ let genExpr = (e, ctx) => switch e {
   | ETernary(cond, thenE, elseE, _) =>
       cat(["(", genExpr(cond, ctx), " ? ", genExpr(thenE, ctx), " : ", genExpr(elseE, ctx), ")"])
   | EMatch(scrutinee, arms, _) => genMatch(scrutinee, arms, ctx)
-  | ERecord(fields, _) =>
-      eq(Array.length(fields), 0)
-        ? "{}"
-        : cat(["{ ", Str.join(", ", fields |> map(f => cat([f.name, ": ", genExpr(f.value, ctx)]))), " }"])
+  // `{ ...base, f: v }` (ADR 0021) -> native JS object spread; `parts.length
+  // === 0` (bare `{}`) is only possible with no spread and no fields.
+  | ERecord(fields, spread, _) =>
+      let fieldStrs = Str.join(", ", fields |> map(f => cat([f.name, ": ", genExpr(f.value, ctx)]))) in
+      switch spread {
+        | None => eq(Array.length(fields), 0) ? "{}" : cat(["{ ", fieldStrs, " }"])
+        | Some(s) =>
+            let spreadStr = cat(["...", genExpr(s, ctx)]) in
+            eq(Array.length(fields), 0)
+              ? cat(["{ ", spreadStr, " }"])
+              : cat(["{ ", spreadStr, ", ", fieldStrs, " }"])
+      }
   | EField(target, name, _) =>
       switch nsRuntimeId(target, name, ctx) {
         | Some(rt) => rt
@@ -243,7 +251,7 @@ let genCallee = (e, ctx) => switch e {
 
 // A record or lambda in member-target position needs parens: `({...}).x`.
 let genMember = (e, ctx) => switch e {
-  | ERecord(_, _) => cat(["(", genExpr(e, ctx), ")"])
+  | ERecord(_, _, _) => cat(["(", genExpr(e, ctx), ")"])
   | ELambda(_, _, _) => cat(["(", genExpr(e, ctx), ")"])
   | _ => genExpr(e, ctx)
 }
@@ -251,7 +259,7 @@ let genMember = (e, ctx) => switch e {
 // A record literal as a concise arrow body must be parenthesized, else JS
 // parses `=> { ... }` as a statement block: `=> ({ x: 1 })`.
 let genLambdaBody = (e, ctx) => switch e {
-  | ERecord(_, _) => cat(["(", genExpr(e, ctx), ")"])
+  | ERecord(_, _, _) => cat(["(", genExpr(e, ctx), ")"])
   | _ => genExpr(e, ctx)
 }
 
@@ -659,7 +667,8 @@ let usesMatchLib = e => switch e {
   | ETernary(cond, thenE, elseE, _) => or(usesMatchLib(cond), or(usesMatchLib(thenE), usesMatchLib(elseE)))
   | EMatch(scrutinee, arms, _) =>
       or(not(isListMatch(arms)), or(usesMatchLib(scrutinee), someOf(usesMatchLibArm, arms)))
-  | ERecord(fields, _) => someOf(f => usesMatchLib(f.value), fields)
+  | ERecord(fields, spread, _) =>
+      or(switch spread { | Some(s) => usesMatchLib(s) | None => false }, someOf(f => usesMatchLib(f.value), fields))
   | EField(target, _, _) => usesMatchLib(target)
   | ETuple(elements, _) => someOf(usesMatchLib, elements)
   | EArr(elements, _) => someOf(usesMatchLib, elements)
@@ -720,7 +729,8 @@ let exprRefs = (e, ctx, acc) => switch e {
         someOf(a => switch a.pattern { | PList(_, Some(PBind(_, _)), _) => true | _ => false }, arms)
           ? Set.add("_list", acc1) : acc1 in
       exprRefsArmsFrom(arms, 0, ctx, acc2)
-  | ERecord(fields, _) => exprRefsFieldsFrom(fields, 0, ctx, acc)
+  | ERecord(fields, spread, _) =>
+      exprRefsFieldsFrom(fields, 0, ctx, switch spread { | Some(s) => exprRefs(s, ctx, acc) | None => acc })
   | EField(target, name, _) =>
       switch nsRuntimeId(target, name, ctx) {
         | Some(rt) => Set.add(rt, acc) // its runtime deps get pulled in by preludePreamble's closure
