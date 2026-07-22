@@ -64,6 +64,7 @@ What else was on the table and why not.
 | [0038](0038-throwing-otherwise-for-array-partitions.md) | Array-partition matches close with a throwing `.otherwise` (TS backend) | Accepted |
 | [0039](0039-concrete-annotation-for-nullary-ctors.md) | Parametric nullary constructors annotate concretely in place (TS backend) | Accepted |
 | [0040](0040-generalize-under-the-substitution.md) | Generalize under the current substitution — sound row generalization | Accepted |
+| [0041](0041-bound-vars-opaque-in-freeinscheme.md) | A scheme's bound vars are opaque when reading its free vars | Accepted |
 
 
 ## Backlog (well-evidenced, not yet written)

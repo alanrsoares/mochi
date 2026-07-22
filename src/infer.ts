@@ -104,18 +104,71 @@ const freeInType = (t: Type): VarSets => {
   return acc;
 };
 
-// Free vars of a scheme UNDER the current substitution. Zonking first is
-// essential: an env binding minted `mono('t)` whose var was later unified to a
-// record `{ … | 'r }` still reads as the bare `'t` in the scheme, hiding `'r`.
-// If `generalize` then treats `'r` as free (not env-bound) it QUANTIFIES a row
-// var the environment already constrains — an unsound over-generalization that
-// makes a monomorphic local (e.g. a Tarjan-state `let`) spuriously polymorphic,
-// which the TS backend surfaces as a leaked `& A` (ADR 0040).
+// Free vars of a scheme UNDER the current substitution, treating the scheme's
+// own quantified vars as OPAQUE (resolution stops at them). Two hazards to
+// thread between:
+//
+//   1. A `mono('t)` binding whose var was later unified to `{ … | 'r }` reads as
+//      the bare `'t` in its scheme, hiding `'r`. Resolving through the subst is
+//      essential — else `generalize` treats `'r` as free (not env-bound) and
+//      QUANTIFIES a row var the environment already constrains: an unsound
+//      over-generalization that makes a monomorphic local spuriously polymorphic
+//      and leaks a `& A` in the TS backend (ADR 0040). Mono schemes bind nothing,
+//      so nothing is opaque and the walk resolves fully — the ADR 0040 fix.
+//
+//   2. A *generalized* scheme's bound var may itself be a subst key (an unsound
+//      over-generalization elsewhere left it bound). Zonking would expand it and
+//      leak the binding's inner vars as false-free, suppressing a sibling's
+//      legitimate generalization (ADR 0041). A scheme's bound vars have no
+//      identity outside the scheme, so stopping at them is exactly correct: the
+//      scheme's declared interface says the caller picks them, so they impose no
+//      constraint the sibling must respect.
 const freeInScheme = (sc: Scheme, s: Subst): VarSets => {
-  const f = freeInType(zonk(sc.type, s));
-  for (const v of sc.vars) f.tv.delete(v);
-  for (const v of sc.rvars) f.rv.delete(v);
-  return f;
+  const bt = new Set(sc.vars);
+  const br = new Set(sc.rvars);
+  const acc: VarSets = { tv: new Set(), rv: new Set() };
+  const walk = (t: Type): void => {
+    let cur = t;
+    while (cur.kind === "var") {
+      if (bt.has(cur.id)) return; // opaque bound var
+      const next = s.tvars.get(cur.id);
+      if (!next) {
+        acc.tv.add(cur.id);
+        return;
+      }
+      cur = next;
+    }
+    switch (cur.kind) {
+      case "con":
+        cur.args.forEach(walk);
+        return;
+      case "arrow":
+        walk(cur.from);
+        walk(cur.to);
+        return;
+      case "record":
+        walkRow(cur.row);
+        return;
+    }
+  };
+  const walkRow = (row: Row): void => {
+    let cur = row;
+    while (cur.kind === "rvar") {
+      if (br.has(cur.id)) return; // opaque bound row var
+      const next = s.rvars.get(cur.id);
+      if (!next) {
+        acc.rv.add(cur.id);
+        return;
+      }
+      cur = next;
+    }
+    if (cur.kind === "extend") {
+      walk(cur.type);
+      walkRow(cur.rest);
+    }
+  };
+  walk(sc.type);
+  return acc;
 };
 
 const freeInEnv = (env: Env, s: Subst): VarSets => {
