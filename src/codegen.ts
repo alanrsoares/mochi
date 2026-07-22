@@ -63,6 +63,11 @@ let annotateCtor: ((s: TypeStmt, c: Ctor) => CtorFactoryTs | null) | null = null
 // Off for the JS backend, which stays byte-identical.
 let flattenPipe = false;
 
+// Extension for cross-module import specifiers: `.js` for the JS backend (the
+// compiled sibling), `""` for the TS backend (`import … from "./mod"`, which
+// tsc/bundlers resolve to the sibling `.ts`). Set per `codegen` call.
+let moduleExt = ".js";
+
 // The field keys of a module's EXPORTED ctors — threaded into an importer's
 // `codegen` so a pattern on an imported variant destructures the right runtime
 // keys (`Some(value: a)` → `{ value }`, not the positional `{ _0 }`).
@@ -521,7 +526,7 @@ const genExtern = (s: ExternStmt): string => {
 // name the `.al` module (with or without extension); output targets `.js`.
 const genImport = (s: ImportStmt): string => {
   const names = s.names.map((n) => n.name).join(", ");
-  const path = `${s.from.replace(/\.al$/, "")}.js`;
+  const path = `${s.from.replace(/\.al$/, "")}${moduleExt}`;
   return `import { ${names} } from ${JSON.stringify(path)};`;
 };
 
@@ -717,6 +722,7 @@ export type CodegenOptions = {
   annotate?: (name: string, value: Expr) => string | null;
   annotateCtor?: (s: TypeStmt, c: Ctor) => CtorFactoryTs | null;
   flattenPipe?: boolean;
+  moduleExt?: string;
 };
 
 export const codegen = (
@@ -728,6 +734,7 @@ export const codegen = (
   annotateLet = opts.annotate ?? null;
   annotateCtor = opts.annotateCtor ?? null;
   flattenPipe = opts.flattenPipe ?? false;
+  moduleExt = opts.moduleExt ?? ".js";
   for (const s of prog.stmts)
     if (s.kind === "type") for (const c of s.ctors) ctorKeys.set(c.name, keysOf(c.fields));
   // Seed builtin variant ctor keys (Some/Ok/…) unless the program declares its own.

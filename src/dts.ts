@@ -271,9 +271,35 @@ const declOf = (
   return sc && !s.name.startsWith("$") ? letDecl(s.name, sc, s.value, aliases) : null;
 };
 
-// Builtin variant type decls a program's binding types reference but that the
-// program does not itself declare (e.g. `Option<number>` from `Map.get`). Emitted
-// so those references resolve. Shared by the `.d.ts` writer and the `.ts` backend.
+// Type-constructor names referenced anywhere in a TypeExpr (`Option<Expr>` →
+// {Option}, nested included). Used to spot builtin unions named in ctor/alias
+// FIELD positions — inference-derived binding types alone miss those.
+const teConNames = (te: TypeExpr, acc: Set<string>): void => {
+  switch (te.kind) {
+    case "tname":
+      acc.add(te.name);
+      return;
+    case "tarrow":
+      teConNames(te.from, acc);
+      teConNames(te.to, acc);
+      return;
+    case "tapp":
+      acc.add(te.ctor);
+      for (const a of te.args) teConNames(a, acc);
+      return;
+    case "ttuple":
+      for (const e of te.elems) teConNames(e, acc);
+      return;
+    case "tlist":
+      teConNames(te.elem, acc);
+      return;
+  }
+};
+
+// Builtin variant type decls a program's types reference but that the program
+// does not itself declare (e.g. `Option<number>` from `Map.get`, or a variant
+// field typed `Option<Expr>`). Emitted so those references resolve. Shared by
+// the `.d.ts` writer and the `.ts` backend.
 export const referencedBuiltinTypeDecls = (
   prog: Program,
   schemeOf: (n: string) => Scheme | undefined,
@@ -281,9 +307,16 @@ export const referencedBuiltinTypeDecls = (
   const declared = new Set(prog.stmts.flatMap((s) => (s.kind === "type" ? [s.name] : [])));
   const referenced = new Set<string>();
   for (const s of prog.stmts) {
-    if (s.kind !== "let" || s.name.startsWith("$")) continue;
-    const sc = schemeOf(s.name);
-    if (sc) consIn(sc.type, referenced);
+    // Binding types (inference-derived) …
+    if (s.kind === "let" && !s.name.startsWith("$")) {
+      const sc = schemeOf(s.name);
+      if (sc) consIn(sc.type, referenced);
+    }
+    // … and type-decl field positions (`guard: Option<Expr>`).
+    if (s.kind === "type") {
+      for (const c of s.ctors) for (const f of c.fields) teConNames(f.type, referenced);
+      if (s.alias) for (const f of s.alias) teConNames(f.type, referenced);
+    }
   }
   return builtinTypeDecls
     .filter((bt) => referenced.has(bt.name) && !declared.has(bt.name))

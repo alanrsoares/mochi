@@ -9,7 +9,7 @@
 // the emitted `.ts` is strict-`tsc`-clean end to end. The import specifier is
 // configurable (`runtimeImport`), defaulting to the published package name.
 import { flatMap, isErr, map, ok, pipe, type Result } from "@onrails/result";
-import type { Expr } from "./ast";
+import type { Expr, Program } from "./ast";
 import { check } from "./check";
 import { codegen, collectRuntimeDeps } from "./codegen";
 import {
@@ -20,18 +20,79 @@ import {
   typeDecl,
 } from "./dts";
 import type { AlangError } from "./errors";
-import { inferProgramTypes } from "./infer";
+import { type Env, inferProgramTypes } from "./infer";
 import { lex } from "./lexer";
 import { parse } from "./parser";
 import { preludeEnv, preludeNamespaces } from "./prelude";
+import type { AliasDef } from "./types";
 
 export type CodegenTsOptions = { runtimeImport?: string };
 
-const DEFAULT_RUNTIME_IMPORT = "@alang/runtime";
+export const DEFAULT_RUNTIME_IMPORT = "@alang/runtime";
 
-// Runtime names the typed runtime module exports (everything except the builtin
-// ctors, which the emitted module names via its own `export type` header + the
-// runtime's factory exports). Imported, never inlined.
+// The inference result + cross-module wiring a module needs to emit its `.ts`.
+// A single file has empty `importLines`/`importedKeys`; a module in a graph
+// (build --emit=ts) supplies its dependency imports and destructure keys.
+export type TsEmitContext = {
+  env: Env;
+  aliases: AliasDef[];
+  importedKeys: Map<string, string[]>;
+  importLines: string[];
+  runtimeImport: string;
+};
+
+// Emit one module's typed `.ts` from a prepared context. Type header (referenced
+// builtin unions + this module's own `type` decls as `export type`), then any
+// cross-module imports, then the runtime import, then the codegen body with
+// per-binding / per-ctor annotations and pipe flattening. Pure — inference and
+// import resolution happen in the caller (`codegenTs` for a file, the graph
+// driver for `build --emit=ts`).
+export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
+  const aliasByName = new Map(ctx.aliases.map((a) => [a.name, a]));
+  const typeHeader = [
+    ...referencedBuiltinTypeDecls(prog, (n) => ctx.env.get(n)),
+    ...prog.stmts.flatMap((s) => {
+      if (s.kind !== "type") return [];
+      const a = aliasByName.get(s.name);
+      return [a ? aliasTsDecl(a) : typeDecl(s.name, s.params, s.ctors)];
+    }),
+  ];
+
+  const deps = collectRuntimeDeps(prog);
+  const runtimeLine = deps.length
+    ? `import { ${deps.join(", ")} } from ${JSON.stringify(ctx.runtimeImport)};`
+    : "";
+
+  // Annotate function-valued top-level lets. Lambda params are where TS inference
+  // is weakest (bare `(x) => …` infers `any` under strict) and where the
+  // generic/nominal signature pays off. A non-function polymorphic binding has no
+  // place to bind generics — dts renders its escaped vars as `unknown` — so
+  // annotating it would be worse than TS's own inference; skip it.
+  const annotate = (name: string, value: Expr): string | null => {
+    if (value.kind !== "lambda" || name.startsWith("$")) return null;
+    const sc = ctx.env.get(name);
+    return sc ? `: ${bindingTsType(sc, value, ctx.aliases)}` : null;
+  };
+
+  // Type each variant's ctor factories (return the variant type, params from the
+  // ctor's field TypeExprs — ADR 0015) so `Circle(2)` is a `Shape`, not `any`.
+  const body = codegen(prog, ctx.importedKeys, {
+    runtime: false,
+    annotate,
+    annotateCtor: (s, c) => ctorFactoryTs(s.name, s.params, c),
+    flattenPipe: true,
+    moduleExt: "", // `import … from "./mod"` — tsc resolves to the sibling `.ts`
+  });
+
+  const parts = [typeHeader.join("\n"), ctx.importLines.join("\n"), runtimeLine, body].filter(
+    (p) => p !== "",
+  );
+  return `${parts.join("\n\n")}\n`;
+};
+
+// Compile a single `.al` source to a typed `.ts` module (CLI `alang ts`). Open
+// world, no cross-module imports resolved — a file that imports from another
+// module won't typecheck alone; use `build --emit=ts` for a graph.
 export const codegenTs = (src: string, opts: CodegenTsOptions = {}): Result<string, AlangError> => {
   const r = pipe(
     lex(src),
@@ -50,46 +111,13 @@ export const codegenTs = (src: string, opts: CodegenTsOptions = {}): Result<stri
   );
   if (isErr(r)) return r;
   const { prog, env, aliases } = r.value;
-  const aliasByName = new Map(aliases.map((a) => [a.name, a]));
-
-  // Header: builtin unions referenced by the API (`Option<number>`, …) then each
-  // `type` decl as an `export type`. Sits alongside codegen's typed ctor
-  // factories — TS keeps type and value namespaces separate, so no clash.
-  const typeHeader = [
-    ...referencedBuiltinTypeDecls(prog, (n) => env.get(n)),
-    ...prog.stmts.flatMap((s) => {
-      if (s.kind !== "type") return [];
-      const a = aliasByName.get(s.name);
-      return [a ? aliasTsDecl(a) : typeDecl(s.name, s.params, s.ctors)];
+  return ok(
+    emitTsModule(prog, {
+      env,
+      aliases,
+      importedKeys: new Map(),
+      importLines: [],
+      runtimeImport: opts.runtimeImport ?? DEFAULT_RUNTIME_IMPORT,
     }),
-  ];
-
-  // Runtime import: the builtins the program uses, pulled from the typed module.
-  const deps = collectRuntimeDeps(prog);
-  const runtimeLine = deps.length
-    ? `import { ${deps.join(", ")} } from ${JSON.stringify(opts.runtimeImport ?? DEFAULT_RUNTIME_IMPORT)};`
-    : "";
-
-  // Annotate function-valued top-level lets. Lambda params are where TS inference
-  // is weakest (bare `(x) => …` infers `any` under strict) and where the
-  // generic/nominal signature pays off. A non-function polymorphic binding has no
-  // place to bind generics — dts renders its escaped vars as `unknown` — so
-  // annotating it would be worse than TS's own inference; skip it.
-  const annotate = (name: string, value: Expr): string | null => {
-    if (value.kind !== "lambda" || name.startsWith("$")) return null;
-    const sc = env.get(name);
-    return sc ? `: ${bindingTsType(sc, value, aliases)}` : null;
-  };
-
-  // Type each variant's ctor factories (return the variant type, params from the
-  // ctor's field TypeExprs — ADR 0015) so `Circle(2)` is a `Shape`, not `any`.
-  const body = codegen(prog, undefined, {
-    runtime: false,
-    annotate,
-    annotateCtor: (s, c) => ctorFactoryTs(s.name, s.params, c),
-    flattenPipe: true,
-  });
-
-  const parts = [typeHeader.join("\n"), runtimeLine, body].filter((p) => p !== "");
-  return ok(`${parts.join("\n\n")}\n`);
+  );
 };

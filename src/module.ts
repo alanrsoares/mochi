@@ -12,6 +12,7 @@ import { err, isErr, ok, type Result, ResultAsync } from "@onrails/result";
 import type { Program, Stmt } from "./ast";
 import { check, exportedRegistry, type Registry } from "./check";
 import { codegen, exportedCtorKeys } from "./codegen";
+import { DEFAULT_RUNTIME_IMPORT, emitTsModule } from "./codegen-ts";
 import { type AlangError, checkErr } from "./errors";
 import { type Env, inferProgramTypes, type Scheme } from "./infer";
 import { lex } from "./lexer";
@@ -171,6 +172,81 @@ export const buildModules = (
   readFile: ReadFile,
 ): ResultAsync<ModuleOutput[], AlangError> =>
   loadGraph(resolve(entry), readFile).andThen(compileGraph);
+
+export type BuildTsOptions = { runtimeImport?: string };
+
+// Like `compileGraph`, but emits a typed `.ts` per module (ADR 0026). Each
+// module is checked + inferred with its imported context, then emitted with two
+// extra ingredients over the single-file `codegenTs`: cross-module `import`
+// lines (the values each `import` names, plus the dep's exported TYPE names so
+// annotations referencing an imported variant resolve), and the imported ctor
+// field keys for pattern destructuring.
+const compileGraphTs = (
+  graph: Loaded[],
+  runtimeImport: string,
+): Result<ModuleOutput[], AlangError> => {
+  const exportsByPath = new Map<string, Env>();
+  const regByPath = new Map<string, Registry>();
+  const keysByPath = new Map<string, Map<string, string[]>>();
+  const outputs: ModuleOutput[] = [];
+
+  for (const { path, prog } of graph) {
+    const gathered = gatherImports(path, prog, exportsByPath, regByPath, keysByPath);
+    if (isErr(gathered)) return gathered;
+    const { imports, importedReg, importedKeys } = gathered.value;
+
+    const checked = check(prog, importedReg);
+    if (isErr(checked)) return checked;
+    const inferred = inferProgramTypes(prog, preludeEnv, {
+      open: true,
+      imports,
+      namespaces: preludeNamespaces,
+    });
+    if (isErr(inferred)) return inferred;
+
+    // Cross-module TYPE imports. The value imports (ctors/functions) are emitted
+    // by codegen's body already (with `moduleExt: ""`); here we add only the
+    // dep's exported type names as `import type`, so emitted annotations that
+    // mention an imported variant resolve. Skip type names this module declares.
+    const localTypes = new Set(
+      prog.stmts
+        .filter((s): s is Extract<Stmt, { kind: "type" }> => s.kind === "type")
+        .map((s) => s.name),
+    );
+    const importLines: string[] = [];
+    for (const imp of importsOf(prog)) {
+      const depReg = regByPath.get(resolveImport(path, imp.from));
+      const depTypes = depReg ? [...depReg.type.keys()].filter((t) => !localTypes.has(t)) : [];
+      if (depTypes.length)
+        importLines.push(
+          `import type { ${depTypes.join(", ")} } from ${JSON.stringify(imp.from.replace(/\.al$/, ""))};`,
+        );
+    }
+
+    const ts = emitTsModule(prog, {
+      env: inferred.value.env,
+      aliases: inferred.value.aliases,
+      importedKeys,
+      importLines,
+      runtimeImport,
+    });
+    exportsByPath.set(path, exportsOf(prog, inferred.value.env));
+    regByPath.set(path, exportedRegistry(prog));
+    keysByPath.set(path, exportedCtorKeys(prog));
+    outputs.push({ path, js: ts });
+  }
+  return ok(outputs);
+};
+
+// `build --emit=ts`: resolve the graph, emit a typed `.ts` beside each `.al`.
+export const buildModulesTs = (
+  entry: string,
+  readFile: ReadFile,
+  opts: BuildTsOptions = {},
+): ResultAsync<ModuleOutput[], AlangError> =>
+  loadGraph(resolve(entry), readFile).andThen((g) =>
+    compileGraphTs(g, opts.runtimeImport ?? DEFAULT_RUNTIME_IMPORT),
+  );
 
 // Resolve + compile only the DEPENDENCIES of `entry` (dependency order), then
 // return the context `entry` itself should be checked/inferred with. Unlike

@@ -56,3 +56,6 @@ docs/plan/
 
 # TS-backend differential test scratch (ADR 0026)
 test/.tsgen/
+
+# build --emit=ts differential scratch (ADR 0026)
+test/.tsgen-graph/

@@ -4,7 +4,7 @@ import { compile } from "./compile";
 import { emitDts } from "./dts";
 import { formatError } from "./errors";
 import { format } from "./format";
-import { buildModules } from "./module";
+import { buildModules, buildModulesTs } from "./module";
 
 const [cmd, ...rest] = process.argv.slice(2);
 
@@ -61,19 +61,23 @@ if (cmd === "fmt") {
     },
   );
 } else if (cmd === "build") {
-  // `build <entry.al>` compiles a module graph, writing a `.js` beside each `.al`.
-  const entry = rest[0];
+  // `build [--emit=ts] <entry.al>` compiles a module graph, writing a `.js`
+  // (default) or typed `.ts` (--emit=ts, ADR 0026) beside each `.al`.
+  const emitTs = rest.includes("--emit=ts");
+  const entry = rest.find((a) => !a.startsWith("-"));
   if (!entry) {
-    console.error("usage: bun src/cli.ts build <entry.al>");
+    console.error("usage: bun src/cli.ts build [--emit=ts] <entry.al>");
     process.exit(1);
   }
-  const result = await buildModules(entry, (p) => Bun.file(p).text());
+  const read = (p: string): Promise<string> => Bun.file(p).text();
+  const result = await (emitTs ? buildModulesTs(entry, read) : buildModules(entry, read));
   if (isErr(result)) {
     console.error(formatError(result.error));
     process.exit(1);
   }
+  const ext = emitTs ? ".ts" : ".js";
   for (const { path, js } of result.value) {
-    const out = path.replace(/\.al$/, ".js");
+    const out = path.replace(/\.al$/, ext);
     await Bun.write(out, js);
     console.error(`  ${out}`);
   }
