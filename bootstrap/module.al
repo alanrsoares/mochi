@@ -21,13 +21,78 @@ extern namespaceRuntime : Map string (Map string string) = "./prelude.gen.js" "n
 extern preludeJsDefs : Map string string = "./prelude.gen.js" "preludeJsDefs"
 extern runtimeDeps : Map string [string] = "./prelude.gen.js" "runtimeDeps"
 
+// Full AST, re-declared to match parser/check/infer/codegen. Only `SImport` is
+// destructured here (every other stmt flows opaquely to the passes), but the
+// CLOSED-WORLD build that ships `alangc` (cli.al → module.al → the passes)
+// unifies same-named variant types by structure — so a 1-ctor `Stmt` would
+// clash with parser's 4-ctor `Stmt`. Declaring the whole shape keeps it
+// consistent (the `_tag` runtime shape makes the declarations interchangeable).
 type Span = { start: number, end: number }
 type Name = { name: string, span: Span }
-// Minimal AST view: only the import ctor is ever destructured here. Under the
-// single-file open-world compile that builds this module, `parse`'s real `Stmt`
-// type stays opaque, so declaring just `SImport` suffices — every other stmt
-// falls through the `_` arm at runtime.
-type Stmt = SImport(names: [Name], from: string, span: Span)
+
+type LamParam =
+  | LPName(name: string)
+  | LPRecord(fields: [string])
+  | LPTuple(names: [string])
+
+type Field = { name: string, value: Expr }
+type MapEntry = { key: Expr, value: Expr }
+type MatchArm = { pattern: Pattern, guard: Option Expr, body: Expr }
+type PatField = { label: string, pat: Pattern }
+
+type Expr =
+  | ENum(value: number, raw: string, span: Span)
+  | EBool(value: bool, span: Span)
+  | EStr(value: string, span: Span)
+  | ERef(name: string, span: Span)
+  | ECall(fn: Expr, args: [Expr], span: Span)
+  | ELambda(params: [LamParam], body: Expr, span: Span)
+  | ELetIn(name: string, nameSpan: Span, value: Expr, body: Expr, span: Span)
+  | ELetBind(param: LamParam, paramSpan: Span, value: Expr, body: Expr, span: Span)
+  | EPipe(left: Expr, right: Expr, span: Span)
+  | ETernary(cond: Expr, thenE: Expr, elseE: Expr, span: Span)
+  | EMatch(scrutinee: Expr, arms: [MatchArm], span: Span)
+  | ERecord(fields: [Field], spread: Option Expr, span: Span)
+  | EField(target: Expr, name: string, span: Span)
+  | ETuple(elements: [Expr], span: Span)
+  | EArr(elements: [Expr], span: Span)
+  | EList(elements: [Expr], span: Span)
+  | EMap(entries: [MapEntry], span: Span)
+  | EInterp(parts: [InterpPart], span: Span)
+
+type InterpPart =
+  | IPLit(value: string)
+  | IPExpr(expr: Expr)
+
+type Pattern =
+  | PWild(span: Span)
+  | PBind(name: string, span: Span)
+  | PLit(value: number, raw: string, span: Span)
+  | PBool(value: bool, span: Span)
+  | PStr(value: string, span: Span)
+  | PTuple(elems: [Pattern], span: Span)
+  | PRecord(fields: [PatField], span: Span)
+  | PCtor(ctor: string, args: [Pattern], span: Span)
+  | PArr(elems: [Pattern], rest: Option Pattern, span: Span)
+  | PList(elems: [Pattern], rest: Option Pattern, span: Span)
+  | POr(alts: [Pattern], span: Span)
+
+type TypeExpr =
+  | TyName(name: string, span: Span)
+  | TyArrow(from: TypeExpr, to: TypeExpr, span: Span)
+  | TyApp(ctor: string, args: [TypeExpr], span: Span)
+  | TyTuple(elems: [TypeExpr], span: Span)
+  | TyList(elem: TypeExpr, span: Span)
+
+type CtorField = { name: Option string, fieldType: TypeExpr }
+type Ctor = { name: string, fields: [CtorField] }
+type AliasField = { name: string, fieldType: TypeExpr }
+
+type Stmt =
+  | SLet(name: string, nameSpan: Span, value: Expr, exported: bool, doc: Option string, span: Span)
+  | SType(name: string, params: [string], ctors: [Ctor], alias: Option [AliasField], exported: bool, span: Span)
+  | SExtern(name: string, nameSpan: Span, typeExpr: TypeExpr, module: string, imported: string, exported: bool, span: Span)
+  | SImport(names: [Name], from: string, span: Span)
 
 // One loaded module: its canonical path and parsed statements.
 type Loaded = { path: string, stmts: [Stmt] }

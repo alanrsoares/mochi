@@ -22,7 +22,7 @@ const work = join(root, ".fixpoint-work");
 
 // Every bootstrap module, in dependency order (order is cosmetic — each is
 // compiled independently, open-world).
-const MODULES = ["lexer", "parser", "check", "infer", "codegen", "compile", "cli"];
+const MODULES = ["lexer", "parser", "check", "infer", "codegen", "module", "compile", "cli"];
 // Runtime deps the emitted compiler imports (hand-written + generated shim).
 const RUNTIME_DEPS = ["host.js", "prelude.gen.js"];
 

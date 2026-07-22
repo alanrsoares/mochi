@@ -1,12 +1,16 @@
-// Ticket 0006 — the shipped `alangc` entry point. Reads the path in argv[0],
-// reads that file, runs the whole self-hosted pipeline (compile.al), and on
-// success writes the emitted JS to a sibling `.js`; on failure prints a
-// `path:line:col: message` diagnostic and exits nonzero.
+// Ticket 0006 / 0013 — the shipped `alangc` entry point. Two modes:
 //
-// Single-file only: the source may not contain `import` statements. Multi-file
-// import graphs (porting module.ts) are out of scope — a later ticket.
+//   alangc <file.al>        single-file, open-world (compile.al) — imports in
+//                           the source are left unresolved; writes one sibling
+//                           `.js`; a failure prints `path:line:col: message`.
+//   alangc build <entry.al> multi-file: resolve the import graph from `entry`,
+//                           compile every module in dependency order with real
+//                           cross-module inference + exhaustiveness (module.al),
+//                           and write a `.js` beside each `.al`.
+//
 // Runs as emitted JS under Bun; the only npm deps are @onrails/{pattern,result}.
 import { compile } from "./compile.al"
+import { buildModules } from "./module.al"
 
 type Diag = { message: string, start: number, end: number }
 
@@ -20,18 +24,45 @@ extern formatError : string -> string -> Diag -> string = "./host.js" "formatErr
 // "foo.al" -> "foo.js"  (drops the 3-char `.al` suffix).
 let outPath = path => Str.concat(Str.slice(0, sub(Str.length(path), 3), path), ".js")
 
-// build : string -> Result string string  (Ok = written path, Err = diagnostic)
-let build = path =>
+// Single-file build: open-world compile, one written `.js`. Every arm of the
+// railway carries a string error (readFile's, or compile's via formatError).
+let buildOne = path =>
   readFile(path)
     |> Result.flatMap(src =>
       compile(src)
         |> Result.mapErr(e => formatError(path, src, e))
         |> Result.flatMap(js => writeFile(outPath(path), js)))
 
+// Write each compiled module's JS beside its source, logging as it goes. A
+// write failure short-circuits with the host's string error.
+let writeAll = outs => switch outs {
+  | [] => Ok("")
+  | [o, ...rest] => switch writeFile(outPath(o.path), o.js) {
+      | Err(e) => Err(e)
+      | Ok(w) => let logged = print(Str.concat("  wrote ", w)) in writeAll(rest)
+    }
+}
+
+// Multi-file build: resolve + compile the graph, then write all outputs. The
+// driver's diagnostic (a graph/type/exhaustiveness error) has no single source
+// file to anchor a line:col against, so we surface its message (as src/cli.ts's
+// build does — span parity across modules is a later refinement).
+let buildMulti = entry =>
+  buildModules(entry)
+    |> Result.mapErr(e => e.message)
+    |> Result.flatMap(writeAll)
+
 // Entry: fire on the real argv the moment the module is evaluated.
 export let main = switch Array.get(0, argv) {
-  | None => die("usage: alangc <file.al>")
-  | Some(path) => switch build(path) {
+  | None => die("usage: alangc <file.al>  |  alangc build <entry.al>")
+  | Some("build") => switch Array.get(1, argv) {
+      | None => die("usage: alangc build <entry.al>")
+      | Some(entry) => switch buildMulti(entry) {
+          | Ok(_) => print("build ok")
+          | Err(msg) => die(msg)
+        }
+    }
+  | Some(path) => switch buildOne(path) {
       | Ok(out) => print(Str.concat("wrote ", out))
       | Err(msg) => die(msg)
     }
