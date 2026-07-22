@@ -90,7 +90,7 @@ const isSpace = (c: string): boolean => c === " " || c === "\t" || c === "\n" ||
 // and quotes don't confuse a caller that's only counting braces. Returns the
 // index just past the closing quote, or null if unterminated. Used only by
 // `findHoleEnd`'s prescan — decoding happens later, in `scanTemplate`.
-const skipStringLiteral = (src: string, i: number): number | null => {
+export const skipStringLiteral = (src: string, i: number): number | null => {
   let j = i + 1;
   while (j < src.length && src[j] !== '"') {
     if (src[j] === "\\" && j + 1 < src.length) {

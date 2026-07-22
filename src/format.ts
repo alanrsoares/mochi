@@ -34,7 +34,7 @@ import type {
   TypeStmt,
 } from "./ast";
 import type { AlangError } from "./errors";
-import { lex } from "./lexer";
+import { lex, skipStringLiteral } from "./lexer";
 import { parse } from "./parser";
 
 const WIDTH = 80;
@@ -45,12 +45,16 @@ const INDENT = 2;
 // `line` is a space when its group prints flat, a newline+indent when it
 // breaks; `softline` is nothing when flat; `hardline` always breaks. `group`
 // asks "does the flat rendering fit the rest of this line?" and picks a mode.
+// `breakparent` is zero-width but forces every enclosing group to break — used
+// after a trailing `//` comment so whatever follows lands on a fresh line
+// (else it would be commented out) without emitting a newline of its own.
 type Doc =
   | { k: "text"; s: string }
   | { k: "line"; hard: boolean; soft: boolean }
   | { k: "cat"; parts: Doc[] }
   | { k: "indent"; doc: Doc }
-  | { k: "group"; doc: Doc };
+  | { k: "group"; doc: Doc }
+  | { k: "breakparent" };
 
 const txt = (s: string): Doc => ({ k: "text", s });
 const cat = (parts: Doc[]): Doc => ({ k: "cat", parts });
@@ -58,6 +62,7 @@ const seq = (...parts: Doc[]): Doc => ({ k: "cat", parts });
 const line: Doc = { k: "line", hard: false, soft: false };
 const softline: Doc = { k: "line", hard: false, soft: true };
 const hardline: Doc = { k: "line", hard: true, soft: false };
+const breakParent: Doc = { k: "breakparent" };
 const indent = (doc: Doc): Doc => ({ k: "indent", doc });
 const group = (doc: Doc): Doc => ({ k: "group", doc });
 
@@ -107,6 +112,8 @@ const fits = (width: number, start: Work): boolean => {
         if (d.hard || m === "break") return true;
         rem -= d.soft ? 0 : 1;
         break;
+      case "breakparent":
+        break; // zero-width here; it only forces the group that *contains* it
     }
   }
   return false;
@@ -121,13 +128,15 @@ const forcesBreak = (d: Doc): boolean => {
   const cached = breakCache.get(d);
   if (cached !== undefined) return cached;
   const r =
-    d.k === "line"
-      ? d.hard
-      : d.k === "cat"
-        ? d.parts.some(forcesBreak)
-        : d.k === "indent" || d.k === "group"
-          ? forcesBreak(d.doc)
-          : false;
+    d.k === "breakparent"
+      ? true
+      : d.k === "line"
+        ? d.hard
+        : d.k === "cat"
+          ? d.parts.some(forcesBreak)
+          : d.k === "indent" || d.k === "group"
+            ? forcesBreak(d.doc)
+            : false;
   breakCache.set(d, r);
   return r;
 };
@@ -169,6 +178,8 @@ const render = (root: Doc, width: number): string => {
         work = fits(width - pos, cand) ? cand : cons({ i, m: "break", d: d.doc }, work);
         break;
       }
+      case "breakparent":
+        break; // zero-width; its only effect is via forcesBreak
     }
   }
   return out.join("");
@@ -283,32 +294,72 @@ const importStmt = (s: ImportStmt): string =>
 // ---- comments --------------------------------------------------------------
 
 // Comments are not in the AST, so the formatter re-scans the source for them
-// and reattaches them by span. Only own-line `//` / `///` comments are handled
-// (a line that is whitespace-then-comment); trailing comments on a code line
-// are not yet preserved. Each comment attaches to the AST node that most
-// tightly follows it and prints as a leading line above that node.
-type Comment = { start: number; end: number; text: string; blankAfter: boolean };
+// and reattaches them by span. An *own-line* comment (a line that is
+// whitespace-then-comment) attaches to the AST node that most tightly follows
+// it and prints as a leading line above that node. A *trailing* comment (code
+// then `//` on the same line) attaches to the node it most tightly follows on
+// that line and prints inline after it; if it trails a bare marker with no node
+// on the line (e.g. a ternary's `:`), it degrades to a leading comment of the
+// following node — never dropped.
+type Comment = {
+  start: number;
+  end: number;
+  text: string;
+  blankAfter: boolean;
+  trailing: boolean; // code preceded it on its line
+};
 
+// Scan every `//` / `///` comment, string-aware: a `//` inside a string literal
+// (or a `${…}` hole) is not a comment. Reuses the lexer's string skipper so the
+// two agree exactly on where a literal ends.
 const collectComments = (src: string): Comment[] => {
   const out: Comment[] = [];
-  const lines = src.split("\n");
-  let offset = 0;
-  for (let li = 0; li < lines.length; li++) {
-    const raw = lines[li]!;
-    const trimmed = raw.trimStart();
-    if (trimmed.startsWith("//")) {
-      const start = offset + (raw.length - trimmed.length);
-      const blankAfter = (lines[li + 1] ?? "x").trim() === "";
-      out.push({ start, end: offset + raw.length, text: trimmed.trimEnd(), blankAfter });
+  let i = 0;
+  let lineHasToken = false; // a non-space, non-comment char seen this line
+  while (i < src.length) {
+    const c = src[i]!;
+    if (c === "\n") {
+      lineHasToken = false;
+      i++;
+      continue;
     }
-    offset += raw.length + 1; // +1 for the consumed "\n"
+    if (c === " " || c === "\t" || c === "\r") {
+      i++;
+      continue;
+    }
+    if (c === '"') {
+      const end = skipStringLiteral(src, i);
+      if (end === null) break; // unterminated — parse already failed upstream
+      i = end;
+      lineHasToken = true;
+      continue;
+    }
+    if (c === "/" && src[i + 1] === "/") {
+      let end = i;
+      while (end < src.length && src[end] !== "\n") end++;
+      const nextNl = src.indexOf("\n", end + 1);
+      const nextLine = src.slice(end + 1, nextNl === -1 ? src.length : nextNl);
+      out.push({
+        start: i,
+        end,
+        text: src.slice(i, end).trimEnd(),
+        blankAfter: nextLine.trim() === "",
+        trailing: lineHasToken,
+      });
+      i = end;
+      continue;
+    }
+    lineHasToken = true;
+    i++;
   }
   return out;
 };
 
-// The node a comment attaches to (leading), keyed by node identity. A fresh AST
-// is parsed per `format` call, so entries never outlive their source.
+// The node a comment attaches to, keyed by node identity — LEADING prints above
+// the node, TRAILING inline after it. A fresh AST is parsed per `format` call,
+// so entries never outlive their source.
 const LEADING = new WeakMap<object, Comment[]>();
+const TRAILING = new WeakMap<object, Comment[]>();
 
 type Anchor = { node: Expr | Stmt; start: number; end: number };
 
@@ -383,21 +434,35 @@ const collectAnchors = (stmts: Stmt[]): Anchor[] => {
   return anchors;
 };
 
-// Assign each comment to the node that follows it most tightly (smallest start
-// at or after the comment; ties broken toward the outermost node). Comments
-// past the last node (trailing EOF block) have no anchor and are returned to be
-// emitted after the final statement.
-const attachComments = (stmts: Stmt[], comments: Comment[]): Comment[] => {
+// Assign each comment to an anchor. A trailing comment binds to the node it
+// most tightly follows *on the same line* (largest end at or before its start,
+// no intervening newline) as a TRAILING comment. An own-line comment — or a
+// trailing one with no node on its line, e.g. after a ternary `:` — binds to
+// the node that follows it most tightly (smallest start at or after the
+// comment; ties toward the outermost node) as a LEADING comment. Comments past
+// the last node have no anchor and are returned to emit after the final stmt.
+const attachComments = (stmts: Stmt[], comments: Comment[], src: string): Comment[] => {
   const anchors = collectAnchors(stmts).toSorted((a, b) => a.start - b.start || b.end - a.end);
   const tail: Comment[] = [];
   for (const c of comments) {
+    if (c.trailing) {
+      let trailed: Anchor | null = null;
+      for (const a of anchors) {
+        if (a.end <= c.start && !src.slice(a.end, c.start).includes("\n")) {
+          if (trailed === null || a.end > trailed.end) trailed = a;
+        }
+      }
+      if (trailed !== null) {
+        TRAILING.set(trailed.node, [...(TRAILING.get(trailed.node) ?? []), c]);
+        continue;
+      }
+    }
     const target = anchors.find((a) => a.start >= c.end);
     if (!target) {
       tail.push(c);
       continue;
     }
-    const prior = LEADING.get(target.node) ?? [];
-    LEADING.set(target.node, [...prior, c]);
+    LEADING.set(target.node, [...(LEADING.get(target.node) ?? []), c]);
   }
   return tail;
 };
@@ -413,9 +478,19 @@ const leadingDocs = (node: Expr | Stmt): Doc[] => {
     : [];
 };
 
+// A trailing comment prints ` // text` after the node, then `breakParent` so
+// whatever follows lands on a new line (otherwise it would be commented out)
+// without emitting a newline here — the enclosing group / statement separator
+// supplies it. Only own-line breaks emit an actual newline.
+const trailingDocs = (node: Expr | Stmt): Doc[] => {
+  const cs = TRAILING.get(node);
+  return cs ? cs.flatMap((c) => [txt(` ${c.text}`), breakParent]) : [];
+};
+
 const withComments = (node: Expr | Stmt, doc: Doc): Doc => {
   const lead = leadingDocs(node);
-  return lead.length ? cat([...lead, doc]) : doc;
+  const trail = trailingDocs(node);
+  return lead.length || trail.length ? cat([...lead, doc, ...trail]) : doc;
 };
 
 const hasLead = (node: Expr): boolean => (LEADING.get(node)?.length ?? 0) > 0;
@@ -703,7 +778,7 @@ export const format = (src: string): Result<string, AlangError> =>
     lex(src),
     flatMap(parse),
     map((prog) => {
-      const tail = attachComments(prog.stmts, collectComments(src));
+      const tail = attachComments(prog.stmts, collectComments(src), src);
       return program(prog.stmts, src, tail);
     }),
   );

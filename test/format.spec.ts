@@ -137,3 +137,31 @@ test("comment preservation is idempotent", () => {
   );
   expect(fmt(once)).toBe(once);
 });
+
+test("keeps a trailing comment inline after the code it follows", () => {
+  const src = "let x = 1 // the answer\nlet y = 2\n";
+  expect(fmt(src)).toBe(src);
+});
+
+test("a trailing comment does not force a short construct to break", () => {
+  const src = "let r = { a: 1, b: 2 } // rec\n";
+  expect(fmt(src)).toBe(src);
+});
+
+test("a `//` inside a string is not mistaken for a trailing comment", () => {
+  const src = 'let u = "http://x.com" // real\n';
+  expect(fmt(src)).toBe(src);
+});
+
+test("a comment trailing a bare marker degrades to a leading comment", () => {
+  // `: // note` has no node on its line to trail, so it attaches as a leading
+  // comment of the else branch rather than being dropped.
+  const once = fmt("let f = c ? a :\n  // note\n  b\n");
+  expect(once).toContain("// note");
+  expect(fmt(once)).toBe(once); // idempotent
+});
+
+test("trailing comments round-trip and stay idempotent", () => {
+  const src = "let x = foo(1) // call\nlet t = c ? a : b // tern\n";
+  expect(fmt(src)).toBe(src);
+});

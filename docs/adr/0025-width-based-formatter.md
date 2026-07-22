@@ -63,13 +63,23 @@ Consequences of the model:
 ## Comments
 
 Comments are not in the AST, so the formatter re-scans the source and reattaches
-them. It collects every **own-line** `//` / `///` comment (a line that is
-whitespace-then-comment) and attaches each to the AST node that most tightly
-follows it, printing it as a leading line above that node. A commented `switch`,
-lambda, ternary branch, or match arm drops its body to its own indented line so
-the comment stays own-line — which is also what keeps the layout idempotent.
-`hardline`s from comments propagate a break to every enclosing `group`.
+them. The scan is **string-aware** (it reuses the lexer's `skipStringLiteral`, so
+a `//` inside a `"…"` literal or a `${…}` hole is never mistaken for a comment).
 
-Not yet handled: a comment written **trailing** code or an operator on the same
-line (`x ? a : // note` … ). These are dropped. Across the entire `bootstrap/`
-tree this is a single comment line; own-line comments (400+) all round-trip.
+- An **own-line** comment (a line that is whitespace-then-comment) attaches to
+  the AST node that most tightly follows it and prints as a leading line above
+  that node. A commented `switch`, lambda, ternary branch, or match arm drops
+  its body to its own indented line so the comment stays own-line — which is
+  also what keeps the layout idempotent. Comment `hardline`s propagate a break
+  to every enclosing `group`.
+- A **trailing** comment (code then `//` on the same line) attaches to the node
+  it most tightly follows on that line and prints inline after it, followed by a
+  `breakParent` — a zero-width doc that forces the *enclosing* `group` to break
+  (so nothing lands after the comment and gets commented out) without emitting a
+  newline of its own or expanding a short construct that merely precedes it.
+- A trailing comment after a **bare marker** with no node on its line (e.g. a
+  ternary's `:`) has nothing to trail, so it degrades to a leading comment of
+  the following node.
+
+Every comment across the `bootstrap/` tree (400+, including the one that used to
+be dropped) now round-trips, and formatting stays idempotent.
