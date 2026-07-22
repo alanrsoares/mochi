@@ -1,4 +1,4 @@
-# TS-emit checkpoint — 2026-07-23 (rev 7)
+# TS-emit checkpoint — 2026-07-23 (rev 8)
 
 Working state of the TypeScript backend track (ADR 0026 / `docs/TS_DIALECT.md`),
 so a fresh session can pick up. Goal: emit **fully working, `tsc --strict`-clean
@@ -8,8 +8,8 @@ TypeScript** from alang, including the self-hosted `bootstrap/`.
 
 Single-file and well-behaved multi-module programs emit **strict-clean today**.
 The self-hosted `bootstrap/` emits and links, but is **not yet strict-clean** —
-**8 `tsc` errors** (was 537). Measure any time with `bun run bootstrap:tsc`
-(`scripts/bootstrap-tsc.ts`, replaces the old `/tmp/bts` recipe). Thirteen gaps have
+**5 `tsc` errors** (was 537). Measure any time with `bun run bootstrap:tsc`
+(`scripts/bootstrap-tsc.ts`, replaces the old `/tmp/bts` recipe). Fourteen gaps have
 shipped: the per-node lambda-param
 type table (gap 1, ADR 0028, −238), cross-module `import type` + extern `.d.ts`
 (gap 3, ADR 0029, −33; TS2307/TS2304 → 0), guard-form arms as **type predicates**
@@ -47,10 +47,18 @@ The open-row `& A` cluster was one bug: `generalize` read env schemes *raw*, so 
 quantified though the env constrained it — unsound over-generalization that made
 Tarjan-state locals spuriously polymorphic and leaked `& A` across
 infer/codegen/check/parser. Zonking the env before collecting free vars cleared
-all six at once. The remaining 8 decompose (see below) into **empty-collection in
-a returned record** (`VarSets` `Set<unknown>` / `Map<unknown,unknown>` seeds, an
-ADR 0035 extension), **`writeAll`'s recursive `Result` union**, and two scattered
-`unknown` reads — each its own lever.
+all six at once — but **surfaced three** it had masked. Most recently — also this
+session — **bound vars opaque in `freeInScheme`** (ADR 0041, 8 → 5, −3). ADR 0040's
+`zonk` expanded a *generalized* scheme's bound var that happened to be a live
+substitution key (`mkSt`'s map-key var → `Set<'t1158>`), leaking the inner var as
+false-free and **suppressing** a sibling's legitimate generalization
+(`unionVarSets`/`diffVarSets`/`freeInScheme` emitting `Set<unknown>`). Fix:
+`freeInScheme` walks the scheme's type resolving through the subst but **stops at
+the scheme's own quantified vars** (opaque) — subsuming both the mono case (ADR
+0040) and the generalized case correctly. The remaining 5 decompose (see below)
+into **empty-collection seeds in a returned record** (`module.ts` `emptyReg`
+`Map<unknown,unknown>`, an ADR 0035 extension), **`writeAll`'s recursive `Result`
+union**, and two scattered `unknown` reads — each its own lever.
 
 ## Landed this session (all on `main`, committed)
 
@@ -69,6 +77,8 @@ ADR 0035 extension), **`writeAll`'s recursive `Result` union**, and two scattere
 | `d5b08c7` | feat(codegen): throwing otherwise for array-partition matches (ADR 0038) |
 | `937f1ad` | feat(codegen): annotate nullary ctors concretely (ADR 0039) |
 | `57da9ff` | fix(infer): generalize under the substitution (ADR 0040) |
+| `9065338` | docs(codegen): checkpoint rev 7 (14 -> 8) |
+| `f3615e1` | fix(infer): treat a scheme's bound vars as opaque (ADR 0041) |
 
 `bun run check` is green (799 tests). JS backend byte-identical throughout
 (all TS-only behavior is behind codegen options that default off).
@@ -189,24 +199,24 @@ bun run bootstrap:tsc --keep    # leave the scratch dir on disk (path logged)
 `scripts/bootstrap-tsc.ts` emits the graph via `buildModulesTs` with
 `runtimeImport` pointed at `src/runtime` (no `sed`), writes the outputs + a strict
 tsconfig to an OS temp dir, runs the repo's `tsc`, and tallies. No files are left
-in `bootstrap/`. The `test/bootstrap-tsc.spec.ts` ratchet asserts total ≤ 8.
+in `bootstrap/`. The `test/bootstrap-tsc.spec.ts` ratchet asserts total ≤ 5.
 
 ## Suggested next step
 
 Gaps 1 (ADR 0028), 2 (ADR 0031), 3 (ADR 0029), polymorphic-HOF starter (ADR 0032),
 combinator tail (ADR 0033), row-poly records (ADR 0034), empty-collection seeds
 (ADR 0035), tuple literals (ADR 0036), partial-application overloads (ADR 0037),
-array-partition `.otherwise` (ADR 0038), nullary-ctor annotation (ADR 0039), and
-sound row generalization (ADR 0040) done — **8 `tsc` errors left**. The open-row
-cluster is GONE (ADR 0040 cleared all six — it was one bug). The rest decompose
-into three clusters:
+array-partition `.otherwise` (ADR 0038), nullary-ctor annotation (ADR 0039),
+sound row generalization (ADR 0040), and opaque bound vars (ADR 0041) done —
+**5 `tsc` errors left**. The open-row cluster is GONE (ADR 0040) and the
+`Set<unknown>` `VarSets` cluster is GONE (ADR 0041 — `infer.ts` 90/93/96 cleared).
+The rest decompose into three clusters:
 
-1. **Empty-collection in a returned record** (5 — the biggest now) — `infer.ts`
-   90/93/96 (`freeInScheme`/`freeInEnv` build empty `VarSets` `Set<unknown>`) and
-   `module.ts` 83/91 (`emptyReg` seeds `Map<unknown,unknown>`). ADR 0035 annotates
-   an empty literal at a *binding*; here the empty seed is a field of a *returned*
-   record whose key/element type is fixed only by a later caller. Extend the
-   empty-collection annotation to reach seeds inside returned records.
+1. **Empty-collection seeds in a returned record** (2 — the biggest now) —
+   `module.ts` 83/91 (`emptyReg` `#{}` seeds infer `Map<unknown,unknown>`). ADR
+   0035 annotates an empty literal at a *binding*; here the empty seed is a field
+   of a *returned* record whose key/element type is fixed only by a later caller.
+   Extend the empty-collection annotation to reach seeds inside returned records.
 2. **`writeAll`'s recursive `Result` union** (`cli.ts:21`) — the fold's first
    ts-pattern arm fixes a narrow `Result` that a later arm widens; a `Result`
    analogue of the ADR 0038 first-arm-return problem.
@@ -214,7 +224,7 @@ into three clusters:
 
 ## Verify
 `bun run check` green (799 pass); the self-host fixpoint (`build ok` ×2) confirms
-the JS backend stays byte-identical after ADR 0040.
+the JS backend stays byte-identical after ADR 0041.
 
 ## Not part of this track (uncommitted in tree)
 Rebrand (README, logos, `docs/REBRAND.md`, `docs/V1.md`) and ADRs 0024 (llvm) /
