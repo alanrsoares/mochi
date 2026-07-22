@@ -23,7 +23,7 @@ test("a curried definition stays curried, with generics for polymorphism", () =>
   const src =
     "type Result a e = | Ok(a) | Err(e)\nlet fmap = f => r => switch r { | Ok(v) => Ok(f(v)) | Err(e) => Err(e) }";
   expect(dts(src)).toContain(
-    "export declare const fmap: <A, B, C>(f: (x: A) => B) => (r: Result<A, C>) => Result<B, C>;",
+    "export declare const fmap: <A, B, C>(f: (a: A) => B) => (r: Result<A, C>) => Result<B, C>;",
   );
 });
 

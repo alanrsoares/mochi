@@ -8,18 +8,21 @@ TypeScript** from alang, including the self-hosted `bootstrap/`.
 
 Single-file and well-behaved multi-module programs emit **strict-clean today**.
 The self-hosted `bootstrap/` emits and links, but is **not yet strict-clean** —
-**94 `tsc` errors** (was 537). Five gaps have shipped: the per-node lambda-param
+**58 `tsc` errors** (was 537). Six gaps have shipped: the per-node lambda-param
 type table (gap 1, ADR 0028, −238), cross-module `import type` + extern `.d.ts`
 (gap 3, ADR 0029, −33; TS2307/TS2304 → 0), guard-form arms as **type predicates**
-(gap 2, ADR 0031, −23; TS2339 23 → 1), and — this session — **generic value-lambda
-emission + flat `let?` bind** (ADR 0032, 243 → 94, −149): scoping the binding's
-generic letters on the value arrow itself (`_curry(n, <A,B>(a: A) => …)`) so its
-polymorphic params stop erasing to `any`/`unknown`, and flattening `let? p = v` to
-`_Result_flatMap(f, v)` so tsc infers the bind param. That designed away the
-TS7006/TS18046 tail entirely (TS7006 40 → 0, TS18046 24 → 1). The remaining blocker
-is now the **first-class combinator tail**: TS2345 (79, mostly `parser.ts` +
-`infer.ts`) where a generic function is passed *as a value* to a curried HOF whose
-own param is still `unknown`-erased — inference through function values, not calls.
+(gap 2, ADR 0031, −23; TS2339 23 → 1), **generic value-lambda emission + flat
+`let?` bind** (ADR 0032, 243 → 94, −149), and — this session — **flat
+function-type emission + overload ordering** (ADR 0033, 94 → 58, −36): `tsOf`
+renders nested function types FLAT (`(a) -> (b) -> R` → `(a, b) => R`) to match
+codegen's uncurried convention and the flat binding types `declType` already
+emits, killing the `parser.ts` combinator cluster (35 → 4); and `flatFnType`
+overloads reordered so the flat all-at-once signature lands LAST, so TS infers a
+call's type args through a passed overloaded builtin correctly (`reduce(add, 0,
+xs)` pins both vars). The remaining blocker is now the **row-poly record tail**:
+TS2345 (48, mostly `infer.ts` 33) where a partial record literal `{ next }` flows
+where the full state `{ tv, rv, next }` is expected — alang's open row emitted as
+a CLOSED record, dropping the row variable.
 
 ## Landed this session (all on `main`, committed)
 
@@ -30,8 +33,9 @@ own param is still `unknown`-erased — inference through function values, not c
 | `91b8df9` | feat(codegen): TypeScript backend — emit strict-clean typed `.ts` (ADR 0026) |
 | `248e239` | fix(codegen): curry-aware TS types + pipe flattening — pipelines typecheck |
 | `704081b` | feat(codegen): `build --emit=ts` — typed `.ts` for module graphs |
+| _(pending)_ | feat(codegen): flat fn-type emission + overload order (ADR 0033) |
 
-`bun run check` is green (788 tests). JS backend byte-identical throughout
+`bun run check` is green (793 tests). JS backend byte-identical throughout
 (all TS-only behavior is behind codegen options that default off).
 
 ## What works now
@@ -123,18 +127,18 @@ the repo `node_modules` (so tsc can run in `/tmp/bts`).
 
 ## Suggested next step
 
-Gaps 1 (ADR 0028), 2 (ADR 0031), 3 (ADR 0029), and the polymorphic higher-order
-tail (ADR 0032) done — 94 `tsc` errors left. The remaining blocker is the
-**first-class combinator tail**: TS2345 (79), concentrated in `parser.ts` (89
-across kinds) and `infer.ts` (51). These are sites where a now-generic function is
-passed *as an argument* to another curried HOF whose own param type is still
-`unknown`-erased (`_curry`'s `(...args: any[]) => any` public sig). ADR 0032's
-generic arrow fixes inference through *direct calls*; it does not flow generics
-through a function *value* handed to another `_curry`-wrapped combinator. Likely
-directions: (a) type `_curry`'s public signature generically instead of `any` (big
-lever, touches every builtin — measure first), or (b) flatten more curried-HOF
-call sites the way `let?`/pipes are flattened. Smaller residuals: TS2322 5, TS2554
-4 (arity), TS2677 2, TS2339 2, TS2741 1, TS18046 1.
+Gaps 1 (ADR 0028), 2 (ADR 0031), 3 (ADR 0029), the polymorphic higher-order tail
+(ADR 0032), and the first-class combinator tail (ADR 0033) done — **58 `tsc`
+errors left**. The remaining blocker is the **row-poly record tail**: TS2345 (48),
+concentrated in `infer.ts` (33). These are all one shape — a partial record
+literal `{ next }` flowing where the full inference state `{ tv, rv, next }` is
+expected. Algorithm W threads an open-row state record (`{ next: Int | r }`); alang
+emits it as a CLOSED record `{ next: number }`, dropping the row variable `r`, so
+tsc rejects it against the concrete full-state param. Fix direction: emit an open
+row as a generic record — a fresh `<R>` intersected (`{ next: number } & R`) or the
+param kept generic — so field-subset records unify. This is its own ADR (open-row →
+generic record emission). Smaller residuals: TS2322 4, TS2554 3 (arity), TS2741 1,
+TS2339 1 (the real `{...st, sccs}` row update), TS18046 1.
 
 ## Not part of this track (uncommitted in tree)
 Rebrand (README, logos, `docs/REBRAND.md`, `docs/V1.md`) and ADRs 0024 (llvm) /

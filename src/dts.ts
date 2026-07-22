@@ -53,8 +53,23 @@ const tsOf = (t: Type, names: Map<number, string>): string => {
         ? t.name
         : `${t.name}<${t.args.map((a) => tsOf(a, names)).join(", ")}>`;
     }
-    case "arrow":
-      return `(x: ${tsOf(t.from, names)}) => ${tsOf(t.to, names)}`;
+    case "arrow": {
+      // Flat multi-param arrow, matching codegen's UNCURRIED calling convention:
+      // user functions emit `(a, b) => …` (defs) and `f(a, b)` (calls), never
+      // `f(a)(b)`. `declType` already flattens a binding's own params this way;
+      // rendering NESTED function types (a HOF's function-typed param, e.g.
+      // `sepBy`'s `parseItem`) curried instead — `(x) => (x) => R` — is what
+      // made a flat function VALUE reject against a curried param slot (TS2345).
+      // Collapse the whole arrow chain into one arrow so the two agree.
+      const params: string[] = [];
+      let cur: Type = t;
+      while (cur.kind === "arrow") {
+        params.push(tsOf(cur.from, names));
+        cur = cur.to;
+      }
+      const named = params.map((p, i) => `${String.fromCharCode(97 + i)}: ${p}`);
+      return `(${named.join(", ")}) => ${tsOf(cur, names)}`;
+    }
     case "record":
       return tsRow(t.row, names);
   }
@@ -139,13 +154,18 @@ const freeVars = (t: Type, acc: number[]): void => {
 };
 
 // Ordered compositions of n: every way to write n as a sum of positive ints
-// keeping order — [2] & [1,1] for n=2; [3],[2,1],[1,2],[1,1,1] for n=3. Shortest
-// first (fewest groups) so overload resolution prefers the all-at-once form.
+// keeping order — [2] & [1,1] for n=2; [3],[2,1],[1,2],[1,1,1] for n=3. Longest
+// first (most groups) so the all-at-once FLAT signature (`[n]`) lands LAST.
+// TS resolves a call against the first *matching* overload regardless of order,
+// but infers a call's type args from a passed OVERLOADED function using its LAST
+// overload only. Keeping the flat form last makes that inference pin every type
+// var (`reduce(add, 0, xs)` → both of add's params inferred), matching the flat
+// param shapes `tsOf` now renders for function-typed values.
 const compositions = (n: number): number[][] => {
   if (n === 0) return [[]];
   const out: number[][] = [];
   for (let k = 1; k <= n; k++) for (const rest of compositions(n - k)) out.push([k, ...rest]);
-  return out.toSorted((a, b) => a.length - b.length);
+  return out.toSorted((a, b) => b.length - a.length);
 };
 
 // A prelude builtin's HM type rendered for the typed runtime (ADR 0026). The JS

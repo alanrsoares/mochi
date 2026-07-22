@@ -24,8 +24,8 @@ test("a generic binding's value lambda scopes the letters so its params can name
   // the value lambda, so its (fully annotated) params name them instead of being
   // erased to `any`/`unknown` by `_curry`. This closes ADR 0028's polymorphic tail.
   const out = ts("let apply = (f, x) => f(x)");
-  expect(out).toContain("const apply: <A, B>(f: (x: A) => B, x: A) => B =");
-  expect(out).toContain("_curry(2, <A, B>(f: (x: A) => B, x: A) => f(x))");
+  expect(out).toContain("const apply: <A, B>(f: (a: A) => B, x: A) => B =");
+  expect(out).toContain("_curry(2, <A, B>(f: (a: A) => B, x: A) => f(x))");
 });
 
 test("let? flattens to the all-at-once flatMap grouping so tsc infers the bind param (ADR 0032)", () => {
@@ -72,7 +72,7 @@ test("a polymorphic function keeps its generics in the annotation", () => {
     "type Result a e = | Ok(a) | Err(e)\nlet fmap = f => r => switch r { | Ok(v) => Ok(f(v)) | Err(e) => Err(e) }";
   const out = ts(src);
   expect(out).toContain(
-    "const fmap: <A, B, C>(f: (x: A) => B) => (r: Result<A, C>) => Result<B, C> =",
+    "const fmap: <A, B, C>(f: (a: A) => B) => (r: Result<A, C>) => Result<B, C> =",
   );
 });
 
