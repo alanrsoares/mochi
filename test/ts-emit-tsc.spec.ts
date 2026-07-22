@@ -145,6 +145,19 @@ let count = xs => switch xs {
 }
 let s = sumAll([1, 2, 3])
 let c = count([1, 2, 3])`,
+  // Regression guard for ADR 0039: a match whose FIRST arm returns a record
+  // field `doc: None` and a later arm returns `doc: Some(str)`. ts-pattern pins
+  // the chain's return from the first arm, so a bare `None` (`Option<never>`)
+  // there rejects the widening `Option<string>` arm (TS2322). The TS backend
+  // annotates the nullary ctor in place (`None as Option<string>`) so the first
+  // arm's field is already the wide type. Mirrors `bootstrap/lexer.al` `mkTok`.
+  noneAnnot: `
+let mkTok = (tok, doc) => switch doc {
+  | [] => { tok: tok, doc: None }
+  | lines => { tok: tok, doc: Some(Str.join("\n", lines)) }
+}
+let a = mkTok(1, [])
+let b = mkTok(2, ["x", "y"])`,
 };
 
 beforeAll(() => {

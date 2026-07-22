@@ -305,6 +305,18 @@ const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
       if (sc) {
         const inst = instantiate(sc, ctx.fresh);
         ctx.noteUse?.(sc, inst);
+        // A parametric nullary constructor (`None`, a user `Empty a`) is the
+        // variant analogue of an empty collection: its type argument is
+        // unconstrained at the reference, so tsc renders it `Option<never>` —
+        // which won't flow where a concrete `Option<C>` is expected (e.g. a
+        // ts-pattern arm a later arm widens; ADR 0038 `mkTok`). Record its
+        // span→type so the TS codegen can annotate it concretely, mirroring the
+        // empty-collection seed rule (ADR 0035, ADR 0039). Uppercase + a `con`
+        // WITH args ⇒ parametric nullary ctor: `Some`/`Ok` are arrows (excluded),
+        // and a monomorphic ctor like `Red : Color` has no args (never leaks a
+        // `never`, so annotating it would be noise).
+        if (inst.kind === "con" && inst.args.length > 0 && /^[A-Z]/.test(e.name))
+          ctx.record?.(e.span, inst);
         return ok(inst);
       }
       if (ctx.open) return ok(freshVar(ctx.fresh)); // opaque host global

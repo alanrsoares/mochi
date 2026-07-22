@@ -62,6 +62,7 @@ What else was on the table and why not.
 | [0036](0036-tuple-literal-emission.md) | Tuple literals emit via `_tuple` so tsc infers tuples (TS backend) | Accepted |
 | [0037](0037-partial-application-overloads.md) | Concrete function bindings emit partial-application overloads (TS backend) | Accepted |
 | [0038](0038-throwing-otherwise-for-array-partitions.md) | Array-partition matches close with a throwing `.otherwise` (TS backend) | Accepted |
+| [0039](0039-concrete-annotation-for-nullary-ctors.md) | Parametric nullary constructors annotate concretely in place (TS backend) | Accepted |
 
 
 ## Backlog (well-evidenced, not yet written)

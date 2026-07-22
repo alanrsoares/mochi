@@ -151,7 +151,16 @@ const genExpr = (e: Expr): string =>
         .join("");
       return `\`${body}\``;
     })
-    .with({ kind: "ref" }, (r) => r.name)
+    .with({ kind: "ref" }, (r) => {
+      // A parametric nullary ctor (`None`) infers `Option<never>`, which won't
+      // flow where a concrete `Option<C>` is expected — annotate it in place
+      // (TS backend, ADR 0039), the Option/variant analogue of the empty-array
+      // rule above. Gate on a 0-field ctor so plain value refs are untouched;
+      // `annotateEmpty` returns null unless the recorded type is fully concrete.
+      const nullaryCtor = ctorKeys.get(r.name)?.length === 0;
+      const ann = nullaryCtor ? annotateEmpty?.(r) : null;
+      return ann ? `(${r.name} as ${ann})` : r.name;
+    })
     .with({ kind: "call" }, (c) => `${genCallee(c.fn)}(${c.args.map(genExpr).join(", ")})`)
     .with({ kind: "lambda" }, (l) => {
       const { params, body } = collapseLambda(l);
