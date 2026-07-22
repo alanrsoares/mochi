@@ -17,7 +17,6 @@ import type {
   Stmt,
   TypeExpr,
 } from "../src/ast";
-import { compile } from "../src/compile";
 import { lex } from "../src/lexer";
 import { parse } from "../src/parser";
 import type { Span } from "../src/span";

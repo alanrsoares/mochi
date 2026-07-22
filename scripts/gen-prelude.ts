@@ -78,7 +78,7 @@ const makeConverters = (al: AlInfer) => {
 // Build the shim's ESM source. Pure function of src/prelude.ts + infer.al, so
 // the parity test can call it and compare against the checked-in file.
 export const buildShimSource = (): string => {
-  const alInfer = evalAlNames<AlInfer>(unwrapOk(compile(readInfer())), [
+  const alInfer = evalAlNames<AlInfer>(unwrapOk(compile(readTypes())), [
     "tVar",
     "tCon",
     "tArrow",
@@ -126,12 +126,13 @@ export const runtimeDeps = _map(_runtimeDeps);
 `;
 };
 
-// infer.al source read lazily so importing this module for buildShimSource
-// doesn't require fs at module-eval time in odd contexts.
-const readInfer = (): string => {
+// types.al source read lazily. Ty/Row and their constructors live here (split
+// out of infer.al, ticket 0013); it's self-contained (no AST import) so it
+// still compiles single-file open-world, unlike infer.al.
+const readTypes = (): string => {
   const { readFileSync } = require("node:fs");
   const { join } = require("node:path");
-  return readFileSync(join(import.meta.dir, "..", "bootstrap/infer.al"), "utf8");
+  return readFileSync(join(import.meta.dir, "..", "bootstrap/types.al"), "utf8");
 };
 
 // Run directly: (re)write the checked-in shim.

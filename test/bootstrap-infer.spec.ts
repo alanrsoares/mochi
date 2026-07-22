@@ -12,7 +12,6 @@ import { join } from "node:path";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
 import type { Program } from "../src/ast";
-import { compile } from "../src/compile";
 import { inferProgram } from "../src/infer";
 import { lex } from "../src/lexer";
 import { parse } from "../src/parser";

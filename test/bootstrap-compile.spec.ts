@@ -8,7 +8,6 @@
 //   3. a type error yields an Err with a span, no JS.
 
 import { beforeAll, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { match } from "@onrails/pattern";
 import { unwrapOk } from "@onrails/result";

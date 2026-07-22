@@ -52,85 +52,22 @@ type Tok =
   | TId(value: string)
   | TEof
 
-type Span = { start: number, end: number }
+import { ENum, EBool, EStr, ERef, ECall, ELambda, ELetIn, ELetBind, EPipe, ETernary, EMatch, ERecord, EField, ETuple, EArr, EList, EMap, EInterp, IPLit, IPExpr, PWild, PBind, PLit, PBool, PStr, PTuple, PRecord, PCtor, PArr, PList, POr, TyName, TyArrow, TyApp, TyTuple, TyList, LPName, LPRecord, LPTuple, SLet, SType, SExtern, SImport } from "./ast.al"
 type LocTok = { tok: Tok, start: number, end: number, doc: Option string }
-type Name = { name: string, span: Span }
 type PErr = { message: string, start: number, end: number }
 
 // --- the AST (mirrors src/ast.ts; `kind` strings become constructors) ---
 
-type LamParam =
-  | LPName(name: string)
-  | LPRecord(fields: [string])
-  | LPTuple(names: [string])
 
-type Field = { name: string, value: Expr }
-type MapEntry = { key: Expr, value: Expr }
-type MatchArm = { pattern: Pattern, guard: Option Expr, body: Expr }
-type PatField = { label: string, pat: Pattern }
 
-type Expr =
-  | ENum(value: number, raw: string, span: Span)
-  | EBool(value: bool, span: Span)
-  | EStr(value: string, span: Span)
-  | ERef(name: string, span: Span)
-  | ECall(fn: Expr, args: [Expr], span: Span)
-  | ELambda(params: [LamParam], body: Expr, span: Span)
-  | ELetIn(name: string, nameSpan: Span, value: Expr, body: Expr, span: Span)
-  | ELetBind(param: LamParam, paramSpan: Span, value: Expr, body: Expr, span: Span)
-  | EPipe(left: Expr, right: Expr, span: Span)
-  // `thenE`/`elseE`: `else` is a JS reserved word, and ctor field labels become
-  // emitted parameter names (same dodge as CtorField's `fieldType`).
-  | ETernary(cond: Expr, thenE: Expr, elseE: Expr, span: Span)
-  | EMatch(scrutinee: Expr, arms: [MatchArm], span: Span)
-  // `spread` (ADR 0021): a leading `...base` makes this an update — `{ ...base,
-// x: 1 }`. TS: an optional `spread?: Expr` field — alang has no optional
-// record fields, so `Option Expr`.
-| ERecord(fields: [Field], spread: Option Expr, span: Span)
-  | EField(target: Expr, name: string, span: Span)
-  | ETuple(elements: [Expr], span: Span)
-  | EArr(elements: [Expr], span: Span)
-  | EList(elements: [Expr], span: Span)
-  | EMap(entries: [MapEntry], span: Span)
-  | EInterp(parts: [InterpPart], span: Span)
 
 // One chunk of a "…${a}…" interpolation (ADR 0023): a literal run, or a
 // parsed hole expression. TS: an untagged `string | Expr` union — alang has
 // no raw unions, so this is a proper variant.
-type InterpPart =
-  | IPLit(value: string)
-  | IPExpr(expr: Expr)
 
-type Pattern =
-  | PWild(span: Span)
-  | PBind(name: string, span: Span)
-  | PLit(value: number, raw: string, span: Span)
-  | PBool(value: bool, span: Span)
-  | PStr(value: string, span: Span)
-  | PTuple(elems: [Pattern], span: Span)
-  | PRecord(fields: [PatField], span: Span)
-  | PCtor(ctor: string, args: [Pattern], span: Span)
-  | PArr(elems: [Pattern], rest: Option Pattern, span: Span)
-  | PList(elems: [Pattern], rest: Option Pattern, span: Span)
-  // A | B | … — or-pattern (ADR 0022). Only produced at an arm's top level.
-  | POr(alts: [Pattern], span: Span)
 
-type TypeExpr =
-  | TyName(name: string, span: Span)
-  | TyArrow(from: TypeExpr, to: TypeExpr, span: Span)
-  | TyApp(ctor: string, args: [TypeExpr], span: Span)
-  | TyTuple(elems: [TypeExpr], span: Span)
-  | TyList(elem: TypeExpr, span: Span)
 
-type CtorField = { name: Option string, fieldType: TypeExpr }
-type Ctor = { name: string, fields: [CtorField] }
-type AliasField = { name: string, fieldType: TypeExpr }
 
-type Stmt =
-  | SLet(name: string, nameSpan: Span, value: Expr, exported: bool, doc: Option string, span: Span)
-  | SType(name: string, params: [string], ctors: [Ctor], alias: Option [AliasField], exported: bool, span: Span)
-  | SExtern(name: string, nameSpan: Span, typeExpr: TypeExpr, module: string, imported: string, exported: bool, span: Span)
-  | SImport(names: [Name], from: string, span: Span)
 
 // --- token plumbing ---
 

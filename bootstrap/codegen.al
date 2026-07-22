@@ -20,76 +20,18 @@
 // - TS `for`/`forEach`/`flatMap` loops become tail-recursive `Array.get(i,
 //   xs)` cursor loops (matches check.al/infer.al's established idiom).
 
-type Span = { start: number, end: number }
+import { ENum, EBool, EStr, ERef, ECall, ELambda, ELetIn, ELetBind, EPipe, ETernary, EMatch, ERecord, EField, ETuple, EArr, EList, EMap, EInterp, IPLit, IPExpr, PWild, PBind, PLit, PBool, PStr, PTuple, PRecord, PCtor, PArr, PList, POr, LPName, LPRecord, LPTuple, SLet, SType, SExtern, SImport } from "./ast.al"
 
-type LamParam =
-  | LPName(name: string)
-  | LPRecord(fields: [string])
-  | LPTuple(names: [string])
 
-type Expr =
-  | ENum(value: number, raw: string, span: Span)
-  | EBool(value: bool, span: Span)
-  | EStr(value: string, span: Span)
-  | ERef(name: string, span: Span)
-  | ECall(fn: Expr, args: [Expr], span: Span)
-  | ELambda(params: [LamParam], body: Expr, span: Span)
-  | ELetIn(name: string, nameSpan: Span, value: Expr, body: Expr, span: Span)
-  | ELetBind(param: LamParam, paramSpan: Span, value: Expr, body: Expr, span: Span)
-  | EPipe(left: Expr, right: Expr, span: Span)
-  | ETernary(cond: Expr, thenE: Expr, elseE: Expr, span: Span)
-  | EMatch(scrutinee: Expr, arms: [MatchArm], span: Span)
-  | ERecord(fields: [Field], spread: Option Expr, span: Span)
-  | EField(target: Expr, name: string, span: Span)
-  | ETuple(elements: [Expr], span: Span)
-  | EArr(elements: [Expr], span: Span)
-  | EList(elements: [Expr], span: Span)
-  | EMap(entries: [MapEntry], span: Span)
-  | EInterp(parts: [InterpPart], span: Span)
 
 // One chunk of a "…${a}…" interpolation (ADR 0023): a literal run, or a
 // hole expression. TS: an untagged `string | Expr` union — alang has no raw
 // unions, so this is a proper variant (mirrors parser.al's own copy).
-type InterpPart =
-  | IPLit(value: string)
-  | IPExpr(expr: Expr)
 
-type Field = { name: string, value: Expr }
-type MapEntry = { key: Expr, value: Expr }
-type MatchArm = { pattern: Pattern, guard: Option Expr, body: Expr }
-type PatField = { label: string, pat: Pattern }
 
-type Pattern =
-  | PWild(span: Span)
-  | PBind(name: string, span: Span)
-  | PLit(value: number, raw: string, span: Span)
-  | PBool(value: bool, span: Span)
-  | PStr(value: string, span: Span)
-  | PTuple(elems: [Pattern], span: Span)
-  | PRecord(fields: [PatField], span: Span)
-  | PCtor(ctor: string, args: [Pattern], span: Span)
-  | PArr(elems: [Pattern], rest: Option Pattern, span: Span)
-  | PList(elems: [Pattern], rest: Option Pattern, span: Span)
-  // A | B | … — or-pattern (ADR 0022). Only at an arm's top level.
-  | POr(alts: [Pattern], span: Span)
 
-type TypeExpr =
-  | TyName(name: string, span: Span)
-  | TyArrow(from: TypeExpr, to: TypeExpr, span: Span)
-  | TyApp(ctor: string, args: [TypeExpr], span: Span)
-  | TyTuple(elems: [TypeExpr], span: Span)
-  | TyList(elem: TypeExpr, span: Span)
 
-type CtorField = { name: Option string, fieldType: TypeExpr }
-type Ctor = { name: string, fields: [CtorField] }
-type AliasField = { name: string, fieldType: TypeExpr }
-type ImportName = { name: string, label: string, pat: Pattern }
 
-type Stmt =
-  | SLet(name: string, nameSpan: Span, value: Expr, exported: bool, doc: Option string, span: Span)
-  | SType(name: string, params: [string], ctors: [Ctor], alias: Option [AliasField], exported: bool, span: Span)
-  | SExtern(name: string, nameSpan: Span, typeExpr: TypeExpr, module: string, imported: string, exported: bool, span: Span)
-  | SImport(names: [ImportName], from: string, span: Span)
 
 // --- small generic helpers (duplicated per bootstrap file, same as check.al/infer.al) ---
 

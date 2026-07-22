@@ -12,7 +12,6 @@ import { join } from "node:path";
 import { match } from "@onrails/pattern";
 import { unwrapOk } from "@onrails/result";
 import { codegen } from "../src/codegen";
-import { compile } from "../src/compile";
 import { lex } from "../src/lexer";
 import { parse } from "../src/parser";
 import { namespaceRuntime, preludeJsDefs, runtimeDeps } from "../src/prelude";

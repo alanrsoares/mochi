@@ -1,0 +1,78 @@
+// bootstrap/ast.al — the one AST, shared by every pass (ticket 0013).
+//
+// Before the module driver landed, parser/check/infer/codegen/module each
+// re-declared this block (the `_tag` runtime shape made the copies
+// interchangeable under compile.al's opaque threading). Now they `import` the
+// variant ctors from here and pattern-match them under the closed-world build.
+//
+// Only the VARIANT types are exported — importing a ctor (ENum, SLet, …) is how
+// a module names the type. The record types (Span, Name, Field, …) are used
+// structurally (`{ start, end }`, `r.name`), so they need no export; they live
+// here only so the ctor field types resolve.
+
+type Span = { start: number, end: number }
+type Name = { name: string, span: Span }
+
+export type LamParam =
+  | LPName(name: string)
+  | LPRecord(fields: [string])
+  | LPTuple(names: [string])
+
+type Field = { name: string, value: Expr }
+type MapEntry = { key: Expr, value: Expr }
+type MatchArm = { pattern: Pattern, guard: Option Expr, body: Expr }
+type PatField = { label: string, pat: Pattern }
+
+export type Expr =
+  | ENum(value: number, raw: string, span: Span)
+  | EBool(value: bool, span: Span)
+  | EStr(value: string, span: Span)
+  | ERef(name: string, span: Span)
+  | ECall(fn: Expr, args: [Expr], span: Span)
+  | ELambda(params: [LamParam], body: Expr, span: Span)
+  | ELetIn(name: string, nameSpan: Span, value: Expr, body: Expr, span: Span)
+  | ELetBind(param: LamParam, paramSpan: Span, value: Expr, body: Expr, span: Span)
+  | EPipe(left: Expr, right: Expr, span: Span)
+  | ETernary(cond: Expr, thenE: Expr, elseE: Expr, span: Span)
+  | EMatch(scrutinee: Expr, arms: [MatchArm], span: Span)
+  | ERecord(fields: [Field], spread: Option Expr, span: Span)
+  | EField(target: Expr, name: string, span: Span)
+  | ETuple(elements: [Expr], span: Span)
+  | EArr(elements: [Expr], span: Span)
+  | EList(elements: [Expr], span: Span)
+  | EMap(entries: [MapEntry], span: Span)
+  | EInterp(parts: [InterpPart], span: Span)
+
+export type InterpPart =
+  | IPLit(value: string)
+  | IPExpr(expr: Expr)
+
+export type Pattern =
+  | PWild(span: Span)
+  | PBind(name: string, span: Span)
+  | PLit(value: number, raw: string, span: Span)
+  | PBool(value: bool, span: Span)
+  | PStr(value: string, span: Span)
+  | PTuple(elems: [Pattern], span: Span)
+  | PRecord(fields: [PatField], span: Span)
+  | PCtor(ctor: string, args: [Pattern], span: Span)
+  | PArr(elems: [Pattern], rest: Option Pattern, span: Span)
+  | PList(elems: [Pattern], rest: Option Pattern, span: Span)
+  | POr(alts: [Pattern], span: Span)
+
+export type TypeExpr =
+  | TyName(name: string, span: Span)
+  | TyArrow(from: TypeExpr, to: TypeExpr, span: Span)
+  | TyApp(ctor: string, args: [TypeExpr], span: Span)
+  | TyTuple(elems: [TypeExpr], span: Span)
+  | TyList(elem: TypeExpr, span: Span)
+
+type CtorField = { name: Option string, fieldType: TypeExpr }
+type Ctor = { name: string, fields: [CtorField] }
+type AliasField = { name: string, fieldType: TypeExpr }
+
+export type Stmt =
+  | SLet(name: string, nameSpan: Span, value: Expr, exported: bool, doc: Option string, span: Span)
+  | SType(name: string, params: [string], ctors: [Ctor], alias: Option [AliasField], exported: bool, span: Span)
+  | SExtern(name: string, nameSpan: Span, typeExpr: TypeExpr, module: string, imported: string, exported: bool, span: Span)
+  | SImport(names: [Name], from: string, span: Span)

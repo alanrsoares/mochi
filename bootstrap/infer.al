@@ -24,266 +24,7 @@
 // 6. Corpus = TS-check-passing files, open:true + namespaces threaded;
 //    strict-mode error cases get their own targeted cases.
 
-let cat = parts => Str.join("", parts)
-
-// ---- Ty / Row: applied type constructors + row-polymorphic records ----
-//
-// `TyCon(name, args)` is a type constructor *applied*: primitive nullary
-// (`TyCon("number", [])`), generic (`TyCon("List", [a])`), nesting
-// arbitrarily (`TyCon("Task", [TyCon("Option", [a])])`). Unification
-// recurses through `args` — deep generics fall out free.
-//
-// `Row` is zero-or-more labelled fields ending in either `RowEmpty` (closed
-// — exactly these fields) or `RowVar` (open — "these fields, possibly
-// more"). Open rows give structural/duck typing: `p.x` accepts any record
-// with an `x` field.
-
-type Ty =
-  | TyVar(id: number)
-  | TyCon(name: string, args: [Ty])
-  | TyFn(from: Ty, to: Ty)
-  | TyRecord(row: Row)
-
-type Row =
-  | RowEmpty
-  | RowVar(id: number)
-  | RowExtend(label: string, fieldType: Ty, rest: Row)
-
-let tVar = id => TyVar(id)
-let tCon = (name, args) => TyCon(name, args)
-let tArrow = (fromT, toT) => TyFn(fromT, toT)
-let tRecord = row => TyRecord(row)
-let tPrim = name => TyCon(name, [])
-
-// tuple: applied constructor under a reserved, unspeakable name (lowercase
-// "tuple" — user types are always Uppercase). Arity is arg count, so
-// `(a, b)` and `(a, b, c)` are distinct types that never unify.
-let TUPLE = "tuple"
-let tTuple = elems => TyCon(TUPLE, elems)
-
-let rVar = id => RowVar(id)
-let rExtend = (label, fieldType, rest) => RowExtend(label, fieldType, rest)
-
-// ---- pretty-printer (errors + tests) ----
-
-let showTypeArgs = args => Str.join(", ", args |> map(showType))
-
-let showType = t => switch t {
-  | TyVar(id) => "'t${show(id)}"
-  | TyCon(name, args) => switch args {
-      | [elem] when eq(name, "Array") => "[${showType(elem)}]"
-      | _ =>
-          eq(name, TUPLE)
-            ? "(${showTypeArgs(args)})"
-            : eq(Array.length(args), 0) ? name : "${name}<${showTypeArgs(args)}>"
-    }
-  | TyFn(from, to) =>
-      let fromS = switch from { | TyFn(_, _) => "(${showType(from)})" | _ => showType(from) } in
-      "${fromS} -> ${showType(to)}"
-  | TyRecord(row) => showRow(row)
-}
-
-// walk a row to its tail, collecting `label: type` field strings on the way
-let showRowFields = row => switch row {
-  | RowExtend(label, fieldType, rest) =>
-      let (fields, tailId) = showRowFields(rest) in
-      (Array.prepend("${label}: ${showType(fieldType)}", fields), tailId)
-  | RowVar(id) => ([], Some(id))
-  | RowEmpty => ([], None)
-}
-
-let showRow = row =>
-  let (fields, tailId) = showRowFields(row) in
-  let tail = switch tailId {
-    | Some(id) => "${eq(Array.length(fields), 0) ? "" : " "}| 'r${show(id)}"
-    | None => ""
-  } in
-  and(eq(Array.length(fields), 0), eq(tail, "")) ? "{}" : "{ ${Str.join(", ", fields)}${tail} }"
-
-// ---- generic index-loop helpers (early-exit `for` loops from the TS
-// originals; same style as bootstrap/check.al's firstSome/allOf/someOf) ----
-
-let someOfFrom = (f, xs, i) => switch Array.get(i, xs) {
-  | None => false
-  | Some(x) => f(x) ? true : someOfFrom(f, xs, add(i, 1))
-}
-let someOf = (f, xs) => someOfFrom(f, xs, 0)
-
-// ---- St: threaded substitution + fresh-var counter ----
-//
-// TS's `Subst` (mutable Map pair) + `Fresh` (mutable counter) become one
-// immutable, threaded `St` — every fresh-var mint AND every unify call
-// returns a NEW St rather than mutating in place. Type vars and row vars
-// draw from the same `next` counter so ids never collide across the two
-// maps (mirrors types.ts's original Fresh).
-
-type St = { tv: Map number Ty, rv: Map number Row, next: number }
-type TypeErr = { message: string }
-
-let mkSt = start => { tv: #{}, rv: #{}, next: start }
-let fail = message => Err({ message: message })
-
-let freshVar = st => (tVar(st.next), { ...st, next: add(st.next, 1) })
-let freshRowVar = st => (rVar(st.next), { ...st, next: add(st.next, 1) })
-
-// ---- resolution: follow a variable chain one level to a head ----
-
-let resolve = (t, st) => switch t {
-  | TyVar(id) => switch Map.get(id, st.tv) {
-      | Some(next) => resolve(next, st)
-      | None => t
-    }
-  | _ => t
-}
-
-let resolveRow = (r, st) => switch r {
-  | RowVar(id) => switch Map.get(id, st.rv) {
-      | Some(next) => resolveRow(next, st)
-      | None => r
-    }
-  | _ => r
-}
-
-// Fully apply the substitution ("zonk") — for display and assertions.
-let zonk = (t, st) => switch resolve(t, st) {
-  | TyVar(id) => tVar(id)
-  | TyCon(name, args) => tCon(name, args |> map(a => zonk(a, st)))
-  | TyFn(from, to) => tArrow(zonk(from, st), zonk(to, st))
-  | TyRecord(row) => tRecord(zonkRow(row, st))
-}
-
-let zonkRow = (row, st) => switch resolveRow(row, st) {
-  | RowExtend(label, fieldType, rest) => rExtend(label, zonk(fieldType, st), zonkRow(rest, st))
-  | r => r
-}
-
-// ---- occurs checks ----
-
-let occurs = (id, t, st) => switch resolve(t, st) {
-  | TyVar(rid) => eq(rid, id)
-  | TyCon(_, args) => someOf(a => occurs(id, a, st), args)
-  | TyFn(from, to) => or(occurs(id, from, st), occurs(id, to, st))
-  | TyRecord(row) => occursRow(id, row, st)
-}
-
-let occursRow = (id, row, st) => switch resolveRow(row, st) {
-  | RowExtend(_, fieldType, rest) => or(occurs(id, fieldType, st), occursRow(id, rest, st))
-  | _ => false
-}
-
-let rowVarOccurs = (id, row, st) => switch resolveRow(row, st) {
-  | RowVar(rid) => eq(rid, id)
-  | RowExtend(_, fieldType, rest) => or(rowVarOccursInType(id, fieldType, st), rowVarOccurs(id, rest, st))
-  | RowEmpty => false
-}
-
-let rowVarOccursInType = (id, t, st) => switch resolve(t, st) {
-  | TyVar(_) => false
-  | TyCon(_, args) => someOf(a => rowVarOccursInType(id, a, st), args)
-  | TyFn(from, to) => or(rowVarOccursInType(id, from, st), rowVarOccursInType(id, to, st))
-  | TyRecord(row) => rowVarOccurs(id, row, st)
-}
-
-// ---- unification ----
-//
-// Arity hint (CRITIQUE §4.4): a function type on exactly one side almost
-// always means a curried call got the wrong number of arguments. Say so
-// instead of a baffling raw `X with A -> B` mismatch.
-
-let isArrowT = t => switch t { | TyFn(_, _) => true | _ => false }
-
-let unifyMismatch = (ra, rb) =>
-  not(eq(isArrowT(ra), isArrowT(rb)))
-    ? let (fn, val) = isArrowT(ra) ? (ra, rb) : (rb, ra) in
-      fail("cannot unify ${showType(ra)} with ${showType(rb)} — a function (${showType(fn)}) was used where a ${showType(val)} was expected; a call may be missing an argument")
-    : fail("cannot unify ${showType(ra)} with ${showType(rb)}")
-
-let unifyArgs = (as_, bs, i, st) => switch Array.get(i, as_) {
-  | None => Ok(st)
-  | Some(a) => switch Array.get(i, bs) {
-      | None => Ok(st)
-      | Some(b) => let? s1 = unify(a, b, st) in unifyArgs(as_, bs, add(i, 1), s1)
-    }
-}
-
-let unify = (a, b, st) =>
-  let ra = resolve(a, st) in
-  let rb = resolve(b, st) in
-  switch ra {
-    | TyVar(aid) => switch rb {
-        | TyVar(bid) => eq(aid, bid) ? Ok(st) : bindVar(aid, rb, st)
-        | _ => bindVar(aid, rb, st)
-      }
-    | TyCon(aname, aargs) => switch rb {
-        | TyVar(bid) => bindVar(bid, ra, st)
-        | TyCon(bname, bargs) =>
-            and(eq(aname, bname), eq(Array.length(aargs), Array.length(bargs)))
-              ? unifyArgs(aargs, bargs, 0, st)
-              : fail("cannot unify ${showType(ra)} with ${showType(rb)}")
-        | _ => unifyMismatch(ra, rb)
-      }
-    | TyFn(afrom, ato) => switch rb {
-        | TyVar(bid) => bindVar(bid, ra, st)
-        | TyFn(bfrom, bto) => let? s1 = unify(afrom, bfrom, st) in unify(ato, bto, s1)
-        | _ => unifyMismatch(ra, rb)
-      }
-    | TyRecord(arow) => switch rb {
-        | TyVar(bid) => bindVar(bid, ra, st)
-        | TyRecord(brow) => unifyRows(arow, brow, st)
-        | _ => unifyMismatch(ra, rb)
-      }
-  }
-
-let bindVar = (id, t, st) =>
-  occurs(id, t, st)
-    ? fail("infinite type: 't${show(id)} occurs in ${showType(zonk(t, st))}")
-    : Ok({ ...st, tv: Map.set(id, t, st.tv) })
-
-// ---- row unification ----
-
-// Bring `label` to the head of a row, extending an open tail if needed.
-// Returns the field's type, the row remaining after removing it, and the
-// (possibly grown) state.
-let rewriteRow = (row, label, st) => switch resolveRow(row, st) {
-  | RowEmpty => fail("record missing field '${label}'")
-  | RowExtend(rlabel, rtype, rrest) =>
-      eq(rlabel, label)
-        ? Ok((rtype, rrest, st))
-        : let? (subType, subRest, subSt) = rewriteRow(rrest, label, st) in
-          Ok((subType, rExtend(rlabel, rtype, subRest), subSt))
-  | RowVar(rid) =>
-      let (freshT, st1) = freshVar(st) in
-      let (freshTail, st2) = freshRowVar(st1) in
-      Ok((freshT, freshTail, { ...st2, rv: Map.set(rid, rExtend(label, freshT, freshTail), st2.rv) }))
-}
-
-// both rows extend: pull a's label out of b, unify the field types, recurse
-let unifyRows = (r1, r2, st) =>
-  let a = resolveRow(r1, st) in
-  let b = resolveRow(r2, st) in
-  switch a {
-    | RowEmpty => switch b {
-        | RowEmpty => Ok(st)
-        | RowVar(bid) => bindRowVar(bid, a, st)
-        | RowExtend(label, _, _) => fail("record missing field '${label}'")
-      }
-    | RowVar(aid) => bindRowVar(aid, b, st)
-    | RowExtend(alabel, atype, arest) => switch b {
-        | RowEmpty => fail("record has extra field '${alabel}'")
-        | RowVar(bid) => bindRowVar(bid, a, st)
-        | RowExtend(_, _, _) =>
-            let? (btype, brest, s1) = rewriteRow(b, alabel, st) in
-            let? s2 = unify(atype, btype, s1) in
-            unifyRows(arest, brest, s2)
-      }
-  }
-
-let bindRowVar = (id, row, st) => switch resolveRow(row, st) {
-  | RowVar(rid) when eq(rid, id) => Ok(st)
-  | r => rowVarOccurs(id, r, st)
-      ? fail("infinite record type")
-      : Ok({ tv: st.tv, rv: Map.set(id, r, st.rv), next: st.next })
-}
+import { TyVar, TyCon, TyFn, TyRecord, RowEmpty, RowVar, RowExtend, tCon, tArrow, tRecord, tPrim, tTuple, rVar, rExtend, showType, mkSt, freshVar, freshRowVar, resolve, zonk, occurs, unify, unifyRows } from "./types.al"
 
 // ============================================================
 // (c) infer.ts — Algorithm W. AST duplicated again (see bootstrap/check.al's
@@ -299,75 +40,17 @@ let bindRowVar = (id, row, st) => switch resolveRow(row, st) {
 // `Ty` type, so its arrow constructor is `TyFn` here instead.
 // ============================================================
 
-type Span = { start: number, end: number }
-type Name = { name: string, span: Span }
+import { ENum, EBool, EStr, ERef, ECall, ELambda, ELetIn, ELetBind, EPipe, ETernary, EMatch, ERecord, EField, ETuple, EArr, EList, EMap, EInterp, IPLit, IPExpr, PWild, PBind, PLit, PBool, PStr, PTuple, PRecord, PCtor, PArr, PList, POr, TyName, TyArrow, TyApp, TyTuple, TyList, LPName, LPRecord, LPTuple, SLet, SType, SExtern } from "./ast.al"
 
-type LamParam =
-  | LPName(name: string)
-  | LPRecord(fields: [string])
-  | LPTuple(names: [string])
 
-type Field = { name: string, value: Expr }
-type MapEntry = { key: Expr, value: Expr }
-type MatchArm = { pattern: Pattern, guard: Option Expr, body: Expr }
-type PatField = { label: string, pat: Pattern }
 
-type Expr =
-  | ENum(value: number, raw: string, span: Span)
-  | EBool(value: bool, span: Span)
-  | EStr(value: string, span: Span)
-  | ERef(name: string, span: Span)
-  | ECall(fn: Expr, args: [Expr], span: Span)
-  | ELambda(params: [LamParam], body: Expr, span: Span)
-  | ELetIn(name: string, nameSpan: Span, value: Expr, body: Expr, span: Span)
-  | ELetBind(param: LamParam, paramSpan: Span, value: Expr, body: Expr, span: Span)
-  | EPipe(left: Expr, right: Expr, span: Span)
-  | ETernary(cond: Expr, thenE: Expr, elseE: Expr, span: Span)
-  | EMatch(scrutinee: Expr, arms: [MatchArm], span: Span)
-  | ERecord(fields: [Field], spread: Option Expr, span: Span)
-  | EField(target: Expr, name: string, span: Span)
-  | ETuple(elements: [Expr], span: Span)
-  | EArr(elements: [Expr], span: Span)
-  | EList(elements: [Expr], span: Span)
-  | EMap(entries: [MapEntry], span: Span)
-  | EInterp(parts: [InterpPart], span: Span)
 
 // One chunk of a "…${a}…" interpolation (ADR 0023): a literal run, or a
 // parsed hole expression.
-type InterpPart =
-  | IPLit(value: string)
-  | IPExpr(expr: Expr)
 
-type Pattern =
-  | PWild(span: Span)
-  | PBind(name: string, span: Span)
-  | PLit(value: number, raw: string, span: Span)
-  | PBool(value: bool, span: Span)
-  | PStr(value: string, span: Span)
-  | PTuple(elems: [Pattern], span: Span)
-  | PRecord(fields: [PatField], span: Span)
-  | PCtor(ctor: string, args: [Pattern], span: Span)
-  | PArr(elems: [Pattern], rest: Option Pattern, span: Span)
-  | PList(elems: [Pattern], rest: Option Pattern, span: Span)
-  // A | B | … — or-pattern (ADR 0022). Only at an arm's top level.
-  | POr(alts: [Pattern], span: Span)
 
-type TypeExpr =
-  | TyName(name: string, span: Span)
-  | TyArrow(from: TypeExpr, to: TypeExpr, span: Span)
-  | TyApp(ctor: string, args: [TypeExpr], span: Span)
-  | TyTuple(elems: [TypeExpr], span: Span)
-  | TyList(elem: TypeExpr, span: Span)
 
-type CtorField = { name: Option string, fieldType: TypeExpr }
-type Ctor = { name: string, fields: [CtorField] }
-type AliasField = { name: string, fieldType: TypeExpr }
 
-type Stmt =
-  | SLet(name: string, nameSpan: Span, value: Expr, exported: bool, doc: Option string, span: Span)
-  | SType(name: string, params: [string], ctors: [Ctor], alias: Option [AliasField], exported: bool, span: Span)
-  | SExtern(name: string, nameSpan: Span, typeExpr: TypeExpr, module: string, imported: string, exported: bool, span: Span)
-  | SImport(names: [Name], from: string, span: Span)
 
 // --- span extractors (TS reads `.span` directly) ---
 
@@ -412,7 +95,6 @@ let patSpan = p => switch p {
 type IErr = { message: string, start: number, end: number }
 let typeErr = (msg, sp) => { message: msg, start: sp.start, end: sp.end }
 
-type Ctx = { env: Map string Scheme, open: bool, ns: Map string (Map string Scheme) }
 
 let u = (a, b, st, sp) => switch unify(a, b, st) {
   | Ok(newSt) => Ok(newSt)
@@ -421,7 +103,6 @@ let u = (a, b, st, sp) => switch unify(a, b, st) {
 
 // --- polymorphic type schemes ---
 
-type Scheme = { vars: [number], rvars: [number], ty: Ty }
 
 let mono = t => { vars: [], rvars: [], ty: t }
 

@@ -8,7 +8,6 @@ import { join } from "node:path";
 import { match } from "@onrails/pattern";
 import { isOk, unwrapErr, unwrapOk } from "@onrails/result";
 import { check } from "../src/check";
-import { compile } from "../src/compile";
 import { lex } from "../src/lexer";
 import { parse } from "../src/parser";
 import { bootstrapModuleJs } from "./support/bootstrap";

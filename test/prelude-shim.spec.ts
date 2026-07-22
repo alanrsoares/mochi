@@ -15,7 +15,6 @@ import { join } from "node:path";
 import { match } from "@onrails/pattern";
 import { unwrapOk } from "@onrails/result";
 import { buildShimSource, SHIM_PATH } from "../scripts/gen-prelude";
-import { compile } from "../src/compile";
 import { bootstrapModuleJs } from "./support/bootstrap";
 
 const root = join(import.meta.dir, "..");
