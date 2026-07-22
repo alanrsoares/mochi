@@ -24,6 +24,7 @@ import type {
   TypeStmt,
 } from "./ast";
 import { builtinTypeDecls, namespaceRuntime, preludeJsDefs, runtimeDeps } from "./prelude";
+import type { Span } from "./span";
 
 // A `Ns.member` access on a bare namespace ref (`List.map`) → the JS identifier
 // its runtime is defined under, or null if it isn't a namespace access.
@@ -62,6 +63,12 @@ let annotateCtor: ((s: TypeStmt, c: Ctor) => CtorFactoryTs | null) | null = null
 // as `map(f, xs)` pins the element type, where `map(f)(xs)` leaves it `unknown`.
 // Off for the JS backend, which stays byte-identical.
 let flattenPipe = false;
+
+// TS backend (ADR 0028): given a lambda's span and its collapsed parameter count,
+// return one type annotation (the bare type text, no leading `:`) or null per
+// param. Supplied by the TS backend from the per-node inference table; null for
+// the JS backend, which emits bare params (byte-identical output).
+let annotateParams: ((span: Span, arity: number) => (string | null)[]) | null = null;
 
 // Extension for cross-module import specifiers: `.js` for the JS backend (the
 // compiled sibling), `""` for the TS backend (`import … from "./mod"`, which
@@ -116,7 +123,16 @@ const genExpr = (e: Expr): string =>
     .with({ kind: "call" }, (c) => `${genCallee(c.fn)}(${c.args.map(genExpr).join(", ")})`)
     .with({ kind: "lambda" }, (l) => {
       const { params, body } = collapseLambda(l);
-      const arrow = `(${params.map(genParam).join(", ")}) => ${genLambdaBody(body)}`;
+      // TS backend: annotate each param from the lambda's inferred curried type
+      // (ADR 0028), so `(x) => …` becomes `(x: A) => …` — otherwise strict tsc
+      // infers `any`. `l.span` (the outer, un-collapsed lambda) carries the full
+      // `A -> B -> …` type; the callback peels it per collapsed param.
+      const anns = annotateParams?.(l.span, params.length) ?? [];
+      const ps = params.map((p, i) => {
+        const g = genParam(p);
+        return anns[i] ? `${g}: ${anns[i]}` : g;
+      });
+      const arrow = `(${ps.join(", ")}) => ${genLambdaBody(body)}`;
       // Curried type, flat JS impl: arity ≥ 2 lowers to a `_curry`-wrapped
       // function so any call grouping works (CRITIQUE §4.4). Arity 1 needs none.
       return params.length >= 2 ? `_curry(${params.length}, ${arrow})` : arrow;
@@ -723,6 +739,7 @@ export type CodegenOptions = {
   annotateCtor?: (s: TypeStmt, c: Ctor) => CtorFactoryTs | null;
   flattenPipe?: boolean;
   moduleExt?: string;
+  annotateParams?: (span: Span, arity: number) => (string | null)[];
 };
 
 export const codegen = (
@@ -735,6 +752,7 @@ export const codegen = (
   annotateCtor = opts.annotateCtor ?? null;
   flattenPipe = opts.flattenPipe ?? false;
   moduleExt = opts.moduleExt ?? ".js";
+  annotateParams = opts.annotateParams ?? null;
   for (const s of prog.stmts)
     if (s.kind === "type") for (const c of s.ctors) ctorKeys.set(c.name, keysOf(c.fields));
   // Seed builtin variant ctor keys (Some/Ok/…) unless the program declares its own.

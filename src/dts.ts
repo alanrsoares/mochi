@@ -8,14 +8,12 @@
 // a multi-param lambda `(a, b) => …` compiles to a 2-arg JS function, so its
 // declaration is `(a: A, b: B) => R` — we peel arrows by the lambda's arity,
 // recursing into curried bodies (`f => r => …` stays `(f: F) => (r: R) => …`).
-import { flatMap, isErr, map, ok, pipe, type Result } from "@onrails/result";
+import { isErr, ok, type Result } from "@onrails/result";
 import type { Ctor, Expr, Program, Stmt, TypeExpr } from "./ast";
-import { check } from "./check";
+import { toTypedProgram } from "./compile";
 import type { AlangError } from "./errors";
-import { inferProgramTypes, type Scheme } from "./infer";
-import { lex } from "./lexer";
-import { parse } from "./parser";
-import { builtinTypeDecls, preludeEnv, preludeNamespaces } from "./prelude";
+import type { Scheme } from "./infer";
+import { builtinTypeDecls, preludeNamespaces } from "./prelude";
 import { type AliasDef, aliasParamId, foldAliases, type Row, type Type } from "./types";
 
 // Collect every type-constructor name appearing in a type (for detecting which
@@ -231,6 +229,40 @@ export const bindingTsType = (sc: Scheme, value: Expr, aliases: AliasDef[]): str
   return tsOf(folded, new Map());
 };
 
+// TS backend (ADR 0028): the per-parameter TS type annotations for a lambda,
+// given its INFERRED (curried) type — looked up from the per-node type table —
+// and its collapsed parameter count. One arrow is peeled per param.
+//
+// Only CONCRETE param types are emitted — a type with a free type variable is
+// left bare (null). Two reasons: (1) a generic binding's letters (`<A, B>`) are
+// declared on the const's TYPE head, NOT in the value expression, so emitting `A`
+// in a value-position param would be an out-of-scope `TS2304`; (2) an outer
+// binding lambda's generic params are already supplied contextually by that head,
+// and generic inner-lambda params are usually supplied contextually by the
+// higher-order function they're passed to. Concrete inner params (over `Expr`,
+// `string`, records of concrete fields, …) are exactly the ones tsc can't infer
+// → the bare-param `any` (TS7006) this clears. Records/tuples render structurally,
+// so destructure params (`{ x, y }`, `[a, b]`) get a matching type too.
+export const lambdaParamTypesTs = (
+  lamType: Type,
+  arity: number,
+  aliases: AliasDef[],
+): (string | null)[] => {
+  const out: (string | null)[] = [];
+  let cur = foldAliases(lamType, aliases);
+  for (let i = 0; i < arity; i++) {
+    if (cur.kind !== "arrow") {
+      out.push(null);
+      continue;
+    }
+    const fv: number[] = [];
+    freeVars(cur.from, fv);
+    out.push(fv.length === 0 ? tsOf(cur.from, new Map()) : null);
+    cur = cur.to;
+  }
+  return out;
+};
+
 const letDecl = (name: string, sc: Scheme, value: Expr, aliases: AliasDef[]): string =>
   `export declare const ${name}: ${bindingTsType(sc, value, aliases)};`;
 
@@ -323,24 +355,52 @@ export const referencedBuiltinTypeDecls = (
     .map((bt) => typeDecl(bt.name, bt.params, bt.ctors));
 };
 
+// An extern binding paired with the inferred scheme its declared type resolved
+// to. `imported` is the JS export name (what the emitted `import { … }` binds).
+export type ExternBinding = { imported: string; scheme: Scheme };
+
+// A `.d.ts` for an extern module (`extern name : T = "./host.js" "jsName"`),
+// so the emitted `.ts` that imports from it type-checks (TS backend, ADR 0026,
+// gap 3). Externs are real external JS with no alang-visible declarations, so
+// without this tsc reports TS2307 "cannot find module". Each imported binding
+// becomes an `export declare const`: a FUNCTION extern gets the same OVERLOADED
+// signature as a runtime builtin (`flatFnType`), so both curried (`f(a)(b)`) and
+// uncurried (`f(a, b)`) call sites resolve; a VALUE extern renders its free type
+// vars as `any` — the untyped-JS boundary, and a const has no generic head to
+// bind them to. Referenced builtin variants (e.g. `Result`) are inlined so the
+// file is self-contained.
+export const externModuleDts = (externs: ExternBinding[]): string => {
+  const referenced = new Set<string>();
+  for (const e of externs) consIn(e.scheme.type, referenced);
+  const decls = builtinTypeDecls
+    .filter((bt) => referenced.has(bt.name))
+    .map((bt) => typeDecl(bt.name, bt.params, bt.ctors));
+
+  const arrowCount = (t: Type): number => (t.kind === "arrow" ? 1 + arrowCount(t.to) : 0);
+  const seen = new Set<string>();
+  const lines: string[] = [];
+  for (const { imported, scheme } of externs) {
+    if (seen.has(imported)) continue;
+    seen.add(imported);
+    const t = scheme.type;
+    const n = arrowCount(t);
+    if (n === 0) {
+      const ids: number[] = [];
+      freeVars(t, ids);
+      const names = new Map(ids.map((id) => [id, "any"]));
+      lines.push(`export declare const ${imported}: ${tsOf(t, names)};`);
+    } else {
+      lines.push(`export declare const ${imported}: ${flatFnType(t, n)};`);
+    }
+  }
+  return `${[...decls, ...lines].join("\n")}\n`;
+};
+
 export const emitDts = (src: string): Result<string, AlangError> => {
-  const r = pipe(
-    lex(src),
-    flatMap(parse),
-    flatMap(check),
-    flatMap((prog) =>
-      map(
-        inferProgramTypes(prog, preludeEnv, { open: true, namespaces: preludeNamespaces }),
-        (res) => ({
-          prog,
-          env: res.env,
-          aliases: res.aliases,
-        }),
-      ),
-    ),
-  );
+  const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces });
   if (isErr(r)) return r;
-  const { prog, env, aliases } = r.value;
+  const { prog, res } = r.value;
+  const { env, aliases } = res;
   const aliasByName = new Map(aliases.map((a) => [a.name, a]));
   const lines = prog.stmts
     .map((s) => declOf(s, (n) => env.get(n), aliasByName, aliases))

@@ -77,7 +77,8 @@ if (cmd === "fmt") {
   }
   const ext = emitTs ? ".ts" : ".js";
   for (const { path, js } of result.value) {
-    const out = path.replace(/\.al$/, ext);
+    // Extern `.d.ts` outputs (TS backend, gap 3) already carry their extension.
+    const out = path.endsWith(".ts") ? path : path.replace(/\.al$/, ext);
     await Bun.write(out, js);
     console.error(`  ${out}`);
   }

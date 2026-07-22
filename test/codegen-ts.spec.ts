@@ -6,7 +6,27 @@ import { codegenTs } from "../src/codegen-ts";
 const ts = (src: string): string => unwrapOk(codegenTs(src)).trim();
 
 test("a function binding is annotated with its inferred type", () => {
-  expect(ts("let inc = x => add(x, 1)")).toContain("const inc: (x: number) => number = (x) =>");
+  // The value-position param is also typed now (ADR 0028) — a concrete param is
+  // no longer left bare, so the `_curry`/arrow arg to tsc isn't implicit-any.
+  expect(ts("let inc = x => add(x, 1)")).toContain(
+    "const inc: (x: number) => number = (x: number) =>",
+  );
+});
+
+test("an inner lambda's concrete params are annotated (ADR 0028)", () => {
+  // `y` inside the map callback would infer `any` under strict tsc; annotate it.
+  const out = ts("let mapInc = xs => xs |> map(y => add(y, 1))");
+  expect(out).toContain("(y: number) => add(y, 1)");
+});
+
+test("a generic param is left bare in value position, typed by the head", () => {
+  // The binding head declares `<A>`; those letters are NOT in scope in the value
+  // expression, so a generic param must stay bare (tsc types it contextually) —
+  // emitting `A` there would be an out-of-scope TS2304.
+  const out = ts("let apply = (f, x) => f(x)");
+  expect(out).toContain("const apply: <A, B>(f: (x: A) => B, x: A) => B =");
+  // Value arrow params stay bare — no generic letter leaks into value position.
+  expect(out).toContain("_curry(2, (f, x) => f(x))");
 });
 
 test("a multi-param function annotates uncurried, matching the emitted value", () => {

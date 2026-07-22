@@ -7,12 +7,13 @@
 // path between them are independent compilation units and could be inferred in
 // parallel. We compile them sequentially here; the dependency order is the only
 // constraint.
-import { dirname, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import { err, isErr, ok, type Result, ResultAsync } from "@onrails/result";
 import type { Program, Stmt } from "./ast";
 import { check, exportedRegistry, type Registry } from "./check";
 import { codegen, exportedCtorKeys } from "./codegen";
 import { DEFAULT_RUNTIME_IMPORT, emitTsModule } from "./codegen-ts";
+import { type ExternBinding, externModuleDts } from "./dts";
 import { type AlangError, checkErr } from "./errors";
 import { type Env, inferProgramTypes, type Scheme } from "./infer";
 import { lex } from "./lexer";
@@ -190,6 +191,19 @@ const compileGraphTs = (
   const keysByPath = new Map<string, Map<string, string[]>>();
   const outputs: ModuleOutput[] = [];
 
+  // alang has no type-name imports: every top-level `type` is globally visible in
+  // the closed-world graph, and the TS backend emits each as `export type`. Map
+  // each type name to its declaring module so a reference from a module with no
+  // value-import edge to the owner can still emit an `import type`.
+  const typeOwner = new Map<string, string>();
+  for (const { path, prog } of graph)
+    for (const s of prog.stmts) if (s.kind === "type") typeOwner.set(s.name, path);
+
+  // Extern modules referenced across the graph → one `.d.ts` each. Keyed by the
+  // resolved `.d.ts` path so a specifier imported by several modules (e.g.
+  // `./prelude.gen.js` from both compile and module) emits a single file.
+  const externDts = new Map<string, ExternBinding[]>();
+
   for (const { path, prog } of graph) {
     const gathered = gatherImports(path, prog, exportsByPath, regByPath, keysByPath);
     if (isErr(gathered)) return gathered;
@@ -203,39 +217,88 @@ const compileGraphTs = (
       namespaces: preludeNamespaces,
     });
     if (isErr(inferred)) return inferred;
+    const { env, aliases, types } = inferred.value;
 
-    // Cross-module TYPE imports. The value imports (ctors/functions) are emitted
-    // by codegen's body already (with `moduleExt: ""`); here we add only the
-    // dep's exported type names as `import type`, so emitted annotations that
-    // mention an imported variant resolve. Skip type names this module declares.
-    const localTypes = new Set(
-      prog.stmts
-        .filter((s): s is Extract<Stmt, { kind: "type" }> => s.kind === "type")
-        .map((s) => s.name),
-    );
-    const importLines: string[] = [];
-    for (const imp of importsOf(prog)) {
-      const depReg = regByPath.get(resolveImport(path, imp.from));
-      const depTypes = depReg ? [...depReg.type.keys()].filter((t) => !localTypes.has(t)) : [];
-      if (depTypes.length)
-        importLines.push(
-          `import type { ${depTypes.join(", ")} } from ${JSON.stringify(imp.from.replace(/\.al$/, ""))};`,
-        );
+    // Collect this module's externs (with their inferred schemes) into the
+    // per-`.d.ts` bucket for gap-3 declaration emission below.
+    for (const s of prog.stmts) {
+      if (s.kind !== "extern") continue;
+      const dtsPath = `${resolve(dirname(path), s.module.replace(/\.[jt]s$/, ""))}.d.ts`;
+      const sc = env.get(s.name);
+      if (!sc) continue;
+      const bucket = externDts.get(dtsPath) ?? externDts.set(dtsPath, []).get(dtsPath)!;
+      if (!bucket.some((e) => e.imported === s.imported))
+        bucket.push({ imported: s.imported, scheme: sc });
     }
 
-    const ts = emitTsModule(prog, {
-      env: inferred.value.env,
-      aliases: inferred.value.aliases,
+    const localTypes = new Set(
+      prog.stmts.filter((s) => s.kind === "type").map((s) => (s as { name: string }).name),
+    );
+    // Emit the body first (no type imports), then scan it for every non-local
+    // type name it references and prepend an `import type` per declaring module.
+    const body = emitTsModule(prog, {
+      env,
+      aliases,
+      types,
       importedKeys,
-      importLines,
+      importLines: [],
       runtimeImport,
     });
-    exportsByPath.set(path, exportsOf(prog, inferred.value.env));
+    const typeImports = crossModuleTypeImports(body, path, localTypes, typeOwner);
+    const ts = typeImports.length ? `${typeImports.join("\n")}\n\n${body}` : body;
+
+    exportsByPath.set(path, exportsOf(prog, env));
     regByPath.set(path, exportedRegistry(prog));
     keysByPath.set(path, exportedCtorKeys(prog));
     outputs.push({ path, js: ts });
   }
+
+  for (const [dtsPath, externs] of externDts)
+    outputs.push({ path: dtsPath, js: externModuleDts(externs) });
+
   return ok(outputs);
+};
+
+// A module specifier for `to` as imported from `from` (absolute `.al` paths),
+// extension stripped — sibling files become `./name`.
+const relSpec = (from: string, to: string): string => {
+  const rel = relative(dirname(from), to).replace(/\.al$/, "");
+  return rel.startsWith(".") ? rel : `./${rel}`;
+};
+
+// `import type { … }` lines for every non-local type name the emitted `ts` text
+// references, grouped by declaring module. A name already bound by a VALUE import
+// is skipped — re-importing it as a type would be a duplicate identifier
+// (TS2300). Builtin variants (`Result`, `Option`) aren't in `typeOwner`; they're
+// emitted inline by `referencedBuiltinTypeDecls`.
+const crossModuleTypeImports = (
+  ts: string,
+  importerPath: string,
+  localTypes: Set<string>,
+  typeOwner: Map<string, string>,
+): string[] => {
+  const valueImported = new Set<string>();
+  for (const m of ts.matchAll(/^import \{([^}]*)\} from/gm))
+    for (const n of m[1]!.split(",")) {
+      const bound = n
+        .trim()
+        .split(/\s+as\s+/)
+        .at(-1)
+        ?.trim();
+      if (bound) valueImported.add(bound);
+    }
+
+  const byOwner = new Map<string, string[]>();
+  for (const [name, ownerPath] of typeOwner) {
+    if (ownerPath === importerPath || localTypes.has(name) || valueImported.has(name)) continue;
+    if (!new RegExp(`\\b${name}\\b`).test(ts)) continue;
+    const spec = relSpec(importerPath, ownerPath);
+    (byOwner.get(spec) ?? byOwner.set(spec, []).get(spec)!).push(name);
+  }
+  return [...byOwner].map(
+    ([spec, names]) =>
+      `import type { ${names.toSorted().join(", ")} } from ${JSON.stringify(spec)};`,
+  );
 };
 
 // `build --emit=ts`: resolve the graph, emit a typed `.ts` beside each `.al`.

@@ -8,8 +8,11 @@ TypeScript** from alang, including the self-hosted `bootstrap/`.
 
 Single-file and well-behaved multi-module programs emit **strict-clean today**.
 The self-hosted `bootstrap/` emits and links, but is **not yet strict-clean** —
-537 `tsc` errors, ~75% of them one deferred feature (per-node type table for
-lambda params). That feature is the highest-leverage next step.
+**266 `tsc` errors** (was 537). Two gaps have shipped: the per-node lambda-param
+type table (gap 1, ADR 0028, −238) and cross-module `import type` + extern `.d.ts`
+(gap 3, ADR 0029, −33; TS2307 and TS2304 now zero). The remaining blocker is
+**gap 2 — row-polymorphic records** (TS2339 23 + TS2322 7 + most of TS2345 168),
+plus the polymorphic higher-order tail ADR 0028 left open (TS7006 40, TS18046 24).
 
 ## Landed this session (all on `main`, committed)
 
@@ -56,25 +59,30 @@ lambda params). That feature is the highest-leverage next step.
 
 ## Remaining gaps (ranked by leverage)
 
-### 1. Per-node type table — THE big one (~75% of bootstrap errors)
-The bootstrap's polymorphic higher-order style (`firstSome`, `reduce`, generic
-index loops) emits lambdas whose params tsc can't infer → TS7006 (implicit any,
-131), TS18046 (unknown, 103), most TS2345 (232). Fix: thread inference's
-per-expression type info (`TypeAt` table from `inferProgramTypes`) into
-`codegen-ts` and annotate lambda params. Deferred in ADR 0024/0026 because
-closed-world didn't need it; the open bootstrap does. **This is the dominant
-blocker for a strict-clean bootstrap** and would also sharpen single-file output.
+### 1. Per-node type table — DONE (ADR 0028, −238 errors: 537 → 299)
+Threaded the `TypeAt` table into `codegen-ts` via an `annotateParams` callback;
+lambda params are annotated by peeling the lambda's recorded curried type
+(`dts.lambdaParamTypesTs`). **Concrete param types only** — a generic binding's
+`<A,B>` letters aren't in scope in the value expression (would be TS2304), and
+generic params get contextual typing from the head / their HOF anyway. Result:
+TS7006 131 → 40, TS18046 103 → 24, TS2345 214 → 170, TS2739/2740 19 → 0.
+Remaining tail here = the *polymorphic* higher-order case (generic inner callbacks
+with no contextual type), which needs generics scoping over the value — out of
+this ADR's scope. Small side-effect: TS2304 6 → 11 (concrete param names a sibling
+module's type that isn't imported — folds into gap 3).
 
-### 2. Row-polymorphic record emission (~40 errors)
+### 2. Row-polymorphic record emission (~30+ errors) — NOW THE DOMINANT BLOCKER
 Partial record construction (`{ ...st, next: n }` inferred as `{next}` where a
-full `{tv, rv, next}` is expected) doesn't fit TS structural typing. TS2339 (30),
-TS2322 (11). Needs a row-poly → TS strategy (structural widening, or emit
-records with the full inferred field set).
+full `{tv, rv, next}` is expected) doesn't fit TS structural typing. TS2339 (23),
+TS2322 (7), plus a large share of TS2345 (168). Needs a row-poly → TS strategy
+(structural widening, or emit records with the full inferred field set).
 
-### 3. Extern module `.d.ts` (19 errors)
-`bootstrap/` imports externs `./host` and `./prelude.gen` (real external JS).
-Emitted `.ts` has no declarations for them → TS2307. Fix: emit/point to `.d.ts`
-for extern modules in the graph.
+### 3. Extern `.d.ts` + cross-module type imports — DONE (ADR 0029, −33: 299 → 266)
+`compileGraphTs` now emits a self-contained `.d.ts` per extern module
+(`dts.externModuleDts`: overloaded fn sigs via `flatFnType`, `any`-typed value
+vars, inlined builtin variant decls) and prepends `import type` for every
+referenced type resolved to its declaring module (`crossModuleTypeImports`,
+scan-based, superset of the old direct-import loop). TS2307 19 → 0, TS2304 11 → 0.
 
 ### 4. Publish `@alang/runtime` (packaging, not code)
 Emitted `.ts` imports `@alang/runtime`, which isn't a resolvable package. Options:
@@ -87,20 +95,28 @@ repo.
 ```bash
 mkdir -p /tmp/bts
 bun run alang build --emit=ts bootstrap/cli.al >/dev/null 2>&1
+# copies both the module .ts AND the emitted extern .d.ts (host.d.ts, prelude.gen.d.ts)
 for f in bootstrap/*.ts; do sed 's#"@alang/runtime"#"<ABS>/src/runtime"#' "$f" > "/tmp/bts/$(basename $f)"; done
-rm -f bootstrap/*.ts   # IMPORTANT: don't leave .ts in bootstrap/ (check scans it)
-# add a strict tsconfig (strict, noEmit, skipLibCheck, moduleResolution bundler) in /tmp/bts
+rm -f bootstrap/*.ts   # IMPORTANT: glob also removes *.d.ts — don't leave any in bootstrap/ (check scans it)
+# strict tsconfig (strict, noEmit, skipLibCheck, moduleResolution bundler) in /tmp/bts,
+# with `paths` mapping @onrails/pattern + @onrails/result to <ABS>/node_modules/.../dist/index.d.ts
 cd /tmp/bts && bunx tsc -p tsconfig.json 2>&1 | grep -oE 'error TS[0-9]+' | sort | uniq -c | sort -rn
 ```
-Note: `alang build --emit=ts` writes `.ts` **beside the `.al`**; always
-`rm -f bootstrap/*.ts` after — a stray `.ts` in `bootstrap/` breaks `bun run check`.
-`@onrails/pattern`/`@onrails/result` only resolve inside the repo, so tsc there.
+Note: `alang build --emit=ts` writes `.ts` (and extern `.d.ts`) **beside the
+`.al`**; always `rm -f bootstrap/*.ts` after — a stray `.ts`/`.d.ts` in
+`bootstrap/` breaks `bun run check`. `@onrails/*` resolve via tsconfig `paths` to
+the repo `node_modules` (so tsc can run in `/tmp/bts`).
 
 ## Suggested next step
 
-Scope the per-node type table (gap 1) as an ADR + plan — it unblocks the bootstrap
-dogfood and is the bulk of the remaining distance. Cheap parallel wins: extern
-`.d.ts` (gap 3) and row-poly records (gap 2), ~60 errors combined.
+Gaps 1 (ADR 0028) and 3 (ADR 0029) done. The remaining blocker is **gap 2 —
+row-polymorphic record emission** (TS2339 23 + TS2322 7 + most of TS2345 168).
+Partial record construction (`{ ...st, next: n }` inferred `{next}` vs a full
+`{tv,rv,next}`) doesn't fit TS structural typing — needs a design call: structural
+widening, or emit the full inferred field set. Not mechanical; scope as an ADR.
+The smaller residual is the polymorphic higher-order tail ADR 0028 left open
+(generic inner callbacks with no contextual type: TS7006 40, TS18046 24), which
+needs generics that scope over the value expression.
 
 ## Not part of this track (uncommitted in tree)
 Rebrand (README, logos, `docs/REBRAND.md`, `docs/V1.md`) and ADRs 0024 (llvm) /

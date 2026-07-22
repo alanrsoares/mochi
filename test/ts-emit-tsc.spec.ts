@@ -61,6 +61,17 @@ let lazyDoubled = @{1, 2, 3} |> List.map(x => mul(x, 2))
 let scores = #{"a": 1, "b": 2}
 let bumped = Some(5) |> Option.map(x => add(x, 1))
 let greet = name => "hello \${name}!"`,
+  // Regression guard for ADR 0028: INNER lambda params over concrete types
+  // (`n`, `acc`) would infer `any` under strict tsc; they must be annotated.
+  // `compose` is generic — its value-position params must stay BARE (their
+  // `<A,B,C>` letters aren't in scope in the value), typed contextually instead.
+  higherOrder: `
+let compose = (f, g, x) => f(g(x))
+let pipeline = xs =>
+  xs
+  |> map(n => add(n, 1))
+  |> filter(n => eq(n, n))
+  |> reduce((acc, n) => add(acc, n), 0)`,
 };
 
 beforeAll(() => {
