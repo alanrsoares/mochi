@@ -92,6 +92,18 @@ let firstR = xs => switch xs {
 }
 let a = describe(Some(Circle(2.0)))
 let b = firstR([Circle(1.0), Rect(2.0, 3.0)])`,
+  // Regression guard for ADR 0035: an EMPTY collection seed (\`#{}\`) threaded
+  // through a stateful fold. A \`let\`-generalized binder (\`s\`) and a top-level
+  // one (\`seeded\`) both make the seed polymorphic, so the empty map otherwise
+  // emits \`Map<unknown, unknown>\` and fails against the fold's \`Map<number,
+  // number>\` state. The annotation (IIFE param + \`const\` type) pins them.
+  emptyColl: `
+let bump = st => { ...st, m: Map.set(st.n, st.n, st.m), n: add(st.n, 1) }
+let seeded = { m: #{}, n: 0 }
+let run = () =>
+  let s = { m: #{}, n: 0 } in
+  bump(bump(s)).m
+let run2 = () => bump(seeded).m`,
 };
 
 beforeAll(() => {

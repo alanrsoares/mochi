@@ -82,6 +82,19 @@ let annotateParams:
 // not plain boolean ones, so nested-pattern handlers otherwise see the full union.
 let guardBaseType: ((scrutinee: Expr) => string | null) | null = null;
 
+// TS backend (ADR 0035): given an EMPTY collection literal expr, return its
+// fully-concrete TS type text (`Map<number, Ty>`, `Ty[]`), or null (element
+// type still generic / JS backend). An empty `#{}`/`[]` otherwise infers
+// `Map<unknown, unknown>`/`never[]` (and `Set.fromArray([])` → `Set<never>`),
+// which won't flow to a concretely-typed state field; the annotation pins it.
+let annotateEmpty: ((e: Expr) => string | null) | null = null;
+
+// TS backend (ADR 0035): given a `let x = v in …` value expr, return the
+// monomorphic TS type to annotate the emitted IIFE param `x`, or null. The
+// annotation flows contextual types into `v`'s empty collections through the
+// IIFE, which arg-based inference alone cannot do.
+let annotateLetin: ((value: Expr) => string | null) | null = null;
+
 // Extension for cross-module import specifiers: `.js` for the JS backend (the
 // compiled sibling), `""` for the TS backend (`import … from "./mod"`, which
 // tsc/bundlers resolve to the sibling `.ts`). Set per `codegen` call.
@@ -154,10 +167,11 @@ const genExpr = (e: Expr): string =>
     })
     // let x = v in b  →  an IIFE binding x: `((x) => b)(v)`. Non-recursive, so
     // a plain arg-application is enough; nested let-ins chain as curried IIFEs.
-    .with(
-      { kind: "letin" },
-      (l) => `((${l.name}) => ${genLambdaBody(l.body)})(${genExpr(l.value)})`,
-    )
+    .with({ kind: "letin" }, (l) => {
+      const ann = annotateLetin?.(l.value);
+      const param = ann ? `${l.name}: ${ann}` : l.name;
+      return `((${param}) => ${genLambdaBody(l.body)})(${genExpr(l.value)})`;
+    })
     // let? p = v in b  →  the Result bind: `_Result_flatMap((p) => b)(v)`.
     // Under `flattenPipe` (TS backend) the two args go in ONE grouping —
     // `_Result_flatMap((p) => b, v)` — so tsc infers `p`'s type from `v` in the
@@ -191,13 +205,21 @@ const genExpr = (e: Expr): string =>
     // A tuple erases to a JS array `[a, b]` (like ReScript); the type system
     // keeps it distinct from an `alang` Array, the runtime shares the shape.
     .with({ kind: "tuple" }, (t) => `[${t.elements.map(genExpr).join(", ")}]`)
-    .with({ kind: "arr" }, (l) => `[${l.elements.map(genExpr).join(", ")}]`)
+    .with({ kind: "arr" }, (l) => {
+      const body = `[${l.elements.map(genExpr).join(", ")}]`;
+      // Empty `[]` infers `never[]` — annotate with the resolved element type
+      // (TS backend) so it flows where a concrete array is expected (ADR 0035).
+      const ann = l.elements.length === 0 ? annotateEmpty?.(l) : null;
+      return ann ? `(${body} as ${ann})` : body;
+    })
     .with({ kind: "list" }, genList)
-    .with(
-      { kind: "map" },
-      (m) =>
-        `new Map([${m.entries.map((e) => `[${genExpr(e.key)}, ${genExpr(e.value)}]`).join(", ")}])`,
-    )
+    .with({ kind: "map" }, (m) => {
+      const entries = m.entries.map((e) => `[${genExpr(e.key)}, ${genExpr(e.value)}]`).join(", ");
+      // Empty `#{}` infers `Map<unknown, unknown>` — emit `new Map<K, V>()`
+      // with the resolved key/value types (TS backend, ADR 0035).
+      const ann = m.entries.length === 0 ? annotateEmpty?.(m) : null;
+      return ann ? `new ${ann}()` : `new Map([${entries}])`;
+    })
     .exhaustive();
 
 // A `@{...}` literal → a lazy iterable over its (eagerly-evaluated) elements.
@@ -832,6 +854,8 @@ export type CodegenOptions = {
   moduleExt?: string;
   annotateParams?: (span: Span, arity: number) => { generics: string; params: (string | null)[] };
   guardBaseType?: (scrutinee: Expr) => string | null;
+  annotateEmpty?: (e: Expr) => string | null;
+  annotateLetin?: (value: Expr) => string | null;
 };
 
 export const codegen = (
@@ -846,6 +870,8 @@ export const codegen = (
   moduleExt = opts.moduleExt ?? ".js";
   annotateParams = opts.annotateParams ?? null;
   guardBaseType = opts.guardBaseType ?? null;
+  annotateEmpty = opts.annotateEmpty ?? null;
+  annotateLetin = opts.annotateLetin ?? null;
   for (const s of prog.stmts)
     if (s.kind === "type") for (const c of s.ctors) ctorKeys.set(c.name, keysOf(c.fields));
   // Seed builtin variant ctor keys (Some/Ok/…) unless the program declares its own.

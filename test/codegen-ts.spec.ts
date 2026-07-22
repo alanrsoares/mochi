@@ -46,6 +46,26 @@ test("a non-function binding is left for TS to infer (no annotation)", () => {
   expect(ts("let answer = 42")).toBe("const answer = 42;");
 });
 
+test("a concrete empty collection literal is annotated with its element types (ADR 0035)", () => {
+  // A monomorphic empty map otherwise infers `Map<unknown, unknown>`; the resolved
+  // key/value types let it flow where a concrete map is expected.
+  const out = ts("let seed = () => Map.set(1, 2, #{})");
+  expect(out).toContain("new Map<number, number>()");
+});
+
+test("a let-generalized empty seed is pinned via the IIFE param (ADR 0035)", () => {
+  // `let m = #{} in …` generalizes `m`, so the seed stays polymorphic; the empty
+  // map can't be annotated in place. Annotating the IIFE param instead flows the
+  // monomorphic use type in contextually, typing `new Map([])` as `Map<K, V>`.
+  const out = ts("let run = () => let m = #{} in Map.set(1, 2, m)");
+  expect(out).toContain("((m: Map<number, number>) =>");
+});
+
+test("a top-level polymorphic-but-single-use seed gets a const annotation (ADR 0035)", () => {
+  const out = ts("let seed = #{}\nlet use = () => Map.set(1, 2, seed)");
+  expect(out).toContain("const seed: Map<number, number> = new Map([]);");
+});
+
 test("a variant decl emits an export type union alongside its typed ctor factories", () => {
   const out = ts("type Color = | Red | Green");
   expect(out).toContain('export type Color =\n  | { _tag: "Red" }\n  | { _tag: "Green" };');

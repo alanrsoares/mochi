@@ -97,6 +97,39 @@ const tsRow = (row: Row, names: Map<number, string>): string => {
   return body;
 };
 
+// True when a (zonked) type still carries an unbound type or row var — i.e. it
+// is NOT fully concrete. `tsOf` would render such a var as `unknown`.
+const hasFreeVar = (t: Type): boolean => {
+  switch (t.kind) {
+    case "var":
+      return true;
+    case "con":
+      return t.args.some(hasFreeVar);
+    case "arrow":
+      return hasFreeVar(t.from) || hasFreeVar(t.to);
+    case "record": {
+      let row = t.row;
+      while (row.kind === "extend") {
+        if (hasFreeVar(row.type)) return true;
+        row = row.rest;
+      }
+      return row.kind === "rvar";
+    }
+  }
+};
+
+// TS type for an EMPTY collection literal (`#{}`/`[]`/`@{}`) whose element types
+// are fully known, else null. An empty literal otherwise infers `Map<unknown,
+// unknown>`/`never[]`/`Set<never>`, which won't flow to a concretely-typed
+// parameter (ADR 0035); annotating the seed with the resolved element types
+// (`new Map<number, Ty>()`, `[] as Ty[]`) fixes the mismatch. Skip when any
+// element type is still a free var — there is no generic head in scope at a
+// literal, so `unknown` would be no better than what tsc already infers.
+export const emptyCollTs = (t: Type, aliases: AliasDef[]): string | null => {
+  const folded = foldAliases(t, aliases);
+  return hasFreeVar(folded) ? null : tsOf(folded, new Map());
+};
+
 // Arity-aware function type: peel one arrow per lambda parameter, then recurse
 // into the body (which may itself be a lambda for curried definitions).
 const declType = (t: Type, value: Expr, names: Map<number, string>): string => {

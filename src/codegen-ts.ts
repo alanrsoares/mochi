@@ -17,6 +17,7 @@ import {
   bindingTsType,
   builtinDeclsIn,
   ctorFactoryTs,
+  emptyCollTs,
   genericLambdaParams,
   guardParamTs,
   lambdaParamTypesTs,
@@ -40,6 +41,7 @@ export type TsEmitContext = {
   env: Env;
   aliases: AliasDef[];
   types: TypeAt[];
+  letParams: TypeAt[];
   importedKeys: Map<string, string[]>;
   importLines: string[];
   runtimeImport: string;
@@ -69,6 +71,10 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
 
   // Per-node inferred types, keyed by span, for annotating lambda params below.
   const typeAt = new Map(ctx.types.map((t) => [`${t.span.start}:${t.span.end}`, t.type]));
+  // Monomorphic types for polymorphic-but-single-use `let` bindings, keyed by
+  // value span — annotates top-level `const`s and `let … in` IIFE params so tsc
+  // types the empty collections inside their values (ADR 0035).
+  const letParamAt = new Map(ctx.letParams.map((t) => [`${t.span.start}:${t.span.end}`, t.type]));
 
   // Annotate function-valued top-level lets. Lambda params are where TS inference
   // is weakest (bare `(x) => …` infers `any` under strict) and where the
@@ -76,7 +82,15 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
   // place to bind generics — dts renders its escaped vars as `unknown` — so
   // annotating it would be worse than TS's own inference; skip it.
   const annotate = (name: string, value: Expr): string | null => {
-    if (value.kind !== "lambda" || name.startsWith("$")) return null;
+    if (name.startsWith("$")) return null;
+    // A polymorphic-but-monomorphically-used non-lambda binding (`let emptyReg =
+    // { ctors: #{}, … }`): annotate `const name: T` with the resolved use type so
+    // tsc types its empty collections, which its own inference erases (ADR 0035).
+    if (value.kind !== "lambda") {
+      const t = letParamAt.get(`${value.span.start}:${value.span.end}`);
+      const ts = t ? emptyCollTs(t, ctx.aliases) : null;
+      return ts ? `: ${ts}` : null;
+    }
     const sc = ctx.env.get(name);
     return sc ? `: ${bindingTsType(sc, value, ctx.aliases)}` : null;
   };
@@ -118,6 +132,21 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
     return t ? guardParamTs(t, ctx.aliases) : null;
   };
 
+  // An empty collection literal (`#{}`/`[]`) — annotate with its resolved
+  // element types so the seed flows to a concretely-typed state field (ADR 0035).
+  const annotateEmpty = (e: Expr) => {
+    const t = typeAt.get(`${e.span.start}:${e.span.end}`);
+    return t ? emptyCollTs(t, ctx.aliases) : null;
+  };
+
+  // A `let x = v in …` whose value is polymorphic but used at one monomorphic
+  // type: annotate the IIFE param so tsc contextually types the value's empty
+  // collections (ADR 0035). Keyed by value span (`infer.letParams`).
+  const annotateLetin = (value: Expr) => {
+    const t = letParamAt.get(`${value.span.start}:${value.span.end}`);
+    return t ? emptyCollTs(t, ctx.aliases) : null;
+  };
+
   // Type each variant's ctor factories (return the variant type, params from the
   // ctor's field TypeExprs — ADR 0015) so `Circle(2)` is a `Shape`, not `any`.
   const body = codegen(prog, ctx.importedKeys, {
@@ -125,6 +154,8 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
     annotate,
     annotateParams,
     guardBaseType,
+    annotateEmpty,
+    annotateLetin,
     annotateCtor: (s, c) => ctorFactoryTs(s.name, s.params, c),
     flattenPipe: true,
     moduleExt: "", // `import … from "./mod"` — tsc resolves to the sibling `.ts`
@@ -152,6 +183,7 @@ export const codegenTs = (src: string, opts: CodegenTsOptions = {}): Result<stri
       env: res.env,
       aliases: res.aliases,
       types: res.types,
+      letParams: res.letParams,
       importedKeys: new Map(),
       importLines: [],
       runtimeImport: opts.runtimeImport ?? DEFAULT_RUNTIME_IMPORT,

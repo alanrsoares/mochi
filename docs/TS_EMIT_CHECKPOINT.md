@@ -1,4 +1,4 @@
-# TS-emit checkpoint — 2026-07-23
+# TS-emit checkpoint — 2026-07-23 (rev 2)
 
 Working state of the TypeScript backend track (ADR 0026 / `docs/TS_DIALECT.md`),
 so a fresh session can pick up. Goal: emit **fully working, `tsc --strict`-clean
@@ -8,20 +8,20 @@ TypeScript** from alang, including the self-hosted `bootstrap/`.
 
 Single-file and well-behaved multi-module programs emit **strict-clean today**.
 The self-hosted `bootstrap/` emits and links, but is **not yet strict-clean** —
-**33 `tsc` errors** (was 537). Seven gaps have shipped: the per-node lambda-param
+**26 `tsc` errors** (was 537). Eight gaps have shipped: the per-node lambda-param
 type table (gap 1, ADR 0028, −238), cross-module `import type` + extern `.d.ts`
 (gap 3, ADR 0029, −33; TS2307/TS2304 → 0), guard-form arms as **type predicates**
 (gap 2, ADR 0031, −23; TS2339 23 → 1), **generic value-lambda emission + flat
 `let?` bind** (ADR 0032, 243 → 94, −149), **flat function-type emission + overload
-ordering** (ADR 0033, 94 → 58, −36), and — this session — **open-row →
-generic-intersection record emission** (ADR 0034, 58 → 33, −25). ADR 0034: an open
-row `{ next: Int | r }` now emits as `({ next: number } & R)` under a scoped `<R>`
-head instead of the closed `{ next: number }` that dropped the row var — so a
-field-subset record unifies with the full state and the spread result flows back.
-This killed the entire `infer.ts` TS2345 "partial record vs full state" class
-(48 → 23). The remaining 23 TS2345 are no longer one shape: they split into
-**empty-collection inference** (`Map.empty` → `Map<unknown, unknown>`) and the
-**polymorphic higher-order tail** (ADR 0028's deferred class) — see below.
+ordering** (ADR 0033, 94 → 58, −36), **open-row → generic-intersection record
+emission** (ADR 0034, 58 → 33, −25), and — this session — **empty-collection seeds
+annotated at the binding** (ADR 0035, 33 → 26, −7). ADR 0035: an empty `#{}`
+otherwise infers `Map<unknown, unknown>`; a concrete seed now emits `new Map<K,
+V>()` in place, and a `let`-generalized seed (whose vars stay quantified) gets its
+IIFE param / top-level `const` annotated with the single monomorphic use type, so
+contextual typing pins the empties. This killed the `infer.ts` empty-collection
+TS2345 class (Tarjan state, `instantiate` maps). The remaining 26 are dominated by
+the **polymorphic higher-order tail** (ADR 0028's deferred class) — see below.
 
 ## Landed this session (all on `main`, committed)
 
@@ -33,9 +33,10 @@ This killed the entire `infer.ts` TS2345 "partial record vs full state" class
 | `248e239` | fix(codegen): curry-aware TS types + pipe flattening — pipelines typecheck |
 | `704081b` | feat(codegen): `build --emit=ts` — typed `.ts` for module graphs |
 | `adea790` | feat(codegen): flat fn-type emission + overload order (ADR 0033) |
-| _(this commit)_ | feat(codegen): open-row records → generic intersections (ADR 0034) |
+| `68d93b6` | feat(codegen): open-row records → generic intersections (ADR 0034) |
+| _(this commit)_ | feat(codegen): empty-collection seeds annotated at binding (ADR 0035) |
 
-`bun run check` is green (795 tests). JS backend byte-identical throughout
+`bun run check` is green (798 tests). JS backend byte-identical throughout
 (all TS-only behavior is behind codegen options that default off).
 
 ## What works now
@@ -119,7 +120,25 @@ emits a type predicate ONLY when it refines (`patTarget !== base`), else a plain
 boolean guard. TS2345 48 → 23 (whole `infer.ts` "partial record vs full state"
 class gone), TS2677 stayed 0. JS backend byte-identical.
 
-### 5. Publish `@alang/runtime` (packaging, not code)
+### 5. Empty-collection seeds annotated at the binding — DONE (ADR 0035, −7: 33 → 26)
+An empty `#{}` emits `new Map([])` → `Map<unknown, unknown>`; `Set.fromArray([])`
+→ `Set<never>`. Two shapes: a **concrete** seed (fold pins it to `Map<number,
+number>`) now emits `new Map<K, V>()` in place (`recordEmpty` records empty-literal
+spans; `dts.emptyCollTs` renders the type when fully concrete, else null). A
+**`let`-generalized** seed (`let initSt = { index: #{}, … } in …`) keeps quantified
+vars — the empty literal can't be annotated in place, and the IIFE lowering blocks
+tsc from flowing the fold's requirement back. Fix: `infer.ts` collects each `let`
+scheme's body instantiations (`noteUse`/`noteLet`), and `resolveLetParams` exposes
+the single monomorphic use type (`InferResult.letParams`, kept off `types` so
+hover/inlay are untouched); `codegen-ts` annotates the IIFE param / top-level
+`const` with it, so contextual typing pins the empties inside. Rule is strict —
+annotate ONLY when every use agrees and is fully concrete; a binding that also
+flows into a generic position stays bare (pinning it over-constrains that call +
+its sibling empties → the polymorphic-HOF tail). Killed the `infer.ts`
+empty-collection TS2345 class; the 2 `module.ts` `emptyReg` cases remain (entangled
+with the HOF tail). JS backend byte-identical.
+
+### 6. Publish `@alang/runtime` (packaging, not code)
 Emitted `.ts` imports `@alang/runtime`, which isn't a resolvable package. Options:
 publish it, or default `build --emit=ts` to write `runtime.ts` into the output
 tree + import relatively. Needed for emitted `.ts` to run/typecheck outside this
@@ -145,26 +164,22 @@ the repo `node_modules` (so tsc can run in `/tmp/bts`).
 ## Suggested next step
 
 Gaps 1 (ADR 0028), 2 (ADR 0031), 3 (ADR 0029), the polymorphic higher-order tail
-starter (ADR 0032), the first-class combinator tail (ADR 0033), and the row-poly
-record tail (ADR 0034) done — **33 `tsc` errors left**, no longer one shape. Two
-distinct gaps remain, each its own ADR:
+starter (ADR 0032), the first-class combinator tail (ADR 0033), the row-poly record
+tail (ADR 0034), and empty-collection seeds (ADR 0035) done — **26 `tsc` errors
+left**. The dominant remaining gap:
 
-1. **Empty-collection inference** — `Map.empty` (and friends) infer
-   `Map<unknown, unknown>`, flowing where a concrete map is expected (`module.ts`
-   registry merge, `infer.ts` Tarjan state `{ index, low, … }`). The `& R` now
-   surfaces these as `{ … } & { tv: Map<unknown, unknown>; … }` mismatches. Fix
-   direction: give empty-collection builtins a generalizable element type at the
-   emit boundary, or annotate the seeded state literal.
-2. **Polymorphic higher-order tail** (ADR 0028's deferred class) — generic inner
-   callbacks with no contextual type: `A[]` vs `Stmt[]` (`infer.ts` 545), `Set<A>`
-   vs `Set<B>` (`codegen.ts` 382), `Stmt` vs `(a: Stmt) => unknown` (`parser.ts`
-   310/314). Needs generics scoping over more value positions than ADR 0032 reaches.
+1. **Polymorphic higher-order tail** (ADR 0028's deferred class) — generic inner
+   callbacks with no contextual type: `A[]` vs `Stmt[]` (`infer.ts`), `Set<A>` vs
+   `Set<B>` (`codegen.ts`), `Stmt` vs `(a: Stmt) => unknown` (`parser.ts`), plus
+   the 2 `module.ts` `emptyReg` seeds entangled with it (a concrete annotation
+   there only helps once the sibling empties in the generic call are also pinned).
+   Needs generics scoping over more value positions than ADR 0032 reaches.
 
 Smaller residuals: TS2322 5, TS2554 3 (arity), TS2339 1, TS18046 1.
 
-## Reproduce (updated for ADR 0034)
-The measurement recipe below still holds. `bun run check` currently green at
-**795 tests**; after ADR 0034 the differential self-host build stays byte-identical.
+## Reproduce (updated for ADR 0035)
+The measurement recipe above still holds. `bun run check` currently green at
+**798 tests**; after ADR 0035 the differential self-host build stays byte-identical.
 
 ## Not part of this track (uncommitted in tree)
 Rebrand (README, logos, `docs/REBRAND.md`, `docs/V1.md`) and ADRs 0024 (llvm) /

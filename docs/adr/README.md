@@ -58,6 +58,7 @@ What else was on the table and why not.
 | [0032](0032-generic-value-lambdas.md) | Generic value-lambda emission + flat `let?` bind (TS backend) | Accepted |
 | [0033](0033-flat-function-type-emission.md) | Flat function-type emission + overload ordering (TS backend) | Accepted |
 | [0034](0034-open-row-generic-record-emission.md) | Open-row records emit as generic intersections `{…} & R` (TS backend) | Accepted |
+| [0035](0035-empty-collection-inference.md) | Empty-collection seeds annotated at the binding (TS backend) | Accepted |
 
 
 ## Backlog (well-evidenced, not yet written)

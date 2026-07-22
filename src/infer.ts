@@ -170,6 +170,12 @@ type Ctx = {
   ns: Map<string, Map<string, Scheme>>; // qualified collection namespaces (List.map, ...)
   aliases: AliasDef[]; // transparent record aliases, for folding types in errors
   record?: (span: Span, t: Type, symbol?: SymbolInfo) => void;
+  // `noteUse` (optional, TS emit) records each instantiation of a `let`-bound
+  // scheme, so a `let x = v in …` whose value is polymorphic but used at a
+  // single monomorphic type can annotate the emitted IIFE param — letting tsc
+  // contextually type empty collections inside `v` (ADR 0035).
+  noteUse?: (sc: Scheme, t: Type) => void;
+  noteLet?: (sc: Scheme, valueSpan: Span) => void;
 };
 
 const u = (a: Type, b: Type, ctx: Ctx, span?: Span): Result<Type, AlangError> => {
@@ -267,6 +273,19 @@ const inferInterp = (parts: (string | Expr)[], ctx: Ctx): Result<Type, AlangErro
   return ok(tString);
 };
 
+// Record the type of an EMPTY collection literal (`#{}`/`[]`/`@{}`) at its span,
+// passing the inferred Result through. Only empties are recorded — a non-empty
+// literal's element type is already inferable by tsc from its members (ADR 0035).
+const recordEmpty = (
+  span: Span,
+  len: number,
+  r: Result<Type, AlangError>,
+  ctx: Ctx,
+): Result<Type, AlangError> => {
+  if (len === 0 && !isErr(r)) ctx.record?.(span, r.value);
+  return r;
+};
+
 const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
   switch (e.kind) {
     case "num":
@@ -283,7 +302,11 @@ const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
 
     case "ref": {
       const sc = ctx.env.get(e.name);
-      if (sc) return ok(instantiate(sc, ctx.fresh));
+      if (sc) {
+        const inst = instantiate(sc, ctx.fresh);
+        ctx.noteUse?.(sc, inst);
+        return ok(inst);
+      }
       if (ctx.open) return ok(freshVar(ctx.fresh)); // opaque host global
       return err(typeErr(`unbound variable '${e.name}'`, e.span));
     }
@@ -310,6 +333,9 @@ const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
       if (ctx.record) ctx.record(e.nameSpan, valT.value, { kind: "let", name: e.name });
       const bodyEnv: Env = new Map(ctx.env);
       bodyEnv.set(e.name, scheme);
+      // Register this scheme so `noteUse` collects the body's instantiations
+      // (see `noteLet`), enabling a monomorphic IIFE-param annotation.
+      ctx.noteLet?.(scheme, e.value.span);
       return infer(e.body, { ...ctx, env: bodyEnv });
     }
 
@@ -397,14 +423,15 @@ const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
       return ok(tTuple(elems));
     }
 
+    // Eager `Array<elem>` / lazy `List<elem>` (empty is polymorphic, pinned by
+    // later use); `map` is `Map<k, v>`. An EMPTY literal records its span → type
+    // so the TS backend can annotate it (`#{}` → `new Map<K, V>()`, ADR 0035).
     case "arr":
-      // Eager `Array<elem>` (empty is polymorphic, pinned by later use).
-      return inferSeqExpr("Array", e.elements, ctx);
+      return recordEmpty(e.span, e.elements.length, inferSeqExpr("Array", e.elements, ctx), ctx);
     case "list":
-      // Lazy `List<elem>`; same element-sharing shape as `arr`.
-      return inferSeqExpr("List", e.elements, ctx);
+      return recordEmpty(e.span, e.elements.length, inferSeqExpr("List", e.elements, ctx), ctx);
     case "map":
-      return inferMapExpr(e.entries, ctx);
+      return recordEmpty(e.span, e.entries.length, inferMapExpr(e.entries, ctx), ctx);
 
     case "match":
       return inferMatch(e, ctx);
@@ -725,7 +752,16 @@ export type SymbolInfo = { kind: "let" | "parameter" | "property"; name: string;
 
 // An inferred type anchored to its source span — the map hover queries.
 export type TypeAt = { span: Span; type: Type; symbol?: SymbolInfo };
-export type InferResult = { env: Env; types: TypeAt[]; aliases: AliasDef[] };
+// `letParams`: the monomorphic type of a `let x = v in …` whose value is
+// polymorphic but used at one type — keyed by the value span, consumed by the
+// TS backend to annotate the emitted IIFE param (ADR 0035). Kept apart from
+// `types` so it never perturbs hover/inlay, which key off `types` alone.
+export type InferResult = {
+  env: Env;
+  types: TypeAt[];
+  aliases: AliasDef[];
+  letParams: TypeAt[];
+};
 
 // The names a pattern binds — excluded from an arm body's free references.
 const patternBinds = (p: Pattern): string[] => {
@@ -864,6 +900,31 @@ const stronglyConnected = (adj: number[][]): number[][] => {
   return sccs;
 };
 
+// A `let`-bound value used at exactly one monomorphic type gets a `const`/IIFE
+// param annotation (ADR 0035), so the TS backend types the empty collections
+// inside it. Annotate ONLY when every use is the same fully-concrete type: a
+// binding that also flows into a generic position (open there) stays bare —
+// pinning it concrete would over-constrain that call and its sibling empties
+// (the polymorphic-HOF tail). No use / disagreeing uses / still-free → skip.
+const resolveLetParams = (
+  letSpans: Map<Scheme, Span>,
+  letUses: Map<Scheme, Type[]>,
+  subst: Subst,
+): TypeAt[] => {
+  const isConcrete = (t: Type): boolean => {
+    const f = freeInType(t);
+    return f.tv.size === 0 && f.rv.size === 0;
+  };
+  const out: TypeAt[] = [];
+  for (const [sc, span] of letSpans) {
+    const uses = (letUses.get(sc) ?? []).map((t) => zonk(t, subst));
+    const first = uses[0] ? showType(uses[0]) : "";
+    if (uses.length > 0 && uses.every((t) => isConcrete(t) && showType(t) === first))
+      out.push({ span, type: uses[0]! });
+  }
+  return out;
+};
+
 // Shared inference core. Always records per-node types; `inferProgram` drops
 // them, `inferProgramTypes` returns them (zonked against the final subst).
 function run(
@@ -914,6 +975,18 @@ function run(
   const record = (span: Span, t: Type, symbol?: SymbolInfo): void => {
     recorded.push({ span, type: t, symbol });
   };
+  // `let x = v in …` IIFE-param annotation (TS emit, ADR 0035): remember each
+  // let scheme's value span, and collect the body's instantiations of it. If a
+  // polymorphic value is used at ONE monomorphic type, annotate the param there.
+  const letSpans = new Map<Scheme, Span>();
+  const letUses = new Map<Scheme, Type[]>();
+  const noteLet = (sc: Scheme, valueSpan: Span): void => {
+    letSpans.set(sc, valueSpan);
+    letUses.set(sc, []);
+  };
+  const noteUse = (sc: Scheme, t: Type): void => {
+    letUses.get(sc)?.push(t);
+  };
 
   // constructors first, so `let`s (in any order after their type) can use them
   for (const s of prog.stmts) {
@@ -963,7 +1036,17 @@ function run(
     }
     const bodyTypes = new Map<string, Type>();
     for (const s of group) {
-      const t = infer(s.value, { env, subst, fresh, open, ns, aliases, record });
+      const t = infer(s.value, {
+        env,
+        subst,
+        fresh,
+        open,
+        ns,
+        aliases,
+        record,
+        noteUse,
+        noteLet,
+      });
       if (isErr(t)) return t;
       const uni = unify(selfVars.get(s.name)!, t.value, subst, fresh, (x) =>
         showType(foldAliases(x, aliases)),
@@ -979,7 +1062,15 @@ function run(
     // first, else the group's own type vars look env-bound and stay ungeneralized.
     // Monomorphic recursion within the group, polymorphic use afterwards.
     for (const s of group) env.delete(s.name);
-    for (const s of group) env.set(s.name, generalize(env, bodyTypes.get(s.name)!, subst));
+    for (const s of group) {
+      const sc = generalize(env, bodyTypes.get(s.name)!, subst);
+      env.set(s.name, sc);
+      // Track a top-level let the same way as `let … in` (ADR 0035): a
+      // polymorphic-but-monomorphically-used value (e.g. `let emptyReg =
+      // { ctors: #{}, … }`) gets a `const name: T` annotation so tsc types
+      // its empty collections. Uses in later groups resolve to this scheme.
+      if (!s.name.startsWith("$")) noteLet(sc, s.value.span);
+    }
   }
   // Resolve every recorded type now that the whole program's subst is final.
   const types = recorded.map((r) => ({
@@ -987,7 +1078,7 @@ function run(
     type: zonk(r.type, subst),
     symbol: r.symbol,
   }));
-  return ok({ env, types, aliases });
+  return ok({ env, types, aliases, letParams: resolveLetParams(letSpans, letUses, subst) });
 }
 
 export function inferProgram(

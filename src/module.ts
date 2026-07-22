@@ -217,7 +217,7 @@ const compileGraphTs = (
       namespaces: preludeNamespaces,
     });
     if (isErr(inferred)) return inferred;
-    const { env, aliases, types } = inferred.value;
+    const { env, aliases, types, letParams } = inferred.value;
 
     // Collect this module's externs (with their inferred schemes) into the
     // per-`.d.ts` bucket for gap-3 declaration emission below.
@@ -240,6 +240,7 @@ const compileGraphTs = (
       env,
       aliases,
       types,
+      letParams,
       importedKeys,
       importLines: [],
       runtimeImport,
