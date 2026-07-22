@@ -158,6 +158,26 @@ let mkTok = (tok, doc) => switch doc {
 }
 let a = mkTok(1, [])
 let b = mkTok(2, ["x", "y"])`,
+  // Regression guard for ADR 0040: two mutually-recursive functions thread a
+  // state record; `conn` reaches a field (`acc`) through the sibling's return
+  // via an intermediate `let`. `generalize` used to read env schemes WITHOUT
+  // the current substitution, so the row var behind the monomorphic param `st`
+  // looked free and was quantified — `conn` emitted `<A, B>` with decoupled
+  // tails, and `s2.acc` on `{…} & B` rejected (TS2339). Zonking the env before
+  // collecting its free vars keeps the local monomorphic (single `& A`), so the
+  // accessed field is pinned. Mirrors `bootstrap/infer.al`'s Tarjan SCC state.
+  monoRecurRow: `
+let visit = (st, ws) => switch ws {
+  | [] => st
+  | [_w, ...rest] => gte(st.n, 3)
+      ? visit({ ...st, low: add(st.low, 1) }, rest)
+      : let st1 = conn(st) in visit({ ...st1, low: add(st1.low, 1) }, rest)
+}
+let conn = (st) =>
+  let s1 = { ...st, low: st.n, idx: st.n } in
+  let s2 = visit(s1, [1, 2]) in
+  gte(s2.low, s2.idx) ? { ...s2, onS: s2.n, out: add(s2.n, s2.acc) } : s2
+let go = conn({ n: 0, low: 0, idx: 0, onS: 0, out: 0, acc: 0 }).out`,
 };
 
 beforeAll(() => {

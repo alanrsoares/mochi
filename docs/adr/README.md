@@ -63,6 +63,7 @@ What else was on the table and why not.
 | [0037](0037-partial-application-overloads.md) | Concrete function bindings emit partial-application overloads (TS backend) | Accepted |
 | [0038](0038-throwing-otherwise-for-array-partitions.md) | Array-partition matches close with a throwing `.otherwise` (TS backend) | Accepted |
 | [0039](0039-concrete-annotation-for-nullary-ctors.md) | Parametric nullary constructors annotate concretely in place (TS backend) | Accepted |
+| [0040](0040-generalize-under-the-substitution.md) | Generalize under the current substitution — sound row generalization | Accepted |
 
 
 ## Backlog (well-evidenced, not yet written)

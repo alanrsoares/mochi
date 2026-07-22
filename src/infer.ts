@@ -104,17 +104,24 @@ const freeInType = (t: Type): VarSets => {
   return acc;
 };
 
-const freeInScheme = (sc: Scheme): VarSets => {
-  const f = freeInType(sc.type);
+// Free vars of a scheme UNDER the current substitution. Zonking first is
+// essential: an env binding minted `mono('t)` whose var was later unified to a
+// record `{ … | 'r }` still reads as the bare `'t` in the scheme, hiding `'r`.
+// If `generalize` then treats `'r` as free (not env-bound) it QUANTIFIES a row
+// var the environment already constrains — an unsound over-generalization that
+// makes a monomorphic local (e.g. a Tarjan-state `let`) spuriously polymorphic,
+// which the TS backend surfaces as a leaked `& A` (ADR 0040).
+const freeInScheme = (sc: Scheme, s: Subst): VarSets => {
+  const f = freeInType(zonk(sc.type, s));
   for (const v of sc.vars) f.tv.delete(v);
   for (const v of sc.rvars) f.rv.delete(v);
   return f;
 };
 
-const freeInEnv = (env: Env): VarSets => {
+const freeInEnv = (env: Env, s: Subst): VarSets => {
   const acc: VarSets = { tv: new Set(), rv: new Set() };
   for (const sc of env.values()) {
-    const f = freeInScheme(sc);
+    const f = freeInScheme(sc, s);
     for (const v of f.tv) acc.tv.add(v);
     for (const v of f.rv) acc.rv.add(v);
   }
@@ -124,7 +131,7 @@ const freeInEnv = (env: Env): VarSets => {
 const generalize = (env: Env, t: Type, s: Subst): Scheme => {
   const zt = zonk(t, s);
   const free = freeInType(zt);
-  const bound = freeInEnv(env);
+  const bound = freeInEnv(env, s);
   const vars = [...free.tv].filter((v) => !bound.tv.has(v));
   const rvars = [...free.rv].filter((v) => !bound.rv.has(v));
   return { vars, rvars, type: zt };
