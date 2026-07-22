@@ -126,6 +126,13 @@ export const preludeJsDefs: Record<string, string> = {
   // functions (the bootstrap lexer's per-token loop) rely on it for depth.
   _curry:
     "const _curry = (n, f) => function c(...a) { if (a.length < n) return (...b) => c(...a, ...b); if (a.length === n) return f(...a); return a.slice(n).reduce((g, x) => g(x), f(...a.slice(0, n))); };",
+  // Tuple constructor. A tuple erases to a plain JS array `[a, b]`, so JS emit
+  // never references this — it stays tree-shaken out. It exists only so the
+  // typed runtime (gen-runtime OVERRIDES) can carry a `_tuple` whose rest-param
+  // is inferred as a TUPLE (`<T extends unknown[]>(...xs: T): T`). TS emit wraps
+  // tuple literals in it (ADR 0036) so tsc keeps `[A, B]` instead of widening a
+  // bare `[a, b]` to `(A | B)[]` where no contextual tuple type is in scope.
+  _tuple: "const _tuple = (...xs) => xs;",
   // Builtin variant constructors (inlined only when a program uses them and does
   // not declare its own type of that name). Shape matches the @onrails ecosystem.
   Some: 'const Some = (value) => ({ _tag: "Some", value });',

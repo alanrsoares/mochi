@@ -15,6 +15,7 @@ export const _curry = (n: number, f: (...args: any[]) => any): ((...args: any[])
     if (a.length === n) return f(...a);
     return a.slice(n).reduce((g: any, x: any) => g(x), f(...a.slice(0, n)));
   };
+export const _tuple = <T extends unknown[]>(...xs: T): T => xs;
 export const Some: <A>(value: A) => Option<A> = (value: any) => ({ _tag: "Some", value });
 export const None: Option<never> = { _tag: "None" };
 export const Ok: <A, B>(value: A) => Result<A, B> = (value: any) => ({ _tag: "Ok", value });

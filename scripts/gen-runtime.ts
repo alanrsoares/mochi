@@ -82,6 +82,10 @@ const CTOR_TYPES: Record<string, string> = {
 // Structural helpers with no HM signature — hand-typed.
 const OVERRIDES: Record<string, string> = {
   _list: "export const _list = <T>(g: () => Iterator<T>): Iterable<T> => ({ [Symbol.iterator]: g });",
+  // Rest-param constrained to an array infers as a TUPLE, so `_tuple(a, b)` is
+  // typed `[typeof a, typeof b]` without naming element types — TS emit wraps
+  // tuple literals in it to stop bare-array widening (ADR 0036).
+  _tuple: "export const _tuple = <T extends unknown[]>(...xs: T): T => xs;",
   _curry:
     "export const _curry = (n: number, f: (...args: any[]) => any): ((...args: any[]) => any) =>\n" +
     "  function c(...a: any[]): any {\n" +

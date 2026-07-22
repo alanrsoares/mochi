@@ -3318,6 +3318,7 @@ const _namespaceRuntime = {
 const _preludeJsDefs = {
   "_list": "const _list = (g) => ({ [Symbol.iterator]: g });",
   "_curry": "const _curry = (n, f) => function c(...a) { if (a.length < n) return (...b) => c(...a, ...b); if (a.length === n) return f(...a); return a.slice(n).reduce((g, x) => g(x), f(...a.slice(0, n))); };",
+  "_tuple": "const _tuple = (...xs) => xs;",
   "Some": "const Some = (value) => ({ _tag: \"Some\", value });",
   "None": "const None = { _tag: \"None\" };",
   "Ok": "const Ok = (value) => ({ _tag: \"Ok\", value });",

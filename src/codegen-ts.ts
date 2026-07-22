@@ -65,9 +65,6 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
   ];
 
   const deps = collectRuntimeDeps(prog);
-  const runtimeLine = deps.length
-    ? `import { ${deps.join(", ")} } from ${JSON.stringify(ctx.runtimeImport)};`
-    : "";
 
   // Per-node inferred types, keyed by span, for annotating lambda params below.
   const typeAt = new Map(ctx.types.map((t) => [`${t.span.start}:${t.span.end}`, t.type]));
@@ -158,12 +155,21 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
     annotateLetin,
     annotateCtor: (s, c) => ctorFactoryTs(s.name, s.params, c),
     flattenPipe: true,
+    tupleHelper: true, // emit `_tuple(a, b)` so tsc infers a tuple (ADR 0036)
     moduleExt: "", // `import … from "./mod"` — tsc resolves to the sibling `.ts`
   });
 
   // A guard predicate can name a builtin variant (`Option`) the header didn't
   // already emit — inject its decl now that the body text exists (ADR 0031).
   const header = [...builtinDeclsIn(body, typeHeader.join("\n")), ...typeHeader];
+
+  // `_tuple` isn't reachable by `collectRuntimeDeps` (a tuple AST node carries no
+  // runtime-name reference); it's a TS-emit device, so pull it in from the body
+  // text once emitted (ADR 0036), like `builtinDeclsIn` above.
+  const allDeps = body.includes("_tuple(") ? [...deps, "_tuple"] : deps;
+  const runtimeLine = allDeps.length
+    ? `import { ${allDeps.join(", ")} } from ${JSON.stringify(ctx.runtimeImport)};`
+    : "";
 
   const parts = [header.join("\n"), ctx.importLines.join("\n"), runtimeLine, body].filter(
     (p) => p !== "",

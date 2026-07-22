@@ -64,6 +64,13 @@ let annotateCtor: ((s: TypeStmt, c: Ctor) => CtorFactoryTs | null) | null = null
 // Off for the JS backend, which stays byte-identical.
 let flattenPipe = false;
 
+// TS backend (ADR 0036): emit a tuple literal as `_tuple(a, b)` instead of the
+// bare array `[a, b]`. The runtime `_tuple` is an identity whose rest param is
+// inferred as a tuple, so tsc keeps `[A, B]` where a bare array literal would
+// widen to `(A | B)[]` (no contextual tuple type flows through `Some(…)`/`Ok(…)`
+// /ts-pattern arm returns). Off for the JS backend — output stays byte-identical.
+let tupleHelper = false;
+
 // TS backend (ADR 0028): given a lambda's span and its collapsed parameter count,
 // return a `generics` head (`<A, B>` or `""`) to scope over the arrow plus one
 // type annotation (the bare type text, no leading `:`) or null per param. The
@@ -203,8 +210,13 @@ const genExpr = (e: Expr): string =>
     })
     .with({ kind: "field" }, (f) => nsRuntimeId(f) ?? `${genMember(f.target)}.${f.name}`)
     // A tuple erases to a JS array `[a, b]` (like ReScript); the type system
-    // keeps it distinct from an `alang` Array, the runtime shares the shape.
-    .with({ kind: "tuple" }, (t) => `[${t.elements.map(genExpr).join(", ")}]`)
+    // keeps it distinct from an `alang` Array, the runtime shares the shape. TS
+    // emit wraps it in `_tuple(…)` so tsc infers a tuple, not a widened array
+    // (ADR 0036); the JS backend keeps the bare literal (byte-identical).
+    .with({ kind: "tuple" }, (t) => {
+      const elems = t.elements.map(genExpr).join(", ");
+      return tupleHelper ? `_tuple(${elems})` : `[${elems}]`;
+    })
     .with({ kind: "arr" }, (l) => {
       const body = `[${l.elements.map(genExpr).join(", ")}]`;
       // Empty `[]` infers `never[]` — annotate with the resolved element type
@@ -851,6 +863,7 @@ export type CodegenOptions = {
   annotate?: (name: string, value: Expr) => string | null;
   annotateCtor?: (s: TypeStmt, c: Ctor) => CtorFactoryTs | null;
   flattenPipe?: boolean;
+  tupleHelper?: boolean;
   moduleExt?: string;
   annotateParams?: (span: Span, arity: number) => { generics: string; params: (string | null)[] };
   guardBaseType?: (scrutinee: Expr) => string | null;
@@ -867,6 +880,7 @@ export const codegen = (
   annotateLet = opts.annotate ?? null;
   annotateCtor = opts.annotateCtor ?? null;
   flattenPipe = opts.flattenPipe ?? false;
+  tupleHelper = opts.tupleHelper ?? false;
   moduleExt = opts.moduleExt ?? ".js";
   annotateParams = opts.annotateParams ?? null;
   guardBaseType = opts.guardBaseType ?? null;

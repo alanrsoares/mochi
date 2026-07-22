@@ -1,4 +1,4 @@
-# TS-emit checkpoint — 2026-07-23 (rev 2)
+# TS-emit checkpoint — 2026-07-23 (rev 3)
 
 Working state of the TypeScript backend track (ADR 0026 / `docs/TS_DIALECT.md`),
 so a fresh session can pick up. Goal: emit **fully working, `tsc --strict`-clean
@@ -8,20 +8,25 @@ TypeScript** from alang, including the self-hosted `bootstrap/`.
 
 Single-file and well-behaved multi-module programs emit **strict-clean today**.
 The self-hosted `bootstrap/` emits and links, but is **not yet strict-clean** —
-**26 `tsc` errors** (was 537). Eight gaps have shipped: the per-node lambda-param
+**22 `tsc` errors** (was 537). Measure any time with `bun run bootstrap:tsc`
+(`scripts/bootstrap-tsc.ts`, replaces the old `/tmp/bts` recipe). Nine gaps have
+shipped: the per-node lambda-param
 type table (gap 1, ADR 0028, −238), cross-module `import type` + extern `.d.ts`
 (gap 3, ADR 0029, −33; TS2307/TS2304 → 0), guard-form arms as **type predicates**
 (gap 2, ADR 0031, −23; TS2339 23 → 1), **generic value-lambda emission + flat
 `let?` bind** (ADR 0032, 243 → 94, −149), **flat function-type emission + overload
 ordering** (ADR 0033, 94 → 58, −36), **open-row → generic-intersection record
-emission** (ADR 0034, 58 → 33, −25), and — this session — **empty-collection seeds
-annotated at the binding** (ADR 0035, 33 → 26, −7). ADR 0035: an empty `#{}`
-otherwise infers `Map<unknown, unknown>`; a concrete seed now emits `new Map<K,
-V>()` in place, and a `let`-generalized seed (whose vars stay quantified) gets its
-IIFE param / top-level `const` annotated with the single monomorphic use type, so
-contextual typing pins the empties. This killed the `infer.ts` empty-collection
-TS2345 class (Tarjan state, `instantiate` maps). The remaining 26 are dominated by
-the **polymorphic higher-order tail** (ADR 0028's deferred class) — see below.
+emission** (ADR 0034, 58 → 33, −25), **empty-collection seeds annotated at the
+binding** (ADR 0035, 33 → 26, −7), and — this session — **tuple literals via
+`_tuple`** (ADR 0036, 26 → 22, −4). ADR 0036: a tuple erases to a bare array `[a,
+b]`, which tsc widens to `(A | B)[]` where no contextual tuple type is in scope
+(inside `Some(…)`/`Ok(…)`, a ts-pattern arm, or against an HM-declared tuple
+return). Emitting `_tuple(a, b)` — an identity whose rest param `<T extends
+unknown[]>(...xs: T): T` is inferred as a tuple — keeps `[A, B]` without naming
+element types (dodging the TS2304 generic-scope hazard `as [T0,T1]` would hit).
+The remaining 22 decompose (see below) into **generic-leak HOF** + **open-row
+state** (the polymorphic-HOF tail proper), a **`NonExhaustiveError`/`never`
+match-return** class, and a **`_curry` arity** gap — each its own lever.
 
 ## Landed this session (all on `main`, committed)
 
@@ -34,7 +39,8 @@ the **polymorphic higher-order tail** (ADR 0028's deferred class) — see below.
 | `704081b` | feat(codegen): `build --emit=ts` — typed `.ts` for module graphs |
 | `adea790` | feat(codegen): flat fn-type emission + overload order (ADR 0033) |
 | `68d93b6` | feat(codegen): open-row records → generic intersections (ADR 0034) |
-| _(this commit)_ | feat(codegen): empty-collection seeds annotated at binding (ADR 0035) |
+| `93f25a6` | feat(codegen): empty-collection seeds annotated at binding (ADR 0035) |
+| _(this commit)_ | feat(codegen): tuple literals via `_tuple` — tsc infers tuples (ADR 0036) |
 
 `bun run check` is green (798 tests). JS backend byte-identical throughout
 (all TS-only behavior is behind codegen options that default off).
@@ -147,39 +153,39 @@ repo.
 ## How to reproduce the bootstrap impact measurement
 
 ```bash
-mkdir -p /tmp/bts
-bun run alang build --emit=ts bootstrap/cli.al >/dev/null 2>&1
-# copies both the module .ts AND the emitted extern .d.ts (host.d.ts, prelude.gen.d.ts)
-for f in bootstrap/*.ts; do sed 's#"@alang/runtime"#"<ABS>/src/runtime"#' "$f" > "/tmp/bts/$(basename $f)"; done
-rm -f bootstrap/*.ts   # IMPORTANT: glob also removes *.d.ts — don't leave any in bootstrap/ (check scans it)
-# strict tsconfig (strict, noEmit, skipLibCheck, moduleResolution bundler) in /tmp/bts,
-# with `paths` mapping @onrails/pattern + @onrails/result to <ABS>/node_modules/.../dist/index.d.ts
-cd /tmp/bts && bunx tsc -p tsconfig.json 2>&1 | grep -oE 'error TS[0-9]+' | sort | uniq -c | sort -rn
+bun run bootstrap:tsc          # summary: counts by code + by file, then total
+bun run bootstrap:tsc --list   # every raw `path.ts(l,c): error TSxxxx: …` line
+bun run bootstrap:tsc --json    # {total, byCode, byFile, errors} for tooling
+bun run bootstrap:tsc --keep    # leave the scratch dir on disk (path logged)
 ```
-Note: `alang build --emit=ts` writes `.ts` (and extern `.d.ts`) **beside the
-`.al`**; always `rm -f bootstrap/*.ts` after — a stray `.ts`/`.d.ts` in
-`bootstrap/` breaks `bun run check`. `@onrails/*` resolve via tsconfig `paths` to
-the repo `node_modules` (so tsc can run in `/tmp/bts`).
+`scripts/bootstrap-tsc.ts` emits the graph via `buildModulesTs` with
+`runtimeImport` pointed at `src/runtime` (no `sed`), writes the outputs + a strict
+tsconfig to an OS temp dir, runs the repo's `tsc`, and tallies. No files are left
+in `bootstrap/`. The `test/bootstrap-tsc.spec.ts` ratchet asserts total ≤ 22.
 
 ## Suggested next step
 
-Gaps 1 (ADR 0028), 2 (ADR 0031), 3 (ADR 0029), the polymorphic higher-order tail
-starter (ADR 0032), the first-class combinator tail (ADR 0033), the row-poly record
-tail (ADR 0034), and empty-collection seeds (ADR 0035) done — **26 `tsc` errors
-left**. The dominant remaining gap:
+Gaps 1 (ADR 0028), 2 (ADR 0031), 3 (ADR 0029), polymorphic-HOF starter (ADR 0032),
+combinator tail (ADR 0033), row-poly records (ADR 0034), empty-collection seeds
+(ADR 0035), and tuple literals (ADR 0036) done — **22 `tsc` errors left**,
+decomposing into four clusters:
 
-1. **Polymorphic higher-order tail** (ADR 0028's deferred class) — generic inner
-   callbacks with no contextual type: `A[]` vs `Stmt[]` (`infer.ts`), `Set<A>` vs
-   `Set<B>` (`codegen.ts`), `Stmt` vs `(a: Stmt) => unknown` (`parser.ts`), plus
-   the 2 `module.ts` `emptyReg` seeds entangled with it (a concrete annotation
-   there only helps once the sibling empties in the generic call are also pinned).
-   Needs generics scoping over more value positions than ADR 0032 reaches.
+1. **Generic-leak HOF** (polymorphic-HOF tail proper) — `B[]` vs `string[]`
+   (`check.ts`), `Set<A>`/`Map<A,…>` (`codegen.ts`), `A[]` vs `Stmt[]`
+   (`infer.ts`). Generic inner callbacks with no contextual type.
+2. **Open-row state** — `infer.ts:429` `.sccs` on `{…} & A`, `infer.ts:545`, and
+   the 2 `module.ts` `emptyReg` seeds entangled with it. Both (1) and (2) need
+   generics scoping over more value positions than ADR 0032 reaches.
+3. **`NonExhaustiveError`/`never` match-return** — `cli.ts:21`, `infer.ts:487`:
+   ts-pattern's `.exhaustive()`/`.otherwise()` return type resolves to
+   `NonExhaustiveError`/`never` under a generic head. (A `swap`-style single-arm
+   tuple `switch` reproduces it minimally.)
+4. **`_curry` arity** — `parser.ts:310/314` TS2554 "expected 3, got 2": a
+   partial-application form the overloaded runtime signature doesn't cover.
 
-Smaller residuals: TS2322 5, TS2554 3 (arity), TS2339 1, TS18046 1.
-
-## Reproduce (updated for ADR 0035)
-The measurement recipe above still holds. `bun run check` currently green at
-**798 tests**; after ADR 0035 the differential self-host build stays byte-identical.
+## Verify
+`bun run check` green; the self-host fixpoint (`build ok`) confirms the JS backend
+stays byte-identical after ADR 0036.
 
 ## Not part of this track (uncommitted in tree)
 Rebrand (README, logos, `docs/REBRAND.md`, `docs/V1.md`) and ADRs 0024 (llvm) /

@@ -104,6 +104,19 @@ let run = () =>
   let s = { m: #{}, n: 0 } in
   bump(bump(s)).m
 let run2 = () => bump(seeded).m`,
+  // Regression guard for ADR 0036: a tuple literal has no contextual tuple type
+  // in a return, a \`Some(…)\` payload, or a call argument, so a bare \`[a, b]\`
+  // widens to \`(A | B)[]\` and fails the binding's declared tuple type. Emitting
+  // \`_tuple(a, b)\` (an identity whose rest param infers as a tuple) keeps it
+  // \`[A, B]\`. Covers concrete + generic tuples, and a tuple built in a match arm.
+  tuples: `
+let pair = () => (1, "a")
+let firstRest = xs => switch xs {
+  | [x, ..._rest] => Some((x, _rest))
+  | _ => None
+}
+let p = pair()
+let r = firstRest([1, 2, 3])`,
 };
 
 beforeAll(() => {
