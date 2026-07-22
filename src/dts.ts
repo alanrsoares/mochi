@@ -9,7 +9,7 @@
 // declaration is `(a: A, b: B) => R` — we peel arrows by the lambda's arity,
 // recursing into curried bodies (`f => r => …` stays `(f: F) => (r: R) => …`).
 import { flatMap, isErr, map, ok, pipe, type Result } from "@onrails/result";
-import type { Ctor, Expr, Stmt, TypeExpr } from "./ast";
+import type { Ctor, Expr, Program, Stmt, TypeExpr } from "./ast";
 import { check } from "./check";
 import type { AlangError } from "./errors";
 import { inferProgramTypes, type Scheme } from "./infer";
@@ -91,26 +91,121 @@ const declType = (t: Type, value: Expr, names: Map<number, string>): string => {
 const genericNames = (sc: Scheme): Map<number, string> =>
   new Map(sc.vars.map((id, i) => [id, LETTERS[i] ?? `T${i}`]));
 
-const letDecl = (name: string, sc: Scheme, value: Expr, aliases: AliasDef[]): string => {
+// A variant's type-param names → TS generic letters (`a` → `A`).
+const paramGmap = (params: string[]): Map<string, string> =>
+  new Map(params.map((p, i) => [p, LETTERS[i] ?? `T${i}`]));
+
+// A ctor field type param / primitive name → TS.
+const argTs = (a: string, gmap: Map<string, string>): string =>
+  gmap.get(a) ?? PRIM_TS[a] ?? (a === "float" || a === "int" ? "number" : a);
+
+// A ctor field type is a full TypeExpr (ADR 0015); render it in tsOf's style
+// (`[t]` → `t[]`, applied ctors → generics, arrows → function types).
+const teTs = (te: TypeExpr, gmap: Map<string, string>): string => {
+  switch (te.kind) {
+    case "tname":
+      return argTs(te.name, gmap);
+    case "tarrow":
+      return `(x: ${teTs(te.from, gmap)}) => ${teTs(te.to, gmap)}`;
+    case "tapp":
+      return `${te.ctor}<${te.args.map((a) => teTs(a, gmap)).join(", ")}>`;
+    case "ttuple":
+      return `[${te.elems.map((e) => teTs(e, gmap)).join(", ")}]`;
+    case "tlist":
+      return `${teTs(te.elem, gmap)}[]`;
+  }
+};
+
+// Free type-var ids in a Type, first-appearance order.
+const freeVars = (t: Type, acc: number[]): void => {
+  switch (t.kind) {
+    case "var":
+      if (!acc.includes(t.id)) acc.push(t.id);
+      return;
+    case "con":
+      for (const a of t.args) freeVars(a, acc);
+      return;
+    case "arrow":
+      freeVars(t.from, acc);
+      freeVars(t.to, acc);
+      return;
+    case "record": {
+      let r = t.row;
+      while (r.kind === "extend") {
+        freeVars(r.type, acc);
+        r = r.rest;
+      }
+      return;
+    }
+  }
+};
+
+// A prelude builtin's HM type rendered as a FLAT n-ary TS function matching its
+// runtime arity (the JS backend collapses currying via `_curry`), free vars
+// bound as generics. Used by scripts/gen-runtime.ts. arity 0 → the bare type.
+export const flatFnType = (t: Type, arity: number): string => {
+  const ids: number[] = [];
+  freeVars(t, ids);
+  const names = new Map(ids.map((id, i) => [id, LETTERS[i] ?? `T${i}`]));
+  const head = ids.length ? `<${ids.map((id) => names.get(id)).join(", ")}>` : "";
+  if (arity === 0) return `${head}${tsOf(t, names)}`;
+  const params: string[] = [];
+  let cur = t;
+  for (let i = 0; i < arity && cur.kind === "arrow"; i++) {
+    params.push(`${String.fromCharCode(97 + i)}: ${tsOf(cur.from, names)}`);
+    cur = cur.to;
+  }
+  return `${head}(${params.join(", ")}) => ${tsOf(cur, names)}`;
+};
+
+// The TS signature pieces for a ctor's runtime factory (ADR 0026 TS backend):
+// generic head, per-field param types, and the variant return type. genType
+// assembles these into `const C = <A>(_0: T): Head => …` (single field) or a
+// `_curry(n, …) as <A>(…) => Head` cast (multi-field).
+// `ret` is the generic return (`Tree<A>`), for the factory signature. `retMono`
+// substitutes `never` for every param (`Tree<never>`), for a nullary ctor const
+// — which has no function to scope generics on, so it takes the "empty" instance
+// (assignable to any covariant use, mirroring how `None: Option<never>` is typed).
+export const ctorFactoryTs = (
+  typeName: string,
+  params: string[],
+  c: Ctor,
+): { generics: string; paramTypes: string[]; ret: string; retMono: string } => {
+  const gmap = paramGmap(params);
+  const gs = params.map((p) => gmap.get(p)!);
+  return {
+    generics: gs.length ? `<${gs.join(", ")}>` : "",
+    paramTypes: c.fields.map((f) => teTs(f.type, gmap)),
+    ret: gs.length ? `${typeName}<${gs.join(", ")}>` : typeName,
+    retMono: gs.length ? `${typeName}<${gs.map(() => "never").join(", ")}>` : typeName,
+  };
+};
+
+// The TS type of a binding, WITHOUT the `export declare const name:` wrapper —
+// the one piece the `.d.ts` writer (`letDecl`) and the `.ts` backend
+// (`codegen-ts.ts`, ADR 0026) share. A function carries a `<A, B>` generic head
+// plus arity-peeled parameter names; a non-function polymorphic binding has
+// nowhere to bind generics, so its escaped vars fall back to `unknown`.
+export const bindingTsType = (sc: Scheme, value: Expr, aliases: AliasDef[]): string => {
   const names = genericNames(sc);
-  const generics = [...names.values()];
   // Fold structural rows to alias names first, so a binding typed `{ x, y }`
   // declares as `Point` — reusing the emitted `export type Point`.
   const folded = foldAliases(sc.type, aliases);
-  // Generics can only be introduced on a function type; a polymorphic non-
-  // function binding has nowhere to bind them, so those vars fall back to
-  // `unknown` (empty names map).
   if (value.kind === "lambda") {
+    const generics = [...names.values()];
     const head = generics.length ? `<${generics.join(", ")}>` : "";
-    return `export declare const ${name}: ${head}${declType(folded, value, names)};`;
+    return `${head}${declType(folded, value, names)}`;
   }
-  return `export declare const ${name}: ${tsOf(folded, new Map())};`;
+  return tsOf(folded, new Map());
 };
+
+const letDecl = (name: string, sc: Scheme, value: Expr, aliases: AliasDef[]): string =>
+  `export declare const ${name}: ${bindingTsType(sc, value, aliases)};`;
 
 // A transparent record alias → an exported TS object type. Field types come from
 // the alias template (an HM record whose params are marker vars); map each marker
 // to a generic letter so `type Box a = { value: a }` emits `type Box<A> = ...`.
-const aliasTsDecl = (def: AliasDef): string => {
+export const aliasTsDecl = (def: AliasDef): string => {
   const names = new Map(def.params.map((_, i) => [aliasParamId(i), LETTERS[i] ?? `T${i}`]));
   const body = tsOf(def.template, names);
   const head = def.params.length ? `${def.name}<${[...names.values()].join(", ")}>` : def.name;
@@ -118,28 +213,10 @@ const aliasTsDecl = (def: AliasDef): string => {
 };
 
 // A `type` decl → an exported tagged union matching the runtime shape.
-const typeDecl = (name: string, params: string[], ctors: Ctor[]): string => {
-  const gmap = new Map(params.map((p, i) => [p, LETTERS[i] ?? `T${i}`]));
-  const argTs = (a: string): string =>
-    gmap.get(a) ?? PRIM_TS[a] ?? (a === "float" || a === "int" ? "number" : a);
-  // A ctor field type is a full TypeExpr (ADR 0015); render it in tsOf's style
-  // (`[t]` → `t[]`, applied ctors → generics, arrows → function types).
-  const teTs = (te: TypeExpr): string => {
-    switch (te.kind) {
-      case "tname":
-        return argTs(te.name);
-      case "tarrow":
-        return `(x: ${teTs(te.from)}) => ${teTs(te.to)}`;
-      case "tapp":
-        return `${te.ctor}<${te.args.map(teTs).join(", ")}>`;
-      case "ttuple":
-        return `[${te.elems.map(teTs).join(", ")}]`;
-      case "tlist":
-        return `${teTs(te.elem)}[]`;
-    }
-  };
+export const typeDecl = (name: string, params: string[], ctors: Ctor[]): string => {
+  const gmap = paramGmap(params);
   const variant = (c: Ctor): string => {
-    const fields = c.fields.map((fld, i) => `${fld.name ?? `_${i}`}: ${teTs(fld.type)}`);
+    const fields = c.fields.map((fld, i) => `${fld.name ?? `_${i}`}: ${teTs(fld.type, gmap)}`);
     return `{ _tag: "${c.name}"${fields.length ? `; ${fields.join("; ")}` : ""} }`;
   };
   const head = params.length ? `${name}<${params.map((p) => gmap.get(p)).join(", ")}>` : name;
@@ -160,6 +237,25 @@ const declOf = (
   if (s.kind === "extern") return null; // imported, not declared here
   const sc = schemeOf(s.name);
   return sc && !s.name.startsWith("$") ? letDecl(s.name, sc, s.value, aliases) : null;
+};
+
+// Builtin variant type decls a program's binding types reference but that the
+// program does not itself declare (e.g. `Option<number>` from `Map.get`). Emitted
+// so those references resolve. Shared by the `.d.ts` writer and the `.ts` backend.
+export const referencedBuiltinTypeDecls = (
+  prog: Program,
+  schemeOf: (n: string) => Scheme | undefined,
+): string[] => {
+  const declared = new Set(prog.stmts.flatMap((s) => (s.kind === "type" ? [s.name] : [])));
+  const referenced = new Set<string>();
+  for (const s of prog.stmts) {
+    if (s.kind !== "let" || s.name.startsWith("$")) continue;
+    const sc = schemeOf(s.name);
+    if (sc) consIn(sc.type, referenced);
+  }
+  return builtinTypeDecls
+    .filter((bt) => referenced.has(bt.name) && !declared.has(bt.name))
+    .map((bt) => typeDecl(bt.name, bt.params, bt.ctors));
 };
 
 export const emitDts = (src: string): Result<string, AlangError> => {
@@ -187,15 +283,6 @@ export const emitDts = (src: string): Result<string, AlangError> => {
   // A builtin variant used in an exported binding's type (e.g. `Option<number>`
   // from `Map.get`) needs its type decl emitted too, unless the program declares
   // its own. Prepend so the reference resolves.
-  const declared = new Set(prog.stmts.flatMap((s) => (s.kind === "type" ? [s.name] : [])));
-  const referenced = new Set<string>();
-  for (const s of prog.stmts) {
-    if (s.kind !== "let" || s.name.startsWith("$")) continue;
-    const sc = env.get(s.name);
-    if (sc) consIn(sc.type, referenced);
-  }
-  const builtins = builtinTypeDecls
-    .filter((bt) => referenced.has(bt.name) && !declared.has(bt.name))
-    .map((bt) => typeDecl(bt.name, bt.params, bt.ctors));
+  const builtins = referencedBuiltinTypeDecls(prog, (n) => env.get(n));
   return ok(`${[...builtins, ...lines].join("\n")}\n`);
 };

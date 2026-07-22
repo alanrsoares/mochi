@@ -16,6 +16,7 @@
     "build:ext": "bun scripts/build-extension.mjs",
     "loc": "bun scripts/find-long-files.ts",
     "gen:prelude": "bun scripts/gen-prelude.ts",
+    "gen:runtime": "bun scripts/gen-runtime.ts",
     "fmt:al": "bun scripts/fmt-al.ts",
     "fmt:check": "bun scripts/fmt-al.ts --check",
     "fixpoint": "bun scripts/fixpoint.ts",

@@ -1,4 +1,5 @@
 import { isErr, match } from "@onrails/result";
+import { codegenTs } from "./codegen-ts";
 import { compile } from "./compile";
 import { emitDts } from "./dts";
 import { formatError } from "./errors";
@@ -37,6 +38,22 @@ if (cmd === "fmt") {
   const src = await Bun.file(path).text();
   match(
     emitDts(src),
+    (out) => process.stdout.write(out),
+    (e) => {
+      console.error(formatError(e, src));
+      process.exit(1);
+    },
+  );
+} else if (cmd === "ts") {
+  // `ts <file.al>` compiles a file to a typed TypeScript module (ADR 0026).
+  const path = rest[0];
+  if (!path) {
+    console.error("usage: bun src/cli.ts ts <file.al>");
+    process.exit(1);
+  }
+  const src = await Bun.file(path).text();
+  match(
+    codegenTs(src),
     (out) => process.stdout.write(out),
     (e) => {
       console.error(formatError(e, src));

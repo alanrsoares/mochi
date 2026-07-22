@@ -5,6 +5,7 @@
 // node and forget it → TS compile error in the compiler, not a silent gap.
 import { match } from "ts-pattern";
 import type {
+  Ctor,
   CtorField,
   Expr,
   ExternStmt,
@@ -35,6 +36,25 @@ const nsRuntimeId = (e: FieldExpr): string | null =>
 // registry — populated per `codegen` call from the program's `type` decls.
 const keysOf = (fields: CtorField[]): string[] => fields.map((f, i) => f.name ?? `_${i}`);
 let ctorKeys = new Map<string, string[]>();
+
+// Optional per-binding type annotation for a top-level `let`, returning the text
+// to splice after the name (`: (x: A) => A`) or null for none. Set from
+// `CodegenOptions.annotate` per `codegen` call; the TS backend (`codegen-ts.ts`,
+// ADR 0026) supplies it, the JS backend leaves it null (byte-identical output).
+// Module-level for the same reason `ctorKeys` is — `genStmt` is a free function.
+let annotateLet: ((name: string, value: Expr) => string | null) | null = null;
+
+// Optional typing for a variant's ctor factory in TS mode (ADR 0026): given the
+// type decl and one ctor, return the generic head, per-field param types, and
+// the variant return type, or null for the untyped JS shape. Supplied by the TS
+// backend (from dts's `ctorFactoryTs`); null for the JS backend.
+export type CtorFactoryTs = {
+  generics: string;
+  paramTypes: string[];
+  ret: string;
+  retMono: string;
+};
+let annotateCtor: ((s: TypeStmt, c: Ctor) => CtorFactoryTs | null) | null = null;
 
 // The field keys of a module's EXPORTED ctors — threaded into an importer's
 // `codegen` so a pattern on an imported variant destructures the right runtime
@@ -449,14 +469,32 @@ const genType = (s: TypeStmt): string =>
   s.ctors
     .map((c) => {
       const tag = JSON.stringify(c.name);
-      if (c.fields.length === 0) return `const ${c.name} = { _tag: ${tag} };`;
-      const params = keysOf(c.fields).join(", ");
-      const impl = `(${params}) => ({ _tag: ${tag}, ${params} })`;
-      // Constructors are curried too (`a -> b -> Pair`); wrap multi-field ones
-      // so partial application works (CRITIQUE §4.4). Single-field needs none.
-      return c.fields.length >= 2
-        ? `const ${c.name} = _curry(${c.fields.length}, ${impl});`
-        : `const ${c.name} = ${impl};`;
+      if (c.fields.length === 0) {
+        const ts = annotateCtor?.(s, c) ?? null;
+        // Annotate the nullary const so `_tag` stays the literal (`"Leaf"`), not
+        // widened to `string` — else it won't match the variant union.
+        return ts
+          ? `const ${c.name}: ${ts.retMono} = { _tag: ${tag} };`
+          : `const ${c.name} = { _tag: ${tag} };`;
+      }
+      const keys = keysOf(c.fields);
+      const params = keys.join(", ");
+      const obj = `({ _tag: ${tag}, ${params} })`;
+      const ts = annotateCtor?.(s, c) ?? null; // TS backend types the factory
+      // Single-field: a typed arrow scopes its own generics (`<A>(_0: A): T`).
+      if (c.fields.length < 2) {
+        if (!ts) return `const ${c.name} = (${params}) => ${obj};`;
+        const typed = keys.map((k, i) => `${k}: ${ts.paramTypes[i]}`).join(", ");
+        return `const ${c.name} = ${ts.generics}(${typed}): ${ts.ret} => ${obj};`;
+      }
+      // Multi-field: curried so partial application works (CRITIQUE §4.4). The
+      // TS form casts `_curry`'s `any` to the public signature — the impl's
+      // params stay `any` (from `_curry`), so no generic-scope gymnastics.
+      const impl = `(${params}) => ${obj}`;
+      const curried = `_curry(${c.fields.length}, ${impl})`;
+      if (!ts) return `const ${c.name} = ${curried};`;
+      const sig = `${ts.generics}(${keys.map((k, i) => `${k}: ${ts.paramTypes[i]}`).join(", ")}) => ${ts.ret}`;
+      return `const ${c.name} = ${curried} as ${sig};`;
     })
     .join("\n");
 
@@ -491,7 +529,8 @@ const genStmt = (s: Stmt): string => {
     return s.exported ? `${genExtern(s)}\nexport { ${s.name} };` : genExtern(s);
   }
   const doExport = s.exported && !s.name.startsWith("$"); // never export destructure temps
-  return `${doExport ? "export " : ""}const ${s.name} = ${genExpr(s.value)};`;
+  const ann = annotateLet?.(s.name, s.value) ?? ""; // TS backend annotates; JS leaves bare
+  return `${doExport ? "export " : ""}const ${s.name}${ann} = ${genExpr(s.value)};`;
 };
 
 // Does the program need the `@onrails/pattern` import? Only if it has a match
@@ -624,9 +663,10 @@ const boundNames = (prog: Program): Set<string> => {
   return bound;
 };
 
-// The prelude runtime a program needs inlined: every builtin it references and
-// does not itself define, emitted in prelude declaration order for determinism.
-const preludePreamble = (prog: Program): string => {
+// The prelude runtime names a program needs: every builtin it references and
+// does not itself define, in prelude declaration order. Shared by the JS backend
+// (inlines the defs) and the TS backend (imports them from the typed runtime).
+export const collectRuntimeDeps = (prog: Program): string[] => {
   const refs = new Set<string>();
   for (const s of prog.stmts) {
     if (s.kind === "let") exprRefs(s.value, refs);
@@ -647,16 +687,23 @@ const preludePreamble = (prog: Program): string => {
       }
   }
   const bound = boundNames(prog);
-  const defs = Object.entries(preludeJsDefs)
-    .filter(([name]) => refs.has(name) && !bound.has(name))
-    .map(([, def]) => def);
+  return Object.keys(preludeJsDefs).filter((name) => refs.has(name) && !bound.has(name));
+};
+
+// The prelude runtime a program needs inlined, emitted in declaration order.
+const preludePreamble = (prog: Program): string => {
+  const defs = collectRuntimeDeps(prog).map((name) => preludeJsDefs[name]!);
   return defs.length ? `${defs.join("\n")}\n\n` : "";
 };
 
 // `runtime`: inline the prelude builtins the program uses, so the emitted module
 // runs standalone. Off by default — callers that supply their own prelude (tests
 // via `new Function(preludeJs, …)`) keep prelude-free output.
-export type CodegenOptions = { runtime?: boolean };
+export type CodegenOptions = {
+  runtime?: boolean;
+  annotate?: (name: string, value: Expr) => string | null;
+  annotateCtor?: (s: TypeStmt, c: Ctor) => CtorFactoryTs | null;
+};
 
 export const codegen = (
   prog: Program,
@@ -664,6 +711,8 @@ export const codegen = (
   opts: CodegenOptions = {},
 ): string => {
   ctorKeys = new Map(imported ?? []);
+  annotateLet = opts.annotate ?? null;
+  annotateCtor = opts.annotateCtor ?? null;
   for (const s of prog.stmts)
     if (s.kind === "type") for (const c of s.ctors) ctorKeys.set(c.name, keysOf(c.fields));
   // Seed builtin variant ctor keys (Some/Ok/…) unless the program declares its own.
