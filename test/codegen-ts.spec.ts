@@ -19,14 +19,22 @@ test("an inner lambda's concrete params are annotated (ADR 0028)", () => {
   expect(out).toContain("(y: number) => add(y, 1)");
 });
 
-test("a generic param is left bare in value position, typed by the head", () => {
-  // The binding head declares `<A>`; those letters are NOT in scope in the value
-  // expression, so a generic param must stay bare (tsc types it contextually) —
-  // emitting `A` there would be an out-of-scope TS2304.
+test("a generic binding's value lambda scopes the letters so its params can name them (ADR 0032)", () => {
+  // The binding head declares `<A, B>`; ADR 0032 re-declares the SAME letters on
+  // the value lambda, so its (fully annotated) params name them instead of being
+  // erased to `any`/`unknown` by `_curry`. This closes ADR 0028's polymorphic tail.
   const out = ts("let apply = (f, x) => f(x)");
   expect(out).toContain("const apply: <A, B>(f: (x: A) => B, x: A) => B =");
-  // Value arrow params stay bare — no generic letter leaks into value position.
-  expect(out).toContain("_curry(2, (f, x) => f(x))");
+  expect(out).toContain("_curry(2, <A, B>(f: (x: A) => B, x: A) => f(x))");
+});
+
+test("let? flattens to the all-at-once flatMap grouping so tsc infers the bind param (ADR 0032)", () => {
+  // Curried `_Result_flatMap(f)(v)` leaves `f`'s param unconstrained across the
+  // two calls (`unknown`); the flat `_Result_flatMap(f, v)` infers it from `v`.
+  const out = ts(
+    "type Result a e = | Ok(a) | Err(e)\nlet chain = r => let? v = r in Ok(add(v, 1))",
+  );
+  expect(out).toContain("_Result_flatMap((v) => Ok(add(v, 1)), r)");
 });
 
 test("a multi-param function annotates uncurried, matching the emitted value", () => {

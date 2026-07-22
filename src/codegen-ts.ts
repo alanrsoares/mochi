@@ -17,13 +17,14 @@ import {
   bindingTsType,
   builtinDeclsIn,
   ctorFactoryTs,
+  genericLambdaParams,
   guardParamTs,
   lambdaParamTypesTs,
   referencedBuiltinTypeDecls,
   typeDecl,
 } from "./dts";
 import type { AlangError } from "./errors";
-import type { Env, TypeAt } from "./infer";
+import type { Env, Scheme, TypeAt } from "./infer";
 import { preludeNamespaces } from "./prelude";
 import type { Span } from "./span";
 import type { AliasDef } from "./types";
@@ -80,11 +81,30 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
     return sc ? `: ${bindingTsType(sc, value, ctx.aliases)}` : null;
   };
 
+  // The value lambda of each GENERIC top-level function binding, keyed by span →
+  // its scheme (ADR 0032). Its params are annotated in full and the arrow carries
+  // a generic head, so polymorphic inner params name the letters instead of being
+  // erased to `any`/`unknown` by `_curry`.
+  const genericBindingLambda = new Map<string, Scheme>();
+  for (const s of prog.stmts) {
+    if (s.kind !== "let" || s.value.kind !== "lambda" || s.name.startsWith("$")) continue;
+    const sc = ctx.env.get(s.name);
+    if (sc && sc.vars.length > 0)
+      genericBindingLambda.set(`${s.value.span.start}:${s.value.span.end}`, sc);
+  }
+
   // Annotate each lambda's params from its inferred curried type (ADR 0028) —
-  // concrete types only; generic params stay bare (typed contextually by tsc).
+  // concrete types only, no generic head; generic params stay bare (typed
+  // contextually by tsc). Exception (ADR 0032): a generic binding's value lambda
+  // gets a generic head + ALL params annotated, so its polymorphic inner params
+  // name the letters rather than falling to `any`/`unknown` through `_curry`.
   const annotateParams = (span: Span, arity: number) => {
-    const t = typeAt.get(`${span.start}:${span.end}`);
-    return t ? lambdaParamTypesTs(t, arity, ctx.aliases) : [];
+    const key = `${span.start}:${span.end}`;
+    const sc = genericBindingLambda.get(key);
+    const g = sc ? genericLambdaParams(sc, arity, ctx.aliases) : null;
+    if (g) return g;
+    const t = typeAt.get(key);
+    return { generics: "", params: t ? lambdaParamTypesTs(t, arity, ctx.aliases) : [] };
   };
 
   // The concrete type each guard-form arm narrows FROM (ADR 0031). codegen turns

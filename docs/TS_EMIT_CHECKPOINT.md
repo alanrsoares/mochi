@@ -8,15 +8,18 @@ TypeScript** from alang, including the self-hosted `bootstrap/`.
 
 Single-file and well-behaved multi-module programs emit **strict-clean today**.
 The self-hosted `bootstrap/` emits and links, but is **not yet strict-clean** —
-**243 `tsc` errors** (was 537). Three gaps have shipped: the per-node lambda-param
+**94 `tsc` errors** (was 537). Five gaps have shipped: the per-node lambda-param
 type table (gap 1, ADR 0028, −238), cross-module `import type` + extern `.d.ts`
-(gap 3, ADR 0029, −33; TS2307/TS2304 → 0), and guard-form arms as **type
-predicates** (gap 2, ADR 0031, −23; TS2339 23 → 1). The checkpoint's original
-"gap 2 = row-poly records" label was **wrong**: the dominant `.with(guard, …)`
-failure was ts-pattern narrowing the handler only for `x is U` guards, not the
-boolean guards we emit. The remaining blocker is now the **polymorphic
-higher-order tail** ADR 0028 left open (TS2345 168, TS7006 40, TS18046 24), plus
-arity knock-ons (TS2554 3) and **one** genuine row-poly TS2339.
+(gap 3, ADR 0029, −33; TS2307/TS2304 → 0), guard-form arms as **type predicates**
+(gap 2, ADR 0031, −23; TS2339 23 → 1), and — this session — **generic value-lambda
+emission + flat `let?` bind** (ADR 0032, 243 → 94, −149): scoping the binding's
+generic letters on the value arrow itself (`_curry(n, <A,B>(a: A) => …)`) so its
+polymorphic params stop erasing to `any`/`unknown`, and flattening `let? p = v` to
+`_Result_flatMap(f, v)` so tsc infers the bind param. That designed away the
+TS7006/TS18046 tail entirely (TS7006 40 → 0, TS18046 24 → 1). The remaining blocker
+is now the **first-class combinator tail**: TS2345 (79, mostly `parser.ts` +
+`infer.ts`) where a generic function is passed *as a value* to a curried HOF whose
+own param is still `unknown`-erased — inference through function values, not calls.
 
 ## Landed this session (all on `main`, committed)
 
@@ -120,15 +123,18 @@ the repo `node_modules` (so tsc can run in `/tmp/bts`).
 
 ## Suggested next step
 
-Gaps 1 (ADR 0028), 2 (ADR 0031), and 3 (ADR 0029) done. The remaining blocker is
-the **polymorphic higher-order tail** ADR 0028 left open: generic inner callbacks
-with no contextual type (TS2345 168, TS7006 40, TS18046 24). These are lambdas
-whose params are generic in the enclosing binding — we can't annotate them because
-the generic letters aren't in scope in the value expression (would be TS2304). The
-fix needs generics that **scope over the value** (e.g. emit the binding as a
-generic function `const f = <A>(…) => …` so its inner lambdas can name `A`), which
-is a real design call — scope as an ADR. Smaller residuals: arity knock-ons
-(TS2554 3) and one genuine row-poly record update (`{ ...st, sccs }`, TS2339 1).
+Gaps 1 (ADR 0028), 2 (ADR 0031), 3 (ADR 0029), and the polymorphic higher-order
+tail (ADR 0032) done — 94 `tsc` errors left. The remaining blocker is the
+**first-class combinator tail**: TS2345 (79), concentrated in `parser.ts` (89
+across kinds) and `infer.ts` (51). These are sites where a now-generic function is
+passed *as an argument* to another curried HOF whose own param type is still
+`unknown`-erased (`_curry`'s `(...args: any[]) => any` public sig). ADR 0032's
+generic arrow fixes inference through *direct calls*; it does not flow generics
+through a function *value* handed to another `_curry`-wrapped combinator. Likely
+directions: (a) type `_curry`'s public signature generically instead of `any` (big
+lever, touches every builtin — measure first), or (b) flatten more curried-HOF
+call sites the way `let?`/pipes are flattened. Smaller residuals: TS2322 5, TS2554
+4 (arity), TS2677 2, TS2339 2, TS2741 1, TS18046 1.
 
 ## Not part of this track (uncommitted in tree)
 Rebrand (README, logos, `docs/REBRAND.md`, `docs/V1.md`) and ADRs 0024 (llvm) /

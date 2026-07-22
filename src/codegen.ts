@@ -65,10 +65,15 @@ let annotateCtor: ((s: TypeStmt, c: Ctor) => CtorFactoryTs | null) | null = null
 let flattenPipe = false;
 
 // TS backend (ADR 0028): given a lambda's span and its collapsed parameter count,
-// return one type annotation (the bare type text, no leading `:`) or null per
-// param. Supplied by the TS backend from the per-node inference table; null for
-// the JS backend, which emits bare params (byte-identical output).
-let annotateParams: ((span: Span, arity: number) => (string | null)[]) | null = null;
+// return a `generics` head (`<A, B>` or `""`) to scope over the arrow plus one
+// type annotation (the bare type text, no leading `:`) or null per param. The
+// head is non-empty only for a generic function binding's value lambda (ADR 0032),
+// where scoping the letters on the arrow lets its params name them; every other
+// lambda gets `""` and concrete-only params. Supplied by the TS backend from the
+// per-node inference table; null for the JS backend (byte-identical output).
+let annotateParams:
+  | ((span: Span, arity: number) => { generics: string; params: (string | null)[] })
+  | null = null;
 
 // TS backend (ADR 0031): given a match scrutinee expr, return its concrete TS
 // type text (the "base" the guard-form predicate narrows from), or null (generic
@@ -134,12 +139,15 @@ const genExpr = (e: Expr): string =>
       // (ADR 0028), so `(x) => …` becomes `(x: A) => …` — otherwise strict tsc
       // infers `any`. `l.span` (the outer, un-collapsed lambda) carries the full
       // `A -> B -> …` type; the callback peels it per collapsed param.
-      const anns = annotateParams?.(l.span, params.length) ?? [];
+      const ann = annotateParams?.(l.span, params.length);
+      const anns = ann?.params ?? [];
       const ps = params.map((p, i) => {
         const g = genParam(p);
         return anns[i] ? `${g}: ${anns[i]}` : g;
       });
-      const arrow = `(${ps.join(", ")}) => ${genLambdaBody(body)}`;
+      // A generic binding's value lambda scopes its letters here (ADR 0032), so
+      // its (now fully annotated) params can name them; every other lambda: "".
+      const arrow = `${ann?.generics ?? ""}(${ps.join(", ")}) => ${genLambdaBody(body)}`;
       // Curried type, flat JS impl: arity ≥ 2 lowers to a `_curry`-wrapped
       // function so any call grouping works (CRITIQUE §4.4). Arity 1 needs none.
       return params.length >= 2 ? `_curry(${params.length}, ${arrow})` : arrow;
@@ -151,11 +159,15 @@ const genExpr = (e: Expr): string =>
       (l) => `((${l.name}) => ${genLambdaBody(l.body)})(${genExpr(l.value)})`,
     )
     // let? p = v in b  →  the Result bind: `_Result_flatMap((p) => b)(v)`.
-    .with(
-      { kind: "letbind" },
-      (l) =>
-        `_Result_flatMap((${genParam(l.param)}) => ${genLambdaBody(l.body)})(${genExpr(l.value)})`,
-    )
+    // Under `flattenPipe` (TS backend) the two args go in ONE grouping —
+    // `_Result_flatMap((p) => b, v)` — so tsc infers `p`'s type from `v` in the
+    // all-at-once overload; the curried `f(v)` split leaves `p` unconstrained
+    // (`unknown`) across the two calls. Both are equivalent under `_curry`.
+    .with({ kind: "letbind" }, (l) => {
+      const f = `(${genParam(l.param)}) => ${genLambdaBody(l.body)}`;
+      const v = genExpr(l.value);
+      return flattenPipe ? `_Result_flatMap(${f}, ${v})` : `_Result_flatMap(${f})(${v})`;
+    })
     // desugar inline: a |> f  →  f(a). Under `flattenPipe` (TS backend), a pipe
     // into a call appends the arg — `a |> f(x)` → `f(x, a)` — so tsc infers type
     // args from every argument at once; otherwise the curried `f(x)(a)`.
@@ -809,7 +821,7 @@ export type CodegenOptions = {
   annotateCtor?: (s: TypeStmt, c: Ctor) => CtorFactoryTs | null;
   flattenPipe?: boolean;
   moduleExt?: string;
-  annotateParams?: (span: Span, arity: number) => (string | null)[];
+  annotateParams?: (span: Span, arity: number) => { generics: string; params: (string | null)[] };
   guardBaseType?: (scrutinee: Expr) => string | null;
 };
 

@@ -263,6 +263,37 @@ export const lambdaParamTypesTs = (
   return out;
 };
 
+// TS backend (ADR 0032): a GENERIC function binding's value lambda emitted as a
+// generic arrow — `_curry(n, <A, B>(p: A, …) => …)` — so its params can name the
+// binding's generic letters. This closes the polymorphic higher-order tail ADR
+// 0028 left open: `lambdaParamTypesTs` skips generic params because their letters
+// live on the const's TYPE head (out of scope in the value expression, would be
+// TS2304), so `_curry` erased them to `any`/`unknown` in the body (TS18046/7006/
+// 2345). Scoping the SAME letters (from the scheme's `genericNames`, matching the
+// const head `bindingTsType` emits) on the lambda itself brings them into value
+// scope. Returns the generic head plus EVERY param's type — generic letters and
+// concrete types alike — peeling one arrow of the scheme type per collapsed param.
+// Null when the binding is non-generic (the concrete-only path already handles it).
+export const genericLambdaParams = (
+  sc: Scheme,
+  arity: number,
+  aliases: AliasDef[],
+): { generics: string; params: (string | null)[] } | null => {
+  const names = genericNames(sc);
+  if (names.size === 0) return null;
+  const params: (string | null)[] = [];
+  let cur = foldAliases(sc.type, aliases);
+  for (let i = 0; i < arity; i++) {
+    if (cur.kind !== "arrow") {
+      params.push(null);
+      continue;
+    }
+    params.push(tsOf(cur.from, names));
+    cur = cur.to;
+  }
+  return { generics: `<${[...names.values()].join(", ")}>`, params };
+};
+
 // A match scrutinee's concrete TS type — the base a guard-form arm's type
 // predicate narrows FROM (`(_v): _v is Extract<T, …>`, ADR 0031). codegen builds
 // the `Extract<…>` target from the pattern; this supplies the `T`. Concrete types
