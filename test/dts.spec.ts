@@ -13,9 +13,11 @@ test("a single-param lambda declares a unary function", () => {
   expect(dts("let inc = x => add(x, 1)")).toBe("export declare const inc: (x: number) => number;");
 });
 
-test("a multi-param lambda declares an uncurried function (matches emitted JS)", () => {
+test("a concrete multi-param lambda declares partial-application overloads (ADR 0037)", () => {
+  // `_curry` makes it callable in any grouping — `sum(a, b)` or `sum(a)(b)` —
+  // so the type is an overload set, flat signature last (see `curriedOverloads`).
   expect(dts("let sum = (a, b) => add(a, b)")).toBe(
-    "export declare const sum: (a: number, b: number) => number;",
+    "export declare const sum: { (a: number): (b: number) => number; (a: number, b: number): number; };",
   );
 });
 

@@ -37,9 +37,11 @@ test("let? flattens to the all-at-once flatMap grouping so tsc infers the bind p
   expect(out).toContain("_Result_flatMap((v) => Ok(add(v, 1)), r)");
 });
 
-test("a multi-param function annotates uncurried, matching the emitted value", () => {
+test("a concrete multi-param function annotates with partial-application overloads (ADR 0037)", () => {
   const out = ts("let sum = (a, b) => add(a, b)");
-  expect(out).toContain("const sum: (a: number, b: number) => number = _curry(2,");
+  expect(out).toContain(
+    "const sum: { (a: number): (b: number) => number; (a: number, b: number): number; } = _curry(2,",
+  );
 });
 
 test("a non-function binding is left for TS to infer (no annotation)", () => {

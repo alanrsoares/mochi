@@ -145,6 +145,32 @@ const declType = (t: Type, value: Expr, names: Map<number, string>): string => {
   return `(${params.join(", ")}) => ${declType(cur, value.body, names)}`;
 };
 
+// A binding's parameters flattened — across nested value lambdas (`a => b => …`)
+// AND a single multi-param lambda (`(a, b) => …`) alike — into one ordered list,
+// plus the final return type. Feeds `curriedOverloads` for CONCRETE function
+// bindings so every partial-application grouping `_curry` accepts typechecks.
+const flatBindingParams = (
+  t: Type,
+  value: Expr,
+  names: Map<number, string>,
+): { params: string[]; ret: string } => {
+  const params: string[] = [];
+  let cur = t;
+  let v = value;
+  let n = 0;
+  while (v.kind === "lambda") {
+    for (const p of v.params) {
+      if (cur.kind !== "arrow") break;
+      const name = p.kind === "name" ? p.name : `_${n}`;
+      params.push(`${name}: ${tsOf(cur.from, names)}`);
+      cur = cur.to;
+      n++;
+    }
+    v = v.body;
+  }
+  return { params, ret: tsOf(cur, names) };
+};
+
 // Assign generic letters to a scheme's quantified vars — type vars AND row
 // vars alike. `freshVar`/`freshRowVar` share one id counter (types.ts), so tv
 // and rv ids never collide and one map covers both: `tsOf` looks up a type var,
@@ -218,6 +244,31 @@ const compositions = (n: number): number[][] => {
   return out.toSorted((a, b) => b.length - a.length);
 };
 
+// Curried-compatible function type from rendered params (`"a: T"`) + return type.
+// The JS backend curries every arity-≥2 function via `_curry`, so a call site may
+// partially apply in ANY grouping — `f(a, b)`, `f(a)(b)`, `f(a, b)(c)`. A single
+// flat `(a, b) => R` rejects all but the all-at-once form, so emit an OVERLOAD
+// per composition of the arity, covering every grouping `_curry` accepts, with the
+// flat signature LAST (see `compositions`). `head` (`<A, B>`) scopes generics; on
+// the overload object it must sit INSIDE each call signature, so it is threaded
+// through here rather than prepended by the caller. Shared by builtin runtime
+// typing (`flatFnType`) and user binding typing (`declType`) so both curry alike.
+const curriedOverloads = (head: string, params: string[], ret: string): string => {
+  if (params.length <= 1) return `${head}(${params.join(", ")}) => ${ret}`;
+  const sig = (groups: number[]): string => {
+    const slices: string[][] = [];
+    let idx = 0;
+    for (const g of groups) {
+      slices.push(params.slice(idx, idx + g));
+      idx += g;
+    }
+    let tail = ret;
+    for (let i = slices.length - 1; i >= 1; i--) tail = `(${slices[i]!.join(", ")}) => ${tail}`;
+    return `${head}(${slices[0]!.join(", ")}): ${tail};`;
+  };
+  return `{ ${compositions(params.length).map(sig).join(" ")} }`;
+};
+
 // A prelude builtin's HM type rendered for the typed runtime (ADR 0026). The JS
 // backend curries every arity-≥2 builtin via `_curry`, so a call site emits ANY
 // partial-application grouping — `map(f, xs)`, `xs |> map(f)` → `map(f)(xs)`,
@@ -238,24 +289,7 @@ export const flatFnType = (t: Type, arity: number): string => {
     params.push(`${String.fromCharCode(97 + i)}: ${tsOf(cur.from, names)}`);
     cur = cur.to;
   }
-  const ret = tsOf(cur, names);
-  if (params.length <= 1) return `${head}(${params.join(", ")}) => ${ret}`;
-
-  // One call signature per grouping. The first group is the (generic) call
-  // signature's params; later groups nest as returned arrow types, inheriting
-  // the generics. `{ <G>(a,b): R; <G>(a): (b) => R; … }`.
-  const sig = (groups: number[]): string => {
-    const slices: string[][] = [];
-    let idx = 0;
-    for (const g of groups) {
-      slices.push(params.slice(idx, idx + g));
-      idx += g;
-    }
-    let tail = ret;
-    for (let i = slices.length - 1; i >= 1; i--) tail = `(${slices[i]!.join(", ")}) => ${tail}`;
-    return `${head}(${slices[0]!.join(", ")}): ${tail};`;
-  };
-  return `{ ${compositions(params.length).map(sig).join(" ")} }`;
+  return curriedOverloads(head, params, tsOf(cur, names));
 };
 
 // The TS signature pieces for a ctor's runtime factory (ADR 0026 TS backend):
@@ -294,6 +328,15 @@ export const bindingTsType = (sc: Scheme, value: Expr, aliases: AliasDef[]): str
   if (value.kind === "lambda") {
     const generics = [...names.values()];
     const head = generics.length ? `<${generics.join(", ")}>` : "";
+    // CONCRETE function: emit partial-application overloads so `_curry`'d partial
+    // calls (`inRange(48, 57)`, `setLetMeta(true, doc)`) typecheck against the
+    // curried runtime. GENERIC functions keep the flat/nested arrow — overloads
+    // there wreck tsc's callback contextual typing and type-arg inference
+    // (params collapse to `Option<never>`/`any`). See ADR 0037.
+    if (head === "") {
+      const { params, ret } = flatBindingParams(folded, value, names);
+      return curriedOverloads("", params, ret);
+    }
     return `${head}${declType(folded, value, names)}`;
   }
   return tsOf(folded, new Map());

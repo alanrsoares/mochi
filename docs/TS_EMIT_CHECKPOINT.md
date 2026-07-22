@@ -1,4 +1,4 @@
-# TS-emit checkpoint — 2026-07-23 (rev 3)
+# TS-emit checkpoint — 2026-07-23 (rev 4)
 
 Working state of the TypeScript backend track (ADR 0026 / `docs/TS_DIALECT.md`),
 so a fresh session can pick up. Goal: emit **fully working, `tsc --strict`-clean
@@ -8,8 +8,8 @@ TypeScript** from alang, including the self-hosted `bootstrap/`.
 
 Single-file and well-behaved multi-module programs emit **strict-clean today**.
 The self-hosted `bootstrap/` emits and links, but is **not yet strict-clean** —
-**22 `tsc` errors** (was 537). Measure any time with `bun run bootstrap:tsc`
-(`scripts/bootstrap-tsc.ts`, replaces the old `/tmp/bts` recipe). Nine gaps have
+**16 `tsc` errors** (was 537). Measure any time with `bun run bootstrap:tsc`
+(`scripts/bootstrap-tsc.ts`, replaces the old `/tmp/bts` recipe). Ten gaps have
 shipped: the per-node lambda-param
 type table (gap 1, ADR 0028, −238), cross-module `import type` + extern `.d.ts`
 (gap 3, ADR 0029, −33; TS2307/TS2304 → 0), guard-form arms as **type predicates**
@@ -17,16 +17,19 @@ type table (gap 1, ADR 0028, −238), cross-module `import type` + extern `.d.ts
 `let?` bind** (ADR 0032, 243 → 94, −149), **flat function-type emission + overload
 ordering** (ADR 0033, 94 → 58, −36), **open-row → generic-intersection record
 emission** (ADR 0034, 58 → 33, −25), **empty-collection seeds annotated at the
-binding** (ADR 0035, 33 → 26, −7), and — this session — **tuple literals via
-`_tuple`** (ADR 0036, 26 → 22, −4). ADR 0036: a tuple erases to a bare array `[a,
-b]`, which tsc widens to `(A | B)[]` where no contextual tuple type is in scope
-(inside `Some(…)`/`Ok(…)`, a ts-pattern arm, or against an HM-declared tuple
-return). Emitting `_tuple(a, b)` — an identity whose rest param `<T extends
-unknown[]>(...xs: T): T` is inferred as a tuple — keeps `[A, B]` without naming
-element types (dodging the TS2304 generic-scope hazard `as [T0,T1]` would hit).
-The remaining 22 decompose (see below) into **generic-leak HOF** + **open-row
-state** (the polymorphic-HOF tail proper), a **`NonExhaustiveError`/`never`
-match-return** class, and a **`_curry` arity** gap — each its own lever.
+binding** (ADR 0035, 33 → 26, −7), **tuple literals via `_tuple`** (ADR 0036, 26
+→ 22, −4), and — this session — **partial-application overloads** (ADR 0037, 22 →
+16, −6). ADR 0037: every function is curried (`_curry`), so `inRange(48, 57)`
+returns a `(n) => …` at runtime, but a flat `(a, b, c) => R` binding type has
+three *required* params and rejects the 2-arg call (TS2554). Builtins already type
+as an overload-per-composition set (`flatFnType`); the fix routes CONCRETE user
+bindings through the same `curriedOverloads` helper. Generic bindings stay flat —
+overloading them regressed 22 → 116 (contextual-typing + type-arg-inference
+collapse), so a `head === ""` gate confines overloads to inference-neutral
+concrete functions. The remaining 16 decompose (see below) into **generic-leak
+HOF** + **open-row state** (the polymorphic-HOF tail proper), a
+**`NonExhaustiveError`/`never` match-return** class, and scattered
+empty-collection / `Option<never>` leaks — each its own lever.
 
 ## Landed this session (all on `main`, committed)
 
@@ -40,9 +43,10 @@ match-return** class, and a **`_curry` arity** gap — each its own lever.
 | `adea790` | feat(codegen): flat fn-type emission + overload order (ADR 0033) |
 | `68d93b6` | feat(codegen): open-row records → generic intersections (ADR 0034) |
 | `93f25a6` | feat(codegen): empty-collection seeds annotated at binding (ADR 0035) |
-| _(this commit)_ | feat(codegen): tuple literals via `_tuple` — tsc infers tuples (ADR 0036) |
+| `ea4b8c2` | feat(codegen): tuple literals via `_tuple` — tsc infers tuples (ADR 0036) |
+| _(this commit)_ | feat(codegen): partial-application overloads for concrete fns (ADR 0037) |
 
-`bun run check` is green (798 tests). JS backend byte-identical throughout
+`bun run check` is green (799 tests). JS backend byte-identical throughout
 (all TS-only behavior is behind codegen options that default off).
 
 ## What works now

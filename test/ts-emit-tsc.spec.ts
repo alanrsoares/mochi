@@ -117,6 +117,17 @@ let firstRest = xs => switch xs {
 }
 let p = pair()
 let r = firstRest([1, 2, 3])`,
+  // Regression guard for ADR 0037: a CONCRETE curried function partially applied.
+  // \`_curry\` makes \`inRange(48, 57)\` / \`clamp(0, 10)\` legal at runtime, but a flat
+  // \`(a, b, c) => R\` binding type rejects the sub-arity call (TS2554). The
+  // partial-application overload set accepts it — used as a \`map\` callback and
+  // then fully applied. Generic functions stay flat (overloads break inference).
+  partialApp: `
+let inRange = (lo, hi, n) => and(gte(n, lo), lte(n, hi))
+let bumped = map(inRange(48, 57), [50, 99])
+let clamp = (lo, hi, n) => add(lo, add(hi, n))
+let atMost = clamp(0, 10)
+let one = atMost(5)`,
 };
 
 beforeAll(() => {
