@@ -471,6 +471,16 @@ const genMatch = (m: MatchExpr): string => {
     parts.push(
       `  .otherwise(${catchAllParam(catchAll.pattern)} => ${genLambdaBody(catchAll.body)})`,
     );
+  } else if (guardBaseType !== null && m.arms.some((a) => a.pattern.kind === "parr")) {
+    // TS backend (ADR 0038): an eager-array match with no catch-all is the
+    // `[]` + `[h, ...t]` length partition check.ts proved total. Its guard arms
+    // test `.length` — they don't narrow `A[]` structurally, so ts-pattern's
+    // `.exhaustive()` still sees `A[]` leftover and types as
+    // `NonExhaustiveError<A[]>` (TS2322). Close with a throwing `.otherwise`
+    // instead: its `never` return is assignable to the declared type, and the
+    // branch is dead (totality already proven). JS mode (`guardBaseType` null)
+    // keeps `.exhaustive()` — emitted JS stays byte-identical.
+    parts.push(`  .otherwise(() => { throw new Error("non-exhaustive match"); })`);
   } else {
     parts.push("  .exhaustive()");
   }

@@ -128,6 +128,23 @@ let bumped = map(inRange(48, 57), [50, 99])
 let clamp = (lo, hi, n) => add(lo, add(hi, n))
 let atMost = clamp(0, 10)
 let one = atMost(5)`,
+  // Regression guard for ADR 0038: an eager-array match with NO catch-all is
+  // the \`[]\` + \`[h, ...t]\` length partition (check.ts proves it total). Its
+  // guard arms test \`.length\` and don't narrow \`A[]\` structurally, so
+  // ts-pattern's \`.exhaustive()\` types as \`NonExhaustiveError<A[]>\` (TS2322).
+  // The TS backend closes it with a throwing \`.otherwise\` instead. Covers a
+  // concrete recursion and a generic (element-polymorphic) one.
+  arrayMatch: `
+let sumAll = xs => switch xs {
+  | [] => 0
+  | [h, ..._t] => add(h, sumAll(_t))
+}
+let count = xs => switch xs {
+  | [] => 0
+  | [_h, ..._t] => add(1, count(_t))
+}
+let s = sumAll([1, 2, 3])
+let c = count([1, 2, 3])`,
 };
 
 beforeAll(() => {
