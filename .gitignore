@@ -45,6 +45,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Finder (MacOS) folder config
 .DS_Store
 
+# planning docs / issue tracker — kept local, not tracked
+docs/plan/
+
 # editor-local config
 .cursor
 
