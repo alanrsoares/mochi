@@ -1387,7 +1387,22 @@ let processGroupsFrom = (sccs, lets, ctx, st) => switch sccs {
       processGroupsFrom(restSccs, lets, ctxWithEnv(ctx, finalEnv), st2)
 }
 
-export let inferProgram = (stmts, builtins, namespaces, openMode) =>
+// Seed each import's already-generalized scheme into the env, so a reference to
+// an imported name types with its real (possibly polymorphic) scheme instead of
+// an open-world fresh var. A module's own `let` (inferred later, in the SCCs)
+// shadows an import of the same name.
+let seedImportsFrom = (keys, imports, env) => switch keys {
+  | [] => env
+  | [k, ...rest] => switch Map.get(k, imports) {
+    | Some(sc) => seedImportsFrom(rest, imports, Map.set(k, sc, env))
+    | None => seedImportsFrom(rest, imports, env)
+  }
+}
+
+// inferProgram threaded with `imports` (a Map of name -> Scheme published by dep
+// modules). Mirrors src/infer.ts's `inferProgramTypes({ imports })`; returns the
+// final env so the module driver can extract this module's export schemes.
+export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports) =>
   let st0 = mkSt(1000) in
   let env0 = seedBuiltins(builtins, #{}, st0) in
   let ns0 = seedNs(namespaces, env0, st0) in
@@ -1395,10 +1410,14 @@ export let inferProgram = (stmts, builtins, namespaces, openMode) =>
   let (env1, st1) = registerUserCtorsFrom(stmts, aliasMap, env0, st0) in
   let (env2, st2) = registerBuiltinCtorsFrom(builtinTypeDecls, aliasMap, env1, st1) in
   let (env3, st3) = registerExternsFrom(stmts, aliasMap, env2, st2) in
+  let env4 = seedImportsFrom(Map.keys(imports), imports, env3) in
   let lets = letsOfFrom(stmts) in
   let idxOf = idxOfMap(lets) in
   let sccs = stronglyConnected(adjOf(lets, idxOf)) in
-  switch processGroupsFrom(sccs, lets, { env: env3, open: openMode, ns: ns0 }, st3) {
+  switch processGroupsFrom(sccs, lets, { env: env4, open: openMode, ns: ns0 }, st3) {
     | Ok(finalCtx) => Ok(finalCtx.env)
     | Err(e) => Err(e)
   }
+
+export let inferProgram = (stmts, builtins, namespaces, openMode) =>
+  inferProgramImports(stmts, builtins, namespaces, openMode, #{})

@@ -570,12 +570,30 @@ let checkCtorFieldVars = stmts => firstSome(s => switch s {
 
 // --- entry point ---
 
-export let check = stmts => switch checkReservedNames(stmts) {
+// Merge every key of `from` that `into` lacks (the importer's own decls win on
+// a name clash). Generic over the map's value type.
+let mergeMissing = (keys, from, into) => switch keys {
+  | [] => into
+  | [k, ...rest] => switch Map.get(k, from) {
+    | Some(v) => mergeMissing(rest, from, Map.has(k, into) ? into : Map.set(k, v, into))
+    | None => mergeMissing(rest, from, into)
+  }
+}
+
+// check threaded with an imported registry (dep modules' exported variant
+// types) so a `switch` on an imported variant is exhaustiveness-checked against
+// every constructor — even ones the importer never named (those force a
+// catch-all). Mirrors src/check.ts's `check(prog, imported)`.
+export let checkWith = (stmts, imported) => switch checkReservedNames(stmts) {
   | Some(e) => Err(e)
   | None => switch checkCtorFieldVars(stmts) {
     | Some(e) => Err(e)
     | None =>
-        let? reg = buildRegistry(stmts) in
+        let? reg0 = buildRegistry(stmts) in
+        let reg = {
+          ctors: mergeMissing(Map.keys(imported.ctors), imported.ctors, reg0.ctors),
+          types: mergeMissing(Map.keys(imported.types), imported.types, reg0.types)
+        } in
         switch firstSome(s => switch s {
           | SLet(_, _, value, _, _, _) => checkExpr(value, reg)
           | _ => None
@@ -585,3 +603,25 @@ export let check = stmts => switch checkReservedNames(stmts) {
         }
   }
 }
+
+export let check = stmts => checkWith(stmts, { ctors: #{}, types: #{} })
+
+// The registry a module PUBLISHES: only its EXPORTED variant types (and their
+// full ctor sets). Threaded into an importer's `checkWith`. Unlike
+// buildRegistry it seeds no builtins and does not dup-check (the module was
+// already checked). Mirrors src/check.ts's `exportedRegistry`.
+let exportedCtorsInto = (ctors, i, owner, acc) => switch Array.get(i, ctors) {
+  | None => acc
+  | Some(c) => exportedCtorsInto(ctors, add(i, 1), owner,
+      Map.set(c.name, { owner: owner, arity: Array.length(c.fields) }, acc))
+}
+let exportedRegLoop = (stmts, i, reg) => switch Array.get(i, stmts) {
+  | None => reg
+  | Some(SType(name, _, ctors, _, true, _)) =>
+      exportedRegLoop(stmts, add(i, 1), {
+        ctors: exportedCtorsInto(ctors, 0, name, reg.ctors),
+        types: Map.set(name, ctors |> map(c => c.name), reg.types)
+      })
+  | Some(_) => exportedRegLoop(stmts, add(i, 1), reg)
+}
+export let exportedRegistry = stmts => exportedRegLoop(stmts, 0, { ctors: #{}, types: #{} })

@@ -833,6 +833,19 @@ let seedBuiltinCtorKeys = m =>
   let m3 = Map.has("Ok", m2) ? m2 : Map.set("Ok", ["value"], m2) in
   Map.has("Err", m3) ? m3 : Map.set("Err", ["error"], m3)
 
+// Field keys of a module's EXPORTED ctors — threaded into an importer's
+// `codegen` (2nd arg) so a pattern on an imported variant destructures the
+// right runtime keys (`Some(value)` → `{ value }`, not positional `{ _0 }`).
+// Mirrors src/codegen.ts's `exportedCtorKeys`.
+let exportedCtorKeysFrom = (stmts, i, m) => switch Array.get(i, stmts) {
+  | None => m
+  | Some(s) => exportedCtorKeysFrom(stmts, add(i, 1), switch s {
+    | SType(_, _, ctors, _, true, _) => seedCtorsFrom(ctors, 0, m)
+    | _ => m
+  })
+}
+export let exportedCtorKeys = stmts => exportedCtorKeysFrom(stmts, 0, #{})
+
 let genStmtAllFrom = (stmts, i, ctx) => switch Array.get(i, stmts) {
   | None => []
   | Some(s) => Array.prepend(genStmt(s, ctx), genStmtAllFrom(stmts, add(i, 1), ctx))
