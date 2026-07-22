@@ -140,9 +140,24 @@ const freeVars = (t: Type, acc: number[]): void => {
   }
 };
 
-// A prelude builtin's HM type rendered as a FLAT n-ary TS function matching its
-// runtime arity (the JS backend collapses currying via `_curry`), free vars
-// bound as generics. Used by scripts/gen-runtime.ts. arity 0 → the bare type.
+// Ordered compositions of n: every way to write n as a sum of positive ints
+// keeping order — [2] & [1,1] for n=2; [3],[2,1],[1,2],[1,1,1] for n=3. Shortest
+// first (fewest groups) so overload resolution prefers the all-at-once form.
+const compositions = (n: number): number[][] => {
+  if (n === 0) return [[]];
+  const out: number[][] = [];
+  for (let k = 1; k <= n; k++) for (const rest of compositions(n - k)) out.push([k, ...rest]);
+  return out.toSorted((a, b) => a.length - b.length);
+};
+
+// A prelude builtin's HM type rendered for the typed runtime (ADR 0026). The JS
+// backend curries every arity-≥2 builtin via `_curry`, so a call site emits ANY
+// partial-application grouping — `map(f, xs)`, `xs |> map(f)` → `map(f)(xs)`,
+// `foldl(f, z)(xs)`, `foldl(f)(z)(xs)`. A single flat `(a, b) => R` type rejects
+// all but the all-at-once form, breaking pipelines. So emit an OVERLOADED type:
+// one generic call signature per composition of the arity, covering every
+// grouping `_curry` accepts. arity 0 → the bare type; arity 1 → a plain arrow.
+// Used by scripts/gen-runtime.ts.
 export const flatFnType = (t: Type, arity: number): string => {
   const ids: number[] = [];
   freeVars(t, ids);
@@ -155,7 +170,24 @@ export const flatFnType = (t: Type, arity: number): string => {
     params.push(`${String.fromCharCode(97 + i)}: ${tsOf(cur.from, names)}`);
     cur = cur.to;
   }
-  return `${head}(${params.join(", ")}) => ${tsOf(cur, names)}`;
+  const ret = tsOf(cur, names);
+  if (params.length <= 1) return `${head}(${params.join(", ")}) => ${ret}`;
+
+  // One call signature per grouping. The first group is the (generic) call
+  // signature's params; later groups nest as returned arrow types, inheriting
+  // the generics. `{ <G>(a,b): R; <G>(a): (b) => R; … }`.
+  const sig = (groups: number[]): string => {
+    const slices: string[][] = [];
+    let idx = 0;
+    for (const g of groups) {
+      slices.push(params.slice(idx, idx + g));
+      idx += g;
+    }
+    let tail = ret;
+    for (let i = slices.length - 1; i >= 1; i--) tail = `(${slices[i]!.join(", ")}) => ${tail}`;
+    return `${head}(${slices[0]!.join(", ")}): ${tail};`;
+  };
+  return `{ ${compositions(params.length).map(sig).join(" ")} }`;
 };
 
 // The TS signature pieces for a ctor's runtime factory (ADR 0026 TS backend):

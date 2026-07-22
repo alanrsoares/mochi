@@ -87,6 +87,7 @@ export const codegenTs = (src: string, opts: CodegenTsOptions = {}): Result<stri
     runtime: false,
     annotate,
     annotateCtor: (s, c) => ctorFactoryTs(s.name, s.params, c),
+    flattenPipe: true,
   });
 
   const parts = [typeHeader.join("\n"), runtimeLine, body].filter((p) => p !== "");

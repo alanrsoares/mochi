@@ -56,6 +56,13 @@ export type CtorFactoryTs = {
 };
 let annotateCtor: ((s: TypeStmt, c: Ctor) => CtorFactoryTs | null) | null = null;
 
+// TS backend (ADR 0026): lower `a |> f(x)` to the flattened call `f(x, a)`
+// instead of the curried `f(x)(a)`. Both are equivalent under `_curry`, but the
+// flat form lets `tsc` infer type args from ALL arguments at once — `xs |> map(f)`
+// as `map(f, xs)` pins the element type, where `map(f)(xs)` leaves it `unknown`.
+// Off for the JS backend, which stays byte-identical.
+let flattenPipe = false;
+
 // The field keys of a module's EXPORTED ctors — threaded into an importer's
 // `codegen` so a pattern on an imported variant destructures the right runtime
 // keys (`Some(value: a)` → `{ value }`, not the positional `{ _0 }`).
@@ -121,8 +128,14 @@ const genExpr = (e: Expr): string =>
       (l) =>
         `_Result_flatMap((${genParam(l.param)}) => ${genLambdaBody(l.body)})(${genExpr(l.value)})`,
     )
-    // desugar inline: a |> f  →  f(a)
-    .with({ kind: "pipe" }, (p) => `${genCallee(p.right)}(${genExpr(p.left)})`)
+    // desugar inline: a |> f  →  f(a). Under `flattenPipe` (TS backend), a pipe
+    // into a call appends the arg — `a |> f(x)` → `f(x, a)` — so tsc infers type
+    // args from every argument at once; otherwise the curried `f(x)(a)`.
+    .with({ kind: "pipe" }, (p) =>
+      flattenPipe && p.right.kind === "call"
+        ? `${genCallee(p.right.fn)}(${[...p.right.args, p.left].map(genExpr).join(", ")})`
+        : `${genCallee(p.right)}(${genExpr(p.left)})`,
+    )
     // Always parenthesized, so the output nests safely in any JS position.
     .with(
       { kind: "ternary" },
@@ -703,6 +716,7 @@ export type CodegenOptions = {
   runtime?: boolean;
   annotate?: (name: string, value: Expr) => string | null;
   annotateCtor?: (s: TypeStmt, c: Ctor) => CtorFactoryTs | null;
+  flattenPipe?: boolean;
 };
 
 export const codegen = (
@@ -713,6 +727,7 @@ export const codegen = (
   ctorKeys = new Map(imported ?? []);
   annotateLet = opts.annotate ?? null;
   annotateCtor = opts.annotateCtor ?? null;
+  flattenPipe = opts.flattenPipe ?? false;
   for (const s of prog.stmts)
     if (s.kind === "type") for (const c of s.ctors) ctorKeys.set(c.name, keysOf(c.fields));
   // Seed builtin variant ctor keys (Some/Ok/…) unless the program declares its own.

@@ -49,6 +49,18 @@ let origin = { x: 0.0, y: 0.0 }
 let shift = (p, dx) => { ...p, x: add(p.x, dx) }
 let dist = p => sqrt(add(mul(p.x, p.x), mul(p.y, p.y)))
 let moved = shift(origin, 3.0)`,
+  // Regression guard: CURRIED / piped prelude application. A flat runtime type
+  // rejects \`map(f)(xs)\`; the overloaded (curry-aware) type + pipe flattening
+  // (ADR 0026) make \`xs |> map(f)\` infer its element type. Covers top-level and
+  // namespace (List/Option) builtins, eager + lazy collections, interpolation.
+  pipelines: `
+let doubled = [1, 2, 3] |> map(x => mul(x, 2))
+let evens = [1, 2, 3, 4] |> filter(x => eq(0, 0))
+let total = [1, 2, 3] |> map(x => add(x, 1)) |> reduce(add, 0)
+let lazyDoubled = @{1, 2, 3} |> List.map(x => mul(x, 2))
+let scores = #{"a": 1, "b": 2}
+let bumped = Some(5) |> Option.map(x => add(x, 1))
+let greet = name => "hello \${name}!"`,
 };
 
 beforeAll(() => {
