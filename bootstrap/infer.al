@@ -1421,3 +1421,28 @@ export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports
 
 export let inferProgram = (stmts, builtins, namespaces, openMode) =>
   inferProgramImports(stmts, builtins, namespaces, openMode, #{})
+
+// The schemes a module PUBLISHES: exported let/extern bindings and the ctors of
+// exported types, pulled from the final inference env by name. Mirrors
+// src/module.ts's `exportsOf`; feeds an importer's `imports` for
+// inferProgramImports. Names absent from the env (should not happen post-infer)
+// are skipped.
+let takeScheme = (name, env, acc) => switch Map.get(name, env) {
+  | Some(sc) => Map.set(name, sc, acc)
+  | None => acc
+}
+let exportCtorsInto = (ctors, i, env, acc) => switch Array.get(i, ctors) {
+  | None => acc
+  | Some(c) => exportCtorsInto(ctors, add(i, 1), env, takeScheme(c.name, env, acc))
+}
+let exportedSchemesFrom = (stmts, i, env, acc) => switch Array.get(i, stmts) {
+  | None => acc
+  | Some(SLet(name, _, _, true, _, _)) =>
+      exportedSchemesFrom(stmts, add(i, 1), env, takeScheme(name, env, acc))
+  | Some(SExtern(name, _, _, _, _, true, _)) =>
+      exportedSchemesFrom(stmts, add(i, 1), env, takeScheme(name, env, acc))
+  | Some(SType(_, _, ctors, _, true, _)) =>
+      exportedSchemesFrom(stmts, add(i, 1), env, exportCtorsInto(ctors, 0, env, acc))
+  | Some(_) => exportedSchemesFrom(stmts, add(i, 1), env, acc)
+}
+export let exportedSchemes = (stmts, env) => exportedSchemesFrom(stmts, 0, env, #{})

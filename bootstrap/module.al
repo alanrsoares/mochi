@@ -9,6 +9,17 @@
 // parts (b) and (c); this half only parses and orders.
 import { lex } from "./lexer.al"
 import { parse } from "./parser.al"
+import { checkWith, exportedRegistry } from "./check.al"
+import { inferProgramImports, exportedSchemes } from "./infer.al"
+import { exportedCtorKeys, codegen } from "./codegen.al"
+
+// Prelude tables from the generated shim (as in compile.al). Threaded opaquely
+// into inferProgramImports / codegen; module.al never inspects them.
+extern builtins : Map string a = "./prelude.gen.js" "builtins"
+extern namespaces : Map string (Map string a) = "./prelude.gen.js" "namespaces"
+extern namespaceRuntime : Map string (Map string string) = "./prelude.gen.js" "namespaceRuntime"
+extern preludeJsDefs : Map string string = "./prelude.gen.js" "preludeJsDefs"
+extern runtimeDeps : Map string [string] = "./prelude.gen.js" "runtimeDeps"
 
 type Span = { start: number, end: number }
 type Name = { name: string, span: Span }
@@ -85,3 +96,94 @@ let visitAll = (froms, importer, acc) => switch froms {
 // Load every module reachable from `entry`, in dependency order.
 export let loadGraph = entry =>
   visit(absPath(entry), { state: #{}, order: [] }) |> Result.map(acc => acc.order)
+
+// --- part (b): compile the loaded graph -------------------------------------
+// Each module checks + infers + codegens with the prelude PLUS everything its
+// imports resolve to: their export SCHEMES (inference), their variant REGISTRY
+// (cross-module exhaustiveness), and their ctor field KEYS (destructuring). A
+// missing export is reported against the import site. Mirrors src/module.ts's
+// compileGraph — sync, since loadGraph already did the IO.
+
+let emptyReg = { ctors: #{}, types: #{} }
+
+// Map has no bulk merge, so fold `from`'s keys into `into` (later source wins).
+let mergeInto = (keys, from, into) => switch keys {
+  | [] => into
+  | [k, ...rest] => mergeInto(rest, from, switch Map.get(k, from) {
+      | Some(v) => Map.set(k, v, into)
+      | None => into
+    })
+}
+let mergeMap = (from, into) => mergeInto(Map.keys(from), from, into)
+
+// Pull each imported name's scheme out of the dep's published exports, folding
+// into `res.imports`. A name the dep does not export errors at the name's span.
+let resolveNames = (names, from, depExports, res) => switch names {
+  | [] => Ok(res)
+  | [n, ...rest] => switch Map.get(n.name, depExports) {
+      | None => Err({ message: "'${from}' has no export '${n.name}'", start: n.span.start, end: n.span.end })
+      | Some(sc) => resolveNames(rest, from, depExports,
+          { imports: Map.set(n.name, sc, res.imports), reg: res.reg, keys: res.keys })
+    }
+}
+
+// Fold a module's import statements into resolved { imports, reg, keys }: the
+// schemes it names, and the merged registry + ctor keys of every dep it pulls.
+let resolveImportsFrom = (stmts, i, path, ctx, res) => switch Array.get(i, stmts) {
+  | None => Ok(res)
+  | Some(SImport(names, from, _)) =>
+      let dp = resolveImport(path, from) in
+      let depExports = Map.getOr(#{}, dp, ctx.exportsByPath) in
+      let depReg = Map.getOr(emptyReg, dp, ctx.regByPath) in
+      let depKeys = Map.getOr(#{}, dp, ctx.keysByPath) in
+      switch resolveNames(names, from, depExports, res) {
+        | Err(e) => Err(e)
+        | Ok(res1) => resolveImportsFrom(stmts, add(i, 1), path, ctx, {
+            imports: res1.imports,
+            reg: { ctors: mergeMap(depReg.ctors, res1.reg.ctors),
+                   types: mergeMap(depReg.types, res1.reg.types) },
+            keys: mergeMap(depKeys, res1.keys)
+          })
+      }
+  | Some(_) => resolveImportsFrom(stmts, add(i, 1), path, ctx, res)
+}
+
+// Compile one module: resolve imports, check (with imported registry), infer
+// (with imported schemes), codegen (with imported ctor keys), then publish this
+// module's own exports/registry/keys into the ctx for later dependents.
+let compileOne = (loaded, ctx) =>
+  switch resolveImportsFrom(loaded.stmts, 0, loaded.path, ctx,
+      { imports: #{}, reg: emptyReg, keys: #{} }) {
+    | Err(e) => Err(e)
+    | Ok(res) => switch checkWith(loaded.stmts, res.reg) {
+        | Err(e) => Err(e)
+        | Ok(_) => switch inferProgramImports(loaded.stmts, builtins, namespaces, true, res.imports) {
+            | Err(e) => Err(e)
+            | Ok(env) =>
+                let js = codegen(loaded.stmts, res.keys, true, namespaceRuntime, preludeJsDefs, runtimeDeps) in
+                Ok({
+                  exportsByPath: Map.set(loaded.path, exportedSchemes(loaded.stmts, env), ctx.exportsByPath),
+                  regByPath: Map.set(loaded.path, exportedRegistry(loaded.stmts), ctx.regByPath),
+                  keysByPath: Map.set(loaded.path, exportedCtorKeys(loaded.stmts), ctx.keysByPath),
+                  outputs: Array.append({ path: loaded.path, js: js }, ctx.outputs)
+                })
+          }
+      }
+  }
+
+// Compile the whole ordered graph, threading the ctx; first Err short-circuits.
+let compileAll = (graph, ctx) => switch graph {
+  | [] => Ok(ctx.outputs)
+  | [m, ...rest] => switch compileOne(m, ctx) {
+      | Err(e) => Err(e)
+      | Ok(ctx1) => compileAll(rest, ctx1)
+    }
+}
+
+// compileGraph : [Loaded] -> Result [ModuleOutput] MErr
+export let compileGraph = graph =>
+  compileAll(graph, { exportsByPath: #{}, regByPath: #{}, keysByPath: #{}, outputs: [] })
+
+// buildModules : string -> Result [ModuleOutput] MErr
+// Resolve the graph then compile it — one sync railway (host IO is sync).
+export let buildModules = entry => loadGraph(entry) |> Result.flatMap(compileGraph)
