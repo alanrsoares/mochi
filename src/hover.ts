@@ -5,8 +5,9 @@
 // adapter that maps a cursor Position onto an offset and this string onto a
 // hover popup.
 import { resolve } from "node:path";
-import { flatMap, isErr, pipe } from "@onrails/result";
+import { isErr } from "@onrails/result";
 import { check } from "./check";
+import { toTypedProgram } from "./compile";
 import { type InferResult, inferProgramTypes, type SymbolInfo, type TypeAt } from "./infer";
 import { lex } from "./lexer";
 import { moduleContext } from "./module";
@@ -52,13 +53,8 @@ const hoverFrom = (res: InferResult, offset: number): HoverInfo | null => {
 // with imports won't typecheck (the imported constructors are unknown), so
 // prefer `moduleHoverAt` when a path is available.
 export const hoverAt = (src: string, offset: number): HoverInfo | null => {
-  const r = pipe(
-    lex(src),
-    flatMap(parse),
-    flatMap(check),
-    flatMap((prog) => inferProgramTypes(prog, preludeEnv, { open: true })),
-  );
-  return isErr(r) ? null : hoverFrom(r.value, offset);
+  const r = toTypedProgram(src, { open: true });
+  return isErr(r) ? null : hoverFrom(r.value.res, offset);
 };
 
 // Module-aware hover: resolve `path`'s dependency graph (deps from disk via

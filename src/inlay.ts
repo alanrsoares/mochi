@@ -7,12 +7,9 @@
 // Deliberately kept to top-level bindings: pattern-bound names (switch arms,
 // destructuring) are served by hover instead, so arm-heavy code stays readable
 // rather than peppered with insets — the TypeScript-LSP balance.
-import { flatMap, isErr, map, pipe } from "@onrails/result";
-import { check } from "./check";
-import { inferProgramTypes, showScheme } from "./infer";
-import { lex } from "./lexer";
-import { parse } from "./parser";
-import { preludeEnv } from "./prelude";
+import { isErr } from "@onrails/result";
+import { toTypedProgram } from "./compile";
+import { showScheme } from "./infer";
 
 // An inlay hint anchored to a byte offset. `label` includes the leading `: `.
 export type Inlay = { offset: number; label: string };
@@ -20,20 +17,10 @@ export type Inlay = { offset: number; label: string };
 // Type-annotation insets for every top-level binding, or [] when the source
 // doesn't typecheck. Open-world so host globals infer.
 export const inlayHints = (src: string): Inlay[] => {
-  const r = pipe(
-    lex(src),
-    flatMap(parse),
-    flatMap(check),
-    flatMap((prog) =>
-      map(inferProgramTypes(prog, preludeEnv, { open: true }), (res) => ({
-        prog,
-        env: res.env,
-        aliases: res.aliases,
-      })),
-    ),
-  );
+  const r = toTypedProgram(src, { open: true });
   if (isErr(r)) return [];
-  const { prog, env, aliases } = r.value;
+  const { prog, res } = r.value;
+  const { env, aliases } = res;
   const hints: Inlay[] = [];
   for (const s of prog.stmts) {
     if (s.kind !== "let") continue;
