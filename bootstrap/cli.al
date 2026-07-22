@@ -22,7 +22,8 @@ extern die : string -> a = "./host.js" "die"
 extern formatError : string -> string -> Diag -> string = "./host.js" "formatError"
 
 // "foo.al" -> "foo.js"  (drops the 3-char `.al` suffix).
-let outPath = path => Str.concat(Str.slice(0, sub(Str.length(path), 3), path), ".js")
+let outPath = path =>
+  Str.concat(Str.slice(0, sub(Str.length(path), 3), path), ".js")
 
 // Single-file build: open-world compile, one written `.js`. Every arm of the
 // railway carries a string error (readFile's, or compile's via formatError).

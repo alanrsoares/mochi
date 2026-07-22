@@ -29,14 +29,6 @@ extern runtimeDeps : Map string [string] = "./prelude.gen.js" "runtimeDeps"
 // consistent (the `_tag` runtime shape makes the declarations interchangeable).
 import { SImport } from "./ast.al"
 
-
-
-
-
-
-
-
-
 // One loaded module: its canonical path and parsed statements.
 type Loaded = { path: string, stmts: [Stmt] }
 
@@ -58,7 +50,11 @@ let parseModule = src => lex(src) |> Result.flatMap(parse)
 let importFromsFrom = (stmts, i, acc) => switch Array.get(i, stmts) {
   | None => acc
   | Some(s) => switch s {
-      | SImport(_, from, _) => importFromsFrom(stmts, add(i, 1), Array.append(from, acc))
+      | SImport(_, from, _) => importFromsFrom(
+          stmts,
+          add(i, 1),
+          Array.append(from, acc)
+        )
       | _ => importFromsFrom(stmts, add(i, 1), acc)
     }
 }
@@ -74,21 +70,28 @@ type Acc = { state: Map string string, order: [Loaded] }
 let visit = (path, acc) => switch Map.get(path, acc.state) {
   | Some("done") => Ok(acc)
   | Some("loading") => Err(mErr("import cycle through '${path}'"))
-  | _ =>
-      let acc1 = { state: Map.set(path, "loading", acc.state), order: acc.order } in
-      switch readFile(path) {
-        | Err(_) => Err(mErr("cannot read module '${path}'"))
-        | Ok(src) => switch parseModule(src) {
-            | Err(e) => Err(e)
-            | Ok(stmts) => switch visitAll(importFroms(stmts), path, acc1) {
-                | Err(e) => Err(e)
-                | Ok(acc2) => Ok({
+  | _ => let acc1 = {
+      state: Map.set(path, "loading", acc.state),
+      order: acc.order
+    } in
+    switch readFile(path) {
+      | Err(_) => Err(mErr("cannot read module '${path}'"))
+      | Ok(src) => switch parseModule(src) {
+          | Err(e) => Err(e)
+          | Ok(stmts) => switch visitAll(importFroms(stmts), path, acc1) {
+              | Err(e) => Err(e)
+              | Ok(acc2) => Ok(
+                  {
                     state: Map.set(path, "done", acc2.state),
-                    order: Array.append({ path: path, stmts: stmts }, acc2.order)
-                  })
-              }
-          }
-      }
+                    order: Array.append(
+                      { path: path, stmts: stmts },
+                      acc2.order
+                    )
+                  }
+                )
+            }
+        }
+    }
 }
 
 // Visit each dep spec, resolved against `importer`, threading the accumulator.
@@ -103,7 +106,8 @@ let visitAll = (froms, importer, acc) => switch froms {
 // loadGraph : string -> Result [Loaded] MErr
 // Load every module reachable from `entry`, in dependency order.
 export let loadGraph = entry =>
-  visit(absPath(entry), { state: #{}, order: [] }) |> Result.map(acc => acc.order)
+  visit(absPath(entry), { state: #{}, order: [] })
+    |> Result.map(acc => acc.order)
 
 // --- part (b): compile the loaded graph -------------------------------------
 // Each module checks + infers + codegens with the prelude PLUS everything its
@@ -117,10 +121,14 @@ let emptyReg = { ctors: #{}, types: #{} }
 // Map has no bulk merge, so fold `from`'s keys into `into` (later source wins).
 let mergeInto = (keys, from, into) => switch keys {
   | [] => into
-  | [k, ...rest] => mergeInto(rest, from, switch Map.get(k, from) {
-      | Some(v) => Map.set(k, v, into)
-      | None => into
-    })
+  | [k, ...rest] => mergeInto(
+      rest,
+      from,
+      switch Map.get(k, from) {
+        | Some(v) => Map.set(k, v, into)
+        | None => into
+      }
+    )
 }
 let mergeMap = (from, into) => mergeInto(Map.keys(from), from, into)
 
@@ -129,9 +137,23 @@ let mergeMap = (from, into) => mergeInto(Map.keys(from), from, into)
 let resolveNames = (names, from, depExports, res) => switch names {
   | [] => Ok(res)
   | [n, ...rest] => switch Map.get(n.name, depExports) {
-      | None => Err({ message: "'${from}' has no export '${n.name}'", start: n.span.start, end: n.span.end })
-      | Some(sc) => resolveNames(rest, from, depExports,
-          { imports: Map.set(n.name, sc, res.imports), reg: res.reg, keys: res.keys })
+      | None => Err(
+          {
+            message: "'${from}' has no export '${n.name}'",
+            start: n.span.start,
+            end: n.span.end
+          }
+        )
+      | Some(sc) => resolveNames(
+          rest,
+          from,
+          depExports,
+          {
+            imports: Map.set(n.name, sc, res.imports),
+            reg: res.reg,
+            keys: res.keys
+          }
+        )
     }
 }
 
@@ -139,45 +161,73 @@ let resolveNames = (names, from, depExports, res) => switch names {
 // schemes it names, and the merged registry + ctor keys of every dep it pulls.
 let resolveImportsFrom = (stmts, i, path, ctx, res) => switch Array.get(i, stmts) {
   | None => Ok(res)
-  | Some(SImport(names, from, _)) =>
-      let dp = resolveImport(path, from) in
-      let depExports = Map.getOr(#{}, dp, ctx.exportsByPath) in
-      let depReg = Map.getOr(emptyReg, dp, ctx.regByPath) in
-      let depKeys = Map.getOr(#{}, dp, ctx.keysByPath) in
-      switch resolveNames(names, from, depExports, res) {
-        | Err(e) => Err(e)
-        | Ok(res1) => resolveImportsFrom(stmts, add(i, 1), path, ctx, {
+  | Some(SImport(names, from, _)) => let dp = resolveImport(path, from) in
+    let depExports = Map.getOr(#{}, dp, ctx.exportsByPath) in
+    let depReg = Map.getOr(emptyReg, dp, ctx.regByPath) in
+    let depKeys = Map.getOr(#{}, dp, ctx.keysByPath) in
+    switch resolveNames(names, from, depExports, res) {
+      | Err(e) => Err(e)
+      | Ok(res1) => resolveImportsFrom(
+          stmts,
+          add(i, 1),
+          path,
+          ctx,
+          {
             imports: res1.imports,
-            reg: { ctors: mergeMap(depReg.ctors, res1.reg.ctors),
-                   types: mergeMap(depReg.types, res1.reg.types) },
+            reg: {
+              ctors: mergeMap(depReg.ctors, res1.reg.ctors),
+              types: mergeMap(depReg.types, res1.reg.types)
+            },
             keys: mergeMap(depKeys, res1.keys)
-          })
-      }
+          }
+        )
+    }
   | Some(_) => resolveImportsFrom(stmts, add(i, 1), path, ctx, res)
 }
 
 // Compile one module: resolve imports, check (with imported registry), infer
 // (with imported schemes), codegen (with imported ctor keys), then publish this
 // module's own exports/registry/keys into the ctx for later dependents.
-let compileOne = (loaded, ctx) =>
-  switch resolveImportsFrom(loaded.stmts, 0, loaded.path, ctx,
-      { imports: #{}, reg: emptyReg, keys: #{} }) {
-    | Err(e) => Err(e)
-    | Ok(res) => switch checkWith(loaded.stmts, res.reg) {
-        | Err(e) => Err(e)
-        | Ok(_) => switch inferProgramImports(loaded.stmts, builtins, namespaces, true, res.imports) {
-            | Err(e) => Err(e)
-            | Ok(env) =>
-                let js = codegen(loaded.stmts, res.keys, true, namespaceRuntime, preludeJsDefs, runtimeDeps) in
-                Ok({
-                  exportsByPath: Map.set(loaded.path, exportedSchemes(loaded.stmts, env), ctx.exportsByPath),
-                  regByPath: Map.set(loaded.path, exportedRegistry(loaded.stmts), ctx.regByPath),
-                  keysByPath: Map.set(loaded.path, exportedCtorKeys(loaded.stmts), ctx.keysByPath),
-                  outputs: Array.append({ path: loaded.path, js: js }, ctx.outputs)
-                })
-          }
-      }
-  }
+let compileOne = (loaded, ctx) => switch resolveImportsFrom(loaded.stmts, 0, loaded.path, ctx, { imports: #{}, reg: emptyReg, keys: #{} }) {
+  | Err(e) => Err(e)
+  | Ok(res) => switch checkWith(loaded.stmts, res.reg) {
+      | Err(e) => Err(e)
+      | Ok(_) => switch inferProgramImports(loaded.stmts, builtins, namespaces, true, res.imports) {
+          | Err(e) => Err(e)
+          | Ok(env) => let js = codegen(
+              loaded.stmts,
+              res.keys,
+              true,
+              namespaceRuntime,
+              preludeJsDefs,
+              runtimeDeps
+            ) in
+            Ok(
+              {
+                exportsByPath: Map.set(
+                  loaded.path,
+                  exportedSchemes(loaded.stmts, env),
+                  ctx.exportsByPath
+                ),
+                regByPath: Map.set(
+                  loaded.path,
+                  exportedRegistry(loaded.stmts),
+                  ctx.regByPath
+                ),
+                keysByPath: Map.set(
+                  loaded.path,
+                  exportedCtorKeys(loaded.stmts),
+                  ctx.keysByPath
+                ),
+                outputs: Array.append(
+                  { path: loaded.path, js: js },
+                  ctx.outputs
+                )
+              }
+            )
+        }
+    }
+}
 
 // Compile the whole ordered graph, threading the ctx; first Err short-circuits.
 let compileAll = (graph, ctx) => switch graph {
@@ -190,8 +240,12 @@ let compileAll = (graph, ctx) => switch graph {
 
 // compileGraph : [Loaded] -> Result [ModuleOutput] MErr
 export let compileGraph = graph =>
-  compileAll(graph, { exportsByPath: #{}, regByPath: #{}, keysByPath: #{}, outputs: [] })
+  compileAll(
+    graph,
+    { exportsByPath: #{}, regByPath: #{}, keysByPath: #{}, outputs: [] }
+  )
 
 // buildModules : string -> Result [ModuleOutput] MErr
 // Resolve the graph then compile it — one sync railway (host IO is sync).
-export let buildModules = entry => loadGraph(entry) |> Result.flatMap(compileGraph)
+export let buildModules = entry =>
+  loadGraph(entry) |> Result.flatMap(compileGraph)

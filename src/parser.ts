@@ -569,6 +569,7 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
   }
 
   function parseCtor(): Ctor {
+    const start = peek().span;
     const name = expectId().name;
     const fields: CtorField[] = [];
     if (peek().t === "lparen") {
@@ -582,7 +583,7 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
       }
       expect("rparen");
     }
-    return { name, fields };
+    return { name, fields, span: to(start) };
   }
 
   // A constructor field: `type` (positional) or `label: type` (named — its

@@ -31,4 +31,5 @@ export let compile = src =>
     |> Result.flatMap(parse)
     |> Result.flatMap(check)
     |> Result.flatMap(typecheck)
-    |> Result.map(prog => codegen(prog, #{}, true, namespaceRuntime, preludeJsDefs, runtimeDeps))
+    |> Result.map(prog =>
+      codegen(prog, #{}, true, namespaceRuntime, preludeJsDefs, runtimeDeps))

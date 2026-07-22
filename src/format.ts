@@ -277,15 +277,18 @@ const typeExpr = (te: TypeExpr): string => {
 const externStmt = (s: ExternStmt): string =>
   `extern ${s.name} : ${typeExpr(s.typeExpr)} = ${JSON.stringify(s.module)} ${JSON.stringify(s.imported)}`;
 
-const typeStmt = (s: TypeStmt): string => {
+// Rendered as a Doc (not a flat string) so a comment interleaved between
+// constructors can print as a leading line above the constructor it documents,
+// indented to the arm — `withComments` per ctor supplies that slot.
+const typeStmtD = (s: TypeStmt): Doc => {
   const head = s.params.length ? `type ${s.name} ${s.params.join(" ")}` : `type ${s.name}`;
   // Transparent record alias: `type Point = { x: number, y: number }`.
   if (s.alias) {
     const fields = s.alias.map((f) => `${f.name}: ${typeExpr(f.type)}`);
-    return fields.length ? `${head} = { ${fields.join(", ")} }` : `${head} = {}`;
+    return txt(fields.length ? `${head} = { ${fields.join(", ")} }` : `${head} = {}`);
   }
-  const arms = s.ctors.map((c) => `${" ".repeat(INDENT)}| ${ctor(c)}`);
-  return `${head} =\n${arms.join("\n")}`;
+  const arms = s.ctors.map((c) => withComments(c, txt(`| ${ctor(c)}`)));
+  return seq(txt(`${head} =`), indent(cat(arms.map((a) => seq(hardline, a)))));
 };
 
 const importStmt = (s: ImportStmt): string =>
@@ -361,12 +364,15 @@ const collectComments = (src: string): Comment[] => {
 const LEADING = new WeakMap<object, Comment[]>();
 const TRAILING = new WeakMap<object, Comment[]>();
 
-type Anchor = { node: Expr | Stmt; start: number; end: number };
+type Anchor = { node: Expr | Stmt | Ctor; start: number; end: number };
 
-// Every span-carrying expression under a statement, plus the statement itself.
+// Every span-carrying expression under a statement, plus the statement itself
+// and — for a `type` decl — each constructor, so a comment interleaved between
+// constructors attaches to the one it precedes instead of migrating to the next
+// statement.
 const collectAnchors = (stmts: Stmt[]): Anchor[] => {
   const anchors: Anchor[] = [];
-  const add = (n: Expr | Stmt): void => {
+  const add = (n: Expr | Stmt | Ctor): void => {
     anchors.push({ node: n, start: n.span.start, end: n.span.end });
   };
   const visit = (e: Expr): void => {
@@ -430,6 +436,7 @@ const collectAnchors = (stmts: Stmt[]): Anchor[] => {
   for (const s of stmts) {
     add(s);
     if (s.kind === "let") visit(s.value);
+    if (s.kind === "type") s.ctors.forEach(add);
   }
   return anchors;
 };
@@ -469,7 +476,7 @@ const attachComments = (stmts: Stmt[], comments: Comment[], src: string): Commen
 
 // Leading comment lines for a node: each on its own line, a blank line kept
 // after any comment the source separated from what follows.
-const leadingDocs = (node: Expr | Stmt): Doc[] => {
+const leadingDocs = (node: Expr | Stmt | Ctor): Doc[] => {
   const cs = LEADING.get(node);
   return cs
     ? cs.flatMap((c) =>
@@ -482,12 +489,12 @@ const leadingDocs = (node: Expr | Stmt): Doc[] => {
 // whatever follows lands on a new line (otherwise it would be commented out)
 // without emitting a newline here — the enclosing group / statement separator
 // supplies it. Only own-line breaks emit an actual newline.
-const trailingDocs = (node: Expr | Stmt): Doc[] => {
+const trailingDocs = (node: Expr | Stmt | Ctor): Doc[] => {
   const cs = TRAILING.get(node);
   return cs ? cs.flatMap((c) => [txt(` ${c.text}`), breakParent]) : [];
 };
 
-const withComments = (node: Expr | Stmt, doc: Doc): Doc => {
+const withComments = (node: Expr | Stmt | Ctor, doc: Doc): Doc => {
   const lead = leadingDocs(node);
   const trail = trailingDocs(node);
   return lead.length || trail.length ? cat([...lead, doc, ...trail]) : doc;
@@ -574,8 +581,23 @@ const ternaryD = (e: TernaryExpr): Doc =>
 
 // `let x = v in body`; when it overflows, `in` stays at the end of the value
 // line and the body drops to the next line at the same indent.
+// A trailing comment on the value (`let x = v // note` then `in …` in source)
+// must print AFTER the `in` keyword, not glued to the value — otherwise the
+// `in` lands on the commented-out line and the output no longer parses. So
+// splice the value's own comments manually: leading before, trailing after
+// `in`.
 const letLikeD = (head: string, value: Expr, body: Expr): Doc =>
-  group(seq(txt(`${head} = `), exprD(value), txt(" in"), line, exprD(body)));
+  group(
+    seq(
+      txt(`${head} = `),
+      ...leadingDocs(value),
+      exprRaw(value),
+      txt(" in"),
+      ...trailingDocs(value),
+      line,
+      exprD(body),
+    ),
+  );
 
 const recordD = (e: RecordExpr): Doc => {
   const fields = e.fields.map((f) => seq(txt(`${f.name}: `), exprD(f.value)));
@@ -706,7 +728,7 @@ type StmtDoc = { doc: Doc; consumed: number };
 const stmtDoc = (stmts: Stmt[], i: number): StmtDoc => {
   const s = stmts[i]!;
   if (s.kind === "import") return { doc: txt(importStmt(s)), consumed: 1 };
-  if (s.kind === "type") return { doc: txt(expPrefix(s) + typeStmt(s)), consumed: 1 };
+  if (s.kind === "type") return { doc: seq(txt(expPrefix(s)), typeStmtD(s)), consumed: 1 };
   if (s.kind === "extern") return { doc: txt(expPrefix(s) + externStmt(s)), consumed: 1 };
 
   if (s.name.startsWith("$")) {
@@ -739,7 +761,7 @@ const blankBetween = /\n[^\S\n]*\n/;
 // kept before a statement lands before its comment block, not inside it.
 const anchorStart = (s: Stmt): number => {
   const lead = LEADING.get(s);
-  return lead && lead.length ? lead[0]!.start : s.span.start;
+  return lead?.length ? lead[0]!.start : s.span.start;
 };
 
 const program = (stmts: Stmt[], src: string, tail: Comment[]): string => {

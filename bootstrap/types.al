@@ -42,7 +42,8 @@ let TUPLE = "tuple"
 export let tTuple = elems => TyCon(TUPLE, elems)
 
 export let rVar = id => RowVar(id)
-export let rExtend = (label, fieldType, rest) => RowExtend(label, fieldType, rest)
+export let rExtend = (label, fieldType, rest) =>
+  RowExtend(label, fieldType, rest)
 
 // ---- pretty-printer (errors + tests) ----
 
@@ -52,22 +53,24 @@ export let showType = t => switch t {
   | TyVar(id) => "'t${show(id)}"
   | TyCon(name, args) => switch args {
       | [elem] when eq(name, "Array") => "[${showType(elem)}]"
-      | _ =>
-          eq(name, TUPLE)
-            ? "(${showTypeArgs(args)})"
-            : eq(Array.length(args), 0) ? name : "${name}<${showTypeArgs(args)}>"
+      | _ => eq(name, TUPLE)
+          ? "(${showTypeArgs(args)})"
+          : eq(Array.length(args), 0) ? name : "${name}<${showTypeArgs(args)}>"
     }
-  | TyFn(from, to) =>
-      let fromS = switch from { | TyFn(_, _) => "(${showType(from)})" | _ => showType(from) } in
-      "${fromS} -> ${showType(to)}"
+  | TyFn(from, to) => let fromS = switch from {
+      | TyFn(_, _) => "(${showType(from)})"
+      | _ => showType(from)
+    } in
+    "${fromS} -> ${showType(to)}"
   | TyRecord(row) => showRow(row)
 }
 
 // walk a row to its tail, collecting `label: type` field strings on the way
 let showRowFields = row => switch row {
-  | RowExtend(label, fieldType, rest) =>
-      let (fields, tailId) = showRowFields(rest) in
-      (Array.prepend("${label}: ${showType(fieldType)}", fields), tailId)
+  | RowExtend(label, fieldType, rest) => let (fields, tailId) = showRowFields(
+      rest
+    ) in
+    (Array.prepend("${label}: ${showType(fieldType)}", fields), tailId)
   | RowVar(id) => ([], Some(id))
   | RowEmpty => ([], None)
 }
@@ -78,7 +81,9 @@ let showRow = row =>
     | Some(id) => "${eq(Array.length(fields), 0) ? "" : " "}| 'r${show(id)}"
     | None => ""
   } in
-  and(eq(Array.length(fields), 0), eq(tail, "")) ? "{}" : "{ ${Str.join(", ", fields)}${tail} }"
+  and(eq(Array.length(fields), 0), eq(tail, ""))
+    ? "{}"
+    : "{ ${Str.join(", ", fields)}${tail} }"
 
 // ---- generic index-loop helpers (early-exit `for` loops from the TS
 // originals; same style as bootstrap/check.al's firstSome/allOf/someOf) ----
@@ -133,7 +138,11 @@ export let zonk = (t, st) => switch resolve(t, st) {
 }
 
 let zonkRow = (row, st) => switch resolveRow(row, st) {
-  | RowExtend(label, fieldType, rest) => rExtend(label, zonk(fieldType, st), zonkRow(rest, st))
+  | RowExtend(label, fieldType, rest) => rExtend(
+      label,
+      zonk(fieldType, st),
+      zonkRow(rest, st)
+    )
   | r => r
 }
 
@@ -147,20 +156,29 @@ export let occurs = (id, t, st) => switch resolve(t, st) {
 }
 
 let occursRow = (id, row, st) => switch resolveRow(row, st) {
-  | RowExtend(_, fieldType, rest) => or(occurs(id, fieldType, st), occursRow(id, rest, st))
+  | RowExtend(_, fieldType, rest) => or(
+      occurs(id, fieldType, st),
+      occursRow(id, rest, st)
+    )
   | _ => false
 }
 
 export let rowVarOccurs = (id, row, st) => switch resolveRow(row, st) {
   | RowVar(rid) => eq(rid, id)
-  | RowExtend(_, fieldType, rest) => or(rowVarOccursInType(id, fieldType, st), rowVarOccurs(id, rest, st))
+  | RowExtend(_, fieldType, rest) => or(
+      rowVarOccursInType(id, fieldType, st),
+      rowVarOccurs(id, rest, st)
+    )
   | RowEmpty => false
 }
 
 let rowVarOccursInType = (id, t, st) => switch resolve(t, st) {
   | TyVar(_) => false
   | TyCon(_, args) => someOf(a => rowVarOccursInType(id, a, st), args)
-  | TyFn(from, to) => or(rowVarOccursInType(id, from, st), rowVarOccursInType(id, to, st))
+  | TyFn(from, to) => or(
+      rowVarOccursInType(id, from, st),
+      rowVarOccursInType(id, to, st)
+    )
   | TyRecord(row) => rowVarOccurs(id, row, st)
 }
 
@@ -175,14 +193,17 @@ let isArrowT = t => switch t { | TyFn(_, _) => true | _ => false }
 let unifyMismatch = (ra, rb) =>
   not(eq(isArrowT(ra), isArrowT(rb)))
     ? let (fn, val) = isArrowT(ra) ? (ra, rb) : (rb, ra) in
-      fail("cannot unify ${showType(ra)} with ${showType(rb)} — a function (${showType(fn)}) was used where a ${showType(val)} was expected; a call may be missing an argument")
+    fail(
+      "cannot unify ${showType(ra)} with ${showType(rb)} — a function (${showType(fn)}) was used where a ${showType(val)} was expected; a call may be missing an argument"
+    )
     : fail("cannot unify ${showType(ra)} with ${showType(rb)}")
 
 let unifyArgs = (as_, bs, i, st) => switch Array.get(i, as_) {
   | None => Ok(st)
   | Some(a) => switch Array.get(i, bs) {
       | None => Ok(st)
-      | Some(b) => let? s1 = unify(a, b, st) in unifyArgs(as_, bs, add(i, 1), s1)
+      | Some(b) => let? s1 = unify(a, b, st) in
+        unifyArgs(as_, bs, add(i, 1), s1)
     }
 }
 
@@ -196,15 +217,18 @@ export let unify = (a, b, st) =>
       }
     | TyCon(aname, aargs) => switch rb {
         | TyVar(bid) => bindVar(bid, ra, st)
-        | TyCon(bname, bargs) =>
-            and(eq(aname, bname), eq(Array.length(aargs), Array.length(bargs)))
-              ? unifyArgs(aargs, bargs, 0, st)
-              : fail("cannot unify ${showType(ra)} with ${showType(rb)}")
+        | TyCon(bname, bargs) => and(
+            eq(aname, bname),
+            eq(Array.length(aargs), Array.length(bargs))
+          )
+            ? unifyArgs(aargs, bargs, 0, st)
+            : fail("cannot unify ${showType(ra)} with ${showType(rb)}")
         | _ => unifyMismatch(ra, rb)
       }
     | TyFn(afrom, ato) => switch rb {
         | TyVar(bid) => bindVar(bid, ra, st)
-        | TyFn(bfrom, bto) => let? s1 = unify(afrom, bfrom, st) in unify(ato, bto, s1)
+        | TyFn(bfrom, bto) => let? s1 = unify(afrom, bfrom, st) in
+          unify(ato, bto, s1)
         | _ => unifyMismatch(ra, rb)
       }
     | TyRecord(arow) => switch rb {
@@ -226,15 +250,19 @@ let bindVar = (id, t, st) =>
 // (possibly grown) state.
 let rewriteRow = (row, label, st) => switch resolveRow(row, st) {
   | RowEmpty => fail("record missing field '${label}'")
-  | RowExtend(rlabel, rtype, rrest) =>
-      eq(rlabel, label)
-        ? Ok((rtype, rrest, st))
-        : let? (subType, subRest, subSt) = rewriteRow(rrest, label, st) in
-          Ok((subType, rExtend(rlabel, rtype, subRest), subSt))
-  | RowVar(rid) =>
-      let (freshT, st1) = freshVar(st) in
-      let (freshTail, st2) = freshRowVar(st1) in
-      Ok((freshT, freshTail, { ...st2, rv: Map.set(rid, rExtend(label, freshT, freshTail), st2.rv) }))
+  | RowExtend(rlabel, rtype, rrest) => eq(rlabel, label)
+      ? Ok((rtype, rrest, st))
+      : let? (subType, subRest, subSt) = rewriteRow(rrest, label, st) in
+      Ok((subType, rExtend(rlabel, rtype, subRest), subSt))
+  | RowVar(rid) => let (freshT, st1) = freshVar(st) in
+    let (freshTail, st2) = freshRowVar(st1) in
+    Ok(
+      (
+        freshT,
+        freshTail,
+        { ...st2, rv: Map.set(rid, rExtend(label, freshT, freshTail), st2.rv) }
+      )
+    )
 }
 
 // both rows extend: pull a's label out of b, unify the field types, recurse
@@ -251,10 +279,12 @@ export let unifyRows = (r1, r2, st) =>
     | RowExtend(alabel, atype, arest) => switch b {
         | RowEmpty => fail("record has extra field '${alabel}'")
         | RowVar(bid) => bindRowVar(bid, a, st)
-        | RowExtend(_, _, _) =>
-            let? (btype, brest, s1) = rewriteRow(b, alabel, st) in
-            let? s2 = unify(atype, btype, s1) in
-            unifyRows(arest, brest, s2)
+        | RowExtend(_, _, _) => let? (btype, brest, s1) = rewriteRow(
+            b,
+            alabel,
+            st
+          ) in
+          let? s2 = unify(atype, btype, s1) in unifyRows(arest, brest, s2)
       }
   }
 

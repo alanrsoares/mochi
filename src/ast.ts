@@ -83,7 +83,7 @@ export type PatField = { label: string; pat: Pattern };
 // an unlabelled field falls back to its positional key `_0`, `_1`, …
 // The type is a `TypeExpr`, so payloads can be lists, applied types, arrows,
 // and tuples (`ECall(fn: Expr, args: [Expr])`) — see ADR 0015.
-export type Ctor = { name: string; fields: CtorField[] };
+export type Ctor = { name: string; fields: CtorField[]; span: Span };
 export type CtorField = { name: string | null; type: TypeExpr };
 
 // One field of a transparent record-type alias: `type Point = { x: number, y: a }`.

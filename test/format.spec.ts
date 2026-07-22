@@ -165,3 +165,29 @@ test("trailing comments round-trip and stay idempotent", () => {
   const src = "let x = foo(1) // call\nlet t = c ? a : b // tern\n";
   expect(fmt(src)).toBe(src);
 });
+
+test("a comment between constructors stays above the ctor it documents", () => {
+  const src = "type T =\n  | A\n  // doc for B\n  | B\n  | C\n";
+  expect(fmt(src)).toBe(src); // in place, not migrated to the next statement
+});
+
+test("a comment between constructors survives a following statement", () => {
+  const src = "type T =\n  | A\n  // note\n  | B\n\nlet x = 1\n";
+  const once = fmt(src);
+  expect(once).toContain("  // note\n  | B");
+  expect(fmt(once)).toBe(once); // idempotent
+});
+
+test("a trailing comment on a constructor prints inline after it", () => {
+  const src = "type T =\n  | A // first\n  | B\n";
+  expect(fmt(src)).toBe(src);
+});
+
+test("a trailing comment on a `let … in` value keeps `in` before the comment", () => {
+  // Regression: the `in` keyword must not land on the commented-out line, or
+  // the output no longer parses.
+  const src = "let f = x =>\n  let y = g(x) in // note\n  h(y)\n";
+  const once = fmt(src);
+  expect(once).toContain(" in // note");
+  expect(fmt(once)).toBe(once); // idempotent — and re-parses
+});

@@ -16,8 +16,10 @@
     "build:ext": "bun scripts/build-extension.mjs",
     "loc": "bun scripts/find-long-files.ts",
     "gen:prelude": "bun scripts/gen-prelude.ts",
+    "fmt:al": "bun scripts/fmt-al.ts",
+    "fmt:check": "bun scripts/fmt-al.ts --check",
     "fixpoint": "bun scripts/fixpoint.ts",
-    "check": "biome check . && tsc --noEmit && bun test"
+    "check": "biome check . && tsc --noEmit && bun run fmt:check && bun test"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.4",
