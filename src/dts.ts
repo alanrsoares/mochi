@@ -263,6 +263,19 @@ export const lambdaParamTypesTs = (
   return out;
 };
 
+// A match scrutinee's concrete TS type — the base a guard-form arm's type
+// predicate narrows FROM (`(_v): _v is Extract<T, …>`, ADR 0031). codegen builds
+// the `Extract<…>` target from the pattern; this supplies the `T`. Concrete types
+// only — a scrutinee with free vars can't name its generics in a value position
+// (TS2304), same rule as `lambdaParamTypesTs`; those stay the bare `(_v) => …`
+// boolean guard (and their nested-pattern handlers keep the polymorphic tail).
+export const guardParamTs = (scrutType: Type, aliases: AliasDef[]): string | null => {
+  const t = foldAliases(scrutType, aliases);
+  const fv: number[] = [];
+  freeVars(t, fv);
+  return fv.length === 0 ? tsOf(t, new Map()) : null;
+};
+
 const letDecl = (name: string, sc: Scheme, value: Expr, aliases: AliasDef[]): string =>
   `export declare const ${name}: ${bindingTsType(sc, value, aliases)};`;
 
@@ -354,6 +367,20 @@ export const referencedBuiltinTypeDecls = (
     .filter((bt) => referenced.has(bt.name) && !declared.has(bt.name))
     .map((bt) => typeDecl(bt.name, bt.params, bt.ctors));
 };
+
+// Builtin variant decls a guard-form type predicate (ADR 0031) names in the
+// emitted body but that `referencedBuiltinTypeDecls` missed — it scans binding
+// schemes and type-decl fields, not match-scrutinee types, so `match(opt)` on an
+// `Option<Stmt>` never surfaced `Option`. Scans the body text and skips any name
+// the header already declares (a builtin the module also uses at binding level,
+// or a locally-declared `type Result`), so no duplicate decl.
+export const builtinDeclsIn = (bodyText: string, headerText: string): string[] =>
+  builtinTypeDecls
+    .filter(
+      (bt) =>
+        !headerText.includes(`type ${bt.name}<`) && new RegExp(`\\b${bt.name}\\b`).test(bodyText),
+    )
+    .map((bt) => typeDecl(bt.name, bt.params, bt.ctors));
 
 // An extern binding paired with the inferred scheme its declared type resolved
 // to. `imported` is the JS export name (what the emitted `import { … }` binds).

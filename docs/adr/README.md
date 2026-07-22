@@ -54,6 +54,7 @@ What else was on the table and why not.
 | [0027](0027-dogfood-al-formatter.md) | Dogfood the `.al` formatter on `bootstrap/` as a QA gate | Accepted |
 | [0028](0028-typed-lambda-params.md) | Typed lambda parameters via the per-node inference table | Accepted |
 | [0029](0029-cross-module-type-imports.md) | Cross-module `import type` + extern `.d.ts` (TS backend, gap 3) | Accepted |
+| [0031](0031-guard-form-type-predicates.md) | Guard-form arms as type predicates (TS backend, gap 2) | Accepted |
 
 
 ## Backlog (well-evidenced, not yet written)

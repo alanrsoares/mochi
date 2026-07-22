@@ -15,7 +15,9 @@ import { toTypedProgram } from "./compile";
 import {
   aliasTsDecl,
   bindingTsType,
+  builtinDeclsIn,
   ctorFactoryTs,
+  guardParamTs,
   lambdaParamTypesTs,
   referencedBuiltinTypeDecls,
   typeDecl,
@@ -85,18 +87,31 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
     return t ? lambdaParamTypesTs(t, arity, ctx.aliases) : [];
   };
 
+  // The concrete type each guard-form arm narrows FROM (ADR 0031). codegen turns
+  // it into a type-predicate guard so nested-pattern handlers narrow — ts-pattern
+  // only refines handler input for `x is U` guards, not boolean ones.
+  const guardBaseType = (scrutinee: Expr) => {
+    const t = typeAt.get(`${scrutinee.span.start}:${scrutinee.span.end}`);
+    return t ? guardParamTs(t, ctx.aliases) : null;
+  };
+
   // Type each variant's ctor factories (return the variant type, params from the
   // ctor's field TypeExprs — ADR 0015) so `Circle(2)` is a `Shape`, not `any`.
   const body = codegen(prog, ctx.importedKeys, {
     runtime: false,
     annotate,
     annotateParams,
+    guardBaseType,
     annotateCtor: (s, c) => ctorFactoryTs(s.name, s.params, c),
     flattenPipe: true,
     moduleExt: "", // `import … from "./mod"` — tsc resolves to the sibling `.ts`
   });
 
-  const parts = [typeHeader.join("\n"), ctx.importLines.join("\n"), runtimeLine, body].filter(
+  // A guard predicate can name a builtin variant (`Option`) the header didn't
+  // already emit — inject its decl now that the body text exists (ADR 0031).
+  const header = [...builtinDeclsIn(body, typeHeader.join("\n")), ...typeHeader];
+
+  const parts = [header.join("\n"), ctx.importLines.join("\n"), runtimeLine, body].filter(
     (p) => p !== "",
   );
   return `${parts.join("\n\n")}\n`;

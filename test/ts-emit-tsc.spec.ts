@@ -72,6 +72,26 @@ let pipeline = xs =>
   |> map(n => add(n, 1))
   |> filter(n => eq(n, n))
   |> reduce((acc, n) => add(acc, n), 0)`,
+  // Regression guard for ADR 0031: NESTED patterns lower to guard-form arms
+  // (`.with((_v) => …, handler)`). ts-pattern only narrows a handler for an
+  // `x is U` guard, so without the emitted type predicate the handler destructure
+  // (`Some(Circle(r))` → `{ value: { _0: r } }`) sees the full union → TS2339.
+  // Covers a ctor inside a ctor, and a ctor at the head of an array pattern.
+  nested: `
+type Shape =
+  | Circle(float)
+  | Rect(float, float)
+let describe = os => switch os {
+  | Some(Circle(r)) => mul(r, r)
+  | Some(Rect(w, h)) => mul(w, h)
+  | _ => 0.0
+}
+let firstR = xs => switch xs {
+  | [Circle(r), ..._rest] => r
+  | _ => 0.0
+}
+let a = describe(Some(Circle(2.0)))
+let b = firstR([Circle(1.0), Rect(2.0, 3.0)])`,
 };
 
 beforeAll(() => {

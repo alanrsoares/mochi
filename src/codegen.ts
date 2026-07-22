@@ -70,6 +70,13 @@ let flattenPipe = false;
 // the JS backend, which emits bare params (byte-identical output).
 let annotateParams: ((span: Span, arity: number) => (string | null)[]) | null = null;
 
+// TS backend (ADR 0031): given a match scrutinee expr, return its concrete TS
+// type text (the "base" the guard-form predicate narrows from), or null (generic
+// scrutinee / JS backend). Used to synthesize a type-predicate guard so the
+// handler input narrows — ts-pattern's `Narrow` only refines for `x is U` guards,
+// not plain boolean ones, so nested-pattern handlers otherwise see the full union.
+let guardBaseType: ((scrutinee: Expr) => string | null) | null = null;
+
 // Extension for cross-module import specifiers: `.js` for the JS backend (the
 // compiled sibling), `""` for the TS backend (`import … from "./mod"`, which
 // tsc/bundlers resolve to the sibling `.ts`). Set per `codegen` call.
@@ -397,19 +404,22 @@ const genListMatch = (m: MatchExpr): string => {
 const genMatch = (m: MatchExpr): string => {
   if (isListMatch(m)) return genListMatch(m);
   const parts = [`match(${genExpr(m.scrutinee)})`];
+  // TS backend (ADR 0031): the concrete scrutinee type each guard-form arm
+  // narrows FROM. null in JS mode / for generic scrutinees → the bare guard form.
+  const base = guardBaseType?.(m.scrutinee) ?? null;
   let catchAll: MatchArm | undefined;
   for (const arm of m.arms) {
     // A guarded arm narrows regardless of its pattern (the guard can be
     // false), so it always takes the guard form — even `_ when g`.
     if (arm.guard) {
-      parts.push(`  ${genGuardArm(arm.pattern, arm.body, arm.guard)}`);
+      parts.push(`  ${genGuardArm(arm.pattern, arm.body, arm.guard, base)}`);
       continue;
     }
     if (isCatchAll(arm.pattern)) {
       catchAll ??= arm;
       continue;
     }
-    parts.push(`  ${genWithArm(arm.pattern as NarrowingPattern, arm.body)}`);
+    parts.push(`  ${genWithArm(arm.pattern as NarrowingPattern, arm.body, base)}`);
   }
   if (catchAll) {
     parts.push(
@@ -441,29 +451,89 @@ const isFlatSub = (p: Pattern): boolean =>
   p.kind === "pbool" ||
   p.kind === "pstr";
 
+// TS backend (ADR 0031): render a guard-form pattern to the type-predicate
+// target it narrows to, from the scrutinee's concrete `base` type. A ctor
+// contributes `Extract<base, { _tag: "C" }>`; a nested ctor/record inside a field
+// refines that field via indexed access, so the handler input narrows exactly as
+// the pattern does. Pure over `ctorKeys`; only reachable in TS mode.
+function patTarget(p: Pattern, base: string): string {
+  if (p.kind === "pctor") {
+    const member = `Extract<${base}, { _tag: ${JSON.stringify(p.ctor)} }>`;
+    const keys = ctorKeys.get(p.ctor);
+    const refines = p.args.flatMap((a, i) => {
+      const key = keys?.[i] ?? `_${i}`;
+      const sub = fieldRefine(a, `${member}[${JSON.stringify(key)}]`);
+      return sub ? [`${JSON.stringify(key)}: ${sub}`] : [];
+    });
+    return refines.length ? `${member} & { ${refines.join("; ")} }` : member;
+  }
+  if (p.kind === "precord") {
+    const refines = p.fields.flatMap((f) => {
+      const sub = fieldRefine(f.pat, `${base}[${JSON.stringify(f.label)}]`);
+      return sub ? [`${JSON.stringify(f.label)}: ${sub}`] : [];
+    });
+    return refines.length ? `${base} & { ${refines.join("; ")} }` : base;
+  }
+  if (p.kind === "ptuple") {
+    // Tuple element i is `base[i]`; refine each element whose sub-pattern narrows.
+    const subs = p.elems.map((e, i) => fieldRefine(e, `(${base})[${i}]`));
+    if (subs.every((s) => s === null)) return base;
+    return `[${p.elems.map((_, i) => subs[i] ?? `(${base})[${i}]`).join(", ")}]`;
+  }
+  if (p.kind === "parr") {
+    // Array `T[]` → a tuple of refined heads plus a `...T[]` rest, so a head
+    // matched by a ctor (`[IPExpr(e), ...rest]`) narrows for the handler.
+    const elemType = `(${base})[number]`;
+    const subs = p.elems.map((e) => fieldRefine(e, elemType));
+    if (subs.every((s) => s === null)) return base;
+    const heads = subs.map((s) => s ?? elemType).join(", ");
+    return `[${heads}${p.rest ? `, ...${base}` : ""}]`;
+  }
+  // or-patterns: keep the base (per-alt narrowing would need a union target).
+  return base;
+}
+
+// A field's refined type when its sub-pattern narrows it, else null (the field
+// keeps its declared type — a bind/wildcard/literal needs no narrowing).
+function fieldRefine(p: Pattern, fieldBase: string): string | null {
+  if (p.kind === "pctor") return patTarget(p, fieldBase);
+  if (p.kind === "precord") {
+    const t = patTarget(p, fieldBase);
+    return t === fieldBase ? null : t;
+  }
+  return null;
+}
+
 // The general arm: predicate + destructuring handler, built by the pattern
 // compiler. Handles arbitrary nesting (`Sm(Sm(n))`, `Ok((a, b))`, ctors inside
 // tuples/arrays) and `when` guards. A guard runs after the structural tests
-// (&&-short-circuit), with the pattern's binds rebound from `_v` by the same
-// destructuring slot the handler uses.
-const genGuardArm = (p: Pattern, body: Expr, guard?: Expr): string => {
-  const conds = patConds(p, "_v");
+// (&&-short-circuit), with the pattern's binds rebound from the root by the same
+// destructuring slot the handler uses. In TS mode (`base` set) the arm is a type
+// predicate `(_v): _v is <target>` whose body tests a widened `_g` copy — so the
+// handler input narrows (ADR 0031) without the boolean body fighting `_v`'s type.
+const genGuardArm = (p: Pattern, body: Expr, guard?: Expr, base: string | null = null): string => {
+  const root = base ? "_g" : "_v";
+  const conds = patConds(p, root);
   const slot = patSlot(p);
   if (guard)
-    conds.push(slot === "" ? `(${genExpr(guard)})` : `((${slot}) => ${genExpr(guard)})(_v)`);
+    conds.push(slot === "" ? `(${genExpr(guard)})` : `((${slot}) => ${genExpr(guard)})(${root})`);
   const test = conds.length ? conds.join(" && ") : "true";
-  return `.with((_v) => ${test}, ${slot === "" ? "()" : `(${slot})`} => ${genLambdaBody(body)})`;
+  const handler = `${slot === "" ? "()" : `(${slot})`} => ${genLambdaBody(body)}`;
+  if (base)
+    return `.with((_v): _v is ${patTarget(p, base)} => { const _g: any = _v; return ${test}; }, ${handler})`;
+  return `.with((_v) => ${test}, ${handler})`;
 };
 
-const genWithArm = (p: NarrowingPattern, body: Expr): string => {
+const genWithArm = (p: NarrowingPattern, body: Expr, base: string | null = null): string => {
   // Array/tuple/or arms always take the guard form (not matcher-object-able).
-  if (p.kind === "parr" || p.kind === "ptuple" || p.kind === "por") return genGuardArm(p, body);
+  if (p.kind === "parr" || p.kind === "ptuple" || p.kind === "por")
+    return genGuardArm(p, body, undefined, base);
 
   if (p.kind === "plit" || p.kind === "pbool" || p.kind === "pstr")
     return `.with(${litValue(p)}, () => ${genLambdaBody(body)})`;
 
   if (p.kind === "precord") {
-    if (!p.fields.every((f) => isFlatSub(f.pat))) return genGuardArm(p, body);
+    if (!p.fields.every((f) => isFlatSub(f.pat))) return genGuardArm(p, body, undefined, base);
     // Flat fast path: literal fields form the matcher object (at least one —
     // else it's a catch-all); binding fields destructure in the handler.
     const lits = p.fields.flatMap((f) =>
@@ -476,7 +546,7 @@ const genWithArm = (p: NarrowingPattern, body: Expr): string => {
   }
 
   // pctor — flat fast path keeps the readable matcher-object form.
-  if (!p.args.every(isFlatSub)) return genGuardArm(p, body);
+  if (!p.args.every(isFlatSub)) return genGuardArm(p, body, undefined, base);
   const binds: string[] = []; // "value: r" (or "_0: r" positionally)
   const litFields: string[] = []; // "value: 5" — narrows further
   const keys = ctorKeys.get(p.ctor);
@@ -740,6 +810,7 @@ export type CodegenOptions = {
   flattenPipe?: boolean;
   moduleExt?: string;
   annotateParams?: (span: Span, arity: number) => (string | null)[];
+  guardBaseType?: (scrutinee: Expr) => string | null;
 };
 
 export const codegen = (
@@ -753,6 +824,7 @@ export const codegen = (
   flattenPipe = opts.flattenPipe ?? false;
   moduleExt = opts.moduleExt ?? ".js";
   annotateParams = opts.annotateParams ?? null;
+  guardBaseType = opts.guardBaseType ?? null;
   for (const s of prog.stmts)
     if (s.kind === "type") for (const c of s.ctors) ctorKeys.set(c.name, keysOf(c.fields));
   // Seed builtin variant ctor keys (Some/Ok/…) unless the program declares its own.
