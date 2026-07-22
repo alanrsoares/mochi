@@ -4,6 +4,7 @@
 // batch tool, and sync results keep the alang surface a plain `Result` (no
 // `Promise<Result>`, per the railway conventions).
 import { readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 
 // alang Result runtime shape: { _tag: "Ok", value } | { _tag: "Err", error }.
 const Ok = (value) => ({ _tag: "Ok", value });
@@ -30,6 +31,16 @@ export const writeFile = (path, contents) => {
     return Err(msg(e));
   }
 };
+
+// resolveImport : string -> string -> string  — an importer's path and an
+// import spec to the dep's absolute `.al` path (a trailing `.al` is optional).
+// Uncurried; mirrors src/module.ts's resolveImport.
+export const resolveImport = (importer, spec) =>
+  resolve(dirname(importer), `${spec.replace(/\.al$/, "")}.al`);
+
+// absPath : string -> string  — absolutize an entry path against the cwd, so
+// the graph loader keys every module on one canonical path.
+export const absPath = (p) => resolve(p);
 
 // argv : [string]  — the process argument vector past the script name.
 export const argv = process.argv.slice(2);
