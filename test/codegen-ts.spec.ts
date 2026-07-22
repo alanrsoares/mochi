@@ -76,6 +76,22 @@ test("a polymorphic function keeps its generics in the annotation", () => {
   );
 });
 
+test("an open-row record param emits the row var as a generic (ADR 0034)", () => {
+  // Field access infers `{ x: A | r } -> A`; the open tail `r` must survive as a
+  // scoped generic `& B`, not be dropped to a closed `{ x: A }` that rejects any
+  // record carrying extra fields.
+  expect(ts("let getX = r => r.x")).toContain("const getX: <A, B>(r: ({ x: A } & B)) => A =");
+});
+
+test("a spread that threads open-row state round-trips through `& R` (ADR 0034)", () => {
+  // The `freshVar`-shape: `st => { ...st, n: … }` infers `{ n: Int | r } -> { n:
+  // Int | r }`. Emitting the param AND return as `{ n: number } & A` lets the
+  // full state bind `A` and the returned record flow back into it — the whole
+  // TS2345 "partial record vs full state" class the bootstrap tripped on.
+  const out = ts("let bump = st => { ...st, n: add(st.n, 1) }");
+  expect(out).toContain("const bump: <A>(st: ({ n: number } & A)) => ({ n: number } & A) =");
+});
+
 test("exported bindings keep the export keyword and gain the annotation", () => {
   expect(ts("export let inc = x => add(x, 1)")).toContain(
     "export const inc: (x: number) => number =",

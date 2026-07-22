@@ -89,7 +89,10 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
   for (const s of prog.stmts) {
     if (s.kind !== "let" || s.value.kind !== "lambda" || s.name.startsWith("$")) continue;
     const sc = ctx.env.get(s.name);
-    if (sc && sc.vars.length > 0)
+    // Type vars OR row vars: a row-poly binding (`st => {...st}`, no type vars)
+    // still needs the generic head so its open-row params emit `{…} & R` under
+    // a scoped `<R>` (ADR 0034), not a closed record dropping the row var.
+    if (sc && (sc.vars.length > 0 || sc.rvars.length > 0))
       genericBindingLambda.set(`${s.value.span.start}:${s.value.span.end}`, sc);
   }
 

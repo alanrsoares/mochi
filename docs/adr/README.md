@@ -55,6 +55,9 @@ What else was on the table and why not.
 | [0028](0028-typed-lambda-params.md) | Typed lambda parameters via the per-node inference table | Accepted |
 | [0029](0029-cross-module-type-imports.md) | Cross-module `import type` + extern `.d.ts` (TS backend, gap 3) | Accepted |
 | [0031](0031-guard-form-type-predicates.md) | Guard-form arms as type predicates (TS backend, gap 2) | Accepted |
+| [0032](0032-generic-value-lambdas.md) | Generic value-lambda emission + flat `let?` bind (TS backend) | Accepted |
+| [0033](0033-flat-function-type-emission.md) | Flat function-type emission + overload ordering (TS backend) | Accepted |
+| [0034](0034-open-row-generic-record-emission.md) | Open-row records emit as generic intersections `{…} & R` (TS backend) | Accepted |
 
 
 ## Backlog (well-evidenced, not yet written)

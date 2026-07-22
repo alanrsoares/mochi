@@ -82,7 +82,19 @@ const tsRow = (row: Row, names: Map<number, string>): string => {
     fields.push(`${cur.label}: ${tsOf(cur.type, names)}`);
     cur = cur.rest;
   }
-  return fields.length === 0 ? "{}" : `{ ${fields.join("; ")} }`;
+  const body = fields.length === 0 ? "{}" : `{ ${fields.join("; ")} }`;
+  // Open tail: intersect the row var's generic letter (`{ … } & R`) so a
+  // field-subset record unifies with the full state and vice-versa (ADR 0034).
+  // A quantified rvar carries a letter (via genericNames); an unbound one (no
+  // generic head to scope it — non-lambda bindings) falls back to the closed
+  // record, matching the pre-0034 behavior.
+  if (cur.kind === "rvar") {
+    const g = names.get(cur.id);
+    // Parenthesize: `&` binds looser than the `[]` an array wrapper appends, so
+    // a bare `{…} & R` element would mis-parse as `{…} & (R[])`.
+    if (g) return fields.length === 0 ? g : `({ ${fields.join("; ")} } & ${g})`;
+  }
+  return body;
 };
 
 // Arity-aware function type: peel one arrow per lambda parameter, then recurse
@@ -100,9 +112,14 @@ const declType = (t: Type, value: Expr, names: Map<number, string>): string => {
   return `(${params.join(", ")}) => ${declType(cur, value.body, names)}`;
 };
 
-// Assign generic letters to a scheme's quantified type vars.
+// Assign generic letters to a scheme's quantified vars — type vars AND row
+// vars alike. `freshVar`/`freshRowVar` share one id counter (types.ts), so tv
+// and rv ids never collide and one map covers both: `tsOf` looks up a type var,
+// `tsRow` looks up an open row's tail. Row-poly bindings (e.g. `st => {...st}`)
+// thus emit `{ …fields } & R` under a `<R>` head instead of a closed record
+// that drops the row var (ADR 0034).
 const genericNames = (sc: Scheme): Map<number, string> =>
-  new Map(sc.vars.map((id, i) => [id, LETTERS[i] ?? `T${i}`]));
+  new Map([...sc.vars, ...sc.rvars].map((id, i) => [id, LETTERS[i] ?? `T${i}`]));
 
 // A variant's type-param names → TS generic letters (`a` → `A`).
 const paramGmap = (params: string[]): Map<string, string> =>

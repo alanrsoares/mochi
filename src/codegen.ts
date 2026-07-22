@@ -531,8 +531,17 @@ const genGuardArm = (p: Pattern, body: Expr, guard?: Expr, base: string | null =
     conds.push(slot === "" ? `(${genExpr(guard)})` : `((${slot}) => ${genExpr(guard)})(${root})`);
   const test = conds.length ? conds.join(" && ") : "true";
   const handler = `${slot === "" ? "()" : `(${slot})`} => ${genLambdaBody(body)}`;
-  if (base)
-    return `.with((_v): _v is ${patTarget(p, base)} => { const _g: any = _v; return ${test}; }, ${handler})`;
+  // Emit a type predicate ONLY when it actually refines (target ≠ base): a
+  // whole-value pattern with no field narrowing (`[]`, `_ when g`) gains nothing
+  // from `_v is base` and would trip TS2677 when `base` is a row-poly `{…} & R`
+  // param — the closed `base` string isn't assignable to the open param. The
+  // plain boolean guard leaves `_v` at its declared (open) type. (ADR 0031/0034)
+  if (base) {
+    const target = patTarget(p, base);
+    if (target !== base)
+      return `.with((_v): _v is ${target} => { const _g: any = _v; return ${test}; }, ${handler})`;
+    return `.with((_v) => { const _g: any = _v; return ${test}; }, ${handler})`;
+  }
   return `.with((_v) => ${test}, ${handler})`;
 };
 
