@@ -56,6 +56,46 @@ const parseModule = (src: string): Result<Program, AlangError> => {
 
 type Loaded = { path: string; prog: Program };
 
+// What a module's imports resolve to: export SCHEMES (inference), variant
+// REGISTRY (cross-module exhaustiveness), and ctor field KEYS (destructuring).
+export type ModuleContext = {
+  imports: Env;
+  importedReg: Registry;
+  importedKeys: Map<string, string[]>;
+};
+
+// Collect `prog`'s imported context from the already-compiled deps. A missing
+// export is reported against the import site. Shared by the full-graph compile
+// and the LSP's dep-only `moduleContext`.
+const gatherImports = (
+  path: string,
+  prog: Program,
+  exportsByPath: Map<string, Env>,
+  regByPath: Map<string, Registry>,
+  keysByPath: Map<string, Map<string, string[]>>,
+): Result<ModuleContext, AlangError> => {
+  const imports: Env = new Map();
+  const importedReg: Registry = { ctor: new Map(), type: new Map() };
+  const importedKeys = new Map<string, string[]>();
+  for (const imp of importsOf(prog)) {
+    const depPath = resolveImport(path, imp.from);
+    const depExports = exportsByPath.get(depPath);
+    for (const n of imp.names) {
+      const sc = depExports?.get(n.name) as Scheme | undefined;
+      if (!sc) return err(checkErr(`'${imp.from}' has no export '${n.name}'`, n.span));
+      imports.set(n.name, sc);
+    }
+    const depReg = regByPath.get(depPath);
+    if (depReg) {
+      for (const [k, v] of depReg.type) importedReg.type.set(k, v);
+      for (const [k, v] of depReg.ctor) importedReg.ctor.set(k, v);
+    }
+    const depKeys = keysByPath.get(depPath);
+    if (depKeys) for (const [k, v] of depKeys) importedKeys.set(k, v);
+  }
+  return ok({ imports, importedReg, importedKeys });
+};
+
 // Load the whole graph reachable from `entry`, depth-first, detecting cycles.
 // Yields modules in DEPENDENCY ORDER (a module appears after all it imports).
 // The async file reads are the reason this half is a ResultAsync.
@@ -104,25 +144,9 @@ const compileGraph = (graph: Loaded[]): Result<ModuleOutput[], AlangError> => {
   const outputs: ModuleOutput[] = [];
 
   for (const { path, prog } of graph) {
-    const imports: Env = new Map();
-    const importedReg: Registry = { ctor: new Map(), type: new Map() };
-    const importedKeys = new Map<string, string[]>();
-    for (const imp of importsOf(prog)) {
-      const depPath = resolveImport(path, imp.from);
-      const depExports = exportsByPath.get(depPath);
-      for (const n of imp.names) {
-        const sc = depExports?.get(n.name) as Scheme | undefined;
-        if (!sc) return err(checkErr(`'${imp.from}' has no export '${n.name}'`, n.span));
-        imports.set(n.name, sc);
-      }
-      const depReg = regByPath.get(depPath);
-      if (depReg) {
-        for (const [k, v] of depReg.type) importedReg.type.set(k, v);
-        for (const [k, v] of depReg.ctor) importedReg.ctor.set(k, v);
-      }
-      const depKeys = keysByPath.get(depPath);
-      if (depKeys) for (const [k, v] of depKeys) importedKeys.set(k, v);
-    }
+    const gathered = gatherImports(path, prog, exportsByPath, regByPath, keysByPath);
+    if (isErr(gathered)) return gathered;
+    const { imports, importedReg, importedKeys } = gathered.value;
 
     const checked = check(prog, importedReg);
     if (isErr(checked)) return checked;
@@ -147,3 +171,46 @@ export const buildModules = (
   readFile: ReadFile,
 ): ResultAsync<ModuleOutput[], AlangError> =>
   loadGraph(resolve(entry), readFile).andThen(compileGraph);
+
+// Resolve + compile only the DEPENDENCIES of `entry` (dependency order), then
+// return the context `entry` itself should be checked/inferred with. Unlike
+// `buildModules` it stops at the entry — never checking, inferring, or
+// codegen-ing it — so the caller can run those on a live, possibly-unsaved
+// buffer. This is what lets LSP diagnostics see imported constructors (else a
+// `switch` on an imported variant is a false "unknown constructor"). A broken
+// dep surfaces as an Err; the caller decides whether to degrade.
+export const moduleContext = (
+  entry: string,
+  readFile: ReadFile,
+): ResultAsync<ModuleContext, AlangError> =>
+  loadGraph(resolve(entry), readFile).andThen((graph) => {
+    const entryPath = resolve(entry);
+    const exportsByPath = new Map<string, Env>();
+    const regByPath = new Map<string, Registry>();
+    const keysByPath = new Map<string, Map<string, string[]>>();
+
+    for (const { path, prog } of graph) {
+      const gathered = gatherImports(path, prog, exportsByPath, regByPath, keysByPath);
+      if (isErr(gathered)) return gathered;
+      // The entry is last in dependency order; its deps are now compiled, so
+      // hand back its context without touching the (live) entry itself.
+      if (path === entryPath) return ok(gathered.value);
+      const checked = check(prog, gathered.value.importedReg);
+      if (isErr(checked)) return checked;
+      const inferred = inferProgramTypes(prog, preludeEnv, {
+        open: true,
+        imports: gathered.value.imports,
+        namespaces: preludeNamespaces,
+      });
+      if (isErr(inferred)) return inferred;
+      exportsByPath.set(path, exportsOf(prog, inferred.value.env));
+      regByPath.set(path, exportedRegistry(prog));
+      keysByPath.set(path, exportedCtorKeys(prog));
+    }
+    // Entry has no imports (graph = [entry]) — empty context.
+    return ok({
+      imports: new Map(),
+      importedReg: { ctor: new Map(), type: new Map() },
+      importedKeys: new Map(),
+    });
+  });

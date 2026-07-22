@@ -2,6 +2,8 @@
 // and republishes the resulting diagnostics. All real logic lives in the
 // compiler (`src/diagnostics.ts`); this file only speaks LSP.
 
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { isOk } from "@onrails/result";
 import {
   createConnection,
@@ -15,9 +17,9 @@ import {
   TextEdit,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { diagnostics as compute } from "../diagnostics";
+import { moduleDiagnostics } from "../diagnostics";
 import { format } from "../format";
-import { hoverAt } from "../hover";
+import { moduleHoverAt } from "../hover";
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
@@ -33,10 +35,13 @@ connection.onInitialize(() => ({
 
 // Hover: map the cursor Position → byte offset → inferred type at that node.
 // Hover is the preferred mechanism for inspecting type hints.
-connection.onHover(({ textDocument, position }): Hover | null => {
+connection.onHover(async ({ textDocument, position }): Promise<Hover | null> => {
   const doc = documents.get(textDocument.uri);
   if (!doc) return null;
-  const info = hoverAt(doc.getText(), doc.offsetAt(position));
+  const path = doc.uri.startsWith("file:") ? fileURLToPath(doc.uri) : doc.uri;
+  const info = await moduleHoverAt(path, doc.getText(), doc.offsetAt(position), (p) =>
+    readFile(p, "utf8"),
+  );
   if (!info) return null;
   const fence = `\`\`\`alang\n${info.code}\n\`\`\``;
   const value = info.doc ? `${fence}\n\n${info.doc}` : fence;
@@ -59,9 +64,14 @@ connection.onDocumentFormatting(({ textDocument }): TextEdit[] => {
 });
 
 // Compile the document and push diagnostics (0 or 1 — the pipeline stops at the
-// first error). Our Range shape already matches the LSP one.
-const validate = (doc: TextDocument): void => {
-  const diags: Diagnostic[] = compute(doc.getText()).map((d) => ({
+// first error). Module-aware: imports are resolved from disk (deps) with the
+// live buffer standing in for the edited file, so a `switch` on an imported
+// variant isn't flagged as an unknown constructor. Our Range shape already
+// matches the LSP one.
+const validate = async (doc: TextDocument): Promise<void> => {
+  const path = doc.uri.startsWith("file:") ? fileURLToPath(doc.uri) : doc.uri;
+  const computed = await moduleDiagnostics(path, doc.getText(), (p) => readFile(p, "utf8"));
+  const diags: Diagnostic[] = computed.map((d) => ({
     range: d.range,
     message: d.message,
     severity: DiagnosticSeverity.Error,
@@ -70,6 +80,8 @@ const validate = (doc: TextDocument): void => {
   connection.sendDiagnostics({ uri: doc.uri, diagnostics: diags });
 };
 
-documents.onDidChangeContent((e) => validate(e.document));
+documents.onDidChangeContent((e) => {
+  void validate(e.document);
+});
 documents.listen(connection);
 connection.listen();

@@ -4,12 +4,14 @@
 // expression whose span contains that offset. The language server is a thin
 // adapter that maps a cursor Position onto an offset and this string onto a
 // hover popup.
+import { resolve } from "node:path";
 import { flatMap, isErr, pipe } from "@onrails/result";
 import { check } from "./check";
-import { inferProgramTypes, type SymbolInfo, type TypeAt } from "./infer";
+import { type InferResult, inferProgramTypes, type SymbolInfo, type TypeAt } from "./infer";
 import { lex } from "./lexer";
+import { moduleContext } from "./module";
 import { parse } from "./parser";
-import { preludeEnv } from "./prelude";
+import { preludeEnv, preludeNamespaces } from "./prelude";
 import { foldAliases, showType } from "./types";
 
 // The tightest span containing `offset`, or null if none. Ties (nested spans of
@@ -37,8 +39,18 @@ const lead = (type: string, symbol: SymbolInfo | undefined): string => {
   return `(property) ${symbol.name}: ${type}`;
 };
 
+// The tightest-span type at `offset`, rendered as a hover payload.
+const hoverFrom = (res: InferResult, offset: number): HoverInfo | null => {
+  const hit = tightest(res.types, offset);
+  if (!hit) return null;
+  const type = showType(foldAliases(hit.type, res.aliases));
+  return { code: lead(type, hit.symbol), doc: hit.symbol?.doc };
+};
+
 // The hover at `offset`, or null when the source doesn't typecheck or nothing
-// sits under the cursor. Open-world so host globals infer.
+// sits under the cursor. Open-world so host globals infer. Single-file: a file
+// with imports won't typecheck (the imported constructors are unknown), so
+// prefer `moduleHoverAt` when a path is available.
 export const hoverAt = (src: string, offset: number): HoverInfo | null => {
   const r = pipe(
     lex(src),
@@ -46,9 +58,38 @@ export const hoverAt = (src: string, offset: number): HoverInfo | null => {
     flatMap(check),
     flatMap((prog) => inferProgramTypes(prog, preludeEnv, { open: true })),
   );
-  if (isErr(r)) return null;
-  const hit = tightest(r.value.types, offset);
-  if (!hit) return null;
-  const type = showType(foldAliases(hit.type, r.value.aliases));
-  return { code: lead(type, hit.symbol), doc: hit.symbol?.doc };
+  return isErr(r) ? null : hoverFrom(r.value, offset);
+};
+
+// Module-aware hover: resolve `path`'s dependency graph (deps from disk via
+// `readFile`, the edited file from the live `src` buffer) and check + infer the
+// live program WITH the imported registry/schemes. Without this, any file that
+// imports a variant fails to typecheck and yields no hover at all. Degrades to
+// single-file `hoverAt` if the dep graph can't be resolved.
+export const moduleHoverAt = async (
+  path: string,
+  src: string,
+  offset: number,
+  readFile: (p: string) => Promise<string>,
+): Promise<HoverInfo | null> => {
+  const lexed = lex(src);
+  if (isErr(lexed)) return null;
+  const parsed = parse(lexed.value);
+  if (isErr(parsed)) return null;
+  const prog = parsed.value;
+
+  const entry = resolve(path);
+  const read = (p: string): Promise<string> =>
+    resolve(p) === entry ? Promise.resolve(src) : readFile(p);
+  const ctx = await moduleContext(entry, read);
+  if (isErr(ctx)) return hoverAt(src, offset);
+
+  const checked = check(prog, ctx.value.importedReg);
+  if (isErr(checked)) return null;
+  const inferred = inferProgramTypes(prog, preludeEnv, {
+    open: true,
+    imports: ctx.value.imports,
+    namespaces: preludeNamespaces,
+  });
+  return isErr(inferred) ? null : hoverFrom(inferred.value, offset);
 };
