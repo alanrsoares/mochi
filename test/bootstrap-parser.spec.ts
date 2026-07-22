@@ -21,13 +21,11 @@ import { compile } from "../src/compile";
 import { lex } from "../src/lexer";
 import { parse } from "../src/parser";
 import type { Span } from "../src/span";
+import { bootstrapModuleJs } from "./support/bootstrap";
 
 const root = join(import.meta.dir, "..");
 
-const compileAl = (path: string): string =>
-  unwrapOk(compile(readFileSync(join(root, path), "utf8")))
-    .replace(/^import .*$/m, "")
-    .replace(/^export /gm, "");
+const compileAl = bootstrapModuleJs;
 
 // The strict prologue matters: JSC does proper tail calls only in strict mode,
 // and both the lexer's and the parser's loops recurse once per token (ADR 0014).

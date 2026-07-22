@@ -19,13 +19,11 @@ import { parse } from "../src/parser";
 import { preludeEnv, preludeNamespaces } from "../src/prelude";
 import type { Row, Type } from "../src/types";
 import { showType } from "../src/types";
+import { bootstrapModuleJs } from "./support/bootstrap";
 
 const root = join(import.meta.dir, "..");
 
-const compileAl = (path: string): string =>
-  unwrapOk(compile(readFileSync(join(root, path), "utf8")))
-    .replace(/^import .*$/m, "")
-    .replace(/^export /gm, "");
+const compileAl = bootstrapModuleJs;
 
 // The strict prologue matters: JSC does proper tail calls only in strict mode
 // (ADR 0014) — infer.al's env/subst threading recurses once per binding/arm.

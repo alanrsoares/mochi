@@ -11,13 +11,11 @@ import { check } from "../src/check";
 import { compile } from "../src/compile";
 import { lex } from "../src/lexer";
 import { parse } from "../src/parser";
+import { bootstrapModuleJs } from "./support/bootstrap";
 
 const root = join(import.meta.dir, "..");
 
-const compileAl = (path: string): string =>
-  unwrapOk(compile(readFileSync(join(root, path), "utf8")))
-    .replace(/^import .*$/m, "")
-    .replace(/^export /gm, "");
+const compileAl = bootstrapModuleJs;
 
 // The strict prologue matters: JSC does proper tail calls only in strict mode,
 // and the checker's index loops recurse once per element (ADR 0014).

@@ -16,6 +16,7 @@ import { match } from "@onrails/pattern";
 import { unwrapOk } from "@onrails/result";
 import { buildShimSource, SHIM_PATH } from "../scripts/gen-prelude";
 import { compile } from "../src/compile";
+import { bootstrapModuleJs } from "./support/bootstrap";
 
 const root = join(import.meta.dir, "..");
 
@@ -27,10 +28,7 @@ test("prelude shim is up to date (regenerate matches checked-in file)", () => {
 // --- compile + eval a bootstrap module, wiring in the shim by name ---
 type AlResult = { _tag: "Ok"; value: unknown } | { _tag: "Err"; error: { message: string } };
 
-const compileAl = (path: string): string =>
-  unwrapOk(compile(readFileSync(join(root, path), "utf8")))
-    .replace(/^import .*$/gm, "")
-    .replace(/^export /gm, "");
+const compileAl = bootstrapModuleJs;
 
 const evalNames = <T extends Record<string, unknown>>(js: string, names: string[]): T =>
   new Function("match", `"use strict";\n${js}\nreturn { ${names.join(", ")} };`)(match) as T;

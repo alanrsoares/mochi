@@ -13,16 +13,14 @@ import { join } from "node:path";
 import { match } from "@onrails/pattern";
 import { unwrapOk } from "@onrails/result";
 import { compile as tsCompile } from "../src/compile";
+import { bootstrapModuleJs } from "./support/bootstrap";
 
 const root = join(import.meta.dir, "..");
 
 type AlErr = { message: string; start: number; end: number };
 type AlResult = { _tag: "Ok"; value: string } | { _tag: "Err"; error: AlErr };
 
-const compileAl = (path: string): string =>
-  unwrapOk(tsCompile(readFileSync(join(root, path), "utf8")))
-    .replace(/^import .*$/gm, "")
-    .replace(/^export /gm, "");
+const compileAl = bootstrapModuleJs;
 
 const evalNames = <T extends Record<string, unknown>>(
   js: string,

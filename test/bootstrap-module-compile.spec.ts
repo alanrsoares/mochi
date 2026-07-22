@@ -24,12 +24,9 @@ let buildModules: (entry: string) => Res;
 const bases = (outs: Out[]): string[] => outs.map((o) => basename(o.path));
 
 beforeAll(async () => {
+  // Build the whole graph closed-world; it emits bootstrap/module.js beside its
+  // deps. Import the shipped driver in-process.
   execFileSync("bun", ["src/cli.ts", "build", "bootstrap/cli.al"], { cwd: root });
-  const js = execFileSync("bun", ["src/cli.ts", "bootstrap/module.al"], {
-    cwd: root,
-    encoding: "utf8",
-  });
-  writeFileSync(join(root, "bootstrap/module.js"), js);
   ({ buildModules } = await import(join(root, "bootstrap/module.js")));
 });
 

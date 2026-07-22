@@ -24,14 +24,9 @@ let dir: string;
 const names = (r: Res): string[] => (r._tag === "Ok" ? r.value.map((m) => basename(m.path)) : []);
 
 beforeAll(async () => {
-  // Emit the dep graph (lexer/parser/host .js that module.js imports), then the
-  // loader itself open-world beside them, and import it in-process.
+  // Build the whole graph closed-world; it emits bootstrap/module.js (which
+  // imports ast/types/lexer/parser) beside its deps. Import it in-process.
   execFileSync("bun", ["src/cli.ts", "build", "bootstrap/cli.al"], { cwd: root });
-  const js = execFileSync("bun", ["src/cli.ts", "bootstrap/module.al"], {
-    cwd: root,
-    encoding: "utf8",
-  });
-  writeFileSync(join(root, "bootstrap/module.js"), js);
   ({ loadGraph } = (await import(join(root, "bootstrap/module.js"))) as {
     loadGraph: typeof loadGraph;
   });
