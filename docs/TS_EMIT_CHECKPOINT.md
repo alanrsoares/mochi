@@ -1,4 +1,4 @@
-# TS-emit checkpoint — 2026-07-23 (rev 4)
+# TS-emit checkpoint — 2026-07-23 (rev 5)
 
 Working state of the TypeScript backend track (ADR 0026 / `docs/TS_DIALECT.md`),
 so a fresh session can pick up. Goal: emit **fully working, `tsc --strict`-clean
@@ -8,8 +8,8 @@ TypeScript** from alang, including the self-hosted `bootstrap/`.
 
 Single-file and well-behaved multi-module programs emit **strict-clean today**.
 The self-hosted `bootstrap/` emits and links, but is **not yet strict-clean** —
-**16 `tsc` errors** (was 537). Measure any time with `bun run bootstrap:tsc`
-(`scripts/bootstrap-tsc.ts`, replaces the old `/tmp/bts` recipe). Ten gaps have
+**15 `tsc` errors** (was 537). Measure any time with `bun run bootstrap:tsc`
+(`scripts/bootstrap-tsc.ts`, replaces the old `/tmp/bts` recipe). Eleven gaps have
 shipped: the per-node lambda-param
 type table (gap 1, ADR 0028, −238), cross-module `import type` + extern `.d.ts`
 (gap 3, ADR 0029, −33; TS2307/TS2304 → 0), guard-form arms as **type predicates**
@@ -26,10 +26,17 @@ as an overload-per-composition set (`flatFnType`); the fix routes CONCRETE user
 bindings through the same `curriedOverloads` helper. Generic bindings stay flat —
 overloading them regressed 22 → 116 (contextual-typing + type-arg-inference
 collapse), so a `head === ""` gate confines overloads to inference-neutral
-concrete functions. The remaining 16 decompose (see below) into **generic-leak
-HOF** + **open-row state** (the polymorphic-HOF tail proper), a
-**`NonExhaustiveError`/`never` match-return** class, and scattered
-empty-collection / `Option<never>` leaks — each its own lever.
+concrete functions. Then — also this session — **a throwing `.otherwise` for
+array-partition matches** (ADR 0038, 16 → 15, −1). ADR 0038: an eager-array
+`switch` with no catch-all is the `[]` + `[h, ...t]` length partition; its guard
+arms test `.length` and don't narrow `A[]`, so ts-pattern's `.exhaustive()` types
+the chain as `NonExhaustiveError<A[]>` (TS2322). The TS backend closes such
+matches with a throwing `.otherwise` (dead branch, `never` return); JS keeps
+`.exhaustive()`. This cleared `infer.ts` `letsOfFrom`; `cli.ts` `writeAll`'s
+residual is a *different* root cause (the recursive `Result` union under the
+`& A` open-row leak). The remaining 15 decompose (see below) into **generic-leak
+HOF** + **open-row state** (the polymorphic-HOF tail proper) and scattered
+`unknown` / `Option<never>` leaks — each its own lever.
 
 ## Landed this session (all on `main`, committed)
 
@@ -44,7 +51,8 @@ empty-collection / `Option<never>` leaks — each its own lever.
 | `68d93b6` | feat(codegen): open-row records → generic intersections (ADR 0034) |
 | `93f25a6` | feat(codegen): empty-collection seeds annotated at binding (ADR 0035) |
 | `ea4b8c2` | feat(codegen): tuple literals via `_tuple` — tsc infers tuples (ADR 0036) |
-| _(this commit)_ | feat(codegen): partial-application overloads for concrete fns (ADR 0037) |
+| `0a8f2ce` | feat(codegen): partial-application overloads for concrete fns (ADR 0037) |
+| `d5b08c7` | feat(codegen): throwing otherwise for array-partition matches (ADR 0038) |
 
 `bun run check` is green (799 tests). JS backend byte-identical throughout
 (all TS-only behavior is behind codegen options that default off).
@@ -165,31 +173,29 @@ bun run bootstrap:tsc --keep    # leave the scratch dir on disk (path logged)
 `scripts/bootstrap-tsc.ts` emits the graph via `buildModulesTs` with
 `runtimeImport` pointed at `src/runtime` (no `sed`), writes the outputs + a strict
 tsconfig to an OS temp dir, runs the repo's `tsc`, and tallies. No files are left
-in `bootstrap/`. The `test/bootstrap-tsc.spec.ts` ratchet asserts total ≤ 22.
+in `bootstrap/`. The `test/bootstrap-tsc.spec.ts` ratchet asserts total ≤ 15.
 
 ## Suggested next step
 
 Gaps 1 (ADR 0028), 2 (ADR 0031), 3 (ADR 0029), polymorphic-HOF starter (ADR 0032),
 combinator tail (ADR 0033), row-poly records (ADR 0034), empty-collection seeds
-(ADR 0035), and tuple literals (ADR 0036) done — **22 `tsc` errors left**,
-decomposing into four clusters:
+(ADR 0035), tuple literals (ADR 0036), partial-application overloads (ADR 0037),
+and array-partition `.otherwise` (ADR 0038) done — **15 `tsc` errors left**,
+decomposing into three clusters:
 
 1. **Generic-leak HOF** (polymorphic-HOF tail proper) — `B[]` vs `string[]`
-   (`check.ts`), `Set<A>`/`Map<A,…>` (`codegen.ts`), `A[]` vs `Stmt[]`
-   (`infer.ts`). Generic inner callbacks with no contextual type.
-2. **Open-row state** — `infer.ts:429` `.sccs` on `{…} & A`, `infer.ts:545`, and
-   the 2 `module.ts` `emptyReg` seeds entangled with it. Both (1) and (2) need
-   generics scoping over more value positions than ADR 0032 reaches.
-3. **`NonExhaustiveError`/`never` match-return** — `cli.ts:21`, `infer.ts:487`:
-   ts-pattern's `.exhaustive()`/`.otherwise()` return type resolves to
-   `NonExhaustiveError`/`never` under a generic head. (A `swap`-style single-arm
-   tuple `switch` reproduces it minimally.)
-4. **`_curry` arity** — `parser.ts:310/314` TS2554 "expected 3, got 2": a
-   partial-application form the overloaded runtime signature doesn't cover.
+   (`check.ts:217`), `Set<A>`/`Map<A,…>` (`codegen.ts:382`), `A[]` vs `Stmt[]`
+   (`infer.ts:545`). Generic inner callbacks with no contextual type.
+2. **Open-row state** — `infer.ts:429` `.sccs` on `{…} & A`, `infer.ts:545/557`,
+   the 2 `module.ts` `emptyReg` seeds, and `cli.ts:21` `writeAll`'s recursive
+   `Result` union — all entangled with the `& A` intersection. Both (1) and (2)
+   need generics scoping over more value positions than ADR 0032 reaches.
+3. **Scattered `unknown` / `Option<never>` leaks** — `check.ts:192`,
+   `infer.ts:156`, `lexer.ts:185`, `parser.ts:294/314`.
 
 ## Verify
 `bun run check` green; the self-host fixpoint (`build ok`) confirms the JS backend
-stays byte-identical after ADR 0036.
+stays byte-identical after ADR 0038.
 
 ## Not part of this track (uncommitted in tree)
 Rebrand (README, logos, `docs/REBRAND.md`, `docs/V1.md`) and ADRs 0024 (llvm) /
