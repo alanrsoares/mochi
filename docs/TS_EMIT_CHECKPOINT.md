@@ -1,4 +1,4 @@
-# TS-emit checkpoint — 2026-07-23 (rev 6)
+# TS-emit checkpoint — 2026-07-23 (rev 7)
 
 Working state of the TypeScript backend track (ADR 0026 / `docs/TS_DIALECT.md`),
 so a fresh session can pick up. Goal: emit **fully working, `tsc --strict`-clean
@@ -8,8 +8,8 @@ TypeScript** from alang, including the self-hosted `bootstrap/`.
 
 Single-file and well-behaved multi-module programs emit **strict-clean today**.
 The self-hosted `bootstrap/` emits and links, but is **not yet strict-clean** —
-**14 `tsc` errors** (was 537). Measure any time with `bun run bootstrap:tsc`
-(`scripts/bootstrap-tsc.ts`, replaces the old `/tmp/bts` recipe). Twelve gaps have
+**8 `tsc` errors** (was 537). Measure any time with `bun run bootstrap:tsc`
+(`scripts/bootstrap-tsc.ts`, replaces the old `/tmp/bts` recipe). Thirteen gaps have
 shipped: the per-node lambda-param
 type table (gap 1, ADR 0028, −238), cross-module `import type` + extern `.d.ts`
 (gap 3, ADR 0029, −33; TS2307/TS2304 → 0), guard-form arms as **type predicates**
@@ -40,10 +40,17 @@ variant analogue of an empty collection — `Option<never>` at the reference. In
 `lexer.al` `mkTok` the first ts-pattern arm returns `doc: None`, fixing the chain
 type before the widening `Some(str)` arm (TS2322). Recorded in infer (parametric
 nullary ctor: uppercase + `con` with args) and annotated in place (`None as
-Option<string>`), reusing ADR 0035's empty-literal machinery. The remaining 14
-decompose (see below) into **open-row state** (6, biggest) + **generic-leak HOF**
-(the polymorphic-HOF tail proper) and scattered `unknown` leaks — each its own
-lever.
+Option<string>`), reusing ADR 0035's empty-literal machinery. Most recently —
+also this session — **generalize under the substitution** (ADR 0040, 14 → 8, −6).
+The open-row `& A` cluster was one bug: `generalize` read env schemes *raw*, so a
+`mono('t)` param later unified to `{ … | 'r }` hid `'r`, and the row var was
+quantified though the env constrained it — unsound over-generalization that made
+Tarjan-state locals spuriously polymorphic and leaked `& A` across
+infer/codegen/check/parser. Zonking the env before collecting free vars cleared
+all six at once. The remaining 8 decompose (see below) into **empty-collection in
+a returned record** (`VarSets` `Set<unknown>` / `Map<unknown,unknown>` seeds, an
+ADR 0035 extension), **`writeAll`'s recursive `Result` union**, and two scattered
+`unknown` reads — each its own lever.
 
 ## Landed this session (all on `main`, committed)
 
@@ -61,6 +68,7 @@ lever.
 | `0a8f2ce` | feat(codegen): partial-application overloads for concrete fns (ADR 0037) |
 | `d5b08c7` | feat(codegen): throwing otherwise for array-partition matches (ADR 0038) |
 | `937f1ad` | feat(codegen): annotate nullary ctors concretely (ADR 0039) |
+| `57da9ff` | fix(infer): generalize under the substitution (ADR 0040) |
 
 `bun run check` is green (799 tests). JS backend byte-identical throughout
 (all TS-only behavior is behind codegen options that default off).
@@ -181,31 +189,32 @@ bun run bootstrap:tsc --keep    # leave the scratch dir on disk (path logged)
 `scripts/bootstrap-tsc.ts` emits the graph via `buildModulesTs` with
 `runtimeImport` pointed at `src/runtime` (no `sed`), writes the outputs + a strict
 tsconfig to an OS temp dir, runs the repo's `tsc`, and tallies. No files are left
-in `bootstrap/`. The `test/bootstrap-tsc.spec.ts` ratchet asserts total ≤ 14.
+in `bootstrap/`. The `test/bootstrap-tsc.spec.ts` ratchet asserts total ≤ 8.
 
 ## Suggested next step
 
 Gaps 1 (ADR 0028), 2 (ADR 0031), 3 (ADR 0029), polymorphic-HOF starter (ADR 0032),
 combinator tail (ADR 0033), row-poly records (ADR 0034), empty-collection seeds
 (ADR 0035), tuple literals (ADR 0036), partial-application overloads (ADR 0037),
-array-partition `.otherwise` (ADR 0038), and nullary-ctor annotation (ADR 0039)
-done — **14 `tsc` errors left**, decomposing into three clusters:
+array-partition `.otherwise` (ADR 0038), nullary-ctor annotation (ADR 0039), and
+sound row generalization (ADR 0040) done — **8 `tsc` errors left**. The open-row
+cluster is GONE (ADR 0040 cleared all six — it was one bug). The rest decompose
+into three clusters:
 
-1. **Open-row state** (6 — the biggest single prize) — `infer.ts:429` `.sccs` on
-   `{…} & A` (an over-opened Tarjan state whose `sccs` field hid in the row tail),
-   `infer.ts:545/557`, the 2 `module.ts` `emptyReg` seeds, and `cli.ts:21`
-   `writeAll`'s recursive `Result` union — all entangled with the `& A`
-   intersection (ADR 0034 territory).
-2. **Generic-leak HOF** (polymorphic-HOF tail proper) — `B[]` vs `string[]`
-   (`check.ts:217`), `Set<A>`/`Map<A,…>` (`codegen.ts:382`), `A[]` vs `Stmt[]`
-   (`infer.ts:545`). Generic inner callbacks with no contextual type. Both (1) and
-   (2) need generics scoping over more value positions than ADR 0032 reaches.
-3. **Scattered `unknown` leaks** — `check.ts:192`, `infer.ts:156` — plus the
-   `parser.ts:294/314` span/`Option` leaks that ride the generic chain.
+1. **Empty-collection in a returned record** (5 — the biggest now) — `infer.ts`
+   90/93/96 (`freeInScheme`/`freeInEnv` build empty `VarSets` `Set<unknown>`) and
+   `module.ts` 83/91 (`emptyReg` seeds `Map<unknown,unknown>`). ADR 0035 annotates
+   an empty literal at a *binding*; here the empty seed is a field of a *returned*
+   record whose key/element type is fixed only by a later caller. Extend the
+   empty-collection annotation to reach seeds inside returned records.
+2. **`writeAll`'s recursive `Result` union** (`cli.ts:21`) — the fold's first
+   ts-pattern arm fixes a narrow `Result` that a later arm widens; a `Result`
+   analogue of the ADR 0038 first-arm-return problem.
+3. **Scattered `unknown` reads** — `check.ts:192`, `infer.ts:156`.
 
 ## Verify
-`bun run check` green; the self-host fixpoint (`build ok`) confirms the JS backend
-stays byte-identical after ADR 0039.
+`bun run check` green (799 pass); the self-host fixpoint (`build ok` ×2) confirms
+the JS backend stays byte-identical after ADR 0040.
 
 ## Not part of this track (uncommitted in tree)
 Rebrand (README, logos, `docs/REBRAND.md`, `docs/V1.md`) and ADRs 0024 (llvm) /
