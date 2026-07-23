@@ -16,6 +16,10 @@ test("example.mochi compiles", () => {
   expect(isErr(compile(read("example.mochi")))).toBe(false);
 });
 
+test("examples/life/main.mochi compiles", () => {
+  expect(isErr(compile(read("examples/life/main.mochi")))).toBe(false);
+});
+
 test("examples/pipelines.mochi compiles and produces its documented values", () => {
   // Output is standalone (prelude inlined) — only the @onrails/pattern import is
   // stripped, and `match` injected in its place.
