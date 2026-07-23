@@ -12,8 +12,9 @@ import { isErr, ok, type Result } from "@onrails/result";
 import type { Ctor, Expr, Program, Stmt, TypeExpr } from "./ast";
 import { toTypedProgram } from "./compile";
 import type { AlangError } from "./errors";
-import { type Scheme, typeExprToType } from "./infer";
+import type { Scheme } from "./infer";
 import { builtinTypeDecls, preludeNamespaces } from "./prelude";
+import { typeExprToType } from "./schemes";
 import {
   type AliasDef,
   aliasParamId,
