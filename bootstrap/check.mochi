@@ -1,9 +1,9 @@
-// bootstrap/check.al — the mochi semantic pass, in mochi. Ported from
+// bootstrap/check.mochi — the mochi semantic pass, in mochi. Ported from
 // src/check.ts (the spec); test/bootstrap-check.spec.ts diffs the error (or
-// ok) verdict against the TS checker on every .al file in the repo.
+// ok) verdict against the TS checker on every .mochi file in the repo.
 //
 // Shape notes vs the TS original:
-// - AST declared here again (same shape as bootstrap/parser.al) — modules
+// - AST declared here again (same shape as bootstrap/parser.mochi) — modules
 //   arrive in Slice F; until then the differential suite keeps both honest,
 //   and the `_tag` runtime shape makes the two declarations interchangeable.
 // - `AlangError | null` returns become `Option CErr`; the mutable
@@ -14,7 +14,7 @@
 // - checkSeqExhaustive's TS 3-state (`error | null | undefined`) becomes the
 //   `SeqCheck` variant — a union beats null-vs-undefined encoding.
 
-import { ENum, EBool, EStr, ERef, ECall, ELambda, ELetIn, ELetBind, EPipe, ETernary, EMatch, ERecord, EField, ETuple, EArr, EList, EMap, EInterp, IPLit, IPExpr, PWild, PBind, PLit, PBool, PStr, PTuple, PRecord, PCtor, PArr, PList, POr, TyName, TyArrow, TyApp, TyTuple, TyList, SLet, SType, SExtern, SImport } from "./ast.al"
+import { ENum, EBool, EStr, ERef, ECall, ELambda, ELetIn, ELetBind, EPipe, ETernary, EMatch, ERecord, EField, ETuple, EArr, EList, EMap, EInterp, IPLit, IPExpr, PWild, PBind, PLit, PBool, PStr, PTuple, PRecord, PCtor, PArr, PList, POr, TyName, TyArrow, TyApp, TyTuple, TyList, SLet, SType, SExtern, SImport } from "./ast.mochi"
 
 // --- AST (mirrors src/ast.ts; `kind` strings become constructors) ---
 

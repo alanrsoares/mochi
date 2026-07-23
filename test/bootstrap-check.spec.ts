@@ -1,7 +1,7 @@
-// Slice E1 — self-hosted checker. bootstrap/check.al is compiled by the TS
+// Slice E1 — self-hosted checker. bootstrap/check.mochi is compiled by the TS
 // compiler, evaluated, and fed the bootstrap parser's AST; its verdict (ok, or
 // the first check error's message + span) must match the TS checker's on every
-// .al file in the repo — including check.al itself.
+// .mochi file in the repo — including check.mochi itself.
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -24,9 +24,9 @@ const evalAl = (js: string, name: string): ((x: never) => AlResult) =>
 type AlErr = { message: string; start: number; end: number };
 type AlResult = { _tag: "Ok"; value: unknown } | { _tag: "Err"; error: AlErr };
 
-const alLex = evalAl(compileAl("bootstrap/lexer.al"), "lex") as (src: string) => AlResult;
-const alParse = evalAl(compileAl("bootstrap/parser.al"), "parse") as (toks: unknown) => AlResult;
-const alCheck = evalAl(compileAl("bootstrap/check.al"), "check") as (stmts: unknown) => AlResult;
+const alLex = evalAl(compileAl("bootstrap/lexer.mochi"), "lex") as (src: string) => AlResult;
+const alParse = evalAl(compileAl("bootstrap/parser.mochi"), "parse") as (toks: unknown) => AlResult;
+const alCheck = evalAl(compileAl("bootstrap/check.mochi"), "check") as (stmts: unknown) => AlResult;
 
 // ---- one canonical verdict shape for both checkers -------------------------------
 
@@ -51,14 +51,14 @@ const alVerdict = (src: string): Verdict => {
     : { ok: false, message: cr.error.message, start: cr.error.start, end: cr.error.end };
 };
 
-// ---- the corpus: every .al file in the repo -------------------------------------
+// ---- the corpus: every .mochi file in the repo -------------------------------------
 
-const corpus = [...new Bun.Glob("**/*.al").scanSync({ cwd: root })]
+const corpus = [...new Bun.Glob("**/*.mochi").scanSync({ cwd: root })]
   .filter((p) => !p.includes("node_modules"))
   .sort();
 
 test("corpus includes the bootstrap checker itself", () => {
-  expect(corpus).toContain("bootstrap/check.al");
+  expect(corpus).toContain("bootstrap/check.mochi");
 });
 
 for (const file of corpus) {

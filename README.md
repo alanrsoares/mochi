@@ -10,7 +10,7 @@ A small statically-typed functional language that compiles to readable JavaScrip
 
 ```bash
 bun install
-bun run mochi example.al        # compile a file to JS on stdout
+bun run mochi example.mochi        # compile a file to JS on stdout
 bun run check                   # lint + typecheck + tests
 ```
 
@@ -82,7 +82,7 @@ let sum = xs => switch xs {
 let greet = name => "Hello, ${name}!"
 ```
 
-See [`example.al`](example.al) for a full feature tour and [`examples/`](examples/) for
+See [`example.mochi`](example.mochi) for a full feature tour and [`examples/`](examples/) for
 multi-file, async, and pipeline programs.
 
 ## Learn more

@@ -1,4 +1,4 @@
-// Host runtime for the mochi modules example — the JS primitives the `.al`
+// Host runtime for the mochi modules example — the JS primitives the `.mochi`
 // modules bind via `extern`. Functions are uncurried (mochi lowers multi-arg
 // calls to uncurried JS calls); `pi` is a plain value binding.
 export const add = (a, b) => a + b;

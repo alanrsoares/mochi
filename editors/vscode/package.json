@@ -1,7 +1,7 @@
 {
   "name": "mochi",
   "displayName": "mochi",
-  "description": "Syntax highlighting for the mochi language (.al)",
+  "description": "Syntax highlighting for the mochi language (.mochi)",
   "version": "0.0.1",
   "publisher": "mochi",
   "private": true,
@@ -14,7 +14,7 @@
       {
         "id": "mochi",
         "aliases": ["mochi", "Mochi"],
-        "extensions": [".al"],
+        "extensions": [".mochi"],
         "configuration": "./language-configuration.json"
       }
     ],

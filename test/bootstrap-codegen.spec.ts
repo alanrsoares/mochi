@@ -1,6 +1,6 @@
-// Slice F — self-hosted codegen. bootstrap/codegen.al is compiled by the TS
+// Slice F — self-hosted codegen. bootstrap/codegen.mochi is compiled by the TS
 // compiler, evaluated, and fed the bootstrap parser's AST; the JS it emits for
-// every .al file in the repo — including codegen.al itself — must be byte-for-
+// every .mochi file in the repo — including codegen.mochi itself — must be byte-for-
 // byte identical to the TS codegen's output. The three prelude runtime tables
 // (namespaceRuntime / preludeJsDefs / runtimeDeps) are passed in as Maps built
 // from the SAME src/prelude.ts data both codegens consult — the prelude is not
@@ -22,18 +22,18 @@ const root = join(import.meta.dir, "..");
 const compileAl = bootstrapModuleJs;
 
 // The strict prologue matters: JSC does proper tail calls only in strict mode
-// (ADR 0014) — codegen.al's cursor loops recurse once per stmt/arm/field.
+// (ADR 0014) — codegen.mochi's cursor loops recurse once per stmt/arm/field.
 const evalAlNames = <T extends Record<string, unknown>>(js: string, names: string[]): T =>
   new Function("match", `"use strict";\n${js}\nreturn { ${names.join(", ")} };`)(match) as T;
 
 type AlErr = { message: string; start: number; end: number };
 type AlResult = { _tag: "Ok"; value: unknown } | { _tag: "Err"; error: AlErr };
 
-const alLex = evalAlNames<{ lex: (src: string) => AlResult }>(compileAl("bootstrap/lexer.al"), [
+const alLex = evalAlNames<{ lex: (src: string) => AlResult }>(compileAl("bootstrap/lexer.mochi"), [
   "lex",
 ]).lex;
 const alParse = evalAlNames<{ parse: (toks: unknown) => AlResult }>(
-  compileAl("bootstrap/parser.al"),
+  compileAl("bootstrap/parser.mochi"),
   ["parse"],
 ).parse;
 
@@ -48,7 +48,7 @@ type AlCodegen = {
   ) => string;
 };
 
-const alCodegen = evalAlNames<AlCodegen>(compileAl("bootstrap/codegen.al"), ["codegen"]).codegen;
+const alCodegen = evalAlNames<AlCodegen>(compileAl("bootstrap/codegen.mochi"), ["codegen"]).codegen;
 
 // The TS prelude tables, converted to Maps — the SAME data both codegens read.
 // Insertion order is preserved (preludeJsDefs drives preamble emit order), so
@@ -71,14 +71,14 @@ const alEmit = (src: string): string => {
   return alCodegen(pr.value, new Map(), true, alNs, alJsDefs, alRuntimeDeps);
 };
 
-// ---- the corpus: every .al file in the repo --------------------------------
+// ---- the corpus: every .mochi file in the repo --------------------------------
 
-const corpus = [...new Bun.Glob("**/*.al").scanSync({ cwd: root })]
+const corpus = [...new Bun.Glob("**/*.mochi").scanSync({ cwd: root })]
   .filter((p) => !p.includes("node_modules"))
   .sort();
 
 test("corpus includes the bootstrap codegen itself", () => {
-  expect(corpus).toContain("bootstrap/codegen.al");
+  expect(corpus).toContain("bootstrap/codegen.mochi");
 });
 
 for (const file of corpus) {

@@ -1,4 +1,4 @@
-// Dogfood mochi's own formatter on the self-hosted `bootstrap/*.al` sources.
+// Dogfood mochi's own formatter on the self-hosted `bootstrap/*.mochi` sources.
 // Default: rewrite each file in place. `--check`: exit non-zero if any file
 // isn't already formatted (the QA-gate mode) — this keeps our formatter honest
 // against ~3.4k lines of real code and blocks any regression that would move,
@@ -12,7 +12,7 @@ const DIR = "bootstrap";
 const check = process.argv.includes("--check");
 
 const files = readdirSync(DIR)
-  .filter((f) => f.endsWith(".al"))
+  .filter((f) => f.endsWith(".mochi"))
   .map((f) => join(DIR, f))
   .toSorted();
 
@@ -35,7 +35,7 @@ for (const f of files) {
 
 if (check && drift.length) {
   console.error(
-    `unformatted .al files (run \`bun run fmt:al\`):\n${drift.map((f) => `  ${f}`).join("\n")}`,
+    `unformatted .mochi files (run \`bun run fmt:al\`):\n${drift.map((f) => `  ${f}`).join("\n")}`,
   );
   process.exit(1);
 }

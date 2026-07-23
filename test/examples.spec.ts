@@ -12,14 +12,14 @@ import { buildModules } from "../src/module";
 const read = (p: string): string => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 const path = (p: string): string => fileURLToPath(new URL(`../${p}`, import.meta.url));
 
-test("example.al compiles", () => {
-  expect(isErr(compile(read("example.al")))).toBe(false);
+test("example.mochi compiles", () => {
+  expect(isErr(compile(read("example.mochi")))).toBe(false);
 });
 
-test("examples/pipelines.al compiles and produces its documented values", () => {
+test("examples/pipelines.mochi compiles and produces its documented values", () => {
   // Output is standalone (prelude inlined) — only the @onrails/pattern import is
   // stripped, and `match` injected in its place.
-  const js = unwrapOk(compile(read("examples/pipelines.al"))).replace(/^import .*$/m, "");
+  const js = unwrapOk(compile(read("examples/pipelines.mochi"))).replace(/^import .*$/m, "");
   const out = new Function("match", `${js}\nreturn { composed, piped, happy, sad };`)(
     match,
   ) as Record<string, number>;
@@ -27,7 +27,7 @@ test("examples/pipelines.al compiles and produces its documented values", () => 
 });
 
 test("examples/async composes a typed Task pipeline that runs to its value", async () => {
-  const js = unwrapOk(compile(read("examples/async/main.al")))
+  const js = unwrapOk(compile(read("examples/async/main.mochi")))
     .replace(/^import .*$/gm, "")
     .replace(/^export /gm, "");
   // Inject the host runtime (mirrors examples/async/task.js) and run the Task.
@@ -53,12 +53,12 @@ test("examples/async composes a typed Task pipeline that runs to its value", asy
 
 test("examples/modules builds the whole graph and wires imports", async () => {
   const outs = unwrapOk(
-    await buildModules(path("examples/modules/main.al"), (p) =>
+    await buildModules(path("examples/modules/main.mochi"), (p) =>
       Promise.resolve(readFileSync(p, "utf8")),
     ),
   );
-  const main = outs.find((o) => o.path.endsWith("main.al"))!.js;
-  const geometry = outs.find((o) => o.path.endsWith("geometry.al"))!.js;
+  const main = outs.find((o) => o.path.endsWith("main.mochi"))!.js;
+  const geometry = outs.find((o) => o.path.endsWith("geometry.mochi"))!.js;
   expect(main).toContain('import { area, hypot, Circle, Rect } from "./geometry.js";');
   expect(geometry).toContain("export const area");
 });

@@ -1,6 +1,6 @@
-// Slice C — the self-hosted lexer. bootstrap/lexer.al is compiled by the TS
-// compiler, evaluated, and run against the TS lexer on every .al file in the
-// repo (including lexer.al itself). The two token streams must be identical.
+// Slice C — the self-hosted lexer. bootstrap/lexer.mochi is compiled by the TS
+// compiler, evaluated, and run against the TS lexer on every .mochi file in the
+// repo (including lexer.mochi itself). The two token streams must be identical.
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -13,7 +13,7 @@ const root = join(import.meta.dir, "..");
 
 // Compile the mochi lexer once; strip the module scaffolding so it evals in a
 // plain function scope (same harness as guards.spec.ts, plus `export`).
-const lexerAlSrc = readFileSync(join(root, "bootstrap/lexer.al"), "utf8");
+const lexerAlSrc = readFileSync(join(root, "bootstrap/lexer.mochi"), "utf8");
 const js = unwrapOk(compile(lexerAlSrc))
   .replace(/^import .*$/m, "")
   .replace(/^export /gm, "");
@@ -110,14 +110,14 @@ const alStream = (src: string): Canon[] => {
   return r.value.map(canonAl);
 };
 
-// --- the corpus: every .al file in the repo -----------------------------------
+// --- the corpus: every .mochi file in the repo -----------------------------------
 
-const corpus = [...new Bun.Glob("**/*.al").scanSync({ cwd: root })]
+const corpus = [...new Bun.Glob("**/*.mochi").scanSync({ cwd: root })]
   .filter((p) => !p.includes("node_modules"))
   .sort();
 
 test("corpus includes the bootstrap lexer itself", () => {
-  expect(corpus).toContain("bootstrap/lexer.al");
+  expect(corpus).toContain("bootstrap/lexer.mochi");
   expect(corpus.length).toBeGreaterThanOrEqual(5);
 });
 

@@ -13,8 +13,8 @@ Read this, then `CONTEXT.md` for vocabulary and `docs/adr/` for the *why*.
 
 ```bash
 bun run check                 # QA gate = biome check . && tsc --noEmit && bun test
-bun run mochi <file.al>       # compile one file to JS on stdout (also: ts, fmt, dts, build)
-bun src/cli.ts ts <file.al>   # emit typed TypeScript (build --emit=ts for the graph)
+bun run mochi <file.mochi>       # compile one file to JS on stdout (also: ts, fmt, dts, build)
+bun src/cli.ts ts <file.mochi>   # emit typed TypeScript (build --emit=ts for the graph)
 bun run bootstrap:tsc         # north-star: count tsc --strict errors on the self-host (0)
 bun test | typecheck | lint | lint:fix | format | build:ext | loc
 ```

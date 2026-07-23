@@ -9,7 +9,7 @@ type-theory core most languages stall on is shipped. **All three surface-syntax
 blockers are now cleared** (let-in ADR 0009, tuples ADR 0010, char cursor in the
 prelude), and **lex → parse → check → infer are all ported to mochi and
 differentially tested against the TS compiler** on the whole repo corpus
-(`bootstrap/{lexer,parser,check,infer}.al`,
+(`bootstrap/{lexer,parser,check,infer}.mochi`,
 `test/bootstrap-{lexer,parser,check,infer}.spec.ts` — see
 `docs/PATH_TO_BOOTSTRAP.md` for the slice-by-slice detail). Only Slice F
 (codegen + the fixpoint ceremony) remains. This doc is the readiness checklist
@@ -69,16 +69,16 @@ modules (`import`/`export`), builtin `Result`/`Option`, structural
    miscompiled (free vars in emitted JS); now lowers to a guard-form arm.
    Conservative exhaustiveness: narrowing arms need a `C(_)`/`_` companion.
    The check/infer ports can dispatch on nested AST shapes directly.
-4. ~~**Spike: lexer-in-mochi**~~ **DONE** — `bootstrap/lexer.al` reproduces
+4. ~~**Spike: lexer-in-mochi**~~ **DONE** — `bootstrap/lexer.mochi` reproduces
    `src/lexer.ts`'s token stream on the full repo corpus
    (`test/bootstrap-lexer.spec.ts`). Tuple-binding sugar (ADR 0011,
    `((a, b)) => …` and `let (a, b) = value in body`) let scanner state thread
    cleanly. The spike's answer: manual `Result` threading was tolerable —
    do-notation was NOT added as a bootstrap prerequisite (see
    `docs/PATH_TO_BOOTSTRAP.md` §6).
-5. ~~**parser**~~ **DONE** — `bootstrap/parser.al` reproduces `src/parser.ts`'s
+5. ~~**parser**~~ **DONE** — `bootstrap/parser.mochi` reproduces `src/parser.ts`'s
    AST on the full corpus (`test/bootstrap-parser.spec.ts`).
-6. ~~**check + infer**~~ **DONE** — `bootstrap/check.al` and `bootstrap/infer.al`
+6. ~~**check + infer**~~ **DONE** — `bootstrap/check.mochi` and `bootstrap/infer.mochi`
    reproduce the TS checker's verdicts and the TS inferrer's schemes on the
    full corpus (`test/bootstrap-{check,infer}.spec.ts`).
 7. **Remaining: codegen + the fixpoint ceremony (Slice F)** — port

@@ -1,7 +1,7 @@
 # 0005 — Transparent (structural) record-type aliases
 
 - **Status:** Accepted
-- **Source:** `docs/CRITIQUE.md` §4.1; commit `4f3d4e2`; `example.al`
+- **Source:** `docs/CRITIQUE.md` §4.1; commit `4f3d4e2`; `example.mochi`
 
 ## Context
 

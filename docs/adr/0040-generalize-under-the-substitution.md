@@ -71,7 +71,7 @@ soundness correction, not a codegen tweak. The JS backend is untyped, so no
   general (it lets a caller pick a type the environment has already fixed). No
   existing program regressed — the corpus and bootstrap graph still typecheck —
   because the affected vars were never legitimately polymorphic.
-- **Three latent leaks surfaced** (net still −6): `bootstrap/infer.al`’s own
+- **Three latent leaks surfaced** (net still −6): `bootstrap/infer.mochi`’s own
   `freeInScheme`/`freeInEnv` build empty `VarSets` (`Set.fromArray([])`) that now
   infer `Set<unknown>` (previously masked by the over-generalization). That is an
   empty-collection-annotation gap (ADR 0035 territory), tracked as the next

@@ -1,7 +1,7 @@
 # 0014 — Recursion depth via proper tail calls (strict-mode JSC)
 
 - **Status:** Accepted
-- **Source:** Slice C, the bootstrap lexer (`bootstrap/lexer.al`); `docs/PATH_TO_BOOTSTRAP.md` §3 "Stack depth"
+- **Source:** Slice C, the bootstrap lexer (`bootstrap/lexer.mochi`); `docs/PATH_TO_BOOTSTRAP.md` §3 "Stack depth"
 
 ## Context
 
@@ -79,4 +79,4 @@ the fix via `patches/@onrails%2Fpattern@0.3.2.patch` (bun patch) until the
 next published release; the source fix lives in the onrails repo.
 
 Verified: 1M-deep `switch` recursion runs in constant stack; the corpus suites
-(including parser.al self-parse, the file that flushed this) guard it.
+(including parser.mochi self-parse, the file that flushed this) guard it.

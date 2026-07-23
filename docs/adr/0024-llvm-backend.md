@@ -115,7 +115,7 @@ Per-concern decisions:
    but monomorphized structs carry no runtime shape info — so these become
    compiler-generated per concrete layout (type-directed, coherent with
    decision 4), not a single `rt.c` walker.
-10. **Testing.** New differential tier: compile the shared `.al` test corpus
+10. **Testing.** New differential tier: compile the shared `.mochi` test corpus
    through both backends, run each native binary, diff stdout against the JS
    backend's output for the same input — same spirit as the bootstrap
    fixpoint differential suites (`AGENTS.md`), applied across backends instead

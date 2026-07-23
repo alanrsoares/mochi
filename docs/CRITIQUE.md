@@ -126,7 +126,7 @@ to teach.
   another reason to decide 2.4 first.
 
 ### 2.3 The `float` / `number` surface lie
-`example.al` writes `Circle(float)` but the type system only has `number`
+`example.mochi` writes `Circle(float)` but the type system only has `number`
 (`types.ts`). Today that's cosmetic, but it is a *tell* that there is no numeric
 hierarchy and no decision yet about int vs float vs bignum.
 

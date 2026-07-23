@@ -30,16 +30,16 @@ between landings.
 
 ### Survey (current tree)
 - **114 files** reference `alang`: ~87 literal `alang`, 7 `alangc`, 2 `source.alang`.
-- `.al` is load-bearing in **code**, not just filenames: `src/{module,codegen,cli}.ts`
-  and the self-host mirror `bootstrap/{module,codegen}.al`, plus
-  `scripts/{fmt-al,bootstrap-tsc}.ts` and `test/support/bootstrap.ts`.
-- `.al` files **import with explicit extension** (`from "./compile.al"`) — the
-  extension rename must rewrite in-file import specifiers, not just `mv` files.
-- **16 tracked `.al` files** (11 `bootstrap/`, 4 `examples/`, `example.al`).
+- `.al` was load-bearing in **code**, not just filenames: `src/{module,codegen,cli}.ts`,
+  the `bootstrap/host.js` resolver, and the self-host mirror `bootstrap/codegen.mochi`,
+  plus `scripts/{fmt-al,bootstrap-tsc,fixpoint}.ts` and `test/support/bootstrap.ts`.
+- `.al` files **imported with explicit extension** (`from "./compile.al"`) — the
+  extension rename rewrote in-file import specifiers, not just `mv`ed files.
+- **16 tracked source files** (11 `bootstrap/`, 4 `examples/`, `example`).
   The 20 in `.fixpoint-work/` are **gitignored** (regenerated — skip).
-- `.al` as a bare substring is a sed hazard (`internAL`, `additionAL`): replace
-  only anchored forms — `\balang\b`, `Alang`, `ALANG`, `alangc`, `source.alang`,
-  and `.al` only at path/extension boundaries.
+- `.al` as a bare substring is a sed hazard (`.all`, `.ali`): replace only the
+  anchored form `\.al\b` — and note `git grep -E` does NOT honor `\b` (use GNU grep).
+  Plus the self-host's hardcoded slice length (`3` → `6`).
 
 ### Phase 1 — Brand rename `alang` → `mochi` (no extension change) ✅ DONE
 Low risk, self-contained; fixpoint unaffected.
@@ -53,13 +53,13 @@ Low risk, self-contained; fixpoint unaffected.
 - Prose: README, AGENTS.md, CONTEXT.md, `docs/**` **and** `docs/adr/**` (full sweep).
 - Gate: `bun run check`.
 
-### Phase 2 — File extension `.al` → `.mochi`
+### Phase 2 — File extension `.al` → `.mochi` ✅ DONE
 Higher risk; touches self-host + fixpoint.
-- `git mv` the 16 tracked files; rewrite in-file `"./x.al"` import specs → `"./x.mochi"`.
-- Extension logic: `src/{module,codegen,cli}.ts` regexes/appends **and** mirror
-  `bootstrap/{module,codegen}.al`.
-- `scripts/{fmt-al,bootstrap-tsc}.ts`, `test/support/bootstrap.ts`, all `.al` fixtures.
-- Gate: `bun run check` + `bun run bootstrap:tsc` (must stay **0**) + fixpoint byte-≡.
+- `git mv` the 16 tracked files; rewrote in-file `"./x.al"` import specs → `"./x.mochi"`.
+- Extension logic: `src/{module,codegen,cli}.ts` regexes + `bootstrap/host.js` resolver
+  **and** the self-host mirror `bootstrap/codegen.mochi` (`stripAlExt` literal + length).
+- `scripts/{fmt-al,bootstrap-tsc,fixpoint}.ts`, `test/support/bootstrap.ts`, all fixtures.
+- Gate: `bun run check` + `bun run bootstrap:tsc` (stayed **0**) + fixpoint byte-≡.
 
 ### Out of code scope (follow-ups)
 - Repo dir `/dev/alang` → `/dev/mochi`, git remote / GitHub repo name.

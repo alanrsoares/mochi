@@ -1,4 +1,4 @@
-// Ticket 0013 (part a) — module-graph loader. Resolve the import graph of `.al`
+// Ticket 0013 (part a) — module-graph loader. Resolve the import graph of `.mochi`
 // files reachable from an entry, depth-first, and yield the modules in
 // DEPENDENCY ORDER (a module lands after everything it imports), detecting
 // import cycles. Sync throughout: the host IO returns `Result` directly (ticket
@@ -7,14 +7,14 @@
 //
 // Cross-module scheme/registry threading and the actual compileGraph land in
 // parts (b) and (c); this half only parses and orders.
-import { lex } from "./lexer.al"
-import { parse } from "./parser.al"
-import { checkWith, exportedRegistry } from "./check.al"
-import { inferProgramImports, exportedSchemes } from "./infer.al"
-import { exportedCtorKeys, codegen } from "./codegen.al"
+import { lex } from "./lexer.mochi"
+import { parse } from "./parser.mochi"
+import { checkWith, exportedRegistry } from "./check.mochi"
+import { inferProgramImports, exportedSchemes } from "./infer.mochi"
+import { exportedCtorKeys, codegen } from "./codegen.mochi"
 
-// Prelude tables from the generated shim (as in compile.al). Threaded opaquely
-// into inferProgramImports / codegen; module.al never inspects them.
+// Prelude tables from the generated shim (as in compile.mochi). Threaded opaquely
+// into inferProgramImports / codegen; module.mochi never inspects them.
 extern builtins : Map string a = "./prelude.gen.js" "builtins"
 extern namespaces : Map string (Map string a) = "./prelude.gen.js" "namespaces"
 extern namespaceRuntime : Map string (Map string string) = "./prelude.gen.js" "namespaceRuntime"
@@ -23,11 +23,11 @@ extern runtimeDeps : Map string [string] = "./prelude.gen.js" "runtimeDeps"
 
 // Full AST, re-declared to match parser/check/infer/codegen. Only `SImport` is
 // destructured here (every other stmt flows opaquely to the passes), but the
-// CLOSED-WORLD build that ships `mochic` (cli.al → module.al → the passes)
+// CLOSED-WORLD build that ships `mochic` (cli.mochi → module.mochi → the passes)
 // unifies same-named variant types by structure — so a 1-ctor `Stmt` would
 // clash with parser's 4-ctor `Stmt`. Declaring the whole shape keeps it
 // consistent (the `_tag` runtime shape makes the declarations interchangeable).
-import { SImport } from "./ast.al"
+import { SImport } from "./ast.mochi"
 
 // One loaded module: its canonical path and parsed statements.
 type Loaded = { path: string, stmts: [Stmt] }
@@ -120,7 +120,7 @@ export let loadGraph = entry =>
 // its empty maps would otherwise infer `Map k v` and, threaded into the generic
 // `resolveImportsFrom`, leave the registry map types unpinned (a `tsc --strict`
 // error on the emitted `.ts`). Structural aliases (ADR 0005), so this unifies
-// with check.al's `Registry` without a cross-module type import.
+// with check.mochi's `Registry` without a cross-module type import.
 type CtorInfo = { owner: string, arity: number }
 type Registry = { ctors: Map string CtorInfo, types: Map string [string] }
 

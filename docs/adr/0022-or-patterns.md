@@ -53,7 +53,7 @@ Add an **or-pattern**: an arm may list alternatives, `| A | B | … => body`.
 - **Labelled-ctor args with differing labels across alts** are rejected by the
   same-position rule (no single destructure serves them). Positional ctors — the
   common case — are fine.
-- `bootstrap/parser.al` is **not** yet taught this form; the bootstrap corpus
+- `bootstrap/parser.mochi` is **not** yet taught this form; the bootstrap corpus
   doesn't use it, so the differential suites and the fixpoint stay green without
   a port. Porting is future work, gated on the self-hoster needing the syntax.
 

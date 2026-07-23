@@ -10,7 +10,7 @@ dominated by **TS2345 (48)**, concentrated in `infer.ts` (33). All one shape: a
 partial record literal `{ next }` flowing where the full inference state
 `{ tv, rv, next }` is expected.
 
-Root cause is `types.al`'s state threading —
+Root cause is `types.mochi`'s state threading —
 `freshVar = st => (tVar(st.next), { ...st, next: add(st.next, 1) })`. Algorithm W
 infers an **open-row** parameter `st: { next: Int | r }` and returns it spread
 unchanged, so the binding's scheme is `∀ r. { next: Int | r } -> (Ty, { next: Int

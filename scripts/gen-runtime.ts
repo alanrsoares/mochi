@@ -70,7 +70,7 @@ const typeBareArrays = (body: string): string =>
 // Body ready for the typed module: params and bare-array locals made explicit.
 const tsBody = (def: string): string => typeBareArrays(anyParams(rhsOf(def)));
 
-// Builtin ctor factory types — stable (4 entries), hardcoded like infer.al's
+// Builtin ctor factory types — stable (4 entries), hardcoded like infer.mochi's
 // `builtinTypeDecls` precedent rather than derived.
 const CTOR_TYPES: Record<string, string> = {
   Some: "<A>(value: A) => Option<A>",

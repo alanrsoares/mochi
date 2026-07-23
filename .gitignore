@@ -6,13 +6,13 @@ out
 dist
 *.tgz
 
-# compiled mochi example modules (sources are the `.al` + hand-written runtime.js)
+# compiled mochi example modules (sources are the `.mochi` + hand-written runtime.js)
 examples/modules/geometry.js
 examples/modules/main.js
 examples/async/main.js
 
 # compiled bootstrap modules — build artifacts from `mochi build`. The sources
-# are the `.al`; host.js is hand-written and prelude.gen.js is the generated
+# are the `.mochi`; host.js is hand-written and prelude.gen.js is the generated
 # (parity-guarded) prelude shim, so both are kept.
 bootstrap/*.js
 !bootstrap/host.js

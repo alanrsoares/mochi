@@ -13,7 +13,7 @@ let isEven = n => switch n { | 0 => true  | _ => isOdd(sub(n, 1)) }    // ✓ mu
 let isOdd  = n => switch n { | 0 => false | _ => isEven(sub(n, 1)) }   //   forward ref OK
 ```
 
-(See `example.al` for the mutual `isEven`/`isOdd` pair, which the example test compiles.)
+(See `example.mochi` for the mutual `isEven`/`isOdd` pair, which the example test compiles.)
 
 ## How it works: SCC grouping (Tarjan)
 

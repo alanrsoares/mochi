@@ -1,6 +1,6 @@
-// Ticket 0005 — bootstrap/compile.al is the whole pipeline as one mochi
+// Ticket 0005 — bootstrap/compile.mochi is the whole pipeline as one mochi
 // function: string -> Result string Err. It runs check and infer as real
-// gates. We eval the compiled compile.al with its five pass-imports and the
+// gates. We eval the compiled compile.mochi with its five pass-imports and the
 // five prelude-shim tables injected (the extern/import bindings become
 // parameters), then assert:
 //   1. a well-typed source emits the SAME JS as the TS `compile`;
@@ -37,17 +37,18 @@ let alCompile: (src: string) => AlResult;
 
 beforeAll(async () => {
   const shim = await import(join(root, "bootstrap/prelude.gen.js"));
-  const { lex } = evalNames<{ lex: unknown }>(compileAl("bootstrap/lexer.al"), ["lex"]);
-  const { parse } = evalNames<{ parse: unknown }>(compileAl("bootstrap/parser.al"), ["parse"]);
-  const { check } = evalNames<{ check: unknown }>(compileAl("bootstrap/check.al"), ["check"]);
-  const { inferProgram } = evalNames<{ inferProgram: unknown }>(compileAl("bootstrap/infer.al"), [
-    "inferProgram",
-  ]);
-  const { codegen } = evalNames<{ codegen: unknown }>(compileAl("bootstrap/codegen.al"), [
+  const { lex } = evalNames<{ lex: unknown }>(compileAl("bootstrap/lexer.mochi"), ["lex"]);
+  const { parse } = evalNames<{ parse: unknown }>(compileAl("bootstrap/parser.mochi"), ["parse"]);
+  const { check } = evalNames<{ check: unknown }>(compileAl("bootstrap/check.mochi"), ["check"]);
+  const { inferProgram } = evalNames<{ inferProgram: unknown }>(
+    compileAl("bootstrap/infer.mochi"),
+    ["inferProgram"],
+  );
+  const { codegen } = evalNames<{ codegen: unknown }>(compileAl("bootstrap/codegen.mochi"), [
     "codegen",
   ]);
   alCompile = evalNames<{ compile: (s: string) => AlResult }>(
-    compileAl("bootstrap/compile.al"),
+    compileAl("bootstrap/compile.mochi"),
     ["compile"],
     {
       lex,

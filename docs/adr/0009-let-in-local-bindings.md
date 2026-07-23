@@ -24,7 +24,7 @@ Add a `letin` `Expr` node — `let x = value in body` — scoped to `body`.
   `id = x => x` can be used at multiple types, exactly like a top-level binding.
 - **`in` is a contextual keyword**, not a reserved word. An expression never
   continues with a bare identifier, so the `in` following `value` is
-  unambiguous; keeping it unreserved avoids breaking any existing `.al` that
+  unambiguous; keeping it unreserved avoids breaking any existing `.mochi` that
   uses `in` as a name. (Mirrors the existing contextual `from` in `import`.)
 - **Codegen: an IIFE.** `((x) => body)(value)` — non-recursive, so a plain
   argument application suffices. Nested let-ins chain as curried IIFEs.

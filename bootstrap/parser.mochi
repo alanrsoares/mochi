@@ -1,6 +1,6 @@
-// bootstrap/parser.al — the mochi parser, in mochi. Ported from src/parser.ts
+// bootstrap/parser.mochi — the mochi parser, in mochi. Ported from src/parser.ts
 // (the spec); test/bootstrap-parser.spec.ts diffs canonical AST JSON against
-// the TS parser on every .al file in the repo — including this one.
+// the TS parser on every .mochi file in the repo — including this one.
 //
 // Shape notes vs the TS original:
 // - The mutable cursor (`pos`/`last`) becomes threading: every production takes
@@ -9,7 +9,7 @@
 // - `ParseAbort` (throw/catch) becomes Result threading: one `let?` bind per
 //   sequenced step (ADR 0017 — this file's original `Result.flatMap` chains
 //   were the pain measurement that motivated it, docs/PATH_TO_BOOTSTRAP.md §2.4).
-// - `Tok` is declared here again (same shape as bootstrap/lexer.al) — modules
+// - `Tok` is declared here again (same shape as bootstrap/lexer.mochi) — modules
 //   arrive with Slice F; until then the differential suite keeps both honest,
 //   and the `_tag` runtime shape makes the two declarations interchangeable.
 // - TS optional fields become Options (`doc`, `guard`, `rest`, `alias`), the
@@ -52,7 +52,7 @@ type Tok =
   | TId(value: string)
   | TEof
 
-import { ENum, EBool, EStr, ERef, ECall, ELambda, ELetIn, ELetBind, EPipe, ETernary, EMatch, ERecord, EField, ETuple, EArr, EList, EMap, EInterp, IPLit, IPExpr, PWild, PBind, PLit, PBool, PStr, PTuple, PRecord, PCtor, PArr, PList, POr, TyName, TyArrow, TyApp, TyTuple, TyList, LPName, LPRecord, LPTuple, SLet, SType, SExtern, SImport } from "./ast.al"
+import { ENum, EBool, EStr, ERef, ECall, ELambda, ELetIn, ELetBind, EPipe, ETernary, EMatch, ERecord, EField, ETuple, EArr, EList, EMap, EInterp, IPLit, IPExpr, PWild, PBind, PLit, PBool, PStr, PTuple, PRecord, PCtor, PArr, PList, POr, TyName, TyArrow, TyApp, TyTuple, TyList, LPName, LPRecord, LPTuple, SLet, SType, SExtern, SImport } from "./ast.mochi"
 type LocTok = { tok: Tok, start: number, end: number, doc: Option string }
 type PErr = { message: string, start: number, end: number }
 

@@ -1,4 +1,4 @@
-// Multi-file driver: resolve an `import` graph of `.al` modules, compile each in
+// Multi-file driver: resolve an `import` graph of `.mochi` modules, compile each in
 // dependency order, and thread every module's EXPORT schemes into the modules
 // that import it — so a value crosses a module boundary with its full inferred
 // (and possibly polymorphic) type, not an opaque `any`.
@@ -23,10 +23,10 @@ import { preludeEnv, preludeNamespaces } from "./prelude";
 export type ModuleOutput = { path: string; js: string };
 type ReadFile = (path: string) => Promise<string>;
 
-// An import `from` spec resolved to an absolute `.al` path, relative to the
-// importer's directory. A trailing `.al` in the spec is optional.
+// An import `from` spec resolved to an absolute `.mochi` path, relative to the
+// importer's directory. A trailing `.mochi` in the spec is optional.
 const resolveImport = (importer: string, spec: string): string =>
-  resolve(dirname(importer), `${spec.replace(/\.al$/, "")}.al`);
+  resolve(dirname(importer), `${spec.replace(/\.mochi$/, "")}.mochi`);
 
 const importsOf = (prog: Program): Extract<Stmt, { kind: "import" }>[] =>
   prog.stmts.filter((s): s is Extract<Stmt, { kind: "import" }> => s.kind === "import");
@@ -260,10 +260,10 @@ const compileGraphTs = (
   return ok(outputs);
 };
 
-// A module specifier for `to` as imported from `from` (absolute `.al` paths),
+// A module specifier for `to` as imported from `from` (absolute `.mochi` paths),
 // extension stripped — sibling files become `./name`.
 const relSpec = (from: string, to: string): string => {
-  const rel = relative(dirname(from), to).replace(/\.al$/, "");
+  const rel = relative(dirname(from), to).replace(/\.mochi$/, "");
   return rel.startsWith(".") ? rel : `./${rel}`;
 };
 
@@ -302,7 +302,7 @@ const crossModuleTypeImports = (
   );
 };
 
-// `build --emit=ts`: resolve the graph, emit a typed `.ts` beside each `.al`.
+// `build --emit=ts`: resolve the graph, emit a typed `.ts` beside each `.mochi`.
 export const buildModulesTs = (
   entry: string,
   readFile: ReadFile,

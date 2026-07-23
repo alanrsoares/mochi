@@ -701,10 +701,10 @@ const genExtern = (s: ExternStmt): string => {
 };
 
 // import { a, b } from "./mod"  → the compiled sibling `./mod.js`. Source paths
-// name the `.al` module (with or without extension); output targets `.js`.
+// name the `.mochi` module (with or without extension); output targets `.js`.
 const genImport = (s: ImportStmt): string => {
   const names = s.names.map((n) => n.name).join(", ");
-  const path = `${s.from.replace(/\.al$/, "")}${moduleExt}`;
+  const path = `${s.from.replace(/\.mochi$/, "")}${moduleExt}`;
   return `import { ${names} } from ${JSON.stringify(path)};`;
 };
 

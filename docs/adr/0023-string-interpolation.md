@@ -7,7 +7,7 @@
 
 mochi strings are plain literals; composite strings are built by hand. The bootstrap
 compiler alone has **123 `cat([...])` call sites** (`cat = parts => Str.join("", parts)`),
-83 of them in `bootstrap/codegen.al` — a string emitter written without interpolation.
+83 of them in `bootstrap/codegen.mochi` — a string emitter written without interpolation.
 Error messages (the chosen v1 quality axis) in check/infer/parser account for ~40 more.
 
 This is the highest-leverage surface addition left: it serves both v1 pillars
@@ -46,8 +46,8 @@ This is the highest-leverage surface addition left: it serves both v1 pillars
 
 ## Consequences
 
-- Per the v1 parity gate, this lands in `src/` and `bootstrap/` (lexer.al scanString
-  mode + parser.al `EInterp`) with differential coverage before bootstrap sources may
+- Per the v1 parity gate, this lands in `src/` and `bootstrap/` (lexer.mochi scanString
+  mode + parser.mochi `EInterp`) with differential coverage before bootstrap sources may
   use it (fixpoint stages compile bootstrap with the bootstrap compiler).
 - Follow-up dogfood sweep migrates `cat([...])` sites where interpolation reads better.
 - Hazard: template-literal escaping in codegen is new surface — pin with tests that

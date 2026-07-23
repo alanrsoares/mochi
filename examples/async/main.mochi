@@ -18,5 +18,5 @@ let program =
   |> andThen(delay(10))
   |> mapT(x => add(x)(x))
 
-// `mochi build main.al`, then `node demo.mjs` — prints 42.
+// `mochi build main.mochi`, then `node demo.mjs` — prints 42.
 export let result = run(program)

@@ -33,10 +33,10 @@ export const writeFile = (path, contents) => {
 };
 
 // resolveImport : string -> string -> string  — an importer's path and an
-// import spec to the dep's absolute `.al` path (a trailing `.al` is optional).
+// import spec to the dep's absolute `.mochi` path (a trailing `.mochi` is optional).
 // Uncurried; mirrors src/module.ts's resolveImport.
 export const resolveImport = (importer, spec) =>
-  resolve(dirname(importer), `${spec.replace(/\.al$/, "")}.al`);
+  resolve(dirname(importer), `${spec.replace(/\.mochi$/, "")}.mochi`);
 
 // absPath : string -> string  — absolutize an entry path against the cwd, so
 // the graph loader keys every module on one canonical path.

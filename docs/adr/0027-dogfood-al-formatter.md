@@ -1,4 +1,4 @@
-# 0027 — Dogfood the `.al` formatter on `bootstrap/` as a QA gate
+# 0027 — Dogfood the `.mochi` formatter on `bootstrap/` as a QA gate
 
 - **Status:** Accepted (implemented)
 - **Source:** conversation 2026-07-22; `src/format.ts` (Wadler/Prettier printer, ADR 0025-era);
@@ -9,7 +9,7 @@
 
 The formatter (`src/format.ts`) had unit tests over small hand-written snippets, but was
 never run against a large body of real mochi. Meanwhile the repo grew one: the self-hosted
-compiler in `bootstrap/*.al` (~3.4k lines). Those two facts never met — the formatter's
+compiler in `bootstrap/*.mochi` (~3.4k lines). Those two facts never met — the formatter's
 only proof of correctness was its own curated fixtures, which by construction avoid the
 shapes their author didn't think to test.
 
@@ -26,7 +26,7 @@ suite never provoked:
    `exprD(value)`, but a trailing `//` comment on the value ends its line — so `in` landed
    on the commented-out line and the output **no longer parsed**. This is worse than
    cosmetic: `format` produced invalid source (caught only because re-formatting the output
-   errored). `bootstrap/codegen.al` hit it.
+   errored). `bootstrap/codegen.mochi` hit it.
 
 A formatter that can silently corrupt real source, and only its author's fixtures say
 otherwise, is not trustworthy. The fix is not just the two patches — it is closing the
@@ -34,10 +34,10 @@ gap that let them exist: make our own source the formatter's standing test corpu
 
 ## Decision
 
-**Dogfood: `bootstrap/*.al` must always equal its own formatted output, enforced in the
+**Dogfood: `bootstrap/*.mochi` must always equal its own formatted output, enforced in the
 QA gate.**
 
-1. **`scripts/fmt-al.ts`** — formats every `bootstrap/*.al` with `src/format.ts`. Default
+1. **`scripts/fmt-al.ts`** — formats every `bootstrap/*.mochi` with `src/format.ts`. Default
    rewrites in place (`bun run fmt:al`); `--check` (`bun run fmt:check`) exits non-zero on
    any drift or format error, listing the files.
 2. **`bun run check`** gains `fmt:check`: `biome … && tsc && fmt:check && bun test`. Every
@@ -62,7 +62,7 @@ QA gate.**
   reformatting all of `bootstrap/` left the fixpoint build output unchanged.
 - New guards in `test/format.spec.ts` pin both bugs (interior + trailing ctor comments;
   `in`-before-comment) and their idempotence.
-- The gate currently covers `bootstrap/` only. Extending it to other checked-in `.al`
+- The gate currently covers `bootstrap/` only. Extending it to other checked-in `.mochi`
   (examples, fixtures) is a follow-up — same script, wider file set.
 
 ## Alternatives rejected

@@ -4,8 +4,8 @@
 import { expect, test } from "bun:test";
 import { diagnostics, moduleDiagnostics } from "../src/diagnostics";
 
-const DEP = "/proj/ast.al";
-const ENTRY = "/proj/main.al";
+const DEP = "/proj/ast.mochi";
+const ENTRY = "/proj/main.mochi";
 const DEP_SRC = "export type E =\n  | A(int)\n  | B\n";
 
 const read =
@@ -19,7 +19,7 @@ const read =
 
 test("a switch on an imported variant is not a false 'unknown constructor'", async () => {
   const entrySrc =
-    'import { A, B } from "./ast.al"\nlet f = e => switch e { | A(n) => n | B => 0 }';
+    'import { A, B } from "./ast.mochi"\nlet f = e => switch e { | A(n) => n | B => 0 }';
   const diags = await moduleDiagnostics(ENTRY, entrySrc, read({ [DEP]: DEP_SRC }));
   expect(diags).toEqual([]);
 
@@ -31,7 +31,7 @@ test("a switch on an imported variant is not a false 'unknown constructor'", asy
 });
 
 test("cross-module exhaustiveness is real: a missing imported ctor is flagged", async () => {
-  const entrySrc = 'import { A, B } from "./ast.al"\nlet f = e => switch e { | A(n) => n }';
+  const entrySrc = 'import { A, B } from "./ast.mochi"\nlet f = e => switch e { | A(n) => n }';
   const diags = await moduleDiagnostics(ENTRY, entrySrc, read({ [DEP]: DEP_SRC }));
   expect(diags).toHaveLength(1);
   expect(diags[0]!.message).toContain("non-exhaustive");
@@ -39,14 +39,14 @@ test("cross-module exhaustiveness is real: a missing imported ctor is flagged", 
 });
 
 test("the entry's own type error is still reported (with imports resolved)", async () => {
-  const entrySrc = 'import { A } from "./ast.al"\nlet bad = add(1, { x: 2 })';
+  const entrySrc = 'import { A } from "./ast.mochi"\nlet bad = add(1, { x: 2 })';
   const diags = await moduleDiagnostics(ENTRY, entrySrc, read({ [DEP]: DEP_SRC }));
   expect(diags).toHaveLength(1);
   expect(diags[0]!.message).toStartWith("type:");
 });
 
 test("the entry's own parse error is reported without touching deps", async () => {
-  const entrySrc = 'import { A } from "./ast.al"\nlet x = ';
+  const entrySrc = 'import { A } from "./ast.mochi"\nlet x = ';
   const diags = await moduleDiagnostics(ENTRY, entrySrc, read({})); // dep never read
   expect(diags).toHaveLength(1);
   expect(diags[0]!.message).toStartWith("parse:");

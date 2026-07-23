@@ -1,4 +1,4 @@
-// Ticket 0013 (part a) — bootstrap/module.al's graph loader. We compile the
+// Ticket 0013 (part a) — bootstrap/module.mochi's graph loader. We compile the
 // loader (open-world, like every bootstrap module) plus its dep graph to JS,
 // then drive the emitted `loadGraph` in-process: it must order modules by
 // dependency, detect cycles, and report an unreadable file — matching the TS
@@ -26,7 +26,7 @@ const names = (r: Res): string[] => (r._tag === "Ok" ? r.value.map((m) => basena
 beforeAll(async () => {
   // Build the whole graph closed-world; it emits bootstrap/module.js (which
   // imports ast/types/lexer/parser) beside its deps. Import it in-process.
-  execFileSync("bun", ["src/cli.ts", "build", "bootstrap/cli.al"], { cwd: root });
+  execFileSync("bun", ["src/cli.ts", "build", "bootstrap/cli.mochi"], { cwd: root });
   ({ loadGraph } = (await import(join(root, "bootstrap/module.js"))) as {
     loadGraph: typeof loadGraph;
   });
@@ -35,33 +35,33 @@ beforeAll(async () => {
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 test("orders a real graph so every dependency precedes its dependent", () => {
-  const r = loadGraph("bootstrap/cli.al");
+  const r = loadGraph("bootstrap/cli.mochi");
   expect(r._tag).toBe("Ok");
   const order = names(r);
-  expect(order.at(-1)).toBe("cli.al"); // entry compiles last
+  expect(order.at(-1)).toBe("cli.mochi"); // entry compiles last
   const before = (a: string, b: string) => order.indexOf(a) < order.indexOf(b);
-  expect(before("lexer.al", "parser.al")).toBe(true);
-  expect(before("compile.al", "cli.al")).toBe(true);
-  expect(before("infer.al", "compile.al")).toBe(true);
+  expect(before("lexer.mochi", "parser.mochi")).toBe(true);
+  expect(before("compile.mochi", "cli.mochi")).toBe(true);
+  expect(before("infer.mochi", "compile.mochi")).toBe(true);
 });
 
 test("dependency order matches the TS buildModules driver on examples/modules", async () => {
-  const entry = "examples/modules/main.al";
+  const entry = "examples/modules/main.mochi";
   const ts = unwrapOk(await buildModules(entry, (p) => Bun.file(p).text()));
   const tsOrder = ts.map((o) => basename(o.path));
   expect(names(loadGraph(entry))).toEqual(tsOrder);
 });
 
 test("reports an unreadable module (no throw, Err verdict)", () => {
-  const r = loadGraph("bootstrap/nope.al");
+  const r = loadGraph("bootstrap/nope.mochi");
   expect(r._tag).toBe("Err");
   if (r._tag === "Err") expect(r.error.message).toContain("cannot read module");
 });
 
 test("detects an import cycle instead of looping", () => {
-  writeFileSync(join(dir, "a.al"), 'import { b } from "./b"\nexport let a = b\n');
-  writeFileSync(join(dir, "b.al"), 'import { a } from "./a"\nexport let b = a\n');
-  const r = loadGraph(join(dir, "a.al"));
+  writeFileSync(join(dir, "a.mochi"), 'import { b } from "./b"\nexport let a = b\n');
+  writeFileSync(join(dir, "b.mochi"), 'import { a } from "./a"\nexport let b = a\n');
+  const r = loadGraph(join(dir, "a.mochi"));
   expect(r._tag).toBe("Err");
   if (r._tag === "Err") expect(r.error.message).toContain("import cycle through");
 });

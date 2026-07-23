@@ -1,16 +1,16 @@
 // Ticket 0007 / 0013 — self-hosting fixpoint driven through the SHIPPED binary
-// (bootstrap/cli.al), not the TS test harness. Real disk IO, real CLI.
+// (bootstrap/cli.mochi), not the TS test harness. Real disk IO, real CLI.
 //
 // Ceremony (PATH_TO_BOOTSTRAP §4, lifted to disk):
-//   seed  : the TS compiler builds bootstrap/cli.al's graph -> a runnable
+//   seed  : the TS compiler builds bootstrap/cli.mochi's graph -> a runnable
 //           mochic (stage-1 binary).
-//   stage2: the seed binary rebuilds the whole graph (`mochic build cli.al`).
+//   stage2: the seed binary rebuilds the whole graph (`mochic build cli.mochi`).
 //   stage3: a binary assembled from the stage-2 outputs rebuilds it again.
 // Self-hosting is proved when stage2 ≡ stage3 byte-for-byte for every module.
 // We also assert the stronger parity stage2 ≡ the TS `build` output (the seed).
 //
 // The build is CLOSED-WORLD (`mochic build`, the module graph), not per-file
-// open-world: modules now share `ast.al`/`types.al` and pattern-match imported
+// open-world: modules now share `ast.mochi`/`types.mochi` and pattern-match imported
 // ctors, which only resolves with the whole graph in scope.
 //
 // Each stage runs in its own directory under a repo-local workspace (so Node
@@ -22,7 +22,7 @@ import { join } from "node:path";
 const root = join(import.meta.dir, "..");
 const work = join(root, ".fixpoint-work");
 
-// Every bootstrap module reachable from cli.al, in dependency order. `build`
+// Every bootstrap module reachable from cli.mochi, in dependency order. `build`
 // discovers the graph itself; this list is what we read back and diff.
 const MODULES = ["ast", "types", "lexer", "parser", "check", "infer", "codegen", "module", "compile", "cli"];
 // Runtime deps the emitted compiler imports (hand-written + generated shim).
@@ -37,13 +37,13 @@ const placeRuntimeDeps = (dir: string) => {
   for (const dep of RUNTIME_DEPS) cpSync(join(root, "bootstrap", dep), join(dir, dep));
 };
 
-// Rebuild the whole module graph with the mochic in `binDir`: copy every .al
-// into `outDir`, then `mochic build cli.al` there (closed-world — one command
-// walks the import graph and emits a .js beside each .al). Returns module -> JS.
+// Rebuild the whole module graph with the mochic in `binDir`: copy every .mochi
+// into `outDir`, then `mochic build cli.mochi` there (closed-world — one command
+// walks the import graph and emits a .js beside each .mochi). Returns module -> JS.
 const compileAllWith = (binDir: string, outDir: string): Record<string, string> => {
   mkdirSync(outDir, { recursive: true });
-  for (const m of MODULES) cpSync(join(root, "bootstrap", `${m}.al`), join(outDir, `${m}.al`));
-  bun([join(binDir, "cli.js"), "build", join(outDir, "cli.al")]);
+  for (const m of MODULES) cpSync(join(root, "bootstrap", `${m}.mochi`), join(outDir, `${m}.mochi`));
+  bun([join(binDir, "cli.js"), "build", join(outDir, "cli.mochi")]);
   const out: Record<string, string> = {};
   for (const m of MODULES) out[m] = readFileSync(join(outDir, `${m}.js`), "utf8");
   return out;
@@ -61,7 +61,7 @@ export const runFixpoint = (): FixpointResult => {
 
   // --- seed (stage-1) binary: TS-built, in .fixpoint-work/seed. This same
   // `build` is the TS parity reference — the emitted bootstrap/*.js it writes. ---
-  bun(["src/cli.ts", "build", "bootstrap/cli.al"]);
+  bun(["src/cli.ts", "build", "bootstrap/cli.mochi"]);
   const tsBuild: Record<string, string> = {};
   for (const m of MODULES) tsBuild[m] = readFileSync(join(root, "bootstrap", `${m}.js`), "utf8");
   const seed = join(work, "seed");

@@ -1,5 +1,5 @@
 // VS Code / Cursor extension entry point. Spawns the bundled mochi language
-// server over IPC and wires it to `.al` documents.
+// server over IPC and wires it to `.mochi` documents.
 import * as path from "node:path";
 import { commands, type ExtensionContext } from "vscode";
 import {

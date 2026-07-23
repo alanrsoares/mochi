@@ -1,6 +1,6 @@
-// Slice D — the self-hosted parser. bootstrap/parser.al is compiled by the TS
+// Slice D — the self-hosted parser. bootstrap/parser.mochi is compiled by the TS
 // compiler, evaluated, and fed the bootstrap lexer's tokens; its AST must match
-// the TS parser's on every .al file in the repo (including parser.al itself).
+// the TS parser's on every .mochi file in the repo (including parser.mochi itself).
 // Both ASTs map into one canonical JSON shape before the diff.
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
@@ -34,8 +34,8 @@ const evalAl = (js: string, name: string): ((x: never) => AlResult) =>
 type AlErr = { message: string; start: number; end: number };
 type AlResult = { _tag: "Ok"; value: unknown } | { _tag: "Err"; error: AlErr };
 
-const alLex = evalAl(compileAl("bootstrap/lexer.al"), "lex") as (src: string) => AlResult;
-const alParse = evalAl(compileAl("bootstrap/parser.al"), "parse") as (toks: unknown) => AlResult;
+const alLex = evalAl(compileAl("bootstrap/lexer.mochi"), "lex") as (src: string) => AlResult;
+const alParse = evalAl(compileAl("bootstrap/parser.mochi"), "parse") as (toks: unknown) => AlResult;
 
 // ---- canonical AST (both parsers map into this) --------------------------------
 
@@ -430,15 +430,15 @@ const alAst = (src: string): Canon[] => {
   return (pr.value as Al[]).map(aStmt);
 };
 
-// ---- the corpus: every .al file in the repo -------------------------------------
+// ---- the corpus: every .mochi file in the repo -------------------------------------
 
-const corpus = [...new Bun.Glob("**/*.al").scanSync({ cwd: root })]
+const corpus = [...new Bun.Glob("**/*.mochi").scanSync({ cwd: root })]
   .filter((p) => !p.includes("node_modules"))
   .sort();
 
 test("corpus includes the bootstrap parser itself", () => {
-  expect(corpus).toContain("bootstrap/parser.al");
-  expect(corpus).toContain("bootstrap/lexer.al");
+  expect(corpus).toContain("bootstrap/parser.mochi");
+  expect(corpus).toContain("bootstrap/lexer.mochi");
 });
 
 for (const file of corpus) {

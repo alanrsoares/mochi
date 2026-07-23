@@ -47,7 +47,7 @@ New module `src/render.ts`, a pure function `renderError(e: AlangError, src): st
 that emits an Elm-style block:
 
 ```
-TypeError — test.al:3:14
+TypeError — test.mochi:3:14
 
 3 │   foo bar baz
   │       ^^^ was used where a value was expected; a call may be missing an argument
@@ -108,7 +108,7 @@ TypeError — test.al:3:14
 - Phase A is pure win: every existing error renders better with zero risk to
   producers, guarded by a `render.spec.ts` snapshot.
 - `AlangError` grows one optional field; all constructors stay source-compatible
-  (`suggestions` optional). The bootstrap's `errors.al` mirror must add the field
+  (`suggestions` optional). The bootstrap's `errors.mochi` mirror must add the field
   when Phase B lands — a language-visible change, so it needs an `examples.spec.ts`
   case per populated site (per Definition of Done).
 - Diverging from 0025's scalar `help` means 0025's JSON schema is amended before it

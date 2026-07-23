@@ -274,7 +274,7 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
   return `${parts.join("\n\n")}\n`;
 };
 
-// Compile a single `.al` source to a typed `.ts` module (CLI `mochi ts`). Open
+// Compile a single `.mochi` source to a typed `.ts` module (CLI `mochi ts`). Open
 // world, no cross-module imports resolved — a file that imports from another
 // module won't typecheck alone; use `build --emit=ts` for a graph.
 export const codegenTs = (src: string, opts: CodegenTsOptions = {}): Result<string, AlangError> => {

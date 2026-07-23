@@ -75,7 +75,7 @@ Per-binding decisions:
   the `never`-instance, `const Leaf: Tree<never> = …`, mirroring `None:
   Option<never>`) — otherwise `_tag` widens to `string` and won't match the union.
 
-CLI: `bun src/cli.ts ts <file.al>` prints the typed `.ts`, mirroring the `dts`
+CLI: `bun src/cli.ts ts <file.mochi>` prints the typed `.ts`, mirroring the `dts`
 subcommand.
 
 ## Consequences

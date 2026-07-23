@@ -2,7 +2,7 @@
 // is compiled by the TS compiler, evaluated in isolation, and diffed against
 // the corresponding TS pass over a corpus.
 //
-// Since ticket 0013 the modules share ast.al / types.al and pattern-match
+// Since ticket 0013 the modules share ast.mochi / types.mochi and pattern-match
 // IMPORTED ctors, which only type-checks under the closed-world `build` (not
 // per-file open-world `compile`). So we build the whole graph once, then for a
 // given module return its emitted JS with imports/exports stripped and the
@@ -20,14 +20,14 @@ const root = join(import.meta.dir, "../..");
 // Build the graph into a per-process temp dir, NOT the shared bootstrap/ — bun
 // runs spec files in parallel, and racing `build`s clobbering the same *.js
 // caused partial reads (spurious "non-exhaustive match"). `mochic build` writes
-// a .js beside each .al, so we copy the sources into an isolated dir and build
+// a .js beside each .mochi, so we copy the sources into an isolated dir and build
 // there.
 let outDir: string | null = null;
 const buildGraph = (): string => {
   if (outDir) return outDir;
   const dir = mkdtempSync(join(tmpdir(), "mochi-bs-"));
   cpSync(join(root, "bootstrap"), dir, { recursive: true });
-  execFileSync("bun", ["src/cli.ts", "build", join(dir, "cli.al")], { cwd: root });
+  execFileSync("bun", ["src/cli.ts", "build", join(dir, "cli.mochi")], { cwd: root });
   outDir = dir;
   return dir;
 };
@@ -73,10 +73,10 @@ const dedupeConsts = (js: string): string => {
 };
 
 // The compiled JS of one bootstrap module, ready to eval in isolation.
-// Accepts either a bare name ("check") or a repo path ("bootstrap/check.al").
+// Accepts either a bare name ("check") or a repo path ("bootstrap/check.mochi").
 export const bootstrapModuleJs = (nameOrPath: string): string => {
   buildGraph();
-  const name = basename(nameOrPath).replace(/\.al$/, "");
+  const name = basename(nameOrPath).replace(/\.mochi$/, "");
   // Prepend only the ctor-def modules this module actually imports (detected
   // from its compiled `import … from "./ast.js"` lines), so a module that never
   // touches the AST (lexer) is left exactly as built.

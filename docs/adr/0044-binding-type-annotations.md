@@ -1,7 +1,7 @@
 # 0044 — Binding type annotations (`let x : T = v`)
 
 - **Status:** Accepted (implemented)
-- **Source:** conversation 2026-07-23; `src/ast.ts` (`annot?` on `let`/`letin`); `src/parser.ts` (`parseOptAnnot`); `src/infer.ts` (unify the inferred value against the annotation, top-level SCC group + `letin`; `aliasMap` threaded onto `Ctx`); `src/format.ts` (print the annotation); the bootstrap mirror `bootstrap/{ast,parser,infer,check,codegen}.al` (`SLet` gains an `annot` field); `bootstrap/module.al` (`emptyReg : Registry`); `docs/adr/0005` (transparent record aliases), `docs/adr/0035` (empty-collection seeds), `docs/adr/0043` (applied-ctor casts), `docs/adr/0026` (TS backend)
+- **Source:** conversation 2026-07-23; `src/ast.ts` (`annot?` on `let`/`letin`); `src/parser.ts` (`parseOptAnnot`); `src/infer.ts` (unify the inferred value against the annotation, top-level SCC group + `letin`; `aliasMap` threaded onto `Ctx`); `src/format.ts` (print the annotation); the bootstrap mirror `bootstrap/{ast,parser,infer,check,codegen}.mochi` (`SLet` gains an `annot` field); `bootstrap/module.mochi` (`emptyReg : Registry`); `docs/adr/0005` (transparent record aliases), `docs/adr/0035` (empty-collection seeds), `docs/adr/0043` (applied-ctor casts), `docs/adr/0026` (TS backend)
 
 ## Context
 
@@ -46,10 +46,10 @@ annotation's span.
 - **Codegen**: annotations are type-only; JS ignores them entirely, so JS output
   is byte-identical.
 - **Self-host**: because `bootstrap/` compiles *itself*, the bootstrap compiler
-  must also understand the new syntax to compile an annotated `module.al`. The
+  must also understand the new syntax to compile an annotated `module.mochi`. The
   mirror sources gain the feature for top-level `SLet` (the only form bootstrap
   uses): `SLet` carries an `annot: Option TypeExpr`, the parser fills it, and
-  `inferGroupFrom` unifies it. `bootstrap/module.al` then declares a local
+  `inferGroupFrom` unifies it. `bootstrap/module.mochi` then declares a local
   transparent `Registry` alias (ADR 0005 — structural, so no cross-module type
   import is needed) and annotates `let emptyReg : Registry = …`.
 
@@ -61,7 +61,7 @@ annotation's span.
 - **JS byte-identical.** The self-host fixpoint (`build ok` ×2) confirms every
   emitted `.js` is unchanged; `bun run check` green (807 pass). The bootstrap
   compiler parses, infers, AND enforces the annotation, so src and self-host
-  verdicts agree on `module.al`.
+  verdicts agree on `module.mochi`.
 - **A real language feature, not a workaround.** Annotations are how a typed
   language pins an over-general binding; this is exactly what `src/module.ts`
   does by hand. Beyond the seed, they document intent and localize type errors.

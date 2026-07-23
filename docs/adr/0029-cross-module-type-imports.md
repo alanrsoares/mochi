@@ -8,7 +8,7 @@
 
 ## Context
 
-ADR 0026's `build --emit=ts` emits a typed `.ts` beside each `.al` in a module
+ADR 0026's `build --emit=ts` emits a typed `.ts` beside each `.mochi` in a module
 graph. Against the self-hosted `bootstrap/` it left two classes of `tsc --strict`
 error that are purely about *resolution*, not types:
 
@@ -18,10 +18,10 @@ error that are purely about *resolution*, not types:
   with no declarations, so tsc can't resolve them.
 - **TS2304 "cannot find name" (11).** mochi has **no type-name imports** — every
   top-level `type` is globally visible across the closed-world graph (this is why
-  `infer.al` can write `[AliasField]` without importing `ast.al`). The old TS
+  `infer.mochi` can write `[AliasField]` without importing `ast.mochi`). The old TS
   emitter approximated this by emitting `import type { …all exported types… }`
   only from the modules a file *directly value-imports*. That misses a type
-  referenced with no import edge: `compile.al` never imports `ast.al`, yet its
+  referenced with no import edge: `compile.mochi` never imports `ast.mochi`, yet its
   binding annotations mention `Stmt`/`Ty` (they arrive via `check`/`inferProgram`
   return types).
 
@@ -57,7 +57,7 @@ self-contained `.d.ts` per extern module.**
    (`env.get(name)`), not its surface `TypeExpr`, so transparent record aliases
    (`Diag`) are already expanded structurally — no dangling alias name.
 3. The CLI writer treats an output `path` already ending in `.ts` as final (the
-   `.d.ts` files) and only maps `.al → .ts/.js` otherwise.
+   `.d.ts` files) and only maps `.mochi → .ts/.js` otherwise.
 
 ## Consequences
 

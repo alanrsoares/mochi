@@ -74,5 +74,5 @@ measured it, and Slice E (infer threads substitution *and* env) will be worse.
 - Slice E inherits the binder before porting infer — its two-state threading
   was the reason to do this now.
 - The bootstrap lexer needs no change (`?` already lexes); the bootstrap parser
-  gains `ELetBind` for parity, and both `.al` files migrate their deep chains
+  gains `ELetBind` for parity, and both `.mochi` files migrate their deep chains
   (differential suites pin behavior).

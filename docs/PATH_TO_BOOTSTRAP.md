@@ -11,12 +11,12 @@ has, what blocks the port, and the slice order to get there.
 Local `let … in` (ADR 0009), tuples + binding sugar (ADR 0010/0011), the char
 cursor, nested patterns (ADR 0012), guards (ADR 0013), composite ctor fields
 (ADR 0015), and the prelude pieces all landed. **Slices C and D shipped**:
-`bootstrap/lexer.al` + `bootstrap/parser.al` reproduce the TS lexer's tokens
-and the TS parser's AST on every `.al` file in the repo, including themselves
-(`test/bootstrap-{lexer,parser}.spec.ts`). **Slice E**: `bootstrap/check.al`
-and `bootstrap/infer.al` reproduce the TS checker's verdict and the TS
+`bootstrap/lexer.mochi` + `bootstrap/parser.mochi` reproduce the TS lexer's tokens
+and the TS parser's AST on every `.mochi` file in the repo, including themselves
+(`test/bootstrap-{lexer,parser}.spec.ts`). **Slice E**: `bootstrap/check.mochi`
+and `bootstrap/infer.mochi` reproduce the TS checker's verdict and the TS
 inferrer's schemes on the same corpus (`test/bootstrap-{check,infer}.spec.ts`).
-**Slice F is now DONE** (ADR 0019): `bootstrap/codegen.al` emits JS
+**Slice F is now DONE** (ADR 0019): `bootstrap/codegen.mochi` emits JS
 byte-identical to the TS codegen on the whole corpus
 (`test/bootstrap-codegen.spec.ts`), and the three-stage fixpoint ceremony
 reaches its fixpoint — `stage2 ≡ stage3` byte-for-byte for all five bootstrap
@@ -87,17 +87,17 @@ record fields may nest, lazy-List patterns may not. Guard:
   tuple-destructure lambdas (`((node, p)) => …`) reads fine at 2–3 steps;
   the worst chains (`parseExtern`, `parseLetIn`) nest 6–7 continuations of
   pure position-threading. `let?` flattens exactly those, shipped before
-  Slice E (infer threads two states, not one). parser.al then migrated:
+  Slice E (infer threads two states, not one). parser.mochi then migrated:
   ~31 chain sites became flat `let?` binds (parseExtern is seven lines, one
   per step); 11 legitimate single-step combinator uses remain. The bootstrap
   parser gained `ELetBind` for parity; the differential suite pins both.
-  The louder Slice D signal was **bool-switch ceremony**: ~25 of parser.al's
+  The louder Slice D signal was **bool-switch ceremony**: ~25 of parser.mochi's
   switches were `switch cond { | true => … | false => … }`.
   ~~a ternary / if-expression cuts noise everywhere~~ **DONE** (ADR 0016) —
-  `cond ? then : else` shipped; 38 bool-switches across lexer.al/parser.al
+  `cond ? then : else` shipped; 38 bool-switches across lexer.mochi/parser.mochi
   became ternaries (differential suites pin the behavior). Found in passing:
   ctor field labels named after JS reserved words (`else`) miscompile — the
-  `thenE`/`elseE` dodge in parser.al, same family as `fieldType`.
+  `thenE`/`elseE` dodge in parser.mochi, same family as `fieldType`.
 - **Record update sugar** (`{ ...r, field: v }` as an expression) — `infer`
   threads state records; rebuilding every field by hand is noise.
 - ~~**Pattern guards**~~ **DONE** (ADR 0013) — `| p when expr => body`; nearly
@@ -139,7 +139,7 @@ one-feature-per-slice style.
 ### Slice A — prelude one-liners — DONE
 `Str.toNumber` ✓, `Str.eq` ✓ (polymorphic `eq`), `show` ✓ (structural, ADR 0007
 addendum), `Str.concat` ✓, `Array.prepend` ✓ (cons).
-*Exit met: a `.al` program round-trips `"42"` → number → string
+*Exit met: a `.mochi` program round-trips `"42"` → number → string
 (`Str.toNumber` + `show`) and compares two strings (`eq`).*
 
 ### Slice B — local bindings — DONE (ADR 0009, 0011)
@@ -154,22 +154,22 @@ General pattern compiler (`patConds`/`patSlot`) + conservative exhaustiveness
 correctly; `test/nested-patterns.spec.ts` guards it.*
 
 ### Slice C — lexer in mochi (first self-hosting artifact) — DONE
-`bootstrap/lexer.al` (~250 LOC): `Tok` variant, `go` tail-recursion over the
+`bootstrap/lexer.mochi` (~250 LOC): `Tok` variant, `go` tail-recursion over the
 char cursor, doc-comment state threaded as parameters, keyword/digraph/punct
 tables as string-literal switches. `test/bootstrap-lexer.spec.ts` diffs
-canonical token streams against the TS lexer on every `.al` file in the repo
+canonical token streams against the TS lexer on every `.mochi` file in the repo
 plus 17 edge cases and error parity (same messages, same spans).
-*Exit met: identical streams on the whole corpus — including `lexer.al`
+*Exit met: identical streams on the whole corpus — including `lexer.mochi`
 lexing itself.* The spike also flushed out two compiler bugs (record-literal
 arm bodies emitted unparenthesized; `_curry` breaking tail calls → ADR 0014)
 — differential testing paying for itself on day one.
 
 ### Slice D — parser in mochi — DONE
-`bootstrap/parser.al` (~760 LOC): AST as variants, every production
+`bootstrap/parser.mochi` (~760 LOC): AST as variants, every production
 `(toks, pos) -> Result((node, pos), err)`, mutually recursive productions on
 SCC inference, generic `sepBy`/`listUntil` comma-list machinery.
 `test/bootstrap-parser.spec.ts` maps both ASTs into one canonical JSON shape
-and diffs them on every `.al` file in the repo — including parser.al itself —
+and diffs them on every `.mochi` file in the repo — including parser.mochi itself —
 plus edge cases and error parity (same messages, same spans).
 Two prerequisites got built on the way:
 - **ADR 0015** — ctor fields carry full type expressions (`[Expr]`,
@@ -177,7 +177,7 @@ Two prerequisites got built on the way:
 - **ADR 0014 addendum** — `@onrails/pattern`'s dispatch broke proper tail
   calls (for..of return + result-sentinel check → ~14.6k ceiling); fixed
   upstream (`findCase`), pinned here via bun patch. Self-parse flushed it.
-*Exit met: canonical AST JSON identical on the corpus; parser.al parses
+*Exit met: canonical AST JSON identical on the corpus; parser.mochi parses
 itself.*
 
 ### Slice E — check + infer in mochi ← DONE
@@ -186,26 +186,26 @@ substitution threading (immutable `Map` first; extern union-find shim if too
 slow). Differential-test inferred schemes against TS on the corpus.
 *Exit: same schemes, same errors (message text may differ; codes/spans must
 match).*
-- **check DONE** — `bootstrap/check.al` (~430 LOC): registry as threaded
+- **check DONE** — `bootstrap/check.mochi` (~430 LOC): registry as threaded
   immutable `Map`s, `forEachMatch` becomes a first-error post-order fold,
   the TS `error | null | undefined` tri-state becomes a `SeqCheck` variant.
   `test/bootstrap-check.spec.ts` pins the verdict (first error message +
-  span, or ok) against the TS checker on every repo `.al` file — including
-  check.al itself — plus 30 targeted parity cases. Green on first run:
+  span, or ok) against the TS checker on every repo `.mochi` file — including
+  check.mochi itself — plus 30 targeted parity cases. Green on first run:
   ADR 0017's `let?` threads the registry build, and the parser/lexer
   differential suites had already flushed the shape bugs.
-- **infer DONE** — `bootstrap/infer.al` (~1.3k LOC): `Ty`/`Row` + Algorithm W,
+- **infer DONE** — `bootstrap/infer.mochi` (~1.3k LOC): `Ty`/`Row` + Algorithm W,
   substitution threaded as an immutable `{tv, rv, next}` state record, Tarjan
   SCC for mutual recursion, row-polymorphic records. `test/bootstrap-infer.spec.ts`
-  pins alpha-normalized schemes against the TS inferrer on every repo `.al`
-  file — including infer.al itself — plus 8 targeted strict-mode parity
-  cases. Two real bugs surfaced and got fixed: (1) infer.al's local `TypeExpr`
+  pins alpha-normalized schemes against the TS inferrer on every repo `.mochi`
+  file — including infer.mochi itself — plus 8 targeted strict-mode parity
+  cases. Two real bugs surfaced and got fixed: (1) infer.mochi's local `TypeExpr`
   redeclaration used a `Te*` ctor prefix to dodge an internal clash with its
-  own `Ty` type's arrow constructor — but each `.al` file bakes literal
+  own `Ty` type's arrow constructor — but each `.mochi` file bakes literal
   `_tag` strings at codegen, so those tags never matched the `Ty*`-tagged
-  nodes `bootstrap/parser.al` actually produces; fixed by renaming the HM
+  nodes `bootstrap/parser.mochi` actually produces; fixed by renaming the HM
   type's arrow ctor to `TyFn` (freeing `Ty*` for `TypeExpr` to mirror
-  parser.al exactly). (2) `inferRecordRow` inferred record-literal field
+  parser.mochi exactly). (2) `inferRecordRow` inferred record-literal field
   values left-to-right, while `src/infer.ts` deliberately infers them
   right-to-left (line 327's reverse loop) — since field access mutates
   shared open row variables, the two orders produced differently-ordered
@@ -214,18 +214,18 @@ match).*
 
 ### Slice F — codegen + closing the loop ← DONE (ADR 0019)
 Ported codegen + prelude inlining, then ran the ceremony.
-- **codegen DONE** — `bootstrap/codegen.al` (~790 LOC): AST→JS, the three
+- **codegen DONE** — `bootstrap/codegen.mochi` (~790 LOC): AST→JS, the three
   prelude runtime tables passed in as `Map`s (not forked). `usesMatchLib`
   header, `preludePreamble` transitive dep-closure, the general pattern
   compiler (nested/guard/lazy-List), all ported.
   `test/bootstrap-codegen.spec.ts` diffs emitted JS against the TS codegen on
-  every repo `.al` file — including codegen.al itself — plus 13 targeted emit
+  every repo `.mochi` file — including codegen.mochi itself — plus 13 targeted emit
   cases. One real bug flushed: `escChar` had a `| "\r" => …` arm, but the lexer
   decodes only `\n \t \\ \"` (a literal `\r` lexes to `r`), so the arm matched
   the *letter* `r` and mangled every `Err`; removed (unreachable + wrong).
 - **fixpoint DONE** — `test/bootstrap-fixpoint.spec.ts` composes `lex→parse→
   codegen` (check/infer are gates that don't alter the emitted JS) and runs:
-  1. **Stage 1:** TS compiler emits each `bootstrap/*.al`.
+  1. **Stage 1:** TS compiler emits each `bootstrap/*.mochi`.
   2. **Stage 2:** the stage-1 compiler (evaluated from that JS) re-emits them.
   3. **Fixpoint:** the stage-2 compiler re-emits them again.
   `stage2 ≡ stage3` byte-for-byte for all five modules; `stage1 ≡ stage2`

@@ -25,7 +25,7 @@ bootstrap graph they emitted **no generic head** — the element vars rendered
 `unknown`, i.e. they were *not* quantified. Instrumenting `generalize` showed
 why: when it generalized `unionVarSets` (element vars `1151`/`1158`), those vars
 were reported **env-bound** — via the scheme for `mkSt` (imported from
-`types.al`):
+`types.mochi`):
 
 ```
 GEN type={ rv: Set<'t1151>, tv: Set<'t1158> | 'r } -> … suppressed=1151,1158
@@ -72,7 +72,7 @@ backend is untyped, so no `.js` output changes.
 - **JS byte-identical.** `bun run check` green (799 pass); the self-host fixpoint
   (`build ok` ×2) confirms every emitted `.js` is unchanged.
 - **Guarded** by the `test/bootstrap-tsc.spec.ts` ratchet, lowered to ≤ 5. A
-  focused `.al` corpus was attempted but not landed: the trigger is a
+  focused `.mochi` corpus was attempted but not landed: the trigger is a
   whole-graph phenomenon — it needs a *generalized* scheme (here the
   cross-module `mkSt`) whose bound var is also a live substitution key, which
   single-file and two-file reductions did not reproduce. The bootstrap graph is

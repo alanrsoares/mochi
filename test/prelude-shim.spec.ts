@@ -2,7 +2,7 @@
 // shipped self-hosted compiler its five prelude tables with no `src/` import.
 //
 // Two guards:
-//  1. PARITY — regenerating from src/prelude.ts (+ infer.al's Ty shape) must
+//  1. PARITY — regenerating from src/prelude.ts (+ infer.mochi's Ty shape) must
 //     reproduce the checked-in shim byte-for-byte. Edit prelude.ts without
 //     running `bun run gen:prelude` and this fails (PATH §6: never fork the
 //     prelude).
@@ -35,11 +35,11 @@ const evalNames = <T extends Record<string, unknown>>(js: string, names: string[
 test("shim tables drive the compiled inferrer and codegen", async () => {
   const shim = await import(join(root, SHIM_PATH));
 
-  const { lex } = evalNames<{ lex: (s: string) => AlResult }>(compileAl("bootstrap/lexer.al"), [
+  const { lex } = evalNames<{ lex: (s: string) => AlResult }>(compileAl("bootstrap/lexer.mochi"), [
     "lex",
   ]);
   const { parse } = evalNames<{ parse: (t: unknown) => AlResult }>(
-    compileAl("bootstrap/parser.al"),
+    compileAl("bootstrap/parser.mochi"),
     ["parse"],
   );
   const { inferProgram } = evalNames<{
@@ -49,7 +49,7 @@ test("shim tables drive the compiled inferrer and codegen", async () => {
       namespaces: Map<string, Map<string, unknown>>,
       openMode: boolean,
     ) => AlResult;
-  }>(compileAl("bootstrap/infer.al"), ["inferProgram"]);
+  }>(compileAl("bootstrap/infer.mochi"), ["inferProgram"]);
   const { codegen } = evalNames<{
     codegen: (
       stmts: unknown,
@@ -59,7 +59,7 @@ test("shim tables drive the compiled inferrer and codegen", async () => {
       jsDefs: Map<string, string>,
       deps: Map<string, string[]>,
     ) => string;
-  }>(compileAl("bootstrap/codegen.al"), ["codegen"]);
+  }>(compileAl("bootstrap/codegen.mochi"), ["codegen"]);
 
   const lr = lex("let twice = n => mul(n, 2)\n");
   const pr = parse(unwrapOk(lr as never));

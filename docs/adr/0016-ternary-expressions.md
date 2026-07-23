@@ -1,7 +1,7 @@
 # 0016 — Ternary expressions
 
 - **Status:** Accepted
-- **Source:** user feature request; evidenced by Slice D — the bootstrap `.al` files grew ~25 two-arm boolean `switch`es (`docs/PATH_TO_BOOTSTRAP.md` §2.4)
+- **Source:** user feature request; evidenced by Slice D — the bootstrap `.mochi` files grew ~25 two-arm boolean `switch`es (`docs/PATH_TO_BOOTSTRAP.md` §2.4)
 
 ## Context
 

@@ -1,6 +1,6 @@
-// bootstrap/types.al — the HM type machinery (ports src/types.ts + src/unify.ts).
-// Split out of infer.al (ticket 0013): Ty/Row + constructors, the St-threaded
-// resolve/zonk/occurs/unify/unifyRows core, and showType. infer.al imports the
+// bootstrap/types.mochi — the HM type machinery (ports src/types.ts + src/unify.ts).
+// Split out of infer.mochi (ticket 0013): Ty/Row + constructors, the St-threaded
+// resolve/zonk/occurs/unify/unifyRows core, and showType. infer.mochi imports the
 // ctors + entry points it needs; gen-prelude compiles THIS file (self-contained,
 // no AST dependency) to lower the prelude tables to mochi Ty.
 
@@ -86,7 +86,7 @@ let showRow = row =>
     : "{ ${Str.join(", ", fields)}${tail} }"
 
 // ---- generic index-loop helpers (early-exit `for` loops from the TS
-// originals; same style as bootstrap/check.al's firstSome/allOf/someOf) ----
+// originals; same style as bootstrap/check.mochi's firstSome/allOf/someOf) ----
 
 let someOfFrom = (f, xs, i) => switch Array.get(i, xs) {
   | None => false

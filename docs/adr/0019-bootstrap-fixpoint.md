@@ -7,7 +7,7 @@
 
 ## Context
 
-`bootstrap/codegen.al` (~790 LOC) ports `src/codegen.ts`: the pure AST→JS pass.
+`bootstrap/codegen.mochi` (~790 LOC) ports `src/codegen.ts`: the pure AST→JS pass.
 Like the other bootstrap modules it redeclares the AST with matching `_tag`
 strings (no modules yet — PATH §6). The port was straightforward except for two
 decisions the ceremony forced into the open.
@@ -17,9 +17,9 @@ decisions the ceremony forced into the open.
 **1. The prelude runtime tables are passed in, not reimplemented.**
 `namespaceRuntime` / `preludeJsDefs` / `runtimeDeps` (the tables that map
 `Ns.member`→JS id, builtin→its runtime string, and runtime→its deps) stay in
-`src/prelude.ts` and are handed to `codegen.al` as three `Map` arguments. Only
+`src/prelude.ts` and are handed to `codegen.mochi` as three `Map` arguments. Only
 the four builtin ctor keys (Some/None/Ok/Err) are hardcoded, matching
-`infer.al`'s precedent for `builtinTypeDecls`. One prelude, consumed by both
+`infer.mochi`'s precedent for `builtinTypeDecls`. One prelude, consumed by both
 codegens — never forked (PATH §6).
 
 **2. The fixpoint "compiler" is `lex→parse→codegen` only.**
@@ -31,7 +31,7 @@ pinned separately by `bootstrap-{check,infer}.spec.ts`.
 
 **3. `escChar` drops its `\r` arm** — the real bug this slice flushed. The TS
 lexer's `scanString` decodes only `\n \t \\ \"`; `\r` falls through to a literal
-`r`. So `codegen.al`'s pattern `| "\r" => …` was matching the *letter* `r`,
+`r`. So `codegen.mochi`'s pattern `| "\r" => …` was matching the *letter* `r`,
 mangling every `Err`→`E\r\r`. A decoded mochi string value can therefore never
 contain a CR from an escape, so the arm was both wrong and unreachable — removed
 it, and corrected the comment that had claimed the lexer decodes `\r`.
@@ -45,8 +45,8 @@ it, and corrected the comment that had claimed the lexer decodes `\r`.
   and the stronger `stage1 ≡ stage2` (TS emit ≡ bootstrap self-emit) holds too.
   **mochi is self-hosting.**
 - **Differential codegen guard.** `test/bootstrap-codegen.spec.ts` diffs the
-  bootstrap codegen's JS against the TS codegen's on every `.al` file in the repo
-  (including `codegen.al` itself) plus 13 targeted emit cases (nested patterns,
+  bootstrap codegen's JS against the TS codegen's on every `.mochi` file in the repo
+  (including `codegen.mochi` itself) plus 13 targeted emit cases (nested patterns,
   guards, lazy List, `let?`, ternary, map literals, string escapes).
 - The driver is not a shipped CLI: host IO (reading files, writing `.js`) is
   still shimmed by the test harness, as PATH §6 permits indefinitely. Porting

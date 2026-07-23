@@ -1,10 +1,10 @@
-// bootstrap/codegen.al — the mochi codegen pass, in mochi. Ported from
+// bootstrap/codegen.mochi — the mochi codegen pass, in mochi. Ported from
 // src/codegen.ts (the spec); test/bootstrap-codegen.spec.ts diffs emitted JS
-// against the TS codegen on every .al file in the repo — including this one.
+// against the TS codegen on every .mochi file in the repo — including this one.
 //
 // Shape notes vs TS original:
-// - AST declared again here (bootstrap/parser.al's shape/tags — same
-//   convention as check.al/infer.al): until modules arrive, each bootstrap
+// - AST declared again here (bootstrap/parser.mochi's shape/tags — same
+//   convention as check.mochi/infer.mochi): until modules arrive, each bootstrap
 //   file's runtime `_tag`s must match by hand, not by import.
 // - `ctorKeys` (TS module-level mutable Map) becomes `GCtx = { keys, ns }`,
 //   threaded through every generator/pattern-compiler function. `ns` is
@@ -16,17 +16,17 @@
 //   src/prelude.ts tables in as Map arguments (one prelude, not forked —
 //   docs/PATH_TO_BOOTSTRAP.md §6). Only `builtinTypeDecls`' ctor keys
 //   (Some/None/Ok/Err — 4 entries) are small/stable enough to hardcode
-//   directly, matching infer.al's precedent for `builtinTypeDecls`.
+//   directly, matching infer.mochi's precedent for `builtinTypeDecls`.
 // - TS `for`/`forEach`/`flatMap` loops become tail-recursive `Array.get(i,
-//   xs)` cursor loops (matches check.al/infer.al's established idiom).
+//   xs)` cursor loops (matches check.mochi/infer.mochi's established idiom).
 
-import { ENum, EBool, EStr, ERef, ECall, ELambda, ELetIn, ELetBind, EPipe, ETernary, EMatch, ERecord, EField, ETuple, EArr, EList, EMap, EInterp, IPLit, IPExpr, PWild, PBind, PLit, PBool, PStr, PTuple, PRecord, PCtor, PArr, PList, POr, LPName, LPRecord, LPTuple, SLet, SType, SExtern, SImport } from "./ast.al"
+import { ENum, EBool, EStr, ERef, ECall, ELambda, ELetIn, ELetBind, EPipe, ETernary, EMatch, ERecord, EField, ETuple, EArr, EList, EMap, EInterp, IPLit, IPExpr, PWild, PBind, PLit, PBool, PStr, PTuple, PRecord, PCtor, PArr, PList, POr, LPName, LPRecord, LPTuple, SLet, SType, SExtern, SImport } from "./ast.mochi"
 
 // One chunk of a "…${a}…" interpolation (ADR 0023): a literal run, or a
 // hole expression. TS: an untagged `string | Expr` union — mochi has no raw
-// unions, so this is a proper variant (mirrors parser.al's own copy).
+// unions, so this is a proper variant (mirrors parser.mochi's own copy).
 
-// --- small generic helpers (duplicated per bootstrap file, same as check.al/infer.al) ---
+// --- small generic helpers (duplicated per bootstrap file, same as check.mochi/infer.mochi) ---
 
 let cat = parts => Str.join("", parts)
 
@@ -301,7 +301,7 @@ let patSlot = (p, ctx) => switch p {
     someOf(s => not(eq(s, "")), slots2) ? "[${Str.join(", ", slots2)}]" : ""
   | POr(alts, _) =>
     // The first alt's destructure serves the whole arm — every alt binds the
-    // same names at the same positions (enforced by check.al).
+    // same names at the same positions (enforced by check.mochi).
     switch Array.head(alts) {
       | Some(first) => patSlot(first, ctx)
       | None => ""
@@ -670,10 +670,10 @@ let genExtern = s => switch s {
 }
 
 let stripAlExt = s =>
-  Str.endsWith(".al", s) ? Str.slice(0, sub(Str.length(s), 3), s) : s
+  Str.endsWith(".mochi", s) ? Str.slice(0, sub(Str.length(s), 6), s) : s
 
 // import { a, b } from "./mod"  ->  compiled sibling `./mod.js`. Source paths
-// name an `.al` module (with or without extension); output targets `.js`.
+// name an `.mochi` module (with or without extension); output targets `.js`.
 let genImport = s => switch s {
   | SImport(names, from, _) => let nameList = Str.join(
       ", ",

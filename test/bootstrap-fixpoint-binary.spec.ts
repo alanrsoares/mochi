@@ -1,13 +1,13 @@
 // Ticket 0007 — the permanent self-hosting guard, driven through the shipped
-// mochic (bootstrap/cli.al) over real disk IO rather than the in-memory
+// mochic (bootstrap/cli.mochi) over real disk IO rather than the in-memory
 // harness. See scripts/fixpoint.ts for the ceremony. Every bootstrap module —
-// including compile.al and cli.al themselves — must satisfy:
+// including compile.mochi and cli.mochi themselves — must satisfy:
 //   stage2 ≡ stage3   (the binary reproduces its own emitted source), and
 //   stage2 ≡ TS `build`   (the two implementations agree).
 //
 // This is the sole self-hosting fixpoint guard: the closed-world `mochic build`
 // runs the full pipeline (check + infer + codegen), so it subsumes the old
-// in-process lex→parse→codegen spec, which the ast.al/types.al split retired
+// in-process lex→parse→codegen spec, which the ast.mochi/types.mochi split retired
 // (modules now import ctors and can't be eval'd pass-by-pass in isolation).
 import { expect, test } from "bun:test";
 import { runFixpoint } from "../scripts/fixpoint";

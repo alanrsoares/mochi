@@ -17,7 +17,7 @@ import { isErr } from "@onrails/result";
 import { buildModulesTs } from "../src/module";
 
 const REPO = resolve(import.meta.dir, "..");
-const ENTRY = join(REPO, "bootstrap", "cli.al");
+const ENTRY = join(REPO, "bootstrap", "cli.mochi");
 const RUNTIME = join(REPO, "src", "runtime"); // bundler resolves to src/runtime.ts
 
 const TSCONFIG = {
@@ -54,8 +54,8 @@ export const bootstrapTsc = async (keep = false): Promise<TscReport> => {
   const dir = await mkdtemp(join(tmpdir(), "mochi-bts-"));
   try {
     for (const { path, js } of built.value) {
-      // Extern `.d.ts` outputs already carry their extension; `.al` → `.ts`.
-      const name = path.endsWith(".ts") ? basename(path) : basename(path).replace(/\.al$/, ".ts");
+      // Extern `.d.ts` outputs already carry their extension; `.mochi` → `.ts`.
+      const name = path.endsWith(".ts") ? basename(path) : basename(path).replace(/\.mochi$/, ".ts");
       await writeFile(join(dir, name), js);
     }
     await writeFile(join(dir, "tsconfig.json"), JSON.stringify(TSCONFIG, null, 2));

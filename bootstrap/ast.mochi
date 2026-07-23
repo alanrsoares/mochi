@@ -1,8 +1,8 @@
-// bootstrap/ast.al — the one AST, shared by every pass (ticket 0013).
+// bootstrap/ast.mochi — the one AST, shared by every pass (ticket 0013).
 //
 // Before the module driver landed, parser/check/infer/codegen/module each
 // re-declared this block (the `_tag` runtime shape made the copies
-// interchangeable under compile.al's opaque threading). Now they `import` the
+// interchangeable under compile.mochi's opaque threading). Now they `import` the
 // variant ctors from here and pattern-match them under the closed-world build.
 //
 // Only the VARIANT types are exported — importing a ctor (ENum, SLet, …) is how

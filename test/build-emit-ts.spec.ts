@@ -22,7 +22,7 @@ const RUNTIME = "../../src/runtime";
 // edge to carry it (gap 3, TS2304). `main` also declares an `extern`, forcing a
 // `host.d.ts` (gap 3, TS2307).
 const MODULES: Record<string, string> = {
-  "shapes.al": `
+  "shapes.mochi": `
 export type Shape =
   | Circle(float)
   | Rect(w: float, h: float)
@@ -30,12 +30,12 @@ export let scale = (k, s) => switch s {
   | Circle(r) => Circle(mul(k, r))
   | Rect(w, h) => Rect(mul(k, w), mul(k, h))
 }`,
-  "ops.al": `
-import { Circle, Rect, scale } from "./shapes.al"
+  "ops.mochi": `
+import { Circle, Rect, scale } from "./shapes.mochi"
 export let unit = Circle(1.0)
 export let grow = s => scale(2.0, s)`,
-  "main.al": `
-import { unit, grow } from "./ops.al"
+  "main.mochi": `
+import { unit, grow } from "./ops.mochi"
 extern log : string -> string = "./host.js" "log"
 export let twice = s => grow(grow(s))
 let base = twice(unit)
@@ -47,13 +47,13 @@ let outputs: ModuleOutput[] = [];
 beforeAll(async () => {
   mkdirSync(DIR, { recursive: true });
   for (const [name, src] of Object.entries(MODULES)) writeFileSync(join(DIR, name), src);
-  const built = await buildModulesTs(join(DIR, "main.al"), (p) => Bun.file(p).text(), {
+  const built = await buildModulesTs(join(DIR, "main.mochi"), (p) => Bun.file(p).text(), {
     runtimeImport: RUNTIME,
   });
   if (isErr(built)) throw new Error(`build --emit=ts failed: ${built.error.message}`);
   outputs = built.value;
   for (const { path, js } of outputs)
-    writeFileSync(path.endsWith(".ts") ? path : path.replace(/\.al$/, ".ts"), js);
+    writeFileSync(path.endsWith(".ts") ? path : path.replace(/\.mochi$/, ".ts"), js);
   writeFileSync(
     join(DIR, "tsconfig.json"),
     JSON.stringify({

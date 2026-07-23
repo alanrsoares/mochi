@@ -119,7 +119,7 @@ test("Str is a reserved namespace name", () => {
 test("Option/Result are reserved as values but redeclarable as types", () => {
   expect(isErr(compile("let Option = 1"))).toBe(true);
   expect(isErr(compile("let Result = 1"))).toBe(true);
-  // builtin-type contract: a user `type` redeclaration wins (example.al does this)
+  // builtin-type contract: a user `type` redeclaration wins (example.mochi does this)
   const redecl = "type Option a = | Some(value: a) | None\nlet a = Some(1)";
   expect(isErr(compile(redecl))).toBe(false);
 });

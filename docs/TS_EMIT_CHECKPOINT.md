@@ -37,7 +37,7 @@ residual is a *different* root cause (the recursive `Result` union under the
 `& A` open-row leak). Finally — also this session — **concrete annotation for
 parametric nullary constructors** (ADR 0039, 15 → 14, −1). ADR 0039: `None` is the
 variant analogue of an empty collection — `Option<never>` at the reference. In
-`lexer.al` `mkTok` the first ts-pattern arm returns `doc: None`, fixing the chain
+`lexer.mochi` `mkTok` the first ts-pattern arm returns `doc: None`, fixing the chain
 type before the widening `Some(str)` arm (TS2322). Recorded in infer (parametric
 nullary ctor: uppercase + `con` with args) and annotated in place (`None as
 Option<string>`), reusing ADR 0035's empty-literal machinery. Most recently —
@@ -80,7 +80,7 @@ contradicts the generic `resolveImportsFrom` (ADR 0035 §3). The gap was the
 language — mochi couldn't write the ascription `src/module.ts` uses by hand
 (`importedReg: Registry`). Adding it (unify the value against the declared type
 before generalizing; type-only so JS is byte-identical) and writing
-`let emptyReg : Registry = …` in `bootstrap/module.al` pins the whole chain.
+`let emptyReg : Registry = …` in `bootstrap/module.mochi` pins the whole chain.
 Self-host meant teaching the bootstrap compiler the syntax too (`SLet` gains an
 `annot` field). **Bootstrap is now 0 `tsc --strict` errors — strict-clean.**
 
@@ -89,7 +89,7 @@ Self-host meant teaching the bootstrap compiler the syntax too (`SLet` gains an
 | Commit | What |
 |---|---|
 | `27acc69` | fix(lsp): module-aware diagnostics + hover for files with imports |
-| `ba2d3f8` | feat(format): dogfood `.al` formatter on bootstrap; fix 2 comment bugs |
+| `ba2d3f8` | feat(format): dogfood `.mochi` formatter on bootstrap; fix 2 comment bugs |
 | `91b8df9` | feat(codegen): TypeScript backend — emit strict-clean typed `.ts` (ADR 0026) |
 | `248e239` | fix(codegen): curry-aware TS types + pipe flattening — pipelines typecheck |
 | `704081b` | feat(codegen): `build --emit=ts` — typed `.ts` for module graphs |
@@ -115,8 +115,8 @@ Self-host meant teaching the bootstrap compiler the syntax too (`SLet` gains an
 
 ## What works now
 
-- **`mochi ts <file.al>`** → single-file typed `.ts` (`src/codegen-ts.ts`).
-- **`mochi build --emit=ts <entry.al>`** → typed `.ts` beside each `.al` in a
+- **`mochi ts <file.mochi>`** → single-file typed `.ts` (`src/codegen-ts.ts`).
+- **`mochi build --emit=ts <entry.mochi>`** → typed `.ts` beside each `.mochi` in a
   module graph (`src/module.ts` `buildModulesTs`/`compileGraphTs`).
 - **Curry/pipelines**: runtime builtins typed as OVERLOADED signatures (one per
   arity composition) via `flatFnType` in `src/dts.ts`; `xs |> map(f)` lowers to

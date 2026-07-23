@@ -1,5 +1,5 @@
 {
-  "// mochi": "Operator ligatures for .al files. |> and => render as combined glyphs with a ligature-capable font. Scoped so it only affects mochi, not your other editors.",
+  "// mochi": "Operator ligatures for .mochi files. |> and => render as combined glyphs with a ligature-capable font. Scoped so it only affects mochi, not your other editors.",
   "[mochi]": {
     "editor.fontLigatures": true,
     "editor.fontFamily": "'Fira Code', 'JetBrains Mono', 'Cascadia Code', 'Victor Mono', monospace"

@@ -72,7 +72,7 @@ The 537 → 33 error burn-down (ADRs 0028–0034) surfaced and fixed real gaps
 open-row emission) that the JS backend silently absorbed.
 
 ### 2.4 The DRY bootstrap paid design dividends
-Extracting shared `ast.al`/`types.al` (−270 lines) forced the bootstrap to be
+Extracting shared `ast.mochi`/`types.mochi` (−270 lines) forced the bootstrap to be
 a real multi-module program, which is how the two genuine language limits
 (§4.4 below) were discovered. Dogfooding at this depth is the project's best
 design-feedback loop.
@@ -187,7 +187,7 @@ Two limits shaped the closed-world self-host and are still surface truths:
 - **No open-world constructor matching** — exhaustiveness against variants
   whose module wasn't compiled in-graph forces catch-alls.
 
-The bootstrap routed around both (shared `ast.al`/`types.al`); users can't
+The bootstrap routed around both (shared `ast.mochi`/`types.mochi`); users can't
 route around as cheaply. Both live in memory/notes today; each deserves an ADR
 (even one whose Decision is "deferred, here's the workaround") so the limits
 are load-bearing decisions rather than folklore.

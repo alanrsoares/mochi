@@ -1,4 +1,4 @@
-// Ticket 0006 — the shipped `mochic` (bootstrap/cli.al) compiles a single .al
+// Ticket 0006 — the shipped `mochic` (bootstrap/cli.mochi) compiles a single .mochi
 // file to a sibling .js through real disk IO, end-to-end under Bun. We build
 // the bootstrap graph with the TS CLI once, then drive the emitted cli.js as a
 // subprocess: a good file compiles (output byte-≡ the TS compiler and it runs),
@@ -33,7 +33,10 @@ const runAlangc = (arg: string): { code: number; stderr: string } => runArgs(arg
 
 beforeAll(() => {
   // Build the shipped compiler graph (emits bootstrap/*.js beside the sources).
-  execFileSync("bun", ["src/cli.ts", "build", "bootstrap/cli.al"], { cwd: root, encoding: "utf8" });
+  execFileSync("bun", ["src/cli.ts", "build", "bootstrap/cli.mochi"], {
+    cwd: root,
+    encoding: "utf8",
+  });
   dir = mkdtempSync(join(tmpdir(), "mochi-cli-"));
 });
 afterAll(() => {
@@ -43,7 +46,7 @@ afterAll(() => {
 test("mochic compiles a good file to a sibling .js identical to the TS compiler", () => {
   const src =
     "let twice = n => mul(n, 2)\ntype C = A | B\nlet f = c => switch c { | A => 1 | B => 2 }\n";
-  const al = join(dir, "good.al");
+  const al = join(dir, "good.mochi");
   const js = join(dir, "good.js");
   writeFileSync(al, src);
 
@@ -57,13 +60,13 @@ test("mochic compiles a good file to a sibling .js identical to the TS compiler"
 });
 
 test("mochic rejects a bad file: line:col diagnostic, nonzero exit, no JS", () => {
-  const al = join(dir, "bad.al");
+  const al = join(dir, "bad.mochi");
   const js = join(dir, "bad.js");
   writeFileSync(al, "type C = A | B\nlet f = c => switch c { | A => 1 }\n");
 
   const { code, stderr } = runAlangc(al);
   expect(code).not.toBe(0);
-  expect(stderr).toContain("bad.al:2:");
+  expect(stderr).toContain("bad.mochi:2:");
   expect(stderr).toContain("non-exhaustive");
   expect(existsSync(js)).toBe(false);
 });
@@ -77,32 +80,32 @@ test("mochic build compiles a module graph, byte-≡ the TS driver, and runs", a
   // exhaustiveness-checkable with lib's registry threaded across the boundary.
   const app =
     'import { Circle, Square, area } from "./lib"\nlet sides = s => switch s { | Circle(r) => 1 | Square(w) => 2 }\nlet demo = area(Circle(3))\nlet d2 = sides(Square(4))\n';
-  writeFileSync(join(dir, "lib.al"), lib);
-  writeFileSync(join(dir, "app.al"), app);
+  writeFileSync(join(dir, "lib.mochi"), lib);
+  writeFileSync(join(dir, "app.mochi"), app);
 
-  const { code } = runArgs("build", join(dir, "app.al"));
+  const { code } = runArgs("build", join(dir, "app.mochi"));
   expect(code).toBe(0);
   expect(existsSync(join(dir, "lib.js"))).toBe(true);
   expect(existsSync(join(dir, "app.js"))).toBe(true);
 
   // Byte-identical to the TS module driver, per module.
-  const ts = await tsBuild(join(dir, "app.al"), (p) => Bun.file(p).text());
+  const ts = await tsBuild(join(dir, "app.mochi"), (p) => Bun.file(p).text());
   const tsBy = new Map(unwrapOk(ts).map((o) => [basename(o.path), o.js]));
-  expect(readFileSync(join(dir, "lib.js"), "utf8")).toBe(tsBy.get("lib.al") ?? "");
-  expect(readFileSync(join(dir, "app.js"), "utf8")).toBe(tsBy.get("app.al") ?? "");
+  expect(readFileSync(join(dir, "lib.js"), "utf8")).toBe(tsBy.get("lib.mochi") ?? "");
+  expect(readFileSync(join(dir, "app.js"), "utf8")).toBe(tsBy.get("app.mochi") ?? "");
 
   // The emitted graph runs under Bun (app imports from lib, resolves, no throw).
   execFileSync("bun", [join(dir, "app.js")], { cwd: root, encoding: "utf8" });
 });
 
 test("mochic build fails on a cross-module exhaustiveness gap, writes nothing", () => {
-  writeFileSync(join(dir, "shp.al"), "export type T = A | B\n");
+  writeFileSync(join(dir, "shp.mochi"), "export type T = A | B\n");
   // Missing the B arm — only catchable via shp's imported registry.
   writeFileSync(
-    join(dir, "bad2.al"),
+    join(dir, "bad2.mochi"),
     'import { A, B } from "./shp"\nlet f = t => switch t { | A => 1 }\n',
   );
-  const { code, stderr } = runArgs("build", join(dir, "bad2.al"));
+  const { code, stderr } = runArgs("build", join(dir, "bad2.mochi"));
   expect(code).not.toBe(0);
   expect(stderr).toContain("non-exhaustive");
   expect(existsSync(join(dir, "bad2.js"))).toBe(false);

@@ -150,7 +150,7 @@ let c = count([1, 2, 3])`,
   // the chain's return from the first arm, so a bare `None` (`Option<never>`)
   // there rejects the widening `Option<string>` arm (TS2322). The TS backend
   // annotates the nullary ctor in place (`None as Option<string>`) so the first
-  // arm's field is already the wide type. Mirrors `bootstrap/lexer.al` `mkTok`.
+  // arm's field is already the wide type. Mirrors `bootstrap/lexer.mochi` `mkTok`.
   noneAnnot: `
 let mkTok = (tok, doc) => switch doc {
   | [] => { tok: tok, doc: None }
@@ -165,7 +165,7 @@ let b = mkTok(2, ["x", "y"])`,
   // looked free and was quantified — `conn` emitted `<A, B>` with decoupled
   // tails, and `s2.acc` on `{…} & B` rejected (TS2339). Zonking the env before
   // collecting its free vars keeps the local monomorphic (single `& A`), so the
-  // accessed field is pinned. Mirrors `bootstrap/infer.al`'s Tarjan SCC state.
+  // accessed field is pinned. Mirrors `bootstrap/infer.mochi`'s Tarjan SCC state.
   monoRecurRow: `
 let visit = (st, ws) => switch ws {
   | [] => st
@@ -185,7 +185,7 @@ let go = conn({ n: 0, low: 0, idx: 0, onS: 0, out: 0, acc: 0 }).out`,
   // (`a` unusable). `lookupNested` — an empty `#{}` seed whose element type is an
   // enclosing letter; bare it emits `Map<unknown, unknown>` and rejects the
   // `Map<B, C>` slot. Both annotate with the in-scope letters. Mirrors
-  // `bootstrap/check.al`'s `checkSeqExhaustive` and `infer.al`'s `inferNsField`.
+  // `bootstrap/check.mochi`'s `checkSeqExhaustive` and `infer.mochi`'s `inferNsField`.
   innerGenericScope: `
 let firstPatterns = arms =>
   arms

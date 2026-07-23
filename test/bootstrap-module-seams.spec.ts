@@ -1,9 +1,9 @@
 // Ticket 0013 (part b) — the four cross-module seams the single-file pipeline
 // never exposed, added to the bootstrap passes and tested individually before
 // compileGraph is built on top:
-//   check.al     — checkWith(stmts, importedReg), exportedRegistry(stmts)
-//   codegen.al   — exportedCtorKeys(stmts)
-//   infer.al     — inferProgramImports(stmts, builtins, namespaces, open, imports)
+//   check.mochi     — checkWith(stmts, importedReg), exportedRegistry(stmts)
+//   codegen.mochi   — exportedCtorKeys(stmts)
+//   infer.mochi     — inferProgramImports(stmts, builtins, namespaces, open, imports)
 // We build the bootstrap graph to JS and drive the emitted functions in-process.
 
 import { beforeAll, expect, test } from "bun:test";
@@ -43,7 +43,7 @@ const unwrap = <T>(r: Res<T>): T => {
 const parseAl = (src: string): Stmts => unwrap(parse(unwrap(lex(src))));
 
 beforeAll(async () => {
-  execFileSync("bun", ["src/cli.ts", "build", "bootstrap/cli.al"], { cwd: root });
+  execFileSync("bun", ["src/cli.ts", "build", "bootstrap/cli.mochi"], { cwd: root });
   ({ lex } = await import(bs("lexer.js")));
   ({ parse } = await import(bs("parser.js")));
   ({ check, checkWith, exportedRegistry } = await import(bs("check.js")));

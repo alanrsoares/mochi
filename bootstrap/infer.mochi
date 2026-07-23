@@ -1,7 +1,7 @@
-// bootstrap/infer.al — Hindley-Milner type inference, in mochi. Ports
+// bootstrap/infer.mochi — Hindley-Milner type inference, in mochi. Ports
 // src/types.ts + src/unify.ts + src/infer.ts into one file (Slice E, part 2).
 // test/bootstrap-infer.spec.ts (once written) diffs alpha-normalized schemes
-// against the TS inferrer on every .al file in the repo.
+// against the TS inferrer on every .mochi file in the repo.
 //
 // PORTING ORDER (biggest unknown first): (a) types.ts warm-up — Ty/Row shape
 // + showType, DONE below. (b) unify.ts — St-threaded resolve/zonk/occurs/
@@ -24,23 +24,23 @@
 // 6. Corpus = TS-check-passing files, open:true + namespaces threaded;
 //    strict-mode error cases get their own targeted cases.
 
-import { TyVar, TyCon, TyFn, TyRecord, RowEmpty, RowVar, RowExtend, tCon, tArrow, tRecord, tPrim, tTuple, rVar, rExtend, showType, mkSt, freshVar, freshRowVar, resolve, zonk, occurs, unify, unifyRows } from "./types.al"
+import { TyVar, TyCon, TyFn, TyRecord, RowEmpty, RowVar, RowExtend, tCon, tArrow, tRecord, tPrim, tTuple, rVar, rExtend, showType, mkSt, freshVar, freshRowVar, resolve, zonk, occurs, unify, unifyRows } from "./types.mochi"
 
 // ============================================================
-// (c) infer.ts — Algorithm W. AST duplicated again (see bootstrap/check.al's
+// (c) infer.ts — Algorithm W. AST duplicated again (see bootstrap/check.mochi's
 // header note on why: modules arrive Slice F, differential harness keeps
 // every duplicate honest via runtime `_tag` shape).
 //
 // Name collision vs section (a): the surface syntax `TypeExpr` needs the
-// SAME ctor names bootstrap/parser.al actually emits at runtime
-// (TyName/TyArrow/TyApp/TyTuple/TyList) — each .al file compiles to an
+// SAME ctor names bootstrap/parser.mochi actually emits at runtime
+// (TyName/TyArrow/TyApp/TyTuple/TyList) — each .mochi file compiles to an
 // independent module with literal baked-in `_tag` strings, so this file's
-// pattern matches must agree with parser.al's tags, not just its own
+// pattern matches must agree with parser.mochi's tags, not just its own
 // internal type decl. That leaves no free `TyArrow` for section (a)'s HM
 // `Ty` type, so its arrow constructor is `TyFn` here instead.
 // ============================================================
 
-import { ENum, EBool, EStr, ERef, ECall, ELambda, ELetIn, ELetBind, EPipe, ETernary, EMatch, ERecord, EField, ETuple, EArr, EList, EMap, EInterp, IPLit, IPExpr, PWild, PBind, PLit, PBool, PStr, PTuple, PRecord, PCtor, PArr, PList, POr, TyName, TyArrow, TyApp, TyTuple, TyList, LPName, LPRecord, LPTuple, SLet, SType, SExtern } from "./ast.al"
+import { ENum, EBool, EStr, ERef, ECall, ELambda, ELetIn, ELetBind, EPipe, ETernary, EMatch, ERecord, EField, ETuple, EArr, EList, EMap, EInterp, IPLit, IPExpr, PWild, PBind, PLit, PBool, PStr, PTuple, PRecord, PCtor, PArr, PList, POr, TyName, TyArrow, TyApp, TyTuple, TyList, LPName, LPRecord, LPTuple, SLet, SType, SExtern } from "./ast.mochi"
 
 // One chunk of a "…${a}…" interpolation (ADR 0023): a literal run, or a
 // parsed hole expression.
@@ -588,7 +588,7 @@ let inferPat = (p, ctx, st) => switch p {
 }
 
 // Every alternative of `A | B | …` describes the same scrutinee, so their
-// types unify; and (guaranteed by check.al) they bind the same names, whose
+// types unify; and (guaranteed by check.mochi) they bind the same names, whose
 // types unify too. The arm's binder env is the FIRST alt's (unified) —
 // mirrors src/infer.ts's inferOrPat exactly.
 let unifyOrPatBinding = (name, altBindings, bindings, st, sp) => switch Map.get(name, bindings) {

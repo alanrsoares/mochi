@@ -1,6 +1,6 @@
-// bootstrap/lexer.al — the mochi lexer, in mochi. Ported from src/lexer.ts
+// bootstrap/lexer.mochi — the mochi lexer, in mochi. Ported from src/lexer.ts
 // (the spec); test/bootstrap-lexer.spec.ts diffs the two token streams over
-// every .al file in the repo — including this one.
+// every .mochi file in the repo — including this one.
 //
 // Shape notes vs the TS original:
 // - `Tok` is a variant (TS: tagged record union); payloads keep field names.

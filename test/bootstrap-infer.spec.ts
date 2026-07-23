@@ -1,10 +1,10 @@
-// Slice E2 — self-hosted inference. bootstrap/infer.al is compiled by the TS
+// Slice E2 — self-hosted inference. bootstrap/infer.mochi is compiled by the TS
 // compiler, evaluated, and fed the bootstrap parser's AST; its inferred
 // scheme for every top-level name declared in a file (alpha-normalized var
-// ids) must match the TS inferrer's on every .al file in the repo —
-// including infer.al itself. Corpus runs `open: true` (unresolved refs —
+// ids) must match the TS inferrer's on every .mochi file in the repo —
+// including infer.mochi itself. Corpus runs `open: true` (unresolved refs —
 // e.g. cross-file imports this standalone port doesn't resolve — become
-// opaque fresh vars rather than errors, per infer.al's design note #6);
+// opaque fresh vars rather than errors, per infer.mochi's design note #6);
 // strict-mode (`open: false`) error parity gets its own targeted cases.
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
@@ -25,18 +25,18 @@ const root = join(import.meta.dir, "..");
 const compileAl = bootstrapModuleJs;
 
 // The strict prologue matters: JSC does proper tail calls only in strict mode
-// (ADR 0014) — infer.al's env/subst threading recurses once per binding/arm.
+// (ADR 0014) — infer.mochi's env/subst threading recurses once per binding/arm.
 const evalAlNames = <T extends Record<string, unknown>>(js: string, names: string[]): T =>
   new Function("match", `"use strict";\n${js}\nreturn { ${names.join(", ")} };`)(match) as T;
 
 type AlErr = { message: string; start: number; end: number };
 type AlResult = { _tag: "Ok"; value: unknown } | { _tag: "Err"; error: AlErr };
 
-const alLex = evalAlNames<{ lex: (src: string) => AlResult }>(compileAl("bootstrap/lexer.al"), [
+const alLex = evalAlNames<{ lex: (src: string) => AlResult }>(compileAl("bootstrap/lexer.mochi"), [
   "lex",
 ]).lex;
 const alParse = evalAlNames<{ parse: (toks: unknown) => AlResult }>(
-  compileAl("bootstrap/parser.al"),
+  compileAl("bootstrap/parser.mochi"),
   ["parse"],
 ).parse;
 
@@ -57,7 +57,7 @@ type AlInfer = {
   showType: (t: unknown) => string;
 };
 
-const alInfer = evalAlNames<AlInfer>(compileAl("bootstrap/infer.al"), [
+const alInfer = evalAlNames<AlInfer>(compileAl("bootstrap/infer.mochi"), [
   "inferProgram",
   "tVar",
   "tCon",
@@ -178,14 +178,14 @@ const alInferVerdict = (src: string, prog: Program): Verdict => {
   return { ok: true, schemes };
 };
 
-// ---- the corpus: every .al file in the repo --------------------------------
+// ---- the corpus: every .mochi file in the repo --------------------------------
 
-const corpus = [...new Bun.Glob("**/*.al").scanSync({ cwd: root })]
+const corpus = [...new Bun.Glob("**/*.mochi").scanSync({ cwd: root })]
   .filter((p) => !p.includes("node_modules"))
   .sort();
 
 test("corpus includes the bootstrap inferrer itself", () => {
-  expect(corpus).toContain("bootstrap/infer.al");
+  expect(corpus).toContain("bootstrap/infer.mochi");
 });
 
 for (const file of corpus) {

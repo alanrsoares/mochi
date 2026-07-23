@@ -1,6 +1,6 @@
 # mochi — VSCode syntax highlighting + language server
 
-TextMate grammar for `.al` files: comments, `let`/`type`/`switch`, pipeline
+TextMate grammar for `.mochi` files: comments, `let`/`type`/`switch`, pipeline
 `|>`, arrow `=>`, match bars `|`, variant constructors (Uppercase idents),
 primitive types (`float`/`int`/`string`/`bool`), and numbers. Plus a language
 server — diagnostics, hover, and inlay type hints — built with `bun run

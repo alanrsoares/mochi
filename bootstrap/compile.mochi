@@ -5,11 +5,11 @@
 // declaration, a non-exhaustive switch, or a type error is rejected with its
 // span and never reaches codegen. Passes are threaded opaquely (ticket 0002);
 // the prelude tables come from the generated shim (ticket 0004).
-import { lex } from "./lexer.al"
-import { parse } from "./parser.al"
-import { check } from "./check.al"
-import { inferProgram } from "./infer.al"
-import { codegen } from "./codegen.al"
+import { lex } from "./lexer.mochi"
+import { parse } from "./parser.mochi"
+import { check } from "./check.mochi"
+import { inferProgram } from "./infer.mochi"
+import { codegen } from "./codegen.mochi"
 
 // Prelude tables from the standalone shim. builtins/namespaces carry the
 // inferrer's Ty; compile never inspects them, so a polymorphic `a` lets them

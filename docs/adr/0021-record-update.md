@@ -1,15 +1,15 @@
 # 0021 — Record update `{ ...base, f: v }`
 
 - **Status:** Accepted
-- **Source:** `docs/CRITIQUE.md` (ergonomics); bootstrap dogfooding (`bootstrap/infer.al`,
-  `bootstrap/check.al` thread immutable state by hand); `src/infer.ts` record
+- **Source:** `docs/CRITIQUE.md` (ergonomics); bootstrap dogfooding (`bootstrap/infer.mochi`,
+  `bootstrap/check.mochi` thread immutable state by hand); `src/infer.ts` record
   case; `test/record-update.spec.ts`
 
 ## Context
 
 mochi records are immutable, and the only way to produce a near-copy of a record
 was to spell out every field. Porting the compiler to mochi made this acute:
-`infer.al`/`check.al` thread immutable state (`St`, `TSt`, registries) where all
+`infer.mochi`/`check.mochi` thread immutable state (`St`, `TSt`, registries) where all
 but one or two fields are copied verbatim on each step. A functional-update form
 is the standard ergonomic answer (ReScript `{...r, x: 1}`), and mochi's existing
 row-polymorphic records already carry the machinery to type it soundly.
@@ -52,7 +52,7 @@ Add a **record update** expression: `{ ...base, f: v, … }`.
   principal and off the ReScript lineage.
 - **No multiple or non-leading spreads.**
 - **No spread in destructuring patterns** — a separate feature, not part of this.
-- `bootstrap/parser.al` is **not** yet taught this form; the bootstrap corpus
+- `bootstrap/parser.mochi` is **not** yet taught this form; the bootstrap corpus
   doesn't use it, so the differential suites and the fixpoint stay green without
   a port. Porting is future work, gated on the self-hoster needing the syntax.
 

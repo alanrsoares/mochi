@@ -1,4 +1,4 @@
-// Ticket 0013 (part b) — bootstrap/module.al's compileGraph / buildModules.
+// Ticket 0013 (part b) — bootstrap/module.mochi's compileGraph / buildModules.
 // Having loaded the graph (part a) and added the four cross-module seams, we
 // now compile a real multi-module program end to end and DIFFERENTIAL-check it
 // against the TS driver (src/module.ts): same module order, byte-identical JS
@@ -26,23 +26,23 @@ const bases = (outs: Out[]): string[] => outs.map((o) => basename(o.path));
 beforeAll(async () => {
   // Build the whole graph closed-world; it emits bootstrap/module.js beside its
   // deps. Import the shipped driver in-process.
-  execFileSync("bun", ["src/cli.ts", "build", "bootstrap/cli.al"], { cwd: root });
+  execFileSync("bun", ["src/cli.ts", "build", "bootstrap/cli.mochi"], { cwd: root });
   ({ buildModules } = await import(join(root, "bootstrap/module.js")));
 });
 
 test("compiles examples/modules end to end", () => {
-  const r = buildModules(join(root, "examples/modules/main.al"));
+  const r = buildModules(join(root, "examples/modules/main.mochi"));
   expect(r._tag).toBe("Ok");
   if (r._tag !== "Ok") return;
   // geometry before main — dependency order.
-  expect(bases(r.value)).toEqual(["geometry.al", "main.al"]);
+  expect(bases(r.value)).toEqual(["geometry.mochi", "main.mochi"]);
   for (const o of r.value) expect(o.js.length).toBeGreaterThan(0);
 });
 
 test("matches the TS buildModules driver byte for byte", async () => {
-  const ts = await tsBuild(join(root, "examples/modules/main.al"), (p) => fsRead(p, "utf8"));
+  const ts = await tsBuild(join(root, "examples/modules/main.mochi"), (p) => fsRead(p, "utf8"));
   expect(ts._tag).toBe("Ok");
-  const boot = buildModules(join(root, "examples/modules/main.al"));
+  const boot = buildModules(join(root, "examples/modules/main.mochi"));
   expect(boot._tag).toBe("Ok");
   if (ts._tag !== "Ok" || boot._tag !== "Ok") return;
 
@@ -55,24 +55,24 @@ test("matches the TS buildModules driver byte for byte", async () => {
 test("cross-module exhaustiveness fires: dropping an imported ctor arm fails", () => {
   const dir = mkdtempSync(join(tmpdir(), "mochi-mod-"));
   writeFileSync(
-    join(dir, "shapes.al"),
+    join(dir, "shapes.mochi"),
     "export type Shape = Circle(r: number) | Square(s: number)\n",
   );
   // Missing the Square arm — only catchable with shapes' registry imported.
   writeFileSync(
-    join(dir, "app.al"),
+    join(dir, "app.mochi"),
     'import { Circle, Square } from "./shapes"\nlet f = s => switch s { | Circle(r) => r }\n',
   );
-  const r = buildModules(join(dir, "app.al"));
+  const r = buildModules(join(dir, "app.mochi"));
   expect(r._tag).toBe("Err");
   if (r._tag === "Err") expect(r.error.message).toContain("non-exhaustive");
 });
 
 test("reports a missing export against the import site", () => {
   const dir = mkdtempSync(join(tmpdir(), "mochi-mod-"));
-  writeFileSync(join(dir, "lib.al"), "export let a = 1\n");
-  writeFileSync(join(dir, "use.al"), 'import { a, nope } from "./lib"\nlet x = a\n');
-  const r = buildModules(join(dir, "use.al"));
+  writeFileSync(join(dir, "lib.mochi"), "export let a = 1\n");
+  writeFileSync(join(dir, "use.mochi"), 'import { a, nope } from "./lib"\nlet x = a\n');
+  const r = buildModules(join(dir, "use.mochi"));
   expect(r._tag).toBe("Err");
   if (r._tag === "Err") {
     expect(r.error.message).toContain("has no export 'nope'");

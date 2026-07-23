@@ -6,12 +6,12 @@
 // Drift control (PATH_TO_BOOTSTRAP §6 — one prelude, never forked): the shim is
 // GENERATED, never hand-edited. `test/prelude-shim.spec.ts` regenerates in
 // memory and asserts byte-equality with the checked-in file, so any edit to
-// `src/prelude.ts` (or to infer.al's `Ty` runtime shape) that skips
+// `src/prelude.ts` (or to infer.mochi's `Ty` runtime shape) that skips
 // `bun run gen:prelude` fails CI.
 //
 // The two inference tables (`preludeEnv`, `preludeNamespaces`) hold TS `Type`
 // values; they are lowered to mochi's `Ty` runtime representation using
-// infer.al's OWN constructors (compiled + evaluated here, exactly as the
+// infer.mochi's OWN constructors (compiled + evaluated here, exactly as the
 // differential test does) so the embedded data can never drift from the shape
 // the bootstrap inferrer expects.
 import { match } from "@onrails/pattern";
@@ -28,7 +28,7 @@ import type { Row, Type } from "../src/types";
 
 export const SHIM_PATH = "bootstrap/prelude.gen.js";
 
-// --- load infer.al's Ty/Row constructors from the compiled module ---
+// --- load infer.mochi's Ty/Row constructors from the compiled module ---
 type AlInfer = {
   tVar: (id: number) => unknown;
   tCon: (name: string, args: unknown[]) => unknown;
@@ -75,7 +75,7 @@ const makeConverters = (al: AlInfer) => {
   return { tsTypeToAl };
 };
 
-// Build the shim's ESM source. Pure function of src/prelude.ts + infer.al, so
+// Build the shim's ESM source. Pure function of src/prelude.ts + infer.mochi, so
 // the parity test can call it and compare against the checked-in file.
 export const buildShimSource = (): string => {
   const alInfer = evalAlNames<AlInfer>(unwrapOk(compile(readTypes())), [
@@ -126,13 +126,13 @@ export const runtimeDeps = _map(_runtimeDeps);
 `;
 };
 
-// types.al source read lazily. Ty/Row and their constructors live here (split
-// out of infer.al, ticket 0013); it's self-contained (no AST import) so it
-// still compiles single-file open-world, unlike infer.al.
+// types.mochi source read lazily. Ty/Row and their constructors live here (split
+// out of infer.mochi, ticket 0013); it's self-contained (no AST import) so it
+// still compiles single-file open-world, unlike infer.mochi.
 const readTypes = (): string => {
   const { readFileSync } = require("node:fs");
   const { join } = require("node:path");
-  return readFileSync(join(import.meta.dir, "..", "bootstrap/types.al"), "utf8");
+  return readFileSync(join(import.meta.dir, "..", "bootstrap/types.mochi"), "utf8");
 };
 
 // Run directly: (re)write the checked-in shim.
