@@ -753,7 +753,9 @@ const aliasRow = (
   return tRecord(row);
 };
 
-const typeExprToType = (
+// Exported for `dts.ts`, which lowers ctor-field TypeExprs to Types so the
+// TS output grammar has exactly one encoder (`tsOf`).
+export const typeExprToType = (
   te: TypeExpr,
   vars: Map<string, Type>,
   f: Fresh,

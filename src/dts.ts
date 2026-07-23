@@ -12,9 +12,17 @@ import { isErr, ok, type Result } from "@onrails/result";
 import type { Ctor, Expr, Program, Stmt, TypeExpr } from "./ast";
 import { toTypedProgram } from "./compile";
 import type { AlangError } from "./errors";
-import type { Scheme } from "./infer";
+import { type Scheme, typeExprToType } from "./infer";
 import { builtinTypeDecls, preludeNamespaces } from "./prelude";
-import { type AliasDef, aliasParamId, foldAliases, type Row, type Type } from "./types";
+import {
+  type AliasDef,
+  aliasParamId,
+  foldAliases,
+  mkFresh,
+  type Row,
+  type Type,
+  tVar,
+} from "./types";
 
 // Collect every type-constructor name appearing in a type (for detecting which
 // builtin variant decls an emitted module must include).
@@ -207,25 +215,14 @@ const genericNames = (sc: Scheme): Map<number, string> =>
 const paramGmap = (params: string[]): Map<string, string> =>
   new Map(params.map((p, i) => [p, LETTERS[i] ?? `T${i}`]));
 
-// A ctor field type param / primitive name → TS.
-const argTs = (a: string, gmap: Map<string, string>): string =>
-  gmap.get(a) ?? PRIM_TS[a] ?? (a === "float" || a === "int" ? "number" : a);
-
-// A ctor field type is a full TypeExpr (ADR 0015); render it in tsOf's style
-// (`[t]` → `t[]`, applied ctors → generics, arrows → function types).
-const teTs = (te: TypeExpr, gmap: Map<string, string>): string => {
-  switch (te.kind) {
-    case "tname":
-      return argTs(te.name, gmap);
-    case "tarrow":
-      return `(x: ${teTs(te.from, gmap)}) => ${teTs(te.to, gmap)}`;
-    case "tapp":
-      return `${te.ctor}<${te.args.map((a) => teTs(a, gmap)).join(", ")}>`;
-    case "ttuple":
-      return `[${te.elems.map((e) => teTs(e, gmap)).join(", ")}]`;
-    case "tlist":
-      return `${teTs(te.elem, gmap)}[]`;
-  }
+// A ctor field type is a full TypeExpr (ADR 0015). Lower it to a Type first
+// (params bound positionally, aliases left nominal) and render through `tsOf`,
+// so the TS output grammar has exactly one encoder — flat-arrow collapse and
+// `List` → `Iterable` apply to ctor fields exactly as everywhere else.
+const fieldTs = (te: TypeExpr, params: string[]): string => {
+  const vars = new Map(params.map((p, i): [string, Type] => [p, tVar(i)]));
+  const names = new Map(params.map((_, i): [number, string] => [i, LETTERS[i] ?? `T${i}`]));
+  return tsOf(typeExprToType(te, vars, mkFresh(params.length)), names);
 };
 
 // Free type-var ids in a Type, first-appearance order.
@@ -332,7 +329,7 @@ export const ctorFactoryTs = (
   const gs = params.map((p) => gmap.get(p)!);
   return {
     generics: gs.length ? `<${gs.join(", ")}>` : "",
-    paramTypes: c.fields.map((f) => teTs(f.type, gmap)),
+    paramTypes: c.fields.map((f) => fieldTs(f.type, params)),
     ret: gs.length ? `${typeName}<${gs.join(", ")}>` : typeName,
     retMono: gs.length ? `${typeName}<${gs.map(() => "never").join(", ")}>` : typeName,
   };
@@ -512,7 +509,7 @@ export const aliasTsDecl = (def: AliasDef): string => {
 export const typeDecl = (name: string, params: string[], ctors: Ctor[]): string => {
   const gmap = paramGmap(params);
   const variant = (c: Ctor): string => {
-    const fields = c.fields.map((fld, i) => `${fld.name ?? `_${i}`}: ${teTs(fld.type, gmap)}`);
+    const fields = c.fields.map((fld, i) => `${fld.name ?? `_${i}`}: ${fieldTs(fld.type, params)}`);
     return `{ _tag: "${c.name}"${fields.length ? `; ${fields.join("; ")}` : ""} }`;
   };
   const head = params.length ? `${name}<${params.map((p) => gmap.get(p)).join(", ")}>` : name;

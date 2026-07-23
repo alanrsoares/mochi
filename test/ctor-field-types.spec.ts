@@ -87,3 +87,15 @@ let count = t => switch t {
 let r = count(Node([Leaf(1), Node([Leaf(2), Leaf(3)])]))`;
   expect(run(src, "r")).toBe(3);
 });
+
+test("dts renders function and List ctor fields through tsOf (one TS grammar)", () => {
+  const src = `type Step a =
+  | Fn(op: a -> a -> a)
+  | Batch(items: List a)
+`;
+  const dts = unwrapOk(emitDts(src));
+  // Arrows collapse FLAT, matching the uncurried calling convention (never
+  // `(x: a) => (x: a) => a`), and `List` lowers to the runtime's `Iterable`.
+  expect(dts).toContain('{ _tag: "Fn"; op: (a: A, b: A) => A }');
+  expect(dts).toContain('{ _tag: "Batch"; items: Iterable<A> }');
+});
