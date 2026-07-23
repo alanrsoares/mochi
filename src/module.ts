@@ -10,10 +10,11 @@
 import { dirname, relative, resolve } from "node:path";
 import { err, isErr, ok, type Result, ResultAsync } from "@onrails/result";
 import type { Program, Stmt } from "./ast";
-import { exportedRegistry, type Registry } from "./check";
-import { codegen, exportedCtorKeys } from "./codegen";
+import type { Registry } from "./check";
+import { codegen } from "./codegen";
 import { DEFAULT_RUNTIME_IMPORT, emitTsModule } from "./codegen-ts";
 import { toTypedProgramWith } from "./compile";
+import { exportedCtorKeys, exportedCtorTable } from "./ctors";
 import { type ExternBinding, externModuleDts } from "./dts";
 import { type AlangError, checkErr } from "./errors";
 import type { Env, Scheme } from "./infer";
@@ -152,7 +153,7 @@ const compileGraph = (graph: Loaded[]): Result<ModuleOutput[], AlangError> => {
     const typed = toTypedProgramWith(prog, gathered.value);
     if (isErr(typed)) return typed;
     exportsByPath.set(path, exportsOf(prog, typed.value.res.env));
-    regByPath.set(path, exportedRegistry(prog));
+    regByPath.set(path, exportedCtorTable(prog));
     keysByPath.set(path, exportedCtorKeys(prog));
     outputs.push({ path, js: codegen(prog, gathered.value.importedKeys, { runtime: true }) });
   }
@@ -240,7 +241,7 @@ const compileGraphTs = (
     const ts = typeImports.length ? `${typeImports.join("\n")}\n\n${body}` : body;
 
     exportsByPath.set(path, exportsOf(prog, env));
-    regByPath.set(path, exportedRegistry(prog));
+    regByPath.set(path, exportedCtorTable(prog));
     keysByPath.set(path, exportedCtorKeys(prog));
     outputs.push({ path, js: ts });
   }
@@ -329,7 +330,7 @@ export const moduleContext = (
       const typed = toTypedProgramWith(prog, gathered.value);
       if (isErr(typed)) return typed;
       exportsByPath.set(path, exportsOf(prog, typed.value.res.env));
-      regByPath.set(path, exportedRegistry(prog));
+      regByPath.set(path, exportedCtorTable(prog));
       keysByPath.set(path, exportedCtorKeys(prog));
     }
     // Entry has no imports (graph = [entry]) — empty context.

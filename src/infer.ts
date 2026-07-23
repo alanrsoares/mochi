@@ -19,8 +19,8 @@ import type {
   TernaryExpr,
   TypeExpr,
 } from "./ast";
+import { ctorTableOf, PRIM_TYPE_NAMES } from "./ctors";
 import { type AlangError, typeErr } from "./errors";
-import { builtinTypeDecls } from "./prelude";
 import type { Span } from "./span";
 import {
   type AliasDef,
@@ -722,7 +722,6 @@ const inferSeqPat = (
 // Convert a surface `extern` type expression into an HM type. Prim names map to
 // their type; Uppercase names are nullary constructors; lowercase names are
 // type variables (shared by name within the signature, then generalized).
-const PRIMS = new Set(["number", "int", "float", "string", "bool"]);
 
 // A transparent record alias, keyed by name, resolved during type-expr → type.
 type AliasInfo = { params: string[]; fields: AliasField[] };
@@ -776,7 +775,7 @@ export const typeExprToType = (
     return tTuple(te.elems.map((el) => typeExprToType(el, vars, f, aliases, expanding)));
   if (te.kind === "tlist")
     return tCon("Array", [typeExprToType(te.elem, vars, f, aliases, expanding)]);
-  if (PRIMS.has(te.name)) return primType(te.name);
+  if (PRIM_TYPE_NAMES.has(te.name)) return primType(te.name);
   const info = aliases.get(te.name);
   if (info) return aliasRow(te.name, info, [], f, aliases, expanding);
   if (/^[A-Z]/.test(te.name)) return tCon(te.name);
@@ -1070,16 +1069,15 @@ function run(
     letUses.get(sc)?.push(t);
   };
 
-  // constructors first, so `let`s (in any order after their type) can use them
-  for (const s of prog.stmts) {
-    if (s.kind !== "type") continue;
-    for (const c of s.ctors) env.set(c.name, ctorScheme(s.name, s.params, c, fresh, aliasMap));
+  // constructors first, so `let`s (in any order after their type) can use them.
+  // One derivation (`ctors.ts`, ticket 0024): a user entry always binds; a
+  // builtin entry (Some/None/Ok/Err) yields to an existing binding — a user
+  // decl above, or an imported ctor scheme already seeded into the env — so
+  // `Map.get : ... -> Option v` and hand-written Some/None both type-check.
+  for (const [name, e] of ctorTableOf(prog).ctor) {
+    if (e.builtin && env.has(name)) continue;
+    env.set(name, ctorScheme(e.type, e.params, e.ctor, fresh, aliasMap));
   }
-  // Builtin variant ctors (Some/None/Ok/Err), unless a user type already bound
-  // the name — so `Map.get : ... -> Option v` and hand-written Some/None type-check.
-  for (const bt of builtinTypeDecls)
-    for (const c of bt.ctors)
-      if (!env.has(c.name)) env.set(c.name, ctorScheme(bt.name, bt.params, c, fresh, aliasMap));
 
   // externs next — their declared type is authoritative; generalize so a
   // polymorphic signature (e.g. a -> a) instantiates fresh at each use site.

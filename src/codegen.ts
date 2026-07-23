@@ -23,20 +23,14 @@ import type {
   Stmt,
   TypeStmt,
 } from "./ast";
-import { builtinTypeDecls, namespaceRuntime, preludeJsDefs, runtimeDeps } from "./prelude";
+import { ctorTableOf, keysOf } from "./ctors";
+import { namespaceRuntime, preludeJsDefs, runtimeDeps } from "./prelude";
 import type { Span } from "./span";
 
 // A `Ns.member` access on a bare namespace ref (`List.map`) → the JS identifier
 // its runtime is defined under, or null if it isn't a namespace access.
 const nsRuntimeId = (e: FieldExpr): string | null =>
   e.target.kind === "ref" ? (namespaceRuntime[e.target.name]?.[e.name] ?? null) : null;
-
-// A constructor's runtime field keys: a labelled field uses its label, an
-// unlabelled one its position (`_0`, `_1`). Both the factory (`genType`) and the
-// pattern destructure (`genWithArm`) must agree, so patterns consult the
-// `GenCtx.ctorKeys` registry — populated per `codegen` call from the program's
-// `type` decls.
-const keysOf = (fields: CtorField[]): string[] => fields.map((f, i) => f.name ?? `_${i}`);
 
 // The typing a TS-mode ctor factory carries (see `GenCtx.annotateCtor`).
 export type CtorFactoryTs = {
@@ -122,16 +116,6 @@ type GenCtx = {
   // compiled sibling), `""` for the TS backend (`import … from "./mod"`, which
   // tsc/bundlers resolve to the sibling `.ts`). Set per `codegen` call.
   readonly moduleExt: string;
-};
-
-// The field keys of a module's EXPORTED ctors — threaded into an importer's
-// `codegen` so a pattern on an imported variant destructures the right runtime
-// keys (`Some(value: a)` → `{ value }`, not the positional `{ _0 }`).
-export const exportedCtorKeys = (prog: Program): Map<string, string[]> => {
-  const m = new Map<string, string[]>();
-  for (const s of prog.stmts)
-    if (s.kind === "type" && s.exported) for (const c of s.ctors) m.set(c.name, keysOf(c.fields));
-  return m;
 };
 
 // Collapse a curried lambda chain (`x => y => body`, or a mix with multi-param
@@ -937,12 +921,12 @@ export const codegen = (
   imported?: Map<string, string[]>,
   opts: CodegenOptions = {},
 ): string => {
+  // One derivation (`ctors.ts`, ticket 0024): user entries always bind; a
+  // builtin entry (Some/Ok/…) yields to an existing key set — a user decl, or
+  // an imported ctor's keys already seeded from `imported`.
   const ctorKeys = new Map(imported ?? []);
-  for (const s of prog.stmts)
-    if (s.kind === "type") for (const c of s.ctors) ctorKeys.set(c.name, keysOf(c.fields));
-  // Seed builtin variant ctor keys (Some/Ok/…) unless the program declares its own.
-  for (const bt of builtinTypeDecls)
-    for (const c of bt.ctors) if (!ctorKeys.has(c.name)) ctorKeys.set(c.name, keysOf(c.fields));
+  for (const [name, e] of ctorTableOf(prog).ctor)
+    if (!e.builtin || !ctorKeys.has(name)) ctorKeys.set(name, e.keys);
   const ctx: GenCtx = {
     ctorKeys,
     annotateLet: opts.annotate ?? null,

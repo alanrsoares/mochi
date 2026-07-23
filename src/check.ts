@@ -2,64 +2,15 @@
 // Builds a variant registry from `type` decls, then verifies every `switch`.
 import { err, isErr, ok, type Result } from "@onrails/result";
 import type { CtorPat, Expr, LamParam, MatchExpr, OrPat, Pattern, Program, TypeExpr } from "./ast";
+import { buildCtorTable, type CtorTable, PRIM_TYPE_NAMES } from "./ctors";
 import { type AlangError, checkErr } from "./errors";
 import { builtinTypeDecls, preludeNamespaces } from "./prelude";
 import type { Span } from "./span";
 
-type CtorInfo = { type: string; arity: number };
-export type Registry = {
-  ctor: Map<string, CtorInfo>; // ctor name → owning type + arity
-  type: Map<string, string[]>; // type name → its ctor names
-};
-
-// The registry a module publishes: only its EXPORTED variant types (and their
-// full ctor sets). Threaded into an importer's `check` so a `switch` on an
-// imported variant is exhaustiveness-checked against every constructor — even
-// ones the importer never imported (those force a catch-all, since it can't
-// name them).
-export const exportedRegistry = (prog: Program): Registry => {
-  const reg: Registry = { ctor: new Map(), type: new Map() };
-  for (const s of prog.stmts) {
-    if (s.kind !== "type" || !s.exported) continue;
-    reg.type.set(
-      s.name,
-      s.ctors.map((c) => c.name),
-    );
-    for (const c of s.ctors) reg.ctor.set(c.name, { type: s.name, arity: c.fields.length });
-  }
-  return reg;
-};
-
-const buildRegistry = (prog: Program): Result<Registry, AlangError> => {
-  const reg: Registry = { ctor: new Map(), type: new Map() };
-  for (const s of prog.stmts) {
-    if (s.kind !== "type") continue;
-    if (reg.type.has(s.name)) return err(checkErr(`duplicate type '${s.name}'`, s.span));
-    // A transparent record alias reserves its name (so a later variant can't
-    // reuse it) but registers no constructors — it's structural, never a
-    // `switch` target. An empty ctor list is inert for exhaustiveness.
-    reg.type.set(
-      s.name,
-      s.ctors.map((c) => c.name),
-    );
-    for (const c of s.ctors) {
-      if (reg.ctor.has(c.name)) return err(checkErr(`duplicate constructor '${c.name}'`, s.span));
-      reg.ctor.set(c.name, { type: s.name, arity: c.fields.length });
-    }
-  }
-  // Seed builtin variant types (Option/Result) unless the program declares its
-  // own type of that name — so user redeclarations win with no duplicate error.
-  for (const bt of builtinTypeDecls) {
-    if (reg.type.has(bt.name)) continue;
-    reg.type.set(
-      bt.name,
-      bt.ctors.map((c) => c.name),
-    );
-    for (const c of bt.ctors)
-      if (!reg.ctor.has(c.name)) reg.ctor.set(c.name, { type: bt.name, arity: c.fields.length });
-  }
-  return ok(reg);
-};
+// The variant registry `check` validates against IS the shared constructor
+// table (`ctors.ts`, ticket 0024) — the same derivation infer builds schemes
+// from and codegen reads keys from, so arity cannot drift between passes.
+export type Registry = CtorTable;
 
 // Walk an expression tree, invoking `visit` on every `match` node.
 function forEachMatch(e: Expr, visit: (m: MatchExpr) => void): void {
@@ -396,13 +347,13 @@ const checkReservedNames = (prog: Program): AlangError | null => {
 // Ctor field types are full type expressions (ADR 0015). A lowercase leaf name
 // is a type variable and must be one of the declaration's parameters — a stray
 // var would be existential (matching couldn't recover its type). Prim names
-// (number/string/bool/...) are fine.
-const CTOR_PRIMS = new Set(["number", "int", "float", "string", "bool"]);
-
+// (number/string/bool/..., `PRIM_TYPE_NAMES` from ctors.ts) are fine.
 const strayTypeVar = (te: TypeExpr, params: ReadonlySet<string>): TypeExpr | null => {
   switch (te.kind) {
     case "tname":
-      return /^[A-Z]/.test(te.name) || CTOR_PRIMS.has(te.name) || params.has(te.name) ? null : te;
+      return /^[A-Z]/.test(te.name) || PRIM_TYPE_NAMES.has(te.name) || params.has(te.name)
+        ? null
+        : te;
     case "tarrow":
       return strayTypeVar(te.from, params) ?? strayTypeVar(te.to, params);
     case "tapp":
@@ -617,7 +568,7 @@ export function check(prog: Program, imported?: Registry): Result<Program, Alang
   if (reservedWord) return err(reservedWord);
   const strays = checkCtorFieldVars(prog);
   if (strays) return err(strays);
-  const built = buildRegistry(prog);
+  const built = buildCtorTable(prog);
   if (isErr(built)) return built;
   const reg = built.value;
   if (imported) {
