@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="logo_mochi_kanji_vector.jpg" alt="mochi logo" width="200" />
+<img src="logo.png" alt="mochi logo" width="200" />
 
 <h1>mochi</h1>
 
