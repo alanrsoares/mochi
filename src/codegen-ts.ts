@@ -16,6 +16,7 @@ import {
   aliasTsDecl,
   bindingTsType,
   builtinDeclsIn,
+  ctorCallTs,
   ctorFactoryTs,
   emptyCollTs,
   genericLambdaParams,
@@ -230,6 +231,15 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
     return t ? emptyCollTs(t, ctx.aliases) : null;
   };
 
+  // An applied parametric ctor call (`Ok("")`, `Err(e)`): cast it to its resolved
+  // concrete type so the phantom param the argument doesn't pin can't widen to
+  // `unknown` in a ts-pattern arm (ADR 0043). Per-node type table; `ctorCallTs`
+  // renders only a fully-concrete `con`, so calls in a generic position stay bare.
+  const annotateCall = (e: Expr) => {
+    const t = typeAt.get(`${e.span.start}:${e.span.end}`);
+    return t ? ctorCallTs(t, ctx.aliases) : null;
+  };
+
   // Type each variant's ctor factories (return the variant type, params from the
   // ctor's field TypeExprs — ADR 0015) so `Circle(2)` is a `Shape`, not `any`.
   const body = codegen(prog, ctx.importedKeys, {
@@ -239,6 +249,7 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
     guardBaseType,
     annotateEmpty,
     annotateLetin,
+    annotateCall,
     annotateCtor: (s, c) => ctorFactoryTs(s.name, s.params, c),
     flattenPipe: true,
     tupleHelper: true, // emit `_tuple(a, b)` so tsc infers a tuple (ADR 0036)

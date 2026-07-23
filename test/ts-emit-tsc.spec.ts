@@ -193,6 +193,20 @@ let firstPatterns = arms =>
   |> map(a => a.pattern)
 let lookupNested = (outer, inner, tbl) =>
   Map.get(inner, Map.getOr(#{}, outer, tbl))`,
+  // ADR 0043: an applied ctor's phantom type param (`Ok`'s error, `Err`'s ok)
+  // widens to `unknown` in a ts-pattern arm, clashing with a sibling arm. The
+  // error type is pinned concretely (via `step`), so the recursion's Result is
+  // fully concrete and each arm is cast to it — without the cast, tsc rejects
+  // `Result<string, unknown>` against the recursive `Result<string, string>`.
+  phantomCtorArm: `
+let step = x => x ? Ok(1) : Err("bad")
+let runAll = xs => switch xs {
+  | [] => Ok("done")
+  | [x, ...rest] => switch step(x) {
+      | Err(e) => Err(e)
+      | Ok(_) => runAll(rest)
+    }
+}`,
 };
 
 beforeAll(() => {

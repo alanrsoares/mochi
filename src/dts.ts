@@ -138,6 +138,21 @@ export const emptyCollTs = (
   return allVarsIn(folded, names) ? tsOf(folded, names) : null;
 };
 
+// TS type for an APPLIED parametric constructor call (`Ok(x)`, `Some(y)`) whose
+// result type is fully known, else null. A constructor's argument pins only the
+// type params it mentions; a phantom param (`Ok`'s error type, `Err`'s ok type)
+// stays free at the call, so tsc widens it to `unknown` — and in a ts-pattern arm
+// that then fails to unify with a sibling arm (`Ok("")` : `Result<string, unknown>`
+// vs the recursive branch's `Result<string, string>`; ADR 0043). Annotate the call
+// with its resolved concrete type (`Ok("") as Result<string, string>`) — the
+// applied-ctor analogue of ADR 0039's nullary-ctor rule and ADR 0035's empty seed.
+// Fully-concrete cons only: a free var would render `unknown`, no better than tsc.
+export const ctorCallTs = (t: Type, aliases: AliasDef[]): string | null => {
+  const folded = foldAliases(t, aliases);
+  if (folded.kind !== "con" || folded.args.length === 0) return null;
+  return hasFreeVar(folded) ? null : tsOf(folded, new Map());
+};
+
 // Arity-aware function type: peel one arrow per lambda parameter, then recurse
 // into the body (which may itself be a lambda for curried definitions).
 const declType = (t: Type, value: Expr, names: Map<number, string>): string => {

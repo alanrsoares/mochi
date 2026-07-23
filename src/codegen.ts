@@ -102,6 +102,14 @@ let annotateEmpty: ((e: Expr) => string | null) | null = null;
 // IIFE, which arg-based inference alone cannot do.
 let annotateLetin: ((value: Expr) => string | null) | null = null;
 
+// TS backend (ADR 0043): given an applied parametric constructor call (`Ok(x)`,
+// `Err(e)`), return its fully-concrete TS type text to cast the call to, or null.
+// A ctor's argument pins only some type params; a phantom one (`Ok`'s error, `Err`'s
+// ok) stays free and widens to `unknown` in a ts-pattern arm — annotating the call
+// (`Ok("") as Result<string, string>`) pins it. The applied-ctor analogue of the
+// nullary-ctor rule (`annotateEmpty` on a `ref`, ADR 0039).
+let annotateCall: ((e: Expr) => string | null) | null = null;
+
 // Extension for cross-module import specifiers: `.js` for the JS backend (the
 // compiled sibling), `""` for the TS backend (`import … from "./mod"`, which
 // tsc/bundlers resolve to the sibling `.ts`). Set per `codegen` call.
@@ -161,7 +169,17 @@ const genExpr = (e: Expr): string =>
       const ann = nullaryCtor ? annotateEmpty?.(r) : null;
       return ann ? `(${r.name} as ${ann})` : r.name;
     })
-    .with({ kind: "call" }, (c) => `${genCallee(c.fn)}(${c.args.map(genExpr).join(", ")})`)
+    .with({ kind: "call" }, (c) => {
+      const inner = `${genCallee(c.fn)}(${c.args.map(genExpr).join(", ")})`;
+      // TS backend (ADR 0043): an applied parametric ctor (`Ok("")`, `Err(e)`)
+      // leaves the type param its argument doesn't determine free, so tsc widens
+      // it to `unknown` — in a ts-pattern arm that then clashes with a sibling
+      // arm. Cast the call to its resolved concrete type. Gated on an uppercase
+      // callee (a ctor; `annotateCall` itself yields null unless the type is a
+      // fully-concrete `con`, so ordinary Capitalized calls stay bare).
+      const ann = c.fn.kind === "ref" && /^[A-Z]/.test(c.fn.name) ? annotateCall?.(c) : null;
+      return ann ? `(${inner} as ${ann})` : inner;
+    })
     .with({ kind: "lambda" }, (l) => {
       const { params, body } = collapseLambda(l);
       // TS backend: annotate each param from the lambda's inferred curried type
@@ -888,6 +906,7 @@ export type CodegenOptions = {
   guardBaseType?: (scrutinee: Expr) => string | null;
   annotateEmpty?: (e: Expr) => string | null;
   annotateLetin?: (value: Expr) => string | null;
+  annotateCall?: (e: Expr) => string | null;
 };
 
 export const codegen = (
@@ -905,6 +924,7 @@ export const codegen = (
   guardBaseType = opts.guardBaseType ?? null;
   annotateEmpty = opts.annotateEmpty ?? null;
   annotateLetin = opts.annotateLetin ?? null;
+  annotateCall = opts.annotateCall ?? null;
   for (const s of prog.stmts)
     if (s.kind === "type") for (const c of s.ctors) ctorKeys.set(c.name, keysOf(c.fields));
   // Seed builtin variant ctor keys (Some/Ok/…) unless the program declares its own.
