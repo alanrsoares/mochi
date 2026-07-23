@@ -1,4 +1,4 @@
-// Ticket 0004 — the generated prelude shim `bootstrap/prelude.gen.js` gives the
+// Ticket 0004 — the generated prelude shim `bootstrap/prelude.gen.mjs` gives the
 // shipped self-hosted compiler its five prelude tables with no `src/` import.
 //
 // Two guards:

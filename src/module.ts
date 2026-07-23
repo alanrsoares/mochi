@@ -201,7 +201,7 @@ const compileGraphTs = (
 
   // Extern modules referenced across the graph → one `.d.ts` each. Keyed by the
   // resolved `.d.ts` path so a specifier imported by several modules (e.g.
-  // `./prelude.gen.js` from both compile and module) emits a single file.
+  // `./prelude.gen.mjs` from both compile and module) emits a single file.
   const externDts = new Map<string, ExternBinding[]>();
 
   for (const { path, prog } of graph) {
