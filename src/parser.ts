@@ -157,11 +157,19 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
       return { kind: "call", fn, args: [value], span: spanning(start, body.span) };
     }
     const { name, span: nameSpan } = expectId();
+    const annot = parseOptAnnot();
     expect("eq");
     const value = parseExpr();
     expectIn();
     const body = parseExpr();
-    return { kind: "letin", name, nameSpan, value, body, span: spanning(start, body.span) };
+    return { kind: "letin", name, nameSpan, annot, value, body, span: spanning(start, body.span) };
+  }
+
+  // An optional `: TypeExpr` binding annotation after a let's name (ADR 0044).
+  function parseOptAnnot(): TypeExpr | undefined {
+    if (peek().t !== "colon") return undefined;
+    next();
+    return parseTypeExpr();
   }
 
   // Consume the contextual `in` keyword after a let binding's value.
@@ -604,9 +612,10 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     const start = expect("let").span;
     if (peek().t === "lbrace") return parseRecordDestructure(start);
     const { name, span: nameSpan } = expectId();
+    const annot = parseOptAnnot();
     expect("eq");
     const value = parseExpr();
-    return [{ kind: "let", name, nameSpan, value, span: spanning(start, value.span) }];
+    return [{ kind: "let", name, nameSpan, annot, value, span: spanning(start, value.span) }];
   }
 
   // `let { x, y } = e` desugars to a temp binding of `e` plus one field-access

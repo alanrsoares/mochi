@@ -72,7 +72,7 @@ type Ctor = { name: string, fields: [CtorField] }
 type AliasField = { name: string, fieldType: TypeExpr }
 
 export type Stmt =
-  | SLet(name: string, nameSpan: Span, value: Expr, exported: bool, doc: Option string, span: Span)
+  | SLet(name: string, nameSpan: Span, annot: Option TypeExpr, value: Expr, exported: bool, doc: Option string, span: Span)
   | SType(name: string, params: [string], ctors: [Ctor], alias: Option [AliasField], exported: bool, span: Span)
   | SExtern(name: string, nameSpan: Span, typeExpr: TypeExpr, module: string, imported: string, exported: bool, span: Span)
   | SImport(names: [Name], from: string, span: Span)

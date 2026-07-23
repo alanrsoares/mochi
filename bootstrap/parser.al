@@ -818,11 +818,12 @@ let parseRecordDestructure = (start, toks, pos, tmp) =>
   let whole = spanning(start, exprSpan(value)) in
   let patSpan = spanning(openSp, closeSp) in
   let tmpName = Str.concat("$d", show(tmp)) in
-  let header = SLet(tmpName, patSpan, value, false, None, whole) in
+  let header = SLet(tmpName, patSpan, None, value, false, None, whole) in
   let access = f =>
     SLet(
       f.name,
       f.span,
+      None,
       EField(ERef(tmpName, f.span), f.name, f.span),
       false,
       None,
@@ -836,7 +837,11 @@ let parseLet = (toks, pos, tmp) =>
   eq(tokAt(toks, p).tok, TLbrace)
     ? parseRecordDestructure(start, toks, p, tmp)
     : let? (nm, p1) = expectId(toks, p) in
-    let? p2 = expectTok(TEq, toks, p1) in
+    let? (annot, pA) = eq(tokAt(toks, p1).tok, TColon)
+      ? parseTypeExpr(toks, add(p1, 1))
+        |> Result.map(((ty, p)) => (Some(ty), p))
+      : Ok((None, p1)) in
+    let? p2 = expectTok(TEq, toks, pA) in
     let? (value, p3) = parseExpr(toks, p2) in
     Ok(
       (
@@ -844,6 +849,7 @@ let parseLet = (toks, pos, tmp) =>
           SLet(
             nm.name,
             nm.span,
+            annot,
             value,
             false,
             None,
@@ -857,9 +863,10 @@ let parseLet = (toks, pos, tmp) =>
 
 // Rebuilders for the export/doc metadata the TS parser spreads on.
 let setLetMeta = (exported, doc, s) => switch s {
-  | SLet(name, nameSpan, value, _, _, span) => SLet(
+  | SLet(name, nameSpan, annot, value, _, _, span) => SLet(
       name,
       nameSpan,
+      annot,
       value,
       exported,
       doc,

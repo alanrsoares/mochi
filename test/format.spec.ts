@@ -16,6 +16,14 @@ test("a multi-param lambda keeps its parentheses", () => {
   expect(fmt("let g=(a,b)=>add(a,b)")).toBe("let g = (a, b) => add(a, b)\n");
 });
 
+test("prints a binding type annotation (ADR 0044)", () => {
+  expect(fmt("let   n:number=5")).toBe("let n : number = 5\n");
+});
+
+test("prints an annotation on a let-in binding (ADR 0044)", () => {
+  expect(fmt("let f=x=>let n:number=x in n")).toBe("let f = x => let n : number = x in n\n");
+});
+
 test("normalizes an import statement", () => {
   expect(fmt('import {a,b}from"./mod"')).toBe('import { a, b } from "./mod"\n');
 });

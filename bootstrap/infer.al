@@ -246,7 +246,8 @@ let arrowChain = (paramTypes, resultT) => switch paramTypes {
   | [p, ...rest] => tArrow(p, arrowChain(rest, resultT))
 }
 
-let ctxWithEnv = (ctx, env) => { env: env, open: ctx.open, ns: ctx.ns }
+let ctxWithEnv = (ctx, env) =>
+  { env: env, open: ctx.open, ns: ctx.ns, aliasMap: ctx.aliasMap }
 
 let inferCallArgs = (fnT, args, ctx, st) => switch args {
   | [] => Ok((fnT, st))
@@ -1248,14 +1249,14 @@ let registerExternsFrom = (stmts, aliasMap, env, st) => switch stmts {
 let letsOfFrom = stmts => switch stmts {
   | [] => []
   | [s, ...rest] => switch s {
-      | SLet(_, _, _, _, _, _) => Array.prepend(s, letsOfFrom(rest))
+      | SLet(_, _, _, _, _, _, _) => Array.prepend(s, letsOfFrom(rest))
       | _ => letsOfFrom(rest)
     }
 }
 
 let idxOfFrom = (lets, i, acc) => switch Array.get(i, lets) {
   | None => acc
-  | Some(SLet(name, _, _, _, _, _)) => idxOfFrom(
+  | Some(SLet(name, _, _, _, _, _, _)) => idxOfFrom(
       lets,
       add(i, 1),
       Map.set(name, i, acc)
@@ -1265,7 +1266,7 @@ let idxOfFrom = (lets, i, acc) => switch Array.get(i, lets) {
 let idxOfMap = lets => idxOfFrom(lets, 0, #{})
 
 let depsOf = (letStmt, idxOf) => switch letStmt {
-  | SLet(_, _, value, _, _, _) => Set.toArray(
+  | SLet(_, _, _, value, _, _, _) => Set.toArray(
       freeRefs(value, Set.fromArray([]), Set.fromArray([]))
     )
       |> Array.flatMap(r => switch Map.get(r, idxOf) {
@@ -1290,7 +1291,7 @@ let groupOfFrom = (idxs, lets) => switch idxs {
 let preBindGroupFrom = (group, env, st) => switch group {
   | [] => (env, st)
   | [s, ...rest] => switch s {
-      | SLet(name, _, _, _, _, _) => let (v, st1) = freshVar(st) in
+      | SLet(name, _, _, _, _, _, _) => let (v, st1) = freshVar(st) in
         preBindGroupFrom(rest, Map.set(name, mono(v), env), st1)
       | _ => preBindGroupFrom(rest, env, st)
     }
@@ -1299,15 +1300,28 @@ let preBindGroupFrom = (group, env, st) => switch group {
 let inferGroupFrom = (group, ctx, st) => switch group {
   | [] => Ok((#{}, st))
   | [s, ...rest] => switch s {
-      | SLet(name, _, value, _, _, span) => let? (t, st1) = inferExpr(
+      | SLet(name, _, annot, value, _, _, span) => let? (t, st1) = inferExpr(
           value,
           ctx,
           st
         ) in
         switch Map.get(name, ctx.env) {
           | Some(selfSc) => let? st2 = u(selfSc.ty, t, st1, span) in
-            let? (restTypes, st3) = inferGroupFrom(rest, ctx, st2) in
-            Ok((Map.set(name, t, restTypes), st3))
+            // Binding annotation (`let x : T = v`, ADR 0044): pin the inferred
+            // value type to the declared one before it is generalized.
+            let? st3 = switch annot {
+              | Some(te) => let (at, _, stA) = typeExprToType(
+                  te,
+                  #{},
+                  st2,
+                  ctx.aliasMap,
+                  Set.fromArray([])
+                ) in
+                u(t, at, stA, span)
+              | None => Ok(st2)
+            } in
+            let? (restTypes, st4) = inferGroupFrom(rest, ctx, st3) in
+            Ok((Map.set(name, t, restTypes), st4))
           | None => Err(
               typeErr("internal: missing self-binding for '${name}'", span)
             )
@@ -1319,7 +1333,10 @@ let inferGroupFrom = (group, ctx, st) => switch group {
 let dropGroupFrom = (group, env) => switch group {
   | [] => env
   | [s, ...rest] => switch s {
-      | SLet(name, _, _, _, _, _) => dropGroupFrom(rest, Map.delete(name, env))
+      | SLet(name, _, _, _, _, _, _) => dropGroupFrom(
+          rest,
+          Map.delete(name, env)
+        )
       | _ => dropGroupFrom(rest, env)
     }
 }
@@ -1329,7 +1346,7 @@ let dropGroupFrom = (group, env) => switch group {
 let generalizeGroupFrom = (group, bodyTypes, env, st) => switch group {
   | [] => env
   | [s, ...rest] => switch s {
-      | SLet(name, _, _, _, _, _) => switch Map.get(name, bodyTypes) {
+      | SLet(name, _, _, _, _, _, _) => switch Map.get(name, bodyTypes) {
           | Some(t) => generalizeGroupFrom(
               rest,
               bodyTypes,
@@ -1391,7 +1408,7 @@ export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports
   let lets = letsOfFrom(stmts) in
   let idxOf = idxOfMap(lets) in
   let sccs = stronglyConnected(adjOf(lets, idxOf)) in
-  switch processGroupsFrom(sccs, lets, { env: env4, open: openMode, ns: ns0 }, st3) {
+  switch processGroupsFrom(sccs, lets, { env: env4, open: openMode, ns: ns0, aliasMap: aliasMap }, st3) {
     | Ok(finalCtx) => Ok(finalCtx.env)
     | Err(e) => Err(e)
   }
@@ -1419,7 +1436,7 @@ let exportCtorsInto = (ctors, i, env, acc) => switch Array.get(i, ctors) {
 }
 let exportedSchemesFrom = (stmts, i, env, acc) => switch Array.get(i, stmts) {
   | None => acc
-  | Some(SLet(name, _, _, true, _, _)) => exportedSchemesFrom(
+  | Some(SLet(name, _, _, _, true, _, _)) => exportedSchemesFrom(
       stmts,
       add(i, 1),
       env,

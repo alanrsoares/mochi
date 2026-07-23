@@ -229,6 +229,7 @@ type Ctx = {
   open: boolean;
   ns: Map<string, Map<string, Scheme>>; // qualified collection namespaces (List.map, ...)
   aliases: AliasDef[]; // transparent record aliases, for folding types in errors
+  aliasMap: AliasMap; // raw alias fields, for resolving binding annotations (`let x : T`)
   record?: (span: Span, t: Type, symbol?: SymbolInfo) => void;
   // `noteUse` (optional, TS emit) records each instantiation of a `let`-bound
   // scheme, so a `let x = v in …` whose value is polymorphic but used at a
@@ -400,6 +401,13 @@ const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
       // with `name` bound to that scheme. `name` is NOT in scope in `value`.
       const valT = infer(e.value, ctx);
       if (isErr(valT)) return valT;
+      // Optional annotation (`let x : T = v in …`): pin the value to T before
+      // generalizing, so an annotated local narrows like a top-level one (ADR 0044).
+      if (e.annot) {
+        const at = typeExprToType(e.annot, new Map(), ctx.fresh, ctx.aliasMap);
+        const au = u(valT.value, at, ctx, e.annot.span);
+        if (isErr(au)) return au;
+      }
       const scheme = generalize(ctx.env, valT.value, ctx.subst);
       // Record the binding name so hover leads with `let x: T` on the local.
       if (ctx.record) ctx.record(e.nameSpan, valT.value, { kind: "let", name: e.name });
@@ -1115,6 +1123,7 @@ function run(
         open,
         ns,
         aliases,
+        aliasMap,
         record,
         noteUse,
         noteLet,
@@ -1124,6 +1133,15 @@ function run(
         showType(foldAliases(x, aliases)),
       );
       if (isErr(uni)) return err(typeErr(uni.error.message, s.span));
+      // Optional binding annotation (`let x : T = v`): unify the inferred value
+      // type against the declared one, so a too-general value is pinned to T.
+      // Resolved through the alias map, so a named record alias expands to its
+      // row (ADR 0044). This is how a self-hosted seed pins a polymorphic empty.
+      if (s.annot) {
+        const at = typeExprToType(s.annot, new Map(), fresh, aliasMap);
+        const au = unify(t.value, at, subst, fresh, (x) => showType(foldAliases(x, aliases)));
+        if (isErr(au)) return err(typeErr(au.error.message, s.annot.span));
+      }
       bodyTypes.set(s.name, t.value);
       // Record the binding name itself so hovering it leads with `let x: T`
       // (+ any doc). Skip synthetic destructuring temps ($d…).

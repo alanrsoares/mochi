@@ -597,7 +597,7 @@ let checkReservedNames = stmts =>
           : Array.contains(name, reservedNames)
             ? Some(reservedErr(name, sp))
             : None
-      | SLet(name, _, _, _, _, sp) => Array.contains(name, reservedNames)
+      | SLet(name, _, _, _, _, _, sp) => Array.contains(name, reservedNames)
           ? Some(reservedErr(name, sp))
           : None
       | SExtern(name, _, _, _, _, _, sp) => Array.contains(name, reservedNames)
@@ -703,7 +703,7 @@ export let checkWith = (stmts, imported) => switch checkReservedNames(stmts) {
             reg0.types
           )
         } in
-        switch firstSome(s => switch s { | SLet(_, _, value, _, _, _) => checkExpr(value, reg) | _ => None }, stmts) {
+        switch firstSome(s => switch s { | SLet(_, _, _, value, _, _, _) => checkExpr(value, reg) | _ => None }, stmts) {
           | Some(e) => Err(e)
           | None => Ok(stmts)
         }

@@ -697,7 +697,7 @@ let genStmt = (s, ctx) => switch s {
   | SExtern(name, _, _, _, _, exported, _) =>
     // An extern is itself an import; re-export the local binding when exported.
     exported ? "${genExtern(s)}\nexport { ${name} };" : genExtern(s)
-  | SLet(name, _, value, exported, _, _) => let doExport = and(
+  | SLet(name, _, _, value, exported, _, _) => let doExport = and(
       exported,
       not(Str.startsWith("$", name))
     ) in // never export destructure temps
@@ -870,7 +870,7 @@ let boundNamesFrom = (stmts, i, acc) => switch Array.get(i, stmts) {
       stmts,
       add(i, 1),
       switch s {
-        | SLet(name, _, _, _, _, _) => Set.add(name, acc)
+        | SLet(name, _, _, _, _, _, _) => Set.add(name, acc)
         | SExtern(name, _, _, _, _, _, _) => Set.add(name, acc)
         | SType(_, _, ctors, _, _, _) => Set.union(
             acc,
@@ -886,7 +886,7 @@ let boundNamesFrom = (stmts, i, acc) => switch Array.get(i, stmts) {
 let boundNames = stmts => boundNamesFrom(stmts, 0, Set.fromArray([]))
 
 let refsForStmt = (s, ctx) => switch s {
-  | SLet(_, _, value, _, _, _) => exprRefs(value, ctx, Set.fromArray([]))
+  | SLet(_, _, _, value, _, _, _) => exprRefs(value, ctx, Set.fromArray([]))
   | SType(_, _, ctors, _, _, _) =>
     // A multi-field constructor lowers to `_curry(...)` in genType (which
     // exprRefs never walks), so seed the dep here.
@@ -997,7 +997,7 @@ export let codegen = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps) =>
   let ctx = { keys: keys, ns: ns } in
   let needsMatch = someOf(
     s => switch s {
-      | SLet(_, _, value, _, _, _) => usesMatchLib(value)
+      | SLet(_, _, _, value, _, _, _) => usesMatchLib(value)
       | _ => false
     },
     stmts

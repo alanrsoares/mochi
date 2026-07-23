@@ -15,7 +15,15 @@ export type Expr =
   // let x = value in body — a local binding scoped to `body`. Non-recursive:
   // `x` is NOT in scope in `value`. Generalized (let-polymorphism) like a
   // top-level `let`. `nameSpan` anchors the bound name for hover/inlay.
-  | { kind: "letin"; name: string; nameSpan: Span; value: Expr; body: Expr; span: Span } // let x = v in b
+  | {
+      kind: "letin";
+      name: string;
+      nameSpan: Span;
+      annot?: TypeExpr;
+      value: Expr;
+      body: Expr;
+      span: Span;
+    } // let x [: T] = v in b
   // let? x = value in body — monadic bind on Result (ADR 0017). `value` must be
   // a Result; on Ok its payload binds `param` (monomorphic) and `body` (itself
   // a Result with the same error type) runs; on Err the whole expression is
@@ -108,6 +116,7 @@ export type Stmt =
       kind: "let";
       name: string;
       nameSpan: Span;
+      annot?: TypeExpr; // `let x : T = v` — optional binding type annotation
       value: Expr;
       exported?: boolean;
       doc?: string;

@@ -704,7 +704,7 @@ const exprRaw = (e: Expr): Doc => {
     case "map":
       return mapD(e);
     case "letin":
-      return letLikeD(`let ${e.name}`, e.value, e.body);
+      return letLikeD(`let ${e.name}${e.annot ? ` : ${typeExpr(e.annot)}` : ""}`, e.value, e.body);
     case "letbind":
       return letLikeD(`let? ${param(e.param)}`, e.value, e.body);
     case "match":
@@ -747,7 +747,11 @@ const stmtDoc = (stmts: Stmt[], i: number): StmtDoc => {
     };
   }
 
-  return { doc: seq(txt(`${expPrefix(s)}let ${s.name} = `), exprD(s.value)), consumed: 1 };
+  const annot = s.annot ? ` : ${typeExpr(s.annot)}` : "";
+  return {
+    doc: seq(txt(`${expPrefix(s)}let ${s.name}${annot} = `), exprD(s.value)),
+    consumed: 1,
+  };
 };
 
 // A blank separator between two statements: a newline, only whitespace, then

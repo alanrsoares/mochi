@@ -48,6 +48,25 @@ test("pipeline types like nested application", () => {
   expect(typeOf(env, "r")).toBe("number");
 });
 
+// ADR 0044 — binding type annotations (`let x : T = v`).
+test("a binding annotation pins a too-general value", () => {
+  // Without the annotation `empty` would be `Map<'a, 'b>`; the alias pins both.
+  const src = "type Reg = { m: Map string number }\nlet empty : Reg = { m: #{} }";
+  const env = unwrapOk(infer(src, {}));
+  expect(typeOf(env, "empty")).toBe("{ m: Map<string, number> }");
+});
+
+test("a binding annotation is enforced (wrong type is a type error)", () => {
+  const r = infer('let bad : number = "hello"', {});
+  expect(isErr(r)).toBe(true);
+  expect(unwrapErr(r).message).toContain("unify");
+});
+
+test("a let-in annotation pins the local (ADR 0044)", () => {
+  const env = unwrapOk(infer("let f = x => let n : number = x in add(n, 1)"));
+  expect(typeOf(env, "f")).toBe("number -> number");
+});
+
 test("record literal is a closed record", () => {
   const env = unwrapOk(infer("let p = { x: 1, y: 2 }", {}));
   expect(typeOf(env, "p")).toBe("{ x: number, y: number }");

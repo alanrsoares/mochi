@@ -116,7 +116,15 @@ export let loadGraph = entry =>
 // missing export is reported against the import site. Mirrors src/module.ts's
 // compileGraph — sync, since loadGraph already did the IO.
 
-let emptyReg = { ctors: #{}, types: #{} }
+// The registry shape, named locally so `emptyReg` can be annotated (ADR 0044) —
+// its empty maps would otherwise infer `Map k v` and, threaded into the generic
+// `resolveImportsFrom`, leave the registry map types unpinned (a `tsc --strict`
+// error on the emitted `.ts`). Structural aliases (ADR 0005), so this unifies
+// with check.al's `Registry` without a cross-module type import.
+type CtorInfo = { owner: string, arity: number }
+type Registry = { ctors: Map string CtorInfo, types: Map string [string] }
+
+let emptyReg : Registry = { ctors: #{}, types: #{} }
 
 // Map has no bulk merge, so fold `from`'s keys into `into` (later source wins).
 let mergeInto = (keys, from, into) => switch keys {
