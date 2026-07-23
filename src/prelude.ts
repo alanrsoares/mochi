@@ -58,6 +58,7 @@ export const preludeEnv: Record<string, Type> = {
   sqrt: tArrow(tNumber, tNumber),
   hypot: num2,
   pi: tNumber,
+  concat: tArrow(a, tArrow(a, a)), // a -> a -> a (polymorphic sequence/string concat)
   // eq/compare/show are STRUCTURAL and polymorphic (deep-equal / deep-order /
   // display at any type) — the pragmatic bridge instead of typeclasses.
   // lt/gt/gte/lte stay numeric.
@@ -147,6 +148,8 @@ export const preludeJsDefs: Record<string, string> = {
   sqrt: "const sqrt = (x) => Math.sqrt(x);",
   hypot: "const hypot = _curry(2, (a, b) => Math.hypot(a, b));",
   pi: "const pi = Math.PI;",
+  concat:
+    'const concat = _curry(2, (a, b) => (typeof a === "string" ? a + b : Array.isArray(a) ? a.concat(b) : _List_concat(a, b)));',
   // Structural deep equality: primitives by ===, arrays/records/variants by
   // recursion. Functions/Set/Map fall back to reference identity.
   eq: 'const eq = _curry(2, (x, y) => { if (x === y) return true; if (typeof x !== "object" || x === null || typeof y !== "object" || y === null) return false; const ax = Array.isArray(x); if (ax !== Array.isArray(y)) return false; if (ax) { if (x.length !== y.length) return false; for (let i = 0; i < x.length; i++) if (!eq(x[i], y[i])) return false; return true; } const kx = Object.keys(x), ky = Object.keys(y); if (kx.length !== ky.length) return false; for (const k of kx) if (!eq(x[k], y[k])) return false; return true; });',
@@ -323,6 +326,7 @@ export const runtimeDeps: Record<string, string[]> = {
   sub: ["_curry"],
   mul: ["_curry"],
   div: ["_curry"],
+  concat: ["_curry", "_List_concat"],
   hypot: ["_curry"],
   eq: ["_curry"],
   compare: ["_curry"],

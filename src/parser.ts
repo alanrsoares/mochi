@@ -51,7 +51,11 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
   // span from a start marker to the last consumed token.
   const to = (start: Span): Span => spanning(start, last.span);
 
-  const PIPE_BP = 1;
+  const PIPE_BP = 5;
+  const COMPOSE_BP = 6;
+  const CONCAT_BP = 10;
+  const ADD_BP = 10;
+  const MUL_BP = 20;
 
   // ---- expressions -------------------------------------------------------
 
@@ -182,12 +186,77 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     if (peek().t === "let") return parseLetIn();
     if (looksLikeLambda()) return parseLambda();
     let left = parseAtomOrCall();
-    while (peek().t === "pipe" && PIPE_BP >= minBp) {
-      next(); // consume |>
-      const right = parseAtomOrCall();
-      left = { kind: "pipe", left, right, span: spanning(left.span, right.span) };
+    for (;;) {
+      const tk = peek();
+      if (tk.t === "pipe" && PIPE_BP >= minBp) {
+        next();
+        const right = parseAtomOrCall();
+        left = { kind: "pipe", left, right, span: spanning(left.span, right.span) };
+        continue;
+      }
+      if (tk.t === "compose" && COMPOSE_BP >= minBp) {
+        next();
+        const right = parseExpr(COMPOSE_BP + 1);
+        const paramSpan = tk.span;
+        const fn: Expr = {
+          kind: "lambda",
+          params: [{ kind: "name", name: "$x" }],
+          body: {
+            kind: "call",
+            fn: right,
+            args: [
+              {
+                kind: "call",
+                fn: left,
+                args: [{ kind: "ref", name: "$x", span: paramSpan }],
+                span: left.span,
+              },
+            ],
+            span: spanning(left.span, right.span),
+          },
+          span: spanning(left.span, right.span),
+        };
+        left = fn;
+        continue;
+      }
+      if (tk.t === "concat" && CONCAT_BP >= minBp) {
+        const opTok = next();
+        const right = parseExpr(CONCAT_BP + 1);
+        left = {
+          kind: "call",
+          fn: { kind: "ref", name: "concat", span: opTok.span },
+          args: [left, right],
+          span: spanning(left.span, right.span),
+        };
+        continue;
+      }
+      if ((tk.t === "plus" || tk.t === "minus") && ADD_BP >= minBp) {
+        const opTok = next();
+        const right = parseExpr(ADD_BP + 1);
+        const fnName = opTok.t === "plus" ? "add" : "sub";
+        left = {
+          kind: "call",
+          fn: { kind: "ref", name: fnName, span: opTok.span },
+          args: [left, right],
+          span: spanning(left.span, right.span),
+        };
+        continue;
+      }
+      if ((tk.t === "star" || tk.t === "slash" || tk.t === "percent") && MUL_BP >= minBp) {
+        const opTok = next();
+        const right = parseExpr(MUL_BP + 1);
+        const fnName = opTok.t === "star" ? "mul" : opTok.t === "slash" ? "div" : "mod";
+        left = {
+          kind: "call",
+          fn: { kind: "ref", name: fnName, span: opTok.span },
+          args: [left, right],
+          span: spanning(left.span, right.span),
+        };
+        continue;
+      }
+      break;
     }
-    // cond ? then : else — binds looser than `|>`, right-associative via the
+    // cond ? then : else — binds looser than operators, right-associative via the
     // recursive parseExpr in the else branch (`a ? x : b ? y : z` chains).
     if (peek().t === "question") {
       next(); // consume ?

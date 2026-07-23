@@ -138,6 +138,24 @@ const _builtins = {
     "name": "number",
     "args": []
   },
+  "concat": {
+    "_tag": "TyFn",
+    "from": {
+      "_tag": "TyVar",
+      "id": 0
+    },
+    "to": {
+      "_tag": "TyFn",
+      "from": {
+        "_tag": "TyVar",
+        "id": 0
+      },
+      "to": {
+        "_tag": "TyVar",
+        "id": 0
+      }
+    }
+  },
   "eq": {
     "_tag": "TyFn",
     "from": {
@@ -3331,6 +3349,7 @@ const _preludeJsDefs = {
   "sqrt": "const sqrt = (x) => Math.sqrt(x);",
   "hypot": "const hypot = _curry(2, (a, b) => Math.hypot(a, b));",
   "pi": "const pi = Math.PI;",
+  "concat": "const concat = _curry(2, (a, b) => (typeof a === \"string\" ? a + b : Array.isArray(a) ? a.concat(b) : _List_concat(a, b)));",
   "eq": "const eq = _curry(2, (x, y) => { if (x === y) return true; if (typeof x !== \"object\" || x === null || typeof y !== \"object\" || y === null) return false; const ax = Array.isArray(x); if (ax !== Array.isArray(y)) return false; if (ax) { if (x.length !== y.length) return false; for (let i = 0; i < x.length; i++) if (!eq(x[i], y[i])) return false; return true; } const kx = Object.keys(x), ky = Object.keys(y); if (kx.length !== ky.length) return false; for (const k of kx) if (!eq(x[k], y[k])) return false; return true; });",
   "compare": "const compare = _curry(2, (x, y) => { if (x === y) return 0; const t = typeof x; if (t === \"number\" || t === \"string\" || t === \"boolean\") return x < y ? -1 : x > y ? 1 : 0; if (Array.isArray(x) && Array.isArray(y)) { const n = Math.min(x.length, y.length); for (let i = 0; i < n; i++) { const c = compare(x[i], y[i]); if (c !== 0) return c; } return compare(x.length, y.length); } const sx = JSON.stringify(x), sy = JSON.stringify(y); return sx < sy ? -1 : sx > sy ? 1 : 0; });",
   "show": "const show = (x) => { const t = typeof x; if (t === \"string\") return JSON.stringify(x); if (t !== \"object\" || x === null) return String(x); if (Array.isArray(x)) return \"[\" + x.map(show).join(\", \") + \"]\"; if (typeof x._tag === \"string\") { const ks = Object.keys(x).filter((k) => k !== \"_tag\"); return ks.length === 0 ? x._tag : x._tag + \"(\" + ks.map((k) => show(x[k])).join(\", \") + \")\"; } const ks = Object.keys(x); if (ks.length === 0) return String(x); return \"{ \" + ks.map((k) => k + \": \" + show(x[k])).join(\", \") + \" }\"; };",
@@ -3454,6 +3473,10 @@ const _runtimeDeps = {
   ],
   "div": [
     "_curry"
+  ],
+  "concat": [
+    "_curry",
+    "_List_concat"
   ],
   "hypot": [
     "_curry"

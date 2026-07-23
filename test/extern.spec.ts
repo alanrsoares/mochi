@@ -1,6 +1,6 @@
 // Gleam-style external bindings: `extern name : type = "module" "export"`.
 import { expect, test } from "bun:test";
-import { isErr, unwrapOk } from "@onrails/result";
+import { isErr, isOk, unwrapOk } from "@onrails/result";
 import { check } from "../src/check";
 import { compile } from "../src/compile";
 import { format } from "../src/format";
@@ -22,6 +22,32 @@ test("an extern's declared type becomes its scheme", () => {
   );
 });
 
+test("composes functions with >> infix operator desugaring", () => {
+  const code = `
+    let inc = x => add(x, 1)
+    let double = x => mul(x, 2)
+    let incThenDouble = inc >> double
+    let res = incThenDouble(5)
+  `;
+  expect(isOk(compile(code))).toBe(true);
+});
+
+test("desugars arithmetic binary operators (+, -, *, /, %) to prelude calls", () => {
+  const code = `
+    let a = 10 + 5 * 2 - 4 / 2 % 3
+  `;
+  const res = compile(code);
+  expect(isOk(res)).toBe(true);
+});
+
+test("desugars ++ concatenation infix operator for strings and arrays", () => {
+  const code = `
+    let s = "hello " ++ "world"
+    let arr = [1, 2] ++ [3, 4]
+  `;
+  const res = compile(code);
+  expect(isOk(res)).toBe(true);
+});
 test("lowercase names in a signature are generalized type variables", () => {
   // a -> a is polymorphic
   expect(schemeOf(`extern id : a -> a = "./u.js" "id"`, "id")).toMatch(/^'t\d+ -> 't\d+$/);

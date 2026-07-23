@@ -15,6 +15,8 @@ export type Tok =
   | { t: "arrow" } // =>
   | { t: "tarrow" } // -> (type arrow)
   | { t: "pipe" } // |>
+  | { t: "compose" } // >>
+  | { t: "concat" } // ++
   | { t: "bar" } // |
   | { t: "lparen" }
   | { t: "rparen" }
@@ -23,6 +25,11 @@ export type Tok =
   | { t: "lbracket" } // [
   | { t: "rbracket" } // ]
   | { t: "spread" } // ... (list-pattern rest)
+  | { t: "plus" } // +
+  | { t: "minus" } // -
+  | { t: "star" } // *
+  | { t: "slash" } // /
+  | { t: "percent" } // %
   | { t: "at" } // @ — lazy-List sigil (@{...})
   | { t: "hash" } // # — Map sigil (#{...})
   | { t: "dot" } // .
@@ -61,12 +68,19 @@ const KEYWORDS: Record<string, Tok | undefined> = {
 // Two-char operators, checked before single chars.
 const DIGRAPHS: Record<string, Tok | undefined> = {
   "|>": { t: "pipe" },
+  ">>": { t: "compose" },
+  "++": { t: "concat" },
   "=>": { t: "arrow" },
   "->": { t: "tarrow" }, // type-expression arrow (extern signatures)
 };
 
 // Single-char punctuation → token.
 const PUNCT: Record<string, Tok | undefined> = {
+  "+": { t: "plus" },
+  "-": { t: "minus" },
+  "*": { t: "star" },
+  "/": { t: "slash" },
+  "%": { t: "percent" },
   "|": { t: "bar" },
   "=": { t: "eq" },
   "(": { t: "lparen" },
@@ -292,13 +306,6 @@ export function lex(src: string): Result<Located[], AlangError> {
       continue;
     }
 
-    const punct = PUNCT[c];
-    if (punct) {
-      emit(punct, i, i + 1);
-      i++;
-      continue;
-    }
-
     // string literal: "..." with \n \t \\ \" \$ escapes, optionally holding
     // `${expr}` interpolations (ADR 0023). A hole-free literal stays a plain
     // `str` token — zero churn for the common case.
@@ -310,7 +317,7 @@ export function lex(src: string): Result<Located[], AlangError> {
     }
 
     // number, with an optional leading `-` for negatives. Safe because mochi has
-    // no binary minus operator — a `-` before a digit is always a literal sign.
+    // binary minus operator desugaring at parse level when preceded by an expression.
     const isDigit = (ch: string | undefined): boolean => ch !== undefined && ch >= "0" && ch <= "9";
     if (isDigit(c) || (c === "-" && isDigit(src[i + 1]))) {
       let j = i + 1; // past the first digit or the sign
@@ -318,6 +325,13 @@ export function lex(src: string): Result<Located[], AlangError> {
       const raw = src.slice(i, j);
       emit({ t: "num", v: Number(raw), raw }, i, j);
       i = j;
+      continue;
+    }
+
+    const punct = PUNCT[c];
+    if (punct) {
+      emit(punct, i, i + 1);
+      i++;
       continue;
     }
 
