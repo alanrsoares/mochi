@@ -1,4 +1,4 @@
-// Ticket 0006 — the shipped `alangc` (bootstrap/cli.al) compiles a single .al
+// Ticket 0006 — the shipped `mochic` (bootstrap/cli.al) compiles a single .al
 // file to a sibling .js through real disk IO, end-to-end under Bun. We build
 // the bootstrap graph with the TS CLI once, then drive the emitted cli.js as a
 // subprocess: a good file compiles (output byte-≡ the TS compiler and it runs),
@@ -18,7 +18,7 @@ const cliJs = join(root, "bootstrap/cli.js");
 
 let dir: string;
 
-// Run alangc; returns { code, stdout, stderr }. execFileSync throws on nonzero,
+// Run mochic; returns { code, stdout, stderr }. execFileSync throws on nonzero,
 // so capture the error's status/stderr instead.
 const runArgs = (...args: string[]): { code: number; stderr: string } => {
   try {
@@ -34,13 +34,13 @@ const runAlangc = (arg: string): { code: number; stderr: string } => runArgs(arg
 beforeAll(() => {
   // Build the shipped compiler graph (emits bootstrap/*.js beside the sources).
   execFileSync("bun", ["src/cli.ts", "build", "bootstrap/cli.al"], { cwd: root, encoding: "utf8" });
-  dir = mkdtempSync(join(tmpdir(), "alang-cli-"));
+  dir = mkdtempSync(join(tmpdir(), "mochi-cli-"));
 });
 afterAll(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-test("alangc compiles a good file to a sibling .js identical to the TS compiler", () => {
+test("mochic compiles a good file to a sibling .js identical to the TS compiler", () => {
   const src =
     "let twice = n => mul(n, 2)\ntype C = A | B\nlet f = c => switch c { | A => 1 | B => 2 }\n";
   const al = join(dir, "good.al");
@@ -56,7 +56,7 @@ test("alangc compiles a good file to a sibling .js identical to the TS compiler"
   execFileSync("bun", [js], { cwd: root, encoding: "utf8" });
 });
 
-test("alangc rejects a bad file: line:col diagnostic, nonzero exit, no JS", () => {
+test("mochic rejects a bad file: line:col diagnostic, nonzero exit, no JS", () => {
   const al = join(dir, "bad.al");
   const js = join(dir, "bad.js");
   writeFileSync(al, "type C = A | B\nlet f = c => switch c { | A => 1 }\n");
@@ -68,9 +68,9 @@ test("alangc rejects a bad file: line:col diagnostic, nonzero exit, no JS", () =
   expect(existsSync(js)).toBe(false);
 });
 
-// ---- `alangc build <entry>` — the multi-module driver (ticket 0013) --------
+// ---- `mochic build <entry>` — the multi-module driver (ticket 0013) --------
 
-test("alangc build compiles a module graph, byte-≡ the TS driver, and runs", async () => {
+test("mochic build compiles a module graph, byte-≡ the TS driver, and runs", async () => {
   const lib =
     "export type Shape = Circle(r: number) | Square(s: number)\nexport let area = s => switch s { | Circle(r) => mul(r, r) | Square(s) => mul(s, s) }\n";
   // Imports Shape's ctors AND switches over them — the switch is only
@@ -95,7 +95,7 @@ test("alangc build compiles a module graph, byte-≡ the TS driver, and runs", a
   execFileSync("bun", [join(dir, "app.js")], { cwd: root, encoding: "utf8" });
 });
 
-test("alangc build fails on a cross-module exhaustiveness gap, writes nothing", () => {
+test("mochic build fails on a cross-module exhaustiveness gap, writes nothing", () => {
   writeFileSync(join(dir, "shp.al"), "export type T = A | B\n");
   // Missing the B arm — only catchable via shp's imported registry.
   writeFileSync(

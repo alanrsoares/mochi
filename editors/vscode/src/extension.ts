@@ -1,4 +1,4 @@
-// VS Code / Cursor extension entry point. Spawns the bundled alang language
+// VS Code / Cursor extension entry point. Spawns the bundled mochi language
 // server over IPC and wires it to `.al` documents.
 import * as path from "node:path";
 import { commands, type ExtensionContext } from "vscode";
@@ -18,13 +18,13 @@ export function activate(context: ExtensionContext): void {
     debug: { module, transport: TransportKind.ipc },
   };
   const clientOptions: LanguageClientOptions = {
-    documentSelector: [{ scheme: "file", language: "alang" }],
+    documentSelector: [{ scheme: "file", language: "mochi" }],
   };
-  client = new LanguageClient("alang", "alang language server", serverOptions, clientOptions);
+  client = new LanguageClient("mochi", "mochi language server", serverOptions, clientOptions);
   client.start();
 
   context.subscriptions.push(
-    commands.registerCommand("alang.restartLsp", () => client?.restart())
+    commands.registerCommand("mochi.restartLsp", () => client?.restart())
   );
 }
 

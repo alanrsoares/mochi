@@ -42,9 +42,9 @@ const tsVerdict = (src: string): Verdict => {
 
 const alVerdict = (src: string): Verdict => {
   const lr = alLex(src);
-  if (lr._tag !== "Ok") throw new Error(`alang lexer errored: ${lr.error.message}`);
+  if (lr._tag !== "Ok") throw new Error(`mochi lexer errored: ${lr.error.message}`);
   const pr = alParse(lr.value);
-  if (pr._tag !== "Ok") throw new Error(`alang parser errored: ${pr.error.message}`);
+  if (pr._tag !== "Ok") throw new Error(`mochi parser errored: ${pr.error.message}`);
   const cr = alCheck(pr.value);
   return cr._tag === "Ok"
     ? { ok: true }

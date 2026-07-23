@@ -1,9 +1,9 @@
-// Ticket 0006 / 0013 — the shipped `alangc` entry point. Two modes:
+// Ticket 0006 / 0013 — the shipped `mochic` entry point. Two modes:
 //
-//   alangc <file.al>        single-file, open-world (compile.al) — imports in
+//   mochic <file.al>        single-file, open-world (compile.al) — imports in
 //                           the source are left unresolved; writes one sibling
 //                           `.js`; a failure prints `path:line:col: message`.
-//   alangc build <entry.al> multi-file: resolve the import graph from `entry`,
+//   mochic build <entry.al> multi-file: resolve the import graph from `entry`,
 //                           compile every module in dependency order with real
 //                           cross-module inference + exhaustiveness (module.al),
 //                           and write a `.js` beside each `.al`.
@@ -55,9 +55,9 @@ let buildMulti = entry =>
 
 // Entry: fire on the real argv the moment the module is evaluated.
 export let main = switch Array.get(0, argv) {
-  | None => die("usage: alangc <file.al>  |  alangc build <entry.al>")
+  | None => die("usage: mochic <file.al>  |  mochic build <entry.al>")
   | Some("build") => switch Array.get(1, argv) {
-      | None => die("usage: alangc build <entry.al>")
+      | None => die("usage: mochic build <entry.al>")
       | Some(entry) => switch buildMulti(entry) {
           | Ok(_) => print("build ok")
           | Err(msg) => die(msg)

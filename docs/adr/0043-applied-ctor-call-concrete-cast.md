@@ -98,7 +98,7 @@ reach it, and annotating it concretely (ADR 0035's `letParams` path) is refused
 because it also flows into the generic `resolveImportsFrom`, whose registry map
 types HM generalizes (`Map<B, C>`) — pinning the seed alone contradicts that head
 (ADR 0035 §3's entanglement). The hand-written `src/module.ts` pins it with an
-explicit `importedReg: Registry` annotation; alang has no binding type-annotation
+explicit `importedReg: Registry` annotation; mochi has no binding type-annotation
 syntax and cannot name `Registry` cross-module, so closing this needs either that
 language feature or a codegen pass that monomorphizes a binding instantiated at a
 single concrete type. Its own lever, its own ADR.

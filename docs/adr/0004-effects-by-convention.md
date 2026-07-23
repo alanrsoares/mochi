@@ -5,7 +5,7 @@
 
 ## Context
 
-alang's HM core is pure-by-omission. The question was whether to make effects visible in
+mochi's HM core is pure-by-omission. The question was whether to make effects visible in
 types (an effect row, an enforced `IO`/`Task`) or keep them a discipline.
 
 ## Decision
@@ -19,13 +19,13 @@ a convention, enforced by review — not by the checker.
 - Signatures stay small; no effect annotation doubles every type.
 - The guarantee is unenforceable mechanically: the compiler cannot inspect a JS export's
   body, so a mistyped `extern` can lie. Accepted cost.
-- `CONTEXT.md` states plainly that alang has no effect system, so nobody expects one.
+- `CONTEXT.md` states plainly that mochi has no effect system, so nobody expects one.
 
 ## Alternatives rejected
 
 - Effect rows (Koka-style `a ->{io} b`) — the row engine already exists, but this doubles
   the cognitive surface of every signature for a language that isn't sold on it.
-- A mechanical FFI lint — not decidable from the alang side of the boundary.
+- A mechanical FFI lint — not decidable from the mochi side of the boundary.
 
 ## Related (not decided)
 

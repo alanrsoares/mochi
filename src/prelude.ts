@@ -23,7 +23,7 @@ const res = (t: Type, e: Type): Type => tCon("Result", [t, e]); // Result t e �
 // Builtin variant types — seeded into the registry / env / codegen ONLY when a
 // program doesn't declare a type of the same name (so user redeclarations win).
 // Runtime shape matches @onrails/result + @onrails/maybe (`{ _tag, value/error }`),
-// so alang Option/Result values flow straight through their combinators.
+// so mochi Option/Result values flow straight through their combinators.
 // Ctor field types are TypeExprs (ADR 0015); builtins only need bare names.
 const tn = (name: string): TypeExpr => ({ kind: "tname", name, span: { start: 0, end: 0 } });
 
@@ -68,7 +68,7 @@ export const preludeEnv: Record<string, Type> = {
   gt: cmp,
   gte: cmp,
   lte: cmp,
-  // --- bool combinators (alang has no operators; these are eager, not
+  // --- bool combinators (mochi has no operators; these are eager, not
   // short-circuit — operands are values, so that only matters for cost) ---
   not: tArrow(tBool, tBool),
   and: bin(tBool, tBool, tBool),
@@ -113,7 +113,7 @@ export const preludeJsDefs: Record<string, string> = {
   // List core: a List is an iterable factory `{ [Symbol.iterator]: () => Iterator }`.
   // Force-included by codegen whenever a `@{...}` literal or List producer is used.
   _list: "const _list = (g) => ({ [Symbol.iterator]: g });",
-  // Currying bridge (CRITIQUE §4.4): every alang function has a curried type
+  // Currying bridge (CRITIQUE §4.4): every mochi function has a curried type
   // (`a -> b -> c`), but its runtime impl is a FLAT n-ary JS function. `_curry`
   // reconciles the two — the result accepts args grouped any way the caller
   // likes: `f(a, b)` hits the fast path (one flat call, no intermediate
@@ -122,7 +122,7 @@ export const preludeJsDefs: Record<string, string> = {
   // the surplus. Definitions of arity ≥ 2 are wrapped in this; arity-1
   // functions need no wrapper (a single arg always saturates).
   // The saturated case MUST be `return f(...a)` — a proper tail call. Emitted
-  // modules are strict (ESM), and JSC eliminates tail frames; recursive alang
+  // modules are strict (ESM), and JSC eliminates tail frames; recursive mochi
   // functions (the bootstrap lexer's per-token loop) rely on it for depth.
   _curry:
     "const _curry = (n, f) => function c(...a) { if (a.length < n) return (...b) => c(...a, ...b); if (a.length === n) return f(...a); return a.slice(n).reduce((g, x) => g(x), f(...a.slice(0, n))); };",
@@ -406,7 +406,7 @@ export const runtimeDeps: Record<string, string[]> = {
   _Str_toNumber: ["Some", "None"],
 };
 
-// Qualified collection namespaces. alang has no overloading, so each collection
+// Qualified collection namespaces. mochi has no overloading, so each collection
 // carries its own `Ns.op`; the unqualified `map`/`filter`/… above stay as eager
 // Array aliases for the common case. `Array.map` mirrors them; `List.*` is lazy.
 export const preludeNamespaces: Record<string, Record<string, Type>> = {

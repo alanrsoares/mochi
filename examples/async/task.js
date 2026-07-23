@@ -2,7 +2,7 @@
 // `() => Promise<a>`. Building one runs no effect; `run` is what starts it —
 // so a Task is a referentially-transparent value, unlike a bare Promise.
 //
-// Every combinator is CURRIED (`f => t => …`) so it composes with alang's `|>`,
+// Every combinator is CURRIED (`f => t => …`) so it composes with mochi's `|>`,
 // which lowers `t |> f(x)` to `f(x)(t)`.
 export const of = (x) => () => Promise.resolve(x);
 export const mapT = (f) => (t) => () => t().then(f);

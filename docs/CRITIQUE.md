@@ -1,6 +1,10 @@
-# alang — design critique
+# mochi — design critique
 
-A deep review of alang's language design as of the current tree (HM inference,
+> **Superseded by [CRITIQUE_V2.md](CRITIQUE_V2.md)** (2026-07-23). This first
+> edition is kept intact because ADRs 0000/0018 cite its section numbers.
+> Scorecard of what happened to each finding: CRITIQUE_V2 §1.
+
+A deep review of mochi's language design as of the current tree (HM inference,
 row-polymorphic records, parametric variants, curried data-last prelude, the
 `[...] / @{...} / #{...} / ${...}` collection family, qualified collection
 namespaces, `extern` FFI, module graph, and span-carrying tooling).
@@ -34,7 +38,7 @@ gamble (the sigil family) that fights the target audience's muscle memory.**
 This is the part a language committee would never think of and a working
 engineer immediately values:
 - Named constructor fields lower to the exact `@onrails/result` / `@onrails/maybe`
-  runtime shape (`Ok(value: a)` → `{ _tag: "Ok", value }`). alang values flow
+  runtime shape (`Ok(value: a)` → `{ _tag: "Ok", value }`). mochi values flow
   through existing JS combinators with zero marshalling.
 - `Set`/`Map` **erase to native `Set`/`Map` at the `.d.ts` boundary**
   (`set-map.spec.ts:60`). The emitted types are honest to JS consumers.
@@ -59,7 +63,7 @@ valuable thing on this list.
 
 ## 2. The central weakness: no abstraction over types
 
-Everything below is one problem wearing different clothes. alang has HM
+Everything below is one problem wearing different clothes. mochi has HM
 inference but **no mechanism to abstract over a type** — no typeclasses, no
 ML-style modules/functors, no traits. Consequences cascade:
 
@@ -152,7 +156,7 @@ Three viable directions, in rough order of fit:
 2. **ML modules / functors.** Explicit, no inference complexity, matches the
    "collection carries its ops" instinct you already have. Cost: verbose,
    less "it just composes", cuts against the terse pipe aesthetic.
-3. **Deliberately stay monomorphic + lean on `extern`.** Legitimate if alang's
+3. **Deliberately stay monomorphic + lean on `extern`.** Legitimate if mochi's
    scope is "a nice typed skin over a JS runtime". But then say so, and drop the
    pretense of a growable generic standard library.
 
@@ -171,7 +175,7 @@ This is the design decision most likely to be regretted, for reasons that have
 nothing to do with the (good) semantics underneath.
 
 ### 3.1 It fights the target audience's muscle memory
-alang compiles to JS and its users are JS/TS developers. `${...}` is
+mochi compiles to JS and its users are JS/TS developers. `${...}` is
 **template-literal interpolation** in that population's fingers and eyes. Using
 it for Set literals means every reader's first parse of `${1, 2, 3}` is wrong.
 `#{...}` collides with Ruby (`#{}` interpolation) and reads as a comment or a
@@ -284,7 +288,7 @@ plain-HM core is expensive; decide early whether you care.
 
 **Alternatives:**
 - *Document the convention* (cheapest, likely right for now): a design note
-  stating "alang is pure by convention; all effects live behind `extern` values
+  stating "mochi is pure by convention; all effects live behind `extern` values
   like `Task`, and `run` is the only escape hatch". Costs a paragraph; sets
   expectations; keeps the door open.
 - *IO-typed externs*: require every `extern` whose JS body performs effects to
@@ -337,7 +341,7 @@ args".
 ## 5. Prioritized recommendations
 
 1. **Decide the abstraction story (Section 2.4) before growing the prelude.**
-   This is the fork that determines whether alang is a toy-with-taste or a real
+   This is the fork that determines whether mochi is a toy-with-taste or a real
    small language. Prototype minimal `Eq`/`Ord` constraints and judge inference
    quality + error legibility.
 2. **Fix the `float`/`number` surface lie** (Section 2.3). Small, and it's a

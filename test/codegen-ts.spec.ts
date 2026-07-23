@@ -116,7 +116,7 @@ test("a payload ctor factory is typed: params from fields, return the variant", 
 
 test("runtime builtins are imported from the typed runtime, not inlined", () => {
   const out = ts("let inc = x => add(x, 1)");
-  expect(out).toContain('import { _curry, add } from "@alang/runtime";');
+  expect(out).toContain('import { _curry, add } from "@mochi/runtime";');
   expect(out).not.toContain("const add = _curry"); // no inlined preamble
 });
 

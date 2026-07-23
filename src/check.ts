@@ -431,10 +431,10 @@ const checkCtorFieldVars = (prog: Program): AlangError | null => {
   return null;
 };
 
-// JavaScript reserved words. An alang lowercase identifier in a BINDING
+// JavaScript reserved words. An mochi lowercase identifier in a BINDING
 // position (let/extern name, lambda/letin/letbind param, pattern bind, labelled
 // ctor field) lowers to a JS binding of that same name — `const else = …`,
-// `(else) => …`, `{ _tag, else }` — which is a SyntaxError. alang keeps its
+// `(else) => …`, `{ _tag, else }` — which is a SyntaxError. mochi keeps its
 // emitted JS pristine (no mangling — ADR 0020), so reject at check time with a
 // rename hint. Object KEYS and member names (`{ default: 1 }`, `r.default`) are
 // legal JS and are NOT binding positions, so they stay allowed.

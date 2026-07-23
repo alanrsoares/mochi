@@ -1,4 +1,4 @@
-// Property-based test for AST span nesting. We generate valid alang
+// Property-based test for AST span nesting. We generate valid mochi
 // expressions, parse them, and assert the fundamental invariant every span
 // consumer (errors, LSP ranges) relies on: a child node's span is always
 // contained within its parent's, and every span lies within the source.
@@ -13,7 +13,7 @@ const ident = fc.constantFrom("a", "b", "foo", "bar", "x");
 const field = fc.constantFrom("x", "y", "z");
 const key = fc.constantFrom("a", "b", "c");
 
-// A generator of syntactically valid alang expression source.
+// A generator of syntactically valid mochi expression source.
 const { expr } = fc.letrec<{ expr: string }>((tie) => ({
   expr: fc.oneof(
     { depthSize: "small", withCrossShrink: true },

@@ -14,7 +14,7 @@ curried functions**:
 - `parser.ts` `setLetMeta(true, doc)` — a 3-arg `(exported, doc, s) => Stmt`
   applied to 2, then handed to `map`.
 
-Every alang function is curried at the surface (ADR 0003); the JS backend
+Every mochi function is curried at the surface (ADR 0003); the JS backend
 uncurries calls and wraps arity-≥2 definitions in `_curry`, so `inRange(48, 57)`
 returns a `(n) => boolean` *at runtime*. But ADR 0033 emits the binding's TS type
 **flat** — `(lo: number, hi: number, n: number) => boolean` — which has three

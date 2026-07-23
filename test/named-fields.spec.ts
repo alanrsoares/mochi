@@ -30,7 +30,7 @@ test("the .d.ts declares the labelled field name", () => {
   expect(unwrapOk(emitDts(RESULT))).toContain('{ _tag: "Ok"; value: A }');
 });
 
-test("an alang-built value flows through @onrails/result combinators", () => {
+test("an mochi-built value flows through @onrails/result combinators", () => {
   const body = js(`${RESULT}let safe = Ok(41)\nlet bad = Err("boom")`).replace(/^import .*$/m, "");
   const { safe, bad } = new Function("match", `${body}\nreturn { safe, bad };`)(match) as {
     safe: unknown;

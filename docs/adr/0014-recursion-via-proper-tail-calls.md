@@ -5,7 +5,7 @@
 
 ## Context
 
-alang has no loops; iteration is recursion. The bootstrap lexer's `go` loop
+mochi has no loops; iteration is recursion. The bootstrap lexer's `go` loop
 recurses once per char-or-token step, so lexing a realistic module (~12k chars)
 needs ~10k+ live activations — past the "known hazard" line in
 PATH_TO_BOOTSTRAP §3. The first corpus run overflowed the stack on the two
@@ -14,7 +14,7 @@ biggest files.
 Two facts turned this from a redesign into two one-line fixes:
 
 1. **JSC (Bun's engine) implements ES2015 proper tail calls** in strict mode —
-   the only major engine that does. Emitted alang modules are ESM, which is
+   the only major engine that does. Emitted mochi modules are ESM, which is
    always strict. `@onrails/pattern`'s dispatch keeps handler calls in tail
    position, so a `switch` whose arm ends in a recursive call already chains
    tail-to-tail (~2M depth measured). *(Corrected by the Slice D addendum
@@ -29,7 +29,7 @@ Two facts turned this from a redesign into two one-line fixes:
 - **`_curry`'s exact-arity path must be a proper tail call:**
   `if (a.length === n) return f(...a);`. The over-application fold stays
   non-tail (rare, unavoidable).
-- **Tail-position recursion is the supported iteration idiom.** Recursive alang
+- **Tail-position recursion is the supported iteration idiom.** Recursive mochi
   functions whose recursive calls are arm/let bodies (tail position) run in
   O(1) stack on the supported runtime (Bun/JSC). Non-tail recursion (e.g.
   `add(head, sum(tail))`) keeps O(n) frames — fine for tree-shaped work, the
@@ -74,7 +74,7 @@ parser's self-parse overflowed, a strict-mode probe through a real compiled
 Fix (upstream, `@onrails/pattern`): split *finding* the case from *invoking*
 its handler — `findCase` (index loop, returns the case or `null`), then
 `return c.run(value)` as the caller's final statement. Dropping the sentinel
-also removes the handler-returned-`undefined` ambiguity outright. alang pins
+also removes the handler-returned-`undefined` ambiguity outright. mochi pins
 the fix via `patches/@onrails%2Fpattern@0.3.2.patch` (bun patch) until the
 next published release; the source fix lives in the onrails repo.
 

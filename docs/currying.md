@@ -9,7 +9,7 @@ groupings agree and the saturated path allocates no intermediate closures.
 
 ## The bug this fixes
 
-Before this, alang's runtime had *two* incompatible calling conventions and the
+Before this, mochi's runtime had *two* incompatible calling conventions and the
 type system knew about neither:
 
 - Arithmetic (`add`, `mul`, …) was a flat 2-arg JS function. `add(2, 3)` worked;
@@ -62,7 +62,7 @@ a constructor's field count, a prelude op's known shape.
 - **Call sites** are emitted verbatim — `f(a, b)` and `f(a)(b)` both just work
   against a `_curry`d callee. No call-spine flattening, so the change never
   touches the codegen of every call (the risk the critique flagged).
-- **Externs** are *not* wrapped. An extern's alang type says `a -> b -> c`, but
+- **Externs** are *not* wrapped. An extern's mochi type says `a -> b -> c`, but
   the compiler cannot know whether the backing JS export is flat 2-ary or a
   curried-1-returning-1 function — the two are indistinguishable from the arrow
   chain, and guessing wrong would silently corrupt the FFI. Externs therefore

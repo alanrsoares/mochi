@@ -6,7 +6,7 @@
 ## Context
 
 `type Point = { x: number, y: number }` needs a meaning. Nominal records (distinct
-types) would fight the open-row, duck-typing story that is alang's headline feature.
+types) would fight the open-row, duck-typing story that is mochi's headline feature.
 
 ## Decision
 

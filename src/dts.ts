@@ -1,4 +1,4 @@
-// Emit a TypeScript declaration (.d.ts) for a compiled alang module, so the
+// Emit a TypeScript declaration (.d.ts) for a compiled mochi module, so the
 // emitted JS can be consumed from TypeScript with full types. Top-level `let`s
 // become `export declare const`s; `type` decls become exported tagged-union
 // types matching the `{ _tag, _0, ... }` runtime; `extern`s are imports, not
@@ -607,7 +607,7 @@ export type ExternBinding = { imported: string; scheme: Scheme };
 
 // A `.d.ts` for an extern module (`extern name : T = "./host.js" "jsName"`),
 // so the emitted `.ts` that imports from it type-checks (TS backend, ADR 0026,
-// gap 3). Externs are real external JS with no alang-visible declarations, so
+// gap 3). Externs are real external JS with no mochi-visible declarations, so
 // without this tsc reports TS2307 "cannot find module". Each imported binding
 // becomes an `export declare const`: a FUNCTION extern gets the same OVERLOADED
 // signature as a runtime builtin (`flatFnType`), so both curried (`f(a)(b)`) and

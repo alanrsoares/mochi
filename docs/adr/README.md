@@ -50,10 +50,13 @@ What else was on the table and why not.
 | [0016](0016-ternary-expressions.md) | Ternary expressions: `cond ? then : else`, looser than `\|>`, right-assoc | Accepted |
 | [0017](0017-let-bind.md) | `let? param = value in body` — monadic bind, Result only, first-class node | Accepted |
 | [0018](0018-type-abstraction-traits.md) | Trait constraint prototype (narrowed scope, not a full trait system) | Proposed |
+| [0024](0024-llvm-backend.md) | LLVM backend (native codegen target) | Proposed |
+| [0025](0025-json-diagnostics.md) | Structured JSON diagnostics (`--json` CLI flag) | Proposed |
 | [0026](0026-typescript-backend.md) | TypeScript backend — emit strict-`tsc`-clean typed `.ts` | Accepted |
 | [0027](0027-dogfood-al-formatter.md) | Dogfood the `.al` formatter on `bootstrap/` as a QA gate | Accepted |
 | [0028](0028-typed-lambda-params.md) | Typed lambda parameters via the per-node inference table | Accepted |
 | [0029](0029-cross-module-type-imports.md) | Cross-module `import type` + extern `.d.ts` (TS backend, gap 3) | Accepted |
+| [0030](0030-friendly-errors-and-hints.md) | Friendly compile errors: source snippets + structured suggestions | Proposed |
 | [0031](0031-guard-form-type-predicates.md) | Guard-form arms as type predicates (TS backend, gap 2) | Accepted |
 | [0032](0032-generic-value-lambdas.md) | Generic value-lambda emission + flat `let?` bind (TS backend) | Accepted |
 | [0033](0033-flat-function-type-emission.md) | Flat function-type emission + overload ordering (TS backend) | Accepted |

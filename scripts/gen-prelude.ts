@@ -1,6 +1,6 @@
 // Generator for `bootstrap/prelude.gen.js` — the standalone prelude-table shim
 // the shipped self-hosted compiler imports (ticket 0004). The five tables live
-// once in `src/prelude.ts`; the shipped `alangc` cannot import from `src/`, so
+// once in `src/prelude.ts`; the shipped `mochic` cannot import from `src/`, so
 // this script lowers them into a plain ESM data module.
 //
 // Drift control (PATH_TO_BOOTSTRAP §6 — one prelude, never forked): the shim is
@@ -10,7 +10,7 @@
 // `bun run gen:prelude` fails CI.
 //
 // The two inference tables (`preludeEnv`, `preludeNamespaces`) hold TS `Type`
-// values; they are lowered to alang's `Ty` runtime representation using
+// values; they are lowered to mochi's `Ty` runtime representation using
 // infer.al's OWN constructors (compiled + evaluated here, exactly as the
 // differential test does) so the embedded data can never drift from the shape
 // the bootstrap inferrer expects.
@@ -45,7 +45,7 @@ const evalAlNames = <T extends Record<string, unknown>>(js: string, names: strin
     `"use strict";\n${js.replace(/^import .*$/gm, "").replace(/^export /gm, "")}\nreturn { ${names.join(", ")} };`,
   )(match) as T;
 
-// --- TS Type/Row -> alang Ty/Row runtime value (mirrors bootstrap-infer.spec) ---
+// --- TS Type/Row -> mochi Ty/Row runtime value (mirrors bootstrap-infer.spec) ---
 const makeConverters = (al: AlInfer) => {
   const tsTypeToAl = (t: Type): unknown => {
     switch (t.kind) {
@@ -89,7 +89,7 @@ export const buildShimSource = (): string => {
   ]);
   const { tsTypeToAl } = makeConverters(alInfer);
 
-  // Inference tables lowered to alang Ty (plain tagged records -> JSON-safe).
+  // Inference tables lowered to mochi Ty (plain tagged records -> JSON-safe).
   const builtins: Record<string, unknown> = {};
   for (const [name, t] of Object.entries(preludeEnv)) builtins[name] = tsTypeToAl(t);
 

@@ -1,4 +1,4 @@
-# 0019 — Slice F: codegen in alang + the self-hosting fixpoint
+# 0019 — Slice F: codegen in mochi + the self-hosting fixpoint
 
 - **Status:** Accepted
 - **Source:** Slice F (`docs/PATH_TO_BOOTSTRAP.md` §4) — the final slice. Three
@@ -32,7 +32,7 @@ pinned separately by `bootstrap-{check,infer}.spec.ts`.
 **3. `escChar` drops its `\r` arm** — the real bug this slice flushed. The TS
 lexer's `scanString` decodes only `\n \t \\ \"`; `\r` falls through to a literal
 `r`. So `codegen.al`'s pattern `| "\r" => …` was matching the *letter* `r`,
-mangling every `Err`→`E\r\r`. A decoded alang string value can therefore never
+mangling every `Err`→`E\r\r`. A decoded mochi string value can therefore never
 contain a CR from an escape, so the arm was both wrong and unreachable — removed
 it, and corrected the comment that had claimed the lexer decodes `\r`.
 
@@ -43,7 +43,7 @@ it, and corrected the comment that had claimed the lexer decodes `\r`.
   compiler (evaluated from that JS) re-emits them; stage 3 = the stage-2
   compiler re-emits again. `stage2 ≡ stage3` byte-for-byte for all five modules,
   and the stronger `stage1 ≡ stage2` (TS emit ≡ bootstrap self-emit) holds too.
-  **alang is self-hosting.**
+  **mochi is self-hosting.**
 - **Differential codegen guard.** `test/bootstrap-codegen.spec.ts` diffs the
   bootstrap codegen's JS against the TS codegen's on every `.al` file in the repo
   (including `codegen.al` itself) plus 13 targeted emit cases (nested patterns,

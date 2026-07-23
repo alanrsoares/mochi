@@ -1,6 +1,6 @@
-# AGENTS.md — working in the `alang` repo
+# AGENTS.md — working in the `mochi` repo
 
-`alang` is a small statically-typed functional language that compiles to readable JS
+`mochi` is a small statically-typed functional language that compiles to readable JS
 **and** to strict-`tsc`-clean typed TypeScript (ADR 0026 — the two backends share one
 codegen). ~3.4k LOC of TypeScript on [Bun](https://bun.sh). Hindley–Milner (Algorithm W)
 with row-polymorphic records and parametric variants; LSP/`.d.ts`/formatter are
@@ -13,7 +13,7 @@ Read this, then `CONTEXT.md` for vocabulary and `docs/adr/` for the *why*.
 
 ```bash
 bun run check                 # QA gate = biome check . && tsc --noEmit && bun test
-bun run alang <file.al>       # compile one file to JS on stdout (also: ts, fmt, dts, build)
+bun run mochi <file.al>       # compile one file to JS on stdout (also: ts, fmt, dts, build)
 bun src/cli.ts ts <file.al>   # emit typed TypeScript (build --emit=ts for the graph)
 bun run bootstrap:tsc         # north-star: count tsc --strict errors on the self-host (0)
 bun test | typecheck | lint | lint:fix | format | build:ext | loc

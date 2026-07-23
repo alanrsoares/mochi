@@ -1,4 +1,4 @@
-// Currying coherence (CRITIQUE §4.4). alang functions have curried types
+// Currying coherence (CRITIQUE §4.4). mochi functions have curried types
 // (`a -> b -> c`) but flat JS runtime impls. Every arity-≥2 definition — a
 // prelude op, a user lambda (`(x, y) =>` or `x => y =>`), or a multi-field
 // constructor — is wrapped in the over-application-safe `_curry`, so ALL call

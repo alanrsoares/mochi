@@ -5,7 +5,7 @@
 
 ## Context
 
-JS has a single `number`. alang could either mirror that or model a real `int`/`float`
+JS has a single `number`. mochi could either mirror that or model a real `int`/`float`
 split. A real split reopens the abstraction-over-types question (see
 [0000](0000-open-questions.md)), because `+` would need overloading.
 

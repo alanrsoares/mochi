@@ -19,13 +19,13 @@ const root = join(import.meta.dir, "../..");
 
 // Build the graph into a per-process temp dir, NOT the shared bootstrap/ — bun
 // runs spec files in parallel, and racing `build`s clobbering the same *.js
-// caused partial reads (spurious "non-exhaustive match"). `alangc build` writes
+// caused partial reads (spurious "non-exhaustive match"). `mochic build` writes
 // a .js beside each .al, so we copy the sources into an isolated dir and build
 // there.
 let outDir: string | null = null;
 const buildGraph = (): string => {
   if (outDir) return outDir;
-  const dir = mkdtempSync(join(tmpdir(), "alang-bs-"));
+  const dir = mkdtempSync(join(tmpdir(), "mochi-bs-"));
   cpSync(join(root, "bootstrap"), dir, { recursive: true });
   execFileSync("bun", ["src/cli.ts", "build", join(dir, "cli.al")], { cwd: root });
   outDir = dir;

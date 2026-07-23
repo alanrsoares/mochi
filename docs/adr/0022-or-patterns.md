@@ -10,7 +10,7 @@
 A `switch` arm matched exactly one pattern, so dispatching several constructors
 or literals to the same body meant repeating the body per arm
 (`| Red => c | Green => c | Blue => c`). Or-patterns — one arm, several
-alternatives — are the standard fix (OCaml/Rust `A | B`), and alang's guard-form
+alternatives — are the standard fix (OCaml/Rust `A | B`), and mochi's guard-form
 codegen and row/HM inference already have the machinery to type and lower them.
 
 ## Decision

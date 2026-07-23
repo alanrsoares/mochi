@@ -1,4 +1,4 @@
-// Qualified collection namespaces: `List.map`, `Array.map`, … alang has no
+// Qualified collection namespaces: `List.map`, `Array.map`, … mochi has no
 // overloading, so each collection carries its own `Ns.op`. `List.*` transformers
 // are lazy (fuse over infinite sequences); `Array.*` mirror the eager unqualified
 // ops. Access parses as plain field-access — no new syntax.

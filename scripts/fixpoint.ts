@@ -3,13 +3,13 @@
 //
 // Ceremony (PATH_TO_BOOTSTRAP §4, lifted to disk):
 //   seed  : the TS compiler builds bootstrap/cli.al's graph -> a runnable
-//           alangc (stage-1 binary).
-//   stage2: the seed binary rebuilds the whole graph (`alangc build cli.al`).
+//           mochic (stage-1 binary).
+//   stage2: the seed binary rebuilds the whole graph (`mochic build cli.al`).
 //   stage3: a binary assembled from the stage-2 outputs rebuilds it again.
 // Self-hosting is proved when stage2 ≡ stage3 byte-for-byte for every module.
 // We also assert the stronger parity stage2 ≡ the TS `build` output (the seed).
 //
-// The build is CLOSED-WORLD (`alangc build`, the module graph), not per-file
+// The build is CLOSED-WORLD (`mochic build`, the module graph), not per-file
 // open-world: modules now share `ast.al`/`types.al` and pattern-match imported
 // ctors, which only resolves with the whole graph in scope.
 //
@@ -31,14 +31,14 @@ const RUNTIME_DEPS = ["host.js", "prelude.gen.js"];
 const bun = (args: string[], cwd = root) =>
   execFileSync("bun", args, { cwd, encoding: "utf8" });
 
-// Copy the files that make a directory a runnable alangc: the compiled module
+// Copy the files that make a directory a runnable mochic: the compiled module
 // JS already present there, plus the runtime deps.
 const placeRuntimeDeps = (dir: string) => {
   for (const dep of RUNTIME_DEPS) cpSync(join(root, "bootstrap", dep), join(dir, dep));
 };
 
-// Rebuild the whole module graph with the alangc in `binDir`: copy every .al
-// into `outDir`, then `alangc build cli.al` there (closed-world — one command
+// Rebuild the whole module graph with the mochic in `binDir`: copy every .al
+// into `outDir`, then `mochic build cli.al` there (closed-world — one command
 // walks the import graph and emits a .js beside each .al). Returns module -> JS.
 const compileAllWith = (binDir: string, outDir: string): Record<string, string> => {
   mkdirSync(outDir, { recursive: true });

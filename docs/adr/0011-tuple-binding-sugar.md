@@ -9,7 +9,7 @@ ADR 0010 shipped tuples but left destructuring `switch`-only, which is painful
 for the code that most wants tuples: parser/scanner combinators that thread a
 `(value, rest)` pair through every step. Writing `switch p { | (a, b) => … }`
 for each peel is noise. Binding sugar is the ergonomic payoff tuples were added
-for, and the natural thing to do before the lexer-in-alang spike.
+for, and the natural thing to do before the lexer-in-mochi spike.
 
 ## Decision
 

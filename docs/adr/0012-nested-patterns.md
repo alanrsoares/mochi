@@ -65,7 +65,7 @@ form.
   arm need `C(_)` or `_`. No working code regresses — those programs
   miscompiled before.
 - Emitted output for existing flat code is byte-identical (goldens unchanged).
-- `check`/`infer`-in-alang ports (bootstrap slices D–E) can dispatch on nested
+- `check`/`infer`-in-mochi ports (bootstrap slices D–E) can dispatch on nested
   AST shapes directly instead of nesting switches.
 
 ## Alternatives rejected

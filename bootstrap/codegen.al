@@ -1,4 +1,4 @@
-// bootstrap/codegen.al — the alang codegen pass, in alang. Ported from
+// bootstrap/codegen.al — the mochi codegen pass, in mochi. Ported from
 // src/codegen.ts (the spec); test/bootstrap-codegen.spec.ts diffs emitted JS
 // against the TS codegen on every .al file in the repo — including this one.
 //
@@ -23,7 +23,7 @@
 import { ENum, EBool, EStr, ERef, ECall, ELambda, ELetIn, ELetBind, EPipe, ETernary, EMatch, ERecord, EField, ETuple, EArr, EList, EMap, EInterp, IPLit, IPExpr, PWild, PBind, PLit, PBool, PStr, PTuple, PRecord, PCtor, PArr, PList, POr, LPName, LPRecord, LPTuple, SLet, SType, SExtern, SImport } from "./ast.al"
 
 // One chunk of a "…${a}…" interpolation (ADR 0023): a literal run, or a
-// hole expression. TS: an untagged `string | Expr` union — alang has no raw
+// hole expression. TS: an untagged `string | Expr` union — mochi has no raw
 // unions, so this is a proper variant (mirrors parser.al's own copy).
 
 // --- small generic helpers (duplicated per bootstrap file, same as check.al/infer.al) ---
@@ -43,9 +43,9 @@ let someOfFrom = (f, xs, i) => switch Array.get(i, xs) {
 }
 let someOf = (f, xs) => someOfFrom(f, xs, 0)
 
-// Encode a decoded alang string VALUE back as a JS string literal. The
+// Encode a decoded mochi string VALUE back as a JS string literal. The
 // lexer only ever decodes \\ \" \n \t (src/lexer.ts scanString — \r is NOT
-// decoded: it falls through to a literal "r"), so no alang string value can
+// decoded: it falls through to a literal "r"), so no mochi string value can
 // contain any other escape-worthy character — this is a complete encoder for
 // anything this compiler could have produced, and it must byte-match
 // `JSON.stringify` on that same restricted alphabet.
@@ -105,7 +105,7 @@ let nsRuntimeId = (target, name, ctx) => switch target {
 }
 
 // Collapse `(x) => (y) => e` (curried lambdas), `(x, y) => e`, or a mix
-// into one flat parameter list plus a final body. alang types treat
+// into one flat parameter list plus a final body. mochi types treat
 // `(x, y) => e` and `x => y => e` identically (`a -> b -> c`), so it's
 // sound to lower a multi-arg function into a single `_curry`-wrapped JS
 // function instead of nested closures (CRITIQUE §4.4).
@@ -167,7 +167,7 @@ let genExpr = (e, ctx) => switch e {
     }
   | ETuple(elements, _) =>
     // A tuple erases to a JS array `[a, b]` (like ReScript); the type system
-    // keeps it distinct from an alang Array, the runtime shares the shape.
+    // keeps it distinct from an mochi Array, the runtime shares the shape.
     "[${Str.join(", ", elements |> map(el => genExpr(el, ctx)))}]"
   | EArr(elements, _) => "[${Str.join(", ", elements |> map(el => genExpr(el, ctx)))}]"
   | EList(elements, _) => genList(elements, ctx)
@@ -642,7 +642,7 @@ let genWithArm = (p, body, ctx) => switch p {
 // factories only. Nullary -> a tagged value; n-ary -> a tagging function.
 // The discriminant key is `_tag`, matching the @onrails ecosystem
 // convention (@onrails/result, @onrails/maybe), so type guards (isOk/isSome/…)
-// recognize alang values at the JS boundary.
+// recognize mochi values at the JS boundary.
 let genCtor = c =>
   let tag = jsStringLit(c.name) in
   eq(Array.length(c.fields), 0)
@@ -990,7 +990,7 @@ let genStmtAllFrom = (stmts, i, ctx) => switch Array.get(i, stmts) {
 // `useRuntime`: inline the prelude builtins the program uses, so the emitted
 // module runs standalone. `ns`/`jsDefs`/`runtimeDeps` are the TS prelude's
 // `namespaceRuntime`/`preludeJsDefs`/`runtimeDeps` tables, converted to
-// alang Maps — the same tables the TS codegen consults, not a fork of them.
+// mochi Maps — the same tables the TS codegen consults, not a fork of them.
 export let codegen = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps) =>
   let keys0 = seedCtorsFromStmts(stmts, 0, imported) in
   let keys = seedBuiltinCtorKeys(keys0) in

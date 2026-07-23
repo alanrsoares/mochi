@@ -1,4 +1,4 @@
-# Docstrings: a prettier doc language for alang
+# Docstrings: a prettier doc language for mochi
 
 ## Status
 
@@ -14,7 +14,7 @@ This doc plans that real docstring language on top of the chosen delimiter.
 
 Every mainstream doc language (JSDoc, Javadoc, docstrings-with-types) spends most
 of its syntax **restating types** — `@param {number} x`, `@returns {string}`.
-alang infers types with Hindley-Milner. Restating them is pure noise and, worse,
+mochi infers types with Hindley-Milner. Restating them is pure noise and, worse,
 a second source of truth that drifts from the real signature.
 
 So the design lever is sharp: **a docstring must carry only what the type system
@@ -26,7 +26,7 @@ cannot express.** That is a short list —
 - **cross-references** — "see also [[clamp]]".
 
 Everything a docstring *shouldn't* do (parameter types, return types, generic
-bounds) alang already renders in hover from inference. The doc language stays
+bounds) mochi already renders in hover from inference. The doc language stays
 small because the type system does the heavy lifting.
 
 ## Design (syntax-independent)
@@ -35,10 +35,10 @@ The extracted doc should have the same shape regardless of delimiter:
 
 1. **Summary** — the first paragraph (up to the first blank line). Short, one
    line ideally. Surfaced wherever docs are useful: hover first, completion
-   `detail` once alang has a completion provider, and optionally inlay. This is
+   `detail` once mochi has a completion provider, and optionally inlay. This is
    the split we lack today.
 2. **Body** — Markdown, flowed to hover as-is (hover already renders markdown).
-3. **`alang` example blocks** — fenced ` ```alang ` blocks hold *real alang*.
+3. **`mochi` example blocks** — fenced ` ```mochi ` blocks hold *real mochi*.
    The check pipeline lexes/parses/typechecks each block against the current
    module so a lying example fails `bun run check` (doctests). A `// ⇒ value`
    or `// value` trailing comment is the expected result; a later slice can
@@ -57,7 +57,7 @@ the name is written as prose ("`lo` and `hi` may be passed in either order").
   reading a *structured* doc instead of a raw string.
 - **Completion detail**: summary line only, after a completion provider exists.
 - **`bun run check`**: add a new doctest pass so the existing check command
-  typechecks every `alang` example block.
+  typechecks every `mochi` example block.
 - **`src/dts.ts`**: carry the summary into generated `.d.ts` as a leading `/** */`
   so TS consumers see it.
 
@@ -69,10 +69,10 @@ structure above.
 
 ### Option A — `///` line docs (Rust/Swift) — SHIPPED
 
-```alang
+```mochi
 /// Clamp `x` into [lo, hi]. Returns lo if below, hi if above.
 ///
-/// ```alang
+/// ```mochi
 /// clamp(5, 0, 10)   // 5
 /// clamp(-3, 0, 10)  // 0
 /// ```
@@ -90,11 +90,11 @@ let clamp = (x, lo, hi) => ...
 
 ### Option B — `/** */` block docs (JSDoc-ish)
 
-```alang
+```mochi
 /**
  * Clamp `x` into [lo, hi].
  *
- * ```alang
+ * ```mochi
  * clamp(5, 0, 10)  // 5
  * ```
  */
@@ -108,10 +108,10 @@ let clamp = (x, lo, hi) => ...
 
 ### Option C — keep `//`, formalize on top
 
-```alang
+```mochi
 // Clamp `x` into [lo, hi].
 //
-// ```alang
+// ```mochi
 // clamp(5, 0, 10)  // 5
 // ```
 let clamp = (x, lo, hi) => ...
@@ -136,7 +136,7 @@ intent from noise.
 1. **AST/parser**: replace `doc?: string` with `doc?: DocBlock` where
    `DocBlock = { summary: string; body: string; examples: DocExample[] }`; parse
    the raw text into that shape (summary = up to first blank line; scan fenced
-   ` ```alang ` blocks out of the body).
+   ` ```mochi ` blocks out of the body).
 2. **Hover/completion**: render the structured block; summary into completion
    detail.
 3. **Doctests**: a `bun run check` pass that lexes+parses+typechecks each

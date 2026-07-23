@@ -14,7 +14,7 @@ import { buildModules } from "../src/module";
 
 const root = join(import.meta.dir, "..");
 
-// The emitted loader's return shape (alang `Result` runtime tags).
+// The emitted loader's return shape (mochi `Result` runtime tags).
 type Loaded = { path: string; stmts: unknown[] };
 type MErr = { message: string; start: number; end: number };
 type Res = { _tag: "Ok"; value: Loaded[] } | { _tag: "Err"; error: MErr };
@@ -30,7 +30,7 @@ beforeAll(async () => {
   ({ loadGraph } = (await import(join(root, "bootstrap/module.js"))) as {
     loadGraph: typeof loadGraph;
   });
-  dir = mkdtempSync(join(tmpdir(), "alang-mod-"));
+  dir = mkdtempSync(join(tmpdir(), "mochi-mod-"));
 });
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 

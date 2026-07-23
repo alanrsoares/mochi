@@ -1,4 +1,4 @@
-# JSX for alang
+# JSX for mochi
 
 ## Status
 
@@ -9,21 +9,21 @@ Crib the design instead of inventing one.
 
 ## Why
 
-JSX is sugar, not a type-system feature. In alang the payoff is sharper than in
-most languages because JSX props are just a **record**, and alang already infers
+JSX is sugar, not a type-system feature. In mochi the payoff is sharper than in
+most languages because JSX props are just a **record**, and mochi already infers
 records with Hindley-Milner. A component's prop type comes out for free — no
 prop-types, no `@param`, no annotation. Hover shows the inferred props. That is
 the whole reason JSX is worth adding here: it costs almost nothing on the type
 side and reuses machinery that already exists.
 
 The only real cost is lexing (`<` is context-sensitive). Everything else is a
-desugar into calls alang can already type and emit.
+desugar into calls mochi can already type and emit.
 
 ## Design
 
 ### One desugar rule, case-driven
 
-alang already treats a Capitalized name as a constructor. Reuse that split:
+mochi already treats a Capitalized name as a constructor. Reuse that split:
 
 ```
 <div class={c}>{kid}</div>   →   jsx("div", { class: c }, [kid])
@@ -38,12 +38,12 @@ alang already treats a Capitalized name as a constructor. Reuse that split:
 
 ### Pluggable runtime via `extern`
 
-`jsx`, `fragment`, and the `Element` type are **`extern`s**, not builtins. alang
+`jsx`, `fragment`, and the `Element` type are **`extern`s**, not builtins. mochi
 already has `extern name : type = "module" "export"`. So the runtime (React,
 Preact, a hand-rolled vdom) is chosen by swapping the imported module — no
 pragma, no compiler flag.
 
-```alang
+```mochi
 type Element  // opaque, no runtime
 
 extern jsx : string -> a -> [Element] -> Element = "react/jsx-runtime" "jsx"
@@ -88,9 +88,9 @@ ReScript and Babel both do this.
 
 Require a marker before JSX. Rejected — ugly, not Cheng-Lou-minimal.
 
-**Recommendation: Option A.** alang's lexer is a pass, but a small mode flag
+**Recommendation: Option A.** mochi's lexer is a pass, but a small mode flag
 pushed at the few known JSX-entry positions is clean enough and correct. The
-heuristic (B) trades correctness for a saving alang shouldn't want.
+heuristic (B) trades correctness for a saving mochi shouldn't want.
 
 ## Build sequence
 

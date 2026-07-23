@@ -53,7 +53,7 @@ test("matches the TS buildModules driver byte for byte", async () => {
 });
 
 test("cross-module exhaustiveness fires: dropping an imported ctor arm fails", () => {
-  const dir = mkdtempSync(join(tmpdir(), "alang-mod-"));
+  const dir = mkdtempSync(join(tmpdir(), "mochi-mod-"));
   writeFileSync(
     join(dir, "shapes.al"),
     "export type Shape = Circle(r: number) | Square(s: number)\n",
@@ -69,7 +69,7 @@ test("cross-module exhaustiveness fires: dropping an imported ctor arm fails", (
 });
 
 test("reports a missing export against the import site", () => {
-  const dir = mkdtempSync(join(tmpdir(), "alang-mod-"));
+  const dir = mkdtempSync(join(tmpdir(), "mochi-mod-"));
   writeFileSync(join(dir, "lib.al"), "export let a = 1\n");
   writeFileSync(join(dir, "use.al"), 'import { a, nope } from "./lib"\nlet x = a\n');
   const r = buildModules(join(dir, "use.al"));

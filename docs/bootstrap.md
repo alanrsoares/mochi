@@ -1,13 +1,13 @@
-# Bootstrapping alang (self-hosting)
+# Bootstrapping mochi (self-hosting)
 
 ## Status
 
-**In progress, three of four stages self-hosted.** alang runs, is Turing-complete,
+**In progress, three of four stages self-hosted.** mochi runs, is Turing-complete,
 and has the hard part done — HM inference, ADTs + exhaustive match, row-poly
 records, Map, mutual recursion, modules, Result/Option, structural eq. The
 type-theory core most languages stall on is shipped. **All three surface-syntax
 blockers are now cleared** (let-in ADR 0009, tuples ADR 0010, char cursor in the
-prelude), and **lex → parse → check → infer are all ported to alang and
+prelude), and **lex → parse → check → infer are all ported to mochi and
 differentially tested against the TS compiler** on the whole repo corpus
 (`bootstrap/{lexer,parser,check,infer}.al`,
 `test/bootstrap-{lexer,parser,check,infer}.spec.ts` — see
@@ -20,7 +20,7 @@ and the incremental path; see `PATH_TO_BOOTSTRAP.md` for current slice status.
 Not for its own sake. Self-hosting is the **forcing function**: it exercises the
 language at real scale and surfaces every ergonomic gap that toy examples hide.
 Each blocker below was found by asking "how would I write `lex`/`parse`/`infer`
-in alang today?" — the answer keeps hitting the same missing pieces.
+in mochi today?" — the answer keeps hitting the same missing pieces.
 
 ## Readiness checklist
 
@@ -69,7 +69,7 @@ modules (`import`/`export`), builtin `Result`/`Option`, structural
    miscompiled (free vars in emitted JS); now lowers to a guard-form arm.
    Conservative exhaustiveness: narrowing arms need a `C(_)`/`_` companion.
    The check/infer ports can dispatch on nested AST shapes directly.
-4. ~~**Spike: lexer-in-alang**~~ **DONE** — `bootstrap/lexer.al` reproduces
+4. ~~**Spike: lexer-in-mochi**~~ **DONE** — `bootstrap/lexer.al` reproduces
    `src/lexer.ts`'s token stream on the full repo corpus
    (`test/bootstrap-lexer.spec.ts`). Tuple-binding sugar (ADR 0011,
    `((a, b)) => …` and `let (a, b) = value in body`) let scanner state thread
@@ -82,9 +82,9 @@ modules (`import`/`export`), builtin `Result`/`Option`, structural
    reproduce the TS checker's verdicts and the TS inferrer's schemes on the
    full corpus (`test/bootstrap-{check,infer}.spec.ts`).
 7. **Remaining: codegen + the fixpoint ceremony (Slice F)** — port
-   `src/codegen.ts` to alang, diffed against its TS counterpart, then the
+   `src/codegen.ts` to mochi, diffed against its TS counterpart, then the
    three-stage fixpoint compile (`docs/PATH_TO_BOOTSTRAP.md` §4, Slice F).
-   This is the only slice left before alang self-hosts.
+   This is the only slice left before mochi self-hosts.
 
 ## Guardrail
 

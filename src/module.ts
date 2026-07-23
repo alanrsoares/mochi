@@ -191,7 +191,7 @@ const compileGraphTs = (
   const keysByPath = new Map<string, Map<string, string[]>>();
   const outputs: ModuleOutput[] = [];
 
-  // alang has no type-name imports: every top-level `type` is globally visible in
+  // mochi has no type-name imports: every top-level `type` is globally visible in
   // the closed-world graph, and the TS backend emits each as `export type`. Map
   // each type name to its declaring module so a reference from a module with no
   // value-import edge to the owner can still emit an `import type`.

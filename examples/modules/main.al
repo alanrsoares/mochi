@@ -23,7 +23,7 @@ let sides = s => switch s {
 let circleSides = sides(circle)
 let rectSides = sides(rect)
 
-// Build the program with `alang build examples/modules/main.al`, then run
+// Build the program with `mochi build examples/modules/main.al`, then run
 // `bun examples/modules/main.js` — it prints these three values.
 let a = log("circle area:", circleArea)
 let b = log("rect area:", rectArea)

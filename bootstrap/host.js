@@ -1,12 +1,12 @@
-// Host IO shims for the self-hosted alang CLI (ticket 0001). Bound into alang
-// source via `extern`; the shipped `alangc` runs as emitted JS under Bun, so
+// Host IO shims for the self-hosted mochi CLI (ticket 0001). Bound into mochi
+// source via `extern`; the shipped `mochic` runs as emitted JS under Bun, so
 // these are plain Node/Bun calls. Synchronous by design — the compiler is a
-// batch tool, and sync results keep the alang surface a plain `Result` (no
+// batch tool, and sync results keep the mochi surface a plain `Result` (no
 // `Promise<Result>`, per the railway conventions).
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
-// alang Result runtime shape: { _tag: "Ok", value } | { _tag: "Err", error }.
+// mochi Result runtime shape: { _tag: "Ok", value } | { _tag: "Err", error }.
 const Ok = (value) => ({ _tag: "Ok", value });
 const Err = (error) => ({ _tag: "Err", error });
 
@@ -22,7 +22,7 @@ export const readFile = (path) => {
 };
 
 // writeFile : string -> string -> Result string string  (Ok carries the path)
-// Uncurried: alang lowers multi-arg application to a flat call.
+// Uncurried: mochi lowers multi-arg application to a flat call.
 export const writeFile = (path, contents) => {
   try {
     writeFileSync(path, contents);
@@ -63,7 +63,7 @@ export const formatError = (path, src, err) => {
 };
 
 // die : string -> a  — print to stderr and exit nonzero. Return type is
-// uninhabited on the alang side (never returns), so it unifies anywhere.
+// uninhabited on the mochi side (never returns), so it unifies anywhere.
 export const die = (msg) => {
   process.stderr.write(`${msg}\n`);
   process.exit(1);

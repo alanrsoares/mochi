@@ -23,7 +23,7 @@ Every earlier lever was a codegen tweak; this one had no codegen fix:
 
 The hand-written `src/module.ts` has none of this trouble because it *annotates*:
 `const importedReg: Registry = …`, `regByPath: Map<string, Registry>`. The gap
-was in the language, not the codegen — alang had no way to write a type
+was in the language, not the codegen — mochi had no way to write a type
 annotation, so HM generalized maximally and the emit had nothing concrete to
 render. The fix is the annotation itself.
 

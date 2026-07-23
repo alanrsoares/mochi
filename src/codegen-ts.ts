@@ -34,7 +34,7 @@ import type { AliasDef } from "./types";
 
 export type CodegenTsOptions = { runtimeImport?: string };
 
-export const DEFAULT_RUNTIME_IMPORT = "@alang/runtime";
+export const DEFAULT_RUNTIME_IMPORT = "@mochi/runtime";
 
 // Visit the span of every lambda AND every empty-collection literal (`#{}`/`[]`/
 // `@{}`) in an expression subtree, root included (ADR 0042). Used to scope a
@@ -274,7 +274,7 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
   return `${parts.join("\n\n")}\n`;
 };
 
-// Compile a single `.al` source to a typed `.ts` module (CLI `alang ts`). Open
+// Compile a single `.al` source to a typed `.ts` module (CLI `mochi ts`). Open
 // world, no cross-module imports resolved — a file that imports from another
 // module won't typecheck alone; use `build --emit=ts` for a graph.
 export const codegenTs = (src: string, opts: CodegenTsOptions = {}): Result<string, AlangError> => {

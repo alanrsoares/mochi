@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "alang",
+      "name": "mochi",
       "dependencies": {
         "@onrails/pattern": "^0.3.2",
         "@onrails/result": "^0.4.0",

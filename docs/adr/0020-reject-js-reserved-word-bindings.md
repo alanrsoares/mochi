@@ -6,7 +6,7 @@
 
 ## Context
 
-alang identifiers are lexed liberally: any lowercase name that isn't a keyword
+mochi identifiers are lexed liberally: any lowercase name that isn't a keyword
 is a legal identifier, including JS reserved words like `else`, `new`, `class`,
 `in`, `default`. Most reach codegen as JS **binding** positions — a `let`
 lowers to `const <name>`, a lambda parameter to `(<name>) =>`, a labelled ctor
@@ -37,10 +37,10 @@ precisely to where a `SyntaxError` would actually occur.
 
 - Emitted JS stays pristine — no `else$`/`_else` mangling, no leak into the
   `.d.ts` FFI surface, no cross-module mangle-agreement to thread. This protects
-  alang's core value proposition (readable, idiomatic JS output).
-- A handful of JS keywords become illegal alang binding names; each is trivially
-  renamed. The full reserved set is rejected even for names alang could in
-  principle emit safely, keeping the rule "alang binding names ⊆ legal JS
+  mochi's core value proposition (readable, idiomatic JS output).
+- A handful of JS keywords become illegal mochi binding names; each is trivially
+  renamed. The full reserved set is rejected even for names mochi could in
+  principle emit safely, keeping the rule "mochi binding names ⊆ legal JS
   binding names" simple and honest.
 - The silent-miscompile class is closed: a reserved-word binding is now a
   first-error `check` failure with a span, not runtime `SyntaxError`.

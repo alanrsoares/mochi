@@ -1,4 +1,4 @@
-// Ticket 0005 — bootstrap/compile.al is the whole pipeline as one alang
+// Ticket 0005 — bootstrap/compile.al is the whole pipeline as one mochi
 // function: string -> Result string Err. It runs check and infer as real
 // gates. We eval the compiled compile.al with its five pass-imports and the
 // five prelude-shim tables injected (the extern/import bindings become

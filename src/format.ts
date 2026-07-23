@@ -1,4 +1,4 @@
-// alang source formatter: parse to the AST, lower to a Wadler/Prettier-style
+// mochi source formatter: parse to the AST, lower to a Wadler/Prettier-style
 // document IR, then lay it out against an 80-column target (ADR 0025). Every
 // breakable construct — pipe, switch, ternary, `let … in`, record/map literals,
 // call-argument lists — is a `group` that prints flat when it fits the line and

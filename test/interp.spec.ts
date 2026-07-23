@@ -11,14 +11,14 @@ test("hole-free string still lowers to a plain JS string (zero churn)", () => {
 });
 
 test("a hole unifies with string; a non-string hole is a type error", () => {
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: mochi source, not a JS template
   const r = compile('let flag = true\nlet bad = "x is ${flag}"', { runtime: false });
   expect(isErr(r)).toBe(true);
   expect(unwrapErr(r).kind).toBe("type");
 });
 
 test("interpolation lowers to a template literal", () => {
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: mochi source, not a JS template
   const src = 'let x = "1"\nlet s = "x is ${x}"';
   // biome-ignore lint/suspicious/noTemplateCurlyInString: expected emitted JS source, not an interpolated template
   const expected = 'const x = "1";\nconst s = `x is ${x}`;\n';
@@ -26,7 +26,7 @@ test("interpolation lowers to a template literal", () => {
 });
 
 test("nested interpolation", () => {
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: mochi source, not a JS template
   const src = 'let n = "1"\nlet s = "outer ${"inner ${n}"}"';
   // biome-ignore lint/suspicious/noTemplateCurlyInString: expected emitted JS source, not an interpolated template
   const expected = 'const n = "1";\nconst s = `outer ${`inner ${n}`}`;\n';
@@ -34,11 +34,11 @@ test("nested interpolation", () => {
 });
 
 test("escaping round-trips through compile-and-eval: backtick, dollar-brace, backslash", () => {
-  // Source holds, in order: a literal backtick (no escape needed — alang
+  // Source holds, in order: a literal backtick (no escape needed — mochi
   // strings are "…", not `…`), `\${` (the escape for a literal `$` before
   // `{`, decoding to the literal text "${c}"), and `\\` (a literal backslash)
   // — all ahead of a real `${n}` hole.
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: mochi source, not a JS template
   const src = 'let n = "1"\nlet s = "a `b \\${c} d\\\\e ${n}"';
   const out = new Function(`${js(src)}\nreturn s;`)() as string;
   // biome-ignore lint/suspicious/noTemplateCurlyInString: expected decoded string value, not a JS template

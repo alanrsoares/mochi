@@ -1,4 +1,4 @@
-// alang AST. Every node carries its source `span` for diagnostics + tooling.
+// mochi AST. Every node carries its source `span` for diagnostics + tooling.
 import type { Span } from "./span";
 
 export type Expr =
@@ -146,7 +146,7 @@ export type Stmt =
       exported?: boolean;
       span: Span;
     }
-  // import { a, b } from "./mod"  — bind exports of another alang module
+  // import { a, b } from "./mod"  — bind exports of another mochi module
   | { kind: "import"; names: ImportName[]; from: string; span: Span };
 
 // Named narrowings of the union nodes. Signatures take these instead of an

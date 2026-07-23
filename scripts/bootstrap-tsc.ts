@@ -51,7 +51,7 @@ export const bootstrapTsc = async (keep = false): Promise<TscReport> => {
   const built = await buildModulesTs(ENTRY, read, { runtimeImport: RUNTIME });
   if (isErr(built)) throw new Error(`bootstrap emit failed: ${JSON.stringify(built.error)}`);
 
-  const dir = await mkdtemp(join(tmpdir(), "alang-bts-"));
+  const dir = await mkdtemp(join(tmpdir(), "mochi-bts-"));
   try {
     for (const { path, js } of built.value) {
       // Extern `.d.ts` outputs already carry their extension; `.al` → `.ts`.

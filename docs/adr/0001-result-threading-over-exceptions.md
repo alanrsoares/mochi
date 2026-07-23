@@ -20,7 +20,7 @@ are ordinary values threaded through the railway, short-circuiting at the first 
 - The failure surface is visible in every signature; a stage can't silently throw past
   its caller. Diagnostics fall out naturally (`diagnostics.ts` is 0-or-1 because the
   railway stops at the first error).
-- Directly ports toward self-hosting: alang source is already `Result`-shaped, so the
+- Directly ports toward self-hosting: mochi source is already `Result`-shaped, so the
   TypeScript compiler's structure maps onto the language it compiles.
 - `throw` survives only as a local implementation detail (ADR 0002's `ParseAbort`, one
   codegen invariant) — never as cross-module plumbing.

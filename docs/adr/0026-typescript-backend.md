@@ -9,7 +9,7 @@
 
 ## Context
 
-`docs/TS_DIALECT.md` reframes "make alang a superset of TypeScript" (infeasible —
+`docs/TS_DIALECT.md` reframes "make mochi a superset of TypeScript" (infeasible —
 would delete the HM core) into an achievable dialect: keep HM + FP semantics, adopt
 TS-shaped surface, emit typed `.ts`. That note splits the work into two independent
 axes: **A. output target** (emit `.ts`) and **B. surface syntax** (accept
@@ -51,7 +51,7 @@ type rendering — it orchestrates the two existing backends:
      from `dts`'s `ctorFactoryTs` (params from the ctor's field `TypeExpr`s — ADR
      0015; return type = the variant), so `Circle(2)` is a `Shape`, not `any`.
 3. **Runtime is imported, not inlined.** The emitted `.ts` does `import { _curry,
-   add, … } from "@alang/runtime"` (specifier configurable via `runtimeImport`)
+   add, … } from "@mochi/runtime"` (specifier configurable via `runtimeImport`)
    instead of inlining an untyped preamble. The target is `src/runtime.ts`, a typed
    module **generated** by `scripts/gen-runtime.ts` (`bun run gen:runtime`) from the
    single source of truth (`preludeJsDefs` bodies + the HM signatures in
@@ -93,14 +93,14 @@ subcommand.
   regenerate with `bun run gen:runtime` after any `preludeJsDefs`/signature change.
   Bodies are duplicated from `preludeJsDefs` at generation time — the "one prelude"
   invariant holds because the generator is the single derivation, not a hand-fork.
-- Emitted `.ts` is **no longer self-contained**: it needs `@alang/runtime`
+- Emitted `.ts` is **no longer self-contained**: it needs `@mochi/runtime`
   resolvable (like any codegen that imports `tslib`/`@babel/runtime`). This is the
   deliberate trade chosen over inlining a typed preamble (see Alternatives).
 - **Deferred to follow-ups** (each explicit, not silent divergence):
   - *Per-node type table.* This backend only needs top-level env schemes (what
     `inferProgramTypes` already returns), not the span→type table ADR 0024 flagged.
     Inline sub-expression annotations (if ever wanted) would need that plumbing.
-  - *Packaging `@alang/runtime`.* The specifier defaults to a package name not yet
+  - *Packaging `@mochi/runtime`.* The specifier defaults to a package name not yet
     published; consumers set `runtimeImport` (the differential test points it at
     `src/runtime`). Shipping the runtime as a real package is unbuilt.
   - *Module graphs.* `codegen-ts` covers single files; a `build --emit=ts` over the
@@ -118,7 +118,7 @@ subcommand.
   `genExpr`/pattern-compilation and drift from the JS backend. Rejected — reuse the
   one backend via the hook.
 - **Inline a typed runtime** (keep the emitted `.ts` self-contained, but emit the
-  preamble with types) instead of importing `@alang/runtime`. Rejected: it forks
+  preamble with types) instead of importing `@mochi/runtime`. Rejected: it forks
   the prelude def strings (the JS backend needs untyped ones, the TS backend typed
   ones) and forces a codegen "TS target" mode to type the preamble. Importing a
   generated typed module keeps one derivation and matches how real compilers ship a

@@ -1,13 +1,13 @@
 # Path to bootstrap
 
-What it takes for alang to compile itself. The spec is the existing compiler:
+What it takes for mochi to compile itself. The spec is the existing compiler:
 ~3.4k LOC of TypeScript (`lexer → parser → check → infer → codegen`, plus
 `dts`/`format`/`module`), all Result-threaded, all pattern-matched — i.e. code
-that is already *shaped* like alang. This doc inventories what the language
+that is already *shaped* like mochi. This doc inventories what the language
 has, what blocks the port, and the slice order to get there.
 (Live status checklist: `docs/bootstrap.md`.)
 
-**Distance, honestly (updated 2026-07-21): DONE — alang is self-hosting.**
+**Distance, honestly (updated 2026-07-21): DONE — mochi is self-hosting.**
 Local `let … in` (ADR 0009), tuples + binding sugar (ADR 0010/0011), the char
 cursor, nested patterns (ADR 0012), guards (ADR 0013), composite ctor fields
 (ADR 0015), and the prelude pieces all landed. **Slices C and D shipped**:
@@ -26,7 +26,7 @@ modules, with `stage1 ≡ stage2` holding too (`test/bootstrap-fixpoint.spec.ts`
 
 ## 1. Verified prerequisites (already work)
 
-| Compiler need | alang feature | Status |
+| Compiler need | mochi feature | Status |
 |---|---|---|
 | AST as data | Recursive parametric variants: `type Expr = \| Num(number) \| Neg(Expr) \| Add(Expr, Expr)` compiles and evaluates (verified 2026-07-21) | ✓ |
 | Error plumbing | Builtin `Option`/`Result` + railway combinators — the TS compiler is Result-everywhere; the same shape ports directly | ✓ |
@@ -117,7 +117,7 @@ record fields may nest, lazy-List patterns may not. Guard:
   redesign the language for this.
 - ~~**Stack depth.**~~ **RESOLVED (ADR 0014).** JSC (Bun) does proper tail
   calls in strict mode, emitted modules are ESM (strict), and `_curry`'s
-  saturated path is now a tail call — so tail-recursive alang functions run in
+  saturated path is now a tail call — so tail-recursive mochi functions run in
   O(1) stack (~2M depth measured). The lexer spike hit this wall on day one
   (per-token recursion overflowed on the two biggest corpus files) and the
   `_curry` fix removed it. Caveat: harnesses eval'ing emitted JS via
@@ -153,7 +153,7 @@ General pattern compiler (`patConds`/`patSlot`) + conservative exhaustiveness
 *Exit met: `Sm(Sm(n)) => n` (and tuple/record/array nestings) evaluate
 correctly; `test/nested-patterns.spec.ts` guards it.*
 
-### Slice C — lexer in alang (first self-hosting artifact) — DONE
+### Slice C — lexer in mochi (first self-hosting artifact) — DONE
 `bootstrap/lexer.al` (~250 LOC): `Tok` variant, `go` tail-recursion over the
 char cursor, doc-comment state threaded as parameters, keyword/digraph/punct
 tables as string-literal switches. `test/bootstrap-lexer.spec.ts` diffs
@@ -164,7 +164,7 @@ lexing itself.* The spike also flushed out two compiler bugs (record-literal
 arm bodies emitted unparenthesized; `_curry` breaking tail calls → ADR 0014)
 — differential testing paying for itself on day one.
 
-### Slice D — parser in alang — DONE
+### Slice D — parser in mochi — DONE
 `bootstrap/parser.al` (~760 LOC): AST as variants, every production
 `(toks, pos) -> Result((node, pos), err)`, mutually recursive productions on
 SCC inference, generic `sepBy`/`listUntil` comma-list machinery.
@@ -180,7 +180,7 @@ Two prerequisites got built on the way:
 *Exit met: canonical AST JSON identical on the corpus; parser.al parses
 itself.*
 
-### Slice E — check + infer in alang ← DONE
+### Slice E — check + infer in mochi ← DONE
 The heavy slice. Registry and exhaustiveness port mechanically; inference needs
 substitution threading (immutable `Map` first; extern union-find shim if too
 slow). Differential-test inferred schemes against TS on the corpus.
@@ -230,7 +230,7 @@ Ported codegen + prelude inlining, then ran the ceremony.
   3. **Fixpoint:** the stage-2 compiler re-emits them again.
   `stage2 ≡ stage3` byte-for-byte for all five modules; `stage1 ≡ stage2`
   (TS emit ≡ bootstrap self-emit) holds too.
-*Exit met: fixpoint reached. alang is self-hosting.*
+*Exit met: fixpoint reached. mochi is self-hosting.*
 
 ---
 
@@ -244,8 +244,8 @@ Ported codegen + prelude inlining, then ran the ceremony.
   versions by hand is exactly the dictionary-passing encoding — doing it
   manually for a month is the cheapest possible experiment for whether
   typeclasses earn their complexity.
-- **A permanent regression corpus.** The compiler-in-alang becomes the largest
-  alang program in existence; every future language change must keep it
+- **A permanent regression corpus.** The compiler-in-mochi becomes the largest
+  mochi program in existence; every future language change must keep it
   compiling.
 - **Differential testing for free.** During the transition, two independent
   implementations must agree on every file in the repo — a bug-finding engine

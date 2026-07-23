@@ -7,11 +7,11 @@
 
 ## Context
 
-alang records are immutable, and the only way to produce a near-copy of a record
-was to spell out every field. Porting the compiler to alang made this acute:
+mochi records are immutable, and the only way to produce a near-copy of a record
+was to spell out every field. Porting the compiler to mochi made this acute:
 `infer.al`/`check.al` thread immutable state (`St`, `TSt`, registries) where all
 but one or two fields are copied verbatim on each step. A functional-update form
-is the standard ergonomic answer (ReScript `{...r, x: 1}`), and alang's existing
+is the standard ergonomic answer (ReScript `{...r, x: 1}`), and mochi's existing
 row-polymorphic records already carry the machinery to type it soundly.
 
 ## Decision
@@ -37,7 +37,7 @@ Add a **record update** expression: `{ ...base, f: v, … }`.
 
 ## Consequences
 
-- Immutable state-threading in the largest alang program (the self-hosted
+- Immutable state-threading in the largest mochi program (the self-hosted
   compiler) and in user code loses its field-by-field boilerplate.
 - Result type = base type keeps updates principal and predictable; the "with"
   mental model holds — you get the same shape back.

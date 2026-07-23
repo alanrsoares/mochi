@@ -1,4 +1,4 @@
-// Hindley-Milner type inference (Algorithm W) over the alang AST.
+// Hindley-Milner type inference (Algorithm W) over the mochi AST.
 //
 // Threads a mutable substitution + fresh-var supply. Top-level `let`s are
 // generalized (let-polymorphism); lambda parameters stay monomorphic while
@@ -51,10 +51,10 @@ export type Scheme = { vars: number[]; rvars: number[]; type: Type };
 export type Env = Map<string, Scheme>;
 const mono = (t: Type): Scheme => ({ vars: [], rvars: [], type: t });
 
-// alang surface type name → HM type. Unknown names become nullary cons
+// mochi surface type name → HM type. Unknown names become nullary cons
 // (a reference to a declared variant).
 //
-// NUMERIC DECISION (CRITIQUE §2.3), recorded deliberately: alang has ONE
+// NUMERIC DECISION (CRITIQUE §2.3), recorded deliberately: mochi has ONE
 // runtime numeric type — JS `number`. `float` and `int` are accepted in surface
 // signatures TODAY as transparent aliases for `number` (they type-check
 // identically, unify freely, and erase to `number` in .d.ts). This keeps the

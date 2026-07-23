@@ -23,7 +23,7 @@ extern runtimeDeps : Map string [string] = "./prelude.gen.js" "runtimeDeps"
 
 // Full AST, re-declared to match parser/check/infer/codegen. Only `SImport` is
 // destructured here (every other stmt flows opaquely to the passes), but the
-// CLOSED-WORLD build that ships `alangc` (cli.al → module.al → the passes)
+// CLOSED-WORLD build that ships `mochic` (cli.al → module.al → the passes)
 // unifies same-named variant types by structure — so a 1-ctor `Stmt` would
 // clash with parser's 4-ctor `Stmt`. Declaring the whole shape keeps it
 // consistent (the `_tag` runtime shape makes the declarations interchangeable).

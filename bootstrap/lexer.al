@@ -1,4 +1,4 @@
-// bootstrap/lexer.al — the alang lexer, in alang. Ported from src/lexer.ts
+// bootstrap/lexer.al — the mochi lexer, in mochi. Ported from src/lexer.ts
 // (the spec); test/bootstrap-lexer.spec.ts diffs the two token streams over
 // every .al file in the repo — including this one.
 //
@@ -8,7 +8,7 @@
 //   makes `doc` optional; here `doc` is an Option.
 // - The while-loop becomes `go`, recursing once per char-or-token step. Depth
 //   is fine because every recursive call is in tail position and JSC (Bun)
-//   eliminates tail frames in strict mode — emitted alang modules are ESM.
+//   eliminates tail frames in strict mode — emitted mochi modules are ESM.
 
 type Tok =
   | TLet
@@ -55,7 +55,7 @@ type Comment =
   | Trailing(stop: number)
 
 // --- char classes ---
-// `\r` has no escape in alang string literals; build it from its code.
+// `\r` has no escape in mochi string literals; build it from its code.
 let cr = Str.fromCode(13)
 let isSpace = c => or(eq(c, " "), or(eq(c, "\t"), or(eq(c, "\n"), eq(c, cr))))
 let inRange = (lo, hi, n) => and(gte(n, lo), lte(n, hi))
@@ -248,7 +248,7 @@ let lexError = (message, start, stop) =>
 // `Number(raw)` in the TS original can be NaN (e.g. "1.2.3"); div(0, 0) mirrors it.
 let numValue = raw => Str.toNumber(raw) |> Option.unwrapOr(div(0, 0))
 
-// A `-` before a digit is always a literal sign (alang has no binary minus).
+// A `-` before a digit is always a literal sign (mochi has no binary minus).
 let numStart = (src, i, c) =>
   or(
     isDigit(c),

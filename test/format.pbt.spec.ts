@@ -1,5 +1,5 @@
 // Property: formatting is idempotent — format(format(src)) === format(src) —
-// over generated valid alang expressions. This is the defining law of a
+// over generated valid mochi expressions. This is the defining law of a
 // pretty-printer: the formatted form is a fixed point.
 import { expect, test } from "bun:test";
 import { unwrapOk } from "@onrails/result";

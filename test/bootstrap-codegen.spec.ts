@@ -65,9 +65,9 @@ const tsEmit = (src: string): string =>
 
 const alEmit = (src: string): string => {
   const lr = alLex(src);
-  if (lr._tag !== "Ok") throw new Error(`alang lexer errored: ${lr.error.message}`);
+  if (lr._tag !== "Ok") throw new Error(`mochi lexer errored: ${lr.error.message}`);
   const pr = alParse(lr.value);
-  if (pr._tag !== "Ok") throw new Error(`alang parser errored: ${pr.error.message}`);
+  if (pr._tag !== "Ok") throw new Error(`mochi parser errored: ${pr.error.message}`);
   return alCodegen(pr.value, new Map(), true, alNs, alJsDefs, alRuntimeDeps);
 };
 
@@ -106,14 +106,14 @@ const cases: Record<string, string> = {
   "map literal": 'let m = #{ "a": 1, "b": 2 }',
   "nullary + n-ary ctors": "type T = | A | B(number) | C(number, number)",
   "string escapes": 'let s = "a\\tb\\nc\\"d\\\\e"',
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: mochi source, not a JS template
   "interp: single hole": 'let s = "a ${x} b"',
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: mochi source, not a JS template
   "interp: multiple holes and a call": 'let s = "${a}-${add(b, 1)}-${c}"',
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: mochi source, not a JS template
   "interp: nested interpolation": 'let s = "outer ${ "inner ${x}" } end"',
   "interp: literal chunk needing re-escaping (backslash/backtick/${)":
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: mochi source, not a JS template
     'let s = "a\\\\b`c ${x} d\\${e}"',
   // ADR 0021 — record update -> native JS object spread.
   "record update: bare spread": "let base = { x: 1 }\nlet r = { ...base }",

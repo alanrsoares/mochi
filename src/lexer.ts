@@ -309,7 +309,7 @@ export function lex(src: string): Result<Located[], AlangError> {
       continue;
     }
 
-    // number, with an optional leading `-` for negatives. Safe because alang has
+    // number, with an optional leading `-` for negatives. Safe because mochi has
     // no binary minus operator — a `-` before a digit is always a literal sign.
     const isDigit = (ch: string | undefined): boolean => ch !== undefined && ch >= "0" && ch <= "9";
     if (isDigit(c) || (c === "-" && isDigit(src[i + 1]))) {

@@ -1,4 +1,4 @@
-// Pipelines & composition in alang.
+// Pipelines & composition in mochi.
 // Everything here type-checks under HM inference and compiles to plain JS.
 
 // ---- function composition (curried combinators) ----

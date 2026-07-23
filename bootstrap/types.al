@@ -2,7 +2,7 @@
 // Split out of infer.al (ticket 0013): Ty/Row + constructors, the St-threaded
 // resolve/zonk/occurs/unify/unifyRows core, and showType. infer.al imports the
 // ctors + entry points it needs; gen-prelude compiles THIS file (self-contained,
-// no AST dependency) to lower the prelude tables to alang Ty.
+// no AST dependency) to lower the prelude tables to mochi Ty.
 
 let cat = parts => Str.join("", parts)
 

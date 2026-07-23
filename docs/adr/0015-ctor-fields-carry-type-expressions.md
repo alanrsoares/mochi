@@ -51,7 +51,7 @@ alias fields.
   bare name is the degenerate `TypeExpr` (`tname`), and `typeExprToType` on a
   `tname` reproduces the old param/prim/nullary-con behavior.
 - Recursive AST-shaped variants are now first-class — the precondition for
-  porting the parser (and later check/infer) to alang.
+  porting the parser (and later check/infer) to mochi.
 - New soundness check: stray type variables in ctor fields are rejected at
   `check` instead of silently becoming a bogus nullary constructor named `a`
   (the old behavior).

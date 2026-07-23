@@ -1,4 +1,4 @@
-// alang error union — errors as values, one app-level type.
+// mochi error union — errors as values, one app-level type.
 // Every kind may carry a source `span`; lex always does.
 import { lineCol, type Span } from "./span";
 

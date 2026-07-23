@@ -1,4 +1,4 @@
-// bootstrap/infer.al — Hindley-Milner type inference, in alang. Ports
+// bootstrap/infer.al — Hindley-Milner type inference, in mochi. Ports
 // src/types.ts + src/unify.ts + src/infer.ts into one file (Slice E, part 2).
 // test/bootstrap-infer.spec.ts (once written) diffs alpha-normalized schemes
 // against the TS inferrer on every .al file in the repo.
@@ -8,7 +8,7 @@
 // unify/unifyRows, DONE below. (c) infer.ts — Algorithm W, generalize/
 // instantiate, stronglyConnected (Tarjan SCC), NOT YET PORTED.
 //
-// Locked design decisions (see alang-roadmap memory for full rationale —
+// Locked design decisions (see mochi-roadmap memory for full rationale —
 // do not re-derive, just implement):
 // 1. One standalone file, no cross-file modules until Slice F.
 // 2. Subst becomes threaded `St = { tv: Map number Ty, rv: Map number Row,

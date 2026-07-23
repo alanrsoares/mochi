@@ -2,7 +2,7 @@
 
 Working state of the TypeScript backend track (ADR 0026 / `docs/TS_DIALECT.md`),
 so a fresh session can pick up. Goal: emit **fully working, `tsc --strict`-clean
-TypeScript** from alang, including the self-hosted `bootstrap/`.
+TypeScript** from mochi, including the self-hosted `bootstrap/`.
 
 ## TL;DR
 
@@ -77,7 +77,7 @@ table. **The last error is closed by ADR 0044 — binding type annotations
 (`let x : T = v`).** The `emptyReg` seed (`module.ts:91`) had no codegen fix: not
 inside a generic binding (ADR 0042 can't reach it), and pinning it at emit-time
 contradicts the generic `resolveImportsFrom` (ADR 0035 §3). The gap was the
-language — alang couldn't write the ascription `src/module.ts` uses by hand
+language — mochi couldn't write the ascription `src/module.ts` uses by hand
 (`importedReg: Registry`). Adding it (unify the value against the declared type
 before generalizing; type-only so JS is byte-identical) and writing
 `let emptyReg : Registry = …` in `bootstrap/module.al` pins the whole chain.
@@ -115,8 +115,8 @@ Self-host meant teaching the bootstrap compiler the syntax too (`SLet` gains an
 
 ## What works now
 
-- **`alang ts <file.al>`** → single-file typed `.ts` (`src/codegen-ts.ts`).
-- **`alang build --emit=ts <entry.al>`** → typed `.ts` beside each `.al` in a
+- **`mochi ts <file.al>`** → single-file typed `.ts` (`src/codegen-ts.ts`).
+- **`mochi build --emit=ts <entry.al>`** → typed `.ts` beside each `.al` in a
   module graph (`src/module.ts` `buildModulesTs`/`compileGraphTs`).
 - **Curry/pipelines**: runtime builtins typed as OVERLOADED signatures (one per
   arity composition) via `flatFnType` in `src/dts.ts`; `xs |> map(f)` lowers to
@@ -125,7 +125,7 @@ Self-host meant teaching the bootstrap compiler the syntax too (`SLet` gains an
   interpolation/arity-3 corpus) and `test/build-emit-ts.spec.ts` (2-module graph).
 - **Typed runtime**: `src/runtime.ts` is GENERATED (`bun run gen:runtime` →
   `scripts/gen-runtime.ts`) from `preludeJsDefs` bodies + HM sigs. Biome-excluded,
-  tsc-checked. Emitted `.ts` imports it from `@alang/runtime` (specifier
+  tsc-checked. Emitted `.ts` imports it from `@mochi/runtime` (specifier
   configurable via `runtimeImport` / `emitTsModule` ctx).
 
 ## Key files (TS-emit)
@@ -227,8 +227,8 @@ Scoped **per binding** — a global union clobbers positional letters (an id tha
 `C` under its head became `A`: 5 → 12). Cleared `check.ts:192`, `infer.ts:156`,
 and `module.ts:83` (its inner lambdas monomorphized the registry). JS byte-identical.
 
-### 7. Publish `@alang/runtime` (packaging, not code)
-Emitted `.ts` imports `@alang/runtime`, which isn't a resolvable package. Options:
+### 7. Publish `@mochi/runtime` (packaging, not code)
+Emitted `.ts` imports `@mochi/runtime`, which isn't a resolvable package. Options:
 publish it, or default `build --emit=ts` to write `runtime.ts` into the output
 tree + import relatively. Needed for emitted `.ts` to run/typecheck outside this
 repo.

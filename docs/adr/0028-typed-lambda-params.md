@@ -75,7 +75,7 @@ lambda's own recorded type — no parser/AST/infer change.**
 - **JS backend untouched.** `paramTypeAt` defaults null; when unset `genParam` emits
   the bare name exactly as before, so the fixpoint self-host build stays
   byte-identical (guarded by the bootstrap differential + `bun run check`).
-- Single-file `alang ts` output also sharpens — inner lambdas now carry types, not
+- Single-file `mochi ts` output also sharpens — inner lambdas now carry types, not
   just top-level bindings.
 - Leaving generic params bare means the *polymorphic* higher-order tail (a truly
   generic inner callback with no contextual type) is untouched by this ADR — it

@@ -14,7 +14,7 @@ After ADRs 0028/0029/0031/0032 the self-hosted `bootstrap/` still emitted **94
 combinator tail". The checkpoint framed it as inference through function *values*
 and guessed the lever was typing `_curry`'s public signature generically.
 
-Measuring the actual errors showed a simpler root cause. alang's codegen is
+Measuring the actual errors showed a simpler root cause. mochi's codegen is
 **uncurried**: a user function of arity *n* emits as a flat arrow `(a, b) => …`
 and is called flat `f(a, b)` (the `_curry` runtime wrapper makes every grouping
 work at runtime — ADR 0003). Two emission paths rendered function *types*
@@ -73,7 +73,7 @@ now-flat rendering.
 
 The now-dominant cluster is **`infer.ts` (33 TS2345)**, a *different* root cause:
 a partial record literal `{ next }` flowing where the full inference state
-`{ tv, rv, next }` is expected — alang's **row-polymorphic record** emitted as a
+`{ tv, rv, next }` is expected — mochi's **row-polymorphic record** emitted as a
 CLOSED record, dropping the open row variable. That is its own ADR (open-row →
 generic record emission), not part of this one. Smaller residuals: TS2322 4,
 TS2554 3 (arity), TS2741 1, TS2339 1 (the real `{...st, sccs}` row update),

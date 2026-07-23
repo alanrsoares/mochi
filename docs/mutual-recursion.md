@@ -6,7 +6,7 @@
 **strongly-connected component** of the reference graph, so both self-recursion and
 mutual recursion type — regardless of definition order.
 
-```alang
+```mochi
 let fact = n => switch n { | 0 => 1 | _ => mul(n, fact(sub(n, 1))) }   // ✓ self-recursion
 
 let isEven = n => switch n { | 0 => true  | _ => isOdd(sub(n, 1)) }    // ✓ mutual —

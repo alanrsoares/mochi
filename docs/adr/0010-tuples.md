@@ -27,7 +27,7 @@ Add tuples as a surface form over the existing type machinery, rather than a new
   lambda param list by the existing `looksLikeLambda` lookahead (no trailing
   `=>` ⇒ not a lambda ⇒ tuple).
 - **Codegen: erase to a JS array.** `(a, b)` → `[a, b]` (like ReScript). The
-  type system keeps tuples distinct from `alang` Arrays; the runtime shares the
+  type system keeps tuples distinct from `mochi` Arrays; the runtime shares the
   shape, so structural `eq`/`compare` work unchanged. A tuple `switch` arm
   lowers like a fixed-length array arm: catch-all → destructure, a literal
   position → an index guard.

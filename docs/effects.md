@@ -2,7 +2,7 @@
 
 ## Status
 
-**Decided: effects are tracked by convention, not by the type system.** alang's
+**Decided: effects are tracked by convention, not by the type system.** mochi's
 HM core stays pure-by-omission — there is no effect row, no `IO`/`Task` marker
 that inference enforces. This is a deliberate, recorded choice, not an oversight.
 
@@ -11,7 +11,7 @@ that inference enforces. This is a deliberate, recorded choice, not an oversight
 Nothing in a type distinguishes an effectful value from a pure one. A function
 that reads the clock and one that doubles a number can share the type
 `number -> number`. Effects enter **only** at the `extern` boundary — that is the
-one place a side effect can cross into an alang program, because everything the
+one place a side effect can cross into an mochi program, because everything the
 compiler emits is pure data-shuffling over the values externs hand it.
 
 The discipline that keeps this honest:
@@ -22,7 +22,7 @@ The discipline that keeps this honest:
   effect is deferred to the program edge — see `examples/async/`.
 - Pure host functions (`Math.hypot`, string ops) return their value directly.
 
-```alang
+```mochi
 extern now    : Unit -> Task number = "host" "now"      // effectful → Task
 extern sqrt   : number -> number     = "Math" "sqrt"     // pure → bare value
 ```
@@ -36,11 +36,11 @@ were both rejected for now:
 - **Effect rows** (Koka-style `a ->{io} b`). The row-unification engine already
   exists (records use it), so the hard part is built — but an effect annotation
   then infects *every* function signature, doubling the cognitive surface. That
-  is a research-grade commitment worth making only if effects become alang's
+  is a research-grade commitment worth making only if effects become mochi's
   thesis. They are not, today.
 - **A mechanical FFI lint** ("an effectful extern must return `Task`/`IO`"). This
   is the appealing middle ground the critique floats, but it is **not decidable
-  from the alang side**: the compiler cannot inspect a JS export's body to know
+  from the mochi side**: the compiler cannot inspect a JS export's body to know
   whether it is effectful. The rule can only ever be author discipline, so it
   lives here as documentation rather than as a false-confidence checker.
 

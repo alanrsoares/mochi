@@ -5,7 +5,7 @@
 
 ## Context
 
-alang strings are plain literals; composite strings are built by hand. The bootstrap
+mochi strings are plain literals; composite strings are built by hand. The bootstrap
 compiler alone has **123 `cat([...])` call sites** (`cat = parts => Str.join("", parts)`),
 83 of them in `bootstrap/codegen.al` — a string emitter written without interpolation.
 Error messages (the chosen v1 quality axis) in check/infer/parser account for ~40 more.
@@ -39,10 +39,10 @@ This is the highest-leverage surface addition left: it serves both v1 pillars
 ## Alternatives rejected
 
 - **Pure parser desugar to `Str.join("", [...])`** — zero infer/codegen change, but
-  emitted JS turns into join-of-array noise (alang's differentiator is readable
+  emitted JS turns into join-of-array noise (mochi's differentiator is readable
   output), error spans point at desugared calls, and the formatter can't round-trip.
 - **Implicit `show` on non-string holes** — convenient, but it's ad-hoc overloading;
-  alang's answer to polymorphic rendering is the explicit structural `show`.
+  mochi's answer to polymorphic rendering is the explicit structural `show`.
 
 ## Consequences
 

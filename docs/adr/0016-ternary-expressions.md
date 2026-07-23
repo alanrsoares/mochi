@@ -5,7 +5,7 @@
 
 ## Context
 
-alang's only conditional was `switch`:
+mochi's only conditional was `switch`:
 
 ```
 switch gt(n, 0) {
@@ -54,7 +54,7 @@ first-class expression syntax with a direct JS lowering.
   to ternaries (differential suites pin the behavior).
 - The bootstrap lexer/parser gain `TQuestion`/`ETernary` for parity; the
   differential harness pins both against this implementation.
-- Found in passing: alang identifiers that are JS reserved words miscompile —
+- Found in passing: mochi identifiers that are JS reserved words miscompile —
   `ETernary(…, else: Expr, …)` emitted a ctor with parameter `else`
   (`SyntaxError`). Dodged with `thenE`/`elseE` field labels (the `fieldType`
   family). The general hole — `let else = 1` → `const else` — is open;

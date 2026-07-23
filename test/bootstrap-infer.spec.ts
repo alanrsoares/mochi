@@ -69,7 +69,7 @@ const alInfer = evalAlNames<AlInfer>(compileAl("bootstrap/infer.al"), [
   "showType",
 ]);
 
-// ---- TS Type/Row -> alang Ty/Row runtime value, via the compiled module's
+// ---- TS Type/Row -> mochi Ty/Row runtime value, via the compiled module's
 // own constructors — so the SAME preludeEnv/preludeNamespaces data seeds
 // both inferrers (locked design decision #3: the prelude is not forked). ----
 
@@ -163,16 +163,16 @@ const tsInferVerdict = (src: string): Verdict => {
 
 const alInferVerdict = (src: string, prog: Program): Verdict => {
   const lr = alLex(src);
-  if (lr._tag !== "Ok") throw new Error(`alang lexer errored: ${lr.error.message}`);
+  if (lr._tag !== "Ok") throw new Error(`mochi lexer errored: ${lr.error.message}`);
   const pr = alParse(lr.value);
-  if (pr._tag !== "Ok") throw new Error(`alang parser errored: ${pr.error.message}`);
+  if (pr._tag !== "Ok") throw new Error(`mochi parser errored: ${pr.error.message}`);
   const ir = alInfer.inferProgram(pr.value, alBuiltins, alNamespaces, true);
   if (ir._tag !== "Ok") return { ok: false, start: ir.error.start, end: ir.error.end };
   const env = ir.value as Map<string, { vars: number[]; rvars: number[]; ty: unknown }>;
   const schemes: Record<string, string> = {};
   for (const name of declaredNames(prog)) {
     const sc = env.get(name);
-    if (!sc) throw new Error(`alang env missing declared name '${name}'`);
+    if (!sc) throw new Error(`mochi env missing declared name '${name}'`);
     schemes[name] = normalize(alInfer.showType(sc.ty));
   }
   return { ok: true, schemes };
@@ -211,9 +211,9 @@ const strictTsVerdict = (src: string): Verdict => {
 
 const strictAlVerdict = (src: string): Verdict => {
   const lr = alLex(src);
-  if (lr._tag !== "Ok") throw new Error(`alang lexer errored: ${lr.error.message}`);
+  if (lr._tag !== "Ok") throw new Error(`mochi lexer errored: ${lr.error.message}`);
   const pr = alParse(lr.value);
-  if (pr._tag !== "Ok") throw new Error(`alang parser errored: ${pr.error.message}`);
+  if (pr._tag !== "Ok") throw new Error(`mochi parser errored: ${pr.error.message}`);
   const ir = alInfer.inferProgram(pr.value, alBuiltins, new Map(), false);
   if (ir._tag !== "Ok") return { ok: false, start: ir.error.start, end: ir.error.end };
   return { ok: true, schemes: {} };

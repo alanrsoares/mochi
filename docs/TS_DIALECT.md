@@ -1,4 +1,4 @@
-# TS-flavored alang — a dialect that emits TypeScript
+# TS-flavored mochi — a dialect that emits TypeScript
 
 - **Status:** Design note (exploratory — no go-ahead, not an ADR)
 - **Source:** conversation 2026-07-22; `src/codegen.ts` (JS backend), `src/dts.ts`
@@ -9,27 +9,27 @@
 
 ## The reframe: drop the word "superset"
 
-The opening ask was "make alang a superset of TypeScript." A true superset — every
-valid TS program typechecks and compiles under alang — is not feasible and not
-desirable here. It would force alang to *adopt TS's type system*: structural
+The opening ask was "make mochi a superset of TypeScript." A true superset — every
+valid TS program typechecks and compiles under mochi — is not feasible and not
+desirable here. It would force mochi to *adopt TS's type system*: structural
 subtyping, bidirectional (not principal) inference, deliberate unsoundness,
 Turing-complete type-level computation (conditional/mapped/template-literal types),
 declaration merging, overloads, decorators. Those are irreconcilable with
 Hindley–Milner: unification assumes *no* subtyping and computes principal types;
 the moment `any` or width subtyping appears, unification either lies or diverges.
-Being a superset means deleting the HM core — deleting what makes alang alang — and
+Being a superset means deleting the HM core — deleting what makes mochi mochi — and
 reimplementing the ~50k-LOC `tsc` checker in a 3.4k-LOC project.
 
 So this note explores the *achievable* target that the "superset" wish was really
 reaching for:
 
-> **alang keeps its HM engine and its FP semantics, adopts a TS-shaped surface
+> **mochi keeps its HM engine and its FP semantics, adopts a TS-shaped surface
 > syntax, and emits typed `.ts` instead of `.js`.**
 
-This is a **dialect**, not a superset. Valid alang would *look* like a disciplined
-subset of TS and interoperate with TS at the value and type level — but alang still
+This is a **dialect**, not a superset. Valid mochi would *look* like a disciplined
+subset of TS and interoperate with TS at the value and type level — but mochi still
 *rejects* the TS features HM can't model. That rejection is the honest promise:
-"alang is the TS you can't shoot your foot with," not "alang runs your TS."
+"mochi is the TS you can't shoot your foot with," not "mochi runs your TS."
 
 ## What already exists (the head start)
 
@@ -56,7 +56,7 @@ Two assets make this much cheaper than it sounds:
 | **A. Output target** | `codegen.ts` (+ `dts.ts`) | emit typed `.ts` instead of `.js` | yes — pure backend work, front end untouched |
 | **B. Surface syntax** | `lexer.ts`, `parser.ts` | accept TS-looking syntax (`: T` annotations, `<T>` generics, `function`/`const`) | yes — but see the annotation fork below |
 
-Axis A alone gives you "alang that ships `.ts`" with today's syntax — cheap, and it
+Axis A alone gives you "mochi that ships `.ts`" with today's syntax — cheap, and it
 follows the ADR 0024 sibling-backend shape (`codegen-ts.ts`, pure
 `Program → string`, non-failing). Axis B is where the real design tension lives.
 
@@ -68,9 +68,9 @@ types must be threaded to the backend — the same plumbing ADR 0024 flagged: to
 (the LSP path) keeps the span → zonked-type table. A typed backend consumes that
 table, exactly like a hypothetical LLVM backend would.
 
-What emitted `.ts` looks like — this alang:
+What emitted `.ts` looks like — this mochi:
 
-```alang
+```mochi
 type Shape =
   | Circle(float)
   | Rect(float, float)
@@ -97,7 +97,7 @@ export const area = (shape: Shape): number =>
 
 Gains over the `.js` + `.d.ts` split: one file, types inline at the value (better
 for humans reading output), and `tsc` becomes a *second* checker over emitted code —
-a free differential oracle (if alang's HM accepts a program but the emitted TS fails
+a free differential oracle (if mochi's HM accepts a program but the emitted TS fails
 `tsc`, that's a codegen bug). Costs: emitted code now has a `tsc`-visible surface, so
 runtime helper shapes (`_curry`, `match`) need honest `.d.ts` for the runtime, and
 the differential test corpus grows a "emitted `.ts` must `tsc --noEmit` clean" tier.
@@ -107,9 +107,9 @@ the differential test corpus grows a "emitted `.ts` must `tsc --noEmit` clean" t
 The defining question: **what do type annotations mean when the language already
 infers everything?**
 
-alang today needs almost no annotations — Algorithm W infers principal types
+mochi today needs almost no annotations — Algorithm W infers principal types
 globally. TS is the opposite: annotations are load-bearing because inference is
-local. If alang adopts `x: number` syntax, three coherent stances exist:
+local. If mochi adopts `x: number` syntax, three coherent stances exist:
 
 1. **Annotations are checked, not trusted.** Parse `let area = (shape: Shape): number
    => …`, infer independently, then *unify* the annotation against the inferred type
@@ -133,8 +133,8 @@ Beyond annotations, the surface menu (each independently opt-in):
 - **`const`/`function` keywords** aliasing `let`/lambda — pure lexer/parser, cheap,
   high familiarity payoff.
 - **`<T>` generic syntax** for explicit type params on `type` decls and `let`s —
-  cosmetic over alang's implicit quantification; maps to existing `Scheme`.
-- **`interface`/`type X = {…}` object types** — alang records are row-polymorphic
+  cosmetic over mochi's implicit quantification; maps to existing `Scheme`.
+- **`interface`/`type X = {…}` object types** — mochi records are row-polymorphic
   and already structural; TS object-type syntax is a near-direct surface swap for
   the existing record type-expression grammar (`TyApp`/record rows).
 - **`.` method-ish chaining** — stays pipelines under the hood; do *not* adopt
@@ -144,9 +144,9 @@ Beyond annotations, the surface menu (each independently opt-in):
 
 Being explicit about rejection is the whole honesty of the dialect. These TS
 features stay **out**, and the checker must produce a *good error* pointing at the
-alang way, not a parse failure:
+mochi way, not a parse failure:
 
-| TS feature | Why out | alang alternative the error should name |
+| TS feature | Why out | mochi alternative the error should name |
 |---|---|---|
 | `any` / `unknown` escape hatches | breaks soundness + unification | make the type real, or a variant |
 | conditional / mapped / template-literal types | Turing-complete, no HM analog | parametric variants + row polymorphism |
@@ -163,15 +163,15 @@ dialect feel broken instead of opinionated.
 ## Interop (why emit `.ts` pays off beyond ergonomics)
 
 Emitting `.ts` (Axis A) plus consuming TS types (a `.d.ts` *reader*, distinct from
-today's `.d.ts` *writer*) is the real interop story: alang calls TS libraries with
-types, TS calls alang output with types. That reader is a separate, larger effort —
+today's `.d.ts` *writer*) is the real interop story: mochi calls TS libraries with
+types, TS calls mochi output with types. That reader is a separate, larger effort —
 it must map the *subset* of TS types that HM can represent and reject the rest — and
 is out of scope for this note, but Axis A is its prerequisite.
 
 ## Suggested staging
 
 1. **Axis A, today's syntax** — `codegen-ts.ts` sibling backend + type-table
-   plumbing (ADR 0024's threading). Ships "alang emits typed `.ts`." Differential
+   plumbing (ADR 0024's threading). Ships "mochi emits typed `.ts`." Differential
    tier: emitted `.ts` must `tsc --noEmit` clean over the corpus. Lowest risk,
    immediate payoff, front end untouched.
 2. **Axis B surface sugar (no semantics)** — `const`/`function`/`<T>`/object-type

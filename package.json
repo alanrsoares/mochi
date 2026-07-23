@@ -1,13 +1,13 @@
 {
-  "name": "alang",
+  "name": "mochi",
   "module": "index.ts",
   "type": "module",
   "private": true,
   "bin": {
-    "alang": "src/cli.ts"
+    "mochi": "src/cli.ts"
   },
   "scripts": {
-    "alang": "bun src/cli.ts",
+    "mochi": "bun src/cli.ts",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",

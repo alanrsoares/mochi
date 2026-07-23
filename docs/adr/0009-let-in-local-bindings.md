@@ -1,7 +1,7 @@
 # 0009 — Local `let … in` bindings
 
 - **Status:** Accepted
-- **Source:** `docs/bootstrap.md` (blocker #1); `alang-roadmap` memory
+- **Source:** `docs/bootstrap.md` (blocker #1); `mochi-roadmap` memory
 
 ## Context
 

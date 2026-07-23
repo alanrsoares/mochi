@@ -8,7 +8,7 @@
 ## Context
 
 The formatter (`src/format.ts`) had unit tests over small hand-written snippets, but was
-never run against a large body of real alang. Meanwhile the repo grew one: the self-hosted
+never run against a large body of real mochi. Meanwhile the repo grew one: the self-hosted
 compiler in `bootstrap/*.al` (~3.4k lines). Those two facts never met — the formatter's
 only proof of correctness was its own curated fixtures, which by construction avoid the
 shapes their author didn't think to test.

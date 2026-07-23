@@ -1,5 +1,5 @@
 // Ticket 0001 — host IO FFI shims (readFile / writeFile / argv / print) reach
-// alang through `extern` and thread through the type checker. The demo
+// mochi through `extern` and thread through the type checker. The demo
 // `bootstrap/io-demo.al` compiles clean (proving the signatures typecheck) and,
 // run against the real `bootstrap/host.js` shims, copies a file on disk.
 
@@ -35,7 +35,7 @@ const buildDemo = (): { run: (args: string[]) => AlResult } => {
 
 let dir: string;
 beforeAll(() => {
-  dir = mkdtempSync(join(tmpdir(), "alang-io-"));
+  dir = mkdtempSync(join(tmpdir(), "mochi-io-"));
 });
 afterAll(() => {
   rmSync(dir, { recursive: true, force: true });
@@ -44,12 +44,12 @@ afterAll(() => {
 test("io-demo copies a file through the host shims", () => {
   const src = join(dir, "src.txt");
   const dst = join(dir, "dst.txt");
-  writeFileSync(src, "hello alang IO\n");
+  writeFileSync(src, "hello mochi IO\n");
 
   const r = buildDemo().run([src, dst]);
   expect(r._tag).toBe("Ok");
   if (r._tag === "Ok") expect(r.value).toBe(dst);
-  expect(readFileSync(dst, "utf8")).toBe("hello alang IO\n");
+  expect(readFileSync(dst, "utf8")).toBe("hello mochi IO\n");
 });
 
 test("io-demo surfaces a read failure as Err", () => {

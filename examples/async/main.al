@@ -1,4 +1,4 @@
-// Async in alang WITHOUT an async/await keyword. A `Task a` is an ordinary
+// Async in mochi WITHOUT an async/await keyword. A `Task a` is an ordinary
 // value — the applied-constructor type from an `extern` — so asynchrony
 // composes through the same `|>` pipeline as everything else. The host runtime
 // (./task.js) supplies the primitives; `run` hands the underlying Promise back
@@ -18,5 +18,5 @@ let program =
   |> andThen(delay(10))
   |> mapT(x => add(x)(x))
 
-// `alang build main.al`, then `node demo.mjs` — prints 42.
+// `mochi build main.al`, then `node demo.mjs` — prints 42.
 export let result = run(program)

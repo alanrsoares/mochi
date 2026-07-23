@@ -1,4 +1,4 @@
-// bootstrap/parser.al — the alang parser, in alang. Ported from src/parser.ts
+// bootstrap/parser.al — the mochi parser, in mochi. Ported from src/parser.ts
 // (the spec); test/bootstrap-parser.spec.ts diffs canonical AST JSON against
 // the TS parser on every .al file in the repo — including this one.
 //
@@ -59,7 +59,7 @@ type PErr = { message: string, start: number, end: number }
 // --- the AST (mirrors src/ast.ts; `kind` strings become constructors) ---
 
 // One chunk of a "…${a}…" interpolation (ADR 0023): a literal run, or a
-// parsed hole expression. TS: an untagged `string | Expr` union — alang has
+// parsed hole expression. TS: an untagged `string | Expr` union — mochi has
 // no raw unions, so this is a proper variant.
 
 // --- token plumbing ---

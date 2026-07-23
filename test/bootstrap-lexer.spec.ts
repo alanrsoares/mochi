@@ -11,14 +11,14 @@ import { type Located, lex } from "../src/lexer";
 
 const root = join(import.meta.dir, "..");
 
-// Compile the alang lexer once; strip the module scaffolding so it evals in a
+// Compile the mochi lexer once; strip the module scaffolding so it evals in a
 // plain function scope (same harness as guards.spec.ts, plus `export`).
 const lexerAlSrc = readFileSync(join(root, "bootstrap/lexer.al"), "utf8");
 const js = unwrapOk(compile(lexerAlSrc))
   .replace(/^import .*$/m, "")
   .replace(/^export /gm, "");
 
-// alang runtime shapes: variants are `_tag`-tagged records, Option is Some/None.
+// mochi runtime shapes: variants are `_tag`-tagged records, Option is Some/None.
 type AlTok = { _tag: string; value?: unknown; raw?: string };
 type AlDoc = { _tag: "Some"; value: string } | { _tag: "None" };
 type AlLocated = { tok: AlTok; start: number; end: number; doc: AlDoc };
@@ -28,7 +28,7 @@ type AlLex = (src: string) => AlResult;
 
 // The strict prologue matters: JSC (Bun) does proper tail calls only in strict
 // mode, and the lexer's `go` loop recurses once per token — without PTC, big
-// files overflow the stack. Emitted alang modules are ESM (always strict), so
+// files overflow the stack. Emitted mochi modules are ESM (always strict), so
 // this mirrors how the code really runs.
 const alLex = new Function("match", `"use strict";\n${js}\nreturn lex;`)(match) as AlLex;
 
@@ -51,7 +51,7 @@ const canonTs = (l: Located): Canon => ({
   doc: l.doc ?? null,
 });
 
-// alang ctor tag → TS `t` tag for the payload-free tokens.
+// mochi ctor tag → TS `t` tag for the payload-free tokens.
 const TAG_TO_T: Record<string, string> = {
   TLet: "let",
   TType: "type",
@@ -92,7 +92,7 @@ const PAYLOAD_TAGS: Record<string, string> = {
 const canonAl = (l: AlLocated): Canon => {
   const payload = PAYLOAD_TAGS[l.tok._tag];
   const t = payload ?? TAG_TO_T[l.tok._tag];
-  if (t === undefined) throw new Error(`unknown alang token tag: ${l.tok._tag}`);
+  if (t === undefined) throw new Error(`unknown mochi token tag: ${l.tok._tag}`);
   return {
     t,
     v: payload ? l.tok.value : undefined,
@@ -106,7 +106,7 @@ const canonAl = (l: AlLocated): Canon => {
 const tsStream = (src: string): Canon[] => unwrapOk(lex(src)).map(canonTs);
 const alStream = (src: string): Canon[] => {
   const r = alLex(src);
-  if (r._tag === "Err") throw new Error(`alang lexer errored: ${r.error.message}`);
+  if (r._tag === "Err") throw new Error(`mochi lexer errored: ${r.error.message}`);
   return r.value.map(canonAl);
 };
 
@@ -150,20 +150,20 @@ const cases: Record<string, string> = {
   "crlf line endings": "let f = 1\r\nlet g = 2\r\n",
   "ident with underscore and digits": "let _foo_2 = bar_baz9",
   // ADR 0023 — string interpolation.
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: mochi source, not a JS template
   "interp: single hole": 'let s = "a ${x} b"',
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: mochi source, not a JS template
   "interp: multiple holes": 'let s = "${a}-${b}-${c}"',
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: mochi source, not a JS template
   "interp: nested interpolation in a hole": 'let s = "a ${ "b ${c} d" } e"',
   "interp: hole containing a switch (brace depth)":
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: mochi source, not a JS template
     'let s = "v = ${ switch n { | 0 => 1 | _ => 2 } }"',
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: mochi source, not a JS template
   "interp: hole containing a string with braces": 'let s = "a ${ "{}" } b"',
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: mochi source, not a JS template
   "interp: escaped hole opener is not a hole": 'let s = "price: \\${amount}"',
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: mochi source, not a JS template
   "interp: leading and trailing empty literal chunks": 'let s = "${a}"',
 };
 
@@ -179,7 +179,7 @@ const expectSameError = (src: string): void => {
   const ts = lex(src);
   const al = alLex(src);
   expect(isErr(ts)).toBe(true);
-  if (al._tag !== "Err") throw new Error("expected the alang lexer to fail");
+  if (al._tag !== "Err") throw new Error("expected the mochi lexer to fail");
   const tsErr = unwrapErr(ts);
   if (tsErr.span === undefined) throw new Error("expected the TS lex error to carry a span");
   expect(al.error.message).toBe(tsErr.message);
@@ -200,6 +200,6 @@ test("unterminated hole: same message and span", () => {
 });
 
 test("unterminated string after a closed hole: same message and span", () => {
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: mochi source, not a JS template
   expectSameError('let s = "a ${x} b');
 });

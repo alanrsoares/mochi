@@ -6,7 +6,7 @@
 
 ## Context
 
-`alang` has no general mechanism to abstract over types. `map`/`filter`/`fold`
+`mochi` has no general mechanism to abstract over types. `map`/`filter`/`fold`
 stay monomorphic per collection (`Array.map`, `List.map`, …) — open question
 #2. `eq`/`compare`/`show` got a tactical, non-typeclass answer (runtime
 structural walk, [0007](0007-structural-eq-compare.md)); the general question
@@ -18,7 +18,7 @@ specialization for any trait, any call site. Review surfaced four problems
 with going straight there:
 
 1. **Runs against the language's own design lineage.** The stated north star
-   for alang design calls is ReScript/Reason taste — and that lineage's
+   for mochi design calls is ReScript/Reason taste — and that lineage's
    answer to typeclasses is *no typeclasses*, deliberately. A full trait
    system is a real divergence, not a natural extension; it needs to be
    chosen with eyes open, not backed into via one ADR.

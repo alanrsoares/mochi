@@ -16,7 +16,7 @@ error that are purely about *resolution*, not types:
   generated prelude through `extern name : T = "./host.js" "jsName"`. Codegen
   emits `import { jsName } from "./host.js"`, but those are real external JS files
   with no declarations, so tsc can't resolve them.
-- **TS2304 "cannot find name" (11).** alang has **no type-name imports** — every
+- **TS2304 "cannot find name" (11).** mochi has **no type-name imports** — every
   top-level `type` is globally visible across the closed-world graph (this is why
   `infer.al` can write `[AliasField]` without importing `ast.al`). The old TS
   emitter approximated this by emitting `import type { …all exported types… }`
@@ -94,8 +94,8 @@ self-contained `.d.ts` per extern module.**
   file. Rejected: ambient module declarations with relative specifiers are
   brittle across module-resolution modes; a real sibling `.d.ts` resolves cleanly
   under `bundler` (proven by the bootstrap differential).
-- **Export type names from alang source and import them explicitly.** Rejected:
-  alang deliberately has no type-name imports (types are globally visible in the
+- **Export type names from mochi source and import them explicitly.** Rejected:
+  mochi deliberately has no type-name imports (types are globally visible in the
   closed world); forcing per-name type imports into the language to satisfy the TS
   backend is the tail wagging the dog. The backend reconstructs the imports the
   target language needs.

@@ -1,4 +1,4 @@
-// bootstrap/check.al — the alang semantic pass, in alang. Ported from
+// bootstrap/check.al — the mochi semantic pass, in mochi. Ported from
 // src/check.ts (the spec); test/bootstrap-check.spec.ts diffs the error (or
 // ok) verdict against the TS checker on every .al file in the repo.
 //

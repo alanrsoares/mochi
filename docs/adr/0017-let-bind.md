@@ -8,7 +8,7 @@
 
 ## Context
 
-Railway code in alang is written with combinators:
+Railway code in mochi is written with combinators:
 
 ```
 expectTok(TLet, toks, pos) |> Result.flatMap(p =>
@@ -54,7 +54,7 @@ measured it, and Slice E (infer threads substitution *and* env) will be worse.
   `Option.okOr`-style adapters or stay on `Option.flatMap`.
 - **Gleam-style `use param <- fn(args)`** — fully general CPS sugar (works for
   any callback-last function), but the capture rule ("the rest of the enclosing
-  block becomes the callback") is alien to alang's expression grammar, which
+  block becomes the callback") is alien to mochi's expression grammar, which
   has no blocks.
 - **Rust-style postfix `?`** (`let x = e? in …`) — the same semantics with
   non-local continuation capture: the `?` has to reach out and wrap the rest of

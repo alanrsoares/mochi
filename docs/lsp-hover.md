@@ -44,9 +44,9 @@ let user: User
 function map<a, b>(f: a -> b, xs: [a]) -> [b]
 ```
 
-alang's hover today dumps the bare inferred type only:
+mochi's hover today dumps the bare inferred type only:
 
-```alang
+```mochi
 User
 ```
 
@@ -65,7 +65,7 @@ feel like TS we enrich the hover payload, not the inlay density.
 - `showScheme` currently discards quantifiers — `showType(foldAliases(sc.type))`
   (`src/infer.ts:779`). Polymorphism is invisible in both hover and inlay.
 - The server (`src/lsp/server.ts`) is a thin adapter: hover wraps the string in
-  an ```` ```alang ```` fence; inlays map offset → Position with kind `Type`.
+  an ```` ```mochi ```` fence; inlays map offset → Position with kind `Type`.
 
 ## Plan
 
@@ -103,7 +103,7 @@ matches the inlay.
 A leading `///` doc on a binding becomes a prose paragraph below the code
 fence in the hover markdown — the JSDoc feel:
 
-```alang
+```mochi
 /// The currently authenticated account.
 let user = loadUser()
 ```
@@ -111,7 +111,7 @@ let user = loadUser()
 renders as:
 
 ````
-```alang
+```mochi
 let user: User
 ```
 The currently authenticated account.

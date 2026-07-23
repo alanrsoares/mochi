@@ -1,4 +1,4 @@
-// alang — showcase of every feature built so far.
+// mochi — showcase of every feature built so far.
 
 // --- variants (sum types) ---
 type Shape =
@@ -161,7 +161,7 @@ let names = Map.keys(ages)                 // ["alice", "bob"]
 let clamped = max(0, min(100, 137))        // 100
 let modulo = mod(negate(1), 3)             // 2 — true modulo (sign of divisor)
 let slug = "  Hello World  " |> Str.trim |> Str.toLower |> Str.split(" ") // ["hello","world"]
-let shout2 = Str.join(" ")(["alang", "rocks"]) |> Str.toUpper            // "ALANG ROCKS"
+let shout2 = Str.join(" ")(["mochi", "rocks"]) |> Str.toUpper            // "MOCHI ROCKS"
 let flipped = Array.reverse([1, 2, 3]) |> Array.append(0)               // [3, 2, 1, 0]
 
 // builtin Option — `Map.get`/`Array.head` return Option, no `type` decl needed.
@@ -229,7 +229,7 @@ let cornerDist = hypot(x, y)
 // Type parameters follow the name, ML-style. Constructors are inferred
 // polymorphic: Ok : a -> Result<a, e>, Err : e -> Result<a, e>.
 // Named fields (`value`/`error`) make the runtime shape identical to
-// @onrails/result + @onrails/maybe, so alang values flow straight through
+// @onrails/result + @onrails/maybe, so mochi values flow straight through
 // their combinators (map/flatMap/unwrapOr) at the JS boundary.
 type Result a e =
   | Ok(value: a)

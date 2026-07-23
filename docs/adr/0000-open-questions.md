@@ -26,7 +26,7 @@ unresolved. Source: `docs/CRITIQUE.md` §2.2.
 
 ## 3. Local / block-bodied bindings
 
-alang has only top-level `let`. Local bindings (ML `let … in` vs. a block form) are "the
+mochi has only top-level `let`. Local bindings (ML `let … in` vs. a block form) are "the
 wall" (~80% of the distance) to self-hosting — well-articulated, not yet decided.
 Source: `docs/PATH_TO_BOOTSTRAP.md` §2.1.
 

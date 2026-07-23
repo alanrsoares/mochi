@@ -239,9 +239,9 @@ const cStmt = (s: Stmt): Canon => {
   }
 };
 
-// -- alang side: `_tag`-tagged runtime records, Options as Some/None --
+// -- mochi side: `_tag`-tagged runtime records, Options as Some/None --
 
-// biome-ignore lint/suspicious/noExplicitAny: untyped alang runtime values
+// biome-ignore lint/suspicious/noExplicitAny: untyped mochi runtime values
 type Al = any;
 
 const opt = <T>(o: Al, f: (v: Al) => T): T | null => (o._tag === "Some" ? f(o.value) : null);
@@ -326,7 +326,7 @@ const A_EXPR: Record<string, (e: Al) => Canon> = {
 };
 const aExpr = (e: Al): Canon => {
   const f = A_EXPR[e._tag];
-  if (!f) throw new Error(`unknown alang expr tag: ${e._tag}`);
+  if (!f) throw new Error(`unknown mochi expr tag: ${e._tag}`);
   return f(e);
 };
 
@@ -354,7 +354,7 @@ const A_PAT: Record<string, (p: Al) => Canon> = {
 };
 const aPat = (p: Al): Canon => {
   const f = A_PAT[p._tag];
-  if (!f) throw new Error(`unknown alang pattern tag: ${p._tag}`);
+  if (!f) throw new Error(`unknown mochi pattern tag: ${p._tag}`);
   return f(p);
 };
 
@@ -367,7 +367,7 @@ const A_TY: Record<string, (t: Al) => Canon> = {
 };
 const aTy = (t: Al): Canon => {
   const f = A_TY[t._tag];
-  if (!f) throw new Error(`unknown alang type-expr tag: ${t._tag}`);
+  if (!f) throw new Error(`unknown mochi type-expr tag: ${t._tag}`);
   return f(t);
 };
 
@@ -414,7 +414,7 @@ const A_STMT: Record<string, (s: Al) => Canon> = {
 };
 const aStmt = (s: Al): Canon => {
   const f = A_STMT[s._tag];
-  if (!f) throw new Error(`unknown alang stmt tag: ${s._tag}`);
+  if (!f) throw new Error(`unknown mochi stmt tag: ${s._tag}`);
   return f(s);
 };
 
@@ -424,9 +424,9 @@ const tsAst = (src: string): Canon[] => unwrapOk(parse(unwrapOk(lex(src)))).stmt
 
 const alAst = (src: string): Canon[] => {
   const lr = alLex(src);
-  if (lr._tag !== "Ok") throw new Error(`alang lexer errored: ${lr.error.message}`);
+  if (lr._tag !== "Ok") throw new Error(`mochi lexer errored: ${lr.error.message}`);
   const pr = alParse(lr.value);
-  if (pr._tag !== "Ok") throw new Error(`alang parser errored: ${pr.error.message}`);
+  if (pr._tag !== "Ok") throw new Error(`mochi parser errored: ${pr.error.message}`);
   return (pr.value as Al[]).map(aStmt);
 };
 
@@ -484,7 +484,7 @@ const cases: Record<string, string> = {
   "let? bind, all param forms + chain (ADR 0017)":
     "let a = let? x = f(1) in Ok(x)\nlet b = let? (l, r) = g(2) in Ok(add(l, r))\nlet c = let? { x, y } = h(3) in Ok(x)\nlet d = let? v = f(4) in let? w = f(v) in Ok(w)\nlet e = let ? sp = f(5) in Ok(sp)",
   "string interpolation, nested and multi-hole (ADR 0023)":
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: alang source, not a JS template
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: mochi source, not a JS template
     'let a = "hello ${name}"\nlet b = "${a}-${b}-${c}"\nlet c = "outer ${ "inner ${x}" } end"',
   "record update, bare and with fields (ADR 0021)":
     "let a = { ...base }\nlet b = { ...base, x: 1 }\nlet c = { ...base, x: 1, y: 2 }",
@@ -504,9 +504,9 @@ const expectSameError = (src: string): void => {
   const ts = parse(unwrapOk(lex(src)));
   expect(isErr(ts)).toBe(true);
   const lr = alLex(src);
-  if (lr._tag !== "Ok") throw new Error("expected the alang lexer to succeed");
+  if (lr._tag !== "Ok") throw new Error("expected the mochi lexer to succeed");
   const al = alParse(lr.value);
-  if (al._tag !== "Err") throw new Error("expected the alang parser to fail");
+  if (al._tag !== "Err") throw new Error("expected the mochi parser to fail");
   const tsErr = unwrapErr(ts);
   if (tsErr.span === undefined) throw new Error("expected the TS parse error to carry a span");
   expect(al.error.message).toBe(tsErr.message);

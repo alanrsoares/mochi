@@ -1,4 +1,4 @@
-// Dogfood alang's own formatter on the self-hosted `bootstrap/*.al` sources.
+// Dogfood mochi's own formatter on the self-hosted `bootstrap/*.al` sources.
 // Default: rewrite each file in place. `--check`: exit non-zero if any file
 // isn't already formatted (the QA-gate mode) — this keeps our formatter honest
 // against ~3.4k lines of real code and blocks any regression that would move,

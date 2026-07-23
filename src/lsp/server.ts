@@ -1,4 +1,4 @@
-// alang language server. A thin adapter: it re-runs the compiler on every edit
+// mochi language server. A thin adapter: it re-runs the compiler on every edit
 // and republishes the resulting diagnostics. All real logic lives in the
 // compiler (`src/diagnostics.ts`); this file only speaks LSP.
 
@@ -43,7 +43,7 @@ connection.onHover(async ({ textDocument, position }): Promise<Hover | null> => 
     readFile(p, "utf8"),
   );
   if (!info) return null;
-  const fence = `\`\`\`alang\n${info.code}\n\`\`\``;
+  const fence = `\`\`\`mochi\n${info.code}\n\`\`\``;
   const value = info.doc ? `${fence}\n\n${info.doc}` : fence;
   return { contents: { kind: MarkupKind.Markdown, value } };
 });
@@ -75,7 +75,7 @@ const validate = async (doc: TextDocument): Promise<void> => {
     range: d.range,
     message: d.message,
     severity: DiagnosticSeverity.Error,
-    source: "alang",
+    source: "mochi",
   }));
   connection.sendDiagnostics({ uri: doc.uri, diagnostics: diags });
 };

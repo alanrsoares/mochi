@@ -1,4 +1,4 @@
-// Ticket 0005 — the whole pipeline as one alang function.
+// Ticket 0005 — the whole pipeline as one mochi function.
 // lex → parse → check → infer → codegen, first Err short-circuits, Ok carries
 // the emitted JS. Unlike the fixpoint harness (which composes only
 // lex→parse→codegen), this runs check and infer as REAL gates: a duplicate

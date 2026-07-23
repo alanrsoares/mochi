@@ -1,5 +1,5 @@
 // Codegen — AST → JavaScript source. Pure (no failure).
-// alang owns the type system (HM inference), so emitted JS carries no type
+// mochi owns the type system (HM inference), so emitted JS carries no type
 // annotations — the checker runs before codegen and guarantees soundness.
 // ts-pattern .exhaustive() forces a case for every Expr kind here: add an AST
 // node and forget it → TS compile error in the compiler, not a silent gap.
@@ -126,7 +126,7 @@ export const exportedCtorKeys = (prog: Program): Map<string, string[]> => {
 };
 
 // Collapse a curried lambda chain (`x => y => body`, or a mix with multi-param
-// lambdas) into one flat parameter list plus the final body. alang types treat
+// lambdas) into one flat parameter list plus the final body. mochi types treat
 // `(x, y) => e` and `x => y => e` identically (`a -> b -> c`), so this is sound
 // — it lets a multi-arg function lower to a single `_curry`-wrapped JS function
 // instead of nested closures (CRITIQUE §4.4).
@@ -237,7 +237,7 @@ const genExpr = (e: Expr): string =>
     })
     .with({ kind: "field" }, (f) => nsRuntimeId(f) ?? `${genMember(f.target)}.${f.name}`)
     // A tuple erases to a JS array `[a, b]` (like ReScript); the type system
-    // keeps it distinct from an `alang` Array, the runtime shares the shape. TS
+    // keeps it distinct from an `mochi` Array, the runtime shares the shape. TS
     // emit wraps it in `_tuple(…)` so tsc infers a tuple, not a widened array
     // (ADR 0036); the JS backend keeps the bare literal (byte-identical).
     .with({ kind: "tuple" }, (t) => {
@@ -660,7 +660,7 @@ const genWithArm = (p: NarrowingPattern, body: Expr, base: string | null = null)
 // factories only. Nullary → a tagged value; n-ary → a tagging function. The
 // discriminant key is `_tag`, matching the @onrails ecosystem convention
 // (@onrails/result, @onrails/maybe), so their type guards (isOk/isSome/...)
-// recognize alang values at the JS boundary.
+// recognize mochi values at the JS boundary.
 const genType = (s: TypeStmt): string =>
   s.ctors
     .map((c) => {
@@ -694,7 +694,7 @@ const genType = (s: TypeStmt): string =>
     })
     .join("\n");
 
-// extern → an ESM import binding the external export to the alang name.
+// extern → an ESM import binding the external export to the mochi name.
 const genExtern = (s: ExternStmt): string => {
   const spec = s.imported === s.name ? s.name : `${s.imported} as ${s.name}`;
   return `import { ${spec} } from ${JSON.stringify(s.module)};`;

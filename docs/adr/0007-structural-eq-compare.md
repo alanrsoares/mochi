@@ -5,9 +5,9 @@
 
 ## Context
 
-`eq`/`compare` want to work on any type, but alang has no abstraction mechanism over
+`eq`/`compare` want to work on any type, but mochi has no abstraction mechanism over
 types (no typeclasses). The naive fix — Haskell-style dictionary passing — would clutter
-the clean JS codegen that is alang's differentiator.
+the clean JS codegen that is mochi's differentiator.
 
 ## Decision
 

@@ -1,4 +1,4 @@
-# CONTEXT.md — the alang domain model
+# CONTEXT.md — the mochi domain model
 
 The shared vocabulary for designing and discussing the compiler. When a term here has
 a precise meaning, use it precisely. Identifiers are exact — they exist in `src/`.
@@ -92,7 +92,7 @@ to a buffered pull, not to `@onrails/pattern`.
 
 ## Effects — a convention, not a feature
 
-alang's type system does **not** track effects. There is no effect row, no `IO`/`Task`
+mochi's type system does **not** track effects. There is no effect row, no `IO`/`Task`
 type the checker enforces. The discipline is: an effectful `extern` *should* be typed to
 return `Task a`, and effects stay at the FFI boundary. This is unenforceable mechanically
 (the compiler can't inspect a JS export's body) and is deliberate (ADR 0004).
