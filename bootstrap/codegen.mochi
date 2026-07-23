@@ -22,6 +22,7 @@
 
 import { ENum, EBool, EStr, ERef, ECall, ELambda, ELetIn, ELetBind, EPipe, ETernary, EMatch, ERecord, EField, ETuple, EArr, EList, EMap, EInterp, IPLit, IPExpr, PWild, PBind, PLit, PBool, PStr, PTuple, PRecord, PCtor, PArr, PList, POr, LPName, LPRecord, LPTuple, SLet, SType, SExtern, SImport } from "./ast.mochi"
 
+import { keysOf, ctorKeysFromStmts, seedBuiltinCtorKeys } from "./ctors.mochi"
 // One chunk of a "…${a}…" interpolation (ADR 0023): a literal run, or a
 // hole expression. TS: an untagged `string | Expr` union — mochi has no raw
 // unions, so this is a proper variant (mirrors parser.mochi's own copy).
@@ -76,18 +77,9 @@ let escapeTemplateLiteral = s => escTemplateLoop(Str.chars(s), 0, "")
 
 // --- ctor field-key registry (GCtx.keys) ---------------------------------
 
-// constructor's runtime field keys: a labelled field uses its label, an
-// unlabelled one its position (`_0`, `_1`). Both the factory (`genType`)
-// and the pattern destructure (`genWithArm`) agree; patterns consult the
-// registry populated per-`codegen`-call from the program's `type` decls.
-let keysOfFrom = (fields, i) => switch Array.get(i, fields) {
-  | None => []
-  | Some(f) => Array.prepend(
-      Option.unwrapOr("_${show(i)}", f.name),
-      keysOfFrom(fields, add(i, 1))
-    )
-}
-let keysOf = fields => keysOfFrom(fields, 0)
+// `keysOf` (a ctor's runtime field keys) lives in ctors.mochi — the shared
+// constructor-knowledge module — so factory, pattern destructure, and the
+// TS pass all derive from one source.
 
 let keyAt = (ctor, i, ctx) => switch Map.get(ctor, ctx.keys) {
   | Some(ks) => Option.unwrapOr("_${show(i)}", Array.get(i, ks))
@@ -935,50 +927,6 @@ let preludePreamble = (stmts, ctx, jsDefs, runtimeDeps) =>
 
 // ---- top-level entry --------------------------------------------------------
 
-let seedCtorsFrom = (ctors, i, m) => switch Array.get(i, ctors) {
-  | None => m
-  | Some(c) => seedCtorsFrom(
-      ctors,
-      add(i, 1),
-      Map.set(c.name, keysOf(c.fields), m)
-    )
-}
-let seedCtorsFromStmts = (stmts, i, m) => switch Array.get(i, stmts) {
-  | None => m
-  | Some(s) => seedCtorsFromStmts(
-      stmts,
-      add(i, 1),
-      switch s {
-        | SType(_, _, ctors, _, _, _) => seedCtorsFrom(ctors, 0, m)
-        | _ => m
-      }
-    )
-}
-
-// Seed builtin variant ctor keys (Some/Ok/…) unless the program declares its own.
-let seedBuiltinCtorKeys = m =>
-  let m1 = Map.has("Some", m) ? m : Map.set("Some", ["value"], m) in
-  let m2 = Map.has("None", m1) ? m1 : Map.set("None", [], m1) in
-  let m3 = Map.has("Ok", m2) ? m2 : Map.set("Ok", ["value"], m2) in
-  Map.has("Err", m3) ? m3 : Map.set("Err", ["error"], m3)
-
-// Field keys of a module's EXPORTED ctors — threaded into an importer's
-// `codegen` (2nd arg) so a pattern on an imported variant destructures the
-// right runtime keys (`Some(value)` → `{ value }`, not positional `{ _0 }`).
-// Mirrors src/codegen.ts's `exportedCtorKeys`.
-let exportedCtorKeysFrom = (stmts, i, m) => switch Array.get(i, stmts) {
-  | None => m
-  | Some(s) => exportedCtorKeysFrom(
-      stmts,
-      add(i, 1),
-      switch s {
-        | SType(_, _, ctors, _, true, _) => seedCtorsFrom(ctors, 0, m)
-        | _ => m
-      }
-    )
-}
-export let exportedCtorKeys = stmts => exportedCtorKeysFrom(stmts, 0, #{})
-
 let genStmtAllFrom = (stmts, i, ctx) => switch Array.get(i, stmts) {
   | None => []
   | Some(s) => Array.prepend(
@@ -992,8 +940,8 @@ let genStmtAllFrom = (stmts, i, ctx) => switch Array.get(i, stmts) {
 // `namespaceRuntime`/`preludeJsDefs`/`runtimeDeps` tables, converted to
 // mochi Maps — the same tables the TS codegen consults, not a fork of them.
 export let codegen = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps) =>
-  let keys0 = seedCtorsFromStmts(stmts, 0, imported) in
-  let keys = seedBuiltinCtorKeys(keys0) in
+  let keys0 = ctorKeysFromStmts(stmts, imported) in
+  let keys = seedBuiltinCtorKeys(stmts, keys0) in
   let ctx = { keys: keys, ns: ns } in
   let needsMatch = someOf(
     s => switch s {

@@ -40,7 +40,7 @@ const stripped = (name: string): string =>
 
 // Data-only modules whose ctors other modules import. Prepended into the eval
 // sandbox (guarded by existsSync so this works before/after each is extracted).
-const CTOR_MODULES = ["ast", "types"];
+const CTOR_MODULES = ["ast", "types", "ctors"];
 
 // Drop repeated top-level `const NAME =` declarations, keeping the first. Every
 // emitted module carries the same runtime preamble (`const _curry = …`), so

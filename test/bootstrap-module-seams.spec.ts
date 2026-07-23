@@ -46,8 +46,8 @@ beforeAll(async () => {
   execFileSync("bun", ["src/cli.ts", "build", "bootstrap/cli.mochi"], { cwd: root });
   ({ lex } = await import(bs("lexer.js")));
   ({ parse } = await import(bs("parser.js")));
-  ({ check, checkWith, exportedRegistry } = await import(bs("check.js")));
-  ({ exportedCtorKeys } = await import(bs("codegen.js")));
+  ({ check, checkWith } = await import(bs("check.js")));
+  ({ exportedRegistry, exportedCtorKeys } = await import(bs("ctors.js")));
   ({ inferProgram, inferProgramImports } = await import(bs("infer.js")));
   ({ builtins, namespaces } = await import(bs("prelude.gen.mjs")));
 });

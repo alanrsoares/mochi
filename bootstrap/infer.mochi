@@ -41,6 +41,7 @@ import { TyVar, TyCon, TyFn, TyRecord, RowEmpty, RowVar, RowExtend, tCon, tArrow
 // ============================================================
 
 import { ENum, EBool, EStr, ERef, ECall, ELambda, ELetIn, ELetBind, EPipe, ETernary, EMatch, ERecord, EField, ETuple, EArr, EList, EMap, EInterp, IPLit, IPExpr, PWild, PBind, PLit, PBool, PStr, PTuple, PRecord, PCtor, PArr, PList, POr, TyName, TyArrow, TyApp, TyTuple, TyList, LPName, LPRecord, LPTuple, SLet, SType, SExtern } from "./ast.mochi"
+import { builtinDeclsFor } from "./ctors.mochi"
 
 // One chunk of a "…${a}…" interpolation (ADR 0023): a literal run, or a
 // parsed hole expression.
@@ -1058,39 +1059,9 @@ let stronglyConnected = adj =>
 // row for typeExprToType, never its display-fold form.
 // ============================================================
 
-// Builtin variant ctors (Option/Result) — the transparent bit prelude.ts
-// hands the checker as data; hardcoded here since this file cannot yet
-// import prelude.ts's table (Slice F). `builtinTypeDecls[].ctors[].fields`
-// use bare TypeExpr, not the checked/authoritative HM type, so ctorScheme
-// (same as for a user type) is what turns them into schemes.
-let builtinSpan = { start: 0, end: 0 }
-let builtinTypeDecls = [
-  {
-    name: "Option",
-    params: ["a"],
-    ctors: [
-      {
-        name: "Some",
-        fields: [{ name: Some("value"), fieldType: TyName("a", builtinSpan) }]
-      },
-      { name: "None", fields: [] }
-    ]
-  },
-  {
-    name: "Result",
-    params: ["a", "e"],
-    ctors: [
-      {
-        name: "Ok",
-        fields: [{ name: Some("value"), fieldType: TyName("a", builtinSpan) }]
-      },
-      {
-        name: "Err",
-        fields: [{ name: Some("error"), fieldType: TyName("e", builtinSpan) }]
-      }
-    ]
-  }
-]
+// Builtin variant decls (Option/Result) live ONCE in ctors.mochi — the
+// shared constructor-knowledge module; `builtinDeclsFor` applies the
+// type-name-shadow rule so all passes share one shadowing semantics.
 
 let seedBuiltinsFrom = (keys, builtins, env, st) => switch keys {
   | [] => env
@@ -1398,7 +1369,7 @@ export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports
   let aliasMap = aliasMapFrom(stmts, #{}) in
   let (env1, st1) = registerUserCtorsFrom(stmts, aliasMap, env0, st0) in
   let (env2, st2) = registerBuiltinCtorsFrom(
-    builtinTypeDecls,
+    builtinDeclsFor(stmts),
     aliasMap,
     env1,
     st1

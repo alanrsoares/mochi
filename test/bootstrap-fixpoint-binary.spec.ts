@@ -23,7 +23,7 @@ test("shipped-binary output ≡ TS compiler output for every module", () => {
   for (const m of modules) expect(stage2[m]).toBe(tsSingle[m]);
 });
 
-test("all ten bootstrap modules are covered", () => {
+test("all eleven bootstrap modules are covered", () => {
   expect(modules.sort()).toEqual(
     [
       "ast",
@@ -31,6 +31,7 @@ test("all ten bootstrap modules are covered", () => {
       "cli",
       "codegen",
       "compile",
+      "ctors",
       "infer",
       "lexer",
       "module",

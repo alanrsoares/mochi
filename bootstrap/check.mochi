@@ -15,6 +15,7 @@
 //   `SeqCheck` variant — a union beats null-vs-undefined encoding.
 
 import { ENum, EBool, EStr, ERef, ECall, ELambda, ELetIn, ELetBind, EPipe, ETernary, EMatch, ERecord, EField, ETuple, EArr, EList, EMap, EInterp, IPLit, IPExpr, PWild, PBind, PLit, PBool, PStr, PTuple, PRecord, PCtor, PArr, PList, POr, TyName, TyArrow, TyApp, TyTuple, TyList, SLet, SType, SExtern, SImport } from "./ast.mochi"
+import { buildRegistry, primTypeNames } from "./ctors.mochi"
 
 // --- AST (mirrors src/ast.ts; `kind` strings become constructors) ---
 
@@ -119,66 +120,8 @@ let seqElemsRest = p => switch p {
   | _ => None
 }
 
-// --- registry ---
-
-let seedCtors = (cs, i, owner, acc) => switch Array.get(i, cs) {
-  | None => acc
-  | Some((cn, arity)) => seedCtors(
-      cs,
-      add(i, 1),
-      owner,
-      Map.has(cn, acc) ? acc : Map.set(cn, { owner: owner, arity: arity }, acc)
-    )
-}
-
-// Seed a builtin variant type (Option/Result) unless the program declares its
-// own type of that name — user redeclarations win, with no duplicate error.
-let seedType = (name, cs, reg) =>
-  Map.has(name, reg.types)
-    ? reg
-    : {
-      ctors: seedCtors(cs, 0, name, reg.ctors),
-      types: Map.set(name, cs |> map(((cn, _)) => cn), reg.types)
-    }
-
-let ctorsInto = (ctors, i, owner, sp, acc) => switch Array.get(i, ctors) {
-  | None => Ok(acc)
-  | Some(c) => Map.has(c.name, acc)
-      ? Err(checkErr("duplicate constructor '${c.name}'", sp))
-      : ctorsInto(
-        ctors,
-        add(i, 1),
-        owner,
-        sp,
-        Map.set(c.name, { owner: owner, arity: Array.length(c.fields) }, acc)
-      )
-}
-
-let buildLoop = (stmts, i, reg) => switch Array.get(i, stmts) {
-  | None => Ok(reg)
-  | Some(SType(name, _, ctors, _, _, sp)) => Map.has(name, reg.types)
-      ? Err(checkErr("duplicate type '${name}'", sp))
-      : let? cs = ctorsInto(ctors, 0, name, sp, reg.ctors) in
-      buildLoop(
-        stmts,
-        add(i, 1),
-        {
-          ctors: cs,
-          types: Map.set(name, ctors |> map(c => c.name), reg.types)
-        }
-      )
-  | Some(_) => buildLoop(stmts, add(i, 1), reg)
-}
-
-let buildRegistry = stmts =>
-  let? reg = buildLoop(stmts, 0, { ctors: #{}, types: #{} }) in
-  Ok(
-    seedType(
-      "Result",
-      [("Ok", 1), ("Err", 1)],
-      seedType("Option", [("Some", 1), ("None", 0)], reg)
-    )
-  )
+// --- registry --- (derivation lives in ctors.mochi — the shared
+// constructor-knowledge module; buildRegistry/exportedRegistry import from it)
 
 // --- pattern validation (nested ctors exist with the right arity; lazy-List
 // patterns cannot nest — matching pulls from the sequence) ---
@@ -619,8 +562,6 @@ let checkReservedNames = stmts =>
     stmts
   )
 
-let ctorPrims = ["number", "int", "float", "string", "bool"]
-
 let isUpperStart = s => switch Str.codeAt(0, s) {
   | Some(c) => and(gte(c, 65), lte(c, 90))
   | None => false
@@ -631,7 +572,7 @@ let isUpperStart = s => switch Str.codeAt(0, s) {
 let strayTypeVar = (te, params) => switch te {
   | TyName(name, sp) => or(
       isUpperStart(name),
-      or(Array.contains(name, ctorPrims), Array.contains(name, params))
+      or(Array.contains(name, primTypeNames), Array.contains(name, params))
     )
       ? None
       : Some((name, sp))
@@ -711,31 +652,3 @@ export let checkWith = (stmts, imported) => switch checkReservedNames(stmts) {
 }
 
 export let check = stmts => checkWith(stmts, { ctors: #{}, types: #{} })
-
-// The registry a module PUBLISHES: only its EXPORTED variant types (and their
-// full ctor sets). Threaded into an importer's `checkWith`. Unlike
-// buildRegistry it seeds no builtins and does not dup-check (the module was
-// already checked). Mirrors src/check.ts's `exportedRegistry`.
-let exportedCtorsInto = (ctors, i, owner, acc) => switch Array.get(i, ctors) {
-  | None => acc
-  | Some(c) => exportedCtorsInto(
-      ctors,
-      add(i, 1),
-      owner,
-      Map.set(c.name, { owner: owner, arity: Array.length(c.fields) }, acc)
-    )
-}
-let exportedRegLoop = (stmts, i, reg) => switch Array.get(i, stmts) {
-  | None => reg
-  | Some(SType(name, _, ctors, _, true, _)) => exportedRegLoop(
-      stmts,
-      add(i, 1),
-      {
-        ctors: exportedCtorsInto(ctors, 0, name, reg.ctors),
-        types: Map.set(name, ctors |> map(c => c.name), reg.types)
-      }
-    )
-  | Some(_) => exportedRegLoop(stmts, add(i, 1), reg)
-}
-export let exportedRegistry = stmts =>
-  exportedRegLoop(stmts, 0, { ctors: #{}, types: #{} })

@@ -24,7 +24,7 @@ const work = join(root, ".fixpoint-work");
 
 // Every bootstrap module reachable from cli.mochi, in dependency order. `build`
 // discovers the graph itself; this list is what we read back and diff.
-const MODULES = ["ast", "types", "lexer", "parser", "check", "infer", "codegen", "module", "compile", "cli"];
+const MODULES = ["ast", "types", "ctors", "lexer", "parser", "check", "infer", "codegen", "module", "compile", "cli"];
 // Runtime deps the emitted compiler imports (hand-written + generated shim).
 const RUNTIME_DEPS = ["host.mjs", "prelude.gen.mjs"];
 

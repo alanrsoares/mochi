@@ -9,9 +9,10 @@
 // parts (b) and (c); this half only parses and orders.
 import { lex } from "./lexer.mochi"
 import { parse } from "./parser.mochi"
-import { checkWith, exportedRegistry } from "./check.mochi"
+import { checkWith } from "./check.mochi"
+import { exportedRegistry, exportedCtorKeys } from "./ctors.mochi"
 import { inferProgramImports, exportedSchemes } from "./infer.mochi"
-import { exportedCtorKeys, codegen } from "./codegen.mochi"
+import { codegen } from "./codegen.mochi"
 
 // Prelude tables from the generated shim (as in compile.mochi). Threaded opaquely
 // into inferProgramImports / codegen; module.mochi never inspects them.
