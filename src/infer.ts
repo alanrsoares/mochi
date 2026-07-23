@@ -6,8 +6,6 @@
 // reads `p.x` accepts any record that has an `x` — structural duck typing.
 import { err, isErr, map, ok, type Result } from "@onrails/result";
 import type {
-  AliasField,
-  Ctor,
   Expr,
   LamParam,
   LetBindExpr,
@@ -17,7 +15,6 @@ import type {
   Pattern,
   Program,
   TernaryExpr,
-  TypeExpr,
 } from "./ast";
 import { ctorTableOf } from "./ctors";
 import {
@@ -29,7 +26,6 @@ import {
   generalize,
   instantiate,
   mono,
-  primType,
   type Scheme,
   typeExprToType,
 } from "./schemes";

@@ -65,7 +65,7 @@ export let showType = t => switch t {
   | TyRecord(row) => showRow(row)
 }
 
-// walk a row to its tail, collecting `label: type` field strings on the way
+/// walk a row to its tail, collecting `label: type` field strings on the way
 let showRowFields = row => switch row {
   | RowExtend(label, fieldType, rest) => let (fields, tailId) = showRowFields(
       rest
@@ -95,13 +95,12 @@ let someOfFrom = (f, xs, i) => switch Array.get(i, xs) {
 let someOf = (f, xs) => someOfFrom(f, xs, 0)
 
 // ---- St: threaded substitution + fresh-var counter ----
-//
-// TS's `Subst` (mutable Map pair) + `Fresh` (mutable counter) become one
-// immutable, threaded `St` — every fresh-var mint AND every unify call
-// returns a NEW St rather than mutating in place. Type vars and row vars
-// draw from the same `next` counter so ids never collide across the two
-// maps (mirrors types.ts's original Fresh).
 
+/// TS's `Subst` (mutable Map pair) + `Fresh` (mutable counter) become one
+/// immutable, threaded `St` — every fresh-var mint AND every unify call
+/// returns a NEW St rather than mutating in place. Type vars and row vars
+/// draw from the same `next` counter so ids never collide across the two
+/// maps (mirrors types.ts's original Fresh).
 export type St = { tv: Map number Ty, rv: Map number Row, next: number }
 export type TypeErr = { message: string }
 
@@ -129,7 +128,7 @@ let resolveRow = (r, st) => switch r {
   | _ => r
 }
 
-// Fully apply the substitution ("zonk") — for display and assertions.
+/// Fully apply the substitution ("zonk") — for display and assertions.
 export let zonk = (t, st) => switch resolve(t, st) {
   | TyVar(id) => tVar(id)
   | TyCon(name, args) => tCon(name, args |> map(a => zonk(a, st)))
@@ -245,9 +244,9 @@ let bindVar = (id, t, st) =>
 
 // ---- row unification ----
 
-// Bring `label` to the head of a row, extending an open tail if needed.
-// Returns the field's type, the row remaining after removing it, and the
-// (possibly grown) state.
+/// Bring `label` to the head of a row, extending an open tail if needed.
+/// Returns the field's type, the row remaining after removing it, and the
+/// (possibly grown) state.
 let rewriteRow = (row, label, st) => switch resolveRow(row, st) {
   | RowEmpty => fail("record missing field '${label}'")
   | RowExtend(rlabel, rtype, rrest) => eq(rlabel, label)

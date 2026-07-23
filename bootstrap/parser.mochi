@@ -64,7 +64,7 @@ type PErr = { message: string, start: number, end: number }
 
 // --- token plumbing ---
 
-// The TS `t` tag of a token — error messages must match the TS parser's.
+/// The TS `t` tag of a token — error messages must match the TS parser's.
 let tokName = t => switch t {
   | TLet => "let"
   | TType => "type"
@@ -100,13 +100,13 @@ let tokName = t => switch t {
   | TEof => "eof"
 }
 
-// The stream is TEof-terminated, so the fallback is unreachable in practice.
+/// The stream is TEof-terminated, so the fallback is unreachable in practice.
 let eofTok = { tok: TEof, start: 0, end: 0, doc: None }
 let tokAt = (toks, i) => Array.get(i, toks) |> Option.unwrapOr(eofTok)
 
 let spanOf = lt => { start: lt.start, end: lt.end }
 let spanning = (a, b) => { start: a.start, end: b.end }
-// Span from a start marker to the last consumed token (TS `to(start)`).
+/// Span from a start marker to the last consumed token (TS `to(start)`).
 let toEnd = (start, toks, pos) =>
   { start: start.start, end: tokAt(toks, sub(pos, 1)).end }
 
@@ -133,7 +133,7 @@ let expectStr = (toks, pos) =>
     | t => errAt("expected str, got ${tokName(t)}", lt)
   }
 
-// Consume the contextual `in` keyword after a let binding's value.
+/// Consume the contextual `in` keyword after a let binding's value.
 let expectIn = (toks, pos) =>
   expectId(toks, pos)
     |> Result.flatMap(((kw, p)) =>
@@ -149,7 +149,7 @@ let isUpper = s =>
 
 // --- generic comma-separated lists ---
 
-// `item (, item)*` — at least one item; the caller peeks the closer for empty.
+/// `item (, item)*` — at least one item; the caller peeks the closer for empty.
 let sepBy = (parseItem, toks, pos, acc) =>
   parseItem(toks, pos)
     |> Result.flatMap(((item, p)) =>
@@ -158,7 +158,7 @@ let sepBy = (parseItem, toks, pos, acc) =>
         ? sepBy(parseItem, toks, add(p, 1), items)
         : Ok((items, p)))
 
-// A possibly-empty comma list ended by `close`; does NOT consume the closer.
+/// A possibly-empty comma list ended by `close`; does NOT consume the closer.
 let listUntil = (close, parseItem, toks, pos) =>
   eq(tokAt(toks, pos).tok, close)
     ? Ok(([], pos))
@@ -166,7 +166,7 @@ let listUntil = (close, parseItem, toks, pos) =>
 
 // --- expressions ---
 
-// `(…) =>` needs unbounded lookahead: scan to the matching rparen.
+/// `(…) =>` needs unbounded lookahead: scan to the matching rparen.
 let scanLambdaDepth = (toks, k, depth) => switch tokAt(toks, k).tok {
   | TLparen => scanLambdaDepth(toks, add(k, 1), add(depth, 1))
   | TRparen => eq(depth, 1)
@@ -182,7 +182,7 @@ let looksLikeLambda = (toks, pos) => switch tokAt(toks, pos).tok {
   | _ => false
 }
 
-// The span of a node, for composite spans (TS reads `.span` directly).
+/// The span of a node, for composite spans (TS reads `.span` directly).
 let exprSpan = e => switch e {
   | ENum(_, _, sp) => sp
   | EBool(_, sp) => sp

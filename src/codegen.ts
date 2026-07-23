@@ -6,7 +6,6 @@
 import { match } from "ts-pattern";
 import type {
   Ctor,
-  CtorField,
   Expr,
   ExternStmt,
   FieldExpr,
