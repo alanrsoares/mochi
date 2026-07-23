@@ -33,87 +33,96 @@ const nsRuntimeId = (e: FieldExpr): string | null =>
 
 // A constructor's runtime field keys: a labelled field uses its label, an
 // unlabelled one its position (`_0`, `_1`). Both the factory (`genType`) and the
-// pattern destructure (`genWithArm`) must agree, so patterns consult this
-// registry — populated per `codegen` call from the program's `type` decls.
+// pattern destructure (`genWithArm`) must agree, so patterns consult the
+// `GenCtx.ctorKeys` registry — populated per `codegen` call from the program's
+// `type` decls.
 const keysOf = (fields: CtorField[]): string[] => fields.map((f, i) => f.name ?? `_${i}`);
-let ctorKeys = new Map<string, string[]>();
 
-// Optional per-binding type annotation for a top-level `let`, returning the text
-// to splice after the name (`: (x: A) => A`) or null for none. Set from
-// `CodegenOptions.annotate` per `codegen` call; the TS backend (`codegen-ts.ts`,
-// ADR 0026) supplies it, the JS backend leaves it null (byte-identical output).
-// Module-level for the same reason `ctorKeys` is — `genStmt` is a free function.
-let annotateLet: ((name: string, value: Expr) => string | null) | null = null;
-
-// Optional typing for a variant's ctor factory in TS mode (ADR 0026): given the
-// type decl and one ctor, return the generic head, per-field param types, and
-// the variant return type, or null for the untyped JS shape. Supplied by the TS
-// backend (from dts's `ctorFactoryTs`); null for the JS backend.
+// The typing a TS-mode ctor factory carries (see `GenCtx.annotateCtor`).
 export type CtorFactoryTs = {
   generics: string;
   paramTypes: string[];
   ret: string;
   retMono: string;
 };
-let annotateCtor: ((s: TypeStmt, c: Ctor) => CtorFactoryTs | null) | null = null;
 
-// TS backend (ADR 0026): lower `a |> f(x)` to the flattened call `f(x, a)`
-// instead of the curried `f(x)(a)`. Both are equivalent under `_curry`, but the
-// flat form lets `tsc` infer type args from ALL arguments at once — `xs |> map(f)`
-// as `map(f, xs)` pins the element type, where `map(f)(xs)` leaves it `unknown`.
-// Off for the JS backend, which stays byte-identical.
-let flattenPipe = false;
+// Per-call codegen context: built once at the top of `codegen` and threaded as
+// the last parameter through the gen* family. Never mutated after construction.
+type GenCtx = {
+  // A constructor's runtime field keys (see `keysOf`) — populated per `codegen`
+  // call from the program's `type` decls (plus imported and builtin ctors).
+  readonly ctorKeys: Map<string, string[]>;
 
-// TS backend (ADR 0036): emit a tuple literal as `_tuple(a, b)` instead of the
-// bare array `[a, b]`. The runtime `_tuple` is an identity whose rest param is
-// inferred as a tuple, so tsc keeps `[A, B]` where a bare array literal would
-// widen to `(A | B)[]` (no contextual tuple type flows through `Some(…)`/`Ok(…)`
-// /ts-pattern arm returns). Off for the JS backend — output stays byte-identical.
-let tupleHelper = false;
+  // Optional per-binding type annotation for a top-level `let`, returning the text
+  // to splice after the name (`: (x: A) => A`) or null for none. Set from
+  // `CodegenOptions.annotate` per `codegen` call; the TS backend (`codegen-ts.ts`,
+  // ADR 0026) supplies it, the JS backend leaves it null (byte-identical output).
+  readonly annotateLet: ((name: string, value: Expr) => string | null) | null;
 
-// TS backend (ADR 0028): given a lambda's span and its collapsed parameter count,
-// return a `generics` head (`<A, B>` or `""`) to scope over the arrow plus one
-// type annotation (the bare type text, no leading `:`) or null per param. The
-// head is non-empty only for a generic function binding's value lambda (ADR 0032),
-// where scoping the letters on the arrow lets its params name them; every other
-// lambda gets `""` and concrete-only params. Supplied by the TS backend from the
-// per-node inference table; null for the JS backend (byte-identical output).
-let annotateParams:
-  | ((span: Span, arity: number) => { generics: string; params: (string | null)[] })
-  | null = null;
+  // Optional typing for a variant's ctor factory in TS mode (ADR 0026): given the
+  // type decl and one ctor, return the generic head, per-field param types, and
+  // the variant return type, or null for the untyped JS shape. Supplied by the TS
+  // backend (from dts's `ctorFactoryTs`); null for the JS backend.
+  readonly annotateCtor: ((s: TypeStmt, c: Ctor) => CtorFactoryTs | null) | null;
 
-// TS backend (ADR 0031): given a match scrutinee expr, return its concrete TS
-// type text (the "base" the guard-form predicate narrows from), or null (generic
-// scrutinee / JS backend). Used to synthesize a type-predicate guard so the
-// handler input narrows — ts-pattern's `Narrow` only refines for `x is U` guards,
-// not plain boolean ones, so nested-pattern handlers otherwise see the full union.
-let guardBaseType: ((scrutinee: Expr) => string | null) | null = null;
+  // TS backend (ADR 0026): lower `a |> f(x)` to the flattened call `f(x, a)`
+  // instead of the curried `f(x)(a)`. Both are equivalent under `_curry`, but the
+  // flat form lets `tsc` infer type args from ALL arguments at once — `xs |> map(f)`
+  // as `map(f, xs)` pins the element type, where `map(f)(xs)` leaves it `unknown`.
+  // Off for the JS backend, which stays byte-identical.
+  readonly flattenPipe: boolean;
 
-// TS backend (ADR 0035): given an EMPTY collection literal expr, return its
-// fully-concrete TS type text (`Map<number, Ty>`, `Ty[]`), or null (element
-// type still generic / JS backend). An empty `#{}`/`[]` otherwise infers
-// `Map<unknown, unknown>`/`never[]` (and `Set.fromArray([])` → `Set<never>`),
-// which won't flow to a concretely-typed state field; the annotation pins it.
-let annotateEmpty: ((e: Expr) => string | null) | null = null;
+  // TS backend (ADR 0036): emit a tuple literal as `_tuple(a, b)` instead of the
+  // bare array `[a, b]`. The runtime `_tuple` is an identity whose rest param is
+  // inferred as a tuple, so tsc keeps `[A, B]` where a bare array literal would
+  // widen to `(A | B)[]` (no contextual tuple type flows through `Some(…)`/`Ok(…)`
+  // /ts-pattern arm returns). Off for the JS backend — output stays byte-identical.
+  readonly tupleHelper: boolean;
 
-// TS backend (ADR 0035): given a `let x = v in …` value expr, return the
-// monomorphic TS type to annotate the emitted IIFE param `x`, or null. The
-// annotation flows contextual types into `v`'s empty collections through the
-// IIFE, which arg-based inference alone cannot do.
-let annotateLetin: ((value: Expr) => string | null) | null = null;
+  // TS backend (ADR 0028): given a lambda's span and its collapsed parameter count,
+  // return a `generics` head (`<A, B>` or `""`) to scope over the arrow plus one
+  // type annotation (the bare type text, no leading `:`) or null per param. The
+  // head is non-empty only for a generic function binding's value lambda (ADR 0032),
+  // where scoping the letters on the arrow lets its params name them; every other
+  // lambda gets `""` and concrete-only params. Supplied by the TS backend from the
+  // per-node inference table; null for the JS backend (byte-identical output).
+  readonly annotateParams:
+    | ((span: Span, arity: number) => { generics: string; params: (string | null)[] })
+    | null;
 
-// TS backend (ADR 0043): given an applied parametric constructor call (`Ok(x)`,
-// `Err(e)`), return its fully-concrete TS type text to cast the call to, or null.
-// A ctor's argument pins only some type params; a phantom one (`Ok`'s error, `Err`'s
-// ok) stays free and widens to `unknown` in a ts-pattern arm — annotating the call
-// (`Ok("") as Result<string, string>`) pins it. The applied-ctor analogue of the
-// nullary-ctor rule (`annotateEmpty` on a `ref`, ADR 0039).
-let annotateCall: ((e: Expr) => string | null) | null = null;
+  // TS backend (ADR 0031): given a match scrutinee expr, return its concrete TS
+  // type text (the "base" the guard-form predicate narrows from), or null (generic
+  // scrutinee / JS backend). Used to synthesize a type-predicate guard so the
+  // handler input narrows — ts-pattern's `Narrow` only refines for `x is U` guards,
+  // not plain boolean ones, so nested-pattern handlers otherwise see the full union.
+  readonly guardBaseType: ((scrutinee: Expr) => string | null) | null;
 
-// Extension for cross-module import specifiers: `.js` for the JS backend (the
-// compiled sibling), `""` for the TS backend (`import … from "./mod"`, which
-// tsc/bundlers resolve to the sibling `.ts`). Set per `codegen` call.
-let moduleExt = ".js";
+  // TS backend (ADR 0035): given an EMPTY collection literal expr, return its
+  // fully-concrete TS type text (`Map<number, Ty>`, `Ty[]`), or null (element
+  // type still generic / JS backend). An empty `#{}`/`[]` otherwise infers
+  // `Map<unknown, unknown>`/`never[]` (and `Set.fromArray([])` → `Set<never>`),
+  // which won't flow to a concretely-typed state field; the annotation pins it.
+  readonly annotateEmpty: ((e: Expr) => string | null) | null;
+
+  // TS backend (ADR 0035): given a `let x = v in …` value expr, return the
+  // monomorphic TS type to annotate the emitted IIFE param `x`, or null. The
+  // annotation flows contextual types into `v`'s empty collections through the
+  // IIFE, which arg-based inference alone cannot do.
+  readonly annotateLetin: ((value: Expr) => string | null) | null;
+
+  // TS backend (ADR 0043): given an applied parametric constructor call (`Ok(x)`,
+  // `Err(e)`), return its fully-concrete TS type text to cast the call to, or null.
+  // A ctor's argument pins only some type params; a phantom one (`Ok`'s error, `Err`'s
+  // ok) stays free and widens to `unknown` in a ts-pattern arm — annotating the call
+  // (`Ok("") as Result<string, string>`) pins it. The applied-ctor analogue of the
+  // nullary-ctor rule (`annotateEmpty` on a `ref`, ADR 0039).
+  readonly annotateCall: ((e: Expr) => string | null) | null;
+
+  // Extension for cross-module import specifiers: `.js` for the JS backend (the
+  // compiled sibling), `""` for the TS backend (`import … from "./mod"`, which
+  // tsc/bundlers resolve to the sibling `.ts`). Set per `codegen` call.
+  readonly moduleExt: string;
+};
 
 // The field keys of a module's EXPORTED ctors — threaded into an importer's
 // `codegen` so a pattern on an imported variant destructures the right runtime
@@ -146,7 +155,7 @@ const collapseLambda = (l: LambdaExpr): { params: LamParam[]; body: Expr } => {
 const escapeTemplateLiteral = (s: string): string =>
   s.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
 
-const genExpr = (e: Expr): string =>
+const genExpr = (e: Expr, ctx: GenCtx): string =>
   match(e)
     .with({ kind: "num" }, (n) => n.raw)
     .with({ kind: "bool" }, (b) => String(b.value))
@@ -155,7 +164,7 @@ const genExpr = (e: Expr): string =>
     // exactly like the source.
     .with({ kind: "interp" }, (interp) => {
       const body = interp.parts
-        .map((p) => (typeof p === "string" ? escapeTemplateLiteral(p) : `\${${genExpr(p)}}`))
+        .map((p) => (typeof p === "string" ? escapeTemplateLiteral(p) : `\${${genExpr(p, ctx)}}`))
         .join("");
       return `\`${body}\``;
     })
@@ -165,19 +174,19 @@ const genExpr = (e: Expr): string =>
       // (TS backend, ADR 0039), the Option/variant analogue of the empty-array
       // rule above. Gate on a 0-field ctor so plain value refs are untouched;
       // `annotateEmpty` returns null unless the recorded type is fully concrete.
-      const nullaryCtor = ctorKeys.get(r.name)?.length === 0;
-      const ann = nullaryCtor ? annotateEmpty?.(r) : null;
+      const nullaryCtor = ctx.ctorKeys.get(r.name)?.length === 0;
+      const ann = nullaryCtor ? ctx.annotateEmpty?.(r) : null;
       return ann ? `(${r.name} as ${ann})` : r.name;
     })
     .with({ kind: "call" }, (c) => {
-      const inner = `${genCallee(c.fn)}(${c.args.map(genExpr).join(", ")})`;
+      const inner = `${genCallee(c.fn, ctx)}(${c.args.map((a) => genExpr(a, ctx)).join(", ")})`;
       // TS backend (ADR 0043): an applied parametric ctor (`Ok("")`, `Err(e)`)
       // leaves the type param its argument doesn't determine free, so tsc widens
       // it to `unknown` — in a ts-pattern arm that then clashes with a sibling
       // arm. Cast the call to its resolved concrete type. Gated on an uppercase
       // callee (a ctor; `annotateCall` itself yields null unless the type is a
       // fully-concrete `con`, so ordinary Capitalized calls stay bare).
-      const ann = c.fn.kind === "ref" && /^[A-Z]/.test(c.fn.name) ? annotateCall?.(c) : null;
+      const ann = c.fn.kind === "ref" && /^[A-Z]/.test(c.fn.name) ? ctx.annotateCall?.(c) : null;
       return ann ? `(${inner} as ${ann})` : inner;
     })
     .with({ kind: "lambda" }, (l) => {
@@ -186,7 +195,7 @@ const genExpr = (e: Expr): string =>
       // (ADR 0028), so `(x) => …` becomes `(x: A) => …` — otherwise strict tsc
       // infers `any`. `l.span` (the outer, un-collapsed lambda) carries the full
       // `A -> B -> …` type; the callback peels it per collapsed param.
-      const ann = annotateParams?.(l.span, params.length);
+      const ann = ctx.annotateParams?.(l.span, params.length);
       const anns = ann?.params ?? [];
       const ps = params.map((p, i) => {
         const g = genParam(p);
@@ -194,7 +203,7 @@ const genExpr = (e: Expr): string =>
       });
       // A generic binding's value lambda scopes its letters here (ADR 0032), so
       // its (now fully annotated) params can name them; every other lambda: "".
-      const arrow = `${ann?.generics ?? ""}(${ps.join(", ")}) => ${genLambdaBody(body)}`;
+      const arrow = `${ann?.generics ?? ""}(${ps.join(", ")}) => ${genLambdaBody(body, ctx)}`;
       // Curried type, flat JS impl: arity ≥ 2 lowers to a `_curry`-wrapped
       // function so any call grouping works (CRITIQUE §4.4). Arity 1 needs none.
       return params.length >= 2 ? `_curry(${params.length}, ${arrow})` : arrow;
@@ -202,9 +211,9 @@ const genExpr = (e: Expr): string =>
     // let x = v in b  →  an IIFE binding x: `((x) => b)(v)`. Non-recursive, so
     // a plain arg-application is enough; nested let-ins chain as curried IIFEs.
     .with({ kind: "letin" }, (l) => {
-      const ann = annotateLetin?.(l.value);
+      const ann = ctx.annotateLetin?.(l.value);
       const param = ann ? `${l.name}: ${ann}` : l.name;
-      return `((${param}) => ${genLambdaBody(l.body)})(${genExpr(l.value)})`;
+      return `((${param}) => ${genLambdaBody(l.body, ctx)})(${genExpr(l.value, ctx)})`;
     })
     // let? p = v in b  →  the Result bind: `_Result_flatMap((p) => b)(v)`.
     // Under `flattenPipe` (TS backend) the two args go in ONE grouping —
@@ -212,59 +221,61 @@ const genExpr = (e: Expr): string =>
     // all-at-once overload; the curried `f(v)` split leaves `p` unconstrained
     // (`unknown`) across the two calls. Both are equivalent under `_curry`.
     .with({ kind: "letbind" }, (l) => {
-      const f = `(${genParam(l.param)}) => ${genLambdaBody(l.body)}`;
-      const v = genExpr(l.value);
-      return flattenPipe ? `_Result_flatMap(${f}, ${v})` : `_Result_flatMap(${f})(${v})`;
+      const f = `(${genParam(l.param)}) => ${genLambdaBody(l.body, ctx)}`;
+      const v = genExpr(l.value, ctx);
+      return ctx.flattenPipe ? `_Result_flatMap(${f}, ${v})` : `_Result_flatMap(${f})(${v})`;
     })
     // desugar inline: a |> f  →  f(a). Under `flattenPipe` (TS backend), a pipe
     // into a call appends the arg — `a |> f(x)` → `f(x, a)` — so tsc infers type
     // args from every argument at once; otherwise the curried `f(x)(a)`.
     .with({ kind: "pipe" }, (p) =>
-      flattenPipe && p.right.kind === "call"
-        ? `${genCallee(p.right.fn)}(${[...p.right.args, p.left].map(genExpr).join(", ")})`
-        : `${genCallee(p.right)}(${genExpr(p.left)})`,
+      ctx.flattenPipe && p.right.kind === "call"
+        ? `${genCallee(p.right.fn, ctx)}(${[...p.right.args, p.left].map((a) => genExpr(a, ctx)).join(", ")})`
+        : `${genCallee(p.right, ctx)}(${genExpr(p.left, ctx)})`,
     )
     // Always parenthesized, so the output nests safely in any JS position.
     .with(
       { kind: "ternary" },
-      (t) => `(${genExpr(t.cond)} ? ${genExpr(t.then)} : ${genExpr(t.else)})`,
+      (t) => `(${genExpr(t.cond, ctx)} ? ${genExpr(t.then, ctx)} : ${genExpr(t.else, ctx)})`,
     )
-    .with({ kind: "match" }, genMatch)
+    .with({ kind: "match" }, (m) => genMatch(m, ctx))
     .with({ kind: "record" }, (r) => {
-      const fields = r.fields.map((f) => `${f.name}: ${genExpr(f.value)}`);
-      const parts = r.spread ? [`...${genExpr(r.spread)}`, ...fields] : fields;
+      const fields = r.fields.map((f) => `${f.name}: ${genExpr(f.value, ctx)}`);
+      const parts = r.spread ? [`...${genExpr(r.spread, ctx)}`, ...fields] : fields;
       return parts.length === 0 ? "{}" : `{ ${parts.join(", ")} }`;
     })
-    .with({ kind: "field" }, (f) => nsRuntimeId(f) ?? `${genMember(f.target)}.${f.name}`)
+    .with({ kind: "field" }, (f) => nsRuntimeId(f) ?? `${genMember(f.target, ctx)}.${f.name}`)
     // A tuple erases to a JS array `[a, b]` (like ReScript); the type system
     // keeps it distinct from an `mochi` Array, the runtime shares the shape. TS
     // emit wraps it in `_tuple(…)` so tsc infers a tuple, not a widened array
     // (ADR 0036); the JS backend keeps the bare literal (byte-identical).
     .with({ kind: "tuple" }, (t) => {
-      const elems = t.elements.map(genExpr).join(", ");
-      return tupleHelper ? `_tuple(${elems})` : `[${elems}]`;
+      const elems = t.elements.map((el) => genExpr(el, ctx)).join(", ");
+      return ctx.tupleHelper ? `_tuple(${elems})` : `[${elems}]`;
     })
     .with({ kind: "arr" }, (l) => {
-      const body = `[${l.elements.map(genExpr).join(", ")}]`;
+      const body = `[${l.elements.map((el) => genExpr(el, ctx)).join(", ")}]`;
       // Empty `[]` infers `never[]` — annotate with the resolved element type
       // (TS backend) so it flows where a concrete array is expected (ADR 0035).
-      const ann = l.elements.length === 0 ? annotateEmpty?.(l) : null;
+      const ann = l.elements.length === 0 ? ctx.annotateEmpty?.(l) : null;
       return ann ? `(${body} as ${ann})` : body;
     })
-    .with({ kind: "list" }, genList)
+    .with({ kind: "list" }, (l) => genList(l, ctx))
     .with({ kind: "map" }, (m) => {
-      const entries = m.entries.map((e) => `[${genExpr(e.key)}, ${genExpr(e.value)}]`).join(", ");
+      const entries = m.entries
+        .map((e) => `[${genExpr(e.key, ctx)}, ${genExpr(e.value, ctx)}]`)
+        .join(", ");
       // Empty `#{}` infers `Map<unknown, unknown>` — emit `new Map<K, V>()`
       // with the resolved key/value types (TS backend, ADR 0035).
-      const ann = m.entries.length === 0 ? annotateEmpty?.(m) : null;
+      const ann = m.entries.length === 0 ? ctx.annotateEmpty?.(m) : null;
       return ann ? `new ${ann}()` : `new Map([${entries}])`;
     })
     .exhaustive();
 
 // A `@{...}` literal → a lazy iterable over its (eagerly-evaluated) elements.
 // `_list` wraps a generator factory so the List is re-iterable and lazy.
-const genList = (e: ListExpr): string => {
-  const yields = e.elements.map((el) => `yield (${genExpr(el)});`).join(" ");
+const genList = (e: ListExpr, ctx: GenCtx): string => {
+  const yields = e.elements.map((el) => `yield (${genExpr(el, ctx)});`).join(" ");
   return `_list(function* () {${yields ? ` ${yields} ` : ""}})`;
 };
 
@@ -277,15 +288,17 @@ const genParam = (p: LamParam): string =>
       : `{ ${p.fields.join(", ")} }`;
 
 // A lambda in callee position must be parenthesized: `((x) => ...)(arg)`.
-const genCallee = (e: Expr): string => (e.kind === "lambda" ? `(${genExpr(e)})` : genExpr(e));
+const genCallee = (e: Expr, ctx: GenCtx): string =>
+  e.kind === "lambda" ? `(${genExpr(e, ctx)})` : genExpr(e, ctx);
 
 // A record or lambda in member-target position needs parens: `({...}).x`.
-const genMember = (e: Expr): string =>
-  e.kind === "record" || e.kind === "lambda" ? `(${genExpr(e)})` : genExpr(e);
+const genMember = (e: Expr, ctx: GenCtx): string =>
+  e.kind === "record" || e.kind === "lambda" ? `(${genExpr(e, ctx)})` : genExpr(e, ctx);
 
 // A record literal as a concise arrow body must be parenthesized, else JS
 // parses `=> { ... }` as a statement block: `=> ({ x: 1 })`.
-const genLambdaBody = (e: Expr): string => (e.kind === "record" ? `(${genExpr(e)})` : genExpr(e));
+const genLambdaBody = (e: Expr, ctx: GenCtx): string =>
+  e.kind === "record" ? `(${genExpr(e, ctx)})` : genExpr(e, ctx);
 
 // ---- match → @onrails/pattern chain --------------------------------------
 // Emitted `switch` lowers to a match().with().exhaustive() chain. We target
@@ -317,7 +330,7 @@ const isCatchAll = (p: Pattern): boolean =>
 // `{ key: sub }` entry, punned when the bound name IS the key.
 const keyedSlot = (key: string, sub: string): string => (sub === key ? key : `${key}: ${sub}`);
 
-const patSlot = (p: Pattern): string => {
+const patSlot = (p: Pattern, ctx: GenCtx): string => {
   switch (p.kind) {
     case "pbind":
       return p.name;
@@ -328,37 +341,37 @@ const patSlot = (p: Pattern): string => {
     case "plist":
       return "";
     case "pctor": {
-      const keys = ctorKeys.get(p.ctor);
+      const keys = ctx.ctorKeys.get(p.ctor);
       const entries = p.args.flatMap((a, i) => {
-        const s = patSlot(a);
+        const s = patSlot(a, ctx);
         return s === "" ? [] : [keyedSlot(keys?.[i] ?? `_${i}`, s)];
       });
       return entries.length ? `{ ${entries.join(", ")} }` : "";
     }
     case "precord": {
       const entries = p.fields.flatMap((f) => {
-        const s = patSlot(f.pat);
+        const s = patSlot(f.pat, ctx);
         return s === "" ? [] : [keyedSlot(f.label, s)];
       });
       return entries.length ? `{ ${entries.join(", ")} }` : "";
     }
     case "ptuple": {
-      const slots = p.elems.map(patSlot);
+      const slots = p.elems.map((e) => patSlot(e, ctx));
       return slots.some((s) => s !== "") ? `[${slots.join(", ")}]` : "";
     }
     case "parr": {
-      const slots = p.elems.map(patSlot);
+      const slots = p.elems.map((e) => patSlot(e, ctx));
       if (p.rest?.kind === "pbind") slots.push(`...${p.rest.name}`);
       return slots.some((s) => s !== "") ? `[${slots.join(", ")}]` : "";
     }
     // Alternatives bind identical names at identical positions (checked), so any
     // alt's slot destructures the value for the whole arm.
     case "por":
-      return patSlot(p.alts[0]!);
+      return patSlot(p.alts[0]!, ctx);
   }
 };
 
-const patConds = (p: Pattern, path: string): string[] => {
+const patConds = (p: Pattern, path: string, ctx: GenCtx): string[] => {
   switch (p.kind) {
     case "pwild":
     case "pbind":
@@ -369,26 +382,26 @@ const patConds = (p: Pattern, path: string): string[] => {
     case "pstr":
       return [`${path} === ${litValue(p)}`];
     case "pctor": {
-      const keys = ctorKeys.get(p.ctor);
+      const keys = ctx.ctorKeys.get(p.ctor);
       return [
         `${path}._tag === ${JSON.stringify(p.ctor)}`,
-        ...p.args.flatMap((a, i) => patConds(a, `${path}.${keys?.[i] ?? `_${i}`}`)),
+        ...p.args.flatMap((a, i) => patConds(a, `${path}.${keys?.[i] ?? `_${i}`}`, ctx)),
       ];
     }
     case "precord":
-      return p.fields.flatMap((f) => patConds(f.pat, `${path}.${f.label}`));
+      return p.fields.flatMap((f) => patConds(f.pat, `${path}.${f.label}`, ctx));
     case "ptuple":
       // No length guard — tuple arity is guaranteed by the type.
-      return p.elems.flatMap((e, i) => patConds(e, `${path}[${i}]`));
+      return p.elems.flatMap((e, i) => patConds(e, `${path}[${i}]`, ctx));
     case "parr":
       return [
         `${path}.length ${p.rest ? ">=" : "==="} ${p.elems.length}`,
-        ...p.elems.flatMap((e, i) => patConds(e, `${path}[${i}]`)),
+        ...p.elems.flatMap((e, i) => patConds(e, `${path}[${i}]`, ctx)),
       ];
     case "por": {
       // `(condsA) || (condsB) || …` — each alt's own conds &&-joined first.
       const alts = p.alts.map((a) => {
-        const c = patConds(a, path);
+        const c = patConds(a, path, ctx);
         return c.length ? c.map((x) => `(${x})`).join(" && ") : "true";
       });
       return [alts.map((a) => `(${a})`).join(" || ")];
@@ -398,12 +411,12 @@ const patConds = (p: Pattern, path: string): string[] => {
 
 // The handler parameter for a catch-all pattern: bind the name, destructure a
 // record's/tuple's binds, or ignore the value.
-const catchAllParam = (p: Pattern): string => {
+const catchAllParam = (p: Pattern, ctx: GenCtx): string => {
   // `[...all]` / `@{...all}` binds the whole collection to the rest name — NOT
   // a destructure: `[...all]` would copy the array and force a lazy List.
   if (p.kind === "parr" || p.kind === "plist")
     return p.rest?.kind === "pbind" ? `(${p.rest.name})` : "()";
-  const slot = patSlot(p);
+  const slot = patSlot(p, ctx);
   return slot === "" ? "()" : `(${slot})`;
 };
 
@@ -424,16 +437,16 @@ const listTail = (from: number): string =>
 // needs n pulls (length ≥ n) and binds its tail to a lazy List over the rest.
 // Element sub-patterns guard/bind via the general compiler against the buffer
 // (`_b[i]` is already pulled, so nested tests force nothing extra).
-const genListArm = (p: ListPat, body: Expr): string => {
+const genListArm = (p: ListPat, body: Expr, ctx: GenCtx): string => {
   const n = p.elems.length;
-  const guards = p.elems.flatMap((ep, i) => patConds(ep, `_b[${i}]`));
+  const guards = p.elems.flatMap((ep, i) => patConds(ep, `_b[${i}]`, ctx));
   const cond = [p.rest ? `_pull(${n})` : `!_pull(${n + 1}) && _b.length === ${n}`, ...guards].join(
     " && ",
   );
   const params: string[] = [];
   const args: string[] = [];
   p.elems.forEach((ep, i) => {
-    const slot = patSlot(ep);
+    const slot = patSlot(ep, ctx);
     if (slot !== "") {
       params.push(slot);
       args.push(`_b[${i}]`);
@@ -443,25 +456,27 @@ const genListArm = (p: ListPat, body: Expr): string => {
     params.push(p.rest.name);
     args.push(listTail(n));
   }
-  return `  if (${cond}) return ((${params.join(", ")}) => ${genLambdaBody(body)})(${args.join(", ")});`;
+  return `  if (${cond}) return ((${params.join(", ")}) => ${genLambdaBody(body, ctx)})(${args.join(", ")});`;
 };
 
 // A lazy-List switch → an IIFE that pulls just enough elements to decide each
 // arm, buffering them so later arms can re-examine a prefix without re-forcing
 // it. Bounded pulls only — a pull-sequence is never fully forced, so this can't
 // use @onrails/pattern (not length-indexable). check.ts proved totality.
-const genListMatch = (m: MatchExpr): string => {
+const genListMatch = (m: MatchExpr, ctx: GenCtx): string => {
   const arms: string[] = [];
   let fallback = `(() => { throw new Error("non-exhaustive lazy-list switch"); })()`;
   for (const a of m.arms) {
     if (a.pattern.kind === "plist" && !isCatchAll(a.pattern)) {
-      arms.push(genListArm(a.pattern, a.body));
+      arms.push(genListArm(a.pattern, a.body, ctx));
     } else if (isCatchAll(a.pattern)) {
       // `@{...all}` / `_` / bind matches any list; a named rest binds a lazy
       // List over the whole thing (leftover buffer + iterator). Terminal arm.
       const rest =
         a.pattern.kind === "plist" && a.pattern.rest?.kind === "pbind" ? a.pattern.rest.name : null;
-      fallback = rest ? `((${rest}) => ${genLambdaBody(a.body)})(${listTail(0)})` : genExpr(a.body);
+      fallback = rest
+        ? `((${rest}) => ${genLambdaBody(a.body, ctx)})(${listTail(0)})`
+        : genExpr(a.body, ctx);
       break;
     }
   }
@@ -470,35 +485,35 @@ const genListMatch = (m: MatchExpr): string => {
     `const _pull = (_n) => { while (_b.length < _n && !_done) { const _s = _it.next(); ` +
     `if (_s.done) _done = true; else _b.push(_s.value); } return _b.length >= _n; };\n` +
     `${arms.join("\n")}\n  return ${fallback};\n` +
-    `})(${genExpr(m.scrutinee)}[Symbol.iterator]())`
+    `})(${genExpr(m.scrutinee, ctx)}[Symbol.iterator]())`
   );
 };
 
-const genMatch = (m: MatchExpr): string => {
-  if (isListMatch(m)) return genListMatch(m);
-  const parts = [`match(${genExpr(m.scrutinee)})`];
+const genMatch = (m: MatchExpr, ctx: GenCtx): string => {
+  if (isListMatch(m)) return genListMatch(m, ctx);
+  const parts = [`match(${genExpr(m.scrutinee, ctx)})`];
   // TS backend (ADR 0031): the concrete scrutinee type each guard-form arm
   // narrows FROM. null in JS mode / for generic scrutinees → the bare guard form.
-  const base = guardBaseType?.(m.scrutinee) ?? null;
+  const base = ctx.guardBaseType?.(m.scrutinee) ?? null;
   let catchAll: MatchArm | undefined;
   for (const arm of m.arms) {
     // A guarded arm narrows regardless of its pattern (the guard can be
     // false), so it always takes the guard form — even `_ when g`.
     if (arm.guard) {
-      parts.push(`  ${genGuardArm(arm.pattern, arm.body, arm.guard, base)}`);
+      parts.push(`  ${genGuardArm(arm.pattern, arm.body, arm.guard, base, ctx)}`);
       continue;
     }
     if (isCatchAll(arm.pattern)) {
       catchAll ??= arm;
       continue;
     }
-    parts.push(`  ${genWithArm(arm.pattern as NarrowingPattern, arm.body, base)}`);
+    parts.push(`  ${genWithArm(arm.pattern as NarrowingPattern, arm.body, base, ctx)}`);
   }
   if (catchAll) {
     parts.push(
-      `  .otherwise(${catchAllParam(catchAll.pattern)} => ${genLambdaBody(catchAll.body)})`,
+      `  .otherwise(${catchAllParam(catchAll.pattern, ctx)} => ${genLambdaBody(catchAll.body, ctx)})`,
     );
-  } else if (guardBaseType !== null && m.arms.some((a) => a.pattern.kind === "parr")) {
+  } else if (ctx.guardBaseType !== null && m.arms.some((a) => a.pattern.kind === "parr")) {
     // TS backend (ADR 0038): an eager-array match with no catch-all is the
     // `[]` + `[h, ...t]` length partition check.ts proved total. Its guard arms
     // test `.length` — they don't narrow `A[]` structurally, so ts-pattern's
@@ -538,28 +553,28 @@ const isFlatSub = (p: Pattern): boolean =>
 // target it narrows to, from the scrutinee's concrete `base` type. A ctor
 // contributes `Extract<base, { _tag: "C" }>`; a nested ctor/record inside a field
 // refines that field via indexed access, so the handler input narrows exactly as
-// the pattern does. Pure over `ctorKeys`; only reachable in TS mode.
-function patTarget(p: Pattern, base: string): string {
+// the pattern does. Pure over `ctx.ctorKeys`; only reachable in TS mode.
+function patTarget(p: Pattern, base: string, ctx: GenCtx): string {
   if (p.kind === "pctor") {
     const member = `Extract<${base}, { _tag: ${JSON.stringify(p.ctor)} }>`;
-    const keys = ctorKeys.get(p.ctor);
+    const keys = ctx.ctorKeys.get(p.ctor);
     const refines = p.args.flatMap((a, i) => {
       const key = keys?.[i] ?? `_${i}`;
-      const sub = fieldRefine(a, `${member}[${JSON.stringify(key)}]`);
+      const sub = fieldRefine(a, `${member}[${JSON.stringify(key)}]`, ctx);
       return sub ? [`${JSON.stringify(key)}: ${sub}`] : [];
     });
     return refines.length ? `${member} & { ${refines.join("; ")} }` : member;
   }
   if (p.kind === "precord") {
     const refines = p.fields.flatMap((f) => {
-      const sub = fieldRefine(f.pat, `${base}[${JSON.stringify(f.label)}]`);
+      const sub = fieldRefine(f.pat, `${base}[${JSON.stringify(f.label)}]`, ctx);
       return sub ? [`${JSON.stringify(f.label)}: ${sub}`] : [];
     });
     return refines.length ? `${base} & { ${refines.join("; ")} }` : base;
   }
   if (p.kind === "ptuple") {
     // Tuple element i is `base[i]`; refine each element whose sub-pattern narrows.
-    const subs = p.elems.map((e, i) => fieldRefine(e, `(${base})[${i}]`));
+    const subs = p.elems.map((e, i) => fieldRefine(e, `(${base})[${i}]`, ctx));
     if (subs.every((s) => s === null)) return base;
     return `[${p.elems.map((_, i) => subs[i] ?? `(${base})[${i}]`).join(", ")}]`;
   }
@@ -567,7 +582,7 @@ function patTarget(p: Pattern, base: string): string {
     // Array `T[]` → a tuple of refined heads plus a `...T[]` rest, so a head
     // matched by a ctor (`[IPExpr(e), ...rest]`) narrows for the handler.
     const elemType = `(${base})[number]`;
-    const subs = p.elems.map((e) => fieldRefine(e, elemType));
+    const subs = p.elems.map((e) => fieldRefine(e, elemType, ctx));
     if (subs.every((s) => s === null)) return base;
     const heads = subs.map((s) => s ?? elemType).join(", ");
     return `[${heads}${p.rest ? `, ...${base}` : ""}]`;
@@ -578,10 +593,10 @@ function patTarget(p: Pattern, base: string): string {
 
 // A field's refined type when its sub-pattern narrows it, else null (the field
 // keeps its declared type — a bind/wildcard/literal needs no narrowing).
-function fieldRefine(p: Pattern, fieldBase: string): string | null {
-  if (p.kind === "pctor") return patTarget(p, fieldBase);
+function fieldRefine(p: Pattern, fieldBase: string, ctx: GenCtx): string | null {
+  if (p.kind === "pctor") return patTarget(p, fieldBase, ctx);
   if (p.kind === "precord") {
-    const t = patTarget(p, fieldBase);
+    const t = patTarget(p, fieldBase, ctx);
     return t === fieldBase ? null : t;
   }
   return null;
@@ -594,21 +609,29 @@ function fieldRefine(p: Pattern, fieldBase: string): string | null {
 // destructuring slot the handler uses. In TS mode (`base` set) the arm is a type
 // predicate `(_v): _v is <target>` whose body tests a widened `_g` copy — so the
 // handler input narrows (ADR 0031) without the boolean body fighting `_v`'s type.
-const genGuardArm = (p: Pattern, body: Expr, guard?: Expr, base: string | null = null): string => {
+const genGuardArm = (
+  p: Pattern,
+  body: Expr,
+  guard: Expr | undefined,
+  base: string | null,
+  ctx: GenCtx,
+): string => {
   const root = base ? "_g" : "_v";
-  const conds = patConds(p, root);
-  const slot = patSlot(p);
+  const conds = patConds(p, root, ctx);
+  const slot = patSlot(p, ctx);
   if (guard)
-    conds.push(slot === "" ? `(${genExpr(guard)})` : `((${slot}) => ${genExpr(guard)})(${root})`);
+    conds.push(
+      slot === "" ? `(${genExpr(guard, ctx)})` : `((${slot}) => ${genExpr(guard, ctx)})(${root})`,
+    );
   const test = conds.length ? conds.join(" && ") : "true";
-  const handler = `${slot === "" ? "()" : `(${slot})`} => ${genLambdaBody(body)}`;
+  const handler = `${slot === "" ? "()" : `(${slot})`} => ${genLambdaBody(body, ctx)}`;
   // Emit a type predicate ONLY when it actually refines (target ≠ base): a
   // whole-value pattern with no field narrowing (`[]`, `_ when g`) gains nothing
   // from `_v is base` and would trip TS2677 when `base` is a row-poly `{…} & R`
   // param — the closed `base` string isn't assignable to the open param. The
   // plain boolean guard leaves `_v` at its declared (open) type. (ADR 0031/0034)
   if (base) {
-    const target = patTarget(p, base);
+    const target = patTarget(p, base, ctx);
     if (target !== base)
       return `.with((_v): _v is ${target} => { const _g: any = _v; return ${test}; }, ${handler})`;
     return `.with((_v) => { const _g: any = _v; return ${test}; }, ${handler})`;
@@ -616,16 +639,16 @@ const genGuardArm = (p: Pattern, body: Expr, guard?: Expr, base: string | null =
   return `.with((_v) => ${test}, ${handler})`;
 };
 
-const genWithArm = (p: NarrowingPattern, body: Expr, base: string | null = null): string => {
+const genWithArm = (p: NarrowingPattern, body: Expr, base: string | null, ctx: GenCtx): string => {
   // Array/tuple/or arms always take the guard form (not matcher-object-able).
   if (p.kind === "parr" || p.kind === "ptuple" || p.kind === "por")
-    return genGuardArm(p, body, undefined, base);
+    return genGuardArm(p, body, undefined, base, ctx);
 
   if (p.kind === "plit" || p.kind === "pbool" || p.kind === "pstr")
-    return `.with(${litValue(p)}, () => ${genLambdaBody(body)})`;
+    return `.with(${litValue(p)}, () => ${genLambdaBody(body, ctx)})`;
 
   if (p.kind === "precord") {
-    if (!p.fields.every((f) => isFlatSub(f.pat))) return genGuardArm(p, body, undefined, base);
+    if (!p.fields.every((f) => isFlatSub(f.pat))) return genGuardArm(p, body, undefined, base, ctx);
     // Flat fast path: literal fields form the matcher object (at least one —
     // else it's a catch-all); binding fields destructure in the handler.
     const lits = p.fields.flatMap((f) =>
@@ -633,15 +656,15 @@ const genWithArm = (p: NarrowingPattern, body: Expr, base: string | null = null)
         ? [`${f.label}: ${litValue(f.pat)}`]
         : [],
     );
-    const slot = patSlot(p);
-    return `.with({ ${lits.join(", ")} }, ${slot === "" ? "()" : `(${slot})`} => ${genLambdaBody(body)})`;
+    const slot = patSlot(p, ctx);
+    return `.with({ ${lits.join(", ")} }, ${slot === "" ? "()" : `(${slot})`} => ${genLambdaBody(body, ctx)})`;
   }
 
   // pctor — flat fast path keeps the readable matcher-object form.
-  if (!p.args.every(isFlatSub)) return genGuardArm(p, body, undefined, base);
+  if (!p.args.every(isFlatSub)) return genGuardArm(p, body, undefined, base, ctx);
   const binds: string[] = []; // "value: r" (or "_0: r" positionally)
   const litFields: string[] = []; // "value: 5" — narrows further
-  const keys = ctorKeys.get(p.ctor);
+  const keys = ctx.ctorKeys.get(p.ctor);
   p.args.forEach((a, i) => {
     const key = keys?.[i] ?? `_${i}`;
     if (a.kind === "pbind") binds.push(keyedSlot(key, a.name));
@@ -651,7 +674,7 @@ const genWithArm = (p: NarrowingPattern, body: Expr, base: string | null = null)
   });
   const patObj = [`_tag: ${JSON.stringify(p.ctor)}`, ...litFields].join(", ");
   const param = binds.length ? `({ ${binds.join(", ")} })` : "()";
-  return `.with({ ${patObj} }, ${param} => ${genLambdaBody(body)})`;
+  return `.with({ ${patObj} }, ${param} => ${genLambdaBody(body, ctx)})`;
 };
 
 // ---- statements -----------------------------------------------------------
@@ -661,12 +684,12 @@ const genWithArm = (p: NarrowingPattern, body: Expr, base: string | null = null)
 // discriminant key is `_tag`, matching the @onrails ecosystem convention
 // (@onrails/result, @onrails/maybe), so their type guards (isOk/isSome/...)
 // recognize mochi values at the JS boundary.
-const genType = (s: TypeStmt): string =>
+const genType = (s: TypeStmt, ctx: GenCtx): string =>
   s.ctors
     .map((c) => {
       const tag = JSON.stringify(c.name);
       if (c.fields.length === 0) {
-        const ts = annotateCtor?.(s, c) ?? null;
+        const ts = ctx.annotateCtor?.(s, c) ?? null;
         // Annotate the nullary const so `_tag` stays the literal (`"Leaf"`), not
         // widened to `string` — else it won't match the variant union.
         return ts
@@ -676,7 +699,7 @@ const genType = (s: TypeStmt): string =>
       const keys = keysOf(c.fields);
       const params = keys.join(", ");
       const obj = `({ _tag: ${tag}, ${params} })`;
-      const ts = annotateCtor?.(s, c) ?? null; // TS backend types the factory
+      const ts = ctx.annotateCtor?.(s, c) ?? null; // TS backend types the factory
       // Single-field: a typed arrow scopes its own generics (`<A>(_0: A): T`).
       if (c.fields.length < 2) {
         if (!ts) return `const ${c.name} = (${params}) => ${obj};`;
@@ -702,16 +725,16 @@ const genExtern = (s: ExternStmt): string => {
 
 // import { a, b } from "./mod"  → the compiled sibling `./mod.js`. Source paths
 // name the `.mochi` module (with or without extension); output targets `.js`.
-const genImport = (s: ImportStmt): string => {
+const genImport = (s: ImportStmt, ctx: GenCtx): string => {
   const names = s.names.map((n) => n.name).join(", ");
-  const path = `${s.from.replace(/\.mochi$/, "")}${moduleExt}`;
+  const path = `${s.from.replace(/\.mochi$/, "")}${ctx.moduleExt}`;
   return `import { ${names} } from ${JSON.stringify(path)};`;
 };
 
-const genStmt = (s: Stmt): string => {
-  if (s.kind === "import") return genImport(s);
+const genStmt = (s: Stmt, ctx: GenCtx): string => {
+  if (s.kind === "import") return genImport(s, ctx);
   if (s.kind === "type") {
-    const decls = genType(s);
+    const decls = genType(s, ctx);
     if (decls === "") return ""; // record alias: pure type, no runtime
     return s.exported
       ? decls
@@ -725,8 +748,8 @@ const genStmt = (s: Stmt): string => {
     return s.exported ? `${genExtern(s)}\nexport { ${s.name} };` : genExtern(s);
   }
   const doExport = s.exported && !s.name.startsWith("$"); // never export destructure temps
-  const ann = annotateLet?.(s.name, s.value) ?? ""; // TS backend annotates; JS leaves bare
-  return `${doExport ? "export " : ""}const ${s.name}${ann} = ${genExpr(s.value)};`;
+  const ann = ctx.annotateLet?.(s.name, s.value) ?? ""; // TS backend annotates; JS leaves bare
+  return `${doExport ? "export " : ""}const ${s.name}${ann} = ${genExpr(s.value, ctx)};`;
 };
 
 // Does the program need the `@onrails/pattern` import? Only if it has a match
@@ -914,25 +937,28 @@ export const codegen = (
   imported?: Map<string, string[]>,
   opts: CodegenOptions = {},
 ): string => {
-  ctorKeys = new Map(imported ?? []);
-  annotateLet = opts.annotate ?? null;
-  annotateCtor = opts.annotateCtor ?? null;
-  flattenPipe = opts.flattenPipe ?? false;
-  tupleHelper = opts.tupleHelper ?? false;
-  moduleExt = opts.moduleExt ?? ".js";
-  annotateParams = opts.annotateParams ?? null;
-  guardBaseType = opts.guardBaseType ?? null;
-  annotateEmpty = opts.annotateEmpty ?? null;
-  annotateLetin = opts.annotateLetin ?? null;
-  annotateCall = opts.annotateCall ?? null;
+  const ctorKeys = new Map(imported ?? []);
   for (const s of prog.stmts)
     if (s.kind === "type") for (const c of s.ctors) ctorKeys.set(c.name, keysOf(c.fields));
   // Seed builtin variant ctor keys (Some/Ok/…) unless the program declares its own.
   for (const bt of builtinTypeDecls)
     for (const c of bt.ctors) if (!ctorKeys.has(c.name)) ctorKeys.set(c.name, keysOf(c.fields));
+  const ctx: GenCtx = {
+    ctorKeys,
+    annotateLet: opts.annotate ?? null,
+    annotateCtor: opts.annotateCtor ?? null,
+    flattenPipe: opts.flattenPipe ?? false,
+    tupleHelper: opts.tupleHelper ?? false,
+    annotateParams: opts.annotateParams ?? null,
+    guardBaseType: opts.guardBaseType ?? null,
+    annotateEmpty: opts.annotateEmpty ?? null,
+    annotateLetin: opts.annotateLetin ?? null,
+    annotateCall: opts.annotateCall ?? null,
+    moduleExt: opts.moduleExt ?? ".js",
+  };
   const needsMatch = prog.stmts.some((s) => s.kind === "let" && usesMatchLib(s.value));
   const header = needsMatch ? `import { match } from "@onrails/pattern";\n\n` : "";
   const preamble = opts.runtime ? preludePreamble(prog) : "";
-  const body = prog.stmts.map(genStmt).join("\n");
+  const body = prog.stmts.map((s) => genStmt(s, ctx)).join("\n");
   return `${header}${preamble}${body}\n`;
 };
