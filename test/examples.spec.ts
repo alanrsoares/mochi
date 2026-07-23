@@ -13,7 +13,7 @@ const read = (p: string): string => readFileSync(new URL(`../${p}`, import.meta.
 const path = (p: string): string => fileURLToPath(new URL(`../${p}`, import.meta.url));
 
 test("example.mochi compiles", () => {
-  expect(isErr(compile(read("example.mochi")))).toBe(false);
+  expect(isErr(compile(read("examples/example.mochi")))).toBe(false);
 });
 
 test("examples/life/main.mochi compiles", () => {
