@@ -20,7 +20,7 @@ const errMsg = (src: string): string => {
 };
 
 test("binds the Ok payload and runs the body", () => {
-  const src = `let r = let? x = Ok(20) in Ok(add(x, 1))`;
+  const src = "let r = let? x = Ok(20) in Ok(add(x, 1))";
   expect(run(src, "r")).toEqual({ _tag: "Ok", value: 21 });
 });
 
@@ -47,21 +47,21 @@ let c = quarter(9)`;
 });
 
 test("tuple param destructures the Ok payload", () => {
-  const src = `let r = let? (a, b) = Ok((3, 4)) in Ok(add(a, b))`;
+  const src = "let r = let? (a, b) = Ok((3, 4)) in Ok(add(a, b))";
   expect(run(src, "r")).toEqual({ _tag: "Ok", value: 7 });
 });
 
 test("record param destructures the Ok payload", () => {
-  const src = `let r = let? { x, y } = Ok({ x: 1, y: 2 }) in Ok(add(x, y))`;
+  const src = "let r = let? { x, y } = Ok({ x: 1, y: 2 }) in Ok(add(x, y))";
   expect(run(src, "r")).toEqual({ _tag: "Ok", value: 3 });
 });
 
 test("value must be a Result", () => {
-  expect(errMsg(`let r = let? x = 1 in Ok(x)`)).toContain("Result");
+  expect(errMsg("let r = let? x = 1 in Ok(x)")).toContain("Result");
 });
 
 test("body must be a Result", () => {
-  expect(errMsg(`let r = let? x = Ok(1) in add(x, 1)`)).toContain("Result");
+  expect(errMsg("let r = let? x = Ok(1) in add(x, 1)")).toContain("Result");
 });
 
 test("value and body share one error type", () => {
@@ -71,7 +71,7 @@ test("value and body share one error type", () => {
 });
 
 test("missing in is a parse error", () => {
-  const r = compile(`let r = let? x = Ok(1) Ok(x)`);
+  const r = compile("let r = let? x = Ok(1) Ok(x)");
   expect(isErr(r)).toBe(true);
   expect(unwrapErr(r).kind).toBe("parse");
 });

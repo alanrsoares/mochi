@@ -50,14 +50,14 @@ test("variant decl → constructor factories (plain JS, no type annotations)", (
       `const Circle = (_0) => ({ _tag: "Circle", _0 });`,
       // Multi-field ctors curry too, so partial application works (§4.4).
       `const Rect = _curry(2, (_0, _1) => ({ _tag: "Rect", _0, _1 }));`,
-      ``,
+      "",
     ].join("\n"),
   );
 });
 
 test("nullary constructor → value, not function", () => {
   expect(js("type Color = | Red | Green")).toBe(
-    [`const Red = { _tag: "Red" };`, `const Green = { _tag: "Green" };`, ``].join("\n"),
+    [`const Red = { _tag: "Red" };`, `const Green = { _tag: "Green" };`, ""].join("\n"),
   );
 });
 
@@ -67,10 +67,10 @@ test("exhaustive switch → @onrails/pattern .exhaustive()", () => {
       "let area = shape => switch shape { | Circle(r) => square(r) | Rect(w, h) => mul(w, h) }",
   );
   expect(out).toContain(`import { match } from "@onrails/pattern";`);
-  expect(out).toContain(`const area = (shape) => match(shape)`);
+  expect(out).toContain("const area = (shape) => match(shape)");
   expect(out).toContain(`.with({ _tag: "Circle" }, ({ _0: r }) => square(r))`);
   expect(out).toContain(`.with({ _tag: "Rect" }, ({ _0: w, _1: h }) => mul(w, h))`);
-  expect(out).toContain(`.exhaustive()`);
+  expect(out).toContain(".exhaustive()");
 });
 
 test("wildcard arm → .otherwise()", () => {
@@ -79,7 +79,7 @@ test("wildcard arm → .otherwise()", () => {
       "let name = shape => switch shape { | Circle(r) => circle | _ => other }",
   );
   expect(out).toContain(`.with({ _tag: "Circle" }, ({ _0: r }) => circle)`);
-  expect(out).toContain(`.otherwise(() => other)`);
+  expect(out).toContain(".otherwise(() => other)");
 });
 
 test("non-exhaustive switch is a compile error naming the missing ctor", () => {

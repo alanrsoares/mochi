@@ -99,8 +99,9 @@ const checkSeqExhaustive = (m: MatchExpr): AlangError | null | undefined => {
   if (seqs.length === 0) return undefined;
   const hasEmpty = seqs.some((p) => p.elems.length === 0 && p.rest === null);
   const hasCons = seqs.some((p) => p.elems.length === 1 && p.rest !== null);
-  if (hasEmpty && hasCons) return null;
-  return checkErr("non-exhaustive list switch: cover `[]` and `[x, ...xs]` (or add `_`)", m.span);
+  return hasEmpty && hasCons
+    ? null
+    : checkErr("non-exhaustive list switch: cover `[]` and `[x, ...xs]` (or add `_`)", m.span);
 };
 
 // Validate a pattern tree: nested constructors must exist with the right
@@ -277,8 +278,9 @@ function checkMatch(m: MatchExpr, reg: Registry): AlangError | null {
     );
     if (bools.has(true) && bools.has(false)) return null;
     const listErr = checkSeqExhaustive(m);
-    if (listErr !== undefined) return listErr;
-    return checkErr("non-exhaustive switch: add a `_` catch-all arm", m.span);
+    return listErr !== undefined
+      ? listErr
+      : checkErr("non-exhaustive switch: add a `_` catch-all arm", m.span);
   }
 
   // Validate each constructor pattern: known + right arity.

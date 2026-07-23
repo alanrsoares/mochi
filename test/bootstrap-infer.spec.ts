@@ -215,8 +215,9 @@ const strictAlVerdict = (src: string): Verdict => {
   const pr = alParse(lr.value);
   if (pr._tag !== "Ok") throw new Error(`mochi parser errored: ${pr.error.message}`);
   const ir = alInfer.inferProgram(pr.value, alBuiltins, new Map(), false);
-  if (ir._tag !== "Ok") return { ok: false, start: ir.error.start, end: ir.error.end };
-  return { ok: true, schemes: {} };
+  return ir._tag !== "Ok"
+    ? { ok: false, start: ir.error.start, end: ir.error.end }
+    : { ok: true, schemes: {} };
 };
 
 const cases: Record<string, { src: string; ok: boolean }> = {

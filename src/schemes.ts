@@ -233,20 +233,22 @@ export const typeExprToType = (
   aliases: AliasMap = new Map(),
   expanding: Set<string> = new Set(),
 ): Type => {
-  if (te.kind === "tarrow")
-    return tArrow(
-      typeExprToType(te.from, vars, f, aliases, expanding),
-      typeExprToType(te.to, vars, f, aliases, expanding),
-    );
-  if (te.kind === "tapp") {
-    const args = te.args.map((a) => typeExprToType(a, vars, f, aliases, expanding));
-    const info = aliases.get(te.ctor);
-    return info ? aliasRow(te.ctor, info, args, f, aliases, expanding) : tCon(te.ctor, args);
+  switch (te.kind) {
+    case "tarrow":
+      return tArrow(
+        typeExprToType(te.from, vars, f, aliases, expanding),
+        typeExprToType(te.to, vars, f, aliases, expanding),
+      );
+    case "tapp": {
+      const args = te.args.map((a) => typeExprToType(a, vars, f, aliases, expanding));
+      const info = aliases.get(te.ctor);
+      return info ? aliasRow(te.ctor, info, args, f, aliases, expanding) : tCon(te.ctor, args);
+    }
+    case "ttuple":
+      return tTuple(te.elems.map((el) => typeExprToType(el, vars, f, aliases, expanding)));
+    case "tlist":
+      return tCon("Array", [typeExprToType(te.elem, vars, f, aliases, expanding)]);
   }
-  if (te.kind === "ttuple")
-    return tTuple(te.elems.map((el) => typeExprToType(el, vars, f, aliases, expanding)));
-  if (te.kind === "tlist")
-    return tCon("Array", [typeExprToType(te.elem, vars, f, aliases, expanding)]);
   if (PRIM_TYPE_NAMES.has(te.name)) return primType(te.name);
   const info = aliases.get(te.name);
   if (info) return aliasRow(te.name, info, [], f, aliases, expanding);

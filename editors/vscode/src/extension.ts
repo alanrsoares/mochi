@@ -28,6 +28,4 @@ export function activate(context: ExtensionContext): void {
   );
 }
 
-export function deactivate(): Thenable<void> | undefined {
-  return client?.stop();
-}
+export const deactivate = (): Thenable<void> | undefined => client?.stop();

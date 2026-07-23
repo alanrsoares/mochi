@@ -53,8 +53,7 @@ const exportsOf = (prog: Program, env: Env): Env => {
 // `compileGraph` once the whole graph is loaded.
 const parseModule = (src: string): Result<Program, AlangError> => {
   const lexed = lex(src);
-  if (isErr(lexed)) return lexed;
-  return parse(lexed.value);
+  return isErr(lexed) ? lexed : parse(lexed.value);
 };
 
 type Loaded = { path: string; prog: Program };

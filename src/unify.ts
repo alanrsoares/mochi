@@ -49,8 +49,7 @@ export const zonk = (t: Type, s: Subst): Type => {
 
 const zonkRow = (row: Row, s: Subst): Row => {
   const r = resolveRow(row, s);
-  if (r.kind === "extend") return rExtend(r.label, zonk(r.type, s), zonkRow(r.rest, s));
-  return r;
+  return r.kind === "extend" ? rExtend(r.label, zonk(r.type, s), zonkRow(r.rest, s)) : r;
 };
 
 // ---- occurs checks ---------------------------------------------------------
@@ -130,8 +129,7 @@ export const unify = (
 
   if (ra.kind === "arrow" && rb.kind === "arrow") {
     const s1 = unify(ra.from, rb.from, s, f, show);
-    if (isErr(s1)) return s1;
-    return unify(ra.to, rb.to, s1.value, f, show);
+    return isErr(s1) ? s1 : unify(ra.to, rb.to, s1.value, f, show);
   }
 
   if (ra.kind === "record" && rb.kind === "record") return unifyRows(ra.row, rb.row, s, f, show);
@@ -185,8 +183,7 @@ const unifyRows = (
     const rw = rewriteRow(b, a.label, s, f);
     if (isErr(rw)) return rw;
     const s1 = unify(a.type, rw.value.type, s, f, show);
-    if (isErr(s1)) return s1;
-    return unifyRows(a.rest, rw.value.rest, s1.value, f, show);
+    return isErr(s1) ? s1 : unifyRows(a.rest, rw.value.rest, s1.value, f, show);
   }
 
   return fail("cannot unify records");
@@ -204,8 +201,9 @@ const rewriteRow = (
   if (r.kind === "extend") {
     if (r.label === label) return ok({ type: r.type, rest: r.rest });
     const sub = rewriteRow(r.rest, label, s, f);
-    if (isErr(sub)) return sub;
-    return ok({ type: sub.value.type, rest: rExtend(r.label, r.type, sub.value.rest) });
+    return isErr(sub)
+      ? sub
+      : ok({ type: sub.value.type, rest: rExtend(r.label, r.type, sub.value.rest) });
   }
   // open tail: invent the field and a fresh tail, growing the record
   const freshT = freshVar(f);

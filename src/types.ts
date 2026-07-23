@@ -92,8 +92,7 @@ const showRow = (row: Row): string => {
     cur = cur.rest;
   }
   const tail = cur.kind === "rvar" ? `${fields.length ? " " : ""}| 'r${cur.id}` : "";
-  if (fields.length === 0 && tail === "") return "{}";
-  return `{ ${fields.join(", ")}${tail} }`;
+  return fields.length === 0 && tail === "" ? "{}" : `{ ${fields.join(", ")}${tail} }`;
 };
 
 // ---- transparent record-type aliases ---------------------------------------

@@ -51,7 +51,7 @@ let r = { lo: clamp01(-3), hi: clamp01(4), mid: clamp01(0.5) }`;
 });
 
 test("cond must be bool", () => {
-  expect(errMsg(`let r = 1 ? 2 : 3`)).toContain("bool");
+  expect(errMsg("let r = 1 ? 2 : 3")).toContain("bool");
 });
 
 test("branches must share one type", () => {
@@ -61,7 +61,7 @@ test("branches must share one type", () => {
 });
 
 test("missing colon is a parse error", () => {
-  const r = compile(`let r = true ? 1`);
+  const r = compile("let r = true ? 1");
   expect(isErr(r)).toBe(true);
   expect(unwrapErr(r).kind).toBe("parse");
 });

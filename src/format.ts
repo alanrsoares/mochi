@@ -260,16 +260,19 @@ const ctor = (c: Ctor): string =>
 // A type expression; the left side of an arrow is parenthesized when it is
 // itself an arrow ((a -> b) -> c).
 const typeExpr = (te: TypeExpr): string => {
-  if (te.kind === "tname") return te.name;
-  if (te.kind === "tapp") {
-    // Only an arrow or a nested application needs parens as an arg
-    // (`Task (Option a)`); `[a]` and `(a, b)` are already self-delimiting.
-    const arg = (a: TypeExpr): string =>
-      a.kind === "tapp" || a.kind === "tarrow" ? `(${typeExpr(a)})` : typeExpr(a);
-    return `${te.ctor} ${te.args.map(arg).join(" ")}`;
+  switch (te.kind) {
+    case "tname":
+      return te.name;
+    case "tapp": {
+      const arg = (a: TypeExpr): string =>
+        a.kind === "tapp" || a.kind === "tarrow" ? `(${typeExpr(a)})` : typeExpr(a);
+      return `${te.ctor} ${te.args.map(arg).join(" ")}`;
+    }
+    case "ttuple":
+      return `(${te.elems.map(typeExpr).join(", ")})`;
+    case "tlist":
+      return `[${typeExpr(te.elem)}]`;
   }
-  if (te.kind === "ttuple") return `(${te.elems.map(typeExpr).join(", ")})`;
-  if (te.kind === "tlist") return `[${typeExpr(te.elem)}]`;
   const from = te.from.kind === "tarrow" ? `(${typeExpr(te.from)})` : typeExpr(te.from);
   return `${from} -> ${typeExpr(te.to)}`;
 };
@@ -321,21 +324,23 @@ const collectComments = (src: string): Comment[] => {
   let lineHasToken = false; // a non-space, non-comment char seen this line
   while (i < src.length) {
     const c = src[i]!;
-    if (c === "\n") {
-      lineHasToken = false;
-      i++;
-      continue;
-    }
-    if (c === " " || c === "\t" || c === "\r") {
-      i++;
-      continue;
-    }
-    if (c === '"') {
-      const end = skipStringLiteral(src, i);
-      if (end === null) break; // unterminated — parse already failed upstream
-      i = end;
-      lineHasToken = true;
-      continue;
+    switch (c) {
+      case "\n":
+        lineHasToken = false;
+        i++;
+        continue;
+      case " ":
+      case "\t":
+      case "\r":
+        i++;
+        continue;
+      case '"': {
+        const end = skipStringLiteral(src, i);
+        if (end === null) break;
+        i = end;
+        lineHasToken = true;
+        continue;
+      }
     }
     if (c === "/" && src[i + 1] === "/") {
       let end = i;
@@ -727,9 +732,14 @@ type StmtDoc = { doc: Doc; consumed: number };
 // lets back into a single `let { … } = e`. Returns how many stmts it consumed.
 const stmtDoc = (stmts: Stmt[], i: number): StmtDoc => {
   const s = stmts[i]!;
-  if (s.kind === "import") return { doc: txt(importStmt(s)), consumed: 1 };
-  if (s.kind === "type") return { doc: seq(txt(expPrefix(s)), typeStmtD(s)), consumed: 1 };
-  if (s.kind === "extern") return { doc: txt(expPrefix(s) + externStmt(s)), consumed: 1 };
+  switch (s.kind) {
+    case "import":
+      return { doc: txt(importStmt(s)), consumed: 1 };
+    case "type":
+      return { doc: seq(txt(expPrefix(s)), typeStmtD(s)), consumed: 1 };
+    case "extern":
+      return { doc: txt(expPrefix(s) + externStmt(s)), consumed: 1 };
+  }
 
   if (s.name.startsWith("$")) {
     const fields: string[] = [];

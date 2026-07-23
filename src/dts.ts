@@ -523,12 +523,16 @@ const declOf = (
   aliasByName: Map<string, AliasDef>,
   aliases: AliasDef[],
 ): string | null => {
-  if (s.kind === "import") return null; // re-exports live in the sibling module
-  if (s.kind === "type") {
-    const a = aliasByName.get(s.name);
-    return a ? aliasTsDecl(a) : typeDecl(s.name, s.params, s.ctors);
-  }
-  if (s.kind === "extern") return null; // imported, not declared here
+  switch (s.kind) {
+    case "import":
+      return null;
+    case "type": {
+      const a = aliasByName.get(s.name);
+      return a ? aliasTsDecl(a) : typeDecl(s.name, s.params, s.ctors);
+    }
+    case "extern":
+      return null;
+  } // imported, not declared here
   const sc = schemeOf(s.name);
   return sc && !s.name.startsWith("$") ? letDecl(s.name, sc, s.value, aliases) : null;
 };

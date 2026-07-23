@@ -16,6 +16,15 @@ import type {
   Program,
   TernaryExpr,
 } from "./ast";
+
+type RefExpr = Extract<Expr, { kind: "ref" }>;
+type LambdaExpr = Extract<Expr, { kind: "lambda" }>;
+type LetInExpr = Extract<Expr, { kind: "letin" }>;
+type CallExpr = Extract<Expr, { kind: "call" }>;
+type RecordExpr = Extract<Expr, { kind: "record" }>;
+type FieldExpr = Extract<Expr, { kind: "field" }>;
+type TupleExpr = Extract<Expr, { kind: "tuple" }>;
+
 import { ctorTableOf } from "./ctors";
 import {
   type AliasMap,
@@ -92,8 +101,10 @@ const u = (a: Type, b: Type, ctx: Ctx, span?: Span): Result<Type, AlangError> =>
   return isErr(r) ? err(typeErr(r.error.message, span)) : ok(a);
 };
 
-// Wrapper over `inferExpr`: records the type of every expression node in one
-// place, so hover can look up any subexpression's type by span.
+/**
+ * Wrapper over `inferExpr`: records the type of every expression node in one
+ * place, so hover can look up any subexpression's type by span.
+ */
 const infer = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
   const r = inferExpr(e, ctx);
   if (ctx.record && !isErr(r))
@@ -105,7 +116,7 @@ const infer = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
   return r;
 };
 
-// cond ? then : else — cond is bool, the branches share one type.
+/** cond ? then : else — cond is bool, the branches share one type. */
 const inferTernary = (e: TernaryExpr, ctx: Ctx): Result<Type, AlangError> => {
   const condT = infer(e.cond, ctx);
   if (isErr(condT)) return condT;
@@ -116,12 +127,13 @@ const inferTernary = (e: TernaryExpr, ctx: Ctx): Result<Type, AlangError> => {
   const elseT = infer(e.else, ctx);
   if (isErr(elseT)) return elseT;
   const uni = u(thenT.value, elseT.value, ctx, e.else.span);
-  if (isErr(uni)) return uni;
-  return ok(thenT.value);
+  return isErr(uni) ? uni : ok(thenT.value);
 };
 
-// Bind one lambda-param form monomorphically into `env`, returning its type.
-// A record param types as an open row (duck typing), like a lambda's.
+/**
+ * Bind one lambda-param form monomorphically into `env`, returning its type.
+ * A record param types as an open row (duck typing), like a lambda's.
+ */
 const bindParam = (p: LamParam, env: Env, ctx: Ctx): Type => {
   if (p.kind === "name") {
     const t = freshVar(ctx.fresh);
@@ -145,10 +157,12 @@ const bindParam = (p: LamParam, env: Env, ctx: Ctx): Type => {
   return tRecord(row);
 };
 
-// let? param = value in body — monadic bind on Result (ADR 0017). The value is
-// a `Result a e`; the Ok payload binds the param; the body is itself a Result
-// sharing the same error type, and the whole expression has the body's type.
-const inferLetBind = (e: LetBindExpr, ctx: Ctx): Result<Type, AlangError> => {
+/**
+ * let? param = value in body — monadic bind on Result (ADR 0017). The value is
+ * a `Result a e`; the Ok payload binds the param; the body is itself a Result
+ * sharing the same error type, and the whole expression has the body's type.
+ */
+function inferLetBind(e: LetBindExpr, ctx: Ctx): Result<Type, AlangError> {
   const valT = infer(e.value, ctx);
   if (isErr(valT)) return valT;
   const okT = freshVar(ctx.fresh);
@@ -165,13 +179,14 @@ const inferLetBind = (e: LetBindExpr, ctx: Ctx): Result<Type, AlangError> => {
   if (isErr(bodyT)) return bodyT;
   const resT = freshVar(ctx.fresh);
   const ub = u(bodyT.value, tCon("Result", [resT, errT]), ctx, e.body.span);
-  if (isErr(ub)) return ub;
-  return ok(tCon("Result", [resT, errT]));
-};
+  return isErr(ub) ? ub : ok(tCon("Result", [resT, errT]));
+}
 
-// Every hole of a "…${x}…" unifies with `string` (ADR 0023) — no implicit
-// `show`. Pulled out of `inferExpr`'s switch to keep its complexity down.
-const inferInterp = (parts: (string | Expr)[], ctx: Ctx): Result<Type, AlangError> => {
+/**
+ * Every hole of a "…${x}…" unifies with `string` (ADR 0023) — no implicit
+ * `show`. Pulled out of `inferExpr`'s switch to keep its complexity down.
+ */
+function inferInterp(parts: (string | Expr)[], ctx: Ctx): Result<Type, AlangError> {
   for (const p of parts) {
     if (typeof p === "string") continue;
     const pt = infer(p, ctx);
@@ -180,194 +195,165 @@ const inferInterp = (parts: (string | Expr)[], ctx: Ctx): Result<Type, AlangErro
     if (isErr(uni)) return uni;
   }
   return ok(tString);
-};
+}
 
-// Record the type of an EMPTY collection literal (`#{}`/`[]`/`@{}`) at its span,
-// passing the inferred Result through. Only empties are recorded — a non-empty
-// literal's element type is already inferable by tsc from its members (ADR 0035).
-const recordEmpty = (
+/**
+ * Record the type of an EMPTY collection literal (`#{}`/`[]`/`@{}`) at its span,
+ * passing the inferred Result through. Only empties are recorded — a non-empty
+ * literal's element type is already inferable by tsc from its members (ADR 0035).
+ */
+function recordEmpty(
   span: Span,
   len: number,
   r: Result<Type, AlangError>,
   ctx: Ctx,
-): Result<Type, AlangError> => {
+): Result<Type, AlangError> {
   if (len === 0 && !isErr(r)) ctx.record?.(span, r.value);
   return r;
-};
+}
 
-const inferExpr = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
+function inferRef(e: RefExpr, ctx: Ctx): Result<Type, AlangError> {
+  const sc = ctx.env.get(e.name);
+  if (sc) {
+    const inst = instantiate(sc, ctx.fresh);
+    ctx.noteUse?.(sc, inst);
+    if (inst.kind === "con" && inst.args.length > 0 && /^[A-Z]/.test(e.name))
+      ctx.record?.(e.span, inst);
+    return ok(inst);
+  }
+  if (ctx.open) return ok(freshVar(ctx.fresh));
+  return err(typeErr(`unbound variable '${e.name}'`, e.span));
+}
+
+function inferLambda(e: LambdaExpr, ctx: Ctx): Result<Type, AlangError> {
+  const bodyEnv: Env = new Map(ctx.env);
+  const paramTypes: Type[] = e.params.map((p) => bindParam(p, bodyEnv, ctx));
+  const bodyT = infer(e.body, { ...ctx, env: bodyEnv });
+  return isErr(bodyT)
+    ? bodyT
+    : ok(paramTypes.reduceRight((acc, pt) => tArrow(pt, acc), bodyT.value));
+}
+
+function inferLetIn(e: LetInExpr, ctx: Ctx): Result<Type, AlangError> {
+  const valT = infer(e.value, ctx);
+  if (isErr(valT)) return valT;
+  if (e.annot) {
+    const at = typeExprToType(e.annot, new Map(), ctx.fresh, ctx.aliasMap);
+    const au = u(valT.value, at, ctx, e.annot.span);
+    if (isErr(au)) return au;
+  }
+  const scheme = generalize(ctx.env, valT.value, ctx.subst);
+  if (ctx.record) ctx.record(e.nameSpan, valT.value, { kind: "let", name: e.name });
+  const bodyEnv: Env = new Map(ctx.env);
+  bodyEnv.set(e.name, scheme);
+  ctx.noteLet?.(scheme, e.value.span);
+  return infer(e.body, { ...ctx, env: bodyEnv });
+}
+
+function inferCall(e: CallExpr, ctx: Ctx): Result<Type, AlangError> {
+  const fnT = infer(e.fn, ctx);
+  if (isErr(fnT)) return fnT;
+  let cur = fnT.value;
+  for (const arg of e.args) {
+    const argT = infer(arg, ctx);
+    if (isErr(argT)) return argT;
+    const resultT = freshVar(ctx.fresh);
+    const uni = u(cur, tArrow(argT.value, resultT), ctx, arg.span);
+    if (isErr(uni)) return uni;
+    cur = resultT;
+  }
+  return ok(cur);
+}
+
+function inferRecord(e: RecordExpr, ctx: Ctx): Result<Type, AlangError> {
+  let row: Row = rEmpty;
+  const fieldTs: [string, Type][] = [];
+  for (let i = e.fields.length - 1; i >= 0; i--) {
+    const f = e.fields[i]!;
+    const ft = infer(f.value, ctx);
+    if (isErr(ft)) return ft;
+    row = rExtend(f.name, ft.value, row);
+    fieldTs.push([f.name, ft.value]);
+  }
+  if (!e.spread) return ok(tRecord(row));
+  const baseT = infer(e.spread, ctx);
+  if (isErr(baseT)) return baseT;
+  let req: Row = freshRowVar(ctx.fresh);
+  for (const [name, t] of fieldTs) req = rExtend(name, t, req);
+  const uni = u(baseT.value, tRecord(req), ctx, e.span);
+  return isErr(uni) ? uni : ok(baseT.value);
+}
+
+function inferField(e: FieldExpr, ctx: Ctx): Result<Type, AlangError> {
+  if (e.target.kind === "ref" && ctx.ns.has(e.target.name) && !ctx.env.has(e.target.name)) {
+    const sc = ctx.ns.get(e.target.name)!.get(e.name);
+    return !sc
+      ? err(typeErr(`'${e.target.name}' has no member '${e.name}'`, e.span))
+      : ok(instantiate(sc, ctx.fresh));
+  }
+  const targetT = infer(e.target, ctx);
+  if (isErr(targetT)) return targetT;
+  const fieldT = freshVar(ctx.fresh);
+  const rest = freshRowVar(ctx.fresh);
+  const uni = u(targetT.value, tRecord(rExtend(e.name, fieldT, rest)), ctx, e.span);
+  return isErr(uni) ? uni : ok(fieldT);
+}
+
+function inferTuple(e: TupleExpr, ctx: Ctx): Result<Type, AlangError> {
+  const elems: Type[] = [];
+  for (const el of e.elements) {
+    const et = infer(el, ctx);
+    if (isErr(et)) return et;
+    elems.push(et.value);
+  }
+  return ok(tTuple(elems));
+}
+
+function inferExpr(e: Expr, ctx: Ctx): Result<Type, AlangError> {
   switch (e.kind) {
     case "num":
       return ok(tNumber);
-
     case "bool":
       return ok(tBool);
-
     case "str":
       return ok(tString);
-
     case "interp":
       return inferInterp(e.parts, ctx);
-
-    case "ref": {
-      const sc = ctx.env.get(e.name);
-      if (sc) {
-        const inst = instantiate(sc, ctx.fresh);
-        ctx.noteUse?.(sc, inst);
-        // A parametric nullary constructor (`None`, a user `Empty a`) is the
-        // variant analogue of an empty collection: its type argument is
-        // unconstrained at the reference, so tsc renders it `Option<never>` —
-        // which won't flow where a concrete `Option<C>` is expected (e.g. a
-        // ts-pattern arm a later arm widens; ADR 0038 `mkTok`). Record its
-        // span→type so the TS codegen can annotate it concretely, mirroring the
-        // empty-collection seed rule (ADR 0035, ADR 0039). Uppercase + a `con`
-        // WITH args ⇒ parametric nullary ctor: `Some`/`Ok` are arrows (excluded),
-        // and a monomorphic ctor like `Red : Color` has no args (never leaks a
-        // `never`, so annotating it would be noise).
-        if (inst.kind === "con" && inst.args.length > 0 && /^[A-Z]/.test(e.name))
-          ctx.record?.(e.span, inst);
-        return ok(inst);
-      }
-      if (ctx.open) return ok(freshVar(ctx.fresh)); // opaque host global
-      return err(typeErr(`unbound variable '${e.name}'`, e.span));
-    }
-
-    case "lambda": {
-      // params monomorphic; function type is curried over them. A record
-      // pattern param types as a record with AT LEAST its fields (open row),
-      // binding each field in the body — structural duck typing.
-      const bodyEnv: Env = new Map(ctx.env);
-      const paramTypes: Type[] = e.params.map((p) => bindParam(p, bodyEnv, ctx));
-      const bodyT = infer(e.body, { ...ctx, env: bodyEnv });
-      if (isErr(bodyT)) return bodyT;
-      return ok(paramTypes.reduceRight((acc, pt) => tArrow(pt, acc), bodyT.value));
-    }
-
-    case "letin": {
-      // Non-recursive let-polymorphism: infer the value, generalize it against
-      // the current env (so unconstrained vars quantify), then infer the body
-      // with `name` bound to that scheme. `name` is NOT in scope in `value`.
-      const valT = infer(e.value, ctx);
-      if (isErr(valT)) return valT;
-      // Optional annotation (`let x : T = v in …`): pin the value to T before
-      // generalizing, so an annotated local narrows like a top-level one (ADR 0044).
-      if (e.annot) {
-        const at = typeExprToType(e.annot, new Map(), ctx.fresh, ctx.aliasMap);
-        const au = u(valT.value, at, ctx, e.annot.span);
-        if (isErr(au)) return au;
-      }
-      const scheme = generalize(ctx.env, valT.value, ctx.subst);
-      // Record the binding name so hover leads with `let x: T` on the local.
-      if (ctx.record) ctx.record(e.nameSpan, valT.value, { kind: "let", name: e.name });
-      const bodyEnv: Env = new Map(ctx.env);
-      bodyEnv.set(e.name, scheme);
-      // Register this scheme so `noteUse` collects the body's instantiations
-      // (see `noteLet`), enabling a monomorphic IIFE-param annotation.
-      ctx.noteLet?.(scheme, e.value.span);
-      return infer(e.body, { ...ctx, env: bodyEnv });
-    }
-
-    case "call": {
-      const fnT = infer(e.fn, ctx);
-      if (isErr(fnT)) return fnT;
-      let cur = fnT.value;
-      for (const arg of e.args) {
-        const argT = infer(arg, ctx);
-        if (isErr(argT)) return argT;
-        const resultT = freshVar(ctx.fresh);
-        const uni = u(cur, tArrow(argT.value, resultT), ctx, arg.span);
-        if (isErr(uni)) return uni;
-        cur = resultT;
-      }
-      return ok(cur);
-    }
-
-    case "pipe": {
-      // a |> f  ≡  f(a)
+    case "ref":
+      return inferRef(e, ctx);
+    case "lambda":
+      return inferLambda(e, ctx);
+    case "letin":
+      return inferLetIn(e, ctx);
+    case "call":
+      return inferCall(e, ctx);
+    case "pipe":
       return infer({ kind: "call", fn: e.right, args: [e.left], span: e.span }, ctx);
-    }
-
     case "ternary":
       return inferTernary(e, ctx);
-
     case "letbind":
       return inferLetBind(e, ctx);
-
-    case "record": {
-      // Field VALUES are inferred right-to-left on purpose (shared open-row
-      // mutation via field access must land in the same order src/infer keeps
-      // — see inferRecordRow). Collect each field's type as we go.
-      let row: Row = rEmpty; // a literal is closed — exactly these fields
-      const fieldTs: [string, Type][] = [];
-      for (let i = e.fields.length - 1; i >= 0; i--) {
-        const f = e.fields[i]!;
-        const ft = infer(f.value, ctx);
-        if (isErr(ft)) return ft;
-        row = rExtend(f.name, ft.value, row);
-        fieldTs.push([f.name, ft.value]);
-      }
-      if (!e.spread) return ok(tRecord(row));
-      // Update (`{ ...base, f: v }`): the base must already carry each listed
-      // field at its value's type (extra base fields flow through the fresh
-      // tail). Result type = base type — fields are replaced in-kind, so a
-      // wrong-typed value or a field absent from a closed base fails to unify.
-      const baseT = infer(e.spread, ctx);
-      if (isErr(baseT)) return baseT;
-      let req: Row = freshRowVar(ctx.fresh);
-      for (const [name, t] of fieldTs) req = rExtend(name, t, req);
-      const uni = u(baseT.value, tRecord(req), ctx, e.span);
-      if (isErr(uni)) return uni;
-      return ok(baseT.value);
-    }
-
-    case "field": {
-      // Qualified namespace member (`List.map`): when the target is a bare,
-      // unbound reference to a known collection namespace, resolve the member
-      // from the namespace's scheme table (instantiated fresh, like a builtin)
-      // instead of treating it as a record field access.
-      if (e.target.kind === "ref" && ctx.ns.has(e.target.name) && !ctx.env.has(e.target.name)) {
-        const sc = ctx.ns.get(e.target.name)!.get(e.name);
-        if (!sc) return err(typeErr(`'${e.target.name}' has no member '${e.name}'`, e.span));
-        return ok(instantiate(sc, ctx.fresh));
-      }
-      // duck typing: target must be a record with AT LEAST field `name`
-      const targetT = infer(e.target, ctx);
-      if (isErr(targetT)) return targetT;
-      const fieldT = freshVar(ctx.fresh);
-      const rest = freshRowVar(ctx.fresh);
-      const uni = u(targetT.value, tRecord(rExtend(e.name, fieldT, rest)), ctx, e.span);
-      if (isErr(uni)) return uni;
-      return ok(fieldT);
-    }
-
-    case "tuple": {
-      // Heterogeneous product: each element keeps its own type.
-      const elems: Type[] = [];
-      for (const el of e.elements) {
-        const et = infer(el, ctx);
-        if (isErr(et)) return et;
-        elems.push(et.value);
-      }
-      return ok(tTuple(elems));
-    }
-
-    // Eager `Array<elem>` / lazy `List<elem>` (empty is polymorphic, pinned by
-    // later use); `map` is `Map<k, v>`. An EMPTY literal records its span → type
-    // so the TS backend can annotate it (`#{}` → `new Map<K, V>()`, ADR 0035).
+    case "record":
+      return inferRecord(e, ctx);
+    case "field":
+      return inferField(e, ctx);
+    case "tuple":
+      return inferTuple(e, ctx);
     case "arr":
       return recordEmpty(e.span, e.elements.length, inferSeqExpr("Array", e.elements, ctx), ctx);
     case "list":
       return recordEmpty(e.span, e.elements.length, inferSeqExpr("List", e.elements, ctx), ctx);
     case "map":
       return recordEmpty(e.span, e.entries.length, inferMapExpr(e.entries, ctx), ctx);
-
     case "match":
       return inferMatch(e, ctx);
   }
-};
+}
 
-// Shared element inference for `arr`/`list` (they differ only in the container
-// constructor): every element unifies with one `elem`, result is `con<elem>`.
+/**
+ * Shared element inference for `arr`/`list` (they differ only in the container
+ * constructor): every element unifies with one `elem`, result is `con<elem>`.
+ */
 const inferSeqExpr = (
   con: "Array" | "List",
   elements: Expr[],
@@ -383,8 +369,8 @@ const inferSeqExpr = (
   return ok(tCon(con, [elem]));
 };
 
-// Keys share one type, values share one type → `Map<k, v>` (native JS Map).
-const inferMapExpr = (entries: MapEntry[], ctx: Ctx): Result<Type, AlangError> => {
+/** Keys share one type, values share one type → `Map<k, v>` (native JS Map). */
+function inferMapExpr(entries: MapEntry[], ctx: Ctx): Result<Type, AlangError> {
   const k = freshVar(ctx.fresh);
   const v = freshVar(ctx.fresh);
   for (const ent of entries) {
@@ -398,9 +384,9 @@ const inferMapExpr = (entries: MapEntry[], ctx: Ctx): Result<Type, AlangError> =
     if (isErr(uv)) return uv;
   }
   return ok(tCon("Map", [k, v]));
-};
+}
 
-const inferMatch = (e: MatchExpr, ctx: Ctx): Result<Type, AlangError> => {
+function inferMatch(e: MatchExpr, ctx: Ctx): Result<Type, AlangError> {
   const scrutT = infer(e.scrutinee, ctx);
   if (isErr(scrutT)) return scrutT;
   const resultT = freshVar(ctx.fresh);
@@ -426,14 +412,16 @@ const inferMatch = (e: MatchExpr, ctx: Ctx): Result<Type, AlangError> => {
     if (isErr(uBody)) return uBody;
   }
   return ok(resultT);
-};
+}
 
 type PatResult = { type: Type; bindings: Map<string, Type> };
 
-// Wrapper over `inferPat`: records every pattern node's span + type, so hover
-// can look up a pattern-bound name (or a whole constructor pattern) by
-// span — the pattern-side analogue of `infer` recording expression nodes.
-const inferPattern = (p: Pattern, ctx: Ctx): Result<PatResult, AlangError> => {
+/**
+ * Wrapper over `inferPat`: records every pattern node's span + type, so hover
+ * can look up a pattern-bound name (or a whole constructor pattern) by
+ * span — the pattern-side analogue of `infer` recording expression nodes.
+ */
+function inferPattern(p: Pattern, ctx: Ctx): Result<PatResult, AlangError> {
   const r = inferPat(p, ctx);
   if (ctx.record && !isErr(r))
     ctx.record(
@@ -442,9 +430,9 @@ const inferPattern = (p: Pattern, ctx: Ctx): Result<PatResult, AlangError> => {
       p.kind === "pbind" ? { kind: "parameter", name: p.name } : undefined,
     );
   return r;
-};
+}
 
-const inferPat = (p: Pattern, ctx: Ctx): Result<PatResult, AlangError> => {
+function inferPat(p: Pattern, ctx: Ctx): Result<PatResult, AlangError> {
   switch (p.kind) {
     case "pwild":
       return ok({ type: freshVar(ctx.fresh), bindings: new Map() });
@@ -511,13 +499,13 @@ const inferPat = (p: Pattern, ctx: Ctx): Result<PatResult, AlangError> => {
     case "por":
       return inferOrPat(p.alts, ctx);
   }
-};
+}
 
 // Every alternative of `A | B | …` describes the same scrutinee, so their
 // types unify; and (guaranteed by check.ts) they bind the same names, whose
 // types unify too. The arm's binder env is the first alt's, refined by those
 // unions. Pulled out of `inferPat`'s switch to keep its complexity down.
-const inferOrPat = (alts: Pattern[], ctx: Ctx): Result<PatResult, AlangError> => {
+function inferOrPat(alts: Pattern[], ctx: Ctx): Result<PatResult, AlangError> {
   const first = inferPattern(alts[0]!, ctx);
   if (isErr(first)) return first;
   const { type: t, bindings } = first.value;
@@ -534,17 +522,17 @@ const inferOrPat = (alts: Pattern[], ctx: Ctx): Result<PatResult, AlangError> =>
     }
   }
   return ok({ type: t, bindings });
-};
+}
 
 // Shared element/rest inference for `parr`/`plist` (they differ only in the
 // container constructor): every element unifies with one `elem` type, and any
 // `...rest` capture binds the tail — itself a `con<elem>`.
-const inferSeqPat = (
+function inferSeqPat(
   con: "Array" | "List",
   elems: Pattern[],
   rest: Pattern | null,
   ctx: Ctx,
-): Result<PatResult, AlangError> => {
+): Result<PatResult, AlangError> {
   const elem = freshVar(ctx.fresh);
   const seqT = tCon(con, [elem]);
   const bindings = new Map<string, Type>();
@@ -563,7 +551,7 @@ const inferSeqPat = (
     if (isErr(uni)) return uni;
   }
   return ok({ type: seqT, bindings });
-};
+}
 
 // ---- program-level inference ----------------------------------------------
 
@@ -599,20 +587,27 @@ export type InferResult = {
 };
 
 // The names a pattern binds — excluded from an arm body's free references.
-const patternBinds = (p: Pattern): string[] => {
-  if (p.kind === "pbind") return [p.name];
-  if (p.kind === "precord") return p.fields.flatMap((f) => patternBinds(f.pat));
-  if (p.kind === "pctor") return p.args.flatMap(patternBinds);
-  if (p.kind === "ptuple") return p.elems.flatMap(patternBinds);
-  if (p.kind === "parr" || p.kind === "plist")
-    return [...p.elems.flatMap(patternBinds), ...(p.rest ? patternBinds(p.rest) : [])];
+function patternBinds(p: Pattern): string[] {
+  switch (p.kind) {
+    case "pbind":
+      return [p.name];
+    case "precord":
+      return p.fields.flatMap((f) => patternBinds(f.pat));
+    case "pctor":
+      return p.args.flatMap(patternBinds);
+    case "ptuple":
+      return p.elems.flatMap(patternBinds);
+    case "parr":
+    case "plist":
+      return [...p.elems.flatMap(patternBinds), ...(p.rest ? patternBinds(p.rest) : [])];
+  }
   return [];
-};
+}
 
 // Collect the free variable references in an expression, minus the locally
 // bound ones (lambda params, pattern binds). Used to build the dependency graph
 // among top-level `let`s so mutually recursive groups infer together.
-const freeRefs = (e: Expr, bound: Set<string>, acc: Set<string>): void => {
+function freeRefs(e: Expr, bound: Set<string>, acc: Set<string>): void {
   switch (e.kind) {
     case "num":
     case "bool":
@@ -690,7 +685,7 @@ const freeRefs = (e: Expr, bound: Set<string>, acc: Set<string>): void => {
         freeRefs(ent.value, bound, acc);
       }
   }
-};
+}
 
 // Tarjan SCC lives in scc.ts (ticket 0030).
 
@@ -700,11 +695,11 @@ const freeRefs = (e: Expr, bound: Set<string>, acc: Set<string>): void => {
 // binding that also flows into a generic position (open there) stays bare —
 // pinning it concrete would over-constrain that call and its sibling empties
 // (the polymorphic-HOF tail). No use / disagreeing uses / still-free → skip.
-const resolveLetParams = (
+function resolveLetParams(
   letSpans: Map<Scheme, Span>,
   letUses: Map<Scheme, Type[]>,
   subst: Subst,
-): TypeAt[] => {
+): TypeAt[] {
   const isConcrete = (t: Type): boolean => {
     const f = freeInType(t);
     return f.tv.size === 0 && f.rv.size === 0;
@@ -717,7 +712,7 @@ const resolveLetParams = (
       out.push({ span, type: uses[0]! });
   }
   return out;
-};
+}
 
 // Shared inference core. Always records per-node types; `inferProgram` drops
 // them, `inferProgramTypes` returns them (zonked against the final subst).
@@ -884,22 +879,18 @@ function run(
   return ok({ env, types, aliases, letParams: resolveLetParams(letSpans, letUses, subst) });
 }
 
-export function inferProgram(
+export const inferProgram = (
   prog: Program,
   builtins: Record<string, Type> = {},
   opts: InferOptions = {},
-): Result<Env, AlangError> {
-  return map(run(prog, builtins, opts), (r) => r.env);
-}
+): Result<Env, AlangError> => map(run(prog, builtins, opts), (r) => r.env);
 
 // Like `inferProgram`, but also returns the span → type map for tooling.
-export function inferProgramTypes(
+export const inferProgramTypes = (
   prog: Program,
   builtins: Record<string, Type> = {},
   opts: InferOptions = {},
-): Result<InferResult, AlangError> {
-  return run(prog, builtins, opts);
-}
+): Result<InferResult, AlangError> => run(prog, builtins, opts);
 
 // Render a binding's scheme for tests / display. Quantified vars appear as
 // 't{id}; the scheme's type is already zonked at generalization time.

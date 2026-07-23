@@ -233,24 +233,29 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     if (peek().t === "hash") return parseMap();
     if (peek().t === "tmplstart") return parseInterp();
     const tk = next();
-    if (tk.t === "num") return { kind: "num", value: tk.v, raw: tk.raw, span: tk.span };
-    if (tk.t === "bool") return { kind: "bool", value: tk.v, span: tk.span };
-    if (tk.t === "str") return { kind: "str", value: tk.v, span: tk.span };
-    if (tk.t === "id") return { kind: "ref", name: tk.v, span: tk.span };
-    if (tk.t === "lparen") {
-      const first = parseExpr();
-      // `(e, e, …)` is a tuple; a lone `(e)` is just grouping.
-      if (peek().t === "comma") {
-        const elements = [first];
-        while (peek().t === "comma") {
-          next();
-          elements.push(parseExpr());
+    switch (tk.t) {
+      case "num":
+        return { kind: "num", value: tk.v, raw: tk.raw, span: tk.span };
+      case "bool":
+        return { kind: "bool", value: tk.v, span: tk.span };
+      case "str":
+        return { kind: "str", value: tk.v, span: tk.span };
+      case "id":
+        return { kind: "ref", name: tk.v, span: tk.span };
+      case "lparen": {
+        const first = parseExpr();
+        if (peek().t === "comma") {
+          const elements = [first];
+          while (peek().t === "comma") {
+            next();
+            elements.push(parseExpr());
+          }
+          const end = expect("rparen").span;
+          return { kind: "tuple", elements, span: spanning(tk.span, end) };
         }
-        const end = expect("rparen").span;
-        return { kind: "tuple", elements, span: spanning(tk.span, end) };
+        expect("rparen");
+        return first;
       }
-      expect("rparen");
-      return first;
     }
     throw new ParseAbort(parseErr(`unexpected token ${tk.t}`, tk.span));
   }
@@ -402,63 +407,65 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
 
   function parsePattern(): Pattern {
     const tk = peek();
-    if (tk.t === "num") {
-      next();
-      return { kind: "plit", value: tk.v, raw: tk.raw, span: tk.span };
-    }
-    if (tk.t === "bool") {
-      next();
-      return { kind: "pbool", value: tk.v, span: tk.span };
-    }
-    if (tk.t === "str") {
-      next();
-      return { kind: "pstr", value: tk.v, span: tk.span };
-    }
-    if (tk.t === "lparen") {
-      const start = next().span;
-      const elems = [parsePattern()];
-      while (peek().t === "comma") {
+    switch (tk.t) {
+      case "num":
         next();
-        elems.push(parsePattern());
-      }
-      const end = expect("rparen").span;
-      // `(p, p, …)` destructures a tuple; a lone `(p)` is just grouping.
-      return elems.length === 1 ? elems[0]! : { kind: "ptuple", elems, span: spanning(start, end) };
-    }
-    if (tk.t === "lbrace") {
-      const start = next().span;
-      const fields: PatField[] = [];
-      if (peek().t !== "rbrace") {
-        fields.push(parsePatField());
+        return { kind: "plit", value: tk.v, raw: tk.raw, span: tk.span };
+      case "bool":
+        next();
+        return { kind: "pbool", value: tk.v, span: tk.span };
+      case "str":
+        next();
+        return { kind: "pstr", value: tk.v, span: tk.span };
+      case "lparen": {
+        const start = next().span;
+        const elems = [parsePattern()];
         while (peek().t === "comma") {
           next();
+          elems.push(parsePattern());
+        }
+        const end = expect("rparen").span;
+        return elems.length === 1
+          ? elems[0]!
+          : { kind: "ptuple", elems, span: spanning(start, end) };
+      }
+      case "lbrace": {
+        const start = next().span;
+        const fields: PatField[] = [];
+        if (peek().t !== "rbrace") {
           fields.push(parsePatField());
-        }
-      }
-      expect("rbrace");
-      return { kind: "precord", fields, span: to(start) };
-    }
-    if (tk.t === "lbracket") return parseArrPattern();
-    if (tk.t === "at") return parseListPattern();
-    if (tk.t === "id") {
-      const { name, span: nameSpan } = expectId();
-      if (name === "_") return { kind: "pwild", span: nameSpan };
-      if (/^[A-Z]/.test(name)) {
-        const args: Pattern[] = [];
-        if (peek().t === "lparen") {
-          next();
-          if (peek().t !== "rparen") {
-            args.push(parsePattern());
-            while (peek().t === "comma") {
-              next();
-              args.push(parsePattern());
-            }
+          while (peek().t === "comma") {
+            next();
+            fields.push(parsePatField());
           }
-          expect("rparen");
         }
-        return { kind: "pctor", ctor: name, args, span: to(nameSpan) };
+        expect("rbrace");
+        return { kind: "precord", fields, span: to(start) };
       }
-      return { kind: "pbind", name, span: nameSpan };
+      case "lbracket":
+        return parseArrPattern();
+      case "at":
+        return parseListPattern();
+      case "id": {
+        const { name, span: nameSpan } = expectId();
+        if (name === "_") return { kind: "pwild", span: nameSpan };
+        if (/^[A-Z]/.test(name)) {
+          const args: Pattern[] = [];
+          if (peek().t === "lparen") {
+            next();
+            if (peek().t !== "rparen") {
+              args.push(parsePattern());
+              while (peek().t === "comma") {
+                next();
+                args.push(parsePattern());
+              }
+            }
+            expect("rparen");
+          }
+          return { kind: "pctor", ctor: name, args, span: to(nameSpan) };
+        }
+        return { kind: "pbind", name, span: nameSpan };
+      }
     }
     return fail(`unexpected token in pattern: ${tk.t}`);
   }
@@ -688,8 +695,9 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     while (peek().t === "id" || peek().t === "lparen" || peek().t === "lbracket")
       args.push(parseTypeAtom());
     const last = args[args.length - 1];
-    if (!last) return head;
-    return { kind: "tapp", ctor: head.name, args, span: spanning(head.span, last.span) };
+    return !last
+      ? head
+      : { kind: "tapp", ctor: head.name, args, span: spanning(head.span, last.span) };
   }
 
   function parseTypeExpr(): TypeExpr {
@@ -744,17 +752,27 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     // downstream, so attaching to all produced lets is harmless.
     const doc = peek().doc;
     const t = peek().t;
-    if (t === "import") return [parseImport()];
-    if (t === "export") {
-      next();
-      const inner = peek().t;
-      if (inner === "type") return [{ ...parseType(), exported: true }];
-      if (inner === "extern") return [{ ...parseExtern(), exported: true }];
-      if (inner === "let") return parseLet().map((s) => ({ ...s, exported: true, doc }));
-      return fail("`export` must precede let, type, or extern");
+    switch (t) {
+      case "import":
+        return [parseImport()];
+      case "export": {
+        next();
+        const inner = peek().t;
+        switch (inner) {
+          case "type":
+            return [{ ...parseType(), exported: true }];
+          case "extern":
+            return [{ ...parseExtern(), exported: true }];
+          case "let":
+            return parseLet().map((s) => ({ ...s, exported: true, doc }));
+        }
+        return fail("`export` must precede let, type, or extern");
+      }
+      case "type":
+        return [parseType()];
+      case "extern":
+        return [parseExtern()];
     }
-    if (t === "type") return [parseType()];
-    if (t === "extern") return [parseExtern()];
     return parseLet().map((s) => ({ ...s, doc }));
   }
 

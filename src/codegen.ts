@@ -413,7 +413,7 @@ const isListMatch = (m: MatchExpr): boolean =>
 // drain whatever's left in the iterator. `_list` makes it re-iterable + lazy.
 const listTail = (from: number): string =>
   `_list(function* () { for (let _i = ${from}; _i < _b.length; _i++) yield _b[_i]; ` +
-  `if (!_done) { let _s; while (!(_s = _it.next()).done) yield _s.value; } })`;
+  "if (!_done) { let _s; while (!(_s = _it.next()).done) yield _s.value; } })";
 
 // One narrowing lazy-List arm → an `if (cond) return call;`. A fixed arm `@{a,
 // b}` must see n+1 pulls to prove length exactly n; a cons arm `@{h, ...t}`
@@ -464,9 +464,9 @@ const genListMatch = (m: MatchExpr, ctx: GenCtx): string => {
     }
   }
   return (
-    `((_it) => { const _b = []; let _done = false; ` +
-    `const _pull = (_n) => { while (_b.length < _n && !_done) { const _s = _it.next(); ` +
-    `if (_s.done) _done = true; else _b.push(_s.value); } return _b.length >= _n; };\n` +
+    "((_it) => { const _b = []; let _done = false; " +
+    "const _pull = (_n) => { while (_b.length < _n && !_done) { const _s = _it.next(); " +
+    "if (_s.done) _done = true; else _b.push(_s.value); } return _b.length >= _n; };\n" +
     `${arms.join("\n")}\n  return ${fallback};\n` +
     `})(${genExpr(m.scrutinee, ctx)}[Symbol.iterator]())`
   );
@@ -538,37 +538,37 @@ const isFlatSub = (p: Pattern): boolean =>
 // refines that field via indexed access, so the handler input narrows exactly as
 // the pattern does. Pure over `ctx.ctorKeys`; only reachable in TS mode.
 function patTarget(p: Pattern, base: string, ctx: GenCtx): string {
-  if (p.kind === "pctor") {
-    const member = `Extract<${base}, { _tag: ${JSON.stringify(p.ctor)} }>`;
-    const keys = ctx.ctorKeys.get(p.ctor);
-    const refines = p.args.flatMap((a, i) => {
-      const key = keys?.[i] ?? `_${i}`;
-      const sub = fieldRefine(a, `${member}[${JSON.stringify(key)}]`, ctx);
-      return sub ? [`${JSON.stringify(key)}: ${sub}`] : [];
-    });
-    return refines.length ? `${member} & { ${refines.join("; ")} }` : member;
-  }
-  if (p.kind === "precord") {
-    const refines = p.fields.flatMap((f) => {
-      const sub = fieldRefine(f.pat, `${base}[${JSON.stringify(f.label)}]`, ctx);
-      return sub ? [`${JSON.stringify(f.label)}: ${sub}`] : [];
-    });
-    return refines.length ? `${base} & { ${refines.join("; ")} }` : base;
-  }
-  if (p.kind === "ptuple") {
-    // Tuple element i is `base[i]`; refine each element whose sub-pattern narrows.
-    const subs = p.elems.map((e, i) => fieldRefine(e, `(${base})[${i}]`, ctx));
-    if (subs.every((s) => s === null)) return base;
-    return `[${p.elems.map((_, i) => subs[i] ?? `(${base})[${i}]`).join(", ")}]`;
-  }
-  if (p.kind === "parr") {
-    // Array `T[]` → a tuple of refined heads plus a `...T[]` rest, so a head
-    // matched by a ctor (`[IPExpr(e), ...rest]`) narrows for the handler.
-    const elemType = `(${base})[number]`;
-    const subs = p.elems.map((e) => fieldRefine(e, elemType, ctx));
-    if (subs.every((s) => s === null)) return base;
-    const heads = subs.map((s) => s ?? elemType).join(", ");
-    return `[${heads}${p.rest ? `, ...${base}` : ""}]`;
+  switch (p.kind) {
+    case "pctor": {
+      const member = `Extract<${base}, { _tag: ${JSON.stringify(p.ctor)} }>`;
+      const keys = ctx.ctorKeys.get(p.ctor);
+      const refines = p.args.flatMap((a, i) => {
+        const key = keys?.[i] ?? `_${i}`;
+        const sub = fieldRefine(a, `${member}[${JSON.stringify(key)}]`, ctx);
+        return sub ? [`${JSON.stringify(key)}: ${sub}`] : [];
+      });
+      return refines.length ? `${member} & { ${refines.join("; ")} }` : member;
+    }
+    case "precord": {
+      const refines = p.fields.flatMap((f) => {
+        const sub = fieldRefine(f.pat, `${base}[${JSON.stringify(f.label)}]`, ctx);
+        return sub ? [`${JSON.stringify(f.label)}: ${sub}`] : [];
+      });
+      return refines.length ? `${base} & { ${refines.join("; ")} }` : base;
+    }
+    case "ptuple": {
+      const subs = p.elems.map((e, i) => fieldRefine(e, `(${base})[${i}]`, ctx));
+      return subs.every((s) => s === null)
+        ? base
+        : `[${p.elems.map((_, i) => subs[i] ?? `(${base})[${i}]`).join(", ")}]`;
+    }
+    case "parr": {
+      const elemType = `(${base})[number]`;
+      const subs = p.elems.map((e) => fieldRefine(e, elemType, ctx));
+      if (subs.every((s) => s === null)) return base;
+      const heads = subs.map((s) => s ?? elemType).join(", ");
+      return `[${heads}${p.rest ? `, ...${base}` : ""}]`;
+    }
   }
   // or-patterns: keep the base (per-alt narrowing would need a union target).
   return base;
@@ -615,32 +615,35 @@ const genGuardArm = (
   // plain boolean guard leaves `_v` at its declared (open) type. (ADR 0031/0034)
   if (base) {
     const target = patTarget(p, base, ctx);
-    if (target !== base)
-      return `.with((_v): _v is ${target} => { const _g: any = _v; return ${test}; }, ${handler})`;
-    return `.with((_v) => { const _g: any = _v; return ${test}; }, ${handler})`;
+    return target !== base
+      ? `.with((_v): _v is ${target} => { const _g: any = _v; return ${test}; }, ${handler})`
+      : `.with((_v) => { const _g: any = _v; return ${test}; }, ${handler})`;
   }
   return `.with((_v) => ${test}, ${handler})`;
 };
 
 const genWithArm = (p: NarrowingPattern, body: Expr, base: string | null, ctx: GenCtx): string => {
   // Array/tuple/or arms always take the guard form (not matcher-object-able).
-  if (p.kind === "parr" || p.kind === "ptuple" || p.kind === "por")
-    return genGuardArm(p, body, undefined, base, ctx);
-
-  if (p.kind === "plit" || p.kind === "pbool" || p.kind === "pstr")
-    return `.with(${litValue(p)}, () => ${genLambdaBody(body, ctx)})`;
-
-  if (p.kind === "precord") {
-    if (!p.fields.every((f) => isFlatSub(f.pat))) return genGuardArm(p, body, undefined, base, ctx);
-    // Flat fast path: literal fields form the matcher object (at least one —
-    // else it's a catch-all); binding fields destructure in the handler.
-    const lits = p.fields.flatMap((f) =>
-      f.pat.kind === "plit" || f.pat.kind === "pbool" || f.pat.kind === "pstr"
-        ? [`${f.label}: ${litValue(f.pat)}`]
-        : [],
-    );
-    const slot = patSlot(p, ctx);
-    return `.with({ ${lits.join(", ")} }, ${slot === "" ? "()" : `(${slot})`} => ${genLambdaBody(body, ctx)})`;
+  switch (p.kind) {
+    case "parr":
+    case "ptuple":
+    case "por":
+      return genGuardArm(p, body, undefined, base, ctx);
+    case "plit":
+    case "pbool":
+    case "pstr":
+      return `.with(${litValue(p)}, () => ${genLambdaBody(body, ctx)})`;
+    case "precord": {
+      if (!p.fields.every((f) => isFlatSub(f.pat)))
+        return genGuardArm(p, body, undefined, base, ctx);
+      const lits = p.fields.flatMap((f) =>
+        f.pat.kind === "plit" || f.pat.kind === "pbool" || f.pat.kind === "pstr"
+          ? [`${f.label}: ${litValue(f.pat)}`]
+          : [],
+      );
+      const slot = patSlot(p, ctx);
+      return `.with({ ${lits.join(", ")} }, ${slot === "" ? "()" : `(${slot})`} => ${genLambdaBody(body, ctx)})`;
+    }
   }
 
   // pctor — flat fast path keeps the readable matcher-object form.
@@ -715,20 +718,21 @@ const genImport = (s: ImportStmt, ctx: GenCtx): string => {
 };
 
 const genStmt = (s: Stmt, ctx: GenCtx): string => {
-  if (s.kind === "import") return genImport(s, ctx);
-  if (s.kind === "type") {
-    const decls = genType(s, ctx);
-    if (decls === "") return ""; // record alias: pure type, no runtime
-    return s.exported
-      ? decls
-          .split("\n")
-          .map((l) => `export ${l}`)
-          .join("\n")
-      : decls;
-  }
-  if (s.kind === "extern") {
-    // An extern is itself an import; re-export the local binding when exported.
-    return s.exported ? `${genExtern(s)}\nexport { ${s.name} };` : genExtern(s);
+  switch (s.kind) {
+    case "import":
+      return genImport(s, ctx);
+    case "type": {
+      const decls = genType(s, ctx);
+      if (decls === "") return "";
+      return s.exported
+        ? decls
+            .split("\n")
+            .map((l) => `export ${l}`)
+            .join("\n")
+        : decls;
+    }
+    case "extern":
+      return s.exported ? `${genExtern(s)}\nexport { ${s.name} };` : genExtern(s);
   }
   const doExport = s.exported && !s.name.startsWith("$"); // never export destructure temps
   const ann = ctx.annotateLet?.(s.name, s.value) ?? ""; // TS backend annotates; JS leaves bare
