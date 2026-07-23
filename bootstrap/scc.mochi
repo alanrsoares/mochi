@@ -1,0 +1,104 @@
+// bootstrap/scc.mochi — Tarjan's strongly-connected components, in mochi.
+// The twin of src/scc.ts (ticket 0030): the dependency-grouping step of
+// let-generalization and a pure graph algorithm with no compiler deps.
+
+// ============================================================
+// Tarjan's SCC over the `let` dependency graph. Returns strongly-connected
+// components (mutually recursive groups) in DEPENDENCY-FIRST order — the
+// order to generalize them, since a group's dependencies are already
+// generalized by the time it's inferred. Tarjan naturally emits SCCs in
+// reverse-topological order, which is that order.
+//
+// TS mutates `index`/`low`/`onStack` arrays and a `stack` in place; here all
+// four (plus the running `counter` and the `sccs` accumulated so far) live
+// in one threaded `TSt` record, returned from `connect`/`visitNeighbors`
+// and passed to the next call.
+// ============================================================
+
+type TSt = { index: Map number number, low: Map number number, onStack: Set number, stack: [number], counter: number, sccs: [[number]] }
+
+let hasIndex = (v, st) => Map.has(v, st.index)
+let indexOfV = (v, st) => Map.getOr(-1, v, st.index)
+let lowOfV = (v, st) => Map.getOr(-1, v, st.low)
+
+let neighborsOf = (v, adj) => switch Array.get(v, adj) {
+  | Some(ws) => ws
+  | None => []
+}
+
+let indexOfFrom = (v, xs, i) => switch Array.get(i, xs) {
+  | None => -1
+  | Some(x) => eq(x, v) ? i : indexOfFrom(v, xs, add(i, 1))
+}
+
+// Annotated (ADR 0044): `{ ...st, … }` updates leave the row open, and the
+// two inferrers generalize the open tail differently (TS links input/output
+// tails, bootstrap does not) — pinning to TSt closes the row on both sides.
+let visitNeighbors : number -> [number] -> [[number]] -> TSt -> TSt = (v, ws, adj, st) => switch ws {
+  | [] => st
+  | [w, ...rest] => hasIndex(w, st)
+      ? Set.has(w, st.onStack)
+        ? visitNeighbors(
+          v,
+          rest,
+          adj,
+          {
+            ...st,
+            low: Map.set(v, min(lowOfV(v, st), indexOfV(w, st)), st.low)
+          }
+        )
+        : visitNeighbors(v, rest, adj, st)
+      : let st1 = connect(w, adj, st) in
+      visitNeighbors(
+        v,
+        rest,
+        adj,
+        {
+          ...st1,
+          low: Map.set(v, min(lowOfV(v, st1), lowOfV(w, st1)), st1.low)
+        }
+      )
+}
+
+let connect : number -> [[number]] -> TSt -> TSt = (v, adj, st) =>
+  let st1 = {
+    ...st,
+    index: Map.set(v, st.counter, st.index),
+    low: Map.set(v, st.counter, st.low),
+    onStack: Set.add(v, st.onStack),
+    stack: Array.append(v, st.stack),
+    counter: add(st.counter, 1)
+  } in
+  let st2 = visitNeighbors(v, neighborsOf(v, adj), adj, st1) in
+  eq(lowOfV(v, st2), indexOfV(v, st2))
+    ? let start = indexOfFrom(v, st2.stack, 0) in
+    let comp = Array.drop(start, st2.stack) in
+    {
+      ...st2,
+      onStack: Set.diff(st2.onStack, Set.fromArray(comp)),
+      stack: Array.take(start, st2.stack),
+      sccs: Array.append(comp, st2.sccs)
+    }
+    : st2
+
+let connectAllFrom = (i, n, adj, st) =>
+  gte(i, n)
+    ? st
+    : connectAllFrom(
+      add(i, 1),
+      n,
+      adj,
+      hasIndex(i, st) ? st : connect(i, adj, st)
+    )
+
+export let stronglyConnected = adj =>
+  let n = Array.length(adj) in
+  let initSt = {
+    index: #{},
+    low: #{},
+    onStack: Set.fromArray([]),
+    stack: [],
+    counter: 0,
+    sccs: []
+  } in
+  connectAllFrom(0, n, adj, initSt).sccs

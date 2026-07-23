@@ -1,0 +1,296 @@
+// bootstrap/schemes.mochi — scheme construction and generalization, in mochi.
+// The twin of src/schemes.ts (ticket 0030): everything Scheme-shaped that is
+// NOT part of infer.mochi's mutually-recursive inference core — mono/free-vars/
+// generalize/instantiate, and the surface-type lowering (typeExprToType /
+// aliasRow / ctorScheme) that builds types and schemes from written TypeExprs.
+// Never calls back into the core, so it can live below it in the module DAG.
+
+import { TyName, TyArrow, TyApp, TyTuple, TyList } from "./ast.mochi"
+import { TyVar, TyCon, TyFn, TyRecord, RowEmpty, RowVar, RowExtend, tCon, tArrow, tRecord, tPrim, tTuple, rExtend, freshVar, freshRowVar, zonk, resolve } from "./types.mochi"
+import { primTypeNames } from "./ctors.mochi"
+
+// --- polymorphic type schemes ---
+
+export let mono = t => { vars: [], rvars: [], ty: t }
+
+export let tNumber = tPrim("number")
+export let tBool = tPrim("bool")
+export let tString = tPrim("string")
+
+// surface `float`/`int`/`string`/`bool` type-expr names -> HM primitive type
+// (used by typeExprToType, further down, for extern signatures)
+export let primType = name => switch name {
+  | "float" => tNumber
+  | "int" => tNumber
+  | "string" => tString
+  | "bool" => tBool
+  | _ => tPrim(name)
+}
+
+// --- free type/row variables, generalization, instantiation ---
+
+type VarSets = { tv: Set number, rv: Set number }
+export let emptyVarSets = { tv: Set.fromArray([]), rv: Set.fromArray([]) }
+let unionVarSets = (a, b) =>
+  { tv: Set.union(a.tv, b.tv), rv: Set.union(a.rv, b.rv) }
+let diffVarSets = (a, b) =>
+  { tv: Set.diff(a.tv, b.tv), rv: Set.diff(a.rv, b.rv) }
+
+export let collect = (t, acc) => switch t {
+  | TyVar(id) => { tv: Set.add(id, acc.tv), rv: acc.rv }
+  | TyCon(_, args) => collectArgs(args, acc)
+  | TyFn(fromT, toT) => collect(toT, collect(fromT, acc))
+  | TyRecord(row) => collectRow(row, acc)
+}
+let collectArgs = (args, acc) => switch args {
+  | [] => acc
+  | [a, ...rest] => collectArgs(rest, collect(a, acc))
+}
+let collectRow = (row, acc) => switch row {
+  | RowVar(id) => { tv: acc.tv, rv: Set.add(id, acc.rv) }
+  | RowExtend(_, fieldType, rest) => collectRow(rest, collect(fieldType, acc))
+  | RowEmpty => acc
+}
+
+export let freeInType = t => collect(t, emptyVarSets)
+
+let freeInScheme = sc =>
+  let f = freeInType(sc.ty) in
+  diffVarSets(f, { tv: Set.fromArray(sc.vars), rv: Set.fromArray(sc.rvars) })
+
+let freeInEnvFrom = (schemes, acc) => switch schemes {
+  | [] => acc
+  | [sc, ...rest] => freeInEnvFrom(rest, unionVarSets(acc, freeInScheme(sc)))
+}
+let freeInEnv = env => freeInEnvFrom(Map.values(env), emptyVarSets)
+
+export let generalize = (env, t, st) =>
+  let zt = zonk(t, st) in
+  let free = diffVarSets(freeInType(zt), freeInEnv(env)) in
+  { vars: Set.toArray(free.tv), rvars: Set.toArray(free.rv), ty: zt }
+
+let instMapFrom = (vars, acc, st) => switch vars {
+  | [] => (acc, st)
+  | [v, ...rest] => let (fv, st1) = freshVar(st) in
+    instMapFrom(rest, Map.set(v, fv, acc), st1)
+}
+let instRowMapFrom = (vars, acc, st) => switch vars {
+  | [] => (acc, st)
+  | [v, ...rest] => let (fr, st1) = freshRowVar(st) in
+    instRowMapFrom(rest, Map.set(v, fr, acc), st1)
+}
+
+let instSub = (t, tmap, rmap) => switch t {
+  | TyVar(id) => Map.getOr(t, id, tmap)
+  | TyCon(name, args) => tCon(name, args |> map(a => instSub(a, tmap, rmap)))
+  | TyFn(fromT, toT) => tArrow(
+      instSub(fromT, tmap, rmap),
+      instSub(toT, tmap, rmap)
+    )
+  | TyRecord(row) => tRecord(instSubRow(row, tmap, rmap))
+}
+let instSubRow = (row, tmap, rmap) => switch row {
+  | RowVar(id) => Map.getOr(row, id, rmap)
+  | RowExtend(label, fieldType, rest) => rExtend(
+      label,
+      instSub(fieldType, tmap, rmap),
+      instSubRow(rest, tmap, rmap)
+    )
+  | RowEmpty => row
+}
+
+export let instantiate = (sc, st) =>
+  let (tmap, st1) = instMapFrom(sc.vars, #{}, st) in
+  let (rmap, st2) = instRowMapFrom(sc.rvars, #{}, st1) in
+  (instSub(sc.ty, tmap, rmap), st2)
+
+// ============================================================
+// Program-level type machinery: surface `TypeExpr` (extern signatures, ctor
+// fields) -> HM `Ty`, transparent record aliases, and variant-ctor schemes.
+// Never fails — no Result plumbing, just threaded (vars/st) tuples.
+// ============================================================
+
+export let isUpperStart = s => switch Str.codeAt(0, s) {
+  | Some(c) => and(gte(c, 65), lte(c, 90))
+  | None => false
+}
+
+type AliasInfo = { params: [string], fields: [AliasField] }
+
+export let typeExprListToType = (tes, vars, st, aliases, expanding) => switch tes {
+  | [] => ([], vars, st)
+  | [te, ...rest] => let (t, vars1, st1) = typeExprToType(
+      te,
+      vars,
+      st,
+      aliases,
+      expanding
+    ) in
+    let (restTs, vars2, st2) = typeExprListToType(
+      rest,
+      vars1,
+      st1,
+      aliases,
+      expanding
+    ) in
+    (Array.prepend(t, restTs), vars2, st2)
+}
+
+export let typeExprName = (name, vars, st, aliases, expanding) =>
+  Array.contains(name, primTypeNames)
+    ? (primType(name), vars, st)
+    : switch Map.get(name, aliases) {
+      | Some(info) => let (t, st1) = aliasRow(
+          name,
+          info,
+          [],
+          st,
+          aliases,
+          expanding
+        ) in
+        (t, vars, st1)
+      | None => isUpperStart(name)
+          ? (tPrim(name), vars, st)
+          : switch Map.get(name, vars) {
+            | Some(v) => (v, vars, st)
+            | None => let (v, st1) = freshVar(st) in
+              (v, Map.set(name, v, vars), st1)
+          }
+    }
+
+// surface type-expr -> HM type. Prim names map to their type; Uppercase names
+// are nullary constructors (unless a transparent alias expands them);
+// lowercase names are type variables, shared by name within one signature
+// via the threaded `vars` cache.
+export let typeExprToType = (te, vars, st, aliases, expanding) => switch te {
+  | TyArrow(fromTe, toTe, _) => let (fromT, vars1, st1) = typeExprToType(
+      fromTe,
+      vars,
+      st,
+      aliases,
+      expanding
+    ) in
+    let (toT, vars2, st2) = typeExprToType(
+      toTe,
+      vars1,
+      st1,
+      aliases,
+      expanding
+    ) in
+    (tArrow(fromT, toT), vars2, st2)
+  | TyApp(ctor, argTes, _) => let (args, vars1, st1) = typeExprListToType(
+      argTes,
+      vars,
+      st,
+      aliases,
+      expanding
+    ) in
+    switch Map.get(ctor, aliases) {
+      | Some(info) => let (t, st2) = aliasRow(
+          ctor,
+          info,
+          args,
+          st1,
+          aliases,
+          expanding
+        ) in
+        (t, vars1, st2)
+      | None => (tCon(ctor, args), vars1, st1)
+    }
+  | TyTuple(elemTes, _) => let (elems, vars1, st1) = typeExprListToType(
+      elemTes,
+      vars,
+      st,
+      aliases,
+      expanding
+    ) in
+    (tTuple(elems), vars1, st1)
+  | TyList(elemTe, _) => let (elemT, vars1, st1) = typeExprToType(
+      elemTe,
+      vars,
+      st,
+      aliases,
+      expanding
+    ) in
+    (tCon("Array", [elemT]), vars1, st1)
+  | TyName(name, _) => typeExprName(name, vars, st, aliases, expanding)
+}
+
+let aliasLocalVarsFrom = (params, args, st) => switch params {
+  | [] => (#{}, st)
+  | [p, ...restParams] => switch args {
+      | [a, ...restArgs] => let (restMap, st1) = aliasLocalVarsFrom(
+          restParams,
+          restArgs,
+          st
+        ) in
+        (Map.set(p, a, restMap), st1)
+      | [] => let (v, st1) = freshVar(st) in
+        let (restMap, st2) = aliasLocalVarsFrom(restParams, [], st1) in
+        (Map.set(p, v, restMap), st2)
+    }
+}
+
+let aliasFieldsFrom = (fields, vars, st, aliases, expanding) => switch fields {
+  | [] => (RowEmpty, st)
+  | [fld, ...rest] => let (ft, vars1, st1) = typeExprToType(
+      fld.fieldType,
+      vars,
+      st,
+      aliases,
+      expanding
+    ) in
+    let (restRow, st2) = aliasFieldsFrom(
+      rest,
+      vars1,
+      st1,
+      aliases,
+      expanding
+    ) in
+    (rExtend(fld.name, ft, restRow), st2)
+}
+
+// Expand a record alias to its structural row. `args` binds its type params
+// positionally; params past `args.length` become fresh generic vars.
+// `expanding` breaks reference cycles (`type T = { self: T }`) by falling
+// back to the bare nominal `con(name, args)` — finite, though that field
+// then unifies nominally.
+export let aliasRow = (name, info, args, st, aliases, expanding) =>
+  Set.has(name, expanding)
+    ? (tCon(name, args), st)
+    : let (local, st1) = aliasLocalVarsFrom(info.params, args, st) in
+    let next = Set.add(name, expanding) in
+    let (row, st2) = aliasFieldsFrom(info.fields, local, st1, aliases, next) in
+    (tRecord(row), st2)
+
+let pvarsFrom = (params, st) => switch params {
+  | [] => (#{}, [], st)
+  | [p, ...rest] => let (v, st1) = freshVar(st) in
+    let (restMap, restVars, st2) = pvarsFrom(rest, st1) in
+    (Map.set(p, v, restMap), Array.prepend(v, restVars), st2)
+}
+
+let ctorFieldsArrowFrom = (fields, pvars, st, aliases, result) => switch fields {
+  | [] => (result, st)
+  | [fld, ...rest] => let (ft, _, st1) = typeExprToType(
+      fld.fieldType,
+      pvars,
+      st,
+      aliases,
+      Set.fromArray([])
+    ) in
+    let (restT, st2) = ctorFieldsArrowFrom(rest, pvars, st1, aliases, result) in
+    (tArrow(ft, restT), st2)
+}
+
+// A variant's constructors become curried functions into that variant type,
+// polymorphic over the type's parameters. `type Result a e = | Ok(a) | Err(e)`
+// gives `Ok : forall a e. a -> Result a e` — a ctor scheme is closed by
+// construction (quantifies every var the fields introduced), nothing leaks
+// from env.
+export let ctorScheme = (typeName, params, c, st, aliases) =>
+  let (pvars, pvarTypes, st1) = pvarsFrom(params, st) in
+  let result = tCon(typeName, pvarTypes) in
+  let (ty, st2) = ctorFieldsArrowFrom(c.fields, pvars, st1, aliases, result) in
+  let sets = collect(ty, emptyVarSets) in
+  ({ vars: Set.toArray(sets.tv), rvars: Set.toArray(sets.rv), ty: ty }, st2)
