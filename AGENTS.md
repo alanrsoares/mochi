@@ -1,8 +1,11 @@
 # AGENTS.md — working in the `alang` repo
 
-`alang` is a small statically-typed functional language that compiles to readable JS.
-~3.4k LOC of TypeScript on [Bun](https://bun.sh). Hindley–Milner (Algorithm W) with
-row-polymorphic records and parametric variants; LSP/`.d.ts`/formatter are first-class.
+`alang` is a small statically-typed functional language that compiles to readable JS
+**and** to strict-`tsc`-clean typed TypeScript (ADR 0026 — the two backends share one
+codegen). ~3.4k LOC of TypeScript on [Bun](https://bun.sh). Hindley–Milner (Algorithm W)
+with row-polymorphic records and parametric variants; LSP/`.d.ts`/formatter are
+first-class. The self-hosted `bootstrap/` graph emits **0 `tsc --strict` errors** — the
+compiler is written in a language whose TS output typechecks (ADRs 0026–0044).
 
 Read this, then `CONTEXT.md` for vocabulary and `docs/adr/` for the *why*.
 
@@ -10,7 +13,9 @@ Read this, then `CONTEXT.md` for vocabulary and `docs/adr/` for the *why*.
 
 ```bash
 bun run check                 # QA gate = biome check . && tsc --noEmit && bun test
-bun run alang <file.al>       # compile one file to JS on stdout (also: fmt, dts, build)
+bun run alang <file.al>       # compile one file to JS on stdout (also: ts, fmt, dts, build)
+bun src/cli.ts ts <file.al>   # emit typed TypeScript (build --emit=ts for the graph)
+bun run bootstrap:tsc         # north-star: count tsc --strict errors on the self-host (0)
 bun test | typecheck | lint | lint:fix | format | build:ext | loc
 ```
 
@@ -29,7 +34,8 @@ string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck�
 | `ast.ts` / `types.ts` | `Expr`/`Pattern`/`TypeExpr`/`Stmt` unions; `Type`/`Row` representation |
 | `check.ts` | name registry, duplicate-decl, `switch` exhaustiveness (incl. imported variants) |
 | `infer.ts` / `unify.ts` | Algorithm W (mutual recursion via Tarjan SCC) / row+type unification |
-| `codegen.ts` | **pure, non-failing** AST → JS |
+| `codegen.ts` | **pure, non-failing** AST → JS; behind TS-backend hooks (default off) also → TS |
+| `codegen-ts.ts` | wraps `codegen.ts`, feeding type annotations from the inference table → strict-clean TS (ADR 0026) |
 | `module.ts` | `buildModules(): ResultAsync<…>` — DFS load, cycle detection, compile graph |
 | `prelude.ts` | builtin HM signatures + JS runtime strings + namespace tables |
 | `dts` · `format` · `hover` · `inlay` · `diagnostics` | `.d.ts`; pretty-print (lex+parse only); LSP surfaces |
@@ -65,5 +71,6 @@ string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck�
 ## Docs
 
 `CONTEXT.md` (domain model) · `docs/adr/` (decisions) · `docs/CRITIQUE.md` (design critique) ·
-`docs/PATH_TO_BOOTSTRAP.md` (self-hosting) · `docs/*.md` (design notes) ·
+`docs/PATH_TO_BOOTSTRAP.md` (self-hosting) · `docs/TS_EMIT_CHECKPOINT.md` (the TS-emit track,
+537 → 0 tsc errors) · `docs/*.md` (design notes) ·
 `docs/agents/issue-tracker.md` (how planning skills track work here).
