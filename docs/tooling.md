@@ -47,4 +47,4 @@ the `.mochi` formatter on `bootstrap/`), `build:ext` (VS Code extension).
 Spans travel on every token, node, and type through the whole pipeline — hover,
 diagnostics, and formatting all depend on that. Synthetic identifiers are marked by
 convention: `_`-prefixed names are emitted runtime helpers, `$`-prefixed names are
-synthetic destructure temporaries (both excluded from hover, inlay, and exports).
+synthetic destructure temporaries (both excluded from hover and exports).

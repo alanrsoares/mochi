@@ -53,7 +53,7 @@ const hoverFrom = (res: InferResult, offset: number): HoverInfo | null => {
 // with imports won't typecheck (the imported constructors are unknown), so
 // prefer `moduleHoverAt` when a path is available.
 export const hoverAt = (src: string, offset: number): HoverInfo | null => {
-  const r = toTypedProgram(src, { open: true });
+  const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces });
   return isErr(r) ? null : hoverFrom(r.value.res, offset);
 };
 

@@ -14,7 +14,7 @@ export type Expr =
   | { kind: "lambda"; params: LamParam[]; body: Expr; span: Span } // (x, y) => body, ({a, b}) => body
   // let x = value in body — a local binding scoped to `body`. Non-recursive:
   // `x` is NOT in scope in `value`. Generalized (let-polymorphism) like a
-  // top-level `let`. `nameSpan` anchors the bound name for hover/inlay.
+  // top-level `let`. `nameSpan` anchors the bound name for hover.
   | {
       kind: "letin";
       name: string;

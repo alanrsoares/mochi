@@ -622,7 +622,7 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
   // `let` per name, so it reuses inference/codegen with no downstream changes.
   // Shorthand only for now (each field binds a variable of the same name); `e`
   // is evaluated once, via the temp. Spans point at each field's identifier so
-  // hover/inlay/errors land on the binding the user wrote.
+  // hover/errors land on the binding the user wrote.
   function parseRecordDestructure(start: Span): Extract<Stmt, { kind: "let" }>[] {
     const open = expect("lbrace").span;
     const fields: { name: string; span: Span }[] = [];

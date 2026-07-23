@@ -109,3 +109,9 @@ test("hover on the whole constructor pattern reports the variant type", () => {
   const off = src.indexOf("Circle(r)"); // on `C`, outside the inner `r` span
   expect(hoverAt(src, off)?.code).toBe("Shape");
 });
+
+test("hover resolves a namespaced prelude ref (0023's discovered gap)", () => {
+  const src = 'let s = Str.concat("a", "b")';
+  const off = src.indexOf("Str.concat") + 5; // on `concat`
+  expect(hoverAt(src, off)?.code).toBe("(property) concat: string -> string -> string");
+});

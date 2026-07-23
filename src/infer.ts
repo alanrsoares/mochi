@@ -583,7 +583,7 @@ const inferMatch = (e: MatchExpr, ctx: Ctx): Result<Type, AlangError> => {
 type PatResult = { type: Type; bindings: Map<string, Type> };
 
 // Wrapper over `inferPat`: records every pattern node's span + type, so hover
-// and inlay can look up a pattern-bound name (or a whole constructor pattern) by
+// can look up a pattern-bound name (or a whole constructor pattern) by
 // span — the pattern-side analogue of `infer` recording expression nodes.
 const inferPattern = (p: Pattern, ctx: Ctx): Result<PatResult, AlangError> => {
   const r = inferPat(p, ctx);
@@ -835,7 +835,7 @@ export type TypeAt = { span: Span; type: Type; symbol?: SymbolInfo };
 // `letParams`: the monomorphic type of a `let x = v in …` whose value is
 // polymorphic but used at one type — keyed by the value span, consumed by the
 // TS backend to annotate the emitted IIFE param (ADR 0035). Kept apart from
-// `types` so it never perturbs hover/inlay, which key off `types` alone.
+// `types` so it never perturbs hover, which keys off `types` alone.
 export type InferResult = {
   env: Env;
   types: TypeAt[];

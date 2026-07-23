@@ -15,8 +15,8 @@ import { preludeEnv, preludeNamespaces } from "./prelude";
 export type TypedProgram = { prog: Program; res: InferResult };
 
 // Source → typed Program: lex → parse → check → infer, first Err short-circuits.
-// The single-file seam behind `codegenTs`, `emitDts`, `hoverAt`, and
-// `inlayHints`, which each open-coded this exact pipe. Open-world by default so
+// The single-file seam behind `codegenTs`, `emitDts`, and `hoverAt`, which
+// each open-coded this exact pipe. Open-world by default so
 // host globals infer; callers pass `namespaces`/`imports` when they need them.
 // The module-aware surfaces (`moduleHoverAt`, `diagnostics`) build their own
 // registry + imports first and stay with the module driver.
