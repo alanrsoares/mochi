@@ -1,5 +1,5 @@
 // Measure the TS-emit track's north-star number: how many `tsc --strict` errors
-// the self-hosted `bootstrap/` graph emits (ADR 0026 / docs/TS_DIALECT.md). This
+// the self-hosted `bootstrap/` graph emits (see docs/compiler.md). This
 // replaces the ad-hoc `/tmp/bts` recipe the checkpoint used to carry — emit the
 // graph via `buildModulesTs` (pointing the runtime import straight at the repo's
 // typed `src/runtime`, so no `sed` rewrite), drop the outputs in a scratch dir

@@ -1,5 +1,5 @@
-// TypeScript backend — AST → typed `.ts` source (ADR 0026; Axis A of
-// docs/TS_DIALECT.md). Not a fresh emitter: it orchestrates the two backends we
+// TypeScript backend — AST → typed `.ts` source (see docs/compiler.md).
+// Not a fresh emitter: it orchestrates the two backends we
 // already have. Types come from `dts.ts` (the `.d.ts` writer's HM-type → TS-type
 // machinery, reused inline); values come from `codegen.ts` via its `annotate`
 // and `annotateCtor` hooks, which splice each binding's / ctor factory's type in.

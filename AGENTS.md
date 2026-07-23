@@ -1,13 +1,13 @@
 # AGENTS.md — working in the `mochi` repo
 
 `mochi` is a small statically-typed functional language that compiles to readable JS
-**and** to strict-`tsc`-clean typed TypeScript (ADR 0026 — the two backends share one
-codegen). ~3.4k LOC of TypeScript on [Bun](https://bun.sh). Hindley–Milner (Algorithm W)
-with row-polymorphic records and parametric variants; LSP/`.d.ts`/formatter are
-first-class. The self-hosted `bootstrap/` graph emits **0 `tsc --strict` errors** — the
-compiler is written in a language whose TS output typechecks (ADRs 0026–0044).
+**and** to strict-`tsc`-clean typed TypeScript — the two backends share one codegen
+(`docs/compiler.md`). ~3.4k LOC of TypeScript on [Bun](https://bun.sh). Hindley–Milner
+(Algorithm W) with row-polymorphic records and parametric variants; LSP/`.d.ts`/formatter
+are first-class. The self-hosted `bootstrap/` graph emits **0 `tsc --strict` errors** —
+the compiler is written in a language whose TS output typechecks.
 
-Read this, then `CONTEXT.md` for vocabulary and `docs/adr/` for the *why*.
+Read this, then `CONTEXT.md` for vocabulary and `docs/` for the language, compiler, and tooling.
 
 ## Commands
 
@@ -70,7 +70,6 @@ string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck�
 
 ## Docs
 
-`CONTEXT.md` (domain model) · `docs/adr/` (decisions) · `docs/CRITIQUE.md` (design critique) ·
-`docs/PATH_TO_BOOTSTRAP.md` (self-hosting) · `docs/TS_EMIT_CHECKPOINT.md` (the TS-emit track,
-537 → 0 tsc errors) · `docs/*.md` (design notes) ·
-`docs/agents/issue-tracker.md` (how planning skills track work here).
+`CONTEXT.md` (domain model) · `docs/README.md` (index) · `docs/language.md` (the surface
+language) · `docs/compiler.md` (pipeline, backends, self-hosting) · `docs/tooling.md`
+(CLI/LSP/formatter/dts) · `docs/adr/` (decisions, going forward).

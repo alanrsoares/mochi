@@ -89,5 +89,6 @@ multi-file, async, and pipeline programs.
 
 - [`AGENTS.md`](AGENTS.md) — build/verify commands, the compiler pipeline, conventions.
 - [`CONTEXT.md`](CONTEXT.md) — the domain model and vocabulary.
-- [`docs/adr/`](docs/adr/) — architectural decisions and open questions.
-- [`docs/CRITIQUE.md`](docs/CRITIQUE.md) · [`docs/PATH_TO_BOOTSTRAP.md`](docs/PATH_TO_BOOTSTRAP.md) — design critique and the road to self-hosting.
+- [`docs/`](docs/) — the [language](docs/language.md), the [compiler](docs/compiler.md)
+  (pipeline, backends, self-hosting), and the [tooling](docs/tooling.md).
+- [`docs/adr/`](docs/adr/) — architectural decision records.

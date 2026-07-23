@@ -3,7 +3,8 @@
 The shared vocabulary for designing and discussing the compiler. When a term here has
 a precise meaning, use it precisely. Identifiers are exact — they exist in `src/`.
 
-Companion to `AGENTS.md` (how to work) and `docs/adr/` (why). This file is the
+Companion to `AGENTS.md` (how to work) and `docs/` (the language, compiler, and tooling).
+This file is the
 ubiquitous language the planning/design skills (`domain-modeling`, `grill-with-docs`,
 `improve-codebase-architecture`) build on.
 
