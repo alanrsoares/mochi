@@ -1,6 +1,14 @@
-# mochi
+<div align="center">
 
-A small statically-typed functional language that compiles to readable JavaScript.
+<img src="logo_mochi_kanji_vector.jpg" alt="mochi logo" width="200" />
+
+<h1>mochi</h1>
+
+<p><em>A small statically-typed functional language that compiles to readable JavaScript — and to strict-<code>tsc</code>-clean TypeScript.</em></p>
+
+<a href="https://github.com/alanrsoares/mochi/actions/workflows/ci.yml"><img src="https://github.com/alanrsoares/mochi/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
+
+</div>
 
 - **Types:** Hindley–Milner (Algorithm W) with row-polymorphic records and parametric variants.
 - **Runtime:** compiles to plain JS; data-last prelude designed to compose under `|>`.
