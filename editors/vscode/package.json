@@ -1,5 +1,5 @@
 {
-  "name": "mochi",
+  "name": "@mochi/vscode",
   "displayName": "mochi",
   "description": "Syntax highlighting for the mochi language (.mochi)",
   "version": "0.0.1",
@@ -9,6 +9,14 @@
   "categories": ["Programming Languages"],
   "main": "./out/extension.js",
   "activationEvents": [],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.125.0",
+    "vscode-languageclient": "^10.1.0"
+  },
   "contributes": {
     "languages": [
       {

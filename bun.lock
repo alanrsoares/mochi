@@ -12,15 +12,21 @@
       "devDependencies": {
         "@biomejs/biome": "^2.5.4",
         "@types/bun": "latest",
-        "@types/vscode": "^1.125.0",
         "esbuild": "^0.28.1",
         "fast-check": "^4.9.0",
-        "vscode-languageclient": "^10.1.0",
         "vscode-languageserver": "^10.1.0",
         "vscode-languageserver-textdocument": "^1.0.12",
       },
       "peerDependencies": {
         "typescript": "^5",
+      },
+    },
+    "editors/vscode": {
+      "name": "mochi",
+      "version": "0.0.1",
+      "devDependencies": {
+        "@types/vscode": "^1.125.0",
+        "vscode-languageclient": "^10.1.0",
       },
     },
   },
@@ -119,6 +125,8 @@
     "fast-check": ["fast-check@4.9.0", "", { "dependencies": { "pure-rand": "^8.0.0" } }, "sha512-7ms6T7SybUev/PQITciI0yLM2pOSFy5zpG8Ty7tQofcVaQUvrMXp6CBwqF6fThLCLOrfBtuHAtwq6Yu4XPCllg=="],
 
     "minimatch": ["minimatch@10.2.5", "", { "dependencies": { "brace-expansion": "^5.0.5" } }, "sha512-MULkVLfKGYDFYejP07QOurDLLQpcjk7Fw+7jXS2R2czRQzR56yHRveU5NDJEOviH+hETZKSkIk5c+T23GjFUMg=="],
+
+    "mochi": ["mochi@workspace:editors/vscode"],
 
     "pure-rand": ["pure-rand@8.4.2", "", {}, "sha512-vvuOGgcuPJAirlHvuQw1TrOiw7ptaIXXmIbNuiNOY6lNGJJH49PQ1Kj4nd783nPdQhQdicgOjVI2yI/9BD6/Ng=="],
 
