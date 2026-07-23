@@ -12,11 +12,11 @@ export type Shape =
   | Circle(radius: number)
   | Rect(width: number, height: number)
 
-// Exhaustive over Shape — the checker guarantees every case is handled.
+/// Calculate the area of a geometric shape.
 export let area = s => switch s {
   | Circle(r) => mul(pi, mul(r, r))
   | Rect(w, h) => mul(w, h)
 }
 
-// Reused by callers that just want the pythagorean distance.
+/// Compute the Euclidean length (hypotenuse) of two orthogonal sides.
 export let hypot = (a, b) => sqrt(add(mul(a, a), mul(b, b)))

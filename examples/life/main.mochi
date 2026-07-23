@@ -3,7 +3,7 @@
 // The simulation is pure (`at`/`neighbours`/`step`/`render`). All effects —
 // clearing the screen, drawing a frame, sleeping between ticks — are `Task`s
 // bound from ./runtime.mjs, sequenced with `andThen`. `run` at the very end is
-// the only place an effect fires.  Build + run:
+// the only place an effect fires. Build + run:
 //
 //   bun src/cli.ts build examples/life/main.mochi
 //   bun examples/life/main.js
@@ -21,73 +21,94 @@ extern teardown : number -> Task number = "./runtime.mjs" "teardown"
 let width = 32
 let height = 16
 
-// ---- pure simulation ----
-// at wraps with `mod` (true modulo: mod(-1, h) = h - 1), giving a torus.
-let at = board => r => c =>
+/// Get cell state at toroidal coordinates (r, c) wrapping around borders.
+let at = (board, r, c) =>
   board
-  |> Array.get(mod(r, height))
-  |> Option.flatMap(Array.get(mod(c, width)))
-  |> Option.unwrapOr(false)
+    |> Array.get(mod(r, height))
+    |> Option.flatMap(Array.get(mod(c, width)))
+    |> Option.unwrapOr(false)
 
-let b2n = alive => switch alive {
-  | true => 1
-  | false => 0
-}
+/// Convert boolean cell state to 1 (alive) or 0 (dead).
+let b2n = alive => alive ? 1 : 0
 
-let neighbours = board => r => c =>
+/// Count the 8 live neighbours surrounding cell (r, c).
+let neighbours = (board, r, c) =>
   let rm = sub(r, 1) in
   let rp = add(r, 1) in
   let cm = sub(c, 1) in
   let cp = add(c, 1) in
-  add(b2n(at(board)(rm)(cm)),
-  add(b2n(at(board)(rm)(c)),
-  add(b2n(at(board)(rm)(cp)),
-  add(b2n(at(board)(r)(cm)),
-  add(b2n(at(board)(r)(cp)),
-  add(b2n(at(board)(rp)(cm)),
-  add(b2n(at(board)(rp)(c)),
-      b2n(at(board)(rp)(cp)))))))))
+  add(
+    b2n(at(board, rm, cm)),
+    add(
+      b2n(at(board, rm, c)),
+      add(
+        b2n(at(board, rm, cp)),
+        add(
+          b2n(at(board, r, cm)),
+          add(
+            b2n(at(board, r, cp)),
+            add(
+              b2n(at(board, rp, cm)),
+              add(b2n(at(board, rp, c)), b2n(at(board, rp, cp)))
+            )
+          )
+        )
+      )
+    )
+  )
 
-let nextCell = alive => n => switch alive {
-  | true => or(eq(n, 2), eq(n, 3))
-  | false => eq(n, 3)
-}
+/// Determine cell state for the next generation given its current state and neighbour count.
+let nextCell = (alive, n) => alive ? or(eq(n, 2), eq(n, 3)) : eq(n, 3)
 
+/// Advance the entire board by one generation step.
 let step = board =>
-  range(0, height) |> toArray |> Array.map(r =>
-    range(0, width) |> toArray |> Array.map(c =>
-      nextCell(at(board)(r)(c))(neighbours(board)(r)(c))))
+  range(0, height)
+    |> toArray
+    |> Array.map(r =>
+      range(0, width)
+        |> toArray
+        |> Array.map(c => nextCell(at(board, r, c), neighbours(board, r, c))))
 
+/// Render the boolean grid as a multiline terminal string.
 let render = board =>
   board
-  |> Array.map(row =>
-       row |> Array.map(c => switch c { | true => "#" | false => "·" }) |> Str.join(""))
-  |> Str.join("\n")
+    |> Array.map(row => row |> Array.map(c => c ? "#" : "·") |> Str.join(""))
+    |> Str.join("\n")
 
 // ---- seed: two gliders chasing across the torus, plus a blinker ----
 // Each entry is a live (row, col). `contains` uses structural eq on the tuple.
 let seeds = [
-  (0, 1), (1, 2), (2, 0), (2, 1), (2, 2),
-  (5, 11), (6, 12), (7, 10), (7, 11), (7, 12),
-  (10, 24), (10, 25), (10, 26)
+  (0, 1),
+  (1, 2),
+  (2, 0),
+  (2, 1),
+  (2, 2),
+  (5, 11),
+  (6, 12),
+  (7, 10),
+  (7, 11),
+  (7, 12),
+  (10, 24),
+  (10, 25),
+  (10, 26)
 ]
 
-let board0 =
-  range(0, height) |> toArray |> Array.map(r =>
+let board0 = range(0, height)
+  |> toArray
+  |> Array.map(r =>
     range(0, width) |> toArray |> Array.map(c => Array.contains((r, c))(seeds)))
 
 // ---- animation loop (recursion sequenced through Task) ----
 let label = g => Str.concat("Conway's Life  ·  generation ")(show(g))
 
-let loop = remaining => g => board => switch lte(remaining, 0) {
-  | true => teardown(0)
-  | false =>
-      draw(label(g))(render(board))
+let loop = (remaining, g, board) =>
+  lte(remaining, 0)
+    ? teardown(0)
+    : draw(label(g))(render(board))
       |> andThen(_ => delay(90)(0))
-      |> andThen(_ => loop(sub(remaining, 1))(add(g, 1))(step(board)))
-}
+      |> andThen(_ => loop(sub(remaining, 1), add(g, 1), step(board)))
 
 // setup grabs the alternate screen buffer, then we run 120 frames.
-let program = setup(0) |> andThen(_ => loop(120)(0)(board0))
+let program = setup(0) |> andThen(_ => loop(120, 0, board0))
 
 export let result = run(program)

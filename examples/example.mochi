@@ -28,23 +28,13 @@ let area = shape => switch shape {
 }
 
 // --- wildcard catch-all ---
-let isRound = shape => switch shape {
-  | Circle(r) => true
-  | _ => false
-}
+let isRound = shape => switch shape { | Circle(r) => true | _ => false }
 
 // --- literal patterns + catch-all ---
-let describe = n => switch n {
-  | 0 => zero
-  | 1 => one
-  | _ => many
-}
+let describe = n => switch n { | 0 => zero | 1 => one | _ => many }
 
 // --- bind catch-all (names the scrutinee) ---
-let label = color => switch color {
-  | Red => hot
-  | other => cool
-}
+let label = color => switch color { | Red => hot | other => cool }
 
 // --- match feeding a pipeline ---
 let report = shape => shape |> area |> format
@@ -52,14 +42,8 @@ let report = shape => shape |> area |> format
 // --- mutual recursion: isEven calls isOdd, defined AFTER it ---
 // Top-level bindings are grouped into recursive components and inferred
 // together, so forward and mutual references type-check (both : number -> bool).
-let isEven = n => switch n {
-  | 0 => true
-  | _ => isOdd(sub(n, 1))
-}
-let isOdd = n => switch n {
-  | 0 => false
-  | _ => isEven(sub(n, 1))
-}
+let isEven = n => switch n { | 0 => true | _ => isOdd(sub(n, 1)) }
+let isOdd = n => switch n { | 0 => false | _ => isEven(sub(n, 1)) }
 
 // --- list literals: homogeneous, inferred as [elem] ---
 // `[1, 2, 3]` is a JS array at runtime; the inferencer requires every element
@@ -99,10 +83,10 @@ let describeList = xs => switch xs {
 // A List is a generator-backed pull-sequence: producers/slicers stay lazy, so
 // infinite streams work as long as you only ever pull a finite prefix. `@` is
 // the List sigil. Map has its own literal `#{...}`; Set has no literal sigil.
-let ns = @{1, 2, 3}                       // List number  (lazy)
+let ns = @{1, 2, 3} // List number  (lazy)
 let firstThree = range(0)(100) |> take(3) // 0..99 built lazily, only 3 forced
-let evens = iterate(x => add(x, 2))(0)    // INFINITE: 0, 2, 4, 6, ...
-let evens5 = evens |> take(5) |> toArray  // [0, 2, 4, 6, 8] — take makes it safe
+let evens = iterate(x => add(x, 2))(0) // INFINITE: 0, 2, 4, 6, ...
+let evens5 = evens |> take(5) |> toArray // [0, 2, 4, 6, 8] — take makes it safe
 let small = range(0)(100) |> takeWhile(x => lt(x, 4)) |> toArray // [0, 1, 2, 3]
 
 // destructuring a List: the same ML idiom as Array, but pull-based. The empty
@@ -119,9 +103,9 @@ let listSum = sumList(@{1, 2, 3, 4}) // 10
 // bounded prefix each arm needs (never forcing the whole sequence).
 let describe = xs => switch xs {
   | @{} => 0
-  | @{0, ...rest} => 1          // starts with a literal 0
-  | @{only} => 2                // exactly one element
-  | @{a, b, ...t} => 3          // two or more
+  | @{0, ...rest} => 1 // starts with a literal 0
+  | @{only} => 2 // exactly one element
+  | @{a, b, ...t} => 3 // two or more
 }
 let shape = describe(@{5, 6, 7}) // 3
 
@@ -132,52 +116,66 @@ let shape = describe(@{5, 6, 7}) // 3
 // unqualified `map`/`filter`. `List`/`Array`/`Set`/`Map` are reserved names.
 let triple = x => mul(x, 3)
 let over6 = x => gt(x, 6)
-let fused = @{1, 2, 3, 4} |> List.map(triple) |> List.filter(over6) |> toArray // [9, 12]
-let joined = List.concat(@{1, 2})(@{3, 4}) |> toArray                          // [1,2,3,4]
-let spread = List.flatMap(x => @{x, x})(@{1, 2}) |> toArray                    // [1,1,2,2]
+let fused = @{1, 2, 3, 4}
+  |> List.map(triple)
+  |> List.filter(over6)
+  |> toArray // [9, 12]
+let joined = List.concat(@{1, 2})(@{3, 4}) |> toArray // [1,2,3,4]
+let spread = List.flatMap(x => @{x, x})(@{1, 2}) |> toArray // [1,1,2,2]
 
 // lazy all the way: map over an INFINITE sequence, force only the first 3
-let inf3 = iterate(inc)(0) |> List.map(triple) |> take(3) |> toArray // [0, 3, 6]
+let inf3 = iterate(inc)(0)
+  |> List.map(triple)
+  |> take(3)
+  |> toArray // [0, 3, 6]
 
 // --- Set: `Set.fromArray([...])` — native JS Set, deduped, unordered ---
 // No literal sigil (dropped `${…}` — it collides with JS template literals).
 // Elements must share a type. Ops are qualified + immutable (return a fresh Set).
-let tags = Set.fromArray([1, 2, 2, 3])                                  // Set number — dedups to {1,2,3}
-let hasTwo = Set.has(2)(tags)                             // true
-let merged = Set.union(Set.fromArray([1, 2]))(Set.fromArray([2, 3])) |> Set.toArray  // [1, 2, 3]
-let shared = Set.intersect(Set.fromArray([1, 2, 3]))(Set.fromArray([2, 3, 4])) |> Set.toArray // [2, 3]
+let tags = Set.fromArray([1, 2, 2, 3]) // Set number — dedups to {1,2,3}
+let hasTwo = Set.has(2)(tags) // true
+let merged = Set.union(Set.fromArray([1, 2]))(Set.fromArray([2, 3]))
+  |> Set.toArray // [1, 2, 3]
+let shared = Set.intersect(Set.fromArray([1, 2, 3]))(Set.fromArray([2, 3, 4]))
+  |> Set.toArray // [2, 3]
 
 // --- Map: `#{ key: value }` (native JS Map) ---
 // Keys share a type, values share a type → Map k v. `getOr` reads with a
 // fallback (an Option-returning `get` waits on the prelude slice). Immutable.
 let ages = #{ "alice": 30, "bob": 25 }
-let alice = Map.getOr(0)("alice")(ages)   // 30
-let nobody = Map.getOr(0)("carol")(ages)  // 0 — fallback
+let alice = Map.getOr(0)("alice")(ages) // 30
+let nobody = Map.getOr(0)("carol")(ages) // 0 — fallback
 let withCarol = Map.set("carol")(41)(ages) // fresh Map; `ages` unchanged
-let names = Map.keys(ages)                 // ["alice", "bob"]
+let names = Map.keys(ages) // ["alice", "bob"]
 
 // --- prelude: Math, String (`Str.*`), grown Array, builtin Option ---
 // Math ops are unqualified (like add/sub); String is the `Str.*` namespace.
-let clamped = max(0, min(100, 137))        // 100
-let modulo = mod(negate(1), 3)             // 2 — true modulo (sign of divisor)
-let slug = "  Hello World  " |> Str.trim |> Str.toLower |> Str.split(" ") // ["hello","world"]
-let shout2 = Str.join(" ")(["mochi", "rocks"]) |> Str.toUpper            // "MOCHI ROCKS"
-let flipped = Array.reverse([1, 2, 3]) |> Array.append(0)               // [3, 2, 1, 0]
+let clamped = max(0, min(100, 137)) // 100
+let modulo = mod(negate(1), 3) // 2 — true modulo (sign of divisor)
+let slug = "  Hello World  "
+  |> Str.trim
+  |> Str.toLower
+  |> Str.split(" ") // ["hello","world"]
+let shout2 = Str.join(" ")(["mochi", "rocks"]) |> Str.toUpper // "MOCHI ROCKS"
+let flipped = Array.reverse([1, 2, 3]) |> Array.append(0) // [3, 2, 1, 0]
 
 // builtin Option — `Map.get`/`Array.head` return Option, no `type` decl needed.
 // (This file declares its own Option/Result below; the builtin is used when a
 // program doesn't. Either way Some/None share one runtime shape.)
-let lookedUp = Map.get("alice")(ages)      // Option number
-let firstName = Array.head(names)          // Option string
+let lookedUp = Map.get("alice")(ages) // Option number
+let firstName = Array.head(names) // Option string
 
 // --- structural eq/compare (polymorphic, no typeclasses) ---
 // eq/compare work at ANY type by deep structural walk — the pragmatic bridge
 // instead of typeclasses (keeps the emitted JS free of hidden dictionaries).
 // The -By family takes an explicit projection = dictionary-passing by hand.
-let sameRec = eq({ x: 1, y: 2 }, { x: 1, y: 2 })  // true — structural, not by ref
-let sorted = Array.sort([3, 1, 2])                // [1, 2, 3]
+let sameRec = eq(
+  { x: 1, y: 2 },
+  { x: 1, y: 2 }
+) // true — structural, not by ref
+let sorted = Array.sort([3, 1, 2]) // [1, 2, 3]
 let byMod = Array.sortBy(x => mod(x, 3))([5, 3, 7]) // sort by x % 3
-let unique = Array.dedupe([1, 1, 2, 3, 3])        // [1, 2, 3]
+let unique = Array.dedupe([1, 1, 2, 3, 3]) // [1, 2, 3]
 let member = Array.contains({ id: 2 })([{ id: 1 }, { id: 2 }]) // true
 
 // --- named record types (transparent aliases) ---
@@ -245,41 +243,24 @@ type Option a =
 // mapOk    : (a -> b) -> Result<a, e> -> Result<b, e>
 // flatMapOk: (a -> Result<b, e>) -> Result<a, e> -> Result<b, e>
 // mapErr   : (e -> f) -> Result<a, e> -> Result<a, f>
-let mapOk = f => r => switch r {
-  | Ok(v) => Ok(f(v))
-  | Err(e) => Err(e)
-}
+let mapOk = f => r => switch r { | Ok(v) => Ok(f(v)) | Err(e) => Err(e) }
 
-let flatMapOk = f => r => switch r {
-  | Ok(v) => f(v)
-  | Err(e) => Err(e)
-}
+let flatMapOk = f => r => switch r { | Ok(v) => f(v) | Err(e) => Err(e) }
 
-let mapErr = f => r => switch r {
-  | Ok(v) => Ok(v)
-  | Err(e) => Err(f(e))
-}
+let mapErr = f => r => switch r { | Ok(v) => Ok(v) | Err(e) => Err(f(e)) }
 
-let unwrapOr = fallback => r => switch r {
-  | Ok(v) => v
-  | Err(e) => fallback
-}
+let unwrapOr = fallback => r => switch r { | Ok(v) => v | Err(e) => fallback }
 
 // --- boolean-literal patterns: branch on a predicate ---
 // `switch` arms match `true`/`false` directly, so predicate branching needs no
 // if-expression: exhaustiveness requires both arms (or a catch-all).
-let parity = n => switch eq(mod(n, 2), 0) {
-  | true => even
-  | false => odd
-}
+let parity = n => switch eq(mod(n, 2), 0) { | true => even | false => odd }
 
 // --- local bindings: `let x = value in body` (ADR 0009) ---
 // Non-recursive, let-polymorphic, scoped to `body`. Chains flatten (each `in`
 // continues at the same depth), so functions can name intermediates.
 let norm = (a, b) =>
-  let a2 = square(a) in
-  let b2 = square(b) in
-  sqrt(add(a2, b2))
+  let a2 = square(a) in let b2 = square(b) in sqrt(add(a2, b2))
 
 // --- tuples: literal, switch pattern, and binding sugar (ADR 0010/0011) ---
 // `(a, b)` is a real product type erasing to a JS array. Destructure in switch,
@@ -287,12 +268,8 @@ let norm = (a, b) =>
 // params), or via `let (a, b) = value in body`.
 let pairUp = (x, y) => (x, y)
 let swap = ((a, b)) => (b, a)
-let takeFst = p => switch p {
-  | (f, _) => f
-}
-let sumPair = p =>
-  let (a, b) = p in
-  add(a, b)
+let takeFst = p => switch p { | (f, _) => f }
+let sumPair = p => let (a, b) = p in add(a, b)
 
 // --- a railway: chain steps that each may fail, short-circuit on Err ---
 // Each step returns a Result; flatMapOk stays on the happy track and skips the
