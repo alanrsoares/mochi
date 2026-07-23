@@ -6,13 +6,12 @@
 // hover popup.
 import { resolve } from "node:path";
 import { isErr } from "@onrails/result";
-import { check } from "./check";
-import { toTypedProgram } from "./compile";
-import { type InferResult, inferProgramTypes, type SymbolInfo, type TypeAt } from "./infer";
+import { toTypedProgram, toTypedProgramWith } from "./compile";
+import type { InferResult, SymbolInfo, TypeAt } from "./infer";
 import { lex } from "./lexer";
 import { moduleContext } from "./module";
 import { parse } from "./parser";
-import { preludeEnv, preludeNamespaces } from "./prelude";
+import { preludeNamespaces } from "./prelude";
 import { foldAliases, showType } from "./types";
 
 // The tightest span containing `offset`, or null if none. Ties (nested spans of
@@ -80,12 +79,6 @@ export const moduleHoverAt = async (
   const ctx = await moduleContext(entry, read);
   if (isErr(ctx)) return hoverAt(src, offset);
 
-  const checked = check(prog, ctx.value.importedReg);
-  if (isErr(checked)) return null;
-  const inferred = inferProgramTypes(prog, preludeEnv, {
-    open: true,
-    imports: ctx.value.imports,
-    namespaces: preludeNamespaces,
-  });
-  return isErr(inferred) ? null : hoverFrom(inferred.value, offset);
+  const typed = toTypedProgramWith(prog, ctx.value);
+  return isErr(typed) ? null : hoverFrom(typed.value.res, offset);
 };

@@ -10,15 +10,15 @@
 import { dirname, relative, resolve } from "node:path";
 import { err, isErr, ok, type Result, ResultAsync } from "@onrails/result";
 import type { Program, Stmt } from "./ast";
-import { check, exportedRegistry, type Registry } from "./check";
+import { exportedRegistry, type Registry } from "./check";
 import { codegen, exportedCtorKeys } from "./codegen";
 import { DEFAULT_RUNTIME_IMPORT, emitTsModule } from "./codegen-ts";
+import { toTypedProgramWith } from "./compile";
 import { type ExternBinding, externModuleDts } from "./dts";
 import { type AlangError, checkErr } from "./errors";
-import { type Env, inferProgramTypes, type Scheme } from "./infer";
+import type { Env, Scheme } from "./infer";
 import { lex } from "./lexer";
 import { parse } from "./parser";
-import { preludeEnv, preludeNamespaces } from "./prelude";
 
 export type ModuleOutput = { path: string; js: string };
 type ReadFile = (path: string) => Promise<string>;
@@ -148,20 +148,13 @@ const compileGraph = (graph: Loaded[]): Result<ModuleOutput[], AlangError> => {
   for (const { path, prog } of graph) {
     const gathered = gatherImports(path, prog, exportsByPath, regByPath, keysByPath);
     if (isErr(gathered)) return gathered;
-    const { imports, importedReg, importedKeys } = gathered.value;
 
-    const checked = check(prog, importedReg);
-    if (isErr(checked)) return checked;
-    const inferred = inferProgramTypes(prog, preludeEnv, {
-      open: true,
-      imports,
-      namespaces: preludeNamespaces,
-    });
-    if (isErr(inferred)) return inferred;
-    exportsByPath.set(path, exportsOf(prog, inferred.value.env));
+    const typed = toTypedProgramWith(prog, gathered.value);
+    if (isErr(typed)) return typed;
+    exportsByPath.set(path, exportsOf(prog, typed.value.res.env));
     regByPath.set(path, exportedRegistry(prog));
     keysByPath.set(path, exportedCtorKeys(prog));
-    outputs.push({ path, js: codegen(prog, importedKeys, { runtime: true }) });
+    outputs.push({ path, js: codegen(prog, gathered.value.importedKeys, { runtime: true }) });
   }
   return ok(outputs);
 };
@@ -207,17 +200,11 @@ const compileGraphTs = (
   for (const { path, prog } of graph) {
     const gathered = gatherImports(path, prog, exportsByPath, regByPath, keysByPath);
     if (isErr(gathered)) return gathered;
-    const { imports, importedReg, importedKeys } = gathered.value;
+    const { importedKeys } = gathered.value;
 
-    const checked = check(prog, importedReg);
-    if (isErr(checked)) return checked;
-    const inferred = inferProgramTypes(prog, preludeEnv, {
-      open: true,
-      imports,
-      namespaces: preludeNamespaces,
-    });
-    if (isErr(inferred)) return inferred;
-    const { env, aliases, types, letParams } = inferred.value;
+    const typed = toTypedProgramWith(prog, gathered.value);
+    if (isErr(typed)) return typed;
+    const { env, aliases, types, letParams } = typed.value.res;
 
     // Collect this module's externs (with their inferred schemes) into the
     // per-`.d.ts` bucket for gap-3 declaration emission below.
@@ -339,15 +326,9 @@ export const moduleContext = (
       // The entry is last in dependency order; its deps are now compiled, so
       // hand back its context without touching the (live) entry itself.
       if (path === entryPath) return ok(gathered.value);
-      const checked = check(prog, gathered.value.importedReg);
-      if (isErr(checked)) return checked;
-      const inferred = inferProgramTypes(prog, preludeEnv, {
-        open: true,
-        imports: gathered.value.imports,
-        namespaces: preludeNamespaces,
-      });
-      if (isErr(inferred)) return inferred;
-      exportsByPath.set(path, exportsOf(prog, inferred.value.env));
+      const typed = toTypedProgramWith(prog, gathered.value);
+      if (isErr(typed)) return typed;
+      exportsByPath.set(path, exportsOf(prog, typed.value.res.env));
       regByPath.set(path, exportedRegistry(prog));
       keysByPath.set(path, exportedCtorKeys(prog));
     }

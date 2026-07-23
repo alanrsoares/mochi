@@ -3,14 +3,11 @@
 // is a thin adapter that maps these onto vscode-languageserver types.
 import { resolve } from "node:path";
 import { isErr } from "@onrails/result";
-import { check } from "./check";
-import { compile } from "./compile";
+import { compile, toTypedProgramWith } from "./compile";
 import type { AlangError } from "./errors";
-import { inferProgramTypes } from "./infer";
 import { lex } from "./lexer";
 import { moduleContext } from "./module";
 import { parse } from "./parser";
-import { preludeEnv, preludeNamespaces } from "./prelude";
 import { lineCol } from "./span";
 
 // 0-based line/character — matches the LSP `Position` shape.
@@ -73,12 +70,6 @@ export const moduleDiagnostics = async (
   const ctx = await moduleContext(entry, read);
   if (isErr(ctx)) return diagnostics(src);
 
-  const checked = check(prog, ctx.value.importedReg);
-  if (isErr(checked)) return [toDiag(src, checked.error)];
-  const inferred = inferProgramTypes(prog, preludeEnv, {
-    open: true,
-    imports: ctx.value.imports,
-    namespaces: preludeNamespaces,
-  });
-  return isErr(inferred) ? [toDiag(src, inferred.error)] : [];
+  const typed = toTypedProgramWith(prog, ctx.value);
+  return isErr(typed) ? [toDiag(src, typed.error)] : [];
 };
