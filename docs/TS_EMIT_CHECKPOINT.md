@@ -1,4 +1,4 @@
-# TS-emit checkpoint — 2026-07-23 (rev 10)
+# TS-emit checkpoint — 2026-07-23 (rev 11)
 
 Working state of the TypeScript backend track (ADR 0026 / `docs/TS_DIALECT.md`),
 so a fresh session can pick up. Goal: emit **fully working, `tsc --strict`-clean
@@ -7,9 +7,9 @@ TypeScript** from alang, including the self-hosted `bootstrap/`.
 ## TL;DR
 
 Single-file and well-behaved multi-module programs emit **strict-clean today**.
-The self-hosted `bootstrap/` emits and links, but is **not yet strict-clean** —
-**1 `tsc` error** (was 537). Measure any time with `bun run bootstrap:tsc`
-(`scripts/bootstrap-tsc.ts`, replaces the old `/tmp/bts` recipe). Sixteen gaps have
+The self-hosted `bootstrap/` now emits, links, AND is **strict-clean** —
+**0 `tsc` errors** (was 537). Measure any time with `bun run bootstrap:tsc`
+(`scripts/bootstrap-tsc.ts`, replaces the old `/tmp/bts` recipe). Seventeen gaps have
 shipped: the per-node lambda-param
 type table (gap 1, ADR 0028, −238), cross-module `import type` + extern `.d.ts`
 (gap 3, ADR 0029, −33; TS2307/TS2304 → 0), guard-form arms as **type predicates**
@@ -73,10 +73,16 @@ unknown>` / `Result<unknown, string>`, whose union with the recursive
 `Result<string, string>` wasn't assignable to the declared head. Cast the call to
 its resolved concrete type (`Ok("") as Result<string, string>`) when fully known
 — the applied-ctor analogue of ADR 0039's nullary rule, reading the per-node type
-table. The remaining 1: **the top-level `emptyReg` seed** (`module.ts:91` — not
-inside a generic binding, so no letters to borrow; ADR 0035 §3's entanglement,
-and no binding-annotation syntax to pin it as `src/module.ts` does with
-`importedReg: Registry`).
+table. **The last error is closed by ADR 0044 — binding type annotations
+(`let x : T = v`).** The `emptyReg` seed (`module.ts:91`) had no codegen fix: not
+inside a generic binding (ADR 0042 can't reach it), and pinning it at emit-time
+contradicts the generic `resolveImportsFrom` (ADR 0035 §3). The gap was the
+language — alang couldn't write the ascription `src/module.ts` uses by hand
+(`importedReg: Registry`). Adding it (unify the value against the declared type
+before generalizing; type-only so JS is byte-identical) and writing
+`let emptyReg : Registry = …` in `bootstrap/module.al` pins the whole chain.
+Self-host meant teaching the bootstrap compiler the syntax too (`SLet` gains an
+`annot` field). **Bootstrap is now 0 `tsc --strict` errors — strict-clean.**
 
 ## Landed this session (all on `main`, committed)
 
@@ -101,6 +107,8 @@ and no binding-annotation syntax to pin it as `src/module.ts` does with
 | `8e75869` | feat(codegen): scope enclosing letters over inner lambdas/seeds (ADR 0042) |
 | `dd95489` | docs(codegen): checkpoint rev 9 (5 -> 2) |
 | `a43721c` | feat(codegen): cast applied ctor calls to their concrete type (ADR 0043) |
+| `8cbf55a` | docs(codegen): checkpoint rev 10 (2 -> 1) |
+| `654071d` | feat(lang): add binding type annotations (ADR 0044) — bootstrap strict-clean |
 
 `bun run check` is green (803 tests). JS backend byte-identical throughout
 (all TS-only behavior is behind codegen options that default off).
@@ -236,35 +244,36 @@ bun run bootstrap:tsc --keep    # leave the scratch dir on disk (path logged)
 `scripts/bootstrap-tsc.ts` emits the graph via `buildModulesTs` with
 `runtimeImport` pointed at `src/runtime` (no `sed`), writes the outputs + a strict
 tsconfig to an OS temp dir, runs the repo's `tsc`, and tallies. No files are left
-in `bootstrap/`. The `test/bootstrap-tsc.spec.ts` ratchet asserts total ≤ 1.
+in `bootstrap/`. The `test/bootstrap-tsc.spec.ts` ratchet asserts total ≤ 0 —
+now a pure regression guard: the count may never rise.
 
-## Suggested next step
+## Status: DONE — bootstrap is strict-clean
 
-Gaps 1 (ADR 0028), 2 (ADR 0031), 3 (ADR 0029), polymorphic-HOF starter (ADR 0032),
-combinator tail (ADR 0033), row-poly records (ADR 0034), empty-collection seeds
-(ADR 0035), tuple literals (ADR 0036), partial-application overloads (ADR 0037),
-array-partition `.otherwise` (ADR 0038), nullary-ctor annotation (ADR 0039),
-sound row generalization (ADR 0040), opaque bound vars (ADR 0041),
-enclosing-letter scoping for inner lambdas/seeds (ADR 0042), and applied-ctor
-concrete casts (ADR 0043) done — **1 `tsc` error left**. The open-row cluster is
-GONE (ADR 0040), the `Set<unknown>` `VarSets` cluster is GONE (ADR 0041), the
-inner-lambda / inner-seed polymorphic-HOF cluster is GONE (ADR 0042 —
-`check.ts:192`, `infer.ts:156`, `module.ts:83` cleared), and `writeAll`'s
-recursive `Result` union is GONE (ADR 0043 — `cli.ts:21`). The last one:
+Every gap is closed. Gaps 1 (ADR 0028), 2 (ADR 0031), 3 (ADR 0029), polymorphic-HOF
+starter (ADR 0032), combinator tail (ADR 0033), row-poly records (ADR 0034),
+empty-collection seeds (ADR 0035), tuple literals (ADR 0036), partial-application
+overloads (ADR 0037), array-partition `.otherwise` (ADR 0038), nullary-ctor
+annotation (ADR 0039), sound row generalization (ADR 0040), opaque bound vars
+(ADR 0041), enclosing-letter scoping (ADR 0042), applied-ctor concrete casts
+(ADR 0043), and binding type annotations (ADR 0044) — **537 → 0 `tsc --strict`
+errors.** The open-row cluster (ADR 0040), the `Set<unknown>` `VarSets` cluster
+(ADR 0041), the inner-lambda/seed polymorphic-HOF cluster (ADR 0042), `writeAll`'s
+recursive `Result` union (ADR 0043), and the final `emptyReg` seed (ADR 0044) are
+all gone.
 
-1. **The top-level `emptyReg` seed** (`module.ts:91`) — `let emptyReg = { ctors:
-   #{}, … }` is NOT inside a generic binding, so ADR 0042 has no lexical letters
-   to borrow, and annotating it alone gives tsc contradictory type-arg constraints
-   where it flows into the generic `resolveImportsFrom` (ADR 0035 §3's
-   entanglement). The hand-written `src/module.ts` pins it with an explicit
-   `importedReg: Registry` annotation; alang has neither binding type-annotation
-   syntax nor a cross-module `Registry` name, so closing it needs either that
-   language feature or a codegen pass that monomorphizes a single-instantiation
-   binding. Its own lever, its own ADR.
+The `emptyReg` closer needed a language feature, not a codegen tweak: binding
+type annotations (`let x : T = v`). `let emptyReg : Registry = …` pins the seed
+exactly as the hand-written `src/module.ts` does; self-hosting required teaching
+the bootstrap compiler the syntax (`SLet` gains an `annot` field).
+
+Possible follow-ups (none blocking): `let … in` annotations in the bootstrap
+mirror (src supports them; no bootstrap source uses them yet); inline record
+annotations (`TypeExpr` has no record form today); recording the thesis in the
+repo README/CLI (see `docs/CRITIQUE_V2.md` §4).
 
 ## Verify
-`bun run check` green (803 pass); the self-host fixpoint (`build ok` ×2) confirms
-the JS backend stays byte-identical after ADR 0043.
+`bun run check` green (808 pass); the self-host fixpoint (`build ok` ×2) confirms
+the JS backend stays byte-identical after ADR 0044.
 
 ## Not part of this track (uncommitted in tree)
 Rebrand (README, logos, `docs/REBRAND.md`, `docs/V1.md`) and ADRs 0024 (llvm) /
