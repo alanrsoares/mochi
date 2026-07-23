@@ -1,4 +1,4 @@
-# TS-emit checkpoint — 2026-07-23 (rev 9)
+# TS-emit checkpoint — 2026-07-23 (rev 10)
 
 Working state of the TypeScript backend track (ADR 0026 / `docs/TS_DIALECT.md`),
 so a fresh session can pick up. Goal: emit **fully working, `tsc --strict`-clean
@@ -8,8 +8,8 @@ TypeScript** from alang, including the self-hosted `bootstrap/`.
 
 Single-file and well-behaved multi-module programs emit **strict-clean today**.
 The self-hosted `bootstrap/` emits and links, but is **not yet strict-clean** —
-**2 `tsc` errors** (was 537). Measure any time with `bun run bootstrap:tsc`
-(`scripts/bootstrap-tsc.ts`, replaces the old `/tmp/bts` recipe). Fifteen gaps have
+**1 `tsc` error** (was 537). Measure any time with `bun run bootstrap:tsc`
+(`scripts/bootstrap-tsc.ts`, replaces the old `/tmp/bts` recipe). Sixteen gaps have
 shipped: the per-node lambda-param
 type table (gap 1, ADR 0028, −238), cross-module `import type` + extern `.d.ts`
 (gap 3, ADR 0029, −33; TS2307/TS2304 → 0), guard-form arms as **type predicates**
@@ -64,10 +64,19 @@ to the concrete-only paths — so an inner `map`/`filter` callback param
 an inner empty `#{}` seed whose element type was an enclosing letter
 (`infer.ts:156`) emitted `Map<unknown,unknown>`. The `<A, B>` head lexically
 scopes the whole body, so both are annotated with those letters — mapped **per
-binding** (a global union clobbers positional letters: 5 → 12). The remaining 2:
-**the top-level `emptyReg` seed** (`module.ts:91` — not inside a generic binding,
-so no letters to borrow; ADR 0035 §3's entanglement), and **`writeAll`'s
-recursive `Result` union** (`cli.ts:21`, the `Result` analogue of ADR 0038).
+binding** (a global union clobbers positional letters: 5 → 12). Most recently —
+also this session — **applied parametric ctor calls cast to their concrete type**
+(ADR 0043, 2 → 1, −1). A ctor's argument pins only the params it mentions; a
+phantom one (`Ok`'s error, `Err`'s ok) stays free and tsc widens it to `unknown`.
+In `writeAll` (`cli.ts:21`) the arms `Ok("")` / `Err(e)` gave `Result<string,
+unknown>` / `Result<unknown, string>`, whose union with the recursive
+`Result<string, string>` wasn't assignable to the declared head. Cast the call to
+its resolved concrete type (`Ok("") as Result<string, string>`) when fully known
+— the applied-ctor analogue of ADR 0039's nullary rule, reading the per-node type
+table. The remaining 1: **the top-level `emptyReg` seed** (`module.ts:91` — not
+inside a generic binding, so no letters to borrow; ADR 0035 §3's entanglement,
+and no binding-annotation syntax to pin it as `src/module.ts` does with
+`importedReg: Registry`).
 
 ## Landed this session (all on `main`, committed)
 
@@ -89,9 +98,11 @@ recursive `Result` union** (`cli.ts:21`, the `Result` analogue of ADR 0038).
 | `9065338` | docs(codegen): checkpoint rev 7 (14 -> 8) |
 | `f3615e1` | fix(infer): treat a scheme's bound vars as opaque (ADR 0041) |
 | `5a7bd26` | docs(codegen): checkpoint rev 8 (8 -> 5) |
-| _(this rev)_ | feat(codegen): scope enclosing letters over inner lambdas/seeds (ADR 0042) |
+| `8e75869` | feat(codegen): scope enclosing letters over inner lambdas/seeds (ADR 0042) |
+| `dd95489` | docs(codegen): checkpoint rev 9 (5 -> 2) |
+| `a43721c` | feat(codegen): cast applied ctor calls to their concrete type (ADR 0043) |
 
-`bun run check` is green (799 tests). JS backend byte-identical throughout
+`bun run check` is green (803 tests). JS backend byte-identical throughout
 (all TS-only behavior is behind codegen options that default off).
 
 ## What works now
@@ -190,8 +201,9 @@ hover/inlay are untouched); `codegen-ts` annotates the IIFE param / top-level
 annotate ONLY when every use agrees and is fully concrete; a binding that also
 flows into a generic position stays bare (pinning it over-constrains that call +
 its sibling empties → the polymorphic-HOF tail). Killed the `infer.ts`
-empty-collection TS2345 class; the 2 `module.ts` `emptyReg` cases remain (entangled
-with the HOF tail). JS backend byte-identical.
+empty-collection TS2345 class; the 2 `module.ts` `emptyReg` cases remained then
+(entangled with the HOF tail) — ADR 0042 later cleared `module.ts:83`, leaving
+only the top-level seed at `:91`. JS backend byte-identical.
 
 ### 6. Enclosing letters scope inner lambdas + seeds — DONE (ADR 0042, −3: 5 → 2)
 ADR 0032 put a generic binding's `<A, B>` head on its *own* value lambda, but the
@@ -224,7 +236,7 @@ bun run bootstrap:tsc --keep    # leave the scratch dir on disk (path logged)
 `scripts/bootstrap-tsc.ts` emits the graph via `buildModulesTs` with
 `runtimeImport` pointed at `src/runtime` (no `sed`), writes the outputs + a strict
 tsconfig to an OS temp dir, runs the repo's `tsc`, and tallies. No files are left
-in `bootstrap/`. The `test/bootstrap-tsc.spec.ts` ratchet asserts total ≤ 2.
+in `bootstrap/`. The `test/bootstrap-tsc.spec.ts` ratchet asserts total ≤ 1.
 
 ## Suggested next step
 
@@ -232,25 +244,27 @@ Gaps 1 (ADR 0028), 2 (ADR 0031), 3 (ADR 0029), polymorphic-HOF starter (ADR 0032
 combinator tail (ADR 0033), row-poly records (ADR 0034), empty-collection seeds
 (ADR 0035), tuple literals (ADR 0036), partial-application overloads (ADR 0037),
 array-partition `.otherwise` (ADR 0038), nullary-ctor annotation (ADR 0039),
-sound row generalization (ADR 0040), opaque bound vars (ADR 0041), and
-enclosing-letter scoping for inner lambdas/seeds (ADR 0042) done —
-**2 `tsc` errors left**. The open-row cluster is GONE (ADR 0040), the
-`Set<unknown>` `VarSets` cluster is GONE (ADR 0041), and the inner-lambda /
-inner-seed polymorphic-HOF cluster is GONE (ADR 0042 — `check.ts:192`,
-`infer.ts:156`, `module.ts:83` cleared). The 2 that remain are unrelated:
+sound row generalization (ADR 0040), opaque bound vars (ADR 0041),
+enclosing-letter scoping for inner lambdas/seeds (ADR 0042), and applied-ctor
+concrete casts (ADR 0043) done — **1 `tsc` error left**. The open-row cluster is
+GONE (ADR 0040), the `Set<unknown>` `VarSets` cluster is GONE (ADR 0041), the
+inner-lambda / inner-seed polymorphic-HOF cluster is GONE (ADR 0042 —
+`check.ts:192`, `infer.ts:156`, `module.ts:83` cleared), and `writeAll`'s
+recursive `Result` union is GONE (ADR 0043 — `cli.ts:21`). The last one:
 
 1. **The top-level `emptyReg` seed** (`module.ts:91`) — `let emptyReg = { ctors:
    #{}, … }` is NOT inside a generic binding, so ADR 0042 has no lexical letters
    to borrow, and annotating it alone gives tsc contradictory type-arg constraints
    where it flows into the generic `resolveImportsFrom` (ADR 0035 §3's
-   entanglement). Needs the whole seed record + its sibling empties pinned together.
-2. **`writeAll`'s recursive `Result` union** (`cli.ts:21`) — the fold's first
-   ts-pattern arm fixes a narrow `Result` that a later arm widens; a `Result`
-   analogue of the ADR 0038 first-arm-return problem.
+   entanglement). The hand-written `src/module.ts` pins it with an explicit
+   `importedReg: Registry` annotation; alang has neither binding type-annotation
+   syntax nor a cross-module `Registry` name, so closing it needs either that
+   language feature or a codegen pass that monomorphizes a single-instantiation
+   binding. Its own lever, its own ADR.
 
 ## Verify
-`bun run check` green (799 pass); the self-host fixpoint (`build ok` ×2) confirms
-the JS backend stays byte-identical after ADR 0042.
+`bun run check` green (803 pass); the self-host fixpoint (`build ok` ×2) confirms
+the JS backend stays byte-identical after ADR 0043.
 
 ## Not part of this track (uncommitted in tree)
 Rebrand (README, logos, `docs/REBRAND.md`, `docs/V1.md`) and ADRs 0024 (llvm) /
