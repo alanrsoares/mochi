@@ -6,17 +6,10 @@ out
 dist
 *.tgz
 
-# compiled mochi example modules (sources are the `.mochi` + hand-written runtime.js)
-examples/modules/geometry.js
-examples/modules/main.js
-examples/async/main.js
-
-# compiled bootstrap modules — build artifacts from `mochi build`. The sources
-# are the `.mochi`; host.js is hand-written and prelude.gen.js is the generated
-# (parity-guarded) prelude shim, so both are kept.
-bootstrap/*.js
-!bootstrap/host.js
-!bootstrap/prelude.gen.js
+# Compiled `mochi build` output is always `.js`. Every source file is `.ts`,
+# `.mochi`, or a hand-written/generated host runtime kept as `.mjs`, so all
+# `.js` in the tree is a build artifact and safe to ignore wholesale.
+*.js
 
 # code coverage
 coverage

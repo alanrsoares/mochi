@@ -14,12 +14,12 @@ import { buildModules } from "./module.mochi"
 
 type Diag = { message: string, start: number, end: number }
 
-extern readFile : string -> Result string string = "./host.js" "readFile"
-extern writeFile : string -> string -> Result string string = "./host.js" "writeFile"
-extern argv : [string] = "./host.js" "argv"
-extern print : string -> string = "./host.js" "print"
-extern die : string -> a = "./host.js" "die"
-extern formatError : string -> string -> Diag -> string = "./host.js" "formatError"
+extern readFile : string -> Result string string = "./host.mjs" "readFile"
+extern writeFile : string -> string -> Result string string = "./host.mjs" "writeFile"
+extern argv : [string] = "./host.mjs" "argv"
+extern print : string -> string = "./host.mjs" "print"
+extern die : string -> a = "./host.mjs" "die"
+extern formatError : string -> string -> Diag -> string = "./host.mjs" "formatError"
 
 // "foo.mochi" -> "foo.js"  (drops the 6-char `.mochi` suffix).
 let outPath = path =>

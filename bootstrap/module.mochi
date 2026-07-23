@@ -15,11 +15,11 @@ import { exportedCtorKeys, codegen } from "./codegen.mochi"
 
 // Prelude tables from the generated shim (as in compile.mochi). Threaded opaquely
 // into inferProgramImports / codegen; module.mochi never inspects them.
-extern builtins : Map string a = "./prelude.gen.js" "builtins"
-extern namespaces : Map string (Map string a) = "./prelude.gen.js" "namespaces"
-extern namespaceRuntime : Map string (Map string string) = "./prelude.gen.js" "namespaceRuntime"
-extern preludeJsDefs : Map string string = "./prelude.gen.js" "preludeJsDefs"
-extern runtimeDeps : Map string [string] = "./prelude.gen.js" "runtimeDeps"
+extern builtins : Map string a = "./prelude.gen.mjs" "builtins"
+extern namespaces : Map string (Map string a) = "./prelude.gen.mjs" "namespaces"
+extern namespaceRuntime : Map string (Map string string) = "./prelude.gen.mjs" "namespaceRuntime"
+extern preludeJsDefs : Map string string = "./prelude.gen.mjs" "preludeJsDefs"
+extern runtimeDeps : Map string [string] = "./prelude.gen.mjs" "runtimeDeps"
 
 // Full AST, re-declared to match parser/check/infer/codegen. Only `SImport` is
 // destructured here (every other stmt flows opaquely to the passes), but the
@@ -36,9 +36,9 @@ type Loaded = { path: string, stmts: [Stmt] }
 // meaningful span, so both offsets are 0 (matching src/module.ts).
 type MErr = { message: string, start: number, end: number }
 
-extern readFile : string -> Result string string = "./host.js" "readFile"
-extern resolveImport : string -> string -> string = "./host.js" "resolveImport"
-extern absPath : string -> string = "./host.js" "absPath"
+extern readFile : string -> Result string string = "./host.mjs" "readFile"
+extern resolveImport : string -> string -> string = "./host.mjs" "resolveImport"
+extern absPath : string -> string = "./host.mjs" "absPath"
 
 let mErr = message => { message: message, start: 0, end: 0 }
 

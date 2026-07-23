@@ -223,7 +223,11 @@ const compileGraphTs = (
     // per-`.d.ts` bucket for gap-3 declaration emission below.
     for (const s of prog.stmts) {
       if (s.kind !== "extern") continue;
-      const dtsPath = `${resolve(dirname(path), s.module.replace(/\.[jt]s$/, ""))}.d.ts`;
+      // Derive the declaration path from the extern specifier. A `.mjs` host
+      // resolves (bundler moduleResolution) to a `.d.mts`; `.js`/`.ts` to `.d.ts`.
+      const base = s.module.replace(/\.m?[jt]s$/, "");
+      const declExt = /\.mjs$/.test(s.module) ? ".d.mts" : ".d.ts";
+      const dtsPath = `${resolve(dirname(path), base)}${declExt}`;
       const sc = env.get(s.name);
       if (!sc) continue;
       const bucket = externDts.get(dtsPath) ?? externDts.set(dtsPath, []).get(dtsPath)!;

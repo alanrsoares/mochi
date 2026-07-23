@@ -1,4 +1,4 @@
-// Generator for `bootstrap/prelude.gen.js` — the standalone prelude-table shim
+// Generator for `bootstrap/prelude.gen.mjs` — the standalone prelude-table shim
 // the shipped self-hosted compiler imports (ticket 0004). The five tables live
 // once in `src/prelude.ts`; the shipped `mochic` cannot import from `src/`, so
 // this script lowers them into a plain ESM data module.
@@ -26,7 +26,7 @@ import {
 } from "../src/prelude";
 import type { Row, Type } from "../src/types";
 
-export const SHIM_PATH = "bootstrap/prelude.gen.js";
+export const SHIM_PATH = "bootstrap/prelude.gen.mjs";
 
 // --- load infer.mochi's Ty/Row constructors from the compiled module ---
 type AlInfer = {

@@ -3,7 +3,7 @@
 // against Shape here even though `area` lives in another file.
 import { area, hypot, Circle, Rect } from "./geometry"
 
-extern log : string -> number -> number = "./runtime.js" "log"
+extern log : string -> number -> number = "./runtime.mjs" "log"
 
 let circle = Circle(2.0)
 let rect = Rect(3.0, 4.0)

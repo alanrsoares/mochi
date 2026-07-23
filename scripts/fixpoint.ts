@@ -26,7 +26,7 @@ const work = join(root, ".fixpoint-work");
 // discovers the graph itself; this list is what we read back and diff.
 const MODULES = ["ast", "types", "lexer", "parser", "check", "infer", "codegen", "module", "compile", "cli"];
 // Runtime deps the emitted compiler imports (hand-written + generated shim).
-const RUNTIME_DEPS = ["host.js", "prelude.gen.js"];
+const RUNTIME_DEPS = ["host.mjs", "prelude.gen.mjs"];
 
 const bun = (args: string[], cwd = root) =>
   execFileSync("bun", args, { cwd, encoding: "utf8" });

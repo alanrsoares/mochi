@@ -49,7 +49,7 @@ beforeAll(async () => {
   ({ check, checkWith, exportedRegistry } = await import(bs("check.js")));
   ({ exportedCtorKeys } = await import(bs("codegen.js")));
   ({ inferProgram, inferProgramImports } = await import(bs("infer.js")));
-  ({ builtins, namespaces } = await import(bs("prelude.gen.js")));
+  ({ builtins, namespaces } = await import(bs("prelude.gen.mjs")));
 });
 
 // ---- exportedRegistry ------------------------------------------------------

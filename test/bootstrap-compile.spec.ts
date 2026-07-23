@@ -36,7 +36,7 @@ const evalNames = <T extends Record<string, unknown>>(
 let alCompile: (src: string) => AlResult;
 
 beforeAll(async () => {
-  const shim = await import(join(root, "bootstrap/prelude.gen.js"));
+  const shim = await import(join(root, "bootstrap/prelude.gen.mjs"));
   const { lex } = evalNames<{ lex: unknown }>(compileAl("bootstrap/lexer.mochi"), ["lex"]);
   const { parse } = evalNames<{ parse: unknown }>(compileAl("bootstrap/parser.mochi"), ["parse"]);
   const { check } = evalNames<{ check: unknown }>(compileAl("bootstrap/check.mochi"), ["check"]);

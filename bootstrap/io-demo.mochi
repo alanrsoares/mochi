@@ -1,10 +1,10 @@
 // Ticket 0001 demo — host IO through `extern`, end-to-end under Bun.
 // Reads the file named by the first argument and writes its contents to the
 // path named by the second. Tracer for the disk/argv surface cli.mochi needs.
-extern readFile : string -> Result string string = "./host.js" "readFile"
-extern writeFile : string -> string -> Result string string = "./host.js" "writeFile"
-extern argv : [string] = "./host.js" "argv"
-extern print : string -> string = "./host.js" "print"
+extern readFile : string -> Result string string = "./host.mjs" "readFile"
+extern writeFile : string -> string -> Result string string = "./host.mjs" "writeFile"
+extern argv : [string] = "./host.mjs" "argv"
+extern print : string -> string = "./host.mjs" "print"
 
 // copy : string -> string -> Result string string
 let copy = (src, dst) => switch readFile(src) {

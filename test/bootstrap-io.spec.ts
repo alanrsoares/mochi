@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { match } from "@onrails/pattern";
 import { unwrapOk } from "@onrails/result";
-import * as host from "../bootstrap/host.js";
+import * as host from "../bootstrap/host.mjs";
 import { compile } from "../src/compile";
 
 const root = join(import.meta.dir, "..");

@@ -1,10 +1,10 @@
 // A library module. It binds a few host primitives via `extern`, then exports
 // a Shape variant and an `area` function computed over it. Everything the rest
 // of the program needs is `export`ed; the externs stay private to this file.
-extern mul : number -> number -> number = "./runtime.js" "mul"
-extern add : number -> number -> number = "./runtime.js" "add"
-extern sqrt : number -> number = "./runtime.js" "sqrt"
-extern pi : number = "./runtime.js" "pi"
+extern mul : number -> number -> number = "./runtime.mjs" "mul"
+extern add : number -> number -> number = "./runtime.mjs" "add"
+extern sqrt : number -> number = "./runtime.mjs" "sqrt"
+extern pi : number = "./runtime.mjs" "pi"
 
 // Named constructor fields make the runtime shape self-describing; a positional
 // field would work too.

@@ -14,11 +14,11 @@ import { codegen } from "./codegen.mochi"
 // Prelude tables from the standalone shim. builtins/namespaces carry the
 // inferrer's Ty; compile never inspects them, so a polymorphic `a` lets them
 // unify with whatever inferProgram expects (the opaque threading of 0002).
-extern builtins : Map string a = "./prelude.gen.js" "builtins"
-extern namespaces : Map string (Map string a) = "./prelude.gen.js" "namespaces"
-extern namespaceRuntime : Map string (Map string string) = "./prelude.gen.js" "namespaceRuntime"
-extern preludeJsDefs : Map string string = "./prelude.gen.js" "preludeJsDefs"
-extern runtimeDeps : Map string [string] = "./prelude.gen.js" "runtimeDeps"
+extern builtins : Map string a = "./prelude.gen.mjs" "builtins"
+extern namespaces : Map string (Map string a) = "./prelude.gen.mjs" "namespaces"
+extern namespaceRuntime : Map string (Map string string) = "./prelude.gen.mjs" "namespaceRuntime"
+extern preludeJsDefs : Map string string = "./prelude.gen.mjs" "preludeJsDefs"
+extern runtimeDeps : Map string [string] = "./prelude.gen.mjs" "runtimeDeps"
 
 // Type-check gate: open-world inference (JS host globals stay legal), program
 // passed through unchanged on success.
