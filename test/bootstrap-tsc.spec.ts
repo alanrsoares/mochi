@@ -7,7 +7,7 @@ import { expect, test } from "bun:test";
 import { bootstrapTsc } from "../scripts/bootstrap-tsc";
 
 // Lower this as levers land; never raise it to make a regression pass.
-const CEILING = 5; // ADR 0041 (bound vars opaque in freeInScheme): 8 → 5.
+const CEILING = 2; // ADR 0042 (enclosing letters scope inner lambdas/seeds): 5 → 2.
 
 test("bootstrap emits within the tsc-error ceiling (ratchet)", async () => {
   const { total, byCode } = await bootstrapTsc();

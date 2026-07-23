@@ -65,6 +65,7 @@ What else was on the table and why not.
 | [0039](0039-concrete-annotation-for-nullary-ctors.md) | Parametric nullary constructors annotate concretely in place (TS backend) | Accepted |
 | [0040](0040-generalize-under-the-substitution.md) | Generalize under the current substitution — sound row generalization | Accepted |
 | [0041](0041-bound-vars-opaque-in-freeinscheme.md) | A scheme's bound vars are opaque when reading its free vars | Accepted |
+| [0042](0042-enclosing-letters-scope-inner-lambdas-and-seeds.md) | A generic binding's letters scope the lambdas and seeds in its body | Accepted |
 
 
 ## Backlog (well-evidenced, not yet written)

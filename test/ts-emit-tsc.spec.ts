@@ -178,6 +178,21 @@ let conn = (st) =>
   let s2 = visit(s1, [1, 2]) in
   gte(s2.low, s2.idx) ? { ...s2, onS: s2.n, out: add(s2.n, s2.acc) } : s2
 let go = conn({ n: 0, low: 0, idx: 0, onS: 0, out: 0, acc: 0 }).out`,
+  // Regression guard for ADR 0042: a lambda NESTED in a generic binding's body
+  // may name that binding's `<A, B, C>` letters. `firstPatterns` — an inner
+  // `map`/`filter` callback (`a => a.pattern`) whose param is the enclosing
+  // element type; tsc infers it `unknown` through the nested higher-order call
+  // (`a` unusable). `lookupNested` — an empty `#{}` seed whose element type is an
+  // enclosing letter; bare it emits `Map<unknown, unknown>` and rejects the
+  // `Map<B, C>` slot. Both annotate with the in-scope letters. Mirrors
+  // `bootstrap/check.al`'s `checkSeqExhaustive` and `infer.al`'s `inferNsField`.
+  innerGenericScope: `
+let firstPatterns = arms =>
+  arms
+  |> filter(a => Option.isNone(a.guard))
+  |> map(a => a.pattern)
+let lookupNested = (outer, inner, tbl) =>
+  Map.get(inner, Map.getOr(#{}, outer, tbl))`,
 };
 
 beforeAll(() => {

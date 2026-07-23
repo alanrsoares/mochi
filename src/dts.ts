@@ -122,12 +122,20 @@ const hasFreeVar = (t: Type): boolean => {
 // are fully known, else null. An empty literal otherwise infers `Map<unknown,
 // unknown>`/`never[]`/`Set<never>`, which won't flow to a concretely-typed
 // parameter (ADR 0035); annotating the seed with the resolved element types
-// (`new Map<number, Ty>()`, `[] as Ty[]`) fixes the mismatch. Skip when any
-// element type is still a free var — there is no generic head in scope at a
-// literal, so `unknown` would be no better than what tsc already infers.
-export const emptyCollTs = (t: Type, aliases: AliasDef[]): string | null => {
+// (`new Map<number, Ty>()`, `[] as Ty[]`) fixes the mismatch.
+//
+// `names` (default empty, ADR 0042) carries the letters of an enclosing generic
+// binding: a seed whose element type is a var of that binding renders it as the
+// letter (`new Map<string, … & D>()`) rather than being skipped. With no such
+// scope (empty map) only a fully concrete element type renders — a free var
+// would become `unknown`, no better than tsc's own guess for the literal.
+export const emptyCollTs = (
+  t: Type,
+  aliases: AliasDef[],
+  names: Map<number, string> = new Map(),
+): string | null => {
   const folded = foldAliases(t, aliases);
-  return hasFreeVar(folded) ? null : tsOf(folded, new Map());
+  return allVarsIn(folded, names) ? tsOf(folded, names) : null;
 };
 
 // Arity-aware function type: peel one arrow per lambda parameter, then recurse
@@ -342,6 +350,42 @@ export const bindingTsType = (sc: Scheme, value: Expr, aliases: AliasDef[]): str
   return tsOf(folded, new Map());
 };
 
+// Every type AND row var in a (zonked) type is a key of `names`. Unlike
+// `freeVars` (type vars only), this also inspects a record's trailing row var,
+// so an open record `{ … } & R` counts as "fully in scope" only when `R` too
+// carries a letter — the precondition for rendering it as `{ … } & R` rather
+// than dropping the tail. Empty `names` ⇒ true only for a fully concrete type.
+const allVarsIn = (t: Type, names: Map<number, string>): boolean => {
+  switch (t.kind) {
+    case "var":
+      return names.has(t.id);
+    case "con":
+      return t.args.every((a) => allVarsIn(a, names));
+    case "arrow":
+      return allVarsIn(t.from, names) && allVarsIn(t.to, names);
+    case "record": {
+      let row = t.row;
+      while (row.kind === "extend") {
+        if (!allVarsIn(row.type, names)) return false;
+        row = row.rest;
+      }
+      return row.kind === "rvar" ? names.has(row.id) : true;
+    }
+  }
+};
+
+// Merge the generic-letter maps of several schemes into one id → letter map.
+// Var ids are globally unique within an inference run and each quantified id
+// belongs to exactly ONE binding's scheme, so the union never collides on a key
+// even when two schemes both start their letters at `A` (distinct ids). Used to
+// bring a generic binding's letters into scope for the inner lambdas nested in
+// its body (ADR 0042).
+export const unionGenericNames = (schemes: Iterable<Scheme>): Map<number, string> => {
+  const out = new Map<number, string>();
+  for (const sc of schemes) for (const [id, letter] of genericNames(sc)) out.set(id, letter);
+  return out;
+};
+
 // TS backend (ADR 0028): the per-parameter TS type annotations for a lambda,
 // given its INFERRED (curried) type — looked up from the per-node type table —
 // and its collapsed parameter count. One arrow is peeled per param.
@@ -356,10 +400,19 @@ export const bindingTsType = (sc: Scheme, value: Expr, aliases: AliasDef[]): str
 // `string`, records of concrete fields, …) are exactly the ones tsc can't infer
 // → the bare-param `any` (TS7006) this clears. Records/tuples render structurally,
 // so destructure params (`{ x, y }`, `[a, b]`) get a matching type too.
+//
+// ADR 0042: `names` (default empty) carries the letters in lexical scope — the
+// enclosing generic binding's `<A, B, …>` (via `unionGenericNames`). A param
+// whose every var is one of those renders with the letters (`(a: { … } & B)`)
+// rather than staying bare; tsc cannot infer such a param through a nested
+// higher-order call (`map((a) => …, filter(…))`) and falls it to `unknown`.
+// A concrete param still renders (empty-map path); a param mixing in an
+// out-of-scope var still stays bare (rendering it would be `unknown`/dropped).
 export const lambdaParamTypesTs = (
   lamType: Type,
   arity: number,
   aliases: AliasDef[],
+  names: Map<number, string> = new Map(),
 ): (string | null)[] => {
   const out: (string | null)[] = [];
   let cur = foldAliases(lamType, aliases);
@@ -368,9 +421,16 @@ export const lambdaParamTypesTs = (
       out.push(null);
       continue;
     }
-    const fv: number[] = [];
-    freeVars(cur.from, fv);
-    out.push(fv.length === 0 ? tsOf(cur.from, new Map()) : null);
+    const from = cur.from;
+    if (allVarsIn(from, names)) {
+      // Every var is in scope — render with the enclosing letters (ADR 0042).
+      out.push(tsOf(from, names));
+    } else {
+      // Fall back to ADR 0028: emit only if fully concrete, else leave bare.
+      const fv: number[] = [];
+      freeVars(from, fv);
+      out.push(fv.length === 0 ? tsOf(from, new Map()) : null);
+    }
     cur = cur.to;
   }
   return out;

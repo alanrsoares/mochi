@@ -23,6 +23,7 @@ import {
   lambdaParamTypesTs,
   referencedBuiltinTypeDecls,
   typeDecl,
+  unionGenericNames,
 } from "./dts";
 import type { AlangError } from "./errors";
 import type { Env, Scheme, TypeAt } from "./infer";
@@ -33,6 +34,72 @@ import type { AliasDef } from "./types";
 export type CodegenTsOptions = { runtimeImport?: string };
 
 export const DEFAULT_RUNTIME_IMPORT = "@alang/runtime";
+
+// Visit the span of every lambda AND every empty-collection literal (`#{}`/`[]`/
+// `@{}`) in an expression subtree, root included (ADR 0042). Used to scope a
+// generic binding's letters over the annotatable nodes nested in its body: each
+// visited span is mapped to that binding's letter assignment, so an inner lambda
+// param or an empty seed can name those letters. The binding's own value-lambda
+// span is visited too, but `annotateParams` resolves it via `genericBindingLambda`
+// first, so the mapping is harmless.
+const forEachScopedSpan = (e: Expr, f: (span: Span) => void): void => {
+  switch (e.kind) {
+    case "lambda":
+      f(e.span);
+      forEachScopedSpan(e.body, f);
+      return;
+    case "call":
+      forEachScopedSpan(e.fn, f);
+      for (const a of e.args) forEachScopedSpan(a, f);
+      return;
+    case "letin":
+    case "letbind":
+      forEachScopedSpan(e.value, f);
+      forEachScopedSpan(e.body, f);
+      return;
+    case "pipe":
+      forEachScopedSpan(e.left, f);
+      forEachScopedSpan(e.right, f);
+      return;
+    case "ternary":
+      forEachScopedSpan(e.cond, f);
+      forEachScopedSpan(e.then, f);
+      forEachScopedSpan(e.else, f);
+      return;
+    case "match":
+      forEachScopedSpan(e.scrutinee, f);
+      for (const a of e.arms) {
+        if (a.guard) forEachScopedSpan(a.guard, f);
+        forEachScopedSpan(a.body, f);
+      }
+      return;
+    case "record":
+      for (const fld of e.fields) forEachScopedSpan(fld.value, f);
+      if (e.spread) forEachScopedSpan(e.spread, f);
+      return;
+    case "field":
+      forEachScopedSpan(e.target, f);
+      return;
+    case "tuple":
+    case "arr":
+    case "list":
+      if (e.kind !== "tuple" && e.elements.length === 0) f(e.span); // empty `[]`/`@{}`
+      for (const x of e.elements) forEachScopedSpan(x, f);
+      return;
+    case "map":
+      if (e.entries.length === 0) f(e.span); // empty `#{}`
+      for (const en of e.entries) {
+        forEachScopedSpan(en.key, f);
+        forEachScopedSpan(en.value, f);
+      }
+      return;
+    case "interp":
+      for (const p of e.parts) if (typeof p !== "string") forEachScopedSpan(p, f);
+      return;
+    default:
+      return; // num / bool / str / ref — no nested expressions
+  }
+};
 
 // The inference result + cross-module wiring a module needs to emit its `.ts`.
 // A single file has empty `importLines`/`importedKeys`; a module in a graph
@@ -97,14 +164,25 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
   // a generic head, so polymorphic inner params name the letters instead of being
   // erased to `any`/`unknown` by `_curry`.
   const genericBindingLambda = new Map<string, Scheme>();
+  // Each annotatable node (lambda, empty-collection literal) NESTED in a generic
+  // binding's value body → that binding's letter map (ADR 0042). The binding's
+  // `<A, B>` head (ADR 0032) lexically scopes its whole body, so a nested param
+  // or seed may name those letters. Scoped PER binding (not a global union):
+  // letters are positional, so the same id could be `A` in one scheme and `C` in
+  // another; a nested node must use exactly its own binding's assignment to match
+  // the head it renders under.
+  const scopedNames = new Map<string, Map<number, string>>();
   for (const s of prog.stmts) {
     if (s.kind !== "let" || s.value.kind !== "lambda" || s.name.startsWith("$")) continue;
     const sc = ctx.env.get(s.name);
     // Type vars OR row vars: a row-poly binding (`st => {...st}`, no type vars)
     // still needs the generic head so its open-row params emit `{…} & R` under
     // a scoped `<R>` (ADR 0034), not a closed record dropping the row var.
-    if (sc && (sc.vars.length > 0 || sc.rvars.length > 0))
+    if (sc && (sc.vars.length > 0 || sc.rvars.length > 0)) {
       genericBindingLambda.set(`${s.value.span.start}:${s.value.span.end}`, sc);
+      const names = unionGenericNames([sc]); // this scheme's own id → letter map
+      forEachScopedSpan(s.value, (sp) => scopedNames.set(`${sp.start}:${sp.end}`, names));
+    }
   }
 
   // Annotate each lambda's params from its inferred curried type (ADR 0028) —
@@ -112,13 +190,17 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
   // contextually by tsc). Exception (ADR 0032): a generic binding's value lambda
   // gets a generic head + ALL params annotated, so its polymorphic inner params
   // name the letters rather than falling to `any`/`unknown` through `_curry`.
+  // Inner lambdas (ADR 0042): pass the enclosing binding's letters so a param
+  // over them renders the letters instead of falling to `unknown` where tsc
+  // cannot infer through a nested higher-order call (`map(f, filter(g, xs))`).
   const annotateParams = (span: Span, arity: number) => {
     const key = `${span.start}:${span.end}`;
     const sc = genericBindingLambda.get(key);
     const g = sc ? genericLambdaParams(sc, arity, ctx.aliases) : null;
     if (g) return g;
     const t = typeAt.get(key);
-    return { generics: "", params: t ? lambdaParamTypesTs(t, arity, ctx.aliases) : [] };
+    const names = scopedNames.get(key);
+    return { generics: "", params: t ? lambdaParamTypesTs(t, arity, ctx.aliases, names) : [] };
   };
 
   // The concrete type each guard-form arm narrows FROM (ADR 0031). codegen turns
@@ -132,8 +214,12 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
   // An empty collection literal (`#{}`/`[]`) — annotate with its resolved
   // element types so the seed flows to a concretely-typed state field (ADR 0035).
   const annotateEmpty = (e: Expr) => {
-    const t = typeAt.get(`${e.span.start}:${e.span.end}`);
-    return t ? emptyCollTs(t, ctx.aliases) : null;
+    const key = `${e.span.start}:${e.span.end}`;
+    const t = typeAt.get(key);
+    // ADR 0042: an empty seed inside a generic binding may name that binding's
+    // letters (`new Map<string, … & D>()`), where its element type is otherwise
+    // free and would render `unknown`.
+    return t ? emptyCollTs(t, ctx.aliases, scopedNames.get(key)) : null;
   };
 
   // A `let x = v in …` whose value is polymorphic but used at one monomorphic

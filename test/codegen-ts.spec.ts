@@ -68,6 +68,21 @@ test("a top-level polymorphic-but-single-use seed gets a const annotation (ADR 0
   expect(out).toContain("const seed: Map<number, number> = new Map([]);");
 });
 
+test("an inner lambda param over the enclosing binding's letters names them (ADR 0042)", () => {
+  // `firstUp`/`get` are generic; the `map`/`filter` callback param is the
+  // enclosing element type. tsc infers it `unknown` through the nested
+  // higher-order call, so annotate it with the binding's in-scope letters.
+  const out = ts("let firstNames = xs => xs |> filter(a => a.ok) |> map(a => a.name)");
+  expect(out).toContain("(a: ({ name: A; ok: boolean } & B)) => a.name");
+});
+
+test("an empty seed over the enclosing binding's letters names them (ADR 0042)", () => {
+  // The `#{}` default's element type is a binding letter; bare it emits
+  // `Map<unknown, unknown>`. Annotate it with the letters in lexical scope.
+  const out = ts("let nested = (k1, k2, m) => Map.get(k2, Map.getOr(#{}, k1, m))");
+  expect(out).toContain("new Map<B, C>()");
+});
+
 test("a variant decl emits an export type union alongside its typed ctor factories", () => {
   const out = ts("type Color = | Red | Green");
   expect(out).toContain('export type Color =\n  | { _tag: "Red" }\n  | { _tag: "Green" };');
