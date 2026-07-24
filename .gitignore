@@ -52,3 +52,8 @@ test/.tsgen/
 
 # build --emit=ts differential scratch (ADR 0026)
 test/.tsgen-graph/
+
+# bootstrap-cli.spec.ts subprocess scratch (needs repo node_modules on the resolution path)
+test/.mochi-cli-*/
+
+.claude

@@ -7,7 +7,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { unwrapOk } from "@onrails/result";
 import { compile as tsCompile } from "../src/compile";
@@ -37,7 +36,10 @@ beforeAll(() => {
     cwd: root,
     encoding: "utf8",
   });
-  dir = mkdtempSync(join(tmpdir(), "mochi-cli-"));
+  // Scratch dir lives under the repo (not the OS tmpdir) so the emitted
+  // .js can resolve runtime deps (@onrails/pattern) via the repo's own
+  // node_modules, same as any real project depending on mochic's output.
+  dir = mkdtempSync(join(root, "test", ".mochi-cli-"));
 });
 afterAll(() => {
   rmSync(dir, { recursive: true, force: true });

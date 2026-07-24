@@ -22,7 +22,7 @@
       },
     },
     "editors/vscode": {
-      "name": "mochi",
+      "name": "@mochi/vscode",
       "version": "0.0.1",
       "devDependencies": {
         "@types/vscode": "^1.125.0",
@@ -104,6 +104,8 @@
 
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.28.1", "", { "os": "win32", "cpu": "x64" }, "sha512-bm4Mowrv+GXMlpWX++EcXw/iLyd1o3+bJkC2DkWXYVvgZCqD/bSj9ctZeAMC3cIxgjRVR2Dufaiu4YPxr5gW1A=="],
 
+    "@mochi/vscode": ["@mochi/vscode@workspace:editors/vscode"],
+
     "@onrails/pattern": ["@onrails/pattern@0.3.2", "", {}, "sha512-EF/xmJ7yXzZpfYinLnMVm6M81NplCfENvaDvjgnCiJ+P51m56ExqWzCaATa17Smpm0T1Plyf5WzcHMjrJ6y0Dg=="],
 
     "@onrails/result": ["@onrails/result@0.4.0", "", {}, "sha512-DFdaC5pyLa8WRGg6dF8W3RbckVB2SmSpNTXtCbuFj2FqkcmWpIzJJvAfvrRcpXwVDhpxstxKkAipTRmaBoJHLQ=="],
@@ -125,8 +127,6 @@
     "fast-check": ["fast-check@4.9.0", "", { "dependencies": { "pure-rand": "^8.0.0" } }, "sha512-7ms6T7SybUev/PQITciI0yLM2pOSFy5zpG8Ty7tQofcVaQUvrMXp6CBwqF6fThLCLOrfBtuHAtwq6Yu4XPCllg=="],
 
     "minimatch": ["minimatch@10.2.5", "", { "dependencies": { "brace-expansion": "^5.0.5" } }, "sha512-MULkVLfKGYDFYejP07QOurDLLQpcjk7Fw+7jXS2R2czRQzR56yHRveU5NDJEOviH+hETZKSkIk5c+T23GjFUMg=="],
-
-    "mochi": ["mochi@workspace:editors/vscode"],
 
     "pure-rand": ["pure-rand@8.4.2", "", {}, "sha512-vvuOGgcuPJAirlHvuQw1TrOiw7ptaIXXmIbNuiNOY6lNGJJH49PQ1Kj4nd783nPdQhQdicgOjVI2yI/9BD6/Ng=="],
 
