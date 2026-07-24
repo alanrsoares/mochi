@@ -10,8 +10,8 @@ let andThen = f => g => x => g(f(x))
 let inc = x => add(x, 1)
 let double = x => mul(x, 2)
 
-// point-free: build a new function without naming its argument
-let incThenDouble = compose(double, inc) // x -> (x + 1) * 2
+// point-free: build a new function using >> left-to-right composition operator
+let incThenDouble = inc >> double // x -> (x + 1) * 2
 let composed = incThenDouble(10) // 22
 
 // ---- long |> pipeline (left-to-right data flow) ----

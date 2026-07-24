@@ -27,6 +27,7 @@ type Tok =
   | TArrow
   | TTarrow
   | TPipe
+  | TCompose
   | TBar
   | TLparen
   | TRparen
@@ -76,6 +77,7 @@ let tokName = t => switch t {
   | TArrow => "arrow"
   | TTarrow => "tarrow"
   | TPipe => "pipe"
+  | TCompose => "compose"
   | TBar => "bar"
   | TLparen => "lparen"
   | TRparen => "rparen"
@@ -305,6 +307,7 @@ let parseExpr = (toks, pos) => switch tokAt(toks, pos).tok {
   | _ => looksLikeLambda(toks, pos)
       ? parseLambda(toks, pos)
       : let? (left, p) = parseAtomOrCall(toks, pos) in
+      let? (left, p) = composeLoop(left, toks, p) in
       let? (left, p) = pipeLoop(left, toks, p) in ternaryTail(left, toks, p)
 }
 
@@ -322,6 +325,27 @@ let ternaryTail = (cond, toks, pos) =>
       )
     )
     : Ok((cond, pos))
+
+let composeLoop = (left, toks, pos) =>
+  let lt = tokAt(toks, pos) in
+  eq(lt.tok, TCompose)
+    ? parseAtomOrCall(toks, add(pos, 1))
+      |> Result.flatMap(((right, p)) =>
+        let opSpan = spanOf(lt) in
+        let xRef = ERef("$x", opSpan) in
+        let innerCall = ECall(left, [xRef], exprSpan(left)) in
+        let outerCall = ECall(
+          right,
+          [innerCall],
+          spanning(exprSpan(left), exprSpan(right))
+        ) in
+        let fn = ELambda(
+          [LPName("$x")],
+          outerCall,
+          spanning(exprSpan(left), exprSpan(right))
+        ) in
+        composeLoop(fn, toks, p))
+    : Ok((left, pos))
 
 let pipeLoop = (left, toks, pos) =>
   eq(tokAt(toks, pos).tok, TPipe)

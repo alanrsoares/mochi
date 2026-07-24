@@ -21,6 +21,7 @@ type Tok =
   | TArrow
   | TTarrow
   | TPipe
+  | TCompose
   | TBar
   | TLparen
   | TRparen
@@ -84,6 +85,7 @@ let identTok = word => keywordTok(word) |> Option.unwrapOr(TId(word))
 // Two-char operators, checked before single chars.
 let digraphTok = two => switch two {
   | "|>" => Some(TPipe)
+  | ">>" => Some(TCompose)
   | "=>" => Some(TArrow)
   | "->" => Some(TTarrow)
   | _ => None
