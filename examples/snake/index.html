@@ -499,10 +499,10 @@
             const hasRight = dirIn === 'right' || dirOut === 'right';
 
             radii = [
-              (hasUp && hasLeft) ? radiusSize : 2,
-              (hasUp && hasRight) ? radiusSize : 2,
-              (hasDown && hasRight) ? radiusSize : 2,
-              (hasDown && hasLeft) ? radiusSize : 2
+              (hasRight && hasDown) ? radiusSize : 2, // top-left (outer for Right+Down)
+              (hasLeft && hasDown)  ? radiusSize : 2, // top-right (outer for Left+Down)
+              (hasLeft && hasUp)    ? radiusSize : 2, // bottom-right (outer for Left+Up)
+              (hasRight && hasUp)   ? radiusSize : 2  // bottom-left (outer for Right+Up)
             ];
           } else {
             radii = [2, 2, 2, 2];
