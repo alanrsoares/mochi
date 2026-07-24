@@ -4,8 +4,6 @@
 // ctors + entry points it needs; gen-prelude compiles THIS file (self-contained,
 // no AST dependency) to lower the prelude tables to mochi Ty.
 
-let cat = parts => Str.join("", parts)
-
 // ---- Ty / Row: applied type constructors + row-polymorphic records ----
 //
 // `TyCon(name, args)` is a type constructor *applied*: primitive nullary

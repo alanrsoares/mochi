@@ -226,6 +226,18 @@ test("cascading ternaries flatten instead of staircasing", () => {
   );
 });
 
+test("short ++ chains stay inline", () => {
+  expect(fmt('let a = "hi" ++ " " ++ "there"')).toBe('let a = "hi" ++ " " ++ "there"\n');
+});
+
+test("long ++ chains break one fragment per line", () => {
+  const src =
+    'let a = "((_it) => { const _b = []; let _done = false; " ++ "const _pull = (_n) => { while (_b.length < _n && !_done) { const _s = _it.next(); " ++ "if (_s.done) _done = true; else _b.push(_s.value); } return _b.length >= _n; };"';
+  expect(fmt(src)).toBe(
+    'let a = "((_it) => { const _b = []; let _done = false; "\n  ++ "const _pull = (_n) => { while (_b.length < _n && !_done) { const _s = _it.next(); "\n  ++ "if (_s.done) _done = true; else _b.push(_s.value); } return _b.length >= _n; };"\n',
+  );
+});
+
 test("composition operator >> refolds correctly when formatted", () => {
   expect(fmt("let f = a >> b")).toBe("let f = a >> b\n");
 });

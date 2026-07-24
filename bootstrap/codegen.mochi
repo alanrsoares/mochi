@@ -29,8 +29,6 @@ import { keysOf, ctorKeysFromStmts, seedBuiltinCtorKeys } from "./ctors.mochi"
 
 // --- small generic helpers (duplicated per bootstrap file, same as check.mochi/infer.mochi) ---
 
-let cat = parts => Str.join("", parts)
-
 let allOfFrom = (f, xs, i) => switch Array.get(i, xs) {
   | None => true
   | Some(x) => f(x) ? allOfFrom(f, xs, i + 1) : false
@@ -57,7 +55,7 @@ let escChar = c => switch c {
   | "\t" => "\\t"
   | _ => c
 }
-let jsStringLit = s => "\"${cat(Str.chars(s) |> map(escChar))}\""
+let jsStringLit = s => "\"${Str.join("", Str.chars(s) |> map(escChar))}\""
 
 // Re-escape a decoded literal chunk for a JS template literal: backslashes
 // first (else the escapes we're about to insert double-escape), then the
@@ -167,19 +165,15 @@ let genExpr = (e, ctx) => switch e {
   | EInterp(parts, _) =>
     // "…${x}…" (ADR 0023) → a native JS template literal — emitted JS reads
     // exactly like the source.
-    cat(
-      [
-        "`",
-        cat(
-          parts
-            |> map(p => switch p {
-              | IPLit(value) => escapeTemplateLiteral(value)
-              | IPExpr(ex) => cat(["\${", genExpr(ex, ctx), "}"])
-            })
-        ),
-        "`"
-      ]
-    )
+    let body = Str.join(
+      "",
+      parts
+        |> map(p => switch p {
+          | IPLit(value) => escapeTemplateLiteral(value)
+          | IPExpr(ex) => "\${${genExpr(ex, ctx)}}"
+        })
+    ) in
+      "`${body}`"
 }
 
 // A `@{...}` literal -> a lazy iterable over its (eagerly-evaluated)
@@ -378,14 +372,10 @@ let isListMatch = arms =>
 // A lazy tail/rest: replay the still-buffered elements from index `from`,
 // then drain whatever's left in the iterator. `_list` makes it re-iterable + lazy.
 let listTail = from =>
-  cat(
-    [
-      "_list(function* () { for (let _i = ",
-      show(from),
-      "; _i < _b.length; _i++) yield _b[_i]; ",
-      "if (!_done) { let _s; while (!(_s = _it.next()).done) yield _s.value; } })"
-    ]
-  )
+  "_list(function* () { for (let _i = "
+    ++ show(from)
+    ++ "; _i < _b.length; _i++) yield _b[_i]; "
+    ++ "if (!_done) { let _s; while (!(_s = _it.next()).done) yield _s.value; } })"
 
 let listArmGuards = (elems, i, ctx) => switch Array.get(i, elems) {
   | None => []
@@ -457,19 +447,15 @@ let listMatchLoop = (arms, i, ctx) => switch Array.get(i, arms) {
 // check.ts proved totality.
 let genListMatch = (scrutinee, arms, ctx) =>
   let (armLines, fallback) = listMatchLoop(arms, 0, ctx) in
-    cat(
-      [
-        "((_it) => { const _b = []; let _done = false; ",
-        "const _pull = (_n) => { while (_b.length < _n && !_done) { const _s = _it.next(); ",
-        "if (_s.done) _done = true; else _b.push(_s.value); } return _b.length >= _n; };\n",
-        Str.join("\n", armLines),
-        "\n  return ",
-        fallback,
-        ";\n})(",
-        genExpr(scrutinee, ctx),
-        "[Symbol.iterator]())"
-      ]
-    )
+    "((_it) => { const _b = []; let _done = false; "
+      ++ "const _pull = (_n) => { while (_b.length < _n && !_done) { const _s = _it.next(); "
+      ++ "if (_s.done) _done = true; else _b.push(_s.value); } return _b.length >= _n; };\n"
+      ++ Str.join("\n", armLines)
+      ++ "\n  return "
+      ++ fallback
+      ++ ";\n})("
+      ++ genExpr(scrutinee, ctx)
+      ++ "[Symbol.iterator]())"
 
 let matchArmsLoop = (arms, i, ctx) => switch Array.get(i, arms) {
   | None => ([], None)

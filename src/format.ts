@@ -735,6 +735,28 @@ const binOperandD = (e: Expr, parentPrec: number, isRight: boolean): Doc => {
   return parenIf(needsParens, exprD(e));
 };
 
+// `++` is left-associative (`concat(concat(a, b), c)`); flatten like `|>` so a
+// long string-build can break one fragment per line instead of overflowing.
+const CONCAT_PREC = 10;
+const isConcatCall = (e: Expr): boolean =>
+  e.kind === "call" && e.fn.kind === "ref" && e.fn.name === "concat" && e.args.length === 2;
+
+const concatSegments = (e: Expr): Expr[] => {
+  if (!isConcatCall(e)) return [e];
+  const [l, r] = (e as CallExpr).args as [Expr, Expr];
+  return [...concatSegments(l), r];
+};
+
+const concatD = (e: CallExpr): Doc => {
+  const [head, ...rest] = concatSegments(e);
+  return group(
+    seq(
+      binOperandD(head!, CONCAT_PREC, false),
+      indent(cat(rest.map((s) => seq(line, txt("++ "), binOperandD(s, CONCAT_PREC, true))))),
+    ),
+  );
+};
+
 const binaryD = (e: CallExpr): Doc | null => {
   const neq = neqOperands(e);
   if (neq) {
@@ -743,6 +765,7 @@ const binaryD = (e: CallExpr): Doc | null => {
   }
   const info = binOpOf(e);
   if (!info) return null;
+  if (info.symbol === "++") return concatD(e);
   const [l, r] = e.args as [Expr, Expr];
   return group(
     seq(binOperandD(l, info.prec, false), txt(` ${info.symbol} `), binOperandD(r, info.prec, true)),
