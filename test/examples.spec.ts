@@ -34,22 +34,9 @@ test("examples/async composes a typed Task pipeline that runs to its value", asy
   const js = unwrapOk(compile(read("examples/async/main.mochi")))
     .replace(/^import .*$/gm, "")
     .replace(/^export /gm, "");
-  // Inject the host runtime (mirrors examples/async/task.js) and run the Task.
-  const of = (x: number) => () => Promise.resolve(x);
-  const mapT = (f: (n: number) => number) => (t: () => Promise<number>) => () => t().then(f);
-  const andThen = (f: (n: number) => () => Promise<number>) => (t: () => Promise<number>) => () =>
-    t().then((x) => f(x)());
-  const delay = (ms: number) => (x: number) => () =>
-    new Promise((res) => setTimeout(() => res(x), ms));
-  const run = (t: () => Promise<number>): Promise<number> => t();
-  const result = new Function("of", "mapT", "andThen", "delay", "run", `${js}\nreturn result;`)(
-    of,
-    mapT,
-    andThen,
-    delay,
-    run,
-  ) as Promise<number>;
-  expect(await result).toBe(42); // of(20) -> +1 -> delayed -> doubled
+  // Prelude Task.* is inlined — no host inject. Pipeline: of(20) -> +1 -> delay -> *2.
+  const result = new Function("match", `${js}\nreturn result;`)(match) as Promise<number>;
+  expect(await result).toBe(42);
 });
 
 test("examples/modules builds the whole graph and wires imports", async () => {
