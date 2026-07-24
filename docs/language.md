@@ -141,7 +141,8 @@ export let result = Task.run(program)   // Promise — await in the host
 
 Effects stay a **convention**, not a checked effect system: domain IO is thin `extern`s
 that *should* return `Task _` (see `examples/life/`); sequencing uses prelude `Task.*`.
-The checker does not force that shape.
+The checker does not force that shape. Multi-arg `extern`s are `_curry`-wrapped at
+emit so flat host exports `(a, b) => …` match mochi’s `f(a, b)` call convention.
 
 ## Other surface features
 

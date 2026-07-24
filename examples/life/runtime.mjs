@@ -1,6 +1,8 @@
 // Domain terminal effects for the animated Life. Sequencing / delay / kick-off
 // live in the prelude (`Task.*`, ADR 0005). This host only writes to the
 // terminal — each export returns a lazy Task `() => Promise<a>`.
+// Multi-arg exports are FLAT `(a, b) => …`; mochi wraps them in `_curry` so both
+// `f(a, b)` and `f(a)(b)` work.
 
 // One-time setup: switch to the alternate screen buffer and hide the cursor, so
 // the animation owns the screen and restores the scrollback on exit.
@@ -11,9 +13,8 @@ export const setup = () => () => {
 };
 
 // Redraw a frame in place: home the cursor (no scroll) and repaint. `label`
-// rides along so the caller can show a generation counter. Nested-curried so
-// `draw(label)(frame)` matches the mochi call sites.
-export const draw = (label) => (frame) => () => {
+// rides along so the caller can show a generation counter.
+export const draw = (label, frame) => () => {
   process.stdout.write(`\x1b[H${label}\n${frame}\n`);
   return Promise.resolve(0);
 };

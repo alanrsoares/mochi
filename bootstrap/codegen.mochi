@@ -652,11 +652,22 @@ let genType = s => switch s {
   | _ => ""
 }
 
+/// Top-level arrow spine length (`a -> b -> c` → 2).
+let typeExprArity = te => switch te {
+  | Ast.TyArrow(_, to, _) => 1 + typeExprArity(to)
+  | _ => 0
+}
+
+/// extern → ESM import. Arity ≥ 2 wraps the host in `_curry` (ADR 0005 / #24).
 let genExtern = s => switch s {
-  | Ast.SExtern(name, _, _, modName, imported, _, _) => let spec = imported == name
-      ? name
-      : "${imported} as ${name}" in
-      "import { ${spec} } from ${jsStringLit(modName)};"
+  | Ast.SExtern(name, _, typeExpr, modName, imported, _, _) => let arity = typeExprArity(
+      typeExpr
+    ) in
+      arity <= 1
+        ? let spec = imported == name ? name : "${imported} as ${name}" in
+          "import { ${spec} } from ${jsStringLit(modName)};"
+        : let raw = Str.concat("$", name) in
+          "import { ${imported} as ${raw} } from ${jsStringLit(modName)};\nconst ${name} = _curry(${show(arity)}, ${raw});"
   | _ => ""
 }
 
@@ -928,6 +939,11 @@ let refsForStmt = (s, ctx) => switch s {
     // A multi-field constructor lowers to `_curry(...)` in genType (which
     // exprRefs never walks), so seed the dep here.
     someOf(c => Array.length(c.fields) >= 2, ctors)
+      ? Set.add("_curry", Set.fromArray([]))
+      : Set.fromArray([])
+  | Ast.SExtern(_, _, typeExpr, _, _, _, _) =>
+    // Multi-arg externs wrap the host import in `_curry` (genExtern).
+    typeExprArity(typeExpr) >= 2
       ? Set.add("_curry", Set.fromArray([]))
       : Set.fromArray([])
   | _ => Set.fromArray([])
