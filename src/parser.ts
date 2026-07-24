@@ -1,7 +1,8 @@
-// Parser — Pratt-style. Returns Result at the boundary.
-// Internally throws a typed marker; the public `parse` catches it into an Err.
-// Every node is built with its source span: leaves take the token's span,
-// composites span from their first token/child to the last one consumed.
+/**
+ * Parser — Pratt-style. Returns Result at the boundary.
+ * Internally throws a typed marker; the public `parse` catches it into an Err.
+ * Every node carries its source span: leaves from tokens, composites from first to last consumed.
+ */
 import { err, ok, type Result } from "@onrails/result";
 import type {
   AliasField,
@@ -63,9 +64,10 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
   const BACKTICK_BP = 15;
   const MUL_BP = 20;
 
-  // Haskell-style operator sections — `(x +)` / `(+ x)` desugar directly to a
-  // one-param lambda calling the same prelude builtin every infix operator
-  // already lowers to, so no new AST node or codegen path is needed.
+  /**
+   * Haskell-style operator sections — `(x +)` / `(+ x)` desugar to a one-param
+   * lambda calling the same prelude builtin every infix already lowers to.
+   */
   const OP_FN: Partial<Record<Tok["t"], string>> = {
     plus: "add",
     minus: "sub",
@@ -86,8 +88,7 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
     return t === "neq" || OP_FN[t] !== undefined;
   }
 
-  // `x`/`y` are already-parsed operands; whichever side is missing has been
-  // filled in by the caller with a fresh param ref.
+  /** Build the body of an operator section; the missing operand is already a param ref. */
   function sectionBody(opType: Tok["t"], x: Expr, y: Expr, opSpan: Span): Expr {
     const full = spanning(x.span, y.span);
     if (opType === "neq") {
@@ -108,7 +109,7 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
     };
   }
 
-  // `(provided op)` — the missing right operand becomes the lambda's param.
+  /** `(provided op)` — the missing right operand becomes the lambda's param. */
   function sectionLeft(provided: Expr, opTok: Located): Expr {
     const paramRef: Expr = { kind: "ref", name: "$s", span: opTok.span };
     return {
@@ -119,9 +120,7 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
     };
   }
 
-  // `(op provided)` — parsed from just after `(`; consumes through the closing
-  // `)` itself since, unlike a left section, there's no existing left operand
-  // for the caller to fold the operator onto.
+  /** `(op provided)` — parsed from just after `(`; consumes through `)`. */
   function tryParseRightSection(lparenSpan: Span): Expr | null {
     const opTok = peek();
     if (opTok.t === "minus" || !isSectionOp(opTok.t)) return null; // `(- x)` stays negation
@@ -136,8 +135,6 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
       span: spanning(lparenSpan, end),
     };
   }
-
-  // ---- expressions -------------------------------------------------------
 
   function looksLikeLambda(): boolean {
     if (peek().t === "id" && toks[pos + 1]?.t === "arrow") return true;
@@ -154,8 +151,7 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
     return false;
   }
 
-  // One lambda parameter: a name, a `{ a, b }` record-destructuring pattern, or
-  // an `(a, b)` tuple-destructuring pattern.
+  /** One lambda parameter: name, `{ a, b }` record destructure, or `(a, b)` tuple destructure. */
   function parseParam(): LamParam {
     if (peek().t === "lbrace") {
       next();
@@ -213,9 +209,10 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
     return { kind: "lambda", params, body, span: spanning(start, body.span) };
   }
 
-  // let x = value in body — a local binding as an expression. `in` is a
-  // contextual keyword (a plain id), never reserved, since an expression never
-  // continues with a bare identifier: the `in` following `value` is unambiguous.
+  /**
+   * `let x = value in body` — local binding as an expression. `in` is a
+   * contextual keyword (unambiguous after a value expression).
+   */
   function parseLetIn(): Expr {
     const start = expect("let").span;
     // let? param = value in body — monadic bind on Result (ADR 0017). The
@@ -257,14 +254,14 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
     return { kind: "letin", name, nameSpan, annot, value, body, span: spanning(start, body.span) };
   }
 
-  // An optional `: TypeExpr` binding annotation after a let's name (ADR 0044).
+  /** Optional `: TypeExpr` binding annotation after a let's name (ADR 0044). */
   function parseOptAnnot(): TypeExpr | undefined {
     if (peek().t !== "colon") return undefined;
     next();
     return parseTypeExpr();
   }
 
-  // Consume the contextual `in` keyword after a let binding's value.
+  /** Consume the contextual `in` keyword after a let binding's value. */
   function expectIn(): void {
     const kw = expectId();
     if (kw.name !== "in") fail(`expected 'in' after let binding, got '${kw.name}'`);
@@ -319,7 +316,7 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
     return null;
   }
 
-  // Shared path for infix ops that lower to a prelude call (and section `(x +)`).
+  /** Infix ops that lower to a prelude call (and support `(x +)` sections). */
   function parseBinOpInfix(
     left: Expr,
     minBp: number,
@@ -511,9 +508,7 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
     throw new ParseAbort(parseErr(`unexpected token ${tk.t}`, tk.span));
   }
 
-  // "…${a}…${b}…" (ADR 0023). The lexer already split this into a token
-  // stream of tmplstart <holeTokens> tmplmid <holeTokens> ... tmplend; each
-  // hole's tokens parse as an ordinary expression via `parseExpr`.
+  /** Template literal `"…${a}…${b}…"` (ADR 0023). */
   function parseInterp(): Expr {
     const start = expect("tmplstart");
     const parts: (string | Expr)[] = [(start as Located & { t: "tmplstart" }).v];
@@ -562,7 +557,7 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
     return { name: id.name, nameSpan: id.span, value: parseExpr() };
   }
 
-  // An array literal: `[]`, `[e]`, `[a, ...xs, b]`. Slots are exprs or spreads.
+  /** Array literal: `[]`, `[e]`, `[a, ...xs, b]`. */
   function parseArr(): Expr {
     const start = expect("lbracket").span;
     const elements = parseSeqElems("rbracket");
@@ -570,7 +565,7 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
     return { kind: "arr", elements, span: to(start) };
   }
 
-  // A lazy-List literal: `@{}`, `@{e}`, `@{a, ...xs}`. Same slot model as arrays.
+  /** Lazy-List literal: `@{}`, `@{e}`, `@{a, ...xs}`. */
   function parseList(): Expr {
     const start = expect("at").span;
     expect("lbrace");
@@ -579,8 +574,10 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
     return { kind: "list", elements, span: to(start) };
   }
 
-  // `#{}` is empty Map. `#{ k: v }` is Map; `#{a, b}` / `#{...s}` is Set
-  // (no colons — same disambiguation Python uses for `{}` dict vs set).
+  /**
+   * `#{}` → empty Map; `#{ k: v }` → Map; `#{a, b}` / `#{...s}` → Set
+   * (no colons — Python-style dict vs set disambiguation).
+   */
   function parseHash(): Expr {
     const start = expect("hash").span;
     expect("lbrace");
@@ -638,8 +635,6 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
     return { key, value: parseExpr() };
   }
 
-  // ---- pattern matching --------------------------------------------------
-
   function parseMatch(): Expr {
     const start = expect("switch").span;
     const scrutinee = parseExpr();
@@ -677,7 +672,7 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
     return { kind: "match", scrutinee, arms, span: to(start) };
   }
 
-  // Argument list of a ctor pattern, after the (already consumed) ctor name.
+  /** Argument list of a ctor pattern, after the (already consumed) ctor name. */
   function parseCtorPatArgs(): Pattern[] {
     const args: Pattern[] = [];
     if (peek().t === "lparen") {
@@ -757,8 +752,7 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
     return fail(`unexpected token in pattern: ${tk.t}`);
   }
 
-  // A list pattern: `[]`, `[a, b]`, `[head, ...tail]`. A `...` marks the rest
-  // capture, which must be the LAST element and bind a name (or `_`).
+  /** List pattern: `[]`, `[a, b]`, `[head, ...tail]` (`...` must be last). */
   function parseArrPattern(): Pattern {
     const start = expect("lbracket").span;
     const elems: Pattern[] = [];
@@ -781,9 +775,7 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
     return { kind: "parr", elems, rest, span: to(start) };
   }
 
-  // A lazy-List pattern: `@{}`, `@{head, ...tail}`. Same grammar as a list
-  // pattern with braces + the `@` sigil. `...rest` must bind a name (or `_`);
-  // check.ts further restricts to the empty and single-head-cons forms.
+  /** Lazy-List pattern: `@{}`, `@{head, ...tail}` (same grammar as list, with `@`). */
   function parseListPattern(): Pattern {
     const start = expect("at").span;
     expect("lbrace");
@@ -807,8 +799,7 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
     return { kind: "plist", elems, rest, span: to(start) };
   }
 
-  // A record-pattern field: `{ x }` puns to binding `x`; `{ x: pat }` matches
-  // field `x` against `pat`.
+  /** Record-pattern field: `{ x }` puns to `x`; `{ x: pat }` matches field `x` against `pat`. */
   function parsePatField(): PatField {
     const { name: label, span: labelSpan } = expectId();
     if (peek().t === "colon") {
@@ -820,8 +811,6 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
     }
     return { label, labelSpan, pat: { kind: "pbind", name: label, span: labelSpan } };
   }
-
-  // ---- statements --------------------------------------------------------
 
   function parseType(): Extract<Stmt, { kind: "type" }> {
     const start = expect("type").span;
@@ -848,8 +837,7 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
     return { kind: "type", name, nameSpan, params, ctors, span: to(start) };
   }
 
-  // The `{ x: T, y: U }` body of a record alias. Each field is `name: TypeExpr`;
-  // the empty record `{}` is allowed. No trailing comma.
+  /** The `{ x: T, y: U }` body of a record alias. */
   function parseAliasBody(): AliasField[] {
     expect("lbrace");
     const fields: AliasField[] = [];
@@ -888,11 +876,10 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
     return { name, fields, span: to(start) };
   }
 
-  // A constructor field: `type` (positional) or `label: type` (named — its
-  // runtime key). The type is a full type expression (ADR 0015):
-  // `Ok(value: a)`, `Circle(float)`, `ECall(fn: Expr, args: [Expr])`.
-  // A label is an id followed by `:`, so the two forms need one token of
-  // lookahead — a bare id could also start a positional type.
+  /**
+   * Constructor field: `type` (positional) or `label: type` (named runtime key).
+   * Full type expression (ADR 0015); one token of lookahead disambiguates.
+   */
   function parseCtorField(): CtorField {
     if (peek().t === "id" && toks[pos + 1]?.t === "colon") {
       const name = expectId().name;
@@ -912,11 +899,10 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
     return [{ kind: "let", name, nameSpan, annot, value, span: spanning(start, value.span) }];
   }
 
-  // `let { x, y } = e` desugars to a temp binding of `e` plus one field-access
-  // `let` per name, so it reuses inference/codegen with no downstream changes.
-  // Shorthand only for now (each field binds a variable of the same name); `e`
-  // is evaluated once, via the temp. Spans point at each field's identifier so
-  // hover/errors land on the binding the user wrote.
+  /**
+   * `let { x, y } = e` desugars to a temp binding plus field-access lets.
+   * Shorthand only; `e` is evaluated once via the temp.
+   */
   function parseRecordDestructure(start: Span): Extract<Stmt, { kind: "let" }>[] {
     const open = expect("lbrace").span;
     const fields: { name: string; span: Span }[] = [];
@@ -944,7 +930,7 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
     return stmts;
   }
 
-  // Type-expression parser for extern signatures. Arrows are right-associative.
+  /** Type-expression parser for extern signatures. Arrows are right-associative. */
   function parseTypeAtom(): TypeExpr {
     if (peek().t === "lparen") {
       const start = next().span;
@@ -972,9 +958,7 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
     return { kind: "tname", name, span };
   }
 
-  // Type application by juxtaposition, tighter than `->`: `Task a`, `Result a e`.
-  // Only an Uppercase constructor head takes args; a nested applied arg must be
-  // parenthesized (`Task (Option a)`). Arg atoms are ids or parenthesized types.
+  /** Type application by juxtaposition, tighter than `->` (`Task a`, `Result a e`). */
   function parseTypeApp(): TypeExpr {
     const head = parseTypeAtom();
     if (head.kind !== "tname" || !/^[A-Z]/.test(head.name)) return head;
@@ -1000,7 +984,7 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
     return { value: tk.v, span: tk.span };
   };
 
-  // extern name : type = "module" "export"
+  /** `extern name : type = "module" "export"`. */
   function parseExtern(): Extract<Stmt, { kind: "extern" }> {
     const start = expect("extern").span;
     const { name, span: nameSpan } = expectId();
@@ -1012,8 +996,7 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
     return { kind: "extern", name, nameSpan, typeExpr, module, imported, span: to(start) };
   }
 
-  // import { a, b } from "./mod"
-  // import * as Alias from "./mod"  — `as` / `from` are contextual ids (ADR 0002).
+  /** `import { a, b } from "./mod"` or `import * as Alias from "./mod"` (ADR 0002). */
   function parseImport(): Stmt {
     const start = expect("import").span;
     if (peek().t === "star") {

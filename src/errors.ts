@@ -1,15 +1,14 @@
-// mochi diagnostics — errors as values, one app-level type (ADR 0003).
-// Every kind may carry a primary source `span`; lex always does. Optional
-// labels / help / suggestions are filled by checker passes; constructors omit
-// them until a pass has something to say. CLI and LSP only *render* this shape.
+/**
+ * mochi diagnostics — errors as values, one app-level type (ADR 0003). Every kind may carry a primary source `span`; lex always does. Optional labels / help / suggestions are filled by checker passes; constructors omit them until a pass has something to say. CLI and LSP only *render* this shape.
+ */
 import { type Location, lineCol, type Span } from "./span";
 
 export type { Location };
 
-// Related site on a Diagnostic (e.g. "defined here") — not a separate error.
+/** Related site on a Diagnostic (e.g. "defined here") — not a separate error. */
 export type Label = { location: Location; message: string };
 
-// Machine-applicable fix; LSP exposes these as code actions.
+/** Machine-applicable fix; LSP exposes these as code actions. */
 export type Suggestion = { location: Location; replaceWith: string; title?: string };
 
 type DiagExtras = {
@@ -99,8 +98,7 @@ const labelAt = (label: Label, opts?: FormatErrorOpts, primarySrc?: string): str
   return `  ${path}@${span.start}: ${label.message}`;
 };
 
-// Human-readable diagnostic. Primary line, then labels, help, and suggestion
-// titles (suggestions are also code-action payloads — CLI just shows them).
+/** Human-readable diagnostic. Primary line, then labels, help, and suggestion titles (suggestions are also code-action payloads — CLI just shows them). */
 export const formatError = (e: Diagnostic, src?: string, opts?: FormatErrorOpts): string => {
   const at = e.span ? atPos(src, e.span) : "";
   const lines = [`${kindLabel[e.kind]}${at}: ${e.message}`];

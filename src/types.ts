@@ -1,17 +1,10 @@
-// Type representation for Hindley-Milner inference with row-polymorphic
-// records and deeply-nested generics. Plain immutable data; unification lives
-// in ./unify.ts.
-//
-// Type constructors are *applied*: `con(name, args)`. A primitive is a nullary
-// constructor (`number` = con("number", [])); a generic is the same node with
-// type arguments (`List<'a>` = con("List", ['a])), and they nest arbitrarily
-// (`List<Option<'a>>`, `Map<'k, List<'v>>`). Unification recurses through
-// `args`, so deep generics fall out for free.
-//
-// A record type is a `row`: zero or more labelled fields ending in either
-// `empty` (closed — exactly these fields) or an `rvar` (open — "these fields
-// and possibly more"). Open rows give structural / duck typing: `p.x` accepts
-// any record that has an `x`.
+/**
+ * Type representation for Hindley-Milner inference with row-polymorphic records and deeply-nested generics. Plain immutable data; unification lives in ./unify.ts.
+ *
+ * Type constructors are *applied*: `con(name, args)`. A primitive is a nullary constructor (`number` = con("number", [])); a generic is the same node with type arguments (`List<'a>` = con("List", ['a])), and they nest arbitrarily (`List<Option<'a>>`, `Map<'k, List<'v>>`). Unification recurses through `args`, so deep generics fall out for free.
+ *
+ * A record type is a `row`: zero or more labelled fields ending in either `empty` (closed — exactly these fields) or an `rvar` (open — "these fields and possibly more"). Open rows give structural / duck typing: `p.x` accepts any record that has an `x`.
+ */
 
 export type Type =
   | { kind: "var"; id: number } // unification variable 'a
@@ -24,25 +17,20 @@ export type Row =
   | { kind: "rvar"; id: number } // open tail: | 'r
   | { kind: "extend"; label: string; type: Type; rest: Row }; // { label: type | rest }
 
-// ---- constructors ----------------------------------------------------------
-
 export const tVar = (id: number): Type => ({ kind: "var", id });
 export const tCon = (name: string, args: Type[] = []): Type => ({ kind: "con", name, args });
 export const tArrow = (from: Type, to: Type): Type => ({ kind: "arrow", from, to });
 export const tRecord = (row: Row): Type => ({ kind: "record", row });
 
-// primitives (nullary constructors)
 export const tNumber = tCon("number");
 export const tString = tCon("string");
 export const tBool = tCon("bool");
 
-// generic sugar: applied constructors
 export const tApp = (name: string, ...args: Type[]): Type => tCon(name, args);
 
-// A tuple is an applied constructor under the reserved, unspeakable name
-// `"tuple"` (lowercase → never a user type, which are always Uppercase). Arity
-// is encoded by the number of args, so `(a, b)` and `(a, b, c)` are distinct
-// types that never unify — all for free via the existing con machinery.
+/**
+ * A tuple is an applied constructor under the reserved, unspeakable name `"tuple"` (lowercase → never a user type, which are always Uppercase). Arity is encoded by the number of args, so `(a, b)` and `(a, b, c)` are distinct types that never unify — all for free via the existing con machinery.
+ */
 export const TUPLE = "tuple";
 export const tTuple = (elems: Type[]): Type => tCon(TUPLE, elems);
 
@@ -55,16 +43,11 @@ export const rExtend = (label: string, type: Type, rest: Row): Row => ({
   rest,
 });
 
-// ---- fresh variable supply -------------------------------------------------
-
-// Type vars and row vars draw from one counter so ids never collide across
-// the two substitution maps.
+/** Type vars and row vars draw from one counter so ids never collide across the two substitution maps. */
 export type Fresh = { next: number };
 export const mkFresh = (start = 0): Fresh => ({ next: start });
 export const freshVar = (f: Fresh): Type => tVar(f.next++);
 export const freshRowVar = (f: Fresh): Row => rVar(f.next++);
-
-// ---- pretty-printer (for errors + tests) -----------------------------------
 
 export const showType = (t: Type): string => {
   switch (t.kind) {
@@ -95,21 +78,14 @@ const showRow = (row: Row): string => {
   return fields.length === 0 && tail === "" ? "{}" : `{ ${fields.join(", ")}${tail} }`;
 };
 
-// ---- transparent record-type aliases ---------------------------------------
-//
-// A `type Point a = { x: a, y: number }` decl names a structural record type.
-// It carries NO nominal identity: inference expands it to its row, and display
-// folds a matching CLOSED row back to the name. The `template` is that record
-// type with each type parameter encoded as a marker var `tVar(-(i+1))` — a slot
-// negative ids never collide with real fresh vars (which start at 0).
-
+/**
+ * A `type Point a = { x: a, y: number }` decl names a structural record type. It carries NO nominal identity: inference expands it to its row, and display folds a matching CLOSED row back to the name. The `template` is that record type with each type parameter encoded as a marker var `tVar(-(i+1))` — a slot negative ids never collide with real fresh vars (which start at 0).
+ */
 export type AliasDef = { name: string; params: string[]; template: Type };
 
-// Marker id for the i-th type parameter of an alias template.
+/** Marker id for the i-th type parameter of an alias template. */
 export const aliasParamId = (i: number): number => -(i + 1);
 
-// Structural type equality (used to keep repeated-parameter bindings consistent
-// while matching a row against an alias template).
 const typeEq = (a: Type, b: Type): boolean => {
   if (a.kind !== b.kind) return false;
   if (a.kind === "var" && b.kind === "var") return a.id === b.id;
@@ -145,10 +121,9 @@ const rowEq = (a: Row, b: Row): boolean => {
   return true;
 };
 
-// One-way match: does concrete type `actual` fit alias `template`? Marker vars
-// in the template bind to concrete types; repeats must agree. Records match only
-// when CLOSED with the exact same label set (so open/partial rows stay
-// structural, never over-eagerly folded).
+/**
+ * One-way match: does concrete type `actual` fit alias `template`? Marker vars in the template bind to concrete types; repeats must agree. Records match only when CLOSED with the exact same label set (so open/partial rows stay structural, never over-eagerly folded).
+ */
 const matchTemplate = (template: Type, actual: Type, binds: Map<number, Type>): boolean => {
   if (template.kind === "var" && template.id < 0) {
     const prev = binds.get(template.id);
@@ -183,11 +158,9 @@ const matchTemplate = (template: Type, actual: Type, binds: Map<number, Type>): 
   return false;
 };
 
-// Rewrite a type so any closed record row matching an alias becomes `con(Name,
-// args)`, which the existing pretty-printers render as the alias name. Top-down:
-// try to match a node whole (against a raw, unfolded template), then recurse into
-// the resulting node's children so nested/argument records fold too. First
-// matching alias wins (declaration order).
+/**
+ * Rewrite a type so any closed record row matching an alias becomes `con(Name, args)`, which the existing pretty-printers render as the alias name. Top-down: try to match a node whole (against a raw, unfolded template), then recurse into the resulting node's children so nested/argument records fold too. First matching alias wins (declaration order).
+ */
 export const foldAliases = (t: Type, aliases: AliasDef[]): Type => {
   for (const def of aliases) {
     const binds = new Map<number, Type>();

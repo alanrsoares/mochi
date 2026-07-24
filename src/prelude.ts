@@ -1,30 +1,32 @@
-// The prelude: builtin signatures the inferencer starts with, plus the JS
-// runtime that backs them. Kept tiny for now — arithmetic and comparison.
+/**
+ * The prelude: builtin signatures the inferencer starts with, plus the JS
+ * runtime that backs them.
+ */
 import type { Ctor, TypeExpr } from "./ast";
 import { type Type, tArrow, tBool, tCon, tNumber, tString, tVar } from "./types";
 
 const bin = (a: Type, b: Type, r: Type): Type => tArrow(a, tArrow(b, r));
-const num2 = bin(tNumber, tNumber, tNumber); // number -> number -> number
-const cmp = bin(tNumber, tNumber, tBool); // number -> number -> bool
+const num2 = bin(tNumber, tNumber, tNumber);
+const cmp = bin(tNumber, tNumber, tBool);
 
-// Polymorphic prelude type vars. Any ids < the inference fresh-supply start
-// (1000) are safe: builtins are generalized, then instantiated fresh per use, so
-// these ids never surface during a program's inference.
+/**
+ * Polymorphic prelude type vars. Ids below the inference fresh-supply start
+ * (1000) are safe: builtins generalize then instantiate fresh per use.
+ */
 const a = tVar(0);
 const b = tVar(1);
 const c = tVar(2);
-const arr = (t: Type): Type => tCon("Array", [t]); // [t] — eager JS array
-const list = (t: Type): Type => tCon("List", [t]); // List t — lazy pull-sequence (@{...})
-const set = (t: Type): Type => tCon("Set", [t]); // Set t — native JS Set (${...})
-const mapT = (k: Type, v: Type): Type => tCon("Map", [k, v]); // Map k v — native JS Map (#{...})
-const opt = (t: Type): Type => tCon("Option", [t]); // Option t — builtin variant
-const res = (t: Type, e: Type): Type => tCon("Result", [t, e]); // Result t e — builtin variant
+const arr = (t: Type): Type => tCon("Array", [t]);
+const list = (t: Type): Type => tCon("List", [t]);
+const set = (t: Type): Type => tCon("Set", [t]);
+const mapT = (k: Type, v: Type): Type => tCon("Map", [k, v]);
+const opt = (t: Type): Type => tCon("Option", [t]);
+const res = (t: Type, e: Type): Type => tCon("Result", [t, e]);
 
-// Builtin variant types — seeded into the registry / env / codegen ONLY when a
-// program doesn't declare a type of the same name (so user redeclarations win).
-// Runtime shape matches @onrails/result + @onrails/maybe (`{ _tag, value/error }`),
-// so mochi Option/Result values flow straight through their combinators.
-// Ctor field types are TypeExprs (ADR 0015); builtins only need bare names.
+/**
+ * Builtin variant types — seeded when a program doesn't declare the same name.
+ * Runtime shape matches @onrails/result + @onrails/maybe.
+ */
 const tn = (name: string): TypeExpr => ({ kind: "tname", name, span: { start: 0, end: 0 } });
 
 export const builtinTypeDecls: { name: string; params: string[]; ctors: Ctor[] }[] = [
@@ -46,9 +48,10 @@ export const builtinTypeDecls: { name: string; params: string[]; ctors: Ctor[] }
   },
 ];
 
-// name → type. Monomorphic entries (arithmetic) carry no vars; the collection /
-// function utilities are polymorphic and generalize at bind time. Curried
-// (data-last) so they compose with `|>`: `xs |> map(f) |> filter(p)`.
+/**
+ * name → type. Curried (data-last) so builtins compose with `|>`.
+ * Monomorphic entries carry no vars; polymorphic ones generalize at bind time.
+ */
 export const preludeEnv: Record<string, Type> = {
   add: num2,
   sub: num2,
@@ -69,15 +72,13 @@ export const preludeEnv: Record<string, Type> = {
   gt: cmp,
   gte: cmp,
   lte: cmp,
-  // --- bool combinators (mochi has no operators; these are eager, not
-  // short-circuit — operands are values, so that only matters for cost) ---
+  // Bool combinators — eager, not short-circuit (operands are values).
   not: tArrow(tBool, tBool),
   and: bin(tBool, tBool, tBool),
   or: bin(tBool, tBool, tBool),
-  // --- Math (unqualified, like the arithmetic ops) ---
-  min: num2, // number -> number -> number
+  min: num2,
   max: num2,
-  pow: num2, // base -> exp -> number
+  pow: num2,
   mod: num2, // a -> b -> number  (true modulo, sign of b)
   abs: tArrow(tNumber, tNumber),
   floor: tArrow(tNumber, tNumber),
@@ -85,18 +86,14 @@ export const preludeEnv: Record<string, Type> = {
   round: tArrow(tNumber, tNumber),
   sign: tArrow(tNumber, tNumber),
   negate: tArrow(tNumber, tNumber),
-  // --- Array ops (ported from prelude-js List; a lazy `List` is future work) ---
   length: tArrow(arr(a), tNumber), // [a] -> number
   map: tArrow(tArrow(a, b), tArrow(arr(a), arr(b))), // (a -> b) -> [a] -> [b]
   filter: tArrow(tArrow(a, tBool), tArrow(arr(a), arr(a))), // (a -> bool) -> [a] -> [a]
   reduce: tArrow(tArrow(b, tArrow(a, b)), tArrow(b, tArrow(arr(a), b))), // (b -> a -> b) -> b -> [a] -> b
-  // --- Func ---
   identity: tArrow(a, a), // a -> a
   always: tArrow(a, tArrow(b, a)), // a -> b -> a  (prelude-js `const`)
   compose: tArrow(tArrow(b, c), tArrow(tArrow(a, b), tArrow(a, c))), // (b -> c) -> (a -> b) -> a -> c
-  // --- Str ---
   capitalize: tArrow(tString, tString),
-  // --- List (lazy sequence, `@{...}`) — generator-backed, supports infinite ---
   range: tArrow(tNumber, tArrow(tNumber, list(tNumber))), // number -> number -> List number
   iterate: tArrow(tArrow(a, a), tArrow(a, list(a))), // (a -> a) -> a -> List a  (infinite)
   repeat: tArrow(a, list(a)), // a -> List a  (infinite)
@@ -107,9 +104,10 @@ export const preludeEnv: Record<string, Type> = {
   toArray: tArrow(list(a), arr(a)), // List a -> [a]  (materializes — infinite hangs)
 };
 
-// Matching JS definitions, keyed by name so codegen can inline just the ones a
-// program actually references (and doesn't shadow) — a standalone module carries
-// only the runtime it uses.
+/**
+ * Matching JS definitions — keyed by name so codegen inlines only what a program
+ * references (and doesn't shadow).
+ */
 export const preludeJsDefs: Record<string, string> = {
   // List core: a List is an iterable factory `{ [Symbol.iterator]: () => Iterator }`.
   // Force-included by codegen whenever a `@{...}` literal or List producer is used.
@@ -169,7 +167,6 @@ export const preludeJsDefs: Record<string, string> = {
   not: "const not = (b) => !b;",
   and: "const and = _curry(2, (a, b) => a && b);",
   or: "const or = _curry(2, (a, b) => a || b);",
-  // --- Math ---
   min: "const min = _curry(2, (a, b) => Math.min(a, b));",
   max: "const max = _curry(2, (a, b) => Math.max(a, b));",
   pow: "const pow = _curry(2, (a, b) => a ** b);",
@@ -189,7 +186,6 @@ export const preludeJsDefs: Record<string, string> = {
   always: "const always = _curry(2, (x, _y) => x);",
   compose: "const compose = _curry(3, (f, g, x) => f(g(x)));",
   capitalize: "const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);",
-  // --- List (lazy sequence) — generator-backed; producers/slicers stay lazy ---
   range:
     "const range = _curry(2, (lo, hi) => _list(function* () { for (let i = lo; i < hi; i++) yield i; }));",
   iterate:
@@ -201,8 +197,7 @@ export const preludeJsDefs: Record<string, string> = {
   drop: "const drop = _curry(2, (n, xs) => _list(function* () { let i = 0; for (const x of xs) { if (i < n) { i++; continue; } yield x; } }));",
   fromArray: "const fromArray = (xs) => _list(function* () { yield* xs; });",
   toArray: "const toArray = (xs) => [...xs];",
-  // Lazy List transformers — accessed qualified (`List.map`), never shadow the
-  // eager Array `map`/`filter`. Each stays lazy (fuses, no intermediate arrays).
+  // Lazy List transformers — qualified (`List.map`); never shadow eager Array ops.
   _List_map:
     "const _List_map = _curry(2, (f, xs) => _list(function* () { for (const x of xs) yield f(x); }));",
   _List_filter:
@@ -211,7 +206,6 @@ export const preludeJsDefs: Record<string, string> = {
     "const _List_concat = _curry(2, (xs, ys) => _list(function* () { yield* xs; yield* ys; }));",
   _List_flatMap:
     "const _List_flatMap = _curry(2, (f, xs) => _list(function* () { for (const x of xs) yield* f(x); }));",
-  // --- Set ops (native JS Set; immutable — each returns a fresh Set) ---
   _Set_has: "const _Set_has = _curry(2, (x, s) => s.has(x));",
   _Set_add: "const _Set_add = _curry(2, (x, s) => new Set(s).add(x));",
   _Set_delete:
@@ -223,7 +217,6 @@ export const preludeJsDefs: Record<string, string> = {
   _Set_intersect:
     "const _Set_intersect = _curry(2, (a, b) => new Set([...a].filter((x) => b.has(x))));",
   _Set_diff: "const _Set_diff = _curry(2, (a, b) => new Set([...a].filter((x) => !b.has(x))));",
-  // --- Map ops (native JS Map; immutable — each returns a fresh Map) ---
   _Map_has: "const _Map_has = _curry(2, (k, m) => m.has(k));",
   _Map_getOr: "const _Map_getOr = _curry(3, (d, k, m) => (m.has(k) ? m.get(k) : d));",
   _Map_set:
@@ -234,8 +227,6 @@ export const preludeJsDefs: Record<string, string> = {
   _Map_keys: "const _Map_keys = (m) => [...m.keys()];",
   _Map_values: "const _Map_values = (m) => [...m.values()];",
   _Map_get: "const _Map_get = _curry(2, (k, m) => (m.has(k) ? Some(m.get(k)) : None));",
-  // --- Option combinators (`Option.*`) — data-last, the Option comes final so
-  // they slot into `|>` chains; runtime shape matches @onrails/maybe ---
   _Option_map:
     'const _Option_map = _curry(2, (f, o) => (o._tag === "Some" ? Some(f(o.value)) : None));',
   _Option_flatMap:
@@ -250,7 +241,6 @@ export const preludeJsDefs: Record<string, string> = {
   _Option_orElse: 'const _Option_orElse = _curry(2, (fb, o) => (o._tag === "Some" ? o : fb));',
   _Option_isSome: 'const _Option_isSome = (o) => o._tag === "Some";',
   _Option_isNone: 'const _Option_isNone = (o) => o._tag === "None";',
-  // --- Result combinators (`Result.*`) — railway ops; shape matches @onrails/result ---
   _Result_map: 'const _Result_map = _curry(2, (f, r) => (r._tag === "Ok" ? Ok(f(r.value)) : r));',
   _Result_mapErr:
     'const _Result_mapErr = _curry(2, (f, r) => (r._tag === "Err" ? Err(f(r.error)) : r));',
@@ -260,14 +250,12 @@ export const preludeJsDefs: Record<string, string> = {
     'const _Result_unwrapOr = _curry(2, (d, r) => (r._tag === "Ok" ? r.value : d));',
   _Result_isOk: 'const _Result_isOk = (r) => r._tag === "Ok";',
   _Result_isErr: 'const _Result_isErr = (r) => r._tag === "Err";',
-  // --- Option-returning safe accessors (depend on Some/None) ---
   _List_head: "const _List_head = (xs) => { for (const x of xs) return Some(x); return None; };",
   _Array_head: "const _Array_head = (xs) => (xs.length > 0 ? Some(xs[0]) : None);",
   _Array_get:
     "const _Array_get = _curry(2, (i, xs) => (i >= 0 && i < xs.length ? Some(xs[i]) : None));",
   _Array_find:
     "const _Array_find = _curry(2, (p, xs) => { for (const x of xs) if (p(x)) return Some(x); return None; });",
-  // --- Array growth (eager, immutable) ---
   _Array_reverse: "const _Array_reverse = (xs) => [...xs].reverse();",
   _Array_concat: "const _Array_concat = _curry(2, (xs, ys) => xs.concat(ys));",
   _Array_append: "const _Array_append = _curry(2, (x, xs) => [...xs, x]);",
@@ -293,7 +281,6 @@ export const preludeJsDefs: Record<string, string> = {
     "const _Array_maxBy = _curry(2, (f, xs) => xs.length ? Some(xs.reduce((a, b) => compare(f(a), f(b)) >= 0 ? a : b)) : None);",
   _Array_minBy:
     "const _Array_minBy = _curry(2, (f, xs) => xs.length ? Some(xs.reduce((a, b) => compare(f(a), f(b)) <= 0 ? a : b)) : None);",
-  // --- String ops ---
   _Str_length: "const _Str_length = (s) => s.length;",
   _Str_concat: "const _Str_concat = _curry(2, (a, b) => a + b);",
   _Str_toUpper: "const _Str_toUpper = (s) => s.toUpperCase();",
@@ -306,7 +293,7 @@ export const preludeJsDefs: Record<string, string> = {
   _Str_endsWith: "const _Str_endsWith = _curry(2, (p, s) => s.endsWith(p));",
   _Str_slice: "const _Str_slice = _curry(3, (start, end, s) => s.slice(start, end));",
   _Str_replace: "const _Str_replace = _curry(3, (find, repl, s) => s.replaceAll(find, repl));",
-  // --- char cursor: bounds-safe indexed access returns Option ---
+  // char cursor: bounds-safe indexed access returns Option
   _Str_get: "const _Str_get = _curry(2, (i, s) => (i >= 0 && i < s.length ? Some(s[i]) : None));",
   _Str_codeAt:
     "const _Str_codeAt = _curry(2, (i, s) => (i >= 0 && i < s.length ? Some(s.charCodeAt(i)) : None));",
@@ -316,11 +303,10 @@ export const preludeJsDefs: Record<string, string> = {
     "const _Str_toNumber = (s) => { const n = Number(s); return Number.isNaN(n) ? None : Some(n); };",
 };
 
-// Runtime-dependency graph: a def name → the other def names its body references.
-// `preludePreamble` takes the transitive closure over this before inlining, so a
-// referenced op drags in the helpers/constructors it needs (`_Map_get` → Some/None,
-// `range` → `_list`, …). Entries with no deps may be omitted. Every arity-≥2 def
-// depends on `_curry` (it is wrapped in it).
+/**
+ * Runtime-dependency graph: def name → other defs its body references.
+ * `preludePreamble` transitively closes over this before inlining.
+ */
 export const runtimeDeps: Record<string, string[]> = {
   add: ["_curry"],
   sub: ["_curry"],
@@ -410,9 +396,9 @@ export const runtimeDeps: Record<string, string[]> = {
   _Str_toNumber: ["Some", "None"],
 };
 
-// Qualified collection namespaces. mochi has no overloading, so each collection
-// carries its own `Ns.op`; the unqualified `map`/`filter`/… above stay as eager
-// Array aliases for the common case. `Array.map` mirrors them; `List.*` is lazy.
+/**
+ * Qualified collection namespaces. Unqualified `map`/`filter`/… stay as eager Array aliases.
+ */
 export const preludeNamespaces: Record<string, Record<string, Type>> = {
   Array: {
     map: tArrow(tArrow(a, b), tArrow(arr(a), arr(b))),
@@ -509,7 +495,7 @@ export const preludeNamespaces: Record<string, Record<string, Type>> = {
     endsWith: tArrow(tString, tArrow(tString, tBool)), // suffix -> s -> bool
     slice: tArrow(tNumber, tArrow(tNumber, tArrow(tString, tString))), // start -> end -> s -> string
     replace: tArrow(tString, tArrow(tString, tArrow(tString, tString))), // find -> repl -> s -> string
-    // --- char cursor (for hand-written scanners / the self-hosted lexer) ---
+    // Char cursor (hand-written scanners / self-hosted lexer).
     get: tArrow(tNumber, tArrow(tString, opt(tString))), // i -> s -> Option string (1-char)
     codeAt: tArrow(tNumber, tArrow(tString, opt(tNumber))), // i -> s -> Option number (char code)
     fromCode: tArrow(tNumber, tString), // code -> string (a 1-char string; no char type)
@@ -518,8 +504,7 @@ export const preludeNamespaces: Record<string, Record<string, Type>> = {
   },
 };
 
-// `Ns.member` → the JS identifier codegen emits. Array reuses the existing eager
-// defs; List points at the lazy `_List_*` generators above.
+/** `Ns.member` → JS identifier codegen emits. Array reuses eager defs; List → `_List_*`. */
 export const namespaceRuntime: Record<string, Record<string, string>> = {
   Array: {
     map: "map",
@@ -615,6 +600,5 @@ export const namespaceRuntime: Record<string, Record<string, string>> = {
   },
 };
 
-// The whole runtime as one blob — for tests / tooling that want every builtin in
-// scope regardless of what a snippet references.
+/** Whole runtime as one blob — for tests / tooling that need every builtin in scope. */
 export const preludeJs = Object.values(preludeJsDefs).join("\n");

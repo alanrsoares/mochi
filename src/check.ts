@@ -1,5 +1,7 @@
-// Semantic pass — the Reason superpower: exhaustiveness + constructor checks.
-// Builds a variant registry from `type` decls, then verifies every `switch`.
+/**
+ * Semantic pass — exhaustiveness + constructor checks.
+ * Builds a variant registry from `type` decls, then verifies every `switch`.
+ */
 import { err, isErr, ok, type Result } from "@onrails/result";
 import type { CtorPat, Expr, LamParam, MatchExpr, OrPat, Pattern, Program, TypeExpr } from "./ast";
 import { buildCtorTable, type CtorTable, PRIM_TYPE_NAMES } from "./ctors";
@@ -7,12 +9,10 @@ import { checkErr, concatDiags, type Diagnostic } from "./errors";
 import { builtinTypeDecls, preludeNamespaces } from "./prelude";
 import type { Span } from "./span";
 
-// The variant registry `check` validates against IS the shared constructor
-// table (`ctors.ts`, ticket 0024) — the same derivation infer builds schemes
-// from and codegen reads keys from, so arity cannot drift between passes.
+/** Variant registry shared with infer and codegen — arity cannot drift between passes. */
 export type Registry = CtorTable;
 
-// Walk an expression tree, invoking `visit` on every `match` node.
+/** Walk an expression tree, invoking `visit` on every `match` node. */
 function forEachMatch(e: Expr, visit: (m: MatchExpr) => void): void {
   switch (e.kind) {
     case "num":
@@ -76,8 +76,10 @@ function forEachMatch(e: Expr, visit: (m: MatchExpr) => void): void {
   }
 }
 
-// A pattern is a catch-all when it always matches. A record pattern does so
-// only when every field just binds (no literal field narrows the match).
+/**
+ * A pattern is a catch-all when it always matches. A record pattern does so
+ * only when every field just binds (no literal field narrows the match).
+ */
 const isCatchAll = (p: Pattern): boolean =>
   p.kind === "pwild" ||
   p.kind === "pbind" ||
@@ -87,13 +89,15 @@ const isCatchAll = (p: Pattern): boolean =>
   // `[...all]` / `@{...all}` — a bare rest with no fixed head matches any list.
   ((p.kind === "parr" || p.kind === "plist") && p.elems.length === 0 && p.rest !== null);
 
-// Eager Array (`parr`) and lazy List (`plist`) patterns share one exhaustiveness
-// rule: a switch can't be proven total in general, but the canonical ML form —
-// an empty `[]`/`@{}` arm plus a single-head cons `[x, ...xs]`/`@{x, ...xs}` —
-// covers length 0 and length ≥ 1, so it's total. Fixed-length arms (`@{a, b}`)
-// and extra arms are allowed but don't themselves prove totality (need the pair
-// above or a `_`). Returns null (exhaustive), an error (a list switch that
-// isn't), or undefined (not a list switch → let the caller decide).
+/**
+ * Eager Array (`parr`) and lazy List (`plist`) patterns share one exhaustiveness
+ * rule: a switch can't be proven total in general, but the canonical ML form —
+ * an empty `[]`/`@{}` arm plus a single-head cons `[x, ...xs]`/`@{x, ...xs}` —
+ * covers length 0 and length ≥ 1, so it's total. Fixed-length arms (`@{a, b}`)
+ * and extra arms are allowed but don't themselves prove totality (need the pair
+ * above or a `_`). Returns null (exhaustive), an error (a list switch that
+ * isn't), or undefined (not a list switch → let the caller decide).
+ */
 const checkSeqExhaustive = (m: MatchExpr): Diagnostic | null | undefined => {
   const seqs = m.arms.flatMap((a) =>
     // Guarded arms don't prove totality (the guard can be false).
@@ -107,12 +111,14 @@ const checkSeqExhaustive = (m: MatchExpr): Diagnostic | null | undefined => {
     : checkErr("non-exhaustive list switch: cover `[]` and `[x, ...xs]` (or add `_`)", m.span);
 };
 
-// Validate a pattern tree: nested constructors must exist with the right
-// arity (top-level ctor arms are re-validated by checkMatch, which also needs
-// the registry info for exhaustiveness), and a lazy-List pattern cannot nest
-// inside another pattern — matching it pulls from the generator, an effect the
-// emitted guard form must not hide mid-predicate. Top-level `plist` arms are
-// fine (genListMatch owns the pulling discipline).
+/**
+ * Validate a pattern tree: nested constructors must exist with the right
+ * arity (top-level ctor arms are re-validated by checkMatch, which also needs
+ * the registry info for exhaustiveness), and a lazy-List pattern cannot nest
+ * inside another pattern — matching it pulls from the generator, an effect the
+ * emitted guard form must not hide mid-predicate. Top-level `plist` arms are
+ * fine (genListMatch owns the pulling discipline).
+ */
 const checkPattern = (p: Pattern, reg: Registry, top: boolean): Diagnostic | null => {
   switch (p.kind) {
     case "pctor": {
@@ -163,12 +169,14 @@ const checkPattern = (p: Pattern, reg: Registry, top: boolean): Diagnostic | nul
   }
 };
 
-// Map each name a pattern binds to a private structural path. The scheme need
-// only be internally consistent — it exists to compare or-pattern alternatives.
-// A name bound twice in one pattern is an error.
 const firstErr = (es: readonly (Diagnostic | null)[]): Diagnostic | null =>
   es.reduce<Diagnostic | null>((f, e) => f ?? e, null);
 
+/**
+ * Map each name a pattern binds to a private structural path. The scheme need
+ * only be internally consistent — it exists to compare or-pattern alternatives.
+ * A name bound twice in one pattern is an error.
+ */
 const binderPaths = (p: Pattern, at: string, acc: Map<string, string>): Diagnostic | null => {
   switch (p.kind) {
     case "pbind":
@@ -186,10 +194,12 @@ const binderPaths = (p: Pattern, at: string, acc: Map<string, string>): Diagnost
   }
 };
 
-// An or-pattern (`A | B | …`): each alternative must narrow (not a catch-all),
-// must not be an eager/lazy sequence (those need genListMatch/length logic the
-// guard form can't host as an alt), and all alts must bind the same names at the
-// same structural position — so the arm's single destructure serves every alt.
+/**
+ * An or-pattern (`A | B | …`): each alternative must narrow (not a catch-all),
+ * must not be an eager/lazy sequence (those need genListMatch/length logic the
+ * guard form can't host as an alt), and all alts must bind the same names at the
+ * same structural position — so the arm's single destructure serves every alt.
+ */
 const checkOrPattern = (p: OrPat, reg: Registry): Diagnostic | null => {
   const maps: Map<string, string>[] = [];
   for (const alt of p.alts) {
@@ -231,10 +241,12 @@ const checkOrPattern = (p: OrPat, reg: Registry): Diagnostic | null => {
   return null;
 };
 
-// A constructor arm covers its constructor only when every argument is
-// irrefutable (a bind/wildcard or an all-binding record/tuple). A narrowing
-// arm — `Sm(Sm(n))`, `Sm(0)` — matches a strict subset, so it must not count
-// toward exhaustiveness.
+/**
+ * A constructor arm covers its constructor only when every argument is
+ * irrefutable (a bind/wildcard or an all-binding record/tuple). A narrowing
+ * arm — `Sm(Sm(n))`, `Sm(0)` — matches a strict subset, so it must not count
+ * toward exhaustiveness.
+ */
 const coversCtor = (p: CtorPat): boolean => p.args.every(isCatchAll);
 
 function checkMatch(m: MatchExpr, reg: Registry): Diagnostic | null {
@@ -324,12 +336,14 @@ function checkMatch(m: MatchExpr, reg: Registry): Diagnostic | null {
   );
 }
 
-// Collection namespaces are built-in; binding one as a value/type/import would
-// shadow `List.map` and desync codegen (which resolves them by name), so forbid it.
-// Exception: `Option`/`Result` are ALSO builtin variant types whose contract is
-// "user redeclarations win" — a `type` statement of those names stays legal
-// (the combinators assume the builtin runtime shape; a same-shape redecl is
-// the only sensible one and predates the namespaces).
+/**
+ * Collection namespaces are built-in; binding one as a value/type/import would
+ * shadow `List.map` and desync codegen (which resolves them by name), so forbid it.
+ * Exception: `Option`/`Result` are ALSO builtin variant types whose contract is
+ * "user redeclarations win" — a `type` statement of those names stays legal
+ * (the combinators assume the builtin runtime shape; a same-shape redecl is
+ * the only sensible one and predates the namespaces).
+ */
 const RESERVED_NAMES = new Set(Object.keys(preludeNamespaces));
 const REDECLARABLE_TYPES = new Set(builtinTypeDecls.map((d) => d.name));
 
@@ -365,10 +379,12 @@ const checkReservedNames = (prog: Program): Diagnostic[] => {
   return diags;
 };
 
-// Ctor field types are full type expressions (ADR 0015). A lowercase leaf name
-// is a type variable and must be one of the declaration's parameters — a stray
-// var would be existential (matching couldn't recover its type). Prim names
-// (number/string/bool/..., `PRIM_TYPE_NAMES` from ctors.ts) are fine.
+/**
+ * Ctor field types are full type expressions (ADR 0015). A lowercase leaf name
+ * is a type variable and must be one of the declaration's parameters — a stray
+ * var would be existential (matching couldn't recover its type). Prim names
+ * (number/string/bool/..., `PRIM_TYPE_NAMES` from ctors.ts) are fine.
+ */
 const strayTypeVar = (te: TypeExpr, params: ReadonlySet<string>): TypeExpr | null => {
   switch (te.kind) {
     case "tname":
@@ -406,13 +422,15 @@ const checkCtorFieldVars = (prog: Program): Diagnostic[] => {
   return diags;
 };
 
-// JavaScript reserved words. An mochi lowercase identifier in a BINDING
-// position (let/extern name, lambda/letin/letbind param, pattern bind, labelled
-// ctor field) lowers to a JS binding of that same name — `const else = …`,
-// `(else) => …`, `{ _tag, else }` — which is a SyntaxError. mochi keeps its
-// emitted JS pristine (no mangling — ADR 0020), so reject at check time with a
-// rename hint. Object KEYS and member names (`{ default: 1 }`, `r.default`) are
-// legal JS and are NOT binding positions, so they stay allowed.
+/**
+ * JavaScript reserved words. An mochi lowercase identifier in a BINDING
+ * position (let/extern name, lambda/letin/letbind param, pattern bind, labelled
+ * ctor field) lowers to a JS binding of that same name — `const else = …`,
+ * `(else) => …`, `{ _tag, else }` — which is a SyntaxError. mochi keeps its
+ * emitted JS pristine (no mangling — ADR 0020), so reject at check time with a
+ * rename hint. Object KEYS and member names (`{ default: 1 }`, `r.default`) are
+ * legal JS and are NOT binding positions, so they stay allowed.
+ */
 const JS_RESERVED = new Set([
   "break",
   "case",
@@ -473,8 +491,7 @@ const reservedBind = (name: string, span: Span): Diagnostic | null =>
 const many = (...parts: readonly (Diagnostic | Diagnostic[] | null)[]): Diagnostic[] =>
   concatDiags(...parts);
 
-// A lambda/letbind parameter binds one or more names; none of its forms carry a
-// per-name span, so offences anchor to the parameter's enclosing span.
+/** A lambda/letbind parameter binds one or more names; anchor offences to the param span. */
 const checkParamBinds = (p: LamParam, span: Span): Diagnostic[] => {
   switch (p.kind) {
     case "name":
@@ -585,9 +602,11 @@ const checkReservedWords = (prog: Program): Diagnostic[] => {
   return diags;
 };
 
-// `imported` carries the ctor/type registries of the modules this program
-// imports from; merged UNDER the local registry (local declarations win) so
-// exhaustiveness works across the module boundary.
+/**
+ * `imported` carries the ctor/type registries of the modules this program
+ * imports from; merged UNDER the local registry (local declarations win) so
+ * exhaustiveness works across the module boundary.
+ */
 export function check(prog: Program, imported?: Registry): Result<Program, Diagnostic[]> {
   const diags: Diagnostic[] = [
     ...checkReservedNames(prog),

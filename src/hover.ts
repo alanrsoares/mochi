@@ -1,9 +1,11 @@
-// LSP-shaped hover, computed from the compiler pipeline but free of any
-// editor/protocol dependency so it stays unit-testable under Bun. Given a byte
-// offset into the source, it reports the inferred type of the smallest
-// expression whose span contains that offset. The language server is a thin
-// adapter that maps a cursor Position onto an offset and this string onto a
-// hover popup.
+/**
+ * LSP-shaped hover, computed from the compiler pipeline but free of any
+ * editor/protocol dependency so it stays unit-testable under Bun. Given a byte
+ * offset into the source, it reports the inferred type of the smallest
+ * expression whose span contains that offset. The language server is a thin
+ * adapter that maps a cursor Position onto an offset and this string onto a
+ * hover popup.
+ */
 import { resolve } from "node:path";
 import { isErr } from "@onrails/result";
 import { toTypedProgram, toTypedProgramWith } from "./compile";
@@ -16,8 +18,7 @@ import { preludeDocForBinding } from "./prelude-virtual";
 import { indexProgram } from "./symbols";
 import { foldAliases, showType } from "./types";
 
-// The tightest span containing `offset`, or null if none. Ties (nested spans of
-// equal width) are broken toward the first — they denote the same location.
+/** The tightest span containing `offset`; ties break toward the first. */
 const tightest = (types: TypeAt[], offset: number): TypeAt | null => {
   let best: TypeAt | null = null;
   for (const t of types) {
@@ -28,12 +29,14 @@ const tightest = (types: TypeAt[], offset: number): TypeAt | null => {
   return best;
 };
 
-// A hover payload: `code` is the mochi-fenced lead line (a bare type, or a
-// TS-style `let x: T` / `(parameter) x: T` / `(property) x: T`), `doc` is an
-// optional prose paragraph (a leading `///` comment) rendered below the fence.
+/**
+ * Hover payload: `code` is the mochi-fenced lead line (bare type, or TS-style
+ * `let x: T` / `(parameter) x: T` / `(property) x: T`); `doc` is optional
+ * prose from a leading `///` comment.
+ */
 export type HoverInfo = { code: string; doc?: string };
 
-// TS-style lead: `kind name: type` for a named symbol, bare type otherwise.
+/** TS-style lead: `kind name: type` for a named symbol, bare type otherwise. */
 const lead = (type: string, symbol: SymbolInfo | undefined): string => {
   if (!symbol) return type;
   if (symbol.kind === "let") return `let ${symbol.name}: ${type}`;
@@ -57,7 +60,7 @@ const docAt = (
   return hit ? preludeDocForBinding(hit.binding) : undefined;
 };
 
-// The tightest-span type at `offset`, rendered as a hover payload.
+/** Render the tightest-span type at `offset` as a hover payload. */
 const hoverFrom = (
   res: InferResult,
   offset: number,
@@ -70,20 +73,24 @@ const hoverFrom = (
   return { code: lead(type, hit.symbol), doc: docAt(src, path, offset, hit.symbol) };
 };
 
-// The hover at `offset`, or null when the source doesn't typecheck or nothing
-// sits under the cursor. Open-world so host globals infer. Single-file: a file
-// with imports won't typecheck (the imported constructors are unknown), so
-// prefer `moduleHoverAt` when a path is available.
+/**
+ * Hover at `offset`, or null when the source doesn't typecheck or nothing sits
+ * under the cursor. Open-world so host globals infer. Single-file: a file with
+ * imports won't typecheck (imported constructors are unknown), so prefer
+ * `moduleHoverAt` when a path is available.
+ */
 export const hoverAt = (src: string, offset: number, path = "<buffer>"): HoverInfo | null => {
   const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces });
   return isErr(r) ? null : hoverFrom(r.value.res, offset, src, path);
 };
 
-// Module-aware hover: resolve `path`'s dependency graph (deps from disk via
-// `readFile`, the edited file from the live `src` buffer) and check + infer the
-// live program WITH the imported registry/schemes. Without this, any file that
-// imports a variant fails to typecheck and yields no hover at all. Degrades to
-// single-file `hoverAt` if the dep graph can't be resolved.
+/**
+ * Module-aware hover: resolve `path`'s dependency graph (deps from disk via
+ * `readFile`, the edited file from the live `src` buffer) and check + infer the
+ * live program WITH the imported registry/schemes. Without this, any file that
+ * imports a variant fails to typecheck and yields no hover. Degrades to
+ * single-file `hoverAt` if the dep graph can't be resolved.
+ */
 export const moduleHoverAt = async (
   path: string,
   src: string,

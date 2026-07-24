@@ -1,6 +1,4 @@
-// Unification for the HM type system. Uses a mutable substitution (union-find
-// style) threaded through as `Subst`; every entry point returns a Result so
-// type errors are values, consistent with the rest of the compiler.
+/** Unification for the HM type system. Uses a mutable substitution (union-find style) threaded through as `Subst`; every entry point returns a Result so type errors are values, consistent with the rest of the compiler. */
 import { err, isErr, ok, type Result } from "@onrails/result";
 import { type Fresh, freshRowVar, freshVar, type Row, rExtend, showType, type Type } from "./types";
 
@@ -9,8 +7,6 @@ export const emptySubst = (): Subst => ({ tvars: new Map(), rvars: new Map() });
 
 export type TypeErr = { message: string };
 const fail = (message: string): Result<never, TypeErr> => err({ message });
-
-// ---- resolution (follow variable chains one level to a head) --------------
 
 export const resolve = (t: Type, s: Subst): Type => {
   let cur = t;
@@ -32,7 +28,7 @@ export const resolveRow = (r: Row, s: Subst): Row => {
   return cur;
 };
 
-// Fully apply the substitution ("zonk") — for display and assertions.
+/** Fully apply the substitution ("zonk") — for display and assertions. */
 export const zonk = (t: Type, s: Subst): Type => {
   const r = resolve(t, s);
   switch (r.kind) {
@@ -51,8 +47,6 @@ const zonkRow = (row: Row, s: Subst): Row => {
   const r = resolveRow(row, s);
   return r.kind === "extend" ? rExtend(r.label, zonk(r.type, s), zonkRow(r.rest, s)) : r;
 };
-
-// ---- occurs checks ---------------------------------------------------------
 
 const occurs = (id: number, t: Type, s: Subst): boolean => {
   const r = resolve(t, s);
@@ -94,12 +88,9 @@ const rowVarOccursInType = (id: number, t: Type, s: Subst): boolean => {
   }
 };
 
-// ---- unification -----------------------------------------------------------
-
-// `show` renders a type for error messages. It defaults to `showType`, but
-// callers with alias context (infer.ts's `u()` seam) pass a folding renderer so
-// a mismatch reads `… with Point`, not `… with { x: number, y: number }`
-// (CRITIQUE §4.1). It's invoked only on the failure path, so folding is free.
+/**
+ * `show` renders a type for error messages. It defaults to `showType`, but callers with alias context (infer.ts's `u()` seam) pass a folding renderer so a mismatch reads `… with Point`, not `… with { x: number, y: number }` (CRITIQUE §4.1). Invoked only on the failure path, so folding is free.
+ */
 export const unify = (
   a: Type,
   b: Type,
@@ -160,8 +151,6 @@ const bindVar = (
   return ok(s);
 };
 
-// ---- row unification -------------------------------------------------------
-
 const unifyRows = (
   r1: Row,
   r2: Row,
@@ -189,7 +178,7 @@ const unifyRows = (
   return fail("cannot unify records");
 };
 
-// Bring `label` to the head of a row, extending an open tail if needed.
+/** Bring `label` to the head of a row, extending an open tail if needed. */
 const rewriteRow = (
   row: Row,
   label: string,

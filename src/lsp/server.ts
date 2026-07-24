@@ -1,7 +1,8 @@
-// mochi language server. A thin adapter: it re-runs the compiler on every edit
-// and republishes the resulting diagnostics. All real logic lives in the
-// compiler; this file only speaks LSP.
-
+/**
+ * mochi language server. A thin adapter: it re-runs the compiler on every edit
+ * and republishes the resulting diagnostics. All real logic lives in the
+ * compiler; this file only speaks LSP.
+ */
 import { readFile } from "node:fs/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { isOk } from "@onrails/result";
@@ -59,7 +60,7 @@ connection.onInitialize(() => ({
     workspaceSymbolProvider: true,
     inlayHintProvider: false,
     documentFormattingProvider: true,
-    // Virtual prelude buffer for F12 on builtins (DX slice 9).
+    // Virtual prelude buffer for go-to-definition on builtins.
     workspace: {
       textDocumentContent: { schemes: ["mochi"] },
     },
@@ -99,7 +100,7 @@ const symbolKind = (kind: string): SymbolKind => {
   return SymbolKind.Variable;
 };
 
-// Hover: map the cursor Position → byte offset → inferred type at that node.
+/** Map cursor Position → byte offset → inferred type at that node. */
 connection.onHover(async ({ textDocument, position }): Promise<Hover | null> => {
   const doc = documents.get(textDocument.uri);
   if (!doc) return null;
@@ -115,7 +116,7 @@ connection.onHover(async ({ textDocument, position }): Promise<Hover | null> => 
   return { contents: { kind: MarkupKind.Markdown, value } };
 });
 
-// Go-to-definition (cross-module via export origins).
+/** Go-to-definition (cross-module via export origins). */
 connection.onDefinition(
   async ({ textDocument, position }: TextDocumentPositionParams): Promise<Location | null> => {
     const doc = documents.get(textDocument.uri);
@@ -127,7 +128,7 @@ connection.onDefinition(
   },
 );
 
-// Go-to-type: nominal type of the expression under the cursor (needs infer).
+/** Go-to-type: nominal type of the expression under the cursor (needs infer). */
 connection.onTypeDefinition(
   async ({ textDocument, position }: TextDocumentPositionParams): Promise<Location | null> => {
     const doc = documents.get(textDocument.uri);
@@ -139,7 +140,7 @@ connection.onTypeDefinition(
   },
 );
 
-// Document highlight: occurrences in the current file.
+/** Document highlight: occurrences in the current file. */
 connection.onDocumentHighlight(async ({ textDocument, position }): Promise<DocumentHighlight[]> => {
   const doc = documents.get(textDocument.uri);
   if (!doc) return [];
@@ -151,7 +152,7 @@ connection.onDocumentHighlight(async ({ textDocument, position }): Promise<Docum
   }));
 });
 
-// Find all references across the import graph.
+/** Find all references across the import graph. */
 connection.onReferences(async ({ textDocument, position }): Promise<Location[]> => {
   const doc = documents.get(textDocument.uri);
   if (!doc) return [];
@@ -160,7 +161,7 @@ connection.onReferences(async ({ textDocument, position }): Promise<Location[]> 
   return Promise.all(refs.map((r) => rangeAtPath(r.location.path, r.location.span)));
 });
 
-// Rename across the import graph.
+/** Rename across the import graph. */
 connection.onPrepareRename(async ({ textDocument, position }) => {
   const doc = documents.get(textDocument.uri);
   if (!doc) return null;
@@ -189,7 +190,7 @@ connection.onRenameRequest(async ({ textDocument, position, newName }) => {
   return { changes };
 });
 
-// Document / workspace symbols.
+/** Document / workspace symbols. */
 connection.onDocumentSymbol(({ textDocument }): DocumentSymbol[] => {
   const doc = documents.get(textDocument.uri);
   if (!doc) return [];
@@ -221,7 +222,7 @@ connection.onWorkspaceSymbol(async ({ query }): Promise<WorkspaceSymbol[]> => {
   return out;
 });
 
-// Quick fixes from Diagnostic.suggestions (recomputed — LSP does not round-trip them).
+/** Quick fixes from Diagnostic.suggestions (recomputed — LSP does not round-trip them). */
 connection.onCodeAction(async ({ textDocument }): Promise<CodeAction[]> => {
   const doc = documents.get(textDocument.uri);
   if (!doc) return [];
@@ -244,8 +245,7 @@ connection.onCodeAction(async ({ textDocument }): Promise<CodeAction[]> => {
   return actions;
 });
 
-// Formatting: run `format(src)` on the document text. If formatting succeeds,
-// return a single full-document replacement edit.
+/** Run `format(src)` on the document; return a single full-document replacement edit. */
 connection.onDocumentFormatting(({ textDocument }): TextEdit[] => {
   const doc = documents.get(textDocument.uri);
   if (!doc) return [];
@@ -283,7 +283,7 @@ documents.onDidChangeContent((e) => {
 });
 documents.listen(connection);
 
-// Serve the virtual prelude buffer when the client opens a `mochi:` Location.
+/** Serve the virtual prelude buffer when the client opens a `mochi:` Location. */
 connection.workspace.textDocumentContent.on((params) => {
   if (params.uri === PRELUDE_PATH || params.uri.startsWith("mochi:")) {
     return { text: preludeVirtualSource() };

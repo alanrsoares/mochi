@@ -1,11 +1,6 @@
-// Tarjan's strongly-connected components — the dependency-grouping step of
-// let-generalization (infer.ts) and a pure graph algorithm with no compiler
-// dependencies, which is why it lives alone.
+/** Tarjan's strongly-connected components — the dependency-grouping step of let-generalization (infer.ts) and a pure graph algorithm with no compiler dependencies, which is why it lives alone. */
 
-// Returns strongly-connected components (mutually recursive groups) in
-// DEPENDENCY-FIRST order — exactly the order to generalize them, since a
-// group's dependencies are already generalized by the time it's inferred.
-// Tarjan naturally emits SCCs in reverse-topological order, which is that order.
+/** Returns strongly-connected components (mutually recursive groups) in dependency-first order — exactly the order to generalize them, since a group's dependencies are already generalized by the time it's inferred. Tarjan naturally emits SCCs in reverse-topological order, which is that order. */
 export const stronglyConnected = (adj: number[][]): number[][] => {
   const n = adj.length;
   const index = new Array<number>(n).fill(-1);

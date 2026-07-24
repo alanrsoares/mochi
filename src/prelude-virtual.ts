@@ -1,6 +1,8 @@
-// Virtual prelude buffer — readable go-to-definition targets for builtins
-// (DX slice 9). Not a real module; Location.path is PRELUDE_PATH.
-// URI ends with `.mochi` so editors pick up the language / syntax grammar.
+/**
+ * Virtual prelude buffer — readable go-to-definition targets for builtins.
+ * Not a real module; Location.path is PRELUDE_PATH. URI ends with `.mochi`
+ * so editors pick up the language / syntax grammar.
+ */
 import { builtinTypeDecls, preludeEnv, preludeNamespaces } from "./prelude";
 import type { Location, Span } from "./span";
 import { emptyOrigins, type Origins } from "./symbols";

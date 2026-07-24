@@ -1,13 +1,15 @@
-// Emit a TypeScript declaration (.d.ts) for a compiled mochi module, so the
-// emitted JS can be consumed from TypeScript with full types. Top-level `let`s
-// become `export declare const`s; `type` decls become exported tagged-union
-// types matching the `{ _tag, _0, ... }` runtime; `extern`s are imports, not
-// our declarations, so they are omitted.
-//
-// The declared type of a binding follows the EMITTED JS, not just the HM type:
-// a multi-param lambda `(a, b) => …` compiles to a 2-arg JS function, so its
-// declaration is `(a: A, b: B) => R` — we peel arrows by the lambda's arity,
-// recursing into curried bodies (`f => r => …` stays `(f: F) => (r: R) => …`).
+/**
+ * Emit a TypeScript declaration (.d.ts) for a compiled mochi module, so the
+ * emitted JS can be consumed from TypeScript with full types. Top-level `let`s
+ * become `export declare const`s; `type` decls become exported tagged-union
+ * types matching the `{ _tag, _0, ... }` runtime; `extern`s are imports, not
+ * our declarations, so they are omitted.
+ *
+ * The declared type of a binding follows the EMITTED JS, not just the HM type:
+ * a multi-param lambda `(a, b) => …` compiles to a 2-arg JS function, so its
+ * declaration is `(a: A, b: B) => R` — we peel arrows by the lambda's arity,
+ * recursing into curried bodies (`f => r => …` stays `(f: F) => (r: R) => …`).
+ */
 import { isErr, ok, type Result } from "@onrails/result";
 import type { Ctor, Expr, Program, Stmt, TypeExpr } from "./ast";
 import { toTypedProgram } from "./compile";
@@ -25,8 +27,7 @@ import {
   tVar,
 } from "./types";
 
-// Collect every type-constructor name appearing in a type (for detecting which
-// builtin variant decls an emitted module must include).
+/** Collect every type-constructor name appearing in a type (for detecting which builtin variant decls an emitted module must include). */
 const consIn = (t: Type, acc: Set<string>): void => {
   if (t.kind === "con") {
     acc.add(t.name);
@@ -46,8 +47,7 @@ const consIn = (t: Type, acc: Set<string>): void => {
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const PRIM_TS: Record<string, string> = { number: "number", string: "string", bool: "boolean" };
 
-// HM type → TS type. `names` maps quantified var ids to generic letters; any
-// other var renders as `unknown` (it escaped generalization at this position).
+/** HM type → TS type. `names` maps quantified var ids to generic letters; any other var renders as `unknown` (it escaped generalization at this position). */
 const tsOf = (t: Type, names: Map<number, string>): string => {
   switch (t.kind) {
     case "var":
@@ -106,8 +106,7 @@ const tsRow = (row: Row, names: Map<number, string>): string => {
   return body;
 };
 
-// True when a (zonked) type still carries an unbound type or row var — i.e. it
-// is NOT fully concrete. `tsOf` would render such a var as `unknown`.
+/** True when a (zonked) type still carries an unbound type or row var — i.e. it is NOT fully concrete. `tsOf` would render such a var as `unknown`. */
 const hasFreeVar = (t: Type): boolean => {
   switch (t.kind) {
     case "var":
@@ -127,17 +126,19 @@ const hasFreeVar = (t: Type): boolean => {
   }
 };
 
-// TS type for an EMPTY collection literal (`#{}`/`[]`/`@{}`) whose element types
-// are fully known, else null. An empty literal otherwise infers `Map<unknown,
-// unknown>`/`never[]`/`Set<never>`, which won't flow to a concretely-typed
-// parameter (ADR 0035); annotating the seed with the resolved element types
-// (`new Map<number, Ty>()`, `[] as Ty[]`) fixes the mismatch.
-//
-// `names` (default empty, ADR 0042) carries the letters of an enclosing generic
-// binding: a seed whose element type is a var of that binding renders it as the
-// letter (`new Map<string, … & D>()`) rather than being skipped. With no such
-// scope (empty map) only a fully concrete element type renders — a free var
-// would become `unknown`, no better than tsc's own guess for the literal.
+/**
+ * TS type for an EMPTY collection literal (`#{}`/`[]`/`@{}`) whose element types
+ * are fully known, else null. An empty literal otherwise infers `Map<unknown,
+ * unknown>`/`never[]`/`Set<never>`, which won't flow to a concretely-typed
+ * parameter (ADR 0035); annotating the seed with the resolved element types
+ * (`new Map<number, Ty>()`, `[] as Ty[]`) fixes the mismatch.
+ *
+ * `names` (default empty, ADR 0042) carries the letters of an enclosing generic
+ * binding: a seed whose element type is a var of that binding renders it as the
+ * letter (`new Map<string, … & D>()`) rather than being skipped. With no such
+ * scope (empty map) only a fully concrete element type renders — a free var
+ * would become `unknown`, no better than tsc's own guess for the literal.
+ */
 export const emptyCollTs = (
   t: Type,
   aliases: AliasDef[],
@@ -147,23 +148,24 @@ export const emptyCollTs = (
   return allVarsIn(folded, names) ? tsOf(folded, names) : null;
 };
 
-// TS type for an APPLIED parametric constructor call (`Ok(x)`, `Some(y)`) whose
-// result type is fully known, else null. A constructor's argument pins only the
-// type params it mentions; a phantom param (`Ok`'s error type, `Err`'s ok type)
-// stays free at the call, so tsc widens it to `unknown` — and in a ts-pattern arm
-// that then fails to unify with a sibling arm (`Ok("")` : `Result<string, unknown>`
-// vs the recursive branch's `Result<string, string>`; ADR 0043). Annotate the call
-// with its resolved concrete type (`Ok("") as Result<string, string>`) — the
-// applied-ctor analogue of ADR 0039's nullary-ctor rule and ADR 0035's empty seed.
-// Fully-concrete cons only: a free var would render `unknown`, no better than tsc.
+/**
+ * TS type for an APPLIED parametric constructor call (`Ok(x)`, `Some(y)`) whose
+ * result type is fully known, else null. A constructor's argument pins only the
+ * type params it mentions; a phantom param (`Ok`'s error type, `Err`'s ok type)
+ * stays free at the call, so tsc widens it to `unknown` — and in a ts-pattern arm
+ * that then fails to unify with a sibling arm (`Ok("")` : `Result<string, unknown>`
+ * vs the recursive branch's `Result<string, string>`; ADR 0043). Annotate the call
+ * with its resolved concrete type (`Ok("") as Result<string, string>`) — the
+ * applied-ctor analogue of ADR 0039's nullary-ctor rule and ADR 0035's empty seed.
+ * Fully-concrete cons only: a free var would render `unknown`, no better than tsc.
+ */
 export const ctorCallTs = (t: Type, aliases: AliasDef[]): string | null => {
   const folded = foldAliases(t, aliases);
   if (folded.kind !== "con" || folded.args.length === 0) return null;
   return hasFreeVar(folded) ? null : tsOf(folded, new Map());
 };
 
-// Arity-aware function type: peel one arrow per lambda parameter, then recurse
-// into the body (which may itself be a lambda for curried definitions).
+/** Arity-aware function type: peel one arrow per lambda parameter, then recurse into the body (which may itself be a lambda for curried definitions). */
 const declType = (t: Type, value: Expr, names: Map<number, string>): string => {
   if (value.kind !== "lambda") return tsOf(t, names);
   const params: string[] = [];
@@ -177,10 +179,12 @@ const declType = (t: Type, value: Expr, names: Map<number, string>): string => {
   return `(${params.join(", ")}) => ${declType(cur, value.body, names)}`;
 };
 
-// A binding's parameters flattened — across nested value lambdas (`a => b => …`)
-// AND a single multi-param lambda (`(a, b) => …`) alike — into one ordered list,
-// plus the final return type. Feeds `curriedOverloads` for CONCRETE function
-// bindings so every partial-application grouping `_curry` accepts typechecks.
+/**
+ * A binding's parameters flattened — across nested value lambdas (`a => b => …`)
+ * AND a single multi-param lambda (`(a, b) => …`) alike — into one ordered list,
+ * plus the final return type. Feeds `curriedOverloads` for CONCRETE function
+ * bindings so every partial-application grouping `_curry` accepts typechecks.
+ */
 const flatBindingParams = (
   t: Type,
   value: Expr,
@@ -203,30 +207,34 @@ const flatBindingParams = (
   return { params, ret: tsOf(cur, names) };
 };
 
-// Assign generic letters to a scheme's quantified vars — type vars AND row
-// vars alike. `freshVar`/`freshRowVar` share one id counter (types.ts), so tv
-// and rv ids never collide and one map covers both: `tsOf` looks up a type var,
-// `tsRow` looks up an open row's tail. Row-poly bindings (e.g. `st => {...st}`)
-// thus emit `{ …fields } & R` under a `<R>` head instead of a closed record
-// that drops the row var (ADR 0034).
+/**
+ * Assign generic letters to a scheme's quantified vars — type vars AND row
+ * vars alike. `freshVar`/`freshRowVar` share one id counter (types.ts), so tv
+ * and rv ids never collide and one map covers both: `tsOf` looks up a type var,
+ * `tsRow` looks up an open row's tail. Row-poly bindings (e.g. `st => {...st}`)
+ * thus emit `{ …fields } & R` under a `<R>` head instead of a closed record
+ * that drops the row var (ADR 0034).
+ */
 const genericNames = (sc: Scheme): Map<number, string> =>
   new Map([...sc.vars, ...sc.rvars].map((id, i) => [id, LETTERS[i] ?? `T${i}`]));
 
-// A variant's type-param names → TS generic letters (`a` → `A`).
+/** A variant's type-param names → TS generic letters (`a` → `A`). */
 const paramGmap = (params: string[]): Map<string, string> =>
   new Map(params.map((p, i) => [p, LETTERS[i] ?? `T${i}`]));
 
-// A ctor field type is a full TypeExpr (ADR 0015). Lower it to a Type first
-// (params bound positionally, aliases left nominal) and render through `tsOf`,
-// so the TS output grammar has exactly one encoder — flat-arrow collapse and
-// `List` → `Iterable` apply to ctor fields exactly as everywhere else.
+/**
+ * A ctor field type is a full TypeExpr (ADR 0015). Lower it to a Type first
+ * (params bound positionally, aliases left nominal) and render through `tsOf`,
+ * so the TS output grammar has exactly one encoder — flat-arrow collapse and
+ * `List` → `Iterable` apply to ctor fields exactly as everywhere else.
+ */
 const fieldTs = (te: TypeExpr, params: string[]): string => {
   const vars = new Map(params.map((p, i): [string, Type] => [p, tVar(i)]));
   const names = new Map(params.map((_, i): [number, string] => [i, LETTERS[i] ?? `T${i}`]));
   return tsOf(typeExprToType(te, vars, mkFresh(params.length)), names);
 };
 
-// Free type-var ids in a Type, first-appearance order.
+/** Free type-var ids in a Type, first-appearance order. */
 const freeVars = (t: Type, acc: number[]): void => {
   switch (t.kind) {
     case "var":
@@ -250,14 +258,16 @@ const freeVars = (t: Type, acc: number[]): void => {
   }
 };
 
-// Ordered compositions of n: every way to write n as a sum of positive ints
-// keeping order — [2] & [1,1] for n=2; [3],[2,1],[1,2],[1,1,1] for n=3. Longest
-// first (most groups) so the all-at-once FLAT signature (`[n]`) lands LAST.
-// TS resolves a call against the first *matching* overload regardless of order,
-// but infers a call's type args from a passed OVERLOADED function using its LAST
-// overload only. Keeping the flat form last makes that inference pin every type
-// var (`reduce(add, 0, xs)` → both of add's params inferred), matching the flat
-// param shapes `tsOf` now renders for function-typed values.
+/**
+ * Ordered compositions of n: every way to write n as a sum of positive ints
+ * keeping order — [2] & [1,1] for n=2; [3],[2,1],[1,2],[1,1,1] for n=3. Longest
+ * first (most groups) so the all-at-once FLAT signature (`[n]`) lands LAST.
+ * TS resolves a call against the first *matching* overload regardless of order,
+ * but infers a call's type args from a passed OVERLOADED function using its LAST
+ * overload only. Keeping the flat form last makes that inference pin every type
+ * var (`reduce(add, 0, xs)` → both of add's params inferred), matching the flat
+ * param shapes `tsOf` now renders for function-typed values.
+ */
 const compositions = (n: number): number[][] => {
   if (n === 0) return [[]];
   const out: number[][] = [];
@@ -265,15 +275,17 @@ const compositions = (n: number): number[][] => {
   return out.toSorted((a, b) => b.length - a.length);
 };
 
-// Curried-compatible function type from rendered params (`"a: T"`) + return type.
-// The JS backend curries every arity-≥2 function via `_curry`, so a call site may
-// partially apply in ANY grouping — `f(a, b)`, `f(a)(b)`, `f(a, b)(c)`. A single
-// flat `(a, b) => R` rejects all but the all-at-once form, so emit an OVERLOAD
-// per composition of the arity, covering every grouping `_curry` accepts, with the
-// flat signature LAST (see `compositions`). `head` (`<A, B>`) scopes generics; on
-// the overload object it must sit INSIDE each call signature, so it is threaded
-// through here rather than prepended by the caller. Shared by builtin runtime
-// typing (`flatFnType`) and user binding typing (`declType`) so both curry alike.
+/**
+ * Curried-compatible function type from rendered params (`"a: T"`) + return type.
+ * The JS backend curries every arity-≥2 function via `_curry`, so a call site may
+ * partially apply in ANY grouping — `f(a, b)`, `f(a)(b)`, `f(a, b)(c)`. A single
+ * flat `(a, b) => R` rejects all but the all-at-once form, so emit an OVERLOAD
+ * per composition of the arity, covering every grouping `_curry` accepts, with the
+ * flat signature LAST (see `compositions`). `head` (`<A, B>`) scopes generics; on
+ * the overload object it must sit INSIDE each call signature, so it is threaded
+ * through here rather than prepended by the caller. Shared by builtin runtime
+ * typing (`flatFnType`) and user binding typing (`declType`) so both curry alike.
+ */
 const curriedOverloads = (head: string, params: string[], ret: string): string => {
   if (params.length <= 1) return `${head}(${params.join(", ")}) => ${ret}`;
   const sig = (groups: number[]): string => {
@@ -290,14 +302,16 @@ const curriedOverloads = (head: string, params: string[], ret: string): string =
   return `{ ${compositions(params.length).map(sig).join(" ")} }`;
 };
 
-// A prelude builtin's HM type rendered for the typed runtime (ADR 0026). The JS
-// backend curries every arity-≥2 builtin via `_curry`, so a call site emits ANY
-// partial-application grouping — `map(f, xs)`, `xs |> map(f)` → `map(f)(xs)`,
-// `foldl(f, z)(xs)`, `foldl(f)(z)(xs)`. A single flat `(a, b) => R` type rejects
-// all but the all-at-once form, breaking pipelines. So emit an OVERLOADED type:
-// one generic call signature per composition of the arity, covering every
-// grouping `_curry` accepts. arity 0 → the bare type; arity 1 → a plain arrow.
-// Used by scripts/gen-runtime.ts.
+/**
+ * A prelude builtin's HM type rendered for the typed runtime (ADR 0026). The JS
+ * backend curries every arity-≥2 builtin via `_curry`, so a call site emits ANY
+ * partial-application grouping — `map(f, xs)`, `xs |> map(f)` → `map(f)(xs)`,
+ * `foldl(f, z)(xs)`, `foldl(f)(z)(xs)`. A single flat `(a, b) => R` type rejects
+ * all but the all-at-once form, breaking pipelines. So emit an OVERLOADED type:
+ * one generic call signature per composition of the arity, covering every
+ * grouping `_curry` accepts. arity 0 → the bare type; arity 1 → a plain arrow.
+ * Used by scripts/gen-runtime.ts.
+ */
 export const flatFnType = (t: Type, arity: number): string => {
   const ids: number[] = [];
   freeVars(t, ids);
@@ -313,14 +327,16 @@ export const flatFnType = (t: Type, arity: number): string => {
   return curriedOverloads(head, params, tsOf(cur, names));
 };
 
-// The TS signature pieces for a ctor's runtime factory (ADR 0026 TS backend):
-// generic head, per-field param types, and the variant return type. genType
-// assembles these into `const C = <A>(_0: T): Head => …` (single field) or a
-// `_curry(n, …) as <A>(…) => Head` cast (multi-field).
-// `ret` is the generic return (`Tree<A>`), for the factory signature. `retMono`
-// substitutes `never` for every param (`Tree<never>`), for a nullary ctor const
-// — which has no function to scope generics on, so it takes the "empty" instance
-// (assignable to any covariant use, mirroring how `None: Option<never>` is typed).
+/**
+ * The TS signature pieces for a ctor's runtime factory (ADR 0026 TS backend):
+ * generic head, per-field param types, and the variant return type. genType
+ * assembles these into `const C = <A>(_0: T): Head => …` (single field) or a
+ * `_curry(n, …) as <A>(…) => Head` cast (multi-field).
+ * `ret` is the generic return (`Tree<A>`), for the factory signature. `retMono`
+ * substitutes `never` for every param (`Tree<never>`), for a nullary ctor const
+ * — which has no function to scope generics on, so it takes the "empty" instance
+ * (assignable to any covariant use, mirroring how `None: Option<never>` is typed).
+ */
 export const ctorFactoryTs = (
   typeName: string,
   params: string[],
@@ -336,11 +352,13 @@ export const ctorFactoryTs = (
   };
 };
 
-// The TS type of a binding, WITHOUT the `export declare const name:` wrapper —
-// the one piece the `.d.ts` writer (`letDecl`) and the `.ts` backend
-// (`codegen-ts.ts`, ADR 0026) share. A function carries a `<A, B>` generic head
-// plus arity-peeled parameter names; a non-function polymorphic binding has
-// nowhere to bind generics, so its escaped vars fall back to `unknown`.
+/**
+ * The TS type of a binding, WITHOUT the `export declare const name:` wrapper —
+ * the one piece the `.d.ts` writer (`letDecl`) and the `.ts` backend
+ * (`codegen-ts.ts`, ADR 0026) share. A function carries a `<A, B>` generic head
+ * plus arity-peeled parameter names; a non-function polymorphic binding has
+ * nowhere to bind generics, so its escaped vars fall back to `unknown`.
+ */
 export const bindingTsType = (sc: Scheme, value: Expr, aliases: AliasDef[]): string => {
   const names = genericNames(sc);
   // Fold structural rows to alias names first, so a binding typed `{ x, y }`
@@ -363,11 +381,13 @@ export const bindingTsType = (sc: Scheme, value: Expr, aliases: AliasDef[]): str
   return tsOf(folded, new Map());
 };
 
-// Every type AND row var in a (zonked) type is a key of `names`. Unlike
-// `freeVars` (type vars only), this also inspects a record's trailing row var,
-// so an open record `{ … } & R` counts as "fully in scope" only when `R` too
-// carries a letter — the precondition for rendering it as `{ … } & R` rather
-// than dropping the tail. Empty `names` ⇒ true only for a fully concrete type.
+/**
+ * Every type AND row var in a (zonked) type is a key of `names`. Unlike
+ * `freeVars` (type vars only), this also inspects a record's trailing row var,
+ * so an open record `{ … } & R` counts as "fully in scope" only when `R` too
+ * carries a letter — the precondition for rendering it as `{ … } & R` rather
+ * than dropping the tail. Empty `names` ⇒ true only for a fully concrete type.
+ */
 const allVarsIn = (t: Type, names: Map<number, string>): boolean => {
   switch (t.kind) {
     case "var":
@@ -387,40 +407,44 @@ const allVarsIn = (t: Type, names: Map<number, string>): boolean => {
   }
 };
 
-// Merge the generic-letter maps of several schemes into one id → letter map.
-// Var ids are globally unique within an inference run and each quantified id
-// belongs to exactly ONE binding's scheme, so the union never collides on a key
-// even when two schemes both start their letters at `A` (distinct ids). Used to
-// bring a generic binding's letters into scope for the inner lambdas nested in
-// its body (ADR 0042).
+/**
+ * Merge the generic-letter maps of several schemes into one id → letter map.
+ * Var ids are globally unique within an inference run and each quantified id
+ * belongs to exactly ONE binding's scheme, so the union never collides on a key
+ * even when two schemes both start their letters at `A` (distinct ids). Used to
+ * bring a generic binding's letters into scope for the inner lambdas nested in
+ * its body (ADR 0042).
+ */
 export const unionGenericNames = (schemes: Iterable<Scheme>): Map<number, string> => {
   const out = new Map<number, string>();
   for (const sc of schemes) for (const [id, letter] of genericNames(sc)) out.set(id, letter);
   return out;
 };
 
-// TS backend (ADR 0028): the per-parameter TS type annotations for a lambda,
-// given its INFERRED (curried) type — looked up from the per-node type table —
-// and its collapsed parameter count. One arrow is peeled per param.
-//
-// Only CONCRETE param types are emitted — a type with a free type variable is
-// left bare (null). Two reasons: (1) a generic binding's letters (`<A, B>`) are
-// declared on the const's TYPE head, NOT in the value expression, so emitting `A`
-// in a value-position param would be an out-of-scope `TS2304`; (2) an outer
-// binding lambda's generic params are already supplied contextually by that head,
-// and generic inner-lambda params are usually supplied contextually by the
-// higher-order function they're passed to. Concrete inner params (over `Expr`,
-// `string`, records of concrete fields, …) are exactly the ones tsc can't infer
-// → the bare-param `any` (TS7006) this clears. Records/tuples render structurally,
-// so destructure params (`{ x, y }`, `[a, b]`) get a matching type too.
-//
-// ADR 0042: `names` (default empty) carries the letters in lexical scope — the
-// enclosing generic binding's `<A, B, …>` (via `unionGenericNames`). A param
-// whose every var is one of those renders with the letters (`(a: { … } & B)`)
-// rather than staying bare; tsc cannot infer such a param through a nested
-// higher-order call (`map((a) => …, filter(…))`) and falls it to `unknown`.
-// A concrete param still renders (empty-map path); a param mixing in an
-// out-of-scope var still stays bare (rendering it would be `unknown`/dropped).
+/**
+ * TS backend (ADR 0028): the per-parameter TS type annotations for a lambda,
+ * given its INFERRED (curried) type — looked up from the per-node type table —
+ * and its collapsed parameter count. One arrow is peeled per param.
+ *
+ * Only CONCRETE param types are emitted — a type with a free type variable is
+ * left bare (null). Two reasons: (1) a generic binding's letters (`<A, B>`) are
+ * declared on the const's TYPE head, NOT in the value expression, so emitting `A`
+ * in a value-position param would be an out-of-scope `TS2304`; (2) an outer
+ * binding lambda's generic params are already supplied contextually by that head,
+ * and generic inner-lambda params are usually supplied contextually by the
+ * higher-order function they're passed to. Concrete inner params (over `Expr`,
+ * `string`, records of concrete fields, …) are exactly the ones tsc can't infer
+ * → the bare-param `any` (TS7006) this clears. Records/tuples render structurally,
+ * so destructure params (`{ x, y }`, `[a, b]`) get a matching type too.
+ *
+ * ADR 0042: `names` (default empty) carries the letters in lexical scope — the
+ * enclosing generic binding's `<A, B, …>` (via `unionGenericNames`). A param
+ * whose every var is one of those renders with the letters (`(a: { … } & B)`)
+ * rather than staying bare; tsc cannot infer such a param through a nested
+ * higher-order call (`map((a) => …, filter(…))`) and falls it to `unknown`.
+ * A concrete param still renders (empty-map path); a param mixing in an
+ * out-of-scope var still stays bare (rendering it would be `unknown`/dropped).
+ */
 export const lambdaParamTypesTs = (
   lamType: Type,
   arity: number,
@@ -449,17 +473,19 @@ export const lambdaParamTypesTs = (
   return out;
 };
 
-// TS backend (ADR 0032): a GENERIC function binding's value lambda emitted as a
-// generic arrow — `_curry(n, <A, B>(p: A, …) => …)` — so its params can name the
-// binding's generic letters. This closes the polymorphic higher-order tail ADR
-// 0028 left open: `lambdaParamTypesTs` skips generic params because their letters
-// live on the const's TYPE head (out of scope in the value expression, would be
-// TS2304), so `_curry` erased them to `any`/`unknown` in the body (TS18046/7006/
-// 2345). Scoping the SAME letters (from the scheme's `genericNames`, matching the
-// const head `bindingTsType` emits) on the lambda itself brings them into value
-// scope. Returns the generic head plus EVERY param's type — generic letters and
-// concrete types alike — peeling one arrow of the scheme type per collapsed param.
-// Null when the binding is non-generic (the concrete-only path already handles it).
+/**
+ * TS backend (ADR 0032): a GENERIC function binding's value lambda emitted as a
+ * generic arrow — `_curry(n, <A, B>(p: A, …) => …)` — so its params can name the
+ * binding's generic letters. This closes the polymorphic higher-order tail ADR
+ * 0028 left open: `lambdaParamTypesTs` skips generic params because their letters
+ * live on the const's TYPE head (out of scope in the value expression, would be
+ * TS2304), so `_curry` erased them to `any`/`unknown` in the body (TS18046/7006/
+ * 2345). Scoping the SAME letters (from the scheme's `genericNames`, matching the
+ * const head `bindingTsType` emits) on the lambda itself brings them into value
+ * scope. Returns the generic head plus EVERY param's type — generic letters and
+ * concrete types alike — peeling one arrow of the scheme type per collapsed param.
+ * Null when the binding is non-generic (the concrete-only path already handles it).
+ */
 export const genericLambdaParams = (
   sc: Scheme,
   arity: number,
@@ -480,12 +506,14 @@ export const genericLambdaParams = (
   return { generics: `<${[...names.values()].join(", ")}>`, params };
 };
 
-// A match scrutinee's concrete TS type — the base a guard-form arm's type
-// predicate narrows FROM (`(_v): _v is Extract<T, …>`, ADR 0031). codegen builds
-// the `Extract<…>` target from the pattern; this supplies the `T`. Concrete types
-// only — a scrutinee with free vars can't name its generics in a value position
-// (TS2304), same rule as `lambdaParamTypesTs`; those stay the bare `(_v) => …`
-// boolean guard (and their nested-pattern handlers keep the polymorphic tail).
+/**
+ * A match scrutinee's concrete TS type — the base a guard-form arm's type
+ * predicate narrows FROM (`(_v): _v is Extract<T, …>`, ADR 0031). codegen builds
+ * the `Extract<…>` target from the pattern; this supplies the `T`. Concrete types
+ * only — a scrutinee with free vars can't name its generics in a value position
+ * (TS2304), same rule as `lambdaParamTypesTs`; those stay the bare `(_v) => …`
+ * boolean guard (and their nested-pattern handlers keep the polymorphic tail).
+ */
 export const guardParamTs = (scrutType: Type, aliases: AliasDef[]): string | null => {
   const t = foldAliases(scrutType, aliases);
   const fv: number[] = [];
@@ -496,9 +524,7 @@ export const guardParamTs = (scrutType: Type, aliases: AliasDef[]): string | nul
 const letDecl = (name: string, sc: Scheme, value: Expr, aliases: AliasDef[]): string =>
   `export declare const ${name}: ${bindingTsType(sc, value, aliases)};`;
 
-// A transparent record alias → an exported TS object type. Field types come from
-// the alias template (an HM record whose params are marker vars); map each marker
-// to a generic letter so `type Box a = { value: a }` emits `type Box<A> = ...`.
+/** A transparent record alias → an exported TS object type. Field types come from the alias template (an HM record whose params are marker vars); map each marker to a generic letter so `type Box a = { value: a }` emits `type Box<A> = ...`. */
 export const aliasTsDecl = (def: AliasDef): string => {
   const names = new Map(def.params.map((_, i) => [aliasParamId(i), LETTERS[i] ?? `T${i}`]));
   const body = tsOf(def.template, names);
@@ -506,7 +532,7 @@ export const aliasTsDecl = (def: AliasDef): string => {
   return `export type ${head} = ${body};`;
 };
 
-// A `type` decl → an exported tagged union matching the runtime shape.
+/** A `type` decl → an exported tagged union matching the runtime shape. */
 export const typeDecl = (name: string, params: string[], ctors: Ctor[]): string => {
   const gmap = paramGmap(params);
   const variant = (c: Ctor): string => {
@@ -537,9 +563,7 @@ const declOf = (
   return sc && !s.name.startsWith("$") ? letDecl(s.name, sc, s.value, aliases) : null;
 };
 
-// Type-constructor names referenced anywhere in a TypeExpr (`Option<Expr>` →
-// {Option}, nested included). Used to spot builtin unions named in ctor/alias
-// FIELD positions — inference-derived binding types alone miss those.
+/** Type-constructor names referenced anywhere in a TypeExpr (`Option<Expr>` → {Option}, nested included). Used to spot builtin unions named in ctor/alias field positions — inference-derived binding types alone miss those. */
 const teConNames = (te: TypeExpr, acc: Set<string>): void => {
   switch (te.kind) {
     case "tname":
@@ -562,10 +586,12 @@ const teConNames = (te: TypeExpr, acc: Set<string>): void => {
   }
 };
 
-// Builtin variant type decls a program's types reference but that the program
-// does not itself declare (e.g. `Option<number>` from `Map.get`, or a variant
-// field typed `Option<Expr>`). Emitted so those references resolve. Shared by
-// the `.d.ts` writer and the `.ts` backend.
+/**
+ * Builtin variant type decls a program's types reference but that the program
+ * does not itself declare (e.g. `Option<number>` from `Map.get`, or a variant
+ * field typed `Option<Expr>`). Emitted so those references resolve. Shared by
+ * the `.d.ts` writer and the `.ts` backend.
+ */
 export const referencedBuiltinTypeDecls = (
   prog: Program,
   schemeOf: (n: string) => Scheme | undefined,
@@ -589,12 +615,14 @@ export const referencedBuiltinTypeDecls = (
     .map((bt) => typeDecl(bt.name, bt.params, bt.ctors));
 };
 
-// Builtin variant decls a guard-form type predicate (ADR 0031) names in the
-// emitted body but that `referencedBuiltinTypeDecls` missed — it scans binding
-// schemes and type-decl fields, not match-scrutinee types, so `match(opt)` on an
-// `Option<Stmt>` never surfaced `Option`. Scans the body text and skips any name
-// the header already declares (a builtin the module also uses at binding level,
-// or a locally-declared `type Result`), so no duplicate decl.
+/**
+ * Builtin variant decls a guard-form type predicate (ADR 0031) names in the
+ * emitted body but that `referencedBuiltinTypeDecls` missed — it scans binding
+ * schemes and type-decl fields, not match-scrutinee types, so `match(opt)` on an
+ * `Option<Stmt>` never surfaced `Option`. Scans the body text and skips any name
+ * the header already declares (a builtin the module also uses at binding level,
+ * or a locally-declared `type Result`), so no duplicate decl.
+ */
 export const builtinDeclsIn = (bodyText: string, headerText: string): string[] =>
   builtinTypeDecls
     .filter(
@@ -603,20 +631,21 @@ export const builtinDeclsIn = (bodyText: string, headerText: string): string[] =
     )
     .map((bt) => typeDecl(bt.name, bt.params, bt.ctors));
 
-// An extern binding paired with the inferred scheme its declared type resolved
-// to. `imported` is the JS export name (what the emitted `import { … }` binds).
+/** An extern binding paired with the inferred scheme its declared type resolved to. `imported` is the JS export name (what the emitted `import { … }` binds). */
 export type ExternBinding = { imported: string; scheme: Scheme };
 
-// A `.d.ts` for an extern module (`extern name : T = "./host.js" "jsName"`),
-// so the emitted `.ts` that imports from it type-checks (TS backend, ADR 0026,
-// gap 3). Externs are real external JS with no mochi-visible declarations, so
-// without this tsc reports TS2307 "cannot find module". Each imported binding
-// becomes an `export declare const`: a FUNCTION extern gets the same OVERLOADED
-// signature as a runtime builtin (`flatFnType`), so both curried (`f(a)(b)`) and
-// uncurried (`f(a, b)`) call sites resolve; a VALUE extern renders its free type
-// vars as `any` — the untyped-JS boundary, and a const has no generic head to
-// bind them to. Referenced builtin variants (e.g. `Result`) are inlined so the
-// file is self-contained.
+/**
+ * A `.d.ts` for an extern module (`extern name : T = "./host.js" "jsName"`),
+ * so the emitted `.ts` that imports from it type-checks (TS backend, ADR 0026).
+ * Externs are real external JS with no mochi-visible declarations, so without
+ * this tsc reports TS2307 "cannot find module". Each imported binding
+ * becomes an `export declare const`: a FUNCTION extern gets the same OVERLOADED
+ * signature as a runtime builtin (`flatFnType`), so both curried (`f(a)(b)`) and
+ * uncurried (`f(a, b)`) call sites resolve; a VALUE extern renders its free type
+ * vars as `any` — the untyped-JS boundary, and a const has no generic head to
+ * bind them to. Referenced builtin variants (e.g. `Result`) are inlined so the
+ * file is self-contained.
+ */
 export const externModuleDts = (externs: ExternBinding[]): string => {
   const referenced = new Set<string>();
   for (const e of externs) consIn(e.scheme.type, referenced);

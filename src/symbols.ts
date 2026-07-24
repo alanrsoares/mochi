@@ -1,7 +1,9 @@
-// Lexical symbol index — def/use map over a Program without typechecking
-// (ADR 0003). Binding identity is the def Location (path + span), not the
-// name string, so shadowing stays precise. Powers go-to-definition, find-refs,
-// rename, highlight, and diagnostic labels in later DX slices.
+/**
+ * Lexical symbol index — def/use map over a Program without typechecking
+ * (ADR 0003). Binding identity is the def Location (path + span), not the
+ * name string, so shadowing stays precise. Powers go-to-definition, find-refs,
+ * rename, highlight, and diagnostic labels.
+ */
 import type { Expr, LamParam, Pattern, Program, Stmt, TypeExpr } from "./ast";
 import { isCtorName } from "./ast";
 import { fieldNameSpan, preludeNsMember, preludeOrigins } from "./prelude-virtual";
@@ -79,9 +81,9 @@ const use = (b: Builder, space: SymbolSpace, name: string, span: Span): void => 
 };
 
 /**
- * File-level record field name (DX slice 10). First site is the def (alias
- * preferred via bindTopLevels order); later alias/literal/pattern/access sites
- * are uses of that same binding. Row polymorphism → name heuristic only.
+ * File-level record field name. First site is the def (alias preferred via
+ * bindTopLevels order); later alias/literal/pattern/access sites are uses of
+ * that same binding. Row polymorphism → name heuristic only.
  */
 const touchField = (b: Builder, name: string, span: Span): void => {
   if (lookup(b, "field", name)) use(b, "field", name, span);
@@ -134,8 +136,7 @@ const walkPat = (b: Builder, p: Pattern): void => {
   }
 };
 
-// Pattern walk that only records uses (ctors), not new binds — for or-pattern alts
-// after the first (binders already recorded).
+/** Pattern walk that only records uses (ctors), not new binds — for or-pattern alts after the first. */
 const walkPatUses = (b: Builder, p: Pattern): void => {
   switch (p.kind) {
     case "pctor":
@@ -260,8 +261,7 @@ const walkExpr = (b: Builder, e: Expr): void => {
       return;
     case "field": {
       walkExpr(b, e.target);
-      // Prelude `Ns.member` (e.g. Result.map) — virtual prelude def.
-      // Else record-field name (DX slice 10).
+      // Prelude `Ns.member` (e.g. Result.map) — virtual prelude def; else record field.
       if (e.target.kind === "ref") {
         const def = preludeNsMember(e.target.name, e.name);
         if (def) {
@@ -402,7 +402,7 @@ const bindImport = (b: Builder, name: string, span: Span, origins?: Origins): vo
   bind(b, "value", name, span);
 };
 
-/** Seed builtins so uses resolve to the virtual prelude Location (DX slice 9). */
+/** Seed builtins so uses resolve to the virtual prelude Location. */
 const seedPrelude = (b: Builder): void => {
   const origins = preludeOrigins();
   for (const [name, def] of origins.type) {

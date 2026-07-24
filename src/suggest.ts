@@ -1,5 +1,4 @@
-// Tiny edit-distance helper for did-you-mean suggestions on unbound names.
-// Kept dependency-free and small — only used at diagnostic construction sites.
+/** Tiny edit-distance helper for did-you-mean suggestions on unbound names. Kept dependency-free and small — only used at diagnostic construction sites. */
 
 const lev = (a: string, b: string): number => {
   const m = a.length;

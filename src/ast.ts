@@ -1,20 +1,24 @@
-// mochi AST. Every node carries its source `span` for diagnostics + tooling.
+/** mochi AST. Every node carries its source `span` for diagnostics + tooling. */
 import type { Span } from "./span";
 
 export type Expr =
   | { kind: "num"; value: number; raw: string; span: Span }
   | { kind: "bool"; value: boolean; span: Span }
   | { kind: "str"; value: string; span: Span }
-  // "…${x}…" — string interpolation (ADR 0023). `parts` alternates literal
-  // chunks and hole expressions, always starting and ending on a literal
-  // chunk (free to be ""). A hole-free "…" stays the plain `str` node above.
+  /**
+   * `"…${x}…"` — string interpolation (ADR 0023). `parts` alternates literal
+   * chunks and hole expressions, always starting and ending on a literal chunk
+   * (free to be `""`). A hole-free `"…"` stays the plain `str` node above.
+   */
   | { kind: "interp"; parts: (string | Expr)[]; span: Span }
   | { kind: "ref"; name: string; span: Span }
   | { kind: "call"; fn: Expr; args: Expr[]; span: Span }
   | { kind: "lambda"; params: LamParam[]; body: Expr; span: Span } // (x, y) => body, ({a, b}) => body
-  // let x = value in body — a local binding scoped to `body`. Non-recursive:
-  // `x` is NOT in scope in `value`. Generalized (let-polymorphism) like a
-  // top-level `let`. `nameSpan` anchors the bound name for hover.
+  /**
+   * `let x = value in body` — a local binding scoped to `body`. Non-recursive:
+   * `x` is NOT in scope in `value`. Generalized (let-polymorphism) like a
+   * top-level `let`. `nameSpan` anchors the bound name for hover.
+   */
   | {
       kind: "letin";
       name: string;
@@ -24,38 +28,44 @@ export type Expr =
       body: Expr;
       span: Span;
     } // let x [: T] = v in b
-  // let? x = value in body — monadic bind on Result (ADR 0017). `value` must be
-  // a Result; on Ok its payload binds `param` (monomorphic) and `body` (itself
-  // a Result with the same error type) runs; on Err the whole expression is
-  // that Err. Lowers to `_Result_flatMap((param) => body)(value)`.
+  /**
+   * `let? x = value in body` — monadic bind on Result (ADR 0017). `value` must be
+   * a Result; on Ok its payload binds `param` (monomorphic) and `body` (itself a
+   * Result with the same error type) runs; on Err the whole expression is that
+   * Err. Lowers to `_Result_flatMap((param) => body)(value)`.
+   */
   | { kind: "letbind"; param: LamParam; paramSpan: Span; value: Expr; body: Expr; span: Span }
   | { kind: "pipe"; left: Expr; right: Expr; span: Span } // a |> f
-  // cond ? then : else — the boolean conditional as an expression (ADR 0016).
-  // Right-associative, binds looser than `|>`; branches are full expressions.
+  /**
+   * `cond ? then : else` — the boolean conditional as an expression (ADR 0016).
+   * Right-associative, binds looser than `|>`; branches are full expressions.
+   */
   | { kind: "ternary"; cond: Expr; then: Expr; else: Expr; span: Span }
   | { kind: "match"; scrutinee: Expr; arms: MatchArm[]; span: Span } // switch x { | p => e }
-  // { x: 1, y: 2 } — a record literal. With `spread` (`{ ...base, x: 1 }`,
-  // ADR 0021) it's a functional UPDATE: `base` must already carry each listed
-  // field at a unifiable type, and the result has `base`'s type (fields
-  // replaced in-kind, never added).
+  /**
+   * `{ x: 1, y: 2 }` — a record literal. With `spread` (`{ ...base, x: 1 }`,
+   * ADR 0021) it's a functional UPDATE: `base` must already carry each listed
+   * field at a unifiable type, and the result has `base`'s type (fields replaced
+   * in-kind, never added).
+   */
   | { kind: "record"; fields: Field[]; spread?: Expr; span: Span }
   | { kind: "field"; target: Expr; name: string; span: Span } // p.x
   | { kind: "tuple"; elements: Expr[]; span: Span } // (a, b) — heterogeneous product, arity ≥ 2
-  // [1, 2] / [a, ...xs, b] — eager Array. Slots are exprs or spreads (ADR 0001).
+  /** `[1, 2]` / `[a, ...xs, b]` — eager Array. Slots are exprs or spreads (ADR 0001). */
   | { kind: "arr"; elements: SeqElem[]; span: Span }
-  // @{1, 2} / @{a, ...xs} — lazy List. Same slot model; spreads must be List.
+  /** `@{1, 2}` / `@{a, ...xs}` — lazy List. Same slot model; spreads must be List. */
   | { kind: "list"; elements: SeqElem[]; span: Span }
-  // #{1, 2} / #{a, ...s} — Set (native; dedupes). `#{}` alone stays Map (empty).
-  // Disambiguated from Map by absence of `:` after the first key expr.
+  /**
+   * `#{1, 2}` / `#{a, ...s}` — Set (native; dedupes). `#{}` alone stays Map (empty).
+   * Disambiguated from Map by absence of `:` after the first key expr.
+   */
   | { kind: "set"; elements: SeqElem[]; span: Span }
   | { kind: "map"; entries: MapEntry[]; span: Span }; // #{ "a": 1 } — Map
 
-// One slot in an Array / List / Set literal: a value, or `...xs` splicing another
-// collection of the same kind.
+/** One slot in an Array / List / Set literal: a value, or `...xs` splicing another collection of the same kind. */
 export type SeqElem = { kind: "expr"; expr: Expr } | { kind: "spread"; expr: Expr };
 
-// A lambda parameter: a plain name, or a record-destructuring pattern that
-// binds each named field. `({ x, y }) => ...` pulls x and y out of the argument.
+/** A lambda parameter: a plain name, or a record-destructuring pattern that binds each named field. `({ x, y }) => ...` pulls x and y out of the argument. */
 export type LamParam =
   | { kind: "name"; name: string; span: Span } // span anchors the bound name for nav
   | { kind: "precord"; fields: string[] } // ({ x, y }) => ...
@@ -63,12 +73,10 @@ export type LamParam =
 
 export type Field = { name: string; nameSpan: Span; value: Expr };
 
-// One `key: value` pair in a `#{…}` map literal. The key is a full expression
-// (usually a string/number literal), not an identifier like a record field.
+/** One `key: value` pair in a `#{…}` map literal. The key is a full expression (usually a string/number literal), not an identifier like a record field. */
 export type MapEntry = { key: Expr; value: Expr };
 
-// `guard` is the optional `when <expr>` clause: the arm matches only when the
-// pattern matches AND the guard (with the pattern's binds in scope) is true.
+/** `guard` is the optional `when <expr>` clause: the arm matches only when the pattern matches AND the guard (with the pattern's binds in scope) is true. */
 export type MatchArm = { pattern: Pattern; guard?: Expr; body: Expr };
 
 export type Pattern =
@@ -79,39 +87,40 @@ export type Pattern =
   | { kind: "pstr"; value: string; span: Span } // "foo"
   | { kind: "ptuple"; elems: Pattern[]; span: Span } // (x, y) — tuple destructure, arity ≥ 2
   | { kind: "precord"; fields: PatField[]; span: Span } // { x, status: "err" }
-  // Circle(r), or Alias.Circle(r) after `import * as Alias` (ADR 0002)
+  /** `Circle(r)`, or `Alias.Circle(r)` after `import * as Alias` (ADR 0002). */
   | { kind: "pctor"; ctor: string; args: Pattern[]; span: Span; ns?: string }
-  // [], [x], [x, y], [head, ...tail] — `rest` (a bind/wild) captures the tail
-  // after a `...`; null means the pattern matches a list of exactly `elems.length`.
+  /**
+   * `[]`, `[x]`, `[x, y]`, `[head, ...tail]` — `rest` (a bind/wild) captures the
+   * tail after a `...`; null means the pattern matches a list of exactly
+   * `elems.length`.
+   */
   | { kind: "parr"; elems: Pattern[]; rest: Pattern | null; span: Span }
-  // @{}, @{head, ...tail} — lazy-List destructuring. Slice 1 supports only the
-  // empty and single-head-cons forms (see check.ts); `rest` is a bind/wild.
+  /**
+   * `@{}`, `@{head, ...tail}` — lazy-List destructuring. Slice 1 supports only
+   * the empty and single-head-cons forms (see check.ts); `rest` is a bind/wild.
+   */
   | { kind: "plist"; elems: Pattern[]; rest: Pattern | null; span: Span }
-  // A | B | … — or-pattern (ADR 0022). Only at an arm's top level (never nested).
-  // Every alt binds the same names at the same position, unified in `infer`.
+  /**
+   * `A | B | …` — or-pattern (ADR 0022). Only at an arm's top level (never nested).
+   * Every alt binds the same names at the same position, unified in `infer`.
+   */
   | { kind: "por"; alts: Pattern[]; span: Span };
 
-// A field inside a record pattern: `{ x }` puns to `pbind x`; `{ x: p }` matches
-// field `x` against sub-pattern `p` (a literal narrows, a name binds).
+/** A field inside a record pattern: `{ x }` puns to `pbind x`; `{ x: p }` matches field `x` against sub-pattern `p` (a literal narrows, a name binds). */
 export type PatField = { label: string; labelSpan: Span; pat: Pattern };
 
-// A variant constructor: name + ordered fields. Each field has a full type
-// expression and an OPTIONAL label. A labelled field lowers to that runtime key
-// (`Ok(value: a)` → `{ _tag: "Ok", value }`), matching the @onrails ecosystem;
-// an unlabelled field falls back to its positional key `_0`, `_1`, …
-// The type is a `TypeExpr`, so payloads can be lists, applied types, arrows,
-// and tuples (`ECall(fn: Expr, args: [Expr])`) — see ADR 0015.
+/**
+ * A variant constructor: name + ordered fields. Each field has a full type expression and an OPTIONAL label. A labelled field lowers to that runtime key (`Ok(value: a)` → `{ _tag: "Ok", value }`), matching the @onrails ecosystem; an unlabelled field falls back to its positional key `_0`, `_1`, …
+ *
+ * The type is a `TypeExpr`, so payloads can be lists, applied types, arrows, and tuples (`ECall(fn: Expr, args: [Expr])`) — see ADR 0015.
+ */
 export type Ctor = { name: string; fields: CtorField[]; span: Span };
 export type CtorField = { name: string | null; type: TypeExpr };
 
-// One field of a transparent record-type alias: `type Point = { x: number, y: a }`.
-// The field type is a full `TypeExpr` (like a `CtorField`'s), so aliases can
-// carry generics and applied/nested types.
+/** One field of a transparent record-type alias: `type Point = { x: number, y: a }`. The field type is a full `TypeExpr` (like a `CtorField`'s), so aliases can carry generics and applied/nested types. */
 export type AliasField = { name: string; nameSpan: Span; type: TypeExpr };
 
-// A surface type expression, used in `extern` signatures. Lowercase names are
-// type variables (generalized); prim names (number/string/bool/...) map to
-// their HM type; others become nullary constructors.
+/** A surface type expression, used in `extern` signatures. Lowercase names are type variables (generalized); prim names (number/string/bool/...) map to their HM type; others become nullary constructors. */
 export type TypeExpr =
   | { kind: "tname"; name: string; span: Span }
   | { kind: "tarrow"; from: TypeExpr; to: TypeExpr; span: Span }
@@ -120,8 +129,10 @@ export type TypeExpr =
   | { kind: "tlist"; elem: TypeExpr; span: Span }; // [a]
 
 export type Stmt =
-  // `doc` is a leading `///` comment block attached by the lexer, surfaced in
-  // hover as a prose paragraph below the type (the JSDoc feel).
+  /**
+   * `doc` is a leading `///` comment block attached by the lexer, surfaced in
+   * hover as a prose paragraph below the type (the JSDoc feel).
+   */
   | {
       kind: "let";
       name: string;
@@ -132,10 +143,12 @@ export type Stmt =
       doc?: string;
       span: Span;
     }
-  // A `type` decl is EITHER a variant (`ctors` non-empty, `alias` absent) or a
-  // transparent record alias (`alias` present, `ctors` empty). An alias is pure
-  // structural naming: inference expands it to its row, display folds the row
-  // back to the name — no nominal identity, no runtime.
+  /**
+   * A `type` decl is EITHER a variant (`ctors` non-empty, `alias` absent) or a
+   * transparent record alias (`alias` present, `ctors` empty). An alias is pure
+   * structural naming: inference expands it to its row, display folds the row
+   * back to the name — no nominal identity, no runtime.
+   */
   | {
       kind: "type";
       name: string;
@@ -146,7 +159,7 @@ export type Stmt =
       exported?: boolean;
       span: Span;
     } // type Result a e = | Ok(a) | ... ; or type Point = { x: number, y: number }
-  // extern name : type = "module" "export"  — bind an external JS/TS function
+  /** `extern name : type = "module" "export"` — bind an external JS/TS function. */
   | {
       kind: "extern";
       name: string;
@@ -157,14 +170,14 @@ export type Stmt =
       exported?: boolean;
       span: Span;
     }
-  // import { a, b } from "./mod"  — named exports into the local env
-  // import * as Alias from "./mod" — whole module as a user namespace (ADR 0002);
-  //   `alias` set, `names` empty
+  /**
+   * `import { a, b } from "./mod"` — named exports into the local env.
+   * `import * as Alias from "./mod"` — whole module as a user namespace (ADR 0002);
+   * `alias` set, `names` empty.
+   */
   | { kind: "import"; names: ImportName[]; alias: ImportName | null; from: string; span: Span };
 
-// Named narrowings of the union nodes. Signatures take these instead of an
-// inline `Extract<Expr, { kind: "…" }>` so the discriminant shape stays out of
-// call sites (and the `no-inline-struct-type` lint stays green).
+/** Named narrowings of the union nodes. Signatures take these instead of an inline `Extract<Expr, { kind: "…" }>` so the discriminant shape stays out of call sites (and the `no-inline-struct-type` lint stays green). */
 export type LambdaExpr = Extract<Expr, { kind: "lambda" }>;
 export type TernaryExpr = Extract<Expr, { kind: "ternary" }>;
 export type LetInExpr = Extract<Expr, { kind: "letin" }>;
@@ -193,7 +206,7 @@ export type TypeStmt = Extract<Stmt, { kind: "type" }>;
 export type ExternStmt = Extract<Stmt, { kind: "extern" }>;
 export type ImportStmt = Extract<Stmt, { kind: "import" }>;
 
-// A name pulled in by an `import`. `span` anchors it for diagnostics.
+/** A name pulled in by an `import`. `span` anchors it for diagnostics. */
 export type ImportName = { name: string; span: Span };
 
 export type Program = { stmts: Stmt[] };

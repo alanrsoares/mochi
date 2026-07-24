@@ -1,10 +1,6 @@
-// Scheme construction and generalization — everything Scheme-shaped that is
-// NOT part of infer.ts's mutually-recursive inference core (ticket 0030):
-// the `Scheme`/`Env` types, free-variable collection, `generalize`/
-// `instantiate`, and the surface-type lowering (`typeExprToType`/`ctorScheme`)
-// that builds types and schemes from written TypeExprs. `infer.ts` is the main
-// consumer; `dts.ts` lowers ctor-field TypeExprs through `typeExprToType` so
-// the TS output grammar has exactly one encoder (ADR 0015 / ticket 0027).
+/**
+ * Scheme construction and generalization — everything Scheme-shaped that is NOT part of infer.ts's mutually-recursive inference core: the `Scheme`/`Env` types, free-variable collection, `generalize`/`instantiate`, and the surface-type lowering (`typeExprToType`/`ctorScheme`) that builds types and schemes from written TypeExprs. `infer.ts` is the main consumer; `dts.ts` lowers ctor-field TypeExprs through `typeExprToType` so the TS output grammar has exactly one encoder (ADR 0015).
+ */
 import type { AliasField, Ctor, TypeExpr } from "./ast";
 import { PRIM_TYPE_NAMES } from "./ctors";
 import {
@@ -25,29 +21,18 @@ import {
 } from "./types";
 import { type Subst, zonk } from "./unify";
 
-// A polymorphic type scheme: `∀ vars rvars. type`.
+/** A polymorphic type scheme: `∀ vars rvars. type`. */
 export type Scheme = { vars: number[]; rvars: number[]; type: Type };
 export type Env = Map<string, Scheme>;
 export const mono = (t: Type): Scheme => ({ vars: [], rvars: [], type: t });
 
-// mochi surface type name → HM type. Unknown names become nullary cons
-// (a reference to a declared variant).
-//
-// NUMERIC DECISION (CRITIQUE §2.3), recorded deliberately: mochi has ONE
-// runtime numeric type — JS `number`. `float` and `int` are accepted in surface
-// signatures TODAY as transparent aliases for `number` (they type-check
-// identically, unify freely, and erase to `number` in .d.ts). This keeps the
-// surface JS-faithful — no int/float coercion rules, no literal-defaulting, no
-// overloaded `+` — while RESERVING the two names so a real int/float split
-// (int erasing to integer ops, float to IEEE double, à la ReScript) can land
-// later without breaking existing code. It is NOT a silent lie: the names mean
-// "number, annotated with intent", and that intent is what a future split would
-// harden. Any such split reopens the abstraction question (§2.4) because `+`
-// would then need overloading — so it stays deferred, not accidental.
+/**
+ * mochi surface type name → HM type. Unknown names become nullary cons (a reference to a declared variant).
+ *
+ * NUMERIC DECISION (CRITIQUE §2.3), recorded deliberately: mochi has ONE runtime numeric type — JS `number`. `float` and `int` are accepted in surface signatures TODAY as transparent aliases for `number` (they type-check identically, unify freely, and erase to `number` in .d.ts). This keeps the surface JS-faithful — no int/float coercion rules, no literal-defaulting, no overloaded `+` — while RESERVING the two names so a real int/float split (int erasing to integer ops, float to IEEE double, à la ReScript) can land later without breaking existing code. It is NOT a silent lie: the names mean "number, annotated with intent", and that intent is what a future split would harden. Any such split reopens the abstraction question (§2.4) because `+` would then need overloading — so it stays deferred, not accidental.
+ */
 export const primType = (name: string): Type =>
   ({ float: tNumber, int: tNumber, string: tString, bool: tBool })[name] ?? tCon(name);
-
-// ---- free variables + generalization / instantiation ----------------------
 
 export type VarSets = { tv: Set<number>; rv: Set<number> };
 
@@ -83,25 +68,13 @@ export const freeInType = (t: Type): VarSets => {
   return acc;
 };
 
-// Free vars of a scheme UNDER the current substitution, treating the scheme's
-// own quantified vars as OPAQUE (resolution stops at them). Two hazards to
-// thread between:
-//
-//   1. A `mono('t)` binding whose var was later unified to `{ … | 'r }` reads as
-//      the bare `'t` in its scheme, hiding `'r`. Resolving through the subst is
-//      essential — else `generalize` treats `'r` as free (not env-bound) and
-//      QUANTIFIES a row var the environment already constrains: an unsound
-//      over-generalization that makes a monomorphic local spuriously polymorphic
-//      and leaks a `& A` in the TS backend (ADR 0040). Mono schemes bind nothing,
-//      so nothing is opaque and the walk resolves fully — the ADR 0040 fix.
-//
-//   2. A *generalized* scheme's bound var may itself be a subst key (an unsound
-//      over-generalization elsewhere left it bound). Zonking would expand it and
-//      leak the binding's inner vars as false-free, suppressing a sibling's
-//      legitimate generalization (ADR 0041). A scheme's bound vars have no
-//      identity outside the scheme, so stopping at them is exactly correct: the
-//      scheme's declared interface says the caller picks them, so they impose no
-//      constraint the sibling must respect.
+/**
+ * Free vars of a scheme UNDER the current substitution, treating the scheme's own quantified vars as OPAQUE (resolution stops at them). Two hazards to thread between:
+ *
+ * 1. A `mono('t)` binding whose var was later unified to `{ … | 'r }` reads as the bare `'t` in its scheme, hiding `'r`. Resolving through the subst is essential — else `generalize` treats `'r` as free (not env-bound) and QUANTIFIES a row var the environment already constrains: an unsound over-generalization that makes a monomorphic local spuriously polymorphic and leaks a `& A` in the TS backend (ADR 0040). Mono schemes bind nothing, so nothing is opaque and the walk resolves fully — the ADR 0040 fix.
+ *
+ * 2. A *generalized* scheme's bound var may itself be a subst key (an unsound over-generalization elsewhere left it bound). Zonking would expand it and leak the binding's inner vars as false-free, suppressing a sibling's legitimate generalization (ADR 0041). A scheme's bound vars have no identity outside the scheme, so stopping at them is exactly correct: the scheme's declared interface says the caller picks them, so they impose no constraint the sibling must respect.
+ */
 const freeInScheme = (sc: Scheme, s: Subst): VarSets => {
   const bt = new Set(sc.vars);
   const br = new Set(sc.rvars);
@@ -195,16 +168,13 @@ export const instantiate = (sc: Scheme, f: Fresh): Type => {
   return sub(sc.type);
 };
 
-// ---- surface-type lowering (TypeExpr → Type / Scheme) ---------------------
-
-// A transparent record alias, keyed by name, resolved during type-expr → type.
+/** A transparent record alias, keyed by name, resolved during type-expr → type. */
 export type AliasInfo = { params: string[]; fields: AliasField[] };
 export type AliasMap = Map<string, AliasInfo>;
 
-// Expand a record alias to its structural row. `args` binds its type parameters
-// positionally; params past `args.length` become fresh generic vars. `expanding`
-// breaks reference cycles (`type T = { self: T }`) by falling back to the bare
-// nominal `con(name, args)` — finite, though that field then unifies nominally.
+/**
+ * Expand a record alias to its structural row. `args` binds its type parameters positionally; params past `args.length` become fresh generic vars. `expanding` breaks reference cycles (`type T = { self: T }`) by falling back to the bare nominal `con(name, args)` — finite, though that field then unifies nominally.
+ */
 export const aliasRow = (
   name: string,
   info: AliasInfo,
@@ -261,11 +231,9 @@ export const typeExprToType = (
   return v;
 };
 
-// A variant's constructors become curried functions into that variant type,
-// polymorphic over the type's parameters. `type Result a e = | Ok(a) | Err(e)`
-// gives `Ok : ∀a e. a -> Result<a, e>` — each type param maps to a fresh var
-// quantified in the scheme; a constructor arg naming a param uses that var, and
-// the result type applies the params so matching connects them.
+/**
+ * A variant's constructors become curried functions into that variant type, polymorphic over the type's parameters. `type Result a e = | Ok(a) | Err(e)` gives `Ok : ∀a e. a -> Result<a, e>` — each type param maps to a fresh var quantified in the scheme; a constructor arg naming a param uses that var, and the result type applies the params so matching connects them.
+ */
 export const ctorScheme = (
   typeName: string,
   params: string[],

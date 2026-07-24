@@ -8,13 +8,13 @@ import { buildModules, buildModulesTs } from "./module";
 
 const [cmd, ...rest] = process.argv.slice(2);
 
-const printDiags = (es: Diagnostic | Diagnostic[], src?: string): void => {
+function printDiags(es: Diagnostic | Diagnostic[], src?: string): void {
   const list = Array.isArray(es) ? es : [es];
   for (let i = 0; i < list.length; i++) {
     if (i > 0) console.error("");
     console.error(formatError(list[i]!, src));
   }
-};
+}
 
 // `fmt [--write] <file.mochi>` pretty-prints (or rewrites) a source file.
 if (cmd === "fmt") {
@@ -78,14 +78,16 @@ if (cmd === "fmt") {
     process.exit(1);
   }
   const read = (p: string): Promise<string> => Bun.file(p).text();
-  const result = await (emitTs ? buildModulesTs(entry, read) : buildModules(entry, read));
+  const result = await (emitTs
+    ? buildModulesTs(entry, read)
+    : buildModules(entry, read));
   if (isErr(result)) {
     printDiags(result.error);
     process.exit(1);
   }
   const ext = emitTs ? ".ts" : ".js";
   for (const { path, js } of result.value) {
-    // Extern `.d.ts` outputs (TS backend, gap 3) already carry their extension.
+    // Extern `.d.ts` outputs (TS backend) already carry their extension.
     const out = path.endsWith(".ts") ? path : path.replace(/\.mochi$/, ext);
     await Bun.write(out, js);
     console.error(`  ${out}`);

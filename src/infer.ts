@@ -1,9 +1,11 @@
-// Hindley-Milner type inference (Algorithm W) over the mochi AST.
-//
-// Threads a mutable substitution + fresh-var supply. Top-level `let`s are
-// generalized (let-polymorphism); lambda parameters stay monomorphic while
-// their body is inferred. Field access uses an open row, so a function that
-// reads `p.x` accepts any record that has an `x` — structural duck typing.
+/**
+ * Hindley-Milner type inference (Algorithm W) over the mochi AST.
+ *
+ * Threads a mutable substitution + fresh-var supply. Top-level `let`s are
+ * generalized (let-polymorphism); lambda parameters stay monomorphic while
+ * their body is inferred. Field access uses an open row, so a function that
+ * reads `p.x` accepts any record that has an `x` — structural duck typing.
+ */
 import { err, isErr, map, ok, type Result } from "@onrails/result";
 import type {
   Expr,
@@ -40,8 +42,7 @@ import {
   typeExprToType,
 } from "./schemes";
 
-// Re-exported: `Scheme`/`Env` are the vocabulary of this module's results, and
-// existing importers (hover, dts, module, compile) name them from here.
+/** Re-exported: `Scheme`/`Env` are this module's result vocabulary. */
 export type { AliasMap, Env, Scheme } from "./schemes";
 
 import { type Diagnostic, typeErr } from "./errors";
@@ -72,15 +73,11 @@ import {
 } from "./types";
 import { emptySubst, resolve, resolveRow, type Subst, unify, zonk } from "./unify";
 
-// Scheme machinery + surface-type lowering live in schemes.ts (ticket 0030);
-// this file keeps only the mutually-recursive inference core and its driver.
-
-// ---- inference -------------------------------------------------------------
-
-// `open` = open-world: unbound refs get a fresh type var instead of erroring.
-// Used when compiling to JS (host globals are legal); strict mode is off.
-// `record` (optional) captures each expression's span + inferred type for
-// tooling (LSP hover). Types are unzonked here; the caller zonks at the end.
+/**
+ * Inference context. `open`: unbound refs get a fresh type var (host globals
+ * when compiling to JS). `record`: optional span → type hook for LSP hover
+ * (unzonked; caller zonks at the end). `noteUse`/`noteLet`: TS emit (ADR 0035).
+ */
 type Ctx = {
   env: Env;
   subst: Subst;
@@ -90,10 +87,6 @@ type Ctx = {
   aliases: AliasDef[]; // transparent record aliases, for folding types in errors
   aliasMap: AliasMap; // raw alias fields, for resolving binding annotations (`let x : T`)
   record?: (span: Span, t: Type, symbol?: SymbolInfo) => void;
-  // `noteUse` (optional, TS emit) records each instantiation of a `let`-bound
-  // scheme, so a `let x = v in …` whose value is polymorphic but used at a
-  // single monomorphic type can annotate the emitted IIFE param — letting tsc
-  // contextually type empty collections inside `v` (ADR 0035).
   noteUse?: (sc: Scheme, t: Type) => void;
   noteLet?: (sc: Scheme, valueSpan: Span) => void;
 };
@@ -534,10 +527,10 @@ function inferPat(p: Pattern, ctx: Ctx): Result<PatResult, Diagnostic> {
   }
 }
 
-// Every alternative of `A | B | …` describes the same scrutinee, so their
-// types unify; and (guaranteed by check.ts) they bind the same names, whose
-// types unify too. The arm's binder env is the first alt's, refined by those
-// unions. Pulled out of `inferPat`'s switch to keep its complexity down.
+/**
+ * Every alternative of `A | B | …` describes the same scrutinee, so their
+ * types unify; binders (same names per check.ts) unify too.
+ */
 function inferOrPat(alts: Pattern[], ctx: Ctx): Result<PatResult, Diagnostic> {
   const first = inferPattern(alts[0]!, ctx);
   if (isErr(first)) return first;
@@ -557,9 +550,7 @@ function inferOrPat(alts: Pattern[], ctx: Ctx): Result<PatResult, Diagnostic> {
   return ok({ type: t, bindings });
 }
 
-// Shared element/rest inference for `parr`/`plist` (they differ only in the
-// container constructor): every element unifies with one `elem` type, and any
-// `...rest` capture binds the tail — itself a `con<elem>`.
+/** Shared element/rest inference for `parr`/`plist` (`Array` vs `List`). */
 function inferSeqPat(
   con: "Array" | "List",
   elems: Pattern[],
@@ -586,14 +577,7 @@ function inferSeqPat(
   return ok({ type: seqT, bindings });
 }
 
-// ---- program-level inference ----------------------------------------------
-
-// Convert a surface `extern` type expression into an HM type. Prim names map to
-// their type; Uppercase names are nullary constructors; lowercase names are
-// type variables (shared by name within the signature, then generalized).
-
-// `imports` seeds the initial env with schemes from `import { … }`.
-// `nsImports` seeds user namespaces from `import * as` (ADR 0002).
+/** `imports`: schemes from `import { … }`. `nsImports`: `import * as` (ADR 0002). */
 export type InferOptions = {
   open?: boolean;
   imports?: Env;
@@ -601,17 +585,16 @@ export type InferOptions = {
   nsImports?: Map<string, Env>; // alias → export schemes
 };
 
-// The identity of the symbol under a span, when the inferrer knows it is binding
-// or projecting a name — lets hover lead with `let x: T` / `(parameter) x: T` /
-// `(property) x: T`, TS-style, instead of a bare type.
+/** Symbol identity for hover (`let x: T`, `(parameter) x: T`, etc.). */
 export type SymbolInfo = { kind: "let" | "parameter" | "property"; name: string; doc?: string };
 
-// An inferred type anchored to its source span — the map hover queries.
+/** Inferred type at a source span — the map hover queries. */
 export type TypeAt = { span: Span; type: Type; symbol?: SymbolInfo };
-// `letParams`: the monomorphic type of a `let x = v in …` whose value is
-// polymorphic but used at one type — keyed by the value span, consumed by the
-// TS backend to annotate the emitted IIFE param (ADR 0035). Kept apart from
-// `types` so it never perturbs hover, which keys off `types` alone.
+
+/**
+ * Full inference result. `letParams`: monomorphic IIFE-param annotations for
+ * TS emit (ADR 0035); kept apart from `types` so hover is unaffected.
+ */
 export type InferResult = {
   env: Env;
   types: TypeAt[];
@@ -619,7 +602,7 @@ export type InferResult = {
   letParams: TypeAt[];
 };
 
-// The names a pattern binds — excluded from an arm body's free references.
+/** Names a pattern binds — excluded from an arm body's free references. */
 function patternBinds(p: Pattern): string[] {
   switch (p.kind) {
     case "pbind":
@@ -637,9 +620,7 @@ function patternBinds(p: Pattern): string[] {
   return [];
 }
 
-// Collect the free variable references in an expression, minus the locally
-// bound ones (lambda params, pattern binds). Used to build the dependency graph
-// among top-level `let`s so mutually recursive groups infer together.
+/** Free refs in an expression (minus local binds) — builds top-level `let` SCC graph. */
 function freeRefs(e: Expr, bound: Set<string>, acc: Set<string>): void {
   switch (e.kind) {
     case "num":
@@ -723,14 +704,10 @@ function freeRefs(e: Expr, bound: Set<string>, acc: Set<string>): void {
   }
 }
 
-// Tarjan SCC lives in scc.ts (ticket 0030).
-
-// A `let`-bound value used at exactly one monomorphic type gets a `const`/IIFE
-// param annotation (ADR 0035), so the TS backend types the empty collections
-// inside it. Annotate ONLY when every use is the same fully-concrete type: a
-// binding that also flows into a generic position (open there) stays bare —
-// pinning it concrete would over-constrain that call and its sibling empties
-// (the polymorphic-HOF tail). No use / disagreeing uses / still-free → skip.
+/**
+ * Resolve `letParams` for TS emit (ADR 0035): annotate only when every use is
+ * the same fully-concrete type; generic positions stay bare.
+ */
 function resolveLetParams(
   letSpans: Map<Scheme, Span>,
   letUses: Map<Scheme, Type[]>,
@@ -750,8 +727,7 @@ function resolveLetParams(
   return out;
 }
 
-// Seed prelude namespaces (Types → Schemes) and module `import * as` namespaces
-// (already-generalized Schemes) into the qualified-lookup table (ADR 0002).
+/** Seed qualified-lookup namespaces from prelude types and `import * as` (ADR 0002). */
 const seedNamespaces = (
   env: Env,
   subst: Subst,
@@ -768,8 +744,7 @@ const seedNamespaces = (
   return ns;
 };
 
-// Shared inference core. Always records per-node types; `inferProgram` drops
-// them, `inferProgramTypes` returns them (zonked against the final subst).
+/** Shared inference core; `inferProgram` drops per-node types, `inferProgramTypes` keeps them. */
 function run(
   prog: Program,
   builtins: Record<string, Type>,
@@ -823,11 +798,7 @@ function run(
     letUses.get(sc)?.push(t);
   };
 
-  // constructors first, so `let`s (in any order after their type) can use them.
-  // One derivation (`ctors.ts`, ticket 0024): a user entry always binds; a
-  // builtin entry (Some/None/Ok/Err) yields to an existing binding — a user
-  // decl above, or an imported ctor scheme already seeded into the env — so
-  // `Map.get : ... -> Option v` and hand-written Some/None both type-check.
+  // Constructors first so `let`s can use them. Builtin ctors yield to user/import bindings.
   for (const [name, e] of ctorTableOf(prog).ctor) {
     if (e.builtin && env.has(name)) continue;
     env.set(name, ctorScheme(e.type, e.params, e.ctor, fresh, aliasMap));
@@ -949,15 +920,14 @@ export const inferProgram = (
   opts: InferOptions = {},
 ): Result<Env, Diagnostic[]> => map(run(prog, builtins, opts), (r) => r.env);
 
-// Like `inferProgram`, but also returns the span → type map for tooling.
+/** Like `inferProgram`, but also returns the span → type map for tooling. */
 export const inferProgramTypes = (
   prog: Program,
   builtins: Record<string, Type> = {},
   opts: InferOptions = {},
 ): Result<InferResult, Diagnostic[]> => run(prog, builtins, opts);
 
-// Render a binding's scheme for tests / display. Quantified vars appear as
-// 't{id}; the scheme's type is already zonked at generalization time.
+/** Render a binding's scheme for tests / display. */
 export const showScheme = (sc: Scheme, aliases: AliasDef[] = []): string =>
   showType(foldAliases(sc.type, aliases));
 

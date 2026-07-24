@@ -1,8 +1,10 @@
-// LSP-shaped publish diagnostics, computed from `compile` but free of any
-// editor/protocol dependency so it stays unit-testable under Bun. The language
-// server is a thin adapter that maps these onto vscode-languageserver types.
-// The compiler error type is `Diagnostic` (`errors.ts`); this file's
-// `PublishDiagnostic` is the wire-shaped DTO only (ADR 0003).
+/**
+ * LSP-shaped publish diagnostics, computed from `compile` but free of any
+ * editor/protocol dependency so it stays unit-testable under Bun. The language
+ * server is a thin adapter that maps these onto vscode-languageserver types.
+ * The compiler error type is `Diagnostic` (`errors.ts`); this file's
+ * `PublishDiagnostic` is the wire-shaped DTO only (ADR 0003).
+ */
 import { resolve } from "node:path";
 import { isErr } from "@onrails/result";
 import { compile, toTypedProgramWith } from "./compile";
@@ -12,7 +14,7 @@ import { moduleContext } from "./module";
 import { parse } from "./parser";
 import { lineCol } from "./span";
 
-// 0-based line/character — matches the LSP `Position` shape.
+/** 0-based line/character — matches the LSP `Position` shape. */
 export type Position = { line: number; character: number };
 export type Range = { start: Position; end: Position };
 
@@ -46,8 +48,7 @@ const spanRange = (src: string, start: number, end: number): Range => ({
   end: posAt(src, end),
 });
 
-// A span → range; spanless errors fall back to the first character so the
-// squiggle still lands somewhere visible.
+/** Map a span to a range; spanless errors fall back to the first character. */
 const rangeOf = (src: string, e: Diagnostic): Range =>
   e.span
     ? spanRange(src, e.span.start, e.span.end)
@@ -89,25 +90,29 @@ export const toPublish = (
   };
 };
 
-// Check + infer may emit several diagnostics (ADR 0004). Lex/parse still yield
-// one. Single-file: imports resolve to nothing, so a `switch` on an imported
-// variant reads as an unknown constructor. Use `moduleDiagnostics` when a path
-// is available.
+/**
+ * Check + infer may emit several diagnostics (ADR 0004). Lex/parse still yield
+ * one. Single-file: imports resolve to nothing, so a `switch` on an imported
+ * variant reads as an unknown constructor. Use `moduleDiagnostics` when a path
+ * is available.
+ */
 export const diagnostics = (src: string): PublishDiagnostic[] => {
   const r = compile(src);
   return isErr(r) ? r.error.map((e) => toPublish(src, e)) : [];
 };
 
-// Module-aware diagnostics: resolve `path`'s dependency graph (deps read from
-// disk via `readFile`, the edited file served from the live `src` buffer) and
-// check + infer the live program WITH the imported registry/schemes. This is
-// what stops a match on an imported constructor from being a false "unknown
-// constructor", and makes cross-module exhaustiveness real.
-//
-// Degradation is deliberate: the entry's own lex/parse errors are always
-// reported (they never depend on deps); if the dep graph can't be resolved or a
-// dep fails to compile, we fall back to single-file `diagnostics(src)` — no
-// worse than before, and the user still sees their own file's errors.
+/**
+ * Module-aware diagnostics: resolve `path`'s dependency graph (deps read from
+ * disk via `readFile`, the edited file served from the live `src` buffer) and
+ * check + infer the live program WITH the imported registry/schemes. This is
+ * what stops a match on an imported constructor from being a false "unknown
+ * constructor", and makes cross-module exhaustiveness real.
+ *
+ * Degradation is deliberate: the entry's own lex/parse errors are always
+ * reported (they never depend on deps); if the dep graph can't be resolved or a
+ * dep fails to compile, we fall back to single-file `diagnostics(src)` — no
+ * worse than before, and the user still sees their own file's errors.
+ */
 export const moduleDiagnostics = async (
   path: string,
   src: string,

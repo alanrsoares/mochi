@@ -1,8 +1,10 @@
-// Codegen — AST → JavaScript source. Pure (no failure).
-// mochi owns the type system (HM inference), so emitted JS carries no type
-// annotations — the checker runs before codegen and guarantees soundness.
-// ts-pattern .exhaustive() forces a case for every Expr kind here: add an AST
-// node and forget it → TS compile error in the compiler, not a silent gap.
+/**
+ * Codegen — AST → JavaScript source. Pure (no failure).
+ * mochi owns the type system (HM inference), so emitted JS carries no type
+ * annotations — the checker runs before codegen and guarantees soundness.
+ * ts-pattern .exhaustive() forces a case for every Expr kind here: add an AST
+ * node and forget it → TS compile error in the compiler, not a silent gap.
+ */
 import { match } from "ts-pattern";
 import type {
   Ctor,
@@ -26,12 +28,11 @@ import { ctorTableOf, keysOf } from "./ctors";
 import { namespaceRuntime, preludeJsDefs, runtimeDeps } from "./prelude";
 import type { Span } from "./span";
 
-// A `Ns.member` access on a bare namespace ref (`List.map`) → the JS identifier
-// its runtime is defined under, or null if it isn't a namespace access.
+/** A `Ns.member` access on a bare namespace ref (`List.map`) → the JS identifier its runtime is defined under, or null if it isn't a namespace access. */
 const nsRuntimeId = (e: FieldExpr): string | null =>
   e.target.kind === "ref" ? (namespaceRuntime[e.target.name]?.[e.name] ?? null) : null;
 
-// The typing a TS-mode ctor factory carries (see `GenCtx.annotateCtor`).
+/** The typing a TS-mode ctor factory carries (see `GenCtx.annotateCtor`). */
 export type CtorFactoryTs = {
   generics: string;
   paramTypes: string[];
@@ -39,8 +40,7 @@ export type CtorFactoryTs = {
   retMono: string;
 };
 
-// Per-call codegen context: built once at the top of `codegen` and threaded as
-// the last parameter through the gen* family. Never mutated after construction.
+/** Per-call codegen context: built once at the top of `codegen` and threaded as the last parameter through the gen* family. Never mutated after construction. */
 type GenCtx = {
   // A constructor's runtime field keys (see `keysOf`) — populated per `codegen`
   // call from the program's `type` decls (plus imported and builtin ctors).
@@ -117,11 +117,13 @@ type GenCtx = {
   readonly moduleExt: string;
 };
 
-// Collapse a curried lambda chain (`x => y => body`, or a mix with multi-param
-// lambdas) into one flat parameter list plus the final body. mochi types treat
-// `(x, y) => e` and `x => y => e` identically (`a -> b -> c`), so this is sound
-// — it lets a multi-arg function lower to a single `_curry`-wrapped JS function
-// instead of nested closures (CRITIQUE §4.4).
+/**
+ * Collapse a curried lambda chain (`x => y => body`, or a mix with multi-param
+ * lambdas) into one flat parameter list plus the final body. mochi types treat
+ * `(x, y) => e` and `x => y => e` identically (`a -> b -> c`), so this is sound
+ * — it lets a multi-arg function lower to a single `_curry`-wrapped JS function
+ * instead of nested closures (CRITIQUE §4.4).
+ */
 const collapseLambda = (l: LambdaExpr): { params: LamParam[]; body: Expr } => {
   const params = [...l.params];
   let body: Expr = l.body;
@@ -132,9 +134,7 @@ const collapseLambda = (l: LambdaExpr): { params: LamParam[]; body: Expr } => {
   return { params, body };
 };
 
-// Re-escape a decoded literal chunk for a JS template literal: backslashes
-// first (else the escapes we're about to insert double-escape), then the
-// two chars that would otherwise reopen JS template syntax.
+/** Re-escape a decoded literal chunk for a JS template literal: backslashes first (else the escapes we're about to insert double-escape), then the two chars that would otherwise reopen JS template syntax. */
 const escapeTemplateLiteral = (s: string): string =>
   s.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
 
@@ -265,7 +265,7 @@ const genExpr = (e: Expr, ctx: GenCtx): string =>
     })
     .exhaustive();
 
-// A `@{...}` literal → a lazy iterable. Spreads `yield*` another List (iterable).
+/** A `@{...}` literal → a lazy iterable. Spreads `yield*` another List (iterable). */
 const genList = (e: ListExpr, ctx: GenCtx): string => {
   const yields = e.elements
     .map((el) =>
@@ -277,7 +277,7 @@ const genList = (e: ListExpr, ctx: GenCtx): string => {
   return `_list(function* () {${yields ? ` ${yields} ` : ""}})`;
 };
 
-// A lambda parameter lowers to JS: a name, or native object destructuring.
+/** A lambda parameter lowers to JS: a name, or native object destructuring. */
 const genParam = (p: LamParam): string =>
   p.kind === "name"
     ? p.name
@@ -285,27 +285,26 @@ const genParam = (p: LamParam): string =>
       ? `[${p.names.join(", ")}]`
       : `{ ${p.fields.join(", ")} }`;
 
-// A lambda in callee position must be parenthesized: `((x) => ...)(arg)`.
+/** A lambda in callee position must be parenthesized: `((x) => ...)(arg)`. */
 const genCallee = (e: Expr, ctx: GenCtx): string =>
   e.kind === "lambda" ? `(${genExpr(e, ctx)})` : genExpr(e, ctx);
 
-// A record or lambda in member-target position needs parens: `({...}).x`.
+/** A record or lambda in member-target position needs parens: `({...}).x`. */
 const genMember = (e: Expr, ctx: GenCtx): string =>
   e.kind === "record" || e.kind === "lambda" ? `(${genExpr(e, ctx)})` : genExpr(e, ctx);
 
-// A record literal as a concise arrow body must be parenthesized, else JS
-// parses `=> { ... }` as a statement block: `=> ({ x: 1 })`.
+/** A record literal as a concise arrow body must be parenthesized, else JS parses `=> { ... }` as a statement block: `=> ({ x: 1 })`. */
 const genLambdaBody = (e: Expr, ctx: GenCtx): string =>
   e.kind === "record" ? `(${genExpr(e, ctx)})` : genExpr(e, ctx);
 
-// ---- match → @onrails/pattern chain --------------------------------------
-// Emitted `switch` lowers to a match().with().exhaustive() chain. We target
-// @onrails/pattern (ts-pattern-shaped, smaller runtime, pairs with
-// @onrails/result + @onrails/maybe). Each arm is a single pattern, which is the
-// common subset both libraries share.
-
-// A pattern always matches (→ `.otherwise`) when it binds without narrowing: a
-// wildcard, a plain name, or a record whose every field just binds.
+/**
+ * Emitted `switch` lowers to a match().with().exhaustive() chain targeting
+ * @onrails/pattern (ts-pattern-shaped, smaller runtime). Each arm is a single
+ * pattern — the common subset both libraries share.
+ *
+ * A pattern always matches (→ `.otherwise`) when it binds without narrowing: a
+ * wildcard, a plain name, or a record whose every field just binds.
+ */
 const isCatchAll = (p: Pattern): boolean =>
   p.kind === "pwild" ||
   p.kind === "pbind" ||
@@ -315,17 +314,18 @@ const isCatchAll = (p: Pattern): boolean =>
   // [...all] / @{...all} — a bare rest with no fixed head matches anything.
   ((p.kind === "parr" || p.kind === "plist") && p.elems.length === 0 && p.rest !== null);
 
-// ---- general pattern compiler ----------------------------------------------
-// Nested patterns can't lower to matcher objects: @onrails/pattern's matcher
-// compares object values shallowly (`!==`), so `{ value: { _tag: "Sm" } }`
-// never matches. An arm with nesting instead lowers to the guard form the
-// array/tuple arms already use — `.with((_v) => conds, (slot) => body)`.
-// `patConds` renders the refutable tests against a path expression; `patSlot`
-// renders the JS destructuring target binding the names ("" = a hole, nothing
-// binds beneath). Lazy `plist` never reaches either: nested occurrences are
-// rejected by check.ts, top-level arms go through `genListMatch`.
+/**
+ * Nested patterns can't lower to matcher objects: @onrails/pattern's matcher
+ * compares object values shallowly (`!==`), so `{ value: { _tag: "Sm" } }`
+ * never matches. An arm with nesting instead lowers to the guard form the
+ * array/tuple arms already use — `.with((_v) => conds, (slot) => body)`.
+ * `patConds` renders the refutable tests against a path expression; `patSlot`
+ * renders the JS destructuring target binding the names ("" = a hole, nothing
+ * binds beneath). Lazy `plist` never reaches either: nested occurrences are
+ * rejected by check.ts, top-level arms go through `genListMatch`.
+ */
 
-// `{ key: sub }` entry, punned when the bound name IS the key.
+/** `{ key: sub }` entry, punned when the bound name IS the key. */
 const keyedSlot = (key: string, sub: string): string => (sub === key ? key : `${key}: ${sub}`);
 
 const patSlot = (p: Pattern, ctx: GenCtx): string => {
@@ -407,8 +407,7 @@ const patConds = (p: Pattern, path: string, ctx: GenCtx): string[] => {
   }
 };
 
-// The handler parameter for a catch-all pattern: bind the name, destructure a
-// record's/tuple's binds, or ignore the value.
+/** The handler parameter for a catch-all pattern: bind the name, destructure a record's/tuple's binds, or ignore the value. */
 const catchAllParam = (p: Pattern, ctx: GenCtx): string => {
   // `[...all]` / `@{...all}` binds the whole collection to the rest name — NOT
   // a destructure: `[...all]` would copy the array and force a lazy List.
@@ -418,23 +417,26 @@ const catchAllParam = (p: Pattern, ctx: GenCtx): string => {
   return slot === "" ? "()" : `(${slot})`;
 };
 
-// A switch is a "lazy-List match" when it has a narrowing `@{}`/`@{h,...t}` arm
-// (a lone `@{...all}` is a catch-all, not narrowing). check.ts guarantees such a
-// switch is exactly the empty + single-head-cons pair, so it lowers directly.
+/**
+ * A switch is a "lazy-List match" when it has a narrowing `@{}`/`@{h,...t}` arm
+ * (a lone `@{...all}` is a catch-all, not narrowing). check.ts guarantees such a
+ * switch is exactly the empty + single-head-cons pair, so it lowers directly.
+ */
 const isListMatch = (m: MatchExpr): boolean =>
   m.arms.some((a) => a.pattern.kind === "plist" && !isCatchAll(a.pattern));
 
-// A lazy tail/rest: replay the still-buffered elements from index `from`, then
-// drain whatever's left in the iterator. `_list` makes it re-iterable + lazy.
+/** A lazy tail/rest: replay the still-buffered elements from index `from`, then drain whatever's left in the iterator. `_list` makes it re-iterable + lazy. */
 const listTail = (from: number): string =>
   `_list(function* () { for (let _i = ${from}; _i < _b.length; _i++) yield _b[_i]; ` +
   "if (!_done) { let _s; while (!(_s = _it.next()).done) yield _s.value; } })";
 
-// One narrowing lazy-List arm → an `if (cond) return call;`. A fixed arm `@{a,
-// b}` must see n+1 pulls to prove length exactly n; a cons arm `@{h, ...t}`
-// needs n pulls (length ≥ n) and binds its tail to a lazy List over the rest.
-// Element sub-patterns guard/bind via the general compiler against the buffer
-// (`_b[i]` is already pulled, so nested tests force nothing extra).
+/**
+ * One narrowing lazy-List arm → an `if (cond) return call;`. A fixed arm `@{a,
+ * b}` must see n+1 pulls to prove length exactly n; a cons arm `@{h, ...t}`
+ * needs n pulls (length ≥ n) and binds its tail to a lazy List over the rest.
+ * Element sub-patterns guard/bind via the general compiler against the buffer
+ * (`_b[i]` is already pulled, so nested tests force nothing extra).
+ */
 const genListArm = (p: ListPat, body: Expr, ctx: GenCtx): string => {
   const n = p.elems.length;
   const guards = p.elems.flatMap((ep, i) => patConds(ep, `_b[${i}]`, ctx));
@@ -457,10 +459,12 @@ const genListArm = (p: ListPat, body: Expr, ctx: GenCtx): string => {
   return `  if (${cond}) return ((${params.join(", ")}) => ${genLambdaBody(body, ctx)})(${args.join(", ")});`;
 };
 
-// A lazy-List switch → an IIFE that pulls just enough elements to decide each
-// arm, buffering them so later arms can re-examine a prefix without re-forcing
-// it. Bounded pulls only — a pull-sequence is never fully forced, so this can't
-// use @onrails/pattern (not length-indexable). check.ts proved totality.
+/**
+ * A lazy-List switch → an IIFE that pulls just enough elements to decide each
+ * arm, buffering them so later arms can re-examine a prefix without re-forcing
+ * it. Bounded pulls only — a pull-sequence is never fully forced, so this can't
+ * use @onrails/pattern (not length-indexable). check.ts proved totality.
+ */
 const genListMatch = (m: MatchExpr, ctx: GenCtx): string => {
   const arms: string[] = [];
   let fallback = `(() => { throw new Error("non-exhaustive lazy-list switch"); })()`;
@@ -527,19 +531,21 @@ const genMatch = (m: MatchExpr, ctx: GenCtx): string => {
   return parts.join("\n");
 };
 
-// A literal pattern rendered as a JS value for the matcher object / `.with`.
+/** A literal pattern rendered as a JS value for the matcher object / `.with`. */
 const litValue = (p: LitPat): string =>
   p.kind === "pstr" ? JSON.stringify(p.value) : p.kind === "plit" ? p.raw : String(p.value);
 
-// Patterns that narrow (everything a catch-all is not) — routed to `.with(...)`.
+/** Patterns that narrow (everything a catch-all is not) — routed to `.with(...)`. */
 type NarrowingPattern = Extract<
   Pattern,
   { kind: "pctor" | "plit" | "pbool" | "pstr" | "precord" | "parr" | "ptuple" | "por" }
 >;
 
-// A sub-pattern the flat matcher-object form can express: a bind, wildcard, or
-// primitive literal (the matcher compares values with `!==`, so only
-// primitives are meaningful there). Anything deeper routes to the guard form.
+/**
+ * A sub-pattern the flat matcher-object form can express: a bind, wildcard, or
+ * primitive literal (the matcher compares values with `!==`, so only
+ * primitives are meaningful there). Anything deeper routes to the guard form.
+ */
 const isFlatSub = (p: Pattern): boolean =>
   p.kind === "pbind" ||
   p.kind === "pwild" ||
@@ -547,11 +553,13 @@ const isFlatSub = (p: Pattern): boolean =>
   p.kind === "pbool" ||
   p.kind === "pstr";
 
-// TS backend (ADR 0031): render a guard-form pattern to the type-predicate
-// target it narrows to, from the scrutinee's concrete `base` type. A ctor
-// contributes `Extract<base, { _tag: "C" }>`; a nested ctor/record inside a field
-// refines that field via indexed access, so the handler input narrows exactly as
-// the pattern does. Pure over `ctx.ctorKeys`; only reachable in TS mode.
+/**
+ * TS backend (ADR 0031): render a guard-form pattern to the type-predicate
+ * target it narrows to, from the scrutinee's concrete `base` type. A ctor
+ * contributes `Extract<base, { _tag: "C" }>`; a nested ctor/record inside a field
+ * refines that field via indexed access, so the handler input narrows exactly as
+ * the pattern does. Pure over `ctx.ctorKeys`; only reachable in TS mode.
+ */
 function patTarget(p: Pattern, base: string, ctx: GenCtx): string {
   switch (p.kind) {
     case "pctor": {
@@ -589,8 +597,7 @@ function patTarget(p: Pattern, base: string, ctx: GenCtx): string {
   return base;
 }
 
-// A field's refined type when its sub-pattern narrows it, else null (the field
-// keeps its declared type — a bind/wildcard/literal needs no narrowing).
+/** A field's refined type when its sub-pattern narrows it, else null (the field keeps its declared type — a bind/wildcard/literal needs no narrowing). */
 function fieldRefine(p: Pattern, fieldBase: string, ctx: GenCtx): string | null {
   if (p.kind === "pctor") return patTarget(p, fieldBase, ctx);
   if (p.kind === "precord") {
@@ -600,13 +607,15 @@ function fieldRefine(p: Pattern, fieldBase: string, ctx: GenCtx): string | null 
   return null;
 }
 
-// The general arm: predicate + destructuring handler, built by the pattern
-// compiler. Handles arbitrary nesting (`Sm(Sm(n))`, `Ok((a, b))`, ctors inside
-// tuples/arrays) and `when` guards. A guard runs after the structural tests
-// (&&-short-circuit), with the pattern's binds rebound from the root by the same
-// destructuring slot the handler uses. In TS mode (`base` set) the arm is a type
-// predicate `(_v): _v is <target>` whose body tests a widened `_g` copy — so the
-// handler input narrows (ADR 0031) without the boolean body fighting `_v`'s type.
+/**
+ * The general arm: predicate + destructuring handler, built by the pattern
+ * compiler. Handles arbitrary nesting (`Sm(Sm(n))`, `Ok((a, b))`, ctors inside
+ * tuples/arrays) and `when` guards. A guard runs after the structural tests
+ * (&&-short-circuit), with the pattern's binds rebound from the root by the same
+ * destructuring slot the handler uses. In TS mode (`base` set) the arm is a type
+ * predicate `(_v): _v is <target>` whose body tests a widened `_g` copy — so the
+ * handler input narrows (ADR 0031) without the boolean body fighting `_v`'s type.
+ */
 const genGuardArm = (
   p: Pattern,
   body: Expr,
@@ -678,13 +687,13 @@ const genWithArm = (p: NarrowingPattern, body: Expr, base: string | null, ctx: G
   return `.with({ ${patObj} }, ${param} => ${genLambdaBody(body, ctx)})`;
 };
 
-// ---- statements -----------------------------------------------------------
-
-// A variant decl has no runtime type in JS — it lowers to constructor
-// factories only. Nullary → a tagged value; n-ary → a tagging function. The
-// discriminant key is `_tag`, matching the @onrails ecosystem convention
-// (@onrails/result, @onrails/maybe), so their type guards (isOk/isSome/...)
-// recognize mochi values at the JS boundary.
+/**
+ * A variant decl has no runtime type in JS — it lowers to constructor
+ * factories only. Nullary → a tagged value; n-ary → a tagging function. The
+ * discriminant key is `_tag`, matching the @onrails ecosystem convention
+ * (@onrails/result, @onrails/maybe), so their type guards (isOk/isSome/...)
+ * recognize mochi values at the JS boundary.
+ */
 const genType = (s: TypeStmt, ctx: GenCtx): string =>
   s.ctors
     .map((c) => {
@@ -700,7 +709,7 @@ const genType = (s: TypeStmt, ctx: GenCtx): string =>
       const keys = keysOf(c.fields);
       const params = keys.join(", ");
       const obj = `({ _tag: ${tag}, ${params} })`;
-      const ts = ctx.annotateCtor?.(s, c) ?? null; // TS backend types the factory
+      const ts = ctx.annotateCtor?.(s, c) ?? null;
       // Single-field: a typed arrow scopes its own generics (`<A>(_0: A): T`).
       if (c.fields.length < 2) {
         if (!ts) return `const ${c.name} = (${params}) => ${obj};`;
@@ -718,14 +727,16 @@ const genType = (s: TypeStmt, ctx: GenCtx): string =>
     })
     .join("\n");
 
-// extern → an ESM import binding the external export to the mochi name.
+/** extern → an ESM import binding the external export to the mochi name. */
 const genExtern = (s: ExternStmt): string => {
   const spec = s.imported === s.name ? s.name : `${s.imported} as ${s.name}`;
   return `import { ${spec} } from ${JSON.stringify(s.module)};`;
 };
 
-// import { a, b } from "./mod"  → the compiled sibling `./mod.js`.
-// import * as Alias from "./mod" → ESM namespace import (ADR 0002).
+/**
+ * import { a, b } from "./mod"  → the compiled sibling `./mod.js`.
+ * import * as Alias from "./mod" → ESM namespace import (ADR 0002).
+ */
 const genImport = (s: ImportStmt, ctx: GenCtx): string => {
   const path = `${s.from.replace(/\.mochi$/, "")}${ctx.moduleExt}`;
   if (s.alias) return `import * as ${s.alias.name} from ${JSON.stringify(path)};`;
@@ -755,9 +766,11 @@ const genStmt = (s: Stmt, ctx: GenCtx): string => {
   return `${doExport ? "export " : ""}const ${s.name}${ann} = ${genExpr(s.value, ctx)};`;
 };
 
-// Does the program need the `@onrails/pattern` import? Only if it has a match
-// that lowers to a `match()` chain. A lazy-List switch lowers to a plain IIFE
-// instead, so a program that only ever destructures Lists imports nothing.
+/**
+ * Does the program need the `@onrails/pattern` import? Only if it has a match
+ * that lowers to a `match()` chain. A lazy-List switch lowers to a plain IIFE
+ * instead, so a program that only ever destructures Lists imports nothing.
+ */
 const usesMatchLib = (e: Expr): boolean =>
   match(e)
     .with({ kind: "num" }, { kind: "bool" }, { kind: "str" }, { kind: "ref" }, () => false)
@@ -795,9 +808,11 @@ const usesMatchLib = (e: Expr): boolean =>
     )
     .exhaustive();
 
-// Every name referenced anywhere in an expression. Coarse — it counts locally
-// shadowed uses too — but only ever consulted for prelude names, which are never
-// worth shadowing, so the over-count is harmless.
+/**
+ * Every name referenced anywhere in an expression. Coarse — it counts locally
+ * shadowed uses too — but only ever consulted for prelude names, which are never
+ * worth shadowing, so the over-count is harmless.
+ */
 const exprRefs = (e: Expr, acc: Set<string>): void => {
   match(e)
     .with({ kind: "num" }, { kind: "bool" }, { kind: "str" }, () => {})
@@ -876,9 +891,11 @@ const exprRefs = (e: Expr, acc: Set<string>): void => {
     .exhaustive();
 };
 
-// The names a program binds at module scope — anything that would shadow a
-// prelude builtin, so its runtime def must NOT be inlined (else a duplicate
-// `const` and a JS SyntaxError, e.g. a user `let hypot = …`).
+/**
+ * The names a program binds at module scope — anything that would shadow a
+ * prelude builtin, so its runtime def must NOT be inlined (else a duplicate
+ * `const` and a JS SyntaxError, e.g. a user `let hypot = …`).
+ */
 const boundNames = (prog: Program): Set<string> => {
   const bound = new Set<string>();
   for (const s of prog.stmts) {
@@ -892,9 +909,11 @@ const boundNames = (prog: Program): Set<string> => {
   return bound;
 };
 
-// The prelude runtime names a program needs: every builtin it references and
-// does not itself define, in prelude declaration order. Shared by the JS backend
-// (inlines the defs) and the TS backend (imports them from the typed runtime).
+/**
+ * The prelude runtime names a program needs: every builtin it references and
+ * does not itself define, in prelude declaration order. Shared by the JS backend
+ * (inlines the defs) and the TS backend (imports them from the typed runtime).
+ */
 export const collectRuntimeDeps = (prog: Program): string[] => {
   const refs = new Set<string>();
   for (const s of prog.stmts) {
@@ -919,15 +938,17 @@ export const collectRuntimeDeps = (prog: Program): string[] => {
   return Object.keys(preludeJsDefs).filter((name) => refs.has(name) && !bound.has(name));
 };
 
-// The prelude runtime a program needs inlined, emitted in declaration order.
+/** The prelude runtime a program needs inlined, emitted in declaration order. */
 const preludePreamble = (prog: Program): string => {
   const defs = collectRuntimeDeps(prog).map((name) => preludeJsDefs[name]!);
   return defs.length ? `${defs.join("\n")}\n\n` : "";
 };
 
-// `runtime`: inline the prelude builtins the program uses, so the emitted module
-// runs standalone. Off by default — callers that supply their own prelude (tests
-// via `new Function(preludeJs, …)`) keep prelude-free output.
+/**
+ * `runtime`: inline the prelude builtins the program uses, so the emitted module
+ * runs standalone. Off by default — callers that supply their own prelude (tests
+ * via `new Function(preludeJs, …)`) keep prelude-free output.
+ */
 export type CodegenOptions = {
   runtime?: boolean;
   annotate?: (name: string, value: Expr) => string | null;
@@ -947,9 +968,9 @@ export const codegen = (
   imported?: Map<string, string[]>,
   opts: CodegenOptions = {},
 ): string => {
-  // One derivation (`ctors.ts`, ticket 0024): user entries always bind; a
-  // builtin entry (Some/Ok/…) yields to an existing key set — a user decl, or
-  // an imported ctor's keys already seeded from `imported`.
+  // One derivation (`ctors.ts`): user entries always bind; a builtin entry
+  // (Some/Ok/…) yields to an existing key set — a user decl, or an imported
+  // ctor's keys already seeded from `imported`.
   const ctorKeys = new Map(imported ?? []);
   for (const [name, e] of ctorTableOf(prog).ctor)
     if (!e.builtin || !ctorKeys.has(name)) ctorKeys.set(name, e.keys);

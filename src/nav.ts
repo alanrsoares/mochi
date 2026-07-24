@@ -1,7 +1,9 @@
-// Navigation queries over the lexical symbol index — free of LSP/protocol
-// types so Bun unit tests can assert on Locations/spans. The language server
-// is a thin adapter (ADR 0003). Go-to-type (DX slice 11) also consults the
-// infer table when typecheck succeeds.
+/**
+ * Navigation queries over the lexical symbol index — free of LSP/protocol
+ * types so Bun unit tests can assert on Locations/spans. The language server
+ * is a thin adapter (ADR 0003). Go-to-type also consults the infer table when
+ * typecheck succeeds.
+ */
 import { resolve } from "node:path";
 import { isErr } from "@onrails/result";
 import { toTypedProgram, toTypedProgramWith } from "./compile";

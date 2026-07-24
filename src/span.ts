@@ -1,20 +1,15 @@
-// Source spans — half-open byte offsets [start, end) into the source text.
-// Threaded from tokens → AST nodes → errors so every diagnostic can point at
-// a location (and an LSP can map a cursor position back to a node).
+/** Source spans — half-open byte offsets [start, end) into the source text. Threaded from tokens → AST nodes → errors so every diagnostic can point at a location (and an LSP can map a cursor position back to a node). */
 export type Span = { start: number; end: number };
 
-// A span anchored to a source file (absolute path). Labels, suggestions, and
-// symbol-index hits share this so cross-module "defined here" / go-to-definition
-// stay one shape (ADR 0003).
+/** A span anchored to a source file (absolute path). Labels, suggestions, and symbol-index hits share this so cross-module "defined here" / go-to-definition stay one shape (ADR 0003). */
 export type Location = { path: string; span: Span };
 
 export const span = (start: number, end: number): Span => ({ start, end });
 
-// The span covering two spans (and everything between): left edge of `a`,
-// right edge of `b`. Callers pass them in source order.
+/** The span covering two spans (and everything between): left edge of `a`, right edge of `b`. Callers pass them in source order. */
 export const spanning = (a: Span, b: Span): Span => ({ start: a.start, end: b.end });
 
-// 1-based line/column for an offset — for human-readable "line:col" messages.
+/** 1-based line/column for an offset — for human-readable "line:col" messages. */
 export type LineCol = { line: number; col: number };
 
 export const lineCol = (src: string, offset: number): LineCol => {

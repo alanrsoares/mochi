@@ -1,12 +1,9 @@
-// Multi-file driver: resolve an `import` graph of `.mochi` modules, compile each in
-// dependency order, and thread every module's EXPORT schemes into the modules
-// that import it — so a value crosses a module boundary with its full inferred
-// (and possibly polymorphic) type, not an opaque `any`.
-//
-// This is the seam the "compiler on many cores" idea hangs off: modules with no
-// path between them are independent compilation units and could be inferred in
-// parallel. We compile them sequentially here; the dependency order is the only
-// constraint.
+/**
+ * Multi-file driver: resolve an `import` graph of `.mochi` modules, compile each in
+ * dependency order, and thread every module's EXPORT schemes into the modules
+ * that import it — so a value crosses a module boundary with its full inferred
+ * (and possibly polymorphic) type, not an opaque `any`.
+ */
 import { dirname, relative, resolve } from "node:path";
 import { err, isErr, ok, type Result, ResultAsync } from "@onrails/result";
 import type { Program, Stmt } from "./ast";
@@ -24,16 +21,14 @@ import { parse } from "./parser";
 export type ModuleOutput = { path: string; js: string };
 type ReadFile = (path: string) => Promise<string>;
 
-// An import `from` spec resolved to an absolute `.mochi` path, relative to the
-// importer's directory. A trailing `.mochi` in the spec is optional.
+/** Resolve an import `from` spec to an absolute `.mochi` path (`.mochi` suffix optional). */
 const resolveImport = (importer: string, spec: string): string =>
   resolve(dirname(importer), `${spec.replace(/\.mochi$/, "")}.mochi`);
 
 const importsOf = (prog: Program): Extract<Stmt, { kind: "import" }>[] =>
   prog.stmts.filter((s): s is Extract<Stmt, { kind: "import" }> => s.kind === "import");
 
-// The schemes a module makes available: exported `let`/`extern` bindings, and
-// the constructors of an exported `type`.
+/** Schemes a module exports: exported `let`/`extern` bindings and exported `type` ctors. */
 const exportsOf = (prog: Program, env: Env): Env => {
   const out: Env = new Map();
   const take = (name: string): void => {
@@ -48,9 +43,7 @@ const exportsOf = (prog: Program, env: Env): Env => {
   return out;
 };
 
-// Parse a file to a Program. Neither `check` nor inference runs here — both
-// need this module's imports resolved first, which only happens in
-// `compileGraph` once the whole graph is loaded.
+/** Parse a file to a Program; check/infer wait until the graph is loaded in `compileGraph`. */
 const parseModule = (src: string): Result<Program, Diagnostic> => {
   const lexed = lex(src);
   return isErr(lexed) ? lexed : parse(lexed.value);
@@ -58,8 +51,10 @@ const parseModule = (src: string): Result<Program, Diagnostic> => {
 
 type Loaded = { path: string; prog: Program };
 
-// What a module's imports resolve to: export SCHEMES (inference), variant
-// REGISTRY (cross-module exhaustiveness), and ctor field KEYS (destructuring).
+/**
+ * What a module's imports resolve to: export SCHEMES (inference), variant
+ * REGISTRY (cross-module exhaustiveness), and ctor field KEYS (destructuring).
+ */
 export type ModuleContext = {
   imports: Env;
   /** `import * as Alias` → Alias's export schemes (ADR 0002). */
@@ -68,9 +63,7 @@ export type ModuleContext = {
   importedKeys: Map<string, string[]>;
 };
 
-// Collect `prog`'s imported context from the already-compiled deps. A missing
-// export is reported against the import site. Shared by the full-graph compile
-// and the LSP's dep-only `moduleContext`.
+/** Collect `prog`'s imported context from already-compiled deps; missing export → Err. */
 const gatherImports = (
   path: string,
   prog: Program,
@@ -108,9 +101,10 @@ const gatherImports = (
   return ok({ imports, nsImports, importedReg, importedKeys });
 };
 
-// Load the whole graph reachable from `entry`, depth-first, detecting cycles.
-// Yields modules in DEPENDENCY ORDER (a module appears after all it imports).
-// The async file reads are the reason this half is a ResultAsync.
+/**
+ * Load the whole graph reachable from `entry`, depth-first, detecting cycles.
+ * Yields modules in dependency order (a module appears after all it imports).
+ */
 export const loadModuleGraph = (
   entry: string,
   readFile: ReadFile,
@@ -150,11 +144,11 @@ const loadGraph = (entry: string, readFile: ReadFile): ResultAsync<Loaded[], Dia
     return failure ? err(failure) : ok(order);
   });
 
-// Compile a resolved graph (synchronous — the I/O already happened). Each module
-// checks + infers + codegens with prelude plus everything its imports resolve
-// to: their export SCHEMES (inference), their variant REGISTRY (cross-module
-// exhaustiveness), and their ctor field KEYS (pattern destructuring). A missing
-// export is reported against the import site.
+/**
+ * Compile a resolved graph (synchronous — I/O already happened). Each module
+ * checks + infers + codegens with prelude plus imported schemes, registry, and
+ * ctor field keys.
+ */
 const compileGraph = (graph: Loaded[]): Result<ModuleOutput[], Diagnostic[]> => {
   const exportsByPath = new Map<string, Env>();
   const regByPath = new Map<string, Registry>();
@@ -175,8 +169,7 @@ const compileGraph = (graph: Loaded[]): Result<ModuleOutput[], Diagnostic[]> => 
   return ok(outputs);
 };
 
-// Resolve the graph (async), then compile it (sync) — one railway, no
-// `Promise<Result<…>>` at the seam.
+/** Resolve the graph (async), then compile it (sync) — one railway, no `Promise<Result<…>>`. */
 export const buildModules = (
   entry: string,
   readFile: ReadFile,
@@ -185,12 +178,11 @@ export const buildModules = (
 
 export type BuildTsOptions = { runtimeImport?: string };
 
-// Like `compileGraph`, but emits a typed `.ts` per module (ADR 0026). Each
-// module is checked + inferred with its imported context, then emitted with two
-// extra ingredients over the single-file `codegenTs`: cross-module `import`
-// lines (the values each `import` names, plus the dep's exported TYPE names so
-// annotations referencing an imported variant resolve), and the imported ctor
-// field keys for pattern destructuring.
+/**
+ * Like `compileGraph`, but emits a typed `.ts` per module (ADR 0026). Each
+ * module is checked + inferred with its imported context, then emitted with
+ * cross-module `import` lines and imported ctor field keys for destructuring.
+ */
 const compileGraphTs = (
   graph: Loaded[],
   runtimeImport: string,
@@ -200,17 +192,13 @@ const compileGraphTs = (
   const keysByPath = new Map<string, Map<string, string[]>>();
   const outputs: ModuleOutput[] = [];
 
-  // mochi has no type-name imports: every top-level `type` is globally visible in
-  // the closed-world graph, and the TS backend emits each as `export type`. Map
-  // each type name to its declaring module so a reference from a module with no
-  // value-import edge to the owner can still emit an `import type`.
+  // Top-level `type` names are globally visible; map each to its declaring module
+  // so cross-module references can emit `import type` without a value-import edge.
   const typeOwner = new Map<string, string>();
   for (const { path, prog } of graph)
     for (const s of prog.stmts) if (s.kind === "type") typeOwner.set(s.name, path);
 
-  // Extern modules referenced across the graph → one `.d.ts` each. Keyed by the
-  // resolved `.d.ts` path so a specifier imported by several modules (e.g.
-  // `./prelude.gen.mjs` from both compile and module) emits a single file.
+  // Extern modules referenced across the graph → one `.d.ts` each.
   const externDts = new Map<string, ExternBinding[]>();
 
   for (const { path, prog } of graph) {
@@ -222,12 +210,9 @@ const compileGraphTs = (
     if (isErr(typed)) return typed;
     const { env, aliases, types, letParams } = typed.value.res;
 
-    // Collect this module's externs (with their inferred schemes) into the
-    // per-`.d.ts` bucket for gap-3 declaration emission below.
     for (const s of prog.stmts) {
       if (s.kind !== "extern") continue;
-      // Derive the declaration path from the extern specifier. A `.mjs` host
-      // resolves (bundler moduleResolution) to a `.d.mts`; `.js`/`.ts` to `.d.ts`.
+      // `.mjs` hosts resolve to `.d.mts`; `.js`/`.ts` to `.d.ts`.
       const base = s.module.replace(/\.m?[jt]s$/, "");
       const declExt = /\.mjs$/.test(s.module) ? ".d.mts" : ".d.ts";
       const dtsPath = `${resolve(dirname(path), base)}${declExt}`;
@@ -241,8 +226,7 @@ const compileGraphTs = (
     const localTypes = new Set(
       prog.stmts.filter((s) => s.kind === "type").map((s) => (s as { name: string }).name),
     );
-    // Emit the body first (no type imports), then scan it for every non-local
-    // type name it references and prepend an `import type` per declaring module.
+    // Emit body first, then prepend `import type` for every non-local type name referenced.
     const body = emitTsModule(prog, {
       env,
       aliases,
@@ -267,18 +251,17 @@ const compileGraphTs = (
   return ok(outputs);
 };
 
-// A module specifier for `to` as imported from `from` (absolute `.mochi` paths),
-// extension stripped — sibling files become `./name`.
+/** Module specifier for `to` as imported from `from`; extension stripped. */
 const relSpec = (from: string, to: string): string => {
   const rel = relative(dirname(from), to).replace(/\.mochi$/, "");
   return rel.startsWith(".") ? rel : `./${rel}`;
 };
 
-// `import type { … }` lines for every non-local type name the emitted `ts` text
-// references, grouped by declaring module. A name already bound by a VALUE import
-// is skipped — re-importing it as a type would be a duplicate identifier
-// (TS2300). Builtin variants (`Result`, `Option`) aren't in `typeOwner`; they're
-// emitted inline by `referencedBuiltinTypeDecls`.
+/**
+ * `import type { … }` lines for every non-local type name the emitted `ts` text
+ * references, grouped by declaring module. Skips names already bound by a value
+ * import (TS2300). Builtin variants aren't in `typeOwner`; emitted inline.
+ */
 const crossModuleTypeImports = (
   ts: string,
   importerPath: string,
@@ -309,7 +292,7 @@ const crossModuleTypeImports = (
   );
 };
 
-// `build --emit=ts`: resolve the graph, emit a typed `.ts` beside each `.mochi`.
+/** `build --emit=ts`: resolve the graph, emit a typed `.ts` beside each `.mochi`. */
 export const buildModulesTs = (
   entry: string,
   readFile: ReadFile,
@@ -319,13 +302,12 @@ export const buildModulesTs = (
     compileGraphTs(g, opts.runtimeImport ?? DEFAULT_RUNTIME_IMPORT),
   );
 
-// Resolve + compile only the DEPENDENCIES of `entry` (dependency order), then
-// return the context `entry` itself should be checked/inferred with. Unlike
-// `buildModules` it stops at the entry — never checking, inferring, or
-// codegen-ing it — so the caller can run those on a live, possibly-unsaved
-// buffer. This is what lets LSP diagnostics see imported constructors (else a
-// `switch` on an imported variant is a false "unknown constructor"). A broken
-// dep surfaces as an Err; the caller decides whether to degrade.
+/**
+ * Resolve + compile only the dependencies of `entry`, then return the context
+ * `entry` itself should be checked/inferred with. Stops at the entry so the
+ * caller can run check/infer on a live buffer (LSP diagnostics/hover). Broken
+ * deps surface as Err; the caller decides whether to degrade.
+ */
 export const moduleContext = (
   entry: string,
   readFile: ReadFile,
@@ -339,8 +321,7 @@ export const moduleContext = (
     for (const { path, prog } of graph) {
       const gathered = gatherImports(path, prog, exportsByPath, regByPath, keysByPath);
       if (isErr(gathered)) return gathered;
-      // The entry is last in dependency order; its deps are now compiled, so
-      // hand back its context without touching the (live) entry itself.
+      // Entry is last in dependency order; hand back its context without compiling it.
       if (path === entryPath) return ok(gathered.value);
       const typed = toTypedProgramWith(prog, gathered.value);
       if (isErr(typed)) return typed;

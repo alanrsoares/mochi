@@ -1,5 +1,7 @@
-// Lexer — text → tokens. Returns Result; bad char = Err, not throw.
-// Each emitted token carries its source `span` (half-open [start, end)).
+/**
+ * Lexer — text → tokens. Returns Result; bad char = Err, not throw.
+ * Each emitted token carries its source `span` (half-open [start, end)).
+ */
 import { err, isErr, ok, type Result } from "@onrails/result";
 import { type Diagnostic, lexErr } from "./errors";
 import { type Span, span } from "./span";
@@ -49,19 +51,19 @@ export type Tok =
   | { t: "num"; v: number; raw: string } // raw source lexeme, so `3.0`/`-3` survive re-printing
   | { t: "bool"; v: boolean } // true / false
   | { t: "str"; v: string } // "..." (decoded value)
-  // ${} interpolation (ADR 0023): the literal chunk before the first hole,
-  // between two holes, and after the last one. A hole's own tokens are
-  // ordinary tokens re-lexed in place between these markers — the parser
-  // reads them back into an alternating `interp` parts array.
+  // ${} interpolation (ADR 0023): literal chunks and hole boundaries; hole
+  // tokens are re-lexed in place between these markers.
   | { t: "tmplstart"; v: string }
   | { t: "tmplmid"; v: string }
   | { t: "tmplend"; v: string }
   | { t: "id"; v: string }
   | { t: "eof" };
 
-// A token plus where it came from. `doc` carries a leading `///` comment block
-// (own-line, no blank line before the token) so the parser can attach it to the
-// following `let` — surfaced in hover as prose.
+/**
+ * A token plus where it came from. `doc` carries a leading `///` comment block
+ * (own-line, no blank line before the token) so the parser can attach it to the
+ * following `let` — surfaced in hover as prose.
+ */
 export type Located = Tok & { span: Span; doc?: string };
 
 const KEYWORDS: Record<string, Tok | undefined> = {
@@ -75,7 +77,7 @@ const KEYWORDS: Record<string, Tok | undefined> = {
   false: { t: "bool", v: false },
 };
 
-// Two-char operators, checked before single chars.
+/** Two-char operators, checked before single chars. */
 const DIGRAPHS: Record<string, Tok | undefined> = {
   "|>": { t: "pipe" },
   ">>": { t: "compose" },
@@ -90,7 +92,7 @@ const DIGRAPHS: Record<string, Tok | undefined> = {
   "->": { t: "tarrow" }, // type-expression arrow (extern signatures)
 };
 
-// Single-char punctuation → token.
+/** Single-char punctuation → token. */
 const PUNCT: Record<string, Tok | undefined> = {
   "+": { t: "plus" },
   "-": { t: "minus" },
@@ -119,11 +121,13 @@ const PUNCT: Record<string, Tok | undefined> = {
 
 const isSpace = (c: string): boolean => c === " " || c === "\t" || c === "\n" || c === "\r";
 
-// Skip a string literal starting at its opening quote `i`, descending into any
-// `${...}` holes (which may themselves contain strings/holes) so their braces
-// and quotes don't confuse a caller that's only counting braces. Returns the
-// index just past the closing quote, or null if unterminated. Used only by
-// `findHoleEnd`'s prescan — decoding happens later, in `scanTemplate`.
+/**
+ * Skip a string literal starting at its opening quote `i`, descending into any
+ * `${...}` holes so their braces and quotes don't confuse a caller that's only
+ * counting braces. Returns the index just past the closing quote, or null if
+ * unterminated. Used only by `findHoleEnd`'s prescan — decoding happens later
+ * in `scanTemplate`.
+ */
 export const skipStringLiteral = (src: string, i: number): number | null => {
   let j = i + 1;
   while (j < src.length && src[j] !== '"') {
@@ -142,10 +146,12 @@ export const skipStringLiteral = (src: string, i: number): number | null => {
   return j >= src.length ? null : j + 1;
 };
 
-// Find the index just past the `}` that closes a `${` hole whose contents
-// start at `start` (right after the `${`). Tracks brace depth so a nested
-// record literal or `switch` inside the hole doesn't close it early, and
-// descends into nested string literals (which may carry their own holes).
+/**
+ * Find the index just past the `}` that closes a `${` hole whose contents
+ * start at `start` (right after the `${`). Tracks brace depth so a nested
+ * record literal or `switch` inside the hole doesn't close it early, and
+ * descends into nested string literals (which may carry their own holes).
+ */
 const findHoleEnd = (src: string, start: number): number | null => {
   let depth = 1;
   let j = start;
@@ -171,15 +177,15 @@ const findHoleEnd = (src: string, start: number): number | null => {
   return null;
 };
 
-// One chunk of a scanned "..." literal: a decoded literal run, or the raw
-// source range of a `${...}` hole (tokenized later, by the caller, via a
-// recursive `lex` call — so hole tokens get real spans for free).
+/** One chunk of a scanned `"..."` literal: a decoded literal run or a hole range. */
 type TemplatePart = { kind: "lit"; value: string } | { kind: "hole"; start: number; end: number };
 
-// Scan a "..." literal (which may contain `${expr}` holes) starting at the
-// opening quote `i`. `\$` escapes a literal `$` (needed only right before a
-// `{`; a lone `$` needs no escape). Returns the alternating lit/hole chunks
-// and the index just past the closing quote, or null if unterminated.
+/**
+ * Scan a `"..."` literal (which may contain `${expr}` holes) starting at the
+ * opening quote `i`. `\$` escapes a literal `$`. Returns the alternating
+ * lit/hole chunks and the index just past the closing quote, or null if
+ * unterminated.
+ */
 const scanTemplate = (src: string, i: number): { parts: TemplatePart[]; end: number } | null => {
   let j = i + 1;
   let value = "";
@@ -213,17 +219,16 @@ const scanTemplate = (src: string, i: number): { parts: TemplatePart[]; end: num
   return { parts, end: j + 1 };
 };
 
-// Shift a span/token by `by` — used to place a hole's recursively-lexed
-// tokens (which `lex()` produced as if the hole source started at 0) at
-// their real position in the enclosing source.
+/** Shift a span/token by `by` — place recursively-lexed hole tokens at their real offset. */
 const offsetSpan = (s: Span, by: number): Span => span(s.start + by, s.end + by);
 const offsetTok = (t: Located, by: number): Located => ({ ...t, span: offsetSpan(t.span, by) });
 
-// Emit the token(s) for a "..." literal starting at its opening quote `i`: a
-// plain `str`, or (ADR 0023) `tmplstart`/spliced-in hole tokens/`tmplmid`s/
-// `tmplend` for one holding `${expr}` interpolations. Returns the index just
-// past the closing quote, or an Err on an unterminated literal or a lex
-// failure inside a hole. Pulled out of `lex`'s main loop to keep it simple.
+/**
+ * Emit token(s) for a `"..."` literal starting at its opening quote `i`: a plain
+ * `str`, or (ADR 0023) `tmplstart`/spliced hole tokens/`tmplmid`s/`tmplend` for
+ * interpolations. Returns the index just past the closing quote, or Err on
+ * failure inside a hole.
+ */
 const lexString = (
   src: string,
   i: number,
@@ -297,8 +302,7 @@ export function lex(src: string): Result<Located[], Diagnostic> {
       i++;
       continue;
     }
-    // Line comment: // ... to end of line. Only own-line `///` comments
-    // accumulate as docs; ordinary `//` comments stay invisible to tooling.
+    // Line comment: only own-line `///` accumulates as docs; ordinary `//` is invisible.
     if (c === "/" && src[i + 1] === "/") {
       const comment = scanLineComment(src, i, lineHasToken);
       i = comment.end;
@@ -312,7 +316,7 @@ export function lex(src: string): Result<Located[], Diagnostic> {
       continue;
     }
 
-    // `...` (list-pattern rest) before the digraph/dot checks, so it isn't split.
+    // `...` (list-pattern rest) before digraph/dot checks, so it isn't split.
     if (src.slice(i, i + 3) === "...") {
       emit({ t: "spread" }, i, i + 3);
       i += 3;
@@ -326,9 +330,7 @@ export function lex(src: string): Result<Located[], Diagnostic> {
       continue;
     }
 
-    // string literal: "..." with \n \t \\ \" \$ escapes, optionally holding
-    // `${expr}` interpolations (ADR 0023). A hole-free literal stays a plain
-    // `str` token — zero churn for the common case.
+    // Hole-free literals stay a plain `str` token — zero churn for the common case.
     if (c === '"') {
       const r = lexString(src, i, emit, toks);
       if (isErr(r)) return r;
@@ -336,11 +338,10 @@ export function lex(src: string): Result<Located[], Diagnostic> {
       continue;
     }
 
-    // number, with an optional leading `-` for negatives. Safe because mochi has
-    // binary minus operator desugaring at parse level when preceded by an expression.
+    // Optional leading `-` for negatives; binary minus desugars at parse level.
     const isDigit = (ch: string | undefined): boolean => ch !== undefined && ch >= "0" && ch <= "9";
     if (isDigit(c) || (c === "-" && isDigit(src[i + 1]))) {
-      let j = i + 1; // past the first digit or the sign
+      let j = i + 1;
       while (j < src.length && (isDigit(src[j]) || src[j] === ".")) j++;
       const raw = src.slice(i, j);
       emit({ t: "num", v: Number(raw), raw }, i, j);
