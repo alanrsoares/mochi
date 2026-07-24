@@ -85,7 +85,7 @@ test("an empty seed over the enclosing binding's letters names them (ADR 0042)",
 
 test("an applied ctor call is cast to its concrete type (ADR 0043)", () => {
   // `Ok(1)`/`Err("bad")` each leave one Result param free (the arg pins the
-  // other); in a ts-pattern arm that widens to `unknown`. The binding's return
+  // other); in an `@onrails/pattern` arm that widens to `unknown`. The binding's return
   // is concrete `Result<number, string>`, so both arms cast to it.
   const out = ts('let step = x => x ? Ok(1) : Err("bad")');
   expect(out).toContain("(Ok(1) as Result<number, string>)");

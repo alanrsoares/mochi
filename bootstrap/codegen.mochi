@@ -222,8 +222,8 @@ let genLambdaBody = (e, ctx) => switch e {
 }
 
 // ---- match -> @onrails/pattern chain ---------------------------------------
-// We target @onrails/pattern (ts-pattern-shaped, smaller runtime, pairs with
-// @onrails/result + @onrails/maybe). Each arm lowers to a single `.with(...)`.
+// We target @onrails/pattern (pairs with @onrails/result + @onrails/maybe).
+// Each arm lowers to a single `.with(...)`.
 
 // A pattern always matches (-> `.otherwise`) when it binds without narrowing:
 // wildcard, plain name, or a record whose every field just binds.

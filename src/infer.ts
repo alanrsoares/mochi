@@ -6,6 +6,7 @@
  * their body is inferred. Field access uses an open row, so a function that
  * reads `p.x` accepts any record that has an `x` — structural duck typing.
  */
+import { match } from "@onrails/pattern";
 import { err, isErr, map, ok, type Result } from "@onrails/result";
 import type {
   Expr,
@@ -326,46 +327,35 @@ function inferTuple(e: TupleExpr, ctx: Ctx): Result<Type, Diagnostic> {
 }
 
 function inferExpr(e: Expr, ctx: Ctx): Result<Type, Diagnostic> {
-  switch (e.kind) {
-    case "num":
-      return ok(tNumber);
-    case "bool":
-      return ok(tBool);
-    case "str":
-      return ok(tString);
-    case "interp":
-      return inferInterp(e.parts, ctx);
-    case "ref":
-      return inferRef(e, ctx);
-    case "lambda":
-      return inferLambda(e, ctx);
-    case "letin":
-      return inferLetIn(e, ctx);
-    case "call":
-      return inferCall(e, ctx);
-    case "pipe":
-      return infer({ kind: "call", fn: e.right, args: [e.left], span: e.span }, ctx);
-    case "ternary":
-      return inferTernary(e, ctx);
-    case "letbind":
-      return inferLetBind(e, ctx);
-    case "record":
-      return inferRecord(e, ctx);
-    case "field":
-      return inferField(e, ctx);
-    case "tuple":
-      return inferTuple(e, ctx);
-    case "arr":
-      return recordEmpty(e.span, e.elements.length, inferSeqSlots("Array", e.elements, ctx), ctx);
-    case "list":
-      return recordEmpty(e.span, e.elements.length, inferSeqSlots("List", e.elements, ctx), ctx);
-    case "set":
-      return inferSeqSlots("Set", e.elements, ctx);
-    case "map":
-      return recordEmpty(e.span, e.entries.length, inferMapExpr(e.entries, ctx), ctx);
-    case "match":
-      return inferMatch(e, ctx);
-  }
+  return match(e)
+    .with({ kind: "num" }, () => ok(tNumber))
+    .with({ kind: "bool" }, () => ok(tBool))
+    .with({ kind: "str" }, () => ok(tString))
+    .with({ kind: "interp" }, (interp) => inferInterp(interp.parts, ctx))
+    .with({ kind: "ref" }, (ref) => inferRef(ref, ctx))
+    .with({ kind: "lambda" }, (lambda) => inferLambda(lambda, ctx))
+    .with({ kind: "letin" }, (letin) => inferLetIn(letin, ctx))
+    .with({ kind: "call" }, (call) => inferCall(call, ctx))
+    .with({ kind: "pipe" }, (pipe) =>
+      infer({ kind: "call", fn: pipe.right, args: [pipe.left], span: pipe.span }, ctx),
+    )
+    .with({ kind: "ternary" }, (ternary) => inferTernary(ternary, ctx))
+    .with({ kind: "letbind" }, (letbind) => inferLetBind(letbind, ctx))
+    .with({ kind: "record" }, (record) => inferRecord(record, ctx))
+    .with({ kind: "field" }, (field) => inferField(field, ctx))
+    .with({ kind: "tuple" }, (tuple) => inferTuple(tuple, ctx))
+    .with({ kind: "arr" }, (arr) =>
+      recordEmpty(arr.span, arr.elements.length, inferSeqSlots("Array", arr.elements, ctx), ctx),
+    )
+    .with({ kind: "list" }, (list) =>
+      recordEmpty(list.span, list.elements.length, inferSeqSlots("List", list.elements, ctx), ctx),
+    )
+    .with({ kind: "set" }, (set) => inferSeqSlots("Set", set.elements, ctx))
+    .with({ kind: "map" }, (mapExpr) =>
+      recordEmpty(mapExpr.span, mapExpr.entries.length, inferMapExpr(mapExpr.entries, ctx), ctx),
+    )
+    .with({ kind: "match" }, (matchExpr) => inferMatch(matchExpr, ctx))
+    .exhaustive();
 }
 
 /**
@@ -453,47 +443,45 @@ function inferPattern(p: Pattern, ctx: Ctx): Result<PatResult, Diagnostic> {
 }
 
 function inferPat(p: Pattern, ctx: Ctx): Result<PatResult, Diagnostic> {
-  switch (p.kind) {
-    case "pwild":
-      return ok({ type: freshVar(ctx.fresh), bindings: new Map() });
-    case "plit":
-      return ok({ type: tNumber, bindings: new Map() });
-    case "pbool":
-      return ok({ type: tBool, bindings: new Map() });
-    case "pstr":
-      return ok({ type: tString, bindings: new Map() });
-    case "pbind": {
+  return match(p)
+    .with({ kind: "pwild" }, () => ok({ type: freshVar(ctx.fresh), bindings: new Map() }))
+    .with({ kind: "plit" }, () => ok({ type: tNumber, bindings: new Map() }))
+    .with({ kind: "pbool" }, () => ok({ type: tBool, bindings: new Map() }))
+    .with({ kind: "pstr" }, () => ok({ type: tString, bindings: new Map() }))
+    .with({ kind: "pbind" }, (pbind) => {
       const t = freshVar(ctx.fresh);
-      return ok({ type: t, bindings: new Map([[p.name, t]]) });
-    }
-    case "precord": {
+      return ok({ type: t, bindings: new Map([[pbind.name, t]]) });
+    })
+    .with({ kind: "precord" }, (precord) => {
       // Open row (duck typing): the scrutinee must have AT LEAST these fields.
       let row: Row = freshRowVar(ctx.fresh);
       const bindings = new Map<string, Type>();
-      for (const f of p.fields) {
+      for (const f of precord.fields) {
         const sub = inferPattern(f.pat, ctx);
         if (isErr(sub)) return sub;
         for (const [k, v] of sub.value.bindings) bindings.set(k, v);
         row = rExtend(f.label, sub.value.type, row);
       }
       return ok({ type: tRecord(row), bindings });
-    }
-    case "pctor": {
-      const sc = p.ns ? ctx.ns.get(p.ns)?.get(p.ctor) : ctx.env.get(p.ctor);
+    })
+    .with({ kind: "pctor" }, (pctor) => {
+      const sc = pctor.ns ? ctx.ns.get(pctor.ns)?.get(pctor.ctor) : ctx.env.get(pctor.ctor);
       if (!sc)
         return err(
           typeErr(
-            p.ns ? `'${p.ns}' has no member '${p.ctor}'` : `unknown constructor '${p.ctor}'`,
-            p.span,
+            pctor.ns
+              ? `'${pctor.ns}' has no member '${pctor.ctor}'`
+              : `unknown constructor '${pctor.ctor}'`,
+            pctor.span,
           ),
         );
       // instantiated ctor type: argT1 -> ... -> ResultType
       let cur = instantiate(sc, ctx.fresh);
       const bindings = new Map<string, Type>();
-      for (const argPat of p.args) {
+      for (const argPat of pctor.args) {
         const rc = resolve(cur, ctx.subst);
         if (rc.kind !== "arrow")
-          return err(typeErr(`constructor '${p.ctor}' applied to too many args`, p.span));
+          return err(typeErr(`constructor '${pctor.ctor}' applied to too many args`, pctor.span));
         const sub = inferPattern(argPat, ctx);
         if (isErr(sub)) return sub;
         for (const [k, v] of sub.value.bindings) bindings.set(k, v);
@@ -502,29 +490,29 @@ function inferPat(p: Pattern, ctx: Ctx): Result<PatResult, Diagnostic> {
         cur = rc.to;
       }
       return ok({ type: cur, bindings });
-    }
-    case "ptuple": {
+    })
+    .with({ kind: "ptuple" }, (ptuple) => {
       // Heterogeneous product: each sub-pattern types its own position.
       const elems: Type[] = [];
       const bindings = new Map<string, Type>();
-      for (const ep of p.elems) {
+      for (const ep of ptuple.elems) {
         const sub = inferPattern(ep, ctx);
         if (isErr(sub)) return sub;
         for (const [k, v] of sub.value.bindings) bindings.set(k, v);
         elems.push(sub.value.type);
       }
       return ok({ type: tTuple(elems), bindings });
-    }
-
-    case "parr":
+    })
+    .with({ kind: "parr" }, (parr) =>
       // Eager `Array<elem>`; every element shares `elem`, `...rest` binds the tail.
-      return inferSeqPat("Array", p.elems, p.rest, ctx);
-    case "plist":
+      inferSeqPat("Array", parr.elems, parr.rest, ctx),
+    )
+    .with({ kind: "plist" }, (plist) =>
       // Lazy `List<elem>`; same element/rest shape as `parr`.
-      return inferSeqPat("List", p.elems, p.rest, ctx);
-    case "por":
-      return inferOrPat(p.alts, ctx);
-  }
+      inferSeqPat("List", plist.elems, plist.rest, ctx),
+    )
+    .with({ kind: "por" }, (por) => inferOrPat(por.alts, ctx))
+    .exhaustive();
 }
 
 /**
@@ -622,86 +610,79 @@ function patternBinds(p: Pattern): string[] {
 
 /** Free refs in an expression (minus local binds) — builds top-level `let` SCC graph. */
 function freeRefs(e: Expr, bound: Set<string>, acc: Set<string>): void {
-  switch (e.kind) {
-    case "num":
-    case "bool":
-    case "str":
-      return;
-    case "interp":
-      for (const p of e.parts) if (typeof p !== "string") freeRefs(p, bound, acc);
-      return;
-    case "ref":
-      if (!bound.has(e.name)) acc.add(e.name);
-      return;
-    case "call":
-      freeRefs(e.fn, bound, acc);
-      for (const a of e.args) freeRefs(a, bound, acc);
-      return;
-    case "lambda": {
+  match(e)
+    .withOneOf([{ kind: "num" }, { kind: "bool" }, { kind: "str" }], () => {})
+    .with({ kind: "interp" }, (interp) => {
+      for (const p of interp.parts) if (typeof p !== "string") freeRefs(p, bound, acc);
+    })
+    .with({ kind: "ref" }, (ref) => {
+      if (!bound.has(ref.name)) acc.add(ref.name);
+    })
+    .with({ kind: "call" }, (call) => {
+      freeRefs(call.fn, bound, acc);
+      for (const a of call.args) freeRefs(a, bound, acc);
+    })
+    .with({ kind: "lambda" }, (lambda) => {
       const inner = new Set(bound);
-      for (const p of e.params)
+      for (const p of lambda.params)
         if (p.kind === "name") inner.add(p.name);
         else if (p.kind === "ptuple") for (const n of p.names) inner.add(n);
         else for (const f of p.fields) inner.add(f);
-      freeRefs(e.body, inner, acc);
-      return;
-    }
-    case "letin": {
+      freeRefs(lambda.body, inner, acc);
+    })
+    .with({ kind: "letin" }, (letin) => {
       // `value` is in the outer scope (non-recursive); `body` sees the new name.
-      freeRefs(e.value, bound, acc);
+      freeRefs(letin.value, bound, acc);
       const inner = new Set(bound);
-      inner.add(e.name);
-      freeRefs(e.body, inner, acc);
-      return;
-    }
-    case "letbind": {
-      freeRefs(e.value, bound, acc);
+      inner.add(letin.name);
+      freeRefs(letin.body, inner, acc);
+    })
+    .with({ kind: "letbind" }, (letbind) => {
+      freeRefs(letbind.value, bound, acc);
       const inner = new Set(bound);
-      if (e.param.kind === "name") inner.add(e.param.name);
-      else if (e.param.kind === "ptuple") for (const n of e.param.names) inner.add(n);
-      else for (const f of e.param.fields) inner.add(f);
-      freeRefs(e.body, inner, acc);
-      return;
-    }
-    case "pipe":
-      freeRefs(e.left, bound, acc);
-      freeRefs(e.right, bound, acc);
-      return;
-    case "ternary":
-      freeRefs(e.cond, bound, acc);
-      freeRefs(e.then, bound, acc);
-      freeRefs(e.else, bound, acc);
-      return;
-    case "match":
-      freeRefs(e.scrutinee, bound, acc);
-      for (const arm of e.arms) {
+      if (letbind.param.kind === "name") inner.add(letbind.param.name);
+      else if (letbind.param.kind === "ptuple") for (const n of letbind.param.names) inner.add(n);
+      else for (const f of letbind.param.fields) inner.add(f);
+      freeRefs(letbind.body, inner, acc);
+    })
+    .with({ kind: "pipe" }, (pipe) => {
+      freeRefs(pipe.left, bound, acc);
+      freeRefs(pipe.right, bound, acc);
+    })
+    .with({ kind: "ternary" }, (ternary) => {
+      freeRefs(ternary.cond, bound, acc);
+      freeRefs(ternary.then, bound, acc);
+      freeRefs(ternary.else, bound, acc);
+    })
+    .with({ kind: "match" }, (matchExpr) => {
+      freeRefs(matchExpr.scrutinee, bound, acc);
+      for (const arm of matchExpr.arms) {
         const inner = new Set(bound);
         for (const n of patternBinds(arm.pattern)) inner.add(n);
         if (arm.guard) freeRefs(arm.guard, inner, acc);
         freeRefs(arm.body, inner, acc);
       }
-      return;
-    case "record":
-      if (e.spread) freeRefs(e.spread, bound, acc);
-      for (const f of e.fields) freeRefs(f.value, bound, acc);
-      return;
-    case "field":
-      freeRefs(e.target, bound, acc);
-      return;
-    case "tuple":
-      for (const el of e.elements) freeRefs(el, bound, acc);
-      return;
-    case "arr":
-    case "list":
-    case "set":
-      for (const el of e.elements) freeRefs(el.expr, bound, acc);
-      return;
-    case "map":
-      for (const ent of e.entries) {
+    })
+    .with({ kind: "record" }, (record) => {
+      if (record.spread) freeRefs(record.spread, bound, acc);
+      for (const f of record.fields) freeRefs(f.value, bound, acc);
+    })
+    .with({ kind: "field" }, (field) => {
+      freeRefs(field.target, bound, acc);
+    })
+    .with({ kind: "tuple" }, (tuple) => {
+      for (const el of tuple.elements) freeRefs(el, bound, acc);
+    })
+    .withOneOf([{ kind: "arr" }, { kind: "list" }, { kind: "set" }], (seq) => {
+      for (const el of seq.elements) freeRefs(el.expr, bound, acc);
+    })
+    .with({ kind: "map" }, (mapExpr) => {
+      for (const ent of mapExpr.entries) {
         freeRefs(ent.key, bound, acc);
         freeRefs(ent.value, bound, acc);
       }
-  }
+    })
+    .exhaustive();
 }
 
 /**

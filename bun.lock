@@ -5,9 +5,9 @@
     "": {
       "name": "mochi",
       "dependencies": {
+        "@onrails/maybe": "^0.2.3",
         "@onrails/pattern": "^0.3.2",
         "@onrails/result": "^0.4.0",
-        "ts-pattern": "^5.9.0",
       },
       "devDependencies": {
         "@biomejs/biome": "^2.5.4",
@@ -107,6 +107,8 @@
 
     "@mochi/vscode": ["@mochi/vscode@workspace:editors/vscode"],
 
+    "@onrails/maybe": ["@onrails/maybe@0.2.3", "", { "peerDependencies": { "@onrails/result": "0.2.0" }, "optionalPeers": ["@onrails/result"] }, "sha512-cou0uxQp6OvYQ/b/VWr2OwJxdL2T5QDyPJV0TAXJDfoCqIdTJ4UNHTW0qXr/MeVsG0P/vY5zJOvmfvadJlmP7g=="],
+
     "@onrails/pattern": ["@onrails/pattern@0.3.2", "", {}, "sha512-EF/xmJ7yXzZpfYinLnMVm6M81NplCfENvaDvjgnCiJ+P51m56ExqWzCaATa17Smpm0T1Plyf5WzcHMjrJ6y0Dg=="],
 
     "@onrails/result": ["@onrails/result@0.4.0", "", {}, "sha512-DFdaC5pyLa8WRGg6dF8W3RbckVB2SmSpNTXtCbuFj2FqkcmWpIzJJvAfvrRcpXwVDhpxstxKkAipTRmaBoJHLQ=="],
@@ -132,8 +134,6 @@
     "pure-rand": ["pure-rand@8.4.2", "", {}, "sha512-vvuOGgcuPJAirlHvuQw1TrOiw7ptaIXXmIbNuiNOY6lNGJJH49PQ1Kj4nd783nPdQhQdicgOjVI2yI/9BD6/Ng=="],
 
     "semver": ["semver@7.8.5", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA=="],
-
-    "ts-pattern": ["ts-pattern@5.9.0", "", {}, "sha512-6s5V71mX8qBUmlgbrfL33xDUwO0fq48rxAu2LBE11WBeGdpCPOsXksQbZJHvHwhrd3QjUusd3mAOM5Gg0mFBLg=="],
 
     "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 

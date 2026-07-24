@@ -7,7 +7,8 @@
  * hover popup.
  */
 import { resolve } from "node:path";
-import { isErr } from "@onrails/result";
+import { map, match as matchMaybe } from "@onrails/maybe";
+import { isErr, isOk } from "@onrails/result";
 import { toTypedProgram, toTypedProgramWith } from "./compile";
 import type { InferResult, SymbolInfo, TypeAt } from "./infer";
 import { lex } from "./lexer";
@@ -15,19 +16,13 @@ import { moduleContext } from "./module";
 import { parse } from "./parser";
 import { preludeNamespaces } from "./prelude";
 import { preludeDocForBinding } from "./prelude-virtual";
+import { spanContainsClosed, tightestHit } from "./span";
 import { indexProgram } from "./symbols";
 import { foldAliases, showType } from "./types";
 
-/** The tightest span containing `offset`; ties break toward the first. */
-const tightest = (types: TypeAt[], offset: number): TypeAt | null => {
-  let best: TypeAt | null = null;
-  for (const t of types) {
-    if (offset < t.span.start || offset > t.span.end) continue;
-    const width = t.span.end - t.span.start;
-    if (!best || width < best.span.end - best.span.start) best = t;
-  }
-  return best;
-};
+/** Tightest inferred type span containing `offset` (closed ends; ties → first). */
+const tightestType = (types: TypeAt[], offset: number) =>
+  tightestHit(types, offset, spanContainsClosed);
 
 /**
  * Hover payload: `code` is the mochi-fenced lead line (bare type, or TS-style
@@ -61,17 +56,15 @@ const docAt = (
 };
 
 /** Render the tightest-span type at `offset` as a hover payload. */
-const hoverFrom = (
-  res: InferResult,
-  offset: number,
-  src: string,
-  path: string,
-): HoverInfo | null => {
-  const hit = tightest(res.types, offset);
-  if (!hit) return null;
-  const type = showType(foldAliases(hit.type, res.aliases));
-  return { code: lead(type, hit.symbol), doc: docAt(src, path, offset, hit.symbol) };
-};
+const hoverFrom = (res: InferResult, offset: number, src: string, path: string): HoverInfo | null =>
+  matchMaybe(
+    map(tightestType(res.types, offset), (hit) => {
+      const type = showType(foldAliases(hit.type, res.aliases));
+      return { code: lead(type, hit.symbol), doc: docAt(src, path, offset, hit.symbol) };
+    }),
+    (info) => info,
+    () => null,
+  );
 
 /**
  * Hover at `offset`, or null when the source doesn't typecheck or nothing sits
@@ -81,7 +74,7 @@ const hoverFrom = (
  */
 export const hoverAt = (src: string, offset: number, path = "<buffer>"): HoverInfo | null => {
   const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces });
-  return isErr(r) ? null : hoverFrom(r.value.res, offset, src, path);
+  return isOk(r) ? hoverFrom(r.value.res, offset, src, path) : null;
 };
 
 /**
@@ -101,7 +94,6 @@ export const moduleHoverAt = async (
   if (isErr(lexed)) return null;
   const parsed = parse(lexed.value);
   if (isErr(parsed)) return null;
-  const prog = parsed.value;
 
   const entry = resolve(path);
   const read = (p: string): Promise<string> =>
@@ -109,6 +101,6 @@ export const moduleHoverAt = async (
   const ctx = await moduleContext(entry, read);
   if (isErr(ctx)) return hoverAt(src, offset, entry);
 
-  const typed = toTypedProgramWith(prog, ctx.value);
-  return isErr(typed) ? null : hoverFrom(typed.value.res, offset, src, entry);
+  const typed = toTypedProgramWith(parsed.value, ctx.value);
+  return isOk(typed) ? hoverFrom(typed.value.res, offset, src, entry) : null;
 };

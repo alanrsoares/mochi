@@ -73,7 +73,7 @@ let pipeline = xs =>
   |> filter(n => eq(n, n))
   |> reduce((acc, n) => add(acc, n), 0)`,
   // Regression guard for ADR 0031: NESTED patterns lower to guard-form arms
-  // (`.with((_v) => …, handler)`). ts-pattern only narrows a handler for an
+  // (`.with((_v) => …, handler)`). `@onrails/pattern` only narrows a handler for an
   // `x is U` guard, so without the emitted type predicate the handler destructure
   // (`Some(Circle(r))` → `{ value: { _0: r } }`) sees the full union → TS2339.
   // Covers a ctor inside a ctor, and a ctor at the head of an array pattern.
@@ -131,7 +131,7 @@ let one = atMost(5)`,
   // Regression guard for ADR 0038: an eager-array match with NO catch-all is
   // the \`[]\` + \`[h, ...t]\` length partition (check.ts proves it total). Its
   // guard arms test \`.length\` and don't narrow \`A[]\` structurally, so
-  // ts-pattern's \`.exhaustive()\` types as \`NonExhaustiveError<A[]>\` (TS2322).
+  // \`@onrails/pattern\`'s \`.exhaustive()\` types as \`NonExhaustiveError<A[]>\` (TS2322).
   // The TS backend closes it with a throwing \`.otherwise\` instead. Covers a
   // concrete recursion and a generic (element-polymorphic) one.
   arrayMatch: `
@@ -146,7 +146,7 @@ let count = xs => switch xs {
 let s = sumAll([1, 2, 3])
 let c = count([1, 2, 3])`,
   // Regression guard for ADR 0039: a match whose FIRST arm returns a record
-  // field `doc: None` and a later arm returns `doc: Some(str)`. ts-pattern pins
+  // field `doc: None` and a later arm returns `doc: Some(str)`. `@onrails/pattern` pins
   // the chain's return from the first arm, so a bare `None` (`Option<never>`)
   // there rejects the widening `Option<string>` arm (TS2322). The TS backend
   // annotates the nullary ctor in place (`None as Option<string>`) so the first
@@ -194,7 +194,7 @@ let firstPatterns = arms =>
 let lookupNested = (outer, inner, tbl) =>
   Map.get(inner, Map.getOr(#{}, outer, tbl))`,
   // ADR 0043: an applied ctor's phantom type param (`Ok`'s error, `Err`'s ok)
-  // widens to `unknown` in a ts-pattern arm, clashing with a sibling arm. The
+  // widens to `unknown` in an `@onrails/pattern` arm, clashing with a sibling arm. The
   // error type is pinned concretely (via `step`), so the recursion's Result is
   // fully concrete and each arm is cast to it — without the cast, tsc rejects
   // `Result<string, unknown>` against the recursive `Result<string, string>`.

@@ -4,10 +4,14 @@
  * name string, so shadowing stays precise. Powers go-to-definition, find-refs,
  * rename, highlight, and diagnostic labels.
  */
+
+import { fromNullable, match as matchMaybe } from "@onrails/maybe";
+import { match } from "@onrails/pattern";
 import type { Expr, LamParam, Pattern, Program, Stmt, TypeExpr } from "./ast";
 import { isCtorName } from "./ast";
 import { fieldNameSpan, preludeNsMember, preludeOrigins } from "./prelude-virtual";
 import type { Location, Span } from "./span";
+import { tightestHit } from "./span";
 
 export type SymbolSpace = "value" | "type" | "ctor" | "field";
 
@@ -103,197 +107,197 @@ const bindParam = (b: Builder, p: LamParam): void => {
 };
 
 const walkPat = (b: Builder, p: Pattern): void => {
-  switch (p.kind) {
-    case "pbind":
-      if (p.name !== "_") bind(b, "value", p.name, p.span);
-      return;
-    case "pctor":
-      use(b, "ctor", p.ctor, p.span);
-      for (const a of p.args) walkPat(b, a);
-      return;
-    case "precord":
-      for (const f of p.fields) {
+  match(p)
+    .with({ kind: "pbind" }, (pbind) => {
+      if (pbind.name !== "_") bind(b, "value", pbind.name, pbind.span);
+    })
+    .with({ kind: "pctor" }, (pctor) => {
+      use(b, "ctor", pctor.ctor, pctor.span);
+      for (const a of pctor.args) walkPat(b, a);
+    })
+    .with({ kind: "precord" }, (precord) => {
+      for (const f of precord.fields) {
         touchField(b, f.label, f.labelSpan);
         walkPat(b, f.pat);
       }
-      return;
-    case "ptuple":
-      for (const e of p.elems) walkPat(b, e);
-      return;
-    case "parr":
-    case "plist":
-      for (const e of p.elems) walkPat(b, e);
-      if (p.rest) walkPat(b, p.rest);
-      return;
-    case "por":
+    })
+    .with({ kind: "ptuple" }, (ptuple) => {
+      for (const e of ptuple.elems) walkPat(b, e);
+    })
+    .with({ kind: "parr" }, (parr) => {
+      for (const e of parr.elems) walkPat(b, e);
+      if (parr.rest) walkPat(b, parr.rest);
+    })
+    .with({ kind: "plist" }, (plist) => {
+      for (const e of plist.elems) walkPat(b, e);
+      if (plist.rest) walkPat(b, plist.rest);
+    })
+    .with({ kind: "por" }, (por) => {
       // Same binders in each alt — walk the first for binds; still note ctor uses
       // in every alt.
-      if (p.alts[0]) walkPat(b, p.alts[0]);
-      for (let i = 1; i < p.alts.length; i++) walkPatUses(b, p.alts[i]!);
-      return;
-    default:
-      return;
-  }
+      if (por.alts[0]) walkPat(b, por.alts[0]);
+      for (let i = 1; i < por.alts.length; i++) walkPatUses(b, por.alts[i]!);
+    })
+    .withOneOf([{ kind: "pwild" }, { kind: "plit" }, { kind: "pbool" }, { kind: "pstr" }], () => {})
+    .exhaustive();
 };
 
 /** Pattern walk that only records uses (ctors), not new binds — for or-pattern alts after the first. */
 const walkPatUses = (b: Builder, p: Pattern): void => {
-  switch (p.kind) {
-    case "pctor":
-      use(b, "ctor", p.ctor, p.span);
-      for (const a of p.args) walkPatUses(b, a);
-      return;
-    case "precord":
-      for (const f of p.fields) {
+  match(p)
+    .with({ kind: "pctor" }, (pctor) => {
+      use(b, "ctor", pctor.ctor, pctor.span);
+      for (const a of pctor.args) walkPatUses(b, a);
+    })
+    .with({ kind: "precord" }, (precord) => {
+      for (const f of precord.fields) {
         touchField(b, f.label, f.labelSpan);
         walkPatUses(b, f.pat);
       }
-      return;
-    case "ptuple":
-      for (const e of p.elems) walkPatUses(b, e);
-      return;
-    case "parr":
-    case "plist":
-      for (const e of p.elems) walkPatUses(b, e);
-      if (p.rest) walkPatUses(b, p.rest);
-      return;
-    case "por":
-      for (const a of p.alts) walkPatUses(b, a);
-      return;
-    default:
-      return;
-  }
+    })
+    .with({ kind: "ptuple" }, (ptuple) => {
+      for (const e of ptuple.elems) walkPatUses(b, e);
+    })
+    .with({ kind: "parr" }, (parr) => {
+      for (const e of parr.elems) walkPatUses(b, e);
+      if (parr.rest) walkPatUses(b, parr.rest);
+    })
+    .with({ kind: "plist" }, (plist) => {
+      for (const e of plist.elems) walkPatUses(b, e);
+      if (plist.rest) walkPatUses(b, plist.rest);
+    })
+    .with({ kind: "por" }, (por) => {
+      for (const a of por.alts) walkPatUses(b, a);
+    })
+    .withOneOf(
+      [{ kind: "pbind" }, { kind: "pwild" }, { kind: "plit" }, { kind: "pbool" }, { kind: "pstr" }],
+      () => {},
+    )
+    .exhaustive();
 };
 
 const walkTypeExpr = (b: Builder, t: TypeExpr): void => {
-  switch (t.kind) {
-    case "tname":
+  match(t)
+    .with({ kind: "tname" }, (tname) => {
       // Lowercase = type variable; skip. Named types (Uppercase) are indexed.
-      if (/^[A-Z]/.test(t.name)) use(b, "type", t.name, t.span);
-      return;
-    case "tarrow":
-      walkTypeExpr(b, t.from);
-      walkTypeExpr(b, t.to);
-      return;
-    case "tapp":
-      use(b, "type", t.ctor, t.span);
-      for (const a of t.args) walkTypeExpr(b, a);
-      return;
-    case "ttuple":
-      for (const e of t.elems) walkTypeExpr(b, e);
-      return;
-    case "tlist":
-      walkTypeExpr(b, t.elem);
-      return;
-  }
+      if (/^[A-Z]/.test(tname.name)) use(b, "type", tname.name, tname.span);
+    })
+    .with({ kind: "tarrow" }, (tarrow) => {
+      walkTypeExpr(b, tarrow.from);
+      walkTypeExpr(b, tarrow.to);
+    })
+    .with({ kind: "tapp" }, (tapp) => {
+      use(b, "type", tapp.ctor, tapp.span);
+      for (const a of tapp.args) walkTypeExpr(b, a);
+    })
+    .with({ kind: "ttuple" }, (ttuple) => {
+      for (const e of ttuple.elems) walkTypeExpr(b, e);
+    })
+    .with({ kind: "tlist" }, (tlist) => {
+      walkTypeExpr(b, tlist.elem);
+    })
+    .exhaustive();
 };
 
 const walkExpr = (b: Builder, e: Expr): void => {
-  switch (e.kind) {
-    case "num":
-    case "bool":
-    case "str":
-      return;
-    case "interp":
-      for (const p of e.parts) if (typeof p !== "string") walkExpr(b, p);
-      return;
-    case "ref":
-      if (e.name.startsWith("$")) return;
-      if (isCtorName(e.name)) {
+  match(e)
+    .withOneOf([{ kind: "num" }, { kind: "bool" }, { kind: "str" }], () => {})
+    .with({ kind: "interp" }, (interp) => {
+      for (const p of interp.parts) if (typeof p !== "string") walkExpr(b, p);
+    })
+    .with({ kind: "ref" }, (ref) => {
+      if (ref.name.startsWith("$")) return;
+      if (isCtorName(ref.name)) {
         // Prefer ctor, then value (a shadowed let Ok = …).
-        if (lookup(b, "ctor", e.name)) use(b, "ctor", e.name, e.span);
-        else use(b, "value", e.name, e.span);
+        if (lookup(b, "ctor", ref.name)) use(b, "ctor", ref.name, ref.span);
+        else use(b, "value", ref.name, ref.span);
       } else {
-        use(b, "value", e.name, e.span);
+        use(b, "value", ref.name, ref.span);
       }
-      return;
-    case "call":
-      walkExpr(b, e.fn);
-      for (const a of e.args) walkExpr(b, a);
-      return;
-    case "lambda": {
+    })
+    .with({ kind: "call" }, (call) => {
+      walkExpr(b, call.fn);
+      for (const a of call.args) walkExpr(b, a);
+    })
+    .with({ kind: "lambda" }, (lambda) => {
       pushScope(b, "value");
-      for (const p of e.params) bindParam(b, p);
-      walkExpr(b, e.body);
+      for (const p of lambda.params) bindParam(b, p);
+      walkExpr(b, lambda.body);
       popScope(b, "value");
-      return;
-    }
-    case "letin":
-      walkExpr(b, e.value);
-      if (e.annot) walkTypeExpr(b, e.annot);
+    })
+    .with({ kind: "letin" }, (letin) => {
+      walkExpr(b, letin.value);
+      if (letin.annot) walkTypeExpr(b, letin.annot);
       pushScope(b, "value");
-      bind(b, "value", e.name, e.nameSpan);
-      walkExpr(b, e.body);
+      bind(b, "value", letin.name, letin.nameSpan);
+      walkExpr(b, letin.body);
       popScope(b, "value");
-      return;
-    case "letbind":
-      walkExpr(b, e.value);
+    })
+    .with({ kind: "letbind" }, (letbind) => {
+      walkExpr(b, letbind.value);
       pushScope(b, "value");
-      bindParam(b, e.param);
-      walkExpr(b, e.body);
+      bindParam(b, letbind.param);
+      walkExpr(b, letbind.body);
       popScope(b, "value");
-      return;
-    case "pipe":
-      walkExpr(b, e.left);
-      walkExpr(b, e.right);
-      return;
-    case "ternary":
-      walkExpr(b, e.cond);
-      walkExpr(b, e.then);
-      walkExpr(b, e.else);
-      return;
-    case "match":
-      walkExpr(b, e.scrutinee);
-      for (const arm of e.arms) {
+    })
+    .with({ kind: "pipe" }, (pipe) => {
+      walkExpr(b, pipe.left);
+      walkExpr(b, pipe.right);
+    })
+    .with({ kind: "ternary" }, (ternary) => {
+      walkExpr(b, ternary.cond);
+      walkExpr(b, ternary.then);
+      walkExpr(b, ternary.else);
+    })
+    .with({ kind: "match" }, (matchExpr) => {
+      walkExpr(b, matchExpr.scrutinee);
+      for (const arm of matchExpr.arms) {
         pushScope(b, "value");
         walkPat(b, arm.pattern);
         if (arm.guard) walkExpr(b, arm.guard);
         walkExpr(b, arm.body);
         popScope(b, "value");
       }
-      return;
-    case "record":
-      if (e.spread) walkExpr(b, e.spread);
-      for (const f of e.fields) {
+    })
+    .with({ kind: "record" }, (record) => {
+      if (record.spread) walkExpr(b, record.spread);
+      for (const f of record.fields) {
         touchField(b, f.name, f.nameSpan);
         walkExpr(b, f.value);
       }
-      return;
-    case "field": {
-      walkExpr(b, e.target);
+    })
+    .with({ kind: "field" }, (field) => {
+      walkExpr(b, field.target);
       // Prelude `Ns.member` (e.g. Result.map) — virtual prelude def; else record field.
-      if (e.target.kind === "ref") {
-        const def = preludeNsMember(e.target.name, e.name);
+      if (field.target.kind === "ref") {
+        const def = preludeNsMember(field.target.name, field.name);
         if (def) {
-          const binding: Binding = { name: e.name, space: "value", def };
+          const binding: Binding = { name: field.name, space: "value", def };
           b.occurrences.push({
             binding,
-            span: fieldNameSpan(e.span, e.name),
+            span: fieldNameSpan(field.span, field.name),
             role: "use",
           });
           return;
         }
       }
-      touchField(b, e.name, fieldNameSpan(e.span, e.name));
-      return;
-    }
-    case "tuple":
-      for (const el of e.elements) walkExpr(b, el);
-      return;
-    case "arr":
-    case "list":
-    case "set":
-      for (const el of e.elements) {
+      touchField(b, field.name, fieldNameSpan(field.span, field.name));
+    })
+    .with({ kind: "tuple" }, (tuple) => {
+      for (const el of tuple.elements) walkExpr(b, el);
+    })
+    .withOneOf([{ kind: "arr" }, { kind: "list" }, { kind: "set" }], (seq) => {
+      for (const el of seq.elements) {
         if (el.kind === "expr" || el.kind === "spread") walkExpr(b, el.expr);
       }
-      return;
-    case "map":
-      for (const en of e.entries) {
+    })
+    .with({ kind: "map" }, (mapExpr) => {
+      for (const en of mapExpr.entries) {
         walkExpr(b, en.key);
         walkExpr(b, en.value);
       }
-      return;
-  }
+    })
+    .exhaustive();
 };
 
 const bindTopLevels = (b: Builder, stmts: Stmt[], origins?: Origins): void => {
@@ -427,15 +431,12 @@ export const indexProgram = (path: string, prog: Program, origins?: Origins): Sy
   bindTopLevels(b, prog.stmts, origins);
   walkStmts(b, prog.stmts);
 
-  const at = (offset: number): Occurrence | null => {
-    let best: Occurrence | null = null;
-    for (const o of b.occurrences) {
-      if (offset < o.span.start || offset >= o.span.end) continue;
-      const width = o.span.end - o.span.start;
-      if (!best || width < best.span.end - best.span.start) best = o;
-    }
-    return best;
-  };
+  const at = (offset: number): Occurrence | null =>
+    matchMaybe(
+      tightestHit(b.occurrences, offset),
+      (o) => o,
+      () => null,
+    );
 
   const occurrences = (binding: Binding): Occurrence[] => {
     const all = b.occurrences.filter((o) => sameBinding(o.binding, binding));
@@ -446,7 +447,11 @@ export const indexProgram = (path: string, prog: Program, origins?: Origins): Sy
   };
 
   const binding = (space: SymbolSpace, name: string): Binding | null =>
-    lookup(b, space, name) ?? null;
+    matchMaybe(
+      fromNullable(lookup(b, space, name)),
+      (x) => x,
+      () => null,
+    );
 
   return { at, occurrences, binding };
 };

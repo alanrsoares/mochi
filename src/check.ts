@@ -2,6 +2,7 @@
  * Semantic pass — exhaustiveness + constructor checks.
  * Builds a variant registry from `type` decls, then verifies every `switch`.
  */
+import { match } from "@onrails/pattern";
 import { err, isErr, ok, type Result } from "@onrails/result";
 import type { CtorPat, Expr, LamParam, MatchExpr, OrPat, Pattern, Program, TypeExpr } from "./ast";
 import { buildCtorTable, type CtorTable, PRIM_TYPE_NAMES } from "./ctors";
@@ -14,66 +15,59 @@ export type Registry = CtorTable;
 
 /** Walk an expression tree, invoking `visit` on every `match` node. */
 function forEachMatch(e: Expr, visit: (m: MatchExpr) => void): void {
-  switch (e.kind) {
-    case "num":
-    case "bool":
-    case "str":
-    case "ref":
-      return;
-    case "interp":
-      for (const p of e.parts) if (typeof p !== "string") forEachMatch(p, visit);
-      return;
-    case "call":
-      forEachMatch(e.fn, visit);
-      for (const a of e.args) forEachMatch(a, visit);
-      return;
-    case "lambda":
-      forEachMatch(e.body, visit);
-      return;
-    case "letin":
-    case "letbind":
-      forEachMatch(e.value, visit);
-      forEachMatch(e.body, visit);
-      return;
-    case "pipe":
-      forEachMatch(e.left, visit);
-      forEachMatch(e.right, visit);
-      return;
-    case "ternary":
-      forEachMatch(e.cond, visit);
-      forEachMatch(e.then, visit);
-      forEachMatch(e.else, visit);
-      return;
-    case "match":
-      forEachMatch(e.scrutinee, visit);
-      for (const a of e.arms) {
+  match(e)
+    .withOneOf([{ kind: "num" }, { kind: "bool" }, { kind: "str" }, { kind: "ref" }], () => {})
+    .with({ kind: "interp" }, (interp) => {
+      for (const p of interp.parts) if (typeof p !== "string") forEachMatch(p, visit);
+    })
+    .with({ kind: "call" }, (call) => {
+      forEachMatch(call.fn, visit);
+      for (const a of call.args) forEachMatch(a, visit);
+    })
+    .with({ kind: "lambda" }, (lambda) => {
+      forEachMatch(lambda.body, visit);
+    })
+    .withOneOf([{ kind: "letin" }, { kind: "letbind" }], (bind) => {
+      forEachMatch(bind.value, visit);
+      forEachMatch(bind.body, visit);
+    })
+    .with({ kind: "pipe" }, (pipe) => {
+      forEachMatch(pipe.left, visit);
+      forEachMatch(pipe.right, visit);
+    })
+    .with({ kind: "ternary" }, (ternary) => {
+      forEachMatch(ternary.cond, visit);
+      forEachMatch(ternary.then, visit);
+      forEachMatch(ternary.else, visit);
+    })
+    .with({ kind: "match" }, (matchExpr) => {
+      forEachMatch(matchExpr.scrutinee, visit);
+      for (const a of matchExpr.arms) {
         if (a.guard) forEachMatch(a.guard, visit);
         forEachMatch(a.body, visit);
       }
-      visit(e);
-      return;
-    case "record":
-      if (e.spread) forEachMatch(e.spread, visit);
-      for (const f of e.fields) forEachMatch(f.value, visit);
-      return;
-    case "field":
-      forEachMatch(e.target, visit);
-      return;
-    case "tuple":
-      for (const el of e.elements) forEachMatch(el, visit);
-      return;
-    case "arr":
-    case "list":
-    case "set":
-      for (const el of e.elements) forEachMatch(el.expr, visit);
-      return;
-    case "map":
-      for (const ent of e.entries) {
+      visit(matchExpr);
+    })
+    .with({ kind: "record" }, (record) => {
+      if (record.spread) forEachMatch(record.spread, visit);
+      for (const f of record.fields) forEachMatch(f.value, visit);
+    })
+    .with({ kind: "field" }, (field) => {
+      forEachMatch(field.target, visit);
+    })
+    .with({ kind: "tuple" }, (tuple) => {
+      for (const el of tuple.elements) forEachMatch(el, visit);
+    })
+    .withOneOf([{ kind: "arr" }, { kind: "list" }, { kind: "set" }], (seq) => {
+      for (const el of seq.elements) forEachMatch(el.expr, visit);
+    })
+    .with({ kind: "map" }, (mapExpr) => {
+      for (const ent of mapExpr.entries) {
         forEachMatch(ent.key, visit);
         forEachMatch(ent.value, visit);
       }
-      return;
-  }
+    })
+    .exhaustive();
 }
 
 /**
@@ -119,55 +113,61 @@ const checkSeqExhaustive = (m: MatchExpr): Diagnostic | null | undefined => {
  * emitted guard form must not hide mid-predicate. Top-level `plist` arms are
  * fine (genListMatch owns the pulling discipline).
  */
-const checkPattern = (p: Pattern, reg: Registry, top: boolean): Diagnostic | null => {
-  switch (p.kind) {
-    case "pctor": {
-      const info = reg.ctor.get(p.ctor);
-      if (!info) return checkErr(`unknown constructor '${p.ctor}'`, p.span);
-      if (p.args.length !== info.arity)
+const checkPattern = (p: Pattern, reg: Registry, top: boolean): Diagnostic | null =>
+  match(p)
+    .with({ kind: "pctor" }, (pctor) => {
+      const info = reg.ctor.get(pctor.ctor);
+      if (!info) return checkErr(`unknown constructor '${pctor.ctor}'`, pctor.span);
+      if (pctor.args.length !== info.arity)
         return checkErr(
-          `constructor '${p.ctor}' expects ${info.arity} arg(s), got ${p.args.length}`,
-          p.span,
+          `constructor '${pctor.ctor}' expects ${info.arity} arg(s), got ${pctor.args.length}`,
+          pctor.span,
         );
-      for (const a of p.args) {
+      for (const a of pctor.args) {
         const e = checkPattern(a, reg, false);
         if (e) return e;
       }
       return null;
-    }
-    case "precord": {
-      for (const f of p.fields) {
+    })
+    .with({ kind: "precord" }, (precord) => {
+      for (const f of precord.fields) {
         const e = checkPattern(f.pat, reg, false);
         if (e) return e;
       }
       return null;
-    }
-    case "ptuple": {
-      for (const el of p.elems) {
+    })
+    .with({ kind: "ptuple" }, (ptuple) => {
+      for (const el of ptuple.elems) {
         const e = checkPattern(el, reg, false);
         if (e) return e;
       }
       return null;
-    }
-    case "parr":
-    case "plist": {
-      if (p.kind === "plist" && !top)
+    })
+    .with({ kind: "parr" }, (parr) => {
+      for (const el of parr.elems) {
+        const e = checkPattern(el, reg, false);
+        if (e) return e;
+      }
+      return parr.rest ? checkPattern(parr.rest, reg, false) : null;
+    })
+    .with({ kind: "plist" }, (plist) => {
+      if (!top)
         return checkErr(
           "lazy-List pattern cannot nest inside another pattern (matching pulls from the sequence)",
-          p.span,
+          plist.span,
         );
-      for (const el of p.elems) {
+      for (const el of plist.elems) {
         const e = checkPattern(el, reg, false);
         if (e) return e;
       }
-      return p.rest ? checkPattern(p.rest, reg, false) : null;
-    }
-    case "por":
-      return checkOrPattern(p, reg);
-    default:
-      return null;
-  }
-};
+      return plist.rest ? checkPattern(plist.rest, reg, false) : null;
+    })
+    .with({ kind: "por" }, (por) => checkOrPattern(por, reg))
+    .withOneOf(
+      [{ kind: "pwild" }, { kind: "plit" }, { kind: "pbool" }, { kind: "pstr" }, { kind: "pbind" }],
+      () => null,
+    )
+    .exhaustive();
 
 const firstErr = (es: readonly (Diagnostic | null)[]): Diagnostic | null =>
   es.reduce<Diagnostic | null>((f, e) => f ?? e, null);
@@ -177,22 +177,36 @@ const firstErr = (es: readonly (Diagnostic | null)[]): Diagnostic | null =>
  * only be internally consistent — it exists to compare or-pattern alternatives.
  * A name bound twice in one pattern is an error.
  */
-const binderPaths = (p: Pattern, at: string, acc: Map<string, string>): Diagnostic | null => {
-  switch (p.kind) {
-    case "pbind":
-      if (acc.has(p.name)) return checkErr(`pattern binds '${p.name}' more than once`, p.span);
-      acc.set(p.name, at);
+const binderPaths = (p: Pattern, at: string, acc: Map<string, string>): Diagnostic | null =>
+  match(p)
+    .with({ kind: "pbind" }, (pbind) => {
+      if (acc.has(pbind.name))
+        return checkErr(`pattern binds '${pbind.name}' more than once`, pbind.span);
+      acc.set(pbind.name, at);
       return null;
-    case "pctor":
-      return firstErr(p.args.map((a, i) => binderPaths(a, `${at}.a${i}`, acc)));
-    case "precord":
-      return firstErr(p.fields.map((f) => binderPaths(f.pat, `${at}.${f.label}`, acc)));
-    case "ptuple":
-      return firstErr(p.elems.map((e, i) => binderPaths(e, `${at}.t${i}`, acc)));
-    default:
-      return null; // pwild/plit/pbool/pstr bind nothing; parr/plist/por barred as alts
-  }
-};
+    })
+    .with({ kind: "pctor" }, (pctor) =>
+      firstErr(pctor.args.map((a, i) => binderPaths(a, `${at}.a${i}`, acc))),
+    )
+    .with({ kind: "precord" }, (precord) =>
+      firstErr(precord.fields.map((f) => binderPaths(f.pat, `${at}.${f.label}`, acc))),
+    )
+    .with({ kind: "ptuple" }, (ptuple) =>
+      firstErr(ptuple.elems.map((e, i) => binderPaths(e, `${at}.t${i}`, acc))),
+    )
+    .withOneOf(
+      [
+        { kind: "pwild" },
+        { kind: "plit" },
+        { kind: "pbool" },
+        { kind: "pstr" },
+        { kind: "parr" },
+        { kind: "plist" },
+        { kind: "por" },
+      ],
+      () => null, // pwild/plit/pbool/pstr bind nothing; parr/plist/por barred as alts
+    )
+    .exhaustive();
 
 /**
  * An or-pattern (`A | B | …`): each alternative must narrow (not a catch-all),
@@ -385,22 +399,25 @@ const checkReservedNames = (prog: Program): Diagnostic[] => {
  * var would be existential (matching couldn't recover its type). Prim names
  * (number/string/bool/..., `PRIM_TYPE_NAMES` from ctors.ts) are fine.
  */
-const strayTypeVar = (te: TypeExpr, params: ReadonlySet<string>): TypeExpr | null => {
-  switch (te.kind) {
-    case "tname":
-      return /^[A-Z]/.test(te.name) || PRIM_TYPE_NAMES.has(te.name) || params.has(te.name)
+const strayTypeVar = (te: TypeExpr, params: ReadonlySet<string>): TypeExpr | null =>
+  match(te)
+    .with({ kind: "tname" }, (tname) =>
+      /^[A-Z]/.test(tname.name) || PRIM_TYPE_NAMES.has(tname.name) || params.has(tname.name)
         ? null
-        : te;
-    case "tarrow":
-      return strayTypeVar(te.from, params) ?? strayTypeVar(te.to, params);
-    case "tapp":
-      return te.args.reduce<TypeExpr | null>((f, a) => f ?? strayTypeVar(a, params), null);
-    case "ttuple":
-      return te.elems.reduce<TypeExpr | null>((f, e) => f ?? strayTypeVar(e, params), null);
-    case "tlist":
-      return strayTypeVar(te.elem, params);
-  }
-};
+        : tname,
+    )
+    .with(
+      { kind: "tarrow" },
+      (tarrow) => strayTypeVar(tarrow.from, params) ?? strayTypeVar(tarrow.to, params),
+    )
+    .with({ kind: "tapp" }, (tapp) =>
+      tapp.args.reduce<TypeExpr | null>((f, a) => f ?? strayTypeVar(a, params), null),
+    )
+    .with({ kind: "ttuple" }, (ttuple) =>
+      ttuple.elems.reduce<TypeExpr | null>((f, e) => f ?? strayTypeVar(e, params), null),
+    )
+    .with({ kind: "tlist" }, (tlist) => strayTypeVar(tlist.elem, params))
+    .exhaustive();
 
 const checkCtorFieldVars = (prog: Program): Diagnostic[] => {
   const diags: Diagnostic[] = [];
@@ -492,97 +509,97 @@ const many = (...parts: readonly (Diagnostic | Diagnostic[] | null)[]): Diagnost
   concatDiags(...parts);
 
 /** A lambda/letbind parameter binds one or more names; anchor offences to the param span. */
-const checkParamBinds = (p: LamParam, span: Span): Diagnostic[] => {
-  switch (p.kind) {
-    case "name":
-      return many(reservedBind(p.name, span));
-    case "precord":
-      return many(...p.fields.map((n) => reservedBind(n, span)));
-    case "ptuple":
-      return many(...p.names.map((n) => reservedBind(n, span)));
-  }
-};
+const checkParamBinds = (p: LamParam, span: Span): Diagnostic[] =>
+  match(p)
+    .with({ kind: "name" }, (name) => many(reservedBind(name.name, span)))
+    .with({ kind: "precord" }, (precord) =>
+      many(...precord.fields.map((n) => reservedBind(n, span))),
+    )
+    .with({ kind: "ptuple" }, (ptuple) => many(...ptuple.names.map((n) => reservedBind(n, span))))
+    .exhaustive();
 
-const checkPatBinds = (p: Pattern): Diagnostic[] => {
-  switch (p.kind) {
-    case "pbind":
-      return many(reservedBind(p.name, p.span));
-    case "ptuple":
-      return many(...p.elems.map(checkPatBinds));
-    case "precord":
-      return many(...p.fields.map((f) => checkPatBinds(f.pat)));
-    case "pctor":
-      return many(...p.args.map(checkPatBinds));
-    case "parr":
-    case "plist":
-      return many(...[...p.elems, ...(p.rest ? [p.rest] : [])].map(checkPatBinds));
-    case "por":
-      return many(...p.alts.map(checkPatBinds));
-    case "pwild":
-    case "plit":
-    case "pbool":
-    case "pstr":
-      return [];
-  }
-};
+const checkPatBinds = (p: Pattern): Diagnostic[] =>
+  match(p)
+    .with({ kind: "pbind" }, (pbind) => many(reservedBind(pbind.name, pbind.span)))
+    .with({ kind: "ptuple" }, (ptuple) => many(...ptuple.elems.map(checkPatBinds)))
+    .with({ kind: "precord" }, (precord) =>
+      many(...precord.fields.map((f) => checkPatBinds(f.pat))),
+    )
+    .with({ kind: "pctor" }, (pctor) => many(...pctor.args.map(checkPatBinds)))
+    .with({ kind: "parr" }, (parr) =>
+      many(...[...parr.elems, ...(parr.rest ? [parr.rest] : [])].map(checkPatBinds)),
+    )
+    .with({ kind: "plist" }, (plist) =>
+      many(...[...plist.elems, ...(plist.rest ? [plist.rest] : [])].map(checkPatBinds)),
+    )
+    .with({ kind: "por" }, (por) => many(...por.alts.map(checkPatBinds)))
+    .withOneOf([{ kind: "pwild" }, { kind: "plit" }, { kind: "pbool" }, { kind: "pstr" }], () => [])
+    .exhaustive();
 
-const checkExprBinds = (e: Expr): Diagnostic[] => {
-  switch (e.kind) {
-    case "num":
-    case "bool":
-    case "str":
-    case "ref":
-      return [];
-    case "interp":
-      return many(...e.parts.filter((p): p is Expr => typeof p !== "string").map(checkExprBinds));
-    case "call":
-      return many(checkExprBinds(e.fn), ...e.args.map(checkExprBinds));
-    case "lambda":
-      return many(...e.params.map((p) => checkParamBinds(p, e.span)), checkExprBinds(e.body));
-    case "letin":
-      return many(
-        reservedBind(e.name, e.nameSpan),
-        checkExprBinds(e.value),
-        checkExprBinds(e.body),
-      );
-    case "letbind":
-      return many(
-        checkParamBinds(e.param, e.paramSpan),
-        checkExprBinds(e.value),
-        checkExprBinds(e.body),
-      );
-    case "pipe":
-      return many(checkExprBinds(e.left), checkExprBinds(e.right));
-    case "ternary":
-      return many(checkExprBinds(e.cond), checkExprBinds(e.then), checkExprBinds(e.else));
-    case "match":
-      return many(
-        checkExprBinds(e.scrutinee),
-        ...e.arms.map((a) =>
+const checkExprBinds = (e: Expr): Diagnostic[] =>
+  match(e)
+    .withOneOf([{ kind: "num" }, { kind: "bool" }, { kind: "str" }, { kind: "ref" }], () => [])
+    .with({ kind: "interp" }, (interp) =>
+      many(...interp.parts.filter((p): p is Expr => typeof p !== "string").map(checkExprBinds)),
+    )
+    .with({ kind: "call" }, (call) =>
+      many(checkExprBinds(call.fn), ...call.args.map(checkExprBinds)),
+    )
+    .with({ kind: "lambda" }, (lambda) =>
+      many(
+        ...lambda.params.map((p) => checkParamBinds(p, lambda.span)),
+        checkExprBinds(lambda.body),
+      ),
+    )
+    .with({ kind: "letin" }, (letin) =>
+      many(
+        reservedBind(letin.name, letin.nameSpan),
+        checkExprBinds(letin.value),
+        checkExprBinds(letin.body),
+      ),
+    )
+    .with({ kind: "letbind" }, (letbind) =>
+      many(
+        checkParamBinds(letbind.param, letbind.paramSpan),
+        checkExprBinds(letbind.value),
+        checkExprBinds(letbind.body),
+      ),
+    )
+    .with({ kind: "pipe" }, (pipe) => many(checkExprBinds(pipe.left), checkExprBinds(pipe.right)))
+    .with({ kind: "ternary" }, (ternary) =>
+      many(
+        checkExprBinds(ternary.cond),
+        checkExprBinds(ternary.then),
+        checkExprBinds(ternary.else),
+      ),
+    )
+    .with({ kind: "match" }, (matchExpr) =>
+      many(
+        checkExprBinds(matchExpr.scrutinee),
+        ...matchExpr.arms.map((a) =>
           many(
             checkPatBinds(a.pattern),
             a.guard ? checkExprBinds(a.guard) : null,
             checkExprBinds(a.body),
           ),
         ),
-      );
-    case "record":
-      return many(
-        e.spread ? checkExprBinds(e.spread) : null,
-        ...e.fields.map((f) => checkExprBinds(f.value)),
-      );
-    case "field":
-      return checkExprBinds(e.target);
-    case "tuple":
-      return many(...e.elements.map(checkExprBinds));
-    case "arr":
-    case "list":
-    case "set":
-      return many(...e.elements.map((el) => checkExprBinds(el.expr)));
-    case "map":
-      return many(...e.entries.map((en) => many(checkExprBinds(en.key), checkExprBinds(en.value))));
-  }
-};
+      ),
+    )
+    .with({ kind: "record" }, (record) =>
+      many(
+        record.spread ? checkExprBinds(record.spread) : null,
+        ...record.fields.map((f) => checkExprBinds(f.value)),
+      ),
+    )
+    .with({ kind: "field" }, (field) => checkExprBinds(field.target))
+    .with({ kind: "tuple" }, (tuple) => many(...tuple.elements.map(checkExprBinds)))
+    .withOneOf([{ kind: "arr" }, { kind: "list" }, { kind: "set" }], (seq) =>
+      many(...seq.elements.map((el) => checkExprBinds(el.expr))),
+    )
+    .with({ kind: "map" }, (mapExpr) =>
+      many(...mapExpr.entries.map((en) => many(checkExprBinds(en.key), checkExprBinds(en.value)))),
+    )
+    .exhaustive();
 
 const checkReservedWords = (prog: Program): Diagnostic[] => {
   const diags: Diagnostic[] = [];

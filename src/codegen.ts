@@ -2,10 +2,10 @@
  * Codegen — AST → JavaScript source. Pure (no failure).
  * mochi owns the type system (HM inference), so emitted JS carries no type
  * annotations — the checker runs before codegen and guarantees soundness.
- * ts-pattern .exhaustive() forces a case for every Expr kind here: add an AST
+ * `@onrails/pattern` `.exhaustive()` forces a case for every Expr kind here: add an AST
  * node and forget it → TS compile error in the compiler, not a silent gap.
  */
-import { match } from "ts-pattern";
+import { match } from "@onrails/pattern";
 import type {
   Ctor,
   Expr,
@@ -69,7 +69,7 @@ type GenCtx = {
   // bare array `[a, b]`. The runtime `_tuple` is an identity whose rest param is
   // inferred as a tuple, so tsc keeps `[A, B]` where a bare array literal would
   // widen to `(A | B)[]` (no contextual tuple type flows through `Some(…)`/`Ok(…)`
-  // /ts-pattern arm returns). Off for the JS backend — output stays byte-identical.
+  // /@onrails/pattern arm returns). Off for the JS backend — output stays byte-identical.
   readonly tupleHelper: boolean;
 
   // TS backend (ADR 0028): given a lambda's span and its collapsed parameter count,
@@ -86,7 +86,7 @@ type GenCtx = {
   // TS backend (ADR 0031): given a match scrutinee expr, return its concrete TS
   // type text (the "base" the guard-form predicate narrows from), or null (generic
   // scrutinee / JS backend). Used to synthesize a type-predicate guard so the
-  // handler input narrows — ts-pattern's `Narrow` only refines for `x is U` guards,
+  // handler input narrows — `@onrails/pattern`'s `Narrow` only refines for `x is U` guards,
   // not plain boolean ones, so nested-pattern handlers otherwise see the full union.
   readonly guardBaseType: ((scrutinee: Expr) => string | null) | null;
 
@@ -106,7 +106,7 @@ type GenCtx = {
   // TS backend (ADR 0043): given an applied parametric constructor call (`Ok(x)`,
   // `Err(e)`), return its fully-concrete TS type text to cast the call to, or null.
   // A ctor's argument pins only some type params; a phantom one (`Ok`'s error, `Err`'s
-  // ok) stays free and widens to `unknown` in a ts-pattern arm — annotating the call
+  // ok) stays free and widens to `unknown` in a @onrails/pattern arm — annotating the call
   // (`Ok("") as Result<string, string>`) pins it. The applied-ctor analogue of the
   // nullary-ctor rule (`annotateEmpty` on a `ref`, ADR 0039).
   readonly annotateCall: ((e: Expr) => string | null) | null;
@@ -165,7 +165,7 @@ const genExpr = (e: Expr, ctx: GenCtx): string =>
       const inner = `${genCallee(c.fn, ctx)}(${c.args.map((a) => genExpr(a, ctx)).join(", ")})`;
       // TS backend (ADR 0043): an applied parametric ctor (`Ok("")`, `Err(e)`)
       // leaves the type param its argument doesn't determine free, so tsc widens
-      // it to `unknown` — in a ts-pattern arm that then clashes with a sibling
+      // it to `unknown` — in a @onrails/pattern arm that then clashes with a sibling
       // arm. Cast the call to its resolved concrete type. Gated on an uppercase
       // callee (a ctor; `annotateCall` itself yields null unless the type is a
       // fully-concrete `con`, so ordinary Capitalized calls stay bare).
@@ -299,7 +299,7 @@ const genLambdaBody = (e: Expr, ctx: GenCtx): string =>
 
 /**
  * Emitted `switch` lowers to a match().with().exhaustive() chain targeting
- * @onrails/pattern (ts-pattern-shaped, smaller runtime). Each arm is a single
+ * @onrails/pattern (emitted into user JS too). Each arm is a single
  * pattern — the common subset both libraries share.
  *
  * A pattern always matches (→ `.otherwise`) when it binds without narrowing: a
@@ -328,84 +328,75 @@ const isCatchAll = (p: Pattern): boolean =>
 /** `{ key: sub }` entry, punned when the bound name IS the key. */
 const keyedSlot = (key: string, sub: string): string => (sub === key ? key : `${key}: ${sub}`);
 
-const patSlot = (p: Pattern, ctx: GenCtx): string => {
-  switch (p.kind) {
-    case "pbind":
-      return p.name;
-    case "pwild":
-    case "plit":
-    case "pbool":
-    case "pstr":
-    case "plist":
-      return "";
-    case "pctor": {
+const patSlot = (p: Pattern, ctx: GenCtx): string =>
+  match(p)
+    .with({ kind: "pbind" }, (p) => p.name)
+    .withOneOf(
+      [{ kind: "pwild" }, { kind: "plit" }, { kind: "pbool" }, { kind: "pstr" }, { kind: "plist" }],
+      () => "",
+    )
+    .with({ kind: "pctor" }, (p) => {
       const keys = ctx.ctorKeys.get(p.ctor);
       const entries = p.args.flatMap((a, i) => {
         const s = patSlot(a, ctx);
         return s === "" ? [] : [keyedSlot(keys?.[i] ?? `_${i}`, s)];
       });
       return entries.length ? `{ ${entries.join(", ")} }` : "";
-    }
-    case "precord": {
+    })
+    .with({ kind: "precord" }, (p) => {
       const entries = p.fields.flatMap((f) => {
         const s = patSlot(f.pat, ctx);
         return s === "" ? [] : [keyedSlot(f.label, s)];
       });
       return entries.length ? `{ ${entries.join(", ")} }` : "";
-    }
-    case "ptuple": {
+    })
+    .with({ kind: "ptuple" }, (p) => {
       const slots = p.elems.map((e) => patSlot(e, ctx));
       return slots.some((s) => s !== "") ? `[${slots.join(", ")}]` : "";
-    }
-    case "parr": {
+    })
+    .with({ kind: "parr" }, (p) => {
       const slots = p.elems.map((e) => patSlot(e, ctx));
       if (p.rest?.kind === "pbind") slots.push(`...${p.rest.name}`);
       return slots.some((s) => s !== "") ? `[${slots.join(", ")}]` : "";
-    }
+    })
     // Alternatives bind identical names at identical positions (checked), so any
     // alt's slot destructures the value for the whole arm.
-    case "por":
-      return patSlot(p.alts[0]!, ctx);
-  }
-};
+    .with({ kind: "por" }, (p) => patSlot(p.alts[0]!, ctx))
+    .exhaustive();
 
-const patConds = (p: Pattern, path: string, ctx: GenCtx): string[] => {
-  switch (p.kind) {
-    case "pwild":
-    case "pbind":
-    case "plist":
-      return [];
-    case "plit":
-    case "pbool":
-    case "pstr":
-      return [`${path} === ${litValue(p)}`];
-    case "pctor": {
+const patConds = (p: Pattern, path: string, ctx: GenCtx): string[] =>
+  match(p)
+    .withOneOf([{ kind: "pwild" }, { kind: "pbind" }, { kind: "plist" }], () => [])
+    .withOneOf([{ kind: "plit" }, { kind: "pbool" }, { kind: "pstr" }], (p) => [
+      `${path} === ${litValue(p)}`,
+    ])
+    .with({ kind: "pctor" }, (p) => {
       const keys = ctx.ctorKeys.get(p.ctor);
       return [
         `${path}._tag === ${JSON.stringify(p.ctor)}`,
         ...p.args.flatMap((a, i) => patConds(a, `${path}.${keys?.[i] ?? `_${i}`}`, ctx)),
       ];
-    }
-    case "precord":
-      return p.fields.flatMap((f) => patConds(f.pat, `${path}.${f.label}`, ctx));
-    case "ptuple":
+    })
+    .with({ kind: "precord" }, (p) =>
+      p.fields.flatMap((f) => patConds(f.pat, `${path}.${f.label}`, ctx)),
+    )
+    .with({ kind: "ptuple" }, (p) =>
       // No length guard — tuple arity is guaranteed by the type.
-      return p.elems.flatMap((e, i) => patConds(e, `${path}[${i}]`, ctx));
-    case "parr":
-      return [
-        `${path}.length ${p.rest ? ">=" : "==="} ${p.elems.length}`,
-        ...p.elems.flatMap((e, i) => patConds(e, `${path}[${i}]`, ctx)),
-      ];
-    case "por": {
+      p.elems.flatMap((e, i) => patConds(e, `${path}[${i}]`, ctx)),
+    )
+    .with({ kind: "parr" }, (p) => [
+      `${path}.length ${p.rest ? ">=" : "==="} ${p.elems.length}`,
+      ...p.elems.flatMap((e, i) => patConds(e, `${path}[${i}]`, ctx)),
+    ])
+    .with({ kind: "por" }, (p) => {
       // `(condsA) || (condsB) || …` — each alt's own conds &&-joined first.
       const alts = p.alts.map((a) => {
         const c = patConds(a, path, ctx);
         return c.length ? c.map((x) => `(${x})`).join(" && ") : "true";
       });
       return [alts.map((a) => `(${a})`).join(" || ")];
-    }
-  }
-};
+    })
+    .exhaustive();
 
 /** The handler parameter for a catch-all pattern: bind the name, destructure a record's/tuple's binds, or ignore the value. */
 const catchAllParam = (p: Pattern, ctx: GenCtx): string => {
@@ -518,7 +509,7 @@ const genMatch = (m: MatchExpr, ctx: GenCtx): string => {
   } else if (ctx.guardBaseType !== null && m.arms.some((a) => a.pattern.kind === "parr")) {
     // TS backend (ADR 0038): an eager-array match with no catch-all is the
     // `[]` + `[h, ...t]` length partition check.ts proved total. Its guard arms
-    // test `.length` — they don't narrow `A[]` structurally, so ts-pattern's
+    // test `.length` — they don't narrow `A[]` structurally, so `@onrails/pattern`'s
     // `.exhaustive()` still sees `A[]` leftover and types as
     // `NonExhaustiveError<A[]>` (TS2322). Close with a throwing `.otherwise`
     // instead: its `never` return is assignable to the declared type, and the
@@ -561,40 +552,53 @@ const isFlatSub = (p: Pattern): boolean =>
  * the pattern does. Pure over `ctx.ctorKeys`; only reachable in TS mode.
  */
 function patTarget(p: Pattern, base: string, ctx: GenCtx): string {
-  switch (p.kind) {
-    case "pctor": {
-      const member = `Extract<${base}, { _tag: ${JSON.stringify(p.ctor)} }>`;
-      const keys = ctx.ctorKeys.get(p.ctor);
-      const refines = p.args.flatMap((a, i) => {
-        const key = keys?.[i] ?? `_${i}`;
-        const sub = fieldRefine(a, `${member}[${JSON.stringify(key)}]`, ctx);
-        return sub ? [`${JSON.stringify(key)}: ${sub}`] : [];
-      });
-      return refines.length ? `${member} & { ${refines.join("; ")} }` : member;
-    }
-    case "precord": {
-      const refines = p.fields.flatMap((f) => {
-        const sub = fieldRefine(f.pat, `${base}[${JSON.stringify(f.label)}]`, ctx);
-        return sub ? [`${JSON.stringify(f.label)}: ${sub}`] : [];
-      });
-      return refines.length ? `${base} & { ${refines.join("; ")} }` : base;
-    }
-    case "ptuple": {
-      const subs = p.elems.map((e, i) => fieldRefine(e, `(${base})[${i}]`, ctx));
-      return subs.every((s) => s === null)
-        ? base
-        : `[${p.elems.map((_, i) => subs[i] ?? `(${base})[${i}]`).join(", ")}]`;
-    }
-    case "parr": {
-      const elemType = `(${base})[number]`;
-      const subs = p.elems.map((e) => fieldRefine(e, elemType, ctx));
-      if (subs.every((s) => s === null)) return base;
-      const heads = subs.map((s) => s ?? elemType).join(", ");
-      return `[${heads}${p.rest ? `, ...${base}` : ""}]`;
-    }
-  }
-  // or-patterns: keep the base (per-alt narrowing would need a union target).
-  return base;
+  return (
+    match(p)
+      .with({ kind: "pctor" }, (p) => {
+        const member = `Extract<${base}, { _tag: ${JSON.stringify(p.ctor)} }>`;
+        const keys = ctx.ctorKeys.get(p.ctor);
+        const refines = p.args.flatMap((a, i) => {
+          const key = keys?.[i] ?? `_${i}`;
+          const sub = fieldRefine(a, `${member}[${JSON.stringify(key)}]`, ctx);
+          return sub ? [`${JSON.stringify(key)}: ${sub}`] : [];
+        });
+        return refines.length ? `${member} & { ${refines.join("; ")} }` : member;
+      })
+      .with({ kind: "precord" }, (p) => {
+        const refines = p.fields.flatMap((f) => {
+          const sub = fieldRefine(f.pat, `${base}[${JSON.stringify(f.label)}]`, ctx);
+          return sub ? [`${JSON.stringify(f.label)}: ${sub}`] : [];
+        });
+        return refines.length ? `${base} & { ${refines.join("; ")} }` : base;
+      })
+      .with({ kind: "ptuple" }, (p) => {
+        const subs = p.elems.map((e, i) => fieldRefine(e, `(${base})[${i}]`, ctx));
+        return subs.every((s) => s === null)
+          ? base
+          : `[${p.elems.map((_, i) => subs[i] ?? `(${base})[${i}]`).join(", ")}]`;
+      })
+      .with({ kind: "parr" }, (p) => {
+        const elemType = `(${base})[number]`;
+        const subs = p.elems.map((e) => fieldRefine(e, elemType, ctx));
+        if (subs.every((s) => s === null)) return base;
+        const heads = subs.map((s) => s ?? elemType).join(", ");
+        return `[${heads}${p.rest ? `, ...${base}` : ""}]`;
+      })
+      // or-patterns: keep the base (per-alt narrowing would need a union target).
+      .withOneOf(
+        [
+          { kind: "pwild" },
+          { kind: "pbind" },
+          { kind: "plit" },
+          { kind: "pbool" },
+          { kind: "pstr" },
+          { kind: "plist" },
+          { kind: "por" },
+        ],
+        () => base,
+      )
+      .exhaustive()
+  );
 }
 
 /** A field's refined type when its sub-pattern narrows it, else null (the field keeps its declared type — a bind/wildcard/literal needs no narrowing). */
@@ -646,18 +650,17 @@ const genGuardArm = (
   return `.with((_v) => ${test}, ${handler})`;
 };
 
-const genWithArm = (p: NarrowingPattern, body: Expr, base: string | null, ctx: GenCtx): string => {
-  // Array/tuple/or arms always take the guard form (not matcher-object-able).
-  switch (p.kind) {
-    case "parr":
-    case "ptuple":
-    case "por":
-      return genGuardArm(p, body, undefined, base, ctx);
-    case "plit":
-    case "pbool":
-    case "pstr":
-      return `.with(${litValue(p)}, () => ${genLambdaBody(body, ctx)})`;
-    case "precord": {
+const genWithArm = (p: NarrowingPattern, body: Expr, base: string | null, ctx: GenCtx): string =>
+  match(p)
+    // Array/tuple/or arms always take the guard form (not matcher-object-able).
+    .withOneOf([{ kind: "parr" }, { kind: "ptuple" }, { kind: "por" }], (p) =>
+      genGuardArm(p, body, undefined, base, ctx),
+    )
+    .withOneOf(
+      [{ kind: "plit" }, { kind: "pbool" }, { kind: "pstr" }],
+      (p) => `.with(${litValue(p)}, () => ${genLambdaBody(body, ctx)})`,
+    )
+    .with({ kind: "precord" }, (p) => {
       if (!p.fields.every((f) => isFlatSub(f.pat)))
         return genGuardArm(p, body, undefined, base, ctx);
       const lits = p.fields.flatMap((f) =>
@@ -667,25 +670,25 @@ const genWithArm = (p: NarrowingPattern, body: Expr, base: string | null, ctx: G
       );
       const slot = patSlot(p, ctx);
       return `.with({ ${lits.join(", ")} }, ${slot === "" ? "()" : `(${slot})`} => ${genLambdaBody(body, ctx)})`;
-    }
-  }
-
-  // pctor — flat fast path keeps the readable matcher-object form.
-  if (!p.args.every(isFlatSub)) return genGuardArm(p, body, undefined, base, ctx);
-  const binds: string[] = []; // "value: r" (or "_0: r" positionally)
-  const litFields: string[] = []; // "value: 5" — narrows further
-  const keys = ctx.ctorKeys.get(p.ctor);
-  p.args.forEach((a, i) => {
-    const key = keys?.[i] ?? `_${i}`;
-    if (a.kind === "pbind") binds.push(keyedSlot(key, a.name));
-    else if (a.kind === "plit" || a.kind === "pbool" || a.kind === "pstr")
-      litFields.push(`${key}: ${litValue(a)}`);
-    // pwild → don't bind
-  });
-  const patObj = [`_tag: ${JSON.stringify(p.ctor)}`, ...litFields].join(", ");
-  const param = binds.length ? `({ ${binds.join(", ")} })` : "()";
-  return `.with({ ${patObj} }, ${param} => ${genLambdaBody(body, ctx)})`;
-};
+    })
+    .with({ kind: "pctor" }, (p) => {
+      // pctor — flat fast path keeps the readable matcher-object form.
+      if (!p.args.every(isFlatSub)) return genGuardArm(p, body, undefined, base, ctx);
+      const binds: string[] = []; // "value: r" (or "_0: r" positionally)
+      const litFields: string[] = []; // "value: 5" — narrows further
+      const keys = ctx.ctorKeys.get(p.ctor);
+      p.args.forEach((a, i) => {
+        const key = keys?.[i] ?? `_${i}`;
+        if (a.kind === "pbind") binds.push(keyedSlot(key, a.name));
+        else if (a.kind === "plit" || a.kind === "pbool" || a.kind === "pstr")
+          litFields.push(`${key}: ${litValue(a)}`);
+        // pwild → don't bind
+      });
+      const patObj = [`_tag: ${JSON.stringify(p.ctor)}`, ...litFields].join(", ");
+      const param = binds.length ? `({ ${binds.join(", ")} })` : "()";
+      return `.with({ ${patObj} }, ${param} => ${genLambdaBody(body, ctx)})`;
+    })
+    .exhaustive();
 
 /**
  * A variant decl has no runtime type in JS — it lowers to constructor
@@ -744,11 +747,10 @@ const genImport = (s: ImportStmt, ctx: GenCtx): string => {
   return `import { ${names} } from ${JSON.stringify(path)};`;
 };
 
-const genStmt = (s: Stmt, ctx: GenCtx): string => {
-  switch (s.kind) {
-    case "import":
-      return genImport(s, ctx);
-    case "type": {
+const genStmt = (s: Stmt, ctx: GenCtx): string =>
+  match(s)
+    .with({ kind: "import" }, (s) => genImport(s, ctx))
+    .with({ kind: "type" }, (s) => {
       const decls = genType(s, ctx);
       if (decls === "") return "";
       return s.exported
@@ -757,14 +759,16 @@ const genStmt = (s: Stmt, ctx: GenCtx): string => {
             .map((l) => `export ${l}`)
             .join("\n")
         : decls;
-    }
-    case "extern":
-      return s.exported ? `${genExtern(s)}\nexport { ${s.name} };` : genExtern(s);
-  }
-  const doExport = s.exported && !s.name.startsWith("$"); // never export destructure temps
-  const ann = ctx.annotateLet?.(s.name, s.value) ?? ""; // TS backend annotates; JS leaves bare
-  return `${doExport ? "export " : ""}const ${s.name}${ann} = ${genExpr(s.value, ctx)};`;
-};
+    })
+    .with({ kind: "extern" }, (s) =>
+      s.exported ? `${genExtern(s)}\nexport { ${s.name} };` : genExtern(s),
+    )
+    .with({ kind: "let" }, (s) => {
+      const doExport = s.exported && !s.name.startsWith("$"); // never export destructure temps
+      const ann = ctx.annotateLet?.(s.name, s.value) ?? ""; // TS backend annotates; JS leaves bare
+      return `${doExport ? "export " : ""}const ${s.name}${ann} = ${genExpr(s.value, ctx)};`;
+    })
+    .exhaustive();
 
 /**
  * Does the program need the `@onrails/pattern` import? Only if it has a match
@@ -773,7 +777,7 @@ const genStmt = (s: Stmt, ctx: GenCtx): string => {
  */
 const usesMatchLib = (e: Expr): boolean =>
   match(e)
-    .with({ kind: "num" }, { kind: "bool" }, { kind: "str" }, { kind: "ref" }, () => false)
+    .withOneOf([{ kind: "num" }, { kind: "bool" }, { kind: "str" }, { kind: "ref" }], () => false)
     .with({ kind: "interp" }, (i) => i.parts.some((p) => typeof p !== "string" && usesMatchLib(p)))
     .with({ kind: "call" }, (c) => usesMatchLib(c.fn) || c.args.some(usesMatchLib))
     .with({ kind: "lambda" }, (l) => usesMatchLib(l.body))
@@ -815,7 +819,7 @@ const usesMatchLib = (e: Expr): boolean =>
  */
 const exprRefs = (e: Expr, acc: Set<string>): void => {
   match(e)
-    .with({ kind: "num" }, { kind: "bool" }, { kind: "str" }, () => {})
+    .withOneOf([{ kind: "num" }, { kind: "bool" }, { kind: "str" }], () => {})
     .with({ kind: "interp" }, (i) => {
       for (const p of i.parts) if (typeof p !== "string") exprRefs(p, acc);
     })

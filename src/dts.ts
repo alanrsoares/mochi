@@ -152,7 +152,7 @@ export const emptyCollTs = (
  * TS type for an APPLIED parametric constructor call (`Ok(x)`, `Some(y)`) whose
  * result type is fully known, else null. A constructor's argument pins only the
  * type params it mentions; a phantom param (`Ok`'s error type, `Err`'s ok type)
- * stays free at the call, so tsc widens it to `unknown` — and in a ts-pattern arm
+ * stays free at the call, so tsc widens it to `unknown` — and in a @onrails/pattern arm
  * that then fails to unify with a sibling arm (`Ok("")` : `Result<string, unknown>`
  * vs the recursive branch's `Result<string, string>`; ADR 0043). Annotate the call
  * with its resolved concrete type (`Ok("") as Result<string, string>`) — the

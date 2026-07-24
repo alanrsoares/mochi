@@ -216,7 +216,7 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
   };
 
   // The concrete type each guard-form arm narrows FROM (ADR 0031). codegen turns
-  // it into a type-predicate guard so nested-pattern handlers narrow — ts-pattern
+  // it into a type-predicate guard so nested-pattern handlers narrow — @onrails/pattern
   // only refines handler input for `x is U` guards, not boolean ones.
   const guardBaseType = (scrutinee: Expr) => {
     const t = typeAt.get(`${scrutinee.span.start}:${scrutinee.span.end}`);
@@ -244,7 +244,7 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
 
   // An applied parametric ctor call (`Ok("")`, `Err(e)`): cast it to its resolved
   // concrete type so the phantom param the argument doesn't pin can't widen to
-  // `unknown` in a ts-pattern arm (ADR 0043). Per-node type table; `ctorCallTs`
+  // `unknown` in a @onrails/pattern arm (ADR 0043). Per-node type table; `ctorCallTs`
   // renders only a fully-concrete `con`, so calls in a generic position stay bare.
   const annotateCall = (e: Expr) => {
     const t = typeAt.get(`${e.span.start}:${e.span.end}`);

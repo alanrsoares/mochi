@@ -39,9 +39,9 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@onrails/maybe": "^0.2.3",
     "@onrails/pattern": "^0.3.2",
-    "@onrails/result": "^0.4.0",
-    "ts-pattern": "^5.9.0"
+    "@onrails/result": "^0.4.0"
   },
   "patchedDependencies": {
     "@onrails/pattern@0.3.2": "patches/@onrails%2Fpattern@0.3.2.patch"

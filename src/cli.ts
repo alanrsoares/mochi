@@ -78,9 +78,7 @@ if (cmd === "fmt") {
     process.exit(1);
   }
   const read = (p: string): Promise<string> => Bun.file(p).text();
-  const result = await (emitTs
-    ? buildModulesTs(entry, read)
-    : buildModules(entry, read));
+  const result = await (emitTs ? buildModulesTs(entry, read) : buildModules(entry, read));
   if (isErr(result)) {
     printDiags(result.error);
     process.exit(1);

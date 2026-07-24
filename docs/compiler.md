@@ -35,9 +35,8 @@ annotations pulled from the inference table; it does not re-emit — the two out
 byte-identical apart from the annotations TS adds. The result typechecks under
 `tsc --strict` with no `any` and no escape hatches.
 
-Two pattern-matching libraries live at different layers, and are not interchangeable:
-`ts-pattern`'s `.exhaustive()` runs *inside* the compiler (a missing `Expr` case is a TS
-error at build time), while `@onrails/pattern` is *emitted into* the user's JS.
+`@onrails/pattern`'s `.exhaustive()` runs *inside* the compiler (a missing `Expr`
+case is a TS error at build time) and is also *emitted into* the user's JS.
 
 ## Self-hosting
 

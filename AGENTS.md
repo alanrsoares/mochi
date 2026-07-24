@@ -49,8 +49,8 @@ string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck�
   becomes `Diagnostic` only at `infer.ts`'s `u()` seam (which attaches the span) — keep it.
 - **No throws** except `parser.ts`'s `ParseAbort` marker and one codegen invariant.
 - **`ResultAsync<T,E>`, never `Promise<Result<…>>`** (`no-promise-result.grit`).
-- **Two match libs, don't conflate:** `ts-pattern` `.exhaustive()` runs *inside* the
-  compiler (missing an `Expr` case = TS error); `@onrails/pattern` is *emitted* into user JS.
+- **One match lib:** `@onrails/pattern` `.exhaustive()` both *inside* the compiler
+  (missing an `Expr` case = TS error) and *emitted* into user JS.
 - **Spans travel** on every token/node/type — hover/diagnostics depend on it.
 - **Named types, not inline object params** (`no-inline-struct-type.grit`).
 - **Immutable data** — `prefer-immutable-{arrays,objects}.grit` (not enforced under tests).

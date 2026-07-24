@@ -5,7 +5,8 @@
  * typecheck succeeds.
  */
 import { resolve } from "node:path";
-import { isErr } from "@onrails/result";
+import { flatMap, fromNullable, map, match as matchMaybe, none, some } from "@onrails/maybe";
+import { isErr, isOk } from "@onrails/result";
 import { toTypedProgram, toTypedProgramWith } from "./compile";
 import type { InferResult, TypeAt } from "./infer";
 import { lex } from "./lexer";
@@ -14,6 +15,7 @@ import { parse } from "./parser";
 import { preludeNamespaces } from "./prelude";
 import { isPreludePath } from "./prelude-virtual";
 import type { Location, Span } from "./span";
+import { spanContainsClosed, tightestHit } from "./span";
 import {
   type Binding,
   emptyOrigins,
@@ -82,47 +84,42 @@ const indexModule = async (
   return indexSrc(path, src, origins);
 };
 
+/** Hit under `offset` in an index, or None. */
+const hitAt = (idx: SymbolIndex, offset: number) => fromNullable(idx.at(offset));
+
 /** Go-to-definition at `offset`. Unknown names → null; prelude → virtual Location. */
-export const definitionAt = (src: string, offset: number, path = "<buffer>"): Location | null => {
-  const idx = indexSrc(path, src);
-  if (!idx) return null;
-  const hit = idx.at(offset);
-  return hit ? hit.binding.def : null;
-};
+export const definitionAt = (src: string, offset: number, path = "<buffer>"): Location | null =>
+  matchMaybe(
+    flatMap(fromNullable(indexSrc(path, src)), (idx) => hitAt(idx, offset)),
+    (hit) => hit.binding.def,
+    () => null,
+  );
 
-/** Tightest inferred type span containing `offset` (ties → first). */
-const tightest = (types: TypeAt[], offset: number): TypeAt | null => {
-  let best: TypeAt | null = null;
-  for (const t of types) {
-    if (offset < t.span.start || offset > t.span.end) continue;
-    const width = t.span.end - t.span.start;
-    if (!best || width < best.span.end - best.span.start) best = t;
-  }
-  return best;
-};
+/** Tightest inferred type span containing `offset` (closed ends; ties → first). */
+const tightestType = (types: TypeAt[], offset: number) =>
+  tightestHit(types, offset, spanContainsClosed);
 
-/** Nominal type head (`Shape`, `Option`, …). Structural / primitives → null. */
-const nominalName = (t: Type): string | null => {
-  if (t.kind !== "con") return null;
-  // User + prelude types are Uppercase; skip `number`/`tuple`/`bool`/….
-  if (!/^[A-Z]/.test(t.name)) return null;
-  return t.name;
-};
+/** Nominal type head (`Shape`, `Option`, …). Structural / primitives → None. */
+const nominalName = (t: Type) =>
+  fromNullable(t.kind === "con" && /^[A-Z]/.test(t.name) ? t.name : null);
 
 const typeDefFrom = (
   res: InferResult,
   offset: number,
   idx: SymbolIndex,
   origins?: Origins,
-): Location | null => {
-  const hit = tightest(res.types, offset);
-  if (!hit) return null;
-  const name = nominalName(foldAliases(hit.type, res.aliases));
-  if (!name) return null;
-  // Prefer a binding in scope (local / imported / prelude); fall back to any
-  // export origin so go-to-type works when only ctors were imported.
-  return idx.binding("type", name)?.def ?? origins?.type.get(name) ?? null;
-};
+): Location | null =>
+  matchMaybe(
+    flatMap(tightestType(res.types, offset), (hit) =>
+      flatMap(nominalName(foldAliases(hit.type, res.aliases)), (name) =>
+        // Prefer a binding in scope (local / imported / prelude); fall back to any
+        // export origin so go-to-type works when only ctors were imported.
+        fromNullable(idx.binding("type", name)?.def ?? origins?.type.get(name) ?? null),
+      ),
+    ),
+    (loc) => loc,
+    () => null,
+  );
 
 /**
  * Go-to-type at `offset`: jump to the nominal type decl of the expression under
@@ -137,8 +134,7 @@ export const typeDefinitionAt = (
   const idx = indexSrc(path, src);
   if (!idx) return null;
   const typed = toTypedProgram(src, { open: true, namespaces: preludeNamespaces });
-  if (isErr(typed)) return null;
-  return typeDefFrom(typed.value.res, offset, idx);
+  return isOk(typed) ? typeDefFrom(typed.value.res, offset, idx) : null;
 };
 
 /** Module-aware go-to-type (imported variants/aliases via export origins). */
@@ -164,8 +160,7 @@ export const moduleTypeDefinitionAt = async (
   if (isErr(ctx)) return typeDefinitionAt(src, offset, entry);
 
   const typed = toTypedProgramWith(parsed.value, ctx.value);
-  if (isErr(typed)) return null;
-  return typeDefFrom(typed.value.res, offset, idx, origins);
+  return isOk(typed) ? typeDefFrom(typed.value.res, offset, idx, origins) : null;
 };
 
 export const moduleDefinitionAt = async (
@@ -173,34 +168,40 @@ export const moduleDefinitionAt = async (
   src: string,
   offset: number,
   readFile: ReadFile,
-): Promise<Location | null> => {
-  const idx = await indexModule(path, src, readFile);
-  if (!idx) return null;
-  const hit = idx.at(offset);
-  return hit ? hit.binding.def : null;
-};
+): Promise<Location | null> =>
+  matchMaybe(
+    flatMap(fromNullable(await indexModule(path, src, readFile)), (idx) => hitAt(idx, offset)),
+    (hit) => hit.binding.def,
+    () => null,
+  );
 
 /** Document highlights for the binding under `offset` (occurrences in this file). */
-export const highlightsAt = (src: string, offset: number, path = "<buffer>"): Highlight[] => {
-  const idx = indexSrc(path, src);
-  if (!idx) return [];
-  const hit = idx.at(offset);
-  if (!hit) return [];
-  return idx.occurrences(hit.binding).map((o: Occurrence) => ({ span: o.span, role: o.role }));
-};
+export const highlightsAt = (src: string, offset: number, path = "<buffer>"): Highlight[] =>
+  matchMaybe(
+    flatMap(fromNullable(indexSrc(path, src)), (idx) =>
+      map(hitAt(idx, offset), (hit) =>
+        idx.occurrences(hit.binding).map((o: Occurrence) => ({ span: o.span, role: o.role })),
+      ),
+    ),
+    (hs) => hs,
+    () => [],
+  );
 
 export const moduleHighlightsAt = async (
   path: string,
   src: string,
   offset: number,
   readFile: ReadFile,
-): Promise<Highlight[]> => {
-  const idx = await indexModule(path, src, readFile);
-  if (!idx) return [];
-  const hit = idx.at(offset);
-  if (!hit) return [];
-  return idx.occurrences(hit.binding).map((o) => ({ span: o.span, role: o.role }));
-};
+): Promise<Highlight[]> =>
+  matchMaybe(
+    flatMap(fromNullable(await indexModule(path, src, readFile)), (idx) =>
+      map(hitAt(idx, offset), (hit) =>
+        idx.occurrences(hit.binding).map((o) => ({ span: o.span, role: o.role })),
+      ),
+    ),
+    (hs) => hs,
+    () => [],
+  );
 
 /** Ensure the def Location is present (prelude defs live outside the file index). */
 const withDefRef = (binding: Binding, refs: Ref[]): Ref[] => {
@@ -209,17 +210,20 @@ const withDefRef = (binding: Binding, refs: Ref[]): Ref[] => {
 };
 
 /** Find-all-references for the binding under `offset` (this file only). */
-export const referencesAt = (src: string, offset: number, path = "<buffer>"): Ref[] => {
-  const idx = indexSrc(path, src);
-  if (!idx) return [];
-  const hit = idx.at(offset);
-  if (!hit) return [];
-  const refs = idx.occurrences(hit.binding).map((o) => ({
-    location: { path: resolve(path), span: o.span },
-    role: o.role,
-  }));
-  return withDefRef(hit.binding, refs);
-};
+export const referencesAt = (src: string, offset: number, path = "<buffer>"): Ref[] =>
+  matchMaybe(
+    flatMap(fromNullable(indexSrc(path, src)), (idx) =>
+      map(hitAt(idx, offset), (hit) => {
+        const refs = idx.occurrences(hit.binding).map((o) => ({
+          location: { path: resolve(path), span: o.span },
+          role: o.role,
+        }));
+        return withDefRef(hit.binding, refs);
+      }),
+    ),
+    (refs) => refs,
+    () => [],
+  );
 
 const collectGraphRefs = async (
   entryPath: string,
@@ -275,12 +279,13 @@ export const moduleReferencesAt = async (
   readFile: ReadFile,
 ): Promise<Ref[]> => {
   const entryPath = resolve(path);
-  const idx = await indexModule(entryPath, src, readFile);
-  if (!idx) return [];
-  const hit = idx.at(offset);
+  const hit = matchMaybe(
+    flatMap(fromNullable(await indexModule(entryPath, src, readFile)), (idx) => hitAt(idx, offset)),
+    (h) => h,
+    () => null,
+  );
   if (!hit) return [];
-  const refs = await collectGraphRefs(entryPath, src, hit.binding, readFile);
-  return withDefRef(hit.binding, refs);
+  return withDefRef(hit.binding, await collectGraphRefs(entryPath, src, hit.binding, readFile));
 };
 
 const isRenameableName = (name: string): boolean =>
@@ -293,26 +298,32 @@ export const prepareRenameAt = (
   src: string,
   offset: number,
   path = "<buffer>",
-): { span: Span; name: string } | null => {
-  const idx = indexSrc(path, src);
-  if (!idx) return null;
-  const hit = idx.at(offset);
-  if (!hit || !canRename(hit.binding)) return null;
-  return { span: hit.span, name: hit.binding.name };
-};
+): { span: Span; name: string } | null =>
+  matchMaybe(
+    flatMap(fromNullable(indexSrc(path, src)), (idx) =>
+      flatMap(hitAt(idx, offset), (hit) =>
+        canRename(hit.binding) ? some({ span: hit.span, name: hit.binding.name }) : none(),
+      ),
+    ),
+    (prep) => prep,
+    () => null,
+  );
 
 export const modulePrepareRenameAt = async (
   path: string,
   src: string,
   offset: number,
   readFile: ReadFile,
-): Promise<{ span: Span; name: string } | null> => {
-  const idx = await indexModule(path, src, readFile);
-  if (!idx) return null;
-  const hit = idx.at(offset);
-  if (!hit || !canRename(hit.binding)) return null;
-  return { span: hit.span, name: hit.binding.name };
-};
+): Promise<{ span: Span; name: string } | null> =>
+  matchMaybe(
+    flatMap(fromNullable(await indexModule(path, src, readFile)), (idx) =>
+      flatMap(hitAt(idx, offset), (hit) =>
+        canRename(hit.binding) ? some({ span: hit.span, name: hit.binding.name }) : none(),
+      ),
+    ),
+    (prep) => prep,
+    () => null,
+  );
 
 /** Rename the binding under `offset` to `newName`. Same-file only. */
 export const renameAt = (
@@ -322,12 +333,16 @@ export const renameAt = (
   path = "<buffer>",
 ): RenameEdit[] | null => {
   if (!isRenameableName(newName)) return null;
-  const idx = indexSrc(path, src);
-  if (!idx) return null;
-  const hit = idx.at(offset);
-  if (!hit || !canRename(hit.binding)) return null;
-  if (hit.binding.name === newName) return [];
-  return idx.occurrences(hit.binding).map((o) => ({
+  const hit = matchMaybe(
+    flatMap(fromNullable(indexSrc(path, src)), (idx) =>
+      map(hitAt(idx, offset), (h) => ({ idx, hit: h })),
+    ),
+    (x) => x,
+    () => null,
+  );
+  if (!hit || !canRename(hit.hit.binding)) return null;
+  if (hit.hit.binding.name === newName) return [];
+  return hit.idx.occurrences(hit.hit.binding).map((o) => ({
     location: { path: resolve(path), span: o.span },
     newText: newName,
   }));
@@ -342,12 +357,15 @@ export const moduleRenameAt = async (
   readFile: ReadFile,
 ): Promise<RenameEdit[] | null> => {
   if (!isRenameableName(newName)) return null;
-  const idx = await indexModule(path, src, readFile);
-  if (!idx) return null;
-  const hit = idx.at(offset);
+  const entryPath = resolve(path);
+  const hit = matchMaybe(
+    flatMap(fromNullable(await indexModule(path, src, readFile)), (idx) => hitAt(idx, offset)),
+    (h) => h,
+    () => null,
+  );
   if (!hit || !canRename(hit.binding)) return null;
   if (hit.binding.name === newName) return [];
-  const refs = await collectGraphRefs(resolve(path), src, hit.binding, readFile);
+  const refs = await collectGraphRefs(entryPath, src, hit.binding, readFile);
   return refs.map((r) => ({ location: r.location, newText: newName }));
 };
 
