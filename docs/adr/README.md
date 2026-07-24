@@ -42,3 +42,4 @@ What else was on the table and why not.
 | [0002](0002-namespace-imports.md) | Namespace imports (`import * as`) | Accepted |
 | [0003](0003-rich-diagnostics.md) | Rich diagnostics in the compiler | Accepted |
 | [0004](0004-multi-error-diagnostics.md) | Multi-error diagnostics (check + infer) | Accepted |
+| [0005](0005-prelude-task.md) | Prelude `Task` (lazy async values) | Accepted |

@@ -135,10 +135,18 @@ errors) share one compiler-side model — the LSP stays a thin adapter (ADR 0003
 
 ## Effects — a convention, not a feature
 
-mochi's type system does **not** track effects. There is no effect row, no `IO`/`Task`
-type the checker enforces. The discipline is: an effectful `extern` *should* be typed to
-return `Task a`, and effects stay at the FFI boundary. This is unenforceable mechanically
-(the compiler can't inspect a JS export's body) and is deliberate (ADR 0004).
+mochi's type system does **not** track effects. There is no effect row and no checker
+rule that forces effectful work into `Task`. The discipline is: effectful `extern`s
+*should* return `Task a`, and effects stay at the FFI boundary. That is unenforceable
+mechanically (the compiler can't inspect a JS export's body) and deliberate
+([ADR 0005](docs/adr/0005-prelude-task.md)).
+
+- **Task** — opaque applied constructor for a lazy async computation
+  (`() => Promise<a>` at runtime). Prelude namespace `Task.of` / `Task.map` /
+  `Task.andThen` / `Task.delay` / `Task.run`. Not a tagged variant; not switchable.
+  `Task.run` is the only kick-off and yields a host **Promise** (also an open
+  applied ctor at the type level). Domain IO remains `extern`; sequencing uses
+  `Task.*`.
 
 ## Extern / FFI
 
