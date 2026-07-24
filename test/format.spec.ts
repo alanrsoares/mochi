@@ -199,3 +199,7 @@ test("a trailing comment on a `let … in` value keeps `in` before the comment",
   expect(once).toContain(" in // note");
   expect(fmt(once)).toBe(once); // idempotent — and re-parses
 });
+
+test("composition operator >> refolds correctly when formatted", () => {
+  expect(fmt("let f = a >> b")).toBe("let f = a >> b\n");
+});

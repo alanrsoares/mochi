@@ -561,6 +561,23 @@ const pipeD = (e: PipeExpr): Doc => {
 // body reads as a block. A `switch` is the exception: it opens its own block
 // right after the arrow (`xs => switch xs {`), so it stays attached.
 const lambdaD = (e: LambdaExpr): Doc => {
+  // Refold composition: `($x) => g(f($x))` -> `f >> g`
+  if (
+    e.params.length === 1 &&
+    e.params[0]!.kind === "name" &&
+    e.params[0]!.name === "$x" &&
+    e.body.kind === "call" &&
+    e.body.args.length === 1 &&
+    e.body.args[0]!.kind === "call" &&
+    e.body.args[0]!.args.length === 1 &&
+    e.body.args[0]!.args[0]!.kind === "ref" &&
+    e.body.args[0]!.args[0]!.name === "$x"
+  ) {
+    const left = e.body.args[0]!.fn;
+    const right = e.body.fn;
+    return group(seq(operandD(left), txt(" >> "), operandD(right)));
+  }
+
   const head = txt(`${params(e.params)} =>`);
   // A switch body attaches to the arrow (`xs => switch xs {`) — unless it
   // carries a leading comment, which forces it onto its own indented line.
@@ -619,13 +636,33 @@ const mapD = (e: MapExpr): Doc =>
 
 const fieldD = (e: FieldExpr): Doc => seq(memberD(e.target), txt(`.${e.name}`));
 
-// `let (a, b) = e in body` / `let { x } = e in body` desugars to an applied
-// lambda with a destructuring param (ADR 0011). Re-fold that surface `let`
-// rather than leak the IIFE `(((a, b)) => body)(e)`.
-const refoldLetIn = (e: CallExpr): Doc | null => {
-  if (e.args.length !== 1 || e.fn.kind !== "lambda" || e.fn.params.length !== 1) return null;
-  const p = e.fn.params[0]!;
-  return p.kind === "name" ? null : letLikeD(`let ${param(p)}`, e.args[0]!, e.fn.body);
+// Re-fold desugared infix/prefix/destructure calls back to surface syntax.
+const refoldCall = (e: CallExpr): Doc | null => {
+  // Destructuring let-in: IIFE `(((a, b)) => body)(e)` -> `let (a, b) = e in body`
+  if (e.args.length === 1 && e.fn.kind === "lambda" && e.fn.params.length === 1) {
+    const p = e.fn.params[0]!;
+    if (p.kind !== "name") return letLikeD(`let ${param(p)}`, e.args[0]!, e.fn.body);
+  }
+
+  // Refold composition: `($x) => g(f($x))` -> `f >> g`
+  if (
+    e.fn.kind === "lambda" &&
+    e.fn.params.length === 1 &&
+    e.fn.params[0]!.kind === "name" &&
+    e.fn.params[0]!.name === "$x" &&
+    e.fn.body.kind === "call" &&
+    e.fn.body.args.length === 1 &&
+    e.fn.body.args[0]!.kind === "call" &&
+    e.fn.body.args[0]!.args.length === 1 &&
+    e.fn.body.args[0]!.args[0]!.kind === "ref" &&
+    e.fn.body.args[0]!.args[0]!.name === "$x"
+  ) {
+    const left = e.fn.body.args[0]!.fn;
+    const right = e.fn.body.fn;
+    return group(seq(operandD(left), txt(" >> "), operandD(right)));
+  }
+
+  return null;
 };
 
 // `f(a, b)`. When the last argument is a lambda, keep `f(…, p =>` on the line
@@ -633,7 +670,7 @@ const refoldLetIn = (e: CallExpr): Doc | null => {
 // than exploding the whole argument list. Otherwise the args are one group that
 // breaks one-per-line when it overflows.
 const callD = (e: CallExpr): Doc => {
-  const refold = refoldLetIn(e);
+  const refold = refoldCall(e);
   if (refold) return refold;
   const fn = calleeD(e.fn);
   if (e.args.length === 0) return seq(fn, txt("()"));
