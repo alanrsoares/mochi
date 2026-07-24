@@ -19,6 +19,8 @@ type AlResult = { _tag: "Ok"; value: string } | { _tag: "Err"; error: string };
 // Compile io-demo.mochi, drop the extern `import` (injected as params instead),
 // and eval. All prelude runtime (Array.get, Some/None, Str.concat…) is inlined
 // by `compile` with useRuntime on; only the host externs are imports.
+// Multi-arg externs lower to `import { f as $f }` + `const f = _curry(n, $f)`, so
+// inject the raw host under `$writeFile` and leave the wrap in place.
 const buildDemo = (): { run: (args: string[]) => AlResult } => {
   const js = unwrapOk(compile(readFileSync(join(root, "bootstrap/io-demo.mochi"), "utf8")))
     .replace(/^import .*$/gm, "") // host externs + match lib injected as params
@@ -26,7 +28,7 @@ const buildDemo = (): { run: (args: string[]) => AlResult } => {
   return new Function(
     "match",
     "readFile",
-    "writeFile",
+    "$writeFile",
     "argv",
     "print",
     `"use strict";\n${js}\nreturn { run };`,

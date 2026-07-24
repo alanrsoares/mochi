@@ -153,6 +153,10 @@ mechanically (the compiler can't inspect a JS export's body) and deliberate
 - Surface: `extern name : type = "module" "export"`.
 - Lowers to `import { <export> as <name> } from "<module>";` (bare `import { name }` if
   they match), plus `export { name };` if the extern is exported.
+- Arity ≥ 2 signatures are wrapped with `_curry(n, …)` at the import binding so host
+  functions written as flat `(a, b) => …` work with mochi’s multi-arg call emit
+  (`f(a, b)` and partial `f(a)`). Prefer flat hosts; nested-curried hosts break under
+  the wrap.
 
 ## Module graph (`src/module.ts`)
 

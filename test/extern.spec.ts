@@ -110,6 +110,37 @@ test("a differently-named export emits an aliased import", () => {
   );
 });
 
+test("multi-arg extern import is _curry-wrapped", () => {
+  const out = js(`extern draw : string -> string -> number = "./u.js" "draw"`);
+  expect(out).toContain('import { draw as $draw } from "./u.js";');
+  expect(out).toContain("const draw = _curry(2, $draw);");
+  expect(out).toContain("const _curry =");
+});
+
+test("aliased multi-arg extern still wraps under the surface name", () => {
+  const out = js(`extern paint : string -> string -> number = "./u.js" "draw"`);
+  expect(out).toContain('import { draw as $paint } from "./u.js";');
+  expect(out).toContain("const paint = _curry(2, $paint);");
+});
+
+test("flat multi-arg host survives multi-arg emit and partial application", () => {
+  const src = `extern add2 : number -> number -> number = "./u.js" "add2"
+let a = add2(10, 32)
+let b = add2(10)(32)`;
+  const code = unwrapOk(compile(src)).replace(
+    /import \{ add2 as \$add2 \} from "[^"]+";/,
+    "const $add2 = (x, y) => x + y;",
+  );
+  const out = new Function(`${code}\nreturn { a, b };`)() as { a: number; b: number };
+  expect(out).toEqual({ a: 42, b: 42 });
+});
+
+test("exported multi-arg extern wraps then re-exports the local binding", () => {
+  const out = js(`export extern draw : string -> string -> number = "./u.js" "draw"`);
+  expect(out).toContain("const draw = _curry(2, $draw);");
+  expect(out).toContain("export { draw };");
+});
+
 test("an extern is usable and type-checked at its call sites", () => {
   const src = `extern triple : number -> number = "./u.js" "triple"\nlet a = triple(7)`;
   expect(isErr(compile(src))).toBe(false);

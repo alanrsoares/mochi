@@ -22,11 +22,16 @@ import type {
   Pattern,
   Program,
   Stmt,
+  TypeExpr,
   TypeStmt,
 } from "./ast";
 import { ctorTableOf, keysOf } from "./ctors";
 import { namespaceRuntime, preludeJsDefs, runtimeDeps } from "./prelude";
 import type { Span } from "./span";
+
+/** Top-level arrow spine length of a surface type (`a -> b -> c` → 2). */
+const typeExprArity = (te: TypeExpr): number =>
+  te.kind === "tarrow" ? 1 + typeExprArity(te.to) : 0;
 
 /** A `Ns.member` access on a bare namespace ref (`List.map`) → the JS identifier its runtime is defined under, or null if it isn't a namespace access. */
 const nsRuntimeId = (e: FieldExpr): string | null =>
@@ -730,10 +735,21 @@ const genType = (s: TypeStmt, ctx: GenCtx): string =>
     })
     .join("\n");
 
-/** extern → an ESM import binding the external export to the mochi name. */
+/**
+ * extern → ESM import. Arity ≥ 2 wraps the host export in `_curry` so flat
+ * `(a, b) => …` hosts survive mochi's multi-arg call emit (ADR 0005 / #24).
+ * The raw import is aliased to `$name` so the local binding stays the surface name.
+ */
 const genExtern = (s: ExternStmt): string => {
-  const spec = s.imported === s.name ? s.name : `${s.imported} as ${s.name}`;
-  return `import { ${spec} } from ${JSON.stringify(s.module)};`;
+  const arity = typeExprArity(s.typeExpr);
+  if (arity < 2) {
+    const spec = s.imported === s.name ? s.name : `${s.imported} as ${s.name}`;
+    return `import { ${spec} } from ${JSON.stringify(s.module)};`;
+  }
+  const raw = `$${s.name}`;
+  const importLine = `import { ${s.imported} as ${raw} } from ${JSON.stringify(s.module)};`;
+  const wrapLine = `const ${s.name} = _curry(${arity}, ${raw});`;
+  return `${importLine}\n${wrapLine}`;
 };
 
 /**
@@ -925,6 +941,8 @@ export const collectRuntimeDeps = (prog: Program): string[] => {
     // A multi-field constructor lowers to `_curry(...)` in genType (which
     // exprRefs never walks), so seed the dep here.
     else if (s.kind === "type" && s.ctors.some((c) => c.fields.length >= 2)) refs.add("_curry");
+    // Multi-arg externs wrap the host import in `_curry` (genExtern).
+    else if (s.kind === "extern" && typeExprArity(s.typeExpr) >= 2) refs.add("_curry");
   }
   // Transitively pull in each referenced def's runtime deps (`range` → `_list`,
   // `_Map_get` → Some/None, …). A forward cursor over a push-only worklist
