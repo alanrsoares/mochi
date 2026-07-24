@@ -11,20 +11,28 @@ type Color =
   | Green
   | Blue
 
+type Option a =
+  | Some(value: a)
+  | None
+
+type Result a e =
+  | Ok(value: a)
+  | Err(error: e)
+
 // --- lambdas + pipelines ---
 /// Doubles a number.
-let double = x => mul(x, 2)
-let inc = x => add(x, 1)
+let double = x => x * 2
+let inc = x => x + 1
 let pipeline = 5 |> double |> inc |> double
 
 // --- multi-arg lambda ---
-let hypot = (a, b) => sqrt(add(square(a), square(b)))
+let hypot = (a, b) => sqrt(square(a) + square(b))
 
 // --- pattern matching: exhaustive over a variant ---
 let area = shape => switch shape {
-  | Circle(r) => mul(pi, square(r))
-  | Rect(w, h) => mul(w, h)
-  | Triangle(b, h) => mul(0.5, mul(b, h))
+  | Circle(r) => pi * square(r)
+  | Rect(w, h) => w * h
+  | Triangle(b, h) => 0.5 * (b * h)
 }
 
 // --- wildcard catch-all ---
@@ -42,8 +50,8 @@ let report = shape => shape |> area |> format
 // --- mutual recursion: isEven calls isOdd, defined AFTER it ---
 // Top-level bindings are grouped into recursive components and inferred
 // together, so forward and mutual references type-check (both : number -> bool).
-let isEven = n => switch n { | 0 => true | _ => isOdd(sub(n, 1)) }
-let isOdd = n => switch n { | 0 => false | _ => isEven(sub(n, 1)) }
+let isEven = n => switch n { | 0 => true | _ => isOdd(n - 1) }
+let isOdd = n => switch n { | 0 => false | _ => isEven(n - 1) }
 
 // --- list literals: homogeneous, inferred as [elem] ---
 // `[1, 2, 3]` is a JS array at runtime; the inferencer requires every element
@@ -55,9 +63,9 @@ let empty = []
 // --- prelude list utilities (ported from prelude-js), data-last + curried ---
 // map/filter/reduce/length take the list LAST, so they slot into a `|>` chain.
 // [1,2,3,4] -> double -> [2,4,6,8] -> keep >4 -> [6,8] -> sum -> 14
-let dbl = x => mul(x, 2)
-let over4 = x => gt(x, 4)
-let plus = a => b => add(a, b)
+let dbl = x => x * 2
+let over4 = x => x > 4
+let plus = a => b => a + b
 let total = [1, 2, 3, 4] |> map(dbl) |> filter(over4) |> reduce(plus)(0)
 let count = nums |> length
 let shout = capitalize("hello")
@@ -65,10 +73,7 @@ let shout = capitalize("hello")
 // --- list destructuring in switch: [], [x], [head, ...tail] ---
 // The ML idiom: an empty-list arm plus a single-head cons arm is exhaustive
 // (covers length 0 and length >= 1). `sum` recurses down the tail.
-let sum = xs => switch xs {
-  | [] => 0
-  | [head, ...tail] => add(head, sum(tail))
-}
+let sum = xs => switch xs { | [] => 0 | [head, ...tail] => head + sum(tail) }
 let listTotal = sum([1, 2, 3, 4]) // 10
 
 // fixed-length arms narrow by exact length; `_` catches the rest
@@ -85,37 +90,37 @@ let describeList = xs => switch xs {
 // the List sigil. Map has its own literal `#{...}`; Set has no literal sigil.
 let ns = @{1, 2, 3} // List number  (lazy)
 let firstThree = range(0)(100) |> take(3) // 0..99 built lazily, only 3 forced
-let evens = iterate(x => add(x, 2))(0) // INFINITE: 0, 2, 4, 6, ...
+let evens = iterate(x => x + 2)(0) // INFINITE: 0, 2, 4, 6, ...
 let evens5 = evens |> take(5) |> toArray // [0, 2, 4, 6, 8] — take makes it safe
-let small = range(0)(100) |> takeWhile(x => lt(x, 4)) |> toArray // [0, 1, 2, 3]
+let small = range(0)(100) |> takeWhile(x => x < 4) |> toArray // [0, 1, 2, 3]
 
 // destructuring a List: the same ML idiom as Array, but pull-based. The empty
 // `@{}` arm plus a single-head cons `@{head, ...tail}` is total; `tail` is the
 // lazy remainder, so recursion consumes the sequence one element at a time.
 let sumList = xs => switch xs {
   | @{} => 0
-  | @{head, ...tail} => add(head, sumList(tail))
+  | @{head, ...tail} => head + sumList(tail)
 }
 let listSum = sumList(@{1, 2, 3, 4}) // 10
 
 // lazy patterns reach Array parity: fixed-length (`@{x}`), multi-head cons
 // (`@{a, b, ...t}`), and literal heads all work — the matcher pulls only the
 // bounded prefix each arm needs (never forcing the whole sequence).
-let describe = xs => switch xs {
+let describeLazy = xs => switch xs {
   | @{} => 0
   | @{0, ...rest} => 1 // starts with a literal 0
   | @{only} => 2 // exactly one element
   | @{a, b, ...t} => 3 // two or more
 }
-let shape = describe(@{5, 6, 7}) // 3
+let shape = describeLazy(@{5, 6, 7}) // 3
 
 // --- qualified collection namespaces: `List.map`, `Array.map` ---
 // No overloading, so each collection carries its own ops. `List.*` transformers
 // stay lazy and FUSE — `map |> filter` builds no intermediate array; nothing is
 // computed until `toArray` (or a `take`) pulls. `Array.*` mirror the eager
 // unqualified `map`/`filter`. `List`/`Array`/`Set`/`Map` are reserved names.
-let triple = x => mul(x, 3)
-let over6 = x => gt(x, 6)
+let triple = x => x * 3
+let over6 = x => x > 6
 let fused = @{1, 2, 3, 4}
   |> List.map(triple)
   |> List.filter(over6)
@@ -151,7 +156,7 @@ let names = Map.keys(ages) // ["alice", "bob"]
 // --- prelude: Math, String (`Str.*`), grown Array, builtin Option ---
 // Math ops are unqualified (like add/sub); String is the `Str.*` namespace.
 let clamped = max(0, min(100, 137)) // 100
-let modulo = mod(negate(1), 3) // 2 — true modulo (sign of divisor)
+let modulo = -1 % 3 // 2 — true modulo (sign of divisor)
 let slug = "  Hello World  "
   |> Str.trim
   |> Str.toLower
@@ -169,12 +174,9 @@ let firstName = Array.head(names) // Option string
 // eq/compare work at ANY type by deep structural walk — the pragmatic bridge
 // instead of typeclasses (keeps the emitted JS free of hidden dictionaries).
 // The -By family takes an explicit projection = dictionary-passing by hand.
-let sameRec = eq(
-  { x: 1, y: 2 },
-  { x: 1, y: 2 }
-) // true — structural, not by ref
+let sameRec = { x: 1, y: 2 } == { x: 1, y: 2 } // true — structural, not by ref
 let sorted = Array.sort([3, 1, 2]) // [1, 2, 3]
-let byMod = Array.sortBy(x => mod(x, 3))([5, 3, 7]) // sort by x % 3
+let byMod = Array.sortBy(x => x % 3)([5, 3, 7]) // sort by x % 3
 let unique = Array.dedupe([1, 1, 2, 3, 3]) // [1, 2, 3]
 let member = Array.contains({ id: 2 })([{ id: 1 }, { id: 2 }]) // true
 
@@ -193,8 +195,8 @@ let origin = { x: 0.0, y: 0.0 }
 let getX = p => p.x
 // destructuring lambda param: pulls x, y straight out of the argument record
 let dist2 = ({ x, y }) => hypot(x, y)
-let translate = (p, dx, dy) => { x: add(p.x, dx), y: add(p.y, dy) }
-let dist = (a, b) => hypot(sub(b.x, a.x), sub(b.y, a.y))
+let translate = (p, dx, dy) => { x: p.x + dx, y: p.y + dy }
+let dist = (a, b) => hypot(b.x - a.x, b.y - a.y)
 
 // duck typing: distTo works on ANY record with x and y — regardless of
 // what else it carries. (Enforced by the HM inferencer, next slice.)
@@ -223,20 +225,6 @@ let corner = { x: 3.0, y: 4.0 }
 let { x, y } = corner
 let cornerDist = hypot(x, y)
 
-// --- parametric variants: generic sum types ---
-// Type parameters follow the name, ML-style. Constructors are inferred
-// polymorphic: Ok : a -> Result<a, e>, Err : e -> Result<a, e>.
-// Named fields (`value`/`error`) make the runtime shape identical to
-// @onrails/result + @onrails/maybe, so mochi values flow straight through
-// their combinators (map/flatMap/unwrapOr) at the JS boundary.
-type Result a e =
-  | Ok(value: a)
-  | Err(error: e)
-
-type Option a =
-  | Some(value: a)
-  | None
-
 // --- railway-oriented programming: combinators over Result ---
 // Curried on purpose (f => r => ...), so partial application composes with the
 // `|>` pipe — the essence of ROP. Inferred types:
@@ -254,13 +242,12 @@ let unwrapOr = fallback => r => switch r { | Ok(v) => v | Err(e) => fallback }
 // --- boolean-literal patterns: branch on a predicate ---
 // `switch` arms match `true`/`false` directly, so predicate branching needs no
 // if-expression: exhaustiveness requires both arms (or a catch-all).
-let parity = n => switch eq(mod(n, 2), 0) { | true => even | false => odd }
+let parity = n => switch n % 2 == 0 { | true => even | false => odd }
 
 // --- local bindings: `let x = value in body` (ADR 0009) ---
 // Non-recursive, let-polymorphic, scoped to `body`. Chains flatten (each `in`
 // continues at the same depth), so functions can name intermediates.
-let norm = (a, b) =>
-  let a2 = square(a) in let b2 = square(b) in sqrt(add(a2, b2))
+let norm = (a, b) => let a2 = square(a) in let b2 = square(b) in sqrt(a2 + b2)
 
 // --- tuples: literal, switch pattern, and binding sugar (ADR 0010/0011) ---
 // `(a, b)` is a real product type erasing to a JS array. Destructure in switch,
@@ -269,13 +256,13 @@ let norm = (a, b) =>
 let pairUp = (x, y) => (x, y)
 let swap = ((a, b)) => (b, a)
 let takeFst = p => switch p { | (f, _) => f }
-let sumPair = p => let (a, b) = p in add(a, b)
+let sumPair = p => let (a, b) = p in a + b
 
 // --- a railway: chain steps that each may fail, short-circuit on Err ---
 // Each step returns a Result; flatMapOk stays on the happy track and skips the
 // rest the moment a step yields Err.
-let addOne = n => Ok(add(n, 1))
-let halve = n => Ok(div(n, 2))
+let addOne = n => Ok(n + 1)
+let halve = n => Ok(n / 2)
 
 // happy track: Ok(41) -> Ok(42) -> Ok(21) -> 21
 let happy = Ok(41) |> flatMapOk(addOne) |> flatMapOk(halve)
