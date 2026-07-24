@@ -30,7 +30,7 @@ bun run bootstrap:tsc  # count tsc --strict errors on the self-host (north-star:
 ```
 
 Individual pieces: `test`, `typecheck`, `lint` / `lint:fix`, `format`, `loc`,
-`gen:prelude` / `gen:runtime` (regenerate the parity-guarded shims), `fmt:al` (dogfood
+`gen:prelude` / `gen:runtime` (regenerate the parity-guarded shims), `fmt:mochi` (dogfood
 the `.mochi` formatter on `bootstrap/`), `build:ext` (VS Code extension).
 
 ## Editor surfaces

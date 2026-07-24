@@ -18,7 +18,7 @@
     "gen:prelude": "bun scripts/gen-prelude.ts",
     "gen:runtime": "bun scripts/gen-runtime.ts",
     "bootstrap:tsc": "bun scripts/bootstrap-tsc.ts",
-    "fmt:al": "bun scripts/fmt-al.ts",
+    "fmt:mochi": "bun scripts/fmt-al.ts",
     "fmt:check": "bun scripts/fmt-al.ts --check",
     "fixpoint": "bun scripts/fixpoint.ts",
     "clean": "bun scripts/clean.ts",

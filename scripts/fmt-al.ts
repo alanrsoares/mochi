@@ -35,7 +35,7 @@ for (const f of files) {
 
 if (check && drift.length) {
   console.error(
-    `unformatted .mochi files (run \`bun run fmt:al\`):\n${drift.map((f) => `  ${f}`).join("\n")}`,
+    `unformatted .mochi files (run \`bun run fmt:mochi\`):\n${drift.map((f) => `  ${f}`).join("\n")}`,
   );
   process.exit(1);
 }
