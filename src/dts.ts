@@ -109,13 +109,16 @@ function tsRow(row: Row, names: Map<number, string>): string {
   // A quantified rvar carries a letter (via genericNames); an unbound one (no
   // generic head to scope it — non-lambda bindings) falls back to the closed
   // record, matching the pre-0034 behavior.
-  if (cur.kind === "rvar") {
-    const g = names.get(cur.id);
-    // Parenthesize: `&` binds looser than the `[]` an array wrapper appends, so
-    // a bare `{…} & R` element would mis-parse as `{…} & (R[])`.
-    if (g) return fields.length === 0 ? g : `({ ${fields.join("; ")} } & ${g})`;
-  }
-  return body;
+  return match(cur)
+    .with({ kind: "empty" }, () => body)
+    .with({ kind: "rvar" }, (rvar) => {
+      const g = names.get(rvar.id);
+      // Parenthesize: `&` binds looser than the `[]` an array wrapper appends, so
+      // a bare `{…} & R` element would mis-parse as `{…} & (R[])`.
+      if (g) return fields.length === 0 ? g : `({ ${fields.join("; ")} } & ${g})`;
+      return body;
+    })
+    .exhaustive();
 }
 
 /** True when a (zonked) type still carries an unbound type or row var — i.e. it is NOT fully concrete. `tsOf` would render such a var as `unknown`. */
@@ -130,7 +133,10 @@ function hasFreeVar(t: Type): boolean {
         if (hasFreeVar(row.type)) return true;
         row = row.rest;
       }
-      return row.kind === "rvar";
+      return match(row)
+        .with({ kind: "empty" }, () => false)
+        .with({ kind: "rvar" }, () => true)
+        .exhaustive();
     })
     .exhaustive();
 }
@@ -170,8 +176,14 @@ export function emptyCollTs(
  */
 export function ctorCallTs(t: Type, aliases: AliasDef[]): string | null {
   const folded = foldAliases(t, aliases);
-  if (folded.kind !== "con" || folded.args.length === 0) return null;
-  return hasFreeVar(folded) ? null : tsOf(folded, new Map());
+  return match(folded)
+    .with({ kind: "con" }, (con) =>
+      con.args.length === 0 || hasFreeVar(con) ? null : tsOf(con, new Map()),
+    )
+    .with({ kind: "var" }, () => null)
+    .with({ kind: "arrow" }, () => null)
+    .with({ kind: "record" }, () => null)
+    .exhaustive();
 }
 
 /** Arity-aware function type: peel one arrow per lambda parameter, then recurse into the body (which may itself be a lambda for curried definitions). */
@@ -407,7 +419,10 @@ function allVarsIn(t: Type, names: Map<number, string>): boolean {
         if (!allVarsIn(row.type, names)) return false;
         row = row.rest;
       }
-      return row.kind === "rvar" ? names.has(row.id) : true;
+      return match(row)
+        .with({ kind: "empty" }, () => true)
+        .with({ kind: "rvar" }, (rvar) => names.has(rvar.id))
+        .exhaustive();
     })
     .exhaustive();
 }
@@ -606,16 +621,19 @@ export function referencedBuiltinTypeDecls(
   const declared = new Set(prog.stmts.flatMap((s) => (s.kind === "type" ? [s.name] : [])));
   const referenced = new Set<string>();
   for (const s of prog.stmts) {
-    // Binding types (inference-derived) …
-    if (s.kind === "let" && !s.name.startsWith("$")) {
-      const sc = schemeOf(s.name);
-      if (sc) consIn(sc.type, referenced);
-    }
-    // … and type-decl field positions (`guard: Option<Expr>`).
-    if (s.kind === "type") {
-      for (const c of s.ctors) for (const f of c.fields) teConNames(f.type, referenced);
-      if (s.alias) for (const f of s.alias) teConNames(f.type, referenced);
-    }
+    match(s)
+      .with({ kind: "let" }, (letin) => {
+        if (letin.name.startsWith("$")) return;
+        const sc = schemeOf(letin.name);
+        if (sc) consIn(sc.type, referenced);
+      })
+      .with({ kind: "type" }, (type) => {
+        for (const c of type.ctors) for (const f of c.fields) teConNames(f.type, referenced);
+        if (type.alias) for (const f of type.alias) teConNames(f.type, referenced);
+      })
+      .with({ kind: "extern" }, () => {})
+      .with({ kind: "import" }, () => {})
+      .exhaustive();
   }
   return builtinTypeDecls
     .filter((bt) => referenced.has(bt.name) && !declared.has(bt.name))
@@ -660,7 +678,13 @@ export function externModuleDts(externs: ExternBinding[]): string {
     .filter((bt) => referenced.has(bt.name))
     .map((bt) => typeDecl(bt.name, bt.params, bt.ctors));
 
-  const arrowCount = (t: Type): number => (t.kind === "arrow" ? 1 + arrowCount(t.to) : 0);
+  const arrowCount = (t: Type): number =>
+    match(t)
+      .with({ kind: "arrow" }, (arrow) => 1 + arrowCount(arrow.to))
+      .with({ kind: "var" }, () => 0)
+      .with({ kind: "con" }, () => 0)
+      .with({ kind: "record" }, () => 0)
+      .exhaustive();
   const seen = new Set<string>();
   const lines: string[] = [];
   for (const { imported, scheme } of externs) {
