@@ -28,7 +28,7 @@ let neighborsOf = (v, adj) => switch Array.get(v, adj) {
 
 let indexOfFrom = (v, xs, i) => switch Array.get(i, xs) {
   | None => -1
-  | Some(x) => eq(x, v) ? i : indexOfFrom(v, xs, add(i, 1))
+  | Some(x) => x == v ? i : indexOfFrom(v, xs, i + 1)
 }
 
 // Annotated (ADR 0044): `{ ...st, … }` updates leave the row open, and the
@@ -67,10 +67,10 @@ let connect : number -> [[number]] -> TSt -> TSt = (v, adj, st) =>
     low: Map.set(v, st.counter, st.low),
     onStack: Set.add(v, st.onStack),
     stack: Array.append(v, st.stack),
-    counter: add(st.counter, 1)
+    counter: st.counter + 1
   } in
   let st2 = visitNeighbors(v, neighborsOf(v, adj), adj, st1) in
-  eq(lowOfV(v, st2), indexOfV(v, st2))
+  lowOfV(v, st2) == indexOfV(v, st2)
     ? let start = indexOfFrom(v, st2.stack, 0) in
     let comp = Array.drop(start, st2.stack) in
     {
@@ -82,14 +82,9 @@ let connect : number -> [[number]] -> TSt -> TSt = (v, adj, st) =>
     : st2
 
 let connectAllFrom = (i, n, adj, st) =>
-  gte(i, n)
+  i >= n
     ? st
-    : connectAllFrom(
-      add(i, 1),
-      n,
-      adj,
-      hasIndex(i, st) ? st : connect(i, adj, st)
-    )
+    : connectAllFrom(i + 1, n, adj, hasIndex(i, st) ? st : connect(i, adj, st))
 
 export let stronglyConnected = adj =>
   let n = Array.length(adj) in

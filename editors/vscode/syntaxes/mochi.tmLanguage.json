@@ -5,6 +5,7 @@
   "patterns": [
     { "include": "#comments" },
     { "include": "#strings" },
+    { "include": "#braces" },
     { "include": "#declarations" },
     { "include": "#keywords" },
     { "include": "#namespaces" },
@@ -26,6 +27,18 @@
         }
       ]
     },
+    "braces": {
+      "comment": "Balance {…} so ${ switch n { … } } holes close on the right brace",
+      "begin": "\\{",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.block.begin.mochi" }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.block.end.mochi" }
+      },
+      "patterns": [{ "include": "$self" }]
+    },
     "strings": {
       "patterns": [
         {
@@ -36,6 +49,20 @@
             {
               "name": "constant.character.escape.mochi",
               "match": "\\\\."
+            },
+            {
+              "comment": "ADR 0023 — ${expr} holes; escape rule above eats \\${ first",
+              "name": "meta.interpolation.mochi",
+              "begin": "\\$\\{",
+              "beginCaptures": {
+                "0": { "name": "punctuation.definition.interpolation.begin.mochi" }
+              },
+              "end": "\\}",
+              "endCaptures": {
+                "0": { "name": "punctuation.definition.interpolation.end.mochi" }
+              },
+              "contentName": "source.mochi.embedded",
+              "patterns": [{ "include": "$self" }]
             }
           ]
         }

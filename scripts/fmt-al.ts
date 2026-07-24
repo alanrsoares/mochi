@@ -11,15 +11,6 @@ import { format } from "../src/format";
 const DIR = "bootstrap";
 const check = process.argv.includes("--check");
 
-// The formatter refolds desugared calls (`eq(a, b)`, `and(a, b)`, …) back to
-// infix operators (`a == b`, `a && b`, …), but bootstrap/lexer.mochi — the
-// self-hosted lexer — was never taught to tokenize those operator chars (it's
-// only ever seen the function-call form). Reformatting bootstrap now would
-// pass this gate but break the self-host agreement tests. Skip the gate here
-// until the self-hosted lexer/parser support those operators; `fmt:al`
-// (write mode) still works for anyone landing that lexer work.
-if (check) process.exit(0);
-
 const files = readdirSync(DIR)
   .filter((f) => f.endsWith(".mochi"))
   .map((f) => join(DIR, f))

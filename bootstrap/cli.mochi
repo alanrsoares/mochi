@@ -23,7 +23,7 @@ extern formatError : string -> string -> Diag -> string = "./host.mjs" "formatEr
 
 // "foo.mochi" -> "foo.js"  (drops the 6-char `.mochi` suffix).
 let outPath = path =>
-  Str.concat(Str.slice(0, sub(Str.length(path), 6), path), ".js")
+  Str.concat(Str.slice(0, Str.length(path) - 6, path), ".js")
 
 // Single-file build: open-world compile, one written `.js`. Every arm of the
 // railway carries a string error (readFile's, or compile's via formatError).

@@ -83,6 +83,17 @@ const TAG_TO_T: Record<string, string> = {
   TColon: "colon",
   TQuestion: "question",
   TComma: "comma",
+  TConcat: "concat",
+  TEqeq: "eqeq",
+  TNeq: "neq",
+  TLte: "lte",
+  TGte: "gte",
+  TLt: "lt",
+  TGt: "gt",
+  TAndand: "andand",
+  TOror: "oror",
+  TBang: "bang",
+  TBacktick: "backtick",
   TEof: "eof",
 };
 const PAYLOAD_TAGS: Record<string, string> = {
@@ -151,6 +162,11 @@ const cases: Record<string, string> = {
   "string escapes decode": 'let s = "a\\nb\\tc\\\\d\\"e"',
   "digraphs before single chars": "let f = x => x |> g\nextern h : number -> number",
   "all punctuation": "| = ( ) { } [ ] , . : @ #",
+  "arithmetic and comparison operators":
+    "let r = 1 + 2 * 3 - 4 / 5 % 6\nlet c = a == b && c != d || e < f",
+  "unary operators, chained": "let n = -x\nlet b = !x\nlet c = !!x\nlet d = -!x",
+  "backtick infix and string concat": "let r = a `add` b\nlet s = x ++ y",
+  "negative literal vs binary minus": "let a = -3\nlet b = x - 3\nlet c = x-3",
   "keywords vs identifiers":
     "let lettuce = typeof1\nswitch x { | true => import2 | false => exporter }",
   "crlf line endings": "let f = 1\r\nlet g = 2\r\n",

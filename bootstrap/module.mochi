@@ -53,10 +53,10 @@ let importFromsFrom = (stmts, i, acc) => switch Array.get(i, stmts) {
   | Some(s) => switch s {
       | SImport(_, from, _) => importFromsFrom(
           stmts,
-          add(i, 1),
+          i + 1,
           Array.append(from, acc)
         )
-      | _ => importFromsFrom(stmts, add(i, 1), acc)
+      | _ => importFromsFrom(stmts, i + 1, acc)
     }
 }
 let importFroms = stmts => importFromsFrom(stmts, 0, [])
@@ -178,7 +178,7 @@ let resolveImportsFrom = (stmts, i, path, ctx, res) => switch Array.get(i, stmts
       | Err(e) => Err(e)
       | Ok(res1) => resolveImportsFrom(
           stmts,
-          add(i, 1),
+          i + 1,
           path,
           ctx,
           {
@@ -191,7 +191,7 @@ let resolveImportsFrom = (stmts, i, path, ctx, res) => switch Array.get(i, stmts
           }
         )
     }
-  | Some(_) => resolveImportsFrom(stmts, add(i, 1), path, ctx, res)
+  | Some(_) => resolveImportsFrom(stmts, i + 1, path, ctx, res)
 }
 
 // Compile one module: resolve imports, check (with imported registry), infer

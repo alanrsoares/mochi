@@ -371,10 +371,7 @@ let inferExpr = (e, ctx, st) => switch e {
         Ok((baseT, st4))
     }
   | EField(target, name, sp) => switch target {
-      | ERef(tname, _) => and(
-          Map.has(tname, ctx.ns),
-          not(Map.has(tname, ctx.env))
-        )
+      | ERef(tname, _) => Map.has(tname, ctx.ns) && !Map.has(tname, ctx.env)
           ? inferNsField(tname, name, sp, ctx, st)
           : inferFieldAccess(target, name, sp, ctx, st)
       | _ => inferFieldAccess(target, name, sp, ctx, st)
@@ -530,7 +527,7 @@ let inferOrPatAlts = (alts, i, t, bindings, ctx, st) => switch Array.get(i, alts
       st2,
       patSpan(alt)
     ) in
-    inferOrPatAlts(alts, add(i, 1), t, bindings, ctx, st3)
+    inferOrPatAlts(alts, i + 1, t, bindings, ctx, st3)
 }
 let inferOrPat = (alts, sp, ctx, st) => switch alts {
   | [] => Err(typeErr("or-pattern needs at least one alternative", sp))
@@ -851,10 +848,10 @@ let idxOfFrom = (lets, i, acc) => switch Array.get(i, lets) {
   | None => acc
   | Some(SLet(name, _, _, _, _, _, _)) => idxOfFrom(
       lets,
-      add(i, 1),
+      i + 1,
       Map.set(name, i, acc)
     )
-  | Some(_) => idxOfFrom(lets, add(i, 1), acc)
+  | Some(_) => idxOfFrom(lets, i + 1, acc)
 }
 let idxOfMap = lets => idxOfFrom(lets, 0, #{})
 
@@ -1020,34 +1017,29 @@ let takeScheme = (name, env, acc) => switch Map.get(name, env) {
 }
 let exportCtorsInto = (ctors, i, env, acc) => switch Array.get(i, ctors) {
   | None => acc
-  | Some(c) => exportCtorsInto(
-      ctors,
-      add(i, 1),
-      env,
-      takeScheme(c.name, env, acc)
-    )
+  | Some(c) => exportCtorsInto(ctors, i + 1, env, takeScheme(c.name, env, acc))
 }
 let exportedSchemesFrom = (stmts, i, env, acc) => switch Array.get(i, stmts) {
   | None => acc
   | Some(SLet(name, _, _, _, true, _, _)) => exportedSchemesFrom(
       stmts,
-      add(i, 1),
+      i + 1,
       env,
       takeScheme(name, env, acc)
     )
   | Some(SExtern(name, _, _, _, _, true, _)) => exportedSchemesFrom(
       stmts,
-      add(i, 1),
+      i + 1,
       env,
       takeScheme(name, env, acc)
     )
   | Some(SType(_, _, ctors, _, true, _)) => exportedSchemesFrom(
       stmts,
-      add(i, 1),
+      i + 1,
       env,
       exportCtorsInto(ctors, 0, env, acc)
     )
-  | Some(_) => exportedSchemesFrom(stmts, add(i, 1), env, acc)
+  | Some(_) => exportedSchemesFrom(stmts, i + 1, env, acc)
 }
 export let exportedSchemes = (stmts, env) =>
   exportedSchemesFrom(stmts, 0, env, #{})

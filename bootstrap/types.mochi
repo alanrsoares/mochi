@@ -52,10 +52,10 @@ let showTypeArgs = args => Str.join(", ", args |> map(showType))
 export let showType = t => switch t {
   | TyVar(id) => "'t${show(id)}"
   | TyCon(name, args) => switch args {
-      | [elem] when eq(name, "Array") => "[${showType(elem)}]"
-      | _ => eq(name, TUPLE)
+      | [elem] when name == "Array" => "[${showType(elem)}]"
+      | _ => name == TUPLE
           ? "(${showTypeArgs(args)})"
-          : eq(Array.length(args), 0) ? name : "${name}<${showTypeArgs(args)}>"
+          : Array.length(args) == 0 ? name : "${name}<${showTypeArgs(args)}>"
     }
   | TyFn(from, to) => let fromS = switch from {
       | TyFn(_, _) => "(${showType(from)})"
@@ -78,10 +78,10 @@ let showRowFields = row => switch row {
 let showRow = row =>
   let (fields, tailId) = showRowFields(row) in
   let tail = switch tailId {
-    | Some(id) => "${eq(Array.length(fields), 0) ? "" : " "}| 'r${show(id)}"
+    | Some(id) => "${Array.length(fields) == 0 ? "" : " "}| 'r${show(id)}"
     | None => ""
   } in
-  and(eq(Array.length(fields), 0), eq(tail, ""))
+  Array.length(fields) == 0 && tail == ""
     ? "{}"
     : "{ ${Str.join(", ", fields)}${tail} }"
 
@@ -90,7 +90,7 @@ let showRow = row =>
 
 let someOfFrom = (f, xs, i) => switch Array.get(i, xs) {
   | None => false
-  | Some(x) => f(x) ? true : someOfFrom(f, xs, add(i, 1))
+  | Some(x) => f(x) ? true : someOfFrom(f, xs, i + 1)
 }
 let someOf = (f, xs) => someOfFrom(f, xs, 0)
 
@@ -107,8 +107,8 @@ export type TypeErr = { message: string }
 export let mkSt = start => { tv: #{}, rv: #{}, next: start }
 export let fail = message => Err({ message: message })
 
-export let freshVar = st => (tVar(st.next), { ...st, next: add(st.next, 1) })
-export let freshRowVar = st => (rVar(st.next), { ...st, next: add(st.next, 1) })
+export let freshVar = st => (tVar(st.next), { ...st, next: st.next + 1 })
+export let freshRowVar = st => (rVar(st.next), { ...st, next: st.next + 1 })
 
 // ---- resolution: follow a variable chain one level to a head ----
 
@@ -148,36 +148,39 @@ let zonkRow = (row, st) => switch resolveRow(row, st) {
 // ---- occurs checks ----
 
 export let occurs = (id, t, st) => switch resolve(t, st) {
-  | TyVar(rid) => eq(rid, id)
+  | TyVar(rid) => rid == id
   | TyCon(_, args) => someOf(a => occurs(id, a, st), args)
-  | TyFn(from, to) => or(occurs(id, from, st), occurs(id, to, st))
+  | TyFn(from, to) => occurs(id, from, st) || occurs(id, to, st)
   | TyRecord(row) => occursRow(id, row, st)
 }
 
 let occursRow = (id, row, st) => switch resolveRow(row, st) {
-  | RowExtend(_, fieldType, rest) => or(
-      occurs(id, fieldType, st),
-      occursRow(id, rest, st)
-    )
+  | RowExtend(_, fieldType, rest) => occurs(
+      id,
+      fieldType,
+      st
+    ) || occursRow(id, rest, st)
   | _ => false
 }
 
 export let rowVarOccurs = (id, row, st) => switch resolveRow(row, st) {
-  | RowVar(rid) => eq(rid, id)
-  | RowExtend(_, fieldType, rest) => or(
-      rowVarOccursInType(id, fieldType, st),
-      rowVarOccurs(id, rest, st)
-    )
+  | RowVar(rid) => rid == id
+  | RowExtend(_, fieldType, rest) => rowVarOccursInType(
+      id,
+      fieldType,
+      st
+    ) || rowVarOccurs(id, rest, st)
   | RowEmpty => false
 }
 
 let rowVarOccursInType = (id, t, st) => switch resolve(t, st) {
   | TyVar(_) => false
   | TyCon(_, args) => someOf(a => rowVarOccursInType(id, a, st), args)
-  | TyFn(from, to) => or(
-      rowVarOccursInType(id, from, st),
-      rowVarOccursInType(id, to, st)
-    )
+  | TyFn(from, to) => rowVarOccursInType(
+      id,
+      from,
+      st
+    ) || rowVarOccursInType(id, to, st)
   | TyRecord(row) => rowVarOccurs(id, row, st)
 }
 
@@ -190,7 +193,7 @@ let rowVarOccursInType = (id, t, st) => switch resolve(t, st) {
 let isArrowT = t => switch t { | TyFn(_, _) => true | _ => false }
 
 let unifyMismatch = (ra, rb) =>
-  not(eq(isArrowT(ra), isArrowT(rb)))
+  isArrowT(ra) != isArrowT(rb)
     ? let (fn, val) = isArrowT(ra) ? (ra, rb) : (rb, ra) in
     fail(
       "cannot unify ${showType(ra)} with ${showType(rb)} — a function (${showType(fn)}) was used where a ${showType(val)} was expected; a call may be missing an argument"
@@ -201,8 +204,7 @@ let unifyArgs = (as_, bs, i, st) => switch Array.get(i, as_) {
   | None => Ok(st)
   | Some(a) => switch Array.get(i, bs) {
       | None => Ok(st)
-      | Some(b) => let? s1 = unify(a, b, st) in
-        unifyArgs(as_, bs, add(i, 1), s1)
+      | Some(b) => let? s1 = unify(a, b, st) in unifyArgs(as_, bs, i + 1, s1)
     }
 }
 
@@ -211,15 +213,14 @@ export let unify = (a, b, st) =>
   let rb = resolve(b, st) in
   switch ra {
     | TyVar(aid) => switch rb {
-        | TyVar(bid) => eq(aid, bid) ? Ok(st) : bindVar(aid, rb, st)
+        | TyVar(bid) => aid == bid ? Ok(st) : bindVar(aid, rb, st)
         | _ => bindVar(aid, rb, st)
       }
     | TyCon(aname, aargs) => switch rb {
         | TyVar(bid) => bindVar(bid, ra, st)
-        | TyCon(bname, bargs) => and(
-            eq(aname, bname),
-            eq(Array.length(aargs), Array.length(bargs))
-          )
+        | TyCon(bname, bargs) => aname == bname && Array.length(
+            aargs
+          ) == Array.length(bargs)
             ? unifyArgs(aargs, bargs, 0, st)
             : fail("cannot unify ${showType(ra)} with ${showType(rb)}")
         | _ => unifyMismatch(ra, rb)
@@ -249,7 +250,7 @@ let bindVar = (id, t, st) =>
 /// (possibly grown) state.
 let rewriteRow = (row, label, st) => switch resolveRow(row, st) {
   | RowEmpty => fail("record missing field '${label}'")
-  | RowExtend(rlabel, rtype, rrest) => eq(rlabel, label)
+  | RowExtend(rlabel, rtype, rrest) => rlabel == label
       ? Ok((rtype, rrest, st))
       : let? (subType, subRest, subSt) = rewriteRow(rrest, label, st) in
       Ok((subType, rExtend(rlabel, rtype, subRest), subSt))
@@ -288,7 +289,7 @@ export let unifyRows = (r1, r2, st) =>
   }
 
 let bindRowVar = (id, row, st) => switch resolveRow(row, st) {
-  | RowVar(rid) when eq(rid, id) => Ok(st)
+  | RowVar(rid) when rid == id => Ok(st)
   | r => rowVarOccurs(id, r, st)
       ? fail("infinite record type")
       : Ok({ tv: st.tv, rv: Map.set(id, r, st.rv), next: st.next })

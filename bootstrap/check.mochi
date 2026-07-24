@@ -37,20 +37,20 @@ let firstSomeFrom = (f, xs, i) => switch Array.get(i, xs) {
   | None => None
   | Some(x) => switch f(x) {
       | Some(e) => Some(e)
-      | None => firstSomeFrom(f, xs, add(i, 1))
+      | None => firstSomeFrom(f, xs, i + 1)
     }
 }
 let firstSome = (f, xs) => firstSomeFrom(f, xs, 0)
 
 let allOfFrom = (f, xs, i) => switch Array.get(i, xs) {
   | None => true
-  | Some(x) => f(x) ? allOfFrom(f, xs, add(i, 1)) : false
+  | Some(x) => f(x) ? allOfFrom(f, xs, i + 1) : false
 }
 let allOf = (f, xs) => allOfFrom(f, xs, 0)
 
 let someOfFrom = (f, xs, i) => switch Array.get(i, xs) {
   | None => false
-  | Some(x) => f(x) ? true : someOfFrom(f, xs, add(i, 1))
+  | Some(x) => f(x) ? true : someOfFrom(f, xs, i + 1)
 }
 let someOf = (f, xs) => someOfFrom(f, xs, 0)
 
@@ -100,11 +100,8 @@ let isCatchAll = p => switch p {
   | PBind(_, _) => true
   | PRecord(fields, _) => allOf(f => isCatchAll(f.pat), fields)
   | PTuple(elems, _) => allOf(isCatchAll, elems)
-  | PArr(elems, rest, _) => and(eq(Array.length(elems), 0), Option.isSome(rest))
-  | PList(elems, rest, _) => and(
-      eq(Array.length(elems), 0),
-      Option.isSome(rest)
-    )
+  | PArr(elems, rest, _) => Array.length(elems) == 0 && Option.isSome(rest)
+  | PList(elems, rest, _) => Array.length(elems) == 0 && Option.isSome(rest)
   | _ => false
 }
 
@@ -129,7 +126,7 @@ let seqElemsRest = p => switch p {
 let checkPattern = (p, reg, top) => switch p {
   | PCtor(ctor, args, sp) => switch Map.get(ctor, reg.ctors) {
       | None => Some(checkErr("unknown constructor '${ctor}'", sp))
-      | Some(info) => eq(Array.length(args), info.arity)
+      | Some(info) => Array.length(args) == info.arity
           ? firstSome(a => checkPattern(a, reg, false), args)
           : Some(
             checkErr(
@@ -173,17 +170,17 @@ let checkPattern = (p, reg, top) => switch p {
 let binderPathsArgs = (args, i, at, acc) => switch Array.get(i, args) {
   | None => Ok(acc)
   | Some(a) => let? acc2 = binderPaths(a, "${at}.a${show(i)}", acc) in
-    binderPathsArgs(args, add(i, 1), at, acc2)
+    binderPathsArgs(args, i + 1, at, acc2)
 }
 let binderPathsFields = (fields, i, at, acc) => switch Array.get(i, fields) {
   | None => Ok(acc)
   | Some(f) => let? acc2 = binderPaths(f.pat, "${at}.${f.label}", acc) in
-    binderPathsFields(fields, add(i, 1), at, acc2)
+    binderPathsFields(fields, i + 1, at, acc2)
 }
 let binderPathsElems = (elems, i, at, acc) => switch Array.get(i, elems) {
   | None => Ok(acc)
   | Some(e) => let? acc2 = binderPaths(e, "${at}.t${show(i)}", acc) in
-    binderPathsElems(elems, add(i, 1), at, acc2)
+    binderPathsElems(elems, i + 1, at, acc2)
 }
 let binderPaths = (p, at, acc) => switch p {
   | PBind(name, sp) => Map.has(name, acc)
@@ -216,7 +213,7 @@ let altMapsFrom = (alts, i, reg, acc) => switch Array.get(i, alts) {
         : switch checkPattern(alt, reg, false) {
           | Some(e) => Err(e)
           | None => let? m = binderPaths(alt, "", #{}) in
-            altMapsFrom(alts, add(i, 1), reg, Array.append(m, acc))
+            altMapsFrom(alts, i + 1, reg, Array.append(m, acc))
         }
 }
 
@@ -238,7 +235,7 @@ let consistentBindsFrom = (maps, i, ref, sp) => switch Array.get(i, maps) {
         firstSome(
           name =>
             Map.has(name, ref)
-              ? eq(Map.getOr("", name, ref), Map.getOr("", name, m))
+              ? Map.getOr("", name, ref) == Map.getOr("", name, m)
                 ? None
                 : Some(
                   checkErr(
@@ -250,7 +247,7 @@ let consistentBindsFrom = (maps, i, ref, sp) => switch Array.get(i, maps) {
           Map.keys(m)
         )
       )
-      |> Option.orElse(consistentBindsFrom(maps, add(i, 1), ref, sp))
+      |> Option.orElse(consistentBindsFrom(maps, i + 1, ref, sp))
 }
 
 let checkOrPattern = (alts, sp, reg) => switch altMapsFrom(alts, 0, reg, []) {
@@ -264,8 +261,7 @@ let checkOrPattern = (alts, sp, reg) => switch altMapsFrom(alts, 0, reg, []) {
 // --- match exhaustiveness ---
 
 // A guarded arm never counts toward exhaustiveness — the guard can be false.
-let armUnguardedCatchAll = a =>
-  and(isCatchAll(a.pattern), Option.isNone(a.guard))
+let armUnguardedCatchAll = a => isCatchAll(a.pattern) && Option.isNone(a.guard)
 
 // Guards vs lazy Lists: a guarded arm still pulls from the sequence to test
 // its pattern, and the buffering codegen has no guard slot — reject.
@@ -273,7 +269,7 @@ let guardErrs = (arms, listSwitch) =>
   firstSome(
     a => switch a.guard {
       | None => None
-      | Some(g) => or(isPList(a.pattern), listSwitch)
+      | Some(g) => isPList(a.pattern) || listSwitch
           ? Some(
             checkErr(
               "`when` guards are unsupported in a lazy-List switch (matching pulls from the sequence)",
@@ -289,13 +285,11 @@ let guardErrs = (arms, listSwitch) =>
 // let codegen silently reorder it.
 let firstCatchIdx = (arms, i) => switch Array.get(i, arms) {
   | None => None
-  | Some(a) => armUnguardedCatchAll(a)
-      ? Some(i)
-      : firstCatchIdx(arms, add(i, 1))
+  | Some(a) => armUnguardedCatchAll(a) ? Some(i) : firstCatchIdx(arms, i + 1)
 }
 let unreachableAfterCatch = arms => switch firstCatchIdx(arms, 0) {
   | None => None
-  | Some(i) => switch Array.get(add(i, 1), arms) {
+  | Some(i) => switch Array.get(i + 1, arms) {
       | None => None
       | Some(a) => Some(
           checkErr(
@@ -317,31 +311,25 @@ type SeqCheck =
 let checkSeqExhaustive = (arms, mSpan) =>
   let seqs = arms
     |> filter(a =>
-      and(Option.isNone(a.guard), Option.isSome(seqElemsRest(a.pattern))))
+      Option.isNone(a.guard) && Option.isSome(seqElemsRest(a.pattern)))
     |> map(a => a.pattern) in
-  eq(Array.length(seqs), 0)
+  Array.length(seqs) == 0
     ? SeqNotSeq
     : let hasEmpty = someOf(
       p => switch seqElemsRest(p) {
-        | Some((elems, rest)) => and(
-            eq(Array.length(elems), 0),
-            Option.isNone(rest)
-          )
+        | Some((elems, rest)) => Array.length(elems) == 0 && Option.isNone(rest)
         | None => false
       },
       seqs
     ) in
     let hasCons = someOf(
       p => switch seqElemsRest(p) {
-        | Some((elems, rest)) => and(
-            eq(Array.length(elems), 1),
-            Option.isSome(rest)
-          )
+        | Some((elems, rest)) => Array.length(elems) == 1 && Option.isSome(rest)
         | None => false
       },
       seqs
     ) in
-    and(hasEmpty, hasCons)
+    hasEmpty && hasCons
       ? SeqTotal
       : SeqFail(
         checkErr(
@@ -350,7 +338,7 @@ let checkSeqExhaustive = (arms, mSpan) =>
         )
       )
 
-let isPBoolOf = (v, p) => switch p { | PBool(b, _) => eq(b, v) | _ => false }
+let isPBoolOf = (v, p) => switch p { | PBool(b, _) => b == v | _ => false }
 
 // No constructor arms → literal/wildcard/bool switch. A catch-all makes it
 // total; so does covering both boolean cases (bool is a closed two-case type).
@@ -358,14 +346,14 @@ let checkNonCtor = (arms, mSpan, hasCatchAll) =>
   hasCatchAll
     ? None
     : let hasTrue = someOf(
-      a => and(isPBoolOf(true, a.pattern), Option.isNone(a.guard)),
+      a => isPBoolOf(true, a.pattern) && Option.isNone(a.guard),
       arms
     ) in
     let hasFalse = someOf(
-      a => and(isPBoolOf(false, a.pattern), Option.isNone(a.guard)),
+      a => isPBoolOf(false, a.pattern) && Option.isNone(a.guard),
       arms
     ) in
-    and(hasTrue, hasFalse)
+    hasTrue && hasFalse
       ? None
       : switch checkSeqExhaustive(arms, mSpan) {
         | SeqTotal => None
@@ -383,7 +371,7 @@ let ctorLoop = (arms, i, reg, owner, covered) => switch Array.get(i, arms) {
   | Some(a) => switch a.pattern {
       | PCtor(ctor, args, sp) => switch Map.get(ctor, reg.ctors) {
           | None => Err(checkErr("unknown constructor '${ctor}'", sp))
-          | Some(info) => not(eq(Array.length(args), info.arity))
+          | Some(info) => Array.length(args) != info.arity
               ? Err(
                 checkErr(
                   "constructor '${ctor}' expects ${show(info.arity)} arg(s), got ${show(Array.length(args))}",
@@ -391,22 +379,22 @@ let ctorLoop = (arms, i, reg, owner, covered) => switch Array.get(i, arms) {
                 )
               )
               : switch owner {
-                | Some(own) when not(eq(own, info.owner)) => Err(
+                | Some(own) when own != info.owner => Err(
                     checkErr(
                       "switch mixes variants of '${own}' and '${info.owner}'",
                       sp
                     )
                   )
-                | _ => let covered2 = and(
-                    allOf(isCatchAll, args),
-                    Option.isNone(a.guard)
-                  )
+                | _ => let covered2 = allOf(
+                    isCatchAll,
+                    args
+                  ) && Option.isNone(a.guard)
                     ? Set.add(ctor, covered)
                     : covered in
-                  ctorLoop(arms, add(i, 1), reg, Some(info.owner), covered2)
+                  ctorLoop(arms, i + 1, reg, Some(info.owner), covered2)
               }
         }
-      | _ => ctorLoop(arms, add(i, 1), reg, owner, covered)
+      | _ => ctorLoop(arms, i + 1, reg, owner, covered)
     }
 }
 
@@ -416,8 +404,8 @@ let checkCtorArms = (ctorArms, mSpan, reg, hasCatchAll) => switch ctorLoop(ctorA
       ? None
       : let own = Option.unwrapOr("", ownerOpt) in
       let required = Map.getOr([], own, reg.types) in
-      let missing = required |> filter(c => not(Set.has(c, covered))) in
-      eq(Array.length(missing), 0)
+      let missing = required |> filter(c => !Set.has(c, covered)) in
+      Array.length(missing) == 0
         ? None
         :
           // A narrowing arm on a missing ctor means the user matched it
@@ -449,7 +437,7 @@ let leavesOfArm = a => switch a.pattern {
 let checkMatch = (arms, mSpan, reg) => switch firstSome(a => checkPattern(a.pattern, reg, true), arms) {
   | Some(e) => Some(e)
   | None => let listSwitch = someOf(
-      a => and(isPList(a.pattern), not(isCatchAll(a.pattern))),
+      a => isPList(a.pattern) && !isCatchAll(a.pattern),
       arms
     ) in
     switch guardErrs(arms, listSwitch) {
@@ -462,7 +450,7 @@ let checkMatch = (arms, mSpan, reg) => switch firstSome(a => checkPattern(a.patt
             // ctor/bool logic below sees each one.
             let leaves = arms |> Array.flatMap(leavesOfArm) in
             let ctorArms = leaves |> filter(a => isPCtor(a.pattern)) in
-            eq(Array.length(ctorArms), 0)
+            Array.length(ctorArms) == 0
               ? checkNonCtor(leaves, mSpan, hasCatchAll)
               : checkCtorArms(ctorArms, mSpan, reg, hasCatchAll)
         }
@@ -563,17 +551,16 @@ let checkReservedNames = stmts =>
   )
 
 let isUpperStart = s => switch Str.codeAt(0, s) {
-  | Some(c) => and(gte(c, 65), lte(c, 90))
+  | Some(c) => c >= 65 && c <= 90
   | None => false
 }
 
 // A lowercase leaf that is neither a declared param nor a primitive is a
 // stray type variable (would be existential) — report (name, span).
 let strayTypeVar = (te, params) => switch te {
-  | TyName(name, sp) => or(
-      isUpperStart(name),
-      or(Array.contains(name, primTypeNames), Array.contains(name, params))
-    )
+  | TyName(name, sp) => isUpperStart(
+      name
+    ) || (Array.contains(name, primTypeNames) || Array.contains(name, params))
       ? None
       : Some((name, sp))
   | TyArrow(from, to, _) => strayTypeVar(from, params)

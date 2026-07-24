@@ -490,6 +490,17 @@ const cases: Record<string, string> = {
     "let a = { ...base }\nlet b = { ...base, x: 1 }\nlet c = { ...base, x: 1, y: 2 }",
   "or-patterns, 2 and 3+ alts, with a guard (ADR 0022)":
     "let f = v => switch v { | A | B => 1 | X | Y | Z when eq(v, 0) => 2 | _ => 3 }",
+  "infix operator precedence: mul over add, cmp over mul, and/or over cmp":
+    "let a = 1 + 2 * 3\nlet b = 1 * 2 + 3\nlet c = 1 + 2 == 3\nlet d = a == b && c == d || e == f",
+  "infix operators right-associate their own RHS":
+    "let a = 1 - 2 - 3\nlet b = 1 / 2 / 3\nlet c = a && b && c",
+  "concat and backtick infix": 'let a = "x" ++ "y" ++ "z"\nlet b = a `add` b `sub` c',
+  "unary operators bind tighter than infix, and chain":
+    "let a = -x + y\nlet b = !x && y\nlet c = !!x\nlet d = -!x",
+  "comparison binds tighter than a switch-arm guard's own body":
+    "let f = n => switch n { | x when x == limit => x | _ => 0 }",
+  "comparison cond binds tighter than the enclosing ternary (not its else)":
+    'let f = (a, b) => a == b ? "eq" : "ne"',
 };
 
 for (const [name, src] of Object.entries(cases)) {

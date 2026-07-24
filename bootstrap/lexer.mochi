@@ -22,6 +22,7 @@ type Tok =
   | TTarrow
   | TPipe
   | TCompose
+  | TConcat
   | TBar
   | TLparen
   | TRparen
@@ -30,11 +31,26 @@ type Tok =
   | TLbracket
   | TRbracket
   | TSpread
+  | TPlus
+  | TMinus
+  | TStar
+  | TSlash
+  | TPercent
   | TAt
   | THash
   | TDot
   | TColon
   | TQuestion
+  | TEqeq
+  | TNeq
+  | TLte
+  | TGte
+  | TLt
+  | TGt
+  | TAndand
+  | TOror
+  | TBang
+  | TBacktick
   | TComma
   | TNum(value: number, raw: string)
   | TBool(value: bool)
@@ -58,15 +74,15 @@ type Comment =
 // --- char classes ---
 // `\r` has no escape in mochi string literals; build it from its code.
 let cr = Str.fromCode(13)
-let isSpace = c => or(eq(c, " "), or(eq(c, "\t"), or(eq(c, "\n"), eq(c, cr))))
-let inRange = (lo, hi, n) => and(gte(n, lo), lte(n, hi))
+let isSpace = c => c == " " || (c == "\t" || (c == "\n" || c == cr))
+let inRange = (lo, hi, n) => n >= lo && n <= hi
 let isDigit = c => Str.codeAt(0, c) |> Option.exists(inRange(48, 57))
 let isIdStart = c =>
   Str.codeAt(0, c)
     |> Option.exists(n =>
-      or(inRange(65, 90, n), or(inRange(97, 122, n), eq(n, 95))))
-let isIdChar = c => or(isIdStart(c), isDigit(c))
-let isNumChar = c => or(isDigit(c), eq(c, "."))
+      inRange(65, 90, n) || (inRange(97, 122, n) || n == 95))
+let isIdChar = c => isIdStart(c) || isDigit(c)
+let isNumChar = c => isDigit(c) || c == "."
 
 // --- token tables (TS: KEYWORDS / DIGRAPHS / PUNCT records) ---
 let keywordTok = word => switch word {
@@ -86,6 +102,13 @@ let identTok = word => keywordTok(word) |> Option.unwrapOr(TId(word))
 let digraphTok = two => switch two {
   | "|>" => Some(TPipe)
   | ">>" => Some(TCompose)
+  | "++" => Some(TConcat)
+  | "==" => Some(TEqeq)
+  | "!=" => Some(TNeq)
+  | "<=" => Some(TLte)
+  | ">=" => Some(TGte)
+  | "&&" => Some(TAndand)
+  | "||" => Some(TOror)
   | "=>" => Some(TArrow)
   | "->" => Some(TTarrow)
   | _ => None
@@ -106,13 +129,22 @@ let punctTok = c => switch c {
   | "?" => Some(TQuestion)
   | "@" => Some(TAt)
   | "#" => Some(THash)
+  | "+" => Some(TPlus)
+  | "-" => Some(TMinus)
+  | "*" => Some(TStar)
+  | "/" => Some(TSlash)
+  | "%" => Some(TPercent)
+  | "!" => Some(TBang)
+  | "`" => Some(TBacktick)
+  | "<" => Some(TLt)
+  | ">" => Some(TGt)
   | _ => None
 }
 
 // --- scanners ---
 // Advance `j` while `pred` holds on the char there; returns the end index.
 let scanWhile = (pred, src, j) => switch Str.get(j, src) {
-  | Some(c) when pred(c) => scanWhile(pred, src, add(j, 1))
+  | Some(c) when pred(c) => scanWhile(pred, src, j + 1)
   | _ => j
 }
 
@@ -133,24 +165,24 @@ type TPart =
 // later, in `scanTemplate`.
 let skipStrLoop = (src, j) => switch Str.get(j, src) {
   | None => None
-  | Some("\"") => Some(add(j, 1))
-  | Some("\\") => switch Str.get(add(j, 1), src) {
-      | Some(_) => skipStrLoop(src, add(j, 2))
-      | None => skipStrLoop(src, add(j, 1))
+  | Some("\"") => Some(j + 1)
+  | Some("\\") => switch Str.get(j + 1, src) {
+      | Some(_) => skipStrLoop(src, j + 2)
+      | None => skipStrLoop(src, j + 1)
     }
-  | Some("$") when Str.get(add(j, 1), src) |> Option.contains("{") => switch findHoleEnd(src, add(j, 2)) {
+  | Some("$") when Str.get(j + 1, src) |> Option.contains("{") => switch findHoleEnd(src, j + 2) {
       | Some(hEnd) => skipStrLoop(src, hEnd)
       | None => None
     }
-  | Some(_) => skipStrLoop(src, add(j, 1))
+  | Some(_) => skipStrLoop(src, j + 1)
 }
-let skipStringLiteral = (src, i) => skipStrLoop(src, add(i, 1))
+let skipStringLiteral = (src, i) => skipStrLoop(src, i + 1)
 
 // Skip to (not past) the next newline, or to end of source.
 let skipLineCommentTo = (src, j) => switch Str.get(j, src) {
   | None => j
   | Some("\n") => j
-  | Some(_) => skipLineCommentTo(src, add(j, 1))
+  | Some(_) => skipLineCommentTo(src, j + 1)
 }
 
 // Find the index just past the `}` that closes a `${` hole whose contents
@@ -164,16 +196,14 @@ let findHoleLoop = (src, j, depth) => switch Str.get(j, src) {
       | Some(stop) => findHoleLoop(src, stop, depth)
       | None => None
     }
-  | Some("/") when Str.get(add(j, 1), src) |> Option.contains("/") => findHoleLoop(
+  | Some("/") when Str.get(j + 1, src) |> Option.contains("/") => findHoleLoop(
       src,
       skipLineCommentTo(src, j),
       depth
     )
-  | Some("{") => findHoleLoop(src, add(j, 1), add(depth, 1))
-  | Some("}") => eq(depth, 1)
-      ? Some(add(j, 1))
-      : findHoleLoop(src, add(j, 1), sub(depth, 1))
-  | Some(_) => findHoleLoop(src, add(j, 1), depth)
+  | Some("{") => findHoleLoop(src, j + 1, depth + 1)
+  | Some("}") => depth == 1 ? Some(j + 1) : findHoleLoop(src, j + 1, depth - 1)
+  | Some(_) => findHoleLoop(src, j + 1, depth)
 }
 let findHoleEnd = (src, start) => findHoleLoop(src, start, 1)
 
@@ -181,43 +211,38 @@ let findHoleEnd = (src, start) => findHoleLoop(src, start, 1)
 // hole-free literal stays a plain `str`; otherwise first/middle/last bracket
 // the holes (ADR 0023).
 let literalTok = (idx, total, value) =>
-  eq(total, 1)
+  total == 1
     ? TStr(value)
-    : eq(idx, 0)
+    : idx == 0
       ? TTmplStart(value)
-      : eq(idx, sub(total, 1)) ? TTmplEnd(value) : TTmplMid(value)
+      : idx == total - 1 ? TTmplEnd(value) : TTmplMid(value)
 
 // Scan a "..." literal (which may contain `${expr}` holes) starting at its
 // opening quote `i`. Returns the alternating lit/hole chunks (oldest first)
 // and the index just past the closing quote; None if unterminated.
 let scanTemplateLoop = (src, j, value, parts) => switch Str.get(j, src) {
   | None => None
-  | Some("\"") => Some(
-      { parts: Array.append(PLit(value), parts), end: add(j, 1) }
-    )
-  | Some("\\") => switch Str.get(add(j, 1), src) {
+  | Some("\"") => Some({ parts: Array.append(PLit(value), parts), end: j + 1 })
+  | Some("\\") => switch Str.get(j + 1, src) {
       | Some(n) => scanTemplateLoop(
           src,
-          add(j, 2),
+          j + 2,
           Str.concat(value, escChar(n)),
           parts
         )
-      | None => scanTemplateLoop(src, add(j, 1), Str.concat(value, "\\"), parts)
+      | None => scanTemplateLoop(src, j + 1, Str.concat(value, "\\"), parts)
     }
-  | Some("$") when Str.get(add(j, 1), src) |> Option.contains("{") => switch findHoleEnd(src, add(j, 2)) {
+  | Some("$") when Str.get(j + 1, src) |> Option.contains("{") => switch findHoleEnd(src, j + 2) {
       | None => None
       | Some(holeEnd) => let withLit = Array.append(PLit(value), parts) in
-        let withHole = Array.append(
-          PHole(add(j, 2), sub(holeEnd, 1)),
-          withLit
-        ) in
+        let withHole = Array.append(PHole(j + 2, holeEnd - 1), withLit) in
         scanTemplateLoop(src, holeEnd, "", withHole)
     }
-  | Some(c) => scanTemplateLoop(src, add(j, 1), Str.concat(value, c), parts)
+  | Some(c) => scanTemplateLoop(src, j + 1, Str.concat(value, c), parts)
 }
-let scanTemplate = (src, i) => scanTemplateLoop(src, add(i, 1), "", [])
+let scanTemplate = (src, i) => scanTemplateLoop(src, i + 1, "", [])
 
-let notNewline = c => not(eq(c, "\n"))
+let notNewline = c => c != "\n"
 
 // Line comment starting at `start` (src[start..start+2] is known to be "//").
 // Only own-line `///` comments carry doc text; an own-line plain comment
@@ -226,10 +251,10 @@ let scanComment = (src, start, lineTok) =>
   let stop = scanWhile(notNewline, src, start) in
   lineTok
     ? Trailing(stop)
-    : Str.get(add(start, 2), src) |> Option.contains("/")
-      ? let textStart = Str.get(add(start, 3), src) |> Option.contains(" ")
-        ? add(start, 4)
-        : add(start, 3) in
+    : Str.get(start + 2, src) |> Option.contains("/")
+      ? let textStart = Str.get(start + 3, src) |> Option.contains(" ")
+        ? start + 4
+        : start + 3 in
       DocLine(Str.slice(textStart, stop, src), stop)
       : PlainOwn(stop)
 
@@ -248,14 +273,11 @@ let lexError = (message, start, stop) =>
   Err({ message: message, start: start, end: stop })
 
 // `Number(raw)` in the TS original can be NaN (e.g. "1.2.3"); div(0, 0) mirrors it.
-let numValue = raw => Str.toNumber(raw) |> Option.unwrapOr(div(0, 0))
+let numValue = raw => Str.toNumber(raw) |> Option.unwrapOr(0 / 0)
 
 // A `-` before a digit is always a literal sign (mochi has no binary minus).
 let numStart = (src, i, c) =>
-  or(
-    isDigit(c),
-    and(eq(c, "-"), Str.get(add(i, 1), src) |> Option.exists(isDigit))
-  )
+  isDigit(c) || (c == "-" && (Str.get(i + 1, src) |> Option.exists(isDigit)))
 
 // Emit one token: doc attaches and clears, the line now has a token, the
 // newline run resets. Mutually recursive with `go`.
@@ -266,13 +288,13 @@ let emit = (src, tok, start, stop, doc, toks) =>
 // tokens (produced as if the hole's source started at 0) at their real
 // position in the enclosing source.
 let offsetLocTok = (lt, by) =>
-  { tok: lt.tok, start: add(lt.start, by), end: add(lt.end, by), doc: lt.doc }
+  { tok: lt.tok, start: lt.start + by, end: lt.end + by, doc: lt.doc }
 
 // Splice a recursively-lexed hole's tokens (minus its trailing `eof`) onto
 // `toks`, each shifted by `by` (the hole's start in the enclosing source).
 let spliceHoleToks = (holeToks, by, toks) => switch Array.head(holeToks) {
   | None => toks
-  | Some(ht) => let toks2 = eq(ht.tok, TEof)
+  | Some(ht) => let toks2 = ht.tok == TEof
       ? toks
       : Array.append(offsetLocTok(ht, by), toks) in
     spliceHoleToks(Array.tail(holeToks), by, toks2)
@@ -284,7 +306,7 @@ let spliceHoleToks = (holeToks, by, toks) => switch Array.head(holeToks) {
 let spliceHole = (src, start, stop, toks) => switch lex(Str.slice(start, stop, src)) {
   | Ok(holeToks) => Ok(spliceHoleToks(holeToks, start, toks))
   | Err(e) => Err(
-      { message: e.message, start: add(e.start, start), end: add(e.end, start) }
+      { message: e.message, start: e.start + start, end: e.end + start }
     )
 }
 
@@ -304,7 +326,7 @@ let lexParts = (src, parts, idx, total, wholeStart, wholeEnd, doc, toks) => swit
         lexParts(
           src,
           Array.tail(parts),
-          add(idx, 1),
+          idx + 1,
           total,
           wholeStart,
           wholeEnd,
@@ -316,7 +338,7 @@ let lexParts = (src, parts, idx, total, wholeStart, wholeEnd, doc, toks) => swit
           | Ok(toks2) => lexParts(
               src,
               Array.tail(parts),
-              add(idx, 1),
+              idx + 1,
               total,
               wholeStart,
               wholeEnd,
@@ -343,11 +365,11 @@ let lexString = (src, i, doc, toks) => switch scanTemplate(src, i) {
 // the current line already has a token (makes a comment "trailing").
 let go = (src, i, doc, nlRun, lineTok, toks) => switch Str.get(i, src) {
   | None => Ok(Array.append(mkTok(TEof, i, i, doc), toks))
-  | Some(c) when isSpace(c) => eq(c, "\n")
-      ? let n = add(nlRun, 1) in
-      let kept = lt(n, 2) ? doc : [] in go(src, add(i, 1), kept, n, false, toks)
-      : go(src, add(i, 1), doc, nlRun, lineTok, toks)
-  | Some("/") when Str.get(add(i, 1), src) |> Option.contains("/") => switch scanComment(src, i, lineTok) {
+  | Some(c) when isSpace(c) => c == "\n"
+      ? let n = nlRun + 1 in
+      let kept = n < 2 ? doc : [] in go(src, i + 1, kept, n, false, toks)
+      : go(src, i + 1, doc, nlRun, lineTok, toks)
+  | Some("/") when Str.get(i + 1, src) |> Option.contains("/") => switch scanComment(src, i, lineTok) {
       | Trailing(stop) => go(src, stop, doc, nlRun, lineTok, toks)
       | PlainOwn(stop) => go(src, stop, [], 0, lineTok, toks)
       | DocLine(text, stop) => go(
@@ -359,27 +381,27 @@ let go = (src, i, doc, nlRun, lineTok, toks) => switch Str.get(i, src) {
           toks
         )
     }
-  | Some(c) => eq(Str.slice(i, add(i, 3), src), "...")
-      ? emit(src, TSpread, i, add(i, 3), doc, toks)
-      : switch digraphTok(Str.slice(i, add(i, 2), src)) {
-        | Some(t) => emit(src, t, i, add(i, 2), doc, toks)
-        | None => switch punctTok(c) {
-            | Some(t) => emit(src, t, i, add(i, 1), doc, toks)
-            | None => eq(c, "\"")
-                ? lexString(src, i, doc, toks)
-                : numStart(src, i, c)
-                  ? let j = scanWhile(isNumChar, src, add(i, 1)) in
-                  let raw = Str.slice(i, j, src) in
-                  emit(src, TNum(numValue(raw), raw), i, j, doc, toks)
-                  : isIdStart(c)
-                    ? let j = scanWhile(isIdChar, src, add(i, 1)) in
+  | Some(c) => Str.slice(i, i + 3, src) == "..."
+      ? emit(src, TSpread, i, i + 3, doc, toks)
+      : switch digraphTok(Str.slice(i, i + 2, src)) {
+        | Some(t) => emit(src, t, i, i + 2, doc, toks)
+        | None => c == "\""
+            ? lexString(src, i, doc, toks)
+            : numStart(src, i, c)
+              ? let j = scanWhile(isNumChar, src, i + 1) in
+              let raw = Str.slice(i, j, src) in
+              emit(src, TNum(numValue(raw), raw), i, j, doc, toks)
+              : switch punctTok(c) {
+                | Some(t) => emit(src, t, i, i + 1, doc, toks)
+                | None => isIdStart(c)
+                    ? let j = scanWhile(isIdChar, src, i + 1) in
                     emit(src, identTok(Str.slice(i, j, src)), i, j, doc, toks)
                     : lexError(
                       Str.concat("unexpected char '", Str.concat(c, "'")),
                       i,
-                      add(i, 1)
+                      i + 1
                     )
-          }
+              }
       }
 }
 
