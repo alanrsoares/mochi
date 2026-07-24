@@ -93,13 +93,13 @@ let board0 = range(0, height)
     range(0, width) |> toArray |> Array.map(c => Array.contains((r, c))(seeds)))
 
 // ---- animation loop (recursion sequenced through Task) ----
-let label = g => Str.concat("Conway's Life  ·  generation ")(show(g))
+let label = g => "Conway's Life  ·  generation ${show(g)}"
 
 let loop = (remaining, g, board) =>
   remaining <= 0
     ? teardown(0)
     : draw(label(g))(render(board))
-      |> andThen(_ => delay(90)(0))
+      |> andThen(_ => delay(90, 0))
       |> andThen(_ => loop(remaining - 1, g + 1, step(board)))
 
 // setup grabs the alternate screen buffer, then we run 120 frames.
