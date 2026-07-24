@@ -350,6 +350,18 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
   }
 
   function parseAtomOrCall(): Expr {
+    const tk = peek();
+    if (tk.t === "minus" || tk.t === "bang") {
+      const opTok = next();
+      const operand = parseAtomOrCall();
+      const fnName = opTok.t === "minus" ? "negate" : "not";
+      return {
+        kind: "call",
+        fn: { kind: "ref", name: fnName, span: opTok.span },
+        args: [operand],
+        span: spanning(opTok.span, operand.span),
+      };
+    }
     let e = parseAtom();
     // postfix chain: calls f(...) and field access .name
     for (;;) {

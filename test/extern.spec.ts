@@ -71,6 +71,18 @@ test("desugars logical infixes (&&, ||)", () => {
   const res = compile(code);
   expect(isOk(res)).toBe(true);
 });
+
+test("desugars prefix unary operators (- and !)", () => {
+  const code = `
+    let x = 5
+    let a = -x
+    let b = -(1 + 2)
+    let c = !true
+    let d = !(1 == 2)
+  `;
+  const res = compile(code);
+  expect(isOk(res)).toBe(true);
+});
 test("lowercase names in a signature are generalized type variables", () => {
   // a -> a is polymorphic
   expect(schemeOf(`extern id : a -> a = "./u.js" "id"`, "id")).toMatch(/^'t\d+ -> 't\d+$/);
