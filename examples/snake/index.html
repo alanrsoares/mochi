@@ -469,18 +469,48 @@
       ctx.shadowColor = '#00ff87';
       ctx.shadowBlur = 10;
 
+      const pad = 1.5;
+      const radiusSize = CELL_SIZE / 2;
+
       snake.forEach(([x, y], idx) => {
         const px = x * CELL_SIZE;
         const py = y * CELL_SIZE;
-        const pad = 2;
         const size = CELL_SIZE - pad * 2;
         const isHead = idx === 0;
+        const isTail = idx === snake.length - 1;
 
-        ctx.fillStyle = isHead ? '#00ff87' : 'rgba(0, 255, 135, 0.75)';
+        ctx.fillStyle = isHead ? '#00ff87' : 'rgba(0, 255, 135, 0.85)';
         
-        // Draw rounded rectangle segment
+        let radii = [4, 4, 4, 4];
+
+        if (!isHead && !isTail) {
+          const [prevX, prevY] = snake[idx - 1];
+          const [nextX, nextY] = snake[idx + 1];
+
+          const dirIn = prevX < x ? 'left' : prevX > x ? 'right' : prevY < y ? 'up' : 'down';
+          const dirOut = nextX < x ? 'left' : nextX > x ? 'right' : nextY < y ? 'up' : 'down';
+
+          const isCorner = dirIn !== dirOut && ((dirIn === 'left' || dirIn === 'right') !== (dirOut === 'left' || dirOut === 'right'));
+          
+          if (isCorner) {
+            const hasUp = dirIn === 'up' || dirOut === 'up';
+            const hasDown = dirIn === 'down' || dirOut === 'down';
+            const hasLeft = dirIn === 'left' || dirOut === 'left';
+            const hasRight = dirIn === 'right' || dirOut === 'right';
+
+            radii = [
+              (hasUp && hasLeft) ? radiusSize : 2,
+              (hasUp && hasRight) ? radiusSize : 2,
+              (hasDown && hasRight) ? radiusSize : 2,
+              (hasDown && hasLeft) ? radiusSize : 2
+            ];
+          } else {
+            radii = [2, 2, 2, 2];
+          }
+        }
+
         ctx.beginPath();
-        ctx.roundRect(px + pad, py + pad, size, size, isHead ? 6 : 4);
+        ctx.roundRect(px + pad, py + pad, size, size, radii);
         ctx.fill();
 
         // Draw eyes on head
@@ -488,9 +518,26 @@
           ctx.shadowBlur = 0;
           ctx.fillStyle = '#042f1a';
           const eyeSize = 3;
+          const [nextX, nextY] = snake.length > 1 ? snake[1] : [x - 1, y];
+          const hDir = x > nextX ? 'right' : x < nextX ? 'left' : y > nextY ? 'down' : 'up';
+
+          let eye1 = [px + size * 0.3, py + size * 0.3];
+          let eye2 = [px + size * 0.7, py + size * 0.3];
+
+          if (hDir === 'right') {
+            eye1 = [px + size * 0.7, py + size * 0.3];
+            eye2 = [px + size * 0.7, py + size * 0.7];
+          } else if (hDir === 'left') {
+            eye1 = [px + size * 0.3, py + size * 0.3];
+            eye2 = [px + size * 0.3, py + size * 0.7];
+          } else if (hDir === 'down') {
+            eye1 = [px + size * 0.3, py + size * 0.7];
+            eye2 = [px + size * 0.7, py + size * 0.7];
+          }
+
           ctx.beginPath();
-          ctx.arc(px + size * 0.35, py + size * 0.35, eyeSize, 0, Math.PI * 2);
-          ctx.arc(px + size * 0.65, py + size * 0.35, eyeSize, 0, Math.PI * 2);
+          ctx.arc(eye1[0], eye1[1], eyeSize, 0, Math.PI * 2);
+          ctx.arc(eye2[0], eye2[1], eyeSize, 0, Math.PI * 2);
           ctx.fill();
           ctx.shadowColor = '#00ff87';
           ctx.shadowBlur = 10;
