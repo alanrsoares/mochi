@@ -36,7 +36,7 @@ export type Expr =
   | ECall(fn: Expr, args: [Expr], span: Span)
   | ELambda(params: [LamParam], body: Expr, span: Span)
   | ELetIn(name: string, nameSpan: Span, value: Expr, body: Expr, span: Span)
-  | ELetBind(param: LamParam, paramSpan: Span, value: Expr, body: Expr, span: Span)
+  | ELetBind(param: LamParam, paramSpan: Span, monad: string, value: Expr, body: Expr, span: Span)
   | EPipe(left: Expr, right: Expr, span: Span)
   | ETernary(cond: Expr, thenE: Expr, elseE: Expr, span: Span)
   | EMatch(scrutinee: Expr, arms: [MatchArm], span: Span)

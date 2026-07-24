@@ -91,7 +91,7 @@ let exprSpan = e => switch e {
   | Ast.ECall(_, _, sp) => sp
   | Ast.ELambda(_, _, sp) => sp
   | Ast.ELetIn(_, _, _, _, sp) => sp
-  | Ast.ELetBind(_, _, _, _, sp) => sp
+  | Ast.ELetBind(_, _, _, _, _, sp) => sp
   | Ast.EPipe(_, _, sp) => sp
   | Ast.ETernary(_, _, _, sp) => sp
   | Ast.EMatch(_, _, sp) => sp
@@ -208,24 +208,28 @@ let inferTernary = (cond, thenE, elseE, ctx, st) =>
   let? (elseT, st4) = inferExpr(elseE, ctx, st3) in
   let? st5 = u(thenT, elseT, st4, exprSpan(elseE)) in Ok((thenT, st5))
 
-// `x let? p = value; body` desugars to a Result-bind: value must be
-// `Result okT errT`, param binds okT, body must itself be `Result resT errT`.
-let inferLetBind = (param, paramSpan, value, body, ctx, st) =>
+// `let?` / `let!` p = value in body — Result / Task monadic bind (ADR 0005).
+let inferLetBind = (param, paramSpan, monad, value, body, ctx, st) =>
   let? (valT, st1) = inferExpr(value, ctx, st) in
-    let (okT, st2) = freshVar(st1) in
-      let (errT, st3) = freshVar(st2) in
-      let? st4 = u(valT, tCon("Result", [okT, errT]), st3, exprSpan(value)) in
+    let (payloadT, st2) = freshVar(st1) in
+      let (errOpt, st3) = monad == "Result"
+        ? let (errT, stE) = freshVar(st2) in (Some(errT), stE)
+        : (None, st2) in
+      let wantVal = switch errOpt {
+        | Some(errT) => tCon("Result", [payloadT, errT])
+        | None => tCon("Task", [payloadT])
+      } in
+      let? st4 = u(valT, wantVal, st3, exprSpan(value)) in
         let (paramT, bodyEnv, st5) = bindParam(param, ctx.env, st4) in
-        let? st6 = u(paramT, okT, st5, paramSpan) in
+        let? st6 = u(paramT, payloadT, st5, paramSpan) in
         let? (bodyT, st7) = inferExpr(body, ctxWithEnv(ctx, bodyEnv), st6) in
           let (resT, st8) = freshVar(st7) in
-          let? st9 = u(
-            bodyT,
-            tCon("Result", [resT, errT]),
-            st8,
-            exprSpan(body)
-          ) in
-            Ok((tCon("Result", [resT, errT]), st9))
+          let wantBody = switch errOpt {
+            | Some(errT) => tCon("Result", [resT, errT])
+            | None => tCon("Task", [resT])
+          } in
+          let? st9 = u(bodyT, wantBody, st8, exprSpan(body)) in
+            Ok((wantBody, st9))
 
 let inferRecordRow = (fields, ctx, st) => switch fields {
   | [] => Ok((RowEmpty, st))
@@ -393,9 +397,10 @@ let inferExpr = (e, ctx, st) => switch e {
     ) in
     let sc = generalize(ctx.env, valT, st1) in
       inferExpr(body, ctxWithEnv(ctx, Map.set(name, sc, ctx.env)), st1)
-  | Ast.ELetBind(param, paramSpan, value, body, _) => inferLetBind(
+  | Ast.ELetBind(param, paramSpan, monad, value, body, _) => inferLetBind(
       param,
       paramSpan,
+      monad,
       value,
       body,
       ctx,
@@ -718,7 +723,7 @@ let freeRefs = (e, bound, acc) => switch e {
       acc
     ) in
       freeRefs(body, Set.add(name, bound), acc1)
-  | Ast.ELetBind(param, _, value, body, _) => let acc1 = freeRefs(
+  | Ast.ELetBind(param, _, _, value, body, _) => let acc1 = freeRefs(
       value,
       bound,
       acc

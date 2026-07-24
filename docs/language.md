@@ -135,9 +135,14 @@ data-last under `Task.*` and compose with `|>` ([ADR 0005](adr/0005-prelude-task
 
 ```mochi
 let program =
-  Task.of(20) |> Task.map((+ 1)) |> Task.andThen(Task.delay(10)) |> Task.map(x => x + x)
+  let! n = Task.of(20) |> Task.map((+ 1)) in
+  let! n2 = Task.delay(10, n) in
+  Task.of(n2 + n2)
 export let result = Task.run(program)   // Promise — await in the host
 ```
+
+`let! x = task in …` is monadic bind over `Task` (mirrors `let?` for `Result`);
+it desugars to `Task.andThen`. Infix bind for both is deferred.
 
 Effects stay a **convention**, not a checked effect system: domain IO is thin `extern`s
 that *should* return `Task _` (see `examples/life/`); sequencing uses prelude `Task.*`.
@@ -148,7 +153,7 @@ emit so flat host exports `(a, b) => …` match mochi’s `f(a, b)` call convent
 
 Ternary `cond ? a : b` (looser than `|>`, right-associative), operator sections
 `(x +)` / `(+ x)` (ADR 0000; `(- x)` stays negation), string interpolation,
-`let? x = value in …` (monadic bind over `Result`), `///` doc comments that attach
+`let?` / `let!` (monadic bind over `Result` / `Task`), `///` doc comments that attach
 to the following binding and surface in hover and `.d.ts`, and namespace imports
 `import * as Alias from "./mod"` with qualified access / ctor patterns
 `Alias.member` / `| Alias.Ctor(…)` (ADR 0002).

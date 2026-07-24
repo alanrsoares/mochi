@@ -4,10 +4,12 @@
 // back to JS at the edge, which is the only place effects actually happen.
 // See ADR 0005.
 
-// of(20) -> +1 -> (10ms later) same -> doubled = 42. Each stage is typed:
-// `Task.map` keeps it a Task; `Task.andThen` sequences one Task after another.
+// of(20) -> +1 -> (10ms later) same -> doubled = 42. `let!` is Task bind
+// (mirrors `let?` for Result); `Task.map` still pipes when you only need map.
 let program =
-  Task.of(20) |> Task.map((+ 1)) |> Task.andThen(Task.delay(10)) |> Task.map(x => x + x)
+  let! n = Task.of(20) |> Task.map((+ 1)) in
+  let! n2 = Task.delay(10, n) in
+  Task.of(n2 + n2)
 
 // `mochi build main.mochi`, then `node demo.mjs` — prints 42.
 export let result = Task.run(program)

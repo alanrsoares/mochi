@@ -129,9 +129,10 @@ let genExpr = (e, ctx) => switch e {
     // let x = v in b -> an IIFE binding x: `((x) => b)(v)`. Non-recursive, so
     // plain arg-application is enough; nested let-ins chain as curried IIFEs.
     "((${name}) => ${genLambdaBody(body, ctx)})(${genExpr(value, ctx)})"
-  | Ast.ELetBind(param, _, value, body, _) =>
-    // let? p = v in b -> the Result bind: `_Result_flatMap((p) => b)(v)`.
-    "_Result_flatMap((${genParam(param)}) => ${genLambdaBody(body, ctx)})(${genExpr(value, ctx)})"
+  | Ast.ELetBind(param, _, monad, value, body, _) =>
+    // let? / let! p = v in b -> `_Result_flatMap` / `_Task_andThen`((p) => b)(v).
+    let rt = monad == "Result" ? "_Result_flatMap" : "_Task_andThen" in
+      "${rt}((${genParam(param)}) => ${genLambdaBody(body, ctx)})(${genExpr(value, ctx)})"
   | Ast.EPipe(left, right, _) =>
     // desugar inline: a |> f  ->  f(a)
     "${genCallee(right, ctx)}(${genExpr(left, ctx)})"
@@ -729,7 +730,7 @@ let usesMatchLib = e => switch e {
   | Ast.ELetIn(_, _, value, body, _) => usesMatchLib(
       value
     ) || usesMatchLib(body)
-  | Ast.ELetBind(_, _, value, body, _) => usesMatchLib(
+  | Ast.ELetBind(_, _, _, value, body, _) => usesMatchLib(
       value
     ) || usesMatchLib(body)
   | Ast.EPipe(left, right, _) => usesMatchLib(left) || usesMatchLib(right)
@@ -843,10 +844,14 @@ let exprRefs = (e, ctx, acc) => switch e {
       ctx,
       exprRefs(value, ctx, acc)
     )
-  | Ast.ELetBind(_, _, value, body, _) => exprRefs(
+  | Ast.ELetBind(_, _, monad, value, body, _) => exprRefs(
       body,
       ctx,
-      exprRefs(value, ctx, Set.add("_Result_flatMap", acc))
+      exprRefs(
+        value,
+        ctx,
+        Set.add(monad == "Result" ? "_Result_flatMap" : "_Task_andThen", acc)
+      )
     )
   | Ast.EPipe(left, right, _) => exprRefs(right, ctx, exprRefs(left, ctx, acc))
   | Ast.ETernary(cond, thenE, elseE, _) => exprRefs(

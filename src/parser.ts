@@ -215,9 +215,10 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
    */
   function parseLetIn(): Expr {
     const start = expect("let").span;
-    // let? param = value in body — monadic bind on Result (ADR 0017). The
+    // let? / let! param = value in body — monadic bind (Result / Task). The
     // param is any lambda param form (name, `(a, b)` tuple, `{ a }` record).
-    if (peek().t === "question") {
+    if (peek().t === "question" || peek().t === "bang") {
+      const monad = peek().t === "question" ? ("Result" as const) : ("Task" as const);
       next();
       const paramSpan = peek().span;
       const param = parseParam();
@@ -225,7 +226,15 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
       const value = parseExpr();
       expectIn();
       const body = parseExpr();
-      return { kind: "letbind", param, paramSpan, value, body, span: spanning(start, body.span) };
+      return {
+        kind: "letbind",
+        monad,
+        param,
+        paramSpan,
+        value,
+        body,
+        span: spanning(start, body.span),
+      };
     }
     // `let (a, b) = value in body` — tuple destructure, desugared to an applied
     // lambda `((a, b)) => body` called with `value`. Reuses the tuple lambda

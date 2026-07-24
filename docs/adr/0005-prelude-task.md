@@ -39,8 +39,11 @@ We want one shared `Task` namespace in the prelude (like `Option` / `Result` /
    path. No effect rows, no colored functions, no `async`/`await` keyword in this
    ADR.
 
-5. **Deferred (follow-up slices / ADRs):** bind sugar (`>>=`, `do`, or `let!`
-   mirroring `let?` for Result); auto-wrapping multi-arg `extern` imports with
+5. **Bind sugar:** `let!` mirrors `let?` for Task (desugars to `Task.andThen`).
+   Infix monadic bind for **both** Result and Task is deferred — one shared
+   design later, not Task-only sugar.
+
+6. **Done (was deferred):** auto-wrapping multi-arg `extern` imports with
    `_curry` from signature arity.
 
 ## Consequences

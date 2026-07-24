@@ -29,12 +29,22 @@ export type Expr =
       span: Span;
     } // let x [: T] = v in b
   /**
-   * `let? x = value in body` — monadic bind on Result (ADR 0017). `value` must be
-   * a Result; on Ok its payload binds `param` (monomorphic) and `body` (itself a
-   * Result with the same error type) runs; on Err the whole expression is that
-   * Err. Lowers to `_Result_flatMap((param) => body)(value)`.
+   * `let?` / `let!` — monadic bind (ADR 0005). `monad` selects the surface:
+   * - `"Result"` (`let?`): value is `Result a e`; Ok payload binds `param`; body
+   *   is `Result b e`; Err short-circuits. Lowers to `_Result_flatMap`.
+   * - `"Task"` (`let!`): value is `Task a`; payload binds `param`; body is
+   *   `Task b`. Lowers to `_Task_andThen`.
+   * Param is any lambda form (name / tuple / record). Infix bind for both is deferred.
    */
-  | { kind: "letbind"; param: LamParam; paramSpan: Span; value: Expr; body: Expr; span: Span }
+  | {
+      kind: "letbind";
+      monad: "Result" | "Task";
+      param: LamParam;
+      paramSpan: Span;
+      value: Expr;
+      body: Expr;
+      span: Span;
+    }
   | { kind: "pipe"; left: Expr; right: Expr; span: Span } // a |> f
   /**
    * `cond ? then : else` — the boolean conditional as an expression (ADR 0016).

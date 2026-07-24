@@ -154,28 +154,30 @@ const bindParam = (p: LamParam, env: Env, ctx: Ctx): Type => {
 };
 
 /**
- * let? param = value in body — monadic bind on Result (ADR 0017). The value is
- * a `Result a e`; the Ok payload binds the param; the body is itself a Result
- * sharing the same error type, and the whole expression has the body's type.
+ * let? / let! param = value in body — monadic bind (ADR 0005).
+ * Result: value `Result a e`, body `Result b e`, whole is body's type.
+ * Task: value `Task a`, body `Task b`, whole is body's type.
  */
 function inferLetBind(e: LetBindExpr, ctx: Ctx): Result<Type, Diagnostic> {
   const valT = infer(e.value, ctx);
   if (isErr(valT)) return valT;
-  const okT = freshVar(ctx.fresh);
-  const errT = freshVar(ctx.fresh);
-  const uv = u(valT.value, tCon("Result", [okT, errT]), ctx, e.value.span);
+  const payloadT = freshVar(ctx.fresh);
+  const errT = e.monad === "Result" ? freshVar(ctx.fresh) : null;
+  const wantVal = errT !== null ? tCon("Result", [payloadT, errT]) : tCon("Task", [payloadT]);
+  const uv = u(valT.value, wantVal, ctx, e.value.span);
   if (isErr(uv)) return uv;
   const bodyEnv: Env = new Map(ctx.env);
   const paramT = bindParam(e.param, bodyEnv, ctx);
-  const up = u(paramT, okT, ctx, e.paramSpan);
+  const up = u(paramT, payloadT, ctx, e.paramSpan);
   if (isErr(up)) return up;
   if (ctx.record && e.param.kind === "name")
-    ctx.record(e.paramSpan, okT, { kind: "let", name: e.param.name });
+    ctx.record(e.paramSpan, payloadT, { kind: "let", name: e.param.name });
   const bodyT = infer(e.body, { ...ctx, env: bodyEnv });
   if (isErr(bodyT)) return bodyT;
   const resT = freshVar(ctx.fresh);
-  const ub = u(bodyT.value, tCon("Result", [resT, errT]), ctx, e.body.span);
-  return isErr(ub) ? ub : ok(tCon("Result", [resT, errT]));
+  const wantBody = errT !== null ? tCon("Result", [resT, errT]) : tCon("Task", [resT]);
+  const ub = u(bodyT.value, wantBody, ctx, e.body.span);
+  return isErr(ub) ? ub : ok(wantBody);
 }
 
 /**

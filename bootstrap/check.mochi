@@ -64,7 +64,7 @@ let exprSpan = e => switch e {
   | Ast.ECall(_, _, sp) => sp
   | Ast.ELambda(_, _, sp) => sp
   | Ast.ELetIn(_, _, _, _, sp) => sp
-  | Ast.ELetBind(_, _, _, _, sp) => sp
+  | Ast.ELetBind(_, _, _, _, _, sp) => sp
   | Ast.EPipe(_, _, sp) => sp
   | Ast.ETernary(_, _, _, sp) => sp
   | Ast.EMatch(_, _, sp) => sp
@@ -478,7 +478,7 @@ let checkExpr = (e, reg) => switch e {
   | Ast.ELambda(_, body, _) => checkExpr(body, reg)
   | Ast.ELetIn(_, _, value, body, _) => checkExpr(value, reg)
       |> Option.orElse(checkExpr(body, reg))
-  | Ast.ELetBind(_, _, value, body, _) => checkExpr(value, reg)
+  | Ast.ELetBind(_, _, _, value, body, _) => checkExpr(value, reg)
       |> Option.orElse(checkExpr(body, reg))
   | Ast.EPipe(left, right, _) => checkExpr(left, reg)
       |> Option.orElse(checkExpr(right, reg))
