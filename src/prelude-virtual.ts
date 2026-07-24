@@ -7,7 +7,7 @@ import { match } from "@onrails/pattern";
 import { builtinTypeDecls, preludeEnv, preludeNamespaces } from "./prelude";
 import type { Location, Span } from "./span";
 import { emptyOrigins, type Origins } from "./symbols";
-import { showType, type Type } from "./types";
+import { type ConType, showType, type Type } from "./types";
 
 /** Virtual document URI / Location.path for every builtin def. */
 export const PRELUDE_PATH = "mochi:/prelude.mochi";
@@ -96,13 +96,11 @@ const VALUE_DOCS: Record<string, string> = {
 const showSurface = (t: Type): string =>
   match(t)
     .with({ kind: "var" }, (v) => VAR_NAMES[v.id] ?? showType(v))
-    .with({ kind: "con" }, (con) => {
-      if (con.name === "Array" && con.args.length === 1) return `[${showSurface(con.args[0]!)}]`;
-      if (con.name === "tuple") return `(${con.args.map(showSurface).join(", ")})`;
-      return con.args.length === 0
-        ? con.name
-        : `${con.name} ${con.args.map(showSurface).join(" ")}`;
-    })
+    .with({ kind: "con", name: "Array" }, (con) =>
+      con.args.length === 1 ? `[${showSurface(con.args[0]!)}]` : surfaceCon(con),
+    )
+    .with({ kind: "con", name: "tuple" }, (con) => `(${con.args.map(showSurface).join(", ")})`)
+    .with({ kind: "con" }, (con) => surfaceCon(con))
     .with({ kind: "arrow" }, (arrow) => {
       const from =
         arrow.from.kind === "arrow" ? `(${showSurface(arrow.from)})` : showSurface(arrow.from);
@@ -110,6 +108,9 @@ const showSurface = (t: Type): string =>
     })
     .with({ kind: "record" }, (rec) => showType(rec))
     .exhaustive();
+
+const surfaceCon = (con: ConType): string =>
+  con.args.length === 0 ? con.name : `${con.name} ${con.args.map(showSurface).join(" ")}`;
 
 export type PreludeVirtual = {
   source: string;

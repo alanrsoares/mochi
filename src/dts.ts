@@ -21,6 +21,7 @@ import { typeExprToType } from "./schemes";
 import {
   type AliasDef,
   aliasParamId,
+  type ConType,
   foldAliases,
   mkFresh,
   type Row,
@@ -59,42 +60,53 @@ const PRIM_TS: Record<string, string> = {
 
 /** HM type → TS type. `names` maps quantified var ids to generic letters; any other var renders as `unknown` (it escaped generalization at this position). */
 function tsOf(t: Type, names: Map<number, string>): string {
-  return match(t)
-    .with({ kind: "var" }, (v) => names.get(v.id) ?? "unknown")
-    .with({ kind: "con" }, (con) => {
-      const prim = PRIM_TS[con.name];
-      if (prim) return prim;
-      if (con.name === "Array" && con.args.length === 1) return `${tsOf(con.args[0]!, names)}[]`;
-      if (con.name === "List" && con.args.length === 1)
-        return `Iterable<${tsOf(con.args[0]!, names)}>`;
+  return (
+    match(t)
+      .with({ kind: "var" }, (v) => names.get(v.id) ?? "unknown")
+      .with({ kind: "con", name: "Array" }, (con) =>
+        con.args.length === 1 ? `${tsOf(con.args[0]!, names)}[]` : nominalCon(con, names),
+      )
+      .with({ kind: "con", name: "List" }, (con) =>
+        con.args.length === 1 ? `Iterable<${tsOf(con.args[0]!, names)}>` : nominalCon(con, names),
+      )
       // Task is an opaque lazy thunk (ADR 0005) — emit the runtime shape, not a phantom nominal.
-      if (con.name === "Task" && con.args.length === 1)
-        return `() => Promise<${tsOf(con.args[0]!, names)}>`;
-      if (con.name === "tuple") return `[${con.args.map((a) => tsOf(a, names)).join(", ")}]`;
-      return con.args.length === 0
-        ? con.name
-        : `${con.name}<${con.args.map((a) => tsOf(a, names)).join(", ")}>`;
-    })
-    .with({ kind: "arrow" }, (arrow) => {
-      // Flat multi-param arrow, matching codegen's UNCURRIED calling convention:
-      // user functions emit `(a, b) => …` (defs) and `f(a, b)` (calls), never
-      // `f(a)(b)`. `declType` already flattens a binding's own params this way;
-      // rendering NESTED function types (a HOF's function-typed param, e.g.
-      // `sepBy`'s `parseItem`) curried instead — `(x) => (x) => R` — is what
-      // made a flat function VALUE reject against a curried param slot (TS2345).
-      // Collapse the whole arrow chain into one arrow so the two agree.
-      const params: string[] = [];
-      let cur: Type = arrow;
-      while (cur.kind === "arrow") {
-        params.push(tsOf(cur.from, names));
-        cur = cur.to;
-      }
-      const named = params.map((p, i) => `${String.fromCharCode(97 + i)}: ${p}`);
-      return `(${named.join(", ")}) => ${tsOf(cur, names)}`;
-    })
-    .with({ kind: "record" }, (rec) => tsRow(rec.row, names))
-    .exhaustive();
+      .with({ kind: "con", name: "Task" }, (con) =>
+        con.args.length === 1
+          ? `() => Promise<${tsOf(con.args[0]!, names)}>`
+          : nominalCon(con, names),
+      )
+      .with(
+        { kind: "con", name: "tuple" },
+        (con) => `[${con.args.map((a) => tsOf(a, names)).join(", ")}]`,
+      )
+      .with({ kind: "con" }, (con) => PRIM_TS[con.name] ?? nominalCon(con, names))
+      .with({ kind: "arrow" }, (arrow) => {
+        // Flat multi-param arrow, matching codegen's UNCURRIED calling convention:
+        // user functions emit `(a, b) => …` (defs) and `f(a, b)` (calls), never
+        // `f(a)(b)`. `declType` already flattens a binding's own params this way;
+        // rendering NESTED function types (a HOF's function-typed param, e.g.
+        // `sepBy`'s `parseItem`) curried instead — `(x) => (x) => R` — is what
+        // made a flat function VALUE reject against a curried param slot (TS2345).
+        // Collapse the whole arrow chain into one arrow so the two agree.
+        const params: string[] = [];
+        let cur: Type = arrow;
+        while (cur.kind === "arrow") {
+          params.push(tsOf(cur.from, names));
+          cur = cur.to;
+        }
+        const named = params.map((p, i) => `${String.fromCharCode(97 + i)}: ${p}`);
+        return `(${named.join(", ")}) => ${tsOf(cur, names)}`;
+      })
+      .with({ kind: "record" }, (rec) => tsRow(rec.row, names))
+      .exhaustive()
+  );
 }
+
+/** Nominal / applied ctor fallback: `Foo` or `Foo<A, B>`. */
+const nominalCon = (con: ConType, names: Map<number, string>): string =>
+  con.args.length === 0
+    ? con.name
+    : `${con.name}<${con.args.map((a) => tsOf(a, names)).join(", ")}>`;
 
 function tsRow(row: Row, names: Map<number, string>): string {
   const fields: string[] = [];
