@@ -224,13 +224,8 @@ let scanTemplateLoop = (src, j, value, parts) => switch Str.get(j, src) {
   | None => None
   | Some("\"") => Some({ parts: Array.append(PLit(value), parts), end: j + 1 })
   | Some("\\") => switch Str.get(j + 1, src) {
-      | Some(n) => scanTemplateLoop(
-          src,
-          j + 2,
-          Str.concat(value, escChar(n)),
-          parts
-        )
-      | None => scanTemplateLoop(src, j + 1, Str.concat(value, "\\"), parts)
+      | Some(n) => scanTemplateLoop(src, j + 2, "${value}${escChar(n)}", parts)
+      | None => scanTemplateLoop(src, j + 1, "${value}\\", parts)
     }
   | Some("$") when Str.get(j + 1, src) |> Option.contains("{") => switch findHoleEnd(src, j + 2) {
       | None => None
@@ -238,7 +233,7 @@ let scanTemplateLoop = (src, j, value, parts) => switch Str.get(j, src) {
         let withHole = Array.append(PHole(j + 2, holeEnd - 1), withLit) in
         scanTemplateLoop(src, holeEnd, "", withHole)
     }
-  | Some(c) => scanTemplateLoop(src, j + 1, Str.concat(value, c), parts)
+  | Some(c) => scanTemplateLoop(src, j + 1, "${value}${c}", parts)
 }
 let scanTemplate = (src, i) => scanTemplateLoop(src, i + 1, "", [])
 
@@ -396,11 +391,7 @@ let go = (src, i, doc, nlRun, lineTok, toks) => switch Str.get(i, src) {
                 | None => isIdStart(c)
                     ? let j = scanWhile(isIdChar, src, i + 1) in
                     emit(src, identTok(Str.slice(i, j, src)), i, j, doc, toks)
-                    : lexError(
-                      Str.concat("unexpected char '", Str.concat(c, "'")),
-                      i,
-                      i + 1
-                    )
+                    : lexError("unexpected char '${c}'", i, i + 1)
               }
       }
 }

@@ -1001,7 +1001,7 @@ let parseRecordDestructure = (start, toks, pos, tmp) =>
   let? (value, p4) = parseExpr(toks, p3) in
   let whole = spanning(start, exprSpan(value)) in
   let patSpan = spanning(openSp, closeSp) in
-  let tmpName = Str.concat("$d", show(tmp)) in
+  let tmpName = "$d${show(tmp)}" in
   let header = SLet(tmpName, patSpan, None, value, false, None, whole) in
   let access = f =>
     SLet(

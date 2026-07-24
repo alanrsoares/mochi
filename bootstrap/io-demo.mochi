@@ -20,6 +20,6 @@ export let run = args => switch (Array.get(0, args), Array.get(1, args)) {
 
 // Entry: drive it from the real process argv.
 export let main = switch run(argv) {
-  | Ok(dst) => print(Str.concat("wrote ", dst))
-  | Err(e) => print(Str.concat("error: ", e))
+  | Ok(dst) => print("wrote ${dst}")
+  | Err(e) => print("error: ${e}")
 }

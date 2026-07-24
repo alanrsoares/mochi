@@ -22,8 +22,7 @@ extern die : string -> a = "./host.mjs" "die"
 extern formatError : string -> string -> Diag -> string = "./host.mjs" "formatError"
 
 // "foo.mochi" -> "foo.js"  (drops the 6-char `.mochi` suffix).
-let outPath = path =>
-  Str.concat(Str.slice(0, Str.length(path) - 6, path), ".js")
+let outPath = path => "${Str.slice(0, Str.length(path) - 6, path)}.js"
 
 // Single-file build: open-world compile, one written `.js`. Every arm of the
 // railway carries a string error (readFile's, or compile's via formatError).
@@ -40,7 +39,7 @@ let writeAll = outs => switch outs {
   | [] => Ok("")
   | [o, ...rest] => switch writeFile(outPath(o.path), o.js) {
       | Err(e) => Err(e)
-      | Ok(w) => let logged = print(Str.concat("  wrote ", w)) in writeAll(rest)
+      | Ok(w) => let logged = print("  wrote ${w}") in writeAll(rest)
     }
 }
 
@@ -64,7 +63,7 @@ export let main = switch Array.get(0, argv) {
         }
     }
   | Some(path) => switch buildOne(path) {
-      | Ok(out) => print(Str.concat("wrote ", out))
+      | Ok(out) => print("wrote ${out}")
       | Err(msg) => die(msg)
     }
 }

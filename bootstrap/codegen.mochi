@@ -64,14 +64,14 @@ let jsStringLit = s => "\"${cat(Str.chars(s) |> map(escChar))}\""
 // two chars that would otherwise reopen JS template syntax.
 let escTemplateLoop = (chars, i, acc) => switch Array.get(i, chars) {
   | None => acc
-  | Some("\\") => escTemplateLoop(chars, i + 1, Str.concat(acc, "\\\\"))
-  | Some("`") => escTemplateLoop(chars, i + 1, Str.concat(acc, "\\`"))
+  | Some("\\") => escTemplateLoop(chars, i + 1, "${acc}\\\\")
+  | Some("`") => escTemplateLoop(chars, i + 1, "${acc}\\`")
   | Some("$") when Array.get(i + 1, chars) |> Option.contains("{") => escTemplateLoop(
       chars,
       i + 2,
-      Str.concat(acc, "\\\${")
+      "${acc}\\\${"
     )
-  | Some(c) => escTemplateLoop(chars, i + 1, Str.concat(acc, c))
+  | Some(c) => escTemplateLoop(chars, i + 1, "${acc}${c}")
 }
 let escapeTemplateLiteral = s => escTemplateLoop(Str.chars(s), 0, "")
 
