@@ -54,11 +54,25 @@ test("every preludeEnv entry has a docstring", () => {
   }
 });
 
-test("definitionAt on a prelude value jumps to the virtual prelude", () => {
-  const src = "let n = add(1, 2)";
-  const def = definitionAt(src, pos(src, "add"), "/t.mochi");
+test("definitionAt on Result.map jumps to the namespace member", () => {
+  const src = "let f = Result.map(identity)";
+  const onNs = definitionAt(src, pos(src, "Result"), "/t.mochi");
+  const onMem = definitionAt(src, pos(src, "map"), "/t.mochi");
+  expect(onNs?.path).toBe(PRELUDE_PATH);
+  expect(onMem?.path).toBe(PRELUDE_PATH);
+  expect(preludeVirtualSource().slice(onNs!.span.start, onNs!.span.end)).toBe("Result");
+  expect(preludeVirtualSource().slice(onMem!.span.start, onMem!.span.end)).toBe("map");
+  // Member def is the Result.map stub, not the unqualified Array `map`.
+  const around = preludeVirtualSource().slice(Math.max(0, onMem!.span.start - 80), onMem!.span.end);
+  expect(around).toContain("`Result.map`");
+});
+
+test("definitionAt on Array.filter uses the Array namespace", () => {
+  const src = "let f = Array.filter(always(true))";
+  const def = definitionAt(src, pos(src, "filter"), "/t.mochi");
   expect(def?.path).toBe(PRELUDE_PATH);
-  expect(preludeVirtualSource().slice(def!.span.start, def!.span.end)).toBe("add");
+  const around = preludeVirtualSource().slice(Math.max(0, def!.span.start - 80), def!.span.end);
+  expect(around).toContain("`Array.filter`");
 });
 
 test("definitionAt on Option / Some jumps to the virtual type/ctor", () => {

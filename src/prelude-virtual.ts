@@ -1,8 +1,8 @@
 // Virtual prelude buffer — readable go-to-definition targets for builtins
 // (DX slice 9). Not a real module; Location.path is PRELUDE_PATH.
 // URI ends with `.mochi` so editors pick up the language / syntax grammar.
-import { builtinTypeDecls, preludeEnv } from "./prelude";
-import type { Location } from "./span";
+import { builtinTypeDecls, preludeEnv, preludeNamespaces } from "./prelude";
+import type { Location, Span } from "./span";
 import { emptyOrigins, type Origins } from "./symbols";
 import { showType, type Type } from "./types";
 
@@ -26,6 +26,18 @@ const CTOR_DOCS: Record<string, string> = {
   None: "Absent `Option`.",
   Ok: "Successful `Result` value.",
   Err: "Failed `Result` error.",
+};
+
+const NS_DOCS: Record<string, string> = {
+  Array:
+    "Eager array combinators (`Array.map`, …). Unqualified `map`/`filter`/`reduce` alias these.",
+  List: "Lazy `List` combinators (`@{…}` sequences).",
+  Set: "Immutable Set ops (return a fresh Set).",
+  Map: "Immutable Map ops (return a fresh Map).",
+  Option: "Option combinators — data-last for `|>` chains. Ctors stay unqualified (`Some`/`None`).",
+  Result:
+    "Result railway combinators — data-last for `|>` chains. Ctors stay unqualified (`Ok`/`Err`).",
+  Str: "String ops (`Str.split`, `Str.get`, …). Data-last where a subject is involved.",
 };
 
 const VALUE_DOCS: Record<string, string> = {
@@ -94,14 +106,19 @@ const showSurface = (t: Type): string => {
   }
 };
 
-type PreludeVirtual = {
+export type PreludeVirtual = {
   source: string;
   origins: Origins;
+  /** `Ns.member` → def Location in the virtual buffer. */
+  nsMembers: Map<string, Location>;
 };
+
+const nsKey = (ns: string, member: string): string => `${ns}.${member}`;
 
 const build = (): PreludeVirtual => {
   let source = "";
   const origins = emptyOrigins();
+  const nsMembers = new Map<string, Location>();
 
   /** Append a line; return the absolute offset where `line` begins. */
   const push = (line: string): number => {
@@ -161,7 +178,33 @@ const build = (): PreludeVirtual => {
     push("");
   }
 
-  return { source, origins };
+  push("/// Prelude namespaces (`Result.map`, `Array.filter`, …)");
+  push("");
+  for (const [ns, members] of Object.entries(preludeNamespaces)) {
+    doc(NS_DOCS[ns] ?? `${ns} namespace.`);
+    // Namespace qualifier binding — F12 on `Result` in `Result.map`.
+    const nsLine = `let ${ns} = ${ns}`;
+    const nsLineStart = push(nsLine);
+    const nsNameStart = nsLineStart + "let ".length;
+    note("value", ns, nsNameStart, nsNameStart + ns.length);
+    push("");
+    for (const [member, ty] of Object.entries(members)) {
+      doc(`\`${ns}.${member}\``);
+      // Keep the surface name as `member` so the def span is the bare identifier;
+      // the /// line above carries the qualified name.
+      const line = `extern ${member} : ${showSurface(ty)} = "mochi:prelude" "${ns}.${member}"`;
+      const lineStart = push(line);
+      const nameStart = lineStart + "extern ".length;
+      const at: Location = {
+        path: PRELUDE_PATH,
+        span: { start: nameStart, end: nameStart + member.length },
+      };
+      nsMembers.set(nsKey(ns, member), at);
+      push("");
+    }
+  }
+
+  return { source, origins, nsMembers };
 };
 
 let cached: PreludeVirtual | undefined;
@@ -176,6 +219,16 @@ export const preludeVirtualSource = (): string => preludeVirtual().source;
 
 export const preludeOrigins = (): Origins => preludeVirtual().origins;
 
+/** Def Location for a prelude `Ns.member`, or null. */
+export const preludeNsMember = (ns: string, member: string): Location | null =>
+  preludeVirtual().nsMembers.get(nsKey(ns, member)) ?? null;
+
+/** Span of the field name in `target.name` (parser span covers the whole access). */
+export const fieldNameSpan = (fieldSpan: Span, name: string): Span => ({
+  start: fieldSpan.end - name.length,
+  end: fieldSpan.end,
+});
+
 /** Lookup a builtin docstring (for tests / future hover enrichment). */
 export const preludeDoc = (name: string): string | undefined =>
-  VALUE_DOCS[name] ?? CTOR_DOCS[name] ?? TYPE_DOCS[name];
+  VALUE_DOCS[name] ?? CTOR_DOCS[name] ?? TYPE_DOCS[name] ?? NS_DOCS[name];

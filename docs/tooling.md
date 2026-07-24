@@ -38,8 +38,9 @@ the `.mochi` formatter on `bootstrap/`), `build:ext` (VS Code extension).
 - **Hover** — types on demand, folded back to named record aliases where they match, with
   `///` doc comments attached.
 - **Go to definition / document highlight** — lexical symbol index (values, types, ctors);
-  works when typecheck fails. Prelude / builtins resolve to a virtual `mochi:/prelude.mochi`
-  buffer (read-only). Cross-module F12 follows import origins to the exporting module
+  works when typecheck fails. Prelude / builtins (including `Result.map`-style
+  namespaces) resolve to a virtual `mochi:/prelude.mochi` buffer (read-only).
+  Cross-module F12 follows import origins to the exporting module
   ([tracer bullets](dx-tracer-bullets.md)).
 - **Find references / rename** — same-file and across the import graph; skips `$`/`_`
   synthetics and prelude (virtual defs are not renameable). F2 rewrites every occurrence
