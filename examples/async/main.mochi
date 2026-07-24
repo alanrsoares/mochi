@@ -1,17 +1,13 @@
 // Async in mochi WITHOUT an async/await keyword. A `Task a` is an ordinary
-// value — the applied-constructor type from an `extern` — so asynchrony
-// composes through the same `|>` pipeline as everything else. The host runtime
-// (./task.mjs) supplies the primitives; `run` hands the underlying Promise back
-// to JS at the edge, which is the only place effects actually happen.
-extern of : a -> Task a = "./task.mjs" "of"
-extern mapT : (a -> b) -> Task a -> Task b = "./task.mjs" "mapT"
-extern andThen : (a -> Task b) -> Task a -> Task b = "./task.mjs" "andThen"
-extern delay : number -> a -> Task a = "./task.mjs" "delay"
-extern run : Task a -> Promise a = "./task.mjs" "run"
+// prelude value (opaque lazy thunk) — asynchrony composes through the same
+// `|>` pipeline as everything else. `Task.run` hands the underlying Promise
+// back to JS at the edge, which is the only place effects actually happen.
+// See ADR 0005.
 
 // of(20) -> +1 -> (10ms later) same -> doubled = 42. Each stage is typed:
-// `mapT` keeps it a Task; `andThen` sequences one Task after another.
-let program = of(20) |> mapT((+ 1)) |> andThen(delay(10)) |> mapT(x => x + x)
+// `Task.map` keeps it a Task; `Task.andThen` sequences one Task after another.
+let program =
+  Task.of(20) |> Task.map((+ 1)) |> Task.andThen(Task.delay(10)) |> Task.map(x => x + x)
 
 // `mochi build main.mochi`, then `node demo.mjs` — prints 42.
-export let result = run(program)
+export let result = Task.run(program)

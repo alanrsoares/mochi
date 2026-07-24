@@ -1,18 +1,13 @@
 // Animated Conway's Game of Life — frames repaint in place in the terminal.
 //
-// The simulation is pure (`at`/`neighbours`/`step`/`render`). All effects —
-// clearing the screen, drawing a frame, sleeping between ticks — are `Task`s
-// bound from ./runtime.mjs, sequenced with `andThen`. `run` at the very end is
-// the only place an effect fires. Build + run:
+// The simulation is pure (`at`/`neighbours`/`step`/`render`). Sequencing uses
+// prelude `Task.*` (ADR 0005); domain effects — setup / draw / teardown — stay
+// as thin `extern`s from ./runtime.mjs. `Task.run` at the very end is the only
+// place an effect fires. Build + run:
 //
 //   bun src/cli.ts build examples/life/main.mochi
 //   bun examples/life/main.js
 
-extern of : a -> Task a = "./runtime.mjs" "of"
-extern mapT : (a -> b) -> Task a -> Task b = "./runtime.mjs" "mapT"
-extern andThen : (a -> Task b) -> Task a -> Task b = "./runtime.mjs" "andThen"
-extern delay : number -> a -> Task a = "./runtime.mjs" "delay"
-extern run : Task a -> Promise a = "./runtime.mjs" "run"
 extern setup : number -> Task number = "./runtime.mjs" "setup"
 extern draw : string -> string -> Task number = "./runtime.mjs" "draw"
 extern teardown : number -> Task number = "./runtime.mjs" "teardown"
@@ -99,10 +94,10 @@ let loop = (remaining, g, board) =>
   remaining <= 0
     ? teardown(0)
     : draw(label(g))(render(board))
-      |> andThen(_ => delay(90, 0))
-      |> andThen(_ => loop(remaining - 1, g + 1, step(board)))
+      |> Task.andThen(_ => Task.delay(90, 0))
+      |> Task.andThen(_ => loop(remaining - 1, g + 1, step(board)))
 
 // setup grabs the alternate screen buffer, then we run 120 frames.
-let program = setup(0) |> andThen(_ => loop(120, 0, board0))
+let program = setup(0) |> Task.andThen(_ => loop(120, 0, board0))
 
-export let result = run(program)
+export let result = Task.run(program)
