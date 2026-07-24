@@ -4,6 +4,7 @@
 // rename, highlight, and diagnostic labels in later DX slices.
 import type { Expr, LamParam, Pattern, Program, Stmt, TypeExpr } from "./ast";
 import { isCtorName } from "./ast";
+import { preludeOrigins } from "./prelude-virtual";
 import type { Location, Span } from "./span";
 
 export type SymbolSpace = "value" | "type" | "ctor";
@@ -363,6 +364,20 @@ const bindImport = (b: Builder, name: string, span: Span, origins?: Origins): vo
   bind(b, "value", name, span);
 };
 
+/** Seed builtins so uses resolve to the virtual prelude Location (DX slice 9). */
+const seedPrelude = (b: Builder): void => {
+  const origins = preludeOrigins();
+  for (const [name, def] of origins.type) {
+    b.scopes.type[0]!.set(name, { name, space: "type", def });
+  }
+  for (const [name, def] of origins.ctor) {
+    b.scopes.ctor[0]!.set(name, { name, space: "ctor", def });
+  }
+  for (const [name, def] of origins.value) {
+    b.scopes.value[0]!.set(name, { name, space: "value", def });
+  }
+};
+
 /** Build a symbol index. `origins` rewrites imported names to their export Locations. */
 export const indexProgram = (path: string, prog: Program, origins?: Origins): SymbolIndex => {
   const b: Builder = {
@@ -370,6 +385,7 @@ export const indexProgram = (path: string, prog: Program, origins?: Origins): Sy
     scopes: { value: [new Map()], type: [new Map()], ctor: [new Map()] },
     occurrences: [],
   };
+  seedPrelude(b);
   bindTopLevels(b, prog.stmts, origins);
   walkStmts(b, prog.stmts);
 
