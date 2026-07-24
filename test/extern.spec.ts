@@ -61,6 +61,16 @@ test("desugars comparison infixes (==, !=, <, <=, >, >=)", () => {
   const res = compile(code);
   expect(isOk(res)).toBe(true);
 });
+
+test("desugars logical infixes (&&, ||)", () => {
+  const code = `
+    let a = true && false
+    let b = true || false
+    let c = (1 < 2) && (3 == 3)
+  `;
+  const res = compile(code);
+  expect(isOk(res)).toBe(true);
+});
 test("lowercase names in a signature are generalized type variables", () => {
   // a -> a is polymorphic
   expect(schemeOf(`extern id : a -> a = "./u.js" "id"`, "id")).toMatch(/^'t\d+ -> 't\d+$/);

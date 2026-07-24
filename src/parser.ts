@@ -53,6 +53,8 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
 
   const PIPE_BP = 5;
   const COMPOSE_BP = 6;
+  const OR_BP = 7;
+  const AND_BP = 7;
   const CMP_BP = 8;
   const CONCAT_BP = 10;
   const ADD_BP = 10;
@@ -267,6 +269,21 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     }
     const cmpResult = parseCmpInfix(left, minBp);
     if (cmpResult) return { left: cmpResult, matched: true };
+    if ((tk.t === "andand" || tk.t === "oror") && (tk.t === "andand" ? AND_BP : OR_BP) >= minBp) {
+      const opTok = next();
+      const bp = opTok.t === "andand" ? AND_BP : OR_BP;
+      const right = parseExpr(bp + 1);
+      const fnName = opTok.t === "andand" ? "and" : "or";
+      return {
+        left: {
+          kind: "call",
+          fn: { kind: "ref", name: fnName, span: opTok.span },
+          args: [left, right],
+          span: spanning(left.span, right.span),
+        },
+        matched: true,
+      };
+    }
     if (tk.t === "concat" && CONCAT_BP >= minBp) {
       const opTok = next();
       const right = parseExpr(CONCAT_BP + 1);

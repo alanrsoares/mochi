@@ -41,6 +41,8 @@ export type Tok =
   | { t: "gte" } // >=
   | { t: "lt" } // <
   | { t: "gt" } // >
+  | { t: "andand" } // &&
+  | { t: "oror" } // ||
   | { t: "comma" }
   | { t: "num"; v: number; raw: string } // raw source lexeme, so `3.0`/`-3` survive re-printing
   | { t: "bool"; v: boolean } // true / false
@@ -80,6 +82,8 @@ const DIGRAPHS: Record<string, Tok | undefined> = {
   "!=": { t: "neq" },
   "<=": { t: "lte" },
   ">=": { t: "gte" },
+  "&&": { t: "andand" },
+  "||": { t: "oror" },
   "=>": { t: "arrow" },
   "->": { t: "tarrow" }, // type-expression arrow (extern signatures)
 };
