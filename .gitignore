@@ -15,6 +15,9 @@ dist
 # (JS emit is already covered by `*.js` above).
 /bootstrap/*.ts
 /bootstrap/*.d.mts
+/examples/**/*.ts
+/examples/**/*.d.mts
+
 
 # code coverage
 coverage

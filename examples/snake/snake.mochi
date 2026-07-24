@@ -1,0 +1,141 @@
+// Canvas Snake Game - Pure State & Logic in Mochi
+//
+// Build with:
+//   bun run mochi build examples/snake/snake.mochi
+
+type Direction = | Up | Down | Left | Right
+
+type Status = | Ready | Playing | Paused | GameOver
+
+type State = {
+  snake: [(number, number)],
+  food: (number, number),
+  dir: Direction,
+  dirQueue: [Direction],
+  score: number,
+  highScore: number,
+  status: Status,
+  cols: number,
+  rows: number
+}
+
+/// Calculate next head position based on direction
+let nextHead = ((x, y), dir) => switch dir {
+  | Up    => (x, y - 1)
+  | Down  => (x, y + 1)
+  | Left  => (x - 1, y)
+  | Right => (x + 1, y)
+}
+
+/// Prevent 180-degree immediate self-reversal
+let isOpposite = (d1, d2) => switch (d1, d2) {
+  | (Up, Down)    => true
+  | (Down, Up)    => true
+  | (Left, Right) => true
+  | (Right, Left) => true
+  | _             => false
+}
+
+/// Get the last intended direction in queue or current dir
+let lastIntendedDir = state =>
+  switch Array.head(Array.reverse(state.dirQueue)) {
+    | Some(d) => d
+    | None    => state.dir
+  }
+
+/// Check if position (x, y) is out of grid bounds
+let checkWallCollision = ((x, y), cols, rows) =>
+  x < 0 || x >= cols || y < 0 || y >= rows
+
+/// Check if position is contained within the snake body
+let checkSelfCollision = (head, body) =>
+  Array.contains(head)(body)
+
+/// Initialize a fresh game state
+export let initGame = (cols, rows, highScore) =>
+  let initialSnake = [(10, 10), (9, 10), (8, 10)] in
+  let initialFood = (15, 10) in
+  {
+    snake: initialSnake,
+    food: initialFood,
+    dir: Right,
+    dirQueue: [],
+    score: 0,
+    highScore: highScore,
+    status: Ready,
+    cols: cols,
+    rows: rows
+  }
+
+/// Queue directional input for guaranteed ordered handling
+export let changeDir = (state, newDir) =>
+  switch state.status {
+    | Playing =>
+        let maxQueueSize = 3 in
+        (Array.length(state.dirQueue) >= maxQueueSize)
+          ? state
+          : let lastDir = lastIntendedDir(state) in
+            (isOpposite(lastDir, newDir) || eq(lastDir, newDir))
+              ? state
+              : { ...state, dirQueue: Array.append(newDir)(state.dirQueue) }
+    | Ready =>
+        let lastDir = lastIntendedDir(state) in
+        isOpposite(lastDir, newDir)
+          ? state
+          : { ...state, dir: newDir, dirQueue: [newDir] }
+    | _ => state
+  }
+
+/// Start or unpause the game
+export let startGame = state =>
+  switch state.status {
+    | Ready => { ...state, status: Playing }
+    | Paused => { ...state, status: Playing }
+    | _ => state
+  }
+
+/// Toggle pause state
+export let togglePause = state =>
+  switch state.status {
+    | Playing => { ...state, status: Paused }
+    | Paused  => { ...state, status: Playing }
+    | _ => state
+  }
+
+/// Advance game state by one frame tick
+export let step = (state, randomFood) =>
+  switch state.status {
+    | Playing =>
+        let _ = isOpposite(state.dir, Up) in
+        let currentDir = switch Array.head(state.dirQueue) {
+          | Some(d) => d
+          | None    => state.dir
+        } in
+        let remainingQueue = switch Array.head(state.dirQueue) {
+          | Some(_) => Array.drop(1)(state.dirQueue)
+          | None    => state.dirQueue
+        } in
+        let head = Array.head(state.snake) |> Option.unwrapOr((0, 0)) in
+        let newHead = nextHead(head, currentDir) in
+        let hitWall = checkWallCollision(newHead, state.cols, state.rows) in
+        let hitSelf = checkSelfCollision(newHead, state.snake) in
+        (hitWall || hitSelf)
+          ? let finalHighScore = max(state.score, state.highScore) in
+            { ...state, status: GameOver, highScore: finalHighScore }
+          : let eating = eq(newHead, state.food) in
+            let newScore = eating ? state.score + 10 : state.score in
+            let newHigh = max(newScore, state.highScore) in
+            let rawBody = [newHead, ...state.snake] in
+            let newSnake = eating ? rawBody : Array.take(Array.length(state.snake))(rawBody) in
+            let newFood = eating ? randomFood : state.food in
+            {
+              ...state,
+              snake: newSnake,
+              food: newFood,
+              dir: currentDir,
+              dirQueue: remainingQueue,
+              score: newScore,
+              highScore: newHigh
+            }
+    | _ => state
+  }
