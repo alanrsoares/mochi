@@ -25,9 +25,10 @@ test("definitionAt on the def site returns itself", () => {
   expect(def?.span).toEqual({ start: 4, end: 5 });
 });
 
-test("definitionAt on a prelude name is null", () => {
+test("definitionAt on a prelude name opens the virtual prelude", () => {
   const src = "let n = add(1, 2)";
-  expect(definitionAt(src, pos(src, "add"))).toBeNull();
+  const def = definitionAt(src, pos(src, "add"));
+  expect(def?.path).toBe("mochi:/prelude.mochi");
 });
 
 test("definitionAt works when the file does not typecheck", () => {

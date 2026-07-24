@@ -121,10 +121,11 @@ errors) share one compiler-side model — the LSP stays a thin adapter (ADR 0003
   the edit path with rename. Distinct from Help: Help explains, Suggestion edits.
 - **Binding** — a name in scope identified by its **def span** (not the string), so
   shadowing stays precise for nav and for error labels.
-- **Symbol index** — lexical def/use map over a `Program` (+ import origins). Powers
-  go-to-definition, find-refs, rename, document highlight, and "defined here" /
-  did-you-mean labels. Built without typechecking so it still works when inference
-  fails.
+- **Symbol index** — lexical def/use map over a `Program` (+ import origins + prelude
+  virtual defs). Powers go-to-definition, find-refs, rename, document highlight, and
+  "defined here" / did-you-mean labels. Built without typechecking so it still works when
+  inference fails. Builtin names resolve to `mochi:/prelude.mochi` (a virtual buffer); they are
+  not renameable.
 
 ## Effects — a convention, not a feature
 

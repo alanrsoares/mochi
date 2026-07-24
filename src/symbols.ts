@@ -4,6 +4,7 @@
 // rename, highlight, and diagnostic labels in later DX slices.
 import type { Expr, LamParam, Pattern, Program, Stmt, TypeExpr } from "./ast";
 import { isCtorName } from "./ast";
+import { fieldNameSpan, preludeNsMember, preludeOrigins } from "./prelude-virtual";
 import type { Location, Span } from "./span";
 
 export type SymbolSpace = "value" | "type" | "ctor";
@@ -236,10 +237,23 @@ const walkExpr = (b: Builder, e: Expr): void => {
       if (e.spread) walkExpr(b, e.spread);
       for (const f of e.fields) walkExpr(b, f.value);
       return;
-    case "field":
+    case "field": {
       walkExpr(b, e.target);
-      // Property names are not bindings in the value/type/ctor index.
+      // Prelude `Ns.member` (e.g. Result.map) — record the member use against the
+      // virtual def. Ordinary record fields stay unindexed (DX slice 10).
+      if (e.target.kind === "ref") {
+        const def = preludeNsMember(e.target.name, e.name);
+        if (def) {
+          const binding: Binding = { name: e.name, space: "value", def };
+          b.occurrences.push({
+            binding,
+            span: fieldNameSpan(e.span, e.name),
+            role: "use",
+          });
+        }
+      }
       return;
+    }
     case "tuple":
       for (const el of e.elements) walkExpr(b, el);
       return;
@@ -363,6 +377,20 @@ const bindImport = (b: Builder, name: string, span: Span, origins?: Origins): vo
   bind(b, "value", name, span);
 };
 
+/** Seed builtins so uses resolve to the virtual prelude Location (DX slice 9). */
+const seedPrelude = (b: Builder): void => {
+  const origins = preludeOrigins();
+  for (const [name, def] of origins.type) {
+    b.scopes.type[0]!.set(name, { name, space: "type", def });
+  }
+  for (const [name, def] of origins.ctor) {
+    b.scopes.ctor[0]!.set(name, { name, space: "ctor", def });
+  }
+  for (const [name, def] of origins.value) {
+    b.scopes.value[0]!.set(name, { name, space: "value", def });
+  }
+};
+
 /** Build a symbol index. `origins` rewrites imported names to their export Locations. */
 export const indexProgram = (path: string, prog: Program, origins?: Origins): SymbolIndex => {
   const b: Builder = {
@@ -370,6 +398,7 @@ export const indexProgram = (path: string, prog: Program, origins?: Origins): Sy
     scopes: { value: [new Map()], type: [new Map()], ctor: [new Map()] },
     occurrences: [],
   };
+  seedPrelude(b);
   bindTopLevels(b, prog.stmts, origins);
   walkStmts(b, prog.stmts);
 

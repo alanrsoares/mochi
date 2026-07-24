@@ -6,6 +6,7 @@ import { isErr } from "@onrails/result";
 import { lex } from "./lexer";
 import { loadModuleGraph } from "./module";
 import { parse } from "./parser";
+import { isPreludePath } from "./prelude-virtual";
 import type { Location, Span } from "./span";
 import {
   type Binding,
@@ -74,7 +75,7 @@ const indexModule = async (
   return indexSrc(path, src, origins);
 };
 
-/** Go-to-definition at `offset`. Prelude / unknown names → null. */
+/** Go-to-definition at `offset`. Unknown names → null; prelude → virtual Location. */
 export const definitionAt = (src: string, offset: number, path = "<buffer>"): Location | null => {
   const idx = indexSrc(path, src);
   if (!idx) return null;
@@ -116,16 +117,23 @@ export const moduleHighlightsAt = async (
   return idx.occurrences(hit.binding).map((o) => ({ span: o.span, role: o.role }));
 };
 
+/** Ensure the def Location is present (prelude defs live outside the file index). */
+const withDefRef = (binding: Binding, refs: Ref[]): Ref[] => {
+  if (refs.some((r) => r.role === "def")) return refs;
+  return [{ location: binding.def, role: "def" }, ...refs];
+};
+
 /** Find-all-references for the binding under `offset` (this file only). */
 export const referencesAt = (src: string, offset: number, path = "<buffer>"): Ref[] => {
   const idx = indexSrc(path, src);
   if (!idx) return [];
   const hit = idx.at(offset);
   if (!hit) return [];
-  return idx.occurrences(hit.binding).map((o) => ({
+  const refs = idx.occurrences(hit.binding).map((o) => ({
     location: { path: resolve(path), span: o.span },
     role: o.role,
   }));
+  return withDefRef(hit.binding, refs);
 };
 
 const collectGraphRefs = async (
@@ -186,11 +194,14 @@ export const moduleReferencesAt = async (
   if (!idx) return [];
   const hit = idx.at(offset);
   if (!hit) return [];
-  return collectGraphRefs(entryPath, src, hit.binding, readFile);
+  const refs = await collectGraphRefs(entryPath, src, hit.binding, readFile);
+  return withDefRef(hit.binding, refs);
 };
 
 const isRenameableName = (name: string): boolean =>
   !name.startsWith("$") && !name.startsWith("_") && /^[A-Za-z][A-Za-z0-9_]*$/.test(name);
+
+const canRename = (b: Binding): boolean => isRenameableName(b.name) && !isPreludePath(b.def.path);
 
 export const prepareRenameAt = (
   src: string,
@@ -200,7 +211,7 @@ export const prepareRenameAt = (
   const idx = indexSrc(path, src);
   if (!idx) return null;
   const hit = idx.at(offset);
-  if (!hit || !isRenameableName(hit.binding.name)) return null;
+  if (!hit || !canRename(hit.binding)) return null;
   return { span: hit.span, name: hit.binding.name };
 };
 
@@ -213,7 +224,7 @@ export const modulePrepareRenameAt = async (
   const idx = await indexModule(path, src, readFile);
   if (!idx) return null;
   const hit = idx.at(offset);
-  if (!hit || !isRenameableName(hit.binding.name)) return null;
+  if (!hit || !canRename(hit.binding)) return null;
   return { span: hit.span, name: hit.binding.name };
 };
 
@@ -228,7 +239,7 @@ export const renameAt = (
   const idx = indexSrc(path, src);
   if (!idx) return null;
   const hit = idx.at(offset);
-  if (!hit || !isRenameableName(hit.binding.name)) return null;
+  if (!hit || !canRename(hit.binding)) return null;
   if (hit.binding.name === newName) return [];
   return idx.occurrences(hit.binding).map((o) => ({
     location: { path: resolve(path), span: o.span },
@@ -248,7 +259,7 @@ export const moduleRenameAt = async (
   const idx = await indexModule(path, src, readFile);
   if (!idx) return null;
   const hit = idx.at(offset);
-  if (!hit || !isRenameableName(hit.binding.name)) return null;
+  if (!hit || !canRename(hit.binding)) return null;
   if (hit.binding.name === newName) return [];
   const refs = await collectGraphRefs(resolve(path), src, hit.binding, readFile);
   return refs.map((r) => ({ location: r.location, newText: newName }));

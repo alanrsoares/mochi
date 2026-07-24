@@ -38,6 +38,7 @@ import {
   moduleRenameAt,
   workspaceSymbolsAt,
 } from "../nav";
+import { isPreludePath, PRELUDE_PATH, preludeVirtualSource } from "../prelude-virtual";
 import type { Span } from "../span";
 
 const connection = createConnection(ProposedFeatures.all);
@@ -56,10 +57,17 @@ connection.onInitialize(() => ({
     workspaceSymbolProvider: true,
     inlayHintProvider: false,
     documentFormattingProvider: true,
+    // Virtual prelude buffer for F12 on builtins (DX slice 9).
+    workspace: {
+      textDocumentContent: { schemes: ["mochi"] },
+    },
   },
 }));
 
 const docPath = (uri: string): string => (uri.startsWith("file:") ? fileURLToPath(uri) : uri);
+
+const uriOf = (path: string): string =>
+  isPreludePath(path) ? PRELUDE_PATH : pathToFileURL(path).href;
 
 const rangeOf = (doc: TextDocument, span: Span) => ({
   start: doc.positionAt(span.start),
@@ -68,8 +76,12 @@ const rangeOf = (doc: TextDocument, span: Span) => ({
 
 const read = (p: string): Promise<string> => readFile(p, "utf8");
 
-/** Range in `path` — prefer an open buffer, else read from disk. */
+/** Range in `path` — prelude virtual, open buffer, or disk. */
 const rangeAtPath = async (path: string, span: Span) => {
+  if (isPreludePath(path)) {
+    const doc = TextDocument.create(PRELUDE_PATH, "mochi", 0, preludeVirtualSource());
+    return { uri: PRELUDE_PATH, range: rangeOf(doc, span) };
+  }
   const uri = pathToFileURL(path).href;
   const open = documents.get(uri);
   if (open) return { uri, range: rangeOf(open, span) };
@@ -209,7 +221,7 @@ connection.onCodeAction(async ({ textDocument }): Promise<CodeAction[]> => {
         kind: CodeActionKind.QuickFix,
         edit: {
           changes: {
-            [pathToFileURL(s.path || path).href]: [TextEdit.replace(s.range, s.replaceWith)],
+            [uriOf(s.path || path)]: [TextEdit.replace(s.range, s.replaceWith)],
           },
         },
       });
@@ -244,7 +256,7 @@ const validate = async (doc: TextDocument): Promise<void> => {
     relatedInformation: d.related?.map((r) => ({
       message: r.message,
       location: {
-        uri: pathToFileURL(r.path).href,
+        uri: uriOf(r.path),
         range: r.range,
       },
     })),
@@ -256,4 +268,13 @@ documents.onDidChangeContent((e) => {
   void validate(e.document);
 });
 documents.listen(connection);
+
+// Serve the virtual prelude buffer when the client opens a `mochi:` Location.
+connection.workspace.textDocumentContent.on((params) => {
+  if (params.uri === PRELUDE_PATH || params.uri.startsWith("mochi:")) {
+    return { text: preludeVirtualSource() };
+  }
+  return null;
+});
+
 connection.listen();

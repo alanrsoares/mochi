@@ -4,21 +4,28 @@ Parent track for rustc/gleam-like editor DX. Decisions: [ADR 0003](./adr/0003-ri
 
 Each slice is a vertical tracer bullet: compiler + tests + LSP surface where applicable.
 
-| # | Title | Type | Blocked by | Issue |
+| # | Title | Type | Blocked by | Issue | Status |
+|---|---|---|---|---|---|
+| 0 | Rename `AlangError` → `Diagnostic` (+ `PublishDiagnostic`); optional rich fields stubbed | AFK | — | [#2](https://github.com/alanrsoares/mochi/issues/2) | done ([#11](https://github.com/alanrsoares/mochi/pull/11)) |
+| 1 | Lexical symbol index (same-file values/types/ctors) + unit tests | AFK | 0 | [#3](https://github.com/alanrsoares/mochi/issues/3) | done ([#11](https://github.com/alanrsoares/mochi/pull/11)) |
+| 2 | Document highlight + go-to-definition (same-file, all name spaces) via LSP | AFK | 1 | [#4](https://github.com/alanrsoares/mochi/issues/4) | done ([#11](https://github.com/alanrsoares/mochi/pull/11)) |
+| 3 | Find refs + rename (same-file) | AFK | 2 | [#5](https://github.com/alanrsoares/mochi/issues/5) | done ([#11](https://github.com/alanrsoares/mochi/pull/11)) |
+| 4 | CLI/LSP render labels + help | AFK | 0 | [#6](https://github.com/alanrsoares/mochi/issues/6) | done ([#11](https://github.com/alanrsoares/mochi/pull/11)) |
+| 5 | First rich checker error (e.g. unbound + did-you-mean `Suggestion`) + code actions | AFK | 1, 4 | [#7](https://github.com/alanrsoares/mochi/issues/7) | done ([#11](https://github.com/alanrsoares/mochi/pull/11)) |
+| 6 | Cross-module `Location` — export origins; F12 + “defined here” across imports | AFK | 2, 5 | [#8](https://github.com/alanrsoares/mochi/issues/8) | done ([#12](https://github.com/alanrsoares/mochi/pull/12)) |
+| 7 | Cross-module refs + rename | AFK | 3, 6 | [#9](https://github.com/alanrsoares/mochi/issues/9) | done ([#12](https://github.com/alanrsoares/mochi/pull/12)) |
+| 8 | Document / workspace symbols | AFK | 6 | [#10](https://github.com/alanrsoares/mochi/issues/10) | done ([#12](https://github.com/alanrsoares/mochi/pull/12)) |
+
+Parent epic: [#1](https://github.com/alanrsoares/mochi/issues/1) (children shipped; GitHub issues #3–#7/#9–#10 may still show open — close keywords missed).
+
+## Wave 2 (was deferred)
+
+| # | Title | Type | Blocked by | Status |
 |---|---|---|---|---|
-| 0 | Rename `AlangError` → `Diagnostic` (+ `PublishDiagnostic`); optional rich fields stubbed | AFK | — | [#2](https://github.com/alanrsoares/mochi/issues/2) |
-| 1 | Lexical symbol index (same-file values/types/ctors) + unit tests | AFK | 0 | [#3](https://github.com/alanrsoares/mochi/issues/3) |
-| 2 | Document highlight + go-to-definition (same-file, all name spaces) via LSP | AFK | 1 | [#4](https://github.com/alanrsoares/mochi/issues/4) |
-| 3 | Find refs + rename (same-file) | AFK | 2 | [#5](https://github.com/alanrsoares/mochi/issues/5) |
-| 4 | CLI/LSP render labels + help | AFK | 0 | [#6](https://github.com/alanrsoares/mochi/issues/6) |
-| 5 | First rich checker error (e.g. unbound + did-you-mean `Suggestion`) + code actions | AFK | 1, 4 | [#7](https://github.com/alanrsoares/mochi/issues/7) |
-| 6 | Cross-module `Location` — export origins; F12 + “defined here” across imports | AFK | 2, 5 | [#8](https://github.com/alanrsoares/mochi/issues/8) |
-| 7 | Cross-module refs + rename | AFK | 3, 6 | [#9](https://github.com/alanrsoares/mochi/issues/9) |
-| 8 | Document / workspace symbols | AFK | 6 | [#10](https://github.com/alanrsoares/mochi/issues/10) |
-
-Parent epic: [#1](https://github.com/alanrsoares/mochi/issues/1).
-
-**Deferred:** multi-error collection, record-field nav, go-to-type/implementation, prelude virtual defs.
+| 9 | Prelude virtual defs — F12 / “defined here” for builtins (virtual `Location`) | AFK | — | done |
+| 10 | Record-field nav (same-file) — `p.x` ↔ type-alias / literal / pattern field sites | AFK | — | |
+| 11 | Go-to-type at expression (uses infer table; degrades when typecheck fails) | AFK | — | |
+| 12 | Multi-error collection (honest recovery; ADR 0003 deferred) | HITL | design | |
 
 ## Slice briefs
 
@@ -186,3 +193,74 @@ Document outline and workspace symbol search over lets/types/ctors.
 ## Blocked by
 
 Slice 6
+
+---
+
+### 9 — Prelude virtual defs
+
+## What to build
+
+Give builtins (`map`, `Some`, `Option`, …) a navigable `Location` (virtual URI or generated prelude buffer) so F12 / “defined here” work. Not renameable.
+
+## Acceptance criteria
+
+- [x] F12 on a prelude value/type/ctor opens a readable def site
+- [x] Rename still refuses prelude names
+- [x] `bun run check` green
+
+## Blocked by
+
+None
+
+---
+
+### 10 — Record-field nav (same-file)
+
+## What to build
+
+Index record field names (type-alias fields, literals, patterns, `e.field` uses). F12 / highlight / refs within the file. Row polymorphism: resolve to same-name field defs in scope / file heuristics without requiring typecheck for the first cut.
+
+## Acceptance criteria
+
+- [ ] F12 on `p.x` jumps to a same-file field def (alias / literal / pattern)
+- [ ] Highlight marks field def + uses for that field name binding
+- [ ] `bun run check` green
+
+## Blocked by
+
+None
+
+---
+
+### 11 — Go-to-type
+
+## What to build
+
+From an expression / value binding, jump to the nominal type’s def (variant / alias) using the infer table when available; no location when typecheck failed or type is structural/prelude-only.
+
+## Acceptance criteria
+
+- [ ] LSP `typeDefinition` (or equivalent) on a typed expression opens the type decl
+- [ ] Degrades cleanly when inference failed
+- [ ] `bun run check` green
+
+## Blocked by
+
+None (uses infer; independent of lexical index)
+
+---
+
+### 12 — Multi-error collection
+
+## What to build
+
+HITL: design recovery so stages can return several `Diagnostic`s without cascading junk. ADR / CONTEXT update before code.
+
+## Acceptance criteria
+
+- [ ] Accepted ADR for multi-error + recovery rules
+- [ ] (Follow-on AFK) railway + CLI/LSP publish many diags
+
+## Blocked by
+
+Design (HITL)
