@@ -51,6 +51,6 @@ test("the value sees the OUTER scope, not the binding itself (non-recursive)", (
 
 test("round-trips through the formatter", () => {
   expect(unwrapOk(format("let r=let  x=add(1,2)in add(x,x)"))).toBe(
-    "let r = let x = add(1, 2) in add(x, x)\n",
+    "let r = let x = 1 + 2 in x + x\n",
   );
 });

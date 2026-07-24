@@ -650,6 +650,90 @@ const mapD = (e: MapExpr): Doc =>
 
 const fieldD = (e: FieldExpr): Doc => seq(memberD(e.target), txt(`.${e.name}`));
 
+// Binary operators the parser desugars straight into 2-arg calls (see the
+// matching *_BP constants in parser.ts) — precedence here must mirror those
+// exactly so a nested operator call gets parens only when omitting them
+// would reparse to a different tree.
+const BIN_OPS: Record<string, { symbol: string; prec: number }> = {
+  or: { symbol: "||", prec: 7 },
+  and: { symbol: "&&", prec: 7 },
+  eq: { symbol: "==", prec: 8 },
+  lt: { symbol: "<", prec: 8 },
+  lte: { symbol: "<=", prec: 8 },
+  gt: { symbol: ">", prec: 8 },
+  gte: { symbol: ">=", prec: 8 },
+  concat: { symbol: "++", prec: 10 },
+  add: { symbol: "+", prec: 10 },
+  sub: { symbol: "-", prec: 10 },
+  mul: { symbol: "*", prec: 20 },
+  div: { symbol: "/", prec: 20 },
+  mod: { symbol: "%", prec: 20 },
+};
+const NEQ_PREC = 8;
+const UNARY_OPS: Record<string, string> = { not: "!", negate: "-" };
+
+const binOpOf = (e: Expr): { symbol: string; prec: number } | null => {
+  if (e.kind !== "call" || e.fn.kind !== "ref" || e.args.length !== 2) return null;
+  return BIN_OPS[e.fn.name] ?? null;
+};
+
+// `!=` desugars to `not(eq(a, b))`; an explicit `!(a == b)` desugars to the
+// exact same shape, so folding either back to `!=` is a deliberate (lossy)
+// simplification, same spirit as the composition refold above.
+const neqOperands = (e: Expr): [Expr, Expr] | null => {
+  if (e.kind !== "call" || e.fn.kind !== "ref" || e.fn.name !== "not" || e.args.length !== 1)
+    return null;
+  const inner = e.args[0]!;
+  if (
+    inner.kind !== "call" ||
+    inner.fn.kind !== "ref" ||
+    inner.fn.name !== "eq" ||
+    inner.args.length !== 2
+  )
+    return null;
+  return [inner.args[0]!, inner.args[1]!];
+};
+
+const binOperandD = (e: Expr, parentPrec: number, isRight: boolean): Doc => {
+  const info = binOpOf(e) ?? (neqOperands(e) ? { symbol: "!=", prec: NEQ_PREC } : null);
+  const needsParens =
+    e.kind === "lambda" || e.kind === "ternary" || e.kind === "pipe"
+      ? true
+      : info !== null && (isRight ? info.prec <= parentPrec : info.prec < parentPrec);
+  return parenIf(needsParens, exprD(e));
+};
+
+const binaryD = (e: CallExpr): Doc | null => {
+  const neq = neqOperands(e);
+  if (neq) {
+    const [l, r] = neq;
+    return group(seq(binOperandD(l, NEQ_PREC, false), txt(" != "), binOperandD(r, NEQ_PREC, true)));
+  }
+  const info = binOpOf(e);
+  if (!info) return null;
+  const [l, r] = e.args as [Expr, Expr];
+  return group(
+    seq(binOperandD(l, info.prec, false), txt(` ${info.symbol} `), binOperandD(r, info.prec, true)),
+  );
+};
+
+// `not(x)` -> `!x`, `negate(x)` -> `-x`. Unary binds tighter than every infix
+// operator (its operand is parsed at atom level), so any operator-shaped
+// operand always needs parens regardless of precedence.
+const unaryD = (e: CallExpr): Doc | null => {
+  if (e.fn.kind !== "ref" || e.args.length !== 1) return null;
+  const symbol = UNARY_OPS[e.fn.name];
+  if (!symbol) return null;
+  const operand = e.args[0]!;
+  const needsParens =
+    operand.kind === "lambda" ||
+    operand.kind === "ternary" ||
+    operand.kind === "pipe" ||
+    binOpOf(operand) !== null ||
+    neqOperands(operand) !== null;
+  return seq(txt(symbol), parenIf(needsParens, exprD(operand)));
+};
+
 // Re-fold desugared infix/prefix/destructure calls back to surface syntax.
 const refoldCall = (e: CallExpr): Doc | null => {
   // Destructuring let-in: IIFE `(((a, b)) => body)(e)` -> `let (a, b) = e in body`
@@ -676,7 +760,7 @@ const refoldCall = (e: CallExpr): Doc | null => {
     return group(seq(operandD(left), txt(" >> "), operandD(right)));
   }
 
-  return null;
+  return binaryD(e) ?? unaryD(e);
 };
 
 // `f(a, b)`. When the last argument is a lambda, keep `f(…, p =>` on the line

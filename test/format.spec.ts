@@ -5,7 +5,7 @@ import { format } from "../src/format";
 const fmt = (src: string): string => unwrapOk(format(src));
 
 test("normalizes whitespace in a let binding", () => {
-  expect(fmt("let   n=add(1,2)")).toBe("let n = add(1, 2)\n");
+  expect(fmt("let   n=add(1,2)")).toBe("let n = 1 + 2\n");
 });
 
 test("a single-param lambda drops its parentheses", () => {
@@ -13,7 +13,7 @@ test("a single-param lambda drops its parentheses", () => {
 });
 
 test("a multi-param lambda keeps its parentheses", () => {
-  expect(fmt("let g=(a,b)=>add(a,b)")).toBe("let g = (a, b) => add(a, b)\n");
+  expect(fmt("let g=(a,b)=>add(a,b)")).toBe("let g = (a, b) => a + b\n");
 });
 
 test("prints a binding type annotation (ADR 0044)", () => {
