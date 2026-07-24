@@ -2981,6 +2981,31 @@ const _namespaces = {
         }
       }
     },
+    "delay": {
+      "_tag": "TyFn",
+      "from": {
+        "_tag": "TyCon",
+        "name": "number",
+        "args": []
+      },
+      "to": {
+        "_tag": "TyFn",
+        "from": {
+          "_tag": "TyVar",
+          "id": 0
+        },
+        "to": {
+          "_tag": "TyCon",
+          "name": "Task",
+          "args": [
+            {
+              "_tag": "TyVar",
+              "id": 0
+            }
+          ]
+        }
+      }
+    },
     "run": {
       "_tag": "TyFn",
       "from": {
@@ -3439,6 +3464,7 @@ const _namespaceRuntime = {
     "of": "_Task_of",
     "map": "_Task_map",
     "andThen": "_Task_andThen",
+    "delay": "_Task_delay",
     "run": "_Task_run"
   },
   "Str": {
@@ -3591,6 +3617,7 @@ const _preludeJsDefs = {
   "_Task_of": "const _Task_of = (x) => () => Promise.resolve(x);",
   "_Task_map": "const _Task_map = _curry(2, (f, t) => () => t().then(f));",
   "_Task_andThen": "const _Task_andThen = _curry(2, (f, t) => () => t().then((x) => f(x)()));",
+  "_Task_delay": "const _Task_delay = _curry(2, (ms, x) => () => new Promise((res) => setTimeout(() => res(x), ms)));",
   "_Task_run": "const _Task_run = (t) => t();"
 };
 const _runtimeDeps = {
@@ -3898,6 +3925,9 @@ const _runtimeDeps = {
     "_curry"
   ],
   "_Task_andThen": [
+    "_curry"
+  ],
+  "_Task_delay": [
     "_curry"
   ]
 };

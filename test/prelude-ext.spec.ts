@@ -207,6 +207,25 @@ let result = Task.run(program)`;
   expect(await result).toBe(42);
 });
 
+// mochi emits multi-arg `Task.delay(ms, x)`; without `_curry` a nested-curried
+// host ignores `x` and returns a partial instead of a Task (life frame footgun).
+test("Task.delay multi-arg emit returns a Task, not a partial", async () => {
+  const src = `let task = Task.delay(1, 0)
+let result = Task.run(task)`;
+  const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
+  const result = new Function("match", `${js}\nreturn result;`)(match) as Promise<number>;
+  expect(result).toBeInstanceOf(Promise);
+  expect(await result).toBe(0);
+});
+
+test("Task.delay partial still works with Task.andThen", async () => {
+  const src = `let program = Task.of(21) |> Task.andThen(Task.delay(1)) |> Task.map(mul(2))
+let result = Task.run(program)`;
+  const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
+  const result = new Function("match", `${js}\nreturn result;`)(match) as Promise<number>;
+  expect(await result).toBe(42);
+});
+
 test("Task is a reserved namespace name", () => {
   const r = compile("let Task = 1");
   expect(isErr(r)).toBe(true);

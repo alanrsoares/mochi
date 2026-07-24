@@ -20,16 +20,6 @@ test("examples/life/main.mochi compiles", () => {
   expect(isErr(compile(read("examples/life/main.mochi")))).toBe(false);
 });
 
-// mochi emits multi-arg `delay(ms, x)`; a nested-curried host ignores `x` and
-// returns a partial instead of a Task, so the animation never sleeps.
-test("examples/life runtime delay accepts multi-arg emit", async () => {
-  const { delay, run } = await import("../examples/life/runtime.mjs");
-  const task = delay(1, 0);
-  expect(task()).toBeInstanceOf(Promise); // Task, not a further partial
-  await expect(run(task)).resolves.toBe(0);
-  await expect(run(delay(1)(0))).resolves.toBe(0); // partial still works
-});
-
 test("examples/pipelines.mochi compiles and produces its documented values", () => {
   // Output is standalone (prelude inlined) — only the @onrails/pattern import is
   // stripped, and `match` injected in its place.

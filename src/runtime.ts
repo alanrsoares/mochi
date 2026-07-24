@@ -142,4 +142,5 @@ export const _Str_toNumber: (a: string) => Option<number> = (s: any) => { const 
 export const _Task_of: <A>(a: A) => () => Promise<A> = (x: any) => () => Promise.resolve(x);
 export const _Task_map: { <A, B>(a: (a: A) => B): (b: () => Promise<A>) => () => Promise<B>; <A, B>(a: (a: A) => B, b: () => Promise<A>): () => Promise<B>; } = _curry(2, (f: any, t: any) => () => t().then(f));
 export const _Task_andThen: { <A, B>(a: (a: A) => () => Promise<B>): (b: () => Promise<A>) => () => Promise<B>; <A, B>(a: (a: A) => () => Promise<B>, b: () => Promise<A>): () => Promise<B>; } = _curry(2, (f: any, t: any) => () => t().then((x: any) => f(x)()));
+export const _Task_delay: { <A>(a: number): (b: A) => () => Promise<A>; <A>(a: number, b: A): () => Promise<A>; } = _curry(2, (ms: any, x: any) => () => new Promise((res: any) => setTimeout(() => res(x), ms)));
 export const _Task_run: <A>(a: () => Promise<A>) => Promise<A> = (t: any) => t();
