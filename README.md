@@ -25,7 +25,7 @@ bun run check                   # lint + typecheck + tests
 ## A taste
 
 ### ADTs & Exhaustive Matching
-```
+```reason
 type Shape =
   | Circle(number)
   | Rect(number, number)
@@ -37,7 +37,7 @@ let area = shape => switch shape {
 ```
 
 ### Row-Polymorphic Records (Duck Typing)
-```
+```reason
 // Works on any record with x and y fields, regardless of other fields
 let dist = p => sqrt(add(square(p.x), square(p.y)))
 
@@ -46,7 +46,7 @@ let d = dist(origin) // 5
 ```
 
 ### Pipelines & Collections (Eager & Lazy)
-```
+```reason
 // Eager arrays and curried prelude utilities in a pipe
 let doubled = [1, 2, 3] |> map(x => mul(x, 2)) // [2, 4, 6]
 
@@ -56,7 +56,7 @@ let firstThree = evens |> take(3) |> toArray  // [0, 2, 4]
 ```
 
 ### Local `let ... in` Bindings
-```
+```reason
 // Scoped, non-recursive, let-polymorphic bindings
 let hypot = (a, b) =>
   let a2 = square(a) in
@@ -65,7 +65,7 @@ let hypot = (a, b) =>
 ```
 
 ### Tuples & Destructuring
-```
+```reason
 // Product types that erase to JS arrays
 let pair = (1, "hello")
 
@@ -79,7 +79,7 @@ let swap = ((a, b)) => (b, a)
 ```
 
 ### Pattern Matching & String Interpolation
-```
+```reason
 // Eager array pattern matching with list head/tail destructuring
 let sum = xs => switch xs {
   | [] => 0
