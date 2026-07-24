@@ -10,6 +10,7 @@
  * declaration is `(a: A, b: B) => R` — we peel arrows by the lambda's arity,
  * recursing into curried bodies (`f => r => …` stays `(f: F) => (r: R) => …`).
  */
+import { match } from "@onrails/pattern";
 import { isErr, ok, type Result } from "@onrails/result";
 import type { Ctor, Expr, Program, Stmt, TypeExpr } from "./ast";
 import { toTypedProgram } from "./compile";
@@ -20,6 +21,7 @@ import { typeExprToType } from "./schemes";
 import {
   type AliasDef,
   aliasParamId,
+  type ConType,
   foldAliases,
   mkFresh,
   type Row,
@@ -29,19 +31,24 @@ import {
 
 /** Collect every type-constructor name appearing in a type (for detecting which builtin variant decls an emitted module must include). */
 function consIn(t: Type, acc: Set<string>): void {
-  if (t.kind === "con") {
-    acc.add(t.name);
-    for (const a of t.args) consIn(a, acc);
-  } else if (t.kind === "arrow") {
-    consIn(t.from, acc);
-    consIn(t.to, acc);
-  } else if (t.kind === "record") {
-    let row = t.row;
-    while (row.kind === "extend") {
-      consIn(row.type, acc);
-      row = row.rest;
-    }
-  }
+  match(t)
+    .with({ kind: "var" }, () => {})
+    .with({ kind: "con" }, (con) => {
+      acc.add(con.name);
+      for (const a of con.args) consIn(a, acc);
+    })
+    .with({ kind: "arrow" }, (arrow) => {
+      consIn(arrow.from, acc);
+      consIn(arrow.to, acc);
+    })
+    .with({ kind: "record" }, (rec) => {
+      let row = rec.row;
+      while (row.kind === "extend") {
+        consIn(row.type, acc);
+        row = row.rest;
+      }
+    })
+    .exhaustive();
 }
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -53,40 +60,53 @@ const PRIM_TS: Record<string, string> = {
 
 /** HM type → TS type. `names` maps quantified var ids to generic letters; any other var renders as `unknown` (it escaped generalization at this position). */
 function tsOf(t: Type, names: Map<number, string>): string {
-  switch (t.kind) {
-    case "var":
-      return names.get(t.id) ?? "unknown";
-    case "con": {
-      const prim = PRIM_TS[t.name];
-      if (prim) return prim;
-      if (t.name === "Array" && t.args.length === 1) return `${tsOf(t.args[0]!, names)}[]`;
-      if (t.name === "List" && t.args.length === 1) return `Iterable<${tsOf(t.args[0]!, names)}>`;
-      if (t.name === "tuple") return `[${t.args.map((a) => tsOf(a, names)).join(", ")}]`;
-      return t.args.length === 0
-        ? t.name
-        : `${t.name}<${t.args.map((a) => tsOf(a, names)).join(", ")}>`;
-    }
-    case "arrow": {
-      // Flat multi-param arrow, matching codegen's UNCURRIED calling convention:
-      // user functions emit `(a, b) => …` (defs) and `f(a, b)` (calls), never
-      // `f(a)(b)`. `declType` already flattens a binding's own params this way;
-      // rendering NESTED function types (a HOF's function-typed param, e.g.
-      // `sepBy`'s `parseItem`) curried instead — `(x) => (x) => R` — is what
-      // made a flat function VALUE reject against a curried param slot (TS2345).
-      // Collapse the whole arrow chain into one arrow so the two agree.
-      const params: string[] = [];
-      let cur: Type = t;
-      while (cur.kind === "arrow") {
-        params.push(tsOf(cur.from, names));
-        cur = cur.to;
-      }
-      const named = params.map((p, i) => `${String.fromCharCode(97 + i)}: ${p}`);
-      return `(${named.join(", ")}) => ${tsOf(cur, names)}`;
-    }
-    case "record":
-      return tsRow(t.row, names);
-  }
+  return (
+    match(t)
+      .with({ kind: "var" }, (v) => names.get(v.id) ?? "unknown")
+      .with({ kind: "con", name: "Array" }, (con) =>
+        con.args.length === 1 ? `${tsOf(con.args[0]!, names)}[]` : nominalCon(con, names),
+      )
+      .with({ kind: "con", name: "List" }, (con) =>
+        con.args.length === 1 ? `Iterable<${tsOf(con.args[0]!, names)}>` : nominalCon(con, names),
+      )
+      // Task is an opaque lazy thunk (ADR 0005) — emit the runtime shape, not a phantom nominal.
+      .with({ kind: "con", name: "Task" }, (con) =>
+        con.args.length === 1
+          ? `() => Promise<${tsOf(con.args[0]!, names)}>`
+          : nominalCon(con, names),
+      )
+      .with(
+        { kind: "con", name: "tuple" },
+        (con) => `[${con.args.map((a) => tsOf(a, names)).join(", ")}]`,
+      )
+      .with({ kind: "con" }, (con) => PRIM_TS[con.name] ?? nominalCon(con, names))
+      .with({ kind: "arrow" }, (arrow) => {
+        // Flat multi-param arrow, matching codegen's UNCURRIED calling convention:
+        // user functions emit `(a, b) => …` (defs) and `f(a, b)` (calls), never
+        // `f(a)(b)`. `declType` already flattens a binding's own params this way;
+        // rendering NESTED function types (a HOF's function-typed param, e.g.
+        // `sepBy`'s `parseItem`) curried instead — `(x) => (x) => R` — is what
+        // made a flat function VALUE reject against a curried param slot (TS2345).
+        // Collapse the whole arrow chain into one arrow so the two agree.
+        const params: string[] = [];
+        let cur: Type = arrow;
+        while (cur.kind === "arrow") {
+          params.push(tsOf(cur.from, names));
+          cur = cur.to;
+        }
+        const named = params.map((p, i) => `${String.fromCharCode(97 + i)}: ${p}`);
+        return `(${named.join(", ")}) => ${tsOf(cur, names)}`;
+      })
+      .with({ kind: "record" }, (rec) => tsRow(rec.row, names))
+      .exhaustive()
+  );
 }
+
+/** Nominal / applied ctor fallback: `Foo` or `Foo<A, B>`. */
+const nominalCon = (con: ConType, names: Map<number, string>): string =>
+  con.args.length === 0
+    ? con.name
+    : `${con.name}<${con.args.map((a) => tsOf(a, names)).join(", ")}>`;
 
 function tsRow(row: Row, names: Map<number, string>): string {
   const fields: string[] = [];
@@ -101,33 +121,36 @@ function tsRow(row: Row, names: Map<number, string>): string {
   // A quantified rvar carries a letter (via genericNames); an unbound one (no
   // generic head to scope it — non-lambda bindings) falls back to the closed
   // record, matching the pre-0034 behavior.
-  if (cur.kind === "rvar") {
-    const g = names.get(cur.id);
-    // Parenthesize: `&` binds looser than the `[]` an array wrapper appends, so
-    // a bare `{…} & R` element would mis-parse as `{…} & (R[])`.
-    if (g) return fields.length === 0 ? g : `({ ${fields.join("; ")} } & ${g})`;
-  }
-  return body;
+  return match(cur)
+    .with({ kind: "empty" }, () => body)
+    .with({ kind: "rvar" }, (rvar) => {
+      const g = names.get(rvar.id);
+      // Parenthesize: `&` binds looser than the `[]` an array wrapper appends, so
+      // a bare `{…} & R` element would mis-parse as `{…} & (R[])`.
+      if (g) return fields.length === 0 ? g : `({ ${fields.join("; ")} } & ${g})`;
+      return body;
+    })
+    .exhaustive();
 }
 
 /** True when a (zonked) type still carries an unbound type or row var — i.e. it is NOT fully concrete. `tsOf` would render such a var as `unknown`. */
 function hasFreeVar(t: Type): boolean {
-  switch (t.kind) {
-    case "var":
-      return true;
-    case "con":
-      return t.args.some(hasFreeVar);
-    case "arrow":
-      return hasFreeVar(t.from) || hasFreeVar(t.to);
-    case "record": {
-      let row = t.row;
+  return match(t)
+    .with({ kind: "var" }, () => true)
+    .with({ kind: "con" }, (con) => con.args.some(hasFreeVar))
+    .with({ kind: "arrow" }, (arrow) => hasFreeVar(arrow.from) || hasFreeVar(arrow.to))
+    .with({ kind: "record" }, (rec) => {
+      let row = rec.row;
       while (row.kind === "extend") {
         if (hasFreeVar(row.type)) return true;
         row = row.rest;
       }
-      return row.kind === "rvar";
-    }
-  }
+      return match(row)
+        .with({ kind: "empty" }, () => false)
+        .with({ kind: "rvar" }, () => true)
+        .exhaustive();
+    })
+    .exhaustive();
 }
 
 /**
@@ -165,8 +188,14 @@ export function emptyCollTs(
  */
 export function ctorCallTs(t: Type, aliases: AliasDef[]): string | null {
   const folded = foldAliases(t, aliases);
-  if (folded.kind !== "con" || folded.args.length === 0) return null;
-  return hasFreeVar(folded) ? null : tsOf(folded, new Map());
+  return match(folded)
+    .with({ kind: "con" }, (con) =>
+      con.args.length === 0 || hasFreeVar(con) ? null : tsOf(con, new Map()),
+    )
+    .with({ kind: "var" }, () => null)
+    .with({ kind: "arrow" }, () => null)
+    .with({ kind: "record" }, () => null)
+    .exhaustive();
 }
 
 /** Arity-aware function type: peel one arrow per lambda parameter, then recurse into the body (which may itself be a lambda for curried definitions). */
@@ -240,26 +269,25 @@ function fieldTs(te: TypeExpr, params: string[]): string {
 
 /** Free type-var ids in a Type, first-appearance order. */
 function freeVars(t: Type, acc: number[]): void {
-  switch (t.kind) {
-    case "var":
-      if (!acc.includes(t.id)) acc.push(t.id);
-      return;
-    case "con":
-      for (const a of t.args) freeVars(a, acc);
-      return;
-    case "arrow":
-      freeVars(t.from, acc);
-      freeVars(t.to, acc);
-      return;
-    case "record": {
-      let r = t.row;
+  match(t)
+    .with({ kind: "var" }, (v) => {
+      if (!acc.includes(v.id)) acc.push(v.id);
+    })
+    .with({ kind: "con" }, (con) => {
+      for (const a of con.args) freeVars(a, acc);
+    })
+    .with({ kind: "arrow" }, (arrow) => {
+      freeVars(arrow.from, acc);
+      freeVars(arrow.to, acc);
+    })
+    .with({ kind: "record" }, (rec) => {
+      let r = rec.row;
       while (r.kind === "extend") {
         freeVars(r.type, acc);
         r = r.rest;
       }
-      return;
-    }
-  }
+    })
+    .exhaustive();
 }
 
 /**
@@ -393,22 +421,22 @@ export function bindingTsType(sc: Scheme, value: Expr, aliases: AliasDef[]): str
  * than dropping the tail. Empty `names` ⇒ true only for a fully concrete type.
  */
 function allVarsIn(t: Type, names: Map<number, string>): boolean {
-  switch (t.kind) {
-    case "var":
-      return names.has(t.id);
-    case "con":
-      return t.args.every((a) => allVarsIn(a, names));
-    case "arrow":
-      return allVarsIn(t.from, names) && allVarsIn(t.to, names);
-    case "record": {
-      let row = t.row;
+  return match(t)
+    .with({ kind: "var" }, (v) => names.has(v.id))
+    .with({ kind: "con" }, (con) => con.args.every((a) => allVarsIn(a, names)))
+    .with({ kind: "arrow" }, (arrow) => allVarsIn(arrow.from, names) && allVarsIn(arrow.to, names))
+    .with({ kind: "record" }, (rec) => {
+      let row = rec.row;
       while (row.kind === "extend") {
         if (!allVarsIn(row.type, names)) return false;
         row = row.rest;
       }
-      return row.kind === "rvar" ? names.has(row.id) : true;
-    }
-  }
+      return match(row)
+        .with({ kind: "empty" }, () => true)
+        .with({ kind: "rvar" }, (rvar) => names.has(rvar.id))
+        .exhaustive();
+    })
+    .exhaustive();
 }
 
 /**
@@ -553,41 +581,43 @@ function declOf(
   aliasByName: Map<string, AliasDef>,
   aliases: AliasDef[],
 ): string | null {
-  switch (s.kind) {
-    case "import":
-      return null;
-    case "type": {
-      const a = aliasByName.get(s.name);
-      return a ? aliasTsDecl(a) : typeDecl(s.name, s.params, s.ctors);
-    }
-    case "extern":
-      return null;
-  } // imported, not declared here
-  const sc = schemeOf(s.name);
-  return sc && !s.name.startsWith("$") ? letDecl(s.name, sc, s.value, aliases) : null;
+  return match(s)
+    .with({ kind: "import" }, () => null)
+    .with({ kind: "extern" }, () => null)
+    .with({ kind: "type" }, (type) => {
+      const a = aliasByName.get(type.name);
+      return a ? aliasTsDecl(a) : typeDecl(type.name, type.params, type.ctors);
+    })
+    .with({ kind: "let" }, (letin) => {
+      const sc = schemeOf(letin.name);
+      return sc && !letin.name.startsWith("$")
+        ? letDecl(letin.name, sc, letin.value, aliases)
+        : null;
+    })
+    .exhaustive();
 }
 
 /** Type-constructor names referenced anywhere in a TypeExpr (`Option<Expr>` → {Option}, nested included). Used to spot builtin unions named in ctor/alias field positions — inference-derived binding types alone miss those. */
 function teConNames(te: TypeExpr, acc: Set<string>): void {
-  switch (te.kind) {
-    case "tname":
-      acc.add(te.name);
-      return;
-    case "tarrow":
-      teConNames(te.from, acc);
-      teConNames(te.to, acc);
-      return;
-    case "tapp":
-      acc.add(te.ctor);
-      for (const a of te.args) teConNames(a, acc);
-      return;
-    case "ttuple":
-      for (const e of te.elems) teConNames(e, acc);
-      return;
-    case "tlist":
-      teConNames(te.elem, acc);
-      return;
-  }
+  match(te)
+    .with({ kind: "tname" }, (tname) => {
+      acc.add(tname.name);
+    })
+    .with({ kind: "tarrow" }, (tarrow) => {
+      teConNames(tarrow.from, acc);
+      teConNames(tarrow.to, acc);
+    })
+    .with({ kind: "tapp" }, (tapp) => {
+      acc.add(tapp.ctor);
+      for (const a of tapp.args) teConNames(a, acc);
+    })
+    .with({ kind: "ttuple" }, (ttuple) => {
+      for (const e of ttuple.elems) teConNames(e, acc);
+    })
+    .with({ kind: "tlist" }, (tlist) => {
+      teConNames(tlist.elem, acc);
+    })
+    .exhaustive();
 }
 
 /**
@@ -603,16 +633,19 @@ export function referencedBuiltinTypeDecls(
   const declared = new Set(prog.stmts.flatMap((s) => (s.kind === "type" ? [s.name] : [])));
   const referenced = new Set<string>();
   for (const s of prog.stmts) {
-    // Binding types (inference-derived) …
-    if (s.kind === "let" && !s.name.startsWith("$")) {
-      const sc = schemeOf(s.name);
-      if (sc) consIn(sc.type, referenced);
-    }
-    // … and type-decl field positions (`guard: Option<Expr>`).
-    if (s.kind === "type") {
-      for (const c of s.ctors) for (const f of c.fields) teConNames(f.type, referenced);
-      if (s.alias) for (const f of s.alias) teConNames(f.type, referenced);
-    }
+    match(s)
+      .with({ kind: "let" }, (letin) => {
+        if (letin.name.startsWith("$")) return;
+        const sc = schemeOf(letin.name);
+        if (sc) consIn(sc.type, referenced);
+      })
+      .with({ kind: "type" }, (type) => {
+        for (const c of type.ctors) for (const f of c.fields) teConNames(f.type, referenced);
+        if (type.alias) for (const f of type.alias) teConNames(f.type, referenced);
+      })
+      .with({ kind: "extern" }, () => {})
+      .with({ kind: "import" }, () => {})
+      .exhaustive();
   }
   return builtinTypeDecls
     .filter((bt) => referenced.has(bt.name) && !declared.has(bt.name))
@@ -657,7 +690,13 @@ export function externModuleDts(externs: ExternBinding[]): string {
     .filter((bt) => referenced.has(bt.name))
     .map((bt) => typeDecl(bt.name, bt.params, bt.ctors));
 
-  const arrowCount = (t: Type): number => (t.kind === "arrow" ? 1 + arrowCount(t.to) : 0);
+  const arrowCount = (t: Type): number =>
+    match(t)
+      .with({ kind: "arrow" }, (arrow) => 1 + arrowCount(arrow.to))
+      .with({ kind: "var" }, () => 0)
+      .with({ kind: "con" }, () => 0)
+      .with({ kind: "record" }, () => 0)
+      .exhaustive();
   const seen = new Set<string>();
   const lines: string[] = [];
   for (const { imported, scheme } of externs) {

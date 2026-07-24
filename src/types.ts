@@ -12,6 +12,9 @@ export type Type =
   | { kind: "arrow"; from: Type; to: Type } // t1 -> t2
   | { kind: "record"; row: Row }; // { x: t, ... | r }
 
+/** Applied constructor (`number`, `List<'a>`, …). */
+export type ConType = Extract<Type, { kind: "con" }>;
+
 export type Row =
   | { kind: "empty" } // closed tail: {}
   | { kind: "rvar"; id: number } // open tail: | 'r

@@ -2883,6 +2883,128 @@ const _namespaces = {
       }
     }
   },
+  "Task": {
+    "of": {
+      "_tag": "TyFn",
+      "from": {
+        "_tag": "TyVar",
+        "id": 0
+      },
+      "to": {
+        "_tag": "TyCon",
+        "name": "Task",
+        "args": [
+          {
+            "_tag": "TyVar",
+            "id": 0
+          }
+        ]
+      }
+    },
+    "map": {
+      "_tag": "TyFn",
+      "from": {
+        "_tag": "TyFn",
+        "from": {
+          "_tag": "TyVar",
+          "id": 0
+        },
+        "to": {
+          "_tag": "TyVar",
+          "id": 1
+        }
+      },
+      "to": {
+        "_tag": "TyFn",
+        "from": {
+          "_tag": "TyCon",
+          "name": "Task",
+          "args": [
+            {
+              "_tag": "TyVar",
+              "id": 0
+            }
+          ]
+        },
+        "to": {
+          "_tag": "TyCon",
+          "name": "Task",
+          "args": [
+            {
+              "_tag": "TyVar",
+              "id": 1
+            }
+          ]
+        }
+      }
+    },
+    "andThen": {
+      "_tag": "TyFn",
+      "from": {
+        "_tag": "TyFn",
+        "from": {
+          "_tag": "TyVar",
+          "id": 0
+        },
+        "to": {
+          "_tag": "TyCon",
+          "name": "Task",
+          "args": [
+            {
+              "_tag": "TyVar",
+              "id": 1
+            }
+          ]
+        }
+      },
+      "to": {
+        "_tag": "TyFn",
+        "from": {
+          "_tag": "TyCon",
+          "name": "Task",
+          "args": [
+            {
+              "_tag": "TyVar",
+              "id": 0
+            }
+          ]
+        },
+        "to": {
+          "_tag": "TyCon",
+          "name": "Task",
+          "args": [
+            {
+              "_tag": "TyVar",
+              "id": 1
+            }
+          ]
+        }
+      }
+    },
+    "run": {
+      "_tag": "TyFn",
+      "from": {
+        "_tag": "TyCon",
+        "name": "Task",
+        "args": [
+          {
+            "_tag": "TyVar",
+            "id": 0
+          }
+        ]
+      },
+      "to": {
+        "_tag": "TyCon",
+        "name": "Promise",
+        "args": [
+          {
+            "_tag": "TyVar",
+            "id": 0
+          }
+        ]
+      }
+    }
+  },
   "Str": {
     "length": {
       "_tag": "TyFn",
@@ -3313,6 +3435,12 @@ const _namespaceRuntime = {
     "isOk": "_Result_isOk",
     "isErr": "_Result_isErr"
   },
+  "Task": {
+    "of": "_Task_of",
+    "map": "_Task_map",
+    "andThen": "_Task_andThen",
+    "run": "_Task_run"
+  },
   "Str": {
     "length": "_Str_length",
     "concat": "_Str_concat",
@@ -3459,7 +3587,11 @@ const _preludeJsDefs = {
   "_Str_codeAt": "const _Str_codeAt = _curry(2, (i, s) => (i >= 0 && i < s.length ? Some(s.charCodeAt(i)) : None));",
   "_Str_fromCode": "const _Str_fromCode = (n) => String.fromCharCode(n);",
   "_Str_chars": "const _Str_chars = (s) => [...s];",
-  "_Str_toNumber": "const _Str_toNumber = (s) => { const n = Number(s); return Number.isNaN(n) ? None : Some(n); };"
+  "_Str_toNumber": "const _Str_toNumber = (s) => { const n = Number(s); return Number.isNaN(n) ? None : Some(n); };",
+  "_Task_of": "const _Task_of = (x) => () => Promise.resolve(x);",
+  "_Task_map": "const _Task_map = _curry(2, (f, t) => () => t().then(f));",
+  "_Task_andThen": "const _Task_andThen = _curry(2, (f, t) => () => t().then((x) => f(x)()));",
+  "_Task_run": "const _Task_run = (t) => t();"
 };
 const _runtimeDeps = {
   "add": [
@@ -3761,6 +3893,12 @@ const _runtimeDeps = {
   "_Str_toNumber": [
     "Some",
     "None"
+  ],
+  "_Task_map": [
+    "_curry"
+  ],
+  "_Task_andThen": [
+    "_curry"
   ]
 };
 

@@ -67,6 +67,17 @@ test("definitionAt on Result.map jumps to the namespace member", () => {
   expect(around).toContain("`Result.map`");
 });
 
+test("definitionAt on Task.andThen jumps to the namespace member", () => {
+  const src = "let f = Task.andThen(Task.of)";
+  const onNs = definitionAt(src, pos(src, "Task"), "/t.mochi");
+  const onMem = definitionAt(src, pos(src, "andThen"), "/t.mochi");
+  expect(onNs?.path).toBe(PRELUDE_PATH);
+  expect(onMem?.path).toBe(PRELUDE_PATH);
+  expect(preludeDoc("Task")).toContain("Lazy async");
+  const around = preludeVirtualSource().slice(Math.max(0, onMem!.span.start - 80), onMem!.span.end);
+  expect(around).toContain("`Task.andThen`");
+});
+
 test("definitionAt on Array.filter uses the Array namespace", () => {
   const src = "let f = Array.filter(always(true))";
   const def = definitionAt(src, pos(src, "filter"), "/t.mochi");

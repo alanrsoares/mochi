@@ -3,10 +3,11 @@
  * Not a real module; Location.path is PRELUDE_PATH. URI ends with `.mochi`
  * so editors pick up the language / syntax grammar.
  */
+import { match } from "@onrails/pattern";
 import { builtinTypeDecls, preludeEnv, preludeNamespaces } from "./prelude";
 import type { Location, Span } from "./span";
 import { emptyOrigins, type Origins } from "./symbols";
-import { showType, type Type } from "./types";
+import { type ConType, showType, type Type } from "./types";
 
 /** Virtual document URI / Location.path for every builtin def. */
 export const PRELUDE_PATH = "mochi:/prelude.mochi";
@@ -39,6 +40,7 @@ const NS_DOCS: Record<string, string> = {
   Option: "Option combinators — data-last for `|>` chains. Ctors stay unqualified (`Some`/`None`).",
   Result:
     "Result railway combinators — data-last for `|>` chains. Ctors stay unqualified (`Ok`/`Err`).",
+  Task: "Lazy async values (`Task.of`, `Task.map`, `Task.andThen`, `Task.run`). Opaque thunk — not switchable. `Task.run` is the only kick-off.",
   Str: "String ops (`Str.split`, `Str.get`, …). Data-last where a subject is involved.",
 };
 
@@ -91,22 +93,24 @@ const VALUE_DOCS: Record<string, string> = {
 };
 
 /** Surface-ish type printer: prelude vars 0.. → a.., else showType. */
-const showSurface = (t: Type): string => {
-  switch (t.kind) {
-    case "var":
-      return VAR_NAMES[t.id] ?? showType(t);
-    case "con":
-      if (t.name === "Array" && t.args.length === 1) return `[${showSurface(t.args[0]!)}]`;
-      if (t.name === "tuple") return `(${t.args.map(showSurface).join(", ")})`;
-      return t.args.length === 0 ? t.name : `${t.name} ${t.args.map(showSurface).join(" ")}`;
-    case "arrow": {
-      const from = t.from.kind === "arrow" ? `(${showSurface(t.from)})` : showSurface(t.from);
-      return `${from} -> ${showSurface(t.to)}`;
-    }
-    case "record":
-      return showType(t);
-  }
-};
+const showSurface = (t: Type): string =>
+  match(t)
+    .with({ kind: "var" }, (v) => VAR_NAMES[v.id] ?? showType(v))
+    .with({ kind: "con", name: "Array" }, (con) =>
+      con.args.length === 1 ? `[${showSurface(con.args[0]!)}]` : surfaceCon(con),
+    )
+    .with({ kind: "con", name: "tuple" }, (con) => `(${con.args.map(showSurface).join(", ")})`)
+    .with({ kind: "con" }, (con) => surfaceCon(con))
+    .with({ kind: "arrow" }, (arrow) => {
+      const from =
+        arrow.from.kind === "arrow" ? `(${showSurface(arrow.from)})` : showSurface(arrow.from);
+      return `${from} -> ${showSurface(arrow.to)}`;
+    })
+    .with({ kind: "record" }, (rec) => showType(rec))
+    .exhaustive();
+
+const surfaceCon = (con: ConType): string =>
+  con.args.length === 0 ? con.name : `${con.name} ${con.args.map(showSurface).join(" ")}`;
 
 export type PreludeVirtual = {
   source: string;

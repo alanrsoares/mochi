@@ -195,3 +195,20 @@ test("Result.map / mapErr / flatMap / unwrapOr / isOk / isErr", () => {
   let r = [show(a), show(b), show(c), show(d), show(e)]`;
   expect(run(src, "r")).toEqual(["42", "0", "true", "true", 'Err("boom!")']);
 });
+
+// ---- Task combinators (ADR 0005) ----------------------------------------------
+
+test("Task.of / map / andThen / run pipeline", async () => {
+  const src = `let program = Task.of(20) |> Task.map((+ 1)) |> Task.andThen(x => Task.of(mul(x, 2)))
+let result = Task.run(program)`;
+  const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
+  const result = new Function("match", `${js}\nreturn result;`)(match) as Promise<number>;
+  expect(result).toBeInstanceOf(Promise);
+  expect(await result).toBe(42);
+});
+
+test("Task is a reserved namespace name", () => {
+  const r = compile("let Task = 1");
+  expect(isErr(r)).toBe(true);
+  expect(unwrapErr(r)[0]!.message).toContain("reserved collection namespace");
+});
