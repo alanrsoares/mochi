@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mochi Canvas Snake</title>
+  <title>Mochi Canvas Snake — Powered by Bun.serve</title>
   <link rel="icon" href="data:,">
   <script type="importmap">
     {
@@ -24,6 +24,7 @@
       --accent-green-glow: rgba(0, 255, 135, 0.4);
       --accent-pink: #ff007f;
       --accent-pink-glow: rgba(255, 0, 127, 0.5);
+      --accent-blue: #3b82f6;
       --text-main: #f3f4f6;
       --text-muted: #9ca3af;
       --grid-color: rgba(255, 255, 255, 0.03);
@@ -51,9 +52,21 @@
       padding: 1.5rem;
     }
 
-    .container {
+    .app-layout {
       width: 100%;
-      max-width: 640px;
+      max-width: 1040px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (min-width: 840px) {
+      .app-layout {
+        grid-template-columns: 1fr 340px;
+      }
+    }
+
+    .main-section {
       display: flex;
       flex-direction: column;
       gap: 1.25rem;
@@ -94,6 +107,30 @@
       padding: 0.2rem 0.6rem;
       border-radius: 20px;
       border: 1px solid rgba(0, 255, 135, 0.25);
+    }
+
+    .ws-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.75rem;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 0.2rem 0.6rem;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+    }
+
+    .ws-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ef4444;
+    }
+
+    .ws-status.connected .ws-dot {
+      background: var(--accent-green);
+      box-shadow: 0 0 8px var(--accent-green-glow);
     }
 
     .scores {
@@ -147,7 +184,7 @@
     .overlay {
       position: absolute;
       inset: 0;
-      background: rgba(9, 13, 22, 0.85);
+      background: rgba(9, 13, 22, 0.88);
       backdrop-filter: blur(8px);
       display: flex;
       flex-direction: column;
@@ -184,15 +221,39 @@
     .overlay-subtitle {
       font-size: 0.95rem;
       color: var(--text-muted);
-      max-width: 300px;
+      max-width: 320px;
       line-height: 1.4;
+    }
+
+    .score-submit-form {
+      display: flex;
+      gap: 0.5rem;
+      width: 100%;
+      max-width: 280px;
+      margin-top: 0.5rem;
+    }
+
+    .score-input {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 0.6rem 0.8rem;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 0.9rem;
+      outline: none;
+    }
+
+    .score-input:focus {
+      border-color: var(--accent-green);
     }
 
     .btn {
       font-family: inherit;
       font-weight: 700;
-      font-size: 1rem;
-      padding: 0.8rem 1.8rem;
+      font-size: 0.95rem;
+      padding: 0.75rem 1.6rem;
       border-radius: 12px;
       border: none;
       cursor: pointer;
@@ -209,6 +270,18 @@
 
     .btn:active {
       transform: translateY(0);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-main);
+      box-shadow: none;
+      border: 1px solid var(--card-border);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.15);
+      box-shadow: 0 4px 15px rgba(255, 255, 255, 0.1);
     }
 
     .controls-legend {
@@ -239,88 +312,175 @@
       color: var(--text-main);
     }
 
-    .dpad {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 0.5rem;
-      max-width: 200px;
-      margin: 0 auto;
+    /* Leaderboard Panel */
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
     }
 
-    .dbtn {
+    .leaderboard-card {
       background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      height: 100%;
+    }
+
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .card-badge {
+      font-size: 0.7rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--accent-pink);
+      background: rgba(255, 0, 127, 0.12);
+      padding: 0.15rem 0.5rem;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 0, 127, 0.25);
+    }
+
+    .leaderboard-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      list-style: none;
+    }
+
+    .leaderboard-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.6rem 0.8rem;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      font-size: 0.88rem;
+      transition: background 0.2s ease;
+    }
+
+    .leaderboard-item.top-1 {
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.03));
+      border-color: rgba(245, 158, 11, 0.3);
+    }
+
+    .rank {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      width: 24px;
+      color: var(--text-muted);
+    }
+
+    .top-1 .rank { color: #f59e0b; }
+    .top-2 .rank { color: #94a3b8; }
+    .top-3 .rank { color: #b45309; }
+
+    .player-name {
+      flex: 1;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .player-score {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      color: var(--accent-green);
+    }
+
+    .audio-btn {
+      background: rgba(255, 255, 255, 0.05);
       border: 1px solid var(--card-border);
       color: var(--text-main);
-      padding: 0.8rem;
       border-radius: 10px;
-      font-size: 1.2rem;
+      padding: 0.4rem 0.8rem;
       cursor: pointer;
+      font-size: 0.8rem;
       display: flex;
       align-items: center;
-      justify-content: center;
-      transition: background 0.15s;
+      gap: 0.4rem;
     }
 
-    .dbtn:active {
-      background: rgba(0, 255, 135, 0.2);
-    }
-
-    @media (min-width: 640px) {
-      .dpad {
-        display: none;
-      }
+    .audio-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <header>
-      <div class="logo">
-        <span class="logo-badge">Mochi</span> Snake
-        <span class="sub-badge">Compiled JS</span>
-      </div>
-      <div class="scores">
-        <div class="score-box">
-          <span class="score-label">Score</span>
-          <span class="score-value" id="score-val">0</span>
+  <div class="app-layout">
+    <div class="main-section">
+      <header>
+        <div class="logo">
+          <span class="logo-badge">Mochi</span> Snake
+          <span class="sub-badge">Bun.serve</span>
         </div>
-        <div class="score-box">
-          <span class="score-label">High Score</span>
-          <span class="score-value high" id="high-val">0</span>
+        <div class="scores">
+          <div class="score-box">
+            <span class="score-label">Score</span>
+            <span class="score-value" id="score-val">0</span>
+          </div>
+          <div class="score-box">
+            <span class="score-label">High Score</span>
+            <span class="score-value high" id="high-val">0</span>
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
 
-    <div class="canvas-wrapper">
-      <canvas id="game-canvas" width="600" height="600"></canvas>
-      
-      <div class="overlay visible" id="overlay">
-        <div class="overlay-title" id="overlay-title">Ready?</div>
-        <div class="overlay-subtitle" id="overlay-sub">Press Space or Start Game to play. Use Arrow keys or WASD to navigate.</div>
-        <button class="btn" id="start-btn">Start Game</button>
+      <div class="canvas-wrapper">
+        <canvas id="game-canvas" width="600" height="600"></canvas>
+        
+        <div class="overlay visible" id="overlay">
+          <div class="overlay-title" id="overlay-title">Ready?</div>
+          <div class="overlay-subtitle" id="overlay-sub">Press Space or Start Game to play. Use Arrow keys or WASD to navigate.</div>
+          
+          <div class="score-submit-form" id="submit-form" style="display: none;">
+            <input type="text" id="player-name" class="score-input" placeholder="Enter Callsign" maxlength="12">
+            <button class="btn" id="submit-score-btn">Submit</button>
+          </div>
+
+          <button class="btn" id="start-btn">Start Game</button>
+        </div>
+      </div>
+
+      <div class="controls-legend">
+        <div class="key-group"><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> / <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move</div>
+        <div class="key-group"><kbd>Space</kbd> Pause</div>
+        <div class="key-group"><kbd>R</kbd> Restart</div>
+        <button class="audio-btn" id="audio-toggle">🔊 Sound: ON</button>
       </div>
     </div>
 
-    <div class="controls-legend">
-      <div class="key-group"><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> / <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move</div>
-      <div class="key-group"><kbd>Space</kbd> Pause</div>
-      <div class="key-group"><kbd>R</kbd> Restart</div>
-    </div>
-
-    <div class="dpad">
-      <div></div>
-      <button class="dbtn" id="btn-up">▲</button>
-      <div></div>
-      <button class="dbtn" id="btn-left">◀</button>
-      <button class="dbtn" id="btn-down">▼</button>
-      <button class="dbtn" id="btn-right">▶</button>
+    <div class="sidebar">
+      <div class="leaderboard-card">
+        <div class="card-title">
+          <span>Global Leaderboard</span>
+          <span class="card-badge">Bun WS</span>
+        </div>
+        <div class="ws-status connected" id="ws-status">
+          <span class="ws-dot"></span>
+          <span id="ws-label">Syncing...</span>
+        </div>
+        <ul class="leaderboard-list" id="leaderboard-list">
+          <li class="leaderboard-item"><span class="player-name">Loading...</span></li>
+        </ul>
+      </div>
     </div>
   </div>
 
   <script type="module">
     import { initGame, step, changeDir, startGame, togglePause } from './snake.js';
 
-    // Mochi Variant Constructors
     const Up = { _tag: "Up" };
     const Down = { _tag: "Down" };
     const Left = { _tag: "Left" };
@@ -335,6 +495,13 @@
     const overlayTitle = document.getElementById('overlay-title');
     const overlaySub = document.getElementById('overlay-sub');
     const startBtn = document.getElementById('start-btn');
+    const submitForm = document.getElementById('submit-form');
+    const playerNameInput = document.getElementById('player-name');
+    const submitScoreBtn = document.getElementById('submit-score-btn');
+    const leaderboardList = document.getElementById('leaderboard-list');
+    const wsStatus = document.getElementById('ws-status');
+    const wsLabel = document.getElementById('ws-label');
+    const audioToggle = document.getElementById('audio-toggle');
 
     const COLS = 20;
     const ROWS = 20;
@@ -343,17 +510,37 @@
     let highScore = parseInt(localStorage.getItem('mochi_snake_highscore') || '0', 10);
     highVal.textContent = highScore;
 
+    let soundEnabled = localStorage.getItem('mochi_snake_sound') !== 'false';
+    updateAudioBtn();
+
     let state = initGame(COLS, ROWS, highScore);
     let lastTime = 0;
-    const TICK_INTERVAL = 110; // ms per tick
+    const TICK_INTERVAL = 110;
 
-    // Simple Web Audio API Sound Synthesizer
+    let particles = [];
+
+    // Web Audio Synthesizer
     let audioCtx = null;
     function initAudio() {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (!audioCtx && soundEnabled) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
     }
 
+    function updateAudioBtn() {
+      audioToggle.textContent = soundEnabled ? '🔊 Sound: ON' : '🔇 Sound: OFF';
+    }
+
+    audioToggle.addEventListener('click', () => {
+      soundEnabled = !soundEnabled;
+      localStorage.setItem('mochi_snake_sound', soundEnabled.toString());
+      updateAudioBtn();
+      if (soundEnabled) initAudio();
+    });
+
     function playSound(type) {
+      if (!soundEnabled) return;
+      initAudio();
       if (!audioCtx) return;
       try {
         const osc = audioCtx.createOscillator();
@@ -382,6 +569,133 @@
       } catch (e) {}
     }
 
+    // Particle FX on food eaten
+    function spawnParticles(x, y) {
+      const px = x * CELL_SIZE + CELL_SIZE / 2;
+      const py = y * CELL_SIZE + CELL_SIZE / 2;
+      for (let i = 0; i < 12; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 3 + 1;
+        particles.push({
+          x: px,
+          y: py,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 1.0,
+          color: Math.random() > 0.5 ? '#ff007f' : '#00ff87'
+        });
+      }
+    }
+
+    function updateAndDrawParticles() {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.05;
+
+        if (p.life <= 0) {
+          particles.splice(i, 1);
+          continue;
+        }
+
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = p.life;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1.0;
+      }
+    }
+
+    // WebSocket Client
+    function connectWS() {
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${location.host}/ws`;
+      let ws;
+
+      try {
+        ws = new WebSocket(wsUrl);
+      } catch {
+        setOfflineWS();
+        return;
+      }
+
+      ws.onopen = () => {
+        wsStatus.className = 'ws-status connected';
+        wsLabel.textContent = 'Live Server';
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'LEADERBOARD_UPDATE') {
+            renderLeaderboard(data.leaderboard);
+          }
+        } catch {}
+      };
+
+      ws.onclose = () => {
+        setOfflineWS();
+        setTimeout(connectWS, 3000);
+      };
+
+      ws.onerror = () => {
+        setOfflineWS();
+      };
+    }
+
+    function setOfflineWS() {
+      wsStatus.className = 'ws-status';
+      wsLabel.textContent = 'Offline (Local)';
+    }
+
+    function renderLeaderboard(list) {
+      if (!list || list.length === 0) {
+        leaderboardList.innerHTML = '<li class="leaderboard-item"><span class="player-name">No scores yet</span></li>';
+        return;
+      }
+      leaderboardList.innerHTML = list.map((item, idx) => `
+        <li class="leaderboard-item top-${idx + 1}">
+          <span class="rank">#${idx + 1}</span>
+          <span class="player-name">${escapeHtml(item.name)}</span>
+          <span class="player-score">${item.score}</span>
+        </li>
+      `).join('');
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // Fetch initial leaderboard via REST
+    fetch('/api/leaderboard')
+      .then(res => res.json())
+      .then(renderLeaderboard)
+      .catch(() => {});
+
+    connectWS();
+
+    // Submit High Score to Bun.serve
+    async function submitScore() {
+      const name = playerNameInput.value.trim() || 'Anonymous';
+      const score = state.score;
+      if (score <= 0) return;
+
+      try {
+        await fetch('/api/score', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, score })
+        });
+        submitForm.style.display = 'none';
+      } catch (err) {
+        console.error('Failed to submit score:', err);
+      }
+    }
+
+    submitScoreBtn.addEventListener('click', submitScore);
+
     function getRandomFood(snake) {
       let candidate;
       let valid = false;
@@ -407,18 +721,28 @@
         overlayTitle.textContent = 'Ready?';
         overlayTitle.className = 'overlay-title';
         overlaySub.textContent = 'Press Space or click Start to begin.';
+        submitForm.style.display = 'none';
         startBtn.textContent = 'Start Game';
         overlay.classList.add('visible');
       } else if (status === 'Paused') {
         overlayTitle.textContent = 'Paused';
         overlayTitle.className = 'overlay-title paused';
         overlaySub.textContent = 'Press Space to resume.';
+        submitForm.style.display = 'none';
         startBtn.textContent = 'Resume';
         overlay.classList.add('visible');
       } else if (status === 'GameOver') {
         overlayTitle.textContent = 'Game Over';
         overlayTitle.className = 'overlay-title game-over';
-        overlaySub.textContent = `Score: ${state.score}  •  High Score: ${state.highScore}`;
+        overlaySub.textContent = `Final Score: ${state.score}`;
+
+        if (state.score > 0) {
+          submitForm.style.display = 'flex';
+          playerNameInput.focus();
+        } else {
+          submitForm.style.display = 'none';
+        }
+
         startBtn.textContent = 'Play Again';
         overlay.classList.add('visible');
       } else {
@@ -448,7 +772,6 @@
       const py = y * CELL_SIZE + CELL_SIZE / 2;
       const radius = CELL_SIZE / 2 - 3;
 
-      // Glow effect
       ctx.shadowColor = '#ff007f';
       ctx.shadowBlur = 15;
 
@@ -457,7 +780,6 @@
       ctx.arc(px, py, radius, 0, Math.PI * 2);
       ctx.fill();
 
-      // Inner shine
       ctx.shadowBlur = 0;
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
@@ -499,10 +821,10 @@
             const hasRight = dirIn === 'right' || dirOut === 'right';
 
             radii = [
-              (hasRight && hasDown) ? radiusSize : 2, // top-left (outer for Right+Down)
-              (hasLeft && hasDown)  ? radiusSize : 2, // top-right (outer for Left+Down)
-              (hasLeft && hasUp)    ? radiusSize : 2, // bottom-right (outer for Left+Up)
-              (hasRight && hasUp)   ? radiusSize : 2  // bottom-left (outer for Right+Up)
+              (hasRight && hasDown) ? radiusSize : 2,
+              (hasLeft && hasDown)  ? radiusSize : 2,
+              (hasLeft && hasUp)    ? radiusSize : 2,
+              (hasRight && hasUp)   ? radiusSize : 2
             ];
           } else {
             radii = [2, 2, 2, 2];
@@ -513,7 +835,6 @@
         ctx.roundRect(px + pad, py + pad, size, size, radii);
         ctx.fill();
 
-        // Draw eyes on head
         if (isHead) {
           ctx.shadowBlur = 0;
           ctx.fillStyle = '#042f1a';
@@ -554,6 +875,7 @@
       drawGrid();
       if (state.food) drawFood(state.food[0], state.food[1]);
       if (state.snake) drawSnake(state.snake);
+      updateAndDrawParticles();
     }
 
     function gameLoop(timestamp) {
@@ -569,6 +891,7 @@
 
           if (state.score > prevScore) {
             playSound('eat');
+            spawnParticles(state.food[0], state.food[1]);
           }
           if (state.status._tag === 'GameOver') {
             playSound('die');
@@ -598,6 +921,7 @@
         state = changeDir(state, Right);
         if (state.status._tag === 'Ready') state = startGame(state);
       } else if (code === 'Space') {
+        if (document.activeElement === playerNameInput) return;
         e.preventDefault();
         if (state.status._tag === 'Ready') {
           state = startGame(state);
@@ -606,6 +930,7 @@
         }
         updateUI();
       } else if (code === 'KeyR') {
+        if (document.activeElement === playerNameInput) return;
         state = initGame(COLS, ROWS, highScore);
         state = startGame(state);
         updateUI();
@@ -626,11 +951,6 @@
 
     window.addEventListener('keydown', handleKey);
     startBtn.addEventListener('click', handleStart);
-
-    document.getElementById('btn-up').addEventListener('click', () => { handleKey({ code: 'ArrowUp' }); });
-    document.getElementById('btn-down').addEventListener('click', () => { handleKey({ code: 'ArrowDown' }); });
-    document.getElementById('btn-left').addEventListener('click', () => { handleKey({ code: 'ArrowLeft' }); });
-    document.getElementById('btn-right').addEventListener('click', () => { handleKey({ code: 'ArrowRight' }); });
 
     updateUI();
     requestAnimationFrame(gameLoop);

@@ -24,7 +24,7 @@
     "clean": "bun scripts/clean.ts",
     "example": "bun run mochi build examples/cli.mochi && bun examples/cli.js",
     "example:life": "bun run mochi build examples/life/main.mochi && bun examples/life/main.js",
-    "example:snake": "bun run mochi build examples/snake/snake.mochi && bun -e \"Bun.serve({ port: 3000, async fetch(req) { const u = new URL(req.url); if (u.pathname.startsWith('/node_modules/')) { const f = Bun.file('.' + u.pathname); if (await f.exists()) return new Response(f); } const p = u.pathname === '/' ? '/index.html' : u.pathname; const file = Bun.file('./examples/snake' + p); if (!(await file.exists())) return new Response('Not Found', { status: 404 }); return new Response(file); } }); console.log('Snake game running on http://localhost:3000');\"",
+    "example:snake": "bun examples/snake/server.ts",
     "example:async": "bun run mochi build examples/async/main.mochi && bun examples/async/main.js",
     "example:modules": "bun run mochi build examples/modules/main.mochi && bun examples/modules/main.js",
     "example:pipelines": "bun run mochi build examples/pipelines.mochi && bun examples/pipelines.js",

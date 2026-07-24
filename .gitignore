@@ -16,7 +16,9 @@ dist
 /bootstrap/*.ts
 /bootstrap/*.d.mts
 /examples/**/*.ts
+!/examples/snake/server.ts
 /examples/**/*.d.mts
+/examples/snake/leaderboard.json
 
 
 # code coverage
