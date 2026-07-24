@@ -36,6 +36,7 @@ import {
   modulePrepareRenameAt,
   moduleReferencesAt,
   moduleRenameAt,
+  moduleTypeDefinitionAt,
   workspaceSymbolsAt,
 } from "../nav";
 import { isPreludePath, PRELUDE_PATH, preludeVirtualSource } from "../prelude-virtual";
@@ -49,6 +50,7 @@ connection.onInitialize(() => ({
     textDocumentSync: TextDocumentSyncKind.Incremental,
     hoverProvider: true,
     definitionProvider: true,
+    typeDefinitionProvider: true,
     documentHighlightProvider: true,
     referencesProvider: true,
     renameProvider: { prepareProvider: true },
@@ -120,6 +122,18 @@ connection.onDefinition(
     if (!doc) return null;
     const path = docPath(textDocument.uri);
     const loc = await moduleDefinitionAt(path, doc.getText(), doc.offsetAt(position), read);
+    if (!loc) return null;
+    return rangeAtPath(loc.path, loc.span);
+  },
+);
+
+// Go-to-type: nominal type of the expression under the cursor (needs infer).
+connection.onTypeDefinition(
+  async ({ textDocument, position }: TextDocumentPositionParams): Promise<Location | null> => {
+    const doc = documents.get(textDocument.uri);
+    if (!doc) return null;
+    const path = docPath(textDocument.uri);
+    const loc = await moduleTypeDefinitionAt(path, doc.getText(), doc.offsetAt(position), read);
     if (!loc) return null;
     return rangeAtPath(loc.path, loc.span);
   },

@@ -1,11 +1,15 @@
 // Navigation queries over the lexical symbol index — free of LSP/protocol
 // types so Bun unit tests can assert on Locations/spans. The language server
-// is a thin adapter (ADR 0003).
+// is a thin adapter (ADR 0003). Go-to-type (DX slice 11) also consults the
+// infer table when typecheck succeeds.
 import { resolve } from "node:path";
 import { isErr } from "@onrails/result";
+import { toTypedProgram, toTypedProgramWith } from "./compile";
+import type { InferResult, TypeAt } from "./infer";
 import { lex } from "./lexer";
-import { loadModuleGraph } from "./module";
+import { loadModuleGraph, moduleContext } from "./module";
 import { parse } from "./parser";
+import { preludeNamespaces } from "./prelude";
 import { isPreludePath } from "./prelude-virtual";
 import type { Location, Span } from "./span";
 import {
@@ -18,6 +22,7 @@ import {
   originsOf,
   type SymbolIndex,
 } from "./symbols";
+import { foldAliases, type Type } from "./types";
 
 export type Highlight = { span: Span; role: "def" | "use" };
 export type Ref = { location: Location; role: "def" | "use" };
@@ -81,6 +86,84 @@ export const definitionAt = (src: string, offset: number, path = "<buffer>"): Lo
   if (!idx) return null;
   const hit = idx.at(offset);
   return hit ? hit.binding.def : null;
+};
+
+/** Tightest inferred type span containing `offset` (ties → first). */
+const tightest = (types: TypeAt[], offset: number): TypeAt | null => {
+  let best: TypeAt | null = null;
+  for (const t of types) {
+    if (offset < t.span.start || offset > t.span.end) continue;
+    const width = t.span.end - t.span.start;
+    if (!best || width < best.span.end - best.span.start) best = t;
+  }
+  return best;
+};
+
+/** Nominal type head (`Shape`, `Option`, …). Structural / primitives → null. */
+const nominalName = (t: Type): string | null => {
+  if (t.kind !== "con") return null;
+  // User + prelude types are Uppercase; skip `number`/`tuple`/`bool`/….
+  if (!/^[A-Z]/.test(t.name)) return null;
+  return t.name;
+};
+
+const typeDefFrom = (
+  res: InferResult,
+  offset: number,
+  idx: SymbolIndex,
+  origins?: Origins,
+): Location | null => {
+  const hit = tightest(res.types, offset);
+  if (!hit) return null;
+  const name = nominalName(foldAliases(hit.type, res.aliases));
+  if (!name) return null;
+  // Prefer a binding in scope (local / imported / prelude); fall back to any
+  // export origin so go-to-type works when only ctors were imported.
+  return idx.binding("type", name)?.def ?? origins?.type.get(name) ?? null;
+};
+
+/**
+ * Go-to-type at `offset`: jump to the nominal type decl of the expression under
+ * the cursor (variant / record alias / prelude). Needs a successful typecheck;
+ * structural types and failed inference → null.
+ */
+export const typeDefinitionAt = (
+  src: string,
+  offset: number,
+  path = "<buffer>",
+): Location | null => {
+  const idx = indexSrc(path, src);
+  if (!idx) return null;
+  const typed = toTypedProgram(src, { open: true, namespaces: preludeNamespaces });
+  if (isErr(typed)) return null;
+  return typeDefFrom(typed.value.res, offset, idx);
+};
+
+/** Module-aware go-to-type (imported variants/aliases via export origins). */
+export const moduleTypeDefinitionAt = async (
+  path: string,
+  src: string,
+  offset: number,
+  readFile: ReadFile,
+): Promise<Location | null> => {
+  const origins = await originsForEntry(path, readFile, src);
+  const idx = indexSrc(path, src, origins);
+  if (!idx) return null;
+
+  const lexed = lex(src);
+  if (isErr(lexed)) return null;
+  const parsed = parse(lexed.value);
+  if (isErr(parsed)) return null;
+
+  const entry = resolve(path);
+  const read = (p: string): Promise<string> =>
+    resolve(p) === entry ? Promise.resolve(src) : readFile(p);
+  const ctx = await moduleContext(entry, read);
+  if (isErr(ctx)) return typeDefinitionAt(src, offset, entry);
+
+  const typed = toTypedProgramWith(parsed.value, ctx.value);
+  if (isErr(typed)) return null;
+  return typeDefFrom(typed.value.res, offset, idx, origins);
 };
 
 export const moduleDefinitionAt = async (

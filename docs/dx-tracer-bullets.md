@@ -24,7 +24,7 @@ Parent epic: [#1](https://github.com/alanrsoares/mochi/issues/1) (children shipp
 |---|---|---|---|---|
 | 9 | Prelude virtual defs — F12 / “defined here” for builtins (virtual `Location`) | AFK | — | done |
 | 10 | Record-field nav (same-file) — `p.x` ↔ type-alias / literal / pattern field sites | AFK | — | done |
-| 11 | Go-to-type at expression (uses infer table; degrades when typecheck fails) | AFK | — | |
+| 11 | Go-to-type at expression (uses infer table; degrades when typecheck fails) | AFK | — | done |
 | 12 | Multi-error collection (honest recovery; ADR 0003 deferred) | HITL | design | |
 
 ## Slice briefs
@@ -240,9 +240,9 @@ From an expression / value binding, jump to the nominal type’s def (variant / 
 
 ## Acceptance criteria
 
-- [ ] LSP `typeDefinition` (or equivalent) on a typed expression opens the type decl
-- [ ] Degrades cleanly when inference failed
-- [ ] `bun run check` green
+- [x] LSP `typeDefinition` (or equivalent) on a typed expression opens the type decl
+- [x] Degrades cleanly when inference failed
+- [x] `bun run check` green
 
 ## Blocked by
 
