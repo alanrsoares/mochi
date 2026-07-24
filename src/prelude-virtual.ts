@@ -3,6 +3,7 @@
  * Not a real module; Location.path is PRELUDE_PATH. URI ends with `.mochi`
  * so editors pick up the language / syntax grammar.
  */
+import { match } from "@onrails/pattern";
 import { builtinTypeDecls, preludeEnv, preludeNamespaces } from "./prelude";
 import type { Location, Span } from "./span";
 import { emptyOrigins, type Origins } from "./symbols";
@@ -92,22 +93,23 @@ const VALUE_DOCS: Record<string, string> = {
 };
 
 /** Surface-ish type printer: prelude vars 0.. → a.., else showType. */
-const showSurface = (t: Type): string => {
-  switch (t.kind) {
-    case "var":
-      return VAR_NAMES[t.id] ?? showType(t);
-    case "con":
-      if (t.name === "Array" && t.args.length === 1) return `[${showSurface(t.args[0]!)}]`;
-      if (t.name === "tuple") return `(${t.args.map(showSurface).join(", ")})`;
-      return t.args.length === 0 ? t.name : `${t.name} ${t.args.map(showSurface).join(" ")}`;
-    case "arrow": {
-      const from = t.from.kind === "arrow" ? `(${showSurface(t.from)})` : showSurface(t.from);
-      return `${from} -> ${showSurface(t.to)}`;
-    }
-    case "record":
-      return showType(t);
-  }
-};
+const showSurface = (t: Type): string =>
+  match(t)
+    .with({ kind: "var" }, (v) => VAR_NAMES[v.id] ?? showType(v))
+    .with({ kind: "con" }, (con) => {
+      if (con.name === "Array" && con.args.length === 1) return `[${showSurface(con.args[0]!)}]`;
+      if (con.name === "tuple") return `(${con.args.map(showSurface).join(", ")})`;
+      return con.args.length === 0
+        ? con.name
+        : `${con.name} ${con.args.map(showSurface).join(" ")}`;
+    })
+    .with({ kind: "arrow" }, (arrow) => {
+      const from =
+        arrow.from.kind === "arrow" ? `(${showSurface(arrow.from)})` : showSurface(arrow.from);
+      return `${from} -> ${showSurface(arrow.to)}`;
+    })
+    .with({ kind: "record" }, (rec) => showType(rec))
+    .exhaustive();
 
 export type PreludeVirtual = {
   source: string;

@@ -1,6 +1,7 @@
 /**
  * Scheme construction and generalization — everything Scheme-shaped that is NOT part of infer.ts's mutually-recursive inference core: the `Scheme`/`Env` types, free-variable collection, `generalize`/`instantiate`, and the surface-type lowering (`typeExprToType`/`ctorScheme`) that builds types and schemes from written TypeExprs. `infer.ts` is the main consumer; `dts.ts` lowers ctor-field TypeExprs through `typeExprToType` so the TS output grammar has exactly one encoder (ADR 0015).
  */
+import { match } from "@onrails/pattern";
 import type { AliasField, Ctor, TypeExpr } from "./ast";
 import { PRIM_TYPE_NAMES } from "./ctors";
 import {
@@ -37,29 +38,34 @@ export const primType = (name: string): Type =>
 export type VarSets = { tv: Set<number>; rv: Set<number> };
 
 const collect = (t: Type, acc: VarSets): void => {
-  switch (t.kind) {
-    case "var":
-      acc.tv.add(t.id);
-      return;
-    case "con":
-      for (const a of t.args) collect(a, acc);
-      return;
-    case "arrow":
-      collect(t.from, acc);
-      collect(t.to, acc);
-      return;
-    case "record":
-      collectRow(t.row, acc);
-      return;
-  }
+  match(t)
+    .with({ kind: "var" }, (v) => {
+      acc.tv.add(v.id);
+    })
+    .with({ kind: "con" }, (con) => {
+      for (const a of con.args) collect(a, acc);
+    })
+    .with({ kind: "arrow" }, (arrow) => {
+      collect(arrow.from, acc);
+      collect(arrow.to, acc);
+    })
+    .with({ kind: "record" }, (rec) => {
+      collectRow(rec.row, acc);
+    })
+    .exhaustive();
 };
 
 const collectRow = (row: Row, acc: VarSets): void => {
-  if (row.kind === "rvar") acc.rv.add(row.id);
-  else if (row.kind === "extend") {
-    collect(row.type, acc);
-    collectRow(row.rest, acc);
-  }
+  match(row)
+    .with({ kind: "empty" }, () => {})
+    .with({ kind: "rvar" }, (rvar) => {
+      acc.rv.add(rvar.id);
+    })
+    .with({ kind: "extend" }, (ext) => {
+      collect(ext.type, acc);
+      collectRow(ext.rest, acc);
+    })
+    .exhaustive();
 };
 
 export const freeInType = (t: Type): VarSets => {
@@ -90,18 +96,18 @@ const freeInScheme = (sc: Scheme, s: Subst): VarSets => {
       }
       cur = next;
     }
-    switch (cur.kind) {
-      case "con":
-        cur.args.forEach(walk);
-        return;
-      case "arrow":
-        walk(cur.from);
-        walk(cur.to);
-        return;
-      case "record":
-        walkRow(cur.row);
-        return;
-    }
+    match(cur)
+      .with({ kind: "con" }, (con) => {
+        con.args.forEach(walk);
+      })
+      .with({ kind: "arrow" }, (arrow) => {
+        walk(arrow.from);
+        walk(arrow.to);
+      })
+      .with({ kind: "record" }, (rec) => {
+        walkRow(rec.row);
+      })
+      .exhaustive();
   };
   const walkRow = (row: Row): void => {
     let cur = row;
@@ -114,10 +120,13 @@ const freeInScheme = (sc: Scheme, s: Subst): VarSets => {
       }
       cur = next;
     }
-    if (cur.kind === "extend") {
-      walk(cur.type);
-      walkRow(cur.rest);
-    }
+    match(cur)
+      .with({ kind: "empty" }, () => {})
+      .with({ kind: "extend" }, (ext) => {
+        walk(ext.type);
+        walkRow(ext.rest);
+      })
+      .exhaustive();
   };
   walk(sc.type);
   return acc;
@@ -145,26 +154,24 @@ export const generalize = (env: Env, t: Type, s: Subst): Scheme => {
 export const instantiate = (sc: Scheme, f: Fresh): Type => {
   const tmap = new Map(sc.vars.map((v) => [v, freshVar(f)]));
   const rmap = new Map(sc.rvars.map((v) => [v, freshRowVar(f)]));
-  const sub = (t: Type): Type => {
-    switch (t.kind) {
-      case "var":
-        return tmap.get(t.id) ?? t;
-      case "con":
-        return tCon(
-          t.name,
-          t.args.map((a) => sub(a)),
-        );
-      case "arrow":
-        return tArrow(sub(t.from), sub(t.to));
-      case "record":
-        return tRecord(subRow(t.row));
-    }
-  };
-  const subRow = (row: Row): Row => {
-    if (row.kind === "rvar") return rmap.get(row.id) ?? row;
-    if (row.kind === "extend") return rExtend(row.label, sub(row.type), subRow(row.rest));
-    return row;
-  };
+  const sub = (t: Type): Type =>
+    match(t)
+      .with({ kind: "var" }, (v) => tmap.get(v.id) ?? v)
+      .with({ kind: "con" }, (con) =>
+        tCon(
+          con.name,
+          con.args.map((a) => sub(a)),
+        ),
+      )
+      .with({ kind: "arrow" }, (arrow) => tArrow(sub(arrow.from), sub(arrow.to)))
+      .with({ kind: "record" }, (rec) => tRecord(subRow(rec.row)))
+      .exhaustive();
+  const subRow = (row: Row): Row =>
+    match(row)
+      .with({ kind: "empty" }, (empty) => empty)
+      .with({ kind: "rvar" }, (rvar) => rmap.get(rvar.id) ?? rvar)
+      .with({ kind: "extend" }, (ext) => rExtend(ext.label, sub(ext.type), subRow(ext.rest)))
+      .exhaustive();
   return sub(sc.type);
 };
 
@@ -202,34 +209,38 @@ export const typeExprToType = (
   f: Fresh,
   aliases: AliasMap = new Map(),
   expanding: Set<string> = new Set(),
-): Type => {
-  switch (te.kind) {
-    case "tarrow":
-      return tArrow(
-        typeExprToType(te.from, vars, f, aliases, expanding),
-        typeExprToType(te.to, vars, f, aliases, expanding),
-      );
-    case "tapp": {
-      const args = te.args.map((a) => typeExprToType(a, vars, f, aliases, expanding));
-      const info = aliases.get(te.ctor);
-      return info ? aliasRow(te.ctor, info, args, f, aliases, expanding) : tCon(te.ctor, args);
-    }
-    case "ttuple":
-      return tTuple(te.elems.map((el) => typeExprToType(el, vars, f, aliases, expanding)));
-    case "tlist":
-      return tCon("Array", [typeExprToType(te.elem, vars, f, aliases, expanding)]);
-  }
-  if (PRIM_TYPE_NAMES.has(te.name)) return primType(te.name);
-  const info = aliases.get(te.name);
-  if (info) return aliasRow(te.name, info, [], f, aliases, expanding);
-  if (/^[A-Z]/.test(te.name)) return tCon(te.name);
-  let v = vars.get(te.name);
-  if (!v) {
-    v = freshVar(f);
-    vars.set(te.name, v);
-  }
-  return v;
-};
+): Type =>
+  match(te)
+    .with({ kind: "tarrow" }, (tarrow) =>
+      tArrow(
+        typeExprToType(tarrow.from, vars, f, aliases, expanding),
+        typeExprToType(tarrow.to, vars, f, aliases, expanding),
+      ),
+    )
+    .with({ kind: "tapp" }, (tapp) => {
+      const args = tapp.args.map((a) => typeExprToType(a, vars, f, aliases, expanding));
+      const info = aliases.get(tapp.ctor);
+      return info ? aliasRow(tapp.ctor, info, args, f, aliases, expanding) : tCon(tapp.ctor, args);
+    })
+    .with({ kind: "ttuple" }, (ttuple) =>
+      tTuple(ttuple.elems.map((el) => typeExprToType(el, vars, f, aliases, expanding))),
+    )
+    .with({ kind: "tlist" }, (tlist) =>
+      tCon("Array", [typeExprToType(tlist.elem, vars, f, aliases, expanding)]),
+    )
+    .with({ kind: "tname" }, (tname) => {
+      if (PRIM_TYPE_NAMES.has(tname.name)) return primType(tname.name);
+      const info = aliases.get(tname.name);
+      if (info) return aliasRow(tname.name, info, [], f, aliases, expanding);
+      if (/^[A-Z]/.test(tname.name)) return tCon(tname.name);
+      let v = vars.get(tname.name);
+      if (!v) {
+        v = freshVar(f);
+        vars.set(tname.name, v);
+      }
+      return v;
+    })
+    .exhaustive();
 
 /**
  * A variant's constructors become curried functions into that variant type, polymorphic over the type's parameters. `type Result a e = | Ok(a) | Err(e)` gives `Ok : ∀a e. a -> Result<a, e>` — each type param maps to a fresh var quantified in the scheme; a constructor arg naming a param uses that var, and the result type applies the params so matching connects them.
