@@ -3,12 +3,22 @@
 // side stays pure; every side effect (writing to the terminal, sleeping) lives
 // here behind an `extern`.
 
-// --- Task combinators (curried, so they compose through Mochi's `|>`) ---
+// --- Task combinators ---
+// Most are nested-curried so `t |> andThen(f)` lowers to `andThen(f)(t)`.
+// `delay` is `_curry`-shaped: mochi emits multi-arg `delay(ms, x)`, and
+// `andThen(delay(ms))` still needs the partial.
+const curry2 = (f) =>
+  function c(...a) {
+    if (a.length < 2) return (...b) => c(...a, ...b);
+    return f(a[0], a[1]);
+  };
+
 export const of = (x) => () => Promise.resolve(x);
 export const mapT = (f) => (t) => () => t().then(f);
 export const andThen = (f) => (t) => () => t().then((x) => f(x)());
-export const delay = (ms) => (x) => () =>
-  new Promise((res) => setTimeout(() => res(x), ms));
+export const delay = curry2(
+  (ms, x) => () => new Promise((res) => setTimeout(() => res(x), ms)),
+);
 export const run = (t) => t(); // kick it off — hands the Promise to the JS host
 
 // --- Terminal frame buffer ---
