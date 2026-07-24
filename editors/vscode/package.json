@@ -5,7 +5,9 @@
   "version": "0.0.1",
   "publisher": "mochi",
   "private": true,
-  "engines": { "vscode": "^1.82.0" },
+  "engines": {
+    "vscode": "^1.82.0"
+  },
   "categories": ["Programming Languages"],
   "main": "./out/extension.js",
   "activationEvents": [],
@@ -14,6 +16,7 @@
     "check": "tsc --noEmit"
   },
   "devDependencies": {
+    "@types/node": "^26.1.1",
     "@types/vscode": "^1.125.0",
     "vscode-languageclient": "^10.1.0"
   },
