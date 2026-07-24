@@ -16,7 +16,7 @@ import { DEFAULT_RUNTIME_IMPORT, emitTsModule } from "./codegen-ts";
 import { toTypedProgramWith } from "./compile";
 import { exportedCtorKeys, exportedCtorTable } from "./ctors";
 import { type ExternBinding, externModuleDts } from "./dts";
-import { type AlangError, checkErr } from "./errors";
+import { checkErr, type Diagnostic } from "./errors";
 import type { Env, Scheme } from "./infer";
 import { lex } from "./lexer";
 import { parse } from "./parser";
@@ -51,7 +51,7 @@ const exportsOf = (prog: Program, env: Env): Env => {
 // Parse a file to a Program. Neither `check` nor inference runs here — both
 // need this module's imports resolved first, which only happens in
 // `compileGraph` once the whole graph is loaded.
-const parseModule = (src: string): Result<Program, AlangError> => {
+const parseModule = (src: string): Result<Program, Diagnostic> => {
   const lexed = lex(src);
   return isErr(lexed) ? lexed : parse(lexed.value);
 };
@@ -77,7 +77,7 @@ const gatherImports = (
   exportsByPath: Map<string, Env>,
   regByPath: Map<string, Registry>,
   keysByPath: Map<string, Map<string, string[]>>,
-): Result<ModuleContext, AlangError> => {
+): Result<ModuleContext, Diagnostic> => {
   const imports: Env = new Map();
   const nsImports = new Map<string, Env>();
   const importedReg: Registry = { ctor: new Map(), type: new Map() };
@@ -111,12 +111,12 @@ const gatherImports = (
 // Load the whole graph reachable from `entry`, depth-first, detecting cycles.
 // Yields modules in DEPENDENCY ORDER (a module appears after all it imports).
 // The async file reads are the reason this half is a ResultAsync.
-const loadGraph = (entry: string, readFile: ReadFile): ResultAsync<Loaded[], AlangError> =>
+const loadGraph = (entry: string, readFile: ReadFile): ResultAsync<Loaded[], Diagnostic> =>
   ResultAsync.defer(async () => {
     const order: Loaded[] = [];
     const state = new Map<string, "loading" | "done">();
 
-    const visit = async (path: string): Promise<AlangError | null> => {
+    const visit = async (path: string): Promise<Diagnostic | null> => {
       const st = state.get(path);
       if (st === "done") return null;
       if (st === "loading") return checkErr(`import cycle through '${path}'`, { start: 0, end: 0 });
@@ -149,7 +149,7 @@ const loadGraph = (entry: string, readFile: ReadFile): ResultAsync<Loaded[], Ala
 // to: their export SCHEMES (inference), their variant REGISTRY (cross-module
 // exhaustiveness), and their ctor field KEYS (pattern destructuring). A missing
 // export is reported against the import site.
-const compileGraph = (graph: Loaded[]): Result<ModuleOutput[], AlangError> => {
+const compileGraph = (graph: Loaded[]): Result<ModuleOutput[], Diagnostic> => {
   const exportsByPath = new Map<string, Env>();
   const regByPath = new Map<string, Registry>();
   const keysByPath = new Map<string, Map<string, string[]>>();
@@ -174,7 +174,7 @@ const compileGraph = (graph: Loaded[]): Result<ModuleOutput[], AlangError> => {
 export const buildModules = (
   entry: string,
   readFile: ReadFile,
-): ResultAsync<ModuleOutput[], AlangError> =>
+): ResultAsync<ModuleOutput[], Diagnostic> =>
   loadGraph(resolve(entry), readFile).andThen(compileGraph);
 
 export type BuildTsOptions = { runtimeImport?: string };
@@ -188,7 +188,7 @@ export type BuildTsOptions = { runtimeImport?: string };
 const compileGraphTs = (
   graph: Loaded[],
   runtimeImport: string,
-): Result<ModuleOutput[], AlangError> => {
+): Result<ModuleOutput[], Diagnostic> => {
   const exportsByPath = new Map<string, Env>();
   const regByPath = new Map<string, Registry>();
   const keysByPath = new Map<string, Map<string, string[]>>();
@@ -308,7 +308,7 @@ export const buildModulesTs = (
   entry: string,
   readFile: ReadFile,
   opts: BuildTsOptions = {},
-): ResultAsync<ModuleOutput[], AlangError> =>
+): ResultAsync<ModuleOutput[], Diagnostic> =>
   loadGraph(resolve(entry), readFile).andThen((g) =>
     compileGraphTs(g, opts.runtimeImport ?? DEFAULT_RUNTIME_IMPORT),
   );
@@ -323,7 +323,7 @@ export const buildModulesTs = (
 export const moduleContext = (
   entry: string,
   readFile: ReadFile,
-): ResultAsync<ModuleContext, AlangError> =>
+): ResultAsync<ModuleContext, Diagnostic> =>
   loadGraph(resolve(entry), readFile).andThen((graph) => {
     const entryPath = resolve(entry);
     const exportsByPath = new Map<string, Env>();

@@ -3,6 +3,11 @@
 // a location (and an LSP can map a cursor position back to a node).
 export type Span = { start: number; end: number };
 
+// A span anchored to a source file (absolute path). Labels, suggestions, and
+// symbol-index hits share this so cross-module "defined here" / go-to-definition
+// stay one shape (ADR 0003).
+export type Location = { path: string; span: Span };
+
 export const span = (start: number, end: number): Span => ({ start, end });
 
 // The span covering two spans (and everything between): left edge of `a`,

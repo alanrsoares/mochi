@@ -23,6 +23,7 @@ share one codegen: readable JavaScript, and typed TypeScript that is clean under
 | [`language.md`](language.md) | The surface language: types, variants, records, patterns, collections, bindings — with examples. |
 | [`compiler.md`](compiler.md) | The pipeline, the two backends, and how self-hosting works. |
 | [`tooling.md`](tooling.md) | The CLI, the LSP surfaces, the formatter, and `.d.ts` emission. |
+| [`dx-tracer-bullets.md`](dx-tracer-bullets.md) | Editor DX slices (rich diagnostics + navigation) — tracked as GitHub issues. |
 | [`adr/`](adr/) | Architectural Decision Records — one file per decision, going forward. |
 
 For working *in* the repo (commands, conventions, definition of done) see

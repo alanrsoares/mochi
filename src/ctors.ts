@@ -9,7 +9,7 @@
 // `codegen` reads its keys.
 import { err, ok, type Result } from "@onrails/result";
 import type { Ctor, CtorField, Program } from "./ast";
-import { type AlangError, checkErr } from "./errors";
+import { checkErr, type Diagnostic } from "./errors";
 import { builtinTypeDecls } from "./prelude";
 
 // The primitive type names legal in a ctor field / type expression. Shared by
@@ -70,7 +70,7 @@ const seedBuiltins = (table: CtorTable): void => {
 // didn't vouch for. A transparent record alias reserves its type name (a later
 // variant can't reuse it) but registers no constructors — it's structural,
 // never a `switch` target; an empty ctor list is inert for exhaustiveness.
-export const buildCtorTable = (prog: Program): Result<CtorTable, AlangError> => {
+export const buildCtorTable = (prog: Program): Result<CtorTable, Diagnostic> => {
   const table: CtorTable = { ctor: new Map(), type: new Map() };
   for (const s of prog.stmts) {
     if (s.kind !== "type") continue;

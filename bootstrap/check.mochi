@@ -6,7 +6,7 @@
 // - AST declared here again (same shape as bootstrap/parser.mochi) — modules
 //   arrive in Slice F; until then the differential suite keeps both honest,
 //   and the `_tag` runtime shape makes the two declarations interchangeable.
-// - `AlangError | null` returns become `Option CErr`; the mutable
+// - `Diagnostic | null` returns become `Option CErr`; the mutable
 //   `forEachMatch` visitor becomes `checkExpr`, a fold returning the first
 //   error in the same post-order (children before the match node itself).
 // - Mutable registry `Map`s become threaded immutable `Map` values;

@@ -127,6 +127,14 @@ test("unbound variable is a type error", () => {
   expect(unwrapErr(r).message).toContain("unbound variable 'nope'");
 });
 
+test("unbound variable suggests a close name from the env", () => {
+  const r = infer("let count = 1\nlet n = coun", {});
+  expect(isErr(r)).toBe(true);
+  const e = unwrapErr(r);
+  expect(e.help).toBe("did you mean 'count'?");
+  expect(e.suggestions?.[0]?.replaceWith).toBe("count");
+});
+
 test("applying a number as a function is a type error", () => {
   const r = infer("let bad = square(add)");
   // add : number -> number -> number, square expects number

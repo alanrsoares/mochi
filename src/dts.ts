@@ -11,7 +11,7 @@
 import { isErr, ok, type Result } from "@onrails/result";
 import type { Ctor, Expr, Program, Stmt, TypeExpr } from "./ast";
 import { toTypedProgram } from "./compile";
-import type { AlangError } from "./errors";
+import type { Diagnostic } from "./errors";
 import type { Scheme } from "./infer";
 import { builtinTypeDecls, preludeNamespaces } from "./prelude";
 import { typeExprToType } from "./schemes";
@@ -644,7 +644,7 @@ export const externModuleDts = (externs: ExternBinding[]): string => {
   return `${[...decls, ...lines].join("\n")}\n`;
 };
 
-export const emitDts = (src: string): Result<string, AlangError> => {
+export const emitDts = (src: string): Result<string, Diagnostic> => {
   const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces });
   if (isErr(r)) return r;
   const { prog, res } = r.value;
