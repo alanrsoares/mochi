@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Strip tool/agent attribution trailers Cursor (or others) may inject.
+# Install: git config core.hooksPath .githooks
+set -euo pipefail
+msg_file="${1:?commit message file}"
+
+tmp="$(mktemp)"
+# Drop Co-authored-by / Made-with / Generated-by / Made with Cursor lines.
+grep -v -E \
+  -e '^[[:space:]]*Co-[Aa]uthored-[Bb]y:' \
+  -e '^[[:space:]]*Made-with:[[:space:]]*Cursor' \
+  -e '^[[:space:]]*Made with Cursor' \
+  -e '^[[:space:]]*Generated (by|with)\b' \
+  "$msg_file" >"$tmp" || true
+mv "$tmp" "$msg_file"
