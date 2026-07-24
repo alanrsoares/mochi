@@ -26,6 +26,8 @@ export type SymbolIndex = {
   at: (offset: number) => Occurrence | null;
   /** All occurrences of a binding (def + uses), def first. */
   occurrences: (b: Binding) => Occurrence[];
+  /** Innermost binding of `name` in `space`, or null. */
+  binding: (space: SymbolSpace, name: string) => Binding | null;
 };
 
 type Scope = Map<string, Binding>;
@@ -443,5 +445,8 @@ export const indexProgram = (path: string, prog: Program, origins?: Origins): Sy
     });
   };
 
-  return { at, occurrences };
+  const binding = (space: SymbolSpace, name: string): Binding | null =>
+    lookup(b, space, name) ?? null;
+
+  return { at, occurrences, binding };
 };

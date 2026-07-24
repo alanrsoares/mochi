@@ -43,6 +43,10 @@ the `.mochi` formatter on `bootstrap/`), `build:ext` (VS Code extension).
   `Result.map`-style namespaces) resolve to a virtual `mochi:/prelude.mochi` buffer
   (read-only). Cross-module F12 follows import origins to the exporting module
   ([tracer bullets](dx-tracer-bullets.md)).
+- **Go to type** — from an expression / value binding, jump to the nominal type decl
+  (variant, record alias, or prelude `Option`/`Result`) via the infer table. Degrades to
+  nothing when typecheck failed or the type is structural / primitive / unbound
+  (`Array`/`List` have no type-space decl yet).
 - **Find references / rename** — same-file and across the import graph; skips `$`/`_`
   synthetics, prelude, and record fields (field nav is name-heuristic only). F2 rewrites
   every occurrence of a user value/type/ctor binding.

@@ -128,6 +128,9 @@ errors) share one compiler-side model — the LSP stays a thin adapter (ADR 0003
   `mochi:/prelude.mochi` (a virtual buffer); they are not renameable. Field nav is a
   same-file name heuristic (row polymorphism) — F12 prefers a type-alias field when
   present; rename of fields is refused.
+- **Go-to-type** — from a typed expression, jump to the nominal type’s def (variant /
+  record alias / prelude) using the infer table + type-space / export-origin lookup.
+  Absent when inference failed or the type is structural/primitive.
 
 ## Effects — a convention, not a feature
 
