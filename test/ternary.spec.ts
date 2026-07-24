@@ -50,6 +50,15 @@ let r = { lo: clamp01(-3), hi: clamp01(4), mid: clamp01(0.5) }`;
   expect(run(src, "[r.lo, r.hi, r.mid]")).toEqual([0, 1, 0.5]);
 });
 
+test("cond binds tighter than ternary when cond is itself an infix comparison", () => {
+  // `a == b ? "eq" : "ne"` must parse as `(a == b) ? "eq" : "ne"`, not
+  // `a == ("eq" if b else "ne")` — the `?` belongs to the enclosing ternary,
+  // not to `b` as `==`'s tightly-bound right operand.
+  const src = `let f = (a, b) => a == b ? "eq" : "ne"
+let r = [f(1, 1), f(1, 2)]`;
+  expect(run(src, "r")).toEqual(["eq", "ne"]);
+});
+
 test("cond must be bool", () => {
   expect(errMsg("let r = 1 ? 2 : 3")).toContain("bool");
 });

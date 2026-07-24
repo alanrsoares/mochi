@@ -346,7 +346,12 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
 
   function parseExpr(minBp = 0): Expr {
     if (peek().t === "let") return parseLetIn();
-    if (looksLikeLambda()) return parseLambda();
+    // Lambda binds looser than every infix operator, so `x => …` is only a
+    // fresh lambda when parseExpr starts unconstrained (minBp 0) — not as the
+    // tightly-bound right operand of an operator (`parseExpr(OP_BP + 1)`),
+    // where a trailing `id =>` almost always belongs to an *enclosing*
+    // construct (a switch-arm guard, e.g. `when a == b => …`) instead.
+    if (minBp === 0 && looksLikeLambda()) return parseLambda();
     let left = parseAtomOrCall();
     for (;;) {
       const res = parseInfix(left, minBp);
@@ -355,7 +360,11 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     }
     // cond ? then : else — binds looser than operators, right-associative via the
     // recursive parseExpr in the else branch (`a ? x : b ? y : z` chains).
-    if (peek().t === "question") {
+    // Same minBp-0 gate as the lambda check above: a `?` after a tightly-bound
+    // operand (e.g. the right side of `==`) belongs to the *enclosing* expr's
+    // ternary, not one rooted at this operand (`a == b ? x : y` must parse as
+    // `(a == b) ? x : y`, not `a == (b ? x : y)`).
+    if (minBp === 0 && peek().t === "question") {
       next(); // consume ?
       const then = parseExpr();
       expect("colon");

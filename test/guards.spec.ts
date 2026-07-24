@@ -78,6 +78,19 @@ test("guard on an eager array pattern", () => {
   expect(run(src)).toEqual([2, 5, -1]);
 });
 
+test("guard's `==` comparison doesn't swallow the arm's `=>` as a lambda", () => {
+  // `x when x == limit => body`: the right operand of `==` is the bare
+  // identifier `limit`, immediately followed by `=>` — the guard parser must
+  // not mistake that for a fresh lambda `limit => body`.
+  const src = `let limit = 10
+  let f = n => switch n {
+    | x when x == limit => "hit"
+    | x => "miss"
+  }
+  let r = [f(10), f(5)]`;
+  expect(run(src)).toEqual(["hit", "miss"]);
+});
+
 test("guard can use outer-scope names alongside pattern binds", () => {
   const src = `let limit = 10
   let f = n => switch n {
