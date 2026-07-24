@@ -321,8 +321,21 @@ const A_EXPR: Record<string, (e: Al) => Canon> = {
   }),
   EField: (e) => ({ kind: "field", target: aExpr(e.target), name: e.name, span: e.span }),
   ETuple: (e) => ({ kind: "tuple", elements: e.elements.map(aExpr), span: e.span }),
-  EArr: (e) => ({ kind: "arr", elements: e.elements.map(aExpr), span: e.span }),
-  EList: (e) => ({ kind: "list", elements: e.elements.map(aExpr), span: e.span }),
+  EArr: (e) => ({
+    kind: "arr",
+    elements: e.elements.map(aSeqElem),
+    span: e.span,
+  }),
+  EList: (e) => ({
+    kind: "list",
+    elements: e.elements.map(aSeqElem),
+    span: e.span,
+  }),
+  ESet: (e) => ({
+    kind: "set",
+    elements: e.elements.map(aSeqElem),
+    span: e.span,
+  }),
   EMap: (e) => ({
     kind: "map",
     entries: e.entries.map((en: Al) => ({ key: aExpr(en.key), value: aExpr(en.value) })),
@@ -334,6 +347,9 @@ const A_EXPR: Record<string, (e: Al) => Canon> = {
     span: e.span,
   }),
 };
+// Plain slots unwrap to exprs (agree with cExpr); spreads stay tagged.
+const aSeqElem = (el: Al): Canon =>
+  el._tag === "SESpread" ? { kind: "spread", expr: aExpr(el.expr) } : aExpr(el.expr);
 const aExpr = (e: Al): Canon => {
   const f = A_EXPR[e._tag];
   if (!f) throw new Error(`unknown mochi expr tag: ${e._tag}`);

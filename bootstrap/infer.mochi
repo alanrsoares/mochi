@@ -40,7 +40,7 @@ import { TyVar, TyCon, TyFn, TyRecord, RowEmpty, RowVar, RowExtend, tCon, tArrow
 // `Ty` type, so its arrow constructor is `TyFn` here instead.
 // ============================================================
 
-import { ENum, EBool, EStr, ERef, ECall, ELambda, ELetIn, ELetBind, EPipe, ETernary, EMatch, ERecord, EField, ETuple, EArr, EList, EMap, EInterp, IPLit, IPExpr, PWild, PBind, PLit, PBool, PStr, PTuple, PRecord, PCtor, PArr, PList, POr, TyName, TyArrow, TyApp, TyTuple, TyList, LPName, LPRecord, LPTuple, SLet, SType, SExtern } from "./ast.mochi"
+import { ENum, EBool, EStr, ERef, ECall, ELambda, ELetIn, ELetBind, EPipe, ETernary, EMatch, ERecord, EField, ETuple, EArr, EList, ESet, EMap, EInterp, IPLit, IPExpr, SEExpr, SESpread, PWild, PBind, PLit, PBool, PStr, PTuple, PRecord, PCtor, PArr, PList, POr, TyName, TyArrow, TyApp, TyTuple, TyList, LPName, LPRecord, LPTuple, SLet, SType, SExtern } from "./ast.mochi"
 import { builtinDeclsFor } from "./ctors.mochi"
 import { mono, tNumber, tBool, tString, generalize, instantiate, typeExprToType, typeExprListToType, ctorScheme, isUpperStart } from "./schemes.mochi"
 import { stronglyConnected } from "./scc.mochi"
@@ -67,6 +67,7 @@ let exprSpan = e => switch e {
   | ETuple(_, sp) => sp
   | EArr(_, sp) => sp
   | EList(_, sp) => sp
+  | ESet(_, sp) => sp
   | EMap(_, sp) => sp
   | EInterp(_, sp) => sp
 }
@@ -251,15 +252,22 @@ let inferTupleElems = (elements, ctx, st) => switch elements {
       Ok((Array.prepend(t, restTs), st2))
 }
 
-let inferSeqExprElems = (elem, elements, ctx, st) => switch elements {
+let seqElemExpr = el => switch el { | SEExpr(e) => e | SESpread(e) => e }
+
+let inferSeqSlotsElems = (con, elem, elements, ctx, st) => switch elements {
   | [] => Ok(st)
-  | [el, ...rest] => let? (et, st1) = inferExpr(el, ctx, st) in
-    let? st2 = u(elem, et, st1, exprSpan(el)) in
-      inferSeqExprElems(elem, rest, ctx, st2)
+  | [slot, ...rest] => let ex = seqElemExpr(slot) in
+    let? (et, st1) = inferExpr(ex, ctx, st) in
+    let want = switch slot {
+      | SEExpr(_) => elem
+      | SESpread(_) => tCon(con, [elem])
+    } in
+    let? st2 = u(want, et, st1, exprSpan(ex)) in
+      inferSeqSlotsElems(con, elem, rest, ctx, st2)
 }
-let inferSeqExpr = (con, elements, ctx, st) =>
+let inferSeqSlots = (con, elements, ctx, st) =>
   let (elem, st1) = freshVar(st) in
-  let? st2 = inferSeqExprElems(elem, elements, ctx, st1) in
+  let? st2 = inferSeqSlotsElems(con, elem, elements, ctx, st1) in
     Ok((tCon(con, [elem]), st2))
 
 let inferMapEntries = (k, v, entries, ctx, st) => switch entries {
@@ -387,8 +395,9 @@ let inferExpr = (e, ctx, st) => switch e {
       st
     ) in
       Ok((tTuple(elems), st1))
-  | EArr(elements, _) => inferSeqExpr("Array", elements, ctx, st)
-  | EList(elements, _) => inferSeqExpr("List", elements, ctx, st)
+  | EArr(elements, _) => inferSeqSlots("Array", elements, ctx, st)
+  | EList(elements, _) => inferSeqSlots("List", elements, ctx, st)
+  | ESet(elements, _) => inferSeqSlots("Set", elements, ctx, st)
   | EMap(entries, _) => inferMapExpr(entries, ctx, st)
   | EMatch(scrutinee, arms, _) => inferMatch(scrutinee, arms, ctx, st)
   | EInterp(parts, _) => let? st1 = inferInterpParts(parts, ctx, st) in
@@ -668,8 +677,9 @@ let freeRefs = (e, bound, acc) => switch e {
     )
   | EField(target, _, _) => freeRefs(target, bound, acc)
   | ETuple(elements, _) => freeRefsList(elements, bound, acc)
-  | EArr(elements, _) => freeRefsList(elements, bound, acc)
-  | EList(elements, _) => freeRefsList(elements, bound, acc)
+  | EArr(elements, _) => freeRefsList(elements |> map(seqElemExpr), bound, acc)
+  | EList(elements, _) => freeRefsList(elements |> map(seqElemExpr), bound, acc)
+  | ESet(elements, _) => freeRefsList(elements |> map(seqElemExpr), bound, acc)
   | EMap(entries, _) => freeRefsEntries(entries, bound, acc)
   | EInterp(parts, _) => freeRefsInterpParts(parts, bound, acc)
 }

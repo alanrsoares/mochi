@@ -23,6 +23,11 @@ type MapEntry = { key: Expr, value: Expr }
 type MatchArm = { pattern: Pattern, guard: Option Expr, body: Expr }
 type PatField = { label: string, pat: Pattern }
 
+// One slot in an Array / List / Set literal (ADR 0001).
+export type SeqElem =
+  | SEExpr(expr: Expr)
+  | SESpread(expr: Expr)
+
 export type Expr =
   | ENum(value: number, raw: string, span: Span)
   | EBool(value: bool, span: Span)
@@ -38,8 +43,9 @@ export type Expr =
   | ERecord(fields: [Field], spread: Option Expr, span: Span)
   | EField(target: Expr, name: string, span: Span)
   | ETuple(elements: [Expr], span: Span)
-  | EArr(elements: [Expr], span: Span)
-  | EList(elements: [Expr], span: Span)
+  | EArr(elements: [SeqElem], span: Span)
+  | EList(elements: [SeqElem], span: Span)
+  | ESet(elements: [SeqElem], span: Span)
   | EMap(entries: [MapEntry], span: Span)
   | EInterp(parts: [InterpPart], span: Span)
 

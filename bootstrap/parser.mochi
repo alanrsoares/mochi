@@ -69,7 +69,7 @@ type Tok =
   | TId(value: string)
   | TEof
 
-import { ENum, EBool, EStr, ERef, ECall, ELambda, ELetIn, ELetBind, EPipe, ETernary, EMatch, ERecord, EField, ETuple, EArr, EList, EMap, EInterp, IPLit, IPExpr, PWild, PBind, PLit, PBool, PStr, PTuple, PRecord, PCtor, PArr, PList, POr, TyName, TyArrow, TyApp, TyTuple, TyList, LPName, LPRecord, LPTuple, SLet, SType, SExtern, SImport } from "./ast.mochi"
+import { ENum, EBool, EStr, ERef, ECall, ELambda, ELetIn, ELetBind, EPipe, ETernary, EMatch, ERecord, EField, ETuple, EArr, EList, ESet, EMap, EInterp, IPLit, IPExpr, SEExpr, SESpread, PWild, PBind, PLit, PBool, PStr, PTuple, PRecord, PCtor, PArr, PList, POr, TyName, TyArrow, TyApp, TyTuple, TyList, LPName, LPRecord, LPTuple, SLet, SType, SExtern, SImport } from "./ast.mochi"
 type LocTok = { tok: Tok, start: number, end: number, doc: Option string }
 type PErr = { message: string, start: number, end: number }
 
@@ -233,6 +233,7 @@ let exprSpan = e => switch e {
   | ETuple(_, sp) => sp
   | EArr(_, sp) => sp
   | EList(_, sp) => sp
+  | ESet(_, sp) => sp
   | EMap(_, sp) => sp
   | EInterp(_, sp) => sp
 }
@@ -623,7 +624,7 @@ let parseAtom = (toks, pos) =>
       | TLbrace => parseRecord(toks, pos)
       | TLbracket => parseArr(toks, pos)
       | TAt => parseList(toks, pos)
-      | THash => parseMap(toks, pos)
+      | THash => parseHash(toks, pos)
       | TTmplStart(_) => parseInterp(toks, pos)
       | TNum(value, raw) => Ok((ENum(value, raw, sp), pos + 1))
       | TBool(value) => Ok((EBool(value, sp), pos + 1))
@@ -713,10 +714,15 @@ let parseRecord = (toks, pos) =>
       let? p2 = expectTok(TRbrace, toks, p1) in
         Ok((ERecord(fields, None, toEnd(start, toks, p2)), p2))
 
+let parseSeqElem = (toks, pos) =>
+  tokAt(toks, pos).tok == TSpread
+    ? let? (ex, p) = parseExpr(toks, pos + 1) in Ok((SESpread(ex), p))
+    : let? (ex, p) = parseExpr(toks, pos) in Ok((SEExpr(ex), p))
+
 let parseArr = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in
   let? p = expectTok(TLbracket, toks, pos) in
-  let? (elements, p2) = listUntil(TRbracket, parseExpr, toks, p) in
+  let? (elements, p2) = listUntil(TRbracket, parseSeqElem, toks, p) in
   let? p3 = expectTok(TRbracket, toks, p2) in
     Ok((EArr(elements, toEnd(start, toks, p3)), p3))
 
@@ -725,7 +731,7 @@ let parseList = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in
   let? p = expectTok(TAt, toks, pos) in
   let? p1 = expectTok(TLbrace, toks, p) in
-  let? (elements, p2) = listUntil(TRbrace, parseExpr, toks, p1) in
+  let? (elements, p2) = listUntil(TRbrace, parseSeqElem, toks, p1) in
   let? p3 = expectTok(TRbrace, toks, p2) in
     Ok((EList(elements, toEnd(start, toks, p3)), p3))
 
@@ -734,14 +740,48 @@ let parseMapEntry = (toks, pos) =>
   let? p2 = expectTok(TColon, toks, p) in
   let? (value, p3) = parseExpr(toks, p2) in Ok(({ key: key, value: value }, p3))
 
-// `#{ key: value, … }` Map literal — keys are full expressions.
-let parseMap = (toks, pos) =>
+// `#{}` empty Map; `#{k: v}` Map; `#{a, b}` / `#{...s}` Set (ADR 0001).
+let parseHash = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in
   let? p = expectTok(THash, toks, pos) in
   let? p1 = expectTok(TLbrace, toks, p) in
-  let? (entries, p2) = listUntil(TRbrace, parseMapEntry, toks, p1) in
-  let? p3 = expectTok(TRbrace, toks, p2) in
-    Ok((EMap(entries, toEnd(start, toks, p3)), p3))
+    tokAt(toks, p1).tok == TRbrace
+      ? let? p2 = expectTok(TRbrace, toks, p1) in
+        Ok((EMap([], toEnd(start, toks, p2)), p2))
+      : tokAt(toks, p1).tok == TSpread
+      ? let? (elements, p2) = listUntil(TRbrace, parseSeqElem, toks, p1) in
+      let? p3 = expectTok(TRbrace, toks, p2) in
+        Ok((ESet(elements, toEnd(start, toks, p3)), p3))
+      : let? (first, p2) = parseExpr(toks, p1) in
+        tokAt(toks, p2).tok == TColon
+          ? let? p3 = expectTok(TColon, toks, p2) in
+          let? (value, p4) = parseExpr(toks, p3) in
+          let? (rest, p5) = tokAt(toks, p4).tok == TComma
+            ? listUntil(TRbrace, parseMapEntry, toks, p4 + 1)
+            : Ok(([], p4)) in
+          let? p6 = expectTok(TRbrace, toks, p5) in
+            Ok(
+              (
+                EMap(
+                  Array.prepend({ key: first, value: value }, rest),
+                  toEnd(start, toks, p6)
+                ),
+                p6
+              )
+            )
+          : let? (rest, p3) = tokAt(toks, p2).tok == TComma
+            ? listUntil(TRbrace, parseSeqElem, toks, p2 + 1)
+            : Ok(([], p2)) in
+          let? p4 = expectTok(TRbrace, toks, p3) in
+            Ok(
+              (
+                ESet(
+                  Array.prepend(SEExpr(first), rest),
+                  toEnd(start, toks, p4)
+                ),
+                p4
+              )
+            )
 
 // --- pattern matching ---
 

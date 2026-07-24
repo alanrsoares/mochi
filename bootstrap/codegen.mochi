@@ -20,7 +20,7 @@
 // - TS `for`/`forEach`/`flatMap` loops become tail-recursive `Array.get(i,
 //   xs)` cursor loops (matches check.mochi/infer.mochi's established idiom).
 
-import { ENum, EBool, EStr, ERef, ECall, ELambda, ELetIn, ELetBind, EPipe, ETernary, EMatch, ERecord, EField, ETuple, EArr, EList, EMap, EInterp, IPLit, IPExpr, PWild, PBind, PLit, PBool, PStr, PTuple, PRecord, PCtor, PArr, PList, POr, LPName, LPRecord, LPTuple, SLet, SType, SExtern, SImport } from "./ast.mochi"
+import { ENum, EBool, EStr, ERef, ECall, ELambda, ELetIn, ELetBind, EPipe, ETernary, EMatch, ERecord, EField, ETuple, EArr, EList, ESet, EMap, EInterp, IPLit, IPExpr, SEExpr, SESpread, PWild, PBind, PLit, PBool, PStr, PTuple, PRecord, PCtor, PArr, PList, POr, LPName, LPRecord, LPTuple, SLet, SType, SExtern, SImport } from "./ast.mochi"
 
 import { keysOf, ctorKeysFromStmts, seedBuiltinCtorKeys } from "./ctors.mochi"
 // One chunk of a "…${a}…" interpolation (ADR 0023): a literal run, or a
@@ -159,8 +159,9 @@ let genExpr = (e, ctx) => switch e {
     // A tuple erases to a JS array `[a, b]` (like ReScript); the type system
     // keeps it distinct from an mochi Array, the runtime shares the shape.
     "[${Str.join(", ", elements |> map(el => genExpr(el, ctx)))}]"
-  | EArr(elements, _) => "[${Str.join(", ", elements |> map(el => genExpr(el, ctx)))}]"
+  | EArr(elements, _) => "[${Str.join(", ", elements |> map(el => genSeqSlot(el, ctx)))}]"
   | EList(elements, _) => genList(elements, ctx)
+  | ESet(elements, _) => "new Set([${Str.join(", ", elements |> map(el => genSeqSlot(el, ctx)))}])"
   | EMap(entries, _) => "new Map([${Str.join(", ", entries |> map(en => "[${genExpr(en.key, ctx)}, ${genExpr(en.value, ctx)}]"))}])"
   | EInterp(parts, _) =>
     // "…${x}…" (ADR 0023) → a native JS template literal — emitted JS reads
@@ -176,12 +177,20 @@ let genExpr = (e, ctx) => switch e {
       "`${body}`"
 }
 
-// A `@{...}` literal -> a lazy iterable over its (eagerly-evaluated)
-// elements. `_list` wraps a generator factory so the List is re-iterable and lazy.
+let genSeqSlot = (el, ctx) => switch el {
+  | SEExpr(ex) => genExpr(ex, ctx)
+  | SESpread(ex) => "...${genExpr(ex, ctx)}"
+}
+
+// A `@{...}` literal -> a lazy iterable. Spreads `yield*` another List.
 let genList = (elements, ctx) =>
   let yields = Str.join(
     " ",
-    elements |> map(el => "yield (${genExpr(el, ctx)});")
+    elements
+      |> map(el => switch el {
+        | SEExpr(ex) => "yield (${genExpr(ex, ctx)});"
+        | SESpread(ex) => "yield* (${genExpr(ex, ctx)});"
+      })
   ) in
     "_list(function* () {${yields == "" ? "" : " ${yields} "}})"
 
@@ -702,8 +711,18 @@ let usesMatchLib = e => switch e {
     } || someOf(f => usesMatchLib(f.value), fields)
   | EField(target, _, _) => usesMatchLib(target)
   | ETuple(elements, _) => someOf(usesMatchLib, elements)
-  | EArr(elements, _) => someOf(usesMatchLib, elements)
-  | EList(elements, _) => someOf(usesMatchLib, elements)
+  | EArr(elements, _) => someOf(
+      el => usesMatchLib(switch el { | SEExpr(e) => e | SESpread(e) => e }),
+      elements
+    )
+  | EList(elements, _) => someOf(
+      el => usesMatchLib(switch el { | SEExpr(e) => e | SESpread(e) => e }),
+      elements
+    )
+  | ESet(elements, _) => someOf(
+      el => usesMatchLib(switch el { | SEExpr(e) => e | SESpread(e) => e }),
+      elements
+    )
   | EMap(entries, _) => someOf(
       en => usesMatchLib(en.key) || usesMatchLib(en.value),
       entries
@@ -812,13 +831,24 @@ let exprRefs = (e, ctx, acc) => switch e {
       | None => exprRefs(target, ctx, acc)
     }
   | ETuple(elements, _) => exprRefsListFrom(elements, 0, ctx, acc)
-  | EArr(elements, _) => exprRefsListFrom(elements, 0, ctx, acc)
+  | EArr(elements, _) => exprRefsListFrom(
+      elements |> map(el => switch el { | SEExpr(e) => e | SESpread(e) => e }),
+      0,
+      ctx,
+      acc
+    )
   | EList(elements, _) => exprRefsListFrom(
-      elements,
+      elements |> map(el => switch el { | SEExpr(e) => e | SESpread(e) => e }),
       0,
       ctx,
       Set.add("_list", acc)
     ) // `@{...}` literal calls List core runtime
+  | ESet(elements, _) => exprRefsListFrom(
+      elements |> map(el => switch el { | SEExpr(e) => e | SESpread(e) => e }),
+      0,
+      ctx,
+      acc
+    )
   | EMap(entries, _) => exprRefsEntriesFrom(entries, 0, ctx, acc)
   | EInterp(parts, _) => exprRefsInterpPartsFrom(parts, 0, ctx, acc)
 }

@@ -14,7 +14,7 @@
 // - checkSeqExhaustive's TS 3-state (`error | null | undefined`) becomes the
 //   `SeqCheck` variant — a union beats null-vs-undefined encoding.
 
-import { ENum, EBool, EStr, ERef, ECall, ELambda, ELetIn, ELetBind, EPipe, ETernary, EMatch, ERecord, EField, ETuple, EArr, EList, EMap, EInterp, IPLit, IPExpr, PWild, PBind, PLit, PBool, PStr, PTuple, PRecord, PCtor, PArr, PList, POr, TyName, TyArrow, TyApp, TyTuple, TyList, SLet, SType, SExtern, SImport } from "./ast.mochi"
+import { ENum, EBool, EStr, ERef, ECall, ELambda, ELetIn, ELetBind, EPipe, ETernary, EMatch, ERecord, EField, ETuple, EArr, EList, ESet, EMap, EInterp, IPLit, IPExpr, SEExpr, SESpread, PWild, PBind, PLit, PBool, PStr, PTuple, PRecord, PCtor, PArr, PList, POr, TyName, TyArrow, TyApp, TyTuple, TyList, SLet, SType, SExtern, SImport } from "./ast.mochi"
 import { buildRegistry, primTypeNames } from "./ctors.mochi"
 
 // --- AST (mirrors src/ast.ts; `kind` strings become constructors) ---
@@ -73,6 +73,7 @@ let exprSpan = e => switch e {
   | ETuple(_, sp) => sp
   | EArr(_, sp) => sp
   | EList(_, sp) => sp
+  | ESet(_, sp) => sp
   | EMap(_, sp) => sp
   | EInterp(_, sp) => sp
 }
@@ -498,8 +499,18 @@ let checkExpr = (e, reg) => switch e {
       |> Option.orElse(firstSome(f => checkExpr(f.value, reg), fields))
   | EField(target, _, _) => checkExpr(target, reg)
   | ETuple(elements, _) => firstSome(el => checkExpr(el, reg), elements)
-  | EArr(elements, _) => firstSome(el => checkExpr(el, reg), elements)
-  | EList(elements, _) => firstSome(el => checkExpr(el, reg), elements)
+  | EArr(elements, _) => firstSome(
+      el => checkExpr(switch el { | SEExpr(e) => e | SESpread(e) => e }, reg),
+      elements
+    )
+  | EList(elements, _) => firstSome(
+      el => checkExpr(switch el { | SEExpr(e) => e | SESpread(e) => e }, reg),
+      elements
+    )
+  | ESet(elements, _) => firstSome(
+      el => checkExpr(switch el { | SEExpr(e) => e | SESpread(e) => e }, reg),
+      elements
+    )
   | EMap(entries, _) => firstSome(
       en => checkExpr(en.key, reg) |> Option.orElse(checkExpr(en.value, reg)),
       entries

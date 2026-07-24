@@ -38,4 +38,4 @@ What else was on the table and why not.
 | ADR | Title | Status |
 |---|---|---|
 | [0000](0000-operator-sections.md) | Operator sections | Accepted |
-| [0001](0001-array-spread.md) | Sequence expression spread (Array / List / Set) | Proposed |
+| [0001](0001-array-spread.md) | Sequence expression spread (Array / List / Set) | Accepted |

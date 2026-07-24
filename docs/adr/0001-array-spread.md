@@ -1,8 +1,8 @@
 # 0001 — Sequence expression spread (Array / List / Set)
 
-- **Status:** Proposed (spike)
+- **Status:** Accepted
 - **Source:** `src/ast.ts` (`SeqElem`), `src/parser.ts` (`parseArr` / `parseList` / `parseHash`),
-  `test/array-spread.spec.ts`
+  `bootstrap/ast.mochi` / `bootstrap/parser.mochi`, `test/array-spread.spec.ts`
 
 ## Context
 
@@ -33,8 +33,8 @@ stays Map. Same colon disambiguation Python uses for `{}`.
 ## Consequences
 
 - Cross-kind spreads are type errors (`@{...array}`, `#{...list}`, …).
-- Bootstrap still has `EArr`/`EList` as `[Expr]` — no self-host parse of seq spreads
-  or Set literals yet.
+- Bootstrap parses and emits the same surface; `module.mochi` dogfoods
+  `[...ctx.outputs, item]` in place of `Array.append`.
 - Pattern `[head, ...tail]` / `@{h, ...t}` unchanged.
 
 ## Alternatives rejected
