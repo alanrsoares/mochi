@@ -4,21 +4,22 @@
  * Every node carries its source span: leaves from tokens, composites from first to last consumed.
  */
 import { err, ok, type Result } from "@onrails/result";
-import type {
-  AliasField,
-  Ctor,
-  CtorField,
-  Expr,
-  Field,
-  ImportName,
-  LamParam,
-  MatchArm,
-  PatField,
-  Pattern,
-  Program,
-  SeqElem,
-  Stmt,
-  TypeExpr,
+import {
+  type AliasField,
+  type Ctor,
+  type CtorField,
+  type Expr,
+  type Field,
+  type ImportName,
+  isCtorName,
+  type LamParam,
+  type MatchArm,
+  type PatField,
+  type Pattern,
+  type Program,
+  type SeqElem,
+  type Stmt,
+  type TypeExpr,
 } from "./ast";
 import { type Diagnostic, parseErr } from "./errors";
 import type { Located, Tok } from "./lexer";
@@ -487,6 +488,7 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
     if (peek().t === "at") return parseList();
     if (peek().t === "hash") return parseHash();
     if (peek().t === "tmplstart") return parseInterp();
+    if (peek().t === "lt") return parseJsx();
     const tk = next();
     switch (tk.t) {
       case "num":
@@ -515,6 +517,188 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
       }
     }
     throw new ParseAbort(parseErr(`unexpected token ${tk.t}`, tk.span));
+  }
+
+  function parseJsx(): Expr {
+    const startTok = expect("lt");
+
+    // Case 1: Fragment `<> ... </>`
+    if (peek().t === "gt") {
+      next(); // consume '>'
+      const children = parseJsxChildren(null);
+      return makeJsxCall(
+        { kind: "str", value: "Fragment", span: startTok.span },
+        [],
+        undefined,
+        children,
+        startTok.span,
+      );
+    }
+
+    // Case 2: Element or Component `<tag ...>`
+    const firstId = expectId();
+    let tagRef: Expr = { kind: "ref", name: firstId.name, span: firstId.span };
+
+    while (peek().t === "dot") {
+      next(); // consume '.'
+      const fieldId = expectId();
+      tagRef = {
+        kind: "field",
+        target: tagRef,
+        name: fieldId.name,
+        span: spanning(tagRef.span, fieldId.span),
+      };
+    }
+
+    let tagNameStr: string | null = null;
+    let tagExpr: Expr;
+    if (tagRef.kind === "ref" && !isCtorName(tagRef.name)) {
+      tagNameStr = tagRef.name;
+      tagExpr = { kind: "str", value: tagRef.name, span: tagRef.span };
+    } else {
+      tagNameStr = tagRef.kind === "ref" ? tagRef.name : null;
+      tagExpr = tagRef;
+    }
+
+    // Attributes
+    const fields: Field[] = [];
+    let spreadExpr: Expr | undefined;
+
+    while (peek().t !== "gt" && !(peek().t === "slash" && toks[pos + 1]?.t === "gt")) {
+      if (peek().t === "lbrace") {
+        next(); // consume '{'
+        expect("spread");
+        const sp = parseExpr();
+        expect("rbrace");
+        spreadExpr = sp;
+      } else {
+        const attrId = expectId();
+        let valExpr: Expr = { kind: "bool", value: true, span: attrId.span };
+        if (peek().t === "eq") {
+          next(); // consume '='
+          if (peek().t === "str") {
+            const strTk = next() as Located & { t: "str"; v: string };
+            valExpr = { kind: "str", value: strTk.v, span: strTk.span };
+          } else if (peek().t === "lbrace") {
+            next(); // consume '{'
+            valExpr = parseExpr();
+            expect("rbrace");
+          } else {
+            fail(`expected string or '{expr}' for attribute '${attrId.name}'`);
+          }
+        }
+        fields.push({ name: attrId.name, nameSpan: attrId.span, value: valExpr });
+      }
+    }
+
+    if (peek().t === "slash") {
+      next(); // consume '/'
+      expect("gt"); // consume '>'
+      return makeJsxCall(tagExpr, fields, spreadExpr, [], startTok.span);
+    }
+
+    expect("gt"); // consume '>' opening tag
+
+    const children = parseJsxChildren(tagNameStr);
+
+    return makeJsxCall(tagExpr, fields, spreadExpr, children, startTok.span);
+  }
+
+  function parseJsxChildren(expectedTag: string | null): SeqElem[] {
+    const elems: SeqElem[] = [];
+
+    for (;;) {
+      const tk = peek();
+      if (tk.t === "eof") {
+        fail(expectedTag ? `unclosed JSX tag '<${expectedTag}>'` : "unclosed JSX fragment");
+      }
+
+      if (tk.t === "lt" && toks[pos + 1]?.t === "slash") {
+        next(); // consume '<'
+        next(); // consume '/'
+
+        if (expectedTag === null) {
+          expect("gt");
+          break;
+        }
+
+        const closingId = expectId();
+        if (closingId.name !== expectedTag && !expectedTag.endsWith(`.${closingId.name}`)) {
+          fail(
+            `mismatched JSX closing tag: expected '</${expectedTag}>', got '</${closingId.name}>'`,
+          );
+        }
+        expect("gt");
+        break;
+      }
+
+      if (tk.t === "lt") {
+        const childJsx = parseJsx();
+        elems.push({ kind: "expr", expr: childJsx });
+        continue;
+      }
+
+      if (tk.t === "lbrace") {
+        next(); // consume '{'
+        if (peek().t === "spread") {
+          next(); // consume '...'
+          const spreadChild = parseExpr();
+          expect("rbrace");
+          elems.push({ kind: "spread", expr: spreadChild });
+        } else {
+          const childExpr = parseExpr();
+          expect("rbrace");
+          elems.push({ kind: "expr", expr: childExpr });
+        }
+        continue;
+      }
+
+      const childTk = next();
+      if (childTk.t === "str") {
+        elems.push({ kind: "expr", expr: { kind: "str", value: childTk.v, span: childTk.span } });
+      } else if (childTk.t === "num") {
+        elems.push({
+          kind: "expr",
+          expr: { kind: "num", value: childTk.v, raw: childTk.raw, span: childTk.span },
+        });
+      } else if (childTk.t === "bool") {
+        elems.push({ kind: "expr", expr: { kind: "bool", value: childTk.v, span: childTk.span } });
+      } else if (childTk.t === "id") {
+        elems.push({ kind: "expr", expr: { kind: "str", value: childTk.v, span: childTk.span } });
+      } else {
+        fail(`unexpected token in JSX children: ${childTk.t}`);
+      }
+    }
+
+    return elems;
+  }
+
+  function makeJsxCall(
+    tagExpr: Expr,
+    fields: Field[],
+    spreadExpr: Expr | undefined,
+    children: SeqElem[],
+    startSpan: Span,
+  ): Expr {
+    const fullSpan = spanning(startSpan, last.span);
+    const pragmaRef: Expr = { kind: "ref", name: "h", span: startSpan };
+    const propsRecord: Expr = {
+      kind: "record",
+      fields,
+      spread: spreadExpr,
+      span: fullSpan,
+    };
+    const childrenArr: Expr = {
+      kind: "arr",
+      elements: children,
+      span: fullSpan,
+    };
+    return {
+      kind: "call",
+      fn: pragmaRef,
+      args: [tagExpr, propsRecord, childrenArr],
+      span: fullSpan,
+    };
   }
 
   /** Template literal `"…${a}…${b}…"` (ADR 0023). */

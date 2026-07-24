@@ -1,0 +1,14 @@
+// Mochi JSX example — desugars component trees into calls to host `h` pragma
+
+let Button = (props) =>
+  <button className={props.kind} disabled={props.disabled}>
+    {props.label}
+  </button>
+
+let Card = (props) =>
+  <div className="card">
+    <h1 className="title">{props.title}</h1>
+    <Button kind="primary" label="Click me" disabled={false} />
+  </div>
+
+let app = <Card title="Mochi Interop" />

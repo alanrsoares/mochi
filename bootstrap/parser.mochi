@@ -648,6 +648,7 @@ let parseAtom = (toks, pos) =>
       | TAt => parseList(toks, pos)
       | THash => parseHash(toks, pos)
       | TTmplStart(_) => parseInterp(toks, pos)
+      | TLt => parseJsx(toks, pos)
       | TNum(value, raw) => Ok((Ast.ENum(value, raw, sp), pos + 1))
       | TBool(value) => Ok((Ast.EBool(value, sp), pos + 1))
       | TStr(value) => Ok((Ast.EStr(value, sp), pos + 1))
@@ -671,6 +672,162 @@ let parseAtom = (toks, pos) =>
                 : expectTok(TRparen, toks, p) |> Result.map(p2 => (first, p2))
       | t => errAt("unexpected token ${tokName(t)}", lt)
     }
+
+let makeJsxCall = (tagExpr, fields, spreadOpt, children, startTok, toks, endPos) =>
+  let fullSpan = toEnd(spanOf(startTok), toks, endPos) in
+  let pragmaRef = Ast.ERef("h", spanOf(startTok)) in
+  let propsRecord = Ast.ERecord(fields, spreadOpt, fullSpan) in
+  let childrenArr = Ast.EArr(children, fullSpan) in
+    Ast.ECall(pragmaRef, [tagExpr, propsRecord, childrenArr], fullSpan)
+
+let parseJsxAttributes = (toks, pos, fieldsAcc, spreadAcc) =>
+  let tk = tokAt(toks, pos).tok in
+  let nxt = tokAt(toks, pos + 1).tok in
+    tk == TGt || (tk == TSlash && nxt == TGt)
+      ? Ok((fieldsAcc, spreadAcc, pos))
+      : tk == TLbrace
+      ? let? p1 = expectTok(TSpread, toks, pos + 1) in
+      let? (spExpr, p2) = parseExpr(toks, p1) in
+      let? p3 = expectTok(TRbrace, toks, p2) in
+        parseJsxAttributes(toks, p3, fieldsAcc, Some(spExpr))
+      : let? (attrId, p1) = expectId(toks, pos) in
+        let (valExpr, p2) = tokAt(toks, p1).tok == TEq
+          ? let pEq = p1 + 1 in
+            switch tokAt(toks, pEq).tok {
+              | TStr(v) => (Ast.EStr(v, spanOf(tokAt(toks, pEq))), pEq + 1)
+              | TLbrace => switch parseExpr(toks, pEq + 1) {
+                  | Ok((e, pR)) => (e, pR + 1)
+                  | Err(_) => (Ast.EBool(true, attrId.span), pEq)
+                }
+              | _ => (Ast.EBool(true, attrId.span), pEq)
+            }
+          : (Ast.EBool(true, attrId.span), p1) in
+        let field = { name: attrId.name, value: valExpr } in
+          parseJsxAttributes(
+            toks,
+            p2,
+            Array.append(field, fieldsAcc),
+            spreadAcc
+          )
+
+let parseJsxChildren = (expectedTag, toks, pos, acc) =>
+  let lt = tokAt(toks, pos) in
+  let nxt = tokAt(toks, pos + 1) in
+    lt.tok == TEof
+      ? errAt(
+        expectedTag == "" ? "unclosed JSX fragment" : "unclosed JSX tag",
+        lt
+      )
+      : lt.tok == TLt && nxt.tok == TSlash
+      ? expectedTag == ""
+        ? let? p1 = expectTok(TGt, toks, pos + 2) in Ok((acc, p1))
+        : let? (closingId, p1) = expectId(toks, pos + 2) in
+        let? p2 = expectTok(TGt, toks, p1) in
+          closingId.name == expectedTag
+            ? Ok((acc, p2))
+            : errAt("mismatched JSX closing tag", lt)
+      : lt.tok == TLt
+      ? let? (childJsx, p1) = parseJsx(toks, pos) in
+        parseJsxChildren(
+          expectedTag,
+          toks,
+          p1,
+          Array.append(Ast.SEExpr(childJsx), acc)
+        )
+      : lt.tok == TLbrace
+      ? nxt.tok == TSpread
+        ? let? (spChild, p1) = parseExpr(toks, pos + 2) in
+        let? p2 = expectTok(TRbrace, toks, p1) in
+          parseJsxChildren(
+            expectedTag,
+            toks,
+            p2,
+            Array.append(Ast.SESpread(spChild), acc)
+          )
+        : let? (childExpr, p1) = parseExpr(toks, pos + 1) in
+        let? p2 = expectTok(TRbrace, toks, p1) in
+          parseJsxChildren(
+            expectedTag,
+            toks,
+            p2,
+            Array.append(Ast.SEExpr(childExpr), acc)
+          )
+      : switch lt.tok {
+        | TStr(v) => parseJsxChildren(
+            expectedTag,
+            toks,
+            pos + 1,
+            Array.append(Ast.SEExpr(Ast.EStr(v, spanOf(lt))), acc)
+          )
+        | TNum(v, raw) => parseJsxChildren(
+            expectedTag,
+            toks,
+            pos + 1,
+            Array.append(Ast.SEExpr(Ast.ENum(v, raw, spanOf(lt))), acc)
+          )
+        | TBool(v) => parseJsxChildren(
+            expectedTag,
+            toks,
+            pos + 1,
+            Array.append(Ast.SEExpr(Ast.EBool(v, spanOf(lt))), acc)
+          )
+        | TId(v) => parseJsxChildren(
+            expectedTag,
+            toks,
+            pos + 1,
+            Array.append(Ast.SEExpr(Ast.EStr(v, spanOf(lt))), acc)
+          )
+        | _ => errAt("unexpected token in JSX children", lt)
+      }
+
+let parseJsx = (toks, pos) =>
+  let startTok = tokAt(toks, pos) in
+  let nxt = tokAt(toks, pos + 1) in
+    nxt.tok == TGt
+      ? let? (children, p1) = parseJsxChildren("", toks, pos + 2, []) in
+        Ok(
+          (
+            makeJsxCall(
+              Ast.EStr("Fragment", spanOf(startTok)),
+              [],
+              None,
+              children,
+              startTok,
+              toks,
+              p1
+            ),
+            p1
+          )
+        )
+      : let? (firstId, p1) = expectId(toks, pos + 1) in
+      let tagRef = isUpper(firstId.name)
+        ? Ast.ERef(firstId.name, firstId.span)
+        : Ast.EStr(firstId.name, firstId.span) in
+      let tagNameStr = isUpper(firstId.name) ? "" : firstId.name in
+      let? (fields, spreadOpt, p2) = parseJsxAttributes(toks, p1, [], None) in
+      let isSelfClosing = tokAt(toks, p2).tok == TSlash in
+      let? p3 = isSelfClosing
+        ? expectTok(TGt, toks, p2 + 1)
+        : expectTok(TGt, toks, p2) in
+        isSelfClosing
+          ? Ok(
+            (makeJsxCall(tagRef, fields, spreadOpt, [], startTok, toks, p3), p3)
+          )
+          : let? (children, p4) = parseJsxChildren(tagNameStr, toks, p3, []) in
+            Ok(
+              (
+                makeJsxCall(
+                  tagRef,
+                  fields,
+                  spreadOpt,
+                  children,
+                  startTok,
+                  toks,
+                  p4
+                ),
+                p4
+              )
+            )
 
 // "…${a}…${b}…" (ADR 0023). The lexer already split this into a token stream
 // of tmplstart <holeTokens> tmplmid <holeTokens> ... tmplend; each hole's
