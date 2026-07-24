@@ -94,6 +94,7 @@ const cExpr = (e: Expr): Canon => {
     case "letbind":
       return {
         kind: "letbind",
+        monad: e.monad,
         param: cParam(e.param),
         paramSpan: cSpan(e.paramSpan),
         value: cExpr(e.value),
@@ -297,6 +298,7 @@ const A_EXPR: Record<string, (e: Al) => Canon> = {
   }),
   ELetBind: (e) => ({
     kind: "letbind",
+    monad: e.monad,
     param: aParam(e.param),
     paramSpan: e.paramSpan,
     value: aExpr(e.value),
@@ -532,6 +534,8 @@ const cases: Record<string, string> = {
     'let a = gt(x, 0) ? 1 : lt(x, 0) ? -1 : 0\nlet b = x |> f ? "y" : "n"\nlet c = (p ? q : r) ? 1 : 2\nlet m = #{ true ? 1 : 2 : "v" }',
   "let? bind, all param forms + chain (ADR 0017)":
     "let a = let? x = f(1) in Ok(x)\nlet b = let? (l, r) = g(2) in Ok(add(l, r))\nlet c = let? { x, y } = h(3) in Ok(x)\nlet d = let? v = f(4) in let? w = f(v) in Ok(w)\nlet e = let ? sp = f(5) in Ok(sp)",
+  "let! Task bind, all param forms + chain (ADR 0005)":
+    "let a = let! x = t(1) in Task.of(x)\nlet b = let! (l, r) = u(2) in Task.of(add(l, r))\nlet c = let! { x, y } = v(3) in Task.of(x)\nlet d = let! p = t(4) in let! q = t(p) in Task.of(q)\nlet e = let ! sp = t(5) in Task.of(sp)",
   "string interpolation, nested and multi-hole (ADR 0023)":
     // biome-ignore lint/suspicious/noTemplateCurlyInString: mochi source, not a JS template
     'let a = "hello ${name}"\nlet b = "${a}-${b}-${c}"\nlet c = "outer ${ "inner ${x}" } end"',

@@ -146,7 +146,7 @@ mechanically (the compiler can't inspect a JS export's body) and deliberate
   `Task.andThen` / `Task.delay` / `Task.run`. Not a tagged variant; not switchable.
   `Task.run` is the only kick-off and yields a host **Promise** (also an open
   applied ctor at the type level). Domain IO remains `extern`; sequencing uses
-  `Task.*`.
+  `Task.*`. Surface bind: `let!` (mirrors Result’s `let?`); infix bind deferred.
 
 ## Extern / FFI
 

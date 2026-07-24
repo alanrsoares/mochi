@@ -93,11 +93,11 @@ let label = g => "Conway's Life  ·  generation ${show(g)}"
 let loop = (remaining, g, board) =>
   remaining <= 0
     ? teardown(0)
-    : draw(label(g), render(board))
-      |> Task.andThen(_ => Task.delay(90, 0))
-      |> Task.andThen(_ => loop(remaining - 1, g + 1, step(board)))
+    : let! _ = draw(label(g), render(board)) in
+      let! _ = Task.delay(90, 0) in
+      loop(remaining - 1, g + 1, step(board))
 
 // setup grabs the alternate screen buffer, then we run 120 frames.
-let program = setup(0) |> Task.andThen(_ => loop(120, 0, board0))
+let program = let! _ = setup(0) in loop(120, 0, board0)
 
 export let result = Task.run(program)

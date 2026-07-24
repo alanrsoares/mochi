@@ -224,7 +224,7 @@ let exprSpan = e => switch e {
   | Ast.ECall(_, _, sp) => sp
   | Ast.ELambda(_, _, sp) => sp
   | Ast.ELetIn(_, _, _, _, sp) => sp
-  | Ast.ELetBind(_, _, _, _, sp) => sp
+  | Ast.ELetBind(_, _, _, _, _, sp) => sp
   | Ast.EPipe(_, _, sp) => sp
   | Ast.ETernary(_, _, _, sp) => sp
   | Ast.EMatch(_, _, sp) => sp
@@ -289,12 +289,13 @@ let parseLambda = (toks, pos) =>
 
 // let x = value in body — non-recursive local binding. `let (a, b) = v in b`
 // desugars to an applied tuple-param lambda, exactly like the TS parser.
-// `let? param = value in body` is the Result bind (ADR 0017), a first-class node.
+// `let?` / `let!` param = value in body is the Result / Task bind (ADR 0005).
 let parseLetIn = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in
   let? p = expectTok(TLet, toks, pos) in
-    tokAt(toks, p).tok == TQuestion
-      ? let paramSpan = spanOf(tokAt(toks, p + 1)) in
+    tokAt(toks, p).tok == TQuestion || tokAt(toks, p).tok == TBang
+      ? let monad = tokAt(toks, p).tok == TQuestion ? "Result" : "Task" in
+      let paramSpan = spanOf(tokAt(toks, p + 1)) in
       let? (param, p1) = parseParam(toks, p + 1) in
       let? p2 = expectTok(TEq, toks, p1) in
       let? (value, p3) = parseExpr(toks, p2) in
@@ -305,6 +306,7 @@ let parseLetIn = (toks, pos) =>
             Ast.ELetBind(
               param,
               paramSpan,
+              monad,
               value,
               body,
               spanning(start, exprSpan(body))

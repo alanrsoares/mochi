@@ -203,15 +203,16 @@ const genExpr = (e: Expr, ctx: GenCtx): string =>
       const param = ann ? `${l.name}: ${ann}` : l.name;
       return `((${param}) => ${genLambdaBody(l.body, ctx)})(${genExpr(l.value, ctx)})`;
     })
-    // let? p = v in b  →  the Result bind: `_Result_flatMap((p) => b)(v)`.
+    // let? / let! p = v in b  →  `_Result_flatMap` / `_Task_andThen`((p) => b)(v).
     // Under `flattenPipe` (TS backend) the two args go in ONE grouping —
     // `_Result_flatMap((p) => b, v)` — so tsc infers `p`'s type from `v` in the
     // all-at-once overload; the curried `f(v)` split leaves `p` unconstrained
     // (`unknown`) across the two calls. Both are equivalent under `_curry`.
     .with({ kind: "letbind" }, (l) => {
+      const rt = l.monad === "Result" ? "_Result_flatMap" : "_Task_andThen";
       const f = `(${genParam(l.param)}) => ${genLambdaBody(l.body, ctx)}`;
       const v = genExpr(l.value, ctx);
-      return ctx.flattenPipe ? `_Result_flatMap(${f}, ${v})` : `_Result_flatMap(${f})(${v})`;
+      return ctx.flattenPipe ? `${rt}(${f}, ${v})` : `${rt}(${f})(${v})`;
     })
     // desugar inline: a |> f  →  f(a). Under `flattenPipe` (TS backend), a pipe
     // into a call appends the arg — `a |> f(x)` → `f(x, a)` — so tsc infers type
@@ -854,7 +855,7 @@ const exprRefs = (e: Expr, acc: Set<string>): void => {
       exprRefs(l.body, acc);
     })
     .with({ kind: "letbind" }, (l) => {
-      acc.add("_Result_flatMap"); // the bind lowers onto the prelude runtime
+      acc.add(l.monad === "Result" ? "_Result_flatMap" : "_Task_andThen");
       exprRefs(l.value, acc);
       exprRefs(l.body, acc);
     })

@@ -957,7 +957,7 @@ const exprRaw = (e: Expr): Doc => {
     case "letin":
       return letLikeD(`let ${e.name}${e.annot ? ` : ${typeExpr(e.annot)}` : ""}`, e.value, e.body);
     case "letbind":
-      return letLikeD(`let? ${param(e.param)}`, e.value, e.body);
+      return letLikeD(`let${e.monad === "Result" ? "?" : "!"} ${param(e.param)}`, e.value, e.body);
     case "match":
       return matchD(e);
   }
