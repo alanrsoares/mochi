@@ -28,7 +28,7 @@ import {
 } from "./types";
 
 /** Collect every type-constructor name appearing in a type (for detecting which builtin variant decls an emitted module must include). */
-const consIn = (t: Type, acc: Set<string>): void => {
+function consIn(t: Type, acc: Set<string>): void {
   if (t.kind === "con") {
     acc.add(t.name);
     for (const a of t.args) consIn(a, acc);
@@ -42,13 +42,17 @@ const consIn = (t: Type, acc: Set<string>): void => {
       row = row.rest;
     }
   }
-};
+}
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-const PRIM_TS: Record<string, string> = { number: "number", string: "string", bool: "boolean" };
+const PRIM_TS: Record<string, string> = {
+  number: "number",
+  string: "string",
+  bool: "boolean",
+};
 
 /** HM type → TS type. `names` maps quantified var ids to generic letters; any other var renders as `unknown` (it escaped generalization at this position). */
-const tsOf = (t: Type, names: Map<number, string>): string => {
+function tsOf(t: Type, names: Map<number, string>): string {
   switch (t.kind) {
     case "var":
       return names.get(t.id) ?? "unknown";
@@ -82,9 +86,9 @@ const tsOf = (t: Type, names: Map<number, string>): string => {
     case "record":
       return tsRow(t.row, names);
   }
-};
+}
 
-const tsRow = (row: Row, names: Map<number, string>): string => {
+function tsRow(row: Row, names: Map<number, string>): string {
   const fields: string[] = [];
   let cur = row;
   while (cur.kind === "extend") {
@@ -104,10 +108,10 @@ const tsRow = (row: Row, names: Map<number, string>): string => {
     if (g) return fields.length === 0 ? g : `({ ${fields.join("; ")} } & ${g})`;
   }
   return body;
-};
+}
 
 /** True when a (zonked) type still carries an unbound type or row var — i.e. it is NOT fully concrete. `tsOf` would render such a var as `unknown`. */
-const hasFreeVar = (t: Type): boolean => {
+function hasFreeVar(t: Type): boolean {
   switch (t.kind) {
     case "var":
       return true;
@@ -124,7 +128,7 @@ const hasFreeVar = (t: Type): boolean => {
       return row.kind === "rvar";
     }
   }
-};
+}
 
 /**
  * TS type for an EMPTY collection literal (`#{}`/`[]`/`@{}`) whose element types
@@ -139,14 +143,14 @@ const hasFreeVar = (t: Type): boolean => {
  * scope (empty map) only a fully concrete element type renders — a free var
  * would become `unknown`, no better than tsc's own guess for the literal.
  */
-export const emptyCollTs = (
+export function emptyCollTs(
   t: Type,
   aliases: AliasDef[],
   names: Map<number, string> = new Map(),
-): string | null => {
+): string | null {
   const folded = foldAliases(t, aliases);
   return allVarsIn(folded, names) ? tsOf(folded, names) : null;
-};
+}
 
 /**
  * TS type for an APPLIED parametric constructor call (`Ok(x)`, `Some(y)`) whose
@@ -159,14 +163,14 @@ export const emptyCollTs = (
  * applied-ctor analogue of ADR 0039's nullary-ctor rule and ADR 0035's empty seed.
  * Fully-concrete cons only: a free var would render `unknown`, no better than tsc.
  */
-export const ctorCallTs = (t: Type, aliases: AliasDef[]): string | null => {
+export function ctorCallTs(t: Type, aliases: AliasDef[]): string | null {
   const folded = foldAliases(t, aliases);
   if (folded.kind !== "con" || folded.args.length === 0) return null;
   return hasFreeVar(folded) ? null : tsOf(folded, new Map());
-};
+}
 
 /** Arity-aware function type: peel one arrow per lambda parameter, then recurse into the body (which may itself be a lambda for curried definitions). */
-const declType = (t: Type, value: Expr, names: Map<number, string>): string => {
+function declType(t: Type, value: Expr, names: Map<number, string>): string {
   if (value.kind !== "lambda") return tsOf(t, names);
   const params: string[] = [];
   let cur = t;
@@ -177,7 +181,7 @@ const declType = (t: Type, value: Expr, names: Map<number, string>): string => {
     cur = cur.to;
   });
   return `(${params.join(", ")}) => ${declType(cur, value.body, names)}`;
-};
+}
 
 /**
  * A binding's parameters flattened — across nested value lambdas (`a => b => …`)
@@ -185,11 +189,11 @@ const declType = (t: Type, value: Expr, names: Map<number, string>): string => {
  * plus the final return type. Feeds `curriedOverloads` for CONCRETE function
  * bindings so every partial-application grouping `_curry` accepts typechecks.
  */
-const flatBindingParams = (
+function flatBindingParams(
   t: Type,
   value: Expr,
   names: Map<number, string>,
-): { params: string[]; ret: string } => {
+): { params: string[]; ret: string } {
   const params: string[] = [];
   let cur = t;
   let v = value;
@@ -205,7 +209,7 @@ const flatBindingParams = (
     v = v.body;
   }
   return { params, ret: tsOf(cur, names) };
-};
+}
 
 /**
  * Assign generic letters to a scheme's quantified vars — type vars AND row
@@ -228,14 +232,14 @@ const paramGmap = (params: string[]): Map<string, string> =>
  * so the TS output grammar has exactly one encoder — flat-arrow collapse and
  * `List` → `Iterable` apply to ctor fields exactly as everywhere else.
  */
-const fieldTs = (te: TypeExpr, params: string[]): string => {
+function fieldTs(te: TypeExpr, params: string[]): string {
   const vars = new Map(params.map((p, i): [string, Type] => [p, tVar(i)]));
   const names = new Map(params.map((_, i): [number, string] => [i, LETTERS[i] ?? `T${i}`]));
   return tsOf(typeExprToType(te, vars, mkFresh(params.length)), names);
-};
+}
 
 /** Free type-var ids in a Type, first-appearance order. */
-const freeVars = (t: Type, acc: number[]): void => {
+function freeVars(t: Type, acc: number[]): void {
   switch (t.kind) {
     case "var":
       if (!acc.includes(t.id)) acc.push(t.id);
@@ -256,7 +260,7 @@ const freeVars = (t: Type, acc: number[]): void => {
       return;
     }
   }
-};
+}
 
 /**
  * Ordered compositions of n: every way to write n as a sum of positive ints
@@ -268,12 +272,12 @@ const freeVars = (t: Type, acc: number[]): void => {
  * var (`reduce(add, 0, xs)` → both of add's params inferred), matching the flat
  * param shapes `tsOf` now renders for function-typed values.
  */
-const compositions = (n: number): number[][] => {
+function compositions(n: number): number[][] {
   if (n === 0) return [[]];
   const out: number[][] = [];
   for (let k = 1; k <= n; k++) for (const rest of compositions(n - k)) out.push([k, ...rest]);
   return out.toSorted((a, b) => b.length - a.length);
-};
+}
 
 /**
  * Curried-compatible function type from rendered params (`"a: T"`) + return type.
@@ -286,7 +290,7 @@ const compositions = (n: number): number[][] => {
  * through here rather than prepended by the caller. Shared by builtin runtime
  * typing (`flatFnType`) and user binding typing (`declType`) so both curry alike.
  */
-const curriedOverloads = (head: string, params: string[], ret: string): string => {
+function curriedOverloads(head: string, params: string[], ret: string): string {
   if (params.length <= 1) return `${head}(${params.join(", ")}) => ${ret}`;
   const sig = (groups: number[]): string => {
     const slices: string[][] = [];
@@ -300,7 +304,7 @@ const curriedOverloads = (head: string, params: string[], ret: string): string =
     return `${head}(${slices[0]!.join(", ")}): ${tail};`;
   };
   return `{ ${compositions(params.length).map(sig).join(" ")} }`;
-};
+}
 
 /**
  * A prelude builtin's HM type rendered for the typed runtime (ADR 0026). The JS
@@ -312,7 +316,7 @@ const curriedOverloads = (head: string, params: string[], ret: string): string =
  * grouping `_curry` accepts. arity 0 → the bare type; arity 1 → a plain arrow.
  * Used by scripts/gen-runtime.ts.
  */
-export const flatFnType = (t: Type, arity: number): string => {
+export function flatFnType(t: Type, arity: number): string {
   const ids: number[] = [];
   freeVars(t, ids);
   const names = new Map(ids.map((id, i) => [id, LETTERS[i] ?? `T${i}`]));
@@ -325,7 +329,7 @@ export const flatFnType = (t: Type, arity: number): string => {
     cur = cur.to;
   }
   return curriedOverloads(head, params, tsOf(cur, names));
-};
+}
 
 /**
  * The TS signature pieces for a ctor's runtime factory (ADR 0026 TS backend):
@@ -337,11 +341,11 @@ export const flatFnType = (t: Type, arity: number): string => {
  * — which has no function to scope generics on, so it takes the "empty" instance
  * (assignable to any covariant use, mirroring how `None: Option<never>` is typed).
  */
-export const ctorFactoryTs = (
+export function ctorFactoryTs(
   typeName: string,
   params: string[],
   c: Ctor,
-): { generics: string; paramTypes: string[]; ret: string; retMono: string } => {
+): { generics: string; paramTypes: string[]; ret: string; retMono: string } {
   const gmap = paramGmap(params);
   const gs = params.map((p) => gmap.get(p)!);
   return {
@@ -350,7 +354,7 @@ export const ctorFactoryTs = (
     ret: gs.length ? `${typeName}<${gs.join(", ")}>` : typeName,
     retMono: gs.length ? `${typeName}<${gs.map(() => "never").join(", ")}>` : typeName,
   };
-};
+}
 
 /**
  * The TS type of a binding, WITHOUT the `export declare const name:` wrapper —
@@ -359,7 +363,7 @@ export const ctorFactoryTs = (
  * plus arity-peeled parameter names; a non-function polymorphic binding has
  * nowhere to bind generics, so its escaped vars fall back to `unknown`.
  */
-export const bindingTsType = (sc: Scheme, value: Expr, aliases: AliasDef[]): string => {
+export function bindingTsType(sc: Scheme, value: Expr, aliases: AliasDef[]): string {
   const names = genericNames(sc);
   // Fold structural rows to alias names first, so a binding typed `{ x, y }`
   // declares as `Point` — reusing the emitted `export type Point`.
@@ -379,7 +383,7 @@ export const bindingTsType = (sc: Scheme, value: Expr, aliases: AliasDef[]): str
     return `${head}${declType(folded, value, names)}`;
   }
   return tsOf(folded, new Map());
-};
+}
 
 /**
  * Every type AND row var in a (zonked) type is a key of `names`. Unlike
@@ -388,7 +392,7 @@ export const bindingTsType = (sc: Scheme, value: Expr, aliases: AliasDef[]): str
  * carries a letter — the precondition for rendering it as `{ … } & R` rather
  * than dropping the tail. Empty `names` ⇒ true only for a fully concrete type.
  */
-const allVarsIn = (t: Type, names: Map<number, string>): boolean => {
+function allVarsIn(t: Type, names: Map<number, string>): boolean {
   switch (t.kind) {
     case "var":
       return names.has(t.id);
@@ -405,7 +409,7 @@ const allVarsIn = (t: Type, names: Map<number, string>): boolean => {
       return row.kind === "rvar" ? names.has(row.id) : true;
     }
   }
-};
+}
 
 /**
  * Merge the generic-letter maps of several schemes into one id → letter map.
@@ -415,11 +419,11 @@ const allVarsIn = (t: Type, names: Map<number, string>): boolean => {
  * bring a generic binding's letters into scope for the inner lambdas nested in
  * its body (ADR 0042).
  */
-export const unionGenericNames = (schemes: Iterable<Scheme>): Map<number, string> => {
+export function unionGenericNames(schemes: Iterable<Scheme>): Map<number, string> {
   const out = new Map<number, string>();
   for (const sc of schemes) for (const [id, letter] of genericNames(sc)) out.set(id, letter);
   return out;
-};
+}
 
 /**
  * TS backend (ADR 0028): the per-parameter TS type annotations for a lambda,
@@ -445,12 +449,12 @@ export const unionGenericNames = (schemes: Iterable<Scheme>): Map<number, string
  * A concrete param still renders (empty-map path); a param mixing in an
  * out-of-scope var still stays bare (rendering it would be `unknown`/dropped).
  */
-export const lambdaParamTypesTs = (
+export function lambdaParamTypesTs(
   lamType: Type,
   arity: number,
   aliases: AliasDef[],
   names: Map<number, string> = new Map(),
-): (string | null)[] => {
+): (string | null)[] {
   const out: (string | null)[] = [];
   let cur = foldAliases(lamType, aliases);
   for (let i = 0; i < arity; i++) {
@@ -471,7 +475,7 @@ export const lambdaParamTypesTs = (
     cur = cur.to;
   }
   return out;
-};
+}
 
 /**
  * TS backend (ADR 0032): a GENERIC function binding's value lambda emitted as a
@@ -486,11 +490,11 @@ export const lambdaParamTypesTs = (
  * concrete types alike — peeling one arrow of the scheme type per collapsed param.
  * Null when the binding is non-generic (the concrete-only path already handles it).
  */
-export const genericLambdaParams = (
+export function genericLambdaParams(
   sc: Scheme,
   arity: number,
   aliases: AliasDef[],
-): { generics: string; params: (string | null)[] } | null => {
+): { generics: string; params: (string | null)[] } | null {
   const names = genericNames(sc);
   if (names.size === 0) return null;
   const params: (string | null)[] = [];
@@ -504,7 +508,7 @@ export const genericLambdaParams = (
     cur = cur.to;
   }
   return { generics: `<${[...names.values()].join(", ")}>`, params };
-};
+}
 
 /**
  * A match scrutinee's concrete TS type — the base a guard-form arm's type
@@ -514,26 +518,26 @@ export const genericLambdaParams = (
  * (TS2304), same rule as `lambdaParamTypesTs`; those stay the bare `(_v) => …`
  * boolean guard (and their nested-pattern handlers keep the polymorphic tail).
  */
-export const guardParamTs = (scrutType: Type, aliases: AliasDef[]): string | null => {
+export function guardParamTs(scrutType: Type, aliases: AliasDef[]): string | null {
   const t = foldAliases(scrutType, aliases);
   const fv: number[] = [];
   freeVars(t, fv);
   return fv.length === 0 ? tsOf(t, new Map()) : null;
-};
+}
 
 const letDecl = (name: string, sc: Scheme, value: Expr, aliases: AliasDef[]): string =>
   `export declare const ${name}: ${bindingTsType(sc, value, aliases)};`;
 
 /** A transparent record alias → an exported TS object type. Field types come from the alias template (an HM record whose params are marker vars); map each marker to a generic letter so `type Box a = { value: a }` emits `type Box<A> = ...`. */
-export const aliasTsDecl = (def: AliasDef): string => {
+export function aliasTsDecl(def: AliasDef): string {
   const names = new Map(def.params.map((_, i) => [aliasParamId(i), LETTERS[i] ?? `T${i}`]));
   const body = tsOf(def.template, names);
   const head = def.params.length ? `${def.name}<${[...names.values()].join(", ")}>` : def.name;
   return `export type ${head} = ${body};`;
-};
+}
 
 /** A `type` decl → an exported tagged union matching the runtime shape. */
-export const typeDecl = (name: string, params: string[], ctors: Ctor[]): string => {
+export function typeDecl(name: string, params: string[], ctors: Ctor[]): string {
   const gmap = paramGmap(params);
   const variant = (c: Ctor): string => {
     const fields = c.fields.map((fld, i) => `${fld.name ?? `_${i}`}: ${fieldTs(fld.type, params)}`);
@@ -541,14 +545,14 @@ export const typeDecl = (name: string, params: string[], ctors: Ctor[]): string 
   };
   const head = params.length ? `${name}<${params.map((p) => gmap.get(p)).join(", ")}>` : name;
   return `export type ${head} =\n${ctors.map((c) => `  | ${variant(c)}`).join("\n")};`;
-};
+}
 
-const declOf = (
+function declOf(
   s: Stmt,
   schemeOf: (n: string) => Scheme | undefined,
   aliasByName: Map<string, AliasDef>,
   aliases: AliasDef[],
-): string | null => {
+): string | null {
   switch (s.kind) {
     case "import":
       return null;
@@ -561,10 +565,10 @@ const declOf = (
   } // imported, not declared here
   const sc = schemeOf(s.name);
   return sc && !s.name.startsWith("$") ? letDecl(s.name, sc, s.value, aliases) : null;
-};
+}
 
 /** Type-constructor names referenced anywhere in a TypeExpr (`Option<Expr>` → {Option}, nested included). Used to spot builtin unions named in ctor/alias field positions — inference-derived binding types alone miss those. */
-const teConNames = (te: TypeExpr, acc: Set<string>): void => {
+function teConNames(te: TypeExpr, acc: Set<string>): void {
   switch (te.kind) {
     case "tname":
       acc.add(te.name);
@@ -584,7 +588,7 @@ const teConNames = (te: TypeExpr, acc: Set<string>): void => {
       teConNames(te.elem, acc);
       return;
   }
-};
+}
 
 /**
  * Builtin variant type decls a program's types reference but that the program
@@ -592,10 +596,10 @@ const teConNames = (te: TypeExpr, acc: Set<string>): void => {
  * field typed `Option<Expr>`). Emitted so those references resolve. Shared by
  * the `.d.ts` writer and the `.ts` backend.
  */
-export const referencedBuiltinTypeDecls = (
+export function referencedBuiltinTypeDecls(
   prog: Program,
   schemeOf: (n: string) => Scheme | undefined,
-): string[] => {
+): string[] {
   const declared = new Set(prog.stmts.flatMap((s) => (s.kind === "type" ? [s.name] : [])));
   const referenced = new Set<string>();
   for (const s of prog.stmts) {
@@ -613,7 +617,7 @@ export const referencedBuiltinTypeDecls = (
   return builtinTypeDecls
     .filter((bt) => referenced.has(bt.name) && !declared.has(bt.name))
     .map((bt) => typeDecl(bt.name, bt.params, bt.ctors));
-};
+}
 
 /**
  * Builtin variant decls a guard-form type predicate (ADR 0031) names in the
@@ -646,7 +650,7 @@ export type ExternBinding = { imported: string; scheme: Scheme };
  * bind them to. Referenced builtin variants (e.g. `Result`) are inlined so the
  * file is self-contained.
  */
-export const externModuleDts = (externs: ExternBinding[]): string => {
+export function externModuleDts(externs: ExternBinding[]): string {
   const referenced = new Set<string>();
   for (const e of externs) consIn(e.scheme.type, referenced);
   const decls = builtinTypeDecls
@@ -671,9 +675,9 @@ export const externModuleDts = (externs: ExternBinding[]): string => {
     }
   }
   return `${[...decls, ...lines].join("\n")}\n`;
-};
+}
 
-export const emitDts = (src: string): Result<string, Diagnostic[]> => {
+export function emitDts(src: string): Result<string, Diagnostic[]> {
   const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces });
   if (isErr(r)) return r;
   const { prog, res } = r.value;
@@ -687,4 +691,4 @@ export const emitDts = (src: string): Result<string, Diagnostic[]> => {
   // its own. Prepend so the reference resolves.
   const builtins = referencedBuiltinTypeDecls(prog, (n) => env.get(n));
   return ok(`${[...builtins, ...lines].join("\n")}\n`);
-};
+}

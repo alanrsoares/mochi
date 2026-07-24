@@ -55,12 +55,12 @@ const rangeOf = (src: string, e: Diagnostic): Range =>
     : { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } };
 
 /** Map a compiler Diagnostic onto the publish DTO (labels → related, etc.). */
-export const toPublish = (
+export function toPublish(
   src: string,
   e: Diagnostic,
   path = "<buffer>",
   sources?: ReadonlyMap<string, string>,
-): PublishDiagnostic => {
+): PublishDiagnostic {
   const related = (e.labels ?? []).map((label) => {
     const labelPath = label.location.path || path;
     const labelSrc = sources?.get(labelPath) ?? src;
@@ -88,7 +88,7 @@ export const toPublish = (
     ...(related.length > 0 ? { related } : {}),
     ...(suggestions.length > 0 ? { suggestions } : {}),
   };
-};
+}
 
 /**
  * Check + infer may emit several diagnostics (ADR 0004). Lex/parse still yield
@@ -96,10 +96,10 @@ export const toPublish = (
  * variant reads as an unknown constructor. Use `moduleDiagnostics` when a path
  * is available.
  */
-export const diagnostics = (src: string): PublishDiagnostic[] => {
+export function diagnostics(src: string): PublishDiagnostic[] {
   const r = compile(src);
   return isErr(r) ? r.error.map((e) => toPublish(src, e)) : [];
-};
+}
 
 /**
  * Module-aware diagnostics: resolve `path`'s dependency graph (deps read from
@@ -113,11 +113,11 @@ export const diagnostics = (src: string): PublishDiagnostic[] => {
  * dep fails to compile, we fall back to single-file `diagnostics(src)` — no
  * worse than before, and the user still sees their own file's errors.
  */
-export const moduleDiagnostics = async (
+export async function moduleDiagnostics(
   path: string,
   src: string,
   readFile: (p: string) => Promise<string>,
-): Promise<PublishDiagnostic[]> => {
+): Promise<PublishDiagnostic[]> {
   const lexed = lex(src);
   if (isErr(lexed)) return [toPublish(src, lexed.error, path)];
   const parsed = parse(lexed.value);
@@ -132,4 +132,4 @@ export const moduleDiagnostics = async (
 
   const typed = toTypedProgramWith(prog, ctx.value);
   return isErr(typed) ? typed.error.map((e) => toPublish(src, e, entry)) : [];
-};
+}

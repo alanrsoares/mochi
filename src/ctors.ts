@@ -42,7 +42,7 @@ const entryOf = (typeName: string, params: string[], c: Ctor, builtin: boolean):
 });
 
 /** Seed builtin variant types (Option/Result) unless the program declares its own type of that name — user redeclarations win with no duplicate error. */
-const seedBuiltins = (table: CtorTable): void => {
+function seedBuiltins(table: CtorTable): void {
   for (const bt of builtinTypeDecls) {
     if (table.type.has(bt.name)) continue;
     table.type.set(
@@ -52,12 +52,12 @@ const seedBuiltins = (table: CtorTable): void => {
     for (const c of bt.ctors)
       if (!table.ctor.has(c.name)) table.ctor.set(c.name, entryOf(bt.name, bt.params, c, true));
   }
-};
+}
 
 /**
  * The failing builder — `check`'s entry point: duplicate-decl detection lives here, at the single derivation, so no later pass can see a table `check` didn't vouch for. A transparent record alias reserves its type name (a later variant can't reuse it) but registers no constructors — it's structural, never a `switch` target; an empty ctor list is inert for exhaustiveness.
  */
-export const buildCtorTable = (prog: Program): Result<CtorTable, Diagnostic[]> => {
+export function buildCtorTable(prog: Program): Result<CtorTable, Diagnostic[]> {
   const table: CtorTable = { ctor: new Map(), type: new Map() };
   const diags: Diagnostic[] = [];
   for (const s of prog.stmts) {
@@ -81,10 +81,10 @@ export const buildCtorTable = (prog: Program): Result<CtorTable, Diagnostic[]> =
   if (diags.length > 0) return err(diags);
   seedBuiltins(table);
   return ok(table);
-};
+}
 
 /** The non-failing builder for passes that run AFTER `check` has rejected duplicates (`infer`, `codegen`): same derivation, last decl wins. */
-export const ctorTableOf = (prog: Program): CtorTable => {
+export function ctorTableOf(prog: Program): CtorTable {
   const table: CtorTable = { ctor: new Map(), type: new Map() };
   for (const s of prog.stmts) {
     if (s.kind !== "type") continue;
@@ -96,12 +96,12 @@ export const ctorTableOf = (prog: Program): CtorTable => {
   }
   seedBuiltins(table);
   return table;
-};
+}
 
 /**
  * The table a module publishes: only its EXPORTED variant types (and their full ctor sets), no builtin seeding. Threaded into an importer's `check` so a `switch` on an imported variant is exhaustiveness-checked against every constructor — even ones the importer never imported (those force a catch-all, since it can't name them).
  */
-export const exportedCtorTable = (prog: Program): CtorTable => {
+export function exportedCtorTable(prog: Program): CtorTable {
   const table: CtorTable = { ctor: new Map(), type: new Map() };
   for (const s of prog.stmts) {
     if (s.kind !== "type" || !s.exported) continue;
@@ -112,13 +112,13 @@ export const exportedCtorTable = (prog: Program): CtorTable => {
     for (const c of s.ctors) table.ctor.set(c.name, entryOf(s.name, s.params, c, false));
   }
   return table;
-};
+}
 
 /**
  * The field keys of a module's EXPORTED ctors — threaded into an importer's `codegen` so a pattern on an imported variant destructures the right runtime keys (`Some(value: a)` → `{ value }`, not the positional `{ _0 }`).
  */
-export const exportedCtorKeys = (prog: Program): Map<string, string[]> => {
+export function exportedCtorKeys(prog: Program): Map<string, string[]> {
   const m = new Map<string, string[]>();
   for (const [name, e] of exportedCtorTable(prog).ctor) m.set(name, e.keys);
   return m;
-};
+}

@@ -43,10 +43,10 @@ export type ImportedContext = {
 };
 
 /** Parsed Program → typed Program, with an imported context: the module-aware sibling of `toTypedProgram`. Owns the prelude-seeding invariant — `preludeEnv` + `preludeNamespaces` + open-world — that the graph drivers (`compileGraph`, `compileGraphTs`, `moduleContext`) and the LSP surfaces (`moduleDiagnostics`, `moduleHoverAt`) previously each re-assembled. */
-export const toTypedProgramWith = (
+export function toTypedProgramWith(
   prog: Program,
   ctx: ImportedContext,
-): Result<TypedProgram, Diagnostic[]> => {
+): Result<TypedProgram, Diagnostic[]> {
   const checked = check(prog, ctx.importedReg);
   if (isErr(checked)) return checked;
   return map(
@@ -58,16 +58,22 @@ export const toTypedProgramWith = (
     }),
     (res) => ({ prog: checked.value, res }),
   );
-};
+}
 
 /** Type-check stage: run HM inference (open-world, so JS host globals are legal) and pass the program through unchanged on success. */
 const typecheck = (prog: Program): Result<Program, Diagnostic[]> =>
-  map(inferProgram(prog, preludeEnv, { open: true, namespaces: preludeNamespaces }), () => prog);
+  map(
+    inferProgram(prog, preludeEnv, {
+      open: true,
+      namespaces: preludeNamespaces,
+    }),
+    () => prog,
+  );
 
 /** `runtime` (default on): inline the prelude builtins the program uses so the emitted module runs standalone. Off yields prelude-free lowering — for tests that supply their own prelude, or callers that bundle it separately. */
 export type CompileOptions = { runtime?: boolean };
 
-export const compile = (src: string, opts: CompileOptions = {}): Result<string, Diagnostic[]> => {
+export function compile(src: string, opts: CompileOptions = {}): Result<string, Diagnostic[]> {
   const lexed = lex(src);
   if (isErr(lexed)) return err(oneDiag(lexed.error));
   const parsed = parse(lexed.value);
@@ -77,4 +83,4 @@ export const compile = (src: string, opts: CompileOptions = {}): Result<string, 
   const typed = typecheck(checked.value);
   if (isErr(typed)) return typed;
   return ok(codegen(typed.value, undefined, { runtime: opts.runtime ?? true }));
-};
+}

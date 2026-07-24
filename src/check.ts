@@ -92,7 +92,7 @@ const isCatchAll = (p: Pattern): boolean =>
  * above or a `_`). Returns null (exhaustive), an error (a list switch that
  * isn't), or undefined (not a list switch → let the caller decide).
  */
-const checkSeqExhaustive = (m: MatchExpr): Diagnostic | null | undefined => {
+function checkSeqExhaustive(m: MatchExpr): Diagnostic | null | undefined {
   const seqs = m.arms.flatMap((a) =>
     // Guarded arms don't prove totality (the guard can be false).
     (a.pattern.kind === "parr" || a.pattern.kind === "plist") && !a.guard ? [a.pattern] : [],
@@ -103,7 +103,7 @@ const checkSeqExhaustive = (m: MatchExpr): Diagnostic | null | undefined => {
   return hasEmpty && hasCons
     ? null
     : checkErr("non-exhaustive list switch: cover `[]` and `[x, ...xs]` (or add `_`)", m.span);
-};
+}
 
 /**
  * Validate a pattern tree: nested constructors must exist with the right
@@ -214,7 +214,7 @@ const binderPaths = (p: Pattern, at: string, acc: Map<string, string>): Diagnost
  * guard form can't host as an alt), and all alts must bind the same names at the
  * same structural position — so the arm's single destructure serves every alt.
  */
-const checkOrPattern = (p: OrPat, reg: Registry): Diagnostic | null => {
+function checkOrPattern(p: OrPat, reg: Registry): Diagnostic | null {
   const maps: Map<string, string>[] = [];
   for (const alt of p.alts) {
     if (isCatchAll(alt))
@@ -253,7 +253,7 @@ const checkOrPattern = (p: OrPat, reg: Registry): Diagnostic | null => {
     }
   }
   return null;
-};
+}
 
 /**
  * A constructor arm covers its constructor only when every argument is
@@ -361,7 +361,7 @@ function checkMatch(m: MatchExpr, reg: Registry): Diagnostic | null {
 const RESERVED_NAMES = new Set(Object.keys(preludeNamespaces));
 const REDECLARABLE_TYPES = new Set(builtinTypeDecls.map((d) => d.name));
 
-const checkReservedNames = (prog: Program): Diagnostic[] => {
+function checkReservedNames(prog: Program): Diagnostic[] {
   const diags: Diagnostic[] = [];
   for (const s of prog.stmts) {
     if (s.kind === "type" && REDECLARABLE_TYPES.has(s.name)) continue;
@@ -391,7 +391,7 @@ const checkReservedNames = (prog: Program): Diagnostic[] => {
     }
   }
   return diags;
-};
+}
 
 /**
  * Ctor field types are full type expressions (ADR 0015). A lowercase leaf name
@@ -419,7 +419,7 @@ const strayTypeVar = (te: TypeExpr, params: ReadonlySet<string>): TypeExpr | nul
     .with({ kind: "tlist" }, (tlist) => strayTypeVar(tlist.elem, params))
     .exhaustive();
 
-const checkCtorFieldVars = (prog: Program): Diagnostic[] => {
+function checkCtorFieldVars(prog: Program): Diagnostic[] {
   const diags: Diagnostic[] = [];
   for (const s of prog.stmts) {
     if (s.kind !== "type") continue;
@@ -437,7 +437,7 @@ const checkCtorFieldVars = (prog: Program): Diagnostic[] => {
       }
   }
   return diags;
-};
+}
 
 /**
  * JavaScript reserved words. An mochi lowercase identifier in a BINDING
@@ -601,7 +601,7 @@ const checkExprBinds = (e: Expr): Diagnostic[] =>
     )
     .exhaustive();
 
-const checkReservedWords = (prog: Program): Diagnostic[] => {
+function checkReservedWords(prog: Program): Diagnostic[] {
   const diags: Diagnostic[] = [];
   for (const s of prog.stmts) {
     if (s.kind === "let") {
@@ -617,7 +617,7 @@ const checkReservedWords = (prog: Program): Diagnostic[] => {
     }
   }
   return diags;
-};
+}
 
 /**
  * `imported` carries the ctor/type registries of the modules this program

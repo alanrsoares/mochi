@@ -9,7 +9,11 @@ export type { Location };
 export type Label = { location: Location; message: string };
 
 /** Machine-applicable fix; LSP exposes these as code actions. */
-export type Suggestion = { location: Location; replaceWith: string; title?: string };
+export type Suggestion = {
+  location: Location;
+  replaceWith: string;
+  title?: string;
+};
 
 type DiagExtras = {
   labels?: readonly Label[];
