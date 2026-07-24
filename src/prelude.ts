@@ -307,6 +307,9 @@ export const preludeJsDefs: Record<string, string> = {
   _Task_of: "const _Task_of = (x) => () => Promise.resolve(x);",
   _Task_map: "const _Task_map = _curry(2, (f, t) => () => t().then(f));",
   _Task_andThen: "const _Task_andThen = _curry(2, (f, t) => () => t().then((x) => f(x)()));",
+  // `_curry`-shaped so both `Task.delay(ms, x)` (multi-arg emit) and `Task.andThen(Task.delay(ms))` work.
+  _Task_delay:
+    "const _Task_delay = _curry(2, (ms, x) => () => new Promise((res) => setTimeout(() => res(x), ms)));",
   _Task_run: "const _Task_run = (t) => t();",
 };
 
@@ -403,6 +406,7 @@ export const runtimeDeps: Record<string, string[]> = {
   _Str_toNumber: ["Some", "None"],
   _Task_map: ["_curry"],
   _Task_andThen: ["_curry"],
+  _Task_delay: ["_curry"],
 };
 
 /**
@@ -496,6 +500,7 @@ export const preludeNamespaces: Record<string, Record<string, Type>> = {
     of: tArrow(a, task(a)), // a -> Task a
     map: tArrow(tArrow(a, b), tArrow(task(a), task(b))), // (a -> b) -> Task a -> Task b
     andThen: tArrow(tArrow(a, task(b)), tArrow(task(a), task(b))), // (a -> Task b) -> Task a -> Task b
+    delay: tArrow(tNumber, tArrow(a, task(a))), // number -> a -> Task a  (_curry; ADR 0005)
     run: tArrow(task(a), promise(a)), // Task a -> Promise a  (only kick-off)
   },
   // String ops (`Str.*`). Data-last where a collection/subject is involved.
@@ -600,6 +605,7 @@ export const namespaceRuntime: Record<string, Record<string, string>> = {
     of: "_Task_of",
     map: "_Task_map",
     andThen: "_Task_andThen",
+    delay: "_Task_delay",
     run: "_Task_run",
   },
   Str: {
