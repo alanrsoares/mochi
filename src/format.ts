@@ -583,10 +583,13 @@ const composeSegments = (e: Expr): Expr[] => {
 };
 
 const lambdaD = (e: LambdaExpr): Doc => {
-  // Refold composition: `($x) => g(f($x))` -> `f >> g` (and flatten `f >> g >> h`)
+  // Refold composition: `($x) => g(f($x))` -> `f >> g` (and flatten `f >> g >> h`).
+  // Inline when it fits, else one `>> stage` per line indented under the head.
   if (isComposeLambda(e)) {
-    const segments = composeSegments(e);
-    return group(join(seq(line, txt(">> ")), segments.map(operandD)));
+    const [head, ...rest] = composeSegments(e);
+    return group(
+      seq(operandD(head!), indent(cat(rest.map((s) => seq(line, txt(">> "), operandD(s)))))),
+    );
   }
 
   const head = txt(`${params(e.params)} =>`);

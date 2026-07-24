@@ -27,9 +27,9 @@ let typecheck = prog =>
 
 // The front-end pipeline: lex -> parse -> check -> typecheck
 let pipeline = lex
->> Result.flatMap(parse)
->> Result.flatMap(check)
->> Result.flatMap(typecheck)
+  >> Result.flatMap(parse)
+  >> Result.flatMap(check)
+  >> Result.flatMap(typecheck)
 
 // compile : string -> Result string Err
 export let compile = src =>

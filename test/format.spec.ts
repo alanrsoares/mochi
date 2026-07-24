@@ -203,3 +203,9 @@ test("a trailing comment on a `let … in` value keeps `in` before the comment",
 test("composition operator >> refolds correctly when formatted", () => {
   expect(fmt("let f = a >> b")).toBe("let f = a >> b\n");
 });
+
+test("composition chain breaks and indents stages under head when overflowing", () => {
+  const src =
+    "let pipeline = lex\n  >> Result.flatMap(parse)\n  >> Result.flatMap(check)\n  >> Result.flatMap(typecheck)\n";
+  expect(fmt(src)).toBe(src);
+});
