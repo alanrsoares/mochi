@@ -115,3 +115,31 @@ test("hover resolves a namespaced prelude ref (0023's discovered gap)", () => {
   const off = src.indexOf("Str.concat") + 5; // on `concat`
   expect(hoverAt(src, off)?.code).toBe("(property) concat: string -> string -> string");
 });
+
+test("hover on a prelude value surfaces its virtual docstring", () => {
+  const src = "let n = add(1, 2)";
+  const info = hoverAt(src, src.indexOf("add"));
+  expect(info?.code).toBe("number -> number -> number");
+  expect(info?.doc).toContain("Number addition");
+});
+
+test("hover on Some surfaces the ctor docstring", () => {
+  const src = "let x = Some(1)";
+  const info = hoverAt(src, src.indexOf("Some"));
+  expect(info?.doc).toBe("Present `Option` value.");
+});
+
+test("hover on Result.map member surfaces the qualified docstring", () => {
+  const src = "let f = Result.map(identity)";
+  const onMap = hoverAt(src, src.indexOf("map"));
+  expect(onMap?.doc).toBe("`Result.map`");
+  const onNs = hoverAt(src, src.indexOf("Result"));
+  expect(onNs?.doc).toContain("Result railway");
+});
+
+test("shadowed prelude name does not keep the prelude docstring", () => {
+  const src = "/// local add\nlet add = 1\nlet n = add";
+  // Use site: user docs attach only at the def name today; must not show prelude's.
+  expect(hoverAt(src, src.lastIndexOf("add"))?.doc).toBeUndefined();
+  expect(hoverAt(src, src.indexOf("let add") + 4)?.doc).toBe("local add");
+});

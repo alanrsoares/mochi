@@ -12,6 +12,8 @@ import { lex } from "./lexer";
 import { moduleContext } from "./module";
 import { parse } from "./parser";
 import { preludeNamespaces } from "./prelude";
+import { preludeDocForBinding } from "./prelude-virtual";
+import { indexProgram } from "./symbols";
 import { foldAliases, showType } from "./types";
 
 // The tightest span containing `offset`, or null if none. Ties (nested spans of
@@ -39,21 +41,42 @@ const lead = (type: string, symbol: SymbolInfo | undefined): string => {
   return `(property) ${symbol.name}: ${type}`;
 };
 
+/** Doc from a user `///` on the binding, else the virtual-prelude docstring. */
+const docAt = (
+  src: string,
+  path: string,
+  offset: number,
+  symbol: SymbolInfo | undefined,
+): string | undefined => {
+  if (symbol?.doc) return symbol.doc;
+  const lexed = lex(src);
+  if (isErr(lexed)) return undefined;
+  const parsed = parse(lexed.value);
+  if (isErr(parsed)) return undefined;
+  const hit = indexProgram(resolve(path), parsed.value).at(offset);
+  return hit ? preludeDocForBinding(hit.binding) : undefined;
+};
+
 // The tightest-span type at `offset`, rendered as a hover payload.
-const hoverFrom = (res: InferResult, offset: number): HoverInfo | null => {
+const hoverFrom = (
+  res: InferResult,
+  offset: number,
+  src: string,
+  path: string,
+): HoverInfo | null => {
   const hit = tightest(res.types, offset);
   if (!hit) return null;
   const type = showType(foldAliases(hit.type, res.aliases));
-  return { code: lead(type, hit.symbol), doc: hit.symbol?.doc };
+  return { code: lead(type, hit.symbol), doc: docAt(src, path, offset, hit.symbol) };
 };
 
 // The hover at `offset`, or null when the source doesn't typecheck or nothing
 // sits under the cursor. Open-world so host globals infer. Single-file: a file
 // with imports won't typecheck (the imported constructors are unknown), so
 // prefer `moduleHoverAt` when a path is available.
-export const hoverAt = (src: string, offset: number): HoverInfo | null => {
+export const hoverAt = (src: string, offset: number, path = "<buffer>"): HoverInfo | null => {
   const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces });
-  return isErr(r) ? null : hoverFrom(r.value.res, offset);
+  return isErr(r) ? null : hoverFrom(r.value.res, offset, src, path);
 };
 
 // Module-aware hover: resolve `path`'s dependency graph (deps from disk via
@@ -77,8 +100,8 @@ export const moduleHoverAt = async (
   const read = (p: string): Promise<string> =>
     resolve(p) === entry ? Promise.resolve(src) : readFile(p);
   const ctx = await moduleContext(entry, read);
-  if (isErr(ctx)) return hoverAt(src, offset);
+  if (isErr(ctx)) return hoverAt(src, offset, entry);
 
   const typed = toTypedProgramWith(prog, ctx.value);
-  return isErr(typed) ? null : hoverFrom(typed.value.res, offset);
+  return isErr(typed) ? null : hoverFrom(typed.value.res, offset, src, entry);
 };

@@ -232,3 +232,25 @@ export const fieldNameSpan = (fieldSpan: Span, name: string): Span => ({
 /** Lookup a builtin docstring (for tests / future hover enrichment). */
 export const preludeDoc = (name: string): string | undefined =>
   VALUE_DOCS[name] ?? CTOR_DOCS[name] ?? TYPE_DOCS[name] ?? NS_DOCS[name];
+
+const sameLoc = (a: Location, b: Location): boolean =>
+  a.path === b.path && a.span.start === b.span.start && a.span.end === b.span.end;
+
+/** Binding-shaped input for prelude docstring lookup (avoids a symbols cycle). */
+export type PreludeDocBinding = {
+  name: string;
+  space: "value" | "type" | "ctor";
+  def: Location;
+};
+
+/** Doc for a symbol-index binding whose def is in the virtual prelude. */
+export const preludeDocForBinding = (b: PreludeDocBinding): string | undefined => {
+  if (!isPreludePath(b.def.path)) return undefined;
+  const v = preludeVirtual();
+  for (const [key, loc] of v.nsMembers) {
+    if (sameLoc(loc, b.def)) return `\`${key}\``;
+  }
+  if (b.space === "type") return TYPE_DOCS[b.name];
+  if (b.space === "ctor") return CTOR_DOCS[b.name];
+  return VALUE_DOCS[b.name] ?? CTOR_DOCS[b.name] ?? NS_DOCS[b.name];
+};

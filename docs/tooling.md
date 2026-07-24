@@ -36,7 +36,8 @@ the `.mochi` formatter on `bootstrap/`), `build:ext` (VS Code extension).
 ## Editor surfaces
 
 - **Hover** — types on demand, folded back to named record aliases where they match, with
-  `///` doc comments attached.
+  `///` doc comments attached (user docs on lets; prelude builtins use the virtual
+  prelude docstrings).
 - **Go to definition / document highlight** — lexical symbol index (values, types, ctors);
   works when typecheck fails. Prelude / builtins (including `Result.map`-style
   namespaces) resolve to a virtual `mochi:/prelude.mochi` buffer (read-only).
