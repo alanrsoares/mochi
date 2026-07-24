@@ -11,6 +11,11 @@ dist
 # `.js` in the tree is a build artifact and safe to ignore wholesale.
 *.js
 
+# bootstrap `build --emit=ts` drops `.ts` / `.d.mts` beside the `.mochi` sources
+# (JS emit is already covered by `*.js` above).
+/bootstrap/*.ts
+/bootstrap/*.d.mts
+
 # code coverage
 coverage
 *.lcov

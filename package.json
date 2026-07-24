@@ -21,6 +21,7 @@
     "fmt:al": "bun scripts/fmt-al.ts",
     "fmt:check": "bun scripts/fmt-al.ts --check",
     "fixpoint": "bun scripts/fixpoint.ts",
+    "clean": "bun scripts/clean.ts",
     "check": "biome check . && tsc --noEmit && bun run --filter '*' check && bun run fmt:check && bun test"
   },
   "workspaces": [
