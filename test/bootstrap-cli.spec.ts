@@ -28,7 +28,7 @@ const runArgs = (...args: string[]): { code: number; stderr: string } => {
     return { code: err.status ?? 1, stderr: err.stderr ?? "" };
   }
 };
-const runAlangc = (arg: string): { code: number; stderr: string } => runArgs(arg);
+const runMochic = (arg: string): { code: number; stderr: string } => runArgs(arg);
 
 beforeAll(() => {
   // Build the shipped compiler graph (emits bootstrap/*.js beside the sources).
@@ -52,7 +52,7 @@ test("mochic compiles a good file to a sibling .js identical to the TS compiler"
   const js = join(dir, "good.js");
   writeFileSync(al, src);
 
-  const { code } = runAlangc(al);
+  const { code } = runMochic(al);
   expect(code).toBe(0);
   expect(existsSync(js)).toBe(true);
   expect(readFileSync(js, "utf8")).toBe(unwrapOk(tsCompile(src)));
@@ -66,7 +66,7 @@ test("mochic rejects a bad file: line:col diagnostic, nonzero exit, no JS", () =
   const js = join(dir, "bad.js");
   writeFileSync(al, "type C = A | B\nlet f = c => switch c { | A => 1 }\n");
 
-  const { code, stderr } = runAlangc(al);
+  const { code, stderr } = runMochic(al);
   expect(code).not.toBe(0);
   expect(stderr).toContain("bad.mochi:2:");
   expect(stderr).toContain("non-exhaustive");
