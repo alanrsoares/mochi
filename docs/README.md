@@ -20,7 +20,7 @@ share one codegen: readable JavaScript, and typed TypeScript that is clean under
 
 | Doc | What's in it |
 |---|---|
-| [`language.md`](language.md) | The surface language: types, variants, records, patterns, collections, bindings — with examples. |
+| [`language.md`](language.md) | The surface language: types, variants, records, patterns, collections, `Task`, bindings — with examples. |
 | [`compiler.md`](compiler.md) | The pipeline, the two backends, and how self-hosting works. |
 | [`tooling.md`](tooling.md) | The CLI, the LSP surfaces, the formatter, and `.d.ts` emission. |
 | [`dx-tracer-bullets.md`](dx-tracer-bullets.md) | Editor DX slices (rich diagnostics + navigation) — tracked as GitHub issues. |
