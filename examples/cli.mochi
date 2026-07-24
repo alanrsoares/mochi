@@ -1,0 +1,45 @@
+// CLI Example Router written in Mochi
+//
+// Build and run with:
+//   bun run mochi build examples/cli.mochi && bun examples/cli.js <example>
+
+extern getArg : string -> string = "./cli_runtime.mjs" "getArg"
+extern log : string -> number = "./cli_runtime.mjs" "log"
+
+type Example =
+  | Life
+  | Snake
+  | AsyncDemo
+  | ModulesDemo
+  | PipelinesDemo
+  | Showcase
+  | Unknown(string)
+  | Help
+
+let parseExample = name => switch name {
+  | "life" => Life
+  | "snake" => Snake
+  | "async" => AsyncDemo
+  | "modules" => ModulesDemo
+  | "pipelines" => PipelinesDemo
+  | "showcase" => Showcase
+  | "" => Help
+  | _ => Unknown(name)
+}
+
+let getInfo = ex => switch ex {
+  | Life => "  [life]      Animated Conway's Game of Life in terminal\n  Run command: bun run example:life"
+  | Snake => "  [snake]     Interactive HTML5 Canvas Snake Game\n  Run command: bun run example:snake"
+  | AsyncDemo => "  [async]     Async concurrency & Task delay pipeline\n  Run command: bun run example:async"
+  | ModulesDemo => "  [modules]   Multi-file module graph and imports\n  Run command: bun run example:modules"
+  | PipelinesDemo => "  [pipelines] Expressive pipeline operators (|>) showcase\n  Run command: bun run example:pipelines"
+  | Showcase => "  [showcase]  Full Mochi language feature tour\n  Run command: bun run example:showcase"
+  | Unknown(name) => "Unknown example '${name}'. Available: life, snake, async, modules, pipelines, showcase."
+  | Help => "=== Mochi Examples CLI Router (Written in Mochi) ===\n\nUsage: bun run example [name]\n\nAvailable examples:\n  • life      - Conway's Game of Life (Terminal animation)\n  • snake     - Canvas Snake Game (Web UI on http://localhost:3000)\n  • async     - Async Task monad & delay pipeline\n  • modules   - Multi-module import/export graph\n  • pipelines - Functional pipeline operator (|>) demo\n  • showcase  - Comprehensive Mochi language tour\n\nRun 'bun run example:<name>' or pass the name as an argument!"
+}
+
+let arg = getArg("")
+let choice = parseExample(arg)
+let message = getInfo(choice)
+
+let _ = log(message)
