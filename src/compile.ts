@@ -38,7 +38,11 @@ export const toTypedProgram = (
 // What a module's imports resolve to, as this seam needs it: export SCHEMES
 // (inference) and the variant REGISTRY (cross-module exhaustiveness). A
 // structural subset of `module.ts`'s `ModuleContext`, so a full context passes.
-export type ImportedContext = { imports: Env; importedReg: Registry };
+export type ImportedContext = {
+  imports: Env;
+  nsImports?: Map<string, Env>;
+  importedReg: Registry;
+};
 
 // Parsed Program → typed Program, WITH an imported context: the module-aware
 // sibling of `toTypedProgram` (0023's Seam B). Owns the prelude-seeding
@@ -57,6 +61,7 @@ export const toTypedProgramWith = (
           open: true,
           imports: ctx.imports,
           namespaces: preludeNamespaces,
+          nsImports: ctx.nsImports,
         }),
         (res) => ({ prog: p, res }),
       ),

@@ -62,6 +62,8 @@ type Loaded = { path: string; prog: Program };
 // REGISTRY (cross-module exhaustiveness), and ctor field KEYS (destructuring).
 export type ModuleContext = {
   imports: Env;
+  /** `import * as Alias` → Alias's export schemes (ADR 0002). */
+  nsImports: Map<string, Env>;
   importedReg: Registry;
   importedKeys: Map<string, string[]>;
 };
@@ -77,15 +79,23 @@ const gatherImports = (
   keysByPath: Map<string, Map<string, string[]>>,
 ): Result<ModuleContext, AlangError> => {
   const imports: Env = new Map();
+  const nsImports = new Map<string, Env>();
   const importedReg: Registry = { ctor: new Map(), type: new Map() };
   const importedKeys = new Map<string, string[]>();
   for (const imp of importsOf(prog)) {
     const depPath = resolveImport(path, imp.from);
     const depExports = exportsByPath.get(depPath);
-    for (const n of imp.names) {
-      const sc = depExports?.get(n.name) as Scheme | undefined;
-      if (!sc) return err(checkErr(`'${imp.from}' has no export '${n.name}'`, n.span));
-      imports.set(n.name, sc);
+    if (imp.alias) {
+      // Namespace import: every export of the dep becomes a member of `alias`.
+      const members: Env = new Map();
+      if (depExports) for (const [name, sc] of depExports) members.set(name, sc);
+      nsImports.set(imp.alias.name, members);
+    } else {
+      for (const n of imp.names) {
+        const sc = depExports?.get(n.name) as Scheme | undefined;
+        if (!sc) return err(checkErr(`'${imp.from}' has no export '${n.name}'`, n.span));
+        imports.set(n.name, sc);
+      }
     }
     const depReg = regByPath.get(depPath);
     if (depReg) {
@@ -95,7 +105,7 @@ const gatherImports = (
     const depKeys = keysByPath.get(depPath);
     if (depKeys) for (const [k, v] of depKeys) importedKeys.set(k, v);
   }
-  return ok({ imports, importedReg, importedKeys });
+  return ok({ imports, nsImports, importedReg, importedKeys });
 };
 
 // Load the whole graph reachable from `entry`, depth-first, detecting cycles.
@@ -335,6 +345,7 @@ export const moduleContext = (
     // Entry has no imports (graph = [entry]) — empty context.
     return ok({
       imports: new Map(),
+      nsImports: new Map(),
       importedReg: { ctor: new Map(), type: new Map() },
       importedKeys: new Map(),
     });

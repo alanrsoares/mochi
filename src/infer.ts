@@ -464,8 +464,14 @@ function inferPat(p: Pattern, ctx: Ctx): Result<PatResult, AlangError> {
       return ok({ type: tRecord(row), bindings });
     }
     case "pctor": {
-      const sc = ctx.env.get(p.ctor);
-      if (!sc) return err(typeErr(`unknown constructor '${p.ctor}'`, p.span));
+      const sc = p.ns ? ctx.ns.get(p.ns)?.get(p.ctor) : ctx.env.get(p.ctor);
+      if (!sc)
+        return err(
+          typeErr(
+            p.ns ? `'${p.ns}' has no member '${p.ctor}'` : `unknown constructor '${p.ctor}'`,
+            p.span,
+          ),
+        );
       // instantiated ctor type: argT1 -> ... -> ResultType
       let cur = instantiate(sc, ctx.fresh);
       const bindings = new Map<string, Type>();
@@ -564,13 +570,13 @@ function inferSeqPat(
 // their type; Uppercase names are nullary constructors; lowercase names are
 // type variables (shared by name within the signature, then generalized).
 
-// `imports` seeds the initial env with schemes brought in by `import` from other
-// modules — their generalized types, so a polymorphic import instantiates fresh
-// at each use site just like a local binding.
+// `imports` seeds the initial env with schemes from `import { … }`.
+// `nsImports` seeds user namespaces from `import * as` (ADR 0002).
 export type InferOptions = {
   open?: boolean;
   imports?: Env;
   namespaces?: Record<string, Record<string, Type>>; // qualified members (List.map, ...)
+  nsImports?: Map<string, Env>; // alias → export schemes
 };
 
 // The identity of the symbol under a span, when the inferrer knows it is binding
@@ -722,6 +728,24 @@ function resolveLetParams(
   return out;
 }
 
+// Seed prelude namespaces (Types → Schemes) and module `import * as` namespaces
+// (already-generalized Schemes) into the qualified-lookup table (ADR 0002).
+const seedNamespaces = (
+  env: Env,
+  subst: Subst,
+  namespaces: Record<string, Record<string, Type>> | undefined,
+  nsImports: Map<string, Env> | undefined,
+): Map<string, Map<string, Scheme>> => {
+  const ns = new Map<string, Map<string, Scheme>>();
+  for (const [nsName, members] of Object.entries(namespaces ?? {})) {
+    const schemes = new Map<string, Scheme>();
+    for (const [m, t] of Object.entries(members)) schemes.set(m, generalize(env, t, subst));
+    ns.set(nsName, schemes);
+  }
+  if (nsImports) for (const [alias, members] of nsImports) ns.set(alias, new Map(members));
+  return ns;
+};
+
 // Shared inference core. Always records per-node types; `inferProgram` drops
 // them, `inferProgramTypes` returns them (zonked against the final subst).
 function run(
@@ -738,15 +762,7 @@ function run(
   for (const [name, t] of Object.entries(builtins)) env.set(name, generalize(env, t, subst));
   if (opts.imports) for (const [name, sc] of opts.imports) env.set(name, sc);
 
-  // Qualified-namespace members (`List.map`, …): generalize each like a builtin,
-  // so a use site instantiates it fresh. Resolved in the `field` case.
-  const ns = new Map<string, Map<string, Scheme>>();
-  for (const [nsName, members] of Object.entries(opts.namespaces ?? {})) {
-    const schemes = new Map<string, Scheme>();
-    for (const [m, t] of Object.entries(members)) schemes.set(m, generalize(env, t, subst));
-    ns.set(nsName, schemes);
-  }
-
+  const ns = seedNamespaces(env, subst, opts.namespaces, opts.nsImports);
   const fresh = mkFresh(1000);
   const open = opts.open ?? false;
 

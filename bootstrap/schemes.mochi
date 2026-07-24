@@ -5,8 +5,26 @@
 // aliasRow / ctorScheme) that builds types and schemes from written TypeExprs.
 // Never calls back into the core, so it can live below it in the module DAG.
 
-import { TyName, TyArrow, TyApp, TyTuple, TyList } from "./ast.mochi"
-import { TyVar, TyCon, TyFn, TyRecord, RowEmpty, RowVar, RowExtend, tCon, tArrow, tRecord, tPrim, tTuple, rExtend, freshVar, freshRowVar, zonk, resolve } from "./types.mochi"
+import * as Ast from "./ast.mochi"
+import {
+  TyVar,
+  TyCon,
+  TyFn,
+  TyRecord,
+  RowEmpty,
+  RowVar,
+  RowExtend,
+  tCon,
+  tArrow,
+  tRecord,
+  tPrim,
+  tTuple,
+  rExtend,
+  freshVar,
+  freshRowVar,
+  zonk,
+  resolve
+} from "./types.mochi"
 import { primTypeNames } from "./ctors.mochi"
 
 // --- polymorphic type schemes ---
@@ -163,7 +181,7 @@ export let typeExprName = (name, vars, st, aliases, expanding) =>
 // lowercase names are type variables, shared by name within one signature
 // via the threaded `vars` cache.
 export let typeExprToType = (te, vars, st, aliases, expanding) => switch te {
-  | TyArrow(fromTe, toTe, _) => let (fromT, vars1, st1) = typeExprToType(
+  | Ast.TyArrow(fromTe, toTe, _) => let (fromT, vars1, st1) = typeExprToType(
       fromTe,
       vars,
       st,
@@ -178,7 +196,7 @@ export let typeExprToType = (te, vars, st, aliases, expanding) => switch te {
         expanding
       ) in
         (tArrow(fromT, toT), vars2, st2)
-  | TyApp(ctor, argTes, _) => let (args, vars1, st1) = typeExprListToType(
+  | Ast.TyApp(ctor, argTes, _) => let (args, vars1, st1) = typeExprListToType(
       argTes,
       vars,
       st,
@@ -197,7 +215,7 @@ export let typeExprToType = (te, vars, st, aliases, expanding) => switch te {
             (t, vars1, st2)
         | None => (tCon(ctor, args), vars1, st1)
       }
-  | TyTuple(elemTes, _) => let (elems, vars1, st1) = typeExprListToType(
+  | Ast.TyTuple(elemTes, _) => let (elems, vars1, st1) = typeExprListToType(
       elemTes,
       vars,
       st,
@@ -205,7 +223,7 @@ export let typeExprToType = (te, vars, st, aliases, expanding) => switch te {
       expanding
     ) in
       (tTuple(elems), vars1, st1)
-  | TyList(elemTe, _) => let (elemT, vars1, st1) = typeExprToType(
+  | Ast.TyList(elemTe, _) => let (elemT, vars1, st1) = typeExprToType(
       elemTe,
       vars,
       st,
@@ -213,7 +231,7 @@ export let typeExprToType = (te, vars, st, aliases, expanding) => switch te {
       expanding
     ) in
       (tCon("Array", [elemT]), vars1, st1)
-  | TyName(name, _) => typeExprName(name, vars, st, aliases, expanding)
+  | Ast.TyName(name, _) => typeExprName(name, vars, st, aliases, expanding)
 }
 
 let aliasLocalVarsFrom = (params, args, st) => switch params {

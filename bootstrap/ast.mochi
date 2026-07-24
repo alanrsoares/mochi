@@ -61,7 +61,8 @@ export type Pattern =
   | PStr(value: string, span: Span)
   | PTuple(elems: [Pattern], span: Span)
   | PRecord(fields: [PatField], span: Span)
-  | PCtor(ctor: string, args: [Pattern], span: Span)
+  // Bare `Circle(r)`, or `Alias.Circle(r)` after `import * as Alias` (ADR 0002).
+  | PCtor(ctor: string, args: [Pattern], ns: Option string, span: Span)
   | PArr(elems: [Pattern], rest: Option Pattern, span: Span)
   | PList(elems: [Pattern], rest: Option Pattern, span: Span)
   | POr(alts: [Pattern], span: Span)
@@ -82,3 +83,5 @@ export type Stmt =
   | SType(name: string, params: [string], ctors: [Ctor], alias: Option [AliasField], exported: bool, span: Span)
   | SExtern(name: string, nameSpan: Span, typeExpr: TypeExpr, module: string, imported: string, exported: bool, span: Span)
   | SImport(names: [Name], from: string, span: Span)
+  // import * as Alias from "./mod" — whole module as a user namespace (ADR 0002).
+  | SImportNs(alias: Name, from: string, span: Span)

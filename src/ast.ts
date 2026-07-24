@@ -79,7 +79,8 @@ export type Pattern =
   | { kind: "pstr"; value: string; span: Span } // "foo"
   | { kind: "ptuple"; elems: Pattern[]; span: Span } // (x, y) — tuple destructure, arity ≥ 2
   | { kind: "precord"; fields: PatField[]; span: Span } // { x, status: "err" }
-  | { kind: "pctor"; ctor: string; args: Pattern[]; span: Span } // Circle(r)
+  // Circle(r), or Alias.Circle(r) after `import * as Alias` (ADR 0002)
+  | { kind: "pctor"; ctor: string; args: Pattern[]; span: Span; ns?: string }
   // [], [x], [x, y], [head, ...tail] — `rest` (a bind/wild) captures the tail
   // after a `...`; null means the pattern matches a list of exactly `elems.length`.
   | { kind: "parr"; elems: Pattern[]; rest: Pattern | null; span: Span }
@@ -155,8 +156,10 @@ export type Stmt =
       exported?: boolean;
       span: Span;
     }
-  // import { a, b } from "./mod"  — bind exports of another mochi module
-  | { kind: "import"; names: ImportName[]; from: string; span: Span };
+  // import { a, b } from "./mod"  — named exports into the local env
+  // import * as Alias from "./mod" — whole module as a user namespace (ADR 0002);
+  //   `alias` set, `names` empty
+  | { kind: "import"; names: ImportName[]; alias: ImportName | null; from: string; span: Span };
 
 // Named narrowings of the union nodes. Signatures take these instead of an
 // inline `Extract<Expr, { kind: "…" }>` so the discriminant shape stays out of

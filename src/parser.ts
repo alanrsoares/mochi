@@ -668,6 +668,23 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     return { kind: "match", scrutinee, arms, span: to(start) };
   }
 
+  // Argument list of a ctor pattern, after the (already consumed) ctor name.
+  function parseCtorPatArgs(): Pattern[] {
+    const args: Pattern[] = [];
+    if (peek().t === "lparen") {
+      next();
+      if (peek().t !== "rparen") {
+        args.push(parsePattern());
+        while (peek().t === "comma") {
+          next();
+          args.push(parsePattern());
+        }
+      }
+      expect("rparen");
+    }
+    return args;
+  }
+
   function parsePattern(): Pattern {
     const tk = peek();
     switch (tk.t) {
@@ -712,19 +729,17 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
       case "id": {
         const { name, span: nameSpan } = expectId();
         if (name === "_") return { kind: "pwild", span: nameSpan };
+        // `Alias.Ctor(…)` after `import * as Alias` (ADR 0002), or bare `Ctor`.
+        if (peek().t === "dot") {
+          next();
+          const c = expectId();
+          if (!/^[A-Z]/.test(c.name))
+            fail(`expected constructor after '${name}.', got '${c.name}'`);
+          const args = parseCtorPatArgs();
+          return { kind: "pctor", ctor: c.name, args, ns: name, span: to(nameSpan) };
+        }
         if (/^[A-Z]/.test(name)) {
-          const args: Pattern[] = [];
-          if (peek().t === "lparen") {
-            next();
-            if (peek().t !== "rparen") {
-              args.push(parsePattern());
-              while (peek().t === "comma") {
-                next();
-                args.push(parsePattern());
-              }
-            }
-            expect("rparen");
-          }
+          const args = parseCtorPatArgs();
           return { kind: "pctor", ctor: name, args, span: to(nameSpan) };
         }
         return { kind: "pbind", name, span: nameSpan };
@@ -988,9 +1003,26 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     return { kind: "extern", name, nameSpan, typeExpr, module, imported, span: to(start) };
   }
 
-  // import { a, b } from "./mod"  — `from` is contextual (still a valid id).
+  // import { a, b } from "./mod"
+  // import * as Alias from "./mod"  — `as` / `from` are contextual ids (ADR 0002).
   function parseImport(): Stmt {
     const start = expect("import").span;
+    if (peek().t === "star") {
+      next();
+      const asKw = expectId();
+      if (asKw.name !== "as") fail(`expected 'as' in namespace import, got '${asKw.name}'`);
+      const alias = expectId();
+      const fromKw = expectId();
+      if (fromKw.name !== "from") fail(`expected 'from' in import, got '${fromKw.name}'`);
+      const from = expectStr().value;
+      return {
+        kind: "import",
+        names: [],
+        alias: { name: alias.name, span: alias.span },
+        from,
+        span: to(start),
+      };
+    }
     expect("lbrace");
     const names: ImportName[] = [];
     if (peek().t !== "rbrace") {
@@ -1006,7 +1038,7 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     const kw = expectId();
     if (kw.name !== "from") fail(`expected 'from' in import, got '${kw.name}'`);
     const from = expectStr().value;
-    return { kind: "import", names, from, span: to(start) };
+    return { kind: "import", names, alias: null, from, span: to(start) };
   }
 
   function parseStmt(): Stmt[] {

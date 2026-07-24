@@ -231,8 +231,10 @@ const pattern = (p: Pattern): string => {
       return `{ ${p.fields.map(patField).join(", ")} }`;
     case "ptuple":
       return `(${p.elems.map(pattern).join(", ")})`;
-    case "pctor":
-      return p.args.length === 0 ? p.ctor : `${p.ctor}(${p.args.map(pattern).join(", ")})`;
+    case "pctor": {
+      const head = p.ns ? `${p.ns}.${p.ctor}` : p.ctor;
+      return p.args.length === 0 ? head : `${head}(${p.args.map(pattern).join(", ")})`;
+    }
     case "parr": {
       const head = p.elems.map(pattern);
       const rest = p.rest ? [`...${pattern(p.rest)}`] : [];
@@ -295,8 +297,13 @@ const typeStmtD = (s: TypeStmt): Doc => {
   return seq(txt(`${head} =`), indent(cat(arms.map((a) => seq(hardline, a)))));
 };
 
-const importStmt = (s: ImportStmt): string =>
-  `import { ${s.names.map((n) => n.name).join(", ")} } from ${JSON.stringify(s.from)}`;
+const importStmtD = (s: ImportStmt): Doc => {
+  if (s.alias) return txt(`import * as ${s.alias.name} from ${JSON.stringify(s.from)}`);
+  const names = s.names.map((n) => txt(n.name));
+  return group(
+    seq(txt("import "), braced("{", "}", names), txt(` from ${JSON.stringify(s.from)}`)),
+  );
+};
 
 // ---- comments --------------------------------------------------------------
 
@@ -956,7 +963,7 @@ const stmtDoc = (stmts: Stmt[], i: number): StmtDoc => {
   const s = stmts[i]!;
   switch (s.kind) {
     case "import":
-      return { doc: txt(importStmt(s)), consumed: 1 };
+      return { doc: importStmtD(s), consumed: 1 };
     case "type":
       return { doc: seq(txt(expPrefix(s)), typeStmtD(s)), consumed: 1 };
     case "extern":

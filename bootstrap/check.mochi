@@ -14,7 +14,7 @@
 // - checkSeqExhaustive's TS 3-state (`error | null | undefined`) becomes the
 //   `SeqCheck` variant — a union beats null-vs-undefined encoding.
 
-import { ENum, EBool, EStr, ERef, ECall, ELambda, ELetIn, ELetBind, EPipe, ETernary, EMatch, ERecord, EField, ETuple, EArr, EList, ESet, EMap, EInterp, IPLit, IPExpr, SEExpr, SESpread, PWild, PBind, PLit, PBool, PStr, PTuple, PRecord, PCtor, PArr, PList, POr, TyName, TyArrow, TyApp, TyTuple, TyList, SLet, SType, SExtern, SImport } from "./ast.mochi"
+import * as Ast from "./ast.mochi"
 import { buildRegistry, primTypeNames } from "./ctors.mochi"
 
 // --- AST (mirrors src/ast.ts; `kind` strings become constructors) ---
@@ -57,39 +57,39 @@ let someOf = (f, xs) => someOfFrom(f, xs, 0)
 // --- span extractors (TS reads `.span` directly) ---
 
 let exprSpan = e => switch e {
-  | ENum(_, _, sp) => sp
-  | EBool(_, sp) => sp
-  | EStr(_, sp) => sp
-  | ERef(_, sp) => sp
-  | ECall(_, _, sp) => sp
-  | ELambda(_, _, sp) => sp
-  | ELetIn(_, _, _, _, sp) => sp
-  | ELetBind(_, _, _, _, sp) => sp
-  | EPipe(_, _, sp) => sp
-  | ETernary(_, _, _, sp) => sp
-  | EMatch(_, _, sp) => sp
-  | ERecord(_, _, sp) => sp
-  | EField(_, _, sp) => sp
-  | ETuple(_, sp) => sp
-  | EArr(_, sp) => sp
-  | EList(_, sp) => sp
-  | ESet(_, sp) => sp
-  | EMap(_, sp) => sp
-  | EInterp(_, sp) => sp
+  | Ast.ENum(_, _, sp) => sp
+  | Ast.EBool(_, sp) => sp
+  | Ast.EStr(_, sp) => sp
+  | Ast.ERef(_, sp) => sp
+  | Ast.ECall(_, _, sp) => sp
+  | Ast.ELambda(_, _, sp) => sp
+  | Ast.ELetIn(_, _, _, _, sp) => sp
+  | Ast.ELetBind(_, _, _, _, sp) => sp
+  | Ast.EPipe(_, _, sp) => sp
+  | Ast.ETernary(_, _, _, sp) => sp
+  | Ast.EMatch(_, _, sp) => sp
+  | Ast.ERecord(_, _, sp) => sp
+  | Ast.EField(_, _, sp) => sp
+  | Ast.ETuple(_, sp) => sp
+  | Ast.EArr(_, sp) => sp
+  | Ast.EList(_, sp) => sp
+  | Ast.ESet(_, sp) => sp
+  | Ast.EMap(_, sp) => sp
+  | Ast.EInterp(_, sp) => sp
 }
 
 let patSpan = p => switch p {
-  | PWild(sp) => sp
-  | PBind(_, sp) => sp
-  | PLit(_, _, sp) => sp
-  | PBool(_, sp) => sp
-  | PStr(_, sp) => sp
-  | PTuple(_, sp) => sp
-  | PRecord(_, sp) => sp
-  | PCtor(_, _, sp) => sp
-  | PArr(_, _, sp) => sp
-  | PList(_, _, sp) => sp
-  | POr(_, sp) => sp
+  | Ast.PWild(sp) => sp
+  | Ast.PBind(_, sp) => sp
+  | Ast.PLit(_, _, sp) => sp
+  | Ast.PBool(_, sp) => sp
+  | Ast.PStr(_, sp) => sp
+  | Ast.PTuple(_, sp) => sp
+  | Ast.PRecord(_, sp) => sp
+  | Ast.PCtor(_, _, _, sp) => sp
+  | Ast.PArr(_, _, sp) => sp
+  | Ast.PList(_, _, sp) => sp
+  | Ast.POr(_, sp) => sp
 }
 
 // --- pattern shape predicates ---
@@ -97,24 +97,24 @@ let patSpan = p => switch p {
 // A pattern is a catch-all when it always matches. A record pattern does so
 // only when every field just binds; a bare rest matches any list.
 let isCatchAll = p => switch p {
-  | PWild(_) => true
-  | PBind(_, _) => true
-  | PRecord(fields, _) => allOf(f => isCatchAll(f.pat), fields)
-  | PTuple(elems, _) => allOf(isCatchAll, elems)
-  | PArr(elems, rest, _) => Array.length(elems) == 0 && Option.isSome(rest)
-  | PList(elems, rest, _) => Array.length(elems) == 0 && Option.isSome(rest)
+  | Ast.PWild(_) => true
+  | Ast.PBind(_, _) => true
+  | Ast.PRecord(fields, _) => allOf(f => isCatchAll(f.pat), fields)
+  | Ast.PTuple(elems, _) => allOf(isCatchAll, elems)
+  | Ast.PArr(elems, rest, _) => Array.length(elems) == 0 && Option.isSome(rest)
+  | Ast.PList(elems, rest, _) => Array.length(elems) == 0 && Option.isSome(rest)
   | _ => false
 }
 
-let isPList = p => switch p { | PList(_, _, _) => true | _ => false }
-let isPCtor = p => switch p { | PCtor(_, _, _) => true | _ => false }
-let ctorNameOf = p => switch p { | PCtor(name, _, _) => name | _ => "" }
+let isPList = p => switch p { | Ast.PList(_, _, _) => true | _ => false }
+let isPCtor = p => switch p { | Ast.PCtor(_, _, _, _) => true | _ => false }
+let ctorNameOf = p => switch p { | Ast.PCtor(name, _, _, _) => name | _ => "" }
 
 // eager `[...]` and lazy `@{...}` share one exhaustiveness rule; both carry
 // (elems, rest).
 let seqElemsRest = p => switch p {
-  | PArr(elems, rest, _) => Some((elems, rest))
-  | PList(elems, rest, _) => Some((elems, rest))
+  | Ast.PArr(elems, rest, _) => Some((elems, rest))
+  | Ast.PList(elems, rest, _) => Some((elems, rest))
   | _ => None
 }
 
@@ -125,7 +125,7 @@ let seqElemsRest = p => switch p {
 // patterns cannot nest — matching pulls from the sequence) ---
 
 let checkPattern = (p, reg, top) => switch p {
-  | PCtor(ctor, args, sp) => switch Map.get(ctor, reg.ctors) {
+  | Ast.PCtor(ctor, args, _, sp) => switch Map.get(ctor, reg.ctors) {
       | None => Some(checkErr("unknown constructor '${ctor}'", sp))
       | Some(info) => Array.length(args) == info.arity
           ? firstSome(a => checkPattern(a, reg, false), args)
@@ -136,16 +136,19 @@ let checkPattern = (p, reg, top) => switch p {
             )
           )
     }
-  | PRecord(fields, _) => firstSome(
+  | Ast.PRecord(fields, _) => firstSome(
       f => checkPattern(f.pat, reg, false),
       fields
     )
-  | PTuple(elems, _) => firstSome(el => checkPattern(el, reg, false), elems)
-  | PArr(elems, rest, _) => firstSome(el => checkPattern(el, reg, false), elems)
+  | Ast.PTuple(elems, _) => firstSome(el => checkPattern(el, reg, false), elems)
+  | Ast.PArr(elems, rest, _) => firstSome(
+      el => checkPattern(el, reg, false),
+      elems
+    )
       |> Option.orElse(
         switch rest { | Some(r) => checkPattern(r, reg, false) | None => None }
       )
-  | PList(elems, rest, sp) => top
+  | Ast.PList(elems, rest, sp) => top
       ? firstSome(el => checkPattern(el, reg, false), elems)
         |> Option.orElse(
           switch rest {
@@ -159,7 +162,7 @@ let checkPattern = (p, reg, top) => switch p {
           sp
         )
       )
-  | POr(alts, sp) => checkOrPattern(alts, sp, reg)
+  | Ast.POr(alts, sp) => checkOrPattern(alts, sp, reg)
   | _ => None
 }
 
@@ -184,12 +187,12 @@ let binderPathsElems = (elems, i, at, acc) => switch Array.get(i, elems) {
       binderPathsElems(elems, i + 1, at, acc2)
 }
 let binderPaths = (p, at, acc) => switch p {
-  | PBind(name, sp) => Map.has(name, acc)
+  | Ast.PBind(name, sp) => Map.has(name, acc)
       ? Err(checkErr("pattern binds '${name}' more than once", sp))
       : Ok(Map.set(name, at, acc))
-  | PCtor(_, args, _) => binderPathsArgs(args, 0, at, acc)
-  | PRecord(fields, _) => binderPathsFields(fields, 0, at, acc)
-  | PTuple(elems, _) => binderPathsElems(elems, 0, at, acc)
+  | Ast.PCtor(_, args, _, _) => binderPathsArgs(args, 0, at, acc)
+  | Ast.PRecord(fields, _) => binderPathsFields(fields, 0, at, acc)
+  | Ast.PTuple(elems, _) => binderPathsElems(elems, 0, at, acc)
   | _ => Ok(acc)
 }
 
@@ -343,7 +346,7 @@ let checkSeqExhaustive = (arms, mSpan) =>
             )
           )
 
-let isPBoolOf = (v, p) => switch p { | PBool(b, _) => b == v | _ => false }
+let isPBoolOf = (v, p) => switch p { | Ast.PBool(b, _) => b == v | _ => false }
 
 // No constructor arms → literal/wildcard/bool switch. A catch-all makes it
 // total; so does covering both boolean cases (bool is a closed two-case type).
@@ -374,7 +377,7 @@ let checkNonCtor = (arms, mSpan, hasCatchAll) =>
 let ctorLoop = (arms, i, reg, owner, covered) => switch Array.get(i, arms) {
   | None => Ok((owner, covered))
   | Some(a) => switch a.pattern {
-      | PCtor(ctor, args, sp) => switch Map.get(ctor, reg.ctors) {
+      | Ast.PCtor(ctor, args, _, sp) => switch Map.get(ctor, reg.ctors) {
           | None => Err(checkErr("unknown constructor '${ctor}'", sp))
           | Some(info) => Array.length(args) != info.arity
               ? Err(
@@ -435,7 +438,7 @@ let checkCtorArms = (ctorArms, mSpan, reg, hasCatchAll) => switch ctorLoop(ctorA
 // arm's guard (ADR 0022) — dropping `body` normalizes the shape so the array
 // stays homogeneous.
 let leavesOfArm = a => switch a.pattern {
-  | POr(alts, _) => alts |> map(alt => { pattern: alt, guard: a.guard })
+  | Ast.POr(alts, _) => alts |> map(alt => { pattern: alt, guard: a.guard })
   | _ => [{ pattern: a.pattern, guard: a.guard }]
 }
 
@@ -466,23 +469,23 @@ let checkMatch = (arms, mSpan, reg) => switch firstSome(a => checkPattern(a.patt
 // node itself) — mirrors TS forEachMatch + `found ??=` exactly ---
 
 let checkExpr = (e, reg) => switch e {
-  | ENum(_, _, _) => None
-  | EBool(_, _) => None
-  | EStr(_, _) => None
-  | ERef(_, _) => None
-  | ECall(fn, args, _) => checkExpr(fn, reg)
+  | Ast.ENum(_, _, _) => None
+  | Ast.EBool(_, _) => None
+  | Ast.EStr(_, _) => None
+  | Ast.ERef(_, _) => None
+  | Ast.ECall(fn, args, _) => checkExpr(fn, reg)
       |> Option.orElse(firstSome(a => checkExpr(a, reg), args))
-  | ELambda(_, body, _) => checkExpr(body, reg)
-  | ELetIn(_, _, value, body, _) => checkExpr(value, reg)
+  | Ast.ELambda(_, body, _) => checkExpr(body, reg)
+  | Ast.ELetIn(_, _, value, body, _) => checkExpr(value, reg)
       |> Option.orElse(checkExpr(body, reg))
-  | ELetBind(_, _, value, body, _) => checkExpr(value, reg)
+  | Ast.ELetBind(_, _, value, body, _) => checkExpr(value, reg)
       |> Option.orElse(checkExpr(body, reg))
-  | EPipe(left, right, _) => checkExpr(left, reg)
+  | Ast.EPipe(left, right, _) => checkExpr(left, reg)
       |> Option.orElse(checkExpr(right, reg))
-  | ETernary(cond, thenE, elseE, _) => checkExpr(cond, reg)
+  | Ast.ETernary(cond, thenE, elseE, _) => checkExpr(cond, reg)
       |> Option.orElse(checkExpr(thenE, reg))
       |> Option.orElse(checkExpr(elseE, reg))
-  | EMatch(scrutinee, arms, sp) => checkExpr(scrutinee, reg)
+  | Ast.EMatch(scrutinee, arms, sp) => checkExpr(scrutinee, reg)
       |> Option.orElse(
         firstSome(
           a =>
@@ -492,31 +495,46 @@ let checkExpr = (e, reg) => switch e {
         )
       )
       |> Option.orElse(checkMatch(arms, sp, reg))
-  | ERecord(fields, spread, _) => switch spread {
+  | Ast.ERecord(fields, spread, _) => switch spread {
       | Some(s) => checkExpr(s, reg)
       | None => None
     }
       |> Option.orElse(firstSome(f => checkExpr(f.value, reg), fields))
-  | EField(target, _, _) => checkExpr(target, reg)
-  | ETuple(elements, _) => firstSome(el => checkExpr(el, reg), elements)
-  | EArr(elements, _) => firstSome(
-      el => checkExpr(switch el { | SEExpr(e) => e | SESpread(e) => e }, reg),
+  | Ast.EField(target, _, _) => checkExpr(target, reg)
+  | Ast.ETuple(elements, _) => firstSome(el => checkExpr(el, reg), elements)
+  | Ast.EArr(elements, _) => firstSome(
+      el =>
+        checkExpr(
+          switch el { | Ast.SEExpr(e) => e | Ast.SESpread(e) => e },
+          reg
+        ),
       elements
     )
-  | EList(elements, _) => firstSome(
-      el => checkExpr(switch el { | SEExpr(e) => e | SESpread(e) => e }, reg),
+  | Ast.EList(elements, _) => firstSome(
+      el =>
+        checkExpr(
+          switch el { | Ast.SEExpr(e) => e | Ast.SESpread(e) => e },
+          reg
+        ),
       elements
     )
-  | ESet(elements, _) => firstSome(
-      el => checkExpr(switch el { | SEExpr(e) => e | SESpread(e) => e }, reg),
+  | Ast.ESet(elements, _) => firstSome(
+      el =>
+        checkExpr(
+          switch el { | Ast.SEExpr(e) => e | Ast.SESpread(e) => e },
+          reg
+        ),
       elements
     )
-  | EMap(entries, _) => firstSome(
+  | Ast.EMap(entries, _) => firstSome(
       en => checkExpr(en.key, reg) |> Option.orElse(checkExpr(en.value, reg)),
       entries
     )
-  | EInterp(parts, _) => firstSome(
-      p => switch p { | IPLit(_) => None | IPExpr(ex) => checkExpr(ex, reg) },
+  | Ast.EInterp(parts, _) => firstSome(
+      p => switch p {
+        | Ast.IPLit(_) => None
+        | Ast.IPExpr(ex) => checkExpr(ex, reg)
+      },
       parts
     )
 }
@@ -538,18 +556,24 @@ let reservedErr = (name, sp) =>
 let checkReservedNames = stmts =>
   firstSome(
     s => switch s {
-      | SType(name, _, _, _, _, sp) => Array.contains(name, redeclarableTypes)
+      | Ast.SType(name, _, _, _, _, sp) => Array.contains(
+          name,
+          redeclarableTypes
+        )
           ? None
           : Array.contains(name, reservedNames)
           ? Some(reservedErr(name, sp))
           : None
-      | SLet(name, _, _, _, _, _, sp) => Array.contains(name, reservedNames)
+      | Ast.SLet(name, _, _, _, _, _, sp) => Array.contains(name, reservedNames)
           ? Some(reservedErr(name, sp))
           : None
-      | SExtern(name, _, _, _, _, _, sp) => Array.contains(name, reservedNames)
+      | Ast.SExtern(name, _, _, _, _, _, sp) => Array.contains(
+          name,
+          reservedNames
+        )
           ? Some(reservedErr(name, sp))
           : None
-      | SImport(names, _, _) => firstSome(
+      | Ast.SImport(names, _, _) => firstSome(
           n =>
             Array.contains(n.name, reservedNames)
               ? Some(
@@ -561,6 +585,14 @@ let checkReservedNames = stmts =>
               : None,
           names
         )
+      | Ast.SImportNs(alias, _, _) => Array.contains(alias.name, reservedNames)
+          ? Some(
+            checkErr(
+              "'${alias.name}' is a reserved collection namespace and cannot be imported",
+              alias.span
+            )
+          )
+          : None
     },
     stmts
   )
@@ -573,22 +605,22 @@ let isUpperStart = s => switch Str.codeAt(0, s) {
 // A lowercase leaf that is neither a declared param nor a primitive is a
 // stray type variable (would be existential) — report (name, span).
 let strayTypeVar = (te, params) => switch te {
-  | TyName(name, sp) => isUpperStart(
+  | Ast.TyName(name, sp) => isUpperStart(
       name
     ) || (Array.contains(name, primTypeNames) || Array.contains(name, params))
       ? None
       : Some((name, sp))
-  | TyArrow(from, to, _) => strayTypeVar(from, params)
+  | Ast.TyArrow(from, to, _) => strayTypeVar(from, params)
       |> Option.orElse(strayTypeVar(to, params))
-  | TyApp(_, args, _) => firstSome(a => strayTypeVar(a, params), args)
-  | TyTuple(elems, _) => firstSome(el => strayTypeVar(el, params), elems)
-  | TyList(elem, _) => strayTypeVar(elem, params)
+  | Ast.TyApp(_, args, _) => firstSome(a => strayTypeVar(a, params), args)
+  | Ast.TyTuple(elems, _) => firstSome(el => strayTypeVar(el, params), elems)
+  | Ast.TyList(elem, _) => strayTypeVar(elem, params)
 }
 
 let checkCtorFieldVars = stmts =>
   firstSome(
     s => switch s {
-      | SType(name, params, ctors, _, _, _) => firstSome(
+      | Ast.SType(name, params, ctors, _, _, _) => firstSome(
           c =>
             firstSome(
               f => switch strayTypeVar(f.fieldType, params) {
@@ -646,7 +678,7 @@ export let checkWith = (stmts, imported) => switch checkReservedNames(stmts) {
             reg0.types
           )
         } in
-          switch firstSome(s => switch s { | SLet(_, _, _, value, _, _, _) => checkExpr(value, reg) | _ => None }, stmts) {
+          switch firstSome(s => switch s { | Ast.SLet(_, _, _, value, _, _, _) => checkExpr(value, reg) | _ => None }, stmts) {
             | Some(e) => Err(e)
             | None => Ok(stmts)
           }

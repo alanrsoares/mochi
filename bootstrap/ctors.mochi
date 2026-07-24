@@ -10,7 +10,7 @@
 // registry as a structural value and re-declare its record shape locally
 // where they annotate (ADR 0005; module.mochi's Registry precedent).
 
-import { SType, TyName } from "./ast.mochi"
+import * as Ast from "./ast.mochi"
 
 // --- shared shapes (structural; consumers re-declare, never import) ---
 
@@ -52,7 +52,9 @@ export let builtinTypeDecls = [
     ctors: [
       {
         name: "Some",
-        fields: [{ name: Some("value"), fieldType: TyName("a", builtinSpan) }]
+        fields: [
+          { name: Some("value"), fieldType: Ast.TyName("a", builtinSpan) }
+        ]
       },
       { name: "None", fields: [] }
     ]
@@ -63,11 +65,15 @@ export let builtinTypeDecls = [
     ctors: [
       {
         name: "Ok",
-        fields: [{ name: Some("value"), fieldType: TyName("a", builtinSpan) }]
+        fields: [
+          { name: Some("value"), fieldType: Ast.TyName("a", builtinSpan) }
+        ]
       },
       {
         name: "Err",
-        fields: [{ name: Some("error"), fieldType: TyName("e", builtinSpan) }]
+        fields: [
+          { name: Some("error"), fieldType: Ast.TyName("e", builtinSpan) }
+        ]
       }
     ]
   }
@@ -75,7 +81,7 @@ export let builtinTypeDecls = [
 
 let declaresType = (stmts, i, name) => switch Array.get(i, stmts) {
   | None => false
-  | Some(SType(n, _, _, _, _, _)) => n == name
+  | Some(Ast.SType(n, _, _, _, _, _)) => n == name
       ? true
       : declaresType(stmts, i + 1, name)
   | Some(_) => declaresType(stmts, i + 1, name)
@@ -134,7 +140,7 @@ let ctorsInto = (ctors, i, owner, sp, acc) => switch Array.get(i, ctors) {
 
 let buildLoop = (stmts, i, reg) => switch Array.get(i, stmts) {
   | None => Ok(reg)
-  | Some(SType(name, _, ctors, _, _, sp)) => Map.has(name, reg.types)
+  | Some(Ast.SType(name, _, ctors, _, _, sp)) => Map.has(name, reg.types)
       ? Err(ctorErr("duplicate type '${name}'", sp))
       : let? cs = ctorsInto(ctors, 0, name, sp, reg.ctors) in
         buildLoop(
@@ -161,7 +167,7 @@ export let buildRegistry = stmts =>
 // every constructor.
 let exportedRegLoop = (stmts, i, reg) => switch Array.get(i, stmts) {
   | None => reg
-  | Some(SType(name, _, ctors, _, true, _)) => exportedRegLoop(
+  | Some(Ast.SType(name, _, ctors, _, true, _)) => exportedRegLoop(
       stmts,
       i + 1,
       {
@@ -183,7 +189,7 @@ let ctorKeysInto = (ctors, i, m) => switch Array.get(i, ctors) {
 // Every declared ctor's keys (user decls override imported seed keys).
 let ctorKeysFrom = (stmts, i, m) => switch Array.get(i, stmts) {
   | None => m
-  | Some(SType(_, _, ctors, _, _, _)) => ctorKeysFrom(
+  | Some(Ast.SType(_, _, ctors, _, _, _)) => ctorKeysFrom(
       stmts,
       i + 1,
       ctorKeysInto(ctors, 0, m)
@@ -216,7 +222,7 @@ export let seedBuiltinCtorKeys = (stmts, m) =>
 // keys (`Some(value)` → `{ value }`, not positional `{ _0 }`).
 let exportedCtorKeysFrom = (stmts, i, m) => switch Array.get(i, stmts) {
   | None => m
-  | Some(SType(_, _, ctors, _, true, _)) => exportedCtorKeysFrom(
+  | Some(Ast.SType(_, _, ctors, _, true, _)) => exportedCtorKeysFrom(
       stmts,
       i + 1,
       ctorKeysInto(ctors, 0, m)

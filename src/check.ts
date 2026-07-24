@@ -338,13 +338,19 @@ const checkReservedNames = (prog: Program): AlangError | null => {
       RESERVED_NAMES.has(s.name)
     )
       return checkErr(`'${s.name}' is a reserved collection namespace and cannot be bound`, s.span);
-    if (s.kind === "import")
+    if (s.kind === "import") {
+      if (s.alias && RESERVED_NAMES.has(s.alias.name))
+        return checkErr(
+          `'${s.alias.name}' is a reserved collection namespace and cannot be imported`,
+          s.alias.span,
+        );
       for (const n of s.names)
         if (RESERVED_NAMES.has(n.name))
           return checkErr(
             `'${n.name}' is a reserved collection namespace and cannot be imported`,
             n.span,
           );
+    }
   }
   return null;
 };

@@ -3,7 +3,7 @@
 // compileGraph is built on top:
 //   check.mochi     — checkWith(stmts, importedReg), exportedRegistry(stmts)
 //   codegen.mochi   — exportedCtorKeys(stmts)
-//   infer.mochi     — inferProgramImports(stmts, builtins, namespaces, open, imports)
+//   infer.mochi     — inferProgramImports(stmts, builtins, namespaces, open, imports, nsImports)
 // We build the bootstrap graph to JS and drive the emitted functions in-process.
 
 import { beforeAll, expect, test } from "bun:test";
@@ -32,6 +32,7 @@ let inferProgramImports: (
   n: unknown,
   open: boolean,
   imports: Map<string, Scheme>,
+  nsImports: Map<string, Map<string, Scheme>>,
 ) => Res<Map<string, Scheme>>;
 let builtins: unknown;
 let namespaces: unknown;
@@ -104,7 +105,9 @@ test("inferProgramImports uses an imported scheme; open-world infer alone does n
   // with add's number domain. Open-world (no import) leaves f a fresh var → ok.
   const importer = parseAl("let bad = add(f(1), 2)\n");
   expect(inferProgram(importer, builtins, namespaces, true)._tag).toBe("Ok");
-  expect(inferProgramImports(importer, builtins, namespaces, true, imports)._tag).toBe("Err");
+  expect(inferProgramImports(importer, builtins, namespaces, true, imports, new Map())._tag).toBe(
+    "Err",
+  );
 });
 
 test("inferProgram is the zero-imports case of inferProgramImports", () => {

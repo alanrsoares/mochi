@@ -28,6 +28,35 @@ test("normalizes an import statement", () => {
   expect(fmt('import {a,b}from"./mod"')).toBe('import { a, b } from "./mod"\n');
 });
 
+test("wraps a long named import one name per line", () => {
+  const names = [
+    "ENum",
+    "EBool",
+    "EStr",
+    "ERef",
+    "ECall",
+    "ELambda",
+    "ELetIn",
+    "ELetBind",
+    "EPipe",
+    "ETernary",
+    "EMatch",
+    "ERecord",
+  ];
+  const src = `import {${names.join(",")}}from"./ast.mochi"`;
+  expect(fmt(src)).toBe(`import {\n  ${names.join(",\n  ")}\n} from "./ast.mochi"\n`);
+});
+
+test("formats a namespace import", () => {
+  expect(fmt('import*as Ast from"./ast.mochi"')).toBe('import * as Ast from "./ast.mochi"\n');
+});
+
+test("formats a qualified ctor pattern", () => {
+  expect(fmt("let f=o=>switch o{|Opt.Some(v)=>v|Opt.None=>0}")).toBe(
+    "let f = o => switch o { | Opt.Some(v) => v | Opt.None => 0 }\n",
+  );
+});
+
 test("keeps the export prefix on a binding", () => {
   expect(fmt("export let x=1")).toBe("export let x = 1\n");
 });

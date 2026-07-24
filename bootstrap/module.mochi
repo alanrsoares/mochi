@@ -22,13 +22,9 @@ extern namespaceRuntime : Map string (Map string string) = "./prelude.gen.mjs" "
 extern preludeJsDefs : Map string string = "./prelude.gen.mjs" "preludeJsDefs"
 extern runtimeDeps : Map string [string] = "./prelude.gen.mjs" "runtimeDeps"
 
-// Full AST, re-declared to match parser/check/infer/codegen. Only `SImport` is
-// destructured here (every other stmt flows opaquely to the passes), but the
-// CLOSED-WORLD build that ships `mochic` (cli.mochi → module.mochi → the passes)
-// unifies same-named variant types by structure — so a 1-ctor `Stmt` would
-// clash with parser's 4-ctor `Stmt`. Declaring the whole shape keeps it
-// consistent (the `_tag` runtime shape makes the declarations interchangeable).
-import { SImport } from "./ast.mochi"
+// Stmt/Pattern ctors via namespace import (ADR 0002) — only SImport/SImportNs are
+// destructured here; other stmts flow opaquely to the passes.
+import * as Ast from "./ast.mochi"
 
 // One loaded module: its canonical path and parsed statements.
 type Loaded = { path: string, stmts: [Stmt] }
@@ -51,7 +47,12 @@ let parseModule = lex >> Result.flatMap(parse)
 let importFromsFrom = (stmts, i, acc) => switch Array.get(i, stmts) {
   | None => acc
   | Some(s) => switch s {
-      | SImport(_, from, _) => importFromsFrom(
+      | Ast.SImport(_, from, _) => importFromsFrom(
+          stmts,
+          i + 1,
+          Array.append(from, acc)
+        )
+      | Ast.SImportNs(_, from, _) => importFromsFrom(
           stmts,
           i + 1,
           Array.append(from, acc)
@@ -160,6 +161,7 @@ let resolveNames = (names, from, depExports, res) => switch names {
           depExports,
           {
             imports: Map.set(n.name, sc, res.imports),
+            nsImports: res.nsImports,
             reg: res.reg,
             keys: res.keys
           }
@@ -167,11 +169,14 @@ let resolveNames = (names, from, depExports, res) => switch names {
     }
 }
 
-// Fold a module's import statements into resolved { imports, reg, keys }: the
-// schemes it names, and the merged registry + ctor keys of every dep it pulls.
+// Fold a module's import statements into resolved { imports, nsImports, reg,
+// keys }: the schemes named imports pull in, the dep's full export table
+// keyed by alias for `import * as` (ADR 0002), and the merged registry +
+// ctor keys of every dep it pulls (regardless of import form — the ADR's
+// "full ctor registry and field keys still merge into the importer").
 let resolveImportsFrom = (stmts, i, path, ctx, res) => switch Array.get(i, stmts) {
   | None => Ok(res)
-  | Some(SImport(names, from, _)) => let dp = resolveImport(path, from) in
+  | Some(Ast.SImport(names, from, _)) => let dp = resolveImport(path, from) in
     let depExports = Map.getOr(#{}, dp, ctx.exportsByPath) in
     let depReg = Map.getOr(emptyReg, dp, ctx.regByPath) in
     let depKeys = Map.getOr(#{}, dp, ctx.keysByPath) in
@@ -184,6 +189,7 @@ let resolveImportsFrom = (stmts, i, path, ctx, res) => switch Array.get(i, stmts
             ctx,
             {
               imports: res1.imports,
+              nsImports: res1.nsImports,
               reg: {
                 ctors: mergeMap(depReg.ctors, res1.reg.ctors),
                 types: mergeMap(depReg.types, res1.reg.types)
@@ -192,17 +198,36 @@ let resolveImportsFrom = (stmts, i, path, ctx, res) => switch Array.get(i, stmts
             }
           )
       }
+  | Some(Ast.SImportNs(alias, from, _)) => let dp = resolveImport(path, from) in
+    let depExports = Map.getOr(#{}, dp, ctx.exportsByPath) in
+    let depReg = Map.getOr(emptyReg, dp, ctx.regByPath) in
+    let depKeys = Map.getOr(#{}, dp, ctx.keysByPath) in
+      resolveImportsFrom(
+        stmts,
+        i + 1,
+        path,
+        ctx,
+        {
+          imports: res.imports,
+          nsImports: Map.set(alias.name, depExports, res.nsImports),
+          reg: {
+            ctors: mergeMap(depReg.ctors, res.reg.ctors),
+            types: mergeMap(depReg.types, res.reg.types)
+          },
+          keys: mergeMap(depKeys, res.keys)
+        }
+      )
   | Some(_) => resolveImportsFrom(stmts, i + 1, path, ctx, res)
 }
 
 // Compile one module: resolve imports, check (with imported registry), infer
 // (with imported schemes), codegen (with imported ctor keys), then publish this
 // module's own exports/registry/keys into the ctx for later dependents.
-let compileOne = (loaded, ctx) => switch resolveImportsFrom(loaded.stmts, 0, loaded.path, ctx, { imports: #{}, reg: emptyReg, keys: #{} }) {
+let compileOne = (loaded, ctx) => switch resolveImportsFrom(loaded.stmts, 0, loaded.path, ctx, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{} }) {
   | Err(e) => Err(e)
   | Ok(res) => switch checkWith(loaded.stmts, res.reg) {
       | Err(e) => Err(e)
-      | Ok(_) => switch inferProgramImports(loaded.stmts, builtins, namespaces, true, res.imports) {
+      | Ok(_) => switch inferProgramImports(loaded.stmts, builtins, namespaces, true, res.imports, res.nsImports) {
           | Err(e) => Err(e)
           | Ok(env) => let js = codegen(
               loaded.stmts,

@@ -20,7 +20,7 @@
 // - TS `for`/`forEach`/`flatMap` loops become tail-recursive `Array.get(i,
 //   xs)` cursor loops (matches check.mochi/infer.mochi's established idiom).
 
-import { ENum, EBool, EStr, ERef, ECall, ELambda, ELetIn, ELetBind, EPipe, ETernary, EMatch, ERecord, EField, ETuple, EArr, EList, ESet, EMap, EInterp, IPLit, IPExpr, SEExpr, SESpread, PWild, PBind, PLit, PBool, PStr, PTuple, PRecord, PCtor, PArr, PList, POr, LPName, LPRecord, LPTuple, SLet, SType, SExtern, SImport } from "./ast.mochi"
+import * as Ast from "./ast.mochi"
 
 import { keysOf, ctorKeysFromStmts, seedBuiltinCtorKeys } from "./ctors.mochi"
 // One chunk of a "…${a}…" interpolation (ADR 0023): a literal run, or a
@@ -87,7 +87,7 @@ let keyAt = (ctor, i, ctx) => switch Map.get(ctor, ctx.keys) {
 // `Ns.member` access on a namespace ref (`List.map`) -> the JS identifier
 // its runtime is defined under, None if it isn't namespace access.
 let nsRuntimeId = (target, name, ctx) => switch target {
-  | ERef(refName, _) => switch Map.get(refName, ctx.ns) {
+  | Ast.ERef(refName, _) => switch Map.get(refName, ctx.ns) {
       | Some(members) => Map.get(name, members)
       | None => None
     }
@@ -100,7 +100,7 @@ let nsRuntimeId = (target, name, ctx) => switch target {
 // sound to lower a multi-arg function into a single `_curry`-wrapped JS
 // function instead of nested closures (CRITIQUE §4.4).
 let collapseLambda = (params, body) => switch body {
-  | ELambda(params2, body2, _) => collapseLambda(
+  | Ast.ELambda(params2, body2, _) => collapseLambda(
       Array.concat(params, params2),
       body2
     )
@@ -110,12 +110,12 @@ let collapseLambda = (params, body) => switch body {
 // ---- expressions -----------------------------------------------------------
 
 let genExpr = (e, ctx) => switch e {
-  | ENum(_, raw, _) => raw
-  | EBool(value, _) => value ? "true" : "false"
-  | EStr(value, _) => jsStringLit(value)
-  | ERef(name, _) => name
-  | ECall(fn, args, _) => "${genCallee(fn, ctx)}(${Str.join(", ", args |> map(a => genExpr(a, ctx)))})"
-  | ELambda(params, body, _) => let (cparams, cbody) = collapseLambda(
+  | Ast.ENum(_, raw, _) => raw
+  | Ast.EBool(value, _) => value ? "true" : "false"
+  | Ast.EStr(value, _) => jsStringLit(value)
+  | Ast.ERef(name, _) => name
+  | Ast.ECall(fn, args, _) => "${genCallee(fn, ctx)}(${Str.join(", ", args |> map(a => genExpr(a, ctx)))})"
+  | Ast.ELambda(params, body, _) => let (cparams, cbody) = collapseLambda(
       params,
       body
     ) in
@@ -125,19 +125,19 @@ let genExpr = (e, ctx) => switch e {
       Array.length(cparams) >= 2
         ? "_curry(${show(Array.length(cparams))}, ${arrow})"
         : arrow
-  | ELetIn(name, _, value, body, _) =>
+  | Ast.ELetIn(name, _, value, body, _) =>
     // let x = v in b -> an IIFE binding x: `((x) => b)(v)`. Non-recursive, so
     // plain arg-application is enough; nested let-ins chain as curried IIFEs.
     "((${name}) => ${genLambdaBody(body, ctx)})(${genExpr(value, ctx)})"
-  | ELetBind(param, _, value, body, _) =>
+  | Ast.ELetBind(param, _, value, body, _) =>
     // let? p = v in b -> the Result bind: `_Result_flatMap((p) => b)(v)`.
     "_Result_flatMap((${genParam(param)}) => ${genLambdaBody(body, ctx)})(${genExpr(value, ctx)})"
-  | EPipe(left, right, _) =>
+  | Ast.EPipe(left, right, _) =>
     // desugar inline: a |> f  ->  f(a)
     "${genCallee(right, ctx)}(${genExpr(left, ctx)})"
-  | ETernary(cond, thenE, elseE, _) => "(${genExpr(cond, ctx)} ? ${genExpr(thenE, ctx)} : ${genExpr(elseE, ctx)})"
-  | EMatch(scrutinee, arms, _) => genMatch(scrutinee, arms, ctx)
-  | ERecord(fields, spread, _) =>
+  | Ast.ETernary(cond, thenE, elseE, _) => "(${genExpr(cond, ctx)} ? ${genExpr(thenE, ctx)} : ${genExpr(elseE, ctx)})"
+  | Ast.EMatch(scrutinee, arms, _) => genMatch(scrutinee, arms, ctx)
+  | Ast.ERecord(fields, spread, _) =>
     // `{ ...base, f: v }` (ADR 0021) -> native JS object spread; `parts.length
     // === 0` (bare `{}`) is only possible with no spread and no fields.
     let fieldStrs = Str.join(
@@ -151,35 +151,35 @@ let genExpr = (e, ctx) => switch e {
               ? "{ ${spreadStr} }"
               : "{ ${spreadStr}, ${fieldStrs} }"
       }
-  | EField(target, name, _) => switch nsRuntimeId(target, name, ctx) {
+  | Ast.EField(target, name, _) => switch nsRuntimeId(target, name, ctx) {
       | Some(rt) => rt
       | None => "${genMember(target, ctx)}.${name}"
     }
-  | ETuple(elements, _) =>
+  | Ast.ETuple(elements, _) =>
     // A tuple erases to a JS array `[a, b]` (like ReScript); the type system
     // keeps it distinct from an mochi Array, the runtime shares the shape.
     "[${Str.join(", ", elements |> map(el => genExpr(el, ctx)))}]"
-  | EArr(elements, _) => "[${Str.join(", ", elements |> map(el => genSeqSlot(el, ctx)))}]"
-  | EList(elements, _) => genList(elements, ctx)
-  | ESet(elements, _) => "new Set([${Str.join(", ", elements |> map(el => genSeqSlot(el, ctx)))}])"
-  | EMap(entries, _) => "new Map([${Str.join(", ", entries |> map(en => "[${genExpr(en.key, ctx)}, ${genExpr(en.value, ctx)}]"))}])"
-  | EInterp(parts, _) =>
+  | Ast.EArr(elements, _) => "[${Str.join(", ", elements |> map(el => genSeqSlot(el, ctx)))}]"
+  | Ast.EList(elements, _) => genList(elements, ctx)
+  | Ast.ESet(elements, _) => "new Set([${Str.join(", ", elements |> map(el => genSeqSlot(el, ctx)))}])"
+  | Ast.EMap(entries, _) => "new Map([${Str.join(", ", entries |> map(en => "[${genExpr(en.key, ctx)}, ${genExpr(en.value, ctx)}]"))}])"
+  | Ast.EInterp(parts, _) =>
     // "…${x}…" (ADR 0023) → a native JS template literal — emitted JS reads
     // exactly like the source.
     let body = Str.join(
       "",
       parts
         |> map(p => switch p {
-          | IPLit(value) => escapeTemplateLiteral(value)
-          | IPExpr(ex) => "\${${genExpr(ex, ctx)}}"
+          | Ast.IPLit(value) => escapeTemplateLiteral(value)
+          | Ast.IPExpr(ex) => "\${${genExpr(ex, ctx)}}"
         })
     ) in
       "`${body}`"
 }
 
 let genSeqSlot = (el, ctx) => switch el {
-  | SEExpr(ex) => genExpr(ex, ctx)
-  | SESpread(ex) => "...${genExpr(ex, ctx)}"
+  | Ast.SEExpr(ex) => genExpr(ex, ctx)
+  | Ast.SESpread(ex) => "...${genExpr(ex, ctx)}"
 }
 
 // A `@{...}` literal -> a lazy iterable. Spreads `yield*` another List.
@@ -188,36 +188,36 @@ let genList = (elements, ctx) =>
     " ",
     elements
       |> map(el => switch el {
-        | SEExpr(ex) => "yield (${genExpr(ex, ctx)});"
-        | SESpread(ex) => "yield* (${genExpr(ex, ctx)});"
+        | Ast.SEExpr(ex) => "yield (${genExpr(ex, ctx)});"
+        | Ast.SESpread(ex) => "yield* (${genExpr(ex, ctx)});"
       })
   ) in
     "_list(function* () {${yields == "" ? "" : " ${yields} "}})"
 
 // A lambda parameter lowers to JS: a name, or native object destructuring.
 let genParam = p => switch p {
-  | LPName(name) => name
-  | LPTuple(names) => "[${Str.join(", ", names)}]"
-  | LPRecord(fields) => "{ ${Str.join(", ", fields)} }"
+  | Ast.LPName(name) => name
+  | Ast.LPTuple(names) => "[${Str.join(", ", names)}]"
+  | Ast.LPRecord(fields) => "{ ${Str.join(", ", fields)} }"
 }
 
 // A lambda in callee position must be parenthesized: `((x) => ...)(arg)`.
 let genCallee = (e, ctx) => switch e {
-  | ELambda(_, _, _) => "(${genExpr(e, ctx)})"
+  | Ast.ELambda(_, _, _) => "(${genExpr(e, ctx)})"
   | _ => genExpr(e, ctx)
 }
 
 // A record or lambda in member-target position needs parens: `({...}).x`.
 let genMember = (e, ctx) => switch e {
-  | ERecord(_, _, _) => "(${genExpr(e, ctx)})"
-  | ELambda(_, _, _) => "(${genExpr(e, ctx)})"
+  | Ast.ERecord(_, _, _) => "(${genExpr(e, ctx)})"
+  | Ast.ELambda(_, _, _) => "(${genExpr(e, ctx)})"
   | _ => genExpr(e, ctx)
 }
 
 // A record literal as a concise arrow body must be parenthesized, else JS
 // parses `=> { ... }` as a statement block: `=> ({ x: 1 })`.
 let genLambdaBody = (e, ctx) => switch e {
-  | ERecord(_, _, _) => "(${genExpr(e, ctx)})"
+  | Ast.ERecord(_, _, _) => "(${genExpr(e, ctx)})"
   | _ => genExpr(e, ctx)
 }
 
@@ -228,20 +228,20 @@ let genLambdaBody = (e, ctx) => switch e {
 // A pattern always matches (-> `.otherwise`) when it binds without narrowing:
 // wildcard, plain name, or a record whose every field just binds.
 let isCatchAll = p => switch p {
-  | PWild(_) => true
-  | PBind(_, _) => true
-  | PRecord(fields, _) => allOf(f => isCatchAll(f.pat), fields)
-  | PTuple(elems, _) =>
+  | Ast.PWild(_) => true
+  | Ast.PBind(_, _) => true
+  | Ast.PRecord(fields, _) => allOf(f => isCatchAll(f.pat), fields)
+  | Ast.PTuple(elems, _) =>
     // a tuple always matches — position does the work (irrefutable product).
     allOf(isCatchAll, elems)
-  | PArr(elems, rest, _) =>
+  | Ast.PArr(elems, rest, _) =>
     // [...all] / @{...all} — a bare rest with no fixed head matches anything.
     Array.length(elems) == 0 && Option.isSome(rest)
-  | PList(elems, rest, _) => Array.length(elems) == 0 && Option.isSome(rest)
+  | Ast.PList(elems, rest, _) => Array.length(elems) == 0 && Option.isSome(rest)
   | _ => false
 }
 
-let isPList = p => switch p { | PList(_, _, _) => true | _ => false }
+let isPList = p => switch p { | Ast.PList(_, _, _) => true | _ => false }
 
 // ---- general pattern compiler ----------------------------------------------
 // Nested patterns can't lower to matcher objects: @onrails/pattern's matcher
@@ -273,25 +273,31 @@ let precordEntries = (fields, i, ctx) => switch Array.get(i, fields) {
 }
 
 let patSlot = (p, ctx) => switch p {
-  | PBind(name, _) => name
-  | PWild(_) => ""
-  | PLit(_, _, _) => ""
-  | PBool(_, _) => ""
-  | PStr(_, _) => ""
-  | PList(_, _, _) => ""
-  | PCtor(ctor, args, _) => let entries = pctorEntries(ctor, args, 0, ctx) in
+  | Ast.PBind(name, _) => name
+  | Ast.PWild(_) => ""
+  | Ast.PLit(_, _, _) => ""
+  | Ast.PBool(_, _) => ""
+  | Ast.PStr(_, _) => ""
+  | Ast.PList(_, _, _) => ""
+  | Ast.PCtor(ctor, args, _, _) => let entries = pctorEntries(
+      ctor,
+      args,
+      0,
+      ctx
+    ) in
       Array.length(entries) == 0 ? "" : "{ ${Str.join(", ", entries)} }"
-  | PRecord(fields, _) => let entries = precordEntries(fields, 0, ctx) in
+  | Ast.PRecord(fields, _) => let entries = precordEntries(fields, 0, ctx) in
       Array.length(entries) == 0 ? "" : "{ ${Str.join(", ", entries)} }"
-  | PTuple(elems, _) => let slots = elems |> map(el => patSlot(el, ctx)) in
+  | Ast.PTuple(elems, _) => let slots = elems |> map(el => patSlot(el, ctx)) in
       someOf(s => s != "", slots) ? "[${Str.join(", ", slots)}]" : ""
-  | PArr(elems, rest, _) => let slots = elems |> map(el => patSlot(el, ctx)) in
+  | Ast.PArr(elems, rest, _) => let slots = elems
+      |> map(el => patSlot(el, ctx)) in
     let slots2 = switch rest {
-      | Some(PBind(name, _)) => Array.append("...${name}", slots)
+      | Some(Ast.PBind(name, _)) => Array.append("...${name}", slots)
       | _ => slots
     } in
       someOf(s => s != "", slots2) ? "[${Str.join(", ", slots2)}]" : ""
-  | POr(alts, _) =>
+  | Ast.POr(alts, _) =>
     // The first alt's destructure serves the whole arm — every alt binds the
     // same names at the same positions (enforced by check.mochi).
     switch Array.head(alts) {
@@ -330,25 +336,25 @@ let parrConds = (elems, i, path, ctx) => switch Array.get(i, elems) {
 }
 
 let patConds = (p, path, ctx) => switch p {
-  | PWild(_) => []
-  | PBind(_, _) => []
-  | PList(_, _, _) => []
-  | PLit(_, _, _) => ["${path} === ${litValue(p)}"]
-  | PBool(_, _) => ["${path} === ${litValue(p)}"]
-  | PStr(_, _) => ["${path} === ${litValue(p)}"]
-  | PCtor(ctor, args, _) => Array.prepend(
+  | Ast.PWild(_) => []
+  | Ast.PBind(_, _) => []
+  | Ast.PList(_, _, _) => []
+  | Ast.PLit(_, _, _) => ["${path} === ${litValue(p)}"]
+  | Ast.PBool(_, _) => ["${path} === ${litValue(p)}"]
+  | Ast.PStr(_, _) => ["${path} === ${litValue(p)}"]
+  | Ast.PCtor(ctor, args, _, _) => Array.prepend(
       "${path}._tag === ${jsStringLit(ctor)}",
       pctorConds(ctor, args, 0, path, ctx)
     )
-  | PRecord(fields, _) => precordConds(fields, 0, path, ctx)
-  | PTuple(elems, _) =>
+  | Ast.PRecord(fields, _) => precordConds(fields, 0, path, ctx)
+  | Ast.PTuple(elems, _) =>
     // No length guard — tuple arity is guaranteed by the type.
     ptupleConds(elems, 0, path, ctx)
-  | PArr(elems, rest, _) => Array.prepend(
+  | Ast.PArr(elems, rest, _) => Array.prepend(
       "${path}.length ${Option.isSome(rest) ? ">=" : "==="} ${show(Array.length(elems))}",
       parrConds(elems, 0, path, ctx)
     )
-  | POr(alts, _) =>
+  | Ast.POr(alts, _) =>
     // Each alt's own conds &&-join into one guard; the alts ||-join into one.
     let altCond = alt =>
       let conds = patConds(alt, path, ctx) in
@@ -361,12 +367,12 @@ let patConds = (p, path, ctx) => switch p {
 // The handler parameter for a catch-all pattern: bind the name, destructure a
 // record's/tuple's binds, or ignore the value.
 let catchAllParam = (p, ctx) => switch p {
-  | PArr(_, rest, _) =>
+  | Ast.PArr(_, rest, _) =>
     // `[...all]` / `@{...all}` binds the whole collection to the rest name —
     // NOT a destructure: `[...all]` would copy the array and force a lazy List.
-    switch rest { | Some(PBind(name, _)) => "(${name})" | _ => "()" }
-  | PList(_, rest, _) => switch rest {
-      | Some(PBind(name, _)) => "(${name})"
+    switch rest { | Some(Ast.PBind(name, _)) => "(${name})" | _ => "()" }
+  | Ast.PList(_, rest, _) => switch rest {
+      | Some(Ast.PBind(name, _)) => "(${name})"
       | _ => "()"
     }
   | _ => let slot = patSlot(p, ctx) in slot == "" ? "()" : "(${slot})"
@@ -411,7 +417,7 @@ let listArmBinds = (elems, i, ctx) => switch Array.get(i, elems) {
 // over the rest. Element sub-patterns guard/bind via the general compiler
 // against the buffer (`_b[i]` is already pulled, nested tests force nothing extra).
 let genListArm = (p, body, ctx) => switch p {
-  | PList(elems, rest, _) => let n = Array.length(elems) in
+  | Ast.PList(elems, rest, _) => let n = Array.length(elems) in
     let guards = listArmGuards(elems, 0, ctx) in
     let head = Option.isSome(rest)
       ? "_pull(${show(n)})"
@@ -419,7 +425,7 @@ let genListArm = (p, body, ctx) => switch p {
     let cond = Str.join(" && ", Array.prepend(head, guards)) in
       let (params0, args0) = listArmBinds(elems, 0, ctx) in
         let (params, args) = switch rest {
-          | Some(PBind(name, _)) => (
+          | Some(Ast.PBind(name, _)) => (
               Array.append(name, params0),
               Array.append(listTail(n), args0)
             )
@@ -439,7 +445,7 @@ let listMatchLoop = (arms, i, ctx) => switch Array.get(i, arms) {
         (Array.prepend(genListArm(a.pattern, a.body, ctx), restLines), fallback)
       : isCatchAll(a.pattern)
       ? let restName = switch a.pattern {
-        | PList(_, Some(PBind(name, _)), _) => Some(name)
+        | Ast.PList(_, Some(Ast.PBind(name, _)), _) => Some(name)
         | _ => None
       } in
       let fallback = switch restName {
@@ -506,9 +512,9 @@ let genMatch = (scrutinee, arms, ctx) =>
       )
 
 let litValue = p => switch p {
-  | PStr(v, _) => jsStringLit(v)
-  | PLit(_, raw, _) => raw
-  | PBool(v, _) => v ? "true" : "false"
+  | Ast.PStr(v, _) => jsStringLit(v)
+  | Ast.PLit(_, raw, _) => raw
+  | Ast.PBool(v, _) => v ? "true" : "false"
   | _ => ""
 }
 
@@ -536,11 +542,11 @@ let genGuardArm = (p, body, guardOpt, ctx) =>
 // primitive literal (the matcher compares values with `!==`, so only
 // primitives are meaningful there). Anything deeper routes to guard form.
 let isFlatSub = p => switch p {
-  | PBind(_, _) => true
-  | PWild(_) => true
-  | PLit(_, _, _) => true
-  | PBool(_, _) => true
-  | PStr(_, _) => true
+  | Ast.PBind(_, _) => true
+  | Ast.PWild(_) => true
+  | Ast.PLit(_, _, _) => true
+  | Ast.PBool(_, _) => true
+  | Ast.PStr(_, _) => true
   | _ => false
 }
 
@@ -548,9 +554,18 @@ let recordLits = (fields, i) => switch Array.get(i, fields) {
   | None => []
   | Some(f) => let rest = recordLits(fields, i + 1) in
       switch f.pat {
-        | PLit(_, _, _) => Array.prepend("${f.label}: ${litValue(f.pat)}", rest)
-        | PBool(_, _) => Array.prepend("${f.label}: ${litValue(f.pat)}", rest)
-        | PStr(_, _) => Array.prepend("${f.label}: ${litValue(f.pat)}", rest)
+        | Ast.PLit(_, _, _) => Array.prepend(
+            "${f.label}: ${litValue(f.pat)}",
+            rest
+          )
+        | Ast.PBool(_, _) => Array.prepend(
+            "${f.label}: ${litValue(f.pat)}",
+            rest
+          )
+        | Ast.PStr(_, _) => Array.prepend(
+            "${f.label}: ${litValue(f.pat)}",
+            rest
+          )
         | _ => rest
       }
 }
@@ -565,19 +580,19 @@ let ctorArgParts = (ctor, args, i, ctx) => switch Array.get(i, args) {
     ) in
     let key = keyAt(ctor, i, ctx) in
       switch a {
-        | PBind(name, _) => (
+        | Ast.PBind(name, _) => (
             Array.prepend(keyedSlot(key, name), restBinds),
             restLits
           )
-        | PLit(_, _, _) => (
+        | Ast.PLit(_, _, _) => (
             restBinds,
             Array.prepend("${key}: ${litValue(a)}", restLits)
           )
-        | PBool(_, _) => (
+        | Ast.PBool(_, _) => (
             restBinds,
             Array.prepend("${key}: ${litValue(a)}", restLits)
           )
-        | PStr(_, _) => (
+        | Ast.PStr(_, _) => (
             restBinds,
             Array.prepend("${key}: ${litValue(a)}", restLits)
           )
@@ -586,20 +601,20 @@ let ctorArgParts = (ctor, args, i, ctx) => switch Array.get(i, args) {
 }
 
 let genWithArm = (p, body, ctx) => switch p {
-  | PArr(_, _, _) =>
+  | Ast.PArr(_, _, _) =>
     // Array/tuple/or arms always take guard form (not matcher-object-able).
     genGuardArm(p, body, None, ctx)
-  | PTuple(_, _) => genGuardArm(p, body, None, ctx)
-  | POr(_, _) => genGuardArm(p, body, None, ctx)
-  | PLit(_, _, _) => ".with(${litValue(p)}, () => ${genLambdaBody(body, ctx)})"
-  | PBool(_, _) => ".with(${litValue(p)}, () => ${genLambdaBody(body, ctx)})"
-  | PStr(_, _) => ".with(${litValue(p)}, () => ${genLambdaBody(body, ctx)})"
-  | PRecord(fields, _) => allOf(f => isFlatSub(f.pat), fields)
+  | Ast.PTuple(_, _) => genGuardArm(p, body, None, ctx)
+  | Ast.POr(_, _) => genGuardArm(p, body, None, ctx)
+  | Ast.PLit(_, _, _) => ".with(${litValue(p)}, () => ${genLambdaBody(body, ctx)})"
+  | Ast.PBool(_, _) => ".with(${litValue(p)}, () => ${genLambdaBody(body, ctx)})"
+  | Ast.PStr(_, _) => ".with(${litValue(p)}, () => ${genLambdaBody(body, ctx)})"
+  | Ast.PRecord(fields, _) => allOf(f => isFlatSub(f.pat), fields)
       ? let lits = recordLits(fields, 0) in
       let slot = patSlot(p, ctx) in
         ".with({ ${Str.join(", ", lits)} }, ${slot == "" ? "()" : "(${slot})"} => ${genLambdaBody(body, ctx)})"
       : genGuardArm(p, body, None, ctx)
-  | PCtor(ctor, args, _) =>
+  | Ast.PCtor(ctor, args, _, _) =>
     // pctor flat fast path keeps readable matcher-object form.
     allOf(isFlatSub, args)
       ? let (binds, litFields) = ctorArgParts(ctor, args, 0, ctx) in
@@ -633,12 +648,12 @@ let genCtor = c =>
           : "const ${c.name} = ${impl};"
 
 let genType = s => switch s {
-  | SType(_, _, ctors, _, _, _) => Str.join("\n", ctors |> map(genCtor))
+  | Ast.SType(_, _, ctors, _, _, _) => Str.join("\n", ctors |> map(genCtor))
   | _ => ""
 }
 
 let genExtern = s => switch s {
-  | SExtern(name, _, _, modName, imported, _, _) => let spec = imported == name
+  | Ast.SExtern(name, _, _, modName, imported, _, _) => let spec = imported == name
       ? name
       : "${imported} as ${name}" in
       "import { ${spec} } from ${jsStringLit(modName)};"
@@ -650,30 +665,34 @@ let stripAlExt = s =>
 
 // import { a, b } from "./mod"  ->  compiled sibling `./mod.js`. Source paths
 // name an `.mochi` module (with or without extension); output targets `.js`.
+// import * as Alias from "./mod" -> ESM namespace import (ADR 0002).
 let genImport = s => switch s {
-  | SImport(names, from, _) => let nameList = Str.join(
+  | Ast.SImport(names, from, _) => let nameList = Str.join(
       ", ",
       names |> map(n => n.name)
     ) in
     let path = "${stripAlExt(from)}.js" in
       "import { ${nameList} } from ${jsStringLit(path)};"
+  | Ast.SImportNs(alias, from, _) => let path = "${stripAlExt(from)}.js" in
+      "import * as ${alias.name} from ${jsStringLit(path)};"
   | _ => ""
 }
 
 let exportLine = l => "export ${l}"
 
 let genStmt = (s, ctx) => switch s {
-  | SImport(_, _, _) => genImport(s)
-  | SType(_, _, _, _, exported, _) => let decls = genType(s) in
+  | Ast.SImport(_, _, _) => genImport(s)
+  | Ast.SImportNs(_, _, _) => genImport(s)
+  | Ast.SType(_, _, _, _, exported, _) => let decls = genType(s) in
       decls == ""
         ? "" // record alias: pure type, no runtime
         : exported
         ? Str.join("\n", Str.split("\n", decls) |> map(exportLine))
         : decls
-  | SExtern(name, _, _, _, _, exported, _) =>
+  | Ast.SExtern(name, _, _, _, _, exported, _) =>
     // An extern is itself an import; re-export the local binding when exported.
     exported ? "${genExtern(s)}\nexport { ${name} };" : genExtern(s)
-  | SLet(name, _, _, value, exported, _, _) => let doExport = exported && !Str.startsWith(
+  | Ast.SLet(name, _, _, value, exported, _, _) => let doExport = exported && !Str.startsWith(
       "$",
       name
     ) in // never export destructure temps
@@ -690,45 +709,55 @@ let usesMatchLibArm = a =>
   } || usesMatchLib(a.body)
 
 let usesMatchLib = e => switch e {
-  | ENum(_, _, _) => false
-  | EBool(_, _) => false
-  | EStr(_, _) => false
-  | ERef(_, _) => false
-  | ECall(fn, args, _) => usesMatchLib(fn) || someOf(usesMatchLib, args)
-  | ELambda(_, body, _) => usesMatchLib(body)
-  | ELetIn(_, _, value, body, _) => usesMatchLib(value) || usesMatchLib(body)
-  | ELetBind(_, _, value, body, _) => usesMatchLib(value) || usesMatchLib(body)
-  | EPipe(left, right, _) => usesMatchLib(left) || usesMatchLib(right)
-  | ETernary(cond, thenE, elseE, _) => usesMatchLib(
+  | Ast.ENum(_, _, _) => false
+  | Ast.EBool(_, _) => false
+  | Ast.EStr(_, _) => false
+  | Ast.ERef(_, _) => false
+  | Ast.ECall(fn, args, _) => usesMatchLib(fn) || someOf(usesMatchLib, args)
+  | Ast.ELambda(_, body, _) => usesMatchLib(body)
+  | Ast.ELetIn(_, _, value, body, _) => usesMatchLib(
+      value
+    ) || usesMatchLib(body)
+  | Ast.ELetBind(_, _, value, body, _) => usesMatchLib(
+      value
+    ) || usesMatchLib(body)
+  | Ast.EPipe(left, right, _) => usesMatchLib(left) || usesMatchLib(right)
+  | Ast.ETernary(cond, thenE, elseE, _) => usesMatchLib(
       cond
     ) || (usesMatchLib(thenE) || usesMatchLib(elseE))
-  | EMatch(scrutinee, arms, _) => !isListMatch(
+  | Ast.EMatch(scrutinee, arms, _) => !isListMatch(
       arms
     ) || (usesMatchLib(scrutinee) || someOf(usesMatchLibArm, arms))
-  | ERecord(fields, spread, _) => switch spread {
+  | Ast.ERecord(fields, spread, _) => switch spread {
       | Some(s) => usesMatchLib(s)
       | None => false
     } || someOf(f => usesMatchLib(f.value), fields)
-  | EField(target, _, _) => usesMatchLib(target)
-  | ETuple(elements, _) => someOf(usesMatchLib, elements)
-  | EArr(elements, _) => someOf(
-      el => usesMatchLib(switch el { | SEExpr(e) => e | SESpread(e) => e }),
+  | Ast.EField(target, _, _) => usesMatchLib(target)
+  | Ast.ETuple(elements, _) => someOf(usesMatchLib, elements)
+  | Ast.EArr(elements, _) => someOf(
+      el =>
+        usesMatchLib(switch el { | Ast.SEExpr(e) => e | Ast.SESpread(e) => e }),
       elements
     )
-  | EList(elements, _) => someOf(
-      el => usesMatchLib(switch el { | SEExpr(e) => e | SESpread(e) => e }),
+  | Ast.EList(elements, _) => someOf(
+      el =>
+        usesMatchLib(switch el { | Ast.SEExpr(e) => e | Ast.SESpread(e) => e }),
       elements
     )
-  | ESet(elements, _) => someOf(
-      el => usesMatchLib(switch el { | SEExpr(e) => e | SESpread(e) => e }),
+  | Ast.ESet(elements, _) => someOf(
+      el =>
+        usesMatchLib(switch el { | Ast.SEExpr(e) => e | Ast.SESpread(e) => e }),
       elements
     )
-  | EMap(entries, _) => someOf(
+  | Ast.EMap(entries, _) => someOf(
       en => usesMatchLib(en.key) || usesMatchLib(en.value),
       entries
     )
-  | EInterp(parts, _) => someOf(
-      p => switch p { | IPLit(_) => false | IPExpr(ex) => usesMatchLib(ex) },
+  | Ast.EInterp(parts, _) => someOf(
+      p => switch p {
+        | Ast.IPLit(_) => false
+        | Ast.IPExpr(ex) => usesMatchLib(ex)
+      },
       parts
     )
 }
@@ -746,7 +775,10 @@ let exprRefsInterpPartsFrom = (parts, i, ctx, acc) => switch Array.get(i, parts)
       parts,
       i + 1,
       ctx,
-      switch p { | IPLit(_) => acc | IPExpr(ex) => exprRefs(ex, ctx, acc) }
+      switch p {
+        | Ast.IPLit(_) => acc
+        | Ast.IPExpr(ex) => exprRefs(ex, ctx, acc)
+      }
     )
 }
 let exprRefsArmsFrom = (arms, i, ctx, acc) => switch Array.get(i, arms) {
@@ -777,12 +809,17 @@ let exprRefsEntriesFrom = (entries, i, ctx, acc) => switch Array.get(i, entries)
 }
 
 let exprRefs = (e, ctx, acc) => switch e {
-  | ENum(_, _, _) => acc
-  | EBool(_, _) => acc
-  | EStr(_, _) => acc
-  | ERef(name, _) => Set.add(name, acc)
-  | ECall(fn, args, _) => exprRefsListFrom(args, 0, ctx, exprRefs(fn, ctx, acc))
-  | ELambda(params, body, _) => let (cparams, cbody) = collapseLambda(
+  | Ast.ENum(_, _, _) => acc
+  | Ast.EBool(_, _) => acc
+  | Ast.EStr(_, _) => acc
+  | Ast.ERef(name, _) => Set.add(name, acc)
+  | Ast.ECall(fn, args, _) => exprRefsListFrom(
+      args,
+      0,
+      ctx,
+      exprRefs(fn, ctx, acc)
+    )
+  | Ast.ELambda(params, body, _) => let (cparams, cbody) = collapseLambda(
       params,
       body
     ) in
@@ -790,26 +827,30 @@ let exprRefs = (e, ctx, acc) => switch e {
       ? Set.add("_curry", acc)
       : acc in // arity >= 2 lowers `_curry(...)`
       exprRefs(cbody, ctx, acc2)
-  | ELetIn(_, _, value, body, _) => exprRefs(
+  | Ast.ELetIn(_, _, value, body, _) => exprRefs(
       body,
       ctx,
       exprRefs(value, ctx, acc)
     )
-  | ELetBind(_, _, value, body, _) => exprRefs(
+  | Ast.ELetBind(_, _, value, body, _) => exprRefs(
       body,
       ctx,
       exprRefs(value, ctx, Set.add("_Result_flatMap", acc))
     )
-  | EPipe(left, right, _) => exprRefs(right, ctx, exprRefs(left, ctx, acc))
-  | ETernary(cond, thenE, elseE, _) => exprRefs(
+  | Ast.EPipe(left, right, _) => exprRefs(right, ctx, exprRefs(left, ctx, acc))
+  | Ast.ETernary(cond, thenE, elseE, _) => exprRefs(
       elseE,
       ctx,
       exprRefs(thenE, ctx, exprRefs(cond, ctx, acc))
     )
-  | EMatch(scrutinee, arms, _) => let acc1 = exprRefs(scrutinee, ctx, acc) in
+  | Ast.EMatch(scrutinee, arms, _) => let acc1 = exprRefs(
+      scrutinee,
+      ctx,
+      acc
+    ) in
     let acc2 = someOf(
       a => switch a.pattern {
-        | PList(_, Some(PBind(_, _)), _) => true
+        | Ast.PList(_, Some(Ast.PBind(_, _)), _) => true
         | _ => false
       },
       arms
@@ -817,40 +858,43 @@ let exprRefs = (e, ctx, acc) => switch e {
       ? Set.add("_list", acc1)
       : acc1 in
       exprRefsArmsFrom(arms, 0, ctx, acc2)
-  | ERecord(fields, spread, _) => exprRefsFieldsFrom(
+  | Ast.ERecord(fields, spread, _) => exprRefsFieldsFrom(
       fields,
       0,
       ctx,
       switch spread { | Some(s) => exprRefs(s, ctx, acc) | None => acc }
     )
-  | EField(target, name, _) => switch nsRuntimeId(target, name, ctx) {
+  | Ast.EField(target, name, _) => switch nsRuntimeId(target, name, ctx) {
       | Some(rt) => Set.add(
           rt,
           acc
         ) // its runtime deps get pulled in by preludePreamble's closure
       | None => exprRefs(target, ctx, acc)
     }
-  | ETuple(elements, _) => exprRefsListFrom(elements, 0, ctx, acc)
-  | EArr(elements, _) => exprRefsListFrom(
-      elements |> map(el => switch el { | SEExpr(e) => e | SESpread(e) => e }),
+  | Ast.ETuple(elements, _) => exprRefsListFrom(elements, 0, ctx, acc)
+  | Ast.EArr(elements, _) => exprRefsListFrom(
+      elements
+        |> map(el => switch el { | Ast.SEExpr(e) => e | Ast.SESpread(e) => e }),
       0,
       ctx,
       acc
     )
-  | EList(elements, _) => exprRefsListFrom(
-      elements |> map(el => switch el { | SEExpr(e) => e | SESpread(e) => e }),
+  | Ast.EList(elements, _) => exprRefsListFrom(
+      elements
+        |> map(el => switch el { | Ast.SEExpr(e) => e | Ast.SESpread(e) => e }),
       0,
       ctx,
       Set.add("_list", acc)
     ) // `@{...}` literal calls List core runtime
-  | ESet(elements, _) => exprRefsListFrom(
-      elements |> map(el => switch el { | SEExpr(e) => e | SESpread(e) => e }),
+  | Ast.ESet(elements, _) => exprRefsListFrom(
+      elements
+        |> map(el => switch el { | Ast.SEExpr(e) => e | Ast.SESpread(e) => e }),
       0,
       ctx,
       acc
     )
-  | EMap(entries, _) => exprRefsEntriesFrom(entries, 0, ctx, acc)
-  | EInterp(parts, _) => exprRefsInterpPartsFrom(parts, 0, ctx, acc)
+  | Ast.EMap(entries, _) => exprRefsEntriesFrom(entries, 0, ctx, acc)
+  | Ast.EInterp(parts, _) => exprRefsInterpPartsFrom(parts, 0, ctx, acc)
 }
 
 // Names a module binds at top scope — anything here would shadow a
@@ -862,24 +906,25 @@ let boundNamesFrom = (stmts, i, acc) => switch Array.get(i, stmts) {
       stmts,
       i + 1,
       switch s {
-        | SLet(name, _, _, _, _, _, _) => Set.add(name, acc)
-        | SExtern(name, _, _, _, _, _, _) => Set.add(name, acc)
-        | SType(_, _, ctors, _, _, _) => Set.union(
+        | Ast.SLet(name, _, _, _, _, _, _) => Set.add(name, acc)
+        | Ast.SExtern(name, _, _, _, _, _, _) => Set.add(name, acc)
+        | Ast.SType(_, _, ctors, _, _, _) => Set.union(
             acc,
             Set.fromArray(ctors |> map(c => c.name))
           )
-        | SImport(names, _, _) => Set.union(
+        | Ast.SImport(names, _, _) => Set.union(
             acc,
             Set.fromArray(names |> map(n => n.name))
           )
+        | Ast.SImportNs(alias, _, _) => Set.add(alias.name, acc)
       }
     )
 }
 let boundNames = stmts => boundNamesFrom(stmts, 0, Set.fromArray([]))
 
 let refsForStmt = (s, ctx) => switch s {
-  | SLet(_, _, _, value, _, _, _) => exprRefs(value, ctx, Set.fromArray([]))
-  | SType(_, _, ctors, _, _, _) =>
+  | Ast.SLet(_, _, _, value, _, _, _) => exprRefs(value, ctx, Set.fromArray([]))
+  | Ast.SType(_, _, ctors, _, _, _) =>
     // A multi-field constructor lowers to `_curry(...)` in genType (which
     // exprRefs never walks), so seed the dep here.
     someOf(c => Array.length(c.fields) >= 2, ctors)
@@ -942,7 +987,7 @@ export let codegen = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps) =>
   let ctx = { keys: keys, ns: ns } in
   let needsMatch = someOf(
     s => switch s {
-      | SLet(_, _, _, value, _, _, _) => usesMatchLib(value)
+      | Ast.SLet(_, _, _, value, _, _, _) => usesMatchLib(value)
       | _ => false
     },
     stmts

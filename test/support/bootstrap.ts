@@ -42,6 +42,11 @@ const stripped = (name: string): string =>
 // sandbox (guarded by existsSync so this works before/after each is extracted).
 const CTOR_MODULES = ["ast", "types", "ctors", "schemes", "scc"];
 
+// CapCase `const` bindings a stripped ctor module defines — used to rebuild an
+// `import * as Alias` namespace object after imports are stripped (ADR 0002).
+const exportedCtorNames = (js: string): string[] =>
+  [...js.matchAll(/^const ([A-Z]\w*) =/gm)].map((m) => m[1]!);
+
 // Drop repeated top-level `const NAME =` declarations, keeping the first. Every
 // emitted module carries the same runtime preamble (`const _curry = …`), so
 // concatenating a dep module with the target would declare those twice. Ctor
@@ -77,12 +82,41 @@ const dedupeConsts = (js: string): string => {
 export const bootstrapModuleJs = (nameOrPath: string): string => {
   buildGraph();
   const name = basename(nameOrPath).replace(/\.mochi$/, "");
-  // Prepend only the ctor-def modules this module actually imports (detected
-  // from its compiled `import … from "./ast.js"` lines), so a module that never
-  // touches the AST (lexer) is left exactly as built.
   const src = raw(name);
-  const deps = CTOR_MODULES.filter((d) => new RegExp(`from "\\./${d}\\.js"`).test(src)).map(
-    stripped,
-  );
-  return dedupeConsts([...deps, stripped(name)].join("\n"));
+  // Prepend ctor-def modules this module (transitively via those modules) needs,
+  // in CTOR_MODULES order so deps land before dependents. After each dep, rebuild
+  // any `import * as Alias` namespaces it uses (ADR 0002) — stripping imports
+  // would otherwise leave `Ast.ENum` unbound.
+  const parts: string[] = [];
+  const seenAlias = new Set<string>();
+  const injectNs = (jsSrc: string): void => {
+    for (const m of jsSrc.matchAll(/^import \* as (\w+) from "\.\/(\w+)\.js";$/gm)) {
+      const alias = m[1]!;
+      const dep = m[2]!;
+      if (seenAlias.has(alias)) continue;
+      seenAlias.add(alias);
+      const names = exportedCtorNames(stripped(dep));
+      if (names.length) parts.push(`const ${alias} = { ${names.join(", ")} };`);
+    }
+  };
+  // Fixed-point: start from modules the target imports; add modules those import.
+  const needed = new Set<string>();
+  const consider = (jsSrc: string): void => {
+    for (const d of CTOR_MODULES) {
+      if (needed.has(d)) continue;
+      if (new RegExp(`from "\\./${d}\\.js"`).test(jsSrc)) {
+        needed.add(d);
+        consider(raw(d));
+      }
+    }
+  };
+  consider(src);
+  for (const d of CTOR_MODULES) {
+    if (!needed.has(d)) continue;
+    injectNs(raw(d)); // namespace aliases before the module body uses them
+    parts.push(stripped(d));
+  }
+  injectNs(src);
+  parts.push(stripped(name));
+  return dedupeConsts(parts.join("\n"));
 };

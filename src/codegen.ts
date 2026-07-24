@@ -724,11 +724,12 @@ const genExtern = (s: ExternStmt): string => {
   return `import { ${spec} } from ${JSON.stringify(s.module)};`;
 };
 
-// import { a, b } from "./mod"  → the compiled sibling `./mod.js`. Source paths
-// name the `.mochi` module (with or without extension); output targets `.js`.
+// import { a, b } from "./mod"  → the compiled sibling `./mod.js`.
+// import * as Alias from "./mod" → ESM namespace import (ADR 0002).
 const genImport = (s: ImportStmt, ctx: GenCtx): string => {
-  const names = s.names.map((n) => n.name).join(", ");
   const path = `${s.from.replace(/\.mochi$/, "")}${ctx.moduleExt}`;
+  if (s.alias) return `import * as ${s.alias.name} from ${JSON.stringify(path)};`;
+  const names = s.names.map((n) => n.name).join(", ");
   return `import { ${names} } from ${JSON.stringify(path)};`;
 };
 
@@ -883,7 +884,10 @@ const boundNames = (prog: Program): Set<string> => {
   for (const s of prog.stmts) {
     if (s.kind === "let" || s.kind === "extern") bound.add(s.name);
     else if (s.kind === "type") for (const c of s.ctors) bound.add(c.name);
-    else if (s.kind === "import") for (const n of s.names) bound.add(n.name);
+    else if (s.kind === "import") {
+      for (const n of s.names) bound.add(n.name);
+      if (s.alias) bound.add(s.alias.name);
+    }
   }
   return bound;
 };

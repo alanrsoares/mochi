@@ -170,7 +170,13 @@ const cPat = (p: Pattern): Canon => {
         span: cSpan(p.span),
       };
     case "pctor":
-      return { kind: "pctor", ctor: p.ctor, args: p.args.map(cPat), span: cSpan(p.span) };
+      return {
+        kind: "pctor",
+        ctor: p.ctor,
+        args: p.args.map(cPat),
+        ns: p.ns ?? null,
+        span: cSpan(p.span),
+      };
     case "parr":
     case "plist":
       return {
@@ -243,6 +249,7 @@ const cStmt = (s: Stmt): Canon => {
       return {
         kind: "import",
         names: s.names.map((n) => ({ name: n.name, span: cSpan(n.span) })),
+        alias: s.alias ? { name: s.alias.name, span: cSpan(s.alias.span) } : null,
         from: s.from,
         span: cSpan(s.span),
       };
@@ -368,7 +375,13 @@ const A_PAT: Record<string, (p: Al) => Canon> = {
     fields: p.fields.map((f: Al) => ({ label: f.label, pat: aPat(f.pat) })),
     span: p.span,
   }),
-  PCtor: (p) => ({ kind: "pctor", ctor: p.ctor, args: p.args.map(aPat), span: p.span }),
+  PCtor: (p) => ({
+    kind: "pctor",
+    ctor: p.ctor,
+    args: p.args.map(aPat),
+    ns: opt(p.ns, (n: Al) => n),
+    span: p.span,
+  }),
   PArr: (p) => ({ kind: "parr", elems: p.elems.map(aPat), rest: opt(p.rest, aPat), span: p.span }),
   PList: (p) => ({
     kind: "plist",
@@ -434,6 +447,14 @@ const A_STMT: Record<string, (s: Al) => Canon> = {
   SImport: (s) => ({
     kind: "import",
     names: s.names.map((n: Al) => ({ name: n.name, span: n.span })),
+    alias: null,
+    from: s.from,
+    span: s.span,
+  }),
+  SImportNs: (s) => ({
+    kind: "import",
+    names: [],
+    alias: { name: s.alias.name, span: s.alias.span },
     from: s.from,
     span: s.span,
   }),
@@ -498,6 +519,8 @@ const cases: Record<string, string> = {
     'extern clamp : number -> number -> number = "./m" "clamp"\nextern pick : (a, b) -> [a] -> Option a = "./m" "pick"',
   "import and exports":
     'import { a, b } from "./mod"\nexport let x = 1\nexport type T = | K\nexport extern e : a -> a = "./m" "e"',
+  "namespace import": 'import * as Ast from "./ast.mochi"\nlet x = Ast.ENum',
+  "qualified ctor pattern": "let f = o => switch o { | Opt.Some(v) => v | Opt.None => 0 }",
   "doc comments attach":
     "/// doubles things\n/// really\nlet double = x => mul(x, 2)\n/// exported doc\nexport let e = 1",
   "record destructure with temp counter": "let { a, b } = p\nlet { c } = q",

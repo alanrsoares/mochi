@@ -98,3 +98,35 @@ test("a non-exhaustive switch on an imported variant is rejected", async () => {
   };
   expect(isErr(await build(files, "/p/main.mochi"))).toBe(true);
 });
+
+test("an exported binding is reachable via import * as", async () => {
+  const files = {
+    "/p/math.mochi": MATH,
+    "/p/main.mochi": 'import * as M from "./math"\nlet r = 5 |> M.double |> M.inc\n',
+  };
+  const outs = unwrapOk(await build(files, "/p/main.mochi"));
+  expect(jsFor(outs, "main.mochi")).toContain('import * as M from "./math.js";');
+  expect(jsFor(outs, "main.mochi")).toContain("M.double");
+});
+
+test("a switch on a namespace-imported variant uses qualified patterns", async () => {
+  const files = {
+    "/p/opt.mochi": OPT,
+    "/p/main.mochi":
+      'import * as Opt from "./opt"\n' +
+      "let get = o => switch o { | Opt.Some(v) => v | Opt.None => 0 }\n" +
+      "let x = Opt.Some(1)\n",
+  };
+  const outs = unwrapOk(await build(files, "/p/main.mochi"));
+  expect(jsFor(outs, "main.mochi")).toContain('import * as Opt from "./opt.js";');
+  expect(jsFor(outs, "main.mochi")).toContain('.with({ _tag: "Some" }, ({ value: v }) =>');
+  expect(jsFor(outs, "main.mochi")).toContain("Opt.Some(1)");
+});
+
+test("import * as a reserved prelude namespace is rejected", async () => {
+  const files = {
+    "/p/math.mochi": MATH,
+    "/p/main.mochi": 'import * as List from "./math"\nlet x = List.double\n',
+  };
+  expect(isErr(await build(files, "/p/main.mochi"))).toBe(true);
+});

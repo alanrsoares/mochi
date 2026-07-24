@@ -24,12 +24,34 @@
 // 6. Corpus = TS-check-passing files, open:true + namespaces threaded;
 //    strict-mode error cases get their own targeted cases.
 
-import { TyVar, TyCon, TyFn, TyRecord, RowEmpty, RowVar, RowExtend, tCon, tArrow, tRecord, tPrim, tTuple, rVar, rExtend, showType, mkSt, freshVar, freshRowVar, resolve, zonk, occurs, unify, unifyRows } from "./types.mochi"
+import {
+  TyVar,
+  TyCon,
+  TyFn,
+  TyRecord,
+  RowEmpty,
+  RowVar,
+  RowExtend,
+  tCon,
+  tArrow,
+  tRecord,
+  tPrim,
+  tTuple,
+  rVar,
+  rExtend,
+  showType,
+  mkSt,
+  freshVar,
+  freshRowVar,
+  resolve,
+  zonk,
+  occurs,
+  unify,
+  unifyRows
+} from "./types.mochi"
 
 // ============================================================
-// (c) infer.ts — Algorithm W. AST duplicated again (see bootstrap/check.mochi's
-// header note on why: modules arrive Slice F, differential harness keeps
-// every duplicate honest via runtime `_tag` shape).
+// (c) infer.ts — Algorithm W. AST via namespace import (ADR 0002).
 //
 // Name collision vs section (a): the surface syntax `TypeExpr` needs the
 // SAME ctor names bootstrap/parser.mochi actually emits at runtime
@@ -40,9 +62,20 @@ import { TyVar, TyCon, TyFn, TyRecord, RowEmpty, RowVar, RowExtend, tCon, tArrow
 // `Ty` type, so its arrow constructor is `TyFn` here instead.
 // ============================================================
 
-import { ENum, EBool, EStr, ERef, ECall, ELambda, ELetIn, ELetBind, EPipe, ETernary, EMatch, ERecord, EField, ETuple, EArr, EList, ESet, EMap, EInterp, IPLit, IPExpr, SEExpr, SESpread, PWild, PBind, PLit, PBool, PStr, PTuple, PRecord, PCtor, PArr, PList, POr, TyName, TyArrow, TyApp, TyTuple, TyList, LPName, LPRecord, LPTuple, SLet, SType, SExtern } from "./ast.mochi"
+import * as Ast from "./ast.mochi"
 import { builtinDeclsFor } from "./ctors.mochi"
-import { mono, tNumber, tBool, tString, generalize, instantiate, typeExprToType, typeExprListToType, ctorScheme, isUpperStart } from "./schemes.mochi"
+import {
+  mono,
+  tNumber,
+  tBool,
+  tString,
+  generalize,
+  instantiate,
+  typeExprToType,
+  typeExprListToType,
+  ctorScheme,
+  isUpperStart
+} from "./schemes.mochi"
 import { stronglyConnected } from "./scc.mochi"
 
 // One chunk of a "…${a}…" interpolation (ADR 0023): a literal run, or a
@@ -51,39 +84,39 @@ import { stronglyConnected } from "./scc.mochi"
 // --- span extractors (TS reads `.span` directly) ---
 
 let exprSpan = e => switch e {
-  | ENum(_, _, sp) => sp
-  | EBool(_, sp) => sp
-  | EStr(_, sp) => sp
-  | ERef(_, sp) => sp
-  | ECall(_, _, sp) => sp
-  | ELambda(_, _, sp) => sp
-  | ELetIn(_, _, _, _, sp) => sp
-  | ELetBind(_, _, _, _, sp) => sp
-  | EPipe(_, _, sp) => sp
-  | ETernary(_, _, _, sp) => sp
-  | EMatch(_, _, sp) => sp
-  | ERecord(_, _, sp) => sp
-  | EField(_, _, sp) => sp
-  | ETuple(_, sp) => sp
-  | EArr(_, sp) => sp
-  | EList(_, sp) => sp
-  | ESet(_, sp) => sp
-  | EMap(_, sp) => sp
-  | EInterp(_, sp) => sp
+  | Ast.ENum(_, _, sp) => sp
+  | Ast.EBool(_, sp) => sp
+  | Ast.EStr(_, sp) => sp
+  | Ast.ERef(_, sp) => sp
+  | Ast.ECall(_, _, sp) => sp
+  | Ast.ELambda(_, _, sp) => sp
+  | Ast.ELetIn(_, _, _, _, sp) => sp
+  | Ast.ELetBind(_, _, _, _, sp) => sp
+  | Ast.EPipe(_, _, sp) => sp
+  | Ast.ETernary(_, _, _, sp) => sp
+  | Ast.EMatch(_, _, sp) => sp
+  | Ast.ERecord(_, _, sp) => sp
+  | Ast.EField(_, _, sp) => sp
+  | Ast.ETuple(_, sp) => sp
+  | Ast.EArr(_, sp) => sp
+  | Ast.EList(_, sp) => sp
+  | Ast.ESet(_, sp) => sp
+  | Ast.EMap(_, sp) => sp
+  | Ast.EInterp(_, sp) => sp
 }
 
 let patSpan = p => switch p {
-  | PWild(sp) => sp
-  | PBind(_, sp) => sp
-  | PLit(_, _, sp) => sp
-  | PBool(_, sp) => sp
-  | PStr(_, sp) => sp
-  | PTuple(_, sp) => sp
-  | PRecord(_, sp) => sp
-  | PCtor(_, _, sp) => sp
-  | PArr(_, _, sp) => sp
-  | PList(_, _, sp) => sp
-  | POr(_, sp) => sp
+  | Ast.PWild(sp) => sp
+  | Ast.PBind(_, sp) => sp
+  | Ast.PLit(_, _, sp) => sp
+  | Ast.PBool(_, sp) => sp
+  | Ast.PStr(_, sp) => sp
+  | Ast.PTuple(_, sp) => sp
+  | Ast.PRecord(_, sp) => sp
+  | Ast.PCtor(_, _, _, sp) => sp
+  | Ast.PArr(_, _, sp) => sp
+  | Ast.PList(_, _, sp) => sp
+  | Ast.POr(_, sp) => sp
 }
 
 // --- inference-time error + context. unify.ts's span-less TypeErr becomes a
@@ -126,15 +159,15 @@ let bindParamFieldsFrom = (fields, env, row, st) => switch fields {
 }
 
 let bindParam = (p, env, st) => switch p {
-  | LPName(name) => let (t, st1) = freshVar(st) in
+  | Ast.LPName(name) => let (t, st1) = freshVar(st) in
       (t, Map.set(name, mono(t), env), st1)
-  | LPTuple(names) => let (elems, env1, st1) = bindParamNamesFrom(
+  | Ast.LPTuple(names) => let (elems, env1, st1) = bindParamNamesFrom(
       names,
       env,
       st
     ) in
       (tTuple(elems), env1, st1)
-  | LPRecord(fields) => let (rowBase, st1) = freshRowVar(st) in
+  | Ast.LPRecord(fields) => let (rowBase, st1) = freshRowVar(st) in
       let (row, env1, st2) = bindParamFieldsFrom(fields, env, rowBase, st1) in
         (tRecord(row), env1, st2)
 }
@@ -239,8 +272,8 @@ let inferNsField = (tname, name, sp, ctx, st) => switch Map.get(name, Map.getOr(
 // `show`. Literal chunks carry no type information to infer.
 let inferInterpParts = (parts, ctx, st) => switch parts {
   | [] => Ok(st)
-  | [IPLit(_), ...rest] => inferInterpParts(rest, ctx, st)
-  | [IPExpr(ex), ...rest] => let? (t, st1) = inferExpr(ex, ctx, st) in
+  | [Ast.IPLit(_), ...rest] => inferInterpParts(rest, ctx, st)
+  | [Ast.IPExpr(ex), ...rest] => let? (t, st1) = inferExpr(ex, ctx, st) in
     let? st2 = u(t, tString, st1, exprSpan(ex)) in
       inferInterpParts(rest, ctx, st2)
 }
@@ -252,15 +285,18 @@ let inferTupleElems = (elements, ctx, st) => switch elements {
       Ok((Array.prepend(t, restTs), st2))
 }
 
-let seqElemExpr = el => switch el { | SEExpr(e) => e | SESpread(e) => e }
+let seqElemExpr = el => switch el {
+  | Ast.SEExpr(e) => e
+  | Ast.SESpread(e) => e
+}
 
 let inferSeqSlotsElems = (con, elem, elements, ctx, st) => switch elements {
   | [] => Ok(st)
   | [slot, ...rest] => let ex = seqElemExpr(slot) in
     let? (et, st1) = inferExpr(ex, ctx, st) in
     let want = switch slot {
-      | SEExpr(_) => elem
-      | SESpread(_) => tCon(con, [elem])
+      | Ast.SEExpr(_) => elem
+      | Ast.SESpread(_) => tCon(con, [elem])
     } in
     let? st2 = u(want, et, st1, exprSpan(ex)) in
       inferSeqSlotsElems(con, elem, rest, ctx, st2)
@@ -334,30 +370,30 @@ let inferMatch = (scrutinee, arms, ctx, st) =>
     let? st3 = inferArms(scrutT, resultT, arms, ctx, st2) in Ok((resultT, st3))
 
 let inferExpr = (e, ctx, st) => switch e {
-  | ENum(_, _, _) => Ok((tNumber, st))
-  | EBool(_, _) => Ok((tBool, st))
-  | EStr(_, _) => Ok((tString, st))
-  | ERef(name, sp) => switch Map.get(name, ctx.env) {
+  | Ast.ENum(_, _, _) => Ok((tNumber, st))
+  | Ast.EBool(_, _) => Ok((tBool, st))
+  | Ast.EStr(_, _) => Ok((tString, st))
+  | Ast.ERef(name, sp) => switch Map.get(name, ctx.env) {
       | Some(sc) => let (t, st1) = instantiate(sc, st) in Ok((t, st1))
       | None => ctx.open
           ? let (t, st1) = freshVar(st) in Ok((t, st1))
           : Err(typeErr("unbound variable '${name}'", sp))
     }
-  | ELambda(params, body, _) => let (paramTypes, bodyEnv, st1) = bindParamsFrom(
+  | Ast.ELambda(params, body, _) => let (paramTypes, bodyEnv, st1) = bindParamsFrom(
       params,
       ctx.env,
       st
     ) in
     let? (bodyT, st2) = inferExpr(body, ctxWithEnv(ctx, bodyEnv), st1) in
       Ok((arrowChain(paramTypes, bodyT), st2))
-  | ELetIn(name, _, value, body, _) => let? (valT, st1) = inferExpr(
+  | Ast.ELetIn(name, _, value, body, _) => let? (valT, st1) = inferExpr(
       value,
       ctx,
       st
     ) in
     let sc = generalize(ctx.env, valT, st1) in
       inferExpr(body, ctxWithEnv(ctx, Map.set(name, sc, ctx.env)), st1)
-  | ELetBind(param, paramSpan, value, body, _) => inferLetBind(
+  | Ast.ELetBind(param, paramSpan, value, body, _) => inferLetBind(
       param,
       paramSpan,
       value,
@@ -365,11 +401,21 @@ let inferExpr = (e, ctx, st) => switch e {
       ctx,
       st
     )
-  | ECall(fn, args, _) => let? (fnT, st1) = inferExpr(fn, ctx, st) in
+  | Ast.ECall(fn, args, _) => let? (fnT, st1) = inferExpr(fn, ctx, st) in
       inferCallArgs(fnT, args, ctx, st1)
-  | EPipe(left, right, sp) => inferExpr(ECall(right, [left], sp), ctx, st)
-  | ETernary(cond, thenE, elseE, _) => inferTernary(cond, thenE, elseE, ctx, st)
-  | ERecord(fields, spread, sp) => switch spread {
+  | Ast.EPipe(left, right, sp) => inferExpr(
+      Ast.ECall(right, [left], sp),
+      ctx,
+      st
+    )
+  | Ast.ETernary(cond, thenE, elseE, _) => inferTernary(
+      cond,
+      thenE,
+      elseE,
+      ctx,
+      st
+    )
+  | Ast.ERecord(fields, spread, sp) => switch spread {
       | None => let? (row, st1) = inferRecordRow(fields, ctx, st) in
           Ok((tRecord(row), st1))
       | Some(spreadExpr) =>
@@ -383,24 +429,24 @@ let inferExpr = (e, ctx, st) => switch e {
           let? st4 = u(baseT, tRecord(rWithTail(row, tailVar)), st3, sp) in
             Ok((baseT, st4))
     }
-  | EField(target, name, sp) => switch target {
-      | ERef(tname, _) => Map.has(tname, ctx.ns) && !Map.has(tname, ctx.env)
+  | Ast.EField(target, name, sp) => switch target {
+      | Ast.ERef(tname, _) => Map.has(tname, ctx.ns) && !Map.has(tname, ctx.env)
           ? inferNsField(tname, name, sp, ctx, st)
           : inferFieldAccess(target, name, sp, ctx, st)
       | _ => inferFieldAccess(target, name, sp, ctx, st)
     }
-  | ETuple(elements, _) => let? (elems, st1) = inferTupleElems(
+  | Ast.ETuple(elements, _) => let? (elems, st1) = inferTupleElems(
       elements,
       ctx,
       st
     ) in
       Ok((tTuple(elems), st1))
-  | EArr(elements, _) => inferSeqSlots("Array", elements, ctx, st)
-  | EList(elements, _) => inferSeqSlots("List", elements, ctx, st)
-  | ESet(elements, _) => inferSeqSlots("Set", elements, ctx, st)
-  | EMap(entries, _) => inferMapExpr(entries, ctx, st)
-  | EMatch(scrutinee, arms, _) => inferMatch(scrutinee, arms, ctx, st)
-  | EInterp(parts, _) => let? st1 = inferInterpParts(parts, ctx, st) in
+  | Ast.EArr(elements, _) => inferSeqSlots("Array", elements, ctx, st)
+  | Ast.EList(elements, _) => inferSeqSlots("List", elements, ctx, st)
+  | Ast.ESet(elements, _) => inferSeqSlots("Set", elements, ctx, st)
+  | Ast.EMap(entries, _) => inferMapExpr(entries, ctx, st)
+  | Ast.EMatch(scrutinee, arms, _) => inferMatch(scrutinee, arms, ctx, st)
+  | Ast.EInterp(parts, _) => let? st1 = inferInterpParts(parts, ctx, st) in
       Ok((tString, st1))
 }
 
@@ -494,22 +540,29 @@ let inferSeqPat = (con, elems, restPat, ctx, st) =>
     }
 
 let inferPat = (p, ctx, st) => switch p {
-  | PWild(_) => let (t, st1) = freshVar(st) in Ok((t, #{}, st1))
-  | PLit(_, _, _) => Ok((tNumber, #{}, st))
-  | PBool(_, _) => Ok((tBool, #{}, st))
-  | PStr(_, _) => Ok((tString, #{}, st))
-  | PBind(name, _) => let (t, st1) = freshVar(st) in
+  | Ast.PWild(_) => let (t, st1) = freshVar(st) in Ok((t, #{}, st1))
+  | Ast.PLit(_, _, _) => Ok((tNumber, #{}, st))
+  | Ast.PBool(_, _) => Ok((tBool, #{}, st))
+  | Ast.PStr(_, _) => Ok((tString, #{}, st))
+  | Ast.PBind(name, _) => let (t, st1) = freshVar(st) in
       Ok((t, Map.set(name, t, #{}), st1))
-  | PRecord(fields, _) => inferPatRecord(fields, ctx, st)
-  | PCtor(ctor, args, sp) => switch Map.get(ctor, ctx.env) {
-      | None => Err(typeErr("unknown constructor '${ctor}'", sp))
-      | Some(sc) => let (curT, st1) = instantiate(sc, st) in
-          inferPatCtorArgs(ctor, curT, args, ctx, st1, #{}, sp)
+  | Ast.PRecord(fields, _) => inferPatRecord(fields, ctx, st)
+  | Ast.PCtor(ctor, args, ns, sp) => switch ns {
+      | Some(alias) => switch Map.get(ctor, Map.getOr(#{}, alias, ctx.ns)) {
+          | None => Err(typeErr("'${alias}' has no member '${ctor}'", sp))
+          | Some(sc) => let (curT, st1) = instantiate(sc, st) in
+              inferPatCtorArgs(ctor, curT, args, ctx, st1, #{}, sp)
+        }
+      | None => switch Map.get(ctor, ctx.env) {
+          | None => Err(typeErr("unknown constructor '${ctor}'", sp))
+          | Some(sc) => let (curT, st1) = instantiate(sc, st) in
+              inferPatCtorArgs(ctor, curT, args, ctx, st1, #{}, sp)
+        }
     }
-  | PTuple(elems, _) => inferPatTuple(elems, ctx, st)
-  | PArr(elems, rest, _) => inferSeqPat("Array", elems, rest, ctx, st)
-  | PList(elems, rest, _) => inferSeqPat("List", elems, rest, ctx, st)
-  | POr(alts, sp) => inferOrPat(alts, sp, ctx, st)
+  | Ast.PTuple(elems, _) => inferPatTuple(elems, ctx, st)
+  | Ast.PArr(elems, rest, _) => inferSeqPat("Array", elems, rest, ctx, st)
+  | Ast.PList(elems, rest, _) => inferSeqPat("List", elems, rest, ctx, st)
+  | Ast.POr(alts, sp) => inferOrPat(alts, sp, ctx, st)
 }
 
 // Every alternative of `A | B | …` describes the same scrutinee, so their
@@ -569,19 +622,19 @@ let patternBindsOpt = rest => switch rest {
   | None => []
 }
 let patternBinds = p => switch p {
-  | PBind(name, _) => [name]
-  | PRecord(fields, _) => fields |> Array.flatMap(f => patternBinds(f.pat))
-  | PCtor(_, args, _) => args |> Array.flatMap(patternBinds)
-  | PTuple(elems, _) => elems |> Array.flatMap(patternBinds)
-  | PArr(elems, rest, _) => Array.concat(
+  | Ast.PBind(name, _) => [name]
+  | Ast.PRecord(fields, _) => fields |> Array.flatMap(f => patternBinds(f.pat))
+  | Ast.PCtor(_, args, _, _) => args |> Array.flatMap(patternBinds)
+  | Ast.PTuple(elems, _) => elems |> Array.flatMap(patternBinds)
+  | Ast.PArr(elems, rest, _) => Array.concat(
       elems |> Array.flatMap(patternBinds),
       patternBindsOpt(rest)
     )
-  | PList(elems, rest, _) => Array.concat(
+  | Ast.PList(elems, rest, _) => Array.concat(
       elems |> Array.flatMap(patternBinds),
       patternBindsOpt(rest)
     )
-  | POr(alts, _) => switch Array.head(alts) {
+  | Ast.POr(alts, _) => switch Array.head(alts) {
       | Some(first) => patternBinds(first)
       | None => []
     }
@@ -594,9 +647,9 @@ let addAllFrom = (names, set) => switch names {
 }
 
 let paramBound = (p, bound) => switch p {
-  | LPName(name) => Set.add(name, bound)
-  | LPTuple(names) => addAllFrom(names, bound)
-  | LPRecord(fields) => addAllFrom(fields, bound)
+  | Ast.LPName(name) => Set.add(name, bound)
+  | Ast.LPTuple(names) => addAllFrom(names, bound)
+  | Ast.LPRecord(fields) => addAllFrom(fields, bound)
 }
 let lambdaBound = (params, bound) => switch params {
   | [] => bound
@@ -621,8 +674,8 @@ let freeRefsEntries = (entries, bound, acc) => switch entries {
 }
 let freeRefsInterpParts = (parts, bound, acc) => switch parts {
   | [] => acc
-  | [IPLit(_), ...rest] => freeRefsInterpParts(rest, bound, acc)
-  | [IPExpr(ex), ...rest] => freeRefsInterpParts(
+  | [Ast.IPLit(_), ...rest] => freeRefsInterpParts(rest, bound, acc)
+  | [Ast.IPExpr(ex), ...rest] => freeRefsInterpParts(
       rest,
       bound,
       freeRefs(ex, bound, acc)
@@ -645,43 +698,71 @@ let freeRefsArms = (arms, bound, acc) => switch arms {
 // bound ones (lambda params, pattern binds). `bound`/`acc` are threaded
 // (not mutated) — TS's in-place `Set` mutation becomes explicit pass-through.
 let freeRefs = (e, bound, acc) => switch e {
-  | ENum(_, _, _) => acc
-  | EBool(_, _) => acc
-  | EStr(_, _) => acc
-  | ERef(name, _) => Set.has(name, bound) ? acc : Set.add(name, acc)
-  | ECall(fn, args, _) => freeRefsList(args, bound, freeRefs(fn, bound, acc))
-  | ELambda(params, body, _) => freeRefs(body, lambdaBound(params, bound), acc)
-  | ELetIn(name, _, value, body, _) => let acc1 = freeRefs(value, bound, acc) in
+  | Ast.ENum(_, _, _) => acc
+  | Ast.EBool(_, _) => acc
+  | Ast.EStr(_, _) => acc
+  | Ast.ERef(name, _) => Set.has(name, bound) ? acc : Set.add(name, acc)
+  | Ast.ECall(fn, args, _) => freeRefsList(
+      args,
+      bound,
+      freeRefs(fn, bound, acc)
+    )
+  | Ast.ELambda(params, body, _) => freeRefs(
+      body,
+      lambdaBound(params, bound),
+      acc
+    )
+  | Ast.ELetIn(name, _, value, body, _) => let acc1 = freeRefs(
+      value,
+      bound,
+      acc
+    ) in
       freeRefs(body, Set.add(name, bound), acc1)
-  | ELetBind(param, _, value, body, _) => let acc1 = freeRefs(
+  | Ast.ELetBind(param, _, value, body, _) => let acc1 = freeRefs(
       value,
       bound,
       acc
     ) in
       freeRefs(body, paramBound(param, bound), acc1)
-  | EPipe(left, right, _) => freeRefs(right, bound, freeRefs(left, bound, acc))
-  | ETernary(cond, thenE, elseE, _) => freeRefs(
+  | Ast.EPipe(left, right, _) => freeRefs(
+      right,
+      bound,
+      freeRefs(left, bound, acc)
+    )
+  | Ast.ETernary(cond, thenE, elseE, _) => freeRefs(
       elseE,
       bound,
       freeRefs(thenE, bound, freeRefs(cond, bound, acc))
     )
-  | EMatch(scrutinee, arms, _) => freeRefsArms(
+  | Ast.EMatch(scrutinee, arms, _) => freeRefsArms(
       arms,
       bound,
       freeRefs(scrutinee, bound, acc)
     )
-  | ERecord(fields, spread, _) => freeRefsFields(
+  | Ast.ERecord(fields, spread, _) => freeRefsFields(
       fields,
       bound,
       switch spread { | Some(s) => freeRefs(s, bound, acc) | None => acc }
     )
-  | EField(target, _, _) => freeRefs(target, bound, acc)
-  | ETuple(elements, _) => freeRefsList(elements, bound, acc)
-  | EArr(elements, _) => freeRefsList(elements |> map(seqElemExpr), bound, acc)
-  | EList(elements, _) => freeRefsList(elements |> map(seqElemExpr), bound, acc)
-  | ESet(elements, _) => freeRefsList(elements |> map(seqElemExpr), bound, acc)
-  | EMap(entries, _) => freeRefsEntries(entries, bound, acc)
-  | EInterp(parts, _) => freeRefsInterpParts(parts, bound, acc)
+  | Ast.EField(target, _, _) => freeRefs(target, bound, acc)
+  | Ast.ETuple(elements, _) => freeRefsList(elements, bound, acc)
+  | Ast.EArr(elements, _) => freeRefsList(
+      elements |> map(seqElemExpr),
+      bound,
+      acc
+    )
+  | Ast.EList(elements, _) => freeRefsList(
+      elements |> map(seqElemExpr),
+      bound,
+      acc
+    )
+  | Ast.ESet(elements, _) => freeRefsList(
+      elements |> map(seqElemExpr),
+      bound,
+      acc
+    )
+  | Ast.EMap(entries, _) => freeRefsEntries(entries, bound, acc)
+  | Ast.EInterp(parts, _) => freeRefsInterpParts(parts, bound, acc)
 }
 
 // Tarjan SCC lives in scc.mochi (ticket 0030).
@@ -751,16 +832,34 @@ let seedNsFrom = (nsNames, namespaces, env, st, acc) => switch nsNames {
     }
 }
 // qualified-namespace members (`List.map`, ...): generalize each like a
-// builtin, so a use site instantiates it fresh. Resolved in the `EField`
+// builtin, so a use site instantiates it fresh. Resolved in the `Ast.EField`
 // case (`inferNsField`, above) against the env as it stood right after
 // builtins were seeded — matching TS's `run`.
 let seedNs = (namespaces, env, st) =>
   seedNsFrom(Map.keys(namespaces), namespaces, env, st, #{})
 
+// `import * as Alias` namespaces (ADR 0002): each alias's members are
+// already-generalized Schemes (published by the dep module), so they overlay
+// directly onto the qualified-lookup table — no re-generalizing, unlike the
+// prelude's `Type` members above.
+let seedNsImportsFrom = (aliases, nsImports, ns) => switch aliases {
+  | [] => ns
+  | [alias, ...rest] => switch Map.get(alias, nsImports) {
+      | Some(members) => seedNsImportsFrom(
+          rest,
+          nsImports,
+          Map.set(alias, members, ns)
+        )
+      | None => seedNsImportsFrom(rest, nsImports, ns)
+    }
+}
+let seedNsImports = (nsImports, ns) =>
+  seedNsImportsFrom(Map.keys(nsImports), nsImports, ns)
+
 let aliasMapFrom = (stmts, acc) => switch stmts {
   | [] => acc
   | [s, ...rest] => switch s {
-      | SType(name, params, _, Some(fields), _, _) => aliasMapFrom(
+      | Ast.SType(name, params, _, Some(fields), _, _) => aliasMapFrom(
           rest,
           Map.set(name, { params: params, fields: fields }, acc)
         )
@@ -790,7 +889,7 @@ let registerCtorsFrom = (ctors, typeName, params, aliasMap, env, st) => switch c
 let registerUserCtorsFrom = (stmts, aliasMap, env, st) => switch stmts {
   | [] => (env, st)
   | [s, ...rest] => switch s {
-      | SType(name, params, ctors, _, _, _) => let (env1, st1) = registerCtorsFrom(
+      | Ast.SType(name, params, ctors, _, _, _) => let (env1, st1) = registerCtorsFrom(
           ctors,
           name,
           params,
@@ -838,7 +937,7 @@ let registerBuiltinCtorsFrom = (decls, aliasMap, env, st) => switch decls {
 let registerExternsFrom = (stmts, aliasMap, env, st) => switch stmts {
   | [] => (env, st)
   | [s, ...rest] => switch s {
-      | SExtern(name, _, typeExpr, _, _, _, _) => let (t, _, st1) = typeExprToType(
+      | Ast.SExtern(name, _, typeExpr, _, _, _, _) => let (t, _, st1) = typeExprToType(
           typeExpr,
           #{},
           st,
@@ -858,14 +957,14 @@ let registerExternsFrom = (stmts, aliasMap, env, st) => switch stmts {
 let letsOfFrom = stmts => switch stmts {
   | [] => []
   | [s, ...rest] => switch s {
-      | SLet(_, _, _, _, _, _, _) => Array.prepend(s, letsOfFrom(rest))
+      | Ast.SLet(_, _, _, _, _, _, _) => Array.prepend(s, letsOfFrom(rest))
       | _ => letsOfFrom(rest)
     }
 }
 
 let idxOfFrom = (lets, i, acc) => switch Array.get(i, lets) {
   | None => acc
-  | Some(SLet(name, _, _, _, _, _, _)) => idxOfFrom(
+  | Some(Ast.SLet(name, _, _, _, _, _, _)) => idxOfFrom(
       lets,
       i + 1,
       Map.set(name, i, acc)
@@ -875,7 +974,7 @@ let idxOfFrom = (lets, i, acc) => switch Array.get(i, lets) {
 let idxOfMap = lets => idxOfFrom(lets, 0, #{})
 
 let depsOf = (letStmt, idxOf) => switch letStmt {
-  | SLet(_, _, _, value, _, _, _) => Set.toArray(
+  | Ast.SLet(_, _, _, value, _, _, _) => Set.toArray(
       freeRefs(value, Set.fromArray([]), Set.fromArray([]))
     )
       |> Array.flatMap(r => switch Map.get(r, idxOf) {
@@ -900,7 +999,7 @@ let groupOfFrom = (idxs, lets) => switch idxs {
 let preBindGroupFrom = (group, env, st) => switch group {
   | [] => (env, st)
   | [s, ...rest] => switch s {
-      | SLet(name, _, _, _, _, _, _) => let (v, st1) = freshVar(st) in
+      | Ast.SLet(name, _, _, _, _, _, _) => let (v, st1) = freshVar(st) in
           preBindGroupFrom(rest, Map.set(name, mono(v), env), st1)
       | _ => preBindGroupFrom(rest, env, st)
     }
@@ -909,7 +1008,7 @@ let preBindGroupFrom = (group, env, st) => switch group {
 let inferGroupFrom = (group, ctx, st) => switch group {
   | [] => Ok((#{}, st))
   | [s, ...rest] => switch s {
-      | SLet(name, _, annot, value, _, _, span) => let? (t, st1) = inferExpr(
+      | Ast.SLet(name, _, annot, value, _, _, span) => let? (t, st1) = inferExpr(
           value,
           ctx,
           st
@@ -942,7 +1041,7 @@ let inferGroupFrom = (group, ctx, st) => switch group {
 let dropGroupFrom = (group, env) => switch group {
   | [] => env
   | [s, ...rest] => switch s {
-      | SLet(name, _, _, _, _, _, _) => dropGroupFrom(
+      | Ast.SLet(name, _, _, _, _, _, _) => dropGroupFrom(
           rest,
           Map.delete(name, env)
         )
@@ -955,7 +1054,7 @@ let dropGroupFrom = (group, env) => switch group {
 let generalizeGroupFrom = (group, bodyTypes, env, st) => switch group {
   | [] => env
   | [s, ...rest] => switch s {
-      | SLet(name, _, _, _, _, _, _) => switch Map.get(name, bodyTypes) {
+      | Ast.SLet(name, _, _, _, _, _, _) => switch Map.get(name, bodyTypes) {
           | Some(t) => generalizeGroupFrom(
               rest,
               bodyTypes,
@@ -998,12 +1097,14 @@ let seedImportsFrom = (keys, imports, env) => switch keys {
 }
 
 // inferProgram threaded with `imports` (a Map of name -> Scheme published by dep
-// modules). Mirrors src/infer.ts's `inferProgramTypes({ imports })`; returns the
-// final env so the module driver can extract this module's export schemes.
-export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports) =>
+// modules) and `nsImports` (`import * as Alias` -> Alias's export schemes,
+// ADR 0002). Mirrors src/infer.ts's `inferProgramTypes({ imports, nsImports })`;
+// returns the final env so the module driver can extract this module's export
+// schemes.
+export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports, nsImports) =>
   let st0 = mkSt(1000) in
   let env0 = seedBuiltins(builtins, #{}, st0) in
-  let ns0 = seedNs(namespaces, env0, st0) in
+  let ns0 = seedNsImports(nsImports, seedNs(namespaces, env0, st0)) in
   let aliasMap = aliasMapFrom(stmts, #{}) in
     let (env1, st1) = registerUserCtorsFrom(stmts, aliasMap, env0, st0) in
       let (env2, st2) = registerBuiltinCtorsFrom(
@@ -1023,7 +1124,7 @@ export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports
           }
 
 export let inferProgram = (stmts, builtins, namespaces, openMode) =>
-  inferProgramImports(stmts, builtins, namespaces, openMode, #{})
+  inferProgramImports(stmts, builtins, namespaces, openMode, #{}, #{})
 
 // The schemes a module PUBLISHES: exported let/extern bindings and the ctors of
 // exported types, pulled from the final inference env by name. Mirrors
@@ -1040,19 +1141,19 @@ let exportCtorsInto = (ctors, i, env, acc) => switch Array.get(i, ctors) {
 }
 let exportedSchemesFrom = (stmts, i, env, acc) => switch Array.get(i, stmts) {
   | None => acc
-  | Some(SLet(name, _, _, _, true, _, _)) => exportedSchemesFrom(
+  | Some(Ast.SLet(name, _, _, _, true, _, _)) => exportedSchemesFrom(
       stmts,
       i + 1,
       env,
       takeScheme(name, env, acc)
     )
-  | Some(SExtern(name, _, _, _, _, true, _)) => exportedSchemesFrom(
+  | Some(Ast.SExtern(name, _, _, _, _, true, _)) => exportedSchemesFrom(
       stmts,
       i + 1,
       env,
       takeScheme(name, env, acc)
     )
-  | Some(SType(_, _, ctors, _, true, _)) => exportedSchemesFrom(
+  | Some(Ast.SType(_, _, ctors, _, true, _)) => exportedSchemesFrom(
       stmts,
       i + 1,
       env,

@@ -121,5 +121,7 @@ let evens5 = evens |> take(5) |> toArray      // [0, 2, 4, 6, 8]
 
 Ternary `cond ? a : b` (looser than `|>`, right-associative), operator sections
 `(x +)` / `(+ x)` (ADR 0000; `(- x)` stays negation), string interpolation,
-`let? x = value in …` (monadic bind over `Result`), and `///` doc comments that attach
-to the following binding and surface in hover and `.d.ts`.
+`let? x = value in …` (monadic bind over `Result`), `///` doc comments that attach
+to the following binding and surface in hover and `.d.ts`, and namespace imports
+`import * as Alias from "./mod"` with qualified access / ctor patterns
+`Alias.member` / `| Alias.Ctor(…)` (ADR 0002).
