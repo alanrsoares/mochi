@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "command": "bun .cursor/hooks/no-attribution-trailers.ts",
+        "matcher": "Shell",
+        "failClosed": false
+      }
+    ]
+  }
+}
