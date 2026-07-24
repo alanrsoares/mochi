@@ -44,6 +44,7 @@ export type Tok =
   | { t: "andand" } // &&
   | { t: "oror" } // ||
   | { t: "bang" } // !
+  | { t: "backtick" } // `
   | { t: "comma" }
   | { t: "num"; v: number; raw: string } // raw source lexeme, so `3.0`/`-3` survive re-printing
   | { t: "bool"; v: boolean } // true / false
@@ -97,6 +98,7 @@ const PUNCT: Record<string, Tok | undefined> = {
   "/": { t: "slash" },
   "%": { t: "percent" },
   "!": { t: "bang" },
+  "`": { t: "backtick" },
   "<": { t: "lt" },
   ">": { t: "gt" },
   "|": { t: "bar" },

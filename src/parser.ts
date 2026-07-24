@@ -58,6 +58,7 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
   const CMP_BP = 8;
   const CONCAT_BP = 10;
   const ADD_BP = 10;
+  const BACKTICK_BP = 15;
   const MUL_BP = 20;
 
   // ---- expressions -------------------------------------------------------
@@ -291,6 +292,21 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
         left: {
           kind: "call",
           fn: { kind: "ref", name: "concat", span: opTok.span },
+          args: [left, right],
+          span: spanning(left.span, right.span),
+        },
+        matched: true,
+      };
+    }
+    if (tk.t === "backtick" && BACKTICK_BP >= minBp) {
+      next();
+      const fnExpr = parseAtomOrCall();
+      expect("backtick");
+      const right = parseExpr(BACKTICK_BP + 1);
+      return {
+        left: {
+          kind: "call",
+          fn: fnExpr,
           args: [left, right],
           span: spanning(left.span, right.span),
         },

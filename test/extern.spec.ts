@@ -83,6 +83,16 @@ test("desugars prefix unary operators (- and !)", () => {
   const res = compile(code);
   expect(isOk(res)).toBe(true);
 });
+
+test("desugars backtick infix function calls (`fn`) to fn(left, right)", () => {
+  const code = `
+    let myAdd = (a, b) => a + b
+    let res1 = 10 \`myAdd\` 20
+    let res2 = 10 \`add\` 20
+  `;
+  const res = compile(code);
+  expect(isOk(res)).toBe(true);
+});
 test("lowercase names in a signature are generalized type variables", () => {
   // a -> a is polymorphic
   expect(schemeOf(`extern id : a -> a = "./u.js" "id"`, "id")).toMatch(/^'t\d+ -> 't\d+$/);
