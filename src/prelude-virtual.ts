@@ -239,7 +239,7 @@ const sameLoc = (a: Location, b: Location): boolean =>
 /** Binding-shaped input for prelude docstring lookup (avoids a symbols cycle). */
 export type PreludeDocBinding = {
   name: string;
-  space: "value" | "type" | "ctor";
+  space: "value" | "type" | "ctor" | "field";
   def: Location;
 };
 

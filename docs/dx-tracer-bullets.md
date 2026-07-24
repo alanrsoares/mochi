@@ -23,7 +23,7 @@ Parent epic: [#1](https://github.com/alanrsoares/mochi/issues/1) (children shipp
 | # | Title | Type | Blocked by | Status |
 |---|---|---|---|---|
 | 9 | Prelude virtual defs — F12 / “defined here” for builtins (virtual `Location`) | AFK | — | done |
-| 10 | Record-field nav (same-file) — `p.x` ↔ type-alias / literal / pattern field sites | AFK | — | |
+| 10 | Record-field nav (same-file) — `p.x` ↔ type-alias / literal / pattern field sites | AFK | — | done |
 | 11 | Go-to-type at expression (uses infer table; degrades when typecheck fails) | AFK | — | |
 | 12 | Multi-error collection (honest recovery; ADR 0003 deferred) | HITL | design | |
 
@@ -222,9 +222,9 @@ Index record field names (type-alias fields, literals, patterns, `e.field` uses)
 
 ## Acceptance criteria
 
-- [ ] F12 on `p.x` jumps to a same-file field def (alias / literal / pattern)
-- [ ] Highlight marks field def + uses for that field name binding
-- [ ] `bun run check` green
+- [x] F12 on `p.x` jumps to a same-file field def (alias / literal / pattern)
+- [x] Highlight marks field def + uses for that field name binding
+- [x] `bun run check` green
 
 ## Blocked by
 

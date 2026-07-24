@@ -201,7 +201,8 @@ export const moduleReferencesAt = async (
 const isRenameableName = (name: string): boolean =>
   !name.startsWith("$") && !name.startsWith("_") && /^[A-Za-z][A-Za-z0-9_]*$/.test(name);
 
-const canRename = (b: Binding): boolean => isRenameableName(b.name) && !isPreludePath(b.def.path);
+const canRename = (b: Binding): boolean =>
+  isRenameableName(b.name) && !isPreludePath(b.def.path) && b.space !== "field";
 
 export const prepareRenameAt = (
   src: string,

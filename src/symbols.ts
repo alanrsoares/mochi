@@ -7,7 +7,7 @@ import { isCtorName } from "./ast";
 import { fieldNameSpan, preludeNsMember, preludeOrigins } from "./prelude-virtual";
 import type { Location, Span } from "./span";
 
-export type SymbolSpace = "value" | "type" | "ctor";
+export type SymbolSpace = "value" | "type" | "ctor" | "field";
 
 export type Binding = {
   name: string;
@@ -32,7 +32,7 @@ type Scope = Map<string, Binding>;
 
 type Builder = {
   path: string;
-  scopes: { value: Scope[]; type: Scope[]; ctor: Scope[] };
+  scopes: { value: Scope[]; type: Scope[]; ctor: Scope[]; field: Scope[] };
   occurrences: Occurrence[];
 };
 
@@ -76,6 +76,16 @@ const use = (b: Builder, space: SymbolSpace, name: string, span: Span): void => 
   if (binding && !isPlaceholder(binding)) b.occurrences.push({ binding, span, role: "use" });
 };
 
+/**
+ * File-level record field name (DX slice 10). First site is the def (alias
+ * preferred via bindTopLevels order); later alias/literal/pattern/access sites
+ * are uses of that same binding. Row polymorphism → name heuristic only.
+ */
+const touchField = (b: Builder, name: string, span: Span): void => {
+  if (lookup(b, "field", name)) use(b, "field", name, span);
+  else bind(b, "field", name, span);
+};
+
 const bindParam = (b: Builder, p: LamParam): void => {
   if (p.kind === "name") {
     if (!p.name.startsWith("$")) bind(b, "value", p.name, p.span);
@@ -98,7 +108,10 @@ const walkPat = (b: Builder, p: Pattern): void => {
       for (const a of p.args) walkPat(b, a);
       return;
     case "precord":
-      for (const f of p.fields) walkPat(b, f.pat);
+      for (const f of p.fields) {
+        touchField(b, f.label, f.labelSpan);
+        walkPat(b, f.pat);
+      }
       return;
     case "ptuple":
       for (const e of p.elems) walkPat(b, e);
@@ -128,7 +141,10 @@ const walkPatUses = (b: Builder, p: Pattern): void => {
       for (const a of p.args) walkPatUses(b, a);
       return;
     case "precord":
-      for (const f of p.fields) walkPatUses(b, f.pat);
+      for (const f of p.fields) {
+        touchField(b, f.label, f.labelSpan);
+        walkPatUses(b, f.pat);
+      }
       return;
     case "ptuple":
       for (const e of p.elems) walkPatUses(b, e);
@@ -235,12 +251,15 @@ const walkExpr = (b: Builder, e: Expr): void => {
       return;
     case "record":
       if (e.spread) walkExpr(b, e.spread);
-      for (const f of e.fields) walkExpr(b, f.value);
+      for (const f of e.fields) {
+        touchField(b, f.name, f.nameSpan);
+        walkExpr(b, f.value);
+      }
       return;
     case "field": {
       walkExpr(b, e.target);
-      // Prelude `Ns.member` (e.g. Result.map) — record the member use against the
-      // virtual def. Ordinary record fields stay unindexed (DX slice 10).
+      // Prelude `Ns.member` (e.g. Result.map) — virtual prelude def.
+      // Else record-field name (DX slice 10).
       if (e.target.kind === "ref") {
         const def = preludeNsMember(e.target.name, e.name);
         if (def) {
@@ -250,8 +269,10 @@ const walkExpr = (b: Builder, e: Expr): void => {
             span: fieldNameSpan(e.span, e.name),
             role: "use",
           });
+          return;
         }
       }
+      touchField(b, e.name, fieldNameSpan(e.span, e.name));
       return;
     }
     case "tuple":
@@ -281,6 +302,8 @@ const bindTopLevels = (b: Builder, stmts: Stmt[], origins?: Origins): void => {
     } else if (s.kind === "type") {
       bind(b, "type", s.name, s.nameSpan);
       for (const c of s.ctors) bind(b, "ctor", c.name, c.span);
+      // Alias fields first so `p.x` resolves to the type's `x` when present.
+      if (s.alias) for (const f of s.alias) touchField(b, f.name, f.nameSpan);
     } else if (s.kind === "let") {
       if (!s.name.startsWith("$")) bind(b, "value", s.name, s.nameSpan);
     } else if (s.kind === "extern") {
@@ -395,7 +418,7 @@ const seedPrelude = (b: Builder): void => {
 export const indexProgram = (path: string, prog: Program, origins?: Origins): SymbolIndex => {
   const b: Builder = {
     path,
-    scopes: { value: [new Map()], type: [new Map()], ctor: [new Map()] },
+    scopes: { value: [new Map()], type: [new Map()], ctor: [new Map()], field: [new Map()] },
     occurrences: [],
   };
   seedPrelude(b);

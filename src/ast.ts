@@ -61,7 +61,7 @@ export type LamParam =
   | { kind: "precord"; fields: string[] } // ({ x, y }) => ...
   | { kind: "ptuple"; names: string[] }; // ((a, b)) => ... — tuple-destructuring param
 
-export type Field = { name: string; value: Expr };
+export type Field = { name: string; nameSpan: Span; value: Expr };
 
 // One `key: value` pair in a `#{…}` map literal. The key is a full expression
 // (usually a string/number literal), not an identifier like a record field.
@@ -93,7 +93,7 @@ export type Pattern =
 
 // A field inside a record pattern: `{ x }` puns to `pbind x`; `{ x: p }` matches
 // field `x` against sub-pattern `p` (a literal narrows, a name binds).
-export type PatField = { label: string; pat: Pattern };
+export type PatField = { label: string; labelSpan: Span; pat: Pattern };
 
 // A variant constructor: name + ordered fields. Each field has a full type
 // expression and an OPTIONAL label. A labelled field lowers to that runtime key
@@ -107,7 +107,7 @@ export type CtorField = { name: string | null; type: TypeExpr };
 // One field of a transparent record-type alias: `type Point = { x: number, y: a }`.
 // The field type is a full `TypeExpr` (like a `CtorField`'s), so aliases can
 // carry generics and applied/nested types.
-export type AliasField = { name: string; type: TypeExpr };
+export type AliasField = { name: string; nameSpan: Span; type: TypeExpr };
 
 // A surface type expression, used in `extern` signatures. Lowercase names are
 // type variables (generalized); prim names (number/string/bool/...) map to

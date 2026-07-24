@@ -38,14 +38,14 @@ the `.mochi` formatter on `bootstrap/`), `build:ext` (VS Code extension).
 - **Hover** — types on demand, folded back to named record aliases where they match, with
   `///` doc comments attached (user docs on lets; prelude builtins use the virtual
   prelude docstrings).
-- **Go to definition / document highlight** — lexical symbol index (values, types, ctors);
-  works when typecheck fails. Prelude / builtins (including `Result.map`-style
-  namespaces) resolve to a virtual `mochi:/prelude.mochi` buffer (read-only).
-  Cross-module F12 follows import origins to the exporting module
+- **Go to definition / document highlight** — lexical symbol index (values, types, ctors,
+  same-file record fields); works when typecheck fails. Prelude / builtins (including
+  `Result.map`-style namespaces) resolve to a virtual `mochi:/prelude.mochi` buffer
+  (read-only). Cross-module F12 follows import origins to the exporting module
   ([tracer bullets](dx-tracer-bullets.md)).
 - **Find references / rename** — same-file and across the import graph; skips `$`/`_`
-  synthetics and prelude (virtual defs are not renameable). F2 rewrites every occurrence
-  of a user binding.
+  synthetics, prelude, and record fields (field nav is name-heuristic only). F2 rewrites
+  every occurrence of a user value/type/ctor binding.
 - **Document / workspace symbols** — outline of top-level lets/types/ctors; workspace
   search over the open module graph.
 - **Code actions** — `Diagnostic.suggestions` become quick fixes (e.g. did-you-mean on

@@ -122,10 +122,12 @@ errors) share one compiler-side model — the LSP stays a thin adapter (ADR 0003
 - **Binding** — a name in scope identified by its **def span** (not the string), so
   shadowing stays precise for nav and for error labels.
 - **Symbol index** — lexical def/use map over a `Program` (+ import origins + prelude
-  virtual defs). Powers go-to-definition, find-refs, rename, document highlight, and
-  "defined here" / did-you-mean labels. Built without typechecking so it still works when
-  inference fails. Builtin names resolve to `mochi:/prelude.mochi` (a virtual buffer); they are
-  not renameable.
+  virtual defs + same-file record **field** names). Powers go-to-definition, find-refs,
+  rename, document highlight, and "defined here" / did-you-mean labels. Built without
+  typechecking so it still works when inference fails. Builtin names resolve to
+  `mochi:/prelude.mochi` (a virtual buffer); they are not renameable. Field nav is a
+  same-file name heuristic (row polymorphism) — F12 prefers a type-alias field when
+  present; rename of fields is refused.
 
 ## Effects — a convention, not a feature
 

@@ -8,6 +8,7 @@ import type {
   Ctor,
   CtorField,
   Expr,
+  Field,
   ImportName,
   LamParam,
   MatchArm,
@@ -540,7 +541,7 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
       next();
       spread = parseExpr();
     }
-    const fields: { name: string; value: Expr }[] = [];
+    const fields: Field[] = [];
     if (peek().t !== "rbrace") {
       if (spread) expect("comma");
       fields.push(parseField());
@@ -555,10 +556,10 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
       : { kind: "record", fields, span: to(start) };
   }
 
-  function parseField(): { name: string; value: Expr } {
-    const name = expectId().name;
+  function parseField(): Field {
+    const id = expectId();
     expect("colon");
-    return { name, value: parseExpr() };
+    return { name: id.name, nameSpan: id.span, value: parseExpr() };
   }
 
   // An array literal: `[]`, `[e]`, `[a, ...xs, b]`. Slots are exprs or spreads.
@@ -809,15 +810,15 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
   // A record-pattern field: `{ x }` puns to binding `x`; `{ x: pat }` matches
   // field `x` against `pat`.
   function parsePatField(): PatField {
-    const { name: label, span } = expectId();
+    const { name: label, span: labelSpan } = expectId();
     if (peek().t === "colon") {
       next();
       // A field sub-pattern is a full pattern — binds, literals, and nesting
       // (`{ a: { b } }`, `{ v: Sm(n) }`). Nested arms lower to the guard form
       // in codegen (matcher objects stay shallow). See ADR 0012.
-      return { label, pat: parsePattern() };
+      return { label, labelSpan, pat: parsePattern() };
     }
-    return { label, pat: { kind: "pbind", name: label, span } };
+    return { label, labelSpan, pat: { kind: "pbind", name: label, span: labelSpan } };
   }
 
   // ---- statements --------------------------------------------------------
@@ -864,9 +865,9 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
   }
 
   function parseAliasField(): AliasField {
-    const name = expectId().name;
+    const id = expectId();
     expect("colon");
-    return { name, type: parseTypeExpr() };
+    return { name: id.name, nameSpan: id.span, type: parseTypeExpr() };
   }
 
   function parseCtor(): Ctor {
