@@ -141,3 +141,17 @@ transfers to mochi's plain HM from what doesn't.
 - **A separate `TaskResult a e` namespace, leaving `Task a` as-is** — rejected,
   fragments one concept into two async vocabularies for no benefit over
   widening the `Task` that already exists.
+- **Fantasy Land compliance** (namespaced instance methods on values, e.g.
+  `x['fantasy-land/map']`) — rejected as a goal. It targets duck-typed interop
+  across untyped JS FP libraries, a shrinking niche; adopting it would mean
+  attaching methods to otherwise-plain tagged values, fighting the class-free,
+  `@onrails/pattern`-matched emit story for an audience mochi isn't targeting.
+- **Deep interop with `effect-ts`'s `Effect<A, E, R>` value type** — rejected.
+  `Effect` is a fiber/scheduler-interpreted structure with structured
+  concurrency, cancellation, and a third `R` (dependency-injection) parameter
+  mochi's type system has no concept of; matching it would be a far larger
+  initiative than "give `Task` an error channel." Boundary interop needs no
+  compiler work regardless: an `extern` can already bind to anything backed
+  by Effect via `Effect.runPromise(eff).then(...)` at the JS edge, same as
+  any other typed-error async library — Effect is designed to be run down to
+  a plain `Promise` at exactly that boundary.
