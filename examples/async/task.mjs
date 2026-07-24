@@ -9,4 +9,3 @@ export const mapT = (f) => (t) => () => t().then(f);
 export const andThen = (f) => (t) => () => t().then((x) => f(x)());
 export const delay = (ms) => (x) => () => new Promise((res) => setTimeout(() => res(x), ms));
 export const run = (t) => t(); // kick it off — hands the Promise to the JS host
-export const add = (a) => (b) => a + b;

@@ -35,4 +35,6 @@ What else was on the table and why not.
 
 ## Index
 
-_None yet — the next decision starts at `0000`._
+| ADR | Title | Status |
+|---|---|---|
+| [0000](0000-operator-sections.md) | Operator sections | Accepted |

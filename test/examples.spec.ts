@@ -42,16 +42,13 @@ test("examples/async composes a typed Task pipeline that runs to its value", asy
   const delay = (ms: number) => (x: number) => () =>
     new Promise((res) => setTimeout(() => res(x), ms));
   const run = (t: () => Promise<number>): Promise<number> => t();
-  const add = (a: number) => (b: number) => a + b;
-  const result = new Function(
-    "of",
-    "mapT",
-    "andThen",
-    "delay",
-    "run",
-    "add",
-    `${js}\nreturn result;`,
-  )(of, mapT, andThen, delay, run, add) as Promise<number>;
+  const result = new Function("of", "mapT", "andThen", "delay", "run", `${js}\nreturn result;`)(
+    of,
+    mapT,
+    andThen,
+    delay,
+    run,
+  ) as Promise<number>;
   expect(await result).toBe(42); // of(20) -> +1 -> delayed -> doubled
 });
 

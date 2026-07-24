@@ -204,6 +204,11 @@ test("composition operator >> refolds correctly when formatted", () => {
   expect(fmt("let f = a >> b")).toBe("let f = a >> b\n");
 });
 
+test("operator sections refold and stay idempotent", () => {
+  expect(fmt("let a = (+ 1)\nlet b = (2 *)")).toBe("let a = (+ 1)\nlet b = (2 *)\n");
+  expect(fmt("let a = (+ 1)")).toBe("let a = (+ 1)\n");
+});
+
 test("composition chain breaks and indents stages under head when overflowing", () => {
   const src =
     "let pipeline = lex\n  >> Result.flatMap(parse)\n  >> Result.flatMap(check)\n  >> Result.flatMap(typecheck)\n";

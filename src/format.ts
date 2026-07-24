@@ -583,6 +583,9 @@ const composeSegments = (e: Expr): Expr[] => {
 };
 
 const lambdaD = (e: LambdaExpr): Doc => {
+  const section = sectionOf(e);
+  if (section) return section;
+
   // Refold composition: `($x) => g(f($x))` -> `f >> g` (and flatten `f >> g >> h`).
   // Inline when it fits, else one `>> stage` per line indented under the head.
   if (isComposeLambda(e)) {
@@ -732,6 +735,27 @@ const unaryD = (e: CallExpr): Doc | null => {
     binOpOf(operand) !== null ||
     neqOperands(operand) !== null;
   return seq(txt(symbol), parenIf(needsParens, exprD(operand)));
+};
+
+// `($s) => op($s, y)` -> `(op y)` (right section); `($s) => op(x, $s)` ->
+// `(x op)` (left section) — see `sectionLeft`/`tryParseRightSection` in
+// parser.ts. `$`-prefixed names never lex as source identifiers (same reason
+// compose's `$x` always refolds to `>>` below), so this refold is required
+// for round-trip correctness, not just cosmetic.
+const sectionOf = (e: LambdaExpr): Doc | null => {
+  const p = e.params[0];
+  if (e.params.length !== 1 || p!.kind !== "name" || p!.name !== "$s") return null;
+  const body = e.body;
+  const neq = neqOperands(body);
+  const info = neq ? { symbol: "!=", prec: NEQ_PREC } : binOpOf(body);
+  if (!info || body.kind !== "call") return null;
+  const [l, r] = neq ?? (body.args as [Expr, Expr]);
+  const lIsParam = l.kind === "ref" && l.name === "$s";
+  const rIsParam = r.kind === "ref" && r.name === "$s";
+  if (lIsParam === rIsParam) return null; // both or neither -> not a section
+  return lIsParam
+    ? seq(txt(`(${info.symbol} `), binOperandD(r, info.prec, true), txt(")"))
+    : seq(txt("("), binOperandD(l, info.prec, false), txt(` ${info.symbol})`));
 };
 
 // Re-fold desugared infix/prefix/destructure calls back to surface syntax.

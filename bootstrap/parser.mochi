@@ -349,6 +349,86 @@ let mkBinCall = (fnName, opSpan, left, right) =>
     spanning(exprSpan(left), exprSpan(right))
   )
 
+// Haskell-style operator sections — `(x +)` / `(+ x)` desugar to a one-param
+// lambda over the same prelude builtin every infix already lowers to (mirrors
+// src/parser.ts's OP_FN / sectionLeft / tryParseRightSection).
+let opFnName = t => switch t {
+  | TPlus => "add"
+  | TMinus => "sub"
+  | TStar => "mul"
+  | TSlash => "div"
+  | TPercent => "mod"
+  | TAndand => "and"
+  | TOror => "or"
+  | TConcat => "concat"
+  | TEqeq => "eq"
+  | TLt => "lt"
+  | TLte => "lte"
+  | TGt => "gt"
+  | TGte => "gte"
+  | _ => "eq"
+}
+
+let isSectionOp = t => switch t {
+  | TPlus => true
+  | TMinus => true
+  | TStar => true
+  | TSlash => true
+  | TPercent => true
+  | TAndand => true
+  | TOror => true
+  | TConcat => true
+  | TEqeq => true
+  | TNeq => true
+  | TLt => true
+  | TLte => true
+  | TGt => true
+  | TGte => true
+  | _ => false
+}
+
+let sectionBody = (opTok, x, y, opSpan) =>
+  let full = spanning(exprSpan(x), exprSpan(y)) in
+  opTok == TNeq
+    ? ECall(ERef("not", opSpan), [mkBinCall("eq", opSpan, x, y)], full)
+    : mkBinCall(opFnName(opTok), opSpan, x, y)
+
+// `(provided op)` — missing right operand becomes the lambda's param.
+let sectionLeft = (provided, opLt) =>
+  let opSpan = spanOf(opLt) in
+  let paramRef = ERef("$s", opSpan) in
+  ELambda(
+    [LPName("$s")],
+    sectionBody(opLt.tok, provided, paramRef, opSpan),
+    spanning(exprSpan(provided), opSpan)
+  )
+
+// `(op provided)` — called from just after `(`. `(- x)` stays unary negation.
+let parseRightSection = (lparenSpan, toks, pos) =>
+  let lt = tokAt(toks, pos) in
+  let? (y, p1) = parseExpr(toks, pos + 1) in
+  let? p2 = expectTok(TRparen, toks, p1) in
+  let paramRef = ERef("$s", spanOf(lt)) in
+  Ok(
+    (
+      ELambda(
+        [LPName("$s")],
+        sectionBody(lt.tok, paramRef, y, spanOf(lt)),
+        toEnd(lparenSpan, toks, p2)
+      ),
+      p2
+    )
+  )
+
+// Shared left-section / bin-call fork used by every sectionable infix group.
+let binCallOrLeftSection = (left, lt, toks, pos, bp, fnName) =>
+  tokAt(toks, pos + 1).tok == TRparen
+    ? Ok({ left: sectionLeft(left, lt), p: pos + 1, matched: true })
+    : let? (right, p) = parseExprBp(bp + 1, toks, pos + 1) in
+    Ok(
+      { left: mkBinCall(fnName, spanOf(lt), left, right), p: p, matched: true }
+    )
+
 let isCmpTok = t => switch t {
   | TEqeq => true
   | TNeq => true
@@ -399,39 +479,27 @@ let parseInfix = (minBp, left, toks, pos) =>
       ) in
       Ok({ left: fn, p: p, matched: true })
       : isCmpTok(lt.tok) && CMP_BP >= minBp
-        ? let? (right, p) = parseExprBp(CMP_BP + 1, toks, pos + 1) in
-        let opSpan = spanOf(lt) in
-        let inner = mkBinCall(cmpFnName(lt.tok), opSpan, left, right) in
-        let result = lt.tok == TNeq
-          ? ECall(
-            ERef("not", opSpan),
-            [inner],
-            spanning(exprSpan(left), exprSpan(right))
-          )
-          : inner in
-        Ok({ left: result, p: p, matched: true })
+        ? tokAt(toks, pos + 1).tok == TRparen
+          ? Ok({ left: sectionLeft(left, lt), p: pos + 1, matched: true })
+          : let? (right, p) = parseExprBp(CMP_BP + 1, toks, pos + 1) in
+          let opSpan = spanOf(lt) in
+          let inner = mkBinCall(cmpFnName(lt.tok), opSpan, left, right) in
+          let result = lt.tok == TNeq
+            ? ECall(
+              ERef("not", opSpan),
+              [inner],
+              spanning(exprSpan(left), exprSpan(right))
+            )
+            : inner in
+          Ok({ left: result, p: p, matched: true })
         : lt.tok == TAndand || lt.tok == TOror && (lt.tok == TAndand
           ? AND_BP
           : OR_BP) >= minBp
           ? let bp = lt.tok == TAndand ? AND_BP : OR_BP in
-          let? (right, p) = parseExprBp(bp + 1, toks, pos + 1) in
           let fnName = lt.tok == TAndand ? "and" : "or" in
-          Ok(
-            {
-              left: mkBinCall(fnName, spanOf(lt), left, right),
-              p: p,
-              matched: true
-            }
-          )
+          binCallOrLeftSection(left, lt, toks, pos, bp, fnName)
           : lt.tok == TConcat && CONCAT_BP >= minBp
-            ? let? (right, p) = parseExprBp(CONCAT_BP + 1, toks, pos + 1) in
-            Ok(
-              {
-                left: mkBinCall("concat", spanOf(lt), left, right),
-                p: p,
-                matched: true
-              }
-            )
+            ? binCallOrLeftSection(left, lt, toks, pos, CONCAT_BP, "concat")
             : lt.tok == TBacktick && BACKTICK_BP >= minBp
               ? let? (fnExpr, p1) = parseAtomOrCall(toks, pos + 1) in
               let? p2 = expectTok(TBacktick, toks, p1) in
@@ -448,27 +516,13 @@ let parseInfix = (minBp, left, toks, pos) =>
                 }
               )
               : lt.tok == TPlus || lt.tok == TMinus && ADD_BP >= minBp
-                ? let? (right, p) = parseExprBp(ADD_BP + 1, toks, pos + 1) in
-                let fnName = lt.tok == TPlus ? "add" : "sub" in
-                Ok(
-                  {
-                    left: mkBinCall(fnName, spanOf(lt), left, right),
-                    p: p,
-                    matched: true
-                  }
-                )
+                ? let fnName = lt.tok == TPlus ? "add" : "sub" in
+                binCallOrLeftSection(left, lt, toks, pos, ADD_BP, fnName)
                 : lt.tok == TStar || (lt.tok == TSlash || lt.tok == TPercent) && MUL_BP >= minBp
-                  ? let? (right, p) = parseExprBp(MUL_BP + 1, toks, pos + 1) in
-                  let fnName = lt.tok == TStar
+                  ? let fnName = lt.tok == TStar
                     ? "mul"
                     : lt.tok == TSlash ? "div" : "mod" in
-                  Ok(
-                    {
-                      left: mkBinCall(fnName, spanOf(lt), left, right),
-                      p: p,
-                      matched: true
-                    }
-                  )
+                  binCallOrLeftSection(left, lt, toks, pos, MUL_BP, fnName)
                   : Ok({ left: left, p: pos, matched: false })
 
 let infixLoop = (minBp, left, toks, pos) =>
@@ -560,12 +614,18 @@ let parseAtom = (toks, pos) =>
     | TBool(value) => Ok((EBool(value, sp), pos + 1))
     | TStr(value) => Ok((EStr(value, sp), pos + 1))
     | TId(name) => Ok((ERef(name, sp), pos + 1))
-    | TLparen => let? (first, p) = parseExpr(toks, pos + 1) in
-      tokAt(toks, p).tok == TComma
-        ? let? (elements, p2) = sepBy(parseExpr, toks, p + 1, [first]) in
-        let? p3 = expectTok(TRparen, toks, p2) in
-        Ok((ETuple(elements, toEnd(sp, toks, p3)), p3))
-        : expectTok(TRparen, toks, p) |> Result.map(p2 => (first, p2))
+    | TLparen =>
+      // `(+ x)` right section before ordinary grouping/tuple — `(- x)` stays
+      // unary negation (minus is excluded here).
+      let nxt = tokAt(toks, pos + 1) in
+      isSectionOp(nxt.tok) && nxt.tok != TMinus
+        ? parseRightSection(sp, toks, pos + 1)
+        : let? (first, p) = parseExpr(toks, pos + 1) in
+        tokAt(toks, p).tok == TComma
+          ? let? (elements, p2) = sepBy(parseExpr, toks, p + 1, [first]) in
+          let? p3 = expectTok(TRparen, toks, p2) in
+          Ok((ETuple(elements, toEnd(sp, toks, p3)), p3))
+          : expectTok(TRparen, toks, p) |> Result.map(p2 => (first, p2))
     | t => errAt("unexpected token ${tokName(t)}", lt)
   }
 

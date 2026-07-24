@@ -53,13 +53,87 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
 
   const PIPE_BP = 5;
   const COMPOSE_BP = 6;
-  const OR_BP = 7;
+  // && and || share the same binding power.
   const AND_BP = 7;
   const CMP_BP = 8;
   const CONCAT_BP = 10;
   const ADD_BP = 10;
   const BACKTICK_BP = 15;
   const MUL_BP = 20;
+
+  // Haskell-style operator sections — `(x +)` / `(+ x)` desugar directly to a
+  // one-param lambda calling the same prelude builtin every infix operator
+  // already lowers to, so no new AST node or codegen path is needed.
+  const OP_FN: Partial<Record<Tok["t"], string>> = {
+    plus: "add",
+    minus: "sub",
+    star: "mul",
+    slash: "div",
+    percent: "mod",
+    andand: "and",
+    oror: "or",
+    concat: "concat",
+    eqeq: "eq",
+    lt: "lt",
+    lte: "lte",
+    gt: "gt",
+    gte: "gte",
+  };
+
+  function isSectionOp(t: Tok["t"]): boolean {
+    return t === "neq" || OP_FN[t] !== undefined;
+  }
+
+  // `x`/`y` are already-parsed operands; whichever side is missing has been
+  // filled in by the caller with a fresh param ref.
+  function sectionBody(opType: Tok["t"], x: Expr, y: Expr, opSpan: Span): Expr {
+    const full = spanning(x.span, y.span);
+    if (opType === "neq") {
+      return {
+        kind: "call",
+        fn: { kind: "ref", name: "not", span: opSpan },
+        args: [
+          { kind: "call", fn: { kind: "ref", name: "eq", span: opSpan }, args: [x, y], span: full },
+        ],
+        span: full,
+      };
+    }
+    return {
+      kind: "call",
+      fn: { kind: "ref", name: OP_FN[opType]!, span: opSpan },
+      args: [x, y],
+      span: full,
+    };
+  }
+
+  // `(provided op)` — the missing right operand becomes the lambda's param.
+  function sectionLeft(provided: Expr, opTok: Located): Expr {
+    const paramRef: Expr = { kind: "ref", name: "$s", span: opTok.span };
+    return {
+      kind: "lambda",
+      params: [{ kind: "name", name: "$s" }],
+      body: sectionBody(opTok.t, provided, paramRef, opTok.span),
+      span: spanning(provided.span, opTok.span),
+    };
+  }
+
+  // `(op provided)` — parsed from just after `(`; consumes through the closing
+  // `)` itself since, unlike a left section, there's no existing left operand
+  // for the caller to fold the operator onto.
+  function tryParseRightSection(lparenSpan: Span): Expr | null {
+    const opTok = peek();
+    if (opTok.t === "minus" || !isSectionOp(opTok.t)) return null; // `(- x)` stays negation
+    next();
+    const y = parseExpr();
+    const end = expect("rparen").span;
+    const paramRef: Expr = { kind: "ref", name: "$s", span: opTok.span };
+    return {
+      kind: "lambda",
+      params: [{ kind: "name", name: "$s" }],
+      body: sectionBody(opTok.t, paramRef, y, opTok.span),
+      span: spanning(lparenSpan, end),
+    };
+  }
 
   // ---- expressions -------------------------------------------------------
 
@@ -198,6 +272,7 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
       CMP_BP >= minBp
     ) {
       const opTok = next();
+      if (peek().t === "rparen") return sectionLeft(left, opTok);
       const right = parseExpr(CMP_BP + 1);
       if (opTok.t === "neq") {
         return {
@@ -232,6 +307,26 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
       };
     }
     return null;
+  }
+
+  // Shared path for infix ops that lower to a prelude call (and section `(x +)`).
+  function parseBinOpInfix(
+    left: Expr,
+    minBp: number,
+    isOp: (t: Tok["t"]) => boolean,
+    bp: number,
+  ): Expr | null {
+    const tk = peek();
+    if (!isOp(tk.t) || bp < minBp) return null;
+    const opTok = next();
+    if (peek().t === "rparen") return sectionLeft(left, opTok);
+    const right = parseExpr(bp + 1);
+    return {
+      kind: "call",
+      fn: { kind: "ref", name: OP_FN[opTok.t]!, span: opTok.span },
+      args: [left, right],
+      span: spanning(left.span, right.span),
+    };
   }
 
   function parseInfix(left: Expr, minBp: number): { left: Expr; matched: boolean } {
@@ -270,34 +365,10 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     }
     const cmpResult = parseCmpInfix(left, minBp);
     if (cmpResult) return { left: cmpResult, matched: true };
-    if ((tk.t === "andand" || tk.t === "oror") && (tk.t === "andand" ? AND_BP : OR_BP) >= minBp) {
-      const opTok = next();
-      const bp = opTok.t === "andand" ? AND_BP : OR_BP;
-      const right = parseExpr(bp + 1);
-      const fnName = opTok.t === "andand" ? "and" : "or";
-      return {
-        left: {
-          kind: "call",
-          fn: { kind: "ref", name: fnName, span: opTok.span },
-          args: [left, right],
-          span: spanning(left.span, right.span),
-        },
-        matched: true,
-      };
-    }
-    if (tk.t === "concat" && CONCAT_BP >= minBp) {
-      const opTok = next();
-      const right = parseExpr(CONCAT_BP + 1);
-      return {
-        left: {
-          kind: "call",
-          fn: { kind: "ref", name: "concat", span: opTok.span },
-          args: [left, right],
-          span: spanning(left.span, right.span),
-        },
-        matched: true,
-      };
-    }
+    const logic = parseBinOpInfix(left, minBp, (t) => t === "andand" || t === "oror", AND_BP);
+    if (logic) return { left: logic, matched: true };
+    const concat = parseBinOpInfix(left, minBp, (t) => t === "concat", CONCAT_BP);
+    if (concat) return { left: concat, matched: true };
     if (tk.t === "backtick" && BACKTICK_BP >= minBp) {
       next();
       const fnExpr = parseAtomOrCall();
@@ -313,34 +384,15 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
         matched: true,
       };
     }
-    if ((tk.t === "plus" || tk.t === "minus") && ADD_BP >= minBp) {
-      const opTok = next();
-      const right = parseExpr(ADD_BP + 1);
-      const fnName = opTok.t === "plus" ? "add" : "sub";
-      return {
-        left: {
-          kind: "call",
-          fn: { kind: "ref", name: fnName, span: opTok.span },
-          args: [left, right],
-          span: spanning(left.span, right.span),
-        },
-        matched: true,
-      };
-    }
-    if ((tk.t === "star" || tk.t === "slash" || tk.t === "percent") && MUL_BP >= minBp) {
-      const opTok = next();
-      const right = parseExpr(MUL_BP + 1);
-      const fnName = opTok.t === "star" ? "mul" : opTok.t === "slash" ? "div" : "mod";
-      return {
-        left: {
-          kind: "call",
-          fn: { kind: "ref", name: fnName, span: opTok.span },
-          args: [left, right],
-          span: spanning(left.span, right.span),
-        },
-        matched: true,
-      };
-    }
+    const add = parseBinOpInfix(left, minBp, (t) => t === "plus" || t === "minus", ADD_BP);
+    if (add) return { left: add, matched: true };
+    const mul = parseBinOpInfix(
+      left,
+      minBp,
+      (t) => t === "star" || t === "slash" || t === "percent",
+      MUL_BP,
+    );
+    if (mul) return { left: mul, matched: true };
     return { left, matched: false };
   }
 
@@ -430,6 +482,8 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
       case "id":
         return { kind: "ref", name: tk.v, span: tk.span };
       case "lparen": {
+        const rightSection = tryParseRightSection(tk.span);
+        if (rightSection) return rightSection;
         const first = parseExpr();
         if (peek().t === "comma") {
           const elements = [first];

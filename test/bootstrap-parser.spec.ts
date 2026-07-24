@@ -501,6 +501,8 @@ const cases: Record<string, string> = {
     "let f = n => switch n { | x when x == limit => x | _ => 0 }",
   "comparison cond binds tighter than the enclosing ternary (not its else)":
     'let f = (a, b) => a == b ? "eq" : "ne"',
+  "operator sections left and right (desugar to $s lambdas)":
+    "let a = (2 *)\nlet b = (+ 5)\nlet c = (10 <)\nlet d = (!= 0)\nlet e = (- 2)\nlet f = (5 -)",
 };
 
 for (const [name, src] of Object.entries(cases)) {
