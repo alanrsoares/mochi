@@ -22,6 +22,8 @@ const set = (t: Type): Type => tCon("Set", [t]);
 const mapT = (k: Type, v: Type): Type => tCon("Map", [k, v]);
 const opt = (t: Type): Type => tCon("Option", [t]);
 const res = (t: Type, e: Type): Type => tCon("Result", [t, e]);
+const task = (t: Type): Type => tCon("Task", [t]);
+const promise = (t: Type): Type => tCon("Promise", [t]);
 
 /**
  * Builtin variant types — seeded when a program doesn't declare the same name.
@@ -301,6 +303,11 @@ export const preludeJsDefs: Record<string, string> = {
   _Str_chars: "const _Str_chars = (s) => [...s];",
   _Str_toNumber:
     "const _Str_toNumber = (s) => { const n = Number(s); return Number.isNaN(n) ? None : Some(n); };",
+  // Task — lazy async thunk `() => Promise<a>`. Building one runs no effect; `run` kicks it off.
+  _Task_of: "const _Task_of = (x) => () => Promise.resolve(x);",
+  _Task_map: "const _Task_map = _curry(2, (f, t) => () => t().then(f));",
+  _Task_andThen: "const _Task_andThen = _curry(2, (f, t) => () => t().then((x) => f(x)()));",
+  _Task_run: "const _Task_run = (t) => t();",
 };
 
 /**
@@ -394,6 +401,8 @@ export const runtimeDeps: Record<string, string[]> = {
   _Str_get: ["Some", "None", "_curry"],
   _Str_codeAt: ["Some", "None", "_curry"],
   _Str_toNumber: ["Some", "None"],
+  _Task_map: ["_curry"],
+  _Task_andThen: ["_curry"],
 };
 
 /**
@@ -480,6 +489,14 @@ export const preludeNamespaces: Record<string, Record<string, Type>> = {
     unwrapOr: tArrow(a, tArrow(res(a, c), a)), // fallback -> Result a e -> a
     isOk: tArrow(res(a, c), tBool), // Result a e -> bool
     isErr: tArrow(res(a, c), tBool), // Result a e -> bool
+  },
+  // Task — opaque lazy async values (`() => Promise<a>`). Not a tagged variant.
+  // `andThen` (not `flatMap`) matches examples/async vocabulary (ADR 0005).
+  Task: {
+    of: tArrow(a, task(a)), // a -> Task a
+    map: tArrow(tArrow(a, b), tArrow(task(a), task(b))), // (a -> b) -> Task a -> Task b
+    andThen: tArrow(tArrow(a, task(b)), tArrow(task(a), task(b))), // (a -> Task b) -> Task a -> Task b
+    run: tArrow(task(a), promise(a)), // Task a -> Promise a  (only kick-off)
   },
   // String ops (`Str.*`). Data-last where a collection/subject is involved.
   Str: {
@@ -578,6 +595,12 @@ export const namespaceRuntime: Record<string, Record<string, string>> = {
     unwrapOr: "_Result_unwrapOr",
     isOk: "_Result_isOk",
     isErr: "_Result_isErr",
+  },
+  Task: {
+    of: "_Task_of",
+    map: "_Task_map",
+    andThen: "_Task_andThen",
+    run: "_Task_run",
   },
   Str: {
     length: "_Str_length",

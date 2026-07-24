@@ -39,6 +39,7 @@ const NS_DOCS: Record<string, string> = {
   Option: "Option combinators — data-last for `|>` chains. Ctors stay unqualified (`Some`/`None`).",
   Result:
     "Result railway combinators — data-last for `|>` chains. Ctors stay unqualified (`Ok`/`Err`).",
+  Task: "Lazy async values (`Task.of`, `Task.map`, `Task.andThen`, `Task.run`). Opaque thunk — not switchable. `Task.run` is the only kick-off.",
   Str: "String ops (`Str.split`, `Str.get`, …). Data-last where a subject is involved.",
 };
 

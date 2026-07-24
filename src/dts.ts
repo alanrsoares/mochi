@@ -61,6 +61,9 @@ function tsOf(t: Type, names: Map<number, string>): string {
       if (prim) return prim;
       if (t.name === "Array" && t.args.length === 1) return `${tsOf(t.args[0]!, names)}[]`;
       if (t.name === "List" && t.args.length === 1) return `Iterable<${tsOf(t.args[0]!, names)}>`;
+      // Task is an opaque lazy thunk (ADR 0005) — emit the runtime shape, not a phantom nominal.
+      if (t.name === "Task" && t.args.length === 1)
+        return `() => Promise<${tsOf(t.args[0]!, names)}>`;
       if (t.name === "tuple") return `[${t.args.map((a) => tsOf(a, names)).join(", ")}]`;
       return t.args.length === 0
         ? t.name
