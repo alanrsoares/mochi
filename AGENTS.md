@@ -21,7 +21,8 @@ bun test | typecheck | lint | lint:fix | format | build:ext | loc
 
 ## Pipeline
 
-Two-track railway; every stage but `codegen`/`format` returns `Result<_, Diagnostic>`.
+Two-track railway; lex/parse return `Result<_, Diagnostic>`; check/infer return
+`Result<_, Diagnostic[]>` (ADR 0004). Codegen/`format` do not fail with diagnostics.
 
 ```
 string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck→ Program ─codegen→ string
