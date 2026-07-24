@@ -116,6 +116,32 @@ let evens5 = evens |> take(5) |> toArray      // [0, 2, 4, 6, 8]
 - Builtin `Option` (`Some`/`None`) and `Result` (`Ok`/`Err`); `Map.get`/`Array.head`
   return `Option`. Field names match `@onrails/result`/`@onrails/maybe`, so values flow
   straight into those combinators at the JS boundary.
+- Builtin `Task a` — opaque lazy async value (`() => Promise<a>` at runtime). Not a
+  tagged variant; not switchable. See [Task](#task) below.
+
+## Task
+
+Async without `async`/`await`. A `Task a` is an ordinary value: building one runs no
+effect; `Task.run` is the only kick-off and yields a host `Promise a`. Combinators are
+data-last under `Task.*` and compose with `|>` ([ADR 0005](adr/0005-prelude-task.md)):
+
+| Member | Type | Role |
+|---|---|---|
+| `Task.of` | `a -> Task a` | pure lift |
+| `Task.map` | `(a -> b) -> Task a -> Task b` | map the result |
+| `Task.andThen` | `(a -> Task b) -> Task a -> Task b` | sequence (v1 name; not `flatMap`) |
+| `Task.delay` | `number -> a -> Task a` | sleep then yield (`_curry`-safe) |
+| `Task.run` | `Task a -> Promise a` | kick-off at the JS edge |
+
+```mochi
+let program =
+  Task.of(20) |> Task.map((+ 1)) |> Task.andThen(Task.delay(10)) |> Task.map(x => x + x)
+export let result = Task.run(program)   // Promise — await in the host
+```
+
+Effects stay a **convention**, not a checked effect system: domain IO is thin `extern`s
+that *should* return `Task _` (see `examples/life/`); sequencing uses prelude `Task.*`.
+The checker does not force that shape.
 
 ## Other surface features
 
