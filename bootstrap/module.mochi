@@ -45,7 +45,7 @@ let mErr = message => { message: message, start: 0, end: 0 }
 
 // Lex + parse a source file to statements. No check/infer — both need the whole
 // graph's exports resolved first, which only happens in a later part.
-let parseModule = src => lex(src) |> Result.flatMap(parse)
+let parseModule = lex >> Result.flatMap(parse)
 
 // The `from` specs of a module's import statements, in source order.
 let importFromsFrom = (stmts, i, acc) => switch Array.get(i, stmts) {

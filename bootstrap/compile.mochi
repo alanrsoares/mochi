@@ -27,9 +27,9 @@ let typecheck = prog =>
 
 // compile : string -> Result string Err
 export let compile = src =>
-  lex(src)
-    |> Result.flatMap(parse)
-    |> Result.flatMap(check)
-    |> Result.flatMap(typecheck)
+  src
+    |> (((lex >> Result.flatMap(
+      parse
+    )) >> Result.flatMap(check)) >> Result.flatMap(typecheck))
     |> Result.map(prog =>
       codegen(prog, #{}, true, namespaceRuntime, preludeJsDefs, runtimeDeps))
