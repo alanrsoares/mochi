@@ -47,10 +47,9 @@ not survive the rich-diagnostic work.
 6. **No post-hoc diagnostic invention** outside the checker — adapters must not
    synthesize labels/help the passes did not emit.
 
-7. **Keep the one-error railway** — stages still return `Result<T, Diagnostic>`
-   (first failure wins). Richness goes into labels / help / suggestions on that
-   single value. Multi-diagnostic collection is deferred until recovery can avoid
-   cascading junk.
+7. **~~Keep the one-error railway~~** — **Superseded by [ADR 0004](0004-multi-error-diagnostics.md).**
+   Check/infer now return `Result<T, Diagnostic[]>`; lex/parse stay single-error.
+   Richness (labels / help / suggestions) still rides on each `Diagnostic`.
 
 ## Consequences
 
@@ -75,9 +74,8 @@ not survive the rich-diagnostic work.
   typechecking fails; worse DX than rust-analyzer / Gleam under broken code.
 - **`Diagnostic` beside `Result` as a second channel** — splits the railway; every
   pass would juggle two channels for one failure story.
-- **Collect many diagnostics from day one** — better rustc surface eventually, but
-  needs honest recovery; fake multi-error cascades are worse than one precise
-  diagnostic. Deferred.
+- **Collect many diagnostics from day one** — deferred in 0003; landed later as
+  [ADR 0004](0004-multi-error-diagnostics.md) with check/infer recovery rules.
 - **Same-file `Span` only on labels, widen later** — cheaper for the first PR, but
   forces a second migration the moment an import-site error points at an export.
 - **Display-only suggestions first, code actions later** — cheaper, but splits

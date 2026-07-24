@@ -2,8 +2,9 @@
 
 ## Pipeline
 
-A two-track railway. Every stage but `codegen`/`format` returns `Result<_, Diagnostic>`
-(`@onrails/result`) — errors are values, not exceptions.
+A two-track railway. Lex/parse return `Result<_, Diagnostic>`; check/infer return
+`Result<_, Diagnostic[]>` (ADR 0004). Codegen/`format` do not fail with diagnostics.
+Pipeline seams wrap a single lex/parse error as a one-element array.
 
 ```
 string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck→ Program ─codegen→ string

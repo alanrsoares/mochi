@@ -14,7 +14,7 @@ const run = (src: string): unknown => {
   return new Function("match", `${js}\nreturn r;`)(match);
 };
 
-const errMsg = (src: string): string => unwrapErr(compile(src)).message;
+const errMsg = (src: string): string => unwrapErr(compile(src))[0]!.message;
 
 // --- evaluation -------------------------------------------------------------
 

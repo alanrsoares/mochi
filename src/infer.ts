@@ -774,7 +774,7 @@ function run(
   prog: Program,
   builtins: Record<string, Type>,
   opts: InferOptions,
-): Result<InferResult, Diagnostic> {
+): Result<InferResult, Diagnostic[]> {
   const env: Env = new Map();
   const subst = emptySubst();
   // Builtins are generalized, not monomorphic: a prelude type carrying type vars
@@ -858,6 +858,8 @@ function run(
     return deps;
   });
 
+  const allDiags: Diagnostic[] = [];
+
   for (const comp of stronglyConnected(adj)) {
     const group = comp.map((i) => lets[i]!);
     // Pre-bind every member (monomorphic) BEFORE inferring any body, so mutual
@@ -882,11 +884,19 @@ function run(
         noteUse,
         noteLet,
       });
-      if (isErr(t)) return t;
+      // Collect-and-bail per member (ADR 0004): record the diag, leave the
+      // pre-bound mono var, continue siblings / later SCCs.
+      if (isErr(t)) {
+        allDiags.push(t.error);
+        continue;
+      }
       const uni = unify(selfVars.get(s.name)!, t.value, subst, fresh, (x) =>
         showType(foldAliases(x, aliases)),
       );
-      if (isErr(uni)) return err(typeErr(uni.error.message, s.span));
+      if (isErr(uni)) {
+        allDiags.push(typeErr(uni.error.message, s.span));
+        continue;
+      }
       // Optional binding annotation (`let x : T = v`): unify the inferred value
       // type against the declared one, so a too-general value is pinned to T.
       // Resolved through the alias map, so a named record alias expands to its
@@ -894,7 +904,10 @@ function run(
       if (s.annot) {
         const at = typeExprToType(s.annot, new Map(), fresh, aliasMap);
         const au = unify(t.value, at, subst, fresh, (x) => showType(foldAliases(x, aliases)));
-        if (isErr(au)) return err(typeErr(au.error.message, s.annot.span));
+        if (isErr(au)) {
+          allDiags.push(typeErr(au.error.message, s.annot.span));
+          continue;
+        }
       }
       bodyTypes.set(s.name, t.value);
       // Record the binding name itself so hovering it leads with `let x: T`
@@ -902,12 +915,16 @@ function run(
       if (!s.name.startsWith("$"))
         record(s.nameSpan, t.value, { kind: "let", name: s.name, doc: s.doc });
     }
-    // Generalize the group against the OUTER env — drop the mono self-bindings
-    // first, else the group's own type vars look env-bound and stay ungeneralized.
-    // Monomorphic recursion within the group, polymorphic use afterwards.
+    // Generalize successes against the OUTER env; failed members keep an
+    // unconstrained mono so later SCCs don't cascade unbound noise.
     for (const s of group) env.delete(s.name);
     for (const s of group) {
-      const sc = generalize(env, bodyTypes.get(s.name)!, subst);
+      const bodyT = bodyTypes.get(s.name);
+      if (bodyT === undefined) {
+        env.set(s.name, mono(selfVars.get(s.name)!));
+        continue;
+      }
+      const sc = generalize(env, bodyT, subst);
       env.set(s.name, sc);
       // Track a top-level let the same way as `let … in` (ADR 0035): a
       // polymorphic-but-monomorphically-used value (e.g. `let emptyReg =
@@ -916,6 +933,7 @@ function run(
       if (!s.name.startsWith("$")) noteLet(sc, s.value.span);
     }
   }
+  if (allDiags.length > 0) return err(allDiags);
   // Resolve every recorded type now that the whole program's subst is final.
   const types = recorded.map((r) => ({
     span: r.span,
@@ -929,14 +947,14 @@ export const inferProgram = (
   prog: Program,
   builtins: Record<string, Type> = {},
   opts: InferOptions = {},
-): Result<Env, Diagnostic> => map(run(prog, builtins, opts), (r) => r.env);
+): Result<Env, Diagnostic[]> => map(run(prog, builtins, opts), (r) => r.env);
 
 // Like `inferProgram`, but also returns the span → type map for tooling.
 export const inferProgramTypes = (
   prog: Program,
   builtins: Record<string, Type> = {},
   opts: InferOptions = {},
-): Result<InferResult, Diagnostic> => run(prog, builtins, opts);
+): Result<InferResult, Diagnostic[]> => run(prog, builtins, opts);
 
 // Render a binding's scheme for tests / display. Quantified vars appear as
 // 't{id}; the scheme's type is already zonked at generalization time.

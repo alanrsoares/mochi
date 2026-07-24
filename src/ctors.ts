@@ -70,20 +70,28 @@ const seedBuiltins = (table: CtorTable): void => {
 // didn't vouch for. A transparent record alias reserves its type name (a later
 // variant can't reuse it) but registers no constructors — it's structural,
 // never a `switch` target; an empty ctor list is inert for exhaustiveness.
-export const buildCtorTable = (prog: Program): Result<CtorTable, Diagnostic> => {
+export const buildCtorTable = (prog: Program): Result<CtorTable, Diagnostic[]> => {
   const table: CtorTable = { ctor: new Map(), type: new Map() };
+  const diags: Diagnostic[] = [];
   for (const s of prog.stmts) {
     if (s.kind !== "type") continue;
-    if (table.type.has(s.name)) return err(checkErr(`duplicate type '${s.name}'`, s.span));
+    if (table.type.has(s.name)) {
+      diags.push(checkErr(`duplicate type '${s.name}'`, s.span));
+      continue;
+    }
     table.type.set(
       s.name,
       s.ctors.map((c) => c.name),
     );
     for (const c of s.ctors) {
-      if (table.ctor.has(c.name)) return err(checkErr(`duplicate constructor '${c.name}'`, s.span));
+      if (table.ctor.has(c.name)) {
+        diags.push(checkErr(`duplicate constructor '${c.name}'`, s.span));
+        continue;
+      }
       table.ctor.set(c.name, entryOf(s.name, s.params, c, false));
     }
   }
+  if (diags.length > 0) return err(diags);
   seedBuiltins(table);
   return ok(table);
 };

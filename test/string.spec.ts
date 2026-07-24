@@ -30,8 +30,8 @@ test("escapes are decoded then safely re-encoded", () => {
 test("an unterminated string is a lex error", () => {
   const r = compile(`let m = "oops`);
   expect(isErr(r)).toBe(true);
-  expect(unwrapErr(r).kind).toBe("lex");
-  expect(unwrapErr(r).message).toBe("unterminated string literal");
+  expect(unwrapErr(r)[0]!.kind).toBe("lex");
+  expect(unwrapErr(r)[0]!.message).toBe("unterminated string literal");
 });
 
 test("strings mismatch numbers under inference", () => {

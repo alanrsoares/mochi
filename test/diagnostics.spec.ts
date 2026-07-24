@@ -31,7 +31,7 @@ test("diagnostics surface did-you-mean suggestions", () => {
   const r = toTypedProgram(src, { open: false });
   expect(isErr(r)).toBe(true);
   if (!isErr(r)) return;
-  const d = toPublish(src, r.error, "/t.mochi");
+  const d = toPublish(src, r.error[0]!, "/t.mochi");
   expect(d.message).toContain("help: did you mean 'count'?");
   expect(d.suggestions?.[0]?.replaceWith).toBe("count");
 });

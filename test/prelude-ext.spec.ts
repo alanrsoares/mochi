@@ -113,7 +113,7 @@ test("Array growth is immutable — the source array is untouched", () => {
 test("Str is a reserved namespace name", () => {
   const r = compile("let Str = 1");
   expect(isErr(r)).toBe(true);
-  expect(unwrapErr(r).message).toContain("reserved collection namespace");
+  expect(unwrapErr(r)[0]!.message).toContain("reserved collection namespace");
 });
 
 test("Option/Result are reserved as values but redeclarable as types", () => {

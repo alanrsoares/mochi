@@ -83,7 +83,7 @@ test("List.map applied to an Array is a type error", () => {
 test("an unknown namespace member is a type error", () => {
   const r = compile("let a = List.nope(@{1})");
   expect(isErr(r)).toBe(true);
-  expect(unwrapErr(r).message).toContain("has no member 'nope'");
+  expect(unwrapErr(r)[0]!.message).toContain("has no member 'nope'");
 });
 
 test("List erases to Iterable through a namespace op in .d.ts", () => {
@@ -98,7 +98,7 @@ test("List erases to Iterable through a namespace op in .d.ts", () => {
 test("binding a namespace name is rejected", () => {
   const r = compile("let List = 5");
   expect(isErr(r)).toBe(true);
-  expect(unwrapErr(r).message).toContain("reserved collection namespace");
+  expect(unwrapErr(r)[0]!.message).toContain("reserved collection namespace");
 });
 
 test("importing a namespace name is rejected", () => {

@@ -79,7 +79,7 @@ test("[] plus [x, ...xs] is exhaustive", () => {
 test("a lone empty-list arm is a non-exhaustive error", () => {
   const r = compile("let f = xs => switch xs { | [] => 0 }");
   expect(isErr(r)).toBe(true);
-  expect(unwrapErr(r).kind).toBe("check");
+  expect(unwrapErr(r)[0]!.kind).toBe("check");
 });
 
 test("[...all] is a catch-all", () => {

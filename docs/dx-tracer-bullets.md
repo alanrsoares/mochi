@@ -16,7 +16,7 @@ Each slice is a vertical tracer bullet: compiler + tests + LSP surface where app
 | 7 | Cross-module refs + rename | AFK | 3, 6 | [#9](https://github.com/alanrsoares/mochi/issues/9) | done ([#12](https://github.com/alanrsoares/mochi/pull/12)) |
 | 8 | Document / workspace symbols | AFK | 6 | [#10](https://github.com/alanrsoares/mochi/issues/10) | done ([#12](https://github.com/alanrsoares/mochi/pull/12)) |
 
-Parent epic: [#1](https://github.com/alanrsoares/mochi/issues/1) (wave 1 + wave 2 AFK shipped; multi-error still open).
+Parent epic: [#1](https://github.com/alanrsoares/mochi/issues/1) (wave 1 + wave 2 shipped).
 
 ## Wave 2 (was deferred)
 
@@ -25,7 +25,7 @@ Parent epic: [#1](https://github.com/alanrsoares/mochi/issues/1) (wave 1 + wave 
 | 9 | Prelude virtual defs — F12 / “defined here” for builtins (virtual `Location`) | AFK | — | done |
 | 10 | Record-field nav (same-file) — `p.x` ↔ type-alias / literal / pattern field sites | AFK | — | done |
 | 11 | Go-to-type at expression (uses infer table; degrades when typecheck fails) | AFK | — | done |
-| 12 | Multi-error collection (honest recovery; ADR 0003 deferred) | HITL | design | |
+| 12 | Multi-error collection (honest recovery; ADR 0004) | HITL→AFK | design | done |
 
 ## Slice briefs
 
@@ -258,9 +258,9 @@ HITL: design recovery so stages can return several `Diagnostic`s without cascadi
 
 ## Acceptance criteria
 
-- [ ] Accepted ADR for multi-error + recovery rules
-- [ ] (Follow-on AFK) railway + CLI/LSP publish many diags
+- [x] Accepted ADR for multi-error + recovery rules
+- [x] (Follow-on AFK) railway + CLI/LSP publish many diags
 
 ## Blocked by
 
-Design (HITL)
+Design (HITL) — resolved in ADR 0004

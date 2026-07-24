@@ -103,12 +103,13 @@ buffered pull, not to `@onrails/pattern`.
 Editor features (hover, go-to-definition, find-refs, rename, helpful checker
 errors) share one compiler-side model — the LSP stays a thin adapter (ADR 0003).
 
-- **Diagnostic** — the value every failing pass returns (`Result<_, Diagnostic>`;
-  first failure wins). Carries a **primary** span, optional **labels** (secondary
-  spans with their own messages, e.g. "defined here"), optional **help** (prose
-  guidance), and optional **suggestions** (proposed fixes). Kind remains
-  `lex | parse | check | type`. CLI and LSP only *render* this shape; they do not
-  invent structure the checker didn't produce. _Avoid_: `AlangError` (retired name).
+- **Diagnostic** — one structured error value. Kind remains `lex | parse | check |
+  type`. Carries a **primary** span, optional **labels** (secondary spans, e.g.
+  "defined here"), optional **help**, and optional **suggestions**. Lex/parse
+  still fail with a single `Diagnostic`; check/infer return `Diagnostic[]`
+  (ADR 0004): check collects all independent findings; infer collect-and-bails per
+  top-level/SCC member (first-error inside one expression). CLI and LSP only
+  *render* what passes emit. _Avoid_: `AlangError` (retired name).
 - **PublishDiagnostic** — the LSP-shaped DTO `{ range, message, … }` that
   `diagnostics.ts` builds from a `Diagnostic` for the editor. Not the compiler
   error type.

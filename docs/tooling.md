@@ -56,10 +56,12 @@ the `.mochi` formatter on `bootstrap/`), `build:ext` (VS Code extension).
   unbound names in **strict** inference). Open-world compile still treats unknown
   names as host globals, so typo suggestions are not guessed there.
 - **Diagnostics** — the same `Diagnostic` values the compiler produces, with spans; a
-  `--json` structured form is available for machine consumers. The LSP maps each to a
-  `PublishDiagnostic` (range + message + `related` from labels; help is appended to the
-  message). Suggestions ride along for code actions
-  ([ADR 0003](adr/0003-rich-diagnostics.md), [tracer bullets](dx-tracer-bullets.md)).
+  `--json` structured form is available for machine consumers. Check/infer may emit
+  **several** diagnostics in one run (ADR 0004); lex/parse still stop at the first.
+  The LSP maps each to a `PublishDiagnostic` (range + message + `related` from labels;
+  help is appended to the message). Suggestions ride along for code actions
+  ([ADR 0003](adr/0003-rich-diagnostics.md), [ADR 0004](adr/0004-multi-error-diagnostics.md),
+  [tracer bullets](dx-tracer-bullets.md)).
 - **Formatter** — width-based pretty-printing that runs on lex + parse only (no type
   information needed), which is why it can format even code that doesn't yet type-check.
 - **`.d.ts`** — HM types lowered to TypeScript declarations, including declarations for

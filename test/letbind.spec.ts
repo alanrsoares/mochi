@@ -16,7 +16,7 @@ const run = (src: string, ret: string): unknown => {
 const errMsg = (src: string): string => {
   const r = compile(src);
   expect(isErr(r)).toBe(true);
-  return unwrapErr(r).message;
+  return unwrapErr(r)[0]!.message;
 };
 
 test("binds the Ok payload and runs the body", () => {
@@ -73,7 +73,7 @@ test("value and body share one error type", () => {
 test("missing in is a parse error", () => {
   const r = compile("let r = let? x = Ok(1) Ok(x)");
   expect(isErr(r)).toBe(true);
-  expect(unwrapErr(r).kind).toBe("parse");
+  expect(unwrapErr(r)[0]!.kind).toBe("parse");
 });
 
 test("formatter round-trips let? idempotently", () => {

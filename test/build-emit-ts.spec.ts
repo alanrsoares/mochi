@@ -50,7 +50,7 @@ beforeAll(async () => {
   const built = await buildModulesTs(join(DIR, "main.mochi"), (p) => Bun.file(p).text(), {
     runtimeImport: RUNTIME,
   });
-  if (isErr(built)) throw new Error(`build --emit=ts failed: ${built.error.message}`);
+  if (isErr(built)) throw new Error(`build --emit=ts failed: ${built.error[0]!.message}`);
   outputs = built.value;
   for (const { path, js } of outputs)
     writeFileSync(path.endsWith(".ts") ? path : path.replace(/\.mochi$/, ".ts"), js);

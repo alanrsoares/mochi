@@ -42,7 +42,7 @@ test("switching on a builtin Result is exhaustive with Ok + Err", () => {
 test("a switch missing None is non-exhaustive", () => {
   const r = compile("let f = o => switch o { | Some(v) => v }");
   expect(isErr(r)).toBe(true);
-  expect(unwrapErr(r).message).toContain("missing None");
+  expect(unwrapErr(r)[0]!.message).toContain("missing None");
 });
 
 // ---- Option-returning accessors --------------------------------------------
