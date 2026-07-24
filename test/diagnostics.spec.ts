@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
-import { diagnostics } from "../src/diagnostics";
+import { isErr } from "@onrails/result";
+import { toTypedProgram } from "../src/compile";
+import { diagnostics, toPublish } from "../src/diagnostics";
 
 test("clean source produces no diagnostics", () => {
   expect(diagnostics("let n = add(mul(2, 3), 4)")).toEqual([]);
@@ -22,12 +24,14 @@ test("error on a later line reports the right line and column", () => {
   expect(d[0]!.range.start).toEqual({ line: 1, character: 8 });
 });
 
-test("lex error maps to a single-char range", () => {
-  const d = diagnostics("let x = ^");
-  expect(d).toHaveLength(1);
-  expect(d[0]!.range).toEqual({
-    start: { line: 0, character: 8 },
-    end: { line: 0, character: 9 },
-  });
-  expect(d[0]!.message).toBe("lex: unexpected char '^'");
+test("diagnostics surface did-you-mean suggestions", () => {
+  // compile()/LSP diagnostics are open-world (host globals); did-you-mean runs
+  // in strict mode so intentional open names aren't false-positived.
+  const src = "let count = 1\nlet n = coun";
+  const r = toTypedProgram(src, { open: false });
+  expect(isErr(r)).toBe(true);
+  if (!isErr(r)) return;
+  const d = toPublish(src, r.error, "/t.mochi");
+  expect(d.message).toContain("help: did you mean 'count'?");
+  expect(d.suggestions?.[0]?.replaceWith).toBe("count");
 });

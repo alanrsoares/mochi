@@ -2,7 +2,7 @@
 
 ## Pipeline
 
-A two-track railway. Every stage but `codegen`/`format` returns `Result<_, AlangError>`
+A two-track railway. Every stage but `codegen`/`format` returns `Result<_, Diagnostic>`
 (`@onrails/result`) — errors are values, not exceptions.
 
 ```
@@ -23,7 +23,7 @@ the JS runtime strings, and the namespace tables. `compile.ts` is the single-fil
 railway; `cli.ts` is the CLI; `lsp/server.ts` is a thin adapter over compiler surfaces.
 
 The one error-type seam worth knowing: `unify.ts` speaks a narrow `TypeErr`; it becomes
-the unified `AlangError` (`kind: lex | parse | check | type`) only at `infer.ts`'s `u()`
+the unified `Diagnostic` (`kind: lex | parse | check | type`) only at `infer.ts`'s `u()`
 seam, which is where the span gets attached.
 
 ## Two backends, one codegen

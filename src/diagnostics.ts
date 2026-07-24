@@ -1,10 +1,12 @@
-// LSP-shaped diagnostics, computed from `compile` but free of any editor/
-// protocol dependency so it stays unit-testable under Bun. The language server
-// is a thin adapter that maps these onto vscode-languageserver types.
+// LSP-shaped publish diagnostics, computed from `compile` but free of any
+// editor/protocol dependency so it stays unit-testable under Bun. The language
+// server is a thin adapter that maps these onto vscode-languageserver types.
+// The compiler error type is `Diagnostic` (`errors.ts`); this file's
+// `PublishDiagnostic` is the wire-shaped DTO only (ADR 0003).
 import { resolve } from "node:path";
 import { isErr } from "@onrails/result";
 import { compile, toTypedProgramWith } from "./compile";
-import type { AlangError } from "./errors";
+import type { Diagnostic } from "./errors";
 import { lex } from "./lexer";
 import { moduleContext } from "./module";
 import { parse } from "./parser";
@@ -13,34 +15,87 @@ import { lineCol } from "./span";
 // 0-based line/character — matches the LSP `Position` shape.
 export type Position = { line: number; character: number };
 export type Range = { start: Position; end: Position };
-export type Diagnostic = { range: Range; message: string };
+
+export type RelatedInformation = {
+  message: string;
+  path: string;
+  range: Range;
+};
+
+export type PublishSuggestion = {
+  title: string;
+  path: string;
+  range: Range;
+  replaceWith: string;
+};
+
+export type PublishDiagnostic = {
+  range: Range;
+  message: string;
+  related?: RelatedInformation[];
+  suggestions?: PublishSuggestion[];
+};
 
 const posAt = (src: string, offset: number): Position => {
   const lc = lineCol(src, offset);
   return { line: lc.line - 1, character: lc.col - 1 };
 };
 
+const spanRange = (src: string, start: number, end: number): Range => ({
+  start: posAt(src, start),
+  end: posAt(src, end),
+});
+
 // A span → range; spanless errors fall back to the first character so the
 // squiggle still lands somewhere visible.
-const rangeOf = (src: string, e: AlangError): Range =>
+const rangeOf = (src: string, e: Diagnostic): Range =>
   e.span
-    ? { start: posAt(src, e.span.start), end: posAt(src, e.span.end) }
+    ? spanRange(src, e.span.start, e.span.end)
     : { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } };
 
-// One AlangError → the LSP-shaped diagnostic. Kind labels the message; the span
-// (if any) places the squiggle.
-const toDiag = (src: string, e: AlangError): Diagnostic => ({
-  range: rangeOf(src, e),
-  message: `${e.kind}: ${e.message}`,
-});
+/** Map a compiler Diagnostic onto the publish DTO (labels → related, etc.). */
+export const toPublish = (
+  src: string,
+  e: Diagnostic,
+  path = "<buffer>",
+  sources?: ReadonlyMap<string, string>,
+): PublishDiagnostic => {
+  const related = (e.labels ?? []).map((label) => {
+    const labelPath = label.location.path || path;
+    const labelSrc = sources?.get(labelPath) ?? src;
+    return {
+      message: label.message,
+      path: labelPath,
+      range: spanRange(labelSrc, label.location.span.start, label.location.span.end),
+    };
+  });
+  const suggestions = (e.suggestions ?? []).map((s) => {
+    const sPath = s.location.path || path;
+    const sSrc = sources?.get(sPath) ?? src;
+    return {
+      title: s.title ?? `Replace with ${JSON.stringify(s.replaceWith)}`,
+      path: sPath,
+      range: spanRange(sSrc, s.location.span.start, s.location.span.end),
+      replaceWith: s.replaceWith,
+    };
+  });
+  let message = `${e.kind}: ${e.message}`;
+  if (e.help) message = `${message}\nhelp: ${e.help}`;
+  return {
+    range: rangeOf(src, e),
+    message,
+    ...(related.length > 0 ? { related } : {}),
+    ...(suggestions.length > 0 ? { suggestions } : {}),
+  };
+};
 
 // The pipeline short-circuits at the first error, so this yields 0 or 1
 // diagnostics. Single-file: imports resolve to nothing, so a `switch` on an
 // imported variant reads as an unknown constructor. Use `moduleDiagnostics`
 // when a path is available.
-export const diagnostics = (src: string): Diagnostic[] => {
+export const diagnostics = (src: string): PublishDiagnostic[] => {
   const r = compile(src);
-  return isErr(r) ? [toDiag(src, r.error)] : [];
+  return isErr(r) ? [toPublish(src, r.error)] : [];
 };
 
 // Module-aware diagnostics: resolve `path`'s dependency graph (deps read from
@@ -57,11 +112,11 @@ export const moduleDiagnostics = async (
   path: string,
   src: string,
   readFile: (p: string) => Promise<string>,
-): Promise<Diagnostic[]> => {
+): Promise<PublishDiagnostic[]> => {
   const lexed = lex(src);
-  if (isErr(lexed)) return [toDiag(src, lexed.error)];
+  if (isErr(lexed)) return [toPublish(src, lexed.error, path)];
   const parsed = parse(lexed.value);
-  if (isErr(parsed)) return [toDiag(src, parsed.error)];
+  if (isErr(parsed)) return [toPublish(src, parsed.error, path)];
   const prog = parsed.value;
 
   const entry = resolve(path);
@@ -71,5 +126,5 @@ export const moduleDiagnostics = async (
   if (isErr(ctx)) return diagnostics(src);
 
   const typed = toTypedProgramWith(prog, ctx.value);
-  return isErr(typed) ? [toDiag(src, typed.error)] : [];
+  return isErr(typed) ? [toPublish(src, typed.error, entry)] : [];
 };

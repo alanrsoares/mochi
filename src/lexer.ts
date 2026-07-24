@@ -1,7 +1,7 @@
 // Lexer — text → tokens. Returns Result; bad char = Err, not throw.
 // Each emitted token carries its source `span` (half-open [start, end)).
 import { err, isErr, ok, type Result } from "@onrails/result";
-import { type AlangError, lexErr } from "./errors";
+import { type Diagnostic, lexErr } from "./errors";
 import { type Span, span } from "./span";
 
 export type Tok =
@@ -229,7 +229,7 @@ const lexString = (
   i: number,
   emit: (tok: Tok, start: number, end: number) => void,
   toks: Located[],
-): Result<number, AlangError> => {
+): Result<number, Diagnostic> => {
   const s = scanTemplate(src, i);
   if (!s) return err(lexErr("unterminated string literal", span(i, src.length)));
   if (s.parts.length === 1) {
@@ -265,7 +265,7 @@ const scanLineComment = (src: string, start: number, lineHasToken: boolean): Lin
   return { end, doc: src.slice(textStart, end), breaksDoc: false };
 };
 
-export function lex(src: string): Result<Located[], AlangError> {
+export function lex(src: string): Result<Located[], Diagnostic> {
   const toks: Located[] = [];
   let i = 0;
   // Doc-comment state: `pendingDoc` accumulates consecutive own-line `///` lines;

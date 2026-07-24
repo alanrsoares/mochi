@@ -44,9 +44,10 @@ import {
 // existing importers (hover, dts, module, compile) name them from here.
 export type { AliasMap, Env, Scheme } from "./schemes";
 
-import { type AlangError, typeErr } from "./errors";
+import { type Diagnostic, typeErr } from "./errors";
 import { stronglyConnected } from "./scc";
 import type { Span } from "./span";
+import { closestName } from "./suggest";
 import {
   type AliasDef,
   aliasParamId,
@@ -97,7 +98,7 @@ type Ctx = {
   noteLet?: (sc: Scheme, valueSpan: Span) => void;
 };
 
-const u = (a: Type, b: Type, ctx: Ctx, span?: Span): Result<Type, AlangError> => {
+const u = (a: Type, b: Type, ctx: Ctx, span?: Span): Result<Type, Diagnostic> => {
   const r = unify(a, b, ctx.subst, ctx.fresh, (t) => showType(foldAliases(t, ctx.aliases)));
   return isErr(r) ? err(typeErr(r.error.message, span)) : ok(a);
 };
@@ -106,7 +107,7 @@ const u = (a: Type, b: Type, ctx: Ctx, span?: Span): Result<Type, AlangError> =>
  * Wrapper over `inferExpr`: records the type of every expression node in one
  * place, so hover can look up any subexpression's type by span.
  */
-const infer = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
+const infer = (e: Expr, ctx: Ctx): Result<Type, Diagnostic> => {
   const r = inferExpr(e, ctx);
   if (ctx.record && !isErr(r))
     ctx.record(
@@ -118,7 +119,7 @@ const infer = (e: Expr, ctx: Ctx): Result<Type, AlangError> => {
 };
 
 /** cond ? then : else — cond is bool, the branches share one type. */
-const inferTernary = (e: TernaryExpr, ctx: Ctx): Result<Type, AlangError> => {
+const inferTernary = (e: TernaryExpr, ctx: Ctx): Result<Type, Diagnostic> => {
   const condT = infer(e.cond, ctx);
   if (isErr(condT)) return condT;
   const condU = u(condT.value, tBool, ctx, e.cond.span);
@@ -163,7 +164,7 @@ const bindParam = (p: LamParam, env: Env, ctx: Ctx): Type => {
  * a `Result a e`; the Ok payload binds the param; the body is itself a Result
  * sharing the same error type, and the whole expression has the body's type.
  */
-function inferLetBind(e: LetBindExpr, ctx: Ctx): Result<Type, AlangError> {
+function inferLetBind(e: LetBindExpr, ctx: Ctx): Result<Type, Diagnostic> {
   const valT = infer(e.value, ctx);
   if (isErr(valT)) return valT;
   const okT = freshVar(ctx.fresh);
@@ -187,7 +188,7 @@ function inferLetBind(e: LetBindExpr, ctx: Ctx): Result<Type, AlangError> {
  * Every hole of a "…${x}…" unifies with `string` (ADR 0023) — no implicit
  * `show`. Pulled out of `inferExpr`'s switch to keep its complexity down.
  */
-function inferInterp(parts: (string | Expr)[], ctx: Ctx): Result<Type, AlangError> {
+function inferInterp(parts: (string | Expr)[], ctx: Ctx): Result<Type, Diagnostic> {
   for (const p of parts) {
     if (typeof p === "string") continue;
     const pt = infer(p, ctx);
@@ -206,14 +207,14 @@ function inferInterp(parts: (string | Expr)[], ctx: Ctx): Result<Type, AlangErro
 function recordEmpty(
   span: Span,
   len: number,
-  r: Result<Type, AlangError>,
+  r: Result<Type, Diagnostic>,
   ctx: Ctx,
-): Result<Type, AlangError> {
+): Result<Type, Diagnostic> {
   if (len === 0 && !isErr(r)) ctx.record?.(span, r.value);
   return r;
 }
 
-function inferRef(e: RefExpr, ctx: Ctx): Result<Type, AlangError> {
+function inferRef(e: RefExpr, ctx: Ctx): Result<Type, Diagnostic> {
   const sc = ctx.env.get(e.name);
   if (sc) {
     const inst = instantiate(sc, ctx.fresh);
@@ -222,11 +223,32 @@ function inferRef(e: RefExpr, ctx: Ctx): Result<Type, AlangError> {
       ctx.record?.(e.span, inst);
     return ok(inst);
   }
+  // Did-you-mean only in strict mode. Open-world leaves unknown names as fresh
+  // vars (host globals); guessing there false-positives on names like `empty2`.
   if (ctx.open) return ok(freshVar(ctx.fresh));
-  return err(typeErr(`unbound variable '${e.name}'`, e.span));
+  const hint = closestName(e.name, ctx.env.keys());
+  if (hint) {
+    return err(
+      typeErr(`unbound variable '${e.name}'`, e.span, {
+        help: `did you mean '${hint}'?`,
+        suggestions: [
+          {
+            location: { path: "", span: e.span },
+            replaceWith: hint,
+            title: `Did you mean '${hint}'?`,
+          },
+        ],
+      }),
+    );
+  }
+  return err(
+    typeErr(`unbound variable '${e.name}'`, e.span, {
+      help: "bind the name before using it, or check the spelling",
+    }),
+  );
 }
 
-function inferLambda(e: LambdaExpr, ctx: Ctx): Result<Type, AlangError> {
+function inferLambda(e: LambdaExpr, ctx: Ctx): Result<Type, Diagnostic> {
   const bodyEnv: Env = new Map(ctx.env);
   const paramTypes: Type[] = e.params.map((p) => bindParam(p, bodyEnv, ctx));
   const bodyT = infer(e.body, { ...ctx, env: bodyEnv });
@@ -235,7 +257,7 @@ function inferLambda(e: LambdaExpr, ctx: Ctx): Result<Type, AlangError> {
     : ok(paramTypes.reduceRight((acc, pt) => tArrow(pt, acc), bodyT.value));
 }
 
-function inferLetIn(e: LetInExpr, ctx: Ctx): Result<Type, AlangError> {
+function inferLetIn(e: LetInExpr, ctx: Ctx): Result<Type, Diagnostic> {
   const valT = infer(e.value, ctx);
   if (isErr(valT)) return valT;
   if (e.annot) {
@@ -251,7 +273,7 @@ function inferLetIn(e: LetInExpr, ctx: Ctx): Result<Type, AlangError> {
   return infer(e.body, { ...ctx, env: bodyEnv });
 }
 
-function inferCall(e: CallExpr, ctx: Ctx): Result<Type, AlangError> {
+function inferCall(e: CallExpr, ctx: Ctx): Result<Type, Diagnostic> {
   const fnT = infer(e.fn, ctx);
   if (isErr(fnT)) return fnT;
   let cur = fnT.value;
@@ -266,7 +288,7 @@ function inferCall(e: CallExpr, ctx: Ctx): Result<Type, AlangError> {
   return ok(cur);
 }
 
-function inferRecord(e: RecordExpr, ctx: Ctx): Result<Type, AlangError> {
+function inferRecord(e: RecordExpr, ctx: Ctx): Result<Type, Diagnostic> {
   let row: Row = rEmpty;
   const fieldTs: [string, Type][] = [];
   for (let i = e.fields.length - 1; i >= 0; i--) {
@@ -285,7 +307,7 @@ function inferRecord(e: RecordExpr, ctx: Ctx): Result<Type, AlangError> {
   return isErr(uni) ? uni : ok(baseT.value);
 }
 
-function inferField(e: FieldExpr, ctx: Ctx): Result<Type, AlangError> {
+function inferField(e: FieldExpr, ctx: Ctx): Result<Type, Diagnostic> {
   if (e.target.kind === "ref" && ctx.ns.has(e.target.name) && !ctx.env.has(e.target.name)) {
     const sc = ctx.ns.get(e.target.name)!.get(e.name);
     return !sc
@@ -300,7 +322,7 @@ function inferField(e: FieldExpr, ctx: Ctx): Result<Type, AlangError> {
   return isErr(uni) ? uni : ok(fieldT);
 }
 
-function inferTuple(e: TupleExpr, ctx: Ctx): Result<Type, AlangError> {
+function inferTuple(e: TupleExpr, ctx: Ctx): Result<Type, Diagnostic> {
   const elems: Type[] = [];
   for (const el of e.elements) {
     const et = infer(el, ctx);
@@ -310,7 +332,7 @@ function inferTuple(e: TupleExpr, ctx: Ctx): Result<Type, AlangError> {
   return ok(tTuple(elems));
 }
 
-function inferExpr(e: Expr, ctx: Ctx): Result<Type, AlangError> {
+function inferExpr(e: Expr, ctx: Ctx): Result<Type, Diagnostic> {
   switch (e.kind) {
     case "num":
       return ok(tNumber);
@@ -362,7 +384,7 @@ const inferSeqSlots = (
   con: "Array" | "List" | "Set",
   elements: SeqElem[],
   ctx: Ctx,
-): Result<Type, AlangError> => {
+): Result<Type, Diagnostic> => {
   const elem = freshVar(ctx.fresh);
   for (const slot of elements) {
     const et = infer(slot.expr, ctx);
@@ -375,7 +397,7 @@ const inferSeqSlots = (
 };
 
 /** Keys share one type, values share one type → `Map<k, v>` (native JS Map). */
-function inferMapExpr(entries: MapEntry[], ctx: Ctx): Result<Type, AlangError> {
+function inferMapExpr(entries: MapEntry[], ctx: Ctx): Result<Type, Diagnostic> {
   const k = freshVar(ctx.fresh);
   const v = freshVar(ctx.fresh);
   for (const ent of entries) {
@@ -391,7 +413,7 @@ function inferMapExpr(entries: MapEntry[], ctx: Ctx): Result<Type, AlangError> {
   return ok(tCon("Map", [k, v]));
 }
 
-function inferMatch(e: MatchExpr, ctx: Ctx): Result<Type, AlangError> {
+function inferMatch(e: MatchExpr, ctx: Ctx): Result<Type, Diagnostic> {
   const scrutT = infer(e.scrutinee, ctx);
   if (isErr(scrutT)) return scrutT;
   const resultT = freshVar(ctx.fresh);
@@ -426,7 +448,7 @@ type PatResult = { type: Type; bindings: Map<string, Type> };
  * can look up a pattern-bound name (or a whole constructor pattern) by
  * span — the pattern-side analogue of `infer` recording expression nodes.
  */
-function inferPattern(p: Pattern, ctx: Ctx): Result<PatResult, AlangError> {
+function inferPattern(p: Pattern, ctx: Ctx): Result<PatResult, Diagnostic> {
   const r = inferPat(p, ctx);
   if (ctx.record && !isErr(r))
     ctx.record(
@@ -437,7 +459,7 @@ function inferPattern(p: Pattern, ctx: Ctx): Result<PatResult, AlangError> {
   return r;
 }
 
-function inferPat(p: Pattern, ctx: Ctx): Result<PatResult, AlangError> {
+function inferPat(p: Pattern, ctx: Ctx): Result<PatResult, Diagnostic> {
   switch (p.kind) {
     case "pwild":
       return ok({ type: freshVar(ctx.fresh), bindings: new Map() });
@@ -516,7 +538,7 @@ function inferPat(p: Pattern, ctx: Ctx): Result<PatResult, AlangError> {
 // types unify; and (guaranteed by check.ts) they bind the same names, whose
 // types unify too. The arm's binder env is the first alt's, refined by those
 // unions. Pulled out of `inferPat`'s switch to keep its complexity down.
-function inferOrPat(alts: Pattern[], ctx: Ctx): Result<PatResult, AlangError> {
+function inferOrPat(alts: Pattern[], ctx: Ctx): Result<PatResult, Diagnostic> {
   const first = inferPattern(alts[0]!, ctx);
   if (isErr(first)) return first;
   const { type: t, bindings } = first.value;
@@ -543,7 +565,7 @@ function inferSeqPat(
   elems: Pattern[],
   rest: Pattern | null,
   ctx: Ctx,
-): Result<PatResult, AlangError> {
+): Result<PatResult, Diagnostic> {
   const elem = freshVar(ctx.fresh);
   const seqT = tCon(con, [elem]);
   const bindings = new Map<string, Type>();
@@ -752,7 +774,7 @@ function run(
   prog: Program,
   builtins: Record<string, Type>,
   opts: InferOptions,
-): Result<InferResult, AlangError> {
+): Result<InferResult, Diagnostic> {
   const env: Env = new Map();
   const subst = emptySubst();
   // Builtins are generalized, not monomorphic: a prelude type carrying type vars
@@ -907,14 +929,14 @@ export const inferProgram = (
   prog: Program,
   builtins: Record<string, Type> = {},
   opts: InferOptions = {},
-): Result<Env, AlangError> => map(run(prog, builtins, opts), (r) => r.env);
+): Result<Env, Diagnostic> => map(run(prog, builtins, opts), (r) => r.env);
 
 // Like `inferProgram`, but also returns the span → type map for tooling.
 export const inferProgramTypes = (
   prog: Program,
   builtins: Record<string, Type> = {},
   opts: InferOptions = {},
-): Result<InferResult, AlangError> => run(prog, builtins, opts);
+): Result<InferResult, Diagnostic> => run(prog, builtins, opts);
 
 // Render a binding's scheme for tests / display. Quantified vars appear as
 // 't{id}; the scheme's type is already zonked at generalization time.

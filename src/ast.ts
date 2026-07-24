@@ -57,7 +57,7 @@ export type SeqElem = { kind: "expr"; expr: Expr } | { kind: "spread"; expr: Exp
 // A lambda parameter: a plain name, or a record-destructuring pattern that
 // binds each named field. `({ x, y }) => ...` pulls x and y out of the argument.
 export type LamParam =
-  | { kind: "name"; name: string }
+  | { kind: "name"; name: string; span: Span } // span anchors the bound name for nav
   | { kind: "precord"; fields: string[] } // ({ x, y }) => ...
   | { kind: "ptuple"; names: string[] }; // ((a, b)) => ... — tuple-destructuring param
 
@@ -139,6 +139,7 @@ export type Stmt =
   | {
       kind: "type";
       name: string;
+      nameSpan: Span;
       params: string[];
       ctors: Ctor[];
       alias?: AliasField[];

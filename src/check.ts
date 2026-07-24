@@ -3,7 +3,7 @@
 import { err, isErr, ok, type Result } from "@onrails/result";
 import type { CtorPat, Expr, LamParam, MatchExpr, OrPat, Pattern, Program, TypeExpr } from "./ast";
 import { buildCtorTable, type CtorTable, PRIM_TYPE_NAMES } from "./ctors";
-import { type AlangError, checkErr } from "./errors";
+import { checkErr, type Diagnostic } from "./errors";
 import { builtinTypeDecls, preludeNamespaces } from "./prelude";
 import type { Span } from "./span";
 
@@ -94,7 +94,7 @@ const isCatchAll = (p: Pattern): boolean =>
 // and extra arms are allowed but don't themselves prove totality (need the pair
 // above or a `_`). Returns null (exhaustive), an error (a list switch that
 // isn't), or undefined (not a list switch → let the caller decide).
-const checkSeqExhaustive = (m: MatchExpr): AlangError | null | undefined => {
+const checkSeqExhaustive = (m: MatchExpr): Diagnostic | null | undefined => {
   const seqs = m.arms.flatMap((a) =>
     // Guarded arms don't prove totality (the guard can be false).
     (a.pattern.kind === "parr" || a.pattern.kind === "plist") && !a.guard ? [a.pattern] : [],
@@ -113,7 +113,7 @@ const checkSeqExhaustive = (m: MatchExpr): AlangError | null | undefined => {
 // inside another pattern — matching it pulls from the generator, an effect the
 // emitted guard form must not hide mid-predicate. Top-level `plist` arms are
 // fine (genListMatch owns the pulling discipline).
-const checkPattern = (p: Pattern, reg: Registry, top: boolean): AlangError | null => {
+const checkPattern = (p: Pattern, reg: Registry, top: boolean): Diagnostic | null => {
   switch (p.kind) {
     case "pctor": {
       const info = reg.ctor.get(p.ctor);
@@ -166,7 +166,7 @@ const checkPattern = (p: Pattern, reg: Registry, top: boolean): AlangError | nul
 // Map each name a pattern binds to a private structural path. The scheme need
 // only be internally consistent — it exists to compare or-pattern alternatives.
 // A name bound twice in one pattern is an error.
-const binderPaths = (p: Pattern, at: string, acc: Map<string, string>): AlangError | null => {
+const binderPaths = (p: Pattern, at: string, acc: Map<string, string>): Diagnostic | null => {
   switch (p.kind) {
     case "pbind":
       if (acc.has(p.name)) return checkErr(`pattern binds '${p.name}' more than once`, p.span);
@@ -187,7 +187,7 @@ const binderPaths = (p: Pattern, at: string, acc: Map<string, string>): AlangErr
 // must not be an eager/lazy sequence (those need genListMatch/length logic the
 // guard form can't host as an alt), and all alts must bind the same names at the
 // same structural position — so the arm's single destructure serves every alt.
-const checkOrPattern = (p: OrPat, reg: Registry): AlangError | null => {
+const checkOrPattern = (p: OrPat, reg: Registry): Diagnostic | null => {
   const maps: Map<string, string>[] = [];
   for (const alt of p.alts) {
     if (isCatchAll(alt))
@@ -234,7 +234,7 @@ const checkOrPattern = (p: OrPat, reg: Registry): AlangError | null => {
 // toward exhaustiveness.
 const coversCtor = (p: CtorPat): boolean => p.args.every(isCatchAll);
 
-function checkMatch(m: MatchExpr, reg: Registry): AlangError | null {
+function checkMatch(m: MatchExpr, reg: Registry): Diagnostic | null {
   for (const arm of m.arms) {
     const e = checkPattern(arm.pattern, reg, true);
     if (e) return e;
@@ -330,7 +330,7 @@ function checkMatch(m: MatchExpr, reg: Registry): AlangError | null {
 const RESERVED_NAMES = new Set(Object.keys(preludeNamespaces));
 const REDECLARABLE_TYPES = new Set(builtinTypeDecls.map((d) => d.name));
 
-const checkReservedNames = (prog: Program): AlangError | null => {
+const checkReservedNames = (prog: Program): Diagnostic | null => {
   for (const s of prog.stmts) {
     if (s.kind === "type" && REDECLARABLE_TYPES.has(s.name)) continue;
     if (
@@ -376,7 +376,7 @@ const strayTypeVar = (te: TypeExpr, params: ReadonlySet<string>): TypeExpr | nul
   }
 };
 
-const checkCtorFieldVars = (prog: Program): AlangError | null => {
+const checkCtorFieldVars = (prog: Program): Diagnostic | null => {
   for (const s of prog.stmts) {
     if (s.kind !== "type") continue;
     const params = new Set(s.params);
@@ -449,7 +449,7 @@ const JS_RESERVED = new Set([
   "await",
 ]);
 
-const reservedBind = (name: string, span: Span): AlangError | null =>
+const reservedBind = (name: string, span: Span): Diagnostic | null =>
   JS_RESERVED.has(name)
     ? checkErr(
         `'${name}' is a JavaScript reserved word and can't be used as a binding name; rename it`,
@@ -457,12 +457,12 @@ const reservedBind = (name: string, span: Span): AlangError | null =>
       )
     : null;
 
-const firstErr = (es: readonly (AlangError | null)[]): AlangError | null =>
-  es.reduce<AlangError | null>((f, e) => f ?? e, null);
+const firstErr = (es: readonly (Diagnostic | null)[]): Diagnostic | null =>
+  es.reduce<Diagnostic | null>((f, e) => f ?? e, null);
 
 // A lambda/letbind parameter binds one or more names; none of its forms carry a
 // per-name span, so offences anchor to the parameter's enclosing span.
-const checkParamBinds = (p: LamParam, span: Span): AlangError | null => {
+const checkParamBinds = (p: LamParam, span: Span): Diagnostic | null => {
   switch (p.kind) {
     case "name":
       return reservedBind(p.name, span);
@@ -473,7 +473,7 @@ const checkParamBinds = (p: LamParam, span: Span): AlangError | null => {
   }
 };
 
-const checkPatBinds = (p: Pattern): AlangError | null => {
+const checkPatBinds = (p: Pattern): Diagnostic | null => {
   switch (p.kind) {
     case "pbind":
       return reservedBind(p.name, p.span);
@@ -496,7 +496,7 @@ const checkPatBinds = (p: Pattern): AlangError | null => {
   }
 };
 
-const checkExprBinds = (e: Expr): AlangError | null => {
+const checkExprBinds = (e: Expr): Diagnostic | null => {
   switch (e.kind) {
     case "num":
     case "bool":
@@ -549,7 +549,7 @@ const checkExprBinds = (e: Expr): AlangError | null => {
   }
 };
 
-const checkReservedWords = (prog: Program): AlangError | null => {
+const checkReservedWords = (prog: Program): Diagnostic | null => {
   for (const s of prog.stmts) {
     if (s.kind === "let") {
       const e = reservedBind(s.name, s.nameSpan) ?? checkExprBinds(s.value);
@@ -574,7 +574,7 @@ const checkReservedWords = (prog: Program): AlangError | null => {
 // `imported` carries the ctor/type registries of the modules this program
 // imports from; merged UNDER the local registry (local declarations win) so
 // exhaustiveness works across the module boundary.
-export function check(prog: Program, imported?: Registry): Result<Program, AlangError> {
+export function check(prog: Program, imported?: Registry): Result<Program, Diagnostic> {
   const reserved = checkReservedNames(prog);
   if (reserved) return err(reserved);
   const reservedWord = checkReservedWords(prog);
@@ -591,7 +591,7 @@ export function check(prog: Program, imported?: Registry): Result<Program, Alang
 
   for (const s of prog.stmts) {
     if (s.kind !== "let") continue;
-    let found: AlangError | null = null;
+    let found: Diagnostic | null = null;
     forEachMatch(s.value, (m) => {
       found ??= checkMatch(m, reg);
     });

@@ -37,8 +37,19 @@ the `.mochi` formatter on `bootstrap/`), `build:ext` (VS Code extension).
 
 - **Hover** — types on demand, folded back to named record aliases where they match, with
   `///` doc comments attached.
-- **Diagnostics** — the same `AlangError` values the compiler produces, with spans; a
-  `--json` structured form is available for machine consumers.
+- **Go to definition / document highlight** — lexical symbol index (values, types, ctors);
+  works when typecheck fails. Prelude names have no location. Cross-module lands in a
+  later DX slice ([tracer bullets](dx-tracer-bullets.md)).
+- **Find references / rename** — same-file; skips `$`/`_` synthetics and prelude. F2
+  rewrites every occurrence of the binding.
+- **Code actions** — `Diagnostic.suggestions` become quick fixes (e.g. did-you-mean on
+  unbound names in **strict** inference). Open-world compile still treats unknown
+  names as host globals, so typo suggestions are not guessed there.
+- **Diagnostics** — the same `Diagnostic` values the compiler produces, with spans; a
+  `--json` structured form is available for machine consumers. The LSP maps each to a
+  `PublishDiagnostic` (range + message + `related` from labels; help is appended to the
+  message). Suggestions ride along for code actions
+  ([ADR 0003](adr/0003-rich-diagnostics.md), [tracer bullets](dx-tracer-bullets.md)).
 - **Formatter** — width-based pretty-printing that runs on lex + parse only (no type
   information needed), which is why it can format even code that doesn't yet type-check.
 - **`.d.ts`** — HM types lowered to TypeScript declarations, including declarations for

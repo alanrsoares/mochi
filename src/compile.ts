@@ -4,7 +4,7 @@ import { flatMap, map, pipe, type Result } from "@onrails/result";
 import type { Program } from "./ast";
 import { check, type Registry } from "./check";
 import { codegen } from "./codegen";
-import type { AlangError } from "./errors";
+import type { Diagnostic } from "./errors";
 import {
   type Env,
   type InferOptions,
@@ -27,7 +27,7 @@ export type TypedProgram = { prog: Program; res: InferResult };
 export const toTypedProgram = (
   src: string,
   opts: InferOptions = { open: true },
-): Result<TypedProgram, AlangError> =>
+): Result<TypedProgram, Diagnostic> =>
   pipe(
     lex(src),
     flatMap(parse),
@@ -52,7 +52,7 @@ export type ImportedContext = {
 export const toTypedProgramWith = (
   prog: Program,
   ctx: ImportedContext,
-): Result<TypedProgram, AlangError> =>
+): Result<TypedProgram, Diagnostic> =>
   pipe(
     check(prog, ctx.importedReg),
     flatMap((p) =>
@@ -70,7 +70,7 @@ export const toTypedProgramWith = (
 
 // Type-check stage: run HM inference (open-world, so JS host globals are legal)
 // and pass the program through unchanged on success.
-const typecheck = (prog: Program): Result<Program, AlangError> =>
+const typecheck = (prog: Program): Result<Program, Diagnostic> =>
   map(inferProgram(prog, preludeEnv, { open: true, namespaces: preludeNamespaces }), () => prog);
 
 // `runtime` (default on): inline the prelude builtins the program uses so the
@@ -78,7 +78,7 @@ const typecheck = (prog: Program): Result<Program, AlangError> =>
 // that supply their own prelude, or callers that bundle it separately.
 export type CompileOptions = { runtime?: boolean };
 
-export const compile = (src: string, opts: CompileOptions = {}): Result<string, AlangError> =>
+export const compile = (src: string, opts: CompileOptions = {}): Result<string, Diagnostic> =>
   pipe(
     lex(src),
     flatMap(parse),

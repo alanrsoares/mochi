@@ -18,17 +18,17 @@ import type {
   Stmt,
   TypeExpr,
 } from "./ast";
-import { type AlangError, parseErr } from "./errors";
+import { type Diagnostic, parseErr } from "./errors";
 import type { Located, Tok } from "./lexer";
 import { type Span, spanning } from "./span";
 
 class ParseAbort extends Error {
-  constructor(readonly detail: AlangError) {
+  constructor(readonly detail: Diagnostic) {
     super(detail.message);
   }
 }
 
-export function parse(toks: Located[]): Result<Program, AlangError> {
+export function parse(toks: Located[]): Result<Program, Diagnostic> {
   let pos = 0;
   let tmpCount = 0; // supplies fresh names for destructuring temporaries
   let last: Located = toks[0]!; // most recently consumed token (for end spans)
@@ -112,7 +112,7 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     const paramRef: Expr = { kind: "ref", name: "$s", span: opTok.span };
     return {
       kind: "lambda",
-      params: [{ kind: "name", name: "$s" }],
+      params: [{ kind: "name", name: "$s", span: opTok.span }],
       body: sectionBody(opTok.t, provided, paramRef, opTok.span),
       span: spanning(provided.span, opTok.span),
     };
@@ -130,7 +130,7 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     const paramRef: Expr = { kind: "ref", name: "$s", span: opTok.span };
     return {
       kind: "lambda",
-      params: [{ kind: "name", name: "$s" }],
+      params: [{ kind: "name", name: "$s", span: opTok.span }],
       body: sectionBody(opTok.t, paramRef, y, opTok.span),
       span: spanning(lparenSpan, end),
     };
@@ -171,23 +171,31 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     }
     if (peek().t === "lparen") {
       next();
-      const names = [expectId().name];
+      const first = expectId();
+      const names = [first.name];
+      const spans = [first.span];
       while (peek().t === "comma") {
         next();
-        names.push(expectId().name);
+        const n = expectId();
+        names.push(n.name);
+        spans.push(n.span);
       }
       expect("rparen");
       // A lone `(x)` is just grouping, not a 1-tuple.
-      return names.length === 1 ? { kind: "name", name: names[0]! } : { kind: "ptuple", names };
+      return names.length === 1
+        ? { kind: "name", name: names[0]!, span: spans[0]! }
+        : { kind: "ptuple", names };
     }
-    return { kind: "name", name: expectId().name };
+    const id = expectId();
+    return { kind: "name", name: id.name, span: id.span };
   }
 
   function parseLambda(): Expr {
     const start = peek().span;
     const params: LamParam[] = [];
     if (peek().t === "id") {
-      params.push({ kind: "name", name: expectId().name }); // bare `x => ...`
+      const id = expectId();
+      params.push({ kind: "name", name: id.name, span: id.span }); // bare `x => ...`
     } else {
       expect("lparen");
       if (peek().t !== "rparen") {
@@ -346,7 +354,7 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
       const paramSpan = tk.span;
       const fn: Expr = {
         kind: "lambda",
-        params: [{ kind: "name", name: "$x" }],
+        params: [{ kind: "name", name: "$x", span: paramSpan }],
         body: {
           kind: "call",
           fn: right,
@@ -816,7 +824,7 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
 
   function parseType(): Extract<Stmt, { kind: "type" }> {
     const start = expect("type").span;
-    const name = expectId().name;
+    const { name, span: nameSpan } = expectId();
     // Optional type parameters, ML-style: `type Result a e = ...`. Any ids
     // before the `=` are parameters the constructors can reference.
     const params: string[] = [];
@@ -827,7 +835,7 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     // so the two forms never collide.
     if (peek().t === "lbrace") {
       const alias = parseAliasBody();
-      return { kind: "type", name, params, ctors: [], alias, span: to(start) };
+      return { kind: "type", name, nameSpan, params, ctors: [], alias, span: to(start) };
     }
     const ctors: Ctor[] = [];
     if (peek().t === "bar") next(); // optional leading bar
@@ -836,7 +844,7 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
       next();
       ctors.push(parseCtor());
     }
-    return { kind: "type", name, params, ctors, span: to(start) };
+    return { kind: "type", name, nameSpan, params, ctors, span: to(start) };
   }
 
   // The `{ x: T, y: U }` body of a record alias. Each field is `name: TypeExpr`;

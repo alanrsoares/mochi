@@ -34,7 +34,7 @@ import type {
   TypeExpr,
   TypeStmt,
 } from "./ast";
-import type { AlangError } from "./errors";
+import type { Diagnostic } from "./errors";
 import { lex, skipStringLiteral } from "./lexer";
 import { parse } from "./parser";
 
@@ -1038,7 +1038,7 @@ const program = (stmts: Stmt[], src: string, tail: Comment[]): string => {
   return render(cat(parts), WIDTH);
 };
 
-export const format = (src: string): Result<string, AlangError> =>
+export const format = (src: string): Result<string, Diagnostic> =>
   pipe(
     lex(src),
     flatMap(parse),
