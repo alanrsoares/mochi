@@ -35,6 +35,12 @@ export type Tok =
   | { t: "dot" } // .
   | { t: "colon" } // :
   | { t: "question" } // ? (ternary)
+  | { t: "eqeq" } // ==
+  | { t: "neq" } // !=
+  | { t: "lte" } // <=
+  | { t: "gte" } // >=
+  | { t: "lt" } // <
+  | { t: "gt" } // >
   | { t: "comma" }
   | { t: "num"; v: number; raw: string } // raw source lexeme, so `3.0`/`-3` survive re-printing
   | { t: "bool"; v: boolean } // true / false
@@ -70,6 +76,10 @@ const DIGRAPHS: Record<string, Tok | undefined> = {
   "|>": { t: "pipe" },
   ">>": { t: "compose" },
   "++": { t: "concat" },
+  "==": { t: "eqeq" },
+  "!=": { t: "neq" },
+  "<=": { t: "lte" },
+  ">=": { t: "gte" },
   "=>": { t: "arrow" },
   "->": { t: "tarrow" }, // type-expression arrow (extern signatures)
 };
@@ -81,6 +91,8 @@ const PUNCT: Record<string, Tok | undefined> = {
   "*": { t: "star" },
   "/": { t: "slash" },
   "%": { t: "percent" },
+  "<": { t: "lt" },
+  ">": { t: "gt" },
   "|": { t: "bar" },
   "=": { t: "eq" },
   "(": { t: "lparen" },

@@ -48,6 +48,19 @@ test("desugars ++ concatenation infix operator for strings and arrays", () => {
   const res = compile(code);
   expect(isOk(res)).toBe(true);
 });
+
+test("desugars comparison infixes (==, !=, <, <=, >, >=)", () => {
+  const code = `
+    let a = 1 == 1
+    let b = 1 != 2
+    let c = 1 < 2
+    let d = 1 <= 1
+    let e = 2 > 1
+    let f = 2 >= 2
+  `;
+  const res = compile(code);
+  expect(isOk(res)).toBe(true);
+});
 test("lowercase names in a signature are generalized type variables", () => {
   // a -> a is polymorphic
   expect(schemeOf(`extern id : a -> a = "./u.js" "id"`, "id")).toMatch(/^'t\d+ -> 't\d+$/);
