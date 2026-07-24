@@ -39,7 +39,7 @@ test("a nested list infers a list of lists", () => {
 test("a heterogeneous list is a type error", () => {
   const r = compile("let bad = [1, true]");
   expect(isErr(r)).toBe(true);
-  expect(unwrapErr(r).kind).toBe("type");
+  expect(unwrapErr(r)[0]!.kind).toBe("type");
 });
 
 test("[T] type syntax parses in an extern signature", () => {

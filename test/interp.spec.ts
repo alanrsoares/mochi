@@ -14,7 +14,7 @@ test("a hole unifies with string; a non-string hole is a type error", () => {
   // biome-ignore lint/suspicious/noTemplateCurlyInString: mochi source, not a JS template
   const r = compile('let flag = true\nlet bad = "x is ${flag}"', { runtime: false });
   expect(isErr(r)).toBe(true);
-  expect(unwrapErr(r).kind).toBe("type");
+  expect(unwrapErr(r)[0]!.kind).toBe("type");
 });
 
 test("interpolation lowers to a template literal", () => {

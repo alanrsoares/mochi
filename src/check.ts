@@ -3,7 +3,7 @@
 import { err, isErr, ok, type Result } from "@onrails/result";
 import type { CtorPat, Expr, LamParam, MatchExpr, OrPat, Pattern, Program, TypeExpr } from "./ast";
 import { buildCtorTable, type CtorTable, PRIM_TYPE_NAMES } from "./ctors";
-import { checkErr, type Diagnostic } from "./errors";
+import { checkErr, concatDiags, type Diagnostic } from "./errors";
 import { builtinTypeDecls, preludeNamespaces } from "./prelude";
 import type { Span } from "./span";
 
@@ -166,6 +166,9 @@ const checkPattern = (p: Pattern, reg: Registry, top: boolean): Diagnostic | nul
 // Map each name a pattern binds to a private structural path. The scheme need
 // only be internally consistent — it exists to compare or-pattern alternatives.
 // A name bound twice in one pattern is an error.
+const firstErr = (es: readonly (Diagnostic | null)[]): Diagnostic | null =>
+  es.reduce<Diagnostic | null>((f, e) => f ?? e, null);
+
 const binderPaths = (p: Pattern, at: string, acc: Map<string, string>): Diagnostic | null => {
   switch (p.kind) {
     case "pbind":
@@ -330,29 +333,36 @@ function checkMatch(m: MatchExpr, reg: Registry): Diagnostic | null {
 const RESERVED_NAMES = new Set(Object.keys(preludeNamespaces));
 const REDECLARABLE_TYPES = new Set(builtinTypeDecls.map((d) => d.name));
 
-const checkReservedNames = (prog: Program): Diagnostic | null => {
+const checkReservedNames = (prog: Program): Diagnostic[] => {
+  const diags: Diagnostic[] = [];
   for (const s of prog.stmts) {
     if (s.kind === "type" && REDECLARABLE_TYPES.has(s.name)) continue;
     if (
       (s.kind === "let" || s.kind === "type" || s.kind === "extern") &&
       RESERVED_NAMES.has(s.name)
     )
-      return checkErr(`'${s.name}' is a reserved collection namespace and cannot be bound`, s.span);
+      diags.push(
+        checkErr(`'${s.name}' is a reserved collection namespace and cannot be bound`, s.span),
+      );
     if (s.kind === "import") {
       if (s.alias && RESERVED_NAMES.has(s.alias.name))
-        return checkErr(
-          `'${s.alias.name}' is a reserved collection namespace and cannot be imported`,
-          s.alias.span,
+        diags.push(
+          checkErr(
+            `'${s.alias.name}' is a reserved collection namespace and cannot be imported`,
+            s.alias.span,
+          ),
         );
       for (const n of s.names)
         if (RESERVED_NAMES.has(n.name))
-          return checkErr(
-            `'${n.name}' is a reserved collection namespace and cannot be imported`,
-            n.span,
+          diags.push(
+            checkErr(
+              `'${n.name}' is a reserved collection namespace and cannot be imported`,
+              n.span,
+            ),
           );
     }
   }
-  return null;
+  return diags;
 };
 
 // Ctor field types are full type expressions (ADR 0015). A lowercase leaf name
@@ -376,7 +386,8 @@ const strayTypeVar = (te: TypeExpr, params: ReadonlySet<string>): TypeExpr | nul
   }
 };
 
-const checkCtorFieldVars = (prog: Program): Diagnostic | null => {
+const checkCtorFieldVars = (prog: Program): Diagnostic[] => {
+  const diags: Diagnostic[] = [];
   for (const s of prog.stmts) {
     if (s.kind !== "type") continue;
     const params = new Set(s.params);
@@ -384,13 +395,15 @@ const checkCtorFieldVars = (prog: Program): Diagnostic | null => {
       for (const f of c.fields) {
         const stray = strayTypeVar(f.type, params);
         if (stray && stray.kind === "tname")
-          return checkErr(
-            `unknown type parameter '${stray.name}' in constructor '${c.name}' — declare it: type ${s.name} ${[...s.params, stray.name].join(" ")} = ...`,
-            stray.span,
+          diags.push(
+            checkErr(
+              `unknown type parameter '${stray.name}' in constructor '${c.name}' — declare it: type ${s.name} ${[...s.params, stray.name].join(" ")} = ...`,
+              stray.span,
+            ),
           );
       }
   }
-  return null;
+  return diags;
 };
 
 // JavaScript reserved words. An mochi lowercase identifier in a BINDING
@@ -457,132 +470,132 @@ const reservedBind = (name: string, span: Span): Diagnostic | null =>
       )
     : null;
 
-const firstErr = (es: readonly (Diagnostic | null)[]): Diagnostic | null =>
-  es.reduce<Diagnostic | null>((f, e) => f ?? e, null);
+const many = (...parts: readonly (Diagnostic | Diagnostic[] | null)[]): Diagnostic[] =>
+  concatDiags(...parts);
 
 // A lambda/letbind parameter binds one or more names; none of its forms carry a
 // per-name span, so offences anchor to the parameter's enclosing span.
-const checkParamBinds = (p: LamParam, span: Span): Diagnostic | null => {
+const checkParamBinds = (p: LamParam, span: Span): Diagnostic[] => {
   switch (p.kind) {
     case "name":
-      return reservedBind(p.name, span);
+      return many(reservedBind(p.name, span));
     case "precord":
-      return firstErr(p.fields.map((n) => reservedBind(n, span)));
+      return many(...p.fields.map((n) => reservedBind(n, span)));
     case "ptuple":
-      return firstErr(p.names.map((n) => reservedBind(n, span)));
+      return many(...p.names.map((n) => reservedBind(n, span)));
   }
 };
 
-const checkPatBinds = (p: Pattern): Diagnostic | null => {
+const checkPatBinds = (p: Pattern): Diagnostic[] => {
   switch (p.kind) {
     case "pbind":
-      return reservedBind(p.name, p.span);
+      return many(reservedBind(p.name, p.span));
     case "ptuple":
-      return firstErr(p.elems.map(checkPatBinds));
+      return many(...p.elems.map(checkPatBinds));
     case "precord":
-      return firstErr(p.fields.map((f) => checkPatBinds(f.pat)));
+      return many(...p.fields.map((f) => checkPatBinds(f.pat)));
     case "pctor":
-      return firstErr(p.args.map(checkPatBinds));
+      return many(...p.args.map(checkPatBinds));
     case "parr":
     case "plist":
-      return firstErr([...p.elems, ...(p.rest ? [p.rest] : [])].map(checkPatBinds));
+      return many(...[...p.elems, ...(p.rest ? [p.rest] : [])].map(checkPatBinds));
     case "por":
-      return firstErr(p.alts.map(checkPatBinds));
+      return many(...p.alts.map(checkPatBinds));
     case "pwild":
     case "plit":
     case "pbool":
     case "pstr":
-      return null;
+      return [];
   }
 };
 
-const checkExprBinds = (e: Expr): Diagnostic | null => {
+const checkExprBinds = (e: Expr): Diagnostic[] => {
   switch (e.kind) {
     case "num":
     case "bool":
     case "str":
     case "ref":
-      return null;
+      return [];
     case "interp":
-      return firstErr(e.parts.filter((p): p is Expr => typeof p !== "string").map(checkExprBinds));
+      return many(...e.parts.filter((p): p is Expr => typeof p !== "string").map(checkExprBinds));
     case "call":
-      return checkExprBinds(e.fn) ?? firstErr(e.args.map(checkExprBinds));
+      return many(checkExprBinds(e.fn), ...e.args.map(checkExprBinds));
     case "lambda":
-      return firstErr(e.params.map((p) => checkParamBinds(p, e.span))) ?? checkExprBinds(e.body);
+      return many(...e.params.map((p) => checkParamBinds(p, e.span)), checkExprBinds(e.body));
     case "letin":
-      return reservedBind(e.name, e.nameSpan) ?? checkExprBinds(e.value) ?? checkExprBinds(e.body);
+      return many(
+        reservedBind(e.name, e.nameSpan),
+        checkExprBinds(e.value),
+        checkExprBinds(e.body),
+      );
     case "letbind":
-      return (
-        checkParamBinds(e.param, e.paramSpan) ?? checkExprBinds(e.value) ?? checkExprBinds(e.body)
+      return many(
+        checkParamBinds(e.param, e.paramSpan),
+        checkExprBinds(e.value),
+        checkExprBinds(e.body),
       );
     case "pipe":
-      return checkExprBinds(e.left) ?? checkExprBinds(e.right);
+      return many(checkExprBinds(e.left), checkExprBinds(e.right));
     case "ternary":
-      return checkExprBinds(e.cond) ?? checkExprBinds(e.then) ?? checkExprBinds(e.else);
+      return many(checkExprBinds(e.cond), checkExprBinds(e.then), checkExprBinds(e.else));
     case "match":
-      return (
-        checkExprBinds(e.scrutinee) ??
-        firstErr(
-          e.arms.map(
-            (a) =>
-              checkPatBinds(a.pattern) ??
-              (a.guard ? checkExprBinds(a.guard) : null) ??
-              checkExprBinds(a.body),
+      return many(
+        checkExprBinds(e.scrutinee),
+        ...e.arms.map((a) =>
+          many(
+            checkPatBinds(a.pattern),
+            a.guard ? checkExprBinds(a.guard) : null,
+            checkExprBinds(a.body),
           ),
-        )
+        ),
       );
     case "record":
-      return (
-        (e.spread ? checkExprBinds(e.spread) : null) ??
-        firstErr(e.fields.map((f) => checkExprBinds(f.value)))
+      return many(
+        e.spread ? checkExprBinds(e.spread) : null,
+        ...e.fields.map((f) => checkExprBinds(f.value)),
       );
     case "field":
       return checkExprBinds(e.target);
     case "tuple":
-      return firstErr(e.elements.map(checkExprBinds));
+      return many(...e.elements.map(checkExprBinds));
     case "arr":
     case "list":
     case "set":
-      return firstErr(e.elements.map((el) => checkExprBinds(el.expr)));
+      return many(...e.elements.map((el) => checkExprBinds(el.expr)));
     case "map":
-      return firstErr(e.entries.map((en) => checkExprBinds(en.key) ?? checkExprBinds(en.value)));
+      return many(...e.entries.map((en) => many(checkExprBinds(en.key), checkExprBinds(en.value))));
   }
 };
 
-const checkReservedWords = (prog: Program): Diagnostic | null => {
+const checkReservedWords = (prog: Program): Diagnostic[] => {
+  const diags: Diagnostic[] = [];
   for (const s of prog.stmts) {
     if (s.kind === "let") {
-      const e = reservedBind(s.name, s.nameSpan) ?? checkExprBinds(s.value);
-      if (e) return e;
+      diags.push(...many(reservedBind(s.name, s.nameSpan), checkExprBinds(s.value)));
     } else if (s.kind === "extern") {
-      const e = reservedBind(s.name, s.nameSpan);
-      if (e) return e;
+      diags.push(...many(reservedBind(s.name, s.nameSpan)));
     } else if (s.kind === "type") {
       // Type/ctor names are Uppercase (never reserved); a labelled ctor field,
       // however, lowers to a binding in the factory and destructure.
       for (const c of s.ctors)
         for (const f of c.fields)
-          if (f.name) {
-            const e = reservedBind(f.name, f.type.span);
-            if (e) return e;
-          }
+          if (f.name) diags.push(...many(reservedBind(f.name, f.type.span)));
     }
   }
-  return null;
+  return diags;
 };
 
 // `imported` carries the ctor/type registries of the modules this program
 // imports from; merged UNDER the local registry (local declarations win) so
 // exhaustiveness works across the module boundary.
-export function check(prog: Program, imported?: Registry): Result<Program, Diagnostic> {
-  const reserved = checkReservedNames(prog);
-  if (reserved) return err(reserved);
-  const reservedWord = checkReservedWords(prog);
-  if (reservedWord) return err(reservedWord);
-  const strays = checkCtorFieldVars(prog);
-  if (strays) return err(strays);
+export function check(prog: Program, imported?: Registry): Result<Program, Diagnostic[]> {
+  const diags: Diagnostic[] = [
+    ...checkReservedNames(prog),
+    ...checkReservedWords(prog),
+    ...checkCtorFieldVars(prog),
+  ];
   const built = buildCtorTable(prog);
-  if (isErr(built)) return built;
+  if (isErr(built)) return err([...diags, ...built.error]);
   const reg = built.value;
   if (imported) {
     for (const [k, v] of imported.type) if (!reg.type.has(k)) reg.type.set(k, v);
@@ -591,11 +604,10 @@ export function check(prog: Program, imported?: Registry): Result<Program, Diagn
 
   for (const s of prog.stmts) {
     if (s.kind !== "let") continue;
-    let found: Diagnostic | null = null;
     forEachMatch(s.value, (m) => {
-      found ??= checkMatch(m, reg);
+      const e = checkMatch(m, reg);
+      if (e) diags.push(e);
     });
-    if (found) return err(found);
   }
-  return ok(prog);
+  return diags.length > 0 ? err(diags) : ok(prog);
 }

@@ -16,7 +16,7 @@ import { DEFAULT_RUNTIME_IMPORT, emitTsModule } from "./codegen-ts";
 import { toTypedProgramWith } from "./compile";
 import { exportedCtorKeys, exportedCtorTable } from "./ctors";
 import { type ExternBinding, externModuleDts } from "./dts";
-import { checkErr, type Diagnostic } from "./errors";
+import { checkErr, type Diagnostic, oneDiag } from "./errors";
 import type { Env, Scheme } from "./infer";
 import { lex } from "./lexer";
 import { parse } from "./parser";
@@ -77,7 +77,7 @@ const gatherImports = (
   exportsByPath: Map<string, Env>,
   regByPath: Map<string, Registry>,
   keysByPath: Map<string, Map<string, string[]>>,
-): Result<ModuleContext, Diagnostic> => {
+): Result<ModuleContext, Diagnostic[]> => {
   const imports: Env = new Map();
   const nsImports = new Map<string, Env>();
   const importedReg: Registry = { ctor: new Map(), type: new Map() };
@@ -93,7 +93,7 @@ const gatherImports = (
     } else {
       for (const n of imp.names) {
         const sc = depExports?.get(n.name) as Scheme | undefined;
-        if (!sc) return err(checkErr(`'${imp.from}' has no export '${n.name}'`, n.span));
+        if (!sc) return err(oneDiag(checkErr(`'${imp.from}' has no export '${n.name}'`, n.span)));
         imports.set(n.name, sc);
       }
     }
@@ -114,27 +114,28 @@ const gatherImports = (
 export const loadModuleGraph = (
   entry: string,
   readFile: ReadFile,
-): ResultAsync<Loaded[], Diagnostic> => loadGraph(resolve(entry), readFile);
+): ResultAsync<Loaded[], Diagnostic[]> => loadGraph(resolve(entry), readFile);
 
-const loadGraph = (entry: string, readFile: ReadFile): ResultAsync<Loaded[], Diagnostic> =>
+const loadGraph = (entry: string, readFile: ReadFile): ResultAsync<Loaded[], Diagnostic[]> =>
   ResultAsync.defer(async () => {
     const order: Loaded[] = [];
     const state = new Map<string, "loading" | "done">();
 
-    const visit = async (path: string): Promise<Diagnostic | null> => {
+    const visit = async (path: string): Promise<Diagnostic[] | null> => {
       const st = state.get(path);
       if (st === "done") return null;
-      if (st === "loading") return checkErr(`import cycle through '${path}'`, { start: 0, end: 0 });
+      if (st === "loading")
+        return oneDiag(checkErr(`import cycle through '${path}'`, { start: 0, end: 0 }));
       state.set(path, "loading");
 
       let src: string;
       try {
         src = await readFile(path);
       } catch {
-        return checkErr(`cannot read module '${path}'`, { start: 0, end: 0 });
+        return oneDiag(checkErr(`cannot read module '${path}'`, { start: 0, end: 0 }));
       }
       const parsed = parseModule(src);
-      if (isErr(parsed)) return parsed.error;
+      if (isErr(parsed)) return oneDiag(parsed.error);
 
       for (const imp of importsOf(parsed.value)) {
         const dep = await visit(resolveImport(path, imp.from));
@@ -154,7 +155,7 @@ const loadGraph = (entry: string, readFile: ReadFile): ResultAsync<Loaded[], Dia
 // to: their export SCHEMES (inference), their variant REGISTRY (cross-module
 // exhaustiveness), and their ctor field KEYS (pattern destructuring). A missing
 // export is reported against the import site.
-const compileGraph = (graph: Loaded[]): Result<ModuleOutput[], Diagnostic> => {
+const compileGraph = (graph: Loaded[]): Result<ModuleOutput[], Diagnostic[]> => {
   const exportsByPath = new Map<string, Env>();
   const regByPath = new Map<string, Registry>();
   const keysByPath = new Map<string, Map<string, string[]>>();
@@ -179,7 +180,7 @@ const compileGraph = (graph: Loaded[]): Result<ModuleOutput[], Diagnostic> => {
 export const buildModules = (
   entry: string,
   readFile: ReadFile,
-): ResultAsync<ModuleOutput[], Diagnostic> =>
+): ResultAsync<ModuleOutput[], Diagnostic[]> =>
   loadGraph(resolve(entry), readFile).andThen(compileGraph);
 
 export type BuildTsOptions = { runtimeImport?: string };
@@ -193,7 +194,7 @@ export type BuildTsOptions = { runtimeImport?: string };
 const compileGraphTs = (
   graph: Loaded[],
   runtimeImport: string,
-): Result<ModuleOutput[], Diagnostic> => {
+): Result<ModuleOutput[], Diagnostic[]> => {
   const exportsByPath = new Map<string, Env>();
   const regByPath = new Map<string, Registry>();
   const keysByPath = new Map<string, Map<string, string[]>>();
@@ -313,7 +314,7 @@ export const buildModulesTs = (
   entry: string,
   readFile: ReadFile,
   opts: BuildTsOptions = {},
-): ResultAsync<ModuleOutput[], Diagnostic> =>
+): ResultAsync<ModuleOutput[], Diagnostic[]> =>
   loadGraph(resolve(entry), readFile).andThen((g) =>
     compileGraphTs(g, opts.runtimeImport ?? DEFAULT_RUNTIME_IMPORT),
   );
@@ -328,7 +329,7 @@ export const buildModulesTs = (
 export const moduleContext = (
   entry: string,
   readFile: ReadFile,
-): ResultAsync<ModuleContext, Diagnostic> =>
+): ResultAsync<ModuleContext, Diagnostic[]> =>
   loadGraph(resolve(entry), readFile).andThen((graph) => {
     const entryPath = resolve(entry);
     const exportsByPath = new Map<string, Env>();

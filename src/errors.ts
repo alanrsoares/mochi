@@ -51,6 +51,22 @@ export const typeErr = (message: string, span?: Span, extras?: DiagExtras): Diag
   ...extras,
 });
 
+/** Wrap a single-stage Diagnostic for pipeline seams that use Diagnostic[]. */
+export const oneDiag = (e: Diagnostic): Diagnostic[] => [e];
+
+/** Flatten optional / single / many diagnostics into one list. */
+export const concatDiags = (
+  ...parts: readonly (Diagnostic | Diagnostic[] | null | undefined)[]
+): Diagnostic[] => {
+  const out: Diagnostic[] = [];
+  for (const p of parts) {
+    if (p == null) continue;
+    if (Array.isArray(p)) out.push(...p);
+    else out.push(p);
+  }
+  return out;
+};
+
 const kindLabel: Record<Diagnostic["kind"], string> = {
   lex: "LexError",
   parse: "ParseError",

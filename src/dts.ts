@@ -644,7 +644,7 @@ export const externModuleDts = (externs: ExternBinding[]): string => {
   return `${[...decls, ...lines].join("\n")}\n`;
 };
 
-export const emitDts = (src: string): Result<string, Diagnostic> => {
+export const emitDts = (src: string): Result<string, Diagnostic[]> => {
   const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces });
   if (isErr(r)) return r;
   const { prog, res } = r.value;

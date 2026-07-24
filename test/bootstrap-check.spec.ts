@@ -35,7 +35,7 @@ type Verdict = { ok: true } | { ok: false; message: string; start: number; end: 
 const tsVerdict = (src: string): Verdict => {
   const r = check(unwrapOk(parse(unwrapOk(lex(src)))));
   if (isOk(r)) return { ok: true };
-  const e = unwrapErr(r);
+  const e = unwrapErr(r)[0]!;
   if (e.span === undefined) throw new Error("TS check error without a span");
   return { ok: false, message: e.message, start: e.span.start, end: e.span.end };
 };

@@ -2,11 +2,19 @@ import { isErr, match } from "@onrails/result";
 import { codegenTs } from "./codegen-ts";
 import { compile } from "./compile";
 import { emitDts } from "./dts";
-import { formatError } from "./errors";
+import { type Diagnostic, formatError } from "./errors";
 import { format } from "./format";
 import { buildModules, buildModulesTs } from "./module";
 
 const [cmd, ...rest] = process.argv.slice(2);
+
+const printDiags = (es: Diagnostic | Diagnostic[], src?: string): void => {
+  const list = Array.isArray(es) ? es : [es];
+  for (let i = 0; i < list.length; i++) {
+    if (i > 0) console.error("");
+    console.error(formatError(list[i]!, src));
+  }
+};
 
 // `fmt [--write] <file.mochi>` pretty-prints (or rewrites) a source file.
 if (cmd === "fmt") {
@@ -24,7 +32,7 @@ if (cmd === "fmt") {
       else process.stdout.write(out);
     },
     (e) => {
-      console.error(formatError(e, src));
+      printDiags(e, src);
       process.exit(1);
     },
   );
@@ -40,7 +48,7 @@ if (cmd === "fmt") {
     emitDts(src),
     (out) => process.stdout.write(out),
     (e) => {
-      console.error(formatError(e, src));
+      printDiags(e, src);
       process.exit(1);
     },
   );
@@ -56,7 +64,7 @@ if (cmd === "fmt") {
     codegenTs(src),
     (out) => process.stdout.write(out),
     (e) => {
-      console.error(formatError(e, src));
+      printDiags(e, src);
       process.exit(1);
     },
   );
@@ -72,7 +80,7 @@ if (cmd === "fmt") {
   const read = (p: string): Promise<string> => Bun.file(p).text();
   const result = await (emitTs ? buildModulesTs(entry, read) : buildModules(entry, read));
   if (isErr(result)) {
-    console.error(formatError(result.error));
+    printDiags(result.error);
     process.exit(1);
   }
   const ext = emitTs ? ".ts" : ".js";
@@ -96,7 +104,7 @@ if (cmd === "fmt") {
     compile(src),
     (ts) => process.stdout.write(ts),
     (e) => {
-      console.error(formatError(e, src));
+      printDiags(e, src);
       process.exit(1);
     },
   );

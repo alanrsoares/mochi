@@ -280,7 +280,10 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
 // Compile a single `.mochi` source to a typed `.ts` module (CLI `mochi ts`). Open
 // world, no cross-module imports resolved — a file that imports from another
 // module won't typecheck alone; use `build --emit=ts` for a graph.
-export const codegenTs = (src: string, opts: CodegenTsOptions = {}): Result<string, Diagnostic> => {
+export const codegenTs = (
+  src: string,
+  opts: CodegenTsOptions = {},
+): Result<string, Diagnostic[]> => {
   const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces });
   if (isErr(r)) return r;
   const { prog, res } = r.value;

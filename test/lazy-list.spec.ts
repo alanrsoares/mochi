@@ -111,7 +111,7 @@ test("`@{}` + `@{h, ...t}` is exhaustive", () => {
 test("a lone `@{}` arm is a non-exhaustive error", () => {
   const r = compile("let f = xs => switch xs { | @{} => 0 }");
   expect(isErr(r)).toBe(true);
-  expect(unwrapErr(r).kind).toBe("check");
+  expect(unwrapErr(r)[0]!.kind).toBe("check");
 });
 
 test("a fixed-length `@{x}` arm matches an exactly-one-element List", () => {
@@ -131,7 +131,7 @@ test("a multi-head `@{a, b, ...t}` arm binds several heads plus a lazy tail", ()
 test("a fixed multi-head `@{a, b}` alone is non-exhaustive (needs cons or `_`)", () => {
   const r = compile("let f = xs => switch xs { | @{} => 0 | @{a, b} => 1 }");
   expect(isErr(r)).toBe(true);
-  expect(unwrapErr(r).kind).toBe("check");
+  expect(unwrapErr(r)[0]!.kind).toBe("check");
 });
 
 test("a literal head narrows a lazy-List arm", () => {

@@ -9,7 +9,7 @@ import { expect, test } from "bun:test";
 import { isErr, isOk, unwrapErr, unwrapOk } from "@onrails/result";
 import { compile } from "../src/compile";
 
-const errMsg = (src: string): string => unwrapErr(compile(src)).message;
+const errMsg = (src: string): string => unwrapErr(compile(src))[0]!.message;
 
 // --- rejected binding positions ---------------------------------------------
 

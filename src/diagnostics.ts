@@ -89,13 +89,13 @@ export const toPublish = (
   };
 };
 
-// The pipeline short-circuits at the first error, so this yields 0 or 1
-// diagnostics. Single-file: imports resolve to nothing, so a `switch` on an
-// imported variant reads as an unknown constructor. Use `moduleDiagnostics`
-// when a path is available.
+// Check + infer may emit several diagnostics (ADR 0004). Lex/parse still yield
+// one. Single-file: imports resolve to nothing, so a `switch` on an imported
+// variant reads as an unknown constructor. Use `moduleDiagnostics` when a path
+// is available.
 export const diagnostics = (src: string): PublishDiagnostic[] => {
   const r = compile(src);
-  return isErr(r) ? [toPublish(src, r.error)] : [];
+  return isErr(r) ? r.error.map((e) => toPublish(src, e)) : [];
 };
 
 // Module-aware diagnostics: resolve `path`'s dependency graph (deps read from
@@ -126,5 +126,5 @@ export const moduleDiagnostics = async (
   if (isErr(ctx)) return diagnostics(src);
 
   const typed = toTypedProgramWith(prog, ctx.value);
-  return isErr(typed) ? [toPublish(src, typed.error, entry)] : [];
+  return isErr(typed) ? typed.error.map((e) => toPublish(src, e, entry)) : [];
 };

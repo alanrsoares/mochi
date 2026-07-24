@@ -7,7 +7,7 @@ import { expect, test } from "bun:test";
 import { unwrapErr } from "@onrails/result";
 import { compile } from "../src/compile";
 
-const errMsg = (src: string): string => unwrapErr(compile(src)).message;
+const errMsg = (src: string): string => unwrapErr(compile(src))[0]!.message;
 
 test("a mismatch names the record alias instead of its row", () => {
   const src =

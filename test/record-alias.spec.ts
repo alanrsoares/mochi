@@ -114,7 +114,7 @@ test("a name declared twice (alias + variant) is a duplicate-type error", () => 
   const src = `${POINT}type Point = | P(number)`;
   const r = check(unwrapOk(parse(unwrapOk(lex(src)))));
   expect(isErr(r)).toBe(true);
-  if (isErr(r)) expect(unwrapErr(r).message).toContain("duplicate type 'Point'");
+  if (isErr(r)) expect(unwrapErr(r)[0]!.message).toContain("duplicate type 'Point'");
 });
 
 // ---- formatting round-trips ------------------------------------------------

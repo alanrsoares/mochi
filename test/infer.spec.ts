@@ -59,7 +59,7 @@ test("a binding annotation pins a too-general value", () => {
 test("a binding annotation is enforced (wrong type is a type error)", () => {
   const r = infer('let bad : number = "hello"', {});
   expect(isErr(r)).toBe(true);
-  expect(unwrapErr(r).message).toContain("unify");
+  expect(unwrapErr(r)[0]!.message).toContain("unify");
 });
 
 test("a let-in annotation pins the local (ADR 0044)", () => {
@@ -124,13 +124,13 @@ test("match infers a common result type and binds pattern vars", () => {
 test("unbound variable is a type error", () => {
   const r = infer("let x = nope", {});
   expect(isErr(r)).toBe(true);
-  expect(unwrapErr(r).message).toContain("unbound variable 'nope'");
+  expect(unwrapErr(r)[0]!.message).toContain("unbound variable 'nope'");
 });
 
 test("unbound variable suggests a close name from the env", () => {
   const r = infer("let count = 1\nlet n = coun", {});
   expect(isErr(r)).toBe(true);
-  const e = unwrapErr(r);
+  const e = unwrapErr(r)[0]!;
   expect(e.help).toBe("did you mean 'count'?");
   expect(e.suggestions?.[0]?.replaceWith).toBe("count");
 });
@@ -139,7 +139,7 @@ test("applying a number as a function is a type error", () => {
   const r = infer("let bad = square(add)");
   // add : number -> number -> number, square expects number
   expect(isErr(r)).toBe(true);
-  expect(unwrapErr(r).kind).toBe("type");
+  expect(unwrapErr(r)[0]!.kind).toBe("type");
 });
 
 test("field type conflict across two uses is a type error", () => {
@@ -148,7 +148,7 @@ test("field type conflict across two uses is a type error", () => {
     yes: tBool,
   });
   expect(isErr(r)).toBe(true);
-  expect(unwrapErr(r).message).toContain("cannot unify");
+  expect(unwrapErr(r)[0]!.message).toContain("cannot unify");
 });
 
 test("match arms returning different types is a type error", () => {
@@ -156,7 +156,7 @@ test("match arms returning different types is a type error", () => {
     flag: tBool,
   });
   expect(isErr(r)).toBe(true);
-  expect(unwrapErr(r).message).toContain("cannot unify");
+  expect(unwrapErr(r)[0]!.message).toContain("cannot unify");
 });
 
 test("mutually recursive top-level functions type-check (strict, no open-world)", () => {
@@ -184,7 +184,7 @@ test("arity mismatch hints at a missing argument", () => {
   const r = infer("let x = add(add(1), 2)");
   expect(isErr(r)).toBe(true);
   if (isErr(r)) {
-    const msg = unwrapErr(r).message;
+    const msg = unwrapErr(r)[0]!.message;
     expect(msg).toContain("cannot unify");
     expect(msg).toContain("a call may be missing an argument");
   }

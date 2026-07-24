@@ -147,9 +147,9 @@ const tsInferVerdict = (src: string): Verdict => {
   const prog = unwrapOk(parse(unwrapOk(lex(src))));
   const r = inferProgram(prog, preludeEnv, { open: true, namespaces: preludeNamespaces });
   if (isErr(r)) {
-    if (r.error.span === undefined)
-      throw new Error(`TS infer error without a span: ${r.error.message}`);
-    return { ok: false, start: r.error.span.start, end: r.error.span.end };
+    if (r.error[0]!.span === undefined)
+      throw new Error(`TS infer error without a span: ${r.error[0]!.message}`);
+    return { ok: false, start: r.error[0]!.span.start, end: r.error[0]!.span.end };
   }
   const env = r.value;
   const schemes: Record<string, string> = {};
@@ -202,9 +202,9 @@ const strictTsVerdict = (src: string): Verdict => {
   const prog = unwrapOk(parse(unwrapOk(lex(src))));
   const r = inferProgram(prog, preludeEnv, { open: false });
   if (isErr(r)) {
-    if (r.error.span === undefined)
-      throw new Error(`TS infer error without a span: ${r.error.message}`);
-    return { ok: false, start: r.error.span.start, end: r.error.span.end };
+    if (r.error[0]!.span === undefined)
+      throw new Error(`TS infer error without a span: ${r.error[0]!.message}`);
+    return { ok: false, start: r.error[0]!.span.start, end: r.error[0]!.span.end };
   }
   return { ok: true, schemes: {} };
 };

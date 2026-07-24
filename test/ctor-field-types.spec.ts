@@ -75,7 +75,7 @@ test("formatter round-trips composite ctor fields idempotently", () => {
 test("a stray lowercase type var in a ctor field is a check error", () => {
   const r = compile("type Foo = | Mk(x: a)");
   expect(isErr(r)).toBe(true);
-  expect(unwrapErr(r).message).toContain("unknown type parameter 'a' in constructor 'Mk'");
+  expect(unwrapErr(r)[0]!.message).toContain("unknown type parameter 'a' in constructor 'Mk'");
 });
 
 test("declared params are not stray, nested or not", () => {

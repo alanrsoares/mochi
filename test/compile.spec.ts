@@ -88,11 +88,13 @@ test("non-exhaustive switch is a compile error naming the missing ctor", () => {
       "let area = shape => switch shape { | Circle(r) => square(r) }",
   );
   expect(isErr(r)).toBe(true);
-  expect(unwrapErr(r)).toEqual({
-    kind: "check",
-    message: "non-exhaustive switch on 'Shape': missing Rect",
-    span: { start: 70, end: 111 },
-  });
+  expect(unwrapErr(r)).toEqual([
+    {
+      kind: "check",
+      message: "non-exhaustive switch on 'Shape': missing Rect",
+      span: { start: 70, end: 111 },
+    },
+  ]);
 });
 
 test("unknown constructor in a pattern is a compile error", () => {
@@ -101,7 +103,7 @@ test("unknown constructor in a pattern is a compile error", () => {
       "let f = shape => switch shape { | Circle(r) => r | Square(s) => s }",
   );
   expect(isErr(r)).toBe(true);
-  expect(unwrapErr(r).message).toContain("unknown constructor 'Square'");
+  expect(unwrapErr(r)[0]!.message).toContain("unknown constructor 'Square'");
 });
 
 test("constructor arity mismatch is a compile error", () => {
@@ -109,7 +111,7 @@ test("constructor arity mismatch is a compile error", () => {
     "type Shape = | Rect(float, float)\n" + "let f = shape => switch shape { | Rect(w) => w }",
   );
   expect(isErr(r)).toBe(true);
-  expect(unwrapErr(r).message).toContain("expects 2 arg(s), got 1");
+  expect(unwrapErr(r)[0]!.message).toContain("expects 2 arg(s), got 1");
 });
 
 // ---- records + field access ----
@@ -158,13 +160,13 @@ test("prelude-typed misuse is a compile-time type error", () => {
   // add : number -> number -> number, but given a record
   const r = compile("let bad = add(1, { x: 2 })");
   expect(isErr(r)).toBe(true);
-  expect(unwrapErr(r).kind).toBe("type");
+  expect(unwrapErr(r)[0]!.kind).toBe("type");
 });
 
 test("field access on a non-record is a type error", () => {
   const r = compile("let bad = pi.x"); // pi : number
   expect(isErr(r)).toBe(true);
-  expect(unwrapErr(r).kind).toBe("type");
+  expect(unwrapErr(r)[0]!.kind).toBe("type");
 });
 
 test("well-typed prelude arithmetic compiles", () => {
@@ -177,42 +179,44 @@ test("type error carries the offending expression's span", () => {
   const r = compile("let bad = add(1, { x: 2 })");
   expect(isErr(r)).toBe(true);
   // the record argument starts at offset 17
-  expect(unwrapErr(r).span).toEqual({ start: 17, end: 25 });
+  expect(unwrapErr(r)[0]!.span).toEqual({ start: 17, end: 25 });
 });
 
 test("parse error carries the offending token's span", () => {
   const r = compile("let = 5");
   expect(isErr(r)).toBe(true);
-  expect(unwrapErr(r).span).toEqual({ start: 4, end: 5 });
+  expect(unwrapErr(r)[0]!.span).toEqual({ start: 4, end: 5 });
 });
 
 test("formatError renders line:col when given the source", () => {
   const src = "let a = 1\nlet b = pi.x"; // pi : number, field access on line 2
   const r = compile(src);
   expect(isErr(r)).toBe(true);
-  expect(formatError(unwrapErr(r), src)).toStartWith("TypeError at 2:9: cannot unify number");
+  expect(formatError(unwrapErr(r)[0]!, src)).toStartWith("TypeError at 2:9: cannot unify number");
 });
 
 test("formatError falls back to raw offset without source", () => {
   const r = compile("let x = ^");
   expect(isErr(r)).toBe(true);
-  expect(formatError(unwrapErr(r))).toBe("LexError at 8: unexpected char '^'");
+  expect(formatError(unwrapErr(r)[0]!)).toBe("LexError at 8: unexpected char '^'");
 });
 
 test("lex error is a value, not a throw", () => {
   const r = compile("let x = ^");
   expect(isErr(r)).toBe(true);
-  expect(unwrapErr(r)).toEqual({
-    kind: "lex",
-    message: "unexpected char '^'",
-    span: { start: 8, end: 9 },
-  });
+  expect(unwrapErr(r)).toEqual([
+    {
+      kind: "lex",
+      message: "unexpected char '^'",
+      span: { start: 8, end: 9 },
+    },
+  ]);
 });
 
 test("parse error is a value, not a throw", () => {
   const r = compile("let = 5");
   expect(isErr(r)).toBe(true);
-  expect(unwrapErr(r).kind).toBe("parse");
+  expect(unwrapErr(r)[0]!.kind).toBe("parse");
 });
 
 test("a negative number literal lexes and emits as a signed value", () => {
