@@ -35,18 +35,21 @@ export const lexErr = (message: string, span: Span, extras?: DiagExtras): Diagno
   span,
   ...extras,
 });
+
 export const parseErr = (message: string, span?: Span, extras?: DiagExtras): Diagnostic => ({
   kind: "parse",
   message,
   span,
   ...extras,
 });
+
 export const checkErr = (message: string, span?: Span, extras?: DiagExtras): Diagnostic => ({
   kind: "check",
   message,
   span,
   ...extras,
 });
+
 export const typeErr = (message: string, span?: Span, extras?: DiagExtras): Diagnostic => ({
   kind: "type",
   message,
@@ -58,9 +61,9 @@ export const typeErr = (message: string, span?: Span, extras?: DiagExtras): Diag
 export const oneDiag = (e: Diagnostic): Diagnostic[] => [e];
 
 /** Flatten optional / single / many diagnostics into one list. */
-export const concatDiags = (
+export function concatDiags(
   ...parts: readonly (Diagnostic | Diagnostic[] | null | undefined)[]
-): Diagnostic[] => {
+): Diagnostic[] {
   const out: Diagnostic[] = [];
   for (const p of parts) {
     if (p == null) continue;
@@ -68,7 +71,7 @@ export const concatDiags = (
     else out.push(p);
   }
   return out;
-};
+}
 
 const kindLabel: Record<Diagnostic["kind"], string> = {
   lex: "LexError",
@@ -84,13 +87,13 @@ export type FormatErrorOpts = {
   sources?: ReadonlyMap<string, string>;
 };
 
-const atPos = (src: string | undefined, span: Span): string => {
+function atPos(src: string | undefined, span: Span): string {
   if (!src) return ` at ${span.start}`;
   const p = lineCol(src, span.start);
   return ` at ${p.line}:${p.col}`;
-};
+}
 
-const labelAt = (label: Label, opts?: FormatErrorOpts, primarySrc?: string): string => {
+function labelAt(label: Label, opts?: FormatErrorOpts, primarySrc?: string): string {
   const { path, span } = label.location;
   const src =
     opts?.sources?.get(path) ??
@@ -100,10 +103,10 @@ const labelAt = (label: Label, opts?: FormatErrorOpts, primarySrc?: string): str
     return `  ${path}:${p.line}:${p.col}: ${label.message}`;
   }
   return `  ${path}@${span.start}: ${label.message}`;
-};
+}
 
 /** Human-readable diagnostic. Primary line, then labels, help, and suggestion titles (suggestions are also code-action payloads — CLI just shows them). */
-export const formatError = (e: Diagnostic, src?: string, opts?: FormatErrorOpts): string => {
+export function formatError(e: Diagnostic, src?: string, opts?: FormatErrorOpts): string {
   const at = e.span ? atPos(src, e.span) : "";
   const lines = [`${kindLabel[e.kind]}${at}: ${e.message}`];
   for (const label of e.labels ?? []) lines.push(labelAt(label, opts, src));
@@ -113,4 +116,4 @@ export const formatError = (e: Diagnostic, src?: string, opts?: FormatErrorOpts)
     lines.push(`suggestion: ${title}`);
   }
   return lines.join("\n");
-};
+}
