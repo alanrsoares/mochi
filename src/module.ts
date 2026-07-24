@@ -111,6 +111,11 @@ const gatherImports = (
 // Load the whole graph reachable from `entry`, depth-first, detecting cycles.
 // Yields modules in DEPENDENCY ORDER (a module appears after all it imports).
 // The async file reads are the reason this half is a ResultAsync.
+export const loadModuleGraph = (
+  entry: string,
+  readFile: ReadFile,
+): ResultAsync<Loaded[], Diagnostic> => loadGraph(resolve(entry), readFile);
+
 const loadGraph = (entry: string, readFile: ReadFile): ResultAsync<Loaded[], Diagnostic> =>
   ResultAsync.defer(async () => {
     const order: Loaded[] = [];

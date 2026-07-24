@@ -259,11 +259,11 @@ const walkExpr = (b: Builder, e: Expr): void => {
   }
 };
 
-const bindTopLevels = (b: Builder, stmts: Stmt[]): void => {
+const bindTopLevels = (b: Builder, stmts: Stmt[], origins?: Origins): void => {
   for (const s of stmts) {
     if (s.kind === "import") {
       if (s.alias) bind(b, "value", s.alias.name, s.alias.span);
-      else for (const n of s.names) bind(b, "value", n.name, n.span);
+      else for (const n of s.names) bindImport(b, n.name, n.span, origins);
     } else if (s.kind === "type") {
       bind(b, "type", s.name, s.nameSpan);
       for (const c of s.ctors) bind(b, "ctor", c.name, c.span);
@@ -296,16 +296,81 @@ const sameBinding = (a: Binding, b: Binding): boolean =>
   a.def.span.start === b.def.span.start &&
   a.def.span.end === b.def.span.end;
 
-/** Build a same-file symbol index. `path` is the absolute file path for Locations. */
-export const indexProgram = (path: string, prog: Program): SymbolIndex => {
+export { sameBinding };
+
+/** Export sites in `prog` at `path`, keyed by symbol space. */
+export type Origins = {
+  value: Map<string, Location>;
+  type: Map<string, Location>;
+  ctor: Map<string, Location>;
+};
+
+export const emptyOrigins = (): Origins => ({
+  value: new Map(),
+  type: new Map(),
+  ctor: new Map(),
+});
+
+export const originsOf = (path: string, prog: Program): Origins => {
+  const out = emptyOrigins();
+  for (const s of prog.stmts) {
+    if (s.kind === "import" || !("exported" in s) || !s.exported) continue;
+    if (s.kind === "let" || s.kind === "extern") out.value.set(s.name, loc(path, s.nameSpan));
+    else if (s.kind === "type") {
+      out.type.set(s.name, loc(path, s.nameSpan));
+      for (const c of s.ctors) {
+        const at = loc(path, c.span);
+        out.ctor.set(c.name, at);
+        // Ctors are also values in the env / import list.
+        out.value.set(c.name, at);
+      }
+    }
+  }
+  return out;
+};
+
+export const mergeOrigins = (into: Origins, from: Origins): void => {
+  for (const [k, v] of from.value) into.value.set(k, v);
+  for (const [k, v] of from.type) into.type.set(k, v);
+  for (const [k, v] of from.ctor) into.ctor.set(k, v);
+};
+
+/** Bind an imported name; def points at the export when `origins` has it. */
+const bindImport = (b: Builder, name: string, span: Span, origins?: Origins): void => {
+  const ctorDef = origins?.ctor.get(name);
+  const valueDef = origins?.value.get(name);
+  const typeDef = origins?.type.get(name);
+  if (ctorDef) {
+    const binding: Binding = { name, space: "ctor", def: ctorDef };
+    b.scopes.ctor[b.scopes.ctor.length - 1]!.set(name, binding);
+    // Constructor refs resolve via ctor space; also seed value for non-call uses.
+    b.scopes.value[b.scopes.value.length - 1]!.set(name, { name, space: "value", def: ctorDef });
+    b.occurrences.push({ binding, span, role: "use" });
+    return;
+  }
+  if (valueDef) {
+    const binding: Binding = { name, space: "value", def: valueDef };
+    b.scopes.value[b.scopes.value.length - 1]!.set(name, binding);
+    b.occurrences.push({ binding, span, role: "use" });
+    return;
+  }
+  if (typeDef) {
+    const binding: Binding = { name, space: "type", def: typeDef };
+    b.scopes.type[b.scopes.type.length - 1]!.set(name, binding);
+    b.occurrences.push({ binding, span, role: "use" });
+    return;
+  }
+  bind(b, "value", name, span);
+};
+
+/** Build a symbol index. `origins` rewrites imported names to their export Locations. */
+export const indexProgram = (path: string, prog: Program, origins?: Origins): SymbolIndex => {
   const b: Builder = {
     path,
     scopes: { value: [new Map()], type: [new Map()], ctor: [new Map()] },
     occurrences: [],
   };
-  // Top-level values/types/ctors are mutually visible (order-independent), like
-  // the inferrer's SCC-aware env — bind all names first, then walk bodies.
-  bindTopLevels(b, prog.stmts);
+  bindTopLevels(b, prog.stmts, origins);
   walkStmts(b, prog.stmts);
 
   const at = (offset: number): Occurrence | null => {

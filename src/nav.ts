@@ -1,23 +1,77 @@
 // Navigation queries over the lexical symbol index — free of LSP/protocol
 // types so Bun unit tests can assert on Locations/spans. The language server
-// is a thin adapter (ADR 0003, DX slices 2–3).
+// is a thin adapter (ADR 0003).
 import { resolve } from "node:path";
 import { isErr } from "@onrails/result";
 import { lex } from "./lexer";
+import { loadModuleGraph } from "./module";
 import { parse } from "./parser";
 import type { Location, Span } from "./span";
-import { indexProgram, type Occurrence } from "./symbols";
+import {
+  type Binding,
+  emptyOrigins,
+  indexProgram,
+  mergeOrigins,
+  type Occurrence,
+  type Origins,
+  originsOf,
+  type SymbolIndex,
+} from "./symbols";
 
 export type Highlight = { span: Span; role: "def" | "use" };
 export type Ref = { location: Location; role: "def" | "use" };
 export type RenameEdit = { location: Location; newText: string };
 
-const indexSrc = (path: string, src: string) => {
+export type DocSymbol = {
+  name: string;
+  kind: "let" | "extern" | "type" | "ctor";
+  span: Span;
+  detail?: string;
+};
+
+export type WorkspaceSymbol = DocSymbol & { path: string };
+
+type ReadFile = (path: string) => Promise<string>;
+
+const parseProgram = (src: string) => {
   const lexed = lex(src);
   if (isErr(lexed)) return null;
   const parsed = parse(lexed.value);
-  if (isErr(parsed)) return null;
-  return indexProgram(resolve(path), parsed.value);
+  return isErr(parsed) ? null : parsed.value;
+};
+
+const indexSrc = (path: string, src: string, origins?: Origins) => {
+  const prog = parseProgram(src);
+  if (!prog) return null;
+  return indexProgram(resolve(path), prog, origins);
+};
+
+/** Origins from every dependency of `entry` (not the entry itself). */
+const originsForEntry = async (
+  entry: string,
+  readFile: ReadFile,
+  liveSrc?: string,
+): Promise<Origins> => {
+  const entryPath = resolve(entry);
+  const read = (p: string): Promise<string> =>
+    resolve(p) === entryPath && liveSrc !== undefined ? Promise.resolve(liveSrc) : readFile(p);
+  const graph = await loadModuleGraph(entryPath, read);
+  const origins = emptyOrigins();
+  if (isErr(graph)) return origins;
+  for (const { path, prog } of graph.value) {
+    if (path === entryPath) continue;
+    mergeOrigins(origins, originsOf(path, prog));
+  }
+  return origins;
+};
+
+const indexModule = async (
+  path: string,
+  src: string,
+  readFile?: ReadFile,
+): Promise<SymbolIndex | null> => {
+  const origins = readFile ? await originsForEntry(path, readFile, src) : undefined;
+  return indexSrc(path, src, origins);
 };
 
 /** Go-to-definition at `offset`. Prelude / unknown names → null. */
@@ -28,7 +82,19 @@ export const definitionAt = (src: string, offset: number, path = "<buffer>"): Lo
   return hit ? hit.binding.def : null;
 };
 
-/** Document highlights for the binding under `offset` (def + all uses). */
+export const moduleDefinitionAt = async (
+  path: string,
+  src: string,
+  offset: number,
+  readFile: ReadFile,
+): Promise<Location | null> => {
+  const idx = await indexModule(path, src, readFile);
+  if (!idx) return null;
+  const hit = idx.at(offset);
+  return hit ? hit.binding.def : null;
+};
+
+/** Document highlights for the binding under `offset` (occurrences in this file). */
 export const highlightsAt = (src: string, offset: number, path = "<buffer>"): Highlight[] => {
   const idx = indexSrc(path, src);
   if (!idx) return [];
@@ -37,22 +103,95 @@ export const highlightsAt = (src: string, offset: number, path = "<buffer>"): Hi
   return idx.occurrences(hit.binding).map((o: Occurrence) => ({ span: o.span, role: o.role }));
 };
 
-/** Find-all-references for the binding under `offset` (def + uses). */
+export const moduleHighlightsAt = async (
+  path: string,
+  src: string,
+  offset: number,
+  readFile: ReadFile,
+): Promise<Highlight[]> => {
+  const idx = await indexModule(path, src, readFile);
+  if (!idx) return [];
+  const hit = idx.at(offset);
+  if (!hit) return [];
+  return idx.occurrences(hit.binding).map((o) => ({ span: o.span, role: o.role }));
+};
+
+/** Find-all-references for the binding under `offset` (this file only). */
 export const referencesAt = (src: string, offset: number, path = "<buffer>"): Ref[] => {
   const idx = indexSrc(path, src);
   if (!idx) return [];
   const hit = idx.at(offset);
   if (!hit) return [];
   return idx.occurrences(hit.binding).map((o) => ({
-    location: { path: hit.binding.def.path, span: o.span },
+    location: { path: resolve(path), span: o.span },
     role: o.role,
   }));
+};
+
+const collectGraphRefs = async (
+  entryPath: string,
+  entrySrc: string,
+  binding: Binding,
+  readFile: ReadFile,
+): Promise<Ref[]> => {
+  const read = (p: string): Promise<string> =>
+    resolve(p) === entryPath ? Promise.resolve(entrySrc) : readFile(p);
+  const graph = await loadModuleGraph(entryPath, read);
+  if (isErr(graph)) {
+    return (
+      indexSrc(entryPath, entrySrc)
+        ?.occurrences(binding)
+        .map((o) => ({ location: { path: entryPath, span: o.span }, role: o.role })) ?? []
+    );
+  }
+
+  const refs: Ref[] = [];
+  for (const { path, prog } of graph.value) {
+    const src = path === entryPath ? entrySrc : await read(path);
+    const fileOrigins = emptyOrigins();
+    for (const dep of graph.value) {
+      if (dep.path === path) continue;
+      mergeOrigins(fileOrigins, originsOf(dep.path, dep.prog));
+    }
+    const fileIdx = indexProgram(path, parseProgram(src) ?? prog, fileOrigins);
+    for (const o of fileIdx.occurrences(binding)) {
+      refs.push({ location: { path, span: o.span }, role: o.role });
+    }
+  }
+  const key = (r: Ref) => `${r.location.path}:${r.location.span.start}:${r.role}`;
+  const seen = new Set<string>();
+  return refs
+    .filter((r) => {
+      const k = key(r);
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    })
+    .sort((a, c) => {
+      if (a.role !== c.role) return a.role === "def" ? -1 : 1;
+      if (a.location.path !== c.location.path) return a.location.path < c.location.path ? -1 : 1;
+      return a.location.span.start - c.location.span.start;
+    });
+};
+
+/** Graph-wide references (def file + every module that imports/uses it). */
+export const moduleReferencesAt = async (
+  path: string,
+  src: string,
+  offset: number,
+  readFile: ReadFile,
+): Promise<Ref[]> => {
+  const entryPath = resolve(path);
+  const idx = await indexModule(entryPath, src, readFile);
+  if (!idx) return [];
+  const hit = idx.at(offset);
+  if (!hit) return [];
+  return collectGraphRefs(entryPath, src, hit.binding, readFile);
 };
 
 const isRenameableName = (name: string): boolean =>
   !name.startsWith("$") && !name.startsWith("_") && /^[A-Za-z][A-Za-z0-9_]*$/.test(name);
 
-/** True when the name under `offset` can be renamed (not prelude / synthetic). */
 export const prepareRenameAt = (
   src: string,
   offset: number,
@@ -65,10 +204,20 @@ export const prepareRenameAt = (
   return { span: hit.span, name: hit.binding.name };
 };
 
-/**
- * Rename the binding under `offset` to `newName`. Null when the site isn't
- * renameable or `newName` isn't a bare identifier. Same-file edits only.
- */
+export const modulePrepareRenameAt = async (
+  path: string,
+  src: string,
+  offset: number,
+  readFile: ReadFile,
+): Promise<{ span: Span; name: string } | null> => {
+  const idx = await indexModule(path, src, readFile);
+  if (!idx) return null;
+  const hit = idx.at(offset);
+  if (!hit || !isRenameableName(hit.binding.name)) return null;
+  return { span: hit.span, name: hit.binding.name };
+};
+
+/** Rename the binding under `offset` to `newName`. Same-file only. */
 export const renameAt = (
   src: string,
   offset: number,
@@ -82,7 +231,71 @@ export const renameAt = (
   if (!hit || !isRenameableName(hit.binding.name)) return null;
   if (hit.binding.name === newName) return [];
   return idx.occurrences(hit.binding).map((o) => ({
-    location: { path: hit.binding.def.path, span: o.span },
+    location: { path: resolve(path), span: o.span },
     newText: newName,
   }));
+};
+
+/** Graph-wide rename (export + all import/use sites). */
+export const moduleRenameAt = async (
+  path: string,
+  src: string,
+  offset: number,
+  newName: string,
+  readFile: ReadFile,
+): Promise<RenameEdit[] | null> => {
+  if (!isRenameableName(newName)) return null;
+  const idx = await indexModule(path, src, readFile);
+  if (!idx) return null;
+  const hit = idx.at(offset);
+  if (!hit || !isRenameableName(hit.binding.name)) return null;
+  if (hit.binding.name === newName) return [];
+  const refs = await collectGraphRefs(resolve(path), src, hit.binding, readFile);
+  return refs.map((r) => ({ location: r.location, newText: newName }));
+};
+
+/** Top-level document symbols for outline. */
+export const documentSymbolsAt = (src: string): DocSymbol[] => {
+  const prog = parseProgram(src);
+  if (!prog) return [];
+  const out: DocSymbol[] = [];
+  for (const s of prog.stmts) {
+    if (s.kind === "let" && !s.name.startsWith("$"))
+      out.push({ name: s.name, kind: "let", span: s.nameSpan });
+    else if (s.kind === "extern") out.push({ name: s.name, kind: "extern", span: s.nameSpan });
+    else if (s.kind === "type") {
+      out.push({ name: s.name, kind: "type", span: s.nameSpan });
+      for (const c of s.ctors)
+        out.push({ name: c.name, kind: "ctor", span: c.span, detail: s.name });
+    }
+  }
+  return out;
+};
+
+/** Workspace symbol search over the module graph from `entry`. */
+export const workspaceSymbolsAt = async (
+  entry: string,
+  query: string,
+  readFile: ReadFile,
+  liveSrc?: string,
+): Promise<WorkspaceSymbol[]> => {
+  const entryPath = resolve(entry);
+  const read = (p: string): Promise<string> =>
+    resolve(p) === entryPath && liveSrc !== undefined ? Promise.resolve(liveSrc) : readFile(p);
+  const graph = await loadModuleGraph(entryPath, read);
+  if (isErr(graph)) {
+    const src = liveSrc ?? (await readFile(entryPath).catch(() => ""));
+    return documentSymbolsAt(src)
+      .filter((s) => s.name.toLowerCase().includes(query.toLowerCase()))
+      .map((s) => ({ ...s, path: entryPath }));
+  }
+  const q = query.toLowerCase();
+  const out: WorkspaceSymbol[] = [];
+  for (const { path } of graph.value) {
+    const src = path === entryPath && liveSrc !== undefined ? liveSrc : await read(path);
+    for (const s of documentSymbolsAt(src)) {
+      if (!q || s.name.toLowerCase().includes(q)) out.push({ ...s, path });
+    }
+  }
+  return out;
 };

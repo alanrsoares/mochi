@@ -13,20 +13,31 @@ import {
   DiagnosticSeverity,
   type DocumentHighlight,
   DocumentHighlightKind,
+  type DocumentSymbol,
   type Hover,
   type Location,
   MarkupKind,
   ProposedFeatures,
+  SymbolKind,
   type TextDocumentPositionParams,
   TextDocumentSyncKind,
   TextDocuments,
   TextEdit,
+  type WorkspaceSymbol,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { moduleDiagnostics } from "../diagnostics";
 import { format } from "../format";
 import { moduleHoverAt } from "../hover";
-import { definitionAt, highlightsAt, prepareRenameAt, referencesAt, renameAt } from "../nav";
+import {
+  documentSymbolsAt,
+  moduleDefinitionAt,
+  moduleHighlightsAt,
+  modulePrepareRenameAt,
+  moduleReferencesAt,
+  moduleRenameAt,
+  workspaceSymbolsAt,
+} from "../nav";
 import type { Span } from "../span";
 
 const connection = createConnection(ProposedFeatures.all);
@@ -41,6 +52,8 @@ connection.onInitialize(() => ({
     referencesProvider: true,
     renameProvider: { prepareProvider: true },
     codeActionProvider: true,
+    documentSymbolProvider: true,
+    workspaceSymbolProvider: true,
     inlayHintProvider: false,
     documentFormattingProvider: true,
   },
@@ -53,6 +66,25 @@ const rangeOf = (doc: TextDocument, span: Span) => ({
   end: doc.positionAt(span.end),
 });
 
+const read = (p: string): Promise<string> => readFile(p, "utf8");
+
+/** Range in `path` — prefer an open buffer, else read from disk. */
+const rangeAtPath = async (path: string, span: Span) => {
+  const uri = pathToFileURL(path).href;
+  const open = documents.get(uri);
+  if (open) return { uri, range: rangeOf(open, span) };
+  const text = await read(path);
+  const doc = TextDocument.create(uri, "mochi", 0, text);
+  return { uri, range: rangeOf(doc, span) };
+};
+
+const symbolKind = (kind: string): SymbolKind => {
+  if (kind === "type") return SymbolKind.Class;
+  if (kind === "ctor") return SymbolKind.EnumMember;
+  if (kind === "extern") return SymbolKind.Function;
+  return SymbolKind.Variable;
+};
+
 // Hover: map the cursor Position → byte offset → inferred type at that node.
 connection.onHover(async ({ textDocument, position }): Promise<Hover | null> => {
   const doc = documents.get(textDocument.uri);
@@ -61,7 +93,7 @@ connection.onHover(async ({ textDocument, position }): Promise<Hover | null> => 
     docPath(textDocument.uri),
     doc.getText(),
     doc.offsetAt(position),
-    (p) => readFile(p, "utf8"),
+    read,
   );
   if (!info) return null;
   const fence = `\`\`\`mochi\n${info.code}\n\`\`\``;
@@ -69,63 +101,98 @@ connection.onHover(async ({ textDocument, position }): Promise<Hover | null> => 
   return { contents: { kind: MarkupKind.Markdown, value } };
 });
 
-// Go-to-definition: lexical symbol index (works even when typecheck fails).
-// Same-file only in this slice — def path matches the open document.
+// Go-to-definition (cross-module via export origins).
 connection.onDefinition(
-  ({ textDocument, position }: TextDocumentPositionParams): Location | null => {
+  async ({ textDocument, position }: TextDocumentPositionParams): Promise<Location | null> => {
     const doc = documents.get(textDocument.uri);
     if (!doc) return null;
     const path = docPath(textDocument.uri);
-    const loc = definitionAt(doc.getText(), doc.offsetAt(position), path);
+    const loc = await moduleDefinitionAt(path, doc.getText(), doc.offsetAt(position), read);
     if (!loc) return null;
-    return { uri: pathToFileURL(loc.path).href, range: rangeOf(doc, loc.span) };
+    return rangeAtPath(loc.path, loc.span);
   },
 );
 
-// Document highlight: def + uses of the binding under the cursor.
-connection.onDocumentHighlight(({ textDocument, position }): DocumentHighlight[] => {
-  const doc = documents.get(textDocument.uri);
-  if (!doc) return [];
-  return highlightsAt(doc.getText(), doc.offsetAt(position), docPath(textDocument.uri)).map(
-    (h) => ({
-      range: rangeOf(doc, h.span),
-      kind: h.role === "def" ? DocumentHighlightKind.Write : DocumentHighlightKind.Read,
-    }),
-  );
-});
-
-// Find all references (same-file).
-connection.onReferences(({ textDocument, position }): Location[] => {
+// Document highlight: occurrences in the current file.
+connection.onDocumentHighlight(async ({ textDocument, position }): Promise<DocumentHighlight[]> => {
   const doc = documents.get(textDocument.uri);
   if (!doc) return [];
   const path = docPath(textDocument.uri);
-  return referencesAt(doc.getText(), doc.offsetAt(position), path).map((r) => ({
-    uri: pathToFileURL(r.location.path).href,
-    range: rangeOf(doc, r.location.span),
+  const hits = await moduleHighlightsAt(path, doc.getText(), doc.offsetAt(position), read);
+  return hits.map((h) => ({
+    range: rangeOf(doc, h.span),
+    kind: h.role === "def" ? DocumentHighlightKind.Write : DocumentHighlightKind.Read,
   }));
 });
 
-// Rename (same-file). Rejects synthetics (`$`/`_`) and non-identifier names.
-connection.onPrepareRename(({ textDocument, position }) => {
+// Find all references across the import graph.
+connection.onReferences(async ({ textDocument, position }): Promise<Location[]> => {
+  const doc = documents.get(textDocument.uri);
+  if (!doc) return [];
+  const path = docPath(textDocument.uri);
+  const refs = await moduleReferencesAt(path, doc.getText(), doc.offsetAt(position), read);
+  return Promise.all(refs.map((r) => rangeAtPath(r.location.path, r.location.span)));
+});
+
+// Rename across the import graph.
+connection.onPrepareRename(async ({ textDocument, position }) => {
   const doc = documents.get(textDocument.uri);
   if (!doc) return null;
-  const prep = prepareRenameAt(doc.getText(), doc.offsetAt(position), docPath(textDocument.uri));
+  const prep = await modulePrepareRenameAt(
+    docPath(textDocument.uri),
+    doc.getText(),
+    doc.offsetAt(position),
+    read,
+  );
   return prep ? { range: rangeOf(doc, prep.span), placeholder: prep.name } : null;
 });
 
-connection.onRenameRequest(({ textDocument, position, newName }) => {
+connection.onRenameRequest(async ({ textDocument, position, newName }) => {
   const doc = documents.get(textDocument.uri);
   if (!doc) return null;
   const path = docPath(textDocument.uri);
-  const edits = renameAt(doc.getText(), doc.offsetAt(position), newName, path);
+  const edits = await moduleRenameAt(path, doc.getText(), doc.offsetAt(position), newName, read);
   if (!edits) return null;
-  return {
-    changes: {
-      [pathToFileURL(path).href]: edits.map((e) =>
-        TextEdit.replace(rangeOf(doc, e.location.span), e.newText),
-      ),
-    },
-  };
+  const changes: Record<string, TextEdit[]> = {};
+  for (const e of edits) {
+    const { uri, range } = await rangeAtPath(e.location.path, e.location.span);
+    const list = changes[uri] ?? [];
+    list.push(TextEdit.replace(range, e.newText));
+    changes[uri] = list;
+  }
+  return { changes };
+});
+
+// Document / workspace symbols.
+connection.onDocumentSymbol(({ textDocument }): DocumentSymbol[] => {
+  const doc = documents.get(textDocument.uri);
+  if (!doc) return [];
+  return documentSymbolsAt(doc.getText()).map((s) => ({
+    name: s.name,
+    detail: s.detail,
+    kind: symbolKind(s.kind),
+    range: rangeOf(doc, s.span),
+    selectionRange: rangeOf(doc, s.span),
+  }));
+});
+
+connection.onWorkspaceSymbol(async ({ query }): Promise<WorkspaceSymbol[]> => {
+  // Search from each open .mochi doc's graph (dedupe by path+span).
+  const seen = new Set<string>();
+  const out: WorkspaceSymbol[] = [];
+  for (const doc of documents.all()) {
+    if (!doc.uri.endsWith(".mochi")) continue;
+    const path = docPath(doc.uri);
+    const syms = await workspaceSymbolsAt(path, query, read, doc.getText());
+    for (const s of syms) {
+      const k = `${s.path}:${s.span.start}:${s.name}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      const { uri, range } = await rangeAtPath(s.path, s.span);
+      out.push({ name: s.name, kind: symbolKind(s.kind), location: { uri, range } });
+    }
+  }
+  return out;
 });
 
 // Quick fixes from Diagnostic.suggestions (recomputed — LSP does not round-trip them).
@@ -133,7 +200,7 @@ connection.onCodeAction(async ({ textDocument }): Promise<CodeAction[]> => {
   const doc = documents.get(textDocument.uri);
   if (!doc) return [];
   const path = docPath(textDocument.uri);
-  const published = await moduleDiagnostics(path, doc.getText(), (p) => readFile(p, "utf8"));
+  const published = await moduleDiagnostics(path, doc.getText(), read);
   const actions: CodeAction[] = [];
   for (const d of published) {
     for (const s of d.suggestions ?? []) {
@@ -166,12 +233,9 @@ connection.onDocumentFormatting(({ textDocument }): TextEdit[] => {
   return [TextEdit.replace(fullRange, formatted.value)];
 });
 
-// Compile the document and push diagnostics (0 or 1 — the pipeline stops at the
-// first error). Module-aware: imports are resolved from disk (deps) with the
-// live buffer standing in for the edited file.
 const validate = async (doc: TextDocument): Promise<void> => {
   const path = docPath(doc.uri);
-  const computed = await moduleDiagnostics(path, doc.getText(), (p) => readFile(p, "utf8"));
+  const computed = await moduleDiagnostics(path, doc.getText(), read);
   const diags: Diagnostic[] = computed.map((d) => ({
     range: d.range,
     message: d.message,
