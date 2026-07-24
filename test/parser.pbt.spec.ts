@@ -61,7 +61,8 @@ const children = (e: Expr): Expr[] => {
       return [e.target];
     case "arr":
     case "list":
-      return e.elements;
+    case "set":
+      return e.elements.map((el) => el.expr);
     case "map":
       return e.entries.flatMap((en) => [en.key, en.value]);
   }

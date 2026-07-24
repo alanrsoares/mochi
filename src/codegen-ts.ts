@@ -82,10 +82,13 @@ const forEachScopedSpan = (e: Expr, f: (span: Span) => void): void => {
       forEachScopedSpan(e.target, f);
       return;
     case "tuple":
+      for (const x of e.elements) forEachScopedSpan(x, f);
+      return;
     case "arr":
     case "list":
-      if (e.kind !== "tuple" && e.elements.length === 0) f(e.span); // empty `[]`/`@{}`
-      for (const x of e.elements) forEachScopedSpan(x, f);
+    case "set":
+      if (e.elements.length === 0) f(e.span); // empty `[]` / `@{}`
+      for (const x of e.elements) forEachScopedSpan(x.expr, f);
       return;
     case "map":
       if (e.entries.length === 0) f(e.span); // empty `#{}`

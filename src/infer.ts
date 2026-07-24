@@ -14,6 +14,7 @@ import type {
   MatchExpr,
   Pattern,
   Program,
+  SeqElem,
   TernaryExpr,
 } from "./ast";
 
@@ -340,9 +341,11 @@ function inferExpr(e: Expr, ctx: Ctx): Result<Type, AlangError> {
     case "tuple":
       return inferTuple(e, ctx);
     case "arr":
-      return recordEmpty(e.span, e.elements.length, inferSeqExpr("Array", e.elements, ctx), ctx);
+      return recordEmpty(e.span, e.elements.length, inferSeqSlots("Array", e.elements, ctx), ctx);
     case "list":
-      return recordEmpty(e.span, e.elements.length, inferSeqExpr("List", e.elements, ctx), ctx);
+      return recordEmpty(e.span, e.elements.length, inferSeqSlots("List", e.elements, ctx), ctx);
+    case "set":
+      return inferSeqSlots("Set", e.elements, ctx);
     case "map":
       return recordEmpty(e.span, e.entries.length, inferMapExpr(e.entries, ctx), ctx);
     case "match":
@@ -351,19 +354,21 @@ function inferExpr(e: Expr, ctx: Ctx): Result<Type, AlangError> {
 }
 
 /**
- * Shared element inference for `arr`/`list` (they differ only in the container
- * constructor): every element unifies with one `elem`, result is `con<elem>`.
+ * Homogeneous sequence with optional spreads (`[a, ...xs]`, `@{a, ...xs}`,
+ * `#{a, ...s}`). Fixed slots unify with `elem`; each spread unifies with
+ * `con<elem>` (Array / List / Set).
  */
-const inferSeqExpr = (
-  con: "Array" | "List",
-  elements: Expr[],
+const inferSeqSlots = (
+  con: "Array" | "List" | "Set",
+  elements: SeqElem[],
   ctx: Ctx,
 ): Result<Type, AlangError> => {
   const elem = freshVar(ctx.fresh);
-  for (const el of elements) {
-    const et = infer(el, ctx);
+  for (const slot of elements) {
+    const et = infer(slot.expr, ctx);
     if (isErr(et)) return et;
-    const uni = u(elem, et.value, ctx, el.span);
+    const want = slot.kind === "spread" ? tCon(con, [elem]) : elem;
+    const uni = u(want, et.value, ctx, slot.expr.span);
     if (isErr(uni)) return uni;
   }
   return ok(tCon(con, [elem]));
@@ -675,9 +680,12 @@ function freeRefs(e: Expr, bound: Set<string>, acc: Set<string>): void {
       freeRefs(e.target, bound, acc);
       return;
     case "tuple":
+      for (const el of e.elements) freeRefs(el, bound, acc);
+      return;
     case "arr":
     case "list":
-      for (const el of e.elements) freeRefs(el, bound, acc);
+    case "set":
+      for (const el of e.elements) freeRefs(el.expr, bound, acc);
       return;
     case "map":
       for (const ent of e.entries) {

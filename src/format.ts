@@ -28,6 +28,7 @@ import type {
   Pattern,
   PipeExpr,
   RecordExpr,
+  SeqElem,
   Stmt,
   TernaryExpr,
   TypeExpr,
@@ -409,9 +410,14 @@ const collectAnchors = (stmts: Stmt[]): Anchor[] => {
         visit(e.target);
         break;
       case "tuple":
+        e.elements.forEach(visit);
+        break;
       case "arr":
       case "list":
-        e.elements.forEach(visit);
+      case "set":
+        e.elements.forEach((el) => {
+          visit(el.expr);
+        });
         break;
       case "map":
         e.entries.forEach((en) => {
@@ -524,15 +530,18 @@ const memberD = (e: Expr): Doc =>
 const operandD = (e: Expr): Doc =>
   parenIf(e.kind === "lambda" || e.kind === "ternary" || e.kind === "pipe", exprD(e));
 
-// `(a, b)` / `[a, b]` / `@{a, b}` — no inner padding; breaks one element per
-// line when it overflows.
-const bracketed = (open: string, close: string, elems: Expr[]): Doc =>
-  elems.length === 0
+// `(a, b)` / `[a, b]` / `@{a, b}` / `#{a, b}` — no inner padding; breaks one
+// element per line when it overflows.
+const seqElemD = (el: SeqElem): Doc =>
+  el.kind === "spread" ? seq(txt("..."), exprD(el.expr)) : exprD(el.expr);
+
+const bracketed = (open: string, close: string, items: Doc[]): Doc =>
+  items.length === 0
     ? txt(`${open}${close}`)
     : group(
         seq(
           txt(open),
-          indent(seq(softline, join(seq(txt(","), line), elems.map(exprD)))),
+          indent(seq(softline, join(seq(txt(","), line), items))),
           softline,
           txt(close),
         ),
@@ -912,11 +921,13 @@ const exprRaw = (e: Expr): Doc => {
     case "field":
       return fieldD(e);
     case "tuple":
-      return bracketed("(", ")", e.elements);
+      return bracketed("(", ")", e.elements.map(exprD));
     case "arr":
-      return bracketed("[", "]", e.elements);
+      return bracketed("[", "]", e.elements.map(seqElemD));
     case "list":
-      return bracketed("@{", "}", e.elements);
+      return bracketed("@{", "}", e.elements.map(seqElemD));
+    case "set":
+      return bracketed("#{", "}", e.elements.map(seqElemD));
     case "map":
       return mapD(e);
     case "letin":

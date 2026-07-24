@@ -128,9 +128,19 @@ const cExpr = (e: Expr): Canon => {
     case "field":
       return { kind: "field", target: cExpr(e.target), name: e.name, span: cSpan(e.span) };
     case "tuple":
+      return { kind: e.kind, elements: e.elements.map(cExpr), span: cSpan(e.span) };
     case "arr":
     case "list":
-      return { kind: e.kind, elements: e.elements.map(cExpr), span: cSpan(e.span) };
+    case "set":
+      // Plain slots unwrap to exprs so they agree with bootstrap's `[Expr]`;
+      // spread slots stay tagged (bootstrap has no seq-expr spread yet).
+      return {
+        kind: e.kind,
+        elements: e.elements.map((el) =>
+          el.kind === "spread" ? { kind: "spread", expr: cExpr(el.expr) } : cExpr(el.expr),
+        ),
+        span: cSpan(e.span),
+      };
     case "map":
       return {
         kind: "map",

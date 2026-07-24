@@ -139,6 +139,7 @@ let mergeInto = (keys, from, into) => switch keys {
       }
     )
 }
+
 let mergeMap = (from, into) => mergeInto(Map.keys(from), from, into)
 
 // Pull each imported name's scheme out of the dep's published exports, folding
@@ -228,10 +229,8 @@ let compileOne = (loaded, ctx) => switch resolveImportsFrom(loaded.stmts, 0, loa
                     exportedCtorKeys(loaded.stmts),
                     ctx.keysByPath
                   ),
-                  outputs: Array.append(
-                    { path: loaded.path, js: js },
-                    ctx.outputs
-                  )
+                  outputs: // ponytail: Array.append until bootstrap parses [...xs] (ADR 0001)
+                  Array.append({ path: loaded.path, js: js }, ctx.outputs)
                 }
               )
         }

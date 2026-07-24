@@ -89,9 +89,14 @@ Three literal forms, each a distinct type:
 |---|---|---|
 | `[1, 2, 3]` | `[number]` (Array, eager) | JS array |
 | `@{1, 2, 3}` | `List number` (lazy) | generator-backed pull sequence |
+| `#{1, 2}` | `Set number` | native JS `Set` (dedupes) |
 | `#{ "a": 1 }` | `Map k v` | native JS `Map` |
 
-`Set` has no literal (`Set.fromArray([...])`). There is no overloading, so each
+Array / List / Set literals may splice with `...` (`[a, ...xs]`, `@{a, ...xs}`,
+`#{a, ...s}` — ADR 0001). Each spread must be the **same** collection kind.
+Empty `#{}` is Map; `#{k: v}` is Map; `#{a, b}` (no colons) is Set.
+
+`Set.fromArray([...])` still works. There is no overloading, so each
 collection carries its own qualified namespace — `Array.*`, `List.*`, `Set.*`, `Map.*` —
 while the unqualified `map`/`filter`/`reduce`/`length` are eager Array aliases. `List.*`
 transformers stay **lazy and fuse**: nothing computes until `toArray` or a `take` pulls,

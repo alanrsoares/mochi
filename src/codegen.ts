@@ -237,13 +237,23 @@ const genExpr = (e: Expr, ctx: GenCtx): string =>
       return ctx.tupleHelper ? `_tuple(${elems})` : `[${elems}]`;
     })
     .with({ kind: "arr" }, (l) => {
-      const body = `[${l.elements.map((el) => genExpr(el, ctx)).join(", ")}]`;
+      const parts = l.elements.map((el) =>
+        el.kind === "spread" ? `...${genExpr(el.expr, ctx)}` : genExpr(el.expr, ctx),
+      );
+      const body = `[${parts.join(", ")}]`;
       // Empty `[]` infers `never[]` — annotate with the resolved element type
       // (TS backend) so it flows where a concrete array is expected (ADR 0035).
       const ann = l.elements.length === 0 ? ctx.annotateEmpty?.(l) : null;
       return ann ? `(${body} as ${ann})` : body;
     })
     .with({ kind: "list" }, (l) => genList(l, ctx))
+    .with({ kind: "set" }, (s) => {
+      // Native `Set` constructor dedupes; spreads are iterable Sets.
+      const parts = s.elements.map((el) =>
+        el.kind === "spread" ? `...${genExpr(el.expr, ctx)}` : genExpr(el.expr, ctx),
+      );
+      return `new Set([${parts.join(", ")}])`;
+    })
     .with({ kind: "map" }, (m) => {
       const entries = m.entries
         .map((e) => `[${genExpr(e.key, ctx)}, ${genExpr(e.value, ctx)}]`)
@@ -255,10 +265,15 @@ const genExpr = (e: Expr, ctx: GenCtx): string =>
     })
     .exhaustive();
 
-// A `@{...}` literal → a lazy iterable over its (eagerly-evaluated) elements.
-// `_list` wraps a generator factory so the List is re-iterable and lazy.
+// A `@{...}` literal → a lazy iterable. Spreads `yield*` another List (iterable).
 const genList = (e: ListExpr, ctx: GenCtx): string => {
-  const yields = e.elements.map((el) => `yield (${genExpr(el, ctx)});`).join(" ");
+  const yields = e.elements
+    .map((el) =>
+      el.kind === "spread"
+        ? `yield* (${genExpr(el.expr, ctx)});`
+        : `yield (${genExpr(el.expr, ctx)});`,
+    )
+    .join(" ");
   return `_list(function* () {${yields ? ` ${yields} ` : ""}})`;
 };
 
@@ -771,8 +786,9 @@ const usesMatchLib = (e: Expr): boolean =>
     )
     .with({ kind: "field" }, (f) => usesMatchLib(f.target))
     .with({ kind: "tuple" }, (t) => t.elements.some(usesMatchLib))
-    .with({ kind: "arr" }, (l) => l.elements.some(usesMatchLib))
-    .with({ kind: "list" }, (l) => l.elements.some(usesMatchLib))
+    .with({ kind: "arr" }, (l) => l.elements.some((el) => usesMatchLib(el.expr)))
+    .with({ kind: "list" }, (l) => l.elements.some((el) => usesMatchLib(el.expr)))
+    .with({ kind: "set" }, (s) => s.elements.some((el) => usesMatchLib(el.expr)))
     .with({ kind: "map" }, (m) =>
       m.entries.some((e) => usesMatchLib(e.key) || usesMatchLib(e.value)),
     )
@@ -841,11 +857,14 @@ const exprRefs = (e: Expr, acc: Set<string>): void => {
       for (const el of t.elements) exprRefs(el, acc);
     })
     .with({ kind: "arr" }, (l) => {
-      for (const el of l.elements) exprRefs(el, acc);
+      for (const el of l.elements) exprRefs(el.expr, acc);
     })
     .with({ kind: "list" }, (l) => {
       acc.add("_list"); // a `@{...}` literal calls the List core at runtime
-      for (const el of l.elements) exprRefs(el, acc);
+      for (const el of l.elements) exprRefs(el.expr, acc);
+    })
+    .with({ kind: "set" }, (s) => {
+      for (const el of s.elements) exprRefs(el.expr, acc);
     })
     .with({ kind: "map" }, (m) => {
       for (const e of m.entries) {

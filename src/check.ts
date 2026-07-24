@@ -60,9 +60,12 @@ function forEachMatch(e: Expr, visit: (m: MatchExpr) => void): void {
       forEachMatch(e.target, visit);
       return;
     case "tuple":
+      for (const el of e.elements) forEachMatch(el, visit);
+      return;
     case "arr":
     case "list":
-      for (const el of e.elements) forEachMatch(el, visit);
+    case "set":
+      for (const el of e.elements) forEachMatch(el.expr, visit);
       return;
     case "map":
       for (const ent of e.entries) {
@@ -530,9 +533,11 @@ const checkExprBinds = (e: Expr): AlangError | null => {
     case "field":
       return checkExprBinds(e.target);
     case "tuple":
+      return firstErr(e.elements.map(checkExprBinds));
     case "arr":
     case "list":
-      return firstErr(e.elements.map(checkExprBinds));
+    case "set":
+      return firstErr(e.elements.map((el) => checkExprBinds(el.expr)));
     case "map":
       return firstErr(e.entries.map((en) => checkExprBinds(en.key) ?? checkExprBinds(en.value)));
   }

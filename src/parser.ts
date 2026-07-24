@@ -14,6 +14,7 @@ import type {
   PatField,
   Pattern,
   Program,
+  SeqElem,
   Stmt,
   TypeExpr,
 } from "./ast";
@@ -469,7 +470,7 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     if (peek().t === "lbrace") return parseRecord();
     if (peek().t === "lbracket") return parseArr();
     if (peek().t === "at") return parseList();
-    if (peek().t === "hash") return parseMap();
+    if (peek().t === "hash") return parseHash();
     if (peek().t === "tmplstart") return parseInterp();
     const tk = next();
     switch (tk.t) {
@@ -552,53 +553,74 @@ export function parse(toks: Located[]): Result<Program, AlangError> {
     return { name, value: parseExpr() };
   }
 
-  // A list literal: `[]`, `[e]`, `[e, e, ...]`. Elements are full expressions.
+  // An array literal: `[]`, `[e]`, `[a, ...xs, b]`. Slots are exprs or spreads.
   function parseArr(): Expr {
     const start = expect("lbracket").span;
-    const elements: Expr[] = [];
-    if (peek().t !== "rbracket") {
-      elements.push(parseExpr());
-      while (peek().t === "comma") {
-        next();
-        elements.push(parseExpr());
-      }
-    }
+    const elements = parseSeqElems("rbracket");
     expect("rbracket");
     return { kind: "arr", elements, span: to(start) };
   }
 
-  // A lazy-List literal: `@{}`, `@{e}`, `@{e, e, ...}`. Same shape as a list
-  // literal but braces + the `@` sigil, so it never collides with a record.
+  // A lazy-List literal: `@{}`, `@{e}`, `@{a, ...xs}`. Same slot model as arrays.
   function parseList(): Expr {
     const start = expect("at").span;
     expect("lbrace");
-    const elements: Expr[] = [];
-    if (peek().t !== "rbrace") {
-      elements.push(parseExpr());
-      while (peek().t === "comma") {
-        next();
-        elements.push(parseExpr());
-      }
-    }
+    const elements = parseSeqElems("rbrace");
     expect("rbrace");
     return { kind: "list", elements, span: to(start) };
   }
 
-  // A Map literal: `#{}`, `#{ key: value, ... }`. Keys are full expressions
-  // (usually string/number literals), not identifiers like record fields.
-  function parseMap(): Expr {
+  // `#{}` is empty Map. `#{ k: v }` is Map; `#{a, b}` / `#{...s}` is Set
+  // (no colons — same disambiguation Python uses for `{}` dict vs set).
+  function parseHash(): Expr {
     const start = expect("hash").span;
     expect("lbrace");
-    const entries: { key: Expr; value: Expr }[] = [];
-    if (peek().t !== "rbrace") {
-      entries.push(parseMapEntry());
+    if (peek().t === "rbrace") {
+      next();
+      return { kind: "map", entries: [], span: to(start) };
+    }
+    if (peek().t === "spread") {
+      const elements = parseSeqElems("rbrace");
+      expect("rbrace");
+      return { kind: "set", elements, span: to(start) };
+    }
+    const first = parseExpr();
+    if (peek().t === "colon") {
+      next();
+      const entries = [{ key: first, value: parseExpr() }];
       while (peek().t === "comma") {
         next();
         entries.push(parseMapEntry());
       }
+      expect("rbrace");
+      return { kind: "map", entries, span: to(start) };
+    }
+    const elements: SeqElem[] = [{ kind: "expr", expr: first }];
+    while (peek().t === "comma") {
+      next();
+      elements.push(parseSeqElem());
     }
     expect("rbrace");
-    return { kind: "map", entries, span: to(start) };
+    return { kind: "set", elements, span: to(start) };
+  }
+
+  function parseSeqElems(close: "rbracket" | "rbrace"): SeqElem[] {
+    const elements: SeqElem[] = [];
+    if (peek().t === close) return elements;
+    elements.push(parseSeqElem());
+    while (peek().t === "comma") {
+      next();
+      elements.push(parseSeqElem());
+    }
+    return elements;
+  }
+
+  function parseSeqElem(): SeqElem {
+    if (peek().t === "spread") {
+      next();
+      return { kind: "spread", expr: parseExpr() };
+    }
+    return { kind: "expr", expr: parseExpr() };
   }
 
   function parseMapEntry(): { key: Expr; value: Expr } {

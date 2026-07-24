@@ -41,9 +41,18 @@ export type Expr =
   | { kind: "record"; fields: Field[]; spread?: Expr; span: Span }
   | { kind: "field"; target: Expr; name: string; span: Span } // p.x
   | { kind: "tuple"; elements: Expr[]; span: Span } // (a, b) — heterogeneous product, arity ≥ 2
-  | { kind: "arr"; elements: Expr[]; span: Span } // [1, 2, 3] — eager Array
-  | { kind: "list"; elements: Expr[]; span: Span } // @{1, 2, 3} — lazy List
+  // [1, 2] / [a, ...xs, b] — eager Array. Slots are exprs or spreads (ADR 0001).
+  | { kind: "arr"; elements: SeqElem[]; span: Span }
+  // @{1, 2} / @{a, ...xs} — lazy List. Same slot model; spreads must be List.
+  | { kind: "list"; elements: SeqElem[]; span: Span }
+  // #{1, 2} / #{a, ...s} — Set (native; dedupes). `#{}` alone stays Map (empty).
+  // Disambiguated from Map by absence of `:` after the first key expr.
+  | { kind: "set"; elements: SeqElem[]; span: Span }
   | { kind: "map"; entries: MapEntry[]; span: Span }; // #{ "a": 1 } — Map
+
+// One slot in an Array / List / Set literal: a value, or `...xs` splicing another
+// collection of the same kind.
+export type SeqElem = { kind: "expr"; expr: Expr } | { kind: "spread"; expr: Expr };
 
 // A lambda parameter: a plain name, or a record-destructuring pattern that
 // binds each named field. `({ x, y }) => ...` pulls x and y out of the argument.
@@ -159,6 +168,8 @@ export type LetBindExpr = Extract<Expr, { kind: "letbind" }>;
 export type MatchExpr = Extract<Expr, { kind: "match" }>;
 export type FieldExpr = Extract<Expr, { kind: "field" }>;
 export type ListExpr = Extract<Expr, { kind: "list" }>;
+export type ArrExpr = Extract<Expr, { kind: "arr" }>;
+export type SetExpr = Extract<Expr, { kind: "set" }>;
 export type CallExpr = Extract<Expr, { kind: "call" }>;
 export type RecordExpr = Extract<Expr, { kind: "record" }>;
 export type MapExpr = Extract<Expr, { kind: "map" }>;
