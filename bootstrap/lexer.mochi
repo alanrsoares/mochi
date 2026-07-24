@@ -214,8 +214,10 @@ let literalTok = (idx, total, value) =>
   total == 1
     ? TStr(value)
     : idx == 0
-      ? TTmplStart(value)
-      : idx == total - 1 ? TTmplEnd(value) : TTmplMid(value)
+    ? TTmplStart(value)
+    : idx == total - 1
+    ? TTmplEnd(value)
+    : TTmplMid(value)
 
 // Scan a "..." literal (which may contain `${expr}` holes) starting at its
 // opening quote `i`. Returns the alternating lit/hole chunks (oldest first)
@@ -231,7 +233,7 @@ let scanTemplateLoop = (src, j, value, parts) => switch Str.get(j, src) {
       | None => None
       | Some(holeEnd) => let withLit = Array.append(PLit(value), parts) in
         let withHole = Array.append(PHole(j + 2, holeEnd - 1), withLit) in
-        scanTemplateLoop(src, holeEnd, "", withHole)
+          scanTemplateLoop(src, holeEnd, "", withHole)
     }
   | Some(c) => scanTemplateLoop(src, j + 1, "${value}${c}", parts)
 }
@@ -244,13 +246,13 @@ let notNewline = c => c != "\n"
 // breaks doc attachment; a trailing comment is invisible.
 let scanComment = (src, start, lineTok) =>
   let stop = scanWhile(notNewline, src, start) in
-  lineTok
-    ? Trailing(stop)
-    : Str.get(start + 2, src) |> Option.contains("/")
+    lineTok
+      ? Trailing(stop)
+      : Str.get(start + 2, src) |> Option.contains("/")
       ? let textStart = Str.get(start + 3, src) |> Option.contains(" ")
         ? start + 4
         : start + 3 in
-      DocLine(Str.slice(textStart, stop, src), stop)
+        DocLine(Str.slice(textStart, stop, src), stop)
       : PlainOwn(stop)
 
 // Attach the pending doc block (if any) and build the located token.
@@ -292,7 +294,7 @@ let spliceHoleToks = (holeToks, by, toks) => switch Array.head(holeToks) {
   | Some(ht) => let toks2 = ht.tok == TEof
       ? toks
       : Array.append(offsetLocTok(ht, by), toks) in
-    spliceHoleToks(Array.tail(holeToks), by, toks2)
+      spliceHoleToks(Array.tail(holeToks), by, toks2)
 }
 
 // Recursively lex one `${...}` hole's own source (start/stop are its extent,
@@ -318,16 +320,16 @@ let lexParts = (src, parts, idx, total, wholeStart, wholeEnd, doc, toks) => swit
           wholeEnd,
           doc
         ) in
-        lexParts(
-          src,
-          Array.tail(parts),
-          idx + 1,
-          total,
-          wholeStart,
-          wholeEnd,
-          [],
-          Array.append(t, toks)
-        )
+          lexParts(
+            src,
+            Array.tail(parts),
+            idx + 1,
+            total,
+            wholeStart,
+            wholeEnd,
+            [],
+            Array.append(t, toks)
+          )
       | PHole(hs, he) => switch spliceHole(src, hs, he, toks) {
           | Err(e) => Err(e)
           | Ok(toks2) => lexParts(
@@ -383,16 +385,16 @@ let go = (src, i, doc, nlRun, lineTok, toks) => switch Str.get(i, src) {
         | None => c == "\""
             ? lexString(src, i, doc, toks)
             : numStart(src, i, c)
-              ? let j = scanWhile(isNumChar, src, i + 1) in
-              let raw = Str.slice(i, j, src) in
+            ? let j = scanWhile(isNumChar, src, i + 1) in
+            let raw = Str.slice(i, j, src) in
               emit(src, TNum(numValue(raw), raw), i, j, doc, toks)
-              : switch punctTok(c) {
-                | Some(t) => emit(src, t, i, i + 1, doc, toks)
-                | None => isIdStart(c)
-                    ? let j = scanWhile(isIdChar, src, i + 1) in
+            : switch punctTok(c) {
+              | Some(t) => emit(src, t, i, i + 1, doc, toks)
+              | None => isIdStart(c)
+                  ? let j = scanWhile(isIdChar, src, i + 1) in
                     emit(src, identTok(Str.slice(i, j, src)), i, j, doc, toks)
-                    : lexError("unexpected char '${c}'", i, i + 1)
-              }
+                  : lexError("unexpected char '${c}'", i, i + 1)
+            }
       }
 }
 

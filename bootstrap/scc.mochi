@@ -49,15 +49,15 @@ let visitNeighbors : number -> [number] -> [[number]] -> TSt -> TSt = (v, ws, ad
         )
         : visitNeighbors(v, rest, adj, st)
       : let st1 = connect(w, adj, st) in
-      visitNeighbors(
-        v,
-        rest,
-        adj,
-        {
-          ...st1,
-          low: Map.set(v, min(lowOfV(v, st1), lowOfV(w, st1)), st1.low)
-        }
-      )
+        visitNeighbors(
+          v,
+          rest,
+          adj,
+          {
+            ...st1,
+            low: Map.set(v, min(lowOfV(v, st1), lowOfV(w, st1)), st1.low)
+          }
+        )
 }
 
 let connect : number -> [[number]] -> TSt -> TSt = (v, adj, st) =>
@@ -70,16 +70,16 @@ let connect : number -> [[number]] -> TSt -> TSt = (v, adj, st) =>
     counter: st.counter + 1
   } in
   let st2 = visitNeighbors(v, neighborsOf(v, adj), adj, st1) in
-  lowOfV(v, st2) == indexOfV(v, st2)
-    ? let start = indexOfFrom(v, st2.stack, 0) in
-    let comp = Array.drop(start, st2.stack) in
-    {
-      ...st2,
-      onStack: Set.diff(st2.onStack, Set.fromArray(comp)),
-      stack: Array.take(start, st2.stack),
-      sccs: Array.append(comp, st2.sccs)
-    }
-    : st2
+    lowOfV(v, st2) == indexOfV(v, st2)
+      ? let start = indexOfFrom(v, st2.stack, 0) in
+      let comp = Array.drop(start, st2.stack) in
+        {
+          ...st2,
+          onStack: Set.diff(st2.onStack, Set.fromArray(comp)),
+          stack: Array.take(start, st2.stack),
+          sccs: Array.append(comp, st2.sccs)
+        }
+      : st2
 
 let connectAllFrom = (i, n, adj, st) =>
   i >= n
@@ -96,4 +96,4 @@ export let stronglyConnected = adj =>
     counter: 0,
     sccs: []
   } in
-  connectAllFrom(0, n, adj, initSt).sccs
+    connectAllFrom(0, n, adj, initSt).sccs

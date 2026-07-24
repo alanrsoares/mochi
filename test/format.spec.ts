@@ -193,11 +193,37 @@ test("a trailing comment on a constructor prints inline after it", () => {
 
 test("a trailing comment on a `let … in` value keeps `in` before the comment", () => {
   // Regression: the `in` keyword must not land on the commented-out line, or
-  // the output no longer parses.
-  const src = "let f = x =>\n  let y = g(x) in // note\n  h(y)\n";
+  // the output no longer parses. Terminal body indents under `in`.
+  const src = "let f = x =>\n  let y = g(x) in // note\n    h(y)\n";
   const once = fmt(src);
-  expect(once).toContain(" in // note");
+  expect(once).toBe(src);
   expect(fmt(once)).toBe(once); // idempotent — and re-parses
+});
+
+test("let-in chains stay flat; the terminal body indents under `in`", () => {
+  // Forces a break so the chain isn't one line; the last `in` payload must
+  // also overflow so it drops under the bind instead of hugging `in`.
+  const src =
+    "let f = x => let alpha = computeAlphaValue(x) in let beta = computeBetaValue(alpha) in combineAlphaAndBetaResultsTogether(alpha, beta)";
+  expect(fmt(src)).toBe(
+    "let f = x =>\n  let alpha = computeAlphaValue(x) in\n  let beta = computeBetaValue(alpha) in\n    combineAlphaAndBetaResultsTogether(alpha, beta)\n",
+  );
+});
+
+test("a let-in ternary branch indents its terminal body under the bind", () => {
+  const src =
+    "let f = veryLongConditionNameHere ? let veryLongBindingName = computeSomethingExpensive(x) in processTheResult(veryLongBindingName) : fallbackValueHere";
+  expect(fmt(src)).toBe(
+    "let f = veryLongConditionNameHere\n  ? let veryLongBindingName = computeSomethingExpensive(x) in\n    processTheResult(veryLongBindingName)\n  : fallbackValueHere\n",
+  );
+});
+
+test("cascading ternaries flatten instead of staircasing", () => {
+  const src =
+    "let f = firstVeryLongConditionCheck(x) ? resultAlpha : secondVeryLongConditionCheck(x) ? resultBeta : thirdVeryLongConditionCheck(x) ? resultGamma : resultDelta";
+  expect(fmt(src)).toBe(
+    "let f = firstVeryLongConditionCheck(x)\n  ? resultAlpha\n  : secondVeryLongConditionCheck(x)\n  ? resultBeta\n  : thirdVeryLongConditionCheck(x)\n  ? resultGamma\n  : resultDelta\n",
+  );
 });
 
 test("composition operator >> refolds correctly when formatted", () => {

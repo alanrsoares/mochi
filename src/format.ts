@@ -608,35 +608,64 @@ const lambdaD = (e: LambdaExpr): Doc => {
 const branchD = (marker: string, e: Expr): Doc =>
   hasLead(e) ? seq(txt(marker), indent(seq(hardline, exprD(e)))) : seq(txt(`${marker} `), exprD(e));
 
-// Inline `c ? t : e`, else break to `c` / `? t` / `: e`. A ternary in cond
-// position keeps its parens (it binds looser than everything else).
-const ternaryD = (e: TernaryExpr): Doc =>
-  group(
-    seq(
-      parenIf(e.cond.kind === "ternary", exprD(e.cond)),
-      indent(seq(line, branchD("?", e.then), line, branchD(":", e.else))),
-    ),
-  );
+const condD = (c: Expr): Doc => parenIf(c.kind === "ternary", exprD(c));
+
+// Right-nested `a ? b : c ? d : e` flattens to one arm list so cascading
+// conditionals share a single indent instead of staircasing.
+type TernaryArm = { cond: Expr; thenE: Expr };
+const ternaryArms = (e: TernaryExpr): { arms: TernaryArm[]; elseE: Expr } => {
+  const arms: TernaryArm[] = [{ cond: e.cond, thenE: e.then }];
+  let rest: Expr = e.else;
+  while (rest.kind === "ternary") {
+    arms.push({ cond: rest.cond, thenE: rest.then });
+    rest = rest.else;
+  }
+  return { arms, elseE: rest };
+};
+
+// Inline when it fits; else `cond` / `? then` / `: cond` / `? then` / `: else`
+// at one indent — a flat chain, not a nested pyramid.
+const ternaryD = (e: TernaryExpr): Doc => {
+  const { arms, elseE } = ternaryArms(e);
+  const parts: Doc[] = [line, branchD("?", arms[0]!.thenE)];
+  for (let i = 1; i < arms.length; i++) {
+    const a = arms[i]!;
+    parts.push(
+      line,
+      hasLead(a.cond)
+        ? seq(txt(":"), indent(seq(hardline, condD(a.cond))))
+        : seq(txt(": "), condD(a.cond)),
+      line,
+      branchD("?", a.thenE),
+    );
+  }
+  parts.push(line, branchD(":", elseE));
+  return group(seq(condD(arms[0]!.cond), indent(cat(parts))));
+};
 
 // `let x = v in body`; when it overflows, `in` stays at the end of the value
-// line and the body drops to the next line at the same indent.
-// A trailing comment on the value (`let x = v // note` then `in …` in source)
-// must print AFTER the `in` keyword, not glued to the value — otherwise the
-// `in` lands on the commented-out line and the output no longer parses. So
-// splice the value's own comments manually: leading before, trailing after
-// `in`.
-const letLikeD = (head: string, value: Expr, body: Expr): Doc =>
-  group(
+// line. A chain of `let … in let … in …` stays left-aligned (flat), but the
+// terminal non-let body indents under `in` so a ternary/`=>` branch's payload
+// doesn't look unbound. Trailing comments on the value print after `in`.
+const letLikeD = (head: string, value: Expr, body: Expr): Doc => {
+  // `line` must sit *inside* `indent` — indent only affects newlines, so a
+  // sibling `line` then `indent(text)` would still print the body at the
+  // outer column (same pitfall as lambda bodies above).
+  const cont =
+    body.kind === "letin" || body.kind === "letbind"
+      ? seq(line, exprD(body))
+      : indent(seq(line, exprD(body)));
+  return group(
     seq(
       txt(`${head} = `),
       ...leadingDocs(value),
       exprRaw(value),
       txt(" in"),
       ...trailingDocs(value),
-      line,
-      exprD(body),
+      cont,
     ),
   );
+};
 
 const recordD = (e: RecordExpr): Doc => {
   const fields = e.fields.map((f) => seq(txt(`${f.name}: `), exprD(f.value)));

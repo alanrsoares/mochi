@@ -122,11 +122,11 @@ let genExpr = (e, ctx) => switch e {
       body
     ) in
     let arrow = "(${Str.join(", ", cparams |> map(genParam))}) => ${genLambdaBody(cbody, ctx)}" in
-    // Curried type, JS impl: arity >= 2 lowers to a `_curry`-wrapped
-    // function so any call grouping works (CRITIQUE §4.4). Arity 1 needs none.
-    Array.length(cparams) >= 2
-      ? "_curry(${show(Array.length(cparams))}, ${arrow})"
-      : arrow
+      // Curried type, JS impl: arity >= 2 lowers to a `_curry`-wrapped
+      // function so any call grouping works (CRITIQUE §4.4). Arity 1 needs none.
+      Array.length(cparams) >= 2
+        ? "_curry(${show(Array.length(cparams))}, ${arrow})"
+        : arrow
   | ELetIn(name, _, value, body, _) =>
     // let x = v in b -> an IIFE binding x: `((x) => b)(v)`. Non-recursive, so
     // plain arg-application is enough; nested let-ins chain as curried IIFEs.
@@ -146,13 +146,13 @@ let genExpr = (e, ctx) => switch e {
       ", ",
       fields |> map(f => "${f.name}: ${genExpr(f.value, ctx)}")
     ) in
-    switch spread {
-      | None => Array.length(fields) == 0 ? "{}" : "{ ${fieldStrs} }"
-      | Some(s) => let spreadStr = "...${genExpr(s, ctx)}" in
-        Array.length(fields) == 0
-          ? "{ ${spreadStr} }"
-          : "{ ${spreadStr}, ${fieldStrs} }"
-    }
+      switch spread {
+        | None => Array.length(fields) == 0 ? "{}" : "{ ${fieldStrs} }"
+        | Some(s) => let spreadStr = "...${genExpr(s, ctx)}" in
+            Array.length(fields) == 0
+              ? "{ ${spreadStr} }"
+              : "{ ${spreadStr}, ${fieldStrs} }"
+      }
   | EField(target, name, _) => switch nsRuntimeId(target, name, ctx) {
       | Some(rt) => rt
       | None => "${genMember(target, ctx)}.${name}"
@@ -189,7 +189,7 @@ let genList = (elements, ctx) =>
     " ",
     elements |> map(el => "yield (${genExpr(el, ctx)});")
   ) in
-  "_list(function* () {${yields == "" ? "" : " ${yields} "}})"
+    "_list(function* () {${yields == "" ? "" : " ${yields} "}})"
 
 // A lambda parameter lowers to JS: a name, or native object destructuring.
 let genParam = p => switch p {
@@ -257,16 +257,16 @@ let pctorEntries = (ctor, args, i, ctx) => switch Array.get(i, args) {
   | None => []
   | Some(a) => let s = patSlot(a, ctx) in
     let restEntries = pctorEntries(ctor, args, i + 1, ctx) in
-    s == ""
-      ? restEntries
-      : Array.prepend(keyedSlot(keyAt(ctor, i, ctx), s), restEntries)
+      s == ""
+        ? restEntries
+        : Array.prepend(keyedSlot(keyAt(ctor, i, ctx), s), restEntries)
 }
 
 let precordEntries = (fields, i, ctx) => switch Array.get(i, fields) {
   | None => []
   | Some(f) => let s = patSlot(f.pat, ctx) in
     let restEntries = precordEntries(fields, i + 1, ctx) in
-    s == "" ? restEntries : Array.prepend(keyedSlot(f.label, s), restEntries)
+      s == "" ? restEntries : Array.prepend(keyedSlot(f.label, s), restEntries)
 }
 
 let patSlot = (p, ctx) => switch p {
@@ -277,17 +277,17 @@ let patSlot = (p, ctx) => switch p {
   | PStr(_, _) => ""
   | PList(_, _, _) => ""
   | PCtor(ctor, args, _) => let entries = pctorEntries(ctor, args, 0, ctx) in
-    Array.length(entries) == 0 ? "" : "{ ${Str.join(", ", entries)} }"
+      Array.length(entries) == 0 ? "" : "{ ${Str.join(", ", entries)} }"
   | PRecord(fields, _) => let entries = precordEntries(fields, 0, ctx) in
-    Array.length(entries) == 0 ? "" : "{ ${Str.join(", ", entries)} }"
+      Array.length(entries) == 0 ? "" : "{ ${Str.join(", ", entries)} }"
   | PTuple(elems, _) => let slots = elems |> map(el => patSlot(el, ctx)) in
-    someOf(s => s != "", slots) ? "[${Str.join(", ", slots)}]" : ""
+      someOf(s => s != "", slots) ? "[${Str.join(", ", slots)}]" : ""
   | PArr(elems, rest, _) => let slots = elems |> map(el => patSlot(el, ctx)) in
     let slots2 = switch rest {
       | Some(PBind(name, _)) => Array.append("...${name}", slots)
       | _ => slots
     } in
-    someOf(s => s != "", slots2) ? "[${Str.join(", ", slots2)}]" : ""
+      someOf(s => s != "", slots2) ? "[${Str.join(", ", slots2)}]" : ""
   | POr(alts, _) =>
     // The first alt's destructure serves the whole arm — every alt binds the
     // same names at the same positions (enforced by check.mochi).
@@ -349,10 +349,10 @@ let patConds = (p, path, ctx) => switch p {
     // Each alt's own conds &&-join into one guard; the alts ||-join into one.
     let altCond = alt =>
       let conds = patConds(alt, path, ctx) in
-      Array.length(conds) == 0
-        ? "true"
-        : Str.join(" && ", conds |> map(c => "(${c})")) in
-    [Str.join(" || ", alts |> map(alt => "(${altCond(alt)})"))]
+        Array.length(conds) == 0
+          ? "true"
+          : Str.join(" && ", conds |> map(c => "(${c})")) in
+      [Str.join(" || ", alts |> map(alt => "(${altCond(alt)})"))]
 }
 
 // The handler parameter for a catch-all pattern: bind the name, destructure a
@@ -398,12 +398,12 @@ let listArmBinds = (elems, i, ctx) => switch Array.get(i, elems) {
   | None => ([], [])
   | Some(el) => let (restParams, restArgs) = listArmBinds(elems, i + 1, ctx) in
     let slot = patSlot(el, ctx) in
-    slot == ""
-      ? (restParams, restArgs)
-      : (
-        Array.prepend(slot, restParams),
-        Array.prepend("_b[${show(i)}]", restArgs)
-      )
+      slot == ""
+        ? (restParams, restArgs)
+        : (
+          Array.prepend(slot, restParams),
+          Array.prepend("_b[${show(i)}]", restArgs)
+        )
 }
 
 // One narrowing lazy-List arm -> an `if (cond) return call;`. A fixed arm
@@ -418,15 +418,15 @@ let genListArm = (p, body, ctx) => switch p {
       ? "_pull(${show(n)})"
       : "!_pull(${show(n + 1)}) && _b.length === ${show(n)}" in
     let cond = Str.join(" && ", Array.prepend(head, guards)) in
-    let (params0, args0) = listArmBinds(elems, 0, ctx) in
-    let (params, args) = switch rest {
-      | Some(PBind(name, _)) => (
-          Array.append(name, params0),
-          Array.append(listTail(n), args0)
-        )
-      | _ => (params0, args0)
-    } in
-    "  if (${cond}) return ((${Str.join(", ", params)}) => ${genLambdaBody(body, ctx)})(${Str.join(", ", args)});"
+      let (params0, args0) = listArmBinds(elems, 0, ctx) in
+        let (params, args) = switch rest {
+          | Some(PBind(name, _)) => (
+              Array.append(name, params0),
+              Array.append(listTail(n), args0)
+            )
+          | _ => (params0, args0)
+        } in
+          "  if (${cond}) return ((${Str.join(", ", params)}) => ${genLambdaBody(body, ctx)})(${Str.join(", ", args)});"
   | _ => ""
 }
 
@@ -437,18 +437,18 @@ let listMatchLoop = (arms, i, ctx) => switch Array.get(i, arms) {
     )
   | Some(a) => isPList(a.pattern) && !isCatchAll(a.pattern)
       ? let (restLines, fallback) = listMatchLoop(arms, i + 1, ctx) in
-      (Array.prepend(genListArm(a.pattern, a.body, ctx), restLines), fallback)
+        (Array.prepend(genListArm(a.pattern, a.body, ctx), restLines), fallback)
       : isCatchAll(a.pattern)
-        ? let restName = switch a.pattern {
-          | PList(_, Some(PBind(name, _)), _) => Some(name)
-          | _ => None
-        } in
-        let fallback = switch restName {
-          | Some(name) => "((${name}) => ${genLambdaBody(a.body, ctx)})(${listTail(0)})"
-          | None => genExpr(a.body, ctx)
-        } in
+      ? let restName = switch a.pattern {
+        | PList(_, Some(PBind(name, _)), _) => Some(name)
+        | _ => None
+      } in
+      let fallback = switch restName {
+        | Some(name) => "((${name}) => ${genLambdaBody(a.body, ctx)})(${listTail(0)})"
+        | None => genExpr(a.body, ctx)
+      } in
         ([], fallback)
-        : listMatchLoop(arms, i + 1, ctx)
+      : listMatchLoop(arms, i + 1, ctx)
 }
 
 // A lazy-List switch -> an IIFE that pulls just enough elements to decide
@@ -457,38 +457,41 @@ let listMatchLoop = (arms, i, ctx) => switch Array.get(i, arms) {
 // check.ts proved totality.
 let genListMatch = (scrutinee, arms, ctx) =>
   let (armLines, fallback) = listMatchLoop(arms, 0, ctx) in
-  cat(
-    [
-      "((_it) => { const _b = []; let _done = false; ",
-      "const _pull = (_n) => { while (_b.length < _n && !_done) { const _s = _it.next(); ",
-      "if (_s.done) _done = true; else _b.push(_s.value); } return _b.length >= _n; };\n",
-      Str.join("\n", armLines),
-      "\n  return ",
-      fallback,
-      ";\n})(",
-      genExpr(scrutinee, ctx),
-      "[Symbol.iterator]())"
-    ]
-  )
+    cat(
+      [
+        "((_it) => { const _b = []; let _done = false; ",
+        "const _pull = (_n) => { while (_b.length < _n && !_done) { const _s = _it.next(); ",
+        "if (_s.done) _done = true; else _b.push(_s.value); } return _b.length >= _n; };\n",
+        Str.join("\n", armLines),
+        "\n  return ",
+        fallback,
+        ";\n})(",
+        genExpr(scrutinee, ctx),
+        "[Symbol.iterator]())"
+      ]
+    )
 
 let matchArmsLoop = (arms, i, ctx) => switch Array.get(i, arms) {
   | None => ([], None)
   | Some(a) => let (restLines, restCatch) = matchArmsLoop(arms, i + 1, ctx) in
-    switch a.guard {
-      | Some(g) => (
-          Array.prepend(
-            "  ${genGuardArm(a.pattern, a.body, Some(g), ctx)}",
-            restLines
-          ),
-          restCatch
-        )
-      | None => isCatchAll(a.pattern)
-          ? (restLines, Some((a.pattern, a.body)))
-          : (
-            Array.prepend("  ${genWithArm(a.pattern, a.body, ctx)}", restLines),
+      switch a.guard {
+        | Some(g) => (
+            Array.prepend(
+              "  ${genGuardArm(a.pattern, a.body, Some(g), ctx)}",
+              restLines
+            ),
             restCatch
           )
-    }
+        | None => isCatchAll(a.pattern)
+            ? (restLines, Some((a.pattern, a.body)))
+            : (
+              Array.prepend(
+                "  ${genWithArm(a.pattern, a.body, ctx)}",
+                restLines
+              ),
+              restCatch
+            )
+      }
 }
 
 let genMatch = (scrutinee, arms, ctx) =>
@@ -499,13 +502,13 @@ let genMatch = (scrutinee, arms, ctx) =>
       | Some((p, body)) => "  .otherwise(${catchAllParam(p, ctx)} => ${genLambdaBody(body, ctx)})"
       | None => "  .exhaustive()"
     } in
-    Str.join(
-      "\n",
-      Array.concat(
-        Array.prepend("match(${genExpr(scrutinee, ctx)})", armLines),
-        [tail]
+      Str.join(
+        "\n",
+        Array.concat(
+          Array.prepend("match(${genExpr(scrutinee, ctx)})", armLines),
+          [tail]
+        )
       )
-    )
 
 let litValue = p => switch p {
   | PStr(v, _) => jsStringLit(v)
@@ -532,7 +535,7 @@ let genGuardArm = (p, body, guardOpt, ctx) =>
     | None => conds0
   } in
   let test = Array.length(conds) == 0 ? "true" : Str.join(" && ", conds) in
-  ".with((_v) => ${test}, ${slot == "" ? "()" : "(${slot})"} => ${genLambdaBody(body, ctx)})"
+    ".with((_v) => ${test}, ${slot == "" ? "()" : "(${slot})"} => ${genLambdaBody(body, ctx)})"
 
 // Sub-pattern flat matcher-object form can express: bind, wildcard, or a
 // primitive literal (the matcher compares values with `!==`, so only
@@ -549,12 +552,12 @@ let isFlatSub = p => switch p {
 let recordLits = (fields, i) => switch Array.get(i, fields) {
   | None => []
   | Some(f) => let rest = recordLits(fields, i + 1) in
-    switch f.pat {
-      | PLit(_, _, _) => Array.prepend("${f.label}: ${litValue(f.pat)}", rest)
-      | PBool(_, _) => Array.prepend("${f.label}: ${litValue(f.pat)}", rest)
-      | PStr(_, _) => Array.prepend("${f.label}: ${litValue(f.pat)}", rest)
-      | _ => rest
-    }
+      switch f.pat {
+        | PLit(_, _, _) => Array.prepend("${f.label}: ${litValue(f.pat)}", rest)
+        | PBool(_, _) => Array.prepend("${f.label}: ${litValue(f.pat)}", rest)
+        | PStr(_, _) => Array.prepend("${f.label}: ${litValue(f.pat)}", rest)
+        | _ => rest
+      }
 }
 
 let ctorArgParts = (ctor, args, i, ctx) => switch Array.get(i, args) {
@@ -566,25 +569,25 @@ let ctorArgParts = (ctor, args, i, ctx) => switch Array.get(i, args) {
       ctx
     ) in
     let key = keyAt(ctor, i, ctx) in
-    switch a {
-      | PBind(name, _) => (
-          Array.prepend(keyedSlot(key, name), restBinds),
-          restLits
-        )
-      | PLit(_, _, _) => (
-          restBinds,
-          Array.prepend("${key}: ${litValue(a)}", restLits)
-        )
-      | PBool(_, _) => (
-          restBinds,
-          Array.prepend("${key}: ${litValue(a)}", restLits)
-        )
-      | PStr(_, _) => (
-          restBinds,
-          Array.prepend("${key}: ${litValue(a)}", restLits)
-        )
-      | _ => (restBinds, restLits)
-    }
+      switch a {
+        | PBind(name, _) => (
+            Array.prepend(keyedSlot(key, name), restBinds),
+            restLits
+          )
+        | PLit(_, _, _) => (
+            restBinds,
+            Array.prepend("${key}: ${litValue(a)}", restLits)
+          )
+        | PBool(_, _) => (
+            restBinds,
+            Array.prepend("${key}: ${litValue(a)}", restLits)
+          )
+        | PStr(_, _) => (
+            restBinds,
+            Array.prepend("${key}: ${litValue(a)}", restLits)
+          )
+        | _ => (restBinds, restLits)
+      }
 }
 
 let genWithArm = (p, body, ctx) => switch p {
@@ -599,7 +602,7 @@ let genWithArm = (p, body, ctx) => switch p {
   | PRecord(fields, _) => allOf(f => isFlatSub(f.pat), fields)
       ? let lits = recordLits(fields, 0) in
       let slot = patSlot(p, ctx) in
-      ".with({ ${Str.join(", ", lits)} }, ${slot == "" ? "()" : "(${slot})"} => ${genLambdaBody(body, ctx)})"
+        ".with({ ${Str.join(", ", lits)} }, ${slot == "" ? "()" : "(${slot})"} => ${genLambdaBody(body, ctx)})"
       : genGuardArm(p, body, None, ctx)
   | PCtor(ctor, args, _) =>
     // pctor flat fast path keeps readable matcher-object form.
@@ -612,7 +615,7 @@ let genWithArm = (p, body, ctx) => switch p {
       let param = Array.length(binds) == 0
         ? "()"
         : "({ ${Str.join(", ", binds)} })" in
-      ".with({ ${patObj} }, ${param} => ${genLambdaBody(body, ctx)})"
+        ".with({ ${patObj} }, ${param} => ${genLambdaBody(body, ctx)})"
       : genGuardArm(p, body, None, ctx)
   | _ => genGuardArm(p, body, None, ctx)
 }
@@ -626,13 +629,13 @@ let genWithArm = (p, body, ctx) => switch p {
 // recognize mochi values at the JS boundary.
 let genCtor = c =>
   let tag = jsStringLit(c.name) in
-  Array.length(c.fields) == 0
-    ? "const ${c.name} = { _tag: ${tag} };"
-    : let params = Str.join(", ", keysOf(c.fields)) in
-    let impl = "(${params}) => ({ _tag: ${tag}, ${params} })" in
-    Array.length(c.fields) >= 2
-      ? "const ${c.name} = _curry(${show(Array.length(c.fields))}, ${impl});"
-      : "const ${c.name} = ${impl};"
+    Array.length(c.fields) == 0
+      ? "const ${c.name} = { _tag: ${tag} };"
+      : let params = Str.join(", ", keysOf(c.fields)) in
+      let impl = "(${params}) => ({ _tag: ${tag}, ${params} })" in
+        Array.length(c.fields) >= 2
+          ? "const ${c.name} = _curry(${show(Array.length(c.fields))}, ${impl});"
+          : "const ${c.name} = ${impl};"
 
 let genType = s => switch s {
   | SType(_, _, ctors, _, _, _) => Str.join("\n", ctors |> map(genCtor))
@@ -643,7 +646,7 @@ let genExtern = s => switch s {
   | SExtern(name, _, _, modName, imported, _, _) => let spec = imported == name
       ? name
       : "${imported} as ${name}" in
-    "import { ${spec} } from ${jsStringLit(modName)};"
+      "import { ${spec} } from ${jsStringLit(modName)};"
   | _ => ""
 }
 
@@ -658,7 +661,7 @@ let genImport = s => switch s {
       names |> map(n => n.name)
     ) in
     let path = "${stripAlExt(from)}.js" in
-    "import { ${nameList} } from ${jsStringLit(path)};"
+      "import { ${nameList} } from ${jsStringLit(path)};"
   | _ => ""
 }
 
@@ -667,9 +670,9 @@ let exportLine = l => "export ${l}"
 let genStmt = (s, ctx) => switch s {
   | SImport(_, _, _) => genImport(s)
   | SType(_, _, _, _, exported, _) => let decls = genType(s) in
-    decls == ""
-      ? "" // record alias: pure type, no runtime
-      : exported
+      decls == ""
+        ? "" // record alias: pure type, no runtime
+        : exported
         ? Str.join("\n", Str.split("\n", decls) |> map(exportLine))
         : decls
   | SExtern(name, _, _, _, _, exported, _) =>
@@ -679,7 +682,7 @@ let genStmt = (s, ctx) => switch s {
       "$",
       name
     ) in // never export destructure temps
-    "${doExport ? "export " : ""}const ${name} = ${genExpr(value, ctx)};"
+      "${doExport ? "export " : ""}const ${name} = ${genExpr(value, ctx)};"
 }
 
 // Need `@onrails/pattern` import? Only if a match lowers to a `match()`
@@ -747,7 +750,7 @@ let exprRefsArmsFrom = (arms, i, ctx, acc) => switch Array.get(i, arms) {
       | Some(g) => exprRefs(g, ctx, acc)
       | None => acc
     } in
-    exprRefsArmsFrom(arms, i + 1, ctx, exprRefs(a.body, ctx, acc1))
+      exprRefsArmsFrom(arms, i + 1, ctx, exprRefs(a.body, ctx, acc1))
 }
 let exprRefsFieldsFrom = (fields, i, ctx, acc) => switch Array.get(i, fields) {
   | None => acc
@@ -781,7 +784,7 @@ let exprRefs = (e, ctx, acc) => switch e {
     let acc2 = Array.length(cparams) >= 2
       ? Set.add("_curry", acc)
       : acc in // arity >= 2 lowers `_curry(...)`
-    exprRefs(cbody, ctx, acc2)
+      exprRefs(cbody, ctx, acc2)
   | ELetIn(_, _, value, body, _) => exprRefs(
       body,
       ctx,
@@ -808,7 +811,7 @@ let exprRefs = (e, ctx, acc) => switch e {
     )
       ? Set.add("_list", acc1)
       : acc1 in
-    exprRefsArmsFrom(arms, 0, ctx, acc2)
+      exprRefsArmsFrom(arms, 0, ctx, acc2)
   | ERecord(fields, spread, _) => exprRefsFieldsFrom(
       fields,
       0,
@@ -890,8 +893,8 @@ let addDepsFrom = (deps, j, refs, queue) => switch Array.get(j, deps) {
 let closeRefsFrom = (queue, i, refs, runtimeDeps) => switch Array.get(i, queue) {
   | None => refs
   | Some(r) => let deps = Option.unwrapOr([], Map.get(r, runtimeDeps)) in
-    let (refs2, queue2) = addDepsFrom(deps, 0, refs, queue) in
-    closeRefsFrom(queue2, i + 1, refs2, runtimeDeps)
+      let (refs2, queue2) = addDepsFrom(deps, 0, refs, queue) in
+        closeRefsFrom(queue2, i + 1, refs2, runtimeDeps)
 }
 
 // The prelude runtime a program needs inlined: every builtin it references
@@ -904,7 +907,7 @@ let preludePreamble = (stmts, ctx, jsDefs, runtimeDeps) =>
   let defs = names
     |> filter(n => Set.has(n, refs) && !Set.has(n, bound))
     |> map(n => Map.getOr("", n, jsDefs)) in
-  Array.length(defs) == 0 ? "" : "${Str.join("\n", defs)}\n\n"
+    Array.length(defs) == 0 ? "" : "${Str.join("\n", defs)}\n\n"
 
 // ---- top-level entry --------------------------------------------------------
 
@@ -935,4 +938,4 @@ export let codegen = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps) =>
     ? preludePreamble(stmts, ctx, jsDefs, runtimeDeps)
     : "" in
   let body = Str.join("\n", genStmtAllFrom(stmts, 0, ctx)) in
-  "${header}${preamble}${body}\n"
+    "${header}${preamble}${body}\n"

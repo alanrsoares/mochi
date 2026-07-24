@@ -75,24 +75,24 @@ let visit = (path, acc) => switch Map.get(path, acc.state) {
       state: Map.set(path, "loading", acc.state),
       order: acc.order
     } in
-    switch readFile(path) {
-      | Err(_) => Err(mErr("cannot read module '${path}'"))
-      | Ok(src) => switch parseModule(src) {
-          | Err(e) => Err(e)
-          | Ok(stmts) => switch visitAll(importFroms(stmts), path, acc1) {
-              | Err(e) => Err(e)
-              | Ok(acc2) => Ok(
-                  {
-                    state: Map.set(path, "done", acc2.state),
-                    order: Array.append(
-                      { path: path, stmts: stmts },
-                      acc2.order
-                    )
-                  }
-                )
-            }
-        }
-    }
+      switch readFile(path) {
+        | Err(_) => Err(mErr("cannot read module '${path}'"))
+        | Ok(src) => switch parseModule(src) {
+            | Err(e) => Err(e)
+            | Ok(stmts) => switch visitAll(importFroms(stmts), path, acc1) {
+                | Err(e) => Err(e)
+                | Ok(acc2) => Ok(
+                    {
+                      state: Map.set(path, "done", acc2.state),
+                      order: Array.append(
+                        { path: path, stmts: stmts },
+                        acc2.order
+                      )
+                    }
+                  )
+              }
+          }
+      }
 }
 
 // Visit each dep spec, resolved against `importer`, threading the accumulator.
@@ -174,23 +174,23 @@ let resolveImportsFrom = (stmts, i, path, ctx, res) => switch Array.get(i, stmts
     let depExports = Map.getOr(#{}, dp, ctx.exportsByPath) in
     let depReg = Map.getOr(emptyReg, dp, ctx.regByPath) in
     let depKeys = Map.getOr(#{}, dp, ctx.keysByPath) in
-    switch resolveNames(names, from, depExports, res) {
-      | Err(e) => Err(e)
-      | Ok(res1) => resolveImportsFrom(
-          stmts,
-          i + 1,
-          path,
-          ctx,
-          {
-            imports: res1.imports,
-            reg: {
-              ctors: mergeMap(depReg.ctors, res1.reg.ctors),
-              types: mergeMap(depReg.types, res1.reg.types)
-            },
-            keys: mergeMap(depKeys, res1.keys)
-          }
-        )
-    }
+      switch resolveNames(names, from, depExports, res) {
+        | Err(e) => Err(e)
+        | Ok(res1) => resolveImportsFrom(
+            stmts,
+            i + 1,
+            path,
+            ctx,
+            {
+              imports: res1.imports,
+              reg: {
+                ctors: mergeMap(depReg.ctors, res1.reg.ctors),
+                types: mergeMap(depReg.types, res1.reg.types)
+              },
+              keys: mergeMap(depKeys, res1.keys)
+            }
+          )
+      }
   | Some(_) => resolveImportsFrom(stmts, i + 1, path, ctx, res)
 }
 
@@ -211,29 +211,29 @@ let compileOne = (loaded, ctx) => switch resolveImportsFrom(loaded.stmts, 0, loa
               preludeJsDefs,
               runtimeDeps
             ) in
-            Ok(
-              {
-                exportsByPath: Map.set(
-                  loaded.path,
-                  exportedSchemes(loaded.stmts, env),
-                  ctx.exportsByPath
-                ),
-                regByPath: Map.set(
-                  loaded.path,
-                  exportedRegistry(loaded.stmts),
-                  ctx.regByPath
-                ),
-                keysByPath: Map.set(
-                  loaded.path,
-                  exportedCtorKeys(loaded.stmts),
-                  ctx.keysByPath
-                ),
-                outputs: Array.append(
-                  { path: loaded.path, js: js },
-                  ctx.outputs
-                )
-              }
-            )
+              Ok(
+                {
+                  exportsByPath: Map.set(
+                    loaded.path,
+                    exportedSchemes(loaded.stmts, env),
+                    ctx.exportsByPath
+                  ),
+                  regByPath: Map.set(
+                    loaded.path,
+                    exportedRegistry(loaded.stmts),
+                    ctx.regByPath
+                  ),
+                  keysByPath: Map.set(
+                    loaded.path,
+                    exportedCtorKeys(loaded.stmts),
+                    ctx.keysByPath
+                  ),
+                  outputs: Array.append(
+                    { path: loaded.path, js: js },
+                    ctx.outputs
+                  )
+                }
+              )
         }
     }
 }

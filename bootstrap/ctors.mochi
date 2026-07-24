@@ -137,14 +137,14 @@ let buildLoop = (stmts, i, reg) => switch Array.get(i, stmts) {
   | Some(SType(name, _, ctors, _, _, sp)) => Map.has(name, reg.types)
       ? Err(ctorErr("duplicate type '${name}'", sp))
       : let? cs = ctorsInto(ctors, 0, name, sp, reg.ctors) in
-      buildLoop(
-        stmts,
-        i + 1,
-        {
-          ctors: cs,
-          types: Map.set(name, ctors |> map(c => c.name), reg.types)
-        }
-      )
+        buildLoop(
+          stmts,
+          i + 1,
+          {
+            ctors: cs,
+            types: Map.set(name, ctors |> map(c => c.name), reg.types)
+          }
+        )
   | Some(_) => buildLoop(stmts, i + 1, reg)
 }
 
@@ -153,7 +153,7 @@ let buildLoop = (stmts, i, reg) => switch Array.get(i, stmts) {
 // didn't vouch for.
 export let buildRegistry = stmts =>
   let? reg = buildLoop(stmts, 0, emptyRegistry) in
-  Ok(seedRegDeclsFrom(builtinDeclsFor(stmts), 0, reg))
+    Ok(seedRegDeclsFrom(builtinDeclsFor(stmts), 0, reg))
 
 // The registry a module publishes: only its EXPORTED variant types (and their
 // full ctor sets), no builtin seed, no dup-check — threaded into an importer's
