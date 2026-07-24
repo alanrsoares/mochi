@@ -37,7 +37,7 @@ async function ensureCompiled() {
     const mochiFile = join(DIR, "snake.mochi");
     const src = await Bun.file(mochiFile).text();
     const res = compile(src);
-    if (res.ok) {
+    if (res._tag === "Ok") {
       await Bun.write(join(DIR, "snake.js"), res.value);
     }
   } catch (err) {
