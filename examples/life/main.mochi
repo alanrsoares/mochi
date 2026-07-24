@@ -24,8 +24,8 @@ let height = 16
 /// Get cell state at toroidal coordinates (r, c) wrapping around borders.
 let at = (board, r, c) =>
   board
-    |> Array.get(mod(r, height))
-    |> Option.flatMap(Array.get(mod(c, width)))
+    |> Array.get(r % height)
+    |> Option.flatMap(Array.get(c % width))
     |> Option.unwrapOr(false)
 
 /// Convert boolean cell state to 1 (alive) or 0 (dead).
@@ -33,32 +33,26 @@ let b2n = alive => alive ? 1 : 0
 
 /// Count the 8 live neighbours surrounding cell (r, c).
 let neighbours = (board, r, c) =>
-  let rm = sub(r, 1) in
-  let rp = add(r, 1) in
-  let cm = sub(c, 1) in
-  let cp = add(c, 1) in
-  add(
-    b2n(at(board, rm, cm)),
-    add(
-      b2n(at(board, rm, c)),
-      add(
-        b2n(at(board, rm, cp)),
-        add(
-          b2n(at(board, r, cm)),
-          add(
-            b2n(at(board, r, cp)),
-            add(
-              b2n(at(board, rp, cm)),
-              add(b2n(at(board, rp, c)), b2n(at(board, rp, cp)))
-            )
-          )
-        )
-      )
-    )
-  )
+  let rm = r - 1 in
+  let rp = r + 1 in
+  let cm = c - 1 in
+  let cp = c + 1 in
+  b2n(
+    at(board, rm, cm)
+  ) + (b2n(
+    at(board, rm, c)
+  ) + (b2n(
+    at(board, rm, cp)
+  ) + (b2n(
+    at(board, r, cm)
+  ) + (b2n(
+    at(board, r, cp)
+  ) + (b2n(
+    at(board, rp, cm)
+  ) + (b2n(at(board, rp, c)) + b2n(at(board, rp, cp))))))))
 
 /// Determine cell state for the next generation given its current state and neighbour count.
-let nextCell = (alive, n) => alive ? or(eq(n, 2), eq(n, 3)) : eq(n, 3)
+let nextCell = (alive, n) => alive ? n == 2 || n == 3 : n == 3
 
 /// Advance the entire board by one generation step.
 let step = board =>
@@ -102,11 +96,11 @@ let board0 = range(0, height)
 let label = g => Str.concat("Conway's Life  ·  generation ")(show(g))
 
 let loop = (remaining, g, board) =>
-  lte(remaining, 0)
+  remaining <= 0
     ? teardown(0)
     : draw(label(g))(render(board))
       |> andThen(_ => delay(90)(0))
-      |> andThen(_ => loop(sub(remaining, 1), add(g, 1), step(board)))
+      |> andThen(_ => loop(remaining - 1, g + 1, step(board)))
 
 // setup grabs the alternate screen buffer, then we run 120 frames.
 let program = setup(0) |> andThen(_ => loop(120, 0, board0))

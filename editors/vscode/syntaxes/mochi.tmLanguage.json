@@ -2,19 +2,23 @@
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
   "name": "mochi",
   "scopeName": "source.mochi",
-  "patterns": [
-    { "include": "#comments" },
-    { "include": "#strings" },
-    { "include": "#braces" },
-    { "include": "#declarations" },
-    { "include": "#keywords" },
-    { "include": "#namespaces" },
-    { "include": "#types" },
-    { "include": "#constructors" },
-    { "include": "#numbers" },
-    { "include": "#operators" }
-  ],
+  "patterns": [{ "include": "#expression" }],
   "repository": {
+    "expression": {
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#strings" },
+        { "include": "#braces" },
+        { "include": "#declarations" },
+        { "include": "#keywords" },
+        { "include": "#namespaces" },
+        { "include": "#function-calls" },
+        { "include": "#types" },
+        { "include": "#constructors" },
+        { "include": "#numbers" },
+        { "include": "#operators" }
+      ]
+    },
     "comments": {
       "patterns": [
         {
@@ -37,14 +41,24 @@
       "endCaptures": {
         "0": { "name": "punctuation.definition.block.end.mochi" }
       },
-      "patterns": [{ "include": "$self" }]
+      "patterns": [{ "include": "#expression" }]
     },
     "strings": {
+      "comment": "String scope only on literal chunks — not on ${…} — so themes don't paint hole contents as strings (JS templates use meta.embedded.line for the same reason).",
       "patterns": [
         {
-          "name": "string.quoted.double.mochi",
           "begin": "\"",
           "end": "\"",
+          "beginCaptures": {
+            "0": {
+              "name": "string.quoted.double.mochi punctuation.definition.string.begin.mochi"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "string.quoted.double.mochi punctuation.definition.string.end.mochi"
+            }
+          },
           "patterns": [
             {
               "name": "constant.character.escape.mochi",
@@ -61,8 +75,12 @@
               "endCaptures": {
                 "0": { "name": "punctuation.definition.interpolation.end.mochi" }
               },
-              "contentName": "source.mochi.embedded",
-              "patterns": [{ "include": "$self" }]
+              "contentName": "meta.embedded.line.mochi",
+              "patterns": [{ "include": "#expression" }]
+            },
+            {
+              "name": "string.quoted.double.mochi",
+              "match": "[^\"\\\\$]+|\\$(?!\\{)"
             }
           ]
         }
@@ -113,6 +131,26 @@
         {
           "name": "support.class.namespace.mochi",
           "match": "\\b(Array|List|Set|Map|Str|Math)\\b"
+        }
+      ]
+    },
+    "function-calls": {
+      "comment": "Same shape as JS/TS: name before ( → entity.name.function",
+      "patterns": [
+        {
+          "comment": "method call — obj.method(",
+          "match": "(\\.)([a-z_][A-Za-z0-9_]*)(?=\\s*\\()",
+          "captures": {
+            "1": { "name": "punctuation.accessor.mochi" },
+            "2": { "name": "entity.name.function.mochi" }
+          }
+        },
+        {
+          "comment": "bare call — foo(  (lowercase/underscore only; Ctors stay #constructors)",
+          "match": "\\b([a-z_][A-Za-z0-9_]*)(?=\\s*\\()",
+          "captures": {
+            "1": { "name": "entity.name.function.mochi" }
+          }
         }
       ]
     },
