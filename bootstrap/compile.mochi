@@ -25,11 +25,15 @@ extern runtimeDeps : Map string [string] = "./prelude.gen.mjs" "runtimeDeps"
 let typecheck = prog =>
   inferProgram(prog, builtins, namespaces, true) |> Result.map(_ => prog)
 
+// The front-end pipeline: lex -> parse -> check -> typecheck
+let pipeline = lex
+>> Result.flatMap(parse)
+>> Result.flatMap(check)
+>> Result.flatMap(typecheck)
+
 // compile : string -> Result string Err
 export let compile = src =>
   src
-    |> (((lex >> Result.flatMap(
-      parse
-    )) >> Result.flatMap(check)) >> Result.flatMap(typecheck))
+    |> pipeline
     |> Result.map(prog =>
       codegen(prog, #{}, true, namespaceRuntime, preludeJsDefs, runtimeDeps))

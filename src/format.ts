@@ -557,25 +557,36 @@ const pipeD = (e: PipeExpr): Doc => {
   );
 };
 
-// A multi-line body breaks after `=>` onto its own indented line, so a pipe
-// body reads as a block. A `switch` is the exception: it opens its own block
-// right after the arrow (`xs => switch xs {`), so it stays attached.
+// `>>` is left-associative, so `a >> b >> c` is lambda(lambda(a, b), c); flatten it.
+const isComposeLambda = (e: Expr): boolean =>
+  e.kind === "lambda" &&
+  e.params.length === 1 &&
+  e.params[0]!.kind === "name" &&
+  e.params[0]!.name === "$x" &&
+  e.body.kind === "call" &&
+  e.body.args.length === 1 &&
+  e.body.args[0]!.kind === "call" &&
+  e.body.args[0]!.args.length === 1 &&
+  e.body.args[0]!.args[0]!.kind === "ref" &&
+  e.body.args[0]!.args[0]!.name === "$x";
+
+const composeSegments = (e: Expr): Expr[] => {
+  if (isComposeLambda(e)) {
+    const lam = e as LambdaExpr;
+    const bodyCall = lam.body as CallExpr;
+    const innerCall = bodyCall.args[0]! as CallExpr;
+    const left = innerCall.fn;
+    const right = bodyCall.fn;
+    return [...composeSegments(left), right];
+  }
+  return [e];
+};
+
 const lambdaD = (e: LambdaExpr): Doc => {
-  // Refold composition: `($x) => g(f($x))` -> `f >> g`
-  if (
-    e.params.length === 1 &&
-    e.params[0]!.kind === "name" &&
-    e.params[0]!.name === "$x" &&
-    e.body.kind === "call" &&
-    e.body.args.length === 1 &&
-    e.body.args[0]!.kind === "call" &&
-    e.body.args[0]!.args.length === 1 &&
-    e.body.args[0]!.args[0]!.kind === "ref" &&
-    e.body.args[0]!.args[0]!.name === "$x"
-  ) {
-    const left = e.body.args[0]!.fn;
-    const right = e.body.fn;
-    return group(seq(operandD(left), txt(" >> "), operandD(right)));
+  // Refold composition: `($x) => g(f($x))` -> `f >> g` (and flatten `f >> g >> h`)
+  if (isComposeLambda(e)) {
+    const segments = composeSegments(e);
+    return group(join(seq(line, txt(">> ")), segments.map(operandD)));
   }
 
   const head = txt(`${params(e.params)} =>`);
