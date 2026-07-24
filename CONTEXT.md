@@ -86,7 +86,7 @@ buffered pull, not to `@onrails/pattern`.
 - **AliasDef** — `{ name, params, template }`. `foldAliases(t, aliases)` folds a
   matching closed record back to its alias name **for display only** (ADR 0005).
 - **Numeric:** one runtime type, `number`. `int`/`float` are transparent aliases today —
-  same checking, erase to `number` — with the names reserved for a future split (ADR 0006).
+  same checking, erase to `number` — with the names reserved for a future split.
 
 ## Unification (`src/unify.ts`)
 
