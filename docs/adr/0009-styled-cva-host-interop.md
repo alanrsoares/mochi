@@ -26,11 +26,39 @@ Tagged templates (`` tw.button`…` ``) are out of scope — styled-cva’s pref
 4. **Loose extern types** (`extern tw : a = … "default"`) — open-world field access opens a
    row; we do not model `VariantProps` in HM.
 
+## Amendment — `*.host.mochi` FFI seams (2026-07-25)
+
+Non-core host bindings (`extern` into npm/TSX) now live in dedicated
+`*.host.mochi` modules — one per host package — instead of inline in logic
+files. Core `.mochi` files carry **zero** `extern`; they `import { … }` from a
+seam. The suffix is a greppable boundary between the language and its host glue
+(`apps/docs/src/host/{styled-cva,re-reduced,widgets}.host.mochi`). `export extern`
+codegens to a clean ESM re-export (`import x from "pkg"; export { x }`), so
+seams compose through the Vite plugin and the module graph unchanged.
+
+**Seam bindings stay opaque (`: a`) — deliberately, not lazily.** Precise
+signatures are infeasible or harmful in the current language:
+
+- `tw.<tag>` is overloaded (`tw.div("x")` **and** `tw.div("x", { variants })`).
+  A fixed-arity HM arrow types the 1-arg sites as *partial application* (a
+  function) when they are components — a wrong type leaking into `.d.mochi.ts`.
+- JSX desugars to open-world `h(tag, props, children)`; Mochi does **not** check
+  JSX attrs against a component's type, so typing widget externs adds no prop
+  hints.
+
+Each seam file documents *why* it is opaque. The two DX gaps this leaves —
+variant/prop hints and `tw.*` completion — are language/LSP features (JSX-attr
+type checking; an LSP completion provider), tracked in
+[dx-tracer-bullets.md](../dx-tracer-bullets.md), not worked around with fake
+types.
+
 ## Consequences
 
 - Docs and apps can author styled-cva factories in `.mochi` (docs
   `primitives.mochi` is the dogfood) or keep a host TSX kit and compose from
   Mochi.
+- Non-core FFI is isolated behind `*.host.mochi`; `rg 'export extern'` /
+  `**/*.host.mochi` enumerates every host dependency of a Mochi app.
 - Formatter round-trips `$tone` attrs and record fields; TextMate treats `\$?` attr names.
 - Multi-arg default externs are not `_curry`-wrapped (default import is the whole value).
 

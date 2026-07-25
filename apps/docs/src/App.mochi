@@ -4,10 +4,7 @@ import { FeatureCard } from "./components/FeatureCard"
 import { InteropCard } from "./components/InteropCard"
 import { ArtworkCard } from "./components/ArtworkCard"
 import { SyntaxPanel } from "./components/SyntaxPanel"
-
-extern Playground : a = "./components/Playground" "Playground"
-extern HighlightedCode : a = "./components/HighlightCode" "HighlightedCode"
-extern Counter : a = "./components/Counter" "Counter"
+import { Playground, HighlightedCode, Counter } from "./host/widgets.host"
 
 let SiteHeader = props =>
   <header

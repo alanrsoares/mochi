@@ -33,10 +33,17 @@ const buildGraph = (): string => {
 };
 
 const raw = (name: string): string => readFileSync(join(outDir as string, `${name}.js`), "utf8");
+// Strip module wiring so the body evals standalone in `new Function`. Match only
+// genuine top-level export STATEMENTS: a multi-line template literal can place
+// `export { … }` at column 0 as string content (codegen's own `export extern`
+// emit does exactly this), and a blunt `/^export /` would eat the keyword out of
+// that string. So target the decl forms and exact `export { idents };` re-export
+// lines, leaving interpolated template content (`export { ${name} };…`) intact.
 const stripped = (name: string): string =>
   raw(name)
     .replace(/^import .*$/gm, "")
-    .replace(/^export /gm, "");
+    .replace(/^export (const|let|var|default|function|class|async) /gm, "$1 ")
+    .replace(/^export (\{[^{}]*\};)$/gm, "$1");
 
 // Data-only modules whose ctors other modules import. Prepended into the eval
 // sandbox (guarded by existsSync so this works before/after each is extracted).

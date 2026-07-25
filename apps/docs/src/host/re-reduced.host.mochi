@@ -1,0 +1,7 @@
+// FFI seam — @re-reduced/preact. Non-core host binding.
+//
+// `defineContainer` builds a signal-backed state container from the host runtime;
+// its return shape (state + actions + hooks) is opaque to Mochi HM, so `: a`.
+// Hooks are consumed from a thin TSX shell (components/Counter.tsx): Mochi `let…in`
+// desugars to IIFEs, which would break React/Preact's Rules of Hooks.
+export extern defineContainer : a = "@re-reduced/preact" "defineContainer"

@@ -1,5 +1,5 @@
 // Docs UI kit — styled-cva factories in Mochi (ADR 0009). Call-form only.
-extern tw : a = "@styled-cva/react" "default"
+import { tw } from "../host/styled-cva.host"
 
 export let BadgeShell = tw.div(
   "inline-flex items-center gap-2 px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-wider rounded-md shadow-sm border",

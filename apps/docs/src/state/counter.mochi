@@ -1,6 +1,6 @@
 // Docs counter container — defined in Mochi, hooked from TSX (ADR-adjacent interop stress).
 // Hooks stay in Counter.tsx: Mochi let-in desugars to IIFEs and breaks Rules of Hooks.
-extern defineContainer : a = "@re-reduced/preact" "defineContainer"
+import { defineContainer } from "../host/re-reduced.host"
 
 export let counter = defineContainer(
   "docs-counter",

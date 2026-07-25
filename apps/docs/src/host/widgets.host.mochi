@@ -1,0 +1,9 @@
+// FFI seam — Preact/TSX widgets that stay in the host (hooks, editor, REPL).
+//
+// Used only in JSX tag position (`<Playground />`), which desugars to
+// `h(tag, props, children)` with open-world `h`. Mochi does not check JSX attrs
+// against a component's type, so these stay opaque (`: a`) — a real signature
+// would add no prop hints. Module paths are relative to THIS seam file.
+export extern Playground : a = "../components/Playground" "Playground"
+export extern HighlightedCode : a = "../components/HighlightCode" "HighlightedCode"
+export extern Counter : a = "../components/Counter" "Counter"

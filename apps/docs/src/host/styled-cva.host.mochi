@@ -1,0 +1,10 @@
+// FFI seam — @styled-cva/react (Preact compat). Non-core host binding (ADR 0009).
+//
+// `tw` stays opaque (`: a`) on purpose: styled-cva's `tw.<tag>` factory is
+// overloaded — `tw.div("x")` and `tw.div("x", { variants })` are both valid.
+// Mochi's fixed-arity HM arrows cannot express that; a typed signature would make
+// the 1-arg call sites infer as partial application (a function) when they are in
+// fact components, leaking a wrong type into the generated `.d.mochi.ts`.
+// Open-world field access keeps every tag callable. Variant/prop hints and
+// `tw.*` completion need language/LSP work — see docs/dx-tracer-bullets.md.
+export extern tw : a = "@styled-cva/react" "default"
