@@ -55,12 +55,13 @@ test("a concrete empty collection literal is annotated with its element types (A
   expect(out).toContain("new Map<number, number>()");
 });
 
-test("a let-generalized empty seed is pinned via the IIFE param (ADR 0035)", () => {
+test("a let-generalized empty seed is pinned via its emitted binding (ADR 0035)", () => {
   // `let m = #{} in …` generalizes `m`, so the seed stays polymorphic; the empty
-  // map can't be annotated in place. Annotating the IIFE param instead flows the
-  // monomorphic use type in contextually, typing `new Map([])` as `Map<K, V>`.
+  // map can't be annotated in place. Annotating the binding it lowers to instead
+  // flows the monomorphic use type in contextually, typing `new Map([])` as
+  // `Map<K, V>` — a `const` under a lambda, an IIFE param anywhere else.
   const out = ts("let run = () => let m = #{} in Map.set(1, 2, m)");
-  expect(out).toContain("((m: Map<number, number>) =>");
+  expect(out).toContain("const m: Map<number, number> = new Map([]);");
 });
 
 test("a top-level polymorphic-but-single-use seed gets a const annotation (ADR 0035)", () => {

@@ -1,0 +1,9 @@
+// Tour: row polymorphism — greet any record with name + role.
+
+let formatUser = user =>
+  //  ^?
+  user.name ++ " (" ++ user.role ++ ")"
+
+let admin = { name: "Alan", role: "Maintainer", id: 42 }
+let formatted = formatUser(admin)
+//  ^?

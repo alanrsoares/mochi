@@ -1,0 +1,29 @@
+{
+  "name": "@mochi/docs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun ../../scripts/gen-mochi-dts.ts && vite",
+    "build": "bun ../../scripts/gen-mochi-dts.ts && vite build",
+    "preview": "vite preview",
+    "check": "bun ../../scripts/gen-mochi-dts.ts && tsc --noEmit && vite build"
+  },
+  "dependencies": {
+    "@mochi/plugin-re-reduced": "workspace:*",
+    "@mochi/plugin-styled-cva": "workspace:*",
+    "@preact/signals": "^2.3.1",
+    "@re-reduced/preact": "^0.2.3",
+    "@styled-cva/react": "^0.7.1",
+    "preact": "^10.26.4"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.1",
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/path-browserify": "^1.0.3",
+    "path-browserify": "^1.0.1",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.0"
+  }
+}

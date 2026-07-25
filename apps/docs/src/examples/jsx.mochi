@@ -1,0 +1,10 @@
+// Tour: jsxPlugin (default-on) desugars to host h(tag, props, children).
+
+let Button = props =>
+  //  ^?
+  <button className={props.kind} disabled={props.disabled}>
+    {props.label}
+  </button>
+
+let app = <Button kind="primary" label="Click me" disabled={false} />
+//  ^?

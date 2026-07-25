@@ -47,6 +47,8 @@ import {
 export type { AliasMap, Env, Scheme } from "./schemes";
 
 import { type Diagnostic, typeErr } from "./errors";
+import type { InferCallApi, InferCallHook, LanguagePlugin } from "./extensions";
+import { resolvePlugins, runInferCallHooks } from "./extensions";
 import { stronglyConnected } from "./scc";
 import type { Span } from "./span";
 import { closestName } from "./suggest";
@@ -66,6 +68,7 @@ import {
   tArrow,
   tBool,
   tCon,
+  tLit,
   tNumber,
   tRecord,
   tString,
@@ -78,6 +81,7 @@ import { emptySubst, resolve, resolveRow, type Subst, unify, zonk } from "./unif
  * Inference context. `open`: unbound refs get a fresh type var (host globals
  * when compiling to JS). `record`: optional span → type hook for LSP hover
  * (unzonked; caller zonks at the end). `noteUse`/`noteLet`: TS emit (ADR 0035).
+ * `inferCallHooks`: resolved plugins' `inferCall` hooks (styled-cva, …).
  */
 type Ctx = {
   env: Env;
@@ -90,6 +94,7 @@ type Ctx = {
   record?: (span: Span, t: Type, symbol?: SymbolInfo) => void;
   noteUse?: (sc: Scheme, t: Type) => void;
   noteLet?: (sc: Scheme, valueSpan: Span) => void;
+  inferCallHooks: InferCallHook[];
 };
 
 const u = (a: Type, b: Type, ctx: Ctx, span?: Span): Result<Type, Diagnostic> => {
@@ -270,6 +275,18 @@ function inferLetIn(e: LetInExpr, ctx: Ctx): Result<Type, Diagnostic> {
 }
 
 function inferCall(e: CallExpr, ctx: Ctx): Result<Type, Diagnostic> {
+  // Sugar/kit calls belong to plugins (builtin JSX, vendor `tw.*`, …); core only
+  // knows how to apply a function to its arguments (ADR 0011).
+  const api: InferCallApi = {
+    infer: (expr) => infer(expr, ctx),
+    unify: (a, b, span) => u(a, b, ctx, span),
+    freshVar: () => freshVar(ctx.fresh),
+    freshRowVar: () => freshRowVar(ctx.fresh),
+    zonk: (t) => zonk(t, ctx.subst),
+  };
+  const hooked = runInferCallHooks(ctx.inferCallHooks, e, api);
+  if (hooked !== null) return hooked;
+
   const fnT = infer(e.fn, ctx);
   if (isErr(fnT)) return fnT;
   let cur = fnT.value;
@@ -332,7 +349,7 @@ function inferExpr(e: Expr, ctx: Ctx): Result<Type, Diagnostic> {
   return match(e)
     .with({ kind: "num" }, () => ok(tNumber))
     .with({ kind: "bool" }, () => ok(tBool))
-    .with({ kind: "str" }, () => ok(tString))
+    .with({ kind: "str" }, (str) => ok(tLit(str.value)))
     .with({ kind: "interp" }, (interp) => inferInterp(interp.parts, ctx))
     .with({ kind: "ref" }, (ref) => inferRef(ref, ctx))
     .with({ kind: "lambda" }, (lambda) => inferLambda(lambda, ctx))
@@ -449,7 +466,7 @@ function inferPat(p: Pattern, ctx: Ctx): Result<PatResult, Diagnostic> {
     .with({ kind: "pwild" }, () => ok({ type: freshVar(ctx.fresh), bindings: new Map() }))
     .with({ kind: "plit" }, () => ok({ type: tNumber, bindings: new Map() }))
     .with({ kind: "pbool" }, () => ok({ type: tBool, bindings: new Map() }))
-    .with({ kind: "pstr" }, () => ok({ type: tString, bindings: new Map() }))
+    .with({ kind: "pstr" }, (pstr) => ok({ type: tLit(pstr.value), bindings: new Map() }))
     .with({ kind: "pbind" }, (pbind) => {
       const t = freshVar(ctx.fresh);
       return ok({ type: t, bindings: new Map([[pbind.name, t]]) });
@@ -573,6 +590,11 @@ export type InferOptions = {
   imports?: Env;
   namespaces?: Record<string, Record<string, Type>>; // qualified members (List.map, ...)
   nsImports?: Map<string, Env>; // alias → export schemes
+  /**
+   * Plugins to run (styled-cva, …). `undefined` → builtins; `[]` → hard
+   * opt-out; non-empty → builtins + this list (`resolvePlugins`, ADR 0011).
+   */
+  plugins?: LanguagePlugin[];
 };
 
 /** Symbol identity for hover (`let x: T`, `(parameter) x: T`, etc.). */
@@ -745,6 +767,9 @@ function run(
   const ns = seedNamespaces(env, subst, opts.namespaces, opts.nsImports);
   const fresh = mkFresh(1000);
   const open = opts.open ?? false;
+  const inferCallHooks = resolvePlugins(opts.plugins).flatMap((p) =>
+    p.inferCall ? [p.inferCall] : [],
+  );
 
   // Transparent record aliases: collect their field lists so extern signatures
   // can reference them (expanded to rows), and build display templates (params
@@ -837,6 +862,7 @@ function run(
         record,
         noteUse,
         noteLet,
+        inferCallHooks,
       });
       // Collect-and-bail per member (ADR 0004): record the diag, leave the
       // pre-bound mono var, continue siblings / later SCCs.

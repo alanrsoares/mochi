@@ -11,9 +11,11 @@ import {
   tApp,
   tArrow,
   tBool,
+  tLit,
   tNumber,
   tRecord,
   tString,
+  tUnion,
   tVar,
 } from "../src/types";
 import { emptySubst, type Subst, unify, zonk } from "../src/unify";
@@ -145,4 +147,33 @@ test("record holding a generic field unifies deeply", () => {
   const r = run(a, b, a);
   expect(r.ok).toBe(true);
   expect(r.show).toBe("{ items: Vec<number>, size: number }");
+});
+
+test("string lit unifies with string (widen)", () => {
+  expect(run(tLit("rose"), tString).ok).toBe(true);
+  expect(run(tString, tLit("rose")).ok).toBe(true);
+});
+
+test("string lit ∈ literal union", () => {
+  const u = tUnion([tLit("rose"), tLit("amber")]);
+  expect(run(tLit("rose"), u).ok).toBe(true);
+  expect(run(u, tLit("rose")).ok).toBe(true);
+});
+
+test("foreign string lit rejects against literal union", () => {
+  const u = tUnion([tLit("rose"), tLit("amber")]);
+  const r = unify(tLit("taupe"), u, emptySubst(), mkFresh());
+  expect(isErr(r)).toBe(true);
+});
+
+test("general string does not unify with literal union", () => {
+  const u = tUnion([tLit("rose"), tLit("amber")]);
+  expect(isErr(unify(tString, u, emptySubst(), mkFresh()))).toBe(true);
+  expect(isErr(unify(u, tString, emptySubst(), mkFresh()))).toBe(true);
+});
+
+test("equal literal unions unify", () => {
+  const a = tUnion([tLit("rose"), tLit("amber")]);
+  const b = tUnion([tLit("amber"), tLit("rose")]);
+  expect(run(a, b).ok).toBe(true);
 });

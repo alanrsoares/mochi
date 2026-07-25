@@ -14,12 +14,17 @@ import { toTypedProgramWith } from "./compile";
 import { exportedCtorKeys, exportedCtorTable } from "./ctors";
 import { type ExternBinding, externModuleDts } from "./dts";
 import { checkErr, type Diagnostic, oneDiag } from "./errors";
+import type { LanguagePlugin } from "./extensions";
+import { bindingTypeHooks, resolvePlugins } from "./extensions";
 import type { Env, Scheme } from "./infer";
 import { lex } from "./lexer";
 import { parse } from "./parser";
 
 export type ModuleOutput = { path: string; js: string };
 type ReadFile = (path: string) => Promise<string>;
+
+/** `plugins` (styled-cva, …) threaded to every per-module `toTypedProgramWith` call — same list `compile`/`inferProgram` take. Optional; callers that omit it get the default/builtin resolution (`resolvePlugins`, ADR 0011). */
+export type ModuleGraphOptions = { plugins?: LanguagePlugin[] };
 
 /** Resolve an import `from` spec to an absolute `.mochi` path (`.mochi` suffix optional). */
 const resolveImport = (importer: string, spec: string): string =>
@@ -44,9 +49,9 @@ const exportsOf = (prog: Program, env: Env): Env => {
 };
 
 /** Parse a file to a Program; check/infer wait until the graph is loaded in `compileGraph`. */
-const parseModule = (src: string): Result<Program, Diagnostic> => {
+const parseModule = (src: string, opts: ModuleGraphOptions): Result<Program, Diagnostic> => {
   const lexed = lex(src);
-  return isErr(lexed) ? lexed : parse(lexed.value);
+  return isErr(lexed) ? lexed : parse(lexed.value, { plugins: opts.plugins });
 };
 
 type Loaded = { path: string; prog: Program };
@@ -108,9 +113,15 @@ const gatherImports = (
 export const loadModuleGraph = (
   entry: string,
   readFile: ReadFile,
-): ResultAsync<Loaded[], Diagnostic[]> => loadGraph(resolve(entry), readFile);
+  opts: ModuleGraphOptions = {},
+): ResultAsync<Loaded[], Diagnostic[]> => loadGraph(resolve(entry), readFile, opts);
 
-const loadGraph = (entry: string, readFile: ReadFile): ResultAsync<Loaded[], Diagnostic[]> =>
+/** `opts.plugins` reaches every module's *parse*, so plugin-owned syntax resolves (or fails) uniformly across the graph. */
+const loadGraph = (
+  entry: string,
+  readFile: ReadFile,
+  opts: ModuleGraphOptions = {},
+): ResultAsync<Loaded[], Diagnostic[]> =>
   ResultAsync.defer(async () => {
     const order: Loaded[] = [];
     const state = new Map<string, "loading" | "done">();
@@ -128,7 +139,7 @@ const loadGraph = (entry: string, readFile: ReadFile): ResultAsync<Loaded[], Dia
       } catch {
         return oneDiag(checkErr(`cannot read module '${path}'`, { start: 0, end: 0 }));
       }
-      const parsed = parseModule(src);
+      const parsed = parseModule(src, opts);
       if (isErr(parsed)) return oneDiag(parsed.error);
 
       for (const imp of importsOf(parsed.value)) {
@@ -149,7 +160,10 @@ const loadGraph = (entry: string, readFile: ReadFile): ResultAsync<Loaded[], Dia
  * checks + infers + codegens with prelude plus imported schemes, registry, and
  * ctor field keys.
  */
-const compileGraph = (graph: Loaded[]): Result<ModuleOutput[], Diagnostic[]> => {
+const compileGraph = (
+  graph: Loaded[],
+  opts: ModuleGraphOptions = {},
+): Result<ModuleOutput[], Diagnostic[]> => {
   const exportsByPath = new Map<string, Env>();
   const regByPath = new Map<string, Registry>();
   const keysByPath = new Map<string, Map<string, string[]>>();
@@ -159,7 +173,7 @@ const compileGraph = (graph: Loaded[]): Result<ModuleOutput[], Diagnostic[]> => 
     const gathered = gatherImports(path, prog, exportsByPath, regByPath, keysByPath);
     if (isErr(gathered)) return gathered;
 
-    const typed = toTypedProgramWith(prog, gathered.value);
+    const typed = toTypedProgramWith(prog, gathered.value, { plugins: opts.plugins });
     if (isErr(typed)) return typed;
     exportsByPath.set(path, exportsOf(prog, typed.value.res.env));
     regByPath.set(path, exportedCtorTable(prog));
@@ -173,10 +187,11 @@ const compileGraph = (graph: Loaded[]): Result<ModuleOutput[], Diagnostic[]> => 
 export const buildModules = (
   entry: string,
   readFile: ReadFile,
+  opts: ModuleGraphOptions = {},
 ): ResultAsync<ModuleOutput[], Diagnostic[]> =>
-  loadGraph(resolve(entry), readFile).andThen(compileGraph);
+  loadGraph(resolve(entry), readFile, opts).andThen((g) => compileGraph(g, opts));
 
-export type BuildTsOptions = { runtimeImport?: string };
+export type BuildTsOptions = ModuleGraphOptions & { runtimeImport?: string };
 
 /**
  * Like `compileGraph`, but emits a typed `.ts` per module (ADR 0026). Each
@@ -186,11 +201,16 @@ export type BuildTsOptions = { runtimeImport?: string };
 const compileGraphTs = (
   graph: Loaded[],
   runtimeImport: string,
+  opts: ModuleGraphOptions = {},
 ): Result<ModuleOutput[], Diagnostic[]> => {
   const exportsByPath = new Map<string, Env>();
   const regByPath = new Map<string, Registry>();
   const keysByPath = new Map<string, Map<string, string[]>>();
   const outputs: ModuleOutput[] = [];
+  // Same plugin resolution the per-module `toTypedProgramWith` calls below get,
+  // so binding types in the emitted `.ts` match what `emitDts` would declare
+  // (ADR 0011 — `bindingTsType` is shared by both backends).
+  const tsBindingTypeHooks = bindingTypeHooks(resolvePlugins(opts.plugins));
 
   // Top-level `type` names are globally visible; map each to its declaring module
   // so cross-module references can emit `import type` without a value-import edge.
@@ -206,7 +226,7 @@ const compileGraphTs = (
     if (isErr(gathered)) return gathered;
     const { importedKeys } = gathered.value;
 
-    const typed = toTypedProgramWith(prog, gathered.value);
+    const typed = toTypedProgramWith(prog, gathered.value, { plugins: opts.plugins });
     if (isErr(typed)) return typed;
     const { env, aliases, types, letParams } = typed.value.res;
 
@@ -235,6 +255,7 @@ const compileGraphTs = (
       importedKeys,
       importLines: [],
       runtimeImport,
+      bindingTypeHooks: tsBindingTypeHooks,
     });
     const typeImports = crossModuleTypeImports(body, path, localTypes, typeOwner);
     const ts = typeImports.length ? `${typeImports.join("\n")}\n\n${body}` : body;
@@ -298,8 +319,10 @@ export const buildModulesTs = (
   readFile: ReadFile,
   opts: BuildTsOptions = {},
 ): ResultAsync<ModuleOutput[], Diagnostic[]> =>
-  loadGraph(resolve(entry), readFile).andThen((g) =>
-    compileGraphTs(g, opts.runtimeImport ?? DEFAULT_RUNTIME_IMPORT),
+  loadGraph(resolve(entry), readFile, { plugins: opts.plugins }).andThen((g) =>
+    compileGraphTs(g, opts.runtimeImport ?? DEFAULT_RUNTIME_IMPORT, {
+      plugins: opts.plugins,
+    }),
   );
 
 /**
@@ -311,8 +334,9 @@ export const buildModulesTs = (
 export const moduleContext = (
   entry: string,
   readFile: ReadFile,
+  opts: ModuleGraphOptions = {},
 ): ResultAsync<ModuleContext, Diagnostic[]> =>
-  loadGraph(resolve(entry), readFile).andThen((graph) => {
+  loadGraph(resolve(entry), readFile, opts).andThen((graph) => {
     const entryPath = resolve(entry);
     const exportsByPath = new Map<string, Env>();
     const regByPath = new Map<string, Registry>();
@@ -323,7 +347,7 @@ export const moduleContext = (
       if (isErr(gathered)) return gathered;
       // Entry is last in dependency order; hand back its context without compiling it.
       if (path === entryPath) return ok(gathered.value);
-      const typed = toTypedProgramWith(prog, gathered.value);
+      const typed = toTypedProgramWith(prog, gathered.value, { plugins: opts.plugins });
       if (isErr(typed)) return typed;
       exportsByPath.set(path, exportsOf(prog, typed.value.res.env));
       regByPath.set(path, exportedCtorTable(prog));

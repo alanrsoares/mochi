@@ -1,19 +1,14 @@
-// Dogfood mochi's own formatter on the self-hosted `bootstrap/*.mochi` sources.
+// Dogfood mochi's own formatter on every `.mochi` source in the repository.
 // Default: rewrite each file in place. `--check`: exit non-zero if any file
-// isn't already formatted (the QA-gate mode) — this keeps our formatter honest
-// against ~3.4k lines of real code and blocks any regression that would move,
-// drop, or corrupt our own source.
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+// isn't already formatted (the QA-gate mode).
+import { readFileSync, writeFileSync } from "node:fs";
 import { isErr, unwrapOk } from "@onrails/result";
 import { format } from "../src/format";
 
-const DIR = "bootstrap";
 const check = process.argv.includes("--check");
 
-const files = readdirSync(DIR)
-  .filter((f) => f.endsWith(".mochi"))
-  .map((f) => join(DIR, f))
+const files = [...new Bun.Glob("**/*.mochi").scanSync({ cwd: "." })]
+  .filter((f) => !f.split("/").some((part) => part === "node_modules" || part === "dist"))
   .toSorted();
 
 const drift: string[] = [];

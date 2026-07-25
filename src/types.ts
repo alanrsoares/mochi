@@ -10,10 +10,17 @@ export type Type =
   | { kind: "var"; id: number } // unification variable 'a
   | { kind: "con"; name: string; args: Type[] } // number; List<'a>; Map<'k,'v>; Shape
   | { kind: "arrow"; from: Type; to: Type } // t1 -> t2
-  | { kind: "record"; row: Row }; // { x: t, ... | r }
+  | { kind: "record"; row: Row } // { x: t, ... | r }
+  | { kind: "lit"; base: LitBase; value: string } // "rose" / 42 (value as text)
+  | { kind: "union"; members: Type[] }; // "rose" | "amber" (finite; ≥2 after normalize)
 
 /** Applied constructor (`number`, `List<'a>`, …). */
 export type ConType = Extract<Type, { kind: "con" }>;
+export type LitType = Extract<Type, { kind: "lit" }>;
+export type UnionType = Extract<Type, { kind: "union" }>;
+
+/** Singleton literal base — string first (ADR 0012 / Wave 7); number reserved. */
+export type LitBase = "string" | "number";
 
 export type Row =
   | { kind: "empty" } // closed tail: {}
@@ -24,6 +31,11 @@ export const tVar = (id: number): Type => ({ kind: "var", id });
 export const tCon = (name: string, args: Type[] = []): Type => ({ kind: "con", name, args });
 export const tArrow = (from: Type, to: Type): Type => ({ kind: "arrow", from, to });
 export const tRecord = (row: Row): Type => ({ kind: "record", row });
+export const tLit = (value: string, base: LitBase = "string"): Type => ({
+  kind: "lit",
+  base,
+  value,
+});
 
 export const tNumber = tCon("number");
 export const tString = tCon("string");
@@ -67,6 +79,10 @@ export const showType = (t: Type): string => {
     }
     case "record":
       return showRow(t.row);
+    case "lit":
+      return t.base === "string" ? JSON.stringify(t.value) : t.value;
+    case "union":
+      return t.members.map(showType).join(" | ");
   }
 };
 
@@ -100,7 +116,28 @@ const typeEq = (a: Type, b: Type): boolean => {
     );
   if (a.kind === "arrow" && b.kind === "arrow") return typeEq(a.from, b.from) && typeEq(a.to, b.to);
   if (a.kind === "record" && b.kind === "record") return rowEq(a.row, b.row);
+  if (a.kind === "lit" && b.kind === "lit") return a.base === b.base && a.value === b.value;
+  if (a.kind === "union" && b.kind === "union") {
+    if (a.members.length !== b.members.length) return false;
+    return a.members.every((m) => b.members.some((n) => typeEq(m, n)));
+  }
   return false;
+};
+
+/**
+ * Finite union. Flattens nested unions, dedupes, unwraps a single member.
+ * Empty input collapses to `string` (no empty-union former).
+ */
+export const tUnion = (members: Type[]): Type => {
+  const flat: Type[] = [];
+  const push = (t: Type): void => {
+    if (t.kind === "union") for (const m of t.members) push(m);
+    else if (!flat.some((x) => typeEq(x, t))) flat.push(t);
+  };
+  for (const m of members) push(m);
+  if (flat.length === 0) return tString;
+  if (flat.length === 1) return flat[0]!;
+  return { kind: "union", members: flat };
 };
 
 const rowFields = (row: Row): { map: Map<string, Type>; closed: boolean } => {
@@ -156,6 +193,12 @@ const matchTemplate = (template: Type, actual: Type, binds: Map<number, Type>): 
     }
     return true;
   }
+  if (template.kind === "lit" && actual.kind === "lit")
+    return template.base === actual.base && template.value === actual.value;
+  if (template.kind === "union" && actual.kind === "union") {
+    if (template.members.length !== actual.members.length) return false;
+    return template.members.every((m) => actual.members.some((n) => matchTemplate(m, n, binds)));
+  }
   // primitives-as-con already handled; vars with non-negative ids compare by id
   if (template.kind === "var" && actual.kind === "var") return template.id === actual.id;
   return false;
@@ -193,6 +236,8 @@ export const foldAliases = (t: Type, aliases: AliasDef[]): Type => {
       const tail: Row = cur;
       return tRecord(fields.reduceRight<Row>((rest, f) => rExtend(f.label, f.type, rest), tail));
     }
+    case "union":
+      return tUnion(t.members.map((m) => foldAliases(m, aliases)));
     default:
       return t;
   }

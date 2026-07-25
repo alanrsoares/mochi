@@ -17,11 +17,14 @@
     "loc": "bun scripts/find-long-files.ts",
     "gen:prelude": "bun scripts/gen-prelude.ts",
     "gen:runtime": "bun scripts/gen-runtime.ts",
+    "gen:mochi-dts": "bun scripts/gen-mochi-dts.ts",
+    "gen:mochi-dts:check": "bun scripts/gen-mochi-dts.ts --check",
     "bootstrap:tsc": "bun scripts/bootstrap-tsc.ts",
     "fmt:mochi": "bun scripts/fmt-al.ts",
     "fmt:check": "bun scripts/fmt-al.ts --check",
     "fixpoint": "bun scripts/fixpoint.ts",
     "clean": "bun scripts/clean.ts",
+    "prepare": "bun scripts/setup-hooks.ts",
     "example": "bun run mochi build examples/cli.mochi && bun examples/cli.js",
     "example:life": "bun run mochi build examples/life/main.mochi && bun examples/life/main.js",
     "example:snake": "bun examples/snake/server.mts",
@@ -29,13 +32,20 @@
     "example:modules": "bun run mochi build examples/modules/main.mochi && bun examples/modules/main.js",
     "example:pipelines": "bun run mochi build examples/pipelines.mochi && bun examples/pipelines.js",
     "example:showcase": "bun run mochi build examples/example.mochi && bun examples/example.js",
+    "docs:dev": "bun run --cwd apps/docs dev",
+    "docs:build": "bun run --cwd apps/docs build",
+    "docs:preview": "bun run --cwd apps/docs preview",
     "check": "biome check . && tsc --noEmit && bun run --filter '*' check && bun run fmt:check && bun test"
   },
   "workspaces": [
-    "editors/*"
+    "editors/*",
+    "apps/*",
+    "packages/*"
   ],
   "devDependencies": {
     "@biomejs/biome": "^2.5.4",
+    "@mochi/plugin-re-reduced": "workspace:*",
+    "@mochi/plugin-styled-cva": "workspace:*",
     "@types/bun": "latest",
     "esbuild": "^0.28.1",
     "fast-check": "^4.9.0",
@@ -47,10 +57,7 @@
   },
   "dependencies": {
     "@onrails/maybe": "^0.2.3",
-    "@onrails/pattern": "^0.3.2",
+    "@onrails/pattern": "^0.3.3",
     "@onrails/result": "^0.4.0"
-  },
-  "patchedDependencies": {
-    "@onrails/pattern@0.3.2": "patches/@onrails%2Fpattern@0.3.2.patch"
   }
 }

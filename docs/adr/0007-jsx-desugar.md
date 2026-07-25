@@ -1,7 +1,7 @@
 # 0007 — Universal JSX/TSX syntax desugaring (`<tag />` to `h(tag, props, children)`)
 
-- **Status:** Proposed
-- **Source:** conversation; `src/ast.ts`; `src/lexer.ts`; `src/parser.ts`; `src/codegen.ts`
+- **Status:** Accepted
+- **Source:** conversation; `src/ast.ts`; `src/lexer.ts`; `src/parser.ts`; `src/codegen.ts`; `src/infer.ts`; `src/format.ts`; `src/dts.ts`
 
 ## Context
 
@@ -28,7 +28,7 @@ Rather than inventing a custom template engine or adding a heavy runtime virtual
    ```ts
    h(tag, propsRecord, childrenList)
    ```
-   Because desugaring happens directly into standard AST call nodes during parsing, the semantic checker (`check.ts`), Hindley-Milner type inference (`infer.ts`), and code generators (`codegen.ts` / `codegen-ts.ts`) require **zero modifications** to handle JSX calls.
+   Desugaring into standard `Expr.call` nodes keeps `check.ts` and the code generators (`codegen.ts` / `codegen-ts.ts`) generic — they treat JSX like any other call. **Later passes did grow small, targeted JSX seams** (still no dedicated `Expr.jsx` node): `infer.ts` recognizes `h(...)` via `inferJsxCall` (prop-row checking when the tag is a component; `VNode` result — [ADR 0010](0010-host-type-interop.md), tracer bullet #14); `format.ts` re-folds parser-produced `h(...)` back to JSX when span provenance matches; `dts.ts` emits component bindings when inference is `record → VNode`. That is core JSX plumbing, not kit-specific vendor plugins ([ADR 0010](0010-host-type-interop.md) boundary).
 
 4. **Universal Pragma Resolution:**
    - Default pragma identifier is `h`.
@@ -41,8 +41,28 @@ Rather than inventing a custom template engine or adding a heavy runtime virtual
 - **Strict TypeScript Compatibility:** Codegen emits plain calls `h(...)` which compile cleanly under `tsc --strict` when host declarations for `h` are in scope.
 - **Lexer & Parser Updates:** `lexer.ts` must disambiguate `<` as a binary comparison operator vs `<` as the start of a JSX tag in expression contexts.
 - **Formatter Support:** `src/format.ts` formats desugared calls or preserves JSX syntax when formatting.
+- **Targeted infer / dts seams:** `inferJsxCall` and `VNode`-aware dts emit are the only infer/dts special cases for JSX; kit hooks (`tw`, CVA AST) stay in vendor plugins, not core.
 
 ## Alternatives Rejected
 
 - **First-class `Expr.jsx` AST Node throughout Checker & Infer:** Rejected. Adding a dedicated AST node would require updating every compiler pass (`check`, `infer`, `unify`, `codegen`, `codegen-ts`, `dts`, `symbols`, `nav`, `lsp`). Immediate parse-time desugar into `Expr.call` keeps the compiler pipeline lean and completely type-checked.
 - **Builtin Mochi Virtual DOM:** Rejected. A custom VDOM would create a runtime dependency and fragment interop with popular JS UI ecosystems (React/Preact/Hono/Solid).
+
+## Cross-link — seams relocate into the builtin `jsxPlugin` ([ADR 0011](0011-language-plugins.md))
+
+The parse-time desugar this ADR decided (`<tag/>` → `h(tag, props, children)`)
+remains, unchanged in shape and in emitted output — status stays **Accepted**.
+What moves is *where every JSX pass lives*: the seams §3/Consequences list here
+(`inferJsxCall`, the formatter's `<tag>` re-fold, `VNode` component dts) plus the
+`parseJsx` desugar itself relocate out of `infer.ts` / `format.ts` / `dts.ts` /
+`parser.ts` into a builtin `jsxPlugin` behind the
+[ADR 0011](0011-language-plugins.md) `LanguagePlugin` seam, default-registered on
+all standard compile paths. Sugar provenance (`call.origin`, ADR 0011 §5)
+replaces the `JSX_ORIGIN` WeakSet / span-sniffing this ADR's formatter support
+relied on.
+
+Two clarifications to the Consequences above, as shipped: the **lexer** never
+needed to disambiguate `<` (it emits a plain `lt` token; the JSX `parse` hook is
+consulted only at atom position, where a comparison operator cannot appear), and
+JSX syntax is now **conditional on the plugin** — with `plugins: []` a `<tag/>`
+is a plain parse `Diagnostic` (ADR 0011 decision 3).

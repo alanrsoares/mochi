@@ -10,12 +10,14 @@ import { resolve } from "node:path";
 import { map, match as matchMaybe } from "@onrails/maybe";
 import { isErr, isOk } from "@onrails/result";
 import { toTypedProgram, toTypedProgramWith } from "./compile";
+import type { LanguagePlugin } from "./extensions";
 import type { InferResult, SymbolInfo, TypeAt } from "./infer";
 import { lex } from "./lexer";
 import { moduleContext } from "./module";
 import { parse } from "./parser";
 import { preludeNamespaces } from "./prelude";
 import { preludeDocForBinding } from "./prelude-virtual";
+import { widenLits } from "./schemes";
 import { spanContainsClosed, tightestHit } from "./span";
 import { indexProgram } from "./symbols";
 import { foldAliases, showType } from "./types";
@@ -51,7 +53,10 @@ const docAt = (
   if (isErr(lexed)) return undefined;
   const parsed = parse(lexed.value);
   if (isErr(parsed)) return undefined;
-  const hit = indexProgram(resolve(path), parsed.value).at(offset);
+  // Virtual buffers (`<buffer>`) skip path.resolve — node:path needs `process`,
+  // which browsers don't have (docs site imports hoverAt for twoslash).
+  const key = path.startsWith("<") ? path : resolve(path);
+  const hit = indexProgram(key, parsed.value).at(offset);
   return hit ? preludeDocForBinding(hit.binding) : undefined;
 };
 
@@ -59,7 +64,7 @@ const docAt = (
 const hoverFrom = (res: InferResult, offset: number, src: string, path: string): HoverInfo | null =>
   matchMaybe(
     map(tightestType(res.types, offset), (hit) => {
-      const type = showType(foldAliases(hit.type, res.aliases));
+      const type = showType(widenLits(foldAliases(hit.type, res.aliases)));
       return { code: lead(type, hit.symbol), doc: docAt(src, path, offset, hit.symbol) };
     }),
     (info) => info,
@@ -77,30 +82,36 @@ export const hoverAt = (src: string, offset: number, path = "<buffer>"): HoverIn
   return isOk(r) ? hoverFrom(r.value.res, offset, src, path) : null;
 };
 
+/** Options threaded into module-aware nav/hover/diagnostics — `plugins` (styled-cva, …), same list Vite / `gen-mochi-dts` use. Omitted = default/builtin resolution (`resolvePlugins`, ADR 0011). */
+export type ModuleHoverOptions = { plugins?: LanguagePlugin[] };
+
 /**
  * Module-aware hover: resolve `path`'s dependency graph (deps from disk via
  * `readFile`, the edited file from the live `src` buffer) and check + infer the
  * live program WITH the imported registry/schemes. Without this, any file that
  * imports a variant fails to typecheck and yields no hover. Degrades to
- * single-file `hoverAt` if the dep graph can't be resolved.
+ * single-file `hoverAt` if the dep graph can't be resolved. `opts.plugins`
+ * (styled-cva, …) reaches both the dependency graph and the live buffer, so
+ * `tw.*` factories hover with a real component scheme instead of `unknown`.
  */
 export const moduleHoverAt = async (
   path: string,
   src: string,
   offset: number,
   readFile: (p: string) => Promise<string>,
+  opts: ModuleHoverOptions = {},
 ): Promise<HoverInfo | null> => {
   const lexed = lex(src);
   if (isErr(lexed)) return null;
-  const parsed = parse(lexed.value);
+  const parsed = parse(lexed.value, { plugins: opts.plugins });
   if (isErr(parsed)) return null;
 
   const entry = resolve(path);
   const read = (p: string): Promise<string> =>
     resolve(p) === entry ? Promise.resolve(src) : readFile(p);
-  const ctx = await moduleContext(entry, read);
+  const ctx = await moduleContext(entry, read, { plugins: opts.plugins });
   if (isErr(ctx)) return hoverAt(src, offset, entry);
 
-  const typed = toTypedProgramWith(parsed.value, ctx.value);
+  const typed = toTypedProgramWith(parsed.value, ctx.value, { plugins: opts.plugins });
   return isOk(typed) ? hoverFrom(typed.value.res, offset, src, entry) : null;
 };

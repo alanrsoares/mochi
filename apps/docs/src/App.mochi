@@ -1,0 +1,226 @@
+import { Counter } from "./components/Counter"
+import { HeaderBadge } from "./components/HeaderBadge"
+import { SyntaxPanel } from "./components/SyntaxPanel"
+import { HighlightedCode, HeroCarousel } from "./host/widgets.host"
+import {
+  NavLink,
+  GhostPill,
+  CtaPill,
+  CmdChip,
+  HeroStatus,
+  SectionEyebrow,
+  SectionTitle,
+  InteropLabel
+} from "./ui/primitives"
+
+let SiteHeader = props =>
+  <header
+    className="sticky top-0 z-50 border-b-2 border-line bg-paper/90 backdrop-blur-md"
+  >
+    <div
+      className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between"
+    >
+      <div className="flex items-center gap-3">
+        <img
+          src={props.logo}
+          alt=""
+          className="w-8 h-8 object-contain rounded-full"
+        />
+        <span
+          className="text-lg font-bold font-display tracking-tight text-ink"
+        >
+          {"mochi"}
+          <span className="text-fur-deep">{".lang"}</span>
+        </span>
+        <HeaderBadge label="v0.1.0" />
+      </div>
+      <nav
+        className="hidden md:flex items-center gap-5 font-mono text-xs text-mute"
+      >
+        <NavLink href={props.playgroundHref}>{"playground"}</NavLink>
+        <NavLink href="#syntax">{"syntax"}</NavLink>
+        <NavLink href="#interop">{"interop"}</NavLink>
+        <GhostPill
+          href="https://github.com/alanrsoares/mochi"
+          target="_blank"
+          rel="noreferrer"
+        >
+          {"GitHub ↗"}
+        </GhostPill>
+      </nav>
+    </div>
+  </header>
+
+let Hero = props =>
+  <section
+    className="hero-wash relative overflow-hidden border-b-2 border-line"
+  >
+    <div
+      className="max-w-6xl mx-auto px-6 py-14 lg:py-20 grid grid-cols-1 md:grid-cols-2 gap-10 lg:gap-14 items-center"
+    >
+      <div className="space-y-7 max-w-xl">
+        <HeroStatus>
+          <span className="text-ok">{"●"}</span>
+          {"self-host · 0 tsc --strict"}
+        </HeroStatus>
+        <h1
+          className="text-hero sm:text-5xl lg:text-hero-lg font-extrabold font-display tracking-tight text-ink leading-hero"
+        >
+          {"mochi"}
+          <span className="text-fur-deep">{".lang"}</span>
+          <span
+            className="block mt-3 text-hero-subtitle sm:text-2xl lg:text-hero-subtitle-lg font-semibold text-mute leading-snug tracking-tight"
+          >
+            {"Hindley–Milner → readable JS & tsc --strict TypeScript."}
+          </span>
+        </h1>
+        <p className="text-copy text-mute leading-relaxed max-w-md">
+          {"Row-polymorphic records, parametric variants, JSX via builtin plugin → host h(). One codegen, two backends."}
+        </p>
+        <div className="flex flex-wrap gap-3 pt-1 font-mono text-xs">
+          <CtaPill href={props.playgroundHref}>{"Open playground"}</CtaPill>
+          <CmdChip>
+            <span className="text-fur-deep font-bold">{"$"}</span>
+            <span className="text-ink">{"bun run mochi app.mochi"}</span>
+          </CmdChip>
+        </div>
+      </div>
+      <HeroCarousel />
+    </div>
+  </section>
+
+let SiteFooter = props =>
+  <footer className="border-t-2 border-line py-8 bg-peach">
+    <div
+      className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4 font-mono text-xs text-mute"
+    >
+      <div className="flex items-center gap-3">
+        <img
+          src={props.logo}
+          alt=""
+          className="w-6 h-6 object-contain rounded-full"
+        />
+        <span>{"mochi"}</span>
+      </div>
+      <span>{"this site: Vite · Preact · Tailwind"}</span>
+    </div>
+  </footer>
+
+let InteropRow = props =>
+  <div
+    className="grid grid-cols-1 sm:grid-cols-[7rem_1fr] gap-1 sm:gap-4 py-4 border-b-2 border-line last:border-0"
+  >
+    <InteropLabel $tone={props.tone}>{props.label}</InteropLabel>
+    <div>
+      <div className="font-display font-semibold text-ink">{props.title}</div>
+      <p className="mt-1 text-sm text-mute leading-relaxed">{props.body}</p>
+    </div>
+  </div>
+
+let App = props =>
+  <div className="site-grain min-h-screen flex flex-col bg-paper text-ink">
+    <SiteHeader logo={props.logo} playgroundHref={props.playgroundHref} />
+    <Hero playgroundHref={props.playgroundHref} />
+    <main className="max-w-6xl mx-auto px-6 py-14 space-y-16 flex-1 w-full">
+      <section id="try" className="scroll-mt-20">
+        <div
+          className="panel flex flex-col sm:flex-row sm:items-center justify-between gap-6 px-6 py-8"
+        >
+          <div className="max-w-xl">
+            <SectionEyebrow>{"try"}</SectionEyebrow>
+            <SectionTitle>{"Playground"}</SectionTitle>
+            <p className="mt-2 text-sm text-mute leading-relaxed">
+              {"Edit mochi in the browser, compile to JS, preview with Preact — same idea as ReScript try / Gleam."}
+            </p>
+          </div>
+          <CtaPill href={props.playgroundHref}>{"Open playground →"}</CtaPill>
+        </div>
+      </section>
+      <section id="syntax" className="space-y-6 scroll-mt-20">
+        <div
+          className="flex flex-col sm:flex-row sm:items-end justify-between gap-3"
+        >
+          <div>
+            <SectionEyebrow>{"syntax"}</SectionEyebrow>
+            <SectionTitle>{"Language tour"}</SectionTitle>
+          </div>
+          <span className="font-mono text-2xs text-mute">
+            {"hover for inferred types"}
+          </span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <SyntaxPanel title="Variants" badge="Result a e" tone="fur">
+            <HighlightedCode
+              code={props.codeVariants}
+              lang="mochi"
+              enableTwoslash={true}
+            />
+          </SyntaxPanel>
+          <SyntaxPanel title="Rows" badge="{ r | name: Str }" tone="plum">
+            <HighlightedCode
+              code={props.codeRecords}
+              lang="mochi"
+              enableTwoslash={true}
+            />
+          </SyntaxPanel>
+          <SyntaxPanel
+            title="JSX → h()"
+            badge="jsxPlugin · default-on"
+            tone="lavender"
+          >
+            <HighlightedCode
+              code={props.codeJsx}
+              lang="mochi"
+              enableTwoslash={true}
+            />
+          </SyntaxPanel>
+        </div>
+      </section>
+      <section id="interop" className="scroll-mt-20 space-y-6">
+        <div
+          className="flex flex-col sm:flex-row sm:items-end justify-between gap-4"
+        >
+          <div>
+            <SectionEyebrow>{"interop"}</SectionEyebrow>
+            <SectionTitle>{"Interop examples"}</SectionTitle>
+            <p className="mt-2 text-sm text-mute leading-relaxed max-w-xl">
+              {"Worked examples of host glue — not a kit catalog. Language surface is extern, builtin jsxPlugin, and a project plugins list. Everything below is one app choosing hosts."}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Counter />
+            <span className="font-mono text-2xs text-mute">
+              {"live counter"}
+            </span>
+          </div>
+        </div>
+        <div className="border-t-2 border-line">
+          <InteropRow
+            tone="fur"
+            label="runtime"
+            title="Any h()-shaped host"
+            body="jsxPlugin emits h(tag, props, children). This site uses Preact; React, Hono, or a custom pragma work the same way."
+          />
+          <InteropRow
+            tone="lavender"
+            label="UI kit"
+            title="Opaque factory + vendor plugin"
+            body="extern tw stays : a; @mochi/plugin-styled-cva recovers component schemes and $tone unions. Pattern, not a blessed kit."
+          />
+          <InteropRow
+            tone="plum"
+            label="state"
+            title="Host factory seam"
+            body="defineContainer behind *.host.mochi; hooks stay in TSX. A vendor plugin should emit the container dts — no hand cast bridge."
+          />
+          <InteropRow
+            tone="ok"
+            label="bridge"
+            title=".d.mochi.ts sidecars"
+            body="Compiler emit so TS can import .mochi. Regenerated for this app; same plugins list as Vite and LSP."
+          />
+        </div>
+      </section>
+    </main>
+    <SiteFooter logo={props.logo} />
+  </div>

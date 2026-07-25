@@ -52,6 +52,7 @@ type Tok =
   | TBang
   | TBacktick
   | TComma
+  | TDollar
   | TNum(value: number, raw: string)
   | TBool(value: bool)
   | TStr(value: string)
@@ -136,6 +137,7 @@ let punctTok = c => switch c {
   | "%" => Some(TPercent)
   | "!" => Some(TBang)
   | "`" => Some(TBacktick)
+  | "$" => Some(TDollar)
   | "<" => Some(TLt)
   | ">" => Some(TGt)
   | _ => None

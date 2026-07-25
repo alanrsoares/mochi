@@ -1,0 +1,207 @@
+// styled-cva factories (ADR 0009). Call-form only.
+import { tw } from "../host/styled-cva.host"
+
+export let BadgeShell = tw.div(
+  "inline-flex items-center gap-2 px-3 py-1 font-mono text-2xs font-bold uppercase tracking-wider rounded-full border-2 shadow-sm",
+  {
+    variants: {
+      $tone: {
+        rose: "text-fur-deep bg-fur-subtle border-fur-border",
+        amber: "text-plum bg-lavender-subtle border-lavender",
+        emerald: "text-ok bg-ok-soft border-ok-border"
+      }
+    },
+    defaultVariants: { $tone: "rose" }
+  }
+)
+
+export let BadgePulse = tw.span(
+  "w-1.5 h-1.5 rounded-full",
+  {
+    variants: {
+      $tone: { rose: "bg-fur", amber: "bg-lavender-deep", emerald: "bg-ok" }
+    },
+    defaultVariants: { $tone: "rose" }
+  }
+)
+
+export let NavLink = tw.a("hover:text-fur-deep transition-colors")
+
+export let GhostPill = tw.a(
+  "px-3 py-1.5 text-ink border-2 border-line-strong rounded-full hover:border-fur hover:bg-foam transition-colors font-semibold"
+)
+
+export let CtaPill = tw.a(
+  "px-5 py-2.5 bg-fur hover:bg-fur-deep text-white font-bold rounded-full shadow-cta transition-colors focus-visible:outline-2 focus-visible:outline-bao focus-visible:outline-offset-2"
+)
+
+export let CmdChip = tw.div(
+  "px-4 py-2.5 border-2 border-line-strong rounded-full bg-foam text-mute flex items-center gap-2"
+)
+
+export let HeroStatus = tw.p(
+  "inline-flex items-center gap-2 font-mono text-2xs tracking-label uppercase text-mute bg-foam border-2 border-line rounded-full px-3 py-1"
+)
+
+export let SectionEyebrow = tw.div(
+  "font-mono text-2xs text-fur-deep font-bold uppercase tracking-eyebrow"
+)
+
+export let SectionTitle = tw.h2(
+  "mt-2 text-2xl font-extrabold font-display tracking-tight text-ink"
+)
+
+export let InteropLabel = tw.div(
+  "font-mono text-2xs font-bold uppercase tracking-wider",
+  {
+    variants: {
+      $tone: {
+        fur: "text-fur-deep",
+        lavender: "text-lavender-deep",
+        plum: "text-plum",
+        ok: "text-ok"
+      }
+    },
+    defaultVariants: { $tone: "fur" }
+  }
+)
+
+export let SyntaxBar = tw.div(
+  "px-4 py-2.5 bg-peach border-b-2 border-line font-mono text-xs font-bold flex items-center justify-between",
+  {
+    variants: {
+      $tone: {
+        fur: "text-fur-deep",
+        plum: "text-plum",
+        lavender: "text-lavender-deep"
+      }
+    },
+    defaultVariants: { $tone: "fur" }
+  }
+)
+
+export let CounterBtn = tw.button("font-mono text-ok/80 hover:text-ink px-1")
+
+export let GhostPillBtn = tw.button(
+  "rounded-full border-2 border-line bg-foam px-3 py-1 font-mono text-2xs text-mute transition-colors hover:border-fur hover:text-ink focus-visible:outline-2 focus-visible:outline-bao focus-visible:outline-offset-2"
+)
+
+export let TypeHint = tw.div(
+  "my-1.5 ml-4 inline-flex max-w-[calc(100%-1rem)] items-start gap-2 whitespace-normal wrap-break-word rounded-2xl border-2 border-ok-border bg-ok-soft px-2.5 py-1 font-mono text-2xs text-ok"
+)
+
+export let CarouselNav = tw.button(
+  "hero-carousel__nav font-mono text-mute text-xs hover:text-ink focus-visible:outline-2 focus-visible:outline-fur focus-visible:outline-offset-2"
+)
+
+// Toggle chrome. cva's `true`/`false` variant keys are not mochi record labels,
+// so the on/off axis is a string union instead — checked in mochi now that
+// `$active` infers as `"on" | "off"` (ADR 0012 / Wave 7), not `string`.
+
+export let SegTab = tw.button(
+  "rounded-full px-3 py-1 font-mono font-semibold text-2xs transition-colors",
+  {
+    variants: {
+      $active: { on: "bg-fur text-white", off: "text-mute hover:text-ink" }
+    },
+    defaultVariants: { $active: "off" }
+  }
+)
+
+// Playground right-pane tabs (ReScript-style underline, not pills).
+export let PaneTab = tw.button(
+  "relative px-3 py-2.5 font-mono text-2xs font-semibold transition-colors",
+  {
+    variants: {
+      $active: {
+        on: "text-fur-deep after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-fur",
+        off: "text-mute hover:text-ink"
+      }
+    },
+    defaultVariants: { $active: "off" }
+  }
+)
+
+export let ToolBtn = tw.button(
+  "rounded-full border-2 border-fur/40 bg-foam px-3.5 py-1.5 font-mono text-2xs font-semibold text-fur-deep transition-colors hover:border-fur hover:bg-fur-subtle focus-visible:outline-2 focus-visible:outline-bao focus-visible:outline-offset-2 disabled:opacity-40"
+)
+
+export let ToolBtnSolid = tw.button(
+  "rounded-full border-2 border-fur bg-fur px-3.5 py-1.5 font-mono text-2xs font-semibold text-white transition-colors hover:bg-fur-deep focus-visible:outline-2 focus-visible:outline-bao focus-visible:outline-offset-2"
+)
+
+export let StatusLabel = tw.span(
+  "font-bold",
+  {
+    variants: { $state: { ok: "text-ok", err: "text-fur-deep" } },
+    defaultVariants: { $state: "ok" }
+  }
+)
+
+export let CarouselDot = tw.button(
+  "h-2 rounded-full transition-all focus-visible:outline-2 focus-visible:outline-fur focus-visible:outline-offset-2",
+  {
+    variants: {
+      $active: { on: "w-5 bg-fur", off: "w-2 bg-line-strong hover:bg-mute" }
+    },
+    defaultVariants: { $active: "off" }
+  }
+)
+
+export let CarouselImg = tw.img(
+  "hero-carousel__img absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ease-out",
+  {
+    variants: { $active: { on: "opacity-100", off: "opacity-0" } },
+    defaultVariants: { $active: "off" }
+  }
+)
+
+// Playground chrome. `ref` / `value` / handlers ride the open prop row and the
+// host forwardRef, so the editor overlay needs no hand-written TSX shim.
+
+export let PresetSelect = tw.select(
+  "rounded-full border-2 border-line bg-foam px-3 py-1 font-mono text-ink text-xs focus:border-fur focus:outline-none"
+)
+
+export let EditorMirror = tw.pre(
+  "pointer-events-none absolute inset-0 m-0 overflow-auto whitespace-pre p-4 font-mono text-ink text-xs leading-relaxed"
+)
+
+export let EditorInput = tw.textarea(
+  "absolute inset-0 m-0 h-full w-full resize-none overflow-auto whitespace-pre border-0 bg-transparent p-4 font-mono font-normal text-transparent text-xs leading-relaxed caret-fur-deep selection:bg-fur/30 focus:outline-none"
+)
+
+export let DiagBox = tw.div(
+  "max-h-87.5 overflow-auto whitespace-pre-wrap rounded-panel border-2 border-fur bg-fur-tint p-4 font-mono text-fur-deep text-xs"
+)
+
+export let PreviewPane = tw.div(
+  "flex min-h-80 flex-1 items-center justify-center rounded-panel border-2 border-line bg-foam p-6"
+)
+
+export let EmitPane = tw.pre(
+  "max-h-87.5 flex-1 overflow-auto rounded-panel border-2 border-line bg-foam p-4 font-mono text-ink text-xs leading-relaxed"
+)
+
+// Hover-token chrome. The host merges a `className` prop into the base classes,
+// so a token's own colour rides along without a `cn(...)` call site.
+
+export let HoverToken = tw.span(
+  "cursor-help rounded px-0.5 underline decoration-fur/40 underline-offset-4 transition-colors hover:bg-fur-glow hover:decoration-fur-deep"
+)
+
+// Viewport-anchored, not `absolute`: the syntax cards clip on `overflow-hidden`,
+// so placement comes from the token's client rect and `fixed` escapes the clip.
+export let TooltipAnchor = tw.span(
+  "pointer-events-none fixed z-50 block w-max max-w-xs -translate-x-1/2",
+  {
+    variants: { $place: { top: "-translate-y-full", bottom: "" } },
+    defaultVariants: { $place: "top" }
+  }
+)
+
+// `whitespace-normal` because tokens render inside a `<pre>` — inherited
+// `white-space: pre` would defeat `max-w-xs` and run the type past the card.
+export let TooltipCard = tw.span(
+  "block whitespace-normal wrap-break-word rounded-panel border-2 border-line-strong bg-foam p-2.5 font-mono text-2xs text-ink leading-tight shadow-soft"
+)

@@ -12,7 +12,14 @@ export type Expr =
    */
   | { kind: "interp"; parts: (string | Expr)[]; span: Span }
   | { kind: "ref"; name: string; span: Span }
-  | { kind: "call"; fn: Expr; args: Expr[]; span: Span }
+  /**
+   * `origin` is *sugar provenance* (ADR 0011 §5): set once, by the parser
+   * pass that desugared a surface form into this call, never inferred by
+   * sniffing source text or callee name later. Absent on a call the user
+   * wrote directly (incl. a hand-written `h(...)`). `"jsx"` marks calls
+   * `jsxPlugin`'s parse hook synthesized from `<tag>…</tag>` / `<>…</>`.
+   */
+  | { kind: "call"; fn: Expr; args: Expr[]; origin?: "jsx"; span: Span }
   | { kind: "lambda"; params: LamParam[]; body: Expr; span: Span } // (x, y) => body, ({a, b}) => body
   /**
    * `let x = value in body` — a local binding scoped to `body`. Non-recursive:

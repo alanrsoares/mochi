@@ -100,6 +100,10 @@ const cases: Record<string, string> = {
   "let in binding": "let f = x => let y = add(x, 1) in add(y, y)",
   "let? monadic bind":
     'extern parseNum : string -> Result number string = "m" "p"\nlet f = s => let? n = parseNum(s) in Ok(add(n, 1))',
+  // ADR 0009 — `export extern` re-exports the local binding. The emit puts
+  // `export { name };` on its own line; guards against the harness stripping it.
+  "export extern (default import)": 'export extern tw : a = "@styled-cva/react" "default"',
+  "export extern (named import)": 'export extern log : string -> a = "./host.mjs" "log"',
   "lazy list match": "let f = xs => switch xs { | @{} => 0 | @{h, ...t} => h }",
   ternary: "let f = b => b ? 1 : 0",
   pipe: "let f = x => x |> add(1)",

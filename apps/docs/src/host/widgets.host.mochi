@@ -1,0 +1,9 @@
+// FFI seam — Preact/TSX widgets that stay in the host (hooks, editor, REPL).
+//
+// Used in JSX tag position (`<Playground />`). Builtin `jsxPlugin` desugars to
+// `h(tag, props, children)` and checks attrs when the tag is `record → VNode`
+// (ADR 0011). These stay opaque (`: a`) because their prop types live in TSX,
+// not HM — open-world `h` still accepts any attrs. Paths relative to THIS file.
+export extern HighlightedCode : a = "../components/HighlightCode" "HighlightedCode"
+export extern HeroCarousel : a = "../components/HeroCarousel" "HeroCarousel"
+export extern Playground : a = "../components/Playground" "Playground"

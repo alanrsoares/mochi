@@ -4,6 +4,7 @@ import type { Program } from "./ast";
 import { check, type Registry } from "./check";
 import { codegen } from "./codegen";
 import { type Diagnostic, oneDiag } from "./errors";
+import type { LanguagePlugin } from "./extensions";
 import {
   type Env,
   type InferOptions,
@@ -25,7 +26,9 @@ export const toTypedProgram = (
 ): Result<TypedProgram, Diagnostic[]> => {
   const lexed = lex(src);
   if (isErr(lexed)) return err(oneDiag(lexed.error));
-  const parsed = parse(lexed.value);
+  // Same `plugins` list drives parse and infer: syntax a plugin owns and the
+  // typing of what it desugars to can never come from different lists.
+  const parsed = parse(lexed.value, { plugins: opts.plugins });
   if (isErr(parsed)) return err(oneDiag(parsed.error));
   const checked = check(parsed.value);
   if (isErr(checked)) return checked;
@@ -42,10 +45,14 @@ export type ImportedContext = {
   importedReg: Registry;
 };
 
+/** Options for `toTypedProgramWith` beyond the imported context — currently just `plugins` (styled-cva, …), threaded the same way `compile`/`inferProgram` take them. */
+export type TypedProgramWithOptions = { plugins?: LanguagePlugin[] };
+
 /** Parsed Program → typed Program, with an imported context: the module-aware sibling of `toTypedProgram`. Owns the prelude-seeding invariant — `preludeEnv` + `preludeNamespaces` + open-world — that the graph drivers (`compileGraph`, `compileGraphTs`, `moduleContext`) and the LSP surfaces (`moduleDiagnostics`, `moduleHoverAt`) previously each re-assembled. */
 export function toTypedProgramWith(
   prog: Program,
   ctx: ImportedContext,
+  opts: TypedProgramWithOptions = {},
 ): Result<TypedProgram, Diagnostic[]> {
   const checked = check(prog, ctx.importedReg);
   if (isErr(checked)) return checked;
@@ -55,32 +62,45 @@ export function toTypedProgramWith(
       imports: ctx.imports,
       namespaces: preludeNamespaces,
       nsImports: ctx.nsImports,
+      plugins: opts.plugins,
     }),
     (res) => ({ prog: checked.value, res }),
   );
 }
 
-/** Type-check stage: run HM inference (open-world, so JS host globals are legal) and pass the program through unchanged on success. */
-const typecheck = (prog: Program): Result<Program, Diagnostic[]> =>
-  map(
-    inferProgram(prog, preludeEnv, {
-      open: true,
-      namespaces: preludeNamespaces,
-    }),
-    () => prog,
-  );
-
-/** `runtime` (default on): inline the prelude builtins the program uses so the emitted module runs standalone. Off yields prelude-free lowering — for tests that supply their own prelude, or callers that bundle it separately. */
-export type CompileOptions = { runtime?: boolean };
+/** `runtime` (default on): inline the prelude builtins the program uses so the emitted module runs standalone. Off yields prelude-free lowering — for tests that supply their own prelude, or callers that bundle it separately. `moduleExt` (default `.js`): suffix rewritten onto relative import paths — Vite uses `.mochi` so sibling modules re-enter the plugin. `plugins`: host kits (styled-cva) plus builtins (`resolvePlugins`, ADR 0011). */
+export type CompileOptions = {
+  runtime?: boolean;
+  moduleExt?: string;
+  plugins?: LanguagePlugin[];
+};
 
 export function compile(src: string, opts: CompileOptions = {}): Result<string, Diagnostic[]> {
   const lexed = lex(src);
   if (isErr(lexed)) return err(oneDiag(lexed.error));
-  const parsed = parse(lexed.value);
+  const parsed = parse(lexed.value, { plugins: opts.plugins });
   if (isErr(parsed)) return err(oneDiag(parsed.error));
   const checked = check(parsed.value);
   if (isErr(checked)) return checked;
-  const typed = typecheck(checked.value);
+  const typed = map(
+    inferProgram(checked.value, preludeEnv, {
+      open: true,
+      namespaces: preludeNamespaces,
+      plugins: opts.plugins,
+    }),
+    () => checked.value,
+  );
   if (isErr(typed)) return typed;
-  return ok(codegen(typed.value, undefined, { runtime: opts.runtime ?? true }));
+  return ok(
+    codegen(typed.value, undefined, {
+      runtime: opts.runtime ?? true,
+      moduleExt: opts.moduleExt,
+    }),
+  );
 }
+
+export type { HostExtension, LanguagePlugin } from "./extensions";
+export { format } from "./format";
+export { type HoverInfo, hoverAt } from "./hover";
+export { lex } from "./lexer";
+export { type MochiPluginOptions, mochiPlugin } from "./vite-plugin";

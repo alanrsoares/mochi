@@ -96,6 +96,19 @@ test("formatting is idempotent", () => {
   expect(fmt(once)).toBe(once);
 });
 
+test("preserves JSX surface syntax instead of printing its desugared call", () => {
+  const src = 'let el=<div className="card">{"hello"}</div>';
+  const expected = 'let el = <div className="card">{"hello"}</div>\n';
+  expect(fmt(src)).toBe(expected);
+  expect(fmt(expected)).toBe(expected);
+});
+
+test("does not rewrite an explicit h call as JSX", () => {
+  expect(fmt('let el=h("div",{className:"card"},["hello"])')).toBe(
+    'let el = h("div", { className: "card" }, ["hello"])\n',
+  );
+});
+
 test("a pipe chain that overflows breaks one stage per line", () => {
   expect(
     fmt("let r = source |> transform(config) |> validate(rules) |> persist(database) |> report"),

@@ -44,4 +44,10 @@ What else was on the table and why not.
 | [0004](0004-multi-error-diagnostics.md) | Multi-error diagnostics (check + infer) | Accepted |
 | [0005](0005-prelude-task.md) | Prelude `Task` (lazy async values) | Accepted |
 | [0006](0006-task-result-async.md) | `Task` gets an error channel (`Task a e`, `ResultAsync`-aligned) | Proposed |
-| [0007](0007-jsx-desugar.md) | Universal JSX/TSX syntax desugaring (`<tag />` to `h(tag, props, children)`) | Proposed |
+| [0007](0007-jsx-desugar.md) | Universal JSX/TSX syntax desugaring (`<tag />` to `h(tag, props, children)`) | Accepted |
+| [0008](0008-vite-mochi-docs-app.md) | Vite Plugin & GitHub Pages Documentation Architecture | Proposed |
+| [0009](0009-styled-cva-host-interop.md) | Host styled-cva interop (`$`-labels + default `extern`) | Accepted |
+| [0010](0010-host-type-interop.md) | Host type interop (Mochi → TS/TSX) | Accepted |
+| [0011](0011-language-plugins.md) | Language plugins (`HostExtension` → `LanguagePlugin`; JSX as builtin plugin) | Accepted |
+| [0012](0012-host-interop-end-state.md) | Host interop end state (typed seam + thin sugar; ReScript-informed) | Accepted |
+

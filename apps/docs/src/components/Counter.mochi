@@ -1,0 +1,30 @@
+// Live counter — container + hooks in one module. `let…in` under the
+// component lambda emits sequential `const`s (Rules of Hooks). ContainerDef
+// honesty comes from `@mochi/plugin-re-reduced` → `.d.mochi.ts`.
+import {
+  defineContainer,
+  useContainer,
+  useSelect
+} from "../host/re-reduced.host"
+import { BadgeShell, CounterBtn } from "../ui/primitives"
+
+let counter = defineContainer(
+  "docs-counter",
+  {
+    state: { count: 0 },
+    actions: on =>
+      {
+        increment: on(s => { count: s.count + 1 }),
+        decrement: on(s => { count: s.count - 1 })
+      }
+  }
+)
+
+let Counter = _ =>
+  let store = useContainer(counter) in
+  let count = useSelect(store, s => s.count.value) in
+    <BadgeShell $tone="emerald">
+      <CounterBtn onClick={() => store.actions.decrement()}>{"−"}</CounterBtn>
+      <span className="tabular-nums min-w-6 text-center text-ink">{count}</span>
+      <CounterBtn onClick={() => store.actions.increment()}>{"+"}</CounterBtn>
+    </BadgeShell>

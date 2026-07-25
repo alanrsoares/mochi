@@ -149,6 +149,24 @@ that *should* return `Task _` (see `examples/life/`); sequencing uses prelude `T
 The checker does not force that shape. Multi-arg `extern`s are `_curry`-wrapped at
 emit so flat host exports `(a, b) => …` match mochi’s `f(a, b)` call convention.
 
+## Host interop (preference order)
+
+When binding JS/TS hosts ([ADR 0012](adr/0012-host-interop-end-state.md),
+ReScript-informed):
+
+1. **Typed `extern`** — declare an honest HM type on the seam when you can.
+2. **Core literals / unions** — so prop types like `$tone: "rose" | "amber"` are
+   real in infer (Wave 7), not only in generated `.d.mochi.ts`.
+3. **Thin sugar plugins** — derive what a signature cannot name (e.g. CVA
+   variant keys → literal unions). Assign core types; do not invent a kit
+   typechecker.
+4. **Heavy host generics** — approximate in HM; put `import("pkg").Type<…>` (or
+   structural) honesty in outbound `.d.mochi.ts`. Opaque `: a` only when a
+   precise arrow would lie (dual-arity factories).
+
+Host kits in the docs app are **worked examples**, not language surface.
+Inbound “read host `.d.ts` into HM” is not the default FFI path.
+
 ## Other surface features
 
 Ternary `cond ? a : b` (looser than `|>`, right-associative), operator sections

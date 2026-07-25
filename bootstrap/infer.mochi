@@ -201,6 +201,9 @@ let inferCallArgs = (fnT, args, ctx, st) => switch args {
         inferCallArgs(resultT, rest, ctx, st3)
 }
 
+let inferNormalCall = (fn, args, ctx, st) =>
+  let? (fnT, st1) = inferExpr(fn, ctx, st) in inferCallArgs(fnT, args, ctx, st1)
+
 let inferTernary = (cond, thenE, elseE, ctx, st) =>
   let? (condT, st1) = inferExpr(cond, ctx, st) in
   let? st2 = u(condT, tBool, st1, exprSpan(cond)) in
@@ -293,6 +296,46 @@ let seqElemExpr = el => switch el {
   | Ast.SEExpr(e) => e
   | Ast.SESpread(e) => e
 }
+
+// JSX desugars to `h(tag, props, …children)`. Heterogeneous children must not
+// go through Array inference (that forces one elem type). Infer each child for
+// errors only; intrinsic tags → VNode; component tags → unify props + return.
+let inferJsxArrElems = (elements, ctx, st) => switch elements {
+  | [] => Ok(st)
+  | [el, ...rest] => let? (_, st1) = inferExpr(seqElemExpr(el), ctx, st) in
+      inferJsxArrElems(rest, ctx, st1)
+}
+
+let inferJsxChildren = (children, ctx, st) => switch children {
+  | [] => Ok(st)
+  | [Ast.EArr(elements, _), ...rest] => let? st1 = inferJsxArrElems(
+      elements,
+      ctx,
+      st
+    ) in
+      inferJsxChildren(rest, ctx, st1)
+  | [child, ...rest] => let? (_, st1) = inferExpr(child, ctx, st) in
+      inferJsxChildren(rest, ctx, st1)
+}
+
+let inferJsxCall = (tagExpr, propsExpr, restArgs, ctx, st) =>
+  let? (tagT, st1) = inferExpr(tagExpr, ctx, st) in
+  let? (propsT, st2) = inferExpr(propsExpr, ctx, st1) in
+  let? st3 = inferJsxChildren(restArgs, ctx, st2) in
+  let zonkedTag = zonk(tagT, st3) in
+    switch zonkedTag {
+      | TyFn(from, to) => switch from {
+          | TyRecord(_) => let? st4 = u(
+              propsT,
+              from,
+              st3,
+              exprSpan(propsExpr)
+            ) in
+              Ok((zonk(to, st4), st4))
+          | _ => Ok((tPrim("VNode"), st3))
+        }
+      | _ => Ok((tPrim("VNode"), st3))
+    }
 
 let inferSeqSlotsElems = (con, elem, elements, ctx, st) => switch elements {
   | [] => Ok(st)
@@ -406,8 +449,21 @@ let inferExpr = (e, ctx, st) => switch e {
       ctx,
       st
     )
-  | Ast.ECall(fn, args, _) => let? (fnT, st1) = inferExpr(fn, ctx, st) in
-      inferCallArgs(fnT, args, ctx, st1)
+  | Ast.ECall(fn, args, _) => switch fn {
+      | Ast.ERef(name, _) => name == "h"
+          ? switch args {
+            | [tagExpr, propsExpr, ...rest] => inferJsxCall(
+                tagExpr,
+                propsExpr,
+                rest,
+                ctx,
+                st
+              )
+            | _ => inferNormalCall(fn, args, ctx, st)
+          }
+          : inferNormalCall(fn, args, ctx, st)
+      | _ => inferNormalCall(fn, args, ctx, st)
+    }
   | Ast.EPipe(left, right, sp) => inferExpr(
       Ast.ECall(right, [left], sp),
       ctx,

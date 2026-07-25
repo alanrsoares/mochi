@@ -1,6 +1,18 @@
 /** Unification for the HM type system. Uses a mutable substitution (union-find style) threaded through as `Subst`; every entry point returns a Result so type errors are values, consistent with the rest of the compiler. */
-import { err, isErr, ok, type Result } from "@onrails/result";
-import { type Fresh, freshRowVar, freshVar, type Row, rExtend, showType, type Type } from "./types";
+import { err, isErr, isOk, ok, type Result } from "@onrails/result";
+import {
+  type Fresh,
+  freshRowVar,
+  freshVar,
+  type LitType,
+  type Row,
+  rExtend,
+  showType,
+  type Type,
+  tNumber,
+  tString,
+  type UnionType,
+} from "./types";
 
 export type Subst = { tvars: Map<number, Type>; rvars: Map<number, Row> };
 export const emptySubst = (): Subst => ({ tvars: new Map(), rvars: new Map() });
@@ -40,6 +52,10 @@ export const zonk = (t: Type, s: Subst): Type => {
       return { kind: "arrow", from: zonk(r.from, s), to: zonk(r.to, s) };
     case "record":
       return { kind: "record", row: zonkRow(r.row, s) };
+    case "lit":
+      return r;
+    case "union":
+      return { kind: "union", members: r.members.map((m) => zonk(m, s)) };
   }
 };
 
@@ -59,6 +75,10 @@ const occurs = (id: number, t: Type, s: Subst): boolean => {
       return occurs(id, r.from, s) || occurs(id, r.to, s);
     case "record":
       return occursRow(id, r.row, s);
+    case "lit":
+      return false;
+    case "union":
+      return r.members.some((m) => occurs(id, m, s));
   }
 };
 
@@ -85,6 +105,10 @@ const rowVarOccursInType = (id: number, t: Type, s: Subst): boolean => {
       return rowVarOccursInType(id, r.from, s) || rowVarOccursInType(id, r.to, s);
     case "record":
       return rowVarOccurs(id, r.row, s);
+    case "lit":
+      return false;
+    case "union":
+      return r.members.some((m) => rowVarOccursInType(id, m, s));
   }
 };
 
@@ -125,6 +149,13 @@ export const unify = (
 
   if (ra.kind === "record" && rb.kind === "record") return unifyRows(ra.row, rb.row, s, f, show);
 
+  // Literal / finite-union algebra (ADR 0012 / Wave 7). Symmetric where both
+  // sides are lit/union; lit widens to `string` / `number` so string-expecting
+  // hosts still accept `"rose"`. General `string` does *not* unify with a
+  // literal union (rejects untyped string vars against `$tone`).
+  if (ra.kind === "lit" || rb.kind === "lit" || ra.kind === "union" || rb.kind === "union")
+    return unifyLitUnion(ra, rb, s, f, show);
+
   // Arity hint (CRITIQUE §4.4): a function type on exactly one side almost
   // always means a curried call got the wrong number of arguments — a value was
   // expected but a partially-applied function turned up (too few args), or vice
@@ -138,6 +169,116 @@ export const unify = (
   }
 
   return fail(`cannot unify ${show(ra)} with ${show(rb)}`);
+};
+
+const isPrim = (t: Type, name: string): boolean =>
+  t.kind === "con" && t.name === name && t.args.length === 0;
+
+const cloneSubst = (s: Subst): Subst => ({
+  tvars: new Map(s.tvars),
+  rvars: new Map(s.rvars),
+});
+
+const adoptSubst = (dst: Subst, src: Subst): void => {
+  dst.tvars = src.tvars;
+  dst.rvars = src.rvars;
+};
+
+/** Rewrite subst entries that resolve to `lit` into the lit's base prim. */
+const widenLitBindings = (lit: LitType, s: Subst): void => {
+  const base = lit.base === "string" ? tString : tNumber;
+  for (const [id, t] of s.tvars) {
+    const z = resolve(t, s);
+    if (z.kind === "lit" && z.base === lit.base && z.value === lit.value) s.tvars.set(id, base);
+  }
+};
+
+/** Lit ∈ union, or lit widens to its base prim. */
+const unifyLitUnion = (
+  a: Type,
+  b: Type,
+  s: Subst,
+  f: Fresh,
+  show: (t: Type) => string,
+): Result<Subst, TypeErr> => {
+  if (a.kind === "lit" && b.kind === "lit") {
+    if (a.base === b.base && a.value === b.value) return ok(s);
+    // Distinct singletons of the same base (e.g. array `["a","b"]`, Map keys):
+    // widen any subst bindings of either lit to the base prim, then succeed.
+    if (a.base === b.base) {
+      widenLitBindings(a, s);
+      widenLitBindings(b, s);
+      return ok(s);
+    }
+    return fail(`cannot unify ${show(a)} with ${show(b)}`);
+  }
+
+  if (a.kind === "lit" && isPrim(b, a.base)) return ok(s);
+  if (b.kind === "lit" && isPrim(a, b.base)) return ok(s);
+
+  if (a.kind === "lit" && b.kind === "union") return litInUnion(a, b, s, f, show);
+  if (b.kind === "lit" && a.kind === "union") return litInUnion(b, a, s, f, show);
+
+  if (a.kind === "union" && b.kind === "union") {
+    // Set equality: every member of each side unifies with the other union.
+    let cur = s;
+    for (const m of a.members) {
+      const tryM = unifyMemberAgainstUnion(m, b, cur, f, show);
+      if (isErr(tryM)) return tryM;
+      cur = tryM.value;
+    }
+    for (const m of b.members) {
+      const tryM = unifyMemberAgainstUnion(m, a, cur, f, show);
+      if (isErr(tryM)) return tryM;
+      cur = tryM.value;
+    }
+    return ok(cur);
+  }
+
+  // `string` / other concrete types do not unify with a literal union — that
+  // would accept untyped string vars against `$tone: "rose" | …`.
+  return fail(`cannot unify ${show(a)} with ${show(b)}`);
+};
+
+const unifyMemberAgainstUnion = (
+  member: Type,
+  u: UnionType,
+  s: Subst,
+  f: Fresh,
+  show: (t: Type) => string,
+): Result<Subst, TypeErr> => {
+  if (member.kind === "lit") return litInUnion(member, u, s, f, show);
+  for (const m of u.members) {
+    const trial = cloneSubst(s);
+    const step = unify(member, m, trial, f, show);
+    if (isOk(step)) {
+      adoptSubst(s, trial);
+      return ok(s);
+    }
+  }
+  return fail(`cannot unify ${show(member)} with ${show(u)}`);
+};
+
+const litInUnion = (
+  lit: LitType,
+  u: UnionType,
+  s: Subst,
+  f: Fresh,
+  show: (t: Type) => string,
+): Result<Subst, TypeErr> => {
+  for (const m of u.members) {
+    // Exact singleton match — do not use lit↔lit widening (that is for
+    // homogeneous collections, not `$tone` membership).
+    if (m.kind === "lit" && m.base === lit.base && m.value === lit.value) return ok(s);
+    if (m.kind === "lit") continue;
+    const trial = cloneSubst(s);
+    const step = unify(lit, m, trial, f, show);
+    if (isOk(step)) {
+      adoptSubst(s, trial);
+      return ok(s);
+    }
+  }
+  return fail(`cannot unify ${show(lit)} with ${show(u)}`);
 };
 
 const bindVar = (

@@ -2,9 +2,10 @@
 
 TextMate grammar for `.mochi` files: comments, `let`/`type`/`switch`, pipeline
 `|>`, arrow `=>`, match bars `|`, variant constructors (Uppercase idents),
-primitive types (`float`/`int`/`string`/`bool`), and numbers. Plus a language
-server — diagnostics, hover, and inlay type hints — built with `bun run
-build:ext` from the repo root.
+primitive types (`float`/`int`/`string`/`bool`), numbers, and JSX (tags,
+components, attributes, `{…}` holes, fragments). Plus a language server —
+diagnostics, hover, and inlay type hints — built with `bun run build:ext` from
+the repo root.
 
 ## Commands
 

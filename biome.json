@@ -2,7 +2,16 @@
   "$schema": "https://biomejs.dev/schemas/2.5.4/schema.json",
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
-    "includes": ["src/**/*.ts", "test/**/*.ts", "*.ts", "!src/runtime.ts"]
+    "includes": [
+      "src/**/*.ts",
+      "test/**/*.ts",
+      "*.ts",
+      "!src/runtime.ts",
+      "apps/docs/src/**/*.ts",
+      "apps/docs/src/**/*.tsx",
+      "apps/docs/*.ts",
+      "packages/*/src/**/*.ts"
+    ]
   },
   "javascript": { "globals": ["Bun"] },
   "formatter": {
@@ -31,6 +40,15 @@
       "suspicious": {
         "noExplicitAny": "error",
         "noConsole": { "level": "warn", "options": { "allow": ["error"] } }
+      },
+      "nursery": {
+        "useSortedClasses": {
+          "level": "on",
+          "options": {
+            "attributes": ["className"],
+            "functions": ["clsx", "cva", "tw", "tw.*"]
+          }
+        }
       }
     }
   },
@@ -49,6 +67,14 @@
         "./biome/plugins/prefer-immutable-arrays.grit",
         "./biome/plugins/prefer-immutable-objects.grit"
       ]
+    },
+    {
+      "includes": ["apps/docs/**"],
+      "linter": {
+        "rules": {
+          "suspicious": { "noExplicitAny": "off" }
+        }
+      }
     }
   ]
 }

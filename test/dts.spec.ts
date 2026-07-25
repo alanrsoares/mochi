@@ -50,3 +50,10 @@ test("destructuring temps are not declared", () => {
   expect(out).not.toContain("$d");
   expect(out).toContain("export declare const x: number;");
 });
+
+// ADR 0011 §5 — component dts still fires off JSX provenance, not `fn.name === "h"`.
+test("a real JSX lambda declares as a host-agnostic component (ADR 0010 #17)", () => {
+  const out = dts('let Card = props => <div className="card">{props.title}</div>');
+  expect(out).toContain("export declare const Card: (props:");
+  expect(out).toContain(") => any;");
+});

@@ -1,0 +1,18 @@
+// Dogfood: call-form styled-cva factories + $ transient props in Mochi (ADR 0009).
+// Run under the docs Vite graph (react → preact/compat). Not a standalone script.
+extern tw : a = "@styled-cva/react" "default"
+
+let BadgeShell = tw.div(
+  "inline-flex items-center gap-2 px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-wider rounded-md shadow-sm border",
+  {
+    variants: {
+      $tone: {
+        rose: "text-rose-300 bg-rose-950/30 border-rose-500/30",
+        amber: "text-amber-300 bg-amber-950/30 border-amber-500/30"
+      }
+    },
+    defaultVariants: { $tone: "rose" }
+  }
+)
+
+let demo = <BadgeShell $tone="rose">{"mochi × styled-cva"}</BadgeShell>

@@ -148,15 +148,59 @@ mechanically (the compiler can't inspect a JS export's body) and deliberate
   applied ctor at the type level). Domain IO remains `extern`; sequencing uses
   `Task.*`. Surface bind: `let!` (mirrors Result’s `let?`); infix bind deferred.
 
-## Extern / FFI
+## Language plugins ([ADR 0011](docs/adr/0011-language-plugins.md))
+
+- **Core (surface)** — HM + rows + variants + `Expr.call`; no kit-specific or
+  JSX-specific knowledge lives in `parser.ts` / `infer.ts` / `format.ts` /
+  `dts.ts` (ADR 0011).
+- **`LanguagePlugin`** — the cross-pass registration seam (`src/extensions.ts`):
+  optional `parse` / `inferCall` / `format` / `bindingType` / `dtsBinding` hooks,
+  consumed by `compile`, the module
+  graph, `dts`, the Vite plugin, and the LSP. A `parse` hook is consulted at atom
+  position *after* core's own prefix tokens (so a plugin extends the grammar but
+  never shadows it) and signals errors via `ParserApi.fail` — the `ParseAbort`
+  marker stays private to `parser.ts`. A `format` hook returns a **`Doc`**
+  (`src/doc.ts`), never a string — the formatter is a Wadler pretty-printer, so
+  a string could not break or indent. `bindingType` sits inside the
+  `bindingTsType` both the `.d.ts` writer and the TS backend share, so a plugin
+  cannot type a binding one way in `.d.ts` and another in emitted `.ts`.
+  `HostExtension` is a back-compat alias/subset of `LanguagePlugin`.
+- **Builtin plugin** — ships in the compiler itself and is registered by
+  default on every standard compile path (`DEFAULT_PLUGINS`). `jsxPlugin`
+  (`src/plugins/jsx.ts`) is the first and owns all of JSX: parsing `<tag/>` →
+  `h(tag, props, children)`, JSX inference, the formatter's `<tag>` re-fold, and
+  `VNode` component dts. The lexer stays generic — `<` is a plain `lt` token.
+- **Vendor plugin** — a library-owned adapter a project opts into, not part of
+  the compiler (`@mochi/plugin-styled-cva`, `@mochi/plugin-re-reduced`). Thin
+  **sugar** only: derive what a typed `extern` cannot name (e.g. CVA variant
+  keys → core literal unions). Not a per-kit reverse typechecker
+  ([ADR 0012](docs/adr/0012-host-interop-end-state.md)).
+- **Project plugin list** — the one place a project registers its plugins,
+  consumed by Vite/dts/LSP instead of hand-duplicated arrays
+  (`apps/docs/mochi.plugins.ts`).
+- **Sugar provenance** — an optional `origin` field on a desugared AST node
+  (e.g. a JSX-sourced call), written once at parse time. Replaces heuristic
+  detection (`JSX_ORIGIN` WeakSet, `fn.name === "h"`) with a structural fact.
+- **Boundary:** core is plugin-free; JSX is a *builtin* plugin, not core —
+  **opt-out rule:** an empty plugin list disables JSX parsing (parse
+  diagnostic on `<…>`), the `.ts`/`.tsx` equivalent for non-UI compiles.
+
+## Extern / FFI ([ADR 0012](docs/adr/0012-host-interop-end-state.md))
 
 - Surface: `extern name : type = "module" "export"`.
+- **Preference order (ReScript-informed):** (1) typed `extern` when HM can be
+  honest; (2) core literal/union formers so prop types are real in infer;
+  (3) thin sugar plugins that *assign* those formers; (4) heavy host generics
+  only in outbound `.d.mochi.ts` (`import("pkg").Type<…>`). Opaque `: a`
+  only when a precise arrow would lie (e.g. dual-arity `tw.div`).
 - Lowers to `import { <export> as <name> } from "<module>";` (bare `import { name }` if
   they match), plus `export { name };` if the extern is exported.
 - Arity ≥ 2 signatures are wrapped with `_curry(n, …)` at the import binding so host
   functions written as flat `(a, b) => …` work with mochi’s multi-arg call emit
   (`f(a, b)` and partial `f(a)`). Prefer flat hosts; nested-curried hosts break under
   the wrap.
+- **Not primary:** inbound “read host `.d.ts` into HM” (ReScript genType is
+  outbound-only). Wave 6 AST→string dts plugins are **bridges**.
 
 ## Module graph (`src/module.ts`)
 

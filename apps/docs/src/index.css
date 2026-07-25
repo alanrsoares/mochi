@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+/*
+  Tokens from illustrations/AESTHETICS.md (mascot plates + logo).
+  Cozy kawaii-tech: cream paper, peach/lavender wash, warm brown ink, fur accent.
+*/
+@theme {
+  --color-paper: oklch(97.1% 0.0186 75.33);
+  --color-peach: oklch(94.1% 0.0229 41.41);
+  --color-foam: oklch(98.5% 0.0113 71.9);
+  --color-ink: oklch(30.7% 0.0288 25.66);
+  --color-mute: oklch(55.6% 0.0418 34.89);
+  --color-line: oklch(87% 0.0289 48.37);
+  --color-line-strong: oklch(79.6% 0.0403 44.05);
+  --color-fur: oklch(75.5% 0.1291 66.7);
+  --color-fur-deep: oklch(68.2% 0.1374 62.09);
+  --color-plum: oklch(43% 0.0568 333.58);
+  --color-lavender: oklch(81.3% 0.0612 318.12);
+  --color-lavender-deep: oklch(68.7% 0.0784 306.75);
+  --color-bao: oklch(85.1% 0.1465 88.56);
+  --color-ok: oklch(61.5% 0.1256 152.79);
+  --color-ok-soft: oklch(95.9% 0.0206 156.82);
+  --color-lime: oklch(83.6% 0.2041 129.98);
+  --color-nebula: oklch(41.7% 0.0852 290.14);
+  --color-nebula-ink: oklch(23.6% 0.0473 289.62);
+  --color-code-surface: oklch(17.9% 0.0193 270.11);
+  --color-code-line: oklch(26.3% 0.035 269.74);
+  --color-code-number: oklch(51.7% 0.093 237.98);
+
+  --color-fur-subtle: color-mix(in oklab, var(--color-fur) 18%, white);
+  --color-fur-tint: color-mix(in oklab, var(--color-fur) 12%, white);
+  --color-fur-border: color-mix(in oklab, var(--color-fur) 45%, white);
+  --color-fur-glow: color-mix(in oklab, var(--color-fur) 12%, transparent);
+  --color-lavender-subtle: color-mix(in oklab, var(--color-lavender) 35%, white);
+  --color-ok-border: color-mix(in oklab, var(--color-ok) 35%, white);
+
+  --font-sans: "Outfit", system-ui, sans-serif;
+  --font-display: "Outfit", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --text-2xs: 0.6875rem;
+  --text-3xs: 0.625rem;
+  --text-copy: 0.95rem;
+  --text-hero: 2.6rem;
+  --text-hero-lg: 3.35rem;
+  --text-hero-subtitle: 1.35rem;
+  --text-hero-subtitle-lg: 1.65rem;
+
+  --tracking-label: 0.14em;
+  --tracking-eyebrow: 0.18em;
+  --tracking-kicker: 0.2em;
+  --leading-hero: 1.05;
+
+  --radius-panel: 1rem;
+  --radius-frame: 1.35rem;
+
+  --shadow-soft: 0 12px 40px color-mix(in oklab, var(--color-plum) 12%, transparent);
+  --shadow-panel: 0 8px 28px color-mix(in oklab, var(--color-plum) 8%, transparent);
+  --shadow-cta: 0 8px 24px color-mix(in oklab, var(--color-fur) 35%, transparent);
+}
+
+@layer base {
+  html {
+    @apply bg-paper;
+  }
+
+  body {
+    @apply bg-paper font-sans text-ink;
+    font-weight: 400;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--color-fur) 35%, transparent);
+    color: var(--color-ink);
+  }
+}
+
+.site-grain::before {
+  content: "";
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  opacity: 0.035;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Soft blob field — matches illustrator peach/lavender backgrounds */
+.hero-wash {
+  background:
+    radial-gradient(ellipse 70% 55% at 90% 15%, color-mix(in oklab, var(--color-lavender) 55%, transparent), transparent 58%),
+    radial-gradient(ellipse 55% 45% at 8% 85%, color-mix(in oklab, var(--color-fur) 28%, transparent), transparent 55%),
+    radial-gradient(ellipse 40% 35% at 40% 0%, color-mix(in oklab, var(--color-bao) 22%, transparent), transparent 50%),
+    var(--color-peach);
+}
+
+.hero-carousel__frame {
+  @apply rounded-frame border-2 border-line-strong bg-foam shadow-soft;
+}
+
+.panel {
+  @apply rounded-panel border-2 border-line bg-foam shadow-panel;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-carousel__img {
+    transition: none !important;
+  }
+}

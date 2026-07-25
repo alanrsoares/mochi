@@ -58,6 +58,7 @@ type Tok =
   | TBang
   | TBacktick
   | TComma
+  | TDollar
   | TNum(value: number, raw: string)
   | TBool(value: bool)
   | TStr(value: string)
@@ -124,6 +125,7 @@ let tokName = t => switch t {
   | TBang => "bang"
   | TBacktick => "backtick"
   | TComma => "comma"
+  | TDollar => "dollar"
   | TNum(_, _) => "num"
   | TBool(_) => "bool"
   | TStr(_) => "str"
@@ -159,6 +161,16 @@ let expectId = (toks, pos) =>
       | TId(name) => Ok(({ name: name, span: spanOf(lt) }, pos + 1))
       | t => errAt("expected id, got ${tokName(t)}", lt)
     }
+
+/// Label in JSX attrs / record fields: `tone` or `$tone` (styled-cva).
+/// `$` is not a general identifier — `let $x = …` / bare `$tone` still fail.
+let expectLabel = (toks, pos) =>
+  let lt = tokAt(toks, pos) in
+    lt.tok == TDollar
+      ? expectId(toks, pos + 1)
+        |> Result.map(((id, p)) =>
+          ({ name: "$${id.name}", span: spanning(spanOf(lt), id.span) }, p))
+      : expectId(toks, pos)
 
 let expectStr = (toks, pos) =>
   let lt = tokAt(toks, pos) in
@@ -690,7 +702,7 @@ let parseJsxAttributes = (toks, pos, fieldsAcc, spreadAcc) =>
       let? (spExpr, p2) = parseExpr(toks, p1) in
       let? p3 = expectTok(TRbrace, toks, p2) in
         parseJsxAttributes(toks, p3, fieldsAcc, Some(spExpr))
-      : let? (attrId, p1) = expectId(toks, pos) in
+      : let? (attrId, p1) = expectLabel(toks, pos) in
         let (valExpr, p2) = tokAt(toks, p1).tok == TEq
           ? let pEq = p1 + 1 in
             switch tokAt(toks, pEq).tok {
@@ -803,7 +815,9 @@ let parseJsx = (toks, pos) =>
       let tagRef = isUpper(firstId.name)
         ? Ast.ERef(firstId.name, firstId.span)
         : Ast.EStr(firstId.name, firstId.span) in
-      let tagNameStr = isUpper(firstId.name) ? "" : firstId.name in
+      // Closing-tag match needs the surface name for both HTML and components
+      // (TS: tagRef.kind === "ref" ? tagRef.name : null — never "" for Upper).
+      let tagNameStr = firstId.name in
       let? (fields, spreadOpt, p2) = parseJsxAttributes(toks, p1, [], None) in
       let isSelfClosing = tokAt(toks, p2).tok == TSlash in
       let? p3 = isSelfClosing
@@ -868,7 +882,7 @@ let parseInterp = (toks, pos) =>
     }
 
 let parseField = (toks, pos) =>
-  let? (nm, p) = expectId(toks, pos) in
+  let? (nm, p) = expectLabel(toks, pos) in
   let? p2 = expectTok(TColon, toks, p) in
   let? (value, p3) = parseExpr(toks, p2) in
     Ok(({ name: nm.name, value: value }, p3))
@@ -876,7 +890,7 @@ let parseField = (toks, pos) =>
 // A leading `...base` (ADR 0021) makes this a record update: only one spread,
 // only at the front; any fields after it need a comma (mirrors src/parser.ts's
 // parseRecord). A stray/trailing/second `...` falls through to parseField's
-// expectId and fails there — same error + span as the TS parser, no bespoke
+// expectLabel and fails there — same error + span as the TS parser, no bespoke
 // handling needed.
 let parseRecord = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in

@@ -1,0 +1,196 @@
+// Pure highlight / twoslash helpers. UI + RegExp JS highlighter stay in
+// HighlightCode.tsx (hooks / DOM / regex).
+extern lex : string -> Result a b = "@mochi/compiler" "lex"
+extern hoverAt : string -> number -> a = "@mochi/compiler" "hoverAt"
+
+/// Closed token shape — pins bootstrap/TS schemes (open-row link mismatch
+/// under Array.append([]) / spread, same class as bootstrap/scc.mochi ADR note).
+type SpanTok = { text: string, kind: string, start: number }
+
+let keywords = Set.fromArray(
+  ["let", "type", "extern", "switch", "import", "export"]
+)
+let strings = Set.fromArray(["str", "tmplstart", "tmplmid", "tmplend"])
+let ops = Set.fromArray(
+  ["eq", "arrow", "tarrow", "pipe", "plus", "minus", "star", "slash"]
+)
+let punct = Set.fromArray(
+  [
+    "lparen",
+    "rparen",
+    "lbrace",
+    "rbrace",
+    "lbracket",
+    "rbracket",
+    "colon",
+    "dot"
+  ]
+)
+let hoverable = Set.fromArray(["type", "plain", "keyword"])
+
+let isUpperId = s => switch Str.codeAt(0, s) {
+  | None => false
+  | Some(c) => c >= 65 && c <= 90
+}
+
+/// Map a lexer tag (+ optional id text) to a highlight kind.
+/// Field is `kind` not `type` — `type` is a mochi keyword.
+let tokenKindFromLexTag = (tag, value) =>
+  Set.has(tag, keywords)
+    ? "keyword"
+    : tag == "num"
+    ? "number"
+    : Set.has(tag, strings)
+    ? "string"
+    : tag == "id"
+    ? isUpperId(value) ? "type" : "plain"
+    : tag == "lt" || tag == "gt"
+    ? "jsx"
+    : Set.has(tag, ops)
+    ? "operator"
+    : Set.has(tag, punct)
+    ? "punctuation"
+    : "plain"
+
+export let tokenClass = kind => switch kind {
+  | "keyword" => "text-plum font-bold"
+  | "type" => "text-fur-deep font-bold"
+  | "string" => "text-ok"
+  | "number" => "text-code-number font-bold"
+  | "comment" => "text-mute italic"
+  | "jsx" => "text-lavender-deep font-bold"
+  | "operator" => "text-fur-deep/80"
+  | "punctuation" => "text-mute"
+  | _ => "text-ink"
+}
+
+export let isHoverable = kind => Set.has(kind, hoverable)
+
+/// Plain span sentinel: `start: -1` means no byte offset (not hoverable).
+let plainSpan = (text, start) => { text: text, kind: "plain", start: start }
+
+let highlightGo = (code, tokens, i, curPos, spans) => switch Array.get(i, tokens) {
+  | None => curPos < Str.length(code)
+      ? [...spans, plainSpan(Str.slice(curPos, Str.length(code), code), -1)]
+      : spans
+  | Some(t) => let spans1 = t.span.start > curPos
+      ? [...spans, plainSpan(Str.slice(curPos, t.span.start, code), -1)]
+      : spans in
+    let value = t.t == "id" ? t.v : "" in
+    let spans2 = [
+      ...spans1,
+      {
+        text: Str.slice(t.span.start, t.span.end, code),
+        kind: tokenKindFromLexTag(t.t, value),
+        start: t.span.start
+      }
+    ] in
+      highlightGo(code, tokens, i + 1, t.span.end, spans2)
+}
+
+export let highlightMochiCode = code => switch lex(code) {
+  | Err(_) => [plainSpan(code, -1)]
+  | Ok(tokens) => highlightGo(code, tokens, 0, 0, [])
+}
+
+/// Twoslash query line: trimmed form starts with `//` and contains `^?`.
+let isTwoslashLine = line =>
+  Str.startsWith("//", Str.trim(line)) && Str.contains("^?", line)
+
+/// Nested recursive `let go = … go … in` codegen is broken (IIFE free-var);
+/// keep recursion at top level so `const go = … go …` self-binds.
+let caretColAt = (line, j) => switch Str.get(j, line) {
+  | None => 0
+  | Some("^") => j
+  | Some(_) => caretColAt(line, j + 1)
+}
+
+let caretCol = line => caretColAt(line, 0)
+
+let collectTwoslash = (lines, i, clean, queries) => switch Array.get(i, lines) {
+  | None => { clean: clean, queries: queries }
+  | Some(line) => isTwoslashLine(line) && Array.length(clean) > 0
+      ? collectTwoslash(
+        lines,
+        i + 1,
+        clean,
+        [
+          ...queries,
+          { lineIndex: Array.length(clean) - 1, caretCol: caretCol(line) }
+        ]
+      )
+      : collectTwoslash(lines, i + 1, [...clean, line], queries)
+}
+
+let sumLineOffsets = (cleanLines, lineIndex, j, acc) =>
+  j >= lineIndex
+    ? acc
+    : switch Array.get(j, cleanLines) {
+      | None => acc
+      | Some(ln) => sumLineOffsets(
+          cleanLines,
+          lineIndex,
+          j + 1,
+          acc + Str.length(ln) + 1
+        )
+    }
+
+let offsetAt = (cleanLines, lineIndex, col) =>
+  let base = sumLineOffsets(cleanLines, lineIndex, 0, 0) in
+    switch Array.get(lineIndex, cleanLines) {
+      | None => base
+      | Some(line) => let last = Str.length(line) - 1 in
+        let clamped = last < 0 ? 0 : col < 0 ? 0 : col > last ? last : col in
+          base + clamped
+    }
+
+let annotate = (cleanCode, cleanLines, queries, i, acc) => switch Array.get(i, queries) {
+  | None => acc
+  | Some(q) => let off = offsetAt(cleanLines, q.lineIndex, q.caretCol) in
+    let hover = hoverAt(cleanCode, off) in
+    let acc2 = hover == null ? acc : Map.set(q.lineIndex, hover, acc) in
+      annotate(cleanCode, cleanLines, queries, i + 1, acc2)
+}
+
+/// Strip `// ^?` lines; resolve hovers against the cleaned source.
+export let processTwoslash = code =>
+  let lines = Str.split("\n", code) in
+  let collected = collectTwoslash(lines, 0, [], []) in
+  let cleanCode = Str.join("\n", collected.clean) in
+    {
+      cleanCode: cleanCode,
+      annotations: annotate(
+        cleanCode,
+        collected.clean,
+        collected.queries,
+        0,
+        #{}
+      )
+    }
+
+/// Push a split fragment onto the line grid. `p > 0` starts a new line;
+/// empty `part` still carries a zero-length token (avoids bare `[]`).
+let pushPart : [[SpanTok]] -> SpanTok -> string -> number -> [[SpanTok]] = (lines, span, part, p) =>
+  let token = { text: part, kind: span.kind, start: span.start } in
+    p > 0
+      ? [...lines, [token]]
+      : Str.length(part) == 0
+      ? lines
+      : switch Array.get(Array.length(lines) - 1, lines) {
+        | None => [...lines, [token]]
+        | Some(last) => [
+            ...Array.take(Array.length(lines) - 1)(lines),
+            [...last, token]
+          ]
+      }
+
+let splitParts : SpanTok -> [string] -> number -> [[SpanTok]] -> [[SpanTok]] = (span, parts, j, acc) => switch Array.get(j, parts) {
+  | None => acc
+  | Some(part) => splitParts(span, parts, j + 1, pushPart(acc, span, part, j))
+}
+
+let splitOne : SpanTok -> [[SpanTok]] -> [[SpanTok]] = (span, lines) =>
+  splitParts(span, Str.split("\n", span.text), 0, lines)
+
+export let splitSpansIntoLines : [SpanTok] -> [[SpanTok]] = spans =>
+  Array.reduce(acc => span => splitOne(span, acc))([[]])(spans)

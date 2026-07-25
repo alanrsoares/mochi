@@ -15,9 +15,16 @@ import { isErr, ok, type Result } from "@onrails/result";
 import type { Ctor, Expr, Program, Stmt, TypeExpr } from "./ast";
 import { toTypedProgram } from "./compile";
 import type { Diagnostic } from "./errors";
+import type { BindingTypeHook, DtsBindingHook, LanguagePlugin } from "./extensions";
+import {
+  bindingTypeHooks,
+  resolvePlugins,
+  runBindingTypeHooks,
+  runDtsBindingHooks,
+} from "./extensions";
 import type { Scheme } from "./infer";
 import { builtinTypeDecls, preludeNamespaces } from "./prelude";
-import { typeExprToType } from "./schemes";
+import { typeExprToType, widenLits } from "./schemes";
 import {
   type AliasDef,
   aliasParamId,
@@ -48,6 +55,10 @@ function consIn(t: Type, acc: Set<string>): void {
         row = row.rest;
       }
     })
+    .with({ kind: "lit" }, () => {})
+    .with({ kind: "union" }, (u) => {
+      for (const m of u.members) consIn(m, acc);
+    })
     .exhaustive();
 }
 
@@ -58,46 +69,49 @@ const PRIM_TS: Record<string, string> = {
   bool: "boolean",
 };
 
-/** HM type → TS type. `names` maps quantified var ids to generic letters; any other var renders as `unknown` (it escaped generalization at this position). */
+/** HM type → TS type. `names` maps quantified var ids to generic letters; any other var renders as `unknown` (it escaped generalization at this position). Bare lits default to their base prim; literal unions stay precise. */
 function tsOf(t: Type, names: Map<number, string>): string {
+  return tsOfRaw(widenLits(t), names);
+}
+
+function tsOfRaw(t: Type, names: Map<number, string>): string {
   return (
     match(t)
       .with({ kind: "var" }, (v) => names.get(v.id) ?? "unknown")
       .with({ kind: "con", name: "Array" }, (con) =>
-        con.args.length === 1 ? `${tsOf(con.args[0]!, names)}[]` : nominalCon(con, names),
+        con.args.length === 1 ? `${tsOfRaw(con.args[0]!, names)}[]` : nominalCon(con, names),
       )
       .with({ kind: "con", name: "List" }, (con) =>
-        con.args.length === 1 ? `Iterable<${tsOf(con.args[0]!, names)}>` : nominalCon(con, names),
+        con.args.length === 1
+          ? `Iterable<${tsOfRaw(con.args[0]!, names)}>`
+          : nominalCon(con, names),
       )
       // Task is an opaque lazy thunk (ADR 0005) — emit the runtime shape, not a phantom nominal.
       .with({ kind: "con", name: "Task" }, (con) =>
         con.args.length === 1
-          ? `() => Promise<${tsOf(con.args[0]!, names)}>`
+          ? `() => Promise<${tsOfRaw(con.args[0]!, names)}>`
           : nominalCon(con, names),
       )
       .with(
         { kind: "con", name: "tuple" },
-        (con) => `[${con.args.map((a) => tsOf(a, names)).join(", ")}]`,
+        (con) => `[${con.args.map((a) => tsOfRaw(a, names)).join(", ")}]`,
       )
       .with({ kind: "con" }, (con) => PRIM_TS[con.name] ?? nominalCon(con, names))
       .with({ kind: "arrow" }, (arrow) => {
-        // Flat multi-param arrow, matching codegen's UNCURRIED calling convention:
-        // user functions emit `(a, b) => …` (defs) and `f(a, b)` (calls), never
-        // `f(a)(b)`. `declType` already flattens a binding's own params this way;
-        // rendering NESTED function types (a HOF's function-typed param, e.g.
-        // `sepBy`'s `parseItem`) curried instead — `(x) => (x) => R` — is what
-        // made a flat function VALUE reject against a curried param slot (TS2345).
-        // Collapse the whole arrow chain into one arrow so the two agree.
         const params: string[] = [];
         let cur: Type = arrow;
         while (cur.kind === "arrow") {
-          params.push(tsOf(cur.from, names));
+          params.push(tsOfRaw(cur.from, names));
           cur = cur.to;
         }
         const named = params.map((p, i) => `${String.fromCharCode(97 + i)}: ${p}`);
-        return `(${named.join(", ")}) => ${tsOf(cur, names)}`;
+        return `(${named.join(", ")}) => ${tsOfRaw(cur, names)}`;
       })
       .with({ kind: "record" }, (rec) => tsRow(rec.row, names))
+      .with({ kind: "lit" }, (lit) =>
+        lit.base === "string" ? JSON.stringify(lit.value) : lit.value,
+      )
+      .with({ kind: "union" }, (u) => u.members.map((m) => tsOfRaw(m, names)).join(" | "))
       .exhaustive()
   );
 }
@@ -106,13 +120,13 @@ function tsOf(t: Type, names: Map<number, string>): string {
 const nominalCon = (con: ConType, names: Map<number, string>): string =>
   con.args.length === 0
     ? con.name
-    : `${con.name}<${con.args.map((a) => tsOf(a, names)).join(", ")}>`;
+    : `${con.name}<${con.args.map((a) => tsOfRaw(a, names)).join(", ")}>`;
 
 function tsRow(row: Row, names: Map<number, string>): string {
   const fields: string[] = [];
   let cur = row;
   while (cur.kind === "extend") {
-    fields.push(`${cur.label}: ${tsOf(cur.type, names)}`);
+    fields.push(`${cur.label}: ${tsOfRaw(cur.type, names)}`);
     cur = cur.rest;
   }
   const body = fields.length === 0 ? "{}" : `{ ${fields.join("; ")} }`;
@@ -150,6 +164,8 @@ function hasFreeVar(t: Type): boolean {
         .with({ kind: "rvar" }, () => true)
         .exhaustive();
     })
+    .with({ kind: "lit" }, () => false)
+    .with({ kind: "union" }, (u) => u.members.some(hasFreeVar))
     .exhaustive();
 }
 
@@ -187,7 +203,9 @@ export function emptyCollTs(
  * Fully-concrete cons only: a free var would render `unknown`, no better than tsc.
  */
 export function ctorCallTs(t: Type, aliases: AliasDef[]): string | null {
-  const folded = foldAliases(t, aliases);
+  // Widen bare lits so `Err("bad")` casts as `Result<number, string>`, not
+  // `Result<number, "bad">` (ADR 0043 + Wave 7 literal defaulting).
+  const folded = widenLits(foldAliases(t, aliases));
   return match(folded)
     .with({ kind: "con" }, (con) =>
       con.args.length === 0 || hasFreeVar(con) ? null : tsOf(con, new Map()),
@@ -195,6 +213,8 @@ export function ctorCallTs(t: Type, aliases: AliasDef[]): string | null {
     .with({ kind: "var" }, () => null)
     .with({ kind: "arrow" }, () => null)
     .with({ kind: "record" }, () => null)
+    .with({ kind: "lit" }, () => null)
+    .with({ kind: "union" }, () => null)
     .exhaustive();
 }
 
@@ -286,6 +306,10 @@ function freeVars(t: Type, acc: number[]): void {
         freeVars(r.type, acc);
         r = r.rest;
       }
+    })
+    .with({ kind: "lit" }, () => {})
+    .with({ kind: "union" }, (u) => {
+      for (const m of u.members) freeVars(m, acc);
     })
     .exhaustive();
 }
@@ -386,16 +410,31 @@ export function ctorFactoryTs(
 
 /**
  * The TS type of a binding, WITHOUT the `export declare const name:` wrapper —
- * the one piece the `.d.ts` writer (`letDecl`) and the `.ts` backend
+ * the one piece the `.d.ts` writer (`declOf`) and the `.ts` backend
  * (`codegen-ts.ts`, ADR 0026) share. A function carries a `<A, B>` generic head
  * plus arity-peeled parameter names; a non-function polymorphic binding has
  * nowhere to bind generics, so its escaped vars fall back to `unknown`.
+ *
+ * `hooks` are the resolved plugins' `bindingType` hooks (ADR 0011) — e.g. JSX
+ * component bindings. It is a REQUIRED parameter precisely because both callers
+ * must pass it: defaulting it to `[]` would let the TS backend silently emit
+ * un-hooked types while the `.d.ts` emitted hooked ones.
  */
-export function bindingTsType(sc: Scheme, value: Expr, aliases: AliasDef[]): string {
+export function bindingTsType(
+  sc: Scheme,
+  value: Expr,
+  aliases: AliasDef[],
+  hooks: BindingTypeHook[],
+): string {
   const names = genericNames(sc);
   // Fold structural rows to alias names first, so a binding typed `{ x, y }`
   // declares as `Point` — reusing the emitted `export type Point`.
   const folded = foldAliases(sc.type, aliases);
+  const hooked = runBindingTypeHooks(hooks, value, {
+    folded,
+    tsType: (t) => tsOf(t, new Map()),
+  });
+  if (hooked !== null) return hooked;
   if (value.kind === "lambda") {
     const generics = [...names.values()];
     const head = generics.length ? `<${generics.join(", ")}>` : "";
@@ -436,6 +475,8 @@ function allVarsIn(t: Type, names: Map<number, string>): boolean {
         .with({ kind: "rvar" }, (rvar) => names.has(rvar.id))
         .exhaustive();
     })
+    .with({ kind: "lit" }, () => true)
+    .with({ kind: "union" }, (u) => u.members.every((m) => allVarsIn(m, names)))
     .exhaustive();
 }
 
@@ -553,9 +594,6 @@ export function guardParamTs(scrutType: Type, aliases: AliasDef[]): string | nul
   return fv.length === 0 ? tsOf(t, new Map()) : null;
 }
 
-const letDecl = (name: string, sc: Scheme, value: Expr, aliases: AliasDef[]): string =>
-  `export declare const ${name}: ${bindingTsType(sc, value, aliases)};`;
-
 /** A transparent record alias → an exported TS object type. Field types come from the alias template (an HM record whose params are marker vars); map each marker to a generic letter so `type Box a = { value: a }` emits `type Box<A> = ...`. */
 export function aliasTsDecl(def: AliasDef): string {
   const names = new Map(def.params.map((_, i) => [aliasParamId(i), LETTERS[i] ?? `T${i}`]));
@@ -575,11 +613,15 @@ export function typeDecl(name: string, params: string[], ctors: Ctor[]): string 
   return `export type ${head} =\n${ctors.map((c) => `  | ${variant(c)}`).join("\n")};`;
 }
 
+/** The two binding-emit hook lists a `.d.ts` declaration consults: `.d.ts`-only overrides, then the shared binding-type ones (ADR 0011). */
+type DeclHooks = { dtsBinding: DtsBindingHook[]; bindingType: BindingTypeHook[] };
+
 function declOf(
   s: Stmt,
   schemeOf: (n: string) => Scheme | undefined,
   aliasByName: Map<string, AliasDef>,
   aliases: AliasDef[],
+  hooks: DeclHooks,
 ): string | null {
   return match(s)
     .with({ kind: "import" }, () => null)
@@ -590,9 +632,11 @@ function declOf(
     })
     .with({ kind: "let" }, (letin) => {
       const sc = schemeOf(letin.name);
-      return sc && !letin.name.startsWith("$")
-        ? letDecl(letin.name, sc, letin.value, aliases)
-        : null;
+      if (!sc || letin.name.startsWith("$")) return null;
+      const ty = runDtsBindingHooks(hooks.dtsBinding, letin.name, sc, letin.value, aliases, () =>
+        bindingTsType(sc, letin.value, aliases, hooks.bindingType),
+      );
+      return `export declare const ${letin.name}: ${ty};`;
     })
     .exhaustive();
 }
@@ -696,6 +740,8 @@ export function externModuleDts(externs: ExternBinding[]): string {
       .with({ kind: "var" }, () => 0)
       .with({ kind: "con" }, () => 0)
       .with({ kind: "record" }, () => 0)
+      .with({ kind: "lit" }, () => 0)
+      .with({ kind: "union" }, () => 0)
       .exhaustive();
   const seen = new Set<string>();
   const lines: string[] = [];
@@ -716,14 +762,32 @@ export function externModuleDts(externs: ExternBinding[]): string {
   return `${[...decls, ...lines].join("\n")}\n`;
 }
 
-export function emitDts(src: string): Result<string, Diagnostic[]> {
-  const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces });
+export type EmitDtsOptions = {
+  /**
+   * Plugins to run (styled-cva, …), applied to both infer and binding emit.
+   * `undefined` → builtins; `[]` → hard opt-out; non-empty → builtins + this
+   * list (`resolvePlugins`, ADR 0011).
+   */
+  plugins?: LanguagePlugin[];
+};
+
+export function emitDts(src: string, opts: EmitDtsOptions = {}): Result<string, Diagnostic[]> {
+  const r = toTypedProgram(src, {
+    open: true,
+    namespaces: preludeNamespaces,
+    plugins: opts.plugins,
+  });
   if (isErr(r)) return r;
   const { prog, res } = r.value;
   const { env, aliases } = res;
   const aliasByName = new Map(aliases.map((a) => [a.name, a]));
+  const resolved = resolvePlugins(opts.plugins);
+  const hooks: DeclHooks = {
+    dtsBinding: resolved.flatMap((p) => (p.dtsBinding ? [p.dtsBinding] : [])),
+    bindingType: bindingTypeHooks(resolved),
+  };
   const lines = prog.stmts
-    .map((s) => declOf(s, (n) => env.get(n), aliasByName, aliases))
+    .map((s) => declOf(s, (n) => env.get(n), aliasByName, aliases, hooks))
     .filter((l): l is string => l !== null);
   // A builtin variant used in an exported binding's type (e.g. `Option<number>`
   // from `Map.get`) needs its type decl emitted too, unless the program declares

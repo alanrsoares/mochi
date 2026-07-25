@@ -191,7 +191,7 @@ const genExpr = (e: Expr, ctx: GenCtx): string =>
       });
       // A generic binding's value lambda scopes its letters here (ADR 0032), so
       // its (now fully annotated) params can name them; every other lambda: "".
-      const arrow = `${ann?.generics ?? ""}(${ps.join(", ")}) => ${genLambdaBody(body, ctx)}`;
+      const arrow = `${ann?.generics ?? ""}(${ps.join(", ")}) => ${genLambdaBody(body, ctx, new Set(params.flatMap(paramNames)))}`;
       // Curried type, flat JS impl: arity ≥ 2 lowers to a `_curry`-wrapped
       // function so any call grouping works (CRITIQUE §4.4). Arity 1 needs none.
       return params.length >= 2 ? `_curry(${params.length}, ${arrow})` : arrow;
@@ -291,6 +291,10 @@ const genParam = (p: LamParam): string =>
       ? `[${p.names.join(", ")}]`
       : `{ ${p.fields.join(", ")} }`;
 
+/** Every JS binding a lambda parameter introduces — a `const` may not reuse one. */
+const paramNames = (p: LamParam): readonly string[] =>
+  p.kind === "name" ? [p.name] : p.kind === "ptuple" ? p.names : p.fields;
+
 /** A lambda in callee position must be parenthesized: `((x) => ...)(arg)`. */
 const genCallee = (e: Expr, ctx: GenCtx): string =>
   e.kind === "lambda" ? `(${genExpr(e, ctx)})` : genExpr(e, ctx);
@@ -299,9 +303,54 @@ const genCallee = (e: Expr, ctx: GenCtx): string =>
 const genMember = (e: Expr, ctx: GenCtx): string =>
   e.kind === "record" || e.kind === "lambda" ? `(${genExpr(e, ctx)})` : genExpr(e, ctx);
 
-/** A record literal as a concise arrow body must be parenthesized, else JS parses `=> { ... }` as a statement block: `=> ({ x: 1 })`. */
-const genLambdaBody = (e: Expr, ctx: GenCtx): string =>
-  e.kind === "record" ? `(${genExpr(e, ctx)})` : genExpr(e, ctx);
+/**
+ * A `let x = v in …` chain directly under a lambda lowers to sequential `const`s
+ * in a block body rather than nested IIFEs, so the emitted JS reads like the
+ * source instead of nesting one closure per binding.
+ *
+ * Two links cannot take that form, because a `const` would bind a name the
+ * source means to read from an enclosing scope — `letin` is non-recursive and
+ * shadowing keeps the outer value:
+ *
+ * - one whose name is already taken by the arrow's parameters or an earlier
+ *   link (`let x = 1 in let x = x + 1 in x`), which is also a JS redeclaration;
+ * - one whose value mentions its own name, which a `const` would resolve to
+ *   itself rather than to the outer binding.
+ *
+ * The chain stops at the first such link and the remainder falls back to the
+ * IIFE form, which scopes both correctly. The self-reference test
+ * over-approximates (`exprRefs` ignores inner shadowing), so it can only cost
+ * readability, never correctness.
+ */
+const genLetBlock = (e: Expr, ctx: GenCtx, bound: ReadonlySet<string>): string | null => {
+  const seen = new Set(bound);
+  const decls: string[] = [];
+  let body = e;
+  while (body.kind === "letin" && !seen.has(body.name) && !mentions(body.value, body.name)) {
+    seen.add(body.name);
+    const ann = ctx.annotateLetin?.(body.value);
+    decls.push(`const ${body.name}${ann ? `: ${ann}` : ""} = ${genExpr(body.value, ctx)};`);
+    body = body.body;
+  }
+  return decls.length === 0 ? null : `{ ${decls.join(" ")} return ${genExpr(body, ctx)}; }`;
+};
+
+/** Does `e` reference `name` anywhere? Over-approximates — shadowing is ignored. */
+const mentions = (e: Expr, name: string): boolean => {
+  const refs = new Set<string>();
+  exprRefs(e, refs);
+  return refs.has(name);
+};
+
+/**
+ * A record literal as a concise arrow body must be parenthesized, else JS parses
+ * `=> { ... }` as a statement block: `=> ({ x: 1 })`. `bound` — the names the
+ * arrow's own parameters already occupy — opts the body into the block form
+ * above; call sites that cannot name their bindings omit it.
+ */
+const genLambdaBody = (e: Expr, ctx: GenCtx, bound?: ReadonlySet<string>): string =>
+  (bound && e.kind === "letin" ? genLetBlock(e, ctx, bound) : null) ??
+  (e.kind === "record" ? `(${genExpr(e, ctx)})` : genExpr(e, ctx));
 
 /**
  * Emitted `switch` lowers to a match().with().exhaustive() chain targeting
@@ -740,8 +789,12 @@ const genType = (s: TypeStmt, ctx: GenCtx): string =>
  * extern → ESM import. Arity ≥ 2 wraps the host export in `_curry` so flat
  * `(a, b) => …` hosts survive mochi's multi-arg call emit (ADR 0005 / #24).
  * The raw import is aliased to `$name` so the local binding stays the surface name.
+ * `imported === "default"` emits a default import (styled-cva / host kits).
  */
 const genExtern = (s: ExternStmt): string => {
+  if (s.imported === "default") {
+    return `import ${s.name} from ${JSON.stringify(s.module)};`;
+  }
   const arity = typeExprArity(s.typeExpr);
   if (arity < 2) {
     const spec = s.imported === s.name ? s.name : `${s.imported} as ${s.name}`;
