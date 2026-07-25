@@ -54,6 +54,16 @@ let HeaderBadge = props => <BadgeShell>{props.label}</BadgeShell>`;
     expect(result?.code).toContain('h("p"');
   });
 
+  it("does not re-export names already emitted by codegen (curried extern)", () => {
+    const plugin = mochiPlugin();
+    // Arity ≥ 2 extern lowers to `const f = _curry(…); export { f }` — a second
+    // `export { f }` from the plugin is a Rollup duplicate-export error.
+    const code = `export extern useSelect : a -> (b -> c) -> c = "@re-reduced/preact" "useSelect"`;
+    const result = plugin.transform(code, "src/host.mochi");
+    expect(result?.code).toContain("export { useSelect };");
+    expect(result?.code.match(/export \{ useSelect \}/g)?.length).toBe(1);
+  });
+
   it("throws SyntaxError with diagnostic message when Mochi compilation fails", () => {
     const plugin = mochiPlugin();
     const badCode = `let invalid = `;

@@ -5,6 +5,5 @@
 // (ADR 0011). These stay opaque (`: a`) because their prop types live in TSX,
 // not HM — open-world `h` still accepts any attrs. Paths relative to THIS file.
 export extern HighlightedCode : a = "../components/HighlightCode" "HighlightedCode"
-export extern Counter : a = "../components/Counter" "Counter"
 export extern HeroCarousel : a = "../components/HeroCarousel" "HeroCarousel"
 export extern Playground : a = "../components/Playground" "Playground"

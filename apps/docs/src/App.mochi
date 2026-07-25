@@ -1,6 +1,7 @@
+import { Counter } from "./components/Counter"
 import { HeaderBadge } from "./components/HeaderBadge"
 import { SyntaxPanel } from "./components/SyntaxPanel"
-import { HighlightedCode, Counter, HeroCarousel } from "./host/widgets.host"
+import { HighlightedCode, HeroCarousel } from "./host/widgets.host"
 import {
   NavLink,
   GhostPill,
