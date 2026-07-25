@@ -32,19 +32,19 @@ let neighbours = (board, r, c) =>
   let rp = r + 1 in
   let cm = c - 1 in
   let cp = c + 1 in
-  b2n(
-    at(board, rm, cm)
-  ) + (b2n(
-    at(board, rm, c)
-  ) + (b2n(
-    at(board, rm, cp)
-  ) + (b2n(
-    at(board, r, cm)
-  ) + (b2n(
-    at(board, r, cp)
-  ) + (b2n(
-    at(board, rp, cm)
-  ) + (b2n(at(board, rp, c)) + b2n(at(board, rp, cp))))))))
+    b2n(
+      at(board, rm, cm)
+    ) + (b2n(
+      at(board, rm, c)
+    ) + (b2n(
+      at(board, rm, cp)
+    ) + (b2n(
+      at(board, r, cm)
+    ) + (b2n(
+      at(board, r, cp)
+    ) + (b2n(
+      at(board, rp, cm)
+    ) + (b2n(at(board, rp, c)) + b2n(at(board, rp, cp))))))))
 
 /// Determine cell state for the next generation given its current state and neighbour count.
 let nextCell = (alive, n) => alive ? n == 2 || n == 3 : n == 3
@@ -94,8 +94,7 @@ let loop = (remaining, g, board) =>
   remaining <= 0
     ? teardown(0)
     : let! _ = draw(label(g), render(board)) in
-      let! _ = Task.delay(90, 0) in
-      loop(remaining - 1, g + 1, step(board))
+    let! _ = Task.delay(90, 0) in loop(remaining - 1, g + 1, step(board))
 
 // setup grabs the alternate screen buffer, then we run 120 frames.
 let program = let! _ = setup(0) in loop(120, 0, board0)

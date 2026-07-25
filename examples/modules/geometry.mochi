@@ -14,9 +14,9 @@ export type Shape =
 
 /// Calculate the area of a geometric shape.
 export let area = s => switch s {
-  | Circle(r) => mul(pi, mul(r, r))
-  | Rect(w, h) => mul(w, h)
+  | Circle(r) => pi * (r * r)
+  | Rect(w, h) => w * h
 }
 
 /// Compute the Euclidean length (hypotenuse) of two orthogonal sides.
-export let hypot = (a, b) => sqrt(add(mul(a, a), mul(b, b)))
+export let hypot = (a, b) => sqrt(a * a + b * b)

@@ -43,7 +43,7 @@ gate is intentionally not on every commit — only on push.
 
 Individual pieces: `test`, `typecheck`, `lint` / `lint:fix`, `format`, `loc`,
 `gen:prelude` / `gen:runtime` (regenerate the parity-guarded shims), `fmt:mochi` (dogfood
-the `.mochi` formatter on `bootstrap/`), `build:ext` (VS Code extension).
+the formatter on every `.mochi` source in the repository), `build:ext` (VS Code extension).
 
 ## Editor surfaces
 

@@ -7,8 +7,8 @@ let compose = f => g => x => f(g(x))
 /// Left-to-right function composition: `f before g`.
 let andThen = f => g => x => g(f(x))
 
-let inc = x => add(x, 1)
-let double = x => mul(x, 2)
+let inc = x => x + 1
+let double = x => x * 2
 
 // point-free: build a new function using >> left-to-right composition operator
 let incThenDouble = inc >> double // x -> (x + 1) * 2
@@ -36,12 +36,12 @@ let flatMapOk = f => r => switch r { | Ok(v) => f(v) | Err(e) => Err(e) }
 let unwrapOr = fallback => r => switch r { | Ok(v) => v | Err(e) => fallback }
 
 // a validation step: a bool predicate chooses the track, string carries the error
-let positive = n => switch gt(n, 0) {
+let positive = n => switch n > 0 {
   | true => Ok(n)
   | false => Err("must be positive")
 }
 
-let halve = n => Ok(div(n, 2))
+let halve = n => Ok(n / 2)
 
 // full railway: validate, chain a fallible step, map on the happy track, recover
 // 20 -> Ok(20) -> Ok(10) -> Ok(20) -> 20
