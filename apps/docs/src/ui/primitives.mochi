@@ -87,7 +87,7 @@ export let GhostPillBtn = tw.button(
 )
 
 export let TypeHint = tw.div(
-  "my-1.5 ml-4 inline-flex w-max items-center gap-2 rounded-full border-2 border-ok-border bg-ok-soft px-2.5 py-1 font-mono text-2xs text-ok"
+  "my-1.5 ml-4 inline-flex max-w-[calc(100%-1rem)] items-start gap-2 whitespace-normal wrap-break-word rounded-2xl border-2 border-ok-border bg-ok-soft px-2.5 py-1 font-mono text-2xs text-ok"
 )
 
 export let CarouselNav = tw.button(
@@ -106,6 +106,28 @@ export let SegTab = tw.button(
     },
     defaultVariants: { $active: "off" }
   }
+)
+
+// Playground right-pane tabs (ReScript-style underline, not pills).
+export let PaneTab = tw.button(
+  "relative px-3 py-2.5 font-mono text-2xs font-semibold transition-colors",
+  {
+    variants: {
+      $active: {
+        on: "text-fur-deep after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-fur",
+        off: "text-mute hover:text-ink"
+      }
+    },
+    defaultVariants: { $active: "off" }
+  }
+)
+
+export let ToolBtn = tw.button(
+  "rounded-full border-2 border-fur/40 bg-foam px-3.5 py-1.5 font-mono text-2xs font-semibold text-fur-deep transition-colors hover:border-fur hover:bg-fur-subtle focus-visible:outline-2 focus-visible:outline-bao focus-visible:outline-offset-2 disabled:opacity-40"
+)
+
+export let ToolBtnSolid = tw.button(
+  "rounded-full border-2 border-fur bg-fur px-3.5 py-1.5 font-mono text-2xs font-semibold text-white transition-colors hover:bg-fur-deep focus-visible:outline-2 focus-visible:outline-bao focus-visible:outline-offset-2"
 )
 
 export let StatusLabel = tw.span(
@@ -165,13 +187,21 @@ export let EmitPane = tw.pre(
 // so a token's own colour rides along without a `cn(...)` call site.
 
 export let HoverToken = tw.span(
-  "group relative cursor-help rounded px-0.5 underline decoration-fur/40 underline-offset-4 transition-colors hover:bg-fur-glow hover:decoration-fur-deep"
+  "cursor-help rounded px-0.5 underline decoration-fur/40 underline-offset-4 transition-colors hover:bg-fur-glow hover:decoration-fur-deep"
 )
 
+// Viewport-anchored, not `absolute`: the syntax cards clip on `overflow-hidden`,
+// so placement comes from the token's client rect and `fixed` escapes the clip.
 export let TooltipAnchor = tw.span(
-  "pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 hidden w-max max-w-xs -translate-x-1/2 group-hover:block"
+  "pointer-events-none fixed z-50 block w-max max-w-xs -translate-x-1/2",
+  {
+    variants: { $place: { top: "-translate-y-full", bottom: "" } },
+    defaultVariants: { $place: "top" }
+  }
 )
 
+// `whitespace-normal` because tokens render inside a `<pre>` — inherited
+// `white-space: pre` would defeat `max-w-xs` and run the type past the card.
 export let TooltipCard = tw.span(
-  "block rounded-panel border-2 border-line-strong bg-foam p-2.5 font-mono text-2xs text-ink leading-tight shadow-soft"
+  "block whitespace-normal wrap-break-word rounded-panel border-2 border-line-strong bg-foam p-2.5 font-mono text-2xs text-ink leading-tight shadow-soft"
 )

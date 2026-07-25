@@ -1,0 +1,34 @@
+// Right-hand pane chrome: tab strip + pane body.
+import { PresetSelect } from "../ui/primitives"
+
+let PlaygroundRight = props =>
+  <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-peach">
+    <div
+      className="flex shrink-0 items-center gap-0.5 border-line border-b-2 px-2"
+      role="tablist"
+      ariaLabel="Output panes"
+    >
+      {props.tabs}
+    </div>
+    <div className="relative min-h-0 flex-1 overflow-auto p-3 sm:p-4">
+      {props.pane}
+    </div>
+  </div>
+
+let PlaygroundSettings = props =>
+  <div className="max-w-sm space-y-4 font-mono text-xs">
+    <div>
+      <label
+        htmlFor="playground-preset"
+        className="mb-1.5 block text-2xs text-mute"
+      >
+        {"Preset"}
+      </label>
+      <PresetSelect id="playground-preset" onChange={props.onPreset}>
+        {props.presetOptions}
+      </PresetSelect>
+    </div>
+    <p className="text-2xs text-mute leading-relaxed">
+      {"⌘E run · ⌘S format · share link lives in the URL query."}
+    </p>
+  </div>

@@ -1,0 +1,29 @@
+// Playground chrome — toolbar + body slot. Compile / hooks / refs stay in
+// Playground.tsx (let-in → IIFE breaks Rules of Hooks).
+import { StatusLabel, ToolBtn, ToolBtnSolid } from "../ui/primitives"
+
+let PlaygroundView = props =>
+  <div className="flex min-h-0 flex-1 flex-col bg-paper">
+    <div
+      className="flex shrink-0 flex-wrap items-center gap-2 border-line border-b-2 bg-peach px-3 py-2 sm:px-4"
+    >
+      <ToolBtn onClick={props.onToggleAutoRun} title="Toggle auto-run">
+        {props.autoRunLabel}
+      </ToolBtn>
+      <ToolBtn onClick={props.onRun} title="Run (⌘E)">
+        {"Run "}
+        <span className="text-mute">{"(⌘E)"}</span>
+      </ToolBtn>
+      <ToolBtn onClick={props.onFormat} title="Format (⌘S)">
+        {props.formatLabel}
+        <span className="text-mute">{" (⌘S)"}</span>
+      </ToolBtn>
+      <ToolBtnSolid onClick={props.onShare} title="Copy share link">
+        {props.shareLabel}
+      </ToolBtnSolid>
+      <div className="ml-auto flex items-center gap-2 font-mono text-2xs">
+        <StatusLabel $state={props.statusState}>{props.statusText}</StatusLabel>
+      </div>
+    </div>
+    {props.body}
+  </div>

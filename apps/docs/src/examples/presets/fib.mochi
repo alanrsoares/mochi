@@ -1,0 +1,10 @@
+let fib = n => n <= 1 ? n : fib(n - 1) + fib(n - 2)
+
+let result = fib(10)
+
+let app = <div
+  className="w-full max-w-md p-4 bg-paper border-2 border-line rounded-panel font-mono text-xs text-ok"
+>
+  {"fib(10) = "}
+  {result}
+</div>

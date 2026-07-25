@@ -12,3 +12,9 @@ declare module "*.jpg" {
   const value: string;
   export default value;
 }
+
+/** Tour snippets imported as source text for HighlightCode (not compiled modules). */
+declare module "*.mochi?raw" {
+  const source: string;
+  export default source;
+}

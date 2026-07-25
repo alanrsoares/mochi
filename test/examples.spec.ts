@@ -50,3 +50,21 @@ test("examples/modules builds the whole graph and wires imports", async () => {
   expect(main).toContain('import { area, hypot, Circle, Rect } from "./geometry.js";');
   expect(geometry).toContain("export const area");
 });
+
+test("docs tour snippets compile (source of HighlightCode panels)", () => {
+  for (const name of ["variants", "records", "jsx"] as const) {
+    const src = read(`apps/docs/src/examples/${name}.mochi`);
+    const r = compile(src);
+    expect(isErr(r), `${name}.mochi: ${isErr(r) ? JSON.stringify(r.error) : ""}`).toBe(false);
+  }
+});
+
+test("docs playground presets compile", () => {
+  for (const name of ["jsx", "result", "row-poly", "fib"] as const) {
+    const src = read(`apps/docs/src/examples/presets/${name}.mochi`);
+    const r = compile(src);
+    expect(isErr(r), `presets/${name}.mochi: ${isErr(r) ? JSON.stringify(r.error) : ""}`).toBe(
+      false,
+    );
+  }
+});

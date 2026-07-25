@@ -1,10 +1,6 @@
 import { HeaderBadge } from "./components/HeaderBadge"
 import { SyntaxPanel } from "./components/SyntaxPanel"
-import {
-  HighlightedCode,
-  Counter,
-  HeroCarousel
-} from "./host/widgets.host"
+import { HighlightedCode, Counter, HeroCarousel } from "./host/widgets.host"
 import {
   NavLink,
   GhostPill,
@@ -152,7 +148,7 @@ let App = props =>
           </span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <SyntaxPanel title="Variants" badge="Result<a, e>" tone="fur">
+          <SyntaxPanel title="Variants" badge="Result a e" tone="fur">
             <HighlightedCode
               code={props.codeVariants}
               lang="mochi"

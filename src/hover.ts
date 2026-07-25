@@ -53,7 +53,10 @@ const docAt = (
   if (isErr(lexed)) return undefined;
   const parsed = parse(lexed.value);
   if (isErr(parsed)) return undefined;
-  const hit = indexProgram(resolve(path), parsed.value).at(offset);
+  // Virtual buffers (`<buffer>`) skip path.resolve — node:path needs `process`,
+  // which browsers don't have (docs site imports hoverAt for twoslash).
+  const key = path.startsWith("<") ? path : resolve(path);
+  const hit = indexProgram(key, parsed.value).at(offset);
   return hit ? preludeDocForBinding(hit.binding) : undefined;
 };
 

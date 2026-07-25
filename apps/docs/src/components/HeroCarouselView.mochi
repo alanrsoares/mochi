@@ -1,0 +1,47 @@
+// Presentational carousel chrome. Index / timer / pause live in HeroCarousel.tsx
+// (hooks — let-in → IIFE breaks Rules of Hooks).
+import { CarouselNav } from "../ui/primitives"
+
+let HeroCarouselView = props =>
+  <figure
+    className="hero-carousel relative"
+    onMouseEnter={props.onPause}
+    onMouseLeave={props.onResume}
+    onFocusCapture={props.onPause}
+    onBlurCapture={props.onResume}
+  >
+    <div
+      className="hero-carousel__frame relative aspect-4/3 overflow-hidden bg-foam"
+    >
+      {props.images}
+    </div>
+    <figcaption className="mt-4 flex items-end justify-between gap-4">
+      <div className="min-w-0">
+        <div
+          className="font-bold font-mono text-3xs text-fur-deep uppercase tracking-kicker"
+        >
+          {props.kicker}
+        </div>
+        <div
+          className="mt-1 truncate font-display font-semibold text-ink text-lg tracking-tight"
+        >
+          {props.title}
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-3">
+        <CarouselNav ariaLabel="Previous artwork" onClick={props.onPrev}>
+          {"←"}
+        </CarouselNav>
+        <div
+          className="flex items-center gap-1.5"
+          role="tablist"
+          ariaLabel="Artwork slides"
+        >
+          {props.dots}
+        </div>
+        <CarouselNav ariaLabel="Next artwork" onClick={props.onNext}>
+          {"→"}
+        </CarouselNav>
+      </div>
+    </figcaption>
+  </figure>

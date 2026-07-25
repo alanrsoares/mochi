@@ -1,110 +1,24 @@
-import { type HoverInfo, hoverAt, lex } from "@mochi/compiler";
-import { isErr, unwrapOk } from "@onrails/result";
+import { type HoverInfo, hoverAt } from "@mochi/compiler";
+import { useEffect, useRef, useState } from "preact/hooks";
+import {
+  highlightMochiCode,
+  isHoverable,
+  processTwoslash,
+  splitSpansIntoLines,
+  tokenClass,
+} from "../lib/highlight.mochi";
 import { HoverToken, TooltipAnchor, TooltipCard, TypeHint } from "../ui/primitives.mochi";
 
 export type HighlightLanguage = "mochi" | "js";
 
+/** Span shape from highlight.mochi (`kind` — `type` is a mochi keyword). */
 type TokenSpan = {
   text: string;
-  type:
-    | "keyword"
-    | "type"
-    | "string"
-    | "number"
-    | "comment"
-    | "operator"
-    | "punctuation"
-    | "jsx"
-    | "plain";
-  offset?: number;
+  kind: string;
+  start: number;
 };
 
-export function highlightMochiCode(code: string): TokenSpan[] {
-  const lexed = lex(code);
-  if (isErr(lexed)) {
-    return [{ text: code, type: "plain" }];
-  }
-
-  const tokens = unwrapOk(lexed);
-  const spans: TokenSpan[] = [];
-  let curPos = 0;
-
-  for (const t of tokens) {
-    if (t.span.start > curPos) {
-      spans.push({
-        text: code.slice(curPos, t.span.start),
-        type: "plain",
-      });
-    }
-
-    const tokText = code.slice(t.span.start, t.span.end);
-    let type: TokenSpan["type"] = "plain";
-
-    switch (t.t) {
-      case "let":
-      case "type":
-      case "extern":
-      case "switch":
-      case "import":
-      case "export":
-        type = "keyword";
-        break;
-      case "num":
-        type = "number";
-        break;
-      case "str":
-      case "tmplstart":
-      case "tmplmid":
-      case "tmplend":
-        type = "string";
-        break;
-      case "id":
-        if (/^[A-Z]/.test(t.v)) {
-          type = "type";
-        } else {
-          type = "plain";
-        }
-        break;
-      case "lt":
-      case "gt":
-        type = "jsx";
-        break;
-      case "eq":
-      case "arrow":
-      case "tarrow":
-      case "pipe":
-      case "plus":
-      case "minus":
-      case "star":
-      case "slash":
-        type = "operator";
-        break;
-      case "lparen":
-      case "rparen":
-      case "lbrace":
-      case "rbrace":
-      case "lbracket":
-      case "rbracket":
-      case "colon":
-      case "dot":
-        type = "punctuation";
-        break;
-      default:
-        type = "plain";
-        break;
-    }
-
-    spans.push({ text: tokText, type, offset: t.span.start });
-    curPos = t.span.end;
-  }
-
-  if (curPos < code.length) {
-    spans.push({ text: code.slice(curPos), type: "plain" });
-  }
-
-  return spans;
-}
-
+/** RegExp JS highlighter — no RegExp in mochi prelude; stays host-side. */
 export function highlightJsCode(code: string): TokenSpan[] {
   const spans: TokenSpan[] = [];
   const tokenRegex =
@@ -115,70 +29,128 @@ export function highlightJsCode(code: string): TokenSpan[] {
 
   while (match !== null) {
     if (match.index > lastIndex) {
-      spans.push({ text: code.slice(lastIndex, match.index), type: "plain" });
+      spans.push({ text: code.slice(lastIndex, match.index), kind: "plain", start: -1 });
     }
 
     const [fullMatch, comment, str, keyword, typeName, num, op, punct] = match;
+    const start = match.index;
 
-    if (comment) spans.push({ text: fullMatch, type: "comment" });
-    else if (str) spans.push({ text: fullMatch, type: "string" });
-    else if (keyword) spans.push({ text: fullMatch, type: "keyword" });
-    else if (typeName) spans.push({ text: fullMatch, type: "type" });
-    else if (num) spans.push({ text: fullMatch, type: "number" });
-    else if (op) spans.push({ text: fullMatch, type: "operator" });
-    else if (punct) spans.push({ text: fullMatch, type: "punctuation" });
-    else spans.push({ text: fullMatch, type: "plain" });
+    if (comment) spans.push({ text: fullMatch, kind: "comment", start });
+    else if (str) spans.push({ text: fullMatch, kind: "string", start });
+    else if (keyword) spans.push({ text: fullMatch, kind: "keyword", start });
+    else if (typeName) spans.push({ text: fullMatch, kind: "type", start });
+    else if (num) spans.push({ text: fullMatch, kind: "number", start });
+    else if (op) spans.push({ text: fullMatch, kind: "operator", start });
+    else if (punct) spans.push({ text: fullMatch, kind: "punctuation", start });
+    else spans.push({ text: fullMatch, kind: "plain", start });
 
     lastIndex = tokenRegex.lastIndex;
     match = tokenRegex.exec(code);
   }
 
   if (lastIndex < code.length) {
-    spans.push({ text: code.slice(lastIndex), type: "plain" });
+    spans.push({ text: code.slice(lastIndex), kind: "plain", start: -1 });
   }
 
   return spans;
 }
 
-interface TwoslashAnnotation {
-  lineIndex: number;
-  hover: HoverInfo;
+/** Tailwind `max-w-xs`, mirrored here so placement can clamp before paint. */
+const TOOLTIP_MAX_W = 320;
+const VIEWPORT_PAD = 8;
+const TOKEN_GAP = 8;
+
+type TipPos = { x: number; y: number; place: "top" | "bottom" };
+
+/** Centre above the token, flipping below and clamping to the viewport. */
+function placeTooltip(el: HTMLElement): TipPos {
+  const rect = el.getBoundingClientRect();
+  const halfW = Math.min(TOOLTIP_MAX_W, window.innerWidth - VIEWPORT_PAD * 2) / 2;
+  const minX = VIEWPORT_PAD + halfW;
+  const maxX = window.innerWidth - VIEWPORT_PAD - halfW;
+  const centre = rect.left + rect.width / 2;
+
+  const place = rect.top < 120 ? "bottom" : "top";
+  return {
+    x: minX > maxX ? window.innerWidth / 2 : Math.min(Math.max(centre, minX), maxX),
+    y: place === "top" ? rect.top - TOKEN_GAP : rect.bottom + TOKEN_GAP,
+    place,
+  };
 }
 
-function processTwoslash(code: string): { cleanCode: string; annotations: TwoslashAnnotation[] } {
-  const lines = code.split("\n");
-  const cleanLines: string[] = [];
-  const annotations: TwoslashAnnotation[] = [];
+type TokenTooltipProps = { hover: HoverInfo; tip: TipPos };
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const match = line.match(/^(\s*)\/\/\s*(\^+)\?/);
+function TokenTooltip({ hover, tip }: TokenTooltipProps) {
+  const arrow = tip.place === "top" ? "-mt-1 border-r-2 border-b-2" : "-mb-1 border-t-2 border-l-2";
 
-    if (match && cleanLines.length > 0) {
-      const caretCol = line.indexOf("^");
-      let byteOffset = 0;
-      for (let j = 0; j < cleanLines.length - 1; j++) {
-        byteOffset += cleanLines[j].length + 1;
-      }
-      const lastLine = cleanLines[cleanLines.length - 1];
-      byteOffset += Math.min(caretCol, Math.max(0, lastLine.length - 1));
+  return (
+    <TooltipAnchor $place={tip.place} style={{ left: `${tip.x}px`, top: `${tip.y}px` }}>
+      {tip.place === "bottom" && (
+        <span className={`mx-auto block h-2 w-2 rotate-45 border-line-strong bg-foam ${arrow}`} />
+      )}
+      <TooltipCard>
+        <span className="mb-1 block border-line border-b pb-1 font-bold text-fur-deep">
+          {hover.code}
+        </span>
+        {hover.doc && (
+          <span className="mt-1 block font-sans text-3xs text-mute italic">{hover.doc}</span>
+        )}
+      </TooltipCard>
+      {tip.place === "top" && (
+        <span className={`mx-auto block h-2 w-2 rotate-45 border-line-strong bg-foam ${arrow}`} />
+      )}
+    </TooltipAnchor>
+  );
+}
 
-      const currentCleanCode = cleanLines.join("\n");
-      try {
-        const hover = hoverAt(currentCleanCode, byteOffset);
-        if (hover) {
-          annotations.push({ lineIndex: cleanLines.length - 1, hover });
-        }
-      } catch {
-        // hoverAt can fail on partial caret lines
-      }
-      continue;
-    }
+type HoverResolver = (offset: number) => HoverInfo | null;
 
-    cleanLines.push(line);
+type CodeTokenProps = {
+  span: TokenSpan;
+  resolveHover: HoverResolver | null;
+};
+
+function CodeToken({ span, resolveHover }: CodeTokenProps) {
+  // undefined = not resolved yet; null = resolved, no type under cursor
+  const hoverRef = useRef<HoverInfo | null | undefined>(undefined);
+  const tokenRef = useRef<HTMLSpanElement>(null);
+  const [tip, setTip] = useState<TipPos | null>(null);
+  const cls = tokenClass(span.kind);
+  const canHover = resolveHover !== null && span.start >= 0 && isHoverable(span.kind);
+
+  // Fixed coords go stale the moment anything scrolls.
+  useEffect(() => {
+    if (!tip) return;
+    const close = () => setTip(null);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [tip]);
+
+  if (!canHover) {
+    return <span className={cls}>{span.text}</span>;
   }
 
-  return { cleanCode: cleanLines.join("\n"), annotations };
+  const open = () => {
+    if (hoverRef.current === undefined) hoverRef.current = resolveHover(span.start);
+    const el = tokenRef.current;
+    if (hoverRef.current && el) setTip(placeTooltip(el));
+  };
+
+  return (
+    <HoverToken
+      ref={tokenRef}
+      className={cls}
+      onMouseEnter={open}
+      onMouseLeave={() => setTip(null)}
+    >
+      {span.text}
+      {tip && hoverRef.current ? <TokenTooltip hover={hoverRef.current} tip={tip} /> : null}
+    </HoverToken>
+  );
 }
 
 type HighlightedCodeProps = {
@@ -188,114 +160,37 @@ type HighlightedCodeProps = {
 };
 
 export function HighlightedCode({ code, lang, enableTwoslash = true }: HighlightedCodeProps) {
-  const { cleanCode, annotations } =
-    enableTwoslash && lang === "mochi"
-      ? processTwoslash(code)
-      : { cleanCode: code, annotations: [] };
-  const spans = lang === "mochi" ? highlightMochiCode(cleanCode) : highlightJsCode(cleanCode);
+  const twoslash = enableTwoslash && lang === "mochi";
+  const { cleanCode, annotations } = twoslash
+    ? processTwoslash(code)
+    : { cleanCode: code, annotations: new Map<number, HoverInfo>() };
 
-  const linesOfSpans: TokenSpan[][] = [[]];
-  for (const span of spans) {
-    const parts = span.text.split("\n");
-    for (let p = 0; p < parts.length; p++) {
-      if (p > 0) {
-        linesOfSpans.push([]);
-      }
-      if (parts[p].length > 0) {
-        linesOfSpans[linesOfSpans.length - 1].push({
-          ...span,
-          text: parts[p],
-        });
-      }
-    }
-  }
+  const spans: TokenSpan[] =
+    lang === "mochi" ? highlightMochiCode(cleanCode) : highlightJsCode(cleanCode);
+  const linesOfSpans: TokenSpan[][] = splitSpansIntoLines(spans);
 
-  const annotationByLine = new Map<number, HoverInfo>();
-  for (const ann of annotations) {
-    annotationByLine.set(ann.lineIndex, ann.hover);
-  }
+  // hoverAt recompiles; cache by offset and only resolve on token mouseenter.
+  const hoverCache = new Map<number, HoverInfo | null>();
+  const resolveHover: HoverResolver | null = twoslash
+    ? (offset) => {
+        if (hoverCache.has(offset)) return hoverCache.get(offset) ?? null;
+        const info = hoverAt(cleanCode, offset);
+        hoverCache.set(offset, info);
+        return info;
+      }
+    : null;
 
   return (
     <code className="block font-mono text-xs leading-relaxed">
       {linesOfSpans.map((lineSpans, lineIdx) => {
-        const lineHover = annotationByLine.get(lineIdx);
+        const lineHover = annotations.get(lineIdx) as HoverInfo | undefined;
 
         return (
           <div key={lineIdx} className="line flex flex-col">
             <div className="flex flex-wrap items-center">
-              {lineSpans.map((span, idx) => {
-                let cls = "text-ink";
-                switch (span.type) {
-                  case "keyword":
-                    cls = "text-plum font-bold";
-                    break;
-                  case "type":
-                    cls = "text-fur-deep font-bold";
-                    break;
-                  case "string":
-                    cls = "text-ok";
-                    break;
-                  case "number":
-                    cls = "text-code-number font-bold";
-                    break;
-                  case "comment":
-                    cls = "text-mute italic";
-                    break;
-                  case "jsx":
-                    cls = "text-lavender-deep font-bold";
-                    break;
-                  case "operator":
-                    cls = "text-fur-deep/80";
-                    break;
-                  case "punctuation":
-                    cls = "text-mute";
-                    break;
-                  default:
-                    cls = "text-ink";
-                    break;
-                }
-
-                let hoverInfo: HoverInfo | null = null;
-                if (
-                  enableTwoslash &&
-                  lang === "mochi" &&
-                  span.offset !== undefined &&
-                  (span.type === "type" || span.type === "plain" || span.type === "keyword")
-                ) {
-                  try {
-                    hoverInfo = hoverAt(cleanCode, span.offset);
-                  } catch {
-                    hoverInfo = null;
-                  }
-                }
-
-                if (!hoverInfo) {
-                  return (
-                    <span key={idx} className={cls}>
-                      {span.text}
-                    </span>
-                  );
-                }
-
-                return (
-                  <HoverToken key={idx} className={cls}>
-                    {span.text}
-                    <TooltipAnchor>
-                      <TooltipCard>
-                        <span className="mb-1 block border-line border-b pb-1 font-bold text-fur-deep">
-                          {hoverInfo.code}
-                        </span>
-                        {hoverInfo.doc && (
-                          <span className="mt-1 block font-sans text-3xs text-mute italic">
-                            {hoverInfo.doc}
-                          </span>
-                        )}
-                      </TooltipCard>
-                      <span className="mx-auto -mt-1 block h-2 w-2 rotate-45 transform border-line-strong border-r-2 border-b-2 bg-foam"></span>
-                    </TooltipAnchor>
-                  </HoverToken>
-                );
-              })}
+              {lineSpans.map((span, idx) => (
+                <CodeToken key={idx} span={span} resolveHover={resolveHover} />
+              ))}
             </div>
 
             {lineHover && (

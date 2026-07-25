@@ -5,7 +5,8 @@ import cosmicTypesImg from "@mochi/root/illustrations/mochi_cosmic_types.jpg";
 import lspInspectorImg from "@mochi/root/illustrations/mochi_lsp_inspector.jpg";
 import stickersImg from "@mochi/root/illustrations/mochi_stickers.jpg";
 import { useCallback, useEffect, useState } from "preact/hooks";
-import { CarouselDot, CarouselImg, CarouselNav } from "../ui/primitives.mochi";
+import { CarouselDot, CarouselImg } from "../ui/primitives.mochi";
+import HeroCarouselView from "./HeroCarouselView.mochi";
 
 type Slide = {
   src: string;
@@ -71,60 +72,38 @@ export function HeroCarousel() {
   }, [go, index, paused]);
 
   const slide = SLIDES[index];
+  const pause = () => setPaused(true);
+  const resume = () => setPaused(false);
 
   return (
-    <figure
-      className="hero-carousel relative"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-      onFocusCapture={() => setPaused(true)}
-      onBlurCapture={() => setPaused(false)}
-    >
-      <div className="hero-carousel__frame relative aspect-4/3 overflow-hidden bg-foam">
-        {SLIDES.map((s, i) => (
-          <CarouselImg
-            key={s.src}
-            src={s.src}
-            alt={s.alt}
-            $active={i === index ? "on" : "off"}
-            loading={i === 0 ? "eager" : "lazy"}
-            decoding="async"
-          />
-        ))}
-      </div>
-
-      <figcaption className="mt-4 flex items-end justify-between gap-4">
-        <div className="min-w-0">
-          <div className="font-bold font-mono text-3xs text-fur-deep uppercase tracking-kicker">
-            {slide.kicker}
-          </div>
-          <div className="mt-1 truncate font-display font-semibold text-ink text-lg tracking-tight">
-            {slide.title}
-          </div>
-        </div>
-
-        <div className="flex shrink-0 items-center gap-3">
-          <CarouselNav type="button" aria-label="Previous artwork" onClick={() => go(index - 1)}>
-            ←
-          </CarouselNav>
-          <div className="flex items-center gap-1.5" role="tablist" aria-label="Artwork slides">
-            {SLIDES.map((s, i) => (
-              <CarouselDot
-                key={s.src}
-                type="button"
-                role="tab"
-                aria-selected={i === index}
-                aria-label={`${s.title} (${i + 1} of ${SLIDES.length})`}
-                $active={i === index ? "on" : "off"}
-                onClick={() => go(i)}
-              />
-            ))}
-          </div>
-          <CarouselNav type="button" aria-label="Next artwork" onClick={() => go(index + 1)}>
-            →
-          </CarouselNav>
-        </div>
-      </figcaption>
-    </figure>
+    <HeroCarouselView
+      kicker={slide.kicker}
+      title={slide.title}
+      onPause={pause}
+      onResume={resume}
+      onPrev={() => go(index - 1)}
+      onNext={() => go(index + 1)}
+      images={SLIDES.map((s, i) => (
+        <CarouselImg
+          key={s.src}
+          src={s.src}
+          alt={s.alt}
+          $active={i === index ? "on" : "off"}
+          loading={i === 0 ? "eager" : "lazy"}
+          decoding="async"
+        />
+      ))}
+      dots={SLIDES.map((s, i) => (
+        <CarouselDot
+          key={s.src}
+          type="button"
+          role="tab"
+          aria-selected={i === index}
+          aria-label={`${s.title} (${i + 1} of ${SLIDES.length})`}
+          $active={i === index ? "on" : "off"}
+          onClick={() => go(i)}
+        />
+      ))}
+    />
   );
 }
