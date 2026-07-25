@@ -1,8 +1,6 @@
 import { type HoverInfo, hoverAt, lex } from "@mochi/compiler";
 import { isErr, unwrapOk } from "@onrails/result";
-import { cn } from "@styled-cva/react";
-import { hoverToken, tooltipAnchor, tooltipCard } from "../ui/chrome";
-import { TypeHint } from "../ui/primitives.mochi";
+import { HoverToken, TooltipAnchor, TooltipCard, TypeHint } from "../ui/primitives.mochi";
 
 export type HighlightLanguage = "mochi" | "js";
 
@@ -280,10 +278,10 @@ export function HighlightedCode({ code, lang, enableTwoslash = true }: Highlight
                 }
 
                 return (
-                  <span key={idx} className={cn(hoverToken(), cls)}>
+                  <HoverToken key={idx} className={cls}>
                     {span.text}
-                    <span className={tooltipAnchor()}>
-                      <span className={tooltipCard()}>
+                    <TooltipAnchor>
+                      <TooltipCard>
                         <span className="mb-1 block border-line border-b pb-1 font-bold text-fur-deep">
                           {hoverInfo.code}
                         </span>
@@ -292,10 +290,10 @@ export function HighlightedCode({ code, lang, enableTwoslash = true }: Highlight
                             {hoverInfo.doc}
                           </span>
                         )}
-                      </span>
+                      </TooltipCard>
                       <span className="mx-auto -mt-1 block h-2 w-2 rotate-45 transform border-line-strong border-r-2 border-b-2 bg-foam"></span>
-                    </span>
-                  </span>
+                    </TooltipAnchor>
+                  </HoverToken>
                 );
               })}
             </div>

@@ -1,21 +1,26 @@
 import { compile, format } from "@mochi/compiler";
+import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
 import { h, render } from "preact";
-import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import {
-  diagBox,
-  editorInput,
-  editorMirror,
-  emitPane,
-  pillSelect,
-  previewPane,
-  segTab,
-  statusLabel,
-} from "../ui/chrome";
-import { GhostPillBtn } from "../ui/primitives.mochi";
+  DiagBox,
+  EditorInput,
+  EditorMirror,
+  EmitPane,
+  GhostPillBtn,
+  PresetSelect,
+  PreviewPane,
+  SegTab,
+  StatusLabel,
+} from "../ui/primitives.mochi";
 import { HighlightedCode } from "./HighlightCode";
 
-const STORAGE_KEY = "mochi_playground_code";
+/** Emit is an ESM module (`import { match }…`); playground runs it in `new Function`. */
+const stripModuleImports = (js: string): string =>
+  js.replace(/^import\s+.+;?\s*$/gm, "").trimStart();
+
+const STORAGE_KEY = "mochi_playground_code_v2";
 
 const PRESETS: Record<string, { name: string; code: string }> = {
   jsx: {
@@ -23,26 +28,26 @@ const PRESETS: Record<string, { name: string; code: string }> = {
     code: `// jsxPlugin (default-on) desugars to host h(tag, props, children)
 
 let Badge = (props) =>
-  <span className="px-2.5 py-0.5 text-3xs font-mono font-bold tracking-wider rounded uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30">
+  <span className="px-2.5 py-0.5 text-3xs font-mono font-bold tracking-wider rounded uppercase bg-fur-subtle text-fur-deep border border-fur-border">
     {props.text}
   </span>
 
 let Card = (props) =>
-  <div className="p-5 bg-code-surface border border-code-line rounded-xl space-y-3 shadow-lg">
-    <div className="flex items-center justify-between">
-      <h3 className="text-base font-bold text-slate-100 font-display">{props.title}</h3>
+  <div className="w-full max-w-md p-5 bg-paper border-2 border-line rounded-panel space-y-3 shadow-soft">
+    <div className="flex items-center justify-between gap-3">
+      <h3 className="text-base font-bold text-ink font-display">{props.title}</h3>
       <Badge text="0 tsc errors" />
     </div>
-    <p className="text-xs font-mono text-slate-400 leading-relaxed">
-      {"HM types → readable JS + strict TypeScript."}
+    <p className="text-xs font-mono text-mute leading-relaxed">
+      {"Mochi compiles Hindley-Milner types to readable JS & strict TypeScript."}
     </p>
   </div>
 
-let app = <Card title="Algorithm W + JSX" />`,
+let app = <Card title="Algorithm W + Universal JSX" />`,
   },
   result: {
     name: "Result + switch",
-    code: `type Result<a, e> = Ok(a) | Err(e)
+    code: `// Prelude Result — no \`type Result<a, e>\` (that's TS; mochi is \`Result a e\`)
 
 let map = (res, f) =>
   switch res {
@@ -54,7 +59,7 @@ let res = Ok(21)
 let doubled = map(res, x => x * 2)
 
 let app =
-  <div className="p-4 bg-code-surface border border-code-line rounded-xl font-mono text-xs text-rose-300">
+  <div className="w-full max-w-md p-4 bg-paper border-2 border-line rounded-panel font-mono text-xs text-fur-deep">
     {"doubled = Ok(42)"}
   </div>`,
   },
@@ -68,19 +73,19 @@ let user = { name: "Alan", role: "Maintainer", id: 42 }
 let message = greet(user)
 
 let app =
-  <div className="p-4 bg-code-surface border border-code-line rounded-xl font-mono text-xs text-amber-300">
+  <div className="w-full max-w-md p-4 bg-paper border-2 border-line rounded-panel font-mono text-xs text-plum">
     {message}
   </div>`,
   },
   fib: {
     name: "Fibonacci",
     code: `let fib = (n) =>
-  if n <= 1 then n else fib(n - 1) + fib(n - 2)
+  n <= 1 ? n : fib(n - 1) + fib(n - 2)
 
 let result = fib(10)
 
 let app =
-  <div className="p-4 bg-code-surface border border-code-line rounded-xl font-mono text-xs text-emerald-300">
+  <div className="w-full max-w-md p-4 bg-paper border-2 border-line rounded-panel font-mono text-xs text-ok">
     {"fib(10) = "} {result}
   </div>`,
   },
@@ -130,35 +135,42 @@ export function Playground() {
         setOutputJs("");
         return;
       }
-
       setError(null);
       setOutputJs(res.value);
-
-      if (previewRef.current) {
-        previewRef.current.innerHTML = "";
-        try {
-          const fn = new Function(
-            "h",
-            `${res.value}; return typeof app !== 'undefined' ? app : null;`,
-          );
-          const vnode = fn(h);
-          if (vnode) {
-            render(vnode, previewRef.current);
-          } else {
-            previewRef.current.innerText = "Compiled. Bind `let app = …` to preview UI.";
-          }
-        } catch (execErr: any) {
-          previewRef.current.innerText = `Runtime error: ${execErr.message}`;
-        }
-      }
     } catch (e: any) {
       setError(e.message);
+      setOutputJs("");
     }
   }, [code]);
 
   useEffect(() => {
     evaluate();
-  }, [evaluate, activeTab]);
+  }, [evaluate]);
+
+  // Imperative Preact into a host React also reconciles. Sibling HighlightCode
+  // setState (Result/Fib lex slower than JSX) re-renders the parent and wipes
+  // those children — re-paint after every commit while preview is showing.
+  useLayoutEffect(() => {
+    const el = previewRef.current;
+    if (!el) return;
+    if (error || activeTab !== "preview" || !outputJs) {
+      render(null, el);
+      return;
+    }
+    try {
+      const fn = new Function(
+        "h",
+        "match",
+        `${stripModuleImports(outputJs)}; return typeof app !== 'undefined' ? app : null;`,
+      );
+      const vnode = fn(h, match);
+      render(vnode ?? null, el);
+      if (!vnode) el.innerText = "Compiled. Bind `let app = …` to preview UI.";
+    } catch (execErr: any) {
+      render(null, el);
+      el.innerText = `Runtime error: ${execErr.message}`;
+    }
+  });
 
   const handleFormat = useCallback(() => {
     const res = format(code);
@@ -204,17 +216,16 @@ export function Playground() {
           <label htmlFor="playground-preset" className="font-mono text-2xs text-mute">
             Preset
           </label>
-          <select
+          <PresetSelect
             id="playground-preset"
-            onChange={(e) => handlePresetSelect((e.target as HTMLSelectElement).value)}
-            className={pillSelect()}
+            onChange={(e: Event) => handlePresetSelect((e.target as HTMLSelectElement).value)}
           >
             {Object.entries(PRESETS).map(([key, p]) => (
               <option key={key} value={key}>
                 {p.name}
               </option>
             ))}
-          </select>
+          </PresetSelect>
         </div>
 
         <div className="flex items-center gap-2">
@@ -227,20 +238,20 @@ export function Playground() {
           </GhostPillBtn>
 
           <div className="flex items-center gap-1 rounded-full border-2 border-line bg-foam p-1 text-xs">
-            <button
+            <SegTab
               type="button"
               onClick={() => setActiveTab("preview")}
-              className={segTab({ active: activeTab === "preview" })}
+              $active={activeTab === "preview" ? "on" : "off"}
             >
               Preview
-            </button>
-            <button
+            </SegTab>
+            <SegTab
               type="button"
               onClick={() => setActiveTab("js")}
-              className={segTab({ active: activeTab === "js" })}
+              $active={activeTab === "js" ? "on" : "off"}
             >
               JS
-            </button>
+            </SegTab>
           </div>
         </div>
       </div>
@@ -252,17 +263,17 @@ export function Playground() {
               <span>source</span>
               <span className="text-3xs">Cmd+Enter</span>
             </span>
-            <span className={statusLabel({ ok: !error })}>{error ? "error" : "ok"}</span>
+            <StatusLabel $state={error ? "err" : "ok"}>{error ? "error" : "ok"}</StatusLabel>
           </div>
           <div className="relative min-h-80 flex-1 overflow-hidden rounded-panel border-2 border-line bg-paper">
-            <pre className={editorMirror()}>
+            <EditorMirror>
               <HighlightedCode code={code} lang="mochi" enableTwoslash={false} />
-            </pre>
+            </EditorMirror>
 
-            <textarea
+            <EditorInput
               value={code}
-              onInput={(e) => setCode((e.target as HTMLTextAreaElement).value)}
-              onScroll={(e) => {
+              onInput={(e: Event) => setCode((e.target as HTMLTextAreaElement).value)}
+              onScroll={(e: Event) => {
                 const preElem = (e.target as HTMLTextAreaElement).previousElementSibling;
                 if (preElem) {
                   preElem.scrollTop = (e.target as HTMLTextAreaElement).scrollTop;
@@ -272,7 +283,6 @@ export function Playground() {
               spellcheck={false}
               autoComplete="off"
               autoCorrect="off"
-              className={editorInput()}
               rows={15}
             />
           </div>
@@ -280,23 +290,24 @@ export function Playground() {
 
         <div className="flex flex-col bg-peach p-4">
           {error ? (
-            <div className={diagBox()}>
+            <DiagBox>
               <div className="mb-1 font-bold">diagnostics</div>
               {error}
-            </div>
-          ) : activeTab === "preview" ? (
-            <div className="flex flex-1 flex-col">
-              <div className="mb-2 font-mono text-2xs text-mute">preview</div>
-              <div ref={previewRef} className={previewPane()} />
-            </div>
-          ) : (
-            <div className="flex flex-1 flex-col">
-              <div className="mb-2 font-mono text-2xs text-mute">emitted js</div>
-              <pre className={emitPane()}>
-                <HighlightedCode code={outputJs} lang="js" />
-              </pre>
-            </div>
-          )}
+            </DiagBox>
+          ) : null}
+          {/* Keep host mounted so imperative preview isn't wiped by remount races. */}
+          <div
+            className={`flex flex-1 flex-col ${error || activeTab !== "preview" ? "hidden" : ""}`}
+          >
+            <div className="mb-2 font-mono text-2xs text-mute">preview</div>
+            <PreviewPane ref={previewRef} />
+          </div>
+          <div className={`flex flex-1 flex-col ${error || activeTab !== "js" ? "hidden" : ""}`}>
+            <div className="mb-2 font-mono text-2xs text-mute">emitted js</div>
+            <EmitPane>
+              <HighlightedCode code={outputJs} lang="js" />
+            </EmitPane>
+          </div>
         </div>
       </div>
     </div>

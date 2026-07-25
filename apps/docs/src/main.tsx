@@ -34,6 +34,7 @@ if (rootElem) {
   render(
     <App
       logo={logoImg}
+      playgroundHref={`${import.meta.env.BASE_URL}playground.html`}
       codeVariants={CODE_EXAMPLES.variants}
       codeRecords={CODE_EXAMPLES.records}
       codeJsx={CODE_EXAMPLES.jsx}

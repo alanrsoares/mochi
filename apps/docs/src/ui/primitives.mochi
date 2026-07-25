@@ -93,3 +93,85 @@ export let TypeHint = tw.div(
 export let CarouselNav = tw.button(
   "hero-carousel__nav font-mono text-mute text-xs hover:text-ink focus-visible:outline-2 focus-visible:outline-fur focus-visible:outline-offset-2"
 )
+
+// Toggle chrome. cva's `true`/`false` variant keys are not mochi record labels,
+// so the on/off axis is a string union instead — checked in mochi now that
+// `$active` infers as `"on" | "off"` (ADR 0012 / Wave 7), not `string`.
+
+export let SegTab = tw.button(
+  "rounded-full px-3 py-1 font-mono font-semibold text-2xs transition-colors",
+  {
+    variants: {
+      $active: { on: "bg-fur text-white", off: "text-mute hover:text-ink" }
+    },
+    defaultVariants: { $active: "off" }
+  }
+)
+
+export let StatusLabel = tw.span(
+  "font-bold",
+  {
+    variants: { $state: { ok: "text-ok", err: "text-fur-deep" } },
+    defaultVariants: { $state: "ok" }
+  }
+)
+
+export let CarouselDot = tw.button(
+  "h-2 rounded-full transition-all focus-visible:outline-2 focus-visible:outline-fur focus-visible:outline-offset-2",
+  {
+    variants: {
+      $active: { on: "w-5 bg-fur", off: "w-2 bg-line-strong hover:bg-mute" }
+    },
+    defaultVariants: { $active: "off" }
+  }
+)
+
+export let CarouselImg = tw.img(
+  "hero-carousel__img absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ease-out",
+  {
+    variants: { $active: { on: "opacity-100", off: "opacity-0" } },
+    defaultVariants: { $active: "off" }
+  }
+)
+
+// Playground chrome. `ref` / `value` / handlers ride the open prop row and the
+// host forwardRef, so the editor overlay needs no hand-written TSX shim.
+
+export let PresetSelect = tw.select(
+  "rounded-full border-2 border-line bg-foam px-3 py-1 font-mono text-ink text-xs focus:border-fur focus:outline-none"
+)
+
+export let EditorMirror = tw.pre(
+  "pointer-events-none absolute inset-0 m-0 overflow-auto whitespace-pre p-4 font-mono text-ink text-xs leading-relaxed"
+)
+
+export let EditorInput = tw.textarea(
+  "absolute inset-0 m-0 h-full w-full resize-none overflow-auto whitespace-pre border-0 bg-transparent p-4 font-mono font-normal text-transparent text-xs leading-relaxed caret-fur-deep selection:bg-fur/30 focus:outline-none"
+)
+
+export let DiagBox = tw.div(
+  "max-h-87.5 overflow-auto whitespace-pre-wrap rounded-panel border-2 border-fur bg-fur-tint p-4 font-mono text-fur-deep text-xs"
+)
+
+export let PreviewPane = tw.div(
+  "flex min-h-80 flex-1 items-center justify-center rounded-panel border-2 border-line bg-foam p-6"
+)
+
+export let EmitPane = tw.pre(
+  "max-h-87.5 flex-1 overflow-auto rounded-panel border-2 border-line bg-foam p-4 font-mono text-ink text-xs leading-relaxed"
+)
+
+// Hover-token chrome. The host merges a `className` prop into the base classes,
+// so a token's own colour rides along without a `cn(...)` call site.
+
+export let HoverToken = tw.span(
+  "group relative cursor-help rounded px-0.5 underline decoration-fur/40 underline-offset-4 transition-colors hover:bg-fur-glow hover:decoration-fur-deep"
+)
+
+export let TooltipAnchor = tw.span(
+  "pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 hidden w-max max-w-xs -translate-x-1/2 group-hover:block"
+)
+
+export let TooltipCard = tw.span(
+  "block rounded-panel border-2 border-line-strong bg-foam p-2.5 font-mono text-2xs text-ink leading-tight shadow-soft"
+)

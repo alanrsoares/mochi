@@ -27,4 +27,12 @@ export default defineConfig({
     },
   },
   base: "/mochi/",
+  build: {
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, "index.html"),
+        playground: path.resolve(__dirname, "playground.html"),
+      },
+    },
+  },
 });

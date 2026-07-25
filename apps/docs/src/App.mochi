@@ -1,7 +1,6 @@
 import { HeaderBadge } from "./components/HeaderBadge"
 import { SyntaxPanel } from "./components/SyntaxPanel"
 import {
-  Playground,
   HighlightedCode,
   Counter,
   HeroCarousel
@@ -41,7 +40,7 @@ let SiteHeader = props =>
       <nav
         className="hidden md:flex items-center gap-5 font-mono text-xs text-mute"
       >
-        <NavLink href="#playground">{"playground"}</NavLink>
+        <NavLink href={props.playgroundHref}>{"playground"}</NavLink>
         <NavLink href="#syntax">{"syntax"}</NavLink>
         <NavLink href="#interop">{"interop"}</NavLink>
         <GhostPill
@@ -65,7 +64,7 @@ let Hero = props =>
       <div className="space-y-7 max-w-xl">
         <HeroStatus>
           <span className="text-ok">{"●"}</span>
-          {"self-host · 0 tsc s--strict"}
+          {"self-host · 0 tsc --strict"}
         </HeroStatus>
         <h1
           className="text-hero sm:text-5xl lg:text-hero-lg font-extrabold font-display tracking-tight text-ink leading-hero"
@@ -82,7 +81,7 @@ let Hero = props =>
           {"Row-polymorphic records, parametric variants, JSX via builtin plugin → host h(). One codegen, two backends."}
         </p>
         <div className="flex flex-wrap gap-3 pt-1 font-mono text-xs">
-          <CtaPill href="#playground">{"Open playground"}</CtaPill>
+          <CtaPill href={props.playgroundHref}>{"Open playground"}</CtaPill>
           <CmdChip>
             <span className="text-fur-deep font-bold">{"$"}</span>
             <span className="text-ink">{"bun run mochi app.mochi"}</span>
@@ -123,10 +122,23 @@ let InteropRow = props =>
 
 let App = props =>
   <div className="site-grain min-h-screen flex flex-col bg-paper text-ink">
-    <SiteHeader logo={props.logo} />
-    <Hero />
+    <SiteHeader logo={props.logo} playgroundHref={props.playgroundHref} />
+    <Hero playgroundHref={props.playgroundHref} />
     <main className="max-w-6xl mx-auto px-6 py-14 space-y-16 flex-1 w-full">
-      <section id="playground" className="scroll-mt-20"><Playground /></section>
+      <section id="try" className="scroll-mt-20">
+        <div
+          className="panel flex flex-col sm:flex-row sm:items-center justify-between gap-6 px-6 py-8"
+        >
+          <div className="max-w-xl">
+            <SectionEyebrow>{"try"}</SectionEyebrow>
+            <SectionTitle>{"Playground"}</SectionTitle>
+            <p className="mt-2 text-sm text-mute leading-relaxed">
+              {"Edit mochi in the browser, compile to JS, preview with Preact — same idea as ReScript try / Gleam."}
+            </p>
+          </div>
+          <CtaPill href={props.playgroundHref}>{"Open playground →"}</CtaPill>
+        </div>
+      </section>
       <section id="syntax" className="space-y-6 scroll-mt-20">
         <div
           className="flex flex-col sm:flex-row sm:items-end justify-between gap-3"

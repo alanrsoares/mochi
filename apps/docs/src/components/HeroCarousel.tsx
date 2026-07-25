@@ -5,8 +5,7 @@ import cosmicTypesImg from "@mochi/root/illustrations/mochi_cosmic_types.jpg";
 import lspInspectorImg from "@mochi/root/illustrations/mochi_lsp_inspector.jpg";
 import stickersImg from "@mochi/root/illustrations/mochi_stickers.jpg";
 import { useCallback, useEffect, useState } from "preact/hooks";
-import { carouselDot, carouselImg } from "../ui/chrome";
-import { CarouselNav } from "../ui/primitives.mochi";
+import { CarouselDot, CarouselImg, CarouselNav } from "../ui/primitives.mochi";
 
 type Slide = {
   src: string;
@@ -83,11 +82,11 @@ export function HeroCarousel() {
     >
       <div className="hero-carousel__frame relative aspect-4/3 overflow-hidden bg-foam">
         {SLIDES.map((s, i) => (
-          <img
+          <CarouselImg
             key={s.src}
             src={s.src}
             alt={s.alt}
-            className={carouselImg({ active: i === index })}
+            $active={i === index ? "on" : "off"}
             loading={i === 0 ? "eager" : "lazy"}
             decoding="async"
           />
@@ -110,13 +109,13 @@ export function HeroCarousel() {
           </CarouselNav>
           <div className="flex items-center gap-1.5" role="tablist" aria-label="Artwork slides">
             {SLIDES.map((s, i) => (
-              <button
+              <CarouselDot
                 key={s.src}
                 type="button"
                 role="tab"
                 aria-selected={i === index}
                 aria-label={`${s.title} (${i + 1} of ${SLIDES.length})`}
-                className={carouselDot({ active: i === index })}
+                $active={i === index ? "on" : "off"}
                 onClick={() => go(i)}
               />
             ))}
