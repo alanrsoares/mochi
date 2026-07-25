@@ -31,7 +31,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Build Mochi Docs Site
-        run: bun --cwd apps/docs run build
+        run: bun run --cwd apps/docs build
 
       - name: Upload GitHub Pages Artifact
         uses: actions/upload-pages-artifact@v3
