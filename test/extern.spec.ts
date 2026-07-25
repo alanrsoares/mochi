@@ -98,6 +98,12 @@ test("lowercase names in a signature are generalized type variables", () => {
   expect(schemeOf(`extern id : a -> a = "./u.js" "id"`, "id")).toMatch(/^'t\d+ -> 't\d+$/);
 });
 
+test("default-export extern emits a default import", () => {
+  expect(js(`extern tw : a = "@styled-cva/react" "default"`)).toBe(
+    'import tw from "@styled-cva/react";\n',
+  );
+});
+
 test("a same-named export emits a plain import", () => {
   expect(js(`extern sqrt : number -> number = "node:module" "sqrt"`)).toBe(
     `import { sqrt } from "node:module";\n`,

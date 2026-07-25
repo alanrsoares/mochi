@@ -740,8 +740,12 @@ const genType = (s: TypeStmt, ctx: GenCtx): string =>
  * extern → ESM import. Arity ≥ 2 wraps the host export in `_curry` so flat
  * `(a, b) => …` hosts survive mochi's multi-arg call emit (ADR 0005 / #24).
  * The raw import is aliased to `$name` so the local binding stays the surface name.
+ * `imported === "default"` emits a default import (styled-cva / host kits).
  */
 const genExtern = (s: ExternStmt): string => {
+  if (s.imported === "default") {
+    return `import ${s.name} from ${JSON.stringify(s.module)};`;
+  }
   const arity = typeExprArity(s.typeExpr);
   if (arity < 2) {
     const spec = s.imported === s.name ? s.name : `${s.imported} as ${s.name}`;

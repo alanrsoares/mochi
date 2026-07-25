@@ -660,15 +660,16 @@ let typeExprArity = te => switch te {
 }
 
 /// extern → ESM import. Arity ≥ 2 wraps the host in `_curry` (ADR 0005 / #24).
+/// `imported == "default"` emits a default import (ADR 0009 / styled-cva).
 let genExtern = s => switch s {
-  | Ast.SExtern(name, _, typeExpr, modName, imported, _, _) => let arity = typeExprArity(
-      typeExpr
-    ) in
-      arity <= 1
-        ? let spec = imported == name ? name : "${imported} as ${name}" in
-          "import { ${spec} } from ${jsStringLit(modName)};"
-        : let raw = Str.concat("$", name) in
-          "import { ${imported} as ${raw} } from ${jsStringLit(modName)};\nconst ${name} = _curry(${show(arity)}, ${raw});"
+  | Ast.SExtern(name, _, typeExpr, modName, imported, _, _) => imported == "default"
+      ? "import ${name} from ${jsStringLit(modName)};"
+      : let arity = typeExprArity(typeExpr) in
+        arity <= 1
+          ? let spec = imported == name ? name : "${imported} as ${name}" in
+            "import { ${spec} } from ${jsStringLit(modName)};"
+          : let raw = Str.concat("$", name) in
+            "import { ${imported} as ${raw} } from ${jsStringLit(modName)};\nconst ${name} = _curry(${show(arity)}, ${raw});"
   | _ => ""
 }
 

@@ -52,6 +52,18 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
     const tk = expect("id") as Located & { t: "id"; v: string };
     return { name: tk.v, span: tk.span };
   };
+  /**
+   * Label in JSX attrs / record fields: `tone` or `$tone` (styled-cva transient props).
+   * `$` is not a general identifier — `let $x = …` / bare `$tone` still fail.
+   */
+  const expectLabel = (): { name: string; span: Span } => {
+    if (peek().t === "dollar") {
+      const dol = next();
+      const id = expectId();
+      return { name: `$${id.name}`, span: spanning(dol.span, id.span) };
+    }
+    return expectId();
+  };
   // span from a start marker to the last consumed token.
   const to = (start: Span): Span => spanning(start, last.span);
 
@@ -572,7 +584,7 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
         expect("rbrace");
         spreadExpr = sp;
       } else {
-        const attrId = expectId();
+        const attrId = expectLabel();
         let valExpr: Expr = { kind: "bool", value: true, span: attrId.span };
         if (peek().t === "eq") {
           next(); // consume '='
@@ -745,7 +757,7 @@ export function parse(toks: Located[]): Result<Program, Diagnostic> {
   }
 
   function parseField(): Field {
-    const id = expectId();
+    const id = expectLabel();
     expect("colon");
     return { name: id.name, nameSpan: id.span, value: parseExpr() };
   }

@@ -79,6 +79,7 @@ const TAG_TO_T: Record<string, string> = {
   TPercent: "percent",
   TAt: "at",
   THash: "hash",
+  TDollar: "dollar",
   TDot: "dot",
   TColon: "colon",
   TQuestion: "question",
@@ -161,7 +162,7 @@ const cases: Record<string, string> = {
   "number with trailing dot chars": "let n = 1.2\nlet m = -0.5",
   "string escapes decode": 'let s = "a\\nb\\tc\\\\d\\"e"',
   "digraphs before single chars": "let f = x => x |> g\nextern h : number -> number",
-  "all punctuation": "| = ( ) { } [ ] , . : @ #",
+  "all punctuation": "| = ( ) { } [ ] , . : @ # $",
   "arithmetic and comparison operators":
     "let r = 1 + 2 * 3 - 4 / 5 % 6\nlet c = a == b && c != d || e < f",
   "unary operators, chained": "let n = -x\nlet b = !x\nlet c = !!x\nlet d = -!x",

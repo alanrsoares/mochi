@@ -110,8 +110,8 @@
     "jsx-attribute": {
       "patterns": [
         {
-          "comment": "name=value — string or {expr}",
-          "begin": "\\b([A-Za-z_][A-Za-z0-9_]*)(=)",
+          "comment": "name=value — string or {expr}; $tone transient props (styled-cva)",
+          "begin": "(\\$?[A-Za-z_][A-Za-z0-9_]*)(=)",
           "beginCaptures": {
             "1": { "name": "entity.other.attribute-name.mochi" },
             "2": { "name": "punctuation.separator.key-value.mochi" }
@@ -120,8 +120,8 @@
           "patterns": [{ "include": "#strings" }, { "include": "#jsx-expression" }]
         },
         {
-          "comment": "boolean shorthand — disabled",
-          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\b",
+          "comment": "boolean shorthand — disabled / $active",
+          "match": "(\\$?[A-Za-z_][A-Za-z0-9_]*)\\b",
           "name": "entity.other.attribute-name.mochi"
         }
       ]
