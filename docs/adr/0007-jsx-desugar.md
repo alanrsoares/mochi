@@ -1,7 +1,7 @@
 # 0007 — Universal JSX/TSX syntax desugaring (`<tag />` to `h(tag, props, children)`)
 
-- **Status:** Proposed
-- **Source:** conversation; `src/ast.ts`; `src/lexer.ts`; `src/parser.ts`; `src/codegen.ts`
+- **Status:** Accepted
+- **Source:** conversation; `src/ast.ts`; `src/lexer.ts`; `src/parser.ts`; `src/codegen.ts`; `src/infer.ts`; `src/format.ts`; `src/dts.ts`
 
 ## Context
 
@@ -28,7 +28,7 @@ Rather than inventing a custom template engine or adding a heavy runtime virtual
    ```ts
    h(tag, propsRecord, childrenList)
    ```
-   Because desugaring happens directly into standard AST call nodes during parsing, the semantic checker (`check.ts`), Hindley-Milner type inference (`infer.ts`), and code generators (`codegen.ts` / `codegen-ts.ts`) require **zero modifications** to handle JSX calls.
+   Desugaring into standard `Expr.call` nodes keeps `check.ts` and the code generators (`codegen.ts` / `codegen-ts.ts`) generic — they treat JSX like any other call. **Later passes did grow small, targeted JSX seams** (still no dedicated `Expr.jsx` node): `infer.ts` recognizes `h(...)` via `inferJsxCall` (prop-row checking when the tag is a component; `VNode` result — [ADR 0010](0010-host-type-interop.md), tracer bullet #14); `format.ts` re-folds parser-produced `h(...)` back to JSX when span provenance matches; `dts.ts` emits component bindings when inference is `record → VNode`. That is core JSX plumbing, not kit-specific vendor plugins ([ADR 0010](0010-host-type-interop.md) boundary).
 
 4. **Universal Pragma Resolution:**
    - Default pragma identifier is `h`.
@@ -41,6 +41,7 @@ Rather than inventing a custom template engine or adding a heavy runtime virtual
 - **Strict TypeScript Compatibility:** Codegen emits plain calls `h(...)` which compile cleanly under `tsc --strict` when host declarations for `h` are in scope.
 - **Lexer & Parser Updates:** `lexer.ts` must disambiguate `<` as a binary comparison operator vs `<` as the start of a JSX tag in expression contexts.
 - **Formatter Support:** `src/format.ts` formats desugared calls or preserves JSX syntax when formatting.
+- **Targeted infer / dts seams:** `inferJsxCall` and `VNode`-aware dts emit are the only infer/dts special cases for JSX; kit hooks (`tw`, CVA AST) stay in vendor plugins, not core.
 
 ## Alternatives Rejected
 

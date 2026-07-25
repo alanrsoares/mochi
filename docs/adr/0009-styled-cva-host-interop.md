@@ -2,7 +2,8 @@
 
 - **Status:** Accepted
 - **Source:** `src/lexer.ts`, `src/parser.ts`, `src/codegen.ts`, `src/vite-plugin.ts`
-  (`moduleExt: ".mochi"`); docs kit in `apps/docs/src/ui/primitives.mochi`
+  (`moduleExt: ".mochi"`); docs kit in `apps/docs/src/ui/primitives.mochi`;
+  vendor plugin [`packages/plugin-styled-cva`](../../packages/plugin-styled-cva/README.md)
 
 ## Context
 
@@ -36,21 +37,29 @@ seam. The suffix is a greppable boundary between the language and its host glue
 codegens to a clean ESM re-export (`import x from "pkg"; export { x }`), so
 seams compose through the Vite plugin and the module graph unchanged.
 
-**Seam bindings stay opaque (`: a`) — deliberately, not lazily.** Precise
-signatures are infeasible or harmful in the current language:
+**Seam bindings stay opaque (`: a`) where precise HM would lie — deliberately,
+not lazily.** What is still infeasible or harmful in the current language:
 
 - `tw.<tag>` is overloaded (`tw.div("x")` **and** `tw.div("x", { variants })`).
   A fixed-arity HM arrow types the 1-arg sites as *partial application* (a
   function) when they are components — a wrong type leaking into `.d.mochi.ts`.
-- JSX desugars to open-world `h(tag, props, children)`; Mochi does **not** check
-  JSX attrs against a component's type, so typing widget externs adds no prop
-  hints.
+  The `tw` overload is **not** modeled in core infer; [`@mochi/plugin-styled-cva`](../../packages/plugin-styled-cva/README.md)
+  is a **vendor plugin** (project plugin list — [`apps/docs/mochi.plugins.ts`](../../apps/docs/mochi.plugins.ts);
+  boundary in [ADR 0010](0010-host-type-interop.md)), not language core.
+- JSX desugars to `h(tag, props, children)`. **Core** now checks attrs against a
+  component tag's prop row when the tag types as `record → VNode` (`inferJsxCall`,
+  tracer bullet #14 / [ADR 0010](0010-host-type-interop.md)). String/intrinsic
+  tags stay open-world on props.
 
-Each seam file documents *why* it is opaque. The two DX gaps this leaves —
-variant/prop hints and `tw.*` completion — are language/LSP features (JSX-attr
-type checking; an LSP completion provider), tracked in
-[dx-tracer-bullets.md](../dx-tracer-bullets.md), not worked around with fake
-types.
+**Gap B is partly closed:** the vendor plugin hooks `inferCall` + `dtsBinding`
+for `$tone` literal unions on `tw.*` factories; JSX-attr checking covers prop
+usage at `<Component … />` sites. `re-reduced` will follow the same vendor-plugin
+pattern (Gap A). Seam `extern` lines can stay `: a` — honesty at the FFI boundary
+without fake fixed-arity `tw` arrows.
+
+Remaining DX gap: `tw.*` / field completion (tracer bullet #13) — an LSP
+completion provider, not fake extern types. Tracked in
+[dx-tracer-bullets.md](../dx-tracer-bullets.md).
 
 ## Consequences
 
@@ -59,6 +68,8 @@ types.
   Mochi.
 - Non-core FFI is isolated behind `*.host.mochi`; `rg 'export extern'` /
   `**/*.host.mochi` enumerates every host dependency of a Mochi app.
+- styled-cva (and later re-reduced) ship as **vendor plugins** under
+  `packages/plugin-*`, registered per project — not baked into core `src/`.
 - Formatter round-trips `$tone` attrs and record fields; TextMate treats `\$?` attr names.
 - Multi-arg default externs are not `_curry`-wrapped (default import is the whole value).
 

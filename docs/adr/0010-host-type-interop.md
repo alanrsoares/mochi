@@ -32,19 +32,23 @@ forever — emit and language need an honest bridge.
 3. **Gap A (near term):** a typed host bridge (or typed extern once rows work in
    signatures) so TSX sees `ContainerDef<S, R, …>` from `@re-reduced/core`.
    Prefer one cast at the seam file over casts at every hook call site.
-4. **Gap B:** (a) styled-cva **host extension** for `tw` factory typing (Wave 3
-   #15) — not core infer; (b) JSX-attr check against prop rows in **core** (#14);
-   (c) dts component mode (#17), including CVA variant key extraction via the
-   styled-cva `dtsBinding` hook.
-5. **Boundary:** Universal JSX (parse desugar + `h` prop checking) may stay in
-   **language core**. Kit-specific knowledge (`tw`, CVA variant AST, re-reduced
-   factories) lives in **host extensions** (`InferOptions.extensions` /
-   `emitDts` / Vite `mochiPlugin({ extensions })`) — see
-   [`src/extensions.ts`](../../src/extensions.ts) and
-   [`src/ext/styled-cva.ts`](../../src/ext/styled-cva.ts).
+4. **Gap B:** (a) `@mochi/plugin-styled-cva` **vendor plugin** for `tw` factory
+   typing (Wave 3 #15) — not core infer; (b) JSX-attr check against prop rows in
+   **core** (#14 / `inferJsxCall`); (c) dts component mode (#17), including CVA
+   variant key extraction via the plugin's `dtsBinding` hook.
+5. **Boundary:** Universal JSX (parse desugar + `h` prop checking) stays in
+   **language core** ([ADR 0007](0007-jsx-desugar.md)). Kit-specific knowledge
+   (`tw`, CVA variant AST, re-reduced factories) lives in **vendor plugins**
+   (`HostExtension` via the project plugin list — `InferOptions.extensions` /
+   `emitDts` / Vite / LSP) — see
+   [`packages/plugin-styled-cva`](../../packages/plugin-styled-cva/README.md),
+   [`apps/docs/mochi.plugins.ts`](../../apps/docs/mochi.plugins.ts), and
+   [`src/extensions.ts`](../../src/extensions.ts). styled-cva and re-reduced are
+   vendor plugins, not language core. Do **not** fold kit AST walks into core
+   `infer.ts`.
 6. **Non-goals:** full `VariantProps` in HM; React-specific dts; fake fixed-arity
-   `tw` arrows that type 1-arg sites as partial application; putting styled-cva
-   into core `infer.ts`.
+   `tw` arrows that type 1-arg sites as partial application; a new LanguagePlugin
+   ADR or moving styled-cva back into core `infer.ts`.
 
 ## Consequences
 
