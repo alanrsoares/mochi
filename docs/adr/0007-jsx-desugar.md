@@ -47,3 +47,22 @@ Rather than inventing a custom template engine or adding a heavy runtime virtual
 
 - **First-class `Expr.jsx` AST Node throughout Checker & Infer:** Rejected. Adding a dedicated AST node would require updating every compiler pass (`check`, `infer`, `unify`, `codegen`, `codegen-ts`, `dts`, `symbols`, `nav`, `lsp`). Immediate parse-time desugar into `Expr.call` keeps the compiler pipeline lean and completely type-checked.
 - **Builtin Mochi Virtual DOM:** Rejected. A custom VDOM would create a runtime dependency and fragment interop with popular JS UI ecosystems (React/Preact/Hono/Solid).
+
+## Cross-link — seams relocate into the builtin `jsxPlugin` ([ADR 0011](0011-language-plugins.md))
+
+The parse-time desugar this ADR decided (`<tag/>` → `h(tag, props, children)`)
+remains, unchanged in shape and in emitted output — status stays **Accepted**.
+What moves is *where every JSX pass lives*: the seams §3/Consequences list here
+(`inferJsxCall`, the formatter's `<tag>` re-fold, `VNode` component dts) plus the
+`parseJsx` desugar itself relocate out of `infer.ts` / `format.ts` / `dts.ts` /
+`parser.ts` into a builtin `jsxPlugin` behind the
+[ADR 0011](0011-language-plugins.md) `LanguagePlugin` seam, default-registered on
+all standard compile paths. Sugar provenance (`call.origin`, ADR 0011 §5)
+replaces the `JSX_ORIGIN` WeakSet / span-sniffing this ADR's formatter support
+relied on.
+
+Two clarifications to the Consequences above, as shipped: the **lexer** never
+needed to disambiguate `<` (it emits a plain `lt` token; the JSX `parse` hook is
+consulted only at atom position, where a comparison operator cannot appear), and
+JSX syntax is now **conditional on the plugin** — with `plugins: []` a `<tag/>`
+is a plain parse `Diagnostic` (ADR 0011 decision 3).

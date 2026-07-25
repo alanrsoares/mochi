@@ -39,7 +39,7 @@ forever — emit and language need an honest bridge.
 5. **Boundary:** Universal JSX (parse desugar + `h` prop checking) stays in
    **language core** ([ADR 0007](0007-jsx-desugar.md)). Kit-specific knowledge
    (`tw`, CVA variant AST, re-reduced factories) lives in **vendor plugins**
-   (`HostExtension` via the project plugin list — `InferOptions.extensions` /
+   (`HostExtension` via the project plugin list — `InferOptions.plugins` /
    `emitDts` / Vite / LSP) — see
    [`packages/plugin-styled-cva`](../../packages/plugin-styled-cva/README.md),
    [`apps/docs/mochi.plugins.ts`](../../apps/docs/mochi.plugins.ts), and
@@ -63,3 +63,14 @@ forever — emit and language need an honest bridge.
   drifts from `gen:mochi-dts`.
 - **Giant `tw` record of every HTML tag in HM** — lies about arity; brittle.
 - **Emitting Preact/React `FC` from the compiler** — couples language to one host.
+
+## Amendment — superseded by ADR 0011 (2026-07-25)
+
+Decision §5 ("Universal JSX … stays in language core") and the non-goal in §6
+("a new LanguagePlugin ADR") are **superseded by
+[ADR 0011](0011-language-plugins.md)**. JSX moves out of core into a builtin
+`jsxPlugin` behind the widened `LanguagePlugin` seam; core keeps HM + rows +
+variants only. The rest of this ADR is unaffected: Gap A/B split (§1), the
+host-agnostic component emit shape (§2), the Gap A typed bridge (§3), and the
+vendor-plugin boundary for `tw` / CVA / `re-reduced` (§4, §5's second sentence)
+all stand — only the "JSX stays core" half of §5 is reopened.

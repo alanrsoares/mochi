@@ -16,12 +16,27 @@ string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck�
 | parse | `parser.ts` | Pratt parser → `Program` (throws `ParseAbort` internally, caught at the boundary) |
 | check | `check.ts` | name registry, duplicate-decl, `switch` exhaustiveness (incl. imported variants) |
 | typecheck | `infer.ts` / `unify.ts` | Algorithm W (mutual recursion via Tarjan SCC) / row + type unification |
-| codegen | `codegen.ts` | **pure, non-failing** AST → JS; also → TS behind the TS-backend hooks |
+| codegen | `codegen.ts` | **pure, non-failing** AST → JS |
 
 `module.ts` (`buildModules`) drives multi-file graphs: DFS load, cycle detection,
 cross-module inference and exhaustiveness. `prelude.ts` holds the builtin HM signatures,
 the JS runtime strings, and the namespace tables. `compile.ts` is the single-file
 railway; `cli.ts` is the CLI; `lsp/server.ts` is a thin adapter over compiler surfaces.
+
+## The plugin seam
+
+Core (`lexer.ts` / `parser.ts` / `infer.ts` / `format.ts` / `dts.ts`) carries no
+kit-specific or JSX-specific knowledge. `extensions.ts` defines `LanguagePlugin` —
+optional `parse` / `inferCall` / `format` / `bindingType` / `dtsBinding` hooks,
+consulted at one seam per pass — and `resolvePlugins`, the single opt-in/opt-out rule
+every entry point (`compile`, the module graph, `dts`, the Vite plugin, the LSP) uses:
+a caller's `plugins` list omitted resolves to the builtin list; `[]` is a hard opt-out
+(no plugins, not even builtins); a non-empty list gets builtins **prepended**. JSX is
+the first builtin, `plugins/jsx.ts`'s `jsxPlugin` — parsing `<tag/>` into
+`h(tag, props, children)`, its prop-row inference, the formatter's re-fold (as a `Doc`,
+`doc.ts`), and its component `.d.ts`/TS binding type, all in one file instead of four
+core seams. `@mochi/plugin-styled-cva` is a vendor plugin built the same way, outside
+the compiler tree. See [ADR 0011](adr/0011-language-plugins.md).
 
 The one error-type seam worth knowing: `unify.ts` speaks a narrow `TypeErr`; it becomes
 the unified `Diagnostic` (`kind: lex | parse | check | type`) only at `infer.ts`'s `u()`
@@ -45,6 +60,12 @@ The compiler is re-implemented in mochi under `bootstrap/` (`lexer.mochi`,
 host files stay hand-written as `.mjs`: `host.mjs` (IO/resolver shims) and
 `prelude.gen.mjs` (the generated, parity-guarded prelude-table shim). Everything else is
 compiled from the `.mochi` sources.
+
+`bootstrap/`'s copy of the parser/inference still has JSX inline — the `src/` → plugin
+move (ADR 0011) has not been mirrored there yet, a deliberate deferral (ADR 0011 §6).
+`fixpoint` (below) compares *emitted output*, not internal structure, so this is safe:
+stage2 ≡ stage3 ≡ TS still holds even though `bootstrap/parser.mochi` and `src/parser.ts`
+disagree on where JSX parsing lives. A follow-on slice ports the self-hosted copy.
 
 Two invariants are enforced in CI-style scripts:
 

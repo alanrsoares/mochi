@@ -48,4 +48,5 @@ What else was on the table and why not.
 | [0008](0008-vite-mochi-docs-app.md) | Vite Plugin & GitHub Pages Documentation Architecture | Proposed |
 | [0009](0009-styled-cva-host-interop.md) | Host styled-cva interop (`$`-labels + default `extern`) | Accepted |
 | [0010](0010-host-type-interop.md) | Host type interop (Mochi → TS/TSX) | Accepted |
+| [0011](0011-language-plugins.md) | Language plugins (`HostExtension` → `LanguagePlugin`; JSX as builtin plugin) | Accepted |
 

@@ -86,3 +86,12 @@ Spans travel on every token, node, and type through the whole pipeline — hover
 diagnostics, and formatting all depend on that. Synthetic identifiers are marked by
 convention: `_`-prefixed names are emitted runtime helpers, `$`-prefixed names are
 synthetic destructure temporaries (both excluded from hover and exports).
+
+## Plugins
+
+The Vite plugin (`MochiPluginOptions.plugins`), `gen-mochi-dts`, and the LSP all accept
+the same `plugins?: LanguagePlugin[]` option `compile`/`emitDts`/`format` do — a project
+lists its vendor plugins once (e.g. `apps/docs/mochi.plugins.ts`'s `docsVendorPlugins`)
+and imports that list everywhere instead of hand-duplicating it. JSX needs no entry —
+`jsxPlugin` is a builtin, registered by default; passing `plugins: []` is the non-UI
+opt-out ([ADR 0011](adr/0011-language-plugins.md), [tracer bullets](dx-tracer-bullets.md)).

@@ -39,8 +39,11 @@ string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck�
 | `ast.ts` / `types.ts` | `Expr`/`Pattern`/`TypeExpr`/`Stmt` unions; `Type`/`Row` representation |
 | `check.ts` | name registry, duplicate-decl, `switch` exhaustiveness (incl. imported variants) |
 | `infer.ts` / `unify.ts` | Algorithm W (mutual recursion via Tarjan SCC) / row+type unification |
-| `codegen.ts` | **pure, non-failing** AST → JS; behind TS-backend hooks (default off) also → TS |
+| `codegen.ts` | **pure, non-failing** AST → JS only |
 | `codegen-ts.ts` | wraps `codegen.ts`, feeding type annotations from the inference table → strict-clean TS (ADR 0026) |
+| `extensions.ts` | `LanguagePlugin` seam (ADR 0011): optional `parse`/`inferCall`/`format`/`bindingType`/`dtsBinding` hooks; `resolvePlugins` opt-in/opt-out |
+| `plugins/jsx.ts` | builtin `jsxPlugin` — all of JSX (parse/infer/format/dts) as a plugin, not core |
+| `doc.ts` | Wadler-style `Doc` IR + layout engine, shared by `format.ts` and plugin `format` hooks |
 | `module.ts` | `buildModules(): ResultAsync<…>` — DFS load, cycle detection, compile graph |
 | `prelude.ts` | builtin HM signatures + JS runtime strings + namespace tables |
 | `dts` · `format` · `hover` · `diagnostics` | `.d.ts`; pretty-print (lex+parse only); LSP surfaces |
