@@ -7,7 +7,7 @@
     "dev": "bun ../../scripts/gen-mochi-dts.ts && vite",
     "build": "bun ../../scripts/gen-mochi-dts.ts && vite build",
     "preview": "vite preview",
-    "check": "bun ../../scripts/gen-mochi-dts.ts && tsc --noEmit"
+    "check": "bun ../../scripts/gen-mochi-dts.ts && tsc --noEmit && vite build"
   },
   "dependencies": {
     "@mochi/plugin-styled-cva": "workspace:*",

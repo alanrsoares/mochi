@@ -23,8 +23,9 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
-      # The whole quality gate: biome + tsc --noEmit + formatter dogfood + the
-      # test suite. The suite already enforces the two self-hosting north-stars —
+      # The whole quality gate: biome + tsc --noEmit + workspace checks (docs
+      # vite build included via @mochi/docs) + formatter dogfood + the test
+      # suite. The suite already enforces the two self-hosting north-stars —
       # the tsc --strict-clean ratchet (bootstrap-tsc.spec.ts) and the byte-exact
       # fixpoint reproduction (bootstrap-fixpoint-binary.spec.ts) — so this single
       # command is the complete verification.
