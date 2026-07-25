@@ -29,6 +29,12 @@ bun run fixpoint       # self-host reproduces itself (stage2 ≡ stage3 ≡ TS)
 bun run bootstrap:tsc  # count tsc --strict errors on the self-host (north-star: 0)
 ```
 
+`bun install` runs `prepare` → `scripts/setup-hooks.ts`, which sets
+`core.hooksPath=.githooks`. On **push**, `.githooks/pre-push` runs the same
+`bun run check` as CI. Escape hatch (rare): `git push --no-verify`. Commits only
+run `.githooks/prepare-commit-msg` (strips attribution trailers) — the full gate
+is intentionally not on every commit.
+
 Individual pieces: `test`, `typecheck`, `lint` / `lint:fix`, `format`, `loc`,
 `gen:prelude` / `gen:runtime` (regenerate the parity-guarded shims), `fmt:mochi` (dogfood
 the `.mochi` formatter on `bootstrap/`), `build:ext` (VS Code extension).

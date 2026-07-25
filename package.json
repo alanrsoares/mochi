@@ -22,6 +22,7 @@
     "fmt:check": "bun scripts/fmt-al.ts --check",
     "fixpoint": "bun scripts/fixpoint.ts",
     "clean": "bun scripts/clean.ts",
+    "prepare": "bun scripts/setup-hooks.ts",
     "example": "bun run mochi build examples/cli.mochi && bun examples/cli.js",
     "example:life": "bun run mochi build examples/life/main.mochi && bun examples/life/main.js",
     "example:snake": "bun examples/snake/server.mts",
