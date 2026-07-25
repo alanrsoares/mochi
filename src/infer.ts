@@ -159,16 +159,17 @@ const bindParam = (p: LamParam, env: Env, ctx: Ctx): Type => {
 };
 
 /**
- * let? / let! param = value in body — monadic bind (ADR 0005).
- * Result: value `Result a e`, body `Result b e`, whole is body's type.
- * Task: value `Task a`, body `Task b`, whole is body's type.
+ * let? / let! param = value in body — monadic bind (ADR 0005, error channel
+ * per ADR 0006). Both surfaces bind a two-slot monad: value `M a e`, body
+ * `M b e`, whole is body's type. `monad` only picks the constructor name.
  */
 function inferLetBind(e: LetBindExpr, ctx: Ctx): Result<Type, Diagnostic> {
   const valT = infer(e.value, ctx);
   if (isErr(valT)) return valT;
   const payloadT = freshVar(ctx.fresh);
-  const errT = e.monad === "Result" ? freshVar(ctx.fresh) : null;
-  const wantVal = errT !== null ? tCon("Result", [payloadT, errT]) : tCon("Task", [payloadT]);
+  const errT = freshVar(ctx.fresh);
+  const ctor = e.monad === "Result" ? "Result" : "Task";
+  const wantVal = tCon(ctor, [payloadT, errT]);
   const uv = u(valT.value, wantVal, ctx, e.value.span);
   if (isErr(uv)) return uv;
   const bodyEnv: Env = new Map(ctx.env);
@@ -180,7 +181,7 @@ function inferLetBind(e: LetBindExpr, ctx: Ctx): Result<Type, Diagnostic> {
   const bodyT = infer(e.body, { ...ctx, env: bodyEnv });
   if (isErr(bodyT)) return bodyT;
   const resT = freshVar(ctx.fresh);
-  const wantBody = errT !== null ? tCon("Result", [resT, errT]) : tCon("Task", [resT]);
+  const wantBody = tCon(ctor, [resT, errT]);
   const ub = u(bodyT.value, wantBody, ctx, e.body.span);
   return isErr(ub) ? ub : ok(wantBody);
 }

@@ -43,7 +43,7 @@ What else was on the table and why not.
 | [0003](0003-rich-diagnostics.md) | Rich diagnostics in the compiler | Accepted |
 | [0004](0004-multi-error-diagnostics.md) | Multi-error diagnostics (check + infer) | Accepted |
 | [0005](0005-prelude-task.md) | Prelude `Task` (lazy async values) | Accepted |
-| [0006](0006-task-result-async.md) | `Task` gets an error channel (`Task a e`, `ResultAsync`-aligned) | Proposed |
+| [0006](0006-task-result-async.md) | `Task` gets an error channel (`Task a e`, `ResultAsync`-aligned) | Accepted |
 | [0007](0007-jsx-desugar.md) | Universal JSX/TSX syntax desugaring (`<tag />` to `h(tag, props, children)`) | Accepted |
 | [0008](0008-vite-mochi-docs-app.md) | Vite Plugin & GitHub Pages Documentation Architecture | Proposed |
 | [0009](0009-styled-cva-host-interop.md) | Host styled-cva interop (`$`-labels + default `extern`) | Accepted |

@@ -16,13 +16,14 @@ const cmp = bin(tNumber, tNumber, tBool);
 const a = tVar(0);
 const b = tVar(1);
 const c = tVar(2);
+const d = tVar(3);
 const arr = (t: Type): Type => tCon("Array", [t]);
 const list = (t: Type): Type => tCon("List", [t]);
 const set = (t: Type): Type => tCon("Set", [t]);
 const mapT = (k: Type, v: Type): Type => tCon("Map", [k, v]);
 const opt = (t: Type): Type => tCon("Option", [t]);
 const res = (t: Type, e: Type): Type => tCon("Result", [t, e]);
-const task = (t: Type): Type => tCon("Task", [t]);
+const task = (t: Type, e: Type): Type => tCon("Task", [t, e]);
 const promise = (t: Type): Type => tCon("Promise", [t]);
 
 /**
@@ -303,13 +304,24 @@ export const preludeJsDefs: Record<string, string> = {
   _Str_chars: "const _Str_chars = (s) => [...s];",
   _Str_toNumber:
     "const _Str_toNumber = (s) => { const n = Number(s); return Number.isNaN(n) ? None : Some(n); };",
-  // Task — lazy async thunk `() => Promise<a>`. Building one runs no effect; `run` kicks it off.
-  _Task_of: "const _Task_of = (x) => () => Promise.resolve(x);",
-  _Task_map: "const _Task_map = _curry(2, (f, t) => () => t().then(f));",
-  _Task_andThen: "const _Task_andThen = _curry(2, (f, t) => () => t().then((x) => f(x)()));",
+  // Task — lazy async thunk `() => Promise<Result<a, e>>` (ADR 0006). Building one
+  // runs no effect; `run` kicks it off and yields the settled `Result`.
+  _Task_of: "const _Task_of = (x) => () => Promise.resolve(Ok(x));",
+  _Task_fail: "const _Task_fail = (e) => () => Promise.resolve(Err(e));",
+  _Task_map:
+    'const _Task_map = _curry(2, (f, t) => () => t().then((r) => (r._tag === "Ok" ? Ok(f(r.value)) : r)));',
+  _Task_mapErr:
+    'const _Task_mapErr = _curry(2, (f, t) => () => t().then((r) => (r._tag === "Err" ? Err(f(r.error)) : r)));',
+  _Task_andThen:
+    'const _Task_andThen = _curry(2, (f, t) => () => t().then((r) => (r._tag === "Ok" ? f(r.value)() : r)));',
+  _Task_recover:
+    'const _Task_recover = _curry(2, (f, t) => () => t().then((r) => (r._tag === "Err" ? f(r.error)() : r)));',
+  _Task_fromResult: "const _Task_fromResult = (r) => () => Promise.resolve(r);",
+  _Task_match:
+    'const _Task_match = _curry(3, (onOk, onErr, t) => () => t().then((r) => Ok(r._tag === "Ok" ? onOk(r.value) : onErr(r.error))));',
   // `_curry`-shaped so both `Task.delay(ms, x)` (multi-arg emit) and `Task.andThen(Task.delay(ms))` work.
   _Task_delay:
-    "const _Task_delay = _curry(2, (ms, x) => () => new Promise((res) => setTimeout(() => res(x), ms)));",
+    "const _Task_delay = _curry(2, (ms, x) => () => new Promise((res) => setTimeout(() => res(Ok(x)), ms)));",
   _Task_run: "const _Task_run = (t) => t();",
 };
 
@@ -404,9 +416,14 @@ export const runtimeDeps: Record<string, string[]> = {
   _Str_get: ["Some", "None", "_curry"],
   _Str_codeAt: ["Some", "None", "_curry"],
   _Str_toNumber: ["Some", "None"],
-  _Task_map: ["_curry"],
+  _Task_of: ["Ok"],
+  _Task_fail: ["Err"],
+  _Task_map: ["Ok", "_curry"],
+  _Task_mapErr: ["Err", "_curry"],
   _Task_andThen: ["_curry"],
-  _Task_delay: ["_curry"],
+  _Task_recover: ["_curry"],
+  _Task_match: ["Ok", "_curry"],
+  _Task_delay: ["Ok", "_curry"],
 };
 
 /**
@@ -494,14 +511,20 @@ export const preludeNamespaces: Record<string, Record<string, Type>> = {
     isOk: tArrow(res(a, c), tBool), // Result a e -> bool
     isErr: tArrow(res(a, c), tBool), // Result a e -> bool
   },
-  // Task — opaque lazy async values (`() => Promise<a>`). Not a tagged variant.
-  // `andThen` (not `flatMap`) matches examples/async vocabulary (ADR 0005).
+  // Task — opaque lazy async values (`() => Promise<Result<a, e>>`, ADR 0006).
+  // Not a tagged variant. `andThen` (not `flatMap`) matches examples/async
+  // vocabulary (ADR 0005).
   Task: {
-    of: tArrow(a, task(a)), // a -> Task a
-    map: tArrow(tArrow(a, b), tArrow(task(a), task(b))), // (a -> b) -> Task a -> Task b
-    andThen: tArrow(tArrow(a, task(b)), tArrow(task(a), task(b))), // (a -> Task b) -> Task a -> Task b
-    delay: tArrow(tNumber, tArrow(a, task(a))), // number -> a -> Task a  (_curry; ADR 0005)
-    run: tArrow(task(a), promise(a)), // Task a -> Promise a  (only kick-off)
+    of: tArrow(a, task(a, c)), // a -> Task a e
+    fail: tArrow(c, task(a, c)), // e -> Task a e
+    map: tArrow(tArrow(a, b), tArrow(task(a, c), task(b, c))), // (a -> b) -> Task a e -> Task b e
+    mapErr: tArrow(tArrow(c, b), tArrow(task(a, c), task(a, b))), // (e -> f) -> Task a e -> Task a f
+    andThen: tArrow(tArrow(a, task(b, c)), tArrow(task(a, c), task(b, c))), // (a -> Task b e) -> Task a e -> Task b e
+    recover: tArrow(tArrow(c, task(a, b)), tArrow(task(a, c), task(a, b))), // (e -> Task a f) -> Task a e -> Task a f
+    fromResult: tArrow(res(a, c), task(a, c)), // Result a e -> Task a e
+    match: tArrow(tArrow(a, b), tArrow(tArrow(c, b), tArrow(task(a, c), task(b, d)))), // (a -> f) -> (e -> f) -> Task a e -> Task f g  (terminal fold, stays a Task per ADR 0006)
+    delay: tArrow(tNumber, tArrow(a, task(a, c))), // number -> a -> Task a e  (_curry; ADR 0005)
+    run: tArrow(task(a, c), promise(res(a, c))), // Task a e -> Promise (Result a e)  (only kick-off)
   },
   // String ops (`Str.*`). Data-last where a collection/subject is involved.
   Str: {
@@ -603,8 +626,13 @@ export const namespaceRuntime: Record<string, Record<string, string>> = {
   },
   Task: {
     of: "_Task_of",
+    fail: "_Task_fail",
     map: "_Task_map",
+    mapErr: "_Task_mapErr",
     andThen: "_Task_andThen",
+    recover: "_Task_recover",
+    fromResult: "_Task_fromResult",
+    match: "_Task_match",
     delay: "_Task_delay",
     run: "_Task_run",
   },

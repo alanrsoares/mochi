@@ -42,6 +42,10 @@ function consIn(t: Type, acc: Set<string>): void {
     .with({ kind: "var" }, () => {})
     .with({ kind: "con" }, (con) => {
       acc.add(con.name);
+      // Task a e's TS shape inlines `Result<...>` (see tsOfRaw) without a `Result`
+      // con anywhere in the semantic type — record it explicitly so its decl
+      // still gets emitted.
+      if (con.name === "Task" && con.args.length === 2) acc.add("Result");
       for (const a of con.args) consIn(a, acc);
     })
     .with({ kind: "arrow" }, (arrow) => {
@@ -86,10 +90,11 @@ function tsOfRaw(t: Type, names: Map<number, string>): string {
           ? `Iterable<${tsOfRaw(con.args[0]!, names)}>`
           : nominalCon(con, names),
       )
-      // Task is an opaque lazy thunk (ADR 0005) — emit the runtime shape, not a phantom nominal.
+      // Task is an opaque lazy thunk (ADR 0005/0006) — emit the runtime shape, not
+      // a phantom nominal. Two-arg form settles to a `Result`, not a bare value.
       .with({ kind: "con", name: "Task" }, (con) =>
-        con.args.length === 1
-          ? `() => Promise<${tsOfRaw(con.args[0]!, names)}>`
+        con.args.length === 2
+          ? `() => Promise<Result<${tsOfRaw(con.args[0]!, names)}, ${tsOfRaw(con.args[1]!, names)}>>`
           : nominalCon(con, names),
       )
       .with(
