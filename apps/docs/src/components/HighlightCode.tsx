@@ -1,11 +1,12 @@
 import { isErr, unwrapOk } from "@onrails/result";
-import { lex } from "@mochi/compiler";
+import { hoverAt, type HoverInfo, lex } from "@mochi/compiler";
 
 export type HighlightLanguage = "mochi" | "js";
 
 type TokenSpan = {
   text: string;
   type: "keyword" | "type" | "string" | "number" | "comment" | "operator" | "punctuation" | "jsx" | "plain";
+  offset?: number;
 };
 
 export function highlightMochiCode(code: string): TokenSpan[] {
@@ -83,7 +84,7 @@ export function highlightMochiCode(code: string): TokenSpan[] {
         break;
     }
 
-    spans.push({ text: tokText, type });
+    spans.push({ text: tokText, type, offset: t.span.start });
     curPos = t.span.end;
   }
 
@@ -128,7 +129,15 @@ export function highlightJsCode(code: string): TokenSpan[] {
   return spans;
 }
 
-export function HighlightedCode({ code, lang }: { code: string; lang: HighlightLanguage }) {
+export function HighlightedCode({
+  code,
+  lang,
+  enableTwoslash = true,
+}: {
+  code: string;
+  lang: HighlightLanguage;
+  enableTwoslash?: boolean;
+}) {
   const spans = lang === "mochi" ? highlightMochiCode(code) : highlightJsCode(code);
 
   return (
@@ -164,9 +173,45 @@ export function HighlightedCode({ code, lang }: { code: string; lang: HighlightL
             cls = "text-slate-200";
             break;
         }
+
+        // Query Mochi HM type hover info at offset if twoslash is enabled
+        let hoverInfo: HoverInfo | null = null;
+        if (enableTwoslash && lang === "mochi" && span.offset !== undefined && (span.type === "type" || span.type === "plain" || span.type === "keyword")) {
+          try {
+            hoverInfo = hoverAt(code, span.offset);
+          } catch {
+            hoverInfo = null;
+          }
+        }
+
+        if (!hoverInfo) {
+          return (
+            <span key={idx} className={cls}>
+              {span.text}
+            </span>
+          );
+        }
+
         return (
-          <span key={idx} className={cls}>
+          <span
+            key={idx}
+            className={`${cls} relative group cursor-help underline underline-offset-4 decoration-rose-500/40 hover:decoration-rose-400 hover:bg-rose-950/30 rounded px-0.5 transition-colors`}
+          >
             {span.text}
+            {/* Twoslash Pseudo-LSP Hover Card */}
+            <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-50 pointer-events-none w-max max-w-xs shadow-2xl">
+              <span className="block bg-[#121624] border border-[#262f48] text-slate-100 rounded-lg p-2.5 text-[11px] font-mono leading-tight">
+                <span className="block font-bold text-rose-300 border-b border-[#20283d] pb-1 mb-1">
+                  {hoverInfo.code}
+                </span>
+                {hoverInfo.doc && (
+                  <span className="block text-slate-400 font-sans text-[10px] mt-1 italic">
+                    {hoverInfo.doc}
+                  </span>
+                )}
+              </span>
+              <span className="block w-2 h-2 bg-[#121624] border-r border-b border-[#262f48] transform rotate-45 mx-auto -mt-1"></span>
+            </span>
           </span>
         );
       })}

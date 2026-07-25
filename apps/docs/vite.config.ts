@@ -16,6 +16,8 @@ export default defineConfig({
     alias: {
       "@mochi/compiler": path.resolve(__dirname, "../../src/compile.ts"),
       "@mochi/root": path.resolve(__dirname, "../../"),
+      "node:path": path.resolve(__dirname, "node_modules/path-browserify"),
+      path: path.resolve(__dirname, "node_modules/path-browserify"),
     },
   },
   base: "/mochi/",
