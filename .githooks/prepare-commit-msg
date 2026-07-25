@@ -1,15 +1,29 @@
 #!/usr/bin/env bash
-# Strip tool/agent attribution trailers Cursor (or others) may inject.
-# Install: git config core.hooksPath .githooks
+# Universal agent/tool attribution stripper (all editors — not Cursor-only).
+# Policy: AGENTS.md. Install: bun install → prepare → core.hooksPath=.githooks
 set -euo pipefail
 msg_file="${1:?commit message file}"
 
 tmp="$(mktemp)"
-# Drop Co-authored-by / Made-with / Generated-by / Made with Cursor lines.
+trap 'rm -f "$tmp"' EXIT
+
+# Drop tool credit / vanity lines agents inject into commit messages.
+# Keep Closes/Refs/BREAKING CHANGE. Do not strip Signed-off-by (DCO is human opt-in).
 grep -v -E \
   -e '^[[:space:]]*Co-[Aa]uthored-[Bb]y:' \
   -e '^[[:space:]]*Made-with:[[:space:]]*Cursor' \
   -e '^[[:space:]]*Made with Cursor' \
   -e '^[[:space:]]*Generated (by|with)\b' \
+  -e '^[[:space:]]*🤖' \
+  -e '^[[:space:]]*AI assisted\b' \
+  -e '^[[:space:]]*[Vv]ia (Claude|Cursor|Copilot)\b' \
   "$msg_file" >"$tmp" || true
+
+# Collapse runs of blank lines left by deletions; keep a single trailing newline.
+awk '
+  NF { blank = 0; print; next }
+  !blank { blank = 1; print }
+' "$tmp" >"${tmp}.out"
+mv "${tmp}.out" "$tmp"
 mv "$tmp" "$msg_file"
+trap - EXIT

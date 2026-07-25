@@ -50,13 +50,8 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # planning docs / issue tracker — kept local, not tracked
 docs/plan/
 
-# editor-local config (track shared agent rules/hooks only)
+# editor-local config — shared instructions live in root AGENTS.md
 .cursor/*
-!.cursor/rules/
-!.cursor/rules/**
-!.cursor/hooks.json
-!.cursor/hooks/
-!.cursor/hooks/**
 
 .serena/
 .fixpoint-work/

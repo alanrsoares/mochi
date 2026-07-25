@@ -30,10 +30,16 @@ bun run bootstrap:tsc  # count tsc --strict errors on the self-host (north-star:
 ```
 
 `bun install` runs `prepare` → `scripts/setup-hooks.ts`, which sets
-`core.hooksPath=.githooks`. On **push**, `.githooks/pre-push` runs the same
-`bun run check` as CI. Escape hatch (rare): `git push --no-verify`. Commits only
-run `.githooks/prepare-commit-msg` (strips attribution trailers) — the full gate
-is intentionally not on every commit.
+`core.hooksPath=.githooks`:
+
+| Hook | When | What |
+|---|---|---|
+| `prepare-commit-msg` | every commit | strip tool/agent attribution trailers |
+| `commit-msg` | every commit | refuse if any attribution trailer remains |
+| `pre-push` | every push | `bun run check` (same as CI) |
+
+Escape hatch (rare): `git commit --no-verify` / `git push --no-verify`. The full QA
+gate is intentionally not on every commit — only on push.
 
 Individual pieces: `test`, `typecheck`, `lint` / `lint:fix`, `format`, `loc`,
 `gen:prelude` / `gen:runtime` (regenerate the parity-guarded shims), `fmt:mochi` (dogfood
