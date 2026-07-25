@@ -8,6 +8,7 @@
       "patterns": [
         { "include": "#comments" },
         { "include": "#strings" },
+        { "include": "#jsx" },
         { "include": "#braces" },
         { "include": "#declarations" },
         { "include": "#keywords" },
@@ -17,6 +18,131 @@
         { "include": "#constructors" },
         { "include": "#numbers" },
         { "include": "#operators" }
+      ]
+    },
+    "jsx": {
+      "comment": "ADR 0007 — surface JSX; `<` starts a tag when followed by an ident, `/`, or `>` (fragments). Comparison `a < b` keeps a space after `<` and does not match.",
+      "patterns": [
+        { "include": "#jsx-fragment" },
+        { "include": "#jsx-component" },
+        { "include": "#jsx-html" }
+      ]
+    },
+    "jsx-fragment": {
+      "name": "meta.tag.jsx.mochi",
+      "begin": "<>",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.tag.begin.mochi" }
+      },
+      "end": "</>",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.tag.end.mochi" }
+      },
+      "contentName": "meta.jsx.children.mochi",
+      "patterns": [{ "include": "#jsx-children" }]
+    },
+    "jsx-component": {
+      "comment": "PascalCase / dotted component — <Card>, <UI.Button>",
+      "name": "meta.tag.jsx.mochi",
+      "begin": "(<)([A-Z][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*)",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.mochi" },
+        "2": { "name": "support.class.component.mochi" }
+      },
+      "end": "(/>)|(?:(</)(\\2)(>))",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.tag.end.mochi" },
+        "2": { "name": "punctuation.definition.tag.begin.mochi" },
+        "3": { "name": "support.class.component.mochi" },
+        "4": { "name": "punctuation.definition.tag.end.mochi" }
+      },
+      "patterns": [{ "include": "#jsx-tag-body" }]
+    },
+    "jsx-html": {
+      "comment": "lowercase host tags — <div>, <button>",
+      "name": "meta.tag.jsx.mochi",
+      "begin": "(<)([a-z][A-Za-z0-9_]*)",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.mochi" },
+        "2": { "name": "entity.name.tag.mochi" }
+      },
+      "end": "(/>)|(?:(</)(\\2)(>))",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.tag.end.mochi" },
+        "2": { "name": "punctuation.definition.tag.begin.mochi" },
+        "3": { "name": "entity.name.tag.mochi" },
+        "4": { "name": "punctuation.definition.tag.end.mochi" }
+      },
+      "patterns": [{ "include": "#jsx-tag-body" }]
+    },
+    "jsx-tag-body": {
+      "patterns": [
+        {
+          "name": "meta.tag.attributes.mochi",
+          "begin": "\\s",
+          "end": "(?=[/]?>)",
+          "patterns": [
+            { "include": "#comments" },
+            { "include": "#jsx-attribute" },
+            { "include": "#jsx-expression" }
+          ]
+        },
+        {
+          "begin": "(>)",
+          "beginCaptures": {
+            "1": { "name": "punctuation.definition.tag.end.mochi" }
+          },
+          "end": "(?=</)",
+          "contentName": "meta.jsx.children.mochi",
+          "patterns": [{ "include": "#jsx-children" }]
+        }
+      ]
+    },
+    "jsx-children": {
+      "patterns": [
+        { "include": "#jsx" },
+        { "include": "#jsx-expression" },
+        { "include": "#strings" },
+        { "include": "#comments" },
+        { "include": "#numbers" }
+      ]
+    },
+    "jsx-attribute": {
+      "patterns": [
+        {
+          "comment": "name=value — string or {expr}",
+          "begin": "\\b([A-Za-z_][A-Za-z0-9_]*)(=)",
+          "beginCaptures": {
+            "1": { "name": "entity.other.attribute-name.mochi" },
+            "2": { "name": "punctuation.separator.key-value.mochi" }
+          },
+          "end": "(?=[\\s/>])",
+          "patterns": [{ "include": "#strings" }, { "include": "#jsx-expression" }]
+        },
+        {
+          "comment": "boolean shorthand — disabled",
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\b",
+          "name": "entity.other.attribute-name.mochi"
+        }
+      ]
+    },
+    "jsx-expression": {
+      "comment": "{expr} / {...spread} in attrs or children",
+      "name": "meta.embedded.expression.mochi",
+      "begin": "\\{",
+      "beginCaptures": {
+        "0": { "name": "punctuation.section.embedded.begin.mochi" }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.section.embedded.end.mochi" }
+      },
+      "patterns": [
+        {
+          "name": "keyword.operator.spread.mochi",
+          "match": "\\.\\.\\."
+        },
+        { "include": "#expression" }
       ]
     },
     "comments": {
