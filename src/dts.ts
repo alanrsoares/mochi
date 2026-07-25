@@ -388,7 +388,7 @@ export function ctorFactoryTs(
 
 /**
  * The TS type of a binding, WITHOUT the `export declare const name:` wrapper —
- * the one piece the `.d.ts` writer (`letDecl`) and the `.ts` backend
+ * the one piece the `.d.ts` writer (`declOf`) and the `.ts` backend
  * (`codegen-ts.ts`, ADR 0026) share. A function carries a `<A, B>` generic head
  * plus arity-peeled parameter names; a non-function polymorphic binding has
  * nowhere to bind generics, so its escaped vars fall back to `unknown`.
@@ -615,9 +615,6 @@ export function guardParamTs(scrutType: Type, aliases: AliasDef[]): string | nul
   freeVars(t, fv);
   return fv.length === 0 ? tsOf(t, new Map()) : null;
 }
-
-const letDecl = (name: string, sc: Scheme, value: Expr, aliases: AliasDef[]): string =>
-  `export declare const ${name}: ${bindingTsType(sc, value, aliases)};`;
 
 /** A transparent record alias → an exported TS object type. Field types come from the alias template (an HM record whose params are marker vars); map each marker to a generic letter so `type Box a = { value: a }` emits `type Box<A> = ...`. */
 export function aliasTsDecl(def: AliasDef): string {

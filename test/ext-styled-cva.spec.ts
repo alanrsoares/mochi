@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { styledCvaExtension } from "@mochi/plugin-styled-cva";
 import { isErr, unwrapOk } from "@onrails/result";
 import { toTypedProgram } from "../src/compile";
