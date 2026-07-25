@@ -380,6 +380,8 @@ const collectComments = (src: string): Comment[] => {
 /** The node a comment attaches to, keyed by node identity — LEADING prints above the node, TRAILING inline after it. A fresh AST is parsed per `format` call, so entries never outlive their source. */
 const LEADING = new WeakMap<object, Comment[]>();
 const TRAILING = new WeakMap<object, Comment[]>();
+/** Calls produced by JSX parsing share the full source span of the `<…>` form. Keep that provenance so formatting can re-fold only actual JSX, never an explicit `h(...)`. */
+const JSX_ORIGIN = new WeakSet<CallExpr>();
 
 type Anchor = { node: Expr | Stmt | Ctor; start: number; end: number };
 
@@ -389,13 +391,14 @@ type Anchor = { node: Expr | Stmt | Ctor; start: number; end: number };
  * constructors attaches to the one it precedes instead of migrating to the next
  * statement.
  */
-const collectAnchors = (stmts: Stmt[]): Anchor[] => {
+const collectAnchors = (stmts: Stmt[], src: string): Anchor[] => {
   const anchors: Anchor[] = [];
   const add = (n: Expr | Stmt | Ctor): void => {
     anchors.push({ node: n, start: n.span.start, end: n.span.end });
   };
   const visit = (e: Expr): void => {
     add(e);
+    if (e.kind === "call" && src[e.span.start] === "<") JSX_ORIGIN.add(e);
     switch (e.kind) {
       case "call":
         visit(e.fn);
@@ -475,7 +478,7 @@ const collectAnchors = (stmts: Stmt[]): Anchor[] => {
  * the last node have no anchor and are returned to emit after the final stmt.
  */
 const attachComments = (stmts: Stmt[], comments: Comment[], src: string): Comment[] => {
-  const anchors = collectAnchors(stmts).toSorted((a, b) => a.start - b.start || b.end - a.end);
+  const anchors = collectAnchors(stmts, src).toSorted((a, b) => a.start - b.start || b.end - a.end);
   const tail: Comment[] = [];
   for (const c of comments) {
     if (c.trailing) {
@@ -704,6 +707,74 @@ const mapD = (e: MapExpr): Doc =>
 
 const fieldD = (e: FieldExpr): Doc => seq(memberD(e.target), txt(`.${e.name}`));
 
+type JsxShape = {
+  tag: Expr;
+  props: RecordExpr;
+  children: SeqElem[];
+};
+
+const jsxShape = (e: CallExpr): JsxShape | null => {
+  if (
+    !JSX_ORIGIN.has(e) ||
+    e.fn.kind !== "ref" ||
+    e.fn.name !== "h" ||
+    e.args.length !== 3 ||
+    e.args[1]!.kind !== "record" ||
+    e.args[2]!.kind !== "arr"
+  )
+    return null;
+  return { tag: e.args[0]!, props: e.args[1]!, children: e.args[2]!.elements };
+};
+
+const jsxTag = (tag: Expr): string => (tag.kind === "str" ? tag.value : flat(memberD(tag)));
+
+const jsxAttrD = (name: string, value: Expr, nameStart: number): Doc => {
+  if (value.kind === "bool" && value.value && value.span.start === nameStart) return txt(name);
+  if (value.kind === "str") return txt(`${name}=${strLit(value.value)}`);
+  return seq(txt(`${name}={`), exprD(value), txt("}"));
+};
+
+const jsxOpenD = (tag: string, attrs: Doc[], selfClosing: boolean): Doc => {
+  if (attrs.length === 0) return txt(selfClosing ? `<${tag} />` : `<${tag}>`);
+  return group(
+    seq(
+      txt(`<${tag}`),
+      indent(cat(attrs.map((attr) => seq(line, attr)))),
+      selfClosing ? line : softline,
+      txt(selfClosing ? "/>" : ">"),
+    ),
+  );
+};
+
+const jsxChildD = (child: SeqElem): Doc => {
+  if (child.kind === "expr" && child.expr.kind === "call" && JSX_ORIGIN.has(child.expr))
+    return exprD(child.expr);
+  return seq(txt(child.kind === "spread" ? "{..." : "{"), exprD(child.expr), txt("}"));
+};
+
+/** Re-fold a parser-produced `h(tag, props, children)` while retaining normal call formatting for source-written `h(...)`. */
+const jsxD = (shape: JsxShape): Doc => {
+  const fragment = shape.tag.kind === "str" && shape.tag.value === "Fragment";
+  const tag = fragment ? "" : jsxTag(shape.tag);
+  const attrs = [
+    ...(shape.props.spread ? [seq(txt("{..."), exprD(shape.props.spread), txt("}"))] : []),
+    ...shape.props.fields.map((field) => jsxAttrD(field.name, field.value, field.nameSpan.start)),
+  ];
+
+  if (shape.children.length === 0 && !fragment) return jsxOpenD(tag, attrs, true);
+
+  const open = fragment ? txt("<>") : jsxOpenD(tag, attrs, false);
+  const close = txt(fragment ? "</>" : `</${tag}>`);
+  return group(
+    seq(
+      open,
+      indent(cat(shape.children.map((child) => seq(softline, jsxChildD(child))))),
+      softline,
+      close,
+    ),
+  );
+};
+
 /**
  * Binary operators the parser desugars straight into 2-arg calls (see the
  * matching *_BP constants in parser.ts) — precedence here must mirror those
@@ -875,6 +946,8 @@ const refoldCall = (e: CallExpr): Doc | null => {
  * breaks one-per-line when it overflows.
  */
 const callD = (e: CallExpr): Doc => {
+  const jsx = jsxShape(e);
+  if (jsx) return jsxD(jsx);
   const refold = refoldCall(e);
   if (refold) return refold;
   const fn = calleeD(e.fn);
