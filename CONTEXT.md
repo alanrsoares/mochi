@@ -171,7 +171,10 @@ mechanically (the compiler can't inspect a JS export's body) and deliberate
   `h(tag, props, children)`, JSX inference, the formatter's `<tag>` re-fold, and
   `VNode` component dts. The lexer stays generic — `<` is a plain `lt` token.
 - **Vendor plugin** — a library-owned adapter a project opts into, not part of
-  the compiler (`@mochi/plugin-styled-cva`).
+  the compiler (`@mochi/plugin-styled-cva`, `@mochi/plugin-re-reduced`). Thin
+  **sugar** only: derive what a typed `extern` cannot name (e.g. CVA variant
+  keys → core literal unions). Not a per-kit reverse typechecker
+  ([ADR 0012](docs/adr/0012-host-interop-end-state.md)).
 - **Project plugin list** — the one place a project registers its plugins,
   consumed by Vite/dts/LSP instead of hand-duplicated arrays
   (`apps/docs/mochi.plugins.ts`).
@@ -182,15 +185,22 @@ mechanically (the compiler can't inspect a JS export's body) and deliberate
   **opt-out rule:** an empty plugin list disables JSX parsing (parse
   diagnostic on `<…>`), the `.ts`/`.tsx` equivalent for non-UI compiles.
 
-## Extern / FFI
+## Extern / FFI ([ADR 0012](docs/adr/0012-host-interop-end-state.md))
 
 - Surface: `extern name : type = "module" "export"`.
+- **Preference order (ReScript-informed):** (1) typed `extern` when HM can be
+  honest; (2) core literal/union formers so prop types are real in infer;
+  (3) thin sugar plugins that *assign* those formers; (4) heavy host generics
+  only in outbound `.d.mochi.ts` (`import("pkg").Type<…>`). Opaque `: a`
+  only when a precise arrow would lie (e.g. dual-arity `tw.div`).
 - Lowers to `import { <export> as <name> } from "<module>";` (bare `import { name }` if
   they match), plus `export { name };` if the extern is exported.
 - Arity ≥ 2 signatures are wrapped with `_curry(n, …)` at the import binding so host
   functions written as flat `(a, b) => …` work with mochi’s multi-arg call emit
   (`f(a, b)` and partial `f(a)`). Prefer flat hosts; nested-curried hosts break under
   the wrap.
+- **Not primary:** inbound “read host `.d.ts` into HM” (ReScript genType is
+  outbound-only). Wave 6 AST→string dts plugins are **bridges**.
 
 ## Module graph (`src/module.ts`)
 

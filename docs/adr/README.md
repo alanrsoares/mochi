@@ -49,4 +49,5 @@ What else was on the table and why not.
 | [0009](0009-styled-cva-host-interop.md) | Host styled-cva interop (`$`-labels + default `extern`) | Accepted |
 | [0010](0010-host-type-interop.md) | Host type interop (Mochi → TS/TSX) | Accepted |
 | [0011](0011-language-plugins.md) | Language plugins (`HostExtension` → `LanguagePlugin`; JSX as builtin plugin) | Accepted |
+| [0012](0012-host-interop-end-state.md) | Host interop end state (typed seam + thin sugar; ReScript-informed) | Accepted |
 

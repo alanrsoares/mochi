@@ -336,6 +336,11 @@ to the builtins, exactly as their infer calls already did — they expose no
 - Vendor plugin packages (`packages/plugin-*`) gain more hooks to opt into
   (`parse`, `format`) without a breaking rename — `HostExtension` keeps typing
   as a subset of `LanguagePlugin`.
+- Vendor plugins that reverse-engineer call ASTs into host types (Wave 6
+  Gap A/B) are **bridges**; the end-state preference order is
+  [ADR 0012](0012-host-interop-end-state.md) (typed `extern` → core
+  literals/unions → thin sugar that *assigns* those formers → outbound
+  `.d.mochi.ts` for heavy generics).
 - `HostExtension` stays as a name in the public surface (back-compat alias),
   so `packages/plugin-styled-cva` and any project's `mochi.plugins.ts` needs no
   changes to keep compiling.

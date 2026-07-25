@@ -67,8 +67,7 @@ kit-specific AST walks.
 
 Out of wave (needs grill / ADR): deepen `HostExtension` → cross-pass
 `LanguagePlugin`; move JSX behind a plugin adapter; sugar provenance on AST;
-CONTEXT.md core vs **vendor plugin** glossary; re-reduced infer/dts vendor
-plugin (Gap A still mostly typed TS bridge).
+CONTEXT.md core vs **vendor plugin** glossary.
 
 ## Wave 5 (JSX as the first builtin plugin — ADR 0011)
 
@@ -113,6 +112,50 @@ Out of wave (deliberate, tracked, not this wave's job):
   always resolve to builtins — accepted as good DX (nav still works on a
   JSX file in an opt-out project) rather than a gap to close (ADR 0011
   Consequences).
+
+## Wave 6 (machine-driven host DX — Gap A via vendor plugin)
+
+Principle: humans declare intent once (`extern` + project `plugins` list);
+the machine fills types and sidecars. Hand files that only exist to appease
+the typechecker are debt. Docs interop section is **worked examples**, not a
+blessed kit catalog.
+
+**First win:** kill `apps/docs/src/state/counter.ts` cast bridge via
+`@mochi/plugin-re-reduced` — same pattern as Gap B / styled-cva. Opaque
+`extern defineContainer : a` stays; plugin recovers `ContainerDef<…>` in
+`.d.mochi.ts` so TSX imports `.mochi` cast-free.
+
+Deferred (later Wave 6 / out of wave): auto-generating `*.host.mochi`; hooks
+inside `.mochi` (Rules of Hooks); LSP `tw.*` completion (#13).
+
+| # | Title | Type | Blocked by | Status |
+|---|---|---|---|---|
+| 30 | Docs copy: interop section = examples only (+ vite pragma sniff fix) | AFK | — | done |
+| 31 | ADR / brief: Gap A via vendor plugin, not hand TS bridge | AFK | — | done |
+| 32 | `@mochi/plugin-re-reduced` — infer/dts for `defineContainer` call sites | AFK | 31 | done |
+| 33 | Docs app: delete `counter.ts`; Counter.tsx imports `.mochi`; register plugin | AFK | 32 | done |
+| 34 | Gate: `apps/docs check` + no cast bridge under `apps/docs/src/state/` | AFK | 33 | done |
+
+**Wave 6 (first win) shipped:** docs interop reframed as examples; Gap A
+honesty is `@mochi/plugin-re-reduced` → `.d.mochi.ts` `ContainerDef`;
+`apps/docs/src/state/counter.ts` cast bridge deleted; `Counter.tsx` imports
+`.mochi` directly.
+
+## Wave 7 (host interop end state — ADR 0012)
+
+Principle (ReScript-informed): **typed `extern` first**; core owns
+**literal + union** formers; sugar plugins only *derive* what signatures
+cannot say (CVA variant keys → unions); heavy host generics stay in
+**outbound** `.d.mochi.ts` (`import("pkg").Type<…>`). Wave 6 AST walkers
+are bridges — shrink, don’t clone.
+
+| # | Title | Type | Blocked by | Status |
+|---|---|---|---|---|
+| 35 | ADR 0012 + index + 0010 amendment + CONTEXT vocabulary | AFK | — | done |
+| 36 | Core string literal types + finite unions (`tLit` / `tUnion`) | AFK | 35 | done |
+| 37 | styled-cva infer: `$tone` → literal union (JSX attr check) | AFK | 36 | done |
+| 38 | re-reduced: mark bridge; plan shrink toward structural HM + thin dts | AFK | 35 | done |
+| 39 | language.md / compiler.md: interop preference order + ReScript pointers | AFK | 35 | done |
 
 ## Slice briefs
 
@@ -886,3 +929,205 @@ drift found there either.
 Not touched: `docs/adr/0007-jsx-desugar.md` / `0009` / `0010` — #21 already
 reconciled these against the plugin-vs-core boundary; re-reading them for this
 slice turned up no new drift attributable to #26–#28.
+
+---
+
+### 30 — Docs copy: interop examples (+ pragma sniff)
+
+## What to build
+
+Reframe `apps/docs` `#interop` as **worked examples of host glue**, not a kit
+catalog. Ship the vite pragma sniff fix (string literal `"import { h } from …"`
+must not suppress the real pragma).
+
+## Acceptance criteria
+
+- [x] Nav / title / lead say "Interop examples"; rows lead with pattern not kit marketing
+- [x] `h` pragma still prepended when emit text mentions `import { h }` in a string (test)
+- [x] `bun run check` green
+
+## Blocked by
+
+None
+
+---
+
+### 31 — Gap A via vendor plugin (ADR note)
+
+## What to build
+
+Amend ADR 0010: Gap A's near-term typed *hand* bridge is superseded by a
+**vendor plugin** that emits `ContainerDef<…>` into `.d.mochi.ts`. Wave 6 table
+opened.
+
+## Acceptance criteria
+
+- [x] ADR 0010 amendment points Gap A at `@mochi/plugin-re-reduced` / Wave 6
+- [x] Tracer Wave 6 table + briefs present
+- [x] `bun run check` green
+
+## Blocked by
+
+None
+
+---
+
+### 32 — `@mochi/plugin-re-reduced`
+
+## What to build
+
+Vendor package mirroring styled-cva: `inferCall` + `dtsBinding` for
+`defineContainer(name, { state, actions })` call sites. Dts emits
+`import("@re-reduced/preact").ContainerDef<S, R, …> & { name: string }` from
+the config AST (flat state literals; void-payload actions for first cut).
+
+## Acceptance criteria
+
+- [x] Package under `packages/plugin-re-reduced`, workspace-wired
+- [x] Unit tests: defineContainer binding dts is not `unknown`; contains `ContainerDef`
+- [x] `bun run check` green
+
+## Blocked by
+
+31
+
+---
+
+### 33 — Docs app drops `counter.ts`
+
+## What to build
+
+Register `reReducedExtension` in `mochi.plugins.ts`. Delete
+`apps/docs/src/state/counter.ts`. `Counter.tsx` imports from `counter.mochi`.
+Update host seam comments.
+
+## Acceptance criteria
+
+- [x] No `counter.ts` cast bridge
+- [x] `Counter.tsx` imports `.mochi` and typechecks via generated sidecar
+- [x] `bun run --cwd apps/docs check` green
+
+## Blocked by
+
+32
+
+---
+
+### 34 — Gate
+
+## What to build
+
+Verify QA gates; mark Wave 6 slices done.
+
+## Acceptance criteria
+
+- [x] Grep-clean of cast bridges under `apps/docs/src/state/`
+- [x] `bun run check` green (includes docs vite build)
+- [x] Wave 6 rows 30–34 → done
+
+---
+
+### 35 — ADR 0012 + vocabulary
+
+## What to build
+
+Accept ADR 0012 (typed seam + thin sugar; ReScript-informed). Index it.
+Amend ADR 0010 end-state pointer. Open Wave 7. Update `CONTEXT.md`
+interop vocabulary.
+
+## Acceptance criteria
+
+- [x] `docs/adr/0012-host-interop-end-state.md` Accepted; README row
+- [x] ADR 0010 amendment points Gap A/B *means* at 0012
+- [x] Wave 7 table + briefs; CONTEXT host-interop paragraph
+
+## Blocked by
+
+None
+
+---
+
+### 36 — Core literal + union types
+
+## What to build
+
+Add string singleton (`tLit`) and finite union (`tUnion`) to the type
+algebra; unify / show / dts / hover. Literals subtype their base
+(`"rose" ⊑ string`). Finite unions distribute sensibly under unify.
+No surface syntax yet beyond what plugins / annotations need for tests —
+prefer constructing via constructors; optional later: `"a" | "b"` in
+type exprs.
+
+## Acceptance criteria
+
+- [x] `Type` carries lit + union; unify + show + dts round-trip
+- [x] Unit / PBT: lit ⊑ string; union member check; no kit code in core
+- [x] `bun run check` green
+
+## Blocked by
+
+35
+
+---
+
+### 37 — styled-cva `$tone` as literal union
+
+## What to build
+
+`@mochi/plugin-styled-cva` `inferCall` builds core `tUnion` of `tLit`s from
+`variants.$tone` keys (not `tString`). JSX attr `"taupe"` fails; `"rose"`
+ok. Dts already emits string unions — keep that path in sync with core
+formers where possible.
+
+## Acceptance criteria
+
+- [x] Infer prop type for `$tone` is `"rose" | …` (show / hover)
+- [x] JSX / call site rejects unknown tone with type diagnostic
+- [x] Docs Badge / Counter still green; `bun run check` green
+
+## Blocked by
+
+36
+
+---
+
+### 38 — re-reduced bridge hygiene
+
+## What to build
+
+Document in package README + tracer that Wave 6 AST→`ContainerDef` string
+template is a **bridge** under ADR 0012. Sketch shrink path: structural
+HM record for hover + thin outbound `import()` dts; no new kit walkers
+without typed-extern or sugar-derive justification.
+
+## Acceptance criteria
+
+- [x] README states bridge + 0012 preference order
+- [x] No new reverse-typechecker surface added in this slice
+- [x] `bun run check` green
+
+## Blocked by
+
+35
+
+---
+
+### 39 — Docs: interop preference order
+
+## What to build
+
+Short section in `docs/language.md` and/or `docs/compiler.md`: write typed
+extern when honest; `: a` + sugar only when signature would lie; outbound
+`.d.mochi.ts` for heavy host types; ReScript pointers (external FFI types,
+JSX V4, genType outbound-only).
+
+## Acceptance criteria
+
+- [x] Docs state preference order matching ADR 0012
+- [x] Link ADR 0012 + Wave 7
+- [x] No kit marketed as language surface
+
+## Blocked by
+
+35
+

@@ -74,3 +74,22 @@ variants only. The rest of this ADR is unaffected: Gap A/B split (§1), the
 host-agnostic component emit shape (§2), the Gap A typed bridge (§3), and the
 vendor-plugin boundary for `tw` / CVA / `re-reduced` (§4, §5's second sentence)
 all stand — only the "JSX stays core" half of §5 is reopened.
+
+## Amendment — Gap A via vendor plugin (2026-07-25)
+
+Decision §3's near-term "typed host bridge" (one cast in a hand-written
+`*.ts` beside `.mochi`) is **superseded for the docs dogfood** by Wave 6:
+`@mochi/plugin-re-reduced` recovers `ContainerDef<S, R, …>` in `.d.mochi.ts`
+from the `defineContainer` call AST — same machine-driven pattern as Gap B /
+`@mochi/plugin-styled-cva`. Seam `extern defineContainer : a` stays opaque in
+HM; TSX imports `.mochi` cast-free. See `docs/dx-tracer-bullets.md` Wave 6.
+
+## Amendment — end-state direction ([ADR 0012](0012-host-interop-end-state.md))
+
+Wave 6's AST→`import("pkg").Type<…>` vendor plugins are a **bridge**, not the
+architecture. [ADR 0012](0012-host-interop-end-state.md) locks the preference
+order: typed `extern` → core literal/union formers → thin sugar plugins that
+*assign* those formers → heavy host types only in outbound `.d.mochi.ts`.
+Per-kit reverse typecheckers and inbound “read host `.d.ts` into HM” as the
+default FFI are rejected (ReScript-informed). Gap A/B *problems* still stand;
+Gap A/B *means* migrate toward 0012.

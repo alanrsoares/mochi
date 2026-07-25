@@ -38,6 +38,12 @@ the first builtin, `plugins/jsx.ts`'s `jsxPlugin` — parsing `<tag/>` into
 core seams. `@mochi/plugin-styled-cva` is a vendor plugin built the same way, outside
 the compiler tree. See [ADR 0011](adr/0011-language-plugins.md).
 
+Host interop end state ([ADR 0012](adr/0012-host-interop-end-state.md)): prefer typed
+`extern`, then core literal/union formers, then thin sugar plugins that *assign*
+those formers; keep heavy host generics in outbound `.d.mochi.ts`. Wave 6 AST→string
+dts adapters are bridges (ReScript: declared FFI type is ground truth; genType is
+outbound-only). Tracker: Wave 7 in [`dx-tracer-bullets.md`](dx-tracer-bullets.md).
+
 The one error-type seam worth knowing: `unify.ts` speaks a narrow `TypeErr`; it becomes
 the unified `Diagnostic` (`kind: lex | parse | check | type`) only at `infer.ts`'s `u()`
 seam, which is where the span gets attached.
