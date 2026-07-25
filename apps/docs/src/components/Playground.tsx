@@ -2,6 +2,7 @@ import { isErr } from "@onrails/result";
 import { h, render } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { compile } from "@mochi/compiler";
+import { HighlightedCode } from "./HighlightCode";
 
 const DEFAULT_CODE = `// Mochi W-Engine Live Sandbox 🐾
 // Desugars JSX directly into host h(tag, props, children) calls
@@ -49,12 +50,16 @@ export function Playground() {
       if (previewRef.current) {
         previewRef.current.innerHTML = "";
         try {
-          const fn = new Function("h", `${res.value}; return typeof app !== 'undefined' ? app : null;`);
+          const fn = new Function(
+            "h",
+            `${res.value}; return typeof app !== 'undefined' ? app : null;`,
+          );
           const vnode = fn(h);
           if (vnode) {
             render(vnode, previewRef.current);
           } else {
-            previewRef.current.innerText = "Execution clean. Define 'let app = <Component />' to render UI preview.";
+            previewRef.current.innerText =
+              "Execution clean. Define 'let app = <Component />' to render UI preview.";
           }
         } catch (execErr: any) {
           previewRef.current.innerText = `Runtime Evaluation Error: ${execErr.message}`;
@@ -139,12 +144,16 @@ export function Playground() {
         <div className="p-4 flex flex-col bg-[#0d101a]">
           {error ? (
             <div className="p-4 bg-rose-950/40 border border-rose-800/60 rounded-xl text-rose-300 font-mono text-xs overflow-auto max-h-[350px] whitespace-pre-wrap">
-              <div className="font-bold text-rose-400 mb-1">Diagnostic Report:</div>
+              <div className="font-bold text-rose-400 mb-1">
+                Diagnostic Report:
+              </div>
               {error}
             </div>
           ) : activeTab === "preview" ? (
             <div className="flex-1 flex flex-col">
-              <div className="text-[11px] font-mono text-slate-400 mb-2">OUTPUT: LIVE PREACT VNODE</div>
+              <div className="text-[11px] font-mono text-slate-400 mb-2">
+                OUTPUT: LIVE PREACT VNODE
+              </div>
               <div
                 ref={previewRef}
                 className="flex-1 p-6 bg-[#111422] border border-[#1b2032] rounded-xl flex items-center justify-center min-h-[300px]"
@@ -152,9 +161,11 @@ export function Playground() {
             </div>
           ) : (
             <div className="flex-1 flex flex-col">
-              <div className="text-[11px] font-mono text-slate-400 mb-2">OUTPUT: EMITTED JS (ZERO DEPENDENCIES)</div>
-              <pre className="flex-1 p-4 bg-[#111422] border border-[#1b2032] rounded-xl text-xs font-mono text-rose-300 overflow-auto max-h-[350px] leading-relaxed">
-                {outputJs}
+              <div className="text-[11px] font-mono text-slate-400 mb-2">
+                OUTPUT: EMITTED JS (ZERO DEPENDENCIES)
+              </div>
+              <pre className="flex-1 p-4 bg-[#111422] border border-[#1b2032] rounded-xl text-xs font-mono text-slate-200 overflow-auto max-h-[350px] leading-relaxed">
+                <HighlightedCode code={outputJs} lang="js" />
               </pre>
             </div>
           )}

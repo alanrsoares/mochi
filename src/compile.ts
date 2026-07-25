@@ -85,4 +85,5 @@ export function compile(src: string, opts: CompileOptions = {}): Result<string, 
   return ok(codegen(typed.value, undefined, { runtime: opts.runtime ?? true }));
 }
 
+export { lex } from "./lexer";
 export { type MochiPluginOptions, mochiPlugin } from "./vite-plugin";
