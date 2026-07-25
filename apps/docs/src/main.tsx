@@ -88,7 +88,7 @@ function App() {
             </div>
 
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold font-display tracking-tight text-white leading-[1.1]">
-              Statically-typed functional compiler with <span className="text-transparent bg-clip-text bg-gradient-to-r from-rose-400 via-pink-400 to-amber-300">zero runtime overhead</span>.
+              Statically-typed functional compiler with <span className="text-transparent bg-clip-text bg-linear-to-r from-rose-400 via-pink-400 to-amber-300">zero runtime overhead</span>.
             </h1>
 
             <p className="text-sm text-slate-300 leading-relaxed font-sans max-w-xl">
@@ -114,7 +114,7 @@ function App() {
               <img
                 src={coderMascotImg}
                 alt="Mochi Mascot Banner"
-                className="rounded-xl object-cover w-full h-[360px] filter brightness-95 contrast-105"
+                className="rounded-xl object-cover w-full h-90 filter brightness-95 contrast-105"
               />
             </div>
           </div>
@@ -219,12 +219,20 @@ function App() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="p-5 bg-[#0b0e17] border border-[#1b2030] rounded-xl space-y-3">
               <div className="font-mono text-xs text-rose-400 font-bold uppercase">Preact (~3KB)</div>
               <h3 className="font-bold text-slate-100 font-display">Native h() Alignment</h3>
               <p className="text-xs text-slate-400 leading-relaxed font-sans">
                 Preact exports <code className="text-slate-200 font-mono">h(tag, props, children)</code> directly matching Mochi's JSX desugar output with zero adapter wrappers.
+              </p>
+            </div>
+
+            <div className="p-5 bg-[#0b0e17] border border-[#1b2030] rounded-xl space-y-3">
+              <div className="font-mono text-xs text-pink-400 font-bold uppercase">styled-cva</div>
+              <h3 className="font-bold text-slate-100 font-display">Host UI Kit</h3>
+              <p className="text-xs text-slate-400 leading-relaxed font-sans">
+                Factories and JSX both live in <code className="text-slate-200 font-mono">.mochi</code> — <code className="text-slate-200 font-mono">extern tw</code> from <code className="text-slate-200 font-mono">@styled-cva/react</code> (Preact compat), call-form <code className="text-slate-200 font-mono">tw.div(…)</code>, and <code className="text-slate-200 font-mono">$tone</code> variant props.
               </p>
             </div>
 

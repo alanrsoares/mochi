@@ -18,6 +18,10 @@ export default defineConfig({
       "@mochi/root": path.resolve(__dirname, "../../"),
       "node:path": path.resolve(__dirname, "node_modules/path-browserify"),
       path: path.resolve(__dirname, "node_modules/path-browserify"),
+      // @styled-cva/react → Preact (see styled-cva Preact compat docs)
+      react: "preact/compat",
+      "react-dom": "preact/compat",
+      "react/jsx-runtime": "preact/jsx-runtime",
     },
   },
   base: "/mochi/",

@@ -1,8 +1,8 @@
-// Mochi JSX Component — Tactile Status Chip
+// Composes styled-cva shells from primitives.mochi (ADR 0009).
+import { BadgeShell, BadgePulse } from "../ui/primitives"
+
 let HeaderBadge = props =>
-  <div
-    className="inline-flex items-center gap-2 px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-wider text-rose-300 bg-rose-950/30 border border-rose-500/30 rounded-md shadow-sm"
-  >
-    <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-ping" />
+  <BadgeShell $tone="rose">
+    <BadgePulse $tone="rose" />
     <span>{props.label}</span>
-  </div>
+  </BadgeShell>

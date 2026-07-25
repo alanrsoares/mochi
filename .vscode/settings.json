@@ -7,8 +7,18 @@
       "strings": "on"
     }
   },
-  "// tailwind": "Treat .mochi as JS so IntelliSense picks up className=\"…\" in JSX (ADR 0007).",
+  "// tailwind": "Treat .mochi as JS so IntelliSense picks up className=\"…\" in JSX (ADR 0007). classRegex covers styled-cva tw factories in host TSX.",
   "tailwindCSS.includeLanguages": {
     "mochi": "javascript"
-  }
+  },
+  "tailwindCSS.experimental.classRegex": [
+    "tw`([^`]*)",
+    "tw\\.\\w+`([^`]*)`",
+    "tw\\([^)]*\\)`([^`]*)`",
+    ["tw\\.\\w+\\s*\\(([^;]*)\\)", "[\"'`]([^\"'`]*)[\"'`]"],
+    ["tw\\.\\w+\\.cva\\s*\\(([^;]*)\\)", "[\"'`]([^\"'`]*)[\"'`]"],
+    ["tw\\([^)]+\\)\\s*\\(([^;]*)\\)", "[\"'`]([^\"'`]*)[\"'`]"],
+    ["cva\\(([^;]*)\\)", "[\"'`]([^\"'`]*)[\"'`]"],
+    ["cn\\(([^;]*)\\)", "[\"'`]([^\"'`]*)[\"'`]"]
+  ]
 }

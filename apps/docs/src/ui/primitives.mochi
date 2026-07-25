@@ -1,0 +1,60 @@
+// Docs UI kit — styled-cva factories in Mochi (ADR 0009). Call-form only.
+extern tw : a = "@styled-cva/react" "default"
+
+export let BadgeShell = tw.div(
+  "inline-flex items-center gap-2 px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-wider rounded-md shadow-sm border",
+  {
+    variants: {
+      $tone: {
+        rose: "text-rose-300 bg-rose-950/30 border-rose-500/30",
+        amber: "text-amber-300 bg-amber-950/30 border-amber-500/30",
+        emerald: "text-emerald-300 bg-emerald-950/30 border-emerald-500/30"
+      }
+    },
+    defaultVariants: { $tone: "rose" }
+  }
+)
+
+export let BadgePulse = tw.span(
+  "w-1.5 h-1.5 rounded-full animate-ping",
+  {
+    variants: {
+      $tone: {
+        rose: "bg-rose-400",
+        amber: "bg-amber-400",
+        emerald: "bg-emerald-400"
+      }
+    },
+    defaultVariants: { $tone: "rose" }
+  }
+)
+
+export let CardRoot = tw.div(
+  "group relative p-6 bg-[#111420] border border-[#1e2436] rounded-xl transition-all duration-200 hover:border-rose-500/50 hover:bg-[#151928] overflow-hidden flex flex-col justify-between"
+)
+
+export let CardBody = tw.div("relative z-10 space-y-4")
+
+export let CardHeader = tw.div("flex items-center justify-between")
+
+export let CardTag = tw.span(
+  "font-mono text-[10px] font-bold tracking-widest text-rose-400 uppercase bg-rose-950/40 border border-rose-800/40 px-2 py-0.5 rounded"
+)
+
+export let CardSpec = tw.span("font-mono text-xs text-slate-500")
+
+export let CardTitle = tw.h3(
+  "text-lg font-bold text-slate-100 font-display mb-1.5 tracking-tight group-hover:text-rose-300 transition-colors"
+)
+
+export let CardDescription = tw.p(
+  "text-xs text-slate-400 leading-relaxed font-sans"
+)
+
+export let CardFooter = tw.div(
+  "pt-4 mt-4 border-t border-slate-800/60 flex items-center justify-between text-[11px] font-mono text-slate-500"
+)
+
+export let CardArrow = tw.span(
+  "text-rose-400 group-hover:translate-x-1 transition-transform font-bold"
+)

@@ -1,36 +1,30 @@
-// Mochi JSX Component — Architecture & Feature Spec Card
+// Composes styled-cva shells from primitives.mochi (ADR 0009).
+import {
+  CardRoot,
+  CardBody,
+  CardHeader,
+  CardTag,
+  CardSpec,
+  CardTitle,
+  CardDescription,
+  CardFooter,
+  CardArrow
+} from "../ui/primitives"
+
 let FeatureCard = props =>
-  <div
-    className="group relative p-6 bg-[#111420] border border-[#1e2436] rounded-xl transition-all duration-200 hover:border-rose-500/50 hover:bg-[#151928] overflow-hidden flex flex-col justify-between"
-  >
-    <div className="relative z-10 space-y-4">
-      <div className="flex items-center justify-between">
-        <span
-          className="font-mono text-[10px] font-bold tracking-widest text-rose-400 uppercase bg-rose-950/40 border border-rose-800/40 px-2 py-0.5 rounded"
-        >
-          {props.tag}
-        </span>
-        <span className="font-mono text-xs text-slate-500">{props.spec}</span>
-      </div>
+  <CardRoot>
+    <CardBody>
+      <CardHeader>
+        <CardTag>{props.tag}</CardTag>
+        <CardSpec>{props.spec}</CardSpec>
+      </CardHeader>
       <div>
-        <h3
-          className="text-lg font-bold text-slate-100 font-display mb-1.5 tracking-tight group-hover:text-rose-300 transition-colors"
-        >
-          {props.title}
-        </h3>
-        <p className="text-xs text-slate-400 leading-relaxed font-sans">
-          {props.description}
-        </p>
+        <CardTitle>{props.title}</CardTitle>
+        <CardDescription>{props.description}</CardDescription>
       </div>
-    </div>
-    <div
-      className="pt-4 mt-4 border-t border-slate-800/60 flex items-center justify-between text-[11px] font-mono text-slate-500"
-    >
+    </CardBody>
+    <CardFooter>
       <span>{props.subtext}</span>
-      <span
-        className="text-rose-400 group-hover:translate-x-1 transition-transform font-bold"
-      >
-        {"->"}
-      </span>
-    </div>
-  </div>
+      <CardArrow>{"->"}</CardArrow>
+    </CardFooter>
+  </CardRoot>
