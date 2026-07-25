@@ -1,17 +1,24 @@
 /**
- * styled-cva host extension (ADR 0010 Gap B / Wave 3 #15+#17).
+ * styled-cva vendor plugin (ADR 0010 Gap B / Wave 3 #15+#17, Wave 4 #23).
  *
- * Not language core — register via `InferOptions.extensions` /
- * `emitDts(..., { extensions })`. Teaches:
+ * A library-owned `HostExtension` adapter — not language core. It lives outside
+ * the compiler tree and depends only on the plugin interface (`HostExtension`,
+ * `InferCallApi`) plus the type constructors it needs. Register it through the
+ * project's vendor-plugin list (`apps/docs/mochi.plugins.ts`, #20). Teaches:
  * - `tw.tag(base)` / `tw.tag(base, { variants })` → props → VNode component
  * - dts: `$tone?: "rose" | …` unions extracted from the variants record AST
  */
 import { isErr, ok, type Result } from "@onrails/result";
-import type { Expr } from "../ast";
-import type { Diagnostic } from "../errors";
-import type { DtsBindingHook, HostExtension, InferCallApi, InferCallHook } from "../extensions";
-import type { Row, Type } from "../types";
-import { rExtend, tArrow, tCon, tRecord, tString } from "../types";
+import type { Expr } from "../../../src/ast";
+import type { Diagnostic } from "../../../src/errors";
+import type {
+  DtsBindingHook,
+  HostExtension,
+  InferCallApi,
+  InferCallHook,
+} from "../../../src/extensions";
+import type { Row, Type } from "../../../src/types";
+import { rExtend, tArrow, tCon, tRecord, tString } from "../../../src/types";
 
 type CallExpr = Extract<Expr, { kind: "call" }>;
 type RecordExpr = Extract<Expr, { kind: "record" }>;
@@ -69,10 +76,3 @@ export const styledCvaExtension: HostExtension = {
   inferCall: inferTwFactory,
   dtsBinding: styledCvaDts,
 };
-
-/** Flatten registered extensions into hook arrays (registration order). */
-export const collectInferCallHooks = (exts: HostExtension[] | undefined): InferCallHook[] =>
-  (exts ?? []).flatMap((e) => (e.inferCall ? [e.inferCall] : []));
-
-export const collectDtsBindingHooks = (exts: HostExtension[] | undefined): DtsBindingHook[] =>
-  (exts ?? []).flatMap((e) => (e.dtsBinding ? [e.dtsBinding] : []));

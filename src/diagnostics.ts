@@ -9,6 +9,7 @@ import { resolve } from "node:path";
 import { isErr } from "@onrails/result";
 import { compile, toTypedProgramWith } from "./compile";
 import type { Diagnostic } from "./errors";
+import type { HostExtension } from "./extensions";
 import { lex } from "./lexer";
 import { moduleContext } from "./module";
 import { parse } from "./parser";
@@ -101,12 +102,17 @@ export function diagnostics(src: string): PublishDiagnostic[] {
   return isErr(r) ? r.error.map((e) => toPublish(src, e)) : [];
 }
 
+/** Options threaded into `moduleDiagnostics` — host `extensions` (styled-cva, …), same list Vite / `gen-mochi-dts` use. Empty/omitted = today's behaviour. */
+export type ModuleDiagnosticsOptions = { extensions?: HostExtension[] };
+
 /**
  * Module-aware diagnostics: resolve `path`'s dependency graph (deps read from
  * disk via `readFile`, the edited file served from the live `src` buffer) and
  * check + infer the live program WITH the imported registry/schemes. This is
  * what stops a match on an imported constructor from being a false "unknown
- * constructor", and makes cross-module exhaustiveness real.
+ * constructor", and makes cross-module exhaustiveness real. `opts.extensions`
+ * (styled-cva, …) reaches the same call, so a project's host kits don't
+ * produce false type errors in the editor that Vite/`gen-mochi-dts` don't see.
  *
  * Degradation is deliberate: the entry's own lex/parse errors are always
  * reported (they never depend on deps); if the dep graph can't be resolved or a
@@ -117,6 +123,7 @@ export async function moduleDiagnostics(
   path: string,
   src: string,
   readFile: (p: string) => Promise<string>,
+  opts: ModuleDiagnosticsOptions = {},
 ): Promise<PublishDiagnostic[]> {
   const lexed = lex(src);
   if (isErr(lexed)) return [toPublish(src, lexed.error, path)];
@@ -127,9 +134,9 @@ export async function moduleDiagnostics(
   const entry = resolve(path);
   const read = (p: string): Promise<string> =>
     resolve(p) === entry ? Promise.resolve(src) : readFile(p);
-  const ctx = await moduleContext(entry, read);
+  const ctx = await moduleContext(entry, read, { extensions: opts.extensions });
   if (isErr(ctx)) return diagnostics(src);
 
-  const typed = toTypedProgramWith(prog, ctx.value);
+  const typed = toTypedProgramWith(prog, ctx.value, { extensions: opts.extensions });
   return isErr(typed) ? typed.error.map((e) => toPublish(src, e, entry)) : [];
 }

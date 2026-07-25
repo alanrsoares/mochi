@@ -14,11 +14,6 @@ export type MochiPluginOptions = {
    */
   jsxPragmaHeader?: string;
   /**
-   * Custom JSX pragma function name used in code desugaring.
-   * Default: `"h"`
-   */
-  jsxPragmaName?: string;
-  /**
    * Inlines Mochi runtime helpers in emitted output.
    * Default: `true`
    */

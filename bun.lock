@@ -11,6 +11,7 @@
       },
       "devDependencies": {
         "@biomejs/biome": "^2.5.4",
+        "@mochi/plugin-styled-cva": "workspace:*",
         "@types/bun": "latest",
         "esbuild": "^0.28.1",
         "fast-check": "^4.9.0",
@@ -25,6 +26,7 @@
       "name": "@mochi/docs",
       "version": "0.1.0",
       "dependencies": {
+        "@mochi/plugin-styled-cva": "workspace:*",
         "@preact/signals": "^2.3.1",
         "@re-reduced/preact": "^0.2.3",
         "@styled-cva/react": "^0.7.1",
@@ -47,6 +49,13 @@
         "@types/node": "^26.1.1",
         "@types/vscode": "^1.125.0",
         "vscode-languageclient": "^10.1.0",
+      },
+    },
+    "packages/plugin-styled-cva": {
+      "name": "@mochi/plugin-styled-cva",
+      "version": "0.1.0",
+      "peerDependencies": {
+        "@onrails/result": "^0.4.0",
       },
     },
   },
@@ -174,6 +183,8 @@
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
 
     "@mochi/docs": ["@mochi/docs@workspace:apps/docs"],
+
+    "@mochi/plugin-styled-cva": ["@mochi/plugin-styled-cva@workspace:packages/plugin-styled-cva"],
 
     "@mochi/vscode": ["@mochi/vscode@workspace:editors/vscode"],
 

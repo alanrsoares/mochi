@@ -39,10 +39,12 @@
   },
   "workspaces": [
     "editors/*",
-    "apps/*"
+    "apps/*",
+    "packages/*"
   ],
   "devDependencies": {
     "@biomejs/biome": "^2.5.4",
+    "@mochi/plugin-styled-cva": "workspace:*",
     "@types/bun": "latest",
     "esbuild": "^0.28.1",
     "fast-check": "^4.9.0",

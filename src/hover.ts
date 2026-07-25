@@ -10,6 +10,7 @@ import { resolve } from "node:path";
 import { map, match as matchMaybe } from "@onrails/maybe";
 import { isErr, isOk } from "@onrails/result";
 import { toTypedProgram, toTypedProgramWith } from "./compile";
+import type { HostExtension } from "./extensions";
 import type { InferResult, SymbolInfo, TypeAt } from "./infer";
 import { lex } from "./lexer";
 import { moduleContext } from "./module";
@@ -77,18 +78,24 @@ export const hoverAt = (src: string, offset: number, path = "<buffer>"): HoverIn
   return isOk(r) ? hoverFrom(r.value.res, offset, src, path) : null;
 };
 
+/** Options threaded into module-aware nav/hover/diagnostics — host `extensions` (styled-cva, …), same list Vite / `gen-mochi-dts` use. Empty/omitted = today's behaviour. */
+export type ModuleHoverOptions = { extensions?: HostExtension[] };
+
 /**
  * Module-aware hover: resolve `path`'s dependency graph (deps from disk via
  * `readFile`, the edited file from the live `src` buffer) and check + infer the
  * live program WITH the imported registry/schemes. Without this, any file that
  * imports a variant fails to typecheck and yields no hover. Degrades to
- * single-file `hoverAt` if the dep graph can't be resolved.
+ * single-file `hoverAt` if the dep graph can't be resolved. `opts.extensions`
+ * (styled-cva, …) reaches both the dependency graph and the live buffer, so
+ * `tw.*` factories hover with a real component scheme instead of `unknown`.
  */
 export const moduleHoverAt = async (
   path: string,
   src: string,
   offset: number,
   readFile: (p: string) => Promise<string>,
+  opts: ModuleHoverOptions = {},
 ): Promise<HoverInfo | null> => {
   const lexed = lex(src);
   if (isErr(lexed)) return null;
@@ -98,9 +105,9 @@ export const moduleHoverAt = async (
   const entry = resolve(path);
   const read = (p: string): Promise<string> =>
     resolve(p) === entry ? Promise.resolve(src) : readFile(p);
-  const ctx = await moduleContext(entry, read);
+  const ctx = await moduleContext(entry, read, { extensions: opts.extensions });
   if (isErr(ctx)) return hoverAt(src, offset, entry);
 
-  const typed = toTypedProgramWith(parsed.value, ctx.value);
+  const typed = toTypedProgramWith(parsed.value, ctx.value, { extensions: opts.extensions });
   return isOk(typed) ? hoverFrom(typed.value.res, offset, src, entry) : null;
 };

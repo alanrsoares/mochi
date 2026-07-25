@@ -8,6 +8,7 @@ import { resolve } from "node:path";
 import { flatMap, fromNullable, map, match as matchMaybe, none, some } from "@onrails/maybe";
 import { isErr, isOk } from "@onrails/result";
 import { toTypedProgram, toTypedProgramWith } from "./compile";
+import type { HostExtension } from "./extensions";
 import type { InferResult, TypeAt } from "./infer";
 import { lex } from "./lexer";
 import { loadModuleGraph, moduleContext } from "./module";
@@ -137,12 +138,16 @@ export const typeDefinitionAt = (
   return isOk(typed) ? typeDefFrom(typed.value.res, offset, idx) : null;
 };
 
+/** Options threaded into module-* nav helpers that typecheck — host `extensions` (styled-cva, …), same list hover/diagnostics take. */
+export type ModuleNavOptions = { extensions?: HostExtension[] };
+
 /** Module-aware go-to-type (imported variants/aliases via export origins). */
 export const moduleTypeDefinitionAt = async (
   path: string,
   src: string,
   offset: number,
   readFile: ReadFile,
+  opts: ModuleNavOptions = {},
 ): Promise<Location | null> => {
   const origins = await originsForEntry(path, readFile, src);
   const idx = indexSrc(path, src, origins);
@@ -156,10 +161,10 @@ export const moduleTypeDefinitionAt = async (
   const entry = resolve(path);
   const read = (p: string): Promise<string> =>
     resolve(p) === entry ? Promise.resolve(src) : readFile(p);
-  const ctx = await moduleContext(entry, read);
+  const ctx = await moduleContext(entry, read, { extensions: opts.extensions });
   if (isErr(ctx)) return typeDefinitionAt(src, offset, entry);
 
-  const typed = toTypedProgramWith(parsed.value, ctx.value);
+  const typed = toTypedProgramWith(parsed.value, ctx.value, { extensions: opts.extensions });
   return isOk(typed) ? typeDefFrom(typed.value.res, offset, idx, origins) : null;
 };
 

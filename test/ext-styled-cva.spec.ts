@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { styledCvaExtension } from "@mochi/plugin-styled-cva";
 import { isErr, unwrapOk } from "@onrails/result";
 import { toTypedProgram } from "../src/compile";
 import { emitDts } from "../src/dts";
-import { styledCvaExtension } from "../src/ext/styled-cva";
 import { showScheme } from "../src/infer";
+import { moduleContext } from "../src/module";
 import { preludeNamespaces } from "../src/prelude";
 
 const exts = [styledCvaExtension];
@@ -50,6 +51,31 @@ export let Badge = tw.div("base")
 `;
   const dts = unwrapOk(emitDts(src));
   expect(dts).toContain("export declare const Badge: unknown;");
+});
+
+test("module graph: tw.div binding types as Record → VNode when extensions cross a module boundary", async () => {
+  const files: Record<string, string> = {
+    "/p/ui.mochi": `
+export extern tw : a = "@styled-cva/react" "default"
+export let Badge = tw.div("base", {
+  variants: { $tone: { rose: "a", amber: "b" } },
+  defaultVariants: { $tone: "rose" }
+})
+`,
+    "/p/main.mochi": 'import { Badge } from "./ui"\nlet x = Badge\n',
+  };
+  const read = async (p: string): Promise<string> => {
+    const src = files[p];
+    if (src === undefined) throw new Error(`no such file ${p}`);
+    return src;
+  };
+  const r = await moduleContext("/p/main.mochi", read, { extensions: exts });
+  expect(isErr(r)).toBe(false);
+  const sc = unwrapOk(r).imports.get("Badge")!;
+  expect(sc).toBeDefined();
+  const shown = showScheme(sc);
+  expect(shown).toContain("VNode");
+  expect(shown).toContain("$tone");
 });
 
 test("JSX core: invalid component prop fails when tag is a component", () => {

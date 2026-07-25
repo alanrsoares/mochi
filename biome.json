@@ -9,7 +9,8 @@
       "!src/runtime.ts",
       "apps/docs/src/**/*.ts",
       "apps/docs/src/**/*.tsx",
-      "apps/docs/*.ts"
+      "apps/docs/*.ts",
+      "packages/*/src/**/*.ts"
     ]
   },
   "javascript": { "globals": ["Bun"] },

@@ -10,6 +10,7 @@
     "check": "bun ../../scripts/gen-mochi-dts.ts && tsc --noEmit"
   },
   "dependencies": {
+    "@mochi/plugin-styled-cva": "workspace:*",
     "@preact/signals": "^2.3.1",
     "@re-reduced/preact": "^0.2.3",
     "@styled-cva/react": "^0.7.1",

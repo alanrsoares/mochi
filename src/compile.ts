@@ -43,10 +43,14 @@ export type ImportedContext = {
   importedReg: Registry;
 };
 
+/** Options for `toTypedProgramWith` beyond the imported context — currently just host `extensions` (styled-cva, …), threaded the same way `compile`/`inferProgram` take them. */
+export type TypedProgramWithOptions = { extensions?: HostExtension[] };
+
 /** Parsed Program → typed Program, with an imported context: the module-aware sibling of `toTypedProgram`. Owns the prelude-seeding invariant — `preludeEnv` + `preludeNamespaces` + open-world — that the graph drivers (`compileGraph`, `compileGraphTs`, `moduleContext`) and the LSP surfaces (`moduleDiagnostics`, `moduleHoverAt`) previously each re-assembled. */
 export function toTypedProgramWith(
   prog: Program,
   ctx: ImportedContext,
+  opts: TypedProgramWithOptions = {},
 ): Result<TypedProgram, Diagnostic[]> {
   const checked = check(prog, ctx.importedReg);
   if (isErr(checked)) return checked;
@@ -56,6 +60,7 @@ export function toTypedProgramWith(
       imports: ctx.imports,
       namespaces: preludeNamespaces,
       nsImports: ctx.nsImports,
+      extensions: opts.extensions,
     }),
     (res) => ({ prog: checked.value, res }),
   );
@@ -92,7 +97,6 @@ export function compile(src: string, opts: CompileOptions = {}): Result<string, 
   );
 }
 
-export { styledCvaExtension } from "./ext/styled-cva";
 export type { HostExtension } from "./extensions";
 export { format } from "./format";
 export { type HoverInfo, hoverAt } from "./hover";
