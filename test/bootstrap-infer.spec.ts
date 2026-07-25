@@ -86,6 +86,12 @@ const tsTypeToAl = (t: Type): unknown => {
       return alInfer.tArrow(tsTypeToAl(t.from), tsTypeToAl(t.to));
     case "record":
       return alInfer.tRecord(tsRowToAl(t.row));
+    // Bootstrap infer still treats string literals as `string` (Wave 7 port
+    // pending). Widen lit/union when seeding prelude tables.
+    case "lit":
+      return alInfer.tCon(t.base, []);
+    case "union":
+      return tsTypeToAl(t.members[0] ?? { kind: "con", name: "string", args: [] });
   }
 };
 
@@ -115,7 +121,10 @@ const alNamespaces = new Map(
 const normalize = (s: string): string => {
   const seen = new Map<string, number>();
   let counter = 0;
-  return s.replace(/'([tr])(\d+)/g, (_m, kind: string, id: string) => {
+  // Wave 7: TS infers string literals as `"hi"`; bootstrap still says `string`.
+  // Widen quoted singletons so corpus parity holds until bootstrap ports TyLit.
+  const widened = s.replace(/"(?:\\.|[^"\\])*"/g, "string");
+  return widened.replace(/'([tr])(\d+)/g, (_m, kind: string, id: string) => {
     const key = kind + id;
     if (!seen.has(key)) seen.set(key, counter++);
     return `'${kind}${seen.get(key)}`;

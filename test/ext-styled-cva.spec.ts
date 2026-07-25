@@ -23,6 +23,8 @@ export let Badge = tw.div("base", {
   const shown = showScheme(sc, unwrapOk(r).res.aliases);
   expect(shown).toContain("VNode");
   expect(shown).toContain("$tone");
+  expect(shown).toContain('"rose"');
+  expect(shown).toContain('"amber"');
 });
 
 test("styled-cva dtsBinding emits $tone literal unions", () => {
@@ -86,4 +88,24 @@ export let bad = <Btn $tone={1} />
 `;
   const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces, plugins: exts });
   expect(isErr(r)).toBe(true);
+});
+
+test("JSX: unknown $tone literal fails against variant union", () => {
+  const src = `
+export extern tw : a = "@styled-cva/react" "default"
+export let Btn = tw.button("x", { variants: { $tone: { rose: "1", amber: "2" } } })
+export let bad = <Btn $tone="taupe" />
+`;
+  const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces, plugins: exts });
+  expect(isErr(r)).toBe(true);
+});
+
+test("JSX: known $tone literal ok against variant union", () => {
+  const src = `
+export extern tw : a = "@styled-cva/react" "default"
+export let Btn = tw.button("x", { variants: { $tone: { rose: "1", amber: "2" } } })
+export let ok = <Btn $tone="rose" />
+`;
+  const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces, plugins: exts });
+  expect(isErr(r)).toBe(false);
 });

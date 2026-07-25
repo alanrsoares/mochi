@@ -24,7 +24,7 @@ import {
 } from "./extensions";
 import type { Scheme } from "./infer";
 import { builtinTypeDecls, preludeNamespaces } from "./prelude";
-import { typeExprToType } from "./schemes";
+import { typeExprToType, widenLits } from "./schemes";
 import {
   type AliasDef,
   aliasParamId,
@@ -55,6 +55,10 @@ function consIn(t: Type, acc: Set<string>): void {
         row = row.rest;
       }
     })
+    .with({ kind: "lit" }, () => {})
+    .with({ kind: "union" }, (u) => {
+      for (const m of u.members) consIn(m, acc);
+    })
     .exhaustive();
 }
 
@@ -65,46 +69,49 @@ const PRIM_TS: Record<string, string> = {
   bool: "boolean",
 };
 
-/** HM type → TS type. `names` maps quantified var ids to generic letters; any other var renders as `unknown` (it escaped generalization at this position). */
+/** HM type → TS type. `names` maps quantified var ids to generic letters; any other var renders as `unknown` (it escaped generalization at this position). Bare lits default to their base prim; literal unions stay precise. */
 function tsOf(t: Type, names: Map<number, string>): string {
+  return tsOfRaw(widenLits(t), names);
+}
+
+function tsOfRaw(t: Type, names: Map<number, string>): string {
   return (
     match(t)
       .with({ kind: "var" }, (v) => names.get(v.id) ?? "unknown")
       .with({ kind: "con", name: "Array" }, (con) =>
-        con.args.length === 1 ? `${tsOf(con.args[0]!, names)}[]` : nominalCon(con, names),
+        con.args.length === 1 ? `${tsOfRaw(con.args[0]!, names)}[]` : nominalCon(con, names),
       )
       .with({ kind: "con", name: "List" }, (con) =>
-        con.args.length === 1 ? `Iterable<${tsOf(con.args[0]!, names)}>` : nominalCon(con, names),
+        con.args.length === 1
+          ? `Iterable<${tsOfRaw(con.args[0]!, names)}>`
+          : nominalCon(con, names),
       )
       // Task is an opaque lazy thunk (ADR 0005) — emit the runtime shape, not a phantom nominal.
       .with({ kind: "con", name: "Task" }, (con) =>
         con.args.length === 1
-          ? `() => Promise<${tsOf(con.args[0]!, names)}>`
+          ? `() => Promise<${tsOfRaw(con.args[0]!, names)}>`
           : nominalCon(con, names),
       )
       .with(
         { kind: "con", name: "tuple" },
-        (con) => `[${con.args.map((a) => tsOf(a, names)).join(", ")}]`,
+        (con) => `[${con.args.map((a) => tsOfRaw(a, names)).join(", ")}]`,
       )
       .with({ kind: "con" }, (con) => PRIM_TS[con.name] ?? nominalCon(con, names))
       .with({ kind: "arrow" }, (arrow) => {
-        // Flat multi-param arrow, matching codegen's UNCURRIED calling convention:
-        // user functions emit `(a, b) => …` (defs) and `f(a, b)` (calls), never
-        // `f(a)(b)`. `declType` already flattens a binding's own params this way;
-        // rendering NESTED function types (a HOF's function-typed param, e.g.
-        // `sepBy`'s `parseItem`) curried instead — `(x) => (x) => R` — is what
-        // made a flat function VALUE reject against a curried param slot (TS2345).
-        // Collapse the whole arrow chain into one arrow so the two agree.
         const params: string[] = [];
         let cur: Type = arrow;
         while (cur.kind === "arrow") {
-          params.push(tsOf(cur.from, names));
+          params.push(tsOfRaw(cur.from, names));
           cur = cur.to;
         }
         const named = params.map((p, i) => `${String.fromCharCode(97 + i)}: ${p}`);
-        return `(${named.join(", ")}) => ${tsOf(cur, names)}`;
+        return `(${named.join(", ")}) => ${tsOfRaw(cur, names)}`;
       })
       .with({ kind: "record" }, (rec) => tsRow(rec.row, names))
+      .with({ kind: "lit" }, (lit) =>
+        lit.base === "string" ? JSON.stringify(lit.value) : lit.value,
+      )
+      .with({ kind: "union" }, (u) => u.members.map((m) => tsOfRaw(m, names)).join(" | "))
       .exhaustive()
   );
 }
@@ -113,13 +120,13 @@ function tsOf(t: Type, names: Map<number, string>): string {
 const nominalCon = (con: ConType, names: Map<number, string>): string =>
   con.args.length === 0
     ? con.name
-    : `${con.name}<${con.args.map((a) => tsOf(a, names)).join(", ")}>`;
+    : `${con.name}<${con.args.map((a) => tsOfRaw(a, names)).join(", ")}>`;
 
 function tsRow(row: Row, names: Map<number, string>): string {
   const fields: string[] = [];
   let cur = row;
   while (cur.kind === "extend") {
-    fields.push(`${cur.label}: ${tsOf(cur.type, names)}`);
+    fields.push(`${cur.label}: ${tsOfRaw(cur.type, names)}`);
     cur = cur.rest;
   }
   const body = fields.length === 0 ? "{}" : `{ ${fields.join("; ")} }`;
@@ -157,6 +164,8 @@ function hasFreeVar(t: Type): boolean {
         .with({ kind: "rvar" }, () => true)
         .exhaustive();
     })
+    .with({ kind: "lit" }, () => false)
+    .with({ kind: "union" }, (u) => u.members.some(hasFreeVar))
     .exhaustive();
 }
 
@@ -194,7 +203,9 @@ export function emptyCollTs(
  * Fully-concrete cons only: a free var would render `unknown`, no better than tsc.
  */
 export function ctorCallTs(t: Type, aliases: AliasDef[]): string | null {
-  const folded = foldAliases(t, aliases);
+  // Widen bare lits so `Err("bad")` casts as `Result<number, string>`, not
+  // `Result<number, "bad">` (ADR 0043 + Wave 7 literal defaulting).
+  const folded = widenLits(foldAliases(t, aliases));
   return match(folded)
     .with({ kind: "con" }, (con) =>
       con.args.length === 0 || hasFreeVar(con) ? null : tsOf(con, new Map()),
@@ -202,6 +213,8 @@ export function ctorCallTs(t: Type, aliases: AliasDef[]): string | null {
     .with({ kind: "var" }, () => null)
     .with({ kind: "arrow" }, () => null)
     .with({ kind: "record" }, () => null)
+    .with({ kind: "lit" }, () => null)
+    .with({ kind: "union" }, () => null)
     .exhaustive();
 }
 
@@ -293,6 +306,10 @@ function freeVars(t: Type, acc: number[]): void {
         freeVars(r.type, acc);
         r = r.rest;
       }
+    })
+    .with({ kind: "lit" }, () => {})
+    .with({ kind: "union" }, (u) => {
+      for (const m of u.members) freeVars(m, acc);
     })
     .exhaustive();
 }
@@ -458,6 +475,8 @@ function allVarsIn(t: Type, names: Map<number, string>): boolean {
         .with({ kind: "rvar" }, (rvar) => names.has(rvar.id))
         .exhaustive();
     })
+    .with({ kind: "lit" }, () => true)
+    .with({ kind: "union" }, (u) => u.members.every((m) => allVarsIn(m, names)))
     .exhaustive();
 }
 
@@ -721,6 +740,8 @@ export function externModuleDts(externs: ExternBinding[]): string {
       .with({ kind: "var" }, () => 0)
       .with({ kind: "con" }, () => 0)
       .with({ kind: "record" }, () => 0)
+      .with({ kind: "lit" }, () => 0)
+      .with({ kind: "union" }, () => 0)
       .exhaustive();
   const seen = new Set<string>();
   const lines: string[] = [];

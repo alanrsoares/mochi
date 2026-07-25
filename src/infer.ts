@@ -68,6 +68,7 @@ import {
   tArrow,
   tBool,
   tCon,
+  tLit,
   tNumber,
   tRecord,
   tString,
@@ -348,7 +349,7 @@ function inferExpr(e: Expr, ctx: Ctx): Result<Type, Diagnostic> {
   return match(e)
     .with({ kind: "num" }, () => ok(tNumber))
     .with({ kind: "bool" }, () => ok(tBool))
-    .with({ kind: "str" }, () => ok(tString))
+    .with({ kind: "str" }, (str) => ok(tLit(str.value)))
     .with({ kind: "interp" }, (interp) => inferInterp(interp.parts, ctx))
     .with({ kind: "ref" }, (ref) => inferRef(ref, ctx))
     .with({ kind: "lambda" }, (lambda) => inferLambda(lambda, ctx))
@@ -465,7 +466,7 @@ function inferPat(p: Pattern, ctx: Ctx): Result<PatResult, Diagnostic> {
     .with({ kind: "pwild" }, () => ok({ type: freshVar(ctx.fresh), bindings: new Map() }))
     .with({ kind: "plit" }, () => ok({ type: tNumber, bindings: new Map() }))
     .with({ kind: "pbool" }, () => ok({ type: tBool, bindings: new Map() }))
-    .with({ kind: "pstr" }, () => ok({ type: tString, bindings: new Map() }))
+    .with({ kind: "pstr" }, (pstr) => ok({ type: tLit(pstr.value), bindings: new Map() }))
     .with({ kind: "pbind" }, (pbind) => {
       const t = freshVar(ctx.fresh);
       return ok({ type: t, bindings: new Map([[pbind.name, t]]) });

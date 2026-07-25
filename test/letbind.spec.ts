@@ -66,7 +66,8 @@ test("body must be a Result", () => {
 
 test("value and body share one error type", () => {
   const m = errMsg(`let r = let? x = Err("s") in Err(1)`);
-  expect(m).toContain("string");
+  // Err("s") is a string singleton until generalize; error may show the lit.
+  expect(m.includes("string") || m.includes('"s"')).toBe(true);
   expect(m).toContain("number");
 });
 

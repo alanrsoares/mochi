@@ -19,6 +19,7 @@ import {
   tRecord,
   tString,
   tTuple,
+  tUnion,
 } from "./types";
 import { type Subst, zonk } from "./unify";
 
@@ -51,6 +52,10 @@ const collect = (t: Type, acc: VarSets): void => {
     })
     .with({ kind: "record" }, (rec) => {
       collectRow(rec.row, acc);
+    })
+    .with({ kind: "lit" }, () => {})
+    .with({ kind: "union" }, (u) => {
+      for (const m of u.members) collect(m, acc);
     })
     .exhaustive();
 };
@@ -107,6 +112,10 @@ const freeInScheme = (sc: Scheme, s: Subst): VarSets => {
       .with({ kind: "record" }, (rec) => {
         walkRow(rec.row);
       })
+      .with({ kind: "lit" }, () => {})
+      .with({ kind: "union" }, (u) => {
+        u.members.forEach(walk);
+      })
       .exhaustive();
   };
   const walkRow = (row: Row): void => {
@@ -143,13 +152,38 @@ const freeInEnv = (env: Env, s: Subst): VarSets => {
 };
 
 export const generalize = (env: Env, t: Type, s: Subst): Scheme => {
-  const zt = zonk(t, s);
+  const zt = widenLits(zonk(t, s));
   const free = freeInType(zt);
   const bound = freeInEnv(env, s);
   const vars = [...free.tv].filter((v) => !bound.tv.has(v));
   const rvars = [...free.rv].filter((v) => !bound.rv.has(v));
   return { vars, rvars, type: zt };
 };
+
+/**
+ * Defaulting: bare string/number singletons widen to their base prim at
+ * generalization (TypeScript-like). Finite unions of lits (e.g. `$tone`) stay
+ * precise — only unwrapped `lit` nodes widen (ADR 0012 / Wave 7).
+ */
+export const widenLits = (t: Type): Type =>
+  match(t)
+    .with({ kind: "lit" }, (lit) => (lit.base === "string" ? tString : tNumber))
+    // Keep literal-union members precise (`$tone: "rose" | "amber"`).
+    .with({ kind: "union" }, (u) =>
+      tUnion(u.members.map((m) => (m.kind === "lit" ? m : widenLits(m)))),
+    )
+    .with({ kind: "con" }, (con) => tCon(con.name, con.args.map(widenLits)))
+    .with({ kind: "arrow" }, (arrow) => tArrow(widenLits(arrow.from), widenLits(arrow.to)))
+    .with({ kind: "record" }, (rec) => tRecord(widenRow(rec.row)))
+    .with({ kind: "var" }, (v) => v)
+    .exhaustive();
+
+const widenRow = (row: Row): Row =>
+  match(row)
+    .with({ kind: "empty" }, (empty) => empty)
+    .with({ kind: "rvar" }, (rvar) => rvar)
+    .with({ kind: "extend" }, (ext) => rExtend(ext.label, widenLits(ext.type), widenRow(ext.rest)))
+    .exhaustive();
 
 export const instantiate = (sc: Scheme, f: Fresh): Type => {
   const tmap = new Map(sc.vars.map((v) => [v, freshVar(f)]));
@@ -165,6 +199,8 @@ export const instantiate = (sc: Scheme, f: Fresh): Type => {
       )
       .with({ kind: "arrow" }, (arrow) => tArrow(sub(arrow.from), sub(arrow.to)))
       .with({ kind: "record" }, (rec) => tRecord(subRow(rec.row)))
+      .with({ kind: "lit" }, (lit) => lit)
+      .with({ kind: "union" }, (u) => tUnion(u.members.map(sub)))
       .exhaustive();
   const subRow = (row: Row): Row =>
     match(row)

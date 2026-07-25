@@ -17,6 +17,7 @@ import { moduleContext } from "./module";
 import { parse } from "./parser";
 import { preludeNamespaces } from "./prelude";
 import { preludeDocForBinding } from "./prelude-virtual";
+import { widenLits } from "./schemes";
 import { spanContainsClosed, tightestHit } from "./span";
 import { indexProgram } from "./symbols";
 import { foldAliases, showType } from "./types";
@@ -60,7 +61,7 @@ const docAt = (
 const hoverFrom = (res: InferResult, offset: number, src: string, path: string): HoverInfo | null =>
   matchMaybe(
     map(tightestType(res.types, offset), (hit) => {
-      const type = showType(foldAliases(hit.type, res.aliases));
+      const type = showType(widenLits(foldAliases(hit.type, res.aliases)));
       return { code: lead(type, hit.symbol), doc: docAt(src, path, offset, hit.symbol) };
     }),
     (info) => info,

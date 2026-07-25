@@ -20,7 +20,7 @@ import type {
 import type { Row, Type } from "../../../src/types";
 // Explicit extension: crossing the package boundary, this specifier is resolved
 // by Node/Vite's config loader without a bundler, which needs the real filename.
-import { rExtend, tArrow, tCon, tRecord, tString } from "../../../src/types.ts";
+import { rExtend, tArrow, tCon, tLit, tRecord, tUnion } from "../../../src/types.ts";
 
 type CallExpr = Extract<Expr, { kind: "call" }>;
 type RecordExpr = Extract<Expr, { kind: "record" }>;
@@ -43,7 +43,8 @@ const inferTwFactory: InferCallHook = (
     const variantsField = variantsArg.fields.find((f) => f.name === "variants");
     if (variantsField?.value.kind === "record") {
       for (const vf of variantsField.value.fields) {
-        row = rExtend(vf.name, tString, row);
+        const keys = vf.value.kind === "record" ? vf.value.fields.map((k) => tLit(k.name)) : [];
+        row = rExtend(vf.name, keys.length > 0 ? tUnion(keys) : tCon("string"), row);
       }
     }
   }

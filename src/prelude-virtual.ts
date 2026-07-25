@@ -107,6 +107,8 @@ const showSurface = (t: Type): string =>
       return `${from} -> ${showSurface(arrow.to)}`;
     })
     .with({ kind: "record" }, (rec) => showType(rec))
+    .with({ kind: "lit" }, (lit) => showType(lit))
+    .with({ kind: "union" }, (u) => u.members.map(showSurface).join(" | "))
     .exhaustive();
 
 const surfaceCon = (con: ConType): string =>
