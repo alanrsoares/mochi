@@ -4,12 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "bun ../../scripts/gen-mochi-dts.ts && vite",
+    "build": "bun ../../scripts/gen-mochi-dts.ts && vite build",
     "preview": "vite preview",
-    "check": "tsc --noEmit"
+    "check": "bun ../../scripts/gen-mochi-dts.ts && tsc --noEmit"
   },
   "dependencies": {
+    "@preact/signals": "^2.3.1",
+    "@re-reduced/preact": "^0.2.3",
     "@styled-cva/react": "^0.7.1",
     "preact": "^10.26.4"
   },

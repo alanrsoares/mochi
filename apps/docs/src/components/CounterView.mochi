@@ -1,0 +1,19 @@
+// Presentational counter — hooks + store live in Counter.tsx.
+import { BadgeShell } from "../ui/primitives"
+
+let CounterView = props =>
+  <BadgeShell $tone="emerald">
+    <button
+      className="font-mono text-emerald-200/80 hover:text-white px-1"
+      onClick={props.onDec}
+    >
+      {"−"}
+    </button>
+    <span className="tabular-nums min-w-6 text-center">{props.count}</span>
+    <button
+      className="font-mono text-emerald-200/80 hover:text-white px-1"
+      onClick={props.onInc}
+    >
+      {"+"}
+    </button>
+  </BadgeShell>

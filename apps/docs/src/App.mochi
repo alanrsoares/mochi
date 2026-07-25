@@ -1,0 +1,365 @@
+// Docs site layout — static chrome in Mochi; host widgets via extern / children.
+import { HeaderBadge } from "./components/HeaderBadge"
+import { FeatureCard } from "./components/FeatureCard"
+import { InteropCard } from "./components/InteropCard"
+import { ArtworkCard } from "./components/ArtworkCard"
+import { SyntaxPanel } from "./components/SyntaxPanel"
+
+extern Playground : a = "./components/Playground" "Playground"
+extern HighlightedCode : a = "./components/HighlightCode" "HighlightedCode"
+extern Counter : a = "./components/Counter" "Counter"
+
+let SiteHeader = props =>
+  <header
+    className="sticky top-0 z-50 bg-[#0b0d14]/90 border-b border-[#1b2030] backdrop-blur-md"
+  >
+    <div
+      className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between"
+    >
+      <div className="flex items-center gap-3">
+        <img
+          src={props.logo}
+          alt="Mochi Logo"
+          className="w-8 h-8 object-contain"
+        />
+        <span
+          className="text-lg font-bold font-display tracking-tight text-white"
+        >
+          {"mochi"}
+          <span className="text-rose-500">{".lang"}</span>
+        </span>
+        <HeaderBadge label="v0.1.0 • JSX + Preact" />
+      </div>
+      <nav
+        className="hidden md:flex items-center gap-6 font-mono text-xs text-slate-400"
+      >
+        <a href="#playground" className="hover:text-rose-400 transition-colors">
+          {"/playground"}
+        </a>
+        <a href="#syntax" className="hover:text-rose-400 transition-colors">
+          {"/syntax"}
+        </a>
+        <a
+          href="#architecture"
+          className="hover:text-rose-400 transition-colors"
+        >
+          {"/architecture"}
+        </a>
+        <a href="#interop" className="hover:text-rose-400 transition-colors">
+          {"/interop"}
+        </a>
+        <a href="#artwork" className="hover:text-rose-400 transition-colors">
+          {"/artwork"}
+        </a>
+        <a
+          href="https://github.com/alanrsoares/mochi"
+          target="_blank"
+          rel="noreferrer"
+          className="px-3 py-1.5 bg-[#141826] hover:bg-[#1a2033] text-slate-200 rounded border border-[#232a40] transition-all font-semibold"
+        >
+          {"GitHub ↗"}
+        </a>
+      </nav>
+    </div>
+  </header>
+
+let Hero = props =>
+  <section
+    className="relative overflow-hidden py-16 border-b border-[#1b2030] bg-[#0d0f18]"
+  >
+    <div
+      className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center"
+    >
+      <div className="space-y-6">
+        <div
+          className="inline-flex items-center gap-2 px-3 py-1 rounded bg-[#151928] border border-[#252d44] text-[11px] font-mono text-slate-300"
+        >
+          <span className="w-2 h-2 rounded-full bg-emerald-400" />
+          <span>{"Self-Hosted Compiler Target"}</span>
+          <span className="text-slate-600">{"|"}</span>
+          <span className="text-emerald-400 font-bold">
+            {"0 tsc --strict errors"}
+          </span>
+        </div>
+        <h1
+          className="text-4xl sm:text-5xl lg:text-6xl font-extrabold font-display tracking-tight text-white leading-[1.1]"
+        >
+          {"Statically-typed functional compiler with "}
+          <span
+            className="text-transparent bg-clip-text bg-linear-to-r from-rose-400 via-pink-400 to-amber-300"
+          >
+            {"zero runtime overhead"}
+          </span>
+          {"."}
+        </h1>
+        <p
+          className="text-sm text-slate-300 leading-relaxed font-sans max-w-xl"
+        >
+          {"Mochi compiles Hindley–Milner type signatures, row-polymorphic records, and JSX expressions into clean JavaScript and strict-type-checked TypeScript output."}
+        </p>
+        <div className="flex flex-wrap gap-4 pt-2 font-mono text-xs">
+          <a
+            href="#playground"
+            className="px-5 py-3 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg shadow-lg shadow-rose-600/20 transition-all hover:-translate-y-0.5"
+          >
+            {"Open Live REPL ➔"}
+          </a>
+          <div
+            className="px-4 py-3 bg-[#131624] border border-[#20273c] text-slate-300 rounded-lg flex items-center gap-2"
+          >
+            <span className="text-rose-400 font-bold">{"$"}</span>
+            <span>{"bun run mochi app.mochi"}</span>
+          </div>
+        </div>
+      </div>
+      <div className="relative">
+        <div
+          className="p-2 bg-[#121522] border border-[#20273c] rounded-2xl shadow-2xl"
+        >
+          <img
+            src={props.mascot}
+            alt="Mochi Mascot Banner"
+            className="rounded-xl object-cover w-full h-90 filter brightness-95 contrast-105"
+          />
+        </div>
+      </div>
+    </div>
+  </section>
+
+let SiteFooter = props =>
+  <footer className="border-t border-[#1b2030] py-8 bg-[#080a10]">
+    <div
+      className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4 font-mono text-xs text-slate-400"
+    >
+      <div className="flex items-center gap-3">
+        <img
+          src={props.logo}
+          alt="Mochi Logo"
+          className="w-5 h-5 object-contain"
+        />
+        <span>{"Mochi Programming Language — Built on Bun & TypeScript"}</span>
+      </div>
+      <div><span>{"GitHub Pages Documentation App • Vite + Preact"}</span></div>
+    </div>
+  </footer>
+
+let App = props =>
+  <div
+    className="min-h-screen flex flex-col bg-[#0b0d14] text-slate-100 font-sans selection:bg-rose-500/30 selection:text-rose-200"
+  >
+    <SiteHeader logo={props.logo} />
+    <Hero mascot={props.coderMascot} />
+    <main className="max-w-7xl mx-auto px-6 py-12 space-y-20 flex-1">
+      <section id="playground" className="scroll-mt-20"><Playground /></section>
+      <section id="syntax" className="space-y-8 scroll-mt-20">
+        <div className="space-y-2">
+          <div
+            className="font-mono text-xs text-rose-400 font-bold uppercase tracking-widest"
+          >
+            {"// SYNTAX & TYPE SYSTEM TOUR"}
+          </div>
+          <div
+            className="flex flex-col md:flex-row md:items-center justify-between gap-4"
+          >
+            <h2
+              className="text-3xl font-extrabold font-display text-white tracking-tight"
+            >
+              {"Language Tour & Interactive Twoslash Tooltips"}
+            </h2>
+            <span
+              className="font-mono text-xs text-slate-400 bg-[#121624] border border-[#20283d] px-3 py-1 rounded self-start md:self-auto"
+            >
+              {"Hover symbols below for HM inferred types"}
+            </span>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <SyntaxPanel
+            title="01. Algebraic Variants"
+            badge="Result<a, e>"
+            tone="text-rose-300"
+          >
+            <HighlightedCode
+              code={props.codeVariants}
+              lang="mochi"
+              enableTwoslash={true}
+            />
+          </SyntaxPanel>
+          <SyntaxPanel
+            title="02. Row Polymorphism"
+            badge="{ r | name: Str }"
+            tone="text-amber-300"
+          >
+            <HighlightedCode
+              code={props.codeRecords}
+              lang="mochi"
+              enableTwoslash={true}
+            />
+          </SyntaxPanel>
+          <SyntaxPanel
+            title="03. JSX Component Desugar"
+            badge="h(tag, props, children)"
+            tone="text-pink-300"
+          >
+            <HighlightedCode
+              code={props.codeJsx}
+              lang="mochi"
+              enableTwoslash={true}
+            />
+          </SyntaxPanel>
+        </div>
+      </section>
+      <section id="architecture" className="space-y-8 scroll-mt-20">
+        <div className="space-y-2">
+          <div
+            className="font-mono text-xs text-rose-400 font-bold uppercase tracking-widest"
+          >
+            {"// ARCHITECTURE & TYPE SYSTEM"}
+          </div>
+          <h2
+            className="text-3xl font-extrabold font-display text-white tracking-tight"
+          >
+            {"Compiler Core Specifications"}
+          </h2>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <FeatureCard
+            tag="AST / DESUGAR"
+            spec="ADR 0007"
+            title="Universal JSX Lowering"
+            description="Transforms <tag /> elements directly into host h(tag, props, children) calls during AST parse pass with no extra VDOM runtime library."
+            subtext="h(tag, props, children)"
+          />
+          <FeatureCard
+            tag="ALGORITHM W"
+            spec="Hindley-Milner"
+            title="Row-Polymorphic Records"
+            description="Infers structural record shapes using row variables. Functions accept any record containing matching field schemas."
+            subtext="{ r | key: val }"
+          />
+          <FeatureCard
+            tag="CODEGEN HOOKS"
+            spec="ADR 0026"
+            title="Strict TypeScript Output"
+            description="Emits clean .ts code passing tsc --strict with 0 type errors. Reuses HM inference tables for TS type annotations."
+            subtext="0 tsc --strict errors"
+          />
+        </div>
+      </section>
+      <section
+        id="interop"
+        className="p-8 bg-[#111422] border border-[#1e2436] rounded-2xl space-y-6 scroll-mt-20"
+      >
+        <div
+          className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#1e2436] pb-6"
+        >
+          <div>
+            <div
+              className="font-mono text-xs text-rose-400 font-bold uppercase tracking-widest mb-1"
+            >
+              {"// FRONTEND INTEROP MATRIX"}
+            </div>
+            <h2 className="text-2xl font-bold font-display text-white">
+              {"Vite Plugin (.mochi) Module Loader"}
+            </h2>
+          </div>
+          <div className="flex items-center gap-3">
+            <Counter />
+            <div
+              className="font-mono text-xs px-3 py-1 bg-[#181c2e] border border-[#272f48] text-slate-300 rounded"
+            >
+              {"vite-plugin-mochi v0.1.0"}
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <InteropCard
+            tone="text-rose-400"
+            label="Preact (~3KB)"
+            title="Native h() Alignment"
+            body="Preact exports h(tag, props, children) directly matching Mochi's JSX desugar output with zero adapter wrappers."
+          />
+          <InteropCard
+            tone="text-pink-400"
+            label="styled-cva"
+            title="Host UI Kit"
+            body="Factories and JSX both live in .mochi — extern tw from @styled-cva/react (Preact compat), call-form tw.div(…), and $tone variant props."
+          />
+          <InteropCard
+            tone="text-amber-400"
+            label="re-reduced"
+            title="Signal-backed state"
+            body="Container defined in .mochi via extern defineContainer; hooks stay in a thin TSX shell (@re-reduced/preact) because Mochi let…in desugars to IIFEs."
+          />
+          <InteropCard
+            tone="text-emerald-400"
+            label="TypeScript Strict"
+            title="Strict Type Contracts"
+            body="Generates strict .ts definitions so TS frontend code can import Mochi modules safely."
+          />
+        </div>
+      </section>
+      <section id="artwork" className="space-y-8 scroll-mt-20">
+        <div className="space-y-2">
+          <div
+            className="font-mono text-xs text-rose-400 font-bold uppercase tracking-widest"
+          >
+            {"// BRAND ARTWORK & ARCHITECTURE"}
+          </div>
+          <h2
+            className="text-3xl font-extrabold font-display text-white tracking-tight"
+          >
+            {"Official Illustration Gallery"}
+          </h2>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <ArtworkCard
+            src={props.compilerMagic}
+            alt="Compiler Magic"
+            span=""
+            tone="text-rose-400"
+            kicker="COMPILER LOWERING"
+            title="Compiler Magic"
+            body="AST transformation into JS and strict TypeScript."
+          />
+          <ArtworkCard
+            src={props.cosmicTypes}
+            alt="Cosmic Type System"
+            span=""
+            tone="text-amber-400"
+            kicker="TYPE INFERENCE"
+            title="Cosmic Type System"
+            body="Hindley–Milner algorithm & row polymorphism."
+          />
+          <ArtworkCard
+            src={props.lspInspector}
+            alt="LSP Inspector"
+            span=""
+            tone="text-emerald-400"
+            kicker="LANGUAGE SERVER"
+            title="LSP Inspector"
+            body="Real-time hover tooltips, type hints & diagnostics."
+          />
+          <ArtworkCard
+            src={props.bootstrapParty}
+            alt="Bootstrap Party"
+            span=""
+            tone="text-purple-400"
+            kicker="SELF-HOSTING"
+            title="Bootstrap Party"
+            body="Self-hosting milestone with 0 tsc --strict errors."
+          />
+          <ArtworkCard
+            src={props.stickers}
+            alt="Stickers"
+            span="md:col-span-2"
+            tone="text-rose-400"
+            kicker="STICKER SHEET"
+            title="Mochi Sticker Sheet & Poses"
+            body="Official mascot artwork, VR coding & CLI poses."
+          />
+        </div>
+      </section>
+    </main>
+    <SiteFooter logo={props.logo} />
+  </div>
