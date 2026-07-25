@@ -4,6 +4,7 @@ import "./index.css";
 // Import components written in Mochi JSX syntax via vite-plugin-mochi!
 import FeatureCard from "./components/FeatureCard.mochi";
 import HeaderBadge from "./components/HeaderBadge.mochi";
+import { HighlightedCode } from "./components/HighlightCode";
 import { Playground } from "./components/Playground";
 
 // Import artwork assets
@@ -14,6 +15,30 @@ import compilerMagicImg from "@mochi/root/illustrations/mochi_compiler_magic.jpg
 import cosmicTypesImg from "@mochi/root/illustrations/mochi_cosmic_types.jpg";
 import lspInspectorImg from "@mochi/root/illustrations/mochi_lsp_inspector.jpg";
 import stickersImg from "@mochi/root/illustrations/mochi_stickers.jpg";
+
+const CODE_EXAMPLES = {
+  variants: `// Algebraic Variants & Exhaustive Pattern Matching
+type Result<a, e> = Ok(a) | Err(e)
+
+let unwrapOr = (res, fallback) =>
+  switch res {
+    | Ok(value) => value
+    | Err(_) => fallback
+  }`,
+  records: `// Row-Polymorphic Record Operations
+let formatUser = (user) =>
+  user.name ++ " (" ++ user.role ++ ")"
+
+let admin = { name: "Alan", role: "Maintainer", id: 42 }
+let formatted = formatUser(admin)`,
+  jsx: `// Universal JSX Component Desugaring
+let Button = (props) =>
+  <button className={props.kind} disabled={props.disabled}>
+    {props.label}
+  </button>
+
+let app = <Button kind="primary" label="Click me" disabled={false} />`,
+};
 
 function App() {
   return (
@@ -31,6 +56,7 @@ function App() {
 
           <nav className="hidden md:flex items-center gap-6 font-mono text-xs text-slate-400">
             <a href="#playground" className="hover:text-rose-400 transition-colors">/playground</a>
+            <a href="#syntax" className="hover:text-rose-400 transition-colors">/syntax</a>
             <a href="#architecture" className="hover:text-rose-400 transition-colors">/architecture</a>
             <a href="#interop" className="hover:text-rose-400 transition-colors">/interop</a>
             <a href="#artwork" className="hover:text-rose-400 transition-colors">/artwork</a>
@@ -96,6 +122,53 @@ function App() {
         {/* Live REPL & Compiler Section */}
         <section id="playground" className="scroll-mt-20">
           <Playground />
+        </section>
+
+        {/* Syntax & Code Examples Section with Twoslash Hover */}
+        <section id="syntax" className="space-y-8 scroll-mt-20">
+          <div className="space-y-2">
+            <div className="font-mono text-xs text-rose-400 font-bold uppercase tracking-widest">// SYNTAX & TYPE SYSTEM TOUR</div>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <h2 className="text-3xl font-extrabold font-display text-white tracking-tight">
+                Language Tour & Interactive Twoslash Tooltips
+              </h2>
+              <span className="font-mono text-xs text-slate-400 bg-[#121624] border border-[#20283d] px-3 py-1 rounded self-start md:self-auto">
+                💡 Hover symbols below for HM inferred types
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-[#111422] border border-[#1e2436] rounded-xl overflow-hidden flex flex-col">
+              <div className="px-4 py-2.5 bg-[#151928] border-b border-[#1e2436] font-mono text-xs font-bold text-rose-300 flex items-center justify-between">
+                <span>01. Algebraic Variants</span>
+                <span className="text-[10px] text-slate-500">Result&lt;a, e&gt;</span>
+              </div>
+              <pre className="p-4 bg-[#0a0c14] overflow-x-auto flex-1 font-mono text-xs leading-relaxed">
+                <HighlightedCode code={CODE_EXAMPLES.variants} lang="mochi" enableTwoslash={true} />
+              </pre>
+            </div>
+
+            <div className="bg-[#111422] border border-[#1e2436] rounded-xl overflow-hidden flex flex-col">
+              <div className="px-4 py-2.5 bg-[#151928] border-b border-[#1e2436] font-mono text-xs font-bold text-amber-300 flex items-center justify-between">
+                <span>02. Row Polymorphism</span>
+                <span className="text-[10px] text-slate-500">{`{ r | name: Str }`}</span>
+              </div>
+              <pre className="p-4 bg-[#0a0c14] overflow-x-auto flex-1 font-mono text-xs leading-relaxed">
+                <HighlightedCode code={CODE_EXAMPLES.records} lang="mochi" enableTwoslash={true} />
+              </pre>
+            </div>
+
+            <div className="bg-[#111422] border border-[#1e2436] rounded-xl overflow-hidden flex flex-col">
+              <div className="px-4 py-2.5 bg-[#151928] border-b border-[#1e2436] font-mono text-xs font-bold text-pink-300 flex items-center justify-between">
+                <span>03. JSX Component Desugar</span>
+                <span className="text-[10px] text-slate-500">h(tag, props, children)</span>
+              </div>
+              <pre className="p-4 bg-[#0a0c14] overflow-x-auto flex-1 font-mono text-xs leading-relaxed">
+                <HighlightedCode code={CODE_EXAMPLES.jsx} lang="mochi" enableTwoslash={true} />
+              </pre>
+            </div>
+          </div>
         </section>
 
         {/* Core Architecture Cards (Rendered via Mochi JSX Components) */}
