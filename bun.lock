@@ -6,7 +6,7 @@
       "name": "mochi",
       "dependencies": {
         "@onrails/maybe": "^0.2.3",
-        "@onrails/pattern": "^0.3.2",
+        "@onrails/pattern": "^0.3.3",
         "@onrails/result": "^0.4.0",
       },
       "devDependencies": {
@@ -49,9 +49,6 @@
         "vscode-languageclient": "^10.1.0",
       },
     },
-  },
-  "patchedDependencies": {
-    "@onrails/pattern@0.3.2": "patches/@onrails%2Fpattern@0.3.2.patch",
   },
   "packages": {
     "@babel/code-frame": ["@babel/code-frame@7.29.7", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.29.7", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw=="],
@@ -182,7 +179,7 @@
 
     "@onrails/maybe": ["@onrails/maybe@0.2.3", "", { "peerDependencies": { "@onrails/result": "0.2.0" }, "optionalPeers": ["@onrails/result"] }, "sha512-cou0uxQp6OvYQ/b/VWr2OwJxdL2T5QDyPJV0TAXJDfoCqIdTJ4UNHTW0qXr/MeVsG0P/vY5zJOvmfvadJlmP7g=="],
 
-    "@onrails/pattern": ["@onrails/pattern@0.3.2", "", {}, "sha512-EF/xmJ7yXzZpfYinLnMVm6M81NplCfENvaDvjgnCiJ+P51m56ExqWzCaATa17Smpm0T1Plyf5WzcHMjrJ6y0Dg=="],
+    "@onrails/pattern": ["@onrails/pattern@0.3.3", "", {}, "sha512-qkOgWO4gVtTuzWrB87idaCa0bgYjFKQcB7uhNEfXKLSQHKccvgWqfpyLxhJxuKIsjyHM8J0a3qqHpanV5XrrxA=="],
 
     "@onrails/result": ["@onrails/result@0.4.0", "", {}, "sha512-DFdaC5pyLa8WRGg6dF8W3RbckVB2SmSpNTXtCbuFj2FqkcmWpIzJJvAfvrRcpXwVDhpxstxKkAipTRmaBoJHLQ=="],
 
