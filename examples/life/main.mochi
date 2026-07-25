@@ -8,9 +8,9 @@
 //   bun src/cli.ts build examples/life/main.mochi
 //   bun examples/life/main.js
 
-extern setup : number -> Task number = "./runtime.mjs" "setup"
-extern draw : string -> string -> Task number = "./runtime.mjs" "draw"
-extern teardown : number -> Task number = "./runtime.mjs" "teardown"
+extern setup : number -> Task number string = "./runtime.mjs" "setup"
+extern draw : string -> string -> Task number string = "./runtime.mjs" "draw"
+extern teardown : number -> Task number string = "./runtime.mjs" "teardown"
 
 // ---- board geometry (toroidal — edges wrap, so patterns run forever) ----
 let width = 32

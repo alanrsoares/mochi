@@ -1,6 +1,8 @@
 // Domain terminal effects for the animated Life. Sequencing / delay / kick-off
 // live in the prelude (`Task.*`, ADR 0005). This host only writes to the
-// terminal — each export returns a lazy Task `() => Promise<a>`.
+// terminal — each export returns a lazy Task `() => Promise<Result<a, e>>`
+// (ADR 0006); the `{ _tag: "Ok", value }` shape matches the runtime `Ok` ctor
+// so mochi's `let!` chains can bind straight through.
 // Multi-arg exports are FLAT `(a, b) => …`; mochi wraps them in `_curry` so both
 // `f(a, b)` and `f(a)(b)` work.
 
@@ -9,18 +11,18 @@
 export const setup = () => () => {
   process.stdout.write("\x1b[?1049h\x1b[?25l");
   process.on("exit", () => process.stdout.write("\x1b[?25h\x1b[?1049l"));
-  return Promise.resolve(0);
+  return Promise.resolve({ _tag: "Ok", value: 0 });
 };
 
 // Redraw a frame in place: home the cursor (no scroll) and repaint. `label`
 // rides along so the caller can show a generation counter.
 export const draw = (label, frame) => () => {
   process.stdout.write(`\x1b[H${label}\n${frame}\n`);
-  return Promise.resolve(0);
+  return Promise.resolve({ _tag: "Ok", value: 0 });
 };
 
 // Leave the alternate buffer / restore the cursor once the run finishes.
 export const teardown = () => () => {
   process.stdout.write("\x1b[?25h\x1b[?1049l");
-  return Promise.resolve(0);
+  return Promise.resolve({ _tag: "Ok", value: 0 });
 };

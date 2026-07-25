@@ -202,9 +202,9 @@ test("Task.of / map / andThen / run pipeline", async () => {
   const src = `let program = Task.of(20) |> Task.map((+ 1)) |> Task.andThen(x => Task.of(mul(x, 2)))
 let result = Task.run(program)`;
   const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
-  const result = new Function("match", `${js}\nreturn result;`)(match) as Promise<number>;
+  const result = new Function("match", `${js}\nreturn result;`)(match) as Promise<unknown>;
   expect(result).toBeInstanceOf(Promise);
-  expect(await result).toBe(42);
+  expect(await result).toEqual({ _tag: "Ok", value: 42 });
 });
 
 // mochi emits multi-arg `Task.delay(ms, x)`; without `_curry` a nested-curried
@@ -213,17 +213,17 @@ test("Task.delay multi-arg emit returns a Task, not a partial", async () => {
   const src = `let task = Task.delay(1, 0)
 let result = Task.run(task)`;
   const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
-  const result = new Function("match", `${js}\nreturn result;`)(match) as Promise<number>;
+  const result = new Function("match", `${js}\nreturn result;`)(match) as Promise<unknown>;
   expect(result).toBeInstanceOf(Promise);
-  expect(await result).toBe(0);
+  expect(await result).toEqual({ _tag: "Ok", value: 0 });
 });
 
 test("Task.delay partial still works with Task.andThen", async () => {
   const src = `let program = Task.of(21) |> Task.andThen(Task.delay(1)) |> Task.map(mul(2))
 let result = Task.run(program)`;
   const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
-  const result = new Function("match", `${js}\nreturn result;`)(match) as Promise<number>;
-  expect(await result).toBe(42);
+  const result = new Function("match", `${js}\nreturn result;`)(match) as Promise<unknown>;
+  expect(await result).toEqual({ _tag: "Ok", value: 42 });
 });
 
 test("Task is a reserved namespace name", () => {

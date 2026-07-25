@@ -141,12 +141,16 @@ rule that forces effectful work into `Task`. The discipline is: effectful `exter
 mechanically (the compiler can't inspect a JS export's body) and deliberate
 ([ADR 0005](docs/adr/0005-prelude-task.md)).
 
-- **Task** — opaque applied constructor for a lazy async computation
-  (`() => Promise<a>` at runtime). Prelude namespace `Task.of` / `Task.map` /
-  `Task.andThen` / `Task.delay` / `Task.run`. Not a tagged variant; not switchable.
-  `Task.run` is the only kick-off and yields a host **Promise** (also an open
-  applied ctor at the type level). Domain IO remains `extern`; sequencing uses
-  `Task.*`. Surface bind: `let!` (mirrors Result’s `let?`); infix bind deferred.
+- **Task** — opaque applied constructor for a lazy async computation with an
+  error channel (`() => Promise<Result<a, e>>` at runtime, ADR 0006). Prelude
+  namespace `Task.of` / `Task.fail` / `Task.map` / `Task.mapErr` / `Task.andThen`
+  / `Task.recover` / `Task.fromResult` / `Task.match` / `Task.delay` / `Task.run`.
+  Not a tagged variant; not switchable. `Task.run` is the only kick-off and yields
+  a host **Promise** of the settled `Result` (also an open applied ctor at the
+  type level). Unlike `ResultAsync.resolve()`, `run` is not memoized — it
+  re-fires the effect every call (IO-action model, not the Promise model).
+  Domain IO remains `extern`; sequencing uses `Task.*`. Surface bind: `let!`
+  (mirrors Result’s `let?`); infix bind deferred.
 
 ## Extern / FFI
 
