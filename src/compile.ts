@@ -70,8 +70,8 @@ const typecheck = (prog: Program): Result<Program, Diagnostic[]> =>
     () => prog,
   );
 
-/** `runtime` (default on): inline the prelude builtins the program uses so the emitted module runs standalone. Off yields prelude-free lowering — for tests that supply their own prelude, or callers that bundle it separately. */
-export type CompileOptions = { runtime?: boolean };
+/** `runtime` (default on): inline the prelude builtins the program uses so the emitted module runs standalone. Off yields prelude-free lowering — for tests that supply their own prelude, or callers that bundle it separately. `moduleExt` (default `.js`): suffix rewritten onto relative import paths — Vite uses `.mochi` so sibling modules re-enter the plugin. */
+export type CompileOptions = { runtime?: boolean; moduleExt?: string };
 
 export function compile(src: string, opts: CompileOptions = {}): Result<string, Diagnostic[]> {
   const lexed = lex(src);
@@ -82,7 +82,12 @@ export function compile(src: string, opts: CompileOptions = {}): Result<string, 
   if (isErr(checked)) return checked;
   const typed = typecheck(checked.value);
   if (isErr(typed)) return typed;
-  return ok(codegen(typed.value, undefined, { runtime: opts.runtime ?? true }));
+  return ok(
+    codegen(typed.value, undefined, {
+      runtime: opts.runtime ?? true,
+      moduleExt: opts.moduleExt,
+    }),
+  );
 }
 
 export { format } from "./format";

@@ -35,6 +35,16 @@ describe("vite-plugin-mochi", () => {
     expect(result?.code).toContain('import { h } from "custom-jsx";');
   });
 
+  it("emits .mochi sibling imports so Vite re-enters the plugin", () => {
+    const plugin = mochiPlugin();
+    const code = `import { BadgeShell } from "../ui/primitives"
+let HeaderBadge = props => <BadgeShell>{props.label}</BadgeShell>`;
+    const result = plugin.transform(code, "src/HeaderBadge.mochi");
+    expect(result?.code).toMatch(
+      /^import \{ h \} from "preact";\nimport \{ BadgeShell \} from "\.\.\/ui\/primitives\.mochi";/,
+    );
+  });
+
   it("throws SyntaxError with diagnostic message when Mochi compilation fails", () => {
     const plugin = mochiPlugin();
     const badCode = `let invalid = `;

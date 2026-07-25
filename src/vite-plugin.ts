@@ -37,7 +37,9 @@ export function mochiPlugin(options: MochiPluginOptions = {}) {
         return null;
       }
 
-      const res = compile(code, { runtime });
+      // Keep sibling imports as `.mochi` so Vite re-enters this plugin
+      // (default codegen rewrites to `.js` for the standalone CLI/graph).
+      const res = compile(code, { runtime, moduleExt: ".mochi" });
       if (isErr(res)) {
         const errorMessages = res.error.map((d) => `[${d.kind}] ${d.message}`).join("\n");
         throw new SyntaxError(`Mochi compilation failed for ${id}:\n${errorMessages}`);
@@ -57,9 +59,14 @@ export function mochiPlugin(options: MochiPluginOptions = {}) {
         transformedCode += `export default ${lastExport};\n`;
       }
 
-      // Prepend JSX header if source contains JSX syntax
-      if (code.includes("<") && code.includes(">") && !transformedCode.startsWith("import")) {
-        transformedCode = `${jsxHeader}${transformedCode}`;
+      // Prepend JSX pragma even when the module already has imports (host kits,
+      // sibling .mochi imports). Without this, `import { … }` at the top of the
+      // emit skips the header and `h` is an unbound reference at runtime.
+      if (code.includes("<") && code.includes(">")) {
+        const hasH =
+          /import\s*\{[^}]*\bh\b[^}]*\}\s*from/.test(transformedCode) ||
+          transformedCode.includes(jsxHeader.trim());
+        if (!hasH) transformedCode = `${jsxHeader}${transformedCode}`;
       }
 
       return {
