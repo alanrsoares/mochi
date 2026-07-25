@@ -10,4 +10,4 @@
 import { docsVendorPlugins } from "../../apps/docs/mochi.plugins";
 import { startServer } from "./server";
 
-startServer({ extensions: docsVendorPlugins });
+startServer({ plugins: docsVendorPlugins });

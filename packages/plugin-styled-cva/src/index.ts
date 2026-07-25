@@ -18,7 +18,9 @@ import type {
   InferCallHook,
 } from "../../../src/extensions";
 import type { Row, Type } from "../../../src/types";
-import { rExtend, tArrow, tCon, tRecord, tString } from "../../../src/types";
+// Explicit extension: crossing the package boundary, this specifier is resolved
+// by Node/Vite's config loader without a bundler, which needs the real filename.
+import { rExtend, tArrow, tCon, tRecord, tString } from "../../../src/types.ts";
 
 type CallExpr = Extract<Expr, { kind: "call" }>;
 type RecordExpr = Extract<Expr, { kind: "record" }>;

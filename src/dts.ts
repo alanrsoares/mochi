@@ -15,8 +15,13 @@ import { isErr, ok, type Result } from "@onrails/result";
 import type { Ctor, Expr, Program, Stmt, TypeExpr } from "./ast";
 import { toTypedProgram } from "./compile";
 import type { Diagnostic } from "./errors";
-import type { HostExtension } from "./extensions";
-import { runDtsBindingHooks } from "./extensions";
+import type { BindingTypeHook, DtsBindingHook, LanguagePlugin } from "./extensions";
+import {
+  bindingTypeHooks,
+  resolvePlugins,
+  runBindingTypeHooks,
+  runDtsBindingHooks,
+} from "./extensions";
 import type { Scheme } from "./infer";
 import { builtinTypeDecls, preludeNamespaces } from "./prelude";
 import { typeExprToType } from "./schemes";
@@ -393,17 +398,26 @@ export function ctorFactoryTs(
  * plus arity-peeled parameter names; a non-function polymorphic binding has
  * nowhere to bind generics, so its escaped vars fall back to `unknown`.
  *
- * Component bindings (props record → `VNode`) emit host-agnostic
- * `(props: P) => unknown` without quantifying escaped JSX vars (ADR 0010 #17).
+ * `hooks` are the resolved plugins' `bindingType` hooks (ADR 0011) — e.g. JSX
+ * component bindings. It is a REQUIRED parameter precisely because both callers
+ * must pass it: defaulting it to `[]` would let the TS backend silently emit
+ * un-hooked types while the `.d.ts` emitted hooked ones.
  */
-export function bindingTsType(sc: Scheme, value: Expr, aliases: AliasDef[]): string {
+export function bindingTsType(
+  sc: Scheme,
+  value: Expr,
+  aliases: AliasDef[],
+  hooks: BindingTypeHook[],
+): string {
   const names = genericNames(sc);
   // Fold structural rows to alias names first, so a binding typed `{ x, y }`
   // declares as `Point` — reusing the emitted `export type Point`.
   const folded = foldAliases(sc.type, aliases);
-  if (isComponentType(folded) || isJsxComponentLambda(value)) {
-    return componentBindingTs(folded);
-  }
+  const hooked = runBindingTypeHooks(hooks, value, {
+    folded,
+    tsType: (t) => tsOf(t, new Map()),
+  });
+  if (hooked !== null) return hooked;
   if (value.kind === "lambda") {
     const generics = [...names.values()];
     const head = generics.length ? `<${generics.join(", ")}>` : "";
@@ -419,61 +433,6 @@ export function bindingTsType(sc: Scheme, value: Expr, aliases: AliasDef[]): str
     return `${head}${declType(folded, value, names)}`;
   }
   return tsOf(folded, new Map());
-}
-
-/** True when the (folded) type is a single record-arg arrow ending in `VNode`. */
-function isComponentType(t: Type): boolean {
-  if (t.kind !== "arrow" || t.from.kind !== "record") return false;
-  let ret: Type = t.to;
-  while (ret.kind === "arrow") ret = ret.to;
-  return ret.kind === "con" && ret.name === "VNode";
-}
-
-/** Heuristic: lambda whose body is JSX (`h(...)`) — used when return hasn't pinned to VNode yet. */
-function isJsxComponentLambda(value: Expr): boolean {
-  if (value.kind !== "lambda") return false;
-  let body = value.body;
-  while (body.kind === "lambda") body = body.body;
-  return body.kind === "call" && body.fn.kind === "ref" && body.fn.name === "h";
-}
-
-/**
- * Host-agnostic component signature. Free prop fields → `unknown`, except
- * `onX` event handlers → `() => void`. Return is always `unknown` (not a host FC).
- */
-function componentBindingTs(t: Type): string {
-  if (t.kind !== "arrow" || t.from.kind !== "record") {
-    return "(props: Record<string, unknown>) => any";
-  }
-  return `(props: ${componentPropsTs(t.from.row)}) => any`;
-}
-
-function componentPropsTs(row: Row): string {
-  const fields: string[] = [];
-  let cur = row;
-  let open = false;
-  while (cur.kind === "extend") {
-    fields.push(`${cur.label}: ${componentPropFieldTs(cur.label, cur.type)}`);
-    cur = cur.rest;
-  }
-  if (cur.kind === "rvar") open = true;
-  // Open prop rows (typical JSX lambdas): add conventional host extras rather than
-  // an index signature (which fights `onX: () => void` under `--strict`).
-  if (open) {
-    if (!fields.some((f) => f.startsWith("children:"))) fields.push("children?: any");
-    if (!fields.some((f) => f.startsWith("className:"))) fields.push("className?: string");
-  }
-  return fields.length === 0 ? "{}" : `{ ${fields.join("; ")} }`;
-}
-
-function componentPropFieldTs(label: string, t: Type): string {
-  if (t.kind === "var") {
-    if (/^on[A-Z]/.test(label)) return "() => void";
-    return "unknown";
-  }
-  if (t.kind === "con" && t.name === "Fn0") return "() => void";
-  if (t.kind === "con" && t.name === "VNode") return "unknown";
-  return tsOf(t, new Map());
 }
 
 /**
@@ -635,12 +594,15 @@ export function typeDecl(name: string, params: string[], ctors: Ctor[]): string 
   return `export type ${head} =\n${ctors.map((c) => `  | ${variant(c)}`).join("\n")};`;
 }
 
+/** The two binding-emit hook lists a `.d.ts` declaration consults: `.d.ts`-only overrides, then the shared binding-type ones (ADR 0011). */
+type DeclHooks = { dtsBinding: DtsBindingHook[]; bindingType: BindingTypeHook[] };
+
 function declOf(
   s: Stmt,
   schemeOf: (n: string) => Scheme | undefined,
   aliasByName: Map<string, AliasDef>,
   aliases: AliasDef[],
-  dtsBindingHooks: import("./extensions").DtsBindingHook[],
+  hooks: DeclHooks,
 ): string | null {
   return match(s)
     .with({ kind: "import" }, () => null)
@@ -652,8 +614,8 @@ function declOf(
     .with({ kind: "let" }, (letin) => {
       const sc = schemeOf(letin.name);
       if (!sc || letin.name.startsWith("$")) return null;
-      const ty = runDtsBindingHooks(dtsBindingHooks, letin.name, sc, letin.value, aliases, () =>
-        bindingTsType(sc, letin.value, aliases),
+      const ty = runDtsBindingHooks(hooks.dtsBinding, letin.name, sc, letin.value, aliases, () =>
+        bindingTsType(sc, letin.value, aliases, hooks.bindingType),
       );
       return `export declare const ${letin.name}: ${ty};`;
     })
@@ -780,25 +742,31 @@ export function externModuleDts(externs: ExternBinding[]): string {
 }
 
 export type EmitDtsOptions = {
-  /** Host kits (styled-cva, …). Applied to both infer and binding emit. */
-  extensions?: HostExtension[];
+  /**
+   * Plugins to run (styled-cva, …), applied to both infer and binding emit.
+   * `undefined` → builtins; `[]` → hard opt-out; non-empty → builtins + this
+   * list (`resolvePlugins`, ADR 0011).
+   */
+  plugins?: LanguagePlugin[];
 };
 
 export function emitDts(src: string, opts: EmitDtsOptions = {}): Result<string, Diagnostic[]> {
   const r = toTypedProgram(src, {
     open: true,
     namespaces: preludeNamespaces,
-    extensions: opts.extensions,
+    plugins: opts.plugins,
   });
   if (isErr(r)) return r;
   const { prog, res } = r.value;
   const { env, aliases } = res;
   const aliasByName = new Map(aliases.map((a) => [a.name, a]));
-  const dtsBindingHooks = (opts.extensions ?? []).flatMap((e) =>
-    e.dtsBinding ? [e.dtsBinding] : [],
-  );
+  const resolved = resolvePlugins(opts.plugins);
+  const hooks: DeclHooks = {
+    dtsBinding: resolved.flatMap((p) => (p.dtsBinding ? [p.dtsBinding] : [])),
+    bindingType: bindingTypeHooks(resolved),
+  };
   const lines = prog.stmts
-    .map((s) => declOf(s, (n) => env.get(n), aliasByName, aliases, dtsBindingHooks))
+    .map((s) => declOf(s, (n) => env.get(n), aliasByName, aliases, hooks))
     .filter((l): l is string => l !== null);
   // A builtin variant used in an exported binding's type (e.g. `Option<number>`
   // from `Map.get`) needs its type decl emitted too, unless the program declares

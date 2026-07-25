@@ -44,9 +44,9 @@ test("degrades to single-file hover when the dep graph can't be resolved", async
   expect(info?.code).toBe("number -> number -> number");
 });
 
-// Slice 19: hover must use the same host `extensions` Vite / `gen-mochi-dts`
-// pass, so a `tw.*` factory binding hovers as a real component scheme instead
-// of lying about `unknown`/`'t0`.
+// Slice 19: hover must use the same `plugins` Vite / `gen-mochi-dts` pass, so
+// a `tw.*` factory binding hovers as a real component scheme instead of
+// lying about `unknown`/`'t0`.
 const TW_SRC = `
 export extern tw : a = "@styled-cva/react" "default"
 export let Badge = tw.div("base", {
@@ -57,15 +57,15 @@ export let x = Badge
 `;
 const badgeUseOffset = TW_SRC.lastIndexOf("Badge");
 
-test("with extensions, hovering a tw.* factory binding shows a component scheme, not unknown/'t0", async () => {
+test("with plugins, hovering a tw.* factory binding shows a component scheme, not unknown/'t0", async () => {
   const info = await moduleHoverAt(ENTRY, TW_SRC, badgeUseOffset, read({}), {
-    extensions: [styledCvaExtension],
+    plugins: [styledCvaExtension],
   });
   expect(info?.code).toContain("VNode");
   expect(info?.code).not.toMatch(/'t\d/);
 });
 
-test("without extensions, tw.* factory hover is unchanged (today's unknown/type-var behavior)", async () => {
+test("without plugins, tw.* factory hover is unchanged (today's unknown/type-var behavior)", async () => {
   const info = await moduleHoverAt(ENTRY, TW_SRC, badgeUseOffset, read({}));
   expect(info?.code).not.toContain("VNode");
 });

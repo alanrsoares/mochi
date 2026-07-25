@@ -66,8 +66,8 @@ test("a file with no imports behaves like single-file diagnostics", async () => 
   expect(diags[0]!.message).toStartWith("type:");
 });
 
-// Slice 19: diagnostics run with the project's `extensions` (styled-cva, …),
-// so JSX-attr checking against a `tw.*` component's real prop type applies in
+// Slice 19: diagnostics run with the project's `plugins` (styled-cva, …), so
+// JSX-attr checking against a `tw.*` component's real prop type applies in
 // the editor the same way it does for Vite/`gen-mochi-dts` (#14/#15/#17).
 const TW_JSX_SRC = `
 export extern tw : a = "@styled-cva/react" "default"
@@ -75,14 +75,14 @@ export let Btn = tw.button("x", { variants: { $tone: { a: "1", b: "2" } } })
 export let bad = <Btn $tone={1} />
 `;
 
-test("with extensions, an invalid prop on a tw.* component is a real diagnostic", async () => {
+test("with plugins, an invalid prop on a tw.* component is a real diagnostic", async () => {
   const diags = await moduleDiagnostics(ENTRY, TW_JSX_SRC, read({}), {
-    extensions: [styledCvaExtension],
+    plugins: [styledCvaExtension],
   });
   expect(diags.length).toBeGreaterThan(0);
 });
 
-test("without extensions, the same tw.* JSX usage is today's blind spot (no diagnostic)", async () => {
+test("without plugins, the same tw.* JSX usage is today's blind spot (no diagnostic)", async () => {
   const diags = await moduleDiagnostics(ENTRY, TW_JSX_SRC, read({}));
   expect(diags).toEqual([]);
 });

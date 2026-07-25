@@ -29,6 +29,8 @@ import {
   unionGenericNames,
 } from "./dts";
 import type { Diagnostic } from "./errors";
+import type { BindingTypeHook } from "./extensions";
+import { bindingTypeHooks, resolvePlugins } from "./extensions";
 import type { Env, Scheme, TypeAt } from "./infer";
 import { preludeNamespaces } from "./prelude";
 import type { Span } from "./span";
@@ -122,6 +124,14 @@ export type TsEmitContext = {
   importedKeys: Map<string, string[]>;
   importLines: string[];
   runtimeImport: string;
+  /**
+   * Resolved plugins' `bindingType` hooks (ADR 0011) — the SAME list the `.d.ts`
+   * writer collects, because both go through `bindingTsType`. Required, not
+   * defaulted: a component binding (`jsxPlugin`) must declare identically in the
+   * `.d.ts` and in the emitted `.ts`, and an omitted list would silently drop
+   * that typing here only. Build it with `bindingTypeHooks(resolvePlugins(…))`.
+   */
+  bindingTypeHooks: BindingTypeHook[];
 };
 
 /**
@@ -168,7 +178,7 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
       return ts ? `: ${ts}` : null;
     }
     const sc = ctx.env.get(name);
-    return sc ? `: ${bindingTsType(sc, value, ctx.aliases)}` : null;
+    return sc ? `: ${bindingTsType(sc, value, ctx.aliases, ctx.bindingTypeHooks)}` : null;
   };
 
   // The value lambda of each GENERIC top-level function binding, keyed by span →
@@ -306,6 +316,9 @@ export const codegenTs = (
       importedKeys: new Map(),
       importLines: [],
       runtimeImport: opts.runtimeImport ?? DEFAULT_RUNTIME_IMPORT,
+      // Single-file `mochi ts` exposes no plugin list (its `toTypedProgram` call
+      // above doesn't either), so both passes see the builtins — one resolution.
+      bindingTypeHooks: bindingTypeHooks(resolvePlugins(undefined)),
     }),
   );
 };

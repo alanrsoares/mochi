@@ -28,7 +28,7 @@ import {
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { moduleDiagnostics } from "../diagnostics";
-import type { HostExtension } from "../extensions";
+import type { LanguagePlugin } from "../extensions";
 import { format } from "../format";
 import { moduleHoverAt } from "../hover";
 import {
@@ -44,8 +44,8 @@ import {
 import { isPreludePath, PRELUDE_PATH, preludeVirtualSource } from "../prelude-virtual";
 import type { Span } from "../span";
 
-/** Options for {@link startServer} — a project's vendor-plugin list (styled-cva, …), same one Vite / `gen-mochi-dts` consume (#20). Core stays kit-agnostic: no plugin is imported/hardcoded here. Empty/omitted = today's behaviour. */
-export type ServerOptions = { extensions?: HostExtension[] };
+/** Options for {@link startServer} — a project's vendor-plugin list (styled-cva, …), same one Vite / `gen-mochi-dts` consume (#20). Core stays kit-agnostic: no plugin is imported/hardcoded here. Omitted = default/builtin resolution (`resolvePlugins`, ADR 0011). */
+export type ServerOptions = { plugins?: LanguagePlugin[] };
 
 const docPath = (uri: string): string => (uri.startsWith("file:") ? fileURLToPath(uri) : uri);
 
@@ -67,16 +67,17 @@ const symbolKind = (kind: string): SymbolKind => {
 };
 
 /**
- * Wire the LSP connection and start listening. `opts.extensions` is the
+ * Wire the LSP connection and start listening. `opts.plugins` is the
  * project's vendor-plugin list (styled-cva, …) — the same list the project's
  * Vite plugin / `gen-mochi-dts` script pass to `compile`/`emitDts`. This file
  * never imports a concrete plugin: the caller (a project's LSP launcher, or
  * #20's shared plugin-list module) supplies it, so hover/diagnostics stop
  * lying about a `tw.*` factory's type relative to what Vite actually emits.
- * Omitted/empty `extensions` reproduces today's (pre-#19) behaviour exactly.
+ * Omitted `plugins` resolves to the default/builtin list; `[]` is the hard
+ * opt-out (`resolvePlugins`, ADR 0011).
  */
 export function startServer(opts: ServerOptions = {}): void {
-  const extensions = opts.extensions;
+  const plugins = opts.plugins;
   const connection = createConnection(ProposedFeatures.all);
   const documents = new TextDocuments(TextDocument);
 
@@ -124,7 +125,7 @@ export function startServer(opts: ServerOptions = {}): void {
       doc.getText(),
       doc.offsetAt(position),
       read,
-      { extensions },
+      { plugins },
     );
     if (!info) return null;
     const fence = `\`\`\`mochi\n${info.code}\n\`\`\``;
@@ -151,7 +152,7 @@ export function startServer(opts: ServerOptions = {}): void {
       if (!doc) return null;
       const path = docPath(textDocument.uri);
       const loc = await moduleTypeDefinitionAt(path, doc.getText(), doc.offsetAt(position), read, {
-        extensions,
+        plugins,
       });
       if (!loc) return null;
       return rangeAtPath(loc.path, loc.span);
@@ -247,7 +248,7 @@ export function startServer(opts: ServerOptions = {}): void {
     const doc = documents.get(textDocument.uri);
     if (!doc) return [];
     const path = docPath(textDocument.uri);
-    const published = await moduleDiagnostics(path, doc.getText(), read, { extensions });
+    const published = await moduleDiagnostics(path, doc.getText(), read, { plugins });
     const actions: CodeAction[] = [];
     for (const d of published) {
       for (const s of d.suggestions ?? []) {
@@ -265,12 +266,12 @@ export function startServer(opts: ServerOptions = {}): void {
     return actions;
   });
 
-  /** Run `format(src)` on the document; return a single full-document replacement edit. */
+  /** Run `format` on the document — with the server's plugins, so sugar a plugin owns (JSX) re-folds here exactly as `mochi fmt` does — and return a single full-document replacement edit. */
   connection.onDocumentFormatting(({ textDocument }): TextEdit[] => {
     const doc = documents.get(textDocument.uri);
     if (!doc) return [];
     const text = doc.getText();
-    const formatted = format(text);
+    const formatted = format(text, { plugins });
     if (!isOk(formatted)) return [];
     const fullRange = {
       start: doc.positionAt(0),
@@ -281,7 +282,7 @@ export function startServer(opts: ServerOptions = {}): void {
 
   const validate = async (doc: TextDocument): Promise<void> => {
     const path = docPath(doc.uri);
-    const computed = await moduleDiagnostics(path, doc.getText(), read, { extensions });
+    const computed = await moduleDiagnostics(path, doc.getText(), read, { plugins });
     const diags: Diagnostic[] = computed.map((d) => ({
       range: d.range,
       message: d.message,

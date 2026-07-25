@@ -17,7 +17,7 @@ export let Badge = tw.div("base", {
   defaultVariants: { $tone: "rose" }
 })
 `;
-  const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces, extensions: exts });
+  const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces, plugins: exts });
   expect(isErr(r)).toBe(false);
   const sc = unwrapOk(r).res.env.get("Badge")!;
   const shown = showScheme(sc, unwrapOk(r).res.aliases);
@@ -35,7 +35,7 @@ export let BadgeShell = tw.div("base", {
   defaultVariants: { $tone: "rose" }
 })
 `;
-  const dts = unwrapOk(emitDts(src, { extensions: exts }));
+  const dts = unwrapOk(emitDts(src, { plugins: exts }));
   expect(dts).toContain("export declare const BadgeShell:");
   expect(dts).toContain('$tone?: "rose" | "amber" | "emerald"');
   expect(dts).toContain("children?: unknown");
@@ -69,7 +69,7 @@ export let Badge = tw.div("base", {
     if (src === undefined) throw new Error(`no such file ${p}`);
     return src;
   };
-  const r = await moduleContext("/p/main.mochi", read, { extensions: exts });
+  const r = await moduleContext("/p/main.mochi", read, { plugins: exts });
   expect(isErr(r)).toBe(false);
   const sc = unwrapOk(r).imports.get("Badge")!;
   expect(sc).toBeDefined();
@@ -84,6 +84,6 @@ export extern tw : a = "@styled-cva/react" "default"
 export let Btn = tw.button("x", { variants: { $tone: { a: "1", b: "2" } } })
 export let bad = <Btn $tone={1} />
 `;
-  const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces, extensions: exts });
+  const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces, plugins: exts });
   expect(isErr(r)).toBe(true);
 });

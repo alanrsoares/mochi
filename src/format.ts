@@ -1,16 +1,21 @@
 /**
  * mochi source formatter: parse to the AST, lower to a Wadler/Prettier-style
- * document IR, then lay it out against an 80-column target (ADR 0025). Every
- * breakable construct — pipe, switch, ternary, `let … in`, record/map literals,
- * call-argument lists — is a `group` that prints flat when it fits the line and
- * breaks otherwise. Formatting is idempotent: the layout is a pure function of
- * the AST and the width, and re-parsing broken output yields the same AST
- * (newlines are insignificant to the lexer).
+ * document IR (`doc.ts`), then lay it out against an 80-column target (ADR
+ * 0025). Every breakable construct — pipe, switch, ternary, `let … in`,
+ * record/map literals, call-argument lists — is a `group` that prints flat when
+ * it fits the line and breaks otherwise. Formatting is idempotent: the layout
+ * is a pure function of the AST and the width, and re-parsing broken output
+ * yields the same AST (newlines are insignificant to the lexer).
  *
  * Record destructuring is desugared by the parser into a temp binding plus
  * field-access lets, so the printer detects that shape and re-folds it back
  * into `let { x, y } = e`; a destructuring `let (a, b) = e in body` desugars to
  * an applied lambda, which the printer re-folds too.
+ *
+ * Sugar a *plugin* owns re-folds through its `format` hook (ADR 0011) — JSX's
+ * `h(tag, props, children)` → `<tag …>` lives in `plugins/jsx.ts`, not here.
+ * Hooks run before this module's own printer and never see types: `format`
+ * lexes and parses only.
  */
 import { flatMap, map, pipe, type Result } from "@onrails/result";
 import type {
@@ -36,163 +41,28 @@ import type {
   TypeExpr,
   TypeStmt,
 } from "./ast";
+import {
+  breakParent,
+  cat,
+  type Doc,
+  flat,
+  group,
+  hardline,
+  indent,
+  join,
+  line,
+  render,
+  seq,
+  softline,
+  txt,
+} from "./doc";
 import type { Diagnostic } from "./errors";
+import type { FormatApi, FormatHook, LanguagePlugin } from "./extensions";
+import { resolvePlugins, runFormatHooks } from "./extensions";
 import { lex, skipStringLiteral } from "./lexer";
 import { parse } from "./parser";
 
 const WIDTH = 80;
-const INDENT = 2;
-
-/**
- * `line` is a space when its group prints flat, a newline+indent when it
- * breaks; `softline` is nothing when flat; `hardline` always breaks. `group`
- * asks "does the flat rendering fit the rest of this line?" and picks a mode.
- * `breakparent` is zero-width but forces every enclosing group to break — used
- * after a trailing `//` comment so whatever follows lands on a fresh line
- * (else it would be commented out) without emitting a newline of its own.
- */
-type Doc =
-  | { k: "text"; s: string }
-  | { k: "line"; hard: boolean; soft: boolean }
-  | { k: "cat"; parts: Doc[] }
-  | { k: "indent"; doc: Doc }
-  | { k: "group"; doc: Doc }
-  | { k: "breakparent" };
-
-const txt = (s: string): Doc => ({ k: "text", s });
-const cat = (parts: Doc[]): Doc => ({ k: "cat", parts });
-const seq = (...parts: Doc[]): Doc => ({ k: "cat", parts });
-const line: Doc = { k: "line", hard: false, soft: false };
-const softline: Doc = { k: "line", hard: false, soft: true };
-const hardline: Doc = { k: "line", hard: true, soft: false };
-const breakParent: Doc = { k: "breakparent" };
-const indent = (doc: Doc): Doc => ({ k: "indent", doc });
-const group = (doc: Doc): Doc => ({ k: "group", doc });
-
-const join = (sep: Doc, parts: Doc[]): Doc =>
-  cat(parts.flatMap((p, i) => (i === 0 ? [p] : [sep, p])));
-
-type Mode = "flat" | "break";
-type Item = { i: number; m: Mode; d: Doc };
-/** The layout worklist is an immutable cons-list (the head is the next document to process), so pushing work never mutates an array. */
-type Cell = { head: Item; tail: Work };
-type Work = Cell | null;
-
-const cons = (head: Item, tail: Work): Work => ({ head, tail });
-
-/** Prepend a cat's parts so part[0] ends up at the head (processed first). */
-const consParts = (parts: Doc[], i: number, m: Mode, tail: Work): Work => {
-  let w = tail;
-  for (let k = parts.length - 1; k >= 0; k--) w = cons({ i, m, d: parts[k]! }, w);
-  return w;
-};
-
-/**
- * Would the documents on `work` (processed head-first, groups forced flat) stay
- * within `width` columns before the line ends? A break-mode line or a hardline
- * ends the line, so we stop and report success there.
- */
-const fits = (width: number, start: Work): boolean => {
-  let rem = width;
-  let work = start;
-  while (rem >= 0) {
-    if (!work) return true;
-    const { i, m, d } = work.head;
-    work = work.tail;
-    switch (d.k) {
-      case "text":
-        rem -= d.s.length;
-        break;
-      case "cat":
-        work = consParts(d.parts, i, m, work);
-        break;
-      case "indent":
-        work = cons({ i: i + INDENT, m, d: d.doc }, work);
-        break;
-      case "group":
-        work = cons({ i, m: "flat", d: d.doc }, work);
-        break;
-      case "line":
-        if (d.hard || m === "break") return true;
-        rem -= d.soft ? 0 : 1;
-        break;
-      case "breakparent":
-        break; // zero-width here; it only forces the group that *contains* it
-    }
-  }
-  return false;
-};
-
-/**
- * Does this document contain a hardline anywhere in its subtree? If so, every
- * enclosing group must break (a group can never print "flat" across a forced
- * newline). Comments introduce hardlines, so a commented node breaks its
- * parents. Memoized — documents are immutable and shared during layout.
- */
-const breakCache = new WeakMap<Doc, boolean>();
-const forcesBreak = (d: Doc): boolean => {
-  const cached = breakCache.get(d);
-  if (cached !== undefined) return cached;
-  const r =
-    d.k === "breakparent"
-      ? true
-      : d.k === "line"
-        ? d.hard
-        : d.k === "cat"
-          ? d.parts.some(forcesBreak)
-          : d.k === "indent" || d.k === "group"
-            ? forcesBreak(d.doc)
-            : false;
-  breakCache.set(d, r);
-  return r;
-};
-
-const render = (root: Doc, width: number): string => {
-  const out: string[] = [];
-  let pos = 0;
-  let work: Work = cons({ i: 0, m: "break", d: root }, null);
-  while (work) {
-    const { i, m, d } = work.head;
-    work = work.tail;
-    switch (d.k) {
-      case "text":
-        out.push(d.s);
-        pos += d.s.length;
-        break;
-      case "cat":
-        work = consParts(d.parts, i, m, work);
-        break;
-      case "indent":
-        work = cons({ i: i + INDENT, m, d: d.doc }, work);
-        break;
-      case "line":
-        if (m === "flat" && !d.hard) {
-          const s = d.soft ? "" : " ";
-          out.push(s);
-          pos += s.length;
-        } else {
-          out.push(`\n${" ".repeat(i)}`);
-          pos = i;
-        }
-        break;
-      case "group": {
-        if (forcesBreak(d.doc)) {
-          work = cons({ i, m: "break", d: d.doc }, work);
-          break;
-        }
-        const cand = cons({ i, m: "flat", d: d.doc }, work);
-        work = fits(width - pos, cand) ? cand : cons({ i, m: "break", d: d.doc }, work);
-        break;
-      }
-      case "breakparent":
-        break; // zero-width; its only effect is via forcesBreak
-    }
-  }
-  return out.join("");
-};
-
-/** Render a document on a single line (every group flat) — for contexts that never wrap: interpolation holes, `switch` scrutinees, and `when` guards. */
-const flat = (d: Doc): string => render(d, Number.POSITIVE_INFINITY);
 
 const param = (p: LamParam): string =>
   p.kind === "name"
@@ -211,12 +81,12 @@ const params = (ps: LamParam[]): string =>
  * Re-escape it so a hole-free string round-trips even when its decoded
  * value happens to contain that sequence.
  */
-const escFragment = (s: string): string => JSON.stringify(s).slice(1, -1).replace(/\$\{/g, "\\${");
-const strLit = (s: string): string => `"${escFragment(s)}"`;
+const escStrBody = (s: string): string => JSON.stringify(s).slice(1, -1).replace(/\$\{/g, "\\${");
+const strLit = (s: string): string => `"${escStrBody(s)}"`;
 
 // "…${x}…" (ADR 0023) — round-trip the sugar; holes render flat.
 const interpText = (e: InterpExpr): string =>
-  `"${e.parts.map((p) => (typeof p === "string" ? escFragment(p) : `\${${flat(exprD(p))}}`)).join("")}"`;
+  `"${e.parts.map((p) => (typeof p === "string" ? escStrBody(p) : `\${${flat(exprD(p))}}`)).join("")}"`;
 
 const pattern = (p: Pattern): string => {
   switch (p.kind) {
@@ -380,8 +250,6 @@ const collectComments = (src: string): Comment[] => {
 /** The node a comment attaches to, keyed by node identity — LEADING prints above the node, TRAILING inline after it. A fresh AST is parsed per `format` call, so entries never outlive their source. */
 const LEADING = new WeakMap<object, Comment[]>();
 const TRAILING = new WeakMap<object, Comment[]>();
-/** Calls produced by JSX parsing share the full source span of the `<…>` form. Keep that provenance so formatting can re-fold only actual JSX, never an explicit `h(...)`. */
-const JSX_ORIGIN = new WeakSet<CallExpr>();
 
 type Anchor = { node: Expr | Stmt | Ctor; start: number; end: number };
 
@@ -391,14 +259,13 @@ type Anchor = { node: Expr | Stmt | Ctor; start: number; end: number };
  * constructors attaches to the one it precedes instead of migrating to the next
  * statement.
  */
-const collectAnchors = (stmts: Stmt[], src: string): Anchor[] => {
+const collectAnchors = (stmts: Stmt[]): Anchor[] => {
   const anchors: Anchor[] = [];
   const add = (n: Expr | Stmt | Ctor): void => {
     anchors.push({ node: n, start: n.span.start, end: n.span.end });
   };
   const visit = (e: Expr): void => {
     add(e);
-    if (e.kind === "call" && src[e.span.start] === "<") JSX_ORIGIN.add(e);
     switch (e.kind) {
       case "call":
         visit(e.fn);
@@ -478,7 +345,7 @@ const collectAnchors = (stmts: Stmt[], src: string): Anchor[] => {
  * the last node have no anchor and are returned to emit after the final stmt.
  */
 const attachComments = (stmts: Stmt[], comments: Comment[], src: string): Comment[] => {
-  const anchors = collectAnchors(stmts, src).toSorted((a, b) => a.start - b.start || b.end - a.end);
+  const anchors = collectAnchors(stmts).toSorted((a, b) => a.start - b.start || b.end - a.end);
   const tail: Comment[] = [];
   for (const c of comments) {
     if (c.trailing) {
@@ -707,74 +574,6 @@ const mapD = (e: MapExpr): Doc =>
 
 const fieldD = (e: FieldExpr): Doc => seq(memberD(e.target), txt(`.${e.name}`));
 
-type JsxShape = {
-  tag: Expr;
-  props: RecordExpr;
-  children: SeqElem[];
-};
-
-const jsxShape = (e: CallExpr): JsxShape | null => {
-  if (
-    !JSX_ORIGIN.has(e) ||
-    e.fn.kind !== "ref" ||
-    e.fn.name !== "h" ||
-    e.args.length !== 3 ||
-    e.args[1]!.kind !== "record" ||
-    e.args[2]!.kind !== "arr"
-  )
-    return null;
-  return { tag: e.args[0]!, props: e.args[1]!, children: e.args[2]!.elements };
-};
-
-const jsxTag = (tag: Expr): string => (tag.kind === "str" ? tag.value : flat(memberD(tag)));
-
-const jsxAttrD = (name: string, value: Expr, nameStart: number): Doc => {
-  if (value.kind === "bool" && value.value && value.span.start === nameStart) return txt(name);
-  if (value.kind === "str") return txt(`${name}=${strLit(value.value)}`);
-  return seq(txt(`${name}={`), exprD(value), txt("}"));
-};
-
-const jsxOpenD = (tag: string, attrs: Doc[], selfClosing: boolean): Doc => {
-  if (attrs.length === 0) return txt(selfClosing ? `<${tag} />` : `<${tag}>`);
-  return group(
-    seq(
-      txt(`<${tag}`),
-      indent(cat(attrs.map((attr) => seq(line, attr)))),
-      selfClosing ? line : softline,
-      txt(selfClosing ? "/>" : ">"),
-    ),
-  );
-};
-
-const jsxChildD = (child: SeqElem): Doc => {
-  if (child.kind === "expr" && child.expr.kind === "call" && JSX_ORIGIN.has(child.expr))
-    return exprD(child.expr);
-  return seq(txt(child.kind === "spread" ? "{..." : "{"), exprD(child.expr), txt("}"));
-};
-
-/** Re-fold a parser-produced `h(tag, props, children)` while retaining normal call formatting for source-written `h(...)`. */
-const jsxD = (shape: JsxShape): Doc => {
-  const fragment = shape.tag.kind === "str" && shape.tag.value === "Fragment";
-  const tag = fragment ? "" : jsxTag(shape.tag);
-  const attrs = [
-    ...(shape.props.spread ? [seq(txt("{..."), exprD(shape.props.spread), txt("}"))] : []),
-    ...shape.props.fields.map((field) => jsxAttrD(field.name, field.value, field.nameSpan.start)),
-  ];
-
-  if (shape.children.length === 0 && !fragment) return jsxOpenD(tag, attrs, true);
-
-  const open = fragment ? txt("<>") : jsxOpenD(tag, attrs, false);
-  const close = txt(fragment ? "</>" : `</${tag}>`);
-  return group(
-    seq(
-      open,
-      indent(cat(shape.children.map((child) => seq(softline, jsxChildD(child))))),
-      softline,
-      close,
-    ),
-  );
-};
-
 /**
  * Binary operators the parser desugars straight into 2-arg calls (see the
  * matching *_BP constants in parser.ts) — precedence here must mirror those
@@ -832,7 +631,7 @@ const binOperandD = (e: Expr, parentPrec: number, isRight: boolean): Doc => {
   return parenIf(needsParens, exprD(e));
 };
 
-/** `++` is left-associative (`concat(concat(a, b), c)`); flatten like `|>` so a long string-build can break one fragment per line instead of overflowing. */
+/** `++` is left-associative (`concat(concat(a, b), c)`); flatten like `|>` so a long string-build can break one segment per line instead of overflowing. */
 const CONCAT_PREC = 10;
 const isConcatCall = (e: Expr): boolean =>
   e.kind === "call" && e.fn.kind === "ref" && e.fn.name === "concat" && e.args.length === 2;
@@ -946,8 +745,6 @@ const refoldCall = (e: CallExpr): Doc | null => {
  * breaks one-per-line when it overflows.
  */
 const callD = (e: CallExpr): Doc => {
-  const jsx = jsxShape(e);
-  if (jsx) return jsxD(jsx);
   const refold = refoldCall(e);
   if (refold) return refold;
   const fn = calleeD(e.fn);
@@ -993,7 +790,27 @@ const matchD = (e: MatchExpr): Doc => {
 
 const exprD = (e: Expr): Doc => withComments(e, exprRaw(e));
 
-const exprRaw = (e: Expr): Doc => {
+/**
+ * What a `format` hook may call back into: the recursive printers it needs to
+ * lay out sub-expressions, plus the two leaf renderers whose escaping rules it
+ * must not re-derive. The `Doc` combinators are plain functions in `doc.ts`, so
+ * a hook imports those directly instead of receiving them here (ADR 0011).
+ */
+const formatApi: FormatApi = { exprD, memberD, flat, strLit };
+
+/**
+ * Resolved `format` hooks for the current `format()` call. Module-level and
+ * reassigned per call, like the comment-attachment maps above: the printers are
+ * a web of module-level functions referenced by name (`e.args.map(exprD)`), so
+ * threading a context parameter through all of them would touch every one.
+ * `format` is synchronous, so a call never observes another call's hooks.
+ */
+let formatHooks: FormatHook[] = [];
+
+/** Plugin sugar first (JSX's `<tag>` re-fold, …), then this module's printer. */
+const exprRaw = (e: Expr): Doc => runFormatHooks(formatHooks, e, formatApi) ?? exprCore(e);
+
+const exprCore = (e: Expr): Doc => {
   switch (e.kind) {
     case "num":
       return txt(e.raw);
@@ -1132,12 +949,17 @@ const program = (stmts: Stmt[], src: string, tail: Comment[]): string => {
   return render(cat(parts), WIDTH);
 };
 
-export const format = (src: string): Result<string, Diagnostic> =>
-  pipe(
+/** `plugins`: sugar parsers *and* printers — one list, so anything a plugin can parse it can also re-fold. `undefined` → builtins (JSX); `[]` → hard opt-out (`resolvePlugins`, ADR 0011). */
+export type FormatOptions = { plugins?: LanguagePlugin[] };
+
+export const format = (src: string, opts: FormatOptions = {}): Result<string, Diagnostic> => {
+  formatHooks = resolvePlugins(opts.plugins).flatMap((p) => (p.format ? [p.format] : []));
+  return pipe(
     lex(src),
-    flatMap(parse),
+    flatMap((toks) => parse(toks, { plugins: opts.plugins })),
     map((prog) => {
       const tail = attachComments(prog.stmts, collectComments(src), src);
       return program(prog.stmts, src, tail);
     }),
   );
+};

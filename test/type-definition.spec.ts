@@ -70,10 +70,10 @@ test("moduleTypeDefinitionAt follows an imported variant", async () => {
   expect(DEP_SRC.slice(def!.span.start, def!.span.end)).toBe("Shape");
 });
 
-// Slice 19: moduleTypeDefinitionAt threads `opts.extensions` the same way
-// moduleHoverAt/moduleDiagnostics do; passing an (unused-here) extension list
+// Slice 19: moduleTypeDefinitionAt threads `opts.plugins` the same way
+// moduleHoverAt/moduleDiagnostics do; passing an (unused-here) plugin list
 // must not change same-file/module behavior that doesn't need it.
-test("moduleTypeDefinitionAt is unaffected by extensions when the source doesn't need them", async () => {
+test("moduleTypeDefinitionAt is unaffected by plugins when the source doesn't need them", async () => {
   const DEP = "/proj/ast.mochi";
   const ENTRY = "/proj/main.mochi";
   const DEP_SRC = "export type Shape =\n  | Circle(number)\n";
@@ -83,7 +83,7 @@ test("moduleTypeDefinitionAt is unaffected by extensions when the source doesn't
       ? Promise.resolve(DEP_SRC)
       : Promise.reject(new Error(`no such file ${p}`));
   const def = await moduleTypeDefinitionAt(ENTRY, src, pos(src, "let c") + 4, read, {
-    extensions: [],
+    plugins: [],
   });
   expect(def?.path).toBe(resolve(DEP));
   expect(DEP_SRC.slice(def!.span.start, def!.span.end)).toBe("Shape");

@@ -10,7 +10,7 @@ import { resolve } from "node:path";
 import { map, match as matchMaybe } from "@onrails/maybe";
 import { isErr, isOk } from "@onrails/result";
 import { toTypedProgram, toTypedProgramWith } from "./compile";
-import type { HostExtension } from "./extensions";
+import type { LanguagePlugin } from "./extensions";
 import type { InferResult, SymbolInfo, TypeAt } from "./infer";
 import { lex } from "./lexer";
 import { moduleContext } from "./module";
@@ -78,15 +78,15 @@ export const hoverAt = (src: string, offset: number, path = "<buffer>"): HoverIn
   return isOk(r) ? hoverFrom(r.value.res, offset, src, path) : null;
 };
 
-/** Options threaded into module-aware nav/hover/diagnostics — host `extensions` (styled-cva, …), same list Vite / `gen-mochi-dts` use. Empty/omitted = today's behaviour. */
-export type ModuleHoverOptions = { extensions?: HostExtension[] };
+/** Options threaded into module-aware nav/hover/diagnostics — `plugins` (styled-cva, …), same list Vite / `gen-mochi-dts` use. Omitted = default/builtin resolution (`resolvePlugins`, ADR 0011). */
+export type ModuleHoverOptions = { plugins?: LanguagePlugin[] };
 
 /**
  * Module-aware hover: resolve `path`'s dependency graph (deps from disk via
  * `readFile`, the edited file from the live `src` buffer) and check + infer the
  * live program WITH the imported registry/schemes. Without this, any file that
  * imports a variant fails to typecheck and yields no hover. Degrades to
- * single-file `hoverAt` if the dep graph can't be resolved. `opts.extensions`
+ * single-file `hoverAt` if the dep graph can't be resolved. `opts.plugins`
  * (styled-cva, …) reaches both the dependency graph and the live buffer, so
  * `tw.*` factories hover with a real component scheme instead of `unknown`.
  */
@@ -99,15 +99,15 @@ export const moduleHoverAt = async (
 ): Promise<HoverInfo | null> => {
   const lexed = lex(src);
   if (isErr(lexed)) return null;
-  const parsed = parse(lexed.value);
+  const parsed = parse(lexed.value, { plugins: opts.plugins });
   if (isErr(parsed)) return null;
 
   const entry = resolve(path);
   const read = (p: string): Promise<string> =>
     resolve(p) === entry ? Promise.resolve(src) : readFile(p);
-  const ctx = await moduleContext(entry, read, { extensions: opts.extensions });
+  const ctx = await moduleContext(entry, read, { plugins: opts.plugins });
   if (isErr(ctx)) return hoverAt(src, offset, entry);
 
-  const typed = toTypedProgramWith(parsed.value, ctx.value, { extensions: opts.extensions });
+  const typed = toTypedProgramWith(parsed.value, ctx.value, { plugins: opts.plugins });
   return isOk(typed) ? hoverFrom(typed.value.res, offset, src, entry) : null;
 };

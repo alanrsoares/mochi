@@ -8,7 +8,7 @@ import { resolve } from "node:path";
 import { flatMap, fromNullable, map, match as matchMaybe, none, some } from "@onrails/maybe";
 import { isErr, isOk } from "@onrails/result";
 import { toTypedProgram, toTypedProgramWith } from "./compile";
-import type { HostExtension } from "./extensions";
+import type { LanguagePlugin } from "./extensions";
 import type { InferResult, TypeAt } from "./infer";
 import { lex } from "./lexer";
 import { loadModuleGraph, moduleContext } from "./module";
@@ -138,8 +138,8 @@ export const typeDefinitionAt = (
   return isOk(typed) ? typeDefFrom(typed.value.res, offset, idx) : null;
 };
 
-/** Options threaded into module-* nav helpers that typecheck — host `extensions` (styled-cva, …), same list hover/diagnostics take. */
-export type ModuleNavOptions = { extensions?: HostExtension[] };
+/** Options threaded into module-* nav helpers that typecheck — `plugins` (styled-cva, …), same list hover/diagnostics take. */
+export type ModuleNavOptions = { plugins?: LanguagePlugin[] };
 
 /** Module-aware go-to-type (imported variants/aliases via export origins). */
 export const moduleTypeDefinitionAt = async (
@@ -155,16 +155,16 @@ export const moduleTypeDefinitionAt = async (
 
   const lexed = lex(src);
   if (isErr(lexed)) return null;
-  const parsed = parse(lexed.value);
+  const parsed = parse(lexed.value, { plugins: opts.plugins });
   if (isErr(parsed)) return null;
 
   const entry = resolve(path);
   const read = (p: string): Promise<string> =>
     resolve(p) === entry ? Promise.resolve(src) : readFile(p);
-  const ctx = await moduleContext(entry, read, { extensions: opts.extensions });
+  const ctx = await moduleContext(entry, read, { plugins: opts.plugins });
   if (isErr(ctx)) return typeDefinitionAt(src, offset, entry);
 
-  const typed = toTypedProgramWith(parsed.value, ctx.value, { extensions: opts.extensions });
+  const typed = toTypedProgramWith(parsed.value, ctx.value, { plugins: opts.plugins });
   return isOk(typed) ? typeDefFrom(typed.value.res, offset, idx, origins) : null;
 };
 

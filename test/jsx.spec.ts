@@ -18,6 +18,8 @@ describe("JSX syntax desugaring (ADR 0007)", () => {
       if (stmt.value.kind === "call") {
         expect(stmt.value.fn).toEqual({ kind: "ref", name: "h", span: expect.anything() });
         expect(stmt.value.args.length).toBe(3);
+        // Sugar provenance (ADR 0011 §5) — set once by the parser, not sniffed later.
+        expect(stmt.value.origin).toBe("jsx");
         // Arg 0: tag "div"
         expect(stmt.value.args[0]).toEqual({ kind: "str", value: "div", span: expect.anything() });
         // Arg 1: props record { className: "card" }
@@ -25,6 +27,16 @@ describe("JSX syntax desugaring (ADR 0007)", () => {
         // Arg 2: children array ["hello"]
         expect(stmt.value.args[2]?.kind).toBe("arr");
       }
+    }
+  });
+
+  it("does not mark a hand-written h(...) call with JSX provenance", () => {
+    const code = `let el = h("div", { className: "card" }, ["hello"])`;
+    const tokens = unwrapOk(lex(code));
+    const prog = unwrapOk(parse(tokens));
+    const stmt = prog.stmts[0]!;
+    if (stmt.kind === "let" && stmt.value.kind === "call") {
+      expect(stmt.value.origin).toBeUndefined();
     }
   });
 

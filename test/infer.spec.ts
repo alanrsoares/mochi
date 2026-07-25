@@ -67,6 +67,14 @@ test("a let-in annotation pins the local (ADR 0044)", () => {
   expect(typeOf(env, "f")).toBe("number -> number");
 });
 
+// ADR 0011 §5 — sugar provenance. A hand-written `h(...)` call has no `origin`,
+// so it types against its own binding instead of hitting `inferJsxCall`
+// (previously false-positived on `fn.name === "h"` regardless of provenance).
+test("an explicit h(...) call is not treated as JSX sugar", () => {
+  const env = unwrapOk(infer("let h = (a, b) => add(a, b)\nlet r = h(1, 2)"));
+  expect(typeOf(env, "r")).toBe("number");
+});
+
 test("record literal is a closed record", () => {
   const env = unwrapOk(infer("let p = { x: 1, y: 2 }", {}));
   expect(typeOf(env, "p")).toBe("{ x: number, y: number }");

@@ -47,8 +47,8 @@ import {
 export type { AliasMap, Env, Scheme } from "./schemes";
 
 import { type Diagnostic, typeErr } from "./errors";
-import type { HostExtension, InferCallApi, InferCallHook } from "./extensions";
-import { runInferCallHooks } from "./extensions";
+import type { InferCallApi, InferCallHook, LanguagePlugin } from "./extensions";
+import { resolvePlugins, runInferCallHooks } from "./extensions";
 import { stronglyConnected } from "./scc";
 import type { Span } from "./span";
 import { closestName } from "./suggest";
@@ -80,7 +80,7 @@ import { emptySubst, resolve, resolveRow, type Subst, unify, zonk } from "./unif
  * Inference context. `open`: unbound refs get a fresh type var (host globals
  * when compiling to JS). `record`: optional span → type hook for LSP hover
  * (unzonked; caller zonks at the end). `noteUse`/`noteLet`: TS emit (ADR 0035).
- * `inferCallHooks`: host extensions (styled-cva, …) — not JSX (core).
+ * `inferCallHooks`: resolved plugins' `inferCall` hooks (styled-cva, …).
  */
 type Ctx = {
   env: Env;
@@ -274,7 +274,8 @@ function inferLetIn(e: LetInExpr, ctx: Ctx): Result<Type, Diagnostic> {
 }
 
 function inferCall(e: CallExpr, ctx: Ctx): Result<Type, Diagnostic> {
-  // Host extensions first (styled-cva `tw.*`, …). Universal JSX stays in core below.
+  // Sugar/kit calls belong to plugins (builtin JSX, vendor `tw.*`, …); core only
+  // knows how to apply a function to its arguments (ADR 0011).
   const api: InferCallApi = {
     infer: (expr) => infer(expr, ctx),
     unify: (a, b, span) => u(a, b, ctx, span),
@@ -284,10 +285,6 @@ function inferCall(e: CallExpr, ctx: Ctx): Result<Type, Diagnostic> {
   };
   const hooked = runInferCallHooks(ctx.inferCallHooks, e, api);
   if (hooked !== null) return hooked;
-
-  // Core: JSX desugars to `h(tag, props, …children)`. When `tag` is a component,
-  // unify attrs with its prop row (ADR 0007 / 0010 — JSX may stay in core).
-  if (isJsxPragmaCall(e)) return inferJsxCall(e, ctx);
 
   const fnT = infer(e.fn, ctx);
   if (isErr(fnT)) return fnT;
@@ -301,48 +298,6 @@ function inferCall(e: CallExpr, ctx: Ctx): Result<Type, Diagnostic> {
     cur = resultT;
   }
   return ok(cur);
-}
-
-/** JSX pragma call: `h(tag, props, …children)` with at least tag + props. */
-const isJsxPragmaCall = (e: CallExpr): boolean =>
-  e.fn.kind === "ref" && e.fn.name === "h" && e.args.length >= 2;
-
-/**
- * Infer `h(tag, props, childrenArr)`. Component tags (arrow from record) check
- * attrs; string tags stay open-world on props.
- *
- * Children are a heterogeneous array (text + elements). Do **not** run normal
- * Array inference (that forces one element type) — infer each child for errors
- * only, then type the slot as `[VNode]` for the call.
- */
-function inferJsxCall(e: CallExpr, ctx: Ctx): Result<Type, Diagnostic> {
-  const tagExpr = e.args[0]!;
-  const propsExpr = e.args[1]!;
-  const tagT = infer(tagExpr, ctx);
-  if (isErr(tagT)) return tagT;
-  const propsT = infer(propsExpr, ctx);
-  if (isErr(propsT)) return propsT;
-
-  const childrenExpr = e.args[2];
-  if (childrenExpr?.kind === "arr") {
-    for (const el of childrenExpr.elements) {
-      const childExpr = el.kind === "spread" ? el.expr : el.expr;
-      const childT = infer(childExpr, ctx);
-      if (isErr(childT)) return childT;
-    }
-  } else if (childrenExpr) {
-    const childT = infer(childrenExpr, ctx);
-    if (isErr(childT)) return childT;
-  }
-
-  const zonkedTag = zonk(tagT.value, ctx.subst);
-  if (zonkedTag.kind === "arrow" && zonkedTag.from.kind === "record") {
-    const uni = u(propsT.value, zonkedTag.from, ctx, propsExpr.span);
-    if (isErr(uni)) return uni;
-    return ok(zonk(zonkedTag.to, ctx.subst));
-  }
-  // Intrinsic / unknown tag: open props, result is VNode.
-  return ok(tCon("VNode"));
 }
 
 function inferRecord(e: RecordExpr, ctx: Ctx): Result<Type, Diagnostic> {
@@ -634,8 +589,11 @@ export type InferOptions = {
   imports?: Env;
   namespaces?: Record<string, Record<string, Type>>; // qualified members (List.map, ...)
   nsImports?: Map<string, Env>; // alias → export schemes
-  /** Host kits (styled-cva, …). Universal JSX is core — not registered here. */
-  extensions?: HostExtension[];
+  /**
+   * Plugins to run (styled-cva, …). `undefined` → builtins; `[]` → hard
+   * opt-out; non-empty → builtins + this list (`resolvePlugins`, ADR 0011).
+   */
+  plugins?: LanguagePlugin[];
 };
 
 /** Symbol identity for hover (`let x: T`, `(parameter) x: T`, etc.). */
@@ -808,7 +766,9 @@ function run(
   const ns = seedNamespaces(env, subst, opts.namespaces, opts.nsImports);
   const fresh = mkFresh(1000);
   const open = opts.open ?? false;
-  const inferCallHooks = (opts.extensions ?? []).flatMap((e) => (e.inferCall ? [e.inferCall] : []));
+  const inferCallHooks = resolvePlugins(opts.plugins).flatMap((p) =>
+    p.inferCall ? [p.inferCall] : [],
+  );
 
   // Transparent record aliases: collect their field lists so extern signatures
   // can reference them (expanded to rows), and build display templates (params

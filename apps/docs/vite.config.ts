@@ -9,7 +9,7 @@ export default defineConfig({
   plugins: [
     mochiPlugin({
       jsxPragmaHeader: 'import { h } from "preact";\n',
-      extensions: docsVendorPlugins,
+      plugins: docsVendorPlugins,
     }),
     preact(),
     tailwindcss(),
