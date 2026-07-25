@@ -1,6 +1,6 @@
-// Mochi JSX Component — Header Badge
+// Mochi JSX Component — Tactile Status Chip
 let HeaderBadge = (props) =>
-  <div className="inline-flex items-center gap-2 px-3 py-1 text-xs font-semibold tracking-wider text-pink-400 bg-pink-950/40 border border-pink-500/30 rounded-full shadow-lg shadow-pink-500/10 backdrop-blur-md">
-    <span className="w-2 h-2 rounded-full bg-pink-400 animate-pulse"></span>
+  <div className="inline-flex items-center gap-2 px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-wider text-rose-300 bg-rose-950/30 border border-rose-500/30 rounded-md shadow-sm">
+    <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-ping"></span>
     <span>{props.label}</span>
   </div>

@@ -17,198 +17,208 @@ import stickersImg from "@mochi/root/illustrations/mochi_stickers.jpg";
 
 function App() {
   return (
-    <div className="min-h-screen flex flex-col bg-[#090d16] text-slate-100 font-sans selection:bg-pink-500/30">
-      {/* Navigation Header */}
-      <header className="sticky top-0 z-50 backdrop-blur-xl bg-[#090d16]/80 border-b border-slate-800/80">
-        <div className="max-w-7xl mx-auto px-6 h-18 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <img src={logoImg} alt="Mochi Logo" className="w-10 h-10 object-contain drop-shadow-[0_0_12px_rgba(244,114,182,0.4)]" />
-            <span className="text-xl font-extrabold font-display tracking-tight text-white">
-              mochi<span className="text-pink-500">.lang</span>
+    <div className="min-h-screen flex flex-col bg-[#0b0d14] text-slate-100 font-sans selection:bg-rose-500/30 selection:text-rose-200">
+      {/* Top Header Navigation */}
+      <header className="sticky top-0 z-50 bg-[#0b0d14]/90 border-b border-[#1b2030] backdrop-blur-md">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <img src={logoImg} alt="Mochi Logo" className="w-8 h-8 object-contain" />
+            <span className="text-lg font-bold font-display tracking-tight text-white">
+              mochi<span className="text-rose-500">.lang</span>
             </span>
-            {/* HeaderBadge is a component written in Mochi JSX! */}
-            <HeaderBadge label="JSX + Preact Enabled" />
+            <HeaderBadge label="v0.1.0 • JSX + Preact" />
           </div>
 
-          <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-300">
-            <a href="#playground" className="hover:text-pink-400 transition-colors">Playground</a>
-            <a href="#features" className="hover:text-pink-400 transition-colors">Features</a>
-            <a href="#interop" className="hover:text-pink-400 transition-colors">Frontend Interop</a>
-            <a href="#gallery" className="hover:text-pink-400 transition-colors">Artwork</a>
+          <nav className="hidden md:flex items-center gap-6 font-mono text-xs text-slate-400">
+            <a href="#playground" className="hover:text-rose-400 transition-colors">/playground</a>
+            <a href="#architecture" className="hover:text-rose-400 transition-colors">/architecture</a>
+            <a href="#interop" className="hover:text-rose-400 transition-colors">/interop</a>
+            <a href="#artwork" className="hover:text-rose-400 transition-colors">/artwork</a>
             <a
               href="https://github.com/alanrsoares/mochi"
               target="_blank"
               rel="noreferrer"
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-lg transition-all border border-slate-700 text-xs font-semibold"
+              className="px-3 py-1.5 bg-[#141826] hover:bg-[#1a2033] text-slate-200 rounded border border-[#232a40] transition-all font-semibold"
             >
-              GitHub Repository
+              GitHub ↗
             </a>
           </nav>
         </div>
       </header>
 
       {/* Hero Section */}
-      <section className="relative overflow-hidden pt-16 pb-20 border-b border-slate-800/60">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-pink-600/15 rounded-full blur-[140px] pointer-events-none"></div>
-
+      <section className="relative overflow-hidden py-16 border-b border-[#1b2030] bg-[#0d0f18]">
         <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <div className="space-y-6">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-xs font-semibold text-pink-300">
-              <span>🚀 Self-Hosted Compiler</span>
-              <span className="text-slate-600">•</span>
-              <span className="text-emerald-400">0 tsc --strict errors</span>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded bg-[#151928] border border-[#252d44] text-[11px] font-mono text-slate-300">
+              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+              <span>Self-Hosted Compiler Target</span>
+              <span className="text-slate-600">|</span>
+              <span className="text-emerald-400 font-bold">0 tsc --strict errors</span>
             </div>
 
-            <h1 className="text-5xl lg:text-6xl font-black font-display tracking-tight text-white leading-[1.1]">
-              Statically-typed functional code, <span className="bg-gradient-to-r from-pink-400 via-purple-400 to-indigo-400 bg-clip-text text-transparent">rendered anywhere</span>.
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold font-display tracking-tight text-white leading-[1.1]">
+              Statically-typed functional compiler with <span className="text-transparent bg-clip-text bg-gradient-to-r from-rose-400 via-pink-400 to-amber-300">zero runtime overhead</span>.
             </h1>
 
-            <p className="text-lg text-slate-300 leading-relaxed font-normal">
-              Mochi is a small, ultra-fast functional programming language featuring Hindley–Milner type inference, row-polymorphic records, universal JSX desugaring, and strict-clean TypeScript code generation.
+            <p className="text-sm text-slate-300 leading-relaxed font-sans max-w-xl">
+              Mochi compiles Hindley–Milner type signatures, row-polymorphic records, and JSX expressions into clean JavaScript and strict-type-checked TypeScript output.
             </p>
 
-            <div className="flex flex-wrap gap-4 pt-2">
+            <div className="flex flex-wrap gap-4 pt-2 font-mono text-xs">
               <a
                 href="#playground"
-                className="px-6 py-3.5 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-bold rounded-xl shadow-lg shadow-pink-600/25 transition-all hover:scale-[1.02]"
+                className="px-5 py-3 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg shadow-lg shadow-rose-600/20 transition-all hover:-translate-y-0.5"
               >
-                Try In Browser REPL
+                Open Live REPL ➔
               </a>
-              <code className="px-5 py-3.5 bg-slate-900 border border-slate-800 text-slate-300 rounded-xl font-mono text-sm flex items-center gap-3">
-                <span className="text-pink-400">$</span> bun run mochi app.mochi
-              </code>
+              <div className="px-4 py-3 bg-[#131624] border border-[#20273c] text-slate-300 rounded-lg flex items-center gap-2">
+                <span className="text-rose-400 font-bold">$</span>
+                <span>bun run mochi app.mochi</span>
+              </div>
             </div>
           </div>
 
           <div className="relative">
-            <div className="absolute -inset-1 rounded-3xl bg-gradient-to-r from-pink-500 to-purple-600 opacity-30 blur-xl"></div>
-            <img
-              src={coderMascotImg}
-              alt="Mochi Mascot Banner"
-              className="relative rounded-2xl border border-slate-800 shadow-2xl object-cover w-full h-[400px]"
-            />
+            <div className="p-2 bg-[#121522] border border-[#20273c] rounded-2xl shadow-2xl">
+              <img
+                src={coderMascotImg}
+                alt="Mochi Mascot Banner"
+                className="rounded-xl object-cover w-full h-[360px] filter brightness-95 contrast-105"
+              />
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Main Content Container */}
+      {/* Main Content Sections */}
       <main className="max-w-7xl mx-auto px-6 py-12 space-y-20 flex-1">
-        {/* Interactive Playground */}
-        <section id="playground">
+        {/* Live REPL & Compiler Section */}
+        <section id="playground" className="scroll-mt-20">
           <Playground />
         </section>
 
-        {/* Feature Cards Grid (Powered by Mochi JSX Components) */}
-        <section id="features" className="space-y-8">
-          <div className="text-center space-y-3">
-            <h2 className="text-3xl font-black font-display text-white">Language Architecture & Core Features</h2>
-            <p className="text-slate-400 max-w-2xl mx-auto text-sm">
-              Built on sound Hindley–Milner type inference (Algorithm W), Mochi provides strict type guarantees without boilerplate annotations.
-            </p>
+        {/* Core Architecture Cards (Rendered via Mochi JSX Components) */}
+        <section id="architecture" className="space-y-8 scroll-mt-20">
+          <div className="space-y-2">
+            <div className="font-mono text-xs text-rose-400 font-bold uppercase tracking-widest">// ARCHITECTURE & TYPE SYSTEM</div>
+            <h2 className="text-3xl font-extrabold font-display text-white tracking-tight">Compiler Core Specifications</h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <FeatureCard
-              icon="✨"
-              title="Universal JSX Support"
-              description="Native JSX desugaring translates <tag /> elements directly into host h(tag, props, children) calls with zero bundle runtime overhead."
+              tag="AST / DESUGAR"
+              spec="ADR 0007"
+              title="Universal JSX Lowering"
+              description="Transforms <tag /> elements directly into host h(tag, props, children) calls during AST parse pass with no extra VDOM runtime library."
+              subtext="h(tag, props, children)"
             />
             <FeatureCard
-              icon="🔮"
+              tag="ALGORITHM W"
+              spec="Hindley-Milner"
               title="Row-Polymorphic Records"
-              description="Structural record typing allows writing functions that operate on any record containing required fields without subtyping complexity."
+              description="Infers structural record shapes using row variables. Functions accept any record containing matching field schemas."
+              subtext="{ r | key: val }"
             />
             <FeatureCard
-              icon="🎯"
-              title="Exhaustive Pattern Matching"
-              description="Pattern matching on algebraic variants and structures with full compile-time exhaustiveness checking."
+              tag="CODEGEN HOOKS"
+              spec="ADR 0026"
+              title="Strict TypeScript Output"
+              description="Emits clean .ts code passing tsc --strict with 0 type errors. Reuses HM inference tables for TS type annotations."
+              subtext="0 tsc --strict errors"
             />
           </div>
         </section>
 
-        {/* Frontend Interop Section */}
-        <section id="interop" className="p-8 bg-slate-900/60 border border-slate-800 rounded-3xl space-y-6 backdrop-blur-xl">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-800 pb-6">
+        {/* Framework Interop Section */}
+        <section id="interop" className="p-8 bg-[#111422] border border-[#1e2436] rounded-2xl space-y-6 scroll-mt-20">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#1e2436] pb-6">
             <div>
-              <h2 className="text-2xl font-bold font-display text-white mb-1">Frontend Ecosystem & Framework Interop</h2>
-              <p className="text-slate-400 text-sm">
-                Mochi's Vite plugin (<code className="text-pink-400 font-mono">vite-plugin-mochi</code>) lets you import <code className="text-pink-400 font-mono">.mochi</code> files directly into modern frontend frameworks.
-              </p>
+              <div className="font-mono text-xs text-rose-400 font-bold uppercase tracking-widest mb-1">// FRONTEND INTEROP MATRIX</div>
+              <h2 className="text-2xl font-bold font-display text-white">Vite Plugin (.mochi) Module Loader</h2>
             </div>
-            <span className="px-4 py-2 bg-pink-500/10 border border-pink-500/30 text-pink-300 font-mono text-xs font-semibold rounded-full self-start md:self-auto">
-              Vite 6 + Tailwind v4 + Preact
-            </span>
+            <div className="font-mono text-xs px-3 py-1 bg-[#181c2e] border border-[#272f48] text-slate-300 rounded">
+              vite-plugin-mochi v0.1.0
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="p-5 bg-slate-950/60 border border-slate-800/80 rounded-2xl space-y-2">
-              <div className="font-bold text-pink-400 text-base font-display">Preact (~3KB)</div>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Direct <code className="text-slate-200">h(tag, props, children)</code> alignment makes Preact the ideal primary runtime for Mochi JSX components.
+            <div className="p-5 bg-[#0b0e17] border border-[#1b2030] rounded-xl space-y-3">
+              <div className="font-mono text-xs text-rose-400 font-bold uppercase">Preact (~3KB)</div>
+              <h3 className="font-bold text-slate-100 font-display">Native h() Alignment</h3>
+              <p className="text-xs text-slate-400 leading-relaxed font-sans">
+                Preact exports <code className="text-slate-200 font-mono">h(tag, props, children)</code> directly matching Mochi's JSX desugar output with zero adapter wrappers.
               </p>
             </div>
 
-            <div className="p-5 bg-slate-950/60 border border-slate-800/80 rounded-2xl space-y-2">
-              <div className="font-bold text-purple-400 text-base font-display">SolidJS & Ripple</div>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Fine-grained signal reactivity and hyperscript adapters allow Mochi components to target VDOM-less DOM updates.
+            <div className="p-5 bg-[#0b0e17] border border-[#1b2030] rounded-xl space-y-3">
+              <div className="font-mono text-xs text-amber-400 font-bold uppercase">SolidJS & Ripple</div>
+              <h3 className="font-bold text-slate-100 font-display">Fine-Grained Signals</h3>
+              <p className="text-xs text-slate-400 leading-relaxed font-sans">
+                Supports hyperscript handlers (<code className="text-slate-200 font-mono">solid-js/h</code>) to target signal-based DOM execution without VDOM overhead.
               </p>
             </div>
 
-            <div className="p-5 bg-slate-950/60 border border-slate-800/80 rounded-2xl space-y-2">
-              <div className="font-bold text-indigo-400 text-base font-display">Strict TypeScript</div>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Emits clean <code className="text-slate-200">.ts</code> output passing <code className="text-slate-200">tsc --strict</code> with 0 errors for seamless TS codebase integration.
+            <div className="p-5 bg-[#0b0e17] border border-[#1b2030] rounded-xl space-y-3">
+              <div className="font-mono text-xs text-emerald-400 font-bold uppercase">TypeScript Strict</div>
+              <h3 className="font-bold text-slate-100 font-display">Strict Type Contracts</h3>
+              <p className="text-xs text-slate-400 leading-relaxed font-sans">
+                Generates strict <code className="text-slate-200 font-mono">.ts</code> definitions so TS frontend code can import Mochi modules safely.
               </p>
             </div>
           </div>
         </section>
 
-        {/* Artwork Gallery */}
-        <section id="gallery" className="space-y-8">
-          <div className="text-center space-y-2">
-            <h2 className="text-3xl font-black font-display text-white">Official Artwork & Illustration Gallery</h2>
-            <p className="text-slate-400 text-sm">Visual representations of the Mochi compiler, type system, and ecosystem.</p>
+        {/* Official Artwork Section */}
+        <section id="artwork" className="space-y-8 scroll-mt-20">
+          <div className="space-y-2">
+            <div className="font-mono text-xs text-rose-400 font-bold uppercase tracking-widest">// BRAND ARTWORK & ARCHITECTURE</div>
+            <h2 className="text-3xl font-extrabold font-display text-white tracking-tight">Official Illustration Gallery</h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div className="group border border-slate-800 bg-slate-900/40 rounded-2xl overflow-hidden hover:border-pink-500/40 transition-colors">
+            <div className="bg-[#111422] border border-[#1e2436] rounded-xl overflow-hidden group">
               <img src={compilerMagicImg} alt="Compiler Magic" className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300" />
-              <div className="p-4">
-                <h3 className="font-bold text-slate-200 font-display">Compiler Magic</h3>
-                <p className="text-xs text-slate-400 mt-1">Compiling functional code into clean JS and strict TypeScript.</p>
+              <div className="p-4 space-y-1">
+                <div className="font-mono text-[10px] text-rose-400 font-bold uppercase">COMPILER LOWERING</div>
+                <h3 className="font-bold text-slate-100 font-display">Compiler Magic</h3>
+                <p className="text-xs text-slate-400">AST transformation into JS and strict TypeScript.</p>
               </div>
             </div>
 
-            <div className="group border border-slate-800 bg-slate-900/40 rounded-2xl overflow-hidden hover:border-pink-500/40 transition-colors">
+            <div className="bg-[#111422] border border-[#1e2436] rounded-xl overflow-hidden group">
               <img src={cosmicTypesImg} alt="Cosmic Type System" className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300" />
-              <div className="p-4">
-                <h3 className="font-bold text-slate-200 font-display">Cosmic Type System</h3>
-                <p className="text-xs text-slate-400 mt-1">Hindley–Milner type inference & row-polymorphic constellations.</p>
+              <div className="p-4 space-y-1">
+                <div className="font-mono text-[10px] text-amber-400 font-bold uppercase">TYPE INFERENCE</div>
+                <h3 className="font-bold text-slate-100 font-display">Cosmic Type System</h3>
+                <p className="text-xs text-slate-400">Hindley–Milner algorithm & row polymorphism.</p>
               </div>
             </div>
 
-            <div className="group border border-slate-800 bg-slate-900/40 rounded-2xl overflow-hidden hover:border-pink-500/40 transition-colors">
+            <div className="bg-[#111422] border border-[#1e2436] rounded-xl overflow-hidden group">
               <img src={lspInspectorImg} alt="LSP Inspector" className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300" />
-              <div className="p-4">
-                <h3 className="font-bold text-slate-200 font-display">LSP Inspector</h3>
-                <p className="text-xs text-slate-400 mt-1">Real-time hover tooltips, type hints, and formatting assistance.</p>
+              <div className="p-4 space-y-1">
+                <div className="font-mono text-[10px] text-emerald-400 font-bold uppercase">LANGUAGE SERVER</div>
+                <h3 className="font-bold text-slate-100 font-display">LSP Inspector</h3>
+                <p className="text-xs text-slate-400">Real-time hover tooltips, type hints & diagnostics.</p>
               </div>
             </div>
 
-            <div className="group border border-slate-800 bg-slate-900/40 rounded-2xl overflow-hidden hover:border-pink-500/40 transition-colors">
-              <img src={bootstrapPartyImg} alt="Bootstrap Milestone" className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300" />
-              <div className="p-4">
-                <h3 className="font-bold text-slate-200 font-display">Bootstrap Party</h3>
-                <p className="text-xs text-slate-400 mt-1">Celebrating self-hosting milestone with 0 tsc --strict errors.</p>
+            <div className="bg-[#111422] border border-[#1e2436] rounded-xl overflow-hidden group">
+              <img src={bootstrapPartyImg} alt="Bootstrap Party" className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300" />
+              <div className="p-4 space-y-1">
+                <div className="font-mono text-[10px] text-purple-400 font-bold uppercase">SELF-HOSTING</div>
+                <h3 className="font-bold text-slate-100 font-display">Bootstrap Party</h3>
+                <p className="text-xs text-slate-400">Self-hosting milestone with 0 tsc --strict errors.</p>
               </div>
             </div>
 
-            <div className="group border border-slate-800 bg-slate-900/40 rounded-2xl overflow-hidden hover:border-pink-500/40 transition-colors md:col-span-2 lg:col-span-2">
-              <img src={stickersImg} alt="Sticker Sheet" className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300" />
-              <div className="p-4">
-                <h3 className="font-bold text-slate-200 font-display">Sticker Sheet & Poses</h3>
-                <p className="text-xs text-slate-400 mt-1">VR coding, Bun rocket jetpack, and CLI prompt mascot stickers.</p>
+            <div className="bg-[#111422] border border-[#1e2436] rounded-xl overflow-hidden group md:col-span-2">
+              <img src={stickersImg} alt="Stickers" className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300" />
+              <div className="p-4 space-y-1">
+                <div className="font-mono text-[10px] text-rose-400 font-bold uppercase">STICKER SHEET</div>
+                <h3 className="font-bold text-slate-100 font-display">Mochi Sticker Sheet & Poses</h3>
+                <p className="text-xs text-slate-400">Official mascot artwork, VR coding & CLI poses.</p>
               </div>
             </div>
           </div>
@@ -216,14 +226,14 @@ function App() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-800/80 py-8 bg-[#060911]">
-        <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-400">
+      <footer className="border-t border-[#1b2030] py-8 bg-[#080a10]">
+        <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4 font-mono text-xs text-slate-400">
           <div className="flex items-center gap-3">
-            <img src={logoImg} alt="Mochi Logo" className="w-6 h-6 object-contain" />
-            <span>Mochi Programming Language — Built with Bun & TypeScript</span>
+            <img src={logoImg} alt="Mochi Logo" className="w-5 h-5 object-contain" />
+            <span>Mochi Programming Language — Built on Bun & TypeScript</span>
           </div>
           <div>
-            <span>GitHub Pages Documentation Site • Powered by Vite + Preact</span>
+            <span>GitHub Pages Documentation App • Vite + Preact</span>
           </div>
         </div>
       </footer>
