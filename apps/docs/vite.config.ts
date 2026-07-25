@@ -2,12 +2,14 @@ import path from "node:path";
 import preact from "@preact/preset-vite";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
+import { styledCvaExtension } from "../../src/ext/styled-cva";
 import { mochiPlugin } from "../../src/vite-plugin";
 
 export default defineConfig({
   plugins: [
     mochiPlugin({
       jsxPragmaHeader: 'import { h } from "preact";\n',
+      extensions: [styledCvaExtension],
     }),
     preact(),
     tailwindcss(),

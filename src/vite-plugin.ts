@@ -5,6 +5,7 @@
  */
 import { isErr } from "@onrails/result";
 import { compile } from "./compile";
+import type { HostExtension } from "./extensions";
 
 export type MochiPluginOptions = {
   /**
@@ -22,11 +23,17 @@ export type MochiPluginOptions = {
    * Default: `true`
    */
   runtime?: boolean;
+  /**
+   * Host kits (styled-cva, …). Universal JSX stays in core — only non-core
+   * kits register here (ADR 0010).
+   */
+  extensions?: HostExtension[];
 };
 
 export function mochiPlugin(options: MochiPluginOptions = {}) {
   const jsxHeader = options.jsxPragmaHeader ?? 'import { h } from "preact";\n';
   const runtime = options.runtime ?? true;
+  const extensions = options.extensions;
 
   return {
     name: "vite-plugin-mochi",
@@ -39,7 +46,7 @@ export function mochiPlugin(options: MochiPluginOptions = {}) {
 
       // Keep sibling imports as `.mochi` so Vite re-enters this plugin
       // (default codegen rewrites to `.js` for the standalone CLI/graph).
-      const res = compile(code, { runtime, moduleExt: ".mochi" });
+      const res = compile(code, { runtime, moduleExt: ".mochi", extensions });
       if (isErr(res)) {
         const errorMessages = res.error.map((d) => `[${d.kind}] ${d.message}`).join("\n");
         throw new SyntaxError(`Mochi compilation failed for ${id}:\n${errorMessages}`);

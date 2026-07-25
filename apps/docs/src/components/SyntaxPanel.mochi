@@ -1,14 +1,13 @@
+import { SyntaxBar } from "../ui/primitives"
+
 let SyntaxPanel = props =>
   <div className="panel overflow-hidden flex flex-col">
-    <div
-      className={"px-4 py-2.5 bg-[var(--peach)] border-b-2 border-[var(--line)] font-mono text-xs font-bold flex items-center justify-between "
-        ++ props.tone}
-    >
+    <SyntaxBar $tone={props.tone}>
       <span>{props.title}</span>
-      <span className="text-[10px] text-[var(--mute)]">{props.badge}</span>
-    </div>
+      <span className="text-3xs text-mute">{props.badge}</span>
+    </SyntaxBar>
     <pre
-      className="p-4 bg-[var(--foam)] overflow-x-auto flex-1 font-mono text-xs leading-relaxed"
+      className="p-4 bg-foam overflow-x-auto flex-1 font-mono text-xs leading-relaxed"
     >
       {props.children}
     </pre>

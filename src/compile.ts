@@ -4,6 +4,7 @@ import type { Program } from "./ast";
 import { check, type Registry } from "./check";
 import { codegen } from "./codegen";
 import { type Diagnostic, oneDiag } from "./errors";
+import type { HostExtension } from "./extensions";
 import {
   type Env,
   type InferOptions,
@@ -60,18 +61,12 @@ export function toTypedProgramWith(
   );
 }
 
-/** Type-check stage: run HM inference (open-world, so JS host globals are legal) and pass the program through unchanged on success. */
-const typecheck = (prog: Program): Result<Program, Diagnostic[]> =>
-  map(
-    inferProgram(prog, preludeEnv, {
-      open: true,
-      namespaces: preludeNamespaces,
-    }),
-    () => prog,
-  );
-
-/** `runtime` (default on): inline the prelude builtins the program uses so the emitted module runs standalone. Off yields prelude-free lowering — for tests that supply their own prelude, or callers that bundle it separately. `moduleExt` (default `.js`): suffix rewritten onto relative import paths — Vite uses `.mochi` so sibling modules re-enter the plugin. */
-export type CompileOptions = { runtime?: boolean; moduleExt?: string };
+/** `runtime` (default on): inline the prelude builtins the program uses so the emitted module runs standalone. Off yields prelude-free lowering — for tests that supply their own prelude, or callers that bundle it separately. `moduleExt` (default `.js`): suffix rewritten onto relative import paths — Vite uses `.mochi` so sibling modules re-enter the plugin. `extensions`: host kits (styled-cva); JSX stays core. */
+export type CompileOptions = {
+  runtime?: boolean;
+  moduleExt?: string;
+  extensions?: HostExtension[];
+};
 
 export function compile(src: string, opts: CompileOptions = {}): Result<string, Diagnostic[]> {
   const lexed = lex(src);
@@ -80,7 +75,14 @@ export function compile(src: string, opts: CompileOptions = {}): Result<string, 
   if (isErr(parsed)) return err(oneDiag(parsed.error));
   const checked = check(parsed.value);
   if (isErr(checked)) return checked;
-  const typed = typecheck(checked.value);
+  const typed = map(
+    inferProgram(checked.value, preludeEnv, {
+      open: true,
+      namespaces: preludeNamespaces,
+      extensions: opts.extensions,
+    }),
+    () => checked.value,
+  );
   if (isErr(typed)) return typed;
   return ok(
     codegen(typed.value, undefined, {
@@ -90,6 +92,8 @@ export function compile(src: string, opts: CompileOptions = {}): Result<string, 
   );
 }
 
+export { styledCvaExtension } from "./ext/styled-cva";
+export type { HostExtension } from "./extensions";
 export { format } from "./format";
 export { type HoverInfo, hoverAt } from "./hover";
 export { lex } from "./lexer";

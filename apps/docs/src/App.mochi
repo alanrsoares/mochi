@@ -6,10 +6,20 @@ import {
   Counter,
   HeroCarousel
 } from "./host/widgets.host"
+import {
+  NavLink,
+  GhostPill,
+  CtaPill,
+  CmdChip,
+  HeroStatus,
+  SectionEyebrow,
+  SectionTitle,
+  InteropLabel
+} from "./ui/primitives"
 
 let SiteHeader = props =>
   <header
-    className="sticky top-0 z-50 border-b-2 border-(--line) bg-(--paper)/90 backdrop-blur-md"
+    className="sticky top-0 z-50 border-b-2 border-line bg-paper/90 backdrop-blur-md"
   >
     <div
       className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between"
@@ -21,84 +31,62 @@ let SiteHeader = props =>
           className="w-8 h-8 object-contain rounded-full"
         />
         <span
-          className="text-lg font-bold font-display tracking-tight text-(--ink)"
+          className="text-lg font-bold font-display tracking-tight text-ink"
         >
           {"mochi"}
-          <span className="text-(--fur-deep)">{".lang"}</span>
+          <span className="text-fur-deep">{".lang"}</span>
         </span>
         <HeaderBadge label="v0.1.0" />
       </div>
       <nav
-        className="hidden md:flex items-center gap-5 font-mono text-xs text-[var(--mute)]"
+        className="hidden md:flex items-center gap-5 font-mono text-xs text-mute"
       >
-        <a
-          href="#playground"
-          className="hover:text-(--fur-deep) transition-colors"
-        >
-          {"playground"}
-        </a>
-        <a href="#syntax" className="hover:text-(--fur-deep) transition-colors">
-          {"syntax"}
-        </a>
-        <a
-          href="#interop"
-          className="hover:text-(--fur-deep) transition-colors"
-        >
-          {"interop"}
-        </a>
-        <a
+        <NavLink href="#playground">{"playground"}</NavLink>
+        <NavLink href="#syntax">{"syntax"}</NavLink>
+        <NavLink href="#interop">{"interop"}</NavLink>
+        <GhostPill
           href="https://github.com/alanrsoares/mochi"
           target="_blank"
           rel="noreferrer"
-          className="px-3 py-1.5 text-(--ink) border-2 border-(--line-strong) rounded-full hover:border-[var(--fur)] hover:bg-[var(--foam)] transition-colors font-semibold"
         >
           {"GitHub ↗"}
-        </a>
+        </GhostPill>
       </nav>
     </div>
   </header>
 
 let Hero = props =>
   <section
-    className="hero-wash relative overflow-hidden border-b-2 border-[var(--line)]"
+    className="hero-wash relative overflow-hidden border-b-2 border-line"
   >
     <div
       className="max-w-6xl mx-auto px-6 py-14 lg:py-20 grid grid-cols-1 md:grid-cols-2 gap-10 lg:gap-14 items-center"
     >
       <div className="space-y-7 max-w-xl">
-        <p
-          className="inline-flex items-center gap-2 font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--mute)] bg-[var(--foam)] border-2 border-[var(--line)] rounded-full px-3 py-1"
-        >
-          <span className="text-[var(--ok)]">{"●"}</span>
-          {"self-host · 0 tsc --strict"}
-        </p>
+        <HeroStatus>
+          <span className="text-ok">{"●"}</span>
+          {"self-host · 0 tsc s--strict"}
+        </HeroStatus>
         <h1
-          className="text-[2.6rem] sm:text-5xl lg:text-[3.35rem] font-extrabold font-display tracking-tight text-[var(--ink)] leading-[1.05]"
+          className="text-hero sm:text-5xl lg:text-hero-lg font-extrabold font-display tracking-tight text-ink leading-hero"
         >
           {"mochi"}
-          <span className="text-(--fur-deep)">{".lang"}</span>
+          <span className="text-fur-deep">{".lang"}</span>
           <span
-            className="block mt-3 text-[1.35rem] sm:text-2xl lg:text-[1.65rem] font-semibold text-[var(--mute)] leading-snug tracking-tight"
+            className="block mt-3 text-hero-subtitle sm:text-2xl lg:text-hero-subtitle-lg font-semibold text-mute leading-snug tracking-tight"
           >
             {"Hindley–Milner → readable JS & tsc --strict TypeScript."}
           </span>
         </h1>
-        <p className="text-[0.95rem] text-(--mute) leading-relaxed max-w-md">
+        <p className="text-copy text-mute leading-relaxed max-w-md">
           {"Row-polymorphic records, parametric variants, JSX → host h(). One codegen, two backends."}
         </p>
         <div className="flex flex-wrap gap-3 pt-1 font-mono text-xs">
-          <a
-            href="#playground"
-            className="px-5 py-2.5 bg-(--fur) hover:bg-(--fur-deep) text-white font-bold rounded-full shadow-[0_8px_24px_color-mix(in_oklab,var(--fur)_35%,transparent)] transition-colors focus-visible:outline-2 focus-visible:outline-[var(--bao)] focus-visible:outline-offset-2"
-          >
-            {"Open playground"}
-          </a>
-          <div
-            className="px-4 py-2.5 border-2 border-(--line-strong) rounded-full bg-(--foam) text-(--mute) flex items-center gap-2"
-          >
-            <span className="text-(--fur-deep) font-bold">{"$"}</span>
-            <span className="text-(--ink)">{"bun run mochi app.mochi"}</span>
-          </div>
+          <CtaPill href="#playground">{"Open playground"}</CtaPill>
+          <CmdChip>
+            <span className="text-fur-deep font-bold">{"$"}</span>
+            <span className="text-ink">{"bun run mochi app.mochi"}</span>
+          </CmdChip>
         </div>
       </div>
       <HeroCarousel />
@@ -106,9 +94,9 @@ let Hero = props =>
   </section>
 
 let SiteFooter = props =>
-  <footer className="border-t-2 border-(--line) py-8 bg-(--peach)">
+  <footer className="border-t-2 border-line py-8 bg-peach">
     <div
-      className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4 font-mono text-xs text-[var(--mute)]"
+      className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4 font-mono text-xs text-mute"
     >
       <div className="flex items-center gap-3">
         <img
@@ -124,26 +112,17 @@ let SiteFooter = props =>
 
 let InteropRow = props =>
   <div
-    className="grid grid-cols-1 sm:grid-cols-[7rem_1fr] gap-1 sm:gap-4 py-4 border-b-2 border-[var(--line)] last:border-0"
+    className="grid grid-cols-1 sm:grid-cols-[7rem_1fr] gap-1 sm:gap-4 py-4 border-b-2 border-line last:border-0"
   >
-    <div
-      className={"font-mono text-[11px] font-bold uppercase tracking-wider "
-        ++ props.tone}
-    >
-      {props.label}
-    </div>
+    <InteropLabel $tone={props.tone}>{props.label}</InteropLabel>
     <div>
-      <div className="font-display font-semibold text-(--ink)">
-        {props.title}
-      </div>
-      <p className="mt-1 text-sm text-(--mute) leading-relaxed">{props.body}</p>
+      <div className="font-display font-semibold text-ink">{props.title}</div>
+      <p className="mt-1 text-sm text-mute leading-relaxed">{props.body}</p>
     </div>
   </div>
 
 let App = props =>
-  <div
-    className="site-grain min-h-screen flex flex-col bg-[var(--paper)] text-[var(--ink)]"
-  >
+  <div className="site-grain min-h-screen flex flex-col bg-paper text-ink">
     <SiteHeader logo={props.logo} />
     <Hero />
     <main className="max-w-6xl mx-auto px-6 py-14 space-y-16 flex-1 w-full">
@@ -153,38 +132,22 @@ let App = props =>
           className="flex flex-col sm:flex-row sm:items-end justify-between gap-3"
         >
           <div>
-            <div
-              className="font-mono text-[11px] text-[var(--fur-deep)] font-bold uppercase tracking-[0.18em]"
-            >
-              {"syntax"}
-            </div>
-            <h2
-              className="mt-2 text-2xl font-extrabold font-display tracking-tight text-[var(--ink)]"
-            >
-              {"Language tour"}
-            </h2>
+            <SectionEyebrow>{"syntax"}</SectionEyebrow>
+            <SectionTitle>{"Language tour"}</SectionTitle>
           </div>
-          <span className="font-mono text-[11px] text-[var(--mute)]">
+          <span className="font-mono text-2xs text-mute">
             {"hover for inferred types"}
           </span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <SyntaxPanel
-            title="Variants"
-            badge="Result<a, e>"
-            tone="text-[var(--fur-deep)]"
-          >
+          <SyntaxPanel title="Variants" badge="Result<a, e>" tone="fur">
             <HighlightedCode
               code={props.codeVariants}
               lang="mochi"
               enableTwoslash={true}
             />
           </SyntaxPanel>
-          <SyntaxPanel
-            title="Rows"
-            badge="{ r | name: Str }"
-            tone="text-[var(--plum)]"
-          >
+          <SyntaxPanel title="Rows" badge="{ r | name: Str }" tone="plum">
             <HighlightedCode
               code={props.codeRecords}
               lang="mochi"
@@ -194,7 +157,7 @@ let App = props =>
           <SyntaxPanel
             title="JSX → h()"
             badge="h(tag, props, children)"
-            tone="text-[var(--lavender-deep)]"
+            tone="lavender"
           >
             <HighlightedCode
               code={props.codeJsx}
@@ -209,45 +172,37 @@ let App = props =>
           className="flex flex-col sm:flex-row sm:items-end justify-between gap-4"
         >
           <div>
-            <div
-              className="font-mono text-[11px] text-[var(--fur-deep)] font-bold uppercase tracking-[0.18em]"
-            >
-              {"interop"}
-            </div>
-            <h2
-              className="mt-2 text-2xl font-extrabold font-display tracking-tight text-[var(--ink)]"
-            >
-              {"Host bindings"}
-            </h2>
+            <SectionEyebrow>{"interop"}</SectionEyebrow>
+            <SectionTitle>{"Host bindings"}</SectionTitle>
           </div>
           <div className="flex items-center gap-3">
             <Counter />
-            <span className="font-mono text-[11px] text-[var(--mute)]">
+            <span className="font-mono text-2xs text-mute">
               {"re-reduced live"}
             </span>
           </div>
         </div>
-        <div className="border-t-2 border-[var(--line)]">
+        <div className="border-t-2 border-line">
           <InteropRow
-            tone="text-[var(--fur-deep)]"
+            tone="fur"
             label="Preact"
             title="Shared h()"
             body="Preact's h(tag, props, children) matches JSX desugar. No adapter."
           />
           <InteropRow
-            tone="text-[var(--lavender-deep)]"
+            tone="lavender"
             label="styled-cva"
             title="UI factories in .mochi"
             body="extern tw; call-form tw.div(…) and $tone variants."
           />
           <InteropRow
-            tone="text-[var(--plum)]"
+            tone="plum"
             label="re-reduced"
             title="Signal state"
             body="defineContainer in .mochi; hooks in TSX — let…in → IIFE breaks Rules of Hooks."
           />
           <InteropRow
-            tone="text-[var(--ok)]"
+            tone="ok"
             label="TypeScript"
             title=".d.mochi.ts"
             body="Generated declarations for TS hosts importing .mochi modules."

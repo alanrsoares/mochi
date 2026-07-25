@@ -2,13 +2,13 @@
 import { tw } from "../host/styled-cva.host"
 
 export let BadgeShell = tw.div(
-  "inline-flex items-center gap-2 px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-wider rounded-full border-2 shadow-sm",
+  "inline-flex items-center gap-2 px-3 py-1 font-mono text-2xs font-bold uppercase tracking-wider rounded-full border-2 shadow-sm",
   {
     variants: {
       $tone: {
-        rose: "text-[var(--fur-deep)] bg-[color-mix(in_oklab,var(--fur)_18%,white)] border-[color-mix(in_oklab,var(--fur)_45%,white)]",
-        amber: "text-[var(--plum)] bg-[color-mix(in_oklab,var(--lavender)_35%,white)] border-[var(--lavender)]",
-        emerald: "text-[var(--ok)] bg-[var(--ok-soft)] border-[color-mix(in_oklab,var(--ok)_35%,white)]"
+        rose: "text-fur-deep bg-fur-subtle border-fur-border",
+        amber: "text-plum bg-lavender-subtle border-lavender",
+        emerald: "text-ok bg-ok-soft border-ok-border"
       }
     },
     defaultVariants: { $tone: "rose" }
@@ -19,12 +19,77 @@ export let BadgePulse = tw.span(
   "w-1.5 h-1.5 rounded-full",
   {
     variants: {
-      $tone: {
-        rose: "bg-[var(--fur)]",
-        amber: "bg-[var(--lavender-deep)]",
-        emerald: "bg-[var(--ok)]"
-      }
+      $tone: { rose: "bg-fur", amber: "bg-lavender-deep", emerald: "bg-ok" }
     },
     defaultVariants: { $tone: "rose" }
   }
+)
+
+export let NavLink = tw.a("hover:text-fur-deep transition-colors")
+
+export let GhostPill = tw.a(
+  "px-3 py-1.5 text-ink border-2 border-line-strong rounded-full hover:border-fur hover:bg-foam transition-colors font-semibold"
+)
+
+export let CtaPill = tw.a(
+  "px-5 py-2.5 bg-fur hover:bg-fur-deep text-white font-bold rounded-full shadow-cta transition-colors focus-visible:outline-2 focus-visible:outline-bao focus-visible:outline-offset-2"
+)
+
+export let CmdChip = tw.div(
+  "px-4 py-2.5 border-2 border-line-strong rounded-full bg-foam text-mute flex items-center gap-2"
+)
+
+export let HeroStatus = tw.p(
+  "inline-flex items-center gap-2 font-mono text-2xs tracking-label uppercase text-mute bg-foam border-2 border-line rounded-full px-3 py-1"
+)
+
+export let SectionEyebrow = tw.div(
+  "font-mono text-2xs text-fur-deep font-bold uppercase tracking-eyebrow"
+)
+
+export let SectionTitle = tw.h2(
+  "mt-2 text-2xl font-extrabold font-display tracking-tight text-ink"
+)
+
+export let InteropLabel = tw.div(
+  "font-mono text-2xs font-bold uppercase tracking-wider",
+  {
+    variants: {
+      $tone: {
+        fur: "text-fur-deep",
+        lavender: "text-lavender-deep",
+        plum: "text-plum",
+        ok: "text-ok"
+      }
+    },
+    defaultVariants: { $tone: "fur" }
+  }
+)
+
+export let SyntaxBar = tw.div(
+  "px-4 py-2.5 bg-peach border-b-2 border-line font-mono text-xs font-bold flex items-center justify-between",
+  {
+    variants: {
+      $tone: {
+        fur: "text-fur-deep",
+        plum: "text-plum",
+        lavender: "text-lavender-deep"
+      }
+    },
+    defaultVariants: { $tone: "fur" }
+  }
+)
+
+export let CounterBtn = tw.button("font-mono text-ok/80 hover:text-ink px-1")
+
+export let GhostPillBtn = tw.button(
+  "rounded-full border-2 border-line bg-foam px-3 py-1 font-mono text-2xs text-mute transition-colors hover:border-fur hover:text-ink focus-visible:outline-2 focus-visible:outline-bao focus-visible:outline-offset-2"
+)
+
+export let TypeHint = tw.div(
+  "my-1.5 ml-4 inline-flex w-max items-center gap-2 rounded-full border-2 border-ok-border bg-ok-soft px-2.5 py-1 font-mono text-2xs text-ok"
+)
+
+export let CarouselNav = tw.button(
+  "hero-carousel__nav font-mono text-mute text-xs hover:text-ink focus-visible:outline-2 focus-visible:outline-fur focus-visible:outline-offset-2"
 )

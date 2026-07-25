@@ -1,20 +1,23 @@
 import { type HoverInfo, hoverAt, lex } from "@mochi/compiler";
 import { isErr, unwrapOk } from "@onrails/result";
+import { cn } from "@styled-cva/react";
+import { hoverToken, tooltipAnchor, tooltipCard } from "../ui/chrome";
+import { TypeHint } from "../ui/primitives.mochi";
 
 export type HighlightLanguage = "mochi" | "js";
 
 type TokenSpan = {
   text: string;
   type:
-  | "keyword"
-  | "type"
-  | "string"
-  | "number"
-  | "comment"
-  | "operator"
-  | "punctuation"
-  | "jsx"
-  | "plain";
+    | "keyword"
+    | "type"
+    | "string"
+    | "number"
+    | "comment"
+    | "operator"
+    | "punctuation"
+    | "jsx"
+    | "plain";
   offset?: number;
 };
 
@@ -223,34 +226,34 @@ export function HighlightedCode({ code, lang, enableTwoslash = true }: Highlight
           <div key={lineIdx} className="line flex flex-col">
             <div className="flex flex-wrap items-center">
               {lineSpans.map((span, idx) => {
-                let cls = "text-[var(--ink)]";
+                let cls = "text-ink";
                 switch (span.type) {
                   case "keyword":
-                    cls = "text-[var(--plum)] font-bold";
+                    cls = "text-plum font-bold";
                     break;
                   case "type":
-                    cls = "text-[var(--fur-deep)] font-bold";
+                    cls = "text-fur-deep font-bold";
                     break;
                   case "string":
-                    cls = "text-[var(--ok)]";
+                    cls = "text-ok";
                     break;
                   case "number":
-                    cls = "text-[#2a6f97] font-bold";
+                    cls = "text-code-number font-bold";
                     break;
                   case "comment":
-                    cls = "text-[var(--mute)] italic";
+                    cls = "text-mute italic";
                     break;
                   case "jsx":
-                    cls = "text-[var(--lavender-deep)] font-bold";
+                    cls = "text-lavender-deep font-bold";
                     break;
                   case "operator":
-                    cls = "text-[var(--fur-deep)]/80";
+                    cls = "text-fur-deep/80";
                     break;
                   case "punctuation":
-                    cls = "text-[var(--mute)]";
+                    cls = "text-mute";
                     break;
                   default:
-                    cls = "text-[var(--ink)]";
+                    cls = "text-ink";
                     break;
                 }
 
@@ -277,23 +280,20 @@ export function HighlightedCode({ code, lang, enableTwoslash = true }: Highlight
                 }
 
                 return (
-                  <span
-                    key={idx}
-                    className={`${cls} group relative cursor-help rounded px-0.5 underline decoration-[var(--fur)]/40 underline-offset-4 transition-colors hover:bg-[color-mix(in_oklab,var(--fur)_12%,transparent)] hover:decoration-[var(--fur-deep)]`}
-                  >
+                  <span key={idx} className={cn(hoverToken(), cls)}>
                     {span.text}
-                    <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 hidden w-max max-w-xs -translate-x-1/2 group-hover:block">
-                      <span className="block rounded-(--radius) border-2 border-[var(--line-strong)] bg-[var(--foam)] p-2.5 font-mono text-[11px] text-[var(--ink)] leading-tight shadow-[var(--shadow-soft)]">
-                        <span className="mb-1 block border-[var(--line)] border-b pb-1 font-bold text-[var(--fur-deep)]">
+                    <span className={tooltipAnchor()}>
+                      <span className={tooltipCard()}>
+                        <span className="mb-1 block border-line border-b pb-1 font-bold text-fur-deep">
                           {hoverInfo.code}
                         </span>
                         {hoverInfo.doc && (
-                          <span className="mt-1 block font-sans text-[10px] text-[var(--mute)] italic">
+                          <span className="mt-1 block font-sans text-3xs text-mute italic">
                             {hoverInfo.doc}
                           </span>
                         )}
                       </span>
-                      <span className="mx-auto -mt-1 block h-2 w-2 rotate-45 transform border-[var(--line-strong)] border-r-2 border-b-2 bg-[var(--foam)]"></span>
+                      <span className="mx-auto -mt-1 block h-2 w-2 rotate-45 transform border-line-strong border-r-2 border-b-2 bg-foam"></span>
                     </span>
                   </span>
                 );
@@ -301,10 +301,10 @@ export function HighlightedCode({ code, lang, enableTwoslash = true }: Highlight
             </div>
 
             {lineHover && (
-              <div className="my-1.5 ml-4 inline-flex w-max items-center gap-2 rounded-full border-2 border-[color-mix(in_oklab,var(--ok)_35%,white)] bg-[var(--ok-soft)] px-2.5 py-1 font-mono text-[11px] text-[var(--ok)]">
+              <TypeHint>
                 <span className="font-bold">↳</span>
                 <span className="font-semibold">{lineHover.code}</span>
-              </div>
+              </TypeHint>
             )}
           </div>
         );

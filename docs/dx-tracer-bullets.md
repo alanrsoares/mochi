@@ -27,17 +27,21 @@ Parent epic: [#1](https://github.com/alanrsoares/mochi/issues/1) (wave 1 + wave 
 | 11 | Go-to-type at expression (uses infer table; degrades when typecheck fails) | AFK | — | done |
 | 12 | Multi-error collection (honest recovery; ADR 0004) | HITL→AFK | design | done |
 
-## Wave 3 (host-interop DX — from ADR 0009 seams)
+## Wave 3 (host-interop DX — from ADR 0009 / 0010)
 
 Surfaced dogfooding `*.host.mochi` seams in the docs app: opaque host externs
-give no hints and there is no completion. Both are language/LSP gaps, not
-docs-side fixes (see [ADR 0009](./adr/0009-styled-cva-host-interop.md) amendment).
+give no hints and there is no completion. Split into Gap A (host factories /
+`defineContainer`) and Gap B (styled components / JSX props) —
+see [ADR 0010](./adr/0010-host-type-interop.md) and the
+[ADR 0009](./adr/0009-styled-cva-host-interop.md) amendment.
 
 | # | Title | Type | Blocked by | Status |
 |---|---|---|---|---|
 | 13 | LSP completion provider — value/field/import members (enables `tw.*`) | HITL→AFK | design | todo |
-| 14 | JSX-attr checking against component prop types (enables `$tone`/prop hints) | HITL | design | todo |
-| 15 | Overloaded / variadic extern signatures so `tw.div` types honestly at both arities | HITL | design | todo |
+| 14 | JSX-attr checking against component prop types (enables `$tone`/prop hints) | HITL | design | done |
+| 15 | Overloaded / variadic extern signatures so `tw.div` types honestly at both arities | HITL | design | done (host ext) |
+| 16 | Typed host factory externs (`defineContainer`) + container dts (Gap A) | HITL→AFK | design | done |
+| 17 | Component dts emit: prop record → `(props: P) => any` (+ CVA variant unions) | HITL→AFK | 14, 15 | done |
 
 ## Slice briefs
 

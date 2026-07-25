@@ -2,6 +2,17 @@ import { compile, format } from "@mochi/compiler";
 import { isErr, unwrapOk } from "@onrails/result";
 import { h, render } from "preact";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import {
+  diagBox,
+  editorInput,
+  editorMirror,
+  emitPane,
+  pillSelect,
+  previewPane,
+  segTab,
+  statusLabel,
+} from "../ui/chrome";
+import { GhostPillBtn } from "../ui/primitives.mochi";
 import { HighlightedCode } from "./HighlightCode";
 
 const STORAGE_KEY = "mochi_playground_code";
@@ -12,12 +23,12 @@ const PRESETS: Record<string, { name: string; code: string }> = {
     code: `// JSX desugars to host h(tag, props, children)
 
 let Badge = (props) =>
-  <span className="px-2.5 py-0.5 text-[10px] font-mono font-bold tracking-wider rounded uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30">
+  <span className="px-2.5 py-0.5 text-3xs font-mono font-bold tracking-wider rounded uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30">
     {props.text}
   </span>
 
 let Card = (props) =>
-  <div className="p-5 bg-[#0e111a] border border-[#1e2436] rounded-xl space-y-3 shadow-lg">
+  <div className="p-5 bg-code-surface border border-code-line rounded-xl space-y-3 shadow-lg">
     <div className="flex items-center justify-between">
       <h3 className="text-base font-bold text-slate-100 font-display">{props.title}</h3>
       <Badge text="0 tsc errors" />
@@ -43,7 +54,7 @@ let res = Ok(21)
 let doubled = map(res, x => x * 2)
 
 let app =
-  <div className="p-4 bg-[#0e111a] border border-[#1e2436] rounded-xl font-mono text-xs text-rose-300">
+  <div className="p-4 bg-code-surface border border-code-line rounded-xl font-mono text-xs text-rose-300">
     {"doubled = Ok(42)"}
   </div>`,
   },
@@ -57,7 +68,7 @@ let user = { name: "Alan", role: "Maintainer", id: 42 }
 let message = greet(user)
 
 let app =
-  <div className="p-4 bg-[#0e111a] border border-[#1e2436] rounded-xl font-mono text-xs text-amber-300">
+  <div className="p-4 bg-code-surface border border-code-line rounded-xl font-mono text-xs text-amber-300">
     {message}
   </div>`,
   },
@@ -69,7 +80,7 @@ let app =
 let result = fib(10)
 
 let app =
-  <div className="p-4 bg-[#0e111a] border border-[#1e2436] rounded-xl font-mono text-xs text-emerald-300">
+  <div className="p-4 bg-code-surface border border-code-line rounded-xl font-mono text-xs text-emerald-300">
     {"fib(10) = "} {result}
   </div>`,
   },
@@ -186,19 +197,17 @@ export function Playground() {
 
   return (
     <div className="panel overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-[var(--line)] border-b-2 bg-[var(--peach)] px-4 py-3">
-        <span className="font-mono font-semibold text-[var(--mute)] text-xs tracking-wide">
-          playground
-        </span>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-line border-b-2 bg-peach px-4 py-3">
+        <span className="font-mono font-semibold text-mute text-xs tracking-wide">playground</span>
 
         <div className="flex items-center gap-2">
-          <label htmlFor="playground-preset" className="font-mono text-[11px] text-[var(--mute)]">
+          <label htmlFor="playground-preset" className="font-mono text-2xs text-mute">
             Preset
           </label>
           <select
             id="playground-preset"
             onChange={(e) => handlePresetSelect((e.target as HTMLSelectElement).value)}
-            className="rounded-full border-2 border-[var(--line)] bg-[var(--foam)] px-3 py-1 font-mono text-[var(--ink)] text-xs focus:border-[var(--fur)] focus:outline-none"
+            className={pillSelect()}
           >
             {Object.entries(PRESETS).map(([key, p]) => (
               <option key={key} value={key}>
@@ -209,44 +218,26 @@ export function Playground() {
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleFormat}
-            title="Format (Cmd+Shift+F)"
-            className="rounded-full border-2 border-[var(--line)] bg-[var(--foam)] px-3 py-1 font-mono text-[11px] text-[var(--mute)] transition-colors hover:border-[var(--fur)] hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--bao)] focus-visible:outline-offset-2"
-          >
+          <GhostPillBtn type="button" onClick={handleFormat} title="Format (Cmd+Shift+F)">
             {formatNotice ? "Formatted" : "Format"}
-          </button>
+          </GhostPillBtn>
 
-          <button
-            type="button"
-            onClick={handleShare}
-            title="Copy playground URL"
-            className="rounded-full border-2 border-[var(--line)] bg-[var(--foam)] px-3 py-1 font-mono text-[11px] text-[var(--mute)] transition-colors hover:border-[var(--fur)] hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--bao)] focus-visible:outline-offset-2"
-          >
+          <GhostPillBtn type="button" onClick={handleShare} title="Copy playground URL">
             {shareCopied ? "Copied" : "Share"}
-          </button>
+          </GhostPillBtn>
 
-          <div className="flex items-center gap-1 rounded-full border-2 border-[var(--line)] bg-[var(--foam)] p-1 text-xs">
+          <div className="flex items-center gap-1 rounded-full border-2 border-line bg-foam p-1 text-xs">
             <button
               type="button"
               onClick={() => setActiveTab("preview")}
-              className={`rounded-full px-3 py-1 font-mono font-semibold text-[11px] transition-colors ${
-                activeTab === "preview"
-                  ? "bg-[var(--fur)] text-white"
-                  : "text-[var(--mute)] hover:text-[var(--ink)]"
-              }`}
+              className={segTab({ active: activeTab === "preview" })}
             >
               Preview
             </button>
             <button
               type="button"
               onClick={() => setActiveTab("js")}
-              className={`rounded-full px-3 py-1 font-mono font-semibold text-[11px] transition-colors ${
-                activeTab === "js"
-                  ? "bg-[var(--fur)] text-white"
-                  : "text-[var(--mute)] hover:text-[var(--ink)]"
-              }`}
+              className={segTab({ active: activeTab === "js" })}
             >
               JS
             </button>
@@ -254,21 +245,17 @@ export function Playground() {
         </div>
       </div>
 
-      <div className="grid min-h-100 grid-cols-1 divide-y-2 divide-[var(--line)] lg:grid-cols-2 lg:divide-x-2 lg:divide-y-0">
-        <div className="flex flex-col bg-[var(--foam)] p-4">
-          <div className="mb-2 flex items-center justify-between font-mono text-[11px] text-[var(--mute)]">
+      <div className="grid min-h-100 grid-cols-1 divide-y-2 divide-line lg:grid-cols-2 lg:divide-x-2 lg:divide-y-0">
+        <div className="flex flex-col bg-foam p-4">
+          <div className="mb-2 flex items-center justify-between font-mono text-2xs text-mute">
             <span className="flex items-center gap-2">
               <span>source</span>
-              <span className="text-[10px]">Cmd+Enter</span>
+              <span className="text-3xs">Cmd+Enter</span>
             </span>
-            <span
-              className={error ? "font-bold text-[var(--fur-deep)]" : "font-bold text-[var(--ok)]"}
-            >
-              {error ? "error" : "ok"}
-            </span>
+            <span className={statusLabel({ ok: !error })}>{error ? "error" : "ok"}</span>
           </div>
-          <div className="relative min-h-80 flex-1 overflow-hidden rounded-[var(--radius)] border-2 border-[var(--line)] bg-[var(--paper)]">
-            <pre className="pointer-events-none absolute inset-0 m-0 overflow-auto whitespace-pre p-4 font-mono text-[var(--ink)] text-xs leading-relaxed">
+          <div className="relative min-h-80 flex-1 overflow-hidden rounded-panel border-2 border-line bg-paper">
+            <pre className={editorMirror()}>
               <HighlightedCode code={code} lang="mochi" enableTwoslash={false} />
             </pre>
 
@@ -285,30 +272,27 @@ export function Playground() {
               spellcheck={false}
               autoComplete="off"
               autoCorrect="off"
-              className="absolute inset-0 m-0 h-full w-full resize-none overflow-auto whitespace-pre border-0 bg-transparent p-4 font-mono font-normal text-transparent text-xs leading-relaxed caret-[var(--fur-deep)] selection:bg-[color-mix(in_oklab,var(--fur)_30%,transparent)] focus:outline-none"
+              className={editorInput()}
               rows={15}
             />
           </div>
         </div>
 
-        <div className="flex flex-col bg-[var(--peach)] p-4">
+        <div className="flex flex-col bg-peach p-4">
           {error ? (
-            <div className="max-h-87.5 overflow-auto whitespace-pre-wrap rounded-[var(--radius)] border-2 border-[var(--fur)] bg-[color-mix(in_oklab,var(--fur)_12%,white)] p-4 font-mono text-[var(--fur-deep)] text-xs">
+            <div className={diagBox()}>
               <div className="mb-1 font-bold">diagnostics</div>
               {error}
             </div>
           ) : activeTab === "preview" ? (
             <div className="flex flex-1 flex-col">
-              <div className="mb-2 font-mono text-[11px] text-[var(--mute)]">preview</div>
-              <div
-                ref={previewRef}
-                className="flex min-h-80 flex-1 items-center justify-center rounded-[var(--radius)] border-2 border-[var(--line)] bg-[var(--foam)] p-6"
-              />
+              <div className="mb-2 font-mono text-2xs text-mute">preview</div>
+              <div ref={previewRef} className={previewPane()} />
             </div>
           ) : (
             <div className="flex flex-1 flex-col">
-              <div className="mb-2 font-mono text-[11px] text-[var(--mute)]">emitted js</div>
-              <pre className="max-h-87.5 flex-1 overflow-auto rounded-[var(--radius)] border-2 border-[var(--line)] bg-[var(--foam)] p-4 font-mono text-[var(--ink)] text-xs leading-relaxed">
+              <div className="mb-2 font-mono text-2xs text-mute">emitted js</div>
+              <pre className={emitPane()}>
                 <HighlightedCode code={outputJs} lang="js" />
               </pre>
             </div>

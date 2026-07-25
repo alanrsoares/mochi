@@ -1,7 +1,8 @@
-// FFI seam — @re-reduced/preact. Non-core host binding.
+// FFI seam — @re-reduced/preact. Non-core host binding (ADR 0010 Gap A).
 //
-// `defineContainer` builds a signal-backed state container from the host runtime;
-// its return shape (state + actions + hooks) is opaque to Mochi HM, so `: a`.
-// Hooks are consumed from a thin TSX shell (components/Counter.tsx): Mochi `let…in`
-// desugars to IIFEs, which would break React/Preact's Rules of Hooks.
+// `defineContainer` builds a signal-backed ContainerDef from the host runtime.
+// Full HM typing of ActionSpec/OnBuilder is Wave 3 #16; until then the seam
+// stays opaque (`: a`) and TSX imports the typed bridge
+// `state/counter.ts` (one cast at the seam, cast-free hook sites).
+// Hooks stay in TSX: Mochi `let…in` → IIFE breaks Rules of Hooks.
 export extern defineContainer : a = "@re-reduced/preact" "defineContainer"
