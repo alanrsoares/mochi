@@ -1,11 +1,20 @@
+import { type HoverInfo, hoverAt, lex } from "@mochi/compiler";
 import { isErr, unwrapOk } from "@onrails/result";
-import { hoverAt, type HoverInfo, lex } from "@mochi/compiler";
 
 export type HighlightLanguage = "mochi" | "js";
 
 type TokenSpan = {
   text: string;
-  type: "keyword" | "type" | "string" | "number" | "comment" | "operator" | "punctuation" | "jsx" | "plain";
+  type:
+  | "keyword"
+  | "type"
+  | "string"
+  | "number"
+  | "comment"
+  | "operator"
+  | "punctuation"
+  | "jsx"
+  | "plain";
   offset?: number;
 };
 
@@ -97,7 +106,8 @@ export function highlightMochiCode(code: string): TokenSpan[] {
 
 export function highlightJsCode(code: string): TokenSpan[] {
   const spans: TokenSpan[] = [];
-  const tokenRegex = /(\/\/.*$|\/\*[\s\S]*?\*\/)|(["'`].*?["'`])|\b(const|let|var|function|return|export|default|import|from|if|else|typeof|null|undefined|true|false)\b|\b([A-Z][A-Za-z0-9_]*)\b|(\d+\.?\d*)|([=><!+\-*/%&|:]+)|([{}()\[\];,])/gm;
+  const tokenRegex =
+    /(\/\/.*$|\/\*[\s\S]*?\*\/)|(["'`].*?["'`])|\b(const|let|var|function|return|export|default|import|from|if|else|typeof|null|undefined|true|false)\b|\b([A-Z][A-Za-z0-9_]*)\b|(\d+\.?\d*)|([=><!+\-*/%&|:]+)|([{}()[\];,])/gm;
 
   let lastIndex = 0;
   let match: RegExpExecArray | null = tokenRegex.exec(code);
@@ -145,10 +155,9 @@ function processTwoslash(code: string): { cleanCode: string; annotations: Twosla
 
     if (match && cleanLines.length > 0) {
       const caretCol = line.indexOf("^");
-      // Compute byte offset of caret position in clean code
       let byteOffset = 0;
       for (let j = 0; j < cleanLines.length - 1; j++) {
-        byteOffset += cleanLines[j].length + 1; // +1 for \n
+        byteOffset += cleanLines[j].length + 1;
       }
       const lastLine = cleanLines[cleanLines.length - 1];
       byteOffset += Math.min(caretCol, Math.max(0, lastLine.length - 1));
@@ -160,7 +169,7 @@ function processTwoslash(code: string): { cleanCode: string; annotations: Twosla
           annotations.push({ lineIndex: cleanLines.length - 1, hover });
         }
       } catch {
-        // ignore fallback
+        // hoverAt can fail on partial caret lines
       }
       continue;
     }
@@ -171,19 +180,19 @@ function processTwoslash(code: string): { cleanCode: string; annotations: Twosla
   return { cleanCode: cleanLines.join("\n"), annotations };
 }
 
-export function HighlightedCode({
-  code,
-  lang,
-  enableTwoslash = true,
-}: {
+type HighlightedCodeProps = {
   code: string;
   lang: HighlightLanguage;
   enableTwoslash?: boolean;
-}) {
-  const { cleanCode, annotations } = enableTwoslash && lang === "mochi" ? processTwoslash(code) : { cleanCode: code, annotations: [] };
+};
+
+export function HighlightedCode({ code, lang, enableTwoslash = true }: HighlightedCodeProps) {
+  const { cleanCode, annotations } =
+    enableTwoslash && lang === "mochi"
+      ? processTwoslash(code)
+      : { cleanCode: code, annotations: [] };
   const spans = lang === "mochi" ? highlightMochiCode(cleanCode) : highlightJsCode(cleanCode);
 
-  // Group spans by line for rendering line-by-line with Twoslash annotations
   const linesOfSpans: TokenSpan[][] = [[]];
   for (const span of spans) {
     const parts = span.text.split("\n");
@@ -206,7 +215,7 @@ export function HighlightedCode({
   }
 
   return (
-    <code className="font-mono text-xs leading-relaxed block">
+    <code className="block font-mono text-xs leading-relaxed">
       {linesOfSpans.map((lineSpans, lineIdx) => {
         const lineHover = annotationByLine.get(lineIdx);
 
@@ -214,38 +223,37 @@ export function HighlightedCode({
           <div key={lineIdx} className="line flex flex-col">
             <div className="flex flex-wrap items-center">
               {lineSpans.map((span, idx) => {
-                let cls = "text-slate-200";
+                let cls = "text-[var(--ink)]";
                 switch (span.type) {
                   case "keyword":
-                    cls = "text-rose-400 font-bold";
+                    cls = "text-[var(--plum)] font-bold";
                     break;
                   case "type":
-                    cls = "text-amber-300 font-bold";
+                    cls = "text-[var(--fur-deep)] font-bold";
                     break;
                   case "string":
-                    cls = "text-[#6EE7B7]";
+                    cls = "text-[var(--ok)]";
                     break;
                   case "number":
-                    cls = "text-cyan-300 font-bold";
+                    cls = "text-[#2a6f97] font-bold";
                     break;
                   case "comment":
-                    cls = "text-slate-500 italic";
+                    cls = "text-[var(--mute)] italic";
                     break;
                   case "jsx":
-                    cls = "text-pink-400 font-bold";
+                    cls = "text-[var(--lavender-deep)] font-bold";
                     break;
                   case "operator":
-                    cls = "text-rose-300/80";
+                    cls = "text-[var(--fur-deep)]/80";
                     break;
                   case "punctuation":
-                    cls = "text-slate-400";
+                    cls = "text-[var(--mute)]";
                     break;
                   default:
-                    cls = "text-slate-200";
+                    cls = "text-[var(--ink)]";
                     break;
                 }
 
-                // Query HM hover info for interactive hover card
                 let hoverInfo: HoverInfo | null = null;
                 if (
                   enableTwoslash &&
@@ -271,32 +279,30 @@ export function HighlightedCode({
                 return (
                   <span
                     key={idx}
-                    className={`${cls} relative group cursor-help underline underline-offset-4 decoration-rose-500/40 hover:decoration-rose-400 hover:bg-rose-950/30 rounded px-0.5 transition-colors`}
+                    className={`${cls} group relative cursor-help rounded px-0.5 underline decoration-[var(--fur)]/40 underline-offset-4 transition-colors hover:bg-[color-mix(in_oklab,var(--fur)_12%,transparent)] hover:decoration-[var(--fur-deep)]`}
                   >
                     {span.text}
-                    {/* Twoslash Interactive Hover Card */}
-                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-50 pointer-events-none w-max max-w-xs shadow-2xl">
-                      <span className="block bg-[#121624] border border-[#262f48] text-slate-100 rounded-lg p-2.5 text-[11px] font-mono leading-tight">
-                        <span className="block font-bold text-rose-300 border-b border-[#20283d] pb-1 mb-1">
+                    <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 hidden w-max max-w-xs -translate-x-1/2 group-hover:block">
+                      <span className="block rounded-(--radius) border-2 border-[var(--line-strong)] bg-[var(--foam)] p-2.5 font-mono text-[11px] text-[var(--ink)] leading-tight shadow-[var(--shadow-soft)]">
+                        <span className="mb-1 block border-[var(--line)] border-b pb-1 font-bold text-[var(--fur-deep)]">
                           {hoverInfo.code}
                         </span>
                         {hoverInfo.doc && (
-                          <span className="block text-slate-400 font-sans text-[10px] mt-1 italic">
+                          <span className="mt-1 block font-sans text-[10px] text-[var(--mute)] italic">
                             {hoverInfo.doc}
                           </span>
                         )}
                       </span>
-                      <span className="block w-2 h-2 bg-[#121624] border-r border-b border-[#262f48] transform rotate-45 mx-auto -mt-1"></span>
+                      <span className="mx-auto -mt-1 block h-2 w-2 rotate-45 transform border-[var(--line-strong)] border-r-2 border-b-2 bg-[var(--foam)]"></span>
                     </span>
                   </span>
                 );
               })}
             </div>
 
-            {/* Twoslash Inline // ^? Annotation Badge */}
             {lineHover && (
-              <div className="my-1.5 ml-4 inline-flex items-center gap-2 px-2.5 py-1 rounded bg-[#161c2e] border border-rose-500/40 text-rose-300 font-mono text-[11px] shadow-lg w-max">
-                <span className="text-rose-400 font-bold">↳</span>
+              <div className="my-1.5 ml-4 inline-flex w-max items-center gap-2 rounded-full border-2 border-[color-mix(in_oklab,var(--ok)_35%,white)] bg-[var(--ok-soft)] px-2.5 py-1 font-mono text-[11px] text-[var(--ok)]">
+                <span className="font-bold">↳</span>
                 <span className="font-semibold">{lineHover.code}</span>
               </div>
             )}

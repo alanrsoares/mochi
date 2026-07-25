@@ -7,3 +7,4 @@
 export extern Playground : a = "../components/Playground" "Playground"
 export extern HighlightedCode : a = "../components/HighlightCode" "HighlightedCode"
 export extern Counter : a = "../components/Counter" "Counter"
+export extern HeroCarousel : a = "../components/HeroCarousel" "HeroCarousel"

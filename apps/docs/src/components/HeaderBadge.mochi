@@ -1,4 +1,3 @@
-// Composes styled-cva shells from primitives.mochi (ADR 0009).
 import { BadgeShell, BadgePulse } from "../ui/primitives"
 
 let HeaderBadge = props =>

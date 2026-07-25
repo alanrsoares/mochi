@@ -1,6 +1,8 @@
-# Mochi Language Illustrations 🐾⚡
+# Mochi Language Illustrations
 
-This directory contains official illustrations for the **Mochi** programming language, based on the original mascot in [`logo.png`](../logo.png).
+Official mascot art for **Mochi**, from [`logo.png`](../logo.png).
+
+**UI guidance derived from these plates:** [`AESTHETICS.md`](./AESTHETICS.md)
 
 ## Artwork Gallery
 
