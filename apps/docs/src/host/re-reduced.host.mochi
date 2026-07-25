@@ -1,8 +1,6 @@
-// FFI seam — @re-reduced/preact. Non-core host binding (ADR 0010 Gap A).
+// FFI seam — @re-reduced/preact. Vendor plugin recovers ContainerDef in
+// `.d.mochi.ts` (`@mochi/plugin-re-reduced`, ADR 0010 Gap A / Wave 6).
 //
-// `defineContainer` builds a signal-backed ContainerDef from the host runtime.
-// Full HM typing of ActionSpec/OnBuilder is Wave 3 #16; until then the seam
-// stays opaque (`: a`) and TSX imports the typed bridge
-// `state/counter.ts` (one cast at the seam, cast-free hook sites).
+// `defineContainer` stays opaque (`: a`) in HM — overloaded host factory.
 // Hooks stay in TSX: Mochi `let…in` → IIFE breaks Rules of Hooks.
 export extern defineContainer : a = "@re-reduced/preact" "defineContainer"

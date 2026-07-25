@@ -1,5 +1,5 @@
 import { useContainer, useSelect } from "@re-reduced/preact";
-import { counter } from "../state/counter";
+import { counter } from "../state/counter.mochi";
 import CounterView from "./CounterView.mochi";
 
 export function Counter() {

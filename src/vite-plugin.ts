@@ -64,10 +64,12 @@ export function mochiPlugin(options: MochiPluginOptions = {}) {
       // Prepend JSX pragma even when the module already has imports (host kits,
       // sibling .mochi imports). Without this, `import { … }` at the top of the
       // emit skips the header and `h` is an unbound reference at runtime.
+      // Match only real import lines (`^…` with /m) — a string literal like
+      // `"We import { h } from preact"` must not suppress the pragma.
       if (code.includes("<") && code.includes(">")) {
         const hasH =
-          /import\s*\{[^}]*\bh\b[^}]*\}\s*from/.test(transformedCode) ||
-          transformedCode.includes(jsxHeader.trim());
+          /^import\s*\{[^}]*\bh\b[^}]*\}\s*from/m.test(transformedCode) ||
+          transformedCode.startsWith(jsxHeader.trim());
         if (!hasH) transformedCode = `${jsxHeader}${transformedCode}`;
       }
 

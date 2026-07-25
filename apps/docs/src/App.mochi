@@ -79,7 +79,7 @@ let Hero = props =>
           </span>
         </h1>
         <p className="text-copy text-mute leading-relaxed max-w-md">
-          {"Row-polymorphic records, parametric variants, JSX → host h(). One codegen, two backends."}
+          {"Row-polymorphic records, parametric variants, JSX via builtin plugin → host h(). One codegen, two backends."}
         </p>
         <div className="flex flex-wrap gap-3 pt-1 font-mono text-xs">
           <CtaPill href="#playground">{"Open playground"}</CtaPill>
@@ -106,7 +106,7 @@ let SiteFooter = props =>
         />
         <span>{"mochi"}</span>
       </div>
-      <span>{"Vite + Preact"}</span>
+      <span>{"this site: Vite · Preact · Tailwind"}</span>
     </div>
   </footer>
 
@@ -156,7 +156,7 @@ let App = props =>
           </SyntaxPanel>
           <SyntaxPanel
             title="JSX → h()"
-            badge="h(tag, props, children)"
+            badge="jsxPlugin · default-on"
             tone="lavender"
           >
             <HighlightedCode
@@ -173,39 +173,42 @@ let App = props =>
         >
           <div>
             <SectionEyebrow>{"interop"}</SectionEyebrow>
-            <SectionTitle>{"Host bindings"}</SectionTitle>
+            <SectionTitle>{"Interop examples"}</SectionTitle>
+            <p className="mt-2 text-sm text-mute leading-relaxed max-w-xl">
+              {"Worked examples of host glue — not a kit catalog. Language surface is extern, builtin jsxPlugin, and a project plugins list. Everything below is one app choosing hosts."}
+            </p>
           </div>
           <div className="flex items-center gap-3">
             <Counter />
             <span className="font-mono text-2xs text-mute">
-              {"re-reduced live"}
+              {"live counter"}
             </span>
           </div>
         </div>
         <div className="border-t-2 border-line">
           <InteropRow
             tone="fur"
-            label="Preact"
-            title="Shared h()"
-            body="Preact's h(tag, props, children) matches JSX desugar. No adapter."
+            label="runtime"
+            title="Any h()-shaped host"
+            body="jsxPlugin emits h(tag, props, children). This site uses Preact; React, Hono, or a custom pragma work the same way."
           />
           <InteropRow
             tone="lavender"
-            label="styled-cva"
-            title="UI factories in .mochi"
-            body="extern tw; call-form tw.div(…) and $tone variants."
+            label="UI kit"
+            title="Opaque factory + vendor plugin"
+            body="extern tw stays : a; @mochi/plugin-styled-cva recovers component schemes and $tone unions. Pattern, not a blessed kit."
           />
           <InteropRow
             tone="plum"
-            label="re-reduced"
-            title="Signal state"
-            body="defineContainer in .mochi; hooks in TSX — let…in → IIFE breaks Rules of Hooks."
+            label="state"
+            title="Host factory seam"
+            body="defineContainer behind *.host.mochi; hooks stay in TSX. A vendor plugin should emit the container dts — no hand cast bridge."
           />
           <InteropRow
             tone="ok"
-            label="TypeScript"
-            title=".d.mochi.ts"
-            body="Generated declarations for TS hosts importing .mochi modules."
+            label="bridge"
+            title=".d.mochi.ts sidecars"
+            body="Compiler emit so TS can import .mochi. Regenerated for this app; same plugins list as Vite and LSP."
           />
         </div>
       </section>

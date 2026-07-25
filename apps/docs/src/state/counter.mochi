@@ -1,4 +1,5 @@
 // defineContainer in Mochi; hooks in Counter.tsx (let-in → IIFE breaks Rules of Hooks).
+// ContainerDef honesty comes from @mochi/plugin-re-reduced → .d.mochi.ts (no cast bridge).
 import { defineContainer } from "../host/re-reduced.host"
 
 export let counter = defineContainer(

@@ -20,7 +20,7 @@ const STORAGE_KEY = "mochi_playground_code";
 const PRESETS: Record<string, { name: string; code: string }> = {
   jsx: {
     name: "JSX → h()",
-    code: `// JSX desugars to host h(tag, props, children)
+    code: `// jsxPlugin (default-on) desugars to host h(tag, props, children)
 
 let Badge = (props) =>
   <span className="px-2.5 py-0.5 text-3xs font-mono font-bold tracking-wider rounded uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30">

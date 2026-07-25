@@ -1,0 +1,12 @@
+{
+  "name": "@mochi/plugin-re-reduced",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "peerDependencies": {
+    "@onrails/result": "^0.4.0"
+  }
+}

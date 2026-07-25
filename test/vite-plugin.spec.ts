@@ -45,6 +45,15 @@ let HeaderBadge = props => <BadgeShell>{props.label}</BadgeShell>`;
     );
   });
 
+  it("still prepends h when emit text mentions import { h } in a string", () => {
+    const plugin = mochiPlugin();
+    // Docs copy once suppressed the pragma: the sniff matched a string body.
+    const code = `let Row = props => <p>{"We import { h } from preact."}</p>`;
+    const result = plugin.transform(code, "src/Row.mochi");
+    expect(result?.code).toMatch(/^import \{ h \} from "preact";/);
+    expect(result?.code).toContain('h("p"');
+  });
+
   it("throws SyntaxError with diagnostic message when Mochi compilation fails", () => {
     const plugin = mochiPlugin();
     const badCode = `let invalid = `;
