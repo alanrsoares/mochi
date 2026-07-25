@@ -21,18 +21,22 @@ const CODE_EXAMPLES = {
 type Result<a, e> = Ok(a) | Err(e)
 
 let unwrapOr = (res, fallback) =>
+//  ^?
   switch res {
     | Ok(value) => value
     | Err(_) => fallback
   }`,
   records: `// Row-Polymorphic Record Operations
 let formatUser = (user) =>
+//  ^?
   user.name ++ " (" ++ user.role ++ ")"
 
 let admin = { name: "Alan", role: "Maintainer", id: 42 }
-let formatted = formatUser(admin)`,
+let formatted = formatUser(admin)
+//  ^?`,
   jsx: `// Universal JSX Component Desugaring
 let Button = (props) =>
+//  ^?
   <button className={props.kind} disabled={props.disabled}>
     {props.label}
   </button>
