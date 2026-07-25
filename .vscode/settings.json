@@ -2,6 +2,13 @@
   "// mochi": "Operator ligatures for .mochi files. |> and => render as combined glyphs with a ligature-capable font. Scoped so it only affects mochi, not your other editors.",
   "[mochi]": {
     "editor.fontLigatures": true,
-    "editor.fontFamily": "'Fira Code', 'JetBrains Mono', 'Cascadia Code', 'Victor Mono', monospace"
+    "editor.fontFamily": "'Fira Code', 'JetBrains Mono', 'Cascadia Code', 'Victor Mono', monospace",
+    "editor.quickSuggestions": {
+      "strings": "on"
+    }
+  },
+  "// tailwind": "Treat .mochi as JS so IntelliSense picks up className=\"…\" in JSX (ADR 0007).",
+  "tailwindCSS.includeLanguages": {
+    "mochi": "javascript"
   }
 }
