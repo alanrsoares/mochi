@@ -1,0 +1,71 @@
+/**
+ * Vite plugin for Mochi (.mochi) files.
+ * Transforms Mochi source files into executable JavaScript or TypeScript modules
+ * with JSX pragma support (defaults to Preact `h`) and ES module exports.
+ */
+import { isErr } from "@onrails/result";
+import { compile } from "./compile";
+
+export type MochiPluginOptions = {
+  /**
+   * JSX pragma import header prepended to modules containing JSX.
+   * Default: `import { h } from "preact";`
+   */
+  jsxPragmaHeader?: string;
+  /**
+   * Custom JSX pragma function name used in code desugaring.
+   * Default: `"h"`
+   */
+  jsxPragmaName?: string;
+  /**
+   * Inlines Mochi runtime helpers in emitted output.
+   * Default: `true`
+   */
+  runtime?: boolean;
+};
+
+export function mochiPlugin(options: MochiPluginOptions = {}) {
+  const jsxHeader = options.jsxPragmaHeader ?? 'import { h } from "preact";\n';
+  const runtime = options.runtime ?? true;
+
+  return {
+    name: "vite-plugin-mochi",
+    enforce: "pre" as const,
+
+    transform(code: string, id: string) {
+      if (!id.endsWith(".mochi")) {
+        return null;
+      }
+
+      const res = compile(code, { runtime });
+      if (isErr(res)) {
+        const errorMessages = res.error.map((d) => `[${d.kind}] ${d.message}`).join("\n");
+        throw new SyntaxError(`Mochi compilation failed for ${id}:\n${errorMessages}`);
+      }
+
+      let transformedCode = res.value;
+
+      // Extract top-level let/const declarations for ES module exports
+      const constMatches = Array.from(transformedCode.matchAll(/^const ([A-Za-z0-9_$]+)\s*=/gm));
+      const exportedNames = constMatches
+        .map((m) => m[1]!)
+        .filter((name) => !name.startsWith("_") && !name.startsWith("$"));
+
+      if (exportedNames.length > 0) {
+        transformedCode += `\nexport { ${exportedNames.join(", ")} };\n`;
+        const lastExport = exportedNames[exportedNames.length - 1];
+        transformedCode += `export default ${lastExport};\n`;
+      }
+
+      // Prepend JSX header if source contains JSX syntax
+      if (code.includes("<") && code.includes(">") && !transformedCode.startsWith("import")) {
+        transformedCode = `${jsxHeader}${transformedCode}`;
+      }
+
+      return {
+        code: transformedCode,
+        map: null,
+      };
+    },
+  };
+}

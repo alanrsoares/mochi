@@ -84,3 +84,5 @@ export function compile(src: string, opts: CompileOptions = {}): Result<string, 
   if (isErr(typed)) return typed;
   return ok(codegen(typed.value, undefined, { runtime: opts.runtime ?? true }));
 }
+
+export { type MochiPluginOptions, mochiPlugin } from "./vite-plugin";

@@ -45,3 +45,5 @@ What else was on the table and why not.
 | [0005](0005-prelude-task.md) | Prelude `Task` (lazy async values) | Accepted |
 | [0006](0006-task-result-async.md) | `Task` gets an error channel (`Task a e`, `ResultAsync`-aligned) | Proposed |
 | [0007](0007-jsx-desugar.md) | Universal JSX/TSX syntax desugaring (`<tag />` to `h(tag, props, children)`) | Proposed |
+| [0008](0008-vite-mochi-docs-app.md) | Vite Plugin & GitHub Pages Documentation Architecture | Proposed |
+
