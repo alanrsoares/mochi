@@ -2,7 +2,7 @@
 
 let greet = person => "Hello, " ++ person.name ++ " (" ++ person.role ++ ")"
 
-let user = { name: "Alan", role: "Maintainer", id: 42 }
+let user = { name: "Mochi", role: "Compiler", id: 42 }
 let message = greet(user)
 
 let app = <div
