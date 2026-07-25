@@ -278,12 +278,30 @@ export function Playground() {
             </span>
             <span className="text-rose-400 font-bold">HM Typecheck OK</span>
           </div>
-          <textarea
-            value={code}
-            onInput={(e) => setCode((e.target as HTMLTextAreaElement).value)}
-            className="flex-1 w-full bg-[#111422] text-slate-100 font-mono text-xs p-4 rounded-xl border border-[#1b2032] focus:outline-none focus:border-rose-500/50 resize-none leading-relaxed selection:bg-rose-500/30 min-h-[320px]"
-            rows={15}
-          />
+          <div className="relative flex-1 min-h-[320px] rounded-xl border border-[#1b2032] overflow-hidden bg-[#111422]">
+            {/* Syntax Highlighted Underlay */}
+            <pre className="absolute inset-0 p-4 m-0 font-mono text-xs leading-relaxed whitespace-pre overflow-auto pointer-events-none text-slate-100">
+              <HighlightedCode code={code} lang="mochi" enableTwoslash={false} />
+            </pre>
+
+            {/* Editable Transparent Textarea Overlay */}
+            <textarea
+              value={code}
+              onInput={(e) => setCode((e.target as HTMLTextAreaElement).value)}
+              onScroll={(e) => {
+                const preElem = (e.target as HTMLTextAreaElement).previousElementSibling;
+                if (preElem) {
+                  preElem.scrollTop = (e.target as HTMLTextAreaElement).scrollTop;
+                  preElem.scrollLeft = (e.target as HTMLTextAreaElement).scrollLeft;
+                }
+              }}
+              spellcheck={false}
+              autoComplete="off"
+              autoCorrect="off"
+              className="absolute inset-0 w-full h-full p-4 m-0 font-mono text-xs leading-relaxed bg-transparent text-transparent caret-rose-400 focus:outline-none resize-none selection:bg-rose-500/30 overflow-auto whitespace-pre font-normal border-0"
+              rows={15}
+            />
+          </div>
         </div>
 
         {/* Right: Output Column */}
