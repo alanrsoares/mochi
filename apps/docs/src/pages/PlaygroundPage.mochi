@@ -25,7 +25,6 @@ let PlaygroundPage = props =>
             className="font-bold font-display text-base text-ink tracking-tight"
           >
             {"mochi"}
-            <span className="text-fur-deep">{".lang"}</span>
           </span>
         </a>
         <nav className="flex items-center gap-4 font-mono text-mute text-xs">
