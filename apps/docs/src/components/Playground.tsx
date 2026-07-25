@@ -245,21 +245,19 @@ export function Playground() {
           <div className="flex items-center gap-1 bg-[#090b12] p-1 rounded-lg border border-[#1e2436] text-xs">
             <button
               onClick={() => setActiveTab("preview")}
-              className={`px-3 py-1 rounded-md font-mono text-[11px] font-semibold transition-all ${
-                activeTab === "preview"
-                  ? "bg-rose-600 text-white shadow-sm"
-                  : "text-slate-400 hover:text-slate-200"
-              }`}
+              className={`px-3 py-1 rounded-md font-mono text-[11px] font-semibold transition-all ${activeTab === "preview"
+                ? "bg-rose-600 text-white shadow-sm"
+                : "text-slate-400 hover:text-slate-200"
+                }`}
             >
               Live Render
             </button>
             <button
               onClick={() => setActiveTab("js")}
-              className={`px-3 py-1 rounded-md font-mono text-[11px] font-semibold transition-all ${
-                activeTab === "js"
-                  ? "bg-rose-600 text-white shadow-sm"
-                  : "text-slate-400 hover:text-slate-200"
-              }`}
+              className={`px-3 py-1 rounded-md font-mono text-[11px] font-semibold transition-all ${activeTab === "js"
+                ? "bg-rose-600 text-white shadow-sm"
+                : "text-slate-400 hover:text-slate-200"
+                }`}
             >
               Emitted JS
             </button>
@@ -268,7 +266,7 @@ export function Playground() {
       </div>
 
       {/* Editor & Preview Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-[#1e2436] min-h-[400px]">
+      <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-[#1e2436] min-h-100">
         {/* Left: Editor Column */}
         <div className="p-4 flex flex-col bg-[#0a0c14]">
           <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 mb-2">
@@ -278,7 +276,7 @@ export function Playground() {
             </span>
             <span className="text-rose-400 font-bold">HM Typecheck OK</span>
           </div>
-          <div className="relative flex-1 min-h-[320px] rounded-xl border border-[#1b2032] overflow-hidden bg-[#111422]">
+          <div className="relative flex-1 min-h-80 rounded-xl border border-[#1b2032] overflow-hidden bg-[#111422]">
             {/* Syntax Highlighted Underlay */}
             <pre className="absolute inset-0 p-4 m-0 font-mono text-xs leading-relaxed whitespace-pre overflow-auto pointer-events-none text-slate-100">
               <HighlightedCode code={code} lang="mochi" enableTwoslash={false} />
@@ -307,7 +305,7 @@ export function Playground() {
         {/* Right: Output Column */}
         <div className="p-4 flex flex-col bg-[#0d101a]">
           {error ? (
-            <div className="p-4 bg-rose-950/40 border border-rose-800/60 rounded-xl text-rose-300 font-mono text-xs overflow-auto max-h-[350px] whitespace-pre-wrap">
+            <div className="p-4 bg-rose-950/40 border border-rose-800/60 rounded-xl text-rose-300 font-mono text-xs overflow-auto max-h-87.5 whitespace-pre-wrap">
               <div className="font-bold text-rose-400 mb-1">Diagnostic Report:</div>
               {error}
             </div>
@@ -316,13 +314,13 @@ export function Playground() {
               <div className="text-[11px] font-mono text-slate-400 mb-2">OUTPUT: LIVE PREACT VNODE</div>
               <div
                 ref={previewRef}
-                className="flex-1 p-6 bg-[#111422] border border-[#1b2032] rounded-xl flex items-center justify-center min-h-[320px]"
+                className="flex-1 p-6 bg-[#111422] border border-[#1b2032] rounded-xl flex items-center justify-center min-h-80"
               />
             </div>
           ) : (
             <div className="flex-1 flex flex-col">
               <div className="text-[11px] font-mono text-slate-400 mb-2">OUTPUT: EMITTED JS (ZERO DEPENDENCIES)</div>
-              <pre className="flex-1 p-4 bg-[#111422] border border-[#1b2032] rounded-xl text-xs font-mono text-slate-200 overflow-auto max-h-[350px] leading-relaxed">
+              <pre className="flex-1 p-4 bg-[#111422] border border-[#1b2032] rounded-xl text-xs font-mono text-slate-200 overflow-auto max-h-87.5 leading-relaxed">
                 <HighlightedCode code={outputJs} lang="js" />
               </pre>
             </div>
