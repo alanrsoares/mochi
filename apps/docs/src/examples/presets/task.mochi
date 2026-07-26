@@ -1,0 +1,21 @@
+// Task a e — error channel (ADR 0006). Pure pipeline; no host, no Task.run
+// (playground preview wants a sync `app` vnode).
+
+type ApiError =
+  | NotFound(number)
+  | Offline(string)
+
+let classify = (id, reason) => reason == "404" ? NotFound(id) : Offline(reason)
+
+// of → map → mapErr (no-op on Ok) → recover → match, still a Task.
+let program = Task.of(21)
+  |> Task.map(mul(2))
+  |> Task.mapErr(classify(0))
+  |> Task.recover(_ => Task.of(0))
+  |> Task.match(n => "ok: ${show(n)}", e => "err: ${show(e)}")
+
+let app = <div
+  className="w-full max-w-md p-4 bg-paper border-2 border-line rounded-panel font-mono text-xs text-fur-deep"
+>
+  {"Task a e — mapErr / recover / match (see JS emit)"}
+</div>

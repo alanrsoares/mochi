@@ -7,6 +7,7 @@ import presetFib from "../examples/presets/fib.mochi?raw";
 import presetJsx from "../examples/presets/jsx.mochi?raw";
 import presetResult from "../examples/presets/result.mochi?raw";
 import presetRowPoly from "../examples/presets/row-poly.mochi?raw";
+import presetTask from "../examples/presets/task.mochi?raw";
 import { createPlaygroundCompiler } from "../lib/playground-compiler";
 import {
   decodeSharedCode,
@@ -44,6 +45,7 @@ type RightTab = "js" | "ts" | "dts" | "output" | "problems" | "settings";
 const PRESETS: Record<string, { name: string; code: string }> = {
   jsx: { name: "JSX → h()", code: presetJsx },
   result: { name: "Result + switch", code: presetResult },
+  task: { name: "Task a e railway", code: presetTask },
   rowPoly: { name: "Row polymorphism", code: presetRowPoly },
   fib: { name: "Fibonacci", code: presetFib },
 };

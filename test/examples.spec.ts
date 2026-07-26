@@ -21,6 +21,29 @@ test("examples/life/main.mochi compiles", () => {
   expect(isErr(compile(read("examples/life/main.mochi")))).toBe(false);
 });
 
+test("examples/life host settles Err on a forced write failure", async () => {
+  const host = await import(path("examples/life/runtime.mjs"));
+  const writes: string[] = [];
+  const orig = process.stdout.write;
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString());
+    return true;
+  }) as typeof process.stdout.write;
+  try {
+    host.__forceFailNextWrite();
+    expect(await host.draw("label", "frame")()).toEqual({
+      _tag: "Err",
+      error: "forced write failure",
+    });
+    expect(writes).toEqual([]);
+    // Cleared after one shot — next draw is Ok again.
+    expect(await host.draw("label", "frame")()).toEqual({ _tag: "Ok", value: 0 });
+    expect(writes.some((w) => w.includes("label"))).toBe(true);
+  } finally {
+    process.stdout.write = orig;
+  }
+});
+
 test("examples/pipelines.mochi compiles and produces its documented values", () => {
   // Output is standalone (prelude inlined) — only the @onrails/pattern import is
   // stripped, and `match` injected in its place.
@@ -89,7 +112,7 @@ test("docs tour snippets compile (source of HighlightCode panels)", () => {
 });
 
 test("docs playground presets emit every displayed target", () => {
-  for (const name of ["jsx", "result", "row-poly", "fib"] as const) {
+  for (const name of ["jsx", "result", "task", "row-poly", "fib"] as const) {
     const src = read(`apps/docs/src/examples/presets/${name}.mochi`);
     const result = compileTargets(src, { runtime: true });
     expect(
