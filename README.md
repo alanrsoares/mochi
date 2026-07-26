@@ -1,18 +1,26 @@
 <div align="center">
 
-<img src="logo.png" alt="mochi logo" width="200" />
+<img src="illustrations/mochi_coder_mascot.jpg" alt="mochi mascot at the keyboard" width="720" />
 
 <h1>mochi</h1>
 
-<p><em>A small statically-typed functional language that compiles to readable JavaScript — and to strict-<code>tsc</code>-clean TypeScript.</em></p>
+<p><em>An ML-family language for the JS world — inferred types, readable output, strict TypeScript when you want it.</em></p>
 
 <a href="https://github.com/alanrsoares/mochi/actions/workflows/ci.yml"><img src="https://github.com/alanrsoares/mochi/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
 
 </div>
 
-- **Types:** Hindley–Milner (Algorithm W) with row-polymorphic records and parametric variants.
-- **Runtime:** compiles to plain JS; data-last prelude designed to compose under `|>`.
-- **Tooling:** LSP hover + inlay hints, `.d.ts` emission, and a formatter — first-class, not bolted on.
+**mochi** is a small statically-typed functional language: Hindley–Milner inference (Algorithm W), parametric variants, row-polymorphic records, and exhaustive `switch`. You write curried, data-last code; the compiler emits **plain JavaScript** you can read — or **TypeScript** that typechecks under `tsc --strict`. Same AST, two backends.
+
+No annotation tax for day-to-day code. Tooling (LSP hover + inlays, `.d.ts`, formatter) is first-class. The self-hosted bootstrap is a north-star: **0 `tsc --strict` errors** on the compiler written in mochi.
+
+<div align="center">
+<img src="illustrations/mochi_compiler_magic.jpg" alt="mochi compiling to JS and TS with zero errors" width="560" />
+</div>
+
+- **Types:** Algorithm W with open/closed rows and parametric variants — duck typing that still exhausts.
+- **Runtime:** plain JS; prelude designed to compose under `|>`.
+- **Tooling:** LSP, `.d.ts`, formatter — not bolted on.
 
 ## Quick start
 
