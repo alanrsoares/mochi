@@ -5,12 +5,12 @@
 // `src/module.ts` driver's verdicts. Scheme/registry threading is parts (b)/(c).
 
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { unwrapOk } from "@onrails/result";
 import { buildModules } from "../src/module";
+import { ensureInTreeBootstrapBuild } from "./support/bootstrap";
 
 const root = join(import.meta.dir, "..");
 
@@ -24,9 +24,8 @@ let dir: string;
 const names = (r: Res): string[] => (r._tag === "Ok" ? r.value.map((m) => basename(m.path)) : []);
 
 beforeAll(async () => {
-  // Build the whole graph closed-world; it emits bootstrap/module.js (which
-  // imports ast/types/lexer/parser) beside its deps. Import it in-process.
-  execFileSync("bun", ["src/cli.ts", "build", "bootstrap/cli.mochi"], { cwd: root });
+  // Shared cache → bootstrap/module.js (+ deps). Import the shipped loader.
+  ensureInTreeBootstrapBuild();
   ({ loadGraph } = (await import(join(root, "bootstrap/module.js"))) as {
     loadGraph: typeof loadGraph;
   });

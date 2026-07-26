@@ -12,7 +12,8 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "typecheck": "tsc --noEmit",
-    "test": "bun test",
+    "test": "bun test --path-ignore-patterns 'test/bootstrap-fixpoint-binary.spec.ts' --path-ignore-patterns 'test/bootstrap-tsc.spec.ts'",
+    "test:full": "bun test",
     "build:ext": "bun scripts/build-extension.mjs",
     "loc": "bun scripts/find-long-files.ts",
     "gen:prelude": "bun scripts/gen-prelude.ts",
@@ -35,7 +36,8 @@
     "docs:dev": "bun run --cwd apps/docs dev",
     "docs:build": "bun run --cwd apps/docs build",
     "docs:preview": "bun run --cwd apps/docs preview",
-    "check": "biome check . && tsc --noEmit && bun run --filter '*' check && bun run fmt:check && bun test"
+    "check": "biome check . && tsc --noEmit && bun run --filter '*' check && bun run fmt:check && bun run test",
+    "check:full": "biome check . && tsc --noEmit && bun run --filter '*' check && bun run fmt:check && bun run test:full"
   },
   "workspaces": [
     "editors/*",

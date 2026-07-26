@@ -7,8 +7,8 @@
 // We build the bootstrap graph to JS and drive the emitted functions in-process.
 
 import { beforeAll, expect, test } from "bun:test";
-import { execFileSync } from "node:child_process";
 import { join } from "node:path";
+import { ensureInTreeBootstrapBuild } from "./support/bootstrap";
 
 const root = join(import.meta.dir, "..");
 const bs = (f: string) => join(root, `bootstrap/${f}`);
@@ -44,7 +44,7 @@ const unwrap = <T>(r: Res<T>): T => {
 const parseAl = (src: string): Stmts => unwrap(parse(unwrap(lex(src))));
 
 beforeAll(async () => {
-  execFileSync("bun", ["src/cli.ts", "build", "bootstrap/cli.mochi"], { cwd: root });
+  ensureInTreeBootstrapBuild();
   ({ lex } = await import(bs("lexer.js")));
   ({ parse } = await import(bs("parser.js")));
   ({ check, checkWith } = await import(bs("check.js")));

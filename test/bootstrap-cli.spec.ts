@@ -11,6 +11,7 @@ import { basename, join } from "node:path";
 import { unwrapOk } from "@onrails/result";
 import { compile as tsCompile } from "../src/compile";
 import { buildModules as tsBuild } from "../src/module";
+import { ensureInTreeBootstrapBuild } from "./support/bootstrap";
 
 const root = join(import.meta.dir, "..");
 const cliJs = join(root, "bootstrap/cli.js");
@@ -31,11 +32,8 @@ const runArgs = (...args: string[]): { code: number; stderr: string } => {
 const runMochic = (arg: string): { code: number; stderr: string } => runArgs(arg);
 
 beforeAll(() => {
-  // Build the shipped compiler graph (emits bootstrap/*.js beside the sources).
-  execFileSync("bun", ["src/cli.ts", "build", "bootstrap/cli.mochi"], {
-    cwd: root,
-    encoding: "utf8",
-  });
+  // Shared cache → bootstrap/*.js (avoids N parallel rebuilds of the graph).
+  ensureInTreeBootstrapBuild();
   // Scratch dir lives under the repo (not the OS tmpdir) so the emitted
   // .js can resolve runtime deps (@onrails/pattern) via the repo's own
   // node_modules, same as any real project depending on mochic's output.

@@ -9,6 +9,7 @@ const dirs = [
   "out",
   "dist",
   "coverage",
+  ".cache/bootstrap-build",
   ".fixpoint-work",
   "test/.tsgen",
   "test/.tsgen-graph",

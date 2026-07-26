@@ -6,12 +6,12 @@
 // non-exhaustive switch over an IMPORTED variant, and a missing export.
 
 import { beforeAll, expect, test } from "bun:test";
-import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { readFile as fsRead } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { buildModules as tsBuild } from "../src/module";
+import { ensureInTreeBootstrapBuild } from "./support/bootstrap";
 
 const root = join(import.meta.dir, "..");
 
@@ -24,9 +24,8 @@ let buildModules: (entry: string) => Res;
 const bases = (outs: Out[]): string[] => outs.map((o) => basename(o.path));
 
 beforeAll(async () => {
-  // Build the whole graph closed-world; it emits bootstrap/module.js beside its
-  // deps. Import the shipped driver in-process.
-  execFileSync("bun", ["src/cli.ts", "build", "bootstrap/cli.mochi"], { cwd: root });
+  // Shared cache → bootstrap/module.js (+ deps). Import the shipped driver.
+  ensureInTreeBootstrapBuild();
   ({ buildModules } = await import(join(root, "bootstrap/module.js")));
 });
 

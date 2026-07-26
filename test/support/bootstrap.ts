@@ -9,27 +9,155 @@
 // shared ctor-definition modules prepended — so it still evals standalone in a
 // `new Function` sandbox with only the runtime (`match`, prelude tables)
 // injected as parameters.
+//
+// The graph build is cached cross-process under `.cache/bootstrap-build/<hash>/`
+// (keyed by bootstrap sources + `src/**/*.ts`). Bun runs spec files in parallel
+// workers; without a shared cache each worker rebuilt the graph into its own
+// temp dir. A `.building` claim + wait-for-peer keeps usually one builder.
 
 import { execFileSync } from "node:child_process";
-import { cpSync, mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, join } from "node:path";
 
 const root = join(import.meta.dir, "../..");
+const CACHE_ROOT = join(root, ".cache", "bootstrap-build");
+const CLAIM_STALE_MS = 120_000;
+const WAIT_MS = 120_000;
 
-// Build the graph into a per-process temp dir, NOT the shared bootstrap/ — bun
-// runs spec files in parallel, and racing `build`s clobbering the same *.js
-// caused partial reads (spurious "non-exhaustive match"). `mochic build` writes
-// a .js beside each .mochi, so we copy the sources into an isolated dir and build
-// there.
 let outDir: string | null = null;
+
+const sourceHash = (): string => {
+  const h = createHash("sha256");
+  const files = [
+    ...new Bun.Glob("bootstrap/*.mochi").scanSync({ cwd: root }),
+    ...new Bun.Glob("src/**/*.ts").scanSync({ cwd: root }),
+  ].toSorted();
+  for (const p of files) {
+    h.update(p);
+    h.update("\0");
+    h.update(readFileSync(join(root, p)));
+    h.update("\0");
+  }
+  return h.digest("hex").slice(0, 16);
+};
+
+const ready = (dir: string): boolean => existsSync(join(dir, "cli.js"));
+
+const waitUntilReady = (dir: string): boolean => {
+  const deadline = Date.now() + WAIT_MS;
+  while (Date.now() < deadline) {
+    if (ready(dir)) return true;
+    Bun.sleepSync(50);
+  }
+  return ready(dir);
+};
+
+const tryClaim = (claim: string): boolean => {
+  try {
+    writeFileSync(claim, String(process.pid), { flag: "wx" });
+    return true;
+  } catch {
+    try {
+      const age = Date.now() - statSync(claim).mtimeMs;
+      if (age > CLAIM_STALE_MS) {
+        rmSync(claim, { force: true });
+        writeFileSync(claim, String(process.pid), { flag: "wx" });
+        return true;
+      }
+    } catch {
+      // Peer still holds a fresh claim, or we lost the stale-retry race.
+    }
+    return false;
+  }
+};
+
+const releaseClaim = (claim: string): void => {
+  try {
+    rmSync(claim, { force: true });
+  } catch {
+    // Best-effort; a peer may have already cleared a stale claim.
+  }
+};
+
+// Build the graph into a content-addressed cache dir — never into shared
+// `bootstrap/`. `mochic build` writes a .js beside each .mochi, so we copy
+// sources into an isolated dir and build there. Parallel workers share the
+// result via hash + claim.
 const buildGraph = (): string => {
   if (outDir) return outDir;
-  const dir = mkdtempSync(join(tmpdir(), "mochi-bs-"));
-  cpSync(join(root, "bootstrap"), dir, { recursive: true });
-  execFileSync("bun", ["src/cli.ts", "build", join(dir, "cli.mochi")], { cwd: root });
-  outDir = dir;
-  return dir;
+
+  const hash = sourceHash();
+  const dest = join(CACHE_ROOT, hash);
+  if (ready(dest)) {
+    outDir = dest;
+    return dest;
+  }
+
+  mkdirSync(CACHE_ROOT, { recursive: true });
+  const claim = join(CACHE_ROOT, `${hash}.building`);
+  const builder = tryClaim(claim);
+
+  if (!builder) {
+    if (waitUntilReady(dest)) {
+      outDir = dest;
+      return dest;
+    }
+    // Peer stalled — fall through and build ourselves.
+  } else if (ready(dest)) {
+    releaseClaim(claim);
+    outDir = dest;
+    return dest;
+  }
+
+  const tmp = join(CACHE_ROOT, `${hash}.tmp-${process.pid}`);
+  rmSync(tmp, { recursive: true, force: true });
+  mkdirSync(tmp, { recursive: true });
+  // Copy sources only — skip stale emit so the build is authoritative.
+  for (const name of readdirSync(join(root, "bootstrap"))) {
+    if (name.endsWith(".js") || name.endsWith(".ts") || name.endsWith(".d.mts")) continue;
+    if (name.startsWith(".")) continue;
+    cpSync(join(root, "bootstrap", name), join(tmp, name));
+  }
+  try {
+    execFileSync("bun", ["src/cli.ts", "build", join(tmp, "cli.mochi")], { cwd: root });
+    try {
+      renameSync(tmp, dest);
+    } catch {
+      rmSync(tmp, { recursive: true, force: true });
+      if (!ready(dest)) {
+        throw new Error(`bootstrap build cache race failed for ${hash}`);
+      }
+    }
+  } finally {
+    if (builder) releaseClaim(claim);
+  }
+
+  outDir = dest;
+  return dest;
+};
+
+/** Ensure `bootstrap/*.js` match the shared cache (for specs that import/run in-tree). */
+export const ensureInTreeBootstrapBuild = (): void => {
+  const dir = buildGraph();
+  const bootstrapDir = join(root, "bootstrap");
+  for (const name of readdirSync(dir)) {
+    if (!name.endsWith(".js")) continue;
+    const target = join(bootstrapDir, name);
+    const tmp = join(bootstrapDir, `.${name}.${process.pid}.tmp`);
+    cpSync(join(dir, name), tmp);
+    renameSync(tmp, target);
+  }
 };
 
 const raw = (name: string): string => readFileSync(join(outDir as string, `${name}.js`), "utf8");

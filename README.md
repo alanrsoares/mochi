@@ -19,7 +19,8 @@
 ```bash
 bun install
 bun run mochi example.mochi        # compile a file to JS on stdout
-bun run check                   # lint + typecheck + tests
+bun run check                   # lint + typecheck + tests (local default)
+bun run check:full              # + self-host north-stars (CI / pre-push)
 ```
 
 ## A taste

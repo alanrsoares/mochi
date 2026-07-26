@@ -23,10 +23,10 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
-      # The whole quality gate: biome + tsc --noEmit + workspace checks (docs
-      # vite build included via @mochi/docs) + formatter dogfood + the test
-      # suite. The suite already enforces the two self-hosting north-stars —
-      # the tsc --strict-clean ratchet (bootstrap-tsc.spec.ts) and the byte-exact
-      # fixpoint reproduction (bootstrap-fixpoint-binary.spec.ts) — so this single
-      # command is the complete verification.
-      - run: bun run check
+      # The complete quality gate: biome + tsc --noEmit + workspace checks (docs
+      # vite build included via @mochi/docs) + formatter dogfood + the full test
+      # suite, including the two self-hosting north-stars — the tsc --strict-clean
+      # ratchet (bootstrap-tsc.spec.ts) and the byte-exact fixpoint reproduction
+      # (bootstrap-fixpoint-binary.spec.ts). Local day-to-day uses `bun run check`
+      # (same gate without those two specs).
+      - run: bun run check:full

@@ -24,10 +24,14 @@ resolves at runtime, and the TS backend emits a matching `.d.mts` for them.
 ## QA gate
 
 ```bash
-bun run check          # biome check . && tsc --noEmit && fmt:check && bun test
+bun run check          # biome + tsc + workspace + fmt + tests (skips north-stars)
+bun run check:full     # CI / pre-push — also runs fixpoint + bootstrap-tsc
 bun run fixpoint       # self-host reproduces itself (stage2 ≡ stage3 ≡ TS)
 bun run bootstrap:tsc  # count tsc --strict errors on the self-host (north-star: 0)
 ```
+
+`check` / `test` omit `test/bootstrap-fixpoint-binary.spec.ts` and
+`test/bootstrap-tsc.spec.ts`. `check:full` / `test:full` run everything.
 
 `bun install` runs `prepare` → `scripts/setup-hooks.ts`, which sets
 `core.hooksPath=.githooks`:
@@ -36,7 +40,7 @@ bun run bootstrap:tsc  # count tsc --strict errors on the self-host (north-star:
 |---|---|---|
 | `prepare-commit-msg` | every commit | strip tool/agent attribution trailers |
 | `commit-msg` | every commit | refuse if any attribution trailer remains |
-| `pre-push` | every push | `bun run check` (same as CI) |
+| `pre-push` | every push | `bun run check:full` (same as CI) |
 
 Escape hatch (rare): `git commit --no-verify` / `git push --no-verify`. The full QA
 gate is intentionally not on every commit — only on push.
