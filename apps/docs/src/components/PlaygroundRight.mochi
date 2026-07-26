@@ -29,6 +29,6 @@ let PlaygroundSettings = props =>
       </PresetSelect>
     </div>
     <p className="text-2xs text-mute leading-relaxed">
-      {"⌘E run · ⌘S format · share link lives in the URL query."}
+      {"⌘E run · ⌘S format · share link is a compressed ?code= payload. Right pane shows JS, typed TS, and .d.ts emit."}
     </p>
   </div>

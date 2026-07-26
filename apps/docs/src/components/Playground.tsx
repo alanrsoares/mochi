@@ -1,4 +1,4 @@
-import { compile, format } from "@mochi/compiler";
+import { codegenTs, compile, type Diagnostic, emitDts, format, formatError } from "@mochi/compiler";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
 import { h, render } from "preact";
@@ -7,6 +7,12 @@ import presetFib from "../examples/presets/fib.mochi?raw";
 import presetJsx from "../examples/presets/jsx.mochi?raw";
 import presetResult from "../examples/presets/result.mochi?raw";
 import presetRowPoly from "../examples/presets/row-poly.mochi?raw";
+import {
+  decodeSharedCode,
+  encodeSharedCode,
+  isSharedCodeWithinLimits,
+  MAX_ENCODED_CODE_LENGTH,
+} from "../lib/shared-code";
 import {
   DiagBox,
   EditorInput,
@@ -25,8 +31,14 @@ const stripModuleImports = (js: string): string =>
 
 const STORAGE_KEY = "mochi_playground_code_v2";
 const AUTORUN_KEY = "mochi_playground_autorun";
+const COMPILE_DEBOUNCE_MS = 280;
+const URL_SYNC_DEBOUNCE_MS = 360;
+/** `text-xs` (12px) × `leading-relaxed` (1.625); replaced by a measured value. */
+const EDITOR_LINE_HEIGHT = 19.5;
+/** Editor `p-4` top padding (1rem) — active-line bar + gutter share it. */
+const EDITOR_PAD_TOP = 16;
 
-type RightTab = "js" | "output" | "problems" | "settings";
+type RightTab = "js" | "ts" | "dts" | "output" | "problems" | "settings";
 
 const PRESETS: Record<string, { name: string; code: string }> = {
   jsx: { name: "JSX → h()", code: presetJsx },
@@ -35,34 +47,29 @@ const PRESETS: Record<string, { name: string; code: string }> = {
   fib: { name: "Fibonacci", code: presetFib },
 };
 
-function safeDecode(encoded: string): string {
-  try {
-    return window.decodeURIComponent(encoded);
-  } catch {
-    return "";
-  }
-}
-
 function readAutorun(): boolean {
   const v = localStorage.getItem(AUTORUN_KEY);
   return v === null ? true : v === "1";
 }
 
-export function Playground() {
-  const [code, setCode] = useState<string>(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const paramCode = urlParams.get("code");
-    if (paramCode) {
-      const decoded = safeDecode(paramCode);
-      if (decoded) return decoded;
-    }
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return saved;
-    return PRESETS.jsx.code;
-  });
+function readInitialCode(): string {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) return saved;
+  return PRESETS.jsx.code;
+}
 
+function diagSpans(diags: readonly Diagnostic[]): { start: number; end: number }[] {
+  return diags.flatMap((d) => (d.span ? [{ start: d.span.start, end: d.span.end }] : []));
+}
+
+export function Playground() {
+  const [code, setCode] = useState(readInitialCode);
+  const [bootstrapped, setBootstrapped] = useState(false);
   const [outputJs, setOutputJs] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [outputTs, setOutputTs] = useState("");
+  const [outputDts, setOutputDts] = useState("");
+  const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
+  const [compileMs, setCompileMs] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<RightTab>("js");
   const [autoRun, setAutoRun] = useState(readAutorun);
   const [shareCopied, setShareCopied] = useState(false);
@@ -70,45 +77,146 @@ export function Playground() {
   const [splitPct, setSplitPct] = useState(50);
   const previewRef = useRef<HTMLDivElement>(null);
   const splitRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<HTMLTextAreaElement>(null);
+  const mirrorRef = useRef<HTMLPreElement>(null);
+  const gutterRef = useRef<HTMLPreElement>(null);
   const dragging = useRef(false);
+  const compileSeq = useRef(0);
+  const urlSeq = useRef(0);
+  const [activeLine, setActiveLine] = useState(1);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [lineHeight, setLineHeight] = useState(EDITOR_LINE_HEIGHT);
 
+  const lineCount = code.split("\n").length;
+  const gutterText = Array.from({ length: lineCount }, (_, i) => i + 1).join("\n");
+
+  const syncCursor = useCallback((el: HTMLTextAreaElement) => {
+    const before = el.value.slice(0, el.selectionStart);
+    let line = 1;
+    for (let i = 0; i < before.length; i++) if (before[i] === "\n") line++;
+    setActiveLine(line);
+  }, []);
+
+  // Measure the real line box once mounted so the active-line bar lines up
+  // regardless of font metrics; fall back to the Tailwind `leading-relaxed` guess.
+  useLayoutEffect(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    const measured = Number.parseFloat(getComputedStyle(el).lineHeight);
+    if (Number.isFinite(measured) && measured > 0) setLineHeight(measured);
+  }, []);
+
+  // Restore share payload from `?code=` once (async gzip decode).
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, code);
-    const encoded = encodeURIComponent(code);
-    const newURL = `${window.location.protocol}//${window.location.host}${window.location.pathname}?code=${encoded}`;
-    window.history.replaceState(null, "", newURL);
-  }, [code]);
+    let cancelled = false;
+    const run = async () => {
+      const paramCode = new URLSearchParams(window.location.search).get("code");
+      if (paramCode && paramCode.length > 0 && paramCode.length <= MAX_ENCODED_CODE_LENGTH) {
+        try {
+          const decoded = await decodeSharedCode(paramCode);
+          if (!cancelled && isSharedCodeWithinLimits(paramCode, decoded) && decoded) {
+            setCode(decoded);
+          }
+        } catch {
+          // keep localStorage / preset fallback
+        }
+      }
+      if (!cancelled) setBootstrapped(true);
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(AUTORUN_KEY, autoRun ? "1" : "0");
   }, [autoRun]);
 
-  const evaluate = useCallback(() => {
+  const syncUrl = useCallback(async (source: string) => {
+    urlSeq.current += 1;
+    const seq = urlSeq.current;
     try {
-      const res = compile(code, { runtime: true });
-      if (isErr(res)) {
-        const diagnostics: Array<{ kind: string; message: string }> = res.error;
-        setError(diagnostics.map((e) => `[${e.kind}] ${e.message}`).join("\n"));
+      const encoded = await encodeSharedCode(source);
+      if (seq !== urlSeq.current) return;
+      if (!isSharedCodeWithinLimits(encoded, source)) return;
+      const params = new URLSearchParams(window.location.search);
+      params.set("code", encoded);
+      const next = `${window.location.pathname}?${params.toString()}${window.location.hash}`;
+      window.history.replaceState(null, "", next);
+      localStorage.setItem(STORAGE_KEY, source);
+    } catch {
+      // keep last good URL
+    }
+  }, []);
+
+  const evaluate = useCallback((source: string) => {
+    compileSeq.current += 1;
+    const seq = compileSeq.current;
+    const start = performance.now();
+    try {
+      const jsRes = compile(source, { runtime: true });
+      if (isErr(jsRes)) {
+        if (seq !== compileSeq.current) return;
+        setDiagnostics(jsRes.error);
         setOutputJs("");
+        setOutputTs("");
+        setOutputDts("");
+        setCompileMs(performance.now() - start);
         return;
       }
-      setError(null);
-      setOutputJs(res.value);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
-      setOutputJs("");
-    }
-  }, [code]);
 
+      const tsRes = codegenTs(source);
+      const dtsRes = emitDts(source);
+      if (seq !== compileSeq.current) return;
+
+      setDiagnostics([]);
+      setOutputJs(jsRes.value);
+      setOutputTs(isErr(tsRes) ? "" : tsRes.value);
+      setOutputDts(isErr(dtsRes) ? "" : dtsRes.value);
+      // Surface TS/dts-only failures as problems even when JS succeeded.
+      const secondary: Diagnostic[] = [
+        ...(isErr(tsRes) ? tsRes.error : []),
+        ...(isErr(dtsRes) ? dtsRes.error : []),
+      ];
+      if (secondary.length > 0) setDiagnostics(secondary);
+      setCompileMs(performance.now() - start);
+    } catch (e: unknown) {
+      if (seq !== compileSeq.current) return;
+      setDiagnostics([
+        {
+          kind: "check",
+          message: e instanceof Error ? e.message : String(e),
+        },
+      ]);
+      setOutputJs("");
+      setOutputTs("");
+      setOutputDts("");
+      setCompileMs(performance.now() - start);
+    }
+  }, []);
+
+  // Debounced autorun compile.
   useEffect(() => {
-    if (autoRun) evaluate();
-  }, [autoRun, evaluate]);
+    if (!bootstrapped || !autoRun) return;
+    const id = window.setTimeout(() => evaluate(code), COMPILE_DEBOUNCE_MS);
+    return () => window.clearTimeout(id);
+  }, [autoRun, bootstrapped, code, evaluate]);
+
+  // Debounced URL + localStorage sync.
+  useEffect(() => {
+    if (!bootstrapped) return;
+    const id = window.setTimeout(() => {
+      void syncUrl(code);
+    }, URL_SYNC_DEBOUNCE_MS);
+    return () => window.clearTimeout(id);
+  }, [bootstrapped, code, syncUrl]);
 
   // Keep preview host mounted; imperative render survives parent re-renders.
   useLayoutEffect(() => {
     const el = previewRef.current;
     if (!el) return;
-    if (error || activeTab !== "output" || !outputJs) {
+    if (diagnostics.length > 0 || activeTab !== "output" || !outputJs) {
       render(null, el);
       return;
     }
@@ -141,7 +249,7 @@ export function Playground() {
       if (!(e.ctrlKey || e.metaKey)) return;
       if (e.key === "e" || e.key === "E" || e.key === "Enter") {
         e.preventDefault();
-        evaluate();
+        evaluate(code);
       } else if (e.key === "s" || e.key === "S") {
         e.preventDefault();
         handleFormat();
@@ -149,7 +257,7 @@ export function Playground() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [evaluate, handleFormat]);
+  }, [code, evaluate, handleFormat]);
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -172,9 +280,16 @@ export function Playground() {
   }, []);
 
   const handleShare = () => {
-    navigator.clipboard.writeText(window.location.href);
-    setShareCopied(true);
-    setTimeout(() => setShareCopied(false), 2000);
+    void (async () => {
+      await syncUrl(code);
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        setShareCopied(true);
+        setTimeout(() => setShareCopied(false), 2000);
+      } catch {
+        setShareCopied(false);
+      }
+    })();
   };
 
   const handlePresetSelect = (e: Event) => {
@@ -182,11 +297,23 @@ export function Playground() {
     if (PRESETS[key]) setCode(PRESETS[key].code);
   };
 
-  const problemCount = error ? error.split("\n").filter(Boolean).length : 0;
+  const problemCount = diagnostics.length;
+  const errorSpans = diagSpans(diagnostics);
+  const statusOk = diagnostics.length === 0;
+  const statusText =
+    compileMs === null
+      ? statusOk
+        ? "ready"
+        : "error"
+      : statusOk
+        ? `ok · ${compileMs.toFixed(1)}ms`
+        : `error · ${compileMs.toFixed(1)}ms`;
 
   const tabs = (
     [
       ["js", "JavaScript"],
+      ["ts", "TypeScript"],
+      ["dts", ".d.ts"],
       ["output", "Output"],
       ["problems", `Problems${problemCount ? ` (${problemCount})` : ""}`],
       ["settings", "Settings"],
@@ -205,7 +332,9 @@ export function Playground() {
 
   // Keep Output host mounted across tab switches so imperative preview isn't wiped.
   const outputHost = (
-    <div className={activeTab === "output" && !error ? "flex h-full min-h-72 flex-col" : "hidden"}>
+    <div
+      className={activeTab === "output" && statusOk ? "flex h-full min-h-72 flex-col" : "hidden"}
+    >
       <PreviewPane ref={previewRef} className="min-h-72 lg:min-h-0" />
     </div>
   );
@@ -221,15 +350,36 @@ export function Playground() {
         )}
       </EmitPane>
     );
-  } else if (activeTab === "problems") {
-    activePane = error ? (
-      <DiagBox className="max-h-none">
-        <div className="mb-1 font-bold">diagnostics</div>
-        {error}
-      </DiagBox>
-    ) : (
-      <p className="font-mono text-mute text-xs">No problems.</p>
+  } else if (activeTab === "ts") {
+    activePane = (
+      <EmitPane className="max-h-none min-h-72 lg:min-h-0">
+        {outputTs ? (
+          <HighlightedCode code={outputTs} lang="ts" />
+        ) : (
+          <span className="text-mute">No TypeScript emit yet — fix Problems or hit Run.</span>
+        )}
+      </EmitPane>
     );
+  } else if (activeTab === "dts") {
+    activePane = (
+      <EmitPane className="max-h-none min-h-72 lg:min-h-0">
+        {outputDts ? (
+          <HighlightedCode code={outputDts} lang="ts" />
+        ) : (
+          <span className="text-mute">No .d.ts emit yet — fix Problems or hit Run.</span>
+        )}
+      </EmitPane>
+    );
+  } else if (activeTab === "problems") {
+    activePane =
+      diagnostics.length > 0 ? (
+        <DiagBox className="max-h-none">
+          <div className="mb-1 font-bold">diagnostics</div>
+          {diagnostics.map((d) => formatError(d, code)).join("\n\n")}
+        </DiagBox>
+      ) : (
+        <p className="font-mono text-mute text-xs">No problems.</p>
+      );
   } else if (activeTab === "settings") {
     activePane = (
       <PlaygroundSettings
@@ -248,10 +398,10 @@ export function Playground() {
       autoRunLabel={autoRun ? "Auto-run ✓" : "Auto-run"}
       formatLabel={formatNotice ? "Formatted" : "Format"}
       shareLabel={shareCopied ? "Copied!" : "Copy Share Link"}
-      statusState={error ? "err" : "ok"}
-      statusText={error ? "error" : "ok"}
+      statusState={statusOk ? "ok" : "err"}
+      statusText={statusText}
       onToggleAutoRun={() => setAutoRun((v) => !v)}
-      onRun={evaluate}
+      onRun={() => evaluate(code)}
       onFormat={handleFormat}
       onShare={handleShare}
       body={
@@ -260,25 +410,74 @@ export function Playground() {
             className="flex min-h-0 min-w-0 flex-1 flex-col border-line border-b-2 lg:w-(--split) lg:flex-none lg:border-r-2 lg:border-b-0"
             style={{ ["--split" as string]: `${splitPct}%` }}
           >
-            <div className="relative min-h-72 flex-1 overflow-hidden bg-foam lg:min-h-0">
-              <EditorMirror>
-                <HighlightedCode code={code} lang="mochi" enableTwoslash={false} />
-              </EditorMirror>
-              <EditorInput
-                value={code}
-                onInput={(e: Event) => setCode((e.target as HTMLTextAreaElement).value)}
-                onScroll={(e: Event) => {
-                  const preElem = (e.target as HTMLTextAreaElement).previousElementSibling;
-                  if (preElem) {
-                    preElem.scrollTop = (e.target as HTMLTextAreaElement).scrollTop;
-                    preElem.scrollLeft = (e.target as HTMLTextAreaElement).scrollLeft;
-                  }
-                }}
-                spellcheck={false}
-                autoComplete="off"
-                autoCorrect="off"
-                ariaLabel="Mochi source"
-              />
+            <div className="relative flex min-h-72 flex-1 overflow-hidden bg-foam lg:min-h-0">
+              <pre
+                ref={gutterRef}
+                aria-hidden="true"
+                className="m-0 select-none overflow-hidden whitespace-pre border-line border-r px-2 py-4 text-right font-mono text-2xs text-mute"
+                style={{ lineHeight: `${lineHeight}px` }}
+              >
+                {gutterText}
+              </pre>
+              <div className="relative min-w-0 flex-1">
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-x-0 bg-fur/10"
+                  style={{
+                    height: `${lineHeight}px`,
+                    top: `${EDITOR_PAD_TOP + (Math.min(activeLine, lineCount) - 1) * lineHeight - scrollTop}px`,
+                  }}
+                />
+                <EditorMirror ref={mirrorRef} style={{ lineHeight: `${lineHeight}px` }}>
+                  <HighlightedCode
+                    code={code}
+                    lang="mochi"
+                    enableTwoslash={false}
+                    errorSpans={errorSpans}
+                    overlay
+                    lineHeightPx={lineHeight}
+                  />
+                </EditorMirror>
+                <EditorInput
+                  ref={editorRef}
+                  style={{ lineHeight: `${lineHeight}px` }}
+                  value={code}
+                  onInput={(e: Event) => {
+                    const el = e.target as HTMLTextAreaElement;
+                    setCode(el.value);
+                    syncCursor(el);
+                  }}
+                  onKeyDown={(e: KeyboardEvent) => {
+                    if (e.key !== "Tab") return;
+                    e.preventDefault();
+                    const el = e.target as HTMLTextAreaElement;
+                    const start = el.selectionStart;
+                    const end = el.selectionEnd;
+                    const next = `${el.value.slice(0, start)}  ${el.value.slice(end)}`;
+                    setCode(next);
+                    const caret = start + 2;
+                    requestAnimationFrame(() => {
+                      el.setSelectionRange(caret, caret);
+                      syncCursor(el);
+                    });
+                  }}
+                  onClick={(e: Event) => syncCursor(e.target as HTMLTextAreaElement)}
+                  onKeyUp={(e: Event) => syncCursor(e.target as HTMLTextAreaElement)}
+                  onScroll={(e: Event) => {
+                    const el = e.target as HTMLTextAreaElement;
+                    setScrollTop(el.scrollTop);
+                    if (gutterRef.current) gutterRef.current.scrollTop = el.scrollTop;
+                    if (mirrorRef.current) {
+                      mirrorRef.current.scrollTop = el.scrollTop;
+                      mirrorRef.current.scrollLeft = el.scrollLeft;
+                    }
+                  }}
+                  spellcheck={false}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  ariaLabel="Mochi source"
+                />
+              </div>
             </div>
           </div>
 

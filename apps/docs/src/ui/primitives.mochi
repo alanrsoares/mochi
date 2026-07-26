@@ -164,11 +164,11 @@ export let PresetSelect = tw.select(
 )
 
 export let EditorMirror = tw.pre(
-  "pointer-events-none absolute inset-0 m-0 overflow-auto whitespace-pre p-4 font-mono text-ink text-xs leading-relaxed"
+  "pointer-events-none absolute inset-0 m-0 overflow-auto whitespace-pre p-4 font-mono font-normal text-ink text-xs [tab-size:2]"
 )
 
 export let EditorInput = tw.textarea(
-  "absolute inset-0 m-0 h-full w-full resize-none overflow-auto whitespace-pre border-0 bg-transparent p-4 font-mono font-normal text-transparent text-xs leading-relaxed caret-fur-deep selection:bg-fur/30 focus:outline-none"
+  "absolute inset-0 m-0 h-full w-full resize-none overflow-auto whitespace-pre border-0 bg-transparent p-4 font-mono font-normal text-transparent text-xs caret-fur-deep [tab-size:2] selection:bg-fur/30 selection:text-transparent focus:outline-none [-webkit-text-fill-color:transparent]"
 )
 
 export let DiagBox = tw.div(
