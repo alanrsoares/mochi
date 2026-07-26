@@ -138,6 +138,7 @@ export function startServer(opts: ServerOptions = {}): void {
   });
 
   const lspCompletionKind = (kind: MochiCompletion["kind"]): CompletionItemKind => {
+    if (kind === "method") return CompletionItemKind.Method;
     if (kind === "field" || kind === "member") return CompletionItemKind.Field;
     if (kind === "ctor") return CompletionItemKind.EnumMember;
     if (kind === "type") return CompletionItemKind.Class;

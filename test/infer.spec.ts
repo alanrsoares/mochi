@@ -29,6 +29,16 @@ test("lambda over numbers", () => {
   expect(typeOf(env, "inc")).toBe("number -> number");
 });
 
+test("nullary lambda is unit -> body (ADR 0014)", () => {
+  const env = unwrapOk(infer("let one = () => 1"));
+  expect(typeOf(env, "one")).toBe("() -> number");
+});
+
+test("nullary call peels unit", () => {
+  const env = unwrapOk(infer("let one = () => 1\nlet x = one()"));
+  expect(typeOf(env, "x")).toBe("number");
+});
+
 test("identity is generalized (polymorphic)", () => {
   const env = unwrapOk(infer("let id = x => x", {}));
   // 'ta -> 'ta  (some quantified var)

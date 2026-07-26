@@ -37,6 +37,7 @@ import {
   tRecord,
   tPrim,
   tTuple,
+  tUnit,
   rVar,
   rExtend,
   showType,
@@ -191,7 +192,8 @@ let bindParamsFrom = (params, env, st) => switch params {
 // ============================================================
 
 let arrowChain = (paramTypes, resultT) => switch paramTypes {
-  | [] => resultT
+  | [] => tArrow(tUnit, resultT)
+  | [p] => tArrow(p, resultT)
   | [p, ...rest] => tArrow(p, arrowChain(rest, resultT))
 }
 
@@ -204,16 +206,22 @@ let ctxWithEnv = (ctx, env) =>
     plugins: ctx.plugins
   }
 
-let inferCallArgs = (fnT, args, ctx, st) => switch args {
+let inferCallArgs = (fnT, args, ctx, st, callSpan) => switch args {
   | [] => Ok((fnT, st))
   | [arg, ...rest] => let? (argT, st1) = inferExpr(arg, ctx, st) in
       let (resultT, st2) = freshVar(st1) in
       let? st3 = u(fnT, tArrow(argT, resultT), st2, exprSpan(arg)) in
-        inferCallArgs(resultT, rest, ctx, st3)
+        inferCallArgs(resultT, rest, ctx, st3, callSpan)
 }
 
 let inferNormalCall = (fn, args, ctx, st) =>
-  let? (fnT, st1) = inferExpr(fn, ctx, st) in inferCallArgs(fnT, args, ctx, st1)
+  let? (fnT, st1) = inferExpr(fn, ctx, st) in
+    switch args {
+      | [] => let (resultT, st2) = freshVar(st1) in
+        let? st3 = u(fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)) in
+          Ok((resultT, st3))
+      | _ => inferCallArgs(fnT, args, ctx, st1, exprSpan(fn))
+    }
 
 let inferTernary = (cond, thenE, elseE, ctx, st) =>
   let? (condT, st1) = inferExpr(cond, ctx, st) in

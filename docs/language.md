@@ -12,6 +12,7 @@ which type-checks end to end. This doc summarizes it.
 ```mochi
 let double = x => mul(x, 2)          // lambda
 let hypot = (a, b) => sqrt(add(square(a), square(b)))  // multi-arg
+let one = () => 1                    // nullary → `() -> number` (ADR 0014)
 let pipeline = 5 |> double |> inc |> double            // left-to-right pipe
 ```
 

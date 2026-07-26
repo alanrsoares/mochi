@@ -30,6 +30,7 @@ import {
   aliasParamId,
   type ConType,
   foldAliases,
+  isUnit,
   mkFresh,
   type Row,
   type Type,
@@ -107,9 +108,12 @@ function tsOfRaw(t: Type, names: Map<number, string>): string {
       )
       .with({ kind: "con" }, (con) => PRIM_TS[con.name] ?? nominalCon(con, names))
       .with({ kind: "arrow" }, (arrow) => {
+        // Don't flatten across `unit` domains (ADR 0014): `a -> () -> b` stays
+        // nested, and a leading `unit -> T` becomes `() => T`.
+        if (isUnit(arrow.from)) return `() => ${tsOfRaw(arrow.to, names)}`;
         const params: string[] = [];
         let cur: Type = arrow;
-        while (cur.kind === "arrow") {
+        while (cur.kind === "arrow" && !isUnit(cur.from)) {
           params.push(tsOfRaw(cur.from, names));
           cur = cur.to;
         }
@@ -230,8 +234,12 @@ export function ctorCallTs(t: Type, aliases: AliasDef[]): string | null {
 /** Arity-aware function type: peel one arrow per lambda parameter, then recurse into the body (which may itself be a lambda for curried definitions). */
 function declType(t: Type, value: Expr, names: Map<number, string>): string {
   if (value.kind !== "lambda") return tsOf(t, names);
-  const params: string[] = [];
   let cur = t;
+  if (value.params.length === 0) {
+    if (cur.kind === "arrow" && isUnit(cur.from)) cur = cur.to;
+    return `() => ${declType(cur, value.body, names)}`;
+  }
+  const params: string[] = [];
   value.params.forEach((p, i) => {
     if (cur.kind !== "arrow") return;
     const name = p.kind === "name" ? p.name : `_${i}`;
@@ -257,6 +265,11 @@ function flatBindingParams(
   let v = value;
   let n = 0;
   while (v.kind === "lambda") {
+    if (v.params.length === 0) {
+      if (cur.kind === "arrow" && isUnit(cur.from)) cur = cur.to;
+      v = v.body;
+      continue;
+    }
     for (const p of v.params) {
       if (cur.kind !== "arrow") break;
       const name = p.kind === "name" ? p.name : `_${n}`;

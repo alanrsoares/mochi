@@ -114,12 +114,13 @@ let demo = () =>
   expect(labels).toContain("$derived");
 });
 
-test("store.actions. completes action names", () => {
+test("store.actions. completes action names as methods", () => {
   const src = `${HOOKS}
 let demo = () =>
   let store = useContainer(counter) in store.actions.`.trimEnd();
-  const labels = completeAt(src, src.length, { plugins }).map((i) => i.label);
-  expect(labels).toEqual(["decrement", "increment"]);
+  const items = completeAt(src, src.length, { plugins });
+  expect(items.map((i) => i.label)).toEqual(["decrement", "increment"]);
+  expect(items.every((i) => i.kind === "method")).toBe(true);
 });
 
 test("useSelect types the selector against state signals", () => {

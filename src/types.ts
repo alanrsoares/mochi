@@ -49,6 +49,15 @@ export const tApp = (name: string, ...args: Type[]): Type => tCon(name, args);
 export const TUPLE = "tuple";
 export const tTuple = (elems: Type[]): Type => tCon(TUPLE, elems);
 
+/**
+ * Internal nullary-function domain (ADR 0014). Surface `() => T` and call `f()`
+ * use `unit -> T`; the name is reserved/lowercase so users cannot write it.
+ */
+export const UNIT = "unit";
+export const tUnit: Type = tCon(UNIT);
+export const isUnit = (t: Type): boolean =>
+  t.kind === "con" && t.name === UNIT && t.args.length === 0;
+
 export const rEmpty: Row = { kind: "empty" };
 export const rVar = (id: number): Row => ({ kind: "rvar", id });
 export const rExtend = (label: string, type: Type, rest: Row): Row => ({
@@ -73,6 +82,8 @@ export const showType = (t: Type): string => {
       if (t.name === TUPLE) return `(${t.args.map(showType).join(", ")})`;
       return t.args.length === 0 ? t.name : `${t.name}<${t.args.map(showType).join(", ")}>`;
     case "arrow": {
+      // Nullary: `() -> T` (internal `unit -> T`, ADR 0014).
+      if (isUnit(t.from)) return `() -> ${showType(t.to)}`;
       // parenthesize a left-nested arrow: (a -> b) -> c
       const from = t.from.kind === "arrow" ? `(${showType(t.from)})` : showType(t.from);
       return `${from} -> ${showType(t.to)}`;

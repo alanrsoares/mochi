@@ -19,14 +19,14 @@ import type {
 } from "../../../src/extensions";
 import type { Row, Type } from "../../../src/types";
 // Explicit extension: package boundary is resolved by Node/Vite without a bundler.
-import { rEmpty, rExtend, tArrow, tRecord, tString } from "../../../src/types.ts";
+import { rEmpty, rExtend, tArrow, tRecord, tString, tUnit } from "../../../src/types.ts";
 
 type CallExpr = Extract<Expr, { kind: "call" }>;
 
 const HOST = 'import("@re-reduced/preact")';
 
-/** Nullary host action stand-in — mochi `f()` peels nothing; `{}` is fine. */
-const tAction = tRecord(rEmpty);
+/** Nullary host action — `unit -> {}` so completion sees a method (ADR 0014). */
+const tAction = tArrow(tUnit, tRecord(rEmpty));
 
 const isRefCall = (e: CallExpr, name: string): boolean => e.fn.kind === "ref" && e.fn.name === name;
 

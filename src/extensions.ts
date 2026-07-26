@@ -143,7 +143,7 @@ export type DtsBindingHook = (
 ) => string | null;
 
 /** Completion item kinds — shared by the compiler API and plugin member hooks (ADR 0013). */
-export type CompletionKind = "value" | "field" | "member" | "ctor" | "type";
+export type CompletionKind = "value" | "field" | "member" | "method" | "ctor" | "type";
 
 /** One completion candidate — protocol-free so Bun unit tests can assert on it. */
 export type CompletionItem = { label: string; kind: CompletionKind; detail?: string };

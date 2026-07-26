@@ -73,6 +73,7 @@ import {
   tRecord,
   tString,
   tTuple,
+  tUnit,
   tVar,
 } from "./types";
 import { emptySubst, resolve, resolveRow, type Subst, unify, zonk } from "./unify";
@@ -254,9 +255,11 @@ function inferLambda(e: LambdaExpr, ctx: Ctx): Result<Type, Diagnostic> {
   const bodyEnv: Env = new Map(ctx.env);
   const paramTypes: Type[] = e.params.map((p) => bindParam(p, bodyEnv, ctx));
   const bodyT = infer(e.body, { ...ctx, env: bodyEnv });
-  return isErr(bodyT)
-    ? bodyT
-    : ok(paramTypes.reduceRight((acc, pt) => tArrow(pt, acc), bodyT.value));
+  if (isErr(bodyT)) return bodyT;
+  // Nullary `() => T` is `unit -> T` (ADR 0014) — empty reduceRight would erase
+  // the arrow and leave leaf actions / thunks looking like plain values.
+  if (paramTypes.length === 0) return ok(tArrow(tUnit, bodyT.value));
+  return ok(paramTypes.reduceRight((acc, pt) => tArrow(pt, acc), bodyT.value));
 }
 
 function inferLetIn(e: LetInExpr, ctx: Ctx): Result<Type, Diagnostic> {
@@ -291,6 +294,12 @@ function inferCall(e: CallExpr, ctx: Ctx): Result<Type, Diagnostic> {
   const fnT = infer(e.fn, ctx);
   if (isErr(fnT)) return fnT;
   let cur = fnT.value;
+  // Nullary call `f()` peels one `unit -> T` (ADR 0014).
+  if (e.args.length === 0) {
+    const resultT = freshVar(ctx.fresh);
+    const uni = u(cur, tArrow(tUnit, resultT), ctx, e.span);
+    return isErr(uni) ? uni : ok(resultT);
+  }
   for (const arg of e.args) {
     const argT = infer(arg, ctx);
     if (isErr(argT)) return argT;

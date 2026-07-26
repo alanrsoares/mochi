@@ -208,9 +208,11 @@ field completion works on the dogfood Counter path.
 | # | Title | Type | Blocked by | Status |
 |---|---|---|---|---|
 | 46 | `useContainer` / `useSelect` inferCall → Store / StateSignals sketch | AFK | 45 | done |
+| 47 | Internal `unit` for nullary fns; action leaves as methods (ADR 0014) | AFK | 46 | done |
 
 **Wave 11 shipped:** `store.` lists `actions` / `$state` / `$derived`;
-`store.actions.` lists action names; `useSelect` selectors see `s.count.value`.
+`store.actions.` lists action names as **methods**; `useSelect` selectors see
+`s.count.value`. Nullary `() => T` is honest `() -> T` in HM.
 
 ## Slice briefs
 
@@ -1331,4 +1333,24 @@ fields). `useSelect(store, sel)` unifies `sel` with StateSignals → result.
 ## Blocked by
 
 45
+
+---
+
+### 47 — Nullary `unit` (ADR 0014)
+
+## What to build
+
+Internal `unit` con: `() => T` → `unit -> T`; `f()` peels it. Show/dts render
+`()`. re-reduced action leaves `unit -> {}`; completion kind `method`.
+
+## Acceptance criteria
+
+- [x] `let f = () => 1` schemes as `() -> number`
+- [x] `store.actions.` items are `method`
+- [x] ADR 0014 + bootstrap mirror
+- [x] `bun run check:full` green
+
+## Blocked by
+
+46
 
