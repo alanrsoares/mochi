@@ -22,7 +22,7 @@ import {
   runBindingTypeHooks,
   runDtsBindingHooks,
 } from "./extensions";
-import type { Scheme } from "./infer";
+import type { InferResult, Scheme } from "./infer";
 import { builtinTypeDecls, preludeNamespaces } from "./prelude";
 import { typeExprToType, widenLits } from "./schemes";
 import {
@@ -771,14 +771,12 @@ export type EmitDtsOptions = {
   plugins?: LanguagePlugin[];
 };
 
-export function emitDts(src: string, opts: EmitDtsOptions = {}): Result<string, Diagnostic[]> {
-  const r = toTypedProgram(src, {
-    open: true,
-    namespaces: preludeNamespaces,
-    plugins: opts.plugins,
-  });
-  if (isErr(r)) return r;
-  const { prog, res } = r.value;
+/** Emit `.d.ts` from an already-typed program — shared by `emitDts` and multi-target compile. */
+export function emitDtsFromTyped(
+  prog: Program,
+  res: Pick<InferResult, "env" | "aliases">,
+  opts: EmitDtsOptions = {},
+): string {
   const { env, aliases } = res;
   const aliasByName = new Map(aliases.map((a) => [a.name, a]));
   const resolved = resolvePlugins(opts.plugins);
@@ -793,5 +791,15 @@ export function emitDts(src: string, opts: EmitDtsOptions = {}): Result<string, 
   // from `Map.get`) needs its type decl emitted too, unless the program declares
   // its own. Prepend so the reference resolves.
   const builtins = referencedBuiltinTypeDecls(prog, (n) => env.get(n));
-  return ok(`${[...builtins, ...lines].join("\n")}\n`);
+  return `${[...builtins, ...lines].join("\n")}\n`;
+}
+
+export function emitDts(src: string, opts: EmitDtsOptions = {}): Result<string, Diagnostic[]> {
+  const r = toTypedProgram(src, {
+    open: true,
+    namespaces: preludeNamespaces,
+    plugins: opts.plugins,
+  });
+  if (isErr(r)) return r;
+  return ok(emitDtsFromTyped(r.value.prog, r.value.res, opts));
 }

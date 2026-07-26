@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
 import { compile } from "../src/compile";
+import { compileTargets } from "../src/compile-targets";
 import { buildModules } from "../src/module";
 
 const read = (p: string): string => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
@@ -59,12 +60,17 @@ test("docs tour snippets compile (source of HighlightCode panels)", () => {
   }
 });
 
-test("docs playground presets compile", () => {
+test("docs playground presets emit every displayed target", () => {
   for (const name of ["jsx", "result", "row-poly", "fib"] as const) {
     const src = read(`apps/docs/src/examples/presets/${name}.mochi`);
-    const r = compile(src);
-    expect(isErr(r), `presets/${name}.mochi: ${isErr(r) ? JSON.stringify(r.error) : ""}`).toBe(
-      false,
-    );
+    const result = compileTargets(src, { runtime: true });
+    expect(
+      isErr(result),
+      `presets/${name}.mochi: ${isErr(result) ? JSON.stringify(result.error) : ""}`,
+    ).toBe(false);
+    if (isErr(result)) continue;
+    expect(result.value.js.trim().length, `${name} JavaScript is empty`).toBeGreaterThan(0);
+    expect(result.value.ts.trim().length, `${name} TypeScript is empty`).toBeGreaterThan(0);
+    expect(result.value.dts.trim().length, `${name} .d.ts is empty`).toBeGreaterThan(0);
   }
 });

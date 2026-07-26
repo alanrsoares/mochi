@@ -100,6 +100,7 @@ export function compile(src: string, opts: CompileOptions = {}): Result<string, 
 }
 
 export { codegenTs } from "./codegen-ts";
+export { type CompileTargets, compileTargets } from "./compile-targets";
 export { emitDts } from "./dts";
 export type { Diagnostic } from "./errors";
 export { formatError } from "./errors";

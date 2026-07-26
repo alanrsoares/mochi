@@ -1,4 +1,4 @@
-import { codegenTs, compile, type Diagnostic, emitDts, format, formatError } from "@mochi/compiler";
+import { type Diagnostic, format, formatError } from "@mochi/compiler";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
 import { h, render } from "preact";
@@ -7,6 +7,7 @@ import presetFib from "../examples/presets/fib.mochi?raw";
 import presetJsx from "../examples/presets/jsx.mochi?raw";
 import presetResult from "../examples/presets/result.mochi?raw";
 import presetRowPoly from "../examples/presets/row-poly.mochi?raw";
+import { createPlaygroundCompiler } from "../lib/playground-compiler";
 import {
   decodeSharedCode,
   encodeSharedCode,
@@ -70,6 +71,7 @@ export function Playground() {
   const [outputDts, setOutputDts] = useState("");
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
   const [compileMs, setCompileMs] = useState<number | null>(null);
+  const [compiling, setCompiling] = useState(false);
   const [activeTab, setActiveTab] = useState<RightTab>("js");
   const [autoRun, setAutoRun] = useState(readAutorun);
   const [shareCopied, setShareCopied] = useState(false);
@@ -83,6 +85,7 @@ export function Playground() {
   const dragging = useRef(false);
   const compileSeq = useRef(0);
   const urlSeq = useRef(0);
+  const compilerRef = useRef(createPlaygroundCompiler());
   const [activeLine, setActiveLine] = useState(1);
   const [scrollTop, setScrollTop] = useState(0);
   const [lineHeight, setLineHeight] = useState(EDITOR_LINE_HEIGHT);
@@ -130,6 +133,11 @@ export function Playground() {
   }, []);
 
   useEffect(() => {
+    const compiler = compilerRef.current;
+    return () => compiler.dispose();
+  }, []);
+
+  useEffect(() => {
     localStorage.setItem(AUTORUN_KEY, autoRun ? "1" : "0");
   }, [autoRun]);
 
@@ -153,49 +161,34 @@ export function Playground() {
   const evaluate = useCallback((source: string) => {
     compileSeq.current += 1;
     const seq = compileSeq.current;
-    const start = performance.now();
-    try {
-      const jsRes = compile(source, { runtime: true });
-      if (isErr(jsRes)) {
-        if (seq !== compileSeq.current) return;
-        setDiagnostics(jsRes.error);
-        setOutputJs("");
-        setOutputTs("");
-        setOutputDts("");
-        setCompileMs(performance.now() - start);
+    setCompiling(true);
+    void compilerRef.current.compile(source).then((result) => {
+      if (seq !== compileSeq.current) return;
+      setCompiling(false);
+      if (result.ok) {
+        setDiagnostics([]);
+        setOutputJs(result.value.js);
+        setOutputTs(result.value.ts);
+        setOutputDts(result.value.dts);
+        setCompileMs(result.value.ms);
         return;
       }
-
-      const tsRes = codegenTs(source);
-      const dtsRes = emitDts(source);
-      if (seq !== compileSeq.current) return;
-
-      setDiagnostics([]);
-      setOutputJs(jsRes.value);
-      setOutputTs(isErr(tsRes) ? "" : tsRes.value);
-      setOutputDts(isErr(dtsRes) ? "" : dtsRes.value);
-      // Surface TS/dts-only failures as problems even when JS succeeded.
-      const secondary: Diagnostic[] = [
-        ...(isErr(tsRes) ? tsRes.error : []),
-        ...(isErr(dtsRes) ? dtsRes.error : []),
-      ];
-      if (secondary.length > 0) setDiagnostics(secondary);
-      setCompileMs(performance.now() - start);
-    } catch (e: unknown) {
-      if (seq !== compileSeq.current) return;
-      setDiagnostics([
-        {
-          kind: "check",
-          message: e instanceof Error ? e.message : String(e),
-        },
-      ]);
       setOutputJs("");
       setOutputTs("");
       setOutputDts("");
-      setCompileMs(performance.now() - start);
-    }
+      setCompileMs(result.error.ms);
+      if (result.error.diagnostics) {
+        setDiagnostics(result.error.diagnostics);
+        return;
+      }
+      setDiagnostics([
+        {
+          kind: "check",
+          message: result.error.message ?? "Compilation failed",
+        },
+      ]);
+    });
   }, []);
-
   // Debounced autorun compile.
   useEffect(() => {
     if (!bootstrapped || !autoRun) return;
@@ -300,15 +293,16 @@ export function Playground() {
   const problemCount = diagnostics.length;
   const errorSpans = diagSpans(diagnostics);
   const statusOk = diagnostics.length === 0;
-  const statusText =
-    compileMs === null
+  const statusText = compiling
+    ? "compiling…"
+    : compileMs === null
       ? statusOk
         ? "ready"
         : "error"
       : statusOk
         ? `ok · ${compileMs.toFixed(1)}ms`
         : `error · ${compileMs.toFixed(1)}ms`;
-
+  const statusState = compiling ? "ok" : statusOk ? "ok" : "err";
   const tabs = (
     [
       ["js", "JavaScript"],
@@ -398,7 +392,7 @@ export function Playground() {
       autoRunLabel={autoRun ? "Auto-run ✓" : "Auto-run"}
       formatLabel={formatNotice ? "Formatted" : "Format"}
       shareLabel={shareCopied ? "Copied!" : "Copy Share Link"}
-      statusState={statusOk ? "ok" : "err"}
+      statusState={statusState}
       statusText={statusText}
       onToggleAutoRun={() => setAutoRun((v) => !v)}
       onRun={() => evaluate(code)}
