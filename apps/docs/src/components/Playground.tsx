@@ -79,6 +79,7 @@ export function Playground() {
   const [shareCopied, setShareCopied] = useState(false);
   const [formatNotice, setFormatNotice] = useState(false);
   const [splitPct, setSplitPct] = useState(50);
+  const [mobilePane, setMobilePane] = useState<"code" | "result">("code");
   const previewRef = useRef<HTMLDivElement>(null);
   const splitRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<HTMLTextAreaElement>(null);
@@ -392,113 +393,146 @@ export function Playground() {
     <PlaygroundView
       autoRunLabel={autoRun ? "Auto-run ✓" : "Auto-run"}
       formatLabel={formatNotice ? "Formatted" : "Format"}
-      shareLabel={shareCopied ? "Copied!" : "Copy Share Link"}
+      shareLabel={shareCopied ? "Copied!" : "Share"}
       statusState={statusState}
       statusText={statusText}
       onToggleAutoRun={() => setAutoRun((v) => !v)}
-      onRun={() => evaluate(code)}
+      onRun={() => {
+        evaluate(code);
+        if (!window.matchMedia("(min-width: 1024px)").matches) setMobilePane("result");
+      }}
       onFormat={handleFormat}
       onShare={handleShare}
       body={
-        <div ref={splitRef} className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        <>
           <div
-            className="flex min-h-0 min-w-0 flex-1 flex-col border-line border-b-2 lg:w-(--split) lg:flex-none lg:border-r-2 lg:border-b-0"
-            style={{ ["--split" as string]: `${splitPct}%` }}
+            className="grid shrink-0 grid-cols-2 border-line border-b-2 bg-peach lg:hidden"
+            role="tablist"
+            aria-label="Editor or result"
           >
-            <div className="relative flex min-h-72 flex-1 overflow-hidden bg-foam lg:min-h-0">
-              <pre
-                ref={gutterRef}
-                aria-hidden="true"
-                className="m-0 select-none overflow-hidden whitespace-pre border-line border-r px-2 py-4 text-right font-mono text-2xs text-mute"
-                style={{ lineHeight: `${lineHeight}px` }}
-              >
-                {gutterText}
-              </pre>
-              <div className="relative min-w-0 flex-1">
-                <div
+            <PaneTab
+              className="flex justify-center"
+              role="tab"
+              aria-selected={mobilePane === "code"}
+              onClick={() => setMobilePane("code")}
+              $active={mobilePane === "code" ? "on" : "off"}
+            >
+              Code
+            </PaneTab>
+            <PaneTab
+              className="flex justify-center"
+              role="tab"
+              aria-selected={mobilePane === "result"}
+              onClick={() => setMobilePane("result")}
+              $active={mobilePane === "result" ? "on" : "off"}
+            >
+              Result
+            </PaneTab>
+          </div>
+          <div ref={splitRef} className="flex min-h-0 flex-1 flex-col lg:flex-row">
+            <div
+              className={`${mobilePane === "code" ? "flex" : "hidden"} min-h-0 min-w-0 flex-1 flex-col border-line lg:flex lg:w-(--split) lg:flex-none lg:border-r-2`}
+              style={{ ["--split" as string]: `${splitPct}%` }}
+            >
+              <div className="relative flex min-h-0 flex-1 overflow-hidden bg-foam">
+                <pre
+                  ref={gutterRef}
                   aria-hidden="true"
-                  className="pointer-events-none absolute inset-x-0 bg-fur/10"
-                  style={{
-                    height: `${lineHeight}px`,
-                    top: `${EDITOR_PAD_TOP + (Math.min(activeLine, lineCount) - 1) * lineHeight - scrollTop}px`,
-                  }}
-                />
-                <EditorMirror ref={mirrorRef} style={{ lineHeight: `${lineHeight}px` }}>
-                  <HighlightedCode
-                    code={code}
-                    lang="mochi"
-                    enableTwoslash={false}
-                    errorSpans={errorSpans}
-                    overlay
-                    lineHeightPx={lineHeight}
-                  />
-                </EditorMirror>
-                <EditorInput
-                  ref={editorRef}
+                  className="m-0 select-none overflow-hidden whitespace-pre border-line border-r px-2 py-4 text-right font-mono text-2xs text-mute"
                   style={{ lineHeight: `${lineHeight}px` }}
-                  value={code}
-                  onInput={(e: Event) => {
-                    const el = e.target as HTMLTextAreaElement;
-                    setCode(el.value);
-                    syncCursor(el);
-                  }}
-                  onKeyDown={(e: KeyboardEvent) => {
-                    if (e.key !== "Tab") return;
-                    e.preventDefault();
-                    const el = e.target as HTMLTextAreaElement;
-                    const start = el.selectionStart;
-                    const end = el.selectionEnd;
-                    const next = `${el.value.slice(0, start)}  ${el.value.slice(end)}`;
-                    setCode(next);
-                    const caret = start + 2;
-                    requestAnimationFrame(() => {
-                      el.setSelectionRange(caret, caret);
+                >
+                  {gutterText}
+                </pre>
+                <div className="relative min-w-0 flex-1">
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-x-0 bg-fur/10"
+                    style={{
+                      height: `${lineHeight}px`,
+                      top: `${EDITOR_PAD_TOP + (Math.min(activeLine, lineCount) - 1) * lineHeight - scrollTop}px`,
+                    }}
+                  />
+                  <EditorMirror ref={mirrorRef} style={{ lineHeight: `${lineHeight}px` }}>
+                    <HighlightedCode
+                      code={code}
+                      lang="mochi"
+                      enableTwoslash={false}
+                      errorSpans={errorSpans}
+                      overlay
+                      lineHeightPx={lineHeight}
+                    />
+                  </EditorMirror>
+                  <EditorInput
+                    ref={editorRef}
+                    style={{ lineHeight: `${lineHeight}px` }}
+                    value={code}
+                    onInput={(e: Event) => {
+                      const el = e.target as HTMLTextAreaElement;
+                      setCode(el.value);
                       syncCursor(el);
-                    });
-                  }}
-                  onClick={(e: Event) => syncCursor(e.target as HTMLTextAreaElement)}
-                  onKeyUp={(e: Event) => syncCursor(e.target as HTMLTextAreaElement)}
-                  onScroll={(e: Event) => {
-                    const el = e.target as HTMLTextAreaElement;
-                    setScrollTop(el.scrollTop);
-                    if (gutterRef.current) gutterRef.current.scrollTop = el.scrollTop;
-                    if (mirrorRef.current) {
-                      mirrorRef.current.scrollTop = el.scrollTop;
-                      mirrorRef.current.scrollLeft = el.scrollLeft;
-                    }
-                  }}
-                  spellcheck={false}
-                  autoComplete="off"
-                  autoCorrect="off"
-                  ariaLabel="Mochi source"
-                />
+                    }}
+                    onKeyDown={(e: KeyboardEvent) => {
+                      if (e.key !== "Tab") return;
+                      e.preventDefault();
+                      const el = e.target as HTMLTextAreaElement;
+                      const start = el.selectionStart;
+                      const end = el.selectionEnd;
+                      const next = `${el.value.slice(0, start)}  ${el.value.slice(end)}`;
+                      setCode(next);
+                      const caret = start + 2;
+                      requestAnimationFrame(() => {
+                        el.setSelectionRange(caret, caret);
+                        syncCursor(el);
+                      });
+                    }}
+                    onClick={(e: Event) => syncCursor(e.target as HTMLTextAreaElement)}
+                    onKeyUp={(e: Event) => syncCursor(e.target as HTMLTextAreaElement)}
+                    onScroll={(e: Event) => {
+                      const el = e.target as HTMLTextAreaElement;
+                      setScrollTop(el.scrollTop);
+                      if (gutterRef.current) gutterRef.current.scrollTop = el.scrollTop;
+                      if (mirrorRef.current) {
+                        mirrorRef.current.scrollTop = el.scrollTop;
+                        mirrorRef.current.scrollLeft = el.scrollLeft;
+                      }
+                    }}
+                    spellcheck={false}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    ariaLabel="Mochi source"
+                  />
+                </div>
               </div>
             </div>
+
+            <button
+              type="button"
+              aria-label="Resize editor"
+              className="hidden w-2 shrink-0 cursor-col-resize items-center justify-center border-0 bg-peach p-0 hover:bg-fur/20 lg:flex"
+              onMouseDown={() => {
+                dragging.current = true;
+                document.body.style.cursor = "col-resize";
+                document.body.style.userSelect = "none";
+              }}
+            >
+              <span className="h-8 w-1 rounded-full bg-line-strong" />
+            </button>
+
+            <div
+              className={`${mobilePane === "result" ? "flex" : "hidden"} min-h-0 min-w-0 flex-1 lg:flex`}
+            >
+              <PlaygroundRight
+                tabs={tabs}
+                pane={
+                  <>
+                    {outputHost}
+                    {activePane}
+                  </>
+                }
+              />
+            </div>
           </div>
-
-          <button
-            type="button"
-            aria-label="Resize editor"
-            className="hidden w-2 shrink-0 cursor-col-resize items-center justify-center border-0 bg-peach p-0 hover:bg-fur/20 lg:flex"
-            onMouseDown={() => {
-              dragging.current = true;
-              document.body.style.cursor = "col-resize";
-              document.body.style.userSelect = "none";
-            }}
-          >
-            <span className="h-8 w-1 rounded-full bg-line-strong" />
-          </button>
-
-          <PlaygroundRight
-            tabs={tabs}
-            pane={
-              <>
-                {outputHost}
-                {activePane}
-              </>
-            }
-          />
-        </div>
+        </>
       }
     />
   );

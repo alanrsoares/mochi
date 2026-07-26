@@ -11,12 +11,12 @@ let PlaygroundView = props =>
         {props.autoRunLabel}
       </ToolBtn>
       <ToolBtn onClick={props.onRun} title="Run (⌘E)">
-        {"Run "}
-        <span className="text-mute">{"(⌘E)"}</span>
+        {"Run"}
+        <span className="hidden text-mute sm:inline">{" (⌘E)"}</span>
       </ToolBtn>
       <ToolBtn onClick={props.onFormat} title="Format (⌘S)">
         {props.formatLabel}
-        <span className="text-mute">{" (⌘S)"}</span>
+        <span className="hidden text-mute sm:inline">{" (⌘S)"}</span>
       </ToolBtn>
       <ToolBtnSolid onClick={props.onShare} title="Copy share link">
         {props.shareLabel}

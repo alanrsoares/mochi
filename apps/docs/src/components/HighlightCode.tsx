@@ -222,7 +222,9 @@ export function HighlightedCode({
   return (
     <code
       className={
-        overlay ? "block font-mono font-normal text-xs" : "block font-mono text-xs leading-relaxed"
+        overlay
+          ? "block font-mono font-normal text-base sm:text-xs"
+          : "block font-mono text-xs leading-relaxed"
       }
       style={
         overlay && lineHeightPx !== undefined ? { lineHeight: `${lineHeightPx}px` } : undefined
