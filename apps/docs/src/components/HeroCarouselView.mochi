@@ -1,5 +1,4 @@
-// Presentational carousel chrome. Index / timer / pause live in HeroCarousel.tsx
-// (hooks — let-in → IIFE breaks Rules of Hooks).
+// Presentational carousel chrome. Index / timer / pause live in HeroCarousel.mochi.
 import { CarouselNav } from "../ui/primitives"
 
 let HeroCarouselView = props =>

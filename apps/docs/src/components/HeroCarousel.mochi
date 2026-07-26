@@ -1,0 +1,72 @@
+// Hero artwork carousel — hooks in mochi (Counter pattern). Slide jpg URLs +
+// interval/DOM timer stay in `lib/hero-slides.ts` (Vite assets / window).
+import {
+  useState,
+  useEffect,
+  useCallback,
+  hookDeps
+} from "@mochi/plugin-preact/hooks"
+import { CarouselDot, CarouselImg } from "../ui/primitives"
+import { HeroCarouselView } from "./HeroCarouselView"
+
+type Slide = { src: string, alt: string, kicker: string, title: string }
+
+extern heroSlides : [Slide] = "../lib/hero-slides" "heroSlides"
+extern HERO_INTERVAL_MS : number = "../lib/hero-slides" "HERO_INTERVAL_MS"
+/// Returns an effect cleanup (`c -> d`).
+extern startHeroTick : (a -> b) -> number -> c -> d = "../lib/hero-slides" "startHeroTick"
+
+let n = Array.length(heroSlides)
+
+/// Indexed map — prelude `map` is unary; dots/images need the slide index.
+/// Recursion is top-level (`let-in` is non-recursive).
+let mapIndexedGo = (f, xs, i, acc) => switch Array.get(i, xs) {
+  | None => acc
+  | Some(x) => mapIndexedGo(f, xs, i + 1, [...acc, f(x, i)])
+}
+let mapIndexed = (f, xs) => mapIndexedGo(f, xs, 0, [])
+
+let HeroCarousel = _ =>
+  let (index, setIndex) = useState(0) in
+    let (paused, setPaused) = useState(false) in
+    let go = useCallback(next => setIndex((next + n) % n), []) in
+    let _fx = useEffect(() =>
+      paused ? _ => 0 : startHeroTick(() => go(index + 1), HERO_INTERVAL_MS))(
+      hookDeps(go, index, paused)
+    ) in
+    let slide = Array.get(index, heroSlides) in
+      switch slide {
+        | None => <div />
+        | Some(s) => <HeroCarouselView
+            kicker={s.kicker}
+            title={s.title}
+            onPause={() => setPaused(true)}
+            onResume={() => setPaused(false)}
+            onPrev={() => go(index - 1)}
+            onNext={() => go(index + 1)}
+            images={mapIndexed(
+              (item, i) =>
+                <CarouselImg
+                  key={item.src}
+                  src={item.src}
+                  alt={item.alt}
+                  $active={i == index ? "on" : "off"}
+                  loading={i == 0 ? "eager" : "lazy"}
+                  decoding="async"
+                />,
+              heroSlides
+            )}
+            dots={mapIndexed(
+              (item, i) =>
+                <CarouselDot
+                  key={item.src}
+                  role="tab"
+                  ariaSelected={i == index}
+                  ariaLabel={item.title}
+                  $active={i == index ? "on" : "off"}
+                  onClick={() => go(i)}
+                />,
+              heroSlides
+            )}
+          />
+      }

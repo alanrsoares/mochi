@@ -18,6 +18,10 @@ export default defineConfig({
     alias: {
       "@mochi/compiler": path.resolve(__dirname, "../../src/compile.ts"),
       "@mochi/root": path.resolve(__dirname, "../../"),
+      "@mochi/plugin-preact/hooks": path.resolve(
+        __dirname,
+        "../../packages/plugin-preact/hooks.mochi",
+      ),
       "node:path": path.resolve(__dirname, "node_modules/path-browserify"),
       path: path.resolve(__dirname, "node_modules/path-browserify"),
       // @styled-cva/react → Preact (see styled-cva Preact compat docs)

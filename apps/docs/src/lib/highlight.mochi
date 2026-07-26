@@ -97,8 +97,8 @@ export let highlightMochiCode = code => switch lex(code) {
 let isTwoslashLine = line =>
   Str.startsWith("//", Str.trim(line)) && Str.contains("^?", line)
 
-/// Nested recursive `let go = … go … in` codegen is broken (IIFE free-var);
-/// keep recursion at top level so `const go = … go …` self-binds.
+/// Local `let-in` is non-recursive (language.md). Keep self-recursion at
+/// top-level `let` so `const go = … go …` self-binds.
 let caretColAt = (line, j) => switch Str.get(j, line) {
   | None => 0
   | Some("^") => j

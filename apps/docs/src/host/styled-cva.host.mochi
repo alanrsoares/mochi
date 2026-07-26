@@ -5,6 +5,6 @@
 // (`tw.div("x")` and `tw.div("x", { variants })`). Fixed-arity HM arrows would
 // type 1-arg sites as partial application. The vendor plugin's inferCall +
 // dtsBinding hooks recover component schemes / `$tone` unions from the call AST;
-// jsxPlugin checks attrs on those components. LSP `tw.*` completion is still
-// open (tracer #13).
+// jsxPlugin checks attrs on those components. LSP completes `$tone` lit unions
+// (Wave 12 / tracer #48); factory `tw.*` members stay open-world opaque.
 export extern tw : a = "@styled-cva/react" "default"

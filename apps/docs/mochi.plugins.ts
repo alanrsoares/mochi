@@ -5,8 +5,13 @@
  * (`scripts/gen-mochi-dts.ts`), and the docs LSP entry (`src/lsp/docs-server.ts`)
  * all import this one list. Registering a new vendor kit is a one-line edit here.
  */
+import { preactExtension } from "@mochi/plugin-preact";
 import { reReducedExtension } from "@mochi/plugin-re-reduced";
 import { styledCvaExtension } from "@mochi/plugin-styled-cva";
 import type { HostExtension } from "../../src/extensions";
 
-export const docsVendorPlugins: HostExtension[] = [styledCvaExtension, reReducedExtension];
+export const docsVendorPlugins: HostExtension[] = [
+  styledCvaExtension,
+  reReducedExtension,
+  preactExtension,
+];

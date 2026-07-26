@@ -1,7 +1,8 @@
 import { Counter } from "./components/Counter"
 import { HeaderBadge } from "./components/HeaderBadge"
 import { SyntaxPanel } from "./components/SyntaxPanel"
-import { HighlightedCode, HeroCarousel } from "./host/widgets.host"
+import { HeroCarousel } from "./components/HeroCarousel"
+import { HighlightedCode } from "./host/widgets.host"
 import {
   NavLink,
   GhostPill,
@@ -209,7 +210,7 @@ let App = props =>
             tone="plum"
             label="state"
             title="Host factory seam"
-            body="defineContainer behind *.host.mochi; hooks stay in TSX. A vendor plugin should emit the container dts — no hand cast bridge."
+            body="defineContainer behind *.host.mochi; hooks under the component lambda (Counter, HeroCarousel). Vendor plugin emits ContainerDef — no hand cast bridge."
           />
           <InteropRow
             tone="ok"
