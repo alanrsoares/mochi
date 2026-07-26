@@ -1,0 +1,253 @@
+/**
+ * LSP-shaped completion, computed from the compiler pipeline but free of any
+ * editor/protocol dependency so it stays unit-testable under Bun (ADR 0013).
+ *
+ * Member completions after `.` tolerate incomplete buffers (`Task.`, `r.ab`) via
+ * a lexical rewrite that strips `.prefix` before typechecking. Value completions
+ * in v1 are top-level + prelude only (nested locals deferred).
+ */
+import { resolve } from "node:path";
+import { map, match as matchMaybe } from "@onrails/maybe";
+import { isErr } from "@onrails/result";
+import type { Program } from "./ast";
+import { toTypedProgram } from "./compile";
+import type {
+  CompleteMemberApi,
+  CompletionItem,
+  CompletionKind,
+  LanguagePlugin,
+} from "./extensions";
+import { resolvePlugins, runCompleteMemberHooks } from "./extensions";
+import type { Env, InferResult, TypeAt } from "./infer";
+import { lex } from "./lexer";
+import { moduleContext } from "./module";
+import { documentSymbolsAt } from "./nav";
+import { parse } from "./parser";
+import { preludeEnv, preludeNamespaces } from "./prelude";
+import { spanContainsClosed, tightestHit } from "./span";
+import { foldAliases, type Row, type Type } from "./types";
+
+export type { CompletionItem, CompletionKind };
+
+export type CompleteOptions = {
+  plugins?: LanguagePlugin[];
+  /** `import * as Alias` member schemes (module-aware path). */
+  nsImports?: Map<string, Env>;
+};
+
+/** Lexical `receiver.prefix` ending at `offset` — incomplete buffers included. */
+type MemberTrigger = {
+  receiver: string;
+  prefix: string;
+  /** Index of `.` in `src`. */
+  dotStart: number;
+  /** Start of the receiver identifier. */
+  recvStart: number;
+};
+
+const memberTriggerAt = (src: string, offset: number): MemberTrigger | null => {
+  const before = src.slice(0, offset);
+  const m = before.match(/([A-Za-z_][\w]*)\.([\w]*)$/);
+  if (!m || m.index === undefined) return null;
+  const receiver = m[1]!;
+  const prefix = m[2]!;
+  return {
+    receiver,
+    prefix,
+    recvStart: m.index,
+    dotStart: m.index + receiver.length,
+  };
+};
+
+/** Identifier (or empty) being typed at `offset` when not in a member trigger. */
+const identPrefixAt = (src: string, offset: number): string => {
+  const before = src.slice(0, offset);
+  const m = before.match(/([A-Za-z_][\w]*)$/);
+  return m?.[1] ?? "";
+};
+
+/** Known labels on a (possibly open) record row. */
+const rowLabels = (row: Row): string[] => {
+  const out: string[] = [];
+  let cur: Row = row;
+  while (cur.kind === "extend") {
+    out.push(cur.label);
+    cur = cur.rest;
+  }
+  return out;
+};
+
+/** Prefer structural record under an alias fold for field listing. */
+const recordLabels = (t: Type, aliases: InferResult["aliases"]): string[] => {
+  const folded = foldAliases(t, aliases);
+  if (folded.kind === "record") return rowLabels(folded.row);
+  if (t.kind === "record") return rowLabels(t.row);
+  return [];
+};
+
+const tightestType = (types: TypeAt[], offset: number) =>
+  tightestHit(types, offset, spanContainsClosed);
+
+const filterPrefix = (items: CompletionItem[], prefix: string): CompletionItem[] => {
+  if (!prefix) return items;
+  return items.filter((i) => i.label.startsWith(prefix));
+};
+
+const dedupeSort = (items: CompletionItem[]): CompletionItem[] => {
+  const seen = new Set<string>();
+  const out: CompletionItem[] = [];
+  for (const i of items) {
+    if (seen.has(i.label)) continue;
+    seen.add(i.label);
+    out.push(i);
+  }
+  return out.toSorted((a, b) => a.label.localeCompare(b.label));
+};
+
+const parseProgram = (src: string, plugins?: LanguagePlugin[]): Program | null => {
+  const lexed = lex(src);
+  if (isErr(lexed)) return null;
+  const parsed = parse(lexed.value, { plugins });
+  return isErr(parsed) ? null : parsed.value;
+};
+
+/** Namespace member labels — prelude table or `import * as` env. */
+const namespaceMembers = (
+  receiver: string,
+  nsImports: Map<string, Env> | undefined,
+): CompletionItem[] | null => {
+  const prelude = preludeNamespaces[receiver];
+  if (prelude) {
+    return Object.keys(prelude).map((label) => ({
+      label,
+      kind: "member" as const,
+      detail: `${receiver}.${label}`,
+    }));
+  }
+  const imported = nsImports?.get(receiver);
+  if (imported) {
+    return [...imported.keys()].map((label) => ({
+      label,
+      kind: "member" as const,
+      detail: `${receiver}.${label}`,
+    }));
+  }
+  return null;
+};
+
+/**
+ * Strip `.prefix` so `… = r.` / `… = Task.m` becomes `… = r` / `… = Task`, then
+ * typecheck and read the receiver's zonked type for record field labels.
+ */
+const recordFieldsAt = (
+  src: string,
+  trigger: MemberTrigger,
+  plugins?: LanguagePlugin[],
+): CompletionItem[] => {
+  const rewritten =
+    src.slice(0, trigger.dotStart) + src.slice(trigger.dotStart + 1 + trigger.prefix.length);
+  const r = toTypedProgram(rewritten, {
+    open: true,
+    namespaces: preludeNamespaces,
+    plugins,
+  });
+  if (isErr(r)) return [];
+  return matchMaybe(
+    map(tightestType(r.value.res.types, trigger.recvStart), (hit) =>
+      recordLabels(hit.type, r.value.res.aliases).map((label) => ({
+        label,
+        kind: "field" as const,
+      })),
+    ),
+    (items) => items,
+    () => [],
+  );
+};
+
+const pluginMembers = (api: CompleteMemberApi, plugins: LanguagePlugin[]): CompletionItem[] => {
+  const hooks = plugins.flatMap((p) => (p.completeMembers ? [p.completeMembers] : []));
+  return runCompleteMemberHooks(hooks, api) ?? [];
+};
+
+/** Top-level + prelude value names (v1 — nested locals deferred). */
+const valueItems = (src: string, plugins?: LanguagePlugin[]): CompletionItem[] => {
+  const items: CompletionItem[] = [];
+  for (const name of Object.keys(preludeEnv)) {
+    items.push({ label: name, kind: "value", detail: "prelude" });
+  }
+  for (const name of Object.keys(preludeNamespaces)) {
+    items.push({ label: name, kind: "value", detail: "namespace" });
+  }
+  for (const s of documentSymbolsAt(src)) {
+    const kind: CompletionKind = s.kind === "type" ? "type" : s.kind === "ctor" ? "ctor" : "value";
+    items.push({
+      label: s.name,
+      kind,
+      detail: s.detail ?? s.kind,
+    });
+  }
+  const prog = parseProgram(src, plugins);
+  if (prog) {
+    for (const s of prog.stmts) {
+      if (s.kind !== "import") continue;
+      if (s.alias) items.push({ label: s.alias.name, kind: "value", detail: "import *" });
+      for (const n of s.names) items.push({ label: n.name, kind: "value", detail: "import" });
+    }
+  }
+  return items;
+};
+
+const membersAt = (
+  src: string,
+  trigger: MemberTrigger,
+  opts: CompleteOptions,
+): CompletionItem[] => {
+  const plugins = resolvePlugins(opts.plugins);
+  const ns = namespaceMembers(trigger.receiver, opts.nsImports);
+  if (ns) return filterPrefix(ns, trigger.prefix);
+  const fields = recordFieldsAt(src, trigger, plugins);
+  if (fields.length > 0) return filterPrefix(fields, trigger.prefix);
+  return filterPrefix(
+    pluginMembers({ receiver: trigger.receiver, prefix: trigger.prefix }, plugins),
+    trigger.prefix,
+  );
+};
+
+/**
+ * Completions at `offset`. Member trigger (after `.`) prefers namespaces, then
+ * record fields, then plugin hooks. Otherwise top-level + prelude value names.
+ */
+export const completeAt = (
+  src: string,
+  offset: number,
+  opts: CompleteOptions = {},
+): CompletionItem[] => {
+  const trigger = memberTriggerAt(src, offset);
+  if (trigger) return dedupeSort(membersAt(src, trigger, opts));
+  return dedupeSort(filterPrefix(valueItems(src, opts.plugins), identPrefixAt(src, offset)));
+};
+
+export type ModuleCompleteOptions = { plugins?: LanguagePlugin[] };
+
+/**
+ * Module-aware completion: resolve imports so `import * as R` members and
+ * plugin-backed `tw.*` work. Degrades to single-file `completeAt` if the dep
+ * graph can't be resolved.
+ */
+export const moduleCompleteAt = async (
+  path: string,
+  src: string,
+  offset: number,
+  readFile: (p: string) => Promise<string>,
+  opts: ModuleCompleteOptions = {},
+): Promise<CompletionItem[]> => {
+  const entry = resolve(path);
+  const read = (p: string): Promise<string> =>
+    resolve(p) === entry ? Promise.resolve(src) : readFile(p);
+  const ctx = await moduleContext(entry, read, { plugins: opts.plugins });
+  if (isErr(ctx)) return completeAt(src, offset, { plugins: opts.plugins });
+  return completeAt(src, offset, {
+    plugins: opts.plugins,
+    nsImports: ctx.value.nsImports,
+  });
+};

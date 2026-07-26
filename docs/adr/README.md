@@ -50,4 +50,5 @@ What else was on the table and why not.
 | [0010](0010-host-type-interop.md) | Host type interop (Mochi → TS/TSX) | Accepted |
 | [0011](0011-language-plugins.md) | Language plugins (`HostExtension` → `LanguagePlugin`; JSX as builtin plugin) | Accepted |
 | [0012](0012-host-interop-end-state.md) | Host interop end state (typed seam + thin sugar; ReScript-informed) | Accepted |
+| [0013](0013-lsp-completion.md) | LSP completion provider (compiler-first + plugin member hook) | Accepted |
 

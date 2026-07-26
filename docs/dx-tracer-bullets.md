@@ -37,7 +37,7 @@ see [ADR 0010](./adr/0010-host-type-interop.md) and the
 
 | # | Title | Type | Blocked by | Status |
 |---|---|---|---|---|
-| 13 | LSP completion provider — value/field/import members (enables `tw.*`) | HITL→AFK | design | todo |
+| 13 | LSP completion provider — value/field/import members (enables `tw.*`) | HITL→AFK | design | done |
 | 14 | JSX-attr checking against component prop types (enables `$tone`/prop hints) | HITL | design | done |
 | 15 | Overloaded / variadic extern signatures so `tw.div` types honestly at both arities | HITL | design | done (host ext) |
 | 16 | Typed host factory externs (`defineContainer`) + container dts (Gap A) | HITL→AFK | design | done |

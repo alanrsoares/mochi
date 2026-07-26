@@ -136,6 +136,21 @@ export type DtsBindingHook = (
   fallback: () => string,
 ) => string | null;
 
+/** Completion item kinds — shared by the compiler API and plugin member hooks (ADR 0013). */
+export type CompletionKind = "value" | "field" | "member" | "ctor" | "type";
+
+/** One completion candidate — protocol-free so Bun unit tests can assert on it. */
+export type CompletionItem = { label: string; kind: CompletionKind; detail?: string };
+
+/** Context for a `completeMembers` hook — receiver name + typed prefix after `.`. */
+export type CompleteMemberApi = { receiver: string; prefix: string };
+
+/**
+ * Suggest members after `receiver.` when core has none (opaque host externs like
+ * `tw`). `null` falls through; first non-null wins (registration order).
+ */
+export type CompleteMemberHook = (api: CompleteMemberApi) => CompletionItem[] | null;
+
 /**
  * A cross-pass adapter: builtin (`jsxPlugin`) or vendor (styled-cva, …).
  * Hooks are listed in pipeline order — `parse` runs first, and a plugin that
@@ -149,15 +164,18 @@ export type LanguagePlugin = {
   format?: FormatHook;
   bindingType?: BindingTypeHook;
   dtsBinding?: DtsBindingHook;
+  completeMembers?: CompleteMemberHook;
 };
 
 /**
- * Back-compat alias: the `inferCall` + `dtsBinding` subset of `LanguagePlugin`
- * — a real subset now that `format`/`bindingType` exist. Existing vendor
- * plugins (`@mochi/plugin-styled-cva`) satisfy `LanguagePlugin` unchanged —
- * they just don't populate the hooks the builtin JSX plugin uses.
+ * Back-compat alias: the host-interop + completion subset of `LanguagePlugin`.
+ * Existing vendor plugins (`@mochi/plugin-styled-cva`) satisfy `LanguagePlugin`
+ * unchanged — they just don't populate the hooks the builtin JSX plugin uses.
  */
-export type HostExtension = Pick<LanguagePlugin, "name" | "inferCall" | "dtsBinding">;
+export type HostExtension = Pick<
+  LanguagePlugin,
+  "name" | "inferCall" | "dtsBinding" | "completeMembers"
+>;
 
 /**
  * Builtin plugins registered by default on every standard compile path (CLI,
@@ -259,4 +277,16 @@ export const runDtsBindingHooks = (
     if (r !== null) return r;
   }
   return fallback();
+};
+
+/** First complete-members hook that returns a list wins; `null` from all → none. */
+export const runCompleteMemberHooks = (
+  hooks: CompleteMemberHook[],
+  api: CompleteMemberApi,
+): CompletionItem[] | null => {
+  for (const hook of hooks) {
+    const r = hook(api);
+    if (r !== null) return r;
+  }
+  return null;
 };
