@@ -312,8 +312,14 @@
           "match": "\\|>"
         },
         {
+          "comment": "Lambda arrow (distinct from type `->` so themes can split them)",
           "name": "keyword.operator.arrow.mochi",
           "match": "=>"
+        },
+        {
+          "comment": "Type arrow — `a -> b`. Separate scope from `=>` and from parens so ligature `→` does not paint the same as `(`.",
+          "name": "keyword.operator.type.mochi",
+          "match": "->"
         },
         {
           "name": "keyword.operator.bar.mochi",
@@ -322,6 +328,14 @@
         {
           "name": "keyword.operator.assignment.mochi",
           "match": "="
+        },
+        {
+          "name": "punctuation.section.parens.begin.mochi",
+          "match": "\\("
+        },
+        {
+          "name": "punctuation.section.parens.end.mochi",
+          "match": "\\)"
         },
         {
           "name": "punctuation.definition.sigil.mochi",
