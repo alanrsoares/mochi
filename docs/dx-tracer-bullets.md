@@ -185,6 +185,20 @@ lambdas / `let-in` / match arms via `SymbolIndex.bindingsAt`.
 **Wave 9 shipped:** cursor inside a nested scope completes lambda params,
 letin/`let?`/`let!` binds, and match-arm pattern binds (shadowing-aware).
 
+## Wave 10 (re-reduced bridge shrink — ADR 0012)
+
+Replace config-AST reverse typing with one structural HM source of truth.
+`defineContainer(name, config)` infers `{ name, ...config }`; the dts hook only
+wraps inferred state/action fields in the outbound host generic.
+
+| # | Title | Type | Blocked by | Status |
+|---|---|---|---|---|
+| 45 | re-reduced structural HM + inferred-shape outbound dts | AFK | 38 | done |
+
+**Wave 10 shipped:** nested state and action fields appear in Mochi hover;
+config bindings (not only inline literals) emit precise `ContainerDef<…>`
+without a hand cast bridge.
+
 ## Slice briefs
 
 ### 0 — Rename to `Diagnostic`
@@ -1262,4 +1276,25 @@ Wire into `completeAt` value completions so nested locals appear.
 ## Blocked by
 
 13
+
+---
+
+### 45 — re-reduced structural HM + thin outbound dts
+
+## What to build
+
+Infer `defineContainer(name, config)` as its runtime `{ name, ...config }`
+record. Give dts hooks access to the folded inferred type and TS renderer, then
+derive `ContainerDef<S, R, …>` from that type rather than walking config AST.
+
+## Acceptance criteria
+
+- [x] Hover/type scheme includes structural state and action fields
+- [x] Config passed through a binding still emits precise `ContainerDef`
+- [x] No state-value or action-record AST reverse typer remains
+- [x] `bun run check:full` green
+
+## Blocked by
+
+38
 

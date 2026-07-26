@@ -23,13 +23,16 @@ export let counter = defineContainer(
 )
 `;
 
-test("re-reduced extension: defineContainer binding has a name field", () => {
+test("re-reduced infer preserves the config as a structural HM record", () => {
   const r = toTypedProgram(SRC, { open: true, namespaces: preludeNamespaces, plugins });
   expect(isErr(r)).toBe(false);
   const sc = unwrapOk(r).res.env.get("counter")!;
   const shown = showScheme(sc, unwrapOk(r).res.aliases);
   expect(shown).toContain("name");
   expect(shown).toContain("string");
+  expect(shown).toContain("state: { count: number }");
+  expect(shown).toContain("actions:");
+  expect(shown).toContain("increment:");
 });
 
 test("re-reduced dtsBinding emits ContainerDef with state + void actions", () => {
@@ -42,6 +45,22 @@ test("re-reduced dtsBinding emits ContainerDef with state + void actions", () =>
   expect(dts).toContain("ActionSpec");
   expect(dts).toContain("& { name: string }");
   expect(dts).not.toMatch(/counter: unknown/);
+});
+
+test("re-reduced dts uses inferred shape when config is a binding", () => {
+  const src = `
+export extern defineContainer : a = "@re-reduced/preact" "defineContainer"
+let config = {
+  state: { profile: { name: "Ada" }, active: true },
+  actions: on => { toggle: on(s => { active: not(s.active) }) }
+}
+export let profile = defineContainer("profile", config)
+`;
+  const dts = unwrapOk(emitDts(src, { plugins }));
+  expect(dts).toContain(
+    'ContainerDef<{ profile: { name: string }; active: boolean }, { toggle: import("@re-reduced/preact").ActionSpec<',
+  );
+  expect(dts).not.toContain("profile: unknown");
 });
 
 test("without extension, defineContainer binding stays unknown in dts", () => {

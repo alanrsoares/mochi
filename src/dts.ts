@@ -642,8 +642,16 @@ function declOf(
     .with({ kind: "let" }, (letin) => {
       const sc = schemeOf(letin.name);
       if (!sc || letin.name.startsWith("$")) return null;
-      const ty = runDtsBindingHooks(hooks.dtsBinding, letin.name, sc, letin.value, aliases, () =>
-        bindingTsType(sc, letin.value, aliases, hooks.bindingType),
+      const fallback = () => bindingTsType(sc, letin.value, aliases, hooks.bindingType);
+      const folded = foldAliases(sc.type, aliases);
+      const ty = runDtsBindingHooks(
+        hooks.dtsBinding,
+        letin.name,
+        sc,
+        letin.value,
+        aliases,
+        fallback,
+        { folded, tsType: (t) => tsOf(t, new Map()) },
       );
       return `export declare const ${letin.name}: ${ty};`;
     })
