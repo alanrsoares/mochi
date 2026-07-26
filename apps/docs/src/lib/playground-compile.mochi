@@ -1,0 +1,14 @@
+// Playground compile as a mochi `Task a e` (ADR 0006). The host is the sync
+// fallback in `playground-compiler.ts` — same Result shape the UI worker path
+// uses. Diagnostics stay opaque (`a`); callers that need them stay on the TS
+// façade. `Task.run` at the edge yields `Promise (Result Emit a)`.
+
+type Emit = { js: string, ts: string, dts: string, ms: number }
+
+extern compileSync : string -> Task Emit a = "./playground-compiler" "compileSyncTask"
+
+/// Kick off a sync compile. Host Promise settles to Ok(emit) or Err(diagnostics|message).
+export let runCompile = source => Task.run(compileSync(source))
+
+/// Keep only the JS emit; failures stay on the error track.
+export let jsOf = source => compileSync(source) |> Task.map(e => e.js)

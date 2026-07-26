@@ -164,32 +164,34 @@ export function Playground() {
     compileSeq.current += 1;
     const seq = compileSeq.current;
     setCompiling(true);
-    void compilerRef.current.compile(source).then((result) => {
-      if (seq !== compileSeq.current) return;
-      setCompiling(false);
-      if (result.ok) {
-        setDiagnostics([]);
-        setOutputJs(result.value.js);
-        setOutputTs(result.value.ts);
-        setOutputDts(result.value.dts);
-        setCompileMs(result.value.ms);
-        return;
-      }
-      setOutputJs("");
-      setOutputTs("");
-      setOutputDts("");
-      setCompileMs(result.error.ms);
-      if (result.error.diagnostics) {
-        setDiagnostics(result.error.diagnostics);
-        return;
-      }
-      setDiagnostics([
-        {
-          kind: "check",
-          message: result.error.message ?? "Compilation failed",
-        },
-      ]);
-    });
+    void compilerRef.current
+      .compile(source)()
+      .then((result) => {
+        if (seq !== compileSeq.current) return;
+        setCompiling(false);
+        if (result._tag === "Ok") {
+          setDiagnostics([]);
+          setOutputJs(result.value.js);
+          setOutputTs(result.value.ts);
+          setOutputDts(result.value.dts);
+          setCompileMs(result.value.ms);
+          return;
+        }
+        setOutputJs("");
+        setOutputTs("");
+        setOutputDts("");
+        setCompileMs(result.error.ms);
+        if (result.error.diagnostics) {
+          setDiagnostics(result.error.diagnostics);
+          return;
+        }
+        setDiagnostics([
+          {
+            kind: "check",
+            message: result.error.message ?? "Compilation failed",
+          },
+        ]);
+      });
   }, []);
   // Debounced autorun compile.
   useEffect(() => {
