@@ -1,0 +1,14 @@
+{
+  "name": "@mochi/plugin-preact",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./hooks": "./hooks.mochi",
+    "./runtime": "./src/runtime.ts"
+  },
+  "peerDependencies": {
+    "preact": "^10.0.0"
+  }
+}

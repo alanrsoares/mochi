@@ -227,6 +227,25 @@ value-side lit (widen → `string`) and completion ignored JSX attrs. Surface th
 **Wave 12 shipped:** `$tone` hovers as `(property) $tone: "rose" | …`;
 `<BadgeShell ` / `$tone="` complete prop names and lit members.
 
+## Wave 13 (Preact host adapter — ADR 0015)
+
+Kit-owned `@mochi/plugin-preact`: typed `hooks.mochi` seam + `hookDeps*`;
+surface `() -> T` in TypeExpr; bare package import paths keep their name under
+Vite `moduleExt`. Docs HeroCarousel imports the package; hand
+`preact-hooks.host.mochi` deleted.
+
+| # | Title | Type | Blocked by | Status |
+|---|---|---|---|---|
+| 49 | ADR 0015 + `() ->` TypeExpr + `@mochi/plugin-preact` v0 | AFK | 14, 12 | done |
+| 50 | Rules-of-Hooks `check` hook + setState updater `inferCall` | AFK | 49 | pending |
+| 51 | Virtual-module resolve `from "@mochi/preact"` (no alias) | AFK | 49 | pending |
+| 52 | Extern hover: scheme + module/export hint on the name | AFK | — | done |
+
+**Wave 13 (v0) shipped:** honest hook externs; docs dogfood on package seam.
+
+**#52 shipped:** decl-site hover → `extern name: <surface>\n= "module" "export"` +
+`///` doc (same attachment path as `let`).
+
 ## Slice briefs
 
 ### 0 — Rename to `Diagnostic`

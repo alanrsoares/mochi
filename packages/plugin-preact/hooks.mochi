@@ -1,0 +1,16 @@
+// Typed Preact hooks seam (ADR 0015). Import from apps; register
+// `preactExtension` on the project plugin list when inferCall/check land.
+//
+// `() ->` is the nullary domain (ADR 0014). Dep lists stay opaque / packed
+// via `hookDeps*` — mochi arrays are homogeneous.
+export extern useState : a -> (a, a -> b) = "preact/hooks" "useState"
+export extern useEffect : (() -> c) -> d -> e = "preact/hooks" "useEffect"
+export extern useCallback : a -> b -> a = "preact/hooks" "useCallback"
+export extern useLayoutEffect : (() -> c) -> d -> e = "preact/hooks" "useLayoutEffect"
+export extern useRef : a -> b = "preact/hooks" "useRef"
+export extern useMemo : (() -> a) -> b -> a = "preact/hooks" "useMemo"
+
+export extern hookDeps : a -> b -> c -> d = "./src/runtime" "hookDeps"
+export extern hookDeps2 : a -> b -> c = "./src/runtime" "hookDeps2"
+export extern hookDeps1 : a -> b = "./src/runtime" "hookDeps1"
+export extern hookDeps0 : () -> a = "./src/runtime" "hookDeps0"

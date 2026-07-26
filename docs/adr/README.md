@@ -52,4 +52,5 @@ What else was on the table and why not.
 | [0012](0012-host-interop-end-state.md) | Host interop end state (typed seam + thin sugar; ReScript-informed) | Accepted |
 | [0013](0013-lsp-completion.md) | LSP completion provider (compiler-first + plugin member hook) | Accepted |
 | [0014](0014-nullary-unit.md) | Nullary functions via internal `unit` | Accepted |
+| [0015](0015-preact-host-adapter.md) | Preact/React host adapter (typed hooks module) | Accepted |
 
