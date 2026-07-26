@@ -199,6 +199,19 @@ wraps inferred state/action fields in the outbound host generic.
 config bindings (not only inline literals) emit precise `ContainerDef<…>`
 without a hand cast bridge.
 
+## Wave 11 (store completion — useContainer / useSelect)
+
+Opaque `useContainer : a -> b` left `store` as a fresh var → empty `store.`
+complete. Derive a structural Store sketch from the container def so editor
+field completion works on the dogfood Counter path.
+
+| # | Title | Type | Blocked by | Status |
+|---|---|---|---|---|
+| 46 | `useContainer` / `useSelect` inferCall → Store / StateSignals sketch | AFK | 45 | done |
+
+**Wave 11 shipped:** `store.` lists `actions` / `$state` / `$derived`;
+`store.actions.` lists action names; `useSelect` selectors see `s.count.value`.
+
 ## Slice briefs
 
 ### 0 — Rename to `Diagnostic`
@@ -1297,4 +1310,25 @@ derive `ContainerDef<S, R, …>` from that type rather than walking config AST.
 ## Blocked by
 
 38
+
+---
+
+### 46 — useContainer / useSelect Store sketch
+
+## What to build
+
+Plugin `inferCall` for `useContainer(def)` → `{ actions, $state, $derived }`
+from the def's structural HM type (action labels; signal `{ value: T }`
+fields). `useSelect(store, sel)` unifies `sel` with StateSignals → result.
+
+## Acceptance criteria
+
+- [x] `store.` completes `actions` / `$state` / `$derived`
+- [x] `store.actions.` completes action names
+- [x] `useSelect` selector reads `s.count.value` as `number`
+- [x] `bun run check:full` green
+
+## Blocked by
+
+45
 

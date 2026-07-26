@@ -1,6 +1,6 @@
 // Live counter — container + hooks in one module. `let…in` under the
 // component lambda emits sequential `const`s (Rules of Hooks). ContainerDef
-// honesty comes from `@mochi/plugin-re-reduced` → `.d.mochi.ts`.
+// honesty + Store sketches come from `@mochi/plugin-re-reduced`.
 import {
   defineContainer,
   useContainer,
