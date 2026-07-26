@@ -19,6 +19,7 @@
  */
 export type Doc =
   | { k: "text"; s: string }
+  | { k: "verbatim"; s: string }
   | { k: "line"; hard: boolean; soft: boolean }
   | { k: "cat"; parts: Doc[] }
   | { k: "indent"; doc: Doc }
@@ -28,6 +29,16 @@ export type Doc =
 const INDENT = 2;
 
 export const txt = (s: string): Doc => ({ k: "text", s });
+/**
+ * An opaque raw-bytes passthrough (C9 slice d, ADR 0045 decision 3): `s` is
+ * printed exactly as given — no re-indentation, no re-wrapping, and any
+ * newlines inside it are never reflowed. Unlike `text`, a document containing
+ * `verbatim` always forces its enclosing groups to break (`forcesBreak`,
+ * mirroring `hardline`) — a group cannot claim to have printed "flat" across
+ * bytes it never actually laid out. Used for parser error-recovery spans:
+ * unparsable source the formatter could not understand and must not touch.
+ */
+export const verbatim = (s: string): Doc => ({ k: "verbatim", s });
 export const cat = (parts: Doc[]): Doc => ({ k: "cat", parts });
 export const seq = (...parts: Doc[]): Doc => ({ k: "cat", parts });
 export const line: Doc = { k: "line", hard: false, soft: false };
@@ -71,6 +82,11 @@ const fits = (width: number, start: Work): boolean => {
       case "text":
         rem -= d.s.length;
         break;
+      case "verbatim":
+        // Opaque and may itself contain newlines — treat it like a hardline
+        // for fitting purposes: whatever comes after is a fresh line, so a
+        // group ending here doesn't need to "fit" past it.
+        return true;
       case "cat":
         work = consParts(d.parts, i, m, work);
         break;
@@ -102,7 +118,7 @@ const forcesBreak = (d: Doc): boolean => {
   const cached = breakCache.get(d);
   if (cached !== undefined) return cached;
   const r =
-    d.k === "breakparent"
+    d.k === "breakparent" || d.k === "verbatim"
       ? true
       : d.k === "line"
         ? d.hard
@@ -127,6 +143,15 @@ export const render = (root: Doc, width: number): string => {
         out.push(d.s);
         pos += d.s.length;
         break;
+      case "verbatim": {
+        // Pushed byte-for-byte; no indentation, wrapping, or reflow applied.
+        // `pos` is recomputed from the last line of `s` (it may itself end
+        // mid-line) so column tracking for whatever follows stays accurate.
+        out.push(d.s);
+        const nl = d.s.lastIndexOf("\n");
+        pos = nl === -1 ? pos + d.s.length : d.s.length - nl - 1;
+        break;
+      }
       case "cat":
         work = consParts(d.parts, i, m, work);
         break;

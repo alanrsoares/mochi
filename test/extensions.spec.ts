@@ -103,7 +103,10 @@ test("the formatter's `<tag>` re-fold comes from the builtin plugin", () => {
   const handWritten = 'let el = h("div", { className: "card" }, ["hi"])\n';
   expect(unwrapOk(format(handWritten))).toBe(handWritten);
   // Opt out and there is nothing left to re-fold — the sugar no longer parses.
-  expect(unwrapErr(format(src, { plugins: [] }))[0]!.kind).toBe("parse");
+  // Since C9 slice d, `format` runs on `parseRecovering`: the unparsable `<div…`
+  // becomes an error-node span and is passed through verbatim, so the (byte-
+  // identical) source still formats rather than erroring.
+  expect(unwrapOk(format(src, { plugins: [] }))).toBe(src);
 });
 
 test("component binding types come from the builtin plugin, in BOTH backends", () => {

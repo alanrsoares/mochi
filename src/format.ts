@@ -17,7 +17,7 @@
  * Hooks run before this module's own printer and never see types: `format`
  * lexes and parses only.
  */
-import { flatMap, map, mapErr, pipe, type Result } from "@onrails/result";
+import { map, mapErr, pipe, type Result } from "@onrails/result";
 import type {
   CallExpr,
   Ctor,
@@ -55,12 +55,13 @@ import {
   seq,
   softline,
   txt,
+  verbatim,
 } from "./doc";
 import { type Diagnostic, oneDiag } from "./errors";
 import type { FormatApi, FormatHook, LanguagePlugin } from "./extensions";
 import { resolvePlugins, runFormatHooks } from "./extensions";
 import { lex, skipStringLiteral } from "./lexer";
-import { parse } from "./parser";
+import { parseRecovering } from "./parser";
 
 const WIDTH = 80;
 
@@ -869,7 +870,7 @@ type StmtDoc = { doc: Doc; consumed: number };
  * Print one statement, re-folding a `$d` destructuring temp + its field-access
  * lets back into a single `let { … } = e`. Returns how many stmts it consumed.
  */
-const stmtDoc = (stmts: Stmt[], i: number): StmtDoc => {
+const stmtDoc = (stmts: Stmt[], i: number, src: string): StmtDoc => {
   const s = stmts[i]!;
   switch (s.kind) {
     case "import":
@@ -878,11 +879,13 @@ const stmtDoc = (stmts: Stmt[], i: number): StmtDoc => {
       return { doc: seq(txt(expPrefix(s)), typeStmtD(s)), consumed: 1 };
     case "extern":
       return { doc: txt(expPrefix(s) + externStmt(s)), consumed: 1 };
-    // Unreachable while `format` is hard-fail: it stops on parse diagnostics. Slice d
-    // of C9 threads `src` down here so the node's span can be re-emitted as a verbatim
-    // raw slice, which is the whole point of the span (ADR 0045 decision 3).
+    // C9 slice d (ADR 0045 decision 3): the span covers every byte skipped
+    // during recovery, so re-emitting it verbatim is exactly what makes
+    // `fmt` on a broken file never destroy code it couldn't parse. `verbatim`
+    // (not `txt`) keeps the raw bytes — including any interior newlines —
+    // opaque to the layout engine: no re-indentation, no re-wrapping.
     case "error":
-      return { doc: txt(""), consumed: 1 };
+      return { doc: verbatim(src.slice(s.span.start, s.span.end)), consumed: 1 };
   }
 
   if (s.name.startsWith("$")) {
@@ -935,7 +938,7 @@ const program = (stmts: Stmt[], src: string, tail: Comment[]): string => {
       parts.push(hardline);
       if (blankBetween.test(src.slice(prevEnd, anchorStart(cur)))) parts.push(hardline);
     }
-    const { doc, consumed } = stmtDoc(stmts, i);
+    const { doc, consumed } = stmtDoc(stmts, i, src);
     parts.push(withComments(cur, doc));
     prevEnd = stmts[i + consumed - 1]!.span.end;
     i += consumed;
@@ -961,18 +964,29 @@ const program = (stmts: Stmt[], src: string, tail: Comment[]): string => {
 export type FormatOptions = { plugins?: LanguagePlugin[] };
 
 /**
- * Plural error channel since ADR 0045: parse reports every diagnostic, and dropping all
- * but the first at this seam would be exactly the bug C9 exists to fix. Lex is still
- * single-error, so its one diagnostic is wrapped.
+ * C9 slice d (ADR 0045): `format` runs on `parseRecovering`, not the hard-fail
+ * `parse` — a file with parse errors still formats, with every unparsable
+ * region ("error" stmts) passed through verbatim rather than emitting nothing.
+ * `parseRecovering` never fails, so the only remaining error channel here is
+ * lex, which is still single-error and gets wrapped to match the (unchanged)
+ * `Result<string, Diagnostic[]>` signature every caller already handles.
  */
 export const format = (src: string, opts: FormatOptions = {}): Result<string, Diagnostic[]> => {
   formatHooks = resolvePlugins(opts.plugins).flatMap((p) => (p.format ? [p.format] : []));
   return pipe(
     lex(src),
     mapErr(oneDiag),
-    flatMap((toks) => parse(toks, { plugins: opts.plugins })),
-    map((prog) => {
-      const tail = attachComments(prog.stmts, collectComments(src), src);
+    map((toks) => parseRecovering(toks, { plugins: opts.plugins })),
+    map(({ program: prog }) => {
+      // Comments inside a recovered error span are already part of its raw
+      // verbatim bytes (below) — attaching them a second time to whatever
+      // anchor happens to sit on the far side of the span would duplicate
+      // them and break idempotency, so they're excluded before attachment.
+      const errorSpans = prog.stmts.filter((s) => s.kind === "error").map((s) => s.span);
+      const comments = collectComments(src).filter(
+        (c) => !errorSpans.some((sp) => c.start >= sp.start && c.start < sp.end),
+      );
+      const tail = attachComments(prog.stmts, comments, src);
       return program(prog.stmts, src, tail);
     }),
   );
