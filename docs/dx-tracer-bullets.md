@@ -173,6 +173,18 @@ imperative `ParserApi` clone. `fixpoint` stays output-equality.
 `src/` (parse + inferCall only). `parser.mochi` / `infer.mochi` are grep-clean
 of JSX logic; `plugins: []` opt-out is a parse diagnostic.
 
+## Wave 9 (nested completion — ADR 0013 follow-on)
+
+Highest remaining editor enabler after Wave 3 #13: value completions inside
+lambdas / `let-in` / match arms via `SymbolIndex.bindingsAt`.
+
+| # | Title | Type | Blocked by | Status |
+|---|---|---|---|---|
+| 44 | `bindingsAt` on symbol index + nested locals in `completeAt` | AFK | 13 | done |
+
+**Wave 9 shipped:** cursor inside a nested scope completes lambda params,
+letin/`let?`/`let!` binds, and match-arm pattern binds (shadowing-aware).
+
 ## Slice briefs
 
 ### 0 — Rename to `Diagnostic`
@@ -1229,4 +1241,25 @@ Opt-out guard (`plugins: []` → `<…>` is a parse diagnostic). Reconcile
 ## Blocked by
 
 42
+
+---
+
+### 44 — Nested completion via `bindingsAt`
+
+## What to build
+
+Record lexical scope frames while indexing. Expose
+`SymbolIndex.bindingsAt(offset, space?)` (visible bindings with shadowing).
+Wire into `completeAt` value completions so nested locals appear.
+
+## Acceptance criteria
+
+- [x] Lambda / letin / match-arm locals complete inside their scope
+- [x] Locals do not leak outside; inner shadow wins
+- [x] ADR 0013 + tracer Wave 9 updated
+- [x] `bun run check:full` green
+
+## Blocked by
+
+13
 
