@@ -855,6 +855,11 @@ function run(
   // graph) and inferred group-by-group in dependency-first order. Within a
   // group every member is pre-bound monomorphically, so `f`/`g` that call each
   // other resolve to these bindings; the group generalizes as a unit afterwards.
+  // ADR 0045 decision 4 (no-cascade): filtering on `"let"` here intentionally drops
+  // `error` stmts before the SCC graph is built — an error node is never an SCC
+  // member and never a generalization boundary. A reference to a name that only
+  // ever lived in a skipped region simply isn't in `idxOf`/env, so it surfaces as
+  // an ordinary "unbound variable" diagnostic in `inferRef`, not a cascade.
   const lets = prog.stmts.filter((s): s is LetStmt => s.kind === "let");
   const idxOf = new Map(lets.map((s, i) => [s.name, i]));
   const adj = lets.map((s) => {

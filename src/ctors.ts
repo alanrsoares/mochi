@@ -61,6 +61,8 @@ export function buildCtorTable(prog: Program): Result<CtorTable, Diagnostic[]> {
   const table: CtorTable = { ctor: new Map(), type: new Map() };
   const diags: Diagnostic[] = [];
   for (const s of prog.stmts) {
+    // ADR 0045 decision 4 (no-cascade): an `error` node contributes no bindings and no
+    // diagnostics of its own — the `!== "type"` guard already excludes it, intentionally.
     if (s.kind !== "type") continue;
     if (table.type.has(s.name)) {
       diags.push(checkErr(`duplicate type '${s.name}'`, s.span));
@@ -87,6 +89,8 @@ export function buildCtorTable(prog: Program): Result<CtorTable, Diagnostic[]> {
 export function ctorTableOf(prog: Program): CtorTable {
   const table: CtorTable = { ctor: new Map(), type: new Map() };
   for (const s of prog.stmts) {
+    // ADR 0045 decision 4 (no-cascade): `error` nodes are not "type" stmts, so they
+    // are skipped here without any special-casing — they contribute no ctors/types.
     if (s.kind !== "type") continue;
     table.type.set(
       s.name,

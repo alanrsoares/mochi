@@ -363,6 +363,9 @@ const REDECLARABLE_TYPES = new Set(builtinTypeDecls.map((d) => d.name));
 
 function checkReservedNames(prog: Program): Diagnostic[] {
   const diags: Diagnostic[] = [];
+  // ADR 0045 decision 4 (no-cascade): the checks below narrow on specific `s.kind`s
+  // (let/type/extern/import), so an `error` stmt is skipped intentionally — it never
+  // matches any branch, contributes no diagnostic, and suppresses no other one.
   for (const s of prog.stmts) {
     if (s.kind === "type" && REDECLARABLE_TYPES.has(s.name)) continue;
     if (

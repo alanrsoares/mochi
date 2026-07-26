@@ -29,7 +29,7 @@ it is a *track*. Slices, in order (each independently shippable):
 
 - [x] Slice a (ADR — blocked by C12 numbering repair)
 - [x] Slice b
-- [ ] Slice c
+- [x] Slice c
 - [ ] Slice d
 - [ ] Slice e
 - [ ] Slice f
