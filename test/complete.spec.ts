@@ -67,3 +67,27 @@ test("tw.d with plugin filters to matching tags", () => {
   const labels = completeAt(src, src.length, { plugins: [styledCvaExtension] }).map((i) => i.label);
   expect(labels).toEqual(["div"]);
 });
+
+test("nested lambda param completes inside body", () => {
+  const src = "let f = (answer) => ans";
+  const labels = completeAt(src, src.length).map((i) => i.label);
+  expect(labels).toContain("answer");
+});
+
+test("nested letin binding completes in body", () => {
+  const src = "let f = () => let local = 1 in loc";
+  const labels = completeAt(src, src.length).map((i) => i.label);
+  expect(labels).toContain("local");
+});
+
+test("lambda param does not complete outside the lambda", () => {
+  const src = "let f = (secret) => 1\nlet z = sec";
+  const labels = completeAt(src, src.length).map((i) => i.label);
+  expect(labels).not.toContain("secret");
+});
+
+test("shadowed local completes as the inner binding", () => {
+  const src = "let x = 1\nlet f = () => let x = 2 in x";
+  const items = completeAt(src, src.length).filter((i) => i.label === "x");
+  expect(items.some((i) => i.detail === "local")).toBe(true);
+});

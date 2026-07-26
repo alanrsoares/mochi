@@ -29,8 +29,9 @@ rejected in ADR 0009 — member lists for kits belong in the plugin, not core HM
    fields (opaque `tw`), the first plugin hook that returns a list wins.
    `@mochi/plugin-styled-cva` supplies HTML tag factories for `receiver === "tw"`.
 
-4. **Value completions v1:** top-level lets/externs/ctors/types + imports +
-   prelude / namespace names. Nested locals deferred.
+4. **Value completions:** top-level lets/externs/ctors/types + imports +
+   prelude / namespace names + **nested locals** via `SymbolIndex.bindingsAt`
+   (lambda params, `let`/`let?`/`let!` binds, match-arm pattern binds).
 
 5. **Task façades stay `() => Promise<SharedResult>`** (docs playground /
    share-link hosts): that shape mirrors emitted mochi `Task a e` (lazy thunk;
@@ -43,8 +44,8 @@ rejected in ADR 0009 — member lists for kits belong in the plugin, not core HM
 
 - `tw.*` completion works only when the project's vendor plugin list is
   registered on the LSP (same list as Vite / dts — #20).
-- Nested-scope value completion needs a follow-up (`bindingsAt` on the symbol
-  index).
+- Nested-scope value completion is live; incomplete buffers still need a
+  parseable expression (same rewrite limit as member `.`).
 
 ## Alternatives rejected
 

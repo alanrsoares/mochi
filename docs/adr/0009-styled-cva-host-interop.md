@@ -58,8 +58,8 @@ pattern (Gap A). Seam `extern` lines can stay `: a` — honesty at the FFI bound
 without fake fixed-arity `tw` arrows.
 
 LSP completion for `tw.*` / record fields shipped as tracer bullet #13 /
-[ADR 0013](0013-lsp-completion.md). Nested-scope value completion remains a
-follow-up (`bindingsAt` on the symbol index).
+[ADR 0013](0013-lsp-completion.md). Nested-scope value completion ships via
+`bindingsAt` on the symbol index (Wave 9 / #44).
 
 ## Consequences
 

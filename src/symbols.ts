@@ -7,11 +7,11 @@
 
 import { fromNullable, match as matchMaybe } from "@onrails/maybe";
 import { match } from "@onrails/pattern";
-import type { Expr, LamParam, Pattern, Program, Stmt, TypeExpr } from "./ast";
+import type { Expr, LamParam, MatchArm, Pattern, Program, Stmt, TypeExpr } from "./ast";
 import { isCtorName } from "./ast";
 import { fieldNameSpan, preludeNsMember, preludeOrigins } from "./prelude-virtual";
 import type { Location, Span } from "./span";
-import { tightestHit } from "./span";
+import { spanContainsClosed, spanning, tightestHit } from "./span";
 
 export type SymbolSpace = "value" | "type" | "ctor" | "field";
 
@@ -34,14 +34,27 @@ export type SymbolIndex = {
   occurrences: (b: Binding) => Occurrence[];
   /** Innermost binding of `name` in `space`, or null. */
   binding: (space: SymbolSpace, name: string) => Binding | null;
+  /**
+   * Bindings visible at `offset` in `space` (default `value`), outer→inner with
+   * shadowing. Powers nested-scope completion (ADR 0013).
+   */
+  bindingsAt: (offset: number, space?: SymbolSpace) => Binding[];
 };
 
 type Scope = Map<string, Binding>;
+
+/** One lexical frame: bindings introduced here, visible across `span`. */
+type ScopeFrame = {
+  space: SymbolSpace;
+  span: Span;
+  bindings: Binding[];
+};
 
 type Builder = {
   path: string;
   scopes: { value: Scope[]; type: Scope[]; ctor: Scope[]; field: Scope[] };
   occurrences: Occurrence[];
+  frames: ScopeFrame[];
 };
 
 const loc = (path: string, span: Span): Location => ({ path, span });
@@ -65,6 +78,24 @@ const lookup = (b: Builder, space: SymbolSpace, name: string): Binding | undefin
 
 const PLACEHOLDER: Span = { start: -1, end: -1 };
 const isPlaceholder = (binding: Binding): boolean => binding.def.span.start < 0;
+
+/** Snapshot the innermost frame before pop — region where its binds are live. */
+const snapshotFrame = (b: Builder, space: SymbolSpace, span: Span): void => {
+  const scope = b.scopes[space][b.scopes[space].length - 1]!;
+  const bindings: Binding[] = [];
+  for (const binding of scope.values()) {
+    if (isPlaceholder(binding) || binding.name.startsWith("$")) continue;
+    bindings.push(binding);
+  }
+  if (bindings.length > 0) b.frames.push({ space, span, bindings });
+};
+
+/** Match-arm visibility: pattern binds cover guard + body. */
+const armSpan = (arm: MatchArm): Span => {
+  let s = arm.pattern.span;
+  if (arm.guard) s = spanning(s, arm.guard.span);
+  return spanning(s, arm.body.span);
+};
 
 const bind = (b: Builder, space: SymbolSpace, name: string, span: Span): Binding => {
   const binding: Binding = { name, space, def: loc(b.path, span) };
@@ -223,6 +254,7 @@ const walkExpr = (b: Builder, e: Expr): void => {
       pushScope(b, "value");
       for (const p of lambda.params) bindParam(b, p);
       walkExpr(b, lambda.body);
+      snapshotFrame(b, "value", lambda.span);
       popScope(b, "value");
     })
     .with({ kind: "letin" }, (letin) => {
@@ -231,6 +263,7 @@ const walkExpr = (b: Builder, e: Expr): void => {
       pushScope(b, "value");
       bind(b, "value", letin.name, letin.nameSpan);
       walkExpr(b, letin.body);
+      snapshotFrame(b, "value", letin.body.span);
       popScope(b, "value");
     })
     .with({ kind: "letbind" }, (letbind) => {
@@ -238,6 +271,7 @@ const walkExpr = (b: Builder, e: Expr): void => {
       pushScope(b, "value");
       bindParam(b, letbind.param);
       walkExpr(b, letbind.body);
+      snapshotFrame(b, "value", letbind.body.span);
       popScope(b, "value");
     })
     .with({ kind: "pipe" }, (pipe) => {
@@ -256,6 +290,7 @@ const walkExpr = (b: Builder, e: Expr): void => {
         walkPat(b, arm.pattern);
         if (arm.guard) walkExpr(b, arm.guard);
         walkExpr(b, arm.body);
+        snapshotFrame(b, "value", armSpan(arm));
         popScope(b, "value");
       }
     })
@@ -426,9 +461,14 @@ export const indexProgram = (path: string, prog: Program, origins?: Origins): Sy
     path,
     scopes: { value: [new Map()], type: [new Map()], ctor: [new Map()], field: [new Map()] },
     occurrences: [],
+    frames: [],
   };
   seedPrelude(b);
   bindTopLevels(b, prog.stmts, origins);
+  // Module scope stays live for the whole file (nested frames overlay it).
+  snapshotFrame(b, "value", { start: 0, end: Number.MAX_SAFE_INTEGER });
+  snapshotFrame(b, "type", { start: 0, end: Number.MAX_SAFE_INTEGER });
+  snapshotFrame(b, "ctor", { start: 0, end: Number.MAX_SAFE_INTEGER });
   walkStmts(b, prog.stmts);
 
   const at = (offset: number): Occurrence | null =>
@@ -453,5 +493,21 @@ export const indexProgram = (path: string, prog: Program, origins?: Origins): Sy
       () => null,
     );
 
-  return { at, occurrences, binding };
+  const bindingsAt = (offset: number, space: SymbolSpace = "value"): Binding[] => {
+    const hits = b.frames
+      .filter((f) => f.space === space && spanContainsClosed(f.span, offset))
+      .toSorted((a, c) => {
+        const aw = a.span.end - a.span.start;
+        const cw = c.span.end - c.span.start;
+        if (aw !== cw) return cw - aw; // wider (outer) first
+        return a.span.start - c.span.start;
+      });
+    const map = new Map<string, Binding>();
+    for (const f of hits) {
+      for (const bn of f.bindings) map.set(bn.name, bn);
+    }
+    return [...map.values()];
+  };
+
+  return { at, occurrences, binding, bindingsAt };
 };

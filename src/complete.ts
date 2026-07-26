@@ -4,7 +4,7 @@
  *
  * Member completions after `.` tolerate incomplete buffers (`Task.`, `r.ab`) via
  * a lexical rewrite that strips `.prefix` before typechecking. Value completions
- * in v1 are top-level + prelude only (nested locals deferred).
+ * include nested locals via `bindingsAt` on the symbol index.
  */
 import { resolve } from "node:path";
 import { map, match as matchMaybe } from "@onrails/maybe";
@@ -24,7 +24,9 @@ import { moduleContext } from "./module";
 import { documentSymbolsAt } from "./nav";
 import { parse } from "./parser";
 import { preludeEnv, preludeNamespaces } from "./prelude";
+import { isPreludePath } from "./prelude-virtual";
 import { spanContainsClosed, tightestHit } from "./span";
+import { indexProgram } from "./symbols";
 import { foldAliases, type Row, type Type } from "./types";
 
 export type { CompletionItem, CompletionKind };
@@ -169,8 +171,8 @@ const pluginMembers = (api: CompleteMemberApi, plugins: LanguagePlugin[]): Compl
   return runCompleteMemberHooks(hooks, api) ?? [];
 };
 
-/** Top-level + prelude value names (v1 — nested locals deferred). */
-const valueItems = (src: string, plugins?: LanguagePlugin[]): CompletionItem[] => {
+/** Prelude + namespaces + types/ctors + imports + values visible at `offset`. */
+const valueItems = (src: string, offset: number, plugins?: LanguagePlugin[]): CompletionItem[] => {
   const items: CompletionItem[] = [];
   for (const name of Object.keys(preludeEnv)) {
     items.push({ label: name, kind: "value", detail: "prelude" });
@@ -178,11 +180,12 @@ const valueItems = (src: string, plugins?: LanguagePlugin[]): CompletionItem[] =
   for (const name of Object.keys(preludeNamespaces)) {
     items.push({ label: name, kind: "value", detail: "namespace" });
   }
+  // Types/ctors from the outline; values come from bindingsAt (scope-aware).
   for (const s of documentSymbolsAt(src)) {
-    const kind: CompletionKind = s.kind === "type" ? "type" : s.kind === "ctor" ? "ctor" : "value";
+    if (s.kind !== "type" && s.kind !== "ctor") continue;
     items.push({
       label: s.name,
-      kind,
+      kind: s.kind,
       detail: s.detail ?? s.kind,
     });
   }
@@ -192,6 +195,10 @@ const valueItems = (src: string, plugins?: LanguagePlugin[]): CompletionItem[] =
       if (s.kind !== "import") continue;
       if (s.alias) items.push({ label: s.alias.name, kind: "value", detail: "import *" });
       for (const n of s.names) items.push({ label: n.name, kind: "value", detail: "import" });
+    }
+    for (const b of indexProgram("<complete>", prog).bindingsAt(offset, "value")) {
+      if (isPreludePath(b.def.path)) continue;
+      items.push({ label: b.name, kind: "value", detail: "local" });
     }
   }
   return items;
@@ -215,7 +222,8 @@ const membersAt = (
 
 /**
  * Completions at `offset`. Member trigger (after `.`) prefers namespaces, then
- * record fields, then plugin hooks. Otherwise top-level + prelude value names.
+ * record fields, then plugin hooks. Otherwise values visible at the cursor
+ * (prelude, top-level, nested locals).
  */
 export const completeAt = (
   src: string,
@@ -224,7 +232,9 @@ export const completeAt = (
 ): CompletionItem[] => {
   const trigger = memberTriggerAt(src, offset);
   if (trigger) return dedupeSort(membersAt(src, trigger, opts));
-  return dedupeSort(filterPrefix(valueItems(src, opts.plugins), identPrefixAt(src, offset)));
+  return dedupeSort(
+    filterPrefix(valueItems(src, offset, opts.plugins), identPrefixAt(src, offset)),
+  );
 };
 
 export type ModuleCompleteOptions = { plugins?: LanguagePlugin[] };

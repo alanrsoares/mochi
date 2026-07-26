@@ -88,3 +88,39 @@ test("import name is a value def site", () => {
   expect(def?.role).toBe("def");
   expect(use?.binding.def).toEqual(def?.binding.def);
 });
+
+test("bindingsAt: lambda param visible in body, not outside", () => {
+  const src = "let f = (x) => add(x, 1)\nlet z = 0";
+  const idx = index(src);
+  const inBody = idx.bindingsAt(pos(src, "add")).map((b) => b.name);
+  expect(inBody).toContain("x");
+  expect(inBody).toContain("f");
+  const outside = idx.bindingsAt(pos(src, "z")).map((b) => b.name);
+  expect(outside).not.toContain("x");
+  expect(outside).toContain("f");
+});
+
+test("bindingsAt: letin name visible in body only", () => {
+  const src = "let f = () => let y = 1 in add(y, 2)";
+  const idx = index(src);
+  const inValue = idx.bindingsAt(pos(src, "1")).map((b) => b.name);
+  expect(inValue).not.toContain("y");
+  const inBody = idx.bindingsAt(pos(src, "add")).map((b) => b.name);
+  expect(inBody).toContain("y");
+});
+
+test("bindingsAt: inner shadow wins", () => {
+  const src = "let x = 1\nlet f = () => let x = 2 in x";
+  const idx = index(src);
+  const atUse = idx.bindingsAt(pos(src, "x", 2));
+  const hit = atUse.find((b) => b.name === "x");
+  expect(hit?.def.span.start).toBe(pos(src, "x", 1));
+});
+
+test("bindingsAt: match arm pattern bind visible in body", () => {
+  const src = "type T = | A(int)\nlet f = x => switch x { | A(k) => k }";
+  const idx = index(src);
+  const names = idx.bindingsAt(pos(src, "k", 1)).map((b) => b.name);
+  expect(names).toContain("k");
+  expect(names).toContain("x");
+});
