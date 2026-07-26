@@ -114,7 +114,7 @@ let genExpr = (e, ctx) => switch e {
   | Ast.EBool(value, _) => value ? "true" : "false"
   | Ast.EStr(value, _) => jsStringLit(value)
   | Ast.ERef(name, _) => name
-  | Ast.ECall(fn, args, _) => "${genCallee(fn, ctx)}(${Str.join(", ", args |> map(a => genExpr(a, ctx)))})"
+  | Ast.ECall(fn, args, _, _) => "${genCallee(fn, ctx)}(${Str.join(", ", args |> map(a => genExpr(a, ctx)))})"
   | Ast.ELambda(params, body, _) => let (cparams, cbody) = collapseLambda(
       params,
       body
@@ -775,7 +775,7 @@ let usesMatchLib = e => switch e {
   | Ast.EBool(_, _) => false
   | Ast.EStr(_, _) => false
   | Ast.ERef(_, _) => false
-  | Ast.ECall(fn, args, _) => usesMatchLib(fn) || someOf(usesMatchLib, args)
+  | Ast.ECall(fn, args, _, _) => usesMatchLib(fn) || someOf(usesMatchLib, args)
   | Ast.ELambda(_, body, _) => usesMatchLib(body)
   | Ast.ELetIn(_, _, value, body, _) => usesMatchLib(
       value
@@ -875,7 +875,7 @@ let exprRefs = (e, ctx, acc) => switch e {
   | Ast.EBool(_, _) => acc
   | Ast.EStr(_, _) => acc
   | Ast.ERef(name, _) => Set.add(name, acc)
-  | Ast.ECall(fn, args, _) => exprRefsListFrom(
+  | Ast.ECall(fn, args, _, _) => exprRefsListFrom(
       args,
       0,
       ctx,

@@ -82,9 +82,13 @@ function tsOfRaw(t: Type, names: Map<number, string>): string {
   return (
     match(t)
       .with({ kind: "var" }, (v) => names.get(v.id) ?? "unknown")
-      .with({ kind: "con", name: "Array" }, (con) =>
-        con.args.length === 1 ? `${tsOfRaw(con.args[0]!, names)}[]` : nominalCon(con, names),
-      )
+      .with({ kind: "con", name: "Array" }, (con) => {
+        if (con.args.length !== 1) return nominalCon(con, names);
+        // Arrow / union need parens: `(a: A) => B[]` ≠ `((a: A) => B)[]`.
+        const elem = tsOfRaw(con.args[0]!, names);
+        const inner = con.args[0]!;
+        return inner.kind === "arrow" || inner.kind === "union" ? `(${elem})[]` : `${elem}[]`;
+      })
       .with({ kind: "con", name: "List" }, (con) =>
         con.args.length === 1
           ? `Iterable<${tsOfRaw(con.args[0]!, names)}>`

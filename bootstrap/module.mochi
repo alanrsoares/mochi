@@ -227,7 +227,7 @@ let compileOne = (loaded, ctx) => switch resolveImportsFrom(loaded.stmts, 0, loa
   | Err(e) => Err(e)
   | Ok(res) => switch checkWith(loaded.stmts, res.reg) {
       | Err(e) => Err(e)
-      | Ok(_) => switch inferProgramImports(loaded.stmts, builtins, namespaces, true, res.imports, res.nsImports) {
+      | Ok(_) => switch inferProgramImports(loaded.stmts, builtins, namespaces, true, res.imports, res.nsImports, None) {
           | Err(e) => Err(e)
           | Ok(env) => let js = codegen(
               loaded.stmts,

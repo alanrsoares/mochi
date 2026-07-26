@@ -72,11 +72,12 @@ adapter; sugar provenance on AST"). This ADR is that grill's answer.
    false-positive on a hand-written `h(...)` call the way the name heuristic
    does.
 
-6. **Non-goals / deferred.**
+6. **Non-goals / deferred (historical note).**
    - Mirroring the seam in the self-hosted `bootstrap/*.mochi` copies of
-     `parseJsx` / JSX infer — deferred. `fixpoint` compares emitted output, not
-     internal structure, so the TS-side refactor is safe today; `bootstrap/`
-     structurally diverges from `src/` until a follow-on slice ports it.
+     `parseJsx` / JSX infer was deferred at Wave 5 accept; **Wave 8 closed it**
+     (`bootstrap/plugins/jsx.mochi` + `bootstrap/extensions.mochi`, parse +
+     inferCall only — bootstrap has no format/dts). Hooks stay Result/(toks,
+     pos); not an imperative `ParserApi` clone.
    - A `.mochi` / `.ui.mochi` file-extension split — rejected, see below.
    - Moving kit knowledge (`tw`, CVA, `re-reduced`) into core — stays vendor
      plugins, unchanged from [ADR 0010](0010-host-type-interop.md) §5's

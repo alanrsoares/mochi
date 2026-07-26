@@ -24,7 +24,23 @@ const work = join(root, ".fixpoint-work");
 
 // Every bootstrap module reachable from cli.mochi, in dependency order. `build`
 // discovers the graph itself; this list is what we read back and diff.
-const MODULES = ["ast", "types", "ctors", "schemes", "scc", "lexer", "parser", "check", "infer", "codegen", "module", "compile", "cli"];
+const MODULES = [
+  "ast",
+  "types",
+  "ctors",
+  "schemes",
+  "scc",
+  "plugins/jsx",
+  "extensions",
+  "lexer",
+  "parser",
+  "check",
+  "infer",
+  "codegen",
+  "module",
+  "compile",
+  "cli",
+];
 // Runtime deps the emitted compiler imports (hand-written + generated shim).
 const RUNTIME_DEPS = ["host.mjs", "prelude.gen.mjs"];
 
@@ -37,12 +53,18 @@ const placeRuntimeDeps = (dir: string) => {
   for (const dep of RUNTIME_DEPS) cpSync(join(root, "bootstrap", dep), join(dir, dep));
 };
 
+const copyModule = (fromRoot: string, toRoot: string, m: string, ext: string) => {
+  const dest = join(toRoot, `${m}${ext}`);
+  mkdirSync(join(dest, ".."), { recursive: true });
+  cpSync(join(fromRoot, `${m}${ext}`), dest);
+};
+
 // Rebuild the whole module graph with the mochic in `binDir`: copy every .mochi
 // into `outDir`, then `mochic build cli.mochi` there (closed-world — one command
 // walks the import graph and emits a .js beside each .mochi). Returns module -> JS.
 const compileAllWith = (binDir: string, outDir: string): Record<string, string> => {
   mkdirSync(outDir, { recursive: true });
-  for (const m of MODULES) cpSync(join(root, "bootstrap", `${m}.mochi`), join(outDir, `${m}.mochi`));
+  for (const m of MODULES) copyModule(join(root, "bootstrap"), outDir, m, ".mochi");
   bun([join(binDir, "cli.js"), "build", join(outDir, "cli.mochi")]);
   const out: Record<string, string> = {};
   for (const m of MODULES) out[m] = readFileSync(join(outDir, `${m}.js`), "utf8");
@@ -66,7 +88,7 @@ export const runFixpoint = (): FixpointResult => {
   for (const m of MODULES) tsBuild[m] = readFileSync(join(root, "bootstrap", `${m}.js`), "utf8");
   const seed = join(work, "seed");
   mkdirSync(seed, { recursive: true });
-  for (const m of MODULES) cpSync(join(root, "bootstrap", `${m}.js`), join(seed, `${m}.js`));
+  for (const m of MODULES) copyModule(join(root, "bootstrap"), seed, m, ".js");
   placeRuntimeDeps(seed);
 
   // --- stage 2: seed binary rebuilds the whole graph ---

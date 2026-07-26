@@ -67,11 +67,12 @@ host files stay hand-written as `.mjs`: `host.mjs` (IO/resolver shims) and
 `prelude.gen.mjs` (the generated, parity-guarded prelude-table shim). Everything else is
 compiled from the `.mochi` sources.
 
-`bootstrap/`'s copy of the parser/inference still has JSX inline — the `src/` → plugin
-move (ADR 0011) has not been mirrored there yet, a deliberate deferral (ADR 0011 §6).
-`fixpoint` (below) compares *emitted output*, not internal structure, so this is safe:
-stage2 ≡ stage3 ≡ TS still holds even though `bootstrap/parser.mochi` and `src/parser.ts`
-disagree on where JSX parsing lives. A follow-on slice ports the self-hosted copy.
+`bootstrap/` mirrors the JSX-as-plugin seam (Wave 8 / ADR 0011 §6): parse +
+inferCall live in `bootstrap/plugins/jsx.mochi`, registered through
+`bootstrap/extensions.mochi` (`resolvePlugins` — same opt-in/opt-out rule as
+`src/`). Hooks are Result/(toks, pos) shaped (no imperative `ParserApi`);
+format/dts hooks are absent because those passes do not exist in bootstrap.
+`fixpoint` (below) still compares *emitted output*.
 
 Two invariants are enforced in CI-style scripts:
 

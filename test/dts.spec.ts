@@ -13,6 +13,13 @@ test("a single-param lambda declares a unary function", () => {
   expect(dts("let inc = x => add(x, 1)")).toBe("export declare const inc: (x: number) => number;");
 });
 
+test("an array of functions parenthesizes the arrow (Wave 8)", () => {
+  // Without parens, `(a: A) => B[]` means "function returning B[]".
+  expect(dts('extern id : a -> a = "./x" "id"\nlet hs = [id]')).toBe(
+    "export declare const hs: ((a: unknown) => unknown)[];",
+  );
+});
+
 test("a concrete multi-param lambda declares partial-application overloads (ADR 0037)", () => {
   // `_curry` makes it callable in any grouping — `sum(a, b)` or `sum(a)(b)` —
   // so the type is an overload set, flat signature last (see `curriedOverloads`).

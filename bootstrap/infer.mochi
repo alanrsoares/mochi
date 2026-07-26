@@ -63,6 +63,11 @@ import {
 // ============================================================
 
 import * as Ast from "./ast.mochi"
+import {
+  inferCallHooksOf,
+  resolvePluginsDefault,
+  runInferCallHooks
+} from "./extensions.mochi"
 import { builtinDeclsFor } from "./ctors.mochi"
 import {
   mono,
@@ -88,7 +93,7 @@ let exprSpan = e => switch e {
   | Ast.EBool(_, sp) => sp
   | Ast.EStr(_, sp) => sp
   | Ast.ERef(_, sp) => sp
-  | Ast.ECall(_, _, sp) => sp
+  | Ast.ECall(_, _, _, sp) => sp
   | Ast.ELambda(_, _, sp) => sp
   | Ast.ELetIn(_, _, _, _, sp) => sp
   | Ast.ELetBind(_, _, _, _, _, sp) => sp
@@ -191,7 +196,13 @@ let arrowChain = (paramTypes, resultT) => switch paramTypes {
 }
 
 let ctxWithEnv = (ctx, env) =>
-  { env: env, open: ctx.open, ns: ctx.ns, aliasMap: ctx.aliasMap }
+  {
+    env: env,
+    open: ctx.open,
+    ns: ctx.ns,
+    aliasMap: ctx.aliasMap,
+    plugins: ctx.plugins
+  }
 
 let inferCallArgs = (fnT, args, ctx, st) => switch args {
   | [] => Ok((fnT, st))
@@ -290,46 +301,6 @@ let seqElemExpr = el => switch el {
   | Ast.SEExpr(e) => e
   | Ast.SESpread(e) => e
 }
-
-// JSX desugars to `h(tag, props, …children)`. Heterogeneous children must not
-// go through Array inference (that forces one elem type). Infer each child for
-// errors only; intrinsic tags → VNode; component tags → unify props + return.
-let inferJsxArrElems = (elements, ctx, st) => switch elements {
-  | [] => Ok(st)
-  | [el, ...rest] => let? (_, st1) = inferExpr(seqElemExpr(el), ctx, st) in
-      inferJsxArrElems(rest, ctx, st1)
-}
-
-let inferJsxChildren = (children, ctx, st) => switch children {
-  | [] => Ok(st)
-  | [Ast.EArr(elements, _), ...rest] => let? st1 = inferJsxArrElems(
-      elements,
-      ctx,
-      st
-    ) in
-      inferJsxChildren(rest, ctx, st1)
-  | [child, ...rest] => let? (_, st1) = inferExpr(child, ctx, st) in
-      inferJsxChildren(rest, ctx, st1)
-}
-
-let inferJsxCall = (tagExpr, propsExpr, restArgs, ctx, st) =>
-  let? (tagT, st1) = inferExpr(tagExpr, ctx, st) in
-  let? (propsT, st2) = inferExpr(propsExpr, ctx, st1) in
-  let? st3 = inferJsxChildren(restArgs, ctx, st2) in
-  let zonkedTag = zonk(tagT, st3) in
-    switch zonkedTag {
-      | TyFn(from, to) => switch from {
-          | TyRecord(_) => let? st4 = u(
-              propsT,
-              from,
-              st3,
-              exprSpan(propsExpr)
-            ) in
-              Ok((zonk(to, st4), st4))
-          | _ => Ok((tPrim("VNode"), st3))
-        }
-      | _ => Ok((tPrim("VNode"), st3))
-    }
 
 let inferSeqSlotsElems = (con, elem, elements, ctx, st) => switch elements {
   | [] => Ok(st)
@@ -443,23 +414,24 @@ let inferExpr = (e, ctx, st) => switch e {
       ctx,
       st
     )
-  | Ast.ECall(fn, args, _) => switch fn {
-      | Ast.ERef(name, _) => name == "h"
-          ? switch args {
-            | [tagExpr, propsExpr, ...rest] => inferJsxCall(
-                tagExpr,
-                propsExpr,
-                rest,
-                ctx,
-                st
-              )
-            | _ => inferNormalCall(fn, args, ctx, st)
-          }
-          : inferNormalCall(fn, args, ctx, st)
-      | _ => inferNormalCall(fn, args, ctx, st)
-    }
+  | Ast.ECall(fn, args, origin, _) => let api = {
+      inferExpr: (e, st0) => inferExpr(e, ctx, st0),
+      unify: u
+    } in
+    let? claimed = runInferCallHooks(
+      inferCallHooksOf(ctx.plugins),
+      fn,
+      args,
+      origin,
+      st,
+      api
+    ) in
+      switch claimed {
+        | Some(r) => Ok(r)
+        | None => inferNormalCall(fn, args, ctx, st)
+      }
   | Ast.EPipe(left, right, sp) => inferExpr(
-      Ast.ECall(right, [left], sp),
+      Ast.ECall(right, [left], None, sp),
       ctx,
       st
     )
@@ -757,7 +729,7 @@ let freeRefs = (e, bound, acc) => switch e {
   | Ast.EBool(_, _) => acc
   | Ast.EStr(_, _) => acc
   | Ast.ERef(name, _) => Set.has(name, bound) ? acc : Set.add(name, acc)
-  | Ast.ECall(fn, args, _) => freeRefsList(
+  | Ast.ECall(fn, args, _, _) => freeRefsList(
       args,
       bound,
       freeRefs(fn, bound, acc)
@@ -1156,7 +1128,8 @@ let seedImportsFrom = (keys, imports, env) => switch keys {
 // ADR 0002). Mirrors src/infer.ts's `inferProgramTypes({ imports, nsImports })`;
 // returns the final env so the module driver can extract this module's export
 // schemes.
-export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports, nsImports) =>
+export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports, nsImports, pluginsOpt) =>
+  let plugins = resolvePluginsDefault(pluginsOpt) in
   let st0 = mkSt(1000) in
   let env0 = seedBuiltins(builtins, #{}, st0) in
   let ns0 = seedNsImports(nsImports, seedNs(namespaces, env0, st0)) in
@@ -1173,13 +1146,24 @@ export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports
         let lets = letsOfFrom(stmts) in
         let idxOf = idxOfMap(lets) in
         let sccs = stronglyConnected(adjOf(lets, idxOf)) in
-          switch processGroupsFrom(sccs, lets, { env: env4, open: openMode, ns: ns0, aliasMap: aliasMap }, st3) {
+          switch processGroupsFrom(sccs, lets, { env: env4, open: openMode, ns: ns0, aliasMap: aliasMap, plugins: plugins }, st3) {
             | Ok(finalCtx) => Ok(finalCtx.env)
             | Err(e) => Err(e)
           }
 
 export let inferProgram = (stmts, builtins, namespaces, openMode) =>
-  inferProgramImports(stmts, builtins, namespaces, openMode, #{}, #{})
+  inferProgramImports(stmts, builtins, namespaces, openMode, #{}, #{}, None)
+
+export let inferProgramWith = (stmts, builtins, namespaces, openMode, pluginsOpt) =>
+  inferProgramImports(
+    stmts,
+    builtins,
+    namespaces,
+    openMode,
+    #{},
+    #{},
+    pluginsOpt
+  )
 
 // The schemes a module PUBLISHES: exported let/extern bindings and the ctors of
 // exported types, pulled from the final inference env by name. Mirrors

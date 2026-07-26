@@ -1,0 +1,397 @@
+// bootstrap/plugins/jsx.mochi — builtin JSX LanguagePlugin (Wave 8 / ADR 0011 §6).
+// Mirrors src/plugins/jsx.ts parse + inferCall only (bootstrap has no format/dts).
+// Parse hooks are Result/(toks, pos) + a `parseExpr` callback for `{…}` holes.
+
+import * as Ast from "../ast.mochi"
+import { zonk, tPrim, TyFn, TyRecord } from "../types.mochi"
+
+// Tok redeclared (same `_tag` shape as lexer/parser — structural ==).
+type Tok =
+  | TLet
+  | TType
+  | TExtern
+  | TSwitch
+  | TImport
+  | TExport
+  | TEq
+  | TArrow
+  | TTarrow
+  | TPipe
+  | TCompose
+  | TConcat
+  | TBar
+  | TLparen
+  | TRparen
+  | TLbrace
+  | TRbrace
+  | TLbracket
+  | TRbracket
+  | TSpread
+  | TPlus
+  | TMinus
+  | TStar
+  | TSlash
+  | TPercent
+  | TAt
+  | THash
+  | TDot
+  | TColon
+  | TQuestion
+  | TEqeq
+  | TNeq
+  | TLte
+  | TGte
+  | TLt
+  | TGt
+  | TAndand
+  | TOror
+  | TBang
+  | TBacktick
+  | TComma
+  | TDollar
+  | TNum(value: number, raw: string)
+  | TBool(value: bool)
+  | TStr(value: string)
+  | TTmplStart(value: string)
+  | TTmplMid(value: string)
+  | TTmplEnd(value: string)
+  | TId(value: string)
+  | TEof
+
+type LocTok = { tok: Tok, start: number, end: number, doc: Option string }
+
+let jxTokName = t => switch t {
+  | TEq => "eq"
+  | TLbrace => "lbrace"
+  | TRbrace => "rbrace"
+  | TSpread => "spread"
+  | TSlash => "slash"
+  | TLt => "lt"
+  | TGt => "gt"
+  | TDollar => "dollar"
+  | TId(_) => "id"
+  | TStr(_) => "str"
+  | TNum(_, _) => "num"
+  | TBool(_) => "bool"
+  | TEof => "eof"
+  | _ => "tok"
+}
+
+let jxEofTok = { tok: TEof, start: 0, end: 0, doc: None }
+let jxTokAt = (toks, i) => Array.get(i, toks) |> Option.unwrapOr(jxEofTok)
+let jxSpanOf = lt => { start: lt.start, end: lt.end }
+let jxSpanning = (a, b) => { start: a.start, end: b.end }
+let jxToEnd = (start, toks, pos) =>
+  { start: start.start, end: jxTokAt(toks, pos - 1).end }
+let jxErrAt = (message, lt) =>
+  Err({ message: message, start: lt.start, end: lt.end })
+
+let jxExpectTok = (t, toks, pos) =>
+  let lt = jxTokAt(toks, pos) in
+    lt.tok == t
+      ? Ok(pos + 1)
+      : jxErrAt("expected ${jxTokName(t)}, got ${jxTokName(lt.tok)}", lt)
+
+let jxExpectId = (toks, pos) =>
+  let lt = jxTokAt(toks, pos) in
+    switch lt.tok {
+      | TId(name) => Ok(({ name: name, span: jxSpanOf(lt) }, pos + 1))
+      | t => jxErrAt("expected id, got ${jxTokName(t)}", lt)
+    }
+
+let jxExpectLabel = (toks, pos) =>
+  let lt = jxTokAt(toks, pos) in
+    lt.tok == TDollar
+      ? jxExpectId(toks, pos + 1)
+        |> Result.map(((id, p)) =>
+          ({ name: "$${id.name}", span: jxSpanning(jxSpanOf(lt), id.span) }, p))
+      : jxExpectId(toks, pos)
+
+let jxIsUpper = s => Str.codeAt(0, s) |> Option.exists(n => n >= 65 && n <= 90)
+
+let jxExprSpan = e => switch e {
+  | Ast.ENum(_, _, sp) => sp
+  | Ast.EBool(_, sp) => sp
+  | Ast.EStr(_, sp) => sp
+  | Ast.ERef(_, sp) => sp
+  | Ast.ECall(_, _, _, sp) => sp
+  | Ast.ELambda(_, _, sp) => sp
+  | Ast.ELetIn(_, _, _, _, sp) => sp
+  | Ast.ELetBind(_, _, _, _, _, sp) => sp
+  | Ast.EPipe(_, _, sp) => sp
+  | Ast.ETernary(_, _, _, sp) => sp
+  | Ast.EMatch(_, _, sp) => sp
+  | Ast.ERecord(_, _, sp) => sp
+  | Ast.EField(_, _, sp) => sp
+  | Ast.ETuple(_, sp) => sp
+  | Ast.EArr(_, sp) => sp
+  | Ast.EList(_, sp) => sp
+  | Ast.ESet(_, sp) => sp
+  | Ast.EMap(_, sp) => sp
+  | Ast.EInterp(_, sp) => sp
+}
+
+// ---------------------------------------------------------------- parse
+
+let makeJsxCall = (tagExpr, fields, spreadOpt, children, startTok, toks, endPos) =>
+  let fullSpan = jxToEnd(jxSpanOf(startTok), toks, endPos) in
+  let pragmaRef = Ast.ERef("h", jxSpanOf(startTok)) in
+  let propsRecord = Ast.ERecord(fields, spreadOpt, fullSpan) in
+  let childrenArr = Ast.EArr(children, fullSpan) in
+    Ast.ECall(
+      pragmaRef,
+      [tagExpr, propsRecord, childrenArr],
+      Some("jsx"),
+      fullSpan
+    )
+
+let parseJsxAttributes = (toks, pos, fieldsAcc, spreadAcc, parseExpr) =>
+  let tk = jxTokAt(toks, pos).tok in
+  let nxt = jxTokAt(toks, pos + 1).tok in
+    tk == TGt || (tk == TSlash && nxt == TGt)
+      ? Ok((fieldsAcc, spreadAcc, pos))
+      : tk == TLbrace
+      ? let? p1 = jxExpectTok(TSpread, toks, pos + 1) in
+      let? (spExpr, p2) = parseExpr(toks, p1) in
+      let? p3 = jxExpectTok(TRbrace, toks, p2) in
+        parseJsxAttributes(toks, p3, fieldsAcc, Some(spExpr), parseExpr)
+      : let? (attrId, p1) = jxExpectLabel(toks, pos) in
+        let (valExpr, p2) = jxTokAt(toks, p1).tok == TEq
+          ? let pEq = p1 + 1 in
+            switch jxTokAt(toks, pEq).tok {
+              | TStr(v) => (Ast.EStr(v, jxSpanOf(jxTokAt(toks, pEq))), pEq + 1)
+              | TLbrace => switch parseExpr(toks, pEq + 1) {
+                  | Ok((e, pR)) => (e, pR + 1)
+                  | Err(_) => (Ast.EBool(true, attrId.span), pEq)
+                }
+              | _ => (Ast.EBool(true, attrId.span), pEq)
+            }
+          : (Ast.EBool(true, attrId.span), p1) in
+        let field = { name: attrId.name, value: valExpr } in
+          parseJsxAttributes(
+            toks,
+            p2,
+            Array.append(field, fieldsAcc),
+            spreadAcc,
+            parseExpr
+          )
+
+let parseJsxChildren = (expectedTag, toks, pos, acc, parseExpr) =>
+  let lt = jxTokAt(toks, pos) in
+  let nxt = jxTokAt(toks, pos + 1) in
+    lt.tok == TEof
+      ? jxErrAt(
+        expectedTag == "" ? "unclosed JSX fragment" : "unclosed JSX tag",
+        lt
+      )
+      : lt.tok == TLt && nxt.tok == TSlash
+      ? expectedTag == ""
+        ? let? p1 = jxExpectTok(TGt, toks, pos + 2) in Ok((acc, p1))
+        : let? (closingId, p1) = jxExpectId(toks, pos + 2) in
+        let? p2 = jxExpectTok(TGt, toks, p1) in
+          closingId.name == expectedTag
+            ? Ok((acc, p2))
+            : jxErrAt("mismatched JSX closing tag", lt)
+      : lt.tok == TLt
+      ? let? (childJsx, p1) = parseJsx(toks, pos, parseExpr) in
+        parseJsxChildren(
+          expectedTag,
+          toks,
+          p1,
+          Array.append(Ast.SEExpr(childJsx), acc),
+          parseExpr
+        )
+      : lt.tok == TLbrace
+      ? nxt.tok == TSpread
+        ? let? (spChild, p1) = parseExpr(toks, pos + 2) in
+        let? p2 = jxExpectTok(TRbrace, toks, p1) in
+          parseJsxChildren(
+            expectedTag,
+            toks,
+            p2,
+            Array.append(Ast.SESpread(spChild), acc),
+            parseExpr
+          )
+        : let? (childExpr, p1) = parseExpr(toks, pos + 1) in
+        let? p2 = jxExpectTok(TRbrace, toks, p1) in
+          parseJsxChildren(
+            expectedTag,
+            toks,
+            p2,
+            Array.append(Ast.SEExpr(childExpr), acc),
+            parseExpr
+          )
+      : switch lt.tok {
+        | TStr(v) => parseJsxChildren(
+            expectedTag,
+            toks,
+            pos + 1,
+            Array.append(Ast.SEExpr(Ast.EStr(v, jxSpanOf(lt))), acc),
+            parseExpr
+          )
+        | TNum(v, raw) => parseJsxChildren(
+            expectedTag,
+            toks,
+            pos + 1,
+            Array.append(Ast.SEExpr(Ast.ENum(v, raw, jxSpanOf(lt))), acc),
+            parseExpr
+          )
+        | TBool(v) => parseJsxChildren(
+            expectedTag,
+            toks,
+            pos + 1,
+            Array.append(Ast.SEExpr(Ast.EBool(v, jxSpanOf(lt))), acc),
+            parseExpr
+          )
+        | TId(v) => parseJsxChildren(
+            expectedTag,
+            toks,
+            pos + 1,
+            Array.append(Ast.SEExpr(Ast.EStr(v, jxSpanOf(lt))), acc),
+            parseExpr
+          )
+        | _ => jxErrAt("unexpected token in JSX children", lt)
+      }
+
+let parseJsx = (toks, pos, parseExpr) =>
+  let startTok = jxTokAt(toks, pos) in
+  let nxt = jxTokAt(toks, pos + 1) in
+    nxt.tok == TGt
+      ? let? (children, p1) = parseJsxChildren(
+        "",
+        toks,
+        pos + 2,
+        [],
+        parseExpr
+      ) in
+        Ok(
+          (
+            makeJsxCall(
+              Ast.EStr("Fragment", jxSpanOf(startTok)),
+              [],
+              None,
+              children,
+              startTok,
+              toks,
+              p1
+            ),
+            p1
+          )
+        )
+      : let? (firstId, p1) = jxExpectId(toks, pos + 1) in
+      let tagRef = jxIsUpper(firstId.name)
+        ? Ast.ERef(firstId.name, firstId.span)
+        : Ast.EStr(firstId.name, firstId.span) in
+      let tagNameStr = firstId.name in
+      let? (fields, spreadOpt, p2) = parseJsxAttributes(
+        toks,
+        p1,
+        [],
+        None,
+        parseExpr
+      ) in
+      let isSelfClosing = jxTokAt(toks, p2).tok == TSlash in
+      let? p3 = isSelfClosing
+        ? jxExpectTok(TGt, toks, p2 + 1)
+        : jxExpectTok(TGt, toks, p2) in
+        isSelfClosing
+          ? Ok(
+            (makeJsxCall(tagRef, fields, spreadOpt, [], startTok, toks, p3), p3)
+          )
+          : let? (children, p4) = parseJsxChildren(
+            tagNameStr,
+            toks,
+            p3,
+            [],
+            parseExpr
+          ) in
+            Ok(
+              (
+                makeJsxCall(
+                  tagRef,
+                  fields,
+                  spreadOpt,
+                  children,
+                  startTok,
+                  toks,
+                  p4
+                ),
+                p4
+              )
+            )
+
+/// Parse hook: claim a leading `<…>`; otherwise Ok(None) fall-through.
+export let parseJsxAtom = (toks, pos, parseExpr) =>
+  jxTokAt(toks, pos).tok == TLt
+    ? parseJsx(toks, pos, parseExpr) |> Result.map(claim => Some(claim))
+    : Ok(None)
+
+// ---------------------------------------------------------------- infer
+
+let seqElemExpr = el => switch el {
+  | Ast.SEExpr(e) => e
+  | Ast.SESpread(e) => e
+}
+
+let inferJsxArrElems = (elements, st, inferExpr) => switch elements {
+  | [] => Ok(st)
+  | [el, ...rest] => let? (_, st1) = inferExpr(seqElemExpr(el), st) in
+      inferJsxArrElems(rest, st1, inferExpr)
+}
+
+let inferJsxChildren = (children, st, inferExpr) => switch children {
+  | [] => Ok(st)
+  | [Ast.EArr(elements, _), ...rest] => let? st1 = inferJsxArrElems(
+      elements,
+      st,
+      inferExpr
+    ) in
+      inferJsxChildren(rest, st1, inferExpr)
+  | [child, ...rest] => let? (_, st1) = inferExpr(child, st) in
+      inferJsxChildren(rest, st1, inferExpr)
+}
+
+let inferJsxCall = (tagExpr, propsExpr, restArgs, st, api) =>
+  let? (tagT, st1) = api.inferExpr(tagExpr, st) in
+  let? (propsT, st2) = api.inferExpr(propsExpr, st1) in
+  let? st3 = inferJsxChildren(restArgs, st2, api.inferExpr) in
+  let zonkedTag = zonk(tagT, st3) in
+    switch zonkedTag {
+      | TyFn(from, to) => switch from {
+          | TyRecord(_) => let? st4 = api.unify(
+              propsT,
+              from,
+              st3,
+              jxExprSpan(propsExpr)
+            ) in
+              Ok((zonk(to, st4), st4))
+          | _ => Ok((tPrim("VNode"), st3))
+        }
+      | _ => Ok((tPrim("VNode"), st3))
+    }
+
+/// Infer-call hook: claim `origin == Some("jsx")`; otherwise Ok(None).
+/// `api.inferExpr` is `(expr, st) -> Result` — closes over Ctx so hooks stay
+/// free of a recursive Ctx type (occurs-check).
+export let inferJsxCallHook = (fn, args, origin, st, api) => switch origin {
+  | Some(o) => o == "jsx"
+      ? switch args {
+        | [tagExpr, propsExpr, ...rest] => inferJsxCall(
+            tagExpr,
+            propsExpr,
+            rest,
+            st,
+            api
+          )
+            |> Result.map(r => Some(r))
+        | _ => Ok(None)
+      }
+      : Ok(None)
+  | None => Ok(None)
+}
+
+export let jsxPlugin = {
+  name: "jsx",
+  parse: Some(parseJsxAtom),
+  inferCall: Some(inferJsxCallHook)
+}

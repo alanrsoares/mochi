@@ -33,7 +33,10 @@ export type Expr =
   | EBool(value: bool, span: Span)
   | EStr(value: string, span: Span)
   | ERef(name: string, span: Span)
-  | ECall(fn: Expr, args: [Expr], span: Span)
+  // `origin` is sugar provenance (ADR 0011 §5): Some("jsx") when the parser
+  // desugared JSX; None for ordinary calls — so a hand-written `h(...)` is
+  // never mistaken for sugar.
+  | ECall(fn: Expr, args: [Expr], origin: Option string, span: Span)
   | ELambda(params: [LamParam], body: Expr, span: Span)
   | ELetIn(name: string, nameSpan: Span, value: Expr, body: Expr, span: Span)
   | ELetBind(param: LamParam, paramSpan: Span, monad: string, value: Expr, body: Expr, span: Span)

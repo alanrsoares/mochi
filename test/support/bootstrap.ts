@@ -127,7 +127,7 @@ const buildGraph = (): string => {
   for (const name of readdirSync(join(root, "bootstrap"))) {
     if (name.endsWith(".js") || name.endsWith(".ts") || name.endsWith(".d.mts")) continue;
     if (name.startsWith(".")) continue;
-    cpSync(join(root, "bootstrap", name), join(tmp, name));
+    cpSync(join(root, "bootstrap", name), join(tmp, name), { recursive: true });
   }
   try {
     execFileSync("bun", ["src/cli.ts", "build", join(tmp, "cli.mochi")], { cwd: root });
@@ -151,24 +151,33 @@ const buildGraph = (): string => {
 export const ensureInTreeBootstrapBuild = (): void => {
   const dir = buildGraph();
   const bootstrapDir = join(root, "bootstrap");
-  for (const name of readdirSync(dir)) {
-    if (!name.endsWith(".js")) continue;
-    const target = join(bootstrapDir, name);
-    const tmp = join(bootstrapDir, `.${name}.${process.pid}.tmp`);
-    cpSync(join(dir, name), tmp);
-    renameSync(tmp, target);
-  }
+  const copyJs = (fromDir: string, toDir: string): void => {
+    mkdirSync(toDir, { recursive: true });
+    for (const name of readdirSync(fromDir)) {
+      const from = join(fromDir, name);
+      const to = join(toDir, name);
+      if (statSync(from).isDirectory()) {
+        copyJs(from, to);
+        continue;
+      }
+      if (!name.endsWith(".js")) continue;
+      const tmp = join(toDir, `.${name}.${process.pid}.tmp`);
+      cpSync(from, tmp);
+      renameSync(tmp, to);
+    }
+  };
+  copyJs(dir, bootstrapDir);
 };
 
-const raw = (name: string): string => readFileSync(join(outDir as string, `${name}.js`), "utf8");
+const raw = (rel: string): string => readFileSync(join(outDir as string, `${rel}.js`), "utf8");
 // Strip module wiring so the body evals standalone in `new Function`. Match only
 // genuine top-level export STATEMENTS: a multi-line template literal can place
 // `export { … }` at column 0 as string content (codegen's own `export extern`
 // emit does exactly this), and a blunt `/^export /` would eat the keyword out of
 // that string. So target the decl forms and exact `export { idents };` re-export
 // lines, leaving interpolated template content (`export { ${name} };…`) intact.
-const stripped = (name: string): string =>
-  raw(name)
+const stripped = (rel: string): string =>
+  raw(rel)
     .replace(/^import .*$/gm, "")
     .replace(/^export (const|let|var|default|function|class|async) /gm, "$1 ")
     .replace(/^export (\{[^{}]*\};)$/gm, "$1");
@@ -212,6 +221,13 @@ const dedupeConsts = (js: string): string => {
   return out.join("\n");
 };
 
+/** Relative module id from an import path: `./extensions.js` → `extensions`, `./plugins/jsx.js` → `plugins/jsx`. */
+const importRel = (spec: string): string => spec.replace(/^\.\//, "").replace(/\.js$/, "");
+
+// Modules that must be prepended (in order) when eval'ing a bootstrap pass that
+// imports the LanguagePlugin seam (Wave 8).
+const PLUGIN_SEAM = ["plugins/jsx", "extensions"];
+
 // The compiled JS of one bootstrap module, ready to eval in isolation.
 // Accepts either a bare name ("check") or a repo path ("bootstrap/check.mochi").
 export const bootstrapModuleJs = (nameOrPath: string): string => {
@@ -225,9 +241,9 @@ export const bootstrapModuleJs = (nameOrPath: string): string => {
   const parts: string[] = [];
   const seenAlias = new Set<string>();
   const injectNs = (jsSrc: string): void => {
-    for (const m of jsSrc.matchAll(/^import \* as (\w+) from "\.\/(\w+)\.js";$/gm)) {
+    for (const m of jsSrc.matchAll(/^import \* as (\w+) from "(\.\/[^"]+)";$/gm)) {
       const alias = m[1]!;
-      const dep = m[2]!;
+      const dep = importRel(m[2]!);
       if (seenAlias.has(alias)) continue;
       seenAlias.add(alias);
       const names = exportedCtorNames(stripped(dep));
@@ -244,11 +260,23 @@ export const bootstrapModuleJs = (nameOrPath: string): string => {
         consider(raw(d));
       }
     }
+    for (const d of PLUGIN_SEAM) {
+      if (needed.has(d)) continue;
+      if (jsSrc.includes(`from "./${d}.js"`)) {
+        needed.add(d);
+        consider(raw(d));
+      }
+    }
   };
   consider(src);
   for (const d of CTOR_MODULES) {
     if (!needed.has(d)) continue;
     injectNs(raw(d)); // namespace aliases before the module body uses them
+    parts.push(stripped(d));
+  }
+  for (const d of PLUGIN_SEAM) {
+    if (!needed.has(d)) continue;
+    injectNs(raw(d));
     parts.push(stripped(d));
   }
   injectNs(src);

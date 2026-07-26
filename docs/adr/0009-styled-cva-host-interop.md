@@ -57,9 +57,9 @@ usage at `<Component … />` sites. `re-reduced` will follow the same vendor-plu
 pattern (Gap A). Seam `extern` lines can stay `: a` — honesty at the FFI boundary
 without fake fixed-arity `tw` arrows.
 
-Remaining DX gap: `tw.*` / field completion (tracer bullet #13) — an LSP
-completion provider, not fake extern types. Tracked in
-[dx-tracer-bullets.md](../dx-tracer-bullets.md).
+LSP completion for `tw.*` / record fields shipped as tracer bullet #13 /
+[ADR 0013](0013-lsp-completion.md). Nested-scope value completion remains a
+follow-up (`bindingsAt` on the symbol index).
 
 ## Consequences
 

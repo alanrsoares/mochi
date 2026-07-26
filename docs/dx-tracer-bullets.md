@@ -99,13 +99,10 @@ supported non-UI opt-out, proven end-to-end through `compile`,
 `moduleDiagnostics`, and (for the vendor-prepend case) an explicit
 plugin-only list — not just spot-checked at one hook.
 
-Out of wave (deliberate, tracked, not this wave's job):
+Out of wave (deliberate, tracked, closed by Wave 8):
 
-- `bootstrap/parser.mochi` / `bootstrap/infer.mochi` still parse and infer JSX
-  inline — the self-hosted mirror of ADR 0011's move was explicitly deferred
-  (ADR 0011 §6). `fixpoint` compares emitted output, not internal structure,
-  so this is safe today; a future slice ports `plugins/jsx.mochi` into
-  `bootstrap/` to close the structural gap.
+- `bootstrap/parser.mochi` / `bootstrap/infer.mochi` JSX moved to
+  `bootstrap/plugins/jsx.mochi` behind `extensions.mochi` (Wave 8 / ADR 0011 §6).
 - The lexical nav helpers (`definitionAt`, `highlightsAt`, `referencesAt`,
   `renameAt`, `documentSymbolsAt`, `workspaceSymbolsAt`, and their `module*`
   twins other than `moduleTypeDefinitionAt`) take no `plugins` option and
@@ -125,8 +122,8 @@ blessed kit catalog.
 `extern defineContainer : a` stays; plugin recovers `ContainerDef<…>` in
 `.d.mochi.ts` so TSX imports `.mochi` cast-free.
 
-Deferred (later Wave 6 / out of wave): auto-generating `*.host.mochi`; hooks
-inside `.mochi` (Rules of Hooks); LSP `tw.*` completion (#13).
+Deferred (later / out of wave): auto-generating `*.host.mochi`; hooks
+inside `.mochi` (Rules of Hooks).
 
 | # | Title | Type | Blocked by | Status |
 |---|---|---|---|---|
@@ -156,6 +153,25 @@ are bridges — shrink, don’t clone.
 | 37 | styled-cva infer: `$tone` → literal union (JSX attr check) | AFK | 36 | done |
 | 38 | re-reduced: mark bridge; plan shrink toward structural HM + thin dts | AFK | 35 | done |
 | 39 | language.md / compiler.md: interop preference order + ReScript pointers | AFK | 35 | done |
+
+## Wave 8 (bootstrap JSX — ADR 0011 §6 mirror)
+
+Close the structural gap: `bootstrap/` still parses/infers JSX inline while
+`src/` owns it as `jsxPlugin`. Port sugar provenance + a thin LanguagePlugin
+seam (parse + inferCall only — bootstrap has no format/dts) and move JSX into
+`bootstrap/plugins/jsx.mochi`. Hooks adapt to Result/(toks, pos), not an
+imperative `ParserApi` clone. `fixpoint` stays output-equality.
+
+| # | Title | Type | Blocked by | Status |
+|---|---|---|---|---|
+| 40 | `ECall` sugar provenance (`origin`) + drop `name == "h"` heuristic | AFK | — | done |
+| 41 | Thin `bootstrap/extensions.mochi` (`resolvePlugins`, parse/inferCall) | AFK | 40 | done |
+| 42 | `bootstrap/plugins/jsx.mochi` + wire parse/infer/compile/module | AFK | 41 | done |
+| 43 | Gate: grep-clean, opt-out test, docs/ADR reconcile, `check:full` | AFK | 42 | done |
+
+**Wave 8 shipped:** bootstrap JSX lives behind the same LanguagePlugin seam as
+`src/` (parse + inferCall only). `parser.mochi` / `infer.mochi` are grep-clean
+of JSX logic; `plugins: []` opt-out is a parse diagnostic.
 
 ## Slice briefs
 
@@ -1130,4 +1146,87 @@ JSX V4, genType outbound-only).
 ## Blocked by
 
 35
+
+---
+
+### 40 — Bootstrap `ECall` sugar provenance
+
+## What to build
+
+Add `origin: Option string` on `bootstrap/ast.mochi`'s `ECall`. JSX
+`makeJsxCall` sets `Some("jsx")`; every other call uses `None`. Infer keys
+off provenance, not `name == "h"`. Update the bootstrap↔TS parser
+canonicalizer to round-trip `origin`.
+
+## Acceptance criteria
+
+- [x] Hand-written `h(...)` is not treated as JSX in bootstrap infer
+- [x] JSX calls carry `Some("jsx")`; other calls `None`
+- [x] `test/bootstrap-parser.spec.ts` parity includes provenance
+- [x] `bun run check` green (fixpoint still holds with JSX inline)
+
+## Blocked by
+
+None
+
+---
+
+### 41 — Thin `bootstrap/extensions.mochi`
+
+## What to build
+
+`LanguagePlugin` (parse + inferCall only) + `resolvePlugins` with the same
+opt-in/opt-out rule as `src/extensions.ts`. Pure Result/(toks, pos) hook
+shape — no imperative `ParserApi`.
+
+## Acceptance criteria
+
+- [x] `resolvePlugins(undefined)` → builtins; `[]` → hard opt-out; non-empty → builtins prepended
+- [x] `runParseHooks` / `runInferCallHooks` first-non-null wins
+- [x] `bun run check` green
+
+## Blocked by
+
+40
+
+---
+
+### 42 — `bootstrap/plugins/jsx.mochi` + wire
+
+## What to build
+
+Move parse/infer JSX out of core into the builtin plugin. Thread optional
+`plugins` through parse / infer / compile / module (default builtins).
+`parseAtom` consults hooks after core prefixes; infer consults `inferCall`
+before the default call rule.
+
+## Acceptance criteria
+
+- [x] `parser.mochi` / `infer.mochi` grep-clean of JSX / `VNode` / `name == "h"`
+- [x] Default paths still parse and type JSX
+- [x] `bun run fixpoint` green
+
+## Blocked by
+
+41
+
+---
+
+### 43 — Gate + docs
+
+## What to build
+
+Opt-out guard (`plugins: []` → `<…>` is a parse diagnostic). Reconcile
+`docs/compiler.md`, ADR 0011 §6, mark Wave 8 done. `bun run check:full`.
+
+## Acceptance criteria
+
+- [x] Opt-out test green
+- [x] Docs no longer claim bootstrap JSX is deferred
+- [x] Wave 8 rows 40–43 → done
+- [x] `bun run check:full` green
+
+## Blocked by
+
+42
 

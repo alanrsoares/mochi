@@ -14,6 +14,7 @@ const root = join(import.meta.dir, "..");
 const bs = (f: string) => join(root, `bootstrap/${f}`);
 
 type Res<T> = { _tag: "Ok"; value: T } | { _tag: "Err"; error: { message: string } };
+type AlOption<T> = { _tag: "None" } | { _tag: "Some"; value: T };
 type Stmts = unknown[];
 type Scheme = unknown;
 type CtorInfo = { owner: string; arity: number };
@@ -33,6 +34,7 @@ let inferProgramImports: (
   open: boolean,
   imports: Map<string, Scheme>,
   nsImports: Map<string, Map<string, Scheme>>,
+  pluginsOpt: AlOption<unknown[]>,
 ) => Res<Map<string, Scheme>>;
 let builtins: unknown;
 let namespaces: unknown;
@@ -105,9 +107,10 @@ test("inferProgramImports uses an imported scheme; open-world infer alone does n
   // with add's number domain. Open-world (no import) leaves f a fresh var → ok.
   const importer = parseAl("let bad = add(f(1), 2)\n");
   expect(inferProgram(importer, builtins, namespaces, true)._tag).toBe("Ok");
-  expect(inferProgramImports(importer, builtins, namespaces, true, imports, new Map())._tag).toBe(
-    "Err",
-  );
+  expect(
+    inferProgramImports(importer, builtins, namespaces, true, imports, new Map(), { _tag: "None" })
+      ._tag,
+  ).toBe("Err");
 });
 
 test("inferProgram is the zero-imports case of inferProgramImports", () => {

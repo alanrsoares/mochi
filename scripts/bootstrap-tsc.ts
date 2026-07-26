@@ -10,14 +10,15 @@
 //   bun scripts/bootstrap-tsc.ts --list      # every raw `error TS…` line
 //   bun scripts/bootstrap-tsc.ts --keep      # leave the scratch dir for inspection
 
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { isErr } from "@onrails/result";
 import { buildModulesTs } from "../src/module";
 
 const REPO = resolve(import.meta.dir, "..");
 const ENTRY = join(REPO, "bootstrap", "cli.mochi");
+const BOOTSTRAP = join(REPO, "bootstrap");
 const RUNTIME = join(REPO, "src", "runtime"); // bundler resolves to src/runtime.ts
 
 const TSCONFIG = {
@@ -34,7 +35,7 @@ const TSCONFIG = {
       "@onrails/result": [join(REPO, "node_modules/@onrails/result/dist/index.d.ts")],
     },
   },
-  include: ["*.ts"],
+  include: ["**/*.ts"],
 };
 
 export type TscReport = {
@@ -54,9 +55,14 @@ export const bootstrapTsc = async (keep = false): Promise<TscReport> => {
   const dir = await mkdtemp(join(tmpdir(), "mochi-bts-"));
   try {
     for (const { path, js } of built.value) {
-      // Extern `.d.ts` outputs already carry their extension; `.mochi` → `.ts`.
-      const name = path.endsWith(".ts") ? basename(path) : basename(path).replace(/\.mochi$/, ".ts");
-      await writeFile(join(dir, name), js);
+      // Preserve bootstrap-relative paths so nested modules (plugins/jsx) keep
+      // working imports under the scratch dir. Extern `.d.ts` outputs already
+      // carry their extension; `.mochi` → `.ts`.
+      const rel = relative(BOOTSTRAP, path);
+      const outRel = path.endsWith(".ts") ? rel : rel.replace(/\.mochi$/, ".ts");
+      const dest = join(dir, outRel);
+      await mkdir(dirname(dest), { recursive: true });
+      await writeFile(dest, js);
     }
     await writeFile(join(dir, "tsconfig.json"), JSON.stringify(TSCONFIG, null, 2));
 
@@ -75,7 +81,11 @@ export const bootstrapTsc = async (keep = false): Promise<TscReport> => {
       const code = line.match(/error (TS\d+)/)?.[1];
       const file = line.match(/^([^(]+)\(/)?.[1];
       if (code) byCode[code] = (byCode[code] ?? 0) + 1;
-      if (file) byFile[file] = (byFile[file] ?? 0) + 1;
+      if (file) {
+        // Count by basename so nested paths (plugins/jsx.ts) stay readable.
+        const base = file.replace(/^.*\//, "");
+        byFile[base] = (byFile[base] ?? 0) + 1;
+      }
     }
     if (keep) console.error(`scratch dir: ${dir}`);
     return { total: errors.length, byCode, byFile, errors };

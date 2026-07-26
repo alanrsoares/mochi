@@ -33,9 +33,14 @@ const evalAl = (js: string, name: string): ((x: never) => AlResult) =>
 
 type AlErr = { message: string; start: number; end: number };
 type AlResult = { _tag: "Ok"; value: unknown } | { _tag: "Err"; error: AlErr };
+type AlOption<T> = { _tag: "None" } | { _tag: "Some"; value: T };
 
 const alLex = evalAl(compileAl("bootstrap/lexer.mochi"), "lex") as (src: string) => AlResult;
 const alParse = evalAl(compileAl("bootstrap/parser.mochi"), "parse") as (toks: unknown) => AlResult;
+const alParseWith = evalAl(compileAl("bootstrap/parser.mochi"), "parseWith") as unknown as (
+  toks: unknown,
+  pluginsOpt: AlOption<unknown[]>,
+) => AlResult;
 
 // ---- canonical AST (both parsers map into this) --------------------------------
 
@@ -74,7 +79,13 @@ const cExpr = (e: Expr): Canon => {
     case "ref":
       return { kind: "ref", name: e.name, span: cSpan(e.span) };
     case "call":
-      return { kind: "call", fn: cExpr(e.fn), args: e.args.map(cExpr), span: cSpan(e.span) };
+      return {
+        kind: "call",
+        fn: cExpr(e.fn),
+        args: e.args.map(cExpr),
+        origin: e.origin ?? null,
+        span: cSpan(e.span),
+      };
     case "lambda":
       return {
         kind: "lambda",
@@ -281,7 +292,13 @@ const A_EXPR: Record<string, (e: Al) => Canon> = {
   EBool: (e) => ({ kind: "bool", value: e.value, span: e.span }),
   EStr: (e) => ({ kind: "str", value: e.value, span: e.span }),
   ERef: (e) => ({ kind: "ref", name: e.name, span: e.span }),
-  ECall: (e) => ({ kind: "call", fn: aExpr(e.fn), args: e.args.map(aExpr), span: e.span }),
+  ECall: (e) => ({
+    kind: "call",
+    fn: aExpr(e.fn),
+    args: e.args.map(aExpr),
+    origin: opt(e.origin, (o: Al) => o),
+    span: e.span,
+  }),
   ELambda: (e) => ({
     kind: "lambda",
     params: e.params.map(aParam),
@@ -506,6 +523,8 @@ const cases: Record<string, string> = {
     "let f = let a = 1 in add(a, 2)\nlet g = let (x, y) = (1, 2) in add(x, y)",
   "pipe chain": "let r = x |> f |> g(1) |> h",
   "call and field chains": "let a = f(1)(2).x.y(3)",
+  "jsx element and fragment provenance":
+    'let el = <div className="c">{"hi"}</div>\nlet frag = <><span>{"1"}</span></>',
   "tuple vs grouping": "let t = (1, 2, 3)\nlet g = (1)",
   "collection literals":
     'let a = []\nlet b = [1, 2]\nlet c = @{}\nlet d = @{1, 2}\nlet e = #{}\nlet f = #{ "k": 1, "j": 2 }\nlet r = { x: 1, y: 2 }\nlet z = {}',
@@ -563,6 +582,20 @@ for (const [name, src] of Object.entries(cases)) {
     expect(alAst(src)).toEqual(tsAst(src));
   });
 }
+
+// Wave 8 #43 — hard opt-out: `plugins: []` makes `<…>` a plain parse error.
+test("bootstrap parseWith(Some([])) rejects JSX (plugin opt-out)", () => {
+  const src = "let el = <div />";
+  const lr = alLex(src);
+  if (lr._tag !== "Ok") throw new Error("expected the mochi lexer to succeed");
+  const optedOut = alParseWith(lr.value, { _tag: "Some", value: [] });
+  expect(optedOut._tag).toBe("Err");
+  if (optedOut._tag === "Err") {
+    expect(optedOut.error.message).toBe("unexpected token lt");
+  }
+  // Default parse still accepts JSX.
+  expect(alParse(lr.value)._tag).toBe("Ok");
+});
 
 // ---- error parity ----------------------------------------------------------------
 

@@ -1,0 +1,65 @@
+// bootstrap/extensions.mochi — thin LanguagePlugin seam for the self-host
+// (Wave 8 / ADR 0011 §6). Parse + inferCall only: bootstrap has no format/dts
+// passes. Hooks are Result/(toks, pos) shaped — not an imperative ParserApi.
+//
+// resolvePlugins mirrors src/extensions.ts:
+//   None            → builtins (default JSX on)
+//   Some([])        → hard opt-out
+//   Some([a, b, …]) → builtins prepended, then caller list
+
+import { jsxPlugin } from "./plugins/jsx.mochi"
+
+export let DEFAULT_PLUGINS = [jsxPlugin]
+
+/// `pluginsOpt` is Option [LanguagePlugin]: None = default, Some([]) = opt-out.
+export let resolvePlugins = (pluginsOpt, builtins) => switch pluginsOpt {
+  | None => builtins
+  | Some(ps) => Array.length(ps) == 0 ? [] : Array.concat(builtins, ps)
+}
+
+export let resolvePluginsDefault = pluginsOpt =>
+  resolvePlugins(pluginsOpt, DEFAULT_PLUGINS)
+
+/// Collect parse hooks (skip plugins with None parse).
+let parseHooksFrom = (plugins, i, acc) => switch Array.get(i, plugins) {
+  | None => acc
+  | Some(p) => switch p.parse {
+      | Some(hook) => parseHooksFrom(plugins, i + 1, Array.append(hook, acc))
+      | None => parseHooksFrom(plugins, i + 1, acc)
+    }
+}
+export let parseHooksOf = plugins => parseHooksFrom(plugins, 0, [])
+
+let inferHooksFrom = (plugins, i, acc) => switch Array.get(i, plugins) {
+  | None => acc
+  | Some(p) => switch p.inferCall {
+      | Some(hook) => inferHooksFrom(plugins, i + 1, Array.append(hook, acc))
+      | None => inferHooksFrom(plugins, i + 1, acc)
+    }
+}
+export let inferCallHooksOf = plugins => inferHooksFrom(plugins, 0, [])
+
+/// First hook to claim wins. Ok(None) = fall through; Ok(Some((e, pos))) =
+/// claimed; Err = parse diagnostic. `parseExpr` is (toks, pos) -> Result.
+export let runParseHooks = (hooks, toks, pos, parseExpr) => switch hooks {
+  | [] => Ok(None)
+  | [hook, ...rest] => switch hook(toks, pos, parseExpr) {
+      | Err(e) => Err(e)
+      | Ok(v) => switch v {
+          | None => runParseHooks(rest, toks, pos, parseExpr)
+          | Some(claim) => Ok(Some(claim))
+        }
+    }
+}
+
+/// First hook to claim wins. Ok(None) = fall through to core call inference.
+export let runInferCallHooks = (hooks, fn, args, origin, st, api) => switch hooks {
+  | [] => Ok(None)
+  | [hook, ...rest] => switch hook(fn, args, origin, st, api) {
+      | Err(e) => Err(e)
+      | Ok(v) => switch v {
+          | None => runInferCallHooks(rest, fn, args, origin, st, api)
+          | Some(claim) => Ok(Some(claim))
+        }
+    }
+}
