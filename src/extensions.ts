@@ -61,6 +61,9 @@ export type ParserApi = {
  */
 export type ParseHook = (api: ParserApi) => Expr | null;
 
+/** Hover identity for a record/JSX attribute label. */
+export type PropertySymbol = { kind: "property"; name: string };
+
 /** Capabilities a call-hook may use — mirrors the private infer Ctx without exporting it. */
 export type InferCallApi = {
   infer: (e: Expr) => Result<Type, Diagnostic>;
@@ -68,6 +71,11 @@ export type InferCallApi = {
   freshVar: () => Type;
   freshRowVar: () => Row;
   zonk: (t: Type) => Type;
+  /**
+   * Record a type at a span for hover (e.g. expected JSX prop on the attr name).
+   * No-op when inference is not collecting a TypeAt table.
+   */
+  noteType: (span: Span, t: Type, symbol?: PropertySymbol) => void;
 };
 
 /**
@@ -143,7 +151,7 @@ export type DtsBindingHook = (
 ) => string | null;
 
 /** Completion item kinds — shared by the compiler API and plugin member hooks (ADR 0013). */
-export type CompletionKind = "value" | "field" | "member" | "method" | "ctor" | "type";
+export type CompletionKind = "value" | "field" | "member" | "method" | "ctor" | "type" | "literal";
 
 /** One completion candidate — protocol-free so Bun unit tests can assert on it. */
 export type CompletionItem = { label: string; kind: CompletionKind; detail?: string };

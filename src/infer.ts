@@ -287,6 +287,7 @@ function inferCall(e: CallExpr, ctx: Ctx): Result<Type, Diagnostic> {
     freshVar: () => freshVar(ctx.fresh),
     freshRowVar: () => freshRowVar(ctx.fresh),
     zonk: (t) => zonk(t, ctx.subst),
+    noteType: (span, t, symbol) => ctx.record?.(span, t, symbol),
   };
   const hooked = runInferCallHooks(ctx.inferCallHooks, e, api);
   if (hooked !== null) return hooked;

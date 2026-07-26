@@ -214,6 +214,19 @@ field completion works on the dogfood Counter path.
 `store.actions.` lists action names as **methods**; `useSelect` selectors see
 `s.count.value`. Nullary `() => T` is honest `() -> T` in HM.
 
+## Wave 12 (JSX prop hints — `$tone` union)
+
+Component props already carry literal unions in HM (#37), but hover showed the
+value-side lit (widen → `string`) and completion ignored JSX attrs. Surface the
+**expected** prop type on attr names + complete lit-union values.
+
+| # | Title | Type | Blocked by | Status |
+|---|---|---|---|---|
+| 48 | JSX attr hover = expected prop type; attr name/value complete | AFK | 37, 13 | done |
+
+**Wave 12 shipped:** `$tone` hovers as `(property) $tone: "rose" | …`;
+`<BadgeShell ` / `$tone="` complete prop names and lit members.
+
 ## Slice briefs
 
 ### 0 — Rename to `Diagnostic`
@@ -1353,4 +1366,25 @@ Internal `unit` con: `() => T` → `unit -> T`; `f()` peels it. Show/dts render
 ## Blocked by
 
 46
+
+---
+
+### 48 — JSX `$tone` hover + attr complete
+
+## What to build
+
+`noteType` expected prop on JSX attr nameSpans; `completeAt` offers prop labels
+and string-literal union members inside `$tone="…"`. `moduleCompleteAt` threads
+named imports. LSP triggers `"`, `'`, `=`, space.
+
+## Acceptance criteria
+
+- [x] Hover on `$tone` shows `(property) $tone: "rose" | …`
+- [x] Complete inside `$tone="` lists lit members
+- [x] Complete after `<BadgeShell ` lists `$tone`
+- [x] `bun run check:full` green
+
+## Blocked by
+
+37, 13
 

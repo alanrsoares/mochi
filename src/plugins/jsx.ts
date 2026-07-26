@@ -269,10 +269,29 @@ const inferJsxCall: InferCallHook = (
   if (zonkedTag.kind === "arrow" && zonkedTag.from.kind === "record") {
     const uni = api.unify(propsT.value, zonkedTag.from, propsExpr.span);
     if (isErr(uni)) return uni;
+    // Expected prop types on attr names — hover shows `"rose" | …`, not the
+    // value-side lit that widenLits would turn into `string`.
+    if (propsExpr.kind === "record") {
+      for (const f of propsExpr.fields) {
+        const expected = rowFieldType(zonkedTag.from.row, f.name);
+        if (expected)
+          api.noteType(f.nameSpan, api.zonk(expected), { kind: "property", name: f.name });
+      }
+    }
     return ok(api.zonk(zonkedTag.to));
   }
   // Intrinsic / unknown tag: open props, result is VNode.
   return ok(tCon("VNode"));
+};
+
+/** Walk a row for `label`; open tails / missing labels → null. */
+const rowFieldType = (row: Row, label: string): Type | null => {
+  let cur = row;
+  while (cur.kind === "extend") {
+    if (cur.label === label) return cur.type;
+    cur = cur.rest;
+  }
+  return null;
 };
 
 // --------------------------------------------------------------- format
