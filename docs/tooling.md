@@ -33,17 +33,18 @@ bun run bootstrap:tsc  # count tsc --strict errors on the self-host (north-star:
 `check` / `test` omit `test/bootstrap-fixpoint-binary.spec.ts` and
 `test/bootstrap-tsc.spec.ts`. `check:full` / `test:full` run everything.
 
-`bun install` runs `prepare` → `scripts/setup-hooks.ts`, which sets
-`core.hooksPath=.githooks`:
+`bun install` runs `prepare` → `scripts/setup-hooks.ts` →
+`lefthook install --reset-hooks-path` (see `lefthook.yml`):
 
 | Hook | When | What |
 |---|---|---|
 | `prepare-commit-msg` | every commit | strip tool/agent attribution trailers |
 | `commit-msg` | every commit | refuse if any attribution trailer remains |
+| `pre-commit` | every commit | `bun run check` (skip north-stars) |
 | `pre-push` | every push | `bun run check:full` (same as CI) |
 
-Escape hatch (rare): `git commit --no-verify` / `git push --no-verify`. The full QA
-gate is intentionally not on every commit — only on push.
+Escape hatch (rare): `LEFTHOOK=0` / `git commit --no-verify` / `git push --no-verify`.
+Full north-stars stay on push (+ CI), not every commit.
 
 Individual pieces: `test`, `typecheck`, `lint` / `lint:fix`, `format`, `loc`,
 `gen:prelude` / `gen:runtime` (regenerate the parity-guarded shims), `gen:mochi-dts`

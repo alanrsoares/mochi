@@ -1,0 +1,22 @@
+# Git hooks via lefthook — install: `bun install` → `prepare` → `lefthook install`
+# Escape hatch: LEFTHOOK=0 git commit|push   or   --no-verify
+
+pre-commit:
+  jobs:
+    - name: check
+      run: bun run check
+
+pre-push:
+  jobs:
+    - name: check:full
+      run: bun run check:full
+
+prepare-commit-msg:
+  jobs:
+    - name: strip-attribution
+      run: bash scripts/hooks/prepare-commit-msg "{1}"
+
+commit-msg:
+  jobs:
+    - name: refuse-attribution
+      run: bash scripts/hooks/commit-msg "{1}"

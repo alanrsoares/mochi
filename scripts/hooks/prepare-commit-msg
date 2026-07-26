@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Universal agent/tool attribution stripper (all editors — not Cursor-only).
-# Policy: AGENTS.md. Install: bun install → prepare → core.hooksPath=.githooks
+# Policy: AGENTS.md. Install: bun install → prepare → lefthook install
 set -euo pipefail
 msg_file="${1:?commit message file}"
 
