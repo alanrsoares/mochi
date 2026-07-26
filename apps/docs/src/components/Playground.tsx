@@ -7,6 +7,7 @@ import presetFib from "../examples/presets/fib.mochi?raw";
 import presetJsx from "../examples/presets/jsx.mochi?raw";
 import presetResult from "../examples/presets/result.mochi?raw";
 import presetRowPoly from "../examples/presets/row-poly.mochi?raw";
+import presetTask from "../examples/presets/task.mochi?raw";
 import { createPlaygroundCompiler } from "../lib/playground-compiler";
 import {
   decodeSharedCode,
@@ -44,6 +45,7 @@ type RightTab = "js" | "ts" | "dts" | "output" | "problems" | "settings";
 const PRESETS: Record<string, { name: string; code: string }> = {
   jsx: { name: "JSX → h()", code: presetJsx },
   result: { name: "Result + switch", code: presetResult },
+  task: { name: "Task a e railway", code: presetTask },
   rowPoly: { name: "Row polymorphism", code: presetRowPoly },
   fib: { name: "Fibonacci", code: presetFib },
 };
@@ -115,13 +117,14 @@ export function Playground() {
     const run = async () => {
       const paramCode = new URLSearchParams(window.location.search).get("code");
       if (paramCode && paramCode.length > 0 && paramCode.length <= MAX_ENCODED_CODE_LENGTH) {
-        try {
-          const decoded = await decodeSharedCode(paramCode);
-          if (!cancelled && isSharedCodeWithinLimits(paramCode, decoded) && decoded) {
-            setCode(decoded);
-          }
-        } catch {
-          // keep localStorage / preset fallback
+        const decoded = await decodeSharedCode(paramCode)();
+        if (
+          !cancelled &&
+          decoded._tag === "Ok" &&
+          isSharedCodeWithinLimits(paramCode, decoded.value) &&
+          decoded.value
+        ) {
+          setCode(decoded.value);
         }
       }
       if (!cancelled) setBootstrapped(true);
@@ -144,50 +147,48 @@ export function Playground() {
   const syncUrl = useCallback(async (source: string) => {
     urlSeq.current += 1;
     const seq = urlSeq.current;
-    try {
-      const encoded = await encodeSharedCode(source);
-      if (seq !== urlSeq.current) return;
-      if (!isSharedCodeWithinLimits(encoded, source)) return;
-      const params = new URLSearchParams(window.location.search);
-      params.set("code", encoded);
-      const next = `${window.location.pathname}?${params.toString()}${window.location.hash}`;
-      window.history.replaceState(null, "", next);
-      localStorage.setItem(STORAGE_KEY, source);
-    } catch {
-      // keep last good URL
-    }
+    const encoded = await encodeSharedCode(source)();
+    if (seq !== urlSeq.current || encoded._tag !== "Ok") return;
+    if (!isSharedCodeWithinLimits(encoded.value, source)) return;
+    const params = new URLSearchParams(window.location.search);
+    params.set("code", encoded.value);
+    const next = `${window.location.pathname}?${params.toString()}${window.location.hash}`;
+    window.history.replaceState(null, "", next);
+    localStorage.setItem(STORAGE_KEY, source);
   }, []);
 
   const evaluate = useCallback((source: string) => {
     compileSeq.current += 1;
     const seq = compileSeq.current;
     setCompiling(true);
-    void compilerRef.current.compile(source).then((result) => {
-      if (seq !== compileSeq.current) return;
-      setCompiling(false);
-      if (result.ok) {
-        setDiagnostics([]);
-        setOutputJs(result.value.js);
-        setOutputTs(result.value.ts);
-        setOutputDts(result.value.dts);
-        setCompileMs(result.value.ms);
-        return;
-      }
-      setOutputJs("");
-      setOutputTs("");
-      setOutputDts("");
-      setCompileMs(result.error.ms);
-      if (result.error.diagnostics) {
-        setDiagnostics(result.error.diagnostics);
-        return;
-      }
-      setDiagnostics([
-        {
-          kind: "check",
-          message: result.error.message ?? "Compilation failed",
-        },
-      ]);
-    });
+    void compilerRef.current
+      .compile(source)()
+      .then((result) => {
+        if (seq !== compileSeq.current) return;
+        setCompiling(false);
+        if (result._tag === "Ok") {
+          setDiagnostics([]);
+          setOutputJs(result.value.js);
+          setOutputTs(result.value.ts);
+          setOutputDts(result.value.dts);
+          setCompileMs(result.value.ms);
+          return;
+        }
+        setOutputJs("");
+        setOutputTs("");
+        setOutputDts("");
+        setCompileMs(result.error.ms);
+        if (result.error.diagnostics) {
+          setDiagnostics(result.error.diagnostics);
+          return;
+        }
+        setDiagnostics([
+          {
+            kind: "check",
+            message: result.error.message ?? "Compilation failed",
+          },
+        ]);
+      });
   }, []);
   // Debounced autorun compile.
   useEffect(() => {

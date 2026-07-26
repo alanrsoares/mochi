@@ -154,7 +154,9 @@ it desugars to `Task.andThen`. Infix bind for both is deferred.
 Unlike `ResultAsync`'s memoized `resolve()`, `Task.run` re-fires the underlying effect
 on every call — `Task` follows the IO-action model, not the cached-Promise model (ADR
 0006 decision 4). Chains stay mono-`e`: `mapErr`/`recover` swap the error type before
-binding two externs with different error shapes into one chain.
+binding two externs with different error shapes into one chain. `examples/async/`
+runs that end to end against a failing host: string failures map onto a domain
+`ApiError`, a 404 is recovered, and an unreachable host still settles as `Err`.
 
 Effects stay a **convention**, not a checked effect system: domain IO is thin `extern`s
 that *should* return `Task _` (see `examples/life/`); sequencing uses prelude `Task.*`.

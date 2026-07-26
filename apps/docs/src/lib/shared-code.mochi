@@ -1,0 +1,12 @@
+// Playground share-link encode/decode as mochi `Task a e` (ADR 0006). Host is
+// `shared-code.ts` — same Result shape the UI uses. Failures are plain strings
+// (missing DecompressionStream, corrupt payload, …).
+
+extern encodeShared : string -> Task string string = "./shared-code" "encodeSharedCode"
+extern decodeShared : string -> Task string string = "./shared-code" "decodeSharedCode"
+
+/// Encode then decode — proves the railway; settles Ok(source) on success.
+export let roundTrip = source =>
+  let! enc = encodeShared(source) in decodeShared(enc)
+
+export let runRoundTrip = source => Task.run(roundTrip(source))

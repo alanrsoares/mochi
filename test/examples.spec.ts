@@ -21,6 +21,29 @@ test("examples/life/main.mochi compiles", () => {
   expect(isErr(compile(read("examples/life/main.mochi")))).toBe(false);
 });
 
+test("examples/life host settles Err on a forced write failure", async () => {
+  const host = await import(path("examples/life/runtime.mjs"));
+  const writes: string[] = [];
+  const orig = process.stdout.write;
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString());
+    return true;
+  }) as typeof process.stdout.write;
+  try {
+    host.__forceFailNextWrite();
+    expect(await host.draw("label", "frame")()).toEqual({
+      _tag: "Err",
+      error: "forced write failure",
+    });
+    expect(writes).toEqual([]);
+    // Cleared after one shot — next draw is Ok again.
+    expect(await host.draw("label", "frame")()).toEqual({ _tag: "Ok", value: 0 });
+    expect(writes.some((w) => w.includes("label"))).toBe(true);
+  } finally {
+    process.stdout.write = orig;
+  }
+});
+
 test("examples/pipelines.mochi compiles and produces its documented values", () => {
   // Output is standalone (prelude inlined) — only the @onrails/pattern import is
   // stripped, and `match` injected in its place.
@@ -31,13 +54,41 @@ test("examples/pipelines.mochi compiles and produces its documented values", () 
   expect(out).toEqual({ composed: 22, piped: 81, happy: 20, sad: -1 });
 });
 
-test("examples/async composes a typed Task pipeline that runs to its value", async () => {
+/**
+ * Compile examples/async and hand its exports back. Prelude `Task.*` is inlined,
+ * but the two domain effects are `extern`s — stripping the imports leaves them
+ * free, so the real host module is injected in their place.
+ */
+const runAsyncExample = async (): Promise<Record<string, Promise<unknown>>> => {
   const js = unwrapOk(compile(read("examples/async/main.mochi")))
     .replace(/^import .*$/gm, "")
     .replace(/^export /gm, "");
-  // Prelude Task.* is inlined — no host inject. Pipeline: of(20) -> +1 -> delay -> *2.
-  const result = new Function("match", `${js}\nreturn result;`)(match) as Promise<unknown>;
-  expect(await result).toEqual({ _tag: "Ok", value: 42 });
+  const host = await import(path("examples/async/runtime.mjs"));
+  return new Function(
+    "match",
+    "fetchUser",
+    "fetchPlan",
+    `${js}\nreturn { result, found, recovered, offline };`,
+  )(match, host.fetchUser, host.fetchPlan) as Record<string, Promise<unknown>>;
+};
+
+test("examples/async composes a typed Task pipeline that runs to its value", async () => {
+  // Pipeline: of(20) -> +1 -> delay -> *2.
+  expect(await (await runAsyncExample()).result).toEqual({ _tag: "Ok", value: 42 });
+});
+
+test("examples/async carries failures on Task's error channel (ADR 0006)", async () => {
+  const out = await runAsyncExample();
+  expect(await out.found).toEqual({ _tag: "Ok", value: "Ada is on the pro plan" });
+  // A 404 is recovered on the error track; an unreachable host stays an Err.
+  expect(await out.recovered).toEqual({
+    _tag: "Ok",
+    value: "user 7 has no plan — showing the demo one",
+  });
+  expect(await out.offline).toEqual({
+    _tag: "Err",
+    error: { _tag: "Offline", _0: "network down" },
+  });
 });
 
 test("examples/modules builds the whole graph and wires imports", async () => {
@@ -61,7 +112,7 @@ test("docs tour snippets compile (source of HighlightCode panels)", () => {
 });
 
 test("docs playground presets emit every displayed target", () => {
-  for (const name of ["jsx", "result", "row-poly", "fib"] as const) {
+  for (const name of ["jsx", "result", "task", "row-poly", "fib"] as const) {
     const src = read(`apps/docs/src/examples/presets/${name}.mochi`);
     const result = compileTargets(src, { runtime: true });
     expect(
