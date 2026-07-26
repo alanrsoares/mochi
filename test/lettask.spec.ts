@@ -26,7 +26,7 @@ const errMsg = (src: string): string => {
 test("binds the Task payload and runs the body", async () => {
   const src = `let program = let! x = Task.of(20) in Task.of(add(x, 1))
 let result = Task.run(program)`;
-  expect(await run(src, "result")).toBe(21);
+  expect(await run(src, "result")).toEqual({ _tag: "Ok", value: 21 });
 });
 
 test("chains flatten through successive binds", async () => {
@@ -35,19 +35,19 @@ test("chains flatten through successive binds", async () => {
   let! b = Task.delay(1, a) in
   Task.of(mul(b, 2))
 let result = Task.run(program)`;
-  expect(await run(src, "result")).toBe(20);
+  expect(await run(src, "result")).toEqual({ _tag: "Ok", value: 20 });
 });
 
 test("tuple param destructures the Task payload", async () => {
   const src = `let program = let! (a, b) = Task.of((3, 4)) in Task.of(add(a, b))
 let result = Task.run(program)`;
-  expect(await run(src, "result")).toBe(7);
+  expect(await run(src, "result")).toEqual({ _tag: "Ok", value: 7 });
 });
 
 test("record param destructures the Task payload", async () => {
   const src = `let program = let! { x, y } = Task.of({ x: 1, y: 2 }) in Task.of(add(x, y))
 let result = Task.run(program)`;
-  expect(await run(src, "result")).toBe(3);
+  expect(await run(src, "result")).toEqual({ _tag: "Ok", value: 3 });
 });
 
 test("value must be a Task", () => {
@@ -92,5 +92,5 @@ test("hover on the bound name shows the Task payload type", () => {
 test("spaced let ! still parses (mirrors let ?)", async () => {
   const src = `let program = let ! x = Task.of(2) in Task.of(mul(x, 3))
 let result = Task.run(program)`;
-  expect(await run(src, "result")).toBe(6);
+  expect(await run(src, "result")).toEqual({ _tag: "Ok", value: 6 });
 });

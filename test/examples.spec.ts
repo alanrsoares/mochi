@@ -36,8 +36,8 @@ test("examples/async composes a typed Task pipeline that runs to its value", asy
     .replace(/^import .*$/gm, "")
     .replace(/^export /gm, "");
   // Prelude Task.* is inlined — no host inject. Pipeline: of(20) -> +1 -> delay -> *2.
-  const result = new Function("match", `${js}\nreturn result;`)(match) as Promise<number>;
-  expect(await result).toBe(42);
+  const result = new Function("match", `${js}\nreturn result;`)(match) as Promise<unknown>;
+  expect(await result).toEqual({ _tag: "Ok", value: 42 });
 });
 
 test("examples/modules builds the whole graph and wires imports", async () => {

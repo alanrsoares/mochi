@@ -137,16 +137,20 @@ errors) share one compiler-side model — the LSP stays a thin adapter (ADR 0003
 
 mochi's type system does **not** track effects. There is no effect row and no checker
 rule that forces effectful work into `Task`. The discipline is: effectful `extern`s
-*should* return `Task a`, and effects stay at the FFI boundary. That is unenforceable
+*should* return `Task a e`, and effects stay at the FFI boundary. That is unenforceable
 mechanically (the compiler can't inspect a JS export's body) and deliberate
-([ADR 0005](docs/adr/0005-prelude-task.md)).
+([ADR 0005](docs/adr/0005-prelude-task.md), [ADR 0006](docs/adr/0006-task-result-async.md)).
 
-- **Task** — opaque applied constructor for a lazy async computation
-  (`() => Promise<a>` at runtime). Prelude namespace `Task.of` / `Task.map` /
-  `Task.andThen` / `Task.delay` / `Task.run`. Not a tagged variant; not switchable.
-  `Task.run` is the only kick-off and yields a host **Promise** (also an open
-  applied ctor at the type level). Domain IO remains `extern`; sequencing uses
-  `Task.*`. Surface bind: `let!` (mirrors Result’s `let?`); infix bind deferred.
+- **Task** — opaque applied constructor for a lazy async computation with an
+  error channel (`() => Promise<Result<a, e>>` at runtime, ADR 0006). Prelude
+  namespace `Task.of` / `Task.fail` / `Task.map` / `Task.mapErr` / `Task.andThen`
+  / `Task.recover` / `Task.fromResult` / `Task.match` / `Task.delay` / `Task.run`.
+  Not a tagged variant; not switchable. `Task.run` is the only kick-off and yields
+  a host **Promise** of the settled `Result` (also an open applied ctor at the
+  type level). Unlike `ResultAsync.resolve()`, `run` is not memoized — it
+  re-fires the effect every call (IO-action model, not the Promise model).
+  Domain IO remains `extern`; sequencing uses `Task.*`. Surface bind: `let!`
+  (mirrors Result’s `let?`); infix bind deferred.
 
 ## Language plugins ([ADR 0011](docs/adr/0011-language-plugins.md))
 

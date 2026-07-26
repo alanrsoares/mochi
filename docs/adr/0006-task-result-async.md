@@ -1,6 +1,6 @@
 # 0006 — `Task` gets an error channel (`Task a e`, `ResultAsync`-aligned)
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Source:** conversation; `@onrails/result`'s `ResultAsync`
   ([alanrsoares/onrails](https://github.com/alanrsoares/onrails),
   `packages/result/src/async.ts`, `async-lift.ts`); `src/prelude.ts`;

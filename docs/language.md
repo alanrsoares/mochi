@@ -116,33 +116,45 @@ let evens5 = evens |> take(5) |> toArray      // [0, 2, 4, 6, 8]
 - Builtin `Option` (`Some`/`None`) and `Result` (`Ok`/`Err`); `Map.get`/`Array.head`
   return `Option`. Field names match `@onrails/result`/`@onrails/maybe`, so values flow
   straight into those combinators at the JS boundary.
-- Builtin `Task a` — opaque lazy async value (`() => Promise<a>` at runtime). Not a
-  tagged variant; not switchable. See [Task](#task) below.
+- Builtin `Task a e` — opaque lazy async value with an error channel
+  (`() => Promise<Result<a, e>>` at runtime). Not a tagged variant; not
+  switchable. See [Task](#task) below.
 
 ## Task
 
-Async without `async`/`await`. A `Task a` is an ordinary value: building one runs no
-effect; `Task.run` is the only kick-off and yields a host `Promise a`. Combinators are
-data-last under `Task.*` and compose with `|>` ([ADR 0005](adr/0005-prelude-task.md)):
+Async without `async`/`await`. A `Task a e` is an ordinary value: building one runs
+no effect; `Task.run` is the only kick-off and yields a host `Promise (Result a e)`.
+Combinators are data-last under `Task.*` and compose with `|>`
+([ADR 0005](adr/0005-prelude-task.md), [ADR 0006](adr/0006-task-result-async.md)):
 
 | Member | Type | Role |
 |---|---|---|
-| `Task.of` | `a -> Task a` | pure lift |
-| `Task.map` | `(a -> b) -> Task a -> Task b` | map the result |
-| `Task.andThen` | `(a -> Task b) -> Task a -> Task b` | sequence (v1 name; not `flatMap`) |
-| `Task.delay` | `number -> a -> Task a` | sleep then yield (`_curry`-safe) |
-| `Task.run` | `Task a -> Promise a` | kick-off at the JS edge |
+| `Task.of` | `a -> Task a e` | pure lift |
+| `Task.fail` | `e -> Task a e` | error lift |
+| `Task.map` | `(a -> b) -> Task a e -> Task b e` | map the payload |
+| `Task.mapErr` | `(e -> f) -> Task a e -> Task a f` | map the error |
+| `Task.andThen` | `(a -> Task b e) -> Task a e -> Task b e` | sequence (v1 name; not `flatMap`) |
+| `Task.recover` | `(e -> Task a f) -> Task a e -> Task a f` | error-track bind |
+| `Task.fromResult` | `Result a e -> Task a e` | lift a settled `Result` |
+| `Task.match` | `(a -> c) -> (e -> c) -> Task a e -> Task c f` | fold both tracks, stays a `Task` |
+| `Task.delay` | `number -> a -> Task a e` | sleep then yield (`_curry`-safe) |
+| `Task.run` | `Task a e -> Promise (Result a e)` | kick-off at the JS edge |
 
 ```mochi
 let program =
   let! n = Task.of(20) |> Task.map((+ 1)) in
   let! n2 = Task.delay(10, n) in
   Task.of(n2 + n2)
-export let result = Task.run(program)   // Promise — await in the host
+export let result = Task.run(program)   // Promise (Result number e) — await in the host
 ```
 
 `let! x = task in …` is monadic bind over `Task` (mirrors `let?` for `Result`);
 it desugars to `Task.andThen`. Infix bind for both is deferred.
+
+Unlike `ResultAsync`'s memoized `resolve()`, `Task.run` re-fires the underlying effect
+on every call — `Task` follows the IO-action model, not the cached-Promise model (ADR
+0006 decision 4). Chains stay mono-`e`: `mapErr`/`recover` swap the error type before
+binding two externs with different error shapes into one chain.
 
 Effects stay a **convention**, not a checked effect system: domain IO is thin `extern`s
 that *should* return `Task _` (see `examples/life/`); sequencing uses prelude `Task.*`.

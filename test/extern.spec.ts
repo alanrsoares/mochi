@@ -166,27 +166,27 @@ test("extern round-trips through the formatter", () => {
 });
 
 test("an applied type constructor in a signature is a parameterized type", () => {
-  // `Task a` is Task applied to a var — polymorphic in the element type.
-  expect(schemeOf(`extern of : a -> Task a = "./t.js" "of"`, "of")).toMatch(
-    /^'t\d+ -> Task<'t\d+>$/,
+  // `Task a e` is Task applied to two vars — polymorphic in payload + error.
+  expect(schemeOf(`extern of : a -> Task a e = "./t.js" "of"`, "of")).toMatch(
+    /^'t\d+ -> Task<'t\d+, 't\d+>$/,
   );
 });
 
 test("applied type constructors unify across a chain", () => {
-  const ok = `extern delay : number -> Task number = "./t.js" "delay"
-extern run : Task number -> number = "./t.js" "run"
+  const ok = `extern delay : number -> Task number string = "./t.js" "delay"
+extern run : Task number string -> number = "./t.js" "run"
 let a = run(delay(1))`;
   expect(isErr(compile(ok))).toBe(false);
-  // Task number ≠ Task string — the element type must match.
-  const bad = `extern delay : number -> Task number = "./t.js" "delay"
-extern needStr : Task string -> number = "./t.js" "needStr"
+  // Task number string ≠ Task string string — the payload type must match.
+  const bad = `extern delay : number -> Task number string = "./t.js" "delay"
+extern needStr : Task string string -> number = "./t.js" "needStr"
 let a = needStr(delay(1))`;
   expect(isErr(compile(bad))).toBe(true);
 });
 
 test("applied types round-trip through the formatter, parenthesizing compound args", () => {
-  const src = `extern mapT : (a -> b) -> Task a -> Task b = "./t.js" "mapT"`;
+  const src = `extern mapT : (a -> b) -> Task a e -> Task b e = "./t.js" "mapT"`;
   expect(unwrapOk(format(src))).toBe(
-    `extern mapT : (a -> b) -> Task a -> Task b = "./t.js" "mapT"\n`,
+    `extern mapT : (a -> b) -> Task a e -> Task b e = "./t.js" "mapT"\n`,
   );
 });

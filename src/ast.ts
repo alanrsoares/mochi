@@ -36,11 +36,11 @@ export type Expr =
       span: Span;
     } // let x [: T] = v in b
   /**
-   * `let?` / `let!` — monadic bind (ADR 0005). `monad` selects the surface:
+   * `let?` / `let!` — monadic bind (ADR 0005, ADR 0006). `monad` selects the surface:
    * - `"Result"` (`let?`): value is `Result a e`; Ok payload binds `param`; body
    *   is `Result b e`; Err short-circuits. Lowers to `_Result_flatMap`.
-   * - `"Task"` (`let!`): value is `Task a`; payload binds `param`; body is
-   *   `Task b`. Lowers to `_Task_andThen`.
+   * - `"Task"` (`let!`): value is `Task a e`; payload binds `param`; body is
+   *   `Task b e`. Lowers to `_Task_andThen`.
    * Param is any lambda form (name / tuple / record). Infix bind for both is deferred.
    */
   | {
