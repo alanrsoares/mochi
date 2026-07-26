@@ -88,9 +88,12 @@ extension).
   `extern` host modules.
 
 Spans travel on every token, node, and type through the whole pipeline — hover,
-diagnostics, and formatting all depend on that. Synthetic identifiers are marked by
+diagnostics, completion, and formatting all depend on that. Synthetic identifiers are marked by
 convention: `_`-prefixed names are emitted runtime helpers, `$`-prefixed names are
 synthetic destructure temporaries (both excluded from hover and exports).
+Completion (`completeAt` / `moduleCompleteAt`, [ADR 0013](adr/0013-lsp-completion.md))
+lists prelude/`import * as` members, record fields, plugin-backed `tw.*` tags, and
+top-level value names; the LSP is a thin adapter with `triggerCharacters: ["."]`.
 
 ## Plugins
 

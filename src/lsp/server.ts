@@ -9,6 +9,8 @@ import { isOk } from "@onrails/result";
 import {
   type CodeAction,
   CodeActionKind,
+  type CompletionItem,
+  CompletionItemKind,
   createConnection,
   type Diagnostic,
   DiagnosticSeverity,
@@ -27,6 +29,7 @@ import {
   type WorkspaceSymbol,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import { type CompletionItem as MochiCompletion, moduleCompleteAt } from "../complete";
 import { moduleDiagnostics } from "../diagnostics";
 import type { LanguagePlugin } from "../extensions";
 import { format } from "../format";
@@ -85,6 +88,7 @@ export function startServer(opts: ServerOptions = {}): void {
     capabilities: {
       textDocumentSync: TextDocumentSyncKind.Incremental,
       hoverProvider: true,
+      completionProvider: { triggerCharacters: ["."] },
       definitionProvider: true,
       typeDefinitionProvider: true,
       documentHighlightProvider: true,
@@ -131,6 +135,31 @@ export function startServer(opts: ServerOptions = {}): void {
     const fence = `\`\`\`mochi\n${info.code}\n\`\`\``;
     const value = info.doc ? `${fence}\n\n${info.doc}` : fence;
     return { contents: { kind: MarkupKind.Markdown, value } };
+  });
+
+  const lspCompletionKind = (kind: MochiCompletion["kind"]): CompletionItemKind => {
+    if (kind === "field" || kind === "member") return CompletionItemKind.Field;
+    if (kind === "ctor") return CompletionItemKind.EnumMember;
+    if (kind === "type") return CompletionItemKind.Class;
+    return CompletionItemKind.Variable;
+  };
+
+  /** Completions at cursor — namespaces, record fields, plugin members, top-level values. */
+  connection.onCompletion(async ({ textDocument, position }): Promise<CompletionItem[]> => {
+    const doc = documents.get(textDocument.uri);
+    if (!doc) return [];
+    const items = await moduleCompleteAt(
+      docPath(textDocument.uri),
+      doc.getText(),
+      doc.offsetAt(position),
+      read,
+      { plugins },
+    );
+    return items.map((i) => ({
+      label: i.label,
+      kind: lspCompletionKind(i.kind),
+      detail: i.detail,
+    }));
   });
 
   /** Go-to-definition (cross-module via export origins). */

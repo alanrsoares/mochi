@@ -12,6 +12,7 @@ import { isErr, ok, type Result } from "@onrails/result";
 import type { Expr } from "../../../src/ast";
 import type { Diagnostic } from "../../../src/errors";
 import type {
+  CompleteMemberHook,
   DtsBindingHook,
   HostExtension,
   InferCallApi,
@@ -74,8 +75,46 @@ const styledCvaDts: DtsBindingHook = (_name, _sc, value): string | null => {
   return `(props: { ${props.join("; ")} } & Record<string, unknown>) => any`;
 };
 
+/**
+ * HTML element factories `tw.div` / `tw.button` / … — opaque `extern tw : a`
+ * carries no member list in HM (ADR 0009); completion is a plugin hook (ADR 0013).
+ */
+const TW_TAGS = [
+  "a",
+  "article",
+  "aside",
+  "button",
+  "div",
+  "footer",
+  "form",
+  "h1",
+  "h2",
+  "h3",
+  "header",
+  "img",
+  "input",
+  "label",
+  "li",
+  "main",
+  "nav",
+  "p",
+  "section",
+  "span",
+  "ul",
+] as const;
+
+const twMembers: CompleteMemberHook = ({ receiver }) => {
+  if (receiver !== "tw") return null;
+  return TW_TAGS.map((label) => ({
+    label,
+    kind: "member" as const,
+    detail: "styled-cva factory",
+  }));
+};
+
 export const styledCvaExtension: HostExtension = {
   name: "styled-cva",
   inferCall: inferTwFactory,
   dtsBinding: styledCvaDts,
+  completeMembers: twMembers,
 };
