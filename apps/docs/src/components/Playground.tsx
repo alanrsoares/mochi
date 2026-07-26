@@ -117,13 +117,14 @@ export function Playground() {
     const run = async () => {
       const paramCode = new URLSearchParams(window.location.search).get("code");
       if (paramCode && paramCode.length > 0 && paramCode.length <= MAX_ENCODED_CODE_LENGTH) {
-        try {
-          const decoded = await decodeSharedCode(paramCode);
-          if (!cancelled && isSharedCodeWithinLimits(paramCode, decoded) && decoded) {
-            setCode(decoded);
-          }
-        } catch {
-          // keep localStorage / preset fallback
+        const decoded = await decodeSharedCode(paramCode)();
+        if (
+          !cancelled &&
+          decoded._tag === "Ok" &&
+          isSharedCodeWithinLimits(paramCode, decoded.value) &&
+          decoded.value
+        ) {
+          setCode(decoded.value);
         }
       }
       if (!cancelled) setBootstrapped(true);
@@ -146,18 +147,14 @@ export function Playground() {
   const syncUrl = useCallback(async (source: string) => {
     urlSeq.current += 1;
     const seq = urlSeq.current;
-    try {
-      const encoded = await encodeSharedCode(source);
-      if (seq !== urlSeq.current) return;
-      if (!isSharedCodeWithinLimits(encoded, source)) return;
-      const params = new URLSearchParams(window.location.search);
-      params.set("code", encoded);
-      const next = `${window.location.pathname}?${params.toString()}${window.location.hash}`;
-      window.history.replaceState(null, "", next);
-      localStorage.setItem(STORAGE_KEY, source);
-    } catch {
-      // keep last good URL
-    }
+    const encoded = await encodeSharedCode(source)();
+    if (seq !== urlSeq.current || encoded._tag !== "Ok") return;
+    if (!isSharedCodeWithinLimits(encoded.value, source)) return;
+    const params = new URLSearchParams(window.location.search);
+    params.set("code", encoded.value);
+    const next = `${window.location.pathname}?${params.toString()}${window.location.hash}`;
+    window.history.replaceState(null, "", next);
+    localStorage.setItem(STORAGE_KEY, source);
   }, []);
 
   const evaluate = useCallback((source: string) => {
