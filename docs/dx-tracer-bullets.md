@@ -185,6 +185,35 @@ lambdas / `let-in` / match arms via `SymbolIndex.bindingsAt`.
 **Wave 9 shipped:** cursor inside a nested scope completes lambda params,
 letin/`let?`/`let!` binds, and match-arm pattern binds (shadowing-aware).
 
+## Wave 10 (re-reduced bridge shrink — ADR 0012)
+
+Replace config-AST reverse typing with one structural HM source of truth.
+`defineContainer(name, config)` infers `{ name, ...config }`; the dts hook only
+wraps inferred state/action fields in the outbound host generic.
+
+| # | Title | Type | Blocked by | Status |
+|---|---|---|---|---|
+| 45 | re-reduced structural HM + inferred-shape outbound dts | AFK | 38 | done |
+
+**Wave 10 shipped:** nested state and action fields appear in Mochi hover;
+config bindings (not only inline literals) emit precise `ContainerDef<…>`
+without a hand cast bridge.
+
+## Wave 11 (store completion — useContainer / useSelect)
+
+Opaque `useContainer : a -> b` left `store` as a fresh var → empty `store.`
+complete. Derive a structural Store sketch from the container def so editor
+field completion works on the dogfood Counter path.
+
+| # | Title | Type | Blocked by | Status |
+|---|---|---|---|---|
+| 46 | `useContainer` / `useSelect` inferCall → Store / StateSignals sketch | AFK | 45 | done |
+| 47 | Internal `unit` for nullary fns; action leaves as methods (ADR 0014) | AFK | 46 | done |
+
+**Wave 11 shipped:** `store.` lists `actions` / `$state` / `$derived`;
+`store.actions.` lists action names as **methods**; `useSelect` selectors see
+`s.count.value`. Nullary `() => T` is honest `() -> T` in HM.
+
 ## Slice briefs
 
 ### 0 — Rename to `Diagnostic`
@@ -1262,4 +1291,66 @@ Wire into `completeAt` value completions so nested locals appear.
 ## Blocked by
 
 13
+
+---
+
+### 45 — re-reduced structural HM + thin outbound dts
+
+## What to build
+
+Infer `defineContainer(name, config)` as its runtime `{ name, ...config }`
+record. Give dts hooks access to the folded inferred type and TS renderer, then
+derive `ContainerDef<S, R, …>` from that type rather than walking config AST.
+
+## Acceptance criteria
+
+- [x] Hover/type scheme includes structural state and action fields
+- [x] Config passed through a binding still emits precise `ContainerDef`
+- [x] No state-value or action-record AST reverse typer remains
+- [x] `bun run check:full` green
+
+## Blocked by
+
+38
+
+---
+
+### 46 — useContainer / useSelect Store sketch
+
+## What to build
+
+Plugin `inferCall` for `useContainer(def)` → `{ actions, $state, $derived }`
+from the def's structural HM type (action labels; signal `{ value: T }`
+fields). `useSelect(store, sel)` unifies `sel` with StateSignals → result.
+
+## Acceptance criteria
+
+- [x] `store.` completes `actions` / `$state` / `$derived`
+- [x] `store.actions.` completes action names
+- [x] `useSelect` selector reads `s.count.value` as `number`
+- [x] `bun run check:full` green
+
+## Blocked by
+
+45
+
+---
+
+### 47 — Nullary `unit` (ADR 0014)
+
+## What to build
+
+Internal `unit` con: `() => T` → `unit -> T`; `f()` peels it. Show/dts render
+`()`. re-reduced action leaves `unit -> {}`; completion kind `method`.
+
+## Acceptance criteria
+
+- [x] `let f = () => 1` schemes as `() -> number`
+- [x] `store.actions.` items are `method`
+- [x] ADR 0014 + bootstrap mirror
+- [x] `bun run check:full` green
+
+## Blocked by
+
+46
 

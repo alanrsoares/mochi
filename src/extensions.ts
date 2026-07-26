@@ -113,6 +113,9 @@ export type BindingTypeApi = {
   tsType: (t: Type) => string;
 };
 
+/** Inferred-type tools available to a `.d.ts`-only binding hook. */
+export type DtsBindingApi = BindingTypeApi;
+
 /**
  * Override the TS type of a binding *wherever* it is declared — the `.d.ts`
  * writer and the TS backend (`codegen-ts.ts`) share one `bindingTsType`, so a
@@ -126,7 +129,9 @@ export type BindingTypeHook = (value: Expr, api: BindingTypeApi) => string | nul
  * Override a binding's `.d.ts` type string, or return `null` for the default
  * `bindingTsType` path. `.d.ts`-only (unlike `bindingType`): used by styled-cva
  * to emit `$tone` literal unions from factory AST without modeling VariantProps
- * in HM.
+ * in HM. `api` exposes the folded inferred type and the core TS renderer so a
+ * thin adapter can wrap HM structure in a heavy outbound host generic without
+ * re-deriving ordinary field types from AST.
  */
 export type DtsBindingHook = (
   name: string,
@@ -134,10 +139,11 @@ export type DtsBindingHook = (
   value: Expr,
   aliases: AliasDef[],
   fallback: () => string,
+  api: DtsBindingApi,
 ) => string | null;
 
 /** Completion item kinds — shared by the compiler API and plugin member hooks (ADR 0013). */
-export type CompletionKind = "value" | "field" | "member" | "ctor" | "type";
+export type CompletionKind = "value" | "field" | "member" | "method" | "ctor" | "type";
 
 /** One completion candidate — protocol-free so Bun unit tests can assert on it. */
 export type CompletionItem = { label: string; kind: CompletionKind; detail?: string };
@@ -271,9 +277,10 @@ export const runDtsBindingHooks = (
   value: Expr,
   aliases: AliasDef[],
   fallback: () => string,
+  api: DtsBindingApi,
 ): string => {
   for (const hook of hooks) {
-    const r = hook(name, sc, value, aliases, fallback);
+    const r = hook(name, sc, value, aliases, fallback, api);
     if (r !== null) return r;
   }
   return fallback();

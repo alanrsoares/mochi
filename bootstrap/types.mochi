@@ -39,6 +39,15 @@ export let tPrim = name => TyCon(name, [])
 let TUPLE = "tuple"
 export let tTuple = elems => TyCon(TUPLE, elems)
 
+// Internal nullary-function domain (ADR 0014). Surface `() => T` / call `f()`
+// use `unit -> T`; lowercase so users cannot write it.
+let UNIT = "unit"
+export let tUnit = TyCon(UNIT, [])
+export let isUnit = t => switch t {
+  | TyCon(name, args) => name == UNIT && Array.length(args) == 0
+  | _ => false
+}
+
 export let rVar = id => RowVar(id)
 export let rExtend = (label, fieldType, rest) =>
   RowExtend(label, fieldType, rest)
@@ -58,6 +67,7 @@ export let showType = t => switch t {
           : "${name}<${showTypeArgs(args)}>"
     }
   | TyFn(from, to) => let fromS = switch from {
+      | TyCon(name, args) when name == UNIT && Array.length(args) == 0 => "()"
       | TyFn(_, _) => "(${showType(from)})"
       | _ => showType(from)
     } in

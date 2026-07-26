@@ -13,6 +13,10 @@ test("a single-param lambda declares a unary function", () => {
   expect(dts("let inc = x => add(x, 1)")).toBe("export declare const inc: (x: number) => number;");
 });
 
+test("a nullary lambda declares () => T (ADR 0014)", () => {
+  expect(dts("let one = () => 1")).toBe("export declare const one: () => number;");
+});
+
 test("an array of functions parenthesizes the arrow (Wave 8)", () => {
   // Without parens, `(a: A) => B[]` means "function returning B[]".
   expect(dts('extern id : a -> a = "./x" "id"\nlet hs = [id]')).toBe(

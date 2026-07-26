@@ -94,9 +94,11 @@ decades of JS FFI experience reject that pattern.
 
 - Wave 7 opens on **core literal/union types**, then restyles styled-cva infer
   to use them (`$tone` precise in Mochi, not only in dts).
-- re-reduced plugin shrinks over time toward structural HM + thin outbound dts,
-  or a kit-shipped adapter — not an ever-growing AST→`ContainerDef` string
-  template.
+- Wave 10 shrinks the re-reduced bridge: infer returns ordinary
+  `{ name, ...config }` structural HM, and the outbound dts hook wraps fields
+  from that inferred type in `ContainerDef<…>`. Config expressions no longer
+  need an AST reverse-typechecker. Moving the thin adapter into a kit-owned
+  package remains possible.
 - Authors get a clear rule: **write a typed extern when you can; use `: a` +
   sugar plugin only when the signature would lie; never expect core to learn
   your kit.**

@@ -27,7 +27,7 @@ import { preludeEnv, preludeNamespaces } from "./prelude";
 import { isPreludePath } from "./prelude-virtual";
 import { spanContainsClosed, tightestHit } from "./span";
 import { indexProgram } from "./symbols";
-import { foldAliases, type Row, type Type } from "./types";
+import { foldAliases, type Type } from "./types";
 
 export type { CompletionItem, CompletionKind };
 
@@ -68,23 +68,23 @@ const identPrefixAt = (src: string, offset: number): string => {
   return m?.[1] ?? "";
 };
 
-/** Known labels on a (possibly open) record row. */
-const rowLabels = (row: Row): string[] => {
-  const out: string[] = [];
-  let cur: Row = row;
+/** Prefer structural record under an alias fold for field listing. */
+const recordFieldItems = (t: Type, aliases: InferResult["aliases"]): CompletionItem[] => {
+  const folded = foldAliases(t, aliases);
+  const row = folded.kind === "record" ? folded.row : t.kind === "record" ? t.row : null;
+  if (!row) return [];
+  const out: CompletionItem[] = [];
+  let cur = row;
   while (cur.kind === "extend") {
-    out.push(cur.label);
+    const fieldT = foldAliases(cur.type, aliases);
+    out.push({
+      label: cur.label,
+      kind: fieldT.kind === "arrow" ? "method" : "field",
+      detail: fieldT.kind === "arrow" ? "method" : undefined,
+    });
     cur = cur.rest;
   }
   return out;
-};
-
-/** Prefer structural record under an alias fold for field listing. */
-const recordLabels = (t: Type, aliases: InferResult["aliases"]): string[] => {
-  const folded = foldAliases(t, aliases);
-  if (folded.kind === "record") return rowLabels(folded.row);
-  if (t.kind === "record") return rowLabels(t.row);
-  return [];
 };
 
 const tightestType = (types: TypeAt[], offset: number) =>
@@ -156,10 +156,7 @@ const recordFieldsAt = (
   if (isErr(r)) return [];
   return matchMaybe(
     map(tightestType(r.value.res.types, trigger.recvStart), (hit) =>
-      recordLabels(hit.type, r.value.res.aliases).map((label) => ({
-        label,
-        kind: "field" as const,
-      })),
+      recordFieldItems(hit.type, r.value.res.aliases),
     ),
     (items) => items,
     () => [],
