@@ -74,6 +74,32 @@ test("nested lambda param completes inside body", () => {
   expect(labels).toContain("answer");
 });
 
+const TW = `extern tw : a = "@styled-cva/react" "default"
+let BadgeShell = tw.div("base", {
+  variants: { $tone: { rose: "a", amber: "b", emerald: "c" } },
+  defaultVariants: { $tone: "rose" }
+})
+`;
+
+test("JSX attr name completes component props", () => {
+  const src = `${TW}let el = <BadgeShell `;
+  const labels = completeAt(src, src.length, { plugins: [styledCvaExtension] }).map((i) => i.label);
+  expect(labels).toContain("$tone");
+});
+
+test('JSX $tone=" completes literal union members', () => {
+  const src = `${TW}let el = <BadgeShell $tone="`;
+  const items = completeAt(src, src.length, { plugins: [styledCvaExtension] });
+  expect(items.map((i) => i.label).toSorted()).toEqual(["amber", "emerald", "rose"]);
+  expect(items.every((i) => i.kind === "literal")).toBe(true);
+});
+
+test('JSX $tone="ro filters lit prefix', () => {
+  const src = `${TW}let el = <BadgeShell $tone="ro`;
+  const labels = completeAt(src, src.length, { plugins: [styledCvaExtension] }).map((i) => i.label);
+  expect(labels).toEqual(["rose"]);
+});
+
 test("nested letin binding completes in body", () => {
   const src = "let f = () => let local = 1 in loc";
   const labels = completeAt(src, src.length).map((i) => i.label);

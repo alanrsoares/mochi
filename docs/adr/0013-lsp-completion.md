@@ -17,7 +17,7 @@ rejected in ADR 0009 — member lists for kits belong in the plugin, not core HM
 1. **Compiler API first:** `completeAt` / `moduleCompleteAt` in `src/complete.ts`
    return protocol-free `CompletionItem[]`. The LSP maps them to
    `vscode-languageserver` items and advertises `completionProvider` with
-   `triggerCharacters: ["."]`.
+   `triggerCharacters: [".", "\"", "'", "=", " "]`.
 
 2. **Incomplete `.` via lexical rewrite:** trailing `Ident.` / `Ident.partial`
    fails parse today. Detect `\bIdent.prefix` left of the cursor; for
@@ -33,7 +33,14 @@ rejected in ADR 0009 — member lists for kits belong in the plugin, not core HM
    prelude / namespace names + **nested locals** via `SymbolIndex.bindingsAt`
    (lambda params, `let`/`let?`/`let!` binds, match-arm pattern binds).
 
-5. **Task façades stay `() => Promise<SharedResult>`** (docs playground /
+5. **JSX attr completions:** inside an open component tag, prop labels come from
+   the tag's `Record → …` domain; inside `$tone="…"`, string-literal union
+   members are offered. Incomplete buffers rewrite `<Tag …` to the tag ref
+   (and `moduleCompleteAt` reloads imports from that rewrite). Expected prop
+   types are also `noteType`'d onto attr nameSpans for hover. LSP triggers
+   include `"`, `'`, `=`, and space.
+
+6. **Task façades stay `() => Promise<SharedResult>`** (docs playground /
    share-link hosts): that shape mirrors emitted mochi `Task a e` (lazy thunk;
    ADR 0006). It is **not** `ResultAsync` — `ResultAsync` is eager and carries
    methods the emitted plain `Promise` does not have. Hand-rolled

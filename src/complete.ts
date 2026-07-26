@@ -4,13 +4,15 @@
  *
  * Member completions after `.` tolerate incomplete buffers (`Task.`, `r.ab`) via
  * a lexical rewrite that strips `.prefix` before typechecking. Value completions
- * include nested locals via `bindingsAt` on the symbol index.
+ * include nested locals via `bindingsAt` on the symbol index. JSX attr names /
+ * literal-union values (`$tone="…"`) read the component's prop row (Wave 12).
  */
 import { resolve } from "node:path";
 import { map, match as matchMaybe } from "@onrails/maybe";
-import { isErr } from "@onrails/result";
+import { isErr, isOk } from "@onrails/result";
 import type { Program } from "./ast";
-import { toTypedProgram } from "./compile";
+import type { Registry } from "./check";
+import { toTypedProgram, toTypedProgramWith } from "./compile";
 import type {
   CompleteMemberApi,
   CompletionItem,
@@ -27,7 +29,7 @@ import { preludeEnv, preludeNamespaces } from "./prelude";
 import { isPreludePath } from "./prelude-virtual";
 import { spanContainsClosed, tightestHit } from "./span";
 import { indexProgram } from "./symbols";
-import { foldAliases, type Type } from "./types";
+import { foldAliases, type Row, type Type } from "./types";
 
 export type { CompletionItem, CompletionKind };
 
@@ -35,6 +37,10 @@ export type CompleteOptions = {
   plugins?: LanguagePlugin[];
   /** `import * as Alias` member schemes (module-aware path). */
   nsImports?: Map<string, Env>;
+  /** Named `import { X }` schemes (module-aware path). */
+  imports?: Env;
+  /** Cross-module variant registry for check (module-aware path). */
+  importedReg?: Registry;
 };
 
 /** Lexical `receiver.prefix` ending at `offset` — incomplete buffers included. */
@@ -46,6 +52,11 @@ type MemberTrigger = {
   /** Start of the receiver identifier. */
   recvStart: number;
 };
+
+/** JSX open-tag attr name or string-value completion trigger. */
+type JsxAttrTrigger =
+  | { kind: "name"; tag: string; prefix: string; tagStart: number }
+  | { kind: "value"; tag: string; attr: string; prefix: string; tagStart: number };
 
 const memberTriggerAt = (src: string, offset: number): MemberTrigger | null => {
   const before = src.slice(0, offset);
@@ -59,6 +70,48 @@ const memberTriggerAt = (src: string, offset: number): MemberTrigger | null => {
     recvStart: m.index,
     dotStart: m.index + receiver.length,
   };
+};
+
+/**
+ * Cursor inside an unclosed JSX open tag: attr name (`<Tag $to`) or string
+ * value (`<Tag $tone="ro`). Intrinsic lowercase tags are skipped — no prop row.
+ */
+const jsxAttrTriggerAt = (src: string, offset: number): JsxAttrTrigger | null => {
+  const before = src.slice(0, offset);
+  const tagM = before.match(/<([A-Za-z_][\w]*)\b([^<]*)$/);
+  if (!tagM || tagM.index === undefined) return null;
+  const tag = tagM[1]!;
+  // Trailing newline after `$tone="` is still value position (cursor at EOL).
+  const afterTag = tagM[2]!.replace(/[\t ]+$/, "");
+  const afterTrim = afterTag.replace(/\n$/, "");
+  if (afterTrim.includes(">")) return null;
+  // Components are capitalized / dotted; lowercase = intrinsic string tag.
+  if (tag[0] !== undefined && tag[0] === tag[0].toLowerCase() && !tag.includes(".")) return null;
+
+  const valDq = afterTrim.match(/(\$?[A-Za-z_][\w]*)\s*=\s*"([^"]*)$/);
+  const valSq = afterTrim.match(/(\$?[A-Za-z_][\w]*)\s*=\s*'([^']*)$/);
+  const val = valDq ?? valSq;
+  if (val) {
+    return {
+      kind: "value",
+      tag,
+      attr: val[1]!,
+      prefix: val[2]!,
+      tagStart: tagM.index,
+    };
+  }
+
+  // After `=` without a quote yet — not a name or string value.
+  if (/=\s*$/.test(afterTrim)) return null;
+
+  const nameM = afterTrim.match(/(?:^|[\s/])(\$?[A-Za-z_][\w]*)$/);
+  if (nameM) {
+    return { kind: "name", tag, prefix: nameM[1]!, tagStart: tagM.index };
+  }
+  if (afterTrim === "" || /[\s/]$/.test(afterTrim)) {
+    return { kind: "name", tag, prefix: "", tagStart: tagM.index };
+  }
+  return null;
 };
 
 /** Identifier (or empty) being typed at `offset` when not in a member trigger. */
@@ -87,6 +140,39 @@ const recordFieldItems = (t: Type, aliases: InferResult["aliases"]): CompletionI
   return out;
 };
 
+const rowLabels = (row: Row): string[] => {
+  const out: string[] = [];
+  let cur = row;
+  while (cur.kind === "extend") {
+    out.push(cur.label);
+    cur = cur.rest;
+  }
+  return out;
+};
+
+const rowField = (row: Row, label: string): Type | null => {
+  let cur = row;
+  while (cur.kind === "extend") {
+    if (cur.label === label) return cur.type;
+    cur = cur.rest;
+  }
+  return null;
+};
+
+/** String-literal union members (and lone lits) for attr-value completion. */
+const litMembers = (t: Type): string[] => {
+  if (t.kind === "lit" && t.base === "string") return [t.value];
+  if (t.kind === "union") return t.members.flatMap(litMembers);
+  return [];
+};
+
+/** Props row of a component scheme `Record -> …`, else null. */
+const componentPropsRow = (t: Type, aliases: InferResult["aliases"]): Row | null => {
+  const folded = foldAliases(t, aliases);
+  if (folded.kind === "arrow" && folded.from.kind === "record") return folded.from.row;
+  return null;
+};
+
 const tightestType = (types: TypeAt[], offset: number) =>
   tightestHit(types, offset, spanContainsClosed);
 
@@ -112,6 +198,42 @@ const parseProgram = (src: string, plugins?: LanguagePlugin[]): Program | null =
   const parsed = parse(lexed.value, { plugins });
   return isErr(parsed) ? null : parsed.value;
 };
+
+const emptyReg = (): Registry => ({ ctor: new Map(), type: new Map() });
+
+/** Typecheck `src`, using module import schemes when provided. */
+const typedOf = (src: string, opts: CompleteOptions) => {
+  const plugins = resolvePlugins(opts.plugins);
+  if (opts.imports) {
+    const prog = parseProgram(src, plugins);
+    if (!prog) return null;
+    const r = toTypedProgramWith(
+      prog,
+      {
+        imports: opts.imports,
+        nsImports: opts.nsImports,
+        importedReg: opts.importedReg ?? emptyReg(),
+      },
+      { plugins },
+    );
+    return isOk(r) ? r.value : null;
+  }
+  const r = toTypedProgram(src, {
+    open: true,
+    namespaces: preludeNamespaces,
+    nsImports: opts.nsImports,
+    plugins,
+  });
+  return isOk(r) ? r.value : null;
+};
+
+/**
+ * Incomplete JSX open tag → replace from `<Tag` through EOF with the bare tag
+ * name so typecheck can resolve the component scheme (drops the broken tail;
+ * imports / prior lets remain).
+ */
+const rewriteJsxTagToRef = (src: string, tagStart: number, tag: string): string =>
+  `${src.slice(0, tagStart)}${tag}`;
 
 /** Namespace member labels — prelude table or `import * as` env. */
 const namespaceMembers = (
@@ -144,19 +266,15 @@ const namespaceMembers = (
 const recordFieldsAt = (
   src: string,
   trigger: MemberTrigger,
-  plugins?: LanguagePlugin[],
+  opts: CompleteOptions,
 ): CompletionItem[] => {
   const rewritten =
     src.slice(0, trigger.dotStart) + src.slice(trigger.dotStart + 1 + trigger.prefix.length);
-  const r = toTypedProgram(rewritten, {
-    open: true,
-    namespaces: preludeNamespaces,
-    plugins,
-  });
-  if (isErr(r)) return [];
+  const typed = typedOf(rewritten, opts);
+  if (!typed) return [];
   return matchMaybe(
-    map(tightestType(r.value.res.types, trigger.recvStart), (hit) =>
-      recordFieldItems(hit.type, r.value.res.aliases),
+    map(tightestType(typed.res.types, trigger.recvStart), (hit) =>
+      recordFieldItems(hit.type, typed.res.aliases),
     ),
     (items) => items,
     () => [],
@@ -166,6 +284,69 @@ const recordFieldsAt = (
 const pluginMembers = (api: CompleteMemberApi, plugins: LanguagePlugin[]): CompletionItem[] => {
   const hooks = plugins.flatMap((p) => (p.completeMembers ? [p.completeMembers] : []));
   return runCompleteMemberHooks(hooks, api) ?? [];
+};
+
+/** Resolve a component's props row: typed buffer, else rewrite incomplete JSX. */
+const propsRowForTag = (
+  src: string,
+  trigger: JsxAttrTrigger,
+  opts: CompleteOptions,
+): { row: Row; aliases: InferResult["aliases"] } | null => {
+  const fromTyped = (typed: NonNullable<ReturnType<typeof typedOf>>) => {
+    const fromHit = matchMaybe(
+      map(tightestType(typed.res.types, trigger.tagStart + 1), (hit) =>
+        componentPropsRow(hit.type, typed.res.aliases),
+      ),
+      (row) => row,
+      () => null,
+    );
+    if (fromHit) return { row: fromHit, aliases: typed.res.aliases };
+    const sc = typed.res.env.get(trigger.tag);
+    if (!sc) return null;
+    const row = componentPropsRow(sc.type, typed.res.aliases);
+    return row ? { row, aliases: typed.res.aliases } : null;
+  };
+
+  const direct = typedOf(src, opts);
+  if (direct) {
+    const got = fromTyped(direct);
+    if (got) return got;
+  }
+
+  // Incomplete `$tone="` / mid-attr: replace open tag through EOF with the tag ref.
+  const rewritten = rewriteJsxTagToRef(src, trigger.tagStart, trigger.tag);
+  const typed = typedOf(rewritten, opts);
+  return typed ? fromTyped(typed) : null;
+};
+
+const jsxAttrItems = (
+  src: string,
+  trigger: JsxAttrTrigger,
+  opts: CompleteOptions,
+): CompletionItem[] => {
+  const props = propsRowForTag(src, trigger, opts);
+  if (!props) return [];
+  if (trigger.kind === "name") {
+    return filterPrefix(
+      rowLabels(props.row).map((label) => ({
+        label,
+        kind: "field" as const,
+        detail: "prop",
+      })),
+      trigger.prefix,
+    );
+  }
+  const fieldT = rowField(props.row, trigger.attr);
+  if (!fieldT) return [];
+  const folded = foldAliases(fieldT, props.aliases);
+  return filterPrefix(
+    litMembers(folded).map((label) => ({
+      label,
+      kind: "literal" as const,
+      detail: trigger.attr,
+    })),
+    trigger.prefix,
+  );
 };
 
 /** Prelude + namespaces + types/ctors + imports + values visible at `offset`. */
@@ -209,7 +390,7 @@ const membersAt = (
   const plugins = resolvePlugins(opts.plugins);
   const ns = namespaceMembers(trigger.receiver, opts.nsImports);
   if (ns) return filterPrefix(ns, trigger.prefix);
-  const fields = recordFieldsAt(src, trigger, plugins);
+  const fields = recordFieldsAt(src, trigger, opts);
   if (fields.length > 0) return filterPrefix(fields, trigger.prefix);
   return filterPrefix(
     pluginMembers({ receiver: trigger.receiver, prefix: trigger.prefix }, plugins),
@@ -219,8 +400,8 @@ const membersAt = (
 
 /**
  * Completions at `offset`. Member trigger (after `.`) prefers namespaces, then
- * record fields, then plugin hooks. Otherwise values visible at the cursor
- * (prelude, top-level, nested locals).
+ * record fields, then plugin hooks. JSX attr name/value next. Otherwise values
+ * visible at the cursor (prelude, top-level, nested locals).
  */
 export const completeAt = (
   src: string,
@@ -229,6 +410,8 @@ export const completeAt = (
 ): CompletionItem[] => {
   const trigger = memberTriggerAt(src, offset);
   if (trigger) return dedupeSort(membersAt(src, trigger, opts));
+  const jsx = jsxAttrTriggerAt(src, offset);
+  if (jsx) return dedupeSort(jsxAttrItems(src, jsx, opts));
   return dedupeSort(
     filterPrefix(valueItems(src, offset, opts.plugins), identPrefixAt(src, offset)),
   );
@@ -237,9 +420,11 @@ export const completeAt = (
 export type ModuleCompleteOptions = { plugins?: LanguagePlugin[] };
 
 /**
- * Module-aware completion: resolve imports so `import * as R` members and
- * plugin-backed `tw.*` work. Degrades to single-file `completeAt` if the dep
- * graph can't be resolved.
+ * Module-aware completion: resolve imports so `import * as R` members,
+ * imported components' JSX props, and plugin-backed `tw.*` work. Degrades to
+ * single-file `completeAt` if the dep graph can't be resolved. Incomplete JSX
+ * (`$tone="`) is rewritten before loading the entry so named imports still
+ * resolve.
  */
 export const moduleCompleteAt = async (
   path: string,
@@ -249,12 +434,22 @@ export const moduleCompleteAt = async (
   opts: ModuleCompleteOptions = {},
 ): Promise<CompletionItem[]> => {
   const entry = resolve(path);
-  const read = (p: string): Promise<string> =>
-    resolve(p) === entry ? Promise.resolve(src) : readFile(p);
-  const ctx = await moduleContext(entry, read, { plugins: opts.plugins });
+  const load = async (buffer: string) => {
+    const read = (p: string): Promise<string> =>
+      resolve(p) === entry ? Promise.resolve(buffer) : readFile(p);
+    return moduleContext(entry, read, { plugins: opts.plugins });
+  };
+
+  let ctx = await load(src);
+  if (isErr(ctx)) {
+    const jsx = jsxAttrTriggerAt(src, offset);
+    if (jsx) ctx = await load(rewriteJsxTagToRef(src, jsx.tagStart, jsx.tag));
+  }
   if (isErr(ctx)) return completeAt(src, offset, { plugins: opts.plugins });
   return completeAt(src, offset, {
     plugins: opts.plugins,
     nsImports: ctx.value.nsImports,
+    imports: ctx.value.imports,
+    importedReg: ctx.value.importedReg,
   });
 };

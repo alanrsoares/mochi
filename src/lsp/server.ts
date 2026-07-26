@@ -88,7 +88,7 @@ export function startServer(opts: ServerOptions = {}): void {
     capabilities: {
       textDocumentSync: TextDocumentSyncKind.Incremental,
       hoverProvider: true,
-      completionProvider: { triggerCharacters: ["."] },
+      completionProvider: { triggerCharacters: [".", '"', "'", "=", " "] },
       definitionProvider: true,
       typeDefinitionProvider: true,
       documentHighlightProvider: true,
@@ -139,6 +139,7 @@ export function startServer(opts: ServerOptions = {}): void {
 
   const lspCompletionKind = (kind: MochiCompletion["kind"]): CompletionItemKind => {
     if (kind === "method") return CompletionItemKind.Method;
+    if (kind === "literal") return CompletionItemKind.EnumMember;
     if (kind === "field" || kind === "member") return CompletionItemKind.Field;
     if (kind === "ctor") return CompletionItemKind.EnumMember;
     if (kind === "type") return CompletionItemKind.Class;

@@ -69,3 +69,22 @@ test("without plugins, tw.* factory hover is unchanged (today's unknown/type-var
   const info = await moduleHoverAt(ENTRY, TW_SRC, badgeUseOffset, read({}));
   expect(info?.code).not.toContain("VNode");
 });
+
+test("JSX $tone attr name hovers as expected literal union", async () => {
+  const src = `
+export extern tw : a = "@styled-cva/react" "default"
+export let Badge = tw.div("base", {
+  variants: { $tone: { rose: "a", amber: "b" } },
+  defaultVariants: { $tone: "rose" }
+})
+export let el = <Badge $tone="rose" />
+`;
+  const off = src.lastIndexOf("$tone");
+  const info = await moduleHoverAt(ENTRY, src, off + 1, read({}), {
+    plugins: [styledCvaExtension],
+  });
+  expect(info?.code).toContain("(property) $tone:");
+  expect(info?.code).toContain('"rose"');
+  expect(info?.code).toContain('"amber"');
+  expect(info?.code).not.toMatch(/\$tone: string/);
+});

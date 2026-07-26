@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { styledCvaExtension } from "@mochi/plugin-styled-cva";
 import { isErr, unwrapOk } from "@onrails/result";
 import { toTypedProgram } from "../src/compile";
+import { moduleCompleteAt } from "../src/complete";
 import { emitDts } from "../src/dts";
 import { showScheme } from "../src/infer";
 import { moduleContext } from "../src/module";
@@ -78,6 +79,29 @@ export let Badge = tw.div("base", {
   const shown = showScheme(sc);
   expect(shown).toContain("VNode");
   expect(shown).toContain("$tone");
+});
+
+test("moduleCompleteAt offers $tone lits for an imported component", async () => {
+  const files: Record<string, string> = {
+    "/p/ui.mochi": `
+export extern tw : a = "@styled-cva/react" "default"
+export let Badge = tw.div("base", {
+  variants: { $tone: { rose: "a", amber: "b" } },
+  defaultVariants: { $tone: "rose" }
+})
+`,
+    "/p/main.mochi": 'import { Badge } from "./ui"\nlet el = <Badge $tone="\n',
+  };
+  const read = async (p: string): Promise<string> => {
+    const src = files[p];
+    if (src === undefined) throw new Error(`no such file ${p}`);
+    return src;
+  };
+  const src = files["/p/main.mochi"]!;
+  const items = await moduleCompleteAt("/p/main.mochi", src, src.length, read, {
+    plugins: exts,
+  });
+  expect(items.map((i) => i.label).toSorted()).toEqual(["amber", "rose"]);
 });
 
 test("JSX core: invalid component prop fails when tag is a component", () => {
