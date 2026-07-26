@@ -10,17 +10,17 @@
 
 </div>
 
-**mochi** is a small statically-typed functional language: Hindley–Milner inference (Algorithm W), parametric variants, row-polymorphic records, and exhaustive `switch`. You write curried, data-last code; the compiler emits **plain JavaScript** you can read — or **TypeScript** that typechecks under `tsc --strict`. Same AST, two backends.
+**mochi** is a small statically-typed functional language: Hindley–Milner inference (Algorithm W), parametric variants, row-polymorphic records, and exhaustive `switch`. You write curried, data-last code; the compiler emits plain JavaScript you can read, or TypeScript that typechecks under `tsc --strict`. Both backends share one AST and one codegen.
 
-No annotation tax for day-to-day code. Tooling (LSP hover + inlays, `.d.ts`, formatter) is first-class. The self-hosted bootstrap is a north-star: **0 `tsc --strict` errors** on the compiler written in mochi.
+Day-to-day code needs no type annotations. The LSP (hover), `.d.ts` generation, and formatter are driven from the compiler itself. The compiler is also self-hosted: the mochi implementation of itself emits TypeScript with 0 `tsc --strict` errors, checked in CI.
 
 <div align="center">
 <img src="illustrations/mochi_compiler_magic.jpg" alt="mochi compiling to JS and TS with zero errors" width="560" />
 </div>
 
-- **Types:** Algorithm W with open/closed rows and parametric variants — duck typing that still exhausts.
-- **Runtime:** plain JS; prelude designed to compose under `|>`.
-- **Tooling:** LSP, `.d.ts`, formatter — not bolted on.
+- **Types:** Algorithm W with open/closed rows and parametric variants; records are structural, matching is exhaustive.
+- **Runtime:** plain JS; the prelude is curried and data-last, so it composes under `|>`.
+- **Tooling:** LSP, `.d.ts`, and formatter, all driven from the compiler's own passes.
 
 ## Quick start
 

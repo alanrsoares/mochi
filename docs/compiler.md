@@ -83,5 +83,4 @@ Two invariants are enforced in CI-style scripts:
   `tsc --strict` errors. The north-star number is **0**; a ratchet fails the build if it
   regresses above 0.
 
-So the claim mochi makes is concrete and checked: *mochi compiles mochi*, and the
-language it is written in emits TypeScript that typechecks.
+Both invariants run in CI: mochi compiles mochi, and the emitted TypeScript typechecks.

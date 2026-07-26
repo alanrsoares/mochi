@@ -5,7 +5,7 @@
 share one codegen: readable JavaScript, and typed TypeScript that is clean under
 `tsc --strict`.
 
-**Current state (factual):**
+**Current state:**
 
 - **Self-hosting.** The compiler is re-implemented in mochi under `bootstrap/`. The
   shipped binary compiles that source and reproduces itself byte-for-byte at the
@@ -13,8 +13,8 @@ share one codegen: readable JavaScript, and typed TypeScript that is clean under
 - **Dual backend, strict-clean.** The self-hosted graph emits **0 `tsc --strict`
   errors** (`bun run bootstrap:tsc`), and the JS and TS emitters are byte-identical up
   to the type annotations the TS backend adds.
-- **Tooling is first-class.** Hover, a width-based formatter, `.d.ts` generation, and
-  structured diagnostics all ship, driven from the compiler (the LSP is a thin adapter).
+- **Tooling.** Hover, a width-based formatter, `.d.ts` generation, and structured
+  diagnostics all ship, driven from the compiler (the LSP is a thin adapter).
 
 ## Map
 

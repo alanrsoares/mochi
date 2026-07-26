@@ -1,7 +1,7 @@
 # The mochi language
 
 A small ML-family language: Hindley–Milner inference (Algorithm W), parametric variants,
-row-polymorphic records, exhaustive pattern matching. There is no type-annotation burden —
+row-polymorphic records, exhaustive pattern matching. Type annotations are optional —
 everything below is inferred. A curried surface compiles to uncurried JS.
 
 The single source of truth for "what compiles today" is [`../example.mochi`](../example.mochi),

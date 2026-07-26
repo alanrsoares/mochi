@@ -70,11 +70,11 @@ let Hero = props =>
           <span
             className="block mt-3 text-hero-subtitle sm:text-2xl lg:text-hero-subtitle-lg font-semibold text-mute leading-snug tracking-tight"
           >
-            {"Hindley–Milner → readable JS & tsc --strict TypeScript."}
+            {"An ML-family language that compiles to readable JavaScript and strict TypeScript."}
           </span>
         </h1>
         <p className="text-copy text-mute leading-relaxed max-w-md">
-          {"Row-polymorphic records, parametric variants, JSX via builtin plugin → host h(). One codegen, two backends."}
+          {"Full Hindley–Milner inference, row-polymorphic records, parametric variants, and JSX. One compiler, two outputs: plain JS and TypeScript that passes tsc --strict."}
         </p>
         <div className="flex flex-wrap gap-3 pt-1 font-mono text-xs">
           <CtaPill href={props.playgroundHref}>{"Open playground"}</CtaPill>
@@ -129,7 +129,7 @@ let App = props =>
             <SectionEyebrow>{"try"}</SectionEyebrow>
             <SectionTitle>{"Playground"}</SectionTitle>
             <p className="mt-2 text-sm text-mute leading-relaxed">
-              {"Edit mochi in the browser, compile to JS, preview with Preact — same idea as ReScript try / Gleam."}
+              {"Edit mochi in the browser, compile it to JavaScript, and preview the result with Preact."}
             </p>
           </div>
           <CtaPill href={props.playgroundHref}>{"Open playground →"}</CtaPill>
@@ -183,7 +183,7 @@ let App = props =>
             <SectionEyebrow>{"interop"}</SectionEyebrow>
             <SectionTitle>{"Interop examples"}</SectionTitle>
             <p className="mt-2 text-sm text-mute leading-relaxed max-w-xl">
-              {"Worked examples of host glue — not a kit catalog. Language surface is extern, builtin jsxPlugin, and a project plugins list. Everything below is one app choosing hosts."}
+              {"How this site binds to its JavaScript hosts. The language surface is small: extern declarations, the builtin jsxPlugin, and a per-project plugins list. Everything below is this app using them."}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -204,19 +204,19 @@ let App = props =>
             tone="lavender"
             label="UI kit"
             title="Opaque factory + vendor plugin"
-            body="extern tw stays : a; @mochi/plugin-styled-cva recovers component schemes and $tone unions. Pattern, not a blessed kit."
+            body="The tw factory is declared as an opaque extern; @mochi/plugin-styled-cva recovers its component schemes and $tone literal unions. Any kit can be bound the same way."
           />
           <InteropRow
             tone="plum"
             label="state"
             title="Host factory seam"
-            body="defineContainer behind *.host.mochi; hooks under the component lambda (Counter, HeroCarousel). Vendor plugin emits ContainerDef — no hand cast bridge."
+            body="defineContainer sits behind a *.host.mochi module, and hooks are called inside the component lambda (see Counter and HeroCarousel). The vendor plugin types it as ContainerDef, so no hand-written cast is needed."
           />
           <InteropRow
             tone="ok"
             label="bridge"
             title=".d.mochi.ts sidecars"
-            body="Compiler emit so TS can import .mochi. Regenerated for this app; same plugins list as Vite and LSP."
+            body="Compiler-emitted declarations that let TypeScript import .mochi modules. Regenerated for this app with the same plugins list the Vite plugin and the LSP use."
           />
         </div>
       </section>
