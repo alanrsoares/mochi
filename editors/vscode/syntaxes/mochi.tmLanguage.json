@@ -322,12 +322,14 @@
           "match": "->"
         },
         {
-          "name": "keyword.operator.bar.mochi",
-          "match": "\\|"
+          "comment": "Assignment — not the `=` in `=>` (else ligature `⇒` paints two colors).",
+          "name": "keyword.operator.assignment.mochi",
+          "match": "=(?!>)"
         },
         {
-          "name": "keyword.operator.assignment.mochi",
-          "match": "="
+          "comment": "Match bar — not the `|` in `|>`.",
+          "name": "keyword.operator.bar.mochi",
+          "match": "\\|(?!>)"
         },
         {
           "name": "punctuation.section.parens.begin.mochi",
