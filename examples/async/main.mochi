@@ -1,9 +1,10 @@
 // Async in mochi WITHOUT an async/await keyword. A `Task a e` is an ordinary
-// prelude value (opaque lazy thunk) — asynchrony composes through the same
-// `|>` pipeline as everything else. `Task.run` hands back a Promise of the
-// settled `Result` to JS at the edge, which is the only place effects
-// actually happen. See ADR 0005, ADR 0006.
+// prelude value (opaque lazy thunk) carrying an error channel — asynchrony and
+// failure both compose through the same `|>` pipeline as everything else.
+// `Task.run` hands back a Promise of the settled `Result` to JS at the edge,
+// which is the only place effects actually happen. See ADR 0005, ADR 0006.
 
+// ---- pure pipeline, no host ----
 // of(20) -> +1 -> (10ms later) same -> doubled = 42. `let!` is Task bind
 // (mirrors `let?` for Result); `Task.map` still pipes when you only need map.
 let program = let! n = Task.of(20) |> Task.map((+ 1)) in
@@ -11,3 +12,44 @@ let! n2 = Task.delay(10, n) in Task.of(n2 + n2)
 
 // `mochi build main.mochi`, then `node demo.mjs` — prints `{ _tag: "Ok", value: 42 }`.
 export let result = Task.run(program)
+
+// ---- the error channel ----
+// Domain effects stay thin `extern`s against a flaky fake remote. The host
+// reports failures as plain strings; mochi maps them onto its own error type
+// once, at the boundary.
+type User = { id: number, name: string }
+
+type ApiError =
+  | NotFound(number)
+  | Offline(string)
+
+extern fetchUser : number -> Task User string = "./runtime.mjs" "fetchUser"
+extern fetchPlan : number -> Task string string = "./runtime.mjs" "fetchPlan"
+
+let classify = (id, reason) => reason == "404" ? NotFound(id) : Offline(reason)
+
+// A chain is mono-`e`: `mapErr` aligns both externs on `ApiError` before `let!`
+// binds them together.
+let planLine = id =>
+  let! user = fetchUser(id) |> Task.mapErr(classify(id)) in
+  let! plan = fetchPlan(user.id) |> Task.mapErr(classify(id)) in
+    Task.of("${user.name} is on the ${plan} plan")
+
+// `recover` is bind on the ERROR track: a missing user degrades to a default,
+// while an unreachable host stays failed and surfaces as `Err` at the edge.
+let describe = id =>
+  planLine(id)
+    |> Task.recover(e => switch e {
+      | NotFound(missing) => Task.of(
+          "user ${show(missing)} has no plan — showing the demo one"
+        )
+      | Offline(why) => Task.fail(Offline(why))
+    })
+
+// `match` folds both tracks into one value, still inside a Task.
+let report = id =>
+  describe(id) |> Task.match(line => line, e => "unavailable: ${show(e)}")
+
+export let found = Task.run(report(1))
+export let recovered = Task.run(report(7))
+export let offline = Task.run(describe(0))

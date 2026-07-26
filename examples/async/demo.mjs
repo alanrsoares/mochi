@@ -1,6 +1,9 @@
-// Runs the compiled async pipeline. Build first: `mochi build main.mochi` (writes
-// main.js beside this file), then `node demo.mjs`. `result` is the Promise the
-// mochi program handed back via `Task.run`; awaiting it here is where the effect runs.
-import { result } from "./main.js";
+// Runs the compiled async pipelines. Build first: `mochi build main.mochi` (writes
+// main.js beside this file), then `node demo.mjs`. Each export is the Promise a
+// `Task.run` handed back; awaiting it here is where the effects actually run.
+import { found, offline, recovered, result } from "./main.js";
 
-console.log("async result:", await result);
+console.log("pure pipeline: ", await result);
+console.log("happy path:    ", await found);
+console.log("recovered 404: ", await recovered);
+console.log("still failing: ", await offline);

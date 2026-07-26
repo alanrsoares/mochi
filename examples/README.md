@@ -22,7 +22,7 @@ bun example:pipelines # Pipeline operator (|>) showcase
 | [`snake/`](./snake/) | Canvas Snake game with pure functional logic (`snake.mochi`), `Bun.serve` backend (`server.mts`), WebSockets leaderboard (`/ws`), and retro Web Audio API |
 | [`cli.mochi`](./cli.mochi) | Interactive command-line example router written in Mochi |
 | [`life/`](./life/) | Conway's Game of Life cellular automaton |
-| [`async/`](./async/) | Asynchronous tasks and Task combinator pipelines |
+| [`async/`](./async/) | Asynchronous tasks, `Task` combinator pipelines, and the `Task a e` error channel (`mapErr` / `recover` / `match`) |
 | [`modules/`](./modules/) | Multi-file module graph resolution and exports |
 | [`pipelines.mochi`](./pipelines.mochi) | Data processing pipelines using `\|>` and standard library combinators |
 | [`example.mochi`](./example.mochi) | Comprehensive language showcase (variants, pattern matching, Hindley-Milner type inference, ROP) |

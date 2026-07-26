@@ -29,7 +29,7 @@
     "example": "bun run mochi build examples/cli.mochi && bun examples/cli.js",
     "example:life": "bun run mochi build examples/life/main.mochi && bun examples/life/main.js",
     "example:snake": "bun examples/snake/server.mts",
-    "example:async": "bun run mochi build examples/async/main.mochi && bun examples/async/main.js",
+    "example:async": "bun run mochi build examples/async/main.mochi && bun examples/async/demo.mjs",
     "example:modules": "bun run mochi build examples/modules/main.mochi && bun examples/modules/main.js",
     "example:pipelines": "bun run mochi build examples/pipelines.mochi && bun examples/pipelines.js",
     "example:showcase": "bun run mochi build examples/example.mochi && bun examples/example.js",
