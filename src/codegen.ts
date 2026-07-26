@@ -807,11 +807,19 @@ const genExtern = (s: ExternStmt): string => {
 };
 
 /**
- * import { a, b } from "./mod"  → the compiled sibling `./mod.js`.
+ * import { a, b } from "./mod"  → the compiled sibling `./mod.js` (or `.mochi`
+ * under Vite). Bare package specs (`@mochi/plugin-preact/hooks`) keep their
+ * name — appending `moduleExt` would break package `exports` (ADR 0015).
  * import * as Alias from "./mod" → ESM namespace import (ADR 0002).
  */
+const rewriteImportPath = (from: string, moduleExt: string): string => {
+  const bare = from.replace(/\.mochi$/, "");
+  if (!(bare.startsWith("./") || bare.startsWith("../"))) return bare;
+  return `${bare}${moduleExt}`;
+};
+
 const genImport = (s: ImportStmt, ctx: GenCtx): string => {
-  const path = `${s.from.replace(/\.mochi$/, "")}${ctx.moduleExt}`;
+  const path = rewriteImportPath(s.from, ctx.moduleExt);
   if (s.alias) return `import * as ${s.alias.name} from ${JSON.stringify(path)};`;
   const names = s.names.map((n) => n.name).join(", ");
   return `import { ${names} } from ${JSON.stringify(path)};`;

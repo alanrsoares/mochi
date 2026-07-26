@@ -1003,6 +1003,11 @@ export function parse(toks: Located[], opts: ParseOptions = {}): Result<Program,
   function parseTypeAtom(): TypeExpr {
     if (peek().t === "lparen") {
       const start = next().span;
+      // `()` is the nullary domain (ADR 0014 / 0015) — internal `unit`.
+      if (peek().t === "rparen") {
+        const end = next().span;
+        return { kind: "tname", name: "unit", span: spanning(start, end) };
+      }
       const inner = parseTypeExpr();
       // `(a, b)` is a tuple type; a lone `(t)` is just grouping.
       if (peek().t === "comma") {
@@ -1104,7 +1109,7 @@ export function parse(toks: Located[], opts: ParseOptions = {}): Result<Program,
 
   function parseStmt(): Stmt[] {
     // A leading `///` comment block rides on the statement's first token; surface
-    // it as the `let`'s doc. Synthetic destructuring temps ($d…) are skipped
+    // it as the `let`/`extern`'s doc. Synthetic destructuring temps ($d…) are skipped
     // downstream, so attaching to all produced lets is harmless.
     const doc = peek().doc;
     const t = peek().t;
@@ -1118,7 +1123,7 @@ export function parse(toks: Located[], opts: ParseOptions = {}): Result<Program,
           case "type":
             return [{ ...parseType(), exported: true }];
           case "extern":
-            return [{ ...parseExtern(), exported: true }];
+            return [{ ...parseExtern(), exported: true, doc }];
           case "let":
             return parseLet().map((s) => ({ ...s, exported: true, doc }));
         }
@@ -1127,7 +1132,7 @@ export function parse(toks: Located[], opts: ParseOptions = {}): Result<Program,
       case "type":
         return [parseType()];
       case "extern":
-        return [parseExtern()];
+        return [{ ...parseExtern(), doc }];
     }
     return parseLet().map((s) => ({ ...s, doc }));
   }

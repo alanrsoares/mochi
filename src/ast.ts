@@ -185,6 +185,8 @@ export type Stmt =
       module: string;
       imported: string;
       exported?: boolean;
+      /** Leading `///` — same attachment as `let` (tracer #52). */
+      doc?: string;
       span: Span;
     }
   /**

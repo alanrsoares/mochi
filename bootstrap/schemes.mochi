@@ -14,6 +14,8 @@ import {
   RowEmpty,
   RowVar,
   RowExtend,
+  UNIT,
+  tUnit,
   tCon,
   tArrow,
   tRecord,
@@ -155,7 +157,9 @@ export let typeExprListToType = (tes, vars, st, aliases, expanding) => switch te
 }
 
 export let typeExprName = (name, vars, st, aliases, expanding) =>
-  Array.contains(name, primTypeNames)
+  name == UNIT
+    ? (tUnit, vars, st)
+    : Array.contains(name, primTypeNames)
     ? (primType(name), vars, st)
     : switch Map.get(name, aliases) {
       | Some(info) => let (t, st1) = aliasRow(

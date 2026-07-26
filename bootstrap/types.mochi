@@ -40,8 +40,9 @@ let TUPLE = "tuple"
 export let tTuple = elems => TyCon(TUPLE, elems)
 
 // Internal nullary-function domain (ADR 0014). Surface `() => T` / call `f()`
-// use `unit -> T`; lowercase so users cannot write it.
-let UNIT = "unit"
+// use `unit -> T`; lowercase so users cannot write it. `()` in TypeExpr also
+// lowers here (ADR 0015).
+export let UNIT = "unit"
 export let tUnit = TyCon(UNIT, [])
 export let isUnit = t => switch t {
   | TyCon(name, args) => name == UNIT && Array.length(args) == 0

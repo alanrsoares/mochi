@@ -1,5 +1,11 @@
 /**
- * Scheme construction and generalization — everything Scheme-shaped that is NOT part of infer.ts's mutually-recursive inference core: the `Scheme`/`Env` types, free-variable collection, `generalize`/`instantiate`, and the surface-type lowering (`typeExprToType`/`ctorScheme`) that builds types and schemes from written TypeExprs. `infer.ts` is the main consumer; `dts.ts` lowers ctor-field TypeExprs through `typeExprToType` so the TS output grammar has exactly one encoder (ADR 0015).
+ * Scheme construction and generalization — everything Scheme-shaped that is NOT
+ * part of infer.ts's mutually-recursive inference core: the `Scheme`/`Env`
+ * types, free-variable collection, `generalize`/`instantiate`, and the
+ * surface-type lowering (`typeExprToType`/`ctorScheme`) that builds types and
+ * schemes from written TypeExprs. `infer.ts` is the main consumer; `dts.ts`
+ * lowers ctor-field TypeExprs through `typeExprToType` so the TS output grammar
+ * has exactly one encoder.
  */
 import { match } from "@onrails/pattern";
 import type { AliasField, Ctor, TypeExpr } from "./ast";
@@ -20,6 +26,8 @@ import {
   tString,
   tTuple,
   tUnion,
+  tUnit,
+  UNIT,
 } from "./types";
 import { type Subst, zonk } from "./unify";
 
@@ -265,6 +273,8 @@ export const typeExprToType = (
       tCon("Array", [typeExprToType(tlist.elem, vars, f, aliases, expanding)]),
     )
     .with({ kind: "tname" }, (tname) => {
+      // `()` in TypeExpr lowers to the reserved name `unit` (ADR 0014 / 0015).
+      if (tname.name === UNIT) return tUnit;
       if (PRIM_TYPE_NAMES.has(tname.name)) return primType(tname.name);
       const info = aliases.get(tname.name);
       if (info) return aliasRow(tname.name, info, [], f, aliases, expanding);

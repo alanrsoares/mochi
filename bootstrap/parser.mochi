@@ -1052,13 +1052,22 @@ let parseTypeAtom = (toks, pos) =>
   let sp = spanOf(lt) in
     switch lt.tok {
       | TLparen =>
-        // `(a, b)` is a tuple type; a lone `(t)` is just grouping.
-        let? (inner, p) = parseTypeExpr(toks, pos + 1) in
-          tokAt(toks, p).tok == TComma
-            ? let? (elems, p2) = sepBy(parseTypeExpr, toks, p + 1, [inner]) in
-            let? p3 = expectTok(TRparen, toks, p2) in
-              Ok((Ast.TyTuple(elems, toEnd(sp, toks, p3)), p3))
-            : expectTok(TRparen, toks, p) |> Result.map(p2 => (inner, p2))
+        // `()` is the nullary domain (ADR 0014 / 0015) — internal `unit`.
+        tokAt(toks, pos + 1).tok == TRparen
+          ? Ok((Ast.TyName("unit", toEnd(sp, toks, pos + 2)), pos + 2))
+          :
+            // `(a, b)` is a tuple type; a lone `(t)` is just grouping.
+            let? (inner, p) = parseTypeExpr(toks, pos + 1) in
+              tokAt(toks, p).tok == TComma
+                ? let? (elems, p2) = sepBy(
+                  parseTypeExpr,
+                  toks,
+                  p + 1,
+                  [inner]
+                ) in
+                let? p3 = expectTok(TRparen, toks, p2) in
+                  Ok((Ast.TyTuple(elems, toEnd(sp, toks, p3)), p3))
+                : expectTok(TRparen, toks, p) |> Result.map(p2 => (inner, p2))
       | TLbracket => let? (elem, p) = parseTypeExpr(toks, pos + 1) in
         let? p2 = expectTok(TRbracket, toks, p) in
           Ok((Ast.TyList(elem, toEnd(sp, toks, p2)), p2))
@@ -1210,6 +1219,7 @@ let parseExtern = (toks, pos) =>
           moduleName,
           importedName,
           false,
+          None,
           toEnd(start, toks, p6)
         ),
         p6
@@ -1334,18 +1344,20 @@ let setTypeExported = s => switch s {
     )
   | other => other
 }
-let setExternExported = s => switch s {
-  | Ast.SExtern(name, nameSpan, t, m, i, _, span) => Ast.SExtern(
+let setExternMeta = (exported, doc, s) => switch s {
+  | Ast.SExtern(name, nameSpan, t, m, i, _, _, span) => Ast.SExtern(
       name,
       nameSpan,
       t,
       m,
       i,
-      true,
+      exported,
+      doc,
       span
     )
   | other => other
 }
+let setExternExported = s => setExternMeta(true, None, s)
 
 // A statement can desugar to several (record destructure); the leading `///`
 // doc block rides on the first token and attaches to every produced `let`.
@@ -1359,7 +1371,7 @@ let parseStmt = (toks, pos, tmp, hooks) =>
           | TType => parseType(toks, pos + 1)
               |> Result.map(((s, p)) => ([setTypeExported(s)], p, tmp))
           | TExtern => parseExtern(toks, pos + 1)
-              |> Result.map(((s, p)) => ([setExternExported(s)], p, tmp))
+              |> Result.map(((s, p)) => ([setExternMeta(true, doc, s)], p, tmp))
           | TLet => parseLet(toks, pos + 1, tmp, hooks)
               |> Result.map(((stmts, p, tmp2)) =>
                 (stmts |> map(setLetMeta(true, doc)), p, tmp2))
@@ -1370,7 +1382,7 @@ let parseStmt = (toks, pos, tmp, hooks) =>
         }
       | TType => parseType(toks, pos) |> Result.map(((s, p)) => ([s], p, tmp))
       | TExtern => parseExtern(toks, pos)
-          |> Result.map(((s, p)) => ([s], p, tmp))
+          |> Result.map(((s, p)) => ([setExternMeta(false, doc, s)], p, tmp))
       | _ => parseLet(toks, pos, tmp, hooks)
           |> Result.map(((stmts, p, tmp2)) =>
             (stmts |> map(setLetMeta(false, doc)), p, tmp2))

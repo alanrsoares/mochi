@@ -49,6 +49,7 @@ export type { AliasMap, Env, Scheme } from "./schemes";
 import { type Diagnostic, typeErr } from "./errors";
 import type { InferCallApi, InferCallHook, LanguagePlugin } from "./extensions";
 import { resolvePlugins, runInferCallHooks } from "./extensions";
+import { showTypeExpr } from "./format";
 import { stronglyConnected } from "./scc";
 import type { Span } from "./span";
 import { closestName } from "./suggest";
@@ -609,7 +610,16 @@ export type InferOptions = {
 };
 
 /** Symbol identity for hover (`let x: T`, `(parameter) x: T`, etc.). */
-export type SymbolInfo = { kind: "let" | "parameter" | "property"; name: string; doc?: string };
+export type SymbolInfo = {
+  kind: "let" | "parameter" | "property" | "extern";
+  name: string;
+  doc?: string;
+  /** Host module + export name — set for `extern` decl hover (tracer #52). */
+  module?: string;
+  imported?: string;
+  /** Surface TypeExpr text for extern hover (keeps `a`/`b`, not `'tN`). */
+  surface?: string;
+};
 
 /** Inferred type at a source span — the map hover queries. */
 export type TypeAt = { span: Span; type: Type; symbol?: SymbolInfo };
@@ -825,10 +835,20 @@ function run(
 
   // externs next — their declared type is authoritative; generalize so a
   // polymorphic signature (e.g. a -> a) instantiates fresh at each use site.
+  // Record the name span so hover leads with `extern name: T` (+ host + ///).
   for (const s of prog.stmts) {
     if (s.kind !== "extern") continue;
     const t = typeExprToType(s.typeExpr, new Map(), fresh, aliasMap);
-    env.set(s.name, generalize(env, t, subst));
+    const sc = generalize(env, t, subst);
+    env.set(s.name, sc);
+    record(s.nameSpan, sc.type, {
+      kind: "extern",
+      name: s.name,
+      doc: s.doc,
+      module: s.module,
+      imported: s.imported,
+      surface: showTypeExpr(s.typeExpr),
+    });
   }
 
   // `let`s, grouped into mutually-recursive components (SCCs of the reference

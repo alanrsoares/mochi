@@ -16,6 +16,8 @@ let one = () => 1                    // nullary → `() -> number` (ADR 0014)
 let pipeline = 5 |> double |> inc |> double            // left-to-right pipe
 ```
 
+Annotations / `extern` may write the same domain as `() -> T` (ADR 0015).
+
 Top-level bindings are grouped into recursive components (Tarjan SCC) and inferred
 together, so **mutual recursion type-checks regardless of definition order**:
 

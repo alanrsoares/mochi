@@ -134,23 +134,26 @@ const ctor = (c: Ctor): string =>
   c.fields.length === 0 ? c.name : `${c.name}(${c.fields.map(ctorField).join(", ")})`;
 
 /** A type expression; the left side of an arrow is parenthesized when it is itself an arrow ((a -> b) -> c). */
-const typeExpr = (te: TypeExpr): string => {
+export const showTypeExpr = (te: TypeExpr): string => {
   switch (te.kind) {
     case "tname":
-      return te.name;
+      // `()` in TypeExpr lowers to reserved name `unit` (ADR 0014 / 0015).
+      return te.name === "unit" ? "()" : te.name;
     case "tapp": {
       const arg = (a: TypeExpr): string =>
-        a.kind === "tapp" || a.kind === "tarrow" ? `(${typeExpr(a)})` : typeExpr(a);
+        a.kind === "tapp" || a.kind === "tarrow" ? `(${showTypeExpr(a)})` : showTypeExpr(a);
       return `${te.ctor} ${te.args.map(arg).join(" ")}`;
     }
     case "ttuple":
-      return `(${te.elems.map(typeExpr).join(", ")})`;
+      return `(${te.elems.map(showTypeExpr).join(", ")})`;
     case "tlist":
-      return `[${typeExpr(te.elem)}]`;
+      return `[${showTypeExpr(te.elem)}]`;
   }
-  const from = te.from.kind === "tarrow" ? `(${typeExpr(te.from)})` : typeExpr(te.from);
-  return `${from} -> ${typeExpr(te.to)}`;
+  const from = te.from.kind === "tarrow" ? `(${showTypeExpr(te.from)})` : showTypeExpr(te.from);
+  return `${from} -> ${showTypeExpr(te.to)}`;
 };
+
+const typeExpr = showTypeExpr;
 
 const externStmt = (s: ExternStmt): string =>
   `extern ${s.name} : ${typeExpr(s.typeExpr)} = ${JSON.stringify(s.module)} ${JSON.stringify(s.imported)}`;

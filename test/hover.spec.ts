@@ -143,3 +143,24 @@ test("shadowed prelude name does not keep the prelude docstring", () => {
   expect(hoverAt(src, src.lastIndexOf("add"))?.doc).toBeUndefined();
   expect(hoverAt(src, src.indexOf("let add") + 4)?.doc).toBe("local add");
 });
+
+test("hover on an extern name leads with scheme + host module (tracer #52)", () => {
+  const src = 'export extern useState : a -> (a, a -> b) = "preact/hooks" "useState"\n';
+  const info = hoverAt(src, src.indexOf("useState") + 1);
+  expect(info?.code).toBe('extern useState: a -> (a, a -> b)\n= "preact/hooks" "useState"');
+});
+
+test("a leading `///` on extern surfaces as doc", () => {
+  const src =
+    '/// Preact state hook\nextern useState : a -> (a, a -> b) = "preact/hooks" "useState"\n';
+  const info = hoverAt(src, src.indexOf("useState") + 1);
+  expect(info?.code).toContain("extern useState:");
+  expect(info?.doc).toBe("Preact state hook");
+});
+
+test("() in an extern signature shows as () not unit", () => {
+  const src = 'extern tick : () -> number = "./t" "tick"\n';
+  expect(hoverAt(src, src.indexOf("tick") + 1)?.code).toBe(
+    'extern tick: () -> number\n= "./t" "tick"',
+  );
+});

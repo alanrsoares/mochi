@@ -255,6 +255,7 @@ const cStmt = (s: Stmt): Canon => {
         module: s.module,
         imported: s.imported,
         exported: s.exported === true,
+        doc: s.doc ?? null,
         span: cSpan(s.span),
       };
     case "import":
@@ -461,6 +462,7 @@ const A_STMT: Record<string, (s: Al) => Canon> = {
     module: s.module,
     imported: s.imported,
     exported: s.exported,
+    doc: opt(s.doc, (d) => d),
     span: s.span,
   }),
   SImport: (s) => ({

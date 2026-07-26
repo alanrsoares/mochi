@@ -567,7 +567,7 @@ let checkReservedNames = stmts =>
       | Ast.SLet(name, _, _, _, _, _, sp) => Array.contains(name, reservedNames)
           ? Some(reservedErr(name, sp))
           : None
-      | Ast.SExtern(name, _, _, _, _, _, sp) => Array.contains(
+      | Ast.SExtern(name, _, _, _, _, _, _, sp) => Array.contains(
           name,
           reservedNames
         )

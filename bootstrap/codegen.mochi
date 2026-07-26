@@ -711,7 +711,7 @@ let typeExprArity = te => switch te {
 /// extern → ESM import. Arity ≥ 2 wraps the host in `_curry` (ADR 0005 / #24).
 /// `imported == "default"` emits a default import (ADR 0009 / styled-cva).
 let genExtern = s => switch s {
-  | Ast.SExtern(name, _, typeExpr, modName, imported, _, _) => imported == "default"
+  | Ast.SExtern(name, _, typeExpr, modName, imported, _, _, _) => imported == "default"
       ? "import ${name} from ${jsStringLit(modName)};"
       : let arity = typeExprArity(typeExpr) in
         arity <= 1
@@ -725,17 +725,25 @@ let genExtern = s => switch s {
 let stripAlExt = s =>
   Str.endsWith(".mochi", s) ? Str.slice(0, Str.length(s) - 6, s) : s
 
+/// Relative `./` / `../` get `.js`; bare package specs keep their name (ADR 0015).
+let rewriteImportPath = from =>
+  let bare = stripAlExt(from) in
+    Str.startsWith("./", bare) || Str.startsWith("../", bare)
+      ? "${bare}.js"
+      : bare
+
 // import { a, b } from "./mod"  ->  compiled sibling `./mod.js`. Source paths
 // name an `.mochi` module (with or without extension); output targets `.js`.
+// Bare package specs keep their name (ADR 0015).
 // import * as Alias from "./mod" -> ESM namespace import (ADR 0002).
 let genImport = s => switch s {
   | Ast.SImport(names, from, _) => let nameList = Str.join(
       ", ",
       names |> map(n => n.name)
     ) in
-    let path = "${stripAlExt(from)}.js" in
+    let path = rewriteImportPath(from) in
       "import { ${nameList} } from ${jsStringLit(path)};"
-  | Ast.SImportNs(alias, from, _) => let path = "${stripAlExt(from)}.js" in
+  | Ast.SImportNs(alias, from, _) => let path = rewriteImportPath(from) in
       "import * as ${alias.name} from ${jsStringLit(path)};"
   | _ => ""
 }
@@ -751,7 +759,7 @@ let genStmt = (s, ctx) => switch s {
         : exported
         ? Str.join("\n", Str.split("\n", decls) |> map(exportLine))
         : decls
-  | Ast.SExtern(name, _, _, _, _, exported, _) =>
+  | Ast.SExtern(name, _, _, _, _, exported, _, _) =>
     // An extern is itself an import; re-export the local binding when exported.
     exported ? "${genExtern(s)}\nexport { ${name} };" : genExtern(s)
   | Ast.SLet(name, _, _, value, exported, _, _) => let doExport = exported && !Str.startsWith(
@@ -973,7 +981,7 @@ let boundNamesFrom = (stmts, i, acc) => switch Array.get(i, stmts) {
       i + 1,
       switch s {
         | Ast.SLet(name, _, _, _, _, _, _) => Set.add(name, acc)
-        | Ast.SExtern(name, _, _, _, _, _, _) => Set.add(name, acc)
+        | Ast.SExtern(name, _, _, _, _, _, _, _) => Set.add(name, acc)
         | Ast.SType(_, _, ctors, _, _, _) => Set.union(
             acc,
             Set.fromArray(ctors |> map(c => c.name))
@@ -996,7 +1004,7 @@ let refsForStmt = (s, ctx) => switch s {
     someOf(c => Array.length(c.fields) >= 2, ctors)
       ? Set.add("_curry", Set.fromArray([]))
       : Set.fromArray([])
-  | Ast.SExtern(_, _, typeExpr, _, _, _, _) =>
+  | Ast.SExtern(_, _, typeExpr, _, _, _, _, _) =>
     // Multi-arg externs wrap the host import in `_curry` (genExtern).
     typeExprArity(typeExpr) >= 2
       ? Set.add("_curry", Set.fromArray([]))

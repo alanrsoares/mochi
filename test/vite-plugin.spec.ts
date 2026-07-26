@@ -45,6 +45,15 @@ let HeaderBadge = props => <BadgeShell>{props.label}</BadgeShell>`;
     );
   });
 
+  it("keeps bare package import specs (ADR 0015)", () => {
+    const plugin = mochiPlugin();
+    const code = `import { useState } from "@mochi/plugin-preact/hooks"
+let x = useState`;
+    const result = plugin.transform(code, "src/Comp.mochi");
+    expect(result?.code).toContain('import { useState } from "@mochi/plugin-preact/hooks";');
+    expect(result?.code).not.toContain("@mochi/plugin-preact/hooks.mochi");
+  });
+
   it("still prepends h when emit text mentions import { h } in a string", () => {
     const plugin = mochiPlugin();
     // Docs copy once suppressed the pragma: the sniff matched a string body.
