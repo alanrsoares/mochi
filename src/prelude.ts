@@ -152,17 +152,33 @@ export const preludeJsDefs: Record<string, string> = {
   concat:
     'const concat = _curry(2, (a, b) => (typeof a === "string" ? a + b : Array.isArray(a) ? a.concat(b) : _List_concat(a, b)));',
   // Structural deep equality: primitives by ===, arrays/records/variants by
-  // recursion. Functions/Set/Map fall back to reference identity.
-  eq: 'const eq = _curry(2, (x, y) => { if (x === y) return true; if (typeof x !== "object" || x === null || typeof y !== "object" || y === null) return false; const ax = Array.isArray(x); if (ax !== Array.isArray(y)) return false; if (ax) { if (x.length !== y.length) return false; for (let i = 0; i < x.length; i++) if (!eq(x[i], y[i])) return false; return true; } const kx = Object.keys(x), ky = Object.keys(y); if (kx.length !== ky.length) return false; for (const k of kx) if (!eq(x[k], y[k])) return false; return true; });',
-  // Structural total order → -1 | 0 | 1. Numbers/strings/bools compare directly,
-  // arrays lexicographically, everything else by a stable JSON fallback.
+  // recursion. Map = same size + same key→value pairs (order-independent,
+  // values compared with `eq`; keys compared with native Map/Set identity —
+  // mochi Map/Set keys are primitives in practice). Set = same size + same
+  // elements (order-independent). List is lazy/possibly-infinite and MUST NOT
+  // be forced implicitly, so `eq` on a List throws naming the fix. Functions
+  // still fall back to reference identity (`x === y` at the top).
+  eq: 'const eq = _curry(2, (x, y) => { if (x === y) return true; if (typeof x !== "object" || x === null || typeof y !== "object" || y === null) return false; const ax = Array.isArray(x); if (ax !== Array.isArray(y)) return false; if (ax) { if (x.length !== y.length) return false; for (let i = 0; i < x.length; i++) if (!eq(x[i], y[i])) return false; return true; } if (x instanceof Map || y instanceof Map) { if (!(x instanceof Map) || !(y instanceof Map)) return false; if (x.size !== y.size) return false; for (const [k, v] of x) { if (!y.has(k) || !eq(v, y.get(k))) return false; } return true; } if (x instanceof Set || y instanceof Set) { if (!(x instanceof Set) || !(y instanceof Set)) return false; if (x.size !== y.size) return false; for (const v of x) if (!y.has(v)) return false; return true; } if (typeof x[Symbol.iterator] === "function" || typeof y[Symbol.iterator] === "function") throw new TypeError("eq on List: force it first with List.toArray"); const kx = Object.keys(x), ky = Object.keys(y); if (kx.length !== ky.length) return false; for (const k of kx) if (!eq(x[k], y[k])) return false; return true; });',
+  // Structural total order → -1 | 0 | 1. Numbers/strings/bools compare
+  // directly, arrays lexicographically. Map/Set have no inherent order
+  // (insertion order is incidental, not semantic), so `compare` sorts each
+  // side's keys/elements with `compare` itself before walking — this makes
+  // the result depend only on content, never on insertion order, which is
+  // required for `compare` to be a stable total order usable in sorted
+  // containers. List is lazy/possibly-infinite and throws rather than being
+  // forced. Everything else falls back to a stable JSON fallback.
   compare:
-    'const compare = _curry(2, (x, y) => { if (x === y) return 0; const t = typeof x; if (t === "number" || t === "string" || t === "boolean") return x < y ? -1 : x > y ? 1 : 0; if (Array.isArray(x) && Array.isArray(y)) { const n = Math.min(x.length, y.length); for (let i = 0; i < n; i++) { const c = compare(x[i], y[i]); if (c !== 0) return c; } return compare(x.length, y.length); } const sx = JSON.stringify(x), sy = JSON.stringify(y); return sx < sy ? -1 : sx > sy ? 1 : 0; });',
+    'const compare = _curry(2, (x, y) => { if (x === y) return 0; const t = typeof x; if (t === "number" || t === "string" || t === "boolean") return x < y ? -1 : x > y ? 1 : 0; if (Array.isArray(x) && Array.isArray(y)) { const n = Math.min(x.length, y.length); for (let i = 0; i < n; i++) { const c = compare(x[i], y[i]); if (c !== 0) return c; } return compare(x.length, y.length); } if (x instanceof Map && y instanceof Map) { const kx = [...x.keys()].sort(compare), ky = [...y.keys()].sort(compare); const n = Math.min(kx.length, ky.length); for (let i = 0; i < n; i++) { const kc = compare(kx[i], ky[i]); if (kc !== 0) return kc; const vc = compare(x.get(kx[i]), y.get(ky[i])); if (vc !== 0) return vc; } return compare(kx.length, ky.length); } if (x instanceof Set && y instanceof Set) { const ex = [...x].sort(compare), ey = [...y].sort(compare); const n = Math.min(ex.length, ey.length); for (let i = 0; i < n; i++) { const c = compare(ex[i], ey[i]); if (c !== 0) return c; } return compare(ex.length, ey.length); } if (typeof x === "object" && x !== null && !Array.isArray(x) && typeof x[Symbol.iterator] === "function") throw new TypeError("compare on List: force it first with List.toArray"); const sx = JSON.stringify(x), sy = JSON.stringify(y); return sx < sy ? -1 : sx > sy ? 1 : 0; });',
   // Structural display: primitives via String (strings quoted), arrays
   // bracketed, variants as `Ctor(args)`, records as `{ k: v }`. Tuples are JS
-  // arrays at runtime, so they show as `[a, b]`. Set/Map/functions fall back
-  // to String(x).
-  show: 'const show = (x) => { const t = typeof x; if (t === "string") return JSON.stringify(x); if (t !== "object" || x === null) return String(x); if (Array.isArray(x)) return "[" + x.map(show).join(", ") + "]"; if (typeof x._tag === "string") { const ks = Object.keys(x).filter((k) => k !== "_tag"); return ks.length === 0 ? x._tag : x._tag + "(" + ks.map((k) => show(x[k])).join(", ") + ")"; } const ks = Object.keys(x); if (ks.length === 0) return String(x); return "{ " + ks.map((k) => k + ": " + show(x[k])).join(", ") + " }"; };',
+  // arrays at runtime, so they show as `[a, b]`. Map/Set round-trip the
+  // surface `#{...}` sigil (`#{k: v, ...}` / `#{a, b, ...}` — docs/language.md)
+  // so output can be pasted back in as mochi source. List is lazy and
+  // possibly infinite; unlike `eq`/`compare`, `show` is a display/debug op,
+  // not a correctness op, so it deliberately does NOT throw — it renders the
+  // non-forcing marker `<List>` instead of materializing (or hanging on an
+  // infinite one). Functions still fall back to String(x).
+  show: 'const show = (x) => { const t = typeof x; if (t === "string") return JSON.stringify(x); if (t !== "object" || x === null) return String(x); if (Array.isArray(x)) return "[" + x.map(show).join(", ") + "]"; if (x instanceof Map) return "#{" + [...x.entries()].map((e) => show(e[0]) + ": " + show(e[1])).join(", ") + "}"; if (x instanceof Set) return "#{" + [...x].map(show).join(", ") + "}"; if (typeof x[Symbol.iterator] === "function") return "<List>"; if (typeof x._tag === "string") { const ks = Object.keys(x).filter((k) => k !== "_tag"); return ks.length === 0 ? x._tag : x._tag + "(" + ks.map((k) => show(x[k])).join(", ") + ")"; } const ks = Object.keys(x); if (ks.length === 0) return String(x); return "{ " + ks.map((k) => k + ": " + show(x[k])).join(", ") + " }"; };',
   lt: "const lt = _curry(2, (a, b) => a < b);",
   gt: "const gt = _curry(2, (a, b) => a > b);",
   gte: "const gte = _curry(2, (a, b) => a >= b);",

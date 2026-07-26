@@ -134,3 +134,43 @@ test("Set.fromArray calls and Map literals survive formatting verbatim", () => {
   const src = 'let s = Set.fromArray([1, 2, 3])\nlet m = #{ "a": 1, "b": 2 }\n';
   expect(unwrapOk(format(src))).toBe(src);
 });
+
+// ---- structural eq/compare/show on Map/Set (C4 bug fix) --------------------
+// `Object.keys` is `[]` for Map/Set, so the old deep walk made `eq`/`compare`
+// treat any two Maps/Sets as equal and `show` printed `"[object Map]"`. These
+// pin the fixed structural behaviour.
+
+test("eq is true for two Maps with the same key/value pairs, false otherwise", () => {
+  expect(run('let a = eq(#{ "x": 1 }, #{ "x": 1 })', "a")).toBe(true);
+  expect(run('let a = eq(#{ "x": 1 }, #{ "y": 99 })', "a")).toBe(false);
+});
+
+test("eq on Map is order-independent", () => {
+  expect(run('let a = eq(#{ "a": 1, "b": 2 }, #{ "b": 2, "a": 1 })', "a")).toBe(true);
+});
+
+test("eq is true for two Sets with the same elements, false otherwise", () => {
+  expect(run("let a = eq(Set.fromArray([1, 2]), Set.fromArray([2, 1]))", "a")).toBe(true);
+  expect(run("let a = eq(Set.fromArray([1, 2]), Set.fromArray([3]))", "a")).toBe(false);
+});
+
+test("compare on Map/Set is deterministic regardless of insertion order", () => {
+  expect(run('let a = compare(#{ "a": 1, "b": 2 }, #{ "b": 2, "a": 1 })', "a")).toBe(0);
+  expect(run("let a = compare(Set.fromArray([1, 2]), Set.fromArray([2, 1]))", "a")).toBe(0);
+});
+
+test("show on Map/Set round-trips the surface `#{...}` form", () => {
+  expect(run('let a = show(#{ "x": 1 })', "a")).toBe('#{"x": 1}');
+  expect(run("let a = show(Set.fromArray([1, 2]))", "a")).toBe("#{1, 2}");
+  expect(run('let a = show(#{ "x": 1 })', "a")).not.toContain("[object");
+  expect(run("let a = show(Set.fromArray([1, 2]))", "a")).not.toContain("[object");
+});
+
+test("eq/compare on a lazy List throw rather than silently lying", () => {
+  expect(() => run("let a = eq(@{1, 2}, @{1, 2})", "a")).toThrow(/List/);
+  expect(() => run("let a = compare(@{1, 2}, @{1, 2})", "a")).toThrow(/List/);
+});
+
+test("show on a lazy List does not force it — renders the `<List>` marker", () => {
+  expect(run("let a = show(@{1, 2})", "a")).toBe("<List>");
+});
