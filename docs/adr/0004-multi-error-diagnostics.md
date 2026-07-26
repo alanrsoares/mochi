@@ -1,6 +1,8 @@
 # 0004 — Multi-error diagnostics (check + infer)
 
-- **Status:** Accepted
+- **Status:** Accepted — the *parse* half of decision 1 is amended by
+  [ADR 0045](0045-parser-error-recovery.md) (parse now returns `Diagnostic[]` with
+  panic-mode recovery; lex stays single-error, and the hard-fail invariant is unchanged)
 - **Source:** DX slice 12 grilling, ADR 0003 decision 7 (superseded here)
 
 ## Context
@@ -14,7 +16,8 @@ scope.
 ## Decision
 
 1. **Check and infer return `Result<T, Diagnostic[]>`.** Hard fail: no value when
-   any diagnostic is present. Lex and parse stay `Result<T, Diagnostic>`; pipeline
+   any diagnostic is present. Lex and parse stay `Result<T, Diagnostic>` (parse
+   amended to `Diagnostic[]` by ADR 0045); pipeline
    seams (`compile`, `toTypedProgram`, module drivers, CLI/LSP) wrap a single
    error as a one-element array.
 
@@ -45,7 +48,8 @@ scope.
 ## Alternatives rejected
 
 - **Whole-pipeline multi-error (lex/parse recovery)** — high cost; not needed for
-  the editor win of “several type/check squiggles.”
+  the editor win of “several type/check squiggles.” *(Revisited and accepted for
+  parse in ADR 0045 once recovery rules existed; lex is still out of scope.)*
 - **Soft `{ value?, diagnostics }`** — enables hover under errors but widens every
   tooling seam; revisit with poison types.
 - **Poison / error type in v1** — correct long-term for intra-expression recovery,
