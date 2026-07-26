@@ -645,30 +645,34 @@ function declOf(
   aliases: AliasDef[],
   hooks: DeclHooks,
 ): string | null {
-  return match(s)
-    .with({ kind: "import" }, () => null)
-    .with({ kind: "extern" }, () => null)
-    .with({ kind: "type" }, (type) => {
-      const a = aliasByName.get(type.name);
-      return a ? aliasTsDecl(a) : typeDecl(type.name, type.params, type.ctors);
-    })
-    .with({ kind: "let" }, (letin) => {
-      const sc = schemeOf(letin.name);
-      if (!sc || letin.name.startsWith("$")) return null;
-      const fallback = () => bindingTsType(sc, letin.value, aliases, hooks.bindingType);
-      const folded = foldAliases(sc.type, aliases);
-      const ty = runDtsBindingHooks(
-        hooks.dtsBinding,
-        letin.name,
-        sc,
-        letin.value,
-        aliases,
-        fallback,
-        { folded, tsType: (t) => tsOf(t, new Map()) },
-      );
-      return `export declare const ${letin.name}: ${ty};`;
-    })
-    .exhaustive();
+  return (
+    match(s)
+      // An unparsable region declares nothing (ADR 0045 decision 4).
+      .with({ kind: "error" }, () => null)
+      .with({ kind: "import" }, () => null)
+      .with({ kind: "extern" }, () => null)
+      .with({ kind: "type" }, (type) => {
+        const a = aliasByName.get(type.name);
+        return a ? aliasTsDecl(a) : typeDecl(type.name, type.params, type.ctors);
+      })
+      .with({ kind: "let" }, (letin) => {
+        const sc = schemeOf(letin.name);
+        if (!sc || letin.name.startsWith("$")) return null;
+        const fallback = () => bindingTsType(sc, letin.value, aliases, hooks.bindingType);
+        const folded = foldAliases(sc.type, aliases);
+        const ty = runDtsBindingHooks(
+          hooks.dtsBinding,
+          letin.name,
+          sc,
+          letin.value,
+          aliases,
+          fallback,
+          { folded, tsType: (t) => tsOf(t, new Map()) },
+        );
+        return `export declare const ${letin.name}: ${ty};`;
+      })
+      .exhaustive()
+  );
 }
 
 /** Type-constructor names referenced anywhere in a TypeExpr (`Option<Expr>` → {Option}, nested included). Used to spot builtin unions named in ctor/alias field positions — inference-derived binding types alone miss those. */
@@ -719,6 +723,7 @@ export function referencedBuiltinTypeDecls(
       })
       .with({ kind: "extern" }, () => {})
       .with({ kind: "import" }, () => {})
+      .with({ kind: "error" }, () => {}) // references nothing (ADR 0045)
       .exhaustive();
   }
   return builtinTypeDecls

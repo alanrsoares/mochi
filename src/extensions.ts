@@ -174,6 +174,14 @@ export type CompleteMemberHook = (api: CompleteMemberApi) => CompletionItem[] | 
 export type LanguagePlugin = {
   name: string;
   parse?: ParseHook;
+  /**
+   * Extra token tags the parser may resynchronise on after an error (ADR 0045).
+   * A plugin that owns a *top-level* form registers its leading keyword here so
+   * panic-mode recovery can resume at it; core's sync set stays the language's own
+   * declaration keywords. `jsxPlugin` contributes none — JSX is expression-level,
+   * which is exactly why core must not name it.
+   */
+  syncTokens?: readonly Tok["t"][];
   inferCall?: InferCallHook;
   format?: FormatHook;
   bindingType?: BindingTypeHook;

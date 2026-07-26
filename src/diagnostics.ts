@@ -128,7 +128,8 @@ export async function moduleDiagnostics(
   const lexed = lex(src);
   if (isErr(lexed)) return [toPublish(src, lexed.error, path)];
   const parsed = parse(lexed.value, { plugins: opts.plugins });
-  if (isErr(parsed)) return [toPublish(src, parsed.error, path)];
+  // Every parse diagnostic, not just the first (ADR 0045).
+  if (isErr(parsed)) return parsed.error.map((d) => toPublish(src, d, path));
   const prog = parsed.value;
 
   const entry = resolve(path);

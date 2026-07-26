@@ -8,7 +8,7 @@ const index = (src: string) => {
   const lexed = lex(src);
   if (isErr(lexed)) throw new Error(lexed.error.message);
   const parsed = parse(lexed.value);
-  if (isErr(parsed)) throw new Error(parsed.error.message);
+  if (isErr(parsed)) throw new Error(parsed.error.map((d) => d.message).join("; "));
   return indexProgram("/t.mochi", parsed.value);
 };
 

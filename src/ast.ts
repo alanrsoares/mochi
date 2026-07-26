@@ -194,7 +194,17 @@ export type Stmt =
    * `import * as Alias from "./mod"` — whole module as a user namespace (ADR 0002);
    * `alias` set, `names` empty.
    */
-  | { kind: "import"; names: ImportName[]; alias: ImportName | null; from: string; span: Span };
+  | { kind: "import"; names: ImportName[]; alias: ImportName | null; from: string; span: Span }
+  /**
+   * An unparsable region the parser skipped to recover (ADR 0045). `span` covers
+   * every byte skipped — from the token that failed through the last one consumed
+   * before the sync point — so the formatter can pass the raw slice through
+   * untouched. Carries no message: the diagnostics are the diagnostic channel.
+   *
+   * It contributes no bindings and no type vars, and codegen never sees one (the
+   * railway stops on parse diagnostics).
+   */
+  | { kind: "error"; span: Span };
 
 /** Named narrowings of the union nodes. Signatures take these instead of an inline `Extract<Expr, { kind: "…" }>` so the discriminant shape stays out of call sites (and the `no-inline-struct-type` lint stays green). */
 export type LambdaExpr = Extract<Expr, { kind: "lambda" }>;
@@ -224,6 +234,7 @@ export type LetStmt = Extract<Stmt, { kind: "let" }>;
 export type TypeStmt = Extract<Stmt, { kind: "type" }>;
 export type ExternStmt = Extract<Stmt, { kind: "extern" }>;
 export type ImportStmt = Extract<Stmt, { kind: "import" }>;
+export type ErrorStmt = Extract<Stmt, { kind: "error" }>;
 
 /** A name pulled in by an `import`. `span` anchors it for diagnostics. */
 export type ImportName = { name: string; span: Span };

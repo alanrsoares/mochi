@@ -41,7 +41,8 @@ const exportsOf = (prog: Program, env: Env): Env => {
     if (sc) out.set(name, sc);
   };
   for (const s of prog.stmts) {
-    if (s.kind === "import" || !s.exported) continue;
+    // An error node exports nothing — it has no name at all (ADR 0045 decision 4).
+    if (s.kind === "import" || s.kind === "error" || !s.exported) continue;
     if (s.kind === "type") for (const c of s.ctors) take(c.name);
     else take(s.name);
   }
@@ -49,9 +50,10 @@ const exportsOf = (prog: Program, env: Env): Env => {
 };
 
 /** Parse a file to a Program; check/infer wait until the graph is loaded in `compileGraph`. */
-const parseModule = (src: string, opts: ModuleGraphOptions): Result<Program, Diagnostic> => {
+const parseModule = (src: string, opts: ModuleGraphOptions): Result<Program, Diagnostic[]> => {
   const lexed = lex(src);
-  return isErr(lexed) ? lexed : parse(lexed.value, { plugins: opts.plugins });
+  // Lex is still single-error (ADR 0004); parse is now plural (ADR 0045).
+  return isErr(lexed) ? err(oneDiag(lexed.error)) : parse(lexed.value, { plugins: opts.plugins });
 };
 
 type Loaded = { path: string; prog: Program };
@@ -140,7 +142,7 @@ const loadGraph = (
         return oneDiag(checkErr(`cannot read module '${path}'`, { start: 0, end: 0 }));
       }
       const parsed = parseModule(src, opts);
-      if (isErr(parsed)) return oneDiag(parsed.error);
+      if (isErr(parsed)) return parsed.error;
 
       for (const imp of importsOf(parsed.value)) {
         const dep = await visit(resolveImport(path, imp.from));

@@ -17,7 +17,7 @@
  * Hooks run before this module's own printer and never see types: `format`
  * lexes and parses only.
  */
-import { flatMap, map, pipe, type Result } from "@onrails/result";
+import { flatMap, map, mapErr, pipe, type Result } from "@onrails/result";
 import type {
   CallExpr,
   Ctor,
@@ -56,7 +56,7 @@ import {
   softline,
   txt,
 } from "./doc";
-import type { Diagnostic } from "./errors";
+import { type Diagnostic, oneDiag } from "./errors";
 import type { FormatApi, FormatHook, LanguagePlugin } from "./extensions";
 import { resolvePlugins, runFormatHooks } from "./extensions";
 import { lex, skipStringLiteral } from "./lexer";
@@ -878,6 +878,11 @@ const stmtDoc = (stmts: Stmt[], i: number): StmtDoc => {
       return { doc: seq(txt(expPrefix(s)), typeStmtD(s)), consumed: 1 };
     case "extern":
       return { doc: txt(expPrefix(s) + externStmt(s)), consumed: 1 };
+    // Unreachable while `format` is hard-fail: it stops on parse diagnostics. Slice d
+    // of C9 threads `src` down here so the node's span can be re-emitted as a verbatim
+    // raw slice, which is the whole point of the span (ADR 0045 decision 3).
+    case "error":
+      return { doc: txt(""), consumed: 1 };
   }
 
   if (s.name.startsWith("$")) {
@@ -955,10 +960,16 @@ const program = (stmts: Stmt[], src: string, tail: Comment[]): string => {
 /** `plugins`: sugar parsers *and* printers — one list, so anything a plugin can parse it can also re-fold. `undefined` → builtins (JSX); `[]` → hard opt-out (`resolvePlugins`, ADR 0011). */
 export type FormatOptions = { plugins?: LanguagePlugin[] };
 
-export const format = (src: string, opts: FormatOptions = {}): Result<string, Diagnostic> => {
+/**
+ * Plural error channel since ADR 0045: parse reports every diagnostic, and dropping all
+ * but the first at this seam would be exactly the bug C9 exists to fix. Lex is still
+ * single-error, so its one diagnostic is wrapped.
+ */
+export const format = (src: string, opts: FormatOptions = {}): Result<string, Diagnostic[]> => {
   formatHooks = resolvePlugins(opts.plugins).flatMap((p) => (p.format ? [p.format] : []));
   return pipe(
     lex(src),
+    mapErr(oneDiag),
     flatMap((toks) => parse(toks, { plugins: opts.plugins })),
     map((prog) => {
       const tail = attachComments(prog.stmts, collectComments(src), src);

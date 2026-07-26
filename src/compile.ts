@@ -29,7 +29,7 @@ export const toTypedProgram = (
   // Same `plugins` list drives parse and infer: syntax a plugin owns and the
   // typing of what it desugars to can never come from different lists.
   const parsed = parse(lexed.value, { plugins: opts.plugins });
-  if (isErr(parsed)) return err(oneDiag(parsed.error));
+  if (isErr(parsed)) return err(parsed.error); // already Diagnostic[] (ADR 0045)
   const checked = check(parsed.value);
   if (isErr(checked)) return checked;
   return map(inferProgramTypes(checked.value, preludeEnv, opts), (res) => ({
@@ -79,7 +79,7 @@ export function compile(src: string, opts: CompileOptions = {}): Result<string, 
   const lexed = lex(src);
   if (isErr(lexed)) return err(oneDiag(lexed.error));
   const parsed = parse(lexed.value, { plugins: opts.plugins });
-  if (isErr(parsed)) return err(oneDiag(parsed.error));
+  if (isErr(parsed)) return err(parsed.error); // already Diagnostic[] (ADR 0045)
   const checked = check(parsed.value);
   if (isErr(checked)) return checked;
   const typed = map(

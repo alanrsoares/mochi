@@ -266,6 +266,10 @@ const cStmt = (s: Stmt): Canon => {
         from: s.from,
         span: cSpan(s.span),
       };
+    // Recovery node (ADR 0045). Only reachable once `bootstrap/parser.mochi` mirrors
+    // recovery (C9 slice f); until then the differential cases all parse cleanly.
+    case "error":
+      return { kind: "error", span: cSpan(s.span) };
   }
 };
 
@@ -608,7 +612,10 @@ const expectSameError = (src: string): void => {
   if (lr._tag !== "Ok") throw new Error("expected the mochi lexer to succeed");
   const al = alParse(lr.value);
   if (al._tag !== "Err") throw new Error("expected the mochi parser to fail");
-  const tsErr = unwrapErr(ts);
+  // Since ADR 0045 the TS parser recovers and reports every diagnostic; the bootstrap
+  // parser still stops at the first. Parity is pinned on the FIRST diagnostic, which
+  // recovery leaves untouched — slice f of C9 mirrors recovery and widens this.
+  const tsErr = unwrapErr(ts)[0]!;
   if (tsErr.span === undefined) throw new Error("expected the TS parse error to carry a span");
   expect(al.error.message).toBe(tsErr.message);
   expect(al.error.start).toBe(tsErr.span.start);

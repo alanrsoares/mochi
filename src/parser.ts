@@ -1,6 +1,8 @@
 /**
  * Parser — Pratt-style. Returns Result at the boundary.
- * Internally throws a typed marker; the public `parse` catches it into an Err.
+ * Internally throws a typed marker; the statement loop catches it per statement,
+ * records the diagnostic, and resynchronises (panic mode, ADR 0045) — the marker
+ * never leaves this module.
  * Every node carries its source span: leaves from tokens, composites from first to last consumed.
  *
  * Core owns the language's own grammar only. Prefix forms a plugin owns (ADR
@@ -36,8 +38,9 @@ import type { Located, Tok } from "./lexer";
 import { type Span, spanning } from "./span";
 
 /**
- * The one throw in the compiler, and it never leaves this module: `parse`
- * catches it into an `Err`. Plugins reach it only through `ParserApi.fail`, so
+ * The one throw in the compiler, and it never leaves this module: the top-level
+ * statement loop catches it into a diagnostic + recovery. Plugins reach it only
+ * through `ParserApi.fail`, so
  * the marker is not exported and no hook can throw past this boundary.
  */
 class ParseAbort extends Error {
@@ -49,14 +52,41 @@ class ParseAbort extends Error {
 /** `plugins`: adapters whose `parse` hooks own extra prefix syntax. `undefined` → the builtin list; `[]` → hard opt-out, and any plugin-owned syntax stops parsing (`resolvePlugins`, ADR 0011). */
 export type ParseOptions = { plugins?: LanguagePlugin[] };
 
-export function parse(toks: Located[], opts: ParseOptions = {}): Result<Program, Diagnostic> {
-  const parseHooks: ParseHook[] = resolvePlugins(opts.plugins).flatMap((p) =>
-    p.parse ? [p.parse] : [],
-  );
+/** What `parseRecovering` yields: a `Program` that may contain `SError` nodes, plus every parse diagnostic. */
+export type RecoveredParse = { program: Program; diagnostics: Diagnostic[] };
+
+/**
+ * Core sync set for panic-mode recovery (ADR 0045): the language's own declaration
+ * keywords. `eof` always terminates. Plugins add their own top-level keywords via
+ * `LanguagePlugin.syncTokens` — core never names plugin syntax.
+ */
+const CORE_SYNC_TOKENS: readonly Tok["t"][] = ["let", "type", "extern", "import", "export"];
+
+/** Hard stop on pathological input so one keystroke can't publish a novel of diagnostics (ADR 0045 decision 5). */
+const MAX_PARSE_ERRORS = 100;
+
+const OPENERS: readonly Tok["t"][] = ["lparen", "lbrace", "lbracket"];
+const CLOSERS: readonly Tok["t"][] = ["rparen", "rbrace", "rbracket"];
+
+/**
+ * The recovering parse (ADR 0045). Always yields a `Program` — unparsable regions
+ * become `SError` statements whose span covers the skipped bytes — alongside every
+ * parse diagnostic in source order. `parse` is the hard-fail wrapper over this;
+ * tooling that wants the partial tree (formatter, LSP) calls this directly and says so.
+ */
+export function parseRecovering(toks: Located[], opts: ParseOptions = {}): RecoveredParse {
+  const plugins = resolvePlugins(opts.plugins);
+  const parseHooks: ParseHook[] = plugins.flatMap((p) => (p.parse ? [p.parse] : []));
+  const syncTokens = new Set<Tok["t"]>([
+    ...CORE_SYNC_TOKENS,
+    ...plugins.flatMap((p) => [...(p.syncTokens ?? [])]),
+  ]);
   let pos = 0;
   let tmpCount = 0; // supplies fresh names for destructuring temporaries
   let last: Located = toks[0]!; // most recently consumed token (for end spans)
   const peek = () => toks[pos]!;
+  /** True at the `eof` token *or* past it — a failed statement may have consumed `eof` itself. */
+  const atEnd = () => pos >= toks.length || toks[pos]!.t === "eof";
   const next = () => {
     last = toks[pos++]!;
     return last;
@@ -1137,12 +1167,62 @@ export function parse(toks: Located[], opts: ParseOptions = {}): Result<Program,
     return parseLet().map((s) => ({ ...s, doc }));
   }
 
-  try {
-    const stmts: Stmt[] = [];
-    while (peek().t !== "eof") stmts.push(...parseStmt());
-    return ok({ stmts });
-  } catch (e) {
-    if (e instanceof ParseAbort) return err(e.detail);
-    throw e; // real bug, not a parse error — let it surface
+  /**
+   * Panic-mode skip (ADR 0045 decision 1). Advances the cursor strictly past `before`,
+   * then stops at the first token in the sync set whose bracket depth relative to here
+   * is 0 — which is what keeps recovery from resuming inside a half-open record,
+   * argument list, or `switch` block, where a `let` is a `let … in`.
+   *
+   * That strict advance is the forward-progress guarantee, and it is conditional because
+   * a failed attempt may have consumed nothing (`fail` at the offending token) or several
+   * tokens (`expect` consumes, then reports): swallowing one more unconditionally would
+   * skip past a perfectly good following declaration.
+   */
+  const recoverFrom = (failedAt: Located, before: number): Stmt => {
+    if (pos === before) next(); // the failed attempt consumed nothing — force progress
+    let depth = 0;
+    while (!atEnd()) {
+      const t = peek().t;
+      if (depth === 0 && syncTokens.has(t)) break;
+      if (OPENERS.includes(t)) depth++;
+      else if (CLOSERS.includes(t)) depth = Math.max(0, depth - 1);
+      next();
+    }
+    return { kind: "error", span: spanning(failedAt.span, last.span) };
+  };
+
+  const stmts: Stmt[] = [];
+  const diagnostics: Diagnostic[] = [];
+  while (!atEnd()) {
+    const before = pos;
+    const failedAt = peek();
+    try {
+      stmts.push(...parseStmt());
+    } catch (e) {
+      if (!(e instanceof ParseAbort)) throw e; // real bug, not a parse error — let it surface
+      diagnostics.push(e.detail);
+      if (diagnostics.length >= MAX_PARSE_ERRORS) {
+        diagnostics.push(parseErr("too many parse errors; stopping", failedAt.span));
+        stmts.push({ kind: "error", span: spanning(failedAt.span, toks[toks.length - 1]!.span) });
+        break;
+      }
+      stmts.push(recoverFrom(failedAt, before));
+    }
+    // A statement parse that neither threw nor consumed anything would spin forever;
+    // no production does, and if one ever did this turns a hang into a diagnostic.
+    if (pos === before) {
+      diagnostics.push(parseErr(`unexpected token ${peek().t}`, peek().span));
+      stmts.push(recoverFrom(failedAt, before));
+    }
   }
+  return { program: { stmts }, diagnostics };
+}
+
+/**
+ * Hard-fail railway entry (ADR 0004 as amended by ADR 0045): every parse diagnostic,
+ * in source order, and no `Program` when there is any.
+ */
+export function parse(toks: Located[], opts: ParseOptions = {}): Result<Program, Diagnostic[]> {
+  const { program, diagnostics } = parseRecovering(toks, opts);
+  return diagnostics.length > 0 ? err(diagnostics) : ok(program);
 }

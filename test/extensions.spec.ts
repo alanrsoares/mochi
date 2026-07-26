@@ -75,8 +75,8 @@ test("JSX syntax comes from the builtin plugin's parse hook", () => {
 
   const optedOut = parse(toks, { plugins: [] });
   expect(isErr(optedOut)).toBe(true);
-  expect(unwrapErr(optedOut).kind).toBe("parse");
-  expect(unwrapErr(optedOut).message).toBe("unexpected token lt");
+  expect(unwrapErr(optedOut)[0]!.kind).toBe("parse");
+  expect(unwrapErr(optedOut)[0]!.message).toBe("unexpected token lt");
 });
 
 test("opting out of all plugins leaves the core grammar untouched", () => {
@@ -103,7 +103,7 @@ test("the formatter's `<tag>` re-fold comes from the builtin plugin", () => {
   const handWritten = 'let el = h("div", { className: "card" }, ["hi"])\n';
   expect(unwrapOk(format(handWritten))).toBe(handWritten);
   // Opt out and there is nothing left to re-fold — the sugar no longer parses.
-  expect(unwrapErr(format(src, { plugins: [] })).kind).toBe("parse");
+  expect(unwrapErr(format(src, { plugins: [] }))[0]!.kind).toBe("parse");
 });
 
 test("component binding types come from the builtin plugin, in BOTH backends", () => {

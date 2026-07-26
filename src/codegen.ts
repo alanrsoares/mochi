@@ -827,6 +827,13 @@ const genImport = (s: ImportStmt, ctx: GenCtx): string => {
 
 const genStmt = (s: Stmt, ctx: GenCtx): string =>
   match(s)
+    // Unreachable by construction: the railway stops on parse diagnostics, so a
+    // Program that reaches codegen has no error nodes (ADR 0045 decision 6). This is
+    // the codegen invariant — emitting a placeholder for unrepresentable source would
+    // hand the user silently-wrong output instead of a loud bug report.
+    .with({ kind: "error" }, (s) => {
+      throw new Error(`codegen invariant: error node reached codegen at ${s.span.start}`);
+    })
     .with({ kind: "import" }, (s) => genImport(s, ctx))
     .with({ kind: "type" }, (s) => {
       const decls = genType(s, ctx);
