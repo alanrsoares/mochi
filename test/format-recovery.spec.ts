@@ -51,7 +51,7 @@ test("format is a fixed point with a comment adjacent to an error region", () =>
 
 // These are real, already-formatted, self-hosted compiler sources (checked
 // in, and independently held to `format(src) === src` project-wide by
-// `scripts/fmt-al.ts --check` in `bun run check`). Reformatting them via the
+// `scripts/fmt.ts --check` in `bun run check`). Reformatting them via the
 // now-`parseRecovering`-backed pipeline must still be a no-op: the switch
 // away from the hard-fail `parse` must not perturb output for files that
 // already parse cleanly (no error-node spans are ever produced for them).
