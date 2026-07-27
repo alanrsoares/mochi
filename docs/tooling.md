@@ -116,3 +116,6 @@ editor's Node runtime, not Bun, so it can't rely on Node's `.mts` type-stripping
 being available. JSX needs no entry —
 `jsxPlugin` is a builtin, registered by default; passing `plugins: []` is the non-UI
 opt-out ([ADR 0011](adr/0011-language-plugins.md), [tracer bullets](dx-tracer-bullets.md)).
+A plugin named like a builtin **replaces** it in place: list your own `"jsx"` plugin to
+swap the builtin, or a hook-less stub (`{ name: "jsx" }`) to disable JSX while keeping
+vendor plugins ([ADR 0049](adr/0049-plugin-name-shadowing.md)).

@@ -45,6 +45,37 @@ test("default builtins param is DEFAULT_PLUGINS", () => {
   expect(resolvePlugins([])).toEqual([]);
 });
 
+// ADR 0049: a caller plugin named like a builtin replaces it in place —
+// same slot in the run order — instead of running after a builtin that
+// would have claimed its syntax first.
+test("a caller plugin shadows the same-named builtin in place", () => {
+  const myBuiltin: LanguagePlugin = { name: "builtin" };
+  expect(resolvePlugins([myBuiltin, vendorA], [builtin])).toEqual([myBuiltin, vendorA]);
+  expect(resolvePlugins([myBuiltin, vendorA], [builtin])[0]).toBe(myBuiltin);
+});
+
+test("a hook-less stub disables one builtin, keeping the rest", () => {
+  const other: LanguagePlugin = { name: "other-builtin" };
+  const stub: LanguagePlugin = { name: "builtin" };
+  expect(resolvePlugins([stub, vendorA], [builtin, other])).toEqual([stub, other, vendorA]);
+});
+
+test("shadowing DEFAULT_PLUGINS' jsx drops the builtin jsx hooks", () => {
+  const noJsx: LanguagePlugin = { name: "jsx" };
+  const resolved = resolvePlugins([noJsx, vendorA]);
+  expect(resolved.filter((p) => p.name === "jsx")).toEqual([noJsx]);
+  expect(resolved).toContain(vendorA);
+});
+
+test("a hook-less jsx stub removes JSX syntax end-to-end (parse fails)", () => {
+  const src = 'let el = <div>{"hi"}</div>';
+  const parsed = parse(unwrapOk(lex(src)), { plugins: [{ name: "jsx" }, vendorA] });
+  expect(isErr(parsed)).toBe(true);
+  expect(unwrapErr(parsed)[0]!.kind).toBe("parse");
+  // …while the same source with only vendor plugins still parses (builtin jsx kept).
+  expect(isErr(parse(unwrapOk(lex(src)), { plugins: [vendorA] }))).toBe(false);
+});
+
 // Slices 27–28 (ADR 0011 decision 2): ALL of JSX — parse, infer, format,
 // binding-type — lives in the builtin `jsxPlugin`, not in `parser.ts` /
 // `infer.ts` / `format.ts` / `dts.ts`. Each guard below pairs the default (no

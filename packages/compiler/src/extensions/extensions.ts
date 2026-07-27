@@ -218,6 +218,11 @@ export const DEFAULT_PLUGINS: LanguagePlugin[] = [jsxPlugin];
  *   silently lose a builtin (JSX) it never asked to drop. `builtins` defaults
  *   to `DEFAULT_PLUGINS`; tests pass an explicit list to exercise the three
  *   cases independently of which builtins ship.
+ * - Name shadowing (ADR 0049): a caller plugin whose `name` matches a builtin
+ *   **replaces** it in place — same slot in the run order, so a project can
+ *   swap `jsxPlugin` for its own `"jsx"`. A hook-less stub (`{ name: "jsx" }`)
+ *   disables that builtin while keeping every other plugin. `name` is plugin
+ *   identity: naming a vendor plugin after a builtin is always a shadow.
  */
 export const resolvePlugins = (
   plugins: LanguagePlugin[] | undefined,
@@ -225,7 +230,9 @@ export const resolvePlugins = (
 ): LanguagePlugin[] => {
   if (plugins === undefined) return builtins;
   if (plugins.length === 0) return [];
-  return [...builtins, ...plugins];
+  const resolved = builtins.map((b) => plugins.find((p) => p.name === b.name) ?? b);
+  const shadowed = new Set(resolved.map((p) => p.name));
+  return [...resolved, ...plugins.filter((p) => !shadowed.has(p.name))];
 };
 
 /**
