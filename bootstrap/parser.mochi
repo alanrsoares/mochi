@@ -277,6 +277,7 @@ let tySpan = t => switch t {
   | Ast.TyApp(_, _, sp) => sp
   | Ast.TyTuple(_, sp) => sp
   | Ast.TyList(_, sp) => sp
+  | Ast.TyQual(_, _, _, _, sp) => sp
 }
 
 // One lambda parameter: a name, `{ a, b }` record-destructuring, or `(a, b)`
@@ -1075,8 +1076,32 @@ let parseTypeAtom = (toks, pos) =>
       | TLbracket => let? (elem, p) = parseTypeExpr(toks, pos + 1) in
         let? p2 = expectTok(TRbracket, toks, p) in
           Ok((Ast.TyList(elem, toEnd(sp, toks, p2)), p2))
-      | _ => expectId(toks, pos)
-          |> Result.map(((nm, p)) => (Ast.TyName(nm.name, nm.span), p))
+      | _ => let? (nm, p) = expectId(toks, pos) in
+          // `Alias.Name` — an alias-qualified type name (ADR 0046). Only
+          // uppercase-initial names can be module aliases (mirrors the
+          // `Alias.Ctor(…)` pattern production).
+          isUpper(nm.name) && tokAt(toks, p).tok == TDot
+            ? let? (q, p2) = expectId(toks, p + 1) in
+              isUpper(q.name)
+                ? Ok(
+                  (
+                    Ast.TyQual(
+                      nm.name,
+                      q.name,
+                      q.span,
+                      [],
+                      spanning(nm.span, q.span)
+                    ),
+                    p2
+                  )
+                )
+                : errAt(
+                  "a type variable cannot be qualified; expected a constructor after '${nm.name}.', got '${q.name}'",
+                  // src/parser.ts's `fail` reports at the CURRENT token, which by
+                  // then is the one after the consumed member — hence `p2`, not `p + 1`.
+                  tokAt(toks, p2)
+                )
+            : Ok((Ast.TyName(nm.name, nm.span), p))
     }
 
 let startsTypeAtom = t => switch t {
@@ -1107,6 +1132,16 @@ let parseTypeApp = (toks, pos) =>
           |> Result.map(((args, lastSp, p2)) => switch lastSp {
             | None => (head, p2)
             | Some(ls) => (Ast.TyApp(name, args, spanning(sp, ls)), p2)
+          })
+      | Ast.TyQual(alias, nm, nameSpan, _, sp) =>
+        // A qualified head takes args too (`D.Result e a`), staying one variant.
+        typeArgsLoop(toks, p, [], None)
+          |> Result.map(((args, lastSp, p2)) => switch lastSp {
+            | None => (head, p2)
+            | Some(ls) => (
+                Ast.TyQual(alias, nm, nameSpan, args, spanning(sp, ls)),
+                p2
+              )
           })
       | _ => Ok((head, p))
     })

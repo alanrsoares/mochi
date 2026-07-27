@@ -215,8 +215,6 @@ const cTy = (t: TypeExpr): Canon => {
     case "tlist":
       return { kind: "tlist", elem: cTy(t.elem), span: cSpan(t.span) };
     case "tqual":
-      // Not yet produced by bootstrap/parser.mochi (that's C5 slice d) — case added
-      // only so this canonicalizer stays exhaustive over the TS-side `TypeExpr`.
       return {
         kind: "tqual",
         alias: t.alias,
@@ -437,6 +435,13 @@ const A_TY: Record<string, (t: Al) => Canon> = {
   TyApp: (t) => ({ kind: "tapp", ctor: t.ctor, args: t.args.map(aTy), span: t.span }),
   TyTuple: (t) => ({ kind: "ttuple", elems: t.elems.map(aTy), span: t.span }),
   TyList: (t) => ({ kind: "tlist", elem: aTy(t.elem), span: t.span }),
+  TyQual: (t) => ({
+    kind: "tqual",
+    alias: t.alias,
+    name: t.name,
+    args: t.args.map(aTy),
+    span: t.span,
+  }),
 };
 const aTy = (t: Al): Canon => {
   const f = A_TY[t._tag];
@@ -578,6 +583,8 @@ const cases: Record<string, string> = {
     "let a = { ...base }\nlet b = { ...base, x: 1 }\nlet c = { ...base, x: 1, y: 2 }",
   "$-label as record key and as projection (ADR 0009)":
     'let p = { $tone: "rose", size: 1 }\nlet t = p.$tone\nlet u = outer.$slot.$tone\nlet m = { $a: 1 }.$a',
+  "alias-qualified type names, nullary and applied (ADR 0046)":
+    'extern a : D.Shape = "m" "a"\nextern b : D.Result e a = "m" "b"\nextern c : [D.Shape] -> Option D.Shape = "m" "c"\nlet d : D.Shape = e\ntype T = { f: D.Result string number }',
   "or-patterns, 2 and 3+ alts, with a guard (ADR 0022)":
     "let f = v => switch v { | A | B => 1 | X | Y | Z when eq(v, 0) => 2 | _ => 3 }",
   "infix operator precedence: mul over add, cmp over mul, and/or over cmp":
@@ -651,6 +658,7 @@ const errorCases: Record<string, string> = {
   "let? missing in": "let r = let? x = f(1) Ok(x)",
   "non-leading spread (ADR 0021)": "let r = { x: 1, ...base }",
   "multiple spreads (ADR 0021)": "let r = { ...a, ...b }",
+  "qualified type name with a lowercase member (ADR 0046)": 'extern a : D.shape = "m" "a"',
   "or-pattern can't nest inside a ctor pattern (ADR 0022)":
     "let f = v => switch v { | Some(A | B) => 1 | _ => 0 }",
 };

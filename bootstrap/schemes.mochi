@@ -236,6 +236,21 @@ export let typeExprToType = (te, vars, st, aliases, expanding) => switch te {
     ) in
       (tCon("Array", [elemT]), vars1, st1)
   | Ast.TyName(name, _) => typeExprName(name, vars, st, aliases, expanding)
+  | Ast.TyQual(_, name, _, argTes, _) => let (args, vars1, st1) = typeExprListToType(
+      argTes,
+      vars,
+      st,
+      aliases,
+      expanding
+    ) in
+      // A variant crosses NOMINALLY under its bare name: module.mochi merges the
+      // dep's type/ctor registry unqualified and codegen emits that same name, so
+      // `D.Shape` and the dep's own `Shape` are one type. An unresolvable alias
+      // or member lowers the same way rather than minting a placeholder, so no
+      // synthetic name can leak into a type message. Unlike src/schemes.ts this
+      // does not yet expand a record alias across the edge — that needs the
+      // per-alias `quals` scope (C5 slice d-3, still to port).
+      (tCon(name, args), vars1, st1)
 }
 
 let aliasLocalVarsFrom = (params, args, st) => switch params {

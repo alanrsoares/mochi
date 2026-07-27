@@ -76,6 +76,11 @@ export type TypeExpr =
   | TyApp(ctor: string, args: [TypeExpr], span: Span)
   | TyTuple(elems: [TypeExpr], span: Span)
   | TyList(elem: TypeExpr, span: Span)
+  // `Alias.Name` (nullary, `args: []`) or `Alias.Name b` (applied) — ADR 0046.
+  // One variant covers both arities, unlike the TyName/TyApp split: a qualified
+  // name is always a constructor reference, never a variable, so the
+  // lowercase/uppercase branch that motivates the split cannot apply.
+  | TyQual(alias: string, name: string, nameSpan: Span, args: [TypeExpr], span: Span)
 
 type CtorField = { name: Option string, fieldType: TypeExpr }
 type Ctor = { name: string, fields: [CtorField] }

@@ -615,6 +615,11 @@ let strayTypeVar = (te, params) => switch te {
   | Ast.TyApp(_, args, _) => firstSome(a => strayTypeVar(a, params), args)
   | Ast.TyTuple(elems, _) => firstSome(el => strayTypeVar(el, params), elems)
   | Ast.TyList(elem, _) => strayTypeVar(elem, params)
+  | Ast.TyQual(_, _, _, args, _) =>
+    // `Alias.Name` is always a constructor reference, never a bare type variable
+    // (that is what motivates the single TyQual variant, ADR 0046) — only its
+    // applied args can hide a stray var.
+    firstSome(a => strayTypeVar(a, params), args)
 }
 
 let checkCtorFieldVars = stmts =>
