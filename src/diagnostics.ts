@@ -7,12 +7,13 @@
  */
 import { resolve } from "node:path";
 import { isErr } from "@onrails/result";
-import { compile, toTypedProgramWith } from "./compile";
+import { toTypedProgram, toTypedProgramWith } from "./compile";
 import type { Diagnostic } from "./errors";
 import type { LanguagePlugin } from "./extensions";
 import { lex } from "./lexer";
 import { moduleContext } from "./module";
 import { parse } from "./parser";
+import { preludeNamespaces } from "./prelude";
 import { lineCol } from "./span";
 
 /** 0-based line/character — matches the LSP `Position` shape. */
@@ -91,20 +92,28 @@ export function toPublish(
   };
 }
 
+/** Options threaded into `moduleDiagnostics` / single-file `diagnostics` — `plugins` (styled-cva, …), same list Vite / `gen-mochi-dts` use. Omitted = default/builtin resolution (`resolvePlugins`, ADR 0011). */
+export type ModuleDiagnosticsOptions = { plugins?: LanguagePlugin[] };
+
 /**
  * Check + infer may emit several diagnostics (ADR 0004); so may parse, since
  * recovery reports every unparsable region (ADR 0045). Only lex still yields a
  * single one. Single-file: imports resolve to nothing, so a `switch` on an imported
  * variant reads as an unknown constructor. Use `moduleDiagnostics` when a path
  * is available.
+ *
+ * **Strict unbound (`open: false`).** Emit/codegen stays open-world so bare host
+ * globals still lower; the editor must flag typos (`useRefssss`, misspelled
+ * locals). `opts.plugins` still reaches infer so vendor `inferCall` runs.
  */
-export function diagnostics(src: string): PublishDiagnostic[] {
-  const r = compile(src);
+export function diagnostics(src: string, opts: ModuleDiagnosticsOptions = {}): PublishDiagnostic[] {
+  const r = toTypedProgram(src, {
+    open: false,
+    namespaces: preludeNamespaces,
+    plugins: opts.plugins,
+  });
   return isErr(r) ? r.error.map((e) => toPublish(src, e)) : [];
 }
-
-/** Options threaded into `moduleDiagnostics` — `plugins` (styled-cva, …), same list Vite / `gen-mochi-dts` use. Omitted = default/builtin resolution (`resolvePlugins`, ADR 0011). */
-export type ModuleDiagnosticsOptions = { plugins?: LanguagePlugin[] };
 
 /**
  * Module-aware diagnostics: resolve `path`'s dependency graph (deps read from
@@ -137,8 +146,11 @@ export async function moduleDiagnostics(
   const read = (p: string): Promise<string> =>
     resolve(p) === entry ? Promise.resolve(src) : readFile(p);
   const ctx = await moduleContext(entry, read, { plugins: opts.plugins });
-  if (isErr(ctx)) return diagnostics(src);
+  if (isErr(ctx)) return diagnostics(src, { plugins: opts.plugins });
 
-  const typed = toTypedProgramWith(prog, ctx.value, { plugins: opts.plugins });
+  const typed = toTypedProgramWith(prog, ctx.value, {
+    plugins: opts.plugins,
+    open: false,
+  });
   return isErr(typed) ? typed.error.map((e) => toPublish(src, e, entry)) : [];
 }

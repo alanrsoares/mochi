@@ -4,6 +4,7 @@
 // batch tool, and sync results keep the mochi surface a plain `Result` (no
 // `Promise<Result>`, per the railway conventions).
 import { readFileSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 
 // mochi Result runtime shape: { _tag: "Ok", value } | { _tag: "Err", error }.
@@ -34,10 +35,21 @@ export const writeFile = (path, contents) => {
 
 // resolveImport : string -> string -> string  — an importer's path and an
 // import spec to the dep's absolute `.mochi` path (a trailing `.mochi` is optional).
-// Uncurried; mirrors src/module.ts's resolveImport.
-export const resolveImport = (importer, spec) =>
-  resolve(dirname(importer), `${spec.replace(/\.mochi$/, "")}.mochi`);
-
+// Relative/absolute specs append `.mochi`; bare package specs use Node `exports`
+// (mirrors src/module.ts — LSP/module graph must resolve kit seams).
+export const resolveImport = (importer, spec) => {
+  const isPath =
+    spec.startsWith("./") ||
+    spec.startsWith("../") ||
+    spec.startsWith("/") ||
+    /^[A-Za-z]:[\\/]/.test(spec);
+  if (isPath) return resolve(dirname(importer), `${spec.replace(/\.mochi$/, "")}.mochi`);
+  try {
+    return createRequire(importer).resolve(spec);
+  } catch {
+    return resolve(dirname(importer), `${spec}.mochi`);
+  }
+};
 // absPath : string -> string  — absolutize an entry path against the cwd, so
 // the graph loader keys every module on one canonical path.
 export const absPath = (p) => resolve(p);

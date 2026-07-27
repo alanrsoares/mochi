@@ -26,9 +26,51 @@ type ReadFile = (path: string) => Promise<string>;
 /** `plugins` (styled-cva, …) threaded to every per-module `toTypedProgramWith` call — same list `compile`/`inferProgram` take. Optional; callers that omit it get the default/builtin resolution (`resolvePlugins`, ADR 0011). */
 export type ModuleGraphOptions = { plugins?: LanguagePlugin[] };
 
-/** Resolve an import `from` spec to an absolute `.mochi` path (`.mochi` suffix optional). */
-const resolveImport = (importer: string, spec: string): string =>
-  resolve(dirname(importer), `${spec.replace(/\.mochi$/, "")}.mochi`);
+/** Relative / absolute specs — everything else is a bare package or package subpath. */
+const isPathSpec = (spec: string): boolean =>
+  spec.startsWith("./") ||
+  spec.startsWith("../") ||
+  spec.startsWith("/") ||
+  /^[A-Za-z]:[\\/]/.test(spec);
+
+type NodeModuleBuiltin = {
+  createRequire: (filename: string) => { resolve: (id: string) => string };
+};
+
+/**
+ * Resolve a bare package/subpath via Node `exports` without a static
+ * `node:module` import — the docs playground bundles this file for the browser
+ * (worker + sync fallback), and Rollup cannot ship `createRequire`.
+ */
+const resolvePackageSpec = (importer: string, spec: string): string | null => {
+  try {
+    const getBuiltin = (globalThis as { process?: { getBuiltinModule?: (id: string) => unknown } })
+      .process?.getBuiltinModule;
+    const mod = getBuiltin?.("module") as NodeModuleBuiltin | undefined;
+    if (!mod?.createRequire) return null;
+    return mod.createRequire(importer).resolve(spec);
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Resolve an import `from` spec to an absolute `.mochi` path.
+ * Relative/absolute specs append `.mochi` (suffix optional). Bare package
+ * specs (`@mochi/plugin-preact/hooks`) use Node `exports` resolution from the
+ * importer — same story Vite aliases paper over, so LSP/module graph can load
+ * kit seams without a project-local host copy (ADR 0015 / tracer #51).
+ */
+export const resolveImport = (importer: string, spec: string): string => {
+  if (isPathSpec(spec)) {
+    return resolve(dirname(importer), `${spec.replace(/\.mochi$/, "")}.mochi`);
+  }
+  const pkg = resolvePackageSpec(importer, spec);
+  if (pkg !== null) return pkg;
+  // Unresolvable bare spec — keep the historical relative fallback so the
+  // graph fails to read the dep and call sites degrade rather than throw.
+  return resolve(dirname(importer), `${spec}.mochi`);
+};
 
 const importsOf = (prog: Program): Extract<Stmt, { kind: "import" }>[] =>
   prog.stmts.filter((s): s is Extract<Stmt, { kind: "import" }> => s.kind === "import");

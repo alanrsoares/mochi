@@ -86,3 +86,69 @@ test("without plugins, the same tw.* JSX usage is today's blind spot (no diagnos
   const diags = await moduleDiagnostics(ENTRY, TW_JSX_SRC, read({}));
   expect(diags).toEqual([]);
 });
+
+// Tracer #51: bare package import must resolve via Node exports so LSP can
+// load `@mochi/plugin-preact/hooks` and run `preactExtension.inferCall`.
+test("package import of plugin-preact hooks + plugin surfaces useState misuse", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { resolve } = await import("node:path");
+  const { preactExtension } = await import("@mochi/plugin-preact");
+  // Real monorepo path so createRequire walks to workspace node_modules.
+  const entry = resolve(import.meta.dir, "../apps/docs/src/components/HeroCarousel.mochi");
+  const src = `
+import { useState } from "@mochi/plugin-preact/hooks"
+let bad = _ =>
+  let (n, setN) = useState(0) in
+  let _ = setN("oops") in n
+`;
+  const diags = await moduleDiagnostics(entry, src, (p) => readFile(p, "utf8"), {
+    plugins: [preactExtension],
+  });
+  expect(diags.some((d) => d.message.startsWith("type:"))).toBe(true);
+});
+
+test("same package import without preactExtension leaves useRef unpinned", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { resolve } = await import("node:path");
+  const { preactExtension } = await import("@mochi/plugin-preact");
+  const entry = resolve(import.meta.dir, "../apps/docs/src/components/HeroCarousel.mochi");
+  const src = `
+import { useRef } from "@mochi/plugin-preact/hooks"
+let bad = _ =>
+  let r = useRef(0) in
+  eq(r.current, "x")
+`;
+  const withPlugin = await moduleDiagnostics(entry, src, (p) => readFile(p, "utf8"), {
+    plugins: [preactExtension],
+  });
+  const without = await moduleDiagnostics(entry, src, (p) => readFile(p, "utf8"), {
+    plugins: [],
+  });
+  expect(withPlugin.some((d) => d.message.startsWith("type:"))).toBe(true);
+  expect(without.every((d) => !d.message.startsWith("type:"))).toBe(true);
+});
+test("resolveImport maps @mochi/plugin-preact/hooks via package exports", async () => {
+  const { resolve } = await import("node:path");
+  const { resolveImport } = await import("../src/module");
+  const importer = resolve(import.meta.dir, "../apps/docs/src/components/HeroCarousel.mochi");
+  const hit = resolveImport(importer, "@mochi/plugin-preact/hooks");
+  expect(hit.endsWith("packages/plugin-preact/hooks.mochi")).toBe(true);
+});
+
+test("strict diagnostics flag unbound typos (open-world emit would swallow them)", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { resolve } = await import("node:path");
+  const { snakeVendorPlugins } = await import("../examples/snake/mochi.plugins");
+  const entry = resolve(import.meta.dir, "../examples/snake/src/components/CanvasBoard.mochi");
+  const good = await readFile(entry, "utf8");
+  const broken = good
+    .replace("let canvasRef = useRef", "let canvasRefasdasd = useRef")
+    .replace("let particles = useRef", "let particles = useRefssss");
+  const diags = await moduleDiagnostics(entry, broken, (p) => readFile(p, "utf8"), {
+    plugins: snakeVendorPlugins,
+  });
+  expect(diags.some((d) => d.message.includes("unbound variable"))).toBe(true);
+  expect(
+    diags.some((d) => d.message.includes("useRefssss") || d.message.includes("canvasRef")),
+  ).toBe(true);
+});

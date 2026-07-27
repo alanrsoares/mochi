@@ -74,8 +74,8 @@ export type ImportedContext = {
   qualTypes?: QualMap;
 };
 
-/** Options for `toTypedProgramWith` beyond the imported context — currently just `plugins` (styled-cva, …), threaded the same way `compile`/`inferProgram` take them. */
-export type TypedProgramWithOptions = { plugins?: LanguagePlugin[] };
+/** Options for `toTypedProgramWith` beyond the imported context — `plugins` (styled-cva, …) and `open` (default `true` for emit; LSP diagnostics pass `false`). */
+export type TypedProgramWithOptions = { plugins?: LanguagePlugin[]; open?: boolean };
 
 /** Parsed Program → typed Program, with an imported context: the module-aware sibling of `toTypedProgram`. Owns the prelude-seeding invariant — `preludeEnv` + `preludeNamespaces` + open-world — that the graph drivers (`compileGraph`, `compileGraphTs`, `moduleContext`) and the LSP surfaces (`moduleDiagnostics`, `moduleHoverAt`) previously each re-assembled. */
 export function toTypedProgramWith(
@@ -87,7 +87,7 @@ export function toTypedProgramWith(
   if (isErr(checked)) return checked;
   return map(
     inferProgramTypes(checked.value, preludeEnv, {
-      open: true,
+      open: opts.open ?? true,
       imports: ctx.imports,
       namespaces: preludeNamespaces,
       nsImports: ctx.nsImports,
