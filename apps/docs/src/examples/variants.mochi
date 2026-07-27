@@ -1,5 +1,4 @@
-// Tour: prelude Result — no `type Result<a, e>` (that's TS; mochi is `Result a e`).
-// Twoslash `// ^?` lines are stripped by HighlightCode for inline type hints.
+// No null checks. Miss a case and it won't compile.
 
 let unwrapOr = (res, fallback) =>
   //  ^?

@@ -4,36 +4,110 @@
 
 <h1>mochi</h1>
 
-<p><em>An ML-family language for the JS world — inferred types, readable output, strict TypeScript when you want it.</em></p>
+<p><em>Functional programming that plays nicely with TypeScript.</em></p>
 
 <a href="https://github.com/alanrsoares/mochi/actions/workflows/ci.yml"><img src="https://github.com/alanrsoares/mochi/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
 
 </div>
 
-**mochi** is a small statically-typed functional language: Hindley–Milner inference (Algorithm W), parametric variants, row-polymorphic records, and exhaustive `switch`. You write curried, data-last code; the compiler emits plain JavaScript you can read, or TypeScript that typechecks under `tsc --strict`. Both backends share one AST and one codegen.
+Write clean, expressive code with pattern matching and type inference — compiled into
+JavaScript you can read, and TypeScript that passes `tsc --strict` with zero errors.
 
-Day-to-day code needs no type annotations. The LSP (hover), `.d.ts` generation, and formatter are driven from the compiler itself. The compiler is also self-hosted: the mochi implementation of itself emits TypeScript with 0 `tsc --strict` errors, checked in CI.
+You almost never write a type annotation. The compiler works them out, then hands the
+same knowledge to the editor: hover types, `.d.ts` files, and the formatter all come from
+the compiler's own passes rather than a separate model of your code.
 
 <div align="center">
 <img src="illustrations/mochi_compiler_magic.jpg" alt="mochi compiling to JS and TS with zero errors" width="560" />
 </div>
 
-- **Types:** Algorithm W with open/closed rows and parametric variants; records are structural, matching is exhaustive.
-- **Runtime:** plain JS; the prelude is curried and data-last, so it composes under `|>`.
-- **Tooling:** LSP, `.d.ts`, and formatter, all driven from the compiler's own passes.
+## One language, two clean outputs
+
+Same source. No runtime bloat in the JS, full annotations in the TS.
+
+<table>
+<tr><th><code>app.mochi</code></th></tr>
+<tr><td>
+
+```reason
+type User = { name: string, age: number }
+
+let greet = user =>
+  switch user.age > 17 {
+    | true => "Welcome, ${user.name}"
+    | false => "Sorry, ${user.name}"
+  }
+
+let birthday = user => { ...user, age: user.age + 1 }
+```
+
+</td></tr>
+</table>
+
+<table>
+<tr><th><code>mochi app.mochi</code> → JavaScript</th><th><code>mochi ts app.mochi</code> → TypeScript</th></tr>
+<tr valign="top"><td>
+
+```js
+const greet = (user) => match(gt(user.age, 17))
+  .with(true, () => `Welcome, ${user.name}`)
+  .with(false, () => `Sorry, ${user.name}`)
+  .exhaustive();
+
+const birthday = (user) =>
+  ({ ...user, age: add(user.age, 1) });
+```
+
+</td><td>
+
+```ts
+export type User = { name: string; age: number };
+
+const greet:
+  <A>(user: { age: number; name: string } & A) => string
+  = <A>(user: { age: number; name: string } & A) =>
+    /* …same body as the JS column… */;
+
+const birthday:
+  <A>(user: { age: number } & A) => { age: number } & A
+  = <A>(user: { age: number } & A) =>
+    ({ ...user, age: add(user.age, 1) });
+```
+
+</td></tr>
+</table>
+
+Note what the TypeScript column says about `birthday`: it takes *any* record with an
+`age`, and gives you back that same record with the extra fields intact. Nobody wrote
+that signature. It fell out of inference.
 
 ## Quick start
 
 ```bash
 bun install
-bun run mochi example.mochi        # compile a file to JS on stdout
-bun run check                   # lint + typecheck + tests (local default)
-bun run check:full              # + self-host north-stars (CI / pre-push)
+bun run mochi app.mochi          # compile to JS on stdout
+bun run mochi ts app.mochi       # compile to strict-clean TypeScript
+bun run mochi build app.mochi    # compile a whole module graph
+bun run mochi fmt --write app.mochi
 ```
 
-## A taste
+Try it without installing anything: **[open the playground](apps/docs)** (`bun run docs:dev`).
 
-### ADTs & Exhaustive Matching
+## Coming from TypeScript
+
+| | TypeScript | mochi |
+|---|---|---|
+| **Types** | `const add = (a: number, b: number) => a + b` | `let add = (a, b) => a + b` — inferred |
+| **Matching** | `switch (r.type) { case "ok": … }`, hope you covered it | `switch r { \| Ok(v) => v \| Err(e) => 0 }` — miss a case, it won't compile |
+| **Records** | write an `interface`, then keep it in sync | `{ id: "123", name: "Alice" }` — fields inferred, structural |
+| **Optionals** | `?.` and `??` scattered everywhere | `Maybe`/`Result` variants; the compiler makes you handle the empty case |
+| **JSX** | configure `jsx: react-jsx` in tsconfig | built in — compiles to whatever `h()` you point it at |
+
+## The tour
+
+**Variants and exhaustive matching** — no runtime `null` checks, because a missing case
+is a compile error.
+
 ```reason
 type Shape =
   | Circle(number)
@@ -45,67 +119,69 @@ let area = shape => switch shape {
 }
 ```
 
-### Row-Polymorphic Records (Duck Typing)
+**Records that don't need an interface** — a function says which fields it uses, and
+accepts anything that has them.
+
 ```reason
-// Works on any record with x and y fields, regardless of other fields
+// works on any record with x and y, whatever else it carries
 let dist = p => sqrt(add(square(p.x), square(p.y)))
 
-let origin = { x: 3, y: 4, label: "home" }
-let d = dist(origin) // 5
+let d = dist({ x: 3, y: 4, label: "home" })  // 5
 ```
 
-### Pipelines & Collections (Eager & Lazy)
-```reason
-// Eager arrays and curried prelude utilities in a pipe
-let doubled = [1, 2, 3] |> map(x => mul(x, 2)) // [2, 4, 6]
+**Pipelines** — the whole prelude is curried and data-last, so `|>` just works. Sequences
+are lazy when you want them to be.
 
-// Lazy generator-backed pull sequences (infinite lists)
-let evens = iterate(x => add(x, 2))(0)        // 0, 2, 4, 6, ...
-let firstThree = evens |> take(3) |> toArray  // [0, 2, 4]
+```reason
+let doubled = [1, 2, 3] |> map(x => mul(x, 2))   // [2, 4, 6]
+
+let evens = iterate(x => add(x, 2))(0)           // 0, 2, 4, 6, …
+let firstThree = evens |> take(3) |> toArray     // [0, 2, 4]
 ```
 
-### Local `let ... in` Bindings
+**Local bindings and destructuring**
+
 ```reason
-// Scoped, non-recursive, let-polymorphic bindings
 let hypot = (a, b) =>
   let a2 = square(a) in
   let b2 = square(b) in
   sqrt(add(a2, b2))
-```
 
-### Tuples & Destructuring
-```reason
-// Product types that erase to JS arrays
-let pair = (1, "hello")
+let swap = ((a, b)) => (b, a)          // tuples erase to JS arrays
 
-// Destructure tuples via local let binding
-let sumPair = p =>
-  let (a, b) = p in
-  add(a, b)
-
-// Destructure tuple parameters directly
-let swap = ((a, b)) => (b, a)
-```
-
-### Pattern Matching & String Interpolation
-```reason
-// Eager array pattern matching with list head/tail destructuring
 let sum = xs => switch xs {
   | [] => 0
   | [head, ...tail] => add(head, sum(tail))
 }
-
-// String interpolation using the standard ${expr} syntax
-let greet = name => "Hello, ${name}!"
 ```
 
-See [`example.mochi`](example.mochi) for a full feature tour and [`examples/`](examples/) for
-multi-file, async, and pipeline programs.
+See [`example.mochi`](example.mochi) for the full tour, and [`examples/`](examples/) for
+real programs — a CLI, Game of Life, Snake, async, multi-file module graphs.
+
+## Living with your JS codebase
+
+- **Call any npm package.** Declare an `extern` with a type signature and use it.
+- **React and Preact hooks** work inside mochi components — call them directly.
+- **Export to TypeScript.** Every module gets a `.d.mochi.ts` sidecar, so existing TS code
+  imports mochi with no configuration and full types.
+- **Vite plugin** for `.mochi` files in an existing app.
+
+## Is it real?
+
+mochi compiles itself. The self-hosted compiler in [`bootstrap/`](bootstrap/) emits
+TypeScript with **0 `tsc --strict` errors** — verified in CI on every commit, alongside a
+fixpoint check that the compiler reproduces itself byte-for-byte. About 3.4k lines of
+TypeScript, running on [Bun](https://bun.sh).
+
+```bash
+bun run check        # lint + typecheck + tests
+bun run check:full   # + self-host north-stars (what CI runs)
+```
 
 ## Learn more
 
-- [`AGENTS.md`](AGENTS.md) — build/verify commands, the compiler pipeline, conventions.
-- [`CONTEXT.md`](CONTEXT.md) — the domain model and vocabulary.
-- [`docs/`](docs/) — the [language](docs/language.md), the [compiler](docs/compiler.md)
-  (pipeline, backends, self-hosting), and the [tooling](docs/tooling.md).
-- [`docs/adr/`](docs/adr/) — architectural decision records.
+- [`docs/language.md`](docs/language.md) — the language itself.
+- [`docs/compiler.md`](docs/compiler.md) — pipeline, both backends, self-hosting.
+- [`docs/tooling.md`](docs/tooling.md) — CLI, LSP, formatter, `.d.ts`.
+- [`AGENTS.md`](AGENTS.md) — how to build and contribute.
+- [`CONTEXT.md`](CONTEXT.md) · [`docs/adr/`](docs/adr/) — vocabulary and decisions.

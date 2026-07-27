@@ -1,4 +1,4 @@
-// Tour: jsxPlugin (default-on) desugars to host h(tag, props, children).
+// JSX is built in. It compiles to whatever h() your host gives you.
 
 let Button = props =>
   //  ^?

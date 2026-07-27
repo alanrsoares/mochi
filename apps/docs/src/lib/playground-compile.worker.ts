@@ -5,6 +5,7 @@
  */
 import { compileTargets, type Diagnostic } from "@mochi/compiler";
 import { isErr } from "@onrails/result";
+import { pretty } from "./pretty";
 
 export type CompileWorkerRequest = { id: number; source: string };
 
@@ -32,11 +33,13 @@ export type CompileWorkerResponse =
 
 const ctx: DedicatedWorkerGlobalScope = self as unknown as DedicatedWorkerGlobalScope;
 
-ctx.onmessage = (event: MessageEvent<CompileWorkerRequest>) => {
+ctx.onmessage = async (event: MessageEvent<CompileWorkerRequest>) => {
   const { id, source } = event.data;
   const start = performance.now();
   try {
     const result = compileTargets(source, { runtime: true });
+    // Measured before formatting: `ms` is the compiler's number, not the
+    // pretty-printer's.
     const ms = performance.now() - start;
     if (isErr(result)) {
       const response: CompileWorkerResponse = {
@@ -48,14 +51,12 @@ ctx.onmessage = (event: MessageEvent<CompileWorkerRequest>) => {
       ctx.postMessage(response);
       return;
     }
-    const response: CompileWorkerResponse = {
-      id,
-      ok: true,
-      js: result.value.js,
-      ts: result.value.ts,
-      dts: result.value.dts,
-      ms,
-    };
+    const [js, ts, dts] = await Promise.all([
+      pretty(result.value.js),
+      pretty(result.value.ts),
+      pretty(result.value.dts),
+    ]);
+    const response: CompileWorkerResponse = { id, ok: true, js, ts, dts, ms };
     ctx.postMessage(response);
   } catch (e: unknown) {
     const response: CompileWorkerResponse = {

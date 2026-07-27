@@ -1,4 +1,4 @@
-// jsxPlugin (default-on) desugars to host h(tag, props, children)
+// JSX is built in. It compiles to whatever h() your host gives you.
 
 let Badge = props =>
   <span
@@ -18,8 +18,8 @@ let Card = props =>
       <Badge text="0 tsc errors" />
     </div>
     <p className="text-xs font-mono text-mute leading-relaxed">
-      {"Mochi compiles Hindley-Milner types to readable JS & strict TypeScript."}
+      {"Edit the source on the left. The JS and TypeScript panes update as you type."}
     </p>
   </div>
 
-let app = <Card title="Algorithm W + Universal JSX" />
+let app = <Card title="Components, no boilerplate" />

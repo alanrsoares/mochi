@@ -1,4 +1,4 @@
-// Tour: row polymorphism — greet any record with name + role.
+// formatUser needs name + role. Anything with them fits — id rides along.
 
 let formatUser = user =>
   //  ^?

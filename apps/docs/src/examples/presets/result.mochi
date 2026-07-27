@@ -1,15 +1,15 @@
-// Prelude Result — no `type Result<a, e>` (that's TS; mochi is `Result a e`)
+// Ok and Err come from the prelude. Drop either arm and the compiler stops you.
 
-let map = (res, f) => switch res {
+let mapOk = (res, f) => switch res {
   | Ok(val) => Ok(f(val))
   | Err(err) => Err(err)
 }
 
 let res = Ok(21)
-let doubled = map(res, x => x * 2)
+let doubled = mapOk(res, x => x * 2)
 
 let app = <div
   className="w-full max-w-md p-4 bg-paper border-2 border-line rounded-panel font-mono text-xs text-fur-deep"
 >
-  {"doubled = Ok(42)"}
+  {"doubled = " ++ show(doubled)}
 </div>

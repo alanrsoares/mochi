@@ -6,3 +6,5 @@ let area = shape => switch shape {
   | Circle(r) => pi * square(r)
   | Rect(w, h) => w * h
 }
+
+let widen = (k, box) => { ...box, w: box.w * k }

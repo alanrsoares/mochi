@@ -1,6 +1,7 @@
 import { RailwayDemo } from "./components/RailwayDemo"
 import { HeaderBadge } from "./components/HeaderBadge"
 import { SyntaxPanel } from "./components/SyntaxPanel"
+import { CodegenPanels } from "./components/CodegenPanels"
 import { HeroCarousel } from "./components/HeroCarousel"
 import { HighlightedCode } from "./host/widgets.host"
 import {
@@ -140,30 +141,17 @@ let App = props =>
             <SectionEyebrow>{"codegen"}</SectionEyebrow>
             <SectionTitle>{"One language, two clean outputs"}</SectionTitle>
             <p className="mt-2 text-sm text-mute leading-relaxed">
-              {"Mochi emits human-readable JavaScript for runtime execution and strict TypeScript for seamless team integration."}
+              {"The JavaScript is what you'd have written by hand. The TypeScript is fully annotated and passes tsc --strict."}
             </p>
           </div>
           <CtaPill href={props.playgroundHref}>{"Open playground →"}</CtaPill>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <SyntaxPanel title="mochi" badge="source" tone="fur">
-            <HighlightedCode
-              code={props.codeEmitSrc}
-              lang="mochi"
-              enableTwoslash={false}
-            />
-          </SyntaxPanel>
-          <SyntaxPanel title="JavaScript" badge="bun run mochi" tone="plum">
-            <HighlightedCode code={props.codeEmitJs} lang="js" />
-          </SyntaxPanel>
-          <SyntaxPanel
-            title="TypeScript"
-            badge="0 tsc --strict errors"
-            tone="lavender"
-          >
-            <HighlightedCode code={props.codeEmitTs} lang="ts" />
-          </SyntaxPanel>
-        </div>
+        <CodegenPanels
+          src={props.codeEmitSrc}
+          js={props.codeEmitJs}
+          ts={props.codeEmitTs}
+          dts={props.codeEmitDts}
+        />
       </section>
       <section id="syntax" className="space-y-6 scroll-mt-20">
         <div
@@ -181,7 +169,7 @@ let App = props =>
           <SyntaxPanel
             title="Variants & Pattern Matching"
             badge="Result a e"
-            tone="fur"
+            $tone="fur"
           >
             <HighlightedCode
               code={props.codeVariants}
@@ -192,7 +180,7 @@ let App = props =>
           <SyntaxPanel
             title="Structural Records"
             badge="Inferred Record Types"
-            tone="plum"
+            $tone="plum"
           >
             <HighlightedCode
               code={props.codeRecords}
@@ -203,7 +191,7 @@ let App = props =>
           <SyntaxPanel
             title="First-Class JSX"
             badge="Preact / React / Hono"
-            tone="lavender"
+            $tone="lavender"
           >
             <HighlightedCode
               code={props.codeJsx}
@@ -221,22 +209,20 @@ let App = props =>
             <SectionEyebrow>{"interop"}</SectionEyebrow>
             <SectionTitle>{"JS & React Integration"}</SectionTitle>
             <p className="mt-2 text-sm text-mute leading-relaxed max-w-xl">
-              {"How Mochi connects with the JavaScript ecosystem. Define simple externs for npm packages, call hooks inside components, and export TypeScript declarations for zero-friction adoption."}
+              {"Mochi is meant to live inside a JavaScript codebase, not replace it. Call npm packages, use React and Preact hooks, and let existing TypeScript import your modules with full types."}
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <RailwayDemo />
-            <span className="font-mono text-2xs text-mute">
-              {"live Result railway"}
-            </span>
-          </div>
+          <span className="font-mono text-2xs text-mute whitespace-nowrap">
+            {"live — type below"}
+          </span>
         </div>
+        <RailwayDemo />
         <div className="border-t-2 border-line">
           <InteropRow
             $tone="fur"
             label="runtime"
             title="Any h()-shaped host"
-            body="JSX compiles directly to h(tag, props, children). Works out of the box with Preact, React, Hono, or custom UI pragmas."
+            body="JSX compiles straight to h(tag, props, children) — point it at Preact, React, Hono, or your own."
           />
           <InteropRow
             $tone="lavender"
@@ -248,7 +234,7 @@ let App = props =>
             $tone="plum"
             label="state"
             title="React & Preact Hooks"
-            body="Call hooks inside component functions seamlessly without extra wrappers or runtime overhead."
+            body="Call useState and friends inside a mochi component. No wrapper, no adapter layer."
           />
           <InteropRow
             $tone="ok"

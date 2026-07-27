@@ -3,6 +3,7 @@ import "./index.css";
 
 import logoImg from "@mochi/root/logo.png";
 import App from "./App.mochi";
+import codeEmitDts from "./examples/emit-shape.d.ts.txt?raw";
 import codeEmitJs from "./examples/emit-shape.js.txt?raw";
 import codeEmitSrc from "./examples/emit-shape.mochi?raw";
 import codeEmitTs from "./examples/emit-shape.ts.txt?raw";
@@ -22,6 +23,7 @@ if (rootElem) {
       codeEmitSrc={codeEmitSrc}
       codeEmitJs={codeEmitJs}
       codeEmitTs={codeEmitTs}
+      codeEmitDts={codeEmitDts}
     />,
     rootElem,
   );

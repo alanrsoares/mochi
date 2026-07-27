@@ -1,0 +1,54 @@
+// Codegen showcase: one source pane, one output pane. The output pane swaps
+// backends instead of sitting beside them — same input, three emits, so putting
+// them in the same slot is the honest layout.
+import { useState } from "@mochi/plugin-preact/hooks"
+import { PaneTab } from "../ui/primitives"
+import { HighlightedCode } from "../host/widgets.host"
+import { SyntaxPanel } from "./SyntaxPanel"
+
+let OutputTab = props =>
+  <PaneTab
+    role="tab"
+    ariaSelected={props.tab == props.id}
+    $active={props.tab == props.id ? "on" : "off"}
+    onClick={() => props.onSelect(props.id)}
+  >
+    {props.label}
+  </PaneTab>
+
+let CodegenPanels = props =>
+  let (tab, setTab) = useState("js") in
+  let caption = tab == "js"
+    ? "bun run mochi"
+    : tab == "ts"
+    ? "0 tsc --strict errors"
+    : "for TypeScript consumers" in
+  let body = tab == "js"
+    ? <HighlightedCode code={props.js} lang="js" />
+    : tab == "ts"
+    ? <HighlightedCode code={props.ts} lang="ts" />
+    : <HighlightedCode code={props.dts} lang="ts" /> in
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
+      <SyntaxPanel title="mochi" badge="source" $tone="fur">
+        <HighlightedCode code={props.src} lang="mochi" enableTwoslash={false} />
+      </SyntaxPanel>
+      <div className="panel overflow-hidden flex flex-col">
+        <div
+          className="pl-1 pr-3 bg-peach border-b-2 border-line flex items-center justify-between gap-2"
+        >
+          <div className="flex items-center" role="tablist">
+            <OutputTab id="js" label="JavaScript" tab={tab} onSelect={setTab} />
+            <OutputTab id="ts" label="TypeScript" tab={tab} onSelect={setTab} />
+            <OutputTab id="dts" label=".d.ts" tab={tab} onSelect={setTab} />
+          </div>
+          <span className="font-mono text-3xs text-mute whitespace-nowrap">
+            {caption}
+          </span>
+        </div>
+        <pre
+          className="p-4 bg-foam overflow-x-auto flex-1 font-mono text-xs leading-relaxed"
+        >
+          {body}
+        </pre>
+      </div>
+    </div>

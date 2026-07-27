@@ -3,7 +3,9 @@ import { match } from "@onrails/pattern";
 
 const Circle = (_0) => ({ _tag: "Circle", _0 });
 const Rect = _curry(2, (_0, _1) => ({ _tag: "Rect", _0, _1 }));
-const area = (shape) => match(shape)
-  .with({ _tag: "Circle" }, ({ _0: r }) => mul(pi, square(r)))
-  .with({ _tag: "Rect" }, ({ _0: w, _1: h }) => mul(w, h))
-  .exhaustive();
+const area = (shape) =>
+  match(shape)
+    .with({ _tag: "Circle" }, ({ _0: r }) => mul(pi, square(r)))
+    .with({ _tag: "Rect" }, ({ _0: w, _1: h }) => mul(w, h))
+    .exhaustive();
+const widen = _curry(2, (k, box) => ({ ...box, w: mul(box.w, k) }));

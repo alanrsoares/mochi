@@ -1,5 +1,5 @@
-// Task a e — error channel (ADR 0006). Pure pipeline; no host, no Task.run
-// (playground preview wants a sync `app` vnode).
+// A Task carries an error channel next to its value, so failures stay typed
+// instead of thrown. Nothing runs until you ask it to.
 
 type ApiError =
   | NotFound(number)
@@ -7,7 +7,7 @@ type ApiError =
 
 let classify = (id, reason) => reason == "404" ? NotFound(id) : Offline(reason)
 
-// of → map → mapErr (no-op on Ok) → recover → match, still a Task.
+// mapErr and recover are no-ops while the pipeline is still Ok.
 let program = Task.of(21)
   |> Task.map(mul(2))
   |> Task.mapErr(classify(0))
@@ -17,5 +17,5 @@ let program = Task.of(21)
 let app = <div
   className="w-full max-w-md p-4 bg-paper border-2 border-line rounded-panel font-mono text-xs text-fur-deep"
 >
-  {"Task a e — mapErr / recover / match (see JS emit)"}
+  {"This pipeline settles to \"ok: 42\" — run it and see the JS pane"}
 </div>

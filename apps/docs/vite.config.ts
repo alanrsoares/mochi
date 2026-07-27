@@ -42,6 +42,10 @@ export default defineConfig({
     ],
   },
   base: "/mochi/",
+  // The compile worker lazily imports the pretty-printer, and code-splitting a
+  // worker requires an ES-module worker — Vite's default `iife` cannot express
+  // a dynamic import.
+  worker: { format: "es" },
   build: {
     rollupOptions: {
       input: {

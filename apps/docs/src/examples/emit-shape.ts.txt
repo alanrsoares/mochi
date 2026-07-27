@@ -3,12 +3,26 @@ export type Shape =
   | { _tag: "Rect"; _0: number; _1: number };
 
 import { _curry, mul, square, pi } from "@mochi/runtime";
+
 import { match } from "@onrails/pattern";
 
 const Circle = (_0: number): Shape => ({ _tag: "Circle", _0 });
-const Rect = _curry(2, (_0, _1) => ({ _tag: "Rect", _0, _1 })) as
-  (_0: number, _1: number) => Shape;
-const area: (shape: Shape) => number = (shape: Shape) => match(shape)
-  .with({ _tag: "Circle" }, ({ _0: r }) => mul(pi, square(r)))
-  .with({ _tag: "Rect" }, ({ _0: w, _1: h }) => mul(w, h))
-  .exhaustive();
+const Rect = _curry(2, (_0, _1) => ({ _tag: "Rect", _0, _1 })) as (
+  _0: number,
+  _1: number,
+) => Shape;
+const area: (shape: Shape) => number = (shape: Shape) =>
+  match(shape)
+    .with({ _tag: "Circle" }, ({ _0: r }) => mul(pi, square(r)))
+    .with({ _tag: "Rect" }, ({ _0: w, _1: h }) => mul(w, h))
+    .exhaustive();
+const widen: <A>(
+  k: number,
+  box: { w: number } & A,
+) => { w: number } & A = _curry(
+  2,
+  <A>(k: number, box: { w: number } & A) => ({
+    ...box,
+    w: mul(box.w, k),
+  }),
+);

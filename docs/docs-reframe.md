@@ -18,6 +18,7 @@ This document outlines a directed execution plan to rewrite and re-structure `ap
 | Current `apps/docs` Copy | Reframed Human Copy |
 |---|---|
 | *"An ML-family language that compiles to readable JavaScript and strict TypeScript."* | *"Functional programming that plays nicely with TypeScript."* |
+| *"row-polymorphic record"* | *"a function says which fields it needs; anything with them fits"* |
 | *"Full Hindley–Milner inference, row-polymorphic records, parametric variants..."* | *"Smart type inference, pattern matching, and flexible structural records."* |
 | *"self-host · 0 tsc --strict"* | *"Compiles to readable JS and 100% strict-clean TypeScript."* |
 | *"Opaque factory + vendor plugin"* | *"Native JS & CSS-in-JS library bindings"* |
@@ -28,18 +29,24 @@ This document outlines a directed execution plan to rewrite and re-structure `ap
 
 ## 2. Target Site Architecture
 
+Target (most of these are **new files**; only `App.mochi`, `HeroCarousel.mochi`, and
+`ui/primitives.mochi` exist today):
+
 ```
 apps/docs/src/
-├── App.mochi                 # Main landing page layout
+├── App.mochi                 # exists — main landing page layout
 ├── components/
-│   ├── Hero.mochi            # Reframed Hero section with 3-column Transformer
-│   ├── CodeTransformer.mochi # Live Mochi -> JS -> TS comparison
-│   ├── TsCheatsheet.mochi    # Side-by-side comparison: TS vs Mochi
-│   ├── LanguageTour.mochi    # Interactive feature walkthrough
-│   └── InteropSection.mochi  # Plain-English JS & React integration
+│   ├── Hero.mochi            # NEW (today: HeroCarousel.mochi + HeroCarouselView.mochi)
+│   ├── CodeTransformer.mochi # NEW — Mochi -> JS -> TS comparison
+│   ├── TsCheatsheet.mochi    # NEW — side-by-side TS vs Mochi
+│   ├── LanguageTour.mochi    # NEW — feature walkthrough
+│   └── InteropSection.mochi  # NEW — plain-English JS & React integration
 └── ui/
-    └── primitives.mochi      # Clean UI primitives
+    └── primitives.mochi      # exists
 ```
+
+Existing components not named above (`Counter`, `RailwayDemo`, `SyntaxPanel`,
+`PlaygroundView`, `PlaygroundRight`, `HeaderBadge`) still need a keep/fold/delete call.
 
 ---
 
@@ -73,9 +80,14 @@ Add a dedicated comparative section for devs transitioning from TypeScript (insp
 | Concept | TypeScript | Mochi |
 |---|---|---|
 | **Type Inference** | `const add = (a: number, b: number) => a + b;` | `let add = (a, b) => a + b` *(types inferred)* |
-| **Pattern Matching** | `switch (res.type) { case "ok": ... }` | `match res { Ok(v) -> v, Err(e) -> 0 }` |
-| **Structural Records** | `type User = { id: string, name: string }` | `{ id: "123", name: "Alice" }` *(row-inferred)* |
+| **Pattern Matching** | `switch (res.type) { case "ok": ... }` | `switch res { \| Ok(v) => v \| Err(e) => 0 }` *(exhaustive — a missing case is a compile error)* |
+| **Structural Records** | `type User = { id: string, name: string }` | `{ id: "123", name: "Alice" }` *(fields inferred)* |
 | **JSX Output** | Requires tsconfig `jsx: react-jsx` | Built-in `jsxPlugin` $\rightarrow$ `h()` |
+
+> Syntax note for whoever builds this table: mochi has **no `match` keyword and no `->`
+> in patterns**. It is `switch <scrutinee> { | Pat => expr }`, arms separated by `|`, not
+> commas. Verify snippets against `packages/compiler/src/lexer/lexer.ts` before shipping
+> them to the site.
 
 ---
 

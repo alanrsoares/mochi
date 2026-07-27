@@ -46,8 +46,8 @@ type RightTab = "js" | "ts" | "dts" | "output" | "problems" | "settings";
 const PRESETS: Record<string, { name: string; code: string }> = {
   jsx: { name: "JSX → h()", code: presetJsx },
   result: { name: "Result + switch", code: presetResult },
-  task: { name: "Task a e railway", code: presetTask },
-  rowPoly: { name: "Row polymorphism", code: presetRowPoly },
+  task: { name: "Async with typed errors", code: presetTask },
+  rowPoly: { name: "Flexible records", code: presetRowPoly },
   fib: { name: "Fibonacci", code: presetFib },
 };
 

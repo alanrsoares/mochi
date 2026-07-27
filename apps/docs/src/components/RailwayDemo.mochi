@@ -1,19 +1,113 @@
-// Live Result railway — a name validator whose Ok/Err badge re-renders as you
-// type. Variants + exhaustive switch + inference in one widget; only useState
-// comes from the host.
+// A live Result railway. Three validators chained with `|>` and
+// Result.flatMap; the first Err derails the value onto the error track and the
+// stages after it never run. The diagram reads its shape from the same Results
+// the badge does — nothing here is a mock-up. Only useState comes from the host.
 import { useState } from "@mochi/plugin-preact/hooks"
 import { BadgeShell, DemoInput } from "../ui/primitives"
 
-let validate = name =>
-  Str.length(name) == 0
-    ? Err("empty")
-    : Str.length(name) > 12
-    ? Err("too long")
-    : Ok(name)
+let required = name => Str.length(name) == 0 ? Err("required") : Ok(name)
+
+let underLimit = name => Str.length(name) > 12 ? Err("max 12 chars") : Ok(name)
+
+let noSpaces = name => Str.contains(" ", name) ? Err("no spaces") : Ok(name)
+
+// `derailedAt` is the 1-based stage that produced the Err, or 0 for a clean
+// run — the single number the diagram needs to draw itself.
+let runRail = raw =>
+  let s1 = required(raw) in
+  let s2 = s1 |> Result.flatMap(underLimit) in
+  let s3 = s2 |> Result.flatMap(noSpaces) in
+    {
+      result: s3,
+      derailedAt: Result.isErr(s1)
+        ? 1
+        : Result.isErr(s2)
+        ? 2
+        : Result.isErr(s3)
+        ? 3
+        : 0
+    }
+
+let OK_Y = 28
+
+let ERR_Y = 64
+
+// The track leaving stage `i`: still on the happy path, the diagonal where this
+// stage failed, or the error track the value was already riding.
+let segKind = (i, derailedAt) =>
+  derailedAt == 0
+    ? "ok"
+    : derailedAt == i
+    ? "drop"
+    : i < derailedAt
+    ? "ok"
+    : "err"
+
+let stageState = (i, derailedAt) =>
+  derailedAt == 0
+    ? "pass"
+    : derailedAt == i
+    ? "fail"
+    : i < derailedAt
+    ? "pass"
+    : "idle"
+
+let RailSeg = props =>
+  props.kind == "drop"
+    ? <g
+      stroke="currentColor"
+      strokeWidth={2.5}
+      strokeLinecap="round"
+      className="text-fur"
+    >
+      <line x1={props.from} y1={OK_Y} x2={props.from + 24} y2={OK_Y} />
+      <line x1={props.from + 24} y1={OK_Y} x2={props.from + 46} y2={ERR_Y} />
+      <line x1={props.from + 46} y1={ERR_Y} x2={props.to} y2={ERR_Y} />
+    </g>
+    : <line
+      x1={props.from}
+      y1={props.kind == "ok" ? OK_Y : ERR_Y}
+      x2={props.to}
+      y2={props.kind == "ok" ? OK_Y : ERR_Y}
+      stroke="currentColor"
+      strokeWidth={2.5}
+      strokeLinecap="round"
+      className={props.kind == "ok" ? "text-ok" : "text-fur"}
+    />
+
+let RailStage = props =>
+  <g
+    className={props.state == "pass"
+      ? "text-ok"
+      : props.state == "fail"
+      ? "text-fur"
+      : "text-mute"}
+  >
+    <text
+      x={props.x}
+      y={14}
+      textAnchor="middle"
+      fontSize={9}
+      fill="currentColor"
+      className="font-mono"
+    >
+      {props.label}
+    </text>
+    <circle
+      cx={props.x}
+      cy={OK_Y}
+      r={5.5}
+      stroke="currentColor"
+      strokeWidth={2.5}
+      fill={props.state == "idle" ? "var(--color-foam)" : "currentColor"}
+    />
+  </g>
 
 let RailwayDemo = _ =>
-  let (raw, setRaw) = useState("") in
-  let badge = switch validate(raw) {
+  let (raw, setRaw) = useState("mochi") in
+  let rail = runRail(raw) in
+  let derailedAt = rail.derailedAt in
+  let landed = switch rail.result {
     | Ok(name) => <BadgeShell
         $tone="emerald"
         className="normal-case tracking-normal"
@@ -27,11 +121,65 @@ let RailwayDemo = _ =>
         {"Err(${msg})"}
       </BadgeShell>
   } in
-    <span className="inline-flex flex-wrap items-center gap-2">
-      <DemoInput
-        placeholder="name your mochi"
-        value={raw}
-        onInput={e => setRaw(e.target.value)}
-      />
-      {badge}
-    </span>
+    <div className="panel bg-foam p-4 sm:p-5 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <DemoInput
+            ariaLabel="Name to validate"
+            placeholder="name your mochi"
+            value={raw}
+            onInput={e => setRaw(e.target.value)}
+          />
+          <span className="font-mono text-2xs text-mute whitespace-nowrap">
+            {"|> flatMap |> flatMap"}
+          </span>
+        </div>
+        {landed}
+      </div>
+      <svg
+        viewBox="0 0 320 80"
+        className="w-full h-auto"
+        role="img"
+        ariaLabel="Result railway diagram"
+      >
+        <g
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeDasharray="3 5"
+          className="text-line"
+        >
+          <line x1={14} y1={OK_Y} x2={306} y2={OK_Y} />
+          <line x1={14} y1={ERR_Y} x2={306} y2={ERR_Y} />
+        </g>
+        <RailSeg from={14} to={72} kind="ok" />
+        <RailSeg from={72} to={164} kind={segKind(1, derailedAt)} />
+        <RailSeg from={164} to={256} kind={segKind(2, derailedAt)} />
+        <RailSeg from={256} to={306} kind={segKind(3, derailedAt)} />
+        <RailStage x={72} label="required" state={stageState(1, derailedAt)} />
+        <RailStage x={164} label="max 12" state={stageState(2, derailedAt)} />
+        <RailStage
+          x={256}
+          label="no spaces"
+          state={stageState(3, derailedAt)}
+        />
+        <circle
+          cx={306}
+          cy={derailedAt == 0 ? OK_Y : ERR_Y}
+          r={5.5}
+          fill="currentColor"
+          className={derailedAt == 0 ? "text-ok" : "text-fur"}
+        />
+        <text
+          x={302}
+          y={derailedAt == 0 ? 46 : 80}
+          textAnchor="end"
+          fontSize={9}
+          fill="currentColor"
+          className={derailedAt == 0
+            ? "font-mono text-ok"
+            : "font-mono text-fur"}
+        >
+          {derailedAt == 0 ? "Ok" : "Err"}
+        </text>
+      </svg>
+    </div>

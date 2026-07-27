@@ -1,0 +1,8 @@
+export type Shape =
+  | { _tag: "Circle"; _0: number }
+  | { _tag: "Rect"; _0: number; _1: number };
+export declare const area: (shape: Shape) => number;
+export declare const widen: <A>(
+  k: number,
+  box: { w: number } & A,
+) => { w: number } & A;
