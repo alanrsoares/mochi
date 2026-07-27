@@ -132,7 +132,7 @@ const buildGraph = (): string => {
     cpSync(join(root, "bootstrap", name), join(tmp, name), { recursive: true });
   }
   try {
-    execFileSync("bun", ["packages/compiler/src/cli.ts", "build", join(tmp, "cli.mochi")], {
+    execFileSync("bun", ["packages/cli/src/cli.ts", "build", join(tmp, "cli.mochi")], {
       cwd: root,
     });
     try {

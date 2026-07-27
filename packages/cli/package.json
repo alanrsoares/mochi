@@ -1,0 +1,18 @@
+{
+  "name": "@mochi/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "mochi": "./src/cli.ts"
+  },
+  "exports": {
+    ".": "./src/cli.ts"
+  },
+  "dependencies": {
+    "@mochi/compiler": "workspace:*",
+    "@mochi/dx": "workspace:*",
+    "@onrails/pattern": "^0.3.3",
+    "@onrails/result": "^0.4.0"
+  }
+}

@@ -9,7 +9,7 @@ import { unwrapOk } from "@onrails/result";
 
 const DIR = new URL("./.tsgen/", import.meta.url).pathname;
 // From test/.tsgen/<file>.ts back to src/runtime.
-const RUNTIME_IMPORT = "../../packages/compiler/src/runtime";
+const RUNTIME_IMPORT = "../../packages/compiler/src/prelude/runtime";
 
 // Each program is closed-world: it references only prelude builtins and its own
 // bindings (no open-world globals that would emit as dangling TS names).

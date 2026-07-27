@@ -12,7 +12,7 @@
       "examples/snake/src/**/*.ts",
       "examples/snake/src/**/*.tsx",
       "examples/snake/*.ts",
-      "!packages/compiler/src/runtime.ts"
+      "!packages/compiler/src/prelude/runtime.ts"
     ]
   },
   "javascript": { "globals": ["Bun"] },

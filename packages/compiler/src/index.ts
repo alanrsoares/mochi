@@ -20,4 +20,4 @@ export {
   toTypedProgram,
   toTypedProgramRecovering,
   toTypedProgramWith,
-} from "./compile.ts";
+} from "./compile/index.ts";

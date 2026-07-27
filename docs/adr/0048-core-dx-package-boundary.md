@@ -50,11 +50,11 @@ modules are still **foundation**, not DX (`unify`, `span`, `errors`, `prelude`,
    `showTypeExpr` moves out of `format` into core so `infer` does not import
    DX; `compile.ts` stops re-exporting format/hover/complete/vite.
 
-6. **Root CLI composes packages.** `fmt` comes from `@mochi/dx`; compile / `ts`
-   / `dts` / `build` stay on `@mochi/compiler`. Bootstrap CLI stays
-   compile/build-only.
+6. **Host CLI is `@mochi/cli`.** Composes `@mochi/compiler` (compile / `ts` / `dts` /
+   `build`) and `@mochi/dx` (`fmt`). Not in `@mochi/compiler` — core never imports
+   DX. Bootstrap CLI stays compile/build-only.
 
-7. **Physical layout.** Compiler sources live in `packages/compiler/src/`; root `src/` is gone. `@mochi/compiler` exports map to those files directly. Vite app configs import `@mochi/vite-plugin` via a **relative** path; the plugin reaches `packages/compiler/src/compile` relatively — Node loading the Vite config cannot resolve Bun-style extensionless imports through the package graph. App/module aliases (`mochiWorkspaceAliases`) map `@mochi/compiler` / `@mochi/dx` for bundled app code.
+7. **Physical layout.** Compiler sources live in `packages/compiler/src/<component>/` (pipeline-aligned folders with `index.ts` barrels and colocated specs). `@mochi/compiler` export URLs are unchanged; only filesystem paths move. Vite app configs import `@mochi/vite-plugin` via a **relative** path; the plugin reaches `packages/compiler/src/compile/compile` relatively — Node loading the Vite config cannot resolve Bun-style extensionless imports through the package graph. App/module aliases (`mochiWorkspaceAliases`) read the compiler `exports` map for `@mochi/compiler/*`.
 
 ## Consequences
 
@@ -63,7 +63,7 @@ modules are still **foundation**, not DX (`unify`, `span`, `errors`, `prelude`,
   bootstrap obligation.
 - Docs / snake / VS Code bundling import `@mochi/dx` / `@mochi/vite-plugin` /
   `@mochi/lsp` instead of treating `compile.ts` as a DX facade.
-- Physical layout: `packages/compiler/src/` is the compiler home; root `src/` removed.
+- Physical layout: `packages/compiler/src/<component>/` is the compiler home; root `src/` removed.
 
 ## Alternatives rejected
 

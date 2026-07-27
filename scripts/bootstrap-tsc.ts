@@ -19,7 +19,7 @@ import { buildModulesTs } from "@mochi/compiler/module";
 const REPO = resolve(import.meta.dir, "..");
 const ENTRY = join(REPO, "bootstrap", "cli.mochi");
 const BOOTSTRAP = join(REPO, "bootstrap");
-const RUNTIME = join(REPO, "packages", "compiler", "src", "runtime");
+const RUNTIME = join(REPO, "packages", "compiler", "src", "prelude", "runtime");
 
 const TSCONFIG = {
   compilerOptions: {

@@ -19,7 +19,7 @@ Read this, then `CONTEXT.md` for vocabulary and `docs/` for the language, compil
 bun run check                 # default gate = biome + tsc + workspace + fmt + tests (skip north-stars)
 bun run check:full            # CI / pre-push gate — adds fixpoint + bootstrap-tsc north-stars
 bun run mochi <file.mochi>       # compile one file to JS on stdout (also: ts, fmt, dts, build)
-bun packages/compiler/src/cli.ts ts <file.mochi>   # emit typed TypeScript (build --emit=ts for the graph)
+bun packages/cli/src/cli.ts ts <file.mochi>   # emit typed TypeScript (build --emit=ts for the graph)
 bun run bootstrap:tsc         # north-star: count tsc --strict errors on the self-host (0)
 bun run test | test:full | typecheck | lint | lint:fix | format | build:ext | loc
 ```
@@ -35,21 +35,20 @@ string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck�
 
 | Module | Responsibility |
 |---|---|
-| `lexer.ts` | text → tokens, each with a half-open `Span`; `///` docs attach via `pendingDoc` |
-| `parser.ts` | Pratt parser → `Program`; throws `ParseAbort` internally, caught at the `parse` boundary |
-| `ast.ts` / `types.ts` | `Expr`/`Pattern`/`TypeExpr`/`Stmt` unions; `Type`/`Row` representation |
-| `check.ts` | name registry, duplicate-decl, `switch` exhaustiveness (incl. imported variants) |
-| `infer.ts` / `unify.ts` | Algorithm W (mutual recursion via Tarjan SCC) / row+type unification |
-| `codegen.ts` | **pure, non-failing** AST → JS only |
-| `codegen-ts.ts` | wraps `codegen.ts`, feeding type annotations from the inference table → strict-clean TS (ADR 0026) |
-| `extensions.ts` | `LanguagePlugin` seam (ADR 0011): optional `parse`/`inferCall`/`format`/`bindingType`/`dtsBinding` hooks; `resolvePlugins` opt-in/opt-out |
-| `plugins/jsx.ts` | builtin `jsxPlugin` — all of JSX (parse/infer/format/dts) as a plugin, not core |
-| `doc.ts` | Wadler-style `Doc` IR + layout engine, shared by `format.ts` and plugin `format` hooks |
-| `module.ts` | `buildModules(): ResultAsync<…>` — DFS load, cycle detection, compile graph |
-| `prelude.ts` | builtin HM signatures + JS runtime strings + namespace tables |
-| `dts` | `.d.ts` emit (still in compiler; TS backend shares printers) |
+| `lexer/` | text → tokens, each with a half-open `Span`; `///` docs attach via `pendingDoc` |
+| `parser/` | Pratt parser → `Program`; throws `ParseAbort` internally, caught at the `parse` boundary |
+| `ast/` | `Expr`/`Pattern`/`TypeExpr`/`Stmt` unions; `Type`/`Row` representation; spans; ctors |
+| `check/` | name registry, duplicate-decl, `switch` exhaustiveness; `symbols` index for IDE |
+| `infer/` | Algorithm W (SCC), `unify`, `schemes`, `show-type-expr`, `suggest` |
+| `codegen/` | **pure, non-failing** AST → JS; `codegen-ts` wraps it for strict-clean TS (ADR 0026) |
+| `extensions/` | `LanguagePlugin` seam (ADR 0011); `plugins/jsx` builtin |
+| `doc/` | Wadler-style `Doc` IR + layout engine, shared by `@mochi/dx` format and plugin hooks |
+| `module/` | `buildModules(): ResultAsync<…>` — DFS load, cycle detection, compile graph |
+| `prelude/` | builtin HM signatures, JS runtime strings, namespace tables, virtual prelude |
+| `dts/` | `.d.ts` emit (TS backend shares printers) |
+| `compile/` | single-file railway, `compile-targets` |
+| `@mochi/cli` | host CLI — composes compiler + `@mochi/dx` (`fmt`) |
 | `@mochi/dx` · `@mochi/lsp` · `@mochi/vite-plugin` | format + IDE queries; LSP adapter; Vite (ADR 0048) |
-| `compile.ts` · `cli.ts` | the railway; CLI (`fmt` via `@mochi/dx`) |
 
 ## Conventions
 

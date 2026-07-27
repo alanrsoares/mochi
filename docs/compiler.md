@@ -12,16 +12,19 @@ string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck�
 
 | Stage | Module | Responsibility |
 |---|---|---|
-| lex | `lexer.ts` | text → tokens, each with a half-open `Span`; `///` docs attach via `pendingDoc` |
-| parse | `parser.ts` | Pratt parser → `Program` (throws `ParseAbort` internally, caught at the boundary) |
-| check | `check.ts` | name registry, duplicate-decl, `switch` exhaustiveness (incl. imported variants) |
-| typecheck | `infer.ts` / `unify.ts` | Algorithm W (mutual recursion via Tarjan SCC) / row + type unification |
-| codegen | `codegen.ts` | **pure, non-failing** AST → JS |
+| lex | `lexer/` | text → tokens, each with a half-open `Span`; `///` docs attach via `pendingDoc` |
+| parse | `parser/` | Pratt parser → `Program` (throws `ParseAbort` internally, caught at the boundary) |
+| check | `check/` | name registry, duplicate-decl, `switch` exhaustiveness (incl. imported variants) |
+| typecheck | `infer/` | Algorithm W (mutual recursion via Tarjan SCC), row+type unification (`unify`, `schemes`) |
+| codegen | `codegen/` | **pure, non-failing** AST → JS; TS backend in `codegen-ts` |
 
-`module.ts` (`buildModules`) drives multi-file graphs: DFS load, cycle detection,
-cross-module inference and exhaustiveness. `prelude.ts` holds the builtin HM signatures,
-the JS runtime strings, and the namespace tables. `compile.ts` is the single-file
-railway; `cli.ts` is the CLI; `@mochi/lsp` is a thin adapter over `@mochi/dx`
+Sources live under `packages/compiler/src/<component>/` — each folder has an `index.ts`
+barrel and colocated unit specs. `@mochi/compiler/*` export URLs are unchanged.
+
+`module/` (`buildModules`) drives multi-file graphs: DFS load, cycle detection,
+cross-module inference and exhaustiveness. `prelude/` holds the builtin HM signatures,
+the JS runtime strings, and the namespace tables. `compile/` is the single-file
+railway; `@mochi/cli` is the host CLI; `@mochi/lsp` is a thin adapter over `@mochi/dx`
 surfaces ([ADR 0048](adr/0048-core-dx-package-boundary.md)).
 
 ## The plugin seam

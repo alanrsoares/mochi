@@ -128,6 +128,6 @@ const header = [
 ];
 
 const out = `${header.join("\n")}${typeDecls.join("\n")}\n\n${lines.join("\n")}\n`;
-await Bun.write(`${import.meta.dir}/../packages/compiler/src/runtime.ts`, out);
+await Bun.write(`${import.meta.dir}/../packages/compiler/src/prelude/runtime.ts`, out);
 console.error(`wrote src/runtime.ts (${Object.keys(preludeJsDefs).length} defs)`);
 if (missing.length) console.error(`  no HM sig (untyped fallback): ${missing.join(", ")}`);

@@ -5,8 +5,8 @@
  */
 
 import { isErr } from "@onrails/result";
-import { compile } from "../../compiler/src/compile";
-import type { LanguagePlugin } from "../../compiler/src/extensions";
+import { compile } from "../../compiler/src/compile/compile";
+import type { LanguagePlugin } from "../../compiler/src/extensions/extensions";
 
 export type MochiPluginOptions = {
   /**

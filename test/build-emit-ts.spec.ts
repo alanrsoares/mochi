@@ -13,7 +13,7 @@ import { isErr } from "@onrails/result";
 
 const DIR = new URL("./.tsgen-graph/", import.meta.url).pathname;
 // From test/.tsgen-graph/<file>.ts back to src/runtime.
-const RUNTIME = "../../packages/compiler/src/runtime";
+const RUNTIME = "../../packages/compiler/src/prelude/runtime";
 
 // `shapes` exports a variant + its ctors + a transform. `ops` imports the ctors
 // and re-exports a value (`unit`) and a transform (`grow`) — both typed `Shape`.
