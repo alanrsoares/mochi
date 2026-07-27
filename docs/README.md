@@ -24,6 +24,7 @@ share one codegen: readable JavaScript, and typed TypeScript that is clean under
 | [`compiler.md`](compiler.md) | The pipeline, the two backends, and how self-hosting works. |
 | [`tooling.md`](tooling.md) | The CLI, the LSP surfaces, the formatter, and `.d.ts` emission. |
 | [`dx-tracer-bullets.md`](dx-tracer-bullets.md) | Editor DX slices (rich diagnostics + navigation) — tracked as GitHub issues. |
+| [`docs-reframe.md`](docs-reframe.md) | Directed execution plan for reframing `apps/docs` content & positioning. |
 | [`adr/`](adr/) | Architectural Decision Records — one file per decision, going forward. |
 
 For working *in* the repo (commands, conventions, definition of done) see

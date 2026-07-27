@@ -1,0 +1,8 @@
+type Shape =
+  | Circle(number)
+  | Rect(number, number)
+
+let area = shape => switch shape {
+  | Circle(r) => pi * square(r)
+  | Rect(w, h) => w * h
+}

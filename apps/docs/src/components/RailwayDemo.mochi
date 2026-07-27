@@ -1,0 +1,37 @@
+// Live Result railway — a name validator whose Ok/Err badge re-renders as you
+// type. Variants + exhaustive switch + inference in one widget; only useState
+// comes from the host.
+import { useState } from "@mochi/plugin-preact/hooks"
+import { BadgeShell, DemoInput } from "../ui/primitives"
+
+let validate = name =>
+  Str.length(name) == 0
+    ? Err("empty")
+    : Str.length(name) > 12
+    ? Err("too long")
+    : Ok(name)
+
+let RailwayDemo = _ =>
+  let (raw, setRaw) = useState("") in
+  let badge = switch validate(raw) {
+    | Ok(name) => <BadgeShell
+        $tone="emerald"
+        className="normal-case tracking-normal"
+      >
+        {"Ok(${name})"}
+      </BadgeShell>
+    | Err(msg) => <BadgeShell
+        $tone="rose"
+        className="normal-case tracking-normal"
+      >
+        {"Err(${msg})"}
+      </BadgeShell>
+  } in
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <DemoInput
+        placeholder="name your mochi"
+        value={raw}
+        onInput={e => setRaw(e.target.value)}
+      />
+      {badge}
+    </span>

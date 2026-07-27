@@ -2,7 +2,7 @@ import { SyntaxBar } from "../ui/primitives"
 
 let SyntaxPanel = props =>
   <div className="panel overflow-hidden flex flex-col">
-    <SyntaxBar $tone={props.tone}>
+    <SyntaxBar $tone={props.$tone}>
       <span>{props.title}</span>
       <span className="text-3xs text-mute">{props.badge}</span>
     </SyntaxBar>

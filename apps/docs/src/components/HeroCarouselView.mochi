@@ -10,9 +10,16 @@ let HeroCarouselView = props =>
     onBlurCapture={props.onResume}
   >
     <div
-      className="hero-carousel__frame relative aspect-4/3 overflow-hidden bg-foam"
+      className="hero-carousel__frame relative aspect-video touch-pan-y select-none overflow-hidden bg-foam"
+      onTouchStart={props.onTouchStart}
+      onTouchEnd={props.onTouchEnd}
     >
-      {props.images}
+      <div
+        className="hero-carousel__track flex h-full transition-transform duration-500 ease-out"
+        style={props.trackStyle}
+      >
+        {props.images}
+      </div>
     </div>
     <figcaption className="mt-4 flex items-end justify-between gap-4">
       <div className="min-w-0">

@@ -30,7 +30,7 @@ export const heroSlides: HeroSlide[] = [
     src: cosmicTypesImg,
     alt: "Cosmic Type System",
     kicker: "inference",
-    title: "Algorithm W + rows",
+    title: "Smart type inference",
   },
   {
     src: lspInspectorImg,
@@ -53,6 +53,10 @@ export const heroSlides: HeroSlide[] = [
 ];
 
 export const HERO_INTERVAL_MS = 5200;
+
+// Touch helpers for the swipe gesture — TouchList access stays in the host.
+export const touchStartX = (e: TouchEvent): number => e.touches[0]?.clientX ?? 0;
+export const touchEndX = (e: TouchEvent): number => e.changedTouches[0]?.clientX ?? 0;
 
 /**
  * Start the auto-advance timer, or no-op under reduced motion.

@@ -20,11 +20,33 @@ let counter = defineContainer(
   }
 )
 
+/// Mascot mood by mochi eaten — plain data, no host involved.
+let mood = count =>
+  count < 1
+    ? "🐶 hungry"
+    : count < 3
+    ? "🐶 nom nom"
+    : count < 6
+    ? "🐕 happy"
+    : "🦴 full!"
+
 let Counter = _ =>
   let store = useContainer(counter) in
   let count = useSelect(store, s => s.count.value) in
     <BadgeShell $tone="emerald">
-      <CounterBtn onClick={() => store.actions.decrement()}>{"−"}</CounterBtn>
-      <span className="tabular-nums min-w-6 text-center text-ink">{count}</span>
-      <CounterBtn onClick={() => store.actions.increment()}>{"+"}</CounterBtn>
+      <CounterBtn
+        onClick={() => store.actions.decrement()}
+        title="take one back"
+      >
+        {"−"}
+      </CounterBtn>
+      <span className="tabular-nums text-center text-ink">
+        {"🍡 ${show(count)} · ${mood(count)}"}
+      </span>
+      <CounterBtn
+        onClick={() => store.actions.increment()}
+        title="feed a mochi"
+      >
+        {"+"}
+      </CounterBtn>
     </BadgeShell>

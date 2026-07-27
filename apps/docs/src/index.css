@@ -104,7 +104,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hero-carousel__img {
+  .hero-carousel__track {
     transition: none !important;
   }
 }

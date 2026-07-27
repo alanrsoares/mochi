@@ -148,16 +148,15 @@ export let CarouselDot = tw.button(
   }
 )
 
-export let CarouselImg = tw.img(
-  "hero-carousel__img absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ease-out",
-  {
-    variants: { $active: { on: "opacity-100", off: "opacity-0" } },
-    defaultVariants: { $active: "off" }
-  }
-)
+// Slide item inside the translated `hero-carousel__track`, not a stacked fade.
+export let CarouselImg = tw.img("h-full w-full shrink-0 object-cover")
 
 // Playground chrome. `ref` / `value` / handlers ride the open prop row and the
 // host forwardRef, so the editor overlay needs no hand-written TSX shim.
+
+export let DemoInput = tw.input(
+  "w-38 rounded-full border-2 border-line bg-foam px-3 py-1 font-mono text-ink text-xs placeholder:text-mute/70 focus:border-fur focus:outline-none"
+)
 
 export let PresetSelect = tw.select(
   "rounded-full border-2 border-line bg-foam px-3 py-1 font-mono text-ink text-base sm:text-xs focus:border-fur focus:outline-none"
@@ -167,11 +166,11 @@ export let PresetSelect = tw.select(
 // focused textarea; mirror + overlay must use the same size or the ghost
 // text drifts off the caret.
 export let EditorMirror = tw.pre(
-  "pointer-events-none absolute inset-0 m-0 overflow-auto whitespace-pre p-4 font-mono font-normal text-ink text-base sm:text-xs [tab-size:2]"
+  "pointer-events-none absolute inset-0 m-0 overflow-auto whitespace-pre p-4 font-mono font-normal text-ink text-base sm:text-xs tab-2"
 )
 
 export let EditorInput = tw.textarea(
-  "absolute inset-0 m-0 h-full w-full resize-none overflow-auto whitespace-pre border-0 bg-transparent p-4 font-mono font-normal text-transparent text-base sm:text-xs caret-fur-deep [tab-size:2] selection:bg-fur/30 selection:text-transparent focus:outline-none [-webkit-text-fill-color:transparent]"
+  "absolute inset-0 m-0 h-full w-full resize-none overflow-auto whitespace-pre border-0 bg-transparent p-4 font-mono font-normal text-transparent text-base sm:text-xs caret-fur-deep tab-2 selection:bg-fur/30 selection:text-transparent focus:outline-none [-webkit-text-fill-color:transparent]"
 )
 
 export let DiagBox = tw.div(

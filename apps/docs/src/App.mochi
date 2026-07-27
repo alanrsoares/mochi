@@ -1,4 +1,4 @@
-import { Counter } from "./components/Counter"
+import { RailwayDemo } from "./components/RailwayDemo"
 import { HeaderBadge } from "./components/HeaderBadge"
 import { SyntaxPanel } from "./components/SyntaxPanel"
 import { HeroCarousel } from "./components/HeroCarousel"
@@ -32,18 +32,23 @@ let SiteHeader = props =>
         >
           {"mochi"}
         </span>
-        <HeaderBadge label="v0.1.0" />
+        <HeaderBadge label="v0.1.0" className="hidden sm:inline-flex" />
       </div>
       <nav
-        className="hidden md:flex items-center gap-5 font-mono text-xs text-mute"
+        className="flex items-center gap-4 md:gap-5 font-mono text-xs text-mute"
       >
         <NavLink href={props.playgroundHref}>{"playground"}</NavLink>
-        <NavLink href="#syntax">{"syntax"}</NavLink>
-        <NavLink href="#interop">{"interop"}</NavLink>
+        <NavLink href="#syntax" className="hidden md:inline">
+          {"syntax"}
+        </NavLink>
+        <NavLink href="#interop" className="hidden md:inline">
+          {"interop"}
+        </NavLink>
         <GhostPill
           href="https://github.com/alanrsoares/mochi"
           target="_blank"
           rel="noreferrer"
+          className="whitespace-nowrap"
         >
           {"GitHub ↗"}
         </GhostPill>
@@ -61,7 +66,7 @@ let Hero = props =>
       <div className="space-y-7 max-w-xl">
         <HeroStatus>
           <span className="text-ok">{"●"}</span>
-          {"self-host · 0 tsc --strict"}
+          {"0 tsc --strict errors"}
         </HeroStatus>
         <h1
           className="text-hero sm:text-5xl lg:text-hero-lg font-extrabold font-display tracking-tight text-ink leading-hero"
@@ -70,11 +75,11 @@ let Hero = props =>
           <span
             className="block mt-3 text-hero-subtitle sm:text-2xl lg:text-hero-subtitle-lg font-semibold text-mute leading-snug tracking-tight"
           >
-            {"An ML-family language that compiles to readable JavaScript and strict TypeScript."}
+            {"Functional programming that plays nicely with TypeScript."}
           </span>
         </h1>
         <p className="text-copy text-mute leading-relaxed max-w-md">
-          {"Full Hindley–Milner inference, row-polymorphic records, parametric variants, and JSX. One compiler, two outputs: plain JS and TypeScript that passes tsc --strict."}
+          {"Write clean, expressive code with pattern matching and smart type inference—compiled directly into human-readable JavaScript and strict, error-free TypeScript."}
         </p>
         <div className="flex flex-wrap gap-3 pt-1 font-mono text-xs">
           <CtaPill href={props.playgroundHref}>{"Open playground"}</CtaPill>
@@ -91,7 +96,7 @@ let Hero = props =>
 let SiteFooter = props =>
   <footer className="border-t-2 border-line py-8 bg-peach">
     <div
-      className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4 font-mono text-xs text-mute"
+      className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-3 font-mono text-xs text-mute"
     >
       <div className="flex items-center gap-3">
         <img
@@ -101,7 +106,13 @@ let SiteFooter = props =>
         />
         <span>{"mochi"}</span>
       </div>
-      <span>{"this site: Vite · Preact · Tailwind"}</span>
+      <NavLink
+        href="https://github.com/alanrsoares/mochi/blob/main/apps/docs/src/App.mochi"
+        target="_blank"
+        rel="noreferrer"
+      >
+        {"built with mochi — this page is App.mochi ↗"}
+      </NavLink>
     </div>
   </footer>
 
@@ -109,7 +120,7 @@ let InteropRow = props =>
   <div
     className="grid grid-cols-1 sm:grid-cols-[7rem_1fr] gap-1 sm:gap-4 py-4 border-b-2 border-line last:border-0"
   >
-    <InteropLabel $tone={props.tone}>{props.label}</InteropLabel>
+    <InteropLabel $tone={props.$tone}>{props.label}</InteropLabel>
     <div>
       <div className="font-display font-semibold text-ink">{props.title}</div>
       <p className="mt-1 text-sm text-mute leading-relaxed">{props.body}</p>
@@ -121,18 +132,37 @@ let App = props =>
     <SiteHeader logo={props.logo} playgroundHref={props.playgroundHref} />
     <Hero playgroundHref={props.playgroundHref} />
     <main className="max-w-6xl mx-auto px-6 py-14 space-y-16 flex-1 w-full">
-      <section id="try" className="scroll-mt-20">
+      <section id="output" className="space-y-6 scroll-mt-20">
         <div
-          className="panel flex flex-col sm:flex-row sm:items-center justify-between gap-6 px-6 py-8"
+          className="flex flex-col sm:flex-row sm:items-end justify-between gap-4"
         >
           <div className="max-w-xl">
-            <SectionEyebrow>{"try"}</SectionEyebrow>
-            <SectionTitle>{"Playground"}</SectionTitle>
+            <SectionEyebrow>{"codegen"}</SectionEyebrow>
+            <SectionTitle>{"One language, two clean outputs"}</SectionTitle>
             <p className="mt-2 text-sm text-mute leading-relaxed">
-              {"Edit mochi in the browser, compile it to JavaScript, and preview the result with Preact."}
+              {"Mochi emits human-readable JavaScript for runtime execution and strict TypeScript for seamless team integration."}
             </p>
           </div>
           <CtaPill href={props.playgroundHref}>{"Open playground →"}</CtaPill>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <SyntaxPanel title="mochi" badge="source" tone="fur">
+            <HighlightedCode
+              code={props.codeEmitSrc}
+              lang="mochi"
+              enableTwoslash={false}
+            />
+          </SyntaxPanel>
+          <SyntaxPanel title="JavaScript" badge="bun run mochi" tone="plum">
+            <HighlightedCode code={props.codeEmitJs} lang="js" />
+          </SyntaxPanel>
+          <SyntaxPanel
+            title="TypeScript"
+            badge="0 tsc --strict errors"
+            tone="lavender"
+          >
+            <HighlightedCode code={props.codeEmitTs} lang="ts" />
+          </SyntaxPanel>
         </div>
       </section>
       <section id="syntax" className="space-y-6 scroll-mt-20">
@@ -148,14 +178,22 @@ let App = props =>
           </span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <SyntaxPanel title="Variants" badge="Result a e" tone="fur">
+          <SyntaxPanel
+            title="Variants & Pattern Matching"
+            badge="Result a e"
+            tone="fur"
+          >
             <HighlightedCode
               code={props.codeVariants}
               lang="mochi"
               enableTwoslash={true}
             />
           </SyntaxPanel>
-          <SyntaxPanel title="Rows" badge="{ r | name: Str }" tone="plum">
+          <SyntaxPanel
+            title="Structural Records"
+            badge="Inferred Record Types"
+            tone="plum"
+          >
             <HighlightedCode
               code={props.codeRecords}
               lang="mochi"
@@ -163,8 +201,8 @@ let App = props =>
             />
           </SyntaxPanel>
           <SyntaxPanel
-            title="JSX → h()"
-            badge="jsxPlugin · default-on"
+            title="First-Class JSX"
+            badge="Preact / React / Hono"
             tone="lavender"
           >
             <HighlightedCode
@@ -181,45 +219,45 @@ let App = props =>
         >
           <div>
             <SectionEyebrow>{"interop"}</SectionEyebrow>
-            <SectionTitle>{"Interop examples"}</SectionTitle>
+            <SectionTitle>{"JS & React Integration"}</SectionTitle>
             <p className="mt-2 text-sm text-mute leading-relaxed max-w-xl">
-              {"How this site binds to its JavaScript hosts. The language surface is small: extern declarations, the builtin jsxPlugin, and a per-project plugins list. Everything below is this app using them."}
+              {"How Mochi connects with the JavaScript ecosystem. Define simple externs for npm packages, call hooks inside components, and export TypeScript declarations for zero-friction adoption."}
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <Counter />
+            <RailwayDemo />
             <span className="font-mono text-2xs text-mute">
-              {"live counter"}
+              {"live Result railway"}
             </span>
           </div>
         </div>
         <div className="border-t-2 border-line">
           <InteropRow
-            tone="fur"
+            $tone="fur"
             label="runtime"
             title="Any h()-shaped host"
-            body="jsxPlugin emits h(tag, props, children). This site uses Preact; React, Hono, or a custom pragma work the same way."
+            body="JSX compiles directly to h(tag, props, children). Works out of the box with Preact, React, Hono, or custom UI pragmas."
           />
           <InteropRow
-            tone="lavender"
-            label="UI kit"
-            title="Opaque factory + vendor plugin"
-            body="The tw factory is declared as an opaque extern; @mochi/plugin-styled-cva recovers its component schemes and $tone literal unions. Any kit can be bound the same way."
+            $tone="lavender"
+            label="npm & libs"
+            title="Zero-overhead JS bindings"
+            body="Declare extern functions to call npm packages or browser APIs directly with static type safety."
           />
           <InteropRow
-            tone="plum"
+            $tone="plum"
             label="state"
-            title="Host factory seam"
-            body="defineContainer sits behind a *.host.mochi module, and hooks are called inside the component lambda (see Counter and HeroCarousel). The vendor plugin types it as ContainerDef, so no hand-written cast is needed."
+            title="React & Preact Hooks"
+            body="Call hooks inside component functions seamlessly without extra wrappers or runtime overhead."
           />
           <InteropRow
-            tone="ok"
+            $tone="ok"
             label="bridge"
-            title=".d.mochi.ts sidecars"
-            body="Compiler-emitted declarations that let TypeScript import .mochi modules. Regenerated for this app with the same plugins list the Vite plugin and the LSP use."
+            title="TypeScript Declarations"
+            body="Compiler-generated .d.ts files let any TypeScript project import Mochi modules with full type safety."
           />
         </div>
       </section>
     </main>
-    <SiteFooter logo={props.logo} />
+    <SiteFooter logo={props.logo} playgroundHref={props.playgroundHref} />
   </div>
