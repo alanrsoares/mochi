@@ -1,0 +1,301 @@
+// Snake game UI — hooks in mochi (HeroCarousel pattern: HM
+// `useState`'s setter isn't a functional updater, so timer/keyboard effects
+// re-arm every render via `hookDeps1(state)` to keep closures fresh).
+// Canvas drawing is the one host TSX widget (`CanvasBoard`); everything else
+// — layout, chrome, overlay screens, leaderboard — is mochi + JSX + styled-cva.
+import {
+  useState,
+  useEffect,
+  hookDeps1,
+  hookDeps0
+} from "@mochi/plugin-preact/hooks"
+import {
+  defineContainer,
+  useContainer,
+  useSelect
+} from "./host/re-reduced.host"
+import { CanvasBoard } from "./host/widgets.host"
+import {
+  Card,
+  Kbd,
+  ScoreLabel,
+  ScoreValue,
+  PrimaryBtn,
+  GhostBtn,
+  NameInput,
+  OverlayTitle,
+  OverlayPanel,
+  WsStatus,
+  WsDot,
+  LeaderRow,
+  RankBadge,
+  PlayerName,
+  PlayerScore
+} from "./ui/primitives"
+import {
+  initGame,
+  changeDir,
+  startGame,
+  togglePause,
+  step,
+  isPlaying,
+  isGameOver,
+  statusTone,
+  statusHeading,
+  Ready,
+  Up,
+  Down,
+  Left,
+  Right
+} from "../snake.mochi"
+
+// Cleanup returns stay OPAQUE (`c`, not `c -> d`): extern arity is the whole
+// arrow spine, so a trailing `-> c -> d` over-currys the import and calls
+// become silent partial applications (keyboard/timer never attach).
+/// Returns an effect cleanup.
+extern startTick : (a -> b) -> number -> c = "./host/game.host" "startTick"
+/// Returns a `useEffect` cleanup.
+extern onKeyDown : (a -> b) -> c = "./host/game.host" "onKeyDown"
+extern randomFood : number -> number -> a -> b = "./host/game.host" "randomFood"
+extern readHighScore : () -> number = "./host/game.host" "readHighScore"
+extern writeHighScore : number -> a = "./host/game.host" "writeHighScore"
+
+extern fetchLeaderboard : () -> Task a b = "./host/leaderboard.host" "fetchLeaderboardTask"
+extern postScore : string -> number -> Task a b = "./host/leaderboard.host" "postScoreTask"
+/// Returns a `useEffect` cleanup.
+extern connectWs : (a -> b) -> (c -> d) -> e = "./host/leaderboard.host" "connectWs"
+
+let COLS = 20
+let ROWS = 20
+let TICK_MS = 120
+
+let gameContainer = defineContainer(
+  "snake-game",
+  {
+    state: {
+      snake: [(10, 10), (9, 10), (8, 10)],
+      food: (15, 10),
+      dir: Right,
+      dirQueue: [],
+      score: 0,
+      highScore: readHighScore(),
+      status: Ready,
+      cols: COLS,
+      rows: ROWS,
+      submitted: false
+    },
+    actions: on =>
+      {
+        up: on(s => changeDir(s, Up)),
+        down: on(s => changeDir(s, Down)),
+        left: on(s => changeDir(s, Left)),
+        right: on(s => changeDir(s, Right)),
+        start: on(s => startGame(s)),
+        togglePause: on(s => togglePause(s)),
+        space: on(s => isPlaying(s) ? togglePause(s) : startGame(s)),
+        restart: on(s =>
+          { ...initGame(COLS, ROWS, s.highScore), submitted: false }),
+        restartIfGameOver: on(s =>
+          isGameOver(s)
+            ? { ...initGame(COLS, ROWS, s.highScore), submitted: false }
+            : s),
+        step: on(s => step(s, randomFood(s.cols, s.rows, s.snake))),
+        markSubmitted: on(s => { ...s, submitted: true })
+      }
+  }
+)
+
+/// Indexed map — prelude `map` is unary; leaderboard rows need their rank.
+/// Recursion is top-level (`let-in` is non-recursive).
+let mapIndexedGo = (f, xs, i, acc) => switch Array.get(i, xs) {
+  | None => acc
+  | Some(x) => mapIndexedGo(f, xs, i + 1, [...acc, f(x, i)])
+}
+let mapIndexed = (f, xs) => mapIndexedGo(f, xs, 0, [])
+
+let App = _ =>
+  let store = useContainer(gameContainer) in
+    let (rows, setRows) = useState([]) in
+      let (connected, setConnected) = useState(false) in
+        let (name, setName) = useState("") in
+        let snake = useSelect(store, s => s.snake.value) in
+        let food = useSelect(store, s => s.food.value) in
+        let score = useSelect(store, s => s.score.value) in
+        let highScore = useSelect(store, s => s.highScore.value) in
+        let status = useSelect(store, s => s.status.value) in
+        let submitted = useSelect(store, s => s.submitted.value) in
+        let gameState = {
+          snake: snake,
+          food: food,
+          dir: Right,
+          dirQueue: [],
+          score: score,
+          highScore: highScore,
+          status: status,
+          cols: COLS,
+          rows: ROWS
+        } in
+        let playing = isPlaying(gameState) in
+        let gameOver = isGameOver(gameState) in
+        let _tick = useEffect(() =>
+          playing ? startTick(() => store.actions.step(), TICK_MS) : () => 0)(
+          hookDeps1(playing)
+        ) in
+        let _keys = useEffect(() =>
+          onKeyDown(key =>
+            key == "up"
+              ? let _ = store.actions.up() in 0
+              : key == "down"
+              ? let _ = store.actions.down() in 0
+              : key == "left"
+              ? let _ = store.actions.left() in 0
+              : key == "right"
+              ? let _ = store.actions.right() in 0
+              : key == "space"
+              ? let _ = store.actions.space() in 0
+              : key == "restart"
+              ? let _ = store.actions.restartIfGameOver() in 0
+              : 0))(
+          hookDeps1(playing)
+        ) in
+        let _persist = useEffect(() =>
+          let _ = writeHighScore(highScore) in _ => 0)(
+          hookDeps1(highScore)
+        ) in
+        let _lb = useEffect(() =>
+          let loadTask = Task.match(setRows, _ => [], fetchLeaderboard()) in
+          let _ = Task.run(loadTask) in connectWs(setRows, setConnected))(
+          hookDeps0()
+        ) in
+        let submit = () =>
+          let submitTask = let! newRows = postScore(name, score) in
+          let _ = setRows(newRows) in
+          let _ = store.actions.markSubmitted() in Task.of(true) in
+          let _ = Task.run(
+            submitTask
+              |> Task.recover(_ =>
+                let _ = store.actions.markSubmitted() in Task.of(true))
+          ) in
+            0 in
+          <div
+            className="snake-wash h-dvh max-h-dvh overflow-hidden flex flex-col gap-4 p-4 md:p-6"
+          >
+            <Card
+              className="flex-none flex items-center justify-between gap-4 px-5 py-3"
+            >
+              <div className="flex items-center gap-3">
+                <img
+                  src="/logo.png"
+                  alt="Mochi"
+                  className="w-8 h-8 object-contain"
+                />
+                <div>
+                  <p
+                    className="font-display font-extrabold text-lg text-ink tracking-tight"
+                  >
+                    {"Mochi Snake"}
+                  </p>
+                  <p
+                    className="font-mono text-2xs text-mute uppercase tracking-label"
+                  >
+                    {"Bun.serve · WebSocket leaderboard"}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="text-right">
+                  <ScoreLabel>{"Score"}</ScoreLabel>
+                  <ScoreValue>{show(score)}</ScoreValue>
+                </div>
+                <div className="text-right">
+                  <ScoreLabel>{"Best"}</ScoreLabel>
+                  <ScoreValue>{show(highScore)}</ScoreValue>
+                </div>
+                <WsStatus $connected={connected ? "on" : "off"}>
+                  <WsDot $connected={connected ? "on" : "off"} />
+                  {connected ? "Live" : "Offline"}
+                </WsStatus>
+              </div>
+            </Card>
+            <div
+              className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-4"
+            >
+              <Card
+                className="relative min-h-0 flex items-center justify-center p-4"
+              >
+                <CanvasBoard
+                  snake={snake}
+                  food={food}
+                  cols={COLS}
+                  rows={ROWS}
+                />
+                <OverlayPanel $visible={playing ? "off" : "on"}>
+                  <OverlayTitle $tone={statusTone(gameState)}>
+                    {statusHeading(gameState)}
+                  </OverlayTitle>
+                  {gameOver
+                    ? <div
+                      className="flex flex-col items-center gap-3 w-full max-w-2xs"
+                    >
+                      <p className="font-mono text-sm text-mute">
+                        {"Score: ${show(score)}"}
+                      </p>
+                      {submitted
+                        ? <PrimaryBtn onClick={() => store.actions.restart()}>
+                          {"Play Again"}
+                        </PrimaryBtn>
+                        : <div
+                          className="flex flex-col items-center gap-2 w-full"
+                        >
+                          <NameInput
+                            placeholder="Callsign"
+                            value={name}
+                            onInput={e => setName(e.target.value)}
+                          />
+                          <div className="flex items-center gap-2">
+                            <PrimaryBtn onClick={() => submit()}>
+                              {"Submit Score"}
+                            </PrimaryBtn>
+                            <GhostBtn onClick={() => store.actions.restart()}>
+                              {"Skip"}
+                            </GhostBtn>
+                          </div>
+                        </div>}
+                    </div>
+                    : <div className="flex flex-col items-center gap-4">
+                      <PrimaryBtn onClick={() => store.actions.start()}>
+                        {"Start Game"}
+                      </PrimaryBtn>
+                    </div>}
+                </OverlayPanel>
+              </Card>
+              <Card className="min-h-0 flex flex-col p-4 gap-3">
+                <p className="font-display font-bold text-ink">
+                  {"Leaderboard"}
+                </p>
+                <ul
+                  className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-1"
+                >
+                  {mapIndexed(
+                    (row, i) =>
+                      <LeaderRow key={show(i)} $rank={i < 3 ? "top" : "other"}>
+                        <RankBadge>{"#${show(i + 1)}"}</RankBadge>
+                        <PlayerName>{row.name}</PlayerName>
+                        <PlayerScore>{show(row.score)}</PlayerScore>
+                      </LeaderRow>,
+                    rows
+                  )}
+                </ul>
+              </Card>
+            </div>
+            <div
+              className="flex-none flex items-center justify-center gap-3 font-mono text-2xs text-mute"
+            >
+              <Kbd>{"↑↓←→"}</Kbd>
+              <span>{"move"}</span>
+              <Kbd>{"Space"}</Kbd>
+              <span>{"pause / start"}</span>
+              <Kbd>{"R"}</Kbd>
+              <span>{"restart"}</span>
+            </div>
+          </div>

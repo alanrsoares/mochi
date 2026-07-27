@@ -1,0 +1,4 @@
+// FFI seam — @re-reduced/preact for Snake game store.
+export extern defineContainer : a = "@re-reduced/preact" "defineContainer"
+export extern useContainer : a -> b = "@re-reduced/preact" "useContainer"
+export extern useSelect : a -> (b -> c) -> c = "@re-reduced/preact" "useSelect"

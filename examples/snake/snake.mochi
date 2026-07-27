@@ -3,19 +3,19 @@
 // Build with:
 //   bun run mochi build examples/snake/snake.mochi
 
-type Direction =
+export type Direction =
   | Up
   | Down
   | Left
   | Right
 
-type Status =
+export type Status =
   | Ready
   | Playing
   | Paused
   | GameOver
 
-type State = { snake: [(number, number)], food: (number, number), dir: Direction, dirQueue: [Direction], score: number, highScore: number, status: Status, cols: number, rows: number }
+export type State = { snake: [(number, number)], food: (number, number), dir: Direction, dirQueue: [Direction], score: number, highScore: number, status: Status, cols: number, rows: number }
 
 /// Calculate next head position based on direction
 let nextHead = ((x, y), dir) => switch dir {
@@ -128,4 +128,33 @@ export let step = (state, randomFood) => switch state.status {
             highScore: newHigh
           }
   | _ => state
+}
+
+/// UI-facing status helpers (App.mochi). Kept here rather than pattern-matched
+/// in the importing module: the Vite plugin's per-file `compile()` path has no
+/// cross-module ctor registry (only the `module.ts` graph driver does), so a
+/// `switch` on an imported variant's constructors fails static checking there
+/// — plain value/function imports and equality are unaffected, only pattern
+/// matching is. These stay switch-based here, where `Status`'s constructors
+/// are locally declared.
+export let isPlaying = state => switch state.status {
+  | Playing => true
+  | _ => false
+}
+
+export let isGameOver = state => switch state.status {
+  | GameOver => true
+  | _ => false
+}
+
+export let statusTone = state => switch state.status {
+  | Playing => "ready"
+  | GameOver => "gameOver"
+  | _ => "paused"
+}
+
+export let statusHeading = state => switch state.status {
+  | GameOver => "Game Over"
+  | Playing => ""
+  | _ => "Ready?"
 }

@@ -1,0 +1,29 @@
+{
+  "name": "@mochi/example-snake",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun ../../scripts/gen-mochi-dts.ts examples/snake/src && vite",
+    "build": "bun ../../scripts/gen-mochi-dts.ts examples/snake/src && vite build",
+    "preview": "vite preview",
+    "check": "bun ../../scripts/gen-mochi-dts.ts examples/snake/src && tsc --noEmit && vite build",
+    "server": "bun server.mts"
+  },
+  "dependencies": {
+    "@mochi/plugin-preact": "workspace:*",
+    "@mochi/plugin-re-reduced": "workspace:*",
+    "@mochi/plugin-styled-cva": "workspace:*",
+    "@onrails/pattern": "^0.3.3",
+    "@re-reduced/preact": "^0.2.3",
+    "@styled-cva/react": "^0.7.1",
+    "preact": "^10.26.4"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.1",
+    "@tailwindcss/vite": "^4.0.0",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.0"
+  }
+}

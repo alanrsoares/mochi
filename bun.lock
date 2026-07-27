@@ -56,6 +56,26 @@
         "vscode-languageclient": "^10.1.0",
       },
     },
+    "examples/snake": {
+      "name": "@mochi/example-snake",
+      "version": "0.1.0",
+      "dependencies": {
+        "@mochi/plugin-preact": "workspace:*",
+        "@mochi/plugin-re-reduced": "workspace:*",
+        "@mochi/plugin-styled-cva": "workspace:*",
+        "@onrails/pattern": "^0.3.3",
+        "@re-reduced/preact": "^0.2.3",
+        "@styled-cva/react": "^0.7.1",
+        "preact": "^10.26.4",
+      },
+      "devDependencies": {
+        "@preact/preset-vite": "^2.10.1",
+        "@tailwindcss/vite": "^4.0.0",
+        "tailwindcss": "^4.0.0",
+        "typescript": "^5.7.3",
+        "vite": "^6.0.0",
+      },
+    },
     "packages/plugin-preact": {
       "name": "@mochi/plugin-preact",
       "version": "0.1.0",
@@ -202,6 +222,8 @@
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
 
     "@mochi/docs": ["@mochi/docs@workspace:apps/docs"],
+
+    "@mochi/example-snake": ["@mochi/example-snake@workspace:examples/snake"],
 
     "@mochi/plugin-preact": ["@mochi/plugin-preact@workspace:packages/plugin-preact"],
 

@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+/*
+  Same cozy kawaii-tech palette as apps/docs (illustrations/AESTHETICS.md):
+  cream paper, peach/lavender wash, warm brown ink, fur accent — plus a
+  dango-pink token for the food sprite.
+*/
+@theme {
+  --color-paper: oklch(97.1% 0.0186 75.33);
+  --color-peach: oklch(94.1% 0.0229 41.41);
+  --color-foam: oklch(98.5% 0.0113 71.9);
+  --color-ink: oklch(30.7% 0.0288 25.66);
+  --color-mute: oklch(55.6% 0.0418 34.89);
+  --color-line: oklch(87% 0.0289 48.37);
+  --color-line-strong: oklch(79.6% 0.0403 44.05);
+  --color-fur: oklch(75.5% 0.1291 66.7);
+  --color-fur-deep: oklch(68.2% 0.1374 62.09);
+  --color-plum: oklch(43% 0.0568 333.58);
+  --color-lavender: oklch(81.3% 0.0612 318.12);
+  --color-lavender-deep: oklch(68.7% 0.0784 306.75);
+  --color-bao: oklch(85.1% 0.1465 88.56);
+  --color-ok: oklch(61.5% 0.1256 152.79);
+  --color-ok-soft: oklch(95.9% 0.0206 156.82);
+  --color-dango: #e88ba9;
+
+  --font-sans: "Outfit", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --tracking-label: 0.14em;
+
+  --radius-panel: 1rem;
+
+  --shadow-soft: 0 8px 28px color-mix(in oklab, var(--color-plum) 8%, transparent);
+}
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-paper font-sans text-ink;
+  }
+}
+
+/* Soft radial washes — lavender top-right, fur bottom-left (Tailwind has no
+   multi-stop radial-gradient utility, so this stays plain CSS). */
+.snake-wash {
+  background-image:
+    radial-gradient(ellipse at 85% 10%, color-mix(in oklab, var(--color-lavender) 45%, transparent), transparent 55%),
+    radial-gradient(ellipse at 15% 90%, color-mix(in oklab, var(--color-fur) 16%, transparent), transparent 55%);
+}
+
+/* The game canvas is a fixed 600x600 intrinsic bitmap (see
+   src/components/CanvasBoard.tsx); scale it responsively within its flex
+   cell without stretching. Chrome states (overlay tone, ws-status,
+   leaderboard rank) are now styled-cva `$variant` props driven from
+   App.mochi state (src/ui/primitives.mochi) rather than className swaps,
+   so no `@layer components` overrides are needed here. */
+.snake-canvas {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+}

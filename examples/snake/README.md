@@ -19,8 +19,9 @@ Open `http://localhost:3000` in your browser.
 
 ## Architecture
 
-| File | Purpose |
+| File / Dir | Purpose |
 |---|---|
-| `snake.mochi` | Pure functional state, direction queue, step tick & collision checks |
-| `index.html` | HTML5 Canvas UI, Web Audio synth, particles & WS leaderboard client |
-| `server.mts` | `Bun.serve` backend (auto-compilation, static server, WebSockets, REST API) |
+| `snake.mochi` | Pure functional game logic: direction queue, step tick & collision checks |
+| `src/App.mochi` | Full Mochi + Preact + styled-cva UI component |
+| `src/host/` | Host TS/TSX seams: canvas rendering (`widgets.host.tsx`), audio/keyboard (`game.host.ts`), WS/REST client (`leaderboard.host.ts`) |
+| `server.mts` | `Bun.serve` backend (auto-builds dist, serves static app, handles WebSockets & REST API) |

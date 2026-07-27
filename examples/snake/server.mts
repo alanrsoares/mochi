@@ -7,13 +7,7 @@ const LEADERBOARD_FILE = join(DIR, "leaderboard.json");
 
 export type ScoreEntry = { name: string; score: number; date: string };
 
-const DEFAULT_LEADERBOARD: ScoreEntry[] = [
-  { name: "MochiMaster", score: 250, date: "2026-07-25" },
-  { name: "AlgorithmW", score: 180, date: "2026-07-25" },
-  { name: "HindleyMilner", score: 140, date: "2026-07-25" },
-  { name: "RowPoly", score: 90, date: "2026-07-25" },
-  { name: "BunServe", score: 50, date: "2026-07-25" },
-];
+const DEFAULT_LEADERBOARD: ScoreEntry[] = [];
 
 async function loadLeaderboard(): Promise<ScoreEntry[]> {
   try {
@@ -32,20 +26,18 @@ async function saveLeaderboard(entries: ScoreEntry[]): Promise<ScoreEntry[]> {
   return sorted;
 }
 
-async function ensureCompiled() {
-  try {
-    const mochiFile = join(DIR, "snake.mochi");
-    const src = await Bun.file(mochiFile).text();
-    const res = compile(src);
-    if (res._tag === "Ok") {
-      await Bun.write(join(DIR, "snake.js"), res.value);
+async function ensureBuilt() {
+  const distIndex = Bun.file(join(DIR, "dist", "index.html"));
+  if (!(await distIndex.exists())) {
+    console.log("Building snake app dist...");
+    const proc = Bun.spawnSync(["bun", "run", "build"], { cwd: DIR });
+    if (!proc.success) {
+      console.error("Failed to build snake app:", proc.stderr.toString());
     }
-  } catch (err) {
-    console.error("Error compiling snake.mochi:", err);
   }
 }
 
-await ensureCompiled();
+await ensureBuilt();
 let leaderboard = await loadLeaderboard();
 
 const server = Bun.serve({
@@ -104,13 +96,18 @@ const server = Bun.serve({
       });
     }
 
-    // Static asset serving
+    // Static asset serving: prefer dist/ (built Vite bundle), fallback to DIR
+    const relPath = url.pathname === "/" ? "/index.html" : url.pathname;
+    const distFile = Bun.file(join(DIR, "dist", relPath));
+    if (await distFile.exists()) {
+      return new Response(distFile);
+    }
+
     if (url.pathname.startsWith("/node_modules/")) {
       const nodeFile = Bun.file("." + url.pathname);
       if (await nodeFile.exists()) return new Response(nodeFile);
     }
 
-    const relPath = url.pathname === "/" ? "/index.html" : url.pathname;
     const staticFile = Bun.file(join(DIR, relPath));
     if (await staticFile.exists()) {
       return new Response(staticFile);

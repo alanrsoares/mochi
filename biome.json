@@ -10,7 +10,10 @@
       "apps/docs/src/**/*.ts",
       "apps/docs/src/**/*.tsx",
       "apps/docs/*.ts",
-      "packages/*/src/**/*.ts"
+      "packages/*/src/**/*.ts",
+      "examples/snake/src/**/*.ts",
+      "examples/snake/src/**/*.tsx",
+      "examples/snake/*.ts"
     ]
   },
   "javascript": { "globals": ["Bun"] },
