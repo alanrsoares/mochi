@@ -41,7 +41,31 @@ Strict before this ships = mandatory annotations that can't be written.
       `test/bootstrap-parser.spec.ts:517` globs `**/*.mochi` into the differential
       corpus, so a fixture fails on `bootstrap/parser.mochi`'s missing production.
       The examples case is an in-memory graph until then.
-- [ ] dts/hover fold-back to qualified alias names.
+- [x] **hover** fold-back to qualified alias names. `qualifyTypeNames` in `src/types.ts`
+      is a display-only `Type -> Type` nominal rename (identity-preserving: untouched
+      nodes are returned by reference), composed in front of `showType` rather than
+      threaded through its recursion. `moduleHoverAt` builds the `name -> Alias.name` map
+      from `ModuleContext.qualTypes`; a locally declared type wins (already writable bare,
+      and it shadows), first alias wins on a tie. `hoverAt` (single-file) passes no map, so
+      it is byte-identical. Before: `let circle: Shape` — a name the importer cannot write.
+      After: `let circle: D.Shape`, `let boxed: D.Box<number>`, `let sizeOf: D.Shape -> number`.
+      Two cases in `test/module-hover.spec.ts` (qualification + local shadowing).
+      **Known limitation:** a qualified *record* alias (`D.Pair number`) still hovers
+      expanded (`{ fst: number, snd: number }`) — aliases are structural (ADR 0005), so a
+      record carries no nominal name to rename. Row-level alias provenance is its own
+      problem, not this slice's.
+- [ ] **dts** fold-back — split out, not blocking. `emitDts` is single-file
+      (`toTypedProgram`) and `src/dts.ts:652,731` drop `{ kind: "import" }`, so a qualified
+      annotation emits a *dangling* nominal: `export let f : D.Shape -> number` →
+      `export declare const f: (s: Shape) => number;` with no import for `Shape`. Nothing
+      gated fails today: sidecars are `X.d.mochi.ts`, outside the root `tsconfig.json`
+      `include`, and already carry dangling names (`VNode`). Fixing it means emitting a
+      resolvable type-only import (`import type * as D from "./shapes.mochi"`, or inline
+      `import("./shapes.mochi").Shape`) — viable because `allowArbitraryExtensions: true`
+      is exactly the TS feature that maps `./shapes.mochi` onto `shapes.d.mochi.ts`, and
+      `apps/docs/tsconfig.json` already sets it. Specifiers would need normalizing to carry
+      the `.mochi` extension. Single-file dts can only fold back names written qualified
+      (an inferred type has no alias provenance), which is all the surface needs.
 - [ ] Bootstrap impact: **large** — `bootstrap/parser.mochi` + `infer`/`check` mirrors
       need the same production (differential tests, message + span parity); afterwards,
       check whether any shared-module workaround in the bootstrap graph can unwind.

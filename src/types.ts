@@ -97,6 +97,49 @@ export const showType = (t: Type): string => {
   }
 };
 
+/**
+ * Display-only: rewrite nominal constructor names through `qualify`
+ * (`Shape` → `D.Shape`) so a surface that shows a type shows the name the
+ * *reading* module can actually write. A variant crosses a module edge
+ * nominally (C5, ADR 0046), so its bare name is unwritable in the importer —
+ * hover reporting `Shape` there names nothing. Structurally a no-op: only
+ * `con` names change, and untouched nodes are returned by identity.
+ */
+export const qualifyTypeNames = (t: Type, qualify: ReadonlyMap<string, string>): Type => {
+  if (qualify.size === 0) return t;
+  const go = (ty: Type): Type => {
+    switch (ty.kind) {
+      case "con": {
+        const args = ty.args.map(go);
+        const name = qualify.get(ty.name) ?? ty.name;
+        return name === ty.name && args.every((a, i) => a === ty.args[i]) ? ty : tCon(name, args);
+      }
+      case "arrow": {
+        const from = go(ty.from);
+        const to = go(ty.to);
+        return from === ty.from && to === ty.to ? ty : tArrow(from, to);
+      }
+      case "record": {
+        const row = goRow(ty.row);
+        return row === ty.row ? ty : tRecord(row);
+      }
+      case "union": {
+        const members = ty.members.map(go);
+        return members.every((m, i) => m === ty.members[i]) ? ty : { kind: "union", members };
+      }
+      default:
+        return ty;
+    }
+  };
+  const goRow = (row: Row): Row => {
+    if (row.kind !== "extend") return row;
+    const type = go(row.type);
+    const rest = goRow(row.rest);
+    return type === row.type && rest === row.rest ? row : rExtend(row.label, type, rest);
+  };
+  return go(t);
+};
+
 const showRow = (row: Row): string => {
   const fields: string[] = [];
   let cur = row;

@@ -88,3 +88,23 @@ export let el = <Badge $tone="rose" />
   expect(info?.code).toContain('"amber"');
   expect(info?.code).not.toMatch(/\$tone: string/);
 });
+
+// C5c — fold-back: a variant crosses a module edge nominally (ADR 0046), so its
+// bare name names nothing in the importer. Where an `import * as D` puts those
+// types in scope, hover reports the writable `D.T`.
+test("hover qualifies an imported type through its namespace alias", async () => {
+  const src =
+    'import * as D from "./ast.mochi"\nimport { A, B } from "./ast.mochi"\nlet f = e => switch e { | A(n) => n | B => 0 }';
+  const eOff = src.indexOf("switch e") + 7;
+  const info = await moduleHoverAt(ENTRY, src, eOff, read({ [DEP]: DEP_SRC }));
+  expect(info?.code).toContain("D.E");
+});
+
+test("a locally declared type shadows the qualified name", async () => {
+  const src =
+    'import * as D from "./ast.mochi"\ntype E =\n  | Local\nlet f = e => switch e { | Local => 0 }';
+  const eOff = src.indexOf("switch e") + 7;
+  const info = await moduleHoverAt(ENTRY, src, eOff, read({ [DEP]: DEP_SRC }));
+  expect(info?.code).toContain("E");
+  expect(info?.code).not.toContain("D.E");
+});

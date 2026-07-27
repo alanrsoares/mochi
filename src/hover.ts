@@ -9,6 +9,7 @@
 import { resolve } from "node:path";
 import { map, match as matchMaybe } from "@onrails/maybe";
 import { isErr, isOk } from "@onrails/result";
+import type { Program } from "./ast";
 import { toTypedProgram, toTypedProgramWith } from "./compile";
 import type { LanguagePlugin } from "./extensions";
 import type { InferResult, SymbolInfo, TypeAt } from "./infer";
@@ -17,10 +18,10 @@ import { moduleContext } from "./module";
 import { parse } from "./parser";
 import { preludeNamespaces } from "./prelude";
 import { preludeDocForBinding } from "./prelude-virtual";
-import { widenLits } from "./schemes";
+import { type QualMap, widenLits } from "./schemes";
 import { spanContainsClosed, tightestHit } from "./span";
 import { indexProgram } from "./symbols";
-import { foldAliases, showType } from "./types";
+import { foldAliases, qualifyTypeNames, showType } from "./types";
 
 /** Tightest inferred type span containing `offset` (closed ends; ties → first). */
 const tightestType = (types: TypeAt[], offset: number) =>
@@ -68,11 +69,34 @@ const docAt = (
   return hit ? preludeDocForBinding(hit.binding) : undefined;
 };
 
+/**
+ * `Shape` → `D.Shape` for every type an `import * as D` brings into type
+ * position (C5, ADR 0046), so hover names what this file can write. A name the
+ * file declares itself wins — it is already writable bare, and it shadows.
+ * First alias wins when two namespaces export the same type name.
+ */
+const qualifierMap = (quals: QualMap, prog: Program): ReadonlyMap<string, string> => {
+  const local = new Set(prog.stmts.flatMap((s) => (s.kind === "type" ? [s.name] : [])));
+  const out = new Map<string, string>();
+  for (const [alias, qual] of quals)
+    for (const name of qual.types)
+      if (!local.has(name) && !out.has(name)) out.set(name, `${alias}.${name}`);
+  return out;
+};
+
 /** Render the tightest-span type at `offset` as a hover payload. */
-const hoverFrom = (res: InferResult, offset: number, src: string, path: string): HoverInfo | null =>
+const hoverFrom = (
+  res: InferResult,
+  offset: number,
+  src: string,
+  path: string,
+  qualify: ReadonlyMap<string, string> = new Map(),
+): HoverInfo | null =>
   matchMaybe(
     map(tightestType(res.types, offset), (hit) => {
-      const type = showType(widenLits(foldAliases(hit.type, res.aliases)));
+      const type = showType(
+        qualifyTypeNames(widenLits(foldAliases(hit.type, res.aliases)), qualify),
+      );
       return { code: lead(type, hit.symbol), doc: docAt(src, path, offset, hit.symbol) };
     }),
     (info) => info,
@@ -121,5 +145,7 @@ export const moduleHoverAt = async (
   if (isErr(ctx)) return hoverAt(src, offset, entry);
 
   const typed = toTypedProgramWith(parsed.value, ctx.value, { plugins: opts.plugins });
-  return isOk(typed) ? hoverFrom(typed.value.res, offset, src, entry) : null;
+  if (isErr(typed)) return null;
+  const qualify = qualifierMap(ctx.value.qualTypes, parsed.value);
+  return hoverFrom(typed.value.res, offset, src, entry, qualify);
 };
