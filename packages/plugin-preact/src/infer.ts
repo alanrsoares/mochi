@@ -5,9 +5,12 @@
  * overloads, heterogeneous deps). This module pins shapes at each call.
  */
 
-import type { Expr } from "@mochi/compiler/ast";
 import type { Diagnostic } from "@mochi/compiler/errors";
 import type { InferCallApi, InferCallHook } from "@mochi/compiler/extensions";
+// Explicit real-file subpath (like `@mochi/compiler/types` below): a value
+// import, so Node/Vite's config loader must resolve it without a bundler.
+import type { CallExpr } from "@mochi/compiler/plugin-kit";
+import { inferArgs, isRefCall } from "@mochi/compiler/plugin-kit";
 import type { Type } from "@mochi/compiler/types";
 import {
   rEmpty,
@@ -20,10 +23,6 @@ import {
   tUnit,
 } from "@mochi/compiler/types";
 import { isErr, ok, type Result } from "@onrails/result";
-
-type CallExpr = Extract<Expr, { kind: "call" }>;
-
-const isRefCall = (e: CallExpr, name: string): boolean => e.fn.kind === "ref" && e.fn.name === name;
 
 const arrOf = (elem: Type): Type => tCon("Array", [elem]);
 
@@ -62,10 +61,8 @@ const inferEffectLike = (
     // Curried: `useEffect(fn)(hookDeps…)` — deps come in a second call.
     return ok(tArrow(arrOf(api.freshVar()), tUnit));
   }
-  for (const arg of e.args.slice(1)) {
-    const r = api.infer(arg);
-    if (isErr(r)) return r;
-  }
+  const restR = inferArgs(e.args.slice(1), api);
+  if (isErr(restR)) return restR;
   return ok(tUnit);
 };
 
@@ -75,10 +72,8 @@ const inferUseCallback: InferCallHook = (e, api) => {
   if (isErr(fnR)) return fnR;
   const fnT = api.zonk(fnR.value);
   if (e.args.length === 1) return ok(tArrow(arrOf(api.freshVar()), fnT));
-  for (const arg of e.args.slice(1)) {
-    const r = api.infer(arg);
-    if (isErr(r)) return r;
-  }
+  const restR = inferArgs(e.args.slice(1), api);
+  if (isErr(restR)) return restR;
   return ok(fnT);
 };
 
@@ -90,10 +85,8 @@ const inferUseMemo: InferCallHook = (e, api) => {
   const uni = api.unify(thunkR.value, tArrow(tUnit, resultT), e.args[0]!.span);
   if (isErr(uni)) return uni;
   if (e.args.length === 1) return ok(tArrow(arrOf(api.freshVar()), api.zonk(resultT)));
-  for (const arg of e.args.slice(1)) {
-    const r = api.infer(arg);
-    if (isErr(r)) return r;
-  }
+  const restR = inferArgs(e.args.slice(1), api);
+  if (isErr(restR)) return restR;
   return ok(api.zonk(resultT));
 };
 
@@ -105,12 +98,24 @@ const inferHookDeps: InferCallHook = (e, api) => {
   const expectedArgs =
     name === "hookDeps0" ? 0 : name === "hookDeps1" ? 1 : name === "hookDeps2" ? 2 : 3;
   if (e.args.length !== expectedArgs) return null;
-  for (const arg of e.args) {
-    const r = api.infer(arg);
-    if (isErr(r)) return r;
-  }
+  const argsR = inferArgs(e.args, api);
+  if (isErr(argsR)) return argsR;
   return ok(arrOf(api.freshVar()));
 };
+
+/** Callee `ref` names this plugin's `inferCall` hook claims (clash detection). */
+export const PREACT_HOOK_REFS = [
+  "useState",
+  "useRef",
+  "useEffect",
+  "useLayoutEffect",
+  "useCallback",
+  "useMemo",
+  "hookDeps",
+  "hookDeps0",
+  "hookDeps1",
+  "hookDeps2",
+] as const;
 
 export const inferPreactCall: InferCallHook = (e, api) =>
   inferUseState(e, api) ??

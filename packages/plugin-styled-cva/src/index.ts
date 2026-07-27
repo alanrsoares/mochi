@@ -9,7 +9,6 @@
  * - dts: `$tone?: "rose" | …` unions extracted from the variants record AST
  */
 
-import type { Expr } from "@mochi/compiler/ast";
 import type { Diagnostic } from "@mochi/compiler/errors";
 import type {
   CompleteMemberHook,
@@ -18,14 +17,15 @@ import type {
   InferCallApi,
   InferCallHook,
 } from "@mochi/compiler/extensions";
+// Explicit real-file subpath (like `@mochi/compiler/types` below): a value
+// import, so Node/Vite's config loader must resolve it without a bundler.
+import type { CallExpr, RecordExpr } from "@mochi/compiler/plugin-kit";
+import { inferArgs } from "@mochi/compiler/plugin-kit";
 import type { Row, Type } from "@mochi/compiler/types";
 // Explicit extension: crossing the package boundary, this specifier is resolved
 // by Node/Vite's config loader without a bundler, which needs the real filename.
 import { rExtend, tArrow, tCon, tLit, tRecord, tUnion } from "@mochi/compiler/types";
 import { isErr, ok, type Result } from "@onrails/result";
-
-type CallExpr = Extract<Expr, { kind: "call" }>;
-type RecordExpr = Extract<Expr, { kind: "record" }>;
 
 const isTwFactoryCall = (e: CallExpr): boolean =>
   e.fn.kind === "field" && e.fn.target.kind === "ref" && e.fn.target.name === "tw";
@@ -35,10 +35,8 @@ const inferTwFactory: InferCallHook = (
   api: InferCallApi,
 ): Result<Type, Diagnostic> | null => {
   if (!isTwFactoryCall(e)) return null;
-  for (const arg of e.args) {
-    const r = api.infer(arg);
-    if (isErr(r)) return r;
-  }
+  const argsR = inferArgs(e.args, api);
+  if (isErr(argsR)) return argsR;
   let row: Row = api.freshRowVar();
   const variantsArg = e.args[1];
   if (variantsArg?.kind === "record") {
@@ -115,7 +113,8 @@ const twMembers: CompleteMemberHook = ({ receiver }) => {
 
 export const styledCvaExtension: HostExtension = {
   name: "styled-cva",
-  inferCall: inferTwFactory,
+  // Claim: calls whose callee is a field off the `tw` extern (`tw.div(...)`).
+  inferCall: { memberTargets: ["tw"], hook: inferTwFactory },
   dtsBinding: styledCvaDts,
   completeMembers: twMembers,
 };

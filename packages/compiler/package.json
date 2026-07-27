@@ -20,6 +20,7 @@
     "./lexer": "./src/lexer/index.ts",
     "./module": "./src/module/index.ts",
     "./parser": "./src/parser/index.ts",
+    "./plugin-kit": "./src/extensions/plugin-kit.ts",
     "./plugins/jsx": "./src/extensions/plugins/jsx.ts",
     "./prelude": "./src/prelude/index.ts",
     "./prelude-virtual": "./src/prelude/prelude-virtual.ts",

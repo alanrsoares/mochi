@@ -32,6 +32,8 @@ import {
   type LanguagePlugin,
   type ParseHook,
   type ParserApi,
+  parseHookTable,
+  pluginClashes,
   resolvePlugins,
   runParseHooks,
 } from "../extensions/extensions";
@@ -76,7 +78,17 @@ const CLOSERS: readonly Tok["t"][] = ["rparen", "rbrace", "rbracket"];
  */
 export function parseRecovering(toks: Located[], opts: ParseOptions = {}): RecoveredParse {
   const plugins = resolvePlugins(opts.plugins);
-  const parseHooks: ParseHook[] = plugins.flatMap((p) => (p.parse ? [p.parse] : []));
+  /**
+   * Choke point (ADR 0050): every pipeline that turns source into a `Program`
+   * funnels through `parseRecovering` (`parse` is a thin hard-fail wrapper
+   * over it, `dx`'s format/hover/complete call it directly) and resolves its
+   * plugin list here first. `pluginClashes` runs once per parse — O(plugins),
+   * not O(tokens) — and its diagnostics seed the same `diagnostics` array
+   * every other parse error lands in, so a clash is an ordinary `Diagnostic`
+   * (errors-as-values, no throw) rather than a silent last-registrant-wins.
+   */
+  const clashes = pluginClashes(plugins);
+  const parseHooks: Map<Tok["t"], ParseHook> = parseHookTable(plugins);
   const syncTokens = new Set<Tok["t"]>([
     ...CORE_SYNC_TOKENS,
     ...plugins.flatMap((p) => [...(p.syncTokens ?? [])]),
@@ -569,10 +581,12 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
     if (peek().t === "hash") return parseHash();
     if (peek().t === "tmplstart") return parseInterp();
     // Plugin-owned prefix forms come after every core atom, so a plugin can
-    // extend the grammar but never shadow it. None matching falls through to the
-    // `unexpected token` error below — which is how `plugins: []` turns a
+    // extend the grammar but never shadow it. Dispatch is a single lookup on
+    // the leading token's claimant (claims are clash-checked at resolve time);
+    // no claimant — or the claimant declining — falls through to the
+    // `unexpected token` error below, which is how `plugins: []` turns a
     // plugin's syntax back into a plain parse Diagnostic (ADR 0011 decision 3).
-    const hooked = runParseHooks(parseHooks, parserApi);
+    const hooked = runParseHooks(parseHooks, peek().t, parserApi);
     if (hooked !== null) return hooked;
     const tk = next();
     switch (tk.t) {
@@ -1228,7 +1242,7 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
   };
 
   const stmts: Stmt[] = [];
-  const diagnostics: Diagnostic[] = [];
+  const diagnostics: Diagnostic[] = [...clashes];
   while (!atEnd()) {
     const before = pos;
     const failedAt = peek();

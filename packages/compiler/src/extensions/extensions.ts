@@ -16,12 +16,11 @@ import type { Expr } from "../ast/ast";
 import type { Span } from "../ast/span";
 import type { AliasDef, Row, Type } from "../ast/types";
 import type { Doc } from "../doc/doc";
-import type { Diagnostic } from "../errors/errors";
+import { checkErr, type Diagnostic } from "../errors/errors";
 import type { Scheme } from "../infer/schemes";
 import type { Located, Tok } from "../lexer/lexer";
+import type { CallExpr } from "./plugin-kit";
 import { jsxPlugin } from "./plugins/jsx";
-
-type CallExpr = Extract<Expr, { kind: "call" }>;
 
 /**
  * Capabilities a `parse` hook may use: the token cursor, the expression parser,
@@ -61,6 +60,22 @@ export type ParserApi = {
  */
 export type ParseHook = (api: ParserApi) => Expr | null;
 
+/**
+ * A plugin's parse registration: the claim plus the hook. `tokens` are the
+ * leading token tags this plugin's atom syntax starts with (`["lt"]` for
+ * JSX's `<…>`) — a declarative ownership claim, checked by `pluginClashes`.
+ * Dispatch is unchanged for now (hooks still chain in registration order and
+ * self-guard by peeking); token-table dispatch is a follow-up slice.
+ *
+ * Distinct from `LanguagePlugin.syncTokens`: `tokens` says "my expression
+ * atom *starts* here", `syncTokens` says "error recovery may *resume* at my
+ * top-level keyword" — different semantics, deliberately separate fields.
+ */
+export type ParseDecl = {
+  tokens: readonly Tok["t"][];
+  hook: ParseHook;
+};
+
 /** Hover identity for a record/JSX attribute label. */
 export type PropertySymbol = { kind: "property"; name: string };
 
@@ -83,6 +98,21 @@ export type InferCallApi = {
  * core default. First non-null wins (registration order).
  */
 export type InferCallHook = (e: CallExpr, api: InferCallApi) => Result<Type, Diagnostic> | null;
+
+/**
+ * A plugin's infer-call registration: declarative claims plus the hook.
+ * `refs` are the callee `ref` names this plugin handles (`useState`,
+ * `defineContainer`, …); `memberTargets` are `field`-callee target ref names
+ * (`tw` for `tw.div(...)`). Claims exist for `pluginClashes` (and future
+ * table dispatch) — the hook still chains and self-guards, and a hook whose
+ * match is structural rather than name-keyed (jsx's `origin: "jsx"`
+ * provenance) declares no claims at all.
+ */
+export type InferCallDecl = {
+  refs?: readonly string[];
+  memberTargets?: readonly string[];
+  hook: InferCallHook;
+};
 
 /**
  * Capabilities a `format` hook may use — the formatter's recursive printers,
@@ -173,7 +203,7 @@ export type CompleteMemberHook = (api: CompleteMemberApi) => CompletionItem[] | 
  */
 export type LanguagePlugin = {
   name: string;
-  parse?: ParseHook;
+  parse?: ParseDecl;
   /**
    * Extra token tags the parser may resynchronise on after an error (ADR 0045).
    * A plugin that owns a *top-level* form registers its leading keyword here so
@@ -182,7 +212,7 @@ export type LanguagePlugin = {
    * which is exactly why core must not name it.
    */
   syncTokens?: readonly Tok["t"][];
-  inferCall?: InferCallHook;
+  inferCall?: InferCallDecl;
   format?: FormatHook;
   bindingType?: BindingTypeHook;
   dtsBinding?: DtsBindingHook;
@@ -235,28 +265,143 @@ export const resolvePlugins = (
   return [...resolved, ...plugins.filter((p) => !shadowed.has(p.name))];
 };
 
+/** Zero-width span for configuration-level diagnostics that have no source site. */
+const NO_SPAN: Span = { start: 0, end: 0 };
+
 /**
- * Run parse hooks in order at atom position; the first that returns an `Expr`
- * has consumed the form. `null` from all → the caller (core `parseAtom`) reports
- * the leading token as unexpected, which is what makes an empty plugin list a
- * real syntax opt-out rather than a silent one.
+ * Detect claim clashes in a **resolved** plugin list — run this on the output
+ * of `resolvePlugins`, never its input: ADR 0049 name shadowing (a caller
+ * plugin replacing a same-named builtin) resolves there first and is legal
+ * replacement, not a clash. What remains after resolution must be disjoint:
+ *
+ * - duplicate plugin `name` (two entries with the same name in one list),
+ * - duplicate `parse.tokens` claim (two plugins owning one leading token),
+ * - duplicate `inferCall.refs` claim (two plugins owning one callee name),
+ * - duplicate `inferCall.memberTargets` claim (two plugins owning one
+ *   `field`-callee target like `tw`).
+ *
+ * Pure — returns `check` diagnostics (zero-width span: the clash is a
+ * configuration fact, not a source location); callers decide whether they are
+ * fatal. Chained dispatch means a clash is first-wins today, but a silent
+ * winner is exactly the misconfiguration this makes visible.
  */
-export const runParseHooks = (hooks: ParseHook[], api: ParserApi): Expr | null => {
-  for (const hook of hooks) {
-    const e = hook(api);
-    if (e !== null) return e;
+export const pluginClashes = (plugins: LanguagePlugin[]): Diagnostic[] => {
+  const diags: Diagnostic[] = [];
+  const claim = (owners: Map<string, string>, what: string, key: string, owner: string): void => {
+    const prev = owners.get(key);
+    if (prev === undefined) {
+      owners.set(key, owner);
+      return;
+    }
+    diags.push(
+      checkErr(`plugin clash: '${prev}' and '${owner}' both claim ${what} '${key}'`, NO_SPAN),
+    );
+  };
+  const names = new Map<string, string>();
+  const tokens = new Map<string, string>();
+  const refs = new Map<string, string>();
+  const memberTargets = new Map<string, string>();
+  for (const p of plugins) {
+    claim(names, "plugin name", p.name, p.name);
+    for (const t of p.parse?.tokens ?? []) claim(tokens, "parse token", t, p.name);
+    for (const r of p.inferCall?.refs ?? []) claim(refs, "inferCall ref", r, p.name);
+    for (const m of p.inferCall?.memberTargets ?? [])
+      claim(memberTargets, "inferCall member target", m, p.name);
   }
-  return null;
+  return diags;
 };
 
-/** Run infer-call hooks in order; `null` from all → caller uses core default. */
+/**
+ * Leading-token → parse-hook table from the **resolved** plugin list.
+ * `pluginClashes` rejects duplicate token claims upstream, so each token has
+ * exactly one claimant and the parser does a single `peek().t` lookup instead
+ * of chaining every hook. Hooks still self-guard — a `null` return falls
+ * through to core's `unexpected token` error, which is what makes an empty
+ * plugin list a real syntax opt-out rather than a silent one. A hook is now
+ * physically unreachable at tokens outside its claim.
+ */
+export const parseHookTable = (plugins: LanguagePlugin[]): Map<Tok["t"], ParseHook> => {
+  const table = new Map<Tok["t"], ParseHook>();
+  for (const p of plugins) {
+    if (!p.parse) continue;
+    for (const t of p.parse.tokens) table.set(t, p.parse.hook);
+  }
+  return table;
+};
+
+/**
+ * Run the parse hook claiming the token under the cursor, if any. `null`
+ * (no claimant, or the claimant declined) → the caller (core `parseAtom`)
+ * reports the leading token as unexpected, exactly as the old chain did.
+ */
+export const runParseHooks = (
+  table: Map<Tok["t"], ParseHook>,
+  tok: Tok["t"],
+  api: ParserApi,
+): Expr | null => table.get(tok)?.(api) ?? null;
+
+/** One plugin's `inferCall` hook plus its resolved registration position. */
+type InferCallEntry = { order: number; hook: InferCallHook };
+
+/**
+ * Claim-table dispatch for `inferCall` hooks, built once per inference run
+ * from the **resolved** plugin list (`pluginClashes` rejects duplicate claims
+ * upstream, so each name has one claimant). `refs` keys callee `ref` names;
+ * `memberTargets` keys `field`-callee target ref names (`tw` in `tw.div(…)`).
+ * `unclaimed` keeps the plugins that declare no claims (jsx — its hook keys
+ * off `origin: "jsx"` provenance, not a callee name) and must therefore see
+ * every call, in registration order.
+ */
+export type InferCallDispatch = {
+  refs: Map<string, InferCallEntry>;
+  memberTargets: Map<string, InferCallEntry>;
+  unclaimed: InferCallEntry[];
+};
+
+/** Build the `inferCall` dispatch tables from a resolved plugin list. */
+export const inferCallDispatch = (plugins: LanguagePlugin[]): InferCallDispatch => {
+  const refs = new Map<string, InferCallEntry>();
+  const memberTargets = new Map<string, InferCallEntry>();
+  const unclaimed: InferCallEntry[] = [];
+  plugins.forEach((p, order) => {
+    const decl = p.inferCall;
+    if (!decl) return;
+    const entry: InferCallEntry = { order, hook: decl.hook };
+    const claims = (decl.refs?.length ?? 0) + (decl.memberTargets?.length ?? 0);
+    if (claims === 0) {
+      unclaimed.push(entry);
+      return;
+    }
+    for (const r of decl.refs ?? []) refs.set(r, entry);
+    for (const m of decl.memberTargets ?? []) memberTargets.set(m, entry);
+  });
+  return { refs, memberTargets, unclaimed };
+};
+
+/**
+ * Run infer-call hooks over the candidates a call can actually belong to:
+ * every claim-less plugin, plus the (at most one) claimant matching the
+ * callee shape — merged back into original registration order, so first-non-null
+ * semantics are exactly the old whole-chain behavior. A claimed hook is now
+ * physically unreachable for calls outside its claims. `null` from all →
+ * caller uses core default.
+ */
 export const runInferCallHooks = (
-  hooks: InferCallHook[],
+  dispatch: InferCallDispatch,
   e: CallExpr,
   api: InferCallApi,
 ): Result<Type, Diagnostic> | null => {
-  for (const hook of hooks) {
-    const r = hook(e, api);
+  const matched =
+    e.fn.kind === "ref"
+      ? dispatch.refs.get(e.fn.name)
+      : e.fn.kind === "field" && e.fn.target.kind === "ref"
+        ? dispatch.memberTargets.get(e.fn.target.name)
+        : undefined;
+  const candidates = matched
+    ? [...dispatch.unclaimed, matched].sort((a, b) => a.order - b.order)
+    : dispatch.unclaimed;
+  for (const c of candidates) {
+    const r = c.hook(e, api);
     if (r !== null) return r;
   }
   return null;

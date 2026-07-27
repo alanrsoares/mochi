@@ -2,7 +2,12 @@ import { expect, test } from "bun:test";
 import { codegenTs } from "@mochi/compiler/codegen-ts";
 import { compile, toTypedProgram } from "@mochi/compiler/compile";
 import { emitDts } from "@mochi/compiler/dts";
-import { DEFAULT_PLUGINS, type LanguagePlugin, resolvePlugins } from "@mochi/compiler/extensions";
+import {
+  DEFAULT_PLUGINS,
+  type LanguagePlugin,
+  pluginClashes,
+  resolvePlugins,
+} from "@mochi/compiler/extensions";
 import { lex } from "@mochi/compiler/lexer";
 import { parse } from "@mochi/compiler/parser";
 import { preludeNamespaces } from "@mochi/compiler/prelude";
@@ -195,4 +200,180 @@ export let el = <Btn $tone="a" />
   const r = compile(src, { plugins: [styledCvaExtension] });
   expect(isErr(r)).toBe(false);
   expect(unwrapOk(r)).toContain("h(");
+});
+
+// Claim declarations + clash detection: hooks now register with declarative
+// ownership (`parse.tokens`, `inferCall.refs` / `.memberTargets`), and
+// `pluginClashes` reports overlaps in a **resolved** list. ADR 0049 name
+// shadowing resolves in `resolvePlugins` first, so shadowing a builtin is
+// legal replacement — never a clash.
+const nullHook = () => null;
+
+test("pluginClashes: duplicate plugin name produces a diagnostic naming the clash", () => {
+  const a: LanguagePlugin = { name: "dup" };
+  const b: LanguagePlugin = { name: "dup" };
+  const diags = pluginClashes([a, b]);
+  expect(diags.length).toBe(1);
+  expect(diags[0]!.kind).toBe("check");
+  expect(diags[0]!.message).toBe("plugin clash: 'dup' and 'dup' both claim plugin name 'dup'");
+});
+
+test("pluginClashes: duplicate parse token claim names both plugins", () => {
+  const a: LanguagePlugin = { name: "alpha", parse: { tokens: ["lt"], hook: nullHook } };
+  const b: LanguagePlugin = { name: "beta", parse: { tokens: ["lt", "at"], hook: nullHook } };
+  const diags = pluginClashes([a, b]);
+  expect(diags.length).toBe(1);
+  expect(diags[0]!.kind).toBe("check");
+  expect(diags[0]!.message).toBe("plugin clash: 'alpha' and 'beta' both claim parse token 'lt'");
+});
+
+test("pluginClashes: duplicate inferCall ref claim names both plugins", () => {
+  const a: LanguagePlugin = { name: "alpha", inferCall: { refs: ["useState"], hook: nullHook } };
+  const b: LanguagePlugin = {
+    name: "beta",
+    inferCall: { refs: ["useState", "useOther"], hook: nullHook },
+  };
+  const diags = pluginClashes([a, b]);
+  expect(diags.length).toBe(1);
+  expect(diags[0]!.message).toBe(
+    "plugin clash: 'alpha' and 'beta' both claim inferCall ref 'useState'",
+  );
+});
+
+test("pluginClashes: duplicate inferCall memberTarget claim names both plugins", () => {
+  const a: LanguagePlugin = { name: "alpha", inferCall: { memberTargets: ["tw"], hook: nullHook } };
+  const b: LanguagePlugin = { name: "beta", inferCall: { memberTargets: ["tw"], hook: nullHook } };
+  const diags = pluginClashes([a, b]);
+  expect(diags.length).toBe(1);
+  expect(diags[0]!.message).toBe(
+    "plugin clash: 'alpha' and 'beta' both claim inferCall member target 'tw'",
+  );
+});
+
+test("pluginClashes: shadowing a builtin is replacement, not a clash (post-resolvePlugins)", () => {
+  // A caller "jsx" claiming the same token as the builtin it shadows: after
+  // resolution only one "jsx" (with one `lt` claim) remains — zero clashes.
+  const myJsx: LanguagePlugin = { name: "jsx", parse: { tokens: ["lt"], hook: nullHook } };
+  const resolved = resolvePlugins([myJsx, vendorA]);
+  expect(resolved.filter((p) => p.name === "jsx")).toEqual([myJsx]);
+  expect(pluginClashes(resolved)).toEqual([]);
+});
+
+test("pluginClashes: disjoint claims produce no diagnostics", () => {
+  // `at` / `dot` rather than `lt`: `resolvePlugins` prepends the builtin
+  // jsxPlugin, whose own claim on `lt` must stay unchallenged here.
+  const a: LanguagePlugin = {
+    name: "alpha",
+    parse: { tokens: ["at"], hook: nullHook },
+    inferCall: { refs: ["useState"], memberTargets: ["tw"], hook: nullHook },
+  };
+  const b: LanguagePlugin = {
+    name: "beta",
+    parse: { tokens: ["dot"], hook: nullHook },
+    inferCall: { refs: ["defineContainer"], memberTargets: ["sx"], hook: nullHook },
+  };
+  expect(pluginClashes([a, b])).toEqual([]);
+  expect(pluginClashes(resolvePlugins([a, b]))).toEqual([]);
+});
+
+test("pluginClashes: the shipped default + vendor plugin set is clash-free", () => {
+  const resolved = resolvePlugins([styledCvaExtension]);
+  expect(pluginClashes(resolved)).toEqual([]);
+});
+
+// ADR 0050: the choke point. `pluginClashes` used to be a pure function
+// nothing called — these two prove a clashing plugin list is rejected as an
+// ordinary Diagnostic through the two public surfaces every pipeline funnels
+// through: `parse` (CLI compile, Vite, dx format/hover/complete) and
+// `moduleDiagnostics` (the editor's diagnostics surface).
+test("parse(): a clashing plugin list fails with a diagnostic whose message contains 'clash'", () => {
+  const a: LanguagePlugin = { name: "alpha", inferCall: { refs: ["useThing"], hook: nullHook } };
+  const b: LanguagePlugin = { name: "beta", inferCall: { refs: ["useThing"], hook: nullHook } };
+  const parsed = parse(unwrapOk(lex("let x = 1")), { plugins: [a, b] });
+  expect(isErr(parsed)).toBe(true);
+  const diags = unwrapErr(parsed);
+  expect(diags[0]!.message).toContain("clash");
+});
+
+test("moduleDiagnostics(): a clashing plugin list surfaces the clash diagnostic for editor display", async () => {
+  const a: LanguagePlugin = { name: "alpha", parse: { tokens: ["at"], hook: nullHook } };
+  const b: LanguagePlugin = { name: "beta", parse: { tokens: ["at"], hook: nullHook } };
+  const noDeps = async (): Promise<string> => {
+    throw new Error("single-file test — no imports to read");
+  };
+  const diags = await moduleDiagnostics("/virtual/main.mochi", "let x = 1", noDeps, {
+    plugins: [a, b],
+  });
+  expect(diags.length).toBeGreaterThan(0);
+  expect(diags[0]!.message).toContain("clash");
+});
+
+// Claim-table dispatch (the follow-up slice to the claim declarations above):
+// a hook is now physically unreachable outside its declared claims — the seam
+// consults only the claimant matching the callee/token, plus every claim-less
+// hook (jsx), in original registration order.
+
+test("inferCall dispatch: a refs-claimed hook is consulted for its callee only", () => {
+  const seen: string[] = [];
+  const spy: LanguagePlugin = {
+    name: "spy-refs",
+    inferCall: {
+      refs: ["foo"],
+      hook: (e) => {
+        seen.push(e.fn.kind === "ref" ? e.fn.name : "?");
+        return null;
+      },
+    },
+  };
+  const r = toTypedProgram("let a = foo(1)\nlet b = bar(1)", { open: true, plugins: [spy] });
+  expect(isErr(r)).toBe(false);
+  expect(seen).toEqual(["foo"]);
+});
+
+test("inferCall dispatch: a memberTargets-claimed hook is consulted for its target only", () => {
+  const seen: string[] = [];
+  const spy: LanguagePlugin = {
+    name: "spy-members",
+    inferCall: {
+      memberTargets: ["tw"],
+      hook: (e) => {
+        seen.push(e.fn.kind === "field" && e.fn.target.kind === "ref" ? e.fn.target.name : "?");
+        return null;
+      },
+    },
+  };
+  const r = toTypedProgram('let a = tw.div("x")\nlet b = other.div("x")', {
+    open: true,
+    plugins: [spy],
+  });
+  expect(isErr(r)).toBe(false);
+  expect(seen).toEqual(["tw"]);
+});
+
+test("parse dispatch: a token-claimed hook fires at its token and only there; jsx keeps `lt`", () => {
+  let consulted = 0;
+  const starPlugin: LanguagePlugin = {
+    name: "star-atom",
+    parse: {
+      tokens: ["star"],
+      hook: (api) => {
+        consulted += 1;
+        const tk = api.next();
+        return { kind: "num", value: 42, raw: "42", span: tk.span };
+      },
+    },
+  };
+  // `*` cannot lead an atom in core — with the claim it parses via the plugin.
+  const starred = unwrapOk(parse(unwrapOk(lex("let x = *")), { plugins: [starPlugin] }));
+  const star = starred.stmts[0]!;
+  expect(star.kind === "let" && star.value.kind === "num" && star.value.value).toBe(42);
+  expect(consulted).toBe(1);
+  // A source full of other atoms never consults the claimed hook…
+  consulted = 0;
+  const plain = 'let a = 1\nlet b = <div />\nlet c = { d: "e" }';
+  const parsed = unwrapOk(parse(unwrapOk(lex(plain)), { plugins: [starPlugin] }));
+  expect(consulted).toBe(0);
+  // …and jsx (claiming `lt`) still parsed alongside it.
+  const jsx = parsed.stmts[1]!;
+  expect(jsx.kind === "let" && jsx.value.kind === "call" && jsx.value.origin).toBe("jsx");
 });

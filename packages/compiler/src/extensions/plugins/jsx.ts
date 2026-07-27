@@ -36,8 +36,7 @@ import type {
   ParseHook,
   ParserApi,
 } from "../extensions";
-
-type CallExpr = Extract<Expr, { kind: "call" }>;
+import { type CallExpr, rowField } from "../plugin-kit";
 
 /** The JSX pragma name the parser desugars to, and the fragment tag it uses for `<>…</>`. */
 const PRAGMA = "h";
@@ -273,7 +272,7 @@ const inferJsxCall: InferCallHook = (
     // value-side lit that widenLits would turn into `string`.
     if (propsExpr.kind === "record") {
       for (const f of propsExpr.fields) {
-        const expected = rowFieldType(zonkedTag.from.row, f.name);
+        const expected = rowField(zonkedTag.from.row, f.name);
         if (expected)
           api.noteType(f.nameSpan, api.zonk(expected), { kind: "property", name: f.name });
       }
@@ -282,16 +281,6 @@ const inferJsxCall: InferCallHook = (
   }
   // Intrinsic / unknown tag: open props, result is VNode.
   return ok(tCon("VNode"));
-};
-
-/** Walk a row for `label`; open tails / missing labels → null. */
-const rowFieldType = (row: Row, label: string): Type | null => {
-  let cur = row;
-  while (cur.kind === "extend") {
-    if (cur.label === label) return cur.type;
-    cur = cur.rest;
-  }
-  return null;
 };
 
 // --------------------------------------------------------------- format
@@ -429,8 +418,11 @@ const componentBindingTs: BindingTypeHook = (value: Expr, api: BindingTypeApi): 
 
 export const jsxPlugin: LanguagePlugin = {
   name: "jsx",
-  parse: parseJsxAtom,
-  inferCall: inferJsxCall,
+  // Claim: JSX atoms start at `<` (the lexer's generic `lt` token).
+  parse: { tokens: ["lt"], hook: parseJsxAtom },
+  // No ref/memberTarget claims: the hook keys off `origin: "jsx"` provenance,
+  // not a callee name — a hand-written `h(...)` is deliberately not claimed.
+  inferCall: { hook: inferJsxCall },
   format: formatJsx,
   bindingType: componentBindingTs,
 };

@@ -8,7 +8,6 @@
  * Register via the project vendor-plugin list (`apps/docs/mochi.plugins.ts`).
  */
 
-import type { Expr } from "@mochi/compiler/ast";
 import type { Diagnostic } from "@mochi/compiler/errors";
 import type {
   DtsBindingApi,
@@ -17,57 +16,22 @@ import type {
   InferCallApi,
   InferCallHook,
 } from "@mochi/compiler/extensions";
-import type { Row, Type } from "@mochi/compiler/types";
+// Explicit real-file subpath (like `@mochi/compiler/types` below): value
+// imports, so Node/Vite's config loader must resolve them without a bundler.
+import type { CallExpr } from "@mochi/compiler/plugin-kit";
+import { inferArgs, isRefCall, mapRow, rowField, rowLabels } from "@mochi/compiler/plugin-kit";
+import type { Type } from "@mochi/compiler/types";
 // Explicit extension: package boundary is resolved by Node/Vite without a bundler.
 import { rEmpty, rExtend, tArrow, tRecord, tString, tUnit } from "@mochi/compiler/types";
 import { isErr, ok, type Result } from "@onrails/result";
-
-type CallExpr = Extract<Expr, { kind: "call" }>;
 
 const HOST = 'import("@re-reduced/preact")';
 
 /** Nullary host action — `unit -> {}` so completion sees a method (ADR 0014). */
 const tAction = tArrow(tUnit, tRecord(rEmpty));
 
-const isRefCall = (e: CallExpr, name: string): boolean => e.fn.kind === "ref" && e.fn.name === name;
-
 const isDefineContainerCall = (e: CallExpr): boolean =>
   isRefCall(e, "defineContainer") && e.args.length >= 2;
-
-const rowField = (row: Row, name: string): Type | null => {
-  let current = row;
-  while (current.kind === "extend") {
-    if (current.label === name) return current.type;
-    current = current.rest;
-  }
-  return null;
-};
-
-const rowLabels = (row: Row): string[] => {
-  const labels: string[] = [];
-  let current = row;
-  while (current.kind === "extend") {
-    labels.push(current.label);
-    current = current.rest;
-  }
-  return labels;
-};
-
-/** Rebuild a row, mapping each field type (preserves order via reverse reduce). */
-const mapRow = (row: Row, mapType: (t: Type) => Type): Row => {
-  const fields: { label: string; type: Type }[] = [];
-  let current = row;
-  while (current.kind === "extend") {
-    fields.push({ label: current.label, type: current.type });
-    current = current.rest;
-  }
-  let out: Row = current.kind === "rvar" ? current : rEmpty;
-  for (let i = fields.length - 1; i >= 0; i--) {
-    const f = fields[i]!;
-    out = rExtend(f.label, mapType(f.type), out);
-  }
-  return out;
-};
 
 /** `ReadSignal<T>` sketch — Counter reads `s.count.value`. */
 const signalOf = (t: Type): Type => tRecord(rExtend("value", t, rEmpty));
@@ -122,12 +86,10 @@ const inferDefineContainer: InferCallHook = (
   api: InferCallApi,
 ): Result<Type, Diagnostic> | null => {
   if (!isDefineContainerCall(e)) return null;
-  let configType: Type | null = null;
-  for (const [index, arg] of e.args.entries()) {
-    const r = api.infer(arg);
-    if (isErr(r)) return r;
-    if (index === 1) configType = api.zonk(r.value);
-  }
+  const argsR = inferArgs(e.args, api);
+  if (isErr(argsR)) return argsR;
+  const configArg = argsR.value[1];
+  const configType: Type | null = configArg ? api.zonk(configArg) : null;
   // Runtime is exactly `{ name, ...config }`; keep that useful structural shape
   // in HM and reserve the heavy host generic for outbound TypeScript.
   if (configType?.kind === "record") {
@@ -143,10 +105,8 @@ const inferUseContainer: InferCallHook = (
   if (!isRefCall(e, "useContainer") || e.args.length < 1) return null;
   const defR = api.infer(e.args[0]!);
   if (isErr(defR)) return defR;
-  for (const arg of e.args.slice(1)) {
-    const r = api.infer(arg);
-    if (isErr(r)) return r;
-  }
+  const restR = inferArgs(e.args.slice(1), api);
+  if (isErr(restR)) return restR;
   return ok(storeOf(api.zonk(defR.value), api));
 };
 
@@ -167,10 +127,8 @@ const inferUseSelect: InferCallHook = (
   if (isErr(selR)) return selR;
   const uni = api.unify(selR.value, tArrow(signals, result), e.args[1]!.span);
   if (isErr(uni)) return uni;
-  for (const arg of e.args.slice(2)) {
-    const r = api.infer(arg);
-    if (isErr(r)) return r;
-  }
+  const restR = inferArgs(e.args.slice(2), api);
+  if (isErr(restR)) return restR;
   return ok(result);
 };
 
@@ -201,6 +159,10 @@ const reReducedDts: DtsBindingHook = (
 
 export const reReducedExtension: HostExtension = {
   name: "re-reduced",
-  inferCall: inferReReducedCall,
+  // Claim: the container API callee names this hook chain handles.
+  inferCall: {
+    refs: ["defineContainer", "useContainer", "useSelect"],
+    hook: inferReReducedCall,
+  },
   dtsBinding: reReducedDts,
 };

@@ -119,3 +119,8 @@ opt-out ([ADR 0011](adr/0011-language-plugins.md), [tracer bullets](dx-tracer-bu
 A plugin named like a builtin **replaces** it in place: list your own `"jsx"` plugin to
 swap the builtin, or a hook-less stub (`{ name: "jsx" }`) to disable JSX while keeping
 vendor plugins ([ADR 0049](adr/0049-plugin-name-shadowing.md)).
+`parse` and `inferCall` hooks declare their ownership up front (`parse.tokens`,
+`inferCall.refs`/`memberTargets`) so dispatch is a table lookup rather than a chain walk;
+two plugins claiming the same token or callee name is rejected as an ordinary `Diagnostic`
+at the parser's choke point and, for a manifest, as an `onError` load failure
+([ADR 0050](adr/0050-plugin-claims-table-dispatch.md)).

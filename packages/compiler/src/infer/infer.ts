@@ -74,8 +74,8 @@ import {
   tVar,
 } from "../ast/types";
 import { type Diagnostic, typeErr } from "../errors/errors";
-import type { InferCallApi, InferCallHook, LanguagePlugin } from "../extensions/extensions";
-import { resolvePlugins, runInferCallHooks } from "../extensions/extensions";
+import type { InferCallApi, InferCallDispatch, LanguagePlugin } from "../extensions/extensions";
+import { inferCallDispatch, resolvePlugins, runInferCallHooks } from "../extensions/extensions";
 import { stronglyConnected } from "./scc";
 import { showTypeExpr } from "./show-type-expr";
 import { closestName } from "./suggest";
@@ -85,7 +85,8 @@ import { emptySubst, resolve, resolveRow, type Subst, unify, zonk } from "./unif
  * Inference context. `open`: unbound refs get a fresh type var (host globals
  * when compiling to JS). `record`: optional span → type hook for LSP hover
  * (unzonked; caller zonks at the end). `noteUse`/`noteLet`: TS emit (ADR 0035).
- * `inferCallHooks`: resolved plugins' `inferCall` hooks (styled-cva, …).
+ * `inferCallHooks`: claim-table dispatch over resolved plugins' `inferCall`
+ * hooks (styled-cva, …), keyed by callee ref / member-target name.
  */
 type Ctx = {
   env: Env;
@@ -100,7 +101,7 @@ type Ctx = {
   record?: (span: Span, t: Type, symbol?: SymbolInfo) => void;
   noteUse?: (sc: Scheme, t: Type) => void;
   noteLet?: (sc: Scheme, valueSpan: Span) => void;
-  inferCallHooks: InferCallHook[];
+  inferCallHooks: InferCallDispatch;
 };
 
 const u = (a: Type, b: Type, ctx: Ctx, span?: Span): Result<Type, Diagnostic> => {
@@ -794,9 +795,7 @@ function run(
   const ns = seedNamespaces(env, subst, opts.namespaces, opts.nsImports);
   const fresh = mkFresh(1000);
   const open = opts.open ?? false;
-  const inferCallHooks = resolvePlugins(opts.plugins).flatMap((p) =>
-    p.inferCall ? [p.inferCall] : [],
-  );
+  const inferCallHooks = inferCallDispatch(resolvePlugins(opts.plugins));
 
   // Transparent record aliases: collect their field lists so extern signatures
   // can reference them (expanded to rows), and build display templates (params
