@@ -1,14 +1,12 @@
 // Prelude extension: Math (unqualified builtins), String ops (`Str.*`), and the
 // grown eager-Array namespace (`Array.reverse/concat/…`). All immutable.
 import { expect, test } from "bun:test";
+import { compile } from "@mochi/compiler/compile";
+import { compileAndEval, compileJs } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
-import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
-import { compile } from "../src/compile";
+import { isErr, unwrapErr } from "@onrails/result";
 
-const run = (src: string, ret: string): unknown => {
-  const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
-  return new Function("match", `${js}\nreturn ${ret};`)(match);
-};
+const run = (src: string, ret: string): unknown => compileAndEval(src, ret);
 
 // ---- Math ------------------------------------------------------------------
 
@@ -201,7 +199,7 @@ test("Result.map / mapErr / flatMap / unwrapOr / isOk / isErr", () => {
 test("Task.of / map / andThen / run pipeline", async () => {
   const src = `let program = Task.of(20) |> Task.map((+ 1)) |> Task.andThen(x => Task.of(mul(x, 2)))
 let result = Task.run(program)`;
-  const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
+  const js = compileJs(src, { stripImports: true, runtime: true });
   const result = new Function("match", `${js}\nreturn result;`)(match) as Promise<unknown>;
   expect(result).toBeInstanceOf(Promise);
   expect(await result).toEqual({ _tag: "Ok", value: 42 });
@@ -212,7 +210,7 @@ let result = Task.run(program)`;
 test("Task.delay multi-arg emit returns a Task, not a partial", async () => {
   const src = `let task = Task.delay(1, 0)
 let result = Task.run(task)`;
-  const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
+  const js = compileJs(src, { stripImports: true, runtime: true });
   const result = new Function("match", `${js}\nreturn result;`)(match) as Promise<unknown>;
   expect(result).toBeInstanceOf(Promise);
   expect(await result).toEqual({ _tag: "Ok", value: 0 });
@@ -221,7 +219,7 @@ let result = Task.run(task)`;
 test("Task.delay partial still works with Task.andThen", async () => {
   const src = `let program = Task.of(21) |> Task.andThen(Task.delay(1)) |> Task.map(mul(2))
 let result = Task.run(program)`;
-  const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
+  const js = compileJs(src, { stripImports: true, runtime: true });
   const result = new Function("match", `${js}\nreturn result;`)(match) as Promise<unknown>;
   expect(await result).toEqual({ _tag: "Ok", value: 42 });
 });

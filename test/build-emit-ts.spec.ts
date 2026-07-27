@@ -8,12 +8,12 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import { buildModulesTs, type ModuleOutput } from "@mochi/compiler/module";
 import { isErr } from "@onrails/result";
-import { buildModulesTs, type ModuleOutput } from "../src/module";
 
 const DIR = new URL("./.tsgen-graph/", import.meta.url).pathname;
 // From test/.tsgen-graph/<file>.ts back to src/runtime.
-const RUNTIME = "../../src/runtime";
+const RUNTIME = "../../packages/compiler/src/runtime";
 
 // `shapes` exports a variant + its ctors + a transform. `ops` imports the ctors
 // and re-exports a value (`unit`) and a transform (`grow`) — both typed `Shape`.

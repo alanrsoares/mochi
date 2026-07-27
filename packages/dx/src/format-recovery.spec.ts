@@ -10,10 +10,8 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { format } from "@mochi/dx/format";
-import { unwrapOk } from "@onrails/result";
-
-const fmt = (src: string): string => unwrapOk(format(src));
+import { repoRoot } from "@mochi/test-support";
+import { formatSrc as fmt } from "@mochi/test-support/format";
 
 // --- 1. Idempotency on broken sources ---------------------------------
 
@@ -55,7 +53,7 @@ test("format is a fixed point with a comment adjacent to an error region", () =>
 // now-`parseRecovering`-backed pipeline must still be a no-op: the switch
 // away from the hard-fail `parse` must not perturb output for files that
 // already parse cleanly (no error-node spans are ever produced for them).
-const root = join(import.meta.dir, "../../..");
+const root = repoRoot(import.meta.url);
 const cleanFiles = ["bootstrap/ast.mochi", "bootstrap/scc.mochi"];
 
 for (const rel of cleanFiles) {

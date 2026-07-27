@@ -3,16 +3,13 @@
 // toward exhaustiveness (it can be false). See ADR 0013.
 
 import { expect, test } from "bun:test";
+import { compile } from "@mochi/compiler/compile";
 import { format } from "@mochi/dx/format";
-import { match } from "@onrails/pattern";
+import { compileAndEval } from "@mochi/test-support";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
-import { compile } from "../src/compile";
 
 // Same harness as nested-patterns.spec.ts: strip the import, inject `match`.
-const run = (src: string): unknown => {
-  const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
-  return new Function("match", `${js}\nreturn r;`)(match);
-};
+const run = (src: string): unknown => compileAndEval(src, "r");
 
 const errMsg = (src: string): string => unwrapErr(compile(src))[0]!.message;
 

@@ -1,13 +1,14 @@
 // String literal patterns in `switch`.
 import { expect, test } from "bun:test";
+import { compile } from "@mochi/compiler/compile";
+import { compileJs } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
-import { isErr, unwrapOk } from "@onrails/result";
-import { compile } from "../src/compile";
+import { isErr } from "@onrails/result";
 
-const js = (src: string): string => unwrapOk(compile(src));
+const js = (src: string) => compileJs(src, { runtime: true });
 
 const run = (src: string, ret: string): unknown => {
-  const body = unwrapOk(compile(src)).replace(/^import .*$/m, "");
+  const body = compileJs(src, { stripImports: true, runtime: true });
   return new Function("match", `${body}\nreturn ${ret};`)(match);
 };
 

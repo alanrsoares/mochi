@@ -5,8 +5,6 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { match } from "@onrails/pattern";
-import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 import type {
   AliasField,
   Ctor,
@@ -16,13 +14,16 @@ import type {
   Pattern,
   Stmt,
   TypeExpr,
-} from "../src/ast";
-import { lex } from "../src/lexer";
-import { parse, parseRecovering } from "../src/parser";
-import type { Span } from "../src/span";
-import { bootstrapModuleJs } from "./support/bootstrap";
+} from "@mochi/compiler/ast";
+import { lex } from "@mochi/compiler/lexer";
+import { parse, parseRecovering } from "@mochi/compiler/parser";
+import type { Span } from "@mochi/compiler/span";
+import { repoRoot } from "@mochi/test-support";
+import { bootstrapModuleJs } from "@mochi/test-support/bootstrap";
+import { match } from "@onrails/pattern";
+import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 
-const root = join(import.meta.dir, "..");
+const root = repoRoot(import.meta.url);
 
 const compileAl = bootstrapModuleJs;
 

@@ -83,7 +83,7 @@ export const runFixpoint = (): FixpointResult => {
 
   // --- seed (stage-1) binary: TS-built, in .fixpoint-work/seed. This same
   // `build` is the TS parity reference — the emitted bootstrap/*.js it writes. ---
-  bun(["src/cli.ts", "build", "bootstrap/cli.mochi"]);
+  bun(["packages/compiler/src/cli.ts", "build", "bootstrap/cli.mochi"]);
   const tsBuild: Record<string, string> = {};
   for (const m of MODULES) tsBuild[m] = readFileSync(join(root, "bootstrap", `${m}.js`), "utf8");
   const seed = join(work, "seed");

@@ -1,8 +1,5 @@
 import { expect, test } from "bun:test";
-import { format } from "@mochi/dx/format";
-import { unwrapOk } from "@onrails/result";
-
-const fmt = (src: string): string => unwrapOk(format(src));
+import { formatSrc as fmt } from "@mochi/test-support/format";
 
 test("normalizes whitespace in a let binding", () => {
   expect(fmt("let   n=add(1,2)")).toBe("let n = 1 + 2\n");

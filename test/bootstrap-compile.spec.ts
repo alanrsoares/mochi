@@ -9,12 +9,13 @@
 
 import { beforeAll, expect, test } from "bun:test";
 import { join } from "node:path";
+import { compile as tsCompile } from "@mochi/compiler/compile";
+import { repoRoot } from "@mochi/test-support";
+import { bootstrapModuleJs } from "@mochi/test-support/bootstrap";
 import { match } from "@onrails/pattern";
 import { unwrapOk } from "@onrails/result";
-import { compile as tsCompile } from "../src/compile";
-import { bootstrapModuleJs } from "./support/bootstrap";
 
-const root = join(import.meta.dir, "..");
+const root = repoRoot(import.meta.url);
 
 type AlErr = { message: string; start: number; end: number };
 type AlResult = { _tag: "Ok"; value: string } | { _tag: "Err"; error: AlErr };

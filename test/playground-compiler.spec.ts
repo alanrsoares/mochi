@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { compile, compileTargets } from "@mochi/compiler/compile";
+import { readRepo } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
-import { compile, compileTargets } from "../src/compile";
 
-const read = (p: string): string => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
+const read = (p: string): string => readRepo(import.meta.url, p);
 
 /**
  * Local Task-shaped host matching `compileSyncTask` — avoids importing

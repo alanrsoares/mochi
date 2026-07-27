@@ -4,13 +4,13 @@ All tooling is driven from the compiler itself — the LSP, formatter, and `.d.t
 generator are surfaces over the same passes, not separate reimplementations.
 
 Package boundary ([ADR 0048](adr/0048-core-dx-package-boundary.md)): **`@mochi/compiler`**
-is the bootstrap mirror + foundation (`src/`); **`@mochi/dx`** owns format + IDE
+is the bootstrap mirror + foundation (`packages/compiler`); **`@mochi/dx`** owns format + IDE
 queries; **`@mochi/lsp`** is the protocol adapter; **`@mochi/vite-plugin`** is the
 Vite transform. Core must not import DX.
 
 ## CLI
 
-`bun run mochi` is `bun src/cli.ts`. With no subcommand it compiles one file to JS on
+`bun run mochi` is `bun packages/compiler/src/cli.ts`. With no subcommand it compiles one file to JS on
 stdout; the subcommands select another output:
 
 ```bash

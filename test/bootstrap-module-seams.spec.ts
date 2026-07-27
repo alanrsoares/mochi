@@ -8,9 +8,10 @@
 
 import { beforeAll, expect, test } from "bun:test";
 import { join } from "node:path";
-import { ensureInTreeBootstrapBuild } from "./support/bootstrap";
+import { repoRoot } from "@mochi/test-support";
+import { ensureInTreeBootstrapBuild } from "@mochi/test-support/bootstrap";
 
-const root = join(import.meta.dir, "..");
+const root = repoRoot(import.meta.url);
 const bs = (f: string) => join(root, `bootstrap/${f}`);
 
 type Res<T> = { _tag: "Ok"; value: T } | { _tag: "Err"; error: { message: string } };

@@ -6,8 +6,8 @@
 // shared by both the JS and typed-TS backends (`src/runtime.ts` is generated
 // from the same bodies).
 import { expect, test } from "bun:test";
+import { preludeJs } from "@mochi/compiler/prelude";
 import fc from "fast-check";
-import { preludeJs } from "../src/prelude";
 
 type Runtime = {
   eq: (a: unknown, b: unknown) => boolean;

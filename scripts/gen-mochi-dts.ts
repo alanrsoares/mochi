@@ -16,7 +16,7 @@ import { join } from "node:path";
 import { isErr, unwrapOk } from "@onrails/result";
 import { docsVendorPlugins } from "../apps/docs/mochi.plugins";
 import { snakeVendorPlugins } from "../examples/snake/mochi.plugins";
-import { emitDts } from "../src/dts";
+import { emitDts } from "@mochi/compiler/dts";
 
 const root = join(import.meta.dir, "..");
 const args = process.argv.slice(2);

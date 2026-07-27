@@ -4,11 +4,11 @@
  * `hooks.mochi` extern schemes stay polymorphic where HM would lie (updater
  * overloads, heterogeneous deps). This module pins shapes at each call.
  */
-import { isErr, ok, type Result } from "@onrails/result";
-import type { Expr } from "../../../src/ast";
-import type { Diagnostic } from "../../../src/errors";
-import type { InferCallApi, InferCallHook } from "../../../src/extensions";
-import type { Type } from "../../../src/types";
+
+import type { Expr } from "@mochi/compiler/ast";
+import type { Diagnostic } from "@mochi/compiler/errors";
+import type { InferCallApi, InferCallHook } from "@mochi/compiler/extensions";
+import type { Type } from "@mochi/compiler/types";
 import {
   rEmpty,
   rExtend,
@@ -18,7 +18,8 @@ import {
   tTuple,
   tUnion,
   tUnit,
-} from "../../../src/types.ts";
+} from "@mochi/compiler/types";
+import { isErr, ok, type Result } from "@onrails/result";
 
 type CallExpr = Extract<Expr, { kind: "call" }>;
 

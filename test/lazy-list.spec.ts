@@ -3,25 +3,22 @@
 // destructuring is the canonical `@{}` + `@{head, ...tail}` pair, lowered to an
 // iterator-stepping IIFE (not @onrails/pattern — a sequence has no length).
 import { expect, test } from "bun:test";
+import { check } from "@mochi/compiler/check";
+import { compile } from "@mochi/compiler/compile";
+import { emitDts } from "@mochi/compiler/dts";
+import { inferProgram, showScheme } from "@mochi/compiler/infer";
+import { lex } from "@mochi/compiler/lexer";
+import { parse } from "@mochi/compiler/parser";
+import { preludeEnv } from "@mochi/compiler/prelude";
 import { format } from "@mochi/dx/format";
-import { match } from "@onrails/pattern";
+import { compileAndEval, compileJs } from "@mochi/test-support";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
-import { check } from "../src/check";
-import { compile } from "../src/compile";
-import { emitDts } from "../src/dts";
-import { inferProgram, showScheme } from "../src/infer";
-import { lex } from "../src/lexer";
-import { parse } from "../src/parser";
-import { preludeEnv } from "../src/prelude";
 
 // Compile standalone (prelude inlined) and evaluate a binding. `match` is
 // injected for the `@{...all}` catch-all, which lowers to a match() chain.
-const run = (src: string, ret: string): unknown => {
-  const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
-  return new Function("match", `${js}\nreturn ${ret};`)(match);
-};
+const run = (src: string, ret: string): unknown => compileAndEval(src, ret);
 
-const js = (src: string): string => unwrapOk(compile(src, { runtime: false }));
+const js = (src: string) => compileJs(src);
 
 const typeOf = (src: string, name: string): string => {
   const prog = unwrapOk(check(unwrapOk(parse(unwrapOk(lex(src))))));

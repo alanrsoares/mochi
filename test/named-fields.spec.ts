@@ -1,12 +1,13 @@
 // Named constructor fields — `Ok(value: a)` lowers to `{ _tag, value }`,
 // matching the @onrails/result + @onrails/maybe runtime shape for interop.
 import { expect, test } from "bun:test";
+import { emitDts } from "@mochi/compiler/dts";
+import { compileJs } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { isOk, map, unwrapOk, unwrapOr } from "@onrails/result";
-import { compile } from "../src/compile";
-import { emitDts } from "../src/dts";
 
-const js = (src: string): string => unwrapOk(compile(src));
+const js = (src: string) => compileJs(src, { runtime: true });
+
 const RESULT = "type Result a e =\n  | Ok(value: a)\n  | Err(error: e)\n";
 
 test("a labelled field lowers to that runtime key", () => {

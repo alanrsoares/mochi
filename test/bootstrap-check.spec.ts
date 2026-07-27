@@ -5,14 +5,15 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { check } from "@mochi/compiler/check";
+import { lex } from "@mochi/compiler/lexer";
+import { parse } from "@mochi/compiler/parser";
+import { repoRoot } from "@mochi/test-support";
+import { bootstrapModuleJs } from "@mochi/test-support/bootstrap";
 import { match } from "@onrails/pattern";
 import { isOk, unwrapErr, unwrapOk } from "@onrails/result";
-import { check } from "../src/check";
-import { lex } from "../src/lexer";
-import { parse } from "../src/parser";
-import { bootstrapModuleJs } from "./support/bootstrap";
 
-const root = join(import.meta.dir, "..");
+const root = repoRoot(import.meta.url);
 
 const compileAl = bootstrapModuleJs;
 

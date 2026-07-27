@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
+import { toTypedProgram } from "@mochi/compiler/compile";
+import { emitDts } from "@mochi/compiler/dts";
+import { showScheme } from "@mochi/compiler/infer";
+import { moduleContext } from "@mochi/compiler/module";
+import { preludeNamespaces } from "@mochi/compiler/prelude";
 import { moduleCompleteAt } from "@mochi/dx/complete";
 import { isErr, unwrapOk } from "@onrails/result";
-import { toTypedProgram } from "../../../src/compile";
-import { emitDts } from "../../../src/dts";
-import { showScheme } from "../../../src/infer";
-import { moduleContext } from "../../../src/module";
-import { preludeNamespaces } from "../../../src/prelude";
 import { styledCvaExtension } from "./index";
 
 const exts = [styledCvaExtension];

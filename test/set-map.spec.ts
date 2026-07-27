@@ -3,18 +3,19 @@
 // destructuring; ops are qualified (`Set.union`, `Map.getOr`) and immutable.
 // Set has no literal sigil (built via `Set.fromArray`); Map keeps `#{…}`.
 import { expect, test } from "bun:test";
+import { check } from "@mochi/compiler/check";
+import { compile } from "@mochi/compiler/compile";
+import { emitDts } from "@mochi/compiler/dts";
+import { inferProgram, showScheme } from "@mochi/compiler/infer";
+import { lex } from "@mochi/compiler/lexer";
+import { parse } from "@mochi/compiler/parser";
+import { preludeEnv, preludeNamespaces } from "@mochi/compiler/prelude";
 import { format } from "@mochi/dx/format";
+import { compileJs } from "@mochi/test-support";
 import { isErr, unwrapOk } from "@onrails/result";
-import { check } from "../src/check";
-import { compile } from "../src/compile";
-import { emitDts } from "../src/dts";
-import { inferProgram, showScheme } from "../src/infer";
-import { lex } from "../src/lexer";
-import { parse } from "../src/parser";
-import { preludeEnv, preludeNamespaces } from "../src/prelude";
 
 const run = (src: string, ret: string): unknown => {
-  const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
+  const js = compileJs(src, { stripImports: true, runtime: true });
   return new Function(`${js}\nreturn ${ret};`)();
 };
 

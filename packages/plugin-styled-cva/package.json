@@ -6,6 +6,9 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "dependencies": {
+    "@mochi/compiler": "workspace:*"
+  },
   "peerDependencies": {
     "@onrails/result": "^0.4.0"
   }

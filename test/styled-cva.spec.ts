@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
+import { compile } from "@mochi/compiler/compile";
+import { lex } from "@mochi/compiler/lexer";
+import { parse } from "@mochi/compiler/parser";
 import { format } from "@mochi/dx/format";
 import { unwrapOk } from "@onrails/result";
-import { compile } from "../src/compile";
-import { lex } from "../src/lexer";
-import { parse } from "../src/parser";
 
 describe("$ labels for styled-cva interop", () => {
   it("parses $tone record fields", () => {

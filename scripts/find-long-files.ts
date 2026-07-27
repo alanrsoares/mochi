@@ -6,7 +6,7 @@ import { Glob } from "bun";
 const SPLIT = 600; // likely doing too much — split into cohesive modules
 const WATCH = 400; // getting large — deepen abstractions before it hits SPLIT
 
-const patterns = ["src/**/*.ts", "editors/**/src/**/*.ts", "scripts/**/*.ts"];
+const patterns = ["packages/compiler/src/**/*.ts", "editors/**/src/**/*.ts", "scripts/**/*.ts"];
 const showAll = process.argv.includes("--all");
 
 const files: { path: string; lines: number }[] = [];

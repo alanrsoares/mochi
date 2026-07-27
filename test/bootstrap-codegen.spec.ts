@@ -9,15 +9,16 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { codegen } from "@mochi/compiler/codegen";
+import { lex } from "@mochi/compiler/lexer";
+import { parse } from "@mochi/compiler/parser";
+import { namespaceRuntime, preludeJsDefs, runtimeDeps } from "@mochi/compiler/prelude";
+import { repoRoot } from "@mochi/test-support";
+import { bootstrapModuleJs } from "@mochi/test-support/bootstrap";
 import { match } from "@onrails/pattern";
 import { unwrapOk } from "@onrails/result";
-import { codegen } from "../src/codegen";
-import { lex } from "../src/lexer";
-import { parse } from "../src/parser";
-import { namespaceRuntime, preludeJsDefs, runtimeDeps } from "../src/prelude";
-import { bootstrapModuleJs } from "./support/bootstrap";
 
-const root = join(import.meta.dir, "..");
+const root = repoRoot(import.meta.url);
 
 const compileAl = bootstrapModuleJs;
 

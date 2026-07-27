@@ -8,20 +8,21 @@
  * - `tw.tag(base)` / `tw.tag(base, { variants })` → props → VNode component
  * - dts: `$tone?: "rose" | …` unions extracted from the variants record AST
  */
-import { isErr, ok, type Result } from "@onrails/result";
-import type { Expr } from "../../../src/ast";
-import type { Diagnostic } from "../../../src/errors";
+
+import type { Expr } from "@mochi/compiler/ast";
+import type { Diagnostic } from "@mochi/compiler/errors";
 import type {
   CompleteMemberHook,
   DtsBindingHook,
   HostExtension,
   InferCallApi,
   InferCallHook,
-} from "../../../src/extensions";
-import type { Row, Type } from "../../../src/types";
+} from "@mochi/compiler/extensions";
+import type { Row, Type } from "@mochi/compiler/types";
 // Explicit extension: crossing the package boundary, this specifier is resolved
 // by Node/Vite's config loader without a bundler, which needs the real filename.
-import { rExtend, tArrow, tCon, tLit, tRecord, tUnion } from "../../../src/types.ts";
+import { rExtend, tArrow, tCon, tLit, tRecord, tUnion } from "@mochi/compiler/types";
+import { isErr, ok, type Result } from "@onrails/result";
 
 type CallExpr = Extract<Expr, { kind: "call" }>;
 type RecordExpr = Extract<Expr, { kind: "record" }>;

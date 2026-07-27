@@ -6,16 +6,13 @@
 // over-application. Before this, type-valid programs like `map(add(10))(xs)`
 // compiled but crashed at runtime.
 import { expect, test } from "bun:test";
-import { match } from "@onrails/pattern";
+import { compile } from "@mochi/compiler/compile";
+import { compileAndEval } from "@mochi/test-support";
 import { unwrapOk } from "@onrails/result";
-import { compile } from "../src/compile";
 
 // Compile standalone (runtime inlined, the default) and evaluate a binding.
 // `match` is injected for any snippet that lowers a catch-all to a match() chain.
-const run = (src: string, ret: string): unknown => {
-  const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
-  return new Function("match", `${js}\nreturn ${ret};`)(match);
-};
+const run = (src: string, ret: string): unknown => compileAndEval(src, ret);
 
 // ---- prelude arithmetic (flat impl) ----------------------------------------
 

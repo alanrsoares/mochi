@@ -3,15 +3,15 @@
 
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { compile } from "@mochi/compiler/compile";
+import { compileTargets } from "@mochi/compiler/compile-targets";
+import { buildModules } from "@mochi/compiler/module";
+import { readRepo, repoPath } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
-import { compile } from "../src/compile";
-import { compileTargets } from "../src/compile-targets";
-import { buildModules } from "../src/module";
 
-const read = (p: string): string => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
-const path = (p: string): string => fileURLToPath(new URL(`../${p}`, import.meta.url));
+const read = (p: string): string => readRepo(import.meta.url, p);
+const path = (p: string): string => repoPath(import.meta.url, p);
 
 test("example.mochi compiles", () => {
   expect(isErr(compile(read("examples/example.mochi")))).toBe(false);

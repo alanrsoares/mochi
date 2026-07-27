@@ -1,15 +1,15 @@
 import { expect, test } from "bun:test";
+import { codegenTs } from "@mochi/compiler/codegen-ts";
+import { compile, toTypedProgram } from "@mochi/compiler/compile";
+import { emitDts } from "@mochi/compiler/dts";
+import { DEFAULT_PLUGINS, type LanguagePlugin, resolvePlugins } from "@mochi/compiler/extensions";
+import { lex } from "@mochi/compiler/lexer";
+import { parse } from "@mochi/compiler/parser";
+import { preludeNamespaces } from "@mochi/compiler/prelude";
 import { moduleDiagnostics } from "@mochi/dx/diagnostics";
 import { format } from "@mochi/dx/format";
 import { styledCvaExtension } from "@mochi/plugin-styled-cva";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
-import { codegenTs } from "../src/codegen-ts";
-import { compile, toTypedProgram } from "../src/compile";
-import { emitDts } from "../src/dts";
-import { DEFAULT_PLUGINS, type LanguagePlugin, resolvePlugins } from "../src/extensions";
-import { lex } from "../src/lexer";
-import { parse } from "../src/parser";
-import { preludeNamespaces } from "../src/prelude";
 
 const builtin: LanguagePlugin = { name: "builtin" };
 const vendorA: LanguagePlugin = { name: "vendor-a" };

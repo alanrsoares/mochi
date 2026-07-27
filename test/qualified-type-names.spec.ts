@@ -5,12 +5,12 @@
 // an unknown alias or member is a check-time diagnostic. Folding qualified names back
 // out in dts/hover is slice c.
 import { expect, test } from "bun:test";
+import { compile } from "@mochi/compiler/compile";
+import { lex } from "@mochi/compiler/lexer";
+import { buildModules } from "@mochi/compiler/module";
+import { parse } from "@mochi/compiler/parser";
 import { format } from "@mochi/dx/format";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
-import { compile } from "../src/compile";
-import { lex } from "../src/lexer";
-import { buildModules } from "../src/module";
-import { parse } from "../src/parser";
 
 /** Build a `{ path: source }` fixture graph; absolute paths keep `node:path` deterministic. */
 const build = (files: Record<string, string>, entry: string) =>

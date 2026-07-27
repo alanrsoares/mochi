@@ -2,21 +2,21 @@
 // (distinct arities never unify), `switch` destructure + narrowing, codegen to
 // JS arrays, extern tuple signatures, and formatter round-trip.
 import { expect, test } from "bun:test";
+import { type Env, inferProgram, showScheme } from "@mochi/compiler/infer";
+import { lex } from "@mochi/compiler/lexer";
+import { parse } from "@mochi/compiler/parser";
+import { type Type, tArrow, tNumber } from "@mochi/compiler/types";
 import { format } from "@mochi/dx/format";
+import { compileJs } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
-import { compile } from "../src/compile";
-import { type Env, inferProgram, showScheme } from "../src/infer";
-import { lex } from "../src/lexer";
-import { parse } from "../src/parser";
-import { type Type, tArrow, tNumber } from "../src/types";
 
 const numOps: Record<string, Type> = { add: tArrow(tNumber, tArrow(tNumber, tNumber)) };
 const infer = (src: string, builtins: Record<string, Type> = numOps) =>
   inferProgram(unwrapOk(parse(unwrapOk(lex(src)))), builtins);
 const typeOf = (env: Env, name: string): string => showScheme(env.get(name)!);
 const run = (src: string): unknown => {
-  const js = unwrapOk(compile(src)).replace(/^import .*$/gm, "");
+  const js = compileJs(src, { stripImports: true, runtime: true });
   return new Function("match", `${js}\nreturn r;`)(match);
 };
 

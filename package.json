@@ -4,10 +4,10 @@
   "type": "module",
   "private": true,
   "bin": {
-    "mochi": "src/cli.ts"
+    "mochi": "packages/compiler/src/cli.ts"
   },
   "scripts": {
-    "mochi": "bun src/cli.ts",
+    "mochi": "bun packages/compiler/src/cli.ts",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
@@ -53,6 +53,7 @@
     "@mochi/plugin-preact": "workspace:*",
     "@mochi/plugin-re-reduced": "workspace:*",
     "@mochi/plugin-styled-cva": "workspace:*",
+    "@mochi/test-support": "workspace:*",
     "@mochi/vite-plugin": "workspace:*",
     "@types/bun": "latest",
     "esbuild": "^0.28.1",

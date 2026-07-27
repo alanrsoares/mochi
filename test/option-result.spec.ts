@@ -4,15 +4,12 @@
 // declare its own type of that name, so hand-written decls still win. They back
 // the Option-returning safe accessors (Map.get, List.head, Array.head/find).
 import { expect, test } from "bun:test";
-import { match } from "@onrails/pattern";
+import { compile } from "@mochi/compiler/compile";
+import { emitDts } from "@mochi/compiler/dts";
+import { compileAndEval } from "@mochi/test-support";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
-import { compile } from "../src/compile";
-import { emitDts } from "../src/dts";
 
-const run = (src: string, ret: string): unknown => {
-  const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
-  return new Function("match", `${js}\nreturn ${ret};`)(match);
-};
+const run = (src: string, ret: string): unknown => compileAndEval(src, ret);
 
 const UNWRAP = "let unwrap = o => switch o {\n | Some(v) => v\n | None => 0\n}\n";
 const ORZERO = "let orZero = r => switch r {\n | Ok(v) => v\n | Err(e) => 0\n}\n";

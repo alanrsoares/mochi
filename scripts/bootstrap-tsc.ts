@@ -14,12 +14,12 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { isErr } from "@onrails/result";
-import { buildModulesTs } from "../src/module";
+import { buildModulesTs } from "@mochi/compiler/module";
 
 const REPO = resolve(import.meta.dir, "..");
 const ENTRY = join(REPO, "bootstrap", "cli.mochi");
 const BOOTSTRAP = join(REPO, "bootstrap");
-const RUNTIME = join(REPO, "src", "runtime"); // bundler resolves to src/runtime.ts
+const RUNTIME = join(REPO, "packages", "compiler", "src", "runtime");
 
 const TSCONFIG = {
   compilerOptions: {

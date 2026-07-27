@@ -1,10 +1,11 @@
 // String interpolation (ADR 0023): "...${expr}..." — holes unify with
 // `string`, codegen is a native JS template literal, safely re-escaped.
 import { expect, test } from "bun:test";
-import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
-import { compile } from "../src/compile";
+import { compile } from "@mochi/compiler/compile";
+import { compileJs } from "@mochi/test-support";
+import { isErr, unwrapErr } from "@onrails/result";
 
-const js = (src: string) => unwrapOk(compile(src, { runtime: false }));
+const js = (src: string) => compileJs(src);
 
 test("hole-free string still lowers to a plain JS string (zero churn)", () => {
   expect(js('let s = "hello"')).toBe('const s = "hello";\n');

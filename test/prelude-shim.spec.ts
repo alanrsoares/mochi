@@ -12,12 +12,13 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { repoRoot } from "@mochi/test-support";
+import { bootstrapModuleJs } from "@mochi/test-support/bootstrap";
 import { match } from "@onrails/pattern";
 import { unwrapOk } from "@onrails/result";
 import { buildShimSource, SHIM_PATH } from "../scripts/gen-prelude";
-import { bootstrapModuleJs } from "./support/bootstrap";
 
-const root = join(import.meta.dir, "..");
+const root = repoRoot(import.meta.url);
 
 test("prelude shim is up to date (regenerate matches checked-in file)", () => {
   const onDisk = readFileSync(join(root, SHIM_PATH), "utf8");

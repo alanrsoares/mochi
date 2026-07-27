@@ -3,14 +3,15 @@
 // `_Task_andThen((param) => body)(value)`. Mirrors `let?` for Result; infix
 // bind for both is deferred.
 import { expect, test } from "bun:test";
+import { compile } from "@mochi/compiler/compile";
 import { format } from "@mochi/dx/format";
 import { hoverAt } from "@mochi/dx/hover";
+import { compileJs } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
-import { compile } from "../src/compile";
 
 const run = async (src: string, ret: string): Promise<unknown> => {
-  const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
+  const js = compileJs(src, { stripImports: true, runtime: true });
   const r = new Function("match", `"use strict";\n${js}\nreturn ${ret};`)(
     match,
   ) as Promise<unknown>;

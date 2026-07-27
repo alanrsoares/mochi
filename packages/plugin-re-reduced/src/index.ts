@@ -7,19 +7,20 @@
  * and wraps ContainerDef only at the outbound `.d.mochi.ts` seam.
  * Register via the project vendor-plugin list (`apps/docs/mochi.plugins.ts`).
  */
-import { isErr, ok, type Result } from "@onrails/result";
-import type { Expr } from "../../../src/ast";
-import type { Diagnostic } from "../../../src/errors";
+
+import type { Expr } from "@mochi/compiler/ast";
+import type { Diagnostic } from "@mochi/compiler/errors";
 import type {
   DtsBindingApi,
   DtsBindingHook,
   HostExtension,
   InferCallApi,
   InferCallHook,
-} from "../../../src/extensions";
-import type { Row, Type } from "../../../src/types";
+} from "@mochi/compiler/extensions";
+import type { Row, Type } from "@mochi/compiler/types";
 // Explicit extension: package boundary is resolved by Node/Vite without a bundler.
-import { rEmpty, rExtend, tArrow, tRecord, tString, tUnit } from "../../../src/types.ts";
+import { rEmpty, rExtend, tArrow, tRecord, tString, tUnit } from "@mochi/compiler/types";
+import { isErr, ok, type Result } from "@onrails/result";
 
 type CallExpr = Extract<Expr, { kind: "call" }>;
 

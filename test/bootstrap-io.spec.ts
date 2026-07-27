@@ -7,12 +7,13 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { compile } from "@mochi/compiler/compile";
+import { repoRoot } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { unwrapOk } from "@onrails/result";
 import * as host from "../bootstrap/host.mjs";
-import { compile } from "../src/compile";
 
-const root = join(import.meta.dir, "..");
+const root = repoRoot(import.meta.url);
 
 type AlResult = { _tag: "Ok"; value: string } | { _tag: "Err"; error: string };
 

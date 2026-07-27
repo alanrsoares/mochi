@@ -3,12 +3,12 @@
 // the same prelude builtin every infix operator already lowers to (see
 // `sectionLeft`/`tryParseRightSection` in `parser.ts`) — no new AST node.
 import { expect, test } from "bun:test";
+import { codegenTs } from "@mochi/compiler/codegen-ts";
+import { compileJs } from "@mochi/test-support";
 import { unwrapOk } from "@onrails/result";
-import { codegenTs } from "../src/codegen-ts";
-import { compile } from "../src/compile";
 
 const run = (src: string, ret: string): unknown => {
-  const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
+  const js = compileJs(src, { stripImports: true, runtime: true });
   return new Function(`${js}\nreturn ${ret};`)();
 };
 

@@ -54,15 +54,7 @@ modules are still **foundation**, not DX (`unify`, `span`, `errors`, `prelude`,
    / `dts` / `build` stay on `@mochi/compiler`. Bootstrap CLI stays
    compile/build-only.
 
-7. **Layout note (this cut).** Compiler sources remain under root `src/`;
-   `@mochi/compiler` exposes them via in-package re-export shims
-   (`packages/compiler/src/*.ts` → `../../../src/…`) because Node `exports`
-   targets must stay inside the package. Vite app configs import
-   `@mochi/vite-plugin` via a **relative** path and the plugin reaches
-   `src/compile` relatively — Node loading the Vite config cannot resolve
-   Bun-style extensionless imports through the package graph. App/module
-   aliases (`mochiWorkspaceAliases`) still map `@mochi/compiler` /
-   `@mochi/dx` for bundled app code.
+7. **Physical layout.** Compiler sources live in `packages/compiler/src/`; root `src/` is gone. `@mochi/compiler` exports map to those files directly. Vite app configs import `@mochi/vite-plugin` via a **relative** path; the plugin reaches `packages/compiler/src/compile` relatively — Node loading the Vite config cannot resolve Bun-style extensionless imports through the package graph. App/module aliases (`mochiWorkspaceAliases`) map `@mochi/compiler` / `@mochi/dx` for bundled app code.
 
 ## Consequences
 
@@ -71,8 +63,7 @@ modules are still **foundation**, not DX (`unify`, `span`, `errors`, `prelude`,
   bootstrap obligation.
 - Docs / snake / VS Code bundling import `@mochi/dx` / `@mochi/vite-plugin` /
   `@mochi/lsp` instead of treating `compile.ts` as a DX facade.
-- Physical layout may still keep compiler sources under root `src/` behind the
-  `@mochi/compiler` export map until a later move into `packages/compiler/src`.
+- Physical layout: `packages/compiler/src/` is the compiler home; root `src/` removed.
 
 ## Alternatives rejected
 

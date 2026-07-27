@@ -4,12 +4,13 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { compile } from "@mochi/compiler/compile";
+import { type Located, lex } from "@mochi/compiler/lexer";
+import { repoRoot } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
-import { compile } from "../src/compile";
-import { type Located, lex } from "../src/lexer";
 
-const root = join(import.meta.dir, "..");
+const root = repoRoot(import.meta.url);
 
 // Compile the mochi lexer once; strip the module scaffolding so it evals in a
 // plain function scope (same harness as guards.spec.ts, plus `export`).

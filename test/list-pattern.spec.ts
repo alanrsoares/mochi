@@ -1,18 +1,15 @@
 // List destructuring in `switch`: [], [x], [head, ...tail]. Patterns lower to
 // length-guards over @onrails/pattern; a `[]` + `[x, ...xs]` pair is total.
 import { expect, test } from "bun:test";
+import { compile } from "@mochi/compiler/compile";
 import { format } from "@mochi/dx/format";
-import { match } from "@onrails/pattern";
+import { compileAndEval, compileJs } from "@mochi/test-support";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
-import { compile } from "../src/compile";
 
 // Compile standalone (prelude inlined), inject `match` for the stripped import.
-const run = (src: string, ret: string): unknown => {
-  const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
-  return new Function("match", `${js}\nreturn ${ret};`)(match);
-};
+const run = (src: string, ret: string): unknown => compileAndEval(src, ret);
 
-const js = (src: string): string => unwrapOk(compile(src, { runtime: false }));
+const js = (src: string) => compileJs(src);
 
 const SUM = [
   "let sum = xs => switch xs {",

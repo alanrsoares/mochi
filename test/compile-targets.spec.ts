@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { codegenTs } from "@mochi/compiler/codegen-ts";
+import { compile } from "@mochi/compiler/compile";
+import { compileTargets } from "@mochi/compiler/compile-targets";
+import { emitDts } from "@mochi/compiler/dts";
 import { isErr, unwrapOk } from "@onrails/result";
-import { codegenTs } from "../src/codegen-ts";
-import { compile } from "../src/compile";
-import { compileTargets } from "../src/compile-targets";
-import { emitDts } from "../src/dts";
 
 const src = `
 let add = (a, b) => a + b

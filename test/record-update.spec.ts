@@ -4,15 +4,12 @@
 // spread. See ADR 0021.
 
 import { expect, test } from "bun:test";
+import { compile } from "@mochi/compiler/compile";
 import { format } from "@mochi/dx/format";
-import { match } from "@onrails/pattern";
+import { compileAndEval } from "@mochi/test-support";
 import { isErr, unwrapOk } from "@onrails/result";
-import { compile } from "../src/compile";
 
-const run = (src: string): unknown => {
-  const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
-  return new Function("match", `${js}\nreturn r;`)(match);
-};
+const run = (src: string): unknown => compileAndEval(src, "r");
 
 // --- runtime + codegen ------------------------------------------------------
 

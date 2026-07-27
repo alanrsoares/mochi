@@ -9,16 +9,16 @@
 // explicitly `any` (see `tsBody`) so the trusted body just runs and nothing trips
 // `--strict`. The body's internal types are irrelevant — the annotation is the
 // contract, the JS-backend differential tests are what prove the body correct.
-import { flatFnType } from "../src/dts";
+import { flatFnType } from "@mochi/compiler/dts";
 import {
   builtinTypeDecls,
   namespaceRuntime,
   preludeEnv,
   preludeJsDefs,
   preludeNamespaces,
-} from "../src/prelude";
-import type { Type } from "../src/types";
-import { typeDecl } from "../src/dts";
+} from "@mochi/compiler/prelude";
+import type { Type } from "@mochi/compiler/types";
+import { typeDecl } from "@mochi/compiler/dts";
 
 // jsId → HM type: top-level builtins by name, plus every namespace member keyed
 // by its runtime identifier (`Map.get` → `_Map_get`).
@@ -128,6 +128,6 @@ const header = [
 ];
 
 const out = `${header.join("\n")}${typeDecls.join("\n")}\n\n${lines.join("\n")}\n`;
-await Bun.write(`${import.meta.dir}/../src/runtime.ts`, out);
+await Bun.write(`${import.meta.dir}/../packages/compiler/src/runtime.ts`, out);
 console.error(`wrote src/runtime.ts (${Object.keys(preludeJsDefs).length} defs)`);
 if (missing.length) console.error(`  no HM sig (untyped fallback): ${missing.join(", ")}`);

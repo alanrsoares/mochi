@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
+import { check } from "@mochi/compiler/check";
+import { compile } from "@mochi/compiler/compile";
+import { inferProgram } from "@mochi/compiler/infer";
+import { lex } from "@mochi/compiler/lexer";
+import { parse } from "@mochi/compiler/parser";
 import { diagnostics } from "@mochi/dx/diagnostics";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
-import { check } from "../src/check";
-import { compile } from "../src/compile";
-import { inferProgram } from "../src/infer";
-import { lex } from "../src/lexer";
-import { parse } from "../src/parser";
 
 const prog = (src: string) => unwrapOk(parse(unwrapOk(lex(src))));
 

@@ -1,13 +1,13 @@
 // Parametric (generic) variant types + railway-oriented combinators over them.
 import { expect, test } from "bun:test";
-import { match } from "@onrails/pattern";
+import { check } from "@mochi/compiler/check";
+import { compile } from "@mochi/compiler/compile";
+import { inferProgram, showScheme } from "@mochi/compiler/infer";
+import { lex } from "@mochi/compiler/lexer";
+import { parse } from "@mochi/compiler/parser";
+import { preludeEnv } from "@mochi/compiler/prelude";
+import { compileAndEval } from "@mochi/test-support";
 import { isErr, unwrapOk } from "@onrails/result";
-import { check } from "../src/check";
-import { compile } from "../src/compile";
-import { inferProgram, showScheme } from "../src/infer";
-import { lex } from "../src/lexer";
-import { parse } from "../src/parser";
-import { preludeEnv } from "../src/prelude";
 
 const RESULT = "type Result a e = | Ok(a) | Err(e)\n";
 
@@ -19,10 +19,7 @@ const schemeOf = (src: string, name: string): string => {
 
 // Compile and run, injecting @onrails/pattern `match` (the codegen import is
 // stripped). Output is standalone — compile inlines the prelude it uses.
-const run = (src: string, ret: string): unknown => {
-  const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
-  return new Function("match", `${js}\nreturn ${ret};`)(match);
-};
+const run = (src: string, ret: string): unknown => compileAndEval(src, ret);
 
 test("a type parameter makes constructors polymorphic", () => {
   expect(schemeOf(RESULT, "Ok")).toMatch(/^'t\d+ -> Result<'t\d+, 't\d+>$/);

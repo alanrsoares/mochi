@@ -1,15 +1,16 @@
 // Boolean literals and patterns.
 import { expect, test } from "bun:test";
+import { check } from "@mochi/compiler/check";
+import { compile } from "@mochi/compiler/compile";
+import { inferProgram, showScheme } from "@mochi/compiler/infer";
+import { lex } from "@mochi/compiler/lexer";
+import { parse } from "@mochi/compiler/parser";
+import { preludeEnv } from "@mochi/compiler/prelude";
+import { compileJs } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
-import { check } from "../src/check";
-import { compile } from "../src/compile";
-import { inferProgram, showScheme } from "../src/infer";
-import { lex } from "../src/lexer";
-import { parse } from "../src/parser";
-import { preludeEnv } from "../src/prelude";
 
-const js = (src: string): string => unwrapOk(compile(src));
+const js = (src: string) => compileJs(src, { runtime: true });
 
 const schemeOf = (src: string, name: string): string => {
   const prog = unwrapOk(check(unwrapOk(parse(unwrapOk(lex(src))))));
@@ -18,7 +19,7 @@ const schemeOf = (src: string, name: string): string => {
 
 const run = (src: string, ret: string): unknown => {
   // runtime off: this harness injects its own `gt`, so keep output prelude-free.
-  const body = unwrapOk(compile(src, { runtime: false })).replace(/^import .*$/m, "");
+  const body = compileJs(src, { stripImports: true });
   return new Function("match", "gt", `${body}\nreturn ${ret};`)(
     match,
     (a: number, b: number) => a > b,

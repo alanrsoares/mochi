@@ -8,12 +8,13 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import { compile as tsCompile } from "@mochi/compiler/compile";
+import { buildModules as tsBuild } from "@mochi/compiler/module";
+import { repoRoot } from "@mochi/test-support";
+import { ensureInTreeBootstrapBuild } from "@mochi/test-support/bootstrap";
 import { unwrapOk } from "@onrails/result";
-import { compile as tsCompile } from "../src/compile";
-import { buildModules as tsBuild } from "../src/module";
-import { ensureInTreeBootstrapBuild } from "./support/bootstrap";
 
-const root = join(import.meta.dir, "..");
+const root = repoRoot(import.meta.url);
 const cliJs = join(root, "bootstrap/cli.js");
 
 let dir: string;

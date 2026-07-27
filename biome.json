@@ -3,17 +3,16 @@
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
     "includes": [
-      "src/**/*.ts",
       "test/**/*.ts",
       "*.ts",
-      "!src/runtime.ts",
       "apps/docs/src/**/*.ts",
       "apps/docs/src/**/*.tsx",
       "apps/docs/*.ts",
       "packages/*/src/**/*.ts",
       "examples/snake/src/**/*.ts",
       "examples/snake/src/**/*.tsx",
-      "examples/snake/*.ts"
+      "examples/snake/*.ts",
+      "!packages/compiler/src/runtime.ts"
     ]
   },
   "javascript": { "globals": ["Bun"] },

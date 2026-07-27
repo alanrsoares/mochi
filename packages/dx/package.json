@@ -15,5 +15,8 @@
     "@mochi/compiler": "workspace:*",
     "@onrails/maybe": "^0.2.3",
     "@onrails/result": "^0.4.0"
+  },
+  "devDependencies": {
+    "@mochi/test-support": "workspace:*"
   }
 }

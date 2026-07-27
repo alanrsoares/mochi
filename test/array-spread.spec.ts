@@ -2,12 +2,13 @@
 // Set literals `#{a, b}` (no colons) dedupe like native JS Set; `#{}` stays Map.
 
 import { expect, test } from "bun:test";
+import { compile } from "@mochi/compiler/compile";
 import { format } from "@mochi/dx/format";
+import { compileJs } from "@mochi/test-support";
 import { isErr, unwrapOk } from "@onrails/result";
-import { compile } from "../src/compile";
 
 const run = (src: string): unknown => {
-  const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
+  const js = compileJs(src, { stripImports: true, runtime: true });
   return new Function(`${js}\nreturn r;`)();
 };
 

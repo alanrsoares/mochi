@@ -10,10 +10,11 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { readFile as fsRead } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { buildModules as tsBuild } from "../src/module";
-import { ensureInTreeBootstrapBuild } from "./support/bootstrap";
+import { buildModules as tsBuild } from "@mochi/compiler/module";
+import { repoRoot } from "@mochi/test-support";
+import { ensureInTreeBootstrapBuild } from "@mochi/test-support/bootstrap";
 
-const root = join(import.meta.dir, "..");
+const root = repoRoot(import.meta.url);
 
 type Out = { path: string; js: string };
 type MErr = { message: string; start: number; end: number };

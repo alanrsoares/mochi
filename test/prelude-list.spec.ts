@@ -2,13 +2,13 @@
 // Func (identity/always/compose), Str (capitalize). Curried (data-last) so they
 // compose with `|>`. Checks both the inferred types and the standalone runtime.
 import { expect, test } from "bun:test";
+import { check } from "@mochi/compiler/check";
+import { compile } from "@mochi/compiler/compile";
+import { inferProgram, showScheme } from "@mochi/compiler/infer";
+import { lex } from "@mochi/compiler/lexer";
+import { parse } from "@mochi/compiler/parser";
+import { preludeEnv } from "@mochi/compiler/prelude";
 import { unwrapOk } from "@onrails/result";
-import { check } from "../src/check";
-import { compile } from "../src/compile";
-import { inferProgram, showScheme } from "../src/infer";
-import { lex } from "../src/lexer";
-import { parse } from "../src/parser";
-import { preludeEnv } from "../src/prelude";
 
 const schemeOf = (src: string, name: string): string => {
   const prog = unwrapOk(check(unwrapOk(parse(unwrapOk(lex(src))))));

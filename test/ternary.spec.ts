@@ -1,13 +1,14 @@
 // ADR 0016 — ternary expressions: `cond ? then : else`. Right-associative,
 // binds looser than `|>`; codegen always parenthesizes the JS conditional.
 import { expect, test } from "bun:test";
+import { compile } from "@mochi/compiler/compile";
 import { format } from "@mochi/dx/format";
+import { compileJs } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
-import { compile } from "../src/compile";
 
 const run = (src: string, ret: string): unknown => {
-  const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
+  const js = compileJs(src, { stripImports: true, runtime: true });
   return new Function("match", `"use strict";\n${js}\nreturn ${ret};`)(match);
 };
 

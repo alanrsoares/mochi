@@ -1,19 +1,9 @@
 import { expect, test } from "bun:test";
 import { resolve } from "node:path";
 import { moduleTypeDefinitionAt, typeDefinitionAt } from "@mochi/dx/nav";
+import { pos } from "@mochi/test-support";
 
 /** Offset of the `n`th occurrence of whole-word-ish `name` (simple scan). */
-const pos = (src: string, name: string, n = 0): number => {
-  let from = 0;
-  for (let i = 0; i <= n; i++) {
-    const idx = src.indexOf(name, from);
-    if (idx < 0) throw new Error(`'${name}' #${i} not found`);
-    if (i === n) return idx;
-    from = idx + name.length;
-  }
-  throw new Error("unreachable");
-};
-
 test("typeDefinitionAt on a variant value jumps to the type decl", () => {
   const src = "type Shape =\n  | Circle(number)\nlet c = Circle(1)";
   // First `c` is inside Circle; the binding is the second.

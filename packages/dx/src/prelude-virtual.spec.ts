@@ -8,17 +8,7 @@ import {
   preludeVirtualSource,
 } from "@mochi/compiler/prelude-virtual";
 import { definitionAt, prepareRenameAt, referencesAt, renameAt } from "@mochi/dx/nav";
-
-const pos = (src: string, name: string, n = 0): number => {
-  let from = 0;
-  for (let i = 0; i <= n; i++) {
-    const idx = src.indexOf(name, from);
-    if (idx < 0) throw new Error(`'${name}' #${i} not found`);
-    if (i === n) return idx;
-    from = idx + name.length;
-  }
-  throw new Error("unreachable");
-};
+import { pos } from "@mochi/test-support";
 
 test("prelude virtual spans cover the declared names", () => {
   const { source, origins } = {

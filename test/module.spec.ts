@@ -1,8 +1,8 @@
 // Multi-file module driver: graph resolution, dependency order, and
 // cross-module type inference. Files live in an in-memory map (no fs).
 import { expect, test } from "bun:test";
+import { buildModules, type ModuleOutput } from "@mochi/compiler/module";
 import { isErr, unwrapOk } from "@onrails/result";
-import { buildModules, type ModuleOutput } from "../src/module";
 
 // Build from a `{ path: source }` fixture; paths are absolute so node:path
 // resolution is deterministic across machines.

@@ -16,15 +16,15 @@
 // the bootstrap inferrer expects.
 import { match } from "@onrails/pattern";
 import { unwrapOk } from "@onrails/result";
-import { compile } from "../src/compile";
+import { compile } from "@mochi/compiler/compile";
 import {
   namespaceRuntime,
   preludeEnv,
   preludeJsDefs,
   preludeNamespaces,
   runtimeDeps,
-} from "../src/prelude";
-import type { Row, Type } from "../src/types";
+} from "@mochi/compiler/prelude";
+import type { Row, Type } from "@mochi/compiler/types";
 
 export const SHIM_PATH = "bootstrap/prelude.gen.mjs";
 

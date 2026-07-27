@@ -4,12 +4,12 @@
 // or the typed runtime (src/runtime.ts) regresses, tsc catches it here.
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { codegenTs } from "@mochi/compiler/codegen-ts";
 import { unwrapOk } from "@onrails/result";
-import { codegenTs } from "../src/codegen-ts";
 
 const DIR = new URL("./.tsgen/", import.meta.url).pathname;
 // From test/.tsgen/<file>.ts back to src/runtime.
-const RUNTIME_IMPORT = "../../src/runtime";
+const RUNTIME_IMPORT = "../../packages/compiler/src/runtime";
 
 // Each program is closed-world: it references only prelude builtins and its own
 // bindings (no open-world globals that would emit as dangling TS names).

@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
+import { toTypedProgram } from "@mochi/compiler/compile";
+import { showScheme } from "@mochi/compiler/infer";
+import { preludeNamespaces } from "@mochi/compiler/prelude";
 import { isErr, unwrapOk } from "@onrails/result";
-import { toTypedProgram } from "../../../src/compile";
-import { showScheme } from "../../../src/infer";
-import { preludeNamespaces } from "../../../src/prelude";
 import { preactExtension } from "./index";
 
 const plugins = [preactExtension];

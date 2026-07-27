@@ -9,11 +9,11 @@ export function mochiWorkspaceAliases(repoRoot: string): WorkspaceAlias[] {
   return [
     {
       find: /^@mochi\/compiler\/(.+)$/,
-      replacement: path.join(root, "src/$1.ts"),
+      replacement: path.join(root, "packages/compiler/src/$1.ts"),
     },
     {
       find: "@mochi/compiler",
-      replacement: path.join(root, "src/compile.ts"),
+      replacement: path.join(root, "packages/compiler/src/compile.ts"),
     },
     {
       find: /^@mochi\/dx\/(.+)$/,

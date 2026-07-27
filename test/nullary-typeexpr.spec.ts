@@ -1,10 +1,10 @@
 // `() -> T` in TypeExpr / extern signatures (ADR 0014 surface + ADR 0015).
 import { expect, test } from "bun:test";
+import { compile } from "@mochi/compiler/compile";
+import { lex } from "@mochi/compiler/lexer";
+import { parse } from "@mochi/compiler/parser";
 import { hoverAt } from "@mochi/dx/hover";
 import { isOk, unwrapOk } from "@onrails/result";
-import { compile } from "../src/compile";
-import { lex } from "../src/lexer";
-import { parse } from "../src/parser";
 
 test("() parses as a type atom (nullary domain)", () => {
   const prog = unwrapOk(parse(unwrapOk(lex('extern f : () -> number = "./m" "f"'))));

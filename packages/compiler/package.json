@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "mochi": "./src/cli.ts"
+  },
   "exports": {
     ".": "./src/index.ts",
     "./ast": "./src/ast.ts",
@@ -33,5 +36,14 @@
     "./symbols": "./src/symbols.ts",
     "./types": "./src/types.ts",
     "./unify": "./src/unify.ts"
+  },
+  "dependencies": {
+    "@mochi/dx": "workspace:*",
+    "@onrails/maybe": "^0.2.3",
+    "@onrails/pattern": "^0.3.3",
+    "@onrails/result": "^0.4.0"
+  },
+  "devDependencies": {
+    "@mochi/test-support": "workspace:*"
   }
 }

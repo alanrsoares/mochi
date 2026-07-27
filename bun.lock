@@ -17,6 +17,7 @@
         "@mochi/plugin-preact": "workspace:*",
         "@mochi/plugin-re-reduced": "workspace:*",
         "@mochi/plugin-styled-cva": "workspace:*",
+        "@mochi/test-support": "workspace:*",
         "@mochi/vite-plugin": "workspace:*",
         "@types/bun": "latest",
         "esbuild": "^0.28.1",
@@ -85,6 +86,18 @@
     "packages/compiler": {
       "name": "@mochi/compiler",
       "version": "0.1.0",
+      "bin": {
+        "mochi": "./src/cli.ts",
+      },
+      "dependencies": {
+        "@mochi/dx": "workspace:*",
+        "@onrails/maybe": "^0.2.3",
+        "@onrails/pattern": "^0.3.3",
+        "@onrails/result": "^0.4.0",
+      },
+      "devDependencies": {
+        "@mochi/test-support": "workspace:*",
+      },
     },
     "packages/dx": {
       "name": "@mochi/dx",
@@ -93,6 +106,9 @@
         "@mochi/compiler": "workspace:*",
         "@onrails/maybe": "^0.2.3",
         "@onrails/result": "^0.4.0",
+      },
+      "devDependencies": {
+        "@mochi/test-support": "workspace:*",
       },
     },
     "packages/lsp": {
@@ -109,6 +125,9 @@
     "packages/plugin-preact": {
       "name": "@mochi/plugin-preact",
       "version": "0.1.0",
+      "dependencies": {
+        "@mochi/compiler": "workspace:*",
+      },
       "peerDependencies": {
         "preact": "^10.0.0",
       },
@@ -116,6 +135,9 @@
     "packages/plugin-re-reduced": {
       "name": "@mochi/plugin-re-reduced",
       "version": "0.1.0",
+      "dependencies": {
+        "@mochi/compiler": "workspace:*",
+      },
       "peerDependencies": {
         "@onrails/result": "^0.4.0",
       },
@@ -123,7 +145,20 @@
     "packages/plugin-styled-cva": {
       "name": "@mochi/plugin-styled-cva",
       "version": "0.1.0",
+      "dependencies": {
+        "@mochi/compiler": "workspace:*",
+      },
       "peerDependencies": {
+        "@onrails/result": "^0.4.0",
+      },
+    },
+    "packages/test-support": {
+      "name": "@mochi/test-support",
+      "version": "0.1.0",
+      "dependencies": {
+        "@mochi/compiler": "workspace:*",
+        "@mochi/dx": "workspace:*",
+        "@onrails/pattern": "^0.3.3",
         "@onrails/result": "^0.4.0",
       },
     },
@@ -131,6 +166,7 @@
       "name": "@mochi/vite-plugin",
       "version": "0.1.0",
       "dependencies": {
+        "@mochi/compiler": "workspace:*",
         "@onrails/result": "^0.4.0",
       },
     },
@@ -273,6 +309,8 @@
     "@mochi/plugin-re-reduced": ["@mochi/plugin-re-reduced@workspace:packages/plugin-re-reduced"],
 
     "@mochi/plugin-styled-cva": ["@mochi/plugin-styled-cva@workspace:packages/plugin-styled-cva"],
+
+    "@mochi/test-support": ["@mochi/test-support@workspace:packages/test-support"],
 
     "@mochi/vite-plugin": ["@mochi/vite-plugin@workspace:packages/vite-plugin"],
 

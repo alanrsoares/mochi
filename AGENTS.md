@@ -19,7 +19,7 @@ Read this, then `CONTEXT.md` for vocabulary and `docs/` for the language, compil
 bun run check                 # default gate = biome + tsc + workspace + fmt + tests (skip north-stars)
 bun run check:full            # CI / pre-push gate — adds fixpoint + bootstrap-tsc north-stars
 bun run mochi <file.mochi>       # compile one file to JS on stdout (also: ts, fmt, dts, build)
-bun src/cli.ts ts <file.mochi>   # emit typed TypeScript (build --emit=ts for the graph)
+bun packages/compiler/src/cli.ts ts <file.mochi>   # emit typed TypeScript (build --emit=ts for the graph)
 bun run bootstrap:tsc         # north-star: count tsc --strict errors on the self-host (0)
 bun run test | test:full | typecheck | lint | lint:fix | format | build:ext | loc
 ```
@@ -79,6 +79,17 @@ string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck�
 2. Language-visible change adds a guard: a case in `test/examples.spec.ts` and/or a
    `*.pbt.spec.ts` invariant (fast-check).
 3. A decision (not just an impl) gets an ADR in `docs/adr/`.
+
+## Tests
+
+- **Unit / package specs** — colocated as `packages/<pkg>/src/**/*.spec.ts` (compiler
+  passes, DX queries, plugins). Test one module or package surface in isolation.
+- **Smoke / integration** — `test/` only: bootstrap parity, module graphs, examples,
+  playground, cross-package seams (`extensions.spec.ts`), and language guards that
+  exercise the full pipeline.
+- **Shared harness** — `@mochi/test-support` (`compileJs`, `compileAndEval`, `pos`,
+  `memRead`, `repoRoot`/`readRepo`, `formatSrc`; `./bootstrap` for self-host diffs).
+  Dev-only; not published.
 
 ## Biome plugins (`biome/plugins/*.grit`)
 

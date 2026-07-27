@@ -1,17 +1,7 @@
 import { expect, test } from "bun:test";
 import { resolve } from "node:path";
 import { definitionAt, highlightsAt, prepareRenameAt, referencesAt } from "@mochi/dx/nav";
-
-const pos = (src: string, name: string, n = 0): number => {
-  let from = 0;
-  for (let i = 0; i <= n; i++) {
-    const idx = src.indexOf(name, from);
-    if (idx < 0) throw new Error(`'${name}' #${i} not found`);
-    if (i === n) return idx;
-    from = idx + name.length;
-  }
-  throw new Error("unreachable");
-};
+import { pos } from "@mochi/test-support";
 
 test("definitionAt on p.x jumps to the record-alias field", () => {
   const src = "type Point = { x: number, y: number }\nlet p = { x: 1, y: 2 }\nlet d = p.x";
