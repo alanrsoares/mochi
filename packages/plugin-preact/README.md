@@ -8,7 +8,7 @@ Preact host adapter for Mochi (ADR 0015).
 import { useState, useEffect, hookDeps } from "@mochi/plugin-preact/hooks"
 ```
 
-Register on the project plugin list (future inferCall / check):
+Register on the project plugin list (required for call-site hook shapes):
 
 ```ts
 import { preactExtension } from "@mochi/plugin-preact";
@@ -17,13 +17,16 @@ import { preactExtension } from "@mochi/plugin-preact";
 Vite: alias `@mochi/plugin-preact/hooks` → the package `hooks.mochi` (or rely on
 package `exports`).
 
-## Honest types (v0)
+## Honest types
 
-| Binding | Scheme |
-|---|---|
-| `useState` | `a -> (a, a -> b)` |
-| `useEffect` / `useLayoutEffect` | `(() -> c) -> d -> e` |
-| `useCallback` / `useMemo` | preserve / opaque deps |
-| `hookDeps*` | pack heterogeneous dep lists |
+| Binding | Seam (`hooks.mochi`) | With `preactExtension.inferCall` |
+|---|---|---|
+| `useState` | loose `a -> (a, a -> b)` | `(a, (a \| (a -> a)) -> unit)` |
+| `useRef` | loose `a -> b` | `{ current: a }` |
+| `useEffect` / `useLayoutEffect` | loose deps/return | `(() -> c) -> deps -> unit` |
+| `useCallback` | loose deps | preserves callback type |
+| `useMemo` | loose deps | thunk return type |
+| `hookDeps*` | pack heterogeneous deps | `Array<'a>` (element opaque) |
 
-Opaque `: a` only where HM would lie (updater overloads — later `inferCall`).
+Without the plugin on the project list, extern schemes alone are polymorphic —
+anything goes. Register `preactExtension` in `mochi.plugins.ts`.

@@ -172,6 +172,13 @@ test("general string does not unify with literal union", () => {
   expect(isErr(unify(u, tString, emptySubst(), mkFresh()))).toBe(true);
 });
 
+test("concrete type unifies with non-literal union member", () => {
+  const u = tUnion([tNumber, tArrow(tNumber, tNumber)]);
+  expect(run(tNumber, u).ok).toBe(true);
+  expect(run(tArrow(tNumber, tNumber), u).ok).toBe(true);
+  expect(isErr(unify(tString, u, emptySubst(), mkFresh()))).toBe(true);
+});
+
 test("equal literal unions unify", () => {
   const a = tUnion([tLit("rose"), tLit("amber")]);
   const b = tUnion([tLit("amber"), tLit("rose")]);

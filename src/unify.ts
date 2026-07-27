@@ -235,6 +235,17 @@ const unifyLitUnion = (
     return ok(cur);
   }
 
+  // Concrete type ⊆ finite union when the union is not literal-only (e.g.
+  // useState setter domain `T | (T -> T)`). Literal unions keep ADR 0012:
+  // general `string` must not widen into `"rose" | "amber"`.
+  const isLitOnlyUnion = (u: UnionType): boolean => u.members.every((m) => m.kind === "lit");
+  if (a.kind === "union" && b.kind !== "union" && b.kind !== "lit" && !isLitOnlyUnion(a)) {
+    return unifyMemberAgainstUnion(b, a, s, f, show);
+  }
+  if (b.kind === "union" && a.kind !== "union" && a.kind !== "lit" && !isLitOnlyUnion(b)) {
+    return unifyMemberAgainstUnion(a, b, s, f, show);
+  }
+
   // `string` / other concrete types do not unify with a literal union — that
   // would accept untyped string vars against `$tone: "rose" | …`.
   return fail(`cannot unify ${show(a)} with ${show(b)}`);

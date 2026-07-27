@@ -1,6 +1,8 @@
 // Typed Preact hooks seam (ADR 0015). Import from apps; register
-// `preactExtension` on the project plugin list when inferCall/check land.
+// `preactExtension` on the project plugin list — `inferCall` pins call-site
+// shapes (state/setter, ref.current, effect thunk, memo body).
 //
+// Extern schemes stay loose where HM would lie; the plugin tightens at calls.
 // `() ->` is the nullary domain (ADR 0014). Dep lists stay opaque / packed
 // via `hookDeps*` — mochi arrays are homogeneous.
 export extern useState : a -> (a, a -> b) = "preact/hooks" "useState"

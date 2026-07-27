@@ -65,7 +65,7 @@ let HeroCarousel = _ =>
                 ? go(index + 1)
                 : dx > SWIPE_MIN_PX
                 ? go(index - 1)
-                : 0}
+                : setPaused(false)}
           onPointerCancel={() => setPaused(false)}
           images={mapIndexed(
             (item, i) =>

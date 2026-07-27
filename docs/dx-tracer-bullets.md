@@ -238,7 +238,7 @@ Vite `moduleExt`. Docs HeroCarousel imports the package; hand
 |---|---|---|---|---|
 | 49 | ADR 0015 + `() ->` TypeExpr + `@mochi/plugin-preact` v0 | AFK | 14, 12 | done |
 | 50 | Rules-of-Hooks `check` hook + setState updater `inferCall` | AFK | 49 | pending |
-| 51 | Virtual-module resolve `from "@mochi/preact"` (no alias) | AFK | 49 | pending |
+| 51 | Bare package import resolve for LSP/module graph (Node exports) | AFK | 49 | done |
 | 52 | Extern hover: scheme + module/export hint on the name | AFK | — | done |
 
 **Wave 13 (v0) shipped:** honest hook externs; docs dogfood on package seam.
@@ -859,7 +859,7 @@ still wins over the builtin component signature.
 Hook ordering: builtins are prepended, so `jsxPlugin.inferCall` now runs
 before `styledCvaExtension`'s. They key off disjoint shapes (`origin === "jsx"`
 vs a `tw.<tag>(…)` field call) so neither shadows the other —
-`test/ext-styled-cva.spec.ts`'s "JSX core: invalid component prop fails when
+`packages/plugin-styled-cva/src/index.spec.ts`'s "JSX core: invalid component prop fails when
 tag is a component" still passes, as does the whole styled-cva suite.
 
 Verified: `bun run check` green; `bun run fixpoint` PASS (stage2 ≡ stage3 ≡ TS
