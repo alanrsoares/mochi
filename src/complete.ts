@@ -12,7 +12,7 @@ import { map, match as matchMaybe } from "@onrails/maybe";
 import { isErr, isOk } from "@onrails/result";
 import type { Program } from "./ast";
 import type { Registry } from "./check";
-import { toTypedProgram, toTypedProgramWith } from "./compile";
+import { toTypedProgramRecovering, toTypedProgramWith } from "./compile";
 import type {
   CompleteMemberApi,
   CompletionItem,
@@ -24,7 +24,7 @@ import type { Env, InferResult, TypeAt } from "./infer";
 import { lex } from "./lexer";
 import { moduleContext } from "./module";
 import { documentSymbolsAt } from "./nav";
-import { parse } from "./parser";
+import { parseRecovering } from "./parser";
 import { preludeEnv, preludeNamespaces } from "./prelude";
 import { isPreludePath } from "./prelude-virtual";
 import { spanContainsClosed, tightestHit } from "./span";
@@ -192,11 +192,12 @@ const dedupeSort = (items: CompletionItem[]): CompletionItem[] => {
   return out.toSorted((a, b) => a.label.localeCompare(b.label));
 };
 
+// Recovering: completion is *most* wanted mid-edit, when the file does not yet
+// parse — the intact prefix still yields members and locals (C9 slice e).
 const parseProgram = (src: string, plugins?: LanguagePlugin[]): Program | null => {
   const lexed = lex(src);
   if (isErr(lexed)) return null;
-  const parsed = parse(lexed.value, { plugins });
-  return isErr(parsed) ? null : parsed.value;
+  return parseRecovering(lexed.value, { plugins }).program;
 };
 
 const emptyReg = (): Registry => ({ ctor: new Map(), type: new Map() });
@@ -218,7 +219,7 @@ const typedOf = (src: string, opts: CompleteOptions) => {
     );
     return isOk(r) ? r.value : null;
   }
-  const r = toTypedProgram(src, {
+  const r = toTypedProgramRecovering(src, {
     open: true,
     namespaces: preludeNamespaces,
     nsImports: opts.nsImports,

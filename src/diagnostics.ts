@@ -92,8 +92,9 @@ export function toPublish(
 }
 
 /**
- * Check + infer may emit several diagnostics (ADR 0004). Lex/parse still yield
- * one. Single-file: imports resolve to nothing, so a `switch` on an imported
+ * Check + infer may emit several diagnostics (ADR 0004); so may parse, since
+ * recovery reports every unparsable region (ADR 0045). Only lex still yields a
+ * single one. Single-file: imports resolve to nothing, so a `switch` on an imported
  * variant reads as an unknown constructor. Use `moduleDiagnostics` when a path
  * is available.
  */

@@ -20,7 +20,7 @@ decision first (usually an ADR); **HITL→AFK** = decision then mechanical.
 
 | # | Title | Ticket | Type | Blocked by | Status |
 |---|---|---|---|---|---|
-| 0 | Parser error recovery — slices a–f (ADR → parser multi-error → no-cascade check/infer → formatter passthrough → LSP → bootstrap parity) | [C9](tickets/c09-parser-error-recovery.md) | HITL→AFK | — | a,b,c,d done (ADR 0045) |
+| 0 | Parser error recovery — slices a–f (ADR → parser multi-error → no-cascade check/infer → formatter passthrough → LSP → bootstrap parity) | [C9](tickets/c09-parser-error-recovery.md) | HITL→AFK | — | a–e done (ADR 0045); f open |
 | 1 | **Bug:** `eq`/`compare`/`show` wrong on Map/Set/List (`Object.keys` walk) — fix runtime + PBT invariants | [C4](tickets/c04-collection-eq-bug-and-exit-adr.md) | AFK | — | bug fixed (`8c47e39`) |
 | 2 | ADR namespace repair (0016–0044 dangling / colliding with plan tickets) | [C12](tickets/c12-adr-namespace-repair.md) | AFK | — | done (`232936b`) |
 

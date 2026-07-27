@@ -10,12 +10,12 @@ import { resolve } from "node:path";
 import { map, match as matchMaybe } from "@onrails/maybe";
 import { isErr, isOk } from "@onrails/result";
 import type { Program } from "./ast";
-import { toTypedProgram, toTypedProgramWith } from "./compile";
+import { toTypedProgramRecovering, toTypedProgramWith } from "./compile";
 import type { LanguagePlugin } from "./extensions";
 import type { InferResult, SymbolInfo, TypeAt } from "./infer";
 import { lex } from "./lexer";
 import { moduleContext } from "./module";
-import { parse } from "./parser";
+import { parseRecovering } from "./parser";
 import { preludeNamespaces } from "./prelude";
 import { preludeDocForBinding } from "./prelude-virtual";
 import { type QualMap, widenLits } from "./schemes";
@@ -60,12 +60,13 @@ const docAt = (
   if (symbol?.doc) return symbol.doc;
   const lexed = lex(src);
   if (isErr(lexed)) return undefined;
-  const parsed = parse(lexed.value);
-  if (isErr(parsed)) return undefined;
+  // Recovering: a `///` doc on an intact binding is readable even when another
+  // region of the file doesn't parse (C9 slice e).
+  const { program } = parseRecovering(lexed.value);
   // Virtual buffers (`<buffer>`) skip path.resolve — node:path needs `process`,
   // which browsers don't have (docs site imports hoverAt for twoslash).
   const key = path.startsWith("<") ? path : resolve(path);
-  const hit = indexProgram(key, parsed.value).at(offset);
+  const hit = indexProgram(key, program).at(offset);
   return hit ? preludeDocForBinding(hit.binding) : undefined;
 };
 
@@ -110,7 +111,7 @@ const hoverFrom = (
  * `moduleHoverAt` when a path is available.
  */
 export const hoverAt = (src: string, offset: number, path = "<buffer>"): HoverInfo | null => {
-  const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces });
+  const r = toTypedProgramRecovering(src, { open: true, namespaces: preludeNamespaces });
   return isOk(r) ? hoverFrom(r.value.res, offset, src, path) : null;
 };
 
@@ -135,8 +136,9 @@ export const moduleHoverAt = async (
 ): Promise<HoverInfo | null> => {
   const lexed = lex(src);
   if (isErr(lexed)) return null;
-  const parsed = parse(lexed.value, { plugins: opts.plugins });
-  if (isErr(parsed)) return null;
+  // Recovering, so a hole elsewhere in the file doesn't blank out hover on the
+  // parts that are intact (C9 slice e).
+  const { program } = parseRecovering(lexed.value, { plugins: opts.plugins });
 
   const entry = resolve(path);
   const read = (p: string): Promise<string> =>
@@ -144,8 +146,8 @@ export const moduleHoverAt = async (
   const ctx = await moduleContext(entry, read, { plugins: opts.plugins });
   if (isErr(ctx)) return hoverAt(src, offset, entry);
 
-  const typed = toTypedProgramWith(parsed.value, ctx.value, { plugins: opts.plugins });
+  const typed = toTypedProgramWith(program, ctx.value, { plugins: opts.plugins });
   if (isErr(typed)) return null;
-  const qualify = qualifierMap(ctx.value.qualTypes, parsed.value);
+  const qualify = qualifierMap(ctx.value.qualTypes, program);
   return hoverFrom(typed.value.res, offset, src, entry, qualify);
 };

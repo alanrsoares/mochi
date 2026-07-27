@@ -14,7 +14,7 @@ import {
   type QualMap,
 } from "./infer";
 import { lex } from "./lexer";
-import { parse } from "./parser";
+import { parse, parseRecovering } from "./parser";
 import { preludeEnv, preludeNamespaces } from "./prelude";
 
 /** The typed program: the parsed `Program` plus the inference result (env, span→type table, aliases) that tooling reads back. */
@@ -32,6 +32,32 @@ export const toTypedProgram = (
   const parsed = parse(lexed.value, { plugins: opts.plugins });
   if (isErr(parsed)) return err(parsed.error); // already Diagnostic[] (ADR 0045)
   const checked = check(parsed.value);
+  if (isErr(checked)) return checked;
+  return map(inferProgramTypes(checked.value, preludeEnv, opts), (res) => ({
+    prog: checked.value,
+    res,
+  }));
+};
+
+/**
+ * The editor's `toTypedProgram` (C9 slice e): identical, except parse errors do
+ * not sink the file. `parseRecovering` yields a `Program` whose unparsable
+ * regions are `error` stmts (ADR 0045) and check/infer tolerate those without
+ * cascading (slice c), so the *surviving* declarations still get types. Parse
+ * diagnostics are dropped here on purpose — `diagnostics` / `moduleDiagnostics`
+ * is the surface that reports them; hover and completion just need the tree.
+ *
+ * Compilation never calls this: emitting code from a file with a hole in it
+ * would be a silent lie, so `compile` keeps the hard-fail `parse`.
+ */
+export const toTypedProgramRecovering = (
+  src: string,
+  opts: InferOptions = { open: true },
+): Result<TypedProgram, Diagnostic[]> => {
+  const lexed = lex(src);
+  if (isErr(lexed)) return err(oneDiag(lexed.error));
+  const { program } = parseRecovering(lexed.value, { plugins: opts.plugins });
+  const checked = check(program);
   if (isErr(checked)) return checked;
   return map(inferProgramTypes(checked.value, preludeEnv, opts), (res) => ({
     prog: checked.value,

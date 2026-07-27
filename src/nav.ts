@@ -7,12 +7,12 @@
 import { resolve } from "node:path";
 import { flatMap, fromNullable, map, match as matchMaybe, none, some } from "@onrails/maybe";
 import { isErr, isOk } from "@onrails/result";
-import { toTypedProgram, toTypedProgramWith } from "./compile";
+import { toTypedProgramRecovering, toTypedProgramWith } from "./compile";
 import type { LanguagePlugin } from "./extensions";
 import type { InferResult, TypeAt } from "./infer";
 import { lex } from "./lexer";
 import { loadModuleGraph, moduleContext } from "./module";
-import { parse } from "./parser";
+import { parseRecovering } from "./parser";
 import { preludeNamespaces } from "./prelude";
 import { isPreludePath } from "./prelude-virtual";
 import type { Location, Span } from "./span";
@@ -44,11 +44,12 @@ export type WorkspaceSymbol = DocSymbol & { path: string };
 
 type ReadFile = (path: string) => Promise<string>;
 
+// Recovering: symbols/definitions on the intact declarations survive a hole
+// elsewhere in the file (C9 slice e).
 const parseProgram = (src: string) => {
   const lexed = lex(src);
   if (isErr(lexed)) return null;
-  const parsed = parse(lexed.value);
-  return isErr(parsed) ? null : parsed.value;
+  return parseRecovering(lexed.value).program;
 };
 
 const indexSrc = (path: string, src: string, origins?: Origins) => {
@@ -134,7 +135,7 @@ export const typeDefinitionAt = (
 ): Location | null => {
   const idx = indexSrc(path, src);
   if (!idx) return null;
-  const typed = toTypedProgram(src, { open: true, namespaces: preludeNamespaces });
+  const typed = toTypedProgramRecovering(src, { open: true, namespaces: preludeNamespaces });
   return isOk(typed) ? typeDefFrom(typed.value.res, offset, idx) : null;
 };
 
@@ -155,8 +156,7 @@ export const moduleTypeDefinitionAt = async (
 
   const lexed = lex(src);
   if (isErr(lexed)) return null;
-  const parsed = parse(lexed.value, { plugins: opts.plugins });
-  if (isErr(parsed)) return null;
+  const { program } = parseRecovering(lexed.value, { plugins: opts.plugins });
 
   const entry = resolve(path);
   const read = (p: string): Promise<string> =>
@@ -164,7 +164,7 @@ export const moduleTypeDefinitionAt = async (
   const ctx = await moduleContext(entry, read, { plugins: opts.plugins });
   if (isErr(ctx)) return typeDefinitionAt(src, offset, entry);
 
-  const typed = toTypedProgramWith(parsed.value, ctx.value, { plugins: opts.plugins });
+  const typed = toTypedProgramWith(program, ctx.value, { plugins: opts.plugins });
   return isOk(typed) ? typeDefFrom(typed.value.res, offset, idx, origins) : null;
 };
 

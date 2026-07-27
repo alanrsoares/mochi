@@ -31,5 +31,26 @@ it is a *track*. Slices, in order (each independently shippable):
 - [x] Slice b
 - [x] Slice c
 - [x] Slice d
-- [ ] Slice e
+- [x] Slice e. `diagnostics` / `moduleDiagnostics` already published every parse
+      diagnostic (slice b), so the residual gap was the *other* direction: hover,
+      symbols, nav and completion each called the hard-fail `parse` and returned
+      `null`, blanking the editor on exactly the files recovery exists for. Added
+      `toTypedProgramRecovering` in `src/compile.ts` (the editor's
+      `toTypedProgram`; drops parse diagnostics on purpose — `diagnostics` is the
+      surface that reports them) and switched `hover.ts` (`docAt`, `hoverAt`,
+      `moduleHoverAt`), `nav.ts` (`parseProgram`, `typeDefinitionAt`,
+      `moduleTypeDefinitionAt`) and `complete.ts` (`parseProgram`, `typedOf`'s
+      single-file branch) to recovering parse. `compile` stays hard-fail: emitting
+      from a file with a hole would be a silent lie. Guard:
+      `test/lsp-recovery.spec.ts` — a file with two unparsable regions still
+      yields ≥2 diagnostics, hover on bindings before *and* after both holes,
+      document symbols, completion, and go-to-definition across a hole. Also
+      corrected the stale `diagnostics()` doc ("Lex/parse still yield one" — only
+      lex does, post-ADR-0045).
+      **Deferred, not blocking:** `moduleContext` loads the *entry* through the
+      module graph with a hard-fail parse, so for a file that both imports and has
+      a typo, the module-aware surfaces fall back to their single-file open-world
+      form (which can still fail `check` on an imported-variant `switch`). Making
+      the graph's entry load recovering touches `module.ts` and its bootstrap
+      mirror `module.mochi`, so it is its own slice.
 - [ ] Slice f
