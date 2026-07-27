@@ -556,7 +556,10 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
         e = { kind: "call", fn: e, args, span: to(e.span) };
       } else if (peek().t === "dot") {
         next();
-        const id = expectId();
+        // `expectLabel`, not `expectId`: `$tone` is a legal record *key*
+        // (ADR 0009 transient props), so it must be a legal projection too —
+        // `props.$tone` reads the field `{ $tone: … }` writes.
+        const id = expectLabel();
         e = { kind: "field", target: e, name: id.name, span: spanning(e.span, id.span) };
       } else {
         return e;
