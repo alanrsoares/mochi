@@ -49,12 +49,17 @@ const startLanguageClient = (context: ExtensionContext): void => {
     run: { module, transport: TransportKind.ipc },
     debug: { module, transport: TransportKind.ipc, options: { execArgv: ["--nolazy"] } },
   };
+  // Forward mochi.plugins.mjs create/change/delete events so the server
+  // can hot-reload the vendor-plugin list without an LSP restart.
+  const pluginWatcher = workspace.createFileSystemWatcher("**/mochi.plugins.mjs");
+  context.subscriptions.push(pluginWatcher);
   const clientOptions: LanguageClientOptions = {
     documentSelector: [
       { scheme: "file", language: "mochi" },
       { scheme: "mochi", language: "mochi" }, // virtual prelude (DX slice 9)
     ],
     initializationOptions: buildInitOptions(),
+    synchronize: { fileEvents: pluginWatcher },
   };
   void client?.stop();
   client = new LanguageClient("mochi", "mochi language server", serverOptions, clientOptions);

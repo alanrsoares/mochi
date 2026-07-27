@@ -21,9 +21,11 @@ extension setting can force them without a supporting font.
 
 ## Vendor plugins
 
-The language server discovers `mochi.plugins.mjs` or `mochi.plugins.mts` by walking
-upward from each open `.mochi` file (same vendor list Vite / `gen-mochi-dts` use via
-`mochi.plugins.ts`). Export `default` or named `plugins`:
+The language server discovers `mochi.plugins.mjs` by walking upward from each open
+`.mochi` file (same vendor list Vite / `gen-mochi-dts` use via `mochi.plugins.ts`).
+The manifest must be plain ESM JavaScript (`.mjs`) — the server runs under the
+editor's Node runtime, so a `.mts` manifest would depend on Node's type-stripping
+support, which isn't a guaranteed contract. Export `default` or named `plugins`:
 
 ```js
 import { styledCvaExtension } from "@mochi/plugin-styled-cva";

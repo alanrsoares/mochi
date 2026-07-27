@@ -4,12 +4,13 @@
  * compiler; this file only speaks LSP.
  */
 import { readFile } from "node:fs/promises";
+import { basename } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import { isPreludePath, PRELUDE_PATH, preludeVirtualSource } from "@mochi/compiler/prelude-virtual";
 import type { Span } from "@mochi/compiler/span";
 import { type CompletionItem as MochiCompletion, moduleCompleteAt } from "@mochi/dx/complete";
-import { moduleDiagnostics } from "@mochi/dx/diagnostics";
+import { moduleDiagnostics, type PublishDiagnostic } from "@mochi/dx/diagnostics";
 import { format } from "@mochi/dx/format";
 import { moduleHoverAt } from "@mochi/dx/hover";
 import {
@@ -46,21 +47,26 @@ import {
   type WorkspaceSymbol,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { pluginsForDocument } from "./load-plugins.ts";
+import { clearPluginsCache, PLUGIN_FILENAMES, pluginsForDocument } from "./load-plugins.ts";
 
 /** Client → server init payload (editor extension). */
 export type MochiInitOptions = {
-  /** Load `mochi.plugins.mjs` / `.mts` when true (requires trusted workspace on client). */
+  /** Load `mochi.plugins.mjs` when true (requires trusted workspace on client). */
   loadProjectPlugins?: boolean;
   /** Workspace folder roots — manifests must resolve under one of these. */
   workspaceRoots?: string[];
 };
 
+/** Cached diagnostics for a document, keyed by URI — the raw result of
+ * `moduleDiagnostics`, retained so `onCodeAction` can read `.suggestions`
+ * without re-running the compiler on every lightbulb request. */
+export type CachedDiagnostics = PublishDiagnostic[];
+
 /** Options for {@link startServer}. */
 export type ServerOptions = {
   /** Fixed plugin list (tests / custom launchers). Overrides project discovery. */
   plugins?: LanguagePlugin[];
-  /** Load `mochi.plugins.mjs` / `.mts` upward from each open file (default false). */
+  /** Load `mochi.plugins.mjs` upward from each open file (default false). */
   loadProjectPlugins?: boolean;
 };
 
@@ -98,10 +104,27 @@ export function startServer(opts: ServerOptions = {}): void {
   let loadProjectPlugins = opts.loadProjectPlugins === true && fixedPlugins === undefined;
   let allowedRoots: string[] = [];
   const dxOpts = async (path: string) => ({
-    plugins: loadProjectPlugins ? await pluginsForDocument(path, { allowedRoots }) : fixedPlugins,
+    plugins: loadProjectPlugins
+      ? await pluginsForDocument(path, {
+          allowedRoots,
+          onError: (file, error) => {
+            const message = error instanceof Error ? error.message : String(error);
+            connection.console.error(
+              `mochi: failed to load plugins from ${file}: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`,
+            );
+            connection.window.showWarningMessage(
+              `mochi: failed to load plugins from ${file}: ${message} — falling back to builtin plugins`,
+            );
+          },
+        })
+      : fixedPlugins,
   });
   const connection = createConnection(ProposedFeatures.all);
   const documents = new TextDocuments(TextDocument);
+  /** Last diagnostics computed by `validate`, per document URI — see
+   * {@link CachedDiagnostics}. Written on every `validate` call (so staleness
+   * matches published diagnostics exactly) and deleted on document close. */
+  const diagnosticsCache = new Map<string, CachedDiagnostics>();
 
   connection.onInitialize((params) => {
     const init = params.initializationOptions as MochiInitOptions | undefined;
@@ -307,12 +330,19 @@ export function startServer(opts: ServerOptions = {}): void {
     return out;
   });
 
-  /** Quick fixes from Diagnostic.suggestions (recomputed — LSP does not round-trip them). */
+  /** Quick fixes from Diagnostic.suggestions — read from the cache `validate`
+   * populates on every content change, so this doesn't re-run the compiler
+   * per lightbulb request. Falls back to computing (and caching) once if a
+   * code action arrives before the first `validate` (rare). */
   connection.onCodeAction(async ({ textDocument }): Promise<CodeAction[]> => {
     const doc = documents.get(textDocument.uri);
     if (!doc) return [];
     const path = docPath(textDocument.uri);
-    const published = await moduleDiagnostics(path, doc.getText(), read, await dxOpts(path));
+    let published = diagnosticsCache.get(textDocument.uri);
+    if (!published) {
+      published = await moduleDiagnostics(path, doc.getText(), read, await dxOpts(path));
+      diagnosticsCache.set(textDocument.uri, published);
+    }
     const actions: CodeAction[] = [];
     for (const d of published) {
       for (const s of d.suggestions ?? []) {
@@ -348,6 +378,7 @@ export function startServer(opts: ServerOptions = {}): void {
   const validate = async (doc: TextDocument): Promise<void> => {
     const path = docPath(doc.uri);
     const computed = await moduleDiagnostics(path, doc.getText(), read, await dxOpts(path));
+    diagnosticsCache.set(doc.uri, computed);
     const diags: Diagnostic[] = computed.map((d) => ({
       range: d.range,
       message: d.message,
@@ -367,7 +398,29 @@ export function startServer(opts: ServerOptions = {}): void {
   documents.onDidChangeContent((e) => {
     void validate(e.document);
   });
+  documents.onDidClose((e) => {
+    diagnosticsCache.delete(e.document.uri);
+  });
   documents.listen(connection);
+
+  /**
+   * Re-load plugins when `mochi.plugins.mjs` changes on disk. The
+   * client (vscode-languageclient) owns watcher registration — this handler
+   * only reacts to the notification. Clears the module-level cache (and its
+   * ESM-cache-busting generation) and republishes diagnostics for every open
+   * `.mochi` document so plugin-dependent hover/completion/diagnostics
+   * reflect the new manifest without an LSP restart.
+   */
+  connection.onDidChangeWatchedFiles(({ changes }) => {
+    const manifestChanged = changes.some((change) =>
+      (PLUGIN_FILENAMES as readonly string[]).includes(basename(fileURLToPath(change.uri))),
+    );
+    if (!manifestChanged) return;
+    clearPluginsCache();
+    for (const doc of documents.all()) {
+      if (doc.uri.endsWith(".mochi")) void validate(doc);
+    }
+  });
 
   /** Serve the virtual prelude buffer when the client opens a `mochi:` Location. */
   connection.workspace.textDocumentContent.on((params) => {
