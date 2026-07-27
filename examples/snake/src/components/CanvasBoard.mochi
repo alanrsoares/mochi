@@ -1,0 +1,42 @@
+// Canvas board — mochi component + effects. Canvas2D / rAF / particles stay
+// in `canvas.host.ts` (not yet expressible in the surface language).
+import { useRef, useEffect, hookDeps2 } from "@mochi/plugin-preact/hooks"
+
+extern BOARD_PX : number = "../host/canvas.host" "BOARD_PX"
+/// Seed for canvas `useRef` (mochi has no `null` literal).
+extern nullEl : a = "../host/canvas.host" "nullEl"
+extern emptyParticles : () -> a = "../host/canvas.host" "emptyParticles"
+extern eatWatchSeed : a -> b -> c = "../host/canvas.host" "eatWatchSeed"
+extern syncBoardRef : a -> b -> c = "../host/canvas.host" "syncBoardRef"
+extern watchEat : a -> b -> c -> d = "../host/canvas.host" "watchEat"
+extern paintBoard : a -> b -> c -> d = "../host/canvas.host" "paintBoard"
+/// Returns a `useEffect` cleanup.
+extern startParticleLoop : a -> b -> c -> d = "../host/canvas.host" "startParticleLoop"
+
+let CanvasBoard = props =>
+  let canvasRef = useRef(nullEl) in
+  let particles = useRef(emptyParticles()) in
+  let eatWatch = useRef(eatWatchSeed(props.snake, props.food)) in
+  let board = {
+    snake: props.snake,
+    food: props.food,
+    cols: props.cols,
+    rows: props.rows
+  } in
+  let boardRef = useRef(board) in
+  let _sync = syncBoardRef(boardRef, board) in
+  // Store → pixels: paint whenever the board slice changes; particle rAF
+  // only while bursts remain (host loop reads `boardRef`).
+  let _draw = useEffect(() =>
+    let _ = watchEat(particles, eatWatch, board) in
+    let _ = paintBoard(canvasRef, board, particles) in
+      startParticleLoop(canvasRef, particles, boardRef))(
+    hookDeps2(props.snake, props.food)
+  ) in
+    <canvas
+      ref={canvasRef}
+      id="game-canvas"
+      width={BOARD_PX}
+      height={BOARD_PX}
+      className="block h-auto max-h-full w-auto max-w-full rounded-[15px] border-2 border-line-strong shadow-lg"
+    />

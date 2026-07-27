@@ -53,7 +53,7 @@
 }
 
 /* The game canvas is a fixed 600x600 intrinsic bitmap (see
-   src/components/CanvasBoard.tsx); scale it responsively within its flex
+   src/host/canvas.host.ts BOARD_PX); scale it responsively within its flex
    cell without stretching. Chrome states (overlay tone, ws-status,
    leaderboard rank) are now styled-cva `$variant` props driven from
    App.mochi state (src/ui/primitives.mochi) rather than className swaps,

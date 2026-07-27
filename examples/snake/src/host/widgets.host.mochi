@@ -1,5 +1,0 @@
-// FFI seam — the one host TSX widget (canvas can't be expressed in mochi/JSX
-// directly: raw 2D context drawing + a local rAF loop). Mirrors
-// `apps/docs/src/host/widgets.host.mochi`'s `Playground` pattern — opaque
-// (`: a`) because its prop type lives in TSX, not HM.
-export extern CanvasBoard : a = "../components/CanvasBoard" "CanvasBoard"

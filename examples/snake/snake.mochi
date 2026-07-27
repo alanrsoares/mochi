@@ -137,24 +137,29 @@ export let step = (state, randomFood) => switch state.status {
 /// — plain value/function imports and equality are unaffected, only pattern
 /// matching is. These stay switch-based here, where `Status`'s constructors
 /// are locally declared.
-export let isPlaying = state => switch state.status {
+export let isPlayingStatus = status => switch status {
   | Playing => true
   | _ => false
 }
 
-export let isGameOver = state => switch state.status {
+export let isGameOverStatus = status => switch status {
   | GameOver => true
   | _ => false
 }
 
-export let statusTone = state => switch state.status {
+export let statusToneOf = status => switch status {
   | Playing => "ready"
   | GameOver => "gameOver"
   | _ => "paused"
 }
 
-export let statusHeading = state => switch state.status {
+export let statusHeadingOf = status => switch status {
   | GameOver => "Game Over"
   | Playing => ""
   | _ => "Ready?"
 }
+
+export let isPlaying = state => isPlayingStatus(state.status)
+export let isGameOver = state => isGameOverStatus(state.status)
+export let statusTone = state => statusToneOf(state.status)
+export let statusHeading = state => statusHeadingOf(state.status)

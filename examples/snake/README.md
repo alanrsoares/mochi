@@ -8,20 +8,24 @@ A Canvas Snake game written in [Mochi](https://github.com/alanrsoares/mochi), se
 bun example:snake
 ```
 
-Open `http://localhost:3000` in your browser.
+Open `http://localhost:3000` in the browser.
 
 ## Features
 
 - **Pure Functional Logic**: Game state, collision detection, and step logic are written in pure Mochi (`snake.mochi`).
+- **re-reduced container**: `App.mochi` `defineContainer` wraps those reducers; tick/keyboard/persist/WS are effects over `store.actions`.
 - **Buffered Direction Queue**: FIFO input queueing guarantees ordered handling of rapid keypresses (e.g. sharp diagonal turns) without accidental self-reversal.
-- **`Bun.serve` Backend**: `server.mts` auto-compiles `snake.mochi` on boot, serves static assets, provides WebSockets (`/ws`) for live leaderboard sync across browser windows, and handles score persistence (`POST /api/score`).
-- **Canvas Visuals & Sound**: Smooth outer corner curvature, directional head eyes, particle explosion FX, and a Web Audio API synthesizer.
+- **`Bun.serve` Backend**: `server.mts` auto-compiles on boot, serves static assets, WebSockets (`/ws`) for live leaderboard sync, and score persistence (`POST /api/score`).
+- **Canvas Visuals**: `CanvasBoard.mochi` syncs pixels via effects; Canvas2D / rAF / particles live in `canvas.host.ts` (host APIs not yet in the surface).
 
 ## Architecture
 
 | File / Dir | Purpose |
 |---|---|
 | `snake.mochi` | Pure functional game logic: direction queue, step tick & collision checks |
-| `src/App.mochi` | Full Mochi + Preact + styled-cva UI component |
-| `src/host/` | Host TS/TSX seams: canvas rendering (`widgets.host.tsx`), audio/keyboard (`game.host.ts`), WS/REST client (`leaderboard.host.ts`) |
-| `server.mts` | `Bun.serve` backend (auto-builds dist, serves static app, handles WebSockets & REST API) |
+| `src/App.mochi` | Container + Preact UI (chrome, overlay, leaderboard) |
+| `src/components/CanvasBoard.mochi` | Board component; effects call into `canvas.host` |
+| `src/host/canvas.host.ts` | Canvas2D paint, eat particles, short rAF loop |
+| `src/host/game.host.ts` | Timer, keyboard, localStorage, random food |
+| `src/host/leaderboard.host.ts` | REST + WebSocket client |
+| `server.mts` | `Bun.serve` backend (build, static, WS, REST) |

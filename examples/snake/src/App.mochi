@@ -1,8 +1,6 @@
-// Snake game UI — hooks in mochi (HeroCarousel pattern: HM
-// `useState`'s setter isn't a functional updater, so timer/keyboard effects
-// re-arm every render via `hookDeps1(state)` to keep closures fresh).
-// Canvas drawing is the one host TSX widget (`CanvasBoard`); everything else
-// — layout, chrome, overlay screens, leaderboard — is mochi + JSX + styled-cva.
+// Snake — re-reduced game container + mochi UI. Host seams only for APIs the
+// surface cannot express yet (timer, keyboard, localStorage, canvas2d/rAF,
+// fetch/WS). Board pixels sync via CanvasBoard.mochi effects → canvas.host.
 import {
   useState,
   useEffect,
@@ -14,7 +12,7 @@ import {
   useContainer,
   useSelect
 } from "./host/re-reduced.host"
-import { CanvasBoard } from "./host/widgets.host"
+import { CanvasBoard } from "./components/CanvasBoard"
 import {
   Card,
   Kbd,
@@ -40,8 +38,10 @@ import {
   step,
   isPlaying,
   isGameOver,
-  statusTone,
-  statusHeading,
+  isPlayingStatus,
+  isGameOverStatus,
+  statusToneOf,
+  statusHeadingOf,
   Ready,
   Up,
   Down,
@@ -124,19 +124,8 @@ let App = _ =>
   let highScore = useSelect(store, s => s.highScore.value) in
   let status = useSelect(store, s => s.status.value) in
   let submitted = useSelect(store, s => s.submitted.value) in
-  let gameState = {
-    snake: snake,
-    food: food,
-    dir: Right,
-    dirQueue: [],
-    score: score,
-    highScore: highScore,
-    status: status,
-    cols: COLS,
-    rows: ROWS
-  } in
-  let playing = isPlaying(gameState) in
-  let gameOver = isGameOver(gameState) in
+  let playing = isPlayingStatus(status) in
+  let gameOver = isGameOverStatus(status) in
   let _tick = useEffect(() =>
     playing ? startTick(() => store.actions.step(), TICK_MS) : () => 0)(
     hookDeps1(playing)
@@ -156,13 +145,13 @@ let App = _ =>
         : key == "restart"
         ? let _ = store.actions.restartIfGameOver() in 0
         : 0))(
-    hookDeps1(playing)
+    hookDeps0()
   ) in
   let _persist = useEffect(() => let _ = writeHighScore(highScore) in _ => 0)(
     hookDeps1(highScore)
   ) in
   let _lb = useEffect(() =>
-    let loadTask = Task.match(setRows, _ => [], fetchLeaderboard()) in
+    let loadTask = Task.match(setRows, _ => setRows([]), fetchLeaderboard()) in
     let _ = Task.run(loadTask) in connectWs(setRows, setConnected))(
     hookDeps0()
   ) in
@@ -218,8 +207,8 @@ let App = _ =>
         <Card className="relative min-h-0 flex items-center justify-center p-4">
           <CanvasBoard snake={snake} food={food} cols={COLS} rows={ROWS} />
           <OverlayPanel $visible={playing ? "off" : "on"}>
-            <OverlayTitle $tone={statusTone(gameState)}>
-              {statusHeading(gameState)}
+            <OverlayTitle $tone={statusToneOf(status)}>
+              {statusHeadingOf(status)}
             </OverlayTitle>
             {gameOver
               ? <div
