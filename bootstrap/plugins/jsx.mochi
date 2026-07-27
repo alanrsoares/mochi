@@ -48,7 +48,6 @@ type Tok =
   | TBang
   | TBacktick
   | TComma
-  | TDollar
   | TNum(value: number, raw: string)
   | TBool(value: bool)
   | TStr(value: string)
@@ -68,7 +67,6 @@ let jxTokName = t => switch t {
   | TSlash => "slash"
   | TLt => "lt"
   | TGt => "gt"
-  | TDollar => "dollar"
   | TId(_) => "id"
   | TStr(_) => "str"
   | TNum(_, _) => "num"
@@ -99,13 +97,7 @@ let jxExpectId = (toks, pos) =>
       | t => jxErrAt("expected id, got ${jxTokName(t)}", lt)
     }
 
-let jxExpectLabel = (toks, pos) =>
-  let lt = jxTokAt(toks, pos) in
-    lt.tok == TDollar
-      ? jxExpectId(toks, pos + 1)
-        |> Result.map(((id, p)) =>
-          ({ name: "$${id.name}", span: jxSpanning(jxSpanOf(lt), id.span) }, p))
-      : jxExpectId(toks, pos)
+let jxExpectLabel = jxExpectId
 
 let jxIsUpper = s => Str.codeAt(0, s) |> Option.exists(n => n >= 65 && n <= 90)
 

@@ -105,17 +105,11 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
   };
   /**
    * Label in record fields / plugin attribute lists: `tone` or `$tone`
-   * (styled-cva transient props, ADR 0009). `$` is not a general identifier —
-   * `let $x = …` / bare `$tone` still fail.
+   * (styled-cva transient props, ADR 0009). Since ADR 0047 `$` is an ordinary
+   * identifier character, so a label is just an id — kept as a named seam because
+   * plugins consume it through `parserApi`.
    */
-  const expectLabel = (): { name: string; span: Span } => {
-    if (peek().t === "dollar") {
-      const dol = next();
-      const id = expectId();
-      return { name: `$${id.name}`, span: spanning(dol.span, id.span) };
-    }
-    return expectId();
-  };
+  const expectLabel = expectId;
   // span from a start marker to the last consumed token.
   const to = (start: Span): Span => spanning(start, last.span);
 

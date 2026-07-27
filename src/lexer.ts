@@ -34,7 +34,6 @@ export type Tok =
   | { t: "percent" } // %
   | { t: "at" } // @ — lazy-List sigil (@{...})
   | { t: "hash" } // # — Map sigil (#{...})
-  | { t: "dollar" } // $ — label prefix ($tone); not a value identifier
   | { t: "dot" } // .
   | { t: "colon" } // :
   | { t: "question" } // ? (ternary)
@@ -118,7 +117,6 @@ const PUNCT: Record<string, Tok | undefined> = {
   "?": { t: "question" },
   "@": { t: "at" },
   "#": { t: "hash" },
-  $: { t: "dollar" },
 };
 
 const isSpace = (c: string): boolean => c === " " || c === "\t" || c === "\n" || c === "\r";
@@ -358,9 +356,12 @@ export function lex(src: string): Result<Located[], Diagnostic> {
       continue;
     }
 
-    if (/[A-Za-z_]/.test(c)) {
+    // `$` is a plain identifier character (ADR 0047): `$tone` is one `id` token, so
+    // styled-cva transient props bind, destructure and get referenced like any other
+    // name. `$` is also legal in JS identifiers, so codegen needs no mangling.
+    if (/[A-Za-z_$]/.test(c)) {
       let j = i;
-      while (j < src.length && /[A-Za-z0-9_]/.test(src[j]!)) j++;
+      while (j < src.length && /[A-Za-z0-9_$]/.test(src[j]!)) j++;
       const word = src.slice(i, j);
       emit(KEYWORDS[word] ?? { t: "id", v: word }, i, j);
       i = j;

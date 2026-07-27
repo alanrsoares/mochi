@@ -58,7 +58,6 @@ type Tok =
   | TBang
   | TBacktick
   | TComma
-  | TDollar
   | TNum(value: number, raw: string)
   | TBool(value: bool)
   | TStr(value: string)
@@ -130,7 +129,6 @@ let tokName = t => switch t {
   | TBang => "bang"
   | TBacktick => "backtick"
   | TComma => "comma"
-  | TDollar => "dollar"
   | TNum(_, _) => "num"
   | TBool(_) => "bool"
   | TStr(_) => "str"
@@ -167,15 +165,10 @@ let expectId = (toks, pos) =>
       | t => errAt("expected id, got ${tokName(t)}", lt)
     }
 
-/// Label in JSX attrs / record fields: `tone` or `$tone` (styled-cva).
-/// `$` is not a general identifier — `let $x = …` / bare `$tone` still fail.
-let expectLabel = (toks, pos) =>
-  let lt = tokAt(toks, pos) in
-    lt.tok == TDollar
-      ? expectId(toks, pos + 1)
-        |> Result.map(((id, p)) =>
-          ({ name: "$${id.name}", span: spanning(spanOf(lt), id.span) }, p))
-      : expectId(toks, pos)
+/// Label in JSX attrs / record fields: `tone` or `$tone` (styled-cva). Since
+/// ADR 0047 `$` is an ordinary identifier char, so a label is just an id — the
+/// name survives as a seam because `parser.ts` exposes it to plugins.
+let expectLabel = expectId
 
 let expectStr = (toks, pos) =>
   let lt = tokAt(toks, pos) in

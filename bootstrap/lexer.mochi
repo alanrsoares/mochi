@@ -52,7 +52,6 @@ type Tok =
   | TBang
   | TBacktick
   | TComma
-  | TDollar
   | TNum(value: number, raw: string)
   | TBool(value: bool)
   | TStr(value: string)
@@ -78,10 +77,11 @@ let cr = Str.fromCode(13)
 let isSpace = c => c == " " || (c == "\t" || (c == "\n" || c == cr))
 let inRange = (lo, hi, n) => n >= lo && n <= hi
 let isDigit = c => Str.codeAt(0, c) |> Option.exists(inRange(48, 57))
+// 36 = `$` — an ordinary identifier char (ADR 0047), so `$tone` is one TId.
 let isIdStart = c =>
   Str.codeAt(0, c)
     |> Option.exists(n =>
-      inRange(65, 90, n) || (inRange(97, 122, n) || n == 95))
+      inRange(65, 90, n) || (inRange(97, 122, n) || (n == 95 || n == 36)))
 let isIdChar = c => isIdStart(c) || isDigit(c)
 let isNumChar = c => isDigit(c) || c == "."
 
@@ -137,7 +137,6 @@ let punctTok = c => switch c {
   | "%" => Some(TPercent)
   | "!" => Some(TBang)
   | "`" => Some(TBacktick)
-  | "$" => Some(TDollar)
   | "<" => Some(TLt)
   | ">" => Some(TGt)
   | _ => None

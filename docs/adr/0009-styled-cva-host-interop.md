@@ -20,7 +20,9 @@ Tagged templates (`` tw.button`…` ``) are out of scope — styled-cva’s pref
 1. **`$`-labels only in label position.** JSX attribute names and record field names accept
    `$` + id via `expectLabel()` (lexer emits `dollar`). Value bindings and expression refs
    stay `[A-Za-z_]…` — `$d` / `$x` / `$s` synthetics remain reserved and users cannot write
-   `let $tone = …`.
+   `let $tone = …`. **Superseded by [ADR 0047](0047-dollar-identifiers.md):** `$` is now an
+   ordinary identifier character, so `$tone` binds, destructures and references like any
+   other name; only the `$`-prefix *convention* for synthetics survives.
 2. **`extern … "default"`** emits `import name from "module"` (not `import { default as … }`).
 3. **No CVA runtime in Mochi.** Factories and `$` stripping stay in the host library; codegen
    still emits plain records and `h(...)`.

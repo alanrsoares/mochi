@@ -79,7 +79,6 @@ const TAG_TO_T: Record<string, string> = {
   TPercent: "percent",
   TAt: "at",
   THash: "hash",
-  TDollar: "dollar",
   TDot: "dot",
   TColon: "colon",
   TQuestion: "question",

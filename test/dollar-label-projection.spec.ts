@@ -1,8 +1,8 @@
 // `$tone` is a legal record *key* (ADR 0009 transient props), so it must be a
-// legal projection too: `props.$tone` reads what `{ $tone: … }` writes. `$` is
-// still not a general identifier — `let $x` / a bare `$tone` param stay errors.
+// legal projection too: `props.$tone` reads what `{ $tone: … }` writes. Since
+// ADR 0047 `$` is an ordinary identifier char, so it also binds and destructures.
 import { expect, test } from "bun:test";
-import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
+import { isErr, unwrapOk } from "@onrails/result";
 import { compile } from "../src/compile";
 import { compileTargets } from "../src/compile-targets";
 import { format } from "../src/format";
@@ -38,8 +38,16 @@ test("a $-label projection round-trips through the formatter", () => {
   expect(unwrapOk(format(src))).toBe(src);
 });
 
-test("$ is still not a general identifier", () => {
-  const e = compile("let $x = 1");
-  expect(isErr(e)).toBe(true);
-  expect(unwrapErr(e)[0]?.kind).toBe("parse");
+test("$ is an ordinary identifier char (ADR 0047)", () => {
+  expect(js("let $x = 1")).toContain("const $x = 1;");
+  expect(js("let id$ = x => x\nlet one = id$(1)")).toContain("id$(1)");
+});
+
+test("a $-label destructures out of a record parameter", () => {
+  const out = js("let pick = ({ $tone }) => $tone");
+  expect(out).toContain("({ $tone })");
+});
+
+test("a $-label binds in a record pattern", () => {
+  expect(js(`${PROPS}let t = switch props { | { $tone: v } => v }`)).toContain("$tone:");
 });

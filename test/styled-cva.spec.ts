@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { isErr, unwrapOk } from "@onrails/result";
+import { unwrapOk } from "@onrails/result";
 import { compile } from "../src/compile";
 import { format } from "../src/format";
 import { lex } from "../src/lexer";
@@ -29,14 +29,18 @@ describe("$ labels for styled-cva interop", () => {
     }
   });
 
-  it("rejects $tone as a value binding", () => {
-    expect(isErr(parse(unwrapOk(lex(`let $tone = 1`))))).toBe(true);
+  it("binds $tone as an ordinary value name (ADR 0047)", () => {
+    const js = unwrapOk(compile(`let $tone = 1\nlet doubled = $tone + $tone`));
+    expect(js).toContain("const $tone = 1;");
+    expect(js).toContain("add($tone, $tone)");
   });
 
-  it("rejects bare $tone as an expression", () => {
-    // `$` then id is only valid in label position; as an atom, `$` is unexpected
-    const r = parse(unwrapOk(lex(`let el = $tone`)));
-    expect(isErr(r)).toBe(true);
+  it("destructures and matches $ labels", () => {
+    const js = unwrapOk(
+      compile(`let pick = ({ $tone }) => $tone\nlet at = r => switch r { | { $tone: t } => t }`),
+    );
+    expect(js).toContain("({ $tone })");
+    expect(js).toContain("$tone");
   });
 
   it("formats $ labels idempotently in records and JSX", () => {
@@ -62,12 +66,12 @@ let Button = tw.button("px-4 py-2", {
   variants: { $tone: { rose: "bg-rose-500", ghost: "bg-transparent" } },
   defaultVariants: { $tone: "rose" }
 })
-let Chip = props => <Button $tone={props.tone}>{"hi"}</Button>
+let Chip = props => <Button $tone={props.$tone}>{"hi"}</Button>
 `;
     const js = unwrapOk(compile(src));
     expect(js).toContain('import tw from "@styled-cva/react";');
     expect(js).toContain("$tone:");
     expect(js).toContain("h(Button,");
-    expect(js).toMatch(/\$tone:\s*props\.tone/);
+    expect(js).toMatch(/\$tone:\s*props\.\$tone/);
   });
 });
