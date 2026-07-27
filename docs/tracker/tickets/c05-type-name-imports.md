@@ -45,4 +45,13 @@ Strict before this ships = mandatory annotations that can't be written.
 - [ ] Bootstrap impact: **large** — `bootstrap/parser.mochi` + `infer`/`check` mirrors
       need the same production (differential tests, message + span parity); afterwards,
       check whether any shared-module workaround in the bootstrap graph can unwind.
+      Sliced: **d-1/d-2 done** — `TyQual` in the shared `bootstrap/ast.mochi` (one
+      variant for both arities), the `parseTypeAtom`/`parseTypeApp` productions with
+      byte-exact message *and* span parity, `strayTypeVar`, and `typeExprToType`
+      lowering to the bare nominal `con(name, args)`. Two differential cases pin it
+      (AST + error). **d-3 remains:** thread a `quals` scope through
+      `bootstrap/schemes.mochi` so a record alias expands across the module edge,
+      port `checkQualifiedTypeNames` + `qualsByPath`, then add the first checked-in
+      `.mochi` fixture using `Alias.T`. The constraint above holds until d-3 —
+      qualified types parse in the bootstrap graph now, but do not yet *resolve*.
 - [ ] `bun run check:full` green.
