@@ -1,0 +1,13 @@
+{
+  "name": "@mochi/vite-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./workspace-aliases": "./src/workspace-aliases.ts"
+  },
+  "dependencies": {
+    "@onrails/result": "^0.4.0"
+  }
+}

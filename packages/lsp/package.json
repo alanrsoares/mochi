@@ -1,0 +1,17 @@
+{
+  "name": "@mochi/lsp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/server.ts",
+    "./docs-server": "./src/docs-server.ts"
+  },
+  "dependencies": {
+    "@mochi/compiler": "workspace:*",
+    "@mochi/dx": "workspace:*",
+    "@onrails/result": "^0.4.0",
+    "vscode-languageserver": "^10.1.0",
+    "vscode-languageserver-textdocument": "^1.0.12"
+  }
+}

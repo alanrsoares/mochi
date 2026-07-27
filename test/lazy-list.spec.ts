@@ -3,12 +3,12 @@
 // destructuring is the canonical `@{}` + `@{head, ...tail}` pair, lowered to an
 // iterator-stepping IIFE (not @onrails/pattern — a sequence has no length).
 import { expect, test } from "bun:test";
+import { format } from "@mochi/dx/format";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 import { check } from "../src/check";
 import { compile } from "../src/compile";
 import { emitDts } from "../src/dts";
-import { format } from "../src/format";
 import { inferProgram, showScheme } from "../src/infer";
 import { lex } from "../src/lexer";
 import { parse } from "../src/parser";

@@ -47,8 +47,9 @@ string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck�
 | `doc.ts` | Wadler-style `Doc` IR + layout engine, shared by `format.ts` and plugin `format` hooks |
 | `module.ts` | `buildModules(): ResultAsync<…>` — DFS load, cycle detection, compile graph |
 | `prelude.ts` | builtin HM signatures + JS runtime strings + namespace tables |
-| `dts` · `format` · `hover` · `diagnostics` | `.d.ts`; pretty-print (lex+parse only); LSP surfaces |
-| `compile.ts` · `cli.ts` · `lsp/server.ts` | the railway; CLI; thin LSP adapter (logic lives in the compiler) |
+| `dts` | `.d.ts` emit (still in compiler; TS backend shares printers) |
+| `@mochi/dx` · `@mochi/lsp` · `@mochi/vite-plugin` | format + IDE queries; LSP adapter; Vite (ADR 0048) |
+| `compile.ts` · `cli.ts` | the railway; CLI (`fmt` via `@mochi/dx`) |
 
 ## Conventions
 

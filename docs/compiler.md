@@ -21,15 +21,17 @@ string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck�
 `module.ts` (`buildModules`) drives multi-file graphs: DFS load, cycle detection,
 cross-module inference and exhaustiveness. `prelude.ts` holds the builtin HM signatures,
 the JS runtime strings, and the namespace tables. `compile.ts` is the single-file
-railway; `cli.ts` is the CLI; `lsp/server.ts` is a thin adapter over compiler surfaces.
+railway; `cli.ts` is the CLI; `@mochi/lsp` is a thin adapter over `@mochi/dx`
+surfaces ([ADR 0048](adr/0048-core-dx-package-boundary.md)).
 
 ## The plugin seam
 
-Core (`lexer.ts` / `parser.ts` / `infer.ts` / `format.ts` / `dts.ts`) carries no
-kit-specific or JSX-specific knowledge. `extensions.ts` defines `LanguagePlugin` —
+Core (`lexer.ts` / `parser.ts` / `infer.ts` / `dts.ts`) and DX `format`
+(`@mochi/dx`) carry no kit-specific or JSX-specific knowledge. `extensions.ts`
+defines `LanguagePlugin` —
 optional `parse` / `inferCall` / `format` / `bindingType` / `dtsBinding` hooks,
 consulted at one seam per pass — and `resolvePlugins`, the single opt-in/opt-out rule
-every entry point (`compile`, the module graph, `dts`, the Vite plugin, the LSP) uses:
+every entry point (`compile`, the module graph, `dts`, `@mochi/vite-plugin`, the LSP) uses:
 a caller's `plugins` list omitted resolves to the builtin list; `[]` is a hard opt-out
 (no plugins, not even builtins); a non-empty list gets builtins **prepended**. JSX is
 the first builtin, `plugins/jsx.ts`'s `jsxPlugin` — parsing `<tag/>` into

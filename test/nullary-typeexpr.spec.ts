@@ -1,8 +1,8 @@
 // `() -> T` in TypeExpr / extern signatures (ADR 0014 surface + ADR 0015).
 import { expect, test } from "bun:test";
+import { hoverAt } from "@mochi/dx/hover";
 import { isOk, unwrapOk } from "@onrails/result";
 import { compile } from "../src/compile";
-import { hoverAt } from "../src/hover";
 import { lex } from "../src/lexer";
 import { parse } from "../src/parser";
 

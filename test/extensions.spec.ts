@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test";
+import { moduleDiagnostics } from "@mochi/dx/diagnostics";
+import { format } from "@mochi/dx/format";
 import { styledCvaExtension } from "@mochi/plugin-styled-cva";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 import { codegenTs } from "../src/codegen-ts";
 import { compile, toTypedProgram } from "../src/compile";
-import { moduleDiagnostics } from "../src/diagnostics";
 import { emitDts } from "../src/dts";
 import { DEFAULT_PLUGINS, type LanguagePlugin, resolvePlugins } from "../src/extensions";
-import { format } from "../src/format";
 import { lex } from "../src/lexer";
 import { parse } from "../src/parser";
 import { preludeNamespaces } from "../src/prelude";

@@ -3,12 +3,12 @@
 // extern signatures); hover / inlay / .d.ts FOLD a matching closed row back to
 // the alias name. No nominal identity, no runtime — pure naming for readability.
 import { expect, test } from "bun:test";
+import { format } from "@mochi/dx/format";
+import { hoverAt } from "@mochi/dx/hover";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 import { check } from "../src/check";
 import { compile } from "../src/compile";
 import { emitDts } from "../src/dts";
-import { format } from "../src/format";
-import { hoverAt } from "../src/hover";
 import { lex } from "../src/lexer";
 import { parse } from "../src/parser";
 

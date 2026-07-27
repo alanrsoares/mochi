@@ -1,0 +1,32 @@
+/** DX query + format surfaces over `@mochi/compiler` (ADR 0048). */
+export { type CompletionItem, type CompletionKind, completeAt, moduleCompleteAt } from "./complete";
+export {
+  diagnostics,
+  moduleDiagnostics,
+  type Position,
+  type PublishDiagnostic,
+  type Range,
+  toPublish,
+} from "./diagnostics";
+export { format } from "./format";
+export { type HoverInfo, hoverAt, moduleHoverAt } from "./hover";
+export {
+  type DocSymbol,
+  definitionAt,
+  documentSymbolsAt,
+  type Highlight,
+  highlightsAt,
+  moduleDefinitionAt,
+  moduleHighlightsAt,
+  modulePrepareRenameAt,
+  moduleReferencesAt,
+  moduleRenameAt,
+  moduleTypeDefinitionAt,
+  prepareRenameAt,
+  type Ref,
+  type RenameEdit,
+  referencesAt,
+  renameAt,
+  typeDefinitionAt,
+  workspaceSymbolsAt,
+} from "./nav";

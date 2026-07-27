@@ -10,9 +10,12 @@
     "check": "bun ../../scripts/gen-mochi-dts.ts && tsc --noEmit && vite build"
   },
   "dependencies": {
+    "@mochi/compiler": "workspace:*",
+    "@mochi/dx": "workspace:*",
     "@mochi/plugin-preact": "workspace:*",
     "@mochi/plugin-re-reduced": "workspace:*",
     "@mochi/plugin-styled-cva": "workspace:*",
+    "@mochi/vite-plugin": "workspace:*",
     "@preact/signals": "^2.3.1",
     "@re-reduced/preact": "^0.2.3",
     "@styled-cva/react": "^0.7.1",

@@ -25,7 +25,19 @@
     // Some stricter flags (disabled by default)
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "noPropertyAccessFromIndexSignature": false
+    "noPropertyAccessFromIndexSignature": false,
+
+    // ADR 0048 — `@mochi/compiler` sources still live under root `src/` behind
+    // the package export map; tsc needs paths because exports leave the package root.
+    "paths": {
+      "@mochi/compiler": ["./packages/compiler/src/index.ts"],
+      "@mochi/compiler/*": ["./src/*"],
+      "@mochi/dx": ["./packages/dx/src/index.ts"],
+      "@mochi/dx/*": ["./packages/dx/src/*"],
+      "@mochi/lsp": ["./packages/lsp/src/server.ts"],
+      "@mochi/lsp/*": ["./packages/lsp/src/*"],
+      "@mochi/vite-plugin": ["./packages/vite-plugin/src/index.ts"]
+    }
   },
   // The vscode extension client (editors/**) is bundled by esbuild and relies on
   // editor-host ambient types; keep it out of the compiler's type gate.

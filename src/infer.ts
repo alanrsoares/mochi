@@ -51,8 +51,8 @@ export type { AliasMap, Env, QualMap, QualScope, Scheme, TypeScope } from "./sch
 import { type Diagnostic, typeErr } from "./errors";
 import type { InferCallApi, InferCallHook, LanguagePlugin } from "./extensions";
 import { resolvePlugins, runInferCallHooks } from "./extensions";
-import { showTypeExpr } from "./format";
 import { stronglyConnected } from "./scc";
+import { showTypeExpr } from "./show-type-expr";
 import type { Span } from "./span";
 import { closestName } from "./suggest";
 import {

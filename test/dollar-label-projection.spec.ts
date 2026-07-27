@@ -2,10 +2,10 @@
 // legal projection too: `props.$tone` reads what `{ $tone: … }` writes. Since
 // ADR 0047 `$` is an ordinary identifier char, so it also binds and destructures.
 import { expect, test } from "bun:test";
+import { format } from "@mochi/dx/format";
 import { isErr, unwrapOk } from "@onrails/result";
 import { compile } from "../src/compile";
 import { compileTargets } from "../src/compile-targets";
-import { format } from "../src/format";
 
 const js = (src: string): string => unwrapOk(compile(src));
 const ts = (src: string): string => unwrapOk(compileTargets(src)).ts;

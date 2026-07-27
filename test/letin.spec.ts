@@ -2,10 +2,10 @@
 // slice: parse+infer (with let-polymorphism), codegen runtime behavior, and
 // formatter round-trip.
 import { expect, test } from "bun:test";
+import { format } from "@mochi/dx/format";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
 import { compile } from "../src/compile";
-import { format } from "../src/format";
 import { type Env, inferProgram, showScheme } from "../src/infer";
 import { lex } from "../src/lexer";
 import { parse } from "../src/parser";

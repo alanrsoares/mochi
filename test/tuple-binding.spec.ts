@@ -2,9 +2,9 @@
 // body`. The let form desugars to an applied tuple-param lambda, so both share
 // one codegen path (JS array destructuring). Guards parse+infer+runtime+format.
 import { expect, test } from "bun:test";
+import { format } from "@mochi/dx/format";
 import { unwrapOk } from "@onrails/result";
 import { compile } from "../src/compile";
-import { format } from "../src/format";
 import { type Env, inferProgram, showScheme } from "../src/infer";
 import { lex } from "../src/lexer";
 import { parse } from "../src/parser";

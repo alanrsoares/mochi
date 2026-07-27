@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
+import { moduleCompleteAt } from "@mochi/dx/complete";
 import { isErr, unwrapOk } from "@onrails/result";
 import { toTypedProgram } from "../../../src/compile";
-import { moduleCompleteAt } from "../../../src/complete";
 import { emitDts } from "../../../src/dts";
 import { showScheme } from "../../../src/infer";
 import { moduleContext } from "../../../src/module";

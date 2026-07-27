@@ -1,7 +1,7 @@
 // Pure highlight / twoslash helpers. UI + RegExp JS highlighter stay in
 // HighlightCode.tsx (hooks / DOM / regex).
 extern lex : string -> Result a b = "@mochi/compiler" "lex"
-extern hoverAt : string -> number -> a = "@mochi/compiler" "hoverAt"
+extern hoverAt : string -> number -> a = "@mochi/dx/hover" "hoverAt"
 
 /// Closed token shape — pins bootstrap/TS schemes (open-row link mismatch
 /// under Array.append([]) / spread, same class as bootstrap/scc.mochi ADR note).

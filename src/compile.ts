@@ -131,17 +131,8 @@ export function compile(src: string, opts: CompileOptions = {}): Result<string, 
 
 export { codegenTs } from "./codegen-ts";
 export { type CompileTargets, compileTargets } from "./compile-targets";
-export {
-  type CompletionItem,
-  type CompletionKind,
-  completeAt,
-  moduleCompleteAt,
-} from "./complete";
 export { emitDts } from "./dts";
 export type { Diagnostic } from "./errors";
 export { formatError } from "./errors";
 export type { HostExtension, LanguagePlugin } from "./extensions";
-export { format } from "./format";
-export { type HoverInfo, hoverAt } from "./hover";
 export { lex } from "./lexer";
-export { type MochiPluginOptions, mochiPlugin } from "./vite-plugin";

@@ -11,15 +11,17 @@
       },
       "devDependencies": {
         "@biomejs/biome": "^2.5.4",
+        "@mochi/compiler": "workspace:*",
+        "@mochi/dx": "workspace:*",
+        "@mochi/lsp": "workspace:*",
         "@mochi/plugin-preact": "workspace:*",
         "@mochi/plugin-re-reduced": "workspace:*",
         "@mochi/plugin-styled-cva": "workspace:*",
+        "@mochi/vite-plugin": "workspace:*",
         "@types/bun": "latest",
         "esbuild": "^0.28.1",
         "fast-check": "^4.9.0",
         "lefthook": "^2.1.10",
-        "vscode-languageserver": "^10.1.0",
-        "vscode-languageserver-textdocument": "^1.0.12",
       },
       "peerDependencies": {
         "typescript": "^5",
@@ -29,9 +31,12 @@
       "name": "@mochi/docs",
       "version": "0.1.0",
       "dependencies": {
+        "@mochi/compiler": "workspace:*",
+        "@mochi/dx": "workspace:*",
         "@mochi/plugin-preact": "workspace:*",
         "@mochi/plugin-re-reduced": "workspace:*",
         "@mochi/plugin-styled-cva": "workspace:*",
+        "@mochi/vite-plugin": "workspace:*",
         "@preact/signals": "^2.3.1",
         "@re-reduced/preact": "^0.2.3",
         "@styled-cva/react": "^0.7.1",
@@ -63,6 +68,7 @@
         "@mochi/plugin-preact": "workspace:*",
         "@mochi/plugin-re-reduced": "workspace:*",
         "@mochi/plugin-styled-cva": "workspace:*",
+        "@mochi/vite-plugin": "workspace:*",
         "@onrails/pattern": "^0.3.3",
         "@re-reduced/preact": "^0.2.3",
         "@styled-cva/react": "^0.7.1",
@@ -74,6 +80,30 @@
         "tailwindcss": "^4.0.0",
         "typescript": "^5.7.3",
         "vite": "^6.0.0",
+      },
+    },
+    "packages/compiler": {
+      "name": "@mochi/compiler",
+      "version": "0.1.0",
+    },
+    "packages/dx": {
+      "name": "@mochi/dx",
+      "version": "0.1.0",
+      "dependencies": {
+        "@mochi/compiler": "workspace:*",
+        "@onrails/maybe": "^0.2.3",
+        "@onrails/result": "^0.4.0",
+      },
+    },
+    "packages/lsp": {
+      "name": "@mochi/lsp",
+      "version": "0.1.0",
+      "dependencies": {
+        "@mochi/compiler": "workspace:*",
+        "@mochi/dx": "workspace:*",
+        "@onrails/result": "^0.4.0",
+        "vscode-languageserver": "^10.1.0",
+        "vscode-languageserver-textdocument": "^1.0.12",
       },
     },
     "packages/plugin-preact": {
@@ -94,6 +124,13 @@
       "name": "@mochi/plugin-styled-cva",
       "version": "0.1.0",
       "peerDependencies": {
+        "@onrails/result": "^0.4.0",
+      },
+    },
+    "packages/vite-plugin": {
+      "name": "@mochi/vite-plugin",
+      "version": "0.1.0",
+      "dependencies": {
         "@onrails/result": "^0.4.0",
       },
     },
@@ -221,15 +258,23 @@
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
 
+    "@mochi/compiler": ["@mochi/compiler@workspace:packages/compiler"],
+
     "@mochi/docs": ["@mochi/docs@workspace:apps/docs"],
 
+    "@mochi/dx": ["@mochi/dx@workspace:packages/dx"],
+
     "@mochi/example-snake": ["@mochi/example-snake@workspace:examples/snake"],
+
+    "@mochi/lsp": ["@mochi/lsp@workspace:packages/lsp"],
 
     "@mochi/plugin-preact": ["@mochi/plugin-preact@workspace:packages/plugin-preact"],
 
     "@mochi/plugin-re-reduced": ["@mochi/plugin-re-reduced@workspace:packages/plugin-re-reduced"],
 
     "@mochi/plugin-styled-cva": ["@mochi/plugin-styled-cva@workspace:packages/plugin-styled-cva"],
+
+    "@mochi/vite-plugin": ["@mochi/vite-plugin@workspace:packages/vite-plugin"],
 
     "@mochi/vscode": ["@mochi/vscode@workspace:editors/vscode"],
 
@@ -541,7 +586,7 @@
 
     "vscode-languageserver-protocol": ["vscode-languageserver-protocol@3.18.2", "", { "dependencies": { "vscode-jsonrpc": "9.0.1", "vscode-languageserver-types": "3.18.0" } }, "sha512-XRyDbT0Pp3sSNti3JmxVEUMySWCSi1hhM+/KUlCy1hV1zmrqpM1OwO12EAki8blhmLuIMpaJrYbo0OzGVfK2Qg=="],
 
-    "vscode-languageserver-textdocument": ["vscode-languageserver-textdocument@1.0.12", "", {}, "sha512-cxWNPesCnQCcMPeenjKKsOCKQZ/L6Tv19DTRIGuLWe32lyzWhihGVJ/rcckZXJxfdKCFvRLS3fpBIsV/ZGX4zA=="],
+    "vscode-languageserver-textdocument": ["vscode-languageserver-textdocument@1.0.13", "", {}, "sha512-nx0ZHwMGIsVkzFG3/VLeJYBLTaFBRuNdGDvevvjuoayU5EOS2fEYazOhtCM3PI9ClMMg5igc0uwXtAq4tJj+Dw=="],
 
     "vscode-languageserver-types": ["vscode-languageserver-types@3.18.0", "", {}, "sha512-8TsGPNMIMiiBdkORgRSvLjuiEIiAFtO+KssmYWxQ+uSVvlf7RjK8YKCOjPzZ+YA04jXEV7+7LvkSmHkhpNS99g=="],
 
@@ -568,8 +613,6 @@
     "@tailwindcss/oxide-wasm32-wasi/tslib": ["tslib@2.8.1", "", { "bundled": true }, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
 
     "vite/esbuild": ["esbuild@0.25.12", "", { "optionalDependencies": { "@esbuild/aix-ppc64": "0.25.12", "@esbuild/android-arm": "0.25.12", "@esbuild/android-arm64": "0.25.12", "@esbuild/android-x64": "0.25.12", "@esbuild/darwin-arm64": "0.25.12", "@esbuild/darwin-x64": "0.25.12", "@esbuild/freebsd-arm64": "0.25.12", "@esbuild/freebsd-x64": "0.25.12", "@esbuild/linux-arm": "0.25.12", "@esbuild/linux-arm64": "0.25.12", "@esbuild/linux-ia32": "0.25.12", "@esbuild/linux-loong64": "0.25.12", "@esbuild/linux-mips64el": "0.25.12", "@esbuild/linux-ppc64": "0.25.12", "@esbuild/linux-riscv64": "0.25.12", "@esbuild/linux-s390x": "0.25.12", "@esbuild/linux-x64": "0.25.12", "@esbuild/netbsd-arm64": "0.25.12", "@esbuild/netbsd-x64": "0.25.12", "@esbuild/openbsd-arm64": "0.25.12", "@esbuild/openbsd-x64": "0.25.12", "@esbuild/openharmony-arm64": "0.25.12", "@esbuild/sunos-x64": "0.25.12", "@esbuild/win32-arm64": "0.25.12", "@esbuild/win32-ia32": "0.25.12", "@esbuild/win32-x64": "0.25.12" }, "bin": { "esbuild": "bin/esbuild" } }, "sha512-bbPBYYrtZbkt6Os6FiTLCTFxvq4tt3JKall1vRwshA3fdVztsLAatFaZobhkBC8/BrPetoa0oksYoKXoG4ryJg=="],
-
-    "vscode-languageclient/vscode-languageserver-textdocument": ["vscode-languageserver-textdocument@1.0.13", "", {}, "sha512-nx0ZHwMGIsVkzFG3/VLeJYBLTaFBRuNdGDvevvjuoayU5EOS2fEYazOhtCM3PI9ClMMg5igc0uwXtAq4tJj+Dw=="],
 
     "@prefresh/vite/@rollup/pluginutils/picomatch": ["picomatch@2.3.2", "", {}, "sha512-V7+vQEJ06Z+c5tSye8S+nHUfI51xoXIXjHQ99cQtKUkQqqO1kO/KCJUfZXuB47h/YBlDhah2H3hdUGXn8ie0oA=="],
 

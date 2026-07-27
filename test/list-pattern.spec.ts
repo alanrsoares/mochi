@@ -1,10 +1,10 @@
 // List destructuring in `switch`: [], [x], [head, ...tail]. Patterns lower to
 // length-guards over @onrails/pattern; a `[]` + `[x, ...xs]` pair is total.
 import { expect, test } from "bun:test";
+import { format } from "@mochi/dx/format";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 import { compile } from "../src/compile";
-import { format } from "../src/format";
 
 // Compile standalone (prelude inlined), inject `match` for the stripped import.
 const run = (src: string, ret: string): unknown => {

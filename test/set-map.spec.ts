@@ -3,11 +3,11 @@
 // destructuring; ops are qualified (`Set.union`, `Map.getOr`) and immutable.
 // Set has no literal sigil (built via `Set.fromArray`); Map keeps `#{…}`.
 import { expect, test } from "bun:test";
+import { format } from "@mochi/dx/format";
 import { isErr, unwrapOk } from "@onrails/result";
 import { check } from "../src/check";
 import { compile } from "../src/compile";
 import { emitDts } from "../src/dts";
-import { format } from "../src/format";
 import { inferProgram, showScheme } from "../src/infer";
 import { lex } from "../src/lexer";
 import { parse } from "../src/parser";

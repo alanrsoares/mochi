@@ -10,9 +10,28 @@
     "noEmit": true,
     "skipLibCheck": true,
     "paths": {
-      "@mochi/compiler": ["../../src/compile.ts"],
-      "@mochi/root/*": ["../../*"]
-    }
+      "@mochi/compiler": [
+        "../../packages/compiler/src/index.ts"
+      ],
+      "@mochi/compiler/*": [
+        "../../src/*"
+      ],
+      "@mochi/dx": [
+        "../../packages/dx/src/index.ts"
+      ],
+      "@mochi/dx/*": [
+        "../../packages/dx/src/*"
+      ],
+      "@mochi/vite-plugin": [
+        "../../packages/vite-plugin/src/index.ts"
+      ],
+      "@mochi/root/*": [
+        "../../*"
+      ]
+    },
+    "allowImportingTsExtensions": true
   },
-  "include": ["src/**/*"]
+  "include": [
+    "src/**/*"
+  ]
 }

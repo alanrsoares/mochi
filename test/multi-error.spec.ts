@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
+import { diagnostics } from "@mochi/dx/diagnostics";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 import { check } from "../src/check";
 import { compile } from "../src/compile";
-import { diagnostics } from "../src/diagnostics";
 import { inferProgram } from "../src/infer";
 import { lex } from "../src/lexer";
 import { parse } from "../src/parser";

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
+import { format } from "@mochi/dx/format";
 import { unwrapOk } from "@onrails/result";
 import { compile } from "../src/compile";
-import { format } from "../src/format";
 import { lex } from "../src/lexer";
 import { parse } from "../src/parser";
 

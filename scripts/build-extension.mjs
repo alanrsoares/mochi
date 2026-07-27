@@ -1,7 +1,7 @@
 // Bundle the language server + extension client into editors/vscode/out/.
 // Both are CommonJS (the VS Code extension host requires it); `vscode` is
 // provided by the host, so it stays external. The server entry is
-// `src/lsp/docs-server.ts`, not `src/lsp/server.ts` directly, so the shipped
+// `packages/lsp/src/docs-server.ts`, not `src/lsp/server.ts` directly, so the shipped
 // extension dogfoods the docs project's vendor-plugin list (#20).
 import * as esbuild from "esbuild";
 
@@ -17,7 +17,7 @@ const common = {
 await Promise.all([
   esbuild.build({
     ...common,
-    entryPoints: ["src/lsp/docs-server.ts"],
+    entryPoints: ["packages/lsp/src/docs-server.ts"],
     outfile: "editors/vscode/out/server.js",
   }),
   esbuild.build({

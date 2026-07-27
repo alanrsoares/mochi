@@ -5,9 +5,9 @@
 // an unknown alias or member is a check-time diagnostic. Folding qualified names back
 // out in dts/hover is slice c.
 import { expect, test } from "bun:test";
+import { format } from "@mochi/dx/format";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 import { compile } from "../src/compile";
-import { format } from "../src/format";
 import { lex } from "../src/lexer";
 import { buildModules } from "../src/module";
 import { parse } from "../src/parser";

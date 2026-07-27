@@ -1,4 +1,4 @@
-import { type HoverInfo, hoverAt } from "@mochi/compiler";
+import { type HoverInfo, hoverAt } from "@mochi/dx/hover";
 import { useEffect, useRef, useState } from "preact/hooks";
 import {
   highlightMochiCode,

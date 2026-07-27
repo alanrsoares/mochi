@@ -1,0 +1,19 @@
+{
+  "name": "@mochi/dx",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./format": "./src/format.ts",
+    "./hover": "./src/hover.ts",
+    "./complete": "./src/complete.ts",
+    "./nav": "./src/nav.ts",
+    "./diagnostics": "./src/diagnostics.ts"
+  },
+  "dependencies": {
+    "@mochi/compiler": "workspace:*",
+    "@onrails/maybe": "^0.2.3",
+    "@onrails/result": "^0.4.0"
+  }
+}

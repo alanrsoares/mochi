@@ -3,7 +3,7 @@
 // isn't already formatted (the QA-gate mode).
 import { readFileSync, writeFileSync } from "node:fs";
 import { isErr, unwrapOk } from "@onrails/result";
-import { format } from "../src/format";
+import { format } from "@mochi/dx/format";
 
 const check = process.argv.includes("--check");
 

@@ -2,11 +2,11 @@
 // Ok payload binds the param; an Err short-circuits the whole expression.
 // Lowers to `_Result_flatMap((param) => body)(value)`.
 import { expect, test } from "bun:test";
+import { format } from "@mochi/dx/format";
+import { hoverAt } from "@mochi/dx/hover";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 import { compile } from "../src/compile";
-import { format } from "../src/format";
-import { hoverAt } from "../src/hover";
 
 const run = (src: string, ret: string): unknown => {
   const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");

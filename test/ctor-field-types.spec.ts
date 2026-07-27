@@ -2,11 +2,11 @@
 // port (Slice D) needs `[Expr]`, `Option Expr`, and tuple payloads; before this
 // a ctor field type was a bare name.
 import { expect, test } from "bun:test";
+import { format } from "@mochi/dx/format";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 import { compile } from "../src/compile";
 import { emitDts } from "../src/dts";
-import { format } from "../src/format";
 
 const run = (src: string, ret: string): unknown => {
   const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");

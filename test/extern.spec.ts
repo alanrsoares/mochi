@@ -1,9 +1,9 @@
 // Gleam-style external bindings: `extern name : type = "module" "export"`.
 import { expect, test } from "bun:test";
+import { format } from "@mochi/dx/format";
 import { isErr, isOk, unwrapOk } from "@onrails/result";
 import { check } from "../src/check";
 import { compile } from "../src/compile";
-import { format } from "../src/format";
 import { inferProgram, showScheme } from "../src/infer";
 import { lex } from "../src/lexer";
 import { parse } from "../src/parser";

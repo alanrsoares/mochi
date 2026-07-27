@@ -1,10 +1,10 @@
+import { format } from "@mochi/dx/format";
 import { match } from "@onrails/pattern";
 import { isErr } from "@onrails/result";
 import { codegenTs } from "./codegen-ts";
 import { compile } from "./compile";
 import { emitDts } from "./dts";
 import { type Diagnostic, formatError } from "./errors";
-import { format } from "./format";
 import { buildModules, buildModulesTs } from "./module";
 
 const [cmd, ...rest] = process.argv.slice(2);

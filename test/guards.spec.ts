@@ -3,10 +3,10 @@
 // toward exhaustiveness (it can be false). See ADR 0013.
 
 import { expect, test } from "bun:test";
+import { format } from "@mochi/dx/format";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 import { compile } from "../src/compile";
-import { format } from "../src/format";
 
 // Same harness as nested-patterns.spec.ts: strip the import, inject `match`.
 const run = (src: string): unknown => {

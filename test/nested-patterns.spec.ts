@@ -4,10 +4,10 @@
 // (`Sm(Sm(n))`, `Sm(0)`) as covering its whole constructor. See ADR 0012.
 
 import { expect, test } from "bun:test";
+import { format } from "@mochi/dx/format";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 import { compile } from "../src/compile";
-import { format } from "../src/format";
 
 // Compiled output is standalone except the @onrails/pattern import — strip it
 // and inject `match` (same harness as examples.spec.ts). `r` is the result.

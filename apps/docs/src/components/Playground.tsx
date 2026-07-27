@@ -1,4 +1,5 @@
-import { type Diagnostic, format, formatError } from "@mochi/compiler";
+import { type Diagnostic, formatError } from "@mochi/compiler";
+import { format } from "@mochi/dx/format";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
 import { h, render } from "preact";
