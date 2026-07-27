@@ -34,6 +34,7 @@ import type {
   PatField,
   Pattern,
   PipeExpr,
+  Program,
   RecordExpr,
   SeqElem,
   Stmt,
@@ -958,6 +959,21 @@ const program = (stmts: Stmt[], src: string, tail: Comment[]): string => {
 /** `plugins`: sugar parsers *and* printers — one list, so anything a plugin can parse it can also re-fold. `undefined` → builtins (JSX); `[]` → hard opt-out (`resolvePlugins`, ADR 0011). */
 export type FormatOptions = { plugins?: LanguagePlugin[] };
 
+const layoutProgram = (prog: Program, src: string): string => {
+  const errorSpans = prog.stmts.filter((s) => s.kind === "error").map((s) => s.span);
+  const comments = collectComments(src).filter(
+    (c) => !errorSpans.some((sp) => c.start >= sp.start && c.start < sp.end),
+  );
+  const tail = attachComments(prog.stmts, comments, src);
+  return program(prog.stmts, src, tail);
+};
+
+/** Print an already-parsed `Program` with comment/blank-line fidelity to `src`. */
+export const formatProgram = (prog: Program, src: string, opts: FormatOptions = {}): string => {
+  formatHooks = resolvePlugins(opts.plugins).flatMap((p) => (p.format ? [p.format] : []));
+  return layoutProgram(prog, src);
+};
+
 /**
  * C9 slice d (ADR 0045): `format` runs on `parseRecovering`, not the hard-fail
  * `parse` — a file with parse errors still formats, with every unparsable
@@ -972,17 +988,6 @@ export const format = (src: string, opts: FormatOptions = {}): Result<string, Di
     lex(src),
     mapErr(oneDiag),
     map((toks) => parseRecovering(toks, { plugins: opts.plugins })),
-    map(({ program: prog }) => {
-      // Comments inside a recovered error span are already part of its raw
-      // verbatim bytes (below) — attaching them a second time to whatever
-      // anchor happens to sit on the far side of the span would duplicate
-      // them and break idempotency, so they're excluded before attachment.
-      const errorSpans = prog.stmts.filter((s) => s.kind === "error").map((s) => s.span);
-      const comments = collectComments(src).filter(
-        (c) => !errorSpans.some((sp) => c.start >= sp.start && c.start < sp.end),
-      );
-      const tail = attachComments(prog.stmts, comments, src);
-      return program(prog.stmts, src, tail);
-    }),
+    map(({ program: prog }) => layoutProgram(prog, src)),
   );
 };

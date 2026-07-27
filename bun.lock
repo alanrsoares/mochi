@@ -12,6 +12,7 @@
       "devDependencies": {
         "@biomejs/biome": "^2.5.4",
         "@mochi/cli": "workspace:*",
+        "@mochi/codemod": "workspace:*",
         "@mochi/compiler": "workspace:*",
         "@mochi/dx": "workspace:*",
         "@mochi/lsp": "workspace:*",
@@ -91,10 +92,23 @@
         "mochi": "./src/cli.ts",
       },
       "dependencies": {
+        "@mochi/codemod": "workspace:*",
         "@mochi/compiler": "workspace:*",
         "@mochi/dx": "workspace:*",
         "@onrails/pattern": "^0.3.3",
         "@onrails/result": "^0.4.0",
+      },
+    },
+    "packages/codemod": {
+      "name": "@mochi/codemod",
+      "version": "0.1.0",
+      "dependencies": {
+        "@mochi/compiler": "workspace:*",
+        "@mochi/dx": "workspace:*",
+        "@onrails/result": "^0.4.0",
+      },
+      "devDependencies": {
+        "@mochi/test-support": "workspace:*",
       },
     },
     "packages/compiler": {
@@ -305,6 +319,8 @@
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
 
     "@mochi/cli": ["@mochi/cli@workspace:packages/cli"],
+
+    "@mochi/codemod": ["@mochi/codemod@workspace:packages/codemod"],
 
     "@mochi/compiler": ["@mochi/compiler@workspace:packages/compiler"],
 

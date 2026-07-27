@@ -8,7 +8,7 @@ export {
   type Range,
   toPublish,
 } from "./diagnostics";
-export { format } from "./format";
+export { type FormatOptions, format, formatProgram } from "./format";
 export { type HoverInfo, hoverAt, moduleHoverAt } from "./hover";
 export {
   type DocSymbol,

@@ -47,8 +47,8 @@ string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck�
 | `prelude/` | builtin HM signatures, JS runtime strings, namespace tables, virtual prelude |
 | `dts/` | `.d.ts` emit (TS backend shares printers) |
 | `compile/` | single-file railway, `compile-targets` |
-| `@mochi/cli` | host CLI — composes compiler + `@mochi/dx` (`fmt`) |
-| `@mochi/dx` · `@mochi/lsp` · `@mochi/vite-plugin` | format + IDE queries; LSP adapter; Vite (ADR 0048) |
+| `@mochi/cli` | host CLI — composes compiler + `@mochi/dx` (`fmt`) + `@mochi/codemod` |
+| `@mochi/codemod` · `@mochi/dx` · `@mochi/lsp` · `@mochi/vite-plugin` | codemods; format + IDE queries; LSP adapter; Vite (ADR 0048) |
 
 ## Conventions
 

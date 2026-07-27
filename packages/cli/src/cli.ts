@@ -1,7 +1,15 @@
 /**
- * Host CLI — composes `@mochi/compiler` (compile / build / dts / ts) and
- * `@mochi/dx` (`fmt`). Not part of the bootstrap mirror (ADR 0048).
+ * Host CLI — composes `@mochi/compiler` (compile / build / dts / ts),
+ * `@mochi/dx` (`fmt`), and `@mochi/codemod` (`codemod`). Not part of the
+ * bootstrap mirror (ADR 0048).
  */
+
+import {
+  expandMochiGlobs,
+  loadTransform,
+  printProjectErrors,
+  transformProject,
+} from "@mochi/codemod";
 import { codegenTs } from "@mochi/compiler/codegen-ts";
 import { compile } from "@mochi/compiler/compile";
 import { emitDts } from "@mochi/compiler/dts";
@@ -12,7 +20,7 @@ import { match } from "@onrails/pattern";
 import { isErr } from "@onrails/result";
 
 const USAGE =
-  "usage: mochi <file.mochi>  |  mochi fmt [--write] <file.mochi>  |  mochi build [--emit=ts] <entry.mochi>  |  mochi dts <file.mochi>  |  mochi ts <file.mochi>";
+  "usage: mochi <file.mochi>  |  mochi fmt [--write] <file.mochi>  |  mochi codemod <transform.ts> [--write|--check] [--strict] <globs…>  |  mochi build [--emit=ts] <entry.mochi>  |  mochi dts <file.mochi>  |  mochi ts <file.mochi>";
 
 const [cmd, ...rest] = process.argv.slice(2);
 
@@ -38,6 +46,32 @@ function die(es: Diagnostic | Diagnostic[], src?: string): never {
 }
 
 await match(cmd)
+  .with("codemod", async () => {
+    const write = rest.includes("--write") || rest.includes("-w");
+    const check = rest.includes("--check");
+    const strict = rest.includes("--strict");
+    const positional = rest.filter((a) => !a.startsWith("-"));
+    const transformFile = positional[0];
+    const globs = positional.slice(1);
+    if (!transformFile || globs.length === 0) {
+      console.error(
+        `usage: mochi codemod <transform.ts> [--write|--check] [--strict] <globs…>\n${USAGE}`,
+      );
+      process.exit(1);
+    }
+    const transform = await loadTransform(transformFile);
+    const paths = expandMochiGlobs(globs);
+    const report = transformProject(paths, transform, { write, check, strict });
+    printProjectErrors(report);
+    if (report.errors.length) process.exit(1);
+    if (check && report.changed.length) {
+      console.error(`codemod would change:\n${report.changed.map((p) => `  ${p}`).join("\n")}`);
+      process.exit(1);
+    }
+    for (const p of report.changed) {
+      console.error(`  ${p}`);
+    }
+  })
   .with("fmt", async () => {
     const write = rest[0] === "--write" || rest[0] === "-w";
     const path = requireArg(

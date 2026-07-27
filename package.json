@@ -48,6 +48,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.5.4",
     "@mochi/cli": "workspace:*",
+    "@mochi/codemod": "workspace:*",
     "@mochi/compiler": "workspace:*",
     "@mochi/dx": "workspace:*",
     "@mochi/lsp": "workspace:*",

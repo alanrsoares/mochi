@@ -5,8 +5,9 @@ generator are surfaces over the same passes, not separate reimplementations.
 
 Package boundary ([ADR 0048](adr/0048-core-dx-package-boundary.md)): **`@mochi/compiler`**
 is the bootstrap mirror + foundation (`packages/compiler`); **`@mochi/dx`** owns format + IDE
-queries; **`@mochi/cli`** composes compiler + DX for the `mochi` binary; **`@mochi/lsp`** is the
-protocol adapter; **`@mochi/vite-plugin`** is the Vite transform. Core must not import DX.
+queries; **`@mochi/cli`** composes compiler + DX for the `mochi` binary; **`@mochi/codemod`**
+runs parse → transform → format over `.mochi` globs; **`@mochi/lsp`** is the protocol adapter;
+**`@mochi/vite-plugin`** is the Vite transform. Core must not import DX.
 
 ## CLI
 
@@ -17,6 +18,8 @@ stdout; the subcommands select another output:
 bun run mochi <file.mochi>          # compile to JavaScript (stdout)
 bun run mochi ts   <file.mochi>     # emit typed, strict-clean TypeScript
 bun run mochi fmt  <file.mochi>     # pretty-print (add --write to edit in place)
+bun run mochi codemod <transform.ts> [--write|--check] [--strict] <globs…>
+                                    #   AST codemod: lex/parse → user transform → format
 bun run mochi dts  <file.mochi>     # emit a .d.ts
 bun run mochi build <entry.mochi>   # compile a module graph, writing a .js beside each source
                                     #   build --emit=ts writes .ts for the whole graph
