@@ -59,8 +59,29 @@ Consequences:
   rename layer between source and JS, breaking the "names emit verbatim" property that
   hover, `.d.ts` and the host seam all rely on.
 
-## Not included
+## Not included: ML-style prime identifiers
 
-ML-style prime identifiers (`xs'`) are a *separate* change: `'` is **not** legal in a JS
-identifier, so it needs a mangling scheme at every emission site plus byte-exact
-bootstrap parity. Tracked on its own.
+Widening identifiers to `$` invites the sibling question — `xs'`, `ys''`, as in ML. We
+considered it here and **rejected it**.
+
+`$` was cheap precisely because it is *already* a legal JS identifier character: names
+still emit verbatim, and no backend changed. `'` is not legal in JS, so it would need a
+mangling scheme (`xs'` → `xs$`, or a suffix chain) applied at every site that writes a
+name into output — ~15 in `codegen.ts` plus `codegen-ts.ts`, `dts.ts` and
+`vite-plugin.ts` — and mirrored byte-exactly in the bootstrap codegen, since the fixpoint
+gate compares emitted bytes.
+
+The cost is not the mangling, it is what mangling breaks:
+
+- **Names stop emitting verbatim.** Hover, `.d.ts` and the host seam all assume the name
+  you write is the name JS sees. A rename layer means every surface has to fold back.
+- **Every scheme collides.** `'` → `$` collides with the now-legal `xs$`; `'` → `_p`
+  collides with ordinary `xs_p`. Collisions are catchable with a new check pass, but that
+  is a diagnostic users would hit for a purely cosmetic naming affordance.
+- **Restricting `'` to non-exported names** would keep the seam clean, at the cost of a
+  positional rule (illegal in exports, record fields and JSX attributes) that has no
+  analogue anywhere else in the language.
+
+`'` remains a lex error (`unexpected char '''`). Shadowing in a `let … in` chain or a
+distinct name covers the cases prime notation is reached for. If this comes back, it comes
+back as its own ADR with a single `jsName()` chokepoint in codegen as step one.
