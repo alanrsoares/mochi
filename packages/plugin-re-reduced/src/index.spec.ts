@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
-import { reReducedExtension } from "@mochi/plugin-re-reduced";
 import { isErr, unwrapOk } from "@onrails/result";
-import { toTypedProgram } from "../src/compile";
-import { completeAt } from "../src/complete";
-import { emitDts } from "../src/dts";
-import { showScheme } from "../src/infer";
-import { preludeNamespaces } from "../src/prelude";
+import { toTypedProgram } from "../../../src/compile";
+import { completeAt } from "../../../src/complete";
+import { emitDts } from "../../../src/dts";
+import { showScheme } from "../../../src/infer";
+import { preludeNamespaces } from "../../../src/prelude";
+import { reReducedExtension } from "./index";
 
 const plugins = [reReducedExtension];
 

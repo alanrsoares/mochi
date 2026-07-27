@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test";
-import { styledCvaExtension } from "@mochi/plugin-styled-cva";
 import { isErr, unwrapOk } from "@onrails/result";
-import { toTypedProgram } from "../src/compile";
-import { moduleCompleteAt } from "../src/complete";
-import { emitDts } from "../src/dts";
-import { showScheme } from "../src/infer";
-import { moduleContext } from "../src/module";
-import { preludeNamespaces } from "../src/prelude";
+import { toTypedProgram } from "../../../src/compile";
+import { moduleCompleteAt } from "../../../src/complete";
+import { emitDts } from "../../../src/dts";
+import { showScheme } from "../../../src/infer";
+import { moduleContext } from "../../../src/module";
+import { preludeNamespaces } from "../../../src/prelude";
+import { styledCvaExtension } from "./index";
 
 const exts = [styledCvaExtension];
 
