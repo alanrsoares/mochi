@@ -143,6 +143,46 @@ let mergeInto = (keys, from, into) => switch keys {
 
 let mergeMap = (from, into) => mergeInto(Map.keys(from), from, into)
 
+// --- qualified type names (C5 slice d, ADR 0046) --------------------------
+// A module hands its importers the set of type names it EXPORTS, plus its OWN
+// alias scope, so a transparent record alias expands in the module that
+// DECLARED it. Mirrors src/module.ts's `qualScopeOf`/`exportedTypeNames`.
+
+let exportedTypeNames = stmts =>
+  Set.fromArray(
+    Array.flatMap(
+      s => switch s { | Ast.SType(name, _, _, _, true, _) => [name] | _ => [] },
+      stmts
+    )
+  )
+
+// Local record aliases, keyed by name — the `aliases` map schemes.mochi
+// expands through. Mirrors infer.mochi's `aliasMapFrom` seed.
+let aliasesOf = stmts =>
+  Array.reduce(
+    (acc, s) => switch s {
+      | Ast.SType(name, params, _, Some(fields), _, _) => Map.set(
+          name,
+          { params: params, fields: fields },
+          acc
+        )
+      | _ => acc
+    },
+    #{},
+    stmts
+  )
+
+// src/module.ts nests the dep's FULL type scope here (`scope.quals`), so a
+// qualified name written inside the dep's own alias expands too. The bootstrap
+// mirror is one hop: `{ types, aliases }`, no nested `quals`. Making it
+// recursive needs a named recursive record type over `Ast.AliasField` — a
+// cross-module TYPE name, i.e. the feature this very slice is building. Unwind
+// once d-3 lands (the "shared-module workaround" the C5 ticket asks about);
+// until then a qualified name nested inside an imported record alias lowers
+// nominally instead of expanding, which only differs under row unification.
+let qualScopeOf = stmts =>
+  { types: exportedTypeNames(stmts), aliases: aliasesOf(stmts) }
+
 // Pull each imported name's scheme out of the dep's published exports, folding
 // into `res.imports`. A name the dep does not export errors at the name's span.
 let resolveNames = (names, from, depExports, res) => switch names {
@@ -163,7 +203,8 @@ let resolveNames = (names, from, depExports, res) => switch names {
             imports: Map.set(n.name, sc, res.imports),
             nsImports: res.nsImports,
             reg: res.reg,
-            keys: res.keys
+            keys: res.keys,
+            quals: res.quals
           }
         )
     }
@@ -194,7 +235,8 @@ let resolveImportsFrom = (stmts, i, path, ctx, res) => switch Array.get(i, stmts
                 ctors: mergeMap(depReg.ctors, res1.reg.ctors),
                 types: mergeMap(depReg.types, res1.reg.types)
               },
-              keys: mergeMap(depKeys, res1.keys)
+              keys: mergeMap(depKeys, res1.keys),
+              quals: res1.quals
             }
           )
       }
@@ -214,7 +256,15 @@ let resolveImportsFrom = (stmts, i, path, ctx, res) => switch Array.get(i, stmts
             ctors: mergeMap(depReg.ctors, res.reg.ctors),
             types: mergeMap(depReg.types, res.reg.types)
           },
-          keys: mergeMap(depKeys, res.keys)
+          keys: mergeMap(depKeys, res.keys),
+          quals: // …and every exported TYPE of the dep becomes namable as `Alias.T`.
+          // Absent from `qualsByPath` (a dep that failed to publish) leaves the
+          // alias unmapped, which check.mochi reads as "not graph-compiled" and
+          // stays silent — same fallback as src/module.ts.
+          switch Map.get(dp, ctx.qualsByPath) {
+            | Some(q) => Map.set(alias.name, q, res.quals)
+            | None => res.quals
+          }
         }
       )
   | Some(_) => resolveImportsFrom(stmts, i + 1, path, ctx, res)
@@ -223,11 +273,11 @@ let resolveImportsFrom = (stmts, i, path, ctx, res) => switch Array.get(i, stmts
 // Compile one module: resolve imports, check (with imported registry), infer
 // (with imported schemes), codegen (with imported ctor keys), then publish this
 // module's own exports/registry/keys into the ctx for later dependents.
-let compileOne = (loaded, ctx) => switch resolveImportsFrom(loaded.stmts, 0, loaded.path, ctx, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{} }) {
+let compileOne = (loaded, ctx) => switch resolveImportsFrom(loaded.stmts, 0, loaded.path, ctx, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }) {
   | Err(e) => Err(e)
-  | Ok(res) => switch checkWith(loaded.stmts, res.reg) {
+  | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
       | Err(e) => Err(e)
-      | Ok(_) => switch inferProgramImports(loaded.stmts, builtins, namespaces, true, res.imports, res.nsImports, None) {
+      | Ok(_) => switch inferProgramImports(loaded.stmts, builtins, namespaces, true, res.imports, res.nsImports, res.quals, None) {
           | Err(e) => Err(e)
           | Ok(env) => let js = codegen(
               loaded.stmts,
@@ -254,6 +304,11 @@ let compileOne = (loaded, ctx) => switch resolveImportsFrom(loaded.stmts, 0, loa
                     exportedCtorKeys(loaded.stmts),
                     ctx.keysByPath
                   ),
+                  qualsByPath: Map.set(
+                    loaded.path,
+                    qualScopeOf(loaded.stmts),
+                    ctx.qualsByPath
+                  ),
                   outputs: [...ctx.outputs, { path: loaded.path, js: js }]
                 }
               )
@@ -274,7 +329,13 @@ let compileAll = (graph, ctx) => switch graph {
 export let compileGraph = graph =>
   compileAll(
     graph,
-    { exportsByPath: #{}, regByPath: #{}, keysByPath: #{}, outputs: [] }
+    {
+      exportsByPath: #{},
+      regByPath: #{},
+      keysByPath: #{},
+      qualsByPath: #{},
+      outputs: []
+    }
   )
 
 // buildModules : string -> Result [ModuleOutput] MErr

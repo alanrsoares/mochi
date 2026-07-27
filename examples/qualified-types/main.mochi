@@ -1,0 +1,26 @@
+/// Type names crossing a module edge (C5, ADR 0046). `import * as D` is
+/// type-only — it makes every type ./shapes EXPORTS writable as `D.T` in any type
+/// position; the ctors and functions still arrive through the ordinary named
+/// import. Both compilers (`src/` and the self-hosted `bootstrap/`) resolve these.
+import * as D from "./shapes"
+import { area, Circle, Rect, Box } from "./shapes"
+
+// Nullary qualified name.
+let circle : D.Shape = Circle(2.0)
+let rect : D.Shape = Rect(3.0, 4.0)
+
+// Applied qualified name — one `TyQual` form covers both arities.
+let boxed : D.Box number = Box(7)
+
+// A qualified RECORD alias expands (aliases are structural, ADR 0005), so a
+// plain record literal still assigns to it — unlike a variant, which crosses
+// the edge nominally.
+let corner : D.Pair number = { fst: 1.0, snd: 2.0 }
+
+// Qualified name inside an arrow.
+let sizeOf : D.Shape -> number = s => area(s)
+
+export let circleArea = sizeOf(circle)
+export let rectArea = sizeOf(rect)
+export let unbox = switch boxed { | Box(n) => n }
+export let cornerSum = corner.fst + corner.snd

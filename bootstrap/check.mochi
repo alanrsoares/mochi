@@ -646,6 +646,87 @@ let checkCtorFieldVars = stmts =>
     stmts
   )
 
+// --- qualified type names (C5 slice d, ADR 0046) ---
+
+// Every `Alias.Name` written inside a type expression, applied args included.
+let qualRefsFrom = te => switch te {
+  | Ast.TyName(_, _) => []
+  | Ast.TyArrow(from, to, _) => [...qualRefsFrom(from), ...qualRefsFrom(to)]
+  | Ast.TyApp(_, args, _) => Array.flatMap(qualRefsFrom, args)
+  | Ast.TyTuple(elems, _) => Array.flatMap(qualRefsFrom, elems)
+  | Ast.TyList(elem, _) => qualRefsFrom(elem)
+  | Ast.TyQual(alias, name, nameSpan, args, sp) => [
+      { alias: alias, name: name, nameSpan: nameSpan, qualSpan: sp },
+      ...Array.flatMap(qualRefsFrom, args)
+    ]
+}
+
+// The type expressions a program WRITES — the positions typeExprToType lowers.
+// `let … in` annotations are not walked here (the bootstrap mirror does not
+// carry them yet); everything else matches src/check.ts's writtenTypeExprs.
+let writtenTypeExprs = stmts =>
+  Array.flatMap(
+    s => switch s {
+      | Ast.SExtern(_, _, te, _, _, _, _, _) => [te]
+      | Ast.SLet(_, _, annot, _, _, _, _) => switch annot {
+          | Some(te) => [te]
+          | None => []
+        }
+      | Ast.SType(_, _, ctors, alias, _, _) => [
+          ...Array.flatMap(c => map(f => f.fieldType, c.fields), ctors),
+          ...switch alias {
+            | Some(fields) => map(f => f.fieldType, fields)
+            | None => []
+          }
+        ]
+      | _ => []
+    },
+    stmts
+  )
+
+// The slice of a dep's type scope `check` needs: which type names it exports.
+// Named so single-file `check` can pin its empty map (ADR 0044) — an unannotated
+// `#{}` there generalizes and leaves the emitted TS with `Map<string, unknown>`.
+// Structural (ADR 0005), so module.mochi's richer `{ types, aliases }` still fits.
+type QualScope = { types: Set string }
+
+let emptyQuals : Map string QualScope = #{}
+
+// `Alias.T` resolves through the import graph: the alias must be a namespace
+// import of THIS module, and the dep must EXPORT a type of that name. `quals`
+// is the alias → dep-type-scope map the module driver threads in; a declared
+// alias missing from it means this module was not compiled through a graph
+// (plain single-file `check`), so stay silent rather than accuse the user.
+let checkQualifiedTypeNames = (stmts, quals) =>
+  let nsAliases = Set.fromArray(
+    Array.flatMap(
+      s => switch s { | Ast.SImportNs(alias, _, _) => [alias.name] | _ => [] },
+      stmts
+    )
+  ) in
+    firstSome(
+      q =>
+        Set.has(q.alias, nsAliases)
+          ? switch Map.get(q.alias, quals) {
+            | None => None
+            | Some(dep) => Set.has(q.name, dep.types)
+                ? None
+                : Some(
+                  checkErr(
+                    "module alias '${q.alias}' has no exported type '${q.name}' — export it from the imported module ('export type ${q.name} = …')",
+                    q.nameSpan
+                  )
+                )
+          }
+          : Some(
+            checkErr(
+              "unknown module alias '${q.alias}' in type '${q.alias}.${q.name}' — a qualified type name needs a matching 'import * as ${q.alias} from \"…\"'",
+              q.qualSpan
+            )
+          ),
+      Array.flatMap(qualRefsFrom, writtenTypeExprs(stmts))
+    )
+
 // --- entry point ---
 
 // Merge every key of `from` that `into` lacks (the importer's own decls win on
@@ -666,28 +747,32 @@ let mergeMissing = (keys, from, into) => switch keys {
 // types) so a `switch` on an imported variant is exhaustiveness-checked against
 // every constructor — even ones the importer never named (those force a
 // catch-all). Mirrors src/check.ts's `check(prog, imported)`.
-export let checkWith = (stmts, imported) => switch checkReservedNames(stmts) {
+export let checkWith = (stmts, imported, quals) => switch checkReservedNames(stmts) {
   | Some(e) => Err(e)
   | None => switch checkCtorFieldVars(stmts) {
       | Some(e) => Err(e)
-      | None => let? reg0 = buildRegistry(stmts) in
-        let reg = {
-          ctors: mergeMissing(
-            Map.keys(imported.ctors),
-            imported.ctors,
-            reg0.ctors
-          ),
-          types: mergeMissing(
-            Map.keys(imported.types),
-            imported.types,
-            reg0.types
-          )
-        } in
-          switch firstSome(s => switch s { | Ast.SLet(_, _, _, value, _, _, _) => checkExpr(value, reg) | _ => None }, stmts) {
-            | Some(e) => Err(e)
-            | None => Ok(stmts)
-          }
+      | None => switch checkQualifiedTypeNames(stmts, quals) {
+          | Some(e) => Err(e)
+          | None => let? reg0 = buildRegistry(stmts) in
+            let reg = {
+              ctors: mergeMissing(
+                Map.keys(imported.ctors),
+                imported.ctors,
+                reg0.ctors
+              ),
+              types: mergeMissing(
+                Map.keys(imported.types),
+                imported.types,
+                reg0.types
+              )
+            } in
+              switch firstSome(s => switch s { | Ast.SLet(_, _, _, value, _, _, _) => checkExpr(value, reg) | _ => None }, stmts) {
+                | Some(e) => Err(e)
+                | None => Ok(stmts)
+              }
+        }
     }
 }
 
-export let check = stmts => checkWith(stmts, { ctors: #{}, types: #{} })
+export let check = stmts =>
+  checkWith(stmts, { ctors: #{}, types: #{} }, emptyQuals)

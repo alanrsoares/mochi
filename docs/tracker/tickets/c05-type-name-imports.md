@@ -49,9 +49,17 @@ Strict before this ships = mandatory annotations that can't be written.
       variant for both arities), the `parseTypeAtom`/`parseTypeApp` productions with
       byte-exact message *and* span parity, `strayTypeVar`, and `typeExprToType`
       lowering to the bare nominal `con(name, args)`. Two differential cases pin it
-      (AST + error). **d-3 remains:** thread a `quals` scope through
-      `bootstrap/schemes.mochi` so a record alias expands across the module edge,
-      port `checkQualifiedTypeNames` + `qualsByPath`, then add the first checked-in
-      `.mochi` fixture using `Alias.T`. The constraint above holds until d-3 —
-      qualified types parse in the bootstrap graph now, but do not yet *resolve*.
-- [ ] `bun run check:full` green.
+      (AST + error). **d-3 done:** `qualsByPath` + `ModuleContext` seed in
+      `bootstrap/module.mochi`, `checkQualifiedTypeNames` + 3-ary `checkWith` in
+      `bootstrap/check.mochi` (both messages byte-exact), and a `quals` scope threaded
+      into `inferProgramImports` → `schemes.mochi`'s `TyQual` arm. Rather than mirror
+      `src/schemes.ts`'s mutually-recursive `TypeScope`/`QualScope`, the importer's
+      alias map is pre-seeded with composite `"Alias.Name"` keys (a dot cannot occur in
+      a type name, so nothing shadows) — so a qualified record alias still expands
+      across the edge. The corpus constraint above is **lifted**:
+      `examples/qualified-types/` is checked in and both compilers build it. Two
+      side-effects of the fixture entering the differential corpus: the two
+      `inferProgram*` wrappers needed an annotated `emptyQuals` (ADR 0044) to keep
+      `bootstrap:tsc` at 0, and the binding-annotation diagnostic now spans the
+      WRITTEN type, matching `src/infer.ts`'s `s.annot.span`.
+- [x] `bun run check:full` green.

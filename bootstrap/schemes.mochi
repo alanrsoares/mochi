@@ -236,7 +236,7 @@ export let typeExprToType = (te, vars, st, aliases, expanding) => switch te {
     ) in
       (tCon("Array", [elemT]), vars1, st1)
   | Ast.TyName(name, _) => typeExprName(name, vars, st, aliases, expanding)
-  | Ast.TyQual(_, name, _, argTes, _) => let (args, vars1, st1) = typeExprListToType(
+  | Ast.TyQual(alias, name, _, argTes, _) => let (args, vars1, st1) = typeExprListToType(
       argTes,
       vars,
       st,
@@ -247,10 +247,28 @@ export let typeExprToType = (te, vars, st, aliases, expanding) => switch te {
       // dep's type/ctor registry unqualified and codegen emits that same name, so
       // `D.Shape` and the dep's own `Shape` are one type. An unresolvable alias
       // or member lowers the same way rather than minting a placeholder, so no
-      // synthetic name can leak into a type message. Unlike src/schemes.ts this
-      // does not yet expand a record alias across the edge — that needs the
-      // per-alias `quals` scope (C5 slice d-3, still to port).
-      (tCon(name, args), vars1, st1)
+      // synthetic name can leak into a type message.
+      //
+      // A transparent RECORD alias must instead EXPAND (aliases are structural,
+      // ADR 0005), so `D.Pair number` still accepts a record literal. Where
+      // src/schemes.ts carries a nested per-alias scope, the mirror pre-seeds the
+      // importer's alias map with `"Alias.Name"` keys (infer.mochi's
+      // `qualAliasSeed`) — a dot cannot occur in a type name, so those entries can
+      // never shadow a local one. `aliasRow` still gets the BARE name so a cyclic
+      // alias falls back to `con(name, args)` without leaking a qualified name
+      // into a type message.
+      switch Map.get("${alias}.${name}", aliases) {
+        | Some(info) => let (t, st2) = aliasRow(
+            name,
+            info,
+            args,
+            st1,
+            aliases,
+            expanding
+          ) in
+            (t, vars1, st2)
+        | None => (tCon(name, args), vars1, st1)
+      }
 }
 
 let aliasLocalVarsFrom = (params, args, st) => switch params {

@@ -129,6 +129,19 @@ let patSpan = p => switch p {
 // spanned IErr only at the `u()` seam below (mirrors src/infer.ts's `u`) ---
 
 type IErr = { message: string, start: number, end: number }
+// src/ast.ts's TypeExpr nodes carry `span` as a plain field, so TS just writes
+// `s.annot.span`; a mochi variant needs the accessor. Kept local (parser.mochi has
+// its own copy) because the differential harness evaluates each bootstrap module
+// standalone — a cross-module VALUE reference would be undefined there.
+let annotSpan = t => switch t {
+  | Ast.TyName(_, sp) => sp
+  | Ast.TyArrow(_, _, sp) => sp
+  | Ast.TyApp(_, _, sp) => sp
+  | Ast.TyTuple(_, sp) => sp
+  | Ast.TyList(_, sp) => sp
+  | Ast.TyQual(_, _, _, _, sp) => sp
+}
+
 let typeErr = (msg, sp) => { message: msg, start: sp.start, end: sp.end }
 
 let u = (a, b, st, sp) => switch unify(a, b, st) {
@@ -1060,7 +1073,9 @@ let inferGroupFrom = (group, ctx, st) => switch group {
                     ctx.aliasMap,
                     Set.fromArray([])
                   ) in
-                    u(t, at, stA, span)
+                    // Reported on the WRITTEN type, not the whole statement —
+                    // src/infer.ts uses `s.annot.span`.
+                    u(t, at, stA, annotSpan(te))
                 | None => Ok(st2)
               } in
               let? (restTypes, st4) = inferGroupFrom(rest, ctx, st3) in
@@ -1136,12 +1151,51 @@ let seedImportsFrom = (keys, imports, env) => switch keys {
 // ADR 0002). Mirrors src/infer.ts's `inferProgramTypes({ imports, nsImports })`;
 // returns the final env so the module driver can extract this module's export
 // schemes.
-export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports, nsImports, pluginsOpt) =>
+// The record aliases an importer can name as `Alias.T` (C5 slice d, ADR 0046),
+// pre-seeded into the local alias map under `"Alias.T"` keys — a dot cannot occur
+// in a type name, so these never shadow a local alias. `quals` is the alias →
+// dep-type-scope map the module driver threads in; an alias absent from it (plain
+// single-file infer) simply contributes nothing, and its qualified names then
+// lower nominally. schemes.mochi's `TyQual` arm reads these keys.
+let qualAliasSeedFrom = (names, alias, from, acc) => switch names {
+  | [] => acc
+  | [n, ...rest] => qualAliasSeedFrom(
+      rest,
+      alias,
+      from,
+      switch Map.get(n, from) {
+        | Some(info) => Map.set("${alias}.${n}", info, acc)
+        | None => acc
+      }
+    )
+}
+
+let qualAliasSeed = (stmts, quals, acc) => switch stmts {
+  | [] => acc
+  | [s, ...rest] => qualAliasSeed(
+      rest,
+      quals,
+      switch s {
+        | Ast.SImportNs(alias, _, _) => switch Map.get(alias.name, quals) {
+            | Some(dep) => qualAliasSeedFrom(
+                Map.keys(dep.aliases),
+                alias.name,
+                dep.aliases,
+                acc
+              )
+            | None => acc
+          }
+        | _ => acc
+      }
+    )
+}
+
+export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt) =>
   let plugins = resolvePluginsDefault(pluginsOpt) in
   let st0 = mkSt(1000) in
   let env0 = seedBuiltins(builtins, #{}, st0) in
   let ns0 = seedNsImports(nsImports, seedNs(namespaces, env0, st0)) in
-  let aliasMap = aliasMapFrom(stmts, #{}) in
+  let aliasMap = aliasMapFrom(stmts, qualAliasSeed(stmts, quals, #{})) in
     let (env1, st1) = registerUserCtorsFrom(stmts, aliasMap, env0, st0) in
       let (env2, st2) = registerBuiltinCtorsFrom(
         builtinDeclsFor(stmts),
@@ -1159,8 +1213,31 @@ export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports
             | Err(e) => Err(e)
           }
 
+// The slice of a dep's type scope inference needs: its transparent record
+// aliases, so a qualified `D.Pair number` still expands (aliases are
+// structural, ADR 0005). Named so these single-file wrappers can pin their
+// empty map (ADR 0044) — an unannotated `#{}` generalizes and leaves the
+// emitted TS a `Map<string, unknown>`. Structural, so module.mochi's richer
+// `{ types, aliases }` scope still fits.
+type QualAliasField = { name: string, fieldType: Ast.TypeExpr }
+
+type QualAliasInfo = { params: [string], fields: [QualAliasField] }
+
+type QualScope = { aliases: Map string QualAliasInfo }
+
+let emptyQuals : Map string QualScope = #{}
+
 export let inferProgram = (stmts, builtins, namespaces, openMode) =>
-  inferProgramImports(stmts, builtins, namespaces, openMode, #{}, #{}, None)
+  inferProgramImports(
+    stmts,
+    builtins,
+    namespaces,
+    openMode,
+    #{},
+    #{},
+    emptyQuals,
+    None
+  )
 
 export let inferProgramWith = (stmts, builtins, namespaces, openMode, pluginsOpt) =>
   inferProgramImports(
@@ -1170,6 +1247,7 @@ export let inferProgramWith = (stmts, builtins, namespaces, openMode, pluginsOpt
     openMode,
     #{},
     #{},
+    emptyQuals,
     pluginsOpt
   )
 

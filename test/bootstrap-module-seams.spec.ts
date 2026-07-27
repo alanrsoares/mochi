@@ -23,7 +23,7 @@ type Registry = { ctors: Map<string, CtorInfo>; types: Map<string, string[]> };
 let lex: (s: string) => Res<unknown>;
 let parse: (t: unknown) => Res<Stmts>;
 let check: (s: Stmts) => Res<Stmts>;
-let checkWith: (s: Stmts, imported: Registry) => Res<Stmts>;
+let checkWith: (s: Stmts, imported: Registry, quals: ReadonlyMap<string, unknown>) => Res<Stmts>;
 let exportedRegistry: (s: Stmts) => Registry;
 let exportedCtorKeys: (s: Stmts) => Map<string, string[]>;
 let inferProgram: (s: Stmts, b: unknown, n: unknown, open: boolean) => Res<Map<string, Scheme>>;
@@ -34,6 +34,7 @@ let inferProgramImports: (
   open: boolean,
   imports: Map<string, Scheme>,
   nsImports: Map<string, Map<string, Scheme>>,
+  quals: ReadonlyMap<string, unknown>,
   pluginsOpt: AlOption<unknown[]>,
 ) => Res<Map<string, Scheme>>;
 let builtins: unknown;
@@ -83,15 +84,49 @@ test("checkWith accepts a switch over an imported variant that check alone rejec
   const dep = exportedRegistry(parseAl("export type Color = Red | Green | Blue\n"));
   const importer = parseAl("let f = c => switch c { | Red => 1 | Green => 2 | Blue => 3 }\n");
   expect(check(importer)._tag).toBe("Err"); // unknown ctor without the import
-  expect(checkWith(importer, dep)._tag).toBe("Ok"); // resolved via imported registry
+  expect(checkWith(importer, dep, new Map())._tag).toBe("Ok"); // resolved via imported registry
 });
 
 test("checkWith still enforces exhaustiveness against the imported ctor set", () => {
   const dep = exportedRegistry(parseAl("export type Color = Red | Green | Blue\n"));
   const importer = parseAl("let f = c => switch c { | Red => 1 | Green => 2 }\n"); // missing Blue
-  const r = checkWith(importer, dep);
+  const r = checkWith(importer, dep, new Map());
   expect(r._tag).toBe("Err");
   if (r._tag === "Err") expect(r.error.message).toContain("non-exhaustive");
+});
+
+// ---- checkWith (qualified type names, C5 slice d) --------------------------
+//
+// `quals` is the alias → dep-type-scope map the module driver threads in. Both
+// diagnostics must read byte-for-byte like src/check.ts's, since the bootstrap
+// binary is what ships.
+
+test("checkWith rejects a qualified type whose alias is not a namespace import", () => {
+  const importer = parseAl('import { Circle } from "./shapes"\nlet n : E.Shape = 1\n');
+  const r = checkWith(importer, { ctors: new Map(), types: new Map() }, new Map());
+  expect(r._tag).toBe("Err");
+  if (r._tag === "Err")
+    expect(r.error.message).toBe(
+      "unknown module alias 'E' in type 'E.Shape' — a qualified type name needs a matching 'import * as E from \"…\"'",
+    );
+});
+
+test("checkWith rejects an alias member the dep does not export", () => {
+  const importer = parseAl('import * as D from "./shapes"\nlet n : D.Nope = 1\n');
+  const quals = new Map([["D", { types: new Set(["Shape"]) }]]);
+  const r = checkWith(importer, { ctors: new Map(), types: new Map() }, quals);
+  expect(r._tag).toBe("Err");
+  if (r._tag === "Err")
+    expect(r.error.message).toBe(
+      "module alias 'D' has no exported type 'Nope' — export it from the imported module ('export type Nope = …')",
+    );
+});
+
+test("checkWith stays silent about qualified names when no graph scope was threaded", () => {
+  // Single-file `check` has no `quals`, so an alias absent from the map means
+  // "not compiled through a graph" — accuse nothing.
+  const importer = parseAl('import * as D from "./shapes"\nlet n : D.Nope = 1\n');
+  expect(checkWith(importer, { ctors: new Map(), types: new Map() }, new Map())._tag).toBe("Ok");
 });
 
 // ---- inferProgramImports (cross-module inference) --------------------------
@@ -108,8 +143,9 @@ test("inferProgramImports uses an imported scheme; open-world infer alone does n
   const importer = parseAl("let bad = add(f(1), 2)\n");
   expect(inferProgram(importer, builtins, namespaces, true)._tag).toBe("Ok");
   expect(
-    inferProgramImports(importer, builtins, namespaces, true, imports, new Map(), { _tag: "None" })
-      ._tag,
+    inferProgramImports(importer, builtins, namespaces, true, imports, new Map(), new Map(), {
+      _tag: "None",
+    })._tag,
   ).toBe("Err");
 });
 
