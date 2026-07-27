@@ -149,6 +149,16 @@ export const showTypeExpr = (te: TypeExpr): string => {
       return `(${te.elems.map(showTypeExpr).join(", ")})`;
     case "tlist":
       return `[${showTypeExpr(te.elem)}]`;
+    case "tqual": {
+      // `Alias.Name` (nullary) or `Alias.Name a b` (applied) — same arg-parenthesization
+      // rule as `tapp` (ADR 0046).
+      const arg = (a: TypeExpr): string =>
+        a.kind === "tapp" || a.kind === "tarrow" || (a.kind === "tqual" && a.args.length > 0)
+          ? `(${showTypeExpr(a)})`
+          : showTypeExpr(a);
+      const head = `${te.alias}.${te.name}`;
+      return te.args.length ? `${head} ${te.args.map(arg).join(" ")}` : head;
+    }
   }
   const from = te.from.kind === "tarrow" ? `(${showTypeExpr(te.from)})` : showTypeExpr(te.from);
   return `${from} -> ${showTypeExpr(te.to)}`;

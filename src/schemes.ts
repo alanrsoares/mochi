@@ -286,6 +286,16 @@ export const typeExprToType = (
       }
       return v;
     })
+    .with({ kind: "tqual" }, (tqual) => {
+      // Alias-qualified names don't resolve through the import graph yet
+      // (C5 slice a — resolution is a later slice, ADR 0046). Lower to a
+      // distinctly-named nominal type rather than guessing: it won't unify
+      // with anything real, so `let x : Alias.T = v` still fails to
+      // typecheck, but with a message that names the unresolved alias
+      // instead of a confusing mismatch against a bogus type.
+      const args = tqual.args.map((a) => typeExprToType(a, vars, f, aliases, expanding));
+      return tCon(`<unresolved ${tqual.alias}.${tqual.name}>`, args);
+    })
     .exhaustive();
 
 /**

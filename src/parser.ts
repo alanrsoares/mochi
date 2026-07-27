@@ -1059,16 +1059,45 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
       return { kind: "tlist", elem, span: spanning(start, end) };
     }
     const { name, span } = expectId();
+    // `Alias.Name` — an alias-qualified type name (ADR 0046). Only uppercase-initial
+    // names can be module aliases (mirrors the `Alias.Ctor(…)` pattern production).
+    if (/^[A-Z]/.test(name) && peek().t === "dot") {
+      next();
+      const q = expectId();
+      if (!/^[A-Z]/.test(q.name))
+        fail(
+          `a type variable cannot be qualified; expected a constructor after '${name}.', got '${q.name}'`,
+        );
+      return {
+        kind: "tqual",
+        alias: name,
+        name: q.name,
+        nameSpan: q.span,
+        args: [],
+        span: spanning(span, q.span),
+      };
+    }
     return { kind: "tname", name, span };
+  }
+
+  /** Argument list shared by `tapp` and `tqual` application (`Task a`, `D.Result e a`). */
+  function parseTypeAppArgs(): TypeExpr[] {
+    const args: TypeExpr[] = [];
+    while (peek().t === "id" || peek().t === "lparen" || peek().t === "lbracket")
+      args.push(parseTypeAtom());
+    return args;
   }
 
   /** Type application by juxtaposition, tighter than `->` (`Task a`, `Result a e`). */
   function parseTypeApp(): TypeExpr {
     const head = parseTypeAtom();
+    if (head.kind === "tqual") {
+      const args = parseTypeAppArgs();
+      const last = args[args.length - 1];
+      return !last ? head : { ...head, args, span: spanning(head.span, last.span) };
+    }
     if (head.kind !== "tname" || !/^[A-Z]/.test(head.name)) return head;
-    const args: TypeExpr[] = [];
-    while (peek().t === "id" || peek().t === "lparen" || peek().t === "lbracket")
-      args.push(parseTypeAtom());
+    const args = parseTypeAppArgs();
     const last = args[args.length - 1];
     return !last
       ? head

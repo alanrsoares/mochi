@@ -420,6 +420,12 @@ const strayTypeVar = (te: TypeExpr, params: ReadonlySet<string>): TypeExpr | nul
       ttuple.elems.reduce<TypeExpr | null>((f, e) => f ?? strayTypeVar(e, params), null),
     )
     .with({ kind: "tlist" }, (tlist) => strayTypeVar(tlist.elem, params))
+    // `Alias.Name` is always a constructor reference, never a bare type variable
+    // (that's what motivates the single `tqual` variant, ADR 0046) — only its
+    // applied args can hide a stray var.
+    .with({ kind: "tqual" }, (tqual) =>
+      tqual.args.reduce<TypeExpr | null>((f, a) => f ?? strayTypeVar(a, params), null),
+    )
     .exhaustive();
 
 function checkCtorFieldVars(prog: Program): Diagnostic[] {

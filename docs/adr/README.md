@@ -95,6 +95,7 @@ What else was on the table and why not.
 | [0043](0043-applied-ctor-phantom-param-widening.md) | Applied-constructor phantom type param widens to `unknown` | Accepted |
 | [0044](0044-let-binding-type-annotations.md) | `let x : T = v` binding type annotations (a language feature) | Accepted |
 | [0045](0045-parser-error-recovery.md) | Parser error recovery: sync points, error nodes, no-cascade | Accepted |
+| [0046](0046-qualified-type-names.md) | Qualified type names in type position (`Alias.T`), one `tqual` variant | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

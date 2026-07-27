@@ -31,8 +31,8 @@ re-exported/aliased variants; the unscoped merge itself) are split out to
 pushes every host seam through `TypeExpr`, which today can't name imported types.
 Strict before this ships = mandatory annotations that can't be written.
 
-- [ ] `ast.ts`: qualified `TypeExpr` form; `parser.ts` accepts `Alias.T` in type
-      position (TS side).
+- [x] `ast.ts`: qualified `TypeExpr` form; `parser.ts` accepts `Alias.T` in type
+      position (TS side). — ADR 0046
 - [ ] check/infer resolve qualified names through the import graph; case in
       `test/examples.spec.ts`.
 - [ ] dts/hover fold-back to qualified alias names.

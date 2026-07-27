@@ -227,6 +227,13 @@ const walkTypeExpr = (b: Builder, t: TypeExpr): void => {
     .with({ kind: "tlist" }, (tlist) => {
       walkTypeExpr(b, tlist.elem);
     })
+    .with({ kind: "tqual" }, (tqual) => {
+      // Alias-qualified: index under the qualified name so nav/symbols don't
+      // crash. Resolving this back to the aliased module's declaration is a
+      // later C5 slice.
+      use(b, "type", `${tqual.alias}.${tqual.name}`, tqual.nameSpan);
+      for (const a of tqual.args) walkTypeExpr(b, a);
+    })
     .exhaustive();
 };
 

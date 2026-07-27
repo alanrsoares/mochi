@@ -695,6 +695,12 @@ function teConNames(te: TypeExpr, acc: Set<string>): void {
     .with({ kind: "tlist" }, (tlist) => {
       teConNames(tlist.elem, acc);
     })
+    .with({ kind: "tqual" }, (tqual) => {
+      // Collect the alias-qualified form — folding back to a resolved,
+      // unqualified name is a later C5 slice (ADR 0046).
+      acc.add(`${tqual.alias}.${tqual.name}`);
+      for (const a of tqual.args) teConNames(a, acc);
+    })
     .exhaustive();
 }
 

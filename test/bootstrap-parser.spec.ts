@@ -214,6 +214,16 @@ const cTy = (t: TypeExpr): Canon => {
       return { kind: "ttuple", elems: t.elems.map(cTy), span: cSpan(t.span) };
     case "tlist":
       return { kind: "tlist", elem: cTy(t.elem), span: cSpan(t.span) };
+    case "tqual":
+      // Not yet produced by bootstrap/parser.mochi (that's C5 slice d) — case added
+      // only so this canonicalizer stays exhaustive over the TS-side `TypeExpr`.
+      return {
+        kind: "tqual",
+        alias: t.alias,
+        name: t.name,
+        args: t.args.map(cTy),
+        span: cSpan(t.span),
+      };
   }
 };
 

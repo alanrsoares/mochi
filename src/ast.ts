@@ -143,7 +143,24 @@ export type TypeExpr =
   | { kind: "tarrow"; from: TypeExpr; to: TypeExpr; span: Span }
   | { kind: "tapp"; ctor: string; args: TypeExpr[]; span: Span } // Task a, Result a e
   | { kind: "ttuple"; elems: TypeExpr[]; span: Span } // (a, b) — tuple type, arity ≥ 2
-  | { kind: "tlist"; elem: TypeExpr; span: Span }; // [a]
+  | { kind: "tlist"; elem: TypeExpr; span: Span } // [a]
+  /**
+   * alias-qualified type name: `Alias.Name` (nullary, `args: []`) or `Alias.Name a b`
+   * (applied, `args` non-empty) — e.g. `D.Shape`, `D.Result e a`. One variant covers
+   * both arities (unlike the unqualified `tname`/`tapp` split) because a qualified name
+   * is always a constructor reference, never a type variable: the lowercase/uppercase
+   * branch that motivates the unqualified split doesn't apply once a dot is involved.
+   * Resolution through the import graph is a later C5 slice (ADR 0046) — for now this
+   * node parses and round-trips but `check`/`schemes` report it as unresolved.
+   */
+  | {
+      kind: "tqual";
+      alias: string;
+      name: string;
+      nameSpan: Span;
+      args: readonly TypeExpr[];
+      span: Span;
+    }; // D.Shape, D.Result e a
 
 export type Stmt =
   /**
@@ -229,6 +246,8 @@ export type RecordPat = Extract<Pattern, { kind: "precord" }>;
 export type CtorPat = Extract<Pattern, { kind: "pctor" }>;
 export type OrPat = Extract<Pattern, { kind: "por" }>;
 export type LitPat = Extract<Pattern, { kind: "plit" | "pbool" | "pstr" }>;
+
+export type QualTypeExpr = Extract<TypeExpr, { kind: "tqual" }>;
 
 export type LetStmt = Extract<Stmt, { kind: "let" }>;
 export type TypeStmt = Extract<Stmt, { kind: "type" }>;
