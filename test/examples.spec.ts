@@ -103,6 +103,52 @@ test("examples/modules builds the whole graph and wires imports", async () => {
   expect(geometry).toContain("export const area");
 });
 
+// A worked multi-module example for C5 slice b: with `import * as D`, every type
+// ./shapes exports is writable as `D.T` in any type position — nullary and applied
+// variants cross nominally, and a transparent record alias EXPANDS across the edge.
+// It lives INLINE rather than as a checked-in example because the bootstrap
+// differential corpus globs every `.mochi` in the repo and `bootstrap/parser.mochi`
+// has no qualified-type production yet (C5 slice d).
+const QUALIFIED_TYPES: Record<string, string> = {
+  "/q/shapes.mochi": [
+    "export type Shape =",
+    "  | Circle(radius: number)",
+    "  | Rect(width: number, height: number)",
+    "",
+    "export type Box a =",
+    "  | Box(a)",
+    "",
+    "export type Pair a = { fst: a, snd: a }",
+    "",
+    "export let area = s => switch s { | Circle(r) => r * r | Rect(w, h) => w * h }",
+    "",
+  ].join("\n"),
+  "/q/main.mochi": [
+    'import * as D from "./shapes"',
+    'import { area, Circle, Rect, Box } from "./shapes"',
+    "",
+    "let circle : D.Shape = Circle(2.0)",
+    "let rect : D.Shape = Rect(3.0, 4.0)",
+    "let boxed : D.Box number = Box(7)",
+    "let corner : D.Pair number = { fst: 1.0, snd: 2.0 }",
+    "let sizeOf : D.Shape -> number = s => area(s)",
+    "let circleArea = sizeOf(circle)",
+    "let rectArea = sizeOf(rect)",
+    "",
+  ].join("\n"),
+};
+
+test("a graph naming imported TYPES through a namespace alias builds (C5 slice b)", async () => {
+  const outs = unwrapOk(
+    await buildModules("/q/main.mochi", (p) => Promise.resolve(QUALIFIED_TYPES[p]!)),
+  );
+  const main = outs.find((o) => o.path.endsWith("main.mochi"))!.js;
+  // `import * as D` is type-only, so it contributes no value import of its own;
+  // the ctors and `area` arrive through the ordinary named import.
+  expect(main).toContain('import { area, Circle, Rect, Box } from "./shapes.js";');
+  expect(main).not.toContain("D.");
+});
+
 test("docs tour snippets compile (source of HighlightCode panels)", () => {
   for (const name of ["variants", "records", "jsx"] as const) {
     const src = read(`apps/docs/src/examples/${name}.mochi`);

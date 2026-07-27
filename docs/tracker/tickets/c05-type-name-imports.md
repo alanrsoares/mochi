@@ -33,8 +33,14 @@ Strict before this ships = mandatory annotations that can't be written.
 
 - [x] `ast.ts`: qualified `TypeExpr` form; `parser.ts` accepts `Alias.T` in type
       position (TS side). — ADR 0046
-- [ ] check/infer resolve qualified names through the import graph; case in
-      `test/examples.spec.ts`.
+- [x] check/infer resolve qualified names through the import graph; case in
+      `test/examples.spec.ts`. — `qualsByPath` in `module.ts` → `ModuleContext.qualTypes`;
+      record aliases expand in the DECLARING module's scope; both
+      `checkQualifiedTypeNames` diagnostics fire. **Constraint discovered:** no
+      checked-in `.mochi` file may use `Alias.T` until slice d —
+      `test/bootstrap-parser.spec.ts:517` globs `**/*.mochi` into the differential
+      corpus, so a fixture fails on `bootstrap/parser.mochi`'s missing production.
+      The examples case is an in-memory graph until then.
 - [ ] dts/hover fold-back to qualified alias names.
 - [ ] Bootstrap impact: **large** — `bootstrap/parser.mochi` + `infer`/`check` mirrors
       need the same production (differential tests, message + span parity); afterwards,

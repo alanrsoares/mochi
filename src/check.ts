@@ -4,71 +4,88 @@
  */
 import { match } from "@onrails/pattern";
 import { err, isErr, ok, type Result } from "@onrails/result";
-import type { CtorPat, Expr, LamParam, MatchExpr, OrPat, Pattern, Program, TypeExpr } from "./ast";
+import type {
+  CtorPat,
+  Expr,
+  LamParam,
+  MatchExpr,
+  OrPat,
+  Pattern,
+  Program,
+  QualTypeExpr,
+  TypeExpr,
+} from "./ast";
 import { buildCtorTable, type CtorTable, PRIM_TYPE_NAMES } from "./ctors";
 import { checkErr, concatDiags, type Diagnostic } from "./errors";
 import { builtinTypeDecls, preludeNamespaces } from "./prelude";
+import type { QualMap } from "./schemes";
 import type { Span } from "./span";
 
 /** Variant registry shared with infer and codegen — arity cannot drift between passes. */
 export type Registry = CtorTable;
 
-/** Walk an expression tree, invoking `visit` on every `match` node. */
-function forEachMatch(e: Expr, visit: (m: MatchExpr) => void): void {
+/** Walk an expression tree, invoking `visit` on every node, children before parent. */
+function forEachSubExpr(e: Expr, visit: (x: Expr) => void): void {
   match(e)
     .withOneOf([{ kind: "num" }, { kind: "bool" }, { kind: "str" }, { kind: "ref" }], () => {})
     .with({ kind: "interp" }, (interp) => {
-      for (const p of interp.parts) if (typeof p !== "string") forEachMatch(p, visit);
+      for (const p of interp.parts) if (typeof p !== "string") forEachSubExpr(p, visit);
     })
     .with({ kind: "call" }, (call) => {
-      forEachMatch(call.fn, visit);
-      for (const a of call.args) forEachMatch(a, visit);
+      forEachSubExpr(call.fn, visit);
+      for (const a of call.args) forEachSubExpr(a, visit);
     })
     .with({ kind: "lambda" }, (lambda) => {
-      forEachMatch(lambda.body, visit);
+      forEachSubExpr(lambda.body, visit);
     })
     .withOneOf([{ kind: "letin" }, { kind: "letbind" }], (bind) => {
-      forEachMatch(bind.value, visit);
-      forEachMatch(bind.body, visit);
+      forEachSubExpr(bind.value, visit);
+      forEachSubExpr(bind.body, visit);
     })
     .with({ kind: "pipe" }, (pipe) => {
-      forEachMatch(pipe.left, visit);
-      forEachMatch(pipe.right, visit);
+      forEachSubExpr(pipe.left, visit);
+      forEachSubExpr(pipe.right, visit);
     })
     .with({ kind: "ternary" }, (ternary) => {
-      forEachMatch(ternary.cond, visit);
-      forEachMatch(ternary.then, visit);
-      forEachMatch(ternary.else, visit);
+      forEachSubExpr(ternary.cond, visit);
+      forEachSubExpr(ternary.then, visit);
+      forEachSubExpr(ternary.else, visit);
     })
     .with({ kind: "match" }, (matchExpr) => {
-      forEachMatch(matchExpr.scrutinee, visit);
+      forEachSubExpr(matchExpr.scrutinee, visit);
       for (const a of matchExpr.arms) {
-        if (a.guard) forEachMatch(a.guard, visit);
-        forEachMatch(a.body, visit);
+        if (a.guard) forEachSubExpr(a.guard, visit);
+        forEachSubExpr(a.body, visit);
       }
-      visit(matchExpr);
     })
     .with({ kind: "record" }, (record) => {
-      if (record.spread) forEachMatch(record.spread, visit);
-      for (const f of record.fields) forEachMatch(f.value, visit);
+      if (record.spread) forEachSubExpr(record.spread, visit);
+      for (const f of record.fields) forEachSubExpr(f.value, visit);
     })
     .with({ kind: "field" }, (field) => {
-      forEachMatch(field.target, visit);
+      forEachSubExpr(field.target, visit);
     })
     .with({ kind: "tuple" }, (tuple) => {
-      for (const el of tuple.elements) forEachMatch(el, visit);
+      for (const el of tuple.elements) forEachSubExpr(el, visit);
     })
     .withOneOf([{ kind: "arr" }, { kind: "list" }, { kind: "set" }], (seq) => {
-      for (const el of seq.elements) forEachMatch(el.expr, visit);
+      for (const el of seq.elements) forEachSubExpr(el.expr, visit);
     })
     .with({ kind: "map" }, (mapExpr) => {
       for (const ent of mapExpr.entries) {
-        forEachMatch(ent.key, visit);
-        forEachMatch(ent.value, visit);
+        forEachSubExpr(ent.key, visit);
+        forEachSubExpr(ent.value, visit);
       }
     })
     .exhaustive();
+  visit(e);
 }
+
+/** Walk an expression tree, invoking `visit` on every `match` node. */
+const forEachMatch = (e: Expr, visit: (m: MatchExpr) => void): void =>
+  forEachSubExpr(e, (x) => {
+    if (x.kind === "match") visit(x);
+  });
 
 /**
  * A pattern is a catch-all when it always matches. A record pattern does so
@@ -448,6 +465,87 @@ function checkCtorFieldVars(prog: Program): Diagnostic[] {
   return diags;
 }
 
+/** Every `tqual` node reachable from a written type expression, in source order. */
+const qualRefs = (te: TypeExpr, out: QualTypeExpr[]): void => {
+  match(te)
+    .with({ kind: "tname" }, () => {})
+    .with({ kind: "tarrow" }, (tarrow) => {
+      qualRefs(tarrow.from, out);
+      qualRefs(tarrow.to, out);
+    })
+    .with({ kind: "tapp" }, (tapp) => {
+      for (const a of tapp.args) qualRefs(a, out);
+    })
+    .with({ kind: "ttuple" }, (ttuple) => {
+      for (const el of ttuple.elems) qualRefs(el, out);
+    })
+    .with({ kind: "tlist" }, (tlist) => {
+      qualRefs(tlist.elem, out);
+    })
+    .with({ kind: "tqual" }, (tqual) => {
+      out.push(tqual);
+      for (const a of tqual.args) qualRefs(a, out);
+    })
+    .exhaustive();
+};
+
+/**
+ * Every type expression a program WRITES — the positions `typeExprToType` lowers:
+ * extern signatures, binding annotations (top-level and `let … in`, ADR 0044),
+ * constructor field types, and transparent record-alias field types.
+ */
+const writtenTypeExprs = (prog: Program): TypeExpr[] => {
+  const out: TypeExpr[] = [];
+  for (const s of prog.stmts) {
+    if (s.kind === "extern") out.push(s.typeExpr);
+    if (s.kind === "let") {
+      if (s.annot) out.push(s.annot);
+      forEachSubExpr(s.value, (x) => {
+        if (x.kind === "letin" && x.annot) out.push(x.annot);
+      });
+    }
+    if (s.kind === "type") {
+      for (const c of s.ctors) for (const fld of c.fields) out.push(fld.type);
+      for (const fld of s.alias ?? []) out.push(fld.type);
+    }
+  }
+  return out;
+};
+
+/**
+ * `Alias.T` resolves through the import graph (C5 slice b): the alias must be a
+ * namespace import of THIS module, and the dep must EXPORT a type of that name.
+ * `quals` is the alias → dep-type-scope map the module driver threads in; when a
+ * declared alias is absent from it the module wasn't compiled through a graph
+ * (plain single-file `check`), so stay silent rather than accuse the user.
+ */
+const checkQualifiedTypeNames = (prog: Program, quals?: QualMap): Diagnostic[] => {
+  const nsAliases = new Set(
+    prog.stmts.flatMap((s) => (s.kind === "import" && s.alias ? [s.alias.name] : [])),
+  );
+  const refs: QualTypeExpr[] = [];
+  for (const te of writtenTypeExprs(prog)) qualRefs(te, refs);
+  return refs.flatMap((q) => {
+    if (!nsAliases.has(q.alias))
+      return [
+        checkErr(
+          `unknown module alias '${q.alias}' in type '${q.alias}.${q.name}' — a qualified type name needs a matching 'import * as ${q.alias} from "…"'`,
+          q.span,
+        ),
+      ];
+    const dep = quals?.get(q.alias);
+    if (!dep) return [];
+    return dep.types.has(q.name)
+      ? []
+      : [
+          checkErr(
+            `module alias '${q.alias}' has no exported type '${q.name}' — export it from the imported module ('export type ${q.name} = …')`,
+            q.nameSpan,
+          ),
+        ];
+  });
+};
+
 /**
  * JavaScript reserved words. An mochi lowercase identifier in a BINDING
  * position (let/extern name, lambda/letin/letbind param, pattern bind, labelled
@@ -633,11 +731,16 @@ function checkReservedWords(prog: Program): Diagnostic[] {
  * imports from; merged UNDER the local registry (local declarations win) so
  * exhaustiveness works across the module boundary.
  */
-export function check(prog: Program, imported?: Registry): Result<Program, Diagnostic[]> {
+export function check(
+  prog: Program,
+  imported?: Registry,
+  quals?: QualMap,
+): Result<Program, Diagnostic[]> {
   const diags: Diagnostic[] = [
     ...checkReservedNames(prog),
     ...checkReservedWords(prog),
     ...checkCtorFieldVars(prog),
+    ...checkQualifiedTypeNames(prog, quals),
   ];
   const built = buildCtorTable(prog);
   if (isErr(built)) return err([...diags, ...built.error]);

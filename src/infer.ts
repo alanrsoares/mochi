@@ -39,12 +39,14 @@ import {
   generalize,
   instantiate,
   mono,
+  type QualMap,
   type Scheme,
+  type TypeScope,
   typeExprToType,
 } from "./schemes";
 
 /** Re-exported: `Scheme`/`Env` are this module's result vocabulary. */
-export type { AliasMap, Env, Scheme } from "./schemes";
+export type { AliasMap, Env, QualMap, QualScope, Scheme, TypeScope } from "./schemes";
 
 import { type Diagnostic, typeErr } from "./errors";
 import type { InferCallApi, InferCallHook, LanguagePlugin } from "./extensions";
@@ -92,7 +94,9 @@ type Ctx = {
   open: boolean;
   ns: Map<string, Map<string, Scheme>>; // qualified collection namespaces (List.map, ...)
   aliases: AliasDef[]; // transparent record aliases, for folding types in errors
-  aliasMap: AliasMap; // raw alias fields, for resolving binding annotations (`let x : T`)
+  // Raw alias fields + namespace-import type scopes, for resolving binding
+  // annotations (`let x : T`, `let x : D.T`).
+  typeScope: TypeScope;
   record?: (span: Span, t: Type, symbol?: SymbolInfo) => void;
   noteUse?: (sc: Scheme, t: Type) => void;
   noteLet?: (sc: Scheme, valueSpan: Span) => void;
@@ -267,7 +271,7 @@ function inferLetIn(e: LetInExpr, ctx: Ctx): Result<Type, Diagnostic> {
   const valT = infer(e.value, ctx);
   if (isErr(valT)) return valT;
   if (e.annot) {
-    const at = typeExprToType(e.annot, new Map(), ctx.fresh, ctx.aliasMap);
+    const at = typeExprToType(e.annot, new Map(), ctx.fresh, ctx.typeScope);
     const au = u(valT.value, at, ctx, e.annot.span);
     if (isErr(au)) return au;
   }
@@ -602,6 +606,8 @@ export type InferOptions = {
   imports?: Env;
   namespaces?: Record<string, Record<string, Type>>; // qualified members (List.map, ...)
   nsImports?: Map<string, Env>; // alias → export schemes
+  /** alias → the dep's exported TYPE scope, so `D.Shape` resolves (C5 slice b). */
+  quals?: QualMap;
   /**
    * Plugins to run (styled-cva, …). `undefined` → builtins; `[]` → hard
    * opt-out; non-empty → builtins + this list (`resolvePlugins`, ADR 0011).
@@ -798,6 +804,9 @@ function run(
   const aliasMap: AliasMap = new Map();
   for (const s of prog.stmts)
     if (s.kind === "type" && s.alias) aliasMap.set(s.name, { params: s.params, fields: s.alias });
+  // Local aliases plus the namespace-import type scopes `D.Shape` resolves
+  // through (C5 slice b) — one scope object every TypeExpr lowering shares.
+  const typeScope: TypeScope = { aliases: aliasMap, quals: opts.quals ?? new Map() };
   const aliases: AliasDef[] = [...aliasMap].map(([name, info]) => ({
     name,
     params: info.params,
@@ -806,7 +815,7 @@ function run(
       info,
       info.params.map((_, i) => tVar(aliasParamId(i))),
       fresh,
-      aliasMap,
+      typeScope,
       new Set(),
     ),
   }));
@@ -830,7 +839,7 @@ function run(
   // Constructors first so `let`s can use them. Builtin ctors yield to user/import bindings.
   for (const [name, e] of ctorTableOf(prog).ctor) {
     if (e.builtin && env.has(name)) continue;
-    env.set(name, ctorScheme(e.type, e.params, e.ctor, fresh, aliasMap));
+    env.set(name, ctorScheme(e.type, e.params, e.ctor, fresh, typeScope));
   }
 
   // externs next — their declared type is authoritative; generalize so a
@@ -838,7 +847,7 @@ function run(
   // Record the name span so hover leads with `extern name: T` (+ host + ///).
   for (const s of prog.stmts) {
     if (s.kind !== "extern") continue;
-    const t = typeExprToType(s.typeExpr, new Map(), fresh, aliasMap);
+    const t = typeExprToType(s.typeExpr, new Map(), fresh, typeScope);
     const sc = generalize(env, t, subst);
     env.set(s.name, sc);
     record(s.nameSpan, sc.type, {
@@ -894,7 +903,7 @@ function run(
         open,
         ns,
         aliases,
-        aliasMap,
+        typeScope,
         record,
         noteUse,
         noteLet,
@@ -918,7 +927,7 @@ function run(
       // Resolved through the alias map, so a named record alias expands to its
       // row (ADR 0044). This is how a self-hosted seed pins a polymorphic empty.
       if (s.annot) {
-        const at = typeExprToType(s.annot, new Map(), fresh, aliasMap);
+        const at = typeExprToType(s.annot, new Map(), fresh, typeScope);
         const au = unify(t.value, at, subst, fresh, (x) => showType(foldAliases(x, aliases)));
         if (isErr(au)) {
           allDiags.push(typeErr(au.error.message, s.annot.span));

@@ -11,6 +11,7 @@ import {
   type InferResult,
   inferProgram,
   inferProgramTypes,
+  type QualMap,
 } from "./infer";
 import { lex } from "./lexer";
 import { parse } from "./parser";
@@ -43,6 +44,8 @@ export type ImportedContext = {
   imports: Env;
   nsImports?: Map<string, Env>;
   importedReg: Registry;
+  /** alias → the dep's exported TYPE scope, so `D.Shape` resolves (C5 slice b). */
+  qualTypes?: QualMap;
 };
 
 /** Options for `toTypedProgramWith` beyond the imported context — currently just `plugins` (styled-cva, …), threaded the same way `compile`/`inferProgram` take them. */
@@ -54,7 +57,7 @@ export function toTypedProgramWith(
   ctx: ImportedContext,
   opts: TypedProgramWithOptions = {},
 ): Result<TypedProgram, Diagnostic[]> {
-  const checked = check(prog, ctx.importedReg);
+  const checked = check(prog, ctx.importedReg, ctx.qualTypes);
   if (isErr(checked)) return checked;
   return map(
     inferProgramTypes(checked.value, preludeEnv, {
@@ -62,6 +65,7 @@ export function toTypedProgramWith(
       imports: ctx.imports,
       namespaces: preludeNamespaces,
       nsImports: ctx.nsImports,
+      quals: ctx.qualTypes,
       plugins: opts.plugins,
     }),
     (res) => ({ prog: checked.value, res }),

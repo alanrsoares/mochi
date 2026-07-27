@@ -224,6 +224,28 @@ export type AliasInfo = { params: string[]; fields: AliasField[] };
 export type AliasMap = Map<string, AliasInfo>;
 
 /**
+ * Everything name resolution needs while lowering a written TypeExpr: the
+ * module's own transparent record aliases, plus the namespace-import aliases it
+ * may qualify through (`import * as D` → `D.Shape`, ADR 0046 / C5 slice b).
+ */
+export type TypeScope = { aliases: AliasMap; quals: QualMap };
+
+/**
+ * The type-name scope a module exposes to its importers: every exported type
+ * name (variants AND record aliases — `types` is the existence check `check.ts`
+ * reports against) and, in `scope`, the aliases that must EXPAND plus the
+ * declaring module's own qual map. Expansion runs in the DECLARING module's
+ * scope so an alias field naming `Other.T` resolves where it was written rather
+ * than where it was imported.
+ */
+export type QualScope = { types: ReadonlySet<string>; scope: TypeScope };
+
+/** Namespace-import alias (`import * as D`) → the dep's exported type scope. */
+export type QualMap = ReadonlyMap<string, QualScope>;
+
+export const emptyTypeScope = (): TypeScope => ({ aliases: new Map(), quals: new Map() });
+
+/**
  * Expand a record alias to its structural row. `args` binds its type parameters positionally; params past `args.length` become fresh generic vars. `expanding` breaks reference cycles (`type T = { self: T }`) by falling back to the bare nominal `con(name, args)` — finite, though that field then unifies nominally.
  */
 export const aliasRow = (
@@ -231,7 +253,7 @@ export const aliasRow = (
   info: AliasInfo,
   args: Type[],
   f: Fresh,
-  aliases: AliasMap,
+  scope: TypeScope,
   expanding: Set<string>,
 ): Type => {
   if (expanding.has(name)) return tCon(name, args);
@@ -241,7 +263,7 @@ export const aliasRow = (
   });
   const next = new Set(expanding).add(name);
   const row = info.fields.reduceRight<Row>(
-    (rest, fld) => rExtend(fld.name, typeExprToType(fld.type, local, f, aliases, next), rest),
+    (rest, fld) => rExtend(fld.name, typeExprToType(fld.type, local, f, scope, next), rest),
     rEmpty,
   );
   return tRecord(row);
@@ -251,33 +273,33 @@ export const typeExprToType = (
   te: TypeExpr,
   vars: Map<string, Type>,
   f: Fresh,
-  aliases: AliasMap = new Map(),
+  scope: TypeScope = emptyTypeScope(),
   expanding: Set<string> = new Set(),
 ): Type =>
   match(te)
     .with({ kind: "tarrow" }, (tarrow) =>
       tArrow(
-        typeExprToType(tarrow.from, vars, f, aliases, expanding),
-        typeExprToType(tarrow.to, vars, f, aliases, expanding),
+        typeExprToType(tarrow.from, vars, f, scope, expanding),
+        typeExprToType(tarrow.to, vars, f, scope, expanding),
       ),
     )
     .with({ kind: "tapp" }, (tapp) => {
-      const args = tapp.args.map((a) => typeExprToType(a, vars, f, aliases, expanding));
-      const info = aliases.get(tapp.ctor);
-      return info ? aliasRow(tapp.ctor, info, args, f, aliases, expanding) : tCon(tapp.ctor, args);
+      const args = tapp.args.map((a) => typeExprToType(a, vars, f, scope, expanding));
+      const info = scope.aliases.get(tapp.ctor);
+      return info ? aliasRow(tapp.ctor, info, args, f, scope, expanding) : tCon(tapp.ctor, args);
     })
     .with({ kind: "ttuple" }, (ttuple) =>
-      tTuple(ttuple.elems.map((el) => typeExprToType(el, vars, f, aliases, expanding))),
+      tTuple(ttuple.elems.map((el) => typeExprToType(el, vars, f, scope, expanding))),
     )
     .with({ kind: "tlist" }, (tlist) =>
-      tCon("Array", [typeExprToType(tlist.elem, vars, f, aliases, expanding)]),
+      tCon("Array", [typeExprToType(tlist.elem, vars, f, scope, expanding)]),
     )
     .with({ kind: "tname" }, (tname) => {
       // `()` in TypeExpr lowers to the reserved name `unit` (ADR 0014 / 0015).
       if (tname.name === UNIT) return tUnit;
       if (PRIM_TYPE_NAMES.has(tname.name)) return primType(tname.name);
-      const info = aliases.get(tname.name);
-      if (info) return aliasRow(tname.name, info, [], f, aliases, expanding);
+      const info = scope.aliases.get(tname.name);
+      if (info) return aliasRow(tname.name, info, [], f, scope, expanding);
       if (/^[A-Z]/.test(tname.name)) return tCon(tname.name);
       let v = vars.get(tname.name);
       if (!v) {
@@ -287,14 +309,19 @@ export const typeExprToType = (
       return v;
     })
     .with({ kind: "tqual" }, (tqual) => {
-      // Alias-qualified names don't resolve through the import graph yet
-      // (C5 slice a — resolution is a later slice, ADR 0046). Lower to a
-      // distinctly-named nominal type rather than guessing: it won't unify
-      // with anything real, so `let x : Alias.T = v` still fails to
-      // typecheck, but with a message that names the unresolved alias
-      // instead of a confusing mismatch against a bogus type.
-      const args = tqual.args.map((a) => typeExprToType(a, vars, f, aliases, expanding));
-      return tCon(`<unresolved ${tqual.alias}.${tqual.name}>`, args);
+      const args = tqual.args.map((a) => typeExprToType(a, vars, f, scope, expanding));
+      const dep = scope.quals.get(tqual.alias);
+      const info = dep?.scope.aliases.get(tqual.name);
+      // A transparent record alias EXPANDS across the edge exactly as a local one
+      // does — but in the declaring module's scope, so its own field types resolve
+      // where they were written (C5 slice b).
+      if (dep && info) return aliasRow(tqual.name, info, args, f, dep.scope, expanding);
+      // A variant crosses NOMINALLY under its bare name: `module.ts` merges the
+      // dep's type/ctor registry unqualified and codegen emits that same name, so
+      // `D.Shape` and the dep's own `Shape` are one type. An unresolvable alias or
+      // member lowers the same way rather than minting a placeholder — `check.ts`
+      // owns that diagnostic, so no synthetic name can leak into a type message.
+      return tCon(tqual.name, args);
     })
     .exhaustive();
 
@@ -306,7 +333,7 @@ export const ctorScheme = (
   params: string[],
   c: Ctor,
   f: Fresh,
-  aliases: AliasMap,
+  scope: TypeScope,
 ): Scheme => {
   const pvars = new Map<string, Type>(params.map((p) => [p, freshVar(f)]));
   const result = tCon(
@@ -316,7 +343,7 @@ export const ctorScheme = (
   // Field types are full type expressions (ADR 0015); params resolve through
   // `pvars`, aliases expand, and `[t]`/`Option t`/arrows/tuples all work.
   const type = c.fields.reduceRight(
-    (acc, fld) => tArrow(typeExprToType(fld.type, pvars, f, aliases), acc),
+    (acc, fld) => tArrow(typeExprToType(fld.type, pvars, f, scope), acc),
     result,
   );
   // Quantify every var the fields introduced (params, plus any the conversion
