@@ -13,7 +13,7 @@ extern paintBoard : a -> b -> c -> d = "../host/canvas.host" "paintBoard"
 /// Returns a `useEffect` cleanup.
 extern startParticleLoop : a -> b -> c -> d = "../host/canvas.host" "startParticleLoop"
 
-let CanvasBoard = props =>
+export let CanvasBoard = props =>
   let canvasRef = useRef(nullEl) in
   let particles = useRef(emptyParticles()) in
   let eatWatch = useRef(eatWatchSeed(props.snake, props.food)) in

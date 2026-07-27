@@ -40,7 +40,6 @@ import {
   isGameOver,
   isPlayingStatus,
   isGameOverStatus,
-  statusToneOf,
   statusHeadingOf,
   Ready,
   Up,
@@ -126,6 +125,9 @@ let App = _ =>
   let highScore = useSelect(store, s => s.highScore.value) in
   let status = useSelect(store, s => s.status.value) in
   let submitted = useSelect(store, s => s.submitted.value) in
+  // `$tone` below stays a ternary of literals: a helper's return (and switch
+  // arms) widen string literals to `string`, which does not unify with the
+  // styled-cva `$tone` literal union.
   let playing = isPlayingStatus(status) in
   let gameOver = isGameOverStatus(status) in
   let _tick = useEffect(() =>
@@ -207,7 +209,9 @@ let App = _ =>
         <Card className="relative min-h-0 flex items-center justify-center p-4">
           <CanvasBoard snake={snake} food={food} cols={COLS} rows={ROWS} />
           <OverlayPanel $visible={playing ? "off" : "on"}>
-            <OverlayTitle $tone={statusToneOf(status)}>
+            <OverlayTitle
+              $tone={playing ? "ready" : gameOver ? "gameOver" : "paused"}
+            >
               {statusHeadingOf(status)}
             </OverlayTitle>
             {gameOver
