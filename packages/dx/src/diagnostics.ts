@@ -6,14 +6,17 @@
  * `PublishDiagnostic` is the wire-shaped DTO only (ADR 0003).
  */
 import { resolve } from "node:path";
+import type { ImportStmt, Program } from "@mochi/compiler/ast";
 import { toTypedProgram, toTypedProgramWith } from "@mochi/compiler/compile";
-import type { Diagnostic } from "@mochi/compiler/errors";
+import { checkErr, type Diagnostic } from "@mochi/compiler/errors";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import { lex } from "@mochi/compiler/lexer";
-import { moduleContext } from "@mochi/compiler/module";
+import { moduleContext, resolveImport } from "@mochi/compiler/module";
 import { parse } from "@mochi/compiler/parser";
 import { preludeNamespaces } from "@mochi/compiler/prelude";
+import type { Env, Scheme } from "@mochi/compiler/schemes";
 import { lineCol } from "@mochi/compiler/span";
+import { tVar } from "@mochi/compiler/types";
 import { isErr } from "@onrails/result";
 
 /** 0-based line/character — matches the LSP `Position` shape. */
@@ -125,9 +128,11 @@ export function diagnostics(src: string, opts: ModuleDiagnosticsOptions = {}): P
  * produce false type errors in the editor that Vite/`gen-mochi-dts` don't see.
  *
  * Degradation is deliberate: the entry's own lex/parse errors are always
- * reported (they never depend on deps); if the dep graph can't be resolved or a
- * dep fails to compile, we fall back to single-file `diagnostics(src)` — no
- * worse than before, and the user still sees their own file's errors.
+ * reported (they never depend on deps). If the dep graph can't be resolved or a
+ * dep fails to compile, the failure is surfaced at the entry's `import`
+ * statement (`graphFailureDiagnostics`) and the entry itself degrades to
+ * single-file checking with every imported name pre-bound (`fallbackDiagnostics`)
+ * so the user sees the real cause, not an "unbound variable" cascade.
  */
 export async function moduleDiagnostics(
   path: string,
@@ -146,11 +151,90 @@ export async function moduleDiagnostics(
   const read = (p: string): Promise<string> =>
     resolve(p) === entry ? Promise.resolve(src) : readFile(p);
   const ctx = await moduleContext(entry, read, { plugins: opts.plugins });
-  if (isErr(ctx)) return diagnostics(src, { plugins: opts.plugins });
+  if (isErr(ctx))
+    return [
+      ...graphFailureDiagnostics(src, prog, entry, ctx.error),
+      ...fallbackDiagnostics(src, prog, entry, opts),
+    ];
 
   const typed = toTypedProgramWith(prog, ctx.value, {
     plugins: opts.plugins,
     open: false,
   });
   return isErr(typed) ? typed.error.map((e) => toPublish(src, e, entry)) : [];
+}
+
+const importsOf = (prog: Program): ImportStmt[] =>
+  prog.stmts.filter((s): s is ImportStmt => s.kind === "import");
+
+/**
+ * Surface a module-graph failure IN the entry file: one diagnostic per failing
+ * module, anchored at the entry's `import … from "<spec>"` statement that pulls
+ * it in (matched by `resolveImport`; a transitive dep that no entry import
+ * resolves to degrades to the first import statement, message prefixed with the
+ * dep's absolute path). A failure the driver attributes to the entry itself —
+ * `gatherImports` on the entry, e.g. a missing export — already spans an entry
+ * import statement, so it anchors there; anything else publishes as-is.
+ */
+function graphFailureDiagnostics(
+  src: string,
+  prog: Program,
+  entry: string,
+  errors: Diagnostic[],
+): PublishDiagnostic[] {
+  const imports = importsOf(prog);
+  const seen = new Set<string>();
+  const out: PublishDiagnostic[] = [];
+  for (const d of errors) {
+    const isDep = d.path !== undefined && resolve(d.path) !== entry;
+    const imp = isDep
+      ? imports.find((i) => resolveImport(entry, i.from) === resolve(d.path!))
+      : // Entry-attributed: the span (import name) sits inside an import stmt.
+        imports.find((i) => d.span && i.span.start <= d.span.start && d.span.end <= i.span.end);
+    if (!isDep && !imp) {
+      // Entry-attributed with a span of its own (e.g. an import cycle) — real range, publish as-is.
+      out.push(toPublish(src, d, entry));
+      continue;
+    }
+    // One wrapped diagnostic per failing module / per import statement.
+    const key = isDep ? resolve(d.path!) : `entry:${imp!.span.start}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const span = imp?.span ?? imports[0]?.span ?? { start: 0, end: 1 };
+    const spec = imp?.from ?? d.path!;
+    out.push(
+      toPublish(src, checkErr(`module '${spec}' failed to compile: ${d.message}`, span), entry),
+    );
+  }
+  return out;
+}
+
+/** `forall a. a` — what an import binds to when its module can't provide a real scheme. */
+const anyScheme = (): Scheme => ({ vars: [0], rvars: [], type: tVar(0) });
+
+/**
+ * Single-file degradation for a broken module graph. Same strict (`open:
+ * false`) check + infer as `diagnostics`, EXCEPT every name the entry imports
+ * is pre-bound to `forall a. a`: those names are real — their module just
+ * failed — so flagging each as an "unbound variable" would bury the one
+ * diagnostic that matters (the graph failure) under cascade noise. Local typos
+ * still surface. Plain `diagnostics()` keeps its strict behavior untouched.
+ */
+function fallbackDiagnostics(
+  src: string,
+  prog: Program,
+  path: string,
+  opts: ModuleDiagnosticsOptions,
+): PublishDiagnostic[] {
+  const imports: Env = new Map();
+  for (const imp of importsOf(prog)) {
+    if (imp.alias) imports.set(imp.alias.name, anyScheme());
+    for (const n of imp.names) imports.set(n.name, anyScheme());
+  }
+  const typed = toTypedProgramWith(
+    prog,
+    { imports, importedReg: { ctor: new Map(), type: new Map() } },
+    { plugins: opts.plugins, open: false },
+  );
+  return isErr(typed) ? typed.error.map((e) => toPublish(src, e, path)) : [];
 }

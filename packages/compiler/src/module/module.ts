@@ -129,6 +129,15 @@ const parseModule = (src: string, opts: ModuleGraphOptions): Result<Program, Dia
 type Loaded = { path: string; prog: Program };
 
 /**
+ * Stamp the failing module's absolute `path` on each diagnostic (unless a
+ * deeper failure already did), so graph consumers can tell WHICH file a span
+ * points into — `moduleDiagnostics` maps dep failures onto the entry's
+ * `import` statement with it.
+ */
+const atPath = (diags: Diagnostic[], path: string): Diagnostic[] =>
+  diags.map((d) => (d.path === undefined ? { ...d, path } : d));
+
+/**
  * What a module's imports resolve to: export SCHEMES (inference), variant
  * REGISTRY (cross-module exhaustiveness), and ctor field KEYS (destructuring).
  */
@@ -209,17 +218,23 @@ const loadGraph = (
       const st = state.get(path);
       if (st === "done") return null;
       if (st === "loading")
-        return oneDiag(checkErr(`import cycle through '${path}'`, { start: 0, end: 0 }));
+        return atPath(
+          oneDiag(checkErr(`import cycle through '${path}'`, { start: 0, end: 0 })),
+          path,
+        );
       state.set(path, "loading");
 
       let src: string;
       try {
         src = await readFile(path);
       } catch {
-        return oneDiag(checkErr(`cannot read module '${path}'`, { start: 0, end: 0 }));
+        return atPath(
+          oneDiag(checkErr(`cannot read module '${path}'`, { start: 0, end: 0 })),
+          path,
+        );
       }
       const parsed = parseModule(src, opts);
-      if (isErr(parsed)) return parsed.error;
+      if (isErr(parsed)) return atPath(parsed.error, path);
 
       for (const imp of importsOf(parsed.value)) {
         const dep = await visit(resolveImport(path, imp.from));
@@ -428,11 +443,11 @@ export const moduleContext = (
 
     for (const { path, prog } of graph) {
       const gathered = gatherImports(path, prog, exportsByPath, regByPath, keysByPath, qualsByPath);
-      if (isErr(gathered)) return gathered;
+      if (isErr(gathered)) return err(atPath(gathered.error, path));
       // Entry is last in dependency order; hand back its context without compiling it.
       if (path === entryPath) return ok(gathered.value);
       const typed = toTypedProgramWith(prog, gathered.value, { plugins: opts.plugins });
-      if (isErr(typed)) return typed;
+      if (isErr(typed)) return err(atPath(typed.error, path));
       exportsByPath.set(path, exportsOf(prog, typed.value.res.env));
       regByPath.set(path, exportedCtorTable(prog));
       keysByPath.set(path, exportedCtorKeys(prog));

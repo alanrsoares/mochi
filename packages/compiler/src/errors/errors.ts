@@ -19,6 +19,13 @@ type DiagExtras = {
   labels?: readonly Label[];
   help?: string;
   suggestions?: readonly Suggestion[];
+  /**
+   * Absolute path of the module the `span` points into, when it is NOT the
+   * file the caller asked about. The module driver stamps it on failures so a
+   * graph consumer (LSP `moduleDiagnostics`) can attribute a dep's error to
+   * the entry's `import` statement instead of silently dropping it.
+   */
+  path?: string;
 };
 
 export type DiagnosticExtras = DiagExtras;
