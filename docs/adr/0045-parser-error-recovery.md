@@ -37,6 +37,25 @@ The depth guard is what stops recovery from resuming inside a half-open record, 
 list, or `switch` block, where a `let` is a `let … in` expression rather than a
 declaration.
 
+**The skip starts at the token the diagnostic points at, not at wherever the cursor was
+left** (added by slice f). The failing production may have consumed arbitrarily far past
+the real error before aborting, so `recoverFrom` re-seeks from the statement's first token
+to the first token whose `start >= diagnostic.span.start`, and scans for a sync point from
+there. Two reasons, both load-bearing:
+
+- **Mirrorable.** `bootstrap/parser.mochi` is `Result`-based: a failure discards the
+  cursor, and the error record it returns is the `{ message, start, end }` shape shared by
+  lexer/parser/check/infer on the railway (`bootstrap/module.mochi`'s
+  `lex >> Result.flatMap(parse)`). Threading a new resume field through that record would
+  contaminate all four passes. The offending token's *span* is information both parsers
+  already have, so the rule is expressible in each without new plumbing.
+- **Strictly kinder.** When the offending token is itself a declaration keyword
+  (`let x let y = 2`), resuming at it means the second declaration parses instead of being
+  swallowed.
+
+Forward progress is preserved by consuming one token when the re-seek lands back on the
+statement's own first token (the ordinary case: the statement failed at its head).
+
 **Column 0 is explicitly *not* the anchor.** The tracker proposed it; it is not
 implementable at this seam and would be worse if it were. `parse` receives `Located[]`,
 and a `Located` carries only a byte-offset `Span` (`src/lexer.ts`) — there is no
@@ -170,9 +189,11 @@ A pointer line is added to ADR 0004 so it does not read as still-current.
   the intended blast-radius report: `codegen.ts`, `codegen-ts.ts`, `dts.ts`, `format.ts`,
   `check.ts`, `infer.ts`, `symbols.ts`, `module.ts`, `hover`/`nav` indexers each state
   their own answer.
-- `bootstrap/parser.mochi` now differs from `src/parser.ts` until slice f mirrors
-  recovery. The differential parse tests pin *first*-error message and span parity, which
-  recovery preserves, so the north-star stays green in the interim.
+- `bootstrap/parser.mochi` mirrors recovery (slice f). The differential parse tests pin
+  parity over the *whole* recovery — every diagnostic's message and span in source order,
+  plus each `SError` hole's span in the partial tree — not just the first error.
+  `bootstrap/parse` stays a hard-fail wrapper reporting the first diagnostic, so no
+  bootstrap caller changed shape.
 - `parseRecovering` is a second entry point to keep honest: anything that wants the
   partial tree must say so at the call site.
 

@@ -1420,16 +1420,139 @@ let parseStmt = (toks, pos, tmp, hooks) =>
             (stmts |> map(setLetMeta(false, doc)), p, tmp2))
     }
 
-let stmtsLoop = (toks, pos, tmp, acc, hooks) => switch tokAt(toks, pos).tok {
-  | TEof => Ok(acc)
-  | _ => parseStmt(toks, pos, tmp, hooks)
-      |> Result.flatMap(((stmts, p, tmp2)) =>
-        stmtsLoop(toks, p, tmp2, Array.concat(acc, stmts), hooks))
+// --- recovery (ADR 0045) ---
+
+/// Core sync set for panic-mode recovery: the language's own declaration keywords.
+/// TEof always terminates. TS lets plugins contribute `syncTokens`; no builtin
+/// plugin declares any, so this mirror carries the core set only.
+let isSyncTok = t => switch t {
+  | TLet => true
+  | TType => true
+  | TExtern => true
+  | TImport => true
+  | TExport => true
+  | _ => false
 }
+
+let isOpener = t => t == TLparen || t == TLbrace || t == TLbracket
+let isCloser = t => t == TRparen || t == TRbrace || t == TRbracket
+
+/// Hard stop on pathological input, so one keystroke cannot publish a novel of
+/// diagnostics (ADR 0045 decision 5).
+let maxParseErrors = 100
+
+/// The first token at-or-after byte offset `at`, scanning forward from `pos`.
+/// Recovering *by span* is what makes the rule mirrorable here: a `Result`
+/// failure leaves no cursor behind, but the error record carries the offending
+/// token's offsets, so TS and bootstrap resume on the same token.
+let resumeAt = (toks, pos, at) =>
+  pos + 1 < Array.length(toks) && tokAt(toks, pos).start < at
+    ? resumeAt(toks, pos + 1, at)
+    : pos
+
+/// Panic-mode skip: stop at the first sync token whose bracket depth relative to
+/// the resume point is 0 — never inside a half-open record, argument list or
+/// `switch` block, where a `let` is a `let … in`.
+let skipToSync = (toks, pos, depth) =>
+  let t = tokAt(toks, pos).tok in
+    // Parens are load-bearing: `&&` and `||` share one precedence level here, so
+    // `a || b && c` groups as `(a || b) && c`.
+    t == TEof || (depth == 0 && isSyncTok(t))
+      ? pos
+      : skipToSync(
+        toks,
+        pos + 1,
+        isOpener(t) ? depth + 1 : isCloser(t) && depth > 0 ? depth - 1 : depth
+      )
+
+/// The skipped region as an `SError`, plus the position to resume parsing from.
+/// Forward progress: when the offending token *is* the statement's own first
+/// token there is nothing to rewind to, so consume one unconditionally.
+let recoverFrom = (toks, before, failedAt, at) =>
+  let resume = resumeAt(toks, before, at) in
+  let start = resume == before ? before + 1 : resume in
+  let final = skipToSync(toks, start, 0) in
+    {
+      node: Ast.SError(
+        { start: failedAt.start, end: tokAt(toks, final - 1).end }
+      ),
+      pos: final
+    }
+
+/// The recovering statement loop: always yields statements (unparsable regions
+/// become `SError`) plus every parse diagnostic in source order.
+let stmtsLoop = (toks, pos, tmp, acc, diags, hooks) =>
+  tokAt(toks, pos).tok == TEof
+    ? { stmts: acc, diagnostics: diags }
+    : let failedAt = tokAt(toks, pos) in
+      switch parseStmt(toks, pos, tmp, hooks) {
+        | Ok((stmts, p, tmp2)) => p == pos
+            ?
+              // No production stands still; if one ever did, this turns a hang
+              // into a diagnostic.
+              let r = recoverFrom(toks, pos, failedAt, failedAt.start) in
+                stmtsLoop(
+                  toks,
+                  r.pos,
+                  tmp,
+                  Array.append(r.node, acc),
+                  Array.append(
+                    {
+                      message: "unexpected token ${tokName(failedAt.tok)}",
+                      start: failedAt.start,
+                      end: failedAt.end
+                    },
+                    diags
+                  ),
+                  hooks
+                )
+            : stmtsLoop(toks, p, tmp2, Array.concat(acc, stmts), diags, hooks)
+        | Err(d) => let ds = Array.append(d, diags) in
+            Array.length(ds) >= maxParseErrors
+              ? {
+                stmts: Array.append(
+                  Ast.SError(
+                    {
+                      start: failedAt.start,
+                      end: tokAt(toks, Array.length(toks) - 1).end
+                    }
+                  ),
+                  acc
+                ),
+                diagnostics: Array.append(
+                  {
+                    message: "too many parse errors; stopping",
+                    start: failedAt.start,
+                    end: failedAt.end
+                  },
+                  ds
+                )
+              }
+              : let r = recoverFrom(toks, pos, failedAt, d.start) in
+                stmtsLoop(
+                  toks,
+                  r.pos,
+                  tmp,
+                  Array.append(r.node, acc),
+                  ds,
+                  hooks
+                )
+      }
+
+/// The recovering parse (ADR 0045). `parse` is the hard-fail wrapper over this;
+/// tooling that wants the partial tree calls this and says so.
+export let parseRecovering = (toks, pluginsOpt) =>
+  let hooks = parseHooksOf(resolvePluginsDefault(pluginsOpt)) in
+    stmtsLoop(toks, 0, 0, [], [], hooks)
 
 export let parse = toks => parseWith(toks, None)
 
+/// Hard-fail railway entry: the bootstrap railway carries one error record, so
+/// this reports the first diagnostic in source order.
 /// `pluginsOpt`: None = default builtins (JSX on); Some([]) = hard opt-out.
 export let parseWith = (toks, pluginsOpt) =>
-  let hooks = parseHooksOf(resolvePluginsDefault(pluginsOpt)) in
-    stmtsLoop(toks, 0, 0, [], hooks)
+  let r = parseRecovering(toks, pluginsOpt) in
+    switch Array.get(0, r.diagnostics) {
+      | Some(d) => Err(d)
+      | None => Ok(r.stmts)
+    }

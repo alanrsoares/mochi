@@ -53,4 +53,22 @@ it is a *track*. Slices, in order (each independently shippable):
       form (which can still fail `check` on an imported-variant `switch`). Making
       the graph's entry load recovering touches `module.ts` and its bootstrap
       mirror `module.mochi`, so it is its own slice.
-- [ ] Slice f
+- [x] Slice f — `bootstrap/parser.mochi` mirrors recovery. `SError(span)` added to
+      `bootstrap/ast.mochi`, with the pass-through arms in `bootstrap/check.mochi`
+      (`boundNamesFrom`, `checkReservedNames`) and the loud invariant throw in
+      `bootstrap/codegen.mochi`. The mirror forced one amendment to ADR 0045 that
+      also improves the TS side: **recovery restarts at the token the diagnostic
+      points at, by span**, not at wherever the failing production left the cursor.
+      A `Result` failure in the bootstrap parser discards the cursor, and the error
+      record's `{ message, start, end }` shape is shared by lexer/parser/check/infer
+      on the railway, so a resume field would contaminate four passes — the span is
+      information both parsers already have. It is also kinder: when the offending
+      token is a declaration keyword (`let x let y = 2`), the next declaration
+      survives. Guard: `test/bootstrap-parser.spec.ts`'s `expectSameError` widened
+      from first-error-only to **every diagnostic (message + span, source order) plus
+      each `SError` hole's span**, over 5 new recovery cases; the hard-fail wrappers
+      are still checked to agree on the first diagnostic.
+      **Found en route (not C9's scope):** mochi puts `&&` and `||` at *one*
+      left-associative precedence level, so `a || b && c` groups as `(a || b) && c`.
+      That silently made `skipToSync`'s stop condition non-terminating. Parenthesized
+      with a comment; the wart itself wants its own ADR.

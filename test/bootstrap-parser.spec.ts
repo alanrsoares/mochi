@@ -18,7 +18,7 @@ import type {
   TypeExpr,
 } from "../src/ast";
 import { lex } from "../src/lexer";
-import { parse } from "../src/parser";
+import { parse, parseRecovering } from "../src/parser";
 import type { Span } from "../src/span";
 import { bootstrapModuleJs } from "./support/bootstrap";
 
@@ -41,6 +41,15 @@ const alParseWith = evalAl(compileAl("bootstrap/parser.mochi"), "parseWith") as 
   toks: unknown,
   pluginsOpt: AlOption<unknown[]>,
 ) => AlResult;
+// ADR 0045: the recovering entry point. Unlike `parse` it never fails — it returns
+// the partial tree (with `SError` holes) plus every diagnostic in source order.
+const alParseRecovering = evalAl(
+  compileAl("bootstrap/parser.mochi"),
+  "parseRecovering",
+) as unknown as (
+  toks: unknown,
+  pluginsOpt: AlOption<unknown[]>,
+) => { stmts: Al[]; diagnostics: AlErr[] };
 
 // ---- canonical AST (both parsers map into this) --------------------------------
 
@@ -498,6 +507,10 @@ const A_STMT: Record<string, (s: Al) => Canon> = {
     from: s.from,
     span: s.span,
   }),
+  // ADR 0045: an unparsable region both parsers skipped. Spans must agree, which is
+  // the whole point of resuming at the offending token *by span* — the bootstrap
+  // parser keeps no cursor past a `Result` failure, only the error's offsets.
+  SError: (s) => ({ kind: "error", span: s.span }),
 };
 const aStmt = (s: Al): Canon => {
   const f = A_STMT[s._tag];
@@ -624,21 +637,38 @@ test("bootstrap parseWith(Some([])) rejects JSX (plugin opt-out)", () => {
 
 // ---- error parity ----------------------------------------------------------------
 
+/**
+ * Since slice f of C9 both parsers recover (ADR 0045), so parity covers the whole
+ * recovery: EVERY diagnostic (message + span, in source order) and the partial tree
+ * including each `SError` hole's span. The hard-fail wrappers are checked too — both
+ * must reject, reporting the same first diagnostic.
+ */
 const expectSameError = (src: string): void => {
-  const ts = parse(unwrapOk(lex(src)));
-  expect(isErr(ts)).toBe(true);
+  const toks = unwrapOk(lex(src));
+  const ts = parseRecovering(toks);
+  expect(ts.diagnostics.length).toBeGreaterThan(0);
   const lr = alLex(src);
   if (lr._tag !== "Ok") throw new Error("expected the mochi lexer to succeed");
-  const al = alParse(lr.value);
-  if (al._tag !== "Err") throw new Error("expected the mochi parser to fail");
-  // Since ADR 0045 the TS parser recovers and reports every diagnostic; the bootstrap
-  // parser still stops at the first. Parity is pinned on the FIRST diagnostic, which
-  // recovery leaves untouched — slice f of C9 mirrors recovery and widens this.
-  const tsErr = unwrapErr(ts)[0]!;
-  if (tsErr.span === undefined) throw new Error("expected the TS parse error to carry a span");
-  expect(al.error.message).toBe(tsErr.message);
-  expect(al.error.start).toBe(tsErr.span.start);
-  expect(al.error.end).toBe(tsErr.span.end);
+  const al = alParseRecovering(lr.value, { _tag: "None" });
+
+  const tsDiags = ts.diagnostics.map((d) => {
+    if (d.span === undefined) throw new Error("expected the TS parse error to carry a span");
+    return { message: d.message, start: d.span.start, end: d.span.end };
+  });
+  expect(al.diagnostics.map((d) => ({ message: d.message, start: d.start, end: d.end }))).toEqual(
+    tsDiags,
+  );
+  expect(al.stmts.map(aStmt)).toEqual(ts.program.stmts.map(cStmt));
+
+  // The hard-fail wrappers agree on the first diagnostic.
+  const tsHard = parse(toks);
+  expect(isErr(tsHard)).toBe(true);
+  const alHard = alParse(lr.value);
+  if (alHard._tag !== "Err") throw new Error("expected the mochi parser to fail");
+  const first = unwrapErr(tsHard)[0]!;
+  expect(alHard.error.message).toBe(first.message);
+  expect(alHard.error.start).toBe(first.span!.start);
+  expect(alHard.error.end).toBe(first.span!.end);
 };
 
 const errorCases: Record<string, string> = {
@@ -661,6 +691,15 @@ const errorCases: Record<string, string> = {
   "qualified type name with a lowercase member (ADR 0046)": 'extern a : D.shape = "m" "a"',
   "or-pattern can't nest inside a ctor pattern (ADR 0022)":
     "let f = v => switch v { | Some(A | B) => 1 | _ => 0 }",
+  // Recovery parity (ADR 0045). No record destructure inside an error region: the
+  // bootstrap parser reuses the destructure-temp counter across a failed statement
+  // where TS's is mutable and persists, so temp names would diverge there.
+  "recovery: two independent bad decls": "let x = )\nlet y = 1\nlet z = 1 * *\nlet w = 2",
+  "recovery: offending token is the next decl's keyword": "let x let y = 2",
+  "recovery: sync token nested at depth is not a sync point":
+    "let a = f(1 * * , g(let y = 1 in y))\nlet b = 2",
+  "recovery: bad decl first, good decls after": "type = \nlet a = 1\nlet b = 2",
+  "recovery: trailing bad decl at eof": "let a = 1\nlet b = ",
 };
 
 for (const [name, src] of Object.entries(errorCases)) {

@@ -751,6 +751,12 @@ let genImport = s => switch s {
 let exportLine = l => "export ${l}"
 
 let genStmt = (s, ctx) => switch s {
+  | Ast.SError(sp) =>
+    // Unreachable by construction: the railway stops on parse diagnostics, so a
+    // Program reaching codegen has no error nodes (ADR 0045 decision 6). Codegen is
+    // pure here (no throw), so the invariant is emitted as a loud runtime throw
+    // rather than a placeholder — silently-wrong output is worse than a bug report.
+    "throw new Error(\"codegen invariant: error node reached codegen at ${show(sp.start)}\");"
   | Ast.SImport(_, _, _) => genImport(s)
   | Ast.SImportNs(_, _, _) => genImport(s)
   | Ast.SType(_, _, _, _, exported, _) => let decls = genType(s) in
@@ -991,6 +997,9 @@ let boundNamesFrom = (stmts, i, acc) => switch Array.get(i, stmts) {
             Set.fromArray(names |> map(n => n.name))
           )
         | Ast.SImportNs(alias, _, _) => Set.add(alias.name, acc)
+        | Ast.SError(_) =>
+          // An unparsable region binds nothing (ADR 0045).
+          acc
       }
     )
 }

@@ -593,6 +593,10 @@ let checkReservedNames = stmts =>
             )
           )
           : None
+      | Ast.SError(_) =>
+        // ADR 0045 decision 4 (no-cascade): an unparsable region binds nothing, so it
+        // contributes no diagnostic here and suppresses none either.
+        None
     },
     stmts
   )

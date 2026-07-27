@@ -1194,18 +1194,28 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
   }
 
   /**
-   * Panic-mode skip (ADR 0045 decision 1). Advances the cursor strictly past `before`,
-   * then stops at the first token in the sync set whose bracket depth relative to here
-   * is 0 — which is what keeps recovery from resuming inside a half-open record,
-   * argument list, or `switch` block, where a `let` is a `let … in`.
+   * Panic-mode skip (ADR 0045 decision 1, as amended by slice f). Recovery restarts at
+   * the *offending token* — the one the diagnostic points at, located by span rather
+   * than by wherever the failed attempt happened to leave the cursor — then stops at the
+   * first token in the sync set whose bracket depth relative to there is 0, which is what
+   * keeps recovery from resuming inside a half-open record, argument list, or `switch`
+   * block, where a `let` is a `let … in`.
    *
-   * That strict advance is the forward-progress guarantee, and it is conditional because
-   * a failed attempt may have consumed nothing (`fail` at the offending token) or several
-   * tokens (`expect` consumes, then reports): swallowing one more unconditionally would
-   * skip past a perfectly good following declaration.
+   * Restarting by span, not by cursor, is load-bearing twice over. It makes the rule
+   * mirrorable in `bootstrap/parser.mochi`, whose Result-based parser has no cursor left
+   * after a failure — only the error record, which carries the span — so both parsers
+   * resume on the same token. And it is strictly kinder than resuming *after* the
+   * offending token: when the token that failed is itself a declaration keyword
+   * (`let x let y = 2`), the second declaration survives instead of being eaten.
+   *
+   * Forward progress: if the offending token is the statement's own first token there is
+   * nothing to rewind to, so consume one unconditionally.
    */
-  const recoverFrom = (failedAt: Located, before: number): Stmt => {
-    if (pos === before) next(); // the failed attempt consumed nothing — force progress
+  const recoverFrom = (failedAt: Located, before: number, at: Span): Stmt => {
+    pos = before;
+    while (pos + 1 < toks.length && toks[pos]!.span.start < at.start) pos++;
+    last = toks[Math.max(0, pos - 1)]!;
+    if (pos === before) next(); // the offending token starts the statement — force progress
     let depth = 0;
     while (!atEnd()) {
       const t = peek().t;
@@ -1232,13 +1242,13 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
         stmts.push({ kind: "error", span: spanning(failedAt.span, toks[toks.length - 1]!.span) });
         break;
       }
-      stmts.push(recoverFrom(failedAt, before));
+      stmts.push(recoverFrom(failedAt, before, e.detail.span ?? failedAt.span));
     }
     // A statement parse that neither threw nor consumed anything would spin forever;
     // no production does, and if one ever did this turns a hang into a diagnostic.
     if (pos === before) {
       diagnostics.push(parseErr(`unexpected token ${peek().t}`, peek().span));
-      stmts.push(recoverFrom(failedAt, before));
+      stmts.push(recoverFrom(failedAt, before, peek().span));
     }
   }
   return { program: { stmts }, diagnostics };
