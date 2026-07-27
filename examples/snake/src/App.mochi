@@ -134,20 +134,15 @@ let App = _ =>
     playing ? startTick(() => store.actions.step(), TICK_MS) : () => 0
   )(hookDeps1(playing)) in
   let _keys = useEffect(() =>
-    onKeyDown(key =>
-      key == "up"
-        ? let _ = store.actions.up() in 0
-        : key == "down"
-        ? let _ = store.actions.down() in 0
-        : key == "left"
-        ? let _ = store.actions.left() in 0
-        : key == "right"
-        ? let _ = store.actions.right() in 0
-        : key == "space"
-        ? let _ = store.actions.space() in 0
-        : key == "restart"
-        ? let _ = store.actions.restartIfGameOver() in 0
-        : 0
+    onKeyDown(key => switch key {
+      | "up" => let _ = store.actions.up() in 0
+      | "down" => let _ = store.actions.down() in 0
+      | "left" => let _ = store.actions.left() in 0
+      | "right" => let _ = store.actions.right() in 0
+      | "space" => let _ = store.actions.space() in 0
+      | "restart" => let _ = store.actions.restartIfGameOver() in 0
+      | _ => 0
+    }
     )
   )(hookDeps0()) in
   let _persist = useEffect(() => let _ = writeHighScore(highScore) in _ => 0
