@@ -42,9 +42,8 @@ let HeroCarousel = _ =>
   let startX = useRef(0) in
   let go = useCallback(next => setIndex((next + n) % n), []) in
   let _fx = useEffect(() =>
-    paused ? _ => 0 : startHeroTick(() => go(index + 1), HERO_INTERVAL_MS))(
-    hookDeps(go, index, paused)
-  ) in
+    paused ? _ => 0 : startHeroTick(() => go(index + 1), HERO_INTERVAL_MS)
+  )(hookDeps(go, index, paused)) in
   let slide = Array.get(index, heroSlides) in
     switch slide {
       | None => <div />

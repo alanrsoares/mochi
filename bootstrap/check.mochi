@@ -315,7 +315,8 @@ type SeqCheck =
 let checkSeqExhaustive = (arms, mSpan) =>
   let seqs = arms
     |> filter(a =>
-      Option.isNone(a.guard) && Option.isSome(seqElemsRest(a.pattern)))
+      Option.isNone(a.guard) && Option.isSome(seqElemsRest(a.pattern))
+    )
     |> map(a => a.pattern) in
     Array.length(seqs) == 0
       ? SeqNotSeq

@@ -186,7 +186,8 @@ let expectIn = (toks, pos) =>
         : errAt(
           "expected 'in' after let binding, got '${kw.name}'",
           tokAt(toks, p)
-        ))
+        )
+    )
 
 let isUpper = s => Str.codeAt(0, s) |> Option.exists(n => n >= 65 && n <= 90)
 
@@ -199,7 +200,8 @@ let sepBy = (parseItem, toks, pos, acc) =>
       let items = Array.append(item, acc) in
         tokAt(toks, p).tok == TComma
           ? sepBy(parseItem, toks, p + 1, items)
-          : Ok((items, p)))
+          : Ok((items, p))
+    )
 
 /// Like `sepBy`, but `parseItem` takes `(toks, pos, hooks)` — used when the
 /// item parser needs the plugin hook list (avoids a `_curry`-wrapped lambda
@@ -210,7 +212,8 @@ let sepByH = (parseItem, toks, pos, acc, hooks) =>
       let items = Array.append(item, acc) in
         tokAt(toks, p).tok == TComma
           ? sepByH(parseItem, toks, p + 1, items, hooks)
-          : Ok((items, p)))
+          : Ok((items, p))
+    )
 
 /// A possibly-empty comma list ended by `close`; does NOT consume the closer.
 let listUntil = (close, parseItem, toks, pos) =>
@@ -661,7 +664,8 @@ let postfixLoop = (e, toks, pos, hooks) => switch tokAt(toks, pos).tok {
           toks,
           p,
           hooks
-        ))
+        )
+      )
   | _ => Ok((e, pos))
 }
 
@@ -700,7 +704,8 @@ let parseAtom = (toks, pos, hooks) =>
       | _ =>
         // Plugin-owned prefix forms (JSX `<…>`) after every core atom prefix.
         let? claimed = runParseHooks(hooks, toks, pos, (t, p) =>
-          parseExpr(t, p, hooks)) in
+          parseExpr(t, p, hooks)
+        ) in
           switch claimed {
             | Some((e, p)) => Ok((e, p))
             | None => switch lt.tok {
@@ -935,7 +940,8 @@ let parseMatch = (toks, pos, hooks) =>
       | 0 => errAt("switch needs at least one | arm", tokAt(toks, p3))
       | _ => expectTok(TRbrace, toks, p3)
           |> Result.map(p4 =>
-            (Ast.EMatch(scrutinee, arms, toEnd(start, toks, p4)), p4))
+            (Ast.EMatch(scrutinee, arms, toEnd(start, toks, p4)), p4)
+          )
     }
 
 // A ctor pattern's argument list, after the (already consumed) ctor name.
@@ -1006,7 +1012,8 @@ let patElemsLoop = (toks, pos, acc) => switch tokAt(toks, pos).tok {
         let elems = Array.append(pat, acc) in
           tokAt(toks, p).tok == TComma
             ? patElemsLoop(toks, p + 1, elems)
-            : Ok((elems, None, p)))
+            : Ok((elems, None, p))
+      )
 }
 
 let parseArrPattern = (toks, pos) =>
@@ -1018,7 +1025,8 @@ let parseArrPattern = (toks, pos) =>
         restOk(rest)
           ? expectTok(TRbracket, toks, p2)
             |> Result.map(p3 =>
-              (Ast.PArr(elems, rest, toEnd(start, toks, p3)), p3))
+              (Ast.PArr(elems, rest, toEnd(start, toks, p3)), p3)
+            )
           : errAt("list `...` rest must bind a name or `_`", tokAt(toks, p2))
 
 // `@{}` / `@{head, ...tail}` lazy-List pattern; check.ts restricts the forms.
@@ -1032,7 +1040,8 @@ let parseListPattern = (toks, pos) =>
         restOk(rest)
           ? expectTok(TRbrace, toks, p2)
             |> Result.map(p3 =>
-              (Ast.PList(elems, rest, toEnd(start, toks, p3)), p3))
+              (Ast.PList(elems, rest, toEnd(start, toks, p3)), p3)
+            )
           : errAt("list `...` rest must bind a name or `_`", tokAt(toks, p2))
 
 // `{ x }` puns to binding `x`; `{ x: pat }` matches `x` against a full pattern.
@@ -1108,7 +1117,8 @@ let typeArgsLoop = (toks, pos, acc, lastSp) =>
   startsTypeAtom(tokAt(toks, pos).tok)
     ? parseTypeAtom(toks, pos)
       |> Result.flatMap(((a, p)) =>
-        typeArgsLoop(toks, p, Array.append(a, acc), Some(tySpan(a))))
+        typeArgsLoop(toks, p, Array.append(a, acc), Some(tySpan(a)))
+      )
     : Ok((acc, lastSp, pos))
 
 // Type application by juxtaposition, tighter than `->`: only an Uppercase
@@ -1125,7 +1135,8 @@ let parseTypeApp = (toks, pos) =>
           |> Result.map(((args, lastSp, p2)) => switch lastSp {
             | None => (head, p2)
             | Some(ls) => (Ast.TyApp(name, args, spanning(sp, ls)), p2)
-          })
+          }
+          )
       | Ast.TyQual(alias, nm, nameSpan, _, sp) =>
         // A qualified head takes args too (`D.Result e a`), staying one variant.
         typeArgsLoop(toks, p, [], None)
@@ -1135,9 +1146,11 @@ let parseTypeApp = (toks, pos) =>
                 Ast.TyQual(alias, nm, nameSpan, args, spanning(sp, ls)),
                 p2
               )
-          })
+          }
+          )
       | _ => Ok((head, p))
-    })
+    }
+    )
 
 // Arrows are right-associative.
 let parseTypeExpr = (toks, pos) =>
@@ -1145,7 +1158,8 @@ let parseTypeExpr = (toks, pos) =>
     tokAt(toks, p).tok == TTarrow
       ? parseTypeExpr(toks, p + 1)
         |> Result.map(((to, p2)) =>
-          (Ast.TyArrow(from, to, spanning(tySpan(from), tySpan(to))), p2))
+          (Ast.TyArrow(from, to, spanning(tySpan(from), tySpan(to))), p2)
+        )
       : Ok((from, p))
 
 // --- statements ---
@@ -1176,7 +1190,8 @@ let ctorsLoop = (toks, pos, acc) =>
   parseCtor(toks, pos)
     |> Result.flatMap(((c, p)) =>
       let cs = Array.append(c, acc) in
-        tokAt(toks, p).tok == TBar ? ctorsLoop(toks, p + 1, cs) : Ok((cs, p)))
+        tokAt(toks, p).tok == TBar ? ctorsLoop(toks, p + 1, cs) : Ok((cs, p))
+    )
 
 let parseAliasField = (toks, pos) =>
   let? (nm, p) = expectId(toks, pos) in
@@ -1216,7 +1231,8 @@ let parseType = (toks, pos) =>
               toEnd(start, toks, p4)
             ),
             p4
-          ))
+          )
+        )
       : let afterBar = tokAt(toks, p3).tok == TBar ? p3 + 1 : p3 in
         ctorsLoop(toks, afterBar, [])
           |> Result.map(((ctors, p4)) =>
@@ -1230,7 +1246,8 @@ let parseType = (toks, pos) =>
                 toEnd(start, toks, p4)
               ),
               p4
-            ))
+            )
+          )
 
 // extern name : type = "module" "export"
 let parseExtern = (toks, pos) =>
@@ -1269,7 +1286,8 @@ let parseImportNs = (start, toks, pos) =>
         kw.name == "from"
           ? expectStr(toks, p3)
             |> Result.map(((path, p4)) =>
-              (Ast.SImportNs(alias, path, toEnd(start, toks, p4)), p4))
+              (Ast.SImportNs(alias, path, toEnd(start, toks, p4)), p4)
+            )
           : errAt(
             "expected 'from' in import, got '${kw.name}'",
             tokAt(toks, p3)
@@ -1291,7 +1309,8 @@ let parseImport = (toks, pos) =>
         kw.name == "from"
           ? expectStr(toks, p4)
             |> Result.map(((path, p5)) =>
-              (Ast.SImport(names, path, toEnd(start, toks, p5)), p5))
+              (Ast.SImport(names, path, toEnd(start, toks, p5)), p5)
+            )
           : errAt(
             "expected 'from' in import, got '${kw.name}'",
             tokAt(toks, p4)
@@ -1406,7 +1425,8 @@ let parseStmt = (toks, pos, tmp, hooks) =>
               |> Result.map(((s, p)) => ([setExternMeta(true, doc, s)], p, tmp))
           | TLet => parseLet(toks, pos + 1, tmp, hooks)
               |> Result.map(((stmts, p, tmp2)) =>
-                (stmts |> map(setLetMeta(true, doc)), p, tmp2))
+                (stmts |> map(setLetMeta(true, doc)), p, tmp2)
+              )
           | _ => errAt(
               "`export` must precede let, type, or extern",
               tokAt(toks, pos + 1)
@@ -1417,7 +1437,8 @@ let parseStmt = (toks, pos, tmp, hooks) =>
           |> Result.map(((s, p)) => ([setExternMeta(false, doc, s)], p, tmp))
       | _ => parseLet(toks, pos, tmp, hooks)
           |> Result.map(((stmts, p, tmp2)) =>
-            (stmts |> map(setLetMeta(false, doc)), p, tmp2))
+            (stmts |> map(setLetMeta(false, doc)), p, tmp2)
+          )
     }
 
 // --- recovery (ADR 0045) ---

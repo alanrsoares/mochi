@@ -36,4 +36,5 @@ export let compile = src =>
   src
     |> pipeline
     |> Result.map(prog =>
-      codegen(prog, #{}, true, namespaceRuntime, preludeJsDefs, runtimeDeps))
+      codegen(prog, #{}, true, namespaceRuntime, preludeJsDefs, runtimeDeps)
+    )

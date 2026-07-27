@@ -30,9 +30,8 @@ let CanvasBoard = props =>
   let _draw = useEffect(() =>
     let _ = watchEat(particles, eatWatch, board) in
     let _ = paintBoard(canvasRef, board, particles) in
-      startParticleLoop(canvasRef, particles, boardRef))(
-    hookDeps2(props.snake, props.food)
-  ) in
+      startParticleLoop(canvasRef, particles, boardRef)
+  )(hookDeps2(props.snake, props.food)) in
     <canvas
       ref={canvasRef}
       id="game-canvas"

@@ -1027,7 +1027,8 @@ let depsOf = (letStmt, idxOf) => switch letStmt {
       |> Array.flatMap(r => switch Map.get(r, idxOf) {
         | Some(j) => [j]
         | None => []
-      })
+      }
+      )
   | _ => []
 }
 let adjOf = (lets, idxOf) => lets |> map(s => depsOf(s, idxOf))

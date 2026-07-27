@@ -94,11 +94,13 @@ let gameContainer = defineContainer(
         togglePause: on(s => togglePause(s)),
         space: on(s => isPlaying(s) ? togglePause(s) : startGame(s)),
         restart: on(s =>
-          { ...initGame(COLS, ROWS, s.highScore), submitted: false }),
+          { ...initGame(COLS, ROWS, s.highScore), submitted: false }
+        ),
         restartIfGameOver: on(s =>
           isGameOver(s)
             ? { ...initGame(COLS, ROWS, s.highScore), submitted: false }
-            : s),
+            : s
+        ),
         step: on(s => step(s, randomFood(s.cols, s.rows, s.snake))),
         markSubmitted: on(s => { ...s, submitted: true })
       }
@@ -127,9 +129,8 @@ let App = _ =>
   let playing = isPlayingStatus(status) in
   let gameOver = isGameOverStatus(status) in
   let _tick = useEffect(() =>
-    playing ? startTick(() => store.actions.step(), TICK_MS) : () => 0)(
-    hookDeps1(playing)
-  ) in
+    playing ? startTick(() => store.actions.step(), TICK_MS) : () => 0
+  )(hookDeps1(playing)) in
   let _keys = useEffect(() =>
     onKeyDown(key =>
       key == "up"
@@ -144,17 +145,15 @@ let App = _ =>
         ? let _ = store.actions.space() in 0
         : key == "restart"
         ? let _ = store.actions.restartIfGameOver() in 0
-        : 0))(
-    hookDeps0()
-  ) in
-  let _persist = useEffect(() => let _ = writeHighScore(highScore) in _ => 0)(
-    hookDeps1(highScore)
-  ) in
+        : 0
+    )
+  )(hookDeps0()) in
+  let _persist = useEffect(() => let _ = writeHighScore(highScore) in _ => 0
+  )(hookDeps1(highScore)) in
   let _lb = useEffect(() =>
     let loadTask = Task.match(setRows, _ => setRows([]), fetchLeaderboard()) in
-    let _ = Task.run(loadTask) in connectWs(setRows, setConnected))(
-    hookDeps0()
-  ) in
+    let _ = Task.run(loadTask) in connectWs(setRows, setConnected)
+  )(hookDeps0()) in
   let submit = () =>
     let submitTask = let! newRows = postScore(name, score) in
     let _ = setRows(newRows) in
@@ -162,7 +161,8 @@ let App = _ =>
     let _ = Task.run(
       submitTask
         |> Task.recover(_ =>
-          let _ = store.actions.markSubmitted() in Task.of(true))
+          let _ = store.actions.markSubmitted() in Task.of(true)
+        )
     ) in
       0 in
     <div

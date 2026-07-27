@@ -741,8 +741,11 @@ const refoldCall = (e: CallExpr): Doc | null => {
 /**
  * `f(a, b)`. When the last argument is a lambda, keep `f(…, p =>` on the line
  * and let the lambda body break beneath it (the "trailing lambda hug"), rather
- * than exploding the whole argument list. Otherwise the args are one group that
- * breaks one-per-line when it overflows.
+ * than exploding the whole argument list. The hug is a `group` with a `softline`
+ * before `)` so a broken body does not glue the closer onto its last line
+ * (`body)` / `body)(`). Otherwise the args are their own group after the
+ * callee — so a short curried apply can still hug a multiline callee's `)`
+ * (`…)(deps)`), instead of being locked into the callee's break decision.
  */
 const callD = (e: CallExpr): Doc => {
   const refold = refoldCall(e);
@@ -750,15 +753,17 @@ const callD = (e: CallExpr): Doc => {
   const fn = calleeD(e.fn);
   if (e.args.length === 0) return seq(fn, txt("()"));
   if (e.args[e.args.length - 1]!.kind === "lambda") {
-    return seq(fn, txt("("), join(txt(", "), e.args.map(exprD)), txt(")"));
+    return group(seq(fn, txt("("), join(txt(", "), e.args.map(exprD)), softline, txt(")")));
   }
-  return group(
-    seq(
-      fn,
-      txt("("),
-      indent(seq(softline, join(seq(txt(","), line), e.args.map(exprD)))),
-      softline,
-      txt(")"),
+  return seq(
+    fn,
+    group(
+      seq(
+        txt("("),
+        indent(seq(softline, join(seq(txt(","), line), e.args.map(exprD)))),
+        softline,
+        txt(")"),
+      ),
     ),
   );
 };

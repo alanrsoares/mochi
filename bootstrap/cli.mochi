@@ -31,7 +31,8 @@ let buildOne = path =>
     |> Result.flatMap(src =>
       compile(src)
         |> Result.mapErr(e => formatError(path, src, e))
-        |> Result.flatMap(js => writeFile(outPath(path), js)))
+        |> Result.flatMap(js => writeFile(outPath(path), js))
+    )
 
 // Write each compiled module's JS beside its source, logging as it goes. A
 // write failure short-circuits with the host's string error.
