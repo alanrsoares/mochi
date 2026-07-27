@@ -106,6 +106,33 @@ test("pluginsForDocument reports duplicate plugin names via onError", async () =
   }
 });
 
+test("pluginsForDocument reports a claim clash via onError (ADR 0050)", async () => {
+  const root = mkdtempSync(join(import.meta.dir, ".plugins-"));
+  try {
+    const file = join(root, "mochi.plugins.mjs");
+    writeFileSync(
+      file,
+      [
+        "export default [",
+        '  { name: "a", inferCall: { refs: ["useThing"], hook: () => null } },',
+        '  { name: "b", inferCall: { refs: ["useThing"], hook: () => null } },',
+        "];",
+        "",
+      ].join("\n"),
+    );
+    clearPluginsCache();
+    const errors: Array<{ file: string; error: unknown }> = [];
+    const plugins = await pluginsForDocument(join(root, "app.mochi"), {
+      onError: (errFile, error) => errors.push({ file: errFile, error }),
+    });
+    expect(plugins).toBeUndefined();
+    expect(errors).toHaveLength(1);
+    expect(String((errors[0]?.error as Error)?.message)).toContain("clash");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("isPathUnderRoots returns false, without throwing, for a nonexistent file", () => {
   const root = mkdtempSync(join(import.meta.dir, ".plugins-"));
   try {

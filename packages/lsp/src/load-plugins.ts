@@ -8,7 +8,7 @@ import {
 } from "node:fs";
 import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { LanguagePlugin } from "@mochi/compiler/extensions";
+import { type LanguagePlugin, pluginClashes, resolvePlugins } from "@mochi/compiler/extensions";
 
 /**
  * Filenames searched upward from each `.mochi` file. Plain ESM JavaScript
@@ -191,10 +191,23 @@ export const pluginsForDocument = async (
   }
   let pending = cache.get(pluginsFile);
   if (!pending) {
-    pending = loadPluginsFile(pluginsFile).catch((error) => {
-      opts.onError?.(pluginsFile, error);
-      return undefined;
-    });
+    pending = loadPluginsFile(pluginsFile)
+      .then((plugins) => {
+        // ADR 0050: a manifest that resolves (with builtins) to clashing
+        // claims is treated the same as a manifest that fails to load — the
+        // editor falls back to builtins rather than running an ambiguous
+        // dispatch table. Checked here, once per manifest per cache
+        // generation, same as `onError`'s own contract.
+        const clashes = pluginClashes(resolvePlugins(plugins));
+        if (clashes.length > 0) {
+          throw new Error(clashes.map((d) => d.message).join("; "));
+        }
+        return plugins;
+      })
+      .catch((error) => {
+        opts.onError?.(pluginsFile, error);
+        return undefined;
+      });
     cache.set(pluginsFile, pending);
   }
   return pending;
