@@ -3,7 +3,7 @@ id: C3
 title: "ADR: generic monadic bind vs per-monad sigils (let? / let!)"
 status: open
 type: task
-blocked-by: [C12]
+blocked-by: []
 ---
 
 > **DECIDED 2026-07-26 (user-grilled): dual-purpose `let?` via head-ctor dispatch

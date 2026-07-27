@@ -3,7 +3,7 @@ id: C2
 title: "ADR: ((a, b)) tuple-param vs (a, b) two-arg — one paren changes semantics"
 status: open
 type: task
-blocked-by: [C12]
+blocked-by: []
 ---
 
 > **DECIDED 2026-07-26 (user-grilled): keep the paren rule + spans + targeted

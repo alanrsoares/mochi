@@ -3,7 +3,7 @@ id: C6
 title: "ADR: collection literals + prelude namespace principle (absorbs C8)"
 status: open
 type: task
-blocked-by: [C12]
+blocked-by: []
 ---
 
 > **DECIDED 2026-07-26 (user-grilled), all three sub-questions:**
