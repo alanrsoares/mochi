@@ -1201,36 +1201,36 @@ let parseType = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in
   let? p = expectTok(TType, toks, pos) in
   let? (nm, p1) = expectId(toks, p) in
-    let (params, p2) = typeParamsLoop(toks, p1, []) in
-    let? p3 = expectTok(TEq, toks, p2) in
-      tokAt(toks, p3).tok == TLbrace
-        ? parseAliasBody(toks, p3)
-          |> Result.map(((alias, p4)) =>
+  let (params, p2) = typeParamsLoop(toks, p1, []) in
+  let? p3 = expectTok(TEq, toks, p2) in
+    tokAt(toks, p3).tok == TLbrace
+      ? parseAliasBody(toks, p3)
+        |> Result.map(((alias, p4)) =>
+          (
+            Ast.SType(
+              nm.name,
+              params,
+              [],
+              Some(alias),
+              false,
+              toEnd(start, toks, p4)
+            ),
+            p4
+          ))
+      : let afterBar = tokAt(toks, p3).tok == TBar ? p3 + 1 : p3 in
+        ctorsLoop(toks, afterBar, [])
+          |> Result.map(((ctors, p4)) =>
             (
               Ast.SType(
                 nm.name,
                 params,
-                [],
-                Some(alias),
+                ctors,
+                None,
                 false,
                 toEnd(start, toks, p4)
               ),
               p4
             ))
-        : let afterBar = tokAt(toks, p3).tok == TBar ? p3 + 1 : p3 in
-          ctorsLoop(toks, afterBar, [])
-            |> Result.map(((ctors, p4)) =>
-              (
-                Ast.SType(
-                  nm.name,
-                  params,
-                  ctors,
-                  None,
-                  false,
-                  toEnd(start, toks, p4)
-                ),
-                p4
-              ))
 
 // extern name : type = "module" "export"
 let parseExtern = (toks, pos) =>

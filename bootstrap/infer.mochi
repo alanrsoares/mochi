@@ -158,12 +158,12 @@ let u = (a, b, st, sp) => switch unify(a, b, st) {
 let bindParamNamesFrom = (names, env, st) => switch names {
   | [] => ([], env, st)
   | [n, ...rest] => let (t, st1) = freshVar(st) in
-      let (restTs, env2, st2) = bindParamNamesFrom(
-        rest,
-        Map.set(n, mono(t), env),
-        st1
-      ) in
-        (Array.prepend(t, restTs), env2, st2)
+    let (restTs, env2, st2) = bindParamNamesFrom(
+      rest,
+      Map.set(n, mono(t), env),
+      st1
+    ) in
+      (Array.prepend(t, restTs), env2, st2)
 }
 
 let bindParamFieldsFrom = (fields, env, row, st) => switch fields {
@@ -187,15 +187,15 @@ let bindParam = (p, env, st) => switch p {
     ) in
       (tTuple(elems), env1, st1)
   | Ast.LPRecord(fields) => let (rowBase, st1) = freshRowVar(st) in
-      let (row, env1, st2) = bindParamFieldsFrom(fields, env, rowBase, st1) in
-        (tRecord(row), env1, st2)
+    let (row, env1, st2) = bindParamFieldsFrom(fields, env, rowBase, st1) in
+      (tRecord(row), env1, st2)
 }
 
 let bindParamsFrom = (params, env, st) => switch params {
   | [] => ([], env, st)
   | [p, ...rest] => let (t, env1, st1) = bindParam(p, env, st) in
-      let (restTs, env2, st2) = bindParamsFrom(rest, env1, st1) in
-        (Array.prepend(t, restTs), env2, st2)
+    let (restTs, env2, st2) = bindParamsFrom(rest, env1, st1) in
+      (Array.prepend(t, restTs), env2, st2)
 }
 
 // ============================================================
@@ -222,9 +222,9 @@ let ctxWithEnv = (ctx, env) =>
 let inferCallArgs = (fnT, args, ctx, st, callSpan) => switch args {
   | [] => Ok((fnT, st))
   | [arg, ...rest] => let? (argT, st1) = inferExpr(arg, ctx, st) in
-      let (resultT, st2) = freshVar(st1) in
-      let? st3 = u(fnT, tArrow(argT, resultT), st2, exprSpan(arg)) in
-        inferCallArgs(resultT, rest, ctx, st3, callSpan)
+    let (resultT, st2) = freshVar(st1) in
+    let? st3 = u(fnT, tArrow(argT, resultT), st2, exprSpan(arg)) in
+      inferCallArgs(resultT, rest, ctx, st3, callSpan)
 }
 
 let inferNormalCall = (fn, args, ctx, st) =>
@@ -247,18 +247,17 @@ let inferTernary = (cond, thenE, elseE, ctx, st) =>
 // two-slot monad `M a e` (ADR 0005, error channel per ADR 0006).
 let inferLetBind = (param, paramSpan, monad, value, body, ctx, st) =>
   let? (valT, st1) = inferExpr(value, ctx, st) in
-    let (payloadT, st2) = freshVar(st1) in
-      let (errT, st3) = freshVar(st2) in
-      let ctorName = monad == "Result" ? "Result" : "Task" in
-      let wantVal = tCon(ctorName, [payloadT, errT]) in
-      let? st4 = u(valT, wantVal, st3, exprSpan(value)) in
-        let (paramT, bodyEnv, st5) = bindParam(param, ctx.env, st4) in
-        let? st6 = u(paramT, payloadT, st5, paramSpan) in
-        let? (bodyT, st7) = inferExpr(body, ctxWithEnv(ctx, bodyEnv), st6) in
-          let (resT, st8) = freshVar(st7) in
-          let wantBody = tCon(ctorName, [resT, errT]) in
-          let? st9 = u(bodyT, wantBody, st8, exprSpan(body)) in
-            Ok((wantBody, st9))
+  let (payloadT, st2) = freshVar(st1) in
+  let (errT, st3) = freshVar(st2) in
+  let ctorName = monad == "Result" ? "Result" : "Task" in
+  let wantVal = tCon(ctorName, [payloadT, errT]) in
+  let? st4 = u(valT, wantVal, st3, exprSpan(value)) in
+  let (paramT, bodyEnv, st5) = bindParam(param, ctx.env, st4) in
+  let? st6 = u(paramT, payloadT, st5, paramSpan) in
+  let? (bodyT, st7) = inferExpr(body, ctxWithEnv(ctx, bodyEnv), st6) in
+  let (resT, st8) = freshVar(st7) in
+  let wantBody = tCon(ctorName, [resT, errT]) in
+  let? st9 = u(bodyT, wantBody, st8, exprSpan(body)) in Ok((wantBody, st9))
 
 let inferRecordRow = (fields, ctx, st) => switch fields {
   | [] => Ok((RowEmpty, st))
@@ -291,10 +290,10 @@ let rWithTail = (row, tail) => switch row {
 // then it's a qualified lookup into ctx.ns, not row inference.
 let inferFieldAccess = (target, name, sp, ctx, st) =>
   let? (targetT, st1) = inferExpr(target, ctx, st) in
-    let (fieldT, st2) = freshVar(st1) in
-      let (restRow, st3) = freshRowVar(st2) in
-      let? st4 = u(targetT, tRecord(rExtend(name, fieldT, restRow)), st3, sp) in
-        Ok((fieldT, st4))
+  let (fieldT, st2) = freshVar(st1) in
+  let (restRow, st3) = freshRowVar(st2) in
+  let? st4 = u(targetT, tRecord(rExtend(name, fieldT, restRow)), st3, sp) in
+    Ok((fieldT, st4))
 
 let inferNsField = (tname, name, sp, ctx, st) => switch Map.get(name, Map.getOr(#{}, tname, ctx.ns)) {
   | Some(sc) => let (t, st1) = instantiate(sc, st) in Ok((t, st1))
@@ -349,9 +348,9 @@ let inferMapEntries = (k, v, entries, ctx, st) => switch entries {
 }
 let inferMapExpr = (entries, ctx, st) =>
   let (k, st1) = freshVar(st) in
-    let (v, st2) = freshVar(st1) in
-    let? st3 = inferMapEntries(k, v, entries, ctx, st2) in
-      Ok((tCon("Map", [k, v]), st3))
+  let (v, st2) = freshVar(st1) in
+  let? st3 = inferMapEntries(k, v, entries, ctx, st2) in
+    Ok((tCon("Map", [k, v]), st3))
 
 let mergeBindingMapsFrom = (keys, src, dest) => switch keys {
   | [] => dest
@@ -399,8 +398,8 @@ let inferArms = (scrutT, resultT, arms, ctx, st) => switch arms {
 }
 let inferMatch = (scrutinee, arms, ctx, st) =>
   let? (scrutT, st1) = inferExpr(scrutinee, ctx, st) in
-    let (resultT, st2) = freshVar(st1) in
-    let? st3 = inferArms(scrutT, resultT, arms, ctx, st2) in Ok((resultT, st3))
+  let (resultT, st2) = freshVar(st1) in
+  let? st3 = inferArms(scrutT, resultT, arms, ctx, st2) in Ok((resultT, st3))
 
 let inferExpr = (e, ctx, st) => switch e {
   | Ast.ENum(_, _, _) => Ok((tNumber, st))
@@ -473,9 +472,9 @@ let inferExpr = (e, ctx, st) => switch e {
         // wrong-typed value or a field absent from a closed base fails to unify.
         let? (row, st1) = inferRecordRow(fields, ctx, st) in
         let? (baseT, st2) = inferExpr(spreadExpr, ctx, st1) in
-          let (tailVar, st3) = freshRowVar(st2) in
-          let? st4 = u(baseT, tRecord(rWithTail(row, tailVar)), st3, sp) in
-            Ok((baseT, st4))
+        let (tailVar, st3) = freshRowVar(st2) in
+        let? st4 = u(baseT, tRecord(rWithTail(row, tailVar)), st3, sp) in
+          Ok((baseT, st4))
     }
   | Ast.EField(target, name, sp) => switch target {
       | Ast.ERef(tname, _) => Map.has(tname, ctx.ns) && !Map.has(tname, ctx.env)
@@ -1122,16 +1121,16 @@ let generalizeGroupFrom = (group, bodyTypes, env, st) => switch group {
 let processGroupsFrom = (sccs, lets, ctx, st) => switch sccs {
   | [] => Ok(ctx)
   | [comp, ...restSccs] => let group = groupOfFrom(comp, lets) in
-      let (preEnv, st1) = preBindGroupFrom(group, ctx.env, st) in
-      let preCtx = ctxWithEnv(ctx, preEnv) in
-      let? (bodyTypes, st2) = inferGroupFrom(group, preCtx, st1) in
-      let finalEnv = generalizeGroupFrom(
-        group,
-        bodyTypes,
-        dropGroupFrom(group, preEnv),
-        st2
-      ) in
-        processGroupsFrom(restSccs, lets, ctxWithEnv(ctx, finalEnv), st2)
+    let (preEnv, st1) = preBindGroupFrom(group, ctx.env, st) in
+    let preCtx = ctxWithEnv(ctx, preEnv) in
+    let? (bodyTypes, st2) = inferGroupFrom(group, preCtx, st1) in
+    let finalEnv = generalizeGroupFrom(
+      group,
+      bodyTypes,
+      dropGroupFrom(group, preEnv),
+      st2
+    ) in
+      processGroupsFrom(restSccs, lets, ctxWithEnv(ctx, finalEnv), st2)
 }
 
 // Seed each import's already-generalized scheme into the env, so a reference to
@@ -1196,22 +1195,22 @@ export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports
   let env0 = seedBuiltins(builtins, #{}, st0) in
   let ns0 = seedNsImports(nsImports, seedNs(namespaces, env0, st0)) in
   let aliasMap = aliasMapFrom(stmts, qualAliasSeed(stmts, quals, #{})) in
-    let (env1, st1) = registerUserCtorsFrom(stmts, aliasMap, env0, st0) in
-      let (env2, st2) = registerBuiltinCtorsFrom(
-        builtinDeclsFor(stmts),
-        aliasMap,
-        env1,
-        st1
-      ) in
-        let (env3, st3) = registerExternsFrom(stmts, aliasMap, env2, st2) in
-        let env4 = seedImportsFrom(Map.keys(imports), imports, env3) in
-        let lets = letsOfFrom(stmts) in
-        let idxOf = idxOfMap(lets) in
-        let sccs = stronglyConnected(adjOf(lets, idxOf)) in
-          switch processGroupsFrom(sccs, lets, { env: env4, open: openMode, ns: ns0, aliasMap: aliasMap, plugins: plugins }, st3) {
-            | Ok(finalCtx) => Ok(finalCtx.env)
-            | Err(e) => Err(e)
-          }
+  let (env1, st1) = registerUserCtorsFrom(stmts, aliasMap, env0, st0) in
+  let (env2, st2) = registerBuiltinCtorsFrom(
+    builtinDeclsFor(stmts),
+    aliasMap,
+    env1,
+    st1
+  ) in
+  let (env3, st3) = registerExternsFrom(stmts, aliasMap, env2, st2) in
+  let env4 = seedImportsFrom(Map.keys(imports), imports, env3) in
+  let lets = letsOfFrom(stmts) in
+  let idxOf = idxOfMap(lets) in
+  let sccs = stronglyConnected(adjOf(lets, idxOf)) in
+    switch processGroupsFrom(sccs, lets, { env: env4, open: openMode, ns: ns0, aliasMap: aliasMap, plugins: plugins }, st3) {
+      | Ok(finalCtx) => Ok(finalCtx.env)
+      | Err(e) => Err(e)
+    }
 
 // The slice of a dep's type scope inference needs: its transparent record
 // aliases, so a qualified `D.Pair number` still expands (aliases are

@@ -37,56 +37,56 @@ let mapIndexed = (f, xs) => mapIndexedGo(f, xs, 0, [])
 
 let HeroCarousel = _ =>
   let (index, setIndex) = useState(0) in
-    let (paused, setPaused) = useState(false) in
-      let (dragX, setDragX) = useState(0) in
-      let go = useCallback(next => setIndex((next + n) % n), []) in
-      let _fx = useEffect(() =>
-        paused ? _ => 0 : startHeroTick(() => go(index + 1), HERO_INTERVAL_MS))(
-        hookDeps(go, index, paused)
-      ) in
-      let slide = Array.get(index, heroSlides) in
-        switch slide {
-          | None => <div />
-          | Some(s) => <HeroCarouselView
-              kicker={s.kicker}
-              title={s.title}
-              trackStyle={{ transform: "translateX(-${show(index * 100)}%)" }}
-              onPause={() => setPaused(true)}
-              onResume={() => setPaused(false)}
-              onPrev={() => go(index - 1)}
-              onNext={() => go(index + 1)}
-              onTouchStart={e =>
-                let _ = setPaused(true) in setDragX(touchStartX(e))}
-              onTouchEnd={e =>
-                let _ = setPaused(false) in
-                let dx = touchEndX(e) - dragX in
-                  dx < 0 - swipeMinPx
-                    ? go(index + 1)
-                    : dx > swipeMinPx
-                    ? go(index - 1)
-                    : go(index)}
-              images={mapIndexed(
-                (item, i) =>
-                  <CarouselImg
-                    key={item.src}
-                    src={item.src}
-                    alt={item.alt}
-                    loading={i == 0 ? "eager" : "lazy"}
-                    decoding="async"
-                  />,
-                heroSlides
-              )}
-              dots={mapIndexed(
-                (item, i) =>
-                  <CarouselDot
-                    key={item.src}
-                    role="tab"
-                    ariaSelected={i == index}
-                    ariaLabel={item.title}
-                    $active={i == index ? "on" : "off"}
-                    onClick={() => go(i)}
-                  />,
-                heroSlides
-              )}
-            />
-        }
+  let (paused, setPaused) = useState(false) in
+  let (dragX, setDragX) = useState(0) in
+  let go = useCallback(next => setIndex((next + n) % n), []) in
+  let _fx = useEffect(() =>
+    paused ? _ => 0 : startHeroTick(() => go(index + 1), HERO_INTERVAL_MS))(
+    hookDeps(go, index, paused)
+  ) in
+  let slide = Array.get(index, heroSlides) in
+    switch slide {
+      | None => <div />
+      | Some(s) => <HeroCarouselView
+          kicker={s.kicker}
+          title={s.title}
+          trackStyle={{ transform: "translateX(-${show(index * 100)}%)" }}
+          onPause={() => setPaused(true)}
+          onResume={() => setPaused(false)}
+          onPrev={() => go(index - 1)}
+          onNext={() => go(index + 1)}
+          onTouchStart={e =>
+            let _ = setPaused(true) in setDragX(touchStartX(e))}
+          onTouchEnd={e =>
+            let _ = setPaused(false) in
+            let dx = touchEndX(e) - dragX in
+              dx < 0 - swipeMinPx
+                ? go(index + 1)
+                : dx > swipeMinPx
+                ? go(index - 1)
+                : go(index)}
+          images={mapIndexed(
+            (item, i) =>
+              <CarouselImg
+                key={item.src}
+                src={item.src}
+                alt={item.alt}
+                loading={i == 0 ? "eager" : "lazy"}
+                decoding="async"
+              />,
+            heroSlides
+          )}
+          dots={mapIndexed(
+            (item, i) =>
+              <CarouselDot
+                key={item.src}
+                role="tab"
+                ariaSelected={i == index}
+                ariaLabel={item.title}
+                $active={i == index ? "on" : "off"}
+                onClick={() => go(i)}
+              />,
+            heroSlides
+          )}
+        />
+    }

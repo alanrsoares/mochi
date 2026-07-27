@@ -121,8 +121,8 @@ let instSubRow = (row, tmap, rmap) => switch row {
 
 export let instantiate = (sc, st) =>
   let (tmap, st1) = instMapFrom(sc.vars, #{}, st) in
-    let (rmap, st2) = instRowMapFrom(sc.rvars, #{}, st1) in
-      (instSub(sc.ty, tmap, rmap), st2)
+  let (rmap, st2) = instRowMapFrom(sc.rvars, #{}, st1) in
+    (instSub(sc.ty, tmap, rmap), st2)
 
 // ============================================================
 // Program-level type machinery: surface `TypeExpr` (extern signatures, ctor
@@ -146,14 +146,14 @@ export let typeExprListToType = (tes, vars, st, aliases, expanding) => switch te
       aliases,
       expanding
     ) in
-      let (restTs, vars2, st2) = typeExprListToType(
-        rest,
-        vars1,
-        st1,
-        aliases,
-        expanding
-      ) in
-        (Array.prepend(t, restTs), vars2, st2)
+    let (restTs, vars2, st2) = typeExprListToType(
+      rest,
+      vars1,
+      st1,
+      aliases,
+      expanding
+    ) in
+      (Array.prepend(t, restTs), vars2, st2)
 }
 
 export let typeExprName = (name, vars, st, aliases, expanding) =>
@@ -192,14 +192,14 @@ export let typeExprToType = (te, vars, st, aliases, expanding) => switch te {
       aliases,
       expanding
     ) in
-      let (toT, vars2, st2) = typeExprToType(
-        toTe,
-        vars1,
-        st1,
-        aliases,
-        expanding
-      ) in
-        (tArrow(fromT, toT), vars2, st2)
+    let (toT, vars2, st2) = typeExprToType(
+      toTe,
+      vars1,
+      st1,
+      aliases,
+      expanding
+    ) in
+      (tArrow(fromT, toT), vars2, st2)
   | Ast.TyApp(ctor, argTes, _) => let (args, vars1, st1) = typeExprListToType(
       argTes,
       vars,
@@ -281,8 +281,8 @@ let aliasLocalVarsFrom = (params, args, st) => switch params {
         ) in
           (Map.set(p, a, restMap), st1)
       | [] => let (v, st1) = freshVar(st) in
-          let (restMap, st2) = aliasLocalVarsFrom(restParams, [], st1) in
-            (Map.set(p, v, restMap), st2)
+        let (restMap, st2) = aliasLocalVarsFrom(restParams, [], st1) in
+          (Map.set(p, v, restMap), st2)
     }
 }
 
@@ -295,14 +295,14 @@ let aliasFieldsFrom = (fields, vars, st, aliases, expanding) => switch fields {
       aliases,
       expanding
     ) in
-      let (restRow, st2) = aliasFieldsFrom(
-        rest,
-        vars1,
-        st1,
-        aliases,
-        expanding
-      ) in
-        (rExtend(fld.name, ft, restRow), st2)
+    let (restRow, st2) = aliasFieldsFrom(
+      rest,
+      vars1,
+      st1,
+      aliases,
+      expanding
+    ) in
+      (rExtend(fld.name, ft, restRow), st2)
 }
 
 // Expand a record alias to its structural row. `args` binds its type params
@@ -315,20 +315,14 @@ export let aliasRow = (name, info, args, st, aliases, expanding) =>
     ? (tCon(name, args), st)
     : let (local, st1) = aliasLocalVarsFrom(info.params, args, st) in
     let next = Set.add(name, expanding) in
-      let (row, st2) = aliasFieldsFrom(
-        info.fields,
-        local,
-        st1,
-        aliases,
-        next
-      ) in
-        (tRecord(row), st2)
+    let (row, st2) = aliasFieldsFrom(info.fields, local, st1, aliases, next) in
+      (tRecord(row), st2)
 
 let pvarsFrom = (params, st) => switch params {
   | [] => (#{}, [], st)
   | [p, ...rest] => let (v, st1) = freshVar(st) in
-      let (restMap, restVars, st2) = pvarsFrom(rest, st1) in
-        (Map.set(p, v, restMap), Array.prepend(v, restVars), st2)
+    let (restMap, restVars, st2) = pvarsFrom(rest, st1) in
+      (Map.set(p, v, restMap), Array.prepend(v, restVars), st2)
 }
 
 let ctorFieldsArrowFrom = (fields, pvars, st, aliases, result) => switch fields {
@@ -340,14 +334,8 @@ let ctorFieldsArrowFrom = (fields, pvars, st, aliases, result) => switch fields 
       aliases,
       Set.fromArray([])
     ) in
-      let (restT, st2) = ctorFieldsArrowFrom(
-        rest,
-        pvars,
-        st1,
-        aliases,
-        result
-      ) in
-        (tArrow(ft, restT), st2)
+    let (restT, st2) = ctorFieldsArrowFrom(rest, pvars, st1, aliases, result) in
+      (tArrow(ft, restT), st2)
 }
 
 // A variant's constructors become curried functions into that variant type,
@@ -358,12 +346,6 @@ let ctorFieldsArrowFrom = (fields, pvars, st, aliases, result) => switch fields 
 export let ctorScheme = (typeName, params, c, st, aliases) =>
   let (pvars, pvarTypes, st1) = pvarsFrom(params, st) in
   let result = tCon(typeName, pvarTypes) in
-    let (ty, st2) = ctorFieldsArrowFrom(
-      c.fields,
-      pvars,
-      st1,
-      aliases,
-      result
-    ) in
-    let sets = collect(ty, emptyVarSets) in
-      ({ vars: Set.toArray(sets.tv), rvars: Set.toArray(sets.rv), ty: ty }, st2)
+  let (ty, st2) = ctorFieldsArrowFrom(c.fields, pvars, st1, aliases, result) in
+  let sets = collect(ty, emptyVarSets) in
+    ({ vars: Set.toArray(sets.tv), rvars: Set.toArray(sets.rv), ty: ty }, st2)

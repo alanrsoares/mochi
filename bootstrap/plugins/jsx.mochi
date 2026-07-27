@@ -148,25 +148,25 @@ let parseJsxAttributes = (toks, pos, fieldsAcc, spreadAcc, parseExpr) =>
       let? p3 = jxExpectTok(TRbrace, toks, p2) in
         parseJsxAttributes(toks, p3, fieldsAcc, Some(spExpr), parseExpr)
       : let? (attrId, p1) = jxExpectLabel(toks, pos) in
-        let (valExpr, p2) = jxTokAt(toks, p1).tok == TEq
-          ? let pEq = p1 + 1 in
-            switch jxTokAt(toks, pEq).tok {
-              | TStr(v) => (Ast.EStr(v, jxSpanOf(jxTokAt(toks, pEq))), pEq + 1)
-              | TLbrace => switch parseExpr(toks, pEq + 1) {
-                  | Ok((e, pR)) => (e, pR + 1)
-                  | Err(_) => (Ast.EBool(true, attrId.span), pEq)
-                }
-              | _ => (Ast.EBool(true, attrId.span), pEq)
-            }
-          : (Ast.EBool(true, attrId.span), p1) in
-        let field = { name: attrId.name, value: valExpr } in
-          parseJsxAttributes(
-            toks,
-            p2,
-            Array.append(field, fieldsAcc),
-            spreadAcc,
-            parseExpr
-          )
+      let (valExpr, p2) = jxTokAt(toks, p1).tok == TEq
+        ? let pEq = p1 + 1 in
+          switch jxTokAt(toks, pEq).tok {
+            | TStr(v) => (Ast.EStr(v, jxSpanOf(jxTokAt(toks, pEq))), pEq + 1)
+            | TLbrace => switch parseExpr(toks, pEq + 1) {
+                | Ok((e, pR)) => (e, pR + 1)
+                | Err(_) => (Ast.EBool(true, attrId.span), pEq)
+              }
+            | _ => (Ast.EBool(true, attrId.span), pEq)
+          }
+        : (Ast.EBool(true, attrId.span), p1) in
+      let field = { name: attrId.name, value: valExpr } in
+        parseJsxAttributes(
+          toks,
+          p2,
+          Array.append(field, fieldsAcc),
+          spreadAcc,
+          parseExpr
+        )
 
 let parseJsxChildren = (expectedTag, toks, pos, acc, parseExpr) =>
   let lt = jxTokAt(toks, pos) in

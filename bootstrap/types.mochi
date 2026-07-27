@@ -266,17 +266,17 @@ let rewriteRow = (row, label, st) => switch resolveRow(row, st) {
       : let? (subType, subRest, subSt) = rewriteRow(rrest, label, st) in
         Ok((subType, rExtend(rlabel, rtype, subRest), subSt))
   | RowVar(rid) => let (freshT, st1) = freshVar(st) in
-      let (freshTail, st2) = freshRowVar(st1) in
-        Ok(
-          (
-            freshT,
-            freshTail,
-            {
-              ...st2,
-              rv: Map.set(rid, rExtend(label, freshT, freshTail), st2.rv)
-            }
-          )
+    let (freshTail, st2) = freshRowVar(st1) in
+      Ok(
+        (
+          freshT,
+          freshTail,
+          {
+            ...st2,
+            rv: Map.set(rid, rExtend(label, freshT, freshTail), st2.rv)
+          }
         )
+      )
 }
 
 // both rows extend: pull a's label out of b, unify the field types, recurse

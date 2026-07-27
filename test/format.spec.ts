@@ -252,6 +252,17 @@ test("let-in chains stay flat; the terminal body indents under `in`", () => {
   );
 });
 
+test("a destructuring bind does not staircase the chain it sits in", () => {
+  // A destructuring `let (a, b) = …` reaches the formatter as the IIFE the
+  // parser desugared it to, so the chain rule has to recognise it by shape
+  // rather than by `kind` — otherwise every destructure adds an indent step.
+  const src =
+    "let f = x => let (alphaOne, alphaTwo) = computeAlphaPair(x) in let (betaOne, betaTwo) = computeBetaPair(alphaOne) in combineEveryResultTogether(alphaTwo, betaOne, betaTwo)";
+  expect(fmt(src)).toBe(
+    "let f = x =>\n  let (alphaOne, alphaTwo) = computeAlphaPair(x) in\n  let (betaOne, betaTwo) = computeBetaPair(alphaOne) in\n    combineEveryResultTogether(alphaTwo, betaOne, betaTwo)\n",
+  );
+});
+
 test("a let-in ternary branch indents its terminal body under the bind", () => {
   const src =
     "let f = veryLongConditionNameHere ? let veryLongBindingName = computeSomethingExpensive(x) in processTheResult(veryLongBindingName) : fallbackValueHere";

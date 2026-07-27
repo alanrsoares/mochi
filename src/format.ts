@@ -548,6 +548,23 @@ const ternaryD = (e: TernaryExpr): Doc => {
 };
 
 /**
+ * Does this expression *print* as `let … in …`? `letin`/`letbind` say so in
+ * their `kind`, but a destructuring `let (a, b) = v in body` reaches the
+ * formatter as the IIFE the parser desugared it to — it only becomes let-shaped
+ * again in `refoldCall`. The chain rule below has to see through that, or every
+ * destructure in a chain adds an indent step. The call shape must stay in sync
+ * with `refoldCall`'s destructuring branch.
+ */
+const printsAsLet = (e: Expr): boolean =>
+  e.kind === "letin" ||
+  e.kind === "letbind" ||
+  (e.kind === "call" &&
+    e.args.length === 1 &&
+    e.fn.kind === "lambda" &&
+    e.fn.params.length === 1 &&
+    e.fn.params[0]!.kind !== "name");
+
+/**
  * `let x = v in body`; when it overflows, `in` stays at the end of the value
  * line. A chain of `let … in let … in …` stays left-aligned (flat), but the
  * terminal non-let body indents under `in` so a ternary/`=>` branch's payload
@@ -557,10 +574,7 @@ const letLikeD = (head: string, value: Expr, body: Expr): Doc => {
   // `line` must sit *inside* `indent` — indent only affects newlines, so a
   // sibling `line` then `indent(text)` would still print the body at the
   // outer column (same pitfall as lambda bodies above).
-  const cont =
-    body.kind === "letin" || body.kind === "letbind"
-      ? seq(line, exprD(body))
-      : indent(seq(line, exprD(body)));
+  const cont = printsAsLet(body) ? seq(line, exprD(body)) : indent(seq(line, exprD(body)));
   return group(
     seq(
       txt(`${head} = `),

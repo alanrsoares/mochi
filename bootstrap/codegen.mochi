@@ -473,15 +473,15 @@ let genListArm = (p, body, ctx) => switch p {
       ? "_pull(${show(n)})"
       : "!_pull(${show(n + 1)}) && _b.length === ${show(n)}" in
     let cond = Str.join(" && ", Array.prepend(head, guards)) in
-      let (params0, args0) = listArmBinds(elems, 0, ctx) in
-        let (params, args) = switch rest {
-          | Some(Ast.PBind(name, _)) => (
-              Array.append(name, params0),
-              Array.append(listTail(n), args0)
-            )
-          | _ => (params0, args0)
-        } in
-          "  if (${cond}) return ((${Str.join(", ", params)}) => ${genLambdaBody(body, ctx)})(${Str.join(", ", args)});"
+    let (params0, args0) = listArmBinds(elems, 0, ctx) in
+    let (params, args) = switch rest {
+      | Some(Ast.PBind(name, _)) => (
+          Array.append(name, params0),
+          Array.append(listTail(n), args0)
+        )
+      | _ => (params0, args0)
+    } in
+      "  if (${cond}) return ((${Str.join(", ", params)}) => ${genLambdaBody(body, ctx)})(${Str.join(", ", args)});"
   | _ => ""
 }
 
@@ -1042,8 +1042,8 @@ let addDepsFrom = (deps, j, refs, queue) => switch Array.get(j, deps) {
 let closeRefsFrom = (queue, i, refs, runtimeDeps) => switch Array.get(i, queue) {
   | None => refs
   | Some(r) => let deps = Option.unwrapOr([], Map.get(r, runtimeDeps)) in
-      let (refs2, queue2) = addDepsFrom(deps, 0, refs, queue) in
-        closeRefsFrom(queue2, i + 1, refs2, runtimeDeps)
+    let (refs2, queue2) = addDepsFrom(deps, 0, refs, queue) in
+      closeRefsFrom(queue2, i + 1, refs2, runtimeDeps)
 }
 
 // The prelude runtime a program needs inlined: every builtin it references
