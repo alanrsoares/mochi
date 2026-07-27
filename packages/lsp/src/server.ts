@@ -46,9 +46,23 @@ import {
   type WorkspaceSymbol,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import { pluginsForDocument } from "./load-plugins.ts";
 
-/** Options for {@link startServer} — a project's vendor-plugin list (styled-cva, …), same one Vite / `gen-mochi-dts` consume (#20). Core stays kit-agnostic: no plugin is imported/hardcoded here. Omitted = default/builtin resolution (`resolvePlugins`, ADR 0011). */
-export type ServerOptions = { plugins?: LanguagePlugin[] };
+/** Client → server init payload (editor extension). */
+export type MochiInitOptions = {
+  /** Load `mochi.plugins.mjs` / `.mts` when true (requires trusted workspace on client). */
+  loadProjectPlugins?: boolean;
+  /** Workspace folder roots — manifests must resolve under one of these. */
+  workspaceRoots?: string[];
+};
+
+/** Options for {@link startServer}. */
+export type ServerOptions = {
+  /** Fixed plugin list (tests / custom launchers). Overrides project discovery. */
+  plugins?: LanguagePlugin[];
+  /** Load `mochi.plugins.mjs` / `.mts` upward from each open file (default false). */
+  loadProjectPlugins?: boolean;
+};
 
 const docPath = (uri: string): string => (uri.startsWith("file:") ? fileURLToPath(uri) : uri);
 
@@ -80,31 +94,44 @@ const symbolKind = (kind: string): SymbolKind => {
  * opt-out (`resolvePlugins`, ADR 0011).
  */
 export function startServer(opts: ServerOptions = {}): void {
-  const plugins = opts.plugins;
+  const fixedPlugins = opts.plugins;
+  let loadProjectPlugins = opts.loadProjectPlugins === true && fixedPlugins === undefined;
+  let allowedRoots: string[] = [];
+  const dxOpts = async (path: string) => ({
+    plugins: loadProjectPlugins ? await pluginsForDocument(path, { allowedRoots }) : fixedPlugins,
+  });
   const connection = createConnection(ProposedFeatures.all);
   const documents = new TextDocuments(TextDocument);
 
-  connection.onInitialize(() => ({
-    capabilities: {
-      textDocumentSync: TextDocumentSyncKind.Incremental,
-      hoverProvider: true,
-      completionProvider: { triggerCharacters: [".", '"', "'", "=", " "] },
-      definitionProvider: true,
-      typeDefinitionProvider: true,
-      documentHighlightProvider: true,
-      referencesProvider: true,
-      renameProvider: { prepareProvider: true },
-      codeActionProvider: true,
-      documentSymbolProvider: true,
-      workspaceSymbolProvider: true,
-      inlayHintProvider: false,
-      documentFormattingProvider: true,
-      // Virtual prelude buffer for go-to-definition on builtins.
-      workspace: {
-        textDocumentContent: { schemes: ["mochi"] },
+  connection.onInitialize((params) => {
+    const init = params.initializationOptions as MochiInitOptions | undefined;
+    if (fixedPlugins === undefined) {
+      loadProjectPlugins = init?.loadProjectPlugins === true;
+    }
+    allowedRoots =
+      init?.workspaceRoots ?? params.workspaceFolders?.map((f) => fileURLToPath(f.uri)) ?? [];
+    return {
+      capabilities: {
+        textDocumentSync: TextDocumentSyncKind.Incremental,
+        hoverProvider: true,
+        completionProvider: { triggerCharacters: [".", '"', "'", "=", " "] },
+        definitionProvider: true,
+        typeDefinitionProvider: true,
+        documentHighlightProvider: true,
+        referencesProvider: true,
+        renameProvider: { prepareProvider: true },
+        codeActionProvider: true,
+        documentSymbolProvider: true,
+        workspaceSymbolProvider: true,
+        inlayHintProvider: false,
+        documentFormattingProvider: true,
+        // Virtual prelude buffer for go-to-definition on builtins.
+        workspace: {
+          textDocumentContent: { schemes: ["mochi"] },
+        },
       },
-    },
-  }));
+    };
+  });
 
   /** Range in `path` — prelude virtual, open buffer, or disk. */
   const rangeAtPath = async (path: string, span: Span) => {
@@ -124,12 +151,13 @@ export function startServer(opts: ServerOptions = {}): void {
   connection.onHover(async ({ textDocument, position }): Promise<Hover | null> => {
     const doc = documents.get(textDocument.uri);
     if (!doc) return null;
+    const path = docPath(textDocument.uri);
     const info = await moduleHoverAt(
-      docPath(textDocument.uri),
+      path,
       doc.getText(),
       doc.offsetAt(position),
       read,
-      { plugins },
+      await dxOpts(path),
     );
     if (!info) return null;
     const fence = `\`\`\`mochi\n${info.code}\n\`\`\``;
@@ -150,12 +178,13 @@ export function startServer(opts: ServerOptions = {}): void {
   connection.onCompletion(async ({ textDocument, position }): Promise<CompletionItem[]> => {
     const doc = documents.get(textDocument.uri);
     if (!doc) return [];
+    const path = docPath(textDocument.uri);
     const items = await moduleCompleteAt(
-      docPath(textDocument.uri),
+      path,
       doc.getText(),
       doc.offsetAt(position),
       read,
-      { plugins },
+      await dxOpts(path),
     );
     return items.map((i) => ({
       label: i.label,
@@ -182,9 +211,13 @@ export function startServer(opts: ServerOptions = {}): void {
       const doc = documents.get(textDocument.uri);
       if (!doc) return null;
       const path = docPath(textDocument.uri);
-      const loc = await moduleTypeDefinitionAt(path, doc.getText(), doc.offsetAt(position), read, {
-        plugins,
-      });
+      const loc = await moduleTypeDefinitionAt(
+        path,
+        doc.getText(),
+        doc.offsetAt(position),
+        read,
+        await dxOpts(path),
+      );
       if (!loc) return null;
       return rangeAtPath(loc.path, loc.span);
     },
@@ -279,7 +312,7 @@ export function startServer(opts: ServerOptions = {}): void {
     const doc = documents.get(textDocument.uri);
     if (!doc) return [];
     const path = docPath(textDocument.uri);
-    const published = await moduleDiagnostics(path, doc.getText(), read, { plugins });
+    const published = await moduleDiagnostics(path, doc.getText(), read, await dxOpts(path));
     const actions: CodeAction[] = [];
     for (const d of published) {
       for (const s of d.suggestions ?? []) {
@@ -298,11 +331,12 @@ export function startServer(opts: ServerOptions = {}): void {
   });
 
   /** Run `format` on the document — with the server's plugins, so sugar a plugin owns (JSX) re-folds here exactly as `mochi fmt` does — and return a single full-document replacement edit. */
-  connection.onDocumentFormatting(({ textDocument }): TextEdit[] => {
+  connection.onDocumentFormatting(async ({ textDocument }): Promise<TextEdit[]> => {
     const doc = documents.get(textDocument.uri);
     if (!doc) return [];
+    const path = docPath(textDocument.uri);
     const text = doc.getText();
-    const formatted = format(text, { plugins });
+    const formatted = format(text, await dxOpts(path));
     if (!isOk(formatted)) return [];
     const fullRange = {
       start: doc.positionAt(0),
@@ -313,7 +347,7 @@ export function startServer(opts: ServerOptions = {}): void {
 
   const validate = async (doc: TextDocument): Promise<void> => {
     const path = docPath(doc.uri);
-    const computed = await moduleDiagnostics(path, doc.getText(), read, { plugins });
+    const computed = await moduleDiagnostics(path, doc.getText(), read, await dxOpts(path));
     const diags: Diagnostic[] = computed.map((d) => ({
       range: d.range,
       message: d.message,

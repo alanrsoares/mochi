@@ -5,7 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/server.ts",
-    "./docs-server": "./src/docs-server.ts"
+    "./load-plugins": "./src/load-plugins.ts"
   },
   "dependencies": {
     "@mochi/compiler": "workspace:*",

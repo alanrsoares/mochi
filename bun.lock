@@ -56,15 +56,6 @@
         "vite": "^6.0.0",
       },
     },
-    "editors/vscode": {
-      "name": "@mochi/vscode",
-      "version": "0.0.1",
-      "devDependencies": {
-        "@types/node": "^26.1.1",
-        "@types/vscode": "^1.125.0",
-        "vscode-languageclient": "^10.1.0",
-      },
-    },
     "examples/snake": {
       "name": "@mochi/example-snake",
       "version": "0.1.0",
@@ -193,6 +184,18 @@
       "dependencies": {
         "@mochi/compiler": "workspace:*",
         "@onrails/result": "^0.4.0",
+      },
+    },
+    "packages/vscode": {
+      "name": "@mochi/vscode",
+      "version": "0.0.1",
+      "dependencies": {
+        "@mochi/lsp": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/node": "^26.1.1",
+        "@types/vscode": "^1.125.0",
+        "vscode-languageclient": "^10.1.0",
       },
     },
   },
@@ -343,7 +346,7 @@
 
     "@mochi/vite-plugin": ["@mochi/vite-plugin@workspace:packages/vite-plugin"],
 
-    "@mochi/vscode": ["@mochi/vscode@workspace:editors/vscode"],
+    "@mochi/vscode": ["@mochi/vscode@workspace:packages/vscode"],
 
     "@onrails/maybe": ["@onrails/maybe@0.2.3", "", { "peerDependencies": { "@onrails/result": "0.2.0" }, "optionalPeers": ["@onrails/result"] }, "sha512-cou0uxQp6OvYQ/b/VWr2OwJxdL2T5QDyPJV0TAXJDfoCqIdTJ4UNHTW0qXr/MeVsG0P/vY5zJOvmfvadJlmP7g=="],
 

@@ -27,7 +27,8 @@ export const docsVendorPlugins: HostExtension[] = [styledCvaExtension];
 ```
 
 Nothing else changes: `vite.config.ts`, `scripts/gen-mochi-dts.ts` and
-`src/lsp/docs-server.ts` already consume that list.
+the docs LSP launcher shipped in the editor extension already consume that
+list.
 
 Authoring the host binding on the Mochi side stays an `extern` (ADR 0009):
 

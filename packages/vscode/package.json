@@ -15,12 +15,31 @@
     "typecheck": "tsc --noEmit",
     "check": "tsc --noEmit"
   },
+  "dependencies": {
+    "@mochi/lsp": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "^26.1.1",
     "@types/vscode": "^1.125.0",
     "vscode-languageclient": "^10.1.0"
   },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Vendor plugin manifests (mochi.plugins.mjs) are not loaded in Restricted Mode."
+    }
+  },
   "contributes": {
+    "configuration": {
+      "title": "mochi",
+      "properties": {
+        "mochi.loadProjectPlugins": {
+          "type": "boolean",
+          "default": true,
+          "description": "Load vendor plugins from mochi.plugins.mjs / .mts in the open workspace. Requires a trusted workspace (Restricted Mode keeps this off)."
+        }
+      }
+    },
     "languages": [
       {
         "id": "mochi",

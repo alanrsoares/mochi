@@ -13,7 +13,7 @@ const dirs = [
   ".fixpoint-work",
   "test/.tsgen",
   "test/.tsgen-graph",
-  "editors/vscode/out",
+  "packages/vscode/out",
 ];
 
 let n = 0;

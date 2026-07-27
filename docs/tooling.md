@@ -105,9 +105,11 @@ top-level value names; the LSP is a thin adapter with `triggerCharacters: ["."]`
 
 ## Plugins
 
-The Vite plugin (`MochiPluginOptions.plugins`), `gen-mochi-dts`, and the LSP all accept
-the same `plugins?: LanguagePlugin[]` option `compile`/`emitDts`/`format` do — a project
-lists its vendor plugins once (e.g. `apps/docs/mochi.plugins.ts`'s `docsVendorPlugins`)
-and imports that list everywhere instead of hand-duplicating it. JSX needs no entry —
+The Vite plugin (`MochiPluginOptions.plugins`), `gen-mochi-dts`, and the editor
+extension all accept the same vendor-plugin list `compile`/`emitDts`/`format` do.
+Apps keep one manifest — `mochi.plugins.ts` for Bun/Vite, plus a Node-loadable
+`mochi.plugins.mjs` or `mochi.plugins.mts` beside it for the LSP (the extension
+walks upward from each open `.mochi` file to find it; loads only in a **trusted**
+workspace and only when the manifest resolves inside a workspace folder). JSX needs no entry —
 `jsxPlugin` is a builtin, registered by default; passing `plugins: []` is the non-UI
 opt-out ([ADR 0011](adr/0011-language-plugins.md), [tracer bullets](dx-tracer-bullets.md)).

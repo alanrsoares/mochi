@@ -4,7 +4,7 @@ import { PresetSelect } from "../ui/primitives"
 let PlaygroundRight = props =>
   <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-peach">
     <div
-      className="flex shrink-0 items-center gap-0.5 overflow-x-auto border-line border-b-2 px-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="flex shrink-0 items-center gap-0.5 overflow-x-auto border-line border-b-2 px-2 scrollbar-none [&::-webkit-scrollbar]:hidden"
       role="tablist"
       ariaLabel="Output panes"
     >

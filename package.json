@@ -40,7 +40,6 @@
     "check:full": "biome check . && tsc --noEmit && bun run --filter '*' check && bun run fmt:check && bun run test:full"
   },
   "workspaces": [
-    "editors/*",
     "apps/*",
     "packages/*",
     "examples/snake"

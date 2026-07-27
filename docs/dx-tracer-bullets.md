@@ -555,13 +555,13 @@ plugin* (library-owned adapter), not “core extension”.
 since #23).
 `apps/docs/vite.config.ts` and `scripts/gen-mochi-dts.ts` both import it
 instead of hand-listing `styledCvaExtension`. LSP gets it via a new thin
-entry `src/lsp/docs-server.ts` (`startServer({ extensions: docsVendorPlugins })`);
+entry `packages/vscode/src/docs-server.ts` (`startServer({ plugins: docsVendorPlugins })`);
 `scripts/build-extension.mjs` now bundles that entry instead of
 `src/lsp/server.ts` directly, so the shipped VS Code extension dogfoods the
 same list. `startServer` itself stays plugin-agnostic — no styled-cva
 hardcode. Confirmed by #23: moving the plugin to a package changed only the
 `import { styledCvaExtension } from …` line inside `apps/docs/mochi.plugins.ts`
-— `vite.config.ts`, `gen-mochi-dts.ts`, and `docs-server.ts` were untouched.
+— `vite.config.ts`, `gen-mochi-dts.ts`, and the docs-server entrypoint were untouched.
 
 ---
 
@@ -770,7 +770,7 @@ brief (`InferOptions`, `EmitDtsOptions`, `CompileOptions`,
 `MochiPluginOptions`, `ServerOptions`, `ModuleHoverOptions`,
 `ModuleDiagnosticsOptions`, `ModuleNavOptions`) plus every call site
 (`apps/docs/vite.config.ts`, `apps/docs/mochi.plugins.ts` consumers,
-`scripts/gen-mochi-dts.ts`, `src/lsp/docs-server.ts`, tests). No deprecated
+`scripts/gen-mochi-dts.ts`, `packages/vscode/src/docs-server.ts`, tests). No deprecated
 `extensions` alias kept — grep for the option name returns nothing (repo is
 pre-1.0, #22 precedent).
 

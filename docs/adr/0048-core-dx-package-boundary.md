@@ -8,7 +8,7 @@
 
 ## Context
 
-The repo already has a workspace (`packages/plugin-*`, `apps/docs`, `editors/vscode`),
+The repo already has a workspace (`packages/plugin-*`, `apps/docs`, `packages/vscode`),
 but the TypeScript compiler still lives as one flat `src/` tree: the self-hosted
 pipeline and the DX surfaces (formatter, `.d.ts` entrypoints, IDE queries, Vite
 plugin, LSP adapter) share a namespace. That blurs what must stay in fixpoint

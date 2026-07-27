@@ -4,7 +4,7 @@
       "path": ".",
     },
     {
-      "path": "editors/vscode",
+      "path": "packages/vscode",
     },
   ],
   "settings": {},

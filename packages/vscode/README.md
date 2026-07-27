@@ -19,6 +19,25 @@ repo's `.vscode/settings.json` turns on `editor.fontLigatures` scoped to
 Code, Victor Mono) — install one and reload. Ligatures are font-shaping, so no
 extension setting can force them without a supporting font.
 
+## Vendor plugins
+
+The language server discovers `mochi.plugins.mjs` or `mochi.plugins.mts` by walking
+upward from each open `.mochi` file (same vendor list Vite / `gen-mochi-dts` use via
+`mochi.plugins.ts`). Export `default` or named `plugins`:
+
+```js
+import { styledCvaExtension } from "@mochi/plugin-styled-cva";
+
+export default [styledCvaExtension];
+```
+
+Restart the language server after editing the manifest.
+
+**Security:** manifests are arbitrary Node modules — only loaded when the workspace is
+**trusted** (VS Code Restricted Mode keeps them off), the manifest must live under a
+workspace folder (symlinks outside the workspace are ignored), and
+`mochi.loadProjectPlugins` can disable loading entirely.
+
 ## Install locally
 
 Symlink (or copy) this folder into your VSCode extensions dir, then reload:
