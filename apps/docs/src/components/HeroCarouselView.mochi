@@ -10,9 +10,10 @@ let HeroCarouselView = props =>
     onBlurCapture={props.onResume}
   >
     <div
-      className="hero-carousel__frame relative aspect-video touch-pan-y select-none overflow-hidden bg-foam"
-      onTouchStart={props.onTouchStart}
-      onTouchEnd={props.onTouchEnd}
+      className="hero-carousel__frame relative aspect-video touch-pan-y select-none overflow-hidden bg-foam cursor-grab active:cursor-grabbing"
+      onPointerDown={props.onPointerDown}
+      onPointerUp={props.onPointerUp}
+      onPointerCancel={props.onPointerCancel}
     >
       <div
         className="hero-carousel__track flex h-full transition-transform duration-500 ease-out"

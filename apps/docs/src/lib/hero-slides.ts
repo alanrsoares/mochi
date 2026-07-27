@@ -54,9 +54,33 @@ export const heroSlides: HeroSlide[] = [
 
 export const HERO_INTERVAL_MS = 5200;
 
-// Touch helpers for the swipe gesture — TouchList access stays in the host.
-export const touchStartX = (e: TouchEvent): number => e.touches[0]?.clientX ?? 0;
-export const touchEndX = (e: TouchEvent): number => e.changedTouches[0]?.clientX ?? 0;
+/** Minimum horizontal travel (px) before a pointer gesture counts as a swipe. */
+export const SWIPE_MIN_PX = 40;
+
+type MutableNum = { current: number };
+
+/**
+ * Pointer swipe helpers — `clientX` + capture stay in the host.
+ * Prefer pointer events over touch*: one path for finger, pen, and mouse drag.
+ */
+export const swipePointerDown = (start: MutableNum, e: PointerEvent): void => {
+  if (!e.isPrimary || e.button !== 0) return;
+  start.current = e.clientX;
+  const el = e.currentTarget;
+  if (el instanceof HTMLElement) {
+    try {
+      el.setPointerCapture(e.pointerId);
+    } catch {
+      // capture unsupported / already released
+    }
+  }
+};
+
+/** Horizontal delta since `swipePointerDown`; 0 if this isn't the primary pointer. */
+export const swipePointerDx = (start: MutableNum, e: PointerEvent): number => {
+  if (!e.isPrimary) return 0;
+  return e.clientX - start.current;
+};
 
 /**
  * Start the auto-advance timer, or no-op under reduced motion.
