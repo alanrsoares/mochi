@@ -656,7 +656,11 @@ let postfixLoop = (e, toks, pos, hooks) => switch tokAt(toks, pos).tok {
         p2,
         hooks
       )
-  | TDot => expectId(toks, pos + 1)
+  | TDot =>
+    // `expectLabel`, not `expectId`: `$tone` is a legal record *key* (ADR 0009
+    // transient props), so it must be a legal projection too — `props.$tone`
+    // reads the field `{ $tone: … }` writes. Mirrors `parser.ts`'s dot production.
+    expectLabel(toks, pos + 1)
       |> Result.flatMap(((id, p)) =>
         postfixLoop(
           Ast.EField(e, id.name, spanning(exprSpan(e), id.span)),

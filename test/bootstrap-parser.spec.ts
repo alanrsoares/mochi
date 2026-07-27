@@ -576,6 +576,8 @@ const cases: Record<string, string> = {
     'let a = "hello ${name}"\nlet b = "${a}-${b}-${c}"\nlet c = "outer ${ "inner ${x}" } end"',
   "record update, bare and with fields (ADR 0021)":
     "let a = { ...base }\nlet b = { ...base, x: 1 }\nlet c = { ...base, x: 1, y: 2 }",
+  "$-label as record key and as projection (ADR 0009)":
+    'let p = { $tone: "rose", size: 1 }\nlet t = p.$tone\nlet u = outer.$slot.$tone\nlet m = { $a: 1 }.$a',
   "or-patterns, 2 and 3+ alts, with a guard (ADR 0022)":
     "let f = v => switch v { | A | B => 1 | X | Y | Z when eq(v, 0) => 2 | _ => 3 }",
   "infix operator precedence: mul over add, cmp over mul, and/or over cmp":
