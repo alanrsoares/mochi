@@ -60,17 +60,19 @@ let jsStringLit = s => "\"${Str.join("", Str.chars(s) |> map(escChar))}\""
 // Re-escape a decoded literal chunk for a JS template literal: backslashes
 // first (else the escapes we're about to insert double-escape), then the
 // two chars that would otherwise reopen JS template syntax.
-let escTemplateLoop = (chars, i, acc) => switch Array.get(i, chars) {
-  | None => acc
-  | Some("\\") => escTemplateLoop(chars, i + 1, "${acc}\\\\")
-  | Some("`") => escTemplateLoop(chars, i + 1, "${acc}\\`")
-  | Some("$") when Array.get(i + 1, chars) |> Option.contains("{") => escTemplateLoop(
-      chars,
-      i + 2,
-      "${acc}\\\${"
-    )
-  | Some(c) => escTemplateLoop(chars, i + 1, "${acc}${c}")
-}
+let escTemplateLoop = (chars, i0, acc0) =>
+  loop (i = i0, acc = acc0) {
+    switch Array.get(i, chars) {
+      | None => acc
+      | Some("\\") => recur(i + 1, "${acc}\\\\")
+      | Some("`") => recur(i + 1, "${acc}\\`")
+      | Some("$") when Array.get(i + 1, chars) |> Option.contains("{") => recur(
+          i + 2,
+          "${acc}\\\${"
+        )
+      | Some(c) => recur(i + 1, "${acc}${c}")
+    }
+  }
 let escapeTemplateLiteral = s => escTemplateLoop(Str.chars(s), 0, "")
 
 // --- ctor field-key registry (GCtx.keys) ---------------------------------

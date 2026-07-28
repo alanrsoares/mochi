@@ -1559,63 +1559,56 @@ let recoverFrom = (toks, before, failedAt, at) =>
 
 /// The recovering statement loop: always yields statements (unparsable regions
 /// become `SError`) plus every parse diagnostic in source order.
-let stmtsLoop = (toks, pos, tmp, acc, diags, hooks) =>
-  tokAt(toks, pos).tok == TEof
-    ? { stmts: acc, diagnostics: diags }
-    : let failedAt = tokAt(toks, pos) in
-      switch parseStmt(toks, pos, tmp, hooks) {
-        | Ok((stmts, p, tmp2)) => p == pos
-            ?
-              // No production stands still; if one ever did, this turns a hang
-              // into a diagnostic.
-              let r = recoverFrom(toks, pos, failedAt, failedAt.start) in
-                stmtsLoop(
-                  toks,
-                  r.pos,
-                  tmp,
-                  Array.append(r.node, acc),
-                  Array.append(
+let stmtsLoop = (toks, pos0, tmp0, acc0, diags0, hooks) =>
+  loop (pos = pos0, tmp = tmp0, acc = acc0, diags = diags0) {
+    tokAt(toks, pos).tok == TEof
+      ? { stmts: acc, diagnostics: diags }
+      : let failedAt = tokAt(toks, pos) in
+        switch parseStmt(toks, pos, tmp, hooks) {
+          | Ok((stmts, p, tmp2)) => p == pos
+              ?
+                // No production stands still; if one ever did, this turns a hang
+                // into a diagnostic.
+                let r = recoverFrom(toks, pos, failedAt, failedAt.start) in
+                  recur(
+                    r.pos,
+                    tmp,
+                    Array.append(r.node, acc),
+                    Array.append(
+                      {
+                        message: "unexpected token ${tokName(failedAt.tok)}",
+                        start: failedAt.start,
+                        end: failedAt.end
+                      },
+                      diags
+                    )
+                  )
+              : recur(p, tmp2, Array.concat(acc, stmts), diags)
+          | Err(d) => let ds = Array.append(d, diags) in
+              Array.length(ds) >= maxParseErrors
+                ? {
+                  stmts: Array.append(
+                    Ast.SError(
+                      {
+                        start: failedAt.start,
+                        end: tokAt(toks, Array.length(toks) - 1).end
+                      }
+                    ),
+                    acc
+                  ),
+                  diagnostics: Array.append(
                     {
-                      message: "unexpected token ${tokName(failedAt.tok)}",
+                      message: "too many parse errors; stopping",
                       start: failedAt.start,
                       end: failedAt.end
                     },
-                    diags
-                  ),
-                  hooks
-                )
-            : stmtsLoop(toks, p, tmp2, Array.concat(acc, stmts), diags, hooks)
-        | Err(d) => let ds = Array.append(d, diags) in
-            Array.length(ds) >= maxParseErrors
-              ? {
-                stmts: Array.append(
-                  Ast.SError(
-                    {
-                      start: failedAt.start,
-                      end: tokAt(toks, Array.length(toks) - 1).end
-                    }
-                  ),
-                  acc
-                ),
-                diagnostics: Array.append(
-                  {
-                    message: "too many parse errors; stopping",
-                    start: failedAt.start,
-                    end: failedAt.end
-                  },
-                  ds
-                )
-              }
-              : let r = recoverFrom(toks, pos, failedAt, d.start) in
-                stmtsLoop(
-                  toks,
-                  r.pos,
-                  tmp,
-                  Array.append(r.node, acc),
-                  ds,
-                  hooks
-                )
-      }
+                    ds
+                  )
+                }
+                : let r = recoverFrom(toks, pos, failedAt, d.start) in
+                  recur(r.pos, tmp, Array.append(r.node, acc), ds)
+        }
+  }
 
 /// The recovering parse (ADR 0045). `parse` is the hard-fail wrapper over this;
 /// tooling that wants the partial tree calls this and says so.

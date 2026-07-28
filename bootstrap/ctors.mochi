@@ -165,18 +165,20 @@ export let buildRegistry = stmts =>
 // full ctor sets), no builtin seed, no dup-check — threaded into an importer's
 // check so a switch on an imported variant is exhaustiveness-checked against
 // every constructor.
-let exportedRegLoop = (stmts, i, reg) => switch Array.get(i, stmts) {
-  | None => reg
-  | Some(Ast.SType(name, _, ctors, _, true, _)) => exportedRegLoop(
-      stmts,
-      i + 1,
-      {
-        ctors: seedRegCtorsFrom(ctors, 0, name, reg.ctors),
-        types: Map.set(name, ctors |> map(c => c.name), reg.types)
-      }
-    )
-  | Some(_) => exportedRegLoop(stmts, i + 1, reg)
-}
+let exportedRegLoop = (stmts, i0, reg0) =>
+  loop (i = i0, reg = reg0) {
+    switch Array.get(i, stmts) {
+      | None => reg
+      | Some(Ast.SType(name, _, ctors, _, true, _)) => recur(
+          i + 1,
+          {
+            ctors: seedRegCtorsFrom(ctors, 0, name, reg.ctors),
+            types: Map.set(name, ctors |> map(c => c.name), reg.types)
+          }
+        )
+      | Some(_) => recur(i + 1, reg)
+    }
+  }
 export let exportedRegistry = stmts => exportedRegLoop(stmts, 0, emptyRegistry)
 
 // --- ctor keys (codegen's projection: runtime destructure keys) ---

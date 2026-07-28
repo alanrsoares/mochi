@@ -6,9 +6,9 @@
 // - `Tok` is a variant (TS: tagged record union); payloads keep field names.
 // - A located token is { tok, start, end, doc } — TS flattens tok + span and
 //   makes `doc` optional; here `doc` is an Option.
-// - The while-loop becomes `go`, recursing once per char-or-token step. Depth
-//   is fine because every recursive call is in tail position and JSC (Bun)
-//   eliminates tail frames in strict mode — emitted mochi modules are ESM.
+// - The while-loop is a `loop`/`recur` (ADR 0056) driving one char-or-token
+//   step per iteration; TS emit is a real `while (true)`, so depth no longer
+//   rides Bun's strict-mode tail-call elimination.
 
 type Tok =
   | TLet
@@ -169,19 +169,22 @@ type TPart =
 // counting braces. Returns the index just past the closing quote, or None if
 // unterminated. Used only by `findHoleEnd`'s prescan — decoding happens
 // later, in `scanTemplate`.
-let skipStrLoop = (src, j) => switch Str.get(j, src) {
-  | None => None
-  | Some("\"") => Some(j + 1)
-  | Some("\\") => switch Str.get(j + 1, src) {
-      | Some(_) => skipStrLoop(src, j + 2)
-      | None => skipStrLoop(src, j + 1)
-    }
-  | Some("$") when Str.get(j + 1, src) |> Option.contains("{") => switch findHoleEnd(src, j + 2) {
-      | Some(hEnd) => skipStrLoop(src, hEnd)
+let skipStrLoop = (src, j0) =>
+  loop (j = j0) {
+    switch Str.get(j, src) {
       | None => None
+      | Some("\"") => Some(j + 1)
+      | Some("\\") => switch Str.get(j + 1, src) {
+          | Some(_) => recur(j + 2)
+          | None => recur(j + 1)
+        }
+      | Some("$") when Str.get(j + 1, src) |> Option.contains("{") => switch findHoleEnd(src, j + 2) {
+          | Some(hEnd) => recur(hEnd)
+          | None => None
+        }
+      | Some(_) => recur(j + 1)
     }
-  | Some(_) => skipStrLoop(src, j + 1)
-}
+  }
 let skipStringLiteral = (src, i) => skipStrLoop(src, i + 1)
 
 // Skip to (not past) the next newline, or to end of source.
@@ -196,21 +199,23 @@ let skipLineCommentTo = (src, j) => switch Str.get(j, src) {
 // record literal or `switch` inside the hole doesn't close it early, and
 // descends into nested string literals (which may carry their own holes).
 // Mutually recursive with `skipStringLiteral`.
-let findHoleLoop = (src, j, depth) => switch Str.get(j, src) {
-  | None => None
-  | Some("\"") => switch skipStringLiteral(src, j) {
-      | Some(stop) => findHoleLoop(src, stop, depth)
+let findHoleLoop = (src, j0, depth0) =>
+  loop (j = j0, depth = depth0) {
+    switch Str.get(j, src) {
       | None => None
+      | Some("\"") => switch skipStringLiteral(src, j) {
+          | Some(stop) => recur(stop, depth)
+          | None => None
+        }
+      | Some("/") when Str.get(j + 1, src) |> Option.contains("/") => recur(
+          skipLineCommentTo(src, j),
+          depth
+        )
+      | Some("{") => recur(j + 1, depth + 1)
+      | Some("}") => depth == 1 ? Some(j + 1) : recur(j + 1, depth - 1)
+      | Some(_) => recur(j + 1, depth)
     }
-  | Some("/") when Str.get(j + 1, src) |> Option.contains("/") => findHoleLoop(
-      src,
-      skipLineCommentTo(src, j),
-      depth
-    )
-  | Some("{") => findHoleLoop(src, j + 1, depth + 1)
-  | Some("}") => depth == 1 ? Some(j + 1) : findHoleLoop(src, j + 1, depth - 1)
-  | Some(_) => findHoleLoop(src, j + 1, depth)
-}
+  }
 let findHoleEnd = (src, start) => findHoleLoop(src, start, 1)
 
 // A literal chunk's token kind depends only on position: the sole chunk of a
@@ -228,21 +233,26 @@ let literalTok = (idx, total, value) =>
 // Scan a "..." literal (which may contain `${expr}` holes) starting at its
 // opening quote `i`. Returns the alternating lit/hole chunks (oldest first)
 // and the index just past the closing quote; None if unterminated.
-let scanTemplateLoop = (src, j, value, parts) => switch Str.get(j, src) {
-  | None => None
-  | Some("\"") => Some({ parts: Array.append(PLit(value), parts), end: j + 1 })
-  | Some("\\") => switch Str.get(j + 1, src) {
-      | Some(n) => scanTemplateLoop(src, j + 2, "${value}${escChar(n)}", parts)
-      | None => scanTemplateLoop(src, j + 1, "${value}\\", parts)
-    }
-  | Some("$") when Str.get(j + 1, src) |> Option.contains("{") => switch findHoleEnd(src, j + 2) {
+let scanTemplateLoop = (src, j0, value0, parts0) =>
+  loop (j = j0, value = value0, parts = parts0) {
+    switch Str.get(j, src) {
       | None => None
-      | Some(holeEnd) => let withLit = Array.append(PLit(value), parts) in
-        let withHole = Array.append(PHole(j + 2, holeEnd - 1), withLit) in
-          scanTemplateLoop(src, holeEnd, "", withHole)
+      | Some("\"") => Some(
+          { parts: Array.append(PLit(value), parts), end: j + 1 }
+        )
+      | Some("\\") => switch Str.get(j + 1, src) {
+          | Some(n) => recur(j + 2, "${value}${escChar(n)}", parts)
+          | None => recur(j + 1, "${value}\\", parts)
+        }
+      | Some("$") when Str.get(j + 1, src) |> Option.contains("{") => switch findHoleEnd(src, j + 2) {
+          | None => None
+          | Some(holeEnd) => let withLit = Array.append(PLit(value), parts) in
+            let withHole = Array.append(PHole(j + 2, holeEnd - 1), withLit) in
+              recur(holeEnd, "", withHole)
+        }
+      | Some(c) => recur(j + 1, "${value}${c}", parts)
     }
-  | Some(c) => scanTemplateLoop(src, j + 1, "${value}${c}", parts)
-}
+  }
 let scanTemplate = (src, i) => scanTemplateLoop(src, i + 1, "", [])
 
 let notNewline = c => c != "\n"
@@ -281,11 +291,6 @@ let numValue = raw => Str.toNumber(raw) |> Option.unwrapOr(0 / 0)
 // A `-` before a digit is always a literal sign (mochi has no binary minus).
 let numStart = (src, i, c) =>
   isDigit(c) || (c == "-" && (Str.get(i + 1, src) |> Option.exists(isDigit)))
-
-// Emit one token: doc attaches and clears, the line now has a token, the
-// newline run resets. Mutually recursive with `go`.
-let emit = (src, tok, start, stop, doc, toks) =>
-  go(src, stop, [], 0, true, Array.append(mkTok(tok, start, stop, doc), toks))
 
 // Shift a located token's span by `by` — places a hole's recursively-lexed
 // tokens (produced as if the hole's source started at 0) at their real
@@ -352,56 +357,92 @@ let lexParts = (src, parts, idx, total, wholeStart, wholeEnd, doc, toks) => swit
     }
 }
 
-// Top-level entry for a "..." literal starting at its opening quote `i`.
-// Mutually recursive with `go` (continues the outer scan past the literal).
-let lexString = (src, i, doc, toks) => switch scanTemplate(src, i) {
-  | None => lexError("unterminated string literal", i, Str.length(src))
-  | Some(scanned) => switch lexParts(src, scanned.parts, 0, Array.length(scanned.parts), i, scanned.end, doc, toks) {
-      | Err(e) => Err(e)
-      | Ok(toks2) => go(src, scanned.end, [], 0, true, toks2)
-    }
-}
-
-// One step per token. State mirrors the TS locals: `doc` is the pending
+// One step per token. Loop state mirrors the TS locals: `doc` is the pending
 // own-line `///` block, `nlRun` counts newlines since the last comment
 // (>= 2 = a blank line, which breaks doc attachment), `lineTok` says whether
 // the current line already has a token (makes a comment "trailing").
-let go = (src, i, doc, nlRun, lineTok, toks) => switch Str.get(i, src) {
-  | None => Ok(Array.append(mkTok(TEof, i, i, doc), toks))
-  | Some(c) when isSpace(c) => c == "\n"
-      ? let n = nlRun + 1 in
-      let kept = n < 2 ? doc : [] in go(src, i + 1, kept, n, false, toks)
-      : go(src, i + 1, doc, nlRun, lineTok, toks)
-  | Some("/") when Str.get(i + 1, src) |> Option.contains("/") => switch scanComment(src, i, lineTok) {
-      | Trailing(stop) => go(src, stop, doc, nlRun, lineTok, toks)
-      | PlainOwn(stop) => go(src, stop, [], 0, lineTok, toks)
-      | DocLine(text, stop) => go(
-          src,
-          stop,
-          Array.append(text, doc),
-          0,
-          lineTok,
-          toks
-        )
+export let lex = src =>
+  loop (i = 0, doc = [], nlRun = 0, lineTok = false, toks = []) {
+    switch Str.get(i, src) {
+      | None => Ok(Array.append(mkTok(TEof, i, i, doc), toks))
+      | Some(c) when isSpace(c) => c == "\n"
+          ? let n = nlRun + 1 in
+          let kept = n < 2 ? doc : [] in recur(i + 1, kept, n, false, toks)
+          : recur(i + 1, doc, nlRun, lineTok, toks)
+      | Some("/") when Str.get(i + 1, src) |> Option.contains("/") => switch scanComment(src, i, lineTok) {
+          | Trailing(stop) => recur(stop, doc, nlRun, lineTok, toks)
+          | PlainOwn(stop) => recur(stop, [], 0, lineTok, toks)
+          | DocLine(text, stop) => recur(
+              stop,
+              Array.append(text, doc),
+              0,
+              lineTok,
+              toks
+            )
+        }
+      | Some(c) => Str.slice(i, i + 3, src) == "..."
+          ? recur(
+            i + 3,
+            [],
+            0,
+            true,
+            Array.append(mkTok(TSpread, i, i + 3, doc), toks)
+          )
+          : switch digraphTok(Str.slice(i, i + 2, src)) {
+            | Some(t) => recur(
+                i + 2,
+                [],
+                0,
+                true,
+                Array.append(mkTok(t, i, i + 2, doc), toks)
+              )
+            | None => c == "\""
+                ? switch scanTemplate(src, i) {
+                  | None => lexError(
+                      "unterminated string literal",
+                      i,
+                      Str.length(src)
+                    )
+                  | Some(scanned) => switch lexParts(src, scanned.parts, 0, Array.length(scanned.parts), i, scanned.end, doc, toks) {
+                      | Err(e) => Err(e)
+                      | Ok(toks2) => recur(scanned.end, [], 0, true, toks2)
+                    }
+                }
+                : numStart(src, i, c)
+                ? let j = scanWhile(isNumChar, src, i + 1) in
+                let raw = Str.slice(i, j, src) in
+                  recur(
+                    j,
+                    [],
+                    0,
+                    true,
+                    Array.append(
+                      mkTok(TNum(numValue(raw), raw), i, j, doc),
+                      toks
+                    )
+                  )
+                : switch punctTok(c) {
+                  | Some(t) => recur(
+                      i + 1,
+                      [],
+                      0,
+                      true,
+                      Array.append(mkTok(t, i, i + 1, doc), toks)
+                    )
+                  | None => isIdStart(c)
+                      ? let j = scanWhile(isIdChar, src, i + 1) in
+                        recur(
+                          j,
+                          [],
+                          0,
+                          true,
+                          Array.append(
+                            mkTok(identTok(Str.slice(i, j, src)), i, j, doc),
+                            toks
+                          )
+                        )
+                      : lexError("unexpected char '${c}'", i, i + 1)
+                }
+          }
     }
-  | Some(c) => Str.slice(i, i + 3, src) == "..."
-      ? emit(src, TSpread, i, i + 3, doc, toks)
-      : switch digraphTok(Str.slice(i, i + 2, src)) {
-        | Some(t) => emit(src, t, i, i + 2, doc, toks)
-        | None => c == "\""
-            ? lexString(src, i, doc, toks)
-            : numStart(src, i, c)
-            ? let j = scanWhile(isNumChar, src, i + 1) in
-            let raw = Str.slice(i, j, src) in
-              emit(src, TNum(numValue(raw), raw), i, j, doc, toks)
-            : switch punctTok(c) {
-              | Some(t) => emit(src, t, i, i + 1, doc, toks)
-              | None => isIdStart(c)
-                  ? let j = scanWhile(isIdChar, src, i + 1) in
-                    emit(src, identTok(Str.slice(i, j, src)), i, j, doc, toks)
-                  : lexError("unexpected char '${c}'", i, i + 1)
-            }
-      }
-}
-
-export let lex = src => go(src, 0, [], 0, false, [])
+  }
