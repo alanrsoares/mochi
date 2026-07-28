@@ -4,6 +4,7 @@ import { SyntaxPanel } from "./components/SyntaxPanel"
 import { CodegenPanels } from "./components/CodegenPanels"
 import { HeroCarousel } from "./components/HeroCarousel"
 import { HighlightedCode, ColorSchemeToggle, Icon } from "./host/widgets.host"
+import { githubUrl, SiteFooter } from "./components/SiteChrome"
 import {
   NavLink,
   GhostPill,
@@ -50,7 +51,7 @@ let SiteHeader = props =>
         </NavLink>
         <ColorSchemeToggle />
         <GhostPill
-          href="https://github.com/alanrsoares/mochi"
+          href={githubUrl}
           target="_blank"
           rel="noreferrer"
           className="whitespace-nowrap"
@@ -101,31 +102,6 @@ let Hero = props =>
       <HeroCarousel />
     </div>
   </section>
-
-let SiteFooter = props =>
-  <footer className="border-t-2 border-line py-8 bg-peach">
-    <div
-      className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-3 font-mono text-xs text-mute"
-    >
-      <div className="flex items-center gap-3">
-        <img
-          src={props.logo}
-          alt=""
-          className="w-6 h-6 object-contain rounded-full"
-        />
-        <span>{"mochi"}</span>
-      </div>
-      <NavLink
-        href="https://github.com/alanrsoares/mochi/blob/main/apps/docs/src/App.mochi"
-        target="_blank"
-        rel="noreferrer"
-        className="inline-flex items-center gap-1.5"
-      >
-        <span>{"built with mochi — this page is App.mochi"}</span>
-        <Icon name="external-link" className="size-3 shrink-0" />
-      </NavLink>
-    </div>
-  </footer>
 
 let InteropRow = props =>
   <div
@@ -262,5 +238,9 @@ export let App = props =>
         </div>
       </section>
     </main>
-    <SiteFooter logo={props.logo} playgroundHref={props.playgroundHref} />
+    <SiteFooter
+      logo={props.logo}
+      linkHref={githubUrl ++ "/blob/main/apps/docs/src/App.mochi"}
+      linkLabel="built with mochi — this page is App.mochi"
+    />
   </div>

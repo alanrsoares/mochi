@@ -1,20 +1,6 @@
-import { render } from "preact";
-import "./index.css";
-
-import logoImg from "@mochi/root/logo.png";
-import { initColorScheme } from "./lib/color-scheme";
+import { logoUrl, mountPage, siteHrefs } from "./lib/site";
 import { AboutPage } from "./pages/AboutPage.mochi";
 
-initColorScheme();
-
-const rootElem = document.getElementById("app");
-if (rootElem) {
-  render(
-    <AboutPage
-      logo={logoImg}
-      homeHref={import.meta.env.BASE_URL}
-      playgroundHref={`${import.meta.env.BASE_URL}playground.html`}
-    />,
-    rootElem,
-  );
-}
+mountPage(
+  <AboutPage logo={logoUrl} homeHref={siteHrefs.home} playgroundHref={siteHrefs.playground} />,
+);

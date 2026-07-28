@@ -1,0 +1,78 @@
+// Shared site chrome — the leaf blocks every page's header/footer repeats
+// (brand link, GitHub link, active-nav marker, footer). Page headers keep
+// their own layout (landing is sticky h-14, playground compact h-12); the
+// duplicated pieces live here once.
+import { Icon } from "../host/widgets.host"
+import { NavLink } from "../ui/primitives"
+
+export let githubUrl = "https://github.com/alanrsoares/mochi"
+
+/// Logo + wordmark link. `compact` fits the playground's h-12 header.
+export let BrandLink = props =>
+  props.compact
+    ? <a href={props.href} className="flex items-center gap-2.5 no-underline">
+      <img
+        src={props.logo}
+        alt=""
+        className="h-7 w-7 rounded-full object-contain"
+      />
+      <span
+        className="font-bold font-display text-base text-ink tracking-tight"
+      >
+        {"mochi"}
+      </span>
+    </a>
+    : <a href={props.href} className="flex items-center gap-3 no-underline">
+      <img
+        src={props.logo}
+        alt=""
+        className="h-8 w-8 rounded-full object-contain"
+      />
+      <span className="font-bold font-display text-ink text-lg tracking-tight">
+        {"mochi"}
+      </span>
+    </a>
+
+/// Plain nav-style GitHub repo link (icon + label).
+export let GithubLink = () =>
+  <a
+    href={githubUrl}
+    target="_blank"
+    rel="noreferrer"
+    className="inline-flex items-center gap-1.5 transition-colors hover:text-fur-deep"
+  >
+    <Icon name="github" className="size-3.5 shrink-0" />
+    <span>{"GitHub"}</span>
+  </a>
+
+/// Current-page marker in the nav.
+export let ActiveNavItem = props =>
+  <span className="border-fur border-b-2 pb-0.5 font-semibold text-fur-deep">
+    {props.label}
+  </span>
+
+/// Shared footer: brand mark + one outbound link.
+export let SiteFooter = props =>
+  <footer className="border-line border-t-2 bg-peach py-8">
+    <div
+      className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-6 font-mono text-mute text-xs sm:flex-row"
+    >
+      <div className="flex items-center gap-3">
+        <img
+          src={props.logo}
+          alt=""
+          className="h-6 w-6 rounded-full object-contain"
+        />
+        <span>{"mochi"}</span>
+      </div>
+      <NavLink
+        href={props.linkHref}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-1.5"
+      >
+        <span>{props.linkLabel}</span>
+        <Icon name="external-link" className="size-3 shrink-0" />
+      </NavLink>
+    </div>
+  </footer>

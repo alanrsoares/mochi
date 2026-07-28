@@ -3,13 +3,24 @@ import { mochiPlugin } from "@mochi/vite-plugin";
 import { mochiWorkspaceAliases } from "@mochi/vite-plugin/workspace-aliases";
 import preact from "@preact/preset-vite";
 import tailwindcss from "@tailwindcss/vite";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import { docsVendorPlugins } from "./mochi.plugins";
+import { headChromeHtml } from "./src/lib/head-chrome";
 
 const repoRoot = path.resolve(import.meta.dirname, "../..");
 
+/** Inject the shared head chrome (metas, fonts, pre-paint theme script) into every entry page. */
+const headChrome = (): Plugin => ({
+  name: "docs-head-chrome",
+  transformIndexHtml: {
+    order: "pre",
+    handler: (html) => html.replace("<!-- head-chrome -->", headChromeHtml),
+  },
+});
+
 export default defineConfig({
   plugins: [
+    headChrome(),
     mochiPlugin({
       jsxPragmaHeader: 'import { h } from "preact";\n',
       plugins: docsVendorPlugins,

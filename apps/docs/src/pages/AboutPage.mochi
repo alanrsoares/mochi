@@ -1,6 +1,13 @@
 // About page shell — same MPA chrome as PlaygroundPage (ADR 0008), story body
 // in AboutScrolly.
-import { ColorSchemeToggle, Icon } from "../host/widgets.host"
+import { ColorSchemeToggle } from "../host/widgets.host"
+import {
+  ActiveNavItem,
+  BrandLink,
+  GithubLink,
+  githubUrl,
+  SiteFooter
+} from "../components/SiteChrome"
 import { AboutScrolly } from "../components/AboutScrolly"
 import { NavLink } from "../ui/primitives"
 
@@ -12,41 +19,15 @@ export let AboutPage = props =>
       <div
         className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6"
       >
-        <a
-          href={props.homeHref}
-          className="flex items-center gap-3 no-underline"
-        >
-          <img
-            src={props.logo}
-            alt=""
-            className="h-8 w-8 rounded-full object-contain"
-          />
-          <span
-            className="font-bold font-display text-ink text-lg tracking-tight"
-          >
-            {"mochi"}
-          </span>
-        </a>
+        <BrandLink href={props.homeHref} logo={props.logo} compact={false} />
         <nav
           className="flex items-center gap-3 font-mono text-mute text-xs md:gap-5"
         >
           <NavLink href={props.homeHref}>{"docs"}</NavLink>
           <NavLink href={props.playgroundHref}>{"playground"}</NavLink>
-          <span
-            className="border-fur border-b-2 pb-0.5 font-semibold text-fur-deep"
-          >
-            {"about"}
-          </span>
+          <ActiveNavItem label="about" />
           <ColorSchemeToggle />
-          <a
-            href="https://github.com/alanrsoares/mochi"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 transition-colors hover:text-fur-deep"
-          >
-            <Icon name="github" className="size-3.5 shrink-0" />
-            <span>{"GitHub"}</span>
-          </a>
+          <GithubLink />
         </nav>
       </div>
     </header>
@@ -68,25 +49,9 @@ export let AboutPage = props =>
       </div>
       <div className="mt-12 lg:mt-16"><AboutScrolly /></div>
     </main>
-    <footer className="border-line border-t-2 bg-peach py-8">
-      <div
-        className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-6 font-mono text-mute text-xs sm:flex-row"
-      >
-        <div className="flex items-center gap-3">
-          <img
-            src={props.logo}
-            alt=""
-            className="h-6 w-6 rounded-full object-contain"
-          />
-          <span>{"mochi"}</span>
-        </div>
-        <NavLink
-          href="https://github.com/alanrsoares/mochi/blob/main/docs/adr"
-          target="_blank"
-          rel="noreferrer"
-        >
-          {"decisions live in docs/adr"}
-        </NavLink>
-      </div>
-    </footer>
+    <SiteFooter
+      logo={props.logo}
+      linkHref={githubUrl ++ "/blob/main/docs/adr"}
+      linkLabel="decisions live in docs/adr"
+    />
   </div>

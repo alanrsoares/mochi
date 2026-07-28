@@ -1,6 +1,7 @@
 // Full-viewport playground shell — ReScript try IA, mochi chrome.
 // Playground stays TSX (compile / hooks / imperative preview host).
-import { Playground, ColorSchemeToggle, Icon } from "../host/widgets.host"
+import { Playground, ColorSchemeToggle } from "../host/widgets.host"
+import { ActiveNavItem, BrandLink, GithubLink } from "../components/SiteChrome"
 
 export let PlaygroundPage = props =>
   <div
@@ -12,21 +13,7 @@ export let PlaygroundPage = props =>
       <div
         className="flex h-12 items-center justify-between gap-4 px-4 sm:px-6"
       >
-        <a
-          href={props.homeHref}
-          className="flex items-center gap-2.5 no-underline"
-        >
-          <img
-            src={props.logo}
-            alt=""
-            className="h-7 w-7 rounded-full object-contain"
-          />
-          <span
-            className="font-bold font-display text-base text-ink tracking-tight"
-          >
-            {"mochi"}
-          </span>
-        </a>
+        <BrandLink href={props.homeHref} logo={props.logo} compact={true} />
         <nav className="flex items-center gap-3 font-mono text-mute text-xs">
           <a
             href={props.homeHref}
@@ -34,21 +21,9 @@ export let PlaygroundPage = props =>
           >
             {"Docs"}
           </a>
-          <span
-            className="border-fur border-b-2 pb-0.5 font-semibold text-fur-deep"
-          >
-            {"Playground"}
-          </span>
+          <ActiveNavItem label="Playground" />
           <ColorSchemeToggle />
-          <a
-            href="https://github.com/alanrsoares/mochi"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 transition-colors hover:text-fur-deep"
-          >
-            <Icon name="github" className="size-3.5 shrink-0" />
-            <span>{"GitHub"}</span>
-          </a>
+          <GithubLink />
         </nav>
       </div>
     </header>
