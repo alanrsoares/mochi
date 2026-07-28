@@ -133,6 +133,29 @@ let evens = iterate(x => add(x, 2))(0)        // INFINITE
 let evens5 = evens |> take(5) |> toArray      // [0, 2, 4, 6, 8]
 ```
 
+## Loops (`loop` / `recur`)
+
+Tail recursion as an expression that emits an idiomatic JS `while` loop
+(ADR 0056). `loop (name = init, …) { body }` binds its params for the body;
+`recur(e, …)` in **tail position** rebinds them and continues; any other tail
+value is the loop's result. No mutation surfaces — rebinding is confined to
+the emitted code.
+
+```mochi
+let sum = (xs) =>
+  loop (acc = 0, i = 0) {
+    switch Array.get(i, xs) {
+      | None => acc
+      | Some(x) => recur(acc + x, i + 1)
+    }
+  }
+```
+
+`recur` outside a loop, outside tail position, with the wrong arity, or beyond
+a lambda boundary is a check error; `recur` always targets the *nearest*
+enclosing loop. For iteration purely for effect, use
+`Array.forEach : (a -> unit) -> [a] -> unit` with `ignore` (ADR 0054).
+
 ## Prelude highlights
 
 - Math ops unqualified (`add`, `mul`, `mod` = true modulo …); strings under `Str.*`.

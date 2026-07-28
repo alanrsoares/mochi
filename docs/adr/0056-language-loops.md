@@ -1,49 +1,84 @@
-# 0056 — Loops in the surface language
+# 0056 — Loops in the surface language: `loop`/`recur`
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-07-28
 - **Source:** owner request during apps/docs architecture review ("also language loops")
 
 ## Context
 
-mochi is recursion-only. That is the right default for an ML-family core, but
-two costs show up at the host seam:
+mochi was recursion-only. That is the right default for an ML-family core, but
+two costs showed up at the host seam:
 
 1. **Emit readability.** The compiler's promise is *readable* JS/TS output.
-   Hand-written host code for iteration-heavy work (the playground editor's
-   cursor/line math, byte chunking in `shared-code.ts`) uses plain loops; the
-   equivalent mochi must be written as recursion and emits as recursion —
-   noticeably less readable than what a person would write, which undercuts the
-   "JS you'd have written by hand" pitch for hot paths.
-2. **Interop pressure.** Code that would be one `for` in the host gets pushed
-   *to* the host (stays TSX/TS) purely to avoid recursive phrasing, moving the
-   FFI seam for a reason that has nothing to do with effects or types.
+   Iteration-heavy code had to be written as recursion and emitted as
+   recursion — undercutting the "JS you'd have written by hand" pitch.
+2. **Stack-depth fragility.** The self-host depended on JSC's strict-mode
+   proper tail calls for depth (prelude `_curry` comment,
+   bootstrap-parser.spec's `"use strict"` prologue) — a target-specific
+   guarantee neither the LLVM ticket (0022) nor the Wasm path (ADR 0053) gets
+   for free.
 
-## Decision (proposed)
+## Decision
 
-Add a loop construct to the surface language. Shape to be designed — candidate
-directions, not yet chosen:
+**Clojure-style `loop`/`recur` expression**, plus prelude **`Array.forEach`**
+(`(a -> unit) -> [a] -> unit`) for pure effect iteration.
 
-- `for x in xs { … }` / `while cond { … }` as `unit`-typed statements
-  (ADR 0054 gives `unit` a value, so loop bodies have an honest type), or
-- a `loop`/`recur` tail-recursion sugar that *emits* a JS loop while keeping
-  expression semantics.
+```
+let sum = (xs) =>
+  loop (acc = 0, i = 0) {
+    switch Array.get(i, xs) {
+      | None => acc
+      | Some(x) => recur(acc + x, i + 1)
+    }
+  }
+```
 
-Whichever shape wins, the codegen requirement is fixed: the emitted JS/TS must
-be an idiomatic loop, and the TS emit must stay `tsc --strict`-clean.
+- `loop (name = init, …) { body }` is an **expression**; `recur(e, …)` in tail
+  position rebinds the params and continues; any non-recur tail value is the
+  loop's result. No mutation surfaces — it stays confined to the emit.
+- **Keywords.** `loop`/`recur` are real keywords (lexer). Corpus cost: one
+  rename (`examples/life` bound `let loop`, now `tick`).
+- **Types.** Inits infer in the outer context; params bind **monomorphic**;
+  `recur` args unify with the nearest loop's param types and the node itself
+  types as a fresh var (bottom-like, so it unifies with the other tails);
+  the loop's type is its body's. Param monotypes ride the existing `letParams`
+  channel so TS emit annotates the loop `let`s (ADR 0035 mechanism).
+- **Checks** (`checkLoops`): `recur` only in tail position of the *nearest*
+  loop (tails: loop body, ternary branches, switch arm bodies, letin bodies;
+  lambda/letbind are hard boundaries); arity must match; duplicate params and
+  letin shadowing a loop param are rejected (the rebind emit depends on it).
+- **Emit.** Statement context (a loop directly under a lambda body, or at the
+  tail of a `genLetBlock` const chain) emits a bare block
+  `{ let acc = 0, i = 0; while (true) { … } }`; any other position wraps in an
+  IIFE. Value tails `return`; `recur` tails rebind (`[acc, i] = […]; continue`);
+  ternary/letin tails lower to `if`/`else` and `const`s. A **switch tail keeps
+  its ts-pattern chain** as an expression whose arms yield `_recur(…)`/`_done(…)`
+  step objects the loop dispatches on — pattern compilation is never
+  reimplemented as statements, and match-free loops never reference the
+  helpers. TS emit is `tsc --strict`-clean (the step helpers' typed forms live
+  in the generated runtime; the rest-param infers the args tuple).
 
 ## Consequences
 
-- Purity story must be stated: loop bodies are effectful (`unit`), which is
-  consistent with ADR 0054's `ignore`/`()` direction.
-- Exhaustiveness/inference untouched — loops are statements, not a new
-  expression form (unless the `loop`/`recur` direction is chosen).
-- Bootstrap self-host would eventually want the construct too (parser/infer
-  loops are recursion-heavy today by necessity).
+- Iteration-heavy mochi now emits idiomatic loops and no longer leans on JSC
+  TCO — the same lowering ticket 0022 plans for LLVM.
+- Bootstrap mirrors the whole node (ast/lexer/parser/check/infer/codegen
+  `.mochi`), byte-parity with the TS emit across the differential corpus
+  (`examples/loops.mochi`). Gotcha recorded: `plugins/jsx.mochi` re-declares
+  `Tok` locally — hook signatures must stay structurally identical to the
+  parser's or the TS emit trips strictFunctionTypes at the module boundary.
+- **Follow-up:** adopting `loop` *inside* `bootstrap/` needs a released
+  generation that parses it (fixpoint constraint) — the mirror is written in
+  recursion style for now.
 
 ## Alternatives rejected
 
-- **Stay recursion-only** — keeps the core minimal but permanently cedes
-  iteration-heavy modules to the host and produces non-idiomatic emit.
-- **Compiler-side tail-call optimization only** — fixes stack safety, not emit
-  readability; recursion still emits as recursion or as an opaque trampoline.
+- **`for x in xs { … }` / `while cond { … }` statements** — mochi has no
+  statement grammar below the top level and **zero mutability** (no `mut`, no
+  `:=`, no cells): `while` would be meaningless, and `for` only covers effect
+  iteration (now `Array.forEach`) while the cited cases (cursor math, byte
+  chunking) accumulate values.
+- **Compiler-side TCO only** — fixes stack safety on some targets, not emit
+  readability; recursion still emits as recursion or an opaque trampoline.
+- **Stay recursion-only** — permanently cedes iteration-heavy modules to the
+  host.
