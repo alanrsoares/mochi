@@ -1,7 +1,6 @@
 import { render } from "preact";
 import "./index.css";
 
-import cosmicTypesImg from "@mochi/root/illustrations/mochi_cosmic_types.jpg";
 import logoImg from "@mochi/root/logo.png";
 import { App } from "./App.mochi";
 import codeEmitDts from "./examples/emit-shape.d.ts.txt?raw";
@@ -20,8 +19,8 @@ if (rootElem) {
   render(
     <App
       logo={logoImg}
-      aboutArt={cosmicTypesImg}
       playgroundHref={`${import.meta.env.BASE_URL}playground.html`}
+      aboutHref={`${import.meta.env.BASE_URL}about.html`}
       codeVariants={codeVariants}
       codeRecords={codeRecords}
       codeJsx={codeJsx}

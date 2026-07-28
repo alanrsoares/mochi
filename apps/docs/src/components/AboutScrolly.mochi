@@ -1,0 +1,99 @@
+// Scrollytelling body — chapter copy scrolls on the left, one sticky plate
+// crossfades on the right. Copy lives in `lib/about-chapters.ts`; the GSAP
+// ScrollTrigger choreography (plate swaps, beat reveals, reduced-motion
+// split) lives in `lib/about-scrolly-fx.ts`. This file is layout only.
+import { useEffect, hookDeps0 } from "@mochi/plugin-preact/hooks"
+import { SectionEyebrow } from "../ui/primitives"
+
+type Chapter = { id: string, kicker: string, title: string, body: [string], src: string, alt: string }
+
+extern aboutChapters : [Chapter] = "../lib/about-chapters" "aboutChapters"
+extern SPARK_TALK_URL : string = "../lib/about-chapters" "SPARK_TALK_URL"
+// Cleanup return stays OPAQUE (`a`, not `a -> b`) — extern arity counts the
+// whole arrow spine; see the HeroCarousel `startHeroTick` note.
+/// Returns an effect cleanup.
+extern startAboutScrollFx : () -> a = "../lib/about-scrolly-fx" "startAboutScrollFx"
+
+/// Quiet credit under the spark chapter — inspired by, not a retelling of.
+let SparkCredit = props =>
+  <p className="about-beat font-mono text-2xs text-mute">
+    {"sparked by Cheng Lou's "}
+    <a
+      href={props.href}
+      target="_blank"
+      rel="noreferrer"
+      className="underline decoration-fur/40 underline-offset-4 transition-colors hover:text-fur-deep"
+    >
+      {"What's in a language?"}
+    </a>
+  </p>
+
+let ChapterBody = props =>
+  <div className="about-beat space-y-3">
+    {map(
+      text => <p className="text-copy text-mute leading-relaxed">{text}</p>,
+      props.body
+    )}
+  </div>
+
+/// One text beat. The mobile plate sits inline (no sticky theatrics); on md+
+/// the sticky column carries the art and this image hides.
+let ChapterSection = props =>
+  <section
+    id={props.chapter.id}
+    className="about-chapter scroll-mt-24 space-y-4 py-10 md:flex md:min-h-[70vh] md:flex-col md:justify-center md:py-0"
+  >
+    <img
+      src={props.chapter.src}
+      alt={props.chapter.alt}
+      loading="lazy"
+      decoding="async"
+      className="about-beat w-full rounded-frame border-2 border-line-strong object-cover shadow-soft md:hidden"
+    />
+    <div className="about-beat">
+      <SectionEyebrow>{props.chapter.kicker}</SectionEyebrow>
+      <h2
+        className="mt-2 font-display font-extrabold text-2xl text-ink tracking-tight"
+      >
+        {props.chapter.title}
+      </h2>
+    </div>
+    <ChapterBody body={props.chapter.body} />
+    {props.chapter.id == "spark"
+      ? <SparkCredit href={SPARK_TALK_URL} />
+      : <span className="hidden" />}
+  </section>
+
+/// Sticky plate stack — all plates render once; GSAP owns opacity/scale, the
+/// `opacity-0` class is only the pre-hydration state (first plate fades in on
+/// mount, so there is no stacked-image flash).
+let PlateStack = _ =>
+  <div
+    className="sticky top-24 hidden aspect-square overflow-hidden rounded-frame border-2 border-line-strong bg-foam shadow-soft md:block"
+  >
+    {map(
+      chapter =>
+        <img
+          key={chapter.id}
+          id={"plate-${chapter.id}"}
+          src={chapter.src}
+          alt={chapter.alt}
+          loading={chapter.id == "spark" ? "eager" : "lazy"}
+          decoding="async"
+          className="about-plate absolute inset-0 h-full w-full object-cover opacity-0"
+        />,
+      aboutChapters
+    )}
+  </div>
+
+export let AboutScrolly = _ =>
+  let _fx = useEffect(() => startAboutScrollFx())(hookDeps0()) in
+    <div className="grid grid-cols-1 gap-10 md:grid-cols-2 md:gap-14 lg:gap-20">
+      <div className="md:space-y-6">
+        {map(
+          chapter => <ChapterSection key={chapter.id} chapter={chapter} />,
+          aboutChapters
+        )}
+      </div>
+      <div className="hidden md:block"><PlateStack /></div>
+    </div>

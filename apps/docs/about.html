@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>About · Mochi</title>
+    <meta
+      name="description"
+      content="Why write a language? The story behind mochi — from a small compiler to a self-hosted, strict-TypeScript-clean toolchain."
+    />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fdf4e8" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#2e2552" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;1,400&family=Outfit:wght@400;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      (() => {
+        const key = "mochi-color-scheme";
+        let pref = "system";
+        try {
+          const raw = localStorage.getItem(key);
+          if (raw === "light" || raw === "dark" || raw === "system") pref = raw;
+        } catch {}
+        const dark =
+          pref === "dark" ||
+          (pref === "system" &&
+            matchMedia("(prefers-color-scheme: dark)").matches);
+        const theme = dark ? "dark" : "light";
+        document.documentElement.setAttribute("data-theme", theme);
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
+  </head>
+  <body class="min-h-screen antialiased">
+    <div id="app"></div>
+    <script type="module" src="/src/about-main.tsx"></script>
+  </body>
+</html>

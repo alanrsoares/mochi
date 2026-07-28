@@ -20,6 +20,7 @@
     "@preact/signals": "^2.3.1",
     "@re-reduced/preact": "^0.2.3",
     "@styled-cva/react": "^0.7.1",
+    "gsap": "^3.15.0",
     "lucide-preact": "^1.27.0",
     "preact": "^10.26.4",
     "prettier": "3"

@@ -49,6 +49,7 @@ export default defineConfig({
       input: {
         main: path.resolve(import.meta.dirname, "index.html"),
         playground: path.resolve(import.meta.dirname, "playground.html"),
+        about: path.resolve(import.meta.dirname, "about.html"),
       },
     },
   },
