@@ -9,10 +9,7 @@
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "allowImportingTsExtensions": true,
-    "paths": {
-      "@mochi/root/*": ["../../*"]
-    }
+    "allowImportingTsExtensions": true
   },
   "include": ["src/**/*"]
 }

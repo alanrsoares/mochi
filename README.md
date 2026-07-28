@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="illustrations/mochi_coder_mascot.jpg" alt="mochi mascot at the keyboard" width="720" />
+<img src="apps/docs/public/illustrations/mochi_coder_mascot.jpg" alt="mochi mascot at the keyboard" width="720" />
 
 <h1>mochi</h1>
 
@@ -18,7 +18,7 @@ same knowledge to the editor: hover types, `.d.ts` files, and the formatter all 
 the compiler's own passes rather than a separate model of your code.
 
 <div align="center">
-<img src="illustrations/mochi_compiler_magic.jpg" alt="mochi compiling to JS and TS with zero errors" width="560" />
+<img src="apps/docs/public/illustrations/mochi_compiler_magic.jpg" alt="mochi compiling to JS and TS with zero errors" width="560" />
 </div>
 
 ## One language, two clean outputs

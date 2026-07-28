@@ -2,10 +2,10 @@
  * Entry-point plumbing shared by the three MPA pages: cross-page hrefs, the
  * site logo, and the mount ritual (global CSS, color-scheme init, render).
  */
-import logoImg from "@mochi/root/logo.png";
 import { render, type VNode } from "preact";
 import "../index.css";
 import { initColorScheme } from "./color-scheme";
+import { logoImg } from "./illustrations";
 
 export const logoUrl: string = logoImg;
 

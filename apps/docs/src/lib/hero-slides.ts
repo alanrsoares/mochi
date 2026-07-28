@@ -1,11 +1,12 @@
-import bootstrapPartyImg from "@mochi/root/illustrations/mochi_bootstrap_party.jpg";
-import coderMascotImg from "@mochi/root/illustrations/mochi_coder_mascot.jpg";
-import compilerMagicImg from "@mochi/root/illustrations/mochi_compiler_magic.jpg";
-import cosmicTypesImg from "@mochi/root/illustrations/mochi_cosmic_types.jpg";
-import lspInspectorImg from "@mochi/root/illustrations/mochi_lsp_inspector.jpg";
-import stickersImg from "@mochi/root/illustrations/mochi_stickers.jpg";
+import {
+  bootstrapPartyImg,
+  coderMascotImg,
+  compilerMagicImg,
+  cosmicTypesImg,
+  lspInspectorImg,
+  stickersImg,
+} from "./illustrations";
 
-/** Vite-resolved slide assets — jpg imports stay in TS (entry/host). */
 export type HeroSlide = {
   src: string;
   alt: string;

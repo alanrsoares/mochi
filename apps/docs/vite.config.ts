@@ -31,7 +31,6 @@ export default defineConfig({
   resolve: {
     alias: [
       ...mochiWorkspaceAliases(repoRoot),
-      { find: "@mochi/root", replacement: repoRoot },
       {
         find: "@mochi/plugin-preact/hooks",
         replacement: path.resolve(repoRoot, "packages/plugin-preact/hooks.mochi"),
