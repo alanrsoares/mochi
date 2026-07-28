@@ -174,4 +174,16 @@ describe("component prop contracts (ADR 0055)", () => {
     `;
     expect(isErr(compile(src))).toBe(false);
   });
+
+  // The "render nothing" arm: `<></>` unifies as VNode in a ternary and emits
+  // `h("Fragment", …)` — the host `h` maps that tag to its Fragment (the
+  // vite-plugin's default pragma header and the playground preview both do).
+  it("an empty fragment fills the empty ternary arm", () => {
+    const src = `let el = eq(1, 2) ? <div>{"busy"}</div> : <></>`;
+    const r = compile(src);
+    expect(isErr(r)).toBe(false);
+    if (!isErr(r)) {
+      expect(r.value).toContain('h("Fragment", {}, [])');
+    }
+  });
 });

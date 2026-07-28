@@ -26,7 +26,7 @@ describe("vite-plugin-mochi", () => {
     const code = `export let Button = (props) => <button className={props.kind}>{props.label}</button>`;
     const result = plugin.transform(code, "src/Button.mochi");
     expect(result).not.toBeNull();
-    expect(result?.code).toContain('import { h } from "preact";');
+    expect(result?.code).toContain('import { h as _h, Fragment as _Fragment } from "preact";');
     expect(result?.code).toContain('h("button", { className: props.kind }, [props.label])');
     expect(result?.code).toContain("export const Button");
   });
@@ -45,7 +45,7 @@ describe("vite-plugin-mochi", () => {
 let HeaderBadge = props => <BadgeShell>{props.label}</BadgeShell>`;
     const result = plugin.transform(code, "src/HeaderBadge.mochi");
     expect(result?.code).toMatch(
-      /^import \{ h \} from "preact";\nimport \{ BadgeShell \} from "\.\.\/ui\/primitives\.mochi";/,
+      /^import \{ h as _h, Fragment as _Fragment \} from "preact";\nconst h = [^\n]+;\nimport \{ BadgeShell \} from "\.\.\/ui\/primitives\.mochi";/,
     );
   });
 
@@ -63,7 +63,7 @@ let x = useState`;
     // Docs copy once suppressed the pragma: the sniff matched a string body.
     const code = `let Row = props => <p>{"We import { h } from preact."}</p>`;
     const result = plugin.transform(code, "src/Row.mochi");
-    expect(result?.code).toMatch(/^import \{ h \} from "preact";/);
+    expect(result?.code).toMatch(/^import \{ h as _h, Fragment as _Fragment \} from "preact";/);
     expect(result?.code).toContain('h("p"');
   });
 

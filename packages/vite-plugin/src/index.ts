@@ -11,7 +11,9 @@ import { isErr } from "@onrails/result";
 export type MochiPluginOptions = {
   /**
    * JSX pragma import header prepended to modules containing JSX.
-   * Default: `import { h } from "preact";`
+   * Default: a Fragment-aware `h` over Preact's — codegen emits `<></>` as
+   * `h("Fragment", …)` (jsx plugin vocabulary, ADR 0055), so the host `h`
+   * maps that tag to Preact's `Fragment`.
    */
   jsxPragmaHeader?: string;
   /**
@@ -27,7 +29,10 @@ export type MochiPluginOptions = {
 };
 
 export function mochiPlugin(options: MochiPluginOptions = {}) {
-  const jsxHeader = options.jsxPragmaHeader ?? 'import { h } from "preact";\n';
+  const jsxHeader =
+    options.jsxPragmaHeader ??
+    'import { h as _h, Fragment as _Fragment } from "preact";\n' +
+      'const h = (tag, props, children) => _h(tag === "Fragment" ? _Fragment : tag, props, children);\n';
   const runtime = options.runtime ?? true;
   const plugins = options.plugins;
 

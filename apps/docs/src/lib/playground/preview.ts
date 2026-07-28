@@ -3,7 +3,15 @@
  * renders the resulting vnode (if the program binds `let app = …`).
  */
 import { match } from "@onrails/pattern";
-import { h, render } from "preact";
+import { type ComponentChildren, type ComponentType, Fragment, h as preactH, render } from "preact";
+
+/** Fragment-aware `h` — codegen emits `<></>` as `h("Fragment", …)` (ADR 0055). */
+const h = (tag: unknown, props: unknown, ...children: unknown[]) =>
+  preactH(
+    (tag === "Fragment" ? Fragment : tag) as ComponentType,
+    props as Record<string, unknown> | null,
+    ...(children as ComponentChildren[]),
+  );
 
 /** Emit is an ESM module (`import { match }…`); playground runs it in `new Function`. */
 export const stripModuleImports = (js: string): string =>

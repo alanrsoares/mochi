@@ -41,7 +41,7 @@ export let PlaygroundView = props =>
             name="loader-2"
             className="size-3.5 shrink-0 animate-spin text-ok"
           />
-          : <span />}
+          : <></>}
         <StatusLabel $state={props.statusState}>{props.statusText}</StatusLabel>
       </div>
     </div>
