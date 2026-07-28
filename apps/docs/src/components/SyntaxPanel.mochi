@@ -1,6 +1,6 @@
 import { SyntaxBar } from "../ui/primitives"
 
-let SyntaxPanel = props =>
+export let SyntaxPanel = props =>
   <div className="panel overflow-hidden flex flex-col">
     <SyntaxBar $tone={props.$tone}>
       <span>{props.title}</span>

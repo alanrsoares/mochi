@@ -28,11 +28,11 @@ export let BadgePulse = tw.span(
 export let NavLink = tw.a("hover:text-fur-deep transition-colors")
 
 export let GhostPill = tw.a(
-  "px-3 py-1.5 text-ink border-2 border-line-strong rounded-full hover:border-fur hover:bg-foam transition-colors font-semibold"
+  "inline-flex items-center gap-1.5 px-3 py-1.5 text-ink border-2 border-line-strong rounded-full hover:border-fur hover:bg-foam transition-colors font-semibold"
 )
 
 export let CtaPill = tw.a(
-  "px-5 py-2.5 bg-fur hover:bg-fur-deep text-white font-bold rounded-full shadow-cta transition-colors focus-visible:outline-2 focus-visible:outline-bao focus-visible:outline-offset-2"
+  "inline-flex items-center gap-1.5 px-5 py-2.5 bg-fur hover:bg-fur-deep text-paper font-bold rounded-full shadow-cta transition-colors focus-visible:outline-2 focus-visible:outline-bao focus-visible:outline-offset-2"
 )
 
 export let CmdChip = tw.div(
@@ -102,7 +102,7 @@ export let SegTab = tw.button(
   "rounded-full px-3 py-1 font-mono font-semibold text-2xs transition-colors",
   {
     variants: {
-      $active: { on: "bg-fur text-white", off: "text-mute hover:text-ink" }
+      $active: { on: "bg-fur text-paper", off: "text-mute hover:text-ink" }
     },
     defaultVariants: { $active: "off" }
   }
@@ -110,7 +110,7 @@ export let SegTab = tw.button(
 
 // Playground right-pane tabs (ReScript-style underline, not pills).
 export let PaneTab = tw.button(
-  "relative shrink-0 whitespace-nowrap px-3 py-2.5 font-mono text-2xs font-semibold transition-colors",
+  "relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-2.5 font-mono text-2xs font-semibold transition-colors",
   {
     variants: {
       $active: {
@@ -123,11 +123,11 @@ export let PaneTab = tw.button(
 )
 
 export let ToolBtn = tw.button(
-  "rounded-full border-2 border-fur/40 bg-foam px-3.5 py-1.5 font-mono text-2xs font-semibold text-fur-deep transition-colors hover:border-fur hover:bg-fur-subtle focus-visible:outline-2 focus-visible:outline-bao focus-visible:outline-offset-2 disabled:opacity-40"
+  "inline-flex items-center gap-1.5 rounded-full border-2 border-fur/40 bg-foam px-3.5 py-1.5 font-mono text-2xs font-semibold text-fur-deep transition-colors hover:border-fur hover:bg-fur-subtle focus-visible:outline-2 focus-visible:outline-bao focus-visible:outline-offset-2 disabled:opacity-40"
 )
 
 export let ToolBtnSolid = tw.button(
-  "rounded-full border-2 border-fur bg-fur px-3.5 py-1.5 font-mono text-2xs font-semibold text-white transition-colors hover:bg-fur-deep focus-visible:outline-2 focus-visible:outline-bao focus-visible:outline-offset-2"
+  "inline-flex items-center gap-1.5 rounded-full border-2 border-fur bg-fur px-3.5 py-1.5 font-mono text-2xs font-semibold text-paper transition-colors hover:bg-fur-deep focus-visible:outline-2 focus-visible:outline-bao focus-visible:outline-offset-2"
 )
 
 export let StatusLabel = tw.span(

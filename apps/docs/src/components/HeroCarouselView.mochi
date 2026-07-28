@@ -1,7 +1,8 @@
 // Presentational carousel chrome. Index / timer / pause live in HeroCarousel.mochi.
+import { Icon } from "../host/widgets.host"
 import { CarouselNav } from "../ui/primitives"
 
-let HeroCarouselView = props =>
+export let HeroCarouselView = props =>
   <figure
     className="hero-carousel relative"
     onMouseEnter={props.onPause}
@@ -37,7 +38,7 @@ let HeroCarouselView = props =>
       </div>
       <div className="flex shrink-0 items-center gap-3">
         <CarouselNav ariaLabel="Previous artwork" onClick={props.onPrev}>
-          {"←"}
+          <Icon name="chevron-left" className="size-4" />
         </CarouselNav>
         <div
           className="flex items-center gap-1.5"
@@ -47,7 +48,7 @@ let HeroCarouselView = props =>
           {props.dots}
         </div>
         <CarouselNav ariaLabel="Next artwork" onClick={props.onNext}>
-          {"→"}
+          <Icon name="chevron-right" className="size-4" />
         </CarouselNav>
       </div>
     </figcaption>

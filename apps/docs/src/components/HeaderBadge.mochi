@@ -1,6 +1,6 @@
 import { BadgeShell, BadgePulse } from "../ui/primitives"
 
-let HeaderBadge = props =>
+export let HeaderBadge = props =>
   <BadgeShell $tone="rose" className={props.className}>
     <BadgePulse $tone="rose" />
     <span>{props.label}</span>

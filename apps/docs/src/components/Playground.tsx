@@ -25,8 +25,9 @@ import {
   PreviewPane,
 } from "../ui/primitives.mochi";
 import { HighlightedCode } from "./HighlightCode";
+import { Icon } from "./Icon";
 import { PlaygroundRight, PlaygroundSettings } from "./PlaygroundRight.mochi";
-import PlaygroundView from "./PlaygroundView.mochi";
+import { PlaygroundView } from "./PlaygroundView.mochi";
 
 /** Emit is an ESM module (`import { match }…`); playground runs it in `new Function`. */
 const stripModuleImports = (js: string): string =>
@@ -308,22 +309,27 @@ export function Playground() {
   const statusState = compiling ? "ok" : statusOk ? "ok" : "err";
   const tabs = (
     [
-      ["js", "JavaScript"],
-      ["ts", "TypeScript"],
-      ["dts", ".d.ts"],
-      ["output", "Output"],
-      ["problems", `Problems${problemCount ? ` (${problemCount})` : ""}`],
-      ["settings", "Settings"],
+      { id: "js" as const, label: "JavaScript" },
+      { id: "ts" as const, label: "TypeScript" },
+      { id: "dts" as const, label: ".d.ts" },
+      { id: "output" as const, label: "Output" },
+      {
+        id: "problems" as const,
+        label: `Problems${problemCount ? ` (${problemCount})` : ""}`,
+        icon: "circle-alert" as const,
+      },
+      { id: "settings" as const, label: "Settings", icon: "settings-2" as const },
     ] as const
-  ).map(([id, label]) => (
+  ).map((tab) => (
     <PaneTab
-      key={id}
+      key={tab.id}
       role="tab"
-      aria-selected={activeTab === id}
-      onClick={() => setActiveTab(id)}
-      $active={activeTab === id ? "on" : "off"}
+      aria-selected={activeTab === tab.id}
+      onClick={() => setActiveTab(tab.id)}
+      $active={activeTab === tab.id ? "on" : "off"}
     >
-      {label}
+      {"icon" in tab ? <Icon name={tab.icon} className="size-3.5 shrink-0" /> : null}
+      {tab.label}
     </PaneTab>
   ));
 
@@ -343,7 +349,10 @@ export function Playground() {
         {outputJs ? (
           <HighlightedCode code={outputJs} lang="js" />
         ) : (
-          <span className="text-mute">No emit yet — fix Problems or hit Run.</span>
+          <span className="inline-flex items-center gap-2 text-mute">
+            <Icon name="file-code" className="size-4 shrink-0 opacity-70" />
+            No emit yet — fix Problems or hit Run.
+          </span>
         )}
       </EmitPane>
     );
@@ -353,7 +362,10 @@ export function Playground() {
         {outputTs ? (
           <HighlightedCode code={outputTs} lang="ts" />
         ) : (
-          <span className="text-mute">No TypeScript emit yet — fix Problems or hit Run.</span>
+          <span className="inline-flex items-center gap-2 text-mute">
+            <Icon name="file-code" className="size-4 shrink-0 opacity-70" />
+            No TypeScript emit yet — fix Problems or hit Run.
+          </span>
         )}
       </EmitPane>
     );
@@ -363,7 +375,10 @@ export function Playground() {
         {outputDts ? (
           <HighlightedCode code={outputDts} lang="ts" />
         ) : (
-          <span className="text-mute">No .d.ts emit yet — fix Problems or hit Run.</span>
+          <span className="inline-flex items-center gap-2 text-mute">
+            <Icon name="file-code" className="size-4 shrink-0 opacity-70" />
+            No .d.ts emit yet — fix Problems or hit Run.
+          </span>
         )}
       </EmitPane>
     );
@@ -392,9 +407,10 @@ export function Playground() {
 
   return (
     <PlaygroundView
-      autoRunLabel={autoRun ? "Auto-run ✓" : "Auto-run"}
-      formatLabel={formatNotice ? "Formatted" : "Format"}
-      shareLabel={shareCopied ? "Copied!" : "Share"}
+      autoRun={autoRun}
+      formatNotice={formatNotice}
+      shareCopied={shareCopied}
+      compiling={compiling}
       statusState={statusState}
       statusText={statusText}
       onToggleAutoRun={() => setAutoRun((v) => !v)}
@@ -418,6 +434,7 @@ export function Playground() {
               onClick={() => setMobilePane("code")}
               $active={mobilePane === "code" ? "on" : "off"}
             >
+              <Icon name="code" className="size-3.5 shrink-0" />
               Code
             </PaneTab>
             <PaneTab
@@ -427,6 +444,7 @@ export function Playground() {
               onClick={() => setMobilePane("result")}
               $active={mobilePane === "result" ? "on" : "off"}
             >
+              <Icon name="panel-right" className="size-3.5 shrink-0" />
               Result
             </PaneTab>
           </div>

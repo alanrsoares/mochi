@@ -7,3 +7,5 @@
 // not HM — open-world `h` still accepts any attrs. Paths relative to THIS file.
 export extern HighlightedCode : a = "../components/HighlightCode" "HighlightedCode"
 export extern Playground : a = "../components/Playground" "Playground"
+export extern ColorSchemeToggle : a = "../components/ColorSchemeToggle" "ColorSchemeToggle"
+export extern Icon : a = "../components/Icon" "Icon"

@@ -1,27 +1,47 @@
 // Playground chrome — toolbar + body slot. Compile / hooks / refs stay in
 // Playground.tsx (let-in → IIFE breaks Rules of Hooks).
+import { Icon } from "../host/widgets.host"
 import { StatusLabel, ToolBtn, ToolBtnSolid } from "../ui/primitives"
 
-let PlaygroundView = props =>
+export let PlaygroundView = props =>
   <div className="flex min-h-0 flex-1 flex-col bg-paper">
     <div
       className="flex shrink-0 flex-wrap items-center gap-2 border-line border-b-2 bg-peach px-3 py-2 sm:px-4"
     >
       <ToolBtn onClick={props.onToggleAutoRun} title="Toggle auto-run">
-        {props.autoRunLabel}
+        <Icon
+          name={props.autoRun ? "refresh-cw" : "pause"}
+          className="size-3.5 shrink-0"
+        />
+        <span>{"Auto-run"}</span>
       </ToolBtn>
       <ToolBtn onClick={props.onRun} title="Run (⌘E)">
-        {"Run"}
+        <Icon name="play" className="size-3.5 shrink-0" />
+        <span>{"Run"}</span>
         <span className="hidden text-mute sm:inline">{" (⌘E)"}</span>
       </ToolBtn>
       <ToolBtn onClick={props.onFormat} title="Format (⌘S)">
-        {props.formatLabel}
+        <Icon
+          name={props.formatNotice ? "check" : "align-left"}
+          className="size-3.5 shrink-0"
+        />
+        <span>{props.formatNotice ? "Formatted" : "Format"}</span>
         <span className="hidden text-mute sm:inline">{" (⌘S)"}</span>
       </ToolBtn>
       <ToolBtnSolid onClick={props.onShare} title="Copy share link">
-        {props.shareLabel}
+        <Icon
+          name={props.shareCopied ? "check" : "share-2"}
+          className="size-3.5 shrink-0"
+        />
+        <span>{props.shareCopied ? "Copied!" : "Share"}</span>
       </ToolBtnSolid>
-      <div className="ml-auto flex items-center gap-2 font-mono text-2xs">
+      <div className="ml-auto flex items-center gap-1.5 font-mono text-2xs">
+        {props.compiling
+          ? <Icon
+            name="loader-2"
+            className="size-3.5 shrink-0 animate-spin text-ok"
+          />
+          : null}
         <StatusLabel $state={props.statusState}>{props.statusText}</StatusLabel>
       </div>
     </div>

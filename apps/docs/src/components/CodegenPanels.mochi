@@ -16,7 +16,7 @@ let OutputTab = props =>
     {props.label}
   </PaneTab>
 
-let CodegenPanels = props =>
+export let CodegenPanels = props =>
   let (tab, setTab) = useState("js") in
   let caption = tab == "js"
     ? "bun run mochi"

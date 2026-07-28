@@ -103,7 +103,7 @@ let RailStage = props =>
     />
   </g>
 
-let RailwayDemo = _ =>
+export let RailwayDemo = _ =>
   let (raw, setRaw) = useState("mochi") in
   let rail = runRail(raw) in
   let derailedAt = rail.derailedAt in
