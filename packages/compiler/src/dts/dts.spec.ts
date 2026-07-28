@@ -93,3 +93,11 @@ test("a bare VNode binding never leaks the plugin's type name (ADR 0055)", () =>
   const out = dts("let el = <div />");
   expect(out).toBe("export declare const el: any;");
 });
+
+// ADR 0055 — `unit` in arrow-return position renders `void`, so a declared
+// handler prop accepts the host's ordinary `() => void` callbacks.
+test("unit-returning fields render void, standalone unit stays undefined", () => {
+  const out = dts("type P = { onRun: () -> (), tag: string }\nlet mk = (p) => p.onRun");
+  expect(out).toContain("onRun: () => void");
+  expect(dts("let nothing = ()")).toBe("export declare const nothing: undefined;");
+});

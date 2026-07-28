@@ -72,9 +72,10 @@ const PRIM_TS: Record<string, string> = {
   number: "number",
   string: "string",
   bool: "boolean",
-  // `unit` only ever reaches here in *result* position — the arrow branch below
-  // short-circuits on `isUnit(arrow.from)` (ADR 0014). `undefined` over `void`:
-  // it is what codegen emits, and it stays assignable under `strict` (ADR 0054).
+  // Standalone `unit` values stay `undefined` — it is what codegen emits and it
+  // stays assignable under `strict` (ADR 0054). Arrow *return* position renders
+  // `void` instead (see the arrow branch): a `() => undefined` prop rejects the
+  // host's ordinary `() => void` callbacks (ADR 0055 seam contracts).
   unit: "undefined",
 };
 
@@ -112,9 +113,12 @@ function tsOfRaw(t: Type, names: Map<number, string>): string {
       )
       .with({ kind: "con" }, (con) => PRIM_TS[con.name] ?? nominalCon(con, names))
       .with({ kind: "arrow" }, (arrow) => {
+        // `unit` results render `void`, not `undefined` — declared fn types must
+        // accept the host's `() => void` callbacks (contravariance, ADR 0055).
+        const ret = (t: Type): string => (isUnit(t) ? "void" : tsOfRaw(t, names));
         // Don't flatten across `unit` domains (ADR 0014): `a -> () -> b` stays
         // nested, and a leading `unit -> T` becomes `() => T`.
-        if (isUnit(arrow.from)) return `() => ${tsOfRaw(arrow.to, names)}`;
+        if (isUnit(arrow.from)) return `() => ${ret(arrow.to)}`;
         const params: string[] = [];
         let cur: Type = arrow;
         while (cur.kind === "arrow" && !isUnit(cur.from)) {
@@ -122,7 +126,7 @@ function tsOfRaw(t: Type, names: Map<number, string>): string {
           cur = cur.to;
         }
         const named = params.map((p, i) => `${String.fromCharCode(97 + i)}: ${p}`);
-        return `(${named.join(", ")}) => ${tsOfRaw(cur, names)}`;
+        return `(${named.join(", ")}) => ${ret(cur)}`;
       })
       .with({ kind: "record" }, (rec) => tsRow(rec.row, names))
       .with({ kind: "lit" }, (lit) =>
