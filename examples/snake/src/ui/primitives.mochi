@@ -1,17 +1,20 @@
 // styled-cva factories (ADR 0009). Call-form only — mirrors
 // apps/docs/src/ui/primitives.mochi's conventions for this smaller app.
-import { tw } from "../host/styled-cva.host"
+import { tw } from "@mochi/plugin-styled-cva/tw"
 
 export let Card = tw.div(
   "rounded-panel border-2 border-line bg-foam shadow-soft"
 )
 
 export let Badge = tw.span(
-  "inline-flex items-center gap-2 px-3 py-1 font-mono text-2xs font-bold uppercase tracking-label rounded-full border-2 border-line-strong bg-peach text-fur-deep shadow-sm"
+  "inline-flex items-center gap-2 px-3 py-1 font-mono text-2xs font-bold"
+    ++ " uppercase tracking-label rounded-full border-2 border-line-strong"
+    ++ " bg-peach text-fur-deep shadow-sm"
 )
 
 export let Kbd = tw.kbd(
-  "rounded-md border-2 border-line-strong bg-peach px-1.5 py-0.5 font-mono text-xs text-ink shadow-sm"
+  "rounded-md border-2 border-line-strong bg-peach px-1.5 py-0.5 font-mono"
+    ++ " text-xs text-ink shadow-sm"
 )
 
 export let ScoreLabel = tw.p(
@@ -21,15 +24,21 @@ export let ScoreLabel = tw.p(
 export let ScoreValue = tw.p("font-mono text-2xl font-extrabold text-ink")
 
 export let PrimaryBtn = tw.button(
-  "px-5 py-2.5 bg-fur hover:bg-fur-deep text-white font-bold rounded-full shadow-soft transition-colors focus-visible:outline-2 focus-visible:outline-bao focus-visible:outline-offset-2 disabled:opacity-40 disabled:pointer-events-none"
+  "px-5 py-2.5 bg-fur hover:bg-fur-deep text-white font-bold rounded-full"
+    ++ " shadow-soft transition-colors focus-visible:outline-2"
+    ++ " focus-visible:outline-bao focus-visible:outline-offset-2"
+    ++ " disabled:opacity-40 disabled:pointer-events-none"
 )
 
 export let GhostBtn = tw.button(
-  "px-4 py-2 text-ink border-2 border-line-strong rounded-full hover:border-fur hover:bg-peach transition-colors font-semibold"
+  "px-4 py-2 text-ink border-2 border-line-strong rounded-full hover:border-fur"
+    ++ " hover:bg-peach transition-colors font-semibold"
 )
 
 export let NameInput = tw.input(
-  "w-full rounded-full border-2 border-line bg-paper px-4 py-2 font-mono text-ink text-sm placeholder:text-mute/70 focus:border-fur focus:outline-none"
+  "w-full rounded-full border-2 border-line bg-paper px-4 py-2 font-mono"
+    ++ " text-ink text-sm placeholder:text-mute/70 focus:border-fur"
+    ++ " focus:outline-none"
 )
 
 export let OverlayTitle = tw.h2(
@@ -47,7 +56,9 @@ export let OverlayTitle = tw.h2(
 )
 
 export let OverlayPanel = tw.div(
-  "absolute inset-0 flex-col items-center justify-center gap-4 bg-foam/40 backdrop-blur-md rounded-panel text-center px-6 transition-all duration-200",
+  "absolute inset-0 flex-col items-center justify-center gap-4 bg-foam/40"
+    ++ " backdrop-blur-md rounded-panel text-center px-6 transition-all"
+    ++ " duration-200",
   {
     variants: { $visible: { on: "flex", off: "hidden" } },
     defaultVariants: { $visible: "off" }
@@ -55,7 +66,8 @@ export let OverlayPanel = tw.div(
 )
 
 export let WsStatus = tw.p(
-  "inline-flex items-center gap-1.5 rounded-full border-2 border-line bg-foam px-2.5 py-1 font-mono text-xs text-mute",
+  "inline-flex items-center gap-1.5 rounded-full border-2 border-line bg-foam"
+    ++ " px-2.5 py-1 font-mono text-xs text-mute",
   {
     variants: {
       $connected: { on: "bg-ok-soft text-ok border-transparent", off: "" }

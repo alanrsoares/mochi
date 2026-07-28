@@ -1,5 +1,0 @@
-// FFI seam — @styled-cva/react (Preact compat). Vendor plugin, not core
-// (`@mochi/plugin-styled-cva` via `examples/snake/mochi.plugins.ts` — ADR 0009/0011).
-// Copy of `apps/docs/src/host/styled-cva.host.mochi` — same rationale for
-// keeping `tw` opaque (overloaded `tw.<tag>(base)` / `tw.<tag>(base, cva)`).
-export extern tw : a = "@styled-cva/react" "default"

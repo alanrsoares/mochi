@@ -1,8 +1,9 @@
 // styled-cva factories (ADR 0009). Call-form only.
-import { tw } from "../host/styled-cva.host"
+import { tw } from "@mochi/plugin-styled-cva/tw"
 
 export let BadgeShell = tw.div(
-  "inline-flex items-center gap-2 px-3 py-1 font-mono text-2xs font-bold uppercase tracking-wider rounded-full border-2 shadow-sm",
+  "inline-flex items-center gap-2 px-3 py-1 font-mono text-2xs font-bold"
+    ++ " uppercase tracking-wider rounded-full border-2 shadow-sm",
   {
     variants: {
       $tone: {
@@ -28,19 +29,26 @@ export let BadgePulse = tw.span(
 export let NavLink = tw.a("hover:text-fur-deep transition-colors")
 
 export let GhostPill = tw.a(
-  "inline-flex items-center gap-1.5 px-3 py-1.5 text-ink border-2 border-line-strong rounded-full hover:border-fur hover:bg-foam transition-colors font-semibold"
+  "inline-flex items-center gap-1.5 px-3 py-1.5 text-ink border-2"
+    ++ " border-line-strong rounded-full hover:border-fur hover:bg-foam"
+    ++ " transition-colors font-semibold"
 )
 
 export let CtaPill = tw.a(
-  "inline-flex items-center gap-1.5 px-5 py-2.5 bg-fur hover:bg-fur-deep text-paper font-bold rounded-full shadow-cta transition-colors focus-visible:outline-2 focus-visible:outline-bao focus-visible:outline-offset-2"
+  "inline-flex items-center gap-1.5 px-5 py-2.5 bg-fur hover:bg-fur-deep"
+    ++ " text-paper font-bold rounded-full shadow-cta transition-colors"
+    ++ " focus-visible:outline-2 focus-visible:outline-bao"
+    ++ " focus-visible:outline-offset-2"
 )
 
 export let CmdChip = tw.div(
-  "px-4 py-2.5 border-2 border-line-strong rounded-full bg-foam text-mute flex items-center gap-2"
+  "px-4 py-2.5 border-2 border-line-strong rounded-full bg-foam text-mute flex"
+    ++ " items-center gap-2"
 )
 
 export let HeroStatus = tw.p(
-  "inline-flex items-center gap-2 font-mono text-2xs tracking-label uppercase text-mute bg-foam border-2 border-line rounded-full px-3 py-1"
+  "inline-flex items-center gap-2 font-mono text-2xs tracking-label uppercase"
+    ++ " text-mute bg-foam border-2 border-line rounded-full px-3 py-1"
 )
 
 export let SectionEyebrow = tw.div(
@@ -67,7 +75,8 @@ export let InteropLabel = tw.div(
 )
 
 export let SyntaxBar = tw.div(
-  "px-4 py-2.5 bg-peach border-b-2 border-line font-mono text-xs font-bold flex items-center justify-between",
+  "px-4 py-2.5 bg-peach border-b-2 border-line font-mono text-xs font-bold flex"
+    ++ " items-center justify-between",
   {
     variants: {
       $tone: {
@@ -81,15 +90,22 @@ export let SyntaxBar = tw.div(
 )
 
 export let GhostPillBtn = tw.button(
-  "rounded-full border-2 border-line bg-foam px-3 py-1 font-mono text-2xs text-mute transition-colors hover:border-fur hover:text-ink focus-visible:outline-2 focus-visible:outline-bao focus-visible:outline-offset-2"
+  "rounded-full border-2 border-line bg-foam px-3 py-1 font-mono text-2xs"
+    ++ " text-mute transition-colors hover:border-fur hover:text-ink"
+    ++ " focus-visible:outline-2 focus-visible:outline-bao"
+    ++ " focus-visible:outline-offset-2"
 )
 
 export let TypeHint = tw.div(
-  "my-1.5 ml-4 inline-flex max-w-[calc(100%-1rem)] items-start gap-2 whitespace-normal wrap-break-word rounded-2xl border-2 border-ok-border bg-ok-soft px-2.5 py-1 font-mono text-2xs text-ok"
+  "my-1.5 ml-4 inline-flex max-w-[calc(100%-1rem)] items-start gap-2"
+    ++ " whitespace-normal wrap-break-word rounded-2xl border-2"
+    ++ " border-ok-border bg-ok-soft px-2.5 py-1 font-mono text-2xs text-ok"
 )
 
 export let CarouselNav = tw.button(
-  "hero-carousel__nav font-mono text-mute text-xs hover:text-ink focus-visible:outline-2 focus-visible:outline-fur focus-visible:outline-offset-2"
+  "hero-carousel__nav font-mono text-mute text-xs hover:text-ink"
+    ++ " focus-visible:outline-2 focus-visible:outline-fur"
+    ++ " focus-visible:outline-offset-2"
 )
 
 // Toggle chrome. cva's `true`/`false` variant keys are not mochi record labels,
@@ -108,11 +124,13 @@ export let SegTab = tw.button(
 
 // Playground right-pane tabs (ReScript-style underline, not pills).
 export let PaneTab = tw.button(
-  "relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-2.5 font-mono text-2xs font-semibold transition-colors",
+  "relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3"
+    ++ " py-2.5 font-mono text-2xs font-semibold transition-colors",
   {
     variants: {
       $active: {
-        on: "text-fur-deep after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-fur",
+        on: "text-fur-deep after:absolute after:inset-x-0 after:bottom-0"
+          ++ " after:h-0.5 after:bg-fur",
         off: "text-mute hover:text-ink"
       }
     },
@@ -121,11 +139,18 @@ export let PaneTab = tw.button(
 )
 
 export let ToolBtn = tw.button(
-  "inline-flex items-center gap-1.5 rounded-full border-2 border-fur/40 bg-foam px-3.5 py-1.5 font-mono text-2xs font-semibold text-fur-deep transition-colors hover:border-fur hover:bg-fur-subtle focus-visible:outline-2 focus-visible:outline-bao focus-visible:outline-offset-2 disabled:opacity-40"
+  "inline-flex items-center gap-1.5 rounded-full border-2 border-fur/40 bg-foam"
+    ++ " px-3.5 py-1.5 font-mono text-2xs font-semibold text-fur-deep"
+    ++ " transition-colors hover:border-fur hover:bg-fur-subtle"
+    ++ " focus-visible:outline-2 focus-visible:outline-bao"
+    ++ " focus-visible:outline-offset-2 disabled:opacity-40"
 )
 
 export let ToolBtnSolid = tw.button(
-  "inline-flex items-center gap-1.5 rounded-full border-2 border-fur bg-fur px-3.5 py-1.5 font-mono text-2xs font-semibold text-paper transition-colors hover:bg-fur-deep focus-visible:outline-2 focus-visible:outline-bao focus-visible:outline-offset-2"
+  "inline-flex items-center gap-1.5 rounded-full border-2 border-fur bg-fur"
+    ++ " px-3.5 py-1.5 font-mono text-2xs font-semibold text-paper"
+    ++ " transition-colors hover:bg-fur-deep focus-visible:outline-2"
+    ++ " focus-visible:outline-bao focus-visible:outline-offset-2"
 )
 
 export let StatusLabel = tw.span(
@@ -137,7 +162,8 @@ export let StatusLabel = tw.span(
 )
 
 export let CarouselDot = tw.button(
-  "h-2 rounded-full transition-all focus-visible:outline-2 focus-visible:outline-fur focus-visible:outline-offset-2",
+  "h-2 rounded-full transition-all focus-visible:outline-2"
+    ++ " focus-visible:outline-fur focus-visible:outline-offset-2",
   {
     variants: {
       $active: { on: "w-5 bg-fur", off: "w-2 bg-line-strong hover:bg-mute" }
@@ -153,41 +179,52 @@ export let CarouselImg = tw.img("h-full w-full shrink-0 object-cover")
 // host forwardRef, so the editor overlay needs no hand-written TSX shim.
 
 export let DemoInput = tw.input(
-  "w-38 rounded-full border-2 border-line bg-foam px-3 py-1 font-mono text-ink text-xs placeholder:text-mute/70 focus:border-fur focus:outline-none"
+  "w-38 rounded-full border-2 border-line bg-foam px-3 py-1 font-mono text-ink"
+    ++ " text-xs placeholder:text-mute/70 focus:border-fur focus:outline-none"
 )
 
 export let PresetSelect = tw.select(
-  "rounded-full border-2 border-line bg-foam px-3 py-1 font-mono text-ink text-base sm:text-xs focus:border-fur focus:outline-none"
+  "rounded-full border-2 border-line bg-foam px-3 py-1 font-mono text-ink"
+    ++ " text-base sm:text-xs focus:border-fur focus:outline-none"
 )
 
 // `text-base sm:text-xs`: 16px on phones so iOS Safari does not zoom the
 // focused textarea; mirror + overlay must use the same size or the ghost
 // text drifts off the caret.
 export let EditorMirror = tw.pre(
-  "pointer-events-none absolute inset-0 m-0 overflow-auto whitespace-pre p-4 font-mono font-normal text-ink text-base sm:text-xs tab-2"
+  "pointer-events-none absolute inset-0 m-0 overflow-auto whitespace-pre p-4"
+    ++ " font-mono font-normal text-ink text-base sm:text-xs tab-2"
 )
 
 export let EditorInput = tw.textarea(
-  "absolute inset-0 m-0 h-full w-full resize-none overflow-auto whitespace-pre border-0 bg-transparent p-4 font-mono font-normal text-transparent text-base sm:text-xs caret-fur-deep tab-2 selection:bg-fur/30 selection:text-transparent focus:outline-none [-webkit-text-fill-color:transparent]"
+  "absolute inset-0 m-0 h-full w-full resize-none overflow-auto whitespace-pre"
+    ++ " border-0 bg-transparent p-4 font-mono font-normal text-transparent"
+    ++ " text-base sm:text-xs caret-fur-deep tab-2 selection:bg-fur/30"
+    ++ " selection:text-transparent focus:outline-none"
+    ++ " [-webkit-text-fill-color:transparent]"
 )
 
 export let DiagBox = tw.div(
-  "max-h-87.5 overflow-auto whitespace-pre-wrap rounded-panel border-2 border-fur bg-fur-tint p-4 font-mono text-fur-deep text-xs"
+  "max-h-87.5 overflow-auto whitespace-pre-wrap rounded-panel border-2"
+    ++ " border-fur bg-fur-tint p-4 font-mono text-fur-deep text-xs"
 )
 
 export let PreviewPane = tw.div(
-  "flex min-h-80 flex-1 items-center justify-center rounded-panel border-2 border-line bg-foam p-6"
+  "flex min-h-80 flex-1 items-center justify-center rounded-panel border-2"
+    ++ " border-line bg-foam p-6"
 )
 
 export let EmitPane = tw.pre(
-  "max-h-87.5 flex-1 overflow-auto rounded-panel border-2 border-line bg-foam p-4 font-mono text-ink text-xs leading-relaxed"
+  "max-h-87.5 flex-1 overflow-auto rounded-panel border-2 border-line bg-foam"
+    ++ " p-4 font-mono text-ink text-xs leading-relaxed"
 )
 
 // Hover-token chrome. The host merges a `className` prop into the base classes,
 // so a token's own colour rides along without a `cn(...)` call site.
 
 export let HoverToken = tw.span(
-  "cursor-help rounded px-0.5 underline decoration-fur/40 underline-offset-4 transition-colors hover:bg-fur-glow hover:decoration-fur-deep"
+  "cursor-help rounded px-0.5 underline decoration-fur/40 underline-offset-4"
+    ++ " transition-colors hover:bg-fur-glow hover:decoration-fur-deep"
 )
 
 // Viewport-anchored, not `absolute`: the syntax cards clip on `overflow-hidden`,
@@ -203,5 +240,7 @@ export let TooltipAnchor = tw.span(
 // `whitespace-normal` because tokens render inside a `<pre>` — inherited
 // `white-space: pre` would defeat `max-w-xs` and run the type past the card.
 export let TooltipCard = tw.span(
-  "block whitespace-normal wrap-break-word rounded-panel border-2 border-line-strong bg-foam p-2.5 font-mono text-2xs text-ink leading-tight shadow-soft"
+  "block whitespace-normal wrap-break-word rounded-panel border-2"
+    ++ " border-line-strong bg-foam p-2.5 font-mono text-2xs text-ink"
+    ++ " leading-tight shadow-soft"
 )
