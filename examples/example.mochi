@@ -35,6 +35,12 @@ let area = shape => switch shape {
   | Triangle(b, h) => 0.5 * (b * h)
 }
 
+let zero = 0
+let one = 1
+let many = 2
+let hot = "hot"
+let cool = "cold"
+
 // --- wildcard catch-all ---
 let isRound = shape => switch shape { | Circle(r) => true | _ => false }
 
@@ -43,6 +49,8 @@ let describe = n => switch n { | 0 => zero | 1 => one | _ => many }
 
 // --- bind catch-all (names the scrutinee) ---
 let label = color => switch color { | Red => hot | other => cool }
+
+let format = x => switch x { | 0 => "zero" | 1 => "one" | _ => "many" }
 
 // --- match feeding a pipeline ---
 let report = shape => shape |> area |> format
@@ -78,10 +86,10 @@ let listTotal = sum([1, 2, 3, 4]) // 10
 
 // fixed-length arms narrow by exact length; `_` catches the rest
 let describeList = xs => switch xs {
-  | [] => empty2
-  | [x] => single
-  | [a, b] => pair
-  | _ => many2
+  | [] => 0
+  | [x] => 1
+  | [a, b] => 2
+  | _ => 3
 }
 
 // --- lazy List: `@{...}` (distinct from the eager Array `[...]`) ---
@@ -112,7 +120,7 @@ let describeLazy = xs => switch xs {
   | @{only} => 2 // exactly one element
   | @{a, b, ...t} => 3 // two or more
 }
-let shape = describeLazy(@{5, 6, 7}) // 3
+let shape = @{5, 6, 7} |> describeLazy // 3
 
 // --- qualified collection namespaces: `List.map`, `Array.map` ---
 // No overloading, so each collection carries its own ops. `List.*` transformers
@@ -201,13 +209,12 @@ let dist = (a, b) => hypot(b.x - a.x, b.y - a.y)
 // duck typing: distTo works on ANY record with x and y — regardless of
 // what else it carries. (Enforced by the HM inferencer, next slice.)
 let distToOrigin = p => hypot(p.x, p.y)
-
 // --- record patterns in switch: bind fields, narrow on literals ---
 // `{ x, y }` puns both fields into scope; a literal field (`x: 0`) narrows the
 // match. Patterns are shallow — a field binds or matches a literal, never nests.
 let quadrant = p => switch p {
-  | { x: 0, y: 0 } => atOrigin
-  | { x, y } => elsewhere
+  | { x: 0, y: 0 } => "at origin"
+  | { x, y } => "elsewhere"
 }
 
 // string + record narrowing: match a tagged record on its string discriminant,
@@ -242,7 +249,7 @@ let unwrapOr = fallback => r => switch r { | Ok(v) => v | Err(e) => fallback }
 // --- boolean-literal patterns: branch on a predicate ---
 // `switch` arms match `true`/`false` directly, so predicate branching needs no
 // if-expression: exhaustiveness requires both arms (or a catch-all).
-let parity = n => switch n % 2 == 0 { | true => even | false => odd }
+let parity = n => switch n % 2 == 0 { | true => "even" | false => "odd" }
 
 // --- local bindings: `let x = value in body` (ADR 0009) ---
 // Non-recursive, let-polymorphic, scoped to `body`. Chains flatten (each `in`
