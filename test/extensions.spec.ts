@@ -149,6 +149,15 @@ test("component binding types come from the builtin plugin, in BOTH backends", (
   // `bindingTsType` is shared: the `.d.ts` writer and the TS backend must agree.
   expect(unwrapOk(emitDts(COMPONENT))).toContain("export declare const Card: (props:");
   expect(unwrapOk(codegenTs(COMPONENT))).toContain("const Card: (props:");
+  // ADR 0055: an annotated component keeps its alias name in both backends —
+  // widening the binding to `Record<string, unknown>` while the lambda param
+  // stays `Props` is a strictFunctionTypes error in the TS backend.
+  const ANNOTATED =
+    "type Props = { title: string }\nlet Card : Props -> VNode = props => <div>{props.title}</div>";
+  expect(unwrapOk(emitDts(ANNOTATED))).toContain(
+    "export declare const Card: (props: Props) => any;",
+  );
+  expect(unwrapOk(codegenTs(ANNOTATED))).toContain("const Card: (props: Props) => any");
   // Opt out and there is no component binding to type — the source is not a
   // program any more, which is the whole point of the non-UI mode.
   expect(unwrapErr(emitDts(COMPONENT, { plugins: [] }))[0]!.kind).toBe("parse");

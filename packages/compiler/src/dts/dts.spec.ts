@@ -75,3 +75,21 @@ test("a real JSX lambda declares as a host-agnostic component (ADR 0010 #17)", (
   expect(out).toContain("export declare const Card: (props:");
   expect(out).toContain(") => any;");
 });
+
+// ADR 0055 — the blessed `type Props` + annotation idiom must survive emit:
+// the alias is named in the sidecar, not degraded to an open props bag.
+test("an annotated component names its Props alias (ADR 0055)", () => {
+  const out = dts(
+    "type Props = { title: string }\nlet Card : Props -> VNode = props => <div>{props.title}</div>",
+  );
+  expect(out).toContain("export type Props = { title: string };");
+  expect(out).toContain("export declare const Card: (props: Props) => any;");
+  expect(out).not.toContain("Record<string, unknown>");
+});
+
+// ADR 0055 — `VNode` is the jsx plugin's vocabulary; it must never appear as a
+// dangling (undeclared) name in TS output.
+test("a bare VNode binding never leaks the plugin's type name (ADR 0055)", () => {
+  const out = dts("let el = <div />");
+  expect(out).toBe("export declare const el: any;");
+});

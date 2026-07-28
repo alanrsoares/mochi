@@ -387,9 +387,10 @@ const formatJsx: FormatHook = (e: Expr, api: FormatApi): Doc | null => {
 
 // ------------------------------------------------------------ binding type
 
-/** True when the (folded) type is a single record-arg arrow ending in `VNode`. */
+/** True when the (folded) type is an arrow whose final return is `VNode` —
+ * covers bare records, folded aliases (`Props -> VNode`), and free-var params. */
 const isComponentType = (t: Type): boolean => {
-  if (t.kind !== "arrow" || t.from.kind !== "record") return false;
+  if (t.kind !== "arrow") return false;
   let ret: Type = t.to;
   while (ret.kind === "arrow") ret = ret.to;
   return ret.kind === "con" && ret.name === "VNode";
@@ -439,11 +440,20 @@ const componentPropsTs = (row: Row, api: BindingTypeApi): string => {
  */
 const componentBindingTs: BindingTypeHook = (value: Expr, api: BindingTypeApi): string | null => {
   const t = api.folded;
+  // A bare `VNode` binding (e.g. `extern none : VNode`) would otherwise leak a
+  // dangling `VNode` name into TS output.
+  if (t.kind === "con" && t.name === "VNode") return "any";
   if (!isComponentType(t) && !isJsxComponentLambda(value)) return null;
-  if (t.kind !== "arrow" || t.from.kind !== "record") {
+  if (t.kind !== "arrow" || t.from.kind === "var") {
     return "(props: Record<string, unknown>) => any";
   }
-  return `(props: ${componentPropsTs(t.from.row, api)}) => any`;
+  if (t.from.kind === "record") {
+    return `(props: ${componentPropsTs(t.from.row, api)}) => any`;
+  }
+  // Folded alias param (`Props -> VNode`): name the alias — its `export type
+  // Props = {…};` decl is co-emitted, and the TS backend's lambda param is
+  // typed `Props` too, so anything wider here is a strictFunctionTypes error.
+  return `(props: ${api.tsType(t.from)}) => any`;
 };
 
 export const jsxPlugin: LanguagePlugin = {

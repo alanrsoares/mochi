@@ -145,3 +145,33 @@ describe("JSX syntax desugaring (ADR 0007)", () => {
     }
   });
 });
+
+// ADR 0055 — component prop contracts: a record-alias extern is a checked
+// seam; `: a` remains the explicit opt-out.
+describe("component prop contracts (ADR 0055)", () => {
+  const ICON = `
+    type IconProps = { name: string, className: string }
+    extern Icon : IconProps -> VNode = "./icon" "Icon"
+  `;
+
+  it("checks attrs against a record-alias extern", () => {
+    expect(isErr(compile(`${ICON}\nlet el = <Icon name="play" className="s" />`))).toBe(false);
+
+    const missing = compile(`${ICON}\nlet el = <Icon name="play" />`);
+    expect(isErr(missing)).toBe(true);
+    if (isErr(missing)) {
+      expect(missing.error.some((d) => d.message.includes("missing field 'className'"))).toBe(true);
+    }
+
+    const extra = compile(`${ICON}\nlet el = <Icon name="play" className="s" size={2} />`);
+    expect(isErr(extra)).toBe(true);
+  });
+
+  it("`: a` externs still opt out of attr checking", () => {
+    const src = `
+      extern Icon : a = "./icon" "Icon"
+      let el = <Icon anything={1} goes="here" />
+    `;
+    expect(isErr(compile(src))).toBe(false);
+  });
+});
