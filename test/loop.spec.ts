@@ -151,3 +151,26 @@ describe("emit contract", () => {
     expect(out).toContain("(() =>"); // `let i` beside param `i` would be a JS redeclaration
   });
 });
+
+describe("Array.forEach (ADR 0056)", () => {
+  it("runs the effect once per element, in order, and returns unit", () => {
+    const src = `
+      let out = (log) =>
+        let _ = Array.forEach((x) => ignore(log(x)), [1, 2, 3]) in
+        ()`;
+    const seen: number[] = [];
+    const body = js(src).replace(/^import .*$/m, "");
+    const run = new Function("match", `${body}\nreturn out;`)(match) as (
+      f: (x: number) => void,
+    ) => undefined;
+    expect(run((x) => seen.push(x))).toBeUndefined();
+    expect(seen).toEqual([1, 2, 3]);
+  });
+
+  it("does not over-apply curried callbacks (not native forEach)", () => {
+    // A curried binary would be saturated by native forEach's (x, i) arity.
+    const out = js("let go = Array.forEach((x) => ignore(x), [1])");
+    expect(out).toContain("_Array_forEach");
+    expect(out).not.toContain(".forEach(");
+  });
+});

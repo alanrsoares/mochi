@@ -283,6 +283,9 @@ export const preludeJsDefs: Record<string, string> = {
   _Result_isErr: 'const _Result_isErr = (r) => r._tag === "Err";',
   _List_head: "const _List_head = (xs) => { for (const x of xs) return Some(x); return None; };",
   _Array_head: "const _Array_head = (xs) => (xs.length > 0 ? Some(xs[0]) : None);",
+  // Effect iteration (ADR 0056) — NOT native xs.forEach(f): its (x, i, arr)
+  // arity would over-apply curried unary callbacks.
+  _Array_forEach: "const _Array_forEach = _curry(2, (f, xs) => { for (const x of xs) f(x); });",
   _Array_get:
     "const _Array_get = _curry(2, (i, xs) => (i >= 0 && i < xs.length ? Some(xs[i]) : None));",
   _Array_find:
@@ -437,6 +440,7 @@ export const runtimeDeps: Record<string, string[]> = {
   _Str_split: ["_curry"],
   _Str_join: ["_curry"],
   _Str_contains: ["_curry"],
+  _Array_forEach: ["_curry"],
   _Str_startsWith: ["_curry"],
   _Str_endsWith: ["_curry"],
   _Str_slice: ["_curry"],
@@ -465,6 +469,7 @@ export const preludeNamespaces: Record<string, Record<string, Type>> = {
     length: tArrow(arr(a), tNumber),
     head: tArrow(arr(a), opt(a)), // [a] -> Option a
     get: tArrow(tNumber, tArrow(arr(a), opt(a))), // number -> [a] -> Option a (bounds-safe)
+    forEach: tArrow(tArrow(a, tUnit), tArrow(arr(a), tUnit)), // (a -> unit) -> [a] -> unit — effect iteration (ADR 0056)
     find: tArrow(tArrow(a, tBool), tArrow(arr(a), opt(a))), // (a -> bool) -> [a] -> Option a
     reverse: tArrow(arr(a), arr(a)), // [a] -> [a]
     concat: tArrow(arr(a), tArrow(arr(a), arr(a))), // [a] -> [a] -> [a]
@@ -586,6 +591,7 @@ export const namespaceRuntime: Record<string, Record<string, string>> = {
     length: "length",
     head: "_Array_head",
     get: "_Array_get",
+    forEach: "_Array_forEach",
     find: "_Array_find",
     reverse: "_Array_reverse",
     concat: "_Array_concat",

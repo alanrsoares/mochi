@@ -106,6 +106,7 @@ export const _Result_isOk: <A, B>(a: Result<A, B>) => boolean = (r: any) => r._t
 export const _Result_isErr: <A, B>(a: Result<A, B>) => boolean = (r: any) => r._tag === "Err";
 export const _List_head: <A>(a: Iterable<A>) => Option<A> = (xs: any) => { for (const x of xs) return Some(x); return None; };
 export const _Array_head: <A>(a: A[]) => Option<A> = (xs: any) => (xs.length > 0 ? Some(xs[0]) : None);
+export const _Array_forEach: { <A>(a: (a: A) => void): (b: A[]) => undefined; <A>(a: (a: A) => void, b: A[]): undefined; } = _curry(2, (f: any, xs: any) => { for (const x of xs) f(x); });
 export const _Array_get: { <A>(a: number): (b: A[]) => Option<A>; <A>(a: number, b: A[]): Option<A>; } = _curry(2, (i: any, xs: any) => (i >= 0 && i < xs.length ? Some(xs[i]) : None));
 export const _Array_find: { <A>(a: (a: A) => boolean): (b: A[]) => Option<A>; <A>(a: (a: A) => boolean, b: A[]): Option<A>; } = _curry(2, (p: any, xs: any) => { for (const x of xs) if (p(x)) return Some(x); return None; });
 export const _Array_reverse: <A>(a: A[]) => A[] = (xs: any) => [...xs].reverse();

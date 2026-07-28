@@ -1154,6 +1154,39 @@ const _namespaces = {
         }
       }
     },
+    "forEach": {
+      "_tag": "TyFn",
+      "from": {
+        "_tag": "TyFn",
+        "from": {
+          "_tag": "TyVar",
+          "id": 0
+        },
+        "to": {
+          "_tag": "TyCon",
+          "name": "unit",
+          "args": []
+        }
+      },
+      "to": {
+        "_tag": "TyFn",
+        "from": {
+          "_tag": "TyCon",
+          "name": "Array",
+          "args": [
+            {
+              "_tag": "TyVar",
+              "id": 0
+            }
+          ]
+        },
+        "to": {
+          "_tag": "TyCon",
+          "name": "unit",
+          "args": []
+        }
+      }
+    },
     "find": {
       "_tag": "TyFn",
       "from": {
@@ -3659,6 +3692,7 @@ const _namespaceRuntime = {
     "length": "length",
     "head": "_Array_head",
     "get": "_Array_get",
+    "forEach": "_Array_forEach",
     "find": "_Array_find",
     "reverse": "_Array_reverse",
     "concat": "_Array_concat",
@@ -3851,6 +3885,7 @@ const _preludeJsDefs = {
   "_Result_isErr": "const _Result_isErr = (r) => r._tag === \"Err\";",
   "_List_head": "const _List_head = (xs) => { for (const x of xs) return Some(x); return None; };",
   "_Array_head": "const _Array_head = (xs) => (xs.length > 0 ? Some(xs[0]) : None);",
+  "_Array_forEach": "const _Array_forEach = _curry(2, (f, xs) => { for (const x of xs) f(x); });",
   "_Array_get": "const _Array_get = _curry(2, (i, xs) => (i >= 0 && i < xs.length ? Some(xs[i]) : None));",
   "_Array_find": "const _Array_find = _curry(2, (p, xs) => { for (const x of xs) if (p(x)) return Some(x); return None; });",
   "_Array_reverse": "const _Array_reverse = (xs) => [...xs].reverse();",
@@ -4171,6 +4206,9 @@ const _runtimeDeps = {
     "_curry"
   ],
   "_Str_contains": [
+    "_curry"
+  ],
+  "_Array_forEach": [
     "_curry"
   ],
   "_Str_startsWith": [
