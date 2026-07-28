@@ -28,16 +28,40 @@ import type { Row, Type } from "@mochi/compiler/types";
 // Explicit extension: crossing the package boundary, this specifier is resolved
 // by Node/Vite's config loader without a bundler, which needs the real filename.
 import { rExtend, tArrow, tCon, tLit, tRecord, tUnion } from "@mochi/compiler/types";
-import { isErr, ok, type Result } from "@onrails/result";
+import { err, isErr, ok, type Result } from "@onrails/result";
 
 const isTwFactoryCall = (e: CallExpr): boolean =>
   e.fn.kind === "field" && e.fn.target.kind === "ref" && e.fn.target.name === "tw";
+
+// All current HTML elements (WHATWG living standard). `tw.<member>` factories
+// address intrinsic tags, so a member outside this set is a typo — `tw` is a
+// runtime proxy that would happily render an unknown element.
+const HTML_ELEMENTS = new Set([
+  ...(
+    "a abbr address area article aside audio b base bdi bdo blockquote body br " +
+    "button canvas caption cite code col colgroup data datalist dd del details dfn " +
+    "dialog div dl dt em embed fieldset figcaption figure footer form h1 h2 h3 h4 h5 " +
+    "h6 head header hgroup hr html i iframe img input ins kbd label legend li link " +
+    "main map mark menu meta meter nav noscript object ol optgroup option output p " +
+    "picture pre progress q rp rt ruby s samp script search section select slot " +
+    "small source span strong style sub summary sup table tbody td template textarea " +
+    "tfoot th thead time title tr track u ul var video wbr"
+  ).split(" "),
+]);
 
 const inferTwFactory: InferCallHook = (
   e: CallExpr,
   api: InferCallApi,
 ): Result<Type, Diagnostic> | null => {
   if (!isTwFactoryCall(e)) return null;
+  const tag = e.fn.kind === "field" ? e.fn.name : "";
+  if (!HTML_ELEMENTS.has(tag)) {
+    return err({
+      kind: "type",
+      message: `tw.${tag}: unknown HTML element '${tag}'`,
+      span: e.fn.span,
+    });
+  }
   const argsR = inferArgs(e.args, api);
   if (isErr(argsR)) return argsR;
   let row: Row = api.freshRowVar();

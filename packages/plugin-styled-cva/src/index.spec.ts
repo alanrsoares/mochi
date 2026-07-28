@@ -133,3 +133,20 @@ export let ok = <Btn $tone="rose" />
   const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces, plugins: exts });
   expect(isErr(r)).toBe(false);
 });
+
+test("styled-cva extension: tw.<typo> is a type error, real elements pass", () => {
+  const src = `
+export extern tw : a = "@styled-cva/react" "default"
+export let Oops = tw.divv("base")
+`;
+  const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces, plugins: exts });
+  expect(isErr(r)).toBe(true);
+  if (isErr(r)) {
+    expect(r.error.some((d) => d.message.includes("unknown HTML element 'divv'"))).toBe(true);
+  }
+  const ok = toTypedProgram(
+    `export extern tw : a = "@styled-cva/react" "default"\nexport let Kbd = tw.kbd("font-mono")`,
+    { open: true, namespaces: preludeNamespaces, plugins: exts },
+  );
+  expect(isErr(ok)).toBe(false);
+});
