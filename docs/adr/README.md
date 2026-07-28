@@ -100,6 +100,7 @@ What else was on the table and why not.
 | [0048](0048-core-dx-package-boundary.md) | Core vs DX package boundary (bootstrap = core) | Accepted |
 | [0049](0049-plugin-name-shadowing.md) | Builtin plugin replacement via name shadowing | Accepted |
 | [0050](0050-plugin-claims-table-dispatch.md) | Plugin claims as declarations, table dispatch, and clash rejection | Accepted |
+| [0051](0051-rank2-builder-call-sites.md) | Rank-2 builder DSLs: type the call sites, never the builder | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

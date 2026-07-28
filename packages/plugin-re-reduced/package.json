@@ -4,12 +4,16 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./container": "./container.mochi",
+    "./runtime": "./src/runtime.ts"
   },
   "dependencies": {
     "@mochi/compiler": "workspace:*"
   },
   "peerDependencies": {
-    "@onrails/result": "^0.4.0"
+    "@onrails/result": "^0.4.0",
+    "@re-reduced/core": "^0.3.2",
+    "@re-reduced/preact": "^0.2.3"
   }
 }

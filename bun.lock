@@ -65,6 +65,7 @@
         "@mochi/plugin-styled-cva": "workspace:*",
         "@mochi/vite-plugin": "workspace:*",
         "@onrails/pattern": "^0.3.3",
+        "@re-reduced/core": "^0.3.2",
         "@re-reduced/preact": "^0.2.3",
         "@styled-cva/react": "^0.7.1",
         "preact": "^10.26.4",
@@ -156,6 +157,8 @@
       },
       "peerDependencies": {
         "@onrails/result": "^0.4.0",
+        "@re-reduced/core": "^0.3.2",
+        "@re-reduced/preact": "^0.2.3",
       },
     },
     "packages/plugin-styled-cva": {

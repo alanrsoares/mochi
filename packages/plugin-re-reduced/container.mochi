@@ -1,0 +1,23 @@
+// Typed re-reduced container seam (ADR 0051). Import in apps; register
+// `reReducedExtension` on the project plugin list — `inferCall` types the
+// whole `defineContainer` config (state signals, per-action payloads,
+// `derive`, the `effects` reaction builder) and the `Intent.*` vocabulary.
+//
+// Extern schemes stay deliberately loose: the config is a rank-2 DSL that HM
+// cannot express, so the plugin pins each call site instead (ADR 0051) and
+// these signatures only need to bind the names. `() ->` nullary domain
+// (ADR 0014); cleanup returns stay opaque so extern arity does not over-curry.
+
+export extern defineContainer : string -> a -> b = "@re-reduced/preact" "defineContainer"
+export extern useContainer : a -> b = "@re-reduced/preact" "useContainer"
+export extern useSelect : a -> b -> c = "@re-reduced/preact" "useSelect"
+export extern useWatch : a -> b -> c -> d = "@re-reduced/preact" "useWatch"
+
+/// Effect intent constructors — `Intent.query`, `Intent.timeout`,
+/// `Intent.storageSet`. Opaque: the plugin claims `Intent` as a member target
+/// and types each call.
+export extern Intent : a = "./src/runtime" "Intent"
+
+/// Interpreters for every builtin intent kind, including the `query` one the
+/// library does not ship. Pass as `useContainer(def, { interpreters })`.
+export extern defaultInterpreters : a = "./src/runtime" "defaultInterpreters"
