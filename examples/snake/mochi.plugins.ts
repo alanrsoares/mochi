@@ -1,6 +1,6 @@
 /**
- * Docs vendor-plugin list (#20). Vite, `gen-mochi-dts`, and the LSP (walks
- * upward for `mochi.plugins.ts`) all read this one file.
+ * Snake example vendor-plugin list (#20). Vite, `gen-mochi-dts`, and the LSP
+ * all read this one file.
  */
 
 import type { HostExtension } from "@mochi/compiler/extensions";
@@ -8,12 +8,12 @@ import { preactExtension } from "@mochi/plugin-preact";
 import { reReducedExtension } from "@mochi/plugin-re-reduced";
 import { styledCvaExtension } from "@mochi/plugin-styled-cva";
 
-export const docsVendorPlugins: HostExtension[] = [
+export const snakeVendorPlugins: HostExtension[] = [
   styledCvaExtension,
-  reReducedExtension,
   preactExtension,
+  reReducedExtension,
 ];
 
 /** LSP contract: `default` or named `plugins`. */
-export const plugins = docsVendorPlugins;
+export const plugins = snakeVendorPlugins;
 export default plugins;

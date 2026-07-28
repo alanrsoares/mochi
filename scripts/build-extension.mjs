@@ -1,7 +1,7 @@
 // Bundle the language server + extension client into packages/vscode/out/.
 // Both are CommonJS (the VS Code extension host requires it); `vscode` is
 // provided by the host, so it stays external. The server entry is
-// `packages/vscode/src/server.ts` loads `mochi.plugins.mjs` / `.mts` per workspace.
+// `packages/vscode/src/server.ts` loads `mochi.plugins.ts` / `.mjs` per workspace.
 import * as esbuild from "esbuild";
 
 const common = {

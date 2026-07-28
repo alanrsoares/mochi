@@ -51,7 +51,7 @@ import { clearPluginsCache, PLUGIN_FILENAMES, pluginsForDocument } from "./load-
 
 /** Client → server init payload (editor extension). */
 export type MochiInitOptions = {
-  /** Load `mochi.plugins.mjs` when true (requires trusted workspace on client). */
+  /** Load `mochi.plugins.ts` when true (requires trusted workspace on client). */
   loadProjectPlugins?: boolean;
   /** Workspace folder roots — manifests must resolve under one of these. */
   workspaceRoots?: string[];
@@ -66,7 +66,7 @@ export type CachedDiagnostics = PublishDiagnostic[];
 export type ServerOptions = {
   /** Fixed plugin list (tests / custom launchers). Overrides project discovery. */
   plugins?: LanguagePlugin[];
-  /** Load `mochi.plugins.mjs` upward from each open file (default false). */
+  /** Load `mochi.plugins.ts` upward from each open file (default false). */
   loadProjectPlugins?: boolean;
 };
 
@@ -404,7 +404,7 @@ export function startServer(opts: ServerOptions = {}): void {
   documents.listen(connection);
 
   /**
-   * Re-load plugins when `mochi.plugins.mjs` changes on disk. The
+   * Re-load plugins when `mochi.plugins.ts` (or `.mjs`) changes on disk. The
    * client (vscode-languageclient) owns watcher registration — this handler
    * only reacts to the notification. Clears the module-level cache (and its
    * ESM-cache-busting generation) and republishes diagnostics for every open

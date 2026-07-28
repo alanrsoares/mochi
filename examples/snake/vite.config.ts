@@ -1,14 +1,12 @@
 import path from "node:path";
+import { mochiPlugin } from "@mochi/vite-plugin";
+import { mochiWorkspaceAliases } from "@mochi/vite-plugin/workspace-aliases";
 import preact from "@preact/preset-vite";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
-// Relative entry: Vite loads the config under Node, which cannot follow
-// `@mochi/compiler` package exports into extensionless `src/*.ts` (ADR 0048).
-import { mochiPlugin } from "../../packages/vite-plugin/src/index";
-import { mochiWorkspaceAliases } from "../../packages/vite-plugin/src/workspace-aliases";
 import { snakeVendorPlugins } from "./mochi.plugins";
 
-const repoRoot = path.resolve(__dirname, "../..");
+const repoRoot = path.resolve(import.meta.dirname, "../..");
 
 export default defineConfig({
   plugins: [

@@ -26,7 +26,7 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": "limited",
-      "description": "Vendor plugin manifests (mochi.plugins.mjs) are not loaded in Restricted Mode."
+      "description": "Vendor plugin manifests (mochi.plugins.ts) are not loaded in Restricted Mode."
     }
   },
   "contributes": {
@@ -36,7 +36,7 @@
         "mochi.loadProjectPlugins": {
           "type": "boolean",
           "default": true,
-          "description": "Load vendor plugins from mochi.plugins.mjs / .mts in the open workspace. Requires a trusted workspace (Restricted Mode keeps this off)."
+          "description": "Load vendor plugins from mochi.plugins.ts (or .mjs) in the open workspace. Requires a trusted workspace (Restricted Mode keeps this off)."
         }
       }
     },

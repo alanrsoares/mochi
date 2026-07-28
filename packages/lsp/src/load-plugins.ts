@@ -11,11 +11,12 @@ import { pathToFileURL } from "node:url";
 import { type LanguagePlugin, pluginClashes, resolvePlugins } from "@mochi/compiler/extensions";
 
 /**
- * Filenames searched upward from each `.mochi` file. Plain ESM JavaScript
- * only — the LSP server runs under the editor's Node runtime, and `.mts`
- * type-stripping there isn't a guaranteed contract (unlike under Bun).
+ * Filenames searched upward from each `.mochi` file. Prefer the typed
+ * source; `.mjs` remains a fallback for older workspaces. Vendor packages
+ * already export `.ts`, so the editor Node must strip types either way
+ * (Node 22+ / Bun).
  */
-export const PLUGIN_FILENAMES = ["mochi.plugins.mjs"] as const;
+export const PLUGIN_FILENAMES = ["mochi.plugins.ts", "mochi.plugins.mjs"] as const;
 
 export type PluginLoadOptions = {
   /** Absolute workspace folder roots — manifests outside these paths are ignored. */
@@ -213,7 +214,7 @@ export const pluginsForDocument = async (
   return pending;
 };
 
-/** Drop cached manifests (e.g. after the user edits `mochi.plugins.mjs`). */
+/** Drop cached manifests (e.g. after the user edits `mochi.plugins.ts`). */
 export const clearPluginsCache = (): void => {
   cache.clear();
   generation += 1;

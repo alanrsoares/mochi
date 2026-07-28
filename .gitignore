@@ -22,6 +22,7 @@ dist
 # examples/snake is a real Vite app (dogfoods the mochi Vite plugin) — its
 # hand-written TS is source, not `mochi build --emit=ts` output; un-ignore it.
 !/examples/snake/vite.config.ts
+!/examples/snake/mochi.plugins.ts
 !/examples/snake/src/**/*.ts
 !/examples/snake/src/**/*.tsx
 

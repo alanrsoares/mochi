@@ -39,7 +39,7 @@ const maybeWarnRestricted = (cfg: WorkspaceConfiguration): void => {
   }
   warnedRestricted = true;
   void window.showWarningMessage(
-    "mochi: vendor plugins (mochi.plugins.mjs) are disabled in Restricted Mode. Trust the workspace to enable them.",
+    "mochi: vendor plugins (mochi.plugins.ts) are disabled in Restricted Mode. Trust the workspace to enable them.",
   );
 };
 
@@ -49,9 +49,9 @@ const startLanguageClient = (context: ExtensionContext): void => {
     run: { module, transport: TransportKind.ipc },
     debug: { module, transport: TransportKind.ipc, options: { execArgv: ["--nolazy"] } },
   };
-  // Forward mochi.plugins.mjs create/change/delete events so the server
+  // Forward mochi.plugins.ts / .mjs create/change/delete events so the server
   // can hot-reload the vendor-plugin list without an LSP restart.
-  const pluginWatcher = workspace.createFileSystemWatcher("**/mochi.plugins.mjs");
+  const pluginWatcher = workspace.createFileSystemWatcher("**/mochi.plugins.{ts,mjs}");
   context.subscriptions.push(pluginWatcher);
   const clientOptions: LanguageClientOptions = {
     documentSelector: [

@@ -54,7 +54,7 @@ modules are still **foundation**, not DX (`unify`, `span`, `errors`, `prelude`,
    `build`) and `@mochi/dx` (`fmt`). Not in `@mochi/compiler` — core never imports
    DX. Bootstrap CLI stays compile/build-only.
 
-7. **Physical layout.** Compiler sources live in `packages/compiler/src/<component>/` (pipeline-aligned folders with `index.ts` barrels and colocated specs). `@mochi/compiler` export URLs are unchanged; only filesystem paths move. Vite app configs import `@mochi/vite-plugin` via a **relative** path; the plugin reaches `packages/compiler/src/compile/compile` relatively — Node loading the Vite config cannot resolve Bun-style extensionless imports through the package graph. App/module aliases (`mochiWorkspaceAliases`) read the compiler `exports` map for `@mochi/compiler/*`.
+7. **Physical layout.** Compiler sources live in `packages/compiler/src/<component>/` (pipeline-aligned folders with `index.ts` barrels and colocated specs). `@mochi/compiler` export URLs are unchanged; only filesystem paths move. Vite app configs import `@mochi/vite-plugin` / `@mochi/vite-plugin/workspace-aliases` by package name; the plugin imports `@mochi/compiler/*` the same way. Run Vite under **Bun** (`bunx --bun vite`) so config loading can follow those TS package exports — Node's ESM loader still cannot resolve the compiler's extensionless relative graph. App/module aliases (`mochiWorkspaceAliases`) map the same packages into sources for the browser bundle.
 
 ## Consequences
 

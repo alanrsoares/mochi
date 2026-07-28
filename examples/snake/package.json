@@ -4,10 +4,10 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "bun ../../scripts/gen-mochi-dts.ts examples/snake/src && vite",
-    "build": "bun ../../scripts/gen-mochi-dts.ts examples/snake/src && vite build",
-    "preview": "vite preview",
-    "check": "bun ../../scripts/gen-mochi-dts.ts examples/snake/src && tsc --noEmit && vite build",
+    "dev": "bun ../../scripts/gen-mochi-dts.ts examples/snake/src && bunx --bun vite",
+    "build": "bun ../../scripts/gen-mochi-dts.ts examples/snake/src && bunx --bun vite build",
+    "preview": "bunx --bun vite preview",
+    "check": "bun ../../scripts/gen-mochi-dts.ts examples/snake/src && tsc --noEmit && bunx --bun vite build",
     "server": "bun server.mts"
   },
   "dependencies": {

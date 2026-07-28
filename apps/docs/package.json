@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun ../../scripts/gen-mochi-dts.ts && vite",
-    "build": "bun ../../scripts/gen-mochi-dts.ts && vite build",
-    "preview": "vite preview",
+    "dev": "bun ../../scripts/gen-mochi-dts.ts && bunx --bun vite",
+    "build": "bun ../../scripts/gen-mochi-dts.ts && bunx --bun vite build",
+    "preview": "bunx --bun vite preview",
     "gen:emit": "bun ../../scripts/gen-docs-emit.ts",
-    "check": "bun ../../scripts/gen-mochi-dts.ts && tsc --noEmit && vite build"
+    "check": "bun ../../scripts/gen-mochi-dts.ts && tsc --noEmit && bunx --bun vite build"
   },
   "dependencies": {
     "@mochi/compiler": "workspace:*",

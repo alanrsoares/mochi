@@ -9,12 +9,38 @@ import {
   pluginsForDocument,
 } from "./load-plugins.ts";
 
-test("findPluginsFile walks up to a nested mochi.plugins.mjs", () => {
+test("findPluginsFile prefers mochi.plugins.ts over .mjs", () => {
+  const root = mkdtempSync(join(import.meta.dir, ".plugins-"));
+  try {
+    writeFileSync(join(root, "mochi.plugins.mjs"), "export default [];\n");
+    writeFileSync(join(root, "mochi.plugins.ts"), "export default [];\n");
+    const nested = join(root, "src", "components");
+    expect(findPluginsFile(nested)).toBe(join(root, "mochi.plugins.ts"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("findPluginsFile falls back to mochi.plugins.mjs", () => {
   const root = mkdtempSync(join(import.meta.dir, ".plugins-"));
   try {
     writeFileSync(join(root, "mochi.plugins.mjs"), "export default [];\n");
     const nested = join(root, "src", "components");
     expect(findPluginsFile(nested)).toBe(join(root, "mochi.plugins.mjs"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("loadPluginsFile reads default export from .ts", async () => {
+  const root = mkdtempSync(join(import.meta.dir, ".plugins-"));
+  try {
+    const file = join(root, "mochi.plugins.ts");
+    writeFileSync(file, 'export default [{ name: "test" }];\n');
+    clearPluginsCache();
+    const plugins = await loadPluginsFile(file);
+    expect(plugins).toHaveLength(1);
+    expect(plugins[0]?.name).toBe("test");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
