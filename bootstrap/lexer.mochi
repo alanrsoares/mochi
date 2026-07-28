@@ -6,9 +6,13 @@
 // - `Tok` is a variant (TS: tagged record union); payloads keep field names.
 // - A located token is { tok, start, end, doc } — TS flattens tok + span and
 //   makes `doc` optional; here `doc` is an Option.
-// - The while-loop is a `loop`/`recur` (ADR 0056) driving one char-or-token
-//   step per iteration; TS emit is a real `while (true)`, so depth no longer
-//   rides Bun's strict-mode tail-call elimination.
+// - The while-loop becomes `go`, recursing once per char-or-token step. Depth
+//   is fine because every recursive call is in tail position and JSC (Bun)
+//   eliminates tail frames in strict mode — emitted mochi modules are ESM.
+//   (`go` itself can't be a `loop`/`recur`: its step-protocol shape confuses
+//   tsc strict-mode union inference across the nested switches — see the
+//   check.mochi ctorLoop note in the loop/recur commit history. The smaller
+//   scan loops below don't hit this and stay converted.)
 
 type Tok =
   | TLet
@@ -357,92 +361,61 @@ let lexParts = (src, parts, idx, total, wholeStart, wholeEnd, doc, toks) => swit
     }
 }
 
-// One step per token. Loop state mirrors the TS locals: `doc` is the pending
+// Emit one token: doc attaches and clears, the line now has a token, the
+// newline run resets. Mutually recursive with `go`.
+let emit = (src, tok, start, stop, doc, toks) =>
+  go(src, stop, [], 0, true, Array.append(mkTok(tok, start, stop, doc), toks))
+
+// Top-level entry for a "..." literal starting at its opening quote `i`.
+// Mutually recursive with `go` (continues the outer scan past the literal).
+let lexString = (src, i, doc, toks) => switch scanTemplate(src, i) {
+  | None => lexError("unterminated string literal", i, Str.length(src))
+  | Some(scanned) => switch lexParts(src, scanned.parts, 0, Array.length(scanned.parts), i, scanned.end, doc, toks) {
+      | Err(e) => Err(e)
+      | Ok(toks2) => go(src, scanned.end, [], 0, true, toks2)
+    }
+}
+
+// One step per token. State mirrors the TS locals: `doc` is the pending
 // own-line `///` block, `nlRun` counts newlines since the last comment
 // (>= 2 = a blank line, which breaks doc attachment), `lineTok` says whether
 // the current line already has a token (makes a comment "trailing").
-export let lex = src =>
-  loop (i = 0, doc = [], nlRun = 0, lineTok = false, toks = []) {
-    switch Str.get(i, src) {
-      | None => Ok(Array.append(mkTok(TEof, i, i, doc), toks))
-      | Some(c) when isSpace(c) => c == "\n"
-          ? let n = nlRun + 1 in
-          let kept = n < 2 ? doc : [] in recur(i + 1, kept, n, false, toks)
-          : recur(i + 1, doc, nlRun, lineTok, toks)
-      | Some("/") when Str.get(i + 1, src) |> Option.contains("/") => switch scanComment(src, i, lineTok) {
-          | Trailing(stop) => recur(stop, doc, nlRun, lineTok, toks)
-          | PlainOwn(stop) => recur(stop, [], 0, lineTok, toks)
-          | DocLine(text, stop) => recur(
-              stop,
-              Array.append(text, doc),
-              0,
-              lineTok,
-              toks
-            )
-        }
-      | Some(c) => Str.slice(i, i + 3, src) == "..."
-          ? recur(
-            i + 3,
-            [],
-            0,
-            true,
-            Array.append(mkTok(TSpread, i, i + 3, doc), toks)
-          )
-          : switch digraphTok(Str.slice(i, i + 2, src)) {
-            | Some(t) => recur(
-                i + 2,
-                [],
-                0,
-                true,
-                Array.append(mkTok(t, i, i + 2, doc), toks)
-              )
-            | None => c == "\""
-                ? switch scanTemplate(src, i) {
-                  | None => lexError(
-                      "unterminated string literal",
-                      i,
-                      Str.length(src)
-                    )
-                  | Some(scanned) => switch lexParts(src, scanned.parts, 0, Array.length(scanned.parts), i, scanned.end, doc, toks) {
-                      | Err(e) => Err(e)
-                      | Ok(toks2) => recur(scanned.end, [], 0, true, toks2)
-                    }
-                }
-                : numStart(src, i, c)
-                ? let j = scanWhile(isNumChar, src, i + 1) in
-                let raw = Str.slice(i, j, src) in
-                  recur(
-                    j,
-                    [],
-                    0,
-                    true,
-                    Array.append(
-                      mkTok(TNum(numValue(raw), raw), i, j, doc),
-                      toks
-                    )
-                  )
-                : switch punctTok(c) {
-                  | Some(t) => recur(
-                      i + 1,
-                      [],
-                      0,
-                      true,
-                      Array.append(mkTok(t, i, i + 1, doc), toks)
-                    )
-                  | None => isIdStart(c)
-                      ? let j = scanWhile(isIdChar, src, i + 1) in
-                        recur(
-                          j,
-                          [],
-                          0,
-                          true,
-                          Array.append(
-                            mkTok(identTok(Str.slice(i, j, src)), i, j, doc),
-                            toks
-                          )
-                        )
-                      : lexError("unexpected char '${c}'", i, i + 1)
-                }
-          }
+let go = (src, i, doc, nlRun, lineTok, toks) => switch Str.get(i, src) {
+  | None => Ok(Array.append(mkTok(TEof, i, i, doc), toks))
+  | Some(c) when isSpace(c) => c == "\n"
+      ? let n = nlRun + 1 in
+      let kept = n < 2 ? doc : [] in go(src, i + 1, kept, n, false, toks)
+      : go(src, i + 1, doc, nlRun, lineTok, toks)
+  | Some("/") when Str.get(i + 1, src) |> Option.contains("/") => switch scanComment(src, i, lineTok) {
+      | Trailing(stop) => go(src, stop, doc, nlRun, lineTok, toks)
+      | PlainOwn(stop) => go(src, stop, [], 0, lineTok, toks)
+      | DocLine(text, stop) => go(
+          src,
+          stop,
+          Array.append(text, doc),
+          0,
+          lineTok,
+          toks
+        )
     }
-  }
+  | Some(c) => Str.slice(i, i + 3, src) == "..."
+      ? emit(src, TSpread, i, i + 3, doc, toks)
+      : switch digraphTok(Str.slice(i, i + 2, src)) {
+        | Some(t) => emit(src, t, i, i + 2, doc, toks)
+        | None => c == "\""
+            ? lexString(src, i, doc, toks)
+            : numStart(src, i, c)
+            ? let j = scanWhile(isNumChar, src, i + 1) in
+            let raw = Str.slice(i, j, src) in
+              emit(src, TNum(numValue(raw), raw), i, j, doc, toks)
+            : switch punctTok(c) {
+              | Some(t) => emit(src, t, i, i + 1, doc, toks)
+              | None => isIdStart(c)
+                  ? let j = scanWhile(isIdChar, src, i + 1) in
+                    emit(src, identTok(Str.slice(i, j, src)), i, j, doc, toks)
+                  : lexError("unexpected char '${c}'", i, i + 1)
+            }
+      }
+}
+
+export let lex = src => go(src, 0, [], 0, false, [])
