@@ -9,7 +9,8 @@
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "types": ["bun"]
   },
   "include": ["src/**/*"]
 }
