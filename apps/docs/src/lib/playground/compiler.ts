@@ -8,7 +8,8 @@
  */
 import { type CompileTargets, compileTargets, type Diagnostic } from "@mochi/compiler";
 import { isErr } from "@onrails/result";
-import type { CompileWorkerRequest, CompileWorkerResponse } from "./playground-compile.worker";
+import { err, ok, type Result, type Task } from "../task";
+import type { CompileWorkerRequest, CompileWorkerResponse } from "./compile.worker";
 
 export type PlaygroundCompileOk = CompileTargets & { ms: number };
 export type PlaygroundCompileErr = {
@@ -17,35 +18,24 @@ export type PlaygroundCompileErr = {
   ms: number;
 };
 
-/** Prelude-shaped Result — matches emitted `Ok` / `Err` ctors. */
-export type PlaygroundResult<A, E> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: E };
-
-/** Prelude-shaped Task — lazy thunk; calling it (or `Task.run`) fires the effect. */
-export type PlaygroundTask<A, E> = () => Promise<PlaygroundResult<A, E>>;
-
-const Ok = <A, E = never>(value: A): PlaygroundResult<A, E> => ({ _tag: "Ok", value });
-const Err = <A = never, E = never>(error: E): PlaygroundResult<A, E> => ({ _tag: "Err", error });
-
 type Pending = {
-  resolve: (result: PlaygroundResult<PlaygroundCompileOk, PlaygroundCompileErr>) => void;
+  resolve: (result: Result<PlaygroundCompileOk, PlaygroundCompileErr>) => void;
 };
 
 export type PlaygroundCompiler = {
-  compile: (source: string) => PlaygroundTask<PlaygroundCompileOk, PlaygroundCompileErr>;
+  compile: (source: string) => Task<PlaygroundCompileOk, PlaygroundCompileErr>;
   dispose: () => void;
 };
 
-const syncCompile = (
-  source: string,
-): PlaygroundResult<PlaygroundCompileOk, PlaygroundCompileErr> => {
+const syncCompile = (source: string): Result<PlaygroundCompileOk, PlaygroundCompileErr> => {
   const start = performance.now();
   try {
     const result = compileTargets(source, { runtime: true });
     const ms = performance.now() - start;
-    if (isErr(result)) return Err({ diagnostics: result.error, ms });
-    return Ok({ ...result.value, ms });
+    if (isErr(result)) return err({ diagnostics: result.error, ms });
+    return ok({ ...result.value, ms });
   } catch (e: unknown) {
-    return Err({
+    return err({
       message: e instanceof Error ? e.message : String(e),
       ms: performance.now() - start,
     });
@@ -53,11 +43,11 @@ const syncCompile = (
 };
 
 /**
- * Sync compile as a `Task` — used by the mochi façade (`playground-compile.mochi`)
+ * Sync compile as a `Task` — used by the mochi façade (`compile.mochi`)
  * and as the Worker-less fallback. Building the Task runs no effect; calling it does.
  */
 export const compileSyncTask =
-  (source: string): PlaygroundTask<PlaygroundCompileOk, PlaygroundCompileErr> =>
+  (source: string): Task<PlaygroundCompileOk, PlaygroundCompileErr> =>
   () =>
     Promise.resolve(syncCompile(source));
 
@@ -74,7 +64,7 @@ export const createPlaygroundCompiler = (): PlaygroundCompiler => {
   let worker: Worker | null = null;
 
   try {
-    worker = new Worker(new URL("./playground-compile.worker.ts", import.meta.url), {
+    worker = new Worker(new URL("./compile.worker.ts", import.meta.url), {
       type: "module",
     });
   } catch {
@@ -90,21 +80,21 @@ export const createPlaygroundCompiler = (): PlaygroundCompiler => {
     if (!entry) return;
     pending.delete(msg.id);
     if (msg.ok) {
-      entry.resolve(Ok({ js: msg.js, ts: msg.ts, dts: msg.dts, ms: msg.ms }));
+      entry.resolve(ok({ js: msg.js, ts: msg.ts, dts: msg.dts, ms: msg.ms }));
       return;
     }
     if ("diagnostics" in msg) {
-      entry.resolve(Err({ diagnostics: msg.diagnostics, ms: msg.ms }));
+      entry.resolve(err({ diagnostics: msg.diagnostics, ms: msg.ms }));
       return;
     }
-    entry.resolve(Err({ message: msg.message, ms: msg.ms }));
+    entry.resolve(err({ message: msg.message, ms: msg.ms }));
   };
 
   worker.onerror = () => {
     // Fall back for any subsequent call; in-flight requests get a generic error.
     for (const [id, entry] of pending) {
       pending.delete(id);
-      entry.resolve(Err({ message: "Playground compile worker failed", ms: 0 }));
+      entry.resolve(err({ message: "Playground compile worker failed", ms: 0 }));
     }
     worker?.terminate();
     worker = null;
@@ -124,7 +114,7 @@ export const createPlaygroundCompiler = (): PlaygroundCompiler => {
     dispose: () => {
       for (const [id, entry] of pending) {
         pending.delete(id);
-        entry.resolve(Err({ message: "Playground compile cancelled", ms: 0 }));
+        entry.resolve(err({ message: "Playground compile cancelled", ms: 0 }));
       }
       worker?.terminate();
       worker = null;

@@ -5,7 +5,7 @@
  */
 import { compileTargets, type Diagnostic } from "@mochi/compiler";
 import { isErr } from "@onrails/result";
-import { pretty } from "./pretty";
+import { pretty } from "../pretty";
 
 export type CompileWorkerRequest = { id: number; source: string };
 

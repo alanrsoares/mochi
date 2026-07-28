@@ -3,11 +3,7 @@ import { compile } from "@mochi/compiler/compile";
 import { readRepo } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
-import {
-  decodeSharedCode,
-  encodeSharedCode,
-  isSharedCodeWithinLimits,
-} from "../apps/docs/src/lib/shared-code";
+import { decodeSharedCode, encodeSharedCode, isSharedCodeWithinLimits } from "./shared-code";
 
 const read = (p: string): string => readRepo(import.meta.url, p);
 

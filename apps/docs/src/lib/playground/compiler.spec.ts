@@ -1,40 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { compile, compileTargets } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler/compile";
 import { readRepo } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
+import { compileSyncTask } from "./compiler";
 
 const read = (p: string): string => readRepo(import.meta.url, p);
-
-/**
- * Local Task-shaped host matching `compileSyncTask` — avoids importing
- * apps/docs (path alias `@mochi/compiler`) into the root tsc graph.
- */
-const compileSyncTask = (source: string) => () => {
-  const start = performance.now();
-  try {
-    const result = compileTargets(source, { runtime: true });
-    const ms = performance.now() - start;
-    if (isErr(result)) {
-      return Promise.resolve({
-        _tag: "Err" as const,
-        error: { diagnostics: result.error, ms },
-      });
-    }
-    return Promise.resolve({
-      _tag: "Ok" as const,
-      value: { ...result.value, ms },
-    });
-  } catch (e: unknown) {
-    return Promise.resolve({
-      _tag: "Err" as const,
-      error: {
-        message: e instanceof Error ? e.message : String(e),
-        ms: performance.now() - start,
-      },
-    });
-  }
-};
 
 describe("playground compile Task (ADR 0006)", () => {
   test("Task-shaped compile settles Ok with js/ts/dts on clean source", async () => {
@@ -55,8 +26,8 @@ describe("playground compile Task (ADR 0006)", () => {
     expect(result.error.ms).toBeGreaterThanOrEqual(0);
   });
 
-  test("playground-compile.mochi façade maps emit through Task.map", async () => {
-    const src = read("apps/docs/src/lib/playground-compile.mochi");
+  test("compile.mochi façade maps emit through Task.map", async () => {
+    const src = read("apps/docs/src/lib/playground/compile.mochi");
     expect(isErr(compile(src))).toBe(false);
     const js = unwrapOk(compile(src))
       .replace(/^import .*$/gm, "")

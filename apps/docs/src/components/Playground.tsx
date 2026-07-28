@@ -1,21 +1,10 @@
 import { type Diagnostic, formatError } from "@mochi/compiler";
 import { format } from "@mochi/dx/format";
-import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
-import { h, render } from "preact";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
-import presetFib from "../examples/presets/fib.mochi?raw";
-import presetJsx from "../examples/presets/jsx.mochi?raw";
-import presetResult from "../examples/presets/result.mochi?raw";
-import presetRowPoly from "../examples/presets/row-poly.mochi?raw";
-import presetTask from "../examples/presets/task.mochi?raw";
-import { createPlaygroundCompiler } from "../lib/playground-compiler";
-import {
-  decodeSharedCode,
-  encodeSharedCode,
-  isSharedCodeWithinLimits,
-  MAX_ENCODED_CODE_LENGTH,
-} from "../lib/shared-code";
+import { PRESETS } from "../lib/playground/presets";
+import { clearPreview, renderPreview } from "../lib/playground/preview";
+import { persistAutorun, readAutorun } from "../lib/playground/session";
 import {
   DiagBox,
   EditorInput,
@@ -28,56 +17,33 @@ import { HighlightedCode } from "./HighlightCode";
 import { Icon } from "./Icon";
 import { PlaygroundRight, PlaygroundSettings } from "./PlaygroundRight.mochi";
 import { PlaygroundView } from "./PlaygroundView.mochi";
+import { playgroundStatus, usePlaygroundCompile } from "./use-playground-compile";
+import { usePlaygroundSource } from "./use-playground-source";
 
-/** Emit is an ESM module (`import { match }…`); playground runs it in `new Function`. */
-const stripModuleImports = (js: string): string =>
-  js.replace(/^import\s+.+;?\s*$/gm, "").trimStart();
-
-const STORAGE_KEY = "mochi_playground_code_v2";
-const AUTORUN_KEY = "mochi_playground_autorun";
-const COMPILE_DEBOUNCE_MS = 280;
-const URL_SYNC_DEBOUNCE_MS = 360;
-/** `text-xs` (12px) × `leading-relaxed` (1.625); replaced by a measured value. */
+/** `text-xs` (12px) × `leading-relaxed` (1.625); replaced by measured value. */
 const EDITOR_LINE_HEIGHT = 19.5;
-/** Editor `p-4` top padding (1rem) — active-line bar + gutter share it. */
+/** Editor `p-4` top padding — active-line bar + gutter share it. */
 const EDITOR_PAD_TOP = 16;
 
 type RightTab = "js" | "ts" | "dts" | "output" | "problems" | "settings";
 
-const PRESETS: Record<string, { name: string; code: string }> = {
-  jsx: { name: "JSX → h()", code: presetJsx },
-  result: { name: "Result + switch", code: presetResult },
-  task: { name: "Async with typed errors", code: presetTask },
-  rowPoly: { name: "Flexible records", code: presetRowPoly },
-  fib: { name: "Fibonacci", code: presetFib },
-};
-
-function readAutorun(): boolean {
-  const v = localStorage.getItem(AUTORUN_KEY);
-  return v === null ? true : v === "1";
-}
-
-function readInitialCode(): string {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) return saved;
-  return PRESETS.jsx.code;
-}
+/** The three emit tabs share one pane shape — id picks the emit, lang the highlighter. */
+const EMIT_TABS = [
+  { id: "js", lang: "js", empty: "No emit yet — fix Problems or hit Run." },
+  { id: "ts", lang: "ts", empty: "No TypeScript emit yet — fix Problems or hit Run." },
+  { id: "dts", lang: "ts", empty: "No .d.ts emit yet — fix Problems or hit Run." },
+] as const;
 
 function diagSpans(diags: readonly Diagnostic[]): { start: number; end: number }[] {
   return diags.flatMap((d) => (d.span ? [{ start: d.span.start, end: d.span.end }] : []));
 }
 
 export function Playground() {
-  const [code, setCode] = useState(readInitialCode);
-  const [bootstrapped, setBootstrapped] = useState(false);
-  const [outputJs, setOutputJs] = useState("");
-  const [outputTs, setOutputTs] = useState("");
-  const [outputDts, setOutputDts] = useState("");
-  const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
-  const [compileMs, setCompileMs] = useState<number | null>(null);
-  const [compiling, setCompiling] = useState(false);
-  const [activeTab, setActiveTab] = useState<RightTab>("js");
+  const { code, setCode, bootstrapped, syncShareUrl } = usePlaygroundSource();
   const [autoRun, setAutoRun] = useState(readAutorun);
+  const { outputJs, outputTs, outputDts, diagnostics, compileMs, compiling, evaluate } =
+    usePlaygroundCompile(code, autoRun, bootstrapped);
+  const [activeTab, setActiveTab] = useState<RightTab>("js");
   const [shareCopied, setShareCopied] = useState(false);
   const [formatNotice, setFormatNotice] = useState(false);
   const [splitPct, setSplitPct] = useState(50);
@@ -88,9 +54,6 @@ export function Playground() {
   const mirrorRef = useRef<HTMLPreElement>(null);
   const gutterRef = useRef<HTMLPreElement>(null);
   const dragging = useRef(false);
-  const compileSeq = useRef(0);
-  const urlSeq = useRef(0);
-  const compilerRef = useRef(createPlaygroundCompiler());
   const [activeLine, setActiveLine] = useState(1);
   const [scrollTop, setScrollTop] = useState(0);
   const [lineHeight, setLineHeight] = useState(EDITOR_LINE_HEIGHT);
@@ -114,122 +77,19 @@ export function Playground() {
     if (Number.isFinite(measured) && measured > 0) setLineHeight(measured);
   }, []);
 
-  // Restore share payload from `?code=` once (async gzip decode).
   useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      const paramCode = new URLSearchParams(window.location.search).get("code");
-      if (paramCode && paramCode.length > 0 && paramCode.length <= MAX_ENCODED_CODE_LENGTH) {
-        const decoded = await decodeSharedCode(paramCode)();
-        if (
-          !cancelled &&
-          decoded._tag === "Ok" &&
-          isSharedCodeWithinLimits(paramCode, decoded.value) &&
-          decoded.value
-        ) {
-          setCode(decoded.value);
-        }
-      }
-      if (!cancelled) setBootstrapped(true);
-    };
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    const compiler = compilerRef.current;
-    return () => compiler.dispose();
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(AUTORUN_KEY, autoRun ? "1" : "0");
+    persistAutorun(autoRun);
   }, [autoRun]);
-
-  const syncUrl = useCallback(async (source: string) => {
-    urlSeq.current += 1;
-    const seq = urlSeq.current;
-    const encoded = await encodeSharedCode(source)();
-    if (seq !== urlSeq.current || encoded._tag !== "Ok") return;
-    if (!isSharedCodeWithinLimits(encoded.value, source)) return;
-    const params = new URLSearchParams(window.location.search);
-    params.set("code", encoded.value);
-    const next = `${window.location.pathname}?${params.toString()}${window.location.hash}`;
-    window.history.replaceState(null, "", next);
-    localStorage.setItem(STORAGE_KEY, source);
-  }, []);
-
-  const evaluate = useCallback((source: string) => {
-    compileSeq.current += 1;
-    const seq = compileSeq.current;
-    setCompiling(true);
-    void compilerRef.current
-      .compile(source)()
-      .then((result) => {
-        if (seq !== compileSeq.current) return;
-        setCompiling(false);
-        if (result._tag === "Ok") {
-          setDiagnostics([]);
-          setOutputJs(result.value.js);
-          setOutputTs(result.value.ts);
-          setOutputDts(result.value.dts);
-          setCompileMs(result.value.ms);
-          return;
-        }
-        setOutputJs("");
-        setOutputTs("");
-        setOutputDts("");
-        setCompileMs(result.error.ms);
-        if (result.error.diagnostics) {
-          setDiagnostics(result.error.diagnostics);
-          return;
-        }
-        setDiagnostics([
-          {
-            kind: "check",
-            message: result.error.message ?? "Compilation failed",
-          },
-        ]);
-      });
-  }, []);
-  // Debounced autorun compile.
-  useEffect(() => {
-    if (!bootstrapped || !autoRun) return;
-    const id = window.setTimeout(() => evaluate(code), COMPILE_DEBOUNCE_MS);
-    return () => window.clearTimeout(id);
-  }, [autoRun, bootstrapped, code, evaluate]);
-
-  // Debounced URL + localStorage sync.
-  useEffect(() => {
-    if (!bootstrapped) return;
-    const id = window.setTimeout(() => {
-      void syncUrl(code);
-    }, URL_SYNC_DEBOUNCE_MS);
-    return () => window.clearTimeout(id);
-  }, [bootstrapped, code, syncUrl]);
 
   // Keep preview host mounted; imperative render survives parent re-renders.
   useLayoutEffect(() => {
     const el = previewRef.current;
     if (!el) return;
     if (diagnostics.length > 0 || activeTab !== "output" || !outputJs) {
-      render(null, el);
+      clearPreview(el);
       return;
     }
-    try {
-      const fn = new Function(
-        "h",
-        "match",
-        `${stripModuleImports(outputJs)}; return typeof app !== 'undefined' ? app : null;`,
-      );
-      const vnode = fn(h, match);
-      render(vnode ?? null, el);
-      if (!vnode) el.innerText = "Compiled. Bind `let app = …` to preview UI.";
-    } catch (execErr: unknown) {
-      render(null, el);
-      el.innerText = `Runtime error: ${execErr instanceof Error ? execErr.message : String(execErr)}`;
-    }
+    renderPreview(el, outputJs);
   });
 
   const handleFormat = useCallback(() => {
@@ -239,7 +99,7 @@ export function Playground() {
       setFormatNotice(true);
       setTimeout(() => setFormatNotice(false), 1800);
     }
-  }, [code]);
+  }, [code, setCode]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -278,7 +138,7 @@ export function Playground() {
 
   const handleShare = () => {
     void (async () => {
-      await syncUrl(code);
+      await syncShareUrl(code);
       try {
         await navigator.clipboard.writeText(window.location.href);
         setShareCopied(true);
@@ -297,16 +157,7 @@ export function Playground() {
   const problemCount = diagnostics.length;
   const errorSpans = diagSpans(diagnostics);
   const statusOk = diagnostics.length === 0;
-  const statusText = compiling
-    ? "compiling…"
-    : compileMs === null
-      ? statusOk
-        ? "ready"
-        : "error"
-      : statusOk
-        ? `ok · ${compileMs.toFixed(1)}ms`
-        : `error · ${compileMs.toFixed(1)}ms`;
-  const statusState = compiling ? "ok" : statusOk ? "ok" : "err";
+  const { text: statusText, state: statusState } = playgroundStatus(compiling, compileMs, statusOk);
   const tabs = (
     [
       { id: "js" as const, label: "JavaScript" },
@@ -342,42 +193,23 @@ export function Playground() {
     </div>
   );
 
+  const emits: Record<(typeof EMIT_TABS)[number]["id"], string> = {
+    js: outputJs,
+    ts: outputTs,
+    dts: outputDts,
+  };
+  const emitTab = EMIT_TABS.find((t) => t.id === activeTab);
+
   let activePane = null;
-  if (activeTab === "js") {
+  if (emitTab) {
     activePane = (
       <EmitPane className="max-h-none min-h-72 lg:min-h-0">
-        {outputJs ? (
-          <HighlightedCode code={outputJs} lang="js" />
+        {emits[emitTab.id] ? (
+          <HighlightedCode code={emits[emitTab.id]} lang={emitTab.lang} />
         ) : (
           <span className="inline-flex items-center gap-2 text-mute">
             <Icon name="file-code" className="size-4 shrink-0 opacity-70" />
-            No emit yet — fix Problems or hit Run.
-          </span>
-        )}
-      </EmitPane>
-    );
-  } else if (activeTab === "ts") {
-    activePane = (
-      <EmitPane className="max-h-none min-h-72 lg:min-h-0">
-        {outputTs ? (
-          <HighlightedCode code={outputTs} lang="ts" />
-        ) : (
-          <span className="inline-flex items-center gap-2 text-mute">
-            <Icon name="file-code" className="size-4 shrink-0 opacity-70" />
-            No TypeScript emit yet — fix Problems or hit Run.
-          </span>
-        )}
-      </EmitPane>
-    );
-  } else if (activeTab === "dts") {
-    activePane = (
-      <EmitPane className="max-h-none min-h-72 lg:min-h-0">
-        {outputDts ? (
-          <HighlightedCode code={outputDts} lang="ts" />
-        ) : (
-          <span className="inline-flex items-center gap-2 text-mute">
-            <Icon name="file-code" className="size-4 shrink-0 opacity-70" />
-            No .d.ts emit yet — fix Problems or hit Run.
+            {emitTab.empty}
           </span>
         )}
       </EmitPane>

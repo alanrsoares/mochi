@@ -8,10 +8,12 @@
     "build": "bun ../../scripts/gen-mochi-dts.ts && bunx --bun vite build",
     "preview": "bunx --bun vite preview",
     "gen:emit": "bun ../../scripts/gen-docs-emit.ts",
-    "check": "bun ../../scripts/gen-mochi-dts.ts && tsc --noEmit && bunx --bun vite build"
+    "check": "bun ../../scripts/gen-mochi-dts.ts && tsc --noEmit && bun test src && bunx --bun vite build"
   },
   "dependencies": {
     "@mochi/compiler": "workspace:*",
+    "@onrails/pattern": "^0.3.3",
+    "@onrails/result": "^0.4.0",
     "@mochi/dx": "workspace:*",
     "@mochi/plugin-preact": "workspace:*",
     "@mochi/plugin-re-reduced": "workspace:*",
@@ -26,7 +28,9 @@
     "prettier": "3"
   },
   "devDependencies": {
+    "@mochi/test-support": "workspace:*",
     "@preact/preset-vite": "^2.10.1",
+    "@types/bun": "latest",
     "@tailwindcss/vite": "^4.0.0",
     "@types/path-browserify": "^1.0.3",
     "path-browserify": "^1.0.1",
