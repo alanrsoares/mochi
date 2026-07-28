@@ -21,6 +21,9 @@ export type LamParam =
 type Field = { name: string, value: Expr }
 type MapEntry = { key: Expr, value: Expr }
 type MatchArm = { pattern: Pattern, guard: Option Expr, body: Expr }
+
+// One `name = init` binder in a `loop (...)` head (ADR 0056).
+type LoopParam = { name: string, nameSpan: Span, init: Expr }
 type PatField = { label: string, pat: Pattern }
 
 // One slot in an Array / List / Set literal (ADR 0001).
@@ -52,6 +55,9 @@ export type Expr =
   | EList(elements: [SeqElem], span: Span)
   | ESet(elements: [SeqElem], span: Span)
   | EMap(entries: [MapEntry], span: Span)
+  // `loop (p = init, ...) { body }` / `recur(args)` — ADR 0056.
+  | ELoop(params: [LoopParam], body: Expr, span: Span)
+  | ERecur(args: [Expr], span: Span)
   | EInterp(parts: [InterpPart], span: Span)
 
 export type InterpPart =

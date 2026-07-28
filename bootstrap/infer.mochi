@@ -102,6 +102,8 @@ let exprSpan = e => switch e {
   | Ast.EPipe(_, _, sp) => sp
   | Ast.ETernary(_, _, _, sp) => sp
   | Ast.EMatch(_, _, sp) => sp
+  | Ast.ELoop(_, _, sp) => sp
+  | Ast.ERecur(_, sp) => sp
   | Ast.ERecord(_, _, sp) => sp
   | Ast.EField(_, _, sp) => sp
   | Ast.ETuple(_, sp) => sp
@@ -218,8 +220,54 @@ let ctxWithEnv = (ctx, env) =>
     open: ctx.open,
     ns: ctx.ns,
     aliasMap: ctx.aliasMap,
-    plugins: ctx.plugins
+    plugins: ctx.plugins,
+    loopStack: ctx.loopStack
   }
+
+// Enter a loop body: params bound in env, frame pushed innermost-FIRST
+// (`recur` reads the head — nearest enclosing loop, ADR 0056).
+let ctxWithLoop = (ctx, env, frame) =>
+  {
+    env: env,
+    open: ctx.open,
+    ns: ctx.ns,
+    aliasMap: ctx.aliasMap,
+    plugins: ctx.plugins,
+    loopStack: Array.prepend(frame, ctx.loopStack)
+  }
+
+// loop params: inits infer in the OUTER ctx; each binds monomorphic —
+// `recur` rebinds them, so generalizing would let iterations disagree.
+let inferLoopParamsFrom = (params, i, ctx, envAcc, frameAcc, st) => switch Array.get(i, params) {
+  | None => Ok((frameAcc, envAcc, st))
+  | Some(p) => let? (t, st1) = inferExpr(p.init, ctx, st) in
+      inferLoopParamsFrom(
+        params,
+        i + 1,
+        ctx,
+        Map.set(p.name, mono(t), envAcc),
+        Array.append(t, frameAcc),
+        st1
+      )
+}
+
+let unifyRecurArgsFrom = (args, frame, i, ctx, st) => switch Array.get(i, args) {
+  | None => Ok(st)
+  | Some(a) => let? (at, st1) = inferExpr(a, ctx, st) in
+      switch Array.get(i, frame) {
+        | None => unifyRecurArgsFrom(args, frame, i + 1, ctx, st1)
+        | Some(pt) => let? st2 = u(at, pt, st1, exprSpan(a)) in
+            unifyRecurArgsFrom(args, frame, i + 1, ctx, st2)
+      }
+}
+
+// recur types as a fresh var (bottom-like) after unifying its args with the
+// nearest frame's param types.
+let inferRecur = (args, sp, ctx, st) => switch ctx.loopStack {
+  | [] => Err(typeErr("'recur' is only legal inside a loop body", sp))
+  | [frame, ..._] => let? st1 = unifyRecurArgsFrom(args, frame, 0, ctx, st) in
+    let (t, st2) = freshVar(st1) in Ok((t, st2))
+}
 
 let inferCallArgs = (fnT, args, ctx, st, callSpan) => switch args {
   | [] => Ok((fnT, st))
@@ -496,6 +544,16 @@ let inferExpr = (e, ctx, st) => switch e {
   | Ast.ESet(elements, _) => inferSeqSlots("Set", elements, ctx, st)
   | Ast.EMap(entries, _) => inferMapExpr(entries, ctx, st)
   | Ast.EMatch(scrutinee, arms, _) => inferMatch(scrutinee, arms, ctx, st)
+  | Ast.ELoop(params, body, _) => let? (frame, bodyEnv, st1) = inferLoopParamsFrom(
+      params,
+      0,
+      ctx,
+      ctx.env,
+      [],
+      st
+    ) in
+      inferExpr(body, ctxWithLoop(ctx, bodyEnv, frame), st1)
+  | Ast.ERecur(args, sp) => inferRecur(args, sp, ctx, st)
   | Ast.EInterp(parts, _) => let? st1 = inferInterpParts(parts, ctx, st) in
       Ok((tString, st1))
 }
@@ -707,6 +765,19 @@ let lambdaBound = (params, bound) => switch params {
   | [p, ...rest] => lambdaBound(rest, paramBound(p, bound))
 }
 
+let loopBound = (params, bound) =>
+  Array.reduce((b, p) => Set.add(p.name, b), bound, params)
+
+let loopInitRefsFrom = (params, i, bound, acc) => switch Array.get(i, params) {
+  | None => acc
+  | Some(p) => loopInitRefsFrom(
+      params,
+      i + 1,
+      bound,
+      freeRefs(p.init, bound, acc)
+    )
+}
+
 let freeRefsList = (es, bound, acc) => switch es {
   | [] => acc
   | [e, ...rest] => freeRefsList(rest, bound, freeRefs(e, bound, acc))
@@ -791,6 +862,12 @@ let freeRefs = (e, bound, acc) => switch e {
       bound,
       freeRefs(scrutinee, bound, acc)
     )
+  | Ast.ELoop(params, body, _) => freeRefs(
+      body,
+      loopBound(params, bound),
+      loopInitRefsFrom(params, 0, bound, acc)
+    )
+  | Ast.ERecur(args, _) => freeRefsList(args, bound, acc)
   | Ast.ERecord(fields, spread, _) => freeRefsFields(
       fields,
       bound,
@@ -1213,7 +1290,7 @@ export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports
   let lets = letsOfFrom(stmts) in
   let idxOf = idxOfMap(lets) in
   let sccs = stronglyConnected(adjOf(lets, idxOf)) in
-    switch processGroupsFrom(sccs, lets, { env: env4, open: openMode, ns: ns0, aliasMap: aliasMap, plugins: plugins }, st3) {
+    switch processGroupsFrom(sccs, lets, { env: env4, open: openMode, ns: ns0, aliasMap: aliasMap, plugins: plugins, loopStack: [] }, st3) {
       | Ok(finalCtx) => Ok(finalCtx.env)
       | Err(e) => Err(e)
     }

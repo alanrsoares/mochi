@@ -69,6 +69,8 @@ let exprSpan = e => switch e {
   | Ast.EPipe(_, _, sp) => sp
   | Ast.ETernary(_, _, _, sp) => sp
   | Ast.EMatch(_, _, sp) => sp
+  | Ast.ELoop(_, _, sp) => sp
+  | Ast.ERecur(_, sp) => sp
   | Ast.ERecord(_, _, sp) => sp
   | Ast.EField(_, _, sp) => sp
   | Ast.ETuple(_, sp) => sp
@@ -508,6 +510,9 @@ let checkExpr = (e, reg) => switch e {
     }
       |> Option.orElse(firstSome(f => checkExpr(f.value, reg), fields))
   | Ast.EField(target, _, _) => checkExpr(target, reg)
+  | Ast.ELoop(params, body, _) => firstSome(p => checkExpr(p.init, reg), params)
+      |> Option.orElse(checkExpr(body, reg))
+  | Ast.ERecur(args, _) => firstSome(a => checkExpr(a, reg), args)
   | Ast.ETuple(elements, _) => firstSome(el => checkExpr(el, reg), elements)
   | Ast.EArr(elements, _) => firstSome(
       el =>

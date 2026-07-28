@@ -21,6 +21,8 @@ type Tok =
   | TType
   | TExtern
   | TSwitch
+  | TLoop
+  | TRecur
   | TImport
   | TExport
   | TEq
@@ -92,6 +94,8 @@ let tokName = t => switch t {
   | TType => "type"
   | TExtern => "extern"
   | TSwitch => "switch"
+  | TLoop => "loop"
+  | TRecur => "recur"
   | TImport => "import"
   | TExport => "export"
   | TEq => "eq"
@@ -258,6 +262,8 @@ let exprSpan = e => switch e {
   | Ast.EPipe(_, _, sp) => sp
   | Ast.ETernary(_, _, _, sp) => sp
   | Ast.EMatch(_, _, sp) => sp
+  | Ast.ELoop(_, _, sp) => sp
+  | Ast.ERecur(_, sp) => sp
   | Ast.ERecord(_, _, sp) => sp
   | Ast.EField(_, _, sp) => sp
   | Ast.ETuple(_, sp) => sp
@@ -697,6 +703,8 @@ let parseAtom = (toks, pos, hooks) =>
   let sp = spanOf(lt) in
     switch lt.tok {
       | TSwitch => parseMatch(toks, pos, hooks)
+      | TLoop => parseLoop(toks, pos, hooks)
+      | TRecur => parseRecur(toks, pos, hooks)
       | TLbrace => parseRecord(toks, pos, hooks)
       | TLbracket => parseArr(toks, pos, hooks)
       | TAt => parseList(toks, pos, hooks)
@@ -936,6 +944,44 @@ let armsLoop = (toks, pos, acc, hooks) =>
         hooks
       )
     : Ok((acc, pos))
+
+// `loop (acc = 0, i = 0) { body }` — tail-recursion loop (ADR 0056).
+let parseLoop = (toks, pos, hooks) =>
+  let start = spanOf(tokAt(toks, pos)) in
+  let? p = expectTok(TLoop, toks, pos) in
+  let? p1 = expectTok(TLparen, toks, p) in
+  let? (params, p2) = loopParamsLoop(toks, p1, [], hooks) in
+  let? p3 = expectTok(TRparen, toks, p2) in
+  let? p4 = expectTok(TLbrace, toks, p3) in
+  let? (body, p5) = parseExpr(toks, p4, hooks) in
+    expectTok(TRbrace, toks, p5)
+      |> Result.map(p6 => (Ast.ELoop(params, body, toEnd(start, toks, p6)), p6))
+
+// One or more `name = init` binders, comma-separated.
+let loopParamsLoop = (toks, pos, acc, hooks) =>
+  let? (id, pid) = expectId(toks, pos) in
+  let? p = expectTok(TEq, toks, pid) in
+  let? (init, p1) = parseExpr(toks, p, hooks) in
+  let next = Array.append(
+    { name: id.name, nameSpan: id.span, init: init },
+    acc
+  ) in
+    switch tokAt(toks, p1).tok {
+      | TComma => loopParamsLoop(toks, p1 + 1, next, hooks)
+      | _ => Ok((next, p1))
+    }
+
+// `recur(a, b)` — first-class node so check/codegen see tail uses (ADR 0056).
+let parseRecur = (toks, pos, hooks) =>
+  let start = spanOf(tokAt(toks, pos)) in
+  let? p = expectTok(TRecur, toks, pos) in
+  let? p1 = expectTok(TLparen, toks, p) in
+    switch tokAt(toks, p1).tok {
+      | TRparen => Ok((Ast.ERecur([], toEnd(start, toks, p1 + 1)), p1 + 1))
+      | _ => let? (args, p2) = sepByH(parseExpr, toks, p1, [], hooks) in
+          expectTok(TRparen, toks, p2)
+            |> Result.map(p3 => (Ast.ERecur(args, toEnd(start, toks, p3)), p3))
+    }
 
 let parseMatch = (toks, pos, hooks) =>
   let start = spanOf(tokAt(toks, pos)) in

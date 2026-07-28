@@ -1,0 +1,25 @@
+// loop/recur (ADR 0056) — tail-recursion loops that emit idiomatic JS while
+// loops. `recur` rebinds the params in tail position; any other tail value is
+// the loop's result.
+
+// Direct rebind form: a ternary tail lowers to if/else + continue.
+let countTo = n => loop (i = 0) { i >= n ? i : recur(i + 1) }
+
+// Step-protocol form: a switch tail keeps its pattern chain; arms yield
+// continue-or-done steps the loop dispatches on.
+let sum = xs =>
+  loop (acc = 0, i = 0) {
+    switch Array.get(i, xs) { | None => acc | Some(x) => recur(acc + x, i + 1) }
+  }
+
+// letin links before the loop stay sequential consts in the same block.
+let sumSquares = xs =>
+  let squares = xs |> map(x => x * x) in
+    loop (acc = 0, i = 0) {
+      switch Array.get(i, squares) {
+        | None => acc
+        | Some(s) => recur(acc + s, i + 1)
+      }
+    }
+
+export let demo = (countTo(5), sum([1, 2, 3]), sumSquares([1, 2, 3]))

@@ -376,6 +376,13 @@ const A_EXPR: Record<string, (e: Al) => Canon> = {
     arms: e.arms.map(aArm),
     span: e.span,
   }),
+  ELoop: (e) => ({
+    kind: "loop",
+    params: e.params.map((p: Al) => ({ name: p.name, init: aExpr(p.init) })),
+    body: aExpr(e.body),
+    span: e.span,
+  }),
+  ERecur: (e) => ({ kind: "recur", args: e.args.map(aExpr), span: e.span }),
   ERecord: (e) => ({
     kind: "record",
     fields: e.fields.map((f: Al) => ({ name: f.name, value: aExpr(f.value) })),
@@ -572,6 +579,8 @@ const cases: Record<string, string> = {
   "let-in and tuple let-in":
     "let f = let a = 1 in add(a, 2)\nlet g = let (x, y) = (1, 2) in add(x, y)",
   "pipe chain": "let r = x |> f |> g(1) |> h",
+  "loop and recur (ADR 0056)":
+    "let sum = xs => loop (acc = 0, i = 0) { switch Array.get(i, xs) { | None => acc | Some(x) => recur(acc + x, i + 1) } }\nlet count = n => loop (i = 0) { i >= n ? i : recur(i + 1) }",
   "call and field chains": "let a = f(1)(2).x.y(3)",
   "jsx element and fragment provenance":
     'let el = <div className="c">{"hi"}</div>\nlet frag = <><span>{"1"}</span></>',

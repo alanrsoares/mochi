@@ -140,6 +140,13 @@ let genExpr = (e, ctx) => switch e {
     "${genCallee(right, ctx)}(${genExpr(left, ctx)})"
   | Ast.ETernary(cond, thenE, elseE, _) => "(${genExpr(cond, ctx)} ? ${genExpr(thenE, ctx)} : ${genExpr(elseE, ctx)})"
   | Ast.EMatch(scrutinee, arms, _) => genMatch(scrutinee, arms, ctx)
+  | Ast.ELoop(params, body, _) =>
+    // Expression-position loop wraps in an IIFE; directly under a lambda body
+    // the bare-block form is used instead (genLambdaBodyIn) — ADR 0056.
+    "(() => { ${genLoopBlock(params, body, ctx)} })()"
+  | Ast.ERecur(args, _) =>
+    // Only reachable inside a loop-tail switch arm (checkLoops): a step value.
+    "_recur(${Str.join(", ", args |> map(a => genExpr(a, ctx)))})"
   | Ast.ERecord(fields, spread, _) =>
     // `{ ...base, f: v }` (ADR 0021) -> native JS object spread; `parts.length
     // === 0` (bare `{}`) is only possible with no spread and no fields.
@@ -221,6 +228,139 @@ let genMember = (e, ctx) => switch e {
 
 // A record literal as a concise arrow body must be parenthesized, else JS
 // parses `=> { ... }` as a statement block: `=> ({ x: 1 })`.
+// ---- loop / recur (ADR 0056) ------------------------------------------------
+
+let seqElemExpr = el => switch el {
+  | Ast.SEExpr(e) => e
+  | Ast.SESpread(e) => e
+}
+
+// Does this subtree contain a recur belonging to the CURRENT loop? Nested
+// loops own their recurs; lambda/letbind bodies are hard boundaries.
+let hasRecur = e => switch e {
+  | Ast.ERecur(_, _) => true
+  | Ast.ELoop(_, _, _) => false
+  | Ast.ELambda(_, _, _) => false
+  | Ast.ELetBind(_, _, _, _, _, _) => false
+  | Ast.EInterp(parts, _) => someOf(
+      p => switch p { | Ast.IPExpr(x) => hasRecur(x) | Ast.IPLit(_) => false },
+      parts
+    )
+  | Ast.ECall(fn, args, _, _) => hasRecur(fn) || someOf(hasRecur, args)
+  | Ast.ELetIn(_, _, value, body, _) => hasRecur(value) || hasRecur(body)
+  | Ast.EPipe(left, right, _) => hasRecur(left) || hasRecur(right)
+  | Ast.ETernary(cond, thenE, elseE, _) => hasRecur(
+      cond
+    ) || (hasRecur(thenE) || hasRecur(elseE))
+  | Ast.EMatch(scrutinee, arms, _) => hasRecur(
+      scrutinee
+    ) || someOf(
+      a =>
+        switch a.guard {
+          | Some(g) => hasRecur(g)
+          | None => false
+        } || hasRecur(a.body),
+      arms
+    )
+  | Ast.ERecord(fields, spread, _) => switch spread {
+      | Some(sp) => hasRecur(sp)
+      | None => false
+    } || someOf(f => hasRecur(f.value), fields)
+  | Ast.EField(target, _, _) => hasRecur(target)
+  | Ast.ETuple(elements, _) => someOf(hasRecur, elements)
+  | Ast.EArr(elements, _) => someOf(el => hasRecur(seqElemExpr(el)), elements)
+  | Ast.EList(elements, _) => someOf(el => hasRecur(seqElemExpr(el)), elements)
+  | Ast.ESet(elements, _) => someOf(el => hasRecur(seqElemExpr(el)), elements)
+  | Ast.EMap(entries, _) => someOf(
+      en => hasRecur(en.key) || hasRecur(en.value),
+      entries
+    )
+  | _ => false
+}
+
+// Will this loop body need the _recur/_done step protocol? Only when a switch
+// sits in tail position with a recur inside.
+let loopNeedsStep = e => switch e {
+  | Ast.ETernary(_, thenE, elseE, _) => loopNeedsStep(
+      thenE
+    ) || loopNeedsStep(elseE)
+  | Ast.ELetIn(_, _, _, body, _) => loopNeedsStep(body)
+  | Ast.EMatch(_, _, _) => hasRecur(e)
+  | _ => false
+}
+
+// Rewrite a loop-tail switch so every arm yields a step value: recur tails
+// already emit `_recur(...)` (genExpr), value tails wrap in `_done(...)`.
+let wrapStepTails = (e, sp) => switch e {
+  | Ast.ERecur(_, _) => e
+  | Ast.ETernary(cond, thenE, elseE, tsp) => Ast.ETernary(
+      cond,
+      wrapStepTails(thenE, sp),
+      wrapStepTails(elseE, sp),
+      tsp
+    )
+  | Ast.ELetIn(name, nameSpan, value, body, lsp) => Ast.ELetIn(
+      name,
+      nameSpan,
+      value,
+      wrapStepTails(body, sp),
+      lsp
+    )
+  | Ast.EMatch(scrutinee, arms, msp) => Ast.EMatch(
+      scrutinee,
+      arms
+        |> map(a =>
+          {
+            pattern: a.pattern,
+            guard: a.guard,
+            body: wrapStepTails(a.body, sp)
+          }
+        ),
+      msp
+    )
+  | _ => Ast.ECall(Ast.ERef("_done", sp), [e], None, sp)
+}
+
+let loopParamNames = params => Str.join(", ", params |> map(p => p.name))
+
+// Lower one loop-body tail to statements inside `while (true)`.
+let genLoopTail = (e, params, ctx) => switch e {
+  | Ast.ERecur(args, _) => switch (params, args) {
+      | ([p], [a]) => "${p.name} = ${genExpr(a, ctx)}; continue;"
+      | (_, _) => "[${loopParamNames(params)}] = [${Str.join(", ", args |> map(a => genExpr(a, ctx)))}]; continue;"
+    }
+  | Ast.ETernary(cond, thenE, elseE, _) => hasRecur(e)
+      ? "if (${genExpr(cond, ctx)}) { ${genLoopTail(thenE, params, ctx)} } else { ${genLoopTail(elseE, params, ctx)} }"
+      : "return ${genExpr(e, ctx)};"
+  | Ast.ELetIn(name, _, value, body, _) => hasRecur(e)
+      ? "const ${name} = ${genExpr(value, ctx)}; ${genLoopTail(body, params, ctx)}"
+      : "return ${genExpr(e, ctx)};"
+  | Ast.EMatch(_, _, sp) => hasRecur(e)
+      ? let step = genExpr(wrapStepTails(e, sp), ctx) in
+      let rebind = switch params {
+        | [p] => "${p.name} = _step.args[0];"
+        | _ => "[${loopParamNames(params)}] = _step.args;"
+      } in
+        "const _step = ${step}; if (_step._tag === ${jsStringLit("recur")}) { ${rebind} continue; } return _step.value;"
+      : "return ${genExpr(e, ctx)};"
+  | _ => "return ${genExpr(e, ctx)};"
+}
+
+// The statement body of a lowered loop: param `let`s + `while (true)`.
+let genLoopBlock = (params, body, ctx) =>
+  let decls = Str.join(
+    " ",
+    params |> map(p => "let ${p.name} = ${genExpr(p.init, ctx)};")
+  ) in
+    "${decls} while (true) { ${genLoopTail(body, params, ctx)} }"
+
+let loopParamFree = (params, i, seen) => switch Array.get(i, params) {
+  | None => true
+  | Some(p) => Set.has(p.name, seen)
+      ? false
+      : loopParamFree(params, i + 1, seen)
+}
+
 let genLambdaBody = (e, ctx) => switch e {
   | Ast.ERecord(_, _, _) => "(${genExpr(e, ctx)})"
   | _ => genExpr(e, ctx)
@@ -253,14 +393,14 @@ let letBlockLoop = (e, ctx, seen, decls) => switch e {
       name,
       seen
     ) || Set.has(name, exprRefs(value, ctx, Set.fromArray([])))
-      ? (decls, e)
+      ? (decls, e, seen)
       : letBlockLoop(
         body,
         ctx,
         Set.add(name, seen),
         Array.append("const ${name} = ${genExpr(value, ctx)};", decls)
       )
-  | _ => (decls, e)
+  | _ => (decls, e, seen)
 }
 
 // A let-chain directly under a lambda lowers to a block body of `const`s
@@ -268,11 +408,25 @@ let letBlockLoop = (e, ctx, seen, decls) => switch e {
 // of nesting one closure per binding. Whatever the chain stopped at falls
 // back to the IIFE form, which scopes it correctly.
 let genLambdaBodyIn = (e, ctx, bound) =>
-  let (decls, rest) = letBlockLoop(e, ctx, bound, []) in
+  let (decls, rest, seen) = letBlockLoop(e, ctx, bound, []) in
     Array.length(decls) == 0
-      ? genLambdaBody(e, ctx)
+      ? switch e {
+        | Ast.ELoop(params, body, _) =>
+          // A loop directly under a lambda emits as the arrow's block body — no
+          // IIFE. Param names clashing with the arrow's own params would be a JS
+          // redeclaration, so those fall through to the IIFE form (ADR 0056).
+          loopParamFree(params, 0, bound)
+            ? "{ ${genLoopBlock(params, body, ctx)} }"
+            : genLambdaBody(e, ctx)
+        | _ => genLambdaBody(e, ctx)
+      }
       : let block = Str.join(" ", decls) in
-        "{ ${block} return ${genExpr(rest, ctx)}; }"
+        switch rest {
+          | Ast.ELoop(params, body, _) => loopParamFree(params, 0, seen)
+              ? "{ ${block} ${genLoopBlock(params, body, ctx)} }"
+              : "{ ${block} return ${genExpr(rest, ctx)}; }"
+          | _ => "{ ${block} return ${genExpr(rest, ctx)}; }"
+        }
 
 // ---- match -> @onrails/pattern chain ---------------------------------------
 // We target @onrails/pattern (pairs with @onrails/result + @onrails/maybe).
@@ -815,6 +969,11 @@ let usesMatchLib = e => switch e {
   | Ast.EMatch(scrutinee, arms, _) => !isListMatch(
       arms
     ) || (usesMatchLib(scrutinee) || someOf(usesMatchLibArm, arms))
+  | Ast.ELoop(params, body, _) => someOf(
+      p => usesMatchLib(p.init),
+      params
+    ) || usesMatchLib(body)
+  | Ast.ERecur(args, _) => someOf(usesMatchLib, args)
   | Ast.ERecord(fields, spread, _) => switch spread {
       | Some(s) => usesMatchLib(s)
       | None => false
@@ -852,6 +1011,11 @@ let usesMatchLib = e => switch e {
 // A name referenced anywhere in an expression. Coarse — counts locally
 // shadowed uses too, but only ever consulted against prelude names, never
 // worth shadowing, so the over-count is harmless.
+let loopInitRefsFrom = (params, i, ctx, acc) => switch Array.get(i, params) {
+  | None => acc
+  | Some(p) => loopInitRefsFrom(params, i + 1, ctx, exprRefs(p.init, ctx, acc))
+}
+
 let exprRefsListFrom = (xs, i, ctx, acc) => switch Array.get(i, xs) {
   | None => acc
   | Some(x) => exprRefsListFrom(xs, i + 1, ctx, exprRefs(x, ctx, acc))
@@ -963,6 +1127,14 @@ let exprRefs = (e, ctx, acc) => switch e {
         ) // its runtime deps get pulled in by preludePreamble's closure
       | None => exprRefs(target, ctx, acc)
     }
+  | Ast.ELoop(params, body, _) =>
+    // A switch in tail position with a recur lowers via the step protocol.
+    let acc1 = loopNeedsStep(body)
+      ? Set.add("_recur", Set.add("_done", acc))
+      : acc in
+    let acc2 = loopInitRefsFrom(params, 0, ctx, acc1) in
+      exprRefs(body, ctx, acc2)
+  | Ast.ERecur(args, _) => exprRefsListFrom(args, 0, ctx, acc)
   | Ast.ETuple(elements, _) => exprRefsListFrom(elements, 0, ctx, acc)
   | Ast.EArr(elements, _) => exprRefsListFrom(
       elements
