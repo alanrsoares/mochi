@@ -33,25 +33,31 @@ let checkErr = (message, sp) =>
 
 // --- generic loops (early-exit `for` loops from the TS original) ---
 
-let firstSomeFrom = (f, xs, i) => switch Array.get(i, xs) {
-  | None => None
-  | Some(x) => switch f(x) {
-      | Some(e) => Some(e)
-      | None => firstSomeFrom(f, xs, i + 1)
+let firstSomeFrom = (f, xs, i0) =>
+  loop (i = i0) {
+    switch Array.get(i, xs) {
+      | None => None
+      | Some(x) => switch f(x) { | Some(e) => Some(e) | None => recur(i + 1) }
     }
-}
+  }
 let firstSome = (f, xs) => firstSomeFrom(f, xs, 0)
 
-let allOfFrom = (f, xs, i) => switch Array.get(i, xs) {
-  | None => true
-  | Some(x) => f(x) ? allOfFrom(f, xs, i + 1) : false
-}
+let allOfFrom = (f, xs, i0) =>
+  loop (i = i0) {
+    switch Array.get(i, xs) {
+      | None => true
+      | Some(x) => f(x) ? recur(i + 1) : false
+    }
+  }
 let allOf = (f, xs) => allOfFrom(f, xs, 0)
 
-let someOfFrom = (f, xs, i) => switch Array.get(i, xs) {
-  | None => false
-  | Some(x) => f(x) ? true : someOfFrom(f, xs, i + 1)
-}
+let someOfFrom = (f, xs, i0) =>
+  loop (i = i0) {
+    switch Array.get(i, xs) {
+      | None => false
+      | Some(x) => f(x) ? true : recur(i + 1)
+    }
+  }
 let someOf = (f, xs) => someOfFrom(f, xs, 0)
 
 // --- span extractors (TS reads `.span` directly) ---
@@ -294,10 +300,13 @@ let guardErrs = (arms, listSwitch) =>
 
 // An arm after an unguarded catch-all can never match — reject rather than
 // let codegen silently reorder it.
-let firstCatchIdx = (arms, i) => switch Array.get(i, arms) {
-  | None => None
-  | Some(a) => armUnguardedCatchAll(a) ? Some(i) : firstCatchIdx(arms, i + 1)
-}
+let firstCatchIdx = (arms, i0) =>
+  loop (i = i0) {
+    switch Array.get(i, arms) {
+      | None => None
+      | Some(a) => armUnguardedCatchAll(a) ? Some(i) : recur(i + 1)
+    }
+  }
 let unreachableAfterCatch = arms => switch firstCatchIdx(arms, 0) {
   | None => None
   | Some(i) => switch Array.get(i + 1, arms) {

@@ -1091,15 +1091,17 @@ let letsOfFrom = stmts => switch stmts {
     }
 }
 
-let idxOfFrom = (lets, i, acc) => switch Array.get(i, lets) {
-  | None => acc
-  | Some(Ast.SLet(name, _, _, _, _, _, _)) => idxOfFrom(
-      lets,
-      i + 1,
-      Map.set(name, i, acc)
-    )
-  | Some(_) => idxOfFrom(lets, i + 1, acc)
-}
+let idxOfFrom = (lets, i0, acc0) =>
+  loop (i = i0, acc = acc0) {
+    switch Array.get(i, lets) {
+      | None => acc
+      | Some(Ast.SLet(name, _, _, _, _, _, _)) => recur(
+          i + 1,
+          Map.set(name, i, acc)
+        )
+      | Some(_) => recur(i + 1, acc)
+    }
+  }
 let idxOfMap = lets => idxOfFrom(lets, 0, #{})
 
 let depsOf = (letStmt, idxOf) => switch letStmt {
@@ -1346,27 +1348,24 @@ let exportCtorsInto = (ctors, i, env, acc) => switch Array.get(i, ctors) {
   | None => acc
   | Some(c) => exportCtorsInto(ctors, i + 1, env, takeScheme(c.name, env, acc))
 }
-let exportedSchemesFrom = (stmts, i, env, acc) => switch Array.get(i, stmts) {
-  | None => acc
-  | Some(Ast.SLet(name, _, _, _, true, _, _)) => exportedSchemesFrom(
-      stmts,
-      i + 1,
-      env,
-      takeScheme(name, env, acc)
-    )
-  | Some(Ast.SExtern(name, _, _, _, _, true, _, _)) => exportedSchemesFrom(
-      stmts,
-      i + 1,
-      env,
-      takeScheme(name, env, acc)
-    )
-  | Some(Ast.SType(_, _, ctors, _, true, _)) => exportedSchemesFrom(
-      stmts,
-      i + 1,
-      env,
-      exportCtorsInto(ctors, 0, env, acc)
-    )
-  | Some(_) => exportedSchemesFrom(stmts, i + 1, env, acc)
-}
+let exportedSchemesFrom = (stmts, i0, env, acc0) =>
+  loop (i = i0, acc = acc0) {
+    switch Array.get(i, stmts) {
+      | None => acc
+      | Some(Ast.SLet(name, _, _, _, true, _, _)) => recur(
+          i + 1,
+          takeScheme(name, env, acc)
+        )
+      | Some(Ast.SExtern(name, _, _, _, _, true, _, _)) => recur(
+          i + 1,
+          takeScheme(name, env, acc)
+        )
+      | Some(Ast.SType(_, _, ctors, _, true, _)) => recur(
+          i + 1,
+          exportCtorsInto(ctors, 0, env, acc)
+        )
+      | Some(_) => recur(i + 1, acc)
+    }
+  }
 export let exportedSchemes = (stmts, env) =>
   exportedSchemesFrom(stmts, 0, env, #{})
