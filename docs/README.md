@@ -25,7 +25,7 @@ share one codegen: readable JavaScript, and typed TypeScript that is clean under
 | [`tooling.md`](tooling.md) | The CLI, the LSP surfaces, the formatter, and `.d.ts` emission. |
 | [`dx-tracer-bullets.md`](dx-tracer-bullets.md) | Editor DX slices (rich diagnostics + navigation) — tracked as GitHub issues. |
 | [`docs-reframe.md`](docs-reframe.md) | Directed execution plan for reframing `apps/docs` content & positioning. |
-| [`PATH_TO_WASM3.md`](PATH_TO_WASM3.md) | Direction paper: WasmGC as the eventual third backend — why not Rust/LLVM, prerequisites, gates. |
+| [`adr/0053-path-to-wasm3.md`](adr/0053-path-to-wasm3.md) | Proposed: WasmGC as eventual third backend — no Rust rewrite, prerequisites, gates. (`PATH_TO_WASM3.md` stubs here.) |
 | [`adr/`](adr/) | Architectural Decision Records — one file per decision, going forward. |
 
 For working *in* the repo (commands, conventions, definition of done) see
