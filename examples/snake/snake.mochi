@@ -47,6 +47,15 @@ let checkWallCollision = ((x, y), cols, rows) =>
 /// Check if position is contained within the snake body
 let checkSelfCollision = (head, body) => Array.contains(head)(body)
 
+/// Every cell of the board the snake does not occupy. The host then picks one
+/// at random — rejection sampling in the host could not terminate once the
+/// snake filled the board, and "which cells are legal" is a game rule anyway.
+export let freeCells = (cols, rows, snake) =>
+  range(0, cols)
+    |> toArray
+    |> Array.flatMap(x => range(0, rows) |> toArray |> Array.map(y => (x, y)))
+    |> Array.filter(cell => !Array.contains(cell)(snake))
+
 /// Initialize a fresh game state
 export let initGame = (cols, rows, highScore) =>
   let initialSnake = [(10, 10), (9, 10), (8, 10)] in

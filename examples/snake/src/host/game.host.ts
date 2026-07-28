@@ -12,53 +12,30 @@ export const startTick = (onTick: () => void, ms: number): (() => void) => {
   return () => window.clearInterval(id);
 };
 
-const KEY_MAP: Record<string, string> = {
-  arrowup: "up",
-  w: "up",
-  arrowdown: "down",
-  s: "down",
-  arrowleft: "left",
-  a: "left",
-  arrowright: "right",
-  d: "right",
-  " ": "space",
-  r: "restart",
-};
-
 /**
- * Normalizes keydown events to `"up" | "down" | "left" | "right" | "space" |
- * "restart"` and calls `cb` with the token — ignored while a text input has
- * focus. Returns a `useEffect` cleanup.
+ * Forwards every keydown as a lowercased raw key — `App.mochi`'s `keyOf` owns
+ * the binding table, so the only decisions left here are DOM ones: skip while a
+ * text input has focus, and stop space from scrolling the page. Returns a
+ * `useEffect` cleanup.
  */
 export const onKeyDown = (cb: (key: string) => void): (() => void) => {
   const handler = (e: KeyboardEvent) => {
     const active = document.activeElement;
     if (active && active.tagName === "INPUT") return;
-    const token = KEY_MAP[e.key.toLowerCase()];
-    if (!token) return;
-    if (token === "space") e.preventDefault();
-    cb(token);
+    if (e.key === " ") e.preventDefault();
+    cb(e.key.toLowerCase());
   };
   window.addEventListener("keydown", handler);
   return () => window.removeEventListener("keydown", handler);
 };
 
-/** Random `(x, y)` (mochi tuples emit as arrays) not currently occupied by the snake. */
-export const randomFood = (
-  cols: number,
-  rows: number,
-  snake: [number, number][],
-): [number, number] => {
-  let candidate: [number, number] = [0, 0];
-  let valid = false;
-  while (!valid) {
-    const rx = Math.floor(Math.random() * cols);
-    const ry = Math.floor(Math.random() * rows);
-    candidate = [rx, ry];
-    valid = !snake.some(([sx, sy]) => sx === rx && sy === ry);
-  }
-  return candidate;
-};
+/**
+ * Uniform choice from `xs`, or `fallback` when it is empty — the only part of
+ * food placement that cannot be pure (`snake.mochi`'s `freeCells` decides
+ * *which* cells are legal). Mochi tuples emit as arrays, so `a` stays opaque.
+ */
+export const pickRandom = <T>(fallback: T, xs: readonly T[]): T =>
+  xs.length === 0 ? fallback : (xs[Math.floor(Math.random() * xs.length)] as T);
 
 /**
  * Exported so the container can name it in an `Intent.storageSet` — the write

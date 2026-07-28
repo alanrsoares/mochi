@@ -162,3 +162,25 @@ test("the snake container compiles clean across the whole re-reduced surface", a
   });
   expect(diags.map((d) => d.message)).toEqual([]);
 });
+
+/**
+ * The point of lifting the keyboard binding table out of `game.host.ts`: the
+ * inner `switch` is on `Key`, not on a raw DOM string, so it has no catch-all
+ * and a new/unhandled constructor is a compile error. Deleting an arm must be
+ * caught — if this ever passes, the dispatch has silently regrown a `| _`.
+ */
+test("dropping a Key arm in the snake dispatch is a non-exhaustive error", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { resolve } = await import("node:path");
+  const { snakeVendorPlugins } = await import("../examples/snake/mochi.plugins");
+  const entry = resolve(import.meta.dir, "../examples/snake/src/App.mochi");
+  const good = await readFile(entry, "utf8");
+  const broken = good.replace(/\n\s*\| MoveLeft => let _ = store\.actions\.left\(\) in 0/, "");
+  expect(broken).not.toBe(good); // the arm we key on still exists
+  const diags = await moduleDiagnostics(entry, broken, (p) => readFile(p, "utf8"), {
+    plugins: snakeVendorPlugins,
+  });
+  const msgs = diags.map((d) => d.message).join("\n");
+  expect(msgs).toContain("non-exhaustive");
+  expect(msgs).toContain("MoveLeft");
+});

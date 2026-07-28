@@ -30,6 +30,7 @@ import {
 } from "./ui/primitives"
 import {
   initGame,
+  freeCells,
   changeDir,
   startGame,
   togglePause,
@@ -50,9 +51,12 @@ import {
 // become silent partial applications (keyboard/timer never attach).
 /// Returns an effect cleanup.
 extern startTick : (a -> b) -> number -> c = "./host/game.host" "startTick"
+/// Forwards raw lowercased keys — `keyOf` below owns the binding table.
 /// Returns a `useEffect` cleanup.
 extern onKeyDown : (a -> b) -> c = "./host/game.host" "onKeyDown"
-extern randomFood : number -> number -> a -> b = "./host/game.host" "randomFood"
+/// Uniform choice, or the fallback when the array is empty. The *only* impure
+/// half of food placement — `freeCells` decides which cells are legal.
+extern pickRandom : a -> [a] -> a = "./host/game.host" "pickRandom"
 extern readHighScore : () -> number = "./host/game.host" "readHighScore"
 /// The storage key `Intent.storageSet` writes — owned by the host that reads it.
 extern highScoreKey : string = "./host/game.host" "HIGH_SCORE_KEY"
@@ -65,6 +69,35 @@ extern fetchLeaderboard : () -> Task [ScoreEntry] string = "./host/leaderboard.h
 extern postScore : string -> number -> Task [ScoreEntry] string = "./host/leaderboard.host" "postScoreTask"
 /// Returns a `useEffect` cleanup.
 extern connectWs : (a -> b) -> (c -> d) -> e = "./host/leaderboard.host" "connectWs"
+
+/// A key the game answers to. Declared here rather than in a shared module: a
+/// `switch` on an imported variant's constructors fails the Vite plugin's
+/// per-file `compile()` path (see `snake.mochi`'s status helpers), and the
+/// dispatch below is the only consumer.
+type Key =
+  | MoveUp
+  | MoveDown
+  | MoveLeft
+  | MoveRight
+  | TogglePlay
+  | Restart
+
+/// The binding table. Raw DOM keys are an open set, so the catch-all lives
+/// *here* — which is what lets the dispatch below switch on `Key` exhaustively.
+let keyOf = raw => switch raw {
+  | "arrowup" | "w" => Some(MoveUp)
+  | "arrowdown" | "s" => Some(MoveDown)
+  | "arrowleft" | "a" => Some(MoveLeft)
+  | "arrowright" | "d" => Some(MoveRight)
+  | " " => Some(TogglePlay)
+  | "r" => Some(Restart)
+  | _ => None
+}
+
+/// A blank callsign posts as "Anonymous" — a product rule, so the host posts
+/// whatever string it is handed.
+let displayName = n =>
+  let trimmed = Str.trim(n) in trimmed == "" ? "Anonymous" : trimmed
 
 let COLS = 20
 let ROWS = 20
@@ -100,7 +133,9 @@ let gameContainer = defineContainer(
         restart: on(s =>
           { ...initGame(COLS, ROWS, s.highScore), submitted: false }
         ),
-        step: on(s => step(s, randomFood(s.cols, s.rows, s.snake))),
+        step: on(s =>
+          step(s, pickRandom(s.food, freeCells(s.cols, s.rows, s.snake)))
+        ),
         setName: on((s, n) => { name: n }),
         setConnected: on((s, c) => { connected: c }),
         setLeaders: on((s, ls) => { leaders: ls }),
@@ -140,7 +175,10 @@ let gameContainer = defineContainer(
             Intent.query(
               {
                 key: ["submit-score"],
-                task: postScore(ctx.getState().name, ctx.getState().score),
+                task: postScore(
+                  displayName(ctx.getState().name),
+                  ctx.getState().score
+                ),
                 onOk: leaders => ctx.actions.setLeaders(leaders),
                 onErr: _ => ctx.actions.setLeaders(ctx.getState().leaders)
               }
@@ -188,20 +226,27 @@ let App = _ =>
     ), running =>
     running ? startTick(() => store.actions.step(), TICK_MS) : () => 0
   ) in
+  // Two switches, not a nested `Some(MoveUp)`: the outer one absorbs the
+  // unbound key, and the inner one has no catch-all — so adding a `Key`
+  // constructor is a compile error here until it is handled.
   let _keys = useEffect(() =>
-    onKeyDown(key => switch key {
-      | "up" => let _ = store.actions.up() in 0
-      | "down" => let _ = store.actions.down() in 0
-      | "left" => let _ = store.actions.left() in 0
-      | "right" => let _ = store.actions.right() in 0
-      | "space" => let _ = store.actions.space() in 0
-      | "restart" =>
-        // Restart only from the game-over screen. Reading `$derived` here keeps the
-        // decision live: the handler is mounted once, so a captured `gameOver`
-        // would go stale, and a reducer that inspected the state would have to
-        // return the whole state — which is not a patch (see the `restart` arm).
-        store.$derived.gameOver.value ? let _ = store.actions.restart() in 0 : 0
-      | _ => 0
+    onKeyDown(raw => switch keyOf(raw) {
+      | None => 0
+      | Some(key) => switch key {
+          | MoveUp => let _ = store.actions.up() in 0
+          | MoveDown => let _ = store.actions.down() in 0
+          | MoveLeft => let _ = store.actions.left() in 0
+          | MoveRight => let _ = store.actions.right() in 0
+          | TogglePlay => let _ = store.actions.space() in 0
+          | Restart =>
+            // Restart only from the game-over screen. Reading `$derived` here keeps the
+            // decision live: the handler is mounted once, so a captured `gameOver`
+            // would go stale, and a reducer that inspected the state would have to
+            // return the whole state — which is not a patch (see the `restart` arm).
+            store.$derived.gameOver.value
+              ? let _ = store.actions.restart() in 0
+              : 0
+        }
     }
     )
   )(hookDeps0()) in

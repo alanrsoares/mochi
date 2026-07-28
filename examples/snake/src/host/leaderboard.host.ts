@@ -12,12 +12,16 @@ export const fetchLeaderboardTask = () => () =>
     .then((data) => Ok(data as ScoreEntry[]))
     .catch((err) => Err(String(err?.message || err)));
 
-/** `postScoreTask` returns a Mochi `Task ScoreEntry[] string`. */
+/**
+ * `postScoreTask` returns a Mochi `Task ScoreEntry[] string`. `name` is posted
+ * as given — blank-name defaulting is a product rule, so `App.mochi`'s
+ * `displayName` owns it.
+ */
 export const postScoreTask = (name: string, score: number) => () =>
   fetch("/api/score", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: name.trim() || "Anonymous", score }),
+    body: JSON.stringify({ name, score }),
   })
     .then((res) => res.json())
     .then((data) => Ok((data.leaderboard || []) as ScoreEntry[]))
