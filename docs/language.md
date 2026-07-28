@@ -56,6 +56,26 @@ let translate = (p, dx, dy) => { x: add(p.x, dx), y: add(p.y, dy) }
 **Tuples** are real product types that erase to JS arrays. **One numeric type** (`number`);
 `int`/`float` are aliases.
 
+**`unit`** is the one-inhabitant type, and `()` is its literal in every position — value,
+type, and pattern ([ADR 0054](adr/0054-unit-value-and-ignore.md)). It is also the domain
+of a nullary function, so `() -> T` and `unit -> T` are the same type and `f()` and `f(())`
+are the same call ([ADR 0014](adr/0014-nullary-unit.md)). It emits `undefined`:
+
+```mochi
+let nothing = ()                             // () : ()
+let f : () -> number = _ => 1
+let a = f()                                  // same call as f(())
+let describe = u => switch u { | () => "done" }
+```
+
+`ignore : a -> ()` is the sanctioned discard for a call whose result you do not want —
+useful when the sibling arms of a `switch` or a ternary must agree on a type:
+
+```mochi
+| MoveUp => ignore(store.actions.up())
+| None => ()
+```
+
 ## Pattern matching
 
 `switch` is exhaustive — a missing case is a compile error, including for imported

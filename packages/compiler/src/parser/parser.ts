@@ -599,6 +599,14 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
       case "id":
         return { kind: "ref", name: tk.v, span: tk.span };
       case "lparen": {
+        // `()` — the unit value (ADR 0054), mirroring `()` in type position.
+        // Checked before everything else: a right section needs an operator
+        // here, `() => e` was already routed to `parseLambda` by
+        // `looksLikeLambda`, and `f()` is a postfix suffix, not an atom.
+        if (peek().t === "rparen") {
+          const end = next().span;
+          return { kind: "unit", span: spanning(tk.span, end) };
+        }
         const rightSection = tryParseRightSection(tk.span);
         if (rightSection) return rightSection;
         const first = parseExpr();
@@ -813,6 +821,8 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
         return { kind: "pstr", value: tk.v, span: tk.span };
       case "lparen": {
         const start = next().span;
+        // `()` — the unit pattern, mirroring the `()` expression (ADR 0054).
+        if (peek().t === "rparen") return { kind: "punit", span: spanning(start, next().span) };
         const elems = [parsePattern()];
         while (peek().t === "comma") {
           next();

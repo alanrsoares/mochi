@@ -144,6 +144,7 @@ export const show: <A>(a: A) => string = (x: any) => {
   if (ks.length === 0) return String(x);
   return "{ " + ks.map((k: any) => k + ": " + show(x[k])).join(", ") + " }";
 };
+export const ignore: <A>(a: A) => undefined = (_x: any) => undefined;
 export const lt: { (a: number): (b: number) => boolean; (a: number, b: number): boolean } = _curry(
   2,
   (a: any, b: any) => a < b,

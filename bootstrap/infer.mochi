@@ -91,6 +91,7 @@ import { stronglyConnected } from "./scc.mochi"
 
 let exprSpan = e => switch e {
   | Ast.ENum(_, _, sp) => sp
+  | Ast.EUnit(sp) => sp
   | Ast.EBool(_, sp) => sp
   | Ast.EStr(_, sp) => sp
   | Ast.ERef(_, sp) => sp
@@ -113,6 +114,7 @@ let exprSpan = e => switch e {
 
 let patSpan = p => switch p {
   | Ast.PWild(sp) => sp
+  | Ast.PUnit(sp) => sp
   | Ast.PBind(_, sp) => sp
   | Ast.PLit(_, _, sp) => sp
   | Ast.PBool(_, sp) => sp
@@ -403,6 +405,7 @@ let inferMatch = (scrutinee, arms, ctx, st) =>
 
 let inferExpr = (e, ctx, st) => switch e {
   | Ast.ENum(_, _, _) => Ok((tNumber, st))
+  | Ast.EUnit(_) => Ok((tUnit, st))
   | Ast.EBool(_, _) => Ok((tBool, st))
   | Ast.EStr(_, _) => Ok((tString, st))
   | Ast.ERef(name, sp) => switch Map.get(name, ctx.env) {
@@ -588,6 +591,7 @@ let inferSeqPat = (con, elems, restPat, ctx, st) =>
 
 let inferPat = (p, ctx, st) => switch p {
   | Ast.PWild(_) => let (t, st1) = freshVar(st) in Ok((t, #{}, st1))
+  | Ast.PUnit(_) => Ok((tUnit, #{}, st))
   | Ast.PLit(_, _, _) => Ok((tNumber, #{}, st))
   | Ast.PBool(_, _) => Ok((tBool, #{}, st))
   | Ast.PStr(_, _) => Ok((tString, #{}, st))
@@ -746,6 +750,7 @@ let freeRefsArms = (arms, bound, acc) => switch arms {
 // (not mutated) — TS's in-place `Set` mutation becomes explicit pass-through.
 let freeRefs = (e, bound, acc) => switch e {
   | Ast.ENum(_, _, _) => acc
+  | Ast.EUnit(_) => acc
   | Ast.EBool(_, _) => acc
   | Ast.EStr(_, _) => acc
   | Ast.ERef(name, _) => Set.has(name, bound) ? acc : Set.add(name, acc)

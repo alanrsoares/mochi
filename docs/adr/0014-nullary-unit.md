@@ -2,6 +2,9 @@
 
 - **Status:** Accepted
 - **Source:** Wave 11 follow-on (store action leaves); `src/types.ts` / `src/infer.ts`
+- **Deepened by:** [ADR 0054](0054-unit-value-and-ignore.md) — `unit` is no longer
+  unspeakable: `()` is its literal as a value and a pattern, and `showType` prints
+  `()` in every position, so decisions 1 and 4 above are superseded in that respect.
 
 ## Context
 

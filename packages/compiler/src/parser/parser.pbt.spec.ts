@@ -37,6 +37,7 @@ const children = (e: Expr): Expr[] => {
     case "bool":
     case "str":
     case "ref":
+    case "unit":
       return [];
     case "interp":
       return e.parts.filter((p): p is Expr => typeof p !== "string");

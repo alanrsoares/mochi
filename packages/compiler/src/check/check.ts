@@ -27,7 +27,10 @@ export type Registry = CtorTable;
 /** Walk an expression tree, invoking `visit` on every node, children before parent. */
 function forEachSubExpr(e: Expr, visit: (x: Expr) => void): void {
   match(e)
-    .withOneOf([{ kind: "num" }, { kind: "bool" }, { kind: "str" }, { kind: "ref" }], () => {})
+    .withOneOf(
+      [{ kind: "num" }, { kind: "bool" }, { kind: "str" }, { kind: "ref" }, { kind: "unit" }],
+      () => {},
+    )
     .with({ kind: "interp" }, (interp) => {
       for (const p of interp.parts) if (typeof p !== "string") forEachSubExpr(p, visit);
     })
@@ -94,6 +97,8 @@ const forEachMatch = (e: Expr, visit: (m: MatchExpr) => void): void =>
 const isCatchAll = (p: Pattern): boolean =>
   p.kind === "pwild" ||
   p.kind === "pbind" ||
+  // `()` is irrefutable: `unit` has exactly one inhabitant, so the type decides (ADR 0054).
+  p.kind === "punit" ||
   (p.kind === "precord" && p.fields.every((f) => isCatchAll(f.pat))) ||
   // A tuple always matches when every position does (irrefutable product).
   (p.kind === "ptuple" && p.elems.every(isCatchAll)) ||
@@ -181,7 +186,14 @@ const checkPattern = (p: Pattern, reg: Registry, top: boolean): Diagnostic | nul
     })
     .with({ kind: "por" }, (por) => checkOrPattern(por, reg))
     .withOneOf(
-      [{ kind: "pwild" }, { kind: "plit" }, { kind: "pbool" }, { kind: "pstr" }, { kind: "pbind" }],
+      [
+        { kind: "pwild" },
+        { kind: "punit" },
+        { kind: "plit" },
+        { kind: "pbool" },
+        { kind: "pstr" },
+        { kind: "pbind" },
+      ],
       () => null,
     )
     .exhaustive();
@@ -214,6 +226,7 @@ const binderPaths = (p: Pattern, at: string, acc: Map<string, string>): Diagnost
     .withOneOf(
       [
         { kind: "pwild" },
+        { kind: "punit" },
         { kind: "plit" },
         { kind: "pbool" },
         { kind: "pstr" },
@@ -221,7 +234,7 @@ const binderPaths = (p: Pattern, at: string, acc: Map<string, string>): Diagnost
         { kind: "plist" },
         { kind: "por" },
       ],
-      () => null, // pwild/plit/pbool/pstr bind nothing; parr/plist/por barred as alts
+      () => null, // pwild/punit/plit/pbool/pstr bind nothing; parr/plist/por barred as alts
     )
     .exhaustive();
 
@@ -640,12 +653,18 @@ const checkPatBinds = (p: Pattern): Diagnostic[] =>
       many(...[...plist.elems, ...(plist.rest ? [plist.rest] : [])].map(checkPatBinds)),
     )
     .with({ kind: "por" }, (por) => many(...por.alts.map(checkPatBinds)))
-    .withOneOf([{ kind: "pwild" }, { kind: "plit" }, { kind: "pbool" }, { kind: "pstr" }], () => [])
+    .withOneOf(
+      [{ kind: "pwild" }, { kind: "punit" }, { kind: "plit" }, { kind: "pbool" }, { kind: "pstr" }],
+      () => [],
+    )
     .exhaustive();
 
 const checkExprBinds = (e: Expr): Diagnostic[] =>
   match(e)
-    .withOneOf([{ kind: "num" }, { kind: "bool" }, { kind: "str" }, { kind: "ref" }], () => [])
+    .withOneOf(
+      [{ kind: "num" }, { kind: "bool" }, { kind: "str" }, { kind: "ref" }, { kind: "unit" }],
+      () => [],
+    )
     .with({ kind: "interp" }, (interp) =>
       many(...interp.parts.filter((p): p is Expr => typeof p !== "string").map(checkExprBinds)),
     )

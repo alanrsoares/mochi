@@ -21,6 +21,11 @@ test("prints an annotation on a let-in binding (ADR 0044)", () => {
   expect(fmt("let f=x=>let n:number=x in n")).toBe("let f = x => let n : number = x in n\n");
 });
 
+test("round-trips the unit literal and the unit pattern (ADR 0054)", () => {
+  expect(fmt("let   x=()")).toBe("let x = ()\n");
+  expect(fmt("let f=u=>switch u{|()=>1}")).toBe("let f = u => switch u { | () => 1 }\n");
+});
+
 test("normalizes an import statement", () => {
   expect(fmt('import {a,b}from"./mod"')).toBe('import { a, b } from "./mod"\n');
 });

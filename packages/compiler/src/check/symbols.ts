@@ -169,7 +169,10 @@ const walkPat = (b: Builder, p: Pattern): void => {
       if (por.alts[0]) walkPat(b, por.alts[0]);
       for (let i = 1; i < por.alts.length; i++) walkPatUses(b, por.alts[i]!);
     })
-    .withOneOf([{ kind: "pwild" }, { kind: "plit" }, { kind: "pbool" }, { kind: "pstr" }], () => {})
+    .withOneOf(
+      [{ kind: "pwild" }, { kind: "punit" }, { kind: "plit" }, { kind: "pbool" }, { kind: "pstr" }],
+      () => {},
+    )
     .exhaustive();
 };
 
@@ -201,7 +204,14 @@ const walkPatUses = (b: Builder, p: Pattern): void => {
       for (const a of por.alts) walkPatUses(b, a);
     })
     .withOneOf(
-      [{ kind: "pbind" }, { kind: "pwild" }, { kind: "plit" }, { kind: "pbool" }, { kind: "pstr" }],
+      [
+        { kind: "pbind" },
+        { kind: "pwild" },
+        { kind: "punit" },
+        { kind: "plit" },
+        { kind: "pbool" },
+        { kind: "pstr" },
+      ],
       () => {},
     )
     .exhaustive();
@@ -239,7 +249,7 @@ const walkTypeExpr = (b: Builder, t: TypeExpr): void => {
 
 const walkExpr = (b: Builder, e: Expr): void => {
   match(e)
-    .withOneOf([{ kind: "num" }, { kind: "bool" }, { kind: "str" }], () => {})
+    .withOneOf([{ kind: "num" }, { kind: "bool" }, { kind: "str" }, { kind: "unit" }], () => {})
     .with({ kind: "interp" }, (interp) => {
       for (const p of interp.parts) if (typeof p !== "string") walkExpr(b, p);
     })

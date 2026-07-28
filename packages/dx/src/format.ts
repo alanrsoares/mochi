@@ -95,6 +95,8 @@ const pattern = (p: Pattern): string => {
   switch (p.kind) {
     case "pwild":
       return "_";
+    case "punit":
+      return "()";
     case "pbind":
       return p.name;
     case "plit":
@@ -819,6 +821,8 @@ const exprCore = (e: Expr): Doc => {
   switch (e.kind) {
     case "num":
       return txt(e.raw);
+    case "unit":
+      return txt("()");
     case "bool":
       return txt(String(e.value));
     case "str":

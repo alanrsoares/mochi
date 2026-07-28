@@ -175,7 +175,7 @@ test("dropping a Key arm in the snake dispatch is a non-exhaustive error", async
   const { snakeVendorPlugins } = await import("../examples/snake/mochi.plugins");
   const entry = resolve(import.meta.dir, "../examples/snake/src/App.mochi");
   const good = await readFile(entry, "utf8");
-  const broken = good.replace(/\n\s*\| MoveLeft => let _ = store\.actions\.left\(\) in 0/, "");
+  const broken = good.replace(/\n\s*\| MoveLeft => ignore\(store\.actions\.left\(\)\)/, "");
   expect(broken).not.toBe(good); // the arm we key on still exists
   const diags = await moduleDiagnostics(entry, broken, (p) => readFile(p, "utf8"), {
     plugins: snakeVendorPlugins,

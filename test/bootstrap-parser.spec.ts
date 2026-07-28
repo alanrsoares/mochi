@@ -77,6 +77,8 @@ const cExpr = (e: Expr): Canon => {
   switch (e.kind) {
     case "num":
       return { kind: "num", value: e.value, raw: e.raw, span: cSpan(e.span) };
+    case "unit":
+      return { kind: "unit", span: cSpan(e.span) };
     case "bool":
     case "str":
       return { kind: e.kind, value: e.value, span: cSpan(e.span) };
@@ -176,6 +178,8 @@ const cPat = (p: Pattern): Canon => {
   switch (p.kind) {
     case "pwild":
       return { kind: "pwild", span: cSpan(p.span) };
+    case "punit":
+      return { kind: "punit", span: cSpan(p.span) };
     case "pbind":
       return { kind: "pbind", name: p.name, span: cSpan(p.span) };
     case "plit":
@@ -312,6 +316,7 @@ const aArm = (a: Al): Canon => ({
 
 const A_EXPR: Record<string, (e: Al) => Canon> = {
   ENum: (e) => ({ kind: "num", value: e.value, raw: e.raw, span: e.span }),
+  EUnit: (e) => ({ kind: "unit", span: e.span }),
   EBool: (e) => ({ kind: "bool", value: e.value, span: e.span }),
   EStr: (e) => ({ kind: "str", value: e.value, span: e.span }),
   ERef: (e) => ({ kind: "ref", name: e.name, span: e.span }),
@@ -407,6 +412,7 @@ const aExpr = (e: Al): Canon => {
 
 const A_PAT: Record<string, (p: Al) => Canon> = {
   PWild: (p) => ({ kind: "pwild", span: p.span }),
+  PUnit: (p) => ({ kind: "punit", span: p.span }),
   PBind: (p) => ({ kind: "pbind", name: p.name, span: p.span }),
   PLit: (p) => ({ kind: "plit", value: p.value, raw: p.raw, span: p.span }),
   PBool: (p) => ({ kind: "pbool", value: p.value, span: p.span }),

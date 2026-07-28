@@ -247,6 +247,7 @@ let looksLikeLambda = (toks, pos) => switch tokAt(toks, pos).tok {
 /// The span of a node, for composite spans (TS reads `.span` directly).
 let exprSpan = e => switch e {
   | Ast.ENum(_, _, sp) => sp
+  | Ast.EUnit(sp) => sp
   | Ast.EBool(_, sp) => sp
   | Ast.EStr(_, sp) => sp
   | Ast.ERef(_, sp) => sp
@@ -714,10 +715,15 @@ let parseAtom = (toks, pos, hooks) =>
                 | TStr(value) => Ok((Ast.EStr(value, sp), pos + 1))
                 | TId(name) => Ok((Ast.ERef(name, sp), pos + 1))
                 | TLparen =>
+                  // `()` is the unit value (ADR 0054) — checked first: a right section
+                  // needs an operator here, and `() => e` / `f()` were already routed
+                  // to the lambda / postfix-call paths.
                   // `(+ x)` right section before ordinary grouping/tuple — `(- x)` stays
                   // unary negation (minus is excluded here).
                   let nxt = tokAt(toks, pos + 1) in
-                    isSectionOp(nxt.tok) && nxt.tok != TMinus
+                    nxt.tok == TRparen
+                      ? Ok((Ast.EUnit(toEnd(sp, toks, pos + 2)), pos + 2))
+                      : isSectionOp(nxt.tok) && nxt.tok != TMinus
                       ? parseRightSection(sp, toks, pos + 1, hooks)
                       : let? (first, p) = parseExpr(toks, pos + 1, hooks) in
                         tokAt(toks, p).tok == TComma
@@ -891,6 +897,7 @@ let parseGuard = (toks, pos, hooks) => switch tokAt(toks, pos).tok {
 
 let patSpan = p => switch p {
   | Ast.PWild(sp) => sp
+  | Ast.PUnit(sp) => sp
   | Ast.PBind(_, sp) => sp
   | Ast.PLit(_, _, sp) => sp
   | Ast.PBool(_, sp) => sp
@@ -961,15 +968,19 @@ let parsePattern = (toks, pos) =>
       | TBool(value) => Ok((Ast.PBool(value, sp), pos + 1))
       | TStr(value) => Ok((Ast.PStr(value, sp), pos + 1))
       | TLparen =>
-        // `(p, p, …)` destructures a tuple; a lone `(p)` is just grouping.
-        let? (elems, p) = sepBy(parsePattern, toks, pos + 1, []) in
-        let? p2 = expectTok(TRparen, toks, p) in
-          Ok(
-            switch elems {
-              | [single] => (single, p2)
-              | many => (Ast.PTuple(many, toEnd(sp, toks, p2)), p2)
-            }
-          )
+        // `()` — the unit pattern, mirroring the `()` expression (ADR 0054).
+        tokAt(toks, pos + 1).tok == TRparen
+          ? Ok((Ast.PUnit(toEnd(sp, toks, pos + 2)), pos + 2))
+          :
+            // `(p, p, …)` destructures a tuple; a lone `(p)` is just grouping.
+            let? (elems, p) = sepBy(parsePattern, toks, pos + 1, []) in
+            let? p2 = expectTok(TRparen, toks, p) in
+              Ok(
+                switch elems {
+                  | [single] => (single, p2)
+                  | many => (Ast.PTuple(many, toEnd(sp, toks, p2)), p2)
+                }
+              )
       | TLbrace => let? (fields, p) = listUntil(
           TRbrace,
           parsePatField,

@@ -146,6 +146,7 @@ const escapeTemplateLiteral = (s: string): string =>
 const genExpr = (e: Expr, ctx: GenCtx): string =>
   match(e)
     .with({ kind: "num" }, (n) => n.raw)
+    .with({ kind: "unit" }, () => "undefined")
     .with({ kind: "bool" }, (b) => String(b.value))
     .with({ kind: "str" }, (s) => JSON.stringify(s.value))
     // "…${x}…" (ADR 0023) → a native JS template literal — emitted JS reads
@@ -363,6 +364,8 @@ const genLambdaBody = (e: Expr, ctx: GenCtx, bound?: ReadonlySet<string>): strin
 const isCatchAll = (p: Pattern): boolean =>
   p.kind === "pwild" ||
   p.kind === "pbind" ||
+  // `()` is irrefutable: `unit` has exactly one inhabitant, so the type decides.
+  p.kind === "punit" ||
   (p.kind === "precord" && p.fields.every((f) => isCatchAll(f.pat))) ||
   // A tuple always matches when every position does (irrefutable product).
   (p.kind === "ptuple" && p.elems.every(isCatchAll)) ||
@@ -387,7 +390,14 @@ const patSlot = (p: Pattern, ctx: GenCtx): string =>
   match(p)
     .with({ kind: "pbind" }, (p) => p.name)
     .withOneOf(
-      [{ kind: "pwild" }, { kind: "plit" }, { kind: "pbool" }, { kind: "pstr" }, { kind: "plist" }],
+      [
+        { kind: "pwild" },
+        { kind: "punit" },
+        { kind: "plit" },
+        { kind: "pbool" },
+        { kind: "pstr" },
+        { kind: "plist" },
+      ],
       () => "",
     )
     .with({ kind: "pctor" }, (p) => {
@@ -421,7 +431,11 @@ const patSlot = (p: Pattern, ctx: GenCtx): string =>
 
 const patConds = (p: Pattern, path: string, ctx: GenCtx): string[] =>
   match(p)
-    .withOneOf([{ kind: "pwild" }, { kind: "pbind" }, { kind: "plist" }], () => [])
+    // `punit` needs no test: `unit` has exactly one inhabitant, so the type alone decides.
+    .withOneOf(
+      [{ kind: "pwild" }, { kind: "punit" }, { kind: "pbind" }, { kind: "plist" }],
+      () => [],
+    )
     .withOneOf([{ kind: "plit" }, { kind: "pbool" }, { kind: "pstr" }], (p) => [
       `${path} === ${litValue(p)}`,
     ])
@@ -643,6 +657,7 @@ function patTarget(p: Pattern, base: string, ctx: GenCtx): string {
       .withOneOf(
         [
           { kind: "pwild" },
+          { kind: "punit" },
           { kind: "pbind" },
           { kind: "plit" },
           { kind: "pbool" },
@@ -862,7 +877,10 @@ const genStmt = (s: Stmt, ctx: GenCtx): string =>
  */
 const usesMatchLib = (e: Expr): boolean =>
   match(e)
-    .withOneOf([{ kind: "num" }, { kind: "bool" }, { kind: "str" }, { kind: "ref" }], () => false)
+    .withOneOf(
+      [{ kind: "num" }, { kind: "bool" }, { kind: "str" }, { kind: "ref" }, { kind: "unit" }],
+      () => false,
+    )
     .with({ kind: "interp" }, (i) => i.parts.some((p) => typeof p !== "string" && usesMatchLib(p)))
     .with({ kind: "call" }, (c) => usesMatchLib(c.fn) || c.args.some(usesMatchLib))
     .with({ kind: "lambda" }, (l) => usesMatchLib(l.body))
@@ -904,7 +922,7 @@ const usesMatchLib = (e: Expr): boolean =>
  */
 const exprRefs = (e: Expr, acc: Set<string>): void => {
   match(e)
-    .withOneOf([{ kind: "num" }, { kind: "bool" }, { kind: "str" }], () => {})
+    .withOneOf([{ kind: "num" }, { kind: "bool" }, { kind: "str" }, { kind: "unit" }], () => {})
     .with({ kind: "interp" }, (i) => {
       for (const p of i.parts) if (typeof p !== "string") exprRefs(p, acc);
     })

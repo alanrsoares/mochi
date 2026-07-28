@@ -111,6 +111,7 @@ let collapseLambda = (params, body) => switch body {
 
 let genExpr = (e, ctx) => switch e {
   | Ast.ENum(_, raw, _) => raw
+  | Ast.EUnit(_) => "undefined"
   | Ast.EBool(value, _) => value ? "true" : "false"
   | Ast.EStr(value, _) => jsStringLit(value)
   | Ast.ERef(name, _) => name
@@ -281,6 +282,9 @@ let genLambdaBodyIn = (e, ctx, bound) =>
 // wildcard, plain name, or a record whose every field just binds.
 let isCatchAll = p => switch p {
   | Ast.PWild(_) => true
+  | Ast.PUnit(_) =>
+    // `()` is irrefutable: `unit` has exactly one inhabitant, so the type decides.
+    true
   | Ast.PBind(_, _) => true
   | Ast.PRecord(fields, _) => allOf(f => isCatchAll(f.pat), fields)
   | Ast.PTuple(elems, _) =>
@@ -327,6 +331,7 @@ let precordEntries = (fields, i, ctx) => switch Array.get(i, fields) {
 let patSlot = (p, ctx) => switch p {
   | Ast.PBind(name, _) => name
   | Ast.PWild(_) => ""
+  | Ast.PUnit(_) => ""
   | Ast.PLit(_, _, _) => ""
   | Ast.PBool(_, _) => ""
   | Ast.PStr(_, _) => ""
@@ -389,6 +394,9 @@ let parrConds = (elems, i, path, ctx) => switch Array.get(i, elems) {
 
 let patConds = (p, path, ctx) => switch p {
   | Ast.PWild(_) => []
+  | Ast.PUnit(_) =>
+    // `PUnit` needs no test: `unit` has exactly one inhabitant, so the type alone decides.
+    []
   | Ast.PBind(_, _) => []
   | Ast.PList(_, _, _) => []
   | Ast.PLit(_, _, _) => ["${path} === ${litValue(p)}"]
@@ -788,6 +796,7 @@ let usesMatchLibArm = a =>
 
 let usesMatchLib = e => switch e {
   | Ast.ENum(_, _, _) => false
+  | Ast.EUnit(_) => false
   | Ast.EBool(_, _) => false
   | Ast.EStr(_, _) => false
   | Ast.ERef(_, _) => false
@@ -888,6 +897,7 @@ let exprRefsEntriesFrom = (entries, i, ctx, acc) => switch Array.get(i, entries)
 
 let exprRefs = (e, ctx, acc) => switch e {
   | Ast.ENum(_, _, _) => acc
+  | Ast.EUnit(_) => acc
   | Ast.EBool(_, _) => acc
   | Ast.EStr(_, _) => acc
   | Ast.ERef(name, _) => Set.add(name, acc)

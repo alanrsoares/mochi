@@ -57,6 +57,8 @@ const VALUE_DOCS: Record<string, string> = {
   eq: "Structural equality at any type.",
   compare: "Structural order: returns `-1 | 0 | 1`.",
   show: "Structural display as a string.",
+  ignore:
+    "Discard a value, yielding `()` — the sanctioned way to drop the result of an effectful call.",
   lt: "Numeric `<`.",
   gt: "Numeric `>`.",
   gte: "Numeric `>=`.",

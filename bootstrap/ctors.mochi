@@ -22,7 +22,7 @@ let emptyRegistry : Registry = { ctors: #{}, types: #{} }
 // The primitive type names legal in a ctor field / type expression. Shared by
 // check (stray-type-var validation) and any future prim consumer — previously
 // check.mochi's private `ctorPrims`.
-export let primTypeNames = ["number", "int", "float", "string", "bool"]
+export let primTypeNames = ["number", "int", "float", "string", "bool", "unit"]
 
 // --- runtime field keys ---
 

@@ -30,6 +30,8 @@ export type SeqElem =
 
 export type Expr =
   | ENum(value: number, raw: string, span: Span)
+  // `()` — the unit value, sole inhabitant of `unit` (ADR 0054). Emits `undefined`.
+  | EUnit(span: Span)
   | EBool(value: bool, span: Span)
   | EStr(value: string, span: Span)
   | ERef(name: string, span: Span)
@@ -58,6 +60,8 @@ export type InterpPart =
 
 export type Pattern =
   | PWild(span: Span)
+  // `()` — matches the sole inhabitant of `unit`, like any nullary variant ctor (ADR 0054).
+  | PUnit(span: Span)
   | PBind(name: string, span: Span)
   | PLit(value: number, raw: string, span: Span)
   | PBool(value: bool, span: Span)

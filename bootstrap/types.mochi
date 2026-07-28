@@ -39,9 +39,9 @@ export let tPrim = name => TyCon(name, [])
 let TUPLE = "tuple"
 export let tTuple = elems => TyCon(TUPLE, elems)
 
-// Internal nullary-function domain (ADR 0014). Surface `() => T` / call `f()`
-// use `unit -> T`; lowercase so users cannot write it. `()` in TypeExpr also
-// lowers here (ADR 0015).
+// The one-inhabitant type (ADR 0054), also the nullary-function domain (ADR
+// 0014): surface `() => T` and the call `f()` both use `unit -> T`. `unit` is an
+// ordinary primitive type name and `()` is its literal — value, type, pattern.
 export let UNIT = "unit"
 export let tUnit = TyCon(UNIT, [])
 export let isUnit = t => switch t {
@@ -57,10 +57,13 @@ export let rExtend = (label, fieldType, rest) =>
 
 let showTypeArgs = args => Str.join(", ", args |> map(showType))
 
+// `unit` renders as its literal `()` in every position (ADR 0054), which also
+// covers the nullary-arrow domain: `unit -> T` prints `() -> T` (ADR 0014).
 export let showType = t => switch t {
   | TyVar(id) => "'t${show(id)}"
   | TyCon(name, args) => switch args {
       | [elem] when name == "Array" => "[${showType(elem)}]"
+      | [] when name == UNIT => "()"
       | _ => name == TUPLE
           ? "(${showTypeArgs(args)})"
           : Array.length(args) == 0
@@ -68,7 +71,6 @@ export let showType = t => switch t {
           : "${name}<${showTypeArgs(args)}>"
     }
   | TyFn(from, to) => let fromS = switch from {
-      | TyCon(name, args) when name == UNIT && Array.length(args) == 0 => "()"
       | TyFn(_, _) => "(${showType(from)})"
       | _ => showType(from)
     } in

@@ -17,6 +17,13 @@ test("a nullary lambda declares () => T (ADR 0014)", () => {
   expect(dts("let one = () => 1")).toBe("export declare const one: () => number;");
 });
 
+test("a unit result declares undefined, the type of the emitted value (ADR 0054)", () => {
+  expect(dts("let nothing = ()")).toBe("export declare const nothing: undefined;");
+  expect(dts("let drop = x => ignore(x)")).toBe(
+    "export declare const drop: <A>(x: A) => undefined;",
+  );
+});
+
 test("an array of functions parenthesizes the arrow (Wave 8)", () => {
   // Without parens, `(a: A) => B[]` means "function returning B[]".
   expect(dts('extern id : a -> a = "./x" "id"\nlet hs = [id]')).toBe(

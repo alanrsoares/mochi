@@ -231,21 +231,19 @@ let App = _ =>
   // constructor is a compile error here until it is handled.
   let _keys = useEffect(() =>
     onKeyDown(raw => switch keyOf(raw) {
-      | None => 0
+      | None => ()
       | Some(key) => switch key {
-          | MoveUp => let _ = store.actions.up() in 0
-          | MoveDown => let _ = store.actions.down() in 0
-          | MoveLeft => let _ = store.actions.left() in 0
-          | MoveRight => let _ = store.actions.right() in 0
-          | TogglePlay => let _ = store.actions.space() in 0
+          | MoveUp => ignore(store.actions.up())
+          | MoveDown => ignore(store.actions.down())
+          | MoveLeft => ignore(store.actions.left())
+          | MoveRight => ignore(store.actions.right())
+          | TogglePlay => ignore(store.actions.space())
           | Restart =>
             // Restart only from the game-over screen. Reading `$derived` here keeps the
             // decision live: the handler is mounted once, so a captured `gameOver`
             // would go stale, and a reducer that inspected the state would have to
             // return the whole state — which is not a patch (see the `restart` arm).
-            store.$derived.gameOver.value
-              ? let _ = store.actions.restart() in 0
-              : 0
+            store.$derived.gameOver.value ? ignore(store.actions.restart()) : ()
         }
     }
     )

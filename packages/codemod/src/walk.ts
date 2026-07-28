@@ -14,6 +14,7 @@ export const mapExpr = (expr: Expr, fn: (e: Expr) => Expr): Expr => {
       case "bool":
       case "str":
       case "ref":
+      case "unit":
         return next;
       case "interp":
         return { ...next, parts: next.parts.map((p) => (typeof p === "string" ? p : walk(p))) };

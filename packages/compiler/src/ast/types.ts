@@ -50,8 +50,9 @@ export const TUPLE = "tuple";
 export const tTuple = (elems: Type[]): Type => tCon(TUPLE, elems);
 
 /**
- * Internal nullary-function domain (ADR 0014). Surface `() => T` and call `f()`
- * use `unit -> T`; the name is reserved/lowercase so users cannot write it.
+ * The one-inhabitant type (ADR 0054), also the nullary-function domain (ADR 0014):
+ * surface `() => T` and the call `f()` both use `unit -> T`. `unit` is an ordinary
+ * primitive type name and `()` is its literal — value, type, and pattern alike.
  */
 export const UNIT = "unit";
 export const tUnit: Type = tCon(UNIT);
@@ -80,10 +81,11 @@ export const showType = (t: Type): string => {
     case "con":
       if (t.name === "Array" && t.args.length === 1) return `[${showType(t.args[0]!)}]`;
       if (t.name === TUPLE) return `(${t.args.map(showType).join(", ")})`;
+      // `unit` renders as its literal `()` in every position (ADR 0054), which also
+      // covers the nullary-arrow domain: `unit -> T` prints `() -> T` (ADR 0014).
+      if (isUnit(t)) return "()";
       return t.args.length === 0 ? t.name : `${t.name}<${t.args.map(showType).join(", ")}>`;
     case "arrow": {
-      // Nullary: `() -> T` (internal `unit -> T`, ADR 0014).
-      if (isUnit(t.from)) return `() -> ${showType(t.to)}`;
       // parenthesize a left-nested arrow: (a -> b) -> c
       const from = t.from.kind === "arrow" ? `(${showType(t.from)})` : showType(t.from);
       return `${from} -> ${showType(t.to)}`;

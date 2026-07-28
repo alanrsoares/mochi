@@ -3,7 +3,7 @@
  * runtime that backs them.
  */
 import type { Ctor, TypeExpr } from "../ast/ast";
-import { type Type, tArrow, tBool, tCon, tNumber, tString, tVar } from "../ast/types";
+import { type Type, tArrow, tBool, tCon, tNumber, tString, tUnit, tVar } from "../ast/types";
 
 const bin = (a: Type, b: Type, r: Type): Type => tArrow(a, tArrow(b, r));
 const num2 = bin(tNumber, tNumber, tNumber);
@@ -71,6 +71,11 @@ export const preludeEnv: Record<string, Type> = {
   eq: tArrow(a, tArrow(a, tBool)), // a -> a -> bool  (structural)
   compare: tArrow(a, tArrow(a, tNumber)), // a -> a -> number  (-1 | 0 | 1)
   show: tArrow(a, tString), // a -> string  (structural display)
+
+  // The sanctioned discard (ADR 0054): drop the value an effectful call happens
+  // to return. `ignore(f())` is the honest spelling of `let _ = f() in ()`.
+  ignore: tArrow(a, tUnit), // a -> ()
+
   lt: cmp,
   gt: cmp,
   gte: cmp,
@@ -179,6 +184,7 @@ export const preludeJsDefs: Record<string, string> = {
   // non-forcing marker `<List>` instead of materializing (or hanging on an
   // infinite one). Functions still fall back to String(x).
   show: 'const show = (x) => { const t = typeof x; if (t === "string") return JSON.stringify(x); if (t !== "object" || x === null) return String(x); if (Array.isArray(x)) return "[" + x.map(show).join(", ") + "]"; if (x instanceof Map) return "#{" + [...x.entries()].map((e) => show(e[0]) + ": " + show(e[1])).join(", ") + "}"; if (x instanceof Set) return "#{" + [...x].map(show).join(", ") + "}"; if (typeof x[Symbol.iterator] === "function") return "<List>"; if (typeof x._tag === "string") { const ks = Object.keys(x).filter((k) => k !== "_tag"); return ks.length === 0 ? x._tag : x._tag + "(" + ks.map((k) => show(x[k])).join(", ") + ")"; } const ks = Object.keys(x); if (ks.length === 0) return String(x); return "{ " + ks.map((k) => k + ": " + show(x[k])).join(", ") + " }"; };',
+  ignore: "const ignore = (_x) => undefined;",
   lt: "const lt = _curry(2, (a, b) => a < b);",
   gt: "const gt = _curry(2, (a, b) => a > b);",
   gte: "const gte = _curry(2, (a, b) => a >= b);",

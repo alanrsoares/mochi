@@ -3,6 +3,8 @@ import type { Span } from "./span";
 
 export type Expr =
   | { kind: "num"; value: number; raw: string; span: Span }
+  /** `()` — the unit value, sole inhabitant of `unit` (ADR 0054). Emits `undefined`. */
+  | { kind: "unit"; span: Span }
   | { kind: "bool"; value: boolean; span: Span }
   | { kind: "str"; value: string; span: Span }
   /**
@@ -98,6 +100,8 @@ export type MatchArm = { pattern: Pattern; guard?: Expr; body: Expr };
 
 export type Pattern =
   | { kind: "pwild"; span: Span } // _
+  /** `()` — matches the sole inhabitant of `unit`, like any nullary variant ctor (ADR 0054). */
+  | { kind: "punit"; span: Span }
   | { kind: "pbind"; name: string; span: Span } // x
   | { kind: "plit"; value: number; raw: string; span: Span } // 0
   | { kind: "pbool"; value: boolean; span: Span } // true / false

@@ -58,6 +58,7 @@ let someOf = (f, xs) => someOfFrom(f, xs, 0)
 
 let exprSpan = e => switch e {
   | Ast.ENum(_, _, sp) => sp
+  | Ast.EUnit(sp) => sp
   | Ast.EBool(_, sp) => sp
   | Ast.EStr(_, sp) => sp
   | Ast.ERef(_, sp) => sp
@@ -80,6 +81,7 @@ let exprSpan = e => switch e {
 
 let patSpan = p => switch p {
   | Ast.PWild(sp) => sp
+  | Ast.PUnit(sp) => sp
   | Ast.PBind(_, sp) => sp
   | Ast.PLit(_, _, sp) => sp
   | Ast.PBool(_, sp) => sp
@@ -98,6 +100,9 @@ let patSpan = p => switch p {
 // only when every field just binds; a bare rest matches any list.
 let isCatchAll = p => switch p {
   | Ast.PWild(_) => true
+  | Ast.PUnit(_) =>
+    // `()` is irrefutable: `unit` has exactly one inhabitant, so the type decides.
+    true
   | Ast.PBind(_, _) => true
   | Ast.PRecord(fields, _) => allOf(f => isCatchAll(f.pat), fields)
   | Ast.PTuple(elems, _) => allOf(isCatchAll, elems)
@@ -471,6 +476,7 @@ let checkMatch = (arms, mSpan, reg) => switch firstSome(a => checkPattern(a.patt
 
 let checkExpr = (e, reg) => switch e {
   | Ast.ENum(_, _, _) => None
+  | Ast.EUnit(_) => None
   | Ast.EBool(_, _) => None
   | Ast.EStr(_, _) => None
   | Ast.ERef(_, _) => None

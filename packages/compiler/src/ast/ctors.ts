@@ -9,7 +9,7 @@ import { builtinTypeDecls } from "../prelude/prelude";
 import type { Ctor, CtorField, Program } from "./ast";
 
 /** The primitive type names legal in a ctor field / type expression. Shared by `check` (field-name validation) and `infer` (prim lowering). */
-export const PRIM_TYPE_NAMES = new Set(["number", "int", "float", "string", "bool"]);
+export const PRIM_TYPE_NAMES = new Set(["number", "int", "float", "string", "bool", "unit"]);
 
 /**
  * One constructor's facts. `type` names the owning variant; `params` are the owning decl's type parameters (scheme construction applies them); `ctor` carries the declaration itself — its fields are full type expressions (ADR 0015); `keys` are the runtime object keys the emitted factory writes and patterns destructure — labelled field → its label, unlabelled → positional `_0`, `_1`. `builtin` marks a seeded Option/Result ctor, which consumers guard (a user or imported binding of the same name wins) where a user decl always applies.

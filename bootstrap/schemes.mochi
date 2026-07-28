@@ -14,8 +14,6 @@ import {
   RowEmpty,
   RowVar,
   RowExtend,
-  UNIT,
-  tUnit,
   tCon,
   tArrow,
   tRecord,
@@ -156,10 +154,10 @@ export let typeExprListToType = (tes, vars, st, aliases, expanding) => switch te
       (Array.prepend(t, restTs), vars2, st2)
 }
 
+// `unit` is an ordinary primitive name (ADR 0054), so `()` in TypeExpr — which the
+// parser lowers to `TyName("unit")` — needs no special case here.
 export let typeExprName = (name, vars, st, aliases, expanding) =>
-  name == UNIT
-    ? (tUnit, vars, st)
-    : Array.contains(name, primTypeNames)
+  Array.contains(name, primTypeNames)
     ? (primType(name), vars, st)
     : switch Map.get(name, aliases) {
       | Some(info) => let (t, st1) = aliasRow(

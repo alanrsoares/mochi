@@ -209,7 +209,7 @@ let demo = () =>
   let store = useContainer(game) in
   let watched = useWatch(store, s => s.count.value, n => n + 1) in watched
 `;
-  expect(typeOfLast(src, "watched")).toBe("unit");
+  expect(typeOfLast(src, "watched")).toBe("()");
 });
 
 test("onAction resolves the payload from the action name", () => {

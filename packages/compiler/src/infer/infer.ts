@@ -365,6 +365,7 @@ function inferTuple(e: TupleExpr, ctx: Ctx): Result<Type, Diagnostic> {
 function inferExpr(e: Expr, ctx: Ctx): Result<Type, Diagnostic> {
   return match(e)
     .with({ kind: "num" }, () => ok(tNumber))
+    .with({ kind: "unit" }, () => ok(tUnit))
     .with({ kind: "bool" }, () => ok(tBool))
     .with({ kind: "str" }, (str) => ok(tLit(str.value)))
     .with({ kind: "interp" }, (interp) => inferInterp(interp.parts, ctx))
@@ -481,6 +482,7 @@ function inferPattern(p: Pattern, ctx: Ctx): Result<PatResult, Diagnostic> {
 function inferPat(p: Pattern, ctx: Ctx): Result<PatResult, Diagnostic> {
   return match(p)
     .with({ kind: "pwild" }, () => ok({ type: freshVar(ctx.fresh), bindings: new Map() }))
+    .with({ kind: "punit" }, () => ok({ type: tUnit, bindings: new Map() }))
     .with({ kind: "plit" }, () => ok({ type: tNumber, bindings: new Map() }))
     .with({ kind: "pbool" }, () => ok({ type: tBool, bindings: new Map() }))
     .with({ kind: "pstr" }, (pstr) => ok({ type: tLit(pstr.value), bindings: new Map() }))
@@ -663,7 +665,7 @@ function patternBinds(p: Pattern): string[] {
 /** Free refs in an expression (minus local binds) — builds top-level `let` SCC graph. */
 function freeRefs(e: Expr, bound: Set<string>, acc: Set<string>): void {
   match(e)
-    .withOneOf([{ kind: "num" }, { kind: "bool" }, { kind: "str" }], () => {})
+    .withOneOf([{ kind: "num" }, { kind: "bool" }, { kind: "str" }, { kind: "unit" }], () => {})
     .with({ kind: "interp" }, (interp) => {
       for (const p of interp.parts) if (typeof p !== "string") freeRefs(p, bound, acc);
     })

@@ -103,6 +103,7 @@ let jxIsUpper = s => Str.codeAt(0, s) |> Option.exists(n => n >= 65 && n <= 90)
 
 let jxExprSpan = e => switch e {
   | Ast.ENum(_, _, sp) => sp
+  | Ast.EUnit(sp) => sp
   | Ast.EBool(_, sp) => sp
   | Ast.EStr(_, sp) => sp
   | Ast.ERef(_, sp) => sp

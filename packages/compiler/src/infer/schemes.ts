@@ -26,8 +26,6 @@ import {
   tString,
   tTuple,
   tUnion,
-  tUnit,
-  UNIT,
 } from "../ast/types";
 import { type Subst, zonk } from "./unify";
 
@@ -295,8 +293,8 @@ export const typeExprToType = (
       tCon("Array", [typeExprToType(tlist.elem, vars, f, scope, expanding)]),
     )
     .with({ kind: "tname" }, (tname) => {
-      // `()` in TypeExpr lowers to the reserved name `unit` (ADR 0014 / 0015).
-      if (tname.name === UNIT) return tUnit;
+      // `unit` is an ordinary primitive name (ADR 0054), so `()` in TypeExpr — which
+      // the parser lowers to `tname "unit"` — needs no special case here.
       if (PRIM_TYPE_NAMES.has(tname.name)) return primType(tname.name);
       const info = scope.aliases.get(tname.name);
       if (info) return aliasRow(tname.name, info, [], f, scope, expanding);

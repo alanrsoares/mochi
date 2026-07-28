@@ -72,6 +72,10 @@ const PRIM_TS: Record<string, string> = {
   number: "number",
   string: "string",
   bool: "boolean",
+  // `unit` only ever reaches here in *result* position — the arrow branch below
+  // short-circuits on `isUnit(arrow.from)` (ADR 0014). `undefined` over `void`:
+  // it is what codegen emits, and it stays assignable under `strict` (ADR 0054).
+  unit: "undefined",
 };
 
 /** HM type → TS type. `names` maps quantified var ids to generic letters; any other var renders as `unknown` (it escaped generalization at this position). Bare lits default to their base prim; literal unions stay precise. */
