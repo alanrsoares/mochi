@@ -63,6 +63,7 @@ import { resolvePlugins, runFormatHooks } from "@mochi/compiler/extensions";
 import { lex, skipStringLiteral } from "@mochi/compiler/lexer";
 import { parseRecovering } from "@mochi/compiler/parser";
 import { showTypeExpr } from "@mochi/compiler/show-type-expr";
+import { match } from "@onrails/pattern";
 import { map, mapErr, pipe, type Result } from "@onrails/result";
 
 const WIDTH = 80;
@@ -91,42 +92,32 @@ const strLit = (s: string): string => `"${escStrBody(s)}"`;
 const interpText = (e: InterpExpr): string =>
   `"${e.parts.map((p) => (typeof p === "string" ? escStrBody(p) : `\${${flat(exprD(p))}}`)).join("")}"`;
 
-const pattern = (p: Pattern): string => {
-  switch (p.kind) {
-    case "pwild":
-      return "_";
-    case "punit":
-      return "()";
-    case "pbind":
-      return p.name;
-    case "plit":
-      return p.raw;
-    case "pbool":
-      return String(p.value);
-    case "pstr":
-      return JSON.stringify(p.value);
-    case "precord":
-      return `{ ${p.fields.map(patField).join(", ")} }`;
-    case "ptuple":
-      return `(${p.elems.map(pattern).join(", ")})`;
-    case "pctor": {
+const pattern = (p: Pattern): string =>
+  match(p)
+    .with({ kind: "pwild" }, () => "_")
+    .with({ kind: "punit" }, () => "()")
+    .with({ kind: "pbind" }, (p) => p.name)
+    .with({ kind: "plit" }, (p) => p.raw)
+    .with({ kind: "pbool" }, (p) => String(p.value))
+    .with({ kind: "pstr" }, (p) => JSON.stringify(p.value))
+    .with({ kind: "precord" }, (p) => `{ ${p.fields.map(patField).join(", ")} }`)
+    .with({ kind: "ptuple" }, (p) => `(${p.elems.map(pattern).join(", ")})`)
+    .with({ kind: "pctor" }, (p) => {
       const head = p.ns ? `${p.ns}.${p.ctor}` : p.ctor;
       return p.args.length === 0 ? head : `${head}(${p.args.map(pattern).join(", ")})`;
-    }
-    case "parr": {
+    })
+    .with({ kind: "parr" }, (p) => {
       const head = p.elems.map(pattern);
       const rest = p.rest ? [`...${pattern(p.rest)}`] : [];
       return `[${[...head, ...rest].join(", ")}]`;
-    }
-    case "plist": {
+    })
+    .with({ kind: "plist" }, (p) => {
       const head = p.elems.map(pattern);
       const rest = p.rest ? [`...${pattern(p.rest)}`] : [];
       return `@{${[...head, ...rest].join(", ")}}`;
-    }
-    case "por":
-      return p.alts.map(pattern).join(" | ");
-  }
-};
+    })
+    .with({ kind: "por" }, (p) => p.alts.map(pattern).join(" | "))
+    .exhaustive();
 
 /** `{ x }` when the field puns to its own name, else `{ label: pat }`. */
 const patField = (f: PatField): string =>
@@ -817,50 +808,33 @@ let formatHooks: FormatHook[] = [];
 /** Plugin sugar first (JSX's `<tag>` re-fold, …), then this module's printer. */
 const exprRaw = (e: Expr): Doc => runFormatHooks(formatHooks, e, formatApi) ?? exprCore(e);
 
-const exprCore = (e: Expr): Doc => {
-  switch (e.kind) {
-    case "num":
-      return txt(e.raw);
-    case "unit":
-      return txt("()");
-    case "bool":
-      return txt(String(e.value));
-    case "str":
-      return txt(strLit(e.value));
-    case "interp":
-      return txt(interpText(e));
-    case "ref":
-      return txt(e.name);
-    case "call":
-      return callD(e);
-    case "lambda":
-      return lambdaD(e);
-    case "pipe":
-      return pipeD(e);
-    case "ternary":
-      return ternaryD(e);
-    case "record":
-      return recordD(e);
-    case "field":
-      return fieldD(e);
-    case "tuple":
-      return bracketed("(", ")", e.elements.map(exprD));
-    case "arr":
-      return bracketed("[", "]", e.elements.map(seqElemD));
-    case "list":
-      return bracketed("@{", "}", e.elements.map(seqElemD));
-    case "set":
-      return bracketed("#{", "}", e.elements.map(seqElemD));
-    case "map":
-      return mapD(e);
-    case "letin":
-      return letLikeD(`let ${e.name}${e.annot ? ` : ${typeExpr(e.annot)}` : ""}`, e.value, e.body);
-    case "letbind":
-      return letLikeD(`let${e.monad === "Result" ? "?" : "!"} ${param(e.param)}`, e.value, e.body);
-    case "match":
-      return matchD(e);
-  }
-};
+const exprCore = (e: Expr): Doc =>
+  match(e)
+    .with({ kind: "num" }, (e) => txt(e.raw))
+    .with({ kind: "unit" }, () => txt("()"))
+    .with({ kind: "bool" }, (e) => txt(String(e.value)))
+    .with({ kind: "str" }, (e) => txt(strLit(e.value)))
+    .with({ kind: "interp" }, (e) => txt(interpText(e)))
+    .with({ kind: "ref" }, (e) => txt(e.name))
+    .with({ kind: "call" }, (e) => callD(e))
+    .with({ kind: "lambda" }, (e) => lambdaD(e))
+    .with({ kind: "pipe" }, (e) => pipeD(e))
+    .with({ kind: "ternary" }, (e) => ternaryD(e))
+    .with({ kind: "record" }, (e) => recordD(e))
+    .with({ kind: "field" }, (e) => fieldD(e))
+    .with({ kind: "tuple" }, (e) => bracketed("(", ")", e.elements.map(exprD)))
+    .with({ kind: "arr" }, (e) => bracketed("[", "]", e.elements.map(seqElemD)))
+    .with({ kind: "list" }, (e) => bracketed("@{", "}", e.elements.map(seqElemD)))
+    .with({ kind: "set" }, (e) => bracketed("#{", "}", e.elements.map(seqElemD)))
+    .with({ kind: "map" }, (e) => mapD(e))
+    .with({ kind: "letin" }, (e) =>
+      letLikeD(`let ${e.name}${e.annot ? ` : ${typeExpr(e.annot)}` : ""}`, e.value, e.body),
+    )
+    .with({ kind: "letbind" }, (e) =>
+      letLikeD(`let${e.monad === "Result" ? "?" : "!"} ${param(e.param)}`, e.value, e.body),
+    )
+    .with({ kind: "match" }, (e) => matchD(e))
+    .exhaustive();
 
 /** `export ` prefix for an exported declaration. */
 const expPrefix = (s: Stmt): string => ("exported" in s && s.exported ? "export " : "");

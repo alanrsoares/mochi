@@ -16,8 +16,8 @@ export let BadgeShell = tw.div(
   }
 )
 
-export let BadgePulse = tw.span(
-  "w-1.5 h-1.5 rounded-full",
+export let BadgePulse = tw.aside(
+  "size-1.5 rounded-full",
   {
     variants: {
       $tone: { rose: "bg-fur", amber: "bg-lavender-deep", emerald: "bg-ok" }
@@ -197,7 +197,7 @@ export let EditorMirror = tw.pre(
 )
 
 export let EditorInput = tw.textarea(
-  "absolute inset-0 m-0 h-full w-full resize-none overflow-auto whitespace-pre"
+  "absolute inset-0 m-0 size-full resize-none overflow-auto whitespace-pre"
     ++ " border-0 bg-transparent p-4 font-mono font-normal text-transparent"
     ++ " text-base sm:text-xs caret-fur-deep tab-2 selection:bg-fur/30"
     ++ " selection:text-transparent focus:outline-none"
