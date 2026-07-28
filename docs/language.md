@@ -72,9 +72,12 @@ let describe = u => switch u { | () => "done" }
 useful when the sibling arms of a `switch` or a ternary must agree on a type:
 
 ```mochi
-| MoveUp => ignore(store.actions.up())
-| None => ()
+| Save => ignore(persist(state))   // persist returns an id nobody reads here
+| Cancel => ()
 ```
+
+Prefer fixing the seam over discarding: an `extern` or plugin sketch for something that
+really returns nothing should say `-> ()`, and then its calls need no `ignore` at all.
 
 ## Pattern matching
 

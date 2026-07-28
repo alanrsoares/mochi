@@ -111,8 +111,13 @@ const patchOf = (reducer: Type): Type | null => {
   return reducer.to.kind === "arrow" ? reducer.to.to : reducer.to;
 };
 
-/** Action creator as a component calls it: `unit -> {}` nullary, else `P -> {}`. */
-const creatorOf = (reducer: Type): Type => tArrow(payloadOf(reducer) ?? tUnit, tRecord(rEmpty));
+/**
+ * Action creator as a component calls it: `unit -> ()` nullary, else `P -> ()`.
+ * Dispatch returns nothing — `(payload?: unknown) => void` in `@re-reduced/core`'s
+ * `container.ts` — so the result is `unit` (ADR 0054), not a closed empty record.
+ * A `{}` result would be unusable anyway and forced call sites to `ignore(…)`.
+ */
+const creatorOf = (reducer: Type): Type => tArrow(payloadOf(reducer) ?? tUnit, tUnit);
 
 /**
  * `actions: on => { increment: on(…), … }` — the field carries the *reducer*

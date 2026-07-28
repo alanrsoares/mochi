@@ -233,17 +233,17 @@ let App = _ =>
     onKeyDown(raw => switch keyOf(raw) {
       | None => ()
       | Some(key) => switch key {
-          | MoveUp => ignore(store.actions.up())
-          | MoveDown => ignore(store.actions.down())
-          | MoveLeft => ignore(store.actions.left())
-          | MoveRight => ignore(store.actions.right())
-          | TogglePlay => ignore(store.actions.space())
+          | MoveUp => store.actions.up()
+          | MoveDown => store.actions.down()
+          | MoveLeft => store.actions.left()
+          | MoveRight => store.actions.right()
+          | TogglePlay => store.actions.space()
           | Restart =>
             // Restart only from the game-over screen. Reading `$derived` here keeps the
             // decision live: the handler is mounted once, so a captured `gameOver`
             // would go stale, and a reducer that inspected the state would have to
             // return the whole state — which is not a patch (see the `restart` arm).
-            store.$derived.gameOver.value ? ignore(store.actions.restart()) : ()
+            store.$derived.gameOver.value ? store.actions.restart() : ()
         }
     }
     )
