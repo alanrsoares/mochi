@@ -3,9 +3,17 @@
 //
 // Used in JSX tag position (`<Playground />`). Builtin `jsxPlugin` desugars to
 // `h(tag, props, children)` and checks attrs when the tag is `record → VNode`
-// (ADR 0011). These stay opaque (`: a`) because their prop types live in TSX,
-// not HM — open-world `h` still accepts any attrs. Paths relative to THIS file.
+// (ADR 0011, ADR 0055). A record-alias extern is a checked seam; `: a` is the
+// explicit opt-out for widgets whose props need optional fields (inexpressible
+// in HM rows today). Paths relative to THIS file.
+//
+// HighlightedCode: `enableTwoslash`/`errorSpans`/`overlay` are optional in TSX,
+// call sites here pass different subsets — stays `: a` (ADR 0055 open question).
 export extern HighlightedCode : a = "../components/HighlightCode" "HighlightedCode"
+// Playground/ColorSchemeToggle take no props — nothing to check.
 export extern Playground : a = "../components/Playground" "Playground"
 export extern ColorSchemeToggle : a = "../components/ColorSchemeToggle" "ColorSchemeToggle"
-export extern Icon : a = "../components/Icon" "Icon"
+
+type IconProps = { name: string, className: string }
+
+export extern Icon : IconProps -> VNode = "../components/Icon" "Icon"

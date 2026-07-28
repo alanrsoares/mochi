@@ -5,6 +5,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { compile } from "@mochi/compiler/compile";
 import { compileTargets } from "@mochi/compiler/compile-targets";
+import { emitDts } from "@mochi/compiler/dts";
 import { buildModules } from "@mochi/compiler/module";
 import { readRepo, repoPath } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
@@ -120,6 +121,17 @@ test("a graph naming imported TYPES through a namespace alias builds (C5 slice b
   // the ctors and `area` arrive through the ordinary named import.
   expect(main).toContain('import { area, Circle, Rect, Box } from "./shapes.js";');
   expect(main).not.toContain("D.");
+});
+
+// ADR 0055 — the blessed prop-contract exemplar: the annotated docs component
+// keeps its alias name in the sidecar (not an open props bag), so the TSX
+// consumer (Playground.tsx) is checked against the mochi contract.
+test("annotated docs component sidecar names its Props alias (ADR 0055)", () => {
+  const src = read("apps/docs/src/components/PlaygroundView.mochi");
+  const dts = unwrapOk(emitDts(src));
+  expect(dts).toContain("export type Props = {");
+  expect(dts).toContain("(props: Props) => any");
+  expect(dts).not.toContain("Record<string, unknown>");
 });
 
 test("docs tour snippets compile (source of HighlightCode panels)", () => {
