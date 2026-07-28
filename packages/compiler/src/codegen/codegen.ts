@@ -781,56 +781,53 @@ const isFlatSub = (p: Pattern): boolean =>
  * refines that field via indexed access, so the handler input narrows exactly as
  * the pattern does. Pure over `ctx.ctorKeys`; only reachable in TS mode.
  */
-function patTarget(p: Pattern, base: string, ctx: GenCtx): string {
-  return (
-    match(p)
-      .with({ kind: "pctor" }, (p) => {
-        const member = `Extract<${base}, { _tag: ${JSON.stringify(p.ctor)} }>`;
-        const keys = ctx.ctorKeys.get(p.ctor);
-        const refines = p.args.flatMap((a, i) => {
-          const key = keys?.[i] ?? `_${i}`;
-          const sub = fieldRefine(a, `${member}[${JSON.stringify(key)}]`, ctx);
-          return sub ? [`${JSON.stringify(key)}: ${sub}`] : [];
-        });
-        return refines.length ? `${member} & { ${refines.join("; ")} }` : member;
-      })
-      .with({ kind: "precord" }, (p) => {
-        const refines = p.fields.flatMap((f) => {
-          const sub = fieldRefine(f.pat, `${base}[${JSON.stringify(f.label)}]`, ctx);
-          return sub ? [`${JSON.stringify(f.label)}: ${sub}`] : [];
-        });
-        return refines.length ? `${base} & { ${refines.join("; ")} }` : base;
-      })
-      .with({ kind: "ptuple" }, (p) => {
-        const subs = p.elems.map((e, i) => fieldRefine(e, `(${base})[${i}]`, ctx));
-        return subs.every((s) => s === null)
-          ? base
-          : `[${p.elems.map((_, i) => subs[i] ?? `(${base})[${i}]`).join(", ")}]`;
-      })
-      .with({ kind: "parr" }, (p) => {
-        const elemType = `(${base})[number]`;
-        const subs = p.elems.map((e) => fieldRefine(e, elemType, ctx));
-        if (subs.every((s) => s === null)) return base;
-        const heads = subs.map((s) => s ?? elemType).join(", ");
-        return `[${heads}${p.rest ? `, ...${base}` : ""}]`;
-      })
-      // or-patterns: keep the base (per-alt narrowing would need a union target).
-      .withOneOf(
-        [
-          { kind: "pwild" },
-          { kind: "punit" },
-          { kind: "pbind" },
-          { kind: "plit" },
-          { kind: "pbool" },
-          { kind: "pstr" },
-          { kind: "plist" },
-          { kind: "por" },
-        ],
-        () => base,
-      )
-      .exhaustive()
-  );
-}
+const patTarget = (p: Pattern, base: string, ctx: GenCtx): string =>
+  match(p)
+    .with({ kind: "pctor" }, (p) => {
+      const member = `Extract<${base}, { _tag: ${JSON.stringify(p.ctor)} }>`;
+      const keys = ctx.ctorKeys.get(p.ctor);
+      const refines = p.args.flatMap((a, i) => {
+        const key = keys?.[i] ?? `_${i}`;
+        const sub = fieldRefine(a, `${member}[${JSON.stringify(key)}]`, ctx);
+        return sub ? [`${JSON.stringify(key)}: ${sub}`] : [];
+      });
+      return refines.length ? `${member} & { ${refines.join("; ")} }` : member;
+    })
+    .with({ kind: "precord" }, (p) => {
+      const refines = p.fields.flatMap((f) => {
+        const sub = fieldRefine(f.pat, `${base}[${JSON.stringify(f.label)}]`, ctx);
+        return sub ? [`${JSON.stringify(f.label)}: ${sub}`] : [];
+      });
+      return refines.length ? `${base} & { ${refines.join("; ")} }` : base;
+    })
+    .with({ kind: "ptuple" }, (p) => {
+      const subs = p.elems.map((e, i) => fieldRefine(e, `(${base})[${i}]`, ctx));
+      return subs.every((s) => s === null)
+        ? base
+        : `[${p.elems.map((_, i) => subs[i] ?? `(${base})[${i}]`).join(", ")}]`;
+    })
+    .with({ kind: "parr" }, (p) => {
+      const elemType = `(${base})[number]`;
+      const subs = p.elems.map((e) => fieldRefine(e, elemType, ctx));
+      if (subs.every((s) => s === null)) return base;
+      const heads = subs.map((s) => s ?? elemType).join(", ");
+      return `[${heads}${p.rest ? `, ...${base}` : ""}]`;
+    })
+    // or-patterns: keep the base (per-alt narrowing would need a union target).
+    .withOneOf(
+      [
+        { kind: "pwild" },
+        { kind: "punit" },
+        { kind: "pbind" },
+        { kind: "plit" },
+        { kind: "pbool" },
+        { kind: "pstr" },
+        { kind: "plist" },
+        { kind: "por" },
+      ],
+      () => base,
+    )
+    .exhaustive();
 
 /** A field's refined type when its sub-pattern narrows it, else null (the field keeps its declared type — a bind/wildcard/literal needs no narrowing). */
 function fieldRefine(p: Pattern, fieldBase: string, ctx: GenCtx): string | null {
@@ -990,8 +987,7 @@ const genExtern = (s: ExternStmt): string => {
  */
 const rewriteImportPath = (from: string, moduleExt: string): string => {
   const bare = from.replace(/\.mochi$/, "");
-  if (!(bare.startsWith("./") || bare.startsWith("../"))) return bare;
-  return `${bare}${moduleExt}`;
+  return !(bare.startsWith("./") || bare.startsWith("../")) ? bare : `${bare}${moduleExt}`;
 };
 
 const genImport = (s: ImportStmt, ctx: GenCtx): string => {

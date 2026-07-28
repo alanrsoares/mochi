@@ -34,9 +34,8 @@ const EMIT_TABS = [
   { id: "dts", lang: "ts", empty: "No .d.ts emit yet — fix Problems or hit Run." },
 ] as const;
 
-function diagSpans(diags: readonly Diagnostic[]): { start: number; end: number }[] {
-  return diags.flatMap((d) => (d.span ? [{ start: d.span.start, end: d.span.end }] : []));
-}
+const diagSpans = (diags: readonly Diagnostic[]): { start: number; end: number }[] =>
+  diags.flatMap((d) => (d.span ? [{ start: d.span.start, end: d.span.end }] : []));
 
 export function Playground() {
   const { code, setCode, bootstrapped, syncShareUrl } = usePlaygroundSource();

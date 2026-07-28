@@ -239,18 +239,17 @@ const formatTwClassStrings: FormatHook = (e, api) => {
     changed = true;
     return next;
   });
-  if (!changed) return null;
-  return api.exprD({ ...e, args });
+  return !changed ? null : api.exprD({ ...e, args });
 };
 
-const twMembers: CompleteMemberHook = ({ receiver }) => {
-  if (receiver !== "tw") return null;
-  return TW_TAGS.map((label) => ({
-    label,
-    kind: "member" as const,
-    detail: "styled-cva factory",
-  }));
-};
+const twMembers: CompleteMemberHook = ({ receiver }) =>
+  receiver !== "tw"
+    ? null
+    : TW_TAGS.map((label) => ({
+        label,
+        kind: "member" as const,
+        detail: "styled-cva factory",
+      }));
 
 export const styledCvaExtension: LanguagePlugin = {
   name: "styled-cva",

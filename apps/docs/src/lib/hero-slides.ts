@@ -78,10 +78,8 @@ export const swipePointerDown = (start: MutableNum, e: PointerEvent): void => {
 };
 
 /** Horizontal delta since `swipePointerDown`; 0 if this isn't the primary pointer. */
-export const swipePointerDx = (start: MutableNum, e: PointerEvent): number => {
-  if (!e.isPrimary) return 0;
-  return e.clientX - start.current;
-};
+export const swipePointerDx = (start: MutableNum, e: PointerEvent): number =>
+  !e.isPrimary ? 0 : e.clientX - start.current;
 
 /**
  * Start the auto-advance timer, or no-op under reduced motion.

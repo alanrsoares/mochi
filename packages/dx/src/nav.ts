@@ -48,14 +48,12 @@ type ReadFile = (path: string) => Promise<string>;
 // elsewhere in the file (C9 slice e).
 const parseProgram = (src: string) => {
   const lexed = lex(src);
-  if (isErr(lexed)) return null;
-  return parseRecovering(lexed.value).program;
+  return isErr(lexed) ? null : parseRecovering(lexed.value).program;
 };
 
 const indexSrc = (path: string, src: string, origins?: Origins) => {
   const prog = parseProgram(src);
-  if (!prog) return null;
-  return indexProgram(resolve(path), prog, origins);
+  return !prog ? null : indexProgram(resolve(path), prog, origins);
 };
 
 /** Origins from every dependency of `entry` (not the entry itself). */
@@ -209,10 +207,8 @@ export const moduleHighlightsAt = async (
   );
 
 /** Ensure the def Location is present (prelude defs live outside the file index). */
-const withDefRef = (binding: Binding, refs: Ref[]): Ref[] => {
-  if (refs.some((r) => r.role === "def")) return refs;
-  return [{ location: binding.def, role: "def" }, ...refs];
-};
+const withDefRef = (binding: Binding, refs: Ref[]): Ref[] =>
+  refs.some((r) => r.role === "def") ? refs : [{ location: binding.def, role: "def" }, ...refs];
 
 /** Find-all-references for the binding under `offset` (this file only). */
 export const referencesAt = (src: string, offset: number, path = "<buffer>"): Ref[] =>
@@ -289,8 +285,9 @@ export const moduleReferencesAt = async (
     (h) => h,
     () => null,
   );
-  if (!hit) return [];
-  return withDefRef(hit.binding, await collectGraphRefs(entryPath, src, hit.binding, readFile));
+  return !hit
+    ? []
+    : withDefRef(hit.binding, await collectGraphRefs(entryPath, src, hit.binding, readFile));
 };
 
 const isRenameableName = (name: string): boolean =>

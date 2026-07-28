@@ -151,8 +151,7 @@ export const builderBody = (e: Expr): BuilderBody | null => {
     return { binder, shape: "seq", sites };
   }
   const single = siteOf(body, binder);
-  if (single) return { binder, shape: "single", sites: [{ label: null, site: single }] };
-  return null;
+  return single ? { binder, shape: "single", sites: [{ label: null, site: single }] } : null;
 };
 
 /** The value expression of `label` in a record literal; `null` when absent. */

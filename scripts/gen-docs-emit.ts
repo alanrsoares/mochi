@@ -37,8 +37,7 @@ const format = async (code: string, ext: "js" | "ts"): Promise<string> =>
 /** Names the TS backend imports from the runtime — i.e. the prelude helpers. */
 const preludeNames = (ts: string): readonly string[] => {
   const match = ts.match(/import\s*\{([^}]*)\}\s*from\s*"@mochi\/runtime"/);
-  if (!match) return [];
-  return match[1]
+  return !match ? [] : match[1]
     .split(",")
     .map((n) => n.trim())
     .filter(Boolean);

@@ -58,8 +58,7 @@ const server = Bun.serve({
     // WebSocket upgrade
     if (url.pathname === "/ws") {
       const upgraded = server.upgrade(req);
-      if (upgraded) return undefined;
-      return new Response("WebSocket upgrade failed", { status: 400 });
+      return upgraded ? undefined : new Response("WebSocket upgrade failed", { status: 400 });
     }
 
     // REST API Endpoints
@@ -109,11 +108,7 @@ const server = Bun.serve({
     }
 
     const staticFile = Bun.file(join(DIR, relPath));
-    if (await staticFile.exists()) {
-      return new Response(staticFile);
-    }
-
-    return new Response("404 Not Found", { status: 404 });
+    return await staticFile.exists() ? new Response(staticFile) : new Response("404 Not Found", { status: 404 });
   },
 });
 

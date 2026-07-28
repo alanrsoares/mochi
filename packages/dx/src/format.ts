@@ -601,10 +601,10 @@ const BIN_OPS: Record<string, { symbol: string; prec: number }> = {
 const NEQ_PREC = 8;
 const UNARY_OPS: Record<string, string> = { not: "!", negate: "-" };
 
-const binOpOf = (e: Expr): { symbol: string; prec: number } | null => {
-  if (e.kind !== "call" || e.fn.kind !== "ref" || e.args.length !== 2) return null;
-  return BIN_OPS[e.fn.name] ?? null;
-};
+const binOpOf = (e: Expr): { symbol: string; prec: number } | null =>
+  e.kind !== "call" || e.fn.kind !== "ref" || e.args.length !== 2
+    ? null
+    : (BIN_OPS[e.fn.name] ?? null);
 
 /**
  * `!=` desugars to `not(eq(a, b))`; an explicit `!(a == b)` desugars to the
@@ -615,14 +615,12 @@ const neqOperands = (e: Expr): [Expr, Expr] | null => {
   if (e.kind !== "call" || e.fn.kind !== "ref" || e.fn.name !== "not" || e.args.length !== 1)
     return null;
   const inner = e.args[0]!;
-  if (
-    inner.kind !== "call" ||
+  return inner.kind !== "call" ||
     inner.fn.kind !== "ref" ||
     inner.fn.name !== "eq" ||
     inner.args.length !== 2
-  )
-    return null;
-  return [inner.args[0]!, inner.args[1]!];
+    ? null
+    : [inner.args[0]!, inner.args[1]!];
 };
 
 const binOperandD = (e: Expr, parentPrec: number, isRight: boolean): Doc => {
@@ -997,6 +995,6 @@ export const format = (src: string, opts: FormatOptions = {}): Result<string, Di
     lex(src),
     mapErr(oneDiag),
     map((toks) => parseRecovering(toks, { plugins: opts.plugins })),
-    map(({ program: prog }) => layoutProgram(prog, src)),
+    map(({ program }) => layoutProgram(program, src)),
   );
 };

@@ -80,9 +80,7 @@ const PRIM_TS: Record<string, string> = {
 };
 
 /** HM type → TS type. `names` maps quantified var ids to generic letters; any other var renders as `unknown` (it escaped generalization at this position). Bare lits default to their base prim; literal unions stay precise. */
-function tsOf(t: Type, names: Map<number, string>): string {
-  return tsOfRaw(widenLits(t), names);
-}
+const tsOf = (t: Type, names: Map<number, string>): string => tsOfRaw(widenLits(t), names);
 
 function tsOfRaw(t: Type, names: Map<number, string>): string {
   return (
@@ -169,8 +167,8 @@ function tsRow(row: Row, names: Map<number, string>): string {
 }
 
 /** True when a (zonked) type still carries an unbound type or row var — i.e. it is NOT fully concrete. `tsOf` would render such a var as `unknown`. */
-function hasFreeVar(t: Type): boolean {
-  return match(t)
+const hasFreeVar = (t: Type): boolean =>
+  match(t)
     .with({ kind: "var" }, () => true)
     .with({ kind: "con" }, (con) => con.args.some(hasFreeVar))
     .with({ kind: "arrow" }, (arrow) => hasFreeVar(arrow.from) || hasFreeVar(arrow.to))
@@ -188,7 +186,6 @@ function hasFreeVar(t: Type): boolean {
     .with({ kind: "lit" }, () => false)
     .with({ kind: "union" }, (u) => u.members.some(hasFreeVar))
     .exhaustive();
-}
 
 /**
  * TS type for an EMPTY collection literal (`#{}`/`[]`/`@{}`) whose element types
@@ -646,42 +643,39 @@ export function typeDecl(name: string, params: string[], ctors: Ctor[]): string 
 /** The two binding-emit hook lists a `.d.ts` declaration consults: `.d.ts`-only overrides, then the shared binding-type ones (ADR 0011). */
 type DeclHooks = { dtsBinding: DtsBindingHook[]; bindingType: BindingTypeHook[] };
 
-function declOf(
+const declOf = (
   s: Stmt,
   schemeOf: (n: string) => Scheme | undefined,
   aliasByName: Map<string, AliasDef>,
   aliases: AliasDef[],
   hooks: DeclHooks,
-): string | null {
-  return (
-    match(s)
-      // An unparsable region declares nothing (ADR 0045 decision 4).
-      .with({ kind: "error" }, () => null)
-      .with({ kind: "import" }, () => null)
-      .with({ kind: "extern" }, () => null)
-      .with({ kind: "type" }, (type) => {
-        const a = aliasByName.get(type.name);
-        return a ? aliasTsDecl(a) : typeDecl(type.name, type.params, type.ctors);
-      })
-      .with({ kind: "let" }, (letin) => {
-        const sc = schemeOf(letin.name);
-        if (!sc || letin.name.startsWith("$")) return null;
-        const fallback = () => bindingTsType(sc, letin.value, aliases, hooks.bindingType);
-        const folded = foldAliases(sc.type, aliases);
-        const ty = runDtsBindingHooks(
-          hooks.dtsBinding,
-          letin.name,
-          sc,
-          letin.value,
-          aliases,
-          fallback,
-          { folded, tsType: (t) => tsOf(t, new Map()) },
-        );
-        return `export declare const ${letin.name}: ${ty};`;
-      })
-      .exhaustive()
-  );
-}
+): string | null =>
+  match(s)
+    // An unparsable region declares nothing (ADR 0045 decision 4).
+    .with({ kind: "error" }, () => null)
+    .with({ kind: "import" }, () => null)
+    .with({ kind: "extern" }, () => null)
+    .with({ kind: "type" }, (type) => {
+      const a = aliasByName.get(type.name);
+      return a ? aliasTsDecl(a) : typeDecl(type.name, type.params, type.ctors);
+    })
+    .with({ kind: "let" }, (letin) => {
+      const sc = schemeOf(letin.name);
+      if (!sc || letin.name.startsWith("$")) return null;
+      const fallback = () => bindingTsType(sc, letin.value, aliases, hooks.bindingType);
+      const folded = foldAliases(sc.type, aliases);
+      const ty = runDtsBindingHooks(
+        hooks.dtsBinding,
+        letin.name,
+        sc,
+        letin.value,
+        aliases,
+        fallback,
+        { folded, tsType: (t) => tsOf(t, new Map()) },
+      );
+      return `export declare const ${letin.name}: ${ty};`;
+    })
+    .exhaustive();
 
 /** Type-constructor names referenced anywhere in a TypeExpr (`Option<Expr>` → {Option}, nested included). Used to spot builtin unions named in ctor/alias field positions — inference-derived binding types alone miss those. */
 function teConNames(te: TypeExpr, acc: Set<string>): void {
@@ -849,6 +843,5 @@ export function emitDts(src: string, opts: EmitDtsOptions = {}): Result<string, 
     namespaces: preludeNamespaces,
     plugins: opts.plugins,
   });
-  if (isErr(r)) return r;
-  return ok(emitDtsFromTyped(r.value.prog, r.value.res, opts));
+  return isErr(r) ? r : ok(emitDtsFromTyped(r.value.prog, r.value.res, opts));
 }

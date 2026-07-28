@@ -28,8 +28,7 @@ export const transformSource = (
   const ctx: CodemodContext = { src, path: opts.path };
   if (opts.strict) {
     const parsed = parse(lexed.value, { plugins: opts.plugins });
-    if (isErr(parsed)) return parsed;
-    return ok(formatProgram(transform(parsed.value, ctx), src, opts));
+    return isErr(parsed) ? parsed : ok(formatProgram(transform(parsed.value, ctx), src, opts));
   }
 
   const recovered = parseRecovering(lexed.value, { plugins: opts.plugins });

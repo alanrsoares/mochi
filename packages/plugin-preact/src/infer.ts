@@ -62,8 +62,7 @@ const inferEffectLike = (
     return ok(tArrow(arrOf(api.freshVar()), tUnit));
   }
   const restR = inferArgs(e.args.slice(1), api);
-  if (isErr(restR)) return restR;
-  return ok(tUnit);
+  return isErr(restR) ? restR : ok(tUnit);
 };
 
 const inferUseCallback: InferCallHook = (e, api) => {
@@ -73,8 +72,7 @@ const inferUseCallback: InferCallHook = (e, api) => {
   const fnT = api.zonk(fnR.value);
   if (e.args.length === 1) return ok(tArrow(arrOf(api.freshVar()), fnT));
   const restR = inferArgs(e.args.slice(1), api);
-  if (isErr(restR)) return restR;
-  return ok(fnT);
+  return isErr(restR) ? restR : ok(fnT);
 };
 
 const inferUseMemo: InferCallHook = (e, api) => {
@@ -86,8 +84,7 @@ const inferUseMemo: InferCallHook = (e, api) => {
   if (isErr(uni)) return uni;
   if (e.args.length === 1) return ok(tArrow(arrOf(api.freshVar()), api.zonk(resultT)));
   const restR = inferArgs(e.args.slice(1), api);
-  if (isErr(restR)) return restR;
-  return ok(api.zonk(resultT));
+  return isErr(restR) ? restR : ok(api.zonk(resultT));
 };
 
 /** Pack heterogeneous deps — element type stays opaque at the seam. */
@@ -99,8 +96,7 @@ const inferHookDeps: InferCallHook = (e, api) => {
     name === "hookDeps0" ? 0 : name === "hookDeps1" ? 1 : name === "hookDeps2" ? 2 : 3;
   if (e.args.length !== expectedArgs) return null;
   const argsR = inferArgs(e.args, api);
-  if (isErr(argsR)) return argsR;
-  return ok(arrOf(api.freshVar()));
+  return isErr(argsR) ? argsR : ok(arrOf(api.freshVar()));
 };
 
 /** Callee `ref` names this plugin's `inferCall` hook claims (clash detection). */

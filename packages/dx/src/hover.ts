@@ -37,15 +37,19 @@ export type HoverInfo = { code: string; doc?: string };
 /** TS-style lead: `kind name: type` for a named symbol, bare type otherwise. */
 const lead = (type: string, symbol: SymbolInfo | undefined): string => {
   if (!symbol) return type;
-  if (symbol.kind === "let") return `let ${symbol.name}: ${type}`;
-  if (symbol.kind === "parameter") return `(parameter) ${symbol.name}: ${type}`;
-  if (symbol.kind === "extern") {
-    const shown = symbol.surface ?? type;
-    const host =
-      symbol.module !== undefined && symbol.imported !== undefined
-        ? `\n= ${JSON.stringify(symbol.module)} ${JSON.stringify(symbol.imported)}`
-        : "";
-    return `extern ${symbol.name}: ${shown}${host}`;
+  switch (symbol.kind) {
+    case "let":
+      return `let ${symbol.name}: ${type}`;
+    case "parameter":
+      return `(parameter) ${symbol.name}: ${type}`;
+    case "extern": {
+      const shown = symbol.surface ?? type;
+      const host =
+        symbol.module !== undefined && symbol.imported !== undefined
+          ? `\n= ${JSON.stringify(symbol.module)} ${JSON.stringify(symbol.imported)}`
+          : "";
+      return `extern ${symbol.name}: ${shown}${host}`;
+    }
   }
   return `(property) ${symbol.name}: ${type}`;
 };

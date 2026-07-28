@@ -527,8 +527,7 @@ export const indexProgram = (path: string, prog: Program, origins?: Origins): Sy
       .toSorted((a, c) => {
         const aw = a.span.end - a.span.start;
         const cw = c.span.end - c.span.start;
-        if (aw !== cw) return cw - aw; // wider (outer) first
-        return a.span.start - c.span.start;
+        return aw !== cw ? cw - aw : a.span.start - c.span.start;
       });
     const map = new Map<string, Binding>();
     for (const f of hits) {

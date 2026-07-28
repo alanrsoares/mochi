@@ -32,11 +32,12 @@ export const toTypedProgram = (
   const parsed = parse(lexed.value, { plugins: opts.plugins });
   if (isErr(parsed)) return err(parsed.error); // already Diagnostic[] (ADR 0045)
   const checked = check(parsed.value);
-  if (isErr(checked)) return checked;
-  return map(inferProgramTypes(checked.value, preludeEnv, opts), (res) => ({
-    prog: checked.value,
-    res,
-  }));
+  return isErr(checked)
+    ? checked
+    : map(inferProgramTypes(checked.value, preludeEnv, opts), (res) => ({
+        prog: checked.value,
+        res,
+      }));
 };
 
 /**
@@ -58,11 +59,12 @@ export const toTypedProgramRecovering = (
   if (isErr(lexed)) return err(oneDiag(lexed.error));
   const { program } = parseRecovering(lexed.value, { plugins: opts.plugins });
   const checked = check(program);
-  if (isErr(checked)) return checked;
-  return map(inferProgramTypes(checked.value, preludeEnv, opts), (res) => ({
-    prog: checked.value,
-    res,
-  }));
+  return isErr(checked)
+    ? checked
+    : map(inferProgramTypes(checked.value, preludeEnv, opts), (res) => ({
+        prog: checked.value,
+        res,
+      }));
 };
 
 /** What a module's imports resolve to, as this seam needs it: export SCHEMES (inference) and the variant REGISTRY (cross-module exhaustiveness). A structural subset of `module.ts`'s `ModuleContext`, so a full context passes. */
@@ -84,18 +86,19 @@ export function toTypedProgramWith(
   opts: TypedProgramWithOptions = {},
 ): Result<TypedProgram, Diagnostic[]> {
   const checked = check(prog, ctx.importedReg, ctx.qualTypes);
-  if (isErr(checked)) return checked;
-  return map(
-    inferProgramTypes(checked.value, preludeEnv, {
-      open: opts.open ?? true,
-      imports: ctx.imports,
-      namespaces: preludeNamespaces,
-      nsImports: ctx.nsImports,
-      quals: ctx.qualTypes,
-      plugins: opts.plugins,
-    }),
-    (res) => ({ prog: checked.value, res }),
-  );
+  return isErr(checked)
+    ? checked
+    : map(
+        inferProgramTypes(checked.value, preludeEnv, {
+          open: opts.open ?? true,
+          imports: ctx.imports,
+          namespaces: preludeNamespaces,
+          nsImports: ctx.nsImports,
+          quals: ctx.qualTypes,
+          plugins: opts.plugins,
+        }),
+        (res) => ({ prog: checked.value, res }),
+      );
 }
 
 /** `runtime` (default on): inline the prelude builtins the program uses so the emitted module runs standalone. Off yields prelude-free lowering — for tests that supply their own prelude, or callers that bundle it separately. `moduleExt` (default `.js`): suffix rewritten onto relative import paths — Vite uses `.mochi` so sibling modules re-enter the plugin. `plugins`: host kits (styled-cva) plus builtins (`resolvePlugins`, ADR 0011). */
@@ -120,13 +123,14 @@ export function compile(src: string, opts: CompileOptions = {}): Result<string, 
     }),
     () => checked.value,
   );
-  if (isErr(typed)) return typed;
-  return ok(
-    codegen(typed.value, undefined, {
-      runtime: opts.runtime ?? true,
-      moduleExt: opts.moduleExt,
-    }),
-  );
+  return isErr(typed)
+    ? typed
+    : ok(
+        codegen(typed.value, undefined, {
+          runtime: opts.runtime ?? true,
+          moduleExt: opts.moduleExt,
+        }),
+      );
 }
 
 export { codegenTs } from "../codegen/codegen-ts";

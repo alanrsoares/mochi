@@ -241,25 +241,24 @@ function inferRef(e: RefExpr, ctx: Ctx): Result<Type, Diagnostic> {
   // vars (host globals); guessing there false-positives on names like `empty2`.
   if (ctx.open) return ok(freshVar(ctx.fresh));
   const hint = closestName(e.name, ctx.env.keys());
-  if (hint) {
-    return err(
-      typeErr(`unbound variable '${e.name}'`, e.span, {
-        help: `did you mean '${hint}'?`,
-        suggestions: [
-          {
-            location: { path: "", span: e.span },
-            replaceWith: hint,
-            title: `Did you mean '${hint}'?`,
-          },
-        ],
-      }),
-    );
-  }
-  return err(
-    typeErr(`unbound variable '${e.name}'`, e.span, {
-      help: "bind the name before using it, or check the spelling",
-    }),
-  );
+  return hint
+    ? err(
+        typeErr(`unbound variable '${e.name}'`, e.span, {
+          help: `did you mean '${hint}'?`,
+          suggestions: [
+            {
+              location: { path: "", span: e.span },
+              replaceWith: hint,
+              title: `Did you mean '${hint}'?`,
+            },
+          ],
+        }),
+      )
+    : err(
+        typeErr(`unbound variable '${e.name}'`, e.span, {
+          help: "bind the name before using it, or check the spelling",
+        }),
+      );
 }
 
 function inferLambda(e: LambdaExpr, ctx: Ctx): Result<Type, Diagnostic> {

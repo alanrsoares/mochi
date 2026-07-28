@@ -175,29 +175,31 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
     gte: "gte",
   };
 
-  function isSectionOp(t: Tok["t"]): boolean {
-    return t === "neq" || OP_FN[t] !== undefined;
-  }
+  const isSectionOp = (t: Tok["t"]): boolean => t === "neq" || OP_FN[t] !== undefined;
 
   /** Build the body of an operator section; the missing operand is already a param ref. */
   function sectionBody(opType: Tok["t"], x: Expr, y: Expr, opSpan: Span): Expr {
     const full = spanning(x.span, y.span);
-    if (opType === "neq") {
-      return {
-        kind: "call",
-        fn: { kind: "ref", name: "not", span: opSpan },
-        args: [
-          { kind: "call", fn: { kind: "ref", name: "eq", span: opSpan }, args: [x, y], span: full },
-        ],
-        span: full,
-      };
-    }
-    return {
-      kind: "call",
-      fn: { kind: "ref", name: OP_FN[opType]!, span: opSpan },
-      args: [x, y],
-      span: full,
-    };
+    return opType === "neq"
+      ? {
+          kind: "call",
+          fn: { kind: "ref", name: "not", span: opSpan },
+          args: [
+            {
+              kind: "call",
+              fn: { kind: "ref", name: "eq", span: opSpan },
+              args: [x, y],
+              span: full,
+            },
+          ],
+          span: full,
+        }
+      : {
+          kind: "call",
+          fn: { kind: "ref", name: OP_FN[opType]!, span: opSpan },
+          args: [x, y],
+          span: full,
+        };
   }
 
   /** `(provided op)` — the missing right operand becomes the lambda's param. */
@@ -499,8 +501,7 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
       (t) => t === "star" || t === "slash" || t === "percent",
       MUL_BP,
     );
-    if (mul) return { left: mul, matched: true };
-    return { left, matched: false };
+    return mul ? { left: mul, matched: true } : { left, matched: false };
   }
 
   function parseExpr(minBp = 0): Expr {

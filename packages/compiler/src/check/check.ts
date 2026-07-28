@@ -486,7 +486,7 @@ function checkCtorFieldVars(prog: Program): Diagnostic[] {
 }
 
 /** Every `tqual` node reachable from a written type expression, in source order. */
-const qualRefs = (te: TypeExpr, out: QualTypeExpr[]): void => {
+const qualRefs = (te: TypeExpr, out: QualTypeExpr[]): void =>
   match(te)
     .with({ kind: "tname" }, () => {})
     .with({ kind: "tarrow" }, (tarrow) => {
@@ -507,7 +507,6 @@ const qualRefs = (te: TypeExpr, out: QualTypeExpr[]): void => {
       for (const a of tqual.args) qualRefs(a, out);
     })
     .exhaustive();
-};
 
 /**
  * Every type expression a program WRITES — the positions `typeExprToType` lowers:
@@ -517,16 +516,20 @@ const qualRefs = (te: TypeExpr, out: QualTypeExpr[]): void => {
 const writtenTypeExprs = (prog: Program): TypeExpr[] => {
   const out: TypeExpr[] = [];
   for (const s of prog.stmts) {
-    if (s.kind === "extern") out.push(s.typeExpr);
-    if (s.kind === "let") {
-      if (s.annot) out.push(s.annot);
-      forEachSubExpr(s.value, (x) => {
-        if (x.kind === "letin" && x.annot) out.push(x.annot);
-      });
-    }
-    if (s.kind === "type") {
-      for (const c of s.ctors) for (const fld of c.fields) out.push(fld.type);
-      for (const fld of s.alias ?? []) out.push(fld.type);
+    switch (s.kind) {
+      case "extern":
+        out.push(s.typeExpr);
+        break;
+      case "let":
+        if (s.annot) out.push(s.annot);
+        forEachSubExpr(s.value, (x) => {
+          if (x.kind === "letin" && x.annot) out.push(x.annot);
+        });
+        break;
+      case "type":
+        for (const c of s.ctors) for (const fld of c.fields) out.push(fld.type);
+        for (const fld of s.alias ?? []) out.push(fld.type);
+        break;
     }
   }
   return out;
@@ -779,40 +782,48 @@ function checkReservedWords(prog: Program): Diagnostic[] {
 function checkLoops(prog: Program): Diagnostic[] {
   const diags: Diagnostic[] = [];
   type Frame = { arity: number; names: Set<string> } | null;
+  type LoopExpr = Extract<Expr, { kind: "loop" }>;
+  type RecurExpr = Extract<Expr, { kind: "recur" }>;
+
+  const checkLoopHead = (e: LoopExpr, frame: Frame): Set<string> => {
+    const seen = new Set<string>();
+    for (const p of e.params) {
+      if (seen.has(p.name)) {
+        diags.push(checkErr(`duplicate loop param '${p.name}'`, p.nameSpan));
+      }
+      seen.add(p.name);
+      walk(p.init, frame, false); // inits evaluate in the OUTER context
+    }
+    return seen;
+  };
+
+  const checkRecurSite = (e: RecurExpr, frame: Frame, tail: boolean): void => {
+    if (!frame) {
+      diags.push(checkErr("'recur' is only legal inside a loop body", e.span));
+      return;
+    }
+    if (!tail) {
+      diags.push(checkErr("'recur' must be in tail position of its enclosing loop", e.span));
+    }
+    if (e.args.length !== frame.arity) {
+      diags.push(
+        checkErr(
+          `'recur' takes ${frame.arity} argument${frame.arity === 1 ? "" : "s"} (one per loop param), got ${e.args.length}`,
+          e.span,
+        ),
+      );
+    }
+  };
 
   const walk = (e: Expr, frame: Frame, tail: boolean): void => {
     switch (e.kind) {
-      case "loop": {
-        const seen = new Set<string>();
-        for (const p of e.params) {
-          if (seen.has(p.name)) {
-            diags.push(checkErr(`duplicate loop param '${p.name}'`, p.nameSpan));
-          }
-          seen.add(p.name);
-          walk(p.init, frame, false); // inits evaluate in the OUTER context
-        }
-        walk(e.body, { arity: e.params.length, names: seen }, true);
+      case "loop":
+        walk(e.body, { arity: e.params.length, names: checkLoopHead(e, frame) }, true);
         return;
-      }
-      case "recur": {
-        if (!frame) {
-          diags.push(checkErr("'recur' is only legal inside a loop body", e.span));
-        } else {
-          if (!tail) {
-            diags.push(checkErr("'recur' must be in tail position of its enclosing loop", e.span));
-          }
-          if (e.args.length !== frame.arity) {
-            diags.push(
-              checkErr(
-                `'recur' takes ${frame.arity} argument${frame.arity === 1 ? "" : "s"} (one per loop param), got ${e.args.length}`,
-                e.span,
-              ),
-            );
-          }
-        }
+      case "recur":
+        checkRecurSite(e, frame, tail);
         for (const a of e.args) walk(a, frame, false);
         return;
-      }
       case "ternary":
         walk(e.cond, frame, false);
         walk(e.then, frame, tail);

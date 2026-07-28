@@ -30,14 +30,14 @@ describe("$ labels for styled-cva interop", () => {
   });
 
   it("binds $tone as an ordinary value name (ADR 0047)", () => {
-    const js = unwrapOk(compile(`let $tone = 1\nlet doubled = $tone + $tone`));
+    const js = unwrapOk(compile("let $tone = 1\nlet doubled = $tone + $tone"));
     expect(js).toContain("const $tone = 1;");
     expect(js).toContain("add($tone, $tone)");
   });
 
   it("destructures and matches $ labels", () => {
     const js = unwrapOk(
-      compile(`let pick = ({ $tone }) => $tone\nlet at = r => switch r { | { $tone: t } => t }`),
+      compile("let pick = ({ $tone }) => $tone\nlet at = r => switch r { | { $tone: t } => t }"),
     );
     expect(js).toContain("({ $tone })");
     expect(js).toContain("$tone");

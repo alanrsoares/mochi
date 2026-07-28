@@ -32,8 +32,7 @@ const syncCompile = (source: string): Result<PlaygroundCompileOk, PlaygroundComp
   try {
     const result = compileTargets(source, { runtime: true });
     const ms = performance.now() - start;
-    if (isErr(result)) return err({ diagnostics: result.error, ms });
-    return ok({ ...result.value, ms });
+    return isErr(result) ? err({ diagnostics: result.error, ms }) : ok({ ...result.value, ms });
   } catch (e: unknown) {
     return err({
       message: e instanceof Error ? e.message : String(e),

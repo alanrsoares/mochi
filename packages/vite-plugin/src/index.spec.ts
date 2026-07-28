@@ -23,7 +23,8 @@ describe("vite-plugin-mochi", () => {
 
   it("prepends JSX pragma header for files containing JSX elements", () => {
     const plugin = mochiPlugin();
-    const code = `export let Button = (props) => <button className={props.kind}>{props.label}</button>`;
+    const code =
+      "export let Button = (props) => <button className={props.kind}>{props.label}</button>";
     const result = plugin.transform(code, "src/Button.mochi");
     expect(result).not.toBeNull();
     expect(result?.code).toContain('import { h as _h, Fragment as _Fragment } from "preact";');
@@ -79,7 +80,7 @@ let x = useState`;
 
   it("throws SyntaxError with diagnostic message when Mochi compilation fails", () => {
     const plugin = mochiPlugin();
-    const badCode = `let invalid = `;
+    const badCode = "let invalid = ";
     expect(() => plugin.transform(badCode, "src/bad.mochi")).toThrow(/Mochi compilation failed/);
   });
 });

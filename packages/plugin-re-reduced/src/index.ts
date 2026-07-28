@@ -126,8 +126,7 @@ const creatorOf = (reducer: Type): Type => tArrow(payloadOf(reducer) ?? tUnit, t
  */
 const actionsOf = (actions: Type | null): Type => {
   const result = resultOf(actions);
-  if (result?.kind !== "record") return tRecord(rEmpty);
-  return tRecord(mapRow(result.row, creatorOf));
+  return result?.kind !== "record" ? tRecord(rEmpty) : tRecord(mapRow(result.row, creatorOf));
 };
 
 /**
@@ -267,8 +266,7 @@ const expectArg = (
   const r = api.infer(arg);
   if (isErr(r)) return r;
   const uni = api.unify(r.value, expected, arg.span);
-  if (isErr(uni)) return uni;
-  return ok(api.zonk(r.value));
+  return isErr(uni) ? uni : ok(api.zonk(r.value));
 };
 
 /**
@@ -295,27 +293,23 @@ const inferReaction = (
     const literal = literalName(nameArg);
     const payload = (literal ? payloads.get(literal) : null) ?? api.freshVar();
     const run = handlerAt(1, tArrow(payload, tArrow(ctx, tEmit)));
-    if (run && isErr(run)) return run;
-    return ok(tReaction);
+    return run && isErr(run) ? run : ok(tReaction);
   }
   if (site.method === "onChange" && site.args.length >= 2) {
     const watched = api.freshVar();
     const select = handlerAt(0, tArrow(signals, watched));
     if (select && isErr(select)) return select;
     const run = handlerAt(1, tArrow(watched, tArrow(watched, tArrow(ctx, tEmit))));
-    if (run && isErr(run)) return run;
-    return ok(tReaction);
+    return run && isErr(run) ? run : ok(tReaction);
   }
   if (site.method === "onEnter" && site.args.length >= 2) {
     const pred = handlerAt(0, tArrow(signals, tBool));
     if (pred && isErr(pred)) return pred;
     const run = handlerAt(1, tArrow(ctx, tEmit));
-    if (run && isErr(run)) return run;
-    return ok(tReaction);
+    return run && isErr(run) ? run : ok(tReaction);
   }
   const rest = inferArgs(site.args, api);
-  if (isErr(rest)) return rest;
-  return ok(tReaction);
+  return isErr(rest) ? rest : ok(tReaction);
 };
 
 /**
@@ -433,8 +427,7 @@ const inferDefineContainer: InferCallHook = (
     if (row) {
       if (isErr(row)) return row;
       const tailR = inferArgs(e.args.slice(2), api);
-      if (isErr(tailR)) return tailR;
-      return ok(tRecord(rExtend("name", tString, row.value)));
+      return isErr(tailR) ? tailR : ok(tRecord(rExtend("name", tString, row.value)));
     }
   }
   // Config is a binding, a spread, or shaped in a way the DSL walk does not
@@ -442,10 +435,9 @@ const inferDefineContainer: InferCallHook = (
   const argsR = inferArgs(e.args.slice(1), api);
   if (isErr(argsR)) return argsR;
   const configType = argsR.value[0] ? api.zonk(argsR.value[0]) : null;
-  if (configType?.kind === "record") {
-    return ok(tRecord(rExtend("name", tString, configType.row)));
-  }
-  return ok(tRecord(rExtend("name", tString, api.freshRowVar())));
+  return configType?.kind === "record"
+    ? ok(tRecord(rExtend("name", tString, configType.row)))
+    : ok(tRecord(rExtend("name", tString, api.freshRowVar())));
 };
 
 const inferUseContainer: InferCallHook = (
@@ -456,8 +448,7 @@ const inferUseContainer: InferCallHook = (
   const defR = api.infer(e.args[0]!);
   if (isErr(defR)) return defR;
   const restR = inferArgs(e.args.slice(1), api);
-  if (isErr(restR)) return restR;
-  return ok(storeOf(api.zonk(defR.value), api));
+  return isErr(restR) ? restR : ok(storeOf(api.zonk(defR.value), api));
 };
 
 /**
@@ -467,10 +458,9 @@ const inferUseContainer: InferCallHook = (
  */
 const selectorType = (selector: Expr, store: Type, result: Type, api: InferCallApi): Type => {
   const signals = storeFieldOr(store, "$state", api);
-  if (selector.kind === "lambda" && selector.params.length >= 2) {
-    return tArrow(signals, tArrow(storeFieldOr(store, "$derived", api), result));
-  }
-  return tArrow(signals, result);
+  return selector.kind === "lambda" && selector.params.length >= 2
+    ? tArrow(signals, tArrow(storeFieldOr(store, "$derived", api), result))
+    : tArrow(signals, result);
 };
 
 /**
@@ -492,8 +482,7 @@ const inferUseSelect: InferCallHook = (
   const uni = api.unify(selR.value, selectorType(selArg, store, result, api), selArg.span);
   if (isErr(uni)) return uni;
   const restR = inferArgs(e.args.slice(2), api);
-  if (isErr(restR)) return restR;
-  return ok(result);
+  return isErr(restR) ? restR : ok(result);
 };
 
 /**
@@ -518,8 +507,7 @@ const inferUseWatch: InferCallHook = (
   const runR = api.infer(runArg);
   if (isErr(runR)) return runR;
   const uniRun = api.unify(runR.value, tArrow(watched, api.freshVar()), runArg.span);
-  if (isErr(uniRun)) return uniRun;
-  return ok(tUnit);
+  return isErr(uniRun) ? uniRun : ok(tUnit);
 };
 
 /**
@@ -560,20 +548,17 @@ const inferIntent: InferCallHook = (
       ),
     );
     const uni = api.unify(argsR.value[0]!, spec, e.args[0]!.span);
-    if (isErr(uni)) return uni;
-    return ok(tIntent);
+    return isErr(uni) ? uni : ok(tIntent);
   }
   if (method === "timeout" && e.args.length >= 2) {
     const ms = api.unify(argsR.value[0]!, tNumber, e.args[0]!.span);
     if (isErr(ms)) return ms;
     const run = api.unify(argsR.value[1]!, tArrow(tUnit, api.freshVar()), e.args[1]!.span);
-    if (isErr(run)) return run;
-    return ok(tIntent);
+    return isErr(run) ? run : ok(tIntent);
   }
   if (method === "storageSet" && e.args.length >= 2) {
     const key = api.unify(argsR.value[0]!, tString, e.args[0]!.span);
-    if (isErr(key)) return key;
-    return ok(tIntent);
+    return isErr(key) ? key : ok(tIntent);
   }
   return null;
 };

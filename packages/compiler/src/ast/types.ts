@@ -174,8 +174,9 @@ const typeEq = (a: Type, b: Type): boolean => {
   if (a.kind === "record" && b.kind === "record") return rowEq(a.row, b.row);
   if (a.kind === "lit" && b.kind === "lit") return a.base === b.base && a.value === b.value;
   if (a.kind === "union" && b.kind === "union") {
-    if (a.members.length !== b.members.length) return false;
-    return a.members.every((m) => b.members.some((n) => typeEq(m, n)));
+    return a.members.length !== b.members.length
+      ? false
+      : a.members.every((m) => b.members.some((n) => typeEq(m, n)));
   }
   return false;
 };
@@ -252,8 +253,9 @@ const matchTemplate = (template: Type, actual: Type, binds: Map<number, Type>): 
   if (template.kind === "lit" && actual.kind === "lit")
     return template.base === actual.base && template.value === actual.value;
   if (template.kind === "union" && actual.kind === "union") {
-    if (template.members.length !== actual.members.length) return false;
-    return template.members.every((m) => actual.members.some((n) => matchTemplate(m, n, binds)));
+    return template.members.length !== actual.members.length
+      ? false
+      : template.members.every((m) => actual.members.some((n) => matchTemplate(m, n, binds)));
   }
   // primitives-as-con already handled; vars with non-negative ids compare by id
   if (template.kind === "var" && actual.kind === "var") return template.id === actual.id;

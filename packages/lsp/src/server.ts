@@ -83,9 +83,14 @@ const rangeOf = (doc: TextDocument, span: Span) => ({
 const read = (p: string): Promise<string> => readFile(p, "utf8");
 
 const symbolKind = (kind: string): SymbolKind => {
-  if (kind === "type") return SymbolKind.Class;
-  if (kind === "ctor") return SymbolKind.EnumMember;
-  if (kind === "extern") return SymbolKind.Function;
+  switch (kind) {
+    case "type":
+      return SymbolKind.Class;
+    case "ctor":
+      return SymbolKind.EnumMember;
+    case "extern":
+      return SymbolKind.Function;
+  }
   return SymbolKind.Variable;
 };
 
@@ -189,11 +194,19 @@ export function startServer(opts: ServerOptions = {}): void {
   });
 
   const lspCompletionKind = (kind: MochiCompletion["kind"]): CompletionItemKind => {
-    if (kind === "method") return CompletionItemKind.Method;
-    if (kind === "literal") return CompletionItemKind.EnumMember;
-    if (kind === "field" || kind === "member") return CompletionItemKind.Field;
-    if (kind === "ctor") return CompletionItemKind.EnumMember;
-    if (kind === "type") return CompletionItemKind.Class;
+    switch (kind) {
+      case "method":
+        return CompletionItemKind.Method;
+      case "literal":
+        return CompletionItemKind.EnumMember;
+      case "field":
+      case "member":
+        return CompletionItemKind.Field;
+      case "ctor":
+        return CompletionItemKind.EnumMember;
+      case "type":
+        return CompletionItemKind.Class;
+    }
     return CompletionItemKind.Variable;
   };
 
@@ -223,8 +236,7 @@ export function startServer(opts: ServerOptions = {}): void {
       if (!doc) return null;
       const path = docPath(textDocument.uri);
       const loc = await moduleDefinitionAt(path, doc.getText(), doc.offsetAt(position), read);
-      if (!loc) return null;
-      return rangeAtPath(loc.path, loc.span);
+      return !loc ? null : rangeAtPath(loc.path, loc.span);
     },
   );
 
@@ -241,8 +253,7 @@ export function startServer(opts: ServerOptions = {}): void {
         read,
         await dxOpts(path),
       );
-      if (!loc) return null;
-      return rangeAtPath(loc.path, loc.span);
+      return !loc ? null : rangeAtPath(loc.path, loc.span);
     },
   );
 
@@ -301,14 +312,15 @@ export function startServer(opts: ServerOptions = {}): void {
   /** Document / workspace symbols. */
   connection.onDocumentSymbol(({ textDocument }): DocumentSymbol[] => {
     const doc = documents.get(textDocument.uri);
-    if (!doc) return [];
-    return documentSymbolsAt(doc.getText()).map((s) => ({
-      name: s.name,
-      detail: s.detail,
-      kind: symbolKind(s.kind),
-      range: rangeOf(doc, s.span),
-      selectionRange: rangeOf(doc, s.span),
-    }));
+    return !doc
+      ? []
+      : documentSymbolsAt(doc.getText()).map((s) => ({
+          name: s.name,
+          detail: s.detail,
+          kind: symbolKind(s.kind),
+          range: rangeOf(doc, s.span),
+          selectionRange: rangeOf(doc, s.span),
+        }));
   });
 
   connection.onWorkspaceSymbol(async ({ query }): Promise<WorkspaceSymbol[]> => {
@@ -423,12 +435,11 @@ export function startServer(opts: ServerOptions = {}): void {
   });
 
   /** Serve the virtual prelude buffer when the client opens a `mochi:` Location. */
-  connection.workspace.textDocumentContent.on((params) => {
-    if (params.uri === PRELUDE_PATH || params.uri.startsWith("mochi:")) {
-      return { text: preludeVirtualSource() };
-    }
-    return null;
-  });
+  connection.workspace.textDocumentContent.on((params) =>
+    params.uri === PRELUDE_PATH || params.uri.startsWith("mochi:")
+      ? { text: preludeVirtualSource() }
+      : null,
+  );
 
   connection.listen();
 }

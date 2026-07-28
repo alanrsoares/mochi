@@ -169,17 +169,14 @@ const litMembers = (t: Type): string[] => {
 /** Props row of a component scheme `Record -> …`, else null. */
 const componentPropsRow = (t: Type, aliases: InferResult["aliases"]): Row | null => {
   const folded = foldAliases(t, aliases);
-  if (folded.kind === "arrow" && folded.from.kind === "record") return folded.from.row;
-  return null;
+  return folded.kind === "arrow" && folded.from.kind === "record" ? folded.from.row : null;
 };
 
 const tightestType = (types: TypeAt[], offset: number) =>
   tightestHit(types, offset, spanContainsClosed);
 
-const filterPrefix = (items: CompletionItem[], prefix: string): CompletionItem[] => {
-  if (!prefix) return items;
-  return items.filter((i) => i.label.startsWith(prefix));
-};
+const filterPrefix = (items: CompletionItem[], prefix: string): CompletionItem[] =>
+  !prefix ? items : items.filter((i) => i.label.startsWith(prefix));
 
 const dedupeSort = (items: CompletionItem[]): CompletionItem[] => {
   const seen = new Set<string>();
@@ -196,8 +193,7 @@ const dedupeSort = (items: CompletionItem[]): CompletionItem[] => {
 // parse — the intact prefix still yields members and locals (C9 slice e).
 const parseProgram = (src: string, plugins?: LanguagePlugin[]): Program | null => {
   const lexed = lex(src);
-  if (isErr(lexed)) return null;
-  return parseRecovering(lexed.value, { plugins }).program;
+  return isErr(lexed) ? null : parseRecovering(lexed.value, { plugins }).program;
 };
 
 const emptyReg = (): Registry => ({ ctor: new Map(), type: new Map() });
@@ -250,14 +246,13 @@ const namespaceMembers = (
     }));
   }
   const imported = nsImports?.get(receiver);
-  if (imported) {
-    return [...imported.keys()].map((label) => ({
-      label,
-      kind: "member" as const,
-      detail: `${receiver}.${label}`,
-    }));
-  }
-  return null;
+  return imported
+    ? [...imported.keys()].map((label) => ({
+        label,
+        kind: "member" as const,
+        detail: `${receiver}.${label}`,
+      }))
+    : null;
 };
 
 /**
@@ -272,14 +267,15 @@ const recordFieldsAt = (
   const rewritten =
     src.slice(0, trigger.dotStart) + src.slice(trigger.dotStart + 1 + trigger.prefix.length);
   const typed = typedOf(rewritten, opts);
-  if (!typed) return [];
-  return matchMaybe(
-    map(tightestType(typed.res.types, trigger.recvStart), (hit) =>
-      recordFieldItems(hit.type, typed.res.aliases),
-    ),
-    (items) => items,
-    () => [],
-  );
+  return !typed
+    ? []
+    : matchMaybe(
+        map(tightestType(typed.res.types, trigger.recvStart), (hit) =>
+          recordFieldItems(hit.type, typed.res.aliases),
+        ),
+        (items) => items,
+        () => [],
+      );
 };
 
 const pluginMembers = (api: CompleteMemberApi, plugins: LanguagePlugin[]): CompletionItem[] => {
@@ -392,11 +388,12 @@ const membersAt = (
   const ns = namespaceMembers(trigger.receiver, opts.nsImports);
   if (ns) return filterPrefix(ns, trigger.prefix);
   const fields = recordFieldsAt(src, trigger, opts);
-  if (fields.length > 0) return filterPrefix(fields, trigger.prefix);
-  return filterPrefix(
-    pluginMembers({ receiver: trigger.receiver, prefix: trigger.prefix }, plugins),
-    trigger.prefix,
-  );
+  return fields.length > 0
+    ? filterPrefix(fields, trigger.prefix)
+    : filterPrefix(
+        pluginMembers({ receiver: trigger.receiver, prefix: trigger.prefix }, plugins),
+        trigger.prefix,
+      );
 };
 
 /**
@@ -412,10 +409,9 @@ export const completeAt = (
   const trigger = memberTriggerAt(src, offset);
   if (trigger) return dedupeSort(membersAt(src, trigger, opts));
   const jsx = jsxAttrTriggerAt(src, offset);
-  if (jsx) return dedupeSort(jsxAttrItems(src, jsx, opts));
-  return dedupeSort(
-    filterPrefix(valueItems(src, offset, opts.plugins), identPrefixAt(src, offset)),
-  );
+  return jsx
+    ? dedupeSort(jsxAttrItems(src, jsx, opts))
+    : dedupeSort(filterPrefix(valueItems(src, offset, opts.plugins), identPrefixAt(src, offset)));
 };
 
 export type ModuleCompleteOptions = { plugins?: LanguagePlugin[] };

@@ -47,8 +47,7 @@ const resolvePackageSpec = (importer: string, spec: string): string | null => {
     const getBuiltin = (globalThis as { process?: { getBuiltinModule?: (id: string) => unknown } })
       .process?.getBuiltinModule;
     const mod = getBuiltin?.("module") as NodeModuleBuiltin | undefined;
-    if (!mod?.createRequire) return null;
-    return mod.createRequire(importer).resolve(spec);
+    return !mod?.createRequire ? null : mod.createRequire(importer).resolve(spec);
   } catch {
     return null;
   }
@@ -66,10 +65,7 @@ export const resolveImport = (importer: string, spec: string): string => {
     return resolve(dirname(importer), `${spec.replace(/\.mochi$/, "")}.mochi`);
   }
   const pkg = resolvePackageSpec(importer, spec);
-  if (pkg !== null) return pkg;
-  // Unresolvable bare spec — keep the historical relative fallback so the
-  // graph fails to read the dep and call sites degrade rather than throw.
-  return resolve(dirname(importer), `${spec}.mochi`);
+  return pkg !== null ? pkg : resolve(dirname(importer), `${spec}.mochi`);
 };
 
 const importsOf = (prog: Program): Extract<Stmt, { kind: "import" }>[] =>

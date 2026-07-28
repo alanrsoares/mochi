@@ -313,13 +313,9 @@ export const typeExprToType = (
       // A transparent record alias EXPANDS across the edge exactly as a local one
       // does — but in the declaring module's scope, so its own field types resolve
       // where they were written (C5 slice b).
-      if (dep && info) return aliasRow(tqual.name, info, args, f, dep.scope, expanding);
-      // A variant crosses NOMINALLY under its bare name: `module.ts` merges the
-      // dep's type/ctor registry unqualified and codegen emits that same name, so
-      // `D.Shape` and the dep's own `Shape` are one type. An unresolvable alias or
-      // member lowers the same way rather than minting a placeholder — `check.ts`
-      // owns that diagnostic, so no synthetic name can leak into a type message.
-      return tCon(tqual.name, args);
+      return dep && info
+        ? aliasRow(tqual.name, info, args, f, dep.scope, expanding)
+        : tCon(tqual.name, args);
     })
     .exhaustive();
 

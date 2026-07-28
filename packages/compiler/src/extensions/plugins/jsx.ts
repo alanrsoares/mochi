@@ -309,8 +309,9 @@ const jsxPropsWithSynthesizedChildren = (
   if (!expectedChildren || propsType.kind !== "record") return propsType;
   const attrsHaveChildren =
     propsExpr.kind === "record" && propsExpr.fields.some((f) => f.name === "children");
-  if (attrsHaveChildren || childElems.length === 0) return propsType;
-  return tRecord(rExtend("children", expectedChildren, propsType.row));
+  return attrsHaveChildren || childElems.length === 0
+    ? propsType
+    : tRecord(rExtend("children", expectedChildren, propsType.row));
 };
 
 // --------------------------------------------------------------- format
@@ -318,19 +319,16 @@ const jsxPropsWithSynthesizedChildren = (
 type JsxShape = { tag: Expr; props: RecordExpr; children: SeqElem[] };
 
 /** The exact call shape the parser emits — anything else prints as a plain call. */
-const jsxShape = (e: Expr): JsxShape | null => {
-  if (
-    e.kind !== "call" ||
-    e.origin !== "jsx" ||
-    e.fn.kind !== "ref" ||
-    e.fn.name !== PRAGMA ||
-    e.args.length !== 3 ||
-    e.args[1]!.kind !== "record" ||
-    e.args[2]!.kind !== "arr"
-  )
-    return null;
-  return { tag: e.args[0]!, props: e.args[1]!, children: e.args[2]!.elements };
-};
+const jsxShape = (e: Expr): JsxShape | null =>
+  e.kind !== "call" ||
+  e.origin !== "jsx" ||
+  e.fn.kind !== "ref" ||
+  e.fn.name !== PRAGMA ||
+  e.args.length !== 3 ||
+  e.args[1]!.kind !== "record" ||
+  e.args[2]!.kind !== "arr"
+    ? null
+    : { tag: e.args[0]!, props: e.args[1]!, children: e.args[2]!.elements };
 
 const jsxTag = (tag: Expr, api: FormatApi): string =>
   tag.kind === "str" ? tag.value : api.flat(api.memberD(tag));
@@ -406,8 +404,7 @@ const isJsxComponentLambda = (value: Expr): boolean => {
 
 const componentPropFieldTs = (label: string, t: Type, api: BindingTypeApi): string => {
   if (t.kind === "var") {
-    if (/^on[A-Z]/.test(label)) return "() => void";
-    return "unknown";
+    return /^on[A-Z]/.test(label) ? "() => void" : "unknown";
   }
   if (t.kind === "con" && t.name === "Fn0") return "() => void";
   if (t.kind === "con" && t.name === "VNode") return "unknown";

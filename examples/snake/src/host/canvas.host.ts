@@ -76,16 +76,26 @@ const dirBetween = ([ax, ay]: [number, number], [bx, by]: [number, number]): Dir
   ax < bx ? "right" : ax > bx ? "left" : ay < by ? "down" : "up";
 
 const headRadii = (dir: Dir, r: number): [number, number, number, number] => {
-  if (dir === "up") return [r, r, 0, 0];
-  if (dir === "down") return [0, 0, r, r];
-  if (dir === "left") return [r, 0, 0, r];
+  switch (dir) {
+    case "up":
+      return [r, r, 0, 0];
+    case "down":
+      return [0, 0, r, r];
+    case "left":
+      return [r, 0, 0, r];
+  }
   return [0, r, r, 0];
 };
 
 const tailRadii = (dir: Dir, r: number): [number, number, number, number] => {
-  if (dir === "up") return [0, 0, r, r];
-  if (dir === "down") return [r, r, 0, 0];
-  if (dir === "left") return [0, r, r, 0];
+  switch (dir) {
+    case "up":
+      return [0, 0, r, r];
+    case "down":
+      return [r, r, 0, 0];
+    case "left":
+      return [0, r, r, 0];
+  }
   return [r, 0, 0, r];
 };
 
@@ -109,21 +119,23 @@ const headEyes = (
   neck: [number, number],
 ): [[number, number], [number, number]] => {
   const dir = dirBetween(neck, head);
-  if (dir === "right")
-    return [
-      [px + size * 0.7, py + size * 0.3],
-      [px + size * 0.7, py + size * 0.7],
-    ];
-  if (dir === "left")
-    return [
-      [px + size * 0.3, py + size * 0.3],
-      [px + size * 0.3, py + size * 0.7],
-    ];
-  if (dir === "down")
-    return [
-      [px + size * 0.3, py + size * 0.7],
-      [px + size * 0.7, py + size * 0.7],
-    ];
+  switch (dir) {
+    case "right":
+      return [
+        [px + size * 0.7, py + size * 0.3],
+        [px + size * 0.7, py + size * 0.7],
+      ];
+    case "left":
+      return [
+        [px + size * 0.3, py + size * 0.3],
+        [px + size * 0.3, py + size * 0.7],
+      ];
+    case "down":
+      return [
+        [px + size * 0.3, py + size * 0.7],
+        [px + size * 0.7, py + size * 0.7],
+      ];
+  }
   return [
     [px + size * 0.3, py + size * 0.3],
     [px + size * 0.7, py + size * 0.3],
