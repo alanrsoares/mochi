@@ -8,23 +8,27 @@ describe("vite-plugin-mochi", () => {
     expect(result).toBeNull();
   });
 
-  it("compiles standard .mochi file to JS module with exports", () => {
+  it("compiles standard .mochi file; only source `export` reaches the emit (ADR 0052)", () => {
     const plugin = mochiPlugin();
-    const result = plugin.transform("let double = (x) => x * 2", "src/math.mochi");
+    const result = plugin.transform(
+      "let hidden = 1\nexport let double = (x) => x * 2",
+      "src/math.mochi",
+    );
     expect(result).not.toBeNull();
-    expect(result?.code).toContain("const double = ");
-    expect(result?.code).toContain("double");
-    expect(result?.code).toContain("export default double;");
+    expect(result?.code).toContain("export const double = ");
+    expect(result?.code).not.toContain("export const hidden");
+    expect(result?.code).not.toContain("export default");
+    expect(result?.code).not.toMatch(/export \{/);
   });
 
   it("prepends JSX pragma header for files containing JSX elements", () => {
     const plugin = mochiPlugin();
-    const code = `let Button = (props) => <button className={props.kind}>{props.label}</button>`;
+    const code = `export let Button = (props) => <button className={props.kind}>{props.label}</button>`;
     const result = plugin.transform(code, "src/Button.mochi");
     expect(result).not.toBeNull();
     expect(result?.code).toContain('import { h } from "preact";');
     expect(result?.code).toContain('h("button", { className: props.kind }, [props.label])');
-    expect(result?.code).toContain("export { Button };");
+    expect(result?.code).toContain("export const Button");
   });
 
   it("supports custom JSX pragma header option", () => {

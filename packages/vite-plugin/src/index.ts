@@ -48,33 +48,9 @@ export function mochiPlugin(options: MochiPluginOptions = {}) {
         throw new SyntaxError(`Mochi compilation failed for ${id}:\n${errorMessages}`);
       }
 
+      // Codegen emits honest ESM: `export` in .mochi source is the only export
+      // surface (ADR 0052). No re-export scraping, no synthetic default.
       let transformedCode = res.value;
-
-      // Names already emitted as `export { … }` (e.g. arity≥2 externs lower to
-      // `const f = _curry(…); export { f }`) must not be re-exported — Rollup
-      // treats a second `export { f }` as a duplicate.
-      const alreadyExported = new Set(
-        [...transformedCode.matchAll(/\bexport\s*\{([^}]+)\}/g)].flatMap((m) =>
-          m[1]!.split(",").map((part) => {
-            const bits = part.trim().split(/\s+as\s+/);
-            return (bits[bits.length - 1] ?? "").trim();
-          }),
-        ),
-      );
-
-      // Extract top-level let/const declarations for ES module exports
-      const constMatches = Array.from(transformedCode.matchAll(/^const ([A-Za-z0-9_$]+)\s*=/gm));
-      const exportedNames = constMatches
-        .map((m) => m[1]!)
-        .filter(
-          (name) => !name.startsWith("_") && !name.startsWith("$") && !alreadyExported.has(name),
-        );
-
-      if (exportedNames.length > 0) {
-        transformedCode += `\nexport { ${exportedNames.join(", ")} };\n`;
-        const lastExport = exportedNames[exportedNames.length - 1];
-        transformedCode += `export default ${lastExport};\n`;
-      }
 
       // Prepend JSX pragma even when the module already has imports (host kits,
       // sibling .mochi imports). Without this, `import { … }` at the top of the

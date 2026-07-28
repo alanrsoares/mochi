@@ -101,7 +101,7 @@ What else was on the table and why not.
 | [0049](0049-plugin-name-shadowing.md) | Builtin plugin replacement via name shadowing | Accepted |
 | [0050](0050-plugin-claims-table-dispatch.md) | Plugin claims as declarations, table dispatch, and clash rejection | Accepted |
 | [0051](0051-rank2-builder-call-sites.md) | Rank-2 builder DSLs: type the call sites, never the builder | Accepted |
-| [0052](0052-js-bundles-via-host-not-compiler.md) | JS bundles via host bundler; compiler ships clean ESM | Proposed |
+| [0052](0052-js-bundles-via-host-not-compiler.md) | JS bundles via host bundler; compiler ships clean ESM | Accepted |
 | [0053](0053-path-to-wasm3.md) | Path to Wasm 3.0 (WasmGC third backend; no Rust rewrite) | Proposed |
 | [0054](0054-unit-value-and-ignore.md) | `unit` as an ordinary type: `()` value, `()` pattern, `ignore` | Accepted |
 

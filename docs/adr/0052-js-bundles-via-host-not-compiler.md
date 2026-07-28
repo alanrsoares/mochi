@@ -1,6 +1,6 @@
 # 0052 — JS bundles via host bundler; compiler ships clean ESM
 
-- **Status:** Proposed (draft)
+- **Status:** Accepted
 - **Date:** 2026-07-28
 - **Source:** conversation (owner direction); `packages/compiler/src/{codegen,module}`;
   `packages/vite-plugin`; `packages/cli` `build`; [ADR 0008](0008-vite-mochi-docs-app.md);
