@@ -140,6 +140,12 @@ export const preludeJsDefs: Record<string, string> = {
   // tuple literals in it (ADR 0036) so tsc keeps `[A, B]` instead of widening a
   // bare `[a, b]` to `(A | B)[]` where no contextual tuple type is in scope.
   _tuple: "const _tuple = (...xs) => xs;",
+  // `loop`/`recur` step protocol (ADR 0056): a `switch` in a loop's tail keeps
+  // its ts-pattern chain as an expression whose arms yield one of these; the
+  // enclosing `while (true)` dispatches on `_tag`. Loops without a tail switch
+  // lower to plain rebind/`continue` and never reference either.
+  _recur: 'const _recur = (...args) => ({ _tag: "recur", args });',
+  _done: 'const _done = (value) => ({ _tag: "done", value });',
   // Builtin variant constructors (inlined only when a program uses them and does
   // not declare its own type of that name). Shape matches the @onrails ecosystem.
   Some: 'const Some = (value) => ({ _tag: "Some", value });',

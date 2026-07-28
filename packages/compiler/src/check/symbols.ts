@@ -291,6 +291,17 @@ const walkExpr = (b: Builder, e: Expr): void => {
       snapshotFrame(b, "value", letbind.body.span);
       popScope(b, "value");
     })
+    .with({ kind: "loop" }, (loop) => {
+      for (const p of loop.params) walkExpr(b, p.init);
+      pushScope(b, "value");
+      for (const p of loop.params) bind(b, "value", p.name, p.nameSpan);
+      walkExpr(b, loop.body);
+      snapshotFrame(b, "value", loop.body.span);
+      popScope(b, "value");
+    })
+    .with({ kind: "recur" }, (recur) => {
+      for (const a of recur.args) walkExpr(b, a);
+    })
     .with({ kind: "pipe" }, (pipe) => {
       walkExpr(b, pipe.left);
       walkExpr(b, pipe.right);

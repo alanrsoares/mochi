@@ -11,6 +11,8 @@ export type Tok =
   | { t: "type" }
   | { t: "extern" }
   | { t: "switch" }
+  | { t: "loop" }
+  | { t: "recur" }
   | { t: "import" }
   | { t: "export" }
   | { t: "eq" } // =
@@ -71,6 +73,8 @@ const KEYWORDS: Record<string, Tok | undefined> = {
   type: { t: "type" },
   extern: { t: "extern" },
   switch: { t: "switch" },
+  loop: { t: "loop" },
+  recur: { t: "recur" },
   import: { t: "import" },
   export: { t: "export" },
   true: { t: "bool", v: true },

@@ -28,6 +28,8 @@ type CallExpr = Extract<Expr, { kind: "call" }>;
 type RecordExpr = Extract<Expr, { kind: "record" }>;
 type FieldExpr = Extract<Expr, { kind: "field" }>;
 type TupleExpr = Extract<Expr, { kind: "tuple" }>;
+type LoopExpr = Extract<Expr, { kind: "loop" }>;
+type RecurExpr = Extract<Expr, { kind: "recur" }>;
 
 import { ctorTableOf } from "../ast/ctors";
 import {
@@ -102,6 +104,9 @@ type Ctx = {
   noteUse?: (sc: Scheme, t: Type) => void;
   noteLet?: (sc: Scheme, valueSpan: Span) => void;
   inferCallHooks: InferCallDispatch;
+  // Enclosing `loop` param-type frames, innermost last (ADR 0056). `recur`
+  // unifies its args against the last frame.
+  loopStack: Type[][];
 };
 
 const u = (a: Type, b: Type, ctx: Ctx, span?: Span): Result<Type, Diagnostic> => {
@@ -362,6 +367,50 @@ function inferTuple(e: TupleExpr, ctx: Ctx): Result<Type, Diagnostic> {
   return ok(tTuple(elems));
 }
 
+/**
+ * `loop (p = init, …) { body }` (ADR 0056): inits infer in the outer context,
+ * params bind MONOMORPHIC in the body (like lambda params — `recur` rebinds
+ * them, so generalizing would let two iterations disagree), and the loop's
+ * type is the body's type. Param monotypes are noted against the init span so
+ * the TS backend can annotate the emitted `let`s (same channel as letin IIFE
+ * params, ADR 0035).
+ */
+function inferLoop(e: LoopExpr, ctx: Ctx): Result<Type, Diagnostic> {
+  const bodyEnv: Env = new Map(ctx.env);
+  const frame: Type[] = [];
+  for (const p of e.params) {
+    const it = infer(p.init, ctx);
+    if (isErr(it)) return it;
+    const sc: Scheme = { vars: [], rvars: [], type: it.value };
+    bodyEnv.set(p.name, sc);
+    frame.push(it.value);
+    ctx.record?.(p.nameSpan, it.value, { kind: "let", name: p.name });
+    ctx.noteLet?.(sc, p.init.span);
+  }
+  return infer(e.body, { ...ctx, env: bodyEnv, loopStack: [...ctx.loopStack, frame] });
+}
+
+/**
+ * `recur(a, …)`: args unify with the nearest loop's param types; the node's
+ * own type is a fresh var — like a `continue`, it never produces a value, so
+ * it unifies with whatever the other tails return.
+ */
+function inferRecur(e: RecurExpr, ctx: Ctx): Result<Type, Diagnostic> {
+  const frame = ctx.loopStack[ctx.loopStack.length - 1];
+  if (!frame) return err(typeErr("'recur' is only legal inside a loop body", e.span));
+  for (let i = 0; i < e.args.length; i++) {
+    const arg = e.args[i]!;
+    const at = infer(arg, ctx);
+    if (isErr(at)) return at;
+    const pt = frame[i];
+    if (pt) {
+      const r = u(at.value, pt, ctx, arg.span);
+      if (isErr(r)) return r;
+    }
+  }
+  return ok(freshVar(ctx.fresh));
+}
+
 function inferExpr(e: Expr, ctx: Ctx): Result<Type, Diagnostic> {
   return match(e)
     .with({ kind: "num" }, () => ok(tNumber))
@@ -371,6 +420,8 @@ function inferExpr(e: Expr, ctx: Ctx): Result<Type, Diagnostic> {
     .with({ kind: "interp" }, (interp) => inferInterp(interp.parts, ctx))
     .with({ kind: "ref" }, (ref) => inferRef(ref, ctx))
     .with({ kind: "lambda" }, (lambda) => inferLambda(lambda, ctx))
+    .with({ kind: "loop" }, (loop) => inferLoop(loop, ctx))
+    .with({ kind: "recur" }, (recur) => inferRecur(recur, ctx))
     .with({ kind: "letin" }, (letin) => inferLetIn(letin, ctx))
     .with({ kind: "call" }, (call) => inferCall(call, ctx))
     .with({ kind: "pipe" }, (pipe) =>
@@ -699,6 +750,16 @@ function freeRefs(e: Expr, bound: Set<string>, acc: Set<string>): void {
       else for (const f of letbind.param.fields) inner.add(f);
       freeRefs(letbind.body, inner, acc);
     })
+    .with({ kind: "loop" }, (loop) => {
+      // inits in the outer scope; body sees the params bound.
+      for (const p of loop.params) freeRefs(p.init, bound, acc);
+      const inner = new Set(bound);
+      for (const p of loop.params) inner.add(p.name);
+      freeRefs(loop.body, inner, acc);
+    })
+    .with({ kind: "recur" }, (recur) => {
+      for (const a of recur.args) freeRefs(a, bound, acc);
+    })
     .with({ kind: "pipe" }, (pipe) => {
       freeRefs(pipe.left, bound, acc);
       freeRefs(pipe.right, bound, acc);
@@ -909,6 +970,7 @@ function run(
         noteUse,
         noteLet,
         inferCallHooks,
+        loopStack: [],
       });
       // Collect-and-bail per member (ADR 0004): record the diag, leave the
       // pre-bound mono var, continue siblings / later SCCs.

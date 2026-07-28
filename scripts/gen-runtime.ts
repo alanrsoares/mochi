@@ -86,6 +86,13 @@ const OVERRIDES: Record<string, string> = {
   // typed `[typeof a, typeof b]` without naming element types — TS emit wraps
   // tuple literals in it to stop bare-array widening (ADR 0036).
   _tuple: "export const _tuple = <T extends unknown[]>(...xs: T): T => xs;",
+  // loop/recur step protocol (ADR 0056): the rest-param infers the args TUPLE,
+  // and the `_tag` discriminant lets the emitted `while (true)` narrow the
+  // ts-pattern chain's union result.
+  _recur:
+    'export const _recur = <A extends unknown[]>(...args: A): { _tag: "recur"; args: A } => ({ _tag: "recur", args });',
+  _done:
+    'export const _done = <R>(value: R): { _tag: "done"; value: R } => ({ _tag: "done", value });',
   _curry:
     "export const _curry = (n: number, f: (...args: any[]) => any): ((...args: any[]) => any) =>\n" +
     "  function c(...a: any[]): any {\n" +

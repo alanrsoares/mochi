@@ -338,3 +338,18 @@ test("composition chain breaks and indents stages under head when overflowing", 
     "let pipeline = lex\n  >> Result.flatMap(parse)\n  >> Result.flatMap(check)\n  >> Result.flatMap(typecheck)\n";
   expect(fmt(src)).toBe(src);
 });
+
+// ADR 0056 — loop/recur layout: inline when it fits, switch-style brace body
+// when it breaks; both are fixed points.
+test("short loops stay inline", () => {
+  const src = "let count = n => loop (i = 0) { i >= n ? i : recur(i + 1) }\n";
+  expect(fmt(src)).toBe(src);
+});
+
+test("long loop bodies break inside the braces", () => {
+  const src =
+    "let sum = xs => loop (accumulated = 0, index = 0) { switch Array.get(index, xs) { | None => accumulated | Some(x) => recur(accumulated + x, index + 1) } }\n";
+  const out = fmt(src);
+  expect(out).toContain("loop (accumulated = 0, index = 0) {\n");
+  expect(fmt(out)).toBe(out);
+});

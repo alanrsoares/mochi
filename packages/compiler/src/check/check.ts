@@ -68,6 +68,13 @@ function forEachSubExpr(e: Expr, visit: (x: Expr) => void): void {
     .with({ kind: "field" }, (field) => {
       forEachSubExpr(field.target, visit);
     })
+    .with({ kind: "loop" }, (loop) => {
+      for (const p of loop.params) forEachSubExpr(p.init, visit);
+      forEachSubExpr(loop.body, visit);
+    })
+    .with({ kind: "recur" }, (recur) => {
+      for (const a of recur.args) forEachSubExpr(a, visit);
+    })
     .with({ kind: "tuple" }, (tuple) => {
       for (const el of tuple.elements) forEachSubExpr(el, visit);
     })
@@ -718,6 +725,14 @@ const checkExprBinds = (e: Expr): Diagnostic[] =>
       ),
     )
     .with({ kind: "field" }, (field) => checkExprBinds(field.target))
+    .with({ kind: "loop" }, (loop) =>
+      many(
+        ...loop.params.map((p) => reservedBind(p.name, p.nameSpan)),
+        ...loop.params.map((p) => checkExprBinds(p.init)),
+        checkExprBinds(loop.body),
+      ),
+    )
+    .with({ kind: "recur" }, (recur) => many(...recur.args.map(checkExprBinds)))
     .with({ kind: "tuple" }, (tuple) => many(...tuple.elements.map(checkExprBinds)))
     .withOneOf([{ kind: "arr" }, { kind: "list" }, { kind: "set" }], (seq) =>
       many(...seq.elements.map((el) => checkExprBinds(el.expr))),
@@ -750,6 +765,126 @@ function checkReservedWords(prog: Program): Diagnostic[] {
  * imports from; merged UNDER the local registry (local declarations win) so
  * exhaustiveness works across the module boundary.
  */
+/**
+ * `loop`/`recur` validity (ADR 0056):
+ * - `recur` only in TAIL position of the NEAREST enclosing `loop` — tails are
+ *   the loop body itself, ternary branches, switch arm bodies, and letin
+ *   bodies. Lambda and letbind bodies are hard boundaries (new call frames).
+ * - `recur` arity must match the loop's param count.
+ * - duplicate loop param names are rejected.
+ * - a letin under a loop body may not shadow a loop param — codegen rebinds
+ *   params in place (`[p, …] = […]; continue`), and a nested `const p` would
+ *   capture the name.
+ */
+function checkLoops(prog: Program): Diagnostic[] {
+  const diags: Diagnostic[] = [];
+  type Frame = { arity: number; names: Set<string> } | null;
+
+  const walk = (e: Expr, frame: Frame, tail: boolean): void => {
+    switch (e.kind) {
+      case "loop": {
+        const seen = new Set<string>();
+        for (const p of e.params) {
+          if (seen.has(p.name)) {
+            diags.push(checkErr(`duplicate loop param '${p.name}'`, p.nameSpan));
+          }
+          seen.add(p.name);
+          walk(p.init, frame, false); // inits evaluate in the OUTER context
+        }
+        walk(e.body, { arity: e.params.length, names: seen }, true);
+        return;
+      }
+      case "recur": {
+        if (!frame) {
+          diags.push(checkErr("'recur' is only legal inside a loop body", e.span));
+        } else {
+          if (!tail) {
+            diags.push(checkErr("'recur' must be in tail position of its enclosing loop", e.span));
+          }
+          if (e.args.length !== frame.arity) {
+            diags.push(
+              checkErr(
+                `'recur' takes ${frame.arity} argument${frame.arity === 1 ? "" : "s"} (one per loop param), got ${e.args.length}`,
+                e.span,
+              ),
+            );
+          }
+        }
+        for (const a of e.args) walk(a, frame, false);
+        return;
+      }
+      case "ternary":
+        walk(e.cond, frame, false);
+        walk(e.then, frame, tail);
+        walk(e.else, frame, tail);
+        return;
+      case "match":
+        walk(e.scrutinee, frame, false);
+        for (const a of e.arms) {
+          if (a.guard) walk(a.guard, frame, false);
+          walk(a.body, frame, tail);
+        }
+        return;
+      case "letin":
+        if (frame?.names.has(e.name)) {
+          diags.push(
+            checkErr(
+              `'${e.name}' shadows a loop param inside the loop body; rename it`,
+              e.nameSpan,
+            ),
+          );
+        }
+        walk(e.value, frame, false);
+        walk(e.body, frame, tail);
+        return;
+      case "letbind":
+        walk(e.value, frame, false);
+        walk(e.body, null, false);
+        return;
+      case "lambda":
+        walk(e.body, null, false);
+        return;
+      case "interp":
+        for (const p of e.parts) if (typeof p !== "string") walk(p, frame, false);
+        return;
+      case "call":
+        walk(e.fn, frame, false);
+        for (const a of e.args) walk(a, frame, false);
+        return;
+      case "pipe":
+        walk(e.left, frame, false);
+        walk(e.right, frame, false);
+        return;
+      case "record":
+        if (e.spread) walk(e.spread, frame, false);
+        for (const f of e.fields) walk(f.value, frame, false);
+        return;
+      case "field":
+        walk(e.target, frame, false);
+        return;
+      case "tuple":
+        for (const el of e.elements) walk(el, frame, false);
+        return;
+      case "arr":
+      case "list":
+      case "set":
+        for (const el of e.elements) walk(el.expr, frame, false);
+        return;
+      case "map":
+        for (const ent of e.entries) {
+          walk(ent.key, frame, false);
+          walk(ent.value, frame, false);
+        }
+        return;
+      default:
+        return; // num / bool / str / ref / unit — no children
+    }
+  };
+
+  for (const s of prog.stmts) if (s.kind === "let") walk(s.value, null, false);
+  return diags;
+}
+
 export function check(
   prog: Program,
   imported?: Registry,
@@ -760,6 +895,7 @@ export function check(
     ...checkReservedWords(prog),
     ...checkCtorFieldVars(prog),
     ...checkQualifiedTypeNames(prog, quals),
+    ...checkLoops(prog),
   ];
   const built = buildCtorTable(prog);
   if (isErr(built)) return err([...diags, ...built.error]);

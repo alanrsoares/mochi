@@ -106,6 +106,13 @@ const forEachScopedSpan = (e: Expr, f: (span: Span) => void): void => {
     case "interp":
       for (const p of e.parts) if (typeof p !== "string") forEachScopedSpan(p, f);
       return;
+    case "loop":
+      for (const p of e.params) forEachScopedSpan(p.init, f);
+      forEachScopedSpan(e.body, f);
+      return;
+    case "recur":
+      for (const a of e.args) forEachScopedSpan(a, f);
+      return;
     default:
       return; // num / bool / str / ref — no nested expressions
   }

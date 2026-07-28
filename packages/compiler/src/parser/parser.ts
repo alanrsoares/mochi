@@ -18,6 +18,7 @@ import type {
   Field,
   ImportName,
   LamParam,
+  LoopParam,
   MatchArm,
   PatField,
   Pattern,
@@ -575,6 +576,8 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
 
   function parseAtom(): Expr {
     if (peek().t === "switch") return parseMatch();
+    if (peek().t === "loop") return parseLoop();
+    if (peek().t === "recur") return parseRecur();
     if (peek().t === "lbrace") return parseRecord();
     if (peek().t === "lbracket") return parseArr();
     if (peek().t === "at") return parseList();
@@ -751,6 +754,45 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
     const key = parseExpr();
     expect("colon");
     return { key, value: parseExpr() };
+  }
+
+  /** `loop (acc = 0, i = 0) { body }` — tail-recursion loop (ADR 0056). */
+  function parseLoop(): Expr {
+    const start = expect("loop").span;
+    expect("lparen");
+    const params: LoopParam[] = [];
+    for (;;) {
+      const id = expectId();
+      expect("eq");
+      const init = parseExpr();
+      params.push({ name: id.name, nameSpan: id.span, init });
+      if (peek().t !== "comma") break;
+      next();
+    }
+    expect("rparen");
+    expect("lbrace");
+    const body = parseExpr();
+    const end = expect("rbrace").span;
+    return { kind: "loop", params, body, span: spanning(start, end) };
+  }
+
+  /**
+   * `recur(a, b)` — a first-class node (not a call) so check can enforce tail
+   * position and codegen can lower it to a rebind + `continue` (ADR 0056).
+   */
+  function parseRecur(): Expr {
+    const start = expect("recur").span;
+    expect("lparen");
+    const args: Expr[] = [];
+    if (peek().t !== "rparen") {
+      args.push(parseExpr());
+      while (peek().t === "comma") {
+        next();
+        args.push(parseExpr());
+      }
+    }
+    const end = expect("rparen").span;
+    return { kind: "recur", args, span: spanning(start, end) };
   }
 
   function parseMatch(): Expr {

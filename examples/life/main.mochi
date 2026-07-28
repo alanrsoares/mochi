@@ -107,15 +107,15 @@ let board0 = range(0, height)
 // ---- animation loop (recursion sequenced through Task) ----
 let label = g => "Conway's Life  ·  generation ${show(g)}"
 
-let loop = (remaining, g, board) =>
+let tick = (remaining, g, board) =>
   remaining <= 0
     ? safeTeardown(0)
     : let! _ = drawFrame(label(g), render(board)) in
-    let! _ = Task.delay(90, 0) in loop(remaining - 1, g + 1, step(board))
+    let! _ = Task.delay(90, 0) in tick(remaining - 1, g + 1, step(board))
 
 // setup grabs the alternate screen buffer, then we run 120 frames. A failed
 // setup still settles as Err at the edge — only per-frame draws recover.
 let program = let! _ = setup(0) |> Task.mapErr(WriteFailed) in
-  loop(120, 0, board0)
+  tick(120, 0, board0)
 
 export let result = Task.run(program)

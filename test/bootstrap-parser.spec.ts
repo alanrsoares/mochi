@@ -171,6 +171,15 @@ const cExpr = (e: Expr): Canon => {
         entries: e.entries.map((en) => ({ key: cExpr(en.key), value: cExpr(en.value) })),
         span: cSpan(e.span),
       };
+    case "loop":
+      return {
+        kind: "loop",
+        params: e.params.map((p) => ({ name: p.name, init: cExpr(p.init) })),
+        body: cExpr(e.body),
+        span: cSpan(e.span),
+      };
+    case "recur":
+      return { kind: "recur", args: e.args.map(cExpr), span: cSpan(e.span) };
   }
 };
 

@@ -207,6 +207,19 @@ let runAll = xs => switch xs {
       | Ok(_) => runAll(rest)
     }
 }`,
+  // ADR 0056: loop/recur — direct rebind form (ternary tail) and the step
+  // protocol (switch tail: ts-pattern chain yields _recur/_done, the while
+  // dispatches on _tag). Loop param lets carry inferred annotations.
+  loops: `
+let count = (n) => loop (i = 0) { i >= n ? i : recur(i + 1) }
+let sum = (xs) =>
+  loop (acc = 0, i = 0) {
+    switch Array.get(i, xs) {
+      | None => acc
+      | Some(x) => recur(acc + x, i + 1)
+    }
+  }
+let total = add(count(4), sum([1, 2, 3]))`,
 };
 
 beforeAll(() => {

@@ -29,6 +29,7 @@ import type {
   InterpExpr,
   LambdaExpr,
   LamParam,
+  LoopExpr,
   MapExpr,
   MatchExpr,
   PatField,
@@ -252,6 +253,15 @@ const collectAnchors = (stmts: Stmt[]): Anchor[] => {
         break;
       case "lambda":
         visit(e.body);
+        break;
+      case "loop":
+        e.params.forEach((lp) => {
+          visit(lp.init);
+        });
+        visit(e.body);
+        break;
+      case "recur":
+        e.args.forEach(visit);
         break;
       case "pipe":
         visit(e.left);
@@ -766,6 +776,20 @@ const callD = (e: CallExpr): Doc => {
  * A multi-line arm body (a nested `switch`, a broken pipe) nests one level past
  * the arm's `|`, so its own lines never align with the parent's arms.
  */
+/**
+ * `loop (acc = 0, i = 0) { body }` (ADR 0056) — inline when it fits, else the
+ * body indents on its own lines, brace layout matching `switch`.
+ */
+const loopD = (e: LoopExpr): Doc => {
+  const params = join(
+    txt(", "),
+    e.params.map((p) => seq(txt(`${p.name} = `), exprD(p.init))),
+  );
+  return group(
+    seq(txt("loop ("), params, txt(") {"), indent(seq(line, exprD(e.body))), line, txt("}")),
+  );
+};
+
 const matchD = (e: MatchExpr): Doc => {
   const arms = e.arms.map((a) => {
     const guard = a.guard ? ` when ${flat(exprD(a.guard))}` : "";
@@ -834,6 +858,8 @@ const exprCore = (e: Expr): Doc =>
       letLikeD(`let${e.monad === "Result" ? "?" : "!"} ${param(e.param)}`, e.value, e.body),
     )
     .with({ kind: "match" }, (e) => matchD(e))
+    .with({ kind: "loop" }, (e) => loopD(e))
+    .with({ kind: "recur" }, (e) => seq(txt("recur"), bracketed("(", ")", e.args.map(exprD))))
     .exhaustive();
 
 /** `export ` prefix for an exported declaration. */

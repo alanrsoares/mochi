@@ -22,6 +22,14 @@ export const mapExpr = (expr: Expr, fn: (e: Expr) => Expr): Expr => {
         return { ...next, fn: walk(next.fn), args: next.args.map(walk) };
       case "lambda":
         return { ...next, body: walk(next.body) };
+      case "loop":
+        return {
+          ...next,
+          params: next.params.map((lp) => ({ ...lp, init: walk(lp.init) })),
+          body: walk(next.body),
+        };
+      case "recur":
+        return { ...next, args: next.args.map(walk) };
       case "letin":
         return { ...next, value: walk(next.value), body: walk(next.body) };
       case "letbind":

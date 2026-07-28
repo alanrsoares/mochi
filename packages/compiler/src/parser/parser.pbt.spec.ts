@@ -66,6 +66,10 @@ const children = (e: Expr): Expr[] => {
       return e.elements.map((el) => el.expr);
     case "map":
       return e.entries.flatMap((en) => [en.key, en.value]);
+    case "loop":
+      return [...e.params.map((p) => p.init), e.body];
+    case "recur":
+      return e.args;
   }
 };
 

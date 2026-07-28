@@ -79,7 +79,22 @@ export type Expr =
    * Disambiguated from Map by absence of `:` after the first key expr.
    */
   | { kind: "set"; elements: SeqElem[]; span: Span }
-  | { kind: "map"; entries: MapEntry[]; span: Span }; // #{ "a": 1 } — Map
+  | { kind: "map"; entries: MapEntry[]; span: Span } // #{ "a": 1 } — Map
+  /**
+   * `loop (acc = 0, i = 0) { body }` — tail-recursion loop expression
+   * (ADR 0056). Params are rebound by `recur` in tail position; any non-recur
+   * tail value is the loop's result. Emits an idiomatic JS `while` loop.
+   */
+  | { kind: "loop"; params: LoopParam[]; body: Expr; span: Span }
+  /**
+   * `recur(a, b)` — continue the NEAREST enclosing `loop` with new param
+   * values (ADR 0056). Only legal in tail position; arity must match the
+   * loop's params. Checked in `checkLoops`, not the parser.
+   */
+  | { kind: "recur"; args: Expr[]; span: Span };
+
+/** One `name = init` binder in a `loop (…)` head (ADR 0056). */
+export type LoopParam = { name: string; nameSpan: Span; init: Expr };
 
 /** One slot in an Array / List / Set literal: a value, or `...xs` splicing another collection of the same kind. */
 export type SeqElem = { kind: "expr"; expr: Expr } | { kind: "spread"; expr: Expr };
@@ -231,6 +246,8 @@ export type Stmt =
 export type LambdaExpr = Extract<Expr, { kind: "lambda" }>;
 export type TernaryExpr = Extract<Expr, { kind: "ternary" }>;
 export type LetInExpr = Extract<Expr, { kind: "letin" }>;
+export type LoopExpr = Extract<Expr, { kind: "loop" }>;
+export type RecurExpr = Extract<Expr, { kind: "recur" }>;
 export type LetBindExpr = Extract<Expr, { kind: "letbind" }>;
 export type MatchExpr = Extract<Expr, { kind: "match" }>;
 export type FieldExpr = Extract<Expr, { kind: "field" }>;
