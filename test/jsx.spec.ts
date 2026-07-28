@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { compile } from "@mochi/compiler/compile";
 import { lex } from "@mochi/compiler/lexer";
 import { parse } from "@mochi/compiler/parser";
-import { unwrapOk } from "@onrails/result";
+import { isErr, unwrapOk } from "@onrails/result";
 
 describe("JSX syntax desugaring (ADR 0007)", () => {
   it("parses basic HTML tag into h(...) call", () => {
@@ -119,5 +119,29 @@ describe("JSX syntax desugaring (ADR 0007)", () => {
       props: { className: "card" },
       children: ["Awesome"],
     });
+  });
+
+  // Props row requires `children` (body reads props.children), but JSX puts
+  // kids in h's 3rd arg — inferJsxCall must synthesize the field or unify
+  // false-fails with `missing field 'children'` (docs SyntaxPanel regression).
+  it("typechecks a component that reads props.children with JSX body kids", () => {
+    const src = `
+      let Panel = props => <div>{props.children}</div>
+      let el = <Panel><span>{"hi"}</span></Panel>
+    `;
+    const r = compile(src);
+    expect(isErr(r)).toBe(false);
+  });
+
+  it("still errors when props.children is required but the JSX tag is empty", () => {
+    const src = `
+      let Panel = props => <div>{props.children}</div>
+      let el = <Panel />
+    `;
+    const r = compile(src);
+    expect(isErr(r)).toBe(true);
+    if (isErr(r)) {
+      expect(r.error.some((d) => d.message.includes("missing field 'children'"))).toBe(true);
+    }
   });
 });

@@ -3,7 +3,17 @@
 // Parse hooks are Result/(toks, pos) + a `parseExpr` callback for `{…}` holes.
 
 import * as Ast from "../ast.mochi"
-import { zonk, tPrim, TyFn, TyRecord } from "../types.mochi"
+import {
+  zonk,
+  tPrim,
+  tRecord,
+  rExtend,
+  TyFn,
+  TyRecord,
+  RowExtend,
+  RowEmpty,
+  RowVar
+} from "../types.mochi"
 
 // Tok redeclared (same `_tag` shape as lexer/parser — structural ==).
 type Tok =
@@ -344,6 +354,46 @@ let inferJsxChildren = (children, st, inferExpr) => switch children {
       inferJsxChildren(rest, st1, inferExpr)
 }
 
+/// Walk a row for `label`; open tails / missing labels → None.
+let rowField = (row, label) => switch row {
+  | RowExtend(l, fieldType, rest) => l == label
+      ? Some(fieldType)
+      : rowField(rest, label)
+  | RowEmpty => None
+  | RowVar(_) => None
+}
+
+let fieldNamed = (label, fields) => switch fields {
+  | [] => false
+  | [f, ...rest] => f.name == label || fieldNamed(label, rest)
+}
+
+let recordHasAttr = (expr, label) => switch expr {
+  | Ast.ERecord(fields, _, _) => fieldNamed(label, fields)
+  | _ => false
+}
+
+let jsxChildCount = restArgs => switch restArgs {
+  | [Ast.EArr(elements, _), ..._] => Array.length(elements)
+  | _ => 0
+}
+
+/// Runtime hosts fold h's 3rd arg into props.children. When the component
+/// expects that field and the JSX body supplied kids, synthesize it onto the
+/// attrs type before unify (mirrors TS `jsxPropsWithSynthesizedChildren`).
+let jsxPropsWithSynthesizedChildren = (propsT, propsExpr, expectedRow, restArgs) => switch rowField(expectedRow, "children") {
+  | None => propsT
+  | Some(expectedChildren) => switch propsT {
+      | TyRecord(prow) => recordHasAttr(
+          propsExpr,
+          "children"
+        ) || jsxChildCount(restArgs) == 0
+          ? propsT
+          : tRecord(rExtend("children", expectedChildren, prow))
+      | _ => propsT
+    }
+}
+
 let inferJsxCall = (tagExpr, propsExpr, restArgs, st, api) =>
   let? (tagT, st1) = api.inferExpr(tagExpr, st) in
   let? (propsT, st2) = api.inferExpr(propsExpr, st1) in
@@ -351,8 +401,14 @@ let inferJsxCall = (tagExpr, propsExpr, restArgs, st, api) =>
   let zonkedTag = zonk(tagT, st3) in
     switch zonkedTag {
       | TyFn(from, to) => switch from {
-          | TyRecord(_) => let? st4 = api.unify(
+          | TyRecord(expectedRow) => let propsForCheck = jsxPropsWithSynthesizedChildren(
               propsT,
+              propsExpr,
+              expectedRow,
+              restArgs
+            ) in
+            let? st4 = api.unify(
+              propsForCheck,
               from,
               st3,
               jxExprSpan(propsExpr)

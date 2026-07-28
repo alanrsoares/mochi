@@ -22,7 +22,7 @@
 import { isErr, ok, type Result } from "@onrails/result";
 import { type Expr, type Field, isCtorName, type RecordExpr, type SeqElem } from "../../ast/ast";
 import { type Span, spanning } from "../../ast/span";
-import { type Row, type Type, tCon } from "../../ast/types";
+import { type Row, rExtend, type Type, tCon, tRecord } from "../../ast/types";
 import { cat, type Doc, group, indent, line, seq, softline, txt } from "../../doc/doc";
 import type { Diagnostic } from "../../errors/errors";
 import type {
@@ -240,6 +240,11 @@ const parseJsxAtom: ParseHook = (api: ParserApi): Expr | null =>
  * Children are a heterogeneous array (text + elements). Do **not** run normal
  * Array inference (that forces one element type) — infer each child for errors
  * only, then type the slot as `[VNode]` for the call.
+ *
+ * Runtime hosts fold the 3rd arg into `props.children`. Attrs never carry that
+ * field, so when the component's prop row requires `children` and the JSX body
+ * supplied kids, synthesize the field onto the attrs record before unify —
+ * otherwise `<Panel>…</Panel>` false-fails with `missing field 'children'`.
  */
 const inferJsxCall: InferCallHook = (
   e: CallExpr,
@@ -254,19 +259,25 @@ const inferJsxCall: InferCallHook = (
   if (isErr(propsT)) return propsT;
 
   const childrenExpr = e.args[2];
-  if (childrenExpr?.kind === "arr") {
-    for (const el of childrenExpr.elements) {
-      const childT = api.infer(el.expr);
-      if (isErr(childT)) return childT;
-    }
-  } else if (childrenExpr) {
+  const childElems = childrenExpr?.kind === "arr" ? childrenExpr.elements : ([] as SeqElem[]);
+  for (const el of childElems) {
+    const childT = api.infer(el.expr);
+    if (isErr(childT)) return childT;
+  }
+  if (childrenExpr && childrenExpr.kind !== "arr") {
     const childT = api.infer(childrenExpr);
     if (isErr(childT)) return childT;
   }
 
   const zonkedTag = api.zonk(tagT.value);
   if (zonkedTag.kind === "arrow" && zonkedTag.from.kind === "record") {
-    const uni = api.unify(propsT.value, zonkedTag.from, propsExpr.span);
+    const propsForCheck = jsxPropsWithSynthesizedChildren(
+      propsT.value,
+      propsExpr,
+      zonkedTag.from.row,
+      childElems,
+    );
+    const uni = api.unify(propsForCheck, zonkedTag.from, propsExpr.span);
     if (isErr(uni)) return uni;
     // Expected prop types on attr names — hover shows `"rose" | …`, not the
     // value-side lit that widenLits would turn into `string`.
@@ -281,6 +292,25 @@ const inferJsxCall: InferCallHook = (
   }
   // Intrinsic / unknown tag: open props, result is VNode.
   return ok(tCon("VNode"));
+};
+
+/**
+ * If the component expects `props.children` and attrs omitted it (normal JSX),
+ * but the body supplied children, add `children` to the attrs type so unify
+ * matches the runtime fold. Empty body + required children → still missing.
+ */
+const jsxPropsWithSynthesizedChildren = (
+  propsType: Type,
+  propsExpr: Expr,
+  expectedRow: Row,
+  childElems: readonly SeqElem[],
+): Type => {
+  const expectedChildren = rowField(expectedRow, "children");
+  if (!expectedChildren || propsType.kind !== "record") return propsType;
+  const attrsHaveChildren =
+    propsExpr.kind === "record" && propsExpr.fields.some((f) => f.name === "children");
+  if (attrsHaveChildren || childElems.length === 0) return propsType;
+  return tRecord(rExtend("children", expectedChildren, propsType.row));
 };
 
 // --------------------------------------------------------------- format
