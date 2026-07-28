@@ -1,6 +1,6 @@
 // Ticket 0001 — host IO FFI shims (readFile / writeFile / argv / print) reach
 // mochi through `extern` and thread through the type checker. The demo
-// `bootstrap/io-demo.mochi` compiles clean (proving the signatures typecheck) and,
+// `test/io-demo.mochi` compiles clean (proving the signatures typecheck) and,
 // run against the real `bootstrap/host.js` shims, copies a file on disk.
 
 import { afterAll, beforeAll, expect, test } from "bun:test";
@@ -23,7 +23,7 @@ type AlResult = { _tag: "Ok"; value: string } | { _tag: "Err"; error: string };
 // Multi-arg externs lower to `import { f as $f }` + `const f = _curry(n, $f)`, so
 // inject the raw host under `$writeFile` and leave the wrap in place.
 const buildDemo = (): { run: (args: string[]) => AlResult } => {
-  const js = unwrapOk(compile(readFileSync(join(root, "bootstrap/io-demo.mochi"), "utf8")))
+  const js = unwrapOk(compile(readFileSync(join(root, "test/io-demo.mochi"), "utf8")))
     .replace(/^import .*$/gm, "") // host externs + match lib injected as params
     .replace(/^export /gm, "");
   return new Function(
