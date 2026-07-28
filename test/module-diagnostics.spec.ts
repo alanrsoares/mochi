@@ -144,3 +144,21 @@ test("strict diagnostics flag unbound typos (open-world emit would swallow them)
     diags.some((d) => d.message.includes("useRefssss") || d.message.includes("canvasRef")),
   ).toBe(true);
 });
+
+/**
+ * The snake example is the only in-repo consumer of the whole re-reduced
+ * surface — payloadful actions, `derive`, `effects` with all three reaction
+ * kinds, and `Intent.query`/`storageSet` (ADR 0051). Compiling it here fails
+ * loudly on a plugin regression instead of waiting for a `vite build`.
+ */
+test("the snake container compiles clean across the whole re-reduced surface", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { resolve } = await import("node:path");
+  const { snakeVendorPlugins } = await import("../examples/snake/mochi.plugins");
+  const entry = resolve(import.meta.dir, "../examples/snake/src/App.mochi");
+  const src = await readFile(entry, "utf8");
+  const diags = await moduleDiagnostics(entry, src, (p) => readFile(p, "utf8"), {
+    plugins: snakeVendorPlugins,
+  });
+  expect(diags.map((d) => d.message)).toEqual([]);
+});

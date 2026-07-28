@@ -1,17 +1,15 @@
 // Snake — re-reduced game container + mochi UI. Host seams only for APIs the
 // surface cannot express yet (timer, keyboard, localStorage, canvas2d/rAF,
 // fetch/WS). Board pixels sync via CanvasBoard.mochi effects → canvas.host.
-import {
-  useState,
-  useEffect,
-  hookDeps1,
-  hookDeps0
-} from "@mochi/plugin-preact/hooks"
+import { useEffect, hookDeps0 } from "@mochi/plugin-preact/hooks"
 import {
   defineContainer,
   useContainer,
-  useSelect
-} from "./host/re-reduced.host"
+  useSelect,
+  useWatch,
+  Intent,
+  defaultInterpreters
+} from "@mochi/plugin-re-reduced/container"
 import { CanvasBoard } from "./components/CanvasBoard"
 import {
   Card,
@@ -37,7 +35,6 @@ import {
   togglePause,
   step,
   isPlaying,
-  isGameOver,
   isPlayingStatus,
   isGameOverStatus,
   statusHeadingOf,
@@ -57,10 +54,15 @@ extern startTick : (a -> b) -> number -> c = "./host/game.host" "startTick"
 extern onKeyDown : (a -> b) -> c = "./host/game.host" "onKeyDown"
 extern randomFood : number -> number -> a -> b = "./host/game.host" "randomFood"
 extern readHighScore : () -> number = "./host/game.host" "readHighScore"
-extern writeHighScore : number -> a = "./host/game.host" "writeHighScore"
+/// The storage key `Intent.storageSet` writes — owned by the host that reads it.
+extern highScoreKey : string = "./host/game.host" "HIGH_SCORE_KEY"
 
-extern fetchLeaderboard : () -> Task a b = "./host/leaderboard.host" "fetchLeaderboardTask"
-extern postScore : string -> number -> Task a b = "./host/leaderboard.host" "postScoreTask"
+/// One leaderboard row. Type names do not cross module boundaries yet, so the
+/// shape is restated here rather than imported from the host's `ScoreEntry`.
+type ScoreEntry = { name: string, score: number }
+
+extern fetchLeaderboard : () -> Task [ScoreEntry] string = "./host/leaderboard.host" "fetchLeaderboardTask"
+extern postScore : string -> number -> Task [ScoreEntry] string = "./host/leaderboard.host" "postScoreTask"
 /// Returns a `useEffect` cleanup.
 extern connectWs : (a -> b) -> (c -> d) -> e = "./host/leaderboard.host" "connectWs"
 
@@ -81,7 +83,10 @@ let gameContainer = defineContainer(
       status: Ready,
       cols: COLS,
       rows: ROWS,
-      submitted: false
+      submitted: false,
+      name: "",
+      connected: false,
+      leaders: []
     },
     actions: on =>
       {
@@ -95,14 +100,54 @@ let gameContainer = defineContainer(
         restart: on(s =>
           { ...initGame(COLS, ROWS, s.highScore), submitted: false }
         ),
-        restartIfGameOver: on(s =>
-          isGameOver(s)
-            ? { ...initGame(COLS, ROWS, s.highScore), submitted: false }
-            : s
-        ),
         step: on(s => step(s, randomFood(s.cols, s.rows, s.snake))),
-        markSubmitted: on(s => { ...s, submitted: true })
-      }
+        setName: on((s, n) => { name: n }),
+        setConnected: on((s, c) => { connected: c }),
+        setLeaders: on((s, ls) => { leaders: ls }),
+        submitScore: // Payloadless: the reaction below reads the name/score off the state.
+        on(s => { submitted: true })
+      },
+    derive: // `derive` keeps the status predicates on the container, so every consumer
+    // reads one derived signal instead of re-deriving from `status`.
+    s =>
+      {
+        playing: () => isPlayingStatus(s.status.value),
+        gameOver: () => isGameOverStatus(s.status.value)
+      },
+    effects: fx =>
+      [
+        // localStorage write, declared instead of hand-rolled in a `useEffect`.
+        fx.onChange(s =>
+          s.highScore.value, (value, prev, ctx) =>
+          [Intent.storageSet(highScoreKey, value)]
+        ),
+        // Mount-once load: `onEnter` fires on the false→true edge only.
+        fx.onEnter(_ =>
+          true, ctx =>
+          [
+            Intent.query(
+              {
+                key: ["leaderboard"],
+                task: fetchLeaderboard(),
+                onOk: leaders => ctx.actions.setLeaders(leaders),
+                onErr: _ => ctx.actions.setLeaders([])
+              }
+            )
+          ]
+        ),
+        fx.onAction("submitScore", (_, ctx) =>
+          [
+            Intent.query(
+              {
+                key: ["submit-score"],
+                task: postScore(ctx.getState().name, ctx.getState().score),
+                onOk: leaders => ctx.actions.setLeaders(leaders),
+                onErr: _ => ctx.actions.setLeaders(ctx.getState().leaders)
+              }
+            )
+          ]
+        )
+      ]
   }
 )
 
@@ -115,24 +160,34 @@ let mapIndexedGo = (f, xs, i, acc) => switch Array.get(i, xs) {
 let mapIndexed = (f, xs) => mapIndexedGo(f, xs, 0, [])
 
 let App = _ =>
-  let store = useContainer(gameContainer) in
-  let (rows, setRows) = useState([]) in
-  let (connected, setConnected) = useState(false) in
-  let (name, setName) = useState("") in
+  let store = useContainer(
+    gameContainer,
+    { interpreters: defaultInterpreters }
+  ) in
   let snake = useSelect(store, s => s.snake.value) in
   let food = useSelect(store, s => s.food.value) in
   let score = useSelect(store, s => s.score.value) in
   let highScore = useSelect(store, s => s.highScore.value) in
   let status = useSelect(store, s => s.status.value) in
   let submitted = useSelect(store, s => s.submitted.value) in
+  let name = useSelect(store, s => s.name.value) in
+  let connected = useSelect(store, s => s.connected.value) in
+  let leaders = useSelect(store, s => s.leaders.value) in
   // `$tone` below stays a ternary of literals: a helper's return (and switch
   // arms) widen string literals to `string`, which does not unify with the
   // styled-cva `$tone` literal union.
-  let playing = isPlayingStatus(status) in
-  let gameOver = isGameOverStatus(status) in
-  let _tick = useEffect(() =>
-    playing ? startTick(() => store.actions.step(), TICK_MS) : () => 0
-  )(hookDeps1(playing)) in
+  // Two-parameter selector = read a `derive`d signal (ADR 0051).
+  let playing = useSelect(store, (s, d) => d.playing.value) in
+  let gameOver = useSelect(store, (s, d) => d.gameOver.value) in
+  // The tick is a *reaction to a value*, not a mount effect: `useWatch` reruns
+  // (and runs the previous cleanup) whenever `playing` flips, which is what an
+  // interpreter cleanup cannot do — those flush only on container destroy.
+  let _tick = useWatch(store, s =>
+    isPlayingStatus(
+      s.status.value
+    ), running =>
+    running ? startTick(() => store.actions.step(), TICK_MS) : () => 0
+  ) in
   let _keys = useEffect(() =>
     onKeyDown(key => switch key {
       | "up" => let _ = store.actions.up() in 0
@@ -140,28 +195,23 @@ let App = _ =>
       | "left" => let _ = store.actions.left() in 0
       | "right" => let _ = store.actions.right() in 0
       | "space" => let _ = store.actions.space() in 0
-      | "restart" => let _ = store.actions.restartIfGameOver() in 0
+      | "restart" =>
+        // Restart only from the game-over screen. Reading `$derived` here keeps the
+        // decision live: the handler is mounted once, so a captured `gameOver`
+        // would go stale, and a reducer that inspected the state would have to
+        // return the whole state — which is not a patch (see the `restart` arm).
+        store.$derived.gameOver.value ? let _ = store.actions.restart() in 0 : 0
       | _ => 0
     }
     )
   )(hookDeps0()) in
-  let _persist = useEffect(() => let _ = writeHighScore(highScore) in _ => 0
-  )(hookDeps1(highScore)) in
-  let _lb = useEffect(() =>
-    let loadTask = Task.match(setRows, _ => setRows([]), fetchLeaderboard()) in
-    let _ = Task.run(loadTask) in connectWs(setRows, setConnected)
+  // The only surviving hand-rolled effect: a mount-once DOM/socket
+  // subscription with a cleanup. The initial fetch and the localStorage write
+  // are container reactions (see `effects` above); the push channel is not — it
+  // has no intent shape and its teardown belongs to the component's lifetime.
+  let _ws = useEffect(() =>
+    connectWs(store.actions.setLeaders, store.actions.setConnected)
   )(hookDeps0()) in
-  let submit = () =>
-    let submitTask = let! newRows = postScore(name, score) in
-    let _ = setRows(newRows) in
-    let _ = store.actions.markSubmitted() in Task.of(true) in
-    let _ = Task.run(
-      submitTask
-        |> Task.recover(_ =>
-          let _ = store.actions.markSubmitted() in Task.of(true)
-        )
-    ) in
-      0 in
     <div
       className="snake-wash h-dvh max-h-dvh overflow-hidden flex flex-col gap-4 p-4 md:p-6"
     >
@@ -224,10 +274,10 @@ let App = _ =>
                     <NameInput
                       placeholder="Callsign"
                       value={name}
-                      onInput={e => setName(e.target.value)}
+                      onInput={e => store.actions.setName(e.target.value)}
                     />
                     <div className="flex items-center gap-2">
-                      <PrimaryBtn onClick={() => submit()}>
+                      <PrimaryBtn onClick={() => store.actions.submitScore()}>
                         {"Submit Score"}
                       </PrimaryBtn>
                       <GhostBtn onClick={() => store.actions.restart()}>
@@ -253,7 +303,7 @@ let App = _ =>
                   <PlayerName>{row.name}</PlayerName>
                   <PlayerScore>{show(row.score)}</PlayerScore>
                 </LeaderRow>,
-              rows
+              leaders
             )}
           </ul>
         </Card>

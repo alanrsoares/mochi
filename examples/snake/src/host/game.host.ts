@@ -60,11 +60,13 @@ export const randomFood = (
   return candidate;
 };
 
-const HIGH_SCORE_KEY = "mochi_snake_highscore";
+/**
+ * Exported so the container can name it in an `Intent.storageSet` — the write
+ * side is a declared reaction now, and only the read stays here.
+ * `makeStorageInterpreter` writes `JSON.stringify(value)`, which for a number
+ * is the same text `parseInt` reads back.
+ */
+export const HIGH_SCORE_KEY = "mochi_snake_highscore";
 
 export const readHighScore = (): number =>
   Number.parseInt(localStorage.getItem(HIGH_SCORE_KEY) || "0", 10);
-
-export const writeHighScore = (score: number): void => {
-  localStorage.setItem(HIGH_SCORE_KEY, score.toString());
-};
