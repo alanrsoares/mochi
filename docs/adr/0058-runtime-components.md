@@ -52,6 +52,10 @@ watched-replacement lifecycle, and LSP's last-known-good project plugins. It
 establishes the vocabulary of owned registrations and declared capabilities
 without adding surface syntax or changing Algorithm W.
 
+The LSP path is additionally covered at the protocol boundary: a running
+server receives the watched-files notification that VSCode forwards and
+republishes diagnostics from the reloaded manifest without a restart.
+
 The reversibility guarantee is intentionally narrow: it covers only work the
 component represents in its `Resource.dispose` result. Arbitrary JS mutation,
 network requests, files, and emitted messages need a host adapter with a real
