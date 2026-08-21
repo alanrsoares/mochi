@@ -1,0 +1,12 @@
+{
+  "name": "@mochi/runtime-components",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@onrails/result": "^0.4.0"
+  }
+}
