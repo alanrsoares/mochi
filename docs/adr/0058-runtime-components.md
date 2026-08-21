@@ -35,7 +35,8 @@ is `capability`, `mount`, `unmount`, and `replace`:
   `LanguagePlugin[]` to a runtime component at `buildStart`. A caller may also
   supply a watched `RuntimePluginSource`; on a successful replacement Vite
   issues a full browser reload, while a failed replacement leaves the previous
-  component active.
+  component active. The docs dev server uses that watched source for its
+  `mochi.plugins.ts` manifest.
 - `@mochi/lsp` is the second host integration: a project manifest reload is a
   component replacement, so a broken save retains the last working plugin set
   while reporting the reload error to the editor.

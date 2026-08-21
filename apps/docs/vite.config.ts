@@ -1,6 +1,13 @@
+import { copyFile, unlink } from "node:fs/promises";
 import path from "node:path";
-import { mochiPlugin } from "@mochi/vite-plugin";
+import { pathToFileURL } from "node:url";
+import {
+  languagePluginsComponent,
+  mochiPlugin,
+  type RuntimePluginSource,
+} from "@mochi/vite-plugin";
 import { mochiWorkspaceAliases } from "@mochi/vite-plugin/workspace-aliases";
+import { ResultAsync } from "@onrails/result";
 import preact from "@preact/preset-vite";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, type Plugin } from "vite";
@@ -8,6 +15,39 @@ import { docsVendorPlugins } from "./mochi.plugins";
 import { headChromeHtml } from "./src/lib/head-chrome";
 
 const repoRoot = path.resolve(import.meta.dirname, "../..");
+const pluginsFile = path.resolve(import.meta.dirname, "mochi.plugins.ts");
+let pluginsGeneration = 0;
+
+type DocsPluginModule = { readonly docsVendorPlugins: typeof docsVendorPlugins };
+
+/**
+ * Bun's module cache is path-keyed, so reload a generation-suffixed sibling
+ * rather than importing the manifest path again. Keeping it beside the source
+ * preserves relative-import resolution for future local docs plugins.
+ */
+const loadDocsVendorPlugins = async (): Promise<typeof docsVendorPlugins> => {
+  pluginsGeneration += 1;
+  const shadow = path.resolve(
+    import.meta.dirname,
+    `.mochi.plugins.runtime-${pluginsGeneration}.ts`,
+  );
+  await copyFile(pluginsFile, shadow);
+  try {
+    const mod = (await import(pathToFileURL(shadow).href)) as DocsPluginModule;
+    return mod.docsVendorPlugins;
+  } finally {
+    await unlink(shadow).catch(() => undefined);
+  }
+};
+
+export const docsRuntimePlugins: RuntimePluginSource = {
+  component: languagePluginsComponent("docs-vendor-plugins", docsVendorPlugins),
+  watch: [pluginsFile],
+  reload: () =>
+    ResultAsync.fromPromise(loadDocsVendorPlugins(), (error) => error).map((plugins) =>
+      languagePluginsComponent("docs-vendor-plugins", plugins),
+    ),
+};
 
 /** Inject the shared head chrome (metas, fonts, pre-paint theme script) into every entry page. */
 const headChrome = (): Plugin => ({
@@ -23,7 +63,7 @@ export default defineConfig({
     headChrome(),
     mochiPlugin({
       jsxPragmaHeader: 'import { h } from "preact";\n',
-      plugins: docsVendorPlugins,
+      runtimePlugins: docsRuntimePlugins,
     }),
     preact(),
     tailwindcss(),
