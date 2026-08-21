@@ -26,6 +26,7 @@ share one codegen: readable JavaScript, and typed TypeScript that is clean under
 | [`dx-tracer-bullets.md`](dx-tracer-bullets.md) | Editor DX slices (rich diagnostics + navigation) — tracked as GitHub issues. |
 | [`docs-reframe.md`](docs-reframe.md) | Directed execution plan for reframing `apps/docs` content & positioning. |
 | [`adr/0053-path-to-wasm3.md`](adr/0053-path-to-wasm3.md) | Proposed: WasmGC as eventual third backend — no Rust rewrite, prerequisites, gates. (`PATH_TO_WASM3.md` stubs here.) |
+| [`adr/0058-runtime-components.md`](adr/0058-runtime-components.md) | Accepted: opt-in runtime composition, separate from compiler plugins. |
 | [`adr/`](adr/) | Architectural Decision Records — one file per decision, going forward. |
 
 For working *in* the repo (commands, conventions, definition of done) see

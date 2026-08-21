@@ -246,3 +246,27 @@ test("pluginsForDocument recovers once a broken manifest is fixed and the cache 
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("pluginsForDocument retains the active plugins when a reload fails", async () => {
+  const root = mkdtempSync(join(import.meta.dir, ".plugins-"));
+  try {
+    const file = join(root, "mochi.plugins.mjs");
+    const nested = join(root, "src", "app.mochi");
+    const errors: Array<{ file: string; error: unknown }> = [];
+
+    writeFileSync(file, 'export default [{ name: "working" }];\n');
+    clearPluginsCache();
+    const active = await pluginsForDocument(nested);
+    expect(active?.map((plugin) => plugin.name)).toEqual(["working"]);
+
+    writeFileSync(file, "export default [{ name: ");
+    clearPluginsCache();
+    const retained = await pluginsForDocument(nested, {
+      onError: (errFile, error) => errors.push({ file: errFile, error }),
+    });
+    expect(retained?.map((plugin) => plugin.name)).toEqual(["working"]);
+    expect(errors).toHaveLength(1);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

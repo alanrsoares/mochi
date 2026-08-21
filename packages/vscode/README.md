@@ -33,7 +33,8 @@ import { styledCvaExtension } from "@mochi/plugin-styled-cva";
 export default [styledCvaExtension];
 ```
 
-Restart the language server after editing the manifest.
+Saving the manifest reloads it automatically and republishes diagnostics for
+open Mochi documents; use `mochi: Restart Language Server` only for recovery.
 
 **Security:** manifests are arbitrary Node modules — only loaded when the workspace is
 **trusted** (VS Code Restricted Mode keeps them off), the manifest must live under a

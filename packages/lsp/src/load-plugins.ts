@@ -9,6 +9,15 @@ import {
 import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { type LanguagePlugin, pluginClashes, resolvePlugins } from "@mochi/compiler/extensions";
+import {
+  type ComponentHost,
+  capability,
+  createComponentHost,
+  provide,
+  type RuntimeComponent,
+  resource,
+} from "@mochi/runtime-components";
+import { isErr, ResultAsync } from "@onrails/result";
 
 /**
  * Filenames searched upward from each `.mochi` file. Prefer the typed
@@ -31,6 +40,17 @@ export type PluginLoadOptions = {
 };
 
 const cache = new Map<string, Promise<LanguagePlugin[] | undefined>>();
+
+/** The LSP capability supplied by a project's active plugin manifest. */
+const languagePluginsCapability = capability<readonly LanguagePlugin[]>(
+  "mochi.lsp.language-plugins",
+);
+
+/**
+ * Hosts outlive a cache generation. This is what lets a failed reload retain
+ * the prior working plugin set while the error is surfaced to the editor.
+ */
+const manifestHosts = new Map<string, ComponentHost>();
 
 /**
  * Bumped by {@link clearPluginsCache}. Both Node's and Bun's ESM loaders
@@ -159,6 +179,34 @@ export const loadPluginsFile = async (file: string): Promise<LanguagePlugin[]> =
   }
 };
 
+const validatePlugins = (plugins: LanguagePlugin[]): LanguagePlugin[] => {
+  const clashes = pluginClashes(resolvePlugins(plugins));
+  if (clashes.length > 0) throw new Error(clashes.map((d) => d.message).join("; "));
+  return plugins;
+};
+
+const languagePluginsComponent = (plugins: readonly LanguagePlugin[]): RuntimeComponent => ({
+  name: "mochi-lsp-project-plugins",
+  provides: [languagePluginsCapability],
+  activate: () => ResultAsync.ok(resource([provide(languagePluginsCapability, plugins)])),
+});
+
+const activePlugins = (host: ComponentHost): LanguagePlugin[] | undefined => {
+  const plugins = host.get(languagePluginsCapability);
+  return plugins ? [...plugins] : undefined;
+};
+
+const hasActivationCause = (
+  error: unknown,
+): error is { readonly kind: "activation-failed"; readonly cause: unknown } =>
+  typeof error === "object" &&
+  error !== null &&
+  "kind" in error &&
+  error.kind === "activation-failed" &&
+  "cause" in error;
+
+const reloadCause = (error: unknown): unknown => (hasActivationCause(error) ? error.cause : error);
+
 /**
  * Innermost `roots` entry that lexically contains `file`, or `undefined`
  * (symlinked layouts may match none — the caller then walks unbounded and
@@ -192,23 +240,21 @@ export const pluginsForDocument = async (
   }
   let pending = cache.get(pluginsFile);
   if (!pending) {
-    pending = loadPluginsFile(pluginsFile)
-      .then((plugins) => {
-        // ADR 0050: a manifest that resolves (with builtins) to clashing
-        // claims is treated the same as a manifest that fails to load — the
-        // editor falls back to builtins rather than running an ambiguous
-        // dispatch table. Checked here, once per manifest per cache
-        // generation, same as `onError`'s own contract.
-        const clashes = pluginClashes(resolvePlugins(plugins));
-        if (clashes.length > 0) {
-          throw new Error(clashes.map((d) => d.message).join("; "));
-        }
-        return plugins;
-      })
-      .catch((error) => {
-        opts.onError?.(pluginsFile, error);
-        return undefined;
-      });
+    const existingHost = manifestHosts.get(pluginsFile);
+    const host = existingHost ?? createComponentHost();
+    pending = (async () => {
+      const plugins = validatePlugins(await loadPluginsFile(pluginsFile));
+      const component = languagePluginsComponent(plugins);
+      const transition = await (existingHost
+        ? host.replace(component.name, component)
+        : host.mount(component));
+      if (isErr(transition)) throw transition.error;
+      manifestHosts.set(pluginsFile, host);
+      return activePlugins(host);
+    })().catch((error) => {
+      opts.onError?.(pluginsFile, reloadCause(error));
+      return existingHost ? activePlugins(existingHost) : undefined;
+    });
     cache.set(pluginsFile, pending);
   }
   return pending;
