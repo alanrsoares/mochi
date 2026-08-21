@@ -94,6 +94,7 @@ export type ComponentHost = {
   mount: (component: RuntimeComponent) => ResultAsync<void, ComponentError>;
   unmount: (name: string) => ResultAsync<void, ComponentError>;
   replace: (name: string, replacement: RuntimeComponent) => ResultAsync<void, ComponentError>;
+  get: <Value>(key: Capability<Value>) => Value | undefined;
   snapshot: () => readonly ComponentSnapshot[];
 };
 
@@ -273,7 +274,7 @@ export const createComponentHost = (): ComponentHost => {
       missing: names(missing(entry.component)),
     }));
 
-  return { mount, unmount, replace, snapshot };
+  return { mount, unmount, replace, get: context.get, snapshot };
 };
 
 /** A no-op resource for components that only consume capabilities. */

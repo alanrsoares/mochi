@@ -1,5 +1,16 @@
 import { describe, expect, it } from "bun:test";
-import { mochiPlugin } from "@mochi/vite-plugin";
+import type { LanguagePlugin } from "@mochi/compiler/extensions";
+import { tCon } from "@mochi/compiler/types";
+import { languagePluginsComponent, mochiPlugin } from "@mochi/vite-plugin";
+import { ok, ResultAsync } from "@onrails/result";
+
+const runtimeLanguagePlugin: LanguagePlugin = {
+  name: "runtime-test",
+  inferCall: {
+    refs: ["dynamic"],
+    hook: () => ok(tCon("string")),
+  },
+};
 
 describe("vite-plugin-mochi", () => {
   it("ignores non-mochi files", () => {
@@ -82,5 +93,46 @@ let x = useState`;
     const plugin = mochiPlugin();
     const badCode = "let invalid = ";
     expect(() => plugin.transform(badCode, "src/bad.mochi")).toThrow(/Mochi compilation failed/);
+  });
+
+  it("activates runtime plugins before transforming Mochi modules", async () => {
+    const plugin = mochiPlugin({
+      runtimePlugins: {
+        component: languagePluginsComponent("runtime-test", [runtimeLanguagePlugin]),
+      },
+    });
+    const code = "export let value = dynamic() + 1";
+
+    expect(plugin.transform(code, "src/runtime.mochi")?.code).toContain("export const value");
+    await plugin.buildStart();
+    await plugin.buildStart();
+    expect(() => plugin.transform(code, "src/runtime.mochi")).toThrow(/Mochi compilation failed/);
+  });
+
+  it("replaces watched runtime plugins before reloading the browser", async () => {
+    const watched = "/project/mochi.plugins.ts";
+    const events: string[] = [];
+    let reloads = 0;
+    const plugin = mochiPlugin({
+      runtimePlugins: {
+        component: languagePluginsComponent("runtime-test", [runtimeLanguagePlugin]),
+        watch: [watched],
+        reload: () => {
+          reloads += 1;
+          return ResultAsync.ok(languagePluginsComponent("runtime-test", [runtimeLanguagePlugin]));
+        },
+      },
+    });
+    const server = {
+      watcher: { add: (file: string) => events.push(`watch:${file}`) },
+      ws: { send: () => events.push("reload") },
+    };
+
+    plugin.configureServer(server);
+    await plugin.buildStart();
+    await plugin.handleHotUpdate({ file: watched, server });
+
+    expect(reloads).toBe(1);
+    expect(events).toEqual([`watch:${watched}`, "reload"]);
   });
 });

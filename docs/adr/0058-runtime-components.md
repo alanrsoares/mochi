@@ -31,6 +31,11 @@ is `capability`, `mount`, `unmount`, and `replace`:
   the provider.
 - `replace` disposes the old component, tries the replacement, and re-mounts
   the previous working component when replacement activation fails.
+- `@mochi/vite-plugin` is the first host integration: it adapts the configured
+  `LanguagePlugin[]` to a runtime component at `buildStart`. A caller may also
+  supply a watched `RuntimePluginSource`; on a successful replacement Vite
+  issues a full browser reload, while a failed replacement leaves the previous
+  component active.
 
 The host is a runtime API only. `LanguagePlugin`, the static module graph, and
 Mochi's no-effect-row decision remain unchanged.
@@ -38,16 +43,16 @@ Mochi's no-effect-row decision remain unchanged.
 ## Consequences
 
 The first slice has executable coverage for delayed activation,
-dependency-ordered teardown, and failed-replacement rollback. It establishes
-the vocabulary of owned registrations and declared capabilities without adding
-surface syntax or changing Algorithm W.
+dependency-ordered teardown, failed-replacement rollback, and Vite's
+build-start / watched-replacement lifecycle. It establishes the vocabulary of
+owned registrations and declared capabilities without adding surface syntax or
+changing Algorithm W.
 
 The reversibility guarantee is intentionally narrow: it covers only work the
 component represents in its `Resource.dispose` result. Arbitrary JS mutation,
 network requests, files, and emitted messages need a host adapter with a real
 inverse or compensation. Concurrent transitions, provider multiplexing,
-isolation/interception, configuration reconciliation, and Vite HMR integration
-remain follow-ups.
+isolation/interception, and configuration reconciliation remain follow-ups.
 
 ## Alternatives rejected
 

@@ -178,6 +178,13 @@
         "@styled-cva/react": "^0.7.1",
       },
     },
+    "packages/runtime-components": {
+      "name": "@mochi/runtime-components",
+      "version": "0.1.0",
+      "dependencies": {
+        "@onrails/result": "^0.4.0",
+      },
+    },
     "packages/test-support": {
       "name": "@mochi/test-support",
       "version": "0.1.0",
@@ -193,6 +200,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@mochi/compiler": "workspace:*",
+        "@mochi/runtime-components": "workspace:*",
         "@onrails/result": "^0.4.0",
       },
     },
@@ -351,6 +359,8 @@
     "@mochi/plugin-re-reduced": ["@mochi/plugin-re-reduced@workspace:packages/plugin-re-reduced"],
 
     "@mochi/plugin-styled-cva": ["@mochi/plugin-styled-cva@workspace:packages/plugin-styled-cva"],
+
+    "@mochi/runtime-components": ["@mochi/runtime-components@workspace:packages/runtime-components"],
 
     "@mochi/test-support": ["@mochi/test-support@workspace:packages/test-support"],
 
