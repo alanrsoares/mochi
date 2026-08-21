@@ -36,6 +36,9 @@ is `capability`, `mount`, `unmount`, and `replace`:
   supply a watched `RuntimePluginSource`; on a successful replacement Vite
   issues a full browser reload, while a failed replacement leaves the previous
   component active.
+- `@mochi/lsp` is the second host integration: a project manifest reload is a
+  component replacement, so a broken save retains the last working plugin set
+  while reporting the reload error to the editor.
 
 The host is a runtime API only. `LanguagePlugin`, the static module graph, and
 Mochi's no-effect-row decision remain unchanged.
@@ -43,10 +46,10 @@ Mochi's no-effect-row decision remain unchanged.
 ## Consequences
 
 The first slice has executable coverage for delayed activation,
-dependency-ordered teardown, failed-replacement rollback, and Vite's
-build-start / watched-replacement lifecycle. It establishes the vocabulary of
-owned registrations and declared capabilities without adding surface syntax or
-changing Algorithm W.
+dependency-ordered teardown, failed-replacement rollback, Vite's build-start /
+watched-replacement lifecycle, and LSP's last-known-good project plugins. It
+establishes the vocabulary of owned registrations and declared capabilities
+without adding surface syntax or changing Algorithm W.
 
 The reversibility guarantee is intentionally narrow: it covers only work the
 component represents in its `Resource.dispose` result. Arbitrary JS mutation,
