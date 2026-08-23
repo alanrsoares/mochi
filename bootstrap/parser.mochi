@@ -1192,8 +1192,7 @@ let parseTypeApp = (toks, pos) =>
           |> Result.map(((args, lastSp, p2)) => switch lastSp {
             | None => (head, p2)
             | Some(ls) => (Ast.TyApp(name, args, spanning(sp, ls)), p2)
-          }
-          )
+          })
       | Ast.TyQual(alias, nm, nameSpan, _, sp) =>
         // A qualified head takes args too (`D.Result e a`), staying one variant.
         typeArgsLoop(toks, p, [], None)
@@ -1203,11 +1202,9 @@ let parseTypeApp = (toks, pos) =>
                 Ast.TyQual(alias, nm, nameSpan, args, spanning(sp, ls)),
                 p2
               )
-          }
-          )
+          })
       | _ => Ok((head, p))
-    }
-    )
+    })
 
 // Arrows are right-associative.
 let parseTypeExpr = (toks, pos) =>

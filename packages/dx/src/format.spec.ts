@@ -170,6 +170,37 @@ test("curried apply hugs a multiline trailing-lambda callee", () => {
   expect(fmt(out)).toBe(out);
 });
 
+test("trailing-lambda switch hugs ) onto the closing brace", () => {
+  const src =
+    'let describe = id => planLine(id) |> Task.recover(e => switch e {|NotFound(missing)=>Task.of("user missing has no plan so we fall back to the demo one")|Offline(why)=>Task.fail(Offline(why))})';
+  const out = [
+    "let describe = id =>",
+    "  planLine(id)",
+    "    |> Task.recover(e => switch e {",
+    "      | NotFound(missing) => Task.of(",
+    '          "user missing has no plan so we fall back to the demo one"',
+    "        )",
+    "      | Offline(why) => Task.fail(Offline(why))",
+    "    })",
+    "",
+  ].join("\n");
+  expect(fmt(src)).toBe(out);
+  expect(fmt(out)).toBe(out);
+});
+
+test("trailing-lambda loop hugs ) onto the closing brace", () => {
+  const src =
+    "let go = xs => each(xs, x => loop (acc = 0) { switch x { | None => acc | Some(n) => recur(acc + n) } })";
+  const out = [
+    "let go = xs =>",
+    "  each(xs, x =>",
+    "    loop (acc = 0) { switch x { | None => acc | Some(n) => recur(acc + n) } })",
+    "",
+  ].join("\n");
+  expect(fmt(src)).toBe(out);
+  expect(fmt(out)).toBe(out);
+});
+
 test("broken pipe chain is idempotent", () => {
   const once = fmt(
     "let r = source |> transform(config) |> validate(rules) |> persist(database) |> report",

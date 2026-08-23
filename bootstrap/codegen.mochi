@@ -184,8 +184,7 @@ let genExpr = (e, ctx) => switch e {
         |> map(p => switch p {
           | Ast.IPLit(value) => escapeTemplateLiteral(value)
           | Ast.IPExpr(ex) => "\${${genExpr(ex, ctx)}}"
-        }
-        )
+        })
     ) in
       "`${body}`"
 }
@@ -203,8 +202,7 @@ let genList = (elements, ctx) =>
       |> map(el => switch el {
         | Ast.SEExpr(ex) => "yield (${genExpr(ex, ctx)});"
         | Ast.SESpread(ex) => "yield* (${genExpr(ex, ctx)});"
-      }
-      )
+      })
   ) in
     "_list(function* () {${yields == "" ? "" : " ${yields} "}})"
 

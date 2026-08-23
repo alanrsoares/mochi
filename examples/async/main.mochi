@@ -44,8 +44,7 @@ let describe = id =>
           "user ${show(missing)} has no plan — showing the demo one"
         )
       | Offline(why) => Task.fail(Offline(why))
-    }
-    )
+    })
 
 // `match` folds both tracks into one value, still inside a Task.
 let report = id =>

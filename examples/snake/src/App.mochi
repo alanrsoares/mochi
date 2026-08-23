@@ -246,8 +246,7 @@ export let App = _ =>
             // return the whole state — which is not a patch (see the `restart` arm).
             store.$derived.gameOver.value ? store.actions.restart() : ()
         }
-    }
-    )
+    })
   )(hookDeps0()) in
   // The only surviving hand-rolled effect: a mount-once DOM/socket
   // subscription with a cleanup. The initial fetch and the localStorage write
