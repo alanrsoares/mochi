@@ -12,6 +12,7 @@ import type { Registry } from "../check/check";
 import { codegen } from "../codegen/codegen";
 import { DEFAULT_RUNTIME_IMPORT, emitTsModule } from "../codegen/codegen-ts";
 import { toTypedProgramWith } from "../compile/compile";
+import { openMode } from "../compile/open-mode";
 import { type ExternBinding, externModuleDts } from "../dts/dts";
 import { checkErr, type Diagnostic, oneDiag } from "../errors/errors";
 import type { LanguagePlugin } from "../extensions/extensions";
@@ -23,8 +24,8 @@ import { parse } from "../parser/parser";
 export type ModuleOutput = { path: string; js: string };
 type ReadFile = (path: string) => Promise<string>;
 
-/** `plugins` (styled-cva, …) threaded to every per-module `toTypedProgramWith` call — same list `compile`/`inferProgram` take. Optional; callers that omit it get the default/builtin resolution (`resolvePlugins`, ADR 0011). */
-export type ModuleGraphOptions = { plugins?: LanguagePlugin[] };
+/** Options threaded to every per-module inference call. Each source file can also opt in through `// @mochi open`. */
+export type ModuleGraphOptions = { plugins?: LanguagePlugin[]; open?: boolean };
 
 /** Relative / absolute specs — everything else is a bare package or package subpath. */
 const isPathSpec = (spec: string): boolean =>
@@ -122,7 +123,7 @@ const parseModule = (src: string, opts: ModuleGraphOptions): Result<Program, Dia
   return isErr(lexed) ? err(oneDiag(lexed.error)) : parse(lexed.value, { plugins: opts.plugins });
 };
 
-type Loaded = { path: string; prog: Program };
+type Loaded = { path: string; prog: Program; src: string };
 
 /**
  * Stamp the failing module's absolute `path` on each diagnostic (unless a
@@ -237,7 +238,7 @@ const loadGraph = (
         if (dep) return dep;
       }
       state.set(path, "done");
-      order.push({ path, prog: parsed.value });
+      order.push({ path, prog: parsed.value, src });
       return null;
     };
 
@@ -260,11 +261,14 @@ const compileGraph = (
   const qualsByPath = new Map<string, QualScope>();
   const outputs: ModuleOutput[] = [];
 
-  for (const { path, prog } of graph) {
+  for (const { path, prog, src } of graph) {
     const gathered = gatherImports(path, prog, exportsByPath, regByPath, keysByPath, qualsByPath);
     if (isErr(gathered)) return gathered;
 
-    const typed = toTypedProgramWith(prog, gathered.value, { plugins: opts.plugins });
+    const typed = toTypedProgramWith(prog, gathered.value, {
+      plugins: opts.plugins,
+      open: openMode(src, opts.open),
+    });
     if (isErr(typed)) return typed;
     exportsByPath.set(path, exportsOf(prog, typed.value.res.env));
     regByPath.set(path, exportedCtorTable(prog));
@@ -314,17 +318,23 @@ const compileGraphTs = (
   // Extern modules referenced across the graph → one `.d.ts` each.
   const externDts = new Map<string, ExternBinding[]>();
 
-  for (const { path, prog } of graph) {
+  for (const { path, prog, src } of graph) {
     const gathered = gatherImports(path, prog, exportsByPath, regByPath, keysByPath, qualsByPath);
     if (isErr(gathered)) return gathered;
     const { importedKeys } = gathered.value;
 
-    const typed = toTypedProgramWith(prog, gathered.value, { plugins: opts.plugins });
+    const typed = toTypedProgramWith(prog, gathered.value, {
+      plugins: opts.plugins,
+      open: openMode(src, opts.open),
+    });
     if (isErr(typed)) return typed;
     const { env, aliases, types, letParams } = typed.value.res;
 
     for (const s of prog.stmts) {
       if (s.kind !== "extern") continue;
+      // JS conventions lower inline; unlike module externs they have no host
+      // module for which a sidecar declaration should be emitted.
+      if (s.module.startsWith("mochi:")) continue;
       // `.mjs` hosts resolve to `.d.mts`; `.js`/`.ts` to `.d.ts`.
       const base = s.module.replace(/\.m?[jt]s$/, "");
       const declExt = /\.mjs$/.test(s.module) ? ".d.mts" : ".d.ts";
@@ -416,6 +426,7 @@ export const buildModulesTs = (
   loadGraph(resolve(entry), readFile, { plugins: opts.plugins }).andThen((g) =>
     compileGraphTs(g, opts.runtimeImport ?? DEFAULT_RUNTIME_IMPORT, {
       plugins: opts.plugins,
+      open: opts.open,
     }),
   );
 
@@ -437,12 +448,15 @@ export const moduleContext = (
     const keysByPath = new Map<string, Map<string, string[]>>();
     const qualsByPath = new Map<string, QualScope>();
 
-    for (const { path, prog } of graph) {
+    for (const { path, prog, src } of graph) {
       const gathered = gatherImports(path, prog, exportsByPath, regByPath, keysByPath, qualsByPath);
       if (isErr(gathered)) return err(atPath(gathered.error, path));
       // Entry is last in dependency order; hand back its context without compiling it.
       if (path === entryPath) return ok(gathered.value);
-      const typed = toTypedProgramWith(prog, gathered.value, { plugins: opts.plugins });
+      const typed = toTypedProgramWith(prog, gathered.value, {
+        plugins: opts.plugins,
+        open: openMode(src, opts.open),
+      });
       if (isErr(typed)) return err(atPath(typed.error, path));
       exportsByPath.set(path, exportsOf(prog, typed.value.res.env));
       regByPath.set(path, exportedCtorTable(prog));

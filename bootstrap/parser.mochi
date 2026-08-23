@@ -1306,7 +1306,7 @@ let parseType = (toks, pos) =>
             )
           )
 
-// extern name : type = "module" "export"
+// extern name : type = "module" "export"; contextual JS conventions mirror src/parser.ts.
 let parseExtern = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in
   let? p = expectTok(TExtern, toks, pos) in
@@ -1314,23 +1314,51 @@ let parseExtern = (toks, pos) =>
   let? p2 = expectTok(TColon, toks, p1) in
   let? (t, p3) = parseTypeExpr(toks, p2) in
   let? p4 = expectTok(TEq, toks, p3) in
-  let? (moduleName, p5) = expectStr(toks, p4) in
-  let? (importedName, p6) = expectStr(toks, p5) in
-    Ok(
-      (
-        Ast.SExtern(
-          nm.name,
-          nm.span,
-          t,
-          moduleName,
-          importedName,
-          false,
-          None,
-          toEnd(start, toks, p6)
-        ),
-        p6
-      )
-    )
+  let nextTok = tokAt(toks, p4).tok in
+    nextTok == TId(
+      "global"
+    ) || nextTok == TId(
+      "send"
+    ) || nextTok == TId("get") || nextTok == TId("set") || nextTok == TId("new")
+      ? let? (convention, p5) = expectId(toks, p4) in
+      let? (first, p6) = expectStr(toks, p5) in
+      let hasSecond = convention.name == "global" && switch tokAt(toks, p6).tok {
+        | TStr(_) => true
+        | _ => false
+      } in
+      let? (second, p7) = hasSecond ? expectStr(toks, p6) : Ok(("", p6)) in
+        Ok(
+          (
+            Ast.SExtern(
+              nm.name,
+              nm.span,
+              t,
+              "mochi:${convention.name}:${first}",
+              second,
+              false,
+              None,
+              toEnd(start, toks, p7)
+            ),
+            p7
+          )
+        )
+      : let? (moduleName, p5) = expectStr(toks, p4) in
+      let? (importedName, p6) = expectStr(toks, p5) in
+        Ok(
+          (
+            Ast.SExtern(
+              nm.name,
+              nm.span,
+              t,
+              moduleName,
+              importedName,
+              false,
+              None,
+              toEnd(start, toks, p6)
+            ),
+            p6
+          )
+        )
 
 // import { a, b } from "./mod"
 // import * as Alias from "./mod" — whole module as a user namespace (ADR 0002).

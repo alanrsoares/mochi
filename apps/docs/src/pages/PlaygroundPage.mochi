@@ -29,3 +29,4 @@ export let PlaygroundPage = props =>
     </header>
     <main className="flex min-h-0 flex-1 flex-col"><Playground /></main>
   </div>
+// @mochi open

@@ -20,10 +20,9 @@ extern namespaceRuntime : Map string (Map string string) = "./prelude.gen.mjs" "
 extern preludeJsDefs : Map string string = "./prelude.gen.mjs" "preludeJsDefs"
 extern runtimeDeps : Map string [string] = "./prelude.gen.mjs" "runtimeDeps"
 
-// Type-check gate: open-world inference (JS host globals stay legal), program
-// passed through unchanged on success.
+// Type-check gate: strict inference, program passed through unchanged on success.
 let typecheck = prog =>
-  inferProgram(prog, builtins, namespaces, true) |> Result.map(_ => prog)
+  inferProgram(prog, builtins, namespaces, false) |> Result.map(_ => prog)
 
 // The front-end pipeline: lex -> parse -> check -> typecheck
 let pipeline = lex

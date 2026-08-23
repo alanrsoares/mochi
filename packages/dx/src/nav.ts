@@ -5,7 +5,7 @@
  * typecheck succeeds.
  */
 import { resolve } from "node:path";
-import { toTypedProgramRecovering, toTypedProgramWith } from "@mochi/compiler/compile";
+import { openMode, toTypedProgramRecovering, toTypedProgramWith } from "@mochi/compiler/compile";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import type { InferResult, TypeAt } from "@mochi/compiler/infer";
 import { lex } from "@mochi/compiler/lexer";
@@ -133,7 +133,7 @@ export const typeDefinitionAt = (
 ): Location | null => {
   const idx = indexSrc(path, src);
   if (!idx) return null;
-  const typed = toTypedProgramRecovering(src, { open: true, namespaces: preludeNamespaces });
+  const typed = toTypedProgramRecovering(src, { namespaces: preludeNamespaces });
   return isOk(typed) ? typeDefFrom(typed.value.res, offset, idx) : null;
 };
 
@@ -162,7 +162,10 @@ export const moduleTypeDefinitionAt = async (
   const ctx = await moduleContext(entry, read, { plugins: opts.plugins });
   if (isErr(ctx)) return typeDefinitionAt(src, offset, entry);
 
-  const typed = toTypedProgramWith(program, ctx.value, { plugins: opts.plugins });
+  const typed = toTypedProgramWith(program, ctx.value, {
+    plugins: opts.plugins,
+    open: openMode(src),
+  });
   return isOk(typed) ? typeDefFrom(typed.value.res, offset, idx, origins) : null;
 };
 

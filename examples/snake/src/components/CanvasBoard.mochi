@@ -39,3 +39,4 @@ export let CanvasBoard = props =>
       height={BOARD_PX}
       className="block h-auto max-h-full w-auto max-w-full rounded-[15px] border-2 border-line-strong shadow-lg"
     />
+// @mochi open

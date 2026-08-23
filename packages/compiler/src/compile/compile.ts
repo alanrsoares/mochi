@@ -16,14 +16,15 @@ import {
 import { lex } from "../lexer/lexer";
 import { parse, parseRecovering } from "../parser/parser";
 import { preludeEnv, preludeNamespaces } from "../prelude/prelude";
+import { openMode } from "./open-mode";
 
 /** The typed program: the parsed `Program` plus the inference result (env, span→type table, aliases) that tooling reads back. */
 export type TypedProgram = { prog: Program; res: InferResult };
 
-/** Source → typed Program: lex → parse → check → infer. Open-world by default so host globals infer; callers pass `namespaces`/`imports` when they need them. */
+/** Source → typed Program: lex → parse → check → infer. Strict by default; `// @mochi open` or `open: true` permits host globals. */
 export const toTypedProgram = (
   src: string,
-  opts: InferOptions = { open: true },
+  opts: InferOptions = {},
 ): Result<TypedProgram, Diagnostic[]> => {
   const lexed = lex(src);
   if (isErr(lexed)) return err(oneDiag(lexed.error));
@@ -34,10 +35,13 @@ export const toTypedProgram = (
   const checked = check(parsed.value);
   return isErr(checked)
     ? checked
-    : map(inferProgramTypes(checked.value, preludeEnv, opts), (res) => ({
-        prog: checked.value,
-        res,
-      }));
+    : map(
+        inferProgramTypes(checked.value, preludeEnv, { ...opts, open: openMode(src, opts.open) }),
+        (res) => ({
+          prog: checked.value,
+          res,
+        }),
+      );
 };
 
 /**
@@ -53,7 +57,7 @@ export const toTypedProgram = (
  */
 export const toTypedProgramRecovering = (
   src: string,
-  opts: InferOptions = { open: true },
+  opts: InferOptions = {},
 ): Result<TypedProgram, Diagnostic[]> => {
   const lexed = lex(src);
   if (isErr(lexed)) return err(oneDiag(lexed.error));
@@ -61,10 +65,13 @@ export const toTypedProgramRecovering = (
   const checked = check(program);
   return isErr(checked)
     ? checked
-    : map(inferProgramTypes(checked.value, preludeEnv, opts), (res) => ({
-        prog: checked.value,
-        res,
-      }));
+    : map(
+        inferProgramTypes(checked.value, preludeEnv, { ...opts, open: openMode(src, opts.open) }),
+        (res) => ({
+          prog: checked.value,
+          res,
+        }),
+      );
 };
 
 /** What a module's imports resolve to, as this seam needs it: export SCHEMES (inference) and the variant REGISTRY (cross-module exhaustiveness). A structural subset of `module.ts`'s `ModuleContext`, so a full context passes. */
@@ -76,10 +83,10 @@ export type ImportedContext = {
   qualTypes?: QualMap;
 };
 
-/** Options for `toTypedProgramWith` beyond the imported context — `plugins` (styled-cva, …) and `open` (default `true` for emit; LSP diagnostics pass `false`). */
+/** Options for `toTypedProgramWith` beyond the imported context — `plugins` (styled-cva, …) and explicit open-world inference. */
 export type TypedProgramWithOptions = { plugins?: LanguagePlugin[]; open?: boolean };
 
-/** Parsed Program → typed Program, with an imported context: the module-aware sibling of `toTypedProgram`. Owns the prelude-seeding invariant — `preludeEnv` + `preludeNamespaces` + open-world — that the graph drivers (`compileGraph`, `compileGraphTs`, `moduleContext`) and the LSP surfaces (`moduleDiagnostics`, `moduleHoverAt`) previously each re-assembled. */
+/** Parsed Program → typed Program, with an imported context: the module-aware sibling of `toTypedProgram`. */
 export function toTypedProgramWith(
   prog: Program,
   ctx: ImportedContext,
@@ -90,7 +97,7 @@ export function toTypedProgramWith(
     ? checked
     : map(
         inferProgramTypes(checked.value, preludeEnv, {
-          open: opts.open ?? true,
+          open: opts.open ?? false,
           imports: ctx.imports,
           namespaces: preludeNamespaces,
           nsImports: ctx.nsImports,
@@ -106,6 +113,8 @@ export type CompileOptions = {
   runtime?: boolean;
   moduleExt?: string;
   plugins?: LanguagePlugin[];
+  /** Permit unbound host globals for this invocation; `// @mochi open` is per-file. */
+  open?: boolean;
 };
 
 export function compile(src: string, opts: CompileOptions = {}): Result<string, Diagnostic[]> {
@@ -117,7 +126,7 @@ export function compile(src: string, opts: CompileOptions = {}): Result<string, 
   if (isErr(checked)) return checked;
   const typed = map(
     inferProgram(checked.value, preludeEnv, {
-      open: true,
+      open: openMode(src, opts.open),
       namespaces: preludeNamespaces,
       plugins: opts.plugins,
     }),

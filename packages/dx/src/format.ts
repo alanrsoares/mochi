@@ -132,8 +132,14 @@ const ctor = (c: Ctor): string =>
 
 const typeExpr = showTypeExpr;
 
-const externStmt = (s: ExternStmt): string =>
-  `extern ${s.name} : ${typeExpr(s.typeExpr)} = ${JSON.stringify(s.module)} ${JSON.stringify(s.imported)}`;
+const externStmt = (s: ExternStmt): string => {
+  const match = /^mochi:(global|send|get|set|new):(.*)$/.exec(s.module);
+  if (!match)
+    return `extern ${s.name} : ${typeExpr(s.typeExpr)} = ${JSON.stringify(s.module)} ${JSON.stringify(s.imported)}`;
+  const [, convention, first] = match;
+  const second = s.imported === "" ? "" : ` ${JSON.stringify(s.imported)}`;
+  return `extern ${s.name} : ${typeExpr(s.typeExpr)} = ${convention} ${JSON.stringify(first)}${second}`;
+};
 
 /**
  * Rendered as a Doc (not a flat string) so a comment interleaved between

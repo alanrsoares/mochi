@@ -8,6 +8,20 @@ import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 // standalone prelude-inlining path is covered separately below.
 const js = (src: string) => compileJs(src);
 
+test("compile is strict by default and suggests a close binding", () => {
+  const r = compile("let count = 1\nlet n = coun");
+  expect(isErr(r)).toBe(true);
+  if (!isErr(r)) return;
+  expect(r.error[0]!.message).toContain("unbound variable 'coun'");
+  expect(r.error[0]!.suggestions?.[0]?.replaceWith).toBe("count");
+});
+
+test("open-world inference requires an explicit flag or file pragma", () => {
+  expect(isErr(compile("let value = browserGlobal"))).toBe(true);
+  expect(isErr(compile("let value = browserGlobal", { open: true }))).toBe(false);
+  expect(isErr(compile("// @mochi open\nlet value = browserGlobal"))).toBe(false);
+});
+
 test("pipeline desugars to nested calls", () => {
   expect(js("let result = 5 |> double |> inc")).toBe("const result = inc(double(5));\n");
 });

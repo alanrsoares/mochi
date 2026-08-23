@@ -53,3 +53,4 @@ export let HeroCarouselView = props =>
       </div>
     </figcaption>
   </figure>
+// @mochi open

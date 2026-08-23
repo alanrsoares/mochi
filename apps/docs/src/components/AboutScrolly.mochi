@@ -3,6 +3,7 @@
 // ScrollTrigger choreography (plate swaps, beat reveals, reduced-motion
 // split) lives in `lib/about-scrolly-fx.ts`. This file is layout only.
 import { useEffect, hookDeps0 } from "@mochi/plugin-preact/hooks"
+// @mochi open
 import { SectionEyebrow } from "../ui/primitives"
 
 type Chapter = { id: string, kicker: string, title: string, body: [string], src: string, alt: string }

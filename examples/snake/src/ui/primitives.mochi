@@ -101,3 +101,4 @@ export let PlayerName = tw.span("truncate flex-1 text-sm text-ink")
 export let PlayerScore = tw.span(
   "font-mono text-sm font-bold text-fur-deep shrink-0"
 )
+// @mochi open

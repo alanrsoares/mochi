@@ -12,3 +12,4 @@ export let SyntaxPanel = props =>
       {props.children}
     </pre>
   </div>
+// @mochi open

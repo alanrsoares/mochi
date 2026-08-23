@@ -76,3 +76,4 @@ export let SiteFooter = props =>
       </NavLink>
     </div>
   </footer>
+// @mochi open

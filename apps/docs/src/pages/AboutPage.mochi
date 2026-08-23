@@ -55,3 +55,4 @@ export let AboutPage = props =>
       linkLabel="decisions live in docs/adr"
     />
   </div>
+// @mochi open

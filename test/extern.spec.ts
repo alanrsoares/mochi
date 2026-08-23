@@ -23,6 +23,23 @@ test("an extern's declared type becomes its scheme", () => {
   );
 });
 
+test("JS extern conventions emit direct global, member, and constructor access", () => {
+  const src = `extern random : () -> number = global "Math" "random"
+extern getName : a -> string = get "name"
+extern setName : a -> string -> () = set "name"
+extern trim : string -> string = send "trim"
+extern Date : number -> a = new "Date"`;
+  const out = js(src);
+  expect(out).toContain('const random = globalThis["Math"]["random"];');
+  expect(out).toContain('const getName = ($receiver) => $receiver["name"];');
+  expect(out).toContain(
+    'const setName = _curry(2, ($receiver, $value) => ($receiver["name"] = $value));',
+  );
+  expect(out).toContain('const trim = ($receiver) => $receiver["trim"]();');
+  expect(out).toContain('const Date = _curry(1, ($a0) => new globalThis["Date"]($a0));');
+  expect(unwrapOk(format(src))).toBe(`${src}\n`);
+});
+
 test("composes functions with >> infix operator desugaring", () => {
   const code = `
     let inc = x => add(x, 1)

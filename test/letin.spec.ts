@@ -70,7 +70,7 @@ test("a value that mentions its own name keeps the IIFE (let-in is not recursive
   // A `const` here would resolve `go` to itself, quietly making the binding
   // recursive — which strict infer rejects as an unbound variable. Codegen must
   // not be more permissive than the type system.
-  const js = unwrapOk(compile("let f = n => let go = j => go(add(j, n)) in go(0)"));
+  const js = unwrapOk(compile("let f = n => let go = j => go(add(j, n)) in go(0)", { open: true }));
   expect(js).toContain("((go) =>");
   expect(js).not.toContain("const go =");
 });

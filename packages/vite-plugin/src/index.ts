@@ -68,6 +68,8 @@ export type MochiPluginOptions = {
    * opt-out; non-empty → builtins + this list (`resolvePlugins`, ADR 0011).
    */
   plugins?: LanguagePlugin[];
+  /** Permit host globals across transformed files; prefer per-file `// @mochi open`. */
+  open?: boolean;
   /**
    * A live runtime owner for the compiler plugin list. The component must
    * provide `languagePluginsCapability`; watched updates replace it only after
@@ -140,7 +142,7 @@ export function mochiPlugin(options: MochiPluginOptions = {}) {
 
       // Keep sibling imports as `.mochi` so Vite re-enters this plugin
       // (default codegen rewrites to `.js` for the standalone CLI/graph).
-      const res = compile(code, { runtime, moduleExt: ".mochi", plugins });
+      const res = compile(code, { runtime, moduleExt: ".mochi", plugins, open: options.open });
       if (isErr(res)) {
         const errorMessages = res.error.map((d) => `[${d.kind}] ${d.message}`).join("\n");
         throw new SyntaxError(`Mochi compilation failed for ${id}:\n${errorMessages}`);
