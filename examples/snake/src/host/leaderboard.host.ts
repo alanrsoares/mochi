@@ -1,31 +1,41 @@
 /** Host seam for the leaderboard REST + WebSocket client (`server.mts`). */
 
+import { Err, Ok, type Result, type Task } from "@mochi/compiler/runtime";
+
 export type ScoreEntry = { name: string; score: number; date?: string };
 
-const Ok = <T>(value: T) => ({ _tag: "Ok" as const, value });
-const Err = <E>(error: E) => ({ _tag: "Err" as const, error });
+type LeaderboardResult = Result<ScoreEntry[], string>;
+type LeaderboardTask = Task<ScoreEntry[], string>;
+
+const fetchError = (cause: unknown): LeaderboardResult =>
+  Err<ScoreEntry[], string>(String((cause as { message?: unknown })?.message || cause));
 
 /** `fetchLeaderboardTask` returns a Mochi `Task ScoreEntry[] string` (a lazy thunk `() => Promise<Result>`). */
-export const fetchLeaderboardTask = () => () =>
+export const fetchLeaderboardTask = (): LeaderboardTask => () =>
   fetch("/api/leaderboard")
     .then((res) => res.json())
-    .then((data) => Ok(data as ScoreEntry[]))
-    .catch((err) => Err(String(err?.message || err)));
+    .then((data): LeaderboardResult => Ok<ScoreEntry[], string>(data as ScoreEntry[]))
+    .catch(fetchError);
 
 /**
  * `postScoreTask` returns a Mochi `Task ScoreEntry[] string`. `name` is posted
  * as given — blank-name defaulting is a product rule, so `App.mochi`'s
  * `displayName` owns it.
  */
-export const postScoreTask = (name: string, score: number) => () =>
-  fetch("/api/score", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, score }),
-  })
-    .then((res) => res.json())
-    .then((data) => Ok((data.leaderboard || []) as ScoreEntry[]))
-    .catch((err) => Err(String(err?.message || err)));
+export const postScoreTask =
+  (name: string, score: number): LeaderboardTask =>
+  () =>
+    fetch("/api/score", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, score }),
+    })
+      .then((res) => res.json())
+      .then(
+        (data): LeaderboardResult =>
+          Ok<ScoreEntry[], string>((data.leaderboard || []) as ScoreEntry[]),
+      )
+      .catch(fetchError);
 
 /**
  * Subscribes to live leaderboard updates over `/ws`, auto-reconnecting.

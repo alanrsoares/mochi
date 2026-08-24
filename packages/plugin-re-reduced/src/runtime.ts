@@ -16,6 +16,7 @@
  *    builtin intents needs no registry of its own.
  */
 
+import type { Task } from "@mochi/compiler/runtime";
 import {
   type InterpCtx,
   makeStorageInterpreter,
@@ -25,9 +26,6 @@ import {
   timeout,
   timeoutInterpreter,
 } from "@re-reduced/core";
-
-/** A mochi `Task a b`: a thunk producing a tagged `Result`. */
-type Task<A, B> = () => Promise<{ _tag: "Ok"; value: A } | { _tag: "Err"; error: B }>;
 
 /** The mochi-facing spec for `Intent.query`. */
 type QuerySpec<A, B> = {

@@ -1,18 +1,16 @@
 // Animated Conway's Game of Life — frames repaint in place in the terminal.
 //
 // The simulation is pure (`at`/`neighbours`/`step`/`render`). Sequencing uses
-// prelude `Task.*` (ADR 0005 / 0006); domain effects — setup / draw / teardown —
-// stay as thin `extern`s from ./runtime.mjs. A failed draw is recovered (skip
+// prelude `Task.*` (ADR 0005 / 0006); terminal effects come from @mochi/bun.
+// A failed draw is recovered (skip
 // frame); `Task.run` at the very end is the only place an effect fires. Build +
 // run:
 //
 //   bun src/cli.ts build examples/life/main.mochi
 //   bun examples/life/main.js
-//   MOCHI_LIFE_FAIL_ONCE=1 bun examples/life/main.js   # force one Err draw
+//   MOCHI_BUN_FAIL_ONCE=1 bun examples/life/main.js   # force one Err draw
 
-extern setup : number -> Task<number, string> = "./runtime.mjs" "setup"
-extern draw : string -> string -> Task<number, string> = "./runtime.mjs" "draw"
-extern teardown : number -> Task<number, string> = "./runtime.mjs" "teardown"
+import { enter, draw, leave } from "@mochi/bun/terminal"
 
 // Host failures are plain strings; fold them onto a domain error once at the
 // boundary so the animation loop can recover a skipped frame without aborting.
@@ -22,10 +20,10 @@ type TermErr =
 let drawFrame = (label, frame) =>
   draw(label, frame)
     |> Task.mapErr(WriteFailed)
-    |> Task.recover(_ => Task.of(0))
+    |> Task.recover(_ => Task.of(()))
 
 let safeTeardown = n =>
-  teardown(n) |> Task.mapErr(WriteFailed) |> Task.recover(_ => Task.of(0))
+  leave() |> Task.mapErr(WriteFailed) |> Task.recover(_ => Task.of(()))
 
 // ---- board geometry (toroidal — edges wrap, so patterns run forever) ----
 let width = 32
@@ -113,9 +111,9 @@ let tick = (remaining, g, board) =>
     : let! _ = drawFrame(label(g), render(board)) in
     let! _ = Task.delay(90, 0) in tick(remaining - 1, g + 1, step(board))
 
-// setup grabs the alternate screen buffer, then we run 120 frames. A failed
+// enter grabs the alternate screen buffer, then we run 120 frames. A failed
 // setup still settles as Err at the edge — only per-frame draws recover.
-let program = let! _ = setup(0) |> Task.mapErr(WriteFailed) in
+let program = let! _ = enter() |> Task.mapErr(WriteFailed) in
   tick(120, 0, board0)
 
 export let result = Task.run(program)

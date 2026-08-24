@@ -1,0 +1,5 @@
+/// Bun process arguments and console output.
+
+export extern args : () -> [string] = "@mochi/bun/runtime" "args"
+export extern log : string -> () = "@mochi/bun/runtime" "log"
+export extern error : string -> () = "@mochi/bun/runtime" "error"
