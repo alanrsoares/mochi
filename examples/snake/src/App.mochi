@@ -55,8 +55,7 @@ extern startTick : (a -> b) -> number -> c = "./host/game.host" "startTick"
 /// Forwards raw lowercased keys — `keyOf` below owns the binding table.
 /// Returns a `useEffect` cleanup.
 extern onKeyDown : (a -> b) -> c = "./host/game.host" "onKeyDown"
-/// Uniform choice, or the fallback when the array is empty. The *only* impure
-/// half of food placement — `freeCells` decides which cells are legal.
+/// Uniform choice from the pure, moving food window.
 extern pickRandom : a -> [a] -> a = "./host/game.host" "pickRandom"
 extern readHighScore : () -> number = "./host/game.host" "readHighScore"
 /// The storage key `Intent.storageSet` writes — owned by the host that reads it.
@@ -134,9 +133,7 @@ let gameContainer = defineContainer(
         restart: on(s =>
           { ...initGame(COLS, ROWS, s.highScore), submitted: false }
         ),
-        step: on(s =>
-          step(s, pickRandom(s.food, freeCells(s.cols, s.rows, s.snake)))
-        ),
+        step: on(s => step(s, pickRandom(s.food, freeCells(s.food, s.snake)))),
         setName: on((s, n) => { name: n }),
         setConnected: on((s, c) => { connected: c }),
         setLeaders: on((s, ls) => { leaders: ls }),

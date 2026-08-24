@@ -40,20 +40,18 @@ let lastIntendedDir = state => switch Array.head(Array.reverse(state.dirQueue)) 
   | None => state.dir
 }
 
-/// Check if position (x, y) is out of grid bounds
-let checkWallCollision = ((x, y), cols, rows) =>
-  x < 0 || x >= cols || y < 0 || y >= rows
-
 /// Check if position is contained within the snake body
 let checkSelfCollision = (head, body) => Array.contains(head)(body)
 
-/// Every cell of the board the snake does not occupy. The host then picks one
-/// at random — rejection sampling in the host could not terminate once the
-/// snake filled the board, and "which cells are legal" is a game rule anyway.
-export let freeCells = (cols, rows, snake) =>
-  range(0, cols)
+/// An unbounded world still needs a finite sampling window for the next food.
+/// Centering the window on the last food keeps food reachable while allowing
+/// the snake to travel forever in any direction.
+export let freeCells = ((x, y), snake) =>
+  range(x - 12, x + 13)
     |> toArray
-    |> Array.flatMap(x => range(0, rows) |> toArray |> Array.map(y => (x, y)))
+    |> Array.flatMap(x =>
+      range(y - 12, y + 13) |> toArray |> Array.map(y => (x, y))
+    )
     |> Array.filter(cell => !Array.contains(cell)(snake))
 
 /// Initialize a fresh game state
@@ -116,9 +114,8 @@ export let step = (state, randomFood) => switch state.status {
     } in
     let head = Array.head(state.snake) |> Option.unwrapOr((0, 0)) in
     let newHead = nextHead(head, currentDir) in
-    let hitWall = checkWallCollision(newHead, state.cols, state.rows) in
     let hitSelf = checkSelfCollision(newHead, state.snake) in
-      hitWall || hitSelf
+      hitSelf
         ? let finalHighScore = max(state.score, state.highScore) in
           { ...state, status: GameOver, highScore: finalHighScore }
         : let eating = newHead == state.food in

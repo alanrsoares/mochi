@@ -28,7 +28,7 @@
     "prepare": "bun scripts/setup-hooks.ts",
     "example": "bun run mochi build examples/cli.mochi && bun examples/cli.js",
     "example:life": "bun run mochi build examples/life/main.mochi && bun examples/life/main.js",
-    "example:snake": "bun examples/snake/server.mts",
+    "example:snake": "bun run --filter @mochi/example-snake build && bun run --filter @mochi/example-snake server",
     "example:async": "bun run mochi build examples/async/main.mochi && bun examples/async/demo.mjs",
     "example:modules": "bun run mochi build examples/modules/main.mochi && bun examples/modules/main.js",
     "example:pipelines": "bun run mochi build examples/pipelines.mochi && bun examples/pipelines.js",

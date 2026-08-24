@@ -8,7 +8,7 @@ Run any example directly using Bun one-liner scripts:
 
 ```bash
 bun example         # Launch interactive CLI example router
-bun example:snake   # Canvas Snake game (Bun.serve + WebSockets)
+bun example:snake   # Build and run the Canvas Snake app
 bun example:life    # Conway's Game of Life
 bun example:async   # Async & Promise integration
 bun example:modules # Multi-file module imports
