@@ -24,7 +24,7 @@ export function compileTargets(
   opts: CompileOptions = {},
 ): Result<CompileTargets, Diagnostic[]> {
   const typed = toTypedProgram(src, {
-    open: true,
+    open: opts.open,
     namespaces: preludeNamespaces,
     plugins: opts.plugins,
   });

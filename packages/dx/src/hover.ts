@@ -8,7 +8,7 @@
  */
 import { resolve } from "node:path";
 import type { Program } from "@mochi/compiler/ast";
-import { toTypedProgramRecovering, toTypedProgramWith } from "@mochi/compiler/compile";
+import { openMode, toTypedProgramRecovering, toTypedProgramWith } from "@mochi/compiler/compile";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import type { InferResult, SymbolInfo, TypeAt } from "@mochi/compiler/infer";
 import { lex } from "@mochi/compiler/lexer";
@@ -110,12 +110,12 @@ const hoverFrom = (
 
 /**
  * Hover at `offset`, or null when the source doesn't typecheck or nothing sits
- * under the cursor. Open-world so host globals infer. Single-file: a file with
+ * under the cursor. Strict by default; `// @mochi open` permits host globals. Single-file: a file with
  * imports won't typecheck (imported constructors are unknown), so prefer
  * `moduleHoverAt` when a path is available.
  */
 export const hoverAt = (src: string, offset: number, path = "<buffer>"): HoverInfo | null => {
-  const r = toTypedProgramRecovering(src, { open: true, namespaces: preludeNamespaces });
+  const r = toTypedProgramRecovering(src, { namespaces: preludeNamespaces });
   return isOk(r) ? hoverFrom(r.value.res, offset, src, path) : null;
 };
 
@@ -150,7 +150,10 @@ export const moduleHoverAt = async (
   const ctx = await moduleContext(entry, read, { plugins: opts.plugins });
   if (isErr(ctx)) return hoverAt(src, offset, entry);
 
-  const typed = toTypedProgramWith(program, ctx.value, { plugins: opts.plugins });
+  const typed = toTypedProgramWith(program, ctx.value, {
+    plugins: opts.plugins,
+    open: openMode(src),
+  });
   if (isErr(typed)) return null;
   const qualify = qualifierMap(ctx.value.qualTypes, program);
   return hoverFrom(typed.value.res, offset, src, entry, qualify);

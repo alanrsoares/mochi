@@ -1,6 +1,7 @@
 // Snake — re-reduced game container + mochi UI. Host seams only for APIs the
 // surface cannot express yet (timer, keyboard, localStorage, canvas2d/rAF,
 // fetch/WS). Board pixels sync via CanvasBoard.mochi effects → canvas.host.
+// @mochi open
 import { useEffect, hookDeps0 } from "@mochi/plugin-preact/hooks"
 import {
   defineContainer,
@@ -245,8 +246,7 @@ export let App = _ =>
             // return the whole state — which is not a patch (see the `restart` arm).
             store.$derived.gameOver.value ? store.actions.restart() : ()
         }
-    }
-    )
+    })
   )(hookDeps0()) in
   // The only surviving hand-rolled effect: a mount-once DOM/socket
   // subscription with a cleanup. The initial fetch and the localStorage write

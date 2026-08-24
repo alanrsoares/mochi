@@ -184,8 +184,7 @@ let genExpr = (e, ctx) => switch e {
         |> map(p => switch p {
           | Ast.IPLit(value) => escapeTemplateLiteral(value)
           | Ast.IPExpr(ex) => "\${${genExpr(ex, ctx)}}"
-        }
-        )
+        })
     ) in
       "`${body}`"
 }
@@ -203,8 +202,7 @@ let genList = (elements, ctx) =>
       |> map(el => switch el {
         | Ast.SEExpr(ex) => "yield (${genExpr(ex, ctx)});"
         | Ast.SESpread(ex) => "yield* (${genExpr(ex, ctx)});"
-      }
-      )
+      })
   ) in
     "_list(function* () {${yields == "" ? "" : " ${yields} "}})"
 
@@ -874,10 +872,48 @@ let typeExprArity = te => switch te {
   | _ => 0
 }
 
+/// `$a0, $a1, …` — must stay byte-for-byte aligned with TS codegen.
+let externArgs = n =>
+  loop (i = 0, acc = "") {
+    i >= n
+      ? acc
+      : recur(i + 1, acc == "" ? "$a${show(i)}" : "${acc}, $a${show(i)}")
+  }
+
 /// extern → ESM import. Arity ≥ 2 wraps the host in `_curry` (ADR 0005 / #24).
 /// `imported == "default"` emits a default import (ADR 0009 / styled-cva).
 let genExtern = s => switch s {
-  | Ast.SExtern(name, _, typeExpr, modName, imported, _, _, _) => imported == "default"
+  | Ast.SExtern(name, _, typeExpr, modName, imported, _, _, _) => Str.startsWith(
+      "mochi:global:",
+      modName
+    )
+      ? let target = Str.slice(13, Str.length(modName), modName) in
+      let base = "globalThis[${jsStringLit(target)}]" in
+        "const ${name} = ${imported == "" ? base : "${base}[${jsStringLit(imported)}]"};"
+      : Str.startsWith("mochi:get:", modName)
+      ? let target = Str.slice(10, Str.length(modName), modName) in
+        "const ${name} = ($receiver) => $receiver[${jsStringLit(target)}];"
+      : Str.startsWith("mochi:set:", modName)
+      ? let target = Str.slice(10, Str.length(modName), modName) in
+        "const ${name} = _curry(2, ($receiver, $value) => ($receiver[${jsStringLit(target)}] = $value));"
+      : Str.startsWith("mochi:new:", modName)
+      ? let target = Str.slice(10, Str.length(modName), modName) in
+      let arity = typeExprArity(typeExpr) in
+      let args = externArgs(arity) in
+        arity == 0
+          ? "const ${name} = () => new globalThis[${jsStringLit(target)}]();"
+          : "const ${name} = _curry(${show(arity)}, (${args}) => new globalThis[${jsStringLit(target)}](${args}));"
+      : Str.startsWith("mochi:send:", modName)
+      ? let target = Str.slice(11, Str.length(modName), modName) in
+      let arity = typeExprArity(typeExpr) in
+      let args = externArgs(arity - 1) in
+      let fn = args == ""
+        ? "($receiver) => $receiver[${jsStringLit(target)}]()"
+        : "($receiver, ${args}) => $receiver[${jsStringLit(target)}](${args})" in
+        arity < 2
+          ? "const ${name} = ${fn};"
+          : "const ${name} = _curry(${show(arity)}, ${fn});"
+      : imported == "default"
       ? "import ${name} from ${jsStringLit(modName)};"
       : let arity = typeExprArity(typeExpr) in
         arity <= 1

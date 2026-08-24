@@ -36,7 +36,7 @@ import type { Env, Scheme, TypeAt } from "../infer/infer";
 import { preludeNamespaces } from "../prelude/prelude";
 import { codegen, collectRuntimeDeps } from "./codegen";
 
-export type CodegenTsOptions = { runtimeImport?: string };
+export type CodegenTsOptions = { runtimeImport?: string; open?: boolean };
 
 export const DEFAULT_RUNTIME_IMPORT = "@mochi/runtime";
 
@@ -303,15 +303,15 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
 };
 
 /**
- * Compile a single `.mochi` source to a typed `.ts` module (CLI `mochi ts`). Open
- * world, no cross-module imports resolved — a file that imports from another
+ * Compile a single `.mochi` source to a typed `.ts` module (CLI `mochi ts`). Strict
+ * by default, no cross-module imports resolved — a file that imports from another
  * module won't typecheck alone; use `build --emit=ts` for a graph.
  */
 export const codegenTs = (
   src: string,
   opts: CodegenTsOptions = {},
 ): Result<string, Diagnostic[]> => {
-  const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces });
+  const r = toTypedProgram(src, { open: opts.open, namespaces: preludeNamespaces });
   if (isErr(r)) return r;
   const { prog, res } = r.value;
   return ok(

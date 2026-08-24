@@ -1,0 +1,17 @@
+// Typed JavaScript interop without a hand-written host declaration file.
+// These externs compile to direct `globalThis` access and ordinary JS calls.
+
+type Person = { name: string }
+
+extern random : () -> number = global "Math" "random"
+extern getName : Person -> string = get "name"
+extern setName : Person -> string -> () = set "name"
+extern trim : string -> string = send "trim"
+extern makeDate : number -> a = new "Date"
+
+let person = { name: " Mochi " }
+let displayName = trim(getName(person))
+let _ = setName(person, "Mochi")
+let renamed = getName(person)
+let sampled = random()
+let epoch = makeDate(0)

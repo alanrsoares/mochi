@@ -812,6 +812,8 @@ export type EmitDtsOptions = {
    * list (`resolvePlugins`, ADR 0011).
    */
   plugins?: LanguagePlugin[];
+  /** Permit unbound host globals; `// @mochi open` remains file-local. */
+  open?: boolean;
 };
 
 /** Emit `.d.ts` from an already-typed program — shared by `emitDts` and multi-target compile. */
@@ -839,7 +841,7 @@ export function emitDtsFromTyped(
 
 export function emitDts(src: string, opts: EmitDtsOptions = {}): Result<string, Diagnostic[]> {
   const r = toTypedProgram(src, {
-    open: true,
+    open: opts.open,
     namespaces: preludeNamespaces,
     plugins: opts.plugins,
   });

@@ -14,13 +14,13 @@ const runtimeLanguagePlugin: LanguagePlugin = {
 
 describe("vite-plugin-mochi", () => {
   it("ignores non-mochi files", () => {
-    const plugin = mochiPlugin();
+    const plugin = mochiPlugin({ open: true });
     const result = plugin.transform("const x = 1;", "src/main.ts");
     expect(result).toBeNull();
   });
 
   it("compiles standard .mochi file; only source `export` reaches the emit (ADR 0052)", () => {
-    const plugin = mochiPlugin();
+    const plugin = mochiPlugin({ open: true });
     const result = plugin.transform(
       "let hidden = 1\nexport let double = (x) => x * 2",
       "src/math.mochi",
@@ -52,7 +52,7 @@ describe("vite-plugin-mochi", () => {
   });
 
   it("emits .mochi sibling imports so Vite re-enters the plugin", () => {
-    const plugin = mochiPlugin();
+    const plugin = mochiPlugin({ open: true });
     const code = `import { BadgeShell } from "../ui/primitives"
 let HeaderBadge = props => <BadgeShell>{props.label}</BadgeShell>`;
     const result = plugin.transform(code, "src/HeaderBadge.mochi");
@@ -62,7 +62,7 @@ let HeaderBadge = props => <BadgeShell>{props.label}</BadgeShell>`;
   });
 
   it("keeps bare package import specs (ADR 0015)", () => {
-    const plugin = mochiPlugin();
+    const plugin = mochiPlugin({ open: true });
     const code = `import { useState } from "@mochi/plugin-preact/hooks"
 let x = useState`;
     const result = plugin.transform(code, "src/Comp.mochi");
@@ -97,6 +97,7 @@ let x = useState`;
 
   it("activates runtime plugins before transforming Mochi modules", async () => {
     const plugin = mochiPlugin({
+      open: true,
       runtimePlugins: {
         component: languagePluginsComponent("runtime-test", [runtimeLanguagePlugin]),
       },

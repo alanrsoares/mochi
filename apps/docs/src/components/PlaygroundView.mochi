@@ -1,5 +1,8 @@
 // Playground chrome — toolbar + body slot. Compile / hooks / refs stay in
 // Playground.tsx (let-in → IIFE breaks Rules of Hooks).
+// This declaration-only component is emitted independently; imported TSX UI
+// components are intentionally host-provided at that boundary.
+// @mochi open
 import { Icon } from "../host/widgets.host"
 import { StatusLabel, ToolBtn, ToolBtnSolid } from "../ui/primitives"
 

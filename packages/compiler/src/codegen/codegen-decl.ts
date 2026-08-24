@@ -51,6 +51,28 @@ const genType = (s: TypeStmt, ctx: GenCtx): string =>
  * `imported === "default"` emits a default import (styled-cva / host kits).
  */
 const genExtern = (s: ExternStmt): string => {
+  const convention = /^mochi:(global|send|get|set|new):(.*)$/.exec(s.module);
+  if (convention) {
+    const [, kind, target] = convention;
+    const global = `globalThis[${JSON.stringify(target)}]`;
+    if (kind === "global")
+      return `const ${s.name} = ${s.imported ? `${global}[${JSON.stringify(s.imported)}]` : global};`;
+    if (kind === "get")
+      return `const ${s.name} = ($receiver) => $receiver[${JSON.stringify(target)}];`;
+    if (kind === "set")
+      return `const ${s.name} = _curry(2, ($receiver, $value) => ($receiver[${JSON.stringify(target)}] = $value));`;
+    if (kind === "new") {
+      const arity = typeExprArity(s.typeExpr);
+      const args = Array.from({ length: arity }, (_, i) => `$a${i}`).join(", ");
+      return arity === 0
+        ? `const ${s.name} = () => new ${global}();`
+        : `const ${s.name} = _curry(${arity}, (${args}) => new ${global}(${args}));`;
+    }
+    const arity = typeExprArity(s.typeExpr);
+    const args = Array.from({ length: Math.max(0, arity - 1) }, (_, i) => `$a${i}`).join(", ");
+    const fn = `($receiver${args ? `, ${args}` : ""}) => $receiver[${JSON.stringify(target)}](${args})`;
+    return arity < 2 ? `const ${s.name} = ${fn};` : `const ${s.name} = _curry(${arity}, ${fn});`;
+  }
   if (s.imported === "default") {
     return `import ${s.name} from ${JSON.stringify(s.module)};`;
   }

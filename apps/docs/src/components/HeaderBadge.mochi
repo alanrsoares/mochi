@@ -5,3 +5,4 @@ export let HeaderBadge = props =>
     <BadgePulse $tone="rose" />
     <span>{props.label}</span>
   </BadgeShell>
+// @mochi open

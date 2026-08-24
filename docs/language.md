@@ -230,6 +230,20 @@ ReScript-informed):
 Host kits in the docs app are **worked examples**, not language surface.
 Inbound “read host `.d.ts` into HM” is not the default FFI path.
 
+`extern` also has small JavaScript calling conventions ([ADR 0059](adr/0059-js-extern-conventions.md)).
+They preserve the typed seam and emit direct JavaScript—no conversion runtime:
+
+```mochi
+extern random : () -> number = global "Math" "random"
+extern getId : Document -> string -> Element = send "getElementById"
+extern title : Document -> string = get "title"
+extern setTitle : Document -> string -> () = set "title"
+extern date : number -> Date = new "Date"
+```
+
+`send`, `get`, and `set` take the JS receiver as their first argument. The existing
+`extern f : T = "module" "export"` form remains the module-import convention.
+
 ## Other surface features
 
 Ternary `cond ? a : b` (looser than `|>`, right-associative), operator sections

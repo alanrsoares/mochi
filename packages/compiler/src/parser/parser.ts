@@ -1181,13 +1181,29 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
     return { value: tk.v, span: tk.span };
   };
 
-  /** `extern name : type = "module" "export"`. */
+  /** Module imports plus contextual JS calling conventions (ADR 0059). */
   function parseExtern(): Extract<Stmt, { kind: "extern" }> {
     const start = expect("extern").span;
     const { name, span: nameSpan } = expectId();
     expect("colon");
     const typeExpr = parseTypeExpr();
     expect("eq");
+    if (peek().t === "id") {
+      const convention = expectId().name;
+      if (!["global", "send", "get", "set", "new"].includes(convention))
+        fail(`expected extern module string or JS convention, got '${convention}'`);
+      const first = expectStr().value;
+      const second = convention === "global" && peek().t === "str" ? expectStr().value : "";
+      return {
+        kind: "extern",
+        name,
+        nameSpan,
+        typeExpr,
+        module: `mochi:${convention}:${first}`,
+        imported: second,
+        span: to(start),
+      };
+    }
     const module = expectStr().value;
     const imported = expectStr().value;
     return { kind: "extern", name, nameSpan, typeExpr, module, imported, span: to(start) };

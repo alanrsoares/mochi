@@ -55,6 +55,21 @@ test("examples/pipelines.mochi compiles and produces its documented values", () 
   expect(out).toEqual({ composed: 22, piped: 81, happy: 20, sad: -1 });
 });
 
+test("examples/interop exercises typed JS extern conventions at runtime", () => {
+  const js = unwrapOk(compile(read("examples/interop/main.mochi")));
+  const out = new Function(`${js}\nreturn { displayName, renamed, sampled, epoch };`)() as {
+    displayName: string;
+    renamed: string;
+    sampled: number;
+    epoch: Date;
+  };
+  expect(out.displayName).toBe("Mochi");
+  expect(out.renamed).toBe("Mochi");
+  expect(out.sampled).toBeGreaterThanOrEqual(0);
+  expect(out.sampled).toBeLessThan(1);
+  expect(out.epoch.getTime()).toBe(0);
+});
+
 /**
  * Compile examples/async and hand its exports back. Prelude `Task.*` is inlined,
  * but the two domain effects are `extern`s — stripping the imports leaves them

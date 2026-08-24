@@ -52,3 +52,4 @@ export let CodegenPanels = props =>
         </pre>
       </div>
     </div>
+// @mochi open

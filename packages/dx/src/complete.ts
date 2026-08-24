@@ -216,7 +216,6 @@ const typedOf = (src: string, opts: CompleteOptions) => {
     return isOk(r) ? r.value : null;
   }
   const r = toTypedProgramRecovering(src, {
-    open: true,
     namespaces: preludeNamespaces,
     nsImports: opts.nsImports,
     plugins,

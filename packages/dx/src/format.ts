@@ -132,8 +132,14 @@ const ctor = (c: Ctor): string =>
 
 const typeExpr = showTypeExpr;
 
-const externStmt = (s: ExternStmt): string =>
-  `extern ${s.name} : ${typeExpr(s.typeExpr)} = ${JSON.stringify(s.module)} ${JSON.stringify(s.imported)}`;
+const externStmt = (s: ExternStmt): string => {
+  const match = /^mochi:(global|send|get|set|new):(.*)$/.exec(s.module);
+  if (!match)
+    return `extern ${s.name} : ${typeExpr(s.typeExpr)} = ${JSON.stringify(s.module)} ${JSON.stringify(s.imported)}`;
+  const [, convention, first] = match;
+  const second = s.imported === "" ? "" : ` ${JSON.stringify(s.imported)}`;
+  return `extern ${s.name} : ${typeExpr(s.typeExpr)} = ${convention} ${JSON.stringify(first)}${second}`;
+};
 
 /**
  * Rendered as a Doc (not a flat string) so a comment interleaved between
@@ -744,7 +750,9 @@ const refoldCall = (e: CallExpr): Doc | null => {
  * and let the lambda body break beneath it (the "trailing lambda hug"), rather
  * than exploding the whole argument list. The hug is a `group` with a `softline`
  * before `)` so a broken body does not glue the closer onto its last line
- * (`body)` / `body)(`). Otherwise the args are their own group after the
+ * (`body)` / `body)(`) — except when the body is already braced (`switch` /
+ * `loop`), where `})` hugs the closer onto the closing brace instead of leaving
+ * a dangling `)\n` staircase. Otherwise the args are their own group after the
  * callee — so a short curried apply can still hug a multiline callee's `)`
  * (`…)(deps)`), instead of being locked into the callee's break decision.
  */
@@ -753,8 +761,19 @@ const callD = (e: CallExpr): Doc => {
   if (refold) return refold;
   const fn = calleeD(e.fn);
   if (e.args.length === 0) return seq(fn, txt("()"));
-  if (e.args[e.args.length - 1]!.kind === "lambda") {
-    return group(seq(fn, txt("("), join(txt(", "), e.args.map(exprD)), softline, txt(")")));
+  const last = e.args[e.args.length - 1]!;
+  if (last.kind === "lambda") {
+    // `switch` / `loop` already end in `}`; glue `)` rather than soft-breaking
+    // to a lone closer under the brace.
+    const hugCloser = last.body.kind === "match" || last.body.kind === "loop";
+    return group(
+      seq(
+        fn,
+        txt("("),
+        join(txt(", "), e.args.map(exprD)),
+        hugCloser ? txt(")") : seq(softline, txt(")")),
+      ),
+    );
   }
   return seq(
     fn,

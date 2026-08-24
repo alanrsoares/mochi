@@ -16,18 +16,26 @@ stdout; the subcommands select another output:
 
 ```bash
 bun run mochi <file.mochi>          # compile to JavaScript (stdout)
-bun run mochi ts   <file.mochi>     # emit typed, strict-clean TypeScript
+bun run mochi --open <file.mochi>   # allow intentional host globals
+bun run mochi ts [--open] <file.mochi> # emit typed, strict-clean TypeScript
 bun run mochi fmt  <file.mochi>     # pretty-print (add --write to edit in place)
 bun run mochi codemod <transform.ts> [--write|--check] [--strict] <globs…>
                                     #   AST codemod: lex/parse → user transform → format
-bun run mochi dts  <file.mochi>     # emit a .d.ts
-bun run mochi build <entry.mochi>   # compile a module graph, writing a .js beside each source
+bun run mochi dts [--open] <file.mochi> # emit a .d.ts
+bun run mochi build [--open] <entry.mochi> # compile a module graph, writing a .js beside each source
                                     #   build --emit=ts writes .ts for the whole graph
 ```
 
 `extern` bindings name a host module by path (`extern log : … = "./host.mjs" "log"`);
 codegen emits that specifier verbatim, so host runtimes are plain `.mjs` files Bun
 resolves at runtime, and the TS backend emits a matching `.d.mts` for them.
+
+## Strict inference
+
+Mochi rejects unbound names by default on every compile and editor surface. This
+catches typos and enables did-you-mean quick fixes. Bind JavaScript values through
+a typed `extern` whenever possible. For a narrow host-global seam, put `// @mochi open`
+on its own line in that file; `--open` is the project-wide migration escape hatch.
 
 ## QA gate
 
@@ -81,8 +89,8 @@ extension).
 - **Document / workspace symbols** — outline of top-level lets/types/ctors; workspace
   search over the open module graph.
 - **Code actions** — `Diagnostic.suggestions` become quick fixes (e.g. did-you-mean on
-  unbound names in **strict** inference). Open-world compile still treats unknown
-  names as host globals, so typo suggestions are not guessed there.
+  unbound names). A file using `// @mochi open` deliberately treats unknown names as
+  host globals, so typo suggestions are not guessed there.
 - **Diagnostics** — the same `Diagnostic` values the compiler produces, with spans; a
   `--json` structured form is available for machine consumers. Check/infer may emit
   **several** diagnostics in one run (ADR 0004); lex/parse still stop at the first.
