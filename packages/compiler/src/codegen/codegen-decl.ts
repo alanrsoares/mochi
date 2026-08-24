@@ -85,13 +85,20 @@ const genExtern = (s: ExternStmt): string => {
     return `import ${s.name} from ${JSON.stringify(s.module)};`;
   }
   const arity = typeExprArity(s.typeExpr);
+  // A `curried` host is already `a => b => c` (ADR 0064), so the flat impl mochi
+  // curries must apply it one argument at a time. Below arity 2 the two host
+  // shapes coincide and the plain import is already right.
   if (arity < 2) {
     const spec = s.imported === s.name ? s.name : `${s.imported} as ${s.name}`;
     return `import { ${spec} } from ${JSON.stringify(s.module)};`;
   }
   const raw = `$${s.name}`;
   const importLine = `import { ${s.imported} as ${raw} } from ${JSON.stringify(s.module)};`;
-  const wrapLine = `const ${s.name} = _curry(${arity}, ${raw});`;
+  const args = Array.from({ length: arity }, (_, i) => `$a${i}`);
+  const flat = s.curried
+    ? `(${args.join(", ")}) => ${raw}${args.map((a) => `(${a})`).join("")}`
+    : raw;
+  const wrapLine = `const ${s.name} = _curry(${arity}, ${flat});`;
   return `${importLine}\n${wrapLine}`;
 };
 

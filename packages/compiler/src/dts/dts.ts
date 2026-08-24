@@ -757,8 +757,34 @@ export const builtinDeclsIn = (bodyText: string, headerText: string): string[] =
     )
     .map((bt) => typeDecl(bt.name, bt.params, bt.ctors));
 
-/** An extern binding paired with the inferred scheme its declared type resolved to. `imported` is the JS export name (what the emitted `import { … }` binds). */
-export type ExternBinding = { imported: string; scheme: Scheme };
+/**
+ * An extern binding paired with the inferred scheme its declared type resolved to.
+ * `imported` is the JS export name (what the emitted `import { … }` binds).
+ * `curried` mirrors the extern's calling convention (ADR 0064) — this declaration
+ * describes the HOST, and a curried host takes exactly one argument per call.
+ */
+export type ExternBinding = { imported: string; scheme: Scheme; curried?: boolean };
+
+/**
+ * `(a: A) => (b: B) => R` — a curried host's own shape. Unlike `flatFnType` there
+ * are no partial-application overloads to offer: mochi's `_curry` wrapper is built
+ * around this host, not exported by it, so the host takes one argument per call.
+ */
+function curriedHostType(t: Type, arity: number): string {
+  const ids: number[] = [];
+  freeVars(t, ids);
+  const names = new Map(ids.map((id, i) => [id, LETTERS[i] ?? `T${i}`]));
+  const head = ids.length ? `<${ids.map((id) => names.get(id)).join(", ")}>` : "";
+  const params: string[] = [];
+  let cur = t;
+  for (let i = 0; i < arity && cur.kind === "arrow"; i++) {
+    params.push(`${String.fromCharCode(97 + i)}: ${tsOf(cur.from, names)}`);
+    cur = cur.to;
+  }
+  let out = tsOf(cur, names);
+  for (let i = params.length - 1; i >= 0; i--) out = `(${params[i]}) => ${out}`;
+  return `${head}${out}`;
+}
 
 /**
  * A `.d.ts` for an extern module (`extern name : T = "./host.js" "jsName"`),
@@ -790,12 +816,14 @@ export function externModuleDts(externs: ExternBinding[]): string {
       .exhaustive();
   const seen = new Set<string>();
   const lines: string[] = [];
-  for (const { imported, scheme } of externs) {
+  for (const { imported, scheme, curried } of externs) {
     if (seen.has(imported)) continue;
     seen.add(imported);
     const t = scheme.type;
     const n = arrowCount(t);
-    if (n === 0) {
+    if (n >= 1 && curried) {
+      lines.push(`export declare const ${imported}: ${curriedHostType(t, n)};`);
+    } else if (n === 0) {
       const ids: number[] = [];
       freeVars(t, ids);
       const names = new Map(ids.map((id) => [id, "any"]));

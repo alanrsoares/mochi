@@ -1237,10 +1237,19 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
     expect("colon");
     const typeExpr = parseTypeExpr();
     expect("eq");
+    // `curried` marks a host written `a => b => c` rather than `(a, b) => c`
+    // (ADR 0064). It describes the artifact, so it precedes the module spec and
+    // leaves the signature — which always describes mochi-side usage — untouched.
+    const curried = peek().t === "id" && (peek() as Located & { v: string }).v === "curried";
+    if (curried) next();
     if (peek().t === "id") {
       const convention = expectId().name;
       if (!["global", "send", "get", "set", "new"].includes(convention))
         fail(`expected extern module string or JS convention, got '${convention}'`);
+      if (curried)
+        fail(
+          `'curried' applies to a module extern, not the '${convention}' convention — give the host's module and export instead`,
+        );
       const first = expectStr().value;
       // `global "Math" "random"` selects a global member, while
       // `new "three" "Vector3"` selects an ESM constructor export.
@@ -1261,7 +1270,17 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
     }
     const module = expectStr().value;
     const imported = expectStr().value;
-    return { kind: "extern", name, nameSpan, params, typeExpr, module, imported, span: to(start) };
+    return {
+      kind: "extern",
+      name,
+      nameSpan,
+      params,
+      typeExpr,
+      module,
+      imported,
+      ...(curried ? { curried } : {}),
+      span: to(start),
+    };
   }
 
   /** `import { a, b } from "./mod"` or `import * as Alias from "./mod"` (ADR 0002). */

@@ -245,6 +245,20 @@ extern date : number -> Date = new "Date"
 `send`, `get`, and `set` take the JS receiver as their first argument. The existing
 `extern f : T = "module" "export"` form remains the module-import convention.
 
+A signature always describes **mochi-side usage**, so `a -> (b -> c)` and `a -> b -> c`
+are one type and `fmt` normalizes the parentheses away. What the *host* looks like is a
+separate fact, and `curried` states it ([ADR 0064](adr/0064-curried-extern-hosts.md)):
+
+```mochi
+extern add       : number -> number -> number = "./m" "add"                // host is (a, b) => c
+extern makeAdder : number -> number -> number = curried "./m" "makeAdder"  // host is a => b => c
+```
+
+Both bind a normal curried mochi function — `f(a, b)`, `f(a)(b)`, and partial application
+all work either way. `curried` only changes how the host is reached: mochi adapts it with
+`_curry(2, ($a0, $a1) => $makeAdder($a0)($a1))` instead of wrapping it directly. Without
+it, a curried host would receive both arguments at once and never invoke its callback.
+
 For a host class, declare an opaque foreign type and use the two-string `new`
 form. It imports the constructor from the package while keeping the host value
 nominal in Mochi—there is no invented Mochi representation of a `Vector3`.

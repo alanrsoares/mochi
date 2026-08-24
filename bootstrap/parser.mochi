@@ -1331,7 +1331,12 @@ let parseExtern = (toks, pos) =>
       let? p3 = expectTok(TColon, toks, p2) in
       let? (t, p4) = parseTypeExpr(toks, p3) in
       let? p5 = expectTok(TEq, toks, p4) in
-      let nextTok = tokAt(toks, p5).tok in
+      // `curried` marks a host written `a => b => c` rather than `(a, b) => c`
+      // (ADR 0064). It describes the artifact, so it precedes the module spec and
+      // leaves the signature — which always describes mochi-side usage — alone.
+      let isCurried = tokAt(toks, p5).tok == TId("curried") in
+      let pConv = isCurried ? p5 + 1 : p5 in
+      let nextTok = tokAt(toks, pConv).tok in
         nextTok == TId(
           "global"
         ) || nextTok == TId(
@@ -1339,30 +1344,38 @@ let parseExtern = (toks, pos) =>
         ) || nextTok == TId(
           "get"
         ) || nextTok == TId("set") || nextTok == TId("new")
-          ? let? (convention, p6) = expectId(toks, p5) in
-          let? (first, p7) = expectStr(toks, p6) in
-          let hasSecond = switch tokAt(toks, p7).tok {
-            | TStr(_) => convention.name == "global" || convention.name == "new"
-            | _ => false
-          } in
-          let? (second, p8) = hasSecond ? expectStr(toks, p7) : Ok(("", p7)) in
-            Ok(
-              (
-                Ast.SExtern(
-                  nm.name,
-                  nm.span,
-                  params,
-                  t,
-                  "mochi:${convention.name}:${first}",
-                  second,
-                  false,
-                  None,
-                  toEnd(start, toks, p8)
-                ),
-                p8
-              )
+          ? isCurried
+            ? errAt(
+              "'curried' applies to a module extern, not a JS convention — give the host's module and export instead",
+              tokAt(toks, pConv)
             )
-          : let? (moduleName, p6) = expectStr(toks, p5) in
+            : let? (convention, p6) = expectId(toks, pConv) in
+            let? (first, p7) = expectStr(toks, p6) in
+            let hasSecond = switch tokAt(toks, p7).tok {
+              | TStr(_) => convention.name == "global" || convention.name == "new"
+              | _ => false
+            } in
+            let? (second, p8) = hasSecond
+              ? expectStr(toks, p7)
+              : Ok(("", p7)) in
+              Ok(
+                (
+                  Ast.SExtern(
+                    nm.name,
+                    nm.span,
+                    params,
+                    t,
+                    "mochi:${convention.name}:${first}",
+                    second,
+                    false,
+                    false,
+                    None,
+                    toEnd(start, toks, p8)
+                  ),
+                  p8
+                )
+              )
+          : let? (moduleName, p6) = expectStr(toks, pConv) in
           let? (importedName, p7) = expectStr(toks, p6) in
             Ok(
               (
@@ -1373,6 +1386,7 @@ let parseExtern = (toks, pos) =>
                   t,
                   moduleName,
                   importedName,
+                  isCurried,
                   false,
                   None,
                   toEnd(start, toks, p7)
@@ -1502,13 +1516,14 @@ let setTypeExported = s => switch s {
   | other => other
 }
 let setExternMeta = (exported, doc, s) => switch s {
-  | Ast.SExtern(name, nameSpan, params, t, m, i, _, _, span) => Ast.SExtern(
+  | Ast.SExtern(name, nameSpan, params, t, m, i, curried, _, _, span) => Ast.SExtern(
       name,
       nameSpan,
       params,
       t,
       m,
       i,
+      curried,
       exported,
       doc,
       span

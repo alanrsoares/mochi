@@ -108,6 +108,7 @@ What else was on the table and why not.
 | [0061](0061-web-standard-library.md) | Web standard-library bindings | Accepted |
 | [0062](0062-extern-generic-binders.md) | Explicit generic binders on externs | Accepted |
 | [0063](0063-bun-standard-library.md) | Bun standard-library bindings | Accepted |
+| [0064](0064-curried-extern-hosts.md) | Host call shape is a calling convention, not type syntax | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

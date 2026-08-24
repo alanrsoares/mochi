@@ -135,8 +135,11 @@ const typeExpr = showTypeExpr;
 const externStmt = (s: ExternStmt): string => {
   const params = s.params.length ? `<${s.params.join(", ")}>` : "";
   const match = /^mochi:(global|send|get|set|new):(.*)$/.exec(s.module);
-  if (!match)
-    return `extern ${s.name}${params} : ${typeExpr(s.typeExpr)} = ${JSON.stringify(s.module)} ${JSON.stringify(s.imported)}`;
+  if (!match) {
+    // `curried` describes the host's shape, not the type (ADR 0064).
+    const shape = s.curried ? "curried " : "";
+    return `extern ${s.name}${params} : ${typeExpr(s.typeExpr)} = ${shape}${JSON.stringify(s.module)} ${JSON.stringify(s.imported)}`;
+  }
   const [, convention, first] = match;
   const second = s.imported === "" ? "" : ` ${JSON.stringify(s.imported)}`;
   return `extern ${s.name}${params} : ${typeExpr(s.typeExpr)} = ${convention} ${JSON.stringify(first)}${second}`;

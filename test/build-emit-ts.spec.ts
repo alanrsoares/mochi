@@ -37,9 +37,13 @@ export let grow = s => scale(2.0, s)`,
   "main.mochi": `
 import { unit, grow } from "./ops.mochi"
 extern log : string -> string = "./host.js" "log"
+extern tag : string -> string -> string = "./host.js" "tag"
+extern prefix : string -> string -> string = curried "./host.js" "prefix"
 export let twice = s => grow(grow(s))
 let base = twice(unit)
-let noise = log("built")`,
+let noise = log("built")
+let flat = tag("a", "b")
+let curried = prefix("a")("b")`,
 };
 
 let outputs: ModuleOutput[] = [];
@@ -89,4 +93,14 @@ test("an extern module emits a self-contained `.d.ts` (gap 3)", () => {
   const dts = outputs.find((o) => basename(o.path) === "host.d.ts");
   expect(dts).toBeDefined();
   expect(dts?.js).toContain("export declare const log: (a: string) => string;");
+});
+
+test("a `curried` host is declared in its own nested shape (ADR 0064)", () => {
+  const dts = outputs.find((o) => basename(o.path) === "host.d.ts");
+  // `tag` is flat: the sidecar offers every grouping `_curry` accepts.
+  expect(dts?.js).toContain("(a: string, b: string): string;");
+  // `prefix` is curried: one argument per call, and the emitted module adapts it.
+  expect(dts?.js).toContain("export declare const prefix: (a: string) => (b: string) => string;");
+  const mainTs = readFileSync(join(DIR, "main.ts"), "utf8");
+  expect(mainTs).toContain("($a0, $a1) => $prefix($a0)($a1)");
 });
