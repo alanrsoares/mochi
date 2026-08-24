@@ -74,7 +74,7 @@ let empty = []
 let dbl = x => x * 2
 let over4 = x => x > 4
 let plus = a => b => a + b
-let total = [1, 2, 3, 4] |> map(dbl) |> filter(over4) |> reduce(plus)(0)
+let total = [1, 2, 3, 4] |> map(dbl) |> filter(over4) |> reduce(plus, 0)
 let count = nums |> length
 let shout = capitalize("hello")
 

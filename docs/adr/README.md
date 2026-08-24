@@ -109,6 +109,7 @@ What else was on the table and why not.
 | [0062](0062-extern-generic-binders.md) | Explicit generic binders on externs | Accepted |
 | [0063](0063-bun-standard-library.md) | Bun standard-library bindings | Accepted |
 | [0064](0064-curried-extern-hosts.md) | Host call shape is a calling convention, not type syntax | Accepted |
+| [0065](0065-canonical-flat-calls.md) | `fmt` canonicalizes `f(a)(b)` to `f(a, b)` where arity is known statically | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

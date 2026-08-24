@@ -178,5 +178,7 @@ test("guards format idempotently and keep the `when` clause", () => {
 `;
   const once = unwrapOk(format(src));
   expect(unwrapOk(format(once))).toBe(once);
-  expect(once).toContain("| x when gt(x)(2) => x");
+  // `gt` is a prelude binary, so the guard canonicalizes twice: `gt(x)(2)` →
+  // `gt(x, 2)` (ADR 0065) → the operator sugar `x > 2`. Same call throughout.
+  expect(once).toContain("| x when x > 2 => x");
 });

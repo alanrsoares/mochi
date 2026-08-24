@@ -63,6 +63,7 @@ import type { FormatApi, FormatHook, LanguagePlugin } from "@mochi/compiler/exte
 import { resolvePlugins, runFormatHooks } from "@mochi/compiler/extensions";
 import { lex, skipStringLiteral } from "@mochi/compiler/lexer";
 import { parseRecovering } from "@mochi/compiler/parser";
+import { namespaceRuntime, preludeEnv, runtimeArity } from "@mochi/compiler/prelude";
 import { showTypeExpr } from "@mochi/compiler/show-type-expr";
 import { match } from "@onrails/pattern";
 import { map, mapErr, pipe, type Result } from "@onrails/result";
@@ -764,6 +765,10 @@ const refoldCall = (e: CallExpr): Doc | null => {
 const callD = (e: CallExpr): Doc => {
   const refold = refoldCall(e);
   if (refold) return refold;
+  // `f(a)(b)` → `f(a, b)` for a local flat callable (ADR 0065). The result has a
+  // single argument group, so this recurses at most once.
+  const flattened = flattenCallSpine(e);
+  if (flattened) return callD(flattened);
   const fn = calleeD(e.fn);
   if (e.args.length === 0) return seq(fn, txt("()"));
   const last = e.args[e.args.length - 1]!;
@@ -850,6 +855,220 @@ const formatApi: FormatApi = { exprD, memberD, flat, strLit };
  * `format` is synchronous, so a call never observes another call's hooks.
  */
 let formatHooks: FormatHook[] = [];
+
+/**
+ * Flat-callable arity of every name the printer can be sure of (ADR 0065):
+ * same-file top-level lambda `let`s, plus prelude builtins whose emitted
+ * `_curry(N, …)` states their arity. Module-level and rebuilt per `format()`
+ * call, for the same reason as `formatHooks`.
+ *
+ * A name bound anywhere else in the file (lambda param, `let … in`, loop param,
+ * pattern binding) is dropped, and a local top-level binding overrides the
+ * prelude entry: the printer has no scopes, so anything that could be shadowed
+ * must not be regrouped against the wrong callable.
+ */
+let flatArity: ReadonlyMap<string, number> = new Map();
+
+/** Names the file rebinds — also guards namespace callees (`Array.map` when `Array` is shadowed). */
+let shadowedNames: ReadonlySet<string> = new Set();
+
+/** Params codegen collapses into one flat JS function — `x => y => e` and `(x, y) => e` alike (`collapseLambda`). */
+const collapsedArity = (e: Expr): number =>
+  e.kind === "lambda" ? e.params.length + collapsedArity(e.body) : 0;
+
+const paramNames = (p: LamParam): string[] =>
+  p.kind === "name" ? [p.name] : p.kind === "ptuple" ? p.names : p.fields;
+
+/** Every name the file binds somewhere other than a top-level `let` — the shadowing over-approximation. */
+const innerBindings = (stmts: Stmt[]): Set<string> => {
+  const out = new Set<string>();
+  const pat = (p: Pattern): void => {
+    match(p)
+      .with({ kind: "pbind" }, (b) => void out.add(b.name))
+      .with({ kind: "ptuple" }, (t) => {
+        for (const el of t.elems) pat(el);
+      })
+      .with({ kind: "precord" }, (r) => {
+        for (const f of r.fields) pat(f.pat);
+      })
+      .with({ kind: "pctor" }, (c) => {
+        for (const a of c.args) pat(a);
+      })
+      .with({ kind: "parr" }, (a) => {
+        for (const el of a.elems) pat(el);
+        if (a.rest) pat(a.rest);
+      })
+      .with({ kind: "plist" }, (l) => {
+        for (const el of l.elems) pat(el);
+        if (l.rest) pat(l.rest);
+      })
+      .with({ kind: "por" }, (o) => {
+        for (const alt of o.alts) pat(alt);
+      })
+      .otherwise(() => {});
+  };
+  const visit = (e: Expr): void => {
+    match(e)
+      .with({ kind: "lambda" }, (l) => {
+        for (const p of l.params) for (const n of paramNames(p)) out.add(n);
+        visit(l.body);
+      })
+      .with({ kind: "letin" }, (l) => {
+        out.add(l.name);
+        visit(l.value);
+        visit(l.body);
+      })
+      .with({ kind: "letbind" }, (l) => {
+        for (const n of paramNames(l.param)) out.add(n);
+        visit(l.value);
+        visit(l.body);
+      })
+      .with({ kind: "loop" }, (l) => {
+        for (const lp of l.params) {
+          out.add(lp.name);
+          visit(lp.init);
+        }
+        visit(l.body);
+      })
+      .with({ kind: "match" }, (m) => {
+        visit(m.scrutinee);
+        for (const a of m.arms) {
+          pat(a.pattern);
+          if (a.guard) visit(a.guard);
+          visit(a.body);
+        }
+      })
+      .with({ kind: "call" }, (c) => {
+        visit(c.fn);
+        for (const a of c.args) visit(a);
+      })
+      .with({ kind: "pipe" }, (p) => {
+        visit(p.left);
+        visit(p.right);
+      })
+      .with({ kind: "ternary" }, (t) => {
+        visit(t.cond);
+        visit(t.then);
+        visit(t.else);
+      })
+      .with({ kind: "field" }, (f) => visit(f.target))
+      .with({ kind: "record" }, (r) => {
+        for (const f of r.fields) visit(f.value);
+        if (r.spread) visit(r.spread);
+      })
+      .with({ kind: "tuple" }, (t) => {
+        for (const el of t.elements) visit(el);
+      })
+      .with({ kind: "arr" }, (s) => {
+        for (const el of s.elements) visit(el.expr);
+      })
+      .with({ kind: "list" }, (s) => {
+        for (const el of s.elements) visit(el.expr);
+      })
+      .with({ kind: "set" }, (s) => {
+        for (const el of s.elements) visit(el.expr);
+      })
+      .with({ kind: "map" }, (m) => {
+        for (const en of m.entries) {
+          visit(en.key);
+          visit(en.value);
+        }
+      })
+      .with({ kind: "recur" }, (r) => {
+        for (const a of r.args) visit(a);
+      })
+      .with({ kind: "interp" }, (i) => {
+        for (const p of i.parts) if (typeof p !== "string") visit(p);
+      })
+      .otherwise(() => {});
+  };
+  for (const s of stmts) if (s.kind === "let") visit(s.value);
+  return out;
+};
+
+/** Every top-level name the file introduces — `let`, `extern`, and imported bindings. */
+const topLevelNames = (stmts: Stmt[]): Set<string> => {
+  const out = new Set<string>();
+  for (const s of stmts) {
+    if (s.kind === "let" || s.kind === "extern") out.add(s.name);
+    if (s.kind === "import") {
+      for (const n of s.names) out.add(n.name);
+      if (s.alias) out.add(s.alias.name);
+    }
+  }
+  return out;
+};
+
+const buildFlatArity = (
+  stmts: Stmt[],
+  innerBound: ReadonlySet<string>,
+): ReadonlyMap<string, number> => {
+  const out = new Map<string, number>();
+  // Prelude builtins first: their arity is fixed by the emitted runtime, so it is
+  // known without inference. A file that rebinds the name loses the entry.
+  for (const name of Object.keys(preludeEnv)) {
+    const n = runtimeArity[name];
+    if (n !== undefined && n >= 2 && !innerBound.has(name)) out.set(name, n);
+  }
+  for (const s of stmts) {
+    if (s.kind !== "let") continue;
+    // A top-level binding shadows the prelude entry either way: with its own
+    // arity when it is a lambda chain, or with nothing when it is a value.
+    out.delete(s.name);
+    if (innerBound.has(s.name)) continue;
+    const n = collapsedArity(s.value);
+    if (n >= 2) out.set(s.name, n);
+  }
+  // An extern's host arity is a seam fact the printer should not guess at.
+  for (const s of stmts) if (s.kind === "extern") out.delete(s.name);
+  return out;
+};
+
+/** `Array.map` → its runtime's flat arity, or null when the namespace is shadowed or unknown. */
+const namespaceArity = (target: Expr, member: string): number | null => {
+  if (target.kind !== "ref" || shadowedNames.has(target.name)) return null;
+  const jsId = namespaceRuntime[target.name]?.[member];
+  if (jsId === undefined) return null;
+  const n = runtimeArity[jsId];
+  return n !== undefined && n >= 2 ? n : null;
+};
+
+/**
+ * `f(a)(b)` → `f(a, b)` when `f`'s flat arity is known (ADR 0065): a same-file
+ * top-level lambda binding, or a prelude builtin. Both lower to one
+ * `_curry`-wrapped flat function, so every grouping of the same arguments is the
+ * same call and the flat one is canonical. Purely syntactic — no types — so it
+ * holds in a file that does not typecheck.
+ *
+ * Bails on anything it cannot see through: an unknown callee (a `let`-bound
+ * value, an extern, an imported name), sugar-provenance calls (`origin`, e.g.
+ * JSX), a nullary group (`f()(x)` passes `unit`, which merging would drop), and
+ * over-application past the known arity, where the extra groups apply the RESULT
+ * rather than the callable.
+ */
+const flattenCallSpine = (e: CallExpr): CallExpr | null => {
+  // Walked outermost-first, so the collected groups are reversed back into
+  // source order before they are concatenated.
+  const outward: Expr[][] = [];
+  let cur: Expr = e;
+  while (cur.kind === "call") {
+    if (cur.origin) return null;
+    outward.push(cur.args);
+    cur = cur.fn;
+  }
+  const groups = outward.toReversed();
+  if (groups.length < 2 || groups.some((g) => g.length === 0)) return null;
+  const arity =
+    cur.kind === "ref"
+      ? (flatArity.get(cur.name) ?? null)
+      : cur.kind === "field"
+        ? namespaceArity(cur.target, cur.name)
+        : null;
+  if (arity === null) return null;
+  const args = groups.flat();
+  if (args.length > arity || args.some((a) => a.kind === "unit")) return null;
+  return { ...e, fn: cur, args };
+};
 
 /** Plugin sugar first (JSX's `<tag>` re-fold, …), then this module's printer. */
 const exprRaw = (e: Expr): Doc => runFormatHooks(formatHooks, e, formatApi) ?? exprCore(e);
@@ -991,6 +1210,11 @@ const program = (stmts: Stmt[], src: string, tail: Comment[]): string => {
 export type FormatOptions = { plugins?: LanguagePlugin[] };
 
 const layoutProgram = (prog: Program, src: string): string => {
+  const innerBound = innerBindings(prog.stmts);
+  // Namespace guard is stricter: a top-level `let Array = …` shadows `Array.map`
+  // even though it does not shadow an unqualified prelude name of its own.
+  shadowedNames = new Set([...innerBound, ...topLevelNames(prog.stmts)]);
+  flatArity = buildFlatArity(prog.stmts, innerBound);
   const errorSpans = prog.stmts.filter((s) => s.kind === "error").map((s) => s.span);
   const comments = collectComments(src).filter(
     (c) => !errorSpans.some((sp) => c.start >= sp.start && c.start < sp.end),

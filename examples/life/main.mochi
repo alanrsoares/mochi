@@ -99,7 +99,7 @@ let seeds = [
 let board0 = range(0, height)
   |> toArray
   |> Array.map(r =>
-    range(0, width) |> toArray |> Array.map(c => Array.contains((r, c))(seeds))
+    range(0, width) |> toArray |> Array.map(c => Array.contains((r, c), seeds))
   )
 
 // ---- animation loop (recursion sequenced through Task) ----

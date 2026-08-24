@@ -693,3 +693,28 @@ export const namespaceRuntime: Record<string, Record<string, string>> = {
 
 /** Whole runtime as one blob — for tests / tooling that need every builtin in scope. */
 export const preludeJs = Object.values(preludeJsDefs).join("\n");
+
+/**
+ * Emitted arity of one runtime definition: `_curry(N, …)` states it; a bare
+ * `(a, b) => …` counts its outer params; anything else (a value like `pi`, a
+ * nullary ctor) is 0.
+ */
+const arityOfDef = (def: string): number => {
+  const curried = def.match(/=\s*_curry\((\d+),/);
+  if (curried) return Number(curried[1]);
+  const arrow = def.match(/^const \w+ = \(([^)]*)\) =>/);
+  if (!arrow) return 0;
+  const ps = arrow[1]!.trim();
+  return ps === "" ? 0 : ps.split(",").length;
+};
+
+/**
+ * Runtime id → how many arguments the builtin takes in ONE flat call. Derived
+ * from the emitted definitions, so it is what the runtime actually accepts
+ * rather than what the HM type suggests (`unit` domains and callback results make
+ * those differ). Consumed by `gen-runtime`'s typing and by the formatter's call
+ * canonicalization (ADR 0065).
+ */
+export const runtimeArity: Record<string, number> = Object.fromEntries(
+  Object.entries(preludeJsDefs).map(([id, def]) => [id, arityOfDef(def)]),
+);
