@@ -36,13 +36,16 @@ let buildOne = path =>
 
 // Write each compiled module's JS beside its source, logging as it goes. A
 // write failure short-circuits with the host's string error.
-let writeAll = outs => switch outs {
-  | [] => Ok("")
-  | [o, ...rest] => switch writeFile(outPath(o.path), o.js) {
-      | Err(e) => Err(e)
-      | Ok(w) => let logged = print("  wrote ${w}") in writeAll(rest)
+let writeAll = outs =>
+  loop (remaining = outs) {
+    switch remaining {
+      | [] => Ok("")
+      | [o, ...rest] => switch writeFile(outPath(o.path), o.js) {
+          | Err(e) => Err(e)
+          | Ok(w) => let logged = print("  wrote ${w}") in recur(rest)
+        }
     }
-}
+  }
 
 // Multi-file build: resolve + compile the graph, then write all outputs. The
 // driver's diagnostic (a graph/type/exhaustiveness error) has no single source

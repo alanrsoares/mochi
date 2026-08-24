@@ -88,20 +88,24 @@ let updateEat : Ref<[Particle]> -> Ref<EatWatch> -> Board -> () = (particles, wa
 /// The simulation camera is transformed by the tiny host rAF seam. Everything
 /// inside that world — grid, food, body, and face — is now Mochi Canvas code.
 let drawGridX = (ctx, x, right, top, bottom) =>
-  x > right
-    ? ()
-    : let _ = beginPath(ctx) in
-    let _ = moveTo(ctx, x * CELL_PX, top * CELL_PX) in
-    let _ = lineTo(ctx, x * CELL_PX, bottom * CELL_PX) in
-    let _ = stroke(ctx) in drawGridX(ctx, x + 1, right, top, bottom)
+  loop (i = x) {
+    i > right
+      ? ()
+      : let begun = beginPath(ctx) in
+      let moved = moveTo(ctx, i * CELL_PX, top * CELL_PX) in
+      let lined = lineTo(ctx, i * CELL_PX, bottom * CELL_PX) in
+      let stroked = stroke(ctx) in recur(i + 1)
+  }
 
 let drawGridY = (ctx, y, left, right, bottom) =>
-  y > bottom
-    ? ()
-    : let _ = beginPath(ctx) in
-    let _ = moveTo(ctx, left * CELL_PX, y * CELL_PX) in
-    let _ = lineTo(ctx, right * CELL_PX, y * CELL_PX) in
-    let _ = stroke(ctx) in drawGridY(ctx, y + 1, left, right, bottom)
+  loop (i = y) {
+    i > bottom
+      ? ()
+      : let begun = beginPath(ctx) in
+      let moved = moveTo(ctx, left * CELL_PX, i * CELL_PX) in
+      let lined = lineTo(ctx, right * CELL_PX, i * CELL_PX) in
+      let stroked = stroke(ctx) in recur(i + 1)
+  }
 
 let drawGrid = (ctx, (cameraX, cameraY)) =>
   let left = floor(cameraX - HALF_BOARD_CELLS) in
@@ -140,21 +144,30 @@ let drawEyes = (ctx, x, y, neckX, neckY) =>
     ? drawEyesAt(ctx, x, y, 0.3, 0.7, 0.7, 0.7)
     : drawEyesAt(ctx, x, y, 0.3, 0.3, 0.7, 0.3)
 
-let drawSnakeGo = (ctx, snake, index) => switch Array.get(index, snake) {
-  | None => ()
-  | Some((x, y)) => let _ = setFillStyle(
-      ctx,
-      index == 0 ? "#D98D3E" : "rgba(235, 167, 92, 0.9)"
-    ) in
-    let _ = fillRect(ctx, x * CELL_PX, y * CELL_PX, CELL_PX, CELL_PX) in
-    let _ = index == 0
-      ? switch Array.get(1, snake) {
-        | Some((neckX, neckY)) => drawEyes(ctx, x, y, neckX, neckY)
-        | None => drawEyes(ctx, x, y, x - 1, y)
-      }
-      : () in
-      drawSnakeGo(ctx, snake, index + 1)
-}
+let drawSnakeGo = (ctx, snake, index) =>
+  loop (i = index) {
+    switch Array.get(i, snake) {
+      | None => ()
+      | Some((x, y)) => let colored = setFillStyle(
+          ctx,
+          i == 0 ? "#D98D3E" : "rgba(235, 167, 92, 0.9)"
+        ) in
+        let filled = fillRect(
+          ctx,
+          x * CELL_PX,
+          y * CELL_PX,
+          CELL_PX,
+          CELL_PX
+        ) in
+        let faced = i == 0
+          ? switch Array.get(1, snake) {
+            | Some((neckX, neckY)) => drawEyes(ctx, x, y, neckX, neckY)
+            | None => drawEyes(ctx, x, y, x - 1, y)
+          }
+          : () in
+          recur(i + 1)
+    }
+  }
 
 let drawSnake = (ctx, snake) =>
   let _ = setStrokeStyle(ctx, "rgba(235, 167, 92, 0.9)") in
