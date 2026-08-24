@@ -4,12 +4,12 @@ export type Shape =
   | Rect(width: number, height: number)
 
 /// A parameterised variant: `D.Box number` exercises the applied form.
-export type Box a =
+export type Box<a> =
   | Box(a)
 
 /// A transparent record alias. Aliases are structural (ADR 0005), so this
 /// expands in the module that DECLARED it — the importer writes `D.Pair number`
 /// and still assigns a plain record literal to it.
-export type Pair a = { fst: a, snd: a }
+export type Pair<a> = { fst: a, snd: a }
 
 export let area = s => switch s { | Circle(r) => r * r | Rect(w, h) => w * h }

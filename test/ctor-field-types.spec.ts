@@ -68,7 +68,7 @@ test(".d.ts renders composite ctor fields in TS syntax", () => {
 test("formatter round-trips composite ctor fields idempotently", () => {
   const once = unwrapOk(format(AST_SRC));
   expect(once).toContain("ECall(fn: Expr, args: [Expr])");
-  expect(once).toContain("EOpt(guard: Option Expr)");
+  expect(once).toContain("EOpt(guard: Option<Expr>)");
   expect(once).toContain("EPair(both: (Expr, Expr))");
   expect(unwrapOk(format(once))).toBe(once);
 });

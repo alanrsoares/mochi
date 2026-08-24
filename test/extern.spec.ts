@@ -137,6 +137,20 @@ test("lowercase names in a signature are generalized type variables", () => {
   expect(schemeOf(`extern id : a -> a = "./u.js" "id"`, "id")).toMatch(/^'t\d+ -> 't\d+$/);
 });
 
+test("explicit extern binders use TypeScript-style angle syntax", () => {
+  const src = `extern map<T, U> : (T -> U) -> T -> U = "./u.js" "map"`;
+  expect(schemeOf(src, "map")).toMatch(/^\('t\d+ -> 't\d+\) -> 't\d+ -> 't\d+$/);
+  expect(unwrapOk(format(src))).toBe(`extern map<T, U> : (T -> U) -> T -> U = "./u.js" "map"\n`);
+});
+
+test("type declarations and applications use angle-bracket generics", () => {
+  const src = `type Result<T, E> = | Ok(value: T) | Err(error: E)
+extern roundTrip<T, E> : Result<T, E> -> Result<T, E> = "./runtime.js" "roundTrip"`;
+  expect(isErr(compile(src))).toBe(false);
+  expect(unwrapOk(format(src))).toContain("type Result<T, E>");
+  expect(unwrapOk(format(src))).toContain("Result<T, E> -> Result<T, E>");
+});
+
 test("default-export extern emits a default import", () => {
   expect(js(`extern tw : a = "@styled-cva/react" "default"`)).toBe(
     'import tw from "@styled-cva/react";\n',
@@ -223,9 +237,9 @@ let a = needStr(delay(1))`;
   expect(isErr(compile(bad))).toBe(true);
 });
 
-test("applied types round-trip through the formatter, parenthesizing compound args", () => {
+test("applied types round-trip through the formatter using angle brackets", () => {
   const src = `extern mapT : (a -> b) -> Task a e -> Task b e = "./t.js" "mapT"`;
   expect(unwrapOk(format(src))).toBe(
-    `extern mapT : (a -> b) -> Task a e -> Task b e = "./t.js" "mapT"\n`,
+    `extern mapT : (a -> b) -> Task<a, e> -> Task<b, e> = "./t.js" "mapT"\n`,
   );
 });

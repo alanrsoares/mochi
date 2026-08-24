@@ -15,7 +15,7 @@ import * as Ast from "./ast.mochi"
 // --- shared shapes (structural; consumers re-declare, never import) ---
 
 type CtorInfo = { owner: string, arity: number }
-type Registry = { ctors: Map string CtorInfo, types: Map string [string] }
+type Registry = { ctors: Map<string, CtorInfo>, types: Map<string, [string]> }
 
 let emptyRegistry : Registry = { ctors: #{}, types: #{} }
 

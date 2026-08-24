@@ -1,6 +1,6 @@
 // Dogfood: call-form styled-cva factories + $ transient props in Mochi (ADR 0009).
 // Run under the docs Vite graph (react → preact/compat). Not a standalone script.
-extern tw : a = "@styled-cva/react" "default"
+extern tw<A> : A = "@styled-cva/react" "default"
 
 let BadgeShell = tw.div(
   "inline-flex items-center gap-2 px-3 py-1 font-mono text-2xs font-bold uppercase tracking-wider rounded-md shadow-sm border",

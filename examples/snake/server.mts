@@ -27,13 +27,13 @@ async function saveLeaderboard(entries: ScoreEntry[]): Promise<ScoreEntry[]> {
 }
 
 async function ensureBuilt() {
-  const distIndex = Bun.file(join(DIR, "dist", "index.html"));
-  if (!(await distIndex.exists())) {
-    console.log("Building snake app dist...");
-    const proc = Bun.spawnSync(["bun", "run", "build"], { cwd: DIR });
-    if (!proc.success) {
-      console.error("Failed to build snake app:", proc.stderr.toString());
-    }
+  // This process serves the production bundle directly on :3000. Rebuilding
+  // when it starts prevents it from silently serving a previous Mochi emit
+  // after the compiler or a `.mochi` source has changed.
+  console.log("Building snake app dist...");
+  const proc = Bun.spawnSync(["bun", "run", "build"], { cwd: DIR });
+  if (!proc.success) {
+    throw new Error(`Failed to build snake app: ${proc.stderr.toString()}`);
   }
 }
 

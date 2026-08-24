@@ -13,7 +13,7 @@ extern SPARK_TALK_URL : string = "../lib/about-chapters" "SPARK_TALK_URL"
 // Cleanup return stays OPAQUE (`a`, not `a -> b`) — extern arity counts the
 // whole arrow spine; see the HeroCarousel `startHeroTick` note.
 /// Returns an effect cleanup.
-extern startAboutScrollFx : () -> a = "../lib/about-scrolly-fx" "startAboutScrollFx"
+extern startAboutScrollFx<A> : () -> A = "../lib/about-scrolly-fx" "startAboutScrollFx"
 
 /// Quiet credit under the spark chapter — inspired by, not a retelling of.
 let SparkCredit = props =>

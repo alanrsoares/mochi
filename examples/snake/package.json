@@ -15,6 +15,7 @@
     "@mochi/plugin-re-reduced": "workspace:*",
     "@mochi/plugin-styled-cva": "workspace:*",
     "@mochi/vite-plugin": "workspace:*",
+    "@mochi/web": "workspace:*",
     "@onrails/pattern": "^0.3.3",
     "@re-reduced/core": "^0.3.2",
     "@re-reduced/preact": "^0.2.3",

@@ -296,6 +296,10 @@ export const typeExprToType = (
       // `unit` is an ordinary primitive name (ADR 0054), so `()` in TypeExpr — which
       // the parser lowers to `tname "unit"` — needs no special case here.
       if (PRIM_TYPE_NAMES.has(tname.name)) return primType(tname.name);
+      // Explicit generic binders on an extern (`extern f<T> : T -> T`) use
+      // conventional upper-case names. Resolve them before nominal types.
+      const bound = vars.get(tname.name);
+      if (bound) return bound;
       const info = scope.aliases.get(tname.name);
       if (info) return aliasRow(tname.name, info, [], f, scope, expanding);
       if (/^[A-Z]/.test(tname.name)) return tCon(tname.name);

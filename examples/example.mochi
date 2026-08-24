@@ -11,11 +11,11 @@ type Color =
   | Green
   | Blue
 
-type Option a =
+type Option<a> =
   | Some(value: a)
   | None
 
-type Result a e =
+type Result<a, e> =
   | Ok(value: a)
   | Err(error: e)
 
@@ -195,7 +195,7 @@ let member = Array.contains({ id: 2 })([{ id: 1 }, { id: 2 }]) // true
 // number, y: number }`) and the emitted .d.ts exports a real `Point` type.
 // Aliases are generic too — `Boxed a` applied shows as `Boxed<number>`.
 type Point = { x: number, y: number }
-type Boxed a = { value: a }
+type Boxed<a> = { value: a }
 let boxedNum = { value: 42 } // hovers as Boxed<number>
 
 // --- records + field access (structural / "duck" data) ---

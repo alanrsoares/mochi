@@ -1,0 +1,11 @@
+{
+  "name": "@mochi/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./dom": "./dom.mochi",
+    "./canvas": "./canvas.mochi",
+    "./runtime": "./src/runtime.ts"
+  }
+}

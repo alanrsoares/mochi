@@ -1,31 +1,127 @@
 // Canvas board — mochi component + effects. Canvas2D / rAF / particles stay
 // in `canvas.host.ts` (not yet expressible in the surface language).
 import { useRef, useEffect, hookDeps2 } from "@mochi/plugin-preact/hooks"
+import {
+  beginPath,
+  moveTo,
+  lineTo,
+  arc,
+  fill,
+  stroke,
+  fillRect,
+  setFillStyle,
+  setStrokeStyle,
+  setLineWidth
+} from "@mochi/web/canvas"
 
 // Canvas2D and particle state remain host-owned, but their handles are no
 // longer interchangeable with arbitrary values at this Mochi boundary.
 extern type CanvasElement
+extern type Context2D
 extern type Particles
 extern type EatWatch
 
 // Preact's `useRef` is structurally modelled by the host adapter, so keep the
 // container transparent while its canvas/particle/watch payloads stay opaque.
-type Ref a = { current: a }
+type Ref<a> = { current: a }
 
 extern BOARD_PX : number = "../host/canvas.host" "BOARD_PX"
 /// Seed for canvas `useRef` (mochi has no `null` literal).
 extern nullEl : CanvasElement = "../host/canvas.host" "nullEl"
 extern emptyParticles : () -> Particles = "../host/canvas.host" "emptyParticles"
-extern eatWatchSeed : a -> b -> EatWatch = "../host/canvas.host" "eatWatchSeed"
-extern syncBoardRef : Ref a -> a -> () = "../host/canvas.host" "syncBoardRef"
-extern watchEat : Ref Particles -> Ref EatWatch -> a -> () = "../host/canvas.host" "watchEat"
+extern eatWatchSeed<A, B> : A -> B -> EatWatch = "../host/canvas.host" "eatWatchSeed"
+extern syncBoardRef<A> : Ref<A> -> A -> () = "../host/canvas.host" "syncBoardRef"
+extern watchEat<A> : Ref<Particles> -> Ref<EatWatch> -> A -> () = "../host/canvas.host" "watchEat"
 /// Returns a `useEffect` cleanup.
-extern startParticleLoop : Ref CanvasElement -> Ref Particles -> Ref a -> ((number, number) -> (number, number) -> number -> (number, number)) -> c = "../host/canvas.host" "startParticleLoop"
+extern startParticleLoop<A, C> : Ref<CanvasElement> -> Ref<Particles> -> Ref<A> -> ((number, number) -> (number, number) -> number -> (number, number)) -> (Context2D -> [(number, number)] -> [(number, number)] -> (number, number) -> (number, number) -> ()) -> C = "../host/canvas.host" "startParticleLoop"
 
 /// One pure interpolation step. Rendering calls this for every snake segment
 /// on each animation frame; Canvas2D itself remains at the host boundary.
 let interpolatePoint = ((fromX, fromY), (toX, toY), progress) =>
   (fromX + (toX - fromX) * progress, fromY + (toY - fromY) * progress)
+
+let CELL_PX = 30
+let HALF_BOARD_CELLS = 11
+let TAU = 6.283185307179586
+
+/// The simulation camera is transformed by the tiny host rAF seam. Everything
+/// inside that world — grid, food, body, and face — is now Mochi Canvas code.
+let drawGridX = (ctx, x, right, top, bottom) =>
+  x > right
+    ? ()
+    : let _ = beginPath(ctx) in
+    let _ = moveTo(ctx, x * CELL_PX, top * CELL_PX) in
+    let _ = lineTo(ctx, x * CELL_PX, bottom * CELL_PX) in
+    let _ = stroke(ctx) in drawGridX(ctx, x + 1, right, top, bottom)
+
+let drawGridY = (ctx, y, left, right, bottom) =>
+  y > bottom
+    ? ()
+    : let _ = beginPath(ctx) in
+    let _ = moveTo(ctx, left * CELL_PX, y * CELL_PX) in
+    let _ = lineTo(ctx, right * CELL_PX, y * CELL_PX) in
+    let _ = stroke(ctx) in drawGridY(ctx, y + 1, left, right, bottom)
+
+let drawGrid = (ctx, (cameraX, cameraY)) =>
+  let left = floor(cameraX - HALF_BOARD_CELLS) in
+  let right = ceil(cameraX + HALF_BOARD_CELLS) in
+  let top = floor(cameraY - HALF_BOARD_CELLS) in
+  let bottom = ceil(cameraY + HALF_BOARD_CELLS) in
+  let _ = setStrokeStyle(ctx, "rgba(74, 58, 54, 0.12)") in
+  let _ = setLineWidth(ctx, 1) in
+  let _ = drawGridX(ctx, left, right, top, bottom) in
+    drawGridY(ctx, top, left, right, bottom)
+
+let drawFood = (ctx, (x, y)) =>
+  let px = x * CELL_PX + CELL_PX / 2 in
+  let py = y * CELL_PX + CELL_PX / 2 in
+  let radius = CELL_PX / 2 - 3 in
+  let _ = setFillStyle(ctx, "#E88BA9") in
+  let _ = beginPath(ctx) in
+  let _ = arc(ctx, px, py, radius, 0, TAU) in fill(ctx)
+
+let drawEyesAt = (ctx, x, y, firstX, firstY, secondX, secondY) =>
+  let px = x * CELL_PX in
+  let py = y * CELL_PX in
+  let _ = setFillStyle(ctx, "#4A3A36") in
+  let _ = beginPath(ctx) in
+  let _ = arc(ctx, px + CELL_PX * firstX, py + CELL_PX * firstY, 3, 0, TAU) in
+  let _ = arc(ctx, px + CELL_PX * secondX, py + CELL_PX * secondY, 3, 0, TAU) in
+    fill(ctx)
+
+/// Eyes sit on the edge leading away from the neck, so the face follows turns.
+let drawEyes = (ctx, x, y, neckX, neckY) =>
+  neckX < x
+    ? drawEyesAt(ctx, x, y, 0.7, 0.3, 0.7, 0.7)
+    : neckX > x
+    ? drawEyesAt(ctx, x, y, 0.3, 0.3, 0.3, 0.7)
+    : neckY < y
+    ? drawEyesAt(ctx, x, y, 0.3, 0.7, 0.7, 0.7)
+    : drawEyesAt(ctx, x, y, 0.3, 0.3, 0.7, 0.3)
+
+let drawSnakeGo = (ctx, snake, index) => switch Array.get(index, snake) {
+  | None => ()
+  | Some((x, y)) => let _ = setFillStyle(
+      ctx,
+      index == 0 ? "#D98D3E" : "rgba(235, 167, 92, 0.9)"
+    ) in
+    let _ = fillRect(ctx, x * CELL_PX, y * CELL_PX, CELL_PX, CELL_PX) in
+    let _ = index == 0
+      ? switch Array.get(1, snake) {
+        | Some((neckX, neckY)) => drawEyes(ctx, x, y, neckX, neckY)
+        | None => drawEyes(ctx, x, y, x - 1, y)
+      }
+      : () in
+      drawSnakeGo(ctx, snake, index + 1)
+}
+
+let drawSnake = (ctx, snake) =>
+  let _ = setStrokeStyle(ctx, "rgba(235, 167, 92, 0.9)") in
+  let _ = setLineWidth(ctx, CELL_PX) in drawSnakeGo(ctx, snake, 0)
+
+let drawBoard = (ctx, snake, _previousSnake, food, head) =>
+  let _ = drawGrid(ctx, head) in
+  let _ = drawFood(ctx, food) in drawSnake(ctx, snake)
 
 export let CanvasBoard = props =>
   let canvasRef = useRef(nullEl) in
@@ -38,7 +134,13 @@ export let CanvasBoard = props =>
   // animation frame. Mochi supplies the pure interpolation between ticks.
   let _draw = useEffect(() =>
     let _ = watchEat(particles, eatWatch, board) in
-      startParticleLoop(canvasRef, particles, boardRef, interpolatePoint)
+      startParticleLoop(
+        canvasRef,
+        particles,
+        boardRef,
+        interpolatePoint,
+        drawBoard
+      )
   )(hookDeps2(props.snake, props.food)) in
     <canvas
       ref={canvasRef}

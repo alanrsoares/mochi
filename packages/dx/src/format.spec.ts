@@ -83,9 +83,9 @@ test("a switch that overflows 80 columns breaks one arm per line", () => {
   );
 });
 
-test("a parametric type prints its params and one ctor per line", () => {
+test("a parametric type prints angle-bracket params and one ctor per line", () => {
   expect(fmt("type Result a e = | Ok(a) | Err(e)")).toBe(
-    "type Result a e =\n  | Ok(a)\n  | Err(e)\n",
+    "type Result<a, e> =\n  | Ok(a)\n  | Err(e)\n",
   );
 });
 

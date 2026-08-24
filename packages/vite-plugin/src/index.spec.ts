@@ -73,6 +73,16 @@ let HeaderBadge = props => <BadgeShell>{props.label}</BadgeShell>`;
     );
   });
 
+  it("does not mistake an extern generic binder for JSX", () => {
+    const plugin = testPlugin();
+    const result = plugin.transform(
+      'export extern identity<T> : T -> T = "./host" "identity"',
+      "src/identity.mochi",
+    );
+
+    expect(result?.code).not.toContain('from "preact"');
+  });
+
   it("keeps bare package import specs (ADR 0015)", () => {
     const plugin = testPlugin({ open: true });
     const code = `import { useState } from "@mochi/plugin-preact/hooks"

@@ -1,0 +1,25 @@
+/// Browser DOM bindings for Mochi applications.
+///
+/// Nullable browser results become `Option`; listener helpers return an effect
+/// cleanup suitable for Preact's `useEffect`.
+
+extern type Document
+extern type Element
+extern type InputElement
+extern type Storage
+extern type Frame
+
+export extern document : () -> Document = "@mochi/web/runtime" "document"
+export extern getElementById : Document -> string -> Option<Element> = "@mochi/web/runtime" "getElementById"
+export extern inputValue : InputElement -> string = "@mochi/web/runtime" "inputValue"
+export extern localStorage : () -> Storage = "@mochi/web/runtime" "localStorage"
+export extern storageGet : Storage -> string -> Option<string> = "@mochi/web/runtime" "storageGet"
+export extern storageSet : Storage -> string -> string -> () = "@mochi/web/runtime" "storageSet"
+/// The cleanup is opaque; a function-shaped result would add a runtime argument.
+export extern onKeyDown<C> : Document -> (string -> ()) -> C = "@mochi/web/runtime" "onKeyDown"
+/// The cleanup is an opaque value. Spelling it `() -> ()` would add a third
+/// runtime argument and leave a two-argument call silently partial.
+export extern every<C> : number -> (() -> ()) -> C = "@mochi/web/runtime" "every"
+export extern pickRandom<T> : T -> [T] -> T = "@mochi/web/runtime" "pickRandom"
+export extern requestFrame : (number -> ()) -> Frame = "@mochi/web/runtime" "requestFrame"
+export extern cancelFrame : Frame -> () = "@mochi/web/runtime" "cancelFrame"

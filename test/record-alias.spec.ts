@@ -124,5 +124,7 @@ test("format prints a record alias on one line", () => {
 });
 
 test("format prints a parametric alias with its params", () => {
-  expect(unwrapOk(format("type Box a = { value: a }")).trimEnd()).toBe("type Box a = { value: a }");
+  expect(unwrapOk(format("type Box a = { value: a }")).trimEnd()).toBe(
+    "type Box<a> = { value: a }",
+  );
 });

@@ -212,11 +212,13 @@ export type Stmt =
       exported?: boolean;
       span: Span;
     } // type Result a e = | Ok(a) | ... ; or type Point = { x: number, y: number }
-  /** `extern name : type = "module" "export"` — bind an external JS/TS function. */
+  /** `extern name<T> : type = "module" "export"` — bind an external JS/TS function. */
   | {
       kind: "extern";
       name: string;
       nameSpan: Span;
+      /** Explicit generic binders, written TypeScript-style as `<T, U>`. */
+      params: string[];
       typeExpr: TypeExpr;
       module: string;
       imported: string;

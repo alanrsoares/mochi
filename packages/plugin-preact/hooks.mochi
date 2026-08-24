@@ -5,14 +5,14 @@
 // Extern schemes stay loose where HM would lie; the plugin tightens at calls.
 // `() ->` is the nullary domain (ADR 0014). Dep lists stay opaque / packed
 // via `hookDeps*` — mochi arrays are homogeneous.
-export extern useState : a -> (a, a -> b) = "preact/hooks" "useState"
-export extern useEffect : (() -> c) -> d -> e = "preact/hooks" "useEffect"
-export extern useCallback : a -> b -> a = "preact/hooks" "useCallback"
-export extern useLayoutEffect : (() -> c) -> d -> e = "preact/hooks" "useLayoutEffect"
-export extern useRef : a -> b = "preact/hooks" "useRef"
-export extern useMemo : (() -> a) -> b -> a = "preact/hooks" "useMemo"
+export extern useState<A, B> : A -> (A, A -> B) = "preact/hooks" "useState"
+export extern useEffect<C, D, E> : (() -> C) -> D -> E = "preact/hooks" "useEffect"
+export extern useCallback<A, B> : A -> B -> A = "preact/hooks" "useCallback"
+export extern useLayoutEffect<C, D, E> : (() -> C) -> D -> E = "preact/hooks" "useLayoutEffect"
+export extern useRef<A, B> : A -> B = "preact/hooks" "useRef"
+export extern useMemo<A, B> : (() -> A) -> B -> A = "preact/hooks" "useMemo"
 
-export extern hookDeps : a -> b -> c -> d = "./src/runtime" "hookDeps"
-export extern hookDeps2 : a -> b -> c = "./src/runtime" "hookDeps2"
-export extern hookDeps1 : a -> b = "./src/runtime" "hookDeps1"
-export extern hookDeps0 : () -> a = "./src/runtime" "hookDeps0"
+export extern hookDeps<A, B, C, D> : A -> B -> C -> D = "./src/runtime" "hookDeps"
+export extern hookDeps2<A, B, C> : A -> B -> C = "./src/runtime" "hookDeps2"
+export extern hookDeps1<A, B> : A -> B = "./src/runtime" "hookDeps1"
+export extern hookDeps0<A> : () -> A = "./src/runtime" "hookDeps0"

@@ -1066,10 +1066,16 @@ let registerBuiltinCtorsFrom = (decls, aliasMap, env, st) => switch decls {
 let registerExternsFrom = (stmts, aliasMap, env, st) => switch stmts {
   | [] => (env, st)
   | [s, ...rest] => switch s {
-      | Ast.SExtern(name, _, typeExpr, _, _, _, _, _) => let (t, _, st1) = typeExprToType(
+      | Ast.SExtern(name, _, params, typeExpr, _, _, _, _, _) => let (vars, st0) = Array.reduce(
+          ((vs, s), param) =>
+            let (v, s1) = freshVar(s) in (Map.set(param, v, vs), s1),
+          (#{}, st),
+          params
+        ) in
+        let (t, _, st1) = typeExprToType(
           typeExpr,
-          #{},
-          st,
+          vars,
+          st0,
           aliasMap,
           Set.fromArray([])
         ) in
@@ -1306,9 +1312,9 @@ type QualAliasField = { name: string, fieldType: Ast.TypeExpr }
 
 type QualAliasInfo = { params: [string], fields: [QualAliasField] }
 
-type QualScope = { aliases: Map string QualAliasInfo }
+type QualScope = { aliases: Map<string, QualAliasInfo> }
 
-let emptyQuals : Map string QualScope = #{}
+let emptyQuals : Map<string, QualScope> = #{}
 
 export let inferProgram = (stmts, builtins, namespaces, openMode) =>
   inferProgramImports(
@@ -1355,7 +1361,7 @@ let exportedSchemesFrom = (stmts, i0, env, acc0) =>
           i + 1,
           takeScheme(name, env, acc)
         )
-      | Some(Ast.SExtern(name, _, _, _, _, true, _, _)) => recur(
+      | Some(Ast.SExtern(name, _, _, _, _, _, true, _, _)) => recur(
           i + 1,
           takeScheme(name, env, acc)
         )

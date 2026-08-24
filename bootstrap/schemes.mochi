@@ -47,7 +47,7 @@ export let primType = name => switch name {
 
 // --- free type/row variables, generalization, instantiation ---
 
-type VarSets = { tv: Set number, rv: Set number }
+type VarSets = { tv: Set<number>, rv: Set<number> }
 export let emptyVarSets = { tv: Set.fromArray([]), rv: Set.fromArray([]) }
 let unionVarSets = (a, b) =>
   { tv: Set.union(a.tv, b.tv), rv: Set.union(a.rv, b.rv) }
@@ -159,23 +159,22 @@ export let typeExprListToType = (tes, vars, st, aliases, expanding) => switch te
 export let typeExprName = (name, vars, st, aliases, expanding) =>
   Array.contains(name, primTypeNames)
     ? (primType(name), vars, st)
-    : switch Map.get(name, aliases) {
-      | Some(info) => let (t, st1) = aliasRow(
-          name,
-          info,
-          [],
-          st,
-          aliases,
-          expanding
-        ) in
-          (t, vars, st1)
-      | None => isUpperStart(name)
-          ? (tPrim(name), vars, st)
-          : switch Map.get(name, vars) {
-            | Some(v) => (v, vars, st)
-            | None => let (v, st1) = freshVar(st) in
-                (v, Map.set(name, v, vars), st1)
-          }
+    : switch Map.get(name, vars) {
+      | Some(v) => (v, vars, st)
+      | None => switch Map.get(name, aliases) {
+          | Some(info) => let (t, st1) = aliasRow(
+              name,
+              info,
+              [],
+              st,
+              aliases,
+              expanding
+            ) in
+              (t, vars, st1)
+          | None => isUpperStart(name)
+              ? (tPrim(name), vars, st)
+              : let (v, st1) = freshVar(st) in (v, Map.set(name, v, vars), st1)
+        }
     }
 
 // surface type-expr -> HM type. Prim names map to their type; Uppercase names

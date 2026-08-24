@@ -77,7 +77,7 @@ import {
   resolvePluginsDefault,
   runParseHooks
 } from "./extensions.mochi"
-type LocTok = { tok: Tok, start: number, end: number, doc: Option string }
+type LocTok = { tok: Tok, start: number, end: number, doc: Option<string> }
 type PErr = { message: string, start: number, end: number }
 
 // --- the AST (mirrors src/ast.ts; `kind` strings become constructors) ---
@@ -1163,6 +1163,10 @@ let parseTypeAtom = (toks, pos) =>
             : Ok((Ast.TyName(nm.name, nm.span), p))
     }
 
+// Type application is angle-bracketed and tighter than `->`: `Task<A>` and
+// `Result<A, E>`. The full type parser is used for each arg so nested arrows
+// need no extra grouping inside the brackets. The legacy juxtaposition form is
+// accepted only so formatting can migrate existing modules.
 let startsTypeAtom = t => switch t {
   | TId(_) => true
   | TLparen => true
@@ -1170,39 +1174,38 @@ let startsTypeAtom = t => switch t {
   | _ => false
 }
 
-let typeArgsLoop = (toks, pos, acc, lastSp) =>
+let legacyTypeArgsLoop = (toks, pos, acc, lastSp) =>
   startsTypeAtom(tokAt(toks, pos).tok)
     ? parseTypeAtom(toks, pos)
       |> Result.flatMap(((a, p)) =>
-        typeArgsLoop(toks, p, Array.append(a, acc), Some(tySpan(a)))
+        legacyTypeArgsLoop(toks, p, Array.append(a, acc), Some(tySpan(a)))
       )
     : Ok((acc, lastSp, pos))
 
-// Type application by juxtaposition, tighter than `->`: only an Uppercase
-// constructor head takes args (`Task a`, `Result a e`).
 let parseTypeApp = (toks, pos) =>
   parseTypeAtom(toks, pos)
     |> Result.flatMap(((head, p)) => switch head {
-      | Ast.TyName(name, sp) when isUpper(name) => typeArgsLoop(
-          toks,
-          p,
-          [],
-          None
-        )
-          |> Result.map(((args, lastSp, p2)) => switch lastSp {
-            | None => (head, p2)
-            | Some(ls) => (Ast.TyApp(name, args, spanning(sp, ls)), p2)
-          })
-      | Ast.TyQual(alias, nm, nameSpan, _, sp) =>
-        // A qualified head takes args too (`D.Result e a`), staying one variant.
-        typeArgsLoop(toks, p, [], None)
-          |> Result.map(((args, lastSp, p2)) => switch lastSp {
-            | None => (head, p2)
-            | Some(ls) => (
-                Ast.TyQual(alias, nm, nameSpan, args, spanning(sp, ls)),
-                p2
-              )
-          })
+      | Ast.TyName(name, sp) when isUpper(name) => tokAt(toks, p).tok == TLt
+          ? let? (args, p1) = listUntil(TGt, parseTypeExpr, toks, p + 1) in
+          let? p2 = expectTok(TGt, toks, p1) in
+            Ok((Ast.TyApp(name, args, toEnd(sp, toks, p2)), p2))
+          : legacyTypeArgsLoop(toks, p, [], None)
+            |> Result.map(((args, lastSp, p2)) => switch lastSp {
+              | None => (head, p2)
+              | Some(ls) => (Ast.TyApp(name, args, spanning(sp, ls)), p2)
+            })
+      | Ast.TyQual(alias, nm, nameSpan, _, sp) => tokAt(toks, p).tok == TLt
+          ? let? (args, p1) = listUntil(TGt, parseTypeExpr, toks, p + 1) in
+          let? p2 = expectTok(TGt, toks, p1) in
+            Ok((Ast.TyQual(alias, nm, nameSpan, args, toEnd(sp, toks, p2)), p2))
+          : legacyTypeArgsLoop(toks, p, [], None)
+            |> Result.map(((args, lastSp, p2)) => switch lastSp {
+              | None => (head, p2)
+              | Some(ls) => (
+                  Ast.TyQual(alias, nm, nameSpan, args, spanning(sp, ls)),
+                  p2
+                )
+            })
       | _ => Ok((head, p))
     })
 
@@ -1259,18 +1262,24 @@ let parseAliasBody = (toks, pos) =>
   let? (fields, p2) = listUntil(TRbrace, parseAliasField, toks, p) in
   let? p3 = expectTok(TRbrace, toks, p2) in Ok((fields, p3))
 
-// Optional ML-style type parameters: any ids before the `=`.
 let typeParamsLoop = (toks, pos, acc) => switch tokAt(toks, pos).tok {
   | TId(name) => typeParamsLoop(toks, pos + 1, Array.append(name, acc))
-  | _ => (acc, pos)
+  | _ => Ok((acc, pos))
 }
+
+// Optional angle-bracketed type parameters: `type Result<A, E> = ...`.
+let parseTypeParams = (toks, pos) =>
+  tokAt(toks, pos).tok == TLt
+    ? let? (names, p) = listUntil(TGt, expectId, toks, pos + 1) in
+      expectTok(TGt, toks, p) |> Result.map(p2 => (map(n => n.name, names), p2))
+    : typeParamsLoop(toks, pos, [])
 
 // `type` decl: a `{` after `=` starts a record alias; anything else a variant.
 let parseType = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in
   let? p = expectTok(TType, toks, pos) in
   let? (nm, p1) = expectId(toks, p) in
-  let (params, p2) = typeParamsLoop(toks, p1, []) in
+  let? (params, p2) = parseTypeParams(toks, p1) in
   let? p3 = expectTok(TEq, toks, p2) in
     tokAt(toks, p3).tok == TLbrace
       ? parseAliasBody(toks, p3)
@@ -1314,10 +1323,15 @@ let parseExtern = (toks, pos) =>
           (Ast.SType(nm.name, [], [], None, false, toEnd(start, toks, p2)), p2)
         )
       : let? (nm, p1) = expectId(toks, p) in
-      let? p2 = expectTok(TColon, toks, p1) in
-      let? (t, p3) = parseTypeExpr(toks, p2) in
-      let? p4 = expectTok(TEq, toks, p3) in
-      let nextTok = tokAt(toks, p4).tok in
+      let? (params, p2) = tokAt(toks, p1).tok == TLt
+        ? let? (names, pParams) = listUntil(TGt, expectId, toks, p1 + 1) in
+        let? pAfter = expectTok(TGt, toks, pParams) in
+          Ok((map(n => n.name, names), pAfter))
+        : Ok(([], p1)) in
+      let? p3 = expectTok(TColon, toks, p2) in
+      let? (t, p4) = parseTypeExpr(toks, p3) in
+      let? p5 = expectTok(TEq, toks, p4) in
+      let nextTok = tokAt(toks, p5).tok in
         nextTok == TId(
           "global"
         ) || nextTok == TId(
@@ -1325,43 +1339,45 @@ let parseExtern = (toks, pos) =>
         ) || nextTok == TId(
           "get"
         ) || nextTok == TId("set") || nextTok == TId("new")
-          ? let? (convention, p5) = expectId(toks, p4) in
-          let? (first, p6) = expectStr(toks, p5) in
-          let hasSecond = switch tokAt(toks, p6).tok {
+          ? let? (convention, p6) = expectId(toks, p5) in
+          let? (first, p7) = expectStr(toks, p6) in
+          let hasSecond = switch tokAt(toks, p7).tok {
             | TStr(_) => convention.name == "global" || convention.name == "new"
             | _ => false
           } in
-          let? (second, p7) = hasSecond ? expectStr(toks, p6) : Ok(("", p6)) in
+          let? (second, p8) = hasSecond ? expectStr(toks, p7) : Ok(("", p7)) in
             Ok(
               (
                 Ast.SExtern(
                   nm.name,
                   nm.span,
+                  params,
                   t,
                   "mochi:${convention.name}:${first}",
                   second,
                   false,
                   None,
-                  toEnd(start, toks, p7)
+                  toEnd(start, toks, p8)
                 ),
-                p7
+                p8
               )
             )
-          : let? (moduleName, p5) = expectStr(toks, p4) in
-          let? (importedName, p6) = expectStr(toks, p5) in
+          : let? (moduleName, p6) = expectStr(toks, p5) in
+          let? (importedName, p7) = expectStr(toks, p6) in
             Ok(
               (
                 Ast.SExtern(
                   nm.name,
                   nm.span,
+                  params,
                   t,
                   moduleName,
                   importedName,
                   false,
                   None,
-                  toEnd(start, toks, p6)
+                  toEnd(start, toks, p7)
                 ),
-                p6
+                p7
               )
             )
 
@@ -1486,9 +1502,10 @@ let setTypeExported = s => switch s {
   | other => other
 }
 let setExternMeta = (exported, doc, s) => switch s {
-  | Ast.SExtern(name, nameSpan, t, m, i, _, _, span) => Ast.SExtern(
+  | Ast.SExtern(name, nameSpan, params, t, m, i, _, _, span) => Ast.SExtern(
       name,
       nameSpan,
+      params,
       t,
       m,
       i,

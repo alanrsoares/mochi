@@ -41,7 +41,7 @@ let norm = (a, b) =>
 
 ```mochi
 type Shape = | Circle(float) | Rect(float, float)
-type Result a e = | Ok(value: a) | Err(error: e)
+type Result<A, E> = | Ok(value: A) | Err(error: E)
 ```
 
 **Records** are transparent structural rows — no nominal identity, no runtime tag. A
@@ -235,6 +235,7 @@ They preserve the typed seam and emit direct JavaScript—no conversion runtime:
 
 ```mochi
 extern random : () -> number = global "Math" "random"
+extern map<T, U> : (T -> U) -> T -> U = "./runtime.js" "map"
 extern getId : Document -> string -> Element = send "getElementById"
 extern title : Document -> string = get "title"
 extern setTitle : Document -> string -> () = set "title"

@@ -26,7 +26,7 @@ import { buildRegistry, primTypeNames } from "./ctors.mochi"
 
 type CErr = { message: string, start: number, end: number }
 type CtorInfo = { owner: string, arity: number }
-type Registry = { ctors: Map string CtorInfo, types: Map string [string] }
+type Registry = { ctors: Map<string, CtorInfo>, types: Map<string, [string]> }
 
 let checkErr = (message, sp) =>
   { message: message, start: sp.start, end: sp.end }
@@ -588,7 +588,7 @@ let checkReservedNames = stmts =>
       | Ast.SLet(name, _, _, _, _, _, sp) => Array.contains(name, reservedNames)
           ? Some(reservedErr(name, sp))
           : None
-      | Ast.SExtern(name, _, _, _, _, _, _, sp) => Array.contains(
+      | Ast.SExtern(name, _, _, _, _, _, _, _, sp) => Array.contains(
           name,
           reservedNames
         )
@@ -692,7 +692,7 @@ let qualRefsFrom = te => switch te {
 let writtenTypeExprs = stmts =>
   Array.flatMap(
     s => switch s {
-      | Ast.SExtern(_, _, te, _, _, _, _, _) => [te]
+      | Ast.SExtern(_, _, _, te, _, _, _, _, _) => [te]
       | Ast.SLet(_, _, annot, _, _, _, _) => switch annot {
           | Some(te) => [te]
           | None => []
@@ -713,9 +713,9 @@ let writtenTypeExprs = stmts =>
 // Named so single-file `check` can pin its empty map (ADR 0044) — an unannotated
 // `#{}` there generalizes and leaves the emitted TS with `Map<string, unknown>`.
 // Structural (ADR 0005), so module.mochi's richer `{ types, aliases }` still fits.
-type QualScope = { types: Set string }
+type QualScope = { types: Set<string> }
 
-let emptyQuals : Map string QualScope = #{}
+let emptyQuals : Map<string, QualScope> = #{}
 
 // `Alias.T` resolves through the import graph: the alias must be a namespace
 // import of THIS module, and the dep must EXPORT a type of that name. `quals`

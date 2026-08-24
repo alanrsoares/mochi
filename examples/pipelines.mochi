@@ -22,7 +22,7 @@ let piped = 3
   |> square // (((3 + 1) * 2) + 1) squared = 81
 
 // ---- railway-oriented programming over Result ----
-type Result a e =
+type Result<a, e> =
   | Ok(a)
   | Err(e)
 
