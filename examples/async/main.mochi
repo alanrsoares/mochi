@@ -23,8 +23,8 @@ type ApiError =
   | NotFound(number)
   | Offline(string)
 
-extern fetchUser : number -> Task User string = "./runtime.mjs" "fetchUser"
-extern fetchPlan : number -> Task string string = "./runtime.mjs" "fetchPlan"
+extern fetchUser : number -> Task<User, string> = "./runtime.mjs" "fetchUser"
+extern fetchPlan : number -> Task<string, string> = "./runtime.mjs" "fetchPlan"
 
 let classify = (id, reason) => reason == "404" ? NotFound(id) : Offline(reason)
 

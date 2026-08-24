@@ -908,7 +908,8 @@ function run(
   // Record the name span so hover leads with `extern name: T` (+ host + ///).
   for (const s of prog.stmts) {
     if (s.kind !== "extern") continue;
-    const t = typeExprToType(s.typeExpr, new Map(), fresh, typeScope);
+    const vars = new Map(s.params.map((param) => [param, freshVar(fresh)]));
+    const t = typeExprToType(s.typeExpr, vars, fresh, typeScope);
     const sc = generalize(env, t, subst);
     env.set(s.name, sc);
     record(s.nameSpan, sc.type, {

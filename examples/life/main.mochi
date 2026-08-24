@@ -10,9 +10,9 @@
 //   bun examples/life/main.js
 //   MOCHI_LIFE_FAIL_ONCE=1 bun examples/life/main.js   # force one Err draw
 
-extern setup : number -> Task number string = "./runtime.mjs" "setup"
-extern draw : string -> string -> Task number string = "./runtime.mjs" "draw"
-extern teardown : number -> Task number string = "./runtime.mjs" "teardown"
+extern setup : number -> Task<number, string> = "./runtime.mjs" "setup"
+extern draw : string -> string -> Task<number, string> = "./runtime.mjs" "draw"
+extern teardown : number -> Task<number, string> = "./runtime.mjs" "teardown"
 
 // Host failures are plain strings; fold them onto a domain error once at the
 // boundary so the animation loop can recover a skipped frame without aborting.

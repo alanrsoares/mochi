@@ -133,12 +133,13 @@ const ctor = (c: Ctor): string =>
 const typeExpr = showTypeExpr;
 
 const externStmt = (s: ExternStmt): string => {
+  const params = s.params.length ? `<${s.params.join(", ")}>` : "";
   const match = /^mochi:(global|send|get|set|new):(.*)$/.exec(s.module);
   if (!match)
-    return `extern ${s.name} : ${typeExpr(s.typeExpr)} = ${JSON.stringify(s.module)} ${JSON.stringify(s.imported)}`;
+    return `extern ${s.name}${params} : ${typeExpr(s.typeExpr)} = ${JSON.stringify(s.module)} ${JSON.stringify(s.imported)}`;
   const [, convention, first] = match;
   const second = s.imported === "" ? "" : ` ${JSON.stringify(s.imported)}`;
-  return `extern ${s.name} : ${typeExpr(s.typeExpr)} = ${convention} ${JSON.stringify(first)}${second}`;
+  return `extern ${s.name}${params} : ${typeExpr(s.typeExpr)} = ${convention} ${JSON.stringify(first)}${second}`;
 };
 
 /**
@@ -147,7 +148,7 @@ const externStmt = (s: ExternStmt): string => {
  * indented to the arm — `withComments` per ctor supplies that slot.
  */
 const typeStmtD = (s: TypeStmt): Doc => {
-  const head = s.params.length ? `type ${s.name} ${s.params.join(" ")}` : `type ${s.name}`;
+  const head = s.params.length ? `type ${s.name}<${s.params.join(", ")}>` : `type ${s.name}`;
   if (s.ctors.length === 0 && !s.alias) return txt(`extern ${head}`);
   // Transparent record alias: `type Point = { x: number, y: number }`.
   if (s.alias) {

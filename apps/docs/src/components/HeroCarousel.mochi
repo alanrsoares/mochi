@@ -20,11 +20,11 @@ extern SWIPE_MIN_PX : number = "../lib/hero-slides" "SWIPE_MIN_PX"
 // call would be a silent partial application — the timer would only start
 // when the effect CLEANUP ran, and its real cleanup would leak.
 /// Returns an effect cleanup.
-extern startHeroTick : (a -> b) -> number -> c = "../lib/hero-slides" "startHeroTick"
+extern startHeroTick<A, B, C> : (A -> B) -> number -> C = "../lib/hero-slides" "startHeroTick"
 /// Record start X + setPointerCapture on the frame.
-extern swipePointerDown : a -> b -> c = "../lib/hero-slides" "swipePointerDown"
+extern swipePointerDown<A, B, C> : A -> B -> C = "../lib/hero-slides" "swipePointerDown"
 /// `clientX - start`; 0 when not the primary pointer.
-extern swipePointerDx : a -> b -> number = "../lib/hero-slides" "swipePointerDx"
+extern swipePointerDx<A, B> : A -> B -> number = "../lib/hero-slides" "swipePointerDx"
 
 let n = Array.length(heroSlides)
 

@@ -1,8 +1,8 @@
 // Pure highlight / twoslash helpers. UI + RegExp JS highlighter stay in
 // HighlightCode.tsx (hooks / DOM / regex).
 // @mochi open
-extern lex : string -> Result a b = "@mochi/compiler" "lex"
-extern hoverAt : string -> number -> a = "@mochi/dx/hover" "hoverAt"
+extern lex<A, B> : string -> Result<A, B> = "@mochi/compiler" "lex"
+extern hoverAt<A> : string -> number -> A = "@mochi/dx/hover" "hoverAt"
 
 /// Closed token shape — pins bootstrap/TS schemes (open-row link mismatch
 /// under Array.append([]) / spread, same class as bootstrap/scc.mochi ADR note).
@@ -46,7 +46,7 @@ let tokenKindFromLexTag = (tag, value) =>
     : tag == "id"
     ? isUpperId(value) ? "type" : "plain"
     : tag == "lt" || tag == "gt"
-    ? "jsx"
+    ? "punctuation"
     : Set.has(tag, ops)
     ? "operator"
     : Set.has(tag, punct)

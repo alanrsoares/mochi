@@ -9,10 +9,10 @@
 //
 // HighlightedCode: `enableTwoslash`/`errorSpans`/`overlay` are optional in TSX,
 // call sites here pass different subsets — stays `: a` (ADR 0055 open question).
-export extern HighlightedCode : a = "../components/HighlightCode" "HighlightedCode"
+export extern HighlightedCode<A> : A = "../components/HighlightCode" "HighlightedCode"
 // Playground/ColorSchemeToggle take no props — nothing to check.
-export extern Playground : a = "../components/Playground" "Playground"
-export extern ColorSchemeToggle : a = "../components/ColorSchemeToggle" "ColorSchemeToggle"
+export extern Playground<A> : A = "../components/Playground" "Playground"
+export extern ColorSchemeToggle<A> : A = "../components/ColorSchemeToggle" "ColorSchemeToggle"
 
 type IconProps = { name: string, className: string }
 

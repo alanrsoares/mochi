@@ -49,7 +49,8 @@ test("snake world has no wall collision and food follows the moving window", () 
   expect(game.freeCells([40, -10], moved.snake)).toContainEqual([40, -10]);
 });
 
-test("snake animation loop is fully applied through the extern boundary", () => {
+test("snake animation loop passes the Mochi renderer through the extern boundary", () => {
   const boardJs = unwrapOk(compile(boardSource));
-  expect(boardJs).toContain("const startParticleLoop = _curry(4, $startParticleLoop);");
+  expect(boardJs).toContain("const startParticleLoop = _curry(5, $startParticleLoop);");
+  expect(boardJs).toContain("const drawBoard = _curry(5");
 });

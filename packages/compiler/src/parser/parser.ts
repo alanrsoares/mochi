@@ -978,10 +978,24 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
   function parseType(): Extract<Stmt, { kind: "type" }> {
     const start = expect("type").span;
     const { name, span: nameSpan } = expectId();
-    // Optional type parameters, ML-style: `type Result a e = ...`. Any ids
-    // before the `=` are parameters the constructors can reference.
+    // Optional type parameters: `type Result<A, E> = ...`. Any ids in the
+    // bracket list are parameters the constructors can reference.
     const params: string[] = [];
-    while (peek().t === "id") params.push(expectId().name);
+    if (peek().t === "lt") {
+      next();
+      if (peek().t !== "gt") {
+        params.push(expectId().name);
+        while (peek().t === "comma") {
+          next();
+          params.push(expectId().name);
+        }
+      }
+      expect("gt");
+    } else {
+      // Read legacy ML binders so old modules can be formatted into the
+      // canonical angle-bracket spelling without a flag day.
+      while (peek().t === "id") params.push(expectId().name);
+    }
     expect("eq");
     // A `{` after `=` starts a transparent record alias; anything else is a
     // variant. `{` can't begin a constructor (those are Uppercase ids or `|`),
@@ -1144,28 +1158,45 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
     return { kind: "tname", name, span };
   }
 
-  /** Argument list shared by `tapp` and `tqual` application (`Task a`, `D.Result e a`). */
+  /** Argument list shared by `tapp` and `tqual` application (`Task<A>`, `D.Result<E, A>`). */
   function parseTypeAppArgs(): TypeExpr[] {
     const args: TypeExpr[] = [];
+    if (peek().t === "lt") {
+      next();
+      if (peek().t !== "gt") {
+        args.push(parseTypeExpr());
+        while (peek().t === "comma") {
+          next();
+          args.push(parseTypeExpr());
+        }
+      }
+      expect("gt");
+      return args;
+    }
+    // Transitional ML-style applications are accepted on input; the formatter
+    // always writes the angle-bracket form.
     while (peek().t === "id" || peek().t === "lparen" || peek().t === "lbracket")
       args.push(parseTypeAtom());
     return args;
   }
 
-  /** Type application by juxtaposition, tighter than `->` (`Task a`, `Result a e`). */
+  /** Angle-bracket type application, tighter than `->` (`Task<A>`, `Result<A, E>`). */
   function parseTypeApp(): TypeExpr {
     const head = parseTypeAtom();
+    const angled = peek().t === "lt";
     if (head.kind === "tqual") {
       const args = parseTypeAppArgs();
       const last = args[args.length - 1];
-      return !last ? head : { ...head, args, span: spanning(head.span, last.span) };
+      const end = angled ? toks[pos - 1]?.span : last?.span;
+      return !end ? head : { ...head, args, span: spanning(head.span, end) };
     }
     if (head.kind !== "tname" || !/^[A-Z]/.test(head.name)) return head;
     const args = parseTypeAppArgs();
     const last = args[args.length - 1];
+    const end = angled ? toks[pos - 1]?.span : last?.span;
     return !last
       ? head
-      : { kind: "tapp", ctor: head.name, args, span: spanning(head.span, last.span) };
+      : { kind: "tapp", ctor: head.name, args, span: spanning(head.span, end ?? last.span) };
   }
 
   function parseTypeExpr(): TypeExpr {
@@ -1193,6 +1224,16 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
       return { kind: "type", name, nameSpan, params: [], ctors: [], span: to(start) };
     }
     const { name, span: nameSpan } = expectId();
+    const params: string[] = [];
+    if (peek().t === "lt") {
+      next();
+      params.push(expectId().name);
+      while (peek().t === "comma") {
+        next();
+        params.push(expectId().name);
+      }
+      expect("gt");
+    }
     expect("colon");
     const typeExpr = parseTypeExpr();
     expect("eq");
@@ -1211,6 +1252,7 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
         kind: "extern",
         name,
         nameSpan,
+        params,
         typeExpr,
         module: `mochi:${convention}:${first}`,
         imported: second,
@@ -1219,7 +1261,7 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
     }
     const module = expectStr().value;
     const imported = expectStr().value;
-    return { kind: "extern", name, nameSpan, typeExpr, module, imported, span: to(start) };
+    return { kind: "extern", name, nameSpan, params, typeExpr, module, imported, span: to(start) };
   }
 
   /** `import { a, b } from "./mod"` or `import * as Alias from "./mod"` (ADR 0002). */

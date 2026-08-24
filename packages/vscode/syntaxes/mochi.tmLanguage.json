@@ -21,7 +21,7 @@
       ]
     },
     "jsx": {
-      "comment": "ADR 0007 — surface JSX; `<` starts a tag when followed by an ident, `/`, or `>` (fragments). Comparison `a < b` keeps a space after `<` and does not match.",
+      "comment": "ADR 0007 — surface JSX. A tag cannot start immediately after an identifier: that spelling is a generic application (`Result<T>`), not JSX.",
       "patterns": [
         { "include": "#jsx-fragment" },
         { "include": "#jsx-component" },
@@ -44,7 +44,7 @@
     "jsx-component": {
       "comment": "PascalCase / dotted component — <Card>, <UI.Button>",
       "name": "meta.tag.jsx.mochi",
-      "begin": "(<)([A-Z][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*)",
+      "begin": "(?<![A-Za-z0-9_.])(<)([A-Z][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*)",
       "beginCaptures": {
         "1": { "name": "punctuation.definition.tag.begin.mochi" },
         "2": { "name": "support.class.component.mochi" }
@@ -61,7 +61,7 @@
     "jsx-html": {
       "comment": "lowercase host tags — <div>, <button>",
       "name": "meta.tag.jsx.mochi",
-      "begin": "(<)([a-z][A-Za-z0-9_]*)",
+      "begin": "(?<![A-Za-z0-9_.])(<)([a-z][A-Za-z0-9_]*)",
       "beginCaptures": {
         "1": { "name": "punctuation.definition.tag.begin.mochi" },
         "2": { "name": "entity.name.tag.mochi" }
@@ -342,6 +342,11 @@
         {
           "name": "punctuation.definition.sigil.mochi",
           "match": "[@#]"
+        },
+        {
+          "comment": "Generic binders and applications: type Result<T, E>, Task<T, E>.",
+          "name": "punctuation.definition.generic.mochi",
+          "match": "[<>]"
         }
       ]
     }

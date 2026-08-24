@@ -8,16 +8,16 @@
 // these signatures only need to bind the names. `() ->` nullary domain
 // (ADR 0014); cleanup returns stay opaque so extern arity does not over-curry.
 
-export extern defineContainer : string -> a -> b = "@re-reduced/preact" "defineContainer"
-export extern useContainer : a -> b = "@re-reduced/preact" "useContainer"
-export extern useSelect : a -> b -> c = "@re-reduced/preact" "useSelect"
-export extern useWatch : a -> b -> c -> d = "@re-reduced/preact" "useWatch"
+export extern defineContainer<A, B> : string -> A -> B = "@re-reduced/preact" "defineContainer"
+export extern useContainer<A, B> : A -> B = "@re-reduced/preact" "useContainer"
+export extern useSelect<A, B, C> : A -> B -> C = "@re-reduced/preact" "useSelect"
+export extern useWatch<A, B, C, D> : A -> B -> C -> D = "@re-reduced/preact" "useWatch"
 
 /// Effect intent constructors — `Intent.query`, `Intent.timeout`,
 /// `Intent.storageSet`. Opaque: the plugin claims `Intent` as a member target
 /// and types each call.
-export extern Intent : a = "./src/runtime" "Intent"
+export extern Intent<A> : A = "./src/runtime" "Intent"
 
 /// Interpreters for every builtin intent kind, including the `query` one the
 /// library does not ship. Pass as `useContainer(def, { interpreters })`.
-export extern defaultInterpreters : a = "./src/runtime" "defaultInterpreters"
+export extern defaultInterpreters<A> : A = "./src/runtime" "defaultInterpreters"

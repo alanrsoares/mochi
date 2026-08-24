@@ -15,7 +15,7 @@
 // and passed to the next call.
 // ============================================================
 
-type TSt = { index: Map number number, low: Map number number, onStack: Set number, stack: [number], counter: number, sccs: [[number]] }
+type TSt = { index: Map<number, number>, low: Map<number, number>, onStack: Set<number>, stack: [number], counter: number, sccs: [[number]] }
 
 let hasIndex = (v, st) => Map.has(v, st.index)
 let indexOfV = (v, st) => Map.getOr(-1, v, st.index)

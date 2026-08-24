@@ -20,7 +20,7 @@ export type LamParam =
 
 type Field = { name: string, value: Expr }
 type MapEntry = { key: Expr, value: Expr }
-type MatchArm = { pattern: Pattern, guard: Option Expr, body: Expr }
+type MatchArm = { pattern: Pattern, guard: Option<Expr>, body: Expr }
 
 // One `name = init` binder in a `loop (...)` head (ADR 0056).
 type LoopParam = { name: string, nameSpan: Span, init: Expr }
@@ -41,14 +41,14 @@ export type Expr =
   // `origin` is sugar provenance (ADR 0011 §5): Some("jsx") when the parser
   // desugared JSX; None for ordinary calls — so a hand-written `h(...)` is
   // never mistaken for sugar.
-  | ECall(fn: Expr, args: [Expr], origin: Option string, span: Span)
+  | ECall(fn: Expr, args: [Expr], origin: Option<string>, span: Span)
   | ELambda(params: [LamParam], body: Expr, span: Span)
   | ELetIn(name: string, nameSpan: Span, value: Expr, body: Expr, span: Span)
   | ELetBind(param: LamParam, paramSpan: Span, monad: string, value: Expr, body: Expr, span: Span)
   | EPipe(left: Expr, right: Expr, span: Span)
   | ETernary(cond: Expr, thenE: Expr, elseE: Expr, span: Span)
   | EMatch(scrutinee: Expr, arms: [MatchArm], span: Span)
-  | ERecord(fields: [Field], spread: Option Expr, span: Span)
+  | ERecord(fields: [Field], spread: Option<Expr>, span: Span)
   | EField(target: Expr, name: string, span: Span)
   | ETuple(elements: [Expr], span: Span)
   | EArr(elements: [SeqElem], span: Span)
@@ -75,9 +75,9 @@ export type Pattern =
   | PTuple(elems: [Pattern], span: Span)
   | PRecord(fields: [PatField], span: Span)
   // Bare `Circle(r)`, or `Alias.Circle(r)` after `import * as Alias` (ADR 0002).
-  | PCtor(ctor: string, args: [Pattern], ns: Option string, span: Span)
-  | PArr(elems: [Pattern], rest: Option Pattern, span: Span)
-  | PList(elems: [Pattern], rest: Option Pattern, span: Span)
+  | PCtor(ctor: string, args: [Pattern], ns: Option<string>, span: Span)
+  | PArr(elems: [Pattern], rest: Option<Pattern>, span: Span)
+  | PList(elems: [Pattern], rest: Option<Pattern>, span: Span)
   | POr(alts: [Pattern], span: Span)
 
 export type TypeExpr =
@@ -92,14 +92,14 @@ export type TypeExpr =
   // lowercase/uppercase branch that motivates the split cannot apply.
   | TyQual(alias: string, name: string, nameSpan: Span, args: [TypeExpr], span: Span)
 
-type CtorField = { name: Option string, fieldType: TypeExpr }
+type CtorField = { name: Option<string>, fieldType: TypeExpr }
 type Ctor = { name: string, fields: [CtorField] }
 type AliasField = { name: string, fieldType: TypeExpr }
 
 export type Stmt =
-  | SLet(name: string, nameSpan: Span, annot: Option TypeExpr, value: Expr, exported: bool, doc: Option string, span: Span)
-  | SType(name: string, params: [string], ctors: [Ctor], alias: Option [AliasField], exported: bool, span: Span)
-  | SExtern(name: string, nameSpan: Span, typeExpr: TypeExpr, module: string, imported: string, exported: bool, doc: Option string, span: Span)
+  | SLet(name: string, nameSpan: Span, annot: Option<TypeExpr>, value: Expr, exported: bool, doc: Option<string>, span: Span)
+  | SType(name: string, params: [string], ctors: [Ctor], alias: Option<[AliasField]>, exported: bool, span: Span)
+  | SExtern(name: string, nameSpan: Span, params: [string], typeExpr: TypeExpr, module: string, imported: string, exported: bool, doc: Option<string>, span: Span)
   | SImport(names: [Name], from: string, span: Span)
   // import * as Alias from "./mod" — whole module as a user namespace (ADR 0002).
   | SImportNs(alias: Name, from: string, span: Span)

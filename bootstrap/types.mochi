@@ -114,7 +114,7 @@ let someOf = (f, xs) => someOfFrom(f, xs, 0)
 /// returns a NEW St rather than mutating in place. Type vars and row vars
 /// draw from the same `next` counter so ids never collide across the two
 /// maps (mirrors types.ts's original Fresh).
-export type St = { tv: Map number Ty, rv: Map number Row, next: number }
+export type St = { tv: Map<number, Ty>, rv: Map<number, Row>, next: number }
 export type TypeErr = { message: string }
 
 export let mkSt = start => { tv: #{}, rv: #{}, next: start }

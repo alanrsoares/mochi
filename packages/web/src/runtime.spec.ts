@@ -1,0 +1,26 @@
+import { expect, test } from "bun:test";
+import { compile } from "@mochi/compiler/compile";
+import { unwrapOk } from "@onrails/result";
+import { option } from "./runtime";
+
+test("option converts JavaScript nullish values to Mochi Option tags", () => {
+  expect(option(null)).toEqual({ _tag: "None" });
+  expect(option(undefined)).toEqual({ _tag: "None" });
+  expect(option(0)).toEqual({ _tag: "Some", value: 0 });
+});
+
+test("canvas bindings compile as curried typed externs", async () => {
+  const source = await Bun.file(new URL("../canvas.mochi", import.meta.url)).text();
+  const js = unwrapOk(compile(source));
+
+  expect(js).toContain('import { context2d } from "@mochi/web/runtime";');
+  expect(js).toContain("const clearRect = _curry(5, $clearRect);");
+});
+
+test("timer binding stays fully applied at its two runtime arguments", async () => {
+  const source = await Bun.file(new URL("../dom.mochi", import.meta.url)).text();
+  const js = unwrapOk(compile(source));
+
+  expect(js).toContain("const every = _curry(2, $every);");
+  expect(js).toContain("const onKeyDown = _curry(2, $onKeyDown);");
+});

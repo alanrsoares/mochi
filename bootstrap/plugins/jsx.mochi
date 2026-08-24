@@ -69,7 +69,7 @@ type Tok =
   | TId(value: string)
   | TEof
 
-type LocTok = { tok: Tok, start: number, end: number, doc: Option string }
+type LocTok = { tok: Tok, start: number, end: number, doc: Option<string> }
 
 let jxTokName = t => switch t {
   | TEq => "eq"

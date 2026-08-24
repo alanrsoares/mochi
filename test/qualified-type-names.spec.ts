@@ -106,7 +106,7 @@ test("formatter round-trips a qualified type name, nullary and applied", () => {
   const src = 'extern f : D.Shape -> D.Result e a = "./m" "f"';
   const once = unwrapOk(format(src));
   expect(once).toContain("D.Shape");
-  expect(once).toContain("D.Result e a");
+  expect(once).toContain("D.Result<e, a>");
   expect(unwrapOk(format(once))).toBe(once);
 });
 

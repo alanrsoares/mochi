@@ -105,6 +105,8 @@ What else was on the table and why not.
 | [0053](0053-path-to-wasm3.md) | Path to Wasm 3.0 (WasmGC third backend; no Rust rewrite) | Proposed |
 | [0054](0054-unit-value-and-ignore.md) | `unit` as an ordinary type: `()` value, `()` pattern, `ignore` | Accepted |
 | [0058](0058-runtime-components.md) | Runtime components: owned resources + declared capabilities | Accepted |
+| [0061](0061-web-standard-library.md) | Web standard-library bindings | Accepted |
+| [0062](0062-extern-generic-binders.md) | Explicit generic binders on externs | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

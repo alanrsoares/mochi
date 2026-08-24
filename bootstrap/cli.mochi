@@ -14,8 +14,8 @@ import { buildModules } from "./module.mochi"
 
 type Diag = { message: string, start: number, end: number }
 
-extern readFile : string -> Result string string = "./host.mjs" "readFile"
-extern writeFile : string -> string -> Result string string = "./host.mjs" "writeFile"
+extern readFile : string -> Result<string, string> = "./host.mjs" "readFile"
+extern writeFile : string -> string -> Result<string, string> = "./host.mjs" "writeFile"
 extern argv : [string] = "./host.mjs" "argv"
 extern print : string -> string = "./host.mjs" "print"
 extern die : string -> a = "./host.mjs" "die"

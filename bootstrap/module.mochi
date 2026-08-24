@@ -16,11 +16,11 @@ import { codegen } from "./codegen.mochi"
 
 // Prelude tables from the generated shim (as in compile.mochi). Threaded opaquely
 // into inferProgramImports / codegen; module.mochi never inspects them.
-extern builtins : Map string a = "./prelude.gen.mjs" "builtins"
-extern namespaces : Map string (Map string a) = "./prelude.gen.mjs" "namespaces"
-extern namespaceRuntime : Map string (Map string string) = "./prelude.gen.mjs" "namespaceRuntime"
-extern preludeJsDefs : Map string string = "./prelude.gen.mjs" "preludeJsDefs"
-extern runtimeDeps : Map string [string] = "./prelude.gen.mjs" "runtimeDeps"
+extern builtins : Map<string, a> = "./prelude.gen.mjs" "builtins"
+extern namespaces : Map<string, Map<string, a> > = "./prelude.gen.mjs" "namespaces"
+extern namespaceRuntime : Map<string, Map<string, string> > = "./prelude.gen.mjs" "namespaceRuntime"
+extern preludeJsDefs : Map<string, string> = "./prelude.gen.mjs" "preludeJsDefs"
+extern runtimeDeps : Map<string, [string]> = "./prelude.gen.mjs" "runtimeDeps"
 
 // Stmt/Pattern ctors via namespace import (ADR 0002) — only SImport/SImportNs are
 // destructured here; other stmts flow opaquely to the passes.
@@ -33,7 +33,7 @@ type Loaded = { path: string, stmts: [Stmt] }
 // meaningful span, so both offsets are 0 (matching src/module.ts).
 type MErr = { message: string, start: number, end: number }
 
-extern readFile : string -> Result string string = "./host.mjs" "readFile"
+extern readFile : string -> Result<string, string> = "./host.mjs" "readFile"
 extern resolveImport : string -> string -> string = "./host.mjs" "resolveImport"
 extern absPath : string -> string = "./host.mjs" "absPath"
 
@@ -64,7 +64,7 @@ let importFroms = stmts => importFromsFrom(stmts, 0, [])
 
 // The DFS accumulator: `state` marks each path "loading" (on the stack, so
 // re-entry is a cycle) or "done"; `order` collects modules in dependency order.
-type Acc = { state: Map string string, order: [Loaded] }
+type Acc = { state: Map<string, string>, order: [Loaded] }
 
 // Visit one module: mark it loading, parse it, recurse into its deps, then mark
 // it done and append it to `order`. First Err short-circuits. A path already
@@ -124,7 +124,7 @@ export let loadGraph = entry =>
 // error on the emitted `.ts`). Structural aliases (ADR 0005), so this unifies
 // with check.mochi's `Registry` without a cross-module type import.
 type CtorInfo = { owner: string, arity: number }
-type Registry = { ctors: Map string CtorInfo, types: Map string [string] }
+type Registry = { ctors: Map<string, CtorInfo>, types: Map<string, [string]> }
 
 let emptyReg : Registry = { ctors: #{}, types: #{} }
 

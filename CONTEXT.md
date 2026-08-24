@@ -137,7 +137,7 @@ errors) share one compiler-side model — the LSP stays a thin adapter (ADR 0003
 
 mochi's type system does **not** track effects. There is no effect row and no checker
 rule that forces effectful work into `Task`. The discipline is: effectful `extern`s
-*should* return `Task a e`, and effects stay at the FFI boundary. That is unenforceable
+*should* return `Task<A, E>`, and effects stay at the FFI boundary. That is unenforceable
 mechanically (the compiler can't inspect a JS export's body) and deliberate
 ([ADR 0005](docs/adr/0005-prelude-task.md), [ADR 0006](docs/adr/0006-task-result-async.md)).
 
@@ -191,7 +191,8 @@ mechanically (the compiler can't inspect a JS export's body) and deliberate
 
 ## Extern / FFI ([ADR 0012](docs/adr/0012-host-interop-end-state.md))
 
-- Surface: `extern name : type = "module" "export"`.
+- Surface: `extern name<T, U> : type = "module" "export"`; the angle binder is
+  optional, and makes uppercase signature variables generic rather than nominal types.
 - **Preference order (ReScript-informed):** (1) typed `extern` when HM can be
   honest; (2) core literal/union formers so prop types are real in infer;
   (3) thin sugar plugins that *assign* those formers; (4) heavy host generics

@@ -8,4 +8,4 @@
 // AST; jsxPlugin checks attrs on those components; the format hook reflows
 // class strings (ADR 0057). LSP completes `$tone` lit unions; factory `tw.*`
 // members stay open-world opaque.
-export extern tw : a = "@styled-cva/react" "default"
+export extern tw<A> : A = "@styled-cva/react" "default"

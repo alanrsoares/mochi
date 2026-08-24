@@ -10,12 +10,12 @@ let circle : D.Shape = Circle(2.0)
 let rect : D.Shape = Rect(3.0, 4.0)
 
 // Applied qualified name — one `TyQual` form covers both arities.
-let boxed : D.Box number = Box(7)
+let boxed : D.Box<number> = Box(7)
 
 // A qualified RECORD alias expands (aliases are structural, ADR 0005), so a
 // plain record literal still assigns to it — unlike a variant, which crosses
 // the edge nominally.
-let corner : D.Pair number = { fst: 1.0, snd: 2.0 }
+let corner : D.Pair<number> = { fst: 1.0, snd: 2.0 }
 
 // Qualified name inside an arrow.
 let sizeOf : D.Shape -> number = s => area(s)

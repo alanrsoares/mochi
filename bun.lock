@@ -70,6 +70,7 @@
         "@mochi/plugin-re-reduced": "workspace:*",
         "@mochi/plugin-styled-cva": "workspace:*",
         "@mochi/vite-plugin": "workspace:*",
+        "@mochi/web": "workspace:*",
         "@onrails/pattern": "^0.3.3",
         "@re-reduced/core": "^0.3.2",
         "@re-reduced/preact": "^0.2.3",
@@ -223,6 +224,10 @@
         "vscode-languageclient": "^10.1.0",
       },
     },
+    "packages/web": {
+      "name": "@mochi/web",
+      "version": "0.1.0",
+    },
   },
   "packages": {
     "@babel/code-frame": ["@babel/code-frame@7.29.7", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.29.7", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw=="],
@@ -374,6 +379,8 @@
     "@mochi/vite-plugin": ["@mochi/vite-plugin@workspace:packages/vite-plugin"],
 
     "@mochi/vscode": ["@mochi/vscode@workspace:packages/vscode"],
+
+    "@mochi/web": ["@mochi/web@workspace:packages/web"],
 
     "@onrails/maybe": ["@onrails/maybe@0.2.3", "", { "peerDependencies": { "@onrails/result": "0.2.0" }, "optionalPeers": ["@onrails/result"] }, "sha512-cou0uxQp6OvYQ/b/VWr2OwJxdL2T5QDyPJV0TAXJDfoCqIdTJ4UNHTW0qXr/MeVsG0P/vY5zJOvmfvadJlmP7g=="],
 

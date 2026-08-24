@@ -148,7 +148,10 @@ export function mochiPlugin(options: MochiPluginOptions = {}): Plugin {
       // emit skips the header and `h` is an unbound reference at runtime.
       // Match only real import lines (`^…` with /m) — a string literal like
       // `"We import { h } from preact"` must not suppress the pragma.
-      if (code.includes("<") && code.includes(">")) {
+      // Inspect the generated call rather than source punctuation: extern
+      // generics (`extern id<T>`) also contain angle brackets, but they are
+      // not JSX and must not pull Preact into a platform binding module.
+      if (/\bh\(/.test(transformedCode)) {
         const hasH =
           /^import\s*\{[^}]*\bh\b[^}]*\}\s*from/m.test(transformedCode) ||
           transformedCode.startsWith(jsxHeader.trim());

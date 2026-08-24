@@ -4,10 +4,17 @@
 // @mochi open
 import { useEffect, hookDeps0 } from "@mochi/plugin-preact/hooks"
 import {
+  document,
+  onKeyDown,
+  every,
+  pickRandom,
+  localStorage,
+  storageGet
+} from "@mochi/web/dom"
+import {
   defineContainer,
   useContainer,
   useSelect,
-  useWatch,
   Intent,
   defaultInterpreters
 } from "@mochi/plugin-re-reduced/container"
@@ -50,25 +57,22 @@ import {
 // Cleanup returns stay OPAQUE (`c`, not `c -> d`): extern arity is the whole
 // arrow spine, so a trailing `-> c -> d` over-currys the import and calls
 // become silent partial applications (keyboard/timer never attach).
-/// Returns an effect cleanup.
-extern startTick : (a -> b) -> number -> c = "./host/game.host" "startTick"
-/// Forwards raw lowercased keys — `keyOf` below owns the binding table.
-/// Returns a `useEffect` cleanup.
-extern onKeyDown : (a -> b) -> c = "./host/game.host" "onKeyDown"
-/// Uniform choice from the pure, moving food window.
-extern pickRandom : a -> [a] -> a = "./host/game.host" "pickRandom"
-extern readHighScore : () -> number = "./host/game.host" "readHighScore"
-/// The storage key `Intent.storageSet` writes — owned by the host that reads it.
-extern highScoreKey : string = "./host/game.host" "HIGH_SCORE_KEY"
+/// The storage key is shared by direct reads and the container interpreter write.
+let highScoreKey = "mochi_snake_highscore"
+
+let readHighScore = () => switch storageGet(localStorage(), highScoreKey) {
+  | Some(raw) => Option.unwrapOr(0, Str.toNumber(raw))
+  | None => 0
+}
 
 /// One leaderboard row. Type names do not cross module boundaries yet, so the
 /// shape is restated here rather than imported from the host's `ScoreEntry`.
 type ScoreEntry = { name: string, score: number }
 
-extern fetchLeaderboard : () -> Task [ScoreEntry] string = "./host/leaderboard.host" "fetchLeaderboardTask"
-extern postScore : string -> number -> Task [ScoreEntry] string = "./host/leaderboard.host" "postScoreTask"
+extern fetchLeaderboard : () -> Task<[ScoreEntry], string> = "./host/leaderboard.host" "fetchLeaderboardTask"
+extern postScore : string -> number -> Task<[ScoreEntry], string> = "./host/leaderboard.host" "postScoreTask"
 /// Returns a `useEffect` cleanup.
-extern connectWs : (a -> b) -> (c -> d) -> e = "./host/leaderboard.host" "connectWs"
+extern connectWs<A, B, C, D, E> : (A -> B) -> (C -> D) -> E = "./host/leaderboard.host" "connectWs"
 
 /// A key the game answers to. Declared here rather than in a shared module: a
 /// `switch` on an imported variant's constructors fails the Vite plugin's
@@ -215,20 +219,21 @@ export let App = _ =>
   // Two-parameter selector = read a `derive`d signal (ADR 0051).
   let playing = useSelect(store, (s, d) => d.playing.value) in
   let gameOver = useSelect(store, (s, d) => d.gameOver.value) in
-  // The tick is a *reaction to a value*, not a mount effect: `useWatch` reruns
-  // (and runs the previous cleanup) whenever `playing` flips, which is what an
-  // interpreter cleanup cannot do — those flush only on container destroy.
-  let _tick = useWatch(store, s =>
-    isPlayingStatus(
-      s.status.value
-    ), running =>
-    running ? startTick(() => store.actions.step(), TICK_MS) : () => 0
-  ) in
+  // Mount one timer and read the store's live status signal on every turn.
+  // This avoids coupling game progression to Preact re-render timing or a
+  // derived signal's subscription lifecycle.
+  let _tick = useEffect(() =>
+    every(TICK_MS, () =>
+      isPlayingStatus(store.$state.status.value)
+        ? let _ = store.actions.step() in ()
+        : ()
+    )
+  )(hookDeps0()) in
   // Two switches, not a nested `Some(MoveUp)`: the outer one absorbs the
   // unbound key, and the inner one has no catch-all — so adding a `Key`
   // constructor is a compile error here until it is handled.
   let _keys = useEffect(() =>
-    onKeyDown(raw => switch keyOf(raw) {
+    onKeyDown(document(), raw => switch keyOf(raw) {
       | None => ()
       | Some(key) => switch key {
           | MoveUp => store.actions.up()
