@@ -20,10 +20,10 @@ channel that is Task's whole point.
 
 **What to build (after a small ADR on partial-failure semantics):**
 
-- `Task.all : [Task a e] -> Task [a] e` — fail-fast on first `Err` (document whether
+- `Task.all : [Task<A, E>] -> Task<[A], E>` — fail-fast on first `Err` (document whether
   in-flight effects are abandoned; no cancellation story yet, so "abandoned" = ignored).
-- `Task.race : [Task a e] -> Task a e`.
-- `Task.traverse : (a -> Task b e) -> [a] -> Task [b] e` (and `sequence` as the
+- `Task.race : [Task<A, E>] -> Task<A, E>`.
+- `Task.traverse : (A -> Task<B, E>) -> [A] -> Task<[B], E>` (and `sequence` as the
   identity special case if it falls out free).
 - Bounded parallelism (`allLimit(n, …)`) — decide in the ADR whether v1 ships it.
 - Chains stay mono-`e` (existing rule): callers `mapErr` before combining.

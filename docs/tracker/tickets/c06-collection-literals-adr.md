@@ -10,7 +10,7 @@ blocked-by: []
 >
 > 1. **`@{}` stays.** Keep the lazy-List sigil; pay the novelty with one great docs
 >    paragraph + hover showing the `List` type.
-> 2. **Empty Set = `Set.empty`** — polymorphic `Set.empty : Set a` prelude value; no
+> 2. **Empty Set = `Set.empty`** — polymorphic `Set.empty : Set<A>` prelude value; no
 >    grammar change; `#{}` stays Map. Add `List.empty`/`Map.empty` for symmetry if
 >    they fall out free.
 > 3. **Namespace rule, documented as-is:** unqualified = the universal layer — math,
