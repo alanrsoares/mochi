@@ -15,6 +15,7 @@ import {
   namespaceRuntime,
   preludeEnv,
   preludeJsDefs,
+  runtimeArity,
   preludeNamespaces,
 } from "@mochi/compiler/prelude";
 import type { Type } from "@mochi/compiler/types";
@@ -28,17 +29,6 @@ for (const [ns, members] of Object.entries(namespaceRuntime))
     const sig = (preludeNamespaces[ns] as Record<string, Type> | undefined)?.[member];
     if (sig && !jsIdType.has(jsId)) jsIdType.set(jsId, sig);
   }
-
-// Runtime arity: `_curry(N, …)` states it; a bare `(a, b) => …` counts its outer
-// params; anything else (a value like `pi`, a nullary ctor) is arity 0.
-const arityOf = (def: string): number => {
-  const curried = def.match(/=\s*_curry\((\d+),/);
-  if (curried) return Number(curried[1]);
-  const arrow = def.match(/^const \w+ = \(([^)]*)\) =>/);
-  if (!arrow) return 0;
-  const ps = arrow[1]!.trim();
-  return ps === "" ? 0 : ps.split(",").length;
-};
 
 // Body with the const head stripped: `const add = <rhs>` → `<rhs>` (keeps `;`).
 const rhsOf = (def: string): string => def.replace(/^const \w+ = /, "");
@@ -120,7 +110,7 @@ for (const [name, def] of Object.entries(preludeJsDefs)) {
     lines.push(`export ${def}`); // untyped fallback (inferred any) — flagged below
     continue;
   }
-  const type = flatFnType(sig, arityOf(def));
+  const type = flatFnType(sig, runtimeArity[name] ?? 0);
   lines.push(`export const ${name}: ${type} = ${tsBody(def)}`);
 }
 

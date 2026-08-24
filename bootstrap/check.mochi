@@ -588,7 +588,7 @@ let checkReservedNames = stmts =>
       | Ast.SLet(name, _, _, _, _, _, sp) => Array.contains(name, reservedNames)
           ? Some(reservedErr(name, sp))
           : None
-      | Ast.SExtern(name, _, _, _, _, _, _, _, sp) => Array.contains(
+      | Ast.SExtern(name, _, _, _, _, _, _, _, _, sp) => Array.contains(
           name,
           reservedNames
         )
@@ -692,7 +692,7 @@ let qualRefsFrom = te => switch te {
 let writtenTypeExprs = stmts =>
   Array.flatMap(
     s => switch s {
-      | Ast.SExtern(_, _, _, te, _, _, _, _, _) => [te]
+      | Ast.SExtern(_, _, _, te, _, _, _, _, _, _) => [te]
       | Ast.SLet(_, _, annot, _, _, _, _) => switch annot {
           | Some(te) => [te]
           | None => []

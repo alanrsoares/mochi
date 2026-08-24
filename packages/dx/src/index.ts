@@ -9,7 +9,7 @@ export {
   toPublish,
 } from "./diagnostics";
 export { type FormatOptions, format, formatProgram } from "./format";
-export { type HoverInfo, hoverAt, moduleHoverAt } from "./hover";
+export { type HoverInfo, hoverAt, hoverAtOption, moduleHoverAt } from "./hover";
 export {
   type DocSymbol,
   definitionAt,

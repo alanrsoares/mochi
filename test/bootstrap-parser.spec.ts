@@ -285,6 +285,7 @@ const cStmt = (s: Stmt): Canon => {
         typeExpr: cTy(s.typeExpr),
         module: s.module,
         imported: s.imported,
+        curried: s.curried === true,
         exported: s.exported === true,
         doc: s.doc ?? null,
         span: cSpan(s.span),
@@ -512,6 +513,7 @@ const A_STMT: Record<string, (s: Al) => Canon> = {
     typeExpr: aTy(s.typeExpr),
     module: s.module,
     imported: s.imported,
+    curried: s.curried,
     exported: s.exported,
     doc: opt(s.doc, (d) => d),
     span: s.span,
@@ -597,6 +599,10 @@ const cases: Record<string, string> = {
   "type decl: record alias": "type Point = { x: number, y: number }\ntype Box a = { value: a }",
   "extern signatures":
     'extern clamp : number -> number -> number = "./m" "clamp"\nextern pick : (a, b) -> [a] -> Option a = "./m" "pick"',
+  // ADR 0064: `curried` is a calling convention on the host, so both parsers must
+  // agree on the flag — and on the type, which the keyword leaves untouched.
+  "curried extern hosts (ADR 0064)":
+    'extern add : number -> number -> number = curried "./m" "add"\nextern tag : string -> string -> string = "./m" "tag"',
   "import and exports":
     'import { a, b } from "./mod"\nexport let x = 1\nexport type T = | K\nexport extern e : a -> a = "./m" "e"',
   "namespace import": 'import * as Ast from "./ast.mochi"\nlet x = Ast.ENum',

@@ -343,7 +343,7 @@ const compileGraphTs = (
       if (!sc) continue;
       const bucket = externDts.get(dtsPath) ?? externDts.set(dtsPath, []).get(dtsPath)!;
       if (!bucket.some((e) => e.imported === s.imported))
-        bucket.push({ imported: s.imported, scheme: sc });
+        bucket.push({ imported: s.imported, scheme: sc, curried: s.curried });
     }
 
     const localTypes = new Set(

@@ -41,7 +41,7 @@ let lastIntendedDir = state => switch Array.head(Array.reverse(state.dirQueue)) 
 }
 
 /// Check if position is contained within the snake body
-let checkSelfCollision = (head, body) => Array.contains(head)(body)
+let checkSelfCollision = (head, body) => Array.contains(head, body)
 
 /// An unbounded world still needs a finite sampling window for the next food.
 /// Centering the window on the last food keeps food reachable while allowing
@@ -52,7 +52,7 @@ export let freeCells = ((x, y), snake) =>
     |> Array.flatMap(x =>
       range(y - 12, y + 13) |> toArray |> Array.map(y => (x, y))
     )
-    |> Array.filter(cell => !Array.contains(cell)(snake))
+    |> Array.filter(cell => !Array.contains(cell, snake))
 
 /// Initialize a fresh game state
 export let initGame = (cols, rows, highScore) =>
@@ -79,7 +79,7 @@ export let changeDir = (state, newDir) => switch state.status {
         : let lastDir = lastIntendedDir(state) in
           isOpposite(lastDir, newDir) || lastDir == newDir
             ? state
-            : { ...state, dirQueue: Array.append(newDir)(state.dirQueue) }
+            : { ...state, dirQueue: Array.append(newDir, state.dirQueue) }
   | Ready => let lastDir = lastIntendedDir(state) in
       isOpposite(lastDir, newDir)
         ? state

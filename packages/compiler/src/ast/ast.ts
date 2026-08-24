@@ -222,6 +222,13 @@ export type Stmt =
       typeExpr: TypeExpr;
       module: string;
       imported: string;
+      /**
+       * `= curried "./m" "f"` — the HOST is written curried (`a => b => c`), not
+       * flat (`(a, b) => c`). A calling convention like `send`/`new` (ADR 0059,
+       * 0064), not a property of the type: the signature always describes
+       * mochi-side usage, and codegen adapts the host to it.
+       */
+      curried?: boolean;
       exported?: boolean;
       /** Leading `///` — same attachment as `let` (tracer #52). */
       doc?: string;
