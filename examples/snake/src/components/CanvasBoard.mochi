@@ -20,7 +20,7 @@ extern eatWatchSeed : a -> b -> EatWatch = "../host/canvas.host" "eatWatchSeed"
 extern syncBoardRef : Ref a -> a -> () = "../host/canvas.host" "syncBoardRef"
 extern watchEat : Ref Particles -> Ref EatWatch -> a -> () = "../host/canvas.host" "watchEat"
 /// Returns a `useEffect` cleanup.
-extern startParticleLoop : Ref CanvasElement -> Ref Particles -> Ref a -> ((number, number) -> (number, number) -> number -> (number, number)) -> () -> () = "../host/canvas.host" "startParticleLoop"
+extern startParticleLoop : Ref CanvasElement -> Ref Particles -> Ref a -> ((number, number) -> (number, number) -> number -> (number, number)) -> c = "../host/canvas.host" "startParticleLoop"
 
 /// One pure interpolation step. Rendering calls this for every snake segment
 /// on each animation frame; Canvas2D itself remains at the host boundary.

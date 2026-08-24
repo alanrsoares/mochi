@@ -5,6 +5,7 @@ import { match } from "@onrails/pattern";
 import { unwrapOk } from "@onrails/result";
 
 const source = readRepo(import.meta.url, "examples/snake/snake.mochi");
+const boardSource = readRepo(import.meta.url, "examples/snake/src/components/CanvasBoard.mochi");
 const js = unwrapOk(compile(source))
   .replace(/^import .*$/gm, "")
   .replace(/^export /gm, "");
@@ -46,4 +47,9 @@ test("snake world has no wall collision and food follows the moving window", () 
   expect(moved.status).toBe(running.status);
   expect(moved.snake[0]).toEqual([20, 10]);
   expect(game.freeCells([40, -10], moved.snake)).toContainEqual([40, -10]);
+});
+
+test("snake animation loop is fully applied through the extern boundary", () => {
+  const boardJs = unwrapOk(compile(boardSource));
+  expect(boardJs).toContain("const startParticleLoop = _curry(4, $startParticleLoop);");
 });
