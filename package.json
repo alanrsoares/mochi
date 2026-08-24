@@ -45,7 +45,7 @@
     "examples/snake"
   ],
   "devDependencies": {
-    "@biomejs/biome": "^2.5.4",
+    "@biomejs/biome": "^2.5.10",
     "@mochi/cli": "workspace:*",
     "@mochi/codemod": "workspace:*",
     "@mochi/compiler": "workspace:*",
@@ -57,7 +57,7 @@
     "@mochi/test-support": "workspace:*",
     "@mochi/vite-plugin": "workspace:*",
     "@types/bun": "latest",
-    "esbuild": "^0.28.1",
+    "esbuild": "^0.28.2",
     "fast-check": "^4.9.0",
     "lefthook": "^2.1.10"
   },

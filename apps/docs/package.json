@@ -19,23 +19,23 @@
     "@mochi/plugin-re-reduced": "workspace:*",
     "@mochi/plugin-styled-cva": "workspace:*",
     "@mochi/vite-plugin": "workspace:*",
-    "@preact/signals": "^2.3.1",
+    "@preact/signals": "^2.11.1",
     "@re-reduced/preact": "^0.2.3",
     "@styled-cva/react": "^0.7.1",
     "gsap": "^3.15.0",
-    "lucide-preact": "^1.27.0",
-    "preact": "^10.26.4",
+    "lucide-preact": "^1.33.0",
+    "preact": "^10.29.8",
     "prettier": "3"
   },
   "devDependencies": {
     "@mochi/test-support": "workspace:*",
-    "@preact/preset-vite": "^2.10.1",
+    "@preact/preset-vite": "^2.10.6",
     "@types/bun": "latest",
-    "@tailwindcss/vite": "^4.0.0",
+    "@tailwindcss/vite": "^4.3.3",
     "@types/path-browserify": "^1.0.3",
     "path-browserify": "^1.0.1",
-    "tailwindcss": "^4.0.0",
-    "typescript": "^5.7.3",
-    "vite": "^6.0.0"
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.3"
   }
 }

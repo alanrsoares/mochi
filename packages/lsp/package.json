@@ -13,6 +13,6 @@
     "@mochi/runtime-components": "workspace:*",
     "@onrails/result": "^0.4.0",
     "vscode-languageserver": "^10.1.0",
-    "vscode-languageserver-textdocument": "^1.0.12"
+    "vscode-languageserver-textdocument": "^1.0.13"
   }
 }
