@@ -2,35 +2,43 @@
 // in `canvas.host.ts` (not yet expressible in the surface language).
 import { useRef, useEffect, hookDeps2 } from "@mochi/plugin-preact/hooks"
 
+// Canvas2D and particle state remain host-owned, but their handles are no
+// longer interchangeable with arbitrary values at this Mochi boundary.
+extern type CanvasElement
+extern type Particles
+extern type EatWatch
+
+// Preact's `useRef` is structurally modelled by the host adapter, so keep the
+// container transparent while its canvas/particle/watch payloads stay opaque.
+type Ref a = { current: a }
+
 extern BOARD_PX : number = "../host/canvas.host" "BOARD_PX"
 /// Seed for canvas `useRef` (mochi has no `null` literal).
-extern nullEl : a = "../host/canvas.host" "nullEl"
-extern emptyParticles : () -> a = "../host/canvas.host" "emptyParticles"
-extern eatWatchSeed : a -> b -> c = "../host/canvas.host" "eatWatchSeed"
-extern syncBoardRef : a -> b -> c = "../host/canvas.host" "syncBoardRef"
-extern watchEat : a -> b -> c -> d = "../host/canvas.host" "watchEat"
-extern paintBoard : a -> b -> c -> d = "../host/canvas.host" "paintBoard"
+extern nullEl : CanvasElement = "../host/canvas.host" "nullEl"
+extern emptyParticles : () -> Particles = "../host/canvas.host" "emptyParticles"
+extern eatWatchSeed : a -> b -> EatWatch = "../host/canvas.host" "eatWatchSeed"
+extern syncBoardRef : Ref a -> a -> () = "../host/canvas.host" "syncBoardRef"
+extern watchEat : Ref Particles -> Ref EatWatch -> a -> () = "../host/canvas.host" "watchEat"
 /// Returns a `useEffect` cleanup.
-extern startParticleLoop : a -> b -> c -> d = "../host/canvas.host" "startParticleLoop"
+extern startParticleLoop : Ref CanvasElement -> Ref Particles -> Ref a -> ((number, number) -> (number, number) -> number -> (number, number)) -> c = "../host/canvas.host" "startParticleLoop"
+
+/// One pure interpolation step. Rendering calls this for every snake segment
+/// on each animation frame; Canvas2D itself remains at the host boundary.
+let interpolatePoint = ((fromX, fromY), (toX, toY), progress) =>
+  (fromX + (toX - fromX) * progress, fromY + (toY - fromY) * progress)
 
 export let CanvasBoard = props =>
   let canvasRef = useRef(nullEl) in
   let particles = useRef(emptyParticles()) in
   let eatWatch = useRef(eatWatchSeed(props.snake, props.food)) in
-  let board = {
-    snake: props.snake,
-    food: props.food,
-    cols: props.cols,
-    rows: props.rows
-  } in
+  let board = { snake: props.snake, food: props.food } in
   let boardRef = useRef(board) in
   let _sync = syncBoardRef(boardRef, board) in
-  // Store → pixels: paint whenever the board slice changes; particle rAF
-  // only while bursts remain (host loop reads `boardRef`).
+  // Store → pixels: the host keeps prior/current snapshots and paints every
+  // animation frame. Mochi supplies the pure interpolation between ticks.
   let _draw = useEffect(() =>
     let _ = watchEat(particles, eatWatch, board) in
-    let _ = paintBoard(canvasRef, board, particles) in
-      startParticleLoop(canvasRef, particles, boardRef)
+      startParticleLoop(canvasRef, particles, boardRef, interpolatePoint)
   )(hookDeps2(props.snake, props.food)) in
     <canvas
       ref={canvasRef}

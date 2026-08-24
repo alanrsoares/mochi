@@ -64,6 +64,14 @@ const genExtern = (s: ExternStmt): string => {
     if (kind === "new") {
       const arity = typeExprArity(s.typeExpr);
       const args = Array.from({ length: arity }, (_, i) => `$a${i}`).join(", ");
+      if (s.imported) {
+        const raw = `$${s.name}`;
+        const importLine = `import { ${s.imported} as ${raw} } from ${JSON.stringify(target)};`;
+        const ctor = `new ${raw}(${args})`;
+        return arity === 0
+          ? `${importLine}\nconst ${s.name} = () => ${ctor};`
+          : `${importLine}\nconst ${s.name} = _curry(${arity}, (${args}) => ${ctor});`;
+      }
       return arity === 0
         ? `const ${s.name} = () => new ${global}();`
         : `const ${s.name} = _curry(${arity}, (${args}) => new ${global}(${args}));`;

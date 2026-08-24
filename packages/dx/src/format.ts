@@ -148,6 +148,7 @@ const externStmt = (s: ExternStmt): string => {
  */
 const typeStmtD = (s: TypeStmt): Doc => {
   const head = s.params.length ? `type ${s.name} ${s.params.join(" ")}` : `type ${s.name}`;
+  if (s.ctors.length === 0 && !s.alias) return txt(`extern ${head}`);
   // Transparent record alias: `type Point = { x: number, y: number }`.
   if (s.alias) {
     const fields = s.alias.map((f) => `${f.name}: ${typeExpr(f.type)}`);

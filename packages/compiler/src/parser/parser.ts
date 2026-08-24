@@ -1182,8 +1182,16 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
   };
 
   /** Module imports plus contextual JS calling conventions (ADR 0059). */
-  function parseExtern(): Extract<Stmt, { kind: "extern" }> {
+  function parseExtern(): Extract<Stmt, { kind: "extern" | "type" }> {
     const start = expect("extern").span;
+    // An opaque foreign type has no Mochi constructors or runtime representation.
+    // Its only purpose is to keep a host object (for example `three.Vector3`)
+    // distinct from every other value at typed extern boundaries.
+    if (peek().t === "type") {
+      next();
+      const { name, span: nameSpan } = expectId();
+      return { kind: "type", name, nameSpan, params: [], ctors: [], span: to(start) };
+    }
     const { name, span: nameSpan } = expectId();
     expect("colon");
     const typeExpr = parseTypeExpr();
@@ -1193,7 +1201,12 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
       if (!["global", "send", "get", "set", "new"].includes(convention))
         fail(`expected extern module string or JS convention, got '${convention}'`);
       const first = expectStr().value;
-      const second = convention === "global" && peek().t === "str" ? expectStr().value : "";
+      // `global "Math" "random"` selects a global member, while
+      // `new "three" "Vector3"` selects an ESM constructor export.
+      const second =
+        (convention === "global" || convention === "new") && peek().t === "str"
+          ? expectStr().value
+          : "";
       return {
         kind: "extern",
         name,
@@ -1261,8 +1274,14 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
         switch (inner) {
           case "type":
             return [{ ...parseType(), exported: true }];
-          case "extern":
-            return [{ ...parseExtern(), exported: true, doc }];
+          case "extern": {
+            const external = parseExtern();
+            return [
+              external.kind === "extern"
+                ? { ...external, exported: true, doc }
+                : { ...external, exported: true },
+            ];
+          }
           case "let":
             return parseLet().map((s) => ({ ...s, exported: true, doc }));
         }
@@ -1270,8 +1289,10 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
       }
       case "type":
         return [parseType()];
-      case "extern":
-        return [{ ...parseExtern(), doc }];
+      case "extern": {
+        const external = parseExtern();
+        return [external.kind === "extern" ? { ...external, doc } : external];
+      }
     }
     return parseLet().map((s) => ({ ...s, doc }));
   }

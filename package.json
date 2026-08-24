@@ -28,7 +28,7 @@
     "prepare": "bun scripts/setup-hooks.ts",
     "example": "bun run mochi build examples/cli.mochi && bun examples/cli.js",
     "example:life": "bun run mochi build examples/life/main.mochi && bun examples/life/main.js",
-    "example:snake": "bun examples/snake/server.mts",
+    "example:snake": "bun run --filter @mochi/example-snake build && bun run --filter @mochi/example-snake server",
     "example:async": "bun run mochi build examples/async/main.mochi && bun examples/async/demo.mjs",
     "example:modules": "bun run mochi build examples/modules/main.mochi && bun examples/modules/main.js",
     "example:pipelines": "bun run mochi build examples/pipelines.mochi && bun examples/pipelines.js",
@@ -45,7 +45,7 @@
     "examples/snake"
   ],
   "devDependencies": {
-    "@biomejs/biome": "^2.5.4",
+    "@biomejs/biome": "^2.5.10",
     "@mochi/cli": "workspace:*",
     "@mochi/codemod": "workspace:*",
     "@mochi/compiler": "workspace:*",
@@ -57,7 +57,7 @@
     "@mochi/test-support": "workspace:*",
     "@mochi/vite-plugin": "workspace:*",
     "@types/bun": "latest",
-    "esbuild": "^0.28.1",
+    "esbuild": "^0.28.2",
     "fast-check": "^4.9.0",
     "lefthook": "^2.1.10"
   },

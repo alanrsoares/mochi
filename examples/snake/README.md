@@ -8,7 +8,8 @@ A Canvas Snake game written in [Mochi](https://github.com/alanrsoares/mochi), se
 bun example:snake
 ```
 
-Open `http://localhost:3000` in the browser.
+This builds the production app into `examples/snake/dist`, starts the local
+game server, and serves it at `http://localhost:3000`.
 
 ## Features
 

@@ -7,7 +7,7 @@
     "dev": "bun ../../scripts/gen-mochi-dts.ts examples/snake/src && bunx --bun vite",
     "build": "bun ../../scripts/gen-mochi-dts.ts examples/snake/src && bunx --bun vite build",
     "preview": "bunx --bun vite preview",
-    "check": "bun ../../scripts/gen-mochi-dts.ts examples/snake/src && tsc --noEmit && bunx --bun vite build",
+    "check": "bun test snake.spec.ts && bun ../../scripts/gen-mochi-dts.ts examples/snake/src && tsc --noEmit && bunx --bun vite build",
     "server": "bun server.mts"
   },
   "dependencies": {

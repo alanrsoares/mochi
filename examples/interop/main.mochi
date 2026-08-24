@@ -3,15 +3,24 @@
 
 type Person = { name: string }
 
+// Opaque types distinguish host values without claiming a Mochi representation.
+extern type Vector3
+
 extern random : () -> number = global "Math" "random"
 extern getName : Person -> string = get "name"
 extern setName : Person -> string -> () = set "name"
 extern trim : string -> string = send "trim"
 extern makeDate : number -> a = new "Date"
+extern vector3 : number -> number -> number -> Vector3 = new "three" "Vector3"
+extern setVector3 : Vector3 -> number -> number -> number -> Vector3 = send "set"
+extern vector3X : Vector3 -> number = get "x"
 
 let person = { name: " Mochi " }
 let displayName = trim(getName(person))
-let _ = setName(person, "Mochi")
+let renamedPerson = setName(person, "Mochi")
 let renamed = getName(person)
 let sampled = random()
 let epoch = makeDate(0)
+let point = vector3(1, 2, 3)
+let movedPoint = setVector3(point, 4, 5, 6)
+let pointX = vector3X(point)

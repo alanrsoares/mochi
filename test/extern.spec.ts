@@ -2,6 +2,7 @@
 import { expect, test } from "bun:test";
 import { check } from "@mochi/compiler/check";
 import { compile } from "@mochi/compiler/compile";
+import { compileTargets } from "@mochi/compiler/compile-targets";
 import { inferProgram, showScheme } from "@mochi/compiler/infer";
 import { lex } from "@mochi/compiler/lexer";
 import { parse } from "@mochi/compiler/parser";
@@ -38,6 +39,26 @@ extern Date : number -> a = new "Date"`;
   expect(out).toContain('const trim = ($receiver) => $receiver["trim"]();');
   expect(out).toContain('const Date = _curry(1, ($a0) => new globalThis["Date"]($a0));');
   expect(unwrapOk(format(src))).toBe(`${src}\n`);
+});
+
+test("module constructors retain opaque host types at the extern boundary", () => {
+  const src = `extern type Vector3
+extern type Quaternion
+extern vector3 : number -> number -> number -> Vector3 = new "three" "Vector3"
+extern setVector3 : Vector3 -> number -> number -> number -> Vector3 = send "set"
+extern quaternion : () -> Quaternion = new "three" "Quaternion"
+let point = vector3(1, 2, 3)
+let moved = setVector3(point, 4, 5, 6)`;
+  const out = js(src);
+  expect(out).toContain('import { Vector3 as $vector3 } from "three";');
+  expect(out).toContain(
+    "const vector3 = _curry(3, ($a0, $a1, $a2) => new $vector3($a0, $a1, $a2));",
+  );
+  expect(isErr(compile(`${src}\nlet wrong = setVector3(quaternion(), 1, 2, 3)`))).toBe(true);
+  expect(unwrapOk(format(src))).toBe(`${src}\n`);
+  const targets = unwrapOk(compileTargets(src));
+  expect(targets.ts).toContain("declare const Vector3: unique symbol;");
+  expect(targets.dts).toContain("export type Vector3 = { readonly [Vector3]: never };");
 });
 
 test("composes functions with >> infix operator desugaring", () => {
