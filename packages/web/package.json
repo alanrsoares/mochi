@@ -6,6 +6,7 @@
   "exports": {
     "./dom": "./dom.mochi",
     "./canvas": "./canvas.mochi",
+    "./time": "./time.mochi",
     "./runtime": "./src/runtime.ts"
   }
 }

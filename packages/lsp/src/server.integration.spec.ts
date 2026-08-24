@@ -9,6 +9,21 @@ type LspServer = {
   waitFor: (text: string) => Promise<string>;
 };
 
+type OnChunk = (chunk: Uint8Array) => void;
+
+const readStream = async (stream: ReadableStream<Uint8Array>, onChunk: OnChunk): Promise<void> => {
+  const reader = stream.getReader();
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      onChunk(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+};
+
 const waitFor = async (
   read: () => string,
   text: string,
@@ -40,18 +55,12 @@ const startLsp = (): LspServer => {
   let output = "";
   const waiters: Array<() => void> = [];
   const decoder = new TextDecoder();
-  void (async () => {
-    for await (const chunk of child.stdout) {
-      output += decoder.decode(chunk, { stream: true });
-      for (const waiter of waiters.splice(0)) waiter();
-    }
-  })();
-  void (async () => {
-    for await (const chunk of child.stderr) {
-      output += decoder.decode(chunk, { stream: true });
-      for (const waiter of waiters.splice(0)) waiter();
-    }
-  })();
+  const append = (chunk: Uint8Array): void => {
+    output += decoder.decode(chunk, { stream: true });
+    for (const waiter of waiters.splice(0)) waiter();
+  };
+  void readStream(child.stdout, append);
+  void readStream(child.stderr, append);
   return {
     process: child,
     send: (message) => {

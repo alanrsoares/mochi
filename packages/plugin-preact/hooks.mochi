@@ -11,6 +11,8 @@ export extern useCallback<A, B> : A -> B -> A = "preact/hooks" "useCallback"
 export extern useLayoutEffect<C, D, E> : (() -> C) -> D -> E = "preact/hooks" "useLayoutEffect"
 export extern useRef<A, B> : A -> B = "preact/hooks" "useRef"
 export extern useMemo<A, B> : (() -> A) -> B -> A = "preact/hooks" "useMemo"
+/// Writes a hook ref. Ref mutation belongs with the hook capability, not DOM.
+export extern setRef<A, B> : A -> B -> () = "./src/runtime" "setRef"
 
 export extern hookDeps<A, B, C, D> : A -> B -> C -> D = "./src/runtime" "hookDeps"
 export extern hookDeps2<A, B, C> : A -> B -> C = "./src/runtime" "hookDeps2"

@@ -1,0 +1,3 @@
+/// High-resolution browser time for animation and measurement.
+
+export extern performanceNow : () -> number = "@mochi/web/runtime" "performanceNow"

@@ -5,7 +5,13 @@
 
 extern type CanvasElement
 extern type Context2D
+extern type Cleanup
+type Ref<A> = { current: A }
 
+/// Seed for `useRef` before Preact attaches the canvas element.
+export extern canvasRefSeed : CanvasElement = "@mochi/web/runtime" "canvasRefSeed"
+/// Runs a Canvas2D frame callback until the returned effect cleanup runs.
+export extern startCanvasLoop : Ref<CanvasElement> -> (Context2D -> number -> ()) -> Cleanup = "@mochi/web/runtime" "startCanvasLoop"
 export extern canvasById : string -> Option<CanvasElement> = "@mochi/web/runtime" "canvasById"
 export extern context2d : CanvasElement -> Option<Context2D> = "@mochi/web/runtime" "context2d"
 export extern clearRect : Context2D -> number -> number -> number -> number -> () = "@mochi/web/runtime" "clearRect"
@@ -14,8 +20,14 @@ export extern beginPath : Context2D -> () = "@mochi/web/runtime" "beginPath"
 export extern moveTo : Context2D -> number -> number -> () = "@mochi/web/runtime" "moveTo"
 export extern lineTo : Context2D -> number -> number -> () = "@mochi/web/runtime" "lineTo"
 export extern arc : Context2D -> number -> number -> number -> number -> number -> () = "@mochi/web/runtime" "arc"
+export extern roundRect : Context2D -> number -> number -> number -> number -> number -> () = "@mochi/web/runtime" "roundRect"
 export extern fill : Context2D -> () = "@mochi/web/runtime" "fill"
 export extern stroke : Context2D -> () = "@mochi/web/runtime" "stroke"
+export extern save : Context2D -> () = "@mochi/web/runtime" "save"
+export extern restore : Context2D -> () = "@mochi/web/runtime" "restore"
+export extern clip : Context2D -> () = "@mochi/web/runtime" "clip"
+export extern translate : Context2D -> number -> number -> () = "@mochi/web/runtime" "translate"
 export extern setFillStyle : Context2D -> string -> () = "@mochi/web/runtime" "setFillStyle"
 export extern setStrokeStyle : Context2D -> string -> () = "@mochi/web/runtime" "setStrokeStyle"
 export extern setLineWidth : Context2D -> number -> () = "@mochi/web/runtime" "setLineWidth"
+export extern setGlobalAlpha : Context2D -> number -> () = "@mochi/web/runtime" "setGlobalAlpha"
