@@ -21,6 +21,8 @@ export type Context2D = {
   fillStyle: string;
   strokeStyle: string;
   lineWidth: number;
+  lineCap: CanvasLineCap;
+  lineJoin: CanvasLineJoin;
   globalAlpha: number;
   clearRect: (x: number, y: number, width: number, height: number) => void;
   fillRect: (x: number, y: number, width: number, height: number) => void;
@@ -175,6 +177,14 @@ export const setStrokeStyle = (ctx: Context2D, color: string): void => {
 
 export const setLineWidth = (ctx: Context2D, width: number): void => {
   ctx.lineWidth = width;
+};
+
+export const setLineCap = (ctx: Context2D, cap: CanvasLineCap): void => {
+  ctx.lineCap = cap;
+};
+
+export const setLineJoin = (ctx: Context2D, join: CanvasLineJoin): void => {
+  ctx.lineJoin = join;
 };
 
 export const setGlobalAlpha = (ctx: Context2D, alpha: number): void => {
