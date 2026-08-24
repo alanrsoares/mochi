@@ -244,6 +244,19 @@ extern date : number -> Date = new "Date"
 `send`, `get`, and `set` take the JS receiver as their first argument. The existing
 `extern f : T = "module" "export"` form remains the module-import convention.
 
+For a host class, declare an opaque foreign type and use the two-string `new`
+form. It imports the constructor from the package while keeping the host value
+nominal in Mochi—there is no invented Mochi representation of a `Vector3`.
+
+```mochi
+extern type Vector3
+extern vector3 : number -> number -> number -> Vector3 = new "three" "Vector3"
+extern setVector3 : Vector3 -> number -> number -> number -> Vector3 = send "set"
+```
+
+Opaque foreign types have no runtime output. They exist only to make incompatible
+host values a type error at `extern` boundaries.
+
 ## Other surface features
 
 Ternary `cond ? a : b` (looser than `|>`, right-associative), operator sections

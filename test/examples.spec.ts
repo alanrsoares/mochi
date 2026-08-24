@@ -56,18 +56,23 @@ test("examples/pipelines.mochi compiles and produces its documented values", () 
 });
 
 test("examples/interop exercises typed JS extern conventions at runtime", () => {
-  const js = unwrapOk(compile(read("examples/interop/main.mochi")));
-  const out = new Function(`${js}\nreturn { displayName, renamed, sampled, epoch };`)() as {
+  const js = unwrapOk(compile(read("examples/interop/main.mochi"))).replace(
+    'import { Vector3 as $vector3 } from "three";',
+    "const $vector3 = class { constructor(x, y, z) { this.x = x; this.y = y; this.z = z; } set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; } };",
+  );
+  const out = new Function(`${js}\nreturn { displayName, renamed, sampled, epoch, pointX };`)() as {
     displayName: string;
     renamed: string;
     sampled: number;
     epoch: Date;
+    pointX: number;
   };
   expect(out.displayName).toBe("Mochi");
   expect(out.renamed).toBe("Mochi");
   expect(out.sampled).toBeGreaterThanOrEqual(0);
   expect(out.sampled).toBeLessThan(1);
   expect(out.epoch.getTime()).toBe(0);
+  expect(out.pointX).toBe(4);
 });
 
 /**

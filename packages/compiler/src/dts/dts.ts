@@ -656,6 +656,8 @@ const declOf = (
     .with({ kind: "import" }, () => null)
     .with({ kind: "extern" }, () => null)
     .with({ kind: "type" }, (type) => {
+      if (type.ctors.length === 0 && !type.alias)
+        return `declare const ${type.name}: unique symbol;\nexport type ${type.name} = { readonly [${type.name}]: never };`;
       const a = aliasByName.get(type.name);
       return a ? aliasTsDecl(a) : typeDecl(type.name, type.params, type.ctors);
     })

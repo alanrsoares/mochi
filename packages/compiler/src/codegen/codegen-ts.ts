@@ -155,6 +155,11 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
     ...referencedBuiltinTypeDecls(prog, (n) => ctx.env.get(n)),
     ...prog.stmts.flatMap((s) => {
       if (s.kind !== "type") return [];
+      if (s.ctors.length === 0 && !s.alias)
+        return [
+          `declare const ${s.name}: unique symbol;`,
+          `type ${s.name} = { readonly [${s.name}]: never };`,
+        ];
       const a = aliasByName.get(s.name);
       return [a ? aliasTsDecl(a) : typeDecl(s.name, s.params, s.ctors)];
     }),

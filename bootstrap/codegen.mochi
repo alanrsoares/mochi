@@ -900,7 +900,14 @@ let genExtern = s => switch s {
       ? let target = Str.slice(10, Str.length(modName), modName) in
       let arity = typeExprArity(typeExpr) in
       let args = externArgs(arity) in
-        arity == 0
+        imported != ""
+          ? let raw = Str.concat("$", name) in
+          let importLine = "import { ${imported} as ${raw} } from ${jsStringLit(target)};" in
+          let ctor = "new ${raw}(${args})" in
+            arity == 0
+              ? "${importLine}\nconst ${name} = () => ${ctor};"
+              : "${importLine}\nconst ${name} = _curry(${show(arity)}, (${args}) => ${ctor});"
+          : arity == 0
           ? "const ${name} = () => new globalThis[${jsStringLit(target)}]();"
           : "const ${name} = _curry(${show(arity)}, (${args}) => new globalThis[${jsStringLit(target)}](${args}));"
       : Str.startsWith("mochi:send:", modName)
