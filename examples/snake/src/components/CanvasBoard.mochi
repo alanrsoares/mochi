@@ -1,6 +1,12 @@
-// Canvas board — mochi component + effects. Canvas2D / rAF / particles stay
-// in `canvas.host.ts` (not yet expressible in the surface language).
-import { useRef, useEffect, hookDeps2 } from "@mochi/plugin-preact/hooks"
+// Canvas board — Mochi owns game state, animation, and every pixel. The host
+// only obtains Canvas2D and schedules requestAnimationFrame.
+import {
+  useRef,
+  useEffect,
+  hookDeps2,
+  setRef
+} from "@mochi/plugin-preact/hooks"
+import { performanceNow } from "@mochi/web/time"
 import {
   beginPath,
   moveTo,
@@ -8,41 +14,76 @@ import {
   arc,
   fill,
   stroke,
+  save,
+  restore,
+  clip,
+  translate,
+  roundRect,
+  canvasRefSeed,
+  startCanvasLoop,
   fillRect,
   setFillStyle,
   setStrokeStyle,
-  setLineWidth
+  setLineWidth,
+  setGlobalAlpha
 } from "@mochi/web/canvas"
 
-// Canvas2D and particle state remain host-owned, but their handles are no
-// longer interchangeable with arbitrary values at this Mochi boundary.
 extern type CanvasElement
 extern type Context2D
-extern type Particles
-extern type EatWatch
 
-// Preact's `useRef` is structurally modelled by the host adapter, so keep the
-// container transparent while its canvas/particle/watch payloads stay opaque.
 type Ref<a> = { current: a }
 
-extern BOARD_PX : number = "../host/canvas.host" "BOARD_PX"
-/// Seed for canvas `useRef` (mochi has no `null` literal).
-extern nullEl : CanvasElement = "../host/canvas.host" "nullEl"
-extern emptyParticles : () -> Particles = "../host/canvas.host" "emptyParticles"
-extern eatWatchSeed<A, B> : A -> B -> EatWatch = "../host/canvas.host" "eatWatchSeed"
-extern syncBoardRef<A> : Ref<A> -> A -> () = "../host/canvas.host" "syncBoardRef"
-extern watchEat<A> : Ref<Particles> -> Ref<EatWatch> -> A -> () = "../host/canvas.host" "watchEat"
-/// Returns a `useEffect` cleanup.
-extern startParticleLoop<A, C> : Ref<CanvasElement> -> Ref<Particles> -> Ref<A> -> ((number, number) -> (number, number) -> number -> (number, number)) -> (Context2D -> [(number, number)] -> [(number, number)] -> (number, number) -> (number, number) -> ()) -> C = "../host/canvas.host" "startParticleLoop"
+type Board = { snake: [(number, number)], food: (number, number) }
+type Motion = { changedAt: number, previous: Board, current: Board }
+type Particle = { x: number, y: number, vx: number, vy: number, life: number, color: string }
+type EatWatch = { len: number, food: (number, number) }
+type BoardProps = { food: (number, number), snake: [(number, number)] }
 
-/// One pure interpolation step. Rendering calls this for every snake segment
-/// on each animation frame; Canvas2D itself remains at the host boundary.
+let BOARD_PX = 600
+let CELL_PX = 30
+let MOVE_MS = 120
+let HALF_BOARD_CELLS = 11
+let TAU = 6.283185307179586
+
 let interpolatePoint = ((fromX, fromY), (toX, toY), progress) =>
   (fromX + (toX - fromX) * progress, fromY + (toY - fromY) * progress)
 
-let CELL_PX = 30
-let HALF_BOARD_CELLS = 11
-let TAU = 6.283185307179586
+let burstParticles : number -> number -> [Particle] = (x, y) =>
+  let px = x * CELL_PX + CELL_PX / 2 in
+  let py = y * CELL_PX + CELL_PX / 2 in
+    [
+      { x: px, y: py, vx: 4, vy: 0, life: 1, color: "#E88BA9" },
+      { x: px, y: py, vx: -4, vy: 0, life: 1, color: "#EBA75C" },
+      { x: px, y: py, vx: 0, vy: 4, life: 1, color: "#E88BA9" },
+      { x: px, y: py, vx: 0, vy: -4, life: 1, color: "#EBA75C" },
+      { x: px, y: py, vx: 3, vy: 3, life: 1, color: "#E88BA9" },
+      { x: px, y: py, vx: -3, vy: 3, life: 1, color: "#EBA75C" },
+      { x: px, y: py, vx: 3, vy: -3, life: 1, color: "#E88BA9" },
+      { x: px, y: py, vx: -3, vy: -3, life: 1, color: "#EBA75C" }
+    ]
+
+let stepParticlesGo : [Particle] -> number -> [Particle] -> [Particle] = (particles, index, alive) => switch Array.get(index, particles) {
+  | None => alive
+  | Some(particle) => let next = {
+      ...particle,
+      x: particle.x + particle.vx,
+      y: particle.y + particle.vy,
+      life: particle.life - 0.05
+    } in
+      next.life > 0
+        ? stepParticlesGo(particles, index + 1, [...alive, next])
+        : stepParticlesGo(particles, index + 1, alive)
+}
+let stepParticles : [Particle] -> [Particle] = particles =>
+  stepParticlesGo(particles, 0, [])
+
+let updateEat : Ref<[Particle]> -> Ref<EatWatch> -> Board -> () = (particles, watch, board) =>
+  let previous = watch.current in
+  let _ = Array.length(board.snake) > previous.len
+    ? let (x, y) = previous.food in
+      setRef(particles, [...particles.current, ...burstParticles(x, y)])
+    : () in
+    setRef(watch, { len: Array.length(board.snake), food: board.food })
 
 /// The simulation camera is transformed by the tiny host rAF seam. Everything
 /// inside that world — grid, food, body, and face — is now Mochi Canvas code.
@@ -123,25 +164,96 @@ let drawBoard = (ctx, snake, _previousSnake, food, head) =>
   let _ = drawGrid(ctx, head) in
   let _ = drawFood(ctx, food) in drawSnake(ctx, snake)
 
-export let CanvasBoard = props =>
-  let canvasRef = useRef(nullEl) in
-  let particles = useRef(emptyParticles()) in
-  let eatWatch = useRef(eatWatchSeed(props.snake, props.food)) in
-  let board = { snake: props.snake, food: props.food } in
-  let boardRef = useRef(board) in
-  let _sync = syncBoardRef(boardRef, board) in
-  // Store → pixels: the host keeps prior/current snapshots and paints every
-  // animation frame. Mochi supplies the pure interpolation between ticks.
-  let _draw = useEffect(() =>
-    let _ = watchEat(particles, eatWatch, board) in
-      startParticleLoop(
-        canvasRef,
-        particles,
-        boardRef,
-        interpolatePoint,
-        drawBoard
+let drawParticlesGo = (ctx, particles, index) => switch Array.get(index, particles) {
+  | None => ()
+  | Some(particle) => let _ = setFillStyle(ctx, particle.color) in
+    let _ = setGlobalAlpha(ctx, particle.life) in
+    let _ = beginPath(ctx) in
+    let _ = arc(ctx, particle.x, particle.y, 3, 0, TAU) in
+    let _ = fill(ctx) in
+    let _ = setGlobalAlpha(ctx, 1) in drawParticlesGo(ctx, particles, index + 1)
+}
+
+let lastPointGo : [(number, number)] -> number -> (number, number) -> (number, number) = (snake, index, fallback) => switch Array.get(index, snake) {
+  | None => fallback
+  | Some(point) => lastPointGo(snake, index + 1, point)
+}
+
+let interpolateSnakeGo : [(number, number)] -> [(number, number)] -> number -> number -> (number, number) -> [(number, number)] -> [(number, number)] = (previous, current, progress, index, fallback, acc) => switch Array.get(index, current) {
+  | None => acc
+  | Some(point) => let from = Option.unwrapOr(
+      fallback,
+      Array.get(index, previous)
+    ) in
+      interpolateSnakeGo(
+        previous,
+        current,
+        progress,
+        index + 1,
+        fallback,
+        [...acc, interpolatePoint(from, point, progress)]
       )
+}
+
+let drawFrame : Ref<Motion> -> Ref<[Particle]> -> Context2D -> number -> () = (motionRef, particlesRef, ctx, time) =>
+  let motion = motionRef.current in
+  let elapsed = (time - motion.changedAt) / MOVE_MS in
+  let progress = elapsed < 0 ? 0 : elapsed > 1 ? 1 : elapsed in
+  let fallback = lastPointGo(motion.previous.snake, 0, (0, 0)) in
+  let snake = interpolateSnakeGo(
+    motion.previous.snake,
+    motion.current.snake,
+    progress,
+    0,
+    fallback,
+    []
+  ) in
+  let head = Option.unwrapOr((0, 0), Array.get(0, snake)) in
+  let alive = stepParticles(particlesRef.current) in
+  let _ = setRef(particlesRef, alive) in
+  let _ = save(ctx) in
+  let _ = beginPath(ctx) in
+  let _ = roundRect(ctx, 0, 0, BOARD_PX, BOARD_PX, CELL_PX / 2) in
+  let _ = setFillStyle(ctx, "#F2E6D8") in
+  let _ = fill(ctx) in
+  let _ = clip(ctx) in
+  let _ = save(ctx) in
+  let (headX, headY) = head in
+  let _ = translate(
+    ctx,
+    BOARD_PX / 2 - (headX + 0.5) * CELL_PX,
+    BOARD_PX / 2 - (headY + 0.5) * CELL_PX
+  ) in
+  let _ = drawBoard(
+    ctx,
+    snake,
+    motion.previous.snake,
+    motion.current.food,
+    head
+  ) in
+  let _ = drawParticlesGo(ctx, alive, 0) in let _ = restore(ctx) in restore(ctx)
+
+export let CanvasBoard : BoardProps -> VNode = props =>
+  let canvasRef = useRef(canvasRefSeed) in
+  let particles = useRef([]) in
+  let eatWatch = useRef({ len: Array.length(props.snake), food: props.food }) in
+  let board = { snake: props.snake, food: props.food } in
+  let motion = useRef(
+    { previous: board, current: board, changedAt: performanceNow() }
+  ) in
+  let previous = motion.current in
+  let _sync = setRef(
+    motion,
+    { previous: previous.current, current: board, changedAt: performanceNow() }
+  ) in
+  let _eat = useEffect(() => updateEat(particles, eatWatch, board)
   )(hookDeps2(props.snake, props.food)) in
+  // The host only schedules rAF and gets Canvas2D; this closure owns each frame.
+  let _draw = useEffect(() =>
+    startCanvasLoop(canvasRef, (ctx, time) =>
+      drawFrame(motion, particles, ctx, time)
+    )
+  )(hookDeps2(canvasRef, motion)) in
     <canvas
       ref={canvasRef}
       id="game-canvas"

@@ -21,15 +21,24 @@ export type Context2D = {
   fillStyle: string;
   strokeStyle: string;
   lineWidth: number;
+  globalAlpha: number;
   clearRect: (x: number, y: number, width: number, height: number) => void;
   fillRect: (x: number, y: number, width: number, height: number) => void;
   beginPath: () => void;
   moveTo: (x: number, y: number) => void;
   lineTo: (x: number, y: number) => void;
   arc: (x: number, y: number, radius: number, startAngle: number, endAngle: number) => void;
+  roundRect: (x: number, y: number, width: number, height: number, radius: number) => void;
   fill: () => void;
   stroke: () => void;
+  save: () => void;
+  restore: () => void;
+  clip: () => void;
+  translate: (x: number, y: number) => void;
 };
+
+type DrawFrame = (ctx: Context2D, time: number) => void;
+type CanvasRef = { current: CanvasElement | null };
 
 type Browser = {
   document: Document;
@@ -75,6 +84,8 @@ export const pickRandom = <A>(fallback: A, values: readonly A[]): A => {
   return values[index] ?? fallback;
 };
 
+export const performanceNow = (): number => performance.now();
+
 export const requestFrame = (callback: (time: number) => void): Frame =>
   browser.requestAnimationFrame(callback);
 export const cancelFrame = (frame: Frame): void => browser.cancelAnimationFrame(frame);
@@ -86,6 +97,27 @@ export const canvasById = (id: string): Option<CanvasElement> => {
 
 export const context2d = (canvas: CanvasElement): Option<Context2D> =>
   option(canvas.getContext("2d"));
+
+/** Seed for UI refs; consumers treat it as an opaque CanvasElement value. */
+export const canvasRefSeed: CanvasElement | null = null;
+
+/** Browser lifecycle only — application frame state remains in Mochi. */
+export const startCanvasLoop = (canvasRef: CanvasRef, drawFrame: DrawFrame): Cleanup => {
+  const ctx = canvasRef.current?.getContext("2d");
+  if (!ctx) return () => {};
+  let frame: Frame | null = null;
+  let active = true;
+  const tick = (time: number): void => {
+    if (!active) return;
+    drawFrame(ctx, time);
+    frame = browser.requestAnimationFrame(tick);
+  };
+  frame = browser.requestAnimationFrame(tick);
+  return () => {
+    active = false;
+    if (frame !== null) browser.cancelAnimationFrame(frame);
+  };
+};
 
 export const clearRect = (
   ctx: Context2D,
@@ -118,8 +150,20 @@ export const arc = (
   startAngle: number,
   endAngle: number,
 ): void => ctx.arc(x, y, radius, startAngle, endAngle);
+export const roundRect = (
+  ctx: Context2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+): void => ctx.roundRect(x, y, width, height, radius);
 export const fill = (ctx: Context2D): void => ctx.fill();
 export const stroke = (ctx: Context2D): void => ctx.stroke();
+export const save = (ctx: Context2D): void => ctx.save();
+export const restore = (ctx: Context2D): void => ctx.restore();
+export const clip = (ctx: Context2D): void => ctx.clip();
+export const translate = (ctx: Context2D, x: number, y: number): void => ctx.translate(x, y);
 
 export const setFillStyle = (ctx: Context2D, color: string): void => {
   ctx.fillStyle = color;
@@ -131,4 +175,8 @@ export const setStrokeStyle = (ctx: Context2D, color: string): void => {
 
 export const setLineWidth = (ctx: Context2D, width: number): void => {
   ctx.lineWidth = width;
+};
+
+export const setGlobalAlpha = (ctx: Context2D, alpha: number): void => {
+  ctx.globalAlpha = alpha;
 };

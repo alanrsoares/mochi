@@ -17,7 +17,7 @@ game server, and serves it at `http://localhost:3000`.
 - **re-reduced container**: `App.mochi` `defineContainer` wraps those reducers; tick/keyboard/persist/WS are effects over `store.actions`.
 - **Buffered Direction Queue**: FIFO input queueing guarantees ordered handling of rapid keypresses (e.g. sharp diagonal turns) without accidental self-reversal.
 - **`Bun.serve` Backend**: `server.mts` auto-compiles on boot, serves static assets, WebSockets (`/ws`) for live leaderboard sync, and score persistence (`POST /api/score`).
-- **Canvas Visuals**: `CanvasBoard.mochi` syncs pixels via effects; Canvas2D / rAF / particles live in `canvas.host.ts` (host APIs not yet in the surface).
+- **Canvas Visuals**: `CanvasBoard.mochi` owns motion and every rendered pixel; `@mochi/web/canvas` provides the Canvas2D and rAF capability boundary.
 
 ## Architecture
 
@@ -25,8 +25,7 @@ game server, and serves it at `http://localhost:3000`.
 |---|---|
 | `snake.mochi` | Pure functional game logic: direction queue, step tick & collision checks |
 | `src/App.mochi` | Container + Preact UI (chrome, overlay, leaderboard) |
-| `src/components/CanvasBoard.mochi` | Board component; effects call into `canvas.host` |
-| `src/host/canvas.host.ts` | Canvas2D paint, eat particles, short rAF loop |
-| `src/host/game.host.ts` | Timer, keyboard, localStorage, random food |
+| `src/components/CanvasBoard.mochi` | Board component; animation, particles, and Canvas2D drawing |
+| `@mochi/web/{dom,canvas}` | Typed browser capabilities: input, storage, timers, Canvas2D, rAF |
 | `src/host/leaderboard.host.ts` | REST + WebSocket client |
 | `server.mts` | `Bun.serve` backend (build, static, WS, REST) |

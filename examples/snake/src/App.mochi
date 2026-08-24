@@ -297,7 +297,7 @@ export let App = _ =>
         className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-4"
       >
         <Card className="relative min-h-0 flex items-center justify-center p-4">
-          <CanvasBoard snake={snake} food={food} cols={COLS} rows={ROWS} />
+          <CanvasBoard snake={snake} food={food} />
           <OverlayPanel $visible={playing ? "off" : "on"}>
             <OverlayTitle
               $tone={playing ? "ready" : gameOver ? "gameOver" : "paused"}

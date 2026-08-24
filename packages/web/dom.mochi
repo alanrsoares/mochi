@@ -8,6 +8,7 @@ extern type Element
 extern type InputElement
 extern type Storage
 extern type Frame
+extern type Cleanup
 
 export extern document : () -> Document = "@mochi/web/runtime" "document"
 export extern getElementById : Document -> string -> Option<Element> = "@mochi/web/runtime" "getElementById"
@@ -15,11 +16,10 @@ export extern inputValue : InputElement -> string = "@mochi/web/runtime" "inputV
 export extern localStorage : () -> Storage = "@mochi/web/runtime" "localStorage"
 export extern storageGet : Storage -> string -> Option<string> = "@mochi/web/runtime" "storageGet"
 export extern storageSet : Storage -> string -> string -> () = "@mochi/web/runtime" "storageSet"
-/// The cleanup is opaque; a function-shaped result would add a runtime argument.
-export extern onKeyDown<C> : Document -> (string -> ()) -> C = "@mochi/web/runtime" "onKeyDown"
-/// The cleanup is an opaque value. Spelling it `() -> ()` would add a third
-/// runtime argument and leave a two-argument call silently partial.
-export extern every<C> : number -> (() -> ()) -> C = "@mochi/web/runtime" "every"
+/// Registers a keyboard listener and returns an opaque effect cleanup.
+export extern onKeyDown : Document -> (string -> ()) -> Cleanup = "@mochi/web/runtime" "onKeyDown"
+/// Registers an interval and returns an opaque effect cleanup.
+export extern every : number -> (() -> ()) -> Cleanup = "@mochi/web/runtime" "every"
 export extern pickRandom<T> : T -> [T] -> T = "@mochi/web/runtime" "pickRandom"
 export extern requestFrame : (number -> ()) -> Frame = "@mochi/web/runtime" "requestFrame"
 export extern cancelFrame : Frame -> () = "@mochi/web/runtime" "cancelFrame"

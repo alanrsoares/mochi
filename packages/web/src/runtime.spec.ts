@@ -15,6 +15,7 @@ test("canvas bindings compile as curried typed externs", async () => {
 
   expect(js).toContain('import { context2d } from "@mochi/web/runtime";');
   expect(js).toContain("const clearRect = _curry(5, $clearRect);");
+  expect(js).toContain("const startCanvasLoop = _curry(2, $startCanvasLoop);");
 });
 
 test("timer binding stays fully applied at its two runtime arguments", async () => {
@@ -23,4 +24,11 @@ test("timer binding stays fully applied at its two runtime arguments", async () 
 
   expect(js).toContain("const every = _curry(2, $every);");
   expect(js).toContain("const onKeyDown = _curry(2, $onKeyDown);");
+});
+
+test("time binding keeps the browser clock separate from DOM", async () => {
+  const source = await Bun.file(new URL("../time.mochi", import.meta.url)).text();
+  const js = unwrapOk(compile(source));
+
+  expect(js).toContain('import { performanceNow } from "@mochi/web/runtime";');
 });
