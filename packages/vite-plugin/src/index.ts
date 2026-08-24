@@ -14,6 +14,7 @@ import {
   resource,
 } from "@mochi/runtime-components";
 import { isErr, ResultAsync } from "@onrails/result";
+import type { Plugin, ViteDevServer } from "vite";
 
 /** The capability through which a live host supplies compiler plugins. */
 export const languagePluginsCapability =
@@ -28,16 +29,6 @@ export const languagePluginsComponent = (
   provides: [languagePluginsCapability],
   activate: () => ResultAsync.ok(resource([provide(languagePluginsCapability, plugins)])),
 });
-
-type ViteWatcher = { add: (file: string) => void };
-type FullReloadMessage = { readonly type: "full-reload" };
-type ViteWebSocket = { send: (payload: FullReloadMessage) => void };
-type ViteServer = { readonly watcher: ViteWatcher; readonly ws: ViteWebSocket };
-
-type HotUpdateContext = {
-  readonly file: string;
-  readonly server: ViteServer;
-};
 
 /**
  * A reloadable source of compiler plugins. Reload runs at the Vite boundary;
@@ -78,7 +69,7 @@ export type MochiPluginOptions = {
   runtimePlugins?: RuntimePluginSource;
 };
 
-export function mochiPlugin(options: MochiPluginOptions = {}) {
+export function mochiPlugin(options: MochiPluginOptions = {}): Plugin {
   const jsxHeader =
     options.jsxPragmaHeader ??
     'import { h as _h, Fragment as _Fragment } from "preact";\n' +
@@ -124,11 +115,11 @@ export function mochiPlugin(options: MochiPluginOptions = {}) {
       if (runtimePlugins) await installRuntimePlugins(runtimePlugins.component);
     },
 
-    configureServer(server: ViteServer) {
+    configureServer(server: ViteDevServer) {
       for (const file of runtimePlugins?.watch ?? []) server.watcher.add(file);
     },
 
-    async handleHotUpdate(ctx: HotUpdateContext) {
+    async handleHotUpdate(ctx) {
       if (!runtimePlugins?.watch?.includes(ctx.file) || !runtimePlugins.reload) return;
       await replaceRuntimePlugins();
       ctx.server.ws.send({ type: "full-reload" });
