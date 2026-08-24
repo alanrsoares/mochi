@@ -24,10 +24,12 @@ type State = {
 
 const game = new Function(
   "match",
-  `${js}\nreturn { initGame, startGame, step, freeCells, Right };`,
+  `${js}\nreturn { initGame, startGame, togglePause, isPausedStatus, step, freeCells, Right };`,
 )(match) as {
   initGame: (cols: number, rows: number, highScore: number) => State;
   startGame: (state: State) => State;
+  togglePause: (state: State) => State;
+  isPausedStatus: (status: unknown) => boolean;
   step: (state: State, food: [number, number]) => State;
   freeCells: (origin: [number, number], snake: [number, number][]) => [number, number][];
   Right: unknown;
@@ -49,11 +51,22 @@ test("snake world has no wall collision and food follows the moving window", () 
   expect(game.freeCells([40, -10], moved.snake)).toContainEqual([40, -10]);
 });
 
+test("pause state remains explicit and resume-safe", () => {
+  const playing = game.startGame(game.initGame(20, 20, 0));
+  const paused = game.togglePause(playing);
+  expect(game.isPausedStatus(paused.status)).toBe(true);
+  expect(game.togglePause(paused).status).toBe(playing.status);
+});
+
 test("snake animation loop keeps the frame renderer in Mochi", () => {
   const boardJs = unwrapOk(compile(boardSource));
   expect(boardJs).toContain('from "@mochi/web/canvas";');
-  expect(boardJs).toContain("roundRect, canvasRefSeed, startCanvasLoop, fillRect");
+  expect(boardJs).toContain("roundRect, canvasRefSeed, startCanvasLoop, setFillStyle");
   expect(boardJs).toContain("const drawFrame = _curry(4");
+  expect(boardJs).toContain("const drawFoodEdgeGlow = _curry(3");
+  expect(boardJs).toContain("const drawSnakePathGo = _curry(3");
+  expect(boardJs).toContain('setLineCap(ctx, "round")');
+  expect(boardJs).toContain('setLineJoin(ctx, "round")');
   expect(boardJs).not.toContain("startParticleLoop");
   expect(boardJs).not.toContain("canvas.host");
   expect(boardJs).toContain("while (true)");

@@ -21,10 +21,11 @@ import {
   roundRect,
   canvasRefSeed,
   startCanvasLoop,
-  fillRect,
   setFillStyle,
   setStrokeStyle,
   setLineWidth,
+  setLineCap,
+  setLineJoin,
   setGlobalAlpha
 } from "@mochi/web/canvas"
 
@@ -44,6 +45,9 @@ let CELL_PX = 30
 let MOVE_MS = 120
 let HALF_BOARD_CELLS = 11
 let TAU = 6.283185307179586
+let VISIBLE_CELLS = 9
+let EDGE_INSET = 10
+let GLOW_HALF_SPAN = 24
 
 let interpolatePoint = ((fromX, fromY), (toX, toY), progress) =>
   (fromX + (toX - fromX) * progress, fromY + (toY - fromY) * progress)
@@ -144,34 +148,81 @@ let drawEyes = (ctx, x, y, neckX, neckY) =>
     ? drawEyesAt(ctx, x, y, 0.3, 0.7, 0.7, 0.7)
     : drawEyesAt(ctx, x, y, 0.3, 0.3, 0.7, 0.3)
 
-let drawSnakeGo = (ctx, snake, index) =>
-  loop (i = index) {
-    switch Array.get(i, snake) {
-      | None => ()
-      | Some((x, y)) => let colored = setFillStyle(
-          ctx,
-          i == 0 ? "#D98D3E" : "rgba(235, 167, 92, 0.9)"
-        ) in
-        let filled = fillRect(
-          ctx,
-          x * CELL_PX,
-          y * CELL_PX,
-          CELL_PX,
-          CELL_PX
-        ) in
-        let faced = i == 0
-          ? switch Array.get(1, snake) {
-            | Some((neckX, neckY)) => drawEyes(ctx, x, y, neckX, neckY)
-            | None => drawEyes(ctx, x, y, x - 1, y)
-          }
-          : () in
-          recur(i + 1)
-    }
-  }
+let drawSnakePathGo = (ctx, snake, index) => switch Array.get(index, snake) {
+  | None => ()
+  | Some((x, y)) => let px = (x + 0.5) * CELL_PX in
+    let py = (y + 0.5) * CELL_PX in
+    let _ = index == 0 ? moveTo(ctx, px, py) : lineTo(ctx, px, py) in
+      drawSnakePathGo(ctx, snake, index + 1)
+}
+
+let drawSnakeHead = (ctx, snake) => switch Array.get(0, snake) {
+  | None => ()
+  | Some((x, y)) => let _ = setFillStyle(ctx, "#D98D3E") in
+    let _ = beginPath(ctx) in
+    let _ = arc(
+      ctx,
+      (x + 0.5) * CELL_PX,
+      (y + 0.5) * CELL_PX,
+      CELL_PX / 2 - 1,
+      0,
+      TAU
+    ) in
+    let _ = fill(ctx) in
+      switch Array.get(1, snake) {
+        | Some((neckX, neckY)) => drawEyes(ctx, x, y, neckX, neckY)
+        | None => drawEyes(ctx, x, y, x - 1, y)
+      }
+}
 
 let drawSnake = (ctx, snake) =>
   let _ = setStrokeStyle(ctx, "rgba(235, 167, 92, 0.9)") in
-  let _ = setLineWidth(ctx, CELL_PX) in drawSnakeGo(ctx, snake, 0)
+  let _ = setLineWidth(ctx, CELL_PX - 3) in
+  let _ = setLineCap(ctx, "round") in
+  let _ = setLineJoin(ctx, "round") in
+  let _ = beginPath(ctx) in
+  let _ = drawSnakePathGo(ctx, snake, 0) in
+  let _ = stroke(ctx) in drawSnakeHead(ctx, snake)
+
+/// Food beyond the camera leaves a quiet dango-pink highlight on the edge it
+/// crossed. A diagonal target lights both relevant edges, retaining its
+/// bearing without adding an in-world object or a distracting HUD marker.
+let drawFoodEdgeGlow = (ctx, (foodX, foodY), (headX, headY)) =>
+  let deltaX = foodX - headX in
+  let deltaY = foodY - headY in
+  let visible = deltaX >= 0 - VISIBLE_CELLS && deltaX <= VISIBLE_CELLS && deltaY >= 0 - VISIBLE_CELLS && deltaY <= VISIBLE_CELLS in
+    visible
+      ? ()
+      : let rawX = BOARD_PX / 2 + deltaX * CELL_PX in
+      let rawY = BOARD_PX / 2 + deltaY * CELL_PX in
+      let edgeX = rawX < EDGE_INSET + GLOW_HALF_SPAN
+        ? EDGE_INSET + GLOW_HALF_SPAN
+        : rawX > BOARD_PX - EDGE_INSET - GLOW_HALF_SPAN
+        ? BOARD_PX - EDGE_INSET - GLOW_HALF_SPAN
+        : rawX in
+      let edgeY = rawY < EDGE_INSET + GLOW_HALF_SPAN
+        ? EDGE_INSET + GLOW_HALF_SPAN
+        : rawY > BOARD_PX - EDGE_INSET - GLOW_HALF_SPAN
+        ? BOARD_PX - EDGE_INSET - GLOW_HALF_SPAN
+        : rawY in
+      let _ = setStrokeStyle(ctx, "rgba(232, 139, 169, 0.48)") in
+      let _ = setLineWidth(ctx, 5) in
+      let _ = beginPath(ctx) in
+      let _ = rawY <= EDGE_INSET
+        ? let _ = moveTo(ctx, edgeX - GLOW_HALF_SPAN, EDGE_INSET) in
+          lineTo(ctx, edgeX + GLOW_HALF_SPAN, EDGE_INSET)
+        : rawY >= BOARD_PX - EDGE_INSET
+        ? let _ = moveTo(ctx, edgeX - GLOW_HALF_SPAN, BOARD_PX - EDGE_INSET) in
+          lineTo(ctx, edgeX + GLOW_HALF_SPAN, BOARD_PX - EDGE_INSET)
+        : () in
+      let _ = rawX <= EDGE_INSET
+        ? let _ = moveTo(ctx, EDGE_INSET, edgeY - GLOW_HALF_SPAN) in
+          lineTo(ctx, EDGE_INSET, edgeY + GLOW_HALF_SPAN)
+        : rawX >= BOARD_PX - EDGE_INSET
+        ? let _ = moveTo(ctx, BOARD_PX - EDGE_INSET, edgeY - GLOW_HALF_SPAN) in
+          lineTo(ctx, BOARD_PX - EDGE_INSET, edgeY + GLOW_HALF_SPAN)
+        : () in
+        stroke(ctx)
 
 let drawBoard = (ctx, snake, _previousSnake, food, head) =>
   let _ = drawGrid(ctx, head) in
@@ -244,7 +295,9 @@ let drawFrame : Ref<Motion> -> Ref<[Particle]> -> Context2D -> number -> () = (m
     motion.current.food,
     head
   ) in
-  let _ = drawParticlesGo(ctx, alive, 0) in let _ = restore(ctx) in restore(ctx)
+  let _ = drawParticlesGo(ctx, alive, 0) in
+  let _ = restore(ctx) in
+  let _ = drawFoodEdgeGlow(ctx, motion.current.food, head) in restore(ctx)
 
 export let CanvasBoard : BoardProps -> VNode = props =>
   let canvasRef = useRef(canvasRefSeed) in

@@ -56,8 +56,9 @@ export let OverlayTitle = tw.h2(
 )
 
 export let OverlayPanel = tw.div(
-  "absolute inset-0 flex-col items-center justify-center gap-4 bg-foam/40"
-    ++ " backdrop-blur-md rounded-panel text-center px-6 transition-all"
+  "absolute inset-0 flex-col items-center justify-center gap-4 bg-foam/58"
+    ++ " backdrop-blur-md rounded-panel text-center px-6"
+    ++ " shadow-[inset_0_0_0_1px_rgba(255,255,255,0.35)] transition-all"
     ++ " duration-200",
   {
     variants: { $visible: { on: "flex", off: "hidden" } },

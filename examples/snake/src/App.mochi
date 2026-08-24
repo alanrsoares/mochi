@@ -46,6 +46,7 @@ import {
   isPlaying,
   isPlayingStatus,
   isGameOverStatus,
+  isPausedStatus,
   statusHeadingOf,
   Ready,
   Up,
@@ -149,7 +150,8 @@ let gameContainer = defineContainer(
     s =>
       {
         playing: () => isPlayingStatus(s.status.value),
-        gameOver: () => isGameOverStatus(s.status.value)
+        gameOver: () => isGameOverStatus(s.status.value),
+        paused: () => isPausedStatus(s.status.value)
       },
     effects: fx =>
       [
@@ -220,6 +222,7 @@ export let App = _ =>
   // Two-parameter selector = read a `derive`d signal (ADR 0051).
   let playing = useSelect(store, (s, d) => d.playing.value) in
   let gameOver = useSelect(store, (s, d) => d.gameOver.value) in
+  let paused = useSelect(store, (s, d) => d.paused.value) in
   // Mount one timer and read the store's live status signal on every turn.
   // This avoids coupling game progression to Preact re-render timing or a
   // derived signal's subscription lifecycle.
@@ -301,7 +304,7 @@ export let App = _ =>
           <CanvasBoard snake={snake} food={food} />
           <OverlayPanel $visible={playing ? "off" : "on"}>
             <OverlayTitle
-              $tone={playing ? "ready" : gameOver ? "gameOver" : "paused"}
+              $tone={gameOver ? "gameOver" : paused ? "paused" : "ready"}
             >
               {statusHeadingOf(status)}
             </OverlayTitle>
@@ -331,6 +334,27 @@ export let App = _ =>
                       </GhostBtn>
                     </div>
                   </div>}
+              </div>
+              : paused
+              ? <div className="flex flex-col items-center gap-4 max-w-xs">
+                <div
+                  className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-lavender-deep/30 bg-lavender/35 text-2xl font-extrabold text-lavender-deep shadow-soft"
+                >
+                  {"Ⅱ"}
+                </div>
+                <p className="font-mono text-sm text-ink/75">
+                  {"Take a breath — your snake is waiting."}
+                </p>
+                <div className="flex flex-col items-center gap-2">
+                  <PrimaryBtn onClick={() => store.actions.start()}>
+                    {"Resume Game"}
+                  </PrimaryBtn>
+                  <p
+                    className="font-mono text-2xs uppercase tracking-label text-mute"
+                  >
+                    {"Space to resume"}
+                  </p>
+                </div>
               </div>
               : <div className="flex flex-col items-center gap-4">
                 <PrimaryBtn onClick={() => store.actions.start()}>

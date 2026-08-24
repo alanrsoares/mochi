@@ -154,6 +154,11 @@ export let isGameOverStatus = status => switch status {
   | _ => false
 }
 
+export let isPausedStatus = status => switch status {
+  | Paused => true
+  | _ => false
+}
+
 export let statusToneOf = status => switch status {
   | Playing => "ready"
   | GameOver => "gameOver"
@@ -163,10 +168,12 @@ export let statusToneOf = status => switch status {
 export let statusHeadingOf = status => switch status {
   | GameOver => "Game Over"
   | Playing => ""
-  | _ => "Ready?"
+  | Paused => "Paused"
+  | Ready => "Ready?"
 }
 
 export let isPlaying = state => isPlayingStatus(state.status)
 export let isGameOver = state => isGameOverStatus(state.status)
+export let isPaused = state => isPausedStatus(state.status)
 export let statusTone = state => statusToneOf(state.status)
 export let statusHeading = state => statusHeadingOf(state.status)
