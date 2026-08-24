@@ -3,6 +3,18 @@ import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import { tCon } from "@mochi/compiler/types";
 import { languagePluginsComponent, mochiPlugin } from "@mochi/vite-plugin";
 import { ok, ResultAsync } from "@onrails/result";
+import type { HmrContext, Plugin, ViteDevServer } from "vite";
+
+/** Vite types hooks as `ObjectHook`; the plugin uses bare functions we call in unit tests. */
+type TestPlugin = Plugin & {
+  transform: (code: string, id: string) => { code: string; map: null } | null;
+  buildStart: () => Promise<void>;
+  configureServer: (server: ViteDevServer) => void;
+  handleHotUpdate: (ctx: HmrContext) => Promise<undefined | []>;
+};
+
+const testPlugin = (...args: Parameters<typeof mochiPlugin>): TestPlugin =>
+  mochiPlugin(...args) as TestPlugin;
 
 const runtimeLanguagePlugin: LanguagePlugin = {
   name: "runtime-test",
@@ -14,13 +26,13 @@ const runtimeLanguagePlugin: LanguagePlugin = {
 
 describe("vite-plugin-mochi", () => {
   it("ignores non-mochi files", () => {
-    const plugin = mochiPlugin({ open: true });
+    const plugin = testPlugin({ open: true });
     const result = plugin.transform("const x = 1;", "src/main.ts");
     expect(result).toBeNull();
   });
 
   it("compiles standard .mochi file; only source `export` reaches the emit (ADR 0052)", () => {
-    const plugin = mochiPlugin({ open: true });
+    const plugin = testPlugin({ open: true });
     const result = plugin.transform(
       "let hidden = 1\nexport let double = (x) => x * 2",
       "src/math.mochi",
@@ -33,7 +45,7 @@ describe("vite-plugin-mochi", () => {
   });
 
   it("prepends JSX pragma header for files containing JSX elements", () => {
-    const plugin = mochiPlugin();
+    const plugin = testPlugin();
     const code =
       "export let Button = (props) => <button className={props.kind}>{props.label}</button>";
     const result = plugin.transform(code, "src/Button.mochi");
@@ -44,7 +56,7 @@ describe("vite-plugin-mochi", () => {
   });
 
   it("supports custom JSX pragma header option", () => {
-    const plugin = mochiPlugin({ jsxPragmaHeader: 'import { h } from "custom-jsx";\n' });
+    const plugin = testPlugin({ jsxPragmaHeader: 'import { h } from "custom-jsx";\n' });
     const code = `let Card = (props) => <div className="card">{props.title}</div>`;
     const result = plugin.transform(code, "src/Card.mochi");
     expect(result).not.toBeNull();
@@ -52,7 +64,7 @@ describe("vite-plugin-mochi", () => {
   });
 
   it("emits .mochi sibling imports so Vite re-enters the plugin", () => {
-    const plugin = mochiPlugin({ open: true });
+    const plugin = testPlugin({ open: true });
     const code = `import { BadgeShell } from "../ui/primitives"
 let HeaderBadge = props => <BadgeShell>{props.label}</BadgeShell>`;
     const result = plugin.transform(code, "src/HeaderBadge.mochi");
@@ -62,7 +74,7 @@ let HeaderBadge = props => <BadgeShell>{props.label}</BadgeShell>`;
   });
 
   it("keeps bare package import specs (ADR 0015)", () => {
-    const plugin = mochiPlugin({ open: true });
+    const plugin = testPlugin({ open: true });
     const code = `import { useState } from "@mochi/plugin-preact/hooks"
 let x = useState`;
     const result = plugin.transform(code, "src/Comp.mochi");
@@ -71,7 +83,7 @@ let x = useState`;
   });
 
   it("still prepends h when emit text mentions import { h } in a string", () => {
-    const plugin = mochiPlugin();
+    const plugin = testPlugin();
     // Docs copy once suppressed the pragma: the sniff matched a string body.
     const code = `let Row = props => <p>{"We import { h } from preact."}</p>`;
     const result = plugin.transform(code, "src/Row.mochi");
@@ -80,7 +92,7 @@ let x = useState`;
   });
 
   it("does not re-export names already emitted by codegen (curried extern)", () => {
-    const plugin = mochiPlugin();
+    const plugin = testPlugin();
     // Arity ≥ 2 extern lowers to `const f = _curry(…); export { f }` — a second
     // `export { f }` from the plugin is a Rollup duplicate-export error.
     const code = `export extern useSelect : a -> (b -> c) -> c = "@re-reduced/preact" "useSelect"`;
@@ -90,13 +102,13 @@ let x = useState`;
   });
 
   it("throws SyntaxError with diagnostic message when Mochi compilation fails", () => {
-    const plugin = mochiPlugin();
+    const plugin = testPlugin();
     const badCode = "let invalid = ";
     expect(() => plugin.transform(badCode, "src/bad.mochi")).toThrow(/Mochi compilation failed/);
   });
 
   it("activates runtime plugins before transforming Mochi modules", async () => {
-    const plugin = mochiPlugin({
+    const plugin = testPlugin({
       open: true,
       runtimePlugins: {
         component: languagePluginsComponent("runtime-test", [runtimeLanguagePlugin]),
@@ -114,7 +126,7 @@ let x = useState`;
     const watched = "/project/mochi.plugins.ts";
     const events: string[] = [];
     let reloads = 0;
-    const plugin = mochiPlugin({
+    const plugin = testPlugin({
       runtimePlugins: {
         component: languagePluginsComponent("runtime-test", [runtimeLanguagePlugin]),
         watch: [watched],
@@ -127,11 +139,11 @@ let x = useState`;
     const server = {
       watcher: { add: (file: string) => events.push(`watch:${file}`) },
       ws: { send: () => events.push("reload") },
-    };
+    } as unknown as ViteDevServer;
 
     plugin.configureServer(server);
     await plugin.buildStart();
-    await plugin.handleHotUpdate({ file: watched, server });
+    await plugin.handleHotUpdate({ file: watched, server } as HmrContext);
 
     expect(reloads).toBe(1);
     expect(events).toEqual([`watch:${watched}`, "reload"]);
