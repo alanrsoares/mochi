@@ -20,7 +20,7 @@ import { type QualMap, widenLits } from "@mochi/compiler/schemes";
 import { spanContainsClosed, tightestHit } from "@mochi/compiler/span";
 import { indexProgram } from "@mochi/compiler/symbols";
 import { foldAliases, qualifyTypeNames, showType } from "@mochi/compiler/types";
-import { map, match as matchMaybe } from "@onrails/maybe";
+import { type Maybe, map, match as matchMaybe, none, some } from "@onrails/maybe";
 import { isErr, isOk } from "@onrails/result";
 
 /** Tightest inferred type span containing `offset` (closed ends; ties → first). */
@@ -117,6 +117,12 @@ const hoverFrom = (
 export const hoverAt = (src: string, offset: number, path = "<buffer>"): HoverInfo | null => {
   const r = toTypedProgramRecovering(src, { namespaces: preludeNamespaces });
   return isOk(r) ? hoverFrom(r.value.res, offset, src, path) : null;
+};
+
+/** Mochi-facing hover seam: absence uses the language's `Option`, not a JS null sentinel. */
+export const hoverAtOption = (src: string, offset: number, path = "<buffer>"): Maybe<HoverInfo> => {
+  const info = hoverAt(src, offset, path);
+  return info === null ? none() : some(info);
 };
 
 /** Options threaded into module-aware nav/hover/diagnostics — `plugins` (styled-cva, …), same list Vite / `gen-mochi-dts` use. Omitted = default/builtin resolution (`resolvePlugins`, ADR 0011). */

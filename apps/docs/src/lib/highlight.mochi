@@ -2,7 +2,7 @@
 // HighlightCode.tsx (hooks / DOM / regex).
 // @mochi open
 extern lex<A, B> : string -> Result<A, B> = "@mochi/compiler" "lex"
-extern hoverAt<A> : string -> number -> A = "@mochi/dx/hover" "hoverAt"
+extern hoverAt<A> : string -> number -> Option<A> = "@mochi/dx/hover" "hoverAtOption"
 
 /// Closed token shape — pins bootstrap/TS schemes (open-row link mismatch
 /// under Array.append([]) / spread, same class as bootstrap/scc.mochi ADR note).
@@ -155,9 +155,10 @@ let annotate = (cleanCode, cleanLines, queries, i, acc) =>
     switch Array.get(j, queries) {
       | None => out
       | Some(q) => let off = offsetAt(cleanLines, q.lineIndex, q.caretCol) in
-        let hover = hoverAt(cleanCode, off) in
-        let out2 = hover == null ? out : Map.set(q.lineIndex, hover, out) in
-          recur(j + 1, out2)
+          switch hoverAt(cleanCode, off) {
+            | None => recur(j + 1, out)
+            | Some(hover) => recur(j + 1, Map.set(q.lineIndex, hover, out))
+          }
     }
   }
 
@@ -188,7 +189,7 @@ let pushPart : [[SpanTok]] -> SpanTok -> string -> number -> [[SpanTok]] = (line
       : switch Array.get(Array.length(lines) - 1, lines) {
         | None => [...lines, [token]]
         | Some(last) => [
-            ...Array.take(Array.length(lines) - 1)(lines),
+            ...Array.take(Array.length(lines) - 1, lines),
             [...last, token]
           ]
       }
@@ -205,4 +206,4 @@ let splitOne : SpanTok -> [[SpanTok]] -> [[SpanTok]] = (span, lines) =>
   splitParts(span, Str.split("\n", span.text), 0, lines)
 
 export let splitSpansIntoLines : [SpanTok] -> [[SpanTok]] = spans =>
-  Array.reduce(acc => span => splitOne(span, acc))([[]])(spans)
+  Array.reduce(acc => span => splitOne(span, acc), [[]], spans)

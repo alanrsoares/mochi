@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { hoverAt } from "@mochi/dx/hover";
+import { hoverAt, hoverAtOption } from "@mochi/dx/hover";
 
 test("hover on a ref reports its inferred type", () => {
   //                 0123456789
@@ -39,6 +39,12 @@ test("hover picks the tightest span (ref inside a call)", () => {
 test("hover returns null off any node", () => {
   const src = "let p = pi";
   expect(hoverAt(src, 3)).toBeNull(); // whitespace before `=`
+});
+
+test("Mochi-facing hover represents absence as None", () => {
+  const src = "let p = pi";
+  expect(hoverAtOption(src, 3)).toEqual({ _tag: "None" });
+  expect(hoverAtOption(src, src.indexOf("pi"))).toMatchObject({ _tag: "Some" });
 });
 
 test("hover returns null when the program does not typecheck", () => {
