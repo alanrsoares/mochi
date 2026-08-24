@@ -114,9 +114,9 @@ Three literal forms, each a distinct type:
 | Syntax | Type | Runtime |
 |---|---|---|
 | `[1, 2, 3]` | `[number]` (Array, eager) | JS array |
-| `@{1, 2, 3}` | `List number` (lazy) | generator-backed pull sequence |
-| `#{1, 2}` | `Set number` | native JS `Set` (dedupes) |
-| `#{ "a": 1 }` | `Map k v` | native JS `Map` |
+| `@{1, 2, 3}` | `List<number>` (lazy) | generator-backed pull sequence |
+| `#{1, 2}` | `Set<number>` | native JS `Set` (dedupes) |
+| `#{ "a": 1 }` | `Map<K, V>` | native JS `Map` |
 
 Array / List / Set literals may splice with `...` (`[a, ...xs]`, `@{a, ...xs}`,
 `#{a, ...s}` — ADR 0001). Each spread must be the **same** collection kind.
@@ -165,36 +165,36 @@ enclosing loop. For iteration purely for effect, use
 - Builtin `Option` (`Some`/`None`) and `Result` (`Ok`/`Err`); `Map.get`/`Array.head`
   return `Option`. Field names match `@onrails/result`/`@onrails/maybe`, so values flow
   straight into those combinators at the JS boundary.
-- Builtin `Task a e` — opaque lazy async value with an error channel
-  (`() => Promise<Result<a, e>>` at runtime). Not a tagged variant; not
+- Builtin `Task<A, E>` — opaque lazy async value with an error channel
+  (`() => Promise<Result<A, E>>` at runtime). Not a tagged variant; not
   switchable. See [Task](#task) below.
 
 ## Task
 
-Async without `async`/`await`. A `Task a e` is an ordinary value: building one runs
-no effect; `Task.run` is the only kick-off and yields a host `Promise (Result a e)`.
+Async without `async`/`await`. A `Task<A, E>` is an ordinary value: building one runs
+no effect; `Task.run` is the only kick-off and yields a host `Promise<Result<A, E>>`.
 Combinators are data-last under `Task.*` and compose with `|>`
 ([ADR 0005](adr/0005-prelude-task.md), [ADR 0006](adr/0006-task-result-async.md)):
 
 | Member | Type | Role |
 |---|---|---|
-| `Task.of` | `a -> Task a e` | pure lift |
-| `Task.fail` | `e -> Task a e` | error lift |
-| `Task.map` | `(a -> b) -> Task a e -> Task b e` | map the payload |
-| `Task.mapErr` | `(e -> f) -> Task a e -> Task a f` | map the error |
-| `Task.andThen` | `(a -> Task b e) -> Task a e -> Task b e` | sequence (v1 name; not `flatMap`) |
-| `Task.recover` | `(e -> Task a f) -> Task a e -> Task a f` | error-track bind |
-| `Task.fromResult` | `Result a e -> Task a e` | lift a settled `Result` |
-| `Task.match` | `(a -> c) -> (e -> c) -> Task a e -> Task c f` | fold both tracks, stays a `Task` |
-| `Task.delay` | `number -> a -> Task a e` | sleep then yield (`_curry`-safe) |
-| `Task.run` | `Task a e -> Promise (Result a e)` | kick-off at the JS edge |
+| `Task.of` | `A -> Task<A, E>` | pure lift |
+| `Task.fail` | `E -> Task<A, E>` | error lift |
+| `Task.map` | `(A -> B) -> Task<A, E> -> Task<B, E>` | map the payload |
+| `Task.mapErr` | `(E -> F) -> Task<A, E> -> Task<A, F>` | map the error |
+| `Task.andThen` | `(A -> Task<B, E>) -> Task<A, E> -> Task<B, E>` | sequence (v1 name; not `flatMap`) |
+| `Task.recover` | `(E -> Task<A, F>) -> Task<A, E> -> Task<A, F>` | error-track bind |
+| `Task.fromResult` | `Result<A, E> -> Task<A, E>` | lift a settled `Result` |
+| `Task.match` | `(A -> C) -> (E -> C) -> Task<A, E> -> Task<C, F>` | fold both tracks, stays a `Task` |
+| `Task.delay` | `number -> A -> Task<A, E>` | sleep then yield (`_curry`-safe) |
+| `Task.run` | `Task<A, E> -> Promise<Result<A, E>>` | kick-off at the JS edge |
 
 ```mochi
 let program =
   let! n = Task.of(20) |> Task.map((+ 1)) in
   let! n2 = Task.delay(10, n) in
   Task.of(n2 + n2)
-export let result = Task.run(program)   // Promise (Result number e) — await in the host
+export let result = Task.run(program)   // Promise<Result<number, E>> — await in the host
 ```
 
 `let! x = task in …` is monadic bind over `Task` (mirrors `let?` for `Result`);
@@ -208,7 +208,7 @@ runs that end to end against a failing host: string failures map onto a domain
 `ApiError`, a 404 is recovered, and an unreachable host still settles as `Err`.
 
 Effects stay a **convention**, not a checked effect system: domain IO is thin `extern`s
-that *should* return `Task _` (see `examples/life/`); sequencing uses prelude `Task.*`.
+that *should* return `Task<A, E>` (see `examples/life/`); sequencing uses prelude `Task.*`.
 The checker does not force that shape. Multi-arg `extern`s are `_curry`-wrapped at
 emit so flat host exports `(a, b) => …` match mochi’s `f(a, b)` call convention.
 

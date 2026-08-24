@@ -11,6 +11,7 @@
     "server": "bun server.mts"
   },
   "dependencies": {
+    "@mochi/compiler": "workspace:*",
     "@mochi/plugin-preact": "workspace:*",
     "@mochi/plugin-re-reduced": "workspace:*",
     "@mochi/plugin-styled-cva": "workspace:*",

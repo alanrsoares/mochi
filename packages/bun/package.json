@@ -1,0 +1,14 @@
+{
+  "name": "@mochi/bun",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./cli": "./cli.mochi",
+    "./terminal": "./terminal.mochi",
+    "./runtime": "./src/runtime.ts"
+  },
+  "dependencies": {
+    "@mochi/compiler": "workspace:*"
+  }
+}

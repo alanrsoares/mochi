@@ -107,6 +107,7 @@ What else was on the table and why not.
 | [0058](0058-runtime-components.md) | Runtime components: owned resources + declared capabilities | Accepted |
 | [0061](0061-web-standard-library.md) | Web standard-library bindings | Accepted |
 | [0062](0062-extern-generic-binders.md) | Explicit generic binders on externs | Accepted |
+| [0063](0063-bun-standard-library.md) | Bun standard-library bindings | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

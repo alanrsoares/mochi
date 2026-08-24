@@ -56,4 +56,5 @@ test("snake animation loop keeps the frame renderer in Mochi", () => {
   expect(boardJs).toContain("const drawFrame = _curry(4");
   expect(boardJs).not.toContain("startParticleLoop");
   expect(boardJs).not.toContain("canvas.host");
+  expect(boardJs).toContain("while (true)");
 });

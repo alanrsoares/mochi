@@ -38,7 +38,7 @@ or compensation instead of a literal rollback. [§3.3.2, pp. 23–26; §5.1.1 an
 
 Mochi is already well positioned to *describe* a component's capability surface:
 its HM inference and row-polymorphic records can model structural `needs` and
-`provides` records. Its existing `Task a e` supplies lazy asynchronous work and
+`provides` records. Its existing `Task<A, E>` supplies lazy asynchronous work and
 an explicit error channel. But Mochi deliberately does **not** track effects in
 the type system: domain effects are a convention at the `extern` boundary.
 [CONTEXT.md](../../CONTEXT.md#effects--a-convention-not-a-feature) and
@@ -57,12 +57,12 @@ or thin surface sugar:
 ```text
 Component<Needs, Provides, Config>
 provide : key -> value -> Resource
-use     : key -> Task value error
+use     : key -> Task<Value, Error>
 ```
 
 `Resource` would own a disposer. The runtime would track resources per component,
 resolve typed capability keys, activate a component only after its declared needs
-are available, and deactivate dependents before disposing a provider. `Task a e`
+are available, and deactivate dependents before disposing a provider. `Task<A, E>`
 would sequence asynchronous setup and cleanup. This makes an existing boundary
 more explicit without changing normal Mochi programs or Algorithm W.
 

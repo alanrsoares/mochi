@@ -1,0 +1,5 @@
+/// Bun terminal effects. Each operation is lazy and settles as `Task`.
+
+export extern enter : () -> Task<(), string> = "@mochi/bun/runtime" "enter"
+export extern draw : string -> string -> Task<(), string> = "@mochi/bun/runtime" "draw"
+export extern leave : () -> Task<(), string> = "@mochi/bun/runtime" "leave"

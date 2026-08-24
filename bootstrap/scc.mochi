@@ -26,39 +26,45 @@ let neighborsOf = (v, adj) => switch Array.get(v, adj) {
   | None => []
 }
 
-let indexOfFrom = (v, xs, i) => switch Array.get(i, xs) {
-  | None => -1
-  | Some(x) => x == v ? i : indexOfFrom(v, xs, i + 1)
-}
+let indexOfFrom = (v, xs, i) =>
+  loop (j = i) {
+    switch Array.get(j, xs) {
+      | None => -1
+      | Some(x) => x == v ? j : recur(j + 1)
+    }
+  }
 
 // Annotated (ADR 0044): `{ ...st, … }` updates leave the row open, and the
 // two inferrers generalize the open tail differently (TS links input/output
 // tails, bootstrap does not) — pinning to TSt closes the row on both sides.
-let visitNeighbors : number -> [number] -> [[number]] -> TSt -> TSt = (v, ws, adj, st) => switch ws {
-  | [] => st
-  | [w, ...rest] => hasIndex(w, st)
-      ? Set.has(w, st.onStack)
-        ? visitNeighbors(
-          v,
-          rest,
-          adj,
-          {
-            ...st,
-            low: Map.set(v, min(lowOfV(v, st), indexOfV(w, st)), st.low)
-          }
-        )
-        : visitNeighbors(v, rest, adj, st)
-      : let st1 = connect(w, adj, st) in
-        visitNeighbors(
-          v,
-          rest,
-          adj,
-          {
-            ...st1,
-            low: Map.set(v, min(lowOfV(v, st1), lowOfV(w, st1)), st1.low)
-          }
-        )
-}
+let visitNeighbors : number -> [number] -> [[number]] -> TSt -> TSt = (v, ws, adj, st) =>
+  loop (remaining = ws, current = st) {
+    switch remaining {
+      | [] => current
+      | [w, ...rest] => hasIndex(w, current)
+          ? Set.has(w, current.onStack)
+            ? recur(
+              rest,
+              {
+                ...current,
+                low: Map.set(
+                  v,
+                  min(lowOfV(v, current), indexOfV(w, current)),
+                  current.low
+                )
+              }
+            )
+            : recur(rest, current)
+          : let next = connect(w, adj, current) in
+            recur(
+              rest,
+              {
+                ...next,
+                low: Map.set(v, min(lowOfV(v, next), lowOfV(w, next)), next.low)
+              }
+            )
+    }
+  }
 
 let connect : number -> [[number]] -> TSt -> TSt = (v, adj, st) =>
   let st1 = {
@@ -82,9 +88,11 @@ let connect : number -> [[number]] -> TSt -> TSt = (v, adj, st) =>
       : st2
 
 let connectAllFrom = (i, n, adj, st) =>
-  i >= n
-    ? st
-    : connectAllFrom(i + 1, n, adj, hasIndex(i, st) ? st : connect(i, adj, st))
+  loop (j = i, current = st) {
+    j >= n
+      ? current
+      : recur(j + 1, hasIndex(j, current) ? current : connect(j, adj, current))
+  }
 
 export let stronglyConnected = adj =>
   let n = Array.length(adj) in

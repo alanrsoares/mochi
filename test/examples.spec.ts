@@ -18,12 +18,13 @@ test("example.mochi compiles", () => {
   expect(isErr(compile(read("examples/example.mochi")))).toBe(false);
 });
 
-test("examples/life/main.mochi compiles", () => {
-  expect(isErr(compile(read("examples/life/main.mochi")))).toBe(false);
+test("examples/life/main.mochi builds with the Bun terminal bindings", async () => {
+  const result = await buildModules(path("examples/life/main.mochi"), (p) => Bun.file(p).text());
+  expect(isErr(result)).toBe(false);
 });
 
-test("examples/life host settles Err on a forced write failure", async () => {
-  const host = await import(path("examples/life/runtime.mjs"));
+test("Bun terminal binding settles Err on a forced write failure", async () => {
+  const host = await import("@mochi/bun/runtime");
   const writes: string[] = [];
   const orig = process.stdout.write;
   process.stdout.write = ((chunk: string | Uint8Array) => {
@@ -38,7 +39,7 @@ test("examples/life host settles Err on a forced write failure", async () => {
     });
     expect(writes).toEqual([]);
     // Cleared after one shot — next draw is Ok again.
-    expect(await host.draw("label", "frame")()).toEqual({ _tag: "Ok", value: 0 });
+    expect(await host.draw("label", "frame")()).toEqual({ _tag: "Ok", value: undefined });
     expect(writes.some((w) => w.includes("label"))).toBe(true);
   } finally {
     process.stdout.write = orig;

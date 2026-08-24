@@ -192,12 +192,13 @@ let gameContainer = defineContainer(
 )
 
 /// Indexed map — prelude `map` is unary; leaderboard rows need their rank.
-/// Recursion is top-level (`let-in` is non-recursive).
-let mapIndexedGo = (f, xs, i, acc) => switch Array.get(i, xs) {
-  | None => acc
-  | Some(x) => mapIndexedGo(f, xs, i + 1, [...acc, f(x, i)])
-}
-let mapIndexed = (f, xs) => mapIndexedGo(f, xs, 0, [])
+let mapIndexed = (f, xs) =>
+  loop (i = 0, acc = []) {
+    switch Array.get(i, xs) {
+      | None => acc
+      | Some(x) => recur(i + 1, [...acc, f(x, i)])
+    }
+  }
 
 export let App = _ =>
   let store = useContainer(

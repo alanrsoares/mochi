@@ -3,8 +3,7 @@
 // Build and run with:
 //   bun run mochi build examples/cli.mochi && bun examples/cli.js <example>
 
-extern getArg : string -> string = "./cli_runtime.mjs" "getArg"
-extern log : string -> number = "./cli_runtime.mjs" "log"
+import { args, log } from "@mochi/bun/cli"
 
 type Example =
   | Life
@@ -38,7 +37,7 @@ let getInfo = ex => switch ex {
   | Help => "=== Mochi Examples CLI Router (Written in Mochi) ===\n\nUsage: bun run example [name]\n\nAvailable examples:\n  • life      - Conway's Game of Life (Terminal animation)\n  • snake     - Canvas Snake Game (Web UI on http://localhost:3000)\n  • async     - Async Task monad & delay pipeline\n  • modules   - Multi-module import/export graph\n  • pipelines - Functional pipeline operator (|>) demo\n  • showcase  - Comprehensive Mochi language tour\n\nRun 'bun run example:<name>' or pass the name as an argument!"
 }
 
-let arg = getArg("")
+let arg = args() |> Array.get(0) |> Option.unwrapOr("")
 let choice = parseExample(arg)
 let message = getInfo(choice)
 

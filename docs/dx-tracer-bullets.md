@@ -1226,7 +1226,7 @@ JSX V4, genType outbound-only).
 
 ## What to build
 
-Add `origin: Option string` on `bootstrap/ast.mochi`'s `ECall`. JSX
+Add `origin: Option<string>` on `bootstrap/ast.mochi`'s `ECall`. JSX
 `makeJsxCall` sets `Some("jsx")`; every other call uses `None`. Infer keys
 off provenance, not `name == "h"`. Update the bootstrap↔TS parser
 canonicalizer to round-trip `origin`.
@@ -1406,4 +1406,3 @@ named imports. LSP triggers `"`, `'`, `=`, space.
 ## Blocked by
 
 37, 13
-

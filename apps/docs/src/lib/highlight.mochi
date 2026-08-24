@@ -70,24 +70,27 @@ export let isHoverable = kind => Set.has(kind, hoverable)
 /// Plain span sentinel: `start: -1` means no byte offset (not hoverable).
 let plainSpan = (text, start) => { text: text, kind: "plain", start: start }
 
-let highlightGo = (code, tokens, i, curPos, spans) => switch Array.get(i, tokens) {
-  | None => curPos < Str.length(code)
-      ? [...spans, plainSpan(Str.slice(curPos, Str.length(code), code), -1)]
-      : spans
-  | Some(t) => let spans1 = t.span.start > curPos
-      ? [...spans, plainSpan(Str.slice(curPos, t.span.start, code), -1)]
-      : spans in
-    let value = t.t == "id" ? t.v : "" in
-    let spans2 = [
-      ...spans1,
-      {
-        text: Str.slice(t.span.start, t.span.end, code),
-        kind: tokenKindFromLexTag(t.t, value),
-        start: t.span.start
-      }
-    ] in
-      highlightGo(code, tokens, i + 1, t.span.end, spans2)
-}
+let highlightGo = (code, tokens, i, curPos, spans) =>
+  loop (j = i, pos = curPos, acc = spans) {
+    switch Array.get(j, tokens) {
+      | None => pos < Str.length(code)
+          ? [...acc, plainSpan(Str.slice(pos, Str.length(code), code), -1)]
+          : acc
+      | Some(t) => let spans1 = t.span.start > pos
+          ? [...acc, plainSpan(Str.slice(pos, t.span.start, code), -1)]
+          : acc in
+        let value = t.t == "id" ? t.v : "" in
+        let spans2 = [
+          ...spans1,
+          {
+            text: Str.slice(t.span.start, t.span.end, code),
+            kind: tokenKindFromLexTag(t.t, value),
+            start: t.span.start
+          }
+        ] in
+          recur(j + 1, t.span.end, spans2)
+    }
+  }
 
 export let highlightMochiCode = code => switch lex(code) {
   | Err(_) => [plainSpan(code, -1)]
@@ -100,41 +103,43 @@ let isTwoslashLine = line =>
 
 /// Local `let-in` is non-recursive (language.md). Keep self-recursion at
 /// top-level `let` so `const go = … go …` self-binds.
-let caretColAt = (line, j) => switch Str.get(j, line) {
-  | None => 0
-  | Some("^") => j
-  | Some(_) => caretColAt(line, j + 1)
-}
+let caretColAt = (line, j) =>
+  loop (i = j) {
+    switch Str.get(i, line) {
+      | None => 0
+      | Some("^") => i
+      | Some(_) => recur(i + 1)
+    }
+  }
 
 let caretCol = line => caretColAt(line, 0)
 
-let collectTwoslash = (lines, i, clean, queries) => switch Array.get(i, lines) {
-  | None => { clean: clean, queries: queries }
-  | Some(line) => isTwoslashLine(line) && Array.length(clean) > 0
-      ? collectTwoslash(
-        lines,
-        i + 1,
-        clean,
-        [
-          ...queries,
-          { lineIndex: Array.length(clean) - 1, caretCol: caretCol(line) }
-        ]
-      )
-      : collectTwoslash(lines, i + 1, [...clean, line], queries)
-}
+let collectTwoslash = (lines, i, clean, queries) =>
+  loop (j = i, kept = clean, found = queries) {
+    switch Array.get(j, lines) {
+      | None => { clean: kept, queries: found }
+      | Some(line) => isTwoslashLine(line) && Array.length(kept) > 0
+          ? recur(
+            j + 1,
+            kept,
+            [
+              ...found,
+              { lineIndex: Array.length(kept) - 1, caretCol: caretCol(line) }
+            ]
+          )
+          : recur(j + 1, [...kept, line], found)
+    }
+  }
 
 let sumLineOffsets = (cleanLines, lineIndex, j, acc) =>
-  j >= lineIndex
-    ? acc
-    : switch Array.get(j, cleanLines) {
-      | None => acc
-      | Some(ln) => sumLineOffsets(
-          cleanLines,
-          lineIndex,
-          j + 1,
-          acc + Str.length(ln) + 1
-        )
-    }
+  loop (i = j, total = acc) {
+    i >= lineIndex
+      ? total
+      : switch Array.get(i, cleanLines) {
+        | None => total
+        | Some(ln) => recur(i + 1, total + Str.length(ln) + 1)
+      }
+  }
 
 let offsetAt = (cleanLines, lineIndex, col) =>
   let base = sumLineOffsets(cleanLines, lineIndex, 0, 0) in
@@ -145,13 +150,16 @@ let offsetAt = (cleanLines, lineIndex, col) =>
           base + clamped
     }
 
-let annotate = (cleanCode, cleanLines, queries, i, acc) => switch Array.get(i, queries) {
-  | None => acc
-  | Some(q) => let off = offsetAt(cleanLines, q.lineIndex, q.caretCol) in
-    let hover = hoverAt(cleanCode, off) in
-    let acc2 = hover == null ? acc : Map.set(q.lineIndex, hover, acc) in
-      annotate(cleanCode, cleanLines, queries, i + 1, acc2)
-}
+let annotate = (cleanCode, cleanLines, queries, i, acc) =>
+  loop (j = i, out = acc) {
+    switch Array.get(j, queries) {
+      | None => out
+      | Some(q) => let off = offsetAt(cleanLines, q.lineIndex, q.caretCol) in
+        let hover = hoverAt(cleanCode, off) in
+        let out2 = hover == null ? out : Map.set(q.lineIndex, hover, out) in
+          recur(j + 1, out2)
+    }
+  }
 
 /// Strip `// ^?` lines; resolve hovers against the cleaned source.
 export let processTwoslash = code =>
@@ -185,10 +193,13 @@ let pushPart : [[SpanTok]] -> SpanTok -> string -> number -> [[SpanTok]] = (line
           ]
       }
 
-let splitParts : SpanTok -> [string] -> number -> [[SpanTok]] -> [[SpanTok]] = (span, parts, j, acc) => switch Array.get(j, parts) {
-  | None => acc
-  | Some(part) => splitParts(span, parts, j + 1, pushPart(acc, span, part, j))
-}
+let splitParts : SpanTok -> [string] -> number -> [[SpanTok]] -> [[SpanTok]] = (span, parts, j, acc) =>
+  loop (i = j, out = acc) {
+    switch Array.get(i, parts) {
+      | None => out
+      | Some(part) => recur(i + 1, pushPart(out, span, part, i))
+    }
+  }
 
 let splitOne : SpanTok -> [[SpanTok]] -> [[SpanTok]] = (span, lines) =>
   splitParts(span, Str.split("\n", span.text), 0, lines)

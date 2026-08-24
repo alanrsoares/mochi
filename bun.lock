@@ -11,6 +11,7 @@
       },
       "devDependencies": {
         "@biomejs/biome": "^2.5.10",
+        "@mochi/bun": "workspace:*",
         "@mochi/cli": "workspace:*",
         "@mochi/codemod": "workspace:*",
         "@mochi/compiler": "workspace:*",
@@ -66,6 +67,7 @@
       "name": "@mochi/example-snake",
       "version": "0.1.0",
       "dependencies": {
+        "@mochi/compiler": "workspace:*",
         "@mochi/plugin-preact": "workspace:*",
         "@mochi/plugin-re-reduced": "workspace:*",
         "@mochi/plugin-styled-cva": "workspace:*",
@@ -83,6 +85,13 @@
         "tailwindcss": "^4.0.0",
         "typescript": "^5.7.3",
         "vite": "^6.0.0",
+      },
+    },
+    "packages/bun": {
+      "name": "@mochi/bun",
+      "version": "0.1.0",
+      "dependencies": {
+        "@mochi/compiler": "workspace:*",
       },
     },
     "packages/cli": {
@@ -351,6 +360,8 @@
     "@jridgewell/sourcemap-codec": ["@jridgewell/sourcemap-codec@1.5.5", "", {}, "sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og=="],
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
+
+    "@mochi/bun": ["@mochi/bun@workspace:packages/bun"],
 
     "@mochi/cli": ["@mochi/cli@workspace:packages/cli"],
 
