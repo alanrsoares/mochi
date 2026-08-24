@@ -10,7 +10,7 @@ type TestPlugin = Plugin & {
   transform: (code: string, id: string) => { code: string; map: null } | null;
   buildStart: () => Promise<void>;
   configureServer: (server: ViteDevServer) => void;
-  handleHotUpdate: (ctx: HmrContext) => Promise<void | []>;
+  handleHotUpdate: (ctx: HmrContext) => Promise<undefined | []>;
 };
 
 const testPlugin = (...args: Parameters<typeof mochiPlugin>): TestPlugin =>
