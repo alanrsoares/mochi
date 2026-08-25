@@ -36,8 +36,8 @@
     "docs:dev": "bun run --cwd apps/docs dev",
     "docs:build": "bun run --cwd apps/docs build",
     "docs:preview": "bun run --cwd apps/docs preview",
-    "check": "biome check . && tsc --noEmit && bun run --filter '*' check && bun run fmt:check && bun run test",
-    "check:full": "biome check . && tsc --noEmit && bun run --filter '*' check && bun run fmt:check && bun run test:full"
+    "check": "bun scripts/tui-runner.ts check",
+    "check:full": "bun scripts/tui-runner.ts check:full"
   },
   "workspaces": {
     "packages": [
