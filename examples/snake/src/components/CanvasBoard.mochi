@@ -85,9 +85,9 @@ let updateEat : Ref<[Particle]> -> Ref<EatWatch> -> Board -> () = (particles, wa
   let previous = watch.current in
   let _ = Array.length(board.snake) > previous.len
     ? let (x, y) = previous.food in
-      setRef(particles, [...particles.current, ...burstParticles(x, y)])
+      particles->setRef([...particles.current, ...burstParticles(x, y)])
     : () in
-    setRef(watch, { len: Array.length(board.snake), food: board.food })
+    watch->setRef({ len: Array.length(board.snake), food: board.food })
 
 /// The simulation camera is transformed by the tiny host rAF seam. Everything
 /// inside that world — grid, food, body, and face — is now Mochi Canvas code.
@@ -95,20 +95,20 @@ let drawGridX = (ctx, x, right, top, bottom) =>
   loop (i = x) {
     i > right
       ? ()
-      : let begun = beginPath(ctx) in
-      let moved = moveTo(ctx, i * CELL_PX, top * CELL_PX) in
-      let lined = lineTo(ctx, i * CELL_PX, bottom * CELL_PX) in
-      let stroked = stroke(ctx) in recur(i + 1)
+      : let _ = ctx->beginPath() in
+      let _ = ctx->moveTo(i * CELL_PX, top * CELL_PX) in
+      let _ = ctx->lineTo(i * CELL_PX, bottom * CELL_PX) in
+      let _ = ctx->stroke() in recur(i + 1)
   }
 
 let drawGridY = (ctx, y, left, right, bottom) =>
   loop (i = y) {
     i > bottom
       ? ()
-      : let begun = beginPath(ctx) in
-      let moved = moveTo(ctx, left * CELL_PX, i * CELL_PX) in
-      let lined = lineTo(ctx, right * CELL_PX, i * CELL_PX) in
-      let stroked = stroke(ctx) in recur(i + 1)
+      : let _ = ctx->beginPath() in
+      let _ = ctx->moveTo(left * CELL_PX, i * CELL_PX) in
+      let _ = ctx->lineTo(right * CELL_PX, i * CELL_PX) in
+      let _ = ctx->stroke() in recur(i + 1)
   }
 
 let drawGrid = (ctx, (cameraX, cameraY)) =>
@@ -116,8 +116,8 @@ let drawGrid = (ctx, (cameraX, cameraY)) =>
   let right = ceil(cameraX + HALF_BOARD_CELLS) in
   let top = floor(cameraY - HALF_BOARD_CELLS) in
   let bottom = ceil(cameraY + HALF_BOARD_CELLS) in
-  let _ = setStrokeStyle(ctx, "rgba(74, 58, 54, 0.12)") in
-  let _ = setLineWidth(ctx, 1) in
+  let _ = ctx->setStrokeStyle("rgba(74, 58, 54, 0.12)") in
+  let _ = ctx->setLineWidth(1) in
   let _ = drawGridX(ctx, left, right, top, bottom) in
     drawGridY(ctx, top, left, right, bottom)
 
@@ -125,18 +125,18 @@ let drawFood = (ctx, (x, y)) =>
   let px = x * CELL_PX + CELL_PX / 2 in
   let py = y * CELL_PX + CELL_PX / 2 in
   let radius = CELL_PX / 2 - 3 in
-  let _ = setFillStyle(ctx, "#E88BA9") in
-  let _ = beginPath(ctx) in
-  let _ = arc(ctx, px, py, radius, 0, TAU) in fill(ctx)
+  let _ = ctx->setFillStyle("#E88BA9") in
+  let _ = ctx->beginPath() in
+  let _ = ctx->arc(px, py, radius, 0, TAU) in ctx->fill()
 
 let drawEyesAt = (ctx, x, y, firstX, firstY, secondX, secondY) =>
   let px = x * CELL_PX in
   let py = y * CELL_PX in
-  let _ = setFillStyle(ctx, "#4A3A36") in
-  let _ = beginPath(ctx) in
-  let _ = arc(ctx, px + CELL_PX * firstX, py + CELL_PX * firstY, 3, 0, TAU) in
-  let _ = arc(ctx, px + CELL_PX * secondX, py + CELL_PX * secondY, 3, 0, TAU) in
-    fill(ctx)
+  let _ = ctx->setFillStyle("#4A3A36") in
+  let _ = ctx->beginPath() in
+  let _ = ctx->arc(px + CELL_PX * firstX, py + CELL_PX * firstY, 3, 0, TAU) in
+  let _ = ctx->arc(px + CELL_PX * secondX, py + CELL_PX * secondY, 3, 0, TAU) in
+    ctx->fill()
 
 /// Eyes sit on the edge leading away from the neck, so the face follows turns.
 let drawEyes = (ctx, x, y, neckX, neckY) =>
@@ -152,23 +152,22 @@ let drawSnakePathGo = (ctx, snake, index) => switch Array.get(index, snake) {
   | None => ()
   | Some((x, y)) => let px = (x + 0.5) * CELL_PX in
     let py = (y + 0.5) * CELL_PX in
-    let _ = index == 0 ? moveTo(ctx, px, py) : lineTo(ctx, px, py) in
+    let _ = index == 0 ? ctx->moveTo(px, py) : ctx->lineTo(px, py) in
       drawSnakePathGo(ctx, snake, index + 1)
 }
 
 let drawSnakeHead = (ctx, snake) => switch Array.get(0, snake) {
   | None => ()
-  | Some((x, y)) => let _ = setFillStyle(ctx, "#D98D3E") in
-    let _ = beginPath(ctx) in
-    let _ = arc(
-      ctx,
+  | Some((x, y)) => let _ = ctx->setFillStyle("#D98D3E") in
+    let _ = ctx->beginPath() in
+    let _ = ctx->arc(
       (x + 0.5) * CELL_PX,
       (y + 0.5) * CELL_PX,
       CELL_PX / 2 - 1,
       0,
       TAU
     ) in
-    let _ = fill(ctx) in
+    let _ = ctx->fill() in
       switch Array.get(1, snake) {
         | Some((neckX, neckY)) => drawEyes(ctx, x, y, neckX, neckY)
         | None => drawEyes(ctx, x, y, x - 1, y)
@@ -176,13 +175,13 @@ let drawSnakeHead = (ctx, snake) => switch Array.get(0, snake) {
 }
 
 let drawSnake = (ctx, snake) =>
-  let _ = setStrokeStyle(ctx, "rgba(235, 167, 92, 0.9)") in
-  let _ = setLineWidth(ctx, CELL_PX - 3) in
-  let _ = setLineCap(ctx, "round") in
-  let _ = setLineJoin(ctx, "round") in
-  let _ = beginPath(ctx) in
+  let _ = ctx->setStrokeStyle("rgba(235, 167, 92, 0.9)") in
+  let _ = ctx->setLineWidth(CELL_PX - 3) in
+  let _ = ctx->setLineCap("round") in
+  let _ = ctx->setLineJoin("round") in
+  let _ = ctx->beginPath() in
   let _ = drawSnakePathGo(ctx, snake, 0) in
-  let _ = stroke(ctx) in drawSnakeHead(ctx, snake)
+  let _ = ctx->stroke() in drawSnakeHead(ctx, snake)
 
 /// Food beyond the camera leaves a quiet dango-pink highlight on the edge it
 /// crossed. A diagonal target lights both relevant edges, retaining its
@@ -225,17 +224,17 @@ let drawFoodEdgeGlow = (ctx, (foodX, foodY), (headX, headY)) =>
         stroke(ctx)
 
 let drawBoard = (ctx, snake, _previousSnake, food, head) =>
-  let _ = drawGrid(ctx, head) in
-  let _ = drawFood(ctx, food) in drawSnake(ctx, snake)
+  let _ = ctx->drawGrid(head) in
+  let _ = ctx->drawFood(food) in ctx->drawSnake(snake)
 
 let drawParticlesGo = (ctx, particles, index) => switch Array.get(index, particles) {
   | None => ()
-  | Some(particle) => let _ = setFillStyle(ctx, particle.color) in
-    let _ = setGlobalAlpha(ctx, particle.life) in
-    let _ = beginPath(ctx) in
-    let _ = arc(ctx, particle.x, particle.y, 3, 0, TAU) in
-    let _ = fill(ctx) in
-    let _ = setGlobalAlpha(ctx, 1) in drawParticlesGo(ctx, particles, index + 1)
+  | Some(particle) => let _ = ctx->setFillStyle(particle.color) in
+    let _ = ctx->setGlobalAlpha(particle.life) in
+    let _ = ctx->beginPath() in
+    let _ = ctx->arc(particle.x, particle.y, 3, 0, TAU) in
+    let _ = ctx->fill() in
+    let _ = ctx->setGlobalAlpha(1) in drawParticlesGo(ctx, particles, index + 1)
 }
 
 let lastPointGo : [(number, number)] -> number -> (number, number) -> (number, number) = (snake, index, fallback) => switch Array.get(index, snake) {
@@ -274,7 +273,7 @@ let drawFrame : Ref<Motion> -> Ref<[Particle]> -> Context2D -> number -> () = (m
   ) in
   let head = Option.unwrapOr((0, 0), Array.get(0, snake)) in
   let alive = stepParticles(particlesRef.current) in
-  let _ = setRef(particlesRef, alive) in
+  let _ = particlesRef->setRef(alive) in
   let _ = save(ctx) in
   let _ = beginPath(ctx) in
   let _ = roundRect(ctx, 0, 0, BOARD_PX, BOARD_PX, CELL_PX / 2) in

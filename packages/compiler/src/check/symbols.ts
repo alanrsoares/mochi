@@ -39,6 +39,8 @@ export type SymbolIndex = {
    * shadowing. Powers nested-scope completion (ADR 0013).
    */
   bindingsAt: (offset: number, space?: SymbolSpace) => Binding[];
+  /** Named, navigable value bindings introduced below module scope. */
+  localBindings: () => Binding[];
 };
 
 type Scope = Map<string, Binding>;
@@ -55,6 +57,7 @@ type Builder = {
   scopes: { value: Scope[]; type: Scope[]; ctor: Scope[]; field: Scope[] };
   occurrences: Occurrence[];
   frames: ScopeFrame[];
+  localBindings: Binding[];
 };
 
 const loc = (path: string, span: Span): Location => ({ path, span });
@@ -104,6 +107,13 @@ const bind = (b: Builder, space: SymbolSpace, name: string, span: Span): Binding
   return binding;
 };
 
+/** Bind a user-written local so editor diagnostics can distinguish it from module scope. */
+const bindLocal = (b: Builder, name: string, span: Span): Binding => {
+  const binding = bind(b, "value", name, span);
+  if (!name.startsWith("_") && !name.startsWith("$")) b.localBindings.push(binding);
+  return binding;
+};
+
 /** Enter a name in scope without a navigable def (destructure params lacking spans). */
 const bindOpaque = (b: Builder, name: string): void => {
   const binding: Binding = { name, space: "value", def: loc(b.path, PLACEHOLDER) };
@@ -128,7 +138,7 @@ const touchField = (b: Builder, name: string, span: Span): void => {
 const bindParam = (b: Builder, p: LamParam): void => {
   if (p.kind === "name") {
     if (p.annot) walkTypeExpr(b, p.annot);
-    if (!p.name.startsWith("$")) bind(b, "value", p.name, p.span);
+    if (!p.name.startsWith("$")) bindLocal(b, p.name, p.span);
     return;
   }
   if (p.kind === "ptuple") {
@@ -142,10 +152,10 @@ const walkPat = (b: Builder, p: Pattern): void => {
   match(p)
     .with({ kind: "pas" }, (pas) => {
       walkPat(b, pas.pat);
-      bind(b, "value", pas.name, pas.nameSpan);
+      bindLocal(b, pas.name, pas.nameSpan);
     })
     .with({ kind: "pbind" }, (pbind) => {
-      if (pbind.name !== "_") bind(b, "value", pbind.name, pbind.span);
+      if (pbind.name !== "_") bindLocal(b, pbind.name, pbind.span);
     })
     .with({ kind: "pctor" }, (pctor) => {
       use(b, "ctor", pctor.ctor, pctor.span);
@@ -264,7 +274,7 @@ const walkRecursiveLetins = (b: Builder, first: LetInExpr): void => {
     tail = tail.body;
   }
   pushScope(b, "value");
-  for (const binding of bindings) bind(b, "value", binding.name, binding.nameSpan);
+  for (const binding of bindings) bindLocal(b, binding.name, binding.nameSpan);
   for (const binding of bindings) {
     if (binding.annot) walkTypeExpr(b, binding.annot);
     walkExpr(b, binding.value);
@@ -309,7 +319,7 @@ const walkExpr = (b: Builder, e: Expr): void => {
       walkExpr(b, letin.value);
       if (letin.annot) walkTypeExpr(b, letin.annot);
       pushScope(b, "value");
-      bind(b, "value", letin.name, letin.nameSpan);
+      bindLocal(b, letin.name, letin.nameSpan);
       walkExpr(b, letin.body);
       snapshotFrame(b, "value", letin.body.span);
       popScope(b, "value");
@@ -325,7 +335,7 @@ const walkExpr = (b: Builder, e: Expr): void => {
     .with({ kind: "loop" }, (loop) => {
       for (const p of loop.params) walkExpr(b, p.init);
       pushScope(b, "value");
-      for (const p of loop.params) bind(b, "value", p.name, p.nameSpan);
+      for (const p of loop.params) bindLocal(b, p.name, p.nameSpan);
       walkExpr(b, loop.body);
       snapshotFrame(b, "value", loop.body.span);
       popScope(b, "value");
@@ -521,6 +531,7 @@ export const indexProgram = (path: string, prog: Program, origins?: Origins): Sy
     scopes: { value: [new Map()], type: [new Map()], ctor: [new Map()], field: [new Map()] },
     occurrences: [],
     frames: [],
+    localBindings: [],
   };
   seedPrelude(b);
   bindTopLevels(b, prog.stmts, origins);
@@ -567,5 +578,7 @@ export const indexProgram = (path: string, prog: Program, origins?: Origins): Sy
     return [...map.values()];
   };
 
-  return { at, occurrences, binding, bindingsAt };
+  const localBindings = (): Binding[] => [...b.localBindings];
+
+  return { at, occurrences, binding, bindingsAt, localBindings };
 };

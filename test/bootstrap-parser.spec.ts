@@ -125,6 +125,14 @@ const cExpr = (e: Expr): Canon => {
         span: cSpan(e.span),
       };
     case "pipe":
+      if (e.fast && e.right.kind === "call")
+        return {
+          kind: "call",
+          fn: cExpr(e.right.fn),
+          args: [cExpr(e.left), ...e.right.args.map(cExpr)],
+          origin: e.right.origin ?? null,
+          span: cSpan(e.span),
+        };
       return { kind: "pipe", left: cExpr(e.left), right: cExpr(e.right), span: cSpan(e.span) };
     case "ternary":
       return {
@@ -586,6 +594,7 @@ const cases: Record<string, string> = {
   "let-in and tuple let-in":
     "let f = let a = 1 in add(a, 2)\nlet g = let (x, y) = (1, 2) in add(x, y)",
   "pipe chain": "let r = x |> f |> g(1) |> h",
+  "fast pipe": "let r = x -> f(1) -> g(2)",
   "loop and recur (ADR 0056)":
     "let sum = xs => loop (acc = 0, i = 0) { switch Array.get(i, xs) { | None => acc | Some(x) => recur(acc + x, i + 1) } }\nlet count = n => loop (i = 0) { i >= n ? i : recur(i + 1) }",
   "call and field chains": "let a = f(1)(2).x.y(3)",

@@ -208,6 +208,11 @@ export const genExpr = (e: Expr, ctx: GenCtx): string =>
     // desugar inline: a |> f  →  f(a). Under `flattenPipe` (TS backend), a pipe
     // into a call appends the arg — `a |> f(x)` → `f(x, a)` — so tsc infers type
     // args from every argument at once; otherwise the curried `f(x)(a)`.
+    .with({ kind: "pipe", fast: true }, (p) => {
+      const right = p.right;
+      if (right.kind !== "call") throw new Error("fast pipe rhs must be a call");
+      return `${genCallee(right.fn, ctx)}(${[p.left, ...right.args].map((a) => genExpr(a, ctx)).join(", ")})`;
+    })
     .with({ kind: "pipe" }, (p) =>
       ctx.flattenPipe && p.right.kind === "call"
         ? `${genCallee(p.right.fn, ctx)}(${[...p.right.args, p.left].map((a) => genExpr(a, ctx)).join(", ")})`

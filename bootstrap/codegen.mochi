@@ -333,7 +333,7 @@ let genLoopTail = (e, params, ctx) => switch e {
       ? "if (${genExpr(cond, ctx)}) { ${genLoopTail(thenE, params, ctx)} } else { ${genLoopTail(elseE, params, ctx)} }"
       : "return ${genExpr(e, ctx)};"
   | Ast.ELetIn(name, _, value, body, _) => hasRecur(e)
-      ? "const ${name} = ${genExpr(value, ctx)}; ${genLoopTail(body, params, ctx)}"
+      ? "{ const ${name} = ${genExpr(value, ctx)}; ${genLoopTail(body, params, ctx)} }"
       : "return ${genExpr(e, ctx)};"
   | Ast.EMatch(_, _, sp) => hasRecur(e)
       ? let step = genExpr(wrapStepTails(e, sp), ctx) in

@@ -1,4 +1,4 @@
-import { test } from "bun:test";
+import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -133,6 +133,37 @@ test("watched plugin manifests reload diagnostics without an LSP restart", async
       params: { changes: [{ uri: pathToFileURL(manifest).href, type: 2 }] },
     });
     await server.waitFor("cannot unify number with string");
+  } finally {
+    server.process.kill();
+    await server.process.exited;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("unused local bindings publish LSP warnings", async () => {
+  const root = mkdtempSync(join(import.meta.dir, ".server-unused-"));
+  const source = join(root, "app.mochi");
+  const uri = pathToFileURL(source).href;
+  const server = startLsp();
+  try {
+    const text = "let f = unused => 1\n";
+    writeFileSync(source, text);
+    server.send({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: { rootUri: pathToFileURL(root).href, capabilities: {} },
+    });
+    await server.waitFor('"id":1');
+    server.send({ jsonrpc: "2.0", method: "initialized", params: {} });
+    server.send({
+      jsonrpc: "2.0",
+      method: "textDocument/didOpen",
+      params: { textDocument: { uri, languageId: "mochi", version: 1, text } },
+    });
+    const output = await server.waitFor("unused local binding 'unused'");
+    expect(output).toContain('"severity":2');
+    expect(output).toContain('"code":"unused-local"');
   } finally {
     server.process.kill();
     await server.process.exited;

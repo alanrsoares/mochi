@@ -117,7 +117,10 @@ const genLoopTail = (e: Expr, params: readonly LoopParam[], ctx: GenCtx): string
   }
   if (e.kind === "letin" && hasRecur(e)) {
     const ann = ctx.annotateLetin?.(e.value);
-    return `const ${e.name}${ann ? `: ${ann}` : ""} = ${genExpr(e.value, ctx)}; ${genLoopTail(e.body, params, ctx)}`;
+    // A let-in introduces a fresh lexical scope. Keep it as a JS block instead
+    // of flattening it into the loop body: consecutive `let _ = … in` effects
+    // and ordinary shadow-rebinds would otherwise redeclare the same `const`.
+    return `{ const ${e.name}${ann ? `: ${ann}` : ""} = ${genExpr(e.value, ctx)}; ${genLoopTail(e.body, params, ctx)} }`;
   }
   if (e.kind === "match" && hasRecur(e)) {
     const step = genExpr(wrapStepTails(e), ctx);

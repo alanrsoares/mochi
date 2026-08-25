@@ -1,11 +1,39 @@
 import { expect, test } from "bun:test";
 import { toTypedProgram } from "@mochi/compiler/compile";
-import { diagnostics, moduleDiagnostics, toPublish } from "@mochi/dx/diagnostics";
+import {
+  diagnostics,
+  moduleDiagnostics,
+  toPublish,
+  unusedLocalDiagnostics,
+} from "@mochi/dx/diagnostics";
 import { memRead } from "@mochi/test-support";
 import { isErr } from "@onrails/result";
 
 test("clean source produces no diagnostics", () => {
   expect(diagnostics("let n = add(mul(2, 3), 4)")).toEqual([]);
+});
+
+test("unused locals publish warning diagnostics by binding identity", () => {
+  const src = "let f = value => let value = 1 in value";
+  const warnings = unusedLocalDiagnostics(src).filter((d) => d.code === "unused-local");
+  expect(warnings).toEqual([
+    {
+      range: {
+        start: { line: 0, character: 8 },
+        end: { line: 0, character: 13 },
+      },
+      message: "unused local binding 'value'",
+      severity: "warning",
+      code: "unused-local",
+    },
+  ]);
+});
+
+test("underscore-prefixed locals intentionally suppress unused warnings", () => {
+  const warnings = unusedLocalDiagnostics("let f = _ignored => 1").filter(
+    (d) => d.code === "unused-local",
+  );
+  expect(warnings).toEqual([]);
 });
 
 test("type error maps to a 0-based range on the offending expression", () => {

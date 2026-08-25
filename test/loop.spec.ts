@@ -103,6 +103,22 @@ describe("semantics", () => {
     expect(evalJs(src, "out")).toBe(12);
   });
 
+  it("keeps consecutive discarded bindings in distinct loop scopes", () => {
+    const src = `
+      let run = (log) =>
+        loop (i = 0) {
+          i >= 1
+            ? ()
+            : let _ = log(i) in
+              let _ = log(i + 1) in
+              recur(i + 1)
+        }`;
+    const seen: number[] = [];
+    const run = evalJs(src, "run") as (log: (n: number) => void) => void;
+    run((n) => seen.push(n));
+    expect(seen).toEqual([0, 1]);
+  });
+
   it("nested loops recur independently", () => {
     const src = `
       let out = loop (row = 0, total = 0) {

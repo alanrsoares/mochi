@@ -525,6 +525,26 @@ let parseInfix = (minBp, left, toks, pos, hooks) =>
             matched: true
           }
         )
+      : lt.tok == TTarrow && PIPE_BP >= minBp
+      ? let? (right, p) = parseAtomOrCall(toks, pos + 1, hooks) in
+        switch right {
+          | Ast.ECall(fn, args, origin, rightSpan) => Ok(
+              {
+                left: Ast.ECall(
+                  fn,
+                  Array.prepend(left, args),
+                  origin,
+                  spanning(exprSpan(left), rightSpan)
+                ),
+                p: p,
+                matched: true
+              }
+            )
+          | _ => errAt(
+              "fast pipe needs a call on the right, like `a -> f(b)`",
+              lt
+            )
+        }
       : lt.tok == TCompose && COMPOSE_BP >= minBp
       ? let? (right, p) = parseExprBp(COMPOSE_BP + 1, toks, pos + 1, hooks) in
       let opSpan = spanOf(lt) in
