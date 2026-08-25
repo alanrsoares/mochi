@@ -5,8 +5,16 @@ import { languagePluginsComponent, mochiPlugin } from "@mochi/vite-plugin";
 import { ok, ResultAsync } from "@onrails/result";
 import type { HmrContext, Plugin, ViteDevServer } from "vite";
 
-/** Vite types hooks as `ObjectHook`; the plugin uses bare functions we call in unit tests. */
-type TestPlugin = Plugin & {
+/**
+ * Vite types hooks as `ObjectHook` (and, since Vite 8, with a `this` plugin
+ * context); the plugin uses bare functions we call in unit tests, so the hooks
+ * are omitted before being redeclared — an intersection would keep Vite's
+ * `this`-bound signatures alongside ours.
+ */
+type TestPlugin = Omit<
+  Plugin,
+  "transform" | "buildStart" | "configureServer" | "handleHotUpdate"
+> & {
   transform: (code: string, id: string) => { code: string; map: null } | null;
   buildStart: () => Promise<void>;
   configureServer: (server: ViteDevServer) => void;
