@@ -9,17 +9,16 @@
 // explicitly `any` (see `tsBody`) so the trusted body just runs and nothing trips
 // `--strict`. The body's internal types are irrelevant — the annotation is the
 // contract, the JS-backend differential tests are what prove the body correct.
-import { flatFnType } from "@mochi/compiler/dts";
+import { flatFnType, typeDecl } from "@mochi/compiler/dts";
 import {
   builtinTypeDecls,
   namespaceRuntime,
   preludeEnv,
   preludeJsDefs,
-  runtimeArity,
   preludeNamespaces,
+  runtimeArity,
 } from "@mochi/compiler/prelude";
 import type { Type } from "@mochi/compiler/types";
-import { typeDecl } from "@mochi/compiler/dts";
 
 // jsId → HM type: top-level builtins by name, plus every namespace member keyed
 // by its runtime identifier (`Map.get` → `_Map_get`).
@@ -71,7 +70,8 @@ const CTOR_TYPES: Record<string, string> = {
 
 // Structural helpers with no HM signature — hand-typed.
 const OVERRIDES: Record<string, string> = {
-  _list: "export const _list = <T>(g: () => Iterator<T>): Iterable<T> => ({ [Symbol.iterator]: g });",
+  _list:
+    "export const _list = <T>(g: () => Iterator<T>): Iterable<T> => ({ [Symbol.iterator]: g });",
   // Rest-param constrained to an array infers as a TUPLE, so `_tuple(a, b)` is
   // typed `[typeof a, typeof b]` without naming element types — TS emit wraps
   // tuple literals in it to stop bare-array widening (ADR 0036).

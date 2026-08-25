@@ -45,8 +45,7 @@ const MODULES = [
 // Runtime deps the emitted compiler imports (hand-written + generated shim).
 const RUNTIME_DEPS = ["host.mjs", "prelude.gen.mjs"];
 
-const bun = (args: string[], cwd = root) =>
-  execFileSync("bun", args, { cwd, encoding: "utf8" });
+const bun = (args: string[], cwd = root) => execFileSync("bun", args, { cwd, encoding: "utf8" });
 
 // Copy the files that make a directory a runnable mochic: the compiled module
 // JS already present there, plus the runtime deps.

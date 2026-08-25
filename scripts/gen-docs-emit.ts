@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { join } from "node:path";
 /**
  * Regenerates the codegen showcase panes on the docs landing page.
  *
@@ -14,7 +15,6 @@
  * import rather than hardcoded, so it stays in sync.
  */
 import { $ } from "bun";
-import { join } from "node:path";
 
 /** Matches the panel's rendered width at text-xs in a half-grid column. */
 const LINE_WIDTH = 72;
@@ -37,10 +37,13 @@ const format = async (code: string, ext: "js" | "ts"): Promise<string> =>
 /** Names the TS backend imports from the runtime — i.e. the prelude helpers. */
 const preludeNames = (ts: string): readonly string[] => {
   const match = ts.match(/import\s*\{([^}]*)\}\s*from\s*"@mochi\/runtime"/);
-  return !match ? [] : match[1]
-    .split(",")
-    .map((n) => n.trim())
-    .filter(Boolean);
+  const group = match?.[1];
+  return !group
+    ? []
+    : group
+        .split(",")
+        .map((n) => n.trim())
+        .filter(Boolean);
 };
 
 const collapsePrelude = (js: string, names: readonly string[]): string => {
@@ -50,7 +53,8 @@ const collapsePrelude = (js: string, names: readonly string[]): string => {
     .split("\n")
     .filter((line) => {
       const decl = line.match(/^const\s+([A-Za-z_$][\w$]*)\s*=/);
-      return !(decl && declares.has(decl[1]));
+      const name = decl?.[1];
+      return !(name && declares.has(name));
     })
     .join("\n");
   return kept.replace(
@@ -59,11 +63,7 @@ const collapsePrelude = (js: string, names: readonly string[]): string => {
   );
 };
 
-const [js, ts, dts] = await Promise.all([
-  compile("js"),
-  compile("ts"),
-  compile("dts"),
-]);
+const [js, ts, dts] = await Promise.all([compile("js"), compile("ts"), compile("dts")]);
 
 const outputs = {
   "emit-shape.js.txt": await format(collapsePrelude(js, preludeNames(ts)), "js"),
