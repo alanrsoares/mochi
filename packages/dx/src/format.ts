@@ -1073,8 +1073,9 @@ const flattenCallSpine = (e: CallExpr): CallExpr | null => {
         : null;
   if (arity === null) return null;
   const args = groups.flat();
-  if (args.length > arity || args.some((a) => a.kind === "unit")) return null;
-  return { ...e, fn: cur, args };
+  return args.length > arity || args.some((a) => a.kind === "unit")
+    ? null
+    : { ...e, fn: cur, args };
 };
 
 /** Plugin sugar first (JSX's `<tag>` re-fold, …), then this module's printer. */

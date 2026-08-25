@@ -297,54 +297,54 @@ function useful(m: Matrix, width: number, ctx: Ctx): Witness {
   };
 
   // Products: one constructor, always complete — descend straight into it.
-  if (kind === "tuple") {
-    const arity = (heads[0] as { t: "tuple"; arity: number }).arity;
-    return tryHeads([{ t: "tuple", arity }], () => arity);
-  }
-  if (kind === "record") return tryHeads([{ t: "record" }], () => labels.length);
-
-  if (kind === "ctor") {
-    const names = heads.flatMap((h) => (h.t === "ctor" ? [h.name] : []));
-    const owner = ctx.reg.ctor.get(names[0]!)?.type;
-    const all = owner === undefined ? undefined : ctx.reg.type.get(owner);
-    if (all?.every((n) => names.includes(n)) === true)
-      return tryHeads(
-        all.map((name): Head => ({ t: "ctor", name })),
-        (c) => (c.t === "ctor" ? (ctx.reg.ctor.get(c.name)?.arity ?? 0) : 0),
-      );
-    // Incomplete: a constructor nobody named is the witness.
-    const missing = all?.find((n) => !names.includes(n));
-    const sub = useful(defaultMatrix(m), width - 1, ctx);
-    if (sub === null) return null;
-    const arity = missing === undefined ? 0 : (ctx.reg.ctor.get(missing)?.arity ?? 0);
-    const head: P = missing === undefined ? WILD : { k: "ctor", name: missing, args: wilds(arity) };
-    return [head, ...sub];
-  }
-
-  if (kind === "bool") {
-    const vs = new Set(heads.flatMap((h) => (h.t === "bool" ? [h.v] : [])));
-    if (vs.has(true) && vs.has(false))
-      return tryHeads(
-        [
-          { t: "bool", v: true },
-          { t: "bool", v: false },
-        ],
-        () => 0,
-      );
-    const sub = useful(defaultMatrix(m), width - 1, ctx);
-    return sub === null ? null : [{ k: "bool", v: !vs.has(true) }, ...sub];
-  }
-
-  if (kind === "arr") {
-    const shape = arrShape(col);
-    if (arrComplete(shape))
-      return tryHeads(
-        arrLengths(shape).map((len): Head => ({ t: "arr", len })),
-        (c) => (c.t === "arr" ? c.len : 0),
-      );
-    const sub = useful(defaultMatrix(m), width - 1, ctx);
-    const len = arrMissingLen(shape);
-    return sub === null ? null : [{ k: "arr", elems: wilds(len), rest: false }, ...sub];
+  switch (kind) {
+    case "tuple": {
+      const arity = (heads[0] as { t: "tuple"; arity: number }).arity;
+      return tryHeads([{ t: "tuple", arity }], () => arity);
+    }
+    case "record":
+      return tryHeads([{ t: "record" }], () => labels.length);
+    case "ctor": {
+      const names = heads.flatMap((h) => (h.t === "ctor" ? [h.name] : []));
+      const owner = ctx.reg.ctor.get(names[0]!)?.type;
+      const all = owner === undefined ? undefined : ctx.reg.type.get(owner);
+      if (all?.every((n) => names.includes(n)) === true)
+        return tryHeads(
+          all.map((name): Head => ({ t: "ctor", name })),
+          (c) => (c.t === "ctor" ? (ctx.reg.ctor.get(c.name)?.arity ?? 0) : 0),
+        );
+      const missing = all?.find((n) => !names.includes(n));
+      const sub = useful(defaultMatrix(m), width - 1, ctx);
+      if (sub === null) return null;
+      const arity = missing === undefined ? 0 : (ctx.reg.ctor.get(missing)?.arity ?? 0);
+      const head: P =
+        missing === undefined ? WILD : { k: "ctor", name: missing, args: wilds(arity) };
+      return [head, ...sub];
+    }
+    case "bool": {
+      const vs = new Set(heads.flatMap((h) => (h.t === "bool" ? [h.v] : [])));
+      if (vs.has(true) && vs.has(false))
+        return tryHeads(
+          [
+            { t: "bool", v: true },
+            { t: "bool", v: false },
+          ],
+          () => 0,
+        );
+      const sub = useful(defaultMatrix(m), width - 1, ctx);
+      return sub === null ? null : [{ k: "bool", v: !vs.has(true) }, ...sub];
+    }
+    case "arr": {
+      const shape = arrShape(col);
+      if (arrComplete(shape))
+        return tryHeads(
+          arrLengths(shape).map((len): Head => ({ t: "arr", len })),
+          (c) => (c.t === "arr" ? c.len : 0),
+        );
+      const sub = useful(defaultMatrix(m), width - 1, ctx);
+      const len = arrMissingLen(shape);
+      return sub === null ? null : [{ k: "arr", elems: wilds(len), rest: false }, ...sub];
+    }
   }
 
   // Infinite signatures (numbers, strings) and opaque columns are never
@@ -353,8 +353,7 @@ function useful(m: Matrix, width: number, ctx: Ctx): Witness {
   // (`parmatch.ml:1022`): ints walk 0, 1, 2…; strings grow by length, "" then
   // "*" then "**", so the report names a concrete literal.
   const sub = useful(defaultMatrix(m), width - 1, ctx);
-  if (sub === null) return null;
-  return [freshLiteral(kind, heads), ...sub];
+  return sub === null ? null : [freshLiteral(kind, heads), ...sub];
 }
 
 const freshLiteral = (kind: Head["t"], heads: readonly Head[]): P => {

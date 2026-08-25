@@ -55,26 +55,28 @@ const genExtern = (s: ExternStmt): string => {
   if (convention) {
     const [, kind, target] = convention;
     const global = `globalThis[${JSON.stringify(target)}]`;
-    if (kind === "global")
-      return `const ${s.name} = ${s.imported ? `${global}[${JSON.stringify(s.imported)}]` : global};`;
-    if (kind === "get")
-      return `const ${s.name} = ($receiver) => $receiver[${JSON.stringify(target)}];`;
-    if (kind === "set")
-      return `const ${s.name} = _curry(2, ($receiver, $value) => ($receiver[${JSON.stringify(target)}] = $value));`;
-    if (kind === "new") {
-      const arity = typeExprArity(s.typeExpr);
-      const args = Array.from({ length: arity }, (_, i) => `$a${i}`).join(", ");
-      if (s.imported) {
-        const raw = `$${s.name}`;
-        const importLine = `import { ${s.imported} as ${raw} } from ${JSON.stringify(target)};`;
-        const ctor = `new ${raw}(${args})`;
+    switch (kind) {
+      case "global":
+        return `const ${s.name} = ${s.imported ? `${global}[${JSON.stringify(s.imported)}]` : global};`;
+      case "get":
+        return `const ${s.name} = ($receiver) => $receiver[${JSON.stringify(target)}];`;
+      case "set":
+        return `const ${s.name} = _curry(2, ($receiver, $value) => ($receiver[${JSON.stringify(target)}] = $value));`;
+      case "new": {
+        const arity = typeExprArity(s.typeExpr);
+        const args = Array.from({ length: arity }, (_, i) => `$a${i}`).join(", ");
+        if (s.imported) {
+          const raw = `$${s.name}`;
+          const importLine = `import { ${s.imported} as ${raw} } from ${JSON.stringify(target)};`;
+          const ctor = `new ${raw}(${args})`;
+          return arity === 0
+            ? `${importLine}\nconst ${s.name} = () => ${ctor};`
+            : `${importLine}\nconst ${s.name} = _curry(${arity}, (${args}) => ${ctor});`;
+        }
         return arity === 0
-          ? `${importLine}\nconst ${s.name} = () => ${ctor};`
-          : `${importLine}\nconst ${s.name} = _curry(${arity}, (${args}) => ${ctor});`;
+          ? `const ${s.name} = () => new ${global}();`
+          : `const ${s.name} = _curry(${arity}, (${args}) => new ${global}(${args}));`;
       }
-      return arity === 0
-        ? `const ${s.name} = () => new ${global}();`
-        : `const ${s.name} = _curry(${arity}, (${args}) => new ${global}(${args}));`;
     }
     const arity = typeExprArity(s.typeExpr);
     const args = Array.from({ length: Math.max(0, arity - 1) }, (_, i) => `$a${i}`).join(", ");

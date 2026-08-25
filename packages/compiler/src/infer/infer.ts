@@ -486,9 +486,9 @@ function inferExpr(e: Expr, ctx: Ctx): Result<Type, Diagnostic> {
     .with({ kind: "call" }, (call) => inferCall(call, ctx))
     .with({ kind: "pipe", fast: true }, (pipe) => {
       const right = pipe.right;
-      if (right.kind !== "call")
-        return err(typeErr("internal: fast pipe rhs is not a call", pipe.span));
-      return infer({ ...right, args: [pipe.left, ...right.args], span: pipe.span }, ctx);
+      return right.kind !== "call"
+        ? err(typeErr("internal: fast pipe rhs is not a call", pipe.span))
+        : infer({ ...right, args: [pipe.left, ...right.args], span: pipe.span }, ctx);
     })
     .with({ kind: "pipe" }, (pipe) =>
       infer({ kind: "call", fn: pipe.right, args: [pipe.left], span: pipe.span }, ctx),
