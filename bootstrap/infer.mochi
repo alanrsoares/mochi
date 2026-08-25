@@ -207,7 +207,7 @@ let bindParamsFrom = (params, env, st) => switch params {
 // Lambda parameter annotations constrain the fresh parameter type before the
 // body is inferred. One `vars` map shares lowercase type variables across a
 // lambda's parameter annotations, matching the TS backend.
-let constrainParamAnnotsFrom = (params, paramTypes, vars, ctx, st) => switch params {
+let constrainParamAnnotsFrom = (ctx, params, paramTypes, vars, st) => switch params {
   | [] => Ok(st)
   | [param, ...rest] => switch paramTypes {
       | [] => Ok(st)
@@ -220,8 +220,8 @@ let constrainParamAnnotsFrom = (params, paramTypes, vars, ctx, st) => switch par
               Set.fromArray([])
             ) in
             let? st2 = u(paramT, annotT, st1, annotSpan(te)) in
-              constrainParamAnnotsFrom(rest, restTypes, vars1, ctx, st2)
-          | _ => constrainParamAnnotsFrom(rest, restTypes, vars, ctx, st)
+              ctx->constrainParamAnnotsFrom(rest, restTypes, vars1, st2)
+          | _ => ctx->constrainParamAnnotsFrom(rest, restTypes, vars, st)
         }
     }
 }
@@ -264,7 +264,7 @@ let ctxWithLoop = (ctx, env, frame) =>
 // `recur` rebinds them, so generalizing would let iterations disagree.
 let inferLoopParamsFrom = (params, i, ctx, envAcc, frameAcc, st) => switch Array.get(i, params) {
   | None => Ok((frameAcc, envAcc, st))
-  | Some(p) => let? (t, st1) = inferExpr(p.init, ctx, st) in
+  | Some(p) => let? (t, st1) = ctx->inferExpr(p.init, st) in
       inferLoopParamsFrom(
         params,
         i + 1,
@@ -277,7 +277,7 @@ let inferLoopParamsFrom = (params, i, ctx, envAcc, frameAcc, st) => switch Array
 
 let unifyRecurArgsFrom = (args, frame, i, ctx, st) => switch Array.get(i, args) {
   | None => Ok(st)
-  | Some(a) => let? (at, st1) = inferExpr(a, ctx, st) in
+  | Some(a) => let? (at, st1) = ctx->inferExpr(a, st) in
       switch Array.get(i, frame) {
         | None => unifyRecurArgsFrom(args, frame, i + 1, ctx, st1)
         | Some(pt) => let? st2 = u(at, pt, st1, exprSpan(a)) in
@@ -295,14 +295,14 @@ let inferRecur = (args, sp, ctx, st) => switch ctx.loopStack {
 
 let inferCallArgs = (fnT, args, ctx, st, callSpan) => switch args {
   | [] => Ok((fnT, st))
-  | [arg, ...rest] => let? (argT, st1) = inferExpr(arg, ctx, st) in
+  | [arg, ...rest] => let? (argT, st1) = ctx->inferExpr(arg, st) in
     let (resultT, st2) = freshVar(st1) in
     let? st3 = u(fnT, tArrow(argT, resultT), st2, exprSpan(arg)) in
       inferCallArgs(resultT, rest, ctx, st3, callSpan)
 }
 
 let inferNormalCall = (fn, args, ctx, st) =>
-  let? (fnT, st1) = inferExpr(fn, ctx, st) in
+  let? (fnT, st1) = ctx->inferExpr(fn, st) in
     switch args {
       | [] => let (resultT, st2) = freshVar(st1) in
         let? st3 = u(fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)) in
@@ -311,16 +311,16 @@ let inferNormalCall = (fn, args, ctx, st) =>
     }
 
 let inferTernary = (cond, thenE, elseE, ctx, st) =>
-  let? (condT, st1) = inferExpr(cond, ctx, st) in
+  let? (condT, st1) = ctx->inferExpr(cond, st) in
   let? st2 = u(condT, tBool, st1, exprSpan(cond)) in
-  let? (thenT, st3) = inferExpr(thenE, ctx, st2) in
-  let? (elseT, st4) = inferExpr(elseE, ctx, st3) in
+  let? (thenT, st3) = ctx->inferExpr(thenE, st2) in
+  let? (elseT, st4) = ctx->inferExpr(elseE, st3) in
   let? st5 = u(thenT, elseT, st4, exprSpan(elseE)) in Ok((thenT, st5))
 
 // `let?` / `let!` p = value in body — Result / Task monadic bind, both a
 // two-slot monad `M a e` (ADR 0005, error channel per ADR 0006).
 let inferLetBind = (param, paramSpan, monad, value, body, ctx, st) =>
-  let? (valT, st1) = inferExpr(value, ctx, st) in
+  let? (valT, st1) = ctx->inferExpr(value, st) in
   let (payloadT, st2) = freshVar(st1) in
   let (errT, st3) = freshVar(st2) in
   let ctorName = monad == "Result" ? "Result" : "Task" in
@@ -328,7 +328,7 @@ let inferLetBind = (param, paramSpan, monad, value, body, ctx, st) =>
   let? st4 = u(valT, wantVal, st3, exprSpan(value)) in
   let (paramT, bodyEnv, st5) = bindParam(param, ctx.env, st4) in
   let? st6 = u(paramT, payloadT, st5, paramSpan) in
-  let? (bodyT, st7) = inferExpr(body, ctxWithEnv(ctx, bodyEnv), st6) in
+  let? (bodyT, st7) = ctxWithEnv(ctx, bodyEnv)->inferExpr(body, st6) in
   let (resT, st8) = freshVar(st7) in
   let wantBody = tCon(ctorName, [resT, errT]) in
   let? st9 = u(bodyT, wantBody, st8, exprSpan(body)) in Ok((wantBody, st9))
@@ -340,7 +340,7 @@ let inferRecordRow = (fields, ctx, st) => switch fields {
     // loop) so side effects on shared open rows via field access land in
     // the same order — row DISPLAY order still follows declaration order.
     let? (restRow, st1) = inferRecordRow(rest, ctx, st) in
-    let? (ft, st2) = inferExpr(f.value, ctx, st1) in
+    let? (ft, st2) = ctx->inferExpr(f.value, st1) in
       Ok((rExtend(f.name, ft, restRow), st2))
 }
 
@@ -363,7 +363,7 @@ let rWithTail = (row, tail) => switch row {
 // with `name` in it, unless target is a bare namespace ref (`List.map`) —
 // then it's a qualified lookup into ctx.ns, not row inference.
 let inferFieldAccess = (target, name, sp, ctx, st) =>
-  let? (targetT, st1) = inferExpr(target, ctx, st) in
+  let? (targetT, st1) = ctx->inferExpr(target, st) in
   let (fieldT, st2) = freshVar(st1) in
   let (restRow, st3) = freshRowVar(st2) in
   let? st4 = u(targetT, tRecord(rExtend(name, fieldT, restRow)), st3, sp) in
@@ -379,14 +379,14 @@ let inferNsField = (tname, name, sp, ctx, st) => switch Map.get(name, Map.getOr(
 let inferInterpParts = (parts, ctx, st) => switch parts {
   | [] => Ok(st)
   | [Ast.IPLit(_), ...rest] => inferInterpParts(rest, ctx, st)
-  | [Ast.IPExpr(ex), ...rest] => let? (t, st1) = inferExpr(ex, ctx, st) in
+  | [Ast.IPExpr(ex), ...rest] => let? (t, st1) = ctx->inferExpr(ex, st) in
     let? st2 = u(t, tString, st1, exprSpan(ex)) in
       inferInterpParts(rest, ctx, st2)
 }
 
 let inferTupleElems = (elements, ctx, st) => switch elements {
   | [] => Ok(([], st))
-  | [el, ...rest] => let? (t, st1) = inferExpr(el, ctx, st) in
+  | [el, ...rest] => let? (t, st1) = ctx->inferExpr(el, st) in
     let? (restTs, st2) = inferTupleElems(rest, ctx, st1) in
       Ok((Array.prepend(t, restTs), st2))
 }
@@ -399,7 +399,7 @@ let seqElemExpr = el => switch el {
 let inferSeqSlotsElems = (con, elem, elements, ctx, st) => switch elements {
   | [] => Ok(st)
   | [slot, ...rest] => let ex = seqElemExpr(slot) in
-    let? (et, st1) = inferExpr(ex, ctx, st) in
+    let? (et, st1) = ctx->inferExpr(ex, st) in
     let want = switch slot {
       | Ast.SEExpr(_) => elem
       | Ast.SESpread(_) => tCon(con, [elem])
@@ -414,9 +414,9 @@ let inferSeqSlots = (con, elements, ctx, st) =>
 
 let inferMapEntries = (k, v, entries, ctx, st) => switch entries {
   | [] => Ok(st)
-  | [ent, ...rest] => let? (kt, st1) = inferExpr(ent.key, ctx, st) in
+  | [ent, ...rest] => let? (kt, st1) = ctx->inferExpr(ent.key, st) in
     let? st2 = u(k, kt, st1, exprSpan(ent.key)) in
-    let? (vt, st3) = inferExpr(ent.value, ctx, st2) in
+    let? (vt, st3) = ctx->inferExpr(ent.value, st2) in
     let? st4 = u(v, vt, st3, exprSpan(ent.value)) in
       inferMapEntries(k, v, rest, ctx, st4)
 }
@@ -463,19 +463,19 @@ let inferArms = (scrutT, resultT, arms, ctx, st) => switch arms {
     let armCtx = ctxWithEnv(ctx, mergeEnvBindings(bindings, ctx.env)) in
     let? st3 = switch arm.guard {
       | None => Ok(st2)
-      | Some(g) => let? (guardT, stg) = inferExpr(g, armCtx, st2) in
+      | Some(g) => let? (guardT, stg) = armCtx->inferExpr(g, st2) in
           u(tBool, guardT, stg, exprSpan(g))
     } in
-    let? (bodyT, st4) = inferExpr(arm.body, armCtx, st3) in
+    let? (bodyT, st4) = armCtx->inferExpr(arm.body, st3) in
     let? st5 = u(resultT, bodyT, st4, exprSpan(arm.body)) in
       inferArms(scrutT, resultT, rest, ctx, st5)
 }
 let inferMatch = (scrutinee, arms, ctx, st) =>
-  let? (scrutT, st1) = inferExpr(scrutinee, ctx, st) in
+  let? (scrutT, st1) = ctx->inferExpr(scrutinee, st) in
   let (resultT, st2) = freshVar(st1) in
   let? st3 = inferArms(scrutT, resultT, arms, ctx, st2) in Ok((resultT, st3))
 
-let inferExpr = (e, ctx, st) => switch e {
+let inferExpr = (ctx, e, st) => switch e {
   | Ast.ENum(_, _, _) => Ok((tNumber, st))
   | Ast.EUnit(_) => Ok((tUnit, st))
   | Ast.EBool(_, _) => Ok((tBool, st))
@@ -491,8 +491,8 @@ let inferExpr = (e, ctx, st) => switch e {
       ctx.env,
       st
     ) in
-    let? st2 = constrainParamAnnotsFrom(params, paramTypes, #{}, ctx, st1) in
-    let? (bodyT, st3) = inferExpr(body, ctxWithEnv(ctx, bodyEnv), st2) in
+    let? st2 = ctx->constrainParamAnnotsFrom(params, paramTypes, #{}, st1) in
+    let? (bodyT, st3) = ctxWithEnv(ctx, bodyEnv)->inferExpr(body, st2) in
       Ok((arrowChain(paramTypes, bodyT), st3))
   | Ast.ELetIn(name, _nameSpan, value, body, _span) => switch value {
       | Ast.ELambda(_, _, _) =>
@@ -507,10 +507,11 @@ let inferExpr = (e, ctx, st) => switch e {
           ctx,
           st
         ) in
-          inferExpr(tail, localCtx, localSt)
-      | _ => let? (valT, st1) = inferExpr(value, ctx, st) in
+          localCtx->inferExpr(tail, localSt)
+      | _ => let? (valT, st1) = ctx->inferExpr(value, st) in
         let sc = generalize(ctx.env, valT, st1) in
-          inferExpr(body, ctxWithEnv(ctx, Map.set(name, sc, ctx.env)), st1)
+        let $ctx = ctxWithEnv(ctx, Map.set(name, sc, ctx.env)) in
+          $ctx->inferExpr(body, st1)
     }
   | Ast.ELetBind(param, paramSpan, monad, value, body, _) => inferLetBind(
       param,
@@ -522,7 +523,7 @@ let inferExpr = (e, ctx, st) => switch e {
       st
     )
   | Ast.ECall(fn, args, origin, _) => let api = {
-      inferExpr: (e, st0) => inferExpr(e, ctx, st0),
+      inferExpr: (e, st0) => ctx->inferExpr(e, st0),
       unify: u
     } in
     let? claimed = runInferCallHooks(
@@ -537,9 +538,8 @@ let inferExpr = (e, ctx, st) => switch e {
         | Some(r) => Ok(r)
         | None => inferNormalCall(fn, args, ctx, st)
       }
-  | Ast.EPipe(left, right, sp) => inferExpr(
+  | Ast.EPipe(left, right, sp) => ctx->inferExpr(
       Ast.ECall(right, [left], None, sp),
-      ctx,
       st
     )
   | Ast.EDo(exprs, _) => inferDo(exprs, ctx, st)
@@ -559,7 +559,7 @@ let inferExpr = (e, ctx, st) => switch e {
         // tail). Result type = base type — fields are replaced in-kind, so a
         // wrong-typed value or a field absent from a closed base fails to unify.
         let? (row, st1) = inferRecordRow(fields, ctx, st) in
-        let? (baseT, st2) = inferExpr(spreadExpr, ctx, st1) in
+        let? (baseT, st2) = ctx->inferExpr(spreadExpr, st1) in
         let (tailVar, st3) = freshRowVar(st2) in
         let? st4 = u(baseT, tRecord(rWithTail(row, tailVar)), st3, sp) in
           Ok((baseT, st4))
@@ -589,7 +589,7 @@ let inferExpr = (e, ctx, st) => switch e {
       [],
       st
     ) in
-      inferExpr(body, ctxWithLoop(ctx, bodyEnv, frame), st1)
+      inferExpr(ctxWithLoop(ctx, bodyEnv, frame), body, st1)
   | Ast.ERecur(args, sp) => inferRecur(args, sp, ctx, st)
   | Ast.EInterp(parts, _) => let? st1 = inferInterpParts(parts, ctx, st) in
       Ok((tString, st1))
@@ -597,8 +597,8 @@ let inferExpr = (e, ctx, st) => switch e {
 
 let inferDo = (exprs, ctx, st) => switch exprs {
   | [] => Err(typeErr("internal: empty do block", { start: 0, end: 0 }))
-  | [last] => inferExpr(last, ctx, st)
-  | [first, ...rest] => let? (_, st1) = inferExpr(first, ctx, st) in
+  | [last] => ctx->inferExpr(last, st)
+  | [first, ...rest] => let? (_, st1) = ctx->inferExpr(first, st) in
       inferDo(rest, ctx, st1)
 }
 
@@ -1220,9 +1220,8 @@ let preBindGroupFrom = (group, env, st) => switch group {
 let inferGroupFrom = (group, ctx, st) => switch group {
   | [] => Ok((#{}, st))
   | [s, ...rest] => switch s {
-      | Ast.SLet(name, _, annot, value, _, _, span) => let? (t, st1) = inferExpr(
+      | Ast.SLet(name, _, annot, value, _, _, span) => let? (t, st1) = ctx->inferExpr(
           value,
-          ctx,
           st
         ) in
           switch Map.get(name, ctx.env) {
