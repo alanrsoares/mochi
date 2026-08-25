@@ -493,7 +493,7 @@ let inferExpr = (e, ctx, st) => switch e {
     let? st2 = constrainParamAnnotsFrom(params, paramTypes, #{}, ctx, st1) in
     let? (bodyT, st3) = inferExpr(body, ctxWithEnv(ctx, bodyEnv), st2) in
       Ok((arrowChain(paramTypes, bodyT), st3))
-  | Ast.ELetIn(name, nameSpan, value, body, span) => switch value {
+  | Ast.ELetIn(name, _, value, body, _) => switch value {
       | Ast.ELambda(_, _, _) =>
         // Adjacent lambda locals share the top-level SCC machinery (ADR 0067):
         // pre-bind monomorphically, infer dependency-first, then generalize.
