@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { type Env, inferProgram, showScheme } from "@mochi/compiler/infer";
 import { lex } from "@mochi/compiler/lexer";
 import { parse } from "@mochi/compiler/parser";
+import { preludeEnv } from "@mochi/compiler/prelude";
 import { type Type, tArrow, tBool, tNumber } from "@mochi/compiler/types";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 
@@ -206,4 +207,23 @@ test("arity mismatch hints at a missing argument", () => {
     expect(msg).toContain("cannot unify");
     expect(msg).toContain("a call may be missing an argument");
   }
+});
+
+const inferPrelude = (src: string) => inferProgram(unwrapOk(parse(unwrapOk(lex(src)))), preludeEnv);
+
+test("fast pipe binds tighter than ++ (ADR 0073)", () => {
+  const src = `let gen = (c, n) => "ok"
+let ctx = { x: 1 }
+let s = "hi" ++ ctx->gen(1)`;
+  expect(isErr(inferPrelude(src))).toBe(false);
+});
+
+test("concat-first grouping still needs parens around ++", () => {
+  const src = `let gen = (c, n) => c.x
+let ctx = { x: 1 }
+let s = ("hi" ++ ctx)->gen(1)`;
+  const r = inferPrelude(src);
+  expect(isErr(r)).toBe(true);
+  if (!isErr(r)) return;
+  expect(unwrapErr(r)[0]!.message).toContain("cannot unify");
 });

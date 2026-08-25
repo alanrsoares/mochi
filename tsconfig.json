@@ -29,5 +29,5 @@
   },
   // The vscode extension client (editors/**) is bundled by esbuild and relies on
   // editor-host ambient types; keep it out of the compiler's type gate.
-  "include": ["test", "packages/*/src", "examples/**/*.mts"]
+  "include": ["scripts", "test", "packages/*/src", "examples/**/*.mts"]
 }

@@ -2,9 +2,9 @@
 // Default: rewrite each file in place. `--check`: exit non-zero if any file
 // isn't already formatted (the QA-gate mode).
 import { readFileSync, writeFileSync } from "node:fs";
-import { isErr, unwrapOk } from "@onrails/result";
-import { format } from "@mochi/dx/format";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
+import { format } from "@mochi/dx/format";
+import { isErr, unwrapOk } from "@onrails/result";
 import { docsVendorPlugins } from "../apps/docs/mochi.plugins";
 import { snakeVendorPlugins } from "../examples/snake/mochi.plugins";
 
@@ -28,7 +28,7 @@ for (const f of files) {
   const src = readFileSync(f, "utf8");
   const r = format(src, { plugins: pluginsFor(f) });
   if (isErr(r)) {
-    console.error(`format error in ${f}: ${r.error.kind}: ${r.error.message}`);
+    console.error(`format error in ${f}: ${r.error.map((e) => e.message).join("; ")}`);
     process.exit(1);
   }
   const out = unwrapOk(r);

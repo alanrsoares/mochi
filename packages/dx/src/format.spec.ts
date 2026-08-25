@@ -354,6 +354,13 @@ test("short ++ chains stay inline", () => {
   expect(fmt('let a = "hi" ++ " " ++ "there"')).toBe('let a = "hi" ++ " " ++ "there"\n');
 });
 
+test("fast pipe binds tighter than ++ so fmt drops redundant pipe parens (ADR 0073)", () => {
+  expect(fmt('let s = "hi" ++ ctx->gen(1)')).toBe('let s = "hi" ++ ctx->gen(1)\n');
+  expect(fmt('let s = "hi" ++ (ctx->gen(1))')).toBe('let s = "hi" ++ ctx->gen(1)\n');
+  expect(fmt('let s = ("hi" ++ ctx)->gen(1)')).toBe('let s = ("hi" ++ ctx)->gen(1)\n');
+  expect(fmt("let r = 1 + 2 |> f")).toBe("let r = 1 + 2 |> f\n");
+});
+
 test("long ++ chains break one fragment per line", () => {
   const src =
     'let a = "((_it) => { const _b = []; let _done = false; " ++ "const _pull = (_n) => { while (_b.length < _n && !_done) { const _s = _it.next(); " ++ "if (_s.done) _done = true; else _b.push(_s.value); } return _b.length >= _n; };"';

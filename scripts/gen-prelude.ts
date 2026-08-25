@@ -14,8 +14,7 @@
 // infer.mochi's OWN constructors (compiled + evaluated here, exactly as the
 // differential test does) so the embedded data can never drift from the shape
 // the bootstrap inferrer expects.
-import { match } from "@onrails/pattern";
-import { unwrapOk } from "@onrails/result";
+
 import { compile } from "@mochi/compiler/compile";
 import {
   namespaceRuntime,
@@ -25,6 +24,8 @@ import {
   runtimeDeps,
 } from "@mochi/compiler/prelude";
 import type { Row, Type } from "@mochi/compiler/types";
+import { match } from "@onrails/pattern";
+import { unwrapOk } from "@onrails/result";
 
 export const SHIM_PATH = "bootstrap/prelude.gen.mjs";
 

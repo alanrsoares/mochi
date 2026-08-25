@@ -11,8 +11,8 @@ import { ResultAsync } from "@onrails/result";
 import preact from "@preact/preset-vite";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, type Plugin } from "vite";
-import { docsVendorPlugins } from "./mochi.plugins";
-import { headChromeHtml } from "./src/lib/head-chrome";
+import { docsVendorPlugins } from "./mochi.plugins.ts";
+import { headChromeHtml } from "./src/lib/head-chrome.ts";
 
 const repoRoot = path.resolve(import.meta.dirname, "../..");
 const pluginsFile = path.resolve(import.meta.dirname, "mochi.plugins.ts");

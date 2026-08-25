@@ -446,10 +446,14 @@ const pipeSegments = (e: Expr): Expr[] =>
 
 /** Inline when it fits, else one `|> stage` per line indented under the head. */
 const pipeD = (e: PipeExpr): Doc => {
-  if (e.fast && e.right.kind === "call") return seq(operandD(e.left), txt("->"), callD(e.right));
+  if (e.fast && e.right.kind === "call")
+    return seq(pipeLeftD(e.left, FAST_PIPE_PREC), txt("->"), callD(e.right));
   const [head, ...rest] = pipeSegments(e);
   return group(
-    seq(operandD(head!), indent(cat(rest.map((s) => seq(line, txt("|> "), operandD(s)))))),
+    seq(
+      pipeLeftD(head!, PIPE_PREC),
+      indent(cat(rest.map((s) => seq(line, txt("|> "), operandD(s))))),
+    ),
   );
 };
 
@@ -619,6 +623,8 @@ const fieldD = (e: FieldExpr): Doc => seq(memberD(e.target), txt(`.${e.name}`));
  * exactly so a nested operator call gets parens only when omitting them
  * would reparse to a different tree.
  */
+const PIPE_PREC = 5;
+const FAST_PIPE_PREC = 21;
 const BIN_OPS: Record<string, { symbol: string; prec: number }> = {
   or: { symbol: "||", prec: 7 },
   and: { symbol: "&&", prec: 7 },
@@ -642,6 +648,9 @@ const binOpOf = (e: Expr): { symbol: string; prec: number } | null =>
     ? null
     : (BIN_OPS[e.fn.name] ?? null);
 
+const pipePrecOf = (e: Expr): number | null =>
+  e.kind === "pipe" ? (e.fast ? FAST_PIPE_PREC : PIPE_PREC) : null;
+
 /**
  * `!=` desugars to `not(eq(a, b))`; an explicit `!(a == b)` desugars to the
  * exact same shape, so folding either back to `!=` is a deliberate (lossy)
@@ -659,12 +668,26 @@ const neqOperands = (e: Expr): [Expr, Expr] | null => {
     : [inner.args[0]!, inner.args[1]!];
 };
 
+const infixPrec = (e: Expr): number | null =>
+  pipePrecOf(e) ?? binOpOf(e)?.prec ?? (neqOperands(e) ? NEQ_PREC : null);
+
 const binOperandD = (e: Expr, parentPrec: number, isRight: boolean): Doc => {
-  const info = binOpOf(e) ?? (neqOperands(e) ? { symbol: "!=", prec: NEQ_PREC } : null);
+  const prec = infixPrec(e);
   const needsParens =
-    e.kind === "lambda" || e.kind === "ternary" || e.kind === "pipe"
+    e.kind === "lambda" || e.kind === "ternary"
       ? true
-      : info !== null && (isRight ? info.prec <= parentPrec : info.prec < parentPrec);
+      : prec !== null && (isRight ? prec <= parentPrec : prec < parentPrec);
+  return parenIf(needsParens, exprD(e));
+};
+
+/**
+ * Parenthesize a pipe's left when dropping parens would reparse: a looser
+ * infix (`(a ++ b)->f`), a nested pipe, or a lambda/ternary.
+ */
+const pipeLeftD = (e: Expr, parentPrec: number): Doc => {
+  const prec = infixPrec(e);
+  const needsParens =
+    e.kind === "lambda" || e.kind === "ternary" ? true : prec !== null && prec < parentPrec;
   return parenIf(needsParens, exprD(e));
 };
 

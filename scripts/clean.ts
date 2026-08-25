@@ -1,5 +1,5 @@
 // Remove ignored build / emit / scratch artifacts (see .gitignore).
-import { unlinkSync, rmSync, existsSync } from "node:fs";
+import { existsSync, rmSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { Glob } from "bun";
 
@@ -25,7 +25,11 @@ for (const d of dirs) {
   n++;
 }
 
-for await (const p of new Glob("test/.mochi-cli-*").scan({ cwd: root, absolute: true, onlyFiles: false })) {
+for await (const p of new Glob("test/.mochi-cli-*").scan({
+  cwd: root,
+  absolute: true,
+  onlyFiles: false,
+})) {
   rmSync(p, { recursive: true, force: true });
   console.error(`  rm ${p.slice(root.length + 1)}/`);
   n++;

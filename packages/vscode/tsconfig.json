@@ -2,6 +2,9 @@
   "compilerOptions": {
     "lib": ["ESNext"],
     "target": "ESNext",
+    // TS 7 does not pick up symlinked `node_modules/@types` automatically under
+    // bun installs — name the extension host's ambient types explicitly.
+    "types": ["node"],
     "module": "Preserve",
     "moduleDetection": "force",
     "moduleResolution": "bundler",

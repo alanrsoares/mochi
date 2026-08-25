@@ -407,6 +407,9 @@ let CONCAT_BP = 10
 let ADD_BP = 10
 let BACKTICK_BP = 15
 let MUL_BP = 20
+// Method-call tightness (ADR 0073): above every infix so `a ++ x->f(y)` is
+// `a ++ f(x, y)`. `|>` stays PIPE_BP (pipeline-loose).
+let FAST_PIPE_BP = 21
 
 // `fnName(left, right)`, desugared infix call — every binary operator below
 // (except `>>`, whose desugaring is a lambda, and `!=`, which wraps this in
@@ -543,7 +546,7 @@ let parseInfix = (minBp, left, toks, pos, hooks) =>
             matched: true
           }
         )
-      : lt.tok == TTarrow && PIPE_BP >= minBp
+      : lt.tok == TTarrow && FAST_PIPE_BP >= minBp
       ? let? (right, p) = parseAtomOrCall(toks, pos + 1, hooks) in
         switch right {
           | Ast.ECall(fn, args, origin, rightSpan) => Ok(

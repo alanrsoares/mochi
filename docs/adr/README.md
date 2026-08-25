@@ -117,6 +117,7 @@ What else was on the table and why not.
 | [0070](0070-lsp-unused-locals.md) | Unused local bindings are LSP warnings | Accepted |
 | [0071](0071-do-notation.md) | `do` is the canonical sequencing expression | Accepted |
 | [0072](0072-use-open-directive.md) | Open-world mode uses a header directive | Accepted |
+| [0073](0073-fast-pipe-precedence.md) | Fast pipe is method-call tight (above every infix) | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

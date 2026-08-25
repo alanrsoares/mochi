@@ -10,7 +10,7 @@ extern hoverAt<A> : string -> number -> Option<A> = "@mochi/dx/hover" "hoverAtOp
 type SpanTok = { text: string, kind: string, start: number }
 
 let keywords = Set.fromArray(
-  ["let", "type", "extern", "switch", "import", "export"]
+  ["let", "type", "extern", "switch", "loop", "recur", "do", "import", "export"]
 )
 let strings = Set.fromArray(["str", "tmplstart", "tmplmid", "tmplend"])
 let ops = Set.fromArray(

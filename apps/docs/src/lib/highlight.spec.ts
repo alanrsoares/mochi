@@ -24,6 +24,30 @@ test("generic angle brackets highlight as punctuation, not JSX", () => {
   ).toEqual(["punctuation", "punctuation"]);
 });
 
+test("do, loop, and recur highlight as keywords", () => {
+  const source = readRepo(import.meta.url, "apps/docs/src/lib/highlight.mochi");
+  const js = unwrapOk(compile(source))
+    .replace(/^import .*$/gm, "")
+    .replace(/^export /gm, "");
+  const api = new Function("match", "lex", "$hoverAt", `${js}\nreturn { highlightMochiCode };`)(
+    match,
+    lex,
+    () => null,
+  ) as {
+    highlightMochiCode: (code: string) => { text: string; kind: string }[];
+  };
+
+  const spans = api.highlightMochiCode(
+    "let count = n => loop (i = 0) { i >= n ? do { i } : recur(i + 1) }",
+  );
+  const kinds = Object.fromEntries(
+    spans
+      .filter((span) => ["do", "loop", "recur"].includes(span.text))
+      .map((span) => [span.text, span.kind]),
+  );
+  expect(kinds).toEqual({ do: "keyword", loop: "keyword", recur: "keyword" });
+});
+
 test("highlights a stack-sized token stream iteratively", () => {
   const source = readRepo(import.meta.url, "apps/docs/src/lib/highlight.mochi");
   const js = unwrapOk(compile(source))

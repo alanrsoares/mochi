@@ -5,6 +5,7 @@
     "includes": [
       "test/**/*.ts",
       "*.ts",
+      "scripts/**/*.ts",
       "apps/docs/src/**/*.ts",
       "apps/docs/src/**/*.tsx",
       "apps/docs/*.ts",
@@ -69,6 +70,14 @@
         "./biome/plugins/prefer-immutable-arrays.grit",
         "./biome/plugins/prefer-immutable-objects.grit"
       ]
+    },
+    {
+      "includes": ["scripts/**"],
+      "linter": {
+        "rules": {
+          "suspicious": { "noConsole": "off" }
+        }
+      }
     },
     {
       "includes": ["apps/docs/**"],

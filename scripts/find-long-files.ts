@@ -16,12 +16,11 @@ for (const pattern of patterns) {
     files.push({ path, lines });
   }
 }
-files.sort((a, b) => b.lines - a.lines);
+const ranked = files.toSorted((a, b) => b.lines - a.lines);
 
-const tier = (n: number) =>
-  n >= SPLIT ? "SPLIT " : n >= WATCH ? "WATCH " : "ok    ";
+const tier = (n: number) => (n >= SPLIT ? "SPLIT " : n >= WATCH ? "WATCH " : "ok    ");
 
-const shown = showAll ? files : files.filter((f) => f.lines >= WATCH);
+const shown = showAll ? ranked : ranked.filter((f) => f.lines >= WATCH);
 
 if (shown.length === 0) {
   console.log(`No files over ${WATCH} lines. All source files stay focused.`);

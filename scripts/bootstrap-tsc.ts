@@ -13,8 +13,8 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
-import { isErr } from "@onrails/result";
 import { buildModulesTs } from "@mochi/compiler/module";
+import { isErr } from "@onrails/result";
 
 const REPO = resolve(import.meta.dir, "..");
 const ENTRY = join(REPO, "bootstrap", "cli.mochi");
@@ -104,8 +104,7 @@ if (import.meta.main) {
   } else if (args.has("--list")) {
     for (const line of report.errors) console.log(line);
   } else {
-    const sorted = (rec: Record<string, number>) =>
-      Object.entries(rec).sort((a, b) => b[1] - a[1]);
+    const sorted = (rec: Record<string, number>) => Object.entries(rec).sort((a, b) => b[1] - a[1]);
     console.log("by code:");
     for (const [k, n] of sorted(report.byCode)) console.log(`  ${String(n).padStart(3)}  ${k}`);
     console.log("by file:");
