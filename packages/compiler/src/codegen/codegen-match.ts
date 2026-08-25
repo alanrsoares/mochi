@@ -14,6 +14,7 @@ import { type GenCtx, genExpr, genLambdaBody } from "./codegen-core";
 const isCatchAll = (p: Pattern): boolean =>
   p.kind === "pwild" ||
   p.kind === "pbind" ||
+  (p.kind === "pas" && isCatchAll(p.pat)) ||
   // `()` is irrefutable: `unit` has exactly one inhabitant, so the type decides.
   p.kind === "punit" ||
   (p.kind === "precord" && p.fields.every((f) => isCatchAll(f.pat))) ||
@@ -38,6 +39,10 @@ const keyedSlot = (key: string, sub: string): string => (sub === key ? key : `${
 
 const patSlot = (p: Pattern, ctx: GenCtx): string =>
   match(p)
+    .with({ kind: "pas" }, (pas) => {
+      const inner = patSlot(pas.pat, ctx);
+      return inner === "" ? pas.name : `${inner}, ${pas.name}`;
+    })
     .with({ kind: "pbind" }, (p) => p.name)
     .withOneOf(
       [
@@ -81,6 +86,7 @@ const patSlot = (p: Pattern, ctx: GenCtx): string =>
 
 const patConds = (p: Pattern, path: string, ctx: GenCtx): string[] =>
   match(p)
+    .with({ kind: "pas" }, (pas) => patConds(pas.pat, path, ctx))
     // `punit` needs no test: `unit` has exactly one inhabitant, so the type alone decides.
     .withOneOf(
       [{ kind: "pwild" }, { kind: "punit" }, { kind: "pbind" }, { kind: "plist" }],
@@ -123,7 +129,7 @@ const catchAllParam = (p: Pattern, ctx: GenCtx): string => {
   // a destructure: `[...all]` would copy the array and force a lazy List.
   if (p.kind === "parr" || p.kind === "plist")
     return p.rest?.kind === "pbind" ? `(${p.rest.name})` : "()";
-  const slot = patSlot(p, ctx);
+  const slot = p.kind === "pas" ? patSlot(p.pat, ctx) : patSlot(p, ctx);
   return slot === "" ? "()" : `(${slot})`;
 };
 
@@ -266,6 +272,7 @@ const isFlatSub = (p: Pattern): boolean =>
  */
 const patTarget = (p: Pattern, base: string, ctx: GenCtx): string =>
   match(p)
+    .with({ kind: "pas" }, (pas) => patTarget(pas.pat, base, ctx))
     .with({ kind: "pctor" }, (p) => {
       const member = `Extract<${base}, { _tag: ${JSON.stringify(p.ctor)} }>`;
       const keys = ctx.ctorKeys.get(p.ctor);
@@ -340,13 +347,16 @@ const genGuardArm = (
 ): string => {
   const root = base ? "_g" : "_v";
   const conds = patConds(p, root, ctx);
-  const slot = patSlot(p, ctx);
+  const slot = p.kind === "pas" ? patSlot(p.pat, ctx) : patSlot(p, ctx);
   if (guard)
     conds.push(
       slot === "" ? `(${genExpr(guard, ctx)})` : `((${slot}) => ${genExpr(guard, ctx)})(${root})`,
     );
   const test = conds.length ? conds.join(" && ") : "true";
-  const handler = `${slot === "" ? "()" : `(${slot})`} => ${genLambdaBody(body, ctx)}`;
+  const handler =
+    p.kind === "pas"
+      ? `(${p.name}) => ${slot === "" ? genLambdaBody(body, ctx) : `((${slot}) => ${genLambdaBody(body, ctx)})(${p.name})`}`
+      : `${slot === "" ? "()" : `(${slot})`} => ${genLambdaBody(body, ctx)}`;
   // Emit a type predicate ONLY when it actually refines (target ≠ base): a
   // whole-value pattern with no field narrowing (`[]`, `_ when g`) gains nothing
   // from `_v is base` and would trip TS2677 when `base` is a row-poly `{…} & R`
@@ -364,13 +374,13 @@ const genGuardArm = (
 /** A pattern refined by `genGuardArm`'s ctor/record/tuple/array/or handling — the subset `genWithArm` may still take the flat matcher-object fast path for. */
 type NarrowingPattern = Extract<
   Pattern,
-  { kind: "pctor" | "plit" | "pbool" | "pstr" | "precord" | "parr" | "ptuple" | "por" }
+  { kind: "pctor" | "plit" | "pbool" | "pstr" | "precord" | "parr" | "ptuple" | "por" | "pas" }
 >;
 
 const genWithArm = (p: NarrowingPattern, body: Expr, base: string | null, ctx: GenCtx): string =>
   match(p)
     // Array/tuple/or arms always take the guard form (not matcher-object-able).
-    .withOneOf([{ kind: "parr" }, { kind: "ptuple" }, { kind: "por" }], (p) =>
+    .withOneOf([{ kind: "parr" }, { kind: "ptuple" }, { kind: "por" }, { kind: "pas" }], (p) =>
       genGuardArm(p, body, undefined, base, ctx),
     )
     .withOneOf(

@@ -104,6 +104,7 @@ const forEachMatch = (e: Expr, visit: (m: MatchExpr) => void): void =>
 const isCatchAll = (p: Pattern): boolean =>
   p.kind === "pwild" ||
   p.kind === "pbind" ||
+  (p.kind === "pas" && isCatchAll(p.pat)) ||
   // `()` is irrefutable: `unit` has exactly one inhabitant, so the type decides (ADR 0054).
   p.kind === "punit" ||
   (p.kind === "precord" && p.fields.every((f) => isCatchAll(f.pat))) ||
@@ -144,6 +145,7 @@ function checkSeqExhaustive(m: MatchExpr): Diagnostic | null | undefined {
  */
 const checkPattern = (p: Pattern, reg: Registry, top: boolean): Diagnostic | null =>
   match(p)
+    .with({ kind: "pas" }, (pas) => checkPattern(pas.pat, reg, top))
     .with({ kind: "pctor" }, (pctor) => {
       const info = reg.ctor.get(pctor.ctor);
       if (!info) return checkErr(`unknown constructor '${pctor.ctor}'`, pctor.span);
@@ -215,6 +217,14 @@ const firstErr = (es: readonly (Diagnostic | null)[]): Diagnostic | null =>
  */
 const binderPaths = (p: Pattern, at: string, acc: Map<string, string>): Diagnostic | null =>
   match(p)
+    .with({ kind: "pas" }, (pas) => {
+      const e = binderPaths(pas.pat, at, acc);
+      if (e) return e;
+      if (acc.has(pas.name))
+        return checkErr(`pattern binds '${pas.name}' more than once`, pas.nameSpan);
+      acc.set(pas.name, at);
+      return null;
+    })
     .with({ kind: "pbind" }, (pbind) => {
       if (acc.has(pbind.name))
         return checkErr(`pattern binds '${pbind.name}' more than once`, pbind.span);
@@ -648,6 +658,9 @@ const checkParamBinds = (p: LamParam, span: Span): Diagnostic[] =>
 
 const checkPatBinds = (p: Pattern): Diagnostic[] =>
   match(p)
+    .with({ kind: "pas" }, (pas) =>
+      many(checkPatBinds(pas.pat), reservedBind(pas.name, pas.nameSpan)),
+    )
     .with({ kind: "pbind" }, (pbind) => many(reservedBind(pbind.name, pbind.span)))
     .with({ kind: "ptuple" }, (ptuple) => many(...ptuple.elems.map(checkPatBinds)))
     .with({ kind: "precord" }, (precord) =>

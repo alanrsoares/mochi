@@ -293,12 +293,15 @@ let parseParam = (toks, pos) => switch tokAt(toks, pos).tok {
     let? p2 = expectTok(TRparen, toks, p) in
       Ok(
         switch names {
-          | [single] => (Ast.LPName(single.name), p2)
+          | [single] => (Ast.LPName(single.name, None), p2)
           | many => (Ast.LPTuple(many |> map(n => n.name)), p2)
         }
       )
-  | _ => expectId(toks, pos)
-      |> Result.map(((nm, p)) => (Ast.LPName(nm.name), p))
+  | _ => let? (nm, p) = expectId(toks, pos) in
+      tokAt(toks, p).tok == TColon
+        ? parseTypeExpr(toks, p + 1)
+          |> Result.map(((annot, p2)) => (Ast.LPName(nm.name, Some(annot)), p2))
+        : Ok((Ast.LPName(nm.name, None), p))
 }
 
 let parseLambda = (toks, pos, hooks) =>
@@ -309,7 +312,7 @@ let parseLambda = (toks, pos, hooks) =>
           Ok(
             (
               Ast.ELambda(
-                [Ast.LPName(name)],
+                [Ast.LPName(name, None)],
                 body,
                 spanning(start, exprSpan(body))
               ),
@@ -458,7 +461,7 @@ let sectionLeft = (provided, opLt) =>
   let opSpan = spanOf(opLt) in
   let paramRef = Ast.ERef("$s", opSpan) in
     Ast.ELambda(
-      [Ast.LPName("$s")],
+      [Ast.LPName("$s", None)],
       sectionBody(opLt.tok, provided, paramRef, opSpan),
       spanning(exprSpan(provided), opSpan)
     )
@@ -472,7 +475,7 @@ let parseRightSection = (lparenSpan, toks, pos, hooks) =>
     Ok(
       (
         Ast.ELambda(
-          [Ast.LPName("$s")],
+          [Ast.LPName("$s", None)],
           sectionBody(lt.tok, paramRef, y, spanOf(lt)),
           toEnd(lparenSpan, toks, p2)
         ),
@@ -542,7 +545,7 @@ let parseInfix = (minBp, left, toks, pos, hooks) =>
         spanning(exprSpan(left), exprSpan(right))
       ) in
       let fn = Ast.ELambda(
-        [Ast.LPName("$x")],
+        [Ast.LPName("$x", None)],
         outerCall,
         spanning(exprSpan(left), exprSpan(right))
       ) in
@@ -793,9 +796,10 @@ let parseInterp = (toks, pos, hooks) =>
 
 let parseField = (toks, pos, hooks) =>
   let? (nm, p) = expectLabel(toks, pos) in
-  let? p2 = expectTok(TColon, toks, p) in
-  let? (value, p3) = parseExpr(toks, p2, hooks) in
-    Ok(({ name: nm.name, value: value }, p3))
+    tokAt(toks, p).tok == TColon
+      ? let? (value, p2) = parseExpr(toks, p + 1, hooks) in
+        Ok(({ name: nm.name, value: value }, p2))
+      : Ok(({ name: nm.name, value: Ast.ERef(nm.name, nm.span) }, p))
 
 // A leading `...base` (ADR 0021) makes this a record update: only one spread,
 // only at the front; any fields after it need a comma (mirrors src/parser.ts's
@@ -907,6 +911,7 @@ let patSpan = p => switch p {
   | Ast.PWild(sp) => sp
   | Ast.PUnit(sp) => sp
   | Ast.PBind(_, sp) => sp
+  | Ast.PAs(_, _, _, sp) => sp
   | Ast.PLit(_, _, sp) => sp
   | Ast.PBool(_, sp) => sp
   | Ast.PStr(_, sp) => sp
@@ -1006,7 +1011,7 @@ let parseCtorArgs = (ctor, ns, nameSpan, toks, pos) =>
       Ok((Ast.PCtor(ctor, args, ns, toEnd(nameSpan, toks, p2)), p2))
     : Ok((Ast.PCtor(ctor, [], ns, toEnd(nameSpan, toks, pos)), pos))
 
-let parsePattern = (toks, pos) =>
+let parsePatternAtom = (toks, pos) =>
   let lt = tokAt(toks, pos) in
   let sp = spanOf(lt) in
     switch lt.tok {
@@ -1050,6 +1055,19 @@ let parsePattern = (toks, pos) =>
           ? parseCtorArgs(name, None, sp, toks, pos + 1)
           : Ok((Ast.PBind(name, sp), pos + 1))
       | t => errAt("unexpected token in pattern: ${tokName(t)}", lt)
+    }
+
+let parsePattern = (toks, pos) =>
+  let? (pat, p) = parsePatternAtom(toks, pos) in
+    switch tokAt(toks, p).tok {
+      | TId("as") => let? (nm, p2) = expectId(toks, p + 1) in
+          Ok(
+            (
+              Ast.PAs(pat, nm.name, nm.span, spanning(patSpan(pat), nm.span)),
+              p2
+            )
+          )
+      | _ => Ok((pat, p))
     }
 
 // A `...` rest capture must bind a name or `_`.

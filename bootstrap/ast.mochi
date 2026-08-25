@@ -14,7 +14,7 @@ type Span = { start: number, end: number }
 type Name = { name: string, span: Span }
 
 export type LamParam =
-  | LPName(name: string)
+  | LPName(name: string, annot: Option<TypeExpr>)
   | LPRecord(fields: [string])
   | LPTuple(names: [string])
 
@@ -69,6 +69,7 @@ export type Pattern =
   // `()` — matches the sole inhabitant of `unit`, like any nullary variant ctor (ADR 0054).
   | PUnit(span: Span)
   | PBind(name: string, span: Span)
+  | PAs(pat: Pattern, name: string, nameSpan: Span, span: Span)
   | PLit(value: number, raw: string, span: Span)
   | PBool(value: bool, span: Span)
   | PStr(value: string, span: Span)

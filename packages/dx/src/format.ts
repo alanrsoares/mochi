@@ -72,7 +72,7 @@ const WIDTH = 80;
 
 const param = (p: LamParam): string =>
   p.kind === "name"
-    ? p.name
+    ? `${p.name}${p.annot ? `: ${typeExpr(p.annot)}` : ""}`
     : p.kind === "ptuple"
       ? `(${p.names.join(", ")})`
       : `{ ${p.fields.join(", ")} }`;
@@ -96,6 +96,7 @@ const interpText = (e: InterpExpr): string =>
 
 const pattern = (p: Pattern): string =>
   match(p)
+    .with({ kind: "pas" }, (p) => `${pattern(p.pat)} as ${p.name}`)
     .with({ kind: "pwild" }, () => "_")
     .with({ kind: "punit" }, () => "()")
     .with({ kind: "pbind" }, (p) => p.name)

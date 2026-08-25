@@ -208,7 +208,7 @@ let genList = (elements, ctx) =>
 
 // A lambda parameter lowers to JS: a name, or native object destructuring.
 let genParam = p => switch p {
-  | Ast.LPName(name) => name
+  | Ast.LPName(name, _) => name
   | Ast.LPTuple(names) => "[${Str.join(", ", names)}]"
   | Ast.LPRecord(fields) => "{ ${Str.join(", ", fields)} }"
 }
@@ -368,7 +368,7 @@ let genLambdaBody = (e, ctx) => switch e {
 
 // Every JS binding a lambda parameter introduces — a `const` may not reuse one.
 let paramNames = p => switch p {
-  | Ast.LPName(name) => [name]
+  | Ast.LPName(name, _) => [name]
   | Ast.LPTuple(names) => names
   | Ast.LPRecord(fields) => fields
 }
@@ -435,6 +435,7 @@ let genLambdaBodyIn = (e, ctx, bound) =>
 // A pattern always matches (-> `.otherwise`) when it binds without narrowing:
 // wildcard, plain name, or a record whose every field just binds.
 let isCatchAll = p => switch p {
+  | Ast.PAs(pat, _, _, _) => isCatchAll(pat)
   | Ast.PWild(_) => true
   | Ast.PUnit(_) =>
     // `()` is irrefutable: `unit` has exactly one inhabitant, so the type decides.
@@ -483,6 +484,8 @@ let precordEntries = (fields, i, ctx) => switch Array.get(i, fields) {
 }
 
 let patSlot = (p, ctx) => switch p {
+  | Ast.PAs(pat, name, _, _) => let inner = patSlot(pat, ctx) in
+      inner == "" ? name : "${inner}, ${name}"
   | Ast.PBind(name, _) => name
   | Ast.PWild(_) => ""
   | Ast.PUnit(_) => ""
@@ -547,6 +550,7 @@ let parrConds = (elems, i, path, ctx) => switch Array.get(i, elems) {
 }
 
 let patConds = (p, path, ctx) => switch p {
+  | Ast.PAs(pat, _, _, _) => patConds(pat, path, ctx)
   | Ast.PWild(_) => []
   | Ast.PUnit(_) =>
     // `PUnit` needs no test: `unit` has exactly one inhabitant, so the type alone decides.
@@ -756,6 +760,7 @@ let genGuardArm = (p, body, guardOpt, ctx) =>
 // primitive literal (the matcher compares values with `!==`, so only
 // primitives are meaningful there). Anything deeper routes to guard form.
 let isFlatSub = p => switch p {
+  | Ast.PAs(_, _, _, _) => false
   | Ast.PBind(_, _) => true
   | Ast.PWild(_) => true
   | Ast.PLit(_, _, _) => true
@@ -815,6 +820,7 @@ let ctorArgParts = (ctor, args, i, ctx) => switch Array.get(i, args) {
 }
 
 let genWithArm = (p, body, ctx) => switch p {
+  | Ast.PAs(_, _, _, _) => genGuardArm(p, body, None, ctx)
   | Ast.PArr(_, _, _) =>
     // Array/tuple/or arms always take guard form (not matcher-object-able).
     genGuardArm(p, body, None, ctx)

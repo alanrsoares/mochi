@@ -118,6 +118,7 @@ let patSpan = p => switch p {
   | Ast.PWild(sp) => sp
   | Ast.PUnit(sp) => sp
   | Ast.PBind(_, sp) => sp
+  | Ast.PAs(_, _, _, sp) => sp
   | Ast.PLit(_, _, sp) => sp
   | Ast.PBool(_, sp) => sp
   | Ast.PStr(_, sp) => sp
@@ -182,7 +183,7 @@ let bindParamFieldsFrom = (fields, env, row, st) => switch fields {
 }
 
 let bindParam = (p, env, st) => switch p {
-  | Ast.LPName(name) => let (t, st1) = freshVar(st) in
+  | Ast.LPName(name, _) => let (t, st1) = freshVar(st) in
       (t, Map.set(name, mono(t), env), st1)
   | Ast.LPTuple(names) => let (elems, env1, st1) = bindParamNamesFrom(
       names,
@@ -648,6 +649,12 @@ let inferSeqPat = (con, elems, restPat, ctx, st) =>
     }
 
 let inferPat = (p, ctx, st) => switch p {
+  | Ast.PAs(pat, name, _, _) => let? (t, bindings, st1) = inferPat(
+      pat,
+      ctx,
+      st
+    ) in
+      Ok((t, Map.set(name, t, bindings), st1))
   | Ast.PWild(_) => let (t, st1) = freshVar(st) in Ok((t, #{}, st1))
   | Ast.PUnit(_) => Ok((tUnit, #{}, st))
   | Ast.PLit(_, _, _) => Ok((tNumber, #{}, st))
@@ -731,6 +738,7 @@ let patternBindsOpt = rest => switch rest {
   | None => []
 }
 let patternBinds = p => switch p {
+  | Ast.PAs(pat, name, _, _) => Array.append(name, patternBinds(pat))
   | Ast.PBind(name, _) => [name]
   | Ast.PRecord(fields, _) => fields |> Array.flatMap(f => patternBinds(f.pat))
   | Ast.PCtor(_, args, _, _) => args |> Array.flatMap(patternBinds)
@@ -756,7 +764,7 @@ let addAllFrom = (names, set) => switch names {
 }
 
 let paramBound = (p, bound) => switch p {
-  | Ast.LPName(name) => Set.add(name, bound)
+  | Ast.LPName(name, _) => Set.add(name, bound)
   | Ast.LPTuple(names) => addAllFrom(names, bound)
   | Ast.LPRecord(fields) => addAllFrom(fields, bound)
 }

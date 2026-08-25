@@ -191,6 +191,8 @@ const cPat = (p: Pattern): Canon => {
       return { kind: "punit", span: cSpan(p.span) };
     case "pbind":
       return { kind: "pbind", name: p.name, span: cSpan(p.span) };
+    case "pas":
+      return { kind: "pas", pat: cPat(p.pat), name: p.name, span: cSpan(p.span) };
     case "plit":
       return { kind: "plit", value: p.value, raw: p.raw, span: cSpan(p.span) };
     case "pbool":

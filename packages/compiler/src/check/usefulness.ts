@@ -84,6 +84,7 @@ export const explode = (p: Pattern): readonly Pattern[] =>
 
 const toP = (p: Pattern): P =>
   match(p)
+    .with({ kind: "pas" }, (pas): P => toP(pas.pat))
     // `_` and a binding always match; `()` does too — `unit` has one inhabitant,
     // so the type decides and the pattern discriminates nothing (ADR 0054).
     .with({ kind: "pwild" }, (): P => WILD)

@@ -264,6 +264,14 @@ function inferRef(e: RefExpr, ctx: Ctx): Result<Type, Diagnostic> {
 function inferLambda(e: LambdaExpr, ctx: Ctx): Result<Type, Diagnostic> {
   const bodyEnv: Env = new Map(ctx.env);
   const paramTypes: Type[] = e.params.map((p) => bindParam(p, bodyEnv, ctx));
+  const annotVars = new Map<string, Type>();
+  for (let i = 0; i < e.params.length; i++) {
+    const p = e.params[i]!;
+    if (p.kind !== "name" || !p.annot) continue;
+    const declared = typeExprToType(p.annot, annotVars, ctx.fresh, ctx.typeScope);
+    const uni = u(paramTypes[i]!, declared, ctx, p.annot.span);
+    if (isErr(uni)) return uni;
+  }
   const bodyT = infer(e.body, { ...ctx, env: bodyEnv });
   if (isErr(bodyT)) return bodyT;
   // Nullary `() => T` is `unit -> T` (ADR 0014) — empty reduceRight would erase
@@ -531,6 +539,15 @@ function inferPattern(p: Pattern, ctx: Ctx): Result<PatResult, Diagnostic> {
 
 function inferPat(p: Pattern, ctx: Ctx): Result<PatResult, Diagnostic> {
   return match(p)
+    .with({ kind: "pas" }, (pas) => {
+      const sub = inferPattern(pas.pat, ctx);
+      return isErr(sub)
+        ? sub
+        : ok({
+            type: sub.value.type,
+            bindings: new Map([...sub.value.bindings, [pas.name, sub.value.type]]),
+          });
+    })
     .with({ kind: "pwild" }, () => ok({ type: freshVar(ctx.fresh), bindings: new Map() }))
     .with({ kind: "punit" }, () => ok({ type: tUnit, bindings: new Map() }))
     .with({ kind: "plit" }, () => ok({ type: tNumber, bindings: new Map() }))
@@ -697,6 +714,8 @@ export type InferResult = {
 /** Names a pattern binds — excluded from an arm body's free references. */
 function patternBinds(p: Pattern): string[] {
   switch (p.kind) {
+    case "pas":
+      return [...patternBinds(p.pat), p.name];
     case "pbind":
       return [p.name];
     case "precord":

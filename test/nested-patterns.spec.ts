@@ -137,6 +137,18 @@ test("nested-record catch-all destructures through both layers", () => {
 
 // --- exhaustiveness: narrowing arms must not count as coverage ---
 
+test("as-pattern retains the whole matched value", () => {
+  const src = `${OPT}let f = value => switch value {
+    | Sm(Leaf(n)) as whole => eq(whole, value) ? n : 0
+    | Sm(_) => 0
+    | Sm(Nn) => 0
+    | Leaf(n) => n
+    | Nn => 0
+  }
+  let r = f(Sm(Leaf(2)))`;
+  expect(run(src)).toBe(2);
+});
+
 test("nested-ctor arm does not cover its constructor", () => {
   const src = `${OPT}let f = x => switch x {
     | Sm(Sm(n)) => 1

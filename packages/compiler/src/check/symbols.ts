@@ -127,6 +127,7 @@ const touchField = (b: Builder, name: string, span: Span): void => {
 
 const bindParam = (b: Builder, p: LamParam): void => {
   if (p.kind === "name") {
+    if (p.annot) walkTypeExpr(b, p.annot);
     if (!p.name.startsWith("$")) bind(b, "value", p.name, p.span);
     return;
   }
@@ -139,6 +140,10 @@ const bindParam = (b: Builder, p: LamParam): void => {
 
 const walkPat = (b: Builder, p: Pattern): void => {
   match(p)
+    .with({ kind: "pas" }, (pas) => {
+      walkPat(b, pas.pat);
+      bind(b, "value", pas.name, pas.nameSpan);
+    })
     .with({ kind: "pbind" }, (pbind) => {
       if (pbind.name !== "_") bind(b, "value", pbind.name, pbind.span);
     })
@@ -179,6 +184,7 @@ const walkPat = (b: Builder, p: Pattern): void => {
 /** Pattern walk that only records uses (ctors), not new binds — for or-pattern alts after the first. */
 const walkPatUses = (b: Builder, p: Pattern): void => {
   match(p)
+    .with({ kind: "pas" }, (pas) => walkPatUses(b, pas.pat))
     .with({ kind: "pctor" }, (pctor) => {
       use(b, "ctor", pctor.ctor, pctor.span);
       for (const a of pctor.args) walkPatUses(b, a);
