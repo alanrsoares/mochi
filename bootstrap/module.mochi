@@ -324,15 +324,19 @@ let compileAll = (ctx, graph) => switch graph {
 }
 
 // compileGraph : [Loaded] -> Result [ModuleOutput] MErr
-export let compileGraph = compileAll(
-  {
-    exportsByPath: #{},
-    regByPath: #{},
-    keysByPath: #{},
-    qualsByPath: #{},
-    outputs: []
-  }
-)
+// Spelled out (not point-free `compileAll(ctx0)`): the TS backend types a
+// multi-param function uncurried, so a partial application is a tsc error.
+export let compileGraph = graph =>
+  compileAll(
+    {
+      exportsByPath: #{},
+      regByPath: #{},
+      keysByPath: #{},
+      qualsByPath: #{},
+      outputs: []
+    },
+    graph
+  )
 
 // buildModules : string -> Result [ModuleOutput] MErr
 // Resolve the graph then compile it — one sync railway (host IO is sync).
