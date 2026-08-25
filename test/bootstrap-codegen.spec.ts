@@ -97,6 +97,10 @@ const cases: Record<string, string> = {
   "when guard": "let f = n => switch n { | x when eq(x, 0) => 1 | _ => 0 }",
   "tuple destructure in match": "let f = p => switch p { | (a, b) => add(a, b) }",
   "record literal arrow body": "let mk = x => { value: x }",
+  "record shorthand": "let x = 1\nlet r = { x }",
+  "as-pattern keeps the whole match":
+    "type N = | Z | Sm(N)\nlet f = n => switch n { | Sm(inner) as whole => whole | Z => Z }",
+  "lambda parameter annotation is erased": "let identity = (x: number) => x",
   "curried multi-arg lambda": "let addThree = (a, b, c) => add(a, add(b, c))",
   "let in binding": "let f = x => let y = add(x, 1) in add(y, y)",
   "let? monadic bind":

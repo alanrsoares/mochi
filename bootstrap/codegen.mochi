@@ -743,18 +743,32 @@ let litValue = p => switch p {
 // from `_v` by the same destructuring slot handler uses.
 let genGuardArm = (p, body, guardOpt, ctx) =>
   let conds0 = patConds(p, "_v", ctx) in
-  let slot = patSlot(p, ctx) in
+  let slot = switch p {
+    | Ast.PAs(pat, _, _, _) => patSlot(pat, ctx)
+    | _ => patSlot(p, ctx)
+  } in
   let conds = switch guardOpt {
-    | Some(g) => Array.append(
-        slot == ""
-          ? "(${genExpr(g, ctx)})"
-          : "((${slot}) => ${genExpr(g, ctx)})(_v)",
-        conds0
-      )
+    | Some(g) => switch p {
+        | Ast.PAs(_, name, _, _) => Array.append(
+            slot == ""
+              ? "((${name}) => ${genExpr(g, ctx)})(_v)"
+              : "((${name}) => ((${slot}) => ${genExpr(g, ctx)})(${name}))(_v)",
+            conds0
+          )
+        | _ => Array.append(
+            slot == ""
+              ? "(${genExpr(g, ctx)})"
+              : "((${slot}) => ${genExpr(g, ctx)})(_v)",
+            conds0
+          )
+      }
     | None => conds0
   } in
   let test = Array.length(conds) == 0 ? "true" : Str.join(" && ", conds) in
-    ".with((_v) => ${test}, ${slot == "" ? "()" : "(${slot})"} => ${genLambdaBody(body, ctx)})"
+    switch p {
+      | Ast.PAs(_, name, _, _) => ".with((_v) => ${test}, (${name}) => ${slot == "" ? genLambdaBody(body, ctx) : "((${slot}) => ${genLambdaBody(body, ctx)})(${name})"})"
+      | _ => ".with((_v) => ${test}, ${slot == "" ? "()" : "(${slot})"} => ${genLambdaBody(body, ctx)})"
+    }
 
 // Sub-pattern flat matcher-object form can express: bind, wildcard, or a
 // primitive literal (the matcher compares values with `!==`, so only

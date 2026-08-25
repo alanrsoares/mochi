@@ -42,3 +42,8 @@ test("destructuring and plain params mix in one lambda", () => {
   const src = "let f = ({a}, b) => add(a, b)\nlet r = f({ a: 10 }, 5)";
   expect(run(src, "r")).toBe(15);
 });
+
+test("a parameter annotation constrains the lambda argument", () => {
+  expect(schemeOf("let double = (n: number) => add(n, n)", "double")).toBe("number -> number");
+  expect(isErr(compile('let double = (n: number) => add(n, n)\nlet r = double("no")'))).toBe(true);
+});

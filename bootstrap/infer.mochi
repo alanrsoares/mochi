@@ -203,6 +203,28 @@ let bindParamsFrom = (params, env, st) => switch params {
       (Array.prepend(t, restTs), env2, st2)
 }
 
+// Lambda parameter annotations constrain the fresh parameter type before the
+// body is inferred. One `vars` map shares lowercase type variables across a
+// lambda's parameter annotations, matching the TS backend.
+let constrainParamAnnotsFrom = (params, paramTypes, vars, ctx, st) => switch params {
+  | [] => Ok(st)
+  | [param, ...rest] => switch paramTypes {
+      | [] => Ok(st)
+      | [paramT, ...restTypes] => switch param {
+          | Ast.LPName(_, Some(te)) => let (annotT, vars1, st1) = typeExprToType(
+              te,
+              vars,
+              st,
+              ctx.aliasMap,
+              Set.fromArray([])
+            ) in
+            let? st2 = u(paramT, annotT, st1, annotSpan(te)) in
+              constrainParamAnnotsFrom(rest, restTypes, vars1, ctx, st2)
+          | _ => constrainParamAnnotsFrom(rest, restTypes, vars, ctx, st)
+        }
+    }
+}
+
 // ============================================================
 // inferExpr — Algorithm W over Expr. Every helper threads and returns
 // `st: St` alongside its result (env only changes locally, on the ctx
@@ -468,8 +490,9 @@ let inferExpr = (e, ctx, st) => switch e {
       ctx.env,
       st
     ) in
-    let? (bodyT, st2) = inferExpr(body, ctxWithEnv(ctx, bodyEnv), st1) in
-      Ok((arrowChain(paramTypes, bodyT), st2))
+    let? st2 = constrainParamAnnotsFrom(params, paramTypes, #{}, ctx, st1) in
+    let? (bodyT, st3) = inferExpr(body, ctxWithEnv(ctx, bodyEnv), st2) in
+      Ok((arrowChain(paramTypes, bodyT), st3))
   | Ast.ELetIn(name, _, value, body, _) => let? (valT, st1) = inferExpr(
       value,
       ctx,
