@@ -26,6 +26,7 @@ const work = join(root, ".fixpoint-work");
 // discovers the graph itself; this list is what we read back and diff.
 const MODULES = [
   "ast",
+  "usefulness",
   "types",
   "ctors",
   "schemes",

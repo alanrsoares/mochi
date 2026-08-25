@@ -188,7 +188,7 @@ const stripped = (rel: string): string =>
 
 // Data-only modules whose ctors other modules import. Prepended into the eval
 // sandbox (guarded by existsSync so this works before/after each is extracted).
-const CTOR_MODULES = ["ast", "types", "ctors", "schemes", "scc"];
+const CTOR_MODULES = ["ast", "usefulness", "types", "ctors", "schemes", "scc"];
 
 // CapCase `const` bindings a stripped ctor module defines — used to rebuild an
 // `import * as Alias` namespace object after imports are stripped (ADR 0002).

@@ -16,6 +16,14 @@
 
 import * as Ast from "./ast.mochi"
 import { buildRegistry, primTypeNames } from "./ctors.mochi"
+import {
+  checkExhaustiveM,
+  isWideWitnessM,
+  showWitness,
+  ExOk,
+  ExWitness,
+  ExFuel
+} from "./usefulness.mochi"
 
 // --- AST (mirrors src/ast.ts; `kind` strings become constructors) ---
 
@@ -363,31 +371,6 @@ let checkSeqExhaustive = (arms, mSpan) =>
             )
           )
 
-let isPBoolOf = (v, p) => switch p { | Ast.PBool(b, _) => b == v | _ => false }
-
-// No constructor arms → literal/wildcard/bool switch. A catch-all makes it
-// total; so does covering both boolean cases (bool is a closed two-case type).
-let checkNonCtor = (arms, mSpan, hasCatchAll) =>
-  hasCatchAll
-    ? None
-    : let hasTrue = someOf(
-      a => isPBoolOf(true, a.pattern) && Option.isNone(a.guard),
-      arms
-    ) in
-    let hasFalse = someOf(
-      a => isPBoolOf(false, a.pattern) && Option.isNone(a.guard),
-      arms
-    ) in
-      hasTrue && hasFalse
-        ? None
-        : switch checkSeqExhaustive(arms, mSpan) {
-          | SeqTotal => None
-          | SeqFail(e) => Some(e)
-          | SeqNotSeq => Some(
-              checkErr("non-exhaustive switch: add a `_` catch-all arm", mSpan)
-            )
-        }
-
 // Constructor arms: known ctor, right arity, one owning type. An arm covers
 // its ctor only when every argument is irrefutable — a narrowing arm
 // (`Sm(Sm(n))`, `Sm(0)`) matches a strict subset and must not count.
@@ -423,32 +406,59 @@ let ctorLoop = (arms, i, reg, owner, covered) => switch Array.get(i, arms) {
     }
 }
 
-let checkCtorArms = (ctorArms, mSpan, reg, hasCatchAll) => switch ctorLoop(ctorArms, 0, reg, None, Set.fromArray([])) {
-  | Err(e) => Some(e)
-  | Ok((ownerOpt, covered)) => hasCatchAll
-      ? None
-      : let own = Option.unwrapOr("", ownerOpt) in
-      let required = Map.getOr([], own, reg.types) in
-      let missing = required |> filter(c => !Set.has(c, covered)) in
-        Array.length(missing) == 0
-          ? None
-          :
-            // A narrowing arm on a missing ctor means the user matched it
-            // partially — point at the fix rather than just naming the gap.
-            let seen = Set.fromArray(
-              ctorArms |> map(a => ctorNameOf(a.pattern))
-            ) in
-            let narrowed = missing |> filter(c => Set.has(c, seen)) in
-            let hint = switch Array.head(narrowed) {
-              | Some(first) => " (arm(s) on ${Str.join(", ", narrowed)} narrow — add ${first}(_) or a '_' catch-all)"
-              | None => ""
-            } in
-              Some(
-                checkErr(
-                  "non-exhaustive switch on '${own}': missing ${Str.join(", ", missing)}${hint}",
-                  mSpan
-                )
-              )
+// Lazy Lists keep their own depth-1 rule: matching one pulls from its
+// generator, so it cannot be reasoned about positionally and the matrix treats
+// the column as opaque.
+let seqVerdict = (arms, mSpan) => switch checkSeqExhaustive(arms, mSpan) {
+  | SeqTotal => None
+  | SeqFail(e) => Some(e)
+  | SeqNotSeq => None
+}
+
+// A guarded arm proves nothing — the guard can be false — so only unguarded
+// patterns enter the matrix, and only unguarded ctor arms count as having
+// "named" a constructor for reporting.
+let unguardedPatterns = arms =>
+  arms |> Array.flatMap(a => Option.isNone(a.guard) ? [a.pattern] : [])
+
+let namedUnguarded = leaves =>
+  Set.fromArray(
+    leaves
+      |> Array.flatMap(a =>
+        isPCtor(a.pattern) && Option.isNone(a.guard)
+          ? [ctorNameOf(a.pattern)]
+          : []
+      )
+  )
+
+let matrixVerdict = (arms, leaves, ownerOpt, mSpan, reg) => switch checkExhaustiveM(unguardedPatterns(arms), reg) {
+  | ExOk => None
+  | ExFuel => Some(
+      checkErr(
+        "switch too complex to prove exhaustive — add a `_` catch-all arm",
+        mSpan
+      )
+    )
+  | ExWitness(w) => let own = Option.unwrapOr("", ownerOpt) in
+    let named = namedUnguarded(leaves) in
+    let absent = Map.getOr([], own, reg.types)
+      |> filter(c => !Set.has(c, named)) in
+      // A witness that is one constructor over nothing but wildcards is the
+      // shape the pre-matrix checker reported as `missing X`. Keep that
+      // wording for it; only a genuinely nested gap pays for the longer form.
+      isWideWitnessM(w) && own != "" && Array.length(absent) > 0
+        ? Some(
+          checkErr(
+            "non-exhaustive switch on '${own}': missing ${Str.join(", ", absent)}",
+            mSpan
+          )
+        )
+        : Some(
+          checkErr(
+            "non-exhaustive switch: '${showWitness(w)}' is not matched",
+            mSpan
+          )
+        )
 }
 
 // Flatten an or-pattern arm into one leaf per alternative, each sharing the
@@ -475,9 +485,21 @@ let checkMatch = (arms, mSpan, reg) => switch firstSome(a => checkPattern(a.patt
               // ctor/bool logic below sees each one.
               let leaves = arms |> Array.flatMap(leavesOfArm) in
               let ctorArms = leaves |> filter(a => isPCtor(a.pattern)) in
-                Array.length(ctorArms) == 0
-                  ? checkNonCtor(leaves, mSpan, hasCatchAll)
-                  : checkCtorArms(ctorArms, mSpan, reg, hasCatchAll)
+                someOf(a => isPList(a.pattern), arms)
+                  ?
+                    // An unguarded catch-all settles a list switch without
+                    // consulting the list rule — `@{...all}` matches every value.
+                    hasCatchAll ? None : seqVerdict(arms, mSpan)
+                  : switch ctorLoop(ctorArms, 0, reg, None, Set.fromArray([])) {
+                    | Err(e) => Some(e)
+                    | Ok((ownerOpt, _)) => matrixVerdict(
+                        arms,
+                        leaves,
+                        ownerOpt,
+                        mSpan,
+                        reg
+                      )
+                  }
           }
       }
 }

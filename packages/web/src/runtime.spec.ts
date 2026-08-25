@@ -16,6 +16,8 @@ test("canvas bindings compile as curried typed externs", async () => {
   expect(js).toContain('import { context2d } from "@mochi/web/runtime";');
   expect(js).toContain("const clearRect = _curry(5, $clearRect);");
   expect(js).toContain("const startCanvasLoop = _curry(2, $startCanvasLoop);");
+  expect(js).toContain("const setLineCap = _curry(2, $setLineCap);");
+  expect(js).toContain("const setLineJoin = _curry(2, $setLineJoin);");
 });
 
 test("timer binding stays fully applied at its two runtime arguments", async () => {

@@ -30,4 +30,6 @@ export extern translate : Context2D -> number -> number -> () = "@mochi/web/runt
 export extern setFillStyle : Context2D -> string -> () = "@mochi/web/runtime" "setFillStyle"
 export extern setStrokeStyle : Context2D -> string -> () = "@mochi/web/runtime" "setStrokeStyle"
 export extern setLineWidth : Context2D -> number -> () = "@mochi/web/runtime" "setLineWidth"
+export extern setLineCap : Context2D -> string -> () = "@mochi/web/runtime" "setLineCap"
+export extern setLineJoin : Context2D -> string -> () = "@mochi/web/runtime" "setLineJoin"
 export extern setGlobalAlpha : Context2D -> number -> () = "@mochi/web/runtime" "setGlobalAlpha"
