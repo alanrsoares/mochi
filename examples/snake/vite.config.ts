@@ -4,7 +4,7 @@ import { mochiWorkspaceAliases } from "@mochi/vite-plugin/workspace-aliases";
 import preact from "@preact/preset-vite";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
-import { snakeVendorPlugins } from "./mochi.plugins";
+import { snakeVendorPlugins } from "./mochi.plugins.ts";
 
 const repoRoot = path.resolve(import.meta.dirname, "../..");
 
