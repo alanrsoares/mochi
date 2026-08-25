@@ -215,7 +215,7 @@ let resolveNames = (names, from, depExports, res) => switch names {
 // keyed by alias for `import * as` (ADR 0002), and the merged registry +
 // ctor keys of every dep it pulls (regardless of import form — the ADR's
 // "full ctor registry and field keys still merge into the importer").
-let resolveImportsFrom = (stmts, i, path, ctx, res) => switch Array.get(i, stmts) {
+let resolveImportsFrom = (ctx, stmts, i, path, res) => switch Array.get(i, stmts) {
   | None => Ok(res)
   | Some(Ast.SImport(names, from, _)) => let dp = resolveImport(path, from) in
     let depExports = Map.getOr(#{}, dp, ctx.exportsByPath) in
@@ -223,11 +223,10 @@ let resolveImportsFrom = (stmts, i, path, ctx, res) => switch Array.get(i, stmts
     let depKeys = Map.getOr(#{}, dp, ctx.keysByPath) in
       switch resolveNames(names, from, depExports, res) {
         | Err(e) => Err(e)
-        | Ok(res1) => resolveImportsFrom(
+        | Ok(res1) => ctx->resolveImportsFrom(
             stmts,
             i + 1,
             path,
-            ctx,
             {
               imports: res1.imports,
               nsImports: res1.nsImports,
@@ -244,11 +243,10 @@ let resolveImportsFrom = (stmts, i, path, ctx, res) => switch Array.get(i, stmts
     let depExports = Map.getOr(#{}, dp, ctx.exportsByPath) in
     let depReg = Map.getOr(emptyReg, dp, ctx.regByPath) in
     let depKeys = Map.getOr(#{}, dp, ctx.keysByPath) in
-      resolveImportsFrom(
+      ctx->resolveImportsFrom(
         stmts,
         i + 1,
         path,
-        ctx,
         {
           imports: res.imports,
           nsImports: Map.set(alias.name, depExports, res.nsImports),
@@ -267,13 +265,13 @@ let resolveImportsFrom = (stmts, i, path, ctx, res) => switch Array.get(i, stmts
           }
         }
       )
-  | Some(_) => resolveImportsFrom(stmts, i + 1, path, ctx, res)
+  | Some(_) => ctx->resolveImportsFrom(stmts, i + 1, path, res)
 }
 
 // Compile one module: resolve imports, check (with imported registry), infer
 // (with imported schemes), codegen (with imported ctor keys), then publish this
 // module's own exports/registry/keys into the ctx for later dependents.
-let compileOne = (loaded, ctx) => switch resolveImportsFrom(loaded.stmts, 0, loaded.path, ctx, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }) {
+let compileOne = (ctx, loaded) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }) {
   | Err(e) => Err(e)
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
       | Err(e) => Err(e)
@@ -317,26 +315,24 @@ let compileOne = (loaded, ctx) => switch resolveImportsFrom(loaded.stmts, 0, loa
 }
 
 // Compile the whole ordered graph, threading the ctx; first Err short-circuits.
-let compileAll = (graph, ctx) => switch graph {
+let compileAll = (ctx, graph) => switch graph {
   | [] => Ok(ctx.outputs)
-  | [m, ...rest] => switch compileOne(m, ctx) {
+  | [m, ...rest] => switch ctx->compileOne(m) {
       | Err(e) => Err(e)
-      | Ok(ctx1) => compileAll(rest, ctx1)
+      | Ok(ctx1) => ctx1->compileAll(rest)
     }
 }
 
 // compileGraph : [Loaded] -> Result [ModuleOutput] MErr
-export let compileGraph = graph =>
-  compileAll(
-    graph,
-    {
-      exportsByPath: #{},
-      regByPath: #{},
-      keysByPath: #{},
-      qualsByPath: #{},
-      outputs: []
-    }
-  )
+export let compileGraph = compileAll(
+  {
+    exportsByPath: #{},
+    regByPath: #{},
+    keysByPath: #{},
+    qualsByPath: #{},
+    outputs: []
+  }
+)
 
 // buildModules : string -> Result [ModuleOutput] MErr
 // Resolve the graph then compile it — one sync railway (host IO is sync).
