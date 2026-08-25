@@ -446,6 +446,7 @@ const pipeSegments = (e: Expr): Expr[] =>
 
 /** Inline when it fits, else one `|> stage` per line indented under the head. */
 const pipeD = (e: PipeExpr): Doc => {
+  if (e.fast && e.right.kind === "call") return seq(operandD(e.left), txt("->"), callD(e.right));
   const [head, ...rest] = pipeSegments(e);
   return group(
     seq(operandD(head!), indent(cat(rest.map((s) => seq(line, txt("|> "), operandD(s)))))),

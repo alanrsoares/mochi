@@ -14,6 +14,7 @@ let double = x => mul(x, 2)          // lambda
 let hypot = (a, b) => sqrt(add(square(a), square(b)))  // multi-arg
 let one = () => 1                    // nullary → `() -> number` (ADR 0014)
 let pipeline = 5 |> double |> inc |> double            // left-to-right pipe
+let shifted = 5 -> add(3)                              // add(5, 3), fast pipe
 ```
 
 Annotations / `extern` may write the same domain as `() -> T` (ADR 0015).
@@ -274,7 +275,7 @@ host values a type error at `extern` boundaries.
 
 ## Other surface features
 
-Ternary `cond ? a : b` (looser than `|>`, right-associative), operator sections
+Ternary `cond ? a : b` (looser than `|>` / `->`, right-associative), operator sections
 `(x +)` / `(+ x)` (ADR 0000; `(- x)` stays negation), string interpolation,
 `let?` / `let!` (monadic bind over `Result` / `Task`), `///` doc comments that attach
 to the following binding and surface in hover and `.d.ts`, and namespace imports

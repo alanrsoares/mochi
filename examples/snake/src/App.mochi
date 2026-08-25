@@ -207,22 +207,22 @@ export let App = _ =>
     gameContainer,
     { interpreters: defaultInterpreters }
   ) in
-  let snake = useSelect(store, s => s.snake.value) in
-  let food = useSelect(store, s => s.food.value) in
-  let score = useSelect(store, s => s.score.value) in
-  let highScore = useSelect(store, s => s.highScore.value) in
-  let status = useSelect(store, s => s.status.value) in
-  let submitted = useSelect(store, s => s.submitted.value) in
-  let name = useSelect(store, s => s.name.value) in
-  let connected = useSelect(store, s => s.connected.value) in
-  let leaders = useSelect(store, s => s.leaders.value) in
+  let snake = store->useSelect(s => s.snake.value) in
+  let food = store->useSelect(s => s.food.value) in
+  let score = store->useSelect(s => s.score.value) in
+  let highScore = store->useSelect(s => s.highScore.value) in
+  let status = store->useSelect(s => s.status.value) in
+  let submitted = store->useSelect(s => s.submitted.value) in
+  let name = store->useSelect(s => s.name.value) in
+  let connected = store->useSelect(s => s.connected.value) in
+  let leaders = store->useSelect(s => s.leaders.value) in
   // `$tone` below stays a ternary of literals: a helper's return (and switch
   // arms) widen string literals to `string`, which does not unify with the
   // styled-cva `$tone` literal union.
   // Two-parameter selector = read a `derive`d signal (ADR 0051).
-  let playing = useSelect(store, (s, d) => d.playing.value) in
-  let gameOver = useSelect(store, (s, d) => d.gameOver.value) in
-  let paused = useSelect(store, (s, d) => d.paused.value) in
+  let playing = store->useSelect((s, d) => d.playing.value) in
+  let gameOver = store->useSelect((s, d) => d.gameOver.value) in
+  let paused = store->useSelect((s, d) => d.paused.value) in
   // Mount one timer and read the store's live status signal on every turn.
   // This avoids coupling game progression to Preact re-render timing or a
   // derived signal's subscription lifecycle.

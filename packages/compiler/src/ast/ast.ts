@@ -54,7 +54,7 @@ export type Expr =
       body: Expr;
       span: Span;
     }
-  | { kind: "pipe"; left: Expr; right: Expr; span: Span } // a |> f
+  | { kind: "pipe"; left: Expr; right: Expr; fast?: boolean; span: Span } // a |> f / a->f(b)
   /**
    * `cond ? then : else` — the boolean conditional as an expression (ADR 0016).
    * Right-associative, binds looser than `|>`; branches are full expressions.

@@ -453,6 +453,19 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
         matched: true,
       };
     }
+    // Fast pipe inserts the left value as the FIRST argument of a call:
+    // `a -> f(b)` becomes `f(a, b)`. It deliberately reuses `->`, whose
+    // type-expression meaning is unambiguous outside an expression parser.
+    if (tk.t === "tarrow" && PIPE_BP >= minBp) {
+      next();
+      const right = parseAtomOrCall();
+      if (right.kind === "call")
+        return {
+          left: { kind: "pipe", left, right, fast: true, span: spanning(left.span, right.span) },
+          matched: true,
+        };
+      fail("fast pipe needs a call on the right, like `a -> f(b)`");
+    }
     if (tk.t === "compose" && COMPOSE_BP >= minBp) {
       next();
       const right = parseExpr(COMPOSE_BP + 1);
