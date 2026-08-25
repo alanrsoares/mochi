@@ -253,6 +253,27 @@ const walkTypeExpr = (b: Builder, t: TypeExpr): void => {
     .exhaustive();
 };
 
+/** Index an adjacent lambda-let run in one recursive lexical scope (ADR 0067). */
+type LetInExpr = Extract<Expr, { kind: "letin" }>;
+
+const walkRecursiveLetins = (b: Builder, first: LetInExpr): void => {
+  const bindings: LetInExpr[] = [];
+  let tail: Expr = first;
+  while (tail.kind === "letin" && tail.value.kind === "lambda") {
+    bindings.push(tail);
+    tail = tail.body;
+  }
+  pushScope(b, "value");
+  for (const binding of bindings) bind(b, "value", binding.name, binding.nameSpan);
+  for (const binding of bindings) {
+    if (binding.annot) walkTypeExpr(b, binding.annot);
+    walkExpr(b, binding.value);
+  }
+  walkExpr(b, tail);
+  snapshotFrame(b, "value", tail.span);
+  popScope(b, "value");
+};
+
 const walkExpr = (b: Builder, e: Expr): void => {
   match(e)
     .withOneOf([{ kind: "num" }, { kind: "bool" }, { kind: "str" }, { kind: "unit" }], () => {})
@@ -281,6 +302,10 @@ const walkExpr = (b: Builder, e: Expr): void => {
       popScope(b, "value");
     })
     .with({ kind: "letin" }, (letin) => {
+      if (letin.value.kind === "lambda") {
+        walkRecursiveLetins(b, letin);
+        return;
+      }
       walkExpr(b, letin.value);
       if (letin.annot) walkTypeExpr(b, letin.annot);
       pushScope(b, "value");

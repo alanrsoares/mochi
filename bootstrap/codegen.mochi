@@ -386,13 +386,16 @@ let paramNameSet = (params, i, acc) => switch Array.get(i, params) {
 // Collect a `let x = v in ...` chain as sequential `const` declarations.
 // `let-in` is non-recursive and shadowing keeps the outer value, so the chain
 // stops at the first link a `const` would capture: one whose name is already
-// bound (by the arrow's params or an earlier link), or one whose value
-// mentions its own name.
+// bound (by the arrow's params or an earlier link), or a non-lambda value whose
+// own name it mentions. Lambda values are locally recursive (ADR 0067).
 let letBlockLoop = (e, ctx, seen, decls) => switch e {
   | Ast.ELetIn(name, _, value, body, _) => Set.has(
       name,
       seen
-    ) || Set.has(name, exprRefs(value, ctx, Set.fromArray([])))
+    ) || switch value {
+      | Ast.ELambda(_, _, _) => false
+      | _ => Set.has(name, exprRefs(value, ctx, Set.fromArray([])))
+    }
       ? (decls, e, seen)
       : letBlockLoop(
         body,

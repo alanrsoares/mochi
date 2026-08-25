@@ -281,6 +281,7 @@ function inferLambda(e: LambdaExpr, ctx: Ctx): Result<Type, Diagnostic> {
 }
 
 function inferLetIn(e: LetInExpr, ctx: Ctx): Result<Type, Diagnostic> {
+  if (e.value.kind === "lambda") return inferLocalLambdaGroup(e, ctx);
   const valT = infer(e.value, ctx);
   if (isErr(valT)) return valT;
   if (e.annot) {
@@ -294,6 +295,58 @@ function inferLetIn(e: LetInExpr, ctx: Ctx): Result<Type, Diagnostic> {
   bodyEnv.set(e.name, scheme);
   ctx.noteLet?.(scheme, e.value.span);
   return infer(e.body, { ...ctx, env: bodyEnv });
+}
+
+/** Infer one adjacent run of lambda-valued local lets as recursive SCCs (ADR 0067). */
+function inferLocalLambdaGroup(first: LetInExpr, ctx: Ctx): Result<Type, Diagnostic> {
+  const bindings: LetInExpr[] = [];
+  let tail: Expr = first;
+  while (tail.kind === "letin" && tail.value.kind === "lambda") {
+    bindings.push(tail);
+    tail = tail.body;
+  }
+
+  const idxOf = new Map(bindings.map((binding, index) => [binding.name, index]));
+  const adj = bindings.map((binding) => {
+    const refs = new Set<string>();
+    freeRefs(binding.value, new Set(), refs);
+    return [...refs].flatMap((ref) => {
+      const index = idxOf.get(ref);
+      return index === undefined ? [] : [index];
+    });
+  });
+  const env: Env = new Map(ctx.env);
+
+  for (const component of stronglyConnected(adj)) {
+    const group = component.map((index) => bindings[index]!);
+    const selfVars = new Map<string, Type>();
+    for (const binding of group) {
+      const self = freshVar(ctx.fresh);
+      selfVars.set(binding.name, self);
+      env.set(binding.name, mono(self));
+    }
+    const bodyTypes = new Map<string, Type>();
+    for (const binding of group) {
+      const value = infer(binding.value, { ...ctx, env });
+      if (isErr(value)) return value;
+      const unified = u(selfVars.get(binding.name)!, value.value, ctx, binding.span);
+      if (isErr(unified)) return unified;
+      if (binding.annot) {
+        const annotated = typeExprToType(binding.annot, new Map(), ctx.fresh, ctx.typeScope);
+        const annotation = u(value.value, annotated, ctx, binding.annot.span);
+        if (isErr(annotation)) return annotation;
+      }
+      bodyTypes.set(binding.name, value.value);
+      ctx.record?.(binding.nameSpan, value.value, { kind: "let", name: binding.name });
+    }
+    for (const binding of group) env.delete(binding.name);
+    for (const binding of group) {
+      const scheme = generalize(env, bodyTypes.get(binding.name)!, ctx.subst);
+      env.set(binding.name, scheme);
+      ctx.noteLet?.(scheme, binding.value.span);
+    }
+  }
+  return infer(tail, { ...ctx, env });
 }
 
 function inferCall(e: CallExpr, ctx: Ctx): Result<Type, Diagnostic> {
@@ -754,8 +807,10 @@ function freeRefs(e: Expr, bound: Set<string>, acc: Set<string>): void {
       freeRefs(lambda.body, inner, acc);
     })
     .with({ kind: "letin" }, (letin) => {
-      // `value` is in the outer scope (non-recursive); `body` sees the new name.
-      freeRefs(letin.value, bound, acc);
+      // Lambda-valued local lets are recursive (ADR 0067); every other value
+      // remains in the outer scope, preserving shadow-rebind semantics.
+      const valueBound = letin.value.kind === "lambda" ? new Set([...bound, letin.name]) : bound;
+      freeRefs(letin.value, valueBound, acc);
       const inner = new Set(bound);
       inner.add(letin.name);
       freeRefs(letin.body, inner, acc);
