@@ -88,6 +88,25 @@ const cases: Record<string, { src: string; ok: boolean }> = {
     src: "type P = | Sm(value: P) | Nn\nlet f = p => switch p { | Sm(Sm(n)) => 1 | Nn => 2 }",
     ok: false,
   },
+  // ADR 0066 — these were all rejected by the depth-1 coverage set. Keep
+  // them at the self-host boundary so the TS specification and bootstrap port
+  // agree on the matrix-only acceptance cases, not just error diagnostics.
+  "matrix: nested constructors are jointly exhaustive": {
+    src: "type Inner = | One | Two\ntype Outer = | Wrap(value: Inner) | Empty\nlet f = value => switch value { | Wrap(One) => 1 | Wrap(Two) => 2 | Empty => 0 }",
+    ok: true,
+  },
+  "matrix: boolean tuple product is jointly exhaustive": {
+    src: "let f = pair => switch pair { | (true, true) => 1 | (true, false) => 2 | (false, true) => 3 | (false, false) => 4 }",
+    ok: true,
+  },
+  "matrix: record field inside a constructor is jointly exhaustive": {
+    src: "type Flags = { enabled: bool }\ntype Box = | Present(value: Flags) | Empty\nlet f = box => switch box { | Present({ enabled: true }) => 1 | Present({ enabled: false }) => 0 | Empty => 0 }",
+    ok: true,
+  },
+  "matrix: empty and rest array patterns are exhaustive": {
+    src: "let f = xs => switch xs { | [] => 0 | [head, ...tail] => head }",
+    ok: true,
+  },
   "catch-all covers the rest": {
     src: "type C = | R | G | B\nlet f = c => switch c { | R => 1 | _ => 0 }",
     ok: true,
