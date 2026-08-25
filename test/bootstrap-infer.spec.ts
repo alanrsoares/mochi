@@ -231,6 +231,11 @@ const strictAlVerdict = (src: string): Verdict => {
 };
 
 const cases: Record<string, { src: string; ok: boolean }> = {
+  "lambda parameter annotation": { src: "let f = (x: number) => add(x, 1)", ok: true },
+  "lambda parameter annotation rejects wrong use": {
+    src: 'let f = (x: number) => add(x, "no")',
+    ok: false,
+  },
   "unbound variable, strict mode": { src: "let f = x => plusOne(x)", ok: false },
   "self-reference is bound, not unbound": { src: "let f = x => f(x)", ok: true },
   "occurs check": { src: "let f = x => f", ok: false },

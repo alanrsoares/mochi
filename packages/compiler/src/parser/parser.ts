@@ -277,7 +277,12 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
         : { kind: "ptuple", names };
     }
     const id = expectId();
-    return { kind: "name", name: id.name, span: id.span };
+    let annot: TypeExpr | undefined;
+    if (peek().t === "colon") {
+      next();
+      annot = parseTypeExpr();
+    }
+    return { kind: "name", name: id.name, span: id.span, annot };
   }
 
   function parseLambda(): Expr {
@@ -675,7 +680,13 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
 
   function parseField(): Field {
     const id = expectLabel();
-    expect("colon");
+    if (peek().t !== "colon")
+      return {
+        name: id.name,
+        nameSpan: id.span,
+        value: { kind: "ref", name: id.name, span: id.span },
+      };
+    next();
     return { name: id.name, nameSpan: id.span, value: parseExpr() };
   }
 
@@ -851,6 +862,21 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
   }
 
   function parsePattern(): Pattern {
+    const pat = parsePatternAtom();
+    const nextTok = peek();
+    if (!(nextTok.t === "id" && nextTok.v === "as")) return pat;
+    next();
+    const name = expectId();
+    return {
+      kind: "pas",
+      pat,
+      name: name.name,
+      nameSpan: name.span,
+      span: spanning(pat.span, name.span),
+    };
+  }
+
+  function parsePatternAtom(): Pattern {
     const tk = peek();
     switch (tk.t) {
       case "num":

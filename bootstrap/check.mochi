@@ -99,6 +99,7 @@ let patSpan = p => switch p {
   | Ast.PWild(sp) => sp
   | Ast.PUnit(sp) => sp
   | Ast.PBind(_, sp) => sp
+  | Ast.PAs(_, _, _, sp) => sp
   | Ast.PLit(_, _, sp) => sp
   | Ast.PBool(_, sp) => sp
   | Ast.PStr(_, sp) => sp
@@ -120,6 +121,7 @@ let isCatchAll = p => switch p {
     // `()` is irrefutable: `unit` has exactly one inhabitant, so the type decides.
     true
   | Ast.PBind(_, _) => true
+  | Ast.PAs(pat, _, _, _) => isCatchAll(pat)
   | Ast.PRecord(fields, _) => allOf(f => isCatchAll(f.pat), fields)
   | Ast.PTuple(elems, _) => allOf(isCatchAll, elems)
   | Ast.PArr(elems, rest, _) => Array.length(elems) == 0 && Option.isSome(rest)
@@ -146,6 +148,7 @@ let seqElemsRest = p => switch p {
 // patterns cannot nest — matching pulls from the sequence) ---
 
 let checkPattern = (p, reg, top) => switch p {
+  | Ast.PAs(pat, _, _, _) => checkPattern(pat, reg, top)
   | Ast.PCtor(ctor, args, _, sp) => switch Map.get(ctor, reg.ctors) {
       | None => Some(checkErr("unknown constructor '${ctor}'", sp))
       | Some(info) => Array.length(args) == info.arity
@@ -208,6 +211,10 @@ let binderPathsElems = (elems, i, at, acc) => switch Array.get(i, elems) {
       binderPathsElems(elems, i + 1, at, acc2)
 }
 let binderPaths = (p, at, acc) => switch p {
+  | Ast.PAs(pat, name, nameSp, _) => let? acc1 = binderPaths(pat, at, acc) in
+      Map.has(name, acc1)
+        ? Err(checkErr("pattern binds '${name}' more than once", nameSp))
+        : Ok(Map.set(name, at, acc1))
   | Ast.PBind(name, sp) => Map.has(name, acc)
       ? Err(checkErr("pattern binds '${name}' more than once", sp))
       : Ok(Map.set(name, at, acc))

@@ -62,11 +62,13 @@ let isWildMP = mp => switch mp { | MWild => true | _ => false }
 
 // Split top-level or-patterns into separate rows — each alt is its own row.
 export let explodePat = p => switch p {
+  | Ast.PAs(pat, _, _, _) => explodePat(pat)
   | Ast.POr(alts, _) => alts |> Array.flatMap(explodePat)
   | _ => [p]
 }
 
 let toMP = p => switch p {
+  | Ast.PAs(pat, _, _, _) => toMP(pat)
   | Ast.PWild(_) =>
     // `_` and a binding always match; `()` does too — `unit` has one inhabitant,
     // so the type decides and the pattern discriminates nothing (ADR 0054).

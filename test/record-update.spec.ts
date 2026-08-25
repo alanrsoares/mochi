@@ -33,6 +33,12 @@ test("bare spread with no updates copies the record", () => {
   expect(run(src)).toEqual({ x: 1, y: 2 });
 });
 
+test("record shorthand reads the matching local binding", () => {
+  const src = "let x = 42\nlet r = { x }";
+  expect(run(src)).toEqual({ x: 42 });
+  expect(unwrapOk(compile(src))).toContain("{ x: x }");
+});
+
 // --- typing (update-only) ---------------------------------------------------
 
 test("updating a field with a wrong-typed value is a type error", () => {
@@ -56,4 +62,8 @@ test("formatter round-trips a record update", () => {
   const once = unwrapOk(format(src));
   expect(once).toContain("{ ...base, x: 1 }");
   expect(unwrapOk(format(once))).toBe(once);
+});
+
+test("formatter expands record shorthand to its canonical field form", () => {
+  expect(unwrapOk(format("let x=1\nlet r={x}\n"))).toBe("let x = 1\nlet r = { x: x }\n");
 });

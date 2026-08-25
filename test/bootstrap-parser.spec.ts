@@ -62,7 +62,7 @@ const cSpan = (s: Span): Canon => ({ start: s.start, end: s.end });
 
 const cParam = (p: LamParam): Canon =>
   p.kind === "name"
-    ? { kind: "name", name: p.name }
+    ? { kind: "name", name: p.name, annot: p.annot ? cTy(p.annot) : null }
     : p.kind === "precord"
       ? { kind: "precord", fields: p.fields }
       : { kind: "ptuple", names: p.names };
@@ -191,6 +191,8 @@ const cPat = (p: Pattern): Canon => {
       return { kind: "punit", span: cSpan(p.span) };
     case "pbind":
       return { kind: "pbind", name: p.name, span: cSpan(p.span) };
+    case "pas":
+      return { kind: "pas", pat: cPat(p.pat), name: p.name, span: cSpan(p.span) };
     case "plit":
       return { kind: "plit", value: p.value, raw: p.raw, span: cSpan(p.span) };
     case "pbool":
@@ -313,7 +315,7 @@ type Al = any;
 const opt = <T>(o: Al, f: (v: Al) => T): T | null => (o._tag === "Some" ? f(o.value) : null);
 
 const aParam = (p: Al): Canon => {
-  if (p._tag === "LPName") return { kind: "name", name: p.name };
+  if (p._tag === "LPName") return { kind: "name", name: p.name, annot: opt(p.annot, aTy) };
   if (p._tag === "LPRecord") return { kind: "precord", fields: p.fields };
   return { kind: "ptuple", names: p.names };
 };
@@ -431,6 +433,7 @@ const A_PAT: Record<string, (p: Al) => Canon> = {
   PWild: (p) => ({ kind: "pwild", span: p.span }),
   PUnit: (p) => ({ kind: "punit", span: p.span }),
   PBind: (p) => ({ kind: "pbind", name: p.name, span: p.span }),
+  PAs: (p) => ({ kind: "pas", pat: aPat(p.pat), name: p.name, span: p.span }),
   PLit: (p) => ({ kind: "plit", value: p.value, raw: p.raw, span: p.span }),
   PBool: (p) => ({ kind: "pbool", value: p.value, span: p.span }),
   PStr: (p) => ({ kind: "pstr", value: p.value, span: p.span }),
@@ -578,6 +581,8 @@ for (const file of corpus) {
 const cases: Record<string, string> = {
   "lambda forms":
     "let f = x => x\nlet g = (a, b) => a\nlet h = () => 1\nlet i = ({ x, y }) => x\nlet j = ((a, b)) => a\nlet k = (x) => x",
+  "ADR 0068 syntax batch":
+    "let x = 1\nlet r = { x }\nlet typed = (n: number) => n\nlet unwrap = value => switch value { | Some(n) as whole => n | None => 0 }",
   "let-in and tuple let-in":
     "let f = let a = 1 in add(a, 2)\nlet g = let (x, y) = (1, 2) in add(x, y)",
   "pipe chain": "let r = x |> f |> g(1) |> h",

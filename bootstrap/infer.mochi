@@ -118,6 +118,7 @@ let patSpan = p => switch p {
   | Ast.PWild(sp) => sp
   | Ast.PUnit(sp) => sp
   | Ast.PBind(_, sp) => sp
+  | Ast.PAs(_, _, _, sp) => sp
   | Ast.PLit(_, _, sp) => sp
   | Ast.PBool(_, sp) => sp
   | Ast.PStr(_, sp) => sp
@@ -182,7 +183,7 @@ let bindParamFieldsFrom = (fields, env, row, st) => switch fields {
 }
 
 let bindParam = (p, env, st) => switch p {
-  | Ast.LPName(name) => let (t, st1) = freshVar(st) in
+  | Ast.LPName(name, _) => let (t, st1) = freshVar(st) in
       (t, Map.set(name, mono(t), env), st1)
   | Ast.LPTuple(names) => let (elems, env1, st1) = bindParamNamesFrom(
       names,
@@ -200,6 +201,28 @@ let bindParamsFrom = (params, env, st) => switch params {
   | [p, ...rest] => let (t, env1, st1) = bindParam(p, env, st) in
     let (restTs, env2, st2) = bindParamsFrom(rest, env1, st1) in
       (Array.prepend(t, restTs), env2, st2)
+}
+
+// Lambda parameter annotations constrain the fresh parameter type before the
+// body is inferred. One `vars` map shares lowercase type variables across a
+// lambda's parameter annotations, matching the TS backend.
+let constrainParamAnnotsFrom = (params, paramTypes, vars, ctx, st) => switch params {
+  | [] => Ok(st)
+  | [param, ...rest] => switch paramTypes {
+      | [] => Ok(st)
+      | [paramT, ...restTypes] => switch param {
+          | Ast.LPName(_, Some(te)) => let (annotT, vars1, st1) = typeExprToType(
+              te,
+              vars,
+              st,
+              ctx.aliasMap,
+              Set.fromArray([])
+            ) in
+            let? st2 = u(paramT, annotT, st1, annotSpan(te)) in
+              constrainParamAnnotsFrom(rest, restTypes, vars1, ctx, st2)
+          | _ => constrainParamAnnotsFrom(rest, restTypes, vars, ctx, st)
+        }
+    }
 }
 
 // ============================================================
@@ -467,8 +490,9 @@ let inferExpr = (e, ctx, st) => switch e {
       ctx.env,
       st
     ) in
-    let? (bodyT, st2) = inferExpr(body, ctxWithEnv(ctx, bodyEnv), st1) in
-      Ok((arrowChain(paramTypes, bodyT), st2))
+    let? st2 = constrainParamAnnotsFrom(params, paramTypes, #{}, ctx, st1) in
+    let? (bodyT, st3) = inferExpr(body, ctxWithEnv(ctx, bodyEnv), st2) in
+      Ok((arrowChain(paramTypes, bodyT), st3))
   | Ast.ELetIn(name, _, value, body, _) => let? (valT, st1) = inferExpr(
       value,
       ctx,
@@ -617,13 +641,11 @@ let inferPatTupleFrom = (elems, ctx, st) => switch elems {
   | [] => Ok(([], #{}, st))
   | [ep, ...rest] => let? (t, bindings, st1) = inferPat(ep, ctx, st) in
     let? (restTs, restBindings, st2) = inferPatTupleFrom(rest, ctx, st1) in
-      Ok(
-        (
-          Array.prepend(t, restTs),
-          mergeBindingMaps(restBindings, bindings),
-          st2
-        )
-      )
+      Ok((
+        Array.prepend(t, restTs),
+        mergeBindingMaps(restBindings, bindings),
+        st2
+      ))
 }
 let inferPatTuple = (elems, ctx, st) =>
   let? (elemTs, bindings, st1) = inferPatTupleFrom(elems, ctx, st) in
@@ -648,6 +670,12 @@ let inferSeqPat = (con, elems, restPat, ctx, st) =>
     }
 
 let inferPat = (p, ctx, st) => switch p {
+  | Ast.PAs(pat, name, _, _) => let? (t, bindings, st1) = inferPat(
+      pat,
+      ctx,
+      st
+    ) in
+      Ok((t, Map.set(name, t, bindings), st1))
   | Ast.PWild(_) => let (t, st1) = freshVar(st) in Ok((t, #{}, st1))
   | Ast.PUnit(_) => Ok((tUnit, #{}, st))
   | Ast.PLit(_, _, _) => Ok((tNumber, #{}, st))
@@ -731,6 +759,7 @@ let patternBindsOpt = rest => switch rest {
   | None => []
 }
 let patternBinds = p => switch p {
+  | Ast.PAs(pat, name, _, _) => Array.append(name, patternBinds(pat))
   | Ast.PBind(name, _) => [name]
   | Ast.PRecord(fields, _) => fields |> Array.flatMap(f => patternBinds(f.pat))
   | Ast.PCtor(_, args, _, _) => args |> Array.flatMap(patternBinds)
@@ -756,7 +785,7 @@ let addAllFrom = (names, set) => switch names {
 }
 
 let paramBound = (p, bound) => switch p {
-  | Ast.LPName(name) => Set.add(name, bound)
+  | Ast.LPName(name, _) => Set.add(name, bound)
   | Ast.LPTuple(names) => addAllFrom(names, bound)
   | Ast.LPRecord(fields) => addAllFrom(fields, bound)
 }

@@ -66,3 +66,12 @@ test("round-trips through the formatter", () => {
     "let f = p => switch p { | (a, b) => a }\n",
   );
 });
+
+test("a singleton tuple argument keeps its call delimiters together when it breaks", () => {
+  const src =
+    "let result = Ok((Ast.ESet(Array.prepend(Ast.SEExpr(first), rest), toEnd(start, toks, p4)), p4))";
+  const once = unwrapOk(format(src));
+  expect(once).toContain("Ok((\n");
+  expect(once).toContain("\n))\n");
+  expect(unwrapOk(format(once))).toBe(once);
+});
