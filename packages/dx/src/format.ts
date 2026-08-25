@@ -773,6 +773,11 @@ const callD = (e: CallExpr): Doc => {
   const fn = calleeD(e.fn);
   if (e.args.length === 0) return seq(fn, txt("()"));
   const last = e.args[e.args.length - 1]!;
+  // A singleton tuple argument needs both parenthesis pairs to preserve the
+  // AST (`Ok((value, next))`). Keep the call glued to that tuple so a broken
+  // tuple becomes `Ok((\n  …\n))`, rather than a staircase of lone closers.
+  if (e.args.length === 1 && last.kind === "tuple")
+    return group(seq(fn, txt("("), exprD(last), txt(")")));
   if (last.kind === "lambda") {
     // `switch` / `loop` already end in `}`; glue `)` rather than soft-breaking
     // to a lone closer under the brace.

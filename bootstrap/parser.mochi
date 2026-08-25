@@ -309,16 +309,14 @@ let parseLambda = (toks, pos, hooks) =>
     switch tokAt(toks, pos).tok {
       | TId(name) => let? p = expectTok(TArrow, toks, pos + 1) in
         let? (body, p2) = parseExpr(toks, p, hooks) in
-          Ok(
-            (
-              Ast.ELambda(
-                [Ast.LPName(name, None)],
-                body,
-                spanning(start, exprSpan(body))
-              ),
-              p2
-            )
-          )
+          Ok((
+            Ast.ELambda(
+              [Ast.LPName(name, None)],
+              body,
+              spanning(start, exprSpan(body))
+            ),
+            p2
+          ))
       | _ => let? p = expectTok(TLparen, toks, pos) in
         let? (params, p2) = listUntil(TRparen, parseParam, toks, p) in
         let? p3 = expectTok(TRparen, toks, p2) in
@@ -341,19 +339,17 @@ let parseLetIn = (toks, pos, hooks) =>
       let? (value, p3) = parseExpr(toks, p2, hooks) in
       let? p4 = expectIn(toks, p3) in
       let? (body, p5) = parseExpr(toks, p4, hooks) in
-        Ok(
-          (
-            Ast.ELetBind(
-              param,
-              paramSpan,
-              monad,
-              value,
-              body,
-              spanning(start, exprSpan(body))
-            ),
-            p5
-          )
-        )
+        Ok((
+          Ast.ELetBind(
+            param,
+            paramSpan,
+            monad,
+            value,
+            body,
+            spanning(start, exprSpan(body))
+          ),
+          p5
+        ))
       : tokAt(toks, p).tok == TLparen
       ? let paramStart = spanOf(tokAt(toks, p)) in
       let? (param, p1) = parseParam(toks, p) in
@@ -372,18 +368,16 @@ let parseLetIn = (toks, pos, hooks) =>
       let? (value, p3) = parseExpr(toks, p2, hooks) in
       let? p4 = expectIn(toks, p3) in
       let? (body, p5) = parseExpr(toks, p4, hooks) in
-        Ok(
-          (
-            Ast.ELetIn(
-              nm.name,
-              nm.span,
-              value,
-              body,
-              spanning(start, exprSpan(body))
-            ),
-            p5
-          )
-        )
+        Ok((
+          Ast.ELetIn(
+            nm.name,
+            nm.span,
+            value,
+            body,
+            spanning(start, exprSpan(body))
+          ),
+          p5
+        ))
 
 // Binding powers — mirrors src/parser.ts's minBp precedence-climbing table.
 let PIPE_BP = 5
@@ -472,16 +466,14 @@ let parseRightSection = (lparenSpan, toks, pos, hooks) =>
   let? (y, p1) = parseExpr(toks, pos + 1, hooks) in
   let? p2 = expectTok(TRparen, toks, p1) in
   let paramRef = Ast.ERef("$s", spanOf(lt)) in
-    Ok(
-      (
-        Ast.ELambda(
-          [Ast.LPName("$s", None)],
-          sectionBody(lt.tok, paramRef, y, spanOf(lt)),
-          toEnd(lparenSpan, toks, p2)
-        ),
-        p2
-      )
-    )
+    Ok((
+      Ast.ELambda(
+        [Ast.LPName("$s", None)],
+        sectionBody(lt.tok, paramRef, y, spanOf(lt)),
+        toEnd(lparenSpan, toks, p2)
+      ),
+      p2
+    ))
 
 // Shared left-section / bin-call fork used by every sectionable infix group.
 let binCallOrLeftSection = (left, lt, toks, pos, bp, fnName, hooks) =>
@@ -617,17 +609,15 @@ let ternaryTail = (cond, toks, pos, hooks) =>
     ? let? (thenE, p1) = parseExpr(toks, pos + 1, hooks) in
     let? p2 = expectTok(TColon, toks, p1) in
     let? (elseE, p3) = parseExpr(toks, p2, hooks) in
-      Ok(
-        (
-          Ast.ETernary(
-            cond,
-            thenE,
-            elseE,
-            spanning(exprSpan(cond), exprSpan(elseE))
-          ),
-          p3
-        )
-      )
+      Ok((
+        Ast.ETernary(
+          cond,
+          thenE,
+          elseE,
+          spanning(exprSpan(cond), exprSpan(elseE))
+        ),
+        p3
+      ))
     : Ok((cond, pos))
 
 // minBp-threaded expression parser (src/parser.ts's `parseExpr(minBp, hooks)`).
@@ -687,17 +677,15 @@ let parseAtomOrCall = (toks, pos, hooks) =>
     lt.tok == TMinus || lt.tok == TBang
       ? let? (operand, p) = parseAtomOrCall(toks, pos + 1, hooks) in
       let fnName = lt.tok == TMinus ? "negate" : "not" in
-        Ok(
-          (
-            Ast.ECall(
-              Ast.ERef(fnName, spanOf(lt)),
-              [operand],
-              None,
-              spanning(spanOf(lt), exprSpan(operand))
-            ),
-            p
-          )
-        )
+        Ok((
+          Ast.ECall(
+            Ast.ERef(fnName, spanOf(lt)),
+            [operand],
+            None,
+            spanning(spanOf(lt), exprSpan(operand))
+          ),
+          p
+        ))
       : parseAtom(toks, pos, hooks)
         |> Result.flatMap(((e, p)) => postfixLoop(e, toks, p, hooks))
 
@@ -769,15 +757,13 @@ let parseInterpLoop = (toks, pos, start, acc, hooks) =>
           Array.append(Ast.IPLit(value), acc2),
           hooks
         )
-      | TTmplEnd(value) => Ok(
-          (
-            Ast.EInterp(
-              Array.append(Ast.IPLit(value), acc2),
-              toEnd(start, toks, p + 1)
-            ),
-            p + 1
-          )
-        )
+      | TTmplEnd(value) => Ok((
+          Ast.EInterp(
+            Array.append(Ast.IPLit(value), acc2),
+            toEnd(start, toks, p + 1)
+          ),
+          p + 1
+        ))
       | t => errAt("expected \${...} to close, got ${tokName(t)}", lt)
     }
 
@@ -875,28 +861,24 @@ let parseHash = (toks, pos, hooks) =>
             ? listUntilH(TRbrace, parseMapEntry, toks, p4 + 1, hooks)
             : Ok(([], p4)) in
           let? p6 = expectTok(TRbrace, toks, p5) in
-            Ok(
-              (
-                Ast.EMap(
-                  Array.prepend({ key: first, value: value }, rest),
-                  toEnd(start, toks, p6)
-                ),
-                p6
-              )
-            )
+            Ok((
+              Ast.EMap(
+                Array.prepend({ key: first, value: value }, rest),
+                toEnd(start, toks, p6)
+              ),
+              p6
+            ))
           : let? (rest, p3) = tokAt(toks, p2).tok == TComma
             ? listUntilH(TRbrace, parseSeqElem, toks, p2 + 1, hooks)
             : Ok(([], p2)) in
           let? p4 = expectTok(TRbrace, toks, p3) in
-            Ok(
-              (
-                Ast.ESet(
-                  Array.prepend(Ast.SEExpr(first), rest),
-                  toEnd(start, toks, p4)
-                ),
-                p4
-              )
-            )
+            Ok((
+              Ast.ESet(
+                Array.prepend(Ast.SEExpr(first), rest),
+                toEnd(start, toks, p4)
+              ),
+              p4
+            ))
 
 // --- pattern matching ---
 
@@ -1061,12 +1043,10 @@ let parsePattern = (toks, pos) =>
   let? (pat, p) = parsePatternAtom(toks, pos) in
     switch tokAt(toks, p).tok {
       | TId("as") => let? (nm, p2) = expectId(toks, p + 1) in
-          Ok(
-            (
-              Ast.PAs(pat, nm.name, nm.span, spanning(patSpan(pat), nm.span)),
-              p2
-            )
-          )
+          Ok((
+            Ast.PAs(pat, nm.name, nm.span, spanning(patSpan(pat), nm.span)),
+            p2
+          ))
       | _ => Ok((pat, p))
     }
 
@@ -1160,18 +1140,16 @@ let parseTypeAtom = (toks, pos) =>
           isUpper(nm.name) && tokAt(toks, p).tok == TDot
             ? let? (q, p2) = expectId(toks, p + 1) in
               isUpper(q.name)
-                ? Ok(
-                  (
-                    Ast.TyQual(
-                      nm.name,
-                      q.name,
-                      q.span,
-                      [],
-                      spanning(nm.span, q.span)
-                    ),
-                    p2
-                  )
-                )
+                ? Ok((
+                  Ast.TyQual(
+                    nm.name,
+                    q.name,
+                    q.span,
+                    [],
+                    spanning(nm.span, q.span)
+                  ),
+                  p2
+                ))
                 : errAt(
                   "a type variable cannot be qualified; expected a constructor after '${nm.name}.', got '${q.name}'",
                   // src/parser.ts's `fail` reports at the CURRENT token, which by
@@ -1337,9 +1315,10 @@ let parseExtern = (toks, pos) =>
     tokAt(toks, p).tok == TType
       ? let? p1 = expectTok(TType, toks, p) in
       let? (nm, p2) = expectId(toks, p1) in
-        Ok(
-          (Ast.SType(nm.name, [], [], None, false, toEnd(start, toks, p2)), p2)
-        )
+        Ok((
+          Ast.SType(nm.name, [], [], None, false, toEnd(start, toks, p2)),
+          p2
+        ))
       : let? (nm, p1) = expectId(toks, p) in
       let? (params, p2) = tokAt(toks, p1).tok == TLt
         ? let? (names, pParams) = listUntil(TGt, expectId, toks, p1 + 1) in
@@ -1376,42 +1355,38 @@ let parseExtern = (toks, pos) =>
             let? (second, p8) = hasSecond
               ? expectStr(toks, p7)
               : Ok(("", p7)) in
-              Ok(
-                (
-                  Ast.SExtern(
-                    nm.name,
-                    nm.span,
-                    params,
-                    t,
-                    "mochi:${convention.name}:${first}",
-                    second,
-                    false,
-                    false,
-                    None,
-                    toEnd(start, toks, p8)
-                  ),
-                  p8
-                )
-              )
-          : let? (moduleName, p6) = expectStr(toks, pConv) in
-          let? (importedName, p7) = expectStr(toks, p6) in
-            Ok(
-              (
+              Ok((
                 Ast.SExtern(
                   nm.name,
                   nm.span,
                   params,
                   t,
-                  moduleName,
-                  importedName,
-                  isCurried,
+                  "mochi:${convention.name}:${first}",
+                  second,
+                  false,
                   false,
                   None,
-                  toEnd(start, toks, p7)
+                  toEnd(start, toks, p8)
                 ),
-                p7
-              )
-            )
+                p8
+              ))
+          : let? (moduleName, p6) = expectStr(toks, pConv) in
+          let? (importedName, p7) = expectStr(toks, p6) in
+            Ok((
+              Ast.SExtern(
+                nm.name,
+                nm.span,
+                params,
+                t,
+                moduleName,
+                importedName,
+                isCurried,
+                false,
+                None,
+                toEnd(start, toks, p7)
+              ),
+              p7
+            ))
 
 // import { a, b } from "./mod"
 // import * as Alias from "./mod" — whole module as a user namespace (ADR 0002).
@@ -1491,23 +1466,21 @@ let parseLet = (toks, pos, tmp, hooks) =>
         : Ok((None, p1)) in
       let? p2 = expectTok(TEq, toks, pA) in
       let? (value, p3) = parseExpr(toks, p2, hooks) in
-        Ok(
-          (
-            [
-              Ast.SLet(
-                nm.name,
-                nm.span,
-                annot,
-                value,
-                false,
-                None,
-                spanning(start, exprSpan(value))
-              )
-            ],
-            p3,
-            tmp
-          )
-        )
+        Ok((
+          [
+            Ast.SLet(
+              nm.name,
+              nm.span,
+              annot,
+              value,
+              false,
+              None,
+              spanning(start, exprSpan(value))
+            )
+          ],
+          p3,
+          tmp
+        ))
 
 // Rebuilders for the export/doc metadata the TS parser spreads on.
 let setLetMeta = (exported, doc, s) => switch s {

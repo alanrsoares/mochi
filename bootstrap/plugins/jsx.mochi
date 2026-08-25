@@ -271,20 +271,18 @@ let parseJsx = (toks, pos, parseExpr) =>
         [],
         parseExpr
       ) in
-        Ok(
-          (
-            makeJsxCall(
-              Ast.EStr("Fragment", jxSpanOf(startTok)),
-              [],
-              None,
-              children,
-              startTok,
-              toks,
-              p1
-            ),
+        Ok((
+          makeJsxCall(
+            Ast.EStr("Fragment", jxSpanOf(startTok)),
+            [],
+            None,
+            children,
+            startTok,
+            toks,
             p1
-          )
-        )
+          ),
+          p1
+        ))
       : let? (firstId, p1) = jxExpectId(toks, pos + 1) in
       let tagRef = jxIsUpper(firstId.name)
         ? Ast.ERef(firstId.name, firstId.span)
@@ -302,9 +300,10 @@ let parseJsx = (toks, pos, parseExpr) =>
         ? jxExpectTok(TGt, toks, p2 + 1)
         : jxExpectTok(TGt, toks, p2) in
         isSelfClosing
-          ? Ok(
-            (makeJsxCall(tagRef, fields, spreadOpt, [], startTok, toks, p3), p3)
-          )
+          ? Ok((
+            makeJsxCall(tagRef, fields, spreadOpt, [], startTok, toks, p3),
+            p3
+          ))
           : let? (children, p4) = parseJsxChildren(
             tagNameStr,
             toks,
@@ -312,20 +311,18 @@ let parseJsx = (toks, pos, parseExpr) =>
             [],
             parseExpr
           ) in
-            Ok(
-              (
-                makeJsxCall(
-                  tagRef,
-                  fields,
-                  spreadOpt,
-                  children,
-                  startTok,
-                  toks,
-                  p4
-                ),
+            Ok((
+              makeJsxCall(
+                tagRef,
+                fields,
+                spreadOpt,
+                children,
+                startTok,
+                toks,
                 p4
-              )
-            )
+              ),
+              p4
+            ))
 
 /// Parse hook: claim a leading `<…>`; otherwise Ok(None) fall-through.
 export let parseJsxAtom = (toks, pos, parseExpr) =>

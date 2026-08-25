@@ -641,13 +641,11 @@ let inferPatTupleFrom = (elems, ctx, st) => switch elems {
   | [] => Ok(([], #{}, st))
   | [ep, ...rest] => let? (t, bindings, st1) = inferPat(ep, ctx, st) in
     let? (restTs, restBindings, st2) = inferPatTupleFrom(rest, ctx, st1) in
-      Ok(
-        (
-          Array.prepend(t, restTs),
-          mergeBindingMaps(restBindings, bindings),
-          st2
-        )
-      )
+      Ok((
+        Array.prepend(t, restTs),
+        mergeBindingMaps(restBindings, bindings),
+        st2
+      ))
 }
 let inferPatTuple = (elems, ctx, st) =>
   let? (elemTs, bindings, st1) = inferPatTupleFrom(elems, ctx, st) in
