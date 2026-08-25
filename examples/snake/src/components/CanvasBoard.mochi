@@ -193,17 +193,16 @@ let drawSnakeHead = (ctx, snake) => switch Array.get(0, snake) {
     }
 }
 
-let drawSnake = (ctx, snake) =>
-  do {
-    ctx->setStrokeStyle("rgba(235, 167, 92, 0.9)");
-    ctx->setLineWidth(CELL_PX - 3);
-    ctx->setLineCap("round");
-    ctx->setLineJoin("round");
-    ctx->beginPath();
-    ctx->drawSnakePathGo(snake, 0);
-    ctx->stroke();
-    ctx->drawSnakeHead(snake)
-  }
+let drawSnake = (ctx, snake) => {
+  ctx->setStrokeStyle("rgba(235, 167, 92, 0.9)");
+  ctx->setLineWidth(CELL_PX - 3);
+  ctx->setLineCap("round");
+  ctx->setLineJoin("round");
+  ctx->beginPath();
+  ctx->drawSnakePathGo(snake, 0);
+  ctx->stroke();
+  ctx->drawSnakeHead(snake)
+}
 
 /// Food beyond the camera leaves a quiet dango-pink highlight on the edge it
 /// crossed. A diagonal target lights both relevant edges, retaining its
@@ -255,12 +254,11 @@ let drawFoodEdgeGlow = (ctx, (foodX, foodY), (headX, headY)) =>
           ctx->stroke()
         }
 
-let drawBoard = (ctx, snake, _previousSnake, food, head) =>
-  do {
-    ctx->drawGrid(head);
-    ctx->drawFood(food);
-    ctx->drawSnake(snake)
-  }
+let drawBoard = (ctx, snake, _previousSnake, food, head) => {
+  ctx->drawGrid(head);
+  ctx->drawFood(food);
+  ctx->drawSnake(snake)
+}
 
 let drawParticlesGo = (ctx, particles, index) => switch Array.get(index, particles) {
   | None => ()

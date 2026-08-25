@@ -18,6 +18,11 @@ expression per line. It canonicalizes a `let _ = … in` chain into `do` notatio
 `do` preserves loop tail position: a final `recur(…)` remains a direct loop recur,
 not an IIFE-wrapped expression.
 
+An arrow body may omit the `do` keyword: `x => { step(); result }` is the same
+sequencing expression and is the formatter's canonical callback form. Arrow
+braces without a top-level semicolon retain their existing record meaning, so
+`x => { value: x }` remains a record-valued lambda.
+
 ## Consequences
 
 - Existing `let _ = … in` source remains valid and formats to the shorter form.
@@ -25,6 +30,8 @@ not an IIFE-wrapped expression.
   soundly require unit at this boundary.
 - The parser, inference, codegen, formatter, and bootstrap mirror carry one `EDo`
   expression variant.
+- Hook calls can appear as non-final arrow-body expressions without a synthetic
+  `let _ = … in` binder.
 
 ## Alternatives rejected
 

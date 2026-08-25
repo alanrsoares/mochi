@@ -12,6 +12,22 @@ test("do evaluates expressions in order and returns the final value", () => {
   expect(seen).toEqual([1, 2]);
 });
 
+test("an arrow-body block is do notation without the keyword", () => {
+  const seen: number[] = [];
+  const src = "let run = log => { log(1); log(2); 42 }";
+  const run = compileAndEval(src, "run") as (log: (n: number) => void) => number;
+  expect(run((n) => seen.push(n))).toBe(42);
+  expect(seen).toEqual([1, 2]);
+  expect(unwrapOk(format(src))).toBe("let run = log => {\n  log(1);\n  log(2);\n  42\n}\n");
+});
+
+test("an arrow record body remains a record", () => {
+  const point = compileAndEval("let point = x => { x: x }", "point") as (x: number) => {
+    x: number;
+  };
+  expect(point(3)).toEqual({ x: 3 });
+});
+
 test("do keeps a final recur in the loop tail", () => {
   const src = "let result = loop (i = 0) { i == 2 ? i : do { ignore(i); recur(i + 1) } }";
   expect(compileAndEval(src, "result")).toBe(2);

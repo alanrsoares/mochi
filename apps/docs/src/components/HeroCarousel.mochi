@@ -56,21 +56,19 @@ export let HeroCarousel = _ =>
           onResume={() => setPaused(false)}
           onPrev={() => go(index - 1)}
           onNext={() => go(index + 1)}
-          onPointerDown={e =>
-            do {
-              setPaused(true);
-              swipePointerDown(startX, e)
-            }}
-          onPointerUp={e =>
-            do {
-              setPaused(false);
-              let dx = swipePointerDx(startX, e) in
-                dx < 0 - SWIPE_MIN_PX
-                  ? go(index + 1)
-                  : dx > SWIPE_MIN_PX
-                  ? go(index - 1)
-                  : setPaused(false)
-            }}
+          onPointerDown={e => {
+            setPaused(true);
+            swipePointerDown(startX, e)
+          }}
+          onPointerUp={e => {
+            setPaused(false);
+            let dx = swipePointerDx(startX, e) in
+              dx < 0 - SWIPE_MIN_PX
+                ? go(index + 1)
+                : dx > SWIPE_MIN_PX
+                ? go(index - 1)
+                : setPaused(false)
+          }}
           onPointerCancel={() => setPaused(false)}
           images={mapIndexed(
             (item, i) =>

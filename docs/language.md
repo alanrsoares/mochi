@@ -17,16 +17,21 @@ let pipeline = 5 |> double |> inc |> double            // left-to-right pipe
 let shifted = 5 -> add(3)                              // add(5, 3), fast pipe
 ```
 
-Use `do { … }` to sequence expressions and return the final one. The formatter
-canonicalizes a nested `let _ = … in` chain to this form:
+Use `do { … }` to sequence expressions and return the final one. An arrow body
+can omit `do`, which keeps callback-heavy code compact:
 
 ```mochi
-let draw = ctx => do {
+let draw = ctx => {
   ctx->beginPath();
   ctx->stroke();
   ()
 }
 ```
+
+The formatter canonicalizes a nested `let _ = … in` chain to `do { … }`, and
+uses the brace form for arrow bodies. Because `{ field: value }` remains a
+record-valued arrow body, braces select sequencing only when they contain a
+top-level semicolon; use explicit `do` for a one-expression sequence.
 
 Annotations / `extern` may write the same domain as `() -> T` (ADR 0015).
 
