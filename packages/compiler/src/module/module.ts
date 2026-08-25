@@ -24,7 +24,7 @@ import { parse } from "../parser/parser";
 export type ModuleOutput = { path: string; js: string };
 type ReadFile = (path: string) => Promise<string>;
 
-/** Options threaded to every per-module inference call. Each source file can also opt in through `// @mochi open`. */
+/** Options threaded to every per-module inference call. Each source file can also opt in through `"use open"`. */
 export type ModuleGraphOptions = { plugins?: LanguagePlugin[]; open?: boolean };
 
 /** Relative / absolute specs — everything else is a bare package or package subpath. */

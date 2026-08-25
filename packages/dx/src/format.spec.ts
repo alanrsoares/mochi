@@ -5,6 +5,11 @@ test("normalizes whitespace in a let binding", () => {
   expect(fmt("let   n=add(1,2)")).toBe("let n = 1 + 2\n");
 });
 
+test("canonicalizes the open-world directive as a module header", () => {
+  const expected = '"use open"\n\nlet value = browserGlobal\n';
+  expect(fmt('"use open"\nlet value = browserGlobal')).toBe(expected);
+});
+
 test("a single-param lambda drops its parentheses", () => {
   expect(fmt("let f=(x)=>x")).toBe("let f = x => x\n");
 });

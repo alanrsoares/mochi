@@ -1,3 +1,5 @@
+"use open"
+
 // Codegen showcase: one source pane, one output pane. The output pane swaps
 // backends instead of sitting beside them — same input, three emits, so putting
 // them in the same slot is the honest layout.
@@ -52,4 +54,3 @@ export let CodegenPanels = props =>
         </pre>
       </div>
     </div>
-// @mochi open

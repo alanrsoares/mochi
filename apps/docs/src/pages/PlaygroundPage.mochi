@@ -1,3 +1,5 @@
+"use open"
+
 // Full-viewport playground shell — ReScript try IA, mochi chrome.
 // Playground stays TSX (compile / hooks / imperative preview host).
 import { Playground, ColorSchemeToggle } from "../host/widgets.host"
@@ -29,4 +31,3 @@ export let PlaygroundPage = props =>
     </header>
     <main className="flex min-h-0 flex-1 flex-col"><Playground /></main>
   </div>
-// @mochi open

@@ -1,3 +1,5 @@
+"use open"
+
 // About page shell — same MPA chrome as PlaygroundPage (ADR 0008), story body
 // in AboutScrolly.
 import { ColorSchemeToggle } from "../host/widgets.host"
@@ -55,4 +57,3 @@ export let AboutPage = props =>
       linkLabel="decisions live in docs/adr"
     />
   </div>
-// @mochi open

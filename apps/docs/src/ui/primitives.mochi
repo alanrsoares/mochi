@@ -1,3 +1,5 @@
+"use open"
+
 // styled-cva factories (ADR 0009). Call-form only.
 import { tw } from "@mochi/plugin-styled-cva/tw"
 
@@ -244,4 +246,3 @@ export let TooltipCard = tw.span(
     ++ " border-line-strong bg-foam p-2.5 font-mono text-2xs text-ink"
     ++ " leading-tight shadow-soft"
 )
-// @mochi open

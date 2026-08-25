@@ -59,7 +59,7 @@ export type MochiPluginOptions = {
    * opt-out; non-empty → builtins + this list (`resolvePlugins`, ADR 0011).
    */
   plugins?: LanguagePlugin[];
-  /** Permit host globals across transformed files; prefer per-file `// @mochi open`. */
+  /** Permit host globals across transformed files; prefer per-file `"use open"`. */
   open?: boolean;
   /**
    * A live runtime owner for the compiler plugin list. The component must

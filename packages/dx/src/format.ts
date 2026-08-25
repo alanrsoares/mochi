@@ -1253,11 +1253,13 @@ const layoutProgram = (prog: Program, src: string): string => {
   shadowedNames = new Set([...innerBound, ...topLevelNames(prog.stmts)]);
   flatArity = buildFlatArity(prog.stmts, innerBound);
   const errorSpans = prog.stmts.filter((s) => s.kind === "error").map((s) => s.span);
+  const openDirective = /^\s*"use open"[ \t]*(?:\r?\n|$)/.test(src);
   const comments = collectComments(src).filter(
     (c) => !errorSpans.some((sp) => c.start >= sp.start && c.start < sp.end),
   );
   const tail = attachComments(prog.stmts, comments, src);
-  return program(prog.stmts, src, tail);
+  const body = program(prog.stmts, src, tail);
+  return openDirective ? `"use open"\n\n${body}` : body;
 };
 
 /** Print an already-parsed `Program` with comment/blank-line fidelity to `src`. */

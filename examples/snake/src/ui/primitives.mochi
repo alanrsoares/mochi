@@ -1,3 +1,5 @@
+"use open"
+
 // styled-cva factories (ADR 0009). Call-form only — mirrors
 // apps/docs/src/ui/primitives.mochi's conventions for this smaller app.
 import { tw } from "@mochi/plugin-styled-cva/tw"
@@ -102,4 +104,3 @@ export let PlayerName = tw.span("truncate flex-1 text-sm text-ink")
 export let PlayerScore = tw.span(
   "font-mono text-sm font-bold text-fur-deep shrink-0"
 )
-// @mochi open

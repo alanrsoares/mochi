@@ -1,4 +1,5 @@
-// @mochi open
+"use open"
+
 import { RailwayDemo } from "./components/RailwayDemo"
 import { HeaderBadge } from "./components/HeaderBadge"
 import { SyntaxPanel } from "./components/SyntaxPanel"

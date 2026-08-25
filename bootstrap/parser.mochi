@@ -1743,7 +1743,17 @@ let stmtsLoop = (toks, pos0, tmp0, acc0, diags0, hooks) =>
 /// tooling that wants the partial tree calls this and says so.
 export let parseRecovering = (toks, pluginsOpt) =>
   let hooks = parseHooksOf(resolvePluginsDefault(pluginsOpt)) in
-    stmtsLoop(toks, 0, 0, [], [], hooks)
+    stmtsLoop(
+      toks,
+      switch tokAt(toks, 0).tok {
+        | TStr(value) => value == "use open" ? 1 : 0
+        | _ => 0
+      },
+      0,
+      [],
+      [],
+      hooks
+    )
 
 export let parse = toks => parseWith(toks, None)
 

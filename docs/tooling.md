@@ -34,8 +34,8 @@ resolves at runtime, and the TS backend emits a matching `.d.mts` for them.
 
 Mochi rejects unbound names by default on every compile and editor surface. This
 catches typos and enables did-you-mean quick fixes. Bind JavaScript values through
-a typed `extern` whenever possible. For a narrow host-global seam, put `// @mochi open`
-on its own line in that file; `--open` is the project-wide migration escape hatch.
+a typed `extern` whenever possible. For a narrow host-global seam, begin the file with
+`"use open"`; `--open` is the project-wide migration escape hatch.
 
 ## QA gate
 
@@ -89,7 +89,7 @@ extension).
 - **Document / workspace symbols** — outline of top-level lets/types/ctors; workspace
   search over the open module graph.
 - **Code actions** — `Diagnostic.suggestions` become quick fixes (e.g. did-you-mean on
-  unbound names). A file using `// @mochi open` deliberately treats unknown names as
+unbound names). A file using `"use open"` deliberately treats unknown names as
   host globals, so typo suggestions are not guessed there.
 - **Diagnostics** — the same `Diagnostic` values the compiler produces, with spans; a
   `--json` structured form is available for machine consumers. Check/infer may emit

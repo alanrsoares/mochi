@@ -16,10 +16,12 @@ test("compile is strict by default and suggests a close binding", () => {
   expect(r.error[0]!.suggestions?.[0]?.replaceWith).toBe("count");
 });
 
-test("open-world inference requires an explicit flag or file pragma", () => {
+test("open-world inference requires an explicit flag or file directive", () => {
   expect(isErr(compile("let value = browserGlobal"))).toBe(true);
   expect(isErr(compile("let value = browserGlobal", { open: true }))).toBe(false);
-  expect(isErr(compile("// @mochi open\nlet value = browserGlobal"))).toBe(false);
+  expect(isErr(compile("// @mochi open\nlet value = browserGlobal"))).toBe(true);
+  expect(isErr(compile('"use open"\nlet value = browserGlobal'))).toBe(false);
+  expect(js('"use open"\nlet value = browserGlobal')).toBe("const value = browserGlobal;\n");
 });
 
 test("pipeline desugars to nested calls", () => {
