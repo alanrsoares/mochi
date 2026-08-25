@@ -294,8 +294,15 @@ let loopNeedsStep = e => switch e {
       thenE
     ) || loopNeedsStep(elseE)
   | Ast.ELetIn(_, _, _, body, _) => loopNeedsStep(body)
+  | Ast.EDo(exprs, _) => loopNeedsStep(lastDoExpr(exprs))
   | Ast.EMatch(_, _, _) => hasRecur(e)
   | _ => false
+}
+
+let lastDoExpr = exprs => switch exprs {
+  | [last] => last
+  | [_, ...rest] => lastDoExpr(rest)
+  | [] => Ast.EUnit({ start: 0, end: 0 })
 }
 
 // Rewrite a loop-tail switch so every arm yields a step value: recur tails
@@ -315,7 +322,7 @@ let wrapStepTails = (e, sp) => switch e {
       wrapStepTails(body, sp),
       lsp
     )
-  | Ast.EDo(exprs, dsp) => Ast.EDo(exprs |> map(x => wrapStepTails(x, sp)), dsp)
+  | Ast.EDo(exprs, dsp) => Ast.EDo(wrapDoStepTail(exprs, sp), dsp)
   | Ast.EMatch(scrutinee, arms, msp) => Ast.EMatch(
       scrutinee,
       arms
@@ -329,6 +336,12 @@ let wrapStepTails = (e, sp) => switch e {
       msp
     )
   | _ => Ast.ECall(Ast.ERef("_done", sp), [e], None, sp)
+}
+
+let wrapDoStepTail = (exprs, sp) => switch exprs {
+  | [last] => [wrapStepTails(last, sp)]
+  | [first, ...rest] => [first, ...wrapDoStepTail(rest, sp)]
+  | [] => []
 }
 
 let loopParamNames = params => Str.join(", ", params |> map(p => p.name))

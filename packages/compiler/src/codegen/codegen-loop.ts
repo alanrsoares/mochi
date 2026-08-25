@@ -60,6 +60,8 @@ export const loopNeedsStep = (e: Expr): boolean => {
       return loopNeedsStep(e.then) || loopNeedsStep(e.else);
     case "letin":
       return loopNeedsStep(e.body);
+    case "do":
+      return loopNeedsStep(e.exprs.at(-1)!);
     case "match":
       return hasRecur(e);
     default:
@@ -88,6 +90,11 @@ const wrapStepTails = (e: Expr): Expr => {
       return { ...e, then: wrapStepTails(e.then), else: wrapStepTails(e.else) };
     case "letin":
       return { ...e, body: wrapStepTails(e.body) };
+    case "do":
+      return {
+        ...e,
+        exprs: [...e.exprs.slice(0, -1), wrapStepTails(e.exprs.at(-1)!)],
+      };
     case "match":
       return { ...e, arms: e.arms.map((a) => ({ ...a, body: wrapStepTails(a.body) })) };
     default:

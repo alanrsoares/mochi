@@ -17,6 +17,16 @@ test("do keeps a final recur in the loop tail", () => {
   expect(compileAndEval(src, "result")).toBe(2);
 });
 
+test("do keeps a final recur in a loop-tail switch arm", () => {
+  const src = `let result = loop (i = 0) {
+    switch i {
+      | 2 => i
+      | _ => do { ignore(i); recur(i + 1) }
+    }
+  }`;
+  expect(compileAndEval(src, "result")).toBe(2);
+});
+
 test("do requires at least one final expression and no trailing separator", () => {
   expect(isErr(compile("let result = do {}"))).toBe(true);
   expect(isErr(compile("let result = do { 1; }"))).toBe(true);
