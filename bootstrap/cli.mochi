@@ -42,7 +42,10 @@ let writeAll = outs =>
       | [] => Ok("")
       | [o, ...rest] => switch writeFile(outPath(o.path), o.js) {
           | Err(e) => Err(e)
-          | Ok(w) => let logged = print("  wrote ${w}") in recur(rest)
+          | Ok(w) => do {
+              print("  wrote ${w}");
+              recur(rest)
+            }
         }
     }
   }
