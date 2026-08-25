@@ -1,3 +1,5 @@
+"use open"
+
 // A live Result railway. Three validators chained with `|>` and
 // Result.flatMap; the first Err derails the value onto the error track and the
 // stages after it never run. The diagram reads its shape from the same Results
@@ -183,4 +185,3 @@ export let RailwayDemo = _ =>
         </text>
       </svg>
     </div>
-// @mochi open

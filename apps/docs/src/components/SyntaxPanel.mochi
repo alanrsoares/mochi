@@ -1,3 +1,5 @@
+"use open"
+
 import { SyntaxBar } from "../ui/primitives"
 
 export let SyntaxPanel = props =>
@@ -12,4 +14,3 @@ export let SyntaxPanel = props =>
       {props.children}
     </pre>
   </div>
-// @mochi open

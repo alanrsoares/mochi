@@ -1,6 +1,7 @@
+"use open"
+
 // Pure highlight / twoslash helpers. UI + RegExp JS highlighter stay in
 // HighlightCode.tsx (hooks / DOM / regex).
-// @mochi open
 extern lex<A, B> : string -> Result<A, B> = "@mochi/compiler" "lex"
 extern hoverAt<A> : string -> number -> Option<A> = "@mochi/dx/hover" "hoverAtOption"
 

@@ -21,7 +21,7 @@ import { openMode } from "./open-mode";
 /** The typed program: the parsed `Program` plus the inference result (env, span→type table, aliases) that tooling reads back. */
 export type TypedProgram = { prog: Program; res: InferResult };
 
-/** Source → typed Program: lex → parse → check → infer. Strict by default; `// @mochi open` or `open: true` permits host globals. */
+/** Source → typed Program: lex → parse → check → infer. Strict by default; `"use open"` or `open: true` permits host globals. */
 export const toTypedProgram = (
   src: string,
   opts: InferOptions = {},
@@ -113,7 +113,7 @@ export type CompileOptions = {
   runtime?: boolean;
   moduleExt?: string;
   plugins?: LanguagePlugin[];
-  /** Permit unbound host globals for this invocation; `// @mochi open` is per-file. */
+  /** Permit unbound host globals for this invocation; `"use open"` is per-file. */
   open?: boolean;
 };
 

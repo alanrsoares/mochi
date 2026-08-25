@@ -1,7 +1,8 @@
+"use open"
+
 // Snake — re-reduced game container + mochi UI. Host seams only for APIs the
 // surface cannot express yet (timer, keyboard, localStorage, canvas2d/rAF,
 // fetch/WS). Board pixels sync via CanvasBoard.mochi effects → canvas.host.
-// @mochi open
 import { useEffect, hookDeps0 } from "@mochi/plugin-preact/hooks"
 import {
   document,

@@ -1,3 +1,5 @@
+"use open"
+
 // Right-hand pane chrome: tab strip + pane body.
 import { PresetSelect } from "../ui/primitives"
 
@@ -32,4 +34,3 @@ export let PlaygroundSettings = props =>
       {"⌘E run · ⌘S format · share link is a compressed ?code= payload. Right pane shows JS, typed TS, and .d.ts emit."}
     </p>
   </div>
-// @mochi open

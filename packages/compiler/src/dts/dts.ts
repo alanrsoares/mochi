@@ -842,7 +842,7 @@ export type EmitDtsOptions = {
    * list (`resolvePlugins`, ADR 0011).
    */
   plugins?: LanguagePlugin[];
-  /** Permit unbound host globals; `// @mochi open` remains file-local. */
+  /** Permit unbound host globals; `"use open"` remains file-local. */
   open?: boolean;
 };
 

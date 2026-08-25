@@ -94,7 +94,8 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
     ...CORE_SYNC_TOKENS,
     ...plugins.flatMap((p) => [...(p.syncTokens ?? [])]),
   ]);
-  let pos = 0;
+  // A string-literal module prologue is metadata, not a top-level expression.
+  let pos = toks[0]?.t === "str" && toks[0].v === "use open" ? 1 : 0;
   let tmpCount = 0; // supplies fresh names for destructuring temporaries
   let last: Located = toks[0]!; // most recently consumed token (for end spans)
   const peek = () => toks[pos]!;

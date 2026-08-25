@@ -1,3 +1,5 @@
+"use open"
+
 // Presentational carousel chrome. Index / timer / pause live in HeroCarousel.mochi.
 import { Icon } from "../host/widgets.host"
 import { CarouselNav } from "../ui/primitives"
@@ -53,4 +55,3 @@ export let HeroCarouselView = props =>
       </div>
     </figcaption>
   </figure>
-// @mochi open

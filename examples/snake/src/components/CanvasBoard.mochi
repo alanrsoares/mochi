@@ -1,3 +1,5 @@
+"use open"
+
 // Canvas board — Mochi owns game state, animation, and every pixel. The host
 // only obtains Canvas2D and schedules requestAnimationFrame.
 import {
@@ -345,24 +347,28 @@ export let CanvasBoard : BoardProps -> VNode = props =>
   let motion = useRef(
     { previous: board, current: board, changedAt: performanceNow() }
   ) in
-  let previous = motion.current in
-  let _sync = setRef(
-    motion,
-    { previous: previous.current, current: board, changedAt: performanceNow() }
-  ) in
-  let _eat = useEffect(() => board->updateEat(particles, eatWatch)
-  )(hookDeps2(props.snake, props.food)) in
-  // The host only schedules rAF and gets Canvas2D; this closure owns each frame.
-  let _draw = useEffect(() =>
-    startCanvasLoop(canvasRef, (ctx, time) =>
-      ctx->drawFrame(motion, particles, time)
-    )
-  )(hookDeps2(canvasRef, motion)) in
-    <canvas
-      ref={canvasRef}
-      id="game-canvas"
-      width={BOARD_PX}
-      height={BOARD_PX}
-      className="block h-auto max-h-full w-auto max-w-full rounded-[15px] border-2 border-line-strong shadow-lg"
-    />
-// @mochi open
+    // The host only schedules rAF and gets Canvas2D; this closure owns each frame.
+    do {
+      setRef(
+        motion,
+        {
+          previous: motion.current.current,
+          current: board,
+          changedAt: performanceNow()
+        }
+      );
+      useEffect(() => board->updateEat(particles, eatWatch)
+      )(hookDeps2(props.snake, props.food));
+      useEffect(() =>
+        startCanvasLoop(canvasRef, (ctx, time) =>
+          ctx->drawFrame(motion, particles, time)
+        )
+      )(hookDeps2(canvasRef, motion));
+      <canvas
+        ref={canvasRef}
+        id="game-canvas"
+        width={BOARD_PX}
+        height={BOARD_PX}
+        className="block h-auto max-h-full w-auto max-w-full rounded-[15px] border-2 border-line-strong shadow-lg"
+      />
+    }

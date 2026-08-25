@@ -110,7 +110,7 @@ const hoverFrom = (
 
 /**
  * Hover at `offset`, or null when the source doesn't typecheck or nothing sits
- * under the cursor. Strict by default; `// @mochi open` permits host globals. Single-file: a file with
+ * under the cursor. Strict by default; `"use open"` permits host globals. Single-file: a file with
  * imports won't typecheck (imported constructors are unknown), so prefer
  * `moduleHoverAt` when a path is available.
  */

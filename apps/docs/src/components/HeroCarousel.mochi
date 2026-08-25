@@ -1,3 +1,5 @@
+"use open"
+
 // Hero artwork carousel — hooks in mochi (Counter pattern). Slide jpg URLs +
 // interval/DOM timer / pointer swipe stay in `lib/hero-slides.ts`.
 import {
@@ -96,4 +98,3 @@ export let HeroCarousel = _ =>
           )}
         />
     }
-// @mochi open

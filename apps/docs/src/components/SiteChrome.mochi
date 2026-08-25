@@ -1,3 +1,5 @@
+"use open"
+
 // Shared site chrome — the leaf blocks every page's header/footer repeats
 // (brand link, GitHub link, active-nav marker, footer). Page headers keep
 // their own layout (landing is sticky h-14, playground compact h-12); the
@@ -76,4 +78,3 @@ export let SiteFooter = props =>
       </NavLink>
     </div>
   </footer>
-// @mochi open
