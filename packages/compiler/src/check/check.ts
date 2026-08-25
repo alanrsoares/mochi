@@ -49,6 +49,9 @@ function forEachSubExpr(e: Expr, visit: (x: Expr) => void): void {
       forEachSubExpr(pipe.left, visit);
       forEachSubExpr(pipe.right, visit);
     })
+    .with({ kind: "do" }, (block) => {
+      for (const expr of block.exprs) forEachSubExpr(expr, visit);
+    })
     .with({ kind: "ternary" }, (ternary) => {
       forEachSubExpr(ternary.cond, visit);
       forEachSubExpr(ternary.then, visit);
@@ -713,6 +716,7 @@ const checkExprBinds = (e: Expr): Diagnostic[] =>
       ),
     )
     .with({ kind: "pipe" }, (pipe) => many(checkExprBinds(pipe.left), checkExprBinds(pipe.right)))
+    .with({ kind: "do" }, (block) => many(...block.exprs.map(checkExprBinds)))
     .with({ kind: "ternary" }, (ternary) =>
       many(
         checkExprBinds(ternary.cond),

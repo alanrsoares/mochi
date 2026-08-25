@@ -139,11 +139,11 @@ let gameContainer = defineContainer(
           { ...initGame(COLS, ROWS, s.highScore), submitted: false }
         ),
         step: on(s => step(s, pickRandom(s.food, freeCells(s.food, s.snake)))),
-        setName: on((s, n) => { name: n }),
-        setConnected: on((s, c) => { connected: c }),
-        setLeaders: on((s, ls) => { leaders: ls }),
+        setName: on((_s, n) => { name: n }),
+        setConnected: on((_s, c) => { connected: c }),
+        setLeaders: on((_s, ls) => { leaders: ls }),
         submitScore: // Payloadless: the reaction below reads the name/score off the state.
-        on(s => { submitted: true })
+        on(_s => { submitted: true })
       },
     derive: // `derive` keeps the status predicates on the container, so every consumer
     // reads one derived signal instead of re-deriving from `status`.
@@ -157,7 +157,7 @@ let gameContainer = defineContainer(
       [
         // localStorage write, declared instead of hand-rolled in a `useEffect`.
         fx.onChange(s =>
-          s.highScore.value, (value, prev, ctx) =>
+          s.highScore.value, (value, _prev, _ctx) =>
           [Intent.storageSet(highScoreKey, value)]
         ),
         // Mount-once load: `onEnter` fires on the false→true edge only.
@@ -220,16 +220,19 @@ export let App = _ =>
   // arms) widen string literals to `string`, which does not unify with the
   // styled-cva `$tone` literal union.
   // Two-parameter selector = read a `derive`d signal (ADR 0051).
-  let playing = store->useSelect((s, d) => d.playing.value) in
-  let gameOver = store->useSelect((s, d) => d.gameOver.value) in
-  let paused = store->useSelect((s, d) => d.paused.value) in
+  let playing = store->useSelect((_s, d) => d.playing.value) in
+  let gameOver = store->useSelect((_s, d) => d.gameOver.value) in
+  let paused = store->useSelect((_s, d) => d.paused.value) in
   // Mount one timer and read the store's live status signal on every turn.
   // This avoids coupling game progression to Preact re-render timing or a
   // derived signal's subscription lifecycle.
   let _tick = useEffect(() =>
     every(TICK_MS, () =>
       isPlayingStatus(store.$state.status.value)
-        ? let _ = store.actions.step() in ()
+        ? do {
+          store.actions.step();
+          ()
+        }
         : ()
     )
   )(hookDeps0()) in

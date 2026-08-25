@@ -103,37 +103,39 @@ export let togglePause = state => switch state.status {
 
 /// Advance game state by one frame tick
 export let step = (state, randomFood) => switch state.status {
-  | Playing => let _ = isOpposite(state.dir, Up) in
-    let currentDir = switch Array.head(state.dirQueue) {
-      | Some(d) => d
-      | None => state.dir
-    } in
-    let remainingQueue = switch state.dirQueue {
-      | [_, ...tail] => tail
-      | _ => state.dirQueue
-    } in
-    let head = Array.head(state.snake) |> Option.unwrapOr((0, 0)) in
-    let newHead = nextHead(head, currentDir) in
-    let hitSelf = checkSelfCollision(newHead, state.snake) in
-      hitSelf
-        ? let finalHighScore = max(state.score, state.highScore) in
-          { ...state, status: GameOver, highScore: finalHighScore }
-        : let eating = newHead == state.food in
-        let newScore = eating ? state.score + 10 : state.score in
-        let newHigh = max(newScore, state.highScore) in
-        let rawBody = [newHead, ...state.snake] in
-        let snakeLen = Array.length(state.snake) in
-        let newSnake = eating ? rawBody : rawBody |> Array.take(snakeLen) in
-        let newFood = eating ? randomFood : state.food in
-          {
-            ...state,
-            snake: newSnake,
-            food: newFood,
-            dir: currentDir,
-            dirQueue: remainingQueue,
-            score: newScore,
-            highScore: newHigh
-          }
+  | Playing => do {
+      isOpposite(state.dir, Up);
+      let currentDir = switch Array.head(state.dirQueue) {
+        | Some(d) => d
+        | None => state.dir
+      } in
+      let remainingQueue = switch state.dirQueue {
+        | [_, ...tail] => tail
+        | _ => state.dirQueue
+      } in
+      let head = Array.head(state.snake) |> Option.unwrapOr((0, 0)) in
+      let newHead = nextHead(head, currentDir) in
+      let hitSelf = checkSelfCollision(newHead, state.snake) in
+        hitSelf
+          ? let finalHighScore = max(state.score, state.highScore) in
+            { ...state, status: GameOver, highScore: finalHighScore }
+          : let eating = newHead == state.food in
+          let newScore = eating ? state.score + 10 : state.score in
+          let newHigh = max(newScore, state.highScore) in
+          let rawBody = [newHead, ...state.snake] in
+          let snakeLen = Array.length(state.snake) in
+          let newSnake = eating ? rawBody : rawBody |> Array.take(snakeLen) in
+          let newFood = eating ? randomFood : state.food in
+            {
+              ...state,
+              snake: newSnake,
+              food: newFood,
+              dir: currentDir,
+              dirQueue: remainingQueue,
+              score: newScore,
+              highScore: newHigh
+            }
+    }
   | _ => state
 }
 

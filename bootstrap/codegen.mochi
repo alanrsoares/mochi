@@ -140,6 +140,7 @@ let genExpr = (e, ctx) => switch e {
   | Ast.EPipe(left, right, _) =>
     // desugar inline: a |> f  ->  f(a)
     "${genCallee(right, ctx)}(${genExpr(left, ctx)})"
+  | Ast.EDo(exprs, _) => genDo(exprs, ctx)
   | Ast.ETernary(cond, thenE, elseE, _) => "(${genExpr(cond, ctx)} ? ${genExpr(thenE, ctx)} : ${genExpr(elseE, ctx)})"
   | Ast.EMatch(scrutinee, arms, _) => genMatch(scrutinee, arms, ctx)
   | Ast.ELoop(params, body, _) =>
@@ -187,6 +188,13 @@ let genExpr = (e, ctx) => switch e {
         })
     ) in
       "`${body}`"
+}
+
+let genDo = (exprs, ctx) => "(() => { ${genDoSteps(exprs, ctx)} })()"
+let genDoSteps = (exprs, ctx) => switch exprs {
+  | [last] => "return ${genExpr(last, ctx)};"
+  | [first, ...rest] => "${genExpr(first, ctx)}; ${genDoSteps(rest, ctx)}"
+  | [] => "throw new Error(\"empty do block\");"
 }
 
 let genSeqSlot = (el, ctx) => switch el {
@@ -249,6 +257,7 @@ let hasRecur = e => switch e {
   | Ast.ECall(fn, args, _, _) => hasRecur(fn) || someOf(hasRecur, args)
   | Ast.ELetIn(_, _, value, body, _) => hasRecur(value) || hasRecur(body)
   | Ast.EPipe(left, right, _) => hasRecur(left) || hasRecur(right)
+  | Ast.EDo(exprs, _) => someOf(hasRecur, exprs)
   | Ast.ETernary(cond, thenE, elseE, _) => hasRecur(
       cond
     ) || (hasRecur(thenE) || hasRecur(elseE))
@@ -306,6 +315,7 @@ let wrapStepTails = (e, sp) => switch e {
       wrapStepTails(body, sp),
       lsp
     )
+  | Ast.EDo(exprs, dsp) => Ast.EDo(exprs |> map(x => wrapStepTails(x, sp)), dsp)
   | Ast.EMatch(scrutinee, arms, msp) => Ast.EMatch(
       scrutinee,
       arms
@@ -335,6 +345,9 @@ let genLoopTail = (e, params, ctx) => switch e {
   | Ast.ELetIn(name, _, value, body, _) => hasRecur(e)
       ? "{ const ${name} = ${genExpr(value, ctx)}; ${genLoopTail(body, params, ctx)} }"
       : "return ${genExpr(e, ctx)};"
+  | Ast.EDo(exprs, _) => hasRecur(e)
+      ? "{ ${genDoLoopTail(exprs, params, ctx)} }"
+      : "return ${genExpr(e, ctx)};"
   | Ast.EMatch(_, _, sp) => hasRecur(e)
       ? let step = genExpr(wrapStepTails(e, sp), ctx) in
       let rebind = switch params {
@@ -344,6 +357,12 @@ let genLoopTail = (e, params, ctx) => switch e {
         "const _step = ${step}; if (_step._tag === ${jsStringLit("recur")}) { ${rebind} continue; } return _step.value;"
       : "return ${genExpr(e, ctx)};"
   | _ => "return ${genExpr(e, ctx)};"
+}
+
+let genDoLoopTail = (exprs, params, ctx) => switch exprs {
+  | [last] => genLoopTail(last, params, ctx)
+  | [first, ...rest] => "${genExpr(first, ctx)}; ${genDoLoopTail(rest, params, ctx)}"
+  | [] => "return undefined;"
 }
 
 // The statement body of a lowered loop: param `let`s + `while (true)`.
@@ -1040,6 +1059,7 @@ let usesMatchLib = e => switch e {
       value
     ) || usesMatchLib(body)
   | Ast.EPipe(left, right, _) => usesMatchLib(left) || usesMatchLib(right)
+  | Ast.EDo(exprs, _) => someOf(usesMatchLib, exprs)
   | Ast.ETernary(cond, thenE, elseE, _) => usesMatchLib(
       cond
     ) || (usesMatchLib(thenE) || usesMatchLib(elseE))
@@ -1171,6 +1191,7 @@ let exprRefs = (e, ctx, acc) => switch e {
       )
     )
   | Ast.EPipe(left, right, _) => exprRefs(right, ctx, exprRefs(left, ctx, acc))
+  | Ast.EDo(exprs, _) => exprRefsListFrom(exprs, 0, ctx, acc)
   | Ast.ETernary(cond, thenE, elseE, _) => exprRefs(
       elseE,
       ctx,

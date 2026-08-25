@@ -28,6 +28,7 @@ export const usesMatchLib = (e: Expr): boolean =>
     )
     .with({ kind: "recur" }, (r) => r.args.some(usesMatchLib))
     .with({ kind: "pipe" }, (p) => usesMatchLib(p.left) || usesMatchLib(p.right))
+    .with({ kind: "do" }, (block) => block.exprs.some(usesMatchLib))
     .with(
       { kind: "ternary" },
       (t) => usesMatchLib(t.cond) || usesMatchLib(t.then) || usesMatchLib(t.else),
@@ -101,6 +102,9 @@ export const exprRefs = (e: Expr, acc: Set<string>): void => {
     .with({ kind: "pipe" }, (p) => {
       exprRefs(p.left, acc);
       exprRefs(p.right, acc);
+    })
+    .with({ kind: "do" }, (block) => {
+      for (const expr of block.exprs) exprRefs(expr, acc);
     })
     .with({ kind: "ternary" }, (t) => {
       exprRefs(t.cond, acc);

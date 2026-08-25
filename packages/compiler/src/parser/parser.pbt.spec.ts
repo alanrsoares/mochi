@@ -52,6 +52,8 @@ const children = (e: Expr): Expr[] => {
       return e.elements;
     case "pipe":
       return [e.left, e.right];
+    case "do":
+      return e.exprs;
     case "ternary":
       return [e.cond, e.then, e.else];
     case "match":

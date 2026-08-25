@@ -23,6 +23,8 @@ export const hasRecur = (e: Expr): boolean => {
       return hasRecur(e.value) || hasRecur(e.body);
     case "pipe":
       return hasRecur(e.left) || hasRecur(e.right);
+    case "do":
+      return e.exprs.some(hasRecur);
     case "ternary":
       return hasRecur(e.cond) || hasRecur(e.then) || hasRecur(e.else);
     case "match":
@@ -121,6 +123,14 @@ const genLoopTail = (e: Expr, params: readonly LoopParam[], ctx: GenCtx): string
     // of flattening it into the loop body: consecutive `let _ = … in` effects
     // and ordinary shadow-rebinds would otherwise redeclare the same `const`.
     return `{ const ${e.name}${ann ? `: ${ann}` : ""} = ${genExpr(e.value, ctx)}; ${genLoopTail(e.body, params, ctx)} }`;
+  }
+  if (e.kind === "do" && hasRecur(e)) {
+    const [last, ...reversedInit] = e.exprs.toReversed();
+    const steps = reversedInit
+      .toReversed()
+      .map((expr) => `${genExpr(expr, ctx)};`)
+      .join(" ");
+    return `{ ${steps} ${genLoopTail(last!, params, ctx)} }`;
   }
   if (e.kind === "match" && hasRecur(e)) {
     const step = genExpr(wrapStepTails(e), ctx);

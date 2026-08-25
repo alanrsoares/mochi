@@ -218,6 +218,14 @@ export const genExpr = (e: Expr, ctx: GenCtx): string =>
         ? `${genCallee(p.right.fn, ctx)}(${[...p.right.args, p.left].map((a) => genExpr(a, ctx)).join(", ")})`
         : `${genCallee(p.right, ctx)}(${genExpr(p.left, ctx)})`,
     )
+    .with({ kind: "do" }, (block) => {
+      const [last, ...reversedInit] = block.exprs.toReversed();
+      const steps = reversedInit
+        .toReversed()
+        .map((expr) => `${genExpr(expr, ctx)};`)
+        .join(" ");
+      return `(() => { ${steps} return ${genExpr(last!, ctx)}; })()`;
+    })
     // Always parenthesized, so the output nests safely in any JS position.
     .with(
       { kind: "ternary" },

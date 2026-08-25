@@ -100,6 +100,7 @@ let exprSpan = e => switch e {
   | Ast.ELetIn(_, _, _, _, sp) => sp
   | Ast.ELetBind(_, _, _, _, _, sp) => sp
   | Ast.EPipe(_, _, sp) => sp
+  | Ast.EDo(_, sp) => sp
   | Ast.ETernary(_, _, _, sp) => sp
   | Ast.EMatch(_, _, sp) => sp
   | Ast.ELoop(_, _, sp) => sp
@@ -541,6 +542,7 @@ let inferExpr = (e, ctx, st) => switch e {
       ctx,
       st
     )
+  | Ast.EDo(exprs, _) => inferDo(exprs, ctx, st)
   | Ast.ETernary(cond, thenE, elseE, _) => inferTernary(
       cond,
       thenE,
@@ -591,6 +593,13 @@ let inferExpr = (e, ctx, st) => switch e {
   | Ast.ERecur(args, sp) => inferRecur(args, sp, ctx, st)
   | Ast.EInterp(parts, _) => let? st1 = inferInterpParts(parts, ctx, st) in
       Ok((tString, st1))
+}
+
+let inferDo = (exprs, ctx, st) => switch exprs {
+  | [] => Err(typeErr("internal: empty do block", { start: 0, end: 0 }))
+  | [last] => inferExpr(last, ctx, st)
+  | [first, ...rest] => let? (_, st1) = inferExpr(first, ctx, st) in
+      inferDo(rest, ctx, st1)
 }
 
 // ============================================================
@@ -892,6 +901,7 @@ let freeRefs = (e, bound, acc) => switch e {
       bound,
       freeRefs(left, bound, acc)
     )
+  | Ast.EDo(exprs, _) => freeRefsList(exprs, bound, acc)
   | Ast.ETernary(cond, thenE, elseE, _) => freeRefs(
       elseE,
       bound,

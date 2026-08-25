@@ -1081,6 +1081,17 @@ const flattenCallSpine = (e: CallExpr): CallExpr | null => {
 /** Plugin sugar first (JSX's `<tag>` re-fold, …), then this module's printer. */
 const exprRaw = (e: Expr): Doc => runFormatHooks(formatHooks, e, formatApi) ?? exprCore(e);
 
+/** `let _ = a in let _ = b in result` is sequencing, not value binding. */
+const discardedLetExprs = (e: Expr): Expr[] | null => {
+  const exprs: Expr[] = [];
+  let tail = e;
+  while (tail.kind === "letin" && tail.name === "_") {
+    exprs.push(tail.value);
+    tail = tail.body;
+  }
+  return exprs.length > 0 ? [...exprs, tail] : null;
+};
+
 const exprCore = (e: Expr): Doc =>
   match(e)
     .with({ kind: "num" }, (e) => txt(e.raw))
@@ -1092,6 +1103,7 @@ const exprCore = (e: Expr): Doc =>
     .with({ kind: "call" }, (e) => callD(e))
     .with({ kind: "lambda" }, (e) => lambdaD(e))
     .with({ kind: "pipe" }, (e) => pipeD(e))
+    .with({ kind: "do" }, (e) => doD(e.exprs))
     .with({ kind: "ternary" }, (e) => ternaryD(e))
     .with({ kind: "record" }, (e) => recordD(e))
     .with({ kind: "field" }, (e) => fieldD(e))
@@ -1100,9 +1112,12 @@ const exprCore = (e: Expr): Doc =>
     .with({ kind: "list" }, (e) => bracketed("@{", "}", e.elements.map(seqElemD)))
     .with({ kind: "set" }, (e) => bracketed("#{", "}", e.elements.map(seqElemD)))
     .with({ kind: "map" }, (e) => mapD(e))
-    .with({ kind: "letin" }, (e) =>
-      letLikeD(`let ${e.name}${e.annot ? ` : ${typeExpr(e.annot)}` : ""}`, e.value, e.body),
-    )
+    .with({ kind: "letin" }, (e) => {
+      const exprs = discardedLetExprs(e);
+      return exprs
+        ? doD(exprs)
+        : letLikeD(`let ${e.name}${e.annot ? ` : ${typeExpr(e.annot)}` : ""}`, e.value, e.body);
+    })
     .with({ kind: "letbind" }, (e) =>
       letLikeD(`let${e.monad === "Result" ? "?" : "!"} ${param(e.param)}`, e.value, e.body),
     )
@@ -1110,6 +1125,15 @@ const exprCore = (e: Expr): Doc =>
     .with({ kind: "loop" }, (e) => loopD(e))
     .with({ kind: "recur" }, (e) => seq(txt("recur"), bracketed("(", ")", e.args.map(exprD))))
     .exhaustive();
+
+/** Ordered expressions, including the canonical form of a `let _ = … in` chain. */
+const doD = (exprs: Expr[]): Doc =>
+  seq(
+    txt("do {"),
+    indent(seq(hardline, join(seq(txt(";"), hardline), exprs.map(exprD)))),
+    hardline,
+    txt("}"),
+  );
 
 /** `export ` prefix for an exported declaration. */
 const expPrefix = (s: Stmt): string => ("exported" in s && s.exported ? "export " : "");

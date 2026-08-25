@@ -124,6 +124,7 @@ let jxExprSpan = e => switch e {
   | Ast.ELetIn(_, _, _, _, sp) => sp
   | Ast.ELetBind(_, _, _, _, _, sp) => sp
   | Ast.EPipe(_, _, sp) => sp
+  | Ast.EDo(_, sp) => sp
   | Ast.ETernary(_, _, _, sp) => sp
   | Ast.EMatch(_, _, sp) => sp
   | Ast.ELoop(_, _, sp) => sp

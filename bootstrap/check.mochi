@@ -81,6 +81,7 @@ let exprSpan = e => switch e {
   | Ast.ELetIn(_, _, _, _, sp) => sp
   | Ast.ELetBind(_, _, _, _, _, sp) => sp
   | Ast.EPipe(_, _, sp) => sp
+  | Ast.EDo(_, sp) => sp
   | Ast.ETernary(_, _, _, sp) => sp
   | Ast.EMatch(_, _, sp) => sp
   | Ast.ELoop(_, _, sp) => sp
@@ -529,6 +530,7 @@ let checkExpr = (e, reg) => switch e {
       |> Option.orElse(checkExpr(body, reg))
   | Ast.EPipe(left, right, _) => checkExpr(left, reg)
       |> Option.orElse(checkExpr(right, reg))
+  | Ast.EDo(exprs, _) => firstSome(x => checkExpr(x, reg), exprs)
   | Ast.ETernary(cond, thenE, elseE, _) => checkExpr(cond, reg)
       |> Option.orElse(checkExpr(thenE, reg))
       |> Option.orElse(checkExpr(elseE, reg))

@@ -17,6 +17,17 @@ let pipeline = 5 |> double |> inc |> double            // left-to-right pipe
 let shifted = 5 -> add(3)                              // add(5, 3), fast pipe
 ```
 
+Use `do { … }` to sequence expressions and return the final one. The formatter
+canonicalizes a nested `let _ = … in` chain to this form:
+
+```mochi
+let draw = ctx => do {
+  ctx->beginPath();
+  ctx->stroke();
+  ()
+}
+```
+
 Annotations / `extern` may write the same domain as `() -> T` (ADR 0015).
 
 Top-level bindings are grouped into recursive components (Tarjan SCC) and inferred

@@ -493,6 +493,7 @@ function inferExpr(e: Expr, ctx: Ctx): Result<Type, Diagnostic> {
     .with({ kind: "pipe" }, (pipe) =>
       infer({ kind: "call", fn: pipe.right, args: [pipe.left], span: pipe.span }, ctx),
     )
+    .with({ kind: "do" }, (block) => inferDo(block.exprs, ctx))
     .with({ kind: "ternary" }, (ternary) => inferTernary(ternary, ctx))
     .with({ kind: "letbind" }, (letbind) => inferLetBind(letbind, ctx))
     .with({ kind: "record" }, (record) => inferRecord(record, ctx))
@@ -510,6 +511,16 @@ function inferExpr(e: Expr, ctx: Ctx): Result<Type, Diagnostic> {
     )
     .with({ kind: "match" }, (matchExpr) => inferMatch(matchExpr, ctx))
     .exhaustive();
+}
+
+function inferDo(exprs: Expr[], ctx: Ctx): Result<Type, Diagnostic> {
+  for (let i = 0; i < exprs.length; i++) {
+    const expr = exprs[i]!;
+    const inferred = infer(expr, ctx);
+    if (isErr(inferred)) return inferred;
+    if (i === exprs.length - 1) return inferred;
+  }
+  return err(typeErr("internal: empty do block", { start: 0, end: 0 }));
 }
 
 /**
@@ -842,6 +853,9 @@ function freeRefs(e: Expr, bound: Set<string>, acc: Set<string>): void {
     .with({ kind: "pipe" }, (pipe) => {
       freeRefs(pipe.left, bound, acc);
       freeRefs(pipe.right, bound, acc);
+    })
+    .with({ kind: "do" }, (block) => {
+      for (const expr of block.exprs) freeRefs(expr, bound, acc);
     })
     .with({ kind: "ternary" }, (ternary) => {
       freeRefs(ternary.cond, bound, acc);

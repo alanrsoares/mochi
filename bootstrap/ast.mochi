@@ -46,6 +46,7 @@ export type Expr =
   | ELetIn(name: string, nameSpan: Span, value: Expr, body: Expr, span: Span)
   | ELetBind(param: LamParam, paramSpan: Span, monad: string, value: Expr, body: Expr, span: Span)
   | EPipe(left: Expr, right: Expr, span: Span)
+  | EDo(exprs: [Expr], span: Span)
   | ETernary(cond: Expr, thenE: Expr, elseE: Expr, span: Span)
   | EMatch(scrutinee: Expr, arms: [MatchArm], span: Span)
   | ERecord(fields: [Field], spread: Option<Expr>, span: Span)
