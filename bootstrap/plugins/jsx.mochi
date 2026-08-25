@@ -21,6 +21,7 @@ type Tok =
   | TType
   | TExtern
   | TSwitch
+  | TDo
   | TLoop
   | TRecur
   | TImport
@@ -60,6 +61,7 @@ type Tok =
   | TBang
   | TBacktick
   | TComma
+  | TSemi
   | TNum(value: number, raw: string)
   | TBool(value: bool)
   | TStr(value: string)
