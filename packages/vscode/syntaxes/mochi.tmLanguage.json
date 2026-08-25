@@ -243,8 +243,9 @@
     "keywords": {
       "patterns": [
         {
+          "comment": "Control + contextual (`in`/`when`) + sequencing (`do`, ADR 0071) + loop (`loop`/`recur`, ADR 0056). Must stay ahead of #function-calls so `loop (` / `recur(` are not painted as calls.",
           "name": "keyword.control.mochi",
-          "match": "\\b(switch|import|export|in|when)\\b"
+          "match": "\\b(switch|import|export|in|when|do|loop|recur)\\b"
         },
         {
           "name": "keyword.declaration.mochi",

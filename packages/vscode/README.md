@@ -1,6 +1,6 @@
 # mochi — VSCode syntax highlighting + language server
 
-TextMate grammar for `.mochi` files: comments, `let`/`type`/`switch`, pipeline
+TextMate grammar for `.mochi` files: comments, `let`/`type`/`switch`/`do`/`loop`/`recur`, pipeline
 `|>`, lambda `=>`, type `->`, match bars `|`, variant constructors (Uppercase idents),
 primitive types (`float`/`int`/`string`/`bool`), numbers, and JSX (tags,
 components, attributes, `{…}` holes, fragments). Plus a language server —
