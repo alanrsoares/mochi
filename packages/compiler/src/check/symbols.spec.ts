@@ -99,6 +99,17 @@ test("bindingsAt: letin name visible in body only", () => {
   expect(inBody).toContain("y");
 });
 
+test("local recursive lambda names resolve in their own and adjacent RHSs", () => {
+  const src = "let f = n => let even = k => odd(k) in let odd = k => even(k) in even(n)";
+  const idx = index(src);
+  const evenDef = idx.at(pos(src, "even", 1));
+  const oddDef = idx.at(pos(src, "odd"));
+  const oddUse = idx.at(pos(src, "odd", 1));
+  const evenUse = idx.at(pos(src, "even", 2));
+  expect(oddUse?.binding.def).toEqual(oddDef?.binding.def);
+  expect(evenUse?.binding.def).toEqual(evenDef?.binding.def);
+});
+
 test("bindingsAt: inner shadow wins", () => {
   const src = "let x = 1\nlet f = () => let x = 2 in x";
   const idx = index(src);

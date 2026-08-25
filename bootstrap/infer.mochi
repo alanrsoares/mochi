@@ -493,13 +493,24 @@ let inferExpr = (e, ctx, st) => switch e {
     let? st2 = constrainParamAnnotsFrom(params, paramTypes, #{}, ctx, st1) in
     let? (bodyT, st3) = inferExpr(body, ctxWithEnv(ctx, bodyEnv), st2) in
       Ok((arrowChain(paramTypes, bodyT), st3))
-  | Ast.ELetIn(name, _, value, body, _) => let? (valT, st1) = inferExpr(
-      value,
-      ctx,
-      st
-    ) in
-    let sc = generalize(ctx.env, valT, st1) in
-      inferExpr(body, ctxWithEnv(ctx, Map.set(name, sc, ctx.env)), st1)
+  | Ast.ELetIn(name, nameSpan, value, body, span) => switch value {
+      | Ast.ELambda(_, _, _) =>
+        // Adjacent lambda locals share the top-level SCC machinery (ADR 0067):
+        // pre-bind monomorphically, infer dependency-first, then generalize.
+        let lets = localLetsFrom(e) in
+        let idxOf = idxOfMap(lets) in
+        let tail = localTail(e) in
+        let? (localCtx, localSt) = processGroupsFrom(
+          stronglyConnected(adjOf(lets, idxOf)),
+          lets,
+          ctx,
+          st
+        ) in
+          inferExpr(tail, localCtx, localSt)
+      | _ => let? (valT, st1) = inferExpr(value, ctx, st) in
+        let sc = generalize(ctx.env, valT, st1) in
+          inferExpr(body, ctxWithEnv(ctx, Map.set(name, sc, ctx.env)), st1)
+    }
   | Ast.ELetBind(param, paramSpan, monad, value, body, _) => inferLetBind(
       param,
       paramSpan,
@@ -864,11 +875,11 @@ let freeRefs = (e, bound, acc) => switch e {
       lambdaBound(params, bound),
       acc
     )
-  | Ast.ELetIn(name, _, value, body, _) => let acc1 = freeRefs(
-      value,
-      bound,
-      acc
-    ) in
+  | Ast.ELetIn(name, _, value, body, _) => let valueBound = switch value {
+      | Ast.ELambda(_, _, _) => Set.add(name, bound)
+      | _ => bound
+    } in
+    let acc1 = freeRefs(value, valueBound, acc) in
       freeRefs(body, Set.add(name, bound), acc1)
   | Ast.ELetBind(param, _, _, value, body, _) => let acc1 = freeRefs(
       value,
@@ -1126,6 +1137,31 @@ let letsOfFrom = stmts => switch stmts {
     }
 }
 
+// Convert an adjacent lambda-local chain to the same lightweight SLet shape
+// top-level SCC inference already consumes. `ELetIn` has no `export`/doc/annot.
+let localLetsFrom = e =>
+  // Dogfood ADR 0067: this private collector recurses without becoming a
+  // bootstrap module binding. Its lambda RHS makes `collect` self-scoped.
+  let collect = (current, acc) => switch current {
+    | Ast.ELetIn(name, nameSpan, value, body, span) => switch value {
+        | Ast.ELambda(_, _, _) => collect(
+            body,
+            Array.append(
+              Ast.SLet(name, nameSpan, None, value, false, None, span),
+              acc
+            )
+          )
+        | _ => acc
+      }
+    | _ => acc
+  } in
+    collect(e, [])
+
+let localTail = e => switch e {
+  | Ast.ELetIn(_, _, Ast.ELambda(_, _, _), body, _) => localTail(body)
+  | _ => e
+}
+
 let idxOfFrom = (lets, i0, acc0) =>
   loop (i = i0, acc = acc0) {
     switch Array.get(i, lets) {
@@ -1238,7 +1274,7 @@ let generalizeGroupFrom = (group, bodyTypes, env, st) => switch group {
 // `let`s, grouped into mutually-recursive components (SCCs of the reference
 // graph) and inferred group-by-group in dependency-first order.
 let processGroupsFrom = (sccs, lets, ctx, st) => switch sccs {
-  | [] => Ok(ctx)
+  | [] => Ok((ctx, st))
   | [comp, ...restSccs] => let group = groupOfFrom(comp, lets) in
     let (preEnv, st1) = preBindGroupFrom(group, ctx.env, st) in
     let preCtx = ctxWithEnv(ctx, preEnv) in
@@ -1327,7 +1363,7 @@ export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports
   let idxOf = idxOfMap(lets) in
   let sccs = stronglyConnected(adjOf(lets, idxOf)) in
     switch processGroupsFrom(sccs, lets, { env: env4, open: openMode, ns: ns0, aliasMap: aliasMap, plugins: plugins, loopStack: [] }, st3) {
-      | Ok(finalCtx) => Ok(finalCtx.env)
+      | Ok((finalCtx, _)) => Ok(finalCtx.env)
       | Err(e) => Err(e)
     }
 

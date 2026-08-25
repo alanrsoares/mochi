@@ -238,6 +238,14 @@ const cases: Record<string, { src: string; ok: boolean }> = {
   },
   "unbound variable, strict mode": { src: "let f = x => plusOne(x)", ok: false },
   "self-reference is bound, not unbound": { src: "let f = x => f(x)", ok: true },
+  "local lambda recursion": {
+    src: "let f = n => let go = k => eq(k, 0) ? 0 : add(1, go(sub(k, 1))) in go(n)",
+    ok: true,
+  },
+  "adjacent local lambda mutual recursion": {
+    src: "let f = n => let even = k => eq(k, 0) ? true : odd(sub(k, 1)) in let odd = k => eq(k, 0) ? false : even(sub(k, 1)) in even(n)",
+    ok: true,
+  },
   "occurs check": { src: "let f = x => f", ok: false },
   "unify mismatch on literal": { src: "let f = x => add(x, true)", ok: false },
   "record field access, open row": { src: "let getX = p => p.x", ok: true },

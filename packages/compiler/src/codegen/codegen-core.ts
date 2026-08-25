@@ -311,8 +311,9 @@ export const genMember = (e: Expr, ctx: GenCtx): string =>
  *
  * - one whose name is already taken by the arrow's parameters or an earlier
  *   link (`let x = 1 in let x = x + 1 in x`), which is also a JS redeclaration;
- * - one whose value mentions its own name, which a `const` would resolve to
- *   itself rather than to the outer binding.
+ * - a non-lambda value whose name is already taken. Lambda values are locally
+ *   recursive (ADR 0067), so their own and adjacent lambda names deliberately
+ *   resolve to these `const` bindings.
  *
  * The chain stops at the first such link and the remainder falls back to the
  * IIFE form, which scopes both correctly. The self-reference test
@@ -323,7 +324,11 @@ export const genLetBlock = (e: Expr, ctx: GenCtx, bound: ReadonlySet<string>): s
   const seen = new Set(bound);
   const decls: string[] = [];
   let body = e;
-  while (body.kind === "letin" && !seen.has(body.name) && !mentions(body.value, body.name)) {
+  while (
+    body.kind === "letin" &&
+    !seen.has(body.name) &&
+    (body.value.kind === "lambda" || !mentions(body.value, body.name))
+  ) {
     seen.add(body.name);
     const ann = ctx.annotateLetin?.(body.value);
     decls.push(`const ${body.name}${ann ? `: ${ann}` : ""} = ${genExpr(body.value, ctx)};`);

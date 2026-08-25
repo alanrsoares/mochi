@@ -6,7 +6,7 @@ import { compile } from "@mochi/compiler/compile";
 import { type Env, inferProgram, showScheme } from "@mochi/compiler/infer";
 import { lex } from "@mochi/compiler/lexer";
 import { parse } from "@mochi/compiler/parser";
-import { type Type, tArrow, tNumber } from "@mochi/compiler/types";
+import { type Type, tArrow, tBool, tNumber } from "@mochi/compiler/types";
 import { format } from "@mochi/dx/format";
 import { compileJs } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
@@ -14,6 +14,8 @@ import { isErr, unwrapOk } from "@onrails/result";
 
 const numOps: Record<string, Type> = {
   add: tArrow(tNumber, tArrow(tNumber, tNumber)),
+  sub: tArrow(tNumber, tArrow(tNumber, tNumber)),
+  eq: tArrow(tNumber, tArrow(tNumber, tBool)),
 };
 const infer = (src: string, builtins: Record<string, Type> = numOps) =>
   inferProgram(unwrapOk(parse(unwrapOk(lex(src)))), builtins);
@@ -66,13 +68,28 @@ test("a re-bind that shadows an earlier link still reads the earlier value", () 
   expect(run("let f = _ => let x = 1 in let x = add(x, 10) in x\nlet r = f(0)")).toBe(11);
 });
 
-test("a value that mentions its own name keeps the IIFE (let-in is not recursive)", () => {
-  // A `const` here would resolve `go` to itself, quietly making the binding
-  // recursive — which strict infer rejects as an unbound variable. Codegen must
-  // not be more permissive than the type system.
+test("a self-referential local lambda emits as a const arrow", () => {
   const js = unwrapOk(compile("let f = n => let go = j => go(add(j, n)) in go(0)", { open: true }));
-  expect(js).toContain("((go) =>");
-  expect(js).not.toContain("const go =");
+  expect(js).toContain("const go =");
+  expect(js).not.toContain("((go) =>");
+});
+
+test("a lambda-valued local let can recurse without leaving its enclosing function", () => {
+  const src =
+    "let count = n => let go = k => eq(k, 0) ? 0 : add(1, go(sub(k, 1))) in go(n)\nlet r = count(4)";
+  expect(run(src)).toBe(4);
+  expect(isErr(infer(src))).toBe(false);
+});
+
+test("adjacent lambda-valued local lets are mutually recursive", () => {
+  const src =
+    "let parity = n => let even = k => eq(k, 0) ? true : odd(sub(k, 1)) in let odd = k => eq(k, 0) ? false : even(sub(k, 1)) in even(n)\nlet r = parity(7)";
+  expect(run(src)).toBe(false);
+  expect(isErr(infer(src))).toBe(false);
+});
+
+test("a non-lambda shadow-rebind still reads the outer local binding", () => {
+  expect(run("let f = _ => let x = 1 in let x = add(x, 10) in x\nlet r = f(0)")).toBe(11);
 });
 
 test("round-trips through the formatter", () => {
