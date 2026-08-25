@@ -110,7 +110,7 @@ What else was on the table and why not.
 | [0063](0063-bun-standard-library.md) | Bun standard-library bindings | Accepted |
 | [0064](0064-curried-extern-hosts.md) | Host call shape is a calling convention, not type syntax | Accepted |
 | [0065](0065-canonical-flat-calls.md) | `fmt` canonicalizes `f(a)(b)` to `f(a, b)` where arity is known statically | Accepted |
-| [0066](0066-pattern-matrix-exhaustiveness.md) | Exhaustiveness as a pattern matrix, not a constructor name set | Proposed |
+| [0066](0066-pattern-matrix-exhaustiveness.md) | Exhaustiveness as a pattern matrix, not a constructor name set | Accepted |
 | [0067](0067-local-recursion.md) | Local recursion: a `let … in` whose RHS is a lambda scopes its own name | Proposed |
 | [0068](0068-parse-only-syntax-batch.md) | Param annotations, as-patterns, record field shorthand (parse-only) | Proposed |
 

@@ -41,6 +41,7 @@ test("all bootstrap modules in the fixpoint graph are covered", () => {
       "scc",
       "schemes",
       "types",
+      "usefulness",
     ].sort(),
   );
 });

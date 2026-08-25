@@ -1,6 +1,6 @@
 # 0066 — Exhaustiveness as a pattern matrix, not a constructor name set
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-08-25
 - **Source:** owner request during a language-gap review ("what high value expressiveness are we lacking")
 
@@ -113,7 +113,9 @@ than `exhaust`"); mochi should have one.
   exhaustiveness is a warning and wrong for one whose exhaustiveness is the
   advertised guarantee: mochi should report non-exhaustive on exhaustion of
   fuel, so the failure mode is "add a `_` to this pathological match" rather
-  than a silently unchecked one.
+  than a silently unchecked one. Implemented at 20,000 recursive calls — far
+  above anything the corpus reaches, since the bail is a hard error rather than
+  a silent downgrade.
 - **Redundancy stays a non-error.** The same primitive detects unreachable rows
   (`U(rows above, this row)` false), which is strictly stronger than the current
   `catchIdx` check at `check.ts:319` and would reject programs that compile

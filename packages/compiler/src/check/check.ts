@@ -5,7 +5,6 @@
 import { match } from "@onrails/pattern";
 import { err, isErr, ok, type Result } from "@onrails/result";
 import type {
-  CtorPat,
   Expr,
   LamParam,
   MatchExpr,
@@ -20,6 +19,7 @@ import type { Span } from "../ast/span";
 import { checkErr, concatDiags, type Diagnostic } from "../errors/errors";
 import type { QualMap } from "../infer/schemes";
 import { builtinTypeDecls, preludeNamespaces } from "../prelude/prelude";
+import { checkExhaustive, isWideWitness, showWitness } from "./usefulness";
 
 /** Variant registry shared with infer and codegen — arity cannot drift between passes. */
 export type Registry = CtorTable;
@@ -292,14 +292,6 @@ function checkOrPattern(p: OrPat, reg: Registry): Diagnostic | null {
   return null;
 }
 
-/**
- * A constructor arm covers its constructor only when every argument is
- * irrefutable (a bind/wildcard or an all-binding record/tuple). A narrowing
- * arm — `Sm(Sm(n))`, `Sm(0)` — matches a strict subset, so it must not count
- * toward exhaustiveness.
- */
-const coversCtor = (p: CtorPat): boolean => p.args.every(isCatchAll);
-
 function checkMatch(m: MatchExpr, reg: Registry): Diagnostic | null {
   for (const arm of m.arms) {
     const e = checkPattern(arm.pattern, reg, true);
@@ -326,37 +318,35 @@ function checkMatch(m: MatchExpr, reg: Registry): Diagnostic | null {
       "unreachable arm: a catch-all arm above it matches first",
       afterCatch.pattern.span,
     );
-  // A guarded arm never counts toward exhaustiveness — the guard can be false.
-  const hasCatchAll = m.arms.some((a) => isCatchAll(a.pattern) && !a.guard);
+  // Lazy Lists keep their own depth-1 rule: matching one pulls from its
+  // generator, so it cannot be reasoned about positionally and the matrix
+  // treats the column as opaque. Route those switches before the matrix runs.
+  if (m.arms.some((a) => a.pattern.kind === "plist")) {
+    // An unguarded catch-all settles it without consulting the list rule —
+    // `@{...all}` binds the whole sequence and matches every value.
+    if (m.arms.some((a) => isCatchAll(a.pattern) && !a.guard)) return null;
+    const seqErr = checkSeqExhaustive(m);
+    if (seqErr !== undefined) return seqErr;
+  }
   // An or-pattern arm contributes each alternative to coverage, sharing the
   // arm's guard — `| Red | Green => …` covers both, `| true | false => …` is
-  // total. Flatten to leaves so the ctor/bool logic below sees each one.
+  // total. Flatten to leaves so the ctor validation below sees each one.
   const leaves = m.arms.flatMap((a) => {
     const one = (pattern: Pattern): { pattern: Pattern; guard?: Expr } =>
       a.guard ? { pattern, guard: a.guard } : { pattern };
     return a.pattern.kind === "por" ? a.pattern.alts.map(one) : [one(a.pattern)];
   });
-  const ctorArms = leaves.filter((a) => a.pattern.kind === "pctor");
+  const ctorArms = leaves.flatMap((a) => (a.pattern.kind === "pctor" ? [a.pattern] : []));
+  // Only *unguarded* ctor arms name a constructor for reporting purposes: a
+  // guarded arm proves nothing, so `Some(x) when …` must still read as
+  // "missing Some" rather than falling through to a witness.
+  const namedUnguarded = new Set(
+    leaves.flatMap((a) => (a.pattern.kind === "pctor" && !a.guard ? [a.pattern.ctor] : [])),
+  );
 
-  // No constructor arms → literal/wildcard/bool switch. A catch-all makes it
-  // total; so does covering both boolean cases (bool is a closed two-case type).
-  if (ctorArms.length === 0) {
-    if (hasCatchAll) return null;
-    const bools = new Set(
-      leaves.flatMap((a) => (a.pattern.kind === "pbool" && !a.guard ? [a.pattern.value] : [])),
-    );
-    if (bools.has(true) && bools.has(false)) return null;
-    const listErr = checkSeqExhaustive(m);
-    return listErr !== undefined
-      ? listErr
-      : checkErr("non-exhaustive switch: add a `_` catch-all arm", m.span);
-  }
-
-  // Validate each constructor pattern: known + right arity.
+  // Validate each constructor pattern: known + right arity + one owning type.
   let owningType: string | null = null;
-  const covered = new Set<string>();
-  for (const arm of ctorArms) {
-    const p = arm.pattern as CtorPat;
+  for (const p of ctorArms) {
     const info = reg.ctor.get(p.ctor);
     if (!info) return checkErr(`unknown constructor '${p.ctor}'`, p.span);
     if (p.args.length !== info.arity)
@@ -367,24 +357,32 @@ function checkMatch(m: MatchExpr, reg: Registry): Diagnostic | null {
     if (owningType === null) owningType = info.type;
     else if (owningType !== info.type)
       return checkErr(`switch mixes variants of '${owningType}' and '${info.type}'`, p.span);
-    if (coversCtor(p) && !arm.guard) covered.add(p.ctor);
   }
 
-  if (hasCatchAll) return null; // catch-all covers the rest
-  const required = reg.type.get(owningType!)!;
-  const missing = required.filter((c) => !covered.has(c));
-  if (missing.length === 0) return null;
-  // A narrowing arm on a missing ctor means the user matched it partially —
-  // point at the fix rather than just naming the gap.
-  const seen = new Set(ctorArms.map((a) => (a.pattern as CtorPat).ctor));
-  const narrowed = missing.filter((c) => seen.has(c));
-  const hint = narrowed.length
-    ? ` (arm(s) on ${narrowed.join(", ")} narrow — add ${narrowed[0]}(_) or a '_' catch-all)`
-    : "";
-  return checkErr(
-    `non-exhaustive switch on '${owningType}': missing ${missing.join(", ")}${hint}`,
-    m.span,
+  // Exhaustiveness proper (ADR 0066). A guarded arm proves nothing — the guard
+  // can be false — so only unguarded patterns enter the matrix.
+  const verdict = checkExhaustive(
+    m.arms.flatMap((a) => (a.guard ? [] : [a.pattern])),
+    reg,
   );
+  if (verdict.ok) return null;
+  if ("exhausted" in verdict)
+    return checkErr("switch too complex to prove exhaustive — add a `_` catch-all arm", m.span);
+
+  // A witness that is one constructor over nothing but wildcards is the shape
+  // the pre-matrix checker reported as `missing X`. Keep that wording for it:
+  // the everyday "you forgot a variant" case reads as it always has, and only a
+  // genuinely nested gap pays for the longer witness form.
+  const witness = verdict.witness;
+  if (isWideWitness(witness) && owningType !== null) {
+    const absent = (reg.type.get(owningType) ?? []).filter((c) => !namedUnguarded.has(c));
+    if (absent.length > 0)
+      return checkErr(
+        `non-exhaustive switch on '${owningType}': missing ${absent.join(", ")}`,
+        m.span,
+      );
+  }
+  return checkErr(`non-exhaustive switch: '${showWitness(witness)}' is not matched`, m.span);
 }
 
 /**

@@ -1,0 +1,491 @@
+// bootstrap/usefulness.mochi — exhaustiveness by Maranget's usefulness
+// algorithm, in mochi. Ported from packages/compiler/src/check/usefulness.ts
+// (the spec); test/bootstrap-check.spec.ts diffs this verdict against the TS
+// checker's, message for message, per ADR 0066.
+//
+// Shape notes vs the TS original:
+// - The TS `P` union becomes `MP`; its `ReadonlyMap<string, P>` record payload
+//   becomes two parallel arrays (labels, pats), because the matrix needs the
+//   labels in a stable *column* order and a Map's order is per-row.
+// - The mutable fuel counter becomes a threaded value: `useful` returns `URes`,
+//   which carries the remaining fuel alongside the verdict. Running out is
+//   `UFuel`, reported as non-exhaustive by the caller (never as exhaustive —
+//   see the TS spec for why mochi bails opposite to ReScript).
+// - `for` loops with early return become tail-recursive index loops, matching
+//   the rest of bootstrap/.
+
+import * as Ast from "./ast.mochi"
+
+// A pattern, stripped of spans: a witness is a shape that occurs in no source
+// location, so it has nothing to carry.
+type MP =
+  | MWild
+  | MCtor(name: string, args: [MP])
+  | MBool(value: bool)
+  | MNum(value: number)
+  | MStr(value: string)
+  | MTuple(elems: [MP])
+  | MRecord(labels: [string], pats: [MP])
+  // `rest` true → matches every length ≥ `Array.length(elems)`.
+  | MArr(elems: [MP], rest: bool)
+  // Lazy-List, and anything else the matrix declines to reason about.
+  | MOpaque
+
+// A column's head constructor. Records and tuples are single-constructor
+// products; arrays are indexed by length.
+type MHead =
+  | HCtor(name: string)
+  | HBool(value: bool)
+  | HNum(value: number)
+  | HStr(value: string)
+  | HTuple(arity: number)
+  | HRecord
+  | HArr(len: number)
+
+// Usefulness with fuel threaded through: the remaining budget rides along so
+// sibling branches cannot each spend the full amount.
+type URes =
+  | UNone(fuel: number)
+  | USome(row: [MP], fuel: number)
+  | UFuel
+
+export type ExhaustVerdict =
+  | ExOk
+  | ExWitness(witness: MP)
+  | ExFuel
+
+let mWilds = n => n <= 0 ? [] : Array.prepend(MWild, mWilds(n - 1))
+
+let isWildMP = mp => switch mp { | MWild => true | _ => false }
+
+// --- AST → matrix patterns ---
+
+// Split top-level or-patterns into separate rows — each alt is its own row.
+export let explodePat = p => switch p {
+  | Ast.POr(alts, _) => alts |> Array.flatMap(explodePat)
+  | _ => [p]
+}
+
+let toMP = p => switch p {
+  | Ast.PWild(_) =>
+    // `_` and a binding always match; `()` does too — `unit` has one inhabitant,
+    // so the type decides and the pattern discriminates nothing (ADR 0054).
+    MWild
+  | Ast.PUnit(_) => MWild
+  | Ast.PBind(_, _) => MWild
+  | Ast.PLit(v, _, _) => MNum(v)
+  | Ast.PBool(v, _) => MBool(v)
+  | Ast.PStr(v, _) => MStr(v)
+  | Ast.PTuple(elems, _) => MTuple(elems |> map(toMP))
+  | Ast.PCtor(name, args, _, _) => MCtor(name, args |> map(toMP))
+  | Ast.PRecord(fields, _) => MRecord(
+      fields |> map(f => f.label),
+      fields |> map(f => toMP(f.pat))
+    )
+  | Ast.PArr(elems, rest, _) => MArr(elems |> map(toMP), Option.isSome(rest))
+  | Ast.PList(_, _, _) =>
+    // A lazy List pulls from its generator as it matches, so it cannot be
+    // reasoned about positionally; check.mochi routes those switches to the
+    // list rule before the matrix ever runs.
+    MOpaque
+  | Ast.POr(_, _) => MOpaque
+}
+
+// --- column analysis ---
+
+let headOf = mp => switch mp {
+  | MWild => None
+  | MOpaque => None
+  | MCtor(n, _) => Some(HCtor(n))
+  | MBool(v) => Some(HBool(v))
+  | MNum(v) => Some(HNum(v))
+  | MStr(v) => Some(HStr(v))
+  | MTuple(elems) => Some(HTuple(Array.length(elems)))
+  | MRecord(_, _) => Some(HRecord)
+  | MArr(elems, _) => Some(HArr(Array.length(elems)))
+}
+
+let colOf = m =>
+  m
+    |> Array.flatMap(row => switch Array.head(row) {
+      | None => []
+      | Some(hd) => [hd]
+    })
+
+let headsOf = col =>
+  col
+    |> Array.flatMap(mp => switch headOf(mp) { | None => [] | Some(h) => [h] })
+
+// The labels a record column discriminates on: the union across the whole
+// column, not any single row's shape. Rows that omit a label are padded with a
+// wildcard for it. A record is always a complete signature — the type
+// guarantees every mentioned label is present, and row polymorphism only means
+// *unmentioned* labels are not columns at all.
+let addLabel = (acc, l) => Array.contains(l, acc) ? acc : Array.append(l, acc)
+
+let labelsOfMP = (acc, mp) => switch mp {
+  | MRecord(ls, _) => Array.reduce(addLabel, acc, ls)
+  | _ => acc
+}
+
+let recordLabelsOf = col => Array.reduce(labelsOfMP, [], col)
+
+let indexOfLabel = (l, labels, i) => switch Array.get(i, labels) {
+  | None => 0 - 1
+  | Some(x) => x == l ? i : indexOfLabel(l, labels, i + 1)
+}
+
+let fieldOf = (l, labels, pats) =>
+  let i = indexOfLabel(l, labels, 0) in
+    i < 0 ? MWild : Option.unwrapOr(MWild, Array.get(i, pats))
+
+type ArrShape = { fixed: [number], restFrom: Option<number> }
+
+let arrShapeStep = (acc, mp) => switch mp {
+  | MArr(elems, rest) => let n = Array.length(elems) in
+      rest
+        ? {
+          fixed: acc.fixed,
+          restFrom: switch acc.restFrom {
+            | None => Some(n)
+            | Some(m) => Some(m < n ? m : n)
+          }
+        }
+        : {
+          fixed: Array.contains(n, acc.fixed)
+            ? acc.fixed
+            : Array.append(n, acc.fixed),
+          restFrom: acc.restFrom
+        }
+  | _ => acc
+}
+
+let arrShapeOf = col =>
+  Array.reduce(arrShapeStep, { fixed: [], restFrom: None }, col)
+
+let rangeCovered = (shape, i, n) =>
+  i >= n
+    ? true
+    : Array.contains(i, shape.fixed) && rangeCovered(shape, i + 1, n)
+
+// Array lengths are an infinite signature, so OCaml calls arrays
+// never-complete — its array patterns are fixed-length only. mochi has
+// `[x, ...xs]`, which covers every length ≥ its head arity, so a column *is*
+// completable: `[]` plus `[x, ...xs]` is total, which this language accepted
+// before the matrix existed.
+let arrComplete = shape => switch shape.restFrom {
+  | None => false
+  | Some(r) => rangeCovered(shape, 0, r)
+}
+
+// The smallest length no row covers — the witness when a column is incomplete.
+let arrMissingLen = (shape, n) =>
+  !Array.contains(
+    n,
+    shape.fixed
+  ) && switch shape.restFrom { | None => true | Some(r) => n < r }
+    ? n
+    : arrMissingLen(shape, n + 1)
+
+let rangeArr = (i, top) => i > top ? [] : Array.prepend(i, rangeArr(i + 1, top))
+
+// Every length ≥ `restFrom` is covered by the rest row, so one representative
+// at or above the longest fixed pattern stands for all of them.
+let arrLengths = shape =>
+  let top = Array.reduce(
+    (a, x) => x > a ? x : a,
+    Option.unwrapOr(0, shape.restFrom),
+    shape.fixed
+  ) in
+    rangeArr(0, top)
+
+// --- specialization and the default matrix ---
+
+let specializeRow = (h, mp, labels) => switch h {
+  | HCtor(name) => switch mp {
+      | MCtor(n, args) => n == name ? Some(args) : None
+      | _ => None
+    }
+  | HBool(v) => switch mp { | MBool(b) => b == v ? Some([]) : None | _ => None }
+  | HNum(v) => switch mp { | MNum(x) => x == v ? Some([]) : None | _ => None }
+  | HStr(v) => switch mp { | MStr(x) => x == v ? Some([]) : None | _ => None }
+  | HTuple(_) => switch mp { | MTuple(elems) => Some(elems) | _ => None }
+  | HRecord => switch mp {
+      | MRecord(ls, ps) => Some(labels |> map(l => fieldOf(l, ls, ps)))
+      | _ => None
+    }
+  | HArr(len) => switch mp {
+      | MArr(elems, rest) => let k = Array.length(elems) in
+          rest
+            ?
+              // A rest pattern of arity k matches every length ≥ k; the tail it
+              // binds is a bind/wild, so it contributes wildcards, never
+              // constraints.
+              k <= len ? Some(Array.concat(elems, mWilds(len - k))) : None
+            : k == len
+            ? Some(elems)
+            : None
+      | _ => None
+    }
+}
+
+let specializeOne = (h, arity, labels, row) => switch Array.head(row) {
+  | None => []
+  | Some(hd) => let rest = Array.tail(row) in
+      isWildMP(hd)
+        ? [Array.concat(mWilds(arity), rest)]
+        : switch specializeRow(h, hd, labels) {
+          | None => []
+          | Some(sub) => [Array.concat(sub, rest)]
+        }
+}
+
+let specializeM = (m, h, arity, labels) =>
+  m |> Array.flatMap(row => specializeOne(h, arity, labels, row))
+
+// Rows whose head matches anything, with that column dropped.
+let defaultM = m =>
+  m
+    |> Array.flatMap(row => switch Array.head(row) {
+      | None => []
+      | Some(hd) => isWildMP(hd) ? [Array.tail(row)] : []
+    })
+
+// Reassemble a witness head from the sub-witnesses specialization produced.
+let rebuild = (h, args, labels) => switch h {
+  | HCtor(name) => MCtor(name, args)
+  | HTuple(_) => MTuple(args)
+  | HRecord => MRecord(labels, args)
+  | HArr(_) => MArr(args, false)
+  | HBool(v) => MBool(v)
+  | HNum(v) => MNum(v)
+  | HStr(v) => MStr(v)
+}
+
+// --- witnesses for infinite signatures ---
+
+let takenNums = heads =>
+  heads |> Array.flatMap(h => switch h { | HNum(v) => [v] | _ => [] })
+
+let freshNum = (taken, i) =>
+  Array.contains(i, taken) ? freshNum(taken, i + 1) : i
+
+let takenStrs = heads =>
+  heads |> Array.flatMap(h => switch h { | HStr(v) => [v] | _ => [] })
+
+let starsOf = n => n <= 0 ? "" : Str.concat("*", starsOf(n - 1))
+
+let freshStr = (taken, i) =>
+  let s = starsOf(i) in Array.contains(s, taken) ? freshStr(taken, i + 1) : s
+
+// --- the usefulness query ---
+
+let ctorNames = heads =>
+  heads |> Array.flatMap(h => switch h { | HCtor(n) => [n] | _ => [] })
+
+let boolVals = heads =>
+  heads |> Array.flatMap(h => switch h { | HBool(v) => [v] | _ => [] })
+
+let arityOfCtor = (reg, n) => switch Map.get(n, reg.ctors) {
+  | None => 0
+  | Some(info) => info.arity
+}
+
+let ownerOfCtor = (reg, n) => switch Map.get(n, reg.ctors) {
+  | None => None
+  | Some(info) => Some(info.owner)
+}
+
+let allNamesIn = (all, names) =>
+  Array.reduce((acc, n) => acc && Array.contains(n, names), true, all)
+
+let useful = (m, width, reg, fuel) =>
+  fuel <= 0
+    ? UFuel
+    : width == 0
+    ? Array.length(m) == 0 ? USome([], fuel - 1) : UNone(fuel - 1)
+    : Array.length(m) == 0
+    ? USome(mWilds(width), fuel - 1)
+    : usefulSplit(m, width, reg, fuel - 1)
+
+let usefulSplit = (m, width, reg, fuel) =>
+  let col = colOf(m) in
+  let heads = headsOf(col) in
+    switch Array.head(heads) {
+      | None =>
+        // Column is all wildcards — nothing to split on.
+        prependWitness(MWild, useful(defaultM(m), width - 1, reg, fuel))
+      | Some(h0) => usefulHead(m, col, heads, h0, width, reg, fuel)
+    }
+
+let prependWitness = (mp, r) => switch r {
+  | UFuel => UFuel
+  | UNone(f) => UNone(f)
+  | USome(row, f) => USome(Array.prepend(mp, row), f)
+}
+
+let tryHeads = (m, heads, arities, labels, width, reg, fuel, i) => switch Array.get(i, heads) {
+  | None => UNone(fuel)
+  | Some(h) => let arity = Option.unwrapOr(0, Array.get(i, arities)) in
+      switch useful(specializeM(m, h, arity, labels), arity + width - 1, reg, fuel) {
+        | UFuel => UFuel
+        | UNone(f2) => tryHeads(
+            m,
+            heads,
+            arities,
+            labels,
+            width,
+            reg,
+            f2,
+            i + 1
+          )
+        | USome(row, f2) => USome(
+            Array.prepend(
+              rebuild(h, Array.take(arity, row), labels),
+              Array.drop(arity, row)
+            ),
+            f2
+          )
+      }
+}
+
+let usefulHead = (m, col, heads, h0, width, reg, fuel) => switch h0 {
+  | HTuple(arity) =>
+    // Products: one constructor, always complete — descend straight in.
+    tryHeads(m, [HTuple(arity)], [arity], [], width, reg, fuel, 0)
+  | HRecord => let labels = recordLabelsOf(col) in
+      tryHeads(
+        m,
+        [HRecord],
+        [Array.length(labels)],
+        labels,
+        width,
+        reg,
+        fuel,
+        0
+      )
+  | HCtor(_) => usefulCtor(m, heads, width, reg, fuel)
+  | HBool(_) => usefulBool(m, heads, width, reg, fuel)
+  | HArr(_) => usefulArr(m, col, width, reg, fuel)
+  | HNum(_) =>
+    // Infinite signatures are never complete — only a wildcard row covers them.
+    // The witness enumerates from a seed until it finds a value nobody matched:
+    // ints walk 0, 1, 2…; strings grow by length, "" then "*" then "**", so the
+    // report names a concrete literal.
+    prependWitness(
+      MNum(freshNum(takenNums(heads), 0)),
+      useful(defaultM(m), width - 1, reg, fuel)
+    )
+  | HStr(_) => prependWitness(
+      MStr(freshStr(takenStrs(heads), 0)),
+      useful(defaultM(m), width - 1, reg, fuel)
+    )
+}
+
+let usefulCtor = (m, heads, width, reg, fuel) =>
+  let names = ctorNames(heads) in
+  let ownerOpt = switch Array.head(names) {
+    | None => None
+    | Some(n) => ownerOfCtor(reg, n)
+  } in
+  let all = switch ownerOpt {
+    | None => []
+    | Some(o) => Map.getOr([], o, reg.types)
+  } in
+    Array.length(all) > 0 && allNamesIn(all, names)
+      ? tryHeads(
+        m,
+        all |> map(n => HCtor(n)),
+        all |> map(n => arityOfCtor(reg, n)),
+        [],
+        width,
+        reg,
+        fuel,
+        0
+      )
+      :
+        // Incomplete: a constructor nobody named is the witness.
+        prependWitness(
+          switch Array.head(all |> filter(n => !Array.contains(n, names))) {
+            | None => MWild
+            | Some(n) => MCtor(n, mWilds(arityOfCtor(reg, n)))
+          },
+          useful(defaultM(m), width - 1, reg, fuel)
+        )
+
+let usefulBool = (m, heads, width, reg, fuel) =>
+  let vs = boolVals(heads) in
+  let hasTrue = Array.contains(true, vs) in
+    hasTrue && Array.contains(false, vs)
+      ? tryHeads(
+        m,
+        [HBool(true), HBool(false)],
+        [0, 0],
+        [],
+        width,
+        reg,
+        fuel,
+        0
+      )
+      : prependWitness(
+        MBool(!hasTrue),
+        useful(defaultM(m), width - 1, reg, fuel)
+      )
+
+let usefulArr = (m, col, width, reg, fuel) =>
+  let shape = arrShapeOf(col) in
+    arrComplete(shape)
+      ? let lens = arrLengths(shape) in
+        tryHeads(m, lens |> map(n => HArr(n)), lens, [], width, reg, fuel, 0)
+      : prependWitness(
+        MArr(mWilds(arrMissingLen(shape, 0)), false),
+        useful(defaultM(m), width - 1, reg, fuel)
+      )
+
+// --- rendering ---
+
+let showFields = (labels, pats, i) => switch Array.get(i, labels) {
+  | None => []
+  | Some(l) => Array.prepend(
+      "${l}: ${showWitness(Option.unwrapOr(MWild, Array.get(i, pats)))}",
+      showFields(labels, pats, i + 1)
+    )
+}
+
+// Render a witness the way the user would have to write it as an arm.
+export let showWitness = mp => switch mp {
+  | MWild => "_"
+  | MOpaque => "_"
+  | MBool(v) => show(v)
+  | MNum(v) => show(v)
+  | MStr(v) => show(v)
+  | MCtor(n, args) => Array.length(args) == 0
+      ? n
+      : "${n}(${Str.join(", ", args |> map(showWitness))})"
+  | MTuple(elems) => "(${Str.join(", ", elems |> map(showWitness))})"
+  | MRecord(labels, pats) => "{ ${Str.join(", ", showFields(labels, pats, 0))} }"
+  | MArr(elems, rest) => "[${Str.join(", ", Array.concat(elems |> map(showWitness), rest ? ["..."] : []))}]"
+}
+
+// A witness that is one constructor over nothing but wildcards is the shape the
+// pre-matrix checker reported as `missing X` — check.mochi keeps that wording
+// for it, so the everyday "you forgot a variant" case reads as it always has.
+// Witnesses that say nothing a constructor name would not say better: a bare
+// wildcard (every arm was guarded, so nothing is covered) or one constructor
+// over wildcards. For these check.mochi keeps the legacy `missing X` wording.
+export let isWideWitnessM = mp => switch mp {
+  | MWild => true
+  | MCtor(_, args) => Array.reduce((acc, a) => acc && isWildMP(a), true, args)
+  | _ => false
+}
+
+// Is this set of (unguarded) arm patterns total? Guarded arms must not be
+// passed — a guard can be false, so such an arm proves nothing.
+export let checkExhaustiveM = (patterns, reg) =>
+  let rows = patterns
+    |> Array.flatMap(p => explodePat(p) |> map(alt => [toMP(alt)])) in
+    switch useful(rows, 1, reg, 20000) {
+      | UFuel => ExFuel
+      | UNone(_) => ExOk
+      | USome(row, _) => ExWitness(Option.unwrapOr(MWild, Array.head(row)))
+    }

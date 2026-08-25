@@ -144,8 +144,11 @@ test("nested-ctor arm does not cover its constructor", () => {
     | Nn => 0
   }`;
   expect(isErr(compile(src))).toBe(true);
-  expect(errMsg(src)).toContain("missing Sm");
-  expect(errMsg(src)).toContain("Sm(_)"); // the hint
+  // Under ADR 0066 the report names the value that escapes rather than the
+  // constructor that was narrowed: `Sm(Sm(_))` covers part of `Sm`, and
+  // `Sm(Leaf(_))` is precisely a part it misses (the first in registry order).
+  expect(errMsg(src)).toContain("Sm(Leaf(_))");
+  expect(errMsg(src)).toContain("is not matched");
 });
 
 test("literal-arg arm does not cover its constructor", () => {
@@ -155,7 +158,9 @@ test("literal-arg arm does not cover its constructor", () => {
     | Nn => 0
   }`;
   expect(isErr(compile(src))).toBe(true);
-  expect(errMsg(src)).toContain("missing Leaf");
+  // `Leaf(0)` narrows an infinite column, so the witness enumerates past the
+  // matched literal to the smallest one nobody covers (ADR 0066).
+  expect(errMsg(src)).toContain("Leaf(1)");
 });
 
 test("narrowing arm plus covering arm is exhaustive", () => {
