@@ -39,11 +39,17 @@
     "check": "biome check . && tsc --noEmit && bun run --filter '*' check && bun run fmt:check && bun run test",
     "check:full": "biome check . && tsc --noEmit && bun run --filter '*' check && bun run fmt:check && bun run test:full"
   },
-  "workspaces": [
-    "apps/*",
-    "packages/*",
-    "examples/snake"
-  ],
+  "workspaces": {
+    "packages": [
+      "apps/*",
+      "packages/*",
+      "examples/snake"
+    ],
+    "catalog": {
+      "typescript": "^7.0.2",
+      "vite": "^8.2.2"
+    }
+  },
   "devDependencies": {
     "@biomejs/biome": "^2.5.10",
     "@mochi/bun": "workspace:*",
@@ -63,7 +69,7 @@
     "lefthook": "^2.1.10"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": "catalog:"
   },
   "dependencies": {
     "@onrails/maybe": "^0.2.3",
