@@ -24,8 +24,8 @@ export let resolvePluginsDefault = pluginsOpt =>
 let parseHooksFrom = (plugins, i, acc) => switch Array.get(i, plugins) {
   | None => acc
   | Some(p) => switch p.parse {
-      | Some(hook) => parseHooksFrom(plugins, i + 1, Array.append(hook, acc))
-      | None => parseHooksFrom(plugins, i + 1, acc)
+      | Some(hook) => plugins->parseHooksFrom(i + 1, Array.append(hook, acc))
+      | None => plugins->parseHooksFrom(i + 1, acc)
     }
 }
 export let parseHooksOf = plugins => parseHooksFrom(plugins, 0, [])
@@ -33,8 +33,8 @@ export let parseHooksOf = plugins => parseHooksFrom(plugins, 0, [])
 let inferHooksFrom = (plugins, i, acc) => switch Array.get(i, plugins) {
   | None => acc
   | Some(p) => switch p.inferCall {
-      | Some(hook) => inferHooksFrom(plugins, i + 1, Array.append(hook, acc))
-      | None => inferHooksFrom(plugins, i + 1, acc)
+      | Some(hook) => plugins->inferHooksFrom(i + 1, Array.append(hook, acc))
+      | None => plugins->inferHooksFrom(i + 1, acc)
     }
 }
 export let inferCallHooksOf = plugins => inferHooksFrom(plugins, 0, [])

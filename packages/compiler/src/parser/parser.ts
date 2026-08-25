@@ -303,8 +303,26 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
       expect("rparen");
     }
     expect("arrow");
-    const body = parseExpr();
+    const body = arrowBodyIsDoBlock() ? parseDoBlock(peek().span) : parseExpr();
     return { kind: "lambda", params, body, span: spanning(start, body.span) };
+  }
+
+  /**
+   * `{ x: value }` has long meant a record-valued lambda body. A semicolon at
+   * this brace depth unambiguously opts into a sequence block instead.
+   */
+  function arrowBodyIsDoBlock(): boolean {
+    if (peek().t !== "lbrace") return false;
+    let depth = 0;
+    for (let i = pos; ; i++) {
+      const t = toks[i]?.t;
+      if (t === "lbrace") depth++;
+      else if (t === "rbrace") {
+        depth--;
+        if (depth === 0) return false;
+      } else if (t === "semi" && depth === 1) return true;
+      else if (t === "eof") return false;
+    }
   }
 
   /**
@@ -595,6 +613,7 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
 
   function parseAtom(): Expr {
     if (peek().t === "switch") return parseMatch();
+    if (peek().t === "do") return parseDo();
     if (peek().t === "loop") return parseLoop();
     if (peek().t === "recur") return parseRecur();
     if (peek().t === "lbrace") return parseRecord();
@@ -646,6 +665,26 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
       }
     }
     throw new ParseAbort(parseErr(`unexpected token ${tk.t}`, tk.span));
+  }
+
+  function parseDo(): Expr {
+    const start = expect("do").span;
+    return parseDoBlock(start);
+  }
+
+  /** Parse the braces shared by explicit `do { … }` and arrow-body `{ … }`. */
+  function parseDoBlock(start: Span): Expr {
+    expect("lbrace");
+    const exprs: Expr[] = [];
+    if (peek().t === "rbrace") fail("do block needs a final expression");
+    for (;;) {
+      exprs.push(parseExpr());
+      if (peek().t !== "semi") break;
+      next();
+      if (peek().t === "rbrace") fail("do block cannot end with a semicolon");
+    }
+    const end = expect("rbrace").span;
+    return { kind: "do", exprs, span: spanning(start, end) };
   }
 
   /** Template literal `"…${a}…${b}…"` (ADR 0023). */

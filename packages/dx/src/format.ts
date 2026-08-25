@@ -478,6 +478,25 @@ const composeSegments = (e: Expr): Expr[] => {
   return [e];
 };
 
+/** `let _ = a in let _ = b in result` is sequencing, not value binding. */
+const discardedLetExprs = (e: Expr): Expr[] | null => {
+  const exprs: Expr[] = [];
+  let tail = e;
+  while (tail.kind === "letin" && tail.name === "_") {
+    exprs.push(tail.value);
+    tail = tail.body;
+  }
+  return exprs.length > 0 ? [...exprs, tail] : null;
+};
+
+const doBlockD = (exprs: Expr[]): Doc =>
+  seq(
+    txt("{"),
+    indent(seq(hardline, join(seq(txt(";"), hardline), exprs.map(exprD)))),
+    hardline,
+    txt("}"),
+  );
+
 const lambdaD = (e: LambdaExpr): Doc => {
   const section = sectionOf(e);
   if (section) return section;
@@ -492,6 +511,9 @@ const lambdaD = (e: LambdaExpr): Doc => {
   }
 
   const head = txt(`${params(e.params)} =>`);
+  if (e.body.kind === "do") return seq(head, txt(" "), doBlockD(e.body.exprs));
+  const discarded = discardedLetExprs(e.body);
+  if (discarded) return seq(head, txt(" "), doBlockD(discarded));
   // A switch body attaches to the arrow (`xs => switch xs {`) — unless it
   // carries a leading comment, which forces it onto its own indented line.
   return e.body.kind === "match" && !hasLead(e.body)
@@ -1092,6 +1114,7 @@ const exprCore = (e: Expr): Doc =>
     .with({ kind: "call" }, (e) => callD(e))
     .with({ kind: "lambda" }, (e) => lambdaD(e))
     .with({ kind: "pipe" }, (e) => pipeD(e))
+    .with({ kind: "do" }, (e) => doD(e.exprs))
     .with({ kind: "ternary" }, (e) => ternaryD(e))
     .with({ kind: "record" }, (e) => recordD(e))
     .with({ kind: "field" }, (e) => fieldD(e))
@@ -1100,9 +1123,12 @@ const exprCore = (e: Expr): Doc =>
     .with({ kind: "list" }, (e) => bracketed("@{", "}", e.elements.map(seqElemD)))
     .with({ kind: "set" }, (e) => bracketed("#{", "}", e.elements.map(seqElemD)))
     .with({ kind: "map" }, (e) => mapD(e))
-    .with({ kind: "letin" }, (e) =>
-      letLikeD(`let ${e.name}${e.annot ? ` : ${typeExpr(e.annot)}` : ""}`, e.value, e.body),
-    )
+    .with({ kind: "letin" }, (e) => {
+      const exprs = discardedLetExprs(e);
+      return exprs
+        ? doD(exprs)
+        : letLikeD(`let ${e.name}${e.annot ? ` : ${typeExpr(e.annot)}` : ""}`, e.value, e.body);
+    })
     .with({ kind: "letbind" }, (e) =>
       letLikeD(`let${e.monad === "Result" ? "?" : "!"} ${param(e.param)}`, e.value, e.body),
     )
@@ -1110,6 +1136,9 @@ const exprCore = (e: Expr): Doc =>
     .with({ kind: "loop" }, (e) => loopD(e))
     .with({ kind: "recur" }, (e) => seq(txt("recur"), bracketed("(", ")", e.args.map(exprD))))
     .exhaustive();
+
+/** Ordered expressions, including the canonical form of a `let _ = … in` chain. */
+const doD = (exprs: Expr[]): Doc => seq(txt("do "), doBlockD(exprs));
 
 /** `export ` prefix for an exported declaration. */
 const expPrefix = (s: Stmt): string => ("exported" in s && s.exported ? "export " : "");

@@ -23,6 +23,7 @@ type Tok =
   | TSwitch
   | TLoop
   | TRecur
+  | TDo
   | TImport
   | TExport
   | TEq
@@ -60,6 +61,7 @@ type Tok =
   | TBang
   | TBacktick
   | TComma
+  | TSemi
   | TNum(value: number, raw: string)
   | TBool(value: bool)
   | TStr(value: string)
@@ -96,6 +98,7 @@ let tokName = t => switch t {
   | TSwitch => "switch"
   | TLoop => "loop"
   | TRecur => "recur"
+  | TDo => "do"
   | TImport => "import"
   | TExport => "export"
   | TEq => "eq"
@@ -133,6 +136,7 @@ let tokName = t => switch t {
   | TBang => "bang"
   | TBacktick => "backtick"
   | TComma => "comma"
+  | TSemi => "semi"
   | TNum(_, _) => "num"
   | TBool(_) => "bool"
   | TStr(_) => "str"
@@ -260,6 +264,7 @@ let exprSpan = e => switch e {
   | Ast.ELetIn(_, _, _, _, sp) => sp
   | Ast.ELetBind(_, _, _, _, _, sp) => sp
   | Ast.EPipe(_, _, sp) => sp
+  | Ast.EDo(_, sp) => sp
   | Ast.ETernary(_, _, _, sp) => sp
   | Ast.EMatch(_, _, sp) => sp
   | Ast.ELoop(_, _, sp) => sp
@@ -308,7 +313,7 @@ let parseLambda = (toks, pos, hooks) =>
   let start = spanOf(tokAt(toks, pos)) in
     switch tokAt(toks, pos).tok {
       | TId(name) => let? p = expectTok(TArrow, toks, pos + 1) in
-        let? (body, p2) = parseExpr(toks, p, hooks) in
+        let? (body, p2) = parseLambdaBody(toks, p, hooks) in
           Ok((
             Ast.ELambda(
               [Ast.LPName(name, None)],
@@ -321,9 +326,22 @@ let parseLambda = (toks, pos, hooks) =>
         let? (params, p2) = listUntil(TRparen, parseParam, toks, p) in
         let? p3 = expectTok(TRparen, toks, p2) in
         let? p4 = expectTok(TArrow, toks, p3) in
-        let? (body, p5) = parseExpr(toks, p4, hooks) in
+        let? (body, p5) = parseLambdaBody(toks, p4, hooks) in
           Ok((Ast.ELambda(params, body, spanning(start, exprSpan(body))), p5))
     }
+
+let parseLambdaBody = (toks, pos, hooks) =>
+  tokAt(toks, pos).tok == TLbrace && arrowBodyIsDoBlock(toks, pos, 0)
+    ? parseDoBlock(toks, pos, hooks)
+    : parseExpr(toks, pos, hooks)
+
+let arrowBodyIsDoBlock = (toks, pos, depth) => switch tokAt(toks, pos).tok {
+  | TLbrace => arrowBodyIsDoBlock(toks, pos + 1, depth + 1)
+  | TRbrace => depth == 1 ? false : arrowBodyIsDoBlock(toks, pos + 1, depth - 1)
+  | TSemi => depth == 1 || arrowBodyIsDoBlock(toks, pos + 1, depth)
+  | TEof => false
+  | _ => arrowBodyIsDoBlock(toks, pos + 1, depth)
+}
 
 // let x = value in body — non-recursive local binding. `let (a, b) = v in b`
 // desugars to an applied tuple-param lambda, exactly like the TS parser.
@@ -714,6 +732,7 @@ let parseAtom = (toks, pos, hooks) =>
   let sp = spanOf(lt) in
     switch lt.tok {
       | TSwitch => parseMatch(toks, pos, hooks)
+      | TDo => parseDo(toks, pos, hooks)
       | TLoop => parseLoop(toks, pos, hooks)
       | TRecur => parseRecur(toks, pos, hooks)
       | TLbrace => parseRecord(toks, pos, hooks)
@@ -953,6 +972,32 @@ let armsLoop = (toks, pos, acc, hooks) =>
     : Ok((acc, pos))
 
 // `loop (acc = 0, i = 0) { body }` — tail-recursion loop (ADR 0056).
+let parseDo = (toks, pos, hooks) =>
+  let start = spanOf(tokAt(toks, pos)) in
+  let? p = expectTok(TDo, toks, pos) in parseDoBlockFrom(start, toks, p, hooks)
+
+let parseDoBlock = (toks, pos, hooks) =>
+  parseDoBlockFrom(spanOf(tokAt(toks, pos)), toks, pos, hooks)
+
+let parseDoBlockFrom = (start, toks, pos, hooks) =>
+  let? p1 = expectTok(TLbrace, toks, pos) in
+    tokAt(toks, p1).tok == TRbrace
+      ? errAt("do block needs a final expression", tokAt(toks, p1))
+      : parseDoExprs(toks, p1, [], hooks)
+        |> Result.flatMap(((exprs, p2)) =>
+          tokAt(toks, p2).tok == TSemi
+            ? errAt("do block cannot end with a semicolon", tokAt(toks, p2))
+            : expectTok(TRbrace, toks, p2)
+              |> Result.map(p3 => (Ast.EDo(exprs, toEnd(start, toks, p3)), p3))
+        )
+
+let parseDoExprs = (toks, pos, acc, hooks) =>
+  let? (expr, p) = parseExpr(toks, pos, hooks) in
+  let next = Array.append(expr, acc) in
+    tokAt(toks, p).tok == TSemi
+      ? parseDoExprs(toks, p + 1, next, hooks)
+      : Ok((next, p))
+
 let parseLoop = (toks, pos, hooks) =>
   let start = spanOf(tokAt(toks, pos)) in
   let? p = expectTok(TLoop, toks, pos) in

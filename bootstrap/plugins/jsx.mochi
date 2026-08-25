@@ -21,6 +21,7 @@ type Tok =
   | TType
   | TExtern
   | TSwitch
+  | TDo
   | TLoop
   | TRecur
   | TImport
@@ -60,6 +61,7 @@ type Tok =
   | TBang
   | TBacktick
   | TComma
+  | TSemi
   | TNum(value: number, raw: string)
   | TBool(value: bool)
   | TStr(value: string)
@@ -124,6 +126,7 @@ let jxExprSpan = e => switch e {
   | Ast.ELetIn(_, _, _, _, sp) => sp
   | Ast.ELetBind(_, _, _, _, _, sp) => sp
   | Ast.EPipe(_, _, sp) => sp
+  | Ast.EDo(_, sp) => sp
   | Ast.ETernary(_, _, _, sp) => sp
   | Ast.EMatch(_, _, sp) => sp
   | Ast.ELoop(_, _, sp) => sp
@@ -423,7 +426,7 @@ let inferJsxCall = (tagExpr, propsExpr, restArgs, st, api) =>
 /// Infer-call hook: claim `origin == Some("jsx")`; otherwise Ok(None).
 /// `api.inferExpr` is `(expr, st) -> Result` — closes over Ctx so hooks stay
 /// free of a recursive Ctx type (occurs-check).
-export let inferJsxCallHook = (fn, args, origin, st, api) => switch origin {
+export let inferJsxCallHook = (_fn, args, origin, st, api) => switch origin {
   | Some(o) => o == "jsx"
       ? switch args {
         | [tagExpr, propsExpr, ...rest] => inferJsxCall(

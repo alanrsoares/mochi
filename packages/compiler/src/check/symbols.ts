@@ -347,6 +347,9 @@ const walkExpr = (b: Builder, e: Expr): void => {
       walkExpr(b, pipe.left);
       walkExpr(b, pipe.right);
     })
+    .with({ kind: "do" }, (block) => {
+      for (const expr of block.exprs) walkExpr(b, expr);
+    })
     .with({ kind: "ternary" }, (ternary) => {
       walkExpr(b, ternary.cond);
       walkExpr(b, ternary.then);

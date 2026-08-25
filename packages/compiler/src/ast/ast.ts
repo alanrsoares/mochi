@@ -55,6 +55,8 @@ export type Expr =
       span: Span;
     }
   | { kind: "pipe"; left: Expr; right: Expr; fast?: boolean; span: Span } // a |> f / a->f(b)
+  /** `do { effect(); result }` — ordered unit effects followed by a result. */
+  | { kind: "do"; exprs: Expr[]; span: Span }
   /**
    * `cond ? then : else` — the boolean conditional as an expression (ADR 0016).
    * Right-associative, binds looser than `|>`; branches are full expressions.

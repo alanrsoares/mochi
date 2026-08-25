@@ -36,6 +36,8 @@ export const mapExpr = (expr: Expr, fn: (e: Expr) => Expr): Expr => {
         return { ...next, value: walk(next.value), body: walk(next.body) };
       case "pipe":
         return { ...next, left: walk(next.left), right: walk(next.right) };
+      case "do":
+        return { ...next, exprs: next.exprs.map(walk) };
       case "ternary":
         // biome-ignore lint/suspicious/noThenProperty: mirrors the AST field; plain data, never awaited
         return { ...next, cond: walk(next.cond), then: walk(next.then), else: walk(next.else) };

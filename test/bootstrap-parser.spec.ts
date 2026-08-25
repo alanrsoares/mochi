@@ -134,6 +134,8 @@ const cExpr = (e: Expr): Canon => {
           span: cSpan(e.span),
         };
       return { kind: "pipe", left: cExpr(e.left), right: cExpr(e.right), span: cSpan(e.span) };
+    case "do":
+      return { kind: "do", exprs: e.exprs.map(cExpr), span: cSpan(e.span) };
     case "ternary":
       return {
         kind: "ternary",
@@ -370,6 +372,7 @@ const A_EXPR: Record<string, (e: Al) => Canon> = {
     body: aExpr(e.body),
     span: e.span,
   }),
+  EDo: (e) => ({ kind: "do", exprs: e.exprs.map(aExpr), span: e.span }),
   EPipe: (e) => ({ kind: "pipe", left: aExpr(e.left), right: aExpr(e.right), span: e.span }),
   // al-side fields are `thenE`/`elseE` (`else` is a JS reserved word); canon
   // folds them back to the TS AST's `then`/`else`.

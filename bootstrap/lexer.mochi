@@ -21,6 +21,7 @@ type Tok =
   | TSwitch
   | TLoop
   | TRecur
+  | TDo
   | TImport
   | TExport
   | TEq
@@ -58,6 +59,7 @@ type Tok =
   | TBang
   | TBacktick
   | TComma
+  | TSemi
   | TNum(value: number, raw: string)
   | TBool(value: bool)
   | TStr(value: string)
@@ -100,6 +102,7 @@ let keywordTok = word => switch word {
   | "switch" => Some(TSwitch)
   | "loop" => Some(TLoop)
   | "recur" => Some(TRecur)
+  | "do" => Some(TDo)
   | "import" => Some(TImport)
   | "export" => Some(TExport)
   | "true" => Some(TBool(true))
@@ -134,6 +137,7 @@ let punctTok = c => switch c {
   | "[" => Some(TLbracket)
   | "]" => Some(TRbracket)
   | "," => Some(TComma)
+  | ";" => Some(TSemi)
   | "." => Some(TDot)
   | ":" => Some(TColon)
   | "?" => Some(TQuestion)

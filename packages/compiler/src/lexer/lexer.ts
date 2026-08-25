@@ -13,6 +13,7 @@ export type Tok =
   | { t: "switch" }
   | { t: "loop" }
   | { t: "recur" }
+  | { t: "do" }
   | { t: "import" }
   | { t: "export" }
   | { t: "eq" } // =
@@ -50,6 +51,7 @@ export type Tok =
   | { t: "bang" } // !
   | { t: "backtick" } // `
   | { t: "comma" }
+  | { t: "semi" }
   | { t: "num"; v: number; raw: string } // raw source lexeme, so `3.0`/`-3` survive re-printing
   | { t: "bool"; v: boolean } // true / false
   | { t: "str"; v: string } // "..." (decoded value)
@@ -75,6 +77,7 @@ const KEYWORDS: Record<string, Tok | undefined> = {
   switch: { t: "switch" },
   loop: { t: "loop" },
   recur: { t: "recur" },
+  do: { t: "do" },
   import: { t: "import" },
   export: { t: "export" },
   true: { t: "bool", v: true },
@@ -116,6 +119,7 @@ const PUNCT: Record<string, Tok | undefined> = {
   "[": { t: "lbracket" },
   "]": { t: "rbracket" },
   ",": { t: "comma" },
+  ";": { t: "semi" },
   ".": { t: "dot" },
   ":": { t: "colon" },
   "?": { t: "question" },

@@ -68,6 +68,9 @@ const forEachScopedSpan = (e: Expr, f: (span: Span) => void): void => {
       forEachScopedSpan(e.left, f);
       forEachScopedSpan(e.right, f);
       return;
+    case "do":
+      for (const expr of e.exprs) forEachScopedSpan(expr, f);
+      return;
     case "ternary":
       forEachScopedSpan(e.cond, f);
       forEachScopedSpan(e.then, f);
