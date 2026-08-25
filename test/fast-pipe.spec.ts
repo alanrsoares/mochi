@@ -34,3 +34,14 @@ test("fast pipe requires a call on its right", () => {
 test("formatter keeps fast pipe snug", () => {
   expect(unwrapOk(format("let result=40 -> foo(2)"))).toBe("let result = 40->foo(2)\n");
 });
+
+test("fast pipe binds tighter than ++ (ADR 0073)", () => {
+  expect(
+    run('let gen = (c, n) => c.x\nlet ctx = { x: "!" }\nlet result = "hi" ++ ctx->gen(1)'),
+  ).toBe("hi!");
+  expect(
+    unwrapOk(compile('let foo = (c, n) => "z"\nlet x = 1\nlet result = "a" ++ x->foo(1)')),
+  ).toContain("foo(x, 1)");
+  expect(unwrapOk(format('let s = "hi" ++ ctx->gen(1)'))).toBe('let s = "hi" ++ ctx->gen(1)\n');
+  expect(unwrapOk(format('let s = ("hi" ++ ctx)->gen(1)'))).toBe('let s = ("hi" ++ ctx)->gen(1)\n');
+});

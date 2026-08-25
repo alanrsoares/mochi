@@ -155,6 +155,9 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
   const ADD_BP = 10;
   const BACKTICK_BP = 15;
   const MUL_BP = 20;
+  // Method-call tightness (ADR 0073): above every infix so `a ++ x->f(y)` is
+  // `a ++ f(x, y)`. `|>` stays PIPE_BP (pipeline-loose).
+  const FAST_PIPE_BP = 21;
 
   /**
    * Haskell-style operator sections — `(x +)` / `(+ x)` desugar to a one-param
@@ -475,7 +478,7 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
     // Fast pipe inserts the left value as the FIRST argument of a call:
     // `a -> f(b)` becomes `f(a, b)`. It deliberately reuses `->`, whose
     // type-expression meaning is unambiguous outside an expression parser.
-    if (tk.t === "tarrow" && PIPE_BP >= minBp) {
+    if (tk.t === "tarrow" && FAST_PIPE_BP >= minBp) {
       next();
       const right = parseAtomOrCall();
       if (right.kind === "call")

@@ -1,6 +1,6 @@
 # 0069 — Fast pipe inserts into a call's first argument
 
-- **Status:** accepted
+- **Status:** accepted (precedence amended by [0073](0073-fast-pipe-precedence.md))
 - **Date:** 2026-08-25
 
 ## Context

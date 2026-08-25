@@ -15,6 +15,7 @@ let hypot = (a, b) => sqrt(add(square(a), square(b)))  // multi-arg
 let one = () => 1                    // nullary → `() -> number` (ADR 0014)
 let pipeline = 5 |> double |> inc |> double            // left-to-right pipe
 let shifted = 5 -> add(3)                              // add(5, 3), fast pipe
+let glued = "hi" ++ ctx->label()                       // "hi" ++ label(ctx) — `->` tighter than `++` (ADR 0073)
 ```
 
 Use `do { … }` to sequence expressions and return the final one. An arrow body
@@ -296,4 +297,5 @@ Ternary `cond ? a : b` (looser than `|>` / `->`, right-associative), operator se
 `let?` / `let!` (monadic bind over `Result` / `Task`), `///` doc comments that attach
 to the following binding and surface in hover and `.d.ts`, and namespace imports
 `import * as Alias from "./mod"` with qualified access / ctor patterns
-`Alias.member` / `| Alias.Ctor(…)` (ADR 0002).
+`Alias.member` / `| Alias.Ctor(…)` (ADR 0002). Fast pipe `->` is method-call tight
+(tighter than `++` / `+` / `*`); `|>` stays pipeline-loose ([ADR 0073](adr/0073-fast-pipe-precedence.md)).

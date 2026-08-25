@@ -91,6 +91,13 @@ test("the fallback still flags the entry's own local typos", async () => {
   expect(diags.some((d) => d.message.includes("unbound variable 'x'"))).toBe(false);
 });
 
+test("++ then -> is method-call grouping, not concat-first (ADR 0073)", () => {
+  const src = `let gen = (c, n) => "ok"
+let ctx = { x: 1 }
+let s = "hi" ++ ctx->gen(1)`;
+  expect(diagnostics(src)).toEqual([]);
+});
+
 test("diagnostics surface did-you-mean suggestions", () => {
   // compile()/LSP diagnostics are open-world (host globals); did-you-mean runs
   // in strict mode so intentional open names aren't false-positived.
