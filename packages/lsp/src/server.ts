@@ -10,7 +10,11 @@ import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import { isPreludePath, PRELUDE_PATH, preludeVirtualSource } from "@mochi/compiler/prelude-virtual";
 import type { Span } from "@mochi/compiler/span";
 import { type CompletionItem as MochiCompletion, moduleCompleteAt } from "@mochi/dx/complete";
-import { moduleDiagnostics, type PublishDiagnostic } from "@mochi/dx/diagnostics";
+import {
+  moduleDiagnostics,
+  type PublishDiagnostic,
+  unusedLocalDiagnostics,
+} from "@mochi/dx/diagnostics";
 import { format } from "@mochi/dx/format";
 import { moduleHoverAt } from "@mochi/dx/hover";
 import {
@@ -389,12 +393,18 @@ export function startServer(opts: ServerOptions = {}): void {
 
   const validate = async (doc: TextDocument): Promise<void> => {
     const path = docPath(doc.uri);
-    const computed = await moduleDiagnostics(path, doc.getText(), read, await dxOpts(path));
+    const opts = await dxOpts(path);
+    const text = doc.getText();
+    const computed = [
+      ...(await moduleDiagnostics(path, text, read, opts)),
+      ...unusedLocalDiagnostics(text, path, opts),
+    ];
     diagnosticsCache.set(doc.uri, computed);
     const diags: Diagnostic[] = computed.map((d) => ({
       range: d.range,
       message: d.message,
-      severity: DiagnosticSeverity.Error,
+      severity: d.severity === "warning" ? DiagnosticSeverity.Warning : DiagnosticSeverity.Error,
+      ...(d.code ? { code: d.code } : {}),
       source: "mochi",
       relatedInformation: d.related?.map((r) => ({
         message: r.message,

@@ -114,6 +114,7 @@ What else was on the table and why not.
 | [0067](0067-local-recursion.md) | Local recursion: a `let … in` whose RHS is a lambda scopes its own name | Proposed |
 | [0068](0068-parse-only-syntax-batch.md) | Param annotations, as-patterns, record field shorthand (parse-only) | Proposed |
 | [0069](0069-fast-pipe.md) | Fast pipe inserts into a call's first argument | Accepted |
+| [0070](0070-lsp-unused-locals.md) | Unused local bindings are LSP warnings | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

@@ -125,3 +125,12 @@ test("bindingsAt: match arm pattern bind visible in body", () => {
   expect(names).toContain("k");
   expect(names).toContain("x");
 });
+
+test("localBindings excludes module declarations and intentional underscore names", () => {
+  const src = "let top = _unused => let local = 1 in local";
+  expect(
+    index(src)
+      .localBindings()
+      .map((binding) => binding.name),
+  ).toEqual(["local"]);
+});

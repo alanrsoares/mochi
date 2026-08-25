@@ -16,6 +16,7 @@ import { parse } from "@mochi/compiler/parser";
 import { preludeNamespaces } from "@mochi/compiler/prelude";
 import type { Env, Scheme } from "@mochi/compiler/schemes";
 import { lineCol } from "@mochi/compiler/span";
+import { indexProgram } from "@mochi/compiler/symbols";
 import { tVar } from "@mochi/compiler/types";
 import { isErr } from "@onrails/result";
 
@@ -39,6 +40,8 @@ export type PublishSuggestion = {
 export type PublishDiagnostic = {
   range: Range;
   message: string;
+  severity?: "warning";
+  code?: string;
   related?: RelatedInformation[];
   suggestions?: PublishSuggestion[];
 };
@@ -163,6 +166,39 @@ export async function moduleDiagnostics(
   });
   return isErr(typed) ? typed.error.map((e) => toPublish(src, e, entry)) : [];
 }
+
+/** Warning-only local liveness diagnostics, derived from lexical binding identity. */
+export function unusedLocalDiagnostics(
+  src: string,
+  path = "<buffer>",
+  opts: ModuleDiagnosticsOptions = {},
+): PublishDiagnostic[] {
+  const lexed = lex(src);
+  if (isErr(lexed)) return [];
+  const parsed = parse(lexed.value, { plugins: opts.plugins });
+  return isErr(parsed) ? [] : unusedLocalDiagnosticsFromProgram(src, path, parsed.value);
+}
+
+const unusedLocalDiagnosticsFromProgram = (
+  src: string,
+  path: string,
+  prog: Program,
+): PublishDiagnostic[] => {
+  const idx = indexProgram(path, prog);
+  return idx.localBindings().flatMap((binding) => {
+    const used = idx.occurrences(binding).some((occurrence) => occurrence.role === "use");
+    return used
+      ? []
+      : [
+          {
+            range: spanRange(src, binding.def.span.start, binding.def.span.end),
+            message: `unused local binding '${binding.name}'`,
+            severity: "warning" as const,
+            code: "unused-local",
+          },
+        ];
+  });
+};
 
 const importsOf = (prog: Program): ImportStmt[] =>
   prog.stmts.filter((s): s is ImportStmt => s.kind === "import");
