@@ -206,6 +206,9 @@ Combinators are data-last under `Task.*` and compose with `|>`
 | `Task.match` | `(A -> C) -> (E -> C) -> Task<A, E> -> Task<C, F>` | fold both tracks, stays a `Task` |
 | `Task.delay` | `number -> A -> Task<A, E>` | sleep then yield (`_curry`-safe) |
 | `Task.run` | `Task<A, E> -> Promise<Result<A, E>>` | kick-off at the JS edge |
+| `Task.all` | `[Task<A, E>] -> Task<[A], E>` | fan-out, fail-fast, input-ordered |
+| `Task.race` | `[Task<A, E>] -> Task<A, E>` | first to **settle** (`Ok` or `Err`) |
+| `Task.traverse` | `(A -> Task<B, E>) -> [A] -> Task<[B], E>` | `all` after `map` (`_curry`-safe) |
 
 ```mochi
 let program =
@@ -224,6 +227,20 @@ on every call — `Task` follows the IO-action model, not the cached-Promise mod
 binding two externs with different error shapes into one chain. `examples/async/`
 runs that end to end against a failing host: string failures map onto a domain
 `ApiError`, a 404 is recovered, and an unreachable host still settles as `Err`.
+
+Fan-out is [ADR 0074](adr/0074-task-fan-out.md). `Task.all` settles `Err` on the *first*
+error rather than waiting for the rest, and results keep **input** order. mochi has no
+cancellation, so tasks still in flight are **abandoned**: their host effects run to
+completion and their results are dropped — if a failure must stop later writes, the
+program has to arrange that itself. `Task.race` races *settlement*, so the first `Err`
+wins as readily as the first `Ok`, and `race([])` never settles (like `Promise.race([])`).
+Combining tasks needs one error type: `mapErr` first.
+
+```mochi
+// three lookups at once; one ApiError channel for all of them
+let profile = ids =>
+  Task.traverse(id => fetchUser(id) |> Task.mapErr(classify(id)), ids)
+```
 
 Effects stay a **convention**, not a checked effect system: domain IO is thin `extern`s
 that *should* return `Task<A, E>` (see `examples/life/`); sequencing uses prelude `Task.*`.

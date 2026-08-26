@@ -44,7 +44,7 @@ string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck�
 | `extensions/` | `LanguagePlugin` seam (ADR 0011); `plugins/jsx` builtin |
 | `doc/` | Wadler-style `Doc` IR + layout engine, shared by `@mochi/dx` format and plugin hooks |
 | `module/` | `buildModules(): ResultAsync<…>` — DFS load, cycle detection, compile graph |
-| `prelude/` | builtin HM signatures, JS runtime strings, namespace tables, virtual prelude |
+| `prelude/` | builtin HM signatures + namespace tables; `runtime.ts` is the runtime source of truth, `js-defs.gen.ts` its stripped JS view (ADR 0075) |
 | `dts/` | `.d.ts` emit (TS backend shares printers) |
 | `compile/` | single-file railway, `compile-targets` |
 | `@mochi/cli` | host CLI — composes compiler + `@mochi/dx` (`fmt`) + `@mochi/codemod` |

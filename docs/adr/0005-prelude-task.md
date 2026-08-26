@@ -48,7 +48,7 @@ We want one shared `Task` namespace in the prelude (like `Option` / `Result` /
 
 ## Consequences
 
-- `prelude.ts` / `prelude-virtual.ts` / `gen:prelude` / `gen:runtime` grow a
+- `prelude.ts` / `prelude-virtual.ts` / `gen:prelude` / `gen:prelude-defs` grow a
   `Task` namespace; `Task` becomes a reserved namespace name like `Option`.
 - `examples/async` and `examples/life` shrink to domain `extern`s + `Task.*`.
 - Docs (`language.md`, `CONTEXT.md`) describe `Task` as the async value type;

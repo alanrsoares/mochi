@@ -213,9 +213,20 @@ const dedupeConsts = (js: string): string => {
       continue;
     }
     // Consume the whole statement (some emitted consts are multi-line match
-    // chains) so dropping a duplicate leaves no orphaned `.with(…)` line.
+    // chains, and prelude defs like `_curry` are multi-line function bodies) so
+    // dropping a duplicate leaves no orphaned `.with(…)` or dangling `};` line.
+    // A trailing `;` only ends the statement once every bracket it opened has
+    // closed — `return (...b) => c(...a, ...b);` inside a body does not.
     let j = i;
-    while (j < lines.length && !/;\s*$/.test(lines[j] ?? ";")) j++;
+    let depth = 0;
+    for (; j < lines.length; j++) {
+      const text = lines[j] ?? "";
+      for (const ch of text) {
+        if ("({[".includes(ch)) depth += 1;
+        else if (")}]".includes(ch)) depth -= 1;
+      }
+      if (depth <= 0 && /;\s*$/.test(text)) break;
+    }
     if (!seen.has(name)) {
       seen.add(name);
       out.push(...lines.slice(i, j + 1));

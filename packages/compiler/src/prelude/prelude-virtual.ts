@@ -40,7 +40,7 @@ const NS_DOCS: Record<string, string> = {
   Option: "Option combinators — data-last for `|>` chains. Ctors stay unqualified (`Some`/`None`).",
   Result:
     "Result railway combinators — data-last for `|>` chains. Ctors stay unqualified (`Ok`/`Err`).",
-  Task: "Lazy async values with an error channel (`Task a e`). `Task.of`, `Task.fail`, `Task.map`, `Task.mapErr`, `Task.andThen`, `Task.recover`, `Task.fromResult`, `Task.match`, `Task.delay`, `Task.run`. Opaque thunk — not switchable. `Task.run` is the only kick-off and is not memoized — it re-fires the effect every call.",
+  Task: "Lazy async values with an error channel (`Task a e`). `Task.of`, `Task.fail`, `Task.map`, `Task.mapErr`, `Task.andThen`, `Task.recover`, `Task.fromResult`, `Task.match`, `Task.delay`, `Task.run`, plus fan-out: `Task.all`, `Task.race`, `Task.traverse` (ADR 0074 — fail-fast, in-flight tasks abandoned). Opaque thunk — not switchable. `Task.run` is the only kick-off and is not memoized — it re-fires the effect every call.",
   Str: "String ops (`Str.split`, `Str.get`, …). Data-last where a subject is involved.",
 };
 

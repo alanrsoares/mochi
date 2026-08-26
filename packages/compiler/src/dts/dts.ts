@@ -88,10 +88,16 @@ function tsOfRaw(t: Type, names: Map<number, string>): string {
       .with({ kind: "var" }, (v) => names.get(v.id) ?? "unknown")
       .with({ kind: "con", name: "Array" }, (con) => {
         if (con.args.length !== 1) return nominalCon(con, names);
-        // Arrow / union need parens: `(a: A) => B[]` ≠ `((a: A) => B)[]`.
+        // Arrow / union need parens: `(a: A) => B[]` ≠ `((a: A) => B)[]`. `Task`
+        // counts as an arrow — it PRINTS as one (`() => Promise<Result<…>>`)
+        // even though it is a `con`, so `[Task<a, e>]` needs them too.
         const elem = tsOfRaw(con.args[0]!, names);
         const inner = con.args[0]!;
-        return inner.kind === "arrow" || inner.kind === "union" ? `(${elem})[]` : `${elem}[]`;
+        const printsAsArrow =
+          inner.kind === "arrow" ||
+          inner.kind === "union" ||
+          (inner.kind === "con" && inner.name === "Task" && inner.args.length === 2);
+        return printsAsArrow ? `(${elem})[]` : `${elem}[]`;
       })
       .with({ kind: "con", name: "List" }, (con) =>
         con.args.length === 1
@@ -393,7 +399,7 @@ function curriedOverloads(head: string, params: string[], ret: string): string {
  * all but the all-at-once form, breaking pipelines. So emit an OVERLOADED type:
  * one generic call signature per composition of the arity, covering every
  * grouping `_curry` accepts. arity 0 → the bare type; arity 1 → a plain arrow.
- * Used by scripts/gen-runtime.ts.
+ * Used by scripts/runtime-types.ts (the runtime-annotation drift check).
  */
 export function flatFnType(t: Type, arity: number): string {
   const ids: number[] = [];
