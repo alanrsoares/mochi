@@ -1,6 +1,6 @@
 # 0067 — Local recursion: a `let … in` whose RHS is a lambda scopes its own name
 
-- **Status:** proposed
+- **Status:** Accepted — implemented (`infer/infer.ts` `inferLocalLambdaGroup`; mirrored and dogfooded in `bootstrap/infer.mochi`)
 - **Date:** 2026-08-25
 - **Source:** owner request during a language-gap review ("what high value expressiveness are we lacking")
 

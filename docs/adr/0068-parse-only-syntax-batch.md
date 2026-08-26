@@ -1,6 +1,6 @@
 # 0068 — Three parse-only syntax additions: param annotations, as-patterns, field shorthand
 
-- **Status:** proposed
+- **Status:** Accepted — implemented (parser/format/bootstrap parity for all three forms)
 - **Date:** 2026-08-25
 - **Source:** owner request during a language-gap review ("what high value expressiveness are we lacking")
 
