@@ -78,6 +78,7 @@ import {
 import { type Diagnostic, typeErr } from "../errors/errors";
 import type { InferCallApi, InferCallDispatch, LanguagePlugin } from "../extensions/extensions";
 import { inferCallDispatch, resolvePlugins, runInferCallHooks } from "../extensions/extensions";
+import { localBinderNames } from "./local-names";
 import { stronglyConnected } from "./scc";
 import { showTypeExpr } from "./show-type-expr";
 import { closestName } from "./suggest";
@@ -107,6 +108,9 @@ type Ctx = {
   // Enclosing `loop` param-type frames, innermost last (ADR 0056). `recur`
   // unifies its args against the last frame.
   loopStack: Type[][];
+  // Names bound by SOME local binder in this program. Open mode uses it to tell
+  // an out-of-scope ref apart from a host global (see `local-names.ts`).
+  localNames: ReadonlySet<string>;
 };
 
 const u = (a: Type, b: Type, ctx: Ctx, span?: Span): Result<Type, Diagnostic> => {
@@ -237,9 +241,19 @@ function inferRef(e: RefExpr, ctx: Ctx): Result<Type, Diagnostic> {
       ctx.record?.(e.span, inst);
     return ok(inst);
   }
-  // Did-you-mean only in strict mode. Open-world leaves unknown names as fresh
-  // vars (host globals); guessing there false-positives on names like `empty2`.
-  if (ctx.open) return ok(freshVar(ctx.fresh));
+  // Open-world leaves unknown names as fresh vars (host globals) — but only
+  // names this module never binds. One it DOES bind somewhere has escaped its
+  // binder's scope, and emitting it would throw `ReferenceError` at runtime.
+  if (ctx.open)
+    return ctx.localNames.has(e.name)
+      ? err(
+          typeErr(`'${e.name}' is not in scope here`, e.span, {
+            help: "it is bound elsewhere in this file, but not around this use — check the binder's extent",
+          }),
+        )
+      : ok(freshVar(ctx.fresh));
+  // Did-you-mean only in strict mode: guessing under open mode false-positives
+  // on host globals with near-miss names like `empty2`.
   const hint = closestName(e.name, ctx.env.keys());
   return hint
     ? err(
@@ -1039,6 +1053,7 @@ function run(
   });
 
   const allDiags: Diagnostic[] = [];
+  const localNames = localBinderNames(prog);
 
   for (const comp of stronglyConnected(adj)) {
     const group = comp.map((i) => lets[i]!);
@@ -1065,6 +1080,7 @@ function run(
         noteLet,
         inferCallHooks,
         loopStack: [],
+        localNames,
       });
       // Collect-and-bail per member (ADR 0004): record the diag, leave the
       // pre-bound mono var, continue siblings / later SCCs.

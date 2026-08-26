@@ -120,6 +120,7 @@ What else was on the table and why not.
 | [0073](0073-fast-pipe-precedence.md) | Fast pipe is method-call tight (above every infix) | Accepted |
 | [0074](0074-task-fan-out.md) | `Task.all` / `race` / `traverse` — fail-fast, no cancellation | Accepted |
 | [0075](0075-runtime-source-of-truth.md) | The runtime is TS source; the JS def table is generated from it | Accepted |
+| [0076](0076-open-mode-locally-bound-names.md) | Open mode does not trust a name the file itself binds | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was
