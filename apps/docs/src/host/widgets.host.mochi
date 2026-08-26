@@ -12,8 +12,4 @@
 export extern HighlightedCode<A> : A = "../components/HighlightCode" "HighlightedCode"
 // Playground/ColorSchemeToggle take no props — nothing to check.
 export extern Playground<A> : A = "../components/Playground" "Playground"
-export extern ColorSchemeToggle<A> : A = "../components/ColorSchemeToggle" "ColorSchemeToggle"
-
-type IconProps = { name: string, className: string }
-
-export extern Icon : IconProps -> VNode = "../components/Icon" "Icon"
+export extern ColorSchemeToggle<A> : A = "../components/ColorSchemeToggle.mochi" "ColorSchemeToggle"

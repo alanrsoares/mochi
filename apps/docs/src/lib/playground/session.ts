@@ -11,7 +11,7 @@ import {
   isSharedCodeWithinLimits,
   MAX_ENCODED_CODE_LENGTH,
 } from "../shared-code";
-import { DEFAULT_PRESET_CODE } from "./presets";
+import { DEFAULT_PRESET_CODE } from "./presets.mochi";
 
 const STORAGE_KEY = "mochi_playground_code_v2";
 const AUTORUN_KEY = "mochi_playground_autorun";

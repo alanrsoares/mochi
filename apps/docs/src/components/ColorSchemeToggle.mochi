@@ -1,0 +1,57 @@
+"use open"
+
+import { useLazyState, useEffect, hookDeps0 } from "@mochi/plugin-preact/hooks"
+import { ThemeToggleBtn } from "../ui/primitives"
+import { Icon } from "../host/icon.host"
+
+extern COLOR_SCHEME_KEY : string = "../lib/color-scheme" "COLOR_SCHEME_KEY"
+extern readPref : () -> string = "../lib/color-scheme" "readPref"
+extern resolveScheme : string -> string = "../lib/color-scheme" "resolveScheme"
+extern cyclePref : string -> string = "../lib/color-scheme" "cyclePref"
+extern setPref : string -> string = "../lib/color-scheme" "setPref"
+
+/// Cleanup return stays OPAQUE — see HeroCarousel `startHeroTick` note.
+extern listenStorage<A> : (string -> ()) -> A = "../lib/color-scheme" "listenStorage"
+
+let labelFor = pref => switch pref {
+  | "system" => "auto"
+  | "light" => "light"
+  | _ => "dark"
+}
+
+let iconFor = pref => switch pref {
+  | "system" => "monitor"
+  | "light" => "sun"
+  | _ => "moon"
+}
+
+export let ColorSchemeToggle = _ =>
+  let (pref, setPrefState) = useLazyState(() => readPref()) in
+  let _fx = useEffect(() =>
+    listenStorage(key =>
+      key == COLOR_SCHEME_KEY || key == "" ? setPrefState(readPref()) : ()
+    )
+  )(hookDeps0()) in
+  let resolved = resolveScheme(pref) in
+  let next = cyclePref(pref) in
+  let labelPref = labelFor(pref) in
+  let labelNext = labelFor(next) in
+  let iconName = iconFor(pref) in
+    <ThemeToggleBtn
+      ariaLabel={"Color scheme "
+        ++ labelPref
+        ++ " (showing "
+        ++ resolved
+        ++ "). Click for "
+        ++ labelNext
+        ++ "."}
+      title={"Scheme: " ++ labelPref ++ " → " ++ labelNext}
+      onClick={() =>
+        let n = cyclePref(readPref()) in
+          do {
+            setPref(n);
+            setPrefState(n)
+          }}
+    >
+      <Icon name={iconName} className="size-3.5" />
+    </ThemeToggleBtn>

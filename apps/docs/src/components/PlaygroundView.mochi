@@ -4,7 +4,7 @@
 // Playground.tsx (let-in → IIFE breaks Rules of Hooks).
 // This declaration-only component is emitted independently; imported TSX UI
 // components are intentionally host-provided at that boundary.
-import { Icon } from "../host/widgets.host"
+import { Icon } from "../host/icon.host"
 import { StatusLabel, ToolBtn, ToolBtnSolid } from "../ui/primitives"
 
 type Props = { onToggleAutoRun: () -> (), autoRun: bool, onRun: () -> (), onFormat: () -> (), formatNotice: bool, onShare: () -> (), shareCopied: bool, compiling: bool, statusState: string, statusText: string, body: VNode }

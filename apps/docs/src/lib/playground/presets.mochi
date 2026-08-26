@@ -1,0 +1,22 @@
+"use open"
+
+extern presetFib : string = "../../examples/presets/fib.mochi?raw" "default"
+extern presetJsx : string = "../../examples/presets/jsx.mochi?raw" "default"
+extern presetResult : string = "../../examples/presets/result.mochi?raw" "default"
+extern presetRowPoly : string = "../../examples/presets/row-poly.mochi?raw" "default"
+extern presetTask : string = "../../examples/presets/task.mochi?raw" "default"
+
+export type Preset = { name: string, code: string }
+
+/// Ordered so the Settings dropdown reads jsx → result → task → rowPoly → fib.
+/// A list of pairs, not a record: the only consumer looks presets up by a
+/// runtime string, which a closed record type can't answer.
+export let presetEntries : [(string, Preset)] = [
+  ("jsx", { name: "JSX → h()", code: presetJsx }),
+  ("result", { name: "Result + switch", code: presetResult }),
+  ("task", { name: "Async with typed errors", code: presetTask }),
+  ("rowPoly", { name: "Flexible records", code: presetRowPoly }),
+  ("fib", { name: "Fibonacci", code: presetFib })
+]
+
+export let DEFAULT_PRESET_CODE = presetJsx

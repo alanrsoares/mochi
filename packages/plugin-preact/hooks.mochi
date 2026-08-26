@@ -6,6 +6,9 @@
 // `() ->` is the nullary domain (ADR 0014). Dep lists stay opaque / packed
 // via `hookDeps*` — mochi arrays are homogeneous.
 export extern useState<A, B> : A -> (A, A -> B) = "preact/hooks" "useState"
+/// Lazy initial state — the thunk runs on mount only. Same runtime binding as
+/// `useState`; Preact calls a function initialiser instead of storing it.
+export extern useLazyState<A, B> : (() -> A) -> (A, A -> B) = "preact/hooks" "useState"
 export extern useEffect<C, D, E> : (() -> C) -> D -> E = "preact/hooks" "useEffect"
 export extern useCallback<A, B> : A -> B -> A = "preact/hooks" "useCallback"
 export extern useLayoutEffect<C, D, E> : (() -> C) -> D -> E = "preact/hooks" "useLayoutEffect"

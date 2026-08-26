@@ -5,7 +5,8 @@ import { HeaderBadge } from "./components/HeaderBadge"
 import { SyntaxPanel } from "./components/SyntaxPanel"
 import { CodegenPanels } from "./components/CodegenPanels"
 import { HeroCarousel } from "./components/HeroCarousel"
-import { HighlightedCode, ColorSchemeToggle, Icon } from "./host/widgets.host"
+import { HighlightedCode, ColorSchemeToggle } from "./host/widgets.host"
+import { Icon } from "./host/icon.host"
 import { githubUrl, SiteFooter } from "./components/SiteChrome"
 import {
   NavLink,

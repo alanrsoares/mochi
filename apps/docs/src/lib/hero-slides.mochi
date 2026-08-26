@@ -1,0 +1,58 @@
+"use open"
+
+// Slide copy + timings for the hero carousel. The pointer/timer effects that
+// need `PointerEvent` and `matchMedia` stay in `hero-slides-fx.ts`.
+import {
+  bootstrapPartyImg,
+  coderMascotImg,
+  compilerMagicImg,
+  cosmicTypesImg,
+  lspInspectorImg,
+  stickersImg
+} from "./illustrations"
+
+export type HeroSlide = { src: string, alt: string, kicker: string, title: string }
+
+export let HERO_INTERVAL_MS = 5200
+
+/// Minimum horizontal travel (px) before a pointer gesture counts as a swipe.
+export let SWIPE_MIN_PX = 40
+
+export let heroSlides : [HeroSlide] = [
+  {
+    src: coderMascotImg,
+    alt: "Mochi coder mascot",
+    kicker: "mascot",
+    title: "At the keyboard"
+  },
+  {
+    src: compilerMagicImg,
+    alt: "Compiler Magic",
+    kicker: "codegen",
+    title: "AST → JS & strict TS"
+  },
+  {
+    src: cosmicTypesImg,
+    alt: "Cosmic Type System",
+    kicker: "inference",
+    title: "Smart type inference"
+  },
+  {
+    src: lspInspectorImg,
+    alt: "LSP Inspector",
+    kicker: "lsp",
+    title: "Hover & diagnostics"
+  },
+  {
+    src: bootstrapPartyImg,
+    alt: "Bootstrap Party",
+    kicker: "self-host",
+    title: "0 tsc --strict errors"
+  },
+  {
+    src: stickersImg,
+    alt: "Sticker sheet",
+    kicker: "stickers",
+    title: "Mascot sticker sheet"
+  }
+]

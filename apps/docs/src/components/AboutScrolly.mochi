@@ -1,16 +1,13 @@
 "use open"
 
 // Scrollytelling body — chapter copy scrolls on the left, one sticky plate
-// crossfades on the right. Copy lives in `lib/about-chapters.ts`; the GSAP
+// crossfades on the right. Copy lives in `lib/about-chapters.mochi`; the GSAP
 // ScrollTrigger choreography (plate swaps, beat reveals, reduced-motion
 // split) lives in `lib/about-scrolly-fx.ts`. This file is layout only.
 import { useEffect, hookDeps0 } from "@mochi/plugin-preact/hooks"
 import { SectionEyebrow } from "../ui/primitives"
 
-type Chapter = { id: string, kicker: string, title: string, body: [string], src: string, alt: string }
-
-extern aboutChapters : [Chapter] = "../lib/about-chapters" "aboutChapters"
-extern SPARK_TALK_URL : string = "../lib/about-chapters" "SPARK_TALK_URL"
+import { aboutChapters, SPARK_TALK_URL } from "../lib/about-chapters"
 // Cleanup return stays OPAQUE (`a`, not `a -> b`) — extern arity counts the
 // whole arrow spine; see the HeroCarousel `startHeroTick` note.
 /// Returns an effect cleanup.

@@ -43,6 +43,12 @@ export const setPref = (pref: ColorSchemePref): ResolvedScheme => {
 export const cyclePref = (pref: ColorSchemePref): ColorSchemePref =>
   pref === "system" ? "light" : pref === "light" ? "dark" : "system";
 
+export const listenStorage = (onStorage: (key: string) => void): (() => void) => {
+  const handler = (e: StorageEvent) => onStorage(e.key ?? "");
+  window.addEventListener("storage", handler);
+  return () => window.removeEventListener("storage", handler);
+};
+
 /** Apply stored pref + listen for system / cross-tab changes. Returns cleanup. */
 export const initColorScheme = (): (() => void) => {
   applyScheme(readPref());
