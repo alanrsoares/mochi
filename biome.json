@@ -1,6 +1,10 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.10/schema.json",
-  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
   "files": {
     "includes": [
       "test/**/*.ts",
@@ -13,10 +17,12 @@
       "examples/snake/src/**/*.ts",
       "examples/snake/src/**/*.tsx",
       "examples/snake/*.ts",
-      "!packages/compiler/src/prelude/runtime.ts"
+      "!packages/compiler/src/prelude/js-defs.gen.ts"
     ]
   },
-  "javascript": { "globals": ["Bun"] },
+  "javascript": {
+    "globals": ["Bun"]
+  },
   "formatter": {
     "enabled": true,
     "indentStyle": "space",
@@ -30,10 +36,15 @@
       "complexity": {
         "noExcessiveCognitiveComplexity": {
           "level": "warn",
-          "options": { "maxAllowedComplexity": 50 }
+          "options": {
+            "maxAllowedComplexity": 50
+          }
         }
       },
-      "correctness": { "noUndeclaredVariables": "error", "useExhaustiveDependencies": "off" },
+      "correctness": {
+        "noUndeclaredVariables": "error",
+        "useExhaustiveDependencies": "off"
+      },
       "style": {
         "noNonNullAssertion": "off",
         "useConst": "error",
@@ -42,7 +53,12 @@
       },
       "suspicious": {
         "noExplicitAny": "error",
-        "noConsole": { "level": "warn", "options": { "allow": ["error"] } }
+        "noConsole": {
+          "level": "warn",
+          "options": {
+            "allow": ["error"]
+          }
+        }
       },
       "nursery": {
         "useSortedClasses": {
@@ -55,17 +71,29 @@
       }
     }
   },
-  "assist": { "actions": { "source": { "organizeImports": "on" } } },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
   "overrides": [
     {
-      "includes": ["**", "!biome/plugins/**"],
+      "includes": ["**", "!biome/plugins/**", "!packages/compiler/src/prelude/runtime.ts"],
       "plugins": [
         "./biome/plugins/no-promise-result.grit",
         "./biome/plugins/no-inline-struct-type.grit"
       ]
     },
     {
-      "includes": ["**", "!test/**", "!**/*.spec.ts", "!biome/plugins/**"],
+      "includes": [
+        "**",
+        "!test/**",
+        "!**/*.spec.ts",
+        "!biome/plugins/**",
+        "!packages/compiler/src/prelude/runtime.ts"
+      ],
       "plugins": [
         "./biome/plugins/prefer-immutable-arrays.grit",
         "./biome/plugins/prefer-immutable-objects.grit"
@@ -75,7 +103,9 @@
       "includes": ["scripts/**"],
       "linter": {
         "rules": {
-          "suspicious": { "noConsole": "off" }
+          "suspicious": {
+            "noConsole": "off"
+          }
         }
       }
     },
@@ -83,7 +113,19 @@
       "includes": ["apps/docs/**"],
       "linter": {
         "rules": {
-          "suspicious": { "noExplicitAny": "off" }
+          "suspicious": {
+            "noExplicitAny": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/compiler/src/prelude/runtime.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noExplicitAny": "off"
+          }
         }
       }
     }

@@ -53,3 +53,25 @@ let report = id =>
 export let found = Task.run(report(1))
 export let recovered = Task.run(report(7))
 export let offline = Task.run(describe(0))
+
+// ---- fan-out (ADR 0074) ----
+// Independent effects run at once and still share ONE error channel: `mapErr`
+// aligns each on `ApiError` before `traverse` collects them. Results come back
+// in INPUT order, never completion order.
+let nameOf = id =>
+  fetchUser(id) |> Task.mapErr(classify(id)) |> Task.map(u => u.name)
+
+let roster = ids => Task.traverse(nameOf, ids)
+
+export let everyone = Task.run(roster([1, 1]))
+
+// Fail-fast: id 7 is a 404, so the whole fan-out settles `Err` on the first
+// failure. The sibling lookup is ABANDONED — its request still completes in the
+// host, its result is simply dropped. mochi has no cancellation (ADR 0074).
+export let partial = Task.run(roster([1, 7]))
+
+// `race` settles on the first task to SETTLE — an early `Err` wins as readily
+// as an early `Ok`. `Task.race([])` would never settle.
+export let fastest = Task.run(
+  Task.race([Task.delay(50, "slow"), Task.delay(1, "quick")])
+)

@@ -22,8 +22,10 @@ Sources live under `packages/compiler/src/<component>/` — each folder has an `
 barrel and colocated unit specs. `@mochi/compiler/*` export URLs are unchanged.
 
 `module/` (`buildModules`) drives multi-file graphs: DFS load, cycle detection,
-cross-module inference and exhaustiveness. `prelude/` holds the builtin HM signatures,
-the JS runtime strings, and the namespace tables. `compile/` is the single-file
+cross-module inference and exhaustiveness. `prelude/` holds the builtin HM signatures
+and the namespace tables; its `runtime.ts` is the runtime itself — TypeScript source
+both backends share, with `js-defs.gen.ts` the type-stripped view the JS backend
+inlines from ([ADR 0075](adr/0075-runtime-source-of-truth.md)). `compile/` is the single-file
 railway; `@mochi/cli` is the host CLI; `@mochi/lsp` is a thin adapter over `@mochi/dx`
 surfaces ([ADR 0048](adr/0048-core-dx-package-boundary.md)).
 

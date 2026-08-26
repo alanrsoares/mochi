@@ -1,7 +1,7 @@
 ---
 id: C1
 title: Strict inference by default; open-world opt-in
-status: open
+status: done
 type: task
 blocked-by: [C5, C10]
 ---

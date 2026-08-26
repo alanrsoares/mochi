@@ -1,7 +1,7 @@
 ---
 id: C7
 title: Task concurrency combinators — all / race / traverse
-status: open
+status: done
 type: task
 blocked-by: []
 ---
@@ -25,11 +25,16 @@ channel that is Task's whole point.
 - `Task.race : [Task<A, E>] -> Task<A, E>`.
 - `Task.traverse : (A -> Task<B, E>) -> [A] -> Task<[B], E>` (and `sequence` as the
   identity special case if it falls out free).
-- Bounded parallelism (`allLimit(n, …)`) — decide in the ADR whether v1 ships it.
+- Bounded parallelism (`allLimit(n, …)`) — decide in the ADR whether v1 ships it. **Out of v1** (ADR 0074).
 - Chains stay mono-`e` (existing rule): callers `mapErr` before combining.
 
-- [ ] ADR: partial-failure + abandonment semantics; `allLimit` in or out.
-- [ ] Prelude signatures + JS runtime (`prelude.ts`), `_curry`-safe like `Task.delay`.
-- [ ] `examples/async/` gains a fan-out example that exercises the `Err` path.
-- [ ] Case in `test/examples.spec.ts`; `.d.ts` output checked.
-- [ ] `bun run check:full` green.
+- [x] ADR: partial-failure + abandonment semantics; `allLimit` in or out.
+- [x] Prelude signatures + JS runtime (`prelude.ts`), `_curry`-safe like `Task.delay`.
+- [x] `examples/async/` gains a fan-out example that exercises the `Err` path.
+- [x] Case in `test/examples.spec.ts`; `.d.ts` output checked.
+- [x] `bun run check:full` green.
+
+**Shipped 2026-08-26** — ADR [0074](../../adr/0074-task-fan-out.md); `Task.all` / `race` /
+`traverse` in `prelude.ts` (bootstrap shim + typed runtime regenerated); fan-out section in
+`examples/async/main.mochi`; guard in `test/examples.spec.ts`. `check:full`, `fixpoint` and
+`bootstrap:tsc` all green.

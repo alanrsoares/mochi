@@ -3326,6 +3326,143 @@ const _namespaces = {
           }
         ]
       }
+    },
+    "all": {
+      "_tag": "TyFn",
+      "from": {
+        "_tag": "TyCon",
+        "name": "Array",
+        "args": [
+          {
+            "_tag": "TyCon",
+            "name": "Task",
+            "args": [
+              {
+                "_tag": "TyVar",
+                "id": 0
+              },
+              {
+                "_tag": "TyVar",
+                "id": 2
+              }
+            ]
+          }
+        ]
+      },
+      "to": {
+        "_tag": "TyCon",
+        "name": "Task",
+        "args": [
+          {
+            "_tag": "TyCon",
+            "name": "Array",
+            "args": [
+              {
+                "_tag": "TyVar",
+                "id": 0
+              }
+            ]
+          },
+          {
+            "_tag": "TyVar",
+            "id": 2
+          }
+        ]
+      }
+    },
+    "race": {
+      "_tag": "TyFn",
+      "from": {
+        "_tag": "TyCon",
+        "name": "Array",
+        "args": [
+          {
+            "_tag": "TyCon",
+            "name": "Task",
+            "args": [
+              {
+                "_tag": "TyVar",
+                "id": 0
+              },
+              {
+                "_tag": "TyVar",
+                "id": 2
+              }
+            ]
+          }
+        ]
+      },
+      "to": {
+        "_tag": "TyCon",
+        "name": "Task",
+        "args": [
+          {
+            "_tag": "TyVar",
+            "id": 0
+          },
+          {
+            "_tag": "TyVar",
+            "id": 2
+          }
+        ]
+      }
+    },
+    "traverse": {
+      "_tag": "TyFn",
+      "from": {
+        "_tag": "TyFn",
+        "from": {
+          "_tag": "TyVar",
+          "id": 0
+        },
+        "to": {
+          "_tag": "TyCon",
+          "name": "Task",
+          "args": [
+            {
+              "_tag": "TyVar",
+              "id": 1
+            },
+            {
+              "_tag": "TyVar",
+              "id": 2
+            }
+          ]
+        }
+      },
+      "to": {
+        "_tag": "TyFn",
+        "from": {
+          "_tag": "TyCon",
+          "name": "Array",
+          "args": [
+            {
+              "_tag": "TyVar",
+              "id": 0
+            }
+          ]
+        },
+        "to": {
+          "_tag": "TyCon",
+          "name": "Task",
+          "args": [
+            {
+              "_tag": "TyCon",
+              "name": "Array",
+              "args": [
+                {
+                  "_tag": "TyVar",
+                  "id": 1
+                }
+              ]
+            },
+            {
+              "_tag": "TyVar",
+              "id": 2
+            }
+          ]
+        }
+      }
     }
   },
   "Str": {
@@ -3769,7 +3906,10 @@ const _namespaceRuntime = {
     "fromResult": "_Task_fromResult",
     "match": "_Task_match",
     "delay": "_Task_delay",
-    "run": "_Task_run"
+    "run": "_Task_run",
+    "all": "_Task_all",
+    "race": "_Task_race",
+    "traverse": "_Task_traverse"
   },
   "Str": {
     "length": "_Str_length",
@@ -3793,9 +3933,9 @@ const _namespaceRuntime = {
 };
 const _preludeJsDefs = {
   "_list": "const _list = (g) => ({ [Symbol.iterator]: g });",
-  "_curry": "const _curry = (n, f) => function c(...a) { if (a.length < n) return (...b) => c(...a, ...b); if (a.length === n) return f(...a); return a.slice(n).reduce((g, x) => g(x), f(...a.slice(0, n))); };",
+  "_curry": "const _curry = (n, f) => function c(...a) {\n  if (a.length < n)\n    return (...b) => c(...a, ...b);\n  if (a.length === n)\n    return f(...a);\n  return a.slice(n).reduce((g, x) => g(x), f(...a.slice(0, n)));\n};",
   "_tuple": "const _tuple = (...xs) => xs;",
-  "_recur": "const _recur = (...args) => ({ _tag: \"recur\", args });",
+  "_recur": "const _recur = (...args) => ({\n  _tag: \"recur\",\n  args\n});",
   "_done": "const _done = (value) => ({ _tag: \"done\", value });",
   "Some": "const Some = (value) => ({ _tag: \"Some\", value });",
   "None": "const None = { _tag: \"None\" };",
@@ -3809,11 +3949,11 @@ const _preludeJsDefs = {
   "sqrt": "const sqrt = (x) => Math.sqrt(x);",
   "hypot": "const hypot = _curry(2, (a, b) => Math.hypot(a, b));",
   "pi": "const pi = Math.PI;",
-  "concat": "const concat = _curry(2, (a, b) => (typeof a === \"string\" ? a + b : Array.isArray(a) ? a.concat(b) : _List_concat(a, b)));",
-  "eq": "const eq = _curry(2, (x, y) => { if (x === y) return true; if (typeof x !== \"object\" || x === null || typeof y !== \"object\" || y === null) return false; const ax = Array.isArray(x); if (ax !== Array.isArray(y)) return false; if (ax) { if (x.length !== y.length) return false; for (let i = 0; i < x.length; i++) if (!eq(x[i], y[i])) return false; return true; } if (x instanceof Map || y instanceof Map) { if (!(x instanceof Map) || !(y instanceof Map)) return false; if (x.size !== y.size) return false; for (const [k, v] of x) { if (!y.has(k) || !eq(v, y.get(k))) return false; } return true; } if (x instanceof Set || y instanceof Set) { if (!(x instanceof Set) || !(y instanceof Set)) return false; if (x.size !== y.size) return false; for (const v of x) if (!y.has(v)) return false; return true; } if (typeof x[Symbol.iterator] === \"function\" || typeof y[Symbol.iterator] === \"function\") throw new TypeError(\"eq on List: force it first with List.toArray\"); const kx = Object.keys(x), ky = Object.keys(y); if (kx.length !== ky.length) return false; for (const k of kx) if (!eq(x[k], y[k])) return false; return true; });",
-  "compare": "const compare = _curry(2, (x, y) => { if (x === y) return 0; const t = typeof x; if (t === \"number\" || t === \"string\" || t === \"boolean\") return x < y ? -1 : x > y ? 1 : 0; if (Array.isArray(x) && Array.isArray(y)) { const n = Math.min(x.length, y.length); for (let i = 0; i < n; i++) { const c = compare(x[i], y[i]); if (c !== 0) return c; } return compare(x.length, y.length); } if (x instanceof Map && y instanceof Map) { const kx = [...x.keys()].sort(compare), ky = [...y.keys()].sort(compare); const n = Math.min(kx.length, ky.length); for (let i = 0; i < n; i++) { const kc = compare(kx[i], ky[i]); if (kc !== 0) return kc; const vc = compare(x.get(kx[i]), y.get(ky[i])); if (vc !== 0) return vc; } return compare(kx.length, ky.length); } if (x instanceof Set && y instanceof Set) { const ex = [...x].sort(compare), ey = [...y].sort(compare); const n = Math.min(ex.length, ey.length); for (let i = 0; i < n; i++) { const c = compare(ex[i], ey[i]); if (c !== 0) return c; } return compare(ex.length, ey.length); } if (typeof x === \"object\" && x !== null && !Array.isArray(x) && typeof x[Symbol.iterator] === \"function\") throw new TypeError(\"compare on List: force it first with List.toArray\"); const sx = JSON.stringify(x), sy = JSON.stringify(y); return sx < sy ? -1 : sx > sy ? 1 : 0; });",
-  "show": "const show = (x) => { const t = typeof x; if (t === \"string\") return JSON.stringify(x); if (t !== \"object\" || x === null) return String(x); if (Array.isArray(x)) return \"[\" + x.map(show).join(\", \") + \"]\"; if (x instanceof Map) return \"#{\" + [...x.entries()].map((e) => show(e[0]) + \": \" + show(e[1])).join(\", \") + \"}\"; if (x instanceof Set) return \"#{\" + [...x].map(show).join(\", \") + \"}\"; if (typeof x[Symbol.iterator] === \"function\") return \"<List>\"; if (typeof x._tag === \"string\") { const ks = Object.keys(x).filter((k) => k !== \"_tag\"); return ks.length === 0 ? x._tag : x._tag + \"(\" + ks.map((k) => show(x[k])).join(\", \") + \")\"; } const ks = Object.keys(x); if (ks.length === 0) return String(x); return \"{ \" + ks.map((k) => k + \": \" + show(x[k])).join(\", \") + \" }\"; };",
-  "ignore": "const ignore = (_x) => undefined;",
+  "concat": "const concat = _curry(2, (a, b) => typeof a === \"string\" ? a + b : Array.isArray(a) ? a.concat(b) : _List_concat(a, b));",
+  "eq": "const eq = _curry(2, (x, y) => {\n  if (x === y)\n    return true;\n  if (typeof x !== \"object\" || x === null || typeof y !== \"object\" || y === null)\n    return false;\n  const ax = Array.isArray(x);\n  if (ax !== Array.isArray(y))\n    return false;\n  if (ax) {\n    if (x.length !== y.length)\n      return false;\n    for (let i = 0;i < x.length; i++)\n      if (!eq(x[i], y[i]))\n        return false;\n    return true;\n  }\n  if (x instanceof Map || y instanceof Map) {\n    if (!(x instanceof Map) || !(y instanceof Map))\n      return false;\n    if (x.size !== y.size)\n      return false;\n    for (const [k, v] of x) {\n      if (!y.has(k) || !eq(v, y.get(k)))\n        return false;\n    }\n    return true;\n  }\n  if (x instanceof Set || y instanceof Set) {\n    if (!(x instanceof Set) || !(y instanceof Set))\n      return false;\n    if (x.size !== y.size)\n      return false;\n    for (const v of x)\n      if (!y.has(v))\n        return false;\n    return true;\n  }\n  if (typeof x[Symbol.iterator] === \"function\" || typeof y[Symbol.iterator] === \"function\")\n    throw new TypeError(\"eq on List: force it first with List.toArray\");\n  const kx = Object.keys(x), ky = Object.keys(y);\n  if (kx.length !== ky.length)\n    return false;\n  for (const k of kx)\n    if (!eq(x[k], y[k]))\n      return false;\n  return true;\n});",
+  "compare": "const compare = _curry(2, (x, y) => {\n  if (x === y)\n    return 0;\n  const t = typeof x;\n  if (t === \"number\" || t === \"string\" || t === \"boolean\")\n    return x < y ? -1 : x > y ? 1 : 0;\n  if (Array.isArray(x) && Array.isArray(y)) {\n    const n = Math.min(x.length, y.length);\n    for (let i = 0;i < n; i++) {\n      const c = compare(x[i], y[i]);\n      if (c !== 0)\n        return c;\n    }\n    return compare(x.length, y.length);\n  }\n  if (x instanceof Map && y instanceof Map) {\n    const kx = [...x.keys()].sort(compare), ky = [...y.keys()].sort(compare);\n    const n = Math.min(kx.length, ky.length);\n    for (let i = 0;i < n; i++) {\n      const kc = compare(kx[i], ky[i]);\n      if (kc !== 0)\n        return kc;\n      const vc = compare(x.get(kx[i]), y.get(ky[i]));\n      if (vc !== 0)\n        return vc;\n    }\n    return compare(kx.length, ky.length);\n  }\n  if (x instanceof Set && y instanceof Set) {\n    const ex = [...x].sort(compare), ey = [...y].sort(compare);\n    const n = Math.min(ex.length, ey.length);\n    for (let i = 0;i < n; i++) {\n      const c = compare(ex[i], ey[i]);\n      if (c !== 0)\n        return c;\n    }\n    return compare(ex.length, ey.length);\n  }\n  if (typeof x === \"object\" && x !== null && !Array.isArray(x) && typeof x[Symbol.iterator] === \"function\")\n    throw new TypeError(\"compare on List: force it first with List.toArray\");\n  const sx = JSON.stringify(x), sy = JSON.stringify(y);\n  return sx < sy ? -1 : sx > sy ? 1 : 0;\n});",
+  "show": "const show = (x) => {\n  const t = typeof x;\n  if (t === \"string\")\n    return JSON.stringify(x);\n  if (t !== \"object\" || x === null)\n    return String(x);\n  if (Array.isArray(x))\n    return `[${x.map(show).join(\", \")}]`;\n  if (x instanceof Map)\n    return `#{${[...x.entries()].map((e) => `${show(e[0])}: ${show(e[1])}`).join(\", \")}}`;\n  if (x instanceof Set)\n    return `#{${[...x].map(show).join(\", \")}}`;\n  if (typeof x[Symbol.iterator] === \"function\")\n    return \"<List>\";\n  if (typeof x._tag === \"string\") {\n    const ks = Object.keys(x).filter((k) => k !== \"_tag\");\n    return ks.length === 0 ? x._tag : `${x._tag}(${ks.map((k) => show(x[k])).join(\", \")})`;\n  }\n  const ks = Object.keys(x);\n  if (ks.length === 0)\n    return String(x);\n  return `{ ${ks.map((k) => `${k}: ${show(x[k])}`).join(\", \")} }`;\n};",
+  "ignore": "const ignore = (_x) => {\n  return;\n};",
   "lt": "const lt = _curry(2, (a, b) => a < b);",
   "gt": "const gt = _curry(2, (a, b) => a > b);",
   "gte": "const gte = _curry(2, (a, b) => a >= b);",
@@ -3824,7 +3964,7 @@ const _preludeJsDefs = {
   "min": "const min = _curry(2, (a, b) => Math.min(a, b));",
   "max": "const max = _curry(2, (a, b) => Math.max(a, b));",
   "pow": "const pow = _curry(2, (a, b) => a ** b);",
-  "mod": "const mod = _curry(2, (a, b) => ((a % b) + b) % b);",
+  "mod": "const mod = _curry(2, (a, b) => (a % b + b) % b);",
   "abs": "const abs = (x) => Math.abs(x);",
   "floor": "const floor = (x) => Math.floor(x);",
   "ceil": "const ceil = (x) => Math.ceil(x);",
@@ -3839,21 +3979,21 @@ const _preludeJsDefs = {
   "always": "const always = _curry(2, (x, _y) => x);",
   "compose": "const compose = _curry(3, (f, g, x) => f(g(x)));",
   "capitalize": "const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);",
-  "range": "const range = _curry(2, (lo, hi) => _list(function* () { for (let i = lo; i < hi; i++) yield i; }));",
-  "iterate": "const iterate = _curry(2, (f, x) => _list(function* () { let v = x; for (;;) { yield v; v = f(v); } }));",
-  "repeat": "const repeat = (x) => _list(function* () { for (;;) yield x; });",
-  "take": "const take = _curry(2, (n, xs) => _list(function* () { let i = 0; for (const x of xs) { if (i >= n) break; yield x; i++; } }));",
-  "takeWhile": "const takeWhile = _curry(2, (p, xs) => _list(function* () { for (const x of xs) { if (!p(x)) break; yield x; } }));",
-  "drop": "const drop = _curry(2, (n, xs) => _list(function* () { let i = 0; for (const x of xs) { if (i < n) { i++; continue; } yield x; } }));",
-  "fromArray": "const fromArray = (xs) => _list(function* () { yield* xs; });",
+  "range": "const range = _curry(2, (lo, hi) => _list(function* () {\n  for (let i = lo;i < hi; i++)\n    yield i;\n}));",
+  "iterate": "const iterate = _curry(2, (f, x) => _list(function* () {\n  let v = x;\n  for (;; ) {\n    yield v;\n    v = f(v);\n  }\n}));",
+  "repeat": "const repeat = (x) => _list(function* () {\n  for (;; )\n    yield x;\n});",
+  "take": "const take = _curry(2, (n, xs) => _list(function* () {\n  let i = 0;\n  for (const x of xs) {\n    if (i >= n)\n      break;\n    yield x;\n    i++;\n  }\n}));",
+  "takeWhile": "const takeWhile = _curry(2, (p, xs) => _list(function* () {\n  for (const x of xs) {\n    if (!p(x))\n      break;\n    yield x;\n  }\n}));",
+  "drop": "const drop = _curry(2, (n, xs) => _list(function* () {\n  let i = 0;\n  for (const x of xs) {\n    if (i < n) {\n      i++;\n      continue;\n    }\n    yield x;\n  }\n}));",
+  "fromArray": "const fromArray = (xs) => _list(function* () {\n  yield* xs;\n});",
   "toArray": "const toArray = (xs) => [...xs];",
-  "_List_map": "const _List_map = _curry(2, (f, xs) => _list(function* () { for (const x of xs) yield f(x); }));",
-  "_List_filter": "const _List_filter = _curry(2, (p, xs) => _list(function* () { for (const x of xs) if (p(x)) yield x; }));",
-  "_List_concat": "const _List_concat = _curry(2, (xs, ys) => _list(function* () { yield* xs; yield* ys; }));",
-  "_List_flatMap": "const _List_flatMap = _curry(2, (f, xs) => _list(function* () { for (const x of xs) yield* f(x); }));",
+  "_List_map": "const _List_map = _curry(2, (f, xs) => _list(function* () {\n  for (const x of xs)\n    yield f(x);\n}));",
+  "_List_filter": "const _List_filter = _curry(2, (p, xs) => _list(function* () {\n  for (const x of xs)\n    if (p(x))\n      yield x;\n}));",
+  "_List_concat": "const _List_concat = _curry(2, (xs, ys) => _list(function* () {\n  yield* xs;\n  yield* ys;\n}));",
+  "_List_flatMap": "const _List_flatMap = _curry(2, (f, xs) => _list(function* () {\n  for (const x of xs)\n    yield* f(x);\n}));",
   "_Set_has": "const _Set_has = _curry(2, (x, s) => s.has(x));",
   "_Set_add": "const _Set_add = _curry(2, (x, s) => new Set(s).add(x));",
-  "_Set_delete": "const _Set_delete = _curry(2, (x, s) => { const n = new Set(s); n.delete(x); return n; });",
+  "_Set_delete": "const _Set_delete = _curry(2, (x, s) => {\n  const n = new Set(s);\n  n.delete(x);\n  return n;\n});",
   "_Set_size": "const _Set_size = (s) => s.size;",
   "_Set_toArray": "const _Set_toArray = (s) => [...s];",
   "_Set_fromArray": "const _Set_fromArray = (xs) => new Set(xs);",
@@ -3861,33 +4001,33 @@ const _preludeJsDefs = {
   "_Set_intersect": "const _Set_intersect = _curry(2, (a, b) => new Set([...a].filter((x) => b.has(x))));",
   "_Set_diff": "const _Set_diff = _curry(2, (a, b) => new Set([...a].filter((x) => !b.has(x))));",
   "_Map_has": "const _Map_has = _curry(2, (k, m) => m.has(k));",
-  "_Map_getOr": "const _Map_getOr = _curry(3, (d, k, m) => (m.has(k) ? m.get(k) : d));",
-  "_Map_set": "const _Map_set = _curry(3, (k, v, m) => { const n = new Map(m); n.set(k, v); return n; });",
-  "_Map_delete": "const _Map_delete = _curry(2, (k, m) => { const n = new Map(m); n.delete(k); return n; });",
+  "_Map_getOr": "const _Map_getOr = _curry(3, (d, k, m) => m.has(k) ? m.get(k) : d);",
+  "_Map_set": "const _Map_set = _curry(3, (k, v, m) => {\n  const n = new Map(m);\n  n.set(k, v);\n  return n;\n});",
+  "_Map_delete": "const _Map_delete = _curry(2, (k, m) => {\n  const n = new Map(m);\n  n.delete(k);\n  return n;\n});",
   "_Map_size": "const _Map_size = (m) => m.size;",
   "_Map_keys": "const _Map_keys = (m) => [...m.keys()];",
   "_Map_values": "const _Map_values = (m) => [...m.values()];",
-  "_Map_get": "const _Map_get = _curry(2, (k, m) => (m.has(k) ? Some(m.get(k)) : None));",
-  "_Option_map": "const _Option_map = _curry(2, (f, o) => (o._tag === \"Some\" ? Some(f(o.value)) : None));",
-  "_Option_flatMap": "const _Option_flatMap = _curry(2, (f, o) => (o._tag === \"Some\" ? f(o.value) : None));",
-  "_Option_mapOr": "const _Option_mapOr = _curry(3, (d, f, o) => (o._tag === \"Some\" ? f(o.value) : d));",
+  "_Map_get": "const _Map_get = _curry(2, (k, m) => m.has(k) ? Some(m.get(k)) : None);",
+  "_Option_map": "const _Option_map = _curry(2, (f, o) => o._tag === \"Some\" ? Some(f(o.value)) : None);",
+  "_Option_flatMap": "const _Option_flatMap = _curry(2, (f, o) => o._tag === \"Some\" ? f(o.value) : None);",
+  "_Option_mapOr": "const _Option_mapOr = _curry(3, (d, f, o) => o._tag === \"Some\" ? f(o.value) : d);",
   "_Option_exists": "const _Option_exists = _curry(2, (p, o) => o._tag === \"Some\" && p(o.value));",
   "_Option_contains": "const _Option_contains = _curry(2, (x, o) => o._tag === \"Some\" && eq(x, o.value));",
-  "_Option_unwrapOr": "const _Option_unwrapOr = _curry(2, (d, o) => (o._tag === \"Some\" ? o.value : d));",
-  "_Option_orElse": "const _Option_orElse = _curry(2, (fb, o) => (o._tag === \"Some\" ? o : fb));",
+  "_Option_unwrapOr": "const _Option_unwrapOr = _curry(2, (d, o) => o._tag === \"Some\" ? o.value : d);",
+  "_Option_orElse": "const _Option_orElse = _curry(2, (fb, o) => o._tag === \"Some\" ? o : fb);",
   "_Option_isSome": "const _Option_isSome = (o) => o._tag === \"Some\";",
   "_Option_isNone": "const _Option_isNone = (o) => o._tag === \"None\";",
-  "_Result_map": "const _Result_map = _curry(2, (f, r) => (r._tag === \"Ok\" ? Ok(f(r.value)) : r));",
-  "_Result_mapErr": "const _Result_mapErr = _curry(2, (f, r) => (r._tag === \"Err\" ? Err(f(r.error)) : r));",
-  "_Result_flatMap": "const _Result_flatMap = _curry(2, (f, r) => (r._tag === \"Ok\" ? f(r.value) : r));",
-  "_Result_unwrapOr": "const _Result_unwrapOr = _curry(2, (d, r) => (r._tag === \"Ok\" ? r.value : d));",
+  "_Result_map": "const _Result_map = _curry(2, (f, r) => r._tag === \"Ok\" ? Ok(f(r.value)) : r);",
+  "_Result_mapErr": "const _Result_mapErr = _curry(2, (f, r) => r._tag === \"Err\" ? Err(f(r.error)) : r);",
+  "_Result_flatMap": "const _Result_flatMap = _curry(2, (f, r) => r._tag === \"Ok\" ? f(r.value) : r);",
+  "_Result_unwrapOr": "const _Result_unwrapOr = _curry(2, (d, r) => r._tag === \"Ok\" ? r.value : d);",
   "_Result_isOk": "const _Result_isOk = (r) => r._tag === \"Ok\";",
   "_Result_isErr": "const _Result_isErr = (r) => r._tag === \"Err\";",
-  "_List_head": "const _List_head = (xs) => { for (const x of xs) return Some(x); return None; };",
-  "_Array_head": "const _Array_head = (xs) => (xs.length > 0 ? Some(xs[0]) : None);",
-  "_Array_forEach": "const _Array_forEach = _curry(2, (f, xs) => { for (const x of xs) f(x); });",
-  "_Array_get": "const _Array_get = _curry(2, (i, xs) => (i >= 0 && i < xs.length ? Some(xs[i]) : None));",
-  "_Array_find": "const _Array_find = _curry(2, (p, xs) => { for (const x of xs) if (p(x)) return Some(x); return None; });",
+  "_List_head": "const _List_head = (xs) => {\n  for (const x of xs)\n    return Some(x);\n  return None;\n};",
+  "_Array_head": "const _Array_head = (xs) => xs.length > 0 ? Some(xs[0]) : None;",
+  "_Array_forEach": "const _Array_forEach = _curry(2, (f, xs) => {\n  for (const x of xs)\n    f(x);\n});",
+  "_Array_get": "const _Array_get = _curry(2, (i, xs) => i >= 0 && i < xs.length ? Some(xs[i]) : None);",
+  "_Array_find": "const _Array_find = _curry(2, (p, xs) => {\n  for (const x of xs)\n    if (p(x))\n      return Some(x);\n  return None;\n});",
   "_Array_reverse": "const _Array_reverse = (xs) => [...xs].reverse();",
   "_Array_concat": "const _Array_concat = _curry(2, (xs, ys) => xs.concat(ys));",
   "_Array_append": "const _Array_append = _curry(2, (x, xs) => [...xs, x]);",
@@ -3900,7 +4040,7 @@ const _preludeJsDefs = {
   "_Array_sort": "const _Array_sort = (xs) => [...xs].sort(compare);",
   "_Array_sortBy": "const _Array_sortBy = _curry(2, (f, xs) => [...xs].sort((a, b) => compare(f(a), f(b))));",
   "_Array_dedupe": "const _Array_dedupe = (xs) => xs.filter((x, i) => xs.findIndex((y) => eq(x, y)) === i);",
-  "_Array_dedupeBy": "const _Array_dedupeBy = _curry(2, (f, xs) => { const seen = []; return xs.filter((x) => { const k = f(x); if (seen.some((s) => eq(s, k))) return false; seen.push(k); return true; }); });",
+  "_Array_dedupeBy": "const _Array_dedupeBy = _curry(2, (f, xs) => {\n  const seen = [];\n  return xs.filter((x) => {\n    const k = f(x);\n    if (seen.some((s) => eq(s, k)))\n      return false;\n    seen.push(k);\n    return true;\n  });\n});",
   "_Array_max": "const _Array_max = (xs) => xs.length ? Some(xs.reduce((a, b) => compare(a, b) >= 0 ? a : b)) : None;",
   "_Array_min": "const _Array_min = (xs) => xs.length ? Some(xs.reduce((a, b) => compare(a, b) <= 0 ? a : b)) : None;",
   "_Array_maxBy": "const _Array_maxBy = _curry(2, (f, xs) => xs.length ? Some(xs.reduce((a, b) => compare(f(a), f(b)) >= 0 ? a : b)) : None);",
@@ -3917,21 +4057,24 @@ const _preludeJsDefs = {
   "_Str_endsWith": "const _Str_endsWith = _curry(2, (p, s) => s.endsWith(p));",
   "_Str_slice": "const _Str_slice = _curry(3, (start, end, s) => s.slice(start, end));",
   "_Str_replace": "const _Str_replace = _curry(3, (find, repl, s) => s.replaceAll(find, repl));",
-  "_Str_get": "const _Str_get = _curry(2, (i, s) => (i >= 0 && i < s.length ? Some(s[i]) : None));",
-  "_Str_codeAt": "const _Str_codeAt = _curry(2, (i, s) => (i >= 0 && i < s.length ? Some(s.charCodeAt(i)) : None));",
+  "_Str_get": "const _Str_get = _curry(2, (i, s) => i >= 0 && i < s.length ? Some(s[i]) : None);",
+  "_Str_codeAt": "const _Str_codeAt = _curry(2, (i, s) => i >= 0 && i < s.length ? Some(s.charCodeAt(i)) : None);",
   "_Str_fromCode": "const _Str_fromCode = (n) => String.fromCharCode(n);",
   "_Str_chars": "const _Str_chars = (s) => [...s];",
-  "_Str_toNumber": "const _Str_toNumber = (s) => { const n = Number(s); return Number.isNaN(n) ? None : Some(n); };",
+  "_Str_toNumber": "const _Str_toNumber = (s) => {\n  const n = Number(s);\n  return Number.isNaN(n) ? None : Some(n);\n};",
   "_Task_of": "const _Task_of = (x) => () => Promise.resolve(Ok(x));",
   "_Task_fail": "const _Task_fail = (e) => () => Promise.resolve(Err(e));",
-  "_Task_map": "const _Task_map = _curry(2, (f, t) => () => t().then((r) => (r._tag === \"Ok\" ? Ok(f(r.value)) : r)));",
-  "_Task_mapErr": "const _Task_mapErr = _curry(2, (f, t) => () => t().then((r) => (r._tag === \"Err\" ? Err(f(r.error)) : r)));",
-  "_Task_andThen": "const _Task_andThen = _curry(2, (f, t) => () => t().then((r) => (r._tag === \"Ok\" ? f(r.value)() : r)));",
-  "_Task_recover": "const _Task_recover = _curry(2, (f, t) => () => t().then((r) => (r._tag === \"Err\" ? f(r.error)() : r)));",
+  "_Task_map": "const _Task_map = _curry(2, (f, t) => () => t().then((r) => r._tag === \"Ok\" ? Ok(f(r.value)) : r));",
+  "_Task_mapErr": "const _Task_mapErr = _curry(2, (f, t) => () => t().then((r) => r._tag === \"Err\" ? Err(f(r.error)) : r));",
+  "_Task_andThen": "const _Task_andThen = _curry(2, (f, t) => () => t().then((r) => r._tag === \"Ok\" ? f(r.value)() : r));",
+  "_Task_recover": "const _Task_recover = _curry(2, (f, t) => () => t().then((r) => r._tag === \"Err\" ? f(r.error)() : r));",
   "_Task_fromResult": "const _Task_fromResult = (r) => () => Promise.resolve(r);",
   "_Task_match": "const _Task_match = _curry(3, (onOk, onErr, t) => () => t().then((r) => Ok(r._tag === \"Ok\" ? onOk(r.value) : onErr(r.error))));",
   "_Task_delay": "const _Task_delay = _curry(2, (ms, x) => () => new Promise((res) => setTimeout(() => res(Ok(x)), ms)));",
-  "_Task_run": "const _Task_run = (t) => t();"
+  "_Task_run": "const _Task_run = (t) => t();",
+  "_Task_all": "const _Task_all = (ts) => () => new Promise((res) => {\n  const out = new Array(ts.length);\n  let left = ts.length;\n  let settled = false;\n  if (left === 0) {\n    res(Ok(out));\n    return;\n  }\n  ts.forEach((t, i) => {\n    t().then((r) => {\n      if (settled)\n        return;\n      if (r._tag === \"Err\") {\n        settled = true;\n        res(r);\n        return;\n      }\n      out[i] = r.value;\n      left -= 1;\n      if (left === 0) {\n        settled = true;\n        res(Ok(out));\n      }\n    });\n  });\n});",
+  "_Task_race": "const _Task_race = (ts) => () => new Promise((res) => {\n  let settled = false;\n  ts.forEach((t) => {\n    t().then((r) => {\n      if (settled)\n        return;\n      settled = true;\n      res(r);\n    });\n  });\n});",
+  "_Task_traverse": "const _Task_traverse = _curry(2, (f, xs) => _Task_all(xs.map(f)));"
 };
 const _runtimeDeps = {
   "add": [
@@ -3946,12 +4089,12 @@ const _runtimeDeps = {
   "div": [
     "_curry"
   ],
+  "hypot": [
+    "_curry"
+  ],
   "concat": [
     "_curry",
     "_List_concat"
-  ],
-  "hypot": [
-    "_curry"
   ],
   "eq": [
     "_curry"
@@ -3963,6 +4106,18 @@ const _runtimeDeps = {
     "_curry"
   ],
   "gt": [
+    "_curry"
+  ],
+  "gte": [
+    "_curry"
+  ],
+  "lte": [
+    "_curry"
+  ],
+  "and": [
+    "_curry"
+  ],
+  "or": [
     "_curry"
   ],
   "min": [
@@ -4065,30 +4220,18 @@ const _runtimeDeps = {
     "_curry"
   ],
   "_Map_get": [
+    "_curry",
     "Some",
-    "None",
-    "_curry"
-  ],
-  "gte": [
-    "_curry"
-  ],
-  "lte": [
-    "_curry"
-  ],
-  "and": [
-    "_curry"
-  ],
-  "or": [
-    "_curry"
+    "None"
   ],
   "_Option_map": [
+    "_curry",
     "Some",
-    "None",
-    "_curry"
+    "None"
   ],
   "_Option_flatMap": [
-    "None",
-    "_curry"
+    "_curry",
+    "None"
   ],
   "_Option_mapOr": [
     "_curry"
@@ -4097,8 +4240,8 @@ const _runtimeDeps = {
     "_curry"
   ],
   "_Option_contains": [
-    "eq",
-    "_curry"
+    "_curry",
+    "eq"
   ],
   "_Option_unwrapOr": [
     "_curry"
@@ -4107,12 +4250,12 @@ const _runtimeDeps = {
     "_curry"
   ],
   "_Result_map": [
-    "Ok",
-    "_curry"
+    "_curry",
+    "Ok"
   ],
   "_Result_mapErr": [
-    "Err",
-    "_curry"
+    "_curry",
+    "Err"
   ],
   "_Result_flatMap": [
     "_curry"
@@ -4128,15 +4271,18 @@ const _runtimeDeps = {
     "Some",
     "None"
   ],
-  "_Array_get": [
-    "Some",
-    "None",
+  "_Array_forEach": [
     "_curry"
   ],
-  "_Array_find": [
+  "_Array_get": [
+    "_curry",
     "Some",
-    "None",
-    "_curry"
+    "None"
+  ],
+  "_Array_find": [
+    "_curry",
+    "Some",
+    "None"
   ],
   "_Array_concat": [
     "_curry"
@@ -4157,44 +4303,44 @@ const _runtimeDeps = {
     "_curry"
   ],
   "_Array_contains": [
-    "eq",
-    "_curry"
-  ],
-  "_Array_dedupe": [
+    "_curry",
     "eq"
-  ],
-  "_Array_dedupeBy": [
-    "eq",
-    "_curry"
   ],
   "_Array_sort": [
     "compare"
   ],
   "_Array_sortBy": [
-    "compare",
-    "_curry"
+    "_curry",
+    "compare"
+  ],
+  "_Array_dedupe": [
+    "eq"
+  ],
+  "_Array_dedupeBy": [
+    "_curry",
+    "eq"
   ],
   "_Array_max": [
-    "compare",
     "Some",
-    "None"
+    "None",
+    "compare"
   ],
   "_Array_min": [
-    "compare",
     "Some",
-    "None"
+    "None",
+    "compare"
   ],
   "_Array_maxBy": [
-    "compare",
+    "_curry",
     "Some",
     "None",
-    "_curry"
+    "compare"
   ],
   "_Array_minBy": [
-    "compare",
+    "_curry",
     "Some",
     "None",
-    "_curry"
+    "compare"
   ],
   "_Str_concat": [
     "_curry"
@@ -4206,9 +4352,6 @@ const _runtimeDeps = {
     "_curry"
   ],
   "_Str_contains": [
-    "_curry"
-  ],
-  "_Array_forEach": [
     "_curry"
   ],
   "_Str_startsWith": [
@@ -4224,14 +4367,14 @@ const _runtimeDeps = {
     "_curry"
   ],
   "_Str_get": [
+    "_curry",
     "Some",
-    "None",
-    "_curry"
+    "None"
   ],
   "_Str_codeAt": [
+    "_curry",
     "Some",
-    "None",
-    "_curry"
+    "None"
   ],
   "_Str_toNumber": [
     "Some",
@@ -4244,12 +4387,12 @@ const _runtimeDeps = {
     "Err"
   ],
   "_Task_map": [
-    "Ok",
-    "_curry"
+    "_curry",
+    "Ok"
   ],
   "_Task_mapErr": [
-    "Err",
-    "_curry"
+    "_curry",
+    "Err"
   ],
   "_Task_andThen": [
     "_curry"
@@ -4258,12 +4401,19 @@ const _runtimeDeps = {
     "_curry"
   ],
   "_Task_match": [
-    "Ok",
-    "_curry"
+    "_curry",
+    "Ok"
   ],
   "_Task_delay": [
-    "Ok",
-    "_curry"
+    "_curry",
+    "Ok"
+  ],
+  "_Task_all": [
+    "Ok"
+  ],
+  "_Task_traverse": [
+    "_curry",
+    "_Task_all"
   ]
 };
 

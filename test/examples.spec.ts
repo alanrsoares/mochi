@@ -90,7 +90,7 @@ const runAsyncExample = async (): Promise<Record<string, Promise<unknown>>> => {
     "match",
     "fetchUser",
     "fetchPlan",
-    `${js}\nreturn { result, found, recovered, offline };`,
+    `${js}\nreturn { result, found, recovered, offline, everyone, partial, fastest };`,
   )(match, host.fetchUser, host.fetchPlan) as Record<string, Promise<unknown>>;
 };
 
@@ -111,6 +111,16 @@ test("examples/async carries failures on Task's error channel (ADR 0006)", async
     _tag: "Err",
     error: { _tag: "Offline", _0: "network down" },
   });
+});
+
+test("examples/async fans out with Task.all/traverse/race (ADR 0074)", async () => {
+  const out = await runAsyncExample();
+  // traverse keeps INPUT order and collects into one Ok.
+  expect(await out.everyone).toEqual({ _tag: "Ok", value: ["Ada", "Ada"] });
+  // Fail-fast: the 404 settles the whole fan-out on the error track.
+  expect(await out.partial).toEqual({ _tag: "Err", error: { _tag: "NotFound", _0: 7 } });
+  // race settles on the first task to settle, not the first in the array.
+  expect(await out.fastest).toEqual({ _tag: "Ok", value: "quick" });
 });
 
 test("examples/modules builds the whole graph and wires imports", async () => {
