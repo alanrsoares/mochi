@@ -16,6 +16,8 @@
  */
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
+import { match } from "@onrails/pattern";
+import { match as matchResult, tryAsync, trySync } from "@onrails/result";
 
 type TaskSpec = {
   readonly name: string;
@@ -58,32 +60,34 @@ const USAGE =
   "usage: bun scripts/tui-runner.ts [check | check:full | <script>] " +
   "[--filter <glob>] [--bail] [--timeout <ms>] [--compact] [--tail <n>]";
 
+/** `never` return, so the `Err` branch below needs no value of its own. */
+const usageExit = (message: string): never => {
+  process.stderr.write(`${message}\n${USAGE}\n`);
+  process.exit(2);
+};
+
 const readOptions = (argv: readonly string[]): Options => {
   // `parseArgs` is strict, so a typo'd flag is a usage error rather than a
   // silently ignored one — but it reports it as a stack trace, which is not.
   // Unannotated, so the literal `options` shape still narrows `values` — an
   // explicit `ReturnType<typeof parseArgs>` would widen every field to unknown.
-  const parse = () =>
-    parseArgs({
-      args: [...argv],
-      allowPositionals: true,
-      options: {
-        filter: { type: "string" },
-        bail: { type: "boolean", default: false },
-        timeout: { type: "string" },
-        compact: { type: "boolean", default: false },
-        tail: { type: "string" },
-      },
-    });
+  const parse = trySync(
+    () =>
+      parseArgs({
+        args: [...argv],
+        allowPositionals: true,
+        options: {
+          filter: { type: "string" },
+          bail: { type: "boolean", default: false },
+          timeout: { type: "string" },
+          compact: { type: "boolean", default: false },
+          tail: { type: "string" },
+        },
+      }),
+    (error) => (error instanceof Error ? error.message : String(error)),
+  );
 
-  let parsed: ReturnType<typeof parse>;
-  try {
-    parsed = parse();
-  } catch (err) {
-    process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n${USAGE}\n`);
-    process.exit(2);
-  }
-  const { values, positionals } = parsed;
+  const { values, positionals } = matchResult(parse(), (parsed) => parsed, usageExit);
   const timeout = Number(values.timeout ?? DEFAULT_TIMEOUT_MS);
   const tail = Number(values.tail ?? DEFAULT_TAIL_LINES);
   return {
@@ -113,9 +117,11 @@ const INTERACTIVE = !OPTS.compact && Boolean(process.stdout.isTTY);
 const sgr = (code: string): string => (COLOR ? code : "");
 const RESET = sgr("\x1b[0m");
 const BOLD = sgr("\x1b[1m");
+const DIM = sgr("\x1b[2m");
 const GRAY = sgr("\x1b[90m");
 const RED = sgr("\x1b[31m");
 const GREEN = sgr("\x1b[32m");
+const YELLOW = sgr("\x1b[33m");
 const CYAN = sgr("\x1b[96m");
 
 /** Hex, not raw SGR: `Bun.color(_, "ansi")` downsamples to whatever depth the terminal has. */
@@ -140,6 +146,20 @@ const rule = (): string => `${GRAY}${"─".repeat(Math.max(0, columns() - 3))}${
 const duration = (ms: number): string =>
   ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(2)}s`;
 
+/**
+ * A partial cell for the leading edge, so the bar advances smoothly at 80ms
+ * ticks instead of jumping a whole column every ~14% of a seven-task run.
+ */
+const EIGHTHS = ["", "▏", "▎", "▍", "▌", "▋", "▊", "▉"] as const;
+
+const meter = (ratio: number, width: number, color: string): string => {
+  const cells = Math.max(0, Math.min(1, ratio)) * width;
+  const full = Math.floor(cells);
+  const edge = EIGHTHS[Math.floor((cells - full) * 8)] ?? "";
+  const body = `${"█".repeat(full)}${edge}`;
+  return `${color}${body}${RESET}${GRAY}${"░".repeat(Math.max(0, width - Bun.stringWidth(body)))}${RESET}`;
+};
+
 /** One buffered sink for every producer — seven tasks logging a line each is otherwise seven syscalls. */
 const out = Bun.stdout.writer({ highWaterMark: 64 * 1024 });
 
@@ -153,8 +173,18 @@ const label = (spec: TaskSpec): string => `${spec.color}${BOLD}${spec.name.padEn
 
 type Phase = "pending" | "running" | Outcome;
 
-const phases = new Map<string, Phase>();
-const startedAt = new Map<string, number>();
+/**
+ * One record per task instead of a map per field: `began` is the live clock a
+ * running row counts up from, `ms` the wall time a settled row keeps showing.
+ */
+type TaskState = {
+  readonly phase: Phase;
+  readonly began?: number;
+  readonly ms?: number;
+};
+
+const states = new Map<string, TaskState>();
+const stateOf = (name: string): TaskState => states.get(name) ?? { phase: "pending" };
 
 const PHASE_ICON: Record<Phase, string> = {
   pending: `${GRAY}◌${RESET}`,
@@ -165,9 +195,22 @@ const PHASE_ICON: Record<Phase, string> = {
   timeout: `${RED}⏱${RESET}`,
 };
 
+const PHASE_COLOR: Record<Phase, string> = {
+  pending: GRAY,
+  running: CYAN,
+  passed: GREEN,
+  failed: RED,
+  cancelled: GRAY,
+  timeout: YELLOW,
+};
+
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
 
+/** Settled = no longer occupying a slot, whatever the verdict. */
+const isSettled = (phase: Phase): boolean => phase !== "pending" && phase !== "running";
+
 let frame = 0;
+let runStarted = performance.now();
 let painted = 0;
 let done = false;
 
@@ -183,14 +226,43 @@ const fit = (text: string): string => {
   return `${Bun.stripANSI(text).slice(0, Math.max(0, max - 1))}…`;
 };
 
+/**
+ * A running task counts up from its start; a settled one keeps its final cost.
+ * Right-aligned so the column does not jitter as digits are gained.
+ */
+const timing = ({ phase, began, ms }: TaskState): string =>
+  phase === "running" && began !== undefined
+    ? duration(performance.now() - began)
+    : ms === undefined
+      ? ""
+      : duration(ms);
+
 const statusLine = (spec: TaskSpec): string => {
-  const phase = phases.get(spec.name) ?? "pending";
+  const state = stateOf(spec.name);
+  const { phase } = state;
   const icon =
     phase === "running" ? `${CYAN}${SPINNER[frame % SPINNER.length]}${RESET}` : PHASE_ICON[phase];
-  const began = startedAt.get(spec.name);
-  const elapsed =
-    phase === "running" && began !== undefined ? ` ${duration(performance.now() - began)}` : "";
-  return `  ${icon} ${label(spec)} ${GRAY}${phase}${elapsed}${RESET}`;
+  const name = phase === "pending" ? `${DIM}${spec.name.padEnd(gutter)}${RESET}` : label(spec);
+  const time = timing(state);
+  return `  ${icon} ${name} ${PHASE_COLOR[phase]}${phase.padEnd(9)}${RESET}${GRAY}${time.padStart(8)}${RESET}`;
+};
+
+/**
+ * The one line worth reading at a glance: how far through the set the run is,
+ * and how long it has been going. Sits above the per-task rows and is redrawn
+ * with them, so its cost is a repaint, not a scroll.
+ */
+const headerLine = (): string => {
+  const settled = allTasks.map((t) => stateOf(t.name).phase).filter(isSettled);
+  const bad = settled.filter((p) => p === "failed" || p === "timeout").length;
+  const ratio = allTasks.length === 0 ? 0 : settled.length / allTasks.length;
+  const width = Math.max(10, Math.min(24, columns() - gutter - 34));
+  const tally = `${settled.length}/${allTasks.length}`;
+  const failures = bad > 0 ? ` ${RED}✖${bad}${RESET}` : "";
+  return (
+    `  ${meter(ratio, width, bad > 0 ? RED : GREEN)} ` +
+    `${BOLD}${tally}${RESET}${failures} ${GRAY}${duration(performance.now() - runStarted)}${RESET}`
+  );
 };
 
 const clear = (): void => {
@@ -201,7 +273,9 @@ const clear = (): void => {
 
 const paint = (): void => {
   if (!INTERACTIVE || done || allTasks.length === 0) return;
-  const lines = allTasks.map((spec) => fit(statusLine(spec)));
+  // Leading blank line: the block is pinned directly under the scrolling log,
+  // and without it the newest log line and the progress meter read as one row.
+  const lines = ["", headerLine(), ...allTasks.map(statusLine)].map(fit);
   out.write(`${lines.join("\n")}\n`);
   painted = lines.length;
 };
@@ -218,8 +292,9 @@ const write = (text: string): void => {
   out.flush();
 };
 
-const setPhase = (name: string, phase: Phase): void => {
-  phases.set(name, phase);
+/** The only writer of `states` — a repaint follows, so every caller stays a one-liner. */
+const setPhase = (name: string, phase: Phase, patch: Omit<TaskState, "phase"> = {}): void => {
+  states.set(name, { ...stateOf(name), ...patch, phase });
   if (INTERACTIVE) write("");
 };
 
@@ -333,6 +408,33 @@ const pump = async (
 /** How long a killed task gets to drain before its readers are cancelled outright. */
 const DRAIN_GRACE_MS = 250;
 
+/**
+ * The scrollback line a task leaves behind once it settles — exhaustive over
+ * `Outcome`, so a new outcome is a compile error here rather than a silent
+ * fall-through into the failure wording.
+ */
+const verdict = (
+  spec: TaskSpec,
+  outcome: Outcome,
+  ms: number,
+  exit: number,
+  opts: Options,
+): string => {
+  const head = `${PHASE_ICON[outcome]} ${label(spec)}`;
+  return match(outcome)
+    .with("passed", () => `${head} ${GREEN}passed${RESET} ${GRAY}in ${duration(ms)}${RESET}\n`)
+    .with(
+      "timeout",
+      () => `${head} ${YELLOW}timed out${RESET} ${GRAY}after ${duration(opts.timeout)}${RESET}\n`,
+    )
+    .with("cancelled", () => `${head} ${GRAY}cancelled${RESET}\n`)
+    .with(
+      "failed",
+      () => `${head} ${RED}failed${RESET} ${GRAY}in ${duration(ms)} (exit ${exit})${RESET}\n`,
+    )
+    .exhaustive();
+};
+
 const runTask = async (spec: TaskSpec, opts: Options): Promise<TaskResult> => {
   if (bail.signal.aborted) {
     setPhase(spec.name, "cancelled");
@@ -340,9 +442,8 @@ const runTask = async (spec: TaskSpec, opts: Options): Promise<TaskResult> => {
   }
 
   const started = performance.now();
-  startedAt.set(spec.name, started);
   const sink = makeSink(spec, opts);
-  setPhase(spec.name, "running");
+  setPhase(spec.name, "running", { began: started });
   // On a TTY the pinned block already shows this; off one it is the only trace.
   // Compact mode reports nothing until a task has an outcome worth a line.
   if (!INTERACTIVE && !opts.compact) {
@@ -375,9 +476,10 @@ const runTask = async (spec: TaskSpec, opts: Options): Promise<TaskResult> => {
   if (exit === "cancelled") {
     proc.kill();
     bail.signal.removeEventListener("abort", stopDrain);
-    setPhase(spec.name, "cancelled");
-    if (!opts.compact) write(`${GRAY}⊘ ${spec.name} cancelled${RESET}\n`);
-    return { name: spec.name, outcome: "cancelled", ms: performance.now() - started };
+    const ms = performance.now() - started;
+    setPhase(spec.name, "cancelled", { ms });
+    if (!opts.compact) write(verdict(spec, "cancelled", ms, 0, opts));
+    return { name: spec.name, outcome: "cancelled", ms };
   }
   /**
    * `proc.killed` is NOT "we killed it" — Bun sets it on any exited process, so
@@ -400,19 +502,13 @@ const runTask = async (spec: TaskSpec, opts: Options): Promise<TaskResult> => {
   const ms = performance.now() - started;
   // The only kill left is the spawn timeout — the bail path returned above.
   const outcome: Outcome = exit === 0 ? "passed" : timedOut ? "timeout" : "failed";
-  setPhase(spec.name, outcome);
+  setPhase(spec.name, outcome, { ms });
   if (opts.compact) {
     if (outcome !== "passed") write(`${outcome.toUpperCase()} ${spec.name} (${duration(ms)})\n`);
     sink.flush(outcome);
   } else {
     sink.flush(outcome);
-    write(
-      outcome === "passed"
-        ? `${GREEN}✔${RESET} ${label(spec)} ${GREEN}passed${RESET} ${GRAY}in ${duration(ms)}${RESET}\n`
-        : outcome === "timeout"
-          ? `${RED}⏱${RESET} ${label(spec)} ${RED}timed out${RESET} ${GRAY}after ${duration(opts.timeout)}${RESET}\n`
-          : `${RED}✖${RESET} ${label(spec)} ${RED}failed${RESET} ${GRAY}in ${duration(ms)} (exit ${exit})${RESET}\n`,
-    );
+    write(verdict(spec, outcome, ms, exit, opts));
   }
 
   if (outcome !== "passed" && opts.bail) bail.abort();
@@ -435,19 +531,31 @@ const workspacePackages = async (): Promise<WorkspacePkg[]> => {
     ? workspaces
     : ((workspaces as { packages?: string[] } | undefined)?.packages ?? []);
 
-  const found: WorkspacePkg[] = [];
+  const paths: string[] = [];
   for (const glob of globs) {
     for await (const rel of new Bun.Glob(`${glob}/package.json`).scan({ cwd: ROOT })) {
-      const manifest = await Bun.file(join(ROOT, rel)).json();
-      if (typeof manifest?.name !== "string") continue;
-      found.push({
-        name: manifest.name,
-        dir: join(ROOT, dirname(rel)),
-        scripts: Object.keys(manifest.scripts ?? {}),
-      });
+      paths.push(rel);
     }
   }
-  return found;
+
+  // Read in parallel and drop the unreadable: an unparseable manifest in some
+  // unrelated package should cost that package its task, not the whole run.
+  const read = await Promise.all(
+    paths.map((rel) =>
+      tryAsync(Bun.file(join(ROOT, rel)).json())
+        .map((manifest): WorkspacePkg | null =>
+          typeof manifest?.name === "string"
+            ? {
+                name: manifest.name,
+                dir: join(ROOT, dirname(rel)),
+                scripts: Object.keys(manifest.scripts ?? {}),
+              }
+            : null,
+        )
+        .unwrapOr(null),
+    ),
+  );
+  return read.filter((pkg): pkg is WorkspacePkg => pkg !== null);
 };
 
 /** Root gates, named by script so this file never restates what they run. */
@@ -463,10 +571,10 @@ const buildTasks = async (opts: Options): Promise<TaskSpec[]> => {
       ? [...ROOT_GATES, opts.target === "check:full" ? "test:full" : "test"]
       : [];
 
-  const match = opts.filter === null ? null : new Bun.Glob(opts.filter);
+  const scope = opts.filter === null ? null : new Bun.Glob(opts.filter);
   const members = (await workspacePackages())
     .filter((pkg) => pkg.scripts.includes(script))
-    .filter((pkg) => match === null || match.match(pkg.name));
+    .filter((pkg) => scope === null || scope.match(pkg.name));
 
   const specs = [
     ...rootScripts.map((s) => ({ name: s, args: ["run", s], cwd: ROOT })),
@@ -481,11 +589,27 @@ const buildTasks = async (opts: Options): Promise<TaskSpec[]> => {
 
 // ── summary ──────────────────────────────────────────────────────────────────
 
-/** Plain text, no SGR: `inspect.table` measures the strings it is handed. */
+/**
+ * Slowest task first, each with a bar scaled to it — the gate runs concurrently,
+ * so the top row is the critical path and the only one worth optimising.
+ * Hand-drawn rather than `Bun.inspect.table`, which cannot colour per cell and
+ * measures SGR codes as if they were printable.
+ */
 const summaryTable = (results: readonly TaskResult[]): string => {
-  const rows: Record<string, { status: Outcome; time: string }> = {};
-  for (const r of results) rows[r.name] = { status: r.outcome, time: duration(r.ms) };
-  return Bun.inspect.table(rows, { colors: COLOR });
+  const ranked = [...results].sort((a, b) => b.ms - a.ms);
+  const slowest = Math.max(1, ...ranked.map((r) => r.ms));
+  const times = ranked.map((r) => duration(r.ms));
+  const timeCol = Math.max(...times.map((t) => t.length));
+  const width = Math.max(8, Math.min(28, columns() - gutter - timeCol - 12));
+  return ranked
+    .map((r, i) => {
+      const spec = allTasks.find((t) => t.name === r.name);
+      const name = spec === undefined ? r.name.padEnd(gutter) : label(spec);
+      const bar =
+        r.outcome === "cancelled" ? "" : meter(r.ms / slowest, width, PHASE_COLOR[r.outcome]);
+      return `  ${PHASE_ICON[r.outcome]} ${name} ${GRAY}${(times[i] ?? "").padStart(timeCol)}${RESET} ${bar}`;
+    })
+    .join("\n");
 };
 
 const main = async (): Promise<void> => {
@@ -500,7 +624,7 @@ const main = async (): Promise<void> => {
 
   allTasks = tasks;
   gutter = Math.max(...tasks.map((t) => Bun.stringWidth(t.name)));
-  for (const t of tasks) phases.set(t.name, "pending");
+  for (const t of tasks) states.set(t.name, { phase: "pending" });
 
   let interrupted = false;
   const onSigint = (): void => {
@@ -512,10 +636,16 @@ const main = async (): Promise<void> => {
   if (INTERACTIVE) out.write("\x1b[?25l");
 
   const started = performance.now();
+  runStarted = started;
   if (!opts.compact) {
-    write(`\n${BOLD}${CYAN}• mochi ${opts.target}${scope}${RESET}\n`);
-    write(`${GRAY}• ${tasks.map((t) => t.name).join(", ")}${RESET}\n`);
-    write(`${rule()}\n\n`);
+    const plan = `${tasks.length} task${tasks.length === 1 ? "" : "s"}, concurrent`;
+    write(
+      `\n ${BOLD}${CYAN}◆ mochi${RESET} ${BOLD}${opts.target}${scope}${RESET} ${GRAY}${plan}${RESET}\n`,
+    );
+    write(` ${tasks.map((t) => `${t.color}▪${RESET}${GRAY} ${t.name}${RESET}`).join("  ")}\n`);
+    // The pinned block supplies its own leading blank line; off a TTY nothing
+    // is pinned, so the gap has to come from here instead.
+    write(INTERACTIVE ? `${rule()}\n` : `${rule()}\n\n`);
   }
 
   const ticker = INTERACTIVE
@@ -549,16 +679,17 @@ const main = async (): Promise<void> => {
       const names = failed.length > 0 ? ` — ${failed.map((r) => r.name).join(", ")}` : "";
       write(`${results.length} tasks: ${tally.join(", ")} (${elapsed})${names}\n`);
     } else {
+      const green = failed.length === 0 && cancelled === 0;
+      const banner = green
+        ? `${GREEN}${BOLD} ✔ ${results.length}/${results.length} passed${RESET}`
+        : `${RED}${BOLD} ✖ ${failed.length} failed${RESET}${GRAY}, ${passed.length} passed${
+            cancelled > 0 ? `, ${cancelled} cancelled${RESET}` : ""
+          }${RESET}`;
       write(`\n${rule()}\n`);
-      write(`${summaryTable(results)}\n`);
-      write(
-        `${BOLD}${CYAN} Tasks:${RESET}    ${GREEN}${passed.length} passed${RESET}${
-          failed.length > 0 ? `, ${RED}${failed.length} failed${RESET}` : ""
-        }${cancelled > 0 ? `, ${GRAY}${cancelled} cancelled${RESET}` : ""}, ${results.length} total\n`,
-      );
-      write(`${BOLD}${CYAN} Time:${RESET}     ${elapsed}\n`);
+      write(`${summaryTable(results)}\n\n`);
+      write(`${banner} ${GRAY}in ${elapsed}${RESET}\n`);
       if (failed.length > 0) {
-        write(`${RED} Failed:${RESET}   ${failed.map((r) => r.name).join(", ")}\n`);
+        write(`${RED}   ↳${RESET} ${GRAY}${failed.map((r) => r.name).join(", ")}${RESET}\n`);
       }
       write("\n");
     }
