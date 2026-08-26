@@ -148,6 +148,19 @@ describe("JSX syntax desugaring (ADR 0007)", () => {
 
 // ADR 0055 — component prop contracts: a record-alias extern is a checked
 // seam; `: a` remains the explicit opt-out.
+describe("keyword attribute names (ADR 0077)", () => {
+  it("accepts a DOM attribute spelled like a mochi keyword", () => {
+    const out = unwrapOk(compile(`let b = <button type="button">{"go"}</button>`));
+    expect(out).toContain('type: "button"');
+  });
+
+  it("keeps the attribute out of binding position", () => {
+    // `type` is a label here, so the surrounding statement still parses as an
+    // ordinary `let` — the keyword has not leaked into expression position.
+    expect(isErr(compile(`let type = <button type="x" />`))).toBe(true);
+  });
+});
+
 describe("component prop contracts (ADR 0055)", () => {
   const ICON = `
     type IconProps = { name: string, className: string }
