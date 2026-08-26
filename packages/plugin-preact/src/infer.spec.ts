@@ -9,6 +9,7 @@ const plugins = [preactExtension];
 
 const HOOKS = `
 export extern useState : a -> (a, a -> b) = "preact/hooks" "useState"
+export extern useLazyState : (() -> a) -> (a, a -> b) = "preact/hooks" "useState"
 export extern useRef : a -> b = "preact/hooks" "useRef"
 export extern useEffect : (() -> c) -> d -> e = "preact/hooks" "useEffect"
 export extern useCallback : a -> b -> a = "preact/hooks" "useCallback"
@@ -23,6 +24,25 @@ let test = _ =>
 `;
   const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces, plugins });
   expect(isErr(r)).toBe(false);
+});
+
+test("useLazyState takes state from the thunk result", () => {
+  const src = `${HOOKS}
+let test = _ =>
+  let (n, setN) = useLazyState(() => 0) in
+  let _ = setN(1) in n
+`;
+  const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces, plugins });
+  expect(isErr(r)).toBe(false);
+});
+
+test("useLazyState rejects a bare value initialiser", () => {
+  const src = `${HOOKS}
+let test = _ =>
+  let (n, _setN) = useLazyState(0) in n
+`;
+  const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces, plugins });
+  expect(isErr(r)).toBe(true);
 });
 
 test("useState rejects wrong setter arg type", () => {

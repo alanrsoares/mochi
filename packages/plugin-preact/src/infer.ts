@@ -38,6 +38,18 @@ const inferUseState: InferCallHook = (e, api) => {
   return ok(tTuple([stateT, setterT]));
 };
 
+/** `useLazyState(() => init)` — thunk runs on mount; state is its result. */
+const inferUseLazyState: InferCallHook = (e, api) => {
+  if (!isRefCall(e, "useLazyState") || e.args.length !== 1) return null;
+  const stateT = api.freshVar();
+  const thunkR = api.infer(e.args[0]!);
+  if (isErr(thunkR)) return thunkR;
+  const uni = api.unify(thunkR.value, tArrow(tUnit, stateT), e.args[0]!.span);
+  if (isErr(uni)) return uni;
+  const state = api.zonk(stateT);
+  return ok(tTuple([state, tArrow(setStateDomain(state), tUnit)]));
+};
+
 const inferUseRef: InferCallHook = (e, api) => {
   if (!isRefCall(e, "useRef") || e.args.length !== 1) return null;
   const initR = api.infer(e.args[0]!);
@@ -102,6 +114,7 @@ const inferHookDeps: InferCallHook = (e, api) => {
 /** Callee `ref` names this plugin's `inferCall` hook claims (clash detection). */
 export const PREACT_HOOK_REFS = [
   "useState",
+  "useLazyState",
   "useRef",
   "useEffect",
   "useLayoutEffect",
@@ -115,6 +128,7 @@ export const PREACT_HOOK_REFS = [
 
 export const inferPreactCall: InferCallHook = (e, api) =>
   inferUseState(e, api) ??
+  inferUseLazyState(e, api) ??
   inferUseRef(e, api) ??
   inferEffectLike(e, api, "useEffect") ??
   inferEffectLike(e, api, "useLayoutEffect") ??
