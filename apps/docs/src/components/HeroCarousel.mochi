@@ -1,7 +1,8 @@
 "use open"
 
-// Hero artwork carousel — hooks in mochi (Counter pattern). Slide jpg URLs +
-// interval/DOM timer / pointer swipe stay in `lib/hero-slides.ts`.
+// Hero artwork carousel — hooks in mochi (Counter pattern). Slide copy lives in
+// `lib/hero-slides.mochi`; the interval/DOM timer and pointer swipe stay in
+// `lib/hero-slides-fx.ts`.
 import {
   useState,
   useEffect,
@@ -11,22 +12,17 @@ import {
 } from "@mochi/plugin-preact/hooks"
 import { CarouselDot, CarouselImg } from "../ui/primitives"
 import { HeroCarouselView } from "./HeroCarouselView"
-
-type Slide = { src: string, alt: string, kicker: string, title: string }
-
-extern heroSlides : [Slide] = "../lib/hero-slides" "heroSlides"
-extern HERO_INTERVAL_MS : number = "../lib/hero-slides" "HERO_INTERVAL_MS"
-extern SWIPE_MIN_PX : number = "../lib/hero-slides" "SWIPE_MIN_PX"
+import { heroSlides, HERO_INTERVAL_MS, SWIPE_MIN_PX } from "../lib/hero-slides"
 // Cleanup return stays OPAQUE (`c`, not `c -> d`): extern arity counts the
 // whole arrow spine, so `-> c -> d` would emit `_curry(3, …)` and the 2-arg
 // call would be a silent partial application — the timer would only start
 // when the effect CLEANUP ran, and its real cleanup would leak.
 /// Returns an effect cleanup.
-extern startHeroTick<A, B, C> : (A -> B) -> number -> C = "../lib/hero-slides" "startHeroTick"
+extern startHeroTick<A, B, C> : (A -> B) -> number -> C = "../lib/hero-slides-fx" "startHeroTick"
 /// Record start X + setPointerCapture on the frame.
-extern swipePointerDown<A, B, C> : A -> B -> C = "../lib/hero-slides" "swipePointerDown"
+extern swipePointerDown<A, B, C> : A -> B -> C = "../lib/hero-slides-fx" "swipePointerDown"
 /// `clientX - start`; 0 when not the primary pointer.
-extern swipePointerDx<A, B> : A -> B -> number = "../lib/hero-slides" "swipePointerDx"
+extern swipePointerDx<A, B> : A -> B -> number = "../lib/hero-slides-fx" "swipePointerDx"
 
 let n = Array.length(heroSlides)
 

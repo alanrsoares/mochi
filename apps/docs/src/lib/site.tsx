@@ -5,7 +5,7 @@
 import { render, type VNode } from "preact";
 import "../index.css";
 import { initColorScheme } from "./color-scheme";
-import { logoImg } from "./illustrations";
+import { logoImg } from "./illustrations.mochi";
 
 export const logoUrl: string = logoImg;
 
