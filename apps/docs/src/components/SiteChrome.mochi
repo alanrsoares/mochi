@@ -4,7 +4,7 @@
 // (brand link, GitHub link, active-nav marker, footer). Page headers keep
 // their own layout (landing is sticky h-14, playground compact h-12); the
 // duplicated pieces live here once.
-import { Icon } from "../host/widgets.host"
+import { Icon } from "../host/icon.host"
 import { NavLink } from "../ui/primitives"
 
 export let githubUrl = "https://github.com/alanrsoares/mochi"

@@ -114,6 +114,13 @@ export let CarouselNav = tw.button(
 // so the on/off axis is a string union instead — checked in mochi now that
 // `$active` infers as `"on" | "off"` (ADR 0012 / Wave 7), not `string`.
 
+export let ThemeToggleBtn = tw.button(
+  "inline-flex size-8 items-center justify-center rounded-full border-2"
+    ++ " border-line-strong bg-foam text-ink transition-colors hover:border-fur"
+    ++ " hover:bg-peach focus-visible:outline-2 focus-visible:outline-bao"
+    ++ " focus-visible:outline-offset-2"
+)
+
 export let SegTab = tw.button(
   "rounded-full px-3 py-1 font-mono font-semibold text-2xs transition-colors",
   {

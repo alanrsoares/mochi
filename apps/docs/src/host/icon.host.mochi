@@ -1,0 +1,6 @@
+// Lucide icon seam, split out of `widgets.host` so `ColorSchemeToggle.mochi`
+// can share it: `widgets.host` imports that component, so a component reaching
+// back into `widgets.host` for `Icon` would be a cycle. Paths relative to THIS file.
+export type IconProps = { name: string, className: string }
+
+export extern Icon : IconProps -> VNode = "../components/Icon" "Icon"
