@@ -571,7 +571,11 @@ const ternaryD = (e: TernaryExpr): Doc => {
  * with `refoldCall`'s destructuring branch.
  */
 const printsAsLet = (e: Expr): boolean =>
-  e.kind === "letin" ||
+  // A `let _ = … in` chain is sequencing: `exprD` collapses it to `do { … }`,
+  // which is NOT let-shaped. Claiming otherwise cost the chain rule its
+  // fixpoint — pass one skipped the indent, then pass two saw a real `do` and
+  // added it, so `fmt` needed two runs to settle.
+  (e.kind === "letin" && discardedLetExprs(e) === null) ||
   e.kind === "letbind" ||
   (e.kind === "call" &&
     e.args.length === 1 &&

@@ -161,6 +161,25 @@ test("trailing-lambda closer drops under a canonical block body (not glued)", ()
   expect(fmt(out)).toBe(out);
 });
 
+test("a do-block under a let-in chain reaches its fixpoint in one pass", () => {
+  // `let _ = … in` is sequencing, so it prints as `do { … }` — not as a
+  // `let … in`, and so it does NOT get the chain rule's flat alignment. Pass one
+  // used to emit it flat and pass two indented it, which meant `fmt:check` could
+  // fail on a file `fmt` had just written.
+  const src = "let f = () => let n = c(r()) in let _ = s(n) in t(n)";
+  const out = [
+    "let f = () =>",
+    "  let n = c(r()) in",
+    "    do {",
+    "      s(n);",
+    "      t(n)",
+    "    }",
+    "",
+  ].join("\n");
+  expect(fmt(src)).toBe(out);
+  expect(fmt(out)).toBe(out);
+});
+
 test("curried apply hugs a multiline trailing-lambda block callee", () => {
   const src =
     "let _draw = useEffect(() => let _ = watchEat(particles, eatWatch, board) in let _ = paintBoard(canvasRef, board, particles) in startParticleLoop(canvasRef, particles, boardRef))(hookDeps2(props.snake, props.food))";
