@@ -1343,10 +1343,10 @@ let genStmtAllFrom = (ctx, stmts, i) => switch Array.get(i, stmts) {
   | Some(s) => Array.prepend(ctx->genStmt(s), ctx->genStmtAllFrom(stmts, i + 1))
 }
 
-// `useRuntime`: inline the prelude builtins the program uses, so the emitted
-// module runs standalone. `ns`/`jsDefs`/`runtimeDeps` are the TS prelude's
-// `namespaceRuntime`/`preludeJsDefs`/`runtimeDeps` tables, converted to
-// mochi Maps — the same tables the TS codegen consults, not a fork of them.
+/// `useRuntime`: inline the prelude builtins the program uses, so the emitted
+/// module runs standalone. `ns`/`jsDefs`/`runtimeDeps` are the TS prelude's
+/// `namespaceRuntime`/`preludeJsDefs`/`runtimeDeps` tables, converted to
+/// mochi Maps — the same tables the TS codegen consults, not a fork of them.
 export let codegen = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps) =>
   let keys0 = ctorKeysFromStmts(stmts, imported) in
   let keys = seedBuiltinCtorKeys(stmts, keys0) in

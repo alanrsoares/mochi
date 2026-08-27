@@ -105,8 +105,8 @@ let visitAll = (froms, importer, acc) => switch froms {
     }
 }
 
-// loadGraph : string -> Result [Loaded] MErr
-// Load every module reachable from `entry`, in dependency order.
+/// loadGraph : string -> Result [Loaded] MErr
+/// Load every module reachable from `entry`, in dependency order.
 export let loadGraph = entry =>
   visit(absPath(entry), { state: #{}, order: [] })
     |> Result.map(acc => acc.order)
@@ -323,9 +323,9 @@ let compileAll = (ctx, graph) => switch graph {
     }
 }
 
-// compileGraph : [Loaded] -> Result [ModuleOutput] MErr
-// Spelled out (not point-free `compileAll(ctx0)`): the TS backend types a
-// multi-param function uncurried, so a partial application is a tsc error.
+/// compileGraph : [Loaded] -> Result [ModuleOutput] MErr
+/// Spelled out (not point-free `compileAll(ctx0)`): the TS backend types a
+/// multi-param function uncurried, so a partial application is a tsc error.
 export let compileGraph = graph =>
   compileAll(
     {
@@ -338,7 +338,7 @@ export let compileGraph = graph =>
     graph
   )
 
-// buildModules : string -> Result [ModuleOutput] MErr
-// Resolve the graph then compile it — one sync railway (host IO is sync).
+/// buildModules : string -> Result [ModuleOutput] MErr
+/// Resolve the graph then compile it — one sync railway (host IO is sync).
 export let buildModules = entry =>
   loadGraph(entry) |> Result.flatMap(compileGraph)

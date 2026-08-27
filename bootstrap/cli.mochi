@@ -59,7 +59,7 @@ let buildMulti = entry =>
     |> Result.mapErr(e => e.message)
     |> Result.flatMap(writeAll)
 
-// Entry: fire on the real argv the moment the module is evaluated.
+/// Entry: fire on the real argv the moment the module is evaluated.
 export let main = switch Array.get(0, argv) {
   | None => die("usage: mochic <file.mochi>  |  mochic build <entry.mochi>")
   | Some("build") => switch Array.get(1, argv) {

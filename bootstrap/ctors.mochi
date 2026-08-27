@@ -19,9 +19,9 @@ type Registry = { ctors: Map<string, CtorInfo>, types: Map<string, [string]> }
 
 let emptyRegistry : Registry = { ctors: #{}, types: #{} }
 
-// The primitive type names legal in a ctor field / type expression. Shared by
-// check (stray-type-var validation) and any future prim consumer — previously
-// check.mochi's private `ctorPrims`.
+/// The primitive type names legal in a ctor field / type expression. Shared by
+/// check (stray-type-var validation) and any future prim consumer — previously
+/// check.mochi's private `ctorPrims`.
 export let primTypeNames = ["number", "int", "float", "string", "bool", "unit"]
 
 // --- runtime field keys ---
@@ -87,10 +87,10 @@ let declaresType = (stmts, i, name) => switch Array.get(i, stmts) {
   | Some(_) => declaresType(stmts, i + 1, name)
 }
 
-// The builtin decls a program does NOT shadow: a user `type` of the same name
-// suppresses the whole builtin type (the type-name-shadow rule, matching
-// src/ctors.ts's seedBuiltins). Consumers seed from this list so all three
-// passes share one shadowing semantics.
+/// The builtin decls a program does NOT shadow: a user `type` of the same name
+/// suppresses the whole builtin type (the type-name-shadow rule, matching
+/// src/ctors.ts's seedBuiltins). Consumers seed from this list so all three
+/// passes share one shadowing semantics.
 export let builtinDeclsFor = stmts =>
   builtinTypeDecls |> filter(bt => !declaresType(stmts, 0, bt.name))
 
@@ -154,9 +154,9 @@ let buildLoop = (stmts, i, reg) => switch Array.get(i, stmts) {
   | Some(_) => buildLoop(stmts, i + 1, reg)
 }
 
-// The failing builder — check's entry point: duplicate-decl detection lives
-// here, at the single derivation, so no later pass can see a registry check
-// didn't vouch for.
+/// The failing builder — check's entry point: duplicate-decl detection lives
+/// here, at the single derivation, so no later pass can see a registry check
+/// didn't vouch for.
 export let buildRegistry = stmts =>
   let? reg = buildLoop(stmts, 0, emptyRegistry) in
     Ok(seedRegDeclsFrom(builtinDeclsFor(stmts), 0, reg))
@@ -213,9 +213,9 @@ let seedKeyDeclsFrom = (decls, i, m) => switch Array.get(i, decls) {
   | Some(bt) => seedKeyDeclsFrom(decls, i + 1, seedKeyCtorsFrom(bt.ctors, 0, m))
 }
 
-// Seed builtin variant ctor keys (Some/Ok/…) unless the program declares its
-// own type of that name, or the key is already present (a user decl or an
-// imported ctor's keys win).
+/// Seed builtin variant ctor keys (Some/Ok/…) unless the program declares its
+/// own type of that name, or the key is already present (a user decl or an
+/// imported ctor's keys win).
 export let seedBuiltinCtorKeys = (stmts, m) =>
   seedKeyDeclsFrom(builtinDeclsFor(stmts), 0, m)
 

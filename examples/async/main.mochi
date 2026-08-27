@@ -10,7 +10,7 @@
 let program = let! n = Task.of(20) |> Task.map((+ 1)) in
 let! n2 = Task.delay(10, n) in Task.of(n2 + n2)
 
-// `mochi build main.mochi`, then `node demo.mjs` — prints `{ _tag: "Ok", value: 42 }`.
+/// `mochi build main.mochi`, then `node demo.mjs` — prints `{ _tag: "Ok", value: 42 }`.
 export let result = Task.run(program)
 
 // ---- the error channel ----
@@ -65,13 +65,13 @@ let roster = ids => Task.traverse(nameOf, ids)
 
 export let everyone = Task.run(roster([1, 1]))
 
-// Fail-fast: id 7 is a 404, so the whole fan-out settles `Err` on the first
-// failure. The sibling lookup is ABANDONED — its request still completes in the
-// host, its result is simply dropped. mochi has no cancellation (ADR 0074).
+/// Fail-fast: id 7 is a 404, so the whole fan-out settles `Err` on the first
+/// failure. The sibling lookup is ABANDONED — its request still completes in the
+/// host, its result is simply dropped. mochi has no cancellation (ADR 0074).
 export let partial = Task.run(roster([1, 7]))
 
-// `race` settles on the first task to SETTLE — an early `Err` wins as readily
-// as an early `Ok`. `Task.race([])` would never settle.
+/// `race` settles on the first task to SETTLE — an early `Err` wins as readily
+/// as an early `Ok`. `Task.race([])` would never settle.
 export let fastest = Task.run(
   Task.race([Task.delay(50, "slow"), Task.delay(1, "quick")])
 )

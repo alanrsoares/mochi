@@ -131,7 +131,7 @@ export let SegTab = tw.button(
   }
 )
 
-// Playground right-pane tabs (ReScript-style underline, not pills).
+/// Playground right-pane tabs (ReScript-style underline, not pills).
 export let PaneTab = tw.button(
   "relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3"
     ++ " py-2.5 font-mono text-2xs font-semibold transition-colors",
@@ -181,7 +181,7 @@ export let CarouselDot = tw.button(
   }
 )
 
-// Slide item inside the translated `hero-carousel__track`, not a stacked fade.
+/// Slide item inside the translated `hero-carousel__track`, not a stacked fade.
 export let CarouselImg = tw.img("h-full w-full shrink-0 object-cover")
 
 // Playground chrome. `ref` / `value` / handlers ride the open prop row and the
@@ -197,9 +197,9 @@ export let PresetSelect = tw.select(
     ++ " text-base sm:text-xs focus:border-fur focus:outline-none"
 )
 
-// `text-base sm:text-xs`: 16px on phones so iOS Safari does not zoom the
-// focused textarea; mirror + overlay must use the same size or the ghost
-// text drifts off the caret.
+/// `text-base sm:text-xs`: 16px on phones so iOS Safari does not zoom the
+/// focused textarea; mirror + overlay must use the same size or the ghost
+/// text drifts off the caret.
 export let EditorMirror = tw.pre(
   "pointer-events-none absolute inset-0 m-0 overflow-auto whitespace-pre p-4"
     ++ " font-mono font-normal text-ink text-base sm:text-xs tab-2"
@@ -236,8 +236,8 @@ export let HoverToken = tw.span(
     ++ " transition-colors hover:bg-fur-glow hover:decoration-fur-deep"
 )
 
-// Viewport-anchored, not `absolute`: the syntax cards clip on `overflow-hidden`,
-// so placement comes from the token's client rect and `fixed` escapes the clip.
+/// Viewport-anchored, not `absolute`: the syntax cards clip on `overflow-hidden`,
+/// so placement comes from the token's client rect and `fixed` escapes the clip.
 export let TooltipAnchor = tw.span(
   "pointer-events-none fixed z-50 block w-max max-w-xs -translate-x-1/2",
   {
@@ -246,8 +246,8 @@ export let TooltipAnchor = tw.span(
   }
 )
 
-// `whitespace-normal` because tokens render inside a `<pre>` — inherited
-// `white-space: pre` would defeat `max-w-xs` and run the type past the card.
+/// `whitespace-normal` because tokens render inside a `<pre>` — inherited
+/// `white-space: pre` would defeat `max-w-xs` and run the type past the card.
 export let TooltipCard = tw.span(
   "block whitespace-normal wrap-break-word rounded-panel border-2"
     ++ " border-line-strong bg-foam p-2.5 font-mono text-2xs text-ink"
