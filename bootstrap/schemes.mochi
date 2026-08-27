@@ -167,7 +167,11 @@ export let isUpperStart = s => switch Str.codeAt(0, s) {
   | None => false
 }
 
-type AliasInfo = { params: [string], fields: [AliasField], expr: Option<Ast.TypeExpr> }
+type AliasInfo = {
+  params: [string],
+  fields: [AliasField],
+  expr: Option<Ast.TypeExpr>
+}
 
 export let typeExprListToType = (tes, vars, st, aliases, expanding) => switch tes {
   | [] => ([], vars, st)

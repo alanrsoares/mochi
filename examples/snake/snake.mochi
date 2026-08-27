@@ -15,7 +15,17 @@ export type Status =
   | Paused
   | GameOver
 
-export type State = { snake: [(number, number)], food: (number, number), dir: Direction, dirQueue: [Direction], score: number, highScore: number, status: Status, cols: number, rows: number }
+export type State = {
+  snake: [(number, number)],
+  food: (number, number),
+  dir: Direction,
+  dirQueue: [Direction],
+  score: number,
+  highScore: number,
+  status: Status,
+  cols: number,
+  rows: number
+}
 
 /// Calculate next head position based on direction
 let nextHead = ((x, y), dir) => switch dir {
