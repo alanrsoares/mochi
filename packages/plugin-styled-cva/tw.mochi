@@ -1,11 +1,11 @@
-// Typed styled-cva seam (ADR 0015) — @styled-cva/react (Preact compat).
-// Import from apps; register `styledCvaExtension` on the project plugin list.
-//
-// `tw` stays opaque (`: a`) on purpose: the `tw.tag` factories are overloaded
-// (`tw.div("x")` and `tw.div("x", { variants })`). Fixed-arity HM arrows would
-// type 1-arg sites as partial application. The vendor plugin's inferCall +
-// dtsBinding hooks recover component schemes / `$tone` unions from the call
-// AST; jsxPlugin checks attrs on those components; the format hook reflows
-// class strings (ADR 0057). LSP completes `$tone` lit unions; factory `tw.*`
-// members stay open-world opaque.
+/// Typed styled-cva seam (ADR 0015) — @styled-cva/react (Preact compat).
+/// Import from apps; register `styledCvaExtension` on the project plugin list.
+///
+/// `tw` stays opaque (`: a`) on purpose: the `tw.tag` factories are overloaded
+/// (`tw.div("x")` and `tw.div("x", { variants })`). Fixed-arity HM arrows would
+/// type 1-arg sites as partial application. The vendor plugin's inferCall +
+/// dtsBinding hooks recover component schemes / `$tone` unions from the call
+/// AST; jsxPlugin checks attrs on those components; the format hook reflows
+/// class strings (ADR 0057). LSP completes `$tone` lit unions; factory `tw.*`
+/// members stay open-world opaque.
 export extern tw<A> : A = "@styled-cva/react" "default"

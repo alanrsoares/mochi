@@ -7,17 +7,18 @@
  * hover popup.
  */
 import { resolve } from "node:path";
-import type { Program } from "@mochi/compiler/ast";
+import type { Ctor, Program, TypeExpr, TypeStmt } from "@mochi/compiler/ast";
 import { openMode, toTypedProgramRecovering, toTypedProgramWith } from "@mochi/compiler/compile";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
-import type { InferResult, SymbolInfo, TypeAt } from "@mochi/compiler/infer";
-import { lex } from "@mochi/compiler/lexer";
-import { moduleContext } from "@mochi/compiler/module";
+import { type InferResult, type SymbolInfo, showScheme, type TypeAt } from "@mochi/compiler/infer";
+import { type Located, lex, type Tok } from "@mochi/compiler/lexer";
+import { type ModuleContext, moduleContext } from "@mochi/compiler/module";
 import { parseRecovering } from "@mochi/compiler/parser";
 import { preludeNamespaces } from "@mochi/compiler/prelude";
 import { preludeDocForBinding } from "@mochi/compiler/prelude-virtual";
 import { type QualMap, widenLits } from "@mochi/compiler/schemes";
-import { spanContainsClosed, tightestHit } from "@mochi/compiler/span";
+import { showTypeExpr } from "@mochi/compiler/show-type-expr";
+import { spanContains, spanContainsClosed, tightestHit } from "@mochi/compiler/span";
 import { indexProgram } from "@mochi/compiler/symbols";
 import { foldAliases, qualifyTypeNames, showType } from "@mochi/compiler/types";
 import { type Maybe, map, match as matchMaybe, none, some } from "@onrails/maybe";
@@ -33,6 +34,173 @@ const tightestType = (types: TypeAt[], offset: number) =>
  * prose from a leading `///` comment.
  */
 export type HoverInfo = { code: string; doc?: string };
+
+/** A parse-level hover candidate — useful even when value inference fails. */
+type SyntaxHover = { span: { start: number; end: number }; info: HoverInfo };
+
+type TokenHint = { token: Tok["t"]; info: HoverInfo };
+
+/** Static hints only fill gaps left by declaration and inferred-type hovers. */
+const TOKEN_HINTS: readonly TokenHint[] = [
+  { token: "let", info: { code: "let binding", doc: "Declares a value binding." } },
+  { token: "extern", info: { code: "extern binding", doc: "Declares a typed host binding." } },
+  {
+    token: "import",
+    info: { code: "import", doc: "Brings exports from another Mochi module into scope." },
+  },
+  {
+    token: "export",
+    info: { code: "export", doc: "Makes a declaration available to importing modules." },
+  },
+  { token: "loop", info: { code: "loop", doc: "Starts a tail-recursive loop expression." } },
+  {
+    token: "recur",
+    info: { code: "recur", doc: "Continues the nearest loop with replacement values." },
+  },
+  { token: "do", info: { code: "do", doc: "Sequences expressions and returns the last result." } },
+  {
+    token: "pipe",
+    info: { code: "|>", doc: "Pipes the left value into the function on the right." },
+  },
+  { token: "compose", info: { code: ">>", doc: "Composes two functions right-to-left." } },
+  { token: "concat", info: { code: "++", doc: "Concatenates strings." } },
+  {
+    token: "spread",
+    info: { code: "...", doc: "Splices a collection into a collection literal or pattern." },
+  },
+  { token: "at", info: { code: "@{…}", doc: "A lazy List literal or pattern." } },
+  {
+    token: "hash",
+    info: { code: "#{…}", doc: "A Set literal, or a Map literal when entries use `:`." },
+  },
+];
+
+const tokenHoverAt = (tokens: Located[], offset: number): HoverInfo | null => {
+  const token = tokens.find((current) => spanContains(current.span, offset));
+  if (!token) return null;
+  if (token.t === "str" && token.v === "use open")
+    return { code: '"use open"', doc: "Permits unresolved names as host globals in this module." };
+  return TOKEN_HINTS.find((hint) => hint.token === token.t)?.info ?? null;
+};
+
+const params = (names: string[]): string => (names.length === 0 ? "" : `<${names.join(", ")}>`);
+
+const showCtor = (ctor: Ctor): string => {
+  if (ctor.fields.length === 0) return ctor.name;
+  const fields = ctor.fields.map((field) => {
+    const type = showTypeExpr(field.type);
+    return field.name === null ? type : `${field.name}: ${type}`;
+  });
+  return `${ctor.name}(${fields.join(", ")})`;
+};
+
+const showTypeDecl = (stmt: TypeStmt): string => {
+  const head = `${stmt.name}${params(stmt.params)}`;
+  if (stmt.alias) {
+    const fields = stmt.alias.map((field) => `${field.name}: ${showTypeExpr(field.type)}`);
+    return `type ${head} = { ${fields.join(", ")} }`;
+  }
+  return `type ${head} = ${stmt.ctors.map(showCtor).join(" | ")}`;
+};
+
+const showCtorScheme = (owner: TypeStmt, ctor: Ctor): string => {
+  const result = `${owner.name}${params(owner.params)}`;
+  const fields = ctor.fields.map((field) => showTypeExpr(field.type));
+  return fields.length === 0 ? result : `${fields.join(" -> ")} -> ${result}`;
+};
+
+const collectTypeSyntax = (type: TypeExpr, out: SyntaxHover[]): void => {
+  out.push({ span: type.span, info: { code: `type ${showTypeExpr(type)}` } });
+  switch (type.kind) {
+    case "tarrow":
+      collectTypeSyntax(type.from, out);
+      collectTypeSyntax(type.to, out);
+      return;
+    case "tapp":
+      for (const arg of type.args) collectTypeSyntax(arg, out);
+      return;
+    case "ttuple":
+      for (const elem of type.elems) collectTypeSyntax(elem, out);
+      return;
+    case "tlist":
+      collectTypeSyntax(type.elem, out);
+      return;
+    case "tqual":
+      for (const arg of type.args) collectTypeSyntax(arg, out);
+      return;
+    case "tname":
+      return;
+  }
+};
+
+/**
+ * Declaration/type-syntax hovers intentionally come from the recovered parse
+ * tree, not Algorithm W. They remain readable while an unrelated value expr
+ * is incomplete or has a type error.
+ */
+const syntaxHoverAt = (program: Program, offset: number): HoverInfo | null => {
+  const candidates: SyntaxHover[] = [];
+  for (const stmt of program.stmts) {
+    if (stmt.kind === "let" && stmt.annot) collectTypeSyntax(stmt.annot, candidates);
+    if (stmt.kind === "extern") {
+      collectTypeSyntax(stmt.typeExpr, candidates);
+      candidates.push({
+        span: stmt.nameSpan,
+        info: {
+          code: `extern ${stmt.name}: ${showTypeExpr(stmt.typeExpr)}\n= ${JSON.stringify(stmt.module)} ${JSON.stringify(stmt.imported)}`,
+          doc: stmt.doc,
+        },
+      });
+    }
+    if (stmt.kind !== "type") continue;
+    const decl = showTypeDecl(stmt);
+    candidates.push({ span: stmt.span, info: { code: decl } });
+    candidates.push({ span: stmt.nameSpan, info: { code: decl } });
+    for (const ctor of stmt.ctors) {
+      candidates.push({
+        span: ctor.span,
+        info: { code: `constructor ${ctor.name}: ${showCtorScheme(stmt, ctor)}` },
+      });
+      for (const field of ctor.fields) collectTypeSyntax(field.type, candidates);
+    }
+    for (const field of stmt.alias ?? []) {
+      candidates.push({
+        span: field.nameSpan,
+        info: { code: `(property) ${field.name}: ${showTypeExpr(field.type)}` },
+      });
+      collectTypeSyntax(field.type, candidates);
+    }
+  }
+  const hit = tightestHit(candidates, offset, spanContainsClosed);
+  return hit._tag === "Some" ? hit.value.info : null;
+};
+
+/** Module imports need their already-compiled dependency schemes to be useful. */
+const importHoverAt = (program: Program, offset: number, ctx: ModuleContext): HoverInfo | null => {
+  const candidates: SyntaxHover[] = [];
+  for (const stmt of program.stmts) {
+    if (stmt.kind !== "import") continue;
+    if (stmt.alias) {
+      candidates.push({
+        span: stmt.alias.span,
+        info: { code: `namespace ${stmt.alias.name}\nfrom ${JSON.stringify(stmt.from)}` },
+      });
+      continue;
+    }
+    for (const name of stmt.names) {
+      const scheme = ctx.imports.get(name.name);
+      if (!scheme) continue;
+      candidates.push({
+        span: name.span,
+        info: {
+          code: `import { ${name.name} }: ${showScheme(scheme)}\nfrom ${JSON.stringify(stmt.from)}`,
+        },
+      });
+    }
+  }
+  const hit = tightestHit(candidates, offset, spanContainsClosed);
+  return hit._tag === "Some" ? hit.value.info : null;
+};
 
 /** TS-style lead: `kind name: type` for a named symbol, bare type otherwise. */
 const lead = (type: string, symbol: SymbolInfo | undefined): string => {
@@ -115,8 +283,14 @@ const hoverFrom = (
  * `moduleHoverAt` when a path is available.
  */
 export const hoverAt = (src: string, offset: number, path = "<buffer>"): HoverInfo | null => {
+  const lexed = lex(src);
+  const fallback = isOk(lexed) ? tokenHoverAt(lexed.value, offset) : null;
+  if (isOk(lexed)) {
+    const syntax = syntaxHoverAt(parseRecovering(lexed.value).program, offset);
+    if (syntax) return syntax;
+  }
   const r = toTypedProgramRecovering(src, { namespaces: preludeNamespaces });
-  return isOk(r) ? hoverFrom(r.value.res, offset, src, path) : null;
+  return isOk(r) ? (hoverFrom(r.value.res, offset, src, path) ?? fallback) : fallback;
 };
 
 /** Mochi-facing hover seam: absence uses the language's `Option`, not a JS null sentinel. */
@@ -149,18 +323,24 @@ export const moduleHoverAt = async (
   // Recovering, so a hole elsewhere in the file doesn't blank out hover on the
   // parts that are intact (C9 slice e).
   const { program } = parseRecovering(lexed.value, { plugins: opts.plugins });
+  const syntax = syntaxHoverAt(program, offset);
+  if (syntax) return syntax;
 
   const entry = resolve(path);
   const read = (p: string): Promise<string> =>
     resolve(p) === entry ? Promise.resolve(src) : readFile(p);
   const ctx = await moduleContext(entry, read, { plugins: opts.plugins });
   if (isErr(ctx)) return hoverAt(src, offset, entry);
+  const imported = importHoverAt(program, offset, ctx.value);
+  if (imported) return imported;
 
   const typed = toTypedProgramWith(program, ctx.value, {
     plugins: opts.plugins,
     open: openMode(src),
   });
-  if (isErr(typed)) return null;
+  if (isErr(typed)) return tokenHoverAt(lexed.value, offset);
   const qualify = qualifierMap(ctx.value.qualTypes, program);
-  return hoverFrom(typed.value.res, offset, src, entry, qualify);
+  return (
+    hoverFrom(typed.value.res, offset, src, entry, qualify) ?? tokenHoverAt(lexed.value, offset)
+  );
 };

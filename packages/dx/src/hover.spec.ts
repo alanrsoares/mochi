@@ -19,6 +19,21 @@ test("hover on a lambda parameter use reports the monomorphic type", () => {
   expect(hoverAt(src, 19)?.code).toBe("number"); // on the `x` inside add(...)
 });
 
+test("hover on a lambda parameter declaration identifies the parameter", () => {
+  const src = "let f = (x) => add(x, 1)";
+  expect(hoverAt(src, src.indexOf("(x)") + 1)?.code).toBe("(parameter) x: number");
+});
+
+test("hover on destructured lambda parameter declarations identifies each binder", () => {
+  const tuple = "let f = ((x, y)) => add(x, y)";
+  expect(hoverAt(tuple, tuple.indexOf("x, y") + 1)?.code).toBe("(parameter) x: number");
+  expect(hoverAt(tuple, tuple.indexOf("y))") + 1)?.code).toBe("(parameter) y: number");
+
+  const record = "let f = ({ x, y }) => add(x, y)";
+  expect(hoverAt(record, record.indexOf("x, y") + 1)?.code).toBe("(parameter) x: number");
+  expect(hoverAt(record, record.indexOf("y })") + 1)?.code).toBe("(parameter) y: number");
+});
+
 test("hover on a record literal reports the closed row", () => {
   const src = "let r = { x: 1, y: 2 }";
   expect(hoverAt(src, 8)?.code).toBe("{ x: number, y: number }"); // on `{`
@@ -39,6 +54,11 @@ test("hover picks the tightest span (ref inside a call)", () => {
 test("hover returns null off any node", () => {
   const src = "let p = pi";
   expect(hoverAt(src, 3)).toBeNull(); // whitespace before `=`
+});
+
+test("static syntax hints fill otherwise-unhoverable tokens", () => {
+  expect(hoverAt("let x = 1", 1)?.code).toBe("let binding");
+  expect(hoverAt('"use open"\nwindow', 1)?.doc).toContain("host globals");
 });
 
 test("Mochi-facing hover represents absence as None", () => {
@@ -116,6 +136,15 @@ test("hover on the whole constructor pattern reports the variant type", () => {
   expect(hoverAt(src, off)?.code).toBe("Shape");
 });
 
+test("hover identifies as-pattern binders and record-pattern labels", () => {
+  const asSrc =
+    "type Shape = | Circle(number)\nlet f = s => switch s { | Circle(_) as shape => shape }";
+  expect(hoverAt(asSrc, asSrc.indexOf("shape =>") + 1)?.code).toBe("(parameter) shape: Shape");
+
+  const recordSrc = 'let f = r => switch r { | { state: "ready" } => 1 | _ => 0 }';
+  expect(hoverAt(recordSrc, recordSrc.indexOf("state") + 1)?.code).toBe("(property) state: string");
+});
+
 test("hover resolves a namespaced prelude ref (0023's discovered gap)", () => {
   const src = 'let s = Str.concat("a", "b")';
   const off = src.indexOf("Str.concat") + 5; // on `concat`
@@ -169,4 +198,21 @@ test("() in an extern signature shows as () not unit", () => {
   expect(hoverAt(src, src.indexOf("tick") + 1)?.code).toBe(
     'extern tick: () -> number\n= "./t" "tick"',
   );
+});
+
+test("type declarations and constructors have parse-level hovers", () => {
+  const src = "type Result<A, E> = | Ok(value: A) | Err(error: E)";
+  expect(hoverAt(src, src.indexOf("Result") + 1)?.code).toBe(
+    "type Result<A, E> = Ok(value: A) | Err(error: E)",
+  );
+  expect(hoverAt(src, src.indexOf("Ok") + 1)?.code).toBe("constructor Ok: A -> Result<A, E>");
+  expect(hoverAt(src, src.indexOf("value") + "value: ".length)?.code).toBe("type A");
+});
+
+test("record-alias fields and type syntax hover without successful inference", () => {
+  const src = `type Point<A> = { x: A, y: number }
+let broken = add(1, "nope")`;
+  expect(hoverAt(src, src.indexOf("x:") + 1)?.code).toBe("(property) x: A");
+  expect(hoverAt(src, src.indexOf("number") + 1)?.code).toBe("type number");
+  expect(hoverAt(src, src.indexOf("Point") + 1)?.code).toBe("type Point<A> = { x: A, y: number }");
 });

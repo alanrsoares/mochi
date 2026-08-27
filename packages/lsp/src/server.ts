@@ -21,6 +21,7 @@ import {
   documentSymbolsAt,
   moduleDefinitionAt,
   moduleHighlightsAt,
+  modulePathLinksAt,
   modulePrepareRenameAt,
   moduleReferencesAt,
   moduleRenameAt,
@@ -41,6 +42,7 @@ import {
   type DocumentSymbol,
   type Hover,
   type Location,
+  type LocationLink,
   MarkupKind,
   ProposedFeatures,
   SymbolKind,
@@ -235,11 +237,29 @@ export function startServer(opts: ServerOptions = {}): void {
 
   /** Go-to-definition (cross-module via export origins). */
   connection.onDefinition(
-    async ({ textDocument, position }: TextDocumentPositionParams): Promise<Location | null> => {
+    async ({
+      textDocument,
+      position,
+    }: TextDocumentPositionParams): Promise<Location | LocationLink[] | null> => {
       const doc = documents.get(textDocument.uri);
       if (!doc) return null;
       const path = docPath(textDocument.uri);
-      const loc = await moduleDefinitionAt(path, doc.getText(), doc.offsetAt(position), read);
+      const offset = doc.offsetAt(position);
+      const pathLink = modulePathLinksAt(doc.getText(), path).find(
+        (link) => link.span.start <= offset && offset <= link.span.end,
+      );
+      if (pathLink) {
+        const target = await rangeAtPath(pathLink.target.path, pathLink.target.span);
+        return [
+          {
+            originSelectionRange: rangeOf(doc, pathLink.span),
+            targetUri: target.uri,
+            targetRange: target.range,
+            targetSelectionRange: target.range,
+          },
+        ];
+      }
+      const loc = await moduleDefinitionAt(path, doc.getText(), offset, read);
       return !loc ? null : rangeAtPath(loc.path, loc.span);
     },
   );

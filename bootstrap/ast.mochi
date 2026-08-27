@@ -26,7 +26,7 @@ type MatchArm = { pattern: Pattern, guard: Option<Expr>, body: Expr }
 type LoopParam = { name: string, nameSpan: Span, init: Expr }
 type PatField = { label: string, pat: Pattern }
 
-// One slot in an Array / List / Set literal (ADR 0001).
+/// One slot in an Array / List / Set literal (ADR 0001).
 export type SeqElem =
   | SEExpr(expr: Expr)
   | SESpread(expr: Expr)

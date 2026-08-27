@@ -6,8 +6,8 @@ extern add : number -> number -> number = "./runtime.mjs" "add"
 extern sqrt : number -> number = "./runtime.mjs" "sqrt"
 extern pi : number = "./runtime.mjs" "pi"
 
-// Named constructor fields make the runtime shape self-describing; a positional
-// field would work too.
+/// Named constructor fields make the runtime shape self-describing; a positional
+/// field would work too.
 export type Shape =
   | Circle(radius: number)
   | Rect(width: number, height: number)

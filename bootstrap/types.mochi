@@ -39,9 +39,9 @@ export let tPrim = name => TyCon(name, [])
 let TUPLE = "tuple"
 export let tTuple = elems => TyCon(TUPLE, elems)
 
-// The one-inhabitant type (ADR 0054), also the nullary-function domain (ADR
-// 0014): surface `() => T` and the call `f()` both use `unit -> T`. `unit` is an
-// ordinary primitive type name and `()` is its literal — value, type, pattern.
+/// The one-inhabitant type (ADR 0054), also the nullary-function domain (ADR
+/// 0014): surface `() => T` and the call `f()` both use `unit -> T`. `unit` is an
+/// ordinary primitive type name and `()` is its literal — value, type, pattern.
 export let UNIT = "unit"
 export let tUnit = TyCon(UNIT, [])
 export let isUnit = t => switch t {
@@ -57,8 +57,8 @@ export let rExtend = (label, fieldType, rest) =>
 
 let showTypeArgs = args => Str.join(", ", args |> map(showType))
 
-// `unit` renders as its literal `()` in every position (ADR 0054), which also
-// covers the nullary-arrow domain: `unit -> T` prints `() -> T` (ADR 0014).
+/// `unit` renders as its literal `()` in every position (ADR 0054), which also
+/// covers the nullary-arrow domain: `unit -> T` prints `() -> T` (ADR 0014).
 export let showType = t => switch t {
   | TyVar(id) => "'t${show(id)}"
   | TyCon(name, args) => switch args {
@@ -276,7 +276,7 @@ let rewriteRow = (row, label, st) => switch resolveRow(row, st) {
       ))
 }
 
-// both rows extend: pull a's label out of b, unify the field types, recurse
+/// both rows extend: pull a's label out of b, unify the field types, recurse
 export let unifyRows = (r1, r2, st) =>
   let a = resolveRow(r1, st) in
   let b = resolveRow(r2, st) in

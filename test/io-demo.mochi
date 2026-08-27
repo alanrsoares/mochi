@@ -12,13 +12,13 @@ let copy = (src, dst) => switch readFile(src) {
   | Err(e) => Err(e)
 }
 
-// run over an explicit argument vector, so it's callable from a test.
+/// run over an explicit argument vector, so it's callable from a test.
 export let run = args => switch (Array.get(0, args), Array.get(1, args)) {
   | (Some(src), Some(dst)) => copy(src, dst)
   | _ => Err("usage: io-demo <src> <dst>")
 }
 
-// Entry: drive it from the real process argv.
+/// Entry: drive it from the real process argv.
 export let main = switch run(argv) {
   | Ok(dst) => print("wrote ${dst}")
   | Err(e) => print("error: ${e}")

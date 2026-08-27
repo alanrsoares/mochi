@@ -60,7 +60,7 @@ let isWildMP = mp => switch mp { | MWild => true | _ => false }
 
 // --- AST → matrix patterns ---
 
-// Split top-level or-patterns into separate rows — each alt is its own row.
+/// Split top-level or-patterns into separate rows — each alt is its own row.
 export let explodePat = p => switch p {
   | Ast.PAs(pat, _, _, _) => explodePat(pat)
   | Ast.POr(alts, _) => alts |> Array.flatMap(explodePat)
@@ -454,7 +454,7 @@ let showFields = (labels, pats, i) => switch Array.get(i, labels) {
     )
 }
 
-// Render a witness the way the user would have to write it as an arm.
+/// Render a witness the way the user would have to write it as an arm.
 export let showWitness = mp => switch mp {
   | MWild => "_"
   | MOpaque => "_"
@@ -469,20 +469,20 @@ export let showWitness = mp => switch mp {
   | MArr(elems, rest) => "[${Str.join(", ", Array.concat(elems |> map(showWitness), rest ? ["..."] : []))}]"
 }
 
-// A witness that is one constructor over nothing but wildcards is the shape the
-// pre-matrix checker reported as `missing X` — check.mochi keeps that wording
-// for it, so the everyday "you forgot a variant" case reads as it always has.
-// Witnesses that say nothing a constructor name would not say better: a bare
-// wildcard (every arm was guarded, so nothing is covered) or one constructor
-// over wildcards. For these check.mochi keeps the legacy `missing X` wording.
+/// A witness that is one constructor over nothing but wildcards is the shape the
+/// pre-matrix checker reported as `missing X` — check.mochi keeps that wording
+/// for it, so the everyday "you forgot a variant" case reads as it always has.
+/// Witnesses that say nothing a constructor name would not say better: a bare
+/// wildcard (every arm was guarded, so nothing is covered) or one constructor
+/// over wildcards. For these check.mochi keeps the legacy `missing X` wording.
 export let isWideWitnessM = mp => switch mp {
   | MWild => true
   | MCtor(_, args) => Array.reduce((acc, a) => acc && isWildMP(a), true, args)
   | _ => false
 }
 
-// Is this set of (unguarded) arm patterns total? Guarded arms must not be
-// passed — a guard can be false, so such an arm proves nothing.
+/// Is this set of (unguarded) arm patterns total? Guarded arms must not be
+/// passed — a guard can be false, so such an arm proves nothing.
 export let checkExhaustiveM = (patterns, reg) =>
   let rows = patterns
     |> Array.flatMap(p => explodePat(p) |> map(alt => [toMP(alt)])) in

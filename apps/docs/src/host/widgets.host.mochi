@@ -1,15 +1,15 @@
-// FFI seam — Preact/TSX widgets that stay in the host (editor, REPL, regex UI).
-// HeroCarousel moved to `.mochi` (hooks via preact-hooks.host).
-//
-// Used in JSX tag position (`<Playground />`). Builtin `jsxPlugin` desugars to
-// `h(tag, props, children)` and checks attrs when the tag is `record → VNode`
-// (ADR 0011, ADR 0055). A record-alias extern is a checked seam; `: a` is the
-// explicit opt-out for widgets whose props need optional fields (inexpressible
-// in HM rows today). Paths relative to THIS file.
-//
-// HighlightedCode: `enableTwoslash`/`errorSpans`/`overlay` are optional in TSX,
-// call sites here pass different subsets — stays `: a` (ADR 0055 open question).
+/// FFI seam — Preact/TSX widgets that stay in the host (editor, REPL, regex UI).
+/// HeroCarousel moved to `.mochi` (hooks via preact-hooks.host).
+///
+/// Used in JSX tag position (`<Playground />`). Builtin `jsxPlugin` desugars to
+/// `h(tag, props, children)` and checks attrs when the tag is `record → VNode`
+/// (ADR 0011, ADR 0055). A record-alias extern is a checked seam; `: a` is the
+/// explicit opt-out for widgets whose props need optional fields (inexpressible
+/// in HM rows today). Paths relative to THIS file.
+///
+/// HighlightedCode: `enableTwoslash`/`errorSpans`/`overlay` are optional in TSX,
+/// call sites here pass different subsets — stays `: a` (ADR 0055 open question).
 export extern HighlightedCode<A> : A = "../components/HighlightCode" "HighlightedCode"
-// Playground/ColorSchemeToggle take no props — nothing to check.
+/// Playground/ColorSchemeToggle take no props — nothing to check.
 export extern Playground<A> : A = "../components/Playground" "Playground"
 export extern ColorSchemeToggle<A> : A = "../components/ColorSchemeToggle.mochi" "ColorSchemeToggle"

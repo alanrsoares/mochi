@@ -30,7 +30,7 @@ let pipeline = lex
   >> Result.flatMap(check)
   >> Result.flatMap(typecheck)
 
-// compile : string -> Result string Err
+/// compile : string -> Result string Err
 export let compile = src =>
   src
     |> pipeline

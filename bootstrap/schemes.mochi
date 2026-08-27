@@ -35,8 +35,8 @@ export let tNumber = tPrim("number")
 export let tBool = tPrim("bool")
 export let tString = tPrim("string")
 
-// surface `float`/`int`/`string`/`bool` type-expr names -> HM primitive type
-// (used by typeExprToType, further down, for extern signatures)
+/// surface `float`/`int`/`string`/`bool` type-expr names -> HM primitive type
+/// (used by typeExprToType, further down, for extern signatures)
 export let primType = name => switch name {
   | "float" => tNumber
   | "int" => tNumber
@@ -154,8 +154,8 @@ export let typeExprListToType = (tes, vars, st, aliases, expanding) => switch te
       (Array.prepend(t, restTs), vars2, st2)
 }
 
-// `unit` is an ordinary primitive name (ADR 0054), so `()` in TypeExpr — which the
-// parser lowers to `TyName("unit")` — needs no special case here.
+/// `unit` is an ordinary primitive name (ADR 0054), so `()` in TypeExpr — which the
+/// parser lowers to `TyName("unit")` — needs no special case here.
 export let typeExprName = (name, vars, st, aliases, expanding) =>
   Array.contains(name, primTypeNames)
     ? (primType(name), vars, st)
@@ -177,10 +177,10 @@ export let typeExprName = (name, vars, st, aliases, expanding) =>
         }
     }
 
-// surface type-expr -> HM type. Prim names map to their type; Uppercase names
-// are nullary constructors (unless a transparent alias expands them);
-// lowercase names are type variables, shared by name within one signature
-// via the threaded `vars` cache.
+/// surface type-expr -> HM type. Prim names map to their type; Uppercase names
+/// are nullary constructors (unless a transparent alias expands them);
+/// lowercase names are type variables, shared by name within one signature
+/// via the threaded `vars` cache.
 export let typeExprToType = (te, vars, st, aliases, expanding) => switch te {
   | Ast.TyArrow(fromTe, toTe, _) => let (fromT, vars1, st1) = typeExprToType(
       fromTe,
@@ -302,11 +302,11 @@ let aliasFieldsFrom = (fields, vars, st, aliases, expanding) => switch fields {
       (rExtend(fld.name, ft, restRow), st2)
 }
 
-// Expand a record alias to its structural row. `args` binds its type params
-// positionally; params past `args.length` become fresh generic vars.
-// `expanding` breaks reference cycles (`type T = { self: T }`) by falling
-// back to the bare nominal `con(name, args)` — finite, though that field
-// then unifies nominally.
+/// Expand a record alias to its structural row. `args` binds its type params
+/// positionally; params past `args.length` become fresh generic vars.
+/// `expanding` breaks reference cycles (`type T = { self: T }`) by falling
+/// back to the bare nominal `con(name, args)` — finite, though that field
+/// then unifies nominally.
 export let aliasRow = (name, info, args, st, aliases, expanding) =>
   Set.has(name, expanding)
     ? (tCon(name, args), st)
@@ -335,11 +335,11 @@ let ctorFieldsArrowFrom = (fields, pvars, st, aliases, result) => switch fields 
       (tArrow(ft, restT), st2)
 }
 
-// A variant's constructors become curried functions into that variant type,
-// polymorphic over the type's parameters. `type Result a e = | Ok(a) | Err(e)`
-// gives `Ok : forall a e. a -> Result a e` — a ctor scheme is closed by
-// construction (quantifies every var the fields introduced), nothing leaks
-// from env.
+/// A variant's constructors become curried functions into that variant type,
+/// polymorphic over the type's parameters. `type Result a e = | Ok(a) | Err(e)`
+/// gives `Ok : forall a e. a -> Result a e` — a ctor scheme is closed by
+/// construction (quantifies every var the fields introduced), nothing leaks
+/// from env.
 export let ctorScheme = (typeName, params, c, st, aliases) =>
   let (pvars, pvarTypes, st1) = pvarsFrom(params, st) in
   let result = tCon(typeName, pvarTypes) in

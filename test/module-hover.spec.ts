@@ -30,6 +30,19 @@ test("hover on the scrutinee reports the imported variant type", async () => {
   expect(info?.code).toContain("E");
 });
 
+test("hover on an import name reports its scheme and source module", async () => {
+  const src = 'import { A, B } from "./ast.mochi"\nlet f = A(1)';
+  const info = await moduleHoverAt(
+    ENTRY,
+    src,
+    src.indexOf("A, B") + 1,
+    memRead({ [DEP]: DEP_SRC }),
+  );
+  expect(info?.code).toContain("import { A }:");
+  expect(info?.code).toContain("number -> E");
+  expect(info?.code).toContain('from "./ast.mochi"');
+});
+
 test("degrades to single-file hover when the dep graph can't be resolved", async () => {
   const src = "let f = (x) => add(x, 1)";
   const info = await moduleHoverAt(ENTRY, src, 16, memRead({})); // on `add`, no imports

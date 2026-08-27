@@ -799,10 +799,10 @@ let mergeMissing = (keys, from, into) => switch keys {
     }
 }
 
-// check threaded with an imported registry (dep modules' exported variant
-// types) so a `switch` on an imported variant is exhaustiveness-checked against
-// every constructor — even ones the importer never named (those force a
-// catch-all). Mirrors src/check.ts's `check(prog, imported)`.
+/// check threaded with an imported registry (dep modules' exported variant
+/// types) so a `switch` on an imported variant is exhaustiveness-checked against
+/// every constructor — even ones the importer never named (those force a
+/// catch-all). Mirrors src/check.ts's `check(prog, imported)`.
 export let checkWith = (stmts, imported, quals) => switch checkReservedNames(stmts) {
   | Some(e) => Err(e)
   | None => switch checkCtorFieldVars(stmts) {

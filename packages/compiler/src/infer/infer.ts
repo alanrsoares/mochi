@@ -163,13 +163,17 @@ const bindParam = (p: LamParam, env: Env, ctx: Ctx): Type => {
       env.set(n, mono(t));
       return t;
     });
+    for (let i = 0; i < p.names.length; i++)
+      ctx.record?.(p.nameSpans[i]!, elems[i]!, { kind: "parameter", name: p.names[i]! });
     return tTuple(elems);
   }
   let row: Row = freshRowVar(ctx.fresh);
-  for (const f of p.fields) {
+  for (let i = 0; i < p.fields.length; i++) {
+    const f = p.fields[i]!;
     const ft = freshVar(ctx.fresh);
     env.set(f, mono(ft));
     row = rExtend(f, ft, row);
+    ctx.record?.(p.fieldSpans[i]!, ft, { kind: "parameter", name: f });
   }
   return tRecord(row);
 };
@@ -288,6 +292,11 @@ function inferLambda(e: LambdaExpr, ctx: Ctx): Result<Type, Diagnostic> {
   }
   const bodyT = infer(e.body, { ...ctx, env: bodyEnv });
   if (isErr(bodyT)) return bodyT;
+  for (let i = 0; i < e.params.length; i++) {
+    const param = e.params[i]!;
+    if (param.kind === "name")
+      ctx.record?.(param.span, paramTypes[i]!, { kind: "parameter", name: param.name });
+  }
   // Nullary `() => T` is `unit -> T` (ADR 0014) — empty reduceRight would erase
   // the arrow and leave leaf actions / thunks looking like plain values.
   if (paramTypes.length === 0) return ok(tArrow(tUnit, bodyT.value));
@@ -625,12 +634,12 @@ function inferPat(p: Pattern, ctx: Ctx): Result<PatResult, Diagnostic> {
   return match(p)
     .with({ kind: "pas" }, (pas) => {
       const sub = inferPattern(pas.pat, ctx);
-      return isErr(sub)
-        ? sub
-        : ok({
-            type: sub.value.type,
-            bindings: new Map([...sub.value.bindings, [pas.name, sub.value.type]]),
-          });
+      if (isErr(sub)) return sub;
+      ctx.record?.(pas.nameSpan, sub.value.type, { kind: "parameter", name: pas.name });
+      return ok({
+        type: sub.value.type,
+        bindings: new Map([...sub.value.bindings, [pas.name, sub.value.type]]),
+      });
     })
     .with({ kind: "pwild" }, () => ok({ type: freshVar(ctx.fresh), bindings: new Map() }))
     .with({ kind: "punit" }, () => ok({ type: tUnit, bindings: new Map() }))
@@ -648,6 +657,7 @@ function inferPat(p: Pattern, ctx: Ctx): Result<PatResult, Diagnostic> {
       for (const f of precord.fields) {
         const sub = inferPattern(f.pat, ctx);
         if (isErr(sub)) return sub;
+        ctx.record?.(f.labelSpan, sub.value.type, { kind: "property", name: f.label });
         for (const [k, v] of sub.value.bindings) bindings.set(k, v);
         row = rExtend(f.label, sub.value.type, row);
       }

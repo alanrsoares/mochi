@@ -4,12 +4,12 @@
  * is a thin adapter (ADR 0003). Go-to-type also consults the infer table when
  * typecheck succeeds.
  */
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { openMode, toTypedProgramRecovering, toTypedProgramWith } from "@mochi/compiler/compile";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import type { InferResult, TypeAt } from "@mochi/compiler/infer";
 import { lex } from "@mochi/compiler/lexer";
-import { loadModuleGraph, moduleContext } from "@mochi/compiler/module";
+import { loadModuleGraph, moduleContext, resolveImport } from "@mochi/compiler/module";
 import { parseRecovering } from "@mochi/compiler/parser";
 import { preludeNamespaces } from "@mochi/compiler/prelude";
 import { isPreludePath } from "@mochi/compiler/prelude-virtual";
@@ -41,6 +41,13 @@ export type DocSymbol = {
 };
 
 export type WorkspaceSymbol = DocSymbol & { path: string };
+export type ModulePathLink = { span: Span; target: Location };
+
+type RelativeModuleSpecifier = {
+  span: Span;
+  targetPath: string;
+  externMember?: { name: string; span: Span };
+};
 
 type ReadFile = (path: string) => Promise<string>;
 
@@ -54,6 +61,97 @@ const parseProgram = (src: string) => {
 const indexSrc = (path: string, src: string, origins?: Origins) => {
   const prog = parseProgram(src);
   return !prog ? null : indexProgram(resolve(path), prog, origins);
+};
+
+/** Relative import/extern module specifiers, including a possible extern member. */
+const relativeModuleSpecifiers = (src: string, path: string): RelativeModuleSpecifier[] => {
+  const lexed = lex(src);
+  if (isErr(lexed)) return [];
+  const { program } = parseRecovering(lexed.value);
+  return program.stmts.flatMap((stmt): RelativeModuleSpecifier[] => {
+    if (stmt.kind !== "import" && stmt.kind !== "extern") return [];
+    const spec = stmt.kind === "import" ? stmt.from : stmt.module;
+    if (!spec.startsWith("./") && !spec.startsWith("../")) return [];
+    const stringTokenAt = (value: string) =>
+      lexed.value.find(
+        (token) =>
+          token.t === "str" &&
+          token.v === value &&
+          stmt.span.start <= token.span.start &&
+          token.span.end <= stmt.span.end,
+      );
+    const stringToken = stringTokenAt(spec);
+    if (!stringToken) return [];
+    const extern = stmt.kind === "extern" ? stmt : null;
+    const externMemberToken = extern ? stringTokenAt(extern.imported) : undefined;
+    const externMember =
+      extern && externMemberToken
+        ? { name: extern.imported, span: externMemberToken.span }
+        : undefined;
+    return [
+      {
+        span: stringToken.span,
+        targetPath:
+          stmt.kind === "import" ? resolveImport(path, spec) : resolve(dirname(path), spec),
+        ...(externMember ? { externMember } : {}),
+      },
+    ];
+  });
+};
+
+/** Relative import/extern module specifiers and their target files. */
+export const modulePathLinksAt = (src: string, path: string): ModulePathLink[] =>
+  relativeModuleSpecifiers(src, path).map(({ span, targetPath }) => ({
+    span,
+    target: { path: targetPath, span: { start: 0, end: 0 } },
+  }));
+
+/** A relative module specifier's target location — the top of the target file. */
+const relativeModulePathAt = (src: string, offset: number, path: string): Location | null =>
+  modulePathLinksAt(src, path).find((link) => spanContainsClosed(link.span, offset))?.target ??
+  null;
+
+const escapeRegex = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Best-effort JS/TS export declaration span for an extern's imported member. */
+const externMemberSpan = (src: string, imported: string): Span | null => {
+  const name = escapeRegex(imported);
+  const pattern =
+    imported === "default"
+      ? /\bexport\s+default\b/
+      : new RegExp(
+          `\\bexport\\s+(?:(?:declare|async)\\s+)*(?:(?:const|let|var|function|class|interface|type|enum)\\s+)?(${name})\\b`,
+        );
+  const hit = pattern.exec(src);
+  if (!hit || hit.index === undefined) return null;
+  const start =
+    imported === "default"
+      ? hit.index + hit[0].lastIndexOf("default")
+      : hit.index + hit[0].lastIndexOf(imported);
+  return { start, end: start + imported.length };
+};
+
+const externMemberDefinitionAt = async (
+  path: string,
+  src: string,
+  offset: number,
+  readFile: ReadFile,
+): Promise<Location | null> => {
+  const specifier = relativeModuleSpecifiers(src, path).find(
+    (candidate) =>
+      candidate.externMember && spanContainsClosed(candidate.externMember.span, offset),
+  );
+  const member = specifier?.externMember;
+  if (!specifier || !member) return null;
+  try {
+    const targetSrc = await readFile(specifier.targetPath);
+    return {
+      path: specifier.targetPath,
+      span: externMemberSpan(targetSrc, member.name) ?? { start: 0, end: 0 },
+    };
+  } catch {
+    return { path: specifier.targetPath, span: { start: 0, end: 0 } };
+  }
 };
 
 /** Origins from every dependency of `entry` (not the entry itself). */
@@ -174,12 +272,17 @@ export const moduleDefinitionAt = async (
   src: string,
   offset: number,
   readFile: ReadFile,
-): Promise<Location | null> =>
-  matchMaybe(
+): Promise<Location | null> => {
+  const externMember = await externMemberDefinitionAt(path, src, offset, readFile);
+  if (externMember) return externMember;
+  const modulePath = relativeModulePathAt(src, offset, path);
+  if (modulePath) return modulePath;
+  return matchMaybe(
     flatMap(fromNullable(await indexModule(path, src, readFile)), (idx) => hitAt(idx, offset)),
     (hit) => hit.binding.def,
     () => null,
   );
+};
 
 /** Document highlights for the binding under `offset` (occurrences in this file). */
 export const highlightsAt = (src: string, offset: number, path = "<buffer>"): Highlight[] =>

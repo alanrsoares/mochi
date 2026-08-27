@@ -71,13 +71,18 @@ extension).
 
 ## Editor surfaces
 
-- **Hover** — types on demand, folded back to named record aliases where they match, with
-  `///` doc comments attached (user docs on lets; prelude builtins use the virtual
-  prelude docstrings).
+- **Hover** — inferred types on demand, folded back to named record aliases where they
+  match, with `///` doc comments attached (user docs on lets; prelude builtins use the
+  virtual prelude docstrings). Type declarations, constructors, record-alias fields, and
+  type syntax also have parse-level hovers, so they remain readable when value inference fails.
+  Otherwise-unhoverable syntax such as `let`, `extern`, `loop`, and collection sigils has a
+  concise fallback hint rather than competing with a more-specific semantic hover.
 - **Go to definition / document highlight** — lexical symbol index (values, types, ctors,
   same-file record fields); works when typecheck fails. Prelude / builtins (including
   `Result.map`-style namespaces) resolve to a virtual `mochi:/prelude.mochi` buffer
-  (read-only). Cross-module F12 follows import origins to the exporting module
+  (read-only). Cross-module F12 follows import origins to the exporting module;
+  on a relative `import` or `extern` path string it opens that target file directly;
+  an `extern`'s imported-member string jumps to its host export when it can be found
   ([tracer bullets](dx-tracer-bullets.md)).
 - **Go to type** — from an expression / value binding, jump to the nominal type decl
   (variant, record alias, or prelude `Option`/`Result`) via the infer table. Degrades to

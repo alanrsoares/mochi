@@ -264,15 +264,20 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
     if (peek().t === "lbrace") {
       next();
       const fields: string[] = [];
+      const fieldSpans: Span[] = [];
       if (peek().t !== "rbrace") {
-        fields.push(expectId().name);
+        const first = expectId();
+        fields.push(first.name);
+        fieldSpans.push(first.span);
         while (peek().t === "comma") {
           next();
-          fields.push(expectId().name);
+          const field = expectId();
+          fields.push(field.name);
+          fieldSpans.push(field.span);
         }
       }
       expect("rbrace");
-      return { kind: "precord", fields };
+      return { kind: "precord", fields, fieldSpans };
     }
     if (peek().t === "lparen") {
       next();
@@ -289,7 +294,7 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
       // A lone `(x)` is just grouping, not a 1-tuple.
       return names.length === 1
         ? { kind: "name", name: names[0]!, span: spans[0]! }
-        : { kind: "ptuple", names };
+        : { kind: "ptuple", names, nameSpans: spans };
     }
     const id = expectId();
     let annot: TypeExpr | undefined;
