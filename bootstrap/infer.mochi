@@ -43,6 +43,7 @@ import {
   rExtend,
   showType,
   mkSt,
+  recordAt,
   freshVar,
   freshRowVar,
   resolve,
@@ -95,7 +96,8 @@ import { stronglyConnected } from "./scc.mochi"
 
 // --- span extractors (TS reads `.span` directly) ---
 
-let exprSpan = e => switch e {
+/// Exported for the TS backend: hooks look node types up by span.
+export let exprSpan = e => switch e {
   | Ast.ENum(_, _, sp) => sp
   | Ast.EUnit(sp) => sp
   | Ast.EBool(_, sp) => sp
@@ -529,7 +531,14 @@ let inferMatch = (ctx, scrutinee, arms, st) =>
   let (resultT, st2) = freshVar(st1) in
   let? st3 = ctx->inferArms(scrutT, resultT, arms, st2) in Ok((resultT, st3))
 
-let inferExpr = (ctx, e, st) => switch e {
+/// Recording wrapper over `inferExprRaw` (mirrors src/infer.ts's `infer`):
+/// every expression node's inferred type lands in `st.recorded`, keyed by span,
+/// so the TS backend can annotate lambda params and empty literals (ADR 0090).
+let inferExpr = (ctx, e, st) =>
+  let? (t, st1) = ctx->inferExprRaw(e, st) in
+    Ok((t, recordAt(exprSpan(e), t, st1)))
+
+let inferExprRaw = (ctx, e, st) => switch e {
   | Ast.ENum(_, _, _) => Ok((tNumber, st))
   | Ast.EUnit(_) => Ok((tUnit, st))
   | Ast.EBool(_, _) => Ok((tBool, st))
@@ -735,7 +744,13 @@ let inferSeqPat = (ctx, con, elems, restPat, st) =>
           Ok((seqT, mergeBindingMaps(bindings, subBindings), st4))
     }
 
-let inferPat = (ctx, p, st) => switch p {
+/// Pattern-side analogue of `inferExpr` — records every pattern node's span
+/// and type, so a pattern-bound param can be annotated by span.
+let inferPat = (ctx, p, st) =>
+  let? (t, bindings, st1) = ctx->inferPatRaw(p, st) in
+    Ok((t, bindings, recordAt(patSpan(p), t, st1)))
+
+let inferPatRaw = (ctx, p, st) => switch p {
   | Ast.PAs(pat, name, _, _) => let? (t, bindings, st1) = ctx->inferPat(
       pat,
       st
@@ -1416,7 +1431,17 @@ let qualAliasSeed = (stmts, quals, acc) => switch stmts {
     )
 }
 
-export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt) =>
+/// Zonk every recorded node type against the FINAL state and restore source
+/// order (`recordAt` prepends). Mirrors src/infer.ts: types are only resolved
+/// once the whole program's substitution is settled, and later records win when
+/// two nodes share a span.
+let zonkRecorded = (recorded, st) =>
+  Array.reverse(recorded) |> map(r => { span: r.span, ty: zonk(r.ty, st) })
+
+/// Full inference result — the metadata the TS backend needs on top of `env`
+/// (ADR 0090). `letParams` (ADR 0035) is not yet ported; it needs
+/// scheme-keyed maps, which Mochi's `Map` cannot express directly.
+let runInferImports = (stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt) =>
   let plugins = resolvePluginsDefault(pluginsOpt) in
   let st0 = mkSt(1000) in
   let env0 = seedBuiltins(builtins, #{}, st0) in
@@ -1436,11 +1461,32 @@ export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports
   let sccs = stronglyConnected(adjOf(lets, idxOf)) in
     switch processGroupsFrom({ env: env4, open: openMode, ns: ns0, aliasMap: aliasMap, plugins: plugins, loopStack: [] }, sccs, lets, st3) {
       | Ok((finalCtx, st4)) => switch finalCtx->inferExprStmtsFrom(stmts, st4) {
-          | Ok(_) => Ok(finalCtx.env)
+          | Ok(st5) => Ok(
+              {
+                env: finalCtx.env,
+                types: zonkRecorded(st5.recorded, st5),
+                aliases: aliasMap
+              }
+            )
           | Err(e) => Err(e)
         }
       | Err(e) => Err(e)
     }
+
+/// Env-only view — the shape every existing caller (compile.mochi,
+/// module.mochi) and the TS parity oracle expect.
+export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt) =>
+  runInferImports(
+    stmts,
+    builtins,
+    namespaces,
+    openMode,
+    imports,
+    nsImports,
+    quals,
+    pluginsOpt
+  )
+    |> Result.map(r => r.env)
 
 // The slice of a dep's type scope inference needs: its transparent record
 // aliases, so a qualified `D.Pair number` still expands (aliases are
@@ -1450,7 +1496,11 @@ export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports
 // `{ types, aliases }` scope still fits.
 type QualAliasField = { name: string, fieldType: Ast.TypeExpr }
 
-type QualAliasInfo = { params: [string], fields: [QualAliasField], expr: Option<Ast.TypeExpr> }
+type QualAliasInfo = {
+  params: [string],
+  fields: [QualAliasField],
+  expr: Option<Ast.TypeExpr>
+}
 
 type QualScope = { aliases: Map<string, QualAliasInfo> }
 
@@ -1458,6 +1508,20 @@ let emptyQuals : Map<string, QualScope> = #{}
 
 export let inferProgram = (stmts, builtins, namespaces, openMode) =>
   inferProgramImports(
+    stmts,
+    builtins,
+    namespaces,
+    openMode,
+    #{},
+    #{},
+    emptyQuals,
+    None
+  )
+
+/// Like `inferProgram`, but also returns the span -> type map and alias scope
+/// the TS backend drives annotation from (ADR 0090).
+export let inferProgramTypes = (stmts, builtins, namespaces, openMode) =>
+  runInferImports(
     stmts,
     builtins,
     namespaces,

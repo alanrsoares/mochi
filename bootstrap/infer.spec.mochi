@@ -1,6 +1,7 @@
-import { ok, test, testEach } from "@mochi/test"
+import { assertEq, ok, test, testEach } from "@mochi/test"
 import { check } from "./check.mochi"
-import { inferProgram } from "./infer.mochi"
+import { inferProgram, inferProgramTypes } from "./infer.mochi"
+import { showType } from "./types.mochi"
 import { lex } from "./lexer.mochi"
 import { parse } from "./parser.mochi"
 
@@ -50,4 +51,42 @@ testEach("inference rejects type conflicts", [
 ], row => switch inferSrc(row.src) {
   | Err(e) => e.message |> Str.contains(row.want) |> ok
   | Ok(_) => false |> ok
+})
+
+// ---- recorded span -> type metadata (ADR 0090) ----
+
+let typesOf = src =>
+  lex(src)
+    |> Result.flatMap(parse)
+    |> Result.flatMap(check)
+    |> Result.flatMap(stmts =>
+      inferProgramTypes(stmts, builtins, namespaces, false))
+    |> Result.map(r => r.types)
+
+let lastOf = xs => Array.get(Array.length(xs) - 1, xs)
+
+/// Later records win when two nodes share a span, so take the LAST match.
+let findAt = (start, end, types) =>
+  types
+    |> Array.filter(r => r.span.start == start && r.span.end == end)
+    |> lastOf
+    |> Option.map(r => showType(r.ty))
+
+let typeAt = (src, start, end) =>
+  typesOf(src)
+    |> Result.unwrapOr([])
+    |> findAt(start, end)
+    |> Option.unwrapOr("<none>")
+
+test("inference records a literal's type at its span", () =>
+  assertEq("number", typeAt("let n = 1", 8, 9)))
+
+test("recorded types are zonked against the final substitution", () =>
+  // `id`'s result is a fresh var at the call site; only the FINAL state
+  // resolves it to `number`.
+  assertEq("number", typeAt("let id = value => value\nlet n = id(1)", 32, 37)))
+
+test("inference records every node, not just top-level bindings", () => switch typesOf("let f = value => add(value, 1)") {
+  | Ok(types) => Array.length(types) > 4 |> ok
+  | Err(_) => false |> ok
 })

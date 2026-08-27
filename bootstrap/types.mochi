@@ -202,10 +202,30 @@ let someOf = (f, xs) => someOfFrom(f, xs, 0)
 /// returns a NEW St rather than mutating in place. Type vars and row vars
 /// draw from the same `next` counter so ids never collide across the two
 /// maps (mirrors types.ts's original Fresh).
-export type St = { tv: Map<number, Ty>, rv: Map<number, Row>, next: number }
+/// Inferred type at a source span. Structural on purpose: types.mochi stays
+/// AST-free (gen-prelude compiles it standalone), so ast.mochi's `Span` fits
+/// this shape rather than being imported.
+export type SpanAt = { start: number, end: number }
+
+export type TypeAt = { span: SpanAt, ty: Ty }
+
+/// `recorded` accumulates one entry per inferred Expr/Pattern node, newest
+/// first (prepend is O(1)); `inferProgramImports` reverses it once so later
+/// records win when two nodes share a span, matching src/infer.ts.
+export type St = {
+  tv: Map<number, Ty>,
+  rv: Map<number, Row>,
+  next: number,
+  recorded: [TypeAt]
+}
 export type TypeErr = { message: string }
 
-export let mkSt = start => { tv: #{}, rv: #{}, next: start }
+export let mkSt : number -> St = start =>
+  { tv: #{}, rv: #{}, next: start, recorded: [] }
+
+/// Prepend an inferred node type onto the threaded record log.
+export let recordAt = (span, t, st) =>
+  { ...st, recorded: Array.prepend({ span: span, ty: t }, st.recorded) }
 export let fail = message => Err({ message: message })
 
 export let freshVar = st => (tVar(st.next), { ...st, next: st.next + 1 })
@@ -560,5 +580,5 @@ let bindRowVar = (id, row, st) => switch resolveRow(row, st) {
   | RowVar(rid) when rid == id => Ok(st)
   | r => rowVarOccurs(id, r, st)
       ? fail("infinite record type")
-      : Ok({ tv: st.tv, rv: Map.set(id, r, st.rv), next: st.next })
+      : Ok({ ...st, rv: Map.set(id, r, st.rv) })
 }
