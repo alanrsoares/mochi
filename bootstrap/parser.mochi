@@ -6,9 +6,10 @@
 // - The mutable cursor (`pos`/`last`) becomes threading: every production takes
 //   `(toks, pos)` and returns `Ok((node, pos))` or `Err({ message, start, end })`.
 //   `to(start)` is derived — the last consumed token is `toks[pos - 1]`.
-// - `ParseAbort` (throw/catch) becomes Result threading: one `let?` bind per
-//   sequenced step (ADR 0017 — this file's original `Result.flatMap` chains
-//   were the pain measurement that motivated it, docs/PATH_TO_BOOTSTRAP.md §2.4).
+// - `ParseAbort` (throw/catch) becomes Result threading: `Result.flatMap` /
+//   `Result.map` per sequenced step. Bootstrap's own railway stays explicit
+//   until C3's generic `let?` dispatch lands; `let?` remains a user-language
+//   feature (ADR 0017, ADR 0079).
 // - `Tok` is declared here again (same shape as bootstrap/lexer.mochi) — modules
 //   arrive with Slice F; until then the differential suite keeps both honest,
 //   and the `_tag` runtime shape makes the two declarations interchangeable.
@@ -314,43 +315,70 @@ let tySpan = t => switch t {
 // One lambda parameter: a name, `{ a, b }` record-destructuring, or `(a, b)`
 // tuple-destructuring. A lone `(x)` is just grouping, not a 1-tuple.
 let parseParam = (toks, pos) => switch tokAt(toks, pos).tok {
-  | TLbrace => let? (fields, p) = listUntil(TRbrace, expectId, toks, pos + 1) in
-    let? p2 = expectTok(TRbrace, toks, p) in
-      Ok((Ast.LPRecord(fields |> map(f => f.name)), p2))
-  | TLparen => let? (names, p) = sepBy(expectId, toks, pos + 1, []) in
-    let? p2 = expectTok(TRparen, toks, p) in
-      Ok(
-        switch names {
-          | [single] => (Ast.LPName(single.name, None), p2)
-          | many => (Ast.LPTuple(many |> map(n => n.name)), p2)
-        }
+  | TLbrace => listUntil(TRbrace, expectId, toks, pos + 1)
+      |> Result.flatMap(((fields, p)) =>
+        expectTok(TRbrace, toks, p)
+          |> Result.map(p2 => (Ast.LPRecord(fields |> map(f => f.name)), p2))
       )
-  | _ => let? (nm, p) = expectId(toks, pos) in
-      tokAt(toks, p).tok == TColon
-        ? parseTypeExpr(toks, p + 1)
-          |> Result.map(((annot, p2)) => (Ast.LPName(nm.name, Some(annot)), p2))
-        : Ok((Ast.LPName(nm.name, None), p))
+  | TLparen => sepBy(expectId, toks, pos + 1, [])
+      |> Result.flatMap(((names, p)) =>
+        expectTok(TRparen, toks, p)
+          |> Result.map(p2 => switch names {
+            | [single] => (Ast.LPName(single.name, None), p2)
+            | many => (Ast.LPTuple(many |> map(n => n.name)), p2)
+          })
+      )
+  | _ => expectId(toks, pos)
+      |> Result.flatMap(((nm, p)) =>
+        tokAt(toks, p).tok == TColon
+          ? parseTypeExpr(toks, p + 1)
+            |> Result.map(((annot, p2)) =>
+              (Ast.LPName(nm.name, Some(annot)), p2)
+            )
+          : Ok((Ast.LPName(nm.name, None), p))
+      )
 }
 
 let parseLambda = (toks, pos, hooks) =>
   let start = spanOf(tokAt(toks, pos)) in
     switch tokAt(toks, pos).tok {
-      | TId(name) => let? p = expectTok(TArrow, toks, pos + 1) in
-        let? (body, p2) = parseLambdaBody(toks, p, hooks) in
-          Ok((
-            Ast.ELambda(
-              [Ast.LPName(name, None)],
-              body,
-              spanning(start, exprSpan(body))
-            ),
-            p2
-          ))
-      | _ => let? p = expectTok(TLparen, toks, pos) in
-        let? (params, p2) = listUntil(TRparen, parseParam, toks, p) in
-        let? p3 = expectTok(TRparen, toks, p2) in
-        let? p4 = expectTok(TArrow, toks, p3) in
-        let? (body, p5) = parseLambdaBody(toks, p4, hooks) in
-          Ok((Ast.ELambda(params, body, spanning(start, exprSpan(body))), p5))
+      | TId(name) => expectTok(TArrow, toks, pos + 1)
+          |> Result.flatMap(p =>
+            parseLambdaBody(toks, p, hooks)
+              |> Result.map(((body, p2)) =>
+                (
+                  Ast.ELambda(
+                    [Ast.LPName(name, None)],
+                    body,
+                    spanning(start, exprSpan(body))
+                  ),
+                  p2
+                )
+              )
+          )
+      | _ => expectTok(TLparen, toks, pos)
+          |> Result.flatMap(p =>
+            listUntil(TRparen, parseParam, toks, p)
+              |> Result.flatMap(((params, p2)) =>
+                expectTok(TRparen, toks, p2)
+                  |> Result.flatMap(p3 =>
+                    expectTok(TArrow, toks, p3)
+                      |> Result.flatMap(p4 =>
+                        parseLambdaBody(toks, p4, hooks)
+                          |> Result.map(((body, p5)) =>
+                            (
+                              Ast.ELambda(
+                                params,
+                                body,
+                                spanning(start, exprSpan(body))
+                              ),
+                              p5
+                            )
+                          )
+                      )
+                  )
+              )
+          )
     }
 
 let parseLambdaBody = (toks, pos, hooks) =>
@@ -371,54 +399,94 @@ let arrowBodyIsDoBlock = (toks, pos, depth) => switch tokAt(toks, pos).tok {
 // `let?` / `let!` param = value in body is the Result / Task bind (ADR 0005).
 let parseLetIn = (toks, pos, hooks) =>
   let start = spanOf(tokAt(toks, pos)) in
-  let? p = expectTok(TLet, toks, pos) in
-    tokAt(toks, p).tok == TQuestion || tokAt(toks, p).tok == TBang
-      ? let monad = tokAt(toks, p).tok == TQuestion ? "Result" : "Task" in
-      let paramSpan = spanOf(tokAt(toks, p + 1)) in
-      let? (param, p1) = parseParam(toks, p + 1) in
-      let? p2 = expectTok(TEq, toks, p1) in
-      let? (value, p3) = parseExpr(toks, p2, hooks) in
-      let? p4 = expectIn(toks, p3) in
-      let? (body, p5) = parseExpr(toks, p4, hooks) in
-        Ok((
-          Ast.ELetBind(
-            param,
-            paramSpan,
-            monad,
-            value,
-            body,
-            spanning(start, exprSpan(body))
-          ),
-          p5
-        ))
-      : tokAt(toks, p).tok == TLparen
-      ? let paramStart = spanOf(tokAt(toks, p)) in
-      let? (param, p1) = parseParam(toks, p) in
-      let? p2 = expectTok(TEq, toks, p1) in
-      let? (value, p3) = parseExpr(toks, p2, hooks) in
-      let? p4 = expectIn(toks, p3) in
-      let? (body, p5) = parseExpr(toks, p4, hooks) in
-      let fn = Ast.ELambda(
-        [param],
-        body,
-        spanning(paramStart, exprSpan(body))
-      ) in
-        Ok((Ast.ECall(fn, [value], None, spanning(start, exprSpan(body))), p5))
-      : let? (nm, p1) = expectId(toks, p) in
-      let? p2 = expectTok(TEq, toks, p1) in
-      let? (value, p3) = parseExpr(toks, p2, hooks) in
-      let? p4 = expectIn(toks, p3) in
-      let? (body, p5) = parseExpr(toks, p4, hooks) in
-        Ok((
-          Ast.ELetIn(
-            nm.name,
-            nm.span,
-            value,
-            body,
-            spanning(start, exprSpan(body))
-          ),
-          p5
-        ))
+    expectTok(TLet, toks, pos)
+      |> Result.flatMap(p =>
+        tokAt(toks, p).tok == TQuestion || tokAt(toks, p).tok == TBang
+          ? let monad = tokAt(toks, p).tok == TQuestion ? "Result" : "Task" in
+          let paramSpan = spanOf(tokAt(toks, p + 1)) in
+            parseParam(toks, p + 1)
+              |> Result.flatMap(((param, p1)) =>
+                expectTok(TEq, toks, p1)
+                  |> Result.flatMap(p2 =>
+                    parseExpr(toks, p2, hooks)
+                      |> Result.flatMap(((value, p3)) =>
+                        expectIn(toks, p3)
+                          |> Result.flatMap(p4 =>
+                            parseExpr(toks, p4, hooks)
+                              |> Result.map(((body, p5)) =>
+                                (
+                                  Ast.ELetBind(
+                                    param,
+                                    paramSpan,
+                                    monad,
+                                    value,
+                                    body,
+                                    spanning(start, exprSpan(body))
+                                  ),
+                                  p5
+                                )
+                              )
+                          )
+                      )
+                  )
+              )
+          : tokAt(toks, p).tok == TLparen
+          ? let paramStart = spanOf(tokAt(toks, p)) in
+            parseParam(toks, p)
+              |> Result.flatMap(((param, p1)) =>
+                expectTok(TEq, toks, p1)
+                  |> Result.flatMap(p2 =>
+                    parseExpr(toks, p2, hooks)
+                      |> Result.flatMap(((value, p3)) =>
+                        expectIn(toks, p3)
+                          |> Result.flatMap(p4 =>
+                            parseExpr(toks, p4, hooks)
+                              |> Result.map(((body, p5)) =>
+                                let fn = Ast.ELambda(
+                                  [param],
+                                  body,
+                                  spanning(paramStart, exprSpan(body))
+                                ) in
+                                  (
+                                    Ast.ECall(
+                                      fn,
+                                      [value],
+                                      None,
+                                      spanning(start, exprSpan(body))
+                                    ),
+                                    p5
+                                  )
+                              )
+                          )
+                      )
+                  )
+              )
+          : expectId(toks, p)
+            |> Result.flatMap(((nm, p1)) =>
+              expectTok(TEq, toks, p1)
+                |> Result.flatMap(p2 =>
+                  parseExpr(toks, p2, hooks)
+                    |> Result.flatMap(((value, p3)) =>
+                      expectIn(toks, p3)
+                        |> Result.flatMap(p4 =>
+                          parseExpr(toks, p4, hooks)
+                            |> Result.map(((body, p5)) =>
+                              (
+                                Ast.ELetIn(
+                                  nm.name,
+                                  nm.span,
+                                  value,
+                                  body,
+                                  spanning(start, exprSpan(body))
+                                ),
+                                p5
+                              )
+                            )
+                        )
+                    )
+                )
+            )
+      )
 
 // Binding powers — mirrors src/parser.ts's minBp precedence-climbing table.
 let PIPE_BP = 5
@@ -507,24 +575,28 @@ let sectionLeft = (provided, opLt) =>
 // `(op provided)` — called from just after `(`. `(- x)` stays unary negation.
 let parseRightSection = (lparenSpan, toks, pos, hooks) =>
   let lt = tokAt(toks, pos) in
-  let? (y, p1) = parseExpr(toks, pos + 1, hooks) in
-  let? p2 = expectTok(TRparen, toks, p1) in
-  let paramRef = Ast.ERef("$s", spanOf(lt)) in
-    Ok((
-      Ast.ELambda(
-        [Ast.LPName("$s", None)],
-        sectionBody(lt.tok, paramRef, y, spanOf(lt)),
-        toEnd(lparenSpan, toks, p2)
-      ),
-      p2
-    ))
+    parseExpr(toks, pos + 1, hooks)
+      |> Result.flatMap(((y, p1)) =>
+        expectTok(TRparen, toks, p1)
+          |> Result.map(p2 =>
+            let paramRef = Ast.ERef("$s", spanOf(lt)) in
+              (
+                Ast.ELambda(
+                  [Ast.LPName("$s", None)],
+                  sectionBody(lt.tok, paramRef, y, spanOf(lt)),
+                  toEnd(lparenSpan, toks, p2)
+                ),
+                p2
+              )
+          )
+      )
 
 // Shared left-section / bin-call fork used by every sectionable infix group.
 let binCallOrLeftSection = (left, lt, toks, pos, bp, fnName, hooks) =>
   tokAt(toks, pos + 1).tok == TRparen
     ? Ok({ left: sectionLeft(left, lt), p: pos + 1, matched: true })
-    : let? (right, p) = parseExprBp(bp + 1, toks, pos + 1, hooks) in
-      Ok(
+    : parseExprBp(bp + 1, toks, pos + 1, hooks)
+      |> Result.map(((right, p)) =>
         {
           left: mkBinCall(fnName, spanOf(lt), left, right),
           p: p,
@@ -557,8 +629,8 @@ let cmpFnName = t => switch t {
 let parseInfix = (minBp, left, toks, pos, hooks) =>
   let lt = tokAt(toks, pos) in
     lt.tok == TPipe && PIPE_BP >= minBp
-      ? let? (right, p) = parseAtomOrCall(toks, pos + 1, hooks) in
-        Ok(
+      ? parseAtomOrCall(toks, pos + 1, hooks)
+        |> Result.map(((right, p)) =>
           {
             left: Ast.EPipe(
               left,
@@ -570,8 +642,8 @@ let parseInfix = (minBp, left, toks, pos, hooks) =>
           }
         )
       : lt.tok == TTarrow && FAST_PIPE_BP >= minBp
-      ? let? (right, p) = parseAtomOrCall(toks, pos + 1, hooks) in
-        switch right {
+      ? parseAtomOrCall(toks, pos + 1, hooks)
+        |> Result.flatMap(((right, p)) => switch right {
           | Ast.ECall(fn, args, origin, rightSpan) => Ok(
               {
                 left: Ast.ECall(
@@ -588,39 +660,43 @@ let parseInfix = (minBp, left, toks, pos, hooks) =>
               "fast pipe needs a call on the right, like `a -> f(b)`",
               lt
             )
-        }
+        })
       : lt.tok == TCompose && COMPOSE_BP >= minBp
-      ? let? (right, p) = parseExprBp(COMPOSE_BP + 1, toks, pos + 1, hooks) in
-      let opSpan = spanOf(lt) in
-      let xRef = Ast.ERef("$x", opSpan) in
-      let innerCall = Ast.ECall(left, [xRef], None, exprSpan(left)) in
-      let outerCall = Ast.ECall(
-        right,
-        [innerCall],
-        None,
-        spanning(exprSpan(left), exprSpan(right))
-      ) in
-      let fn = Ast.ELambda(
-        [Ast.LPName("$x", None)],
-        outerCall,
-        spanning(exprSpan(left), exprSpan(right))
-      ) in
-        Ok({ left: fn, p: p, matched: true })
+      ? parseExprBp(COMPOSE_BP + 1, toks, pos + 1, hooks)
+        |> Result.map(((right, p)) =>
+          let opSpan = spanOf(lt) in
+          let xRef = Ast.ERef("$x", opSpan) in
+          let innerCall = Ast.ECall(left, [xRef], None, exprSpan(left)) in
+          let outerCall = Ast.ECall(
+            right,
+            [innerCall],
+            None,
+            spanning(exprSpan(left), exprSpan(right))
+          ) in
+          let fn = Ast.ELambda(
+            [Ast.LPName("$x", None)],
+            outerCall,
+            spanning(exprSpan(left), exprSpan(right))
+          ) in
+            { left: fn, p: p, matched: true }
+        )
       : isCmpTok(lt.tok) && CMP_BP >= minBp
       ? tokAt(toks, pos + 1).tok == TRparen
         ? Ok({ left: sectionLeft(left, lt), p: pos + 1, matched: true })
-        : let? (right, p) = parseExprBp(CMP_BP + 1, toks, pos + 1, hooks) in
-        let opSpan = spanOf(lt) in
-        let inner = mkBinCall(cmpFnName(lt.tok), opSpan, left, right) in
-        let result = lt.tok == TNeq
-          ? Ast.ECall(
-            Ast.ERef("not", opSpan),
-            [inner],
-            None,
-            spanning(exprSpan(left), exprSpan(right))
+        : parseExprBp(CMP_BP + 1, toks, pos + 1, hooks)
+          |> Result.map(((right, p)) =>
+            let opSpan = spanOf(lt) in
+            let inner = mkBinCall(cmpFnName(lt.tok), opSpan, left, right) in
+            let result = lt.tok == TNeq
+              ? Ast.ECall(
+                Ast.ERef("not", opSpan),
+                [inner],
+                None,
+                spanning(exprSpan(left), exprSpan(right))
+              )
+              : inner in
+              { left: result, p: p, matched: true }
           )
-          : inner in
-          Ok({ left: result, p: p, matched: true })
       : lt.tok == TAndand || lt.tok == TOror && (lt.tok == TAndand
         ? AND_BP
         : OR_BP) >= minBp
@@ -630,20 +706,24 @@ let parseInfix = (minBp, left, toks, pos, hooks) =>
       : lt.tok == TConcat && CONCAT_BP >= minBp
       ? binCallOrLeftSection(left, lt, toks, pos, CONCAT_BP, "concat", hooks)
       : lt.tok == TBacktick && BACKTICK_BP >= minBp
-      ? let? (fnExpr, p1) = parseAtomOrCall(toks, pos + 1, hooks) in
-      let? p2 = expectTok(TBacktick, toks, p1) in
-      let? (right, p3) = parseExprBp(BACKTICK_BP + 1, toks, p2, hooks) in
-        Ok(
-          {
-            left: Ast.ECall(
-              fnExpr,
-              [left, right],
-              None,
-              spanning(exprSpan(left), exprSpan(right))
-            ),
-            p: p3,
-            matched: true
-          }
+      ? parseAtomOrCall(toks, pos + 1, hooks)
+        |> Result.flatMap(((fnExpr, p1)) =>
+          expectTok(TBacktick, toks, p1)
+            |> Result.flatMap(p2 =>
+              parseExprBp(BACKTICK_BP + 1, toks, p2, hooks)
+                |> Result.map(((right, p3)) =>
+                  {
+                    left: Ast.ECall(
+                      fnExpr,
+                      [left, right],
+                      None,
+                      spanning(exprSpan(left), exprSpan(right))
+                    ),
+                    p: p3,
+                    matched: true
+                  }
+                )
+            )
         )
       : lt.tok == TPlus || lt.tok == TMinus && ADD_BP >= minBp
       ? let fnName = lt.tok == TPlus ? "add" : "sub" in
@@ -658,10 +738,12 @@ let parseInfix = (minBp, left, toks, pos, hooks) =>
       : Ok({ left: left, p: pos, matched: false })
 
 let infixLoop = (minBp, left, toks, pos, hooks) =>
-  let? res = parseInfix(minBp, left, toks, pos, hooks) in
-    res.matched
-      ? infixLoop(minBp, res.left, toks, res.p, hooks)
-      : Ok((res.left, res.p))
+  parseInfix(minBp, left, toks, pos, hooks)
+    |> Result.flatMap(res =>
+      res.matched
+        ? infixLoop(minBp, res.left, toks, res.p, hooks)
+        : Ok((res.left, res.p))
+    )
 
 // cond ? then : else — binds looser than every operator (only tried at
 // minBp 0), right-associative via the recursive parseExpr in the else
@@ -670,18 +752,24 @@ let infixLoop = (minBp, left, toks, pos, hooks) =>
 // minBp-0 call sees it.
 let ternaryTail = (cond, toks, pos, hooks) =>
   tokAt(toks, pos).tok == TQuestion
-    ? let? (thenE, p1) = parseExpr(toks, pos + 1, hooks) in
-    let? p2 = expectTok(TColon, toks, p1) in
-    let? (elseE, p3) = parseExpr(toks, p2, hooks) in
-      Ok((
-        Ast.ETernary(
-          cond,
-          thenE,
-          elseE,
-          spanning(exprSpan(cond), exprSpan(elseE))
-        ),
-        p3
-      ))
+    ? parseExpr(toks, pos + 1, hooks)
+      |> Result.flatMap(((thenE, p1)) =>
+        expectTok(TColon, toks, p1)
+          |> Result.flatMap(p2 =>
+            parseExpr(toks, p2, hooks)
+              |> Result.map(((elseE, p3)) =>
+                (
+                  Ast.ETernary(
+                    cond,
+                    thenE,
+                    elseE,
+                    spanning(exprSpan(cond), exprSpan(elseE))
+                  ),
+                  p3
+                )
+              )
+          )
+      )
     : Ok((cond, pos))
 
 // minBp-threaded expression parser (src/parser.ts's `parseExpr(minBp, hooks)`).
@@ -694,28 +782,30 @@ let parseExprBp = (minBp, toks, pos, hooks) => switch tokAt(toks, pos).tok {
   | TLet => parseLetIn(toks, pos, hooks)
   | _ => minBp == 0 && looksLikeLambda(toks, pos)
       ? parseLambda(toks, pos, hooks)
-      : let? (left, p) = parseAtomOrCall(toks, pos, hooks) in
-      let? (left2, p2) = infixLoop(minBp, left, toks, p, hooks) in
-        minBp == 0 ? ternaryTail(left2, toks, p2, hooks) : Ok((left2, p2))
+      : parseAtomOrCall(toks, pos, hooks)
+        |> Result.flatMap(((left, p)) =>
+          infixLoop(minBp, left, toks, p, hooks)
+            |> Result.flatMap(((left2, p2)) =>
+              minBp == 0 ? ternaryTail(left2, toks, p2, hooks) : Ok((left2, p2))
+            )
+        )
 }
 
 let parseExpr = (toks, pos, hooks) => parseExprBp(0, toks, pos, hooks)
 
 // Postfix chain: calls `f(...)` and field access `.name`.
 let postfixLoop = (e, toks, pos, hooks) => switch tokAt(toks, pos).tok {
-  | TLparen => let? (args, p) = listUntilH(
-      TRparen,
-      parseExpr,
-      toks,
-      pos + 1,
-      hooks
-    ) in
-    let? p2 = expectTok(TRparen, toks, p) in
-      postfixLoop(
-        Ast.ECall(e, args, None, toEnd(exprSpan(e), toks, p2)),
-        toks,
-        p2,
-        hooks
+  | TLparen => listUntilH(TRparen, parseExpr, toks, pos + 1, hooks)
+      |> Result.flatMap(((args, p)) =>
+        expectTok(TRparen, toks, p)
+          |> Result.flatMap(p2 =>
+            postfixLoop(
+              Ast.ECall(e, args, None, toEnd(exprSpan(e), toks, p2)),
+              toks,
+              p2,
+              hooks
+            )
+          )
       )
   | TDot =>
     // `expectLabel`, not `expectId`: `$tone` is a legal record *key* (ADR 0009
@@ -739,17 +829,19 @@ let postfixLoop = (e, toks, pos, hooks) => switch tokAt(toks, pos).tok {
 let parseAtomOrCall = (toks, pos, hooks) =>
   let lt = tokAt(toks, pos) in
     lt.tok == TMinus || lt.tok == TBang
-      ? let? (operand, p) = parseAtomOrCall(toks, pos + 1, hooks) in
-      let fnName = lt.tok == TMinus ? "negate" : "not" in
-        Ok((
-          Ast.ECall(
-            Ast.ERef(fnName, spanOf(lt)),
-            [operand],
-            None,
-            spanning(spanOf(lt), exprSpan(operand))
-          ),
-          p
-        ))
+      ? parseAtomOrCall(toks, pos + 1, hooks)
+        |> Result.map(((operand, p)) =>
+          let fnName = lt.tok == TMinus ? "negate" : "not" in
+            (
+              Ast.ECall(
+                Ast.ERef(fnName, spanOf(lt)),
+                [operand],
+                None,
+                spanning(spanOf(lt), exprSpan(operand))
+              ),
+              p
+            )
+        )
       : parseAtom(toks, pos, hooks)
         |> Result.flatMap(((e, p)) => postfixLoop(e, toks, p, hooks))
 
@@ -768,10 +860,8 @@ let parseAtom = (toks, pos, hooks) =>
       | TTmplStart(_) => parseInterp(toks, pos, hooks)
       | _ =>
         // Plugin-owned prefix forms (JSX `<…>`) after every core atom prefix.
-        let? claimed = runParseHooks(hooks, toks, pos, (t, p) =>
-          parseExpr(t, p, hooks)
-        ) in
-          switch claimed {
+        runParseHooks(hooks, toks, pos, (t, p) => parseExpr(t, p, hooks))
+          |> Result.flatMap(claimed => switch claimed {
             | Some((e, p)) => Ok((e, p))
             | None => switch lt.tok {
                 | TNum(value, raw) => Ok((Ast.ENum(value, raw, sp), pos + 1))
@@ -789,48 +879,53 @@ let parseAtom = (toks, pos, hooks) =>
                       ? Ok((Ast.EUnit(toEnd(sp, toks, pos + 2)), pos + 2))
                       : isSectionOp(nxt.tok) && nxt.tok != TMinus
                       ? parseRightSection(sp, toks, pos + 1, hooks)
-                      : let? (first, p) = parseExpr(toks, pos + 1, hooks) in
-                        tokAt(toks, p).tok == TComma
-                          ? let? (elements, p2) = sepByH(
-                            parseExpr,
-                            toks,
-                            p + 1,
-                            [first],
-                            hooks
-                          ) in
-                          let? p3 = expectTok(TRparen, toks, p2) in
-                            Ok((Ast.ETuple(elements, toEnd(sp, toks, p3)), p3))
-                          : expectTok(TRparen, toks, p)
-                            |> Result.map(p2 => (first, p2))
+                      : parseExpr(toks, pos + 1, hooks)
+                        |> Result.flatMap(((first, p)) =>
+                          tokAt(toks, p).tok == TComma
+                            ? sepByH(parseExpr, toks, p + 1, [first], hooks)
+                              |> Result.flatMap(((elements, p2)) =>
+                                expectTok(TRparen, toks, p2)
+                                  |> Result.map(p3 =>
+                                    (
+                                      Ast.ETuple(elements, toEnd(sp, toks, p3)),
+                                      p3
+                                    )
+                                  )
+                              )
+                            : expectTok(TRparen, toks, p)
+                              |> Result.map(p2 => (first, p2))
+                        )
                 | t => errAt("unexpected token ${tokName(t)}", lt)
               }
-          }
+          })
     }
 
 // "…${a}…${b}…" (ADR 0023). The lexer already split this into a token stream
 // of tmplstart <holeTokens> tmplmid <holeTokens> ... tmplend; each hole's
 // tokens parse as an ordinary expression via `parseExpr`.
 let parseInterpLoop = (toks, pos, start, acc, hooks) =>
-  let? (holeExpr, p) = parseExpr(toks, pos, hooks) in
-  let acc2 = Array.append(Ast.IPExpr(holeExpr), acc) in
-  let lt = tokAt(toks, p) in
-    switch lt.tok {
-      | TTmplMid(value) => parseInterpLoop(
-          toks,
-          p + 1,
-          start,
-          Array.append(Ast.IPLit(value), acc2),
-          hooks
-        )
-      | TTmplEnd(value) => Ok((
-          Ast.EInterp(
-            Array.append(Ast.IPLit(value), acc2),
-            toEnd(start, toks, p + 1)
-          ),
-          p + 1
-        ))
-      | t => errAt("expected \${...} to close, got ${tokName(t)}", lt)
-    }
+  parseExpr(toks, pos, hooks)
+    |> Result.flatMap(((holeExpr, p)) =>
+      let acc2 = Array.append(Ast.IPExpr(holeExpr), acc) in
+      let lt = tokAt(toks, p) in
+        switch lt.tok {
+          | TTmplMid(value) => parseInterpLoop(
+              toks,
+              p + 1,
+              start,
+              Array.append(Ast.IPLit(value), acc2),
+              hooks
+            )
+          | TTmplEnd(value) => Ok((
+              Ast.EInterp(
+                Array.append(Ast.IPLit(value), acc2),
+                toEnd(start, toks, p + 1)
+              ),
+              p + 1
+            ))
+          | t => errAt("expected \${...} to close, got ${tokName(t)}", lt)
+        }
+    )
 
 let parseInterp = (toks, pos, hooks) =>
   let lt = tokAt(toks, pos) in
@@ -847,13 +942,16 @@ let parseInterp = (toks, pos, hooks) =>
 
 let parseField = (toks, pos, hooks) =>
   let lt = tokAt(toks, pos) in
-  let? (nm, p) = expectLabel(toks, pos) in
-    tokAt(toks, p).tok == TColon
-      ? let? (value, p2) = parseExpr(toks, p + 1, hooks) in
-        Ok(({ name: nm.name, value: value }, p2))
-      : keywordText(lt.tok) != None
-      ? errAt("'${nm.name}' is a keyword — write '${nm.name}: <expr>'", lt)
-      : Ok(({ name: nm.name, value: Ast.ERef(nm.name, nm.span) }, p))
+    expectLabel(toks, pos)
+      |> Result.flatMap(((nm, p)) =>
+        tokAt(toks, p).tok == TColon
+          ? parseExpr(toks, p + 1, hooks)
+            |> Result.map(((value, p2)) => ({ name: nm.name, value: value }, p2)
+            )
+          : keywordText(lt.tok) != None
+          ? errAt("'${nm.name}' is a keyword — write '${nm.name}: <expr>'", lt)
+          : Ok(({ name: nm.name, value: Ast.ERef(nm.name, nm.span) }, p))
+      )
 
 // A leading `...base` (ADR 0021) makes this a record update: only one spread,
 // only at the front; any fields after it need a comma (mirrors src/parser.ts's
@@ -862,91 +960,156 @@ let parseField = (toks, pos, hooks) =>
 // handling needed.
 let parseRecord = (toks, pos, hooks) =>
   let start = spanOf(tokAt(toks, pos)) in
-  let? p = expectTok(TLbrace, toks, pos) in
-    tokAt(toks, p).tok == TSpread
-      ? let? (spreadExpr, p1) = parseExpr(toks, p + 1, hooks) in
-      let? p2 = tokAt(toks, p1).tok == TRbrace
-        ? Ok(p1)
-        : expectTok(TComma, toks, p1) in
-      let? (fields, p3) = listUntilH(TRbrace, parseField, toks, p2, hooks) in
-      let? p4 = expectTok(TRbrace, toks, p3) in
-        Ok((Ast.ERecord(fields, Some(spreadExpr), toEnd(start, toks, p4)), p4))
-      : let? (fields, p1) = listUntilH(TRbrace, parseField, toks, p, hooks) in
-      let? p2 = expectTok(TRbrace, toks, p1) in
-        Ok((Ast.ERecord(fields, None, toEnd(start, toks, p2)), p2))
+    expectTok(TLbrace, toks, pos)
+      |> Result.flatMap(p =>
+        tokAt(toks, p).tok == TSpread
+          ? parseExpr(toks, p + 1, hooks)
+            |> Result.flatMap(((spreadExpr, p1)) =>
+              (tokAt(toks, p1).tok == TRbrace
+                ? Ok(p1)
+                : expectTok(TComma, toks, p1))
+                |> Result.flatMap(p2 =>
+                  listUntilH(TRbrace, parseField, toks, p2, hooks)
+                    |> Result.flatMap(((fields, p3)) =>
+                      expectTok(TRbrace, toks, p3)
+                        |> Result.map(p4 =>
+                          (
+                            Ast.ERecord(
+                              fields,
+                              Some(spreadExpr),
+                              toEnd(start, toks, p4)
+                            ),
+                            p4
+                          )
+                        )
+                    )
+                )
+            )
+          : listUntilH(TRbrace, parseField, toks, p, hooks)
+            |> Result.flatMap(((fields, p1)) =>
+              expectTok(TRbrace, toks, p1)
+                |> Result.map(p2 =>
+                  (Ast.ERecord(fields, None, toEnd(start, toks, p2)), p2)
+                )
+            )
+      )
 
 let parseSeqElem = (toks, pos, hooks) =>
   tokAt(toks, pos).tok == TSpread
-    ? let? (ex, p) = parseExpr(toks, pos + 1, hooks) in
-      Ok((Ast.SESpread(ex), p))
-    : let? (ex, p) = parseExpr(toks, pos, hooks) in Ok((Ast.SEExpr(ex), p))
+    ? parseExpr(toks, pos + 1, hooks)
+      |> Result.map(((ex, p)) => (Ast.SESpread(ex), p))
+    : parseExpr(toks, pos, hooks)
+      |> Result.map(((ex, p)) => (Ast.SEExpr(ex), p))
 
 let parseArr = (toks, pos, hooks) =>
   let start = spanOf(tokAt(toks, pos)) in
-  let? p = expectTok(TLbracket, toks, pos) in
-  let? (elements, p2) = listUntilH(TRbracket, parseSeqElem, toks, p, hooks) in
-  let? p3 = expectTok(TRbracket, toks, p2) in
-    Ok((Ast.EArr(elements, toEnd(start, toks, p3)), p3))
+    expectTok(TLbracket, toks, pos)
+      |> Result.flatMap(p =>
+        listUntilH(TRbracket, parseSeqElem, toks, p, hooks)
+          |> Result.flatMap(((elements, p2)) =>
+            expectTok(TRbracket, toks, p2)
+              |> Result.map(p3 =>
+                (Ast.EArr(elements, toEnd(start, toks, p3)), p3)
+              )
+          )
+      )
 
 // `@{…}` lazy-List literal — the `@` sigil keeps it clear of records.
 let parseList = (toks, pos, hooks) =>
   let start = spanOf(tokAt(toks, pos)) in
-  let? p = expectTok(TAt, toks, pos) in
-  let? p1 = expectTok(TLbrace, toks, p) in
-  let? (elements, p2) = listUntilH(TRbrace, parseSeqElem, toks, p1, hooks) in
-  let? p3 = expectTok(TRbrace, toks, p2) in
-    Ok((Ast.EList(elements, toEnd(start, toks, p3)), p3))
+    expectTok(TAt, toks, pos)
+      |> Result.flatMap(p =>
+        expectTok(TLbrace, toks, p)
+          |> Result.flatMap(p1 =>
+            listUntilH(TRbrace, parseSeqElem, toks, p1, hooks)
+              |> Result.flatMap(((elements, p2)) =>
+                expectTok(TRbrace, toks, p2)
+                  |> Result.map(p3 =>
+                    (Ast.EList(elements, toEnd(start, toks, p3)), p3)
+                  )
+              )
+          )
+      )
 
 let parseMapEntry = (toks, pos, hooks) =>
-  let? (key, p) = parseExpr(toks, pos, hooks) in
-  let? p2 = expectTok(TColon, toks, p) in
-  let? (value, p3) = parseExpr(toks, p2, hooks) in
-    Ok(({ key: key, value: value }, p3))
+  parseExpr(toks, pos, hooks)
+    |> Result.flatMap(((key, p)) =>
+      expectTok(TColon, toks, p)
+        |> Result.flatMap(p2 =>
+          parseExpr(toks, p2, hooks)
+            |> Result.map(((value, p3)) => ({ key: key, value: value }, p3))
+        )
+    )
 
 // `#{}` empty Map; `#{k: v}` Map; `#{a, b}` / `#{...s}` Set (ADR 0001).
 let parseHash = (toks, pos, hooks) =>
   let start = spanOf(tokAt(toks, pos)) in
-  let? p = expectTok(THash, toks, pos) in
-  let? p1 = expectTok(TLbrace, toks, p) in
-    tokAt(toks, p1).tok == TRbrace
-      ? let? p2 = expectTok(TRbrace, toks, p1) in
-        Ok((Ast.EMap([], toEnd(start, toks, p2)), p2))
-      : tokAt(toks, p1).tok == TSpread
-      ? let? (elements, p2) = listUntilH(
-        TRbrace,
-        parseSeqElem,
-        toks,
-        p1,
-        hooks
-      ) in
-      let? p3 = expectTok(TRbrace, toks, p2) in
-        Ok((Ast.ESet(elements, toEnd(start, toks, p3)), p3))
-      : let? (first, p2) = parseExpr(toks, p1, hooks) in
-        tokAt(toks, p2).tok == TColon
-          ? let? p3 = expectTok(TColon, toks, p2) in
-          let? (value, p4) = parseExpr(toks, p3, hooks) in
-          let? (rest, p5) = tokAt(toks, p4).tok == TComma
-            ? listUntilH(TRbrace, parseMapEntry, toks, p4 + 1, hooks)
-            : Ok(([], p4)) in
-          let? p6 = expectTok(TRbrace, toks, p5) in
-            Ok((
-              Ast.EMap(
-                Array.prepend({ key: first, value: value }, rest),
-                toEnd(start, toks, p6)
-              ),
-              p6
-            ))
-          : let? (rest, p3) = tokAt(toks, p2).tok == TComma
-            ? listUntilH(TRbrace, parseSeqElem, toks, p2 + 1, hooks)
-            : Ok(([], p2)) in
-          let? p4 = expectTok(TRbrace, toks, p3) in
-            Ok((
-              Ast.ESet(
-                Array.prepend(Ast.SEExpr(first), rest),
-                toEnd(start, toks, p4)
-              ),
-              p4
-            ))
+    expectTok(THash, toks, pos)
+      |> Result.flatMap(p =>
+        expectTok(TLbrace, toks, p)
+          |> Result.flatMap(p1 =>
+            tokAt(toks, p1).tok == TRbrace
+              ? expectTok(TRbrace, toks, p1)
+                |> Result.map(p2 => (Ast.EMap([], toEnd(start, toks, p2)), p2))
+              : tokAt(toks, p1).tok == TSpread
+              ? listUntilH(TRbrace, parseSeqElem, toks, p1, hooks)
+                |> Result.flatMap(((elements, p2)) =>
+                  expectTok(TRbrace, toks, p2)
+                    |> Result.map(p3 =>
+                      (Ast.ESet(elements, toEnd(start, toks, p3)), p3)
+                    )
+                )
+              : parseExpr(toks, p1, hooks)
+                |> Result.flatMap(((first, p2)) =>
+                  tokAt(toks, p2).tok == TColon
+                    ? expectTok(TColon, toks, p2)
+                      |> Result.flatMap(p3 =>
+                        parseExpr(toks, p3, hooks)
+                          |> Result.flatMap(((value, p4)) =>
+                            (tokAt(toks, p4).tok == TComma
+                              ? listUntilH(
+                                TRbrace,
+                                parseMapEntry,
+                                toks,
+                                p4 + 1,
+                                hooks
+                              )
+                              : Ok(([], p4)))
+                              |> Result.flatMap(((rest, p5)) =>
+                                expectTok(TRbrace, toks, p5)
+                                  |> Result.map(p6 =>
+                                    (
+                                      Ast.EMap(
+                                        Array.prepend(
+                                          { key: first, value: value },
+                                          rest
+                                        ),
+                                        toEnd(start, toks, p6)
+                                      ),
+                                      p6
+                                    )
+                                  )
+                              )
+                          )
+                      )
+                    : (tokAt(toks, p2).tok == TComma
+                      ? listUntilH(TRbrace, parseSeqElem, toks, p2 + 1, hooks)
+                      : Ok(([], p2)))
+                      |> Result.flatMap(((rest, p3)) =>
+                        expectTok(TRbrace, toks, p3)
+                          |> Result.map(p4 =>
+                            (
+                              Ast.ESet(
+                                Array.prepend(Ast.SEExpr(first), rest),
+                                toEnd(start, toks, p4)
+                              ),
+                              p4
+                            )
+                          )
+                      )
+                )
+          )
+      )
 
 // --- pattern matching ---
 
@@ -978,113 +1141,186 @@ let patSpan = p => switch p {
 // of a following bar (next is `when`/`=>`) ends the run.
 let altsLoop = (toks, pos, acc, lastSpan) =>
   tokAt(toks, pos).tok == TBar
-    ? let? (alt, p1) = parsePattern(toks, pos + 1) in
-      altsLoop(toks, p1, Array.append(alt, acc), patSpan(alt))
+    ? parsePattern(toks, pos + 1)
+      |> Result.flatMap(((alt, p1)) =>
+        altsLoop(toks, p1, Array.append(alt, acc), patSpan(alt))
+      )
     : Ok((acc, pos, lastSpan))
 
 let armsLoop = (toks, pos, acc, hooks) =>
   tokAt(toks, pos).tok == TBar
-    ? let? (first, p1) = parsePattern(toks, pos + 1) in
-    let? (alts, p2, lastSpan) = altsLoop(toks, p1, [first], patSpan(first)) in
-    let pattern = Array.length(alts) == 1
-      ? first
-      : Ast.POr(alts, spanning(patSpan(first), lastSpan)) in
-    let? (guard, p3) = parseGuard(toks, p2, hooks) in
-    let? p4 = expectTok(TArrow, toks, p3) in
-    let? (body, p5) = parseExpr(toks, p4, hooks) in
-      armsLoop(
-        toks,
-        p5,
-        Array.append({ pattern: pattern, guard: guard, body: body }, acc),
-        hooks
+    ? parsePattern(toks, pos + 1)
+      |> Result.flatMap(((first, p1)) =>
+        altsLoop(toks, p1, [first], patSpan(first))
+          |> Result.flatMap(((alts, p2, lastSpan)) =>
+            let pattern = Array.length(alts) == 1
+              ? first
+              : Ast.POr(alts, spanning(patSpan(first), lastSpan)) in
+              parseGuard(toks, p2, hooks)
+                |> Result.flatMap(((guard, p3)) =>
+                  expectTok(TArrow, toks, p3)
+                    |> Result.flatMap(p4 =>
+                      parseExpr(toks, p4, hooks)
+                        |> Result.flatMap(((body, p5)) =>
+                          armsLoop(
+                            toks,
+                            p5,
+                            Array.append(
+                              { pattern: pattern, guard: guard, body: body },
+                              acc
+                            ),
+                            hooks
+                          )
+                        )
+                    )
+                )
+          )
       )
     : Ok((acc, pos))
 
 // `loop (acc = 0, i = 0) { body }` — tail-recursion loop (ADR 0056).
 let parseDo = (toks, pos, hooks) =>
   let start = spanOf(tokAt(toks, pos)) in
-  let? p = expectTok(TDo, toks, pos) in parseDoBlockFrom(start, toks, p, hooks)
+    expectTok(TDo, toks, pos)
+      |> Result.flatMap(p => parseDoBlockFrom(start, toks, p, hooks))
 
 let parseDoBlock = (toks, pos, hooks) =>
   parseDoBlockFrom(spanOf(tokAt(toks, pos)), toks, pos, hooks)
 
 let parseDoBlockFrom = (start, toks, pos, hooks) =>
-  let? p1 = expectTok(TLbrace, toks, pos) in
-    tokAt(toks, p1).tok == TRbrace
-      ? errAt("do block needs a final expression", tokAt(toks, p1))
-      : parseDoExprs(toks, p1, [], hooks)
-        |> Result.flatMap(((exprs, p2)) =>
-          tokAt(toks, p2).tok == TSemi
-            ? errAt("do block cannot end with a semicolon", tokAt(toks, p2))
-            : expectTok(TRbrace, toks, p2)
-              |> Result.map(p3 => (Ast.EDo(exprs, toEnd(start, toks, p3)), p3))
-        )
+  expectTok(TLbrace, toks, pos)
+    |> Result.flatMap(p1 =>
+      tokAt(toks, p1).tok == TRbrace
+        ? errAt("do block needs a final expression", tokAt(toks, p1))
+        : parseDoExprs(toks, p1, [], hooks)
+          |> Result.flatMap(((exprs, p2)) =>
+            tokAt(toks, p2).tok == TSemi
+              ? errAt("do block cannot end with a semicolon", tokAt(toks, p2))
+              : expectTok(TRbrace, toks, p2)
+                |> Result.map(p3 => (Ast.EDo(exprs, toEnd(start, toks, p3)), p3)
+                )
+          )
+    )
 
 let parseDoExprs = (toks, pos, acc, hooks) =>
-  let? (expr, p) = parseExpr(toks, pos, hooks) in
-  let next = Array.append(expr, acc) in
-    tokAt(toks, p).tok == TSemi
-      ? parseDoExprs(toks, p + 1, next, hooks)
-      : Ok((next, p))
+  parseExpr(toks, pos, hooks)
+    |> Result.flatMap(((expr, p)) =>
+      let next = Array.append(expr, acc) in
+        tokAt(toks, p).tok == TSemi
+          ? parseDoExprs(toks, p + 1, next, hooks)
+          : Ok((next, p))
+    )
 
 let parseLoop = (toks, pos, hooks) =>
   let start = spanOf(tokAt(toks, pos)) in
-  let? p = expectTok(TLoop, toks, pos) in
-  let? p1 = expectTok(TLparen, toks, p) in
-  let? (params, p2) = loopParamsLoop(toks, p1, [], hooks) in
-  let? p3 = expectTok(TRparen, toks, p2) in
-  let? p4 = expectTok(TLbrace, toks, p3) in
-  let? (body, p5) = parseExpr(toks, p4, hooks) in
-    expectTok(TRbrace, toks, p5)
-      |> Result.map(p6 => (Ast.ELoop(params, body, toEnd(start, toks, p6)), p6))
+    expectTok(TLoop, toks, pos)
+      |> Result.flatMap(p =>
+        expectTok(TLparen, toks, p)
+          |> Result.flatMap(p1 =>
+            loopParamsLoop(toks, p1, [], hooks)
+              |> Result.flatMap(((params, p2)) =>
+                expectTok(TRparen, toks, p2)
+                  |> Result.flatMap(p3 =>
+                    expectTok(TLbrace, toks, p3)
+                      |> Result.flatMap(p4 =>
+                        parseExpr(toks, p4, hooks)
+                          |> Result.flatMap(((body, p5)) =>
+                            expectTok(TRbrace, toks, p5)
+                              |> Result.map(p6 =>
+                                (
+                                  Ast.ELoop(
+                                    params,
+                                    body,
+                                    toEnd(start, toks, p6)
+                                  ),
+                                  p6
+                                )
+                              )
+                          )
+                      )
+                  )
+              )
+          )
+      )
 
 // One or more `name = init` binders, comma-separated.
 let loopParamsLoop = (toks, pos, acc, hooks) =>
-  let? (id, pid) = expectId(toks, pos) in
-  let? p = expectTok(TEq, toks, pid) in
-  let? (init, p1) = parseExpr(toks, p, hooks) in
-  let next = Array.append(
-    { name: id.name, nameSpan: id.span, init: init },
-    acc
-  ) in
-    switch tokAt(toks, p1).tok {
-      | TComma => loopParamsLoop(toks, p1 + 1, next, hooks)
-      | _ => Ok((next, p1))
-    }
+  expectId(toks, pos)
+    |> Result.flatMap(((id, pid)) =>
+      expectTok(TEq, toks, pid)
+        |> Result.flatMap(p =>
+          parseExpr(toks, p, hooks)
+            |> Result.flatMap(((init, p1)) =>
+              let next = Array.append(
+                { name: id.name, nameSpan: id.span, init: init },
+                acc
+              ) in
+                switch tokAt(toks, p1).tok {
+                  | TComma => loopParamsLoop(toks, p1 + 1, next, hooks)
+                  | _ => Ok((next, p1))
+                }
+            )
+        )
+    )
 
 // `recur(a, b)` — first-class node so check/codegen see tail uses (ADR 0056).
 let parseRecur = (toks, pos, hooks) =>
   let start = spanOf(tokAt(toks, pos)) in
-  let? p = expectTok(TRecur, toks, pos) in
-  let? p1 = expectTok(TLparen, toks, p) in
-    switch tokAt(toks, p1).tok {
-      | TRparen => Ok((Ast.ERecur([], toEnd(start, toks, p1 + 1)), p1 + 1))
-      | _ => let? (args, p2) = sepByH(parseExpr, toks, p1, [], hooks) in
-          expectTok(TRparen, toks, p2)
-            |> Result.map(p3 => (Ast.ERecur(args, toEnd(start, toks, p3)), p3))
-    }
+    expectTok(TRecur, toks, pos)
+      |> Result.flatMap(p =>
+        expectTok(TLparen, toks, p)
+          |> Result.flatMap(p1 => switch tokAt(toks, p1).tok {
+            | TRparen => Ok((
+                Ast.ERecur([], toEnd(start, toks, p1 + 1)),
+                p1 + 1
+              ))
+            | _ => sepByH(parseExpr, toks, p1, [], hooks)
+                |> Result.flatMap(((args, p2)) =>
+                  expectTok(TRparen, toks, p2)
+                    |> Result.map(p3 =>
+                      (Ast.ERecur(args, toEnd(start, toks, p3)), p3)
+                    )
+                )
+          })
+      )
 
 let parseMatch = (toks, pos, hooks) =>
   let start = spanOf(tokAt(toks, pos)) in
-  let? p = expectTok(TSwitch, toks, pos) in
-  let? (scrutinee, p1) = parseExpr(toks, p, hooks) in
-  let? p2 = expectTok(TLbrace, toks, p1) in
-  let? (arms, p3) = armsLoop(toks, p2, [], hooks) in
-    switch Array.length(arms) {
-      | 0 => errAt("switch needs at least one | arm", tokAt(toks, p3))
-      | _ => expectTok(TRbrace, toks, p3)
-          |> Result.map(p4 =>
-            (Ast.EMatch(scrutinee, arms, toEnd(start, toks, p4)), p4)
+    expectTok(TSwitch, toks, pos)
+      |> Result.flatMap(p =>
+        parseExpr(toks, p, hooks)
+          |> Result.flatMap(((scrutinee, p1)) =>
+            expectTok(TLbrace, toks, p1)
+              |> Result.flatMap(p2 =>
+                armsLoop(toks, p2, [], hooks)
+                  |> Result.flatMap(((arms, p3)) => switch Array.length(arms) {
+                    | 0 => errAt(
+                        "switch needs at least one | arm",
+                        tokAt(toks, p3)
+                      )
+                    | _ => expectTok(TRbrace, toks, p3)
+                        |> Result.map(p4 =>
+                          (
+                            Ast.EMatch(scrutinee, arms, toEnd(start, toks, p4)),
+                            p4
+                          )
+                        )
+                  })
+              )
           )
-    }
+      )
 
 // A ctor pattern's argument list, after the (already consumed) ctor name.
 // `ns` is `Some(alias)` for a qualified `Alias.Ctor(…)` (ADR 0002), else None.
 let parseCtorArgs = (ctor, ns, nameSpan, toks, pos) =>
   tokAt(toks, pos).tok == TLparen
-    ? let? (args, p) = listUntil(TRparen, parsePattern, toks, pos + 1) in
-    let? p2 = expectTok(TRparen, toks, p) in
-      Ok((Ast.PCtor(ctor, args, ns, toEnd(nameSpan, toks, p2)), p2))
+    ? listUntil(TRparen, parsePattern, toks, pos + 1)
+      |> Result.flatMap(((args, p)) =>
+        expectTok(TRparen, toks, p)
+          |> Result.map(p2 =>
+            (Ast.PCtor(ctor, args, ns, toEnd(nameSpan, toks, p2)), p2)
+          )
+      )
     : Ok((Ast.PCtor(ctor, [], ns, toEnd(nameSpan, toks, pos)), pos))
 
 let parsePatternAtom = (toks, pos) =>
@@ -1100,33 +1336,33 @@ let parsePatternAtom = (toks, pos) =>
           ? Ok((Ast.PUnit(toEnd(sp, toks, pos + 2)), pos + 2))
           :
             // `(p, p, …)` destructures a tuple; a lone `(p)` is just grouping.
-            let? (elems, p) = sepBy(parsePattern, toks, pos + 1, []) in
-            let? p2 = expectTok(TRparen, toks, p) in
-              Ok(
-                switch elems {
-                  | [single] => (single, p2)
-                  | many => (Ast.PTuple(many, toEnd(sp, toks, p2)), p2)
-                }
+            sepBy(parsePattern, toks, pos + 1, [])
+              |> Result.flatMap(((elems, p)) =>
+                expectTok(TRparen, toks, p)
+                  |> Result.map(p2 => switch elems {
+                    | [single] => (single, p2)
+                    | many => (Ast.PTuple(many, toEnd(sp, toks, p2)), p2)
+                  })
               )
-      | TLbrace => let? (fields, p) = listUntil(
-          TRbrace,
-          parsePatField,
-          toks,
-          pos + 1
-        ) in
-        let? p2 = expectTok(TRbrace, toks, p) in
-          Ok((Ast.PRecord(fields, toEnd(sp, toks, p2)), p2))
+      | TLbrace => listUntil(TRbrace, parsePatField, toks, pos + 1)
+          |> Result.flatMap(((fields, p)) =>
+            expectTok(TRbrace, toks, p)
+              |> Result.map(p2 => (Ast.PRecord(fields, toEnd(sp, toks, p2)), p2)
+              )
+          )
       | TLbracket => parseArrPattern(toks, pos)
       | TAt => parseListPattern(toks, pos)
       | TId("_") => Ok((Ast.PWild(sp), pos + 1))
       | TId(name) => tokAt(toks, pos + 1).tok == TDot
-          ? let? (c, p1) = expectId(toks, pos + 2) in
-            isUpper(c.name)
-              ? parseCtorArgs(c.name, Some(name), sp, toks, p1)
-              : errAt(
-                "expected constructor after '${name}.', got '${c.name}'",
-                tokAt(toks, p1)
-              )
+          ? expectId(toks, pos + 2)
+            |> Result.flatMap(((c, p1)) =>
+              isUpper(c.name)
+                ? parseCtorArgs(c.name, Some(name), sp, toks, p1)
+                : errAt(
+                  "expected constructor after '${name}.', got '${c.name}'",
+                  tokAt(toks, p1)
+                )
+            )
           : isUpper(name)
           ? parseCtorArgs(name, None, sp, toks, pos + 1)
           : Ok((Ast.PBind(name, sp), pos + 1))
@@ -1134,15 +1370,17 @@ let parsePatternAtom = (toks, pos) =>
     }
 
 let parsePattern = (toks, pos) =>
-  let? (pat, p) = parsePatternAtom(toks, pos) in
-    switch tokAt(toks, p).tok {
-      | TId("as") => let? (nm, p2) = expectId(toks, p + 1) in
-          Ok((
-            Ast.PAs(pat, nm.name, nm.span, spanning(patSpan(pat), nm.span)),
-            p2
-          ))
+  parsePatternAtom(toks, pos)
+    |> Result.flatMap(((pat, p)) => switch tokAt(toks, p).tok {
+      | TId("as") => expectId(toks, p + 1)
+          |> Result.map(((nm, p2)) =>
+            (
+              Ast.PAs(pat, nm.name, nm.span, spanning(patSpan(pat), nm.span)),
+              p2
+            )
+          )
       | _ => Ok((pat, p))
-    }
+    })
 
 // A `...` rest capture must bind a name or `_`.
 let restOk = rest => switch rest {
@@ -1167,42 +1405,63 @@ let patElemsLoop = (toks, pos, acc) => switch tokAt(toks, pos).tok {
 
 let parseArrPattern = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in
-  let? p = expectTok(TLbracket, toks, pos) in
-    tokAt(toks, p).tok == TRbracket
-      ? Ok((Ast.PArr([], None, toEnd(start, toks, p + 1)), p + 1))
-      : let? (elems, rest, p2) = patElemsLoop(toks, p, []) in
-        restOk(rest)
-          ? expectTok(TRbracket, toks, p2)
-            |> Result.map(p3 =>
-              (Ast.PArr(elems, rest, toEnd(start, toks, p3)), p3)
+    expectTok(TLbracket, toks, pos)
+      |> Result.flatMap(p =>
+        tokAt(toks, p).tok == TRbracket
+          ? Ok((Ast.PArr([], None, toEnd(start, toks, p + 1)), p + 1))
+          : patElemsLoop(toks, p, [])
+            |> Result.flatMap(((elems, rest, p2)) =>
+              restOk(rest)
+                ? expectTok(TRbracket, toks, p2)
+                  |> Result.map(p3 =>
+                    (Ast.PArr(elems, rest, toEnd(start, toks, p3)), p3)
+                  )
+                : errAt(
+                  "list `...` rest must bind a name or `_`",
+                  tokAt(toks, p2)
+                )
             )
-          : errAt("list `...` rest must bind a name or `_`", tokAt(toks, p2))
+      )
 
 // `@{}` / `@{head, ...tail}` lazy-List pattern; check.ts restricts the forms.
 let parseListPattern = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in
-  let? p = expectTok(TAt, toks, pos) in
-  let? p1 = expectTok(TLbrace, toks, p) in
-    tokAt(toks, p1).tok == TRbrace
-      ? Ok((Ast.PList([], None, toEnd(start, toks, p1 + 1)), p1 + 1))
-      : let? (elems, rest, p2) = patElemsLoop(toks, p1, []) in
-        restOk(rest)
-          ? expectTok(TRbrace, toks, p2)
-            |> Result.map(p3 =>
-              (Ast.PList(elems, rest, toEnd(start, toks, p3)), p3)
-            )
-          : errAt("list `...` rest must bind a name or `_`", tokAt(toks, p2))
+    expectTok(TAt, toks, pos)
+      |> Result.flatMap(p =>
+        expectTok(TLbrace, toks, p)
+          |> Result.flatMap(p1 =>
+            tokAt(toks, p1).tok == TRbrace
+              ? Ok((Ast.PList([], None, toEnd(start, toks, p1 + 1)), p1 + 1))
+              : patElemsLoop(toks, p1, [])
+                |> Result.flatMap(((elems, rest, p2)) =>
+                  restOk(rest)
+                    ? expectTok(TRbrace, toks, p2)
+                      |> Result.map(p3 =>
+                        (Ast.PList(elems, rest, toEnd(start, toks, p3)), p3)
+                      )
+                    : errAt(
+                      "list `...` rest must bind a name or `_`",
+                      tokAt(toks, p2)
+                    )
+                )
+          )
+      )
 
 // `{ x }` puns to binding `x`; `{ x: pat }` matches `x` against a full pattern.
 let parsePatField = (toks, pos) =>
   let lt = tokAt(toks, pos) in
-  let? (nm, p) = expectLabel(toks, pos) in
-    tokAt(toks, p).tok == TColon
-      ? let? (pat, p2) = parsePattern(toks, p + 1) in
-        Ok(({ label: nm.name, pat: pat }, p2))
-      : keywordText(lt.tok) != None
-      ? errAt("'${nm.name}' is a keyword — write '${nm.name}: <pattern>'", lt)
-      : Ok(({ label: nm.name, pat: Ast.PBind(nm.name, nm.span) }, p))
+    expectLabel(toks, pos)
+      |> Result.flatMap(((nm, p)) =>
+        tokAt(toks, p).tok == TColon
+          ? parsePattern(toks, p + 1)
+            |> Result.map(((pat, p2)) => ({ label: nm.name, pat: pat }, p2))
+          : keywordText(lt.tok) != None
+          ? errAt(
+            "'${nm.name}' is a keyword — write '${nm.name}: <pattern>'",
+            lt
+          )
+          : Ok(({ label: nm.name, pat: Ast.PBind(nm.name, nm.span) }, p))
+      )
 
 // --- type expressions (extern signatures + ctor fields) ---
 
@@ -1216,44 +1475,51 @@ let parseTypeAtom = (toks, pos) =>
           ? Ok((Ast.TyName("unit", toEnd(sp, toks, pos + 2)), pos + 2))
           :
             // `(a, b)` is a tuple type; a lone `(t)` is just grouping.
-            let? (inner, p) = parseTypeExpr(toks, pos + 1) in
-              tokAt(toks, p).tok == TComma
-                ? let? (elems, p2) = sepBy(
-                  parseTypeExpr,
-                  toks,
-                  p + 1,
-                  [inner]
-                ) in
-                let? p3 = expectTok(TRparen, toks, p2) in
-                  Ok((Ast.TyTuple(elems, toEnd(sp, toks, p3)), p3))
-                : expectTok(TRparen, toks, p) |> Result.map(p2 => (inner, p2))
-      | TLbracket => let? (elem, p) = parseTypeExpr(toks, pos + 1) in
-        let? p2 = expectTok(TRbracket, toks, p) in
-          Ok((Ast.TyList(elem, toEnd(sp, toks, p2)), p2))
-      | _ => let? (nm, p) = expectId(toks, pos) in
-          // `Alias.Name` — an alias-qualified type name (ADR 0046). Only
-          // uppercase-initial names can be module aliases (mirrors the
-          // `Alias.Ctor(…)` pattern production).
-          isUpper(nm.name) && tokAt(toks, p).tok == TDot
-            ? let? (q, p2) = expectId(toks, p + 1) in
-              isUpper(q.name)
-                ? Ok((
-                  Ast.TyQual(
-                    nm.name,
-                    q.name,
-                    q.span,
-                    [],
-                    spanning(nm.span, q.span)
-                  ),
-                  p2
-                ))
-                : errAt(
-                  "a type variable cannot be qualified; expected a constructor after '${nm.name}.', got '${q.name}'",
-                  // src/parser.ts's `fail` reports at the CURRENT token, which by
-                  // then is the one after the consumed member — hence `p2`, not `p + 1`.
-                  tokAt(toks, p2)
+            parseTypeExpr(toks, pos + 1)
+              |> Result.flatMap(((inner, p)) =>
+                tokAt(toks, p).tok == TComma
+                  ? sepBy(parseTypeExpr, toks, p + 1, [inner])
+                    |> Result.flatMap(((elems, p2)) =>
+                      expectTok(TRparen, toks, p2)
+                        |> Result.map(p3 =>
+                          (Ast.TyTuple(elems, toEnd(sp, toks, p3)), p3)
+                        )
+                    )
+                  : expectTok(TRparen, toks, p) |> Result.map(p2 => (inner, p2))
+              )
+      | TLbracket => parseTypeExpr(toks, pos + 1)
+          |> Result.flatMap(((elem, p)) =>
+            expectTok(TRbracket, toks, p)
+              |> Result.map(p2 => (Ast.TyList(elem, toEnd(sp, toks, p2)), p2))
+          )
+      | _ => expectId(toks, pos)
+          |> Result.flatMap(((nm, p)) =>
+            // `Alias.Name` — an alias-qualified type name (ADR 0046). Only
+            // uppercase-initial names can be module aliases (mirrors the
+            // `Alias.Ctor(…)` pattern production).
+            isUpper(nm.name) && tokAt(toks, p).tok == TDot
+              ? expectId(toks, p + 1)
+                |> Result.flatMap(((q, p2)) =>
+                  isUpper(q.name)
+                    ? Ok((
+                      Ast.TyQual(
+                        nm.name,
+                        q.name,
+                        q.span,
+                        [],
+                        spanning(nm.span, q.span)
+                      ),
+                      p2
+                    ))
+                    : errAt(
+                      "a type variable cannot be qualified; expected a constructor after '${nm.name}.', got '${q.name}'",
+                      // src/parser.ts's `fail` reports at the CURRENT token, which by
+                      // then is the one after the consumed member — hence `p2`, not `p + 1`.
+                      tokAt(toks, p2)
+                    )
                 )
-            : Ok((Ast.TyName(nm.name, nm.span), p))
+              : Ok((Ast.TyName(nm.name, nm.span), p))
+          )
     }
 
 // Type application is angle-bracketed and tighter than `->`: `Task<A>` and
@@ -1279,18 +1545,29 @@ let parseTypeApp = (toks, pos) =>
   parseTypeAtom(toks, pos)
     |> Result.flatMap(((head, p)) => switch head {
       | Ast.TyName(name, sp) when isUpper(name) => tokAt(toks, p).tok == TLt
-          ? let? (args, p1) = listUntil(TGt, parseTypeExpr, toks, p + 1) in
-          let? p2 = expectTok(TGt, toks, p1) in
-            Ok((Ast.TyApp(name, args, toEnd(sp, toks, p2)), p2))
+          ? listUntil(TGt, parseTypeExpr, toks, p + 1)
+            |> Result.flatMap(((args, p1)) =>
+              expectTok(TGt, toks, p1)
+                |> Result.map(p2 =>
+                  (Ast.TyApp(name, args, toEnd(sp, toks, p2)), p2)
+                )
+            )
           : legacyTypeArgsLoop(toks, p, [], None)
             |> Result.map(((args, lastSp, p2)) => switch lastSp {
               | None => (head, p2)
               | Some(ls) => (Ast.TyApp(name, args, spanning(sp, ls)), p2)
             })
       | Ast.TyQual(alias, nm, nameSpan, _, sp) => tokAt(toks, p).tok == TLt
-          ? let? (args, p1) = listUntil(TGt, parseTypeExpr, toks, p + 1) in
-          let? p2 = expectTok(TGt, toks, p1) in
-            Ok((Ast.TyQual(alias, nm, nameSpan, args, toEnd(sp, toks, p2)), p2))
+          ? listUntil(TGt, parseTypeExpr, toks, p + 1)
+            |> Result.flatMap(((args, p1)) =>
+              expectTok(TGt, toks, p1)
+                |> Result.map(p2 =>
+                  (
+                    Ast.TyQual(alias, nm, nameSpan, args, toEnd(sp, toks, p2)),
+                    p2
+                  )
+                )
+            )
           : legacyTypeArgsLoop(toks, p, [], None)
             |> Result.map(((args, lastSp, p2)) => switch lastSp {
               | None => (head, p2)
@@ -1304,13 +1581,15 @@ let parseTypeApp = (toks, pos) =>
 
 // Arrows are right-associative.
 let parseTypeExpr = (toks, pos) =>
-  let? (from, p) = parseTypeApp(toks, pos) in
-    tokAt(toks, p).tok == TTarrow
-      ? parseTypeExpr(toks, p + 1)
-        |> Result.map(((to, p2)) =>
-          (Ast.TyArrow(from, to, spanning(tySpan(from), tySpan(to))), p2)
-        )
-      : Ok((from, p))
+  parseTypeApp(toks, pos)
+    |> Result.flatMap(((from, p)) =>
+      tokAt(toks, p).tok == TTarrow
+        ? parseTypeExpr(toks, p + 1)
+          |> Result.map(((to, p2)) =>
+            (Ast.TyArrow(from, to, spanning(tySpan(from), tySpan(to))), p2)
+          )
+        : Ok((from, p))
+    )
 
 // --- statements ---
 
@@ -1322,19 +1601,27 @@ let parseCtorField = (toks, pos) =>
     | _ => false
   } in
     isLabel
-      ? let? (nm, p) = expectId(toks, pos) in
-      let? (t, p2) = parseTypeExpr(toks, p + 1) in
-        Ok(({ name: Some(nm.name), fieldType: t }, p2))
+      ? expectId(toks, pos)
+        |> Result.flatMap(((nm, p)) =>
+          parseTypeExpr(toks, p + 1)
+            |> Result.map(((t, p2)) =>
+              ({ name: Some(nm.name), fieldType: t }, p2)
+            )
+        )
       : parseTypeExpr(toks, pos)
         |> Result.map(((t, p)) => ({ name: None, fieldType: t }, p))
 
 let parseCtor = (toks, pos) =>
-  let? (nm, p) = expectId(toks, pos) in
-    tokAt(toks, p).tok == TLparen
-      ? let? (fields, p2) = listUntil(TRparen, parseCtorField, toks, p + 1) in
-      let? p3 = expectTok(TRparen, toks, p2) in
-        Ok(({ name: nm.name, fields: fields }, p3))
-      : Ok(({ name: nm.name, fields: [] }, p))
+  expectId(toks, pos)
+    |> Result.flatMap(((nm, p)) =>
+      tokAt(toks, p).tok == TLparen
+        ? listUntil(TRparen, parseCtorField, toks, p + 1)
+          |> Result.flatMap(((fields, p2)) =>
+            expectTok(TRparen, toks, p2)
+              |> Result.map(p3 => ({ name: nm.name, fields: fields }, p3))
+          )
+        : Ok(({ name: nm.name, fields: [] }, p))
+    )
 
 let ctorsLoop = (toks, pos, acc) =>
   parseCtor(toks, pos)
@@ -1346,16 +1633,24 @@ let ctorsLoop = (toks, pos, acc) =>
 // `expectLabel`: a record type must be able to describe a host shape whose field
 // is spelled like a mochi keyword — `{ type: string }` (ADR 0077).
 let parseAliasField = (toks, pos) =>
-  let? (nm, p) = expectLabel(toks, pos) in
-  let? p2 = expectTok(TColon, toks, p) in
-  let? (t, p3) = parseTypeExpr(toks, p2) in
-    Ok(({ name: nm.name, fieldType: t }, p3))
+  expectLabel(toks, pos)
+    |> Result.flatMap(((nm, p)) =>
+      expectTok(TColon, toks, p)
+        |> Result.flatMap(p2 =>
+          parseTypeExpr(toks, p2)
+            |> Result.map(((t, p3)) => ({ name: nm.name, fieldType: t }, p3))
+        )
+    )
 
 // The `{ x: T, y: U }` body of a transparent record alias.
 let parseAliasBody = (toks, pos) =>
-  let? p = expectTok(TLbrace, toks, pos) in
-  let? (fields, p2) = listUntil(TRbrace, parseAliasField, toks, p) in
-  let? p3 = expectTok(TRbrace, toks, p2) in Ok((fields, p3))
+  expectTok(TLbrace, toks, pos)
+    |> Result.flatMap(p =>
+      listUntil(TRbrace, parseAliasField, toks, p)
+        |> Result.flatMap(((fields, p2)) =>
+          expectTok(TRbrace, toks, p2) |> Result.map(p3 => (fields, p3))
+        )
+    )
 
 let typeParamsLoop = (toks, pos, acc) => switch tokAt(toks, pos).tok {
   | TId(name) => typeParamsLoop(toks, pos + 1, Array.append(name, acc))
@@ -1365,221 +1660,335 @@ let typeParamsLoop = (toks, pos, acc) => switch tokAt(toks, pos).tok {
 // Optional angle-bracketed type parameters: `type Result<A, E> = ...`.
 let parseTypeParams = (toks, pos) =>
   tokAt(toks, pos).tok == TLt
-    ? let? (names, p) = listUntil(TGt, expectId, toks, pos + 1) in
-      expectTok(TGt, toks, p) |> Result.map(p2 => (map(n => n.name, names), p2))
+    ? listUntil(TGt, expectId, toks, pos + 1)
+      |> Result.flatMap(((names, p)) =>
+        expectTok(TGt, toks, p)
+          |> Result.map(p2 => (map(n => n.name, names), p2))
+      )
     : typeParamsLoop(toks, pos, [])
 
 // `type` decl: a `{` after `=` starts a record alias; anything else a variant.
 let parseType = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in
-  let? p = expectTok(TType, toks, pos) in
-  let? (nm, p1) = expectId(toks, p) in
-  let? (params, p2) = parseTypeParams(toks, p1) in
-  let? p3 = expectTok(TEq, toks, p2) in
-    tokAt(toks, p3).tok == TLbrace
-      ? parseAliasBody(toks, p3)
-        |> Result.map(((alias, p4)) =>
-          (
-            Ast.SType(
-              nm.name,
-              params,
-              [],
-              Some(alias),
-              false,
-              toEnd(start, toks, p4)
-            ),
-            p4
+    expectTok(TType, toks, pos)
+      |> Result.flatMap(p =>
+        expectId(toks, p)
+          |> Result.flatMap(((nm, p1)) =>
+            parseTypeParams(toks, p1)
+              |> Result.flatMap(((params, p2)) =>
+                expectTok(TEq, toks, p2)
+                  |> Result.flatMap(p3 =>
+                    tokAt(toks, p3).tok == TLbrace
+                      ? parseAliasBody(toks, p3)
+                        |> Result.map(((alias, p4)) =>
+                          (
+                            Ast.SType(
+                              nm.name,
+                              params,
+                              [],
+                              Some(alias),
+                              false,
+                              toEnd(start, toks, p4)
+                            ),
+                            p4
+                          )
+                        )
+                      : let afterBar = tokAt(toks, p3).tok == TBar
+                        ? p3 + 1
+                        : p3 in
+                        ctorsLoop(toks, afterBar, [])
+                          |> Result.map(((ctors, p4)) =>
+                            (
+                              Ast.SType(
+                                nm.name,
+                                params,
+                                ctors,
+                                None,
+                                false,
+                                toEnd(start, toks, p4)
+                              ),
+                              p4
+                            )
+                          )
+                  )
+              )
           )
-        )
-      : let afterBar = tokAt(toks, p3).tok == TBar ? p3 + 1 : p3 in
-        ctorsLoop(toks, afterBar, [])
-          |> Result.map(((ctors, p4)) =>
-            (
-              Ast.SType(
-                nm.name,
-                params,
-                ctors,
-                None,
-                false,
-                toEnd(start, toks, p4)
-              ),
-              p4
-            )
-          )
+      )
 
 // extern name : type = "module" "export"; contextual JS conventions mirror src/parser.ts.
 let parseExtern = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in
-  let? p = expectTok(TExtern, toks, pos) in
-    tokAt(toks, p).tok == TType
-      ? let? p1 = expectTok(TType, toks, p) in
-      let? (nm, p2) = expectId(toks, p1) in
-        Ok((
-          Ast.SType(nm.name, [], [], None, false, toEnd(start, toks, p2)),
-          p2
-        ))
-      : let? (nm, p1) = expectId(toks, p) in
-      let? (params, p2) = tokAt(toks, p1).tok == TLt
-        ? let? (names, pParams) = listUntil(TGt, expectId, toks, p1 + 1) in
-        let? pAfter = expectTok(TGt, toks, pParams) in
-          Ok((map(n => n.name, names), pAfter))
-        : Ok(([], p1)) in
-      let? p3 = expectTok(TColon, toks, p2) in
-      let? (t, p4) = parseTypeExpr(toks, p3) in
-      let? p5 = expectTok(TEq, toks, p4) in
-      // `curried` marks a host written `a => b => c` rather than `(a, b) => c`
-      // (ADR 0064). It describes the artifact, so it precedes the module spec and
-      // leaves the signature — which always describes mochi-side usage — alone.
-      let isCurried = tokAt(toks, p5).tok == TId("curried") in
-      let pConv = isCurried ? p5 + 1 : p5 in
-      let nextTok = tokAt(toks, pConv).tok in
-        nextTok == TId(
-          "global"
-        ) || nextTok == TId(
-          "send"
-        ) || nextTok == TId(
-          "get"
-        ) || nextTok == TId("set") || nextTok == TId("new")
-          ? isCurried
-            ? errAt(
-              "'curried' applies to a module extern, not a JS convention — give the host's module and export instead",
-              tokAt(toks, pConv)
+    expectTok(TExtern, toks, pos)
+      |> Result.flatMap(p =>
+        tokAt(toks, p).tok == TType
+          ? expectTok(TType, toks, p)
+            |> Result.flatMap(p1 =>
+              expectId(toks, p1)
+                |> Result.map(((nm, p2)) =>
+                  (
+                    Ast.SType(
+                      nm.name,
+                      [],
+                      [],
+                      None,
+                      false,
+                      toEnd(start, toks, p2)
+                    ),
+                    p2
+                  )
+                )
             )
-            : let? (convention, p6) = expectId(toks, pConv) in
-            let? (first, p7) = expectStr(toks, p6) in
-            let hasSecond = switch tokAt(toks, p7).tok {
-              | TStr(_) => convention.name == "global" || convention.name == "new"
-              | _ => false
-            } in
-            let? (second, p8) = hasSecond
-              ? expectStr(toks, p7)
-              : Ok(("", p7)) in
-              Ok((
-                Ast.SExtern(
-                  nm.name,
-                  nm.span,
-                  params,
-                  t,
-                  "mochi:${convention.name}:${first}",
-                  second,
-                  false,
-                  false,
-                  None,
-                  toEnd(start, toks, p8)
-                ),
-                p8
-              ))
-          : let? (moduleName, p6) = expectStr(toks, pConv) in
-          let? (importedName, p7) = expectStr(toks, p6) in
-            Ok((
-              Ast.SExtern(
-                nm.name,
-                nm.span,
-                params,
-                t,
-                moduleName,
-                importedName,
-                isCurried,
-                false,
-                None,
-                toEnd(start, toks, p7)
-              ),
-              p7
-            ))
+          : expectId(toks, p)
+            |> Result.flatMap(((nm, p1)) =>
+              (tokAt(toks, p1).tok == TLt
+                ? listUntil(TGt, expectId, toks, p1 + 1)
+                  |> Result.flatMap(((names, pParams)) =>
+                    expectTok(TGt, toks, pParams)
+                      |> Result.map(pAfter => (map(n => n.name, names), pAfter))
+                  )
+                : Ok(([], p1)))
+                |> Result.flatMap(((params, p2)) =>
+                  expectTok(TColon, toks, p2)
+                    |> Result.flatMap(p3 =>
+                      parseTypeExpr(toks, p3)
+                        |> Result.flatMap(((t, p4)) =>
+                          expectTok(TEq, toks, p4)
+                            |> Result.flatMap(p5 =>
+                              // `curried` marks a host written `a => b => c` rather than `(a, b) => c`
+                              // (ADR 0064). It describes the artifact, so it precedes the module spec and
+                              // leaves the signature — which always describes mochi-side usage — alone.
+                              let isCurried = tokAt(
+                                toks,
+                                p5
+                              ).tok == TId("curried") in
+                              let pConv = isCurried ? p5 + 1 : p5 in
+                              let nextTok = tokAt(toks, pConv).tok in
+                                nextTok == TId(
+                                  "global"
+                                ) || nextTok == TId(
+                                  "send"
+                                ) || nextTok == TId(
+                                  "get"
+                                ) || nextTok == TId(
+                                  "set"
+                                ) || nextTok == TId("new")
+                                  ? isCurried
+                                    ? errAt(
+                                      "'curried' applies to a module extern, not a JS convention — give the host's module and export instead",
+                                      tokAt(toks, pConv)
+                                    )
+                                    : expectId(toks, pConv)
+                                      |> Result.flatMap(((convention, p6)) =>
+                                        expectStr(toks, p6)
+                                          |> Result.flatMap(((first, p7)) =>
+                                            let hasSecond = switch tokAt(toks, p7).tok {
+                                              | TStr(_) => convention.name == "global" || convention.name == "new"
+                                              | _ => false
+                                            } in
+                                              (hasSecond
+                                                ? expectStr(toks, p7)
+                                                : Ok(("", p7)))
+                                                |> Result.map(((second, p8)) =>
+                                                  (
+                                                    Ast.SExtern(
+                                                      nm.name,
+                                                      nm.span,
+                                                      params,
+                                                      t,
+                                                      "mochi:${convention.name}:${first}",
+                                                      second,
+                                                      false,
+                                                      false,
+                                                      None,
+                                                      toEnd(start, toks, p8)
+                                                    ),
+                                                    p8
+                                                  )
+                                                )
+                                          )
+                                      )
+                                  : expectStr(toks, pConv)
+                                    |> Result.flatMap(((moduleName, p6)) =>
+                                      expectStr(toks, p6)
+                                        |> Result.map(((importedName, p7)) =>
+                                          (
+                                            Ast.SExtern(
+                                              nm.name,
+                                              nm.span,
+                                              params,
+                                              t,
+                                              moduleName,
+                                              importedName,
+                                              isCurried,
+                                              false,
+                                              None,
+                                              toEnd(start, toks, p7)
+                                            ),
+                                            p7
+                                          )
+                                        )
+                                    )
+                            )
+                        )
+                    )
+                )
+            )
+      )
 
 // import { a, b } from "./mod"
 // import * as Alias from "./mod" — whole module as a user namespace (ADR 0002).
 // `as` / `from` are contextual ids (still valid ids), like `in`.
 let parseImportNs = (start, toks, pos) =>
-  let? (asKw, p1) = expectId(toks, pos) in
-    asKw.name == "as"
-      ? let? (alias, p2) = expectId(toks, p1) in
-      let? (kw, p3) = expectId(toks, p2) in
-        kw.name == "from"
-          ? expectStr(toks, p3)
-            |> Result.map(((path, p4)) =>
-              (Ast.SImportNs(alias, path, toEnd(start, toks, p4)), p4)
-            )
-          : errAt(
-            "expected 'from' in import, got '${kw.name}'",
-            tokAt(toks, p3)
+  expectId(toks, pos)
+    |> Result.flatMap(((asKw, p1)) =>
+      asKw.name == "as"
+        ? expectId(toks, p1)
+          |> Result.flatMap(((alias, p2)) =>
+            expectId(toks, p2)
+              |> Result.flatMap(((kw, p3)) =>
+                kw.name == "from"
+                  ? expectStr(toks, p3)
+                    |> Result.map(((path, p4)) =>
+                      (Ast.SImportNs(alias, path, toEnd(start, toks, p4)), p4)
+                    )
+                  : errAt(
+                    "expected 'from' in import, got '${kw.name}'",
+                    tokAt(toks, p3)
+                  )
+              )
           )
-      : errAt(
-        "expected 'as' in namespace import, got '${asKw.name}'",
-        tokAt(toks, p1)
-      )
+        : errAt(
+          "expected 'as' in namespace import, got '${asKw.name}'",
+          tokAt(toks, p1)
+        )
+    )
 
 let parseImport = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in
-  let? p = expectTok(TImport, toks, pos) in
-    tokAt(toks, p).tok == TStar
-      ? let? p1 = expectTok(TStar, toks, p) in parseImportNs(start, toks, p1)
-      : let? p1 = expectTok(TLbrace, toks, p) in
-      let? (names, p2) = listUntil(TRbrace, expectId, toks, p1) in
-      let? p3 = expectTok(TRbrace, toks, p2) in
-      let? (kw, p4) = expectId(toks, p3) in
-        kw.name == "from"
-          ? expectStr(toks, p4)
-            |> Result.map(((path, p5)) =>
-              (Ast.SImport(names, path, toEnd(start, toks, p5)), p5)
+    expectTok(TImport, toks, pos)
+      |> Result.flatMap(p =>
+        tokAt(toks, p).tok == TStar
+          ? expectTok(TStar, toks, p)
+            |> Result.flatMap(p1 => parseImportNs(start, toks, p1))
+          : expectTok(TLbrace, toks, p)
+            |> Result.flatMap(p1 =>
+              listUntil(TRbrace, expectId, toks, p1)
+                |> Result.flatMap(((names, p2)) =>
+                  expectTok(TRbrace, toks, p2)
+                    |> Result.flatMap(p3 =>
+                      expectId(toks, p3)
+                        |> Result.flatMap(((kw, p4)) =>
+                          kw.name == "from"
+                            ? expectStr(toks, p4)
+                              |> Result.map(((path, p5)) =>
+                                (
+                                  Ast.SImport(
+                                    names,
+                                    path,
+                                    toEnd(start, toks, p5)
+                                  ),
+                                  p5
+                                )
+                              )
+                            : errAt(
+                              "expected 'from' in import, got '${kw.name}'",
+                              tokAt(toks, p4)
+                            )
+                        )
+                    )
+                )
             )
-          : errAt(
-            "expected 'from' in import, got '${kw.name}'",
-            tokAt(toks, p4)
-          )
+      )
 
 // `let { x, y } = e` desugars to a `$dN` temp binding plus one field-access
 // `let` per name — mirrors the TS parser, including the temp counter.
 let parseRecordDestructure = (start, toks, pos, tmp, hooks) =>
   let openSp = spanOf(tokAt(toks, pos)) in
-  let? p = expectTok(TLbrace, toks, pos) in
-  let? (fields, p1) = listUntil(TRbrace, expectId, toks, p) in
-  let closeSp = spanOf(tokAt(toks, p1)) in
-  let? p2 = expectTok(TRbrace, toks, p1) in
-  let? p3 = expectTok(TEq, toks, p2) in
-  let? (value, p4) = parseExpr(toks, p3, hooks) in
-  let whole = spanning(start, exprSpan(value)) in
-  let patSpan = spanning(openSp, closeSp) in
-  let tmpName = "$d${show(tmp)}" in
-  let header = Ast.SLet(tmpName, patSpan, None, value, false, None, whole) in
-  let access = f =>
-    Ast.SLet(
-      f.name,
-      f.span,
-      None,
-      Ast.EField(Ast.ERef(tmpName, f.span), f.name, f.span),
-      false,
-      None,
-      f.span
-    ) in
-    Ok((Array.prepend(header, fields |> map(access)), p4, tmp + 1))
+    expectTok(TLbrace, toks, pos)
+      |> Result.flatMap(p =>
+        listUntil(TRbrace, expectId, toks, p)
+          |> Result.flatMap(((fields, p1)) =>
+            let closeSp = spanOf(tokAt(toks, p1)) in
+              expectTok(TRbrace, toks, p1)
+                |> Result.flatMap(p2 =>
+                  expectTok(TEq, toks, p2)
+                    |> Result.flatMap(p3 =>
+                      parseExpr(toks, p3, hooks)
+                        |> Result.map(((value, p4)) =>
+                          let whole = spanning(start, exprSpan(value)) in
+                          let patSpan = spanning(openSp, closeSp) in
+                          let tmpName = "$d${show(tmp)}" in
+                          let header = Ast.SLet(
+                            tmpName,
+                            patSpan,
+                            None,
+                            value,
+                            false,
+                            None,
+                            whole
+                          ) in
+                          let access = f =>
+                            Ast.SLet(
+                              f.name,
+                              f.span,
+                              None,
+                              Ast.EField(
+                                Ast.ERef(tmpName, f.span),
+                                f.name,
+                                f.span
+                              ),
+                              false,
+                              None,
+                              f.span
+                            ) in
+                            (
+                              Array.prepend(header, fields |> map(access)),
+                              p4,
+                              tmp + 1
+                            )
+                        )
+                    )
+                )
+          )
+      )
 
 let parseLet = (toks, pos, tmp, hooks) =>
   let start = spanOf(tokAt(toks, pos)) in
-  let? p = expectTok(TLet, toks, pos) in
-    tokAt(toks, p).tok == TLbrace
-      ? parseRecordDestructure(start, toks, p, tmp, hooks)
-      : let? (nm, p1) = expectId(toks, p) in
-      let? (annot, pA) = tokAt(toks, p1).tok == TColon
-        ? parseTypeExpr(toks, p1 + 1) |> Result.map(((ty, p)) => (Some(ty), p))
-        : Ok((None, p1)) in
-      let? p2 = expectTok(TEq, toks, pA) in
-      let? (value, p3) = parseExpr(toks, p2, hooks) in
-        Ok((
-          [
-            Ast.SLet(
-              nm.name,
-              nm.span,
-              annot,
-              value,
-              false,
-              None,
-              spanning(start, exprSpan(value))
+    expectTok(TLet, toks, pos)
+      |> Result.flatMap(p =>
+        tokAt(toks, p).tok == TLbrace
+          ? parseRecordDestructure(start, toks, p, tmp, hooks)
+          : expectId(toks, p)
+            |> Result.flatMap(((nm, p1)) =>
+              (tokAt(toks, p1).tok == TColon
+                ? parseTypeExpr(toks, p1 + 1)
+                  |> Result.map(((ty, pTy)) => (Some(ty), pTy))
+                : Ok((None, p1)))
+                |> Result.flatMap(((annot, pA)) =>
+                  expectTok(TEq, toks, pA)
+                    |> Result.flatMap(p2 =>
+                      parseExpr(toks, p2, hooks)
+                        |> Result.map(((value, p3)) =>
+                          (
+                            [
+                              Ast.SLet(
+                                nm.name,
+                                nm.span,
+                                annot,
+                                value,
+                                false,
+                                None,
+                                spanning(start, exprSpan(value))
+                              )
+                            ],
+                            p3,
+                            tmp
+                          )
+                        )
+                    )
+                )
             )
-          ],
-          p3,
-          tmp
-        ))
+      )
 
 // Rebuilders for the export/doc metadata the TS parser spreads on.
 let setLetMeta = (exported, doc, s) => switch s {
