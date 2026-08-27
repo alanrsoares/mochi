@@ -10,7 +10,7 @@
 // structurally (`{ start, end }`, `r.name`), so they need no export; they live
 // here only so the ctor field types resolve.
 
-type Span = { start: number, end: number }
+export type Span = { start: number, end: number }
 type Name = { name: string, span: Span }
 
 export type LamParam =
