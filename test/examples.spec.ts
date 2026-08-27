@@ -205,3 +205,10 @@ test("Set.empty is a writable empty Set (ADR 0080)", () => {
   const out = new Function(`${js}\nreturn s;`)() as Set<number>;
   expect([...out]).toEqual([1]);
 });
+
+test("a string-literal union synonym accepts a member (ADR 0081)", () => {
+  const src = `type Tone = "rose" | "amber"
+let t : Tone = "rose"`;
+  expect(isErr(compile(src))).toBe(false);
+  expect(isErr(compile(`type Tone = "rose" | "amber"\nlet t : Tone = "taupe"`))).toBe(true);
+});

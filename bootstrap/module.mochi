@@ -150,7 +150,10 @@ let mergeMap = (from, into) => mergeInto(Map.keys(from), from, into)
 let exportedTypeNames = stmts =>
   Set.fromArray(
     Array.flatMap(
-      s => switch s { | Ast.SType(name, _, _, _, true, _) => [name] | _ => [] },
+      s => switch s {
+        | Ast.SType(name, _, _, _, _, true, _) => [name]
+        | _ => []
+      },
       stmts
     )
   )
@@ -160,9 +163,14 @@ let exportedTypeNames = stmts =>
 let aliasesOf = stmts =>
   Array.reduce(
     (acc, s) => switch s {
-      | Ast.SType(name, params, _, Some(fields), _, _) => Map.set(
+      | Ast.SType(name, params, _, Some(fields), _, _, _) => Map.set(
           name,
-          { params: params, fields: fields },
+          { params: params, fields: fields, expr: None },
+          acc
+        )
+      | Ast.SType(name, params, _, _, Some(te), _, _) => Map.set(
+          name,
+          { params: params, fields: [], expr: Some(te) },
           acc
         )
       | _ => acc

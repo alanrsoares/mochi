@@ -38,6 +38,7 @@ import {
   tPrim,
   tTuple,
   tUnit,
+  tLit,
   rVar,
   rExtend,
   showType,
@@ -151,6 +152,8 @@ let annotSpan = t => switch t {
   | Ast.TyTuple(_, sp) => sp
   | Ast.TyList(_, sp) => sp
   | Ast.TyQual(_, _, _, _, sp) => sp
+  | Ast.TyLit(_, sp) => sp
+  | Ast.TyUnion(_, sp) => sp
 }
 
 let typeErr = (msg, sp) => { message: msg, start: sp.start, end: sp.end }
@@ -530,7 +533,7 @@ let inferExpr = (ctx, e, st) => switch e {
   | Ast.ENum(_, _, _) => Ok((tNumber, st))
   | Ast.EUnit(_) => Ok((tUnit, st))
   | Ast.EBool(_, _) => Ok((tBool, st))
-  | Ast.EStr(_, _) => Ok((tString, st))
+  | Ast.EStr(value, _) => Ok((tLit(value), st))
   | Ast.ERef(name, sp) => switch Map.get(name, ctx.env) {
       | Some(sc) => let (t, st1) = instantiate(sc, st) in Ok((t, st1))
       | None => ctx.open
@@ -559,7 +562,7 @@ let inferExpr = (ctx, e, st) => switch e {
         ) in
           localCtx->inferExpr(tail, localSt)
       | _ => let? (valT, st1) = ctx->inferExpr(value, st) in
-        let sc = generalize(ctx.env, valT, st1) in
+        let sc = generalize(ctx.env, valT, st1, true) in
         let $ctx = ctxWithEnv(ctx, Map.set(name, sc, ctx.env)) in
           $ctx->inferExpr(body, st1)
     }
@@ -742,7 +745,7 @@ let inferPat = (ctx, p, st) => switch p {
   | Ast.PUnit(_) => Ok((tUnit, #{}, st))
   | Ast.PLit(_, _, _) => Ok((tNumber, #{}, st))
   | Ast.PBool(_, _) => Ok((tBool, #{}, st))
-  | Ast.PStr(_, _) => Ok((tString, #{}, st))
+  | Ast.PStr(value, _) => Ok((tLit(value), #{}, st))
   | Ast.PBind(name, _) => let (t, st1) = freshVar(st) in
       Ok((t, Map.set(name, t, #{}), st1))
   | Ast.PRecord(fields, _) => ctx->inferPatRecord(fields, st)
@@ -1009,7 +1012,7 @@ let seedBuiltinsFrom = (keys, builtins, env, st) => switch keys {
       | Some(t) => seedBuiltinsFrom(
           rest,
           builtins,
-          Map.set(n, generalize(env, t, st), env),
+          Map.set(n, generalize(env, t, st, true), env),
           st
         )
       | None => seedBuiltinsFrom(rest, builtins, env, st)
@@ -1030,7 +1033,7 @@ let seedNsMembersFrom = (keys, members, env, st, acc) => switch keys {
           members,
           env,
           st,
-          Map.set(m, generalize(env, t, st), acc)
+          Map.set(m, generalize(env, t, st, true), acc)
         )
       | None => seedNsMembersFrom(rest, members, env, st, acc)
     }
@@ -1080,9 +1083,13 @@ let seedNsImports = (nsImports, ns) =>
 let aliasMapFrom = (stmts, acc) => switch stmts {
   | [] => acc
   | [s, ...rest] => switch s {
-      | Ast.SType(name, params, _, Some(fields), _, _) => aliasMapFrom(
+      | Ast.SType(name, params, _, Some(fields), _, _, _) => aliasMapFrom(
           rest,
-          Map.set(name, { params: params, fields: fields }, acc)
+          Map.set(name, { params: params, fields: fields, expr: None }, acc)
+        )
+      | Ast.SType(name, params, _, _, Some(te), _, _) => aliasMapFrom(
+          rest,
+          Map.set(name, { params: params, fields: [], expr: Some(te) }, acc)
         )
       | _ => aliasMapFrom(rest, acc)
     }
@@ -1110,7 +1117,7 @@ let registerCtorsFrom = (ctors, typeName, params, aliasMap, env, st) => switch c
 let registerUserCtorsFrom = (stmts, aliasMap, env, st) => switch stmts {
   | [] => (env, st)
   | [s, ...rest] => switch s {
-      | Ast.SType(name, params, ctors, _, _, _) => let (env1, st1) = registerCtorsFrom(
+      | Ast.SType(name, params, ctors, _, _, _, _) => let (env1, st1) = registerCtorsFrom(
           ctors,
           name,
           params,
@@ -1174,7 +1181,7 @@ let registerExternsFrom = (stmts, aliasMap, env, st) => switch stmts {
           registerExternsFrom(
             rest,
             aliasMap,
-            Map.set(name, generalize(env, t, st1), env),
+            Map.set(name, generalize(env, t, st1, false), env),
             st1
           )
       | _ => registerExternsFrom(rest, aliasMap, env, st)
@@ -1268,9 +1275,10 @@ let inferGroupFrom = (ctx, group, st) => switch group {
         ) in
           switch Map.get(name, ctx.env) {
             | Some(selfSc) => let? st2 = u(selfSc.ty, t, st1, span) in
-              // Binding annotation (`let x : T = v`, ADR 0044): pin the inferred
-              // value type to the declared one before it is generalized.
-              let? st3 = switch annot {
+              // Binding annotation (`let x : T = v`, ADR 0044 / 0081): pin to
+              // the declared type before generalize, so a lit against a union
+              // keeps the union instead of widening to `string`.
+              let? (pinned, st3) = switch annot {
                 | Some(te) => let (at, _, stA) = typeExprToType(
                     te,
                     #{},
@@ -1278,13 +1286,11 @@ let inferGroupFrom = (ctx, group, st) => switch group {
                     ctx.aliasMap,
                     Set.fromArray([])
                   ) in
-                    // Reported on the WRITTEN type, not the whole statement —
-                    // src/infer.ts uses `s.annot.span`.
-                    u(t, at, stA, annotSpan(te))
-                | None => Ok(st2)
+                    u(t, at, stA, annotSpan(te)) |> Result.map(stB => (at, stB))
+                | None => Ok((t, st2))
               } in
               let? (restTypes, st4) = ctx->inferGroupFrom(rest, st3) in
-                Ok((Map.set(name, t, restTypes), st4))
+                Ok((Map.set(name, pinned, restTypes), st4))
             | None => Err(
                 typeErr("internal: missing self-binding for '${name}'", span)
               )
@@ -1309,13 +1315,17 @@ let dropGroupFrom = (group, env) => switch group {
 let generalizeGroupFrom = (group, bodyTypes, env, st) => switch group {
   | [] => env
   | [s, ...rest] => switch s {
-      | Ast.SLet(name, _, _, _, _, _, _) => switch Map.get(name, bodyTypes) {
-          | Some(t) => generalizeGroupFrom(
-              rest,
-              bodyTypes,
-              Map.set(name, generalize(env, t, st), env),
-              st
-            )
+      | Ast.SLet(name, _, annot, _, _, _, _) => switch Map.get(name, bodyTypes) {
+          | Some(t) => let widen = switch annot {
+              | None => true
+              | Some(_) => false
+            } in
+              generalizeGroupFrom(
+                rest,
+                bodyTypes,
+                Map.set(name, generalize(env, t, st, widen), env),
+                st
+              )
           | None => generalizeGroupFrom(rest, bodyTypes, env, st)
         }
       | _ => generalizeGroupFrom(rest, bodyTypes, env, st)
@@ -1426,7 +1436,7 @@ export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports
 // `{ types, aliases }` scope still fits.
 type QualAliasField = { name: string, fieldType: Ast.TypeExpr }
 
-type QualAliasInfo = { params: [string], fields: [QualAliasField] }
+type QualAliasInfo = { params: [string], fields: [QualAliasField], expr: Option<Ast.TypeExpr> }
 
 type QualScope = { aliases: Map<string, QualAliasInfo> }
 
@@ -1481,7 +1491,7 @@ let exportedSchemesFrom = (stmts, i0, env, acc0) =>
           i + 1,
           takeScheme(name, env, acc)
         )
-      | Some(Ast.SType(_, _, ctors, _, true, _)) => recur(
+      | Some(Ast.SType(_, _, ctors, _, _, true, _)) => recur(
           i + 1,
           exportCtorsInto(ctors, 0, env, acc)
         )

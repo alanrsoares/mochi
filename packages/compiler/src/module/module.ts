@@ -98,6 +98,8 @@ const aliasesOf = (prog: Program): AliasMap => {
   const out: AliasMap = new Map();
   for (const s of prog.stmts)
     if (s.kind === "type" && s.alias) out.set(s.name, { params: s.params, fields: s.alias });
+    else if (s.kind === "type" && s.aliasType)
+      out.set(s.name, { params: s.params, fields: [], expr: s.aliasType });
   return out;
 };
 

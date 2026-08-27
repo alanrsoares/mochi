@@ -351,6 +351,12 @@ function inferLetIn(e: LetInExpr, ctx: Ctx): Result<Type, Diagnostic> {
     const at = typeExprToType(e.annot, new Map(), ctx.fresh, ctx.typeScope);
     const au = u(valT.value, at, ctx, e.annot.span);
     if (isErr(au)) return au;
+    const scheme = generalize(ctx.env, at, ctx.subst, false);
+    if (ctx.record) ctx.record(e.nameSpan, at, { kind: "let", name: e.name });
+    const bodyEnv: Env = new Map(ctx.env);
+    bodyEnv.set(e.name, scheme);
+    ctx.noteLet?.(scheme, e.value.span);
+    return infer(e.body, { ...ctx, env: bodyEnv });
   }
   const scheme = generalize(ctx.env, valT.value, ctx.subst);
   if (ctx.record) ctx.record(e.nameSpan, valT.value, { kind: "let", name: e.name });
@@ -398,13 +404,18 @@ function inferLocalLambdaGroup(first: LetInExpr, ctx: Ctx): Result<Type, Diagnos
         const annotated = typeExprToType(binding.annot, new Map(), ctx.fresh, ctx.typeScope);
         const annotation = u(value.value, annotated, ctx, binding.annot.span);
         if (isErr(annotation)) return annotation;
+        bodyTypes.set(binding.name, annotated);
+      } else {
+        bodyTypes.set(binding.name, value.value);
       }
-      bodyTypes.set(binding.name, value.value);
-      ctx.record?.(binding.nameSpan, value.value, { kind: "let", name: binding.name });
+      ctx.record?.(binding.nameSpan, bodyTypes.get(binding.name)!, {
+        kind: "let",
+        name: binding.name,
+      });
     }
     for (const binding of group) env.delete(binding.name);
     for (const binding of group) {
-      const scheme = generalize(env, bodyTypes.get(binding.name)!, ctx.subst);
+      const scheme = generalize(env, bodyTypes.get(binding.name)!, ctx.subst, !binding.annot);
       env.set(binding.name, scheme);
       ctx.noteLet?.(scheme, binding.value.span);
     }
@@ -997,6 +1008,17 @@ const seedNamespaces = (
   return ns;
 };
 
+/** Transparent record / TypeExpr aliases declared in this program. */
+function collectAliasMap(prog: Program): AliasMap {
+  const aliasMap: AliasMap = new Map();
+  for (const s of prog.stmts) {
+    if (s.kind !== "type") continue;
+    if (s.alias) aliasMap.set(s.name, { params: s.params, fields: s.alias });
+    else if (s.aliasType) aliasMap.set(s.name, { params: s.params, fields: [], expr: s.aliasType });
+  }
+  return aliasMap;
+}
+
 /** Shared inference core; `inferProgram` drops per-node types, `inferProgramTypes` keeps them. */
 function run(
   prog: Program,
@@ -1020,9 +1042,7 @@ function run(
   // Transparent record aliases: collect their field lists so extern signatures
   // can reference them (expanded to rows), and build display templates (params
   // as marker vars) so tooling can fold matching rows back to the alias name.
-  const aliasMap: AliasMap = new Map();
-  for (const s of prog.stmts)
-    if (s.kind === "type" && s.alias) aliasMap.set(s.name, { params: s.params, fields: s.alias });
+  const aliasMap = collectAliasMap(prog);
   // Local aliases plus the namespace-import type scopes `D.Shape` resolves
   // through (C5 slice b) — one scope object every TypeExpr lowering shares.
   const typeScope: TypeScope = { aliases: aliasMap, quals: opts.quals ?? new Map() };
@@ -1068,7 +1088,7 @@ function run(
     if (s.kind !== "extern") continue;
     const vars = new Map(s.params.map((param) => [param, freshVar(fresh)]));
     const t = typeExprToType(s.typeExpr, vars, fresh, typeScope);
-    const sc = generalize(env, t, subst);
+    const sc = generalize(env, t, subst, false);
     env.set(s.name, sc);
     record(s.nameSpan, sc.type, {
       kind: "extern",
@@ -1149,6 +1169,7 @@ function run(
       // type against the declared one, so a too-general value is pinned to T.
       // Resolved through the alias map, so a named record alias expands to its
       // row (ADR 0044). This is how a self-hosted seed pins a polymorphic empty.
+      let stored = t.value;
       if (s.annot) {
         const at = typeExprToType(s.annot, new Map(), fresh, typeScope);
         const au = unify(t.value, at, subst, fresh, (x) => showType(foldAliases(x, aliases)));
@@ -1156,12 +1177,13 @@ function run(
           allDiags.push(typeErr(au.error.message, s.annot.span));
           continue;
         }
+        stored = at;
       }
-      bodyTypes.set(s.name, t.value);
+      bodyTypes.set(s.name, stored);
       // Record the binding name itself so hovering it leads with `let x: T`
       // (+ any doc). Skip synthetic destructuring temps ($d…).
       if (!s.name.startsWith("$"))
-        record(s.nameSpan, t.value, { kind: "let", name: s.name, doc: s.doc });
+        record(s.nameSpan, stored, { kind: "let", name: s.name, doc: s.doc });
     }
     // Generalize successes against the OUTER env; failed members keep an
     // unconstrained mono so later SCCs don't cascade unbound noise.
@@ -1172,7 +1194,7 @@ function run(
         env.set(s.name, mono(selfVars.get(s.name)!));
         continue;
       }
-      const sc = generalize(env, bodyT, subst);
+      const sc = generalize(env, bodyT, subst, !s.annot);
       env.set(s.name, sc);
       // Track a top-level let the same way as `let … in` (ADR 0035): a
       // polymorphic-but-monomorphically-used value (e.g. `let emptyReg =

@@ -610,7 +610,7 @@ let reservedErr = (name, sp) =>
 let checkReservedNames = stmts =>
   firstSome(
     s => switch s {
-      | Ast.SType(name, _, _, _, _, sp) => Array.contains(
+      | Ast.SType(name, _, _, _, _, _, sp) => Array.contains(
           name,
           redeclarableTypes
         )
@@ -678,12 +678,14 @@ let strayTypeVar = (te, params) => switch te {
     // (that is what motivates the single TyQual variant, ADR 0046) — only its
     // applied args can hide a stray var.
     firstSome(a => strayTypeVar(a, params), args)
+  | Ast.TyLit(_, _) => None
+  | Ast.TyUnion(members, _) => firstSome(m => strayTypeVar(m, params), members)
 }
 
 let checkCtorFieldVars = stmts =>
   firstSome(
     s => switch s {
-      | Ast.SType(name, params, ctors, _, _, _) => firstSome(
+      | Ast.SType(name, params, ctors, _, _, _, _) => firstSome(
           c =>
             firstSome(
               f => switch strayTypeVar(f.fieldType, params) {
@@ -717,6 +719,8 @@ let qualRefsFrom = te => switch te {
       { alias: alias, name: name, nameSpan: nameSpan, qualSpan: sp },
       ...Array.flatMap(qualRefsFrom, args)
     ]
+  | Ast.TyLit(_, _) => []
+  | Ast.TyUnion(members, _) => Array.flatMap(qualRefsFrom, members)
 }
 
 // The type expressions a program WRITES — the positions typeExprToType lowers.
@@ -730,12 +734,13 @@ let writtenTypeExprs = stmts =>
           | Some(te) => [te]
           | None => []
         }
-      | Ast.SType(_, _, ctors, alias, _, _) => [
+      | Ast.SType(_, _, ctors, alias, aliasType, _, _) => [
           ...Array.flatMap(c => map(f => f.fieldType, c.fields), ctors),
           ...switch alias {
             | Some(fields) => map(f => f.fieldType, fields)
             | None => []
-          }
+          },
+          ...switch aliasType { | Some(te) => [te] | None => [] }
         ]
       | _ => []
     },

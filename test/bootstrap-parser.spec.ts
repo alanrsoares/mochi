@@ -257,6 +257,10 @@ const cTy = (t: TypeExpr): Canon => {
         args: t.args.map(cTy),
         span: cSpan(t.span),
       };
+    case "tlit":
+      return { kind: "tlit", value: t.value, span: cSpan(t.span) };
+    case "tunion":
+      return { kind: "tunion", members: t.members.map(cTy), span: cSpan(t.span) };
   }
 };
 
@@ -286,6 +290,7 @@ const cStmt = (s: Stmt): Canon => {
         params: s.params,
         ctors: s.ctors.map(cCtor),
         alias: s.alias ? s.alias.map(cAliasField) : null,
+        aliasType: s.aliasType ? cTy(s.aliasType) : null,
         exported: s.exported === true,
         span: cSpan(s.span),
       };
@@ -489,6 +494,8 @@ const A_TY: Record<string, (t: Al) => Canon> = {
     args: t.args.map(aTy),
     span: t.span,
   }),
+  TyLit: (t) => ({ kind: "tlit", value: t.value, span: t.span }),
+  TyUnion: (t) => ({ kind: "tunion", members: t.members.map(aTy), span: t.span }),
 };
 const aTy = (t: Al): Canon => {
   const f = A_TY[t._tag];
@@ -517,6 +524,7 @@ const A_STMT: Record<string, (s: Al) => Canon> = {
     params: s.params,
     ctors: s.ctors.map(aCtor),
     alias: opt(s.alias, (fs: Al) => fs.map((f: Al) => ({ name: f.name, type: aTy(f.fieldType) }))),
+    aliasType: opt(s.aliasType, aTy),
     exported: s.exported,
     span: s.span,
   }),

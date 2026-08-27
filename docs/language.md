@@ -74,6 +74,22 @@ let translate = (p, dx, dy) => { x: add(p.x, dx), y: add(p.y, dy) }
 **Tuples** are real product types that erase to JS arrays. **One numeric type** (`number`);
 `int`/`float` are aliases.
 
+**String literals and finite unions** are TypeScript-shaped ([ADR 0081](adr/0081-string-literal-unions.md)).
+A string literal is a singleton (`"rose"`). A finite union is written with `|` in type
+position. Unannotated `let x = "hi"` generalizes to `string` (TS `let`). An annotation
+or a named synonym keeps the precise type:
+
+```mochi
+type Tone = "rose" | "amber"
+let ok : Tone = "rose"
+let greeting = "hi"                          // string
+extern setTone : Tone -> () = "./ui.js" "setTone"
+```
+
+Union binds tighter than `->`, so `"a" | "b" -> T` is `("a" | "b") -> T`, and
+`a -> b | c` is `a -> (b | c)`. Parenthesize an arrow that is a union member:
+`(T -> T) | T`. A general `string` does not unify with a literal union.
+
 **`unit`** is the one-inhabitant type, and `()` is its literal in every position — value,
 type, and pattern ([ADR 0054](adr/0054-unit-value-and-ignore.md)). It is also the domain
 of a nullary function, so `() -> T` and `unit -> T` are the same type and `f()` and `f(())`

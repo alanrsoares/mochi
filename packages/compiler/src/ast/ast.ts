@@ -186,7 +186,11 @@ export type TypeExpr =
       nameSpan: Span;
       args: readonly TypeExpr[];
       span: Span;
-    }; // D.Shape, D.Result e a
+    } // D.Shape, D.Result e a
+  /** `"rose"` — string singleton in type position (ADR 0081). */
+  | { kind: "tlit"; value: string; span: Span }
+  /** `"rose" | "amber"` — finite union; parser never emits a singleton. */
+  | { kind: "tunion"; members: TypeExpr[]; span: Span };
 
 export type Stmt =
   /**
@@ -204,10 +208,10 @@ export type Stmt =
       span: Span;
     }
   /**
-   * A `type` decl is EITHER a variant (`ctors` non-empty, `alias` absent) or a
-   * transparent record alias (`alias` present, `ctors` empty). An alias is pure
-   * structural naming: inference expands it to its row, display folds the row
-   * back to the name — no nominal identity, no runtime.
+   * A `type` decl is a variant (`ctors` non-empty), a transparent record alias
+   * (`alias` present), or a TypeExpr synonym (`aliasType` present, e.g.
+   * `type Tone = "rose" | "amber"` — ADR 0081). An alias is pure structural
+   * naming: inference expands it, display folds matching types back to the name.
    */
   | {
       kind: "type";
@@ -216,9 +220,10 @@ export type Stmt =
       params: string[];
       ctors: Ctor[];
       alias?: AliasField[];
+      aliasType?: TypeExpr;
       exported?: boolean;
       span: Span;
-    } // type Result a e = | Ok(a) | ... ; or type Point = { x: number, y: number }
+    } // type Result a e = | Ok(a) | ... ; type Point = { x: number }; type Tone = "rose" | "amber"
   /** `extern name<T> : type = "module" "export"` — bind an external JS/TS function. */
   | {
       kind: "extern";

@@ -474,6 +474,10 @@ const strayTypeVar = (te: TypeExpr, params: ReadonlySet<string>): TypeExpr | nul
     .with({ kind: "tqual" }, (tqual) =>
       tqual.args.reduce<TypeExpr | null>((f, a) => f ?? strayTypeVar(a, params), null),
     )
+    .with({ kind: "tlit" }, () => null)
+    .with({ kind: "tunion" }, (tunion) =>
+      tunion.members.reduce<TypeExpr | null>((f, m) => f ?? strayTypeVar(m, params), null),
+    )
     .exhaustive();
 
 function checkCtorFieldVars(prog: Program): Diagnostic[] {
@@ -517,6 +521,10 @@ const qualRefs = (te: TypeExpr, out: QualTypeExpr[]): void =>
       out.push(tqual);
       for (const a of tqual.args) qualRefs(a, out);
     })
+    .with({ kind: "tlit" }, () => {})
+    .with({ kind: "tunion" }, (tunion) => {
+      for (const m of tunion.members) qualRefs(m, out);
+    })
     .exhaustive();
 
 /**
@@ -540,6 +548,7 @@ const writtenTypeExprs = (prog: Program): TypeExpr[] => {
       case "type":
         for (const c of s.ctors) for (const fld of c.fields) out.push(fld.type);
         for (const fld of s.alias ?? []) out.push(fld.type);
+        if (s.aliasType) out.push(s.aliasType);
         break;
     }
   }

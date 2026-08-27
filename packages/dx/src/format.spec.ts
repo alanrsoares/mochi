@@ -94,6 +94,11 @@ test("a parametric type prints angle-bracket params and one ctor per line", () =
   );
 });
 
+test("formats a string-literal union type (ADR 0081)", () => {
+  expect(fmt(`type Tone="rose"|"amber"`)).toBe('type Tone = "rose" | "amber"\n');
+  expect(fmt(`let t:"rose"|"amber"="rose"`)).toBe('let t : "rose" | "amber" = "rose"\n');
+});
+
 test("record destructuring is re-folded from its desugared form", () => {
   expect(fmt("let {x,y}=p")).toBe("let { x, y } = p\n");
 });

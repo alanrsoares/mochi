@@ -941,7 +941,7 @@ let genCtor = c =>
           : "const ${c.name} = ${impl};"
 
 let genType = s => switch s {
-  | Ast.SType(_, _, ctors, _, _, _) => Str.join("\n", ctors |> map(genCtor))
+  | Ast.SType(_, _, ctors, _, _, _, _) => Str.join("\n", ctors |> map(genCtor))
   | _ => ""
 }
 
@@ -1056,7 +1056,7 @@ let genStmt = (ctx, s) => switch s {
     "throw new Error(\"codegen invariant: error node reached codegen at ${show(sp.start)}\");"
   | Ast.SImport(_, _, _) => genImport(s)
   | Ast.SImportNs(_, _, _) => genImport(s)
-  | Ast.SType(_, _, _, _, exported, _) => let decls = genType(s) in
+  | Ast.SType(_, _, _, _, _, exported, _) => let decls = genType(s) in
       decls == ""
         ? "" // record alias: pure type, no runtime
         : exported
@@ -1297,7 +1297,7 @@ let boundNamesFrom = (stmts, i, acc) => switch Array.get(i, stmts) {
       switch s {
         | Ast.SLet(name, _, _, _, _, _, _) => Set.add(name, acc)
         | Ast.SExtern(name, _, _, _, _, _, _, _, _, _) => Set.add(name, acc)
-        | Ast.SType(_, _, ctors, _, _, _) => Set.union(
+        | Ast.SType(_, _, ctors, _, _, _, _) => Set.union(
             acc,
             Set.fromArray(ctors |> map(c => c.name))
           )
@@ -1316,7 +1316,7 @@ let boundNames = stmts => boundNamesFrom(stmts, 0, Set.fromArray([]))
 
 let refsForStmt = (ctx, s) => switch s {
   | Ast.SLet(_, _, _, value, _, _, _) => ctx->exprRefs(value, Set.fromArray([]))
-  | Ast.SType(_, _, ctors, _, _, _) =>
+  | Ast.SType(_, _, ctors, _, _, _, _) =>
     // A multi-field constructor lowers to `_curry(...)` in genType (which
     // exprRefs never walks), so seed the dep here.
     someOf(c => Array.length(c.fields) >= 2, ctors)

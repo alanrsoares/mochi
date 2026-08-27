@@ -81,7 +81,7 @@ export let builtinTypeDecls = [
 
 let declaresType = (stmts, i, name) => switch Array.get(i, stmts) {
   | None => false
-  | Some(Ast.SType(n, _, _, _, _, _)) => n == name
+  | Some(Ast.SType(n, _, _, _, _, _, _)) => n == name
       ? true
       : declaresType(stmts, i + 1, name)
   | Some(_) => declaresType(stmts, i + 1, name)
@@ -140,7 +140,7 @@ let ctorsInto = (ctors, i, owner, sp, acc) => switch Array.get(i, ctors) {
 
 let buildLoop = (stmts, i, reg) => switch Array.get(i, stmts) {
   | None => Ok(reg)
-  | Some(Ast.SType(name, _, ctors, _, _, sp)) => Map.has(name, reg.types)
+  | Some(Ast.SType(name, _, ctors, _, _, _, sp)) => Map.has(name, reg.types)
       ? Err(ctorErr("duplicate type '${name}'", sp))
       : ctorsInto(ctors, 0, name, sp, reg.ctors)
         |> Result.flatMap(cs =>
@@ -171,7 +171,7 @@ let exportedRegLoop = (stmts, i0, reg0) =>
   loop (i = i0, reg = reg0) {
     switch Array.get(i, stmts) {
       | None => reg
-      | Some(Ast.SType(name, _, ctors, _, true, _)) => recur(
+      | Some(Ast.SType(name, _, ctors, _, _, true, _)) => recur(
           i + 1,
           {
             ctors: seedRegCtorsFrom(ctors, 0, name, reg.ctors),
@@ -193,7 +193,7 @@ let ctorKeysInto = (ctors, i, m) => switch Array.get(i, ctors) {
 // Every declared ctor's keys (user decls override imported seed keys).
 let ctorKeysFrom = (stmts, i, m) => switch Array.get(i, stmts) {
   | None => m
-  | Some(Ast.SType(_, _, ctors, _, _, _)) => ctorKeysFrom(
+  | Some(Ast.SType(_, _, ctors, _, _, _, _)) => ctorKeysFrom(
       stmts,
       i + 1,
       ctorKeysInto(ctors, 0, m)
@@ -226,7 +226,7 @@ export let seedBuiltinCtorKeys = (stmts, m) =>
 // keys (`Some(value)` → `{ value }`, not positional `{ _0 }`).
 let exportedCtorKeysFrom = (stmts, i, m) => switch Array.get(i, stmts) {
   | None => m
-  | Some(Ast.SType(_, _, ctors, _, true, _)) => exportedCtorKeysFrom(
+  | Some(Ast.SType(_, _, ctors, _, _, true, _)) => exportedCtorKeysFrom(
       stmts,
       i + 1,
       ctorKeysInto(ctors, 0, m)

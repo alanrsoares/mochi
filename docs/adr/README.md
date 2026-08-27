@@ -125,6 +125,7 @@ What else was on the table and why not.
 | [0078](0078-mochi-first-self-hosted-core.md) | Mochi-first authoring for the self-hosted core | Accepted |
 | [0079](0079-generic-let-question-bind.md) | `let?` dispatches between `Option` and `Result` | Accepted |
 | [0080](0080-collection-literals.md) | Collection literals, `Set.empty`, and the prelude namespace rule | Accepted |
+| [0081](0081-string-literal-unions.md) | String literal types and finite unions as surface TypeExpr | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

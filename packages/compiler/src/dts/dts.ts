@@ -662,7 +662,7 @@ const declOf = (
     .with({ kind: "import" }, () => null)
     .with({ kind: "extern" }, () => null)
     .with({ kind: "type" }, (type) => {
-      if (type.ctors.length === 0 && !type.alias)
+      if (type.ctors.length === 0 && !type.alias && !type.aliasType)
         return `declare const ${type.name}: unique symbol;\nexport type ${type.name} = { readonly [${type.name}]: never };`;
       const a = aliasByName.get(type.name);
       return a ? aliasTsDecl(a) : typeDecl(type.name, type.params, type.ctors);
@@ -711,6 +711,10 @@ function teConNames(te: TypeExpr, acc: Set<string>): void {
       acc.add(`${tqual.alias}.${tqual.name}`);
       for (const a of tqual.args) teConNames(a, acc);
     })
+    .with({ kind: "tlit" }, () => {})
+    .with({ kind: "tunion" }, (tunion) => {
+      for (const m of tunion.members) teConNames(m, acc);
+    })
     .exhaustive();
 }
 
@@ -736,6 +740,7 @@ export function referencedBuiltinTypeDecls(
       .with({ kind: "type" }, (type) => {
         for (const c of type.ctors) for (const f of c.fields) teConNames(f.type, referenced);
         if (type.alias) for (const f of type.alias) teConNames(f.type, referenced);
+        if (type.aliasType) teConNames(type.aliasType, referenced);
       })
       .with({ kind: "extern" }, () => {})
       .with({ kind: "import" }, () => {})

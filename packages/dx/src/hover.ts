@@ -100,6 +100,7 @@ const showTypeDecl = (stmt: TypeStmt): string => {
     const fields = stmt.alias.map((field) => `${field.name}: ${showTypeExpr(field.type)}`);
     return `type ${head} = { ${fields.join(", ")} }`;
   }
+  if (stmt.aliasType) return `type ${head} = ${showTypeExpr(stmt.aliasType)}`;
   return `type ${head} = ${stmt.ctors.map(showCtor).join(" | ")}`;
 };
 
@@ -127,6 +128,11 @@ const collectTypeSyntax = (type: TypeExpr, out: SyntaxHover[]): void => {
       return;
     case "tqual":
       for (const arg of type.args) collectTypeSyntax(arg, out);
+      return;
+    case "tlit":
+      return;
+    case "tunion":
+      for (const member of type.members) collectTypeSyntax(member, out);
       return;
     case "tname":
       return;
@@ -170,6 +176,7 @@ const syntaxHoverAt = (program: Program, offset: number): HoverInfo | null => {
       });
       collectTypeSyntax(field.type, candidates);
     }
+    if (stmt.aliasType) collectTypeSyntax(stmt.aliasType, candidates);
   }
   const hit = tightestHit(candidates, offset, spanContainsClosed);
   return hit._tag === "Some" ? hit.value.info : null;

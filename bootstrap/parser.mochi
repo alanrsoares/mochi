@@ -307,6 +307,8 @@ let tySpan = t => switch t {
   | Ast.TyTuple(_, sp) => sp
   | Ast.TyList(_, sp) => sp
   | Ast.TyQual(_, _, _, _, sp) => sp
+  | Ast.TyLit(_, sp) => sp
+  | Ast.TyUnion(_, sp) => sp
 }
 
 // One lambda parameter: a name, `{ a, b }` record-destructuring, or `(a, b)`
@@ -1223,6 +1225,7 @@ let parseTypeAtom = (toks, pos) =>
       | TLbracket => let? (elem, p) = parseTypeExpr(toks, pos + 1) in
         let? p2 = expectTok(TRbracket, toks, p) in
           Ok((Ast.TyList(elem, toEnd(sp, toks, p2)), p2))
+      | TStr(value) => Ok((Ast.TyLit(value, sp), pos + 1))
       | _ => let? (nm, p) = expectId(toks, pos) in
           // `Alias.Name` — an alias-qualified type name (ADR 0046). Only
           // uppercase-initial names can be module aliases (mirrors the
@@ -1257,6 +1260,7 @@ let startsTypeAtom = t => switch t {
   | TId(_) => true
   | TLparen => true
   | TLbracket => true
+  | TStr(_) => true
   | _ => false
 }
 
@@ -1297,9 +1301,29 @@ let parseTypeApp = (toks, pos) =>
       | _ => Ok((head, p))
     }
 
+// Union binds tighter than arrow: `"a" | "b" -> T` is `("a" | "b") -> T`,
+// and `a -> b | c` is `a -> (b | c)` (ADR 0081).
+let parseTypeUnionRest = (toks, pos, acc, lastSp) =>
+  tokAt(toks, pos).tok == TBar
+    ? let? (m, p) = toks->parseTypeApp(pos + 1) in
+      parseTypeUnionRest(toks, p, Array.append(m, acc), tySpan(m))
+    : Ok((acc, lastSp, pos))
+
+let parseTypeUnion = (toks, pos) =>
+  let? (first, p) = toks->parseTypeApp(pos) in
+    tokAt(toks, p).tok == TBar
+      ? let? (members, lastSp, p2) = parseTypeUnionRest(
+        toks,
+        p,
+        [first],
+        tySpan(first)
+      ) in
+        Ok((Ast.TyUnion(members, spanning(tySpan(first), lastSp)), p2))
+      : Ok((first, p))
+
 // Arrows are right-associative.
 let parseTypeExpr = (toks, pos) =>
-  let? (from, p) = toks->parseTypeApp(pos) in
+  let? (from, p) = toks->parseTypeUnion(pos) in
     tokAt(toks, p).tok == TTarrow
       ? let? (to, p2) = toks->parseTypeExpr(p + 1) in
         Ok((Ast.TyArrow(from, to, spanning(tySpan(from), tySpan(to))), p2))
@@ -1360,7 +1384,16 @@ let parseTypeParams = (toks, pos) =>
       expectTok(TGt, toks, p) |> Result.map(p2 => (map(n => n.name, names), p2))
     : typeParamsLoop(toks, pos, [])
 
-// `type` decl: a `{` after `=` starts a record alias; anything else a variant.
+// `type` decl: `{` after `=` is a record alias; a string / grouping / list
+// type is a transparent TypeExpr synonym (`type Tone = "rose" | "amber"`);
+// anything else is a variant (ADR 0081).
+let startsTypeSynonym = t => switch t {
+  | TStr(_) => true
+  | TLparen => true
+  | TLbracket => true
+  | _ => false
+}
+
 let parseType = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in
   let? p = expectTok(TType, toks, pos) in
@@ -1376,12 +1409,27 @@ let parseType = (toks, pos) =>
               params,
               [],
               Some(alias),
+              None,
               false,
               toEnd(start, toks, p4)
             ),
             p4
           )
         )
+      : startsTypeSynonym(tokAt(toks, p3).tok)
+      ? let? (te, p4) = parseTypeExpr(toks, p3) in
+        Ok((
+          Ast.SType(
+            nm.name,
+            params,
+            [],
+            None,
+            Some(te),
+            false,
+            toEnd(start, toks, p4)
+          ),
+          p4
+        ))
       : let afterBar = tokAt(toks, p3).tok == TBar ? p3 + 1 : p3 in
         ctorsLoop(toks, afterBar, [])
           |> Result.map(((ctors, p4)) =>
@@ -1390,6 +1438,7 @@ let parseType = (toks, pos) =>
                 nm.name,
                 params,
                 ctors,
+                None,
                 None,
                 false,
                 toEnd(start, toks, p4)
@@ -1406,7 +1455,7 @@ let parseExtern = (toks, pos) =>
       ? let? p1 = expectTok(TType, toks, p) in
       let? (nm, p2) = expectId(toks, p1) in
         Ok((
-          Ast.SType(nm.name, [], [], None, false, toEnd(start, toks, p2)),
+          Ast.SType(nm.name, [], [], None, None, false, toEnd(start, toks, p2)),
           p2
         ))
       : let? (nm, p1) = expectId(toks, p) in
@@ -1586,11 +1635,12 @@ let setLetMeta = (exported, doc, s) => switch s {
   | other => other
 }
 let setTypeExported = s => switch s {
-  | Ast.SType(name, params, ctors, alias, _, span) => Ast.SType(
+  | Ast.SType(name, params, ctors, alias, aliasType, _, span) => Ast.SType(
       name,
       params,
       ctors,
       alias,
+      aliasType,
       true,
       span
     )
@@ -1609,11 +1659,12 @@ let setExternMeta = (exported, doc, s) => switch s {
       doc,
       span
     )
-  | Ast.SType(name, params, ctors, alias, _, span) => Ast.SType(
+  | Ast.SType(name, params, ctors, alias, aliasType, _, span) => Ast.SType(
       name,
       params,
       ctors,
       alias,
+      aliasType,
       exported,
       span
     )

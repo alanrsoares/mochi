@@ -251,6 +251,10 @@ const walkTypeExpr = (b: Builder, t: TypeExpr): void => {
       use(b, "type", `${tqual.alias}.${tqual.name}`, tqual.nameSpan);
       for (const a of tqual.args) walkTypeExpr(b, a);
     })
+    .with({ kind: "tlit" }, () => {})
+    .with({ kind: "tunion" }, (tunion) => {
+      for (const m of tunion.members) walkTypeExpr(b, m);
+    })
     .exhaustive();
 };
 
@@ -426,6 +430,7 @@ const walkStmts = (b: Builder, stmts: Stmt[]): void => {
     } else if (s.kind === "type") {
       for (const c of s.ctors) for (const f of c.fields) walkTypeExpr(b, f.type);
       if (s.alias) for (const f of s.alias) walkTypeExpr(b, f.type);
+      if (s.aliasType) walkTypeExpr(b, s.aliasType);
     }
   }
 };
