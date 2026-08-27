@@ -222,6 +222,8 @@ export type Stmt =
       alias?: AliasField[];
       aliasType?: TypeExpr;
       exported?: boolean;
+      /** Leading `///` documentation shown by declaration hover. */
+      doc?: string;
       span: Span;
     } // type Result a e = | Ok(a) | ... ; type Point = { x: number }; type Tone = "rose" | "amber"
   /** `extern name<T> : type = "module" "export"` — bind an external JS/TS function. */

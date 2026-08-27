@@ -616,7 +616,7 @@ let reservedErr = (name, sp) =>
 let checkReservedNames = stmts =>
   firstSome(
     s => switch s {
-      | Ast.SType(name, _, _, _, _, _, sp) => Array.contains(
+      | Ast.SType(name, _, _, _, _, _, _, sp) => Array.contains(
           name,
           redeclarableTypes
         )
@@ -691,7 +691,7 @@ let strayTypeVar = (te, params) => switch te {
 let checkCtorFieldVars = stmts =>
   firstSome(
     s => switch s {
-      | Ast.SType(name, params, ctors, _, _, _, _) => firstSome(
+      | Ast.SType(name, params, ctors, _, _, _, _, _) => firstSome(
           c =>
             firstSome(
               f => switch strayTypeVar(f.fieldType, params) {
@@ -740,7 +740,7 @@ let writtenTypeExprs = stmts =>
           | Some(te) => [te]
           | None => []
         }
-      | Ast.SType(_, _, ctors, alias, aliasType, _, _) => [
+      | Ast.SType(_, _, ctors, alias, aliasType, _, _, _) => [
           ...Array.flatMap(c => map(f => f.fieldType, c.fields), ctors),
           ...switch alias {
             | Some(fields) => map(f => f.fieldType, fields)

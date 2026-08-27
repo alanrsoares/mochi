@@ -103,7 +103,7 @@ type AliasField = { name: string, fieldType: TypeExpr }
 
 export type Stmt =
   | SLet(name: string, nameSpan: Span, annot: Option<TypeExpr>, value: Expr, exported: bool, doc: Option<string>, span: Span)
-  | SType(name: string, params: [string], ctors: [Ctor], alias: Option<[AliasField]>, aliasType: Option<TypeExpr>, exported: bool, span: Span)
+  | SType(name: string, params: [string], ctors: [Ctor], alias: Option<[AliasField]>, aliasType: Option<TypeExpr>, exported: bool, doc: Option<string>, span: Span)
   // `curried` marks a host written `a => b => c` rather than `(a, b) => c` — a
   // calling convention like `send`/`new`, not a property of the type (ADR 0064).
   | SExtern(name: string, nameSpan: Span, params: [string], typeExpr: TypeExpr, module: string, imported: string, curried: bool, exported: bool, doc: Option<string>, span: Span)

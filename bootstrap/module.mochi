@@ -150,7 +150,7 @@ let mergeMap = (from, into) => mergeInto(Map.keys(from), from, into)
 let exportedTypeNames = stmts =>
   stmts
     |> Array.flatMap(s => switch s {
-      | Ast.SType(name, _, _, _, _, true, _) => [name]
+      | Ast.SType(name, _, _, _, _, true, _, _) => [name]
       | _ => []
     })
     |> Set.fromArray
@@ -161,9 +161,9 @@ let aliasesOf = stmts =>
   stmts
     |> Array.reduce(
       (acc, s) => switch s {
-        | Ast.SType(name, params, _, Some(fields), _, _, _) => acc
+        | Ast.SType(name, params, _, Some(fields), _, _, _, _) => acc
             |> Map.set(name, { params: params, fields: fields, expr: None })
-        | Ast.SType(name, params, _, _, Some(te), _, _) => acc
+        | Ast.SType(name, params, _, _, Some(te), _, _, _) => acc
             |> Map.set(name, { params: params, fields: [], expr: Some(te) })
         | _ => acc
       },
@@ -195,8 +195,8 @@ let withNamedCtor = (name, info, depReg, depKeys, res) =>
         | None => res.reg.types
       }
     },
-    keys: switch Map.get(name, depKeys) {
-      | Some(ks) => Map.set(name, ks, res.keys)
+    keys: switch depKeys |> Map.get(name) {
+      | Some(ks) => res.keys |> Map.set(name, ks)
       | None => res.keys
     },
     quals: res.quals

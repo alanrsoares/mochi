@@ -1411,6 +1411,7 @@ let parseType = (toks, pos) =>
               Some(alias),
               None,
               false,
+              None,
               toEnd(start, toks, p4)
             ),
             p4
@@ -1426,6 +1427,7 @@ let parseType = (toks, pos) =>
             None,
             Some(te),
             false,
+            None,
             toEnd(start, toks, p4)
           ),
           p4
@@ -1441,6 +1443,7 @@ let parseType = (toks, pos) =>
                 None,
                 None,
                 false,
+                None,
                 toEnd(start, toks, p4)
               ),
               p4
@@ -1455,7 +1458,16 @@ let parseExtern = (toks, pos) =>
       ? let? p1 = expectTok(TType, toks, p) in
       let? (nm, p2) = expectId(toks, p1) in
         Ok((
-          Ast.SType(nm.name, [], [], None, None, false, toEnd(start, toks, p2)),
+          Ast.SType(
+            nm.name,
+            [],
+            [],
+            None,
+            None,
+            false,
+            None,
+            toEnd(start, toks, p2)
+          ),
           p2
         ))
       : let? (nm, p1) = expectId(toks, p) in
@@ -1634,14 +1646,15 @@ let setLetMeta = (exported, doc, s) => switch s {
     )
   | other => other
 }
-let setTypeExported = s => switch s {
-  | Ast.SType(name, params, ctors, alias, aliasType, _, span) => Ast.SType(
+let setTypeMeta = (exported, doc, s) => switch s {
+  | Ast.SType(name, params, ctors, alias, aliasType, _, _, span) => Ast.SType(
       name,
       params,
       ctors,
       alias,
       aliasType,
-      true,
+      exported,
+      doc,
       span
     )
   | other => other
@@ -1659,13 +1672,14 @@ let setExternMeta = (exported, doc, s) => switch s {
       doc,
       span
     )
-  | Ast.SType(name, params, ctors, alias, aliasType, _, span) => Ast.SType(
+  | Ast.SType(name, params, ctors, alias, aliasType, _, _, span) => Ast.SType(
       name,
       params,
       ctors,
       alias,
       aliasType,
       exported,
+      doc,
       span
     )
   | other => other
@@ -1682,7 +1696,7 @@ let parseStmt = (toks, pos, tmp, hooks) =>
           |> Result.map(((s, p)) => ([s], p, tmp))
       | TExport => switch tokAt(toks, pos + 1).tok {
           | TType => parseType(toks, pos + 1)
-              |> Result.map(((s, p)) => ([setTypeExported(s)], p, tmp))
+              |> Result.map(((s, p)) => ([setTypeMeta(true, doc, s)], p, tmp))
           | TExtern => parseExtern(toks, pos + 1)
               |> Result.map(((s, p)) => ([setExternMeta(true, doc, s)], p, tmp))
           | TLet => parseLet(toks, pos + 1, tmp, hooks)
@@ -1694,7 +1708,8 @@ let parseStmt = (toks, pos, tmp, hooks) =>
               tokAt(toks, pos + 1)
             )
         }
-      | TType => parseType(toks, pos) |> Result.map(((s, p)) => ([s], p, tmp))
+      | TType => parseType(toks, pos)
+          |> Result.map(((s, p)) => ([setTypeMeta(false, doc, s)], p, tmp))
       | TExtern => parseExtern(toks, pos)
           |> Result.map(((s, p)) => ([setExternMeta(false, doc, s)], p, tmp))
       | _ => parseLet(toks, pos, tmp, hooks)

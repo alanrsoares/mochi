@@ -72,8 +72,8 @@ extension).
 ## Editor surfaces
 
 - **Hover** — inferred types on demand, folded back to named record aliases where they
-  match, with `///` doc comments attached (user docs on lets; prelude builtins use the
-  virtual prelude docstrings). Type declarations, constructors, record-alias fields, and
+  match, with `///` doc comments attached (user docs on lets, externs, and type declarations;
+  prelude builtins use the virtual prelude docstrings). Type declarations, constructors, record-alias fields, and
   type syntax also have parse-level hovers, so they remain readable when value inference fails.
   Otherwise-unhoverable syntax such as `let`, `extern`, `loop`, and collection sigils has a
   concise fallback hint rather than competing with a more-specific semantic hover.

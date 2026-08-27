@@ -1083,11 +1083,11 @@ let seedNsImports = (nsImports, ns) =>
 let aliasMapFrom = (stmts, acc) => switch stmts {
   | [] => acc
   | [s, ...rest] => switch s {
-      | Ast.SType(name, params, _, Some(fields), _, _, _) => aliasMapFrom(
+      | Ast.SType(name, params, _, Some(fields), _, _, _, _) => aliasMapFrom(
           rest,
           Map.set(name, { params: params, fields: fields, expr: None }, acc)
         )
-      | Ast.SType(name, params, _, _, Some(te), _, _) => aliasMapFrom(
+      | Ast.SType(name, params, _, _, Some(te), _, _, _) => aliasMapFrom(
           rest,
           Map.set(name, { params: params, fields: [], expr: Some(te) }, acc)
         )
@@ -1117,7 +1117,7 @@ let registerCtorsFrom = (ctors, typeName, params, aliasMap, env, st) => switch c
 let registerUserCtorsFrom = (stmts, aliasMap, env, st) => switch stmts {
   | [] => (env, st)
   | [s, ...rest] => switch s {
-      | Ast.SType(name, params, ctors, _, _, _, _) => let (env1, st1) = registerCtorsFrom(
+      | Ast.SType(name, params, ctors, _, _, _, _, _) => let (env1, st1) = registerCtorsFrom(
           ctors,
           name,
           params,
@@ -1491,7 +1491,7 @@ let exportedSchemesFrom = (stmts, i0, env, acc0) =>
           i + 1,
           takeScheme(name, env, acc)
         )
-      | Some(Ast.SType(_, _, ctors, _, _, true, _)) => recur(
+      | Some(Ast.SType(_, _, ctors, _, _, true, _, _)) => recur(
           i + 1,
           exportCtorsInto(ctors, 0, env, acc)
         )

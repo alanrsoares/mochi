@@ -1477,13 +1477,13 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
         const inner = peek().t;
         switch (inner) {
           case "type":
-            return [{ ...parseType(), exported: true }];
+            return [{ ...parseType(), exported: true, doc }];
           case "extern": {
             const external = parseExtern();
             return [
               external.kind === "extern"
                 ? { ...external, exported: true, doc }
-                : { ...external, exported: true },
+                : { ...external, exported: true, doc },
             ];
           }
           case "let":
@@ -1492,7 +1492,7 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
         return fail("`export` must precede let, type, or extern");
       }
       case "type":
-        return [parseType()];
+        return [{ ...parseType(), doc }];
       case "extern": {
         const external = parseExtern();
         return [external.kind === "extern" ? { ...external, doc } : external];

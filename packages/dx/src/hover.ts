@@ -160,8 +160,8 @@ const syntaxHoverAt = (program: Program, offset: number): HoverInfo | null => {
     }
     if (stmt.kind !== "type") continue;
     const decl = showTypeDecl(stmt);
-    candidates.push({ span: stmt.span, info: { code: decl } });
-    candidates.push({ span: stmt.nameSpan, info: { code: decl } });
+    candidates.push({ span: stmt.span, info: { code: decl, doc: stmt.doc } });
+    candidates.push({ span: stmt.nameSpan, info: { code: decl, doc: stmt.doc } });
     for (const ctor of stmt.ctors) {
       candidates.push({
         span: ctor.span,
