@@ -700,6 +700,7 @@ const declOf = (
       );
       return `export declare const ${letin.name}: ${ty};`;
     })
+    .with({ kind: "expr" }, () => null)
     .exhaustive();
 
 /** Type-constructor names referenced anywhere in a TypeExpr (`Option<Expr>` → {Option}, nested included). Used to spot builtin unions named in ctor/alias field positions — inference-derived binding types alone miss those. */
@@ -762,6 +763,7 @@ export function referencedBuiltinTypeDecls(
       })
       .with({ kind: "extern" }, () => {})
       .with({ kind: "import" }, () => {})
+      .with({ kind: "expr" }, () => {})
       .with({ kind: "error" }, () => {}) // references nothing (ADR 0045)
       .exhaustive();
   }

@@ -255,6 +255,12 @@ export type Stmt =
    */
   | { kind: "import"; names: ImportName[]; alias: ImportName | null; from: string; span: Span }
   /**
+   * A top-level expression statement (ADR 0087). Must infer as `()` —
+   * `test(…)`, `log(msg)`, `do { … }` whose last expr is unit. Optional
+   * trailing semicolon. Binds nothing; codegen emits `expr;`.
+   */
+  | { kind: "expr"; value: Expr; span: Span }
+  /**
    * An unparsable region the parser skipped to recover (ADR 0045). `span` covers
    * every byte skipped — from the token that failed through the last one consumed
    * before the sync point — so the formatter can pass the raw slice through
@@ -297,6 +303,7 @@ export type LetStmt = Extract<Stmt, { kind: "let" }>;
 export type TypeStmt = Extract<Stmt, { kind: "type" }>;
 export type ExternStmt = Extract<Stmt, { kind: "extern" }>;
 export type ImportStmt = Extract<Stmt, { kind: "import" }>;
+export type ExprStmt = Extract<Stmt, { kind: "expr" }>;
 export type ErrorStmt = Extract<Stmt, { kind: "error" }>;
 
 /** A name pulled in by an `import`. `span` anchors it for diagnostics. */

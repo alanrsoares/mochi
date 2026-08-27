@@ -143,6 +143,6 @@ const exprNames = (e: Expr, out: Set<string>): void => {
 /** Names bound by some local binder anywhere in `prog`. */
 export const localBinderNames = (prog: Program): ReadonlySet<string> => {
   const out = new Set<string>();
-  for (const s of prog.stmts) if (s.kind === "let") exprNames(s.value, out);
+  for (const s of prog.stmts) if (s.kind === "let" || s.kind === "expr") exprNames(s.value, out);
   return out;
 };

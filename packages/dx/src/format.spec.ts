@@ -156,7 +156,7 @@ test("breaks a two-segment pipe when a segment is itself multi-line", () => {
   expect(fmt(out)).toBe(out);
 });
 
-test("trailing-lambda closer drops under a canonical block body (not glued)", () => {
+test("trailing-lambda do hugs ) onto the closing brace", () => {
   const src =
     "let _draw = useEffect(() => let _ = watchEat(particles, eatWatch, board) in let _ = paintBoard(canvasRef, board, particles) in startParticleLoop(canvasRef, particles, boardRef))";
   const out = [
@@ -164,8 +164,7 @@ test("trailing-lambda closer drops under a canonical block body (not glued)", ()
     "  watchEat(particles, eatWatch, board);",
     "  paintBoard(canvasRef, board, particles);",
     "  startParticleLoop(canvasRef, particles, boardRef)",
-    "}",
-    ")",
+    "})",
     "",
   ].join("\n");
   expect(fmt(src)).toBe(out);
@@ -199,8 +198,7 @@ test("curried apply hugs a multiline trailing-lambda block callee", () => {
     "  watchEat(particles, eatWatch, board);",
     "  paintBoard(canvasRef, board, particles);",
     "  startParticleLoop(canvasRef, particles, boardRef)",
-    "}",
-    ")(hookDeps2(props.snake, props.food))",
+    "})(hookDeps2(props.snake, props.food))",
     "",
   ].join("\n");
   expect(fmt(src)).toBe(out);

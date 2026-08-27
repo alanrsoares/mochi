@@ -551,6 +551,11 @@ const writtenTypeExprs = (prog: Program): TypeExpr[] => {
           if (x.kind === "letin" && x.annot) out.push(x.annot);
         });
         break;
+      case "expr":
+        forEachSubExpr(s.value, (x) => {
+          if (x.kind === "letin" && x.annot) out.push(x.annot);
+        });
+        break;
       case "type":
         for (const c of s.ctors) for (const fld of c.fields) out.push(fld.type);
         for (const fld of s.alias ?? []) out.push(fld.type);
@@ -780,6 +785,8 @@ function checkReservedWords(prog: Program): Diagnostic[] {
   for (const s of prog.stmts) {
     if (s.kind === "let") {
       diags.push(...many(reservedBind(s.name, s.nameSpan), checkExprBinds(s.value)));
+    } else if (s.kind === "expr") {
+      diags.push(...many(checkExprBinds(s.value)));
     } else if (s.kind === "extern") {
       diags.push(...many(reservedBind(s.name, s.nameSpan)));
     } else if (s.kind === "type") {
@@ -922,7 +929,9 @@ function checkLoops(prog: Program): Diagnostic[] {
     }
   };
 
-  for (const s of prog.stmts) if (s.kind === "let") walk(s.value, null, false);
+  for (const s of prog.stmts) {
+    if (s.kind === "let" || s.kind === "expr") walk(s.value, null, false);
+  }
   return diags;
 }
 
@@ -947,7 +956,7 @@ export function check(
   }
 
   for (const s of prog.stmts) {
-    if (s.kind !== "let") continue;
+    if (s.kind !== "let" && s.kind !== "expr") continue;
     forEachMatch(s.value, (m) => {
       const e = checkMatch(m, reg);
       if (e) diags.push(e);

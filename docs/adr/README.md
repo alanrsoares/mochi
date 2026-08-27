@@ -130,6 +130,8 @@ What else was on the table and why not.
 | [0083](0083-lambda-paren-rule.md) | Keep the lambda paren rule; name it on tuple/arity mismatch | Accepted |
 | [0084](0084-structural-eq.md) | `eq`/`show`/`compare` stay structural; `-By` is the override | Accepted |
 | [0085](0085-int-float-aliases.md) | `int`/`float` are documentation aliases of `number` | Accepted |
+| [0086](0086-bun-test-bindings.md) | bun:test bindings for Mochi specs | Accepted |
+| [0087](0087-expr-statements.md) | Top-level expression statements are unit | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

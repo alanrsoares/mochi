@@ -657,6 +657,7 @@ let checkReservedNames = stmts =>
         // ADR 0045 decision 4 (no-cascade): an unparsable region binds nothing, so it
         // contributes no diagnostic here and suppresses none either.
         None
+      | Ast.SExpr(_, _) => None
     },
     stmts
   )
@@ -835,7 +836,7 @@ export let checkWith = (stmts, imported, quals) => switch checkReservedNames(stm
                 reg0.types
               )
             } in
-              switch firstSome(s => switch s { | Ast.SLet(_, _, _, value, _, _, _) => checkExpr(value, reg) | _ => None }, stmts) {
+              switch firstSome(s => switch s { | Ast.SLet(_, _, _, value, _, _, _) => checkExpr(value, reg) | Ast.SExpr(value, _) => checkExpr(value, reg) | _ => None }, stmts) {
                 | Some(e) => Err(e)
                 | None => Ok(stmts)
               }

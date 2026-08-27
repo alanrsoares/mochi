@@ -67,11 +67,13 @@ test("plugins contribute sync tokens, and core does not hardcode them", () => {
   // Core's sync set has no `switch`, so recovery runs to eof: one error node, one diagnostic.
   expect(recover(src).diagnostics).toHaveLength(1);
   expect(errorNodes(src)).toHaveLength(1);
-  // A plugin that owns a top-level `switch` form makes it a resume point — the parser
-  // stops there, tries to parse it, and reports its own failure separately.
+  // A plugin that owns a top-level `switch` form makes it a resume point. With
+  // expression statements (ADR 0087), `switch` parses as an expr stmt — the
+  // plugin's sync token is what lets it survive instead of being swallowed.
   const withSwitch: LanguagePlugin = { name: "t", syncTokens: ["switch"] };
   const r = recover(src, [withSwitch]);
-  expect(r.diagnostics).toHaveLength(2);
+  expect(r.diagnostics).toHaveLength(1);
+  expect(r.program.stmts.map((s) => s.kind)).toEqual(["error", "expr"]);
   expect(errorNodes(src, [withSwitch])[0]!.span).toEqual({ start: 0, end: src.indexOf("\n") });
 });
 

@@ -86,6 +86,8 @@ string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck�
 
 - **Unit / package specs** — colocated as `packages/<pkg>/src/**/*.spec.ts` (compiler
   passes, DX queries, plugins). Test one module or package surface in isolation.
+  Mochi specs are `*.spec.mochi` (`import { test, assertEq, ok } from "@mochi/test"`,
+  ADR 0086) — `bun test` discovers them via bunfig `[loader] ".mochi" = "js"`.
 - **Smoke / integration** — `test/` only: bootstrap parity, module graphs, examples,
   playground, cross-package seams (`extensions.spec.ts`), and language guards that
   exercise the full pipeline.

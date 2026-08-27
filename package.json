@@ -62,6 +62,7 @@
     "@mochi/plugin-preact": "workspace:*",
     "@mochi/plugin-re-reduced": "workspace:*",
     "@mochi/plugin-styled-cva": "workspace:*",
+    "@mochi/test": "workspace:*",
     "@mochi/test-support": "workspace:*",
     "@mochi/vite-plugin": "workspace:*",
     "@types/bun": "latest",

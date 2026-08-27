@@ -1073,6 +1073,7 @@ let genStmt = (ctx, s) => switch s {
       name
     ) in // never export destructure temps
       "${doExport ? "export " : ""}const ${name} = ${ctx->genExpr(value)};"
+  | Ast.SExpr(value, _) => "${ctx->genExpr(value)};"
 }
 
 // Need `@onrails/pattern` import? Only if a match lowers to a `match()`
@@ -1312,6 +1313,7 @@ let boundNamesFrom = (stmts, i, acc) => switch Array.get(i, stmts) {
         | Ast.SError(_) =>
           // An unparsable region binds nothing (ADR 0045).
           acc
+        | Ast.SExpr(_, _) => acc
       }
     )
 }
@@ -1319,6 +1321,7 @@ let boundNames = stmts => boundNamesFrom(stmts, 0, Set.fromArray([]))
 
 let refsForStmt = (ctx, s) => switch s {
   | Ast.SLet(_, _, _, value, _, _, _) => ctx->exprRefs(value, Set.fromArray([]))
+  | Ast.SExpr(value, _) => ctx->exprRefs(value, Set.fromArray([]))
   | Ast.SType(_, _, ctors, _, _, _, _, _) =>
     // A multi-field constructor lowers to `_curry(...)` in genType (which
     // exprRefs never walks), so seed the dep here.
@@ -1387,6 +1390,7 @@ export let codegen = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps) =>
   let needsMatch = someOf(
     s => switch s {
       | Ast.SLet(_, _, _, value, _, _, _) => usesMatchLib(value)
+      | Ast.SExpr(value, _) => usesMatchLib(value)
       | _ => false
     },
     stmts

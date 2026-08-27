@@ -1,0 +1,8 @@
+import { assertEq, describe, ok, test } from "@mochi/test"
+
+describe("assertEq", () => {
+  test("numbers", () => 1 + 1 |> assertEq(2));
+  test("strings", () => "ab" |> assertEq("ab"));
+  test("ok", () => 1 == 1 |> ok);
+  test("not", () => 1 != 2 |> ok)
+})

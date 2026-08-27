@@ -161,13 +161,13 @@ let errAt = (message, lt) =>
   Err({ message: message, start: lt.start, end: lt.end })
 
 let expectTok = (t, toks, pos) =>
-  let lt = tokAt(toks, pos) in
+  let lt = toks->tokAt(pos) in
     lt.tok == t
       ? Ok(pos + 1)
       : errAt("expected ${tokName(t)}, got ${tokName(lt.tok)}", lt)
 
 let expectId = (toks, pos) =>
-  let lt = tokAt(toks, pos) in
+  let lt = toks->tokAt(pos) in
     switch lt.tok {
       | TId(name) => Ok(({ name: name, span: spanOf(lt) }, pos + 1))
       | t => errAt("expected id, got ${tokName(t)}", lt)
@@ -506,7 +506,7 @@ let sectionLeft = (provided, opLt) =>
     )
 
 // `(op provided)` — called from just after `(`. `(- x)` stays unary negation.
-let parseRightSection = (lparenSpan, toks, pos, hooks) =>
+let parseRightSection = (toks, lparenSpan, pos, hooks) =>
   let lt = tokAt(toks, pos) in
   let? (y, p1) = parseExpr(toks, pos + 1, hooks) in
   let? p2 = expectTok(TRparen, toks, p1) in
@@ -521,10 +521,10 @@ let parseRightSection = (lparenSpan, toks, pos, hooks) =>
     ))
 
 // Shared left-section / bin-call fork used by every sectionable infix group.
-let binCallOrLeftSection = (left, lt, toks, pos, bp, fnName, hooks) =>
+let binCallOrLeftSection = (toks, left, lt, pos, bp, fnName, hooks) =>
   tokAt(toks, pos + 1).tok == TRparen
     ? Ok({ left: sectionLeft(left, lt), p: pos + 1, matched: true })
-    : let? (right, p) = parseExprBp(bp + 1, toks, pos + 1, hooks) in
+    : let? (right, p) = toks->parseExprBp(bp + 1, pos + 1, hooks) in
       Ok(
         {
           left: mkBinCall(fnName, spanOf(lt), left, right),
@@ -555,7 +555,7 @@ let cmpFnName = t => switch t {
 // position, in precedence order, and reports whether one matched (so
 // `infixLoop` knows whether to keep going). Mirrors src/parser.ts's
 // `parseInfix` — `minBp` gates each group exactly like there.
-let parseInfix = (minBp, left, toks, pos, hooks) =>
+let parseInfix = (toks, minBp, left, pos, hooks) =>
   let lt = tokAt(toks, pos) in
     lt.tok == TPipe && PIPE_BP >= minBp
       ? let? (right, p) = parseAtomOrCall(toks, pos + 1, hooks) in
@@ -591,7 +591,7 @@ let parseInfix = (minBp, left, toks, pos, hooks) =>
             )
         }
       : lt.tok == TCompose && COMPOSE_BP >= minBp
-      ? let? (right, p) = parseExprBp(COMPOSE_BP + 1, toks, pos + 1, hooks) in
+      ? let? (right, p) = toks->parseExprBp(COMPOSE_BP + 1, pos + 1, hooks) in
       let opSpan = spanOf(lt) in
       let xRef = Ast.ERef("$x", opSpan) in
       let innerCall = Ast.ECall(left, [xRef], None, exprSpan(left)) in
@@ -610,7 +610,7 @@ let parseInfix = (minBp, left, toks, pos, hooks) =>
       : isCmpTok(lt.tok) && CMP_BP >= minBp
       ? tokAt(toks, pos + 1).tok == TRparen
         ? Ok({ left: sectionLeft(left, lt), p: pos + 1, matched: true })
-        : let? (right, p) = parseExprBp(CMP_BP + 1, toks, pos + 1, hooks) in
+        : let? (right, p) = toks->parseExprBp(CMP_BP + 1, pos + 1, hooks) in
         let opSpan = spanOf(lt) in
         let inner = mkBinCall(cmpFnName(lt.tok), opSpan, left, right) in
         let result = lt.tok == TNeq
@@ -627,13 +627,13 @@ let parseInfix = (minBp, left, toks, pos, hooks) =>
         : OR_BP) >= minBp
       ? let bp = lt.tok == TAndand ? AND_BP : OR_BP in
       let fnName = lt.tok == TAndand ? "and" : "or" in
-        binCallOrLeftSection(left, lt, toks, pos, bp, fnName, hooks)
+        toks->binCallOrLeftSection(left, lt, pos, bp, fnName, hooks)
       : lt.tok == TConcat && CONCAT_BP >= minBp
-      ? binCallOrLeftSection(left, lt, toks, pos, CONCAT_BP, "concat", hooks)
+      ? toks->binCallOrLeftSection(left, lt, pos, CONCAT_BP, "concat", hooks)
       : lt.tok == TBacktick && BACKTICK_BP >= minBp
       ? let? (fnExpr, p1) = parseAtomOrCall(toks, pos + 1, hooks) in
       let? p2 = expectTok(TBacktick, toks, p1) in
-      let? (right, p3) = parseExprBp(BACKTICK_BP + 1, toks, p2, hooks) in
+      let? (right, p3) = toks->parseExprBp(BACKTICK_BP + 1, p2, hooks) in
         Ok(
           {
             left: Ast.ECall(
@@ -648,20 +648,20 @@ let parseInfix = (minBp, left, toks, pos, hooks) =>
         )
       : lt.tok == TPlus || lt.tok == TMinus && ADD_BP >= minBp
       ? let fnName = lt.tok == TPlus ? "add" : "sub" in
-        binCallOrLeftSection(left, lt, toks, pos, ADD_BP, fnName, hooks)
+        toks->binCallOrLeftSection(left, lt, pos, ADD_BP, fnName, hooks)
       : lt.tok == TStar || (lt.tok == TSlash || lt.tok == TPercent) && MUL_BP >= minBp
       ? let fnName = lt.tok == TStar
         ? "mul"
         : lt.tok == TSlash
         ? "div"
         : "mod" in
-        binCallOrLeftSection(left, lt, toks, pos, MUL_BP, fnName, hooks)
+        toks->binCallOrLeftSection(left, lt, pos, MUL_BP, fnName, hooks)
       : Ok({ left: left, p: pos, matched: false })
 
-let infixLoop = (minBp, left, toks, pos, hooks) =>
-  let? res = parseInfix(minBp, left, toks, pos, hooks) in
+let infixLoop = (toks, minBp, left, pos, hooks) =>
+  let? res = toks->parseInfix(minBp, left, pos, hooks) in
     res.matched
-      ? infixLoop(minBp, res.left, toks, res.p, hooks)
+      ? toks->infixLoop(minBp, res.left, res.p, hooks)
       : Ok((res.left, res.p))
 
 // cond ? then : else — binds looser than every operator (only tried at
@@ -669,11 +669,11 @@ let infixLoop = (minBp, left, toks, pos, hooks) =>
 // branch. `a == b ? x : y` parses as `(a == b) ? x : y`: the `?` after `b`
 // (parsed at minBp CMP_BP+1) is never reached here — only the enclosing
 // minBp-0 call sees it.
-let ternaryTail = (cond, toks, pos, hooks) =>
+let ternaryTail = (toks, cond, pos, hooks) =>
   tokAt(toks, pos).tok == TQuestion
-    ? let? (thenE, p1) = parseExpr(toks, pos + 1, hooks) in
+    ? let? (thenE, p1) = toks->parseExpr(pos + 1, hooks) in
     let? p2 = expectTok(TColon, toks, p1) in
-    let? (elseE, p3) = parseExpr(toks, p2, hooks) in
+    let? (elseE, p3) = toks->parseExpr(p2, hooks) in
       Ok((
         Ast.ETernary(
           cond,
@@ -691,19 +691,19 @@ let ternaryTail = (cond, toks, pos, hooks) =>
 // operator, where a trailing `id =>` or `?` belongs to an *enclosing*
 // construct (a switch-arm guard, or the ternary this operand is itself
 // inside of).
-let parseExprBp = (minBp, toks, pos, hooks) => switch tokAt(toks, pos).tok {
-  | TLet => parseLetIn(toks, pos, hooks)
+let parseExprBp = (toks, minBp, pos, hooks) => switch tokAt(toks, pos).tok {
+  | TLet => toks->parseLetIn(pos, hooks)
   | _ => minBp == 0 && looksLikeLambda(toks, pos)
-      ? parseLambda(toks, pos, hooks)
+      ? toks->parseLambda(pos, hooks)
       : let? (left, p) = parseAtomOrCall(toks, pos, hooks) in
-      let? (left2, p2) = infixLoop(minBp, left, toks, p, hooks) in
-        minBp == 0 ? ternaryTail(left2, toks, p2, hooks) : Ok((left2, p2))
+      let? (left2, p2) = toks->infixLoop(minBp, left, p, hooks) in
+        minBp == 0 ? toks->ternaryTail(left2, p2, hooks) : Ok((left2, p2))
 }
 
-let parseExpr = (toks, pos, hooks) => parseExprBp(0, toks, pos, hooks)
+let parseExpr = (toks, pos, hooks) => toks->parseExprBp(0, pos, hooks)
 
 // Postfix chain: calls `f(...)` and field access `.name`.
-let postfixLoop = (e, toks, pos, hooks) => switch tokAt(toks, pos).tok {
+let postfixLoop = (toks, e, pos, hooks) => switch tokAt(toks, pos).tok {
   | TLparen => let? (args, p) = listUntilH(
       TRparen,
       parseExpr,
@@ -712,9 +712,8 @@ let postfixLoop = (e, toks, pos, hooks) => switch tokAt(toks, pos).tok {
       hooks
     ) in
     let? p2 = expectTok(TRparen, toks, p) in
-      postfixLoop(
+      toks->postfixLoop(
         Ast.ECall(e, args, None, toEnd(exprSpan(e), toks, p2)),
-        toks,
         p2,
         hooks
       )
@@ -723,9 +722,8 @@ let postfixLoop = (e, toks, pos, hooks) => switch tokAt(toks, pos).tok {
     // transient props), so it must be a legal projection too — `props.$tone`
     // reads the field `{ $tone: … }` writes. Mirrors `parser.ts`'s dot production.
     let? (id, p) = toks->expectLabel(pos + 1) in
-      postfixLoop(
+      toks->postfixLoop(
         Ast.EField(e, id.name, spanning(exprSpan(e), id.span)),
-        toks,
         p,
         hooks
       )
@@ -750,21 +748,21 @@ let parseAtomOrCall = (toks, pos, hooks) =>
           p
         ))
       : let? (e, p) = toks->parseAtom(pos, hooks) in
-        e->postfixLoop(toks, p, hooks)
+        toks->postfixLoop(e, p, hooks)
 
 let parseAtom = (toks, pos, hooks) =>
-  let lt = tokAt(toks, pos) in
+  let lt = toks->tokAt(pos) in
   let sp = spanOf(lt) in
     switch lt.tok {
-      | TSwitch => parseMatch(toks, pos, hooks)
-      | TDo => parseDo(toks, pos, hooks)
-      | TLoop => parseLoop(toks, pos, hooks)
-      | TRecur => parseRecur(toks, pos, hooks)
-      | TLbrace => parseRecord(toks, pos, hooks)
-      | TLbracket => parseArr(toks, pos, hooks)
-      | TAt => parseList(toks, pos, hooks)
-      | THash => parseHash(toks, pos, hooks)
-      | TTmplStart(_) => parseInterp(toks, pos, hooks)
+      | TSwitch => toks->parseMatch(pos, hooks)
+      | TDo => toks->parseDo(pos, hooks)
+      | TLoop => toks->parseLoop(pos, hooks)
+      | TRecur => toks->parseRecur(pos, hooks)
+      | TLbrace => toks->parseRecord(pos, hooks)
+      | TLbracket => toks->parseArr(pos, hooks)
+      | TAt => toks->parseList(pos, hooks)
+      | THash => toks->parseHash(pos, hooks)
+      | TTmplStart(_) => toks->parseInterp(pos, hooks)
       | _ =>
         // Plugin-owned prefix forms (JSX `<…>`) after every core atom prefix.
         let? claimed = runParseHooks(hooks, toks, pos, (t, p) =>
@@ -787,7 +785,7 @@ let parseAtom = (toks, pos, hooks) =>
                     nxt.tok == TRparen
                       ? Ok((Ast.EUnit(toEnd(sp, toks, pos + 2)), pos + 2))
                       : isSectionOp(nxt.tok) && nxt.tok != TMinus
-                      ? parseRightSection(sp, toks, pos + 1, hooks)
+                      ? toks->parseRightSection(sp, pos + 1, hooks)
                       : let? (first, p) = parseExpr(toks, pos + 1, hooks) in
                         tokAt(toks, p).tok == TComma
                           ? let? (elements, p2) = sepByH(
@@ -832,10 +830,9 @@ let parseInterpLoop = (toks, pos, start, acc, hooks) =>
     }
 
 let parseInterp = (toks, pos, hooks) =>
-  let lt = tokAt(toks, pos) in
+  let lt = toks->tokAt(pos) in
     switch lt.tok {
-      | TTmplStart(value) => parseInterpLoop(
-          toks,
+      | TTmplStart(value) => toks->parseInterpLoop(
           pos + 1,
           spanOf(lt),
           [Ast.IPLit(value)],
@@ -845,10 +842,10 @@ let parseInterp = (toks, pos, hooks) =>
     }
 
 let parseField = (toks, pos, hooks) =>
-  let lt = tokAt(toks, pos) in
-  let? (nm, p) = expectLabel(toks, pos) in
+  let lt = toks->tokAt(pos) in
+  let? (nm, p) = toks->expectLabel(pos) in
     tokAt(toks, p).tok == TColon
-      ? let? (value, p2) = parseExpr(toks, p + 1, hooks) in
+      ? let? (value, p2) = toks->parseExpr(p + 1, hooks) in
         Ok(({ name: nm.name, value: value }, p2))
       : keywordText(lt.tok) != None
       ? errAt("'${nm.name}' is a keyword — write '${nm.name}: <expr>'", lt)
@@ -876,12 +873,12 @@ let parseRecord = (toks, pos, hooks) =>
 
 let parseSeqElem = (toks, pos, hooks) =>
   tokAt(toks, pos).tok == TSpread
-    ? let? (ex, p) = parseExpr(toks, pos + 1, hooks) in
+    ? let? (ex, p) = toks->parseExpr(pos + 1, hooks) in
       Ok((Ast.SESpread(ex), p))
-    : let? (ex, p) = parseExpr(toks, pos, hooks) in Ok((Ast.SEExpr(ex), p))
+    : let? (ex, p) = toks->parseExpr(pos, hooks) in Ok((Ast.SEExpr(ex), p))
 
 let parseArr = (toks, pos, hooks) =>
-  let start = spanOf(tokAt(toks, pos)) in
+  let start = spanOf(toks->tokAt(pos)) in
   let? p = expectTok(TLbracket, toks, pos) in
   let? (elements, p2) = listUntilH(TRbracket, parseSeqElem, toks, p, hooks) in
   let? p3 = expectTok(TRbracket, toks, p2) in
@@ -897,9 +894,9 @@ let parseList = (toks, pos, hooks) =>
     Ok((Ast.EList(elements, toEnd(start, toks, p3)), p3))
 
 let parseMapEntry = (toks, pos, hooks) =>
-  let? (key, p) = parseExpr(toks, pos, hooks) in
+  let? (key, p) = toks->parseExpr(pos, hooks) in
   let? p2 = expectTok(TColon, toks, p) in
-  let? (value, p3) = parseExpr(toks, p2, hooks) in
+  let? (value, p3) = toks->parseExpr(p2, hooks) in
     Ok(({ key: key, value: value }, p3))
 
 // `#{}` empty Map; `#{k: v}` Map; `#{a, b}` / `#{...s}` Set (ADR 0001).
@@ -920,10 +917,10 @@ let parseHash = (toks, pos, hooks) =>
       ) in
       let? p3 = expectTok(TRbrace, toks, p2) in
         Ok((Ast.ESet(elements, toEnd(start, toks, p3)), p3))
-      : let? (first, p2) = parseExpr(toks, p1, hooks) in
+      : let? (first, p2) = toks->parseExpr(p1, hooks) in
         tokAt(toks, p2).tok == TColon
           ? let? p3 = expectTok(TColon, toks, p2) in
-          let? (value, p4) = parseExpr(toks, p3, hooks) in
+          let? (value, p4) = toks->parseExpr(p3, hooks) in
           let? (rest, p5) = tokAt(toks, p4).tok == TComma
             ? listUntilH(TRbrace, parseMapEntry, toks, p4 + 1, hooks)
             : Ok(([], p4)) in
@@ -951,7 +948,7 @@ let parseHash = (toks, pos, hooks) =>
 
 // `when <expr>` guard — contextual keyword, like `in`.
 let parseGuard = (toks, pos, hooks) => switch tokAt(toks, pos).tok {
-  | TId("when") => parseExpr(toks, pos + 1, hooks)
+  | TId("when") => toks->parseExpr(pos + 1, hooks)
       |> Result.map(((g, p)) => (Some(g), p))
   | _ => Ok((None, pos))
 }
@@ -977,20 +974,20 @@ let patSpan = p => switch p {
 // of a following bar (next is `when`/`=>`) ends the run.
 let altsLoop = (toks, pos, acc, lastSpan) =>
   tokAt(toks, pos).tok == TBar
-    ? let? (alt, p1) = parsePattern(toks, pos + 1) in
-      altsLoop(toks, p1, Array.append(alt, acc), patSpan(alt))
+    ? let? (alt, p1) = toks->parsePattern(pos + 1) in
+      toks->altsLoop(p1, Array.append(alt, acc), patSpan(alt))
     : Ok((acc, pos, lastSpan))
 
 let armsLoop = (toks, pos, acc, hooks) =>
   tokAt(toks, pos).tok == TBar
     ? let? (first, p1) = parsePattern(toks, pos + 1) in
-    let? (alts, p2, lastSpan) = altsLoop(toks, p1, [first], patSpan(first)) in
+    let? (alts, p2, lastSpan) = toks->altsLoop(p1, [first], patSpan(first)) in
     let pattern = Array.length(alts) == 1
       ? first
       : Ast.POr(alts, spanning(patSpan(first), lastSpan)) in
     let? (guard, p3) = parseGuard(toks, p2, hooks) in
     let? p4 = expectTok(TArrow, toks, p3) in
-    let? (body, p5) = parseExpr(toks, p4, hooks) in
+    let? (body, p5) = toks->parseExpr(p4, hooks) in
       armsLoop(
         toks,
         p5,
@@ -1002,12 +999,12 @@ let armsLoop = (toks, pos, acc, hooks) =>
 // `loop (acc = 0, i = 0) { body }` — tail-recursion loop (ADR 0056).
 let parseDo = (toks, pos, hooks) =>
   let start = spanOf(tokAt(toks, pos)) in
-  let? p = expectTok(TDo, toks, pos) in parseDoBlockFrom(start, toks, p, hooks)
+  let? p = expectTok(TDo, toks, pos) in toks->parseDoBlockFrom(start, p, hooks)
 
 let parseDoBlock = (toks, pos, hooks) =>
-  parseDoBlockFrom(spanOf(tokAt(toks, pos)), toks, pos, hooks)
+  toks->parseDoBlockFrom(spanOf(tokAt(toks, pos)), pos, hooks)
 
-let parseDoBlockFrom = (start, toks, pos, hooks) =>
+let parseDoBlockFrom = (toks, start, pos, hooks) =>
   let? p1 = expectTok(TLbrace, toks, pos) in
     tokAt(toks, p1).tok == TRbrace
       ? errAt("do block needs a final expression", tokAt(toks, p1))
@@ -1018,20 +1015,20 @@ let parseDoBlockFrom = (start, toks, pos, hooks) =>
             Ok((Ast.EDo(exprs, toEnd(start, toks, p3)), p3))
 
 let parseDoExprs = (toks, pos, acc, hooks) =>
-  let? (expr, p) = parseExpr(toks, pos, hooks) in
+  let? (expr, p) = toks->parseExpr(pos, hooks) in
   let next = Array.append(expr, acc) in
     tokAt(toks, p).tok == TSemi
-      ? parseDoExprs(toks, p + 1, next, hooks)
+      ? toks->parseDoExprs(p + 1, next, hooks)
       : Ok((next, p))
 
 let parseLoop = (toks, pos, hooks) =>
-  let start = spanOf(tokAt(toks, pos)) in
+  let start = spanOf(toks->tokAt(pos)) in
   let? p = expectTok(TLoop, toks, pos) in
   let? p1 = expectTok(TLparen, toks, p) in
   let? (params, p2) = loopParamsLoop(toks, p1, [], hooks) in
   let? p3 = expectTok(TRparen, toks, p2) in
   let? p4 = expectTok(TLbrace, toks, p3) in
-  let? (body, p5) = parseExpr(toks, p4, hooks) in
+  let? (body, p5) = toks->parseExpr(p4, hooks) in
     expectTok(TRbrace, toks, p5)
       |> Result.map(p6 => (Ast.ELoop(params, body, toEnd(start, toks, p6)), p6))
 
@@ -1077,7 +1074,7 @@ let parseMatch = (toks, pos, hooks) =>
 
 // A ctor pattern's argument list, after the (already consumed) ctor name.
 // `ns` is `Some(alias)` for a qualified `Alias.Ctor(…)` (ADR 0002), else None.
-let parseCtorArgs = (ctor, ns, nameSpan, toks, pos) =>
+let parseCtorArgs = (toks, ctor, ns, nameSpan, pos) =>
   tokAt(toks, pos).tok == TLparen
     ? let? (args, p) = listUntil(TRparen, parsePattern, toks, pos + 1) in
     let? p2 = expectTok(TRparen, toks, p) in
@@ -1119,13 +1116,13 @@ let parsePatternAtom = (toks, pos) =>
       | TId(name) => tokAt(toks, pos + 1).tok == TDot
           ? let? (c, p1) = expectId(toks, pos + 2) in
             isUpper(c.name)
-              ? parseCtorArgs(c.name, Some(name), sp, toks, p1)
+              ? toks->parseCtorArgs(c.name, Some(name), sp, p1)
               : errAt(
                 "expected constructor after '${name}.', got '${c.name}'",
                 tokAt(toks, p1)
               )
           : isUpper(name)
-          ? parseCtorArgs(name, None, sp, toks, pos + 1)
+          ? toks->parseCtorArgs(name, None, sp, pos + 1)
           : Ok((Ast.PBind(name, sp), pos + 1))
       | t => errAt("unexpected token in pattern: ${tokName(t)}", lt)
     }
@@ -1202,7 +1199,7 @@ let parsePatField = (toks, pos) =>
 // --- type expressions (extern signatures + ctor fields) ---
 
 let parseTypeAtom = (toks, pos) =>
-  let lt = tokAt(toks, pos) in
+  let lt = toks->tokAt(pos) in
   let sp = spanOf(lt) in
     switch lt.tok {
       | TLparen =>
@@ -1267,7 +1264,7 @@ let startsTypeAtom = t => switch t {
 let legacyTypeArgsLoop = (toks, pos, acc, lastSp) =>
   startsTypeAtom(tokAt(toks, pos).tok)
     ? let? (a, p) = toks->parseTypeAtom(pos) in
-      legacyTypeArgsLoop(toks, p, Array.append(a, acc), Some(tySpan(a)))
+      toks->legacyTypeArgsLoop(p, Array.append(a, acc), Some(tySpan(a)))
     : Ok((acc, lastSp, pos))
 
 let parseTypeApp = (toks, pos) =>
@@ -1306,14 +1303,13 @@ let parseTypeApp = (toks, pos) =>
 let parseTypeUnionRest = (toks, pos, acc, lastSp) =>
   tokAt(toks, pos).tok == TBar
     ? let? (m, p) = toks->parseTypeApp(pos + 1) in
-      parseTypeUnionRest(toks, p, Array.append(m, acc), tySpan(m))
+      toks->parseTypeUnionRest(p, Array.append(m, acc), tySpan(m))
     : Ok((acc, lastSp, pos))
 
 let parseTypeUnion = (toks, pos) =>
   let? (first, p) = toks->parseTypeApp(pos) in
     tokAt(toks, p).tok == TBar
-      ? let? (members, lastSp, p2) = parseTypeUnionRest(
-        toks,
+      ? let? (members, lastSp, p2) = toks->parseTypeUnionRest(
         p,
         [first],
         tySpan(first)
@@ -1356,7 +1352,7 @@ let parseCtor = (toks, pos) =>
 let ctorsLoop = (toks, pos, acc) =>
   let? (c, p) = toks->parseCtor(pos) in
   let cs = Array.append(c, acc) in
-    tokAt(toks, p).tok == TBar ? ctorsLoop(toks, p + 1, cs) : Ok((cs, p))
+    tokAt(toks, p).tok == TBar ? toks->ctorsLoop(p + 1, cs) : Ok((cs, p))
 
 // `expectLabel`: a record type must be able to describe a host shape whose field
 // is spelled like a mochi keyword — `{ type: string }` (ADR 0077).
@@ -1433,7 +1429,7 @@ let parseType = (toks, pos) =>
           p4
         ))
       : let afterBar = tokAt(toks, p3).tok == TBar ? p3 + 1 : p3 in
-        ctorsLoop(toks, afterBar, [])
+        toks->ctorsLoop(afterBar, [])
           |> Result.map(((ctors, p4)) =>
             (
               Ast.SType(
@@ -1452,11 +1448,11 @@ let parseType = (toks, pos) =>
 
 // extern name : type = "module" "export"; contextual JS conventions mirror src/parser.ts.
 let parseExtern = (toks, pos) =>
-  let start = spanOf(tokAt(toks, pos)) in
+  let start = spanOf(toks->tokAt(pos)) in
   let? p = expectTok(TExtern, toks, pos) in
     tokAt(toks, p).tok == TType
       ? let? p1 = expectTok(TType, toks, p) in
-      let? (nm, p2) = expectId(toks, p1) in
+      let? (nm, p2) = toks->expectId(p1) in
         Ok((
           Ast.SType(
             nm.name,
@@ -1542,7 +1538,7 @@ let parseExtern = (toks, pos) =>
 // import { a, b } from "./mod"
 // import * as Alias from "./mod" — whole module as a user namespace (ADR 0002).
 // `as` / `from` are contextual ids (still valid ids), like `in`.
-let parseImportNs = (start, toks, pos) =>
+let parseImportNs = (toks, start, pos) =>
   let? (asKw, p1) = expectId(toks, pos) in
     asKw.name == "as"
       ? let? (alias, p2) = expectId(toks, p1) in
@@ -1565,7 +1561,7 @@ let parseImport = (toks, pos) =>
   let start = spanOf(tokAt(toks, pos)) in
   let? p = expectTok(TImport, toks, pos) in
     tokAt(toks, p).tok == TStar
-      ? let? p1 = expectTok(TStar, toks, p) in parseImportNs(start, toks, p1)
+      ? let? p1 = expectTok(TStar, toks, p) in toks->parseImportNs(start, p1)
       : let? p1 = expectTok(TLbrace, toks, p) in
       let? (names, p2) = listUntil(TRbrace, expectId, toks, p1) in
       let? p3 = expectTok(TRbrace, toks, p2) in
@@ -1582,7 +1578,7 @@ let parseImport = (toks, pos) =>
 
 // `let { x, y } = e` desugars to a `$dN` temp binding plus one field-access
 // `let` per name — mirrors the TS parser, including the temp counter.
-let parseRecordDestructure = (start, toks, pos, tmp, hooks) =>
+let parseRecordDestructure = (toks, start, pos, tmp, hooks) =>
   let openSp = spanOf(tokAt(toks, pos)) in
   let? p = expectTok(TLbrace, toks, pos) in
   let? (fields, p1) = listUntil(TRbrace, expectId, toks, p) in
@@ -1607,16 +1603,16 @@ let parseRecordDestructure = (start, toks, pos, tmp, hooks) =>
     Ok((Array.prepend(header, fields |> map(access)), p4, tmp + 1))
 
 let parseLet = (toks, pos, tmp, hooks) =>
-  let start = spanOf(tokAt(toks, pos)) in
+  let start = spanOf(toks->tokAt(pos)) in
   let? p = expectTok(TLet, toks, pos) in
     tokAt(toks, p).tok == TLbrace
-      ? parseRecordDestructure(start, toks, p, tmp, hooks)
+      ? toks->parseRecordDestructure(start, p, tmp, hooks)
       : let? (nm, p1) = expectId(toks, p) in
       let? (annot, pA) = tokAt(toks, p1).tok == TColon
-        ? parseTypeExpr(toks, p1 + 1) |> Result.map(((ty, p)) => (Some(ty), p))
+        ? toks->parseTypeExpr(p1 + 1) |> Result.map(((ty, p)) => (Some(ty), p))
         : Ok((None, p1)) in
       let? p2 = expectTok(TEq, toks, pA) in
-      let? (value, p3) = parseExpr(toks, p2, hooks) in
+      let? (value, p3) = toks->parseExpr(p2, hooks) in
         Ok((
           [
             Ast.SLet(
@@ -1686,6 +1682,13 @@ let setExternMeta = (exported, doc, s) => switch s {
 }
 let setExternExported = s => setExternMeta(true, None, s)
 
+// Top-level expression statement (ADR 0087). Trailing `;` is optional.
+let parseExprStmt = (toks, pos, tmp, hooks) =>
+  let start = toks->tokAt(pos) in
+  let? (value, p) = toks->parseExpr(pos, hooks) in
+  let p2 = tokAt(toks, p).tok == TSemi ? p + 1 : p in
+    Ok(([Ast.SExpr(value, spanning(start, exprSpan(value)))], p2, tmp))
+
 // A statement can desugar to several (record destructure); the leading `///`
 // doc block rides on the first token and attaches to every produced `let`.
 let parseStmt = (toks, pos, tmp, hooks) =>
@@ -1695,11 +1698,11 @@ let parseStmt = (toks, pos, tmp, hooks) =>
       | TImport => parseImport(toks, pos)
           |> Result.map(((s, p)) => ([s], p, tmp))
       | TExport => switch tokAt(toks, pos + 1).tok {
-          | TType => parseType(toks, pos + 1)
+          | TType => toks->parseType(pos + 1)
               |> Result.map(((s, p)) => ([setTypeMeta(true, doc, s)], p, tmp))
-          | TExtern => parseExtern(toks, pos + 1)
+          | TExtern => toks->parseExtern(pos + 1)
               |> Result.map(((s, p)) => ([setExternMeta(true, doc, s)], p, tmp))
-          | TLet => parseLet(toks, pos + 1, tmp, hooks)
+          | TLet => toks->parseLet(pos + 1, tmp, hooks)
               |> Result.map(((stmts, p, tmp2)) =>
                 (stmts |> map(setLetMeta(true, doc)), p, tmp2)
               )
@@ -1708,14 +1711,15 @@ let parseStmt = (toks, pos, tmp, hooks) =>
               tokAt(toks, pos + 1)
             )
         }
-      | TType => parseType(toks, pos)
+      | TType => toks->parseType(pos)
           |> Result.map(((s, p)) => ([setTypeMeta(false, doc, s)], p, tmp))
-      | TExtern => parseExtern(toks, pos)
+      | TExtern => toks->parseExtern(pos)
           |> Result.map(((s, p)) => ([setExternMeta(false, doc, s)], p, tmp))
-      | _ => parseLet(toks, pos, tmp, hooks)
+      | TLet => toks->parseLet(pos, tmp, hooks)
           |> Result.map(((stmts, p, tmp2)) =>
             (stmts |> map(setLetMeta(false, doc)), p, tmp2)
           )
+      | _ => toks->parseExprStmt(pos, tmp, hooks)
     }
 
 // --- recovery (ADR 0045) ---
@@ -1745,7 +1749,7 @@ let maxParseErrors = 100
 /// token's offsets, so TS and bootstrap resume on the same token.
 let resumeAt = (toks, pos, at) =>
   pos + 1 < Array.length(toks) && tokAt(toks, pos).start < at
-    ? resumeAt(toks, pos + 1, at)
+    ? toks->resumeAt(pos + 1, at)
     : pos
 
 /// Panic-mode skip: stop at the first sync token whose bracket depth relative to
@@ -1757,8 +1761,7 @@ let skipToSync = (toks, pos, depth) =>
     // `a || b && c` groups as `(a || b) && c`.
     t == TEof || (depth == 0 && isSyncTok(t))
       ? pos
-      : skipToSync(
-        toks,
+      : toks->skipToSync(
         pos + 1,
         isOpener(t) ? depth + 1 : isCloser(t) && depth > 0 ? depth - 1 : depth
       )
@@ -1767,9 +1770,9 @@ let skipToSync = (toks, pos, depth) =>
 /// Forward progress: when the offending token *is* the statement's own first
 /// token there is nothing to rewind to, so consume one unconditionally.
 let recoverFrom = (toks, before, failedAt, at) =>
-  let resume = resumeAt(toks, before, at) in
+  let resume = toks->resumeAt(before, at) in
   let start = resume == before ? before + 1 : resume in
-  let final = skipToSync(toks, start, 0) in
+  let final = toks->skipToSync(start, 0) in
     {
       node: Ast.SError(
         { start: failedAt.start, end: tokAt(toks, final - 1).end }
@@ -1783,13 +1786,13 @@ let stmtsLoop = (toks, pos0, tmp0, acc0, diags0, hooks) =>
   loop (pos = pos0, tmp = tmp0, acc = acc0, diags = diags0) {
     tokAt(toks, pos).tok == TEof
       ? { stmts: acc, diagnostics: diags }
-      : let failedAt = tokAt(toks, pos) in
-        switch parseStmt(toks, pos, tmp, hooks) {
+      : let failedAt = toks->tokAt(pos) in
+        switch toks->parseStmt(pos, tmp, hooks) {
           | Ok((stmts, p, tmp2)) => p == pos
               ?
                 // No production stands still; if one ever did, this turns a hang
                 // into a diagnostic.
-                let r = recoverFrom(toks, pos, failedAt, failedAt.start) in
+                let r = toks->recoverFrom(pos, failedAt, failedAt.start) in
                   recur(
                     r.pos,
                     tmp,
@@ -1825,7 +1828,7 @@ let stmtsLoop = (toks, pos0, tmp0, acc0, diags0, hooks) =>
                     ds
                   )
                 }
-                : let r = recoverFrom(toks, pos, failedAt, d.start) in
+                : let r = toks->recoverFrom(pos, failedAt, d.start) in
                   recur(r.pos, tmp, Array.append(r.node, acc), ds)
         }
   }
@@ -1852,7 +1855,7 @@ export let parse = toks => parseWith(toks, None)
 /// this reports the first diagnostic in source order.
 /// `pluginsOpt`: None = default builtins (JSX on); Some([]) = hard opt-out.
 export let parseWith = (toks, pluginsOpt) =>
-  let r = parseRecovering(toks, pluginsOpt) in
+  let r = toks->parseRecovering(pluginsOpt) in
     switch Array.get(0, r.diagnostics) {
       | Some(d) => Err(d)
       | None => Ok(r.stmts)

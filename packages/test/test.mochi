@@ -1,0 +1,12 @@
+/// ReScript-shaped bun:test bindings (`Mocha` + `Test_utils`).
+/// Assertion is `assertEq` — not `eq` — because `==` desugars to prelude `eq`
+/// and inlined `Array.contains` calls it. Expected first, actual last:
+/// `got |> assertEq(want)`. Specs are top-level `test(...)` statements (ADR 0087).
+
+export extern test : string -> (() -> ()) -> () = "@mochi/test/runtime" "test"
+export extern testSkip : string -> (() -> ()) -> () = "@mochi/test/runtime" "testSkip"
+export extern testOnly : string -> (() -> ()) -> () = "@mochi/test/runtime" "testOnly"
+export extern describe : string -> (() -> ()) -> () = "@mochi/test/runtime" "describe"
+export extern assertEq : a -> a -> () = "@mochi/test/runtime" "assertEq"
+export extern ok : bool -> () = "@mochi/test/runtime" "ok"
+export extern throws : (() -> a) -> () = "@mochi/test/runtime" "throws"

@@ -1349,6 +1349,17 @@ let processGroupsFrom = (ctx, sccs, lets, st) => switch sccs {
       ctxWithEnv(ctx, finalEnv)->processGroupsFrom(restSccs, lets, st2)
 }
 
+// Top-level expression statements after every let is generalized (ADR 0087).
+// Must unify with `()`.
+let inferExprStmtsFrom = (ctx, stmts, st) => switch stmts {
+  | [] => Ok(st)
+  | [s, ...rest] => switch s {
+      | Ast.SExpr(value, span) => let? (t, st1) = ctx->inferExpr(value, st) in
+        let? st2 = u(t, tUnit, st1, span) in ctx->inferExprStmtsFrom(rest, st2)
+      | _ => ctx->inferExprStmtsFrom(rest, st)
+    }
+}
+
 // Seed each import's already-generalized scheme into the env, so a reference to
 // an imported name types with its real (possibly polymorphic) scheme instead of
 // an open-world fresh var. A module's own `let` (inferred later, in the SCCs)
@@ -1424,7 +1435,10 @@ export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports
   let idxOf = idxOfMap(lets) in
   let sccs = stronglyConnected(adjOf(lets, idxOf)) in
     switch processGroupsFrom({ env: env4, open: openMode, ns: ns0, aliasMap: aliasMap, plugins: plugins, loopStack: [] }, sccs, lets, st3) {
-      | Ok((finalCtx, _)) => Ok(finalCtx.env)
+      | Ok((finalCtx, st4)) => switch finalCtx->inferExprStmtsFrom(stmts, st4) {
+          | Ok(_) => Ok(finalCtx.env)
+          | Err(e) => Err(e)
+        }
       | Err(e) => Err(e)
     }
 

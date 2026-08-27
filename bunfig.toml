@@ -1,0 +1,5 @@
+[loader]
+".mochi" = "js"
+
+[test]
+preload = ["./packages/test/src/preload.ts"]

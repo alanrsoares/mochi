@@ -315,6 +315,8 @@ const cStmt = (s: Stmt): Canon => {
         from: s.from,
         span: cSpan(s.span),
       };
+    case "expr":
+      return { kind: "expr", value: cExpr(s.value), span: cSpan(s.span) };
     // Recovery node (ADR 0045). Only reachable once `bootstrap/parser.mochi` mirrors
     // recovery (C9 slice f); until then the differential cases all parse cleanly.
     case "error":
@@ -554,6 +556,7 @@ const A_STMT: Record<string, (s: Al) => Canon> = {
     from: s.from,
     span: s.span,
   }),
+  SExpr: (s) => ({ kind: "expr", value: aExpr(s.value), span: s.span }),
   // ADR 0045: an unparsable region both parsers skipped. Spans must agree, which is
   // the whole point of resuming at the offending token *by span* — the bootstrap
   // parser keeps no cursor past a `Result` failure, only the error's offsets.
@@ -670,6 +673,8 @@ const cases: Record<string, string> = {
     'let f = (a, b) => a == b ? "eq" : "ne"',
   "operator sections left and right (desugar to $s lambdas)":
     "let a = (2 *)\nlet b = (+ 5)\nlet c = (10 <)\nlet d = (!= 0)\nlet e = (- 2)\nlet f = (5 -)",
+  "top-level expression statements (ADR 0087)":
+    "let f = () => ()\nf()\nignore(1)\ndo { f(); ignore(2) }",
 };
 
 for (const [name, src] of Object.entries(cases)) {

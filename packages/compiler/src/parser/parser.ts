@@ -1497,8 +1497,15 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
         const external = parseExtern();
         return [external.kind === "extern" ? { ...external, doc } : external];
       }
+      case "let":
+        return parseLet().map((s) => ({ ...s, doc }));
     }
-    return parseLet().map((s) => ({ ...s, doc }));
+    // Anything else is an expression statement (ADR 0087). Trailing `;` is
+    // optional — `do` requires it between exprs, top-level does not.
+    const start = peek().span;
+    const value = parseExpr();
+    if (peek().t === "semi") next();
+    return [{ kind: "expr", value, span: spanning(start, value.span) }];
   }
 
   /**

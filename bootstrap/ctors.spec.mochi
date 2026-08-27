@@ -1,0 +1,9 @@
+import { assertEq, ok, test } from "@mochi/test"
+import { primTypeNames } from "./ctors.mochi"
+
+test("primTypeNames has six prims", () =>
+  primTypeNames |> Array.length |> assertEq(6)
+)
+test("primTypeNames includes unit", () =>
+  primTypeNames |> Array.contains("unit") |> ok
+)

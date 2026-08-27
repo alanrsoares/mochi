@@ -49,6 +49,19 @@ bun run bootstrap:tsc  # count tsc --strict errors on the self-host (north-star:
 `check` / `test` omit `test/bootstrap-fixpoint-binary.spec.ts` and
 `test/bootstrap-tsc.spec.ts`. `check:full` / `test:full` run everything.
 
+## Mochi specs (`*.spec.mochi`)
+
+`@mochi/test` binds `bun:test` as typed `extern`s (`test`, `describe`,
+`assertEq` / `ok` / `throws` — ReScript's mocha helpers, with `assertEq` instead
+of `eq` so prelude `eq` / `==` stay intact). `assertEq` is expected-first,
+actual last, so `got |> assertEq(want)`.
+`bunfig.toml` maps `.mochi` to the JS loader so `bun test` discovers
+`*.spec.mochi` the same way it discovers `*.spec.ts`; `@mochi/test/preload`
+compiles them through the module graph ([ADR 0086](adr/0086-bun-test-bindings.md)).
+
+A spec file is top-level `test(...)` / `describe(...)` statements
+([ADR 0087](adr/0087-expr-statements.md)).
+
 `bun install` runs `prepare` → `scripts/setup-hooks.ts` →
 `lefthook install --reset-hooks-path` (see `lefthook.yml`):
 

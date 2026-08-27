@@ -331,7 +331,7 @@ const collectAnchors = (stmts: Stmt[]): Anchor[] => {
   };
   for (const s of stmts) {
     add(s);
-    if (s.kind === "let") visit(s.value);
+    if (s.kind === "let" || s.kind === "expr") visit(s.value);
     if (s.kind === "type") s.ctors.forEach(add);
   }
   return anchors;
@@ -808,7 +808,7 @@ const refoldCall = (e: CallExpr): Doc | null => {
  * than exploding the whole argument list. The hug is a `group` with a `softline`
  * before `)` so a broken body does not glue the closer onto its last line
  * (`body)` / `body)(`) — except when the body is already braced (`switch` /
- * `loop`), where `})` hugs the closer onto the closing brace instead of leaving
+ * `loop` / `do`), where `})` hugs the closer onto the closing brace instead of leaving
  * a dangling `)\n` staircase. Otherwise the args are their own group after the
  * callee — so a short curried apply can still hug a multiline callee's `)`
  * (`…)(deps)`), instead of being locked into the callee's break decision.
@@ -829,9 +829,15 @@ const callD = (e: CallExpr): Doc => {
   if (e.args.length === 1 && last.kind === "tuple")
     return group(seq(fn, txt("("), exprD(last), txt(")")));
   if (last.kind === "lambda") {
-    // `switch` / `loop` already end in `}`; glue `)` rather than soft-breaking
-    // to a lone closer under the brace.
-    const hugCloser = last.body.kind === "match" || last.body.kind === "loop";
+    // `switch` / `loop` / `do` already end in `}`; glue `)` rather than
+    // soft-breaking to a lone closer under the brace. A discarded `let _ =`
+    // chain prints as a brace block too, so hug on that AST as well — otherwise
+    // pass one emits `}\n)` and pass two, seeing a real `do`, would hug.
+    const hugCloser =
+      last.body.kind === "match" ||
+      last.body.kind === "loop" ||
+      last.body.kind === "do" ||
+      discardedLetExprs(last.body) !== null;
     return group(
       seq(
         fn,
@@ -1038,7 +1044,7 @@ const innerBindings = (stmts: Stmt[]): Set<string> => {
       })
       .otherwise(() => {});
   };
-  for (const s of stmts) if (s.kind === "let") visit(s.value);
+  for (const s of stmts) if (s.kind === "let" || s.kind === "expr") visit(s.value);
   return out;
 };
 
@@ -1196,6 +1202,10 @@ const stmtDoc = (stmts: Stmt[], i: number, src: string): StmtDoc => {
     // opaque to the layout engine: no re-indentation, no re-wrapping.
     case "error":
       return { doc: verbatim(src.slice(s.span.start, s.span.end)), consumed: 1 };
+    case "expr":
+      return { doc: exprD(s.value), consumed: 1 };
+    case "let":
+      break;
   }
 
   if (s.name.startsWith("$")) {

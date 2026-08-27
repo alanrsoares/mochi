@@ -185,7 +185,7 @@ const boundNames = (prog: Program): Set<string> => {
 export const collectRuntimeDeps = (prog: Program): string[] => {
   const refs = new Set<string>();
   for (const s of prog.stmts) {
-    if (s.kind === "let") exprRefs(s.value, refs);
+    if (s.kind === "let" || s.kind === "expr") exprRefs(s.value, refs);
     // A multi-field constructor lowers to `_curry(...)` in genType (which
     // exprRefs never walks), so seed the dep here.
     else if (s.kind === "type" && s.ctors.some((c) => c.fields.length >= 2)) refs.add("_curry");

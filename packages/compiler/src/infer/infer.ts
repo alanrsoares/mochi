@@ -133,6 +133,22 @@ const infer = (e: Expr, ctx: Ctx): Result<Type, Diagnostic> => {
   return r;
 };
 
+/** Top-level `expr` stmts after lets generalize. Must unify with `()` (ADR 0087). */
+const inferExprStmts = (prog: Program, ctx: Ctx, diags: Diagnostic[]): void => {
+  for (const s of prog.stmts) {
+    if (s.kind !== "expr") continue;
+    const t = infer(s.value, ctx);
+    if (isErr(t)) {
+      diags.push(t.error);
+      continue;
+    }
+    const uni = unify(t.value, tUnit, ctx.subst, ctx.fresh, (x) =>
+      showType(foldAliases(x, ctx.aliases)),
+    );
+    if (isErr(uni)) diags.push(typeErr(uni.error.message, s.span));
+  }
+};
+
 /** cond ? then : else — cond is bool, the branches share one type. */
 const inferTernary = (e: TernaryExpr, ctx: Ctx): Result<Type, Diagnostic> => {
   const condT = infer(e.cond, ctx);
@@ -1203,6 +1219,29 @@ function run(
       if (!s.name.startsWith("$")) noteLet(sc, s.value.span);
     }
   }
+
+  // Expression statements after every let is generalized, so they see the
+  // final schemes. Must be `()` (ADR 0087).
+  inferExprStmts(
+    prog,
+    {
+      env,
+      subst,
+      fresh,
+      open,
+      ns,
+      aliases,
+      typeScope,
+      record,
+      noteUse,
+      noteLet,
+      inferCallHooks,
+      loopStack: [],
+      localNames,
+    },
+    allDiags,
+  );
+
   if (allDiags.length > 0) return err(allDiags);
   // Resolve every recorded type now that the whole program's subst is final.
   const types = recorded.map((r) => ({

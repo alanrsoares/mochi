@@ -40,6 +40,10 @@ uses the brace form for arrow bodies. Because `{ field: value }` remains a
 record-valued arrow body, braces select sequencing only when they contain a
 top-level semicolon; use explicit `do` for a one-expression sequence.
 
+A top-level expression of type `()` is a statement ([ADR 0087](adr/0087-expr-statements.md)) —
+`test(...)`, `log(msg)`, `do { … }` whose last expr is unit. `1 + 1` at top level
+is a type error; bind it with `let` or discard with `ignore`.
+
 Annotations / `extern` may write the same domain as `() -> T` (ADR 0015).
 
 Top-level bindings are grouped into recursive components (Tarjan SCC) and inferred

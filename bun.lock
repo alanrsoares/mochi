@@ -20,6 +20,7 @@
         "@mochi/plugin-preact": "workspace:*",
         "@mochi/plugin-re-reduced": "workspace:*",
         "@mochi/plugin-styled-cva": "workspace:*",
+        "@mochi/test": "workspace:*",
         "@mochi/test-support": "workspace:*",
         "@mochi/vite-plugin": "workspace:*",
         "@types/bun": "latest",
@@ -193,6 +194,14 @@
       "name": "@mochi/runtime-components",
       "version": "0.1.0",
       "dependencies": {
+        "@onrails/result": "^0.4.0",
+      },
+    },
+    "packages/test": {
+      "name": "@mochi/test",
+      "version": "0.1.0",
+      "dependencies": {
+        "@mochi/compiler": "workspace:*",
         "@onrails/result": "^0.4.0",
       },
     },
@@ -388,6 +397,8 @@
     "@mochi/plugin-styled-cva": ["@mochi/plugin-styled-cva@workspace:packages/plugin-styled-cva"],
 
     "@mochi/runtime-components": ["@mochi/runtime-components@workspace:packages/runtime-components"],
+
+    "@mochi/test": ["@mochi/test@workspace:packages/test"],
 
     "@mochi/test-support": ["@mochi/test-support@workspace:packages/test-support"],
 

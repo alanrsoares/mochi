@@ -27,7 +27,15 @@ export type ModuleOutput = { path: string; js: string };
 type ReadFile = (path: string) => Promise<string>;
 
 /** Options threaded to every per-module inference call. Each source file can also opt in through `"use open"`. */
-export type ModuleGraphOptions = { plugins?: LanguagePlugin[]; open?: boolean };
+export type ModuleGraphOptions = {
+  plugins?: LanguagePlugin[];
+  open?: boolean;
+  /**
+   * Suffix rewritten onto relative import paths (codegen default `.js`).
+   * Bun/Vite plugins pass `.mochi` so sibling modules re-enter the loader.
+   */
+  moduleExt?: string;
+};
 
 /** Relative / absolute specs — everything else is a bare package or package subpath. */
 const isPathSpec = (spec: string): boolean =>
@@ -83,7 +91,7 @@ const exportsOf = (prog: Program, env: Env): Env => {
   };
   for (const s of prog.stmts) {
     // An error node exports nothing — it has no name at all (ADR 0045 decision 4).
-    if (s.kind === "import" || s.kind === "error" || !s.exported) continue;
+    if (s.kind === "import" || s.kind === "error" || s.kind === "expr" || !s.exported) continue;
     if (s.kind === "type") for (const c of s.ctors) take(c.name);
     else take(s.name);
   }
@@ -312,7 +320,13 @@ const compileGraph = (
     regByPath.set(path, exportedCtorTable(prog));
     keysByPath.set(path, exportedCtorKeys(prog));
     qualsByPath.set(path, qualScopeOf(prog, gathered.value.qualTypes));
-    outputs.push({ path, js: codegen(prog, gathered.value.importedKeys, { runtime: true }) });
+    outputs.push({
+      path,
+      js: codegen(prog, gathered.value.importedKeys, {
+        runtime: true,
+        moduleExt: opts.moduleExt,
+      }),
+    });
   }
   return ok(outputs);
 };

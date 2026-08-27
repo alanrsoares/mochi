@@ -425,6 +425,8 @@ const walkStmts = (b: Builder, stmts: Stmt[]): void => {
     if (s.kind === "let") {
       if (s.annot) walkTypeExpr(b, s.annot);
       walkExpr(b, s.value);
+    } else if (s.kind === "expr") {
+      walkExpr(b, s.value);
     } else if (s.kind === "extern") {
       walkTypeExpr(b, s.typeExpr);
     } else if (s.kind === "type") {
