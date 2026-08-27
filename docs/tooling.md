@@ -80,7 +80,8 @@ extension).
 - **Go to definition / document highlight** — lexical symbol index (values, types, ctors,
   same-file record fields); works when typecheck fails. Prelude / builtins (including
   `Result.map`-style namespaces) resolve to a virtual `mochi:/prelude.mochi` buffer
-  (read-only). Cross-module F12 follows import origins to the exporting module
+  (read-only). Cross-module F12 follows import origins to the exporting module;
+  on a relative `import` or `extern` path string it opens that target file directly
   ([tracer bullets](dx-tracer-bullets.md)).
 - **Go to type** — from an expression / value binding, jump to the nominal type decl
   (variant, record alias, or prelude `Option`/`Result`) via the infer table. Degrades to

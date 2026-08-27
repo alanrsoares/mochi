@@ -4,12 +4,13 @@
  * is a thin adapter (ADR 0003). Go-to-type also consults the infer table when
  * typecheck succeeds.
  */
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import type { ExternStmt, ImportStmt } from "@mochi/compiler/ast";
 import { openMode, toTypedProgramRecovering, toTypedProgramWith } from "@mochi/compiler/compile";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import type { InferResult, TypeAt } from "@mochi/compiler/infer";
 import { lex } from "@mochi/compiler/lexer";
-import { loadModuleGraph, moduleContext } from "@mochi/compiler/module";
+import { loadModuleGraph, moduleContext, resolveImport } from "@mochi/compiler/module";
 import { parseRecovering } from "@mochi/compiler/parser";
 import { preludeNamespaces } from "@mochi/compiler/prelude";
 import { isPreludePath } from "@mochi/compiler/prelude-virtual";
@@ -54,6 +55,37 @@ const parseProgram = (src: string) => {
 const indexSrc = (path: string, src: string, origins?: Origins) => {
   const prog = parseProgram(src);
   return !prog ? null : indexProgram(resolve(path), prog, origins);
+};
+
+/** A relative module specifier's target location — the top of the target file. */
+const relativeModulePathAt = (src: string, offset: number, path: string): Location | null => {
+  const lexed = lex(src);
+  if (isErr(lexed)) return null;
+  const { program } = parseRecovering(lexed.value);
+  const stmt = program.stmts.find(
+    (s): s is ExternStmt | ImportStmt =>
+      (s.kind === "import" || s.kind === "extern") &&
+      s.span.start <= offset &&
+      offset <= s.span.end,
+  );
+  if (!stmt) return null;
+
+  const spec = stmt.kind === "import" ? stmt.from : stmt.module;
+  if (!spec.startsWith("./") && !spec.startsWith("../")) return null;
+  const stringToken = lexed.value.find(
+    (token) =>
+      token.t === "str" &&
+      token.v === spec &&
+      stmt.span.start <= token.span.start &&
+      token.span.start <= offset &&
+      offset <= token.span.end,
+  );
+  if (!stringToken) return null;
+
+  return {
+    path: stmt.kind === "import" ? resolveImport(path, spec) : resolve(dirname(path), spec),
+    span: { start: 0, end: 0 },
+  };
 };
 
 /** Origins from every dependency of `entry` (not the entry itself). */
@@ -174,12 +206,15 @@ export const moduleDefinitionAt = async (
   src: string,
   offset: number,
   readFile: ReadFile,
-): Promise<Location | null> =>
-  matchMaybe(
+): Promise<Location | null> => {
+  const modulePath = relativeModulePathAt(src, offset, path);
+  if (modulePath) return modulePath;
+  return matchMaybe(
     flatMap(fromNullable(await indexModule(path, src, readFile)), (idx) => hitAt(idx, offset)),
     (hit) => hit.binding.def,
     () => null,
   );
+};
 
 /** Document highlights for the binding under `offset` (occurrences in this file). */
 export const highlightsAt = (src: string, offset: number, path = "<buffer>"): Highlight[] =>

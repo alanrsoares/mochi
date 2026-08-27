@@ -33,6 +33,20 @@ test("moduleDefinitionAt on import name goes to export", async () => {
   expect(def?.path).toBe(geomPath);
 });
 
+test("moduleDefinitionAt opens a relative import specifier", async () => {
+  const src = await read(mainPath);
+  const spec = src.indexOf('"./geometry"') + 2;
+  const def = await moduleDefinitionAt(mainPath, src, spec, read);
+  expect(def).toEqual({ path: geomPath, span: { start: 0, end: 0 } });
+});
+
+test("moduleDefinitionAt opens a relative extern specifier", async () => {
+  const src = 'extern log : string -> string = "./host.mjs" "log"\n';
+  const path = "/project/src/main.mochi";
+  const def = await moduleDefinitionAt(path, src, src.indexOf("host") + 1, read);
+  expect(def).toEqual({ path: "/project/src/host.mjs", span: { start: 0, end: 0 } });
+});
+
 test("moduleReferencesAt spans importer and exporter", async () => {
   const src = await read(mainPath);
   const use = src.indexOf("hypot(");
