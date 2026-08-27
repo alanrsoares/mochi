@@ -43,7 +43,7 @@ forever — emit and language need an honest bridge.
    `emitDts` / Vite / LSP) — see
    [`packages/plugin-styled-cva`](../../packages/plugin-styled-cva/README.md),
    [`apps/docs/mochi.plugins.ts`](../../apps/docs/mochi.plugins.ts), and
-   [`src/extensions.ts`](../../src/extensions.ts). styled-cva and re-reduced are
+   [`packages/compiler/src/extensions/extensions.ts`](../../packages/compiler/src/extensions/extensions.ts). styled-cva and re-reduced are
    vendor plugins, not language core. Do **not** fold kit AST walks into core
    `infer.ts`.
 6. **Non-goals:** full `VariantProps` in HM; React-specific dts; fake fixed-arity

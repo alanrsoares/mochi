@@ -2,19 +2,25 @@
 
 A small ML-family language: Hindley–Milner inference (Algorithm W), parametric variants,
 row-polymorphic records, exhaustive pattern matching. Type annotations are optional —
-everything below is inferred. A curried surface compiles to uncurried JS.
+write `let x : T = v` at an export or a seam when inference would generalize the wrong
+shape ([ADR 0044](adr/0044-let-binding-type-annotations.md)). A curried surface compiles
+to uncurried JS.
 
-The single source of truth for "what compiles today" is [`../example.mochi`](../example.mochi),
-which type-checks end to end. This doc summarizes it.
+Prose examples use infix (`+`, `*`, `|>`) where the operator exists; named prelude
+functions (`square`, `hypot`, `map`) elsewhere. `(+ 1)` is a section ([ADR 0000](adr/0000-operator-sections.md)).
+
+The single source of truth for "what compiles today" is
+[`../examples/example.mochi`](../examples/example.mochi), which type-checks end to end.
+This doc summarizes it.
 
 ## Bindings and functions
 
 ```mochi
-let double = x => mul(x, 2)          // lambda
-let hypot = (a, b) => sqrt(add(square(a), square(b)))  // multi-arg
+let double = x => x * 2              // lambda
+let hypot = (a, b) => sqrt(square(a) + square(b))  // multi-arg
 let one = () => 1                    // nullary → `() -> number` (ADR 0014)
 let pipeline = 5 |> double |> inc |> double            // left-to-right pipe
-let shifted = 5 -> add(3)                              // add(5, 3), fast pipe
+let shifted = 5 -> (+ 3)                               // add(5, 3), fast pipe
 let glued = "hi" ++ ctx->label()                       // "hi" ++ label(ctx) — `->` tighter than `++` (ADR 0073)
 ```
 
@@ -40,8 +46,8 @@ Top-level bindings are grouped into recursive components (Tarjan SCC) and inferr
 together, so **mutual recursion type-checks regardless of definition order**:
 
 ```mochi
-let isEven = n => switch n { | 0 => true  | _ => isOdd(sub(n, 1)) }
-let isOdd  = n => switch n { | 0 => false | _ => isEven(sub(n, 1)) }
+let isEven = n => switch n { | 0 => true  | _ => isOdd(n - 1) }
+let isOdd  = n => switch n { | 0 => false | _ => isEven(n - 1) }
 ```
 
 Local, non-recursive, let-polymorphic bindings scope to a body and chains flatten:
@@ -50,7 +56,7 @@ Local, non-recursive, let-polymorphic bindings scope to a body and chains flatte
 let norm = (a, b) =>
   let a2 = square(a) in
   let b2 = square(b) in
-  sqrt(add(a2, b2))
+  sqrt(a2 + b2)
 ```
 
 ## Types
@@ -68,11 +74,12 @@ named alias folds back in hover and `.d.ts`; duck typing falls out of row polymo
 ```mochi
 type Point = { x: number, y: number }
 let distToOrigin = p => hypot(p.x, p.y)   // works on ANY record with x and y
-let translate = (p, dx, dy) => { x: add(p.x, dx), y: add(p.y, dy) }
+let translate = (p, dx, dy) => { x: p.x + dx, y: p.y + dy }
 ```
 
-**Tuples** are real product types that erase to JS arrays. **One numeric type** (`number`);
-`int`/`float` are aliases.
+**Tuples** are real product types that erase to JS arrays. **One numeric type**
+(`number`); `int`/`float` are documentation aliases with zero extra semantics —
+`let z : int = 2.5` typechecks ([ADR 0085](adr/0085-int-float-aliases.md)).
 
 **String literals and finite unions** are TypeScript-shaped ([ADR 0081](adr/0081-string-literal-unions.md)).
 A string literal is a singleton (`"rose"`). A finite union is written with `|` in type
@@ -121,8 +128,8 @@ variants. Arms match constructors, literals, wildcards, a binding catch-all, rec
 
 ```mochi
 let area = shape => switch shape {
-  | Circle(r) => mul(pi, square(r))
-  | Rect(w, h) => mul(w, h)
+  | Circle(r) => pi * square(r)
+  | Rect(w, h) => w * h
 }
 
 let handle = event => switch event {          // narrow on a string discriminant
@@ -133,7 +140,7 @@ let handle = event => switch event {          // narrow on a string discriminant
 
 let sum = xs => switch xs {                   // [] / [head, ...tail]
   | [] => 0
-  | [head, ...tail] => add(head, sum(tail))
+  | [head, ...tail] => head + sum(tail)
 }
 ```
 
@@ -173,7 +180,7 @@ as long as you force a finite prefix. `@{}` is the lazy List literal
 ([ADR 0080](adr/0080-collection-literals.md)).
 
 ```mochi
-let evens = iterate(x => add(x, 2))(0)        // INFINITE
+let evens = iterate(x => x + 2)(0)        // INFINITE
 let evens5 = evens |> take(5) |> toArray      // [0, 2, 4, 6, 8]
 ```
 
