@@ -56,6 +56,9 @@ string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck�
   One union `Diagnostic` (`kind: lex|parse|check|type`). `unify.ts`'s narrower `TypeErr`
   becomes `Diagnostic` only at `infer.ts`'s `u()` seam (which attaches the span) — keep it.
 - **No throws** except `parser.ts`'s `ParseAbort` marker and one codegen invariant.
+- **Bootstrap-covered core is Mochi-first.** Change the matching `bootstrap/*.mochi`
+  source first, then port it to `packages/compiler/src/`; TypeScript remains the seed
+  and parity oracle. See `bootstrap/README.md` and ADR 0078.
 - **`ResultAsync<T,E>`, never `Promise<Result<…>>`** (`no-promise-result.grit`).
 - **One match lib:** `@onrails/pattern` `.exhaustive()` both *inside* the compiler
   (missing an `Expr` case = TS error) and *emitted* into user JS.

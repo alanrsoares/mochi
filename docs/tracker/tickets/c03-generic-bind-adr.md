@@ -1,7 +1,7 @@
 ---
 id: C3
 title: "ADR: generic monadic bind vs per-monad sigils (let? / let!)"
-status: open
+status: in-progress
 type: task
 blocked-by: []
 ---
@@ -37,6 +37,7 @@ parity work. Two sigils is fine; the third is where the pattern locks in.
   the binding site — annotation or unambiguous inference required).
 - Desugaring target(s): keep `Result.andThen` / `Task.andThen` as the compiled form.
 
-- [ ] ADR in `docs/adr/` with dispatch rules, error behavior when the monad is
-      ambiguous, and rejected alternatives.
-- [ ] No implementation required by this ticket — decision only.
+- [x] ADR in `docs/adr/` with dispatch rules, error behavior when the monad is
+      ambiguous, and rejected alternatives (ADR 0079).
+- [ ] Implement dispatch in bootstrap first, then port it to TypeScript with
+      differential tests and fixpoint parity.
