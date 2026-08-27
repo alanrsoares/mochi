@@ -467,3 +467,33 @@ test("long loop bodies break inside the braces", () => {
   expect(out).toContain("loop (accumulated = 0, index = 0) {\n");
   expect(fmt(out)).toBe(out);
 });
+
+test("a short record type alias stays on one line", () => {
+  expect(fmt("type P={x:number,y:number}")).toBe("type P = { x: number, y: number }\n");
+});
+
+test("a wide record type alias breaks one field per line", () => {
+  // A record alias is laid out with the same `braced` group as a record
+  // literal — a flat string could not break, leaving 400-char declarations.
+  const src =
+    "type GenOpts={annotateLet:Option<string>,annotateCtor:Option<string>,annotateParams:Option<string>,annotateEmpty:Option<string>,flattenPipe:bool,moduleExt:string}";
+  const out = fmt(src);
+  expect(out.split("\n").every((l) => l.length <= 80)).toBe(true);
+  expect(out).toBe(
+    [
+      "type GenOpts = {",
+      "  annotateLet: Option<string>,",
+      "  annotateCtor: Option<string>,",
+      "  annotateParams: Option<string>,",
+      "  annotateEmpty: Option<string>,",
+      "  flattenPipe: bool,",
+      "  moduleExt: string",
+      "}",
+      "",
+    ].join("\n"),
+  );
+});
+
+test("an empty record type alias keeps the flat form", () => {
+  expect(fmt("type Empty={}")).toBe("type Empty = {}\n");
+});

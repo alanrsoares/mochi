@@ -155,8 +155,11 @@ const externStmt = (s: ExternStmt): string => {
 const typeStmtD = (s: TypeStmt): Doc => {
   const head = s.params.length ? `type ${s.name}<${s.params.join(", ")}>` : `type ${s.name}`;
   if (s.alias) {
-    const fields = s.alias.map((f) => `${f.name}: ${typeExpr(f.type)}`);
-    return txt(fields.length ? `${head} = { ${fields.join(", ")} }` : `${head} = {}`);
+    // `braced`, not a flat `txt`: a record alias with many/long fields must be
+    // able to break one-per-line like a record literal does. A joined string
+    // is unbreakable at any width, which left wide aliases on one long line.
+    const fields = s.alias.map((f) => txt(`${f.name}: ${typeExpr(f.type)}`));
+    return seq(txt(`${head} = `), braced("{", "}", fields));
   }
   if (s.aliasType) return txt(`${head} = ${typeExpr(s.aliasType)}`);
   if (s.ctors.length === 0) return txt(`extern ${head}`);
