@@ -5,6 +5,7 @@
 import { match } from "@onrails/pattern";
 import { err, isErr, ok, type Result } from "@onrails/result";
 import type {
+  CtorPat,
   Expr,
   LamParam,
   MatchExpr,
@@ -23,6 +24,9 @@ import { checkExhaustive, isWideWitness, showWitness } from "./usefulness";
 
 /** Variant registry shared with infer and codegen — arity cannot drift between passes. */
 export type Registry = CtorTable;
+
+/** Named import → `Circle`; `import * as S` → `S.Circle` (ADR 0082). */
+const patCtorKey = (p: CtorPat): string => (p.ns ? `${p.ns}.${p.ctor}` : p.ctor);
 
 /** Walk an expression tree, invoking `visit` on every node, children before parent. */
 function forEachSubExpr(e: Expr, visit: (x: Expr) => void): void {
@@ -150,8 +154,9 @@ const checkPattern = (p: Pattern, reg: Registry, top: boolean): Diagnostic | nul
   match(p)
     .with({ kind: "pas" }, (pas) => checkPattern(pas.pat, reg, top))
     .with({ kind: "pctor" }, (pctor) => {
-      const info = reg.ctor.get(pctor.ctor);
-      if (!info) return checkErr(`unknown constructor '${pctor.ctor}'`, pctor.span);
+      const key = patCtorKey(pctor);
+      const info = reg.ctor.get(key);
+      if (!info) return checkErr(`unknown constructor '${key}'`, pctor.span);
       if (pctor.args.length !== info.arity)
         return checkErr(
           `constructor '${pctor.ctor}' expects ${info.arity} arg(s), got ${pctor.args.length}`,
@@ -360,8 +365,9 @@ function checkMatch(m: MatchExpr, reg: Registry): Diagnostic | null {
   // Validate each constructor pattern: known + right arity + one owning type.
   let owningType: string | null = null;
   for (const p of ctorArms) {
-    const info = reg.ctor.get(p.ctor);
-    if (!info) return checkErr(`unknown constructor '${p.ctor}'`, p.span);
+    const key = patCtorKey(p);
+    const info = reg.ctor.get(key);
+    if (!info) return checkErr(`unknown constructor '${key}'`, p.span);
     if (p.args.length !== info.arity)
       return checkErr(
         `constructor '${p.ctor}' expects ${info.arity} arg(s), got ${p.args.length}`,

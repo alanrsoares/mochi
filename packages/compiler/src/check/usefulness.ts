@@ -24,6 +24,15 @@ import { match } from "@onrails/pattern";
 import type { Pattern } from "../ast/ast";
 import type { Registry } from "./check";
 
+/** Bare `Circle`, or `S.Circle` after `import * as S` (ADR 0082). */
+const ctorEntry = (reg: Registry, name: string) => {
+  const hit = reg.ctor.get(name);
+  if (hit) return hit;
+  const suffix = `.${name}`;
+  for (const [k, v] of reg.ctor) if (k.endsWith(suffix)) return v;
+  return undefined;
+};
+
 /**
  * The matrix works on its own pattern type rather than the AST's: it needs no
  * spans, and dropping them means witnesses can be *built* (a witness is a shape
@@ -306,17 +315,17 @@ function useful(m: Matrix, width: number, ctx: Ctx): Witness {
       return tryHeads([{ t: "record" }], () => labels.length);
     case "ctor": {
       const names = heads.flatMap((h) => (h.t === "ctor" ? [h.name] : []));
-      const owner = ctx.reg.ctor.get(names[0]!)?.type;
+      const owner = ctorEntry(ctx.reg, names[0]!)?.type;
       const all = owner === undefined ? undefined : ctx.reg.type.get(owner);
       if (all?.every((n) => names.includes(n)) === true)
         return tryHeads(
           all.map((name): Head => ({ t: "ctor", name })),
-          (c) => (c.t === "ctor" ? (ctx.reg.ctor.get(c.name)?.arity ?? 0) : 0),
+          (c) => (c.t === "ctor" ? (ctorEntry(ctx.reg, c.name)?.arity ?? 0) : 0),
         );
       const missing = all?.find((n) => !names.includes(n));
       const sub = useful(defaultMatrix(m), width - 1, ctx);
       if (sub === null) return null;
-      const arity = missing === undefined ? 0 : (ctx.reg.ctor.get(missing)?.arity ?? 0);
+      const arity = missing === undefined ? 0 : (ctorEntry(ctx.reg, missing)?.arity ?? 0);
       const head: P =
         missing === undefined ? WILD : { k: "ctor", name: missing, args: wilds(arity) };
       return [head, ...sub];

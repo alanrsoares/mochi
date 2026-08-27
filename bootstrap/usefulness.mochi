@@ -288,12 +288,25 @@ let ctorNames = heads =>
 let boolVals = heads =>
   heads |> Array.flatMap(h => switch h { | HBool(v) => [v] | _ => [] })
 
-let arityOfCtor = (reg, n) => switch Map.get(n, reg.ctors) {
+// Bare `Circle`, or `S.Circle` after `import * as S` (ADR 0082).
+let ctorInfoSuffixed = (keys, reg, n) => switch keys {
+  | [] => None
+  | [k, ...rest] => Str.endsWith(".${n}", k)
+      ? Map.get(k, reg.ctors)
+      : ctorInfoSuffixed(rest, reg, n)
+}
+
+let ctorInfoOf = (reg, n) => switch Map.get(n, reg.ctors) {
+  | Some(info) => Some(info)
+  | None => ctorInfoSuffixed(Map.keys(reg.ctors), reg, n)
+}
+
+let arityOfCtor = (reg, n) => switch ctorInfoOf(reg, n) {
   | None => 0
   | Some(info) => info.arity
 }
 
-let ownerOfCtor = (reg, n) => switch Map.get(n, reg.ctors) {
+let ownerOfCtor = (reg, n) => switch ctorInfoOf(reg, n) {
   | None => None
   | Some(info) => Some(info.owner)
 }

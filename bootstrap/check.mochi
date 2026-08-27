@@ -133,6 +133,10 @@ let isCatchAll = p => switch p {
 let isPList = p => switch p { | Ast.PList(_, _, _) => true | _ => false }
 let isPCtor = p => switch p { | Ast.PCtor(_, _, _, _) => true | _ => false }
 let ctorNameOf = p => switch p { | Ast.PCtor(name, _, _, _) => name | _ => "" }
+let patCtorKey = (ctor, ns) => switch ns {
+  | Some(alias) => "${alias}.${ctor}"
+  | None => ctor
+}
 
 // eager `[...]` and lazy `@{...}` share one exhaustiveness rule; both carry
 // (elems, rest).
@@ -150,17 +154,18 @@ let seqElemsRest = p => switch p {
 
 let checkPattern = (p, reg, top) => switch p {
   | Ast.PAs(pat, _, _, _) => checkPattern(pat, reg, top)
-  | Ast.PCtor(ctor, args, _, sp) => switch Map.get(ctor, reg.ctors) {
-      | None => Some(checkErr("unknown constructor '${ctor}'", sp))
-      | Some(info) => Array.length(args) == info.arity
-          ? firstSome(a => checkPattern(a, reg, false), args)
-          : Some(
-            checkErr(
-              "constructor '${ctor}' expects ${show(info.arity)} arg(s), got ${show(Array.length(args))}",
-              sp
+  | Ast.PCtor(ctor, args, ns, sp) => let key = patCtorKey(ctor, ns) in
+      switch Map.get(key, reg.ctors) {
+        | None => Some(checkErr("unknown constructor '${key}'", sp))
+        | Some(info) => Array.length(args) == info.arity
+            ? firstSome(a => checkPattern(a, reg, false), args)
+            : Some(
+              checkErr(
+                "constructor '${ctor}' expects ${show(info.arity)} arg(s), got ${show(Array.length(args))}",
+                sp
+              )
             )
-          )
-    }
+      }
   | Ast.PRecord(fields, _) => firstSome(
       f => checkPattern(f.pat, reg, false),
       fields
@@ -387,31 +392,32 @@ let checkSeqExhaustive = (arms, mSpan) =>
 let ctorLoop = (arms, i, reg, owner, covered) => switch Array.get(i, arms) {
   | None => Ok((owner, covered))
   | Some(a) => switch a.pattern {
-      | Ast.PCtor(ctor, args, _, sp) => switch Map.get(ctor, reg.ctors) {
-          | None => Err(checkErr("unknown constructor '${ctor}'", sp))
-          | Some(info) => Array.length(args) != info.arity
-              ? Err(
-                checkErr(
-                  "constructor '${ctor}' expects ${show(info.arity)} arg(s), got ${show(Array.length(args))}",
-                  sp
-                )
-              )
-              : switch owner {
-                | Some(own) when own != info.owner => Err(
-                    checkErr(
-                      "switch mixes variants of '${own}' and '${info.owner}'",
-                      sp
-                    )
+      | Ast.PCtor(ctor, args, ns, sp) => let key = patCtorKey(ctor, ns) in
+          switch Map.get(key, reg.ctors) {
+            | None => Err(checkErr("unknown constructor '${key}'", sp))
+            | Some(info) => Array.length(args) != info.arity
+                ? Err(
+                  checkErr(
+                    "constructor '${ctor}' expects ${show(info.arity)} arg(s), got ${show(Array.length(args))}",
+                    sp
                   )
-                | _ => let covered2 = allOf(
-                    isCatchAll,
-                    args
-                  ) && Option.isNone(a.guard)
-                    ? Set.add(ctor, covered)
-                    : covered in
-                    ctorLoop(arms, i + 1, reg, Some(info.owner), covered2)
-              }
-        }
+                )
+                : switch owner {
+                  | Some(own) when own != info.owner => Err(
+                      checkErr(
+                        "switch mixes variants of '${own}' and '${info.owner}'",
+                        sp
+                      )
+                    )
+                  | _ => let covered2 = allOf(
+                      isCatchAll,
+                      args
+                    ) && Option.isNone(a.guard)
+                      ? Set.add(ctor, covered)
+                      : covered in
+                      ctorLoop(arms, i + 1, reg, Some(info.owner), covered2)
+                }
+          }
       | _ => ctorLoop(arms, i + 1, reg, owner, covered)
     }
 }

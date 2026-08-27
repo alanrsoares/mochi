@@ -8,6 +8,7 @@ import { dirname, relative, resolve } from "node:path";
 import { err, isErr, ok, type Result, ResultAsync } from "@onrails/result";
 import type { Program, Stmt } from "../ast/ast";
 import { exportedCtorKeys, exportedCtorTable } from "../ast/ctors";
+import type { Span } from "../ast/span";
 import type { Registry } from "../check/check";
 import { codegen } from "../codegen/codegen";
 import { DEFAULT_RUNTIME_IMPORT, emitTsModule } from "../codegen/codegen-ts";
@@ -150,6 +151,42 @@ export type ModuleContext = {
   qualTypes: QualMap;
 };
 
+/** Bring one named constructor into the importer, or error on a colliding owner. */
+const takeNamedCtor = (
+  name: string,
+  span: Span,
+  depReg: Registry | undefined,
+  depKeys: Map<string, string[]> | undefined,
+  importedReg: Registry,
+  importedKeys: Map<string, string[]>,
+): Result<void, Diagnostic[]> => {
+  const info = depReg?.ctor.get(name);
+  if (!info) return ok(undefined);
+  const prior = importedReg.ctor.get(name);
+  if (prior && prior.type !== info.type)
+    return err(oneDiag(checkErr(`duplicate constructor '${name}'`, span)));
+  importedReg.ctor.set(name, info);
+  const owner = depReg?.type.get(info.type);
+  if (owner) importedReg.type.set(info.type, owner);
+  const keys = depKeys?.get(name);
+  if (keys) importedKeys.set(name, keys);
+  return ok(undefined);
+};
+
+/** Namespace import: ctors live under `Alias.Ctor`; type map stays bare (exhaustiveness). */
+const takeNsCtors = (
+  alias: string,
+  depReg: Registry | undefined,
+  depKeys: Map<string, string[]> | undefined,
+  importedReg: Registry,
+  importedKeys: Map<string, string[]>,
+): void => {
+  if (!depReg) return;
+  for (const [k, v] of depReg.type) importedReg.type.set(k, v);
+  for (const [k, v] of depReg.ctor) importedReg.ctor.set(`${alias}.${k}`, v);
+  if (depKeys) for (const [k, v] of depKeys) importedKeys.set(k, v);
+};
+
 /** Collect `prog`'s imported context from already-compiled deps; missing export → Err. */
 const gatherImports = (
   path: string,
@@ -167,6 +204,8 @@ const gatherImports = (
   for (const imp of importsOf(prog)) {
     const depPath = resolveImport(path, imp.from);
     const depExports = exportsByPath.get(depPath);
+    const depReg = regByPath.get(depPath);
+    const depKeys = keysByPath.get(depPath);
     if (imp.alias) {
       // Namespace import: every export of the dep becomes a member of `alias`.
       const members: Env = new Map();
@@ -175,20 +214,16 @@ const gatherImports = (
       // …and every exported TYPE of the dep becomes namable as `Alias.T` (C5 slice b).
       const depQual = qualsByPath.get(depPath);
       if (depQual) qualTypes.set(imp.alias.name, depQual);
+      takeNsCtors(imp.alias.name, depReg, depKeys, importedReg, importedKeys);
     } else {
       for (const n of imp.names) {
         const sc = depExports?.get(n.name) as Scheme | undefined;
         if (!sc) return err(oneDiag(checkErr(`'${imp.from}' has no export '${n.name}'`, n.span)));
+        const taken = takeNamedCtor(n.name, n.span, depReg, depKeys, importedReg, importedKeys);
+        if (isErr(taken)) return taken;
         imports.set(n.name, sc);
       }
     }
-    const depReg = regByPath.get(depPath);
-    if (depReg) {
-      for (const [k, v] of depReg.type) importedReg.type.set(k, v);
-      for (const [k, v] of depReg.ctor) importedReg.ctor.set(k, v);
-    }
-    const depKeys = keysByPath.get(depPath);
-    if (depKeys) for (const [k, v] of depKeys) importedKeys.set(k, v);
   }
   return ok({ imports, nsImports, importedReg, importedKeys, qualTypes });
 };

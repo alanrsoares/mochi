@@ -35,7 +35,7 @@ C1 + C10 touch the same example files, so they land together.
 | 4 | Strict inference by default (flip 9 hardcoded `open: true` sites); opt-in = pragma + CLI flag (decided) | [C1](tickets/c01-strict-by-default.md) | AFK | 3, 5 | done — opt-in is the `"use open"` directive (ADR 0072) |
 | 5 | Docs pass: canonical example register, 4 stale `example.mochi` links, annotation pitch, int/float ADR (absorbs C11) | [C10](tickets/c10-docs-pass.md) | AFK | — | open |
 | 6 | `Task.all` / `race` / `traverse` — fail-fast, no `allLimit` v1 (decided) | [C7](tickets/c07-task-concurrency.md) | AFK | — | done (ADR 0074) |
-| 7 | Ctor-merge scoping: imports bring only what they name; collision diagnostic; re-export nominal identity | [C13](tickets/c13-unscoped-ctor-merge.md) | AFK | 3 | open |
+| 7 | Ctor-merge scoping: imports bring only what they name; collision diagnostic; re-export nominal identity | [C13](tickets/c13-unscoped-ctor-merge.md) | AFK | 3 | done |
 
 ## Wave 3 — syntax decisions (DECIDED — now ADR-writing + implementation)
 

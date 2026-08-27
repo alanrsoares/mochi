@@ -341,5 +341,7 @@ Ternary `cond ? a : b` (looser than `|>` / `->`, right-associative), operator se
 `let?` / `let!` (monadic bind over `Option`|`Result` / `Task`), `///` doc comments that attach
 to the following binding and surface in hover and `.d.ts`, and namespace imports
 `import * as Alias from "./mod"` with qualified access / ctor patterns
-`Alias.member` / `| Alias.Ctor(…)` (ADR 0002). Fast pipe `->` is method-call tight
+`Alias.member` / `| Alias.Ctor(…)` (ADR 0002 / [0082](adr/0082-scoped-ctor-imports.md)).
+A named import does not leak sibling constructors; `import * as S` does not
+seed bare `| Circle` — write `| S.Circle`. Fast pipe `->` is method-call tight
 (tighter than `++` / `+` / `*`); `|>` stays pipeline-loose ([ADR 0073](adr/0073-fast-pipe-precedence.md)).

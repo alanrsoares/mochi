@@ -2,7 +2,7 @@
 // cross-module type inference. Files live in an in-memory map (no fs).
 import { expect, test } from "bun:test";
 import { buildModules, type ModuleOutput } from "@mochi/compiler/module";
-import { isErr, unwrapOk } from "@onrails/result";
+import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 
 // Build from a `{ path: source }` fixture; paths are absolute so node:path
 // resolution is deterministic across machines.
@@ -129,4 +129,73 @@ test("import * as a reserved prelude namespace is rejected", async () => {
     "/p/main.mochi": 'import * as List from "./math"\nlet x = List.double\n',
   };
   expect(isErr(await build(files, "/p/main.mochi"))).toBe(true);
+});
+
+const SHAPE =
+  "export type Shape =\n  | Circle(r: number)\n  | Square(s: number)\nexport let origin = 0\n";
+
+test("a named import does not leak sibling constructors (ADR 0082)", async () => {
+  const files = {
+    "/p/shapes.mochi": SHAPE,
+    "/p/main.mochi":
+      'import { origin } from "./shapes"\n' + "let f = s => switch s { | Circle(r) => r }\n",
+  };
+  const r = await build(files, "/p/main.mochi");
+  expect(isErr(r)).toBe(true);
+  if (isErr(r)) expect(unwrapErr(r)[0]!.message).toContain("unknown constructor 'Circle'");
+});
+
+test("importing one ctor still exhausts the whole owning type (ADR 0082)", async () => {
+  const files = {
+    "/p/shapes.mochi": SHAPE,
+    "/p/main.mochi":
+      'import { Circle } from "./shapes"\n' + "let f = s => switch s { | Circle(r) => r }\n",
+  };
+  const r = await build(files, "/p/main.mochi");
+  expect(isErr(r)).toBe(true);
+  if (isErr(r)) expect(unwrapErr(r)[0]!.message).toContain("non-exhaustive");
+});
+
+test("a namespace import requires qualified ctor patterns (ADR 0082)", async () => {
+  const files = {
+    "/p/shapes.mochi": SHAPE,
+    "/p/main.mochi":
+      'import * as S from "./shapes"\n' +
+      "let f = s => switch s { | S.Circle(r) => r | S.Square(w) => w }\n",
+  };
+  expect(isErr(await build(files, "/p/main.mochi"))).toBe(false);
+
+  const bare = {
+    "/p/shapes.mochi": SHAPE,
+    "/p/main.mochi":
+      'import * as S from "./shapes"\n' +
+      "let f = s => switch s { | Circle(r) => r | Square(w) => w }\n",
+  };
+  const r = await build(bare, "/p/main.mochi");
+  expect(isErr(r)).toBe(true);
+  if (isErr(r)) expect(unwrapErr(r)[0]!.message).toMatch(/unknown constructor/);
+});
+
+test("same-name ctors from two deps collide at the second import (ADR 0082)", async () => {
+  const files = {
+    "/p/a.mochi": "export type A = | Empty\n",
+    "/p/b.mochi": "export type B = | Empty\n",
+    "/p/main.mochi": 'import { Empty } from "./a"\nimport { Empty } from "./b"\nlet x = Empty\n',
+  };
+  const r = await build(files, "/p/main.mochi");
+  expect(isErr(r)).toBe(true);
+  if (isErr(r)) expect(unwrapErr(r)[0]!.message).toContain("duplicate constructor 'Empty'");
+});
+
+test("the same ctor imported twice from one module is the same type (ADR 0082)", async () => {
+  const files = {
+    "/p/opt.mochi": "export type Box a = | Hold(a)\n",
+    "/p/wrap.mochi": 'import { Hold } from "./opt"\nexport let wrap = x => Hold(x)\n',
+    "/p/main.mochi":
+      'import { Hold } from "./opt"\n' +
+      'import { wrap } from "./wrap"\n' +
+      "let x = wrap(1)\n" +
+      "let n = switch x { | Hold(v) => v }\n",
+  };
+  expect(isErr(await build(files, "/p/main.mochi"))).toBe(false);
 });

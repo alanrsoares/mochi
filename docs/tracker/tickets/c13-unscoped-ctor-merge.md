@@ -1,7 +1,7 @@
 ---
 id: C13
 title: Unscoped ctor-table merge on import + nominal identity for re-exports
-status: open
+status: done
 type: task
 blocked-by: []
 ---
@@ -26,11 +26,11 @@ Split from C5 (whose original ctor claim was wrong — cross-module ctor matchin
 - Nominal identity: a re-exported / aliased variant is the same type across the graph,
   not a structural twin (verify current behavior first — unconfirmed in sanity check).
 
-- [ ] Failing-first tests: unnamed-ctor leak; two-dep `None` collision; re-export
+- [x] Failing-first tests: unnamed-ctor leak; two-dep `None` collision; re-export
       identity.
-- [ ] `module.ts` merge scoping + duplicate-decl diagnostic in `check.ts`.
-- [ ] Audit `examples/` + `apps/docs` + bootstrap for code accidentally relying on
+- [x] `module.ts` merge scoping + duplicate-decl diagnostic in `check.ts`.
+- [x] Audit `examples/` + `apps/docs` + bootstrap for code accidentally relying on
       the leak.
-- [ ] Bootstrap impact: `bootstrap/module.mochi` mirrors the scoping (differential
+- [x] Bootstrap impact: `bootstrap/module.mochi` mirrors the scoping (differential
       parity).
-- [ ] `bun run check:full` green.
+- [x] `bun run check:full` green.
