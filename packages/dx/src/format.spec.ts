@@ -380,6 +380,24 @@ test("fast pipe binds tighter than ++ so fmt drops redundant pipe parens (ADR 00
   expect(fmt("let r = 1 + 2 |> f")).toBe("let r = 1 + 2 |> f\n");
 });
 
+test("does not flatten a fast pipe into a following |> chain (ADR 0069)", () => {
+  expect(fmt("let r = val->fn(param2, param3) |> fn2(param1)")).toBe(
+    "let r = val->fn(param2, param3) |> fn2(param1)\n",
+  );
+  expect(fmt("let r = ctx->inferExpr(e, st) |> Result.flatMap(f)")).toBe(
+    "let r = ctx->inferExpr(e, st) |> Result.flatMap(f)\n",
+  );
+  const src =
+    "let r = ctx->inferExpr(aVeryLongExpressionNameHere, st) |> Result.flatMap(((t, st1)) => continueWith(t, st1))";
+  const out = [
+    "let r = ctx->inferExpr(aVeryLongExpressionNameHere, st)",
+    "  |> Result.flatMap(((t, st1)) => continueWith(t, st1))",
+    "",
+  ].join("\n");
+  expect(fmt(src)).toBe(out);
+  expect(fmt(out)).toBe(out);
+});
+
 test("long ++ chains break one fragment per line", () => {
   const src =
     'let a = "((_it) => { const _b = []; let _done = false; " ++ "const _pull = (_n) => { while (_b.length < _n && !_done) { const _s = _it.next(); " ++ "if (_s.done) _done = true; else _b.push(_s.value); } return _b.length >= _n; };"';

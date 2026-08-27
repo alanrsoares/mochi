@@ -262,9 +262,9 @@ const cases: Record<string, { src: string; ok: boolean }> = {
     src: "let f = n => let? x = Some(n) in Some(add(x, 1))",
     ok: true,
   },
-  "let? tyvar is ambiguous": {
+  "let? tyvar defaults to Result": {
     src: "let f = x => let? y = x in Ok(y)",
-    ok: false,
+    ok: true,
   },
   // ADR 0021 — record update is update-only: base type returned, wrong-typed
   // or base-absent fields rejected.

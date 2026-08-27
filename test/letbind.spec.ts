@@ -145,8 +145,12 @@ test("body must be an Option when the value is", () => {
   expect(errMsg("let r = let? x = Some(1) in add(x, 1)")).toContain("Option");
 });
 
-test("unresolved tyvar cannot determine the monad", () => {
-  expect(errMsg("let f = x => let? y = x in Ok(y)")).toBe("cannot determine monad for let?");
+test("unresolved tyvar on let? defaults to Result", () => {
+  expect(run("let f = x => let? y = x in Ok(y)\nlet r = f(Ok(1))", "r")).toEqual({
+    _tag: "Ok",
+    value: 1,
+  });
+  expect(errMsg("let f = x => let? y = x in Some(y)")).toContain("Result");
 });
 
 test("does not mix Option and Result in one chain", () => {

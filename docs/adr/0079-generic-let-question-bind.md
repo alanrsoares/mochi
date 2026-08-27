@@ -22,11 +22,13 @@ needed to select the matching runtime helper.
 - `Result a e` binds `Ok(a)`, short-circuits `Err(e)`, and requires a
   `Result b e` body.
 
-The head must be concrete at the bind site. An unresolved type variable reports
-`cannot determine monad for let?`; every other head reports that `let?` requires
-`Option` or `Result`. A chain cannot implicitly mix the two: its inner bind
-body must have the same monad as its outer bind. Use an explicit conversion such
-as `Result.fromOption` when crossing the boundary.
+The head constructor of `value` selects the monad. `Option a` binds `Some(a)`.
+`Result a e` binds `Ok(a)`. An unresolved type variable defaults to Result —
+the parser tags `let?` as Result, and Option dispatch requires a resolved
+`Option` head. Every other head reports that `let?` requires `Option` or
+`Result`. A chain cannot implicitly mix the two: its inner bind body must have
+the same monad as its outer bind. Use an explicit conversion such as
+`Result.fromOption` when crossing the boundary.
 
 `let!` remains Task-only. The bind sigil set is permanently capped at `let?`
 and `let!`.

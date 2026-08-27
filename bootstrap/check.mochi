@@ -198,21 +198,21 @@ let checkPattern = (p, reg, top) => switch p {
 // A name bound twice in one pattern is an error.
 let binderPathsArgs = (args, i, at, acc) => switch Array.get(i, args) {
   | None => Ok(acc)
-  | Some(a) => binderPaths(a, "${at}.a${show(i)}", acc)
-      |> Result.flatMap(binderPathsArgs(args, i + 1, at))
+  | Some(a) => a->binderPaths("${at}.a${show(i)}", acc)
+      |> Result.flatMap(acc2 => binderPathsArgs(args, i + 1, at, acc2))
 }
 let binderPathsFields = (fields, i, at, acc) => switch Array.get(i, fields) {
   | None => Ok(acc)
-  | Some(f) => binderPaths(f.pat, "${at}.${f.label}", acc)
-      |> Result.flatMap(binderPathsFields(fields, i + 1, at))
+  | Some(f) => f.pat->binderPaths("${at}.${f.label}", acc)
+      |> Result.flatMap(acc2 => binderPathsFields(fields, i + 1, at, acc2))
 }
 let binderPathsElems = (elems, i, at, acc) => switch Array.get(i, elems) {
   | None => Ok(acc)
-  | Some(e) => binderPaths(e, "${at}.t${show(i)}", acc)
-      |> Result.flatMap(binderPathsElems(elems, i + 1, at))
+  | Some(e) => e->binderPaths("${at}.t${show(i)}", acc)
+      |> Result.flatMap(acc2 => binderPathsElems(elems, i + 1, at, acc2))
 }
 let binderPaths = (p, at, acc) => switch p {
-  | Ast.PAs(pat, name, nameSp, _) => binderPaths(pat, at, acc)
+  | Ast.PAs(pat, name, nameSp, _) => pat->binderPaths(at, acc)
       |> Result.flatMap(acc1 =>
         Map.has(name, acc1)
           ? Err(checkErr("pattern binds '${name}' more than once", nameSp))
@@ -247,10 +247,8 @@ let altMapsFrom = (alts, i, reg, acc) => switch Array.get(i, alts) {
       )
       : switch checkPattern(alt, reg, false) {
         | Some(e) => Err(e)
-        | None => binderPaths(alt, "", #{})
-            |> Result.flatMap(m =>
-              altMapsFrom(alts, i + 1, reg, Array.append(m, acc))
-            )
+        | None => let? m = binderPaths(alt, "", #{}) in
+            altMapsFrom(alts, i + 1, reg, Array.append(m, acc))
       }
 }
 
@@ -813,25 +811,23 @@ export let checkWith = (stmts, imported, quals) => switch checkReservedNames(stm
       | Some(e) => Err(e)
       | None => switch checkQualifiedTypeNames(stmts, quals) {
           | Some(e) => Err(e)
-          | None => buildRegistry(stmts)
-              |> Result.flatMap(reg0 =>
-                let reg = {
-                  ctors: mergeMissing(
-                    Map.keys(imported.ctors),
-                    imported.ctors,
-                    reg0.ctors
-                  ),
-                  types: mergeMissing(
-                    Map.keys(imported.types),
-                    imported.types,
-                    reg0.types
-                  )
-                } in
-                  switch firstSome(s => switch s { | Ast.SLet(_, _, _, value, _, _, _) => checkExpr(value, reg) | _ => None }, stmts) {
-                    | Some(e) => Err(e)
-                    | None => Ok(stmts)
-                  }
+          | None => let? reg0 = buildRegistry(stmts) in
+            let reg = {
+              ctors: mergeMissing(
+                Map.keys(imported.ctors),
+                imported.ctors,
+                reg0.ctors
+              ),
+              types: mergeMissing(
+                Map.keys(imported.types),
+                imported.types,
+                reg0.types
               )
+            } in
+              switch firstSome(s => switch s { | Ast.SLet(_, _, _, value, _, _, _) => checkExpr(value, reg) | _ => None }, stmts) {
+                | Some(e) => Err(e)
+                | None => Ok(stmts)
+              }
         }
     }
 }

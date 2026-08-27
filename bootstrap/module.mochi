@@ -108,8 +108,7 @@ let visitAll = (froms, importer, acc) => switch froms {
 /// loadGraph : string -> Result [Loaded] MErr
 /// Load every module reachable from `entry`, in dependency order.
 export let loadGraph = entry =>
-  visit(absPath(entry), { state: #{}, order: [] })
-    |> Result.map(acc => acc.order)
+  let? acc = absPath(entry)->visit({ state: #{}, order: [] }) in Ok(acc.order)
 
 // --- part (b): compile the loaded graph -------------------------------------
 // Each module checks + infers + codegens with the prelude PLUS everything its
@@ -341,4 +340,4 @@ export let compileGraph = graph =>
 /// buildModules : string -> Result [ModuleOutput] MErr
 /// Resolve the graph then compile it — one sync railway (host IO is sync).
 export let buildModules = entry =>
-  loadGraph(entry) |> Result.flatMap(compileGraph)
+  let? graph = entry->loadGraph() in graph->compileGraph()

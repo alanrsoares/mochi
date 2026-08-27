@@ -22,7 +22,7 @@ extern runtimeDeps : Map<string, [string]> = "./prelude.gen.mjs" "runtimeDeps"
 
 // Type-check gate: strict inference, program passed through unchanged on success.
 let typecheck = prog =>
-  inferProgram(prog, builtins, namespaces, false) |> Result.map(_ => prog)
+  let? $env = prog->inferProgram(builtins, namespaces, false) in Ok(prog)
 
 // The front-end pipeline: lex -> parse -> check -> typecheck
 let pipeline = lex
@@ -32,8 +32,5 @@ let pipeline = lex
 
 /// compile : string -> Result string Err
 export let compile = src =>
-  src
-    |> pipeline
-    |> Result.map(prog =>
-      codegen(prog, #{}, true, namespaceRuntime, preludeJsDefs, runtimeDeps)
-    )
+  let? prog = src->pipeline() in
+    Ok(codegen(prog, #{}, true, namespaceRuntime, preludeJsDefs, runtimeDeps))

@@ -219,25 +219,24 @@ function inferTwoSlotBind(
 /**
  * `let?` / `let!` param = value in body — monadic bind (ADR 0005, ADR 0079).
  * `let!` is Task-only. `let?` dispatches Option vs Result from the resolved
- * head constructor of `value`; the selected helper is written onto `e.monad`
- * for codegen.
+ * head of `value`; an unresolved tyvar defaults to Result. The selected helper
+ * is written onto `e.monad` for codegen.
  */
 function inferLetBind(e: LetBindExpr, ctx: Ctx): Result<Type, Diagnostic> {
   const valT = infer(e.value, ctx);
   if (isErr(valT)) return valT;
   if (e.monad === "Task") return inferTwoSlotBind(e, ctx, valT.value, "Task");
   const head = resolve(valT.value, ctx.subst);
-  if (head.kind === "var") return err(typeErr("cannot determine monad for let?", e.value.span));
+  if (head.kind === "var" || (head.kind === "con" && head.name === "Result")) {
+    e.monad = "Result";
+    return inferTwoSlotBind(e, ctx, valT.value, "Result");
+  }
   if (head.kind === "con" && head.name === "Option") {
     e.monad = "Option";
     const payloadT = freshVar(ctx.fresh);
     const uv = u(valT.value, tCon("Option", [payloadT]), ctx, e.value.span);
     if (isErr(uv)) return uv;
     return inferBindBody(e, ctx, payloadT, (resT) => tCon("Option", [resT]));
-  }
-  if (head.kind === "con" && head.name === "Result") {
-    e.monad = "Result";
-    return inferTwoSlotBind(e, ctx, valT.value, "Result");
   }
   return err(
     typeErr(

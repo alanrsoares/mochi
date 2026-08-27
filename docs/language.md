@@ -191,8 +191,8 @@ enclosing loop. For iteration purely for effect, use
   straight into those combinators at the JS boundary.
   `let? x = e in …` binds over **Option or Result**, dispatched from the inferred
   head constructor of `e` ([ADR 0079](adr/0079-generic-let-question-bind.md)).
-  The head must be concrete at the bind site — an unresolved type variable is
-  `cannot determine monad for let?`. A chain cannot mix the two; lift explicitly.
+  An unresolved type variable defaults to Result; a resolved `Option` head
+  selects Option. A chain cannot mix the two; lift explicitly.
   `let!` is Task-only.
 - Builtin `Task<A, E>` — opaque lazy async value with an error channel
   (`() => Promise<Result<A, E>>` at runtime). Not a tagged variant; not

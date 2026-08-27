@@ -440,9 +440,9 @@ const braced = (open: string, close: string, items: Doc[]): Doc =>
     ? txt(`${open}${close}`)
     : group(seq(txt(open), indent(seq(line, join(seq(txt(","), line), items))), line, txt(close)));
 
-/** `|>` is left-associative, so `a |> b |> c` is pipe(pipe(a, b), c); flatten it back to the source order [a, b, c]. */
+/** `|>` is left-associative, so `a |> b |> c` is pipe(pipe(a, b), c); flatten it back to the source order [a, b, c]. Do not walk into `->`: fast pipe inserts first (ADR 0069), `|>` is data-last — flattening mixed chains would rewrite `val->fn(a, b) |> g(c)` into `val |> fn(a, b) |> g(c)`. */
 const pipeSegments = (e: Expr): Expr[] =>
-  e.kind === "pipe" ? [...pipeSegments(e.left), e.right] : [e];
+  e.kind === "pipe" && !e.fast ? [...pipeSegments(e.left), e.right] : [e];
 
 /** Inline when it fits, else one `|> stage` per line indented under the head. */
 const pipeD = (e: PipeExpr): Doc => {
