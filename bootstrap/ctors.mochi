@@ -33,10 +33,10 @@ let keysOfFrom = (fields, i) => switch Array.get(i, fields) {
   | None => []
   | Some(f) => Array.prepend(
       Option.unwrapOr("_${show(i)}", f.name),
-      keysOfFrom(fields, i + 1)
+      fields->keysOfFrom(i + 1)
     )
 }
-export let keysOf = fields => keysOfFrom(fields, 0)
+export let keysOf = fields => fields->keysOfFrom(0)
 
 // --- builtin variant decls (the single hardcoded copy) ---
 
@@ -98,8 +98,7 @@ export let builtinDeclsFor = stmts =>
 
 let seedRegCtorsFrom = (ctors, i, owner, acc) => switch Array.get(i, ctors) {
   | None => acc
-  | Some(c) => seedRegCtorsFrom(
-      ctors,
+  | Some(c) => ctors->seedRegCtorsFrom(
       i + 1,
       owner,
       Map.has(c.name, acc)
@@ -116,7 +115,7 @@ let seedRegDeclsFrom = (decls, i, reg) => switch Array.get(i, decls) {
       decls,
       i + 1,
       {
-        ctors: seedRegCtorsFrom(bt.ctors, 0, bt.name, reg.ctors),
+        ctors: bt.ctors->seedRegCtorsFrom(0, bt.name, reg.ctors),
         types: Map.set(bt.name, bt.ctors |> map(c => c.name), reg.types)
       }
     )
@@ -129,8 +128,7 @@ let ctorsInto = (ctors, i, owner, sp, acc) => switch Array.get(i, ctors) {
   | None => Ok(acc)
   | Some(c) => Map.has(c.name, acc)
       ? Err(ctorErr("duplicate constructor '${c.name}'", sp))
-      : ctorsInto(
-        ctors,
+      : ctors->ctorsInto(
         i + 1,
         owner,
         sp,
@@ -142,7 +140,7 @@ let buildLoop = (stmts, i, reg) => switch Array.get(i, stmts) {
   | None => Ok(reg)
   | Some(Ast.SType(name, _, ctors, _, _, _, _, sp)) => Map.has(name, reg.types)
       ? Err(ctorErr("duplicate type '${name}'", sp))
-      : ctorsInto(ctors, 0, name, sp, reg.ctors)
+      : ctors->ctorsInto(0, name, sp, reg.ctors)
         |> Result.flatMap(cs =>
           stmts->buildLoop(
             i + 1,
