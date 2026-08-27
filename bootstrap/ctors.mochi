@@ -157,7 +157,7 @@ let buildLoop = (stmts, i, reg) => switch Array.get(i, stmts) {
 /// didn't vouch for.
 export let buildRegistry = stmts =>
   stmts->buildLoop(0, emptyRegistry)
-    |> Result.map(seedRegDeclsFrom(stmts->builtinDeclsFor(), 0))
+    |> Result.map(reg => seedRegDeclsFrom(stmts->builtinDeclsFor(), 0, reg))
 
 // The registry a module publishes: only its EXPORTED variant types (and their
 // full ctor sets), no builtin seed, no dup-check — threaded into an importer's
