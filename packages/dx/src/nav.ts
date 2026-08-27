@@ -5,7 +5,6 @@
  * typecheck succeeds.
  */
 import { dirname, resolve } from "node:path";
-import type { ExternStmt, ImportStmt } from "@mochi/compiler/ast";
 import { openMode, toTypedProgramRecovering, toTypedProgramWith } from "@mochi/compiler/compile";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import type { InferResult, TypeAt } from "@mochi/compiler/infer";
@@ -42,6 +41,13 @@ export type DocSymbol = {
 };
 
 export type WorkspaceSymbol = DocSymbol & { path: string };
+export type ModulePathLink = { span: Span; target: Location };
+
+type RelativeModuleSpecifier = {
+  span: Span;
+  targetPath: string;
+  externMember?: { name: string; span: Span };
+};
 
 type ReadFile = (path: string) => Promise<string>;
 
@@ -57,35 +63,95 @@ const indexSrc = (path: string, src: string, origins?: Origins) => {
   return !prog ? null : indexProgram(resolve(path), prog, origins);
 };
 
-/** A relative module specifier's target location — the top of the target file. */
-const relativeModulePathAt = (src: string, offset: number, path: string): Location | null => {
+/** Relative import/extern module specifiers, including a possible extern member. */
+const relativeModuleSpecifiers = (src: string, path: string): RelativeModuleSpecifier[] => {
   const lexed = lex(src);
-  if (isErr(lexed)) return null;
+  if (isErr(lexed)) return [];
   const { program } = parseRecovering(lexed.value);
-  const stmt = program.stmts.find(
-    (s): s is ExternStmt | ImportStmt =>
-      (s.kind === "import" || s.kind === "extern") &&
-      s.span.start <= offset &&
-      offset <= s.span.end,
-  );
-  if (!stmt) return null;
+  return program.stmts.flatMap((stmt): RelativeModuleSpecifier[] => {
+    if (stmt.kind !== "import" && stmt.kind !== "extern") return [];
+    const spec = stmt.kind === "import" ? stmt.from : stmt.module;
+    if (!spec.startsWith("./") && !spec.startsWith("../")) return [];
+    const stringTokenAt = (value: string) =>
+      lexed.value.find(
+        (token) =>
+          token.t === "str" &&
+          token.v === value &&
+          stmt.span.start <= token.span.start &&
+          token.span.end <= stmt.span.end,
+      );
+    const stringToken = stringTokenAt(spec);
+    if (!stringToken) return [];
+    const extern = stmt.kind === "extern" ? stmt : null;
+    const externMemberToken = extern ? stringTokenAt(extern.imported) : undefined;
+    const externMember =
+      extern && externMemberToken
+        ? { name: extern.imported, span: externMemberToken.span }
+        : undefined;
+    return [
+      {
+        span: stringToken.span,
+        targetPath:
+          stmt.kind === "import" ? resolveImport(path, spec) : resolve(dirname(path), spec),
+        ...(externMember ? { externMember } : {}),
+      },
+    ];
+  });
+};
 
-  const spec = stmt.kind === "import" ? stmt.from : stmt.module;
-  if (!spec.startsWith("./") && !spec.startsWith("../")) return null;
-  const stringToken = lexed.value.find(
-    (token) =>
-      token.t === "str" &&
-      token.v === spec &&
-      stmt.span.start <= token.span.start &&
-      token.span.start <= offset &&
-      offset <= token.span.end,
-  );
-  if (!stringToken) return null;
+/** Relative import/extern module specifiers and their target files. */
+export const modulePathLinksAt = (src: string, path: string): ModulePathLink[] =>
+  relativeModuleSpecifiers(src, path).map(({ span, targetPath }) => ({
+    span,
+    target: { path: targetPath, span: { start: 0, end: 0 } },
+  }));
 
-  return {
-    path: stmt.kind === "import" ? resolveImport(path, spec) : resolve(dirname(path), spec),
-    span: { start: 0, end: 0 },
-  };
+/** A relative module specifier's target location — the top of the target file. */
+const relativeModulePathAt = (src: string, offset: number, path: string): Location | null =>
+  modulePathLinksAt(src, path).find((link) => spanContainsClosed(link.span, offset))?.target ??
+  null;
+
+const escapeRegex = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Best-effort JS/TS export declaration span for an extern's imported member. */
+const externMemberSpan = (src: string, imported: string): Span | null => {
+  const name = escapeRegex(imported);
+  const pattern =
+    imported === "default"
+      ? /\bexport\s+default\b/
+      : new RegExp(
+          `\\bexport\\s+(?:(?:declare|async)\\s+)*(?:(?:const|let|var|function|class|interface|type|enum)\\s+)?(${name})\\b`,
+        );
+  const hit = pattern.exec(src);
+  if (!hit || hit.index === undefined) return null;
+  const start =
+    imported === "default"
+      ? hit.index + hit[0].lastIndexOf("default")
+      : hit.index + hit[0].lastIndexOf(imported);
+  return { start, end: start + imported.length };
+};
+
+const externMemberDefinitionAt = async (
+  path: string,
+  src: string,
+  offset: number,
+  readFile: ReadFile,
+): Promise<Location | null> => {
+  const specifier = relativeModuleSpecifiers(src, path).find(
+    (candidate) =>
+      candidate.externMember && spanContainsClosed(candidate.externMember.span, offset),
+  );
+  const member = specifier?.externMember;
+  if (!specifier || !member) return null;
+  try {
+    const targetSrc = await readFile(specifier.targetPath);
+    return {
+      path: specifier.targetPath,
+      span: externMemberSpan(targetSrc, member.name) ?? { start: 0, end: 0 },
+    };
+  } catch {
+    return { path: specifier.targetPath, span: { start: 0, end: 0 } };
+  }
 };
 
 /** Origins from every dependency of `entry` (not the entry itself). */
@@ -207,6 +273,8 @@ export const moduleDefinitionAt = async (
   offset: number,
   readFile: ReadFile,
 ): Promise<Location | null> => {
+  const externMember = await externMemberDefinitionAt(path, src, offset, readFile);
+  if (externMember) return externMember;
   const modulePath = relativeModulePathAt(src, offset, path);
   if (modulePath) return modulePath;
   return matchMaybe(

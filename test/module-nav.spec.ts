@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import {
   documentSymbolsAt,
   moduleDefinitionAt,
+  modulePathLinksAt,
   moduleReferencesAt,
   moduleRenameAt,
   workspaceSymbolsAt,
@@ -45,6 +46,31 @@ test("moduleDefinitionAt opens a relative extern specifier", async () => {
   const path = "/project/src/main.mochi";
   const def = await moduleDefinitionAt(path, src, src.indexOf("host") + 1, read);
   expect(def).toEqual({ path: "/project/src/host.mjs", span: { start: 0, end: 0 } });
+});
+
+test("moduleDefinitionAt opens an extern's host export", async () => {
+  const src = 'extern log : string -> string = "./host.mjs" "log"\n';
+  const path = "/project/src/main.mochi";
+  const host = "export const log = (message) => message\n";
+  const readHost = async (file: string): Promise<string> => {
+    if (file === "/project/src/host.mjs") return host;
+    throw new Error(`unexpected read: ${file}`);
+  };
+  const def = await moduleDefinitionAt(path, src, src.lastIndexOf("log") + 1, readHost);
+  expect(def).toEqual({
+    path: "/project/src/host.mjs",
+    span: { start: host.indexOf("log"), end: host.indexOf("log") + 3 },
+  });
+});
+
+test("module path links cover each complete quoted specifier", () => {
+  const src =
+    'import { point } from "./geometry.mochi"\nextern log : string -> string = "./host.mjs" "log"\n';
+  const links = modulePathLinksAt(src, "/project/src/main.mochi");
+  expect(links.map((link) => src.slice(link.span.start, link.span.end))).toEqual([
+    '"./geometry.mochi"',
+    '"./host.mjs"',
+  ]);
 });
 
 test("moduleReferencesAt spans importer and exporter", async () => {
