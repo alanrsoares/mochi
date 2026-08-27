@@ -568,7 +568,10 @@ const buildTasks = async (opts: Options): Promise<TaskSpec[]> => {
   // `--filter` scopes to workspace packages, so the root gates step aside.
   const rootScripts =
     isCheck && opts.filter === null
-      ? [...ROOT_GATES, opts.target === "check:full" ? "test:full" : "test"]
+      ? [
+          ...ROOT_GATES,
+          ...(opts.target === "check:full" ? ["test:full", "test:mochi:coverage"] : ["test"]),
+        ]
       : [];
 
   const scope = opts.filter === null ? null : new Bun.Glob(opts.filter);

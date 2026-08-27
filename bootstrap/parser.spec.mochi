@@ -1,0 +1,42 @@
+import { assertEq, ok, test, testEach } from "@mochi/test"
+import * as Ast from "./ast.mochi"
+import { lex } from "./lexer.mochi"
+import { parse } from "./parser.mochi"
+
+let parseSrc = src => lex(src) |> Result.flatMap(parse)
+
+test("a let declaration preserves its name, doc, and lambda shape", () => switch parseSrc("/// increments\nlet inc = n => n + 1") {
+  | Ok([Ast.SLet("inc", _, None, Ast.ELambda([Ast.LPName("n", None)], _, _), false, Some("increments"), _)]) => true
+      |> ok
+  | _ => false |> ok
+})
+
+test("fast pipe becomes a call with the piped value first", () => switch parseSrc("let value = 1->add(2)") {
+  | Ok([Ast.SLet("value", _, None, Ast.ECall(Ast.ERef("add", _), [Ast.ENum(1, "1", _), Ast.ENum(2, "2", _)], None, _), false, None, _)]) => true
+      |> ok
+  | _ => false |> ok
+})
+
+test("keyword labels are valid in records and projections", () => switch parseSrc("let button = { type: \"button\" }\nlet kind = button.type") {
+  | Ok([Ast.SLet("button", _, None, Ast.ERecord([{ name: "type", value: Ast.EStr("button", _) }], None, _), false, None, _), Ast.SLet("kind", _, None, Ast.EField(Ast.ERef("button", _), "type", _), false, None, _)]) => true
+      |> ok
+  | _ => false |> ok
+})
+
+test("namespace imports keep their alias and source", () => switch parseSrc("import * as Shapes from \"./shapes.mochi\"") {
+  | Ok([Ast.SImportNs({ name: "Shapes", span: _ }, "./shapes.mochi", _)]) => true
+      |> ok
+  | _ => false |> ok
+})
+
+testEach("parse rejects malformed declarations", [
+  { label: "missing let value", src: "let x =", want: "unexpected token eof" },
+  {
+    label: "invalid export target",
+    src: "export import { x } from \"./x.mochi\"",
+    want: "`export` must precede"
+  }
+], row => switch parseSrc(row.src) {
+  | Err(e) => e.message |> Str.contains(row.want) |> ok
+  | Ok(_) => false |> ok
+})

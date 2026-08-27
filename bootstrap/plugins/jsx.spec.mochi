@@ -1,0 +1,44 @@
+import { ok, test, testEach } from "@mochi/test"
+import * as Ast from "../ast.mochi"
+import { lex } from "../lexer.mochi"
+import { parse, parseWith } from "../parser.mochi"
+
+let parseSrc = src => lex(src) |> Result.flatMap(parse)
+let parseWithoutJsx = src =>
+  lex(src) |> Result.flatMap(toks => parseWith(toks, Some([])))
+
+test("an intrinsic element lowers to h with JSX provenance", () => switch parseSrc("let el = <button type=\"button\" disabled />") {
+  | Ok([Ast.SLet("el", _, None, Ast.ECall(Ast.ERef("h", _), [Ast.EStr("button", _), Ast.ERecord([{ name: "type", value: Ast.EStr("button", _) }, { name: "disabled", value: Ast.EBool(true, _) }], None, _), Ast.EArr([], _)], Some("jsx"), _), false, None, _)]) => true
+      |> ok
+  | _ => false |> ok
+})
+
+test("a component tag stays a reference and preserves children", () => switch parseSrc("let el = <Card title={name}>{child}</Card>") {
+  | Ok([Ast.SLet("el", _, None, Ast.ECall(Ast.ERef("h", _), [Ast.ERef("Card", _), Ast.ERecord([{ name: "title", value: Ast.ERef("name", _) }], None, _), Ast.EArr([Ast.SEExpr(Ast.ERef("child", _))], _)], Some("jsx"), _), false, None, _)]) => true
+      |> ok
+  | _ => false |> ok
+})
+
+test("a fragment lowers to the Fragment tag", () => switch parseSrc("let el = <><span /></>") {
+  | Ok([Ast.SLet("el", _, None, Ast.ECall(_, [Ast.EStr("Fragment", _), _, Ast.EArr([Ast.SEExpr(Ast.ECall(_, _, Some("jsx"), _))], _)], Some("jsx"), _), false, None, _)]) => true
+      |> ok
+  | _ => false |> ok
+})
+
+testEach("JSX parse boundaries", [
+  {
+    label: "mismatched closing tag",
+    src: "let el = <main></aside>",
+    parse: parseSrc,
+    want: "mismatched JSX closing tag"
+  },
+  {
+    label: "plugin opt-out",
+    src: "let el = <div />",
+    parse: parseWithoutJsx,
+    want: "unexpected token lt"
+  }
+], row => switch row.parse(row.src) {
+  | Err(e) => e.message |> Str.contains(row.want) |> ok
+  | Ok(_) => false |> ok
+})

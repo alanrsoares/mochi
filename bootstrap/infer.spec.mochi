@@ -1,0 +1,53 @@
+import { ok, test, testEach } from "@mochi/test"
+import { check } from "./check.mochi"
+import { inferProgram } from "./infer.mochi"
+import { lex } from "./lexer.mochi"
+import { parse } from "./parser.mochi"
+
+extern builtins : Map<string, a> = "./prelude.gen.mjs" "builtins"
+extern namespaces : Map<string, Map<string, a> > = "./prelude.gen.mjs" "namespaces"
+
+let inferSrc = src =>
+  lex(src)
+    |> Result.flatMap(parse)
+    |> Result.flatMap(check)
+    |> Result.flatMap(stmts => inferProgram(stmts, builtins, namespaces, false))
+
+testEach("inference accepts well-typed programs", [
+  {
+    label: "polymorphic identity",
+    src: "let id = value => value\nlet n = id(1)\nlet s = id(\"ok\")"
+  },
+  {
+    label: "row-polymorphic field",
+    src: "let getName = value => value.name\nlet name = getName({ name: \"mochi\", version: 1 })"
+  },
+  {
+    label: "exhaustive variant",
+    src: "type Option a = Some(value: a) | None\nlet withDefault = value => switch value { | Some(n) => n | None => 0 }"
+  }
+], row => switch inferSrc(row.src) {
+  | Ok(_) => true |> ok
+  | Err(_) => false |> ok
+})
+
+testEach("inference rejects type conflicts", [
+  {
+    label: "number used as a function",
+    src: "let value = 1\nlet result = value(2)",
+    want: "unify"
+  },
+  {
+    label: "incompatible match arms",
+    src: "let f = value => switch value { | true => 1 | false => \"no\" }",
+    want: "unify"
+  },
+  {
+    label: "wrong builtin argument",
+    src: "let value = mul(1, \"no\")",
+    want: "unify"
+  }
+], row => switch inferSrc(row.src) {
+  | Err(e) => e.message |> Str.contains(row.want) |> ok
+  | Ok(_) => false |> ok
+})

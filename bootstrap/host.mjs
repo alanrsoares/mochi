@@ -57,6 +57,13 @@ export const absPath = (p) => resolve(p);
 // argv : [string]  — the process argument vector past the script name.
 export const argv = process.argv.slice(2);
 
+// isCliEntry : () -> bool — a bootstrap CLI module is also imported by its
+// colocated unit spec. Only invoke its top-level driver when Bun executed the
+// emitted cli.js itself, not when another module imported it.
+export const isCliEntry = () =>
+  process.argv[1] !== undefined &&
+  resolve(process.argv[1]) === resolve(new URL("./cli.js", import.meta.url).pathname);
+
 // print : string -> string  — write a line to stderr; returns its argument so
 // it threads inside a pipeline. (stderr keeps stdout clean for emitted JS.)
 export const print = (s) => {

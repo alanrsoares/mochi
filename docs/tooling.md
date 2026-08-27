@@ -73,6 +73,14 @@ statements ([ADR 0087](adr/0087-expr-statements.md)).
 Bootstrap unit specs live next to the source (`bootstrap/*.spec.mochi`);
 parity diffs against the TypeScript compiler stay in `test/bootstrap-*.spec.ts`.
 
+Run `bun run test:mochi:coverage` for a coverage report scoped to the colocated
+bootstrap Mochi specs, including builtin-plugin specs. It prints function and line
+coverage, including uncovered Mochi line ranges, and writes LCOV data to
+`coverage/mochi/lcov.info` for CI or editor integrations. It enforces a 65% function
+and line coverage floor for `bootstrap/**/*.mochi`; parity suites and non-bootstrap
+Mochi specs intentionally sit outside this scoped gate. `bun run check:full` runs
+the gate in CI.
+
 `bun install` runs `prepare` → `scripts/setup-hooks.ts` →
 `lefthook install --reset-hooks-path` (see `lefthook.yml`):
 

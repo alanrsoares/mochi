@@ -1,0 +1,43 @@
+import { assertEq, ok, test } from "@mochi/test"
+import * as Ast from "./ast.mochi"
+import {
+  ctorScheme,
+  generalize,
+  instantiate,
+  mono,
+  widenLits
+} from "./schemes.mochi"
+import { mkSt, showType, tArrow, tLit, tPrim, tVar } from "./types.mochi"
+
+let identityType = tArrow(tVar(0), tVar(0))
+let sp = { start: 0, end: 0 }
+
+test("generalize quantifies variables not free in the environment", () =>
+  let env = Map.set("fixed", mono(tVar(0)), #{}) in
+  let sc = generalize(env, tArrow(tVar(0), tVar(1)), mkSt(2), false) in
+    sc.vars |> assertEq([1]))
+
+test("instantiate makes each quantified variable fresh", () =>
+  let (ty, st) = instantiate(
+    { vars: [0], rvars: [], ty: identityType },
+    mkSt(5)
+  ) in
+    showType(ty) == "'t5 -> 't5" && st.next == 6 |> ok)
+
+test("generalization widens an unannotated string literal", () =>
+  generalize(#{}, tLit("hi"), mkSt(0), true).ty
+    |> showType
+    |> assertEq("string"))
+
+test("widenLits preserves finite literal unions", () =>
+  widenLits(tArrow(tLit("yes"), tPrim("bool")))
+    |> showType
+    |> assertEq("string -> bool"))
+
+test("ctorScheme makes a polymorphic curried constructor", () =>
+  let ctor = {
+    name: "Some",
+    fields: [{ name: Some("value"), fieldType: Ast.TyName("a", sp) }]
+  } in
+  let (sc, _) = ctorScheme("Option", ["a"], ctor, mkSt(0), #{}) in
+    sc.vars == [0] && showType(sc.ty) == "'t0 -> Option<'t0>" |> ok)
