@@ -39,6 +39,44 @@ test("hover on a record literal reports the closed row", () => {
   expect(hoverAt(src, 8)?.code).toBe("{ x: number, y: number }"); // on `{`
 });
 
+test("hover lays out deeply nested structural types", () => {
+  const src = `let profile = {
+  id: "p1",
+  preferences: {
+    theme: "dark",
+    language: "en",
+    timezone: "Pacific/Auckland",
+    colorScheme: "high-contrast"
+  }
+}`;
+  expect(hoverAt(src, src.indexOf("profile"))?.code).toBe(`let profile: {
+  id: string,
+  preferences: {
+    theme: string,
+    language: string,
+    timezone: string,
+    colorScheme: string
+  }
+}`);
+});
+
+test("hover lays out long arrows, unions, and declaration generics", () => {
+  const fn = "let transform = (first, second, third, fourth, fifth, sixth) => first";
+  const fnCode = hoverAt(fn, fn.indexOf("transform"))?.code;
+  expect(fnCode).toContain("let transform:");
+  expect(fnCode).toContain("\n");
+  expect(fnCode).toContain("->");
+
+  const decl = `type ApiResponse<A, B, C> =
+  | Success(payload: Result<Map<string, A>, Map<string, B> >, metadata: Map<string, C>)
+  | Failure(message: string, retryAfter: number, correlationId: string)`;
+  const declCode = hoverAt(decl, decl.indexOf("ApiResponse"))?.code;
+  expect(declCode).toContain("type ApiResponse<A, B, C> =");
+  expect(declCode).toContain("\n  Success(");
+  expect(declCode).toContain("\n  | Failure(");
+  expect(declCode).toContain("Map<string, A>");
+});
+
 test("hover on a nested field value reports the tightest node", () => {
   //          0         1
   //          012345678901234
