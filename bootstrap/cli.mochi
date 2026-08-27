@@ -17,23 +17,24 @@ type Diag = { message: string, start: number, end: number }
 extern readFile : string -> Result<string, string> = "./host.mjs" "readFile"
 extern writeFile : string -> string -> Result<string, string> = "./host.mjs" "writeFile"
 extern argv : [string] = "./host.mjs" "argv"
+extern isCliEntry : () -> bool = "./host.mjs" "isCliEntry"
 extern print : string -> string = "./host.mjs" "print"
 extern die : string -> a = "./host.mjs" "die"
 extern formatError : string -> string -> Diag -> string = "./host.mjs" "formatError"
 
 // "foo.mochi" -> "foo.js"  (drops the 6-char `.mochi` suffix).
-let outPath = path => "${Str.slice(0, Str.length(path) - 6, path)}.js"
+export let outPath = path => "${Str.slice(0, Str.length(path) - 6, path)}.js"
 
 // Single-file build: open-world compile, one written `.js`. Every arm of the
 // railway carries a string error (readFile's, or compile's via formatError).
-let buildOne = path =>
+export let buildOne = path =>
   let? src = path->readFile() in
   let? js = src->compile() |> Result.mapErr(e => path->formatError(src, e)) in
     outPath(path)->writeFile(js)
 
 // Write each compiled module's JS beside its source, logging as it goes. A
 // write failure short-circuits with the host's string error.
-let writeAll = outs =>
+export let writeAll = outs =>
   loop (remaining = outs) {
     switch remaining {
       | [] => Ok("")
@@ -51,23 +52,26 @@ let writeAll = outs =>
 // driver's diagnostic (a graph/type/exhaustiveness error) has no single source
 // file to anchor a line:col against, so we surface its message (as src/cli.ts's
 // build does — span parity across modules is a later refinement).
-let buildMulti = entry =>
+export let buildMulti = entry =>
   buildModules(entry)
     |> Result.mapErr(e => e.message)
     |> Result.flatMap(writeAll)
 
-/// Entry: fire on the real argv the moment the module is evaluated.
-export let main = switch Array.get(0, argv) {
-  | None => die("usage: mochic <file.mochi>  |  mochic build <entry.mochi>")
-  | Some("build") => switch Array.get(1, argv) {
-      | None => die("usage: mochic build <entry.mochi>")
-      | Some(entry) => switch buildMulti(entry) {
-          | Ok(_) => print("build ok")
-          | Err(msg) => die(msg)
-        }
-    }
-  | Some(path) => switch buildOne(path) {
-      | Ok(out) => print("wrote ${out}")
-      | Err(msg) => die(msg)
-    }
-}
+/// Invoke only when Bun executes cli.js directly. Importing it from a colocated
+/// unit spec must expose the helpers above without exiting the test process.
+let runEntry = isCliEntry(())
+  ? switch Array.get(0, argv) {
+    | None => die("usage: mochic <file.mochi>  |  mochic build <entry.mochi>")
+    | Some("build") => switch Array.get(1, argv) {
+        | None => die("usage: mochic build <entry.mochi>")
+        | Some(entry) => switch buildMulti(entry) {
+            | Ok(_) => print("build ok")
+            | Err(msg) => die(msg)
+          }
+      }
+    | Some(path) => switch buildOne(path) {
+        | Ok(out) => print("wrote ${out}")
+        | Err(msg) => die(msg)
+      }
+  }
+  : ""

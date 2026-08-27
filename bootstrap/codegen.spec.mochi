@@ -1,0 +1,56 @@
+import { ok, testEach } from "@mochi/test"
+import { codegen } from "./codegen.mochi"
+import { lex } from "./lexer.mochi"
+import { parse } from "./parser.mochi"
+
+extern namespaceRuntime : Map<string, Map<string, string> > = "./prelude.gen.mjs" "namespaceRuntime"
+extern preludeJsDefs : Map<string, string> = "./prelude.gen.mjs" "preludeJsDefs"
+extern runtimeDeps : Map<string, [string]> = "./prelude.gen.mjs" "runtimeDeps"
+
+let genSrc = src =>
+  lex(src)
+    |> Result.flatMap(parse)
+    |> Result.map(stmts =>
+      codegen(stmts, #{}, true, namespaceRuntime, preludeJsDefs, runtimeDeps))
+
+testEach("codegen emits runtime forms", [
+  {
+    label: "curried multi-argument lambda",
+    src: "let addPair = (a, b) => add(a, b)",
+    want: "const addPair = _curry(2, (a, b) => add(a, b));"
+  },
+  {
+    label: "record update",
+    src: "let base = { x: 1 }\nlet next = { ...base, x: 2 }",
+    want: "const next = { ...base, x: 2 };"
+  },
+  {
+    label: "lazy list",
+    src: "let values = @{1, 2}",
+    want: "const values = _list(function* () { yield (1); yield (2); });"
+  },
+  {
+    label: "native map",
+    src: "let values = #{ \"a\": 1 }",
+    want: "const values = new Map([[\"a\", 1]]);"
+  }
+], row => switch genSrc(row.src) {
+  | Ok(js) => js |> Str.contains(row.want) |> ok
+  | Err(_) => false |> ok
+})
+
+testEach("codegen emits match support only when needed", [
+  {
+    label: "variant switch",
+    src: "type Light = Red | Green\nlet show = light => switch light { | Red => 1 | Green => 2 }",
+    want: "import { match } from \"@onrails/pattern\";"
+  },
+  { label: "plain binding", src: "let value = 1", want: "const value = 1;" }
+], row => switch genSrc(row.src) {
+  | Ok(js) => row.label == "variant switch"
+      ? js |> Str.contains(row.want) |> ok
+      : js |> Str.contains("import { match } from \"@onrails/pattern\";")
+      ? false |> ok
+      : js |> Str.contains(row.want) |> ok
+  | Err(_) => false |> ok
+})

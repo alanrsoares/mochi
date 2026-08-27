@@ -1,0 +1,39 @@
+import { assertEq, ok, test } from "@mochi/test"
+import * as Ast from "./ast.mochi"
+import * as U from "./usefulness.mochi"
+
+let sp = { start: 0, end: 0 }
+let lightReg = {
+  ctors: #{
+    "Red": { owner: "Light", arity: 0 },
+    "Green": { owner: "Light", arity: 0 },
+    "Blue": { owner: "Light", arity: 0 }
+  },
+  types: #{ "Light": ["Red", "Green", "Blue"] }
+}
+let emptyReg = { ctors: #{}, types: #{} }
+
+test("all variant constructors are exhaustive", () => switch U.checkExhaustiveM([Ast.PCtor("Red", [], None, sp), Ast.PCtor("Green", [], None, sp), Ast.PCtor("Blue", [], None, sp)], lightReg) {
+  | U.ExOk => true |> ok
+  | _ => false |> ok
+})
+
+test("a missing variant produces a constructor witness", () => switch U.checkExhaustiveM([Ast.PCtor("Red", [], None, sp)], lightReg) {
+  | U.ExWitness(w) => w |> U.showWitness |> assertEq("Green")
+  | _ => false |> ok
+})
+
+test("both boolean patterns are exhaustive", () => switch U.checkExhaustiveM([Ast.PBool(true, sp), Ast.PBool(false, sp)], emptyReg) {
+  | U.ExOk => true |> ok
+  | _ => false |> ok
+})
+
+test("array empty plus rest covers every length", () => switch U.checkExhaustiveM([Ast.PArr([], None, sp), Ast.PArr([Ast.PBind("head", sp)], Some(Ast.PBind("tail", sp)), sp)], emptyReg) {
+  | U.ExOk => true |> ok
+  | _ => false |> ok
+})
+
+test("a literal number arm leaves a concrete witness", () => switch U.checkExhaustiveM([Ast.PLit(0, "0", sp)], emptyReg) {
+  | U.ExWitness(w) => w |> U.showWitness |> assertEq("1")
+  | _ => false |> ok
+})

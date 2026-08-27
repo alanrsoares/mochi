@@ -1,0 +1,20 @@
+import { assertEq, ok, test } from "@mochi/test"
+import { buildMulti, buildOne, outPath, writeAll } from "./cli.mochi"
+
+test("outPath replaces only the .mochi suffix", () =>
+  outPath("src/entry.mochi") |> assertEq("src/entry.js"))
+
+test("buildOne keeps an unreadable source on the Err rail", () => switch buildOne("bootstrap/not-a-cli-input.mochi") {
+  | Err(_) => true |> ok
+  | Ok(_) => false |> ok
+})
+
+test("buildMulti keeps an unreadable entry on the Err rail", () => switch buildMulti("bootstrap/not-a-cli-entry.mochi") {
+  | Err(_) => true |> ok
+  | Ok(_) => false |> ok
+})
+
+test("writeAll accepts an empty module output list", () => switch writeAll([]) {
+  | Ok(path) => path |> assertEq("")
+  | Err(_) => false |> ok
+})

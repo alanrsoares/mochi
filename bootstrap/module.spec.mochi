@@ -1,0 +1,43 @@
+import { ok, test } from "@mochi/test"
+import { buildModules, compileGraph, loadGraph } from "./module.mochi"
+
+let modulesEntry = "examples/modules/main.mochi"
+
+test("loadGraph puts a dependency before its importer", () => switch loadGraph(modulesEntry) {
+  | Ok([geometry, main]) => Str.endsWith(
+      "/geometry.mochi",
+      geometry.path
+    ) && Str.endsWith("/main.mochi", main.path)
+      |> ok
+  | Ok(_) => false |> ok
+  | _ => false |> ok
+})
+
+test("compileGraph emits every module from a loaded graph", () => switch loadGraph(modulesEntry) {
+  | Err(_) => false |> ok
+  | Ok(graph) => switch compileGraph(graph) {
+      | Ok([geometry, main]) => (geometry.js
+          |> Str.contains("export")) && (main.js |> Str.contains("geometry"))
+          |> ok
+      | Ok(_) => false |> ok
+      | Err(_) => false |> ok
+    }
+})
+
+test("buildModules resolves then compiles the real module graph", () => switch buildModules(modulesEntry) {
+  | Ok([geometry, main]) => Str.endsWith(
+      "/geometry.mochi",
+      geometry.path
+    ) && Str.endsWith(
+      "/main.mochi",
+      main.path
+    ) && (main.js |> Str.contains("import"))
+      |> ok
+  | Ok(_) => false |> ok
+  | Err(_) => false |> ok
+})
+
+test("loadGraph reports an unreadable entry as an Err verdict", () => switch loadGraph("bootstrap/not-a-module.mochi") {
+  | Err(e) => e.message |> Str.contains("cannot read module") |> ok
+  | Ok(_) => false |> ok
+})

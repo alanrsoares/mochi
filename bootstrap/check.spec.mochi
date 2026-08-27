@@ -1,0 +1,47 @@
+import { assertEq, ok, test, testEach } from "@mochi/test"
+import { check } from "./check.mochi"
+import { lex } from "./lexer.mochi"
+import { parse } from "./parser.mochi"
+
+let checkSrc = src => lex(src) |> Result.flatMap(parse) |> Result.flatMap(check)
+
+test("an exhaustive variant switch is accepted", () => switch checkSrc("type Light = Red | Green\nlet go = light => switch light { | Red => 1 | Green => 2 }") {
+  | Ok(_) => true |> ok
+  | Err(_) => false |> ok
+})
+
+test("a catch-all makes a variant switch exhaustive", () => switch checkSrc("type Light = Red | Green | Blue\nlet go = light => switch light { | Red => 1 | _ => 0 }") {
+  | Ok(_) => true |> ok
+  | Err(_) => false |> ok
+})
+
+testEach("checker rejects invalid declarations and switches", [
+  {
+    label: "missing variant arm",
+    src: "type Light = Red | Green\nlet go = light => switch light { | Red => 1 }",
+    want: "non-exhaustive"
+  },
+  {
+    label: "duplicate type",
+    src: "type Thing = One\ntype Thing = Two",
+    want: "duplicate type 'Thing'"
+  },
+  {
+    label: "unknown constructor",
+    src: "let f = value => switch value { | Missing => 1 | _ => 0 }",
+    want: "unknown constructor 'Missing'"
+  },
+  {
+    label: "reserved prelude name",
+    src: "let Str = 1",
+    want: "'Str' is a reserved collection namespace"
+  },
+  {
+    label: "undeclared constructor type variable",
+    src: "type Box a = Item(a, b)",
+    want: "unknown type parameter 'b'"
+  }
+], row => switch checkSrc(row.src) {
+  | Err(e) => e.message |> Str.contains(row.want) |> ok
+  | Ok(_) => false |> ok
+})
