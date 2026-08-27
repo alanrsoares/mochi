@@ -128,6 +128,7 @@ What else was on the table and why not.
 | [0081](0081-string-literal-unions.md) | String literal types and finite unions as surface TypeExpr | Accepted |
 | [0082](0082-scoped-ctor-imports.md) | Named/namespace imports scope the constructor registry | Accepted |
 | [0083](0083-lambda-paren-rule.md) | Keep the lambda paren rule; name it on tuple/arity mismatch | Accepted |
+| [0084](0084-structural-eq.md) | `eq`/`show`/`compare` stay structural; `-By` is the override | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

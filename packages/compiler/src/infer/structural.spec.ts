@@ -40,6 +40,11 @@ test("eq compares primitives, strings, arrays, and records structurally", () => 
   expect(run("let a = eq({ x: 1, y: 2 }, { x: 1, y: 9 })", "a")).toBe(false);
 });
 
+test("functions compare by reference (ADR 0084)", () => {
+  expect(run("let f = x => x\nlet a = eq(f, f)", "a")).toBe(true);
+  expect(run("let a = eq(x => x, x => x)", "a")).toBe(false);
+});
+
 // ---- structural compare ----------------------------------------------------
 
 test("compare returns -1 | 0 | 1 across numbers and strings", () => {

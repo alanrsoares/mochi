@@ -71,7 +71,7 @@ export const preludeEnv: Record<string, Type> = {
   // eq/compare/show are STRUCTURAL and polymorphic (deep-equal / deep-order /
   // display at any type) — the pragmatic bridge instead of typeclasses.
   // lt/gt/gte/lte stay numeric.
-  eq: tArrow(a, tArrow(a, tBool)), // a -> a -> bool  (structural)
+  eq: tArrow(a, tArrow(a, tBool)), // a -> a -> bool  (structural; ADR 0084)
   compare: tArrow(a, tArrow(a, tNumber)), // a -> a -> number  (-1 | 0 | 1)
   show: tArrow(a, tString), // a -> string  (structural display)
 

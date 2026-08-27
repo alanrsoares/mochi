@@ -1,7 +1,7 @@
 ---
 id: C4
 title: Structural eq/show/compare — BUG on Map/Set/List, then ADR the extension exit path
-status: open
+status: done
 type: bug + task
 blocked-by: []
 ---
@@ -37,9 +37,9 @@ O(n) deep equality in a hot loop is invisible at the call site. The plugin seam
       error naming `List.toArray`).
 - [x] Cases in `test/examples.spec.ts` + a PBT invariant (`eq(x, x)` true,
       `eq(a, b)` false for structurally distinct Map/Set fixtures).
-- [ ] ADR: extension exit path — scoped instances / per-nominal override registry /
+- [x] ADR: extension exit path — scoped instances / per-nominal override registry /
       permanent-structural-only — with the accepted failure modes named.
-- [ ] `docs/language.md` documents `eq`-on-functions and hot-loop cost.
+- [x] `docs/language.md` documents `eq`-on-functions and hot-loop cost.
 - [x] Bootstrap impact: none expected (runtime string change; bootstrap emits the same
       prelude runtime) — verify via fixpoint.
 - [x] `bun run check:full` green.

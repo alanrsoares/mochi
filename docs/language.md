@@ -203,9 +203,15 @@ enclosing loop. For iteration purely for effect, use
 ## Prelude highlights
 
 - Math ops unqualified (`add`, `mul`, `mod` = true modulo …); strings under `Str.*`.
-- **Structural `eq`/`compare`/`show`** work at any type by deep walk — the pragmatic
-  bridge instead of typeclasses, keeping emitted JS free of hidden dictionaries. The
-  `-By` family (`sortBy`, `dedupeBy`, …) takes an explicit projection.
+- **Structural `eq`/`compare`/`show`** work at any type by a deep walk — the pragmatic
+  bridge instead of typeclasses, keeping emitted JS free of hidden dictionaries
+  ([ADR 0084](adr/0084-structural-eq.md)). That is a **guarantee**, not a placeholder:
+  there is no instance registry and no plugin override. The `-By` family (`sortBy`,
+  `dedupeBy`, `maxBy`, …) is the customization point — pass an explicit projection.
+  Named costs: functions compare by reference (`eq(x => x, x => x)` is `false`);
+  opaque host values `show` enumerable fields; a hot loop pays O(n) with no call-site
+  warning. `eq`/`compare` on a lazy List throw (`List.toArray` first); `show` prints
+  `<List>` without pulling. Map/Set **keys** use host identity, not deep `eq`.
 - Builtin `Option` (`Some`/`None`) and `Result` (`Ok`/`Err`); `Map.get`/`Array.head`
   return `Option`. Field names match `@onrails/result`/`@onrails/maybe`, so values flow
   straight into those combinators at the JS boundary.
