@@ -217,7 +217,8 @@ let unifyArgs = (as_, bs, i, st) => switch Array.get(i, as_) {
   | None => Ok(st)
   | Some(a) => switch Array.get(i, bs) {
       | None => Ok(st)
-      | Some(b) => let? s1 = unify(a, b, st) in unifyArgs(as_, bs, i + 1, s1)
+      | Some(b) => unify(a, b, st)
+          |> Result.flatMap(s1 => unifyArgs(as_, bs, i + 1, s1))
     }
 }
 
@@ -240,8 +241,8 @@ export let unify = (a, b, st) =>
         }
       | TyFn(afrom, ato) => switch rb {
           | TyVar(bid) => bindVar(bid, ra, st)
-          | TyFn(bfrom, bto) => let? s1 = unify(afrom, bfrom, st) in
-              unify(ato, bto, s1)
+          | TyFn(bfrom, bto) => unify(afrom, bfrom, st)
+              |> Result.flatMap(s1 => unify(ato, bto, s1))
           | _ => unifyMismatch(ra, rb)
         }
       | TyRecord(arow) => switch rb {
@@ -265,8 +266,10 @@ let rewriteRow = (row, label, st) => switch resolveRow(row, st) {
   | RowEmpty => fail("record missing field '${label}'")
   | RowExtend(rlabel, rtype, rrest) => rlabel == label
       ? Ok((rtype, rrest, st))
-      : let? (subType, subRest, subSt) = rewriteRow(rrest, label, st) in
-        Ok((subType, rExtend(rlabel, rtype, subRest), subSt))
+      : rewriteRow(rrest, label, st)
+        |> Result.map(((subType, subRest, subSt)) =>
+          (subType, rExtend(rlabel, rtype, subRest), subSt)
+        )
   | RowVar(rid) => let (freshT, st1) = freshVar(st) in
     let (freshTail, st2) = freshRowVar(st1) in
       Ok((
@@ -290,12 +293,11 @@ export let unifyRows = (r1, r2, st) =>
       | RowExtend(alabel, atype, arest) => switch b {
           | RowEmpty => fail("record has extra field '${alabel}'")
           | RowVar(bid) => bindRowVar(bid, a, st)
-          | RowExtend(_, _, _) => let? (btype, brest, s1) = rewriteRow(
-              b,
-              alabel,
-              st
-            ) in
-            let? s2 = unify(atype, btype, s1) in unifyRows(arest, brest, s2)
+          | RowExtend(_, _, _) => rewriteRow(b, alabel, st)
+              |> Result.flatMap(((btype, brest, s1)) =>
+                unify(atype, btype, s1)
+                  |> Result.flatMap(s2 => unifyRows(arest, brest, s2))
+              )
         }
     }
 
