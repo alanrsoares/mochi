@@ -33,4 +33,4 @@ let pipeline = lex
 /// compile : string -> Result string Err
 export let compile = src =>
   let? prog = src->pipeline() in
-    Ok(codegen(prog, #{}, true, namespaceRuntime, preludeJsDefs, runtimeDeps))
+    Ok(prog->codegen(#{}, true, namespaceRuntime, preludeJsDefs, runtimeDeps))
