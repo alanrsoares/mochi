@@ -71,9 +71,12 @@ extension).
 
 ## Editor surfaces
 
-- **Hover** — types on demand, folded back to named record aliases where they match, with
-  `///` doc comments attached (user docs on lets; prelude builtins use the virtual
-  prelude docstrings).
+- **Hover** — inferred types on demand, folded back to named record aliases where they
+  match, with `///` doc comments attached (user docs on lets; prelude builtins use the
+  virtual prelude docstrings). Type declarations, constructors, record-alias fields, and
+  type syntax also have parse-level hovers, so they remain readable when value inference fails.
+  Otherwise-unhoverable syntax such as `let`, `extern`, `loop`, and collection sigils has a
+  concise fallback hint rather than competing with a more-specific semantic hover.
 - **Go to definition / document highlight** — lexical symbol index (values, types, ctors,
   same-file record fields); works when typecheck fails. Prelude / builtins (including
   `Result.map`-style namespaces) resolve to a virtual `mochi:/prelude.mochi` buffer

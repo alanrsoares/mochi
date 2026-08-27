@@ -79,15 +79,12 @@ const lookup = (b: Builder, space: SymbolSpace, name: string): Binding | undefin
   return undefined;
 };
 
-const PLACEHOLDER: Span = { start: -1, end: -1 };
-const isPlaceholder = (binding: Binding): boolean => binding.def.span.start < 0;
-
 /** Snapshot the innermost frame before pop — region where its binds are live. */
 const snapshotFrame = (b: Builder, space: SymbolSpace, span: Span): void => {
   const scope = b.scopes[space][b.scopes[space].length - 1]!;
   const bindings: Binding[] = [];
   for (const binding of scope.values()) {
-    if (isPlaceholder(binding) || binding.name.startsWith("$")) continue;
+    if (binding.name.startsWith("$")) continue;
     bindings.push(binding);
   }
   if (bindings.length > 0) b.frames.push({ space, span, bindings });
@@ -103,7 +100,7 @@ const armSpan = (arm: MatchArm): Span => {
 const bind = (b: Builder, space: SymbolSpace, name: string, span: Span): Binding => {
   const binding: Binding = { name, space, def: loc(b.path, span) };
   b.scopes[space][b.scopes[space].length - 1]!.set(name, binding);
-  if (!isPlaceholder(binding)) b.occurrences.push({ binding, span, role: "def" });
+  b.occurrences.push({ binding, span, role: "def" });
   return binding;
 };
 
@@ -114,15 +111,9 @@ const bindLocal = (b: Builder, name: string, span: Span): Binding => {
   return binding;
 };
 
-/** Enter a name in scope without a navigable def (destructure params lacking spans). */
-const bindOpaque = (b: Builder, name: string): void => {
-  const binding: Binding = { name, space: "value", def: loc(b.path, PLACEHOLDER) };
-  b.scopes.value[b.scopes.value.length - 1]!.set(name, binding);
-};
-
 const use = (b: Builder, space: SymbolSpace, name: string, span: Span): void => {
   const binding = lookup(b, space, name);
-  if (binding && !isPlaceholder(binding)) b.occurrences.push({ binding, span, role: "use" });
+  if (binding) b.occurrences.push({ binding, span, role: "use" });
 };
 
 /**
@@ -142,10 +133,10 @@ const bindParam = (b: Builder, p: LamParam): void => {
     return;
   }
   if (p.kind === "ptuple") {
-    for (const n of p.names) bindOpaque(b, n);
+    for (let i = 0; i < p.names.length; i++) bindLocal(b, p.names[i]!, p.nameSpans[i]!);
     return;
   }
-  for (const f of p.fields) bindOpaque(b, f);
+  for (let i = 0; i < p.fields.length; i++) bindLocal(b, p.fields[i]!, p.fieldSpans[i]!);
 };
 
 const walkPat = (b: Builder, p: Pattern): void => {

@@ -2,7 +2,7 @@ import { type Diagnostic, formatError } from "@mochi/compiler";
 import { format } from "@mochi/dx/format";
 import { isErr, unwrapOk } from "@onrails/result";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
-import { DEFAULT_PRESET_CODE, presetEntries } from "../lib/playground/presets.mochi";
+import { presetEntries } from "../lib/playground/presets.mochi";
 import { clearPreview, renderPreview } from "../lib/playground/preview";
 import { persistAutorun, readAutorun } from "../lib/playground/session";
 import {
