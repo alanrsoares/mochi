@@ -79,13 +79,17 @@ inferCall live in `bootstrap/plugins/jsx.mochi`, registered through
 `bootstrap/extensions.mochi` (`resolvePlugins` — same opt-in/opt-out rule as
 `src/`). Hooks are Result/(toks, pos) shaped (no imperative `ParserApi`);
 format/dts hooks are absent because those passes do not exist in bootstrap.
-`fixpoint` (below) still compares *emitted output*.
+`fixpoint` (below) still compares *emitted output*. The checked-in
+`bootstrap/seed/` graph is the temporary JavaScript stage-1 bridge. It is a
+reviewed emitted artifact with a SHA-256 manifest, not an editable source; ADR
+0090's target is a TypeScript graph emitted by Mochi. The TypeScript build
+remains an independent differential oracle during the migration.
 
 Two invariants are enforced in CI-style scripts:
 
-- **`bun run fixpoint`** — the shipped binary compiles `bootstrap/`, and the output
-  reproduces itself byte-for-byte across stages (stage2 ≡ stage3), and matches the TS
-  reference build (stage2 ≡ TS).
+- **`bun run fixpoint`** — the frozen stage-1 binary compiles `bootstrap/`, and
+  the output reproduces itself byte-for-byte across stages (stage2 ≡ stage3),
+  and matches the independent TS reference build (stage2 ≡ TS).
 - **`bun run bootstrap:tsc`** — emit the whole graph as TypeScript and count
   `tsc --strict` errors. The north-star number is **0**; a ratchet fails the build if it
   regresses above 0.

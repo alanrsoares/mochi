@@ -1,0 +1,23 @@
+{
+  "sourceRevision": "e54cdb41af6968b9f1299e6deeda8472d757d484",
+  "files": {
+    "ast.js": "71184b567fe3d7c2f92e2e640d7e7572d0e13e6d27c55031ccfb1a59bb5634aa",
+    "check.js": "2fd93423706bdf0aad3589b1088b1d088622af34aea68f3a30f9567fee9f72d6",
+    "cli.js": "376c0f6d2b8217254bdbe6b8cef8f27a6cb05d051df23c872cad73d14958a6df",
+    "codegen.js": "a773c8af106e8feeba985665bb389d44a907337c97e60a6508798be81135a673",
+    "compile.js": "c53ff9a05e2e6afa5919d1bf3ed4be0597a806917ea351a303bbd704bb6b0c10",
+    "ctors.js": "ca3ec4259f8370ccea52eb0b67bbac47592ce164d690906bedae17e5fee127b5",
+    "extensions.js": "8f0392165a1ca27c9013bd33cdec2440944543ece7878dfd872e4e626a5ec5e2",
+    "infer.js": "6e02b345af23d0b360aee2938ae0be03c007215bed266ec3b3b99d9724257e4d",
+    "lexer.js": "233a2c20ecdd9a287e85c6f59d54e174668587398bf405319e8966deedca7483",
+    "module.js": "84524b0c30b0b58e5c80dae3b008e4f5e52ab4f522b04c5b4e9f23dacdaf52db",
+    "parser.js": "e9bfe5d864cb465dfe87025edd3a54d416f1f933afa52d35a386085e86ebc54e",
+    "plugins/jsx.js": "3b813532be7d95cb98ef008fc9ce184599b889087df7df5c990efe22ff476ee8",
+    "scc.js": "eb76c208bcd54ac89dd4723fc00b44a28e463086385bc2c9159c1c29a665234d",
+    "schemes.js": "bffce436fa967f717f4356e9e56c0aa423ef3b04455400be77864e1e9fc9fc56",
+    "types.js": "8ae41a86d51e7725275df13fc7ce5e548ccdb98e74a2ebffe6b3cf17463cbfc3",
+    "usefulness.js": "07df3e79114f52f66f651f52c725663bbc613c9a324bddb69f7f2c1e9c67d88b",
+    "host.mjs": "614cf5e1e6d1df93b7f27ec249eca8d285c2172fea3a234a71408b023e912917",
+    "prelude.gen.mjs": "b7f9f45bb28691df71615d24fd1c733ff78407fc393bb79a7731cfedbbc4efdc"
+  }
+}

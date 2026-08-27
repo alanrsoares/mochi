@@ -134,6 +134,7 @@ What else was on the table and why not.
 | [0087](0087-expr-statements.md) | Top-level expression statements are unit | Accepted |
 | [0088](0088-table-and-pbt.md) | Table tests (`testEach`) and PBT (`check`) | Accepted |
 | [0089](0089-task-tests.md) | Async Task tests, `checkTask`, timeouts | Accepted |
+| [0090](0090-bootstrap-chain.md) | Mochi-emitted TypeScript for stage 1 | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was
