@@ -358,8 +358,7 @@ let wrapStepTails = (e, sp) => switch e {
             pattern: a.pattern,
             guard: a.guard,
             body: wrapStepTails(a.body, sp)
-          }
-        ),
+          }),
       msp
     )
   | _ => Ast.ECall(Ast.ERef("_done", sp), [e], None, sp)

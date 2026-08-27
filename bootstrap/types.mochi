@@ -525,8 +525,7 @@ let rewriteRow = (row, label, st) => switch resolveRow(row, st) {
       ? Ok((rtype, rrest, st))
       : rewriteRow(rrest, label, st)
         |> Result.map(((subType, subRest, subSt)) =>
-          (subType, rExtend(rlabel, rtype, subRest), subSt)
-        )
+          (subType, rExtend(rlabel, rtype, subRest), subSt))
   | RowVar(rid) => let (freshT, st1) = freshVar(st) in
     let (freshTail, st2) = freshRowVar(st1) in
       Ok((
@@ -553,8 +552,7 @@ export let unifyRows = (r1, r2, st) =>
           | RowExtend(_, _, _) => rewriteRow(b, alabel, st)
               |> Result.flatMap(((btype, brest, s1)) =>
                 unify(atype, btype, s1)
-                  |> Result.flatMap(s2 => unifyRows(arest, brest, s2))
-              )
+                  |> Result.flatMap(s2 => unifyRows(arest, brest, s2)))
         }
     }
 

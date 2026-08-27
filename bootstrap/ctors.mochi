@@ -148,8 +148,7 @@ let buildLoop = (stmts, i, reg) => switch Array.get(i, stmts) {
               ctors: cs,
               types: Map.set(name, ctors |> map(c => c.name), reg.types)
             }
-          )
-        )
+          ))
   | Some(_) => stmts->buildLoop(i + 1, reg)
 }
 

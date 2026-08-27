@@ -409,7 +409,9 @@ const parenIf = (cond: boolean, d: Doc): Doc => (cond ? seq(txt("("), d, txt(")"
  * in member position is ambiguous, and a nested pipe would re-associate.
  */
 const calleeD = (e: Expr): Doc =>
-  parenIf(e.kind === "lambda" || e.kind === "ternary" || e.kind === "pipe", exprD(e));
+  e.kind === "call"
+    ? callD(e, true)
+    : parenIf(e.kind === "lambda" || e.kind === "ternary" || e.kind === "pipe", exprD(e));
 const memberD = (e: Expr): Doc =>
   parenIf(
     e.kind === "lambda" || e.kind === "record" || e.kind === "ternary" || e.kind === "pipe",
@@ -805,21 +807,27 @@ const refoldCall = (e: CallExpr): Doc | null => {
 /**
  * `f(a, b)`. When the last argument is a lambda, keep `f(…, p =>` on the line
  * and let the lambda body break beneath it (the "trailing lambda hug"), rather
- * than exploding the whole argument list. The hug is a `group` with a `softline`
- * before `)` so a broken body does not glue the closer onto its last line
- * (`body)` / `body)(`) — except when the body is already braced (`switch` /
- * `loop` / `do`), where `})` hugs the closer onto the closing brace instead of leaving
- * a dangling `)\n` staircase. Otherwise the args are their own group after the
- * callee — so a short curried apply can still hug a multiline callee's `)`
- * (`…)(deps)`), instead of being locked into the callee's break decision.
+ * than exploding the whole argument list.
+ *
+ * `)` hugs the lambda's last line for a statement-position call (`testEach(…,
+ * row => …)`), so a broken earlier arg (a table) cannot leave a dangling `)\n`
+ * under a one-line callback. When this call is itself applied (`f(x => body)(y)`),
+ * an expression body keeps a `softline` before `)` so we do not glue `body)(`.
+ * Braced `switch` / `loop` / `do` still hug (`})(deps)`). A discarded `let _ =`
+ * chain prints as a brace block too, so hug on that AST as well — otherwise
+ * pass one emits `}\n)` and pass two, seeing a real `do`, would hug.
+ *
+ * Otherwise the args are their own group after the callee — so a short curried
+ * apply can still hug a multiline callee's `)` (`…)(deps)`), instead of being
+ * locked into the callee's break decision.
  */
-const callD = (e: CallExpr): Doc => {
+const callD = (e: CallExpr, asCallee = false): Doc => {
   const refold = refoldCall(e);
   if (refold) return refold;
   // `f(a)(b)` → `f(a, b)` for a local flat callable (ADR 0065). The result has a
   // single argument group, so this recurses at most once.
   const flattened = flattenCallSpine(e);
-  if (flattened) return callD(flattened);
+  if (flattened) return callD(flattened, asCallee);
   const fn = calleeD(e.fn);
   if (e.args.length === 0) return seq(fn, txt("()"));
   const last = e.args[e.args.length - 1]!;
@@ -829,15 +837,12 @@ const callD = (e: CallExpr): Doc => {
   if (e.args.length === 1 && last.kind === "tuple")
     return group(seq(fn, txt("("), exprD(last), txt(")")));
   if (last.kind === "lambda") {
-    // `switch` / `loop` / `do` already end in `}`; glue `)` rather than
-    // soft-breaking to a lone closer under the brace. A discarded `let _ =`
-    // chain prints as a brace block too, so hug on that AST as well — otherwise
-    // pass one emits `}\n)` and pass two, seeing a real `do`, would hug.
-    const hugCloser =
+    const braced =
       last.body.kind === "match" ||
       last.body.kind === "loop" ||
       last.body.kind === "do" ||
       discardedLetExprs(last.body) !== null;
+    const hugCloser = braced || !asCallee;
     return group(
       seq(
         fn,

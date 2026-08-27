@@ -221,8 +221,7 @@ let binderPaths = (p, at, acc) => switch p {
       |> Result.flatMap(acc1 =>
         Map.has(name, acc1)
           ? Err(checkErr("pattern binds '${name}' more than once", nameSp))
-          : Ok(Map.set(name, at, acc1))
-      )
+          : Ok(Map.set(name, at, acc1)))
   | Ast.PBind(name, sp) => Map.has(name, acc)
       ? Err(checkErr("pattern binds '${name}' more than once", sp))
       : Ok(Map.set(name, at, acc))
@@ -354,8 +353,7 @@ type SeqCheck =
 let checkSeqExhaustive = (arms, mSpan) =>
   let seqs = arms
     |> filter(a =>
-      Option.isNone(a.guard) && Option.isSome(seqElemsRest(a.pattern))
-    )
+      Option.isNone(a.guard) && Option.isSome(seqElemsRest(a.pattern)))
     |> map(a => a.pattern) in
     Array.length(seqs) == 0
       ? SeqNotSeq
@@ -443,8 +441,7 @@ let namedUnguarded = leaves =>
       |> Array.flatMap(a =>
         isPCtor(a.pattern) && Option.isNone(a.guard)
           ? [ctorNameOf(a.pattern)]
-          : []
-      )
+          : [])
   )
 
 let matrixVerdict = (arms, leaves, ownerOpt, mSpan, reg) => switch checkExhaustiveM(unguardedPatterns(arms), reg) {

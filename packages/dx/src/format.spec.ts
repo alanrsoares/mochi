@@ -148,8 +148,31 @@ test("breaks a two-segment pipe when a segment is itself multi-line", () => {
     "    |> Result.flatMap(src =>",
     "      compile(src)",
     "        |> Result.mapErr(e => formatError(path, src, e))",
-    "        |> Result.flatMap(js => writeFile(outPath(path), js))",
-    "    )",
+    "        |> Result.flatMap(js => writeFile(outPath(path), js)))",
+    "",
+  ].join("\n");
+  expect(fmt(src)).toBe(out);
+  expect(fmt(out)).toBe(out);
+});
+
+test("trailing-lambda after a broken table hugs ) onto the callback", () => {
+  const src = [
+    'testEach("stronglyConnected", [',
+    '  { label: "empty", adj: [], want: [] },',
+    '  { label: "one node", adj: [[]], want: [[0]] }',
+    "], row => row.adj |> stronglyConnected |> assertEq(row.want))",
+  ].join("\n");
+  expect(fmt(src)).toBe(`${src}\n`);
+  expect(fmt(`${src}\n`)).toBe(`${src}\n`);
+});
+
+test("curried apply does not glue )( onto an expression-body lambda", () => {
+  const src =
+    "let _ws = useEffect(() => connectWs(store.actions.setLeaders, store.actions.setConnected))(hookDeps0())";
+  const out = [
+    "let _ws = useEffect(() =>",
+    "  connectWs(store.actions.setLeaders, store.actions.setConnected)",
+    ")(hookDeps0())",
     "",
   ].join("\n");
   expect(fmt(src)).toBe(out);

@@ -229,8 +229,7 @@ let sepBy = (parseItem, toks, pos, acc) =>
       let items = Array.append(item, acc) in
         tokAt(toks, p).tok == TComma
           ? sepBy(parseItem, toks, p + 1, items)
-          : Ok((items, p))
-    )
+          : Ok((items, p)))
 
 /// Like `sepBy`, but `parseItem` takes `(toks, pos, hooks)` — used when the
 /// item parser needs the plugin hook list (avoids a `_curry`-wrapped lambda
@@ -241,8 +240,7 @@ let sepByH = (parseItem, toks, pos, acc, hooks) =>
       let items = Array.append(item, acc) in
         tokAt(toks, p).tok == TComma
           ? sepByH(parseItem, toks, p + 1, items, hooks)
-          : Ok((items, p))
-    )
+          : Ok((items, p)))
 
 /// A possibly-empty comma list ended by `close`; does NOT consume the closer.
 let listUntil = (close, parseItem, toks, pos) =>
@@ -766,8 +764,7 @@ let parseAtom = (toks, pos, hooks) =>
       | _ =>
         // Plugin-owned prefix forms (JSX `<…>`) after every core atom prefix.
         let? claimed = runParseHooks(hooks, toks, pos, (t, p) =>
-          parseExpr(t, p, hooks)
-        ) in
+          parseExpr(t, p, hooks)) in
           switch claimed {
             | Some((e, p)) => Ok((e, p))
             | None => switch lt.tok {
@@ -1068,8 +1065,7 @@ let parseMatch = (toks, pos, hooks) =>
       | 0 => errAt("switch needs at least one | arm", tokAt(toks, p3))
       | _ => expectTok(TRbrace, toks, p3)
           |> Result.map(p4 =>
-            (Ast.EMatch(scrutinee, arms, toEnd(start, toks, p4)), p4)
-          )
+            (Ast.EMatch(scrutinee, arms, toEnd(start, toks, p4)), p4))
     }
 
 // A ctor pattern's argument list, after the (already consumed) ctor name.
@@ -1166,8 +1162,7 @@ let parseArrPattern = (toks, pos) =>
         restOk(rest)
           ? expectTok(TRbracket, toks, p2)
             |> Result.map(p3 =>
-              (Ast.PArr(elems, rest, toEnd(start, toks, p3)), p3)
-            )
+              (Ast.PArr(elems, rest, toEnd(start, toks, p3)), p3))
           : errAt("list `...` rest must bind a name or `_`", tokAt(toks, p2))
 
 // `@{}` / `@{head, ...tail}` lazy-List pattern; check.ts restricts the forms.
@@ -1181,8 +1176,7 @@ let parseListPattern = (toks, pos) =>
         restOk(rest)
           ? expectTok(TRbrace, toks, p2)
             |> Result.map(p3 =>
-              (Ast.PList(elems, rest, toEnd(start, toks, p3)), p3)
-            )
+              (Ast.PList(elems, rest, toEnd(start, toks, p3)), p3))
           : errAt("list `...` rest must bind a name or `_`", tokAt(toks, p2))
 
 // `{ x }` puns to binding `x`; `{ x: pat }` matches `x` against a full pattern.
@@ -1411,8 +1405,7 @@ let parseType = (toks, pos) =>
               toEnd(start, toks, p4)
             ),
             p4
-          )
-        )
+          ))
       : startsTypeSynonym(tokAt(toks, p3).tok)
       ? let? (te, p4) = parseTypeExpr(toks, p3) in
         Ok((
@@ -1443,8 +1436,7 @@ let parseType = (toks, pos) =>
                 toEnd(start, toks, p4)
               ),
               p4
-            )
-          )
+            ))
 
 // extern name : type = "module" "export"; contextual JS conventions mirror src/parser.ts.
 let parseExtern = (toks, pos) =>
@@ -1546,8 +1538,7 @@ let parseImportNs = (toks, start, pos) =>
         kw.name == "from"
           ? expectStr(toks, p3)
             |> Result.map(((path, p4)) =>
-              (Ast.SImportNs(alias, path, toEnd(start, toks, p4)), p4)
-            )
+              (Ast.SImportNs(alias, path, toEnd(start, toks, p4)), p4))
           : errAt(
             "expected 'from' in import, got '${kw.name}'",
             tokAt(toks, p3)
@@ -1569,8 +1560,7 @@ let parseImport = (toks, pos) =>
         kw.name == "from"
           ? expectStr(toks, p4)
             |> Result.map(((path, p5)) =>
-              (Ast.SImport(names, path, toEnd(start, toks, p5)), p5)
-            )
+              (Ast.SImport(names, path, toEnd(start, toks, p5)), p5))
           : errAt(
             "expected 'from' in import, got '${kw.name}'",
             tokAt(toks, p4)
@@ -1704,8 +1694,7 @@ let parseStmt = (toks, pos, tmp, hooks) =>
               |> Result.map(((s, p)) => ([setExternMeta(true, doc, s)], p, tmp))
           | TLet => toks->parseLet(pos + 1, tmp, hooks)
               |> Result.map(((stmts, p, tmp2)) =>
-                (stmts |> map(setLetMeta(true, doc)), p, tmp2)
-              )
+                (stmts |> map(setLetMeta(true, doc)), p, tmp2))
           | _ => errAt(
               "`export` must precede let, type, or extern",
               tokAt(toks, pos + 1)
@@ -1717,8 +1706,7 @@ let parseStmt = (toks, pos, tmp, hooks) =>
           |> Result.map(((s, p)) => ([setExternMeta(false, doc, s)], p, tmp))
       | TLet => toks->parseLet(pos, tmp, hooks)
           |> Result.map(((stmts, p, tmp2)) =>
-            (stmts |> map(setLetMeta(false, doc)), p, tmp2)
-          )
+            (stmts |> map(setLetMeta(false, doc)), p, tmp2))
       | _ => toks->parseExprStmt(pos, tmp, hooks)
     }
 

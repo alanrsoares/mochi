@@ -16,12 +16,10 @@ test("isUnit", () => tUnit |> isUnit |> ok)
 test("arrow prints", () =>
   tArrow(tPrim("number"), tPrim("bool"))
     |> showType
-    |> assertEq("number -> bool")
-)
+    |> assertEq("number -> bool"))
 
 test("nullary arrow domain prints as ()", () =>
-  tArrow(tUnit, tPrim("number")) |> showType |> assertEq("() -> number")
-)
+  tArrow(tUnit, tPrim("number")) |> showType |> assertEq("() -> number"))
 
 test("unify unit with itself", () => switch unify(tUnit, tUnit, mkSt(0)) {
   | Ok(_) => true |> ok

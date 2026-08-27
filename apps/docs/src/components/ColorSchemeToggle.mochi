@@ -29,8 +29,7 @@ export let ColorSchemeToggle = _ =>
   let (pref, setPrefState) = useLazyState(() => readPref()) in
   let _fx = useEffect(() =>
     listenStorage(key =>
-      key == COLOR_SCHEME_KEY || key == "" ? setPrefState(readPref()) : ()
-    )
+      key == COLOR_SCHEME_KEY || key == "" ? setPrefState(readPref()) : ())
   )(hookDeps0()) in
   let resolved = resolveScheme(pref) in
   let next = cyclePref(pref) in

@@ -189,8 +189,7 @@ let parseJsxAttributes = (toks, pos, fieldsAcc, spreadAcc, parseExpr) =>
         parseExpr(toks, p1)
           |> Result.flatMap(((spExpr, p2)) =>
             let? p3 = jxExpectTok(TRbrace, toks, p2) in
-              parseJsxAttributes(toks, p3, fieldsAcc, Some(spExpr), parseExpr)
-          )
+              parseJsxAttributes(toks, p3, fieldsAcc, Some(spExpr), parseExpr))
       : let? (attrId, p1) = jxExpectLabel(toks, pos) in
       let (valExpr, p2) = jxTokAt(toks, p1).tok == TEq
         ? let pEq = p1 + 1 in
@@ -237,8 +236,7 @@ let parseJsxChildren = (expectedTag, toks, pos, acc, parseExpr) =>
             p1,
             Array.append(Ast.SEExpr(childJsx), acc),
             parseExpr
-          )
-        )
+          ))
       : lt.tok == TLbrace
       ? nxt.tok == TSpread
         ? parseExpr(toks, pos + 2)
@@ -250,8 +248,7 @@ let parseJsxChildren = (expectedTag, toks, pos, acc, parseExpr) =>
                 p2,
                 Array.append(Ast.SESpread(spChild), acc),
                 parseExpr
-              )
-          )
+              ))
         : parseExpr(toks, pos + 1)
           |> Result.flatMap(((childExpr, p1)) =>
             let? p2 = jxExpectTok(TRbrace, toks, p1) in
@@ -261,8 +258,7 @@ let parseJsxChildren = (expectedTag, toks, pos, acc, parseExpr) =>
                 p2,
                 Array.append(Ast.SEExpr(childExpr), acc),
                 parseExpr
-              )
-          )
+              ))
       : switch lt.tok {
         | TStr(v) => parseJsxChildren(
             expectedTag,
@@ -312,8 +308,7 @@ let parseJsx = (toks, pos, parseExpr) =>
               p1
             ),
             p1
-          ))
-        )
+          )))
       : let? (firstId, p1) = jxExpectId(toks, pos + 1) in
       let tagRef = jxIsUpper(firstId.name)
         ? Ast.ERef(firstId.name, firstId.span)
@@ -351,9 +346,7 @@ let parseJsx = (toks, pos, parseExpr) =>
                         p4
                       ),
                       p4
-                    ))
-                  )
-          )
+                    ))))
 
 /// Parse hook: claim a leading `<…>`; otherwise Ok(None) fall-through.
 export let parseJsxAtom = (toks, pos, parseExpr) =>
@@ -452,10 +445,7 @@ let inferJsxCall = (tagExpr, propsExpr, restArgs, st, api) =>
                       | _ => Ok((tPrim("VNode"), st3))
                     }
                   | _ => Ok((tPrim("VNode"), st3))
-                }
-            )
-        )
-    )
+                })))
 
 /// Infer-call hook: claim `origin == Some("jsx")`; otherwise Ok(None).
 /// `api.inferExpr` is `(expr, st) -> Result` — closes over Ctx so hooks stay
