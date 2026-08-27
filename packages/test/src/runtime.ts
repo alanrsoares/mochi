@@ -5,7 +5,13 @@ import fc from "fast-check";
 
 export { describe, test };
 export const testSkip = test.skip;
-export const testOnly = test.only;
+/**
+ * bun <1.4 throws if `test.only` is *read* when `CI=true`. Bind on call so
+ * importing the runtime does not throw even if someone is still on 1.3.
+ */
+export const testOnly = (name: string, fn: () => void | Promise<void>): void => {
+  test.only(name, fn);
+};
 
 /** Expected first, actual last — `got |> assertEq(want)`. */
 export const assertEq = <A>(expected: A, actual: A): void => {

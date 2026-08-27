@@ -30,3 +30,15 @@ test("test bindings compile as curried @mochi/test/runtime imports", async () =>
 test("oneof rejects an empty list", () => {
   expect(() => oneof([])).toThrow(/at least one arbitrary/);
 });
+
+test("importing the runtime under CI=true does not throw", async () => {
+  const proc = Bun.spawn(["bun", "-e", 'await import("./runtime.ts")'], {
+    cwd: import.meta.dir,
+    env: { ...process.env, CI: "true" },
+    stderr: "pipe",
+    stdout: "pipe",
+  });
+  const stderr = await new Response(proc.stderr).text();
+  expect(await proc.exited).toBe(0);
+  expect(stderr).not.toContain(".only is disabled");
+});
