@@ -366,20 +366,20 @@ let seqElemExpr = el => switch el {
 
 let inferJsxArrElems = (elements, st, inferExpr) => switch elements {
   | [] => Ok(st)
-  | [el, ...rest] => let? (_, st1) = inferExpr(seqElemExpr(el), st) in
-      inferJsxArrElems(rest, st1, inferExpr)
+  | [el, ...rest] => inferExpr(seqElemExpr(el), st)
+      |> Result.flatMap(((_, st1)) => inferJsxArrElems(rest, st1, inferExpr))
 }
 
 let inferJsxChildren = (children, st, inferExpr) => switch children {
   | [] => Ok(st)
-  | [Ast.EArr(elements, _), ...rest] => let? st1 = inferJsxArrElems(
+  | [Ast.EArr(elements, _), ...rest] => inferJsxArrElems(
       elements,
       st,
       inferExpr
-    ) in
-      inferJsxChildren(rest, st1, inferExpr)
-  | [child, ...rest] => let? (_, st1) = inferExpr(child, st) in
-      inferJsxChildren(rest, st1, inferExpr)
+    )
+      |> Result.flatMap(st1 => inferJsxChildren(rest, st1, inferExpr))
+  | [child, ...rest] => inferExpr(child, st)
+      |> Result.flatMap(((_, st1)) => inferJsxChildren(rest, st1, inferExpr))
 }
 
 /// Walk a row for `label`; open tails / missing labels → None.
@@ -423,29 +423,35 @@ let jsxPropsWithSynthesizedChildren = (propsT, propsExpr, expectedRow, restArgs)
 }
 
 let inferJsxCall = (tagExpr, propsExpr, restArgs, st, api) =>
-  let? (tagT, st1) = api.inferExpr(tagExpr, st) in
-  let? (propsT, st2) = api.inferExpr(propsExpr, st1) in
-  let? st3 = inferJsxChildren(restArgs, st2, api.inferExpr) in
-  let zonkedTag = zonk(tagT, st3) in
-    switch zonkedTag {
-      | TyFn(from, to) => switch from {
-          | TyRecord(expectedRow) => let propsForCheck = jsxPropsWithSynthesizedChildren(
-              propsT,
-              propsExpr,
-              expectedRow,
-              restArgs
-            ) in
-            let? st4 = api.unify(
-              propsForCheck,
-              from,
-              st3,
-              jxExprSpan(propsExpr)
-            ) in
-              Ok((zonk(to, st4), st4))
-          | _ => Ok((tPrim("VNode"), st3))
-        }
-      | _ => Ok((tPrim("VNode"), st3))
-    }
+  api.inferExpr(tagExpr, st)
+    |> Result.flatMap(((tagT, st1)) =>
+      api.inferExpr(propsExpr, st1)
+        |> Result.flatMap(((propsT, st2)) =>
+          inferJsxChildren(restArgs, st2, api.inferExpr)
+            |> Result.flatMap(st3 =>
+              let zonkedTag = zonk(tagT, st3) in
+                switch zonkedTag {
+                  | TyFn(from, to) => switch from {
+                      | TyRecord(expectedRow) => let propsForCheck = jsxPropsWithSynthesizedChildren(
+                          propsT,
+                          propsExpr,
+                          expectedRow,
+                          restArgs
+                        ) in
+                          api.unify(
+                            propsForCheck,
+                            from,
+                            st3,
+                            jxExprSpan(propsExpr)
+                          )
+                            |> Result.map(st4 => (zonk(to, st4), st4))
+                      | _ => Ok((tPrim("VNode"), st3))
+                    }
+                  | _ => Ok((tPrim("VNode"), st3))
+                }
+            )
+        )
+    )
 
 /// Infer-call hook: claim `origin == Some("jsx")`; otherwise Ok(None).
 /// `api.inferExpr` is `(expr, st) -> Result` — closes over Ctx so hooks stay
