@@ -46,7 +46,8 @@ string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck�
 
 - **Expr** kinds: `num`, `bool`, `str`, `ref`, `call`, `lambda`, `pipe`, `match`,
   `record`, `field`, `arr`, `list`, `map`.
-- **Stmt** kinds: `let`, `type`, `extern`, `import`. A `type` stmt is **either** a variant
+- **Stmt** kinds: `let`, `type`, `extern`, `import`, `expr` (top-level unit
+  expression — ADR 0087), `error`. A `type` stmt is **either** a variant
   (`ctors` non-empty) **or** a transparent record alias (`alias` present, `ctors: []`) —
   never both. An `import` is either named (`names`, `alias: null`) or a namespace import
   (`import * as Alias`, `alias` set, `names: []` — ADR 0002).

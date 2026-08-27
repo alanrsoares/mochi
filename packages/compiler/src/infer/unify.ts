@@ -8,6 +8,7 @@ import {
   type Row,
   rExtend,
   showType,
+  TUPLE,
   type Type,
   tNumber,
   tString,
@@ -112,6 +113,31 @@ const rowVarOccursInType = (id: number, t: Type, s: Subst): boolean => {
   }
 };
 
+const COLLECTIONS = new Set(["Array", "List", "Set", "Map"]);
+
+const isTupleT = (t: Type): boolean => t.kind === "con" && t.name === TUPLE;
+
+/** `((a, b)) =>` vs `(a, b) =>` — extra parens are a tuple param (ADR 0083). */
+const TUPLE_PAREN_HINT = "((a, b)) => takes one tuple; (a, b) => takes two arguments";
+
+const tupleParenMsg = (a: Type, b: Type, shown: string): string =>
+  isTupleT(a) !== isTupleT(b) ? `${shown} — ${TUPLE_PAREN_HINT}` : shown;
+
+/** Array vs List/Set/Map (and List vs Set, …) — name the qualified fix (ADR 0080). */
+const collectionUnifyMsg = (aName: string, bName: string, shown: string): string => {
+  if (aName === bName || !COLLECTIONS.has(aName) || !COLLECTIONS.has(bName)) return shown;
+  const other = aName === "Array" ? bName : bName === "Array" ? aName : null;
+  const hint =
+    other === "List"
+      ? "unqualified map/filter/length expect Array; use List.map"
+      : other === "Set"
+        ? "unqualified map/filter/length expect Array; convert with Set.toArray or use Set.*"
+        : other === "Map"
+          ? "unqualified map/filter/length expect Array; use Map.*"
+          : `${aName} and ${bName} are distinct collections`;
+  return `${shown} — ${hint}`;
+};
+
 /**
  * `show` renders a type for error messages. It defaults to `showType`, but callers with alias context (infer.ts's `u()` seam) pass a folding renderer so a mismatch reads `… with Point`, not `… with { x: number, y: number }` (CRITIQUE §4.1). Invoked only on the failure path, so folding is free.
  */
@@ -131,7 +157,13 @@ export const unify = (
 
   if (ra.kind === "con" && rb.kind === "con") {
     if (ra.name !== rb.name || ra.args.length !== rb.args.length)
-      return fail(`cannot unify ${show(ra)} with ${show(rb)}`);
+      return fail(
+        tupleParenMsg(
+          ra,
+          rb,
+          collectionUnifyMsg(ra.name, rb.name, `cannot unify ${show(ra)} with ${show(rb)}`),
+        ),
+      );
     // deep generics: unify type arguments position by position
     let cur = s;
     for (let i = 0; i < ra.args.length; i++) {
@@ -163,12 +195,16 @@ export const unify = (
   if ((ra.kind === "arrow") !== (rb.kind === "arrow")) {
     const [fn, val] = ra.kind === "arrow" ? [ra, rb] : [rb, ra];
     return fail(
-      `cannot unify ${show(ra)} with ${show(rb)} — a function (${show(fn)}) ` +
-        `was used where a ${show(val)} was expected; a call may be missing an argument`,
+      tupleParenMsg(
+        ra,
+        rb,
+        `cannot unify ${show(ra)} with ${show(rb)} — a function (${show(fn)}) ` +
+          `was used where a ${show(val)} was expected; a call may be missing an argument`,
+      ),
     );
   }
 
-  return fail(`cannot unify ${show(ra)} with ${show(rb)}`);
+  return fail(tupleParenMsg(ra, rb, `cannot unify ${show(ra)} with ${show(rb)}`));
 };
 
 const isPrim = (t: Type, name: string): boolean =>

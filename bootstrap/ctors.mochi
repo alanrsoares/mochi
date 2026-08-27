@@ -33,10 +33,10 @@ let keysOfFrom = (fields, i) => switch Array.get(i, fields) {
   | None => []
   | Some(f) => Array.prepend(
       Option.unwrapOr("_${show(i)}", f.name),
-      keysOfFrom(fields, i + 1)
+      fields->keysOfFrom(i + 1)
     )
 }
-export let keysOf = fields => keysOfFrom(fields, 0)
+export let keysOf = fields => fields->keysOfFrom(0)
 
 // --- builtin variant decls (the single hardcoded copy) ---
 
@@ -81,10 +81,10 @@ export let builtinTypeDecls = [
 
 let declaresType = (stmts, i, name) => switch Array.get(i, stmts) {
   | None => false
-  | Some(Ast.SType(n, _, _, _, _, _)) => n == name
+  | Some(Ast.SType(n, _, _, _, _, _, _, _)) => n == name
       ? true
-      : declaresType(stmts, i + 1, name)
-  | Some(_) => declaresType(stmts, i + 1, name)
+      : stmts->declaresType(i + 1, name)
+  | Some(_) => stmts->declaresType(i + 1, name)
 }
 
 /// The builtin decls a program does NOT shadow: a user `type` of the same name
@@ -98,8 +98,7 @@ export let builtinDeclsFor = stmts =>
 
 let seedRegCtorsFrom = (ctors, i, owner, acc) => switch Array.get(i, ctors) {
   | None => acc
-  | Some(c) => seedRegCtorsFrom(
-      ctors,
+  | Some(c) => ctors->seedRegCtorsFrom(
       i + 1,
       owner,
       Map.has(c.name, acc)
@@ -116,7 +115,7 @@ let seedRegDeclsFrom = (decls, i, reg) => switch Array.get(i, decls) {
       decls,
       i + 1,
       {
-        ctors: seedRegCtorsFrom(bt.ctors, 0, bt.name, reg.ctors),
+        ctors: bt.ctors->seedRegCtorsFrom(0, bt.name, reg.ctors),
         types: Map.set(bt.name, bt.ctors |> map(c => c.name), reg.types)
       }
     )
@@ -129,8 +128,7 @@ let ctorsInto = (ctors, i, owner, sp, acc) => switch Array.get(i, ctors) {
   | None => Ok(acc)
   | Some(c) => Map.has(c.name, acc)
       ? Err(ctorErr("duplicate constructor '${c.name}'", sp))
-      : ctorsInto(
-        ctors,
+      : ctors->ctorsInto(
         i + 1,
         owner,
         sp,
@@ -140,26 +138,26 @@ let ctorsInto = (ctors, i, owner, sp, acc) => switch Array.get(i, ctors) {
 
 let buildLoop = (stmts, i, reg) => switch Array.get(i, stmts) {
   | None => Ok(reg)
-  | Some(Ast.SType(name, _, ctors, _, _, sp)) => Map.has(name, reg.types)
+  | Some(Ast.SType(name, _, ctors, _, _, _, _, sp)) => Map.has(name, reg.types)
       ? Err(ctorErr("duplicate type '${name}'", sp))
-      : let? cs = ctorsInto(ctors, 0, name, sp, reg.ctors) in
-        buildLoop(
-          stmts,
-          i + 1,
-          {
-            ctors: cs,
-            types: Map.set(name, ctors |> map(c => c.name), reg.types)
-          }
-        )
-  | Some(_) => buildLoop(stmts, i + 1, reg)
+      : ctors->ctorsInto(0, name, sp, reg.ctors)
+        |> Result.flatMap(cs =>
+          stmts->buildLoop(
+            i + 1,
+            {
+              ctors: cs,
+              types: Map.set(name, ctors |> map(c => c.name), reg.types)
+            }
+          ))
+  | Some(_) => stmts->buildLoop(i + 1, reg)
 }
 
 /// The failing builder — check's entry point: duplicate-decl detection lives
 /// here, at the single derivation, so no later pass can see a registry check
 /// didn't vouch for.
 export let buildRegistry = stmts =>
-  let? reg = buildLoop(stmts, 0, emptyRegistry) in
-    Ok(seedRegDeclsFrom(builtinDeclsFor(stmts), 0, reg))
+  stmts->buildLoop(0, emptyRegistry)
+    |> Result.map(reg => seedRegDeclsFrom(stmts->builtinDeclsFor(), 0, reg))
 
 // The registry a module publishes: only its EXPORTED variant types (and their
 // full ctor sets), no builtin seed, no dup-check — threaded into an importer's
@@ -167,50 +165,55 @@ export let buildRegistry = stmts =>
 // every constructor.
 let exportedRegLoop = (stmts, i0, reg0) =>
   loop (i = i0, reg = reg0) {
-    switch Array.get(i, stmts) {
+    switch stmts |> Array.get(i) {
       | None => reg
-      | Some(Ast.SType(name, _, ctors, _, true, _)) => recur(
+      | Some(Ast.SType(name, _, ctors, _, _, true, _, _)) => recur(
           i + 1,
           {
-            ctors: seedRegCtorsFrom(ctors, 0, name, reg.ctors),
+            ctors: ctors->seedRegCtorsFrom(0, name, reg.ctors),
             types: Map.set(name, ctors |> map(c => c.name), reg.types)
           }
         )
       | Some(_) => recur(i + 1, reg)
     }
   }
-export let exportedRegistry = stmts => exportedRegLoop(stmts, 0, emptyRegistry)
+export let exportedRegistry = stmts => stmts->exportedRegLoop(0, emptyRegistry)
 
 // --- ctor keys (codegen's projection: runtime destructure keys) ---
 
-let ctorKeysInto = (ctors, i, m) => switch Array.get(i, ctors) {
+let ctorKeysInto = (ctors, i, m) => switch ctors |> Array.get(i) {
   | None => m
-  | Some(c) => ctorKeysInto(ctors, i + 1, Map.set(c.name, keysOf(c.fields), m))
+  | Some({ name, fields }) => ctors->ctorKeysInto(
+      i + 1,
+      m |> Map.set(name, fields->keysOf())
+    )
 }
 
 // Every declared ctor's keys (user decls override imported seed keys).
 let ctorKeysFrom = (stmts, i, m) => switch Array.get(i, stmts) {
   | None => m
-  | Some(Ast.SType(_, _, ctors, _, _, _)) => ctorKeysFrom(
-      stmts,
+  | Some(Ast.SType(_, _, ctors, _, _, _, _, _)) => stmts->ctorKeysFrom(
       i + 1,
-      ctorKeysInto(ctors, 0, m)
+      ctors->ctorKeysInto(0, m)
     )
-  | Some(_) => ctorKeysFrom(stmts, i + 1, m)
+  | Some(_) => stmts->ctorKeysFrom(i + 1, m)
 }
-export let ctorKeysFromStmts = (stmts, m) => ctorKeysFrom(stmts, 0, m)
+export let ctorKeysFromStmts = (stmts, m) => stmts->ctorKeysFrom(0, m)
 
-let seedKeyCtorsFrom = (ctors, i, m) => switch Array.get(i, ctors) {
+let seedKeyCtorsFrom = (ctors, i, m) => switch ctors |> Array.get(i) {
   | None => m
-  | Some(c) => seedKeyCtorsFrom(
+  | Some({ name, fields }) => seedKeyCtorsFrom(
       ctors,
       i + 1,
-      Map.has(c.name, m) ? m : Map.set(c.name, keysOf(c.fields), m)
+      m |> Map.has(name) ? m : m |> Map.set(name, fields->keysOf())
     )
 }
-let seedKeyDeclsFrom = (decls, i, m) => switch Array.get(i, decls) {
+let seedKeyDeclsFrom = (decls, i, m) => switch decls |> Array.get(i) {
   | None => m
-  | Some(bt) => seedKeyDeclsFrom(decls, i + 1, seedKeyCtorsFrom(bt.ctors, 0, m))
+  | Some({ ctors }) => decls->seedKeyDeclsFrom(
+      i + 1,
+      ctors->seedKeyCtorsFrom(0, m)
+    )
 }
 
 /// Seed builtin variant ctor keys (Some/Ok/…) unless the program declares its
@@ -224,11 +227,10 @@ export let seedBuiltinCtorKeys = (stmts, m) =>
 // keys (`Some(value)` → `{ value }`, not positional `{ _0 }`).
 let exportedCtorKeysFrom = (stmts, i, m) => switch Array.get(i, stmts) {
   | None => m
-  | Some(Ast.SType(_, _, ctors, _, true, _)) => exportedCtorKeysFrom(
-      stmts,
+  | Some(Ast.SType(_, _, ctors, _, _, true, _, _)) => stmts->exportedCtorKeysFrom(
       i + 1,
-      ctorKeysInto(ctors, 0, m)
+      ctors->ctorKeysInto(0, m)
     )
-  | Some(_) => exportedCtorKeysFrom(stmts, i + 1, m)
+  | Some(_) => stmts->exportedCtorKeysFrom(i + 1, m)
 }
-export let exportedCtorKeys = stmts => exportedCtorKeysFrom(stmts, 0, #{})
+export let exportedCtorKeys = stmts => stmts->exportedCtorKeysFrom(0, #{})

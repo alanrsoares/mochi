@@ -1,0 +1,17 @@
+import { ok, test } from "@mochi/test"
+import { compile } from "./compile.mochi"
+
+test("well-typed source emits a binding", () => switch compile("let x = 1") {
+  | Ok(js) => js |> Str.contains("const x = 1") |> ok
+  | Err(_) => false |> ok
+})
+
+test("non-exhaustive switch is Err", () => switch compile("type C = A | B\nlet f = c => switch c { | A => 1 }") {
+  | Err(e) => e.message |> Str.contains("non-exhaustive") |> ok
+  | Ok(_) => false |> ok
+})
+
+test("type error is Err", () => switch compile("let x = mul(1, \"hi\")") {
+  | Err(e) => e.message |> Str.contains("unify") |> ok
+  | Ok(_) => false |> ok
+})

@@ -21,6 +21,7 @@ import {
   tArrow,
   tBool,
   tCon,
+  tLit,
   tNumber,
   tRecord,
   tString,
@@ -36,8 +37,7 @@ export const mono = (t: Type): Scheme => ({ vars: [], rvars: [], type: t });
 
 /**
  * mochi surface type name → HM type. Unknown names become nullary cons (a reference to a declared variant).
- *
- * NUMERIC DECISION (CRITIQUE §2.3), recorded deliberately: mochi has ONE runtime numeric type — JS `number`. `float` and `int` are accepted in surface signatures TODAY as transparent aliases for `number` (they type-check identically, unify freely, and erase to `number` in .d.ts). This keeps the surface JS-faithful — no int/float coercion rules, no literal-defaulting, no overloaded `+` — while RESERVING the two names so a real int/float split (int erasing to integer ops, float to IEEE double, à la ReScript) can land later without breaking existing code. It is NOT a silent lie: the names mean "number, annotated with intent", and that intent is what a future split would harden. Any such split reopens the abstraction question (§2.4) because `+` would then need overloading — so it stays deferred, not accidental.
+ * `int`/`float` are aliases of `number` (ADR 0085).
  */
 export const primType = (name: string): Type =>
   ({ float: tNumber, int: tNumber, string: tString, bool: tBool })[name] ?? tCon(name);
@@ -157,8 +157,8 @@ const freeInEnv = (env: Env, s: Subst): VarSets => {
   return acc;
 };
 
-export const generalize = (env: Env, t: Type, s: Subst): Scheme => {
-  const zt = widenLits(zonk(t, s));
+export const generalize = (env: Env, t: Type, s: Subst, widen = true): Scheme => {
+  const zt = widen ? widenLits(zonk(t, s)) : zonk(t, s);
   const free = freeInType(zt);
   const bound = freeInEnv(env, s);
   const vars = [...free.tv].filter((v) => !bound.tv.has(v));
@@ -168,8 +168,9 @@ export const generalize = (env: Env, t: Type, s: Subst): Scheme => {
 
 /**
  * Defaulting: bare string/number singletons widen to their base prim at
- * generalization (TypeScript-like). Finite unions of lits (e.g. `$tone`) stay
- * precise — only unwrapped `lit` nodes widen (ADR 0012 / Wave 7).
+ * generalization of an *unannotated* binding (TypeScript `let`). Written
+ * types (annotations, externs) skip this pass so `"hi"` stays `"hi"`
+ * (ADR 0081). Finite unions of lits stay precise either way.
  */
 export const widenLits = (t: Type): Type =>
   match(t)
@@ -217,8 +218,8 @@ export const instantiate = (sc: Scheme, f: Fresh): Type => {
   return sub(sc.type);
 };
 
-/** A transparent record alias, keyed by name, resolved during type-expr → type. */
-export type AliasInfo = { params: string[]; fields: AliasField[] };
+/** A transparent alias, keyed by name, resolved during type-expr → type. */
+export type AliasInfo = { params: string[]; fields: AliasField[]; expr?: TypeExpr };
 export type AliasMap = Map<string, AliasInfo>;
 
 /**
@@ -260,6 +261,7 @@ export const aliasRow = (
     local.set(p, args[i] ?? freshVar(f));
   });
   const next = new Set(expanding).add(name);
+  if (info.expr) return typeExprToType(info.expr, local, f, scope, next);
   const row = info.fields.reduceRight<Row>(
     (rest, fld) => rExtend(fld.name, typeExprToType(fld.type, local, f, scope, next), rest),
     rEmpty,
@@ -321,6 +323,10 @@ export const typeExprToType = (
         ? aliasRow(tqual.name, info, args, f, dep.scope, expanding)
         : tCon(tqual.name, args);
     })
+    .with({ kind: "tlit" }, (tlit) => tLit(tlit.value))
+    .with({ kind: "tunion" }, (tunion) =>
+      tUnion(tunion.members.map((m) => typeExprToType(m, vars, f, scope, expanding))),
+    )
     .exhaustive();
 
 /**

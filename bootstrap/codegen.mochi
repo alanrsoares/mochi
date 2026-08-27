@@ -29,6 +29,13 @@ import { keysOf, ctorKeysFromStmts, seedBuiltinCtorKeys } from "./ctors.mochi"
 
 // --- small generic helpers (duplicated per bootstrap file, same as check.mochi/infer.mochi) ---
 
+let bindRuntime = monad =>
+  monad == "Option"
+    ? "_Option_flatMap"
+    : monad == "Result"
+    ? "_Result_flatMap"
+    : "_Task_andThen"
+
 let allOfFrom = (f, xs, i) => switch Array.get(i, xs) {
   | None => true
   | Some(x) => f(x) ? allOfFrom(f, xs, i + 1) : false
@@ -96,6 +103,21 @@ let nsRuntimeId = (ctx, target, name) => switch target {
   | _ => None
 }
 
+// `Set.empty` / `Map.empty` / `List.empty` lower to the same runtime as
+// `#{}` / `@{}` (ADR 0080). Not namespaceRuntime ids — inline constructors.
+let emptyNsEmit = (target, name) => switch target {
+  | Ast.ERef(refName, _) => name == "empty"
+      ? refName == "Set"
+        ? Some("new Set()")
+        : refName == "Map"
+        ? Some("new Map()")
+        : refName == "List"
+        ? Some("_list(function* () {})")
+        : None
+      : None
+  | _ => None
+}
+
 // Collapse `(x) => (y) => e` (curried lambdas), `(x, y) => e`, or a mix
 // into one flat parameter list plus a final body. mochi types treat
 // `(x, y) => e` and `x => y => e` identically (`a -> b -> c`), so it's
@@ -134,8 +156,10 @@ let genExpr = (ctx, e) => switch e {
     // plain arg-application is enough; nested let-ins chain as curried IIFEs.
     "((${name}) => ${ctx->genLambdaBody(body)})(${ctx->genExpr(value)})"
   | Ast.ELetBind(param, _, monad, value, body, _) =>
-    // let? / let! p = v in b -> `_Result_flatMap` / `_Task_andThen`((p) => b)(v).
-    let rt = monad == "Result" ? "_Result_flatMap" : "_Task_andThen" in
+    // let? / let! p = v in b -> `_Option_flatMap` / `_Result_flatMap` /
+    // `_Task_andThen`((p) => b)(v). `let?` monad is Result or Option after
+    // infer dispatch (ADR 0079); `let!` is Task.
+    let rt = bindRuntime(monad) in
       "${rt}((${genParam(param)}) => ${ctx->genLambdaBody(body)})(${ctx->genExpr(value)})"
   | Ast.EPipe(left, right, _) =>
     // desugar inline: a |> f  ->  f(a)
@@ -164,9 +188,12 @@ let genExpr = (ctx, e) => switch e {
               ? "{ ${spreadStr} }"
               : "{ ${spreadStr}, ${fieldStrs} }"
       }
-  | Ast.EField(target, name, _) => switch ctx->nsRuntimeId(target, name) {
-      | Some(rt) => rt
-      | None => "${ctx->genMember(target)}.${name}"
+  | Ast.EField(target, name, _) => switch emptyNsEmit(target, name) {
+      | Some(js) => js
+      | None => switch ctx->nsRuntimeId(target, name) {
+          | Some(rt) => rt
+          | None => "${ctx->genMember(target)}.${name}"
+        }
     }
   | Ast.ETuple(elements, _) =>
     // A tuple erases to a JS array `[a, b]` (like ReScript); the type system
@@ -331,8 +358,7 @@ let wrapStepTails = (e, sp) => switch e {
             pattern: a.pattern,
             guard: a.guard,
             body: wrapStepTails(a.body, sp)
-          }
-        ),
+          }),
       msp
     )
   | _ => Ast.ECall(Ast.ERef("_done", sp), [e], None, sp)
@@ -914,7 +940,10 @@ let genCtor = c =>
           : "const ${c.name} = ${impl};"
 
 let genType = s => switch s {
-  | Ast.SType(_, _, ctors, _, _, _) => Str.join("\n", ctors |> map(genCtor))
+  | Ast.SType(_, _, ctors, _, _, _, _, _) => Str.join(
+      "\n",
+      ctors |> map(genCtor)
+    )
   | _ => ""
 }
 
@@ -1029,7 +1058,7 @@ let genStmt = (ctx, s) => switch s {
     "throw new Error(\"codegen invariant: error node reached codegen at ${show(sp.start)}\");"
   | Ast.SImport(_, _, _) => genImport(s)
   | Ast.SImportNs(_, _, _) => genImport(s)
-  | Ast.SType(_, _, _, _, exported, _) => let decls = genType(s) in
+  | Ast.SType(_, _, _, _, _, exported, _, _) => let decls = genType(s) in
       decls == ""
         ? "" // record alias: pure type, no runtime
         : exported
@@ -1043,6 +1072,7 @@ let genStmt = (ctx, s) => switch s {
       name
     ) in // never export destructure temps
       "${doExport ? "export " : ""}const ${name} = ${ctx->genExpr(value)};"
+  | Ast.SExpr(value, _) => "${ctx->genExpr(value)};"
 }
 
 // Need `@onrails/pattern` import? Only if a match lowers to a `match()`
@@ -1188,10 +1218,7 @@ let exprRefs = (ctx, e, acc) => switch e {
     )
   | Ast.ELetBind(_, _, monad, value, body, _) => ctx->exprRefs(
       body,
-      ctx->exprRefs(
-        value,
-        Set.add(monad == "Result" ? "_Result_flatMap" : "_Task_andThen", acc)
-      )
+      ctx->exprRefs(value, Set.add(bindRuntime(monad), acc))
     )
   | Ast.EPipe(left, right, _) => ctx->exprRefs(right, ctx->exprRefs(left, acc))
   | Ast.EDo(exprs, _) => ctx->exprRefsListFrom(exprs, 0, acc)
@@ -1218,12 +1245,18 @@ let exprRefs = (ctx, e, acc) => switch e {
       0,
       switch spread { | Some(s) => ctx->exprRefs(s, acc) | None => acc }
     )
-  | Ast.EField(target, name, _) => switch ctx->nsRuntimeId(target, name) {
-      | Some(rt) => Set.add(
-          rt,
-          acc
-        ) // its runtime deps get pulled in by preludePreamble's closure
-      | None => ctx->exprRefs(target, acc)
+  | Ast.EField(target, name, _) => switch emptyNsEmit(target, name) {
+      | Some(_) => switch target {
+          | Ast.ERef("List", _) => Set.add("_list", acc)
+          | _ => acc
+        }
+      | None => switch ctx->nsRuntimeId(target, name) {
+          | Some(rt) => Set.add(
+              rt,
+              acc
+            ) // its runtime deps get pulled in by preludePreamble's closure
+          | None => ctx->exprRefs(target, acc)
+        }
     }
   | Ast.ELoop(params, body, _) =>
     // A switch in tail position with a recur lowers via the step protocol.
@@ -1267,7 +1300,7 @@ let boundNamesFrom = (stmts, i, acc) => switch Array.get(i, stmts) {
       switch s {
         | Ast.SLet(name, _, _, _, _, _, _) => Set.add(name, acc)
         | Ast.SExtern(name, _, _, _, _, _, _, _, _, _) => Set.add(name, acc)
-        | Ast.SType(_, _, ctors, _, _, _) => Set.union(
+        | Ast.SType(_, _, ctors, _, _, _, _, _) => Set.union(
             acc,
             Set.fromArray(ctors |> map(c => c.name))
           )
@@ -1279,6 +1312,7 @@ let boundNamesFrom = (stmts, i, acc) => switch Array.get(i, stmts) {
         | Ast.SError(_) =>
           // An unparsable region binds nothing (ADR 0045).
           acc
+        | Ast.SExpr(_, _) => acc
       }
     )
 }
@@ -1286,7 +1320,8 @@ let boundNames = stmts => boundNamesFrom(stmts, 0, Set.fromArray([]))
 
 let refsForStmt = (ctx, s) => switch s {
   | Ast.SLet(_, _, _, value, _, _, _) => ctx->exprRefs(value, Set.fromArray([]))
-  | Ast.SType(_, _, ctors, _, _, _) =>
+  | Ast.SExpr(value, _) => ctx->exprRefs(value, Set.fromArray([]))
+  | Ast.SType(_, _, ctors, _, _, _, _, _) =>
     // A multi-field constructor lowers to `_curry(...)` in genType (which
     // exprRefs never walks), so seed the dep here.
     someOf(c => Array.length(c.fields) >= 2, ctors)
@@ -1354,6 +1389,7 @@ export let codegen = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps) =>
   let needsMatch = someOf(
     s => switch s {
       | Ast.SLet(_, _, _, value, _, _, _) => usesMatchLib(value)
+      | Ast.SExpr(value, _) => usesMatchLib(value)
       | _ => false
     },
     stmts

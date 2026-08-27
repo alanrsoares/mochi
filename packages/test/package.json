@@ -1,0 +1,17 @@
+{
+  "name": "@mochi/test",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./test.mochi",
+    "./runtime": "./src/runtime.ts",
+    "./plugin": "./src/plugin.ts",
+    "./preload": "./src/preload.ts"
+  },
+  "dependencies": {
+    "@mochi/compiler": "workspace:*",
+    "@onrails/result": "^0.4.0",
+    "fast-check": "^4.9.0"
+  }
+}

@@ -75,8 +75,8 @@ behavior split is:
   expected and pinned by a test — but the failure now reads as an
   unresolved-alias mismatch instead of an opaque one.
 - **`dts.ts`'s free-name collection (`teConNames`)** — collects the
-  alias-qualified form (`"Alias.Name"`); folding it back to an emitted,
-  resolved TS import is deferred.
+  alias-qualified form (`"Alias.Name"`). Emit folds a resolved name back to
+  `D.Shape` plus `import type * as D from "./shapes.mochi"` (C5 dts).
 
 ## Consequences
 
@@ -84,16 +84,13 @@ behavior split is:
   `extern f : T -> U`, ctor/alias field types) without touching resolution.
 - No behavior change for any program that doesn't use qualified type names —
   `tname`/`tapp`/`tarrow`/`ttuple`/`tlist` are untouched.
-- `let x : D.Shape = …` still doesn't typecheck after this slice (by design —
-  pinned in `test/infer.spec.ts`), and hover/dts don't yet fold a qualified
-  name back to the real declaration. Both are explicitly later C5 slices;
-  resolving them here would be premature (no import-graph plumbing exists at
-  the `TypeExpr`-lowering call sites yet — see the C5 slice-b handoff note in
-  the roadmap/tracker for where that plumbing needs to land).
-- `bootstrap/parser.mochi` does not produce `tqual` yet (C5 slice d); the
-  `test/bootstrap-parser.spec.ts` differential canonicalizer gained a `tqual`
-  case purely so the TS-side switch stays exhaustive — it is unreachable
-  until the bootstrap mirror is taught the same grammar.
+- Hover and `.d.mochi.ts` fold imported variants to the writable `D.T`. Sidecars
+  emit `import type * as D from "./dep.mochi"` (the `.mochi` specifier is what
+  `allowArbitraryExtensions` maps onto `dep.d.mochi.ts`). Inferred types fold
+  when the graph supplies `qualTypes`; single-file dts can only fold names
+  written qualified. Record aliases stay structural (ADR 0005) — `D.Pair`
+  still expands, same as hover.
+- `bootstrap/parser.mochi` produces `TyQual` (C5 slice d).
 
 ## Alternatives rejected
 

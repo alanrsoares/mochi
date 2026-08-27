@@ -19,9 +19,10 @@ namespaces (`List.map`, `Str.length`); modules need the same shape.
 
 2. **Semantics:** Alias binds a *user namespace* — same table as `List.*`. Members
    resolve via field access (`Alias.export`) and via **qualified ctor patterns**
-   (`| Alias.Ok(x)`). Bare `Alias` is not a value. The dep's full ctor registry
-   and field keys still merge into the importer (exhaustiveness / destructuring),
-   keyed by the bare ctor name; the qualifier is only for name resolution.
+   (`| Alias.Ok(x)`). Bare `Alias` is not a value. Named imports bring only the
+   ctors they list; namespace imports register ctors under `Alias.Ctor` rather
+   than the bare name (ADR 0082). The owning type's full constructor set still
+   feeds exhaustiveness.
 
 3. **Codegen:** Emit ESM `import * as Alias from "./mod.js"`; leave
    `Alias.member` as property access (no `namespaceRuntime` rewrite).
@@ -33,8 +34,8 @@ namespaces (`List.map`, `Str.length`); modules need the same shape.
 
 - `ModuleContext` gains `nsImports: Map<alias, Env>`; `toTypedProgramWith` merges
   those schemes into infer's `ns` beside `preludeNamespaces`.
-- `pctor` carries optional `ns`; check still validates the bare ctor against the
-  registry; infer looks the scheme up under `ns` when qualified.
+- `pctor` carries optional `ns`; check looks up `| Alias.Ctor` as `Alias.Ctor`
+  (ADR 0082); infer looks the scheme up under `ns` when qualified.
 - Long `import { … }` lines wrap; re-format of bootstrap AST imports is mechanical.
 
 ## Alternatives rejected

@@ -49,6 +49,30 @@ bun run bootstrap:tsc  # count tsc --strict errors on the self-host (north-star:
 `check` / `test` omit `test/bootstrap-fixpoint-binary.spec.ts` and
 `test/bootstrap-tsc.spec.ts`. `check:full` / `test:full` run everything.
 
+## Mochi specs (`*.spec.mochi`)
+
+`@mochi/test` binds `bun:test` as typed `extern`s (`test`, `describe`,
+`assertEq` / `ok` / `throws` — ReScript's mocha helpers, with `assertEq` instead
+of `eq` so prelude `eq` / `==` stay intact). `assertEq` is expected-first,
+actual last, so `got |> assertEq(want)`.
+Table tests are `testEach(title, rows, fn)` — one test per row, row passed as a
+single argument (not bun `test.each`, which spreads; Mochi tuples are arrays).
+Property tests are `check(title, arb, fn)` over `fast-check` combinators
+(`int` / `pair` / `mapArb` / …) ([ADR 0088](adr/0088-table-and-pbt.md)).
+Async Task tests are `testTask(title, task)` — bun waits on the Task thunk;
+`Err` fails. Table form is `testEachTask`. Property form is `checkTask`.
+Timeouts take milliseconds first: `testTimeout` / `testTaskTimeout` / …
+([ADR 0089](adr/0089-task-tests.md)). Specs do not call `Task.run`.
+`bunfig.toml` maps `.mochi` to the JS loader so `bun test` discovers
+`*.spec.mochi` the same way it discovers `*.spec.ts`; `@mochi/test/preload`
+compiles them through the module graph ([ADR 0086](adr/0086-bun-test-bindings.md)).
+
+A spec file is top-level `test(...)` / `describe(...)` / `testEach(...)` /
+`check(...)` / `testTask(...)` / `testEachTask(...)` / `checkTask(...)`
+statements ([ADR 0087](adr/0087-expr-statements.md)).
+Bootstrap unit specs live next to the source (`bootstrap/*.spec.mochi`);
+parity diffs against the TypeScript compiler stay in `test/bootstrap-*.spec.ts`.
+
 `bun install` runs `prepare` → `scripts/setup-hooks.ts` →
 `lefthook install --reset-hooks-path` (see `lefthook.yml`):
 
@@ -72,8 +96,8 @@ extension).
 ## Editor surfaces
 
 - **Hover** — inferred types on demand, folded back to named record aliases where they
-  match, with `///` doc comments attached (user docs on lets; prelude builtins use the
-  virtual prelude docstrings). Type declarations, constructors, record-alias fields, and
+  match, with `///` doc comments attached (user docs on lets, externs, and type declarations;
+  prelude builtins use the virtual prelude docstrings). Type declarations, constructors, record-alias fields, and
   type syntax also have parse-level hovers, so they remain readable when value inference fails.
   Otherwise-unhoverable syntax such as `let`, `extern`, `loop`, and collection sigils has a
   concise fallback hint rather than competing with a more-specific semantic hover.

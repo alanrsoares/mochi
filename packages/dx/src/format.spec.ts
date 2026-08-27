@@ -18,6 +18,12 @@ test("a multi-param lambda keeps its parentheses", () => {
   expect(fmt("let g=(a,b)=>add(a,b)")).toBe("let g = (a, b) => a + b\n");
 });
 
+test("lambda paren count is load-bearing (ADR 0083)", () => {
+  expect(fmt("let f=(x)=>x")).toBe("let f = x => x\n");
+  expect(fmt("let g=(a,b)=>a")).toBe("let g = (a, b) => a\n");
+  expect(fmt("let h=((a,b))=>a")).toBe("let h = ((a, b)) => a\n");
+});
+
 test("prints a binding type annotation (ADR 0044)", () => {
   expect(fmt("let   n:number=5")).toBe("let n : number = 5\n");
 });
@@ -94,6 +100,11 @@ test("a parametric type prints angle-bracket params and one ctor per line", () =
   );
 });
 
+test("formats a string-literal union type (ADR 0081)", () => {
+  expect(fmt(`type Tone="rose"|"amber"`)).toBe('type Tone = "rose" | "amber"\n');
+  expect(fmt(`let t:"rose"|"amber"="rose"`)).toBe('let t : "rose" | "amber" = "rose"\n');
+});
+
 test("record destructuring is re-folded from its desugared form", () => {
   expect(fmt("let {x,y}=p")).toBe("let { x, y } = p\n");
 });
@@ -137,15 +148,38 @@ test("breaks a two-segment pipe when a segment is itself multi-line", () => {
     "    |> Result.flatMap(src =>",
     "      compile(src)",
     "        |> Result.mapErr(e => formatError(path, src, e))",
-    "        |> Result.flatMap(js => writeFile(outPath(path), js))",
-    "    )",
+    "        |> Result.flatMap(js => writeFile(outPath(path), js)))",
     "",
   ].join("\n");
   expect(fmt(src)).toBe(out);
   expect(fmt(out)).toBe(out);
 });
 
-test("trailing-lambda closer drops under a canonical block body (not glued)", () => {
+test("trailing-lambda after a broken table hugs ) onto the callback", () => {
+  const src = [
+    'testEach("stronglyConnected", [',
+    '  { label: "empty", adj: [], want: [] },',
+    '  { label: "one node", adj: [[]], want: [[0]] }',
+    "], row => row.adj |> stronglyConnected |> assertEq(row.want))",
+  ].join("\n");
+  expect(fmt(src)).toBe(`${src}\n`);
+  expect(fmt(`${src}\n`)).toBe(`${src}\n`);
+});
+
+test("curried apply does not glue )( onto an expression-body lambda", () => {
+  const src =
+    "let _ws = useEffect(() => connectWs(store.actions.setLeaders, store.actions.setConnected))(hookDeps0())";
+  const out = [
+    "let _ws = useEffect(() =>",
+    "  connectWs(store.actions.setLeaders, store.actions.setConnected)",
+    ")(hookDeps0())",
+    "",
+  ].join("\n");
+  expect(fmt(src)).toBe(out);
+  expect(fmt(out)).toBe(out);
+});
+
+test("trailing-lambda do hugs ) onto the closing brace", () => {
   const src =
     "let _draw = useEffect(() => let _ = watchEat(particles, eatWatch, board) in let _ = paintBoard(canvasRef, board, particles) in startParticleLoop(canvasRef, particles, boardRef))";
   const out = [
@@ -153,8 +187,7 @@ test("trailing-lambda closer drops under a canonical block body (not glued)", ()
     "  watchEat(particles, eatWatch, board);",
     "  paintBoard(canvasRef, board, particles);",
     "  startParticleLoop(canvasRef, particles, boardRef)",
-    "}",
-    ")",
+    "})",
     "",
   ].join("\n");
   expect(fmt(src)).toBe(out);
@@ -188,8 +221,7 @@ test("curried apply hugs a multiline trailing-lambda block callee", () => {
     "  watchEat(particles, eatWatch, board);",
     "  paintBoard(canvasRef, board, particles);",
     "  startParticleLoop(canvasRef, particles, boardRef)",
-    "}",
-    ")(hookDeps2(props.snake, props.food))",
+    "})(hookDeps2(props.snake, props.food))",
     "",
   ].join("\n");
   expect(fmt(src)).toBe(out);
@@ -378,6 +410,24 @@ test("fast pipe binds tighter than ++ so fmt drops redundant pipe parens (ADR 00
   expect(fmt('let s = "hi" ++ (ctx->gen(1))')).toBe('let s = "hi" ++ ctx->gen(1)\n');
   expect(fmt('let s = ("hi" ++ ctx)->gen(1)')).toBe('let s = ("hi" ++ ctx)->gen(1)\n');
   expect(fmt("let r = 1 + 2 |> f")).toBe("let r = 1 + 2 |> f\n");
+});
+
+test("does not flatten a fast pipe into a following |> chain (ADR 0069)", () => {
+  expect(fmt("let r = val->fn(param2, param3) |> fn2(param1)")).toBe(
+    "let r = val->fn(param2, param3) |> fn2(param1)\n",
+  );
+  expect(fmt("let r = ctx->inferExpr(e, st) |> Result.flatMap(f)")).toBe(
+    "let r = ctx->inferExpr(e, st) |> Result.flatMap(f)\n",
+  );
+  const src =
+    "let r = ctx->inferExpr(aVeryLongExpressionNameHere, st) |> Result.flatMap(((t, st1)) => continueWith(t, st1))";
+  const out = [
+    "let r = ctx->inferExpr(aVeryLongExpressionNameHere, st)",
+    "  |> Result.flatMap(((t, st1)) => continueWith(t, st1))",
+    "",
+  ].join("\n");
+  expect(fmt(src)).toBe(out);
+  expect(fmt(out)).toBe(out);
 });
 
 test("long ++ chains break one fragment per line", () => {

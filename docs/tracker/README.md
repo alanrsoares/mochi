@@ -6,7 +6,7 @@ agent (verdicts below). Each finding has a ticket in [`tickets/`](tickets/); the
 implementation sequence lives in [`tracer-bullets.md`](tracer-bullets.md).
 
 Format follows [`../dx-tracer-bullets.md`](../dx-tracer-bullets.md) (vertical slices)
-and [`../plan/tickets/`](../plan/tickets/) (frontmatter + checklist). Numbering is
+and `docs/plan/tickets/` (frontmatter + checklist). Numbering is
 local (`C1`–`C13`) to avoid colliding with `docs/plan/tickets/` ids.
 
 ## What's working (don't touch)

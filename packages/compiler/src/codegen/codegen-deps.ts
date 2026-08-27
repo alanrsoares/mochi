@@ -2,7 +2,7 @@
 import { match } from "@onrails/pattern";
 import type { Expr, Program } from "../ast/ast";
 import { preludeJsDefs, runtimeDeps } from "../prelude/prelude";
-import { collapseLambda, nsRuntimeId, typeExprArity } from "./codegen-core";
+import { bindRuntime, collapseLambda, nsRuntimeId, typeExprArity } from "./codegen-core";
 import { loopNeedsStep } from "./codegen-loop";
 import { isListMatch } from "./codegen-match";
 
@@ -83,7 +83,7 @@ export const exprRefs = (e: Expr, acc: Set<string>): void => {
       exprRefs(l.body, acc);
     })
     .with({ kind: "letbind" }, (l) => {
-      acc.add(l.monad === "Result" ? "_Result_flatMap" : "_Task_andThen");
+      acc.add(bindRuntime(l.monad));
       exprRefs(l.value, acc);
       exprRefs(l.body, acc);
     })
@@ -126,6 +126,10 @@ export const exprRefs = (e: Expr, acc: Set<string>): void => {
       for (const f of r.fields) exprRefs(f.value, acc);
     })
     .with({ kind: "field" }, (f) => {
+      if (f.target.kind === "ref" && f.name === "empty") {
+        if (f.target.name === "List") acc.add("_list");
+        if (f.target.name === "Set" || f.target.name === "Map" || f.target.name === "List") return;
+      }
       const rt = nsRuntimeId(f); // `List.map` → `_List_map`, not a field access
       if (rt) {
         acc.add(rt); // its runtime deps are pulled in by preludePreamble's closure
@@ -181,7 +185,7 @@ const boundNames = (prog: Program): Set<string> => {
 export const collectRuntimeDeps = (prog: Program): string[] => {
   const refs = new Set<string>();
   for (const s of prog.stmts) {
-    if (s.kind === "let") exprRefs(s.value, refs);
+    if (s.kind === "let" || s.kind === "expr") exprRefs(s.value, refs);
     // A multi-field constructor lowers to `_curry(...)` in genType (which
     // exprRefs never walks), so seed the dep here.
     else if (s.kind === "type" && s.ctors.some((c) => c.fields.length >= 2)) refs.add("_curry");

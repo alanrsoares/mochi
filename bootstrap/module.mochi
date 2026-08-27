@@ -108,8 +108,7 @@ let visitAll = (froms, importer, acc) => switch froms {
 /// loadGraph : string -> Result [Loaded] MErr
 /// Load every module reachable from `entry`, in dependency order.
 export let loadGraph = entry =>
-  visit(absPath(entry), { state: #{}, order: [] })
-    |> Result.map(acc => acc.order)
+  let? acc = absPath(entry)->visit({ state: #{}, order: [] }) in Ok(acc.order)
 
 // --- part (b): compile the loaded graph -------------------------------------
 // Each module checks + infers + codegens with the prelude PLUS everything its
@@ -149,28 +148,27 @@ let mergeMap = (from, into) => mergeInto(Map.keys(from), from, into)
 // DECLARED it. Mirrors src/module.ts's `qualScopeOf`/`exportedTypeNames`.
 
 let exportedTypeNames = stmts =>
-  Set.fromArray(
-    Array.flatMap(
-      s => switch s { | Ast.SType(name, _, _, _, true, _) => [name] | _ => [] },
-      stmts
-    )
-  )
+  stmts
+    |> Array.flatMap(s => switch s {
+      | Ast.SType(name, _, _, _, _, true, _, _) => [name]
+      | _ => []
+    })
+    |> Set.fromArray
 
 // Local record aliases, keyed by name — the `aliases` map schemes.mochi
 // expands through. Mirrors infer.mochi's `aliasMapFrom` seed.
 let aliasesOf = stmts =>
-  Array.reduce(
-    (acc, s) => switch s {
-      | Ast.SType(name, params, _, Some(fields), _, _) => Map.set(
-          name,
-          { params: params, fields: fields },
-          acc
-        )
-      | _ => acc
-    },
-    #{},
-    stmts
-  )
+  stmts
+    |> Array.reduce(
+      (acc, s) => switch s {
+        | Ast.SType(name, params, _, Some(fields), _, _, _, _) => acc
+            |> Map.set(name, { params: params, fields: fields, expr: None })
+        | Ast.SType(name, params, _, _, Some(te), _, _, _) => acc
+            |> Map.set(name, { params: params, fields: [], expr: Some(te) })
+        | _ => acc
+      },
+      #{}
+    )
 
 // src/module.ts nests the dep's FULL type scope here (`scope.quals`), so a
 // qualified name written inside the dep's own alias expands too. The bootstrap
@@ -181,11 +179,62 @@ let aliasesOf = stmts =>
 // until then a qualified name nested inside an imported record alias lowers
 // nominally instead of expanding, which only differs under row unification.
 let qualScopeOf = stmts =>
-  { types: exportedTypeNames(stmts), aliases: aliasesOf(stmts) }
+  { types: stmts->exportedTypeNames(), aliases: stmts->aliasesOf() }
+
+// Seed one named constructor into the importer. Sibling ctors stay out of the
+// ctor map; the owning type's full list still lands so exhaustiveness is sound.
+// A second Empty from a different owner is duplicate constructor (ADR 0082).
+let withNamedCtor = (name, info, depReg, depKeys, res) =>
+  {
+    imports: res.imports,
+    nsImports: res.nsImports,
+    reg: {
+      ctors: Map.set(name, info, res.reg.ctors),
+      types: switch Map.get(info.owner, depReg.types) {
+        | Some(cs) => Map.set(info.owner, cs, res.reg.types)
+        | None => res.reg.types
+      }
+    },
+    keys: switch depKeys |> Map.get(name) {
+      | Some(ks) => res.keys |> Map.set(name, ks)
+      | None => res.keys
+    },
+    quals: res.quals
+  }
+
+let takeNamedCtor = (name, span, depReg, depKeys, res) => switch Map.get(name, depReg.ctors) {
+  | None => Ok(res)
+  | Some(info) => switch Map.get(name, res.reg.ctors) {
+      | Some(prior) => prior.owner != info.owner
+          ? Err(
+            {
+              message: "duplicate constructor '${name}'",
+              start: span.start,
+              end: span.end
+            }
+          )
+          : Ok(withNamedCtor(name, info, depReg, depKeys, res))
+      | None => Ok(withNamedCtor(name, info, depReg, depKeys, res))
+    }
+}
+
+// Namespace import: ctors live under `Alias.Ctor`; type map stays bare.
+let prefixCtorsInto = (keys, alias, from, into) => switch keys {
+  | [] => into
+  | [k, ...rest] => prefixCtorsInto(
+      rest,
+      alias,
+      from,
+      switch Map.get(k, from) {
+        | Some(v) => Map.set("${alias}.${k}", v, into)
+        | None => into
+      }
+    )
+}
 
 // Pull each imported name's scheme out of the dep's published exports, folding
 // into `res.imports`. A name the dep does not export errors at the name's span.
-let resolveNames = (names, from, depExports, res) => switch names {
+let resolveNames = (names, from, depExports, depReg, depKeys, res) => switch names {
   | [] => Ok(res)
   | [n, ...rest] => switch Map.get(n.name, depExports) {
       | None => Err(
@@ -195,49 +244,33 @@ let resolveNames = (names, from, depExports, res) => switch names {
             end: n.span.end
           }
         )
-      | Some(sc) => resolveNames(
-          rest,
-          from,
-          depExports,
-          {
-            imports: Map.set(n.name, sc, res.imports),
-            nsImports: res.nsImports,
-            reg: res.reg,
-            keys: res.keys,
-            quals: res.quals
-          }
-        )
+      | Some(sc) => switch takeNamedCtor(n.name, n.span, depReg, depKeys, { imports: Map.set(n.name, sc, res.imports), nsImports: res.nsImports, reg: res.reg, keys: res.keys, quals: res.quals }) {
+          | Err(e) => Err(e)
+          | Ok(res1) => resolveNames(
+              rest,
+              from,
+              depExports,
+              depReg,
+              depKeys,
+              res1
+            )
+        }
     }
 }
 
 // Fold a module's import statements into resolved { imports, nsImports, reg,
-// keys }: the schemes named imports pull in, the dep's full export table
-// keyed by alias for `import * as` (ADR 0002), and the merged registry +
-// ctor keys of every dep it pulls (regardless of import form — the ADR's
-// "full ctor registry and field keys still merge into the importer").
+// keys }: named imports bring only the ctors they list; `import * as` registers
+// ctors under `Alias.Ctor` (ADR 0082). Field keys still merge under the bare
+// ctor name so destructure emit stays `Circle`, not `S.Circle`.
 let resolveImportsFrom = (ctx, stmts, i, path, res) => switch Array.get(i, stmts) {
   | None => Ok(res)
   | Some(Ast.SImport(names, from, _)) => let dp = resolveImport(path, from) in
     let depExports = Map.getOr(#{}, dp, ctx.exportsByPath) in
     let depReg = Map.getOr(emptyReg, dp, ctx.regByPath) in
     let depKeys = Map.getOr(#{}, dp, ctx.keysByPath) in
-      switch resolveNames(names, from, depExports, res) {
+      switch resolveNames(names, from, depExports, depReg, depKeys, res) {
         | Err(e) => Err(e)
-        | Ok(res1) => ctx->resolveImportsFrom(
-            stmts,
-            i + 1,
-            path,
-            {
-              imports: res1.imports,
-              nsImports: res1.nsImports,
-              reg: {
-                ctors: mergeMap(depReg.ctors, res1.reg.ctors),
-                types: mergeMap(depReg.types, res1.reg.types)
-              },
-              keys: mergeMap(depKeys, res1.keys),
-              quals: res1.quals
-            }
-          )
+        | Ok(res1) => ctx->resolveImportsFrom(stmts, i + 1, path, res1)
       }
   | Some(Ast.SImportNs(alias, from, _)) => let dp = resolveImport(path, from) in
     let depExports = Map.getOr(#{}, dp, ctx.exportsByPath) in
@@ -251,7 +284,12 @@ let resolveImportsFrom = (ctx, stmts, i, path, res) => switch Array.get(i, stmts
           imports: res.imports,
           nsImports: Map.set(alias.name, depExports, res.nsImports),
           reg: {
-            ctors: mergeMap(depReg.ctors, res.reg.ctors),
+            ctors: prefixCtorsInto(
+              Map.keys(depReg.ctors),
+              alias.name,
+              depReg.ctors,
+              res.reg.ctors
+            ),
             types: mergeMap(depReg.types, res.reg.types)
           },
           keys: mergeMap(depKeys, res.keys),
@@ -341,4 +379,4 @@ export let compileGraph = graph =>
 /// buildModules : string -> Result [ModuleOutput] MErr
 /// Resolve the graph then compile it — one sync railway (host IO is sync).
 export let buildModules = entry =>
-  loadGraph(entry) |> Result.flatMap(compileGraph)
+  let? graph = entry->loadGraph() in graph->compileGraph()

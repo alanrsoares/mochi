@@ -2,19 +2,25 @@
 
 A small ML-family language: Hindley–Milner inference (Algorithm W), parametric variants,
 row-polymorphic records, exhaustive pattern matching. Type annotations are optional —
-everything below is inferred. A curried surface compiles to uncurried JS.
+write `let x : T = v` at an export or a seam when inference would generalize the wrong
+shape ([ADR 0044](adr/0044-let-binding-type-annotations.md)). A curried surface compiles
+to uncurried JS.
 
-The single source of truth for "what compiles today" is [`../example.mochi`](../example.mochi),
-which type-checks end to end. This doc summarizes it.
+Prose examples use infix (`+`, `*`, `|>`) where the operator exists; named prelude
+functions (`square`, `hypot`, `map`) elsewhere. `(+ 1)` is a section ([ADR 0000](adr/0000-operator-sections.md)).
+
+The single source of truth for "what compiles today" is
+[`../examples/example.mochi`](../examples/example.mochi), which type-checks end to end.
+This doc summarizes it.
 
 ## Bindings and functions
 
 ```mochi
-let double = x => mul(x, 2)          // lambda
-let hypot = (a, b) => sqrt(add(square(a), square(b)))  // multi-arg
+let double = x => x * 2              // lambda
+let hypot = (a, b) => sqrt(square(a) + square(b))  // multi-arg
 let one = () => 1                    // nullary → `() -> number` (ADR 0014)
 let pipeline = 5 |> double |> inc |> double            // left-to-right pipe
-let shifted = 5 -> add(3)                              // add(5, 3), fast pipe
+let shifted = 5 -> (+ 3)                               // add(5, 3), fast pipe
 let glued = "hi" ++ ctx->label()                       // "hi" ++ label(ctx) — `->` tighter than `++` (ADR 0073)
 ```
 
@@ -34,14 +40,18 @@ uses the brace form for arrow bodies. Because `{ field: value }` remains a
 record-valued arrow body, braces select sequencing only when they contain a
 top-level semicolon; use explicit `do` for a one-expression sequence.
 
+A top-level expression of type `()` is a statement ([ADR 0087](adr/0087-expr-statements.md)) —
+`test(...)`, `log(msg)`, `do { … }` whose last expr is unit. `1 + 1` at top level
+is a type error; bind it with `let` or discard with `ignore`.
+
 Annotations / `extern` may write the same domain as `() -> T` (ADR 0015).
 
 Top-level bindings are grouped into recursive components (Tarjan SCC) and inferred
 together, so **mutual recursion type-checks regardless of definition order**:
 
 ```mochi
-let isEven = n => switch n { | 0 => true  | _ => isOdd(sub(n, 1)) }
-let isOdd  = n => switch n { | 0 => false | _ => isEven(sub(n, 1)) }
+let isEven = n => switch n { | 0 => true  | _ => isOdd(n - 1) }
+let isOdd  = n => switch n { | 0 => false | _ => isEven(n - 1) }
 ```
 
 Local, non-recursive, let-polymorphic bindings scope to a body and chains flatten:
@@ -50,7 +60,7 @@ Local, non-recursive, let-polymorphic bindings scope to a body and chains flatte
 let norm = (a, b) =>
   let a2 = square(a) in
   let b2 = square(b) in
-  sqrt(add(a2, b2))
+  sqrt(a2 + b2)
 ```
 
 ## Types
@@ -68,11 +78,28 @@ named alias folds back in hover and `.d.ts`; duck typing falls out of row polymo
 ```mochi
 type Point = { x: number, y: number }
 let distToOrigin = p => hypot(p.x, p.y)   // works on ANY record with x and y
-let translate = (p, dx, dy) => { x: add(p.x, dx), y: add(p.y, dy) }
+let translate = (p, dx, dy) => { x: p.x + dx, y: p.y + dy }
 ```
 
-**Tuples** are real product types that erase to JS arrays. **One numeric type** (`number`);
-`int`/`float` are aliases.
+**Tuples** are real product types that erase to JS arrays. **One numeric type**
+(`number`); `int`/`float` are documentation aliases with zero extra semantics —
+`let z : int = 2.5` typechecks ([ADR 0085](adr/0085-int-float-aliases.md)).
+
+**String literals and finite unions** are TypeScript-shaped ([ADR 0081](adr/0081-string-literal-unions.md)).
+A string literal is a singleton (`"rose"`). A finite union is written with `|` in type
+position. Unannotated `let x = "hi"` generalizes to `string` (TS `let`). An annotation
+or a named synonym keeps the precise type:
+
+```mochi
+type Tone = "rose" | "amber"
+let ok : Tone = "rose"
+let greeting = "hi"                          // string
+extern setTone : Tone -> () = "./ui.js" "setTone"
+```
+
+Union binds tighter than `->`, so `"a" | "b" -> T` is `("a" | "b") -> T`, and
+`a -> b | c` is `a -> (b | c)`. Parenthesize an arrow that is a union member:
+`(T -> T) | T`. A general `string` does not unify with a literal union.
 
 **`unit`** is the one-inhabitant type, and `()` is its literal in every position — value,
 type, and pattern ([ADR 0054](adr/0054-unit-value-and-ignore.md)). It is also the domain
@@ -105,8 +132,8 @@ variants. Arms match constructors, literals, wildcards, a binding catch-all, rec
 
 ```mochi
 let area = shape => switch shape {
-  | Circle(r) => mul(pi, square(r))
-  | Rect(w, h) => mul(w, h)
+  | Circle(r) => pi * square(r)
+  | Rect(w, h) => w * h
 }
 
 let handle = event => switch event {          // narrow on a string discriminant
@@ -117,13 +144,17 @@ let handle = event => switch event {          // narrow on a string discriminant
 
 let sum = xs => switch xs {                   // [] / [head, ...tail]
   | [] => 0
-  | [head, ...tail] => add(head, sum(tail))
+  | [head, ...tail] => head + sum(tail)
 }
 ```
 
 A `when` clause adds a guard (no exhaustiveness credit). Destructuring also works in
 lambda params (`({ x, y }) => …`, `((a, b)) => …`) and in `let` (`let { x, y } = r`,
-`let (a, b) = p in …`).
+`let (a, b) = p in …`). Lambda parens are load-bearing
+([ADR 0083](adr/0083-lambda-paren-rule.md)): `(x) =>` is grouping (formatter writes
+`x =>`); `(a, b) =>` is two arguments; `((a, b)) =>` is one tuple. Mixing them
+(`f((1, 2))` on a two-arg lambda, or `f(1, 2)` on a tuple-param lambda) is a type
+error that names this rule.
 
 ## Collections
 
@@ -139,15 +170,21 @@ Three literal forms, each a distinct type:
 Array / List / Set literals may splice with `...` (`[a, ...xs]`, `@{a, ...xs}`,
 `#{a, ...s}` — ADR 0001). Each spread must be the **same** collection kind.
 Empty `#{}` is Map; `#{k: v}` is Map; `#{a, b}` (no colons) is Set.
+There is no empty-Set literal — write `Set.empty`. `List.empty` / `Map.empty`
+are the named forms of `@{}` / `#{}`.
 
-`Set.fromArray([...])` still works. There is no overloading, so each
-collection carries its own qualified namespace — `Array.*`, `List.*`, `Set.*`, `Map.*` —
-while the unqualified `map`/`filter`/`reduce`/`length` are eager Array aliases. `List.*`
-transformers stay **lazy and fuse**: nothing computes until `toArray` or a `take` pulls,
-so infinite sequences work as long as you force a finite prefix.
+There is no overloading, so each collection carries its own qualified
+namespace — `Array.*`, `List.*`, `Set.*`, `Map.*` — while the unqualified
+`map`/`filter`/`reduce`/`length` are eager Array aliases (Array is the default
+collection; math and structural `eq`/`show`/`compare` stay unqualified too).
+Piping a List or Set into bare `map` is a type error that names the qualified
+fix (`List.map`, `Set.toArray`). `List.*` transformers stay **lazy and fuse**:
+nothing computes until `toArray` or a `take` pulls, so infinite sequences work
+as long as you force a finite prefix. `@{}` is the lazy List literal
+([ADR 0080](adr/0080-collection-literals.md)).
 
 ```mochi
-let evens = iterate(x => add(x, 2))(0)        // INFINITE
+let evens = iterate(x => x + 2)(0)        // INFINITE
 let evens5 = evens |> take(5) |> toArray      // [0, 2, 4, 6, 8]
 ```
 
@@ -177,12 +214,23 @@ enclosing loop. For iteration purely for effect, use
 ## Prelude highlights
 
 - Math ops unqualified (`add`, `mul`, `mod` = true modulo …); strings under `Str.*`.
-- **Structural `eq`/`compare`/`show`** work at any type by deep walk — the pragmatic
-  bridge instead of typeclasses, keeping emitted JS free of hidden dictionaries. The
-  `-By` family (`sortBy`, `dedupeBy`, …) takes an explicit projection.
+- **Structural `eq`/`compare`/`show`** work at any type by a deep walk — the pragmatic
+  bridge instead of typeclasses, keeping emitted JS free of hidden dictionaries
+  ([ADR 0084](adr/0084-structural-eq.md)). That is a **guarantee**, not a placeholder:
+  there is no instance registry and no plugin override. The `-By` family (`sortBy`,
+  `dedupeBy`, `maxBy`, …) is the customization point — pass an explicit projection.
+  Named costs: functions compare by reference (`eq(x => x, x => x)` is `false`);
+  opaque host values `show` enumerable fields; a hot loop pays O(n) with no call-site
+  warning. `eq`/`compare` on a lazy List throw (`List.toArray` first); `show` prints
+  `<List>` without pulling. Map/Set **keys** use host identity, not deep `eq`.
 - Builtin `Option` (`Some`/`None`) and `Result` (`Ok`/`Err`); `Map.get`/`Array.head`
   return `Option`. Field names match `@onrails/result`/`@onrails/maybe`, so values flow
   straight into those combinators at the JS boundary.
+  `let? x = e in …` binds over **Option or Result**, dispatched from the inferred
+  head constructor of `e` ([ADR 0079](adr/0079-generic-let-question-bind.md)).
+  An unresolved type variable defaults to Result; a resolved `Option` head
+  selects Option. A chain cannot mix the two; lift explicitly.
+  `let!` is Task-only.
 - Builtin `Task<A, E>` — opaque lazy async value with an error channel
   (`() => Promise<Result<A, E>>` at runtime). Not a tagged variant; not
   switchable. See [Task](#task) below.
@@ -218,7 +266,7 @@ let program =
 export let result = Task.run(program)   // Promise<Result<number, E>> — await in the host
 ```
 
-`let! x = task in …` is monadic bind over `Task` (mirrors `let?` for `Result`);
+`let! x = task in …` is monadic bind over `Task` (mirrors `let?` for Option/Result);
 it desugars to `Task.andThen`. Infix bind for both is deferred.
 
 Unlike `ResultAsync`'s memoized `resolve()`, `Task.run` re-fires the underlying effect
@@ -311,8 +359,10 @@ host values a type error at `extern` boundaries.
 
 Ternary `cond ? a : b` (looser than `|>` / `->`, right-associative), operator sections
 `(x +)` / `(+ x)` (ADR 0000; `(- x)` stays negation), string interpolation,
-`let?` / `let!` (monadic bind over `Result` / `Task`), `///` doc comments that attach
+`let?` / `let!` (monadic bind over `Option`|`Result` / `Task`), `///` doc comments that attach
 to the following binding and surface in hover and `.d.ts`, and namespace imports
 `import * as Alias from "./mod"` with qualified access / ctor patterns
-`Alias.member` / `| Alias.Ctor(…)` (ADR 0002). Fast pipe `->` is method-call tight
+`Alias.member` / `| Alias.Ctor(…)` (ADR 0002 / [0082](adr/0082-scoped-ctor-imports.md)).
+A named import does not leak sibling constructors; `import * as S` does not
+seed bare `| Circle` — write `| S.Circle`. Fast pipe `->` is method-call tight
 (tighter than `++` / `+` / `*`); `|>` stays pipeline-loose ([ADR 0073](adr/0073-fast-pipe-precedence.md)).

@@ -150,4 +150,5 @@ export const genStmt = (s: Stmt, ctx: GenCtx): string =>
       const ann = ctx.annotateLet?.(s.name, s.value) ?? ""; // TS backend annotates; JS leaves bare
       return `${doExport ? "export " : ""}const ${s.name}${ann} = ${genExpr(s.value, ctx)};`;
     })
+    .with({ kind: "expr" }, (s) => `${genExpr(s.value, ctx)};`)
     .exhaustive();

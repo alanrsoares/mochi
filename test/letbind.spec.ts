@@ -1,6 +1,7 @@
-// ADR 0017 — `let? param = value in body`: monadic bind on Result. The value's
-// Ok payload binds the param; an Err short-circuits the whole expression.
-// Lowers to `_Result_flatMap((param) => body)(value)`.
+// ADR 0017 / ADR 0079 — `let? param = value in body`: monadic bind on Option
+// or Result, dispatched from the value's head constructor. Option binds the
+// Some payload and short-circuits None; Result binds Ok and short-circuits
+// Err. Lowers to `_Option_flatMap` / `_Result_flatMap`.
 import { expect, test } from "bun:test";
 import { compile } from "@mochi/compiler/compile";
 import { format } from "@mochi/dx/format";
@@ -57,8 +58,8 @@ test("record param destructures the Ok payload", () => {
   expect(run(src, "r")).toEqual({ _tag: "Ok", value: 3 });
 });
 
-test("value must be a Result", () => {
-  expect(errMsg("let r = let? x = 1 in Ok(x)")).toContain("Result");
+test("value must be Option or Result", () => {
+  expect(errMsg("let r = let? x = 1 in Ok(x)")).toBe("let? requires Option or Result, got number");
 });
 
 test("body must be a Result", () => {
@@ -101,4 +102,78 @@ test("hover on the bound name shows the Ok payload type", () => {
   const src = "let r = let? x = Ok(1) in Ok(x)";
   const h = hoverAt(src, src.indexOf("x ="));
   expect(h?.code).toBe("let x: number");
+});
+
+test("binds the Some payload and runs the body", () => {
+  const src = "let r = let? x = Some(20) in Some(add(x, 1))";
+  expect(run(src, "r")).toEqual({ _tag: "Some", value: 21 });
+});
+
+test("a None short-circuits — the body never runs", () => {
+  const src = `let boom = () => None
+let r = let? x = boom() in Some(add(x, 1))`;
+  expect(run(src, "r")).toEqual({ _tag: "None" });
+});
+
+test("Option chains flatten — first None wins", () => {
+  const src = `let half = n => eq(mod(n, 2), 0) ? Some(div(n, 2)) : None
+let quarter = n =>
+  let? h = half(n) in
+  let? q = half(h) in
+  Some(q)
+let a = quarter(20)
+let b = quarter(10)
+let c = quarter(9)`;
+  expect(run(src, "[a, b, c]")).toEqual([
+    { _tag: "Some", value: 5 },
+    { _tag: "None" },
+    { _tag: "None" },
+  ]);
+});
+
+test("tuple param destructures the Some payload", () => {
+  const src = "let r = let? (a, b) = Some((3, 4)) in Some(add(a, b))";
+  expect(run(src, "r")).toEqual({ _tag: "Some", value: 7 });
+});
+
+test("record param destructures the Some payload", () => {
+  const src = "let r = let? { x, y } = Some({ x: 1, y: 2 }) in Some(add(x, y))";
+  expect(run(src, "r")).toEqual({ _tag: "Some", value: 3 });
+});
+
+test("body must be an Option when the value is", () => {
+  expect(errMsg("let r = let? x = Some(1) in add(x, 1)")).toContain("Option");
+});
+
+test("unresolved tyvar on let? defaults to Result", () => {
+  expect(run("let f = x => let? y = x in Ok(y)\nlet r = f(Ok(1))", "r")).toEqual({
+    _tag: "Ok",
+    value: 1,
+  });
+  expect(errMsg("let f = x => let? y = x in Some(y)")).toContain("Result");
+});
+
+test("does not mix Option and Result in one chain", () => {
+  const m = errMsg("let r = let? x = Some(1) in Ok(x)");
+  expect(m).toContain("Option");
+  expect(m).toContain("Result");
+});
+
+test("emitted JS is the Option bind; prelude inlines its runtime", () => {
+  const js = unwrapOk(compile("let r = let? x = Some(1) in Some(x)"));
+  expect(js).toContain("_Option_flatMap((x) => Some(x))(Some(1))");
+  expect(js).toContain("const _Option_flatMap =");
+});
+
+test("hover on an Option bind shows the Some payload type", () => {
+  const src = "let r = let? x = Some(1) in Some(x)";
+  const h = hoverAt(src, src.indexOf("x ="));
+  expect(h?.code).toBe("let x: number");
+});
+
+test("formatter round-trips Option let? idempotently", () => {
+  const src = "let r = let? x = Some(1) in Some(add(x, 1))\n";
+  const once = unwrapOk(format(src));
+  expect(unwrapOk(format(once))).toBe(once);
+  expect(unwrapOk(compile(once))).toBe(unwrapOk(compile(src)));
 });

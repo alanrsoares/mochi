@@ -1,7 +1,7 @@
 ---
 id: C6
 title: "ADR: collection literals + prelude namespace principle (absorbs C8)"
-status: open
+status: done
 type: task
 blocked-by: []
 ---
@@ -43,9 +43,9 @@ is unwritable** (Set form requires ≥1 element or spread, `parser.ts:657+`), fo
 4. Piping a `List`/`Set` into bare Array-typed `map` must produce a targeted error
    naming the qualified fix (`List.map`), or users read it as a language bug.
 
-- [ ] ADR: sigil survival (`@{}` keep/drop), empty-Set answer, and the namespace
+- [x] ADR: sigil survival (`@{}` keep/drop), empty-Set answer, and the namespace
       principle in one document; rejected alternatives recorded.
-- [ ] `docs/language.md`: empty-`#{}` = Map, the unqualified-=-Array rule, and the
+- [x] `docs/language.md`: empty-`#{}` = Map, the unqualified-=-Array rule, and the
       namespace principle, each stated in one paragraph.
-- [ ] Targeted wrong-collection diagnostic with test.
-- [ ] Bootstrap impact: none unless a sigil changes (then parser mirror + parity).
+- [x] Targeted wrong-collection diagnostic with test.
+- [x] Bootstrap impact: none unless a sigil changes (then parser mirror + parity).

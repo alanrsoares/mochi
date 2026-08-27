@@ -1,0 +1,28 @@
+import { assertEq, ok, test, testEach } from "@mochi/test"
+import { builtinTypeDecls, keysOf, primTypeNames } from "./ctors.mochi"
+
+test("primTypeNames has six prims", () =>
+  primTypeNames |> Array.length |> assertEq(6))
+
+testEach("primTypeNames members", [
+  "number",
+  "int",
+  "float",
+  "string",
+  "bool",
+  "unit"
+], name => primTypeNames |> Array.contains(name) |> ok)
+
+test("builtin types are Option then Result", () =>
+  builtinTypeDecls |> map(d => d.name) |> assertEq(["Option", "Result"]))
+
+testEach("keysOf", [
+  { label: "empty", fields: [], want: [] },
+  { label: "labelled", fields: [{ name: Some("value") }], want: ["value"] },
+  { label: "positional", fields: [{ name: None }], want: ["_0"] },
+  {
+    label: "mixed",
+    fields: [{ name: Some("value") }, { name: None }],
+    want: ["value", "_1"]
+  }
+], row => row.fields |> keysOf |> assertEq(row.want))

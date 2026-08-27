@@ -62,12 +62,16 @@
     "@mochi/plugin-preact": "workspace:*",
     "@mochi/plugin-re-reduced": "workspace:*",
     "@mochi/plugin-styled-cva": "workspace:*",
+    "@mochi/test": "workspace:*",
     "@mochi/test-support": "workspace:*",
     "@mochi/vite-plugin": "workspace:*",
     "@types/bun": "latest",
     "esbuild": "^0.28.2",
     "fast-check": "^4.9.0",
     "lefthook": "^2.1.10"
+  },
+  "engines": {
+    "bun": ">=1.4.0"
   },
   "peerDependencies": {
     "typescript": "catalog:"

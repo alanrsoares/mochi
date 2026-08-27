@@ -16,11 +16,11 @@ import { type ModuleContext, moduleContext } from "@mochi/compiler/module";
 import { parseRecovering } from "@mochi/compiler/parser";
 import { preludeNamespaces } from "@mochi/compiler/prelude";
 import { preludeDocForBinding } from "@mochi/compiler/prelude-virtual";
-import { type QualMap, widenLits } from "@mochi/compiler/schemes";
+import { widenLits } from "@mochi/compiler/schemes";
 import { showTypeExpr } from "@mochi/compiler/show-type-expr";
 import { spanContains, spanContainsClosed, tightestHit } from "@mochi/compiler/span";
 import { indexProgram } from "@mochi/compiler/symbols";
-import { foldAliases, qualifyTypeNames, showType } from "@mochi/compiler/types";
+import { foldAliases, qualifierMap, qualifyTypeNames, showType } from "@mochi/compiler/types";
 import { type Maybe, map, match as matchMaybe, none, some } from "@onrails/maybe";
 import { isErr, isOk } from "@onrails/result";
 
@@ -100,6 +100,7 @@ const showTypeDecl = (stmt: TypeStmt): string => {
     const fields = stmt.alias.map((field) => `${field.name}: ${showTypeExpr(field.type)}`);
     return `type ${head} = { ${fields.join(", ")} }`;
   }
+  if (stmt.aliasType) return `type ${head} = ${showTypeExpr(stmt.aliasType)}`;
   return `type ${head} = ${stmt.ctors.map(showCtor).join(" | ")}`;
 };
 
@@ -128,6 +129,11 @@ const collectTypeSyntax = (type: TypeExpr, out: SyntaxHover[]): void => {
     case "tqual":
       for (const arg of type.args) collectTypeSyntax(arg, out);
       return;
+    case "tlit":
+      return;
+    case "tunion":
+      for (const member of type.members) collectTypeSyntax(member, out);
+      return;
     case "tname":
       return;
   }
@@ -154,8 +160,8 @@ const syntaxHoverAt = (program: Program, offset: number): HoverInfo | null => {
     }
     if (stmt.kind !== "type") continue;
     const decl = showTypeDecl(stmt);
-    candidates.push({ span: stmt.span, info: { code: decl } });
-    candidates.push({ span: stmt.nameSpan, info: { code: decl } });
+    candidates.push({ span: stmt.span, info: { code: decl, doc: stmt.doc } });
+    candidates.push({ span: stmt.nameSpan, info: { code: decl, doc: stmt.doc } });
     for (const ctor of stmt.ctors) {
       candidates.push({
         span: ctor.span,
@@ -170,6 +176,7 @@ const syntaxHoverAt = (program: Program, offset: number): HoverInfo | null => {
       });
       collectTypeSyntax(field.type, candidates);
     }
+    if (stmt.aliasType) collectTypeSyntax(stmt.aliasType, candidates);
   }
   const hit = tightestHit(candidates, offset, spanContainsClosed);
   return hit._tag === "Some" ? hit.value.info : null;
@@ -240,21 +247,6 @@ const docAt = (
   const key = path.startsWith("<") ? path : resolve(path);
   const hit = indexProgram(key, program).at(offset);
   return hit ? preludeDocForBinding(hit.binding) : undefined;
-};
-
-/**
- * `Shape` → `D.Shape` for every type an `import * as D` brings into type
- * position (C5, ADR 0046), so hover names what this file can write. A name the
- * file declares itself wins — it is already writable bare, and it shadows.
- * First alias wins when two namespaces export the same type name.
- */
-const qualifierMap = (quals: QualMap, prog: Program): ReadonlyMap<string, string> => {
-  const local = new Set(prog.stmts.flatMap((s) => (s.kind === "type" ? [s.name] : [])));
-  const out = new Map<string, string>();
-  for (const [alias, qual] of quals)
-    for (const name of qual.types)
-      if (!local.has(name) && !out.has(name)) out.set(name, `${alias}.${name}`);
-  return out;
 };
 
 /** Render the tightest-span type at `offset` as a hover payload. */
@@ -339,7 +331,8 @@ export const moduleHoverAt = async (
     open: openMode(src),
   });
   if (isErr(typed)) return tokenHoverAt(lexed.value, offset);
-  const qualify = qualifierMap(ctx.value.qualTypes, program);
+  const localTypes = new Set(program.stmts.flatMap((s) => (s.kind === "type" ? [s.name] : [])));
+  const qualify = qualifierMap(ctx.value.qualTypes, localTypes);
   return (
     hoverFrom(typed.value.res, offset, src, entry, qualify) ?? tokenHoverAt(lexed.value, offset)
   );

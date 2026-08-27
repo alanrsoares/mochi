@@ -10,10 +10,12 @@ import {
   tApp,
   tArrow,
   tBool,
+  tCon,
   tLit,
   tNumber,
   tRecord,
   tString,
+  tTuple,
   tUnion,
   tVar,
 } from "@mochi/compiler/types";
@@ -86,6 +88,19 @@ test("generic arity mismatch fails", () => {
   const r = unify(tApp("Pair", tNumber), tApp("Pair", tNumber, tBool), emptySubst(), mkFresh());
   expect(isErr(r)).toBe(true);
   expect(unwrapErr(r).message).toContain("cannot unify");
+});
+
+test("Array vs List names List.map (ADR 0080)", () => {
+  const r = unify(tCon("List", [tNumber]), tCon("Array", [tNumber]), emptySubst(), mkFresh());
+  expect(isErr(r)).toBe(true);
+  expect(unwrapErr(r).message).toContain("use List.map");
+});
+
+test("tuple vs non-tuple names the lambda paren rule (ADR 0083)", () => {
+  const r = unify(tTuple([tNumber, tNumber]), tNumber, emptySubst(), mkFresh());
+  expect(isErr(r)).toBe(true);
+  expect(unwrapErr(r).message).toContain("((a, b)) => takes one tuple");
+  expect(unwrapErr(r).message).toContain("(a, b) => takes two arguments");
 });
 
 test("nested generic arg conflict fails with a deep message", () => {

@@ -32,4 +32,4 @@ share one codegen: readable JavaScript, and typed TypeScript that is clean under
 For working *in* the repo (commands, conventions, definition of done) see
 [`../AGENTS.md`](../AGENTS.md); for the precise domain vocabulary see
 [`../CONTEXT.md`](../CONTEXT.md). The complete, runnable feature tour is
-[`../example.mochi`](../example.mochi).
+[`../examples/example.mochi`](../examples/example.mochi).

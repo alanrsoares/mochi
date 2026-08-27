@@ -5,6 +5,7 @@
 import { match } from "@onrails/pattern";
 import { err, isErr, ok, type Result } from "@onrails/result";
 import type {
+  CtorPat,
   Expr,
   LamParam,
   MatchExpr,
@@ -23,6 +24,9 @@ import { checkExhaustive, isWideWitness, showWitness } from "./usefulness";
 
 /** Variant registry shared with infer and codegen — arity cannot drift between passes. */
 export type Registry = CtorTable;
+
+/** Named import → `Circle`; `import * as S` → `S.Circle` (ADR 0082). */
+const patCtorKey = (p: CtorPat): string => (p.ns ? `${p.ns}.${p.ctor}` : p.ctor);
 
 /** Walk an expression tree, invoking `visit` on every node, children before parent. */
 function forEachSubExpr(e: Expr, visit: (x: Expr) => void): void {
@@ -150,8 +154,9 @@ const checkPattern = (p: Pattern, reg: Registry, top: boolean): Diagnostic | nul
   match(p)
     .with({ kind: "pas" }, (pas) => checkPattern(pas.pat, reg, top))
     .with({ kind: "pctor" }, (pctor) => {
-      const info = reg.ctor.get(pctor.ctor);
-      if (!info) return checkErr(`unknown constructor '${pctor.ctor}'`, pctor.span);
+      const key = patCtorKey(pctor);
+      const info = reg.ctor.get(key);
+      if (!info) return checkErr(`unknown constructor '${key}'`, pctor.span);
       if (pctor.args.length !== info.arity)
         return checkErr(
           `constructor '${pctor.ctor}' expects ${info.arity} arg(s), got ${pctor.args.length}`,
@@ -360,8 +365,9 @@ function checkMatch(m: MatchExpr, reg: Registry): Diagnostic | null {
   // Validate each constructor pattern: known + right arity + one owning type.
   let owningType: string | null = null;
   for (const p of ctorArms) {
-    const info = reg.ctor.get(p.ctor);
-    if (!info) return checkErr(`unknown constructor '${p.ctor}'`, p.span);
+    const key = patCtorKey(p);
+    const info = reg.ctor.get(key);
+    if (!info) return checkErr(`unknown constructor '${key}'`, p.span);
     if (p.args.length !== info.arity)
       return checkErr(
         `constructor '${p.ctor}' expects ${info.arity} arg(s), got ${p.args.length}`,
@@ -474,6 +480,10 @@ const strayTypeVar = (te: TypeExpr, params: ReadonlySet<string>): TypeExpr | nul
     .with({ kind: "tqual" }, (tqual) =>
       tqual.args.reduce<TypeExpr | null>((f, a) => f ?? strayTypeVar(a, params), null),
     )
+    .with({ kind: "tlit" }, () => null)
+    .with({ kind: "tunion" }, (tunion) =>
+      tunion.members.reduce<TypeExpr | null>((f, m) => f ?? strayTypeVar(m, params), null),
+    )
     .exhaustive();
 
 function checkCtorFieldVars(prog: Program): Diagnostic[] {
@@ -517,6 +527,10 @@ const qualRefs = (te: TypeExpr, out: QualTypeExpr[]): void =>
       out.push(tqual);
       for (const a of tqual.args) qualRefs(a, out);
     })
+    .with({ kind: "tlit" }, () => {})
+    .with({ kind: "tunion" }, (tunion) => {
+      for (const m of tunion.members) qualRefs(m, out);
+    })
     .exhaustive();
 
 /**
@@ -537,9 +551,15 @@ const writtenTypeExprs = (prog: Program): TypeExpr[] => {
           if (x.kind === "letin" && x.annot) out.push(x.annot);
         });
         break;
+      case "expr":
+        forEachSubExpr(s.value, (x) => {
+          if (x.kind === "letin" && x.annot) out.push(x.annot);
+        });
+        break;
       case "type":
         for (const c of s.ctors) for (const fld of c.fields) out.push(fld.type);
         for (const fld of s.alias ?? []) out.push(fld.type);
+        if (s.aliasType) out.push(s.aliasType);
         break;
     }
   }
@@ -765,6 +785,8 @@ function checkReservedWords(prog: Program): Diagnostic[] {
   for (const s of prog.stmts) {
     if (s.kind === "let") {
       diags.push(...many(reservedBind(s.name, s.nameSpan), checkExprBinds(s.value)));
+    } else if (s.kind === "expr") {
+      diags.push(...many(checkExprBinds(s.value)));
     } else if (s.kind === "extern") {
       diags.push(...many(reservedBind(s.name, s.nameSpan)));
     } else if (s.kind === "type") {
@@ -907,7 +929,9 @@ function checkLoops(prog: Program): Diagnostic[] {
     }
   };
 
-  for (const s of prog.stmts) if (s.kind === "let") walk(s.value, null, false);
+  for (const s of prog.stmts) {
+    if (s.kind === "let" || s.kind === "expr") walk(s.value, null, false);
+  }
   return diags;
 }
 
@@ -932,7 +956,7 @@ export function check(
   }
 
   for (const s of prog.stmts) {
-    if (s.kind !== "let") continue;
+    if (s.kind !== "let" && s.kind !== "expr") continue;
     forEachMatch(s.value, (m) => {
       const e = checkMatch(m, reg);
       if (e) diags.push(e);

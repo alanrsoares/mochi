@@ -187,3 +187,28 @@ test("docs playground presets emit every displayed target", () => {
     expect(result.value.dts.trim().length, `${name} .d.ts is empty`).toBeGreaterThan(0);
   }
 });
+
+test("let? dispatches Option and Result from the value head (ADR 0079)", () => {
+  const src = `let o = let? x = Some(20) in Some(add(x, 1))
+let r = let? x = Ok(20) in Ok(add(x, 1))`;
+  const js = unwrapOk(compile(src)).replace(/^import .*$/m, "");
+  const out = new Function("match", `${js}\nreturn { o, r };`)(match) as {
+    o: { _tag: string; value?: number };
+    r: { _tag: string; value?: number };
+  };
+  expect(out.o).toEqual({ _tag: "Some", value: 21 });
+  expect(out.r).toEqual({ _tag: "Ok", value: 21 });
+});
+
+test("Set.empty is a writable empty Set (ADR 0080)", () => {
+  const js = unwrapOk(compile("let s = Set.add(1, Set.empty)")).replace(/^import .*$/m, "");
+  const out = new Function(`${js}\nreturn s;`)() as Set<number>;
+  expect([...out]).toEqual([1]);
+});
+
+test("a string-literal union synonym accepts a member (ADR 0081)", () => {
+  const src = `type Tone = "rose" | "amber"
+let t : Tone = "rose"`;
+  expect(isErr(compile(src))).toBe(false);
+  expect(isErr(compile(`type Tone = "rose" | "amber"\nlet t : Tone = "taupe"`))).toBe(true);
+});

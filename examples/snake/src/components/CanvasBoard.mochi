@@ -361,8 +361,7 @@ export let CanvasBoard : BoardProps -> VNode = props =>
       )(hookDeps2(props.snake, props.food));
       useEffect(() =>
         startCanvasLoop(canvasRef, (ctx, time) =>
-          ctx->drawFrame(motion, particles, time)
-        )
+          ctx->drawFrame(motion, particles, time))
       )(hookDeps2(canvasRef, motion));
       <canvas
         ref={canvasRef}

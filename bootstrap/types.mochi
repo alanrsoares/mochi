@@ -21,6 +21,11 @@ export type Ty =
   | TyCon(name: string, args: [Ty])
   | TyFn(from: Ty, to: Ty)
   | TyRecord(row: Row)
+  // String (and later number) singletons + finite unions (ADR 0012 / 0081).
+  // Not `TyLit`/`TyUnion`: those names belong to TypeExpr (same reason HM
+  // arrows are `TyFn` rather than `TyArrow`).
+  | TySingleton(base: string, value: string)
+  | TyOneOf(members: [Ty])
 
 export type Row =
   | RowEmpty
@@ -32,6 +37,87 @@ export let tCon = (name, args) => TyCon(name, args)
 export let tArrow = (fromT, toT) => TyFn(fromT, toT)
 export let tRecord = row => TyRecord(row)
 export let tPrim = name => TyCon(name, [])
+export let tLit = value => TySingleton("string", value)
+
+let typeEq = (a, b) => switch a {
+  | TyVar(aid) => switch b { | TyVar(bid) => aid == bid | _ => false }
+  | TyCon(aname, aargs) => switch b {
+      | TyCon(bname, bargs) => aname == bname && Array.length(
+          aargs
+        ) == Array.length(bargs) && typeEqList(aargs, bargs, 0)
+      | _ => false
+    }
+  | TyFn(af, at) => switch b {
+      | TyFn(bf, bt) => typeEq(af, bf) && typeEq(at, bt)
+      | _ => false
+    }
+  | TyRecord(arow) => switch b {
+      | TyRecord(brow) => rowEq(arow, brow)
+      | _ => false
+    }
+  | TySingleton(abase, aval) => switch b {
+      | TySingleton(bbase, bval) => abase == bbase && aval == bval
+      | _ => false
+    }
+  | TyOneOf(am) => switch b {
+      | TyOneOf(bm) => Array.length(
+          am
+        ) == Array.length(bm) && allMembersIn(am, bm, 0)
+      | _ => false
+    }
+}
+
+let typeEqList = (as_, bs, i) => switch Array.get(i, as_) {
+  | None => true
+  | Some(a) => switch Array.get(i, bs) {
+      | None => false
+      | Some(b) => typeEq(a, b) && typeEqList(as_, bs, i + 1)
+    }
+}
+
+let memberEqIn = (t, xs, i) => switch Array.get(i, xs) {
+  | None => false
+  | Some(x) => typeEq(t, x) ? true : memberEqIn(t, xs, i + 1)
+}
+
+let allMembersIn = (am, bm, i) => switch Array.get(i, am) {
+  | None => true
+  | Some(m) => memberEqIn(m, bm, 0) && allMembersIn(am, bm, i + 1)
+}
+
+let rowEq = (a, b) => switch a {
+  | RowEmpty => switch b { | RowEmpty => true | _ => false }
+  | RowVar(aid) => switch b { | RowVar(bid) => aid == bid | _ => false }
+  | RowExtend(al, at, ar) => switch b {
+      | RowExtend(bl, bt, br) => al == bl && typeEq(at, bt) && rowEq(ar, br)
+      | _ => false
+    }
+}
+
+let flattenUnionFrom = (members, acc, i) => switch Array.get(i, members) {
+  | None => acc
+  | Some(t) => switch t {
+      | TyOneOf(ms) => flattenUnionFrom(
+          members,
+          flattenUnionFrom(ms, acc, 0),
+          i + 1
+        )
+      | _ => flattenUnionFrom(
+          members,
+          memberEqIn(t, acc, 0) ? acc : Array.append(t, acc),
+          i + 1
+        )
+    }
+}
+
+/// Finite union. Flattens nested unions, dedupes, unwraps a singleton.
+export let tUnion = members =>
+  let flat = flattenUnionFrom(members, [], 0) in
+    switch flat {
+      | [] => tPrim("string")
+      | [only] => only
+      | _ => TyOneOf(flat)
+    }
 
 // tuple: applied constructor under a reserved, unspeakable name (lowercase
 // "tuple" — user types are always Uppercase). Arity is arg count, so
@@ -76,6 +162,8 @@ export let showType = t => switch t {
     } in
       "${fromS} -> ${showType(to)}"
   | TyRecord(row) => showRow(row)
+  | TySingleton(base, value) => base == "string" ? show(value) : value
+  | TyOneOf(members) => Str.join(" | ", members |> map(showType))
 }
 
 /// walk a row to its tail, collecting `label: type` field strings on the way
@@ -147,6 +235,8 @@ export let zonk = (t, st) => switch resolve(t, st) {
   | TyCon(name, args) => tCon(name, args |> map(a => zonk(a, st)))
   | TyFn(from, to) => tArrow(zonk(from, st), zonk(to, st))
   | TyRecord(row) => tRecord(zonkRow(row, st))
+  | TySingleton(base, value) => TySingleton(base, value)
+  | TyOneOf(members) => tUnion(members |> map(m => zonk(m, st)))
 }
 
 let zonkRow = (row, st) => switch resolveRow(row, st) {
@@ -165,6 +255,8 @@ export let occurs = (id, t, st) => switch resolve(t, st) {
   | TyCon(_, args) => someOf(a => occurs(id, a, st), args)
   | TyFn(from, to) => occurs(id, from, st) || occurs(id, to, st)
   | TyRecord(row) => occursRow(id, row, st)
+  | TySingleton(_, _) => false
+  | TyOneOf(members) => someOf(m => occurs(id, m, st), members)
 }
 
 let occursRow = (id, row, st) => switch resolveRow(row, st) {
@@ -195,6 +287,8 @@ let rowVarOccursInType = (id, t, st) => switch resolve(t, st) {
       st
     ) || rowVarOccursInType(id, to, st)
   | TyRecord(row) => rowVarOccurs(id, row, st)
+  | TySingleton(_, _) => false
+  | TyOneOf(members) => someOf(m => rowVarOccursInType(id, m, st), members)
 }
 
 // ---- unification ----
@@ -205,19 +299,159 @@ let rowVarOccursInType = (id, t, st) => switch resolve(t, st) {
 
 let isArrowT = t => switch t { | TyFn(_, _) => true | _ => false }
 
+let isCollection = name =>
+  name == "Array" || name == "List" || name == "Set" || name == "Map"
+
+let isTupleT = t => switch t { | TyCon(name, _) => name == TUPLE | _ => false }
+
+// `((a, b)) =>` vs `(a, b) =>` — extra parens are a tuple param (ADR 0083).
+let tupleParenMsg = (a, b, shown) =>
+  isTupleT(a) != isTupleT(b)
+    ? "${shown} — ((a, b)) => takes one tuple; (a, b) => takes two arguments"
+    : shown
+
+// Array vs List/Set/Map (and List vs Set, …) — name the qualified fix (ADR 0080).
+let collectionUnifyMsg = (aname, bname, shown) =>
+  aname == bname || !isCollection(aname) || !isCollection(bname)
+    ? shown
+    : let other = aname == "Array" ? bname : bname == "Array" ? aname : "" in
+    let hint = other == "List"
+      ? "unqualified map/filter/length expect Array; use List.map"
+      : other == "Set"
+      ? "unqualified map/filter/length expect Array; convert with Set.toArray or use Set.*"
+      : other == "Map"
+      ? "unqualified map/filter/length expect Array; use Map.*"
+      : "${aname} and ${bname} are distinct collections" in
+      "${shown} — ${hint}"
+
 let unifyMismatch = (ra, rb) =>
   isArrowT(ra) != isArrowT(rb)
     ? let (fn, val) = isArrowT(ra) ? (ra, rb) : (rb, ra) in
       fail(
-        "cannot unify ${showType(ra)} with ${showType(rb)} — a function (${showType(fn)}) was used where a ${showType(val)} was expected; a call may be missing an argument"
+        tupleParenMsg(
+          ra,
+          rb,
+          "cannot unify ${showType(ra)} with ${showType(rb)} — a function (${showType(fn)}) was used where a ${showType(val)} was expected; a call may be missing an argument"
+        )
       )
-    : fail("cannot unify ${showType(ra)} with ${showType(rb)}")
+    : fail(
+      tupleParenMsg(ra, rb, "cannot unify ${showType(ra)} with ${showType(rb)}")
+    )
 
 let unifyArgs = (as_, bs, i, st) => switch Array.get(i, as_) {
   | None => Ok(st)
   | Some(a) => switch Array.get(i, bs) {
       | None => Ok(st)
-      | Some(b) => let? s1 = unify(a, b, st) in unifyArgs(as_, bs, i + 1, s1)
+      | Some(b) => unify(a, b, st)
+          |> Result.flatMap(s1 => unifyArgs(as_, bs, i + 1, s1))
+    }
+}
+
+let isPrimT = (t, name) => switch t {
+  | TyCon(n, args) => n == name && Array.length(args) == 0
+  | _ => false
+}
+
+let isLitOnlyUnion = members => switch members {
+  | [] => true
+  | [TySingleton(_, _), ...rest] => isLitOnlyUnion(rest)
+  | _ => false
+}
+
+let widenLitBindingsFrom = (ids, lit, st) => switch ids {
+  | [] => st
+  | [id, ...rest] => switch Map.get(id, st.tv) {
+      | Some(t) => switch resolve(t, st) {
+          | TySingleton(base, value) => switch lit {
+              | TySingleton(lbase, lvalue) => base == lbase && value == lvalue
+                  ? widenLitBindingsFrom(
+                    rest,
+                    lit,
+                    { ...st, tv: Map.set(id, tPrim(base), st.tv) }
+                  )
+                  : widenLitBindingsFrom(rest, lit, st)
+              | _ => widenLitBindingsFrom(rest, lit, st)
+            }
+          | _ => widenLitBindingsFrom(rest, lit, st)
+        }
+      | None => widenLitBindingsFrom(rest, lit, st)
+    }
+}
+
+let widenLitBindings = (lit, st) =>
+  widenLitBindingsFrom(Map.keys(st.tv), lit, st)
+
+let litInUnionFrom = (lit, members, i, st) => switch Array.get(i, members) {
+  | None => fail(
+      "cannot unify ${showType(lit)} with ${showType(TyOneOf(members))}"
+    )
+  | Some(m) => switch m {
+      | TySingleton(base, value) => switch lit {
+          | TySingleton(lbase, lvalue) => base == lbase && value == lvalue
+              ? Ok(st)
+              : litInUnionFrom(lit, members, i + 1, st)
+          | _ => litInUnionFrom(lit, members, i + 1, st)
+        }
+      | _ => switch unify(lit, m, st) {
+          | Ok(st1) => Ok(st1)
+          | Err(_) => litInUnionFrom(lit, members, i + 1, st)
+        }
+    }
+}
+
+let unifyMemberAgainstUnionFrom = (member, members, i, st) => switch member {
+  | TySingleton(_, _) => litInUnionFrom(member, members, 0, st)
+  | _ => unifyConcreteAgainstUnionFrom(member, members, i, st)
+}
+
+/// Split so `fail` sits beside `Ok` in one match (tsc-clean Result, ADR 0026).
+let unifyConcreteAgainstUnionFrom = (member, members, i, st) => switch Array.get(i, members) {
+  | None => fail(
+      "cannot unify ${showType(member)} with ${showType(TyOneOf(members))}"
+    )
+  | Some(m) => switch unify(member, m, st) {
+      | Ok(st1) => Ok(st1)
+      | Err(_) => unifyConcreteAgainstUnionFrom(member, members, i + 1, st)
+    }
+}
+
+let unifyUnionMembersFrom = (members, u, i, st) => switch Array.get(i, members) {
+  | None => Ok(st)
+  | Some(m) => switch u {
+      | TyOneOf(ums) => unifyMemberAgainstUnionFrom(m, ums, 0, st)
+          |> Result.flatMap(s1 => unifyUnionMembersFrom(members, u, i + 1, s1))
+      | _ => Ok(st)
+    }
+}
+
+let unifyLitUnion = (a, b, st) => switch a {
+  | TySingleton(abase, aval) => switch b {
+      | TySingleton(bbase, bval) => abase == bbase && aval == bval
+          ? Ok(st)
+          : abase == bbase
+          ? Ok(widenLitBindings(b, widenLitBindings(a, st)))
+          : fail("cannot unify ${showType(a)} with ${showType(b)}")
+      | TyOneOf(members) => litInUnionFrom(a, members, 0, st)
+      | _ => isPrimT(b, abase)
+          ? Ok(st)
+          : fail("cannot unify ${showType(a)} with ${showType(b)}")
+    }
+  | TyOneOf(amembers) => switch b {
+      | TySingleton(_, _) => litInUnionFrom(b, amembers, 0, st)
+      | TyOneOf(bmembers) => unifyUnionMembersFrom(amembers, b, 0, st)
+          |> Result.flatMap(s1 => unifyUnionMembersFrom(bmembers, a, 0, s1))
+      | _ => isLitOnlyUnion(amembers)
+          ? fail("cannot unify ${showType(a)} with ${showType(b)}")
+          : unifyMemberAgainstUnionFrom(b, amembers, 0, st)
+    }
+  | _ => switch b {
+      | TySingleton(bbase, _) => isPrimT(a, bbase)
+          ? Ok(st)
+          : fail("cannot unify ${showType(a)} with ${showType(b)}")
+      | TyOneOf(bmembers) => isLitOnlyUnion(bmembers)
+          ? fail("cannot unify ${showType(a)} with ${showType(b)}")
+          : unifyMemberAgainstUnionFrom(a, bmembers, 0, st)
+      | _ => fail("cannot unify ${showType(a)} with ${showType(b)}")
     }
 }
 
@@ -235,19 +469,43 @@ export let unify = (a, b, st) =>
               aargs
             ) == Array.length(bargs)
               ? unifyArgs(aargs, bargs, 0, st)
-              : fail("cannot unify ${showType(ra)} with ${showType(rb)}")
+              : fail(
+                tupleParenMsg(
+                  ra,
+                  rb,
+                  collectionUnifyMsg(
+                    aname,
+                    bname,
+                    "cannot unify ${showType(ra)} with ${showType(rb)}"
+                  )
+                )
+              )
+          | TySingleton(_, _) => unifyLitUnion(ra, rb, st)
+          | TyOneOf(_) => unifyLitUnion(ra, rb, st)
           | _ => unifyMismatch(ra, rb)
         }
       | TyFn(afrom, ato) => switch rb {
           | TyVar(bid) => bindVar(bid, ra, st)
-          | TyFn(bfrom, bto) => let? s1 = unify(afrom, bfrom, st) in
-              unify(ato, bto, s1)
+          | TyFn(bfrom, bto) => unify(afrom, bfrom, st)
+              |> Result.flatMap(s1 => unify(ato, bto, s1))
+          | TySingleton(_, _) => unifyLitUnion(ra, rb, st)
+          | TyOneOf(_) => unifyLitUnion(ra, rb, st)
           | _ => unifyMismatch(ra, rb)
         }
       | TyRecord(arow) => switch rb {
           | TyVar(bid) => bindVar(bid, ra, st)
           | TyRecord(brow) => unifyRows(arow, brow, st)
+          | TySingleton(_, _) => unifyLitUnion(ra, rb, st)
+          | TyOneOf(_) => unifyLitUnion(ra, rb, st)
           | _ => unifyMismatch(ra, rb)
+        }
+      | TySingleton(_, _) => switch rb {
+          | TyVar(bid) => bindVar(bid, ra, st)
+          | _ => unifyLitUnion(ra, rb, st)
+        }
+      | TyOneOf(_) => switch rb {
+          | TyVar(bid) => bindVar(bid, ra, st)
+          | _ => unifyLitUnion(ra, rb, st)
         }
     }
 
@@ -265,8 +523,9 @@ let rewriteRow = (row, label, st) => switch resolveRow(row, st) {
   | RowEmpty => fail("record missing field '${label}'")
   | RowExtend(rlabel, rtype, rrest) => rlabel == label
       ? Ok((rtype, rrest, st))
-      : let? (subType, subRest, subSt) = rewriteRow(rrest, label, st) in
-        Ok((subType, rExtend(rlabel, rtype, subRest), subSt))
+      : rewriteRow(rrest, label, st)
+        |> Result.map(((subType, subRest, subSt)) =>
+          (subType, rExtend(rlabel, rtype, subRest), subSt))
   | RowVar(rid) => let (freshT, st1) = freshVar(st) in
     let (freshTail, st2) = freshRowVar(st1) in
       Ok((
@@ -290,12 +549,10 @@ export let unifyRows = (r1, r2, st) =>
       | RowExtend(alabel, atype, arest) => switch b {
           | RowEmpty => fail("record has extra field '${alabel}'")
           | RowVar(bid) => bindRowVar(bid, a, st)
-          | RowExtend(_, _, _) => let? (btype, brest, s1) = rewriteRow(
-              b,
-              alabel,
-              st
-            ) in
-            let? s2 = unify(atype, btype, s1) in unifyRows(arest, brest, s2)
+          | RowExtend(_, _, _) => rewriteRow(b, alabel, st)
+              |> Result.flatMap(((btype, brest, s1)) =>
+                unify(atype, btype, s1)
+                  |> Result.flatMap(s2 => unifyRows(arest, brest, s2)))
         }
     }
 

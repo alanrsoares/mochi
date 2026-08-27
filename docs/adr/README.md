@@ -122,6 +122,18 @@ What else was on the table and why not.
 | [0075](0075-runtime-source-of-truth.md) | The runtime is TS source; the JS def table is generated from it | Accepted |
 | [0076](0076-open-mode-locally-bound-names.md) | Open mode does not trust a name the file itself binds | Accepted |
 | [0077](0077-mochi-keywords-as-labels.md) | mochi keywords are legal as record/attribute labels | Accepted |
+| [0078](0078-mochi-first-self-hosted-core.md) | Mochi-first authoring for the self-hosted core | Accepted |
+| [0079](0079-generic-let-question-bind.md) | `let?` dispatches between `Option` and `Result` | Accepted |
+| [0080](0080-collection-literals.md) | Collection literals, `Set.empty`, and the prelude namespace rule | Accepted |
+| [0081](0081-string-literal-unions.md) | String literal types and finite unions as surface TypeExpr | Accepted |
+| [0082](0082-scoped-ctor-imports.md) | Named/namespace imports scope the constructor registry | Accepted |
+| [0083](0083-lambda-paren-rule.md) | Keep the lambda paren rule; name it on tuple/arity mismatch | Accepted |
+| [0084](0084-structural-eq.md) | `eq`/`show`/`compare` stay structural; `-By` is the override | Accepted |
+| [0085](0085-int-float-aliases.md) | `int`/`float` are documentation aliases of `number` | Accepted |
+| [0086](0086-bun-test-bindings.md) | bun:test bindings for Mochi specs | Accepted |
+| [0087](0087-expr-statements.md) | Top-level expression statements are unit | Accepted |
+| [0088](0088-table-and-pbt.md) | Table tests (`testEach`) and PBT (`check`) | Accepted |
+| [0089](0089-task-tests.md) | Async Task tests, `checkTask`, timeouts | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

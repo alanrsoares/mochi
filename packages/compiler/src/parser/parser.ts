@@ -351,8 +351,9 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
    */
   function parseLetIn(): Expr {
     const start = expect("let").span;
-    // let? / let! param = value in body — monadic bind (Result / Task). The
-    // param is any lambda param form (name, `(a, b)` tuple, `{ a }` record).
+    // let? / let! param = value in body — monadic bind. Parser tags `let?` as
+    // Result (infer may rewrite Option, ADR 0079) and `let!` as Task.
+    // Param is any lambda param form (name, `(a, b)` tuple, `{ a }` record).
     if (peek().t === "question" || peek().t === "bang") {
       const monad = peek().t === "question" ? ("Result" as const) : ("Task" as const);
       next();
@@ -1111,12 +1112,16 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
       while (peek().t === "id") params.push(expectId().name);
     }
     expect("eq");
-    // A `{` after `=` starts a transparent record alias; anything else is a
-    // variant. `{` can't begin a constructor (those are Uppercase ids or `|`),
-    // so the two forms never collide.
+    // A `{` after `=` starts a transparent record alias. A string, grouping, or
+    // list type starts a TypeExpr synonym (`type Tone = "rose" | "amber"`).
+    // Anything else is a variant. These prefixes never begin a constructor.
     if (peek().t === "lbrace") {
       const alias = parseAliasBody();
       return { kind: "type", name, nameSpan, params, ctors: [], alias, span: to(start) };
+    }
+    if (peek().t === "str" || peek().t === "lparen" || peek().t === "lbracket") {
+      const aliasType = parseTypeExpr();
+      return { kind: "type", name, nameSpan, params, ctors: [], aliasType, span: to(start) };
     }
     const ctors: Ctor[] = [];
     if (peek().t === "bar") next(); // optional leading bar
@@ -1252,6 +1257,10 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
       const end = expect("rbracket").span;
       return { kind: "tlist", elem, span: spanning(start, end) };
     }
+    if (peek().t === "str") {
+      const tk = expect("str") as Located & { t: "str"; v: string };
+      return { kind: "tlit", value: tk.v, span: tk.span };
+    }
     const { name, span } = expectId();
     // `Alias.Name` — an alias-qualified type name (ADR 0046). Only uppercase-initial
     // names can be module aliases (mirrors the `Alias.Ctor(…)` pattern production).
@@ -1291,7 +1300,12 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
     }
     // Transitional ML-style applications are accepted on input; the formatter
     // always writes the angle-bracket form.
-    while (peek().t === "id" || peek().t === "lparen" || peek().t === "lbracket")
+    while (
+      peek().t === "id" ||
+      peek().t === "lparen" ||
+      peek().t === "lbracket" ||
+      peek().t === "str"
+    )
       args.push(parseTypeAtom());
     return args;
   }
@@ -1315,8 +1329,21 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
       : { kind: "tapp", ctor: head.name, args, span: spanning(head.span, end ?? last.span) };
   }
 
+  /** Union tighter than `->`: `"a" | "b" -> T` is `("a" | "b") -> T`. */
+  function parseTypeUnion(): TypeExpr {
+    const first = parseTypeApp();
+    if (peek().t !== "bar") return first;
+    const members = [first];
+    while (peek().t === "bar") {
+      next();
+      members.push(parseTypeApp());
+    }
+    const last = members[members.length - 1]!;
+    return { kind: "tunion", members, span: spanning(first.span, last.span) };
+  }
+
   function parseTypeExpr(): TypeExpr {
-    const from = parseTypeApp();
+    const from = parseTypeUnion();
     if (peek().t !== "tarrow") return from;
     next();
     const to = parseTypeExpr();
@@ -1450,13 +1477,13 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
         const inner = peek().t;
         switch (inner) {
           case "type":
-            return [{ ...parseType(), exported: true }];
+            return [{ ...parseType(), exported: true, doc }];
           case "extern": {
             const external = parseExtern();
             return [
               external.kind === "extern"
                 ? { ...external, exported: true, doc }
-                : { ...external, exported: true },
+                : { ...external, exported: true, doc },
             ];
           }
           case "let":
@@ -1465,13 +1492,20 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
         return fail("`export` must precede let, type, or extern");
       }
       case "type":
-        return [parseType()];
+        return [{ ...parseType(), doc }];
       case "extern": {
         const external = parseExtern();
         return [external.kind === "extern" ? { ...external, doc } : external];
       }
+      case "let":
+        return parseLet().map((s) => ({ ...s, doc }));
     }
-    return parseLet().map((s) => ({ ...s, doc }));
+    // Anything else is an expression statement (ADR 0087). Trailing `;` is
+    // optional — `do` requires it between exprs, top-level does not.
+    const start = peek().span;
+    const value = parseExpr();
+    if (peek().t === "semi") next();
+    return [{ kind: "expr", value, span: spanning(start, value.span) }];
   }
 
   /**

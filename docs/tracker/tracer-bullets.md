@@ -31,17 +31,17 @@ C1 + C10 touch the same example files, so they land together.
 
 | # | Title | Ticket | Type | Blocked by | Status |
 |---|---|---|---|---|---|
-| 3 | Type-name imports — qualified `TypeExpr` (`Alias.T`) parser → infer → dts/hover, TS + bootstrap parity | [C5](tickets/c05-type-name-imports.md) | AFK | — | a,b,c-hover,d1,d2,d3 done (ADR 0046); c-dts split out |
+| 3 | Type-name imports — qualified `TypeExpr` (`Alias.T`) parser → infer → dts/hover, TS + bootstrap parity | [C5](tickets/c05-type-name-imports.md) | AFK | — | done (ADR 0046) |
 | 4 | Strict inference by default (flip 9 hardcoded `open: true` sites); opt-in = pragma + CLI flag (decided) | [C1](tickets/c01-strict-by-default.md) | AFK | 3, 5 | done — opt-in is the `"use open"` directive (ADR 0072) |
-| 5 | Docs pass: canonical example register, 4 stale `example.mochi` links, annotation pitch, int/float ADR (absorbs C11) | [C10](tickets/c10-docs-pass.md) | AFK | — | open |
+| 5 | Docs pass: canonical example register, 4 stale `example.mochi` links, annotation pitch, int/float ADR (absorbs C11) | [C10](tickets/c10-docs-pass.md) | AFK | — | done |
 | 6 | `Task.all` / `race` / `traverse` — fail-fast, no `allLimit` v1 (decided) | [C7](tickets/c07-task-concurrency.md) | AFK | — | done (ADR 0074) |
-| 7 | Ctor-merge scoping: imports bring only what they name; collision diagnostic; re-export nominal identity | [C13](tickets/c13-unscoped-ctor-merge.md) | AFK | 3 | open |
+| 7 | Ctor-merge scoping: imports bring only what they name; collision diagnostic; re-export nominal identity | [C13](tickets/c13-unscoped-ctor-merge.md) | AFK | 3 | done |
 
 ## Wave 3 — syntax decisions (DECIDED — now ADR-writing + implementation)
 
 | # | Title | Ticket | Type | Blocked by | Status |
 |---|---|---|---|---|---|
-| 8 | Dual-purpose `let?` (Option\|Result head-ctor dispatch, Rust-`?` style); sigils capped — ADR + infer/codegen impl + bootstrap parity | [C3](tickets/c03-generic-bind-adr.md) | AFK | — | open |
-| 9 | Collection literals: keep `@{}`; add `Set.empty`; namespace rule documented as-is — ADR + prelude + diagnostic | [C6](tickets/c06-collection-literals-adr.md) | AFK | — | open |
-| 10 | Tuple-param: keep paren rule; spans on `LamParam` + targeted diagnostic — ADR + impl | [C2](tickets/c02-tuple-param-trap.md) | AFK | — | open |
-| 11 | eq/show/compare: structural-only-forever guarantee — retro ADR + loud docs (design half of C4, after bug fix) | [C4](tickets/c04-collection-eq-bug-and-exit-adr.md) | AFK | — | design half open |
+| 8 | Dual-purpose `let?` (Option\|Result head-ctor dispatch, Rust-`?` style); sigils capped — ADR + infer/codegen impl + bootstrap parity | [C3](tickets/c03-generic-bind-adr.md) | AFK | — | done |
+| 9 | Collection literals: keep `@{}`; add `Set.empty`; namespace rule documented as-is — ADR + prelude + diagnostic | [C6](tickets/c06-collection-literals-adr.md) | AFK | — | done |
+| 10 | Tuple-param: keep paren rule; spans on `LamParam` + targeted diagnostic — ADR + impl | [C2](tickets/c02-tuple-param-trap.md) | AFK | — | done |
+| 11 | eq/show/compare: structural-only-forever guarantee — retro ADR + loud docs (design half of C4, after bug fix) | [C4](tickets/c04-collection-eq-bug-and-exit-adr.md) | AFK | — | done |

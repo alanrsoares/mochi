@@ -25,7 +25,15 @@ export const showTypeExpr = (te: TypeExpr): string => {
       const head = `${te.alias}.${te.name}`;
       return te.args.length ? `${head}<${te.args.map(typeArg).join(", ")}>` : head;
     }
+    case "tlit":
+      return JSON.stringify(te.value);
+    case "tunion":
+      return te.members
+        .map((m) => (m.kind === "tarrow" ? `(${showTypeExpr(m)})` : showTypeExpr(m)))
+        .join(" | ");
+    case "tarrow": {
+      const from = te.from.kind === "tarrow" ? `(${showTypeExpr(te.from)})` : showTypeExpr(te.from);
+      return `${from} -> ${showTypeExpr(te.to)}`;
+    }
   }
-  const from = te.from.kind === "tarrow" ? `(${showTypeExpr(te.from)})` : showTypeExpr(te.from);
-  return `${from} -> ${showTypeExpr(te.to)}`;
 };

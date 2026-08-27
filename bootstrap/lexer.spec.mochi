@@ -1,0 +1,35 @@
+import { assertEq, ok, test, testEach } from "@mochi/test"
+import { lex } from "./lexer.mochi"
+
+testEach("lex token count", [
+  { label: "empty", src: "", n: 1 },
+  { label: "let x = 1", src: "let x = 1", n: 5 },
+  { label: "1 + 2", src: "1 + 2", n: 4 },
+  { label: "pipe", src: "x |> f", n: 4 }
+], row => switch lex(row.src) {
+  | Ok(toks) => Array.length(toks) |> assertEq(row.n)
+  | Err(_) => false |> ok
+})
+
+testEach("lex errors", [
+  { label: "tilde", src: "let x = ~1", msg: "unexpected char '~'" },
+  {
+    label: "unterminated string",
+    src: "let s = \"oops",
+    msg: "unterminated string literal"
+  }
+], row => switch lex(row.src) {
+  | Err(e) => e.message |> assertEq(row.msg)
+  | Ok(_) => false |> ok
+})
+
+test("doc attaches to the next token", () => switch lex("/// hi\nlet x = 1") {
+  | Ok(toks) => switch Array.get(0, toks) {
+      | Some(loc) => switch loc.doc {
+          | Some(d) => d |> assertEq("hi")
+          | None => false |> ok
+        }
+      | None => false |> ok
+    }
+  | Err(_) => false |> ok
+})

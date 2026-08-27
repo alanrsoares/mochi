@@ -50,8 +50,7 @@ export let freeCells = ((x, y), snake) =>
   range(x - 12, x + 13)
     |> toArray
     |> Array.flatMap(x =>
-      range(y - 12, y + 13) |> toArray |> Array.map(y => (x, y))
-    )
+      range(y - 12, y + 13) |> toArray |> Array.map(y => (x, y)))
     |> Array.filter(cell => !Array.contains(cell, snake))
 
 /// Initialize a fresh game state

@@ -41,4 +41,4 @@ let arg = args() |> Array.get(0) |> Option.unwrapOr("")
 let choice = parseExample(arg)
 let message = getInfo(choice)
 
-let _ = log(message)
+log(message)

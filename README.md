@@ -15,7 +15,9 @@ JavaScript you can read, and TypeScript that passes `tsc --strict` with zero err
 
 You almost never write a type annotation. The compiler works them out, then hands the
 same knowledge to the editor: hover types, `.d.ts` files, and the formatter all come from
-the compiler's own passes rather than a separate model of your code.
+the compiler's own passes rather than a separate model of your code. Write
+`let x : T = v` at an export or a seam when inference would generalize the wrong shape
+([ADR 0044](docs/adr/0044-let-binding-type-annotations.md)).
 
 <div align="center">
 <img src="apps/docs/public/illustrations/mochi_compiler_magic.jpg" alt="mochi compiling to JS and TS with zero errors" width="560" />
@@ -114,8 +116,8 @@ type Shape =
   | Rect(number, number)
 
 let area = shape => switch shape {
-  | Circle(r) => mul(pi, square(r))
-  | Rect(w, h) => mul(w, h)
+  | Circle(r) => pi * square(r)
+  | Rect(w, h) => w * h
 }
 ```
 
@@ -124,7 +126,7 @@ accepts anything that has them.
 
 ```reason
 // works on any record with x and y, whatever else it carries
-let dist = p => sqrt(add(square(p.x), square(p.y)))
+let dist = p => sqrt(square(p.x) + square(p.y))
 
 let d = dist({ x: 3, y: 4, label: "home" })  // 5
 ```
@@ -133,9 +135,9 @@ let d = dist({ x: 3, y: 4, label: "home" })  // 5
 are lazy when you want them to be.
 
 ```reason
-let doubled = [1, 2, 3] |> map(x => mul(x, 2))   // [2, 4, 6]
+let doubled = [1, 2, 3] |> map(x => x * 2)           // [2, 4, 6]
 
-let evens = iterate(x => add(x, 2))(0)           // 0, 2, 4, 6, …
+let evens = iterate(x => x + 2)(0)                   // 0, 2, 4, 6, …
 let firstThree = evens |> take(3) |> toArray     // [0, 2, 4]
 ```
 
@@ -145,17 +147,17 @@ let firstThree = evens |> take(3) |> toArray     // [0, 2, 4]
 let hypot = (a, b) =>
   let a2 = square(a) in
   let b2 = square(b) in
-  sqrt(add(a2, b2))
+  sqrt(a2 + b2)
 
 let swap = ((a, b)) => (b, a)          // tuples erase to JS arrays
 
 let sum = xs => switch xs {
   | [] => 0
-  | [head, ...tail] => add(head, sum(tail))
+  | [head, ...tail] => head + sum(tail)
 }
 ```
 
-See [`example.mochi`](example.mochi) for the full tour, and [`examples/`](examples/) for
+See [`examples/example.mochi`](examples/example.mochi) for the full tour, and [`examples/`](examples/) for
 real programs — a CLI, Game of Life, Snake, async, multi-file module graphs.
 
 ## Living with your JS codebase

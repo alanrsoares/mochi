@@ -69,8 +69,7 @@ let step = board =>
     |> Array.map(r =>
       range(0, width)
         |> toArray
-        |> Array.map(c => nextCell(at(board, r, c), neighbours(board, r, c)))
-    )
+        |> Array.map(c => nextCell(at(board, r, c), neighbours(board, r, c))))
 
 /// Render the boolean grid as a multiline terminal string.
 let render = board =>
@@ -99,8 +98,7 @@ let seeds = [
 let board0 = range(0, height)
   |> toArray
   |> Array.map(r =>
-    range(0, width) |> toArray |> Array.map(c => Array.contains((r, c), seeds))
-  )
+    range(0, width) |> toArray |> Array.map(c => Array.contains((r, c), seeds)))
 
 // ---- animation loop (recursion sequenced through Task) ----
 let label = g => "Conway's Life  ·  generation ${show(g)}"

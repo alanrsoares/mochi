@@ -20,6 +20,7 @@ import {
   foldAliases,
   isUnit,
   mkFresh,
+  qualifyTypeNames,
   type Row,
   type Type,
   tVar,
@@ -314,10 +315,14 @@ const paramGmap = (params: string[]): Map<string, string> =>
  * so the TS output grammar has exactly one encoder — flat-arrow collapse and
  * `List` → `Iterable` apply to ctor fields exactly as everywhere else.
  */
-function fieldTs(te: TypeExpr, params: string[]): string {
+function fieldTs(
+  te: TypeExpr,
+  params: string[],
+  qualify: ReadonlyMap<string, string> = new Map(),
+): string {
   const vars = new Map(params.map((p, i): [string, Type] => [p, tVar(i)]));
   const names = new Map(params.map((_, i): [number, string] => [i, LETTERS[i] ?? `T${i}`]));
-  return tsOf(typeExprToType(te, vars, mkFresh(params.length)), names);
+  return tsOf(qualifyTypeNames(typeExprToType(te, vars, mkFresh(params.length)), qualify), names);
 }
 
 /** Free type-var ids in a Type, first-appearance order. */
@@ -628,18 +633,28 @@ export function guardParamTs(scrutType: Type, aliases: AliasDef[]): string | nul
 }
 
 /** A transparent record alias → an exported TS object type. Field types come from the alias template (an HM record whose params are marker vars); map each marker to a generic letter so `type Box a = { value: a }` emits `type Box<A> = ...`. */
-export function aliasTsDecl(def: AliasDef): string {
+export function aliasTsDecl(
+  def: AliasDef,
+  qualify: ReadonlyMap<string, string> = new Map(),
+): string {
   const names = new Map(def.params.map((_, i) => [aliasParamId(i), LETTERS[i] ?? `T${i}`]));
-  const body = tsOf(def.template, names);
+  const body = tsOf(qualifyTypeNames(def.template, qualify), names);
   const head = def.params.length ? `${def.name}<${[...names.values()].join(", ")}>` : def.name;
   return `export type ${head} = ${body};`;
 }
 
 /** A `type` decl → an exported tagged union matching the runtime shape. */
-export function typeDecl(name: string, params: string[], ctors: Ctor[]): string {
+export function typeDecl(
+  name: string,
+  params: string[],
+  ctors: Ctor[],
+  qualify: ReadonlyMap<string, string> = new Map(),
+): string {
   const gmap = paramGmap(params);
   const variant = (c: Ctor): string => {
-    const fields = c.fields.map((fld, i) => `${fld.name ?? `_${i}`}: ${fieldTs(fld.type, params)}`);
+    const fields = c.fields.map(
+      (fld, i) => `${fld.name ?? `_${i}`}: ${fieldTs(fld.type, params, qualify)}`,
+    );
     return `{ _tag: "${c.name}"${fields.length ? `; ${fields.join("; ")}` : ""} }`;
   };
   const head = params.length ? `${name}<${params.map((p) => gmap.get(p)).join(", ")}>` : name;
@@ -655,6 +670,7 @@ const declOf = (
   aliasByName: Map<string, AliasDef>,
   aliases: AliasDef[],
   hooks: DeclHooks,
+  qualify: ReadonlyMap<string, string>,
 ): string | null =>
   match(s)
     // An unparsable region declares nothing (ADR 0045 decision 4).
@@ -662,20 +678,21 @@ const declOf = (
     .with({ kind: "import" }, () => null)
     .with({ kind: "extern" }, () => null)
     .with({ kind: "type" }, (type) => {
-      if (type.ctors.length === 0 && !type.alias)
+      if (type.ctors.length === 0 && !type.alias && !type.aliasType)
         return `declare const ${type.name}: unique symbol;\nexport type ${type.name} = { readonly [${type.name}]: never };`;
       const a = aliasByName.get(type.name);
-      return a ? aliasTsDecl(a) : typeDecl(type.name, type.params, type.ctors);
+      return a ? aliasTsDecl(a, qualify) : typeDecl(type.name, type.params, type.ctors, qualify);
     })
     .with({ kind: "let" }, (letin) => {
       const sc = schemeOf(letin.name);
       if (!sc || letin.name.startsWith("$")) return null;
-      const fallback = () => bindingTsType(sc, letin.value, aliases, hooks.bindingType);
-      const folded = foldAliases(sc.type, aliases);
+      const displayed: Scheme = { ...sc, type: qualifyTypeNames(sc.type, qualify) };
+      const fallback = () => bindingTsType(displayed, letin.value, aliases, hooks.bindingType);
+      const folded = foldAliases(displayed.type, aliases);
       const ty = runDtsBindingHooks(
         hooks.dtsBinding,
         letin.name,
-        sc,
+        displayed,
         letin.value,
         aliases,
         fallback,
@@ -683,6 +700,7 @@ const declOf = (
       );
       return `export declare const ${letin.name}: ${ty};`;
     })
+    .with({ kind: "expr" }, () => null)
     .exhaustive();
 
 /** Type-constructor names referenced anywhere in a TypeExpr (`Option<Expr>` → {Option}, nested included). Used to spot builtin unions named in ctor/alias field positions — inference-derived binding types alone miss those. */
@@ -706,10 +724,15 @@ function teConNames(te: TypeExpr, acc: Set<string>): void {
       teConNames(tlist.elem, acc);
     })
     .with({ kind: "tqual" }, (tqual) => {
-      // Collect the alias-qualified form — folding back to a resolved,
-      // unqualified name is a later C5 slice (ADR 0046).
+      // Builtin lookup is by unqualified name; `D.Shape` is never a prelude
+      // variant. Fold-back to a resolvable `import type * as D` lives in
+      // `emitDtsFromTyped` (C5 dts, ADR 0046).
       acc.add(`${tqual.alias}.${tqual.name}`);
       for (const a of tqual.args) teConNames(a, acc);
+    })
+    .with({ kind: "tlit" }, () => {})
+    .with({ kind: "tunion" }, (tunion) => {
+      for (const m of tunion.members) teConNames(m, acc);
     })
     .exhaustive();
 }
@@ -736,9 +759,11 @@ export function referencedBuiltinTypeDecls(
       .with({ kind: "type" }, (type) => {
         for (const c of type.ctors) for (const f of c.fields) teConNames(f.type, referenced);
         if (type.alias) for (const f of type.alias) teConNames(f.type, referenced);
+        if (type.aliasType) teConNames(type.aliasType, referenced);
       })
       .with({ kind: "extern" }, () => {})
       .with({ kind: "import" }, () => {})
+      .with({ kind: "expr" }, () => {})
       .with({ kind: "error" }, () => {}) // references nothing (ADR 0045)
       .exhaustive();
   }
@@ -850,6 +875,88 @@ export type EmitDtsOptions = {
   plugins?: LanguagePlugin[];
   /** Permit unbound host globals; `"use open"` remains file-local. */
   open?: boolean;
+  /**
+   * Nominal rename for imported variants (`Shape` → `D.Shape`). Graph callers
+   * pass `qualifierMap` from the module's `qualTypes` (inferred types too).
+   * Omitted → fold only names written qualified in this file (C5 dts).
+   */
+  qualify?: ReadonlyMap<string, string>;
+};
+
+/** Collect `tqual` nodes so single-file dts can print `D.Shape` without a graph. */
+const addWrittenQuals = (
+  te: TypeExpr,
+  local: ReadonlySet<string>,
+  out: Map<string, string>,
+): void =>
+  match(te)
+    .with({ kind: "tname" }, () => {})
+    .with({ kind: "tarrow" }, (tarrow) => {
+      addWrittenQuals(tarrow.from, local, out);
+      addWrittenQuals(tarrow.to, local, out);
+    })
+    .with({ kind: "tapp" }, (tapp) => {
+      for (const a of tapp.args) addWrittenQuals(a, local, out);
+    })
+    .with({ kind: "ttuple" }, (ttuple) => {
+      for (const e of ttuple.elems) addWrittenQuals(e, local, out);
+    })
+    .with({ kind: "tlist" }, (tlist) => {
+      addWrittenQuals(tlist.elem, local, out);
+    })
+    .with({ kind: "tqual" }, (tqual) => {
+      if (!local.has(tqual.name) && !out.has(tqual.name))
+        out.set(tqual.name, `${tqual.alias}.${tqual.name}`);
+      for (const a of tqual.args) addWrittenQuals(a, local, out);
+    })
+    .with({ kind: "tlit" }, () => {})
+    .with({ kind: "tunion" }, (tunion) => {
+      for (const m of tunion.members) addWrittenQuals(m, local, out);
+    })
+    .exhaustive();
+
+const writtenQualifierMap = (prog: Program): ReadonlyMap<string, string> => {
+  const local = new Set(prog.stmts.flatMap((s) => (s.kind === "type" ? [s.name] : [])));
+  const out = new Map<string, string>();
+  for (const s of prog.stmts) {
+    switch (s.kind) {
+      case "extern":
+        addWrittenQuals(s.typeExpr, local, out);
+        break;
+      case "let":
+        if (s.annot) addWrittenQuals(s.annot, local, out);
+        break;
+      case "type":
+        for (const c of s.ctors) for (const f of c.fields) addWrittenQuals(f.type, local, out);
+        for (const f of s.alias ?? []) addWrittenQuals(f.type, local, out);
+        if (s.aliasType) addWrittenQuals(s.aliasType, local, out);
+        break;
+    }
+  }
+  return out;
+};
+
+/**
+ * Sidecar imports must keep the `.mochi` specifier so `allowArbitraryExtensions`
+ * maps `./shapes.mochi` onto `shapes.d.mochi.ts`. Package specs stay untouched.
+ */
+const mochiDtsSpec = (from: string): string => {
+  const bare = from.replace(/\.mochi$/, "");
+  return bare.startsWith("./") || bare.startsWith("../") ? `${bare}.mochi` : from;
+};
+
+/** `import type * as D from "./shapes.mochi"` for aliases the body actually names. */
+const nsTypeImports = (prog: Program, body: string): string[] => {
+  const seen = new Set<string>();
+  const lines: string[] = [];
+  for (const s of prog.stmts) {
+    if (s.kind !== "import" || !s.alias) continue;
+    const alias = s.alias.name;
+    if (seen.has(alias) || !new RegExp(`\\b${alias}\\.`).test(body)) continue;
+    seen.add(alias);
+    lines.push(`import type * as ${alias} from ${JSON.stringify(mochiDtsSpec(s.from))};`);
+  }
+  return lines;
 };
 
 /** Emit `.d.ts` from an already-typed program — shared by `emitDts` and multi-target compile. */
@@ -865,14 +972,18 @@ export function emitDtsFromTyped(
     dtsBinding: resolved.flatMap((p) => (p.dtsBinding ? [p.dtsBinding] : [])),
     bindingType: bindingTypeHooks(resolved),
   };
+  const qualify = new Map(opts.qualify ?? []);
+  for (const [k, v] of writtenQualifierMap(prog)) if (!qualify.has(k)) qualify.set(k, v);
   const lines = prog.stmts
-    .map((s) => declOf(s, (n) => env.get(n), aliasByName, aliases, hooks))
+    .map((s) => declOf(s, (n) => env.get(n), aliasByName, aliases, hooks, qualify))
     .filter((l): l is string => l !== null);
   // A builtin variant used in an exported binding's type (e.g. `Option<number>`
   // from `Map.get`) needs its type decl emitted too, unless the program declares
   // its own. Prepend so the reference resolves.
   const builtins = referencedBuiltinTypeDecls(prog, (n) => env.get(n));
-  return `${[...builtins, ...lines].join("\n")}\n`;
+  const body = `${[...builtins, ...lines].join("\n")}\n`;
+  const imports = nsTypeImports(prog, body);
+  return imports.length === 0 ? body : `${imports.join("\n")}\n${body}`;
 }
 
 export function emitDts(src: string, opts: EmitDtsOptions = {}): Result<string, Diagnostic[]> {

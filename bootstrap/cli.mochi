@@ -27,12 +27,9 @@ let outPath = path => "${Str.slice(0, Str.length(path) - 6, path)}.js"
 // Single-file build: open-world compile, one written `.js`. Every arm of the
 // railway carries a string error (readFile's, or compile's via formatError).
 let buildOne = path =>
-  readFile(path)
-    |> Result.flatMap(src =>
-      compile(src)
-        |> Result.mapErr(e => formatError(path, src, e))
-        |> Result.flatMap(js => writeFile(outPath(path), js))
-    )
+  let? src = path->readFile() in
+  let? js = src->compile() |> Result.mapErr(e => path->formatError(src, e)) in
+    outPath(path)->writeFile(js)
 
 // Write each compiled module's JS beside its source, logging as it goes. A
 // write failure short-circuits with the host's string error.
@@ -40,7 +37,7 @@ let writeAll = outs =>
   loop (remaining = outs) {
     switch remaining {
       | [] => Ok("")
-      | [o, ...rest] => switch writeFile(outPath(o.path), o.js) {
+      | [o, ...rest] => switch writeFile(o.path->outPath(), o.js) {
           | Err(e) => Err(e)
           | Ok(w) => do {
               print("  wrote ${w}");

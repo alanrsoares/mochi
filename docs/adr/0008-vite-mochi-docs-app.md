@@ -13,7 +13,7 @@ Rather than building a isolated static documentation viewer, this is an opportun
 
 1. **`vite-plugin-mochi` Plugin**: Create a Vite plugin that resolves and transforms `.mochi` files on the fly. In dev mode and build time, it invokes Mochi's compiler (`compile()`), attaches hot module replacement (HMR), and prepends a configurable JSX pragma header (`import { h } from 'preact'`).
 2. **Docs Site Architecture**: Build a Vite app using **Tailwind CSS** for visual design, **Preact** for ultra-lightweight UI runtime (~3kB), and **shadcn/ui** design patterns for components (Tabs, Code Blocks, Dialogs, Cards).
-3. **Official Artwork & Brand Integration**: Incorporate official logo assets ([`logo.png`](../../logo.png)) and illustrations ([`illustrations/`](../../illustrations/README.md)) across the hero banner, feature sections, and type system documentation.
+3. **Official Artwork & Brand Integration**: Incorporate official logo assets ([`logo.png`](../../apps/docs/public/logo.png)) and illustrations ([`illustrations/`](../../apps/docs/public/illustrations/README.md)) across the hero banner, feature sections, and type system documentation.
 4. **In-Browser Playground**: Expose Mochi's pure TypeScript compiler core to the browser so code snippets can be edited and compiled to JS/TS in real time with live component previews.
 
 ## Consequences

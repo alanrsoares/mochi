@@ -8,12 +8,14 @@ import { dirname, relative, resolve } from "node:path";
 import { err, isErr, ok, type Result, ResultAsync } from "@onrails/result";
 import type { Program, Stmt } from "../ast/ast";
 import { exportedCtorKeys, exportedCtorTable } from "../ast/ctors";
+import type { Span } from "../ast/span";
+import { qualifierMap } from "../ast/types";
 import type { Registry } from "../check/check";
 import { codegen } from "../codegen/codegen";
 import { DEFAULT_RUNTIME_IMPORT, emitTsModule } from "../codegen/codegen-ts";
 import { toTypedProgramWith } from "../compile/compile";
 import { openMode } from "../compile/open-mode";
-import { type ExternBinding, externModuleDts } from "../dts/dts";
+import { type ExternBinding, emitDtsFromTyped, externModuleDts } from "../dts/dts";
 import { checkErr, type Diagnostic, oneDiag } from "../errors/errors";
 import type { LanguagePlugin } from "../extensions/extensions";
 import { bindingTypeHooks, resolvePlugins } from "../extensions/extensions";
@@ -25,7 +27,15 @@ export type ModuleOutput = { path: string; js: string };
 type ReadFile = (path: string) => Promise<string>;
 
 /** Options threaded to every per-module inference call. Each source file can also opt in through `"use open"`. */
-export type ModuleGraphOptions = { plugins?: LanguagePlugin[]; open?: boolean };
+export type ModuleGraphOptions = {
+  plugins?: LanguagePlugin[];
+  open?: boolean;
+  /**
+   * Suffix rewritten onto relative import paths (codegen default `.js`).
+   * Bun/Vite plugins pass `.mochi` so sibling modules re-enter the loader.
+   */
+  moduleExt?: string;
+};
 
 /** Relative / absolute specs — everything else is a bare package or package subpath. */
 const isPathSpec = (spec: string): boolean =>
@@ -81,7 +91,7 @@ const exportsOf = (prog: Program, env: Env): Env => {
   };
   for (const s of prog.stmts) {
     // An error node exports nothing — it has no name at all (ADR 0045 decision 4).
-    if (s.kind === "import" || s.kind === "error" || !s.exported) continue;
+    if (s.kind === "import" || s.kind === "error" || s.kind === "expr" || !s.exported) continue;
     if (s.kind === "type") for (const c of s.ctors) take(c.name);
     else take(s.name);
   }
@@ -98,6 +108,8 @@ const aliasesOf = (prog: Program): AliasMap => {
   const out: AliasMap = new Map();
   for (const s of prog.stmts)
     if (s.kind === "type" && s.alias) out.set(s.name, { params: s.params, fields: s.alias });
+    else if (s.kind === "type" && s.aliasType)
+      out.set(s.name, { params: s.params, fields: [], expr: s.aliasType });
   return out;
 };
 
@@ -148,6 +160,42 @@ export type ModuleContext = {
   qualTypes: QualMap;
 };
 
+/** Bring one named constructor into the importer, or error on a colliding owner. */
+const takeNamedCtor = (
+  name: string,
+  span: Span,
+  depReg: Registry | undefined,
+  depKeys: Map<string, string[]> | undefined,
+  importedReg: Registry,
+  importedKeys: Map<string, string[]>,
+): Result<void, Diagnostic[]> => {
+  const info = depReg?.ctor.get(name);
+  if (!info) return ok(undefined);
+  const prior = importedReg.ctor.get(name);
+  if (prior && prior.type !== info.type)
+    return err(oneDiag(checkErr(`duplicate constructor '${name}'`, span)));
+  importedReg.ctor.set(name, info);
+  const owner = depReg?.type.get(info.type);
+  if (owner) importedReg.type.set(info.type, owner);
+  const keys = depKeys?.get(name);
+  if (keys) importedKeys.set(name, keys);
+  return ok(undefined);
+};
+
+/** Namespace import: ctors live under `Alias.Ctor`; type map stays bare (exhaustiveness). */
+const takeNsCtors = (
+  alias: string,
+  depReg: Registry | undefined,
+  depKeys: Map<string, string[]> | undefined,
+  importedReg: Registry,
+  importedKeys: Map<string, string[]>,
+): void => {
+  if (!depReg) return;
+  for (const [k, v] of depReg.type) importedReg.type.set(k, v);
+  for (const [k, v] of depReg.ctor) importedReg.ctor.set(`${alias}.${k}`, v);
+  if (depKeys) for (const [k, v] of depKeys) importedKeys.set(k, v);
+};
+
 /** Collect `prog`'s imported context from already-compiled deps; missing export → Err. */
 const gatherImports = (
   path: string,
@@ -165,6 +213,8 @@ const gatherImports = (
   for (const imp of importsOf(prog)) {
     const depPath = resolveImport(path, imp.from);
     const depExports = exportsByPath.get(depPath);
+    const depReg = regByPath.get(depPath);
+    const depKeys = keysByPath.get(depPath);
     if (imp.alias) {
       // Namespace import: every export of the dep becomes a member of `alias`.
       const members: Env = new Map();
@@ -173,20 +223,16 @@ const gatherImports = (
       // …and every exported TYPE of the dep becomes namable as `Alias.T` (C5 slice b).
       const depQual = qualsByPath.get(depPath);
       if (depQual) qualTypes.set(imp.alias.name, depQual);
+      takeNsCtors(imp.alias.name, depReg, depKeys, importedReg, importedKeys);
     } else {
       for (const n of imp.names) {
         const sc = depExports?.get(n.name) as Scheme | undefined;
         if (!sc) return err(oneDiag(checkErr(`'${imp.from}' has no export '${n.name}'`, n.span)));
+        const taken = takeNamedCtor(n.name, n.span, depReg, depKeys, importedReg, importedKeys);
+        if (isErr(taken)) return taken;
         imports.set(n.name, sc);
       }
     }
-    const depReg = regByPath.get(depPath);
-    if (depReg) {
-      for (const [k, v] of depReg.type) importedReg.type.set(k, v);
-      for (const [k, v] of depReg.ctor) importedReg.ctor.set(k, v);
-    }
-    const depKeys = keysByPath.get(depPath);
-    if (depKeys) for (const [k, v] of depKeys) importedKeys.set(k, v);
   }
   return ok({ imports, nsImports, importedReg, importedKeys, qualTypes });
 };
@@ -274,7 +320,13 @@ const compileGraph = (
     regByPath.set(path, exportedCtorTable(prog));
     keysByPath.set(path, exportedCtorKeys(prog));
     qualsByPath.set(path, qualScopeOf(prog, gathered.value.qualTypes));
-    outputs.push({ path, js: codegen(prog, gathered.value.importedKeys, { runtime: true }) });
+    outputs.push({
+      path,
+      js: codegen(prog, gathered.value.importedKeys, {
+        runtime: true,
+        moduleExt: opts.moduleExt,
+      }),
+    });
   }
   return ok(outputs);
 };
@@ -471,4 +523,34 @@ export const moduleContext = (
       importedKeys: new Map(),
       qualTypes: new Map(),
     });
+  });
+
+/**
+ * `.d.ts` for `path` with its import graph (C5 dts). Folds imported variants
+ * to `D.Shape` and emits `import type * as D from "./shapes.mochi"` so the
+ * sidecar resolves under `allowArbitraryExtensions`.
+ */
+export const emitDtsForFile = (
+  path: string,
+  src: string,
+  readFile: ReadFile,
+  opts: ModuleGraphOptions = {},
+): ResultAsync<string, Diagnostic[]> =>
+  moduleContext(path, readFile, opts).andThen((ctx) => {
+    const lexed = lex(src);
+    if (isErr(lexed)) return err(oneDiag(lexed.error));
+    const parsed = parse(lexed.value, { plugins: opts.plugins });
+    if (isErr(parsed)) return parsed;
+    const typed = toTypedProgramWith(parsed.value, ctx, {
+      plugins: opts.plugins,
+      open: openMode(src, opts.open),
+    });
+    if (isErr(typed)) return typed;
+    const local = new Set(parsed.value.stmts.flatMap((s) => (s.kind === "type" ? [s.name] : [])));
+    return ok(
+      emitDtsFromTyped(typed.value.prog, typed.value.res, {
+        plugins: opts.plugins,
+        qualify: qualifierMap(ctx.qualTypes, local),
+      }),
+    );
   });

@@ -38,16 +38,20 @@ export type Expr =
       span: Span;
     } // let x [: T] = v in b
   /**
-   * `let?` / `let!` — monadic bind (ADR 0005, ADR 0006). `monad` selects the surface:
-   * - `"Result"` (`let?`): value is `Result a e`; Ok payload binds `param`; body
-   *   is `Result b e`; Err short-circuits. Lowers to `_Result_flatMap`.
+   * `let?` / `let!` — monadic bind (ADR 0005, ADR 0006, ADR 0079). `monad`
+   * selects the runtime helper:
+   * - `"Option"` / `"Result"` (`let?`): infer dispatches from the value's
+   *   head constructor. Option binds `Some(a)` and requires an `Option b`
+   *   body; Result binds `Ok(a)` and requires a `Result b e` body. Parser
+   *   tags `let?` as `"Result"`; infer rewrites `"Option"` when the head is
+   *   Option. Lowers to `_Option_flatMap` / `_Result_flatMap`.
    * - `"Task"` (`let!`): value is `Task a e`; payload binds `param`; body is
    *   `Task b e`. Lowers to `_Task_andThen`.
    * Param is any lambda form (name / tuple / record). Infix bind for both is deferred.
    */
   | {
       kind: "letbind";
-      monad: "Result" | "Task";
+      monad: "Option" | "Result" | "Task";
       param: LamParam;
       paramSpan: Span;
       value: Expr;
@@ -182,7 +186,11 @@ export type TypeExpr =
       nameSpan: Span;
       args: readonly TypeExpr[];
       span: Span;
-    }; // D.Shape, D.Result e a
+    } // D.Shape, D.Result e a
+  /** `"rose"` — string singleton in type position (ADR 0081). */
+  | { kind: "tlit"; value: string; span: Span }
+  /** `"rose" | "amber"` — finite union; parser never emits a singleton. */
+  | { kind: "tunion"; members: TypeExpr[]; span: Span };
 
 export type Stmt =
   /**
@@ -200,10 +208,10 @@ export type Stmt =
       span: Span;
     }
   /**
-   * A `type` decl is EITHER a variant (`ctors` non-empty, `alias` absent) or a
-   * transparent record alias (`alias` present, `ctors` empty). An alias is pure
-   * structural naming: inference expands it to its row, display folds the row
-   * back to the name — no nominal identity, no runtime.
+   * A `type` decl is a variant (`ctors` non-empty), a transparent record alias
+   * (`alias` present), or a TypeExpr synonym (`aliasType` present, e.g.
+   * `type Tone = "rose" | "amber"` — ADR 0081). An alias is pure structural
+   * naming: inference expands it, display folds matching types back to the name.
    */
   | {
       kind: "type";
@@ -212,9 +220,12 @@ export type Stmt =
       params: string[];
       ctors: Ctor[];
       alias?: AliasField[];
+      aliasType?: TypeExpr;
       exported?: boolean;
+      /** Leading `///` documentation shown by declaration hover. */
+      doc?: string;
       span: Span;
-    } // type Result a e = | Ok(a) | ... ; or type Point = { x: number, y: number }
+    } // type Result a e = | Ok(a) | ... ; type Point = { x: number }; type Tone = "rose" | "amber"
   /** `extern name<T> : type = "module" "export"` — bind an external JS/TS function. */
   | {
       kind: "extern";
@@ -243,6 +254,12 @@ export type Stmt =
    * `alias` set, `names` empty.
    */
   | { kind: "import"; names: ImportName[]; alias: ImportName | null; from: string; span: Span }
+  /**
+   * A top-level expression statement (ADR 0087). Must infer as `()` —
+   * `test(…)`, `log(msg)`, `do { … }` whose last expr is unit. Optional
+   * trailing semicolon. Binds nothing; codegen emits `expr;`.
+   */
+  | { kind: "expr"; value: Expr; span: Span }
   /**
    * An unparsable region the parser skipped to recover (ADR 0045). `span` covers
    * every byte skipped — from the token that failed through the last one consumed
@@ -286,6 +303,7 @@ export type LetStmt = Extract<Stmt, { kind: "let" }>;
 export type TypeStmt = Extract<Stmt, { kind: "type" }>;
 export type ExternStmt = Extract<Stmt, { kind: "extern" }>;
 export type ImportStmt = Extract<Stmt, { kind: "import" }>;
+export type ExprStmt = Extract<Stmt, { kind: "expr" }>;
 export type ErrorStmt = Extract<Stmt, { kind: "error" }>;
 
 /** A name pulled in by an `import`. `span` anchors it for diagnostics. */

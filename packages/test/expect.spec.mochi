@@ -1,0 +1,103 @@
+import {
+  array,
+  assertEq,
+  bool,
+  check,
+  checkTask,
+  checkTaskTimeout,
+  checkTimeout,
+  describe,
+  filterArb,
+  int,
+  nat,
+  ok,
+  option,
+  pair,
+  result,
+  test,
+  testEach,
+  testEachTask,
+  testEachTaskTimeout,
+  testEachTimeout,
+  testTask,
+  testTaskTimeout,
+  testTimeout,
+  text
+} from "@mochi/test"
+
+describe("assertEq", () => {
+  test("numbers", () => 1 + 1 |> assertEq(2));
+  test("strings", () => "ab" |> assertEq("ab"));
+  test("ok", () => 1 == 1 |> ok);
+  test("not", () => 1 != 2 |> ok)
+})
+
+describe("testEach", () => {
+  testEach("sum", [
+    (1, 2, 3),
+    (0, 0, 0),
+    (-1, 1, 0)
+  ], ((a, b, want)) => a + b |> assertEq(want));
+  testEach("labelled", [
+    { label: "1+2", a: 1, b: 2, want: 3 },
+    { label: "zeros", a: 0, b: 0, want: 0 }
+  ], row => row.a + row.b |> assertEq(row.want))
+})
+
+describe("check", () => {
+  check("addition commutes", pair(int, int), ((a, b)) => a + b == b + a |> ok);
+  check("nat is non-negative", nat, n => n >= 0 |> ok);
+  check("bool is bool", bool, b => b == true || b == false |> ok);
+  check("filterArb keeps predicate", filterArb(
+    n => n >= 0,
+    int
+  ), n => n >= 0 |> ok);
+  check("array length is nat-ish", array(
+    int
+  ), xs => Array.length(xs) >= 0 |> ok);
+  check("option is Some or None", option(
+    text
+  ), o => switch o { | Some(_) => true | None => true } |> ok);
+  check("result is Ok or Err", result(
+    int,
+    text
+  ), r => switch r { | Ok(_) => true | Err(_) => true } |> ok)
+})
+
+describe("testTask", () => {
+  testTask("delay", Task.delay(1, 2) |> Task.map(assertEq(2)));
+  testTask(
+    "fail then recover",
+    Task.fail("nope") |> Task.recover(e => e |> assertEq("nope") |> Task.of)
+  )
+})
+
+describe("testEachTask", () => {
+  testEachTask("delay identity", [
+    (1, 1),
+    (2, 2)
+  ], ((n, want)) => Task.delay(1, n) |> Task.map(assertEq(want)));
+  testEachTask("labelled", [
+    { label: "one", n: 1, want: 1 }
+  ], row => Task.delay(1, row.n) |> Task.map(assertEq(row.want)))
+})
+
+describe("timeouts", () => {
+  testTimeout(50, "sync", () => 1 |> assertEq(1));
+  testTaskTimeout(50, "task", Task.of(1) |> Task.map(assertEq(1)));
+  testEachTimeout(50, "sum", [(1, 1)], ((a, want)) => a |> assertEq(want));
+  testEachTaskTimeout(50, "of", [
+    (1, 1)
+  ], ((a, want)) => Task.of(a) |> Task.map(assertEq(want)))
+})
+
+describe("checkTask", () => {
+  checkTask("Task.of addition commutes", pair(
+    int,
+    int
+  ), ((a, b)) => Task.of(a + b) |> Task.map(assertEq(b + a)));
+  checkTimeout(5000, "bool still bool", bool, b =>
+    b == true || b == false |> ok);
+  checkTaskTimeout(5000, "Task.of nat", nat, n =>
+    Task.of(n) |> Task.map(x => x >= 0 |> ok))
+})

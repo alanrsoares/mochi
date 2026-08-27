@@ -1,7 +1,7 @@
 ---
 id: C10
 title: Docs pass — canonical style, dead links, annotation pitch, int/float honesty (absorbs C11)
-status: open
+status: done
 type: task
 blocked-by: []
 ---
@@ -28,15 +28,15 @@ blocked-by: []
 
 **What to build:**
 
-- [ ] Pick the canonical example register (recommend: infix where it exists, named fns
+- [x] Pick the canonical example register (recommend: infix where it exists, named fns
       elsewhere); sweep README + `docs/language.md`.
-- [ ] Fix the four stale `example.mochi` links; add a CI guard that compiles
+- [x] Fix the four stale `example.mochi` links; add a CI guard that compiles
       `examples/example.mochi` (or confirm `test/examples.spec.ts` already covers it).
-- [ ] Annotation-pitch sentence in README + `language.md`.
-- [ ] Promote the `schemes.ts:42` numeric-decision comment into a retroactive ADR
+- [x] Annotation-pitch sentence in README + `language.md`.
+- [x] Promote the `schemes.ts:42` numeric-decision comment into a retroactive ADR
       (after C12 fixes numbering); link from `language.md`.
-- [ ] Relative-link check over README + `docs/`.
-- [ ] `bun run check` green.
+- [x] Relative-link check over README + `docs/`.
+- [x] `bun run check` green.
 
 Note: C1's strict-by-default migration touches the same example files (7 unbound
 pseudo-literals in `example.mochi`) — coordinate; ideally the sweeps land together.

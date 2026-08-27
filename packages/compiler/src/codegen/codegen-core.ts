@@ -27,6 +27,10 @@ export const typeExprArity = (te: TypeExpr): number =>
 export const nsRuntimeId = (e: FieldExpr): string | null =>
   e.target.kind === "ref" ? (namespaceRuntime[e.target.name]?.[e.name] ?? null) : null;
 
+/** Runtime helper for a monadic bind — `let?` is Option or Result after infer dispatch (ADR 0079). */
+export const bindRuntime = (monad: "Option" | "Result" | "Task"): string =>
+  monad === "Option" ? "_Option_flatMap" : monad === "Result" ? "_Result_flatMap" : "_Task_andThen";
+
 /** The typing a TS-mode ctor factory carries (see `GenCtx.annotateCtor`). */
 export type CtorFactoryTs = {
   generics: string;
@@ -112,6 +116,25 @@ export type GenCtx = {
   readonly moduleExt: string;
 };
 
+/** `Set.empty` / `Map.empty` / `List.empty` lower to the same runtime as `#{}` / `@{}` (ADR 0080). */
+export const emptyNsEmit = (e: FieldExpr, ctx: GenCtx): string | null => {
+  if (e.target.kind !== "ref" || e.name !== "empty") return null;
+  switch (e.target.name) {
+    case "Set": {
+      const ann = ctx.annotateEmpty?.(e);
+      return ann ? `new ${ann}()` : "new Set()";
+    }
+    case "Map": {
+      const ann = ctx.annotateEmpty?.(e);
+      return ann ? `new ${ann}()` : "new Map()";
+    }
+    case "List":
+      return "_list(function* () {})";
+    default:
+      return null;
+  }
+};
+
 /**
  * Collapse a curried lambda chain (`x => y => body`, or a mix with multi-param
  * lambdas) into one flat parameter list plus the final body. mochi types treat
@@ -194,13 +217,14 @@ export const genExpr = (e: Expr, ctx: GenCtx): string =>
       const param = ann ? `${l.name}: ${ann}` : l.name;
       return `((${param}) => ${genLambdaBody(l.body, ctx)})(${genExpr(l.value, ctx)})`;
     })
-    // let? / let! p = v in b  →  `_Result_flatMap` / `_Task_andThen`((p) => b)(v).
-    // Under `flattenPipe` (TS backend) the two args go in ONE grouping —
-    // `_Result_flatMap((p) => b, v)` — so tsc infers `p`'s type from `v` in the
-    // all-at-once overload; the curried `f(v)` split leaves `p` unconstrained
-    // (`unknown`) across the two calls. Both are equivalent under `_curry`.
+    // let? / let! p = v in b  →  `_Option_flatMap` / `_Result_flatMap` /
+    // `_Task_andThen`((p) => b)(v). Under `flattenPipe` (TS backend) the two
+    // args go in ONE grouping — `_Result_flatMap((p) => b, v)` — so tsc infers
+    // `p`'s type from `v` in the all-at-once overload; the curried `f(v)` split
+    // leaves `p` unconstrained (`unknown`) across the two calls. Both are
+    // equivalent under `_curry`.
     .with({ kind: "letbind" }, (l) => {
-      const rt = l.monad === "Result" ? "_Result_flatMap" : "_Task_andThen";
+      const rt = bindRuntime(l.monad);
       const f = `(${genParam(l.param)}) => ${genLambdaBody(l.body, ctx)}`;
       const v = genExpr(l.value, ctx);
       return ctx.flattenPipe ? `${rt}(${f}, ${v})` : `${rt}(${f})(${v})`;
@@ -243,7 +267,10 @@ export const genExpr = (e: Expr, ctx: GenCtx): string =>
       const parts = r.spread ? [`...${genExpr(r.spread, ctx)}`, ...fields] : fields;
       return parts.length === 0 ? "{}" : `{ ${parts.join(", ")} }`;
     })
-    .with({ kind: "field" }, (f) => nsRuntimeId(f) ?? `${genMember(f.target, ctx)}.${f.name}`)
+    .with(
+      { kind: "field" },
+      (f) => emptyNsEmit(f, ctx) ?? nsRuntimeId(f) ?? `${genMember(f.target, ctx)}.${f.name}`,
+    )
     // A tuple erases to a JS array `[a, b]` (like ReScript); the type system
     // keeps it distinct from an `mochi` Array, the runtime shares the shape. TS
     // emit wraps it in `_tuple(…)` so tsc infers a tuple, not a widened array

@@ -91,3 +91,12 @@ Two invariants are enforced in CI-style scripts:
   regresses above 0.
 
 Both invariants run in CI: mochi compiles mochi, and the emitted TypeScript typechecks.
+
+### Development ownership
+
+For compiler behavior covered by `bootstrap/`, Mochi is the authoring source:
+make the semantic change in the self-hosted graph first, then port it to the
+TypeScript seed/reference and prove agreement with the two invariants above.
+This does **not** make the whole repository Mochi-only. The seed and host seams,
+strict TS/declaration emission, and DX tooling remain TypeScript-owned. See
+[ADR 0078](adr/0078-mochi-first-self-hosted-core.md).

@@ -89,8 +89,7 @@ let isDigit = c => Str.codeAt(0, c) |> Option.exists(inRange(48, 57))
 let isIdStart = c =>
   Str.codeAt(0, c)
     |> Option.exists(n =>
-      inRange(65, 90, n) || (inRange(97, 122, n) || (n == 95 || n == 36))
-    )
+      inRange(65, 90, n) || (inRange(97, 122, n) || (n == 95 || n == 36)))
 let isIdChar = c => isIdStart(c) || isDigit(c)
 let isNumChar = c => isDigit(c) || c == "."
 

@@ -79,3 +79,31 @@ test("reports a missing export against the import site", () => {
     expect(r.error.end).toBeGreaterThan(r.error.start); // pinned to the name span
   }
 });
+
+test("a named import does not leak sibling constructors (ADR 0082)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "mochi-mod-"));
+  writeFileSync(
+    join(dir, "shapes.mochi"),
+    "export type Shape =\n  | Circle(r: number)\n  | Square(s: number)\nexport let origin = 0\n",
+  );
+  writeFileSync(
+    join(dir, "app.mochi"),
+    'import { origin } from "./shapes"\nlet f = s => switch s { | Circle(r) => r }\n',
+  );
+  const r = buildModules(join(dir, "app.mochi"));
+  expect(r._tag).toBe("Err");
+  if (r._tag === "Err") expect(r.error.message).toContain("unknown constructor 'Circle'");
+});
+
+test("same-name ctors from two deps collide at the second import (ADR 0082)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "mochi-mod-"));
+  writeFileSync(join(dir, "a.mochi"), "export type A = | Empty\n");
+  writeFileSync(join(dir, "b.mochi"), "export type B = | Empty\n");
+  writeFileSync(
+    join(dir, "app.mochi"),
+    'import { Empty } from "./a"\nimport { Empty } from "./b"\nlet x = Empty\n',
+  );
+  const r = buildModules(join(dir, "app.mochi"));
+  expect(r._tag).toBe("Err");
+  if (r._tag === "Err") expect(r.error.message).toContain("duplicate constructor 'Empty'");
+});

@@ -38,6 +38,7 @@ import {
   tPrim,
   tTuple,
   tUnit,
+  tLit,
   rVar,
   rExtend,
   showType,
@@ -64,6 +65,11 @@ import {
 // ============================================================
 
 import * as Ast from "./ast.mochi"
+
+// Record the selected `let?` helper on the AST node so codegen can lower
+// without a separate type table (ADR 0079). Parser tags `let?` as Result;
+// infer rewrites Option when the value's head constructor is Option.
+extern setLetBindMonad : a -> string -> () = set "monad"
 import {
   inferCallHooksOf,
   resolvePluginsDefault,
@@ -146,6 +152,8 @@ let annotSpan = t => switch t {
   | Ast.TyTuple(_, sp) => sp
   | Ast.TyList(_, sp) => sp
   | Ast.TyQual(_, _, _, _, sp) => sp
+  | Ast.TyLit(_, sp) => sp
+  | Ast.TyUnion(_, sp) => sp
 }
 
 let typeErr = (msg, sp) => { message: msg, start: sp.start, end: sp.end }
@@ -316,21 +324,69 @@ let inferTernary = (ctx, cond, thenE, elseE, st) =>
   let? (elseT, st4) = ctx->inferExpr(elseE, st3) in
   let? st5 = u(thenT, elseT, st4, exprSpan(elseE)) in Ok((thenT, st5))
 
-// `let?` / `let!` p = value in body — Result / Task monadic bind, both a
-// two-slot monad `M a e` (ADR 0005, error channel per ADR 0006).
-let inferLetBind = (ctx, param, paramSpan, monad, value, body, st) =>
+// Shared tail of `let?` / `let!`: bind `param` to the payload, then unify the
+// body against `mkBody(resT)` (Option b / Result b e / Task b e).
+let inferBindBody = (ctx, param, paramSpan, body, payloadT, mkBody, st) =>
+  let (paramT, bodyEnv, st1) = bindParam(param, ctx.env, st) in
+  let? st2 = u(paramT, payloadT, st1, paramSpan) in
+  let? (bodyT, st3) = ctxWithEnv(ctx, bodyEnv)->inferExpr(body, st2) in
+  let (resT, st4) = freshVar(st3) in
+  let wantBody = mkBody(resT) in
+  let? st5 = u(bodyT, wantBody, st4, exprSpan(body)) in Ok((wantBody, st5))
+
+// Two-slot bind (`Result a e` / `Task a e`): value `M a e`, body `M b e`.
+let inferTwoSlotBind = (ctx, param, paramSpan, value, body, valT, ctor, st) =>
+  let (payloadT, st1) = freshVar(st) in
+  let (errT, st2) = freshVar(st1) in
+  let? st3 = u(valT, tCon(ctor, [payloadT, errT]), st2, exprSpan(value)) in
+    ctx->inferBindBody(
+      param,
+      paramSpan,
+      body,
+      payloadT,
+      resT => tCon(ctor, [resT, errT]),
+      st3
+    )
+
+// `let?` dispatches Option vs Result from the resolved head of `value`
+// (ADR 0079). Unresolved tyvar defaults to Result. `let!` stays Task-only.
+let inferQuestionBind = (ctx, bind, param, paramSpan, value, body, valT, st) => switch resolve(valT, st) {
+  | TyVar(_) => let $written = setLetBindMonad(bind, "Result") in
+      ctx->inferTwoSlotBind(param, paramSpan, value, body, valT, "Result", st)
+  | TyCon(name, _) => name == "Option"
+      ? let $written = setLetBindMonad(bind, "Option") in
+      let (payloadT, st1) = freshVar(st) in
+      let? st2 = u(valT, tCon("Option", [payloadT]), st1, exprSpan(value)) in
+        ctx->inferBindBody(
+          param,
+          paramSpan,
+          body,
+          payloadT,
+          resT => tCon("Option", [resT]),
+          st2
+        )
+      : name == "Result"
+      ? let $written = setLetBindMonad(bind, "Result") in
+        ctx->inferTwoSlotBind(param, paramSpan, value, body, valT, "Result", st)
+      : Err(
+        typeErr(
+          "let? requires Option or Result, got ${showType(zonk(valT, st))}",
+          exprSpan(value)
+        )
+      )
+  | _ => Err(
+      typeErr(
+        "let? requires Option or Result, got ${showType(zonk(valT, st))}",
+        exprSpan(value)
+      )
+    )
+}
+
+let inferLetBind = (ctx, bind, param, paramSpan, monad, value, body, st) =>
   let? (valT, st1) = ctx->inferExpr(value, st) in
-  let (payloadT, st2) = freshVar(st1) in
-  let (errT, st3) = freshVar(st2) in
-  let ctorName = monad == "Result" ? "Result" : "Task" in
-  let wantVal = tCon(ctorName, [payloadT, errT]) in
-  let? st4 = u(valT, wantVal, st3, exprSpan(value)) in
-  let (paramT, bodyEnv, st5) = bindParam(param, ctx.env, st4) in
-  let? st6 = u(paramT, payloadT, st5, paramSpan) in
-  let? (bodyT, st7) = ctxWithEnv(ctx, bodyEnv)->inferExpr(body, st6) in
-  let (resT, st8) = freshVar(st7) in
-  let wantBody = tCon(ctorName, [resT, errT]) in
-  let? st9 = u(bodyT, wantBody, st8, exprSpan(body)) in Ok((wantBody, st9))
+    monad == "Task"
+      ? ctx->inferTwoSlotBind(param, paramSpan, value, body, valT, "Task", st1)
+      : ctx->inferQuestionBind(bind, param, paramSpan, value, body, valT, st1)
 
 let inferRecordRow = (ctx, fields, st) => switch fields {
   | [] => Ok((RowEmpty, st))
@@ -477,7 +533,7 @@ let inferExpr = (ctx, e, st) => switch e {
   | Ast.ENum(_, _, _) => Ok((tNumber, st))
   | Ast.EUnit(_) => Ok((tUnit, st))
   | Ast.EBool(_, _) => Ok((tBool, st))
-  | Ast.EStr(_, _) => Ok((tString, st))
+  | Ast.EStr(value, _) => Ok((tLit(value), st))
   | Ast.ERef(name, sp) => switch Map.get(name, ctx.env) {
       | Some(sc) => let (t, st1) = instantiate(sc, st) in Ok((t, st1))
       | None => ctx.open
@@ -506,11 +562,12 @@ let inferExpr = (ctx, e, st) => switch e {
         ) in
           localCtx->inferExpr(tail, localSt)
       | _ => let? (valT, st1) = ctx->inferExpr(value, st) in
-        let sc = generalize(ctx.env, valT, st1) in
+        let sc = generalize(ctx.env, valT, st1, true) in
         let $ctx = ctxWithEnv(ctx, Map.set(name, sc, ctx.env)) in
           $ctx->inferExpr(body, st1)
     }
   | Ast.ELetBind(param, paramSpan, monad, value, body, _) => ctx->inferLetBind(
+      e,
       param,
       paramSpan,
       monad,
@@ -688,7 +745,7 @@ let inferPat = (ctx, p, st) => switch p {
   | Ast.PUnit(_) => Ok((tUnit, #{}, st))
   | Ast.PLit(_, _, _) => Ok((tNumber, #{}, st))
   | Ast.PBool(_, _) => Ok((tBool, #{}, st))
-  | Ast.PStr(_, _) => Ok((tString, #{}, st))
+  | Ast.PStr(value, _) => Ok((tLit(value), #{}, st))
   | Ast.PBind(name, _) => let (t, st1) = freshVar(st) in
       Ok((t, Map.set(name, t, #{}), st1))
   | Ast.PRecord(fields, _) => ctx->inferPatRecord(fields, st)
@@ -955,7 +1012,7 @@ let seedBuiltinsFrom = (keys, builtins, env, st) => switch keys {
       | Some(t) => seedBuiltinsFrom(
           rest,
           builtins,
-          Map.set(n, generalize(env, t, st), env),
+          Map.set(n, generalize(env, t, st, true), env),
           st
         )
       | None => seedBuiltinsFrom(rest, builtins, env, st)
@@ -976,7 +1033,7 @@ let seedNsMembersFrom = (keys, members, env, st, acc) => switch keys {
           members,
           env,
           st,
-          Map.set(m, generalize(env, t, st), acc)
+          Map.set(m, generalize(env, t, st, true), acc)
         )
       | None => seedNsMembersFrom(rest, members, env, st, acc)
     }
@@ -1026,9 +1083,13 @@ let seedNsImports = (nsImports, ns) =>
 let aliasMapFrom = (stmts, acc) => switch stmts {
   | [] => acc
   | [s, ...rest] => switch s {
-      | Ast.SType(name, params, _, Some(fields), _, _) => aliasMapFrom(
+      | Ast.SType(name, params, _, Some(fields), _, _, _, _) => aliasMapFrom(
           rest,
-          Map.set(name, { params: params, fields: fields }, acc)
+          Map.set(name, { params: params, fields: fields, expr: None }, acc)
+        )
+      | Ast.SType(name, params, _, _, Some(te), _, _, _) => aliasMapFrom(
+          rest,
+          Map.set(name, { params: params, fields: [], expr: Some(te) }, acc)
         )
       | _ => aliasMapFrom(rest, acc)
     }
@@ -1056,7 +1117,7 @@ let registerCtorsFrom = (ctors, typeName, params, aliasMap, env, st) => switch c
 let registerUserCtorsFrom = (stmts, aliasMap, env, st) => switch stmts {
   | [] => (env, st)
   | [s, ...rest] => switch s {
-      | Ast.SType(name, params, ctors, _, _, _) => let (env1, st1) = registerCtorsFrom(
+      | Ast.SType(name, params, ctors, _, _, _, _, _) => let (env1, st1) = registerCtorsFrom(
           ctors,
           name,
           params,
@@ -1120,7 +1181,7 @@ let registerExternsFrom = (stmts, aliasMap, env, st) => switch stmts {
           registerExternsFrom(
             rest,
             aliasMap,
-            Map.set(name, generalize(env, t, st1), env),
+            Map.set(name, generalize(env, t, st1, false), env),
             st1
           )
       | _ => registerExternsFrom(rest, aliasMap, env, st)
@@ -1214,9 +1275,10 @@ let inferGroupFrom = (ctx, group, st) => switch group {
         ) in
           switch Map.get(name, ctx.env) {
             | Some(selfSc) => let? st2 = u(selfSc.ty, t, st1, span) in
-              // Binding annotation (`let x : T = v`, ADR 0044): pin the inferred
-              // value type to the declared one before it is generalized.
-              let? st3 = switch annot {
+              // Binding annotation (`let x : T = v`, ADR 0044 / 0081): pin to
+              // the declared type before generalize, so a lit against a union
+              // keeps the union instead of widening to `string`.
+              let? (pinned, st3) = switch annot {
                 | Some(te) => let (at, _, stA) = typeExprToType(
                     te,
                     #{},
@@ -1224,13 +1286,11 @@ let inferGroupFrom = (ctx, group, st) => switch group {
                     ctx.aliasMap,
                     Set.fromArray([])
                   ) in
-                    // Reported on the WRITTEN type, not the whole statement —
-                    // src/infer.ts uses `s.annot.span`.
-                    u(t, at, stA, annotSpan(te))
-                | None => Ok(st2)
+                    u(t, at, stA, annotSpan(te)) |> Result.map(stB => (at, stB))
+                | None => Ok((t, st2))
               } in
               let? (restTypes, st4) = ctx->inferGroupFrom(rest, st3) in
-                Ok((Map.set(name, t, restTypes), st4))
+                Ok((Map.set(name, pinned, restTypes), st4))
             | None => Err(
                 typeErr("internal: missing self-binding for '${name}'", span)
               )
@@ -1255,13 +1315,17 @@ let dropGroupFrom = (group, env) => switch group {
 let generalizeGroupFrom = (group, bodyTypes, env, st) => switch group {
   | [] => env
   | [s, ...rest] => switch s {
-      | Ast.SLet(name, _, _, _, _, _, _) => switch Map.get(name, bodyTypes) {
-          | Some(t) => generalizeGroupFrom(
-              rest,
-              bodyTypes,
-              Map.set(name, generalize(env, t, st), env),
-              st
-            )
+      | Ast.SLet(name, _, annot, _, _, _, _) => switch Map.get(name, bodyTypes) {
+          | Some(t) => let widen = switch annot {
+              | None => true
+              | Some(_) => false
+            } in
+              generalizeGroupFrom(
+                rest,
+                bodyTypes,
+                Map.set(name, generalize(env, t, st, widen), env),
+                st
+              )
           | None => generalizeGroupFrom(rest, bodyTypes, env, st)
         }
       | _ => generalizeGroupFrom(rest, bodyTypes, env, st)
@@ -1283,6 +1347,17 @@ let processGroupsFrom = (ctx, sccs, lets, st) => switch sccs {
       st2
     ) in
       ctxWithEnv(ctx, finalEnv)->processGroupsFrom(restSccs, lets, st2)
+}
+
+// Top-level expression statements after every let is generalized (ADR 0087).
+// Must unify with `()`.
+let inferExprStmtsFrom = (ctx, stmts, st) => switch stmts {
+  | [] => Ok(st)
+  | [s, ...rest] => switch s {
+      | Ast.SExpr(value, span) => let? (t, st1) = ctx->inferExpr(value, st) in
+        let? st2 = u(t, tUnit, st1, span) in ctx->inferExprStmtsFrom(rest, st2)
+      | _ => ctx->inferExprStmtsFrom(rest, st)
+    }
 }
 
 // Seed each import's already-generalized scheme into the env, so a reference to
@@ -1360,7 +1435,10 @@ export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports
   let idxOf = idxOfMap(lets) in
   let sccs = stronglyConnected(adjOf(lets, idxOf)) in
     switch processGroupsFrom({ env: env4, open: openMode, ns: ns0, aliasMap: aliasMap, plugins: plugins, loopStack: [] }, sccs, lets, st3) {
-      | Ok((finalCtx, _)) => Ok(finalCtx.env)
+      | Ok((finalCtx, st4)) => switch finalCtx->inferExprStmtsFrom(stmts, st4) {
+          | Ok(_) => Ok(finalCtx.env)
+          | Err(e) => Err(e)
+        }
       | Err(e) => Err(e)
     }
 
@@ -1372,7 +1450,7 @@ export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports
 // `{ types, aliases }` scope still fits.
 type QualAliasField = { name: string, fieldType: Ast.TypeExpr }
 
-type QualAliasInfo = { params: [string], fields: [QualAliasField] }
+type QualAliasInfo = { params: [string], fields: [QualAliasField], expr: Option<Ast.TypeExpr> }
 
 type QualScope = { aliases: Map<string, QualAliasInfo> }
 
@@ -1427,7 +1505,7 @@ let exportedSchemesFrom = (stmts, i0, env, acc0) =>
           i + 1,
           takeScheme(name, env, acc)
         )
-      | Some(Ast.SType(_, _, ctors, _, true, _)) => recur(
+      | Some(Ast.SType(_, _, ctors, _, _, true, _, _)) => recur(
           i + 1,
           exportCtorsInto(ctors, 0, env, acc)
         )

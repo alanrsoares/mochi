@@ -84,6 +84,8 @@ export const mapProgramExprs = (prog: Program, fn: (e: Expr) => Expr): Program =
     switch (stmt.kind) {
       case "let":
         return { ...stmt, value: mapExpr(stmt.value, fn) };
+      case "expr":
+        return { ...stmt, value: mapExpr(stmt.value, fn) };
       case "type":
       case "extern":
       case "import":

@@ -1,13 +1,10 @@
-// C5 slices a + b: `Alias.T` parses in type-annotation position (slice a, ADR 0046)
-// and RESOLVES through the import graph (slice b) — the module driver hands each
-// module a qual map (alias → the dep's exported type scope), so a variant crosses
-// nominally, a transparent record alias EXPANDS in its declaring module's scope, and
-// an unknown alias or member is a check-time diagnostic. Folding qualified names back
-// out in dts/hover is slice c.
+// C5: `Alias.T` parses (slice a, ADR 0046), resolves through the import graph
+// (slice b), and folds back in hover/dts (slice c) — dts emits
+// `import type * as D from "./shapes.mochi"` so the sidecar resolves.
 import { expect, test } from "bun:test";
 import { compile } from "@mochi/compiler/compile";
 import { lex } from "@mochi/compiler/lexer";
-import { buildModules } from "@mochi/compiler/module";
+import { buildModules, emitDtsForFile } from "@mochi/compiler/module";
 import { parse } from "@mochi/compiler/parser";
 import { format } from "@mochi/dx/format";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
@@ -208,4 +205,25 @@ test("a qualified variant is the SAME type as the dep's own — no nominal dupli
   };
   const r = await build(files, "/p/main.mochi");
   expect(isErr(r) ? unwrapErr(r) : []).toEqual([]);
+});
+
+test("dts qualifies an inferred imported variant (C5 dts)", async () => {
+  const files: Record<string, string> = {
+    "/p/shapes.mochi": SHAPES,
+    "/p/main.mochi": [
+      'import * as D from "./shapes"',
+      'import { Circle, Rect } from "./shapes"',
+      "export let sz = s => switch s { | Circle(r) => r | Rect(w, h) => w * h }",
+      "",
+    ].join("\n"),
+  };
+  const dts = unwrapOk(
+    await emitDtsForFile("/p/main.mochi", files["/p/main.mochi"]!, async (p) => {
+      const src = files[p];
+      if (src === undefined) throw new Error(`no such file ${p}`);
+      return src;
+    }),
+  );
+  expect(dts).toContain('import type * as D from "./shapes.mochi";');
+  expect(dts).toContain("D.Shape");
 });

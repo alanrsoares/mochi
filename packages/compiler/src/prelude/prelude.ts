@@ -71,7 +71,7 @@ export const preludeEnv: Record<string, Type> = {
   // eq/compare/show are STRUCTURAL and polymorphic (deep-equal / deep-order /
   // display at any type) — the pragmatic bridge instead of typeclasses.
   // lt/gt/gte/lte stay numeric.
-  eq: tArrow(a, tArrow(a, tBool)), // a -> a -> bool  (structural)
+  eq: tArrow(a, tArrow(a, tBool)), // a -> a -> bool  (structural; ADR 0084)
   compare: tArrow(a, tArrow(a, tNumber)), // a -> a -> number  (-1 | 0 | 1)
   show: tArrow(a, tString), // a -> string  (structural display)
 
@@ -161,6 +161,7 @@ export const preludeNamespaces: Record<string, Record<string, Type>> = {
     concat: tArrow(list(a), tArrow(list(a), list(a))), // List a -> List a -> List a
     flatMap: tArrow(tArrow(a, list(b)), tArrow(list(a), list(b))), // (a -> List b) -> List a -> List b
     head: tArrow(list(a), opt(a)), // List a -> Option a  (forces one element)
+    empty: list(a), // List a — same runtime as `@{}`
   },
   // Set ops — immutable (return a fresh Set). Keys/elements are primitives.
   Set: {
@@ -170,6 +171,7 @@ export const preludeNamespaces: Record<string, Record<string, Type>> = {
     size: tArrow(set(a), tNumber), // Set a -> number
     toArray: tArrow(set(a), arr(a)), // Set a -> [a]
     fromArray: tArrow(arr(a), set(a)), // [a] -> Set a
+    empty: set(a), // Set a — no empty Set literal; `#{}` is Map
     union: tArrow(set(a), tArrow(set(a), set(a))), // Set a -> Set a -> Set a
     intersect: tArrow(set(a), tArrow(set(a), set(a))), // Set a -> Set a -> Set a
     diff: tArrow(set(a), tArrow(set(a), set(a))), // Set a -> Set a -> Set a
@@ -185,6 +187,7 @@ export const preludeNamespaces: Record<string, Record<string, Type>> = {
     keys: tArrow(mapT(a, b), arr(a)), // Map k v -> [k]
     values: tArrow(mapT(a, b), arr(b)), // Map k v -> [v]
     get: tArrow(a, tArrow(mapT(a, b), opt(b))), // k -> Map k v -> Option v
+    empty: mapT(a, b), // Map k v — same runtime as `#{}`
   },
   // Option combinators — data-last (Option comes final) for `|>` chains.
   // The ctors (Some/None) stay unqualified builtins; only the combinators are

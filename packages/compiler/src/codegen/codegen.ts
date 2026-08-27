@@ -64,7 +64,9 @@ export const codegen = (
     annotateCall: opts.annotateCall ?? null,
     moduleExt: opts.moduleExt ?? ".js",
   };
-  const needsMatch = prog.stmts.some((s) => s.kind === "let" && usesMatchLib(s.value));
+  const needsMatch = prog.stmts.some(
+    (s) => (s.kind === "let" || s.kind === "expr") && usesMatchLib(s.value),
+  );
   const header = needsMatch ? `import { match } from "@onrails/pattern";\n\n` : "";
   const preamble = opts.runtime ? preludePreamble(prog) : "";
   const body = prog.stmts.map((s) => genStmt(s, ctx)).join("\n");

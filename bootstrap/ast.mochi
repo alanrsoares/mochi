@@ -93,6 +93,9 @@ export type TypeExpr =
   // name is always a constructor reference, never a variable, so the
   // lowercase/uppercase branch that motivates the split cannot apply.
   | TyQual(alias: string, name: string, nameSpan: Span, args: [TypeExpr], span: Span)
+  // `"rose"` / `"rose" | "amber"` in type position (ADR 0081).
+  | TyLit(value: string, span: Span)
+  | TyUnion(members: [TypeExpr], span: Span)
 
 type CtorField = { name: Option<string>, fieldType: TypeExpr }
 type Ctor = { name: string, fields: [CtorField] }
@@ -100,13 +103,16 @@ type AliasField = { name: string, fieldType: TypeExpr }
 
 export type Stmt =
   | SLet(name: string, nameSpan: Span, annot: Option<TypeExpr>, value: Expr, exported: bool, doc: Option<string>, span: Span)
-  | SType(name: string, params: [string], ctors: [Ctor], alias: Option<[AliasField]>, exported: bool, span: Span)
+  | SType(name: string, params: [string], ctors: [Ctor], alias: Option<[AliasField]>, aliasType: Option<TypeExpr>, exported: bool, doc: Option<string>, span: Span)
   // `curried` marks a host written `a => b => c` rather than `(a, b) => c` — a
   // calling convention like `send`/`new`, not a property of the type (ADR 0064).
   | SExtern(name: string, nameSpan: Span, params: [string], typeExpr: TypeExpr, module: string, imported: string, curried: bool, exported: bool, doc: Option<string>, span: Span)
   | SImport(names: [Name], from: string, span: Span)
   // import * as Alias from "./mod" — whole module as a user namespace (ADR 0002).
   | SImportNs(alias: Name, from: string, span: Span)
+  // A top-level expression statement. Must have type `()` (ADR 0087) — `test(…)`,
+  // `log(msg)`, `do { … }` whose last expr is unit. Optional trailing semicolon.
+  | SExpr(value: Expr, span: Span)
   // An unparsable region the parser skipped to recover (ADR 0045). `span` covers
   // every byte skipped, from the token that failed through the last one consumed
   // before the sync point. No message — diagnostics are the diagnostic channel —

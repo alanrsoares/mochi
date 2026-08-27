@@ -11,6 +11,8 @@ import {
   TyCon,
   TyFn,
   TyRecord,
+  TySingleton,
+  TyOneOf,
   RowEmpty,
   RowVar,
   RowExtend,
@@ -19,6 +21,8 @@ import {
   tRecord,
   tPrim,
   tTuple,
+  tLit,
+  tUnion,
   rExtend,
   freshVar,
   freshRowVar,
@@ -59,6 +63,8 @@ export let collect = (t, acc) => switch t {
   | TyCon(_, args) => collectArgs(args, acc)
   | TyFn(fromT, toT) => collect(toT, collect(fromT, acc))
   | TyRecord(row) => collectRow(row, acc)
+  | TySingleton(_, _) => acc
+  | TyOneOf(members) => collectArgs(members, acc)
 }
 let collectArgs = (args, acc) => switch args {
   | [] => acc
@@ -82,10 +88,36 @@ let freeInEnvFrom = (schemes, acc) => switch schemes {
 }
 let freeInEnv = env => freeInEnvFrom(Map.values(env), emptyVarSets)
 
-export let generalize = (env, t, st) =>
-  let zt = zonk(t, st) in
+export let generalize = (env, t, st, widen) =>
+  let zt = widen ? widenLits(zonk(t, st)) : zonk(t, st) in
   let free = diffVarSets(freeInType(zt), freeInEnv(env)) in
     { vars: Set.toArray(free.tv), rvars: Set.toArray(free.rv), ty: zt }
+
+/// Bare string/number singletons widen to their base prim at generalization
+/// of an unannotated binding (TypeScript `let`). Written types skip this
+/// pass so `"hi"` stays `"hi"` (ADR 0081). Finite unions of lits stay precise.
+export let widenLits = t => switch t {
+  | TySingleton("string", _) => tString
+  | TySingleton(_, _) => tNumber
+  | TyOneOf(members) => tUnion(
+      members
+        |> map(m => switch m { | TySingleton(_, _) => m | _ => widenLits(m) })
+    )
+  | TyCon(name, args) => tCon(name, args |> map(widenLits))
+  | TyFn(fromT, toT) => tArrow(widenLits(fromT), widenLits(toT))
+  | TyRecord(row) => tRecord(widenRow(row))
+  | TyVar(_) => t
+}
+
+let widenRow = row => switch row {
+  | RowEmpty => row
+  | RowVar(_) => row
+  | RowExtend(label, fieldType, rest) => rExtend(
+      label,
+      widenLits(fieldType),
+      widenRow(rest)
+    )
+}
 
 let instMapFrom = (vars, acc, st) => switch vars {
   | [] => (acc, st)
@@ -106,6 +138,8 @@ let instSub = (t, tmap, rmap) => switch t {
       instSub(toT, tmap, rmap)
     )
   | TyRecord(row) => tRecord(instSubRow(row, tmap, rmap))
+  | TySingleton(base, value) => TySingleton(base, value)
+  | TyOneOf(members) => tUnion(members |> map(m => instSub(m, tmap, rmap)))
 }
 let instSubRow = (row, tmap, rmap) => switch row {
   | RowVar(id) => Map.getOr(row, id, rmap)
@@ -133,7 +167,7 @@ export let isUpperStart = s => switch Str.codeAt(0, s) {
   | None => false
 }
 
-type AliasInfo = { params: [string], fields: [AliasField] }
+type AliasInfo = { params: [string], fields: [AliasField], expr: Option<Ast.TypeExpr> }
 
 export let typeExprListToType = (tes, vars, st, aliases, expanding) => switch tes {
   | [] => ([], vars, st)
@@ -266,6 +300,15 @@ export let typeExprToType = (te, vars, st, aliases, expanding) => switch te {
             (t, vars1, st2)
         | None => (tCon(name, args), vars1, st1)
       }
+  | Ast.TyLit(value, _) => (tLit(value), vars, st)
+  | Ast.TyUnion(members, _) => let (ts, vars1, st1) = typeExprListToType(
+      members,
+      vars,
+      st,
+      aliases,
+      expanding
+    ) in
+      (tUnion(ts), vars1, st1)
 }
 
 let aliasLocalVarsFrom = (params, args, st) => switch params {
@@ -310,10 +353,31 @@ let aliasFieldsFrom = (fields, vars, st, aliases, expanding) => switch fields {
 export let aliasRow = (name, info, args, st, aliases, expanding) =>
   Set.has(name, expanding)
     ? (tCon(name, args), st)
-    : let (local, st1) = aliasLocalVarsFrom(info.params, args, st) in
-    let next = Set.add(name, expanding) in
-    let (row, st2) = aliasFieldsFrom(info.fields, local, st1, aliases, next) in
-      (tRecord(row), st2)
+    : switch info.expr {
+      | Some(te) => let (local, st1) = aliasLocalVarsFrom(
+          info.params,
+          args,
+          st
+        ) in
+        let (t, _, st2) = typeExprToType(
+          te,
+          local,
+          st1,
+          aliases,
+          Set.add(name, expanding)
+        ) in
+          (t, st2)
+      | None => let (local, st1) = aliasLocalVarsFrom(info.params, args, st) in
+        let next = Set.add(name, expanding) in
+        let (row, st2) = aliasFieldsFrom(
+          info.fields,
+          local,
+          st1,
+          aliases,
+          next
+        ) in
+          (tRecord(row), st2)
+    }
 
 let pvarsFrom = (params, st) => switch params {
   | [] => (#{}, [], st)

@@ -257,6 +257,10 @@ const cTy = (t: TypeExpr): Canon => {
         args: t.args.map(cTy),
         span: cSpan(t.span),
       };
+    case "tlit":
+      return { kind: "tlit", value: t.value, span: cSpan(t.span) };
+    case "tunion":
+      return { kind: "tunion", members: t.members.map(cTy), span: cSpan(t.span) };
   }
 };
 
@@ -286,6 +290,7 @@ const cStmt = (s: Stmt): Canon => {
         params: s.params,
         ctors: s.ctors.map(cCtor),
         alias: s.alias ? s.alias.map(cAliasField) : null,
+        aliasType: s.aliasType ? cTy(s.aliasType) : null,
         exported: s.exported === true,
         span: cSpan(s.span),
       };
@@ -310,6 +315,8 @@ const cStmt = (s: Stmt): Canon => {
         from: s.from,
         span: cSpan(s.span),
       };
+    case "expr":
+      return { kind: "expr", value: cExpr(s.value), span: cSpan(s.span) };
     // Recovery node (ADR 0045). Only reachable once `bootstrap/parser.mochi` mirrors
     // recovery (C9 slice f); until then the differential cases all parse cleanly.
     case "error":
@@ -489,6 +496,8 @@ const A_TY: Record<string, (t: Al) => Canon> = {
     args: t.args.map(aTy),
     span: t.span,
   }),
+  TyLit: (t) => ({ kind: "tlit", value: t.value, span: t.span }),
+  TyUnion: (t) => ({ kind: "tunion", members: t.members.map(aTy), span: t.span }),
 };
 const aTy = (t: Al): Canon => {
   const f = A_TY[t._tag];
@@ -517,6 +526,7 @@ const A_STMT: Record<string, (s: Al) => Canon> = {
     params: s.params,
     ctors: s.ctors.map(aCtor),
     alias: opt(s.alias, (fs: Al) => fs.map((f: Al) => ({ name: f.name, type: aTy(f.fieldType) }))),
+    aliasType: opt(s.aliasType, aTy),
     exported: s.exported,
     span: s.span,
   }),
@@ -546,6 +556,7 @@ const A_STMT: Record<string, (s: Al) => Canon> = {
     from: s.from,
     span: s.span,
   }),
+  SExpr: (s) => ({ kind: "expr", value: aExpr(s.value), span: s.span }),
   // ADR 0045: an unparsable region both parsers skipped. Spans must agree, which is
   // the whole point of resuming at the offending token *by span* — the bootstrap
   // parser keeps no cursor past a `Result` failure, only the error's offsets.
@@ -662,6 +673,8 @@ const cases: Record<string, string> = {
     'let f = (a, b) => a == b ? "eq" : "ne"',
   "operator sections left and right (desugar to $s lambdas)":
     "let a = (2 *)\nlet b = (+ 5)\nlet c = (10 <)\nlet d = (!= 0)\nlet e = (- 2)\nlet f = (5 -)",
+  "top-level expression statements (ADR 0087)":
+    "let f = () => ()\nf()\nignore(1)\ndo { f(); ignore(2) }",
 };
 
 for (const [name, src] of Object.entries(cases)) {

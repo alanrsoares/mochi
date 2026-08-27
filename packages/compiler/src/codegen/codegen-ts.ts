@@ -88,6 +88,7 @@ const forEachScopedSpan = (e: Expr, f: (span: Span) => void): void => {
       if (e.spread) forEachScopedSpan(e.spread, f);
       return;
     case "field":
+      if (e.name === "empty" && e.target.kind === "ref") f(e.span); // Set.empty / Map.empty / List.empty
       forEachScopedSpan(e.target, f);
       return;
     case "tuple":
