@@ -1,0 +1,121 @@
+// TypeScript type rendering for the self-hosted TS backend (ADR 0090).
+// This is deliberately below emission: it owns the HM Type -> TS grammar used
+// by both typed source and future declarations, while codegen owns syntax.
+
+import {
+  TyVar,
+  TyCon,
+  TyFn,
+  TyRecord,
+  TySingleton,
+  TyOneOf,
+  RowEmpty,
+  RowVar,
+  RowExtend,
+  isUnit,
+  tCon,
+  tArrow,
+  tRecord
+} from "./types.mochi"
+import { widenLits } from "./schemes.mochi"
+
+let letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+/// `A`, `B`, … then `T26`, `T27`, … past the alphabet.
+export let letterAt = i => Option.unwrapOr("T${show(i)}", Str.get(i, letters))
+
+/// Generic names for both type and row variables. The fresh supply is shared,
+/// so the two lists have no colliding ids.
+export let genericNames = sc =>
+  genericNamesFrom(Array.concat(sc.vars, sc.rvars), 0, #{})
+
+let genericNamesFrom = (ids, i, names) => switch Array.get(i, ids) {
+  | None => names
+  | Some(id) => genericNamesFrom(ids, i + 1, Map.set(id, letterAt(i), names))
+}
+
+let primitiveTs = name => switch name {
+  | "number" => "number"
+  | "int" => "number"
+  | "float" => "number"
+  | "string" => "string"
+  | "bool" => "boolean"
+  | "unit" => "undefined"
+  | _ => name
+}
+
+let namesOf = (ts, names) => Str.join(", ", ts |> map(t => tsOfRaw(t, names)))
+
+let nominal = (name, args, names) =>
+  Array.length(args) == 0
+    ? primitiveTs(name)
+    : "${name}<${namesOf(args, names)}>"
+
+let tsRowFields = (row, names) => switch row {
+  | RowEmpty => ([], None)
+  | RowVar(id) => ([], Some(id))
+  | RowExtend(label, fieldType, rest) => let (fields, tail) = tsRowFields(
+      rest,
+      names
+    ) in
+      (Array.prepend("${label}: ${tsOfRaw(fieldType, names)}", fields), tail)
+}
+
+let tsRow = (row, names) =>
+  let (fields, tail) = tsRowFields(row, names) in
+  let body = Array.length(fields) == 0
+    ? "{}"
+    : "{ ${Str.join("; ", fields)} }" in
+    switch tail {
+      | None => body
+      | Some(id) => switch Map.get(id, names) {
+          | None => body
+          | Some(name) => Array.length(fields) == 0
+              ? name
+              : "(${body} & ${name})"
+        }
+    }
+
+let tsArrow = (fromT, toT, names) =>
+  isUnit(fromT)
+    ? "() => ${tsOfRaw(toT, names)}"
+    : tsArrowParams(fromT, toT, names, 0, [])
+
+let tsArrowParams = (fromT, toT, names, i, params) =>
+  let params1 = Array.append(
+    "${Str.fromCode(97 + i)}: ${tsOfRaw(fromT, names)}",
+    params
+  ) in
+    switch toT {
+      | TyFn(nextFrom, nextTo) when !isUnit(nextFrom) => tsArrowParams(
+          nextFrom,
+          nextTo,
+          names,
+          i + 1,
+          params1
+        )
+      | _ => "(${Str.join(", ", params1)}) => ${tsOfRaw(toT, names)}"
+    }
+
+/// Render an already-zonked HM type into strict TypeScript syntax. Bare
+/// singleton types widen at this boundary just as the TS backend does.
+export let tsOf = (t, names) => tsOfRaw(widenLits(t), names)
+
+let tsOfRaw = (t, names) => switch t {
+  | TyVar(id) => Option.unwrapOr("unknown", Map.get(id, names))
+  | TyCon("Array", [elem]) => let inner = tsOfRaw(elem, names) in
+      switch elem {
+        | TyFn(_, _) => "(${inner})[]"
+        | TyOneOf(_) => "(${inner})[]"
+        | _ => "${inner}[]"
+      }
+  | TyCon("List", [elem]) => "Iterable<${tsOfRaw(elem, names)}>"
+  | TyCon("Task", [value, error]) => "() => Promise<Result<${tsOfRaw(value, names)}, ${tsOfRaw(error, names)}>>"
+  | TyCon("tuple", elems) => "[${namesOf(elems, names)}]"
+  | TyCon(name, args) => nominal(name, args, names)
+  | TyFn(fromT, toT) => tsArrow(fromT, toT, names)
+  | TyRecord(row) => tsRow(row, names)
+  | TySingleton("string", value) => "\"${value}\""
+  | TySingleton(_, value) => value
+  | TyOneOf(members) => Str.join(" | ", members |> map(m => tsOfRaw(m, names)))
+}

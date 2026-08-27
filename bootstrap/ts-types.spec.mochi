@@ -1,0 +1,39 @@
+import { assertEq, test } from "@mochi/test"
+import {
+  rExtend,
+  rVar,
+  tArrow,
+  tCon,
+  tPrim,
+  tRecord,
+  tVar
+} from "./types.mochi"
+import { genericNames, tsOf } from "./ts-types.mochi"
+
+test("TS types render primitives, arrows, and tuples", () => {
+  assertEq("number", tsOf(tPrim("number"), #{}));
+  assertEq(
+    "(a: number, b: string) => boolean",
+    tsOf(tArrow(tPrim("number"), tArrow(tPrim("string"), tPrim("bool"))), #{})
+  );
+  assertEq(
+    "[number, string]",
+    tsOf(tCon("tuple", [tPrim("number"), tPrim("string")]), #{})
+  )
+})
+
+test("TS types preserve a named open row", () =>
+  let names = genericNames({ vars: [], rvars: [7], ty: tRecord(rVar(7)) }) in
+    assertEq(
+      "({ x: number } & A)",
+      tsOf(tRecord(rExtend("x", tPrim("number"), rVar(7))), names)
+    ))
+
+test("TS types use generic names for type variables", () =>
+  assertEq(
+    "A[]",
+    tsOf(
+      tCon("Array", [tVar(3)]),
+      genericNames({ vars: [3], rvars: [], ty: tVar(3) })
+    )
+  ))

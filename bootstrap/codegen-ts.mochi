@@ -1,0 +1,635 @@
+// bootstrap/codegen-ts.mochi — the TypeScript backend, in mochi (ADR 0026 / 0090).
+//
+// Not a fresh emitter: it drives the ONE shared codegen through the `GenOpts`
+// hooks (codegen.mochi) with types supplied by `inferProgramTypes`
+// (infer.mochi) and rendered by `tsOf` (ts-types.mochi). Values come from
+// codegen, types come from here, and the two meet at the hook boundary.
+//
+// This file owns the DECLARATION layer: a `type` decl becomes an exported
+// tagged union matching the runtime `_tag` shape, and a record alias becomes an
+// exported object type. Ports src/dts/dts.ts's `typeDecl` / `aliasTsDecl` /
+// `unionGenericNames`; the annotation hooks land in a later slice.
+
+import * as Ast from "./ast.mochi"
+
+import {
+  mkSt,
+  freshVar,
+  tVar,
+  TyVar,
+  TyCon,
+  TyFn,
+  TyRecord,
+  TySingleton,
+  TyOneOf,
+  RowEmpty,
+  RowVar,
+  RowExtend,
+  isUnit
+} from "./types.mochi"
+import { typeExprToType, collect, emptyVarSets } from "./schemes.mochi"
+import { builtinTypeDecls, keysOf } from "./ctors.mochi"
+import { codegenWith, jsGenOpts, runtimeDepNames } from "./codegen.mochi"
+import { inferProgramTypes, exprSpan } from "./infer.mochi"
+import { genericNames, letterAt, tsOf } from "./ts-types.mochi"
+
+/// Type params are bound POSITIONALLY: the i-th param is var `i`, rendered as
+/// the i-th letter. Both maps are built from one index so a field type and the
+/// declaration head always agree on a param's letter.
+let paramVarsFrom = (params, i) => switch Array.get(i, params) {
+  | None => #{}
+  | Some(p) => Map.set(p, tVar(i), paramVarsFrom(params, i + 1))
+}
+
+let paramNamesFrom = (params, i) => switch Array.get(i, params) {
+  | None => #{}
+  | Some(_) => Map.set(i, letterAt(i), paramNamesFrom(params, i + 1))
+}
+
+/// `<A, B>` for a parameterised decl, `""` for a nullary one.
+let genericHead = (params, i, acc) => switch Array.get(i, params) {
+  | None => Array.length(acc) == 0 ? "" : "<${Str.join(", ", acc)}>"
+  | Some(_) => genericHead(params, i + 1, Array.append(letterAt(i), acc))
+}
+
+/// A ctor field's type is a full TypeExpr (ADR 0015). Lower it to a Ty first —
+/// params bound positionally, aliases left nominal — then render through `tsOf`,
+/// so the TS grammar has exactly one encoder.
+let fieldTs = (te, params, aliases) =>
+  let vars = paramVarsFrom(params, 0) in
+  let names = paramNamesFrom(params, 0) in
+  let (t, _vars, _st) = typeExprToType(
+    te,
+    vars,
+    mkSt(Array.length(params)),
+    aliases,
+    Set.fromArray([])
+  ) in
+    tsOf(t, names)
+
+/// Keys come from `keysOf` (the same projection the runtime shape uses, so a
+/// declared field name and its emitted key can never drift); this loop only
+/// ever reads `fieldType`.
+let ctorFieldsFrom = (fields, keys, params, aliases, i) => switch Array.get(i, fields) {
+  | None => []
+  | Some(fld) => Array.prepend(
+      "${Option.unwrapOr("_${show(i)}", Array.get(i, keys))}: ${fieldTs(fld.fieldType, params, aliases)}",
+      ctorFieldsFrom(fields, keys, params, aliases, i + 1)
+    )
+}
+
+/// One ctor's runtime shape: the `_tag` discriminant plus its fields.
+let ctorVariant = (c, params, aliases) =>
+  let fields = ctorFieldsFrom(c.fields, keysOf(c.fields), params, aliases, 0) in
+    Array.length(fields) == 0
+      ? "{ _tag: \"${c.name}\" }"
+      : "{ _tag: \"${c.name}\"; ${Str.join("; ", fields)} }"
+
+let ctorVariantsFrom = (ctors, params, aliases, i) => switch Array.get(i, ctors) {
+  | None => []
+  | Some(c) => Array.prepend(
+      "  | ${ctorVariant(c, params, aliases)}",
+      ctorVariantsFrom(ctors, params, aliases, i + 1)
+    )
+}
+
+/// A `type` decl -> an exported tagged union matching the runtime shape.
+export let typeDecl = (name, params, ctors, aliases) =>
+  let head = "${name}${genericHead(params, 0, [])}" in
+    "export type ${head} =\n${Str.join("\n", ctorVariantsFrom(ctors, params, aliases, 0))};"
+
+let aliasFieldsFrom = (fields, params, aliases, i) => switch Array.get(i, fields) {
+  | None => []
+  | Some(f) => Array.prepend(
+      "${f.name}: ${fieldTs(f.fieldType, params, aliases)}",
+      aliasFieldsFrom(fields, params, aliases, i + 1)
+    )
+}
+
+/// A record alias (`type Point = { x: number, y: number }`) -> an exported
+/// object type. Structural, so it renders through the same `tsOf` encoder.
+export let recordAliasDecl = (name, params, fields, aliases) =>
+  let head = "${name}${genericHead(params, 0, [])}" in
+  let body = aliasFieldsFrom(fields, params, aliases, 0) in
+    Array.length(body) == 0
+      ? "export type ${head} = {};"
+      : "export type ${head} = { ${Str.join("; ", body)} };"
+
+/// A transparent type alias (`type Id = number`) -> the aliased type directly.
+export let aliasTsDecl = (name, params, template, aliases) =>
+  let head = "${name}${genericHead(params, 0, [])}" in
+    "export type ${head} = ${fieldTs(template, params, aliases)};"
+
+/// An opaque `extern type` has no structure to print: a unique-symbol brand
+/// keeps it nominal and unforgeable on the TS side.
+export let opaqueTypeDecl = name =>
+  "declare const ${name}: unique symbol;\nexport type ${name} = { readonly [${name}]: never };"
+
+/// Union the letter maps of several schemes — ids are globally unique, so a
+/// later scheme never clobbers an earlier one's letter (ADR 0042).
+let mergeInto = (keys, src, acc, i) => switch Array.get(i, keys) {
+  | None => acc
+  | Some(k) => mergeInto(
+      keys,
+      src,
+      switch Map.get(k, src) { | Some(v) => Map.set(k, v, acc) | None => acc },
+      i + 1
+    )
+}
+
+let unionNamesFrom = (schemes, i, acc) => switch Array.get(i, schemes) {
+  | None => acc
+  | Some(sc) => let names = genericNames(sc) in
+      unionNamesFrom(schemes, i + 1, mergeInto(Map.keys(names), names, acc, 0))
+}
+
+export let unionGenericNames = schemes => unionNamesFrom(schemes, 0, #{})
+
+// ---- type-level predicates -------------------------------------------------
+
+/// Every type AND row var in a (zonked) type is a key of `names`. Unlike
+/// `freeInType` (type vars only) this also inspects a record's trailing row
+/// var, so an open record `{ … } & R` counts as fully in scope only when `R`
+/// too carries a letter — the precondition for rendering the tail rather than
+/// dropping it. An empty `names` therefore means "fully concrete".
+let allVarsIn = (t, names) => switch t {
+  | TyVar(id) => Option.isSome(Map.get(id, names))
+  | TyCon(_, args) => allVarsInAll(args, names, 0)
+  | TyFn(fromT, toT) => allVarsIn(fromT, names) && allVarsIn(toT, names)
+  | TyRecord(row) => allVarsInRow(row, names)
+  | TySingleton(_, _) => true
+  | TyOneOf(members) => allVarsInAll(members, names, 0)
+}
+
+let allVarsInAll = (ts, names, i) => switch Array.get(i, ts) {
+  | None => true
+  | Some(t) => allVarsIn(t, names) && allVarsInAll(ts, names, i + 1)
+}
+
+let allVarsInRow = (row, names) => switch row {
+  | RowEmpty => true
+  | RowVar(id) => Option.isSome(Map.get(id, names))
+  | RowExtend(_, fieldType, rest) => allVarsIn(
+      fieldType,
+      names
+    ) && allVarsInRow(rest, names)
+}
+
+/// No `names` in scope, so this is true exactly when the type is fully concrete.
+let isConcrete = t => allVarsIn(t, #{})
+
+// ---- annotation hooks ------------------------------------------------------
+
+/// TS type for an EMPTY literal (`#{}` / `[]` / `@{}` / `Set.empty`). Such a
+/// seed infers `Map<unknown, unknown>` / `never[]` / `Set<never>`, which will
+/// not flow into a concretely-typed position (ADR 0035). `names` carries an
+/// enclosing generic binding's letters (ADR 0042), so a seed whose element type
+/// is one of those renders as the letter instead of being skipped; with no such
+/// scope only a fully concrete type renders, since a free var would become
+/// `unknown` — no better than tsc's own guess.
+export let emptyCollTs = (t, names) =>
+  allVarsIn(t, names) ? Some(tsOf(t, names)) : None
+
+/// TS type for an APPLIED parametric ctor call (`Ok(x)`), else `None`. A ctor's
+/// argument pins only the params it mentions; a phantom one (`Ok`'s error type)
+/// stays free and widens to `unknown`, which then fails to unify with a sibling
+/// match arm (ADR 0043). Fully-concrete applied cons only — a nullary con or a
+/// free var would render no better than tsc manages alone.
+export let ctorCallTs = t => switch t {
+  | TyCon(_, args) => Array.length(args) == 0 || !isConcrete(t)
+      ? None
+      : Some(tsOf(t, #{}))
+  | _ => None
+}
+
+/// A match scrutinee's concrete TS type — the base a guard-form arm's predicate
+/// narrows FROM (ADR 0031). Concrete only: a scrutinee with free vars cannot
+/// name its generics in value position (TS2304), so those keep the bare boolean
+/// guard and their handlers keep the polymorphic tail.
+export let guardParamTs = t => isConcrete(t) ? Some(tsOf(t, #{})) : None
+
+/// Peel one arrow per collapsed lambda param, annotating each (ADR 0028).
+/// A param whose vars are ALL in scope renders with those letters (ADR 0042);
+/// otherwise only a fully concrete param renders, because a generic binding's
+/// letters live on the const's TYPE head and naming one in a value position
+/// would be an out-of-scope TS2304.
+let lambdaParamsFrom = (t, arity, names, i) =>
+  i >= arity
+    ? []
+    : switch t {
+      | TyFn(fromT, toT) => Array.prepend(
+          allVarsIn(fromT, names)
+            ? Some(tsOf(fromT, names))
+            : isConcrete(fromT)
+            ? Some(tsOf(fromT, #{}))
+            : None,
+          lambdaParamsFrom(toT, arity, names, i + 1)
+        )
+      | _ => Array.prepend(None, lambdaParamsFrom(t, arity, names, i + 1))
+    }
+
+export let lambdaParamTypesTs = (lamType, arity, names) =>
+  lambdaParamsFrom(lamType, arity, names, 0)
+
+/// Every param annotated with the scheme's OWN letters, scoped by a generic
+/// head on the arrow itself (ADR 0032). This closes the polymorphic
+/// higher-order tail ADR 0028 leaves open: `lambdaParamTypesTs` skips generic
+/// params precisely because their letters are out of scope in the value
+/// expression, so `_curry` erased them to `any`. Scoping the SAME letters on
+/// the lambda brings them into value scope. `None` when the binding is not
+/// generic — the concrete-only path already covers it.
+let genericParamsFrom = (t, arity, names, i) =>
+  i >= arity
+    ? []
+    : switch t {
+      | TyFn(fromT, toT) => Array.prepend(
+          Some(tsOf(fromT, names)),
+          genericParamsFrom(toT, arity, names, i + 1)
+        )
+      | _ => Array.prepend(None, genericParamsFrom(t, arity, names, i + 1))
+    }
+
+export let genericLambdaParams = (sc, arity) =>
+  let names = genericNames(sc) in
+    Map.size(names) == 0
+      ? None
+      : Some(
+        {
+          generics: "<${Str.join(", ", Map.values(names))}>",
+          params: genericParamsFrom(sc.ty, arity, names, 0)
+        }
+      )
+
+/// The typing for one variant ctor's factory (`GenOpts.annotateCtor`).
+/// `retMono` pins every param to `never` so a NULLARY ctor's const keeps its
+/// literal `_tag` instead of widening to `string`.
+let neverArgs = (params, i, acc) => switch Array.get(i, params) {
+  | None => acc
+  | Some(_) => neverArgs(params, i + 1, Array.append("never", acc))
+}
+
+let ctorParamTypes = (fields, params, aliases, i) => switch Array.get(i, fields) {
+  | None => []
+  | Some(fld) => Array.prepend(
+      fieldTs(fld.fieldType, params, aliases),
+      ctorParamTypes(fields, params, aliases, i + 1)
+    )
+}
+
+export let ctorFactoryTs = (typeName, params, c, aliases) =>
+  let head = genericHead(params, 0, []) in
+  let monos = neverArgs(params, 0, []) in
+    {
+      generics: head,
+      paramTypes: ctorParamTypes(c.fields, params, aliases, 0),
+      ret: "${typeName}${head}",
+      retMono: Array.length(monos) == 0
+        ? typeName
+        : "${typeName}<${Str.join(", ", monos)}>"
+    }
+
+// ---- binding types (ADR 0026 / 0037) ---------------------------------------
+
+/// A lambda param's declared NAME (destructuring params take a positional
+/// placeholder — the type is what matters here, not the binder shape).
+let paramDeclName = (p, i) => switch p {
+  | Ast.LPName(name, _) => name
+  | _ => "_${show(i)}"
+}
+
+/// Every ordered composition of `n` — `3` gives [1,1,1], [1,2], [2,1], [3].
+/// Longest first, so the flat all-at-once signature is emitted LAST.
+let compositions = n => n == 0 ? [[]] : compositionsFrom(n, 1)
+
+let compositionsFrom = (n, k) =>
+  k > n
+    ? []
+    : Array.concat(
+      compositions(n - k) |> map(rest => Array.prepend(k, rest)),
+      compositionsFrom(n, k + 1)
+    )
+
+/// Slice `params` into consecutive groups of the given sizes.
+let sliceGroups = (params, groups, i, at) => switch Array.get(i, groups) {
+  | None => []
+  | Some(g) => Array.prepend(
+      Array.take(g, Array.drop(at, params)),
+      sliceGroups(params, groups, i + 1, at + g)
+    )
+}
+
+/// Fold the trailing groups into a curried tail: `(c) => (d) => R`.
+let curriedTail = (slices, i, acc) =>
+  i < 1
+    ? acc
+    : curriedTail(
+      slices,
+      i - 1,
+      "(${Str.join(", ", Option.unwrapOr([], Array.get(i, slices)))}) => ${acc}"
+    )
+
+let overloadSig = (head, params, ret, groups) =>
+  let slices = sliceGroups(params, groups, 0, 0) in
+  let tail = curriedTail(slices, Array.length(slices) - 1, ret) in
+    "${head}(${Str.join(", ", Option.unwrapOr([], Array.get(0, slices)))}): ${tail};"
+
+/// A curry-compatible function type. The JS backend curries every arity->=2
+/// function through `_curry`, so a call site may partially apply in ANY
+/// grouping — `f(a, b)`, `f(a)(b)`, `f(a, b)(c)`. One flat `(a, b) => R` rejects
+/// all but the all-at-once form, so emit an OVERLOAD per composition of the
+/// arity (ADR 0037). `head` scopes generics INSIDE each call signature, so it is
+/// threaded here rather than prepended by the caller.
+export let curriedOverloads = (head, params, ret) =>
+  Array.length(params) <= 1
+    ? "${head}(${Str.join(", ", params)}) => ${ret}"
+    : "{ ${Str.join(" ", Array.sortBy(g => 0 - Array.length(g), compositions(Array.length(params))) |> map(g => overloadSig(head, params, ret, g)))} }"
+
+/// Walk the value's lambda spine and the type's arrow spine together,
+/// collecting one rendered `name: T` per param. A zero-param lambda consumes
+/// the `unit` arrow the JS side erases.
+let flatParamsFrom = (t, value, names, n, acc) => switch value {
+  | Ast.ELambda(params, body, _) => Array.length(params) == 0
+      ? let next = switch t {
+        | TyFn(fromT, toT) when isUnit(fromT) => toT
+        | _ => t
+      } in
+        flatParamsFrom(next, body, names, n, acc)
+      : let (t1, n1, acc1) = takeParams(t, params, names, 0, n, acc) in
+        flatParamsFrom(t1, body, names, n1, acc1)
+  | _ => (acc, tsOf(t, names))
+}
+
+let takeParams = (t, params, names, i, n, acc) => switch Array.get(i, params) {
+  | None => (t, n, acc)
+  | Some(p) => switch t {
+      | TyFn(fromT, toT) => takeParams(
+          toT,
+          params,
+          names,
+          i + 1,
+          n + 1,
+          Array.append("${paramDeclName(p, n)}: ${tsOf(fromT, names)}", acc)
+        )
+      | _ => (t, n, acc)
+    }
+}
+
+/// Arity-aware nested form: one arrow peeled per param, recursing into the body
+/// so a curried definition keeps its shape.
+let declType = (t, value, names) => switch value {
+  | Ast.ELambda(params, body, _) => Array.length(params) == 0
+      ? let next = switch t {
+        | TyFn(fromT, toT) when isUnit(fromT) => toT
+        | _ => t
+      } in
+        "() => ${declType(next, body, names)}"
+      : let (t1, _n, ps) = takeParams(t, params, names, 0, 0, []) in
+        "(${Str.join(", ", ps)}) => ${declType(t1, body, names)}"
+  | _ => tsOf(t, names)
+}
+
+/// The TS type of a binding, WITHOUT the `const name:` wrapper — the piece the
+/// declaration writer and the TS backend share.
+///
+/// A CONCRETE function emits partial-application overloads so `_curry`'d calls
+/// typecheck (ADR 0037). A GENERIC one keeps the nested arrow: overloads there
+/// wreck tsc's callback contextual typing and type-argument inference. A
+/// non-function polymorphic binding has nowhere to bind generics, so its
+/// escaped vars fall back to `unknown`.
+export let bindingTsType = (sc, value) =>
+  let names = genericNames(sc) in
+  let head = Map.size(names) == 0
+    ? ""
+    : "<${Str.join(", ", Map.values(names))}>" in
+    switch value {
+      | Ast.ELambda(_, _, _) => head == ""
+          ? let (params, ret) = flatParamsFrom(sc.ty, value, names, 0, []) in
+            curriedOverloads("", params, ret)
+          : "${head}${declType(sc.ty, value, names)}"
+      | _ => tsOf(sc.ty, #{})
+    }
+
+// ---- module assembly -------------------------------------------------------
+
+/// Per-node types are keyed by span text, so a lookup is one Map hit.
+let spanKey = sp => "${show(sp.start)}:${show(sp.end)}"
+
+let typeAtFrom = (types, i, acc) => switch Array.get(i, types) {
+  | None => acc
+  | Some(r) => typeAtFrom(types, i + 1, Map.set(spanKey(r.span), r.ty, acc))
+}
+
+/// Later records win when two nodes share a span — `zonkRecorded` already put
+/// them in source order, so a plain left fold gets that for free.
+export let typeAtTable = types => typeAtFrom(types, 0, #{})
+
+/// Every `con` name a type mentions — used to decide which builtin variant
+/// decls a module has to carry so its own references resolve.
+let consInTy = (t, acc) => switch t {
+  | TyCon(name, args) => consInAll(args, Set.add(name, acc), 0)
+  | TyFn(fromT, toT) => consInTy(toT, consInTy(fromT, acc))
+  | TyRecord(row) => consInRow(row, acc)
+  | TyOneOf(members) => consInAll(members, acc, 0)
+  | _ => acc
+}
+
+let consInAll = (ts, acc, i) => switch Array.get(i, ts) {
+  | None => acc
+  | Some(t) => consInAll(ts, consInTy(t, acc), i + 1)
+}
+
+let consInRow = (row, acc) => switch row {
+  | RowExtend(_, fieldType, rest) => consInRow(rest, consInTy(fieldType, acc))
+  | _ => acc
+}
+
+let declaredTypeNames = (stmts, i, acc) => switch Array.get(i, stmts) {
+  | None => acc
+  | Some(Ast.SType(name, _, _, _, _, _, _, _)) => declaredTypeNames(
+      stmts,
+      i + 1,
+      Set.add(name, acc)
+    )
+  | Some(_) => declaredTypeNames(stmts, i + 1, acc)
+}
+
+let referencedCons = (stmts, env, i, acc) => switch Array.get(i, stmts) {
+  | None => acc
+  | Some(Ast.SLet(name, _, _, _, _, _, _)) => referencedCons(
+      stmts,
+      env,
+      i + 1,
+      Str.startsWith("$", name)
+        ? acc
+        : switch Map.get(name, env) {
+          | Some(sc) => consInTy(sc.ty, acc)
+          | None => acc
+        }
+    )
+  | Some(_) => referencedCons(stmts, env, i + 1, acc)
+}
+
+/// Builtin variant decls a module references but does not itself declare, so
+/// those references resolve (`Option<number>` from `Map.get`, etc).
+let builtinDeclsFor = (declared, wanted, i, aliases) => switch Array.get(i, builtinTypeDecls) {
+  | None => []
+  | Some(bt) => let rest = builtinDeclsFor(declared, wanted, i + 1, aliases) in
+      Set.has(bt.name, wanted) && !Set.has(bt.name, declared)
+        ? Array.prepend(typeDecl(bt.name, bt.params, bt.ctors, aliases), rest)
+        : rest
+}
+
+/// A guard predicate can name a builtin variant the scheme scan missed — it
+/// looks at binding types, not match-scrutinee types, so `match(opt)` on an
+/// `Option<Stmt>` never surfaces `Option`. Scan the emitted body text and skip
+/// anything the header already declares, so no duplicate decl (ADR 0031).
+let builtinDeclsInBody = (body, header, i, aliases) => switch Array.get(i, builtinTypeDecls) {
+  | None => []
+  | Some(bt) => let rest = builtinDeclsInBody(body, header, i + 1, aliases) in
+      !Str.contains("type ${bt.name}", header) && Str.contains(bt.name, body)
+        ? Array.prepend(typeDecl(bt.name, bt.params, bt.ctors, aliases), rest)
+        : rest
+}
+
+let typeHeaderFrom = (stmts, aliases, i) => switch Array.get(i, stmts) {
+  | None => []
+  | Some(Ast.SType(name, params, ctors, alias, aliasType, _, _, _)) => let rest = typeHeaderFrom(
+      stmts,
+      aliases,
+      i + 1
+    ) in
+      switch alias {
+        | Some(fields) => Array.prepend(
+            recordAliasDecl(name, params, fields, aliases),
+            rest
+          )
+        | None => switch aliasType {
+            | Some(te) => Array.prepend(
+                aliasTsDecl(name, params, te, aliases),
+                rest
+              )
+            | None => Array.length(ctors) == 0
+                ? Array.prepend(opaqueTypeDecl(name), rest)
+                : Array.prepend(typeDecl(name, params, ctors, aliases), rest)
+          }
+      }
+  | Some(_) => typeHeaderFrom(stmts, aliases, i + 1)
+}
+
+/// Generic top-level function bindings, keyed by their value-lambda span ->
+/// scheme (ADR 0032). Such a lambda gets a generic head plus ALL params
+/// annotated, so its polymorphic inner params name the letters instead of being
+/// erased to `any` by `_curry`. Row vars count too: a row-polymorphic binding
+/// with no type vars still needs the head so its open-row params emit
+/// `{…} & R` rather than a closed record dropping the tail (ADR 0034).
+let genericLambdasFrom = (stmts, env, i, acc) => switch Array.get(i, stmts) {
+  | None => acc
+  | Some(Ast.SLet(name, _, _, value, _, _, _)) => genericLambdasFrom(
+      stmts,
+      env,
+      i + 1,
+      switch value {
+        | Ast.ELambda(_, _, sp) when !Str.startsWith("$", name) => switch Map.get(name, env) {
+            | Some(sc) => Array.length(
+                sc.vars
+              ) > 0 || Array.length(sc.rvars) > 0
+                ? Map.set(spanKey(sp), sc, acc)
+                : acc
+            | None => acc
+          }
+        | _ => acc
+      }
+    )
+  | Some(_) => genericLambdasFrom(stmts, env, i + 1, acc)
+}
+
+/// The TS-backend options: every hook resolved against this module's inference
+/// metadata. This is where `inferProgramTypes` and `codegenWith` actually meet.
+export let tsGenOpts = (stmts, env, types, aliases) =>
+  let typeAt = typeAtTable(types) in
+  let genericLams = genericLambdasFrom(stmts, env, 0, #{}) in
+  let typeOf = e => Map.get(spanKey(exprSpan(e)), typeAt) in
+    {
+      ...jsGenOpts,
+      annotateLet: Some((name, value) =>
+        Str.startsWith("$", name)
+          ? None
+          : switch value {
+            | Ast.ELambda(_, _, _) => switch Map.get(name, env) {
+                | Some(sc) => Some(": ${bindingTsType(sc, value)}")
+                | None => None
+              }
+            | _ =>
+              // A non-lambda polymorphic binding has nowhere to bind generics,
+              // so annotating it would be worse than tsc's own inference.
+              // (`letParams`, ADR 0035, would refine this — not yet ported.)
+              None
+          }),
+      annotateCtor: Some((s, c) => switch s {
+        | Ast.SType(name, params, _, _, _, _, _, _) => Some(
+            ctorFactoryTs(name, params, c, aliases)
+          )
+        | _ => None
+      }),
+      annotateParams: Some((sp, arity) => switch Map.get(spanKey(sp), genericLams) {
+        | Some(sc) => Option.unwrapOr(
+            { generics: "", params: [] },
+            genericLambdaParams(sc, arity)
+          )
+        | None => {
+            generics: "",
+            params: switch Map.get(spanKey(sp), typeAt) {
+              | Some(t) => lambdaParamTypesTs(t, arity, #{})
+              | None => []
+            }
+          }
+      }),
+      annotateEmpty: Some(e =>
+        typeOf(e) |> Option.flatMap(t => emptyCollTs(t, #{}))),
+      annotateCall: Some(e => typeOf(e) |> Option.flatMap(ctorCallTs)),
+      guardBaseType: Some(e => typeOf(e) |> Option.flatMap(guardParamTs)),
+      flattenPipe: true,
+      tupleHelper: true,
+      moduleExt: ""
+    }
+
+/// Emit one module's typed TS: type header, then the runtime import, then the
+/// codegen body with per-binding / per-ctor annotations and pipe flattening.
+export let emitTsModule = (stmts, env, types, aliases, ns, jsDefs, runtimeDeps, runtimeImport) =>
+  let declared = declaredTypeNames(stmts, 0, Set.fromArray([])) in
+  let wanted = referencedCons(stmts, env, 0, Set.fromArray([])) in
+  let typeHeader = Array.concat(
+    builtinDeclsFor(declared, wanted, 0, aliases),
+    typeHeaderFrom(stmts, aliases, 0)
+  ) in
+  let body = codegenWith(
+    stmts,
+    #{},
+    false,
+    ns,
+    jsDefs,
+    runtimeDeps,
+    tsGenOpts(stmts, env, types, aliases)
+  ) in
+  // `_tuple` is a TS-emit device with no AST reference for the dep scan to
+  // find (ADR 0036), so pull it in from the emitted text.
+  let deps0 = runtimeDepNames(stmts, #{}, ns, jsDefs, runtimeDeps) in
+  let deps = Str.contains("_tuple(", body)
+    ? Array.append("_tuple", deps0)
+    : deps0 in
+  let runtimeLine = Array.length(deps) == 0
+    ? ""
+    : "import { ${Str.join(", ", Array.sort(deps))} } from \"${runtimeImport}\";" in
+  let headerText = Str.join("\n", typeHeader) in
+  let header = Array.concat(
+    builtinDeclsInBody(body, headerText, 0, aliases),
+    typeHeader
+  ) in
+    Str.join(
+      "\n\n",
+      Array.filter(
+        part => part != "",
+        [Str.join("\n", header), runtimeLine, body]
+      )
+    )
+      ++ "\n"

@@ -9,7 +9,7 @@
 //                           and write a `.js` beside each `.mochi`.
 //
 // Runs as emitted JS under Bun; the only npm deps are @onrails/{pattern,result}.
-import { compile } from "./compile.mochi"
+import { compile, compileTs } from "./compile.mochi"
 import { buildModules } from "./module.mochi"
 
 type Diag = { message: string, start: number, end: number }
@@ -25,12 +25,23 @@ extern formatError : string -> string -> Diag -> string = "./host.mjs" "formatEr
 // "foo.mochi" -> "foo.js"  (drops the 6-char `.mochi` suffix).
 export let outPath = path => "${Str.slice(0, Str.length(path) - 6, path)}.js"
 
+// "foo.mochi" -> "foo.ts" — the typed-emit sibling (ADR 0090).
+export let tsOutPath = path => "${Str.slice(0, Str.length(path) - 6, path)}.ts"
+
 // Single-file build: open-world compile, one written `.js`. Every arm of the
 // railway carries a string error (readFile's, or compile's via formatError).
 export let buildOne = path =>
   let? src = path->readFile() in
   let? js = src->compile() |> Result.mapErr(e => path->formatError(src, e)) in
     outPath(path)->writeFile(js)
+
+// Single-file typed emit: one written `.ts` (ADR 0090). Same railway as
+// `buildOne`, but through the TypeScript backend.
+export let buildOneTs = (path, runtimeImport) =>
+  let? src = path->readFile() in
+  let? ts = compileTs(src, runtimeImport)
+    |> Result.mapErr(e => path->formatError(src, e)) in
+    tsOutPath(path)->writeFile(ts)
 
 // Write each compiled module's JS beside its source, logging as it goes. A
 // write failure short-circuits with the host's string error.
@@ -61,7 +72,16 @@ export let buildMulti = entry =>
 /// unit spec must expose the helpers above without exiting the test process.
 let runEntry = isCliEntry(())
   ? switch Array.get(0, argv) {
-    | None => die("usage: mochic <file.mochi>  |  mochic build <entry.mochi>")
+    | None => die(
+        "usage: mochic <file.mochi>  |  mochic ts <file.mochi>  |  mochic build <entry.mochi>"
+      )
+    | Some("ts") => switch Array.get(1, argv) {
+        | None => die("usage: mochic ts <file.mochi>")
+        | Some(path) => switch buildOneTs(path, "@mochi/runtime") {
+            | Ok(out) => print("wrote ${out}")
+            | Err(msg) => die(msg)
+          }
+      }
     | Some("build") => switch Array.get(1, argv) {
         | None => die("usage: mochic build <entry.mochi>")
         | Some(entry) => switch buildMulti(entry) {
