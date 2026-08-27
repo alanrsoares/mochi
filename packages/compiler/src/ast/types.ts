@@ -142,6 +142,30 @@ export const qualifyTypeNames = (t: Type, qualify: ReadonlyMap<string, string>):
   return go(t);
 };
 
+/**
+ * Existence set a namespace import exposes in type position. Structural subset
+ * of `QualScope` so hover/dts can share the fold-back map without importing
+ * inference.
+ */
+export type NsTypeNames = { types: ReadonlySet<string> };
+
+/**
+ * `Shape` → `D.Shape` for every type an `import * as D` brings into type
+ * position (C5, ADR 0046). A name the file declares itself wins — already
+ * writable bare, and it shadows. First alias wins when two namespaces export
+ * the same type name.
+ */
+export const qualifierMap = (
+  quals: ReadonlyMap<string, NsTypeNames>,
+  localTypeNames: ReadonlySet<string>,
+): ReadonlyMap<string, string> => {
+  const out = new Map<string, string>();
+  for (const [alias, qual] of quals)
+    for (const name of qual.types)
+      if (!localTypeNames.has(name) && !out.has(name)) out.set(name, `${alias}.${name}`);
+  return out;
+};
+
 const showRow = (row: Row): string => {
   const fields: string[] = [];
   let cur = row;

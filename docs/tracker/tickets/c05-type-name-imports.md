@@ -1,7 +1,7 @@
 ---
 id: C5
 title: Type-name imports (qualified TypeExpr) — parser through dts
-status: open
+status: done
 type: task
 blocked-by: []
 ---
@@ -54,7 +54,7 @@ Strict before this ships = mandatory annotations that can't be written.
       expanded (`{ fst: number, snd: number }`) — aliases are structural (ADR 0005), so a
       record carries no nominal name to rename. Row-level alias provenance is its own
       problem, not this slice's.
-- [ ] **dts** fold-back — split out, not blocking. `emitDts` is single-file
+- [x] **dts** fold-back — split out, not blocking. `emitDts` is single-file
       (`toTypedProgram`) and `src/dts.ts:652,731` drop `{ kind: "import" }`, so a qualified
       annotation emits a *dangling* nominal: `export let f : D.Shape -> number` →
       `export declare const f: (s: Shape) => number;` with no import for `Shape`. Nothing
@@ -66,6 +66,10 @@ Strict before this ships = mandatory annotations that can't be written.
       `apps/docs/tsconfig.json` already sets it. Specifiers would need normalizing to carry
       the `.mochi` extension. Single-file dts can only fold back names written qualified
       (an inferred type has no alias provenance), which is all the surface needs.
+      **Done:** `emitDtsFromTyped` qualifies via `qualifierMap` (graph) or written
+      `tqual` nodes (single-file), and prepends `import type * as Alias from "….mochi"`.
+      `emitDtsForFile` / `mochi dts` run the import graph so inferred `Shape` prints as
+      `D.Shape`. Record aliases still expand (ADR 0005), same as hover.
 - [ ] Bootstrap impact: **large** — `bootstrap/parser.mochi` + `infer`/`check` mirrors
       need the same production (differential tests, message + span parity); afterwards,
       check whether any shared-module workaround in the bootstrap graph can unwind.

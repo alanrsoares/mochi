@@ -9,12 +9,13 @@ import { err, isErr, ok, type Result, ResultAsync } from "@onrails/result";
 import type { Program, Stmt } from "../ast/ast";
 import { exportedCtorKeys, exportedCtorTable } from "../ast/ctors";
 import type { Span } from "../ast/span";
+import { qualifierMap } from "../ast/types";
 import type { Registry } from "../check/check";
 import { codegen } from "../codegen/codegen";
 import { DEFAULT_RUNTIME_IMPORT, emitTsModule } from "../codegen/codegen-ts";
 import { toTypedProgramWith } from "../compile/compile";
 import { openMode } from "../compile/open-mode";
-import { type ExternBinding, externModuleDts } from "../dts/dts";
+import { type ExternBinding, emitDtsFromTyped, externModuleDts } from "../dts/dts";
 import { checkErr, type Diagnostic, oneDiag } from "../errors/errors";
 import type { LanguagePlugin } from "../extensions/extensions";
 import { bindingTypeHooks, resolvePlugins } from "../extensions/extensions";
@@ -508,4 +509,34 @@ export const moduleContext = (
       importedKeys: new Map(),
       qualTypes: new Map(),
     });
+  });
+
+/**
+ * `.d.ts` for `path` with its import graph (C5 dts). Folds imported variants
+ * to `D.Shape` and emits `import type * as D from "./shapes.mochi"` so the
+ * sidecar resolves under `allowArbitraryExtensions`.
+ */
+export const emitDtsForFile = (
+  path: string,
+  src: string,
+  readFile: ReadFile,
+  opts: ModuleGraphOptions = {},
+): ResultAsync<string, Diagnostic[]> =>
+  moduleContext(path, readFile, opts).andThen((ctx) => {
+    const lexed = lex(src);
+    if (isErr(lexed)) return err(oneDiag(lexed.error));
+    const parsed = parse(lexed.value, { plugins: opts.plugins });
+    if (isErr(parsed)) return parsed;
+    const typed = toTypedProgramWith(parsed.value, ctx, {
+      plugins: opts.plugins,
+      open: openMode(src, opts.open),
+    });
+    if (isErr(typed)) return typed;
+    const local = new Set(parsed.value.stmts.flatMap((s) => (s.kind === "type" ? [s.name] : [])));
+    return ok(
+      emitDtsFromTyped(typed.value.prog, typed.value.res, {
+        plugins: opts.plugins,
+        qualify: qualifierMap(ctx.qualTypes, local),
+      }),
+    );
   });

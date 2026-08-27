@@ -101,3 +101,14 @@ test("unit-returning fields render void, standalone unit stays undefined", () =>
   expect(out).toContain("onRun: () => void");
   expect(dts("let nothing = ()")).toBe("export declare const nothing: undefined;");
 });
+
+test("a written D.Shape folds back with a type-only star import (C5 dts)", () => {
+  const src = [
+    'import * as D from "./shapes"',
+    'extern mk : number -> D.Shape = "./shapes" "Circle"',
+    "export let c : D.Shape = mk(1)",
+  ].join("\n");
+  const out = dts(src);
+  expect(out).toContain('import type * as D from "./shapes.mochi";');
+  expect(out).toContain("export declare const c: D.Shape;");
+});

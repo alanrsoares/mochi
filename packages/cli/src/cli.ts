@@ -12,9 +12,8 @@ import {
 } from "@mochi/codemod";
 import { codegenTs } from "@mochi/compiler/codegen-ts";
 import { compile } from "@mochi/compiler/compile";
-import { emitDts } from "@mochi/compiler/dts";
 import { type Diagnostic, formatError } from "@mochi/compiler/errors";
-import { buildModules, buildModulesTs } from "@mochi/compiler/module";
+import { buildModules, buildModulesTs, emitDtsForFile } from "@mochi/compiler/module";
 import { format } from "@mochi/dx/format";
 import { match } from "@onrails/pattern";
 import { isErr } from "@onrails/result";
@@ -91,7 +90,7 @@ await match(cmd)
       `usage: mochi dts [--open] <file.mochi>\n${USAGE}`,
     );
     const src = await Bun.file(path).text();
-    const r = emitDts(src, { open });
+    const r = await emitDtsForFile(path, src, (p) => Bun.file(p).text(), { open });
     if (isErr(r)) die(r.error, src);
     process.stdout.write(r.value);
   })
