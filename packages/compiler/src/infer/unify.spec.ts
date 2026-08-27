@@ -10,6 +10,7 @@ import {
   tApp,
   tArrow,
   tBool,
+  tCon,
   tLit,
   tNumber,
   tRecord,
@@ -86,6 +87,12 @@ test("generic arity mismatch fails", () => {
   const r = unify(tApp("Pair", tNumber), tApp("Pair", tNumber, tBool), emptySubst(), mkFresh());
   expect(isErr(r)).toBe(true);
   expect(unwrapErr(r).message).toContain("cannot unify");
+});
+
+test("Array vs List names List.map (ADR 0080)", () => {
+  const r = unify(tCon("List", [tNumber]), tCon("Array", [tNumber]), emptySubst(), mkFresh());
+  expect(isErr(r)).toBe(true);
+  expect(unwrapErr(r).message).toContain("use List.map");
 });
 
 test("nested generic arg conflict fails with a deep message", () => {

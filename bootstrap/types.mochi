@@ -205,6 +205,23 @@ let rowVarOccursInType = (id, t, st) => switch resolve(t, st) {
 
 let isArrowT = t => switch t { | TyFn(_, _) => true | _ => false }
 
+let isCollection = name =>
+  name == "Array" || name == "List" || name == "Set" || name == "Map"
+
+// Array vs List/Set/Map (and List vs Set, …) — name the qualified fix (ADR 0080).
+let collectionUnifyMsg = (aname, bname, shown) =>
+  aname == bname || !isCollection(aname) || !isCollection(bname)
+    ? shown
+    : let other = aname == "Array" ? bname : bname == "Array" ? aname : "" in
+    let hint = other == "List"
+      ? "unqualified map/filter/length expect Array; use List.map"
+      : other == "Set"
+      ? "unqualified map/filter/length expect Array; convert with Set.toArray or use Set.*"
+      : other == "Map"
+      ? "unqualified map/filter/length expect Array; use Map.*"
+      : "${aname} and ${bname} are distinct collections" in
+      "${shown} — ${hint}"
+
 let unifyMismatch = (ra, rb) =>
   isArrowT(ra) != isArrowT(rb)
     ? let (fn, val) = isArrowT(ra) ? (ra, rb) : (rb, ra) in
@@ -236,7 +253,13 @@ export let unify = (a, b, st) =>
               aargs
             ) == Array.length(bargs)
               ? unifyArgs(aargs, bargs, 0, st)
-              : fail("cannot unify ${showType(ra)} with ${showType(rb)}")
+              : fail(
+                collectionUnifyMsg(
+                  aname,
+                  bname,
+                  "cannot unify ${showType(ra)} with ${showType(rb)}"
+                )
+              )
           | _ => unifyMismatch(ra, rb)
         }
       | TyFn(afrom, ato) => switch rb {

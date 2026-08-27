@@ -116,6 +116,25 @@ export type GenCtx = {
   readonly moduleExt: string;
 };
 
+/** `Set.empty` / `Map.empty` / `List.empty` lower to the same runtime as `#{}` / `@{}` (ADR 0080). */
+export const emptyNsEmit = (e: FieldExpr, ctx: GenCtx): string | null => {
+  if (e.target.kind !== "ref" || e.name !== "empty") return null;
+  switch (e.target.name) {
+    case "Set": {
+      const ann = ctx.annotateEmpty?.(e);
+      return ann ? `new ${ann}()` : "new Set()";
+    }
+    case "Map": {
+      const ann = ctx.annotateEmpty?.(e);
+      return ann ? `new ${ann}()` : "new Map()";
+    }
+    case "List":
+      return "_list(function* () {})";
+    default:
+      return null;
+  }
+};
+
 /**
  * Collapse a curried lambda chain (`x => y => body`, or a mix with multi-param
  * lambdas) into one flat parameter list plus the final body. mochi types treat
@@ -248,7 +267,10 @@ export const genExpr = (e: Expr, ctx: GenCtx): string =>
       const parts = r.spread ? [`...${genExpr(r.spread, ctx)}`, ...fields] : fields;
       return parts.length === 0 ? "{}" : `{ ${parts.join(", ")} }`;
     })
-    .with({ kind: "field" }, (f) => nsRuntimeId(f) ?? `${genMember(f.target, ctx)}.${f.name}`)
+    .with(
+      { kind: "field" },
+      (f) => emptyNsEmit(f, ctx) ?? nsRuntimeId(f) ?? `${genMember(f.target, ctx)}.${f.name}`,
+    )
     // A tuple erases to a JS array `[a, b]` (like ReScript); the type system
     // keeps it distinct from an `mochi` Array, the runtime shares the shape. TS
     // emit wraps it in `_tuple(…)` so tsc infers a tuple, not a widened array

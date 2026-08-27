@@ -199,3 +199,9 @@ let r = let? x = Ok(20) in Ok(add(x, 1))`;
   expect(out.o).toEqual({ _tag: "Some", value: 21 });
   expect(out.r).toEqual({ _tag: "Ok", value: 21 });
 });
+
+test("Set.empty is a writable empty Set (ADR 0080)", () => {
+  const js = unwrapOk(compile("let s = Set.add(1, Set.empty)")).replace(/^import .*$/m, "");
+  const out = new Function(`${js}\nreturn s;`)() as Set<number>;
+  expect([...out]).toEqual([1]);
+});

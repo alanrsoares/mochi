@@ -139,12 +139,18 @@ Three literal forms, each a distinct type:
 Array / List / Set literals may splice with `...` (`[a, ...xs]`, `@{a, ...xs}`,
 `#{a, ...s}` — ADR 0001). Each spread must be the **same** collection kind.
 Empty `#{}` is Map; `#{k: v}` is Map; `#{a, b}` (no colons) is Set.
+There is no empty-Set literal — write `Set.empty`. `List.empty` / `Map.empty`
+are the named forms of `@{}` / `#{}`.
 
-`Set.fromArray([...])` still works. There is no overloading, so each
-collection carries its own qualified namespace — `Array.*`, `List.*`, `Set.*`, `Map.*` —
-while the unqualified `map`/`filter`/`reduce`/`length` are eager Array aliases. `List.*`
-transformers stay **lazy and fuse**: nothing computes until `toArray` or a `take` pulls,
-so infinite sequences work as long as you force a finite prefix.
+There is no overloading, so each collection carries its own qualified
+namespace — `Array.*`, `List.*`, `Set.*`, `Map.*` — while the unqualified
+`map`/`filter`/`reduce`/`length` are eager Array aliases (Array is the default
+collection; math and structural `eq`/`show`/`compare` stay unqualified too).
+Piping a List or Set into bare `map` is a type error that names the qualified
+fix (`List.map`, `Set.toArray`). `List.*` transformers stay **lazy and fuse**:
+nothing computes until `toArray` or a `take` pulls, so infinite sequences work
+as long as you force a finite prefix. `@{}` is the lazy List literal
+([ADR 0080](adr/0080-collection-literals.md)).
 
 ```mochi
 let evens = iterate(x => add(x, 2))(0)        // INFINITE

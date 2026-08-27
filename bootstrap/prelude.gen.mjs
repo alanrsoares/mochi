@@ -1915,6 +1915,16 @@ const _namespaces = {
           }
         ]
       }
+    },
+    "empty": {
+      "_tag": "TyCon",
+      "name": "List",
+      "args": [
+        {
+          "_tag": "TyVar",
+          "id": 0
+        }
+      ]
     }
   },
   "Set": {
@@ -2066,6 +2076,16 @@ const _namespaces = {
           }
         ]
       }
+    },
+    "empty": {
+      "_tag": "TyCon",
+      "name": "Set",
+      "args": [
+        {
+          "_tag": "TyVar",
+          "id": 0
+        }
+      ]
     },
     "union": {
       "_tag": "TyFn",
@@ -2433,6 +2453,20 @@ const _namespaces = {
           ]
         }
       }
+    },
+    "empty": {
+      "_tag": "TyCon",
+      "name": "Map",
+      "args": [
+        {
+          "_tag": "TyVar",
+          "id": 0
+        },
+        {
+          "_tag": "TyVar",
+          "id": 1
+        }
+      ]
     }
   },
   "Option": {

@@ -1,7 +1,7 @@
 // Set and Map — backed by native JS Set/Map, so they erase to real
 // `Set<a>`/`Map<k,v>` at the .d.ts boundary. Both are unordered → no
 // destructuring; ops are qualified (`Set.union`, `Map.getOr`) and immutable.
-// Set has no literal sigil (built via `Set.fromArray`); Map keeps `#{…}`.
+// Empty Set is `Set.empty` (ADR 0080); `#{}` stays Map.
 import { expect, test } from "bun:test";
 import { check } from "@mochi/compiler/check";
 import { compile } from "@mochi/compiler/compile";
@@ -35,6 +35,27 @@ test("Set.fromArray builds a Set (deduped)", () => {
 
 test("an empty Set has size 0", () => {
   expect(run("let a = Set.size(Set.fromArray([]))", "a")).toBe(0);
+});
+
+test("Set.empty is a polymorphic empty Set (ADR 0080)", () => {
+  expect(run("let a = Set.size(Set.empty)", "a")).toBe(0);
+  expect(run("let a = Set.toArray(Set.add(1, Set.empty))", "a")).toEqual([1]);
+  expect(schemeOf("let s = Set.add(1, Set.empty)", "s")).toBe("Set<number>");
+});
+
+test("List.empty and Map.empty match the empty literals (ADR 0080)", () => {
+  expect(run("let a = toArray(List.empty)", "a")).toEqual([]);
+  expect(run("let a = Map.size(Map.empty)", "a")).toBe(0);
+  expect(unwrapOk(compile("let xs = List.empty", { runtime: false }))).toContain(
+    "_list(function* () {})",
+  );
+  expect(unwrapOk(compile("let m = Map.empty", { runtime: false }))).toContain("new Map()");
+});
+
+test("piping a List into unqualified map names List.map (ADR 0080)", () => {
+  const r = compile("let xs = @{1, 2}\nlet ys = xs |> map(n => add(n, 1))");
+  expect(isErr(r)).toBe(true);
+  if (isErr(r)) expect(r.error[0]!.message).toContain("use List.map");
 });
 
 test("Set.has / add / delete / size", () => {
@@ -129,6 +150,7 @@ test("Map literal lowers to a native constructor; Set.fromArray to its runtime",
   expect(unwrapOk(compile("let s = Set.fromArray([1, 2])", { runtime: false }))).toContain(
     "_Set_fromArray([1, 2])",
   );
+  expect(unwrapOk(compile("let s = Set.empty", { runtime: false }))).toContain("new Set()");
 });
 
 test("Set.fromArray calls and Map literals survive formatting verbatim", () => {

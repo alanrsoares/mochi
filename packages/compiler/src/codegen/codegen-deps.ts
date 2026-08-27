@@ -126,6 +126,10 @@ export const exprRefs = (e: Expr, acc: Set<string>): void => {
       for (const f of r.fields) exprRefs(f.value, acc);
     })
     .with({ kind: "field" }, (f) => {
+      if (f.target.kind === "ref" && f.name === "empty") {
+        if (f.target.name === "List") acc.add("_list");
+        if (f.target.name === "Set" || f.target.name === "Map" || f.target.name === "List") return;
+      }
       const rt = nsRuntimeId(f); // `List.map` → `_List_map`, not a field access
       if (rt) {
         acc.add(rt); // its runtime deps are pulled in by preludePreamble's closure
