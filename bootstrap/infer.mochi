@@ -613,7 +613,7 @@ let inferPatRecordFrom = (ctx, fields, row, bindings, st) => switch fields {
       )
 }
 let inferPatRecord = (ctx, fields, st) =>
-  let (rowBase, st1) = freshRowVar(st) in
+  let (rowBase, _st1) = freshRowVar(st) in
   let? (row, bindings, st2) = ctx->inferPatRecordFrom(
     fields,
     rowBase,
