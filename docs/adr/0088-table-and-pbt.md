@@ -42,7 +42,7 @@ check("addition commutes", pair(int, int), ((a, b)) =>
 )
 ```
 
-`fast-check` is a dependency of `@mochi/test`. Async `Task` tests stay deferred.
+`fast-check` is a dependency of `@mochi/test`. Async Task tests: [ADR 0089](0089-task-tests.md).
 
 ## Consequences
 

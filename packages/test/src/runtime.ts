@@ -20,6 +20,22 @@ export const throws = (fn: () => unknown): void => {
   expect(fn).toThrow();
 };
 
+type BunTimeout = { readonly timeout: number };
+
+const bunTimeout = (timeout: number): BunTimeout => ({ timeout });
+
+const registerTest = (
+  name: string,
+  fn: () => void | Promise<void>,
+  timeout: number | undefined,
+): void => {
+  if (timeout === undefined) {
+    test(name, fn);
+    return;
+  }
+  test(name, fn, bunTimeout(timeout));
+};
+
 const labelOf = (row: unknown, index: number): string => {
   if (typeof row === "object" && row !== null && "label" in row) {
     const label = Reflect.get(row, "label");
@@ -37,15 +53,46 @@ const labelOf = (row: unknown, index: number): string => {
  * One bun:test per row. Passes the row as a single argument — do not use
  * `test.each`, which spreads array rows, and Mochi tuples are JS arrays.
  */
-export const testEach = <A>(title: string, rows: readonly A[], fn: (row: A) => void): void => {
+const eachOrFail = <A>(
+  title: string,
+  rows: readonly A[],
+  kind: string,
+  timeout: number | undefined,
+  register: (name: string, row: A) => void,
+): void => {
   if (rows.length === 0) {
-    test(`${title} (empty table)`, () => {
-      throw new Error("testEach: no rows");
-    });
+    registerTest(
+      `${title} (empty table)`,
+      () => {
+        throw new Error(`${kind}: no rows`);
+      },
+      timeout,
+    );
     return;
   }
   rows.forEach((row, index) => {
-    test(`${title} ${labelOf(row, index)}`, () => fn(row));
+    register(`${title} ${labelOf(row, index)}`, row);
+  });
+};
+
+export const testEach = <A>(title: string, rows: readonly A[], fn: (row: A) => void): void => {
+  eachOrFail(title, rows, "testEach", undefined, (name, row) => {
+    registerTest(name, () => fn(row), undefined);
+  });
+};
+
+export const testTimeout = (timeout: number, title: string, fn: () => void): void => {
+  registerTest(title, fn, timeout);
+};
+
+export const testEachTimeout = <A>(
+  timeout: number,
+  title: string,
+  rows: readonly A[],
+  fn: (row: A) => void,
+): void => {
+  eachOrFail(title, rows, "testEach", timeout, (name, row) => {
+    registerTest(name, () => fn(row), timeout);
   });
 };
 
@@ -98,7 +145,123 @@ export const result = <A, E>(
   );
 
 export const check = <A>(title: string, arb: fc.Arbitrary<A>, fn: (value: A) => void): void => {
-  test(title, () => {
-    fc.assert(fc.property(arb, (value) => fn(value)));
+  runCheck(title, arb, fn, undefined);
+};
+
+export const checkTimeout = <A>(
+  timeout: number,
+  title: string,
+  arb: fc.Arbitrary<A>,
+  fn: (value: A) => void,
+): void => {
+  runCheck(title, arb, fn, timeout);
+};
+
+const runCheck = <A>(
+  title: string,
+  arb: fc.Arbitrary<A>,
+  fn: (value: A) => void,
+  timeout: number | undefined,
+): void => {
+  registerTest(
+    title,
+    () => {
+      fc.assert(fc.property(arb, (value) => fn(value)));
+    },
+    timeout,
+  );
+};
+
+type TaskThunk<A, E> = () => Promise<Ok<A> | Err<E>>;
+
+const throwIfErr = <A, E>(settled: Ok<A> | Err<E>): void => {
+  if (settled._tag !== "Err") return;
+  const { error } = settled;
+  throw error instanceof Error ? error : new Error(String(error));
+};
+
+const runTask = async <E>(task: TaskThunk<void, E>): Promise<void> => {
+  throwIfErr(await task());
+};
+
+/**
+ * Kick-off a `Task () e`. bun waits on the Promise; `Err` fails the test.
+ * Do not `ignore(Task.run(t))` in a sync `test` — the runner would not wait.
+ */
+export const testTask = <E>(title: string, task: TaskThunk<void, E>): void => {
+  registerTest(title, () => runTask(task), undefined);
+};
+
+export const testTaskTimeout = <E>(
+  timeout: number,
+  title: string,
+  task: TaskThunk<void, E>,
+): void => {
+  registerTest(title, () => runTask(task), timeout);
+};
+
+export const testTaskSkip = <E>(title: string, task: TaskThunk<void, E>): void => {
+  test.skip(title, () => runTask(task));
+};
+
+export const testTaskOnly = <E>(title: string, task: TaskThunk<void, E>): void => {
+  test.only(title, () => runTask(task));
+};
+
+export const testEachTask = <A, E>(
+  title: string,
+  rows: readonly A[],
+  fn: (row: A) => TaskThunk<void, E>,
+): void => {
+  eachTask(title, rows, fn, undefined);
+};
+
+export const testEachTaskTimeout = <A, E>(
+  timeout: number,
+  title: string,
+  rows: readonly A[],
+  fn: (row: A) => TaskThunk<void, E>,
+): void => {
+  eachTask(title, rows, fn, timeout);
+};
+
+const eachTask = <A, E>(
+  title: string,
+  rows: readonly A[],
+  fn: (row: A) => TaskThunk<void, E>,
+  timeout: number | undefined,
+): void => {
+  eachOrFail(title, rows, "testEachTask", timeout, (name, row) => {
+    registerTest(name, () => runTask(fn(row)), timeout);
   });
+};
+
+export const checkTask = <A, E>(
+  title: string,
+  arb: fc.Arbitrary<A>,
+  fn: (value: A) => TaskThunk<void, E>,
+): void => {
+  runCheckTask(title, arb, fn, undefined);
+};
+
+export const checkTaskTimeout = <A, E>(
+  timeout: number,
+  title: string,
+  arb: fc.Arbitrary<A>,
+  fn: (value: A) => TaskThunk<void, E>,
+): void => {
+  runCheckTask(title, arb, fn, timeout);
+};
+
+const runCheckTask = <A, E>(
+  title: string,
+  arb: fc.Arbitrary<A>,
+  fn: (value: A) => TaskThunk<void, E>,
+  timeout: number | undefined,
+): void => {
+  registerTest(
+    title,
+    () => fc.assert(fc.asyncProperty(arb, (value) => runTask(fn(value)))),
+    timeout,
+  );
 };

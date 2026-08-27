@@ -15,6 +15,14 @@ test("test bindings compile as curried @mochi/test/runtime imports", async () =>
   expect(js).toContain("const testEach = _curry(3, $testEach);");
   expect(js).toContain("const check = _curry(3, $check);");
   expect(js).toContain("const pair = _curry(2, $pair);");
+  expect(js).toContain("const testTask = _curry(2, $testTask);");
+  expect(js).toContain("const testEachTask = _curry(3, $testEachTask);");
+  expect(js).toContain("const testTaskSkip = _curry(2, $testTaskSkip);");
+  expect(js).toContain("const testTimeout = _curry(3, $testTimeout);");
+  expect(js).toContain("const testTaskTimeout = _curry(3, $testTaskTimeout);");
+  expect(js).toContain("const testEachTimeout = _curry(4, $testEachTimeout);");
+  expect(js).toContain("const checkTask = _curry(3, $checkTask);");
+  expect(js).toContain("const checkTaskTimeout = _curry(4, $checkTaskTimeout);");
   expect(js).toContain('import { int } from "@mochi/test/runtime";');
   expect(js).not.toContain("const int = _curry");
 });

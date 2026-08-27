@@ -3,6 +3,7 @@
 /// and inlined `Array.contains` calls it. Expected first, actual last:
 /// `got |> assertEq(want)`. Specs are top-level `test(...)` statements (ADR 0087).
 /// Table tests (`testEach`) and property tests (`check`) are ADR 0088.
+/// Async Task tests (`testTask`) are ADR 0089.
 /// `Arbitrary` is opaque; construct it with `int` / `pair` / …, never `FcArb`.
 
 type Arbitrary<a> =
@@ -17,6 +18,14 @@ export extern ok : bool -> () = "@mochi/test/runtime" "ok"
 export extern throws : (() -> a) -> () = "@mochi/test/runtime" "throws"
 
 export extern testEach : string -> [a] -> (a -> ()) -> () = "@mochi/test/runtime" "testEach"
+export extern testEachTimeout : number -> string -> [a] -> (a -> ()) -> () = "@mochi/test/runtime" "testEachTimeout"
+export extern testTimeout : number -> string -> (() -> ()) -> () = "@mochi/test/runtime" "testTimeout"
+export extern testTask : string -> Task<(), e> -> () = "@mochi/test/runtime" "testTask"
+export extern testTaskTimeout : number -> string -> Task<(), e> -> () = "@mochi/test/runtime" "testTaskTimeout"
+export extern testTaskSkip : string -> Task<(), e> -> () = "@mochi/test/runtime" "testTaskSkip"
+export extern testTaskOnly : string -> Task<(), e> -> () = "@mochi/test/runtime" "testTaskOnly"
+export extern testEachTask : string -> [a] -> (a -> Task<(), e>) -> () = "@mochi/test/runtime" "testEachTask"
+export extern testEachTaskTimeout : number -> string -> [a] -> (a -> Task<(), e>) -> () = "@mochi/test/runtime" "testEachTaskTimeout"
 
 export extern int : Arbitrary<number> = "@mochi/test/runtime" "int"
 export extern nat : Arbitrary<number> = "@mochi/test/runtime" "nat"
@@ -33,3 +42,6 @@ export extern filterArb : (a -> bool) -> Arbitrary<a> -> Arbitrary<a> = "@mochi/
 export extern option : Arbitrary<a> -> Arbitrary<Option<a> > = "@mochi/test/runtime" "option"
 export extern result : Arbitrary<a> -> Arbitrary<e> -> Arbitrary<Result<a, e> > = "@mochi/test/runtime" "result"
 export extern check : string -> Arbitrary<a> -> (a -> ()) -> () = "@mochi/test/runtime" "check"
+export extern checkTimeout : number -> string -> Arbitrary<a> -> (a -> ()) -> () = "@mochi/test/runtime" "checkTimeout"
+export extern checkTask : string -> Arbitrary<a> -> (a -> Task<(), e>) -> () = "@mochi/test/runtime" "checkTask"
+export extern checkTaskTimeout : number -> string -> Arbitrary<a> -> (a -> Task<(), e>) -> () = "@mochi/test/runtime" "checkTaskTimeout"
