@@ -7,7 +7,7 @@
  * hover popup.
  */
 import { resolve } from "node:path";
-import type { Ctor, Program, TypeExpr, TypeStmt } from "@mochi/compiler/ast";
+import type { Program, TypeExpr } from "@mochi/compiler/ast";
 import { openMode, toTypedProgramRecovering, toTypedProgramWith } from "@mochi/compiler/compile";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import { type InferResult, type SymbolInfo, showScheme, type TypeAt } from "@mochi/compiler/infer";
@@ -17,12 +17,17 @@ import { parseRecovering } from "@mochi/compiler/parser";
 import { preludeNamespaces } from "@mochi/compiler/prelude";
 import { preludeDocForBinding } from "@mochi/compiler/prelude-virtual";
 import { widenLits } from "@mochi/compiler/schemes";
-import { showTypeExpr } from "@mochi/compiler/show-type-expr";
 import { spanContains, spanContainsClosed, tightestHit } from "@mochi/compiler/span";
 import { indexProgram } from "@mochi/compiler/symbols";
 import { foldAliases, qualifierMap, qualifyTypeNames, showType } from "@mochi/compiler/types";
 import { type Maybe, map, match as matchMaybe, none, some } from "@onrails/maybe";
 import { isErr, isOk } from "@onrails/result";
+import {
+  renderHoverCtorScheme,
+  renderHoverType,
+  renderHoverTypeDecl,
+  renderHoverTypeExpr,
+} from "./hover-type";
 
 /** Tightest inferred type span containing `offset` (closed ends; ties → first). */
 const tightestType = (types: TypeAt[], offset: number) =>
@@ -83,35 +88,8 @@ const tokenHoverAt = (tokens: Located[], offset: number): HoverInfo | null => {
   return TOKEN_HINTS.find((hint) => hint.token === token.t)?.info ?? null;
 };
 
-const params = (names: string[]): string => (names.length === 0 ? "" : `<${names.join(", ")}>`);
-
-const showCtor = (ctor: Ctor): string => {
-  if (ctor.fields.length === 0) return ctor.name;
-  const fields = ctor.fields.map((field) => {
-    const type = showTypeExpr(field.type);
-    return field.name === null ? type : `${field.name}: ${type}`;
-  });
-  return `${ctor.name}(${fields.join(", ")})`;
-};
-
-const showTypeDecl = (stmt: TypeStmt): string => {
-  const head = `${stmt.name}${params(stmt.params)}`;
-  if (stmt.alias) {
-    const fields = stmt.alias.map((field) => `${field.name}: ${showTypeExpr(field.type)}`);
-    return `type ${head} = { ${fields.join(", ")} }`;
-  }
-  if (stmt.aliasType) return `type ${head} = ${showTypeExpr(stmt.aliasType)}`;
-  return `type ${head} = ${stmt.ctors.map(showCtor).join(" | ")}`;
-};
-
-const showCtorScheme = (owner: TypeStmt, ctor: Ctor): string => {
-  const result = `${owner.name}${params(owner.params)}`;
-  const fields = ctor.fields.map((field) => showTypeExpr(field.type));
-  return fields.length === 0 ? result : `${fields.join(" -> ")} -> ${result}`;
-};
-
 const collectTypeSyntax = (type: TypeExpr, out: SyntaxHover[]): void => {
-  out.push({ span: type.span, info: { code: `type ${showTypeExpr(type)}` } });
+  out.push({ span: type.span, info: { code: renderHoverTypeExpr(type, "type ") } });
   switch (type.kind) {
     case "tarrow":
       collectTypeSyntax(type.from, out);
@@ -153,26 +131,26 @@ const syntaxHoverAt = (program: Program, offset: number): HoverInfo | null => {
       candidates.push({
         span: stmt.nameSpan,
         info: {
-          code: `extern ${stmt.name}: ${showTypeExpr(stmt.typeExpr)}\n= ${JSON.stringify(stmt.module)} ${JSON.stringify(stmt.imported)}`,
+          code: `${renderHoverTypeExpr(stmt.typeExpr, `extern ${stmt.name}: `)}\n= ${JSON.stringify(stmt.module)} ${JSON.stringify(stmt.imported)}`,
           doc: stmt.doc,
         },
       });
     }
     if (stmt.kind !== "type") continue;
-    const decl = showTypeDecl(stmt);
+    const decl = renderHoverTypeDecl(stmt);
     candidates.push({ span: stmt.span, info: { code: decl, doc: stmt.doc } });
     candidates.push({ span: stmt.nameSpan, info: { code: decl, doc: stmt.doc } });
     for (const ctor of stmt.ctors) {
       candidates.push({
         span: ctor.span,
-        info: { code: `constructor ${ctor.name}: ${showCtorScheme(stmt, ctor)}` },
+        info: { code: renderHoverCtorScheme(stmt, ctor) },
       });
       for (const field of ctor.fields) collectTypeSyntax(field.type, candidates);
     }
     for (const field of stmt.alias ?? []) {
       candidates.push({
         span: field.nameSpan,
-        info: { code: `(property) ${field.name}: ${showTypeExpr(field.type)}` },
+        info: { code: renderHoverTypeExpr(field.type, `(property) ${field.name}: `) },
       });
       collectTypeSyntax(field.type, candidates);
     }
@@ -229,6 +207,21 @@ const lead = (type: string, symbol: SymbolInfo | undefined): string => {
   return `(property) ${symbol.name}: ${type}`;
 };
 
+/** Prefix that participates in the hover layout; externs retain their source signature. */
+const inferredPrefix = (symbol: SymbolInfo | undefined): string | null => {
+  if (!symbol) return "";
+  switch (symbol.kind) {
+    case "let":
+      return `let ${symbol.name}: `;
+    case "parameter":
+      return `(parameter) ${symbol.name}: `;
+    case "property":
+      return `(property) ${symbol.name}: `;
+    case "extern":
+      return null;
+  }
+};
+
 /** Doc from a user `///` on the binding, else the virtual-prelude docstring. */
 const docAt = (
   src: string,
@@ -259,10 +252,11 @@ const hoverFrom = (
 ): HoverInfo | null =>
   matchMaybe(
     map(tightestType(res.types, offset), (hit) => {
-      const type = showType(
-        qualifyTypeNames(widenLits(foldAliases(hit.type, res.aliases)), qualify),
-      );
-      return { code: lead(type, hit.symbol), doc: docAt(src, path, offset, hit.symbol) };
+      const type = qualifyTypeNames(widenLits(foldAliases(hit.type, res.aliases)), qualify);
+      const prefix = inferredPrefix(hit.symbol);
+      const code =
+        prefix === null ? lead(showType(type), hit.symbol) : renderHoverType(type, prefix);
+      return { code, doc: docAt(src, path, offset, hit.symbol) };
     }),
     (info) => info,
     () => null,
