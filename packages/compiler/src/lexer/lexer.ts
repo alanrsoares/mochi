@@ -84,6 +84,24 @@ const KEYWORDS: Record<string, Tok | undefined> = {
   false: { t: "bool", v: false },
 };
 
+/**
+ * A keyword token's source spelling. Label positions — record fields, `.field`
+ * projection, plugin attribute names — accept keywords as ordinary names
+ * (`{ type: "button" }`, `x.export`), so the parser needs to read the word back
+ * out of the token. Derived from `KEYWORDS` so the two can't drift.
+ *
+ * `true`/`false` lex to `bool`, which carries its own value and would collide;
+ * they stay out, and remain unusable as labels.
+ */
+const KEYWORD_TEXT: ReadonlyMap<Tok["t"], string> = new Map(
+  Object.entries(KEYWORDS).flatMap(([word, tok]) =>
+    tok && tok.t !== "bool" ? [[tok.t, word] as const] : [],
+  ),
+);
+
+/** The word a keyword token was written as, or `null` if `tk` is not a keyword. */
+export const keywordText = (tk: Tok): string | null => KEYWORD_TEXT.get(tk.t) ?? null;
+
 /** Two-char operators, checked before single chars. */
 const DIGRAPHS: Record<string, Tok | undefined> = {
   "|>": { t: "pipe" },

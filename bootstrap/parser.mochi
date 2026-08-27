@@ -173,10 +173,33 @@ let expectId = (toks, pos) =>
       | t => errAt("expected id, got ${tokName(t)}", lt)
     }
 
-/// Label in JSX attrs / record fields: `tone` or `$tone` (styled-cva). Since
-/// ADR 0047 `$` is an ordinary identifier char, so a label is just an id — the
-/// name survives as a seam because `parser.ts` exposes it to plugins.
-let expectLabel = expectId
+/// The word a keyword token was written as, or `None` if `t` is not a keyword.
+/// Mirrors `lexer.ts`'s `keywordText` (ADR 0077). `TBool` stays out: it carries
+/// a value rather than a spelling, so `true`/`false` are not labels.
+let keywordText = t => switch t {
+  | TLet => Some("let")
+  | TType => Some("type")
+  | TExtern => Some("extern")
+  | TSwitch => Some("switch")
+  | TLoop => Some("loop")
+  | TRecur => Some("recur")
+  | TDo => Some("do")
+  | TImport => Some("import")
+  | TExport => Some("export")
+  | _ => None
+}
+
+/// Label in JSX attrs / record fields / `.field` projection: `tone` or `$tone`
+/// (styled-cva). Since ADR 0047 `$` is an ordinary identifier char, so a plain
+/// label is just an id — the name survives as a seam because `parser.ts` exposes
+/// it to plugins. A keyword is also a label (ADR 0077): nothing here can start a
+/// statement or an expression, so `{ type: 1 }` and `x.type` are unambiguous.
+let expectLabel = (toks, pos) =>
+  let lt = tokAt(toks, pos) in
+    switch keywordText(lt.tok) {
+      | Some(name) => Ok(({ name: name, span: spanOf(lt) }, pos + 1))
+      | None => expectId(toks, pos)
+    }
 
 let expectStr = (toks, pos) =>
   let lt = tokAt(toks, pos) in
@@ -823,10 +846,13 @@ let parseInterp = (toks, pos, hooks) =>
     }
 
 let parseField = (toks, pos, hooks) =>
+  let lt = tokAt(toks, pos) in
   let? (nm, p) = expectLabel(toks, pos) in
     tokAt(toks, p).tok == TColon
       ? let? (value, p2) = parseExpr(toks, p + 1, hooks) in
         Ok(({ name: nm.name, value: value }, p2))
+      : keywordText(lt.tok) != None
+      ? errAt("'${nm.name}' is a keyword — write '${nm.name}: <expr>'", lt)
       : Ok(({ name: nm.name, value: Ast.ERef(nm.name, nm.span) }, p))
 
 // A leading `...base` (ADR 0021) makes this a record update: only one spread,
@@ -1169,10 +1195,13 @@ let parseListPattern = (toks, pos) =>
 
 // `{ x }` puns to binding `x`; `{ x: pat }` matches `x` against a full pattern.
 let parsePatField = (toks, pos) =>
-  let? (nm, p) = expectId(toks, pos) in
+  let lt = tokAt(toks, pos) in
+  let? (nm, p) = expectLabel(toks, pos) in
     tokAt(toks, p).tok == TColon
       ? let? (pat, p2) = parsePattern(toks, p + 1) in
         Ok(({ label: nm.name, pat: pat }, p2))
+      : keywordText(lt.tok) != None
+      ? errAt("'${nm.name}' is a keyword — write '${nm.name}: <pattern>'", lt)
       : Ok(({ label: nm.name, pat: Ast.PBind(nm.name, nm.span) }, p))
 
 // --- type expressions (extern signatures + ctor fields) ---
@@ -1314,8 +1343,10 @@ let ctorsLoop = (toks, pos, acc) =>
         tokAt(toks, p).tok == TBar ? ctorsLoop(toks, p + 1, cs) : Ok((cs, p))
     )
 
+// `expectLabel`: a record type must be able to describe a host shape whose field
+// is spelled like a mochi keyword — `{ type: string }` (ADR 0077).
 let parseAliasField = (toks, pos) =>
-  let? (nm, p) = expectId(toks, pos) in
+  let? (nm, p) = expectLabel(toks, pos) in
   let? p2 = expectTok(TColon, toks, p) in
   let? (t, p3) = parseTypeExpr(toks, p2) in
     Ok(({ name: nm.name, fieldType: t }, p3))

@@ -42,7 +42,10 @@ let outDir: string | null = null;
 const sourceHash = (): string => {
   const h = createHash("sha256");
   const files = [
-    ...new Bun.Glob("bootstrap/*.mochi").scanSync({ cwd: root }),
+    // `**`, not `*`: `bootstrap/plugins/jsx.mochi` is part of the graph, so a
+    // change to it must invalidate the cache — with `*` the stale build was
+    // silently reused and the parity tests scored the previous source.
+    ...new Bun.Glob("bootstrap/**/*.mochi").scanSync({ cwd: root }),
     ...new Bun.Glob("packages/compiler/src/**/*.ts").scanSync({ cwd: root }),
   ].toSorted();
   for (const p of files) {

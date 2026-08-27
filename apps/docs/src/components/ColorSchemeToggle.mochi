@@ -38,6 +38,7 @@ export let ColorSchemeToggle = _ =>
   let labelNext = labelFor(next) in
   let iconName = iconFor(pref) in
     <ThemeToggleBtn
+      type="button"
       ariaLabel={"Color scheme "
         ++ labelPref
         ++ " (showing "

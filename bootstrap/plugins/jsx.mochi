@@ -111,7 +111,31 @@ let jxExpectId = (toks, pos) =>
       | t => jxErrAt("expected id, got ${jxTokName(t)}", lt)
     }
 
-let jxExpectLabel = jxExpectId
+/// Keyword spelling, mirroring `parser.mochi`'s `keywordText` (ADR 0077). The
+/// plugin carries its own copy for the same reason it carries `jxTokName`: it
+/// sees the token stream, not the parser's internals.
+let jxKeywordText = t => switch t {
+  | TLet => Some("let")
+  | TType => Some("type")
+  | TExtern => Some("extern")
+  | TSwitch => Some("switch")
+  | TLoop => Some("loop")
+  | TRecur => Some("recur")
+  | TDo => Some("do")
+  | TImport => Some("import")
+  | TExport => Some("export")
+  | _ => None
+}
+
+/// Attribute name. A keyword is legal here (ADR 0077) — `type="button"` is the
+/// case that forced it. A valueless attr lowers to `true`, not a reference, so
+/// there is no pun to reject.
+let jxExpectLabel = (toks, pos) =>
+  let lt = jxTokAt(toks, pos) in
+    switch jxKeywordText(lt.tok) {
+      | Some(name) => Ok(({ name: name, span: jxSpanOf(lt) }, pos + 1))
+      | None => jxExpectId(toks, pos)
+    }
 
 let jxIsUpper = s => Str.codeAt(0, s) |> Option.exists(n => n >= 65 && n <= 90)
 

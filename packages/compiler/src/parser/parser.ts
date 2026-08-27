@@ -38,7 +38,7 @@ import {
   resolvePlugins,
   runParseHooks,
 } from "../extensions/extensions";
-import type { Located, Tok } from "../lexer/lexer";
+import { keywordText, type Located, type Tok } from "../lexer/lexer";
 
 /**
  * The one throw in the compiler, and it never leaves this module: the top-level
@@ -118,12 +118,23 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
     return { name: tk.v, span: tk.span };
   };
   /**
-   * Label in record fields / plugin attribute lists: `tone` or `$tone`
-   * (styled-cva transient props, ADR 0009). Since ADR 0047 `$` is an ordinary
-   * identifier character, so a label is just an id — kept as a named seam because
-   * plugins consume it through `parserApi`.
+   * Label in record fields, `.field` projection, and plugin attribute lists:
+   * `tone` or `$tone` (styled-cva transient props, ADR 0009). Since ADR 0047 `$`
+   * is an ordinary identifier character, so a plain label is just an id — kept as
+   * a named seam because plugins consume it through `parserApi`.
+   *
+   * A keyword is also a legal label (ADR 0077). Nothing here can start a
+   * statement or an expression, so `{ type: "button" }`, `props.export`, and JSX's
+   * `type="button"` are unambiguous; rejecting them only made the host's field
+   * names unreachable from mochi.
    */
-  const expectLabel = expectId;
+  const expectLabel = (): { name: string; span: Span } => {
+    const tk = next();
+    const kw = keywordText(tk);
+    if (kw !== null) return { name: kw, span: tk.span };
+    if (tk.t !== "id") throw new ParseAbort(parseErr(`expected id, got ${tk.t}`, tk.span));
+    return { name: tk.v, span: tk.span };
+  };
   // span from a start marker to the last consumed token.
   const to = (start: Span): Span => spanning(start, last.span);
 
@@ -735,13 +746,22 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
   }
 
   function parseField(): Field {
+    const kw = keywordText(peek()) !== null;
     const id = expectLabel();
-    if (peek().t !== "colon")
+    if (peek().t !== "colon") {
+      // Shorthand desugars to `{ name: name }`, and a keyword is never a legal
+      // binding, so the implied reference could not resolve — and `{ do }` would
+      // emit a bare `do` as an identifier. Only the explicit form is meaningful.
+      if (kw)
+        throw new ParseAbort(
+          parseErr(`'${id.name}' is a keyword — write '${id.name}: <expr>'`, id.span),
+        );
       return {
         name: id.name,
         nameSpan: id.span,
         value: { kind: "ref", name: id.name, span: id.span },
       };
+    }
     next();
     return { name: id.name, nameSpan: id.span, value: parseExpr() };
   }
@@ -1046,7 +1066,14 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
 
   /** Record-pattern field: `{ x }` puns to `x`; `{ x: pat }` matches field `x` against `pat`. */
   function parsePatField(): PatField {
-    const { name: label, span: labelSpan } = expectId();
+    const kw = keywordText(peek()) !== null;
+    const { name: label, span: labelSpan } = expectLabel();
+    if (kw && peek().t !== "colon")
+      // The pun would bind a variable named for a keyword, which neither mochi
+      // nor the emitted JS can spell. `{ type: t }` renames it to something legal.
+      throw new ParseAbort(
+        parseErr(`'${label}' is a keyword — write '${label}: <pattern>'`, labelSpan),
+      );
     if (peek().t === "colon") {
       next();
       // A field sub-pattern is a full pattern — binds, literals, and nesting
@@ -1112,7 +1139,9 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
   }
 
   function parseAliasField(): AliasField {
-    const id = expectId();
+    // `expectLabel`: a record type must be able to describe a host shape whose
+    // field is spelled like a mochi keyword — `{ type: string }` (ADR 0077).
+    const id = expectLabel();
     expect("colon");
     return { name: id.name, nameSpan: id.span, type: parseTypeExpr() };
   }
