@@ -31,10 +31,16 @@ test("a generic binding's value lambda scopes the letters so its params can name
 test("let? flattens to the all-at-once flatMap grouping so tsc infers the bind param (ADR 0032)", () => {
   // Curried `_Result_flatMap(f)(v)` leaves `f`'s param unconstrained across the
   // two calls (`unknown`); the flat `_Result_flatMap(f, v)` infers it from `v`.
-  const out = ts(
-    "type Result a e = | Ok(a) | Err(e)\nlet chain = r => let? v = r in Ok(add(v, 1))",
+  // The value's head must be concrete at the bind site (ADR 0079).
+  const out = ts("let chain = n => let? v = Ok(n) in Ok(add(v, 1))");
+  expect(out).toContain("_Result_flatMap((v) => Ok(add(v, 1)), Ok(n))");
+});
+
+test("Option let? flattens to the all-at-once Option flatMap grouping (ADR 0079)", () => {
+  const out = ts("let chain = n => let? v = Some(n) in Some(add(v, 1))");
+  expect(out).toContain(
+    "_Option_flatMap((v) => (Some(add(v, 1)) as Option<number>), (Some(n) as Option<number>))",
   );
-  expect(out).toContain("_Result_flatMap((v) => Ok(add(v, 1)), r)");
 });
 
 test("a concrete multi-param function annotates with partial-application overloads (ADR 0037)", () => {

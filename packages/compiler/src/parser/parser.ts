@@ -351,8 +351,9 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
    */
   function parseLetIn(): Expr {
     const start = expect("let").span;
-    // let? / let! param = value in body — monadic bind (Result / Task). The
-    // param is any lambda param form (name, `(a, b)` tuple, `{ a }` record).
+    // let? / let! param = value in body — monadic bind. Parser tags `let?` as
+    // Result (infer may rewrite Option, ADR 0079) and `let!` as Task.
+    // Param is any lambda param form (name, `(a, b)` tuple, `{ a }` record).
     if (peek().t === "question" || peek().t === "bang") {
       const monad = peek().t === "question" ? ("Result" as const) : ("Task" as const);
       next();

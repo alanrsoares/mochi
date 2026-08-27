@@ -7,9 +7,8 @@
 //   `(toks, pos)` and returns `Ok((node, pos))` or `Err({ message, start, end })`.
 //   `to(start)` is derived — the last consumed token is `toks[pos - 1]`.
 // - `ParseAbort` (throw/catch) becomes Result threading: `Result.flatMap` /
-//   `Result.map` per sequenced step. Bootstrap's own railway stays explicit
-//   until C3's generic `let?` dispatch lands; `let?` remains a user-language
-//   feature (ADR 0017, ADR 0079).
+//   `Result.map` per sequenced step. Bootstrap's own railway stays explicit;
+//   `let?` is a user-language feature (ADR 0017, ADR 0079).
 // - `Tok` is declared here again (same shape as bootstrap/lexer.mochi) — modules
 //   arrive with Slice F; until then the differential suite keeps both honest,
 //   and the `_tag` runtime shape makes the two declarations interchangeable.
@@ -396,7 +395,8 @@ let arrowBodyIsDoBlock = (toks, pos, depth) => switch tokAt(toks, pos).tok {
 
 // let x = value in body — non-recursive local binding. `let (a, b) = v in b`
 // desugars to an applied tuple-param lambda, exactly like the TS parser.
-// `let?` / `let!` param = value in body is the Result / Task bind (ADR 0005).
+// `let?` / `let!` param = value in body is the Option|Result / Task bind
+// (ADR 0005, ADR 0079). Parser tags `let?` as Result; infer may rewrite Option.
 let parseLetIn = (toks, pos, hooks) =>
   let start = spanOf(tokAt(toks, pos)) in
     expectTok(TLet, toks, pos)

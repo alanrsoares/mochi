@@ -258,6 +258,14 @@ const cases: Record<string, { src: string; ok: boolean }> = {
     src: 'extern parseNum : string -> Result number string = "m" "p"\nlet f = s => let? n = parseNum(s) in Ok(add(n, 1))',
     ok: true,
   },
+  "let? Option bind": {
+    src: "let f = n => let? x = Some(n) in Some(add(x, 1))",
+    ok: true,
+  },
+  "let? tyvar is ambiguous": {
+    src: "let f = x => let? y = x in Ok(y)",
+    ok: false,
+  },
   // ADR 0021 — record update is update-only: base type returned, wrong-typed
   // or base-absent fields rejected.
   "record update: base type returned": {

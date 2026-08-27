@@ -2,7 +2,7 @@
 import { match } from "@onrails/pattern";
 import type { Expr, Program } from "../ast/ast";
 import { preludeJsDefs, runtimeDeps } from "../prelude/prelude";
-import { collapseLambda, nsRuntimeId, typeExprArity } from "./codegen-core";
+import { bindRuntime, collapseLambda, nsRuntimeId, typeExprArity } from "./codegen-core";
 import { loopNeedsStep } from "./codegen-loop";
 import { isListMatch } from "./codegen-match";
 
@@ -83,7 +83,7 @@ export const exprRefs = (e: Expr, acc: Set<string>): void => {
       exprRefs(l.body, acc);
     })
     .with({ kind: "letbind" }, (l) => {
-      acc.add(l.monad === "Result" ? "_Result_flatMap" : "_Task_andThen");
+      acc.add(bindRuntime(l.monad));
       exprRefs(l.value, acc);
       exprRefs(l.body, acc);
     })

@@ -38,16 +38,20 @@ export type Expr =
       span: Span;
     } // let x [: T] = v in b
   /**
-   * `let?` / `let!` — monadic bind (ADR 0005, ADR 0006). `monad` selects the surface:
-   * - `"Result"` (`let?`): value is `Result a e`; Ok payload binds `param`; body
-   *   is `Result b e`; Err short-circuits. Lowers to `_Result_flatMap`.
+   * `let?` / `let!` — monadic bind (ADR 0005, ADR 0006, ADR 0079). `monad`
+   * selects the runtime helper:
+   * - `"Option"` / `"Result"` (`let?`): infer dispatches from the value's
+   *   head constructor. Option binds `Some(a)` and requires an `Option b`
+   *   body; Result binds `Ok(a)` and requires a `Result b e` body. Parser
+   *   tags `let?` as `"Result"`; infer rewrites `"Option"` when the head is
+   *   Option. Lowers to `_Option_flatMap` / `_Result_flatMap`.
    * - `"Task"` (`let!`): value is `Task a e`; payload binds `param`; body is
    *   `Task b e`. Lowers to `_Task_andThen`.
    * Param is any lambda form (name / tuple / record). Infix bind for both is deferred.
    */
   | {
       kind: "letbind";
-      monad: "Result" | "Task";
+      monad: "Option" | "Result" | "Task";
       param: LamParam;
       paramSpan: Span;
       value: Expr;

@@ -179,19 +179,15 @@ const bindParam = (p: LamParam, env: Env, ctx: Ctx): Type => {
 };
 
 /**
- * let? / let! param = value in body — monadic bind (ADR 0005, error channel
- * per ADR 0006). Both surfaces bind a two-slot monad: value `M a e`, body
- * `M b e`, whole is body's type. `monad` only picks the constructor name.
+ * Shared tail of `let?` / `let!`: bind `param` to the payload, then unify the
+ * body against `mkBody(resT)` (`Option b` / `Result b e` / `Task b e`).
  */
-function inferLetBind(e: LetBindExpr, ctx: Ctx): Result<Type, Diagnostic> {
-  const valT = infer(e.value, ctx);
-  if (isErr(valT)) return valT;
-  const payloadT = freshVar(ctx.fresh);
-  const errT = freshVar(ctx.fresh);
-  const ctor = e.monad === "Result" ? "Result" : "Task";
-  const wantVal = tCon(ctor, [payloadT, errT]);
-  const uv = u(valT.value, wantVal, ctx, e.value.span);
-  if (isErr(uv)) return uv;
+function inferBindBody(
+  e: LetBindExpr,
+  ctx: Ctx,
+  payloadT: Type,
+  mkBody: (resT: Type) => Type,
+): Result<Type, Diagnostic> {
   const bodyEnv: Env = new Map(ctx.env);
   const paramT = bindParam(e.param, bodyEnv, ctx);
   const up = u(paramT, payloadT, ctx, e.paramSpan);
@@ -201,9 +197,54 @@ function inferLetBind(e: LetBindExpr, ctx: Ctx): Result<Type, Diagnostic> {
   const bodyT = infer(e.body, { ...ctx, env: bodyEnv });
   if (isErr(bodyT)) return bodyT;
   const resT = freshVar(ctx.fresh);
-  const wantBody = tCon(ctor, [resT, errT]);
+  const wantBody = mkBody(resT);
   const ub = u(bodyT.value, wantBody, ctx, e.body.span);
   return isErr(ub) ? ub : ok(wantBody);
+}
+
+/** Two-slot bind (`Result a e` / `Task a e`): value `M a e`, body `M b e`. */
+function inferTwoSlotBind(
+  e: LetBindExpr,
+  ctx: Ctx,
+  valT: Type,
+  ctor: "Result" | "Task",
+): Result<Type, Diagnostic> {
+  const payloadT = freshVar(ctx.fresh);
+  const errT = freshVar(ctx.fresh);
+  const uv = u(valT, tCon(ctor, [payloadT, errT]), ctx, e.value.span);
+  if (isErr(uv)) return uv;
+  return inferBindBody(e, ctx, payloadT, (resT) => tCon(ctor, [resT, errT]));
+}
+
+/**
+ * `let?` / `let!` param = value in body — monadic bind (ADR 0005, ADR 0079).
+ * `let!` is Task-only. `let?` dispatches Option vs Result from the resolved
+ * head constructor of `value`; the selected helper is written onto `e.monad`
+ * for codegen.
+ */
+function inferLetBind(e: LetBindExpr, ctx: Ctx): Result<Type, Diagnostic> {
+  const valT = infer(e.value, ctx);
+  if (isErr(valT)) return valT;
+  if (e.monad === "Task") return inferTwoSlotBind(e, ctx, valT.value, "Task");
+  const head = resolve(valT.value, ctx.subst);
+  if (head.kind === "var") return err(typeErr("cannot determine monad for let?", e.value.span));
+  if (head.kind === "con" && head.name === "Option") {
+    e.monad = "Option";
+    const payloadT = freshVar(ctx.fresh);
+    const uv = u(valT.value, tCon("Option", [payloadT]), ctx, e.value.span);
+    if (isErr(uv)) return uv;
+    return inferBindBody(e, ctx, payloadT, (resT) => tCon("Option", [resT]));
+  }
+  if (head.kind === "con" && head.name === "Result") {
+    e.monad = "Result";
+    return inferTwoSlotBind(e, ctx, valT.value, "Result");
+  }
+  return err(
+    typeErr(
+      `let? requires Option or Result, got ${showType(foldAliases(zonk(valT.value, ctx.subst), ctx.aliases))}`,
+      e.value.span,
+    ),
+  );
 }
 
 /**

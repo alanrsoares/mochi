@@ -91,3 +91,17 @@ test("infer gate: type error rejected with span, no JS", () => {
     expect(r.error.end).toBeGreaterThan(r.error.start);
   }
 });
+
+test("let? Option bind: bootstrap compile ≡ TS compile (ADR 0079)", () => {
+  const src = "let r = let? x = Some(20) in Some(add(x, 1))\n";
+  const r = alCompile(src);
+  expect(r._tag).toBe("Ok");
+  if (r._tag === "Ok") expect(r.value).toBe(unwrapOk(tsCompile(src)));
+});
+
+test("let? tyvar: bootstrap compile ≡ TS diagnostic (ADR 0079)", () => {
+  const src = "let f = x => let? y = x in Ok(y)\n";
+  const r = alCompile(src);
+  expect(r._tag).toBe("Err");
+  if (r._tag === "Err") expect(r.error.message).toBe("cannot determine monad for let?");
+});

@@ -27,6 +27,10 @@ export const typeExprArity = (te: TypeExpr): number =>
 export const nsRuntimeId = (e: FieldExpr): string | null =>
   e.target.kind === "ref" ? (namespaceRuntime[e.target.name]?.[e.name] ?? null) : null;
 
+/** Runtime helper for a monadic bind — `let?` is Option or Result after infer dispatch (ADR 0079). */
+export const bindRuntime = (monad: "Option" | "Result" | "Task"): string =>
+  monad === "Option" ? "_Option_flatMap" : monad === "Result" ? "_Result_flatMap" : "_Task_andThen";
+
 /** The typing a TS-mode ctor factory carries (see `GenCtx.annotateCtor`). */
 export type CtorFactoryTs = {
   generics: string;
@@ -194,13 +198,14 @@ export const genExpr = (e: Expr, ctx: GenCtx): string =>
       const param = ann ? `${l.name}: ${ann}` : l.name;
       return `((${param}) => ${genLambdaBody(l.body, ctx)})(${genExpr(l.value, ctx)})`;
     })
-    // let? / let! p = v in b  →  `_Result_flatMap` / `_Task_andThen`((p) => b)(v).
-    // Under `flattenPipe` (TS backend) the two args go in ONE grouping —
-    // `_Result_flatMap((p) => b, v)` — so tsc infers `p`'s type from `v` in the
-    // all-at-once overload; the curried `f(v)` split leaves `p` unconstrained
-    // (`unknown`) across the two calls. Both are equivalent under `_curry`.
+    // let? / let! p = v in b  →  `_Option_flatMap` / `_Result_flatMap` /
+    // `_Task_andThen`((p) => b)(v). Under `flattenPipe` (TS backend) the two
+    // args go in ONE grouping — `_Result_flatMap((p) => b, v)` — so tsc infers
+    // `p`'s type from `v` in the all-at-once overload; the curried `f(v)` split
+    // leaves `p` unconstrained (`unknown`) across the two calls. Both are
+    // equivalent under `_curry`.
     .with({ kind: "letbind" }, (l) => {
-      const rt = l.monad === "Result" ? "_Result_flatMap" : "_Task_andThen";
+      const rt = bindRuntime(l.monad);
       const f = `(${genParam(l.param)}) => ${genLambdaBody(l.body, ctx)}`;
       const v = genExpr(l.value, ctx);
       return ctx.flattenPipe ? `${rt}(${f}, ${v})` : `${rt}(${f})(${v})`;

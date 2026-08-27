@@ -29,6 +29,13 @@ import { keysOf, ctorKeysFromStmts, seedBuiltinCtorKeys } from "./ctors.mochi"
 
 // --- small generic helpers (duplicated per bootstrap file, same as check.mochi/infer.mochi) ---
 
+let bindRuntime = monad =>
+  monad == "Option"
+    ? "_Option_flatMap"
+    : monad == "Result"
+    ? "_Result_flatMap"
+    : "_Task_andThen"
+
 let allOfFrom = (f, xs, i) => switch Array.get(i, xs) {
   | None => true
   | Some(x) => f(x) ? allOfFrom(f, xs, i + 1) : false
@@ -134,8 +141,10 @@ let genExpr = (ctx, e) => switch e {
     // plain arg-application is enough; nested let-ins chain as curried IIFEs.
     "((${name}) => ${ctx->genLambdaBody(body)})(${ctx->genExpr(value)})"
   | Ast.ELetBind(param, _, monad, value, body, _) =>
-    // let? / let! p = v in b -> `_Result_flatMap` / `_Task_andThen`((p) => b)(v).
-    let rt = monad == "Result" ? "_Result_flatMap" : "_Task_andThen" in
+    // let? / let! p = v in b -> `_Option_flatMap` / `_Result_flatMap` /
+    // `_Task_andThen`((p) => b)(v). `let?` monad is Result or Option after
+    // infer dispatch (ADR 0079); `let!` is Task.
+    let rt = bindRuntime(monad) in
       "${rt}((${genParam(param)}) => ${ctx->genLambdaBody(body)})(${ctx->genExpr(value)})"
   | Ast.EPipe(left, right, _) =>
     // desugar inline: a |> f  ->  f(a)
@@ -1188,10 +1197,7 @@ let exprRefs = (ctx, e, acc) => switch e {
     )
   | Ast.ELetBind(_, _, monad, value, body, _) => ctx->exprRefs(
       body,
-      ctx->exprRefs(
-        value,
-        Set.add(monad == "Result" ? "_Result_flatMap" : "_Task_andThen", acc)
-      )
+      ctx->exprRefs(value, Set.add(bindRuntime(monad), acc))
     )
   | Ast.EPipe(left, right, _) => ctx->exprRefs(right, ctx->exprRefs(left, acc))
   | Ast.EDo(exprs, _) => ctx->exprRefsListFrom(exprs, 0, acc)

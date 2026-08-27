@@ -64,6 +64,11 @@ import {
 // ============================================================
 
 import * as Ast from "./ast.mochi"
+
+// Record the selected `let?` helper on the AST node so codegen can lower
+// without a separate type table (ADR 0079). Parser tags `let?` as Result;
+// infer rewrites Option when the value's head constructor is Option.
+extern setLetBindMonad : a -> string -> () = set "monad"
 import {
   inferCallHooksOf,
   resolvePluginsDefault,
@@ -335,29 +340,90 @@ let inferTernary = (ctx, cond, thenE, elseE, st) =>
         )
     )
 
-// `let?` / `let!` p = value in body — Result / Task monadic bind, both a
-// two-slot monad `M a e` (ADR 0005, error channel per ADR 0006).
-let inferLetBind = (ctx, param, paramSpan, monad, value, body, st) =>
+// Shared tail of `let?` / `let!`: bind `param` to the payload, then unify the
+// body against `mkBody(resT)` (Option b / Result b e / Task b e).
+let inferBindBody = (ctx, param, paramSpan, body, payloadT, mkBody, st) =>
+  let (paramT, bodyEnv, st1) = bindParam(param, ctx.env, st) in
+    u(paramT, payloadT, st1, paramSpan)
+      |> Result.flatMap(st2 =>
+        inferExpr(ctxWithEnv(ctx, bodyEnv), body, st2)
+          |> Result.flatMap(((bodyT, st3)) =>
+            let (resT, st4) = freshVar(st3) in
+            let wantBody = mkBody(resT) in
+              u(bodyT, wantBody, st4, exprSpan(body))
+                |> Result.map(st5 => (wantBody, st5))
+          )
+      )
+
+// Two-slot bind (`Result a e` / `Task a e`): value `M a e`, body `M b e`.
+let inferTwoSlotBind = (ctx, param, paramSpan, value, body, valT, ctor, st) =>
+  let (payloadT, st1) = freshVar(st) in
+  let (errT, st2) = freshVar(st1) in
+    u(valT, tCon(ctor, [payloadT, errT]), st2, exprSpan(value))
+      |> Result.flatMap(st3 =>
+        inferBindBody(
+          ctx,
+          param,
+          paramSpan,
+          body,
+          payloadT,
+          resT => tCon(ctor, [resT, errT]),
+          st3
+        )
+      )
+
+// `let?` dispatches Option vs Result from the resolved head of `value`
+// (ADR 0079). `let!` stays Task-only. The selected helper is written onto
+// the AST node for codegen.
+let inferQuestionBind = (ctx, bind, param, paramSpan, value, body, valT, st) => switch resolve(valT, st) {
+  | TyVar(_) => Err(typeErr("cannot determine monad for let?", exprSpan(value)))
+  | TyCon(name, _) => name == "Option"
+      ? let $written = setLetBindMonad(bind, "Option") in
+      let (payloadT, st1) = freshVar(st) in
+        u(valT, tCon("Option", [payloadT]), st1, exprSpan(value))
+          |> Result.flatMap(st2 =>
+            inferBindBody(
+              ctx,
+              param,
+              paramSpan,
+              body,
+              payloadT,
+              resT => tCon("Option", [resT]),
+              st2
+            )
+          )
+      : name == "Result"
+      ? let $written = setLetBindMonad(bind, "Result") in
+        inferTwoSlotBind(ctx, param, paramSpan, value, body, valT, "Result", st)
+      : Err(
+        typeErr(
+          "let? requires Option or Result, got ${showType(zonk(valT, st))}",
+          exprSpan(value)
+        )
+      )
+  | _ => Err(
+      typeErr(
+        "let? requires Option or Result, got ${showType(zonk(valT, st))}",
+        exprSpan(value)
+      )
+    )
+}
+
+let inferLetBind = (ctx, bind, param, paramSpan, monad, value, body, st) =>
   inferExpr(ctx, value, st)
     |> Result.flatMap(((valT, st1)) =>
-      let (payloadT, st2) = freshVar(st1) in
-      let (errT, st3) = freshVar(st2) in
-      let ctorName = monad == "Result" ? "Result" : "Task" in
-      let wantVal = tCon(ctorName, [payloadT, errT]) in
-        u(valT, wantVal, st3, exprSpan(value))
-          |> Result.flatMap(st4 =>
-            let (paramT, bodyEnv, st5) = bindParam(param, ctx.env, st4) in
-              u(paramT, payloadT, st5, paramSpan)
-                |> Result.flatMap(st6 =>
-                  inferExpr(ctxWithEnv(ctx, bodyEnv), body, st6)
-                    |> Result.flatMap(((bodyT, st7)) =>
-                      let (resT, st8) = freshVar(st7) in
-                      let wantBody = tCon(ctorName, [resT, errT]) in
-                        u(bodyT, wantBody, st8, exprSpan(body))
-                          |> Result.map(st9 => (wantBody, st9))
-                    )
-                )
-          )
+      monad == "Task"
+        ? inferTwoSlotBind(
+          ctx,
+          param,
+          paramSpan,
+          value,
+          body,
+          valT,
+          "Task",
+          st1
+        )
+        : inferQuestionBind(ctx, bind, param, paramSpan, value, body, valT, st1)
     )
 
 let inferRecordRow = (ctx, fields, st) => switch fields {
@@ -578,6 +644,7 @@ let inferExpr = (ctx, e, st) => switch e {
           )
     }
   | Ast.ELetBind(param, paramSpan, monad, value, body, _) => ctx->inferLetBind(
+      e,
       param,
       paramSpan,
       monad,

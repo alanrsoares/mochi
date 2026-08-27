@@ -1157,7 +1157,7 @@ const exprCore = (e: Expr): Doc =>
         : letLikeD(`let ${e.name}${e.annot ? ` : ${typeExpr(e.annot)}` : ""}`, e.value, e.body);
     })
     .with({ kind: "letbind" }, (e) =>
-      letLikeD(`let${e.monad === "Result" ? "?" : "!"} ${param(e.param)}`, e.value, e.body),
+      letLikeD(`let${e.monad === "Task" ? "!" : "?"} ${param(e.param)}`, e.value, e.body),
     )
     .with({ kind: "match" }, (e) => matchD(e))
     .with({ kind: "loop" }, (e) => loopD(e))

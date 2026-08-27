@@ -183,6 +183,11 @@ enclosing loop. For iteration purely for effect, use
 - Builtin `Option` (`Some`/`None`) and `Result` (`Ok`/`Err`); `Map.get`/`Array.head`
   return `Option`. Field names match `@onrails/result`/`@onrails/maybe`, so values flow
   straight into those combinators at the JS boundary.
+  `let? x = e in …` binds over **Option or Result**, dispatched from the inferred
+  head constructor of `e` ([ADR 0079](adr/0079-generic-let-question-bind.md)).
+  The head must be concrete at the bind site — an unresolved type variable is
+  `cannot determine monad for let?`. A chain cannot mix the two; lift explicitly.
+  `let!` is Task-only.
 - Builtin `Task<A, E>` — opaque lazy async value with an error channel
   (`() => Promise<Result<A, E>>` at runtime). Not a tagged variant; not
   switchable. See [Task](#task) below.
@@ -218,7 +223,7 @@ let program =
 export let result = Task.run(program)   // Promise<Result<number, E>> — await in the host
 ```
 
-`let! x = task in …` is monadic bind over `Task` (mirrors `let?` for `Result`);
+`let! x = task in …` is monadic bind over `Task` (mirrors `let?` for Option/Result);
 it desugars to `Task.andThen`. Infix bind for both is deferred.
 
 Unlike `ResultAsync`'s memoized `resolve()`, `Task.run` re-fires the underlying effect
@@ -311,7 +316,7 @@ host values a type error at `extern` boundaries.
 
 Ternary `cond ? a : b` (looser than `|>` / `->`, right-associative), operator sections
 `(x +)` / `(+ x)` (ADR 0000; `(- x)` stays negation), string interpolation,
-`let?` / `let!` (monadic bind over `Result` / `Task`), `///` doc comments that attach
+`let?` / `let!` (monadic bind over `Option`|`Result` / `Task`), `///` doc comments that attach
 to the following binding and surface in hover and `.d.ts`, and namespace imports
 `import * as Alias from "./mod"` with qualified access / ctor patterns
 `Alias.member` / `| Alias.Ctor(…)` (ADR 0002). Fast pipe `->` is method-call tight
