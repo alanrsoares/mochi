@@ -55,12 +55,16 @@ bun run bootstrap:tsc  # count tsc --strict errors on the self-host (north-star:
 `assertEq` / `ok` / `throws` — ReScript's mocha helpers, with `assertEq` instead
 of `eq` so prelude `eq` / `==` stay intact). `assertEq` is expected-first,
 actual last, so `got |> assertEq(want)`.
+Table tests are `testEach(title, rows, fn)` — one test per row, row passed as a
+single argument (not bun `test.each`, which spreads; Mochi tuples are arrays).
+Property tests are `check(title, arb, fn)` over `fast-check` combinators
+(`int` / `pair` / `mapArb` / …) ([ADR 0088](adr/0088-table-and-pbt.md)).
 `bunfig.toml` maps `.mochi` to the JS loader so `bun test` discovers
 `*.spec.mochi` the same way it discovers `*.spec.ts`; `@mochi/test/preload`
 compiles them through the module graph ([ADR 0086](adr/0086-bun-test-bindings.md)).
 
-A spec file is top-level `test(...)` / `describe(...)` statements
-([ADR 0087](adr/0087-expr-statements.md)).
+A spec file is top-level `test(...)` / `describe(...)` / `testEach(...)` /
+`check(...)` statements ([ADR 0087](adr/0087-expr-statements.md)).
 
 `bun install` runs `prepare` → `scripts/setup-hooks.ts` →
 `lefthook install --reset-hooks-path` (see `lefthook.yml`):

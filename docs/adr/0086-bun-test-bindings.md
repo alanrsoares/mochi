@@ -40,7 +40,8 @@ A spec file is top-level `test(...)` / `describe(...)` statements ([ADR 0087](00
 ## Consequences
 
 `bun test` runs `*.spec.mochi` next to `*.spec.ts`. Bootstrap tests can be
-authored in Mochi. Async `Task` tests and property-based helpers are deferred.
+authored in Mochi. Table tests and property-based helpers: [ADR 0088](0088-table-and-pbt.md).
+Async `Task` tests stay deferred.
 
 ## Alternatives rejected
 

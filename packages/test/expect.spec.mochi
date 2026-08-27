@@ -1,8 +1,60 @@
-import { assertEq, describe, ok, test } from "@mochi/test"
+import {
+  array,
+  assertEq,
+  bool,
+  check,
+  describe,
+  filterArb,
+  int,
+  nat,
+  ok,
+  option,
+  pair,
+  result,
+  test,
+  testEach,
+  text
+} from "@mochi/test"
 
 describe("assertEq", () => {
   test("numbers", () => 1 + 1 |> assertEq(2));
   test("strings", () => "ab" |> assertEq("ab"));
   test("ok", () => 1 == 1 |> ok);
   test("not", () => 1 != 2 |> ok)
+})
+
+describe("testEach", () => {
+  testEach("sum", [
+    (1, 2, 3),
+    (0, 0, 0),
+    (-1, 1, 0)
+  ], ((a, b, want)) => a + b |> assertEq(want)
+  );
+  testEach("labelled", [
+    { label: "1+2", a: 1, b: 2, want: 3 },
+    { label: "zeros", a: 0, b: 0, want: 0 }
+  ], row => row.a + row.b |> assertEq(row.want)
+  )
+})
+
+describe("check", () => {
+  check("addition commutes", pair(int, int), ((a, b)) => a + b == b + a |> ok);
+  check("nat is non-negative", nat, n => n >= 0 |> ok);
+  check("bool is bool", bool, b => b == true || b == false |> ok);
+  check("filterArb keeps predicate", filterArb(
+    n => n >= 0,
+    int
+  ), n => n >= 0 |> ok
+  );
+  check("array length is nat-ish", array(int), xs => Array.length(xs) >= 0 |> ok
+  );
+  check("option is Some or None", option(
+    text
+  ), o => switch o { | Some(_) => true | None => true } |> ok
+  );
+  check("result is Ok or Err", result(
+    int,
+    text
+  ), r => switch r { | Ok(_) => true | Err(_) => true } |> ok
+  )
 })
