@@ -139,7 +139,11 @@ let sum = xs => switch xs {                   // [] / [head, ...tail]
 
 A `when` clause adds a guard (no exhaustiveness credit). Destructuring also works in
 lambda params (`({ x, y }) => …`, `((a, b)) => …`) and in `let` (`let { x, y } = r`,
-`let (a, b) = p in …`).
+`let (a, b) = p in …`). Lambda parens are load-bearing
+([ADR 0083](adr/0083-lambda-paren-rule.md)): `(x) =>` is grouping (formatter writes
+`x =>`); `(a, b) =>` is two arguments; `((a, b)) =>` is one tuple. Mixing them
+(`f((1, 2))` on a two-arg lambda, or `f(1, 2)` on a tuple-param lambda) is a type
+error that names this rule.
 
 ## Collections
 

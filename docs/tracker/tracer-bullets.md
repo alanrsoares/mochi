@@ -43,5 +43,5 @@ C1 + C10 touch the same example files, so they land together.
 |---|---|---|---|---|---|
 | 8 | Dual-purpose `let?` (Option\|Result head-ctor dispatch, Rust-`?` style); sigils capped — ADR + infer/codegen impl + bootstrap parity | [C3](tickets/c03-generic-bind-adr.md) | AFK | — | done |
 | 9 | Collection literals: keep `@{}`; add `Set.empty`; namespace rule documented as-is — ADR + prelude + diagnostic | [C6](tickets/c06-collection-literals-adr.md) | AFK | — | done |
-| 10 | Tuple-param: keep paren rule; spans on `LamParam` + targeted diagnostic — ADR + impl | [C2](tickets/c02-tuple-param-trap.md) | AFK | — | open |
+| 10 | Tuple-param: keep paren rule; spans on `LamParam` + targeted diagnostic — ADR + impl | [C2](tickets/c02-tuple-param-trap.md) | AFK | — | done |
 | 11 | eq/show/compare: structural-only-forever guarantee — retro ADR + loud docs (design half of C4, after bug fix) | [C4](tickets/c04-collection-eq-bug-and-exit-adr.md) | AFK | — | design half open |

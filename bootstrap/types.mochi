@@ -302,6 +302,14 @@ let isArrowT = t => switch t { | TyFn(_, _) => true | _ => false }
 let isCollection = name =>
   name == "Array" || name == "List" || name == "Set" || name == "Map"
 
+let isTupleT = t => switch t { | TyCon(name, _) => name == TUPLE | _ => false }
+
+// `((a, b)) =>` vs `(a, b) =>` — extra parens are a tuple param (ADR 0083).
+let tupleParenMsg = (a, b, shown) =>
+  isTupleT(a) != isTupleT(b)
+    ? "${shown} — ((a, b)) => takes one tuple; (a, b) => takes two arguments"
+    : shown
+
 // Array vs List/Set/Map (and List vs Set, …) — name the qualified fix (ADR 0080).
 let collectionUnifyMsg = (aname, bname, shown) =>
   aname == bname || !isCollection(aname) || !isCollection(bname)
@@ -320,9 +328,15 @@ let unifyMismatch = (ra, rb) =>
   isArrowT(ra) != isArrowT(rb)
     ? let (fn, val) = isArrowT(ra) ? (ra, rb) : (rb, ra) in
       fail(
-        "cannot unify ${showType(ra)} with ${showType(rb)} — a function (${showType(fn)}) was used where a ${showType(val)} was expected; a call may be missing an argument"
+        tupleParenMsg(
+          ra,
+          rb,
+          "cannot unify ${showType(ra)} with ${showType(rb)} — a function (${showType(fn)}) was used where a ${showType(val)} was expected; a call may be missing an argument"
+        )
       )
-    : fail("cannot unify ${showType(ra)} with ${showType(rb)}")
+    : fail(
+      tupleParenMsg(ra, rb, "cannot unify ${showType(ra)} with ${showType(rb)}")
+    )
 
 let unifyArgs = (as_, bs, i, st) => switch Array.get(i, as_) {
   | None => Ok(st)
@@ -456,10 +470,14 @@ export let unify = (a, b, st) =>
             ) == Array.length(bargs)
               ? unifyArgs(aargs, bargs, 0, st)
               : fail(
-                collectionUnifyMsg(
-                  aname,
-                  bname,
-                  "cannot unify ${showType(ra)} with ${showType(rb)}"
+                tupleParenMsg(
+                  ra,
+                  rb,
+                  collectionUnifyMsg(
+                    aname,
+                    bname,
+                    "cannot unify ${showType(ra)} with ${showType(rb)}"
+                  )
                 )
               )
           | TySingleton(_, _) => unifyLitUnion(ra, rb, st)

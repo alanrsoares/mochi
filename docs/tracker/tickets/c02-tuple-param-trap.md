@@ -1,7 +1,7 @@
 ---
 id: C2
 title: "ADR: ((a, b)) tuple-param vs (a, b) two-arg — one paren changes semantics"
-status: open
+status: done
 type: task
 blocked-by: []
 ---
@@ -30,9 +30,9 @@ render it more clearly.
 - Require explicit destructure: `p => let (a, b) = p in …` (drop the param form).
 - Distinct pattern syntax in param position that isn't paren-count-based.
 
-- [ ] ADR with the chosen direction + rejected alternatives (blocked by C12 numbering).
-- [ ] Spans on `LamParam`/`ptuple` regardless of direction (hover/diagnostics want
+- [x] ADR with the chosen direction + rejected alternatives (blocked by C12 numbering).
+- [x] Spans on `LamParam`/`ptuple` regardless of direction (hover/diagnostics want
       them anyway).
-- [ ] If kept: targeted diagnostic + formatter test locking the rendering.
+- [x] If kept: targeted diagnostic + formatter test locking the rendering.
 - [ ] If changed: parser + `bootstrap/parser.mochi` parity + migration note.
-- [ ] `docs/language.md` documents the rule (all three paren cases) either way.
+- [x] `docs/language.md` documents the rule (all three paren cases) either way.

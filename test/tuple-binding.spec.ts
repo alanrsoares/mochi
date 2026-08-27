@@ -8,7 +8,7 @@ import { lex } from "@mochi/compiler/lexer";
 import { parse } from "@mochi/compiler/parser";
 import { type Type, tArrow, tNumber } from "@mochi/compiler/types";
 import { format } from "@mochi/dx/format";
-import { unwrapOk } from "@onrails/result";
+import { unwrapErr, unwrapOk } from "@onrails/result";
 
 const numOps: Record<string, Type> = { add: tArrow(tNumber, tArrow(tNumber, tNumber)) };
 const infer = (src: string, builtins: Record<string, Type> = numOps) =>
@@ -43,6 +43,18 @@ test("nested let-tuple threads scanner-style state", () => {
 
 test("a tuple lambda param round-trips through the formatter", () => {
   expect(unwrapOk(format("let f=((a,b))=>a"))).toBe("let f = ((a, b)) => a\n");
+});
+
+test("passing a tuple to a two-arg lambda names the paren rule (ADR 0083)", () => {
+  const msg = unwrapErr(compile("let f = (x, y) => add(x, y)\nlet r = f((3, 4))"))[0]!.message;
+  expect(msg).toContain("((a, b)) => takes one tuple");
+  expect(msg).toContain("(a, b) => takes two arguments");
+});
+
+test("calling a tuple-param lambda with two args names the paren rule (ADR 0083)", () => {
+  const msg = unwrapErr(compile("let f = ((x, y)) => add(x, y)\nlet r = f(3, 4)"))[0]!.message;
+  expect(msg).toContain("((a, b)) => takes one tuple");
+  expect(msg).toContain("(a, b) => takes two arguments");
 });
 
 test("let-tuple re-folds from its desugared applied lambda back to surface sugar", () => {

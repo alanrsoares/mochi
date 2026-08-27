@@ -18,6 +18,12 @@ test("a multi-param lambda keeps its parentheses", () => {
   expect(fmt("let g=(a,b)=>add(a,b)")).toBe("let g = (a, b) => a + b\n");
 });
 
+test("lambda paren count is load-bearing (ADR 0083)", () => {
+  expect(fmt("let f=(x)=>x")).toBe("let f = x => x\n");
+  expect(fmt("let g=(a,b)=>a")).toBe("let g = (a, b) => a\n");
+  expect(fmt("let h=((a,b))=>a")).toBe("let h = ((a, b)) => a\n");
+});
+
 test("prints a binding type annotation (ADR 0044)", () => {
   expect(fmt("let   n:number=5")).toBe("let n : number = 5\n");
 });
