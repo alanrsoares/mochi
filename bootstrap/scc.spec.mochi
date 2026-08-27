@@ -1,0 +1,11 @@
+import { assertEq, testEach } from "@mochi/test"
+import { stronglyConnected } from "./scc.mochi"
+
+testEach("stronglyConnected", [
+  { label: "empty", adj: [], want: [] },
+  { label: "one node", adj: [[]], want: [[0]] },
+  { label: "two independent", adj: [[], []], want: [[0], [1]] },
+  { label: "chain 0→1", adj: [[1], []], want: [[1], [0]] },
+  { label: "cycle 0↔1", adj: [[1], [0]], want: [[0, 1]] }
+], row => row.adj |> stronglyConnected |> assertEq(row.want)
+)

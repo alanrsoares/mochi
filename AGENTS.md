@@ -88,6 +88,8 @@ string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck�
   passes, DX queries, plugins). Test one module or package surface in isolation.
   Mochi specs are `*.spec.mochi` (`import { test, testEach, testTask, check, checkTask, assertEq, ok } from "@mochi/test"`,
   ADR 0086 / 0088 / 0089) — `bun test` discovers them via bunfig `[loader] ".mochi" = "js"`.
+  Bootstrap unit specs colocate as `bootstrap/*.spec.mochi`; corpus parity vs the
+  TypeScript oracle stays in `test/bootstrap-*.spec.ts`.
 - **Smoke / integration** — `test/` only: bootstrap parity, module graphs, examples,
   playground, cross-package seams (`extensions.spec.ts`), and language guards that
   exercise the full pipeline.

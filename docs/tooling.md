@@ -70,6 +70,8 @@ compiles them through the module graph ([ADR 0086](adr/0086-bun-test-bindings.md
 A spec file is top-level `test(...)` / `describe(...)` / `testEach(...)` /
 `check(...)` / `testTask(...)` / `testEachTask(...)` / `checkTask(...)`
 statements ([ADR 0087](adr/0087-expr-statements.md)).
+Bootstrap unit specs live next to the source (`bootstrap/*.spec.mochi`);
+parity diffs against the TypeScript compiler stay in `test/bootstrap-*.spec.ts`.
 
 `bun install` runs `prepare` → `scripts/setup-hooks.ts` →
 `lefthook install --reset-hooks-path` (see `lefthook.yml`):
