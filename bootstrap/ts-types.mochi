@@ -19,10 +19,7 @@ import {
   RowEmpty,
   RowVar,
   RowExtend,
-  isUnit,
-  tCon,
-  tArrow,
-  tRecord
+  isUnit
 } from "./types.mochi"
 import { widenLits } from "./schemes.mochi"
 

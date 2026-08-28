@@ -45,9 +45,6 @@ import {
   RowVar,
   RowExtend,
   isUnit,
-  tCon,
-  tArrow,
-  tRecord,
 } from "./types";
 import { widenLits } from "./schemes";
 

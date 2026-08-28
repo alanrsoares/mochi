@@ -28,14 +28,12 @@ import {
   TyVar,
   TyCon,
   TyFn,
-  TyRecord,
   RowEmpty,
   RowVar,
   RowExtend,
   tCon,
   tArrow,
   tRecord,
-  tPrim,
   tTuple,
   tUnit,
   tLit,
@@ -50,9 +48,7 @@ import {
   freshRowVar,
   resolve,
   zonk,
-  occurs,
-  unify,
-  unifyRows
+  unify
 } from "./types.mochi"
 
 // ============================================================
@@ -95,11 +91,10 @@ import {
   generalize,
   instantiate,
   typeExprToType,
-  typeExprListToType,
   ctorScheme,
-  isUpperStart,
   freeInType
 } from "./schemes.mochi"
+import * as Schemes from "./schemes.mochi"
 import { stronglyConnected } from "./scc.mochi"
 
 // One chunk of a "…${a}…" interpolation (ADR 0023): a literal run, or a
@@ -228,7 +223,7 @@ let bindParamsFrom = (params, env, st: Types.St) => switch params {
 // Lambda parameter annotations constrain the fresh parameter type before the
 // body is inferred. One `vars` map shares lowercase type variables across a
 // lambda's parameter annotations, matching the TS backend.
-let constrainParamAnnotsFrom = (ctx, params, paramTypes, vars, st: Types.St) => switch params {
+let constrainParamAnnotsFrom = (ctx: Ctx<a>, params, paramTypes, vars, st: Types.St) => switch params {
   | [] => Ok(st)
   | [param, ...rest] => switch paramTypes {
       | [] => Ok(st)
@@ -259,7 +254,7 @@ let arrowChain = (paramTypes, resultT) => switch paramTypes {
   | [p, ...rest] => tArrow(p, arrowChain(rest, resultT))
 }
 
-let ctxWithEnv = (ctx, env) =>
+let ctxWithEnv = (ctx: Ctx<a>, env) =>
   {
     env,
     open: ctx.open,
@@ -274,7 +269,7 @@ let ctxWithEnv = (ctx, env) =>
 // in` just introduced (ADR 0035): name -> the value span its scheme came from.
 // This is the identity src/infer.ts gets for free from its `Map<Scheme, …>` —
 // scoped exactly like `env`, so a shadowing rebind takes over the annotation.
-let ctxWithLets = (ctx, env, letOwner) =>
+let ctxWithLets = (ctx: Ctx<a>, env, letOwner) =>
   {
     env,
     open: ctx.open,
@@ -287,7 +282,7 @@ let ctxWithLets = (ctx, env, letOwner) =>
 
 // Enter a loop body: params bound in env, frame pushed innermost-FIRST
 // (`recur` reads the head — nearest enclosing loop, ADR 0056).
-let ctxWithLoop = (ctx, env, frame, letOwner) =>
+let ctxWithLoop = (ctx: Ctx<a>, env, frame, letOwner) =>
   {
     env,
     open: ctx.open,
@@ -302,7 +297,7 @@ let ctxWithLoop = (ctx, env, frame, letOwner) =>
 // `recur` rebinds them, so generalizing would let iterations disagree. Each
 // init span is an ADR 0035 candidate: the lowered `let name = init;` declaration
 // takes the same annotation a `let … in` IIFE param does.
-let inferLoopParamsFrom = (ctx, params, i, envAcc, frameAcc, ownerAcc, st: Types.St) => switch Array.get(i, params) {
+let inferLoopParamsFrom = (ctx: Ctx<a>, params, i, envAcc, frameAcc, ownerAcc, st: Types.St) => switch Array.get(i, params) {
   | None => Ok((frameAcc, envAcc, ownerAcc, st))
   | Some(p) => let? (t, st1) = ctx->inferExpr(p.init, st) in
     let sp = exprSpan(p.init) in
@@ -316,7 +311,7 @@ let inferLoopParamsFrom = (ctx, params, i, envAcc, frameAcc, ownerAcc, st: Types
       )
 }
 
-let unifyRecurArgsFrom = (ctx, args, frame, i, st: Types.St) => switch Array.get(i, args) {
+let unifyRecurArgsFrom = (ctx: Ctx<a>, args, frame, i, st: Types.St) => switch Array.get(i, args) {
   | None => Ok(st)
   | Some(a) => let? (at, st1) = ctx->inferExpr(a, st) in
       switch Array.get(i, frame) {
@@ -328,13 +323,13 @@ let unifyRecurArgsFrom = (ctx, args, frame, i, st: Types.St) => switch Array.get
 
 // recur types as a fresh var (bottom-like) after unifying its args with the
 // nearest frame's param types.
-let inferRecur = (ctx, args, sp, st: Types.St) => switch ctx.loopStack {
+let inferRecur = (ctx: Ctx<a>, args, sp, st: Types.St) => switch ctx.loopStack {
   | [] => Err(typeErr("'recur' is only legal inside a loop body", sp))
   | [frame, ..._] => let? st1 = ctx->unifyRecurArgsFrom(args, frame, 0, st) in
     let (t, st2) = freshVar(st1) in Ok((t, st2))
 }
 
-let inferCallArgs = (ctx, fnT, args, st: Types.St, callSpan) => switch args {
+let inferCallArgs = (ctx: Ctx<a>, fnT, args, st: Types.St, callSpan) => switch args {
   | [] => Ok((fnT, st))
   | [arg, ...rest] => let? (argT, st1) = ctx->inferExpr(arg, st) in
     let (resultT, st2) = freshVar(st1) in
@@ -342,7 +337,7 @@ let inferCallArgs = (ctx, fnT, args, st: Types.St, callSpan) => switch args {
       ctx->inferCallArgs(resultT, rest, st3, callSpan)
 }
 
-let inferNormalCall = (ctx, fn, args, st: Types.St) =>
+let inferNormalCall = (ctx: Ctx<a>, fn, args, st: Types.St) =>
   let? (fnT, st1) = ctx->inferExpr(fn, st) in
     switch args {
       | [] => let (resultT, st2) = freshVar(st1) in
@@ -351,7 +346,7 @@ let inferNormalCall = (ctx, fn, args, st: Types.St) =>
       | _ => ctx->inferCallArgs(fnT, args, st1, exprSpan(fn))
     }
 
-let inferTernary = (ctx, cond, thenE, elseE, st: Types.St) =>
+let inferTernary = (ctx: Ctx<a>, cond, thenE, elseE, st: Types.St) =>
   let? (condT, st1) = ctx->inferExpr(cond, st) in
   let? st2 = u(condT, tBool, st1, exprSpan(cond)) in
   let? (thenT, st3) = ctx->inferExpr(thenE, st2) in
@@ -360,7 +355,7 @@ let inferTernary = (ctx, cond, thenE, elseE, st: Types.St) =>
 
 // Shared tail of `let?` / `let!`: bind `param` to the payload, then unify the
 // body against `mkBody(resT)` (Option b / Result b e / Task b e).
-let inferBindBody = (ctx, param, paramSpan, body, payloadT, mkBody, st: Types.St) =>
+let inferBindBody = (ctx: Ctx<a>, param, paramSpan, body, payloadT, mkBody, st: Types.St) =>
   let (paramT, bodyEnv, st1) = bindParam(param, ctx.env, st) in
   let? st2 = u(paramT, payloadT, st1, paramSpan) in
   let? (bodyT, st3) = ctxWithEnv(ctx, bodyEnv)->inferExpr(body, st2) in
@@ -369,7 +364,7 @@ let inferBindBody = (ctx, param, paramSpan, body, payloadT, mkBody, st: Types.St
   let? st5 = u(bodyT, wantBody, st4, exprSpan(body)) in Ok((wantBody, st5))
 
 // Two-slot bind (`Result a e` / `Task a e`): value `M a e`, body `M b e`.
-let inferTwoSlotBind = (ctx, param, paramSpan, value, body, valT, ctor, st: Types.St) =>
+let inferTwoSlotBind = (ctx: Ctx<a>, param, paramSpan, value, body, valT, ctor, st: Types.St) =>
   let (payloadT, st1) = freshVar(st) in
   let (errT, st2) = freshVar(st1) in
   let? st3 = u(valT, tCon(ctor, [payloadT, errT]), st2, exprSpan(value)) in
@@ -384,7 +379,7 @@ let inferTwoSlotBind = (ctx, param, paramSpan, value, body, valT, ctor, st: Type
 
 // `let?` dispatches Option vs Result from the resolved head of `value`
 // (ADR 0079). Unresolved tyvar defaults to Result. `let!` stays Task-only.
-let inferQuestionBind = (ctx, bind, param, paramSpan, value, body, valT, st: Types.St) => switch resolve(valT, st) {
+let inferQuestionBind = (ctx: Ctx<a>, bind, param, paramSpan, value, body, valT, st: Types.St) => switch resolve(valT, st) {
   | TyVar(_) => let $written = setLetBindMonad(bind, "Result") in
       ctx->inferTwoSlotBind(param, paramSpan, value, body, valT, "Result", st)
   | TyCon(name, _) => name == "Option"
@@ -416,13 +411,13 @@ let inferQuestionBind = (ctx, bind, param, paramSpan, value, body, valT, st: Typ
     )
 }
 
-let inferLetBind = (ctx, bind, param, paramSpan, monad, value, body, st: Types.St) =>
+let inferLetBind = (ctx: Ctx<a>, bind, param, paramSpan, monad, value, body, st: Types.St) =>
   let? (valT, st1) = ctx->inferExpr(value, st) in
     monad == "Task"
       ? ctx->inferTwoSlotBind(param, paramSpan, value, body, valT, "Task", st1)
       : ctx->inferQuestionBind(bind, param, paramSpan, value, body, valT, st1)
 
-let inferRecordRow = (ctx, fields, st: Types.St) => switch fields {
+let inferRecordRow = (ctx: Ctx<a>, fields, st: Types.St) => switch fields {
   | [] => Ok((RowEmpty, st))
   | [f, ...rest] =>
     // Field VALUES infer last-to-first (matching src/infer.ts's reverse
@@ -451,21 +446,21 @@ let rWithTail = (row, tail) => switch row {
 // duck-typed record field access: target's type unifies against an open row
 // with `name` in it, unless target is a bare namespace ref (`List.map`) —
 // then it's a qualified lookup into ctx.ns, not row inference.
-let inferFieldAccess = (ctx, target, name, sp, st: Types.St) =>
+let inferFieldAccess = (ctx: Ctx<a>, target, name, sp, st: Types.St) =>
   let? (targetT, st1) = ctx->inferExpr(target, st) in
   let (fieldT, st2) = freshVar(st1) in
   let (restRow, st3) = freshRowVar(st2) in
   let? st4 = u(targetT, tRecord(rExtend(name, fieldT, restRow)), st3, sp) in
     Ok((fieldT, st4))
 
-let inferNsField = (ctx, tname, name, sp, st: Types.St) => switch Map.get(name, Map.getOr(#{}, tname, ctx.ns)) {
+let inferNsField = (ctx: Ctx<a>, tname, name, sp, st: Types.St) => switch Map.get(name, Map.getOr(#{}, tname, ctx.ns)) {
   | Some(sc) => let (t, st1) = instantiate(sc, st) in Ok((t, st1))
   | None => Err(typeErr("'${tname}' has no member '${name}'", sp))
 }
 
 // Every hole of a "…${x}…" unifies with `string` (ADR 0023) — no implicit
 // `show`. Literal chunks carry no type information to infer.
-let inferInterpParts = (ctx, parts, st: Types.St) => switch parts {
+let inferInterpParts = (ctx: Ctx<a>, parts, st: Types.St) => switch parts {
   | [] => Ok(st)
   | [Ast.IPLit(_), ...rest] => ctx->inferInterpParts(rest, st)
   | [Ast.IPExpr(ex), ...rest] => let? (t, st1) = ctx->inferExpr(ex, st) in
@@ -473,7 +468,7 @@ let inferInterpParts = (ctx, parts, st: Types.St) => switch parts {
       ctx->inferInterpParts(rest, st2)
 }
 
-let inferTupleElems = (ctx, elements, st: Types.St) => switch elements {
+let inferTupleElems = (ctx: Ctx<a>, elements, st: Types.St) => switch elements {
   | [] => Ok(([], st))
   | [el, ...rest] => let? (t, st1) = ctx->inferExpr(el, st) in
     let? (restTs, st2) = ctx->inferTupleElems(rest, st1) in
@@ -485,7 +480,7 @@ let seqElemExpr = el => switch el {
   | Ast.SESpread(e) => e
 }
 
-let inferSeqSlotsElems = (ctx, con, elem, elements, st: Types.St) => switch elements {
+let inferSeqSlotsElems = (ctx: Ctx<a>, con, elem, elements, st: Types.St) => switch elements {
   | [] => Ok(st)
   | [slot, ...rest] => let ex = seqElemExpr(slot) in
     let? (et, st1) = ctx->inferExpr(ex, st) in
@@ -496,12 +491,12 @@ let inferSeqSlotsElems = (ctx, con, elem, elements, st: Types.St) => switch elem
     let? st2 = u(want, et, st1, exprSpan(ex)) in
       ctx->inferSeqSlotsElems(con, elem, rest, st2)
 }
-let inferSeqSlots = (ctx, con, elements, st: Types.St) =>
+let inferSeqSlots = (ctx: Ctx<a>, con, elements, st: Types.St) =>
   let (elem, st1) = freshVar(st) in
   let? st2 = ctx->inferSeqSlotsElems(con, elem, elements, st1) in
     Ok((tCon(con, [elem]), st2))
 
-let inferMapEntries = (ctx, k, v, entries, st: Types.St) => switch entries {
+let inferMapEntries = (ctx: Ctx<a>, k, v, entries, st: Types.St) => switch entries {
   | [] => Ok(st)
   | [ent, ...rest] => let? (kt, st1) = ctx->inferExpr(ent.key, st) in
     let? st2 = u(k, kt, st1, exprSpan(ent.key)) in
@@ -509,7 +504,7 @@ let inferMapEntries = (ctx, k, v, entries, st: Types.St) => switch entries {
     let? st4 = u(v, vt, st3, exprSpan(ent.value)) in
       ctx->inferMapEntries(k, v, rest, st4)
 }
-let inferMapExpr = (ctx, entries, st: Types.St) =>
+let inferMapExpr = (ctx: Ctx<a>, entries, st: Types.St) =>
   let (k, st1) = freshVar(st) in
   let (v, st2) = freshVar(st1) in
   let? st3 = ctx->inferMapEntries(k, v, entries, st2) in
@@ -541,7 +536,7 @@ let mergeEnvBindingsFrom = (keys, bindings, env) => switch keys {
 let mergeEnvBindings = (bindings, env) =>
   mergeEnvBindingsFrom(Map.keys(bindings), bindings, env)
 
-let inferArms = (ctx, scrutT, resultT, arms, st: Types.St) => switch arms {
+let inferArms = (ctx: Ctx<a>, scrutT, resultT, arms, st: Types.St) => switch arms {
   | [] => Ok(st)
   | [arm, ...rest] => let? (patT, bindings, st1) = ctx->inferPat(
       arm.pattern,
@@ -558,7 +553,7 @@ let inferArms = (ctx, scrutT, resultT, arms, st: Types.St) => switch arms {
     let? st5 = u(resultT, bodyT, st4, exprSpan(arm.body)) in
       ctx->inferArms(scrutT, resultT, rest, st5)
 }
-let inferMatch = (ctx, scrutinee, arms, st: Types.St) =>
+let inferMatch = (ctx: Ctx<a>, scrutinee, arms, st: Types.St) =>
   let? (scrutT, st1) = ctx->inferExpr(scrutinee, st) in
   let (resultT, st2) = freshVar(st1) in
   let? st3 = ctx->inferArms(scrutT, resultT, arms, st2) in Ok((resultT, st3))
@@ -566,11 +561,11 @@ let inferMatch = (ctx, scrutinee, arms, st: Types.St) =>
 /// Recording wrapper over `inferExprRaw` (mirrors src/infer.ts's `infer`):
 /// every expression node's inferred type lands in `st.recorded`, keyed by span,
 /// so the TS backend can annotate lambda params and empty literals (ADR 0090).
-let inferExpr = (ctx, e, st: Types.St) =>
+let inferExpr = (ctx: Ctx<a>, e, st: Types.St) =>
   let? (t, st1) = ctx->inferExprRaw(e, st) in
     Ok((t, recordAt(exprSpan(e), t, st1)))
 
-let inferExprRaw = (ctx, e, st: Types.St) => switch e {
+let inferExprRaw = (ctx: Ctx<a>, e, st: Types.St) => switch e {
   | Ast.ENum(_, _, _) => Ok((tNumber, st))
   | Ast.EUnit(_) => Ok((tUnit, st))
   | Ast.EBool(_, _) => Ok((tBool, st))
@@ -699,7 +694,7 @@ let inferExprRaw = (ctx, e, st: Types.St) => switch e {
       Ok((tString, st1))
 }
 
-let inferDo = (ctx, exprs, st: Types.St) => switch exprs {
+let inferDo = (ctx: Ctx<a>, exprs, st: Types.St) => switch exprs {
   | [] => Err(typeErr("internal: empty do block", { start: 0, end: 0 }))
   | [last] => ctx->inferExpr(last, st)
   | [first, ...rest] => let? (_, st1) = ctx->inferExpr(first, st) in
@@ -713,7 +708,7 @@ let inferDo = (ctx, exprs, st: Types.St) => switch exprs {
 // the threaded state.
 // ============================================================
 
-let inferPatRecordFrom = (ctx, fields, row, bindings, st: Types.St) => switch fields {
+let inferPatRecordFrom = (ctx: Ctx<a>, fields, row, bindings, st: Types.St) => switch fields {
   | [] => Ok((row, bindings, st))
   | [f, ...rest] => let? (subT, subBindings, st1) = ctx->inferPat(f.pat, st) in
       ctx->inferPatRecordFrom(
@@ -723,7 +718,7 @@ let inferPatRecordFrom = (ctx, fields, row, bindings, st: Types.St) => switch fi
         st1
       )
 }
-let inferPatRecord = (ctx, fields, st: Types.St) =>
+let inferPatRecord = (ctx: Ctx<a>, fields, st: Types.St) =>
   let (rowBase, _st1) = freshRowVar(st) in
   let? (row, bindings, st2) = ctx->inferPatRecordFrom(
     fields,
@@ -735,7 +730,7 @@ let inferPatRecord = (ctx, fields, st: Types.St) =>
 
 // peel one arrow off the constructor's (instantiated) scheme per arg,
 // resolving through `st` since instantiate may have left it behind a TyVar
-let inferPatCtorArgs = (ctx, ctor, curT, args, st: Types.St, bindings, sp) => switch args {
+let inferPatCtorArgs = (ctx: Ctx<a>, ctor, curT, args, st: Types.St, bindings, sp) => switch args {
   | [] => Ok((curT, bindings, st))
   | [argPat, ...rest] => switch resolve(curT, st) {
       | TyFn(fromT, toT) => let? (subT, subBindings, st1) = ctx->inferPat(
@@ -757,7 +752,7 @@ let inferPatCtorArgs = (ctx, ctor, curT, args, st: Types.St, bindings, sp) => sw
     }
 }
 
-let inferPatTupleFrom = (ctx, elems, st: Types.St) => switch elems {
+let inferPatTupleFrom = (ctx: Ctx<a>, elems, st: Types.St) => switch elems {
   | [] => Ok(([], #{}, st))
   | [ep, ...rest] => let? (t, bindings, st1) = ctx->inferPat(ep, st) in
     let? (restTs, restBindings, st2) = ctx->inferPatTupleFrom(rest, st1) in
@@ -767,18 +762,18 @@ let inferPatTupleFrom = (ctx, elems, st: Types.St) => switch elems {
         st2
       ))
 }
-let inferPatTuple = (ctx, elems, st: Types.St) =>
+let inferPatTuple = (ctx: Ctx<a>, elems, st: Types.St) =>
   let? (elemTs, bindings, st1) = ctx->inferPatTupleFrom(elems, st) in
     Ok((tTuple(elemTs), bindings, st1))
 
-let inferSeqPatElems = (ctx, elem, elems, st: Types.St) => switch elems {
+let inferSeqPatElems = (ctx: Ctx<a>, elem, elems, st: Types.St) => switch elems {
   | [] => Ok((#{}, st))
   | [ep, ...rest] => let? (subT, subBindings, st1) = ctx->inferPat(ep, st) in
     let? st2 = u(elem, subT, st1, patSpan(ep)) in
     let? (restBindings, st3) = ctx->inferSeqPatElems(elem, rest, st2) in
       Ok((mergeBindingMaps(restBindings, subBindings), st3))
 }
-let inferSeqPat = (ctx, con, elems, restPat, st: Types.St) =>
+let inferSeqPat = (ctx: Ctx<a>, con, elems, restPat, st: Types.St) =>
   let (elem, st1) = freshVar(st) in
   let seqT = tCon(con, [elem]) in
   let? (bindings, st2) = ctx->inferSeqPatElems(elem, elems, st1) in
@@ -791,11 +786,11 @@ let inferSeqPat = (ctx, con, elems, restPat, st: Types.St) =>
 
 /// Pattern-side analogue of `inferExpr` — records every pattern node's span
 /// and type, so a pattern-bound param can be annotated by span.
-let inferPat = (ctx, p, st: Types.St) =>
+let inferPat = (ctx: Ctx<a>, p, st: Types.St) =>
   let? (t, bindings, st1) = ctx->inferPatRaw(p, st) in
     Ok((t, bindings, recordAt(patSpan(p), t, st1)))
 
-let inferPatRaw = (ctx, p, st: Types.St) => switch p {
+let inferPatRaw = (ctx: Ctx<a>, p, st: Types.St) => switch p {
   | Ast.PAs(pat, name, _, _) => let? (t, bindings, st1) = ctx->inferPat(
       pat,
       st
@@ -849,7 +844,7 @@ let unifyOrPatBindings = (names, altBindings, bindings, st: Types.St, sp) => swi
     ) in
       unifyOrPatBindings(rest, altBindings, bindings, st1, sp)
 }
-let inferOrPatAlts = (ctx, alts, i, t, bindings, st: Types.St) => switch Array.get(i, alts) {
+let inferOrPatAlts = (ctx: Ctx<a>, alts, i, t, bindings, st: Types.St) => switch Array.get(i, alts) {
   | None => Ok(st)
   | Some(alt) => let? (altT, altBindings, st1) = ctx->inferPat(alt, st) in
     let? st2 = u(t, altT, st1, patSpan(alt)) in
@@ -862,7 +857,7 @@ let inferOrPatAlts = (ctx, alts, i, t, bindings, st: Types.St) => switch Array.g
     ) in
       ctx->inferOrPatAlts(alts, i + 1, t, bindings, st3)
 }
-let inferOrPat = (ctx, alts, sp, st: Types.St) => switch alts {
+let inferOrPat = (ctx: Ctx<a>, alts, sp, st: Types.St) => switch alts {
   | [] => Err(typeErr("or-pattern needs at least one alternative", sp))
   | [first, ...rest] => let? (t, bindings, st1) = ctx->inferPat(first, st) in
     let? st2 = ctx->inferOrPatAlts(rest, 0, t, bindings, st1) in
@@ -1326,7 +1321,7 @@ let preBindGroupFrom = (group, env, st: Types.St) => switch group {
     }
 }
 
-let inferGroupFrom = (ctx, group, st: Types.St) => switch group {
+let inferGroupFrom = (ctx: Ctx<a>, group, st: Types.St) => switch group {
   | [] => Ok((#{}, st))
   | [s, ...rest] => switch s {
       | Ast.SLet(name, _, annot, value, _, _, span) => let? (t, st1) = ctx->inferExpr(
@@ -1409,7 +1404,7 @@ let noteGroupLets = (group, letOwner, st: Types.St) => switch group {
 
 // `let`s, grouped into mutually-recursive components (SCCs of the reference
 // graph) and inferred group-by-group in dependency-first order.
-let processGroupsFrom = (ctx, sccs, lets, st: Types.St) => switch sccs {
+let processGroupsFrom = (ctx: Ctx<a>, sccs, lets, st: Types.St) => switch sccs {
   | [] => Ok((ctx, st))
   | [comp, ...restSccs] => let group = groupOfFrom(comp, lets) in
     let (preEnv, st1) = preBindGroupFrom(group, ctx.env, st) in
@@ -1431,7 +1426,7 @@ let processGroupsFrom = (ctx, sccs, lets, st: Types.St) => switch sccs {
 
 // Top-level expression statements after every let is generalized (ADR 0087).
 // Must unify with `()`.
-let inferExprStmtsFrom = (ctx, stmts, st: Types.St) => switch stmts {
+let inferExprStmtsFrom = (ctx: Ctx<a>, stmts, st: Types.St) => switch stmts {
   | [] => Ok(st)
   | [s, ...rest] => switch s {
       | Ast.SExpr(value, span) => let? (t, st1) = ctx->inferExpr(value, st) in
@@ -1659,6 +1654,36 @@ type QualAliasInfo = {
 }
 
 type QualScope = { aliases: Map<string, QualAliasInfo> }
+
+/// The API an `inferCall` plugin hook is handed (ADR 0011 6).
+type InferApi = {
+  inferExpr: Ast.Expr -> Types.St -> Result<(Types.Ty, Types.St), IErr>,
+  unify: Types.Ty -> Types.Ty -> Types.St -> Ast.Span -> Result<Types.St, IErr>
+}
+
+/// A plugin as INFERENCE sees it. `parse` stays a type PARAMETER: its hook is
+/// token-shaped and `Tok` lives in parser.mochi, which imports extensions.mochi
+/// - naming it here would close a module cycle.
+type Plugin<p> = {
+  name: string,
+  parse: Option<p>,
+  inferCall: Option<Ast.Expr -> [Ast.Expr] -> Option<string> -> Types.St -> InferApi -> Result<Option<(Types.Ty, Types.St)> , IErr> >
+}
+
+/// The context threaded through Algorithm W. Declared and annotated at every
+/// `ctx` parameter for the same reason scc.mochi pins `TSt` (ADR 0044): each
+/// reader generalizes the record's open tail on its own, so the emitted TS
+/// reprinted `{ ns: Map<string, Map<string, { ty; rvars; vars } & C>>; ... }`
+/// once per function instead of naming it.
+type Ctx<p> = {
+  env: Map<string, Schemes.Scheme>,
+  open: bool,
+  ns: Map<string, Map<string, Schemes.Scheme> >,
+  aliasMap: Map<string, QualAliasInfo>,
+  plugins: [Plugin<p>],
+  loopStack: [[Types.Ty]],
+  letOwner: Map<string, Ast.Span>
+}
 
 let emptyQuals : Map<string, QualScope> = #{}
 

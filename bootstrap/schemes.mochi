@@ -26,8 +26,7 @@ import {
   rExtend,
   freshVar,
   freshRowVar,
-  zonk,
-  resolve
+  zonk
 } from "./types.mochi"
 import { primTypeNames } from "./ctors.mochi"
 

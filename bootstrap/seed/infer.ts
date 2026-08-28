@@ -24,6 +24,26 @@ export type IErr = PErr;
 export type QualAliasField = AliasField;
 export type QualAliasInfo = { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> };
 export type QualScope = { aliases: Map<string, QualAliasInfo> };
+export type InferApi = {
+  inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
+  unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, IErr>;
+};
+export type Plugin<A> = {
+  name: string;
+  parse: Option<A>;
+  inferCall: Option<
+    (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
+  >;
+};
+export type Ctx<A> = {
+  env: Map<string, Scheme>;
+  open: boolean;
+  ns: Map<string, Map<string, Scheme>>;
+  aliasMap: Map<string, QualAliasInfo>;
+  plugins: Plugin<A>[];
+  loopStack: Ty[][];
+  letOwner: Map<string, Span>;
+};
 
 import {
   _curry,
@@ -70,14 +90,12 @@ import {
   TyVar,
   TyCon,
   TyFn,
-  TyRecord,
   RowEmpty,
   RowVar,
   RowExtend,
   tCon,
   tArrow,
   tRecord,
-  tPrim,
   tTuple,
   tUnit,
   tLit,
@@ -92,9 +110,7 @@ import {
   freshRowVar,
   resolve,
   zonk,
-  occurs,
   unify,
-  unifyRows,
 } from "./types";
 import * as Ast from "./ast";
 import * as Types from "./types";
@@ -109,11 +125,10 @@ import {
   generalize,
   instantiate,
   typeExprToType,
-  typeExprListToType,
   ctorScheme,
-  isUpperStart,
   freeInType,
 } from "./schemes";
+import * as Schemes from "./schemes";
 import { stronglyConnected } from "./scc";
 export const exprSpan: (e: Expr) => Span = (e: Expr) =>
   match(e)
@@ -304,39 +319,15 @@ const bindParamsFrom: <A, B>(
         throw new Error("non-exhaustive match");
       }),
 );
-const constrainParamAnnotsFrom: <A, B, C>(
-  ctx: {
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & A)[];
-      } & B
-    >;
-  } & C,
+const constrainParamAnnotsFrom: <A>(
+  ctx: Ctx<A>,
   params: LamParam[],
   paramTypes: Ty[],
   vars: Map<string, Ty>,
   st: St,
 ) => Result<St, IErr> = _curry(
   5,
-  <A, B, C>(
-    ctx: {
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & A)[];
-        } & B
-      >;
-    } & C,
-    params: LamParam[],
-    paramTypes: Ty[],
-    vars: Map<string, Ty>,
-    st: St,
-  ) =>
+  <A>(ctx: Ctx<A>, params: LamParam[], paramTypes: Ty[], vars: Map<string, Ty>, st: St) =>
     match(params)
       .with(
         (_v) => {
@@ -425,101 +416,71 @@ const arrowChain: { (paramTypes: Ty[]): (resultT: Ty) => Ty; (paramTypes: Ty[], 
         throw new Error("non-exhaustive match");
       }),
   );
-const ctxWithEnv: <A, B, C, D, E, F, G, H>(
-  ctx: { letOwner: A; loopStack: B; plugins: C; aliasMap: D; ns: E; open: F } & H,
-  env: G,
-) => { env: G; open: F; ns: E; aliasMap: D; plugins: C; loopStack: B; letOwner: A } = _curry(
-  2,
-  <A, B, C, D, E, F, G, H>(
-    ctx: { letOwner: A; loopStack: B; plugins: C; aliasMap: D; ns: E; open: F } & H,
-    env: G,
-  ) => ({
-    env: env,
-    open: ctx.open,
-    ns: ctx.ns,
-    aliasMap: ctx.aliasMap,
-    plugins: ctx.plugins,
-    loopStack: ctx.loopStack,
-    letOwner: ctx.letOwner,
-  }),
-);
-const ctxWithLets: <A, B, C, D, E, F, G, H>(
-  ctx: { loopStack: A; plugins: B; aliasMap: C; ns: D; open: E } & H,
-  env: F,
-  letOwner: G,
-) => { env: F; open: E; ns: D; aliasMap: C; plugins: B; loopStack: A; letOwner: G } = _curry(
-  3,
-  <A, B, C, D, E, F, G, H>(
-    ctx: { loopStack: A; plugins: B; aliasMap: C; ns: D; open: E } & H,
-    env: F,
-    letOwner: G,
-  ) => ({
-    env: env,
-    open: ctx.open,
-    ns: ctx.ns,
-    aliasMap: ctx.aliasMap,
-    plugins: ctx.plugins,
-    loopStack: ctx.loopStack,
-    letOwner: letOwner,
-  }),
-);
-const ctxWithLoop: <A, B, C, D, E, F, G, H>(
-  ctx: { loopStack: A[]; plugins: B; aliasMap: C; ns: D; open: E } & H,
-  env: F,
-  frame: A,
-  letOwner: G,
-) => { env: F; open: E; ns: D; aliasMap: C; plugins: B; loopStack: A[]; letOwner: G } = _curry(
-  4,
-  <A, B, C, D, E, F, G, H>(
-    ctx: { loopStack: A[]; plugins: B; aliasMap: C; ns: D; open: E } & H,
-    env: F,
-    frame: A,
-    letOwner: G,
-  ) => ({
-    env: env,
-    open: ctx.open,
-    ns: ctx.ns,
-    aliasMap: ctx.aliasMap,
-    plugins: ctx.plugins,
-    loopStack: _Array_prepend(frame, ctx.loopStack),
-    letOwner: letOwner,
-  }),
-);
-const inferLoopParamsFrom: <A, B, C, D, E, F, G>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & D)[];
-      } & E
-    >;
-    plugins: ({
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: St,
-              d: { end: A; start: B } & F,
-            ) => Result<St, { message: string; start: B; end: A }>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    } & G)[];
-    loopStack: Ty[][];
-    letOwner: Map<string, Span>;
-  },
+const ctxWithEnv: <A, B>(
+  ctx: Ctx<A>,
+  env: B,
+) => {
+  env: B;
+  open: boolean;
+  ns: Map<string, Map<string, Scheme>>;
+  aliasMap: Map<string, QualAliasInfo>;
+  plugins: Plugin<A>[];
+  loopStack: Ty[][];
+  letOwner: Map<string, Span>;
+} = _curry(2, <A, B>(ctx: Ctx<A>, env: B) => ({
+  env: env,
+  open: ctx.open,
+  ns: ctx.ns,
+  aliasMap: ctx.aliasMap,
+  plugins: ctx.plugins,
+  loopStack: ctx.loopStack,
+  letOwner: ctx.letOwner,
+}));
+const ctxWithLets: <A, B, C>(
+  ctx: Ctx<A>,
+  env: B,
+  letOwner: C,
+) => {
+  env: B;
+  open: boolean;
+  ns: Map<string, Map<string, Scheme>>;
+  aliasMap: Map<string, QualAliasInfo>;
+  plugins: Plugin<A>[];
+  loopStack: Ty[][];
+  letOwner: C;
+} = _curry(3, <A, B, C>(ctx: Ctx<A>, env: B, letOwner: C) => ({
+  env: env,
+  open: ctx.open,
+  ns: ctx.ns,
+  aliasMap: ctx.aliasMap,
+  plugins: ctx.plugins,
+  loopStack: ctx.loopStack,
+  letOwner: letOwner,
+}));
+const ctxWithLoop: <A, B, C>(
+  ctx: Ctx<A>,
+  env: B,
+  frame: Ty[],
+  letOwner: C,
+) => {
+  env: B;
+  open: boolean;
+  ns: Map<string, Map<string, Scheme>>;
+  aliasMap: Map<string, QualAliasInfo>;
+  plugins: Plugin<A>[];
+  loopStack: Ty[][];
+  letOwner: C;
+} = _curry(4, <A, B, C>(ctx: Ctx<A>, env: B, frame: Ty[], letOwner: C) => ({
+  env: env,
+  open: ctx.open,
+  ns: ctx.ns,
+  aliasMap: ctx.aliasMap,
+  plugins: ctx.plugins,
+  loopStack: _Array_prepend(frame, ctx.loopStack),
+  letOwner: letOwner,
+}));
+const inferLoopParamsFrom: <A>(
+  ctx: Ctx<A>,
   params: LoopParam[],
   i: number,
   envAcc: Map<string, Scheme>,
@@ -528,41 +489,8 @@ const inferLoopParamsFrom: <A, B, C, D, E, F, G>(
   st: St,
 ) => Result<[Ty[], Map<string, Scheme>, Map<string, Span>, St], IErr> = _curry(
   7,
-  <A, B, C, D, E, F, G>(
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & D)[];
-        } & E
-      >;
-      plugins: ({
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: St,
-                d: { end: A; start: B } & F,
-              ) => Result<St, { message: string; start: B; end: A }>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      } & G)[];
-      loopStack: Ty[][];
-      letOwner: Map<string, Span>;
-    },
+  <A>(
+    ctx: Ctx<A>,
     params: LoopParam[],
     i: number,
     envAcc: Map<string, Scheme>,
@@ -597,185 +525,34 @@ const inferLoopParamsFrom: <A, B, C, D, E, F, G>(
       )
       .exhaustive(),
 );
-const unifyRecurArgsFrom: <A, B, C, D, E, F, G>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & D)[];
-      } & E
-    >;
-    plugins: ({
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: St,
-              d: { end: A; start: B } & F,
-            ) => Result<St, { message: string; start: B; end: A }>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    } & G)[];
-    loopStack: Ty[][];
-    letOwner: Map<string, Span>;
-  },
+const unifyRecurArgsFrom: <A>(
+  ctx: Ctx<A>,
   args: Expr[],
   frame: Ty[],
   i: number,
   st: St,
-) => Result<St, IErr> = _curry(
-  5,
-  <A, B, C, D, E, F, G>(
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & D)[];
-        } & E
-      >;
-      plugins: ({
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: St,
-                d: { end: A; start: B } & F,
-              ) => Result<St, { message: string; start: B; end: A }>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      } & G)[];
-      loopStack: Ty[][];
-      letOwner: Map<string, Span>;
-    },
-    args: Expr[],
-    frame: Ty[],
-    i: number,
-    st: St,
-  ) =>
-    match(_Array_get(i, args))
-      .with({ _tag: "None" }, () => Ok(st) as Result<St, IErr>)
-      .with({ _tag: "Some" }, ({ value: a }) =>
-        _Result_flatMap(
-          ([at, st1]) =>
-            match(_Array_get(i, frame))
-              .with({ _tag: "None" }, () => unifyRecurArgsFrom(ctx, args, frame, add(i, 1), st1))
-              .with({ _tag: "Some" }, ({ value: pt }) =>
-                _Result_flatMap(
-                  (st2) => unifyRecurArgsFrom(ctx, args, frame, add(i, 1), st2),
-                  u(at, pt, st1, exprSpan(a)),
-                ),
-              )
-              .exhaustive(),
-          inferExpr(ctx, a, st),
-        ),
-      )
-      .exhaustive(),
+) => Result<St, IErr> = _curry(5, <A>(ctx: Ctx<A>, args: Expr[], frame: Ty[], i: number, st: St) =>
+  match(_Array_get(i, args))
+    .with({ _tag: "None" }, () => Ok(st) as Result<St, IErr>)
+    .with({ _tag: "Some" }, ({ value: a }) =>
+      _Result_flatMap(
+        ([at, st1]) =>
+          match(_Array_get(i, frame))
+            .with({ _tag: "None" }, () => unifyRecurArgsFrom(ctx, args, frame, add(i, 1), st1))
+            .with({ _tag: "Some" }, ({ value: pt }) =>
+              _Result_flatMap(
+                (st2) => unifyRecurArgsFrom(ctx, args, frame, add(i, 1), st2),
+                u(at, pt, st1, exprSpan(a)),
+              ),
+            )
+            .exhaustive(),
+        inferExpr(ctx, a, st),
+      ),
+    )
+    .exhaustive(),
 );
-const inferRecur: <A, B, C, D, E, F, G>(
-  ctx: {
-    loopStack: Ty[][];
-    env: Map<string, Scheme>;
-    letOwner: Map<string, Span>;
-    open: boolean;
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & C)[];
-      } & D
-    >;
-    plugins: ({
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: St,
-              d: { end: A; start: B } & E,
-            ) => Result<St, { message: string; start: B; end: A }>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    } & F)[];
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
-  },
-  args: Expr[],
-  sp: Span,
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  4,
-  <A, B, C, D, E, F, G>(
-    ctx: {
-      loopStack: Ty[][];
-      env: Map<string, Scheme>;
-      letOwner: Map<string, Span>;
-      open: boolean;
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & C)[];
-        } & D
-      >;
-      plugins: ({
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: St,
-                d: { end: A; start: B } & E,
-              ) => Result<St, { message: string; start: B; end: A }>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      } & F)[];
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
-    },
-    args: Expr[],
-    sp: Span,
-    st: St,
-  ) =>
+const inferRecur: <A>(ctx: Ctx<A>, args: Expr[], sp: Span, st: St) => Result<[Ty, St], IErr> =
+  _curry(4, <A>(ctx: Ctx<A>, args: Expr[], sp: Span, st: St) =>
     match(ctx.loopStack)
       .with(
         (_v) => {
@@ -807,88 +584,16 @@ const inferRecur: <A, B, C, D, E, F, G>(
       .otherwise(() => {
         throw new Error("non-exhaustive match");
       }),
-);
-const inferCallArgs: <A, B, C, D, E, F, G>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & D)[];
-      } & E
-    >;
-    plugins: ({
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: St,
-              d: { end: A; start: B } & F,
-            ) => Result<St, { message: string; start: B; end: A }>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    } & G)[];
-    loopStack: Ty[][];
-    letOwner: Map<string, Span>;
-  },
+  );
+const inferCallArgs: <A>(
+  ctx: Ctx<A>,
   fnT: Ty,
   args: Expr[],
   st: St,
   callSpan: Span,
 ) => Result<[Ty, St], IErr> = _curry(
   5,
-  <A, B, C, D, E, F, G>(
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & D)[];
-        } & E
-      >;
-      plugins: ({
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: St,
-                d: { end: A; start: B } & F,
-              ) => Result<St, { message: string; start: B; end: A }>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      } & G)[];
-      loopStack: Ty[][];
-      letOwner: Map<string, Span>;
-    },
-    fnT: Ty,
-    args: Expr[],
-    st: St,
-    callSpan: Span,
-  ) =>
+  <A>(ctx: Ctx<A>, fnT: Ty, args: Expr[], st: St, callSpan: Span) =>
     match(args)
       .with(
         (_v) => {
@@ -917,85 +622,8 @@ const inferCallArgs: <A, B, C, D, E, F, G>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferNormalCall: <A, B, C, D, E, F, G>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & D)[];
-      } & E
-    >;
-    plugins: ({
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: St,
-              d: { end: A; start: B } & F,
-            ) => Result<St, { message: string; start: B; end: A }>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    } & G)[];
-    loopStack: Ty[][];
-    letOwner: Map<string, Span>;
-  },
-  fn: Expr,
-  args: Expr[],
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  4,
-  <A, B, C, D, E, F, G>(
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & D)[];
-        } & E
-      >;
-      plugins: ({
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: St,
-                d: { end: A; start: B } & F,
-              ) => Result<St, { message: string; start: B; end: A }>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      } & G)[];
-      loopStack: Ty[][];
-      letOwner: Map<string, Span>;
-    },
-    fn: Expr,
-    args: Expr[],
-    st: St,
-  ) =>
+const inferNormalCall: <A>(ctx: Ctx<A>, fn: Expr, args: Expr[], st: St) => Result<[Ty, St], IErr> =
+  _curry(4, <A>(ctx: Ctx<A>, fn: Expr, args: Expr[], st: St) =>
     _Result_flatMap(
       ([fnT, st1]) =>
         match(args)
@@ -1014,88 +642,16 @@ const inferNormalCall: <A, B, C, D, E, F, G>(
           .otherwise(() => inferCallArgs(ctx, fnT, args, st1, exprSpan(fn))),
       inferExpr(ctx, fn, st),
     ),
-);
-const inferTernary: <A, B, C, D, E, F, G>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & D)[];
-      } & E
-    >;
-    plugins: ({
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: St,
-              d: { end: A; start: B } & F,
-            ) => Result<St, { message: string; start: B; end: A }>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    } & G)[];
-    loopStack: Ty[][];
-    letOwner: Map<string, Span>;
-  },
+  );
+const inferTernary: <A>(
+  ctx: Ctx<A>,
   cond: Expr,
   thenE: Expr,
   elseE: Expr,
   st: St,
 ) => Result<[Ty, St], IErr> = _curry(
   5,
-  <A, B, C, D, E, F, G>(
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & D)[];
-        } & E
-      >;
-      plugins: ({
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: St,
-                d: { end: A; start: B } & F,
-              ) => Result<St, { message: string; start: B; end: A }>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      } & G)[];
-      loopStack: Ty[][];
-      letOwner: Map<string, Span>;
-    },
-    cond: Expr,
-    thenE: Expr,
-    elseE: Expr,
-    st: St,
-  ) =>
+  <A>(ctx: Ctx<A>, cond: Expr, thenE: Expr, elseE: Expr, st: St) =>
     _Result_flatMap(
       ([condT, st1]) =>
         _Result_flatMap(
@@ -1117,41 +673,8 @@ const inferTernary: <A, B, C, D, E, F, G>(
       inferExpr(ctx, cond, st),
     ),
 );
-const inferBindBody: <A, B, C, D, E, F, G>(
-  ctx: {
-    letOwner: Map<string, Span>;
-    loopStack: Ty[][];
-    plugins: ({
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: St,
-              d: { end: A; start: B } & C,
-            ) => Result<St, { message: string; start: B; end: A }>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    } & D)[];
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & E)[];
-      } & F
-    >;
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
-    open: boolean;
-    env: Map<string, Scheme>;
-  },
+const inferBindBody: <A>(
+  ctx: Ctx<A>,
   param: LamParam,
   paramSpan: Span,
   body: Expr,
@@ -1160,41 +683,8 @@ const inferBindBody: <A, B, C, D, E, F, G>(
   st: St,
 ) => Result<[Ty, St], IErr> = _curry(
   7,
-  <A, B, C, D, E, F, G>(
-    ctx: {
-      letOwner: Map<string, Span>;
-      loopStack: Ty[][];
-      plugins: ({
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: St,
-                d: { end: A; start: B } & C,
-              ) => Result<St, { message: string; start: B; end: A }>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      } & D)[];
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & E)[];
-        } & F
-      >;
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
-      open: boolean;
-      env: Map<string, Scheme>;
-    },
+  <A>(
+    ctx: Ctx<A>,
     param: LamParam,
     paramSpan: Span,
     body: Expr,
@@ -1219,41 +709,8 @@ const inferBindBody: <A, B, C, D, E, F, G>(
         u(paramT, payloadT, st1, paramSpan),
       ))(bindParam(param, ctx.env, st)),
 );
-const inferTwoSlotBind: <A, B, C, D, E, F, G>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & D)[];
-      } & E
-    >;
-    plugins: ({
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: St,
-              d: { end: A; start: B } & F,
-            ) => Result<St, { message: string; start: B; end: A }>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    } & G)[];
-    loopStack: Ty[][];
-    letOwner: Map<string, Span>;
-  },
+const inferTwoSlotBind: <A>(
+  ctx: Ctx<A>,
   param: LamParam,
   paramSpan: Span,
   value: Expr,
@@ -1263,41 +720,8 @@ const inferTwoSlotBind: <A, B, C, D, E, F, G>(
   st: St,
 ) => Result<[Ty, St], IErr> = _curry(
   8,
-  <A, B, C, D, E, F, G>(
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & D)[];
-        } & E
-      >;
-      plugins: ({
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: St,
-                d: { end: A; start: B } & F,
-              ) => Result<St, { message: string; start: B; end: A }>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      } & G)[];
-      loopStack: Ty[][];
-      letOwner: Map<string, Span>;
-    },
+  <A>(
+    ctx: Ctx<A>,
     param: LamParam,
     paramSpan: Span,
     value: Expr,
@@ -1322,41 +746,8 @@ const inferTwoSlotBind: <A, B, C, D, E, F, G>(
           u(valT, tCon(ctor, [payloadT, errT]), st2, exprSpan(value)),
         ))(freshVar(st1)))(freshVar(st)),
 );
-const inferQuestionBind: <A, B, C, D, E, F, G>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & D)[];
-      } & E
-    >;
-    plugins: ({
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: St,
-              d: { end: A; start: B } & F,
-            ) => Result<St, { message: string; start: B; end: A }>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    } & G)[];
-    loopStack: Ty[][];
-    letOwner: Map<string, Span>;
-  },
+const inferQuestionBind: <A>(
+  ctx: Ctx<A>,
   bind: Expr,
   param: LamParam,
   paramSpan: Span,
@@ -1366,41 +757,8 @@ const inferQuestionBind: <A, B, C, D, E, F, G>(
   st: St,
 ) => Result<[Ty, St], IErr> = _curry(
   8,
-  <A, B, C, D, E, F, G>(
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & D)[];
-        } & E
-      >;
-      plugins: ({
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: St,
-                d: { end: A; start: B } & F,
-              ) => Result<St, { message: string; start: B; end: A }>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      } & G)[];
-      loopStack: Ty[][];
-      letOwner: Map<string, Span>;
-    },
+  <A>(
+    ctx: Ctx<A>,
     bind: Expr,
     param: LamParam,
     paramSpan: Span,
@@ -1454,41 +812,8 @@ const inferQuestionBind: <A, B, C, D, E, F, G>(
           ) as Result<[Ty, St], IErr>,
       ),
 );
-const inferLetBind: <A, B, C, D, E, F, G>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & D)[];
-      } & E
-    >;
-    plugins: ({
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: St,
-              d: { end: A; start: B } & F,
-            ) => Result<St, { message: string; start: B; end: A }>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    } & G)[];
-    loopStack: Ty[][];
-    letOwner: Map<string, Span>;
-  },
+const inferLetBind: <A>(
+  ctx: Ctx<A>,
   bind: Expr,
   param: LamParam,
   paramSpan: Span,
@@ -1498,41 +823,8 @@ const inferLetBind: <A, B, C, D, E, F, G>(
   st: St,
 ) => Result<[Ty, St], IErr> = _curry(
   8,
-  <A, B, C, D, E, F, G>(
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & D)[];
-        } & E
-      >;
-      plugins: ({
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: St,
-                d: { end: A; start: B } & F,
-              ) => Result<St, { message: string; start: B; end: A }>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      } & G)[];
-      loopStack: Ty[][];
-      letOwner: Map<string, Span>;
-    },
+  <A>(
+    ctx: Ctx<A>,
     bind: Expr,
     param: LamParam,
     paramSpan: Span,
@@ -1549,83 +841,9 @@ const inferLetBind: <A, B, C, D, E, F, G>(
       inferExpr(ctx, value, st),
     ),
 );
-const inferRecordRow: <A, B, C, D, E, F, G>(
-  ctx: {
-    env: Map<string, Scheme>;
-    letOwner: Map<string, Span>;
-    open: boolean;
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & C)[];
-      } & D
-    >;
-    loopStack: Ty[][];
-    plugins: ({
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: St,
-              d: { end: A; start: B } & E,
-            ) => Result<St, { message: string; start: B; end: A }>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    } & F)[];
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
-  },
-  fields: Field[],
-  st: St,
-) => Result<[Row, St], IErr> = _curry(
+const inferRecordRow: <A>(ctx: Ctx<A>, fields: Field[], st: St) => Result<[Row, St], IErr> = _curry(
   3,
-  <A, B, C, D, E, F, G>(
-    ctx: {
-      env: Map<string, Scheme>;
-      letOwner: Map<string, Span>;
-      open: boolean;
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & C)[];
-        } & D
-      >;
-      loopStack: Ty[][];
-      plugins: ({
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: St,
-                d: { end: A; start: B } & E,
-              ) => Result<St, { message: string; start: B; end: A }>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      } & F)[];
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
-    },
-    fields: Field[],
-    st: St,
-  ) =>
+  <A>(ctx: Ctx<A>, fields: Field[], st: St) =>
     match(fields)
       .with(
         (_v) => {
@@ -1665,87 +883,15 @@ const rWithTail: { (row: Row): (tail: Row) => Row; (row: Row, tail: Row): Row } 
       )
       .exhaustive(),
 );
-const inferFieldAccess: <A, B, C, D, E, F, G>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & D)[];
-      } & E
-    >;
-    plugins: ({
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: St,
-              d: { end: A; start: B } & F,
-            ) => Result<St, { message: string; start: B; end: A }>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    } & G)[];
-    loopStack: Ty[][];
-    letOwner: Map<string, Span>;
-  },
+const inferFieldAccess: <A>(
+  ctx: Ctx<A>,
   target: Expr,
   name: string,
   sp: Span,
   st: St,
 ) => Result<[Ty, St], IErr> = _curry(
   5,
-  <A, B, C, D, E, F, G>(
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & D)[];
-        } & E
-      >;
-      plugins: ({
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: St,
-                d: { end: A; start: B } & F,
-              ) => Result<St, { message: string; start: B; end: A }>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      } & G)[];
-      loopStack: Ty[][];
-      letOwner: Map<string, Span>;
-    },
-    target: Expr,
-    name: string,
-    sp: Span,
-    st: St,
-  ) =>
+  <A>(ctx: Ctx<A>, target: Expr, name: string, sp: Span, st: St) =>
     _Result_flatMap(
       ([targetT, st1]) =>
         (([fieldT, st2]: [Ty, St]) =>
@@ -1757,114 +903,25 @@ const inferFieldAccess: <A, B, C, D, E, F, G>(
       inferExpr(ctx, target, st),
     ),
 );
-const inferNsField: <A, B, C, D, E>(
-  ctx: { ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>> } & D,
+const inferNsField: <A, B, C, D>(
+  ctx: Ctx<A>,
   tname: string,
   name: string,
-  sp: { end: A; start: B } & E,
+  sp: { end: B; start: C } & D,
   st: St,
-) => Result<[Ty, St], { message: string; start: B; end: A }> = _curry(
+) => Result<[Ty, St], { message: string; start: C; end: B }> = _curry(
   5,
-  <A, B, C, D, E>(
-    ctx: { ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>> } & D,
-    tname: string,
-    name: string,
-    sp: { end: A; start: B } & E,
-    st: St,
-  ) =>
-    match(
-      _Map_get(
-        name,
-        _Map_getOr(
-          new Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>(),
-          tname,
-          ctx.ns,
-        ),
-      ),
-    )
+  <A, B, C, D>(ctx: Ctx<A>, tname: string, name: string, sp: { end: B; start: C } & D, st: St) =>
+    match(_Map_get(name, _Map_getOr(new Map<string, Scheme>(), tname, ctx.ns)))
       .with({ _tag: "Some" }, ({ value: sc }) =>
         (([t, st1]: [Ty, St]) => Ok(_tuple(t, st1)))(instantiate(sc, st)),
       )
       .with({ _tag: "None" }, () => Err(typeErr(`'${tname}' has no member '${name}'`, sp)))
       .exhaustive(),
 );
-const inferInterpParts: <A, B, C, D, E, F, G>(
-  ctx: {
-    env: Map<string, Scheme>;
-    letOwner: Map<string, Span>;
-    open: boolean;
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & C)[];
-      } & D
-    >;
-    loopStack: Ty[][];
-    plugins: ({
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: St,
-              d: { end: A; start: B } & E,
-            ) => Result<St, { message: string; start: B; end: A }>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    } & F)[];
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
-  },
-  parts: InterpPart[],
-  st: St,
-) => Result<St, IErr> = _curry(
+const inferInterpParts: <A>(ctx: Ctx<A>, parts: InterpPart[], st: St) => Result<St, IErr> = _curry(
   3,
-  <A, B, C, D, E, F, G>(
-    ctx: {
-      env: Map<string, Scheme>;
-      letOwner: Map<string, Span>;
-      open: boolean;
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & C)[];
-        } & D
-      >;
-      loopStack: Ty[][];
-      plugins: ({
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: St,
-                d: { end: A; start: B } & E,
-              ) => Result<St, { message: string; start: B; end: A }>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      } & F)[];
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
-    },
-    parts: InterpPart[],
-    st: St,
-  ) =>
+  <A>(ctx: Ctx<A>, parts: InterpPart[], st: St) =>
     match(parts)
       .with(
         (_v) => {
@@ -1899,83 +956,8 @@ const inferInterpParts: <A, B, C, D, E, F, G>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferTupleElems: <A, B, C, D, E, F, G>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & D)[];
-      } & E
-    >;
-    plugins: ({
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: St,
-              d: { end: A; start: B } & F,
-            ) => Result<St, { message: string; start: B; end: A }>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    } & G)[];
-    loopStack: Ty[][];
-    letOwner: Map<string, Span>;
-  },
-  elements: Expr[],
-  st: St,
-) => Result<[Ty[], St], IErr> = _curry(
-  3,
-  <A, B, C, D, E, F, G>(
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & D)[];
-        } & E
-      >;
-      plugins: ({
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: St,
-                d: { end: A; start: B } & F,
-              ) => Result<St, { message: string; start: B; end: A }>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      } & G)[];
-      loopStack: Ty[][];
-      letOwner: Map<string, Span>;
-    },
-    elements: Expr[],
-    st: St,
-  ) =>
+const inferTupleElems: <A>(ctx: Ctx<A>, elements: Expr[], st: St) => Result<[Ty[], St], IErr> =
+  _curry(3, <A>(ctx: Ctx<A>, elements: Expr[], st: St) =>
     match(elements)
       .with(
         (_v) => {
@@ -2003,93 +985,21 @@ const inferTupleElems: <A, B, C, D, E, F, G>(
       .otherwise(() => {
         throw new Error("non-exhaustive match");
       }),
-);
+  );
 const seqElemExpr: (el: SeqElem) => Expr = (el: SeqElem) =>
   match(el)
     .with({ _tag: "SEExpr" }, ({ expr: e }) => e)
     .with({ _tag: "SESpread" }, ({ expr: e }) => e)
     .exhaustive();
-const inferSeqSlotsElems: <A, B, C, D, E, F, G>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & D)[];
-      } & E
-    >;
-    plugins: ({
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: St,
-              d: { end: A; start: B } & F,
-            ) => Result<St, { message: string; start: B; end: A }>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    } & G)[];
-    loopStack: Ty[][];
-    letOwner: Map<string, Span>;
-  },
+const inferSeqSlotsElems: <A>(
+  ctx: Ctx<A>,
   con: string,
   elem: Ty,
   elements: SeqElem[],
   st: St,
 ) => Result<St, IErr> = _curry(
   5,
-  <A, B, C, D, E, F, G>(
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & D)[];
-        } & E
-      >;
-      plugins: ({
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: St,
-                d: { end: A; start: B } & F,
-              ) => Result<St, { message: string; start: B; end: A }>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      } & G)[];
-      loopStack: Ty[][];
-      letOwner: Map<string, Span>;
-    },
-    con: string,
-    elem: Ty,
-    elements: SeqElem[],
-    st: St,
-  ) =>
+  <A>(ctx: Ctx<A>, con: string, elem: Ty, elements: SeqElem[], st: St) =>
     match(elements)
       .with(
         (_v) => {
@@ -2124,291 +1034,71 @@ const inferSeqSlotsElems: <A, B, C, D, E, F, G>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferSeqSlots: <A, B, C, D, E, F, G>(
-  ctx: {
-    env: Map<string, Scheme>;
-    letOwner: Map<string, Span>;
-    open: boolean;
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & C)[];
-      } & D
-    >;
-    loopStack: Ty[][];
-    plugins: ({
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: St,
-              d: { end: A; start: B } & E,
-            ) => Result<St, { message: string; start: B; end: A }>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    } & F)[];
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
-  },
+const inferSeqSlots: <A>(
+  ctx: Ctx<A>,
   con: string,
   elements: SeqElem[],
   st: St,
 ) => Result<[Ty, St], IErr> = _curry(
   4,
-  <A, B, C, D, E, F, G>(
-    ctx: {
-      env: Map<string, Scheme>;
-      letOwner: Map<string, Span>;
-      open: boolean;
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & C)[];
-        } & D
-      >;
-      loopStack: Ty[][];
-      plugins: ({
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: St,
-                d: { end: A; start: B } & E,
-              ) => Result<St, { message: string; start: B; end: A }>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      } & F)[];
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
-    },
-    con: string,
-    elements: SeqElem[],
-    st: St,
-  ) =>
+  <A>(ctx: Ctx<A>, con: string, elements: SeqElem[], st: St) =>
     (([elem, st1]: [Ty, St]) =>
       _Result_flatMap(
         (st2) => Ok(_tuple(tCon(con, [elem]), st2)) as Result<[Ty, St], IErr>,
         inferSeqSlotsElems(ctx, con, elem, elements, st1),
       ))(freshVar(st)),
 );
-const inferMapEntries: <A, B, C, D, E, F, G>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & D)[];
-      } & E
-    >;
-    plugins: ({
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: St,
-              d: { end: A; start: B } & F,
-            ) => Result<St, { message: string; start: B; end: A }>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    } & G)[];
-    loopStack: Ty[][];
-    letOwner: Map<string, Span>;
-  },
+const inferMapEntries: <A>(
+  ctx: Ctx<A>,
   k: Ty,
   v: Ty,
   entries: MapEntry[],
   st: St,
-) => Result<St, IErr> = _curry(
-  5,
-  <A, B, C, D, E, F, G>(
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & D)[];
-        } & E
-      >;
-      plugins: ({
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: St,
-                d: { end: A; start: B } & F,
-              ) => Result<St, { message: string; start: B; end: A }>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      } & G)[];
-      loopStack: Ty[][];
-      letOwner: Map<string, Span>;
-    },
-    k: Ty,
-    v: Ty,
-    entries: MapEntry[],
-    st: St,
-  ) =>
-    match(entries)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => Ok(st) as Result<St, IErr>,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([ent, ...rest]) =>
-          _Result_flatMap(
-            ([kt, st1]) =>
-              _Result_flatMap(
-                (st2) =>
-                  _Result_flatMap(
-                    ([vt, st3]) =>
-                      _Result_flatMap(
-                        (st4) => inferMapEntries(ctx, k, v, rest, st4),
-                        u(v, vt, st3, exprSpan(ent.value)),
-                      ),
-                    inferExpr(ctx, ent.value, st2),
-                  ),
-                u(k, kt, st1, exprSpan(ent.key)),
-              ),
-            inferExpr(ctx, ent.key, st),
-          ),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+) => Result<St, IErr> = _curry(5, <A>(ctx: Ctx<A>, k: Ty, v: Ty, entries: MapEntry[], st: St) =>
+  match(entries)
+    .with(
+      (_v) => {
+        const _g: any = _v;
+        return _g.length === 0;
+      },
+      () => Ok(st) as Result<St, IErr>,
+    )
+    .with(
+      (_v) => {
+        const _g: any = _v;
+        return _g.length >= 1;
+      },
+      ([ent, ...rest]) =>
+        _Result_flatMap(
+          ([kt, st1]) =>
+            _Result_flatMap(
+              (st2) =>
+                _Result_flatMap(
+                  ([vt, st3]) =>
+                    _Result_flatMap(
+                      (st4) => inferMapEntries(ctx, k, v, rest, st4),
+                      u(v, vt, st3, exprSpan(ent.value)),
+                    ),
+                  inferExpr(ctx, ent.value, st2),
+                ),
+              u(k, kt, st1, exprSpan(ent.key)),
+            ),
+          inferExpr(ctx, ent.key, st),
+        ),
+    )
+    .otherwise(() => {
+      throw new Error("non-exhaustive match");
+    }),
 );
-const inferMapExpr: <A, B, C, D, E, F, G>(
-  ctx: {
-    env: Map<string, Scheme>;
-    letOwner: Map<string, Span>;
-    open: boolean;
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & C)[];
-      } & D
-    >;
-    loopStack: Ty[][];
-    plugins: ({
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: St,
-              d: { end: A; start: B } & E,
-            ) => Result<St, { message: string; start: B; end: A }>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    } & F)[];
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
-  },
-  entries: MapEntry[],
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  3,
-  <A, B, C, D, E, F, G>(
-    ctx: {
-      env: Map<string, Scheme>;
-      letOwner: Map<string, Span>;
-      open: boolean;
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & C)[];
-        } & D
-      >;
-      loopStack: Ty[][];
-      plugins: ({
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: St,
-                d: { end: A; start: B } & E,
-              ) => Result<St, { message: string; start: B; end: A }>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      } & F)[];
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
-    },
-    entries: MapEntry[],
-    st: St,
-  ) =>
+const inferMapExpr: <A>(ctx: Ctx<A>, entries: MapEntry[], st: St) => Result<[Ty, St], IErr> =
+  _curry(3, <A>(ctx: Ctx<A>, entries: MapEntry[], st: St) =>
     (([k, st1]: [Ty, St]) =>
       (([v, st2]: [Ty, St]) =>
         _Result_flatMap(
           (st3) => Ok(_tuple(tCon("Map", [k, v]), st3)) as Result<[Ty, St], IErr>,
           inferMapEntries(ctx, k, v, entries, st2),
         ))(freshVar(st1)))(freshVar(st)),
-);
+  );
 const mergeBindingMapsFrom: <A, B>(keys: A[], src: Map<A, B>, dest: Map<A, B>) => Map<A, B> =
   _curry(3, <A, B>(keys: A[], src: Map<A, B>, dest: Map<A, B>) =>
     match(keys)
@@ -2468,87 +1158,15 @@ const mergeEnvBindings: <A, B, C, D>(
   <A, B, C, D>(bindings: Map<A, B>, env: Map<A, { vars: C[]; rvars: D[]; ty: B }>) =>
     mergeEnvBindingsFrom(_Map_keys(bindings), bindings, env),
 );
-const inferArms: <A, B, C, D, E, F, G>(
-  ctx: {
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-    env: Map<string, Scheme>;
-    letOwner: Map<string, Span>;
-    loopStack: Ty[][];
-    plugins: ({
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: St,
-              d: { end: A; start: B } & D,
-            ) => Result<St, { message: string; start: B; end: A }>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    } & E)[];
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & F)[];
-      } & G
-    >;
-    open: boolean;
-  },
+const inferArms: <A>(
+  ctx: Ctx<A>,
   scrutT: Ty,
   resultT: Ty,
   arms: MatchArm[],
   st: St,
 ) => Result<St, IErr> = _curry(
   5,
-  <A, B, C, D, E, F, G>(
-    ctx: {
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-      env: Map<string, Scheme>;
-      letOwner: Map<string, Span>;
-      loopStack: Ty[][];
-      plugins: ({
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: St,
-                d: { end: A; start: B } & D,
-              ) => Result<St, { message: string; start: B; end: A }>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      } & E)[];
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & F)[];
-        } & G
-      >;
-      open: boolean;
-    },
-    scrutT: Ty,
-    resultT: Ty,
-    arms: MatchArm[],
-    st: St,
-  ) =>
+  <A>(ctx: Ctx<A>, scrutT: Ty, resultT: Ty, arms: MatchArm[], st: St) =>
     match(arms)
       .with(
         (_v) => {
@@ -2597,85 +1215,14 @@ const inferArms: <A, B, C, D, E, F, G>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferMatch: <A, B, C, D, E, F, G>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & D)[];
-      } & E
-    >;
-    plugins: ({
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: St,
-              d: { end: A; start: B } & F,
-            ) => Result<St, { message: string; start: B; end: A }>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    } & G)[];
-    loopStack: Ty[][];
-    letOwner: Map<string, Span>;
-  },
+const inferMatch: <A>(
+  ctx: Ctx<A>,
   scrutinee: Expr,
   arms: MatchArm[],
   st: St,
 ) => Result<[Ty, St], IErr> = _curry(
   4,
-  <A, B, C, D, E, F, G>(
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & D)[];
-        } & E
-      >;
-      plugins: ({
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: St,
-                d: { end: A; start: B } & F,
-              ) => Result<St, { message: string; start: B; end: A }>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      } & G)[];
-      loopStack: Ty[][];
-      letOwner: Map<string, Span>;
-    },
-    scrutinee: Expr,
-    arms: MatchArm[],
-    st: St,
-  ) =>
+  <A>(ctx: Ctx<A>, scrutinee: Expr, arms: MatchArm[], st: St) =>
     _Result_flatMap(
       ([scrutT, st1]) =>
         (([resultT, st2]: [Ty, St]) =>
@@ -2686,165 +1233,17 @@ const inferMatch: <A, B, C, D, E, F, G>(
       inferExpr(ctx, scrutinee, st),
     ),
 );
-const inferExpr: <A, B, C, D, E, F, G>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & D)[];
-      } & E
-    >;
-    plugins: ({
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: St,
-              d: { end: A; start: B } & F,
-            ) => Result<St, { message: string; start: B; end: A }>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    } & G)[];
-    loopStack: Ty[][];
-    letOwner: Map<string, Span>;
-  },
-  e: Expr,
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
+const inferExpr: <A>(ctx: Ctx<A>, e: Expr, st: St) => Result<[Ty, St], IErr> = _curry(
   3,
-  <A, B, C, D, E, F, G>(
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & D)[];
-        } & E
-      >;
-      plugins: ({
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: St,
-                d: { end: A; start: B } & F,
-              ) => Result<St, { message: string; start: B; end: A }>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      } & G)[];
-      loopStack: Ty[][];
-      letOwner: Map<string, Span>;
-    },
-    e: Expr,
-    st: St,
-  ) =>
+  <A>(ctx: Ctx<A>, e: Expr, st: St) =>
     _Result_flatMap(
       ([t, st1]) => Ok(_tuple(t, recordAt(exprSpan(e), t, st1))) as Result<[Ty, St], IErr>,
       inferExprRaw(ctx, e, st),
     ),
 );
-const inferExprRaw: <A, B, C, D, E, F, G>(
-  ctx: {
-    env: Map<string, Scheme>;
-    letOwner: Map<string, Span>;
-    open: boolean;
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & C)[];
-      } & D
-    >;
-    loopStack: Ty[][];
-    plugins: ({
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: St,
-              d: { end: A; start: B } & E,
-            ) => Result<St, { message: string; start: B; end: A }>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    } & F)[];
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
-  },
-  e: Expr,
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
+const inferExprRaw: <A>(ctx: Ctx<A>, e: Expr, st: St) => Result<[Ty, St], IErr> = _curry(
   3,
-  <A, B, C, D, E, F, G>(
-    ctx: {
-      env: Map<string, Scheme>;
-      letOwner: Map<string, Span>;
-      open: boolean;
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & C)[];
-        } & D
-      >;
-      loopStack: Ty[][];
-      plugins: ({
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: St,
-                d: { end: A; start: B } & E,
-              ) => Result<St, { message: string; start: B; end: A }>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      } & F)[];
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
-    },
-    e: Expr,
-    st: St,
-  ) =>
+  <A>(ctx: Ctx<A>, e: Expr, st: St) =>
     match(e)
       .with({ _tag: "ENum" }, () => Ok(_tuple(tNumber, st)) as Result<[Ty, St], IErr>)
       .with({ _tag: "EUnit" }, () => Ok(_tuple(tUnit, st)) as Result<[Ty, St], IErr>)
@@ -2914,7 +1313,7 @@ const inferExprRaw: <A, B, C, D, E, F, G>(
         inferLetBind(ctx, e, param, paramSpan, monad, value, body, st),
       )
       .with({ _tag: "ECall" }, ({ fn, args, origin }) =>
-        ((api) =>
+        ((api: InferApi) =>
           _Result_flatMap(
             (claimed) =>
               match(claimed)
@@ -2992,83 +1391,9 @@ const inferExprRaw: <A, B, C, D, E, F, G>(
       )
       .exhaustive(),
 );
-const inferDo: <A, B, C, D, E, F, G>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & D)[];
-      } & E
-    >;
-    plugins: ({
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: St,
-              d: { end: A; start: B } & F,
-            ) => Result<St, { message: string; start: B; end: A }>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    } & G)[];
-    loopStack: Ty[][];
-    letOwner: Map<string, Span>;
-  },
-  exprs: Expr[],
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
+const inferDo: <A>(ctx: Ctx<A>, exprs: Expr[], st: St) => Result<[Ty, St], IErr> = _curry(
   3,
-  <A, B, C, D, E, F, G>(
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & D)[];
-        } & E
-      >;
-      plugins: ({
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: St,
-                d: { end: A; start: B } & F,
-              ) => Result<St, { message: string; start: B; end: A }>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      } & G)[];
-      loopStack: Ty[][];
-      letOwner: Map<string, Span>;
-    },
-    exprs: Expr[],
-    st: St,
-  ) =>
+  <A>(ctx: Ctx<A>, exprs: Expr[], st: St) =>
     match(exprs)
       .with(
         (_v) => {
@@ -3100,27 +1425,15 @@ const inferDo: <A, B, C, D, E, F, G>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferPatRecordFrom: <A, B, C>(
-  ctx: {
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
-    env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
-  } & C,
+const inferPatRecordFrom: <A>(
+  ctx: Ctx<A>,
   fields: PatField[],
   row: Row,
   bindings: Map<string, Ty>,
   st: St,
 ) => Result<[Row, Map<string, Ty>, St], IErr> = _curry(
   5,
-  <A, B, C>(
-    ctx: {
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
-      env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
-    } & C,
-    fields: PatField[],
-    row: Row,
-    bindings: Map<string, Ty>,
-    st: St,
-  ) =>
+  <A>(ctx: Ctx<A>, fields: PatField[], row: Row, bindings: Map<string, Ty>, st: St) =>
     match(fields)
       .with(
         (_v) => {
@@ -3151,23 +1464,13 @@ const inferPatRecordFrom: <A, B, C>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferPatRecord: <A, B, C>(
-  ctx: {
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
-    env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
-  } & C,
+const inferPatRecord: <A>(
+  ctx: Ctx<A>,
   fields: PatField[],
   st: St,
 ) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
   3,
-  <A, B, C>(
-    ctx: {
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
-      env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
-    } & C,
-    fields: PatField[],
-    st: St,
-  ) =>
+  <A>(ctx: Ctx<A>, fields: PatField[], st: St) =>
     (([rowBase, _st1]: [Row, St]) =>
       _Result_flatMap(
         ([row, bindings, st2]) =>
@@ -3175,11 +1478,8 @@ const inferPatRecord: <A, B, C>(
         inferPatRecordFrom(ctx, fields, rowBase, new Map<string, Ty>(), st),
       ))(freshRowVar(st)),
 );
-const inferPatCtorArgs: <A, B, C>(
-  ctx: {
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
-    env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
-  } & C,
+const inferPatCtorArgs: <A>(
+  ctx: Ctx<A>,
   ctor: string,
   curT: Ty,
   args: Pattern[],
@@ -3188,11 +1488,8 @@ const inferPatCtorArgs: <A, B, C>(
   sp: Span,
 ) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
   7,
-  <A, B, C>(
-    ctx: {
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
-      env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
-    } & C,
+  <A>(
+    ctx: Ctx<A>,
     ctor: string,
     curT: Ty,
     args: Pattern[],
@@ -3246,23 +1543,13 @@ const inferPatCtorArgs: <A, B, C>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferPatTupleFrom: <A, B, C>(
-  ctx: {
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
-    env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
-  } & C,
+const inferPatTupleFrom: <A>(
+  ctx: Ctx<A>,
   elems: Pattern[],
   st: St,
 ) => Result<[Ty[], Map<string, Ty>, St], IErr> = _curry(
   3,
-  <A, B, C>(
-    ctx: {
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
-      env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
-    } & C,
-    elems: Pattern[],
-    st: St,
-  ) =>
+  <A>(ctx: Ctx<A>, elems: Pattern[], st: St) =>
     match(elems)
       .with(
         (_v) => {
@@ -3301,48 +1588,27 @@ const inferPatTupleFrom: <A, B, C>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferPatTuple: <A, B, C>(
-  ctx: {
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
-    env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
-  } & C,
+const inferPatTuple: <A>(
+  ctx: Ctx<A>,
   elems: Pattern[],
   st: St,
 ) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
   3,
-  <A, B, C>(
-    ctx: {
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
-      env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
-    } & C,
-    elems: Pattern[],
-    st: St,
-  ) =>
+  <A>(ctx: Ctx<A>, elems: Pattern[], st: St) =>
     _Result_flatMap(
       ([elemTs, bindings, st1]) =>
         Ok(_tuple(tTuple(elemTs), bindings, st1)) as Result<[Ty, Map<string, Ty>, St], IErr>,
       inferPatTupleFrom(ctx, elems, st),
     ),
 );
-const inferSeqPatElems: <A, B, C>(
-  ctx: {
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
-    env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
-  } & C,
+const inferSeqPatElems: <A>(
+  ctx: Ctx<A>,
   elem: Ty,
   elems: Pattern[],
   st: St,
 ) => Result<[Map<string, Ty>, St], IErr> = _curry(
   4,
-  <A, B, C>(
-    ctx: {
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
-      env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
-    } & C,
-    elem: Ty,
-    elems: Pattern[],
-    st: St,
-  ) =>
+  <A>(ctx: Ctx<A>, elem: Ty, elems: Pattern[], st: St) =>
     match(elems)
       .with(
         (_v) => {
@@ -3378,27 +1644,15 @@ const inferSeqPatElems: <A, B, C>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferSeqPat: <A, B, C>(
-  ctx: {
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
-    env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
-  } & C,
+const inferSeqPat: <A>(
+  ctx: Ctx<A>,
   con: string,
   elems: Pattern[],
   restPat: Option<Pattern>,
   st: St,
 ) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
   5,
-  <A, B, C>(
-    ctx: {
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
-      env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
-    } & C,
-    con: string,
-    elems: Pattern[],
-    restPat: Option<Pattern>,
-    st: St,
-  ) =>
+  <A>(ctx: Ctx<A>, con: string, elems: Pattern[], restPat: Option<Pattern>, st: St) =>
     (([elem, st1]: [Ty, St]) => {
       const seqT: Ty = tCon(con, [elem]);
       return _Result_flatMap(
@@ -3427,23 +1681,8 @@ const inferSeqPat: <A, B, C>(
       );
     })(freshVar(st)),
 );
-const inferPat: <A, B, C>(
-  ctx: {
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
-    env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
-  } & C,
-  p: Pattern,
-  st: St,
-) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
-  3,
-  <A, B, C>(
-    ctx: {
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
-      env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
-    } & C,
-    p: Pattern,
-    st: St,
-  ) =>
+const inferPat: <A>(ctx: Ctx<A>, p: Pattern, st: St) => Result<[Ty, Map<string, Ty>, St], IErr> =
+  _curry(3, <A>(ctx: Ctx<A>, p: Pattern, st: St) =>
     _Result_flatMap(
       ([t, bindings, st1]) =>
         Ok(_tuple(t, bindings, recordAt(patSpan(p), t, st1))) as Result<
@@ -3452,24 +1691,9 @@ const inferPat: <A, B, C>(
         >,
       inferPatRaw(ctx, p, st),
     ),
-);
-const inferPatRaw: <A, B, C>(
-  ctx: {
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
-    env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
-  } & C,
-  p: Pattern,
-  st: St,
-) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
-  3,
-  <A, B, C>(
-    ctx: {
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
-      env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
-    } & C,
-    p: Pattern,
-    st: St,
-  ) =>
+  );
+const inferPatRaw: <A>(ctx: Ctx<A>, p: Pattern, st: St) => Result<[Ty, Map<string, Ty>, St], IErr> =
+  _curry(3, <A>(ctx: Ctx<A>, p: Pattern, st: St) =>
     match(p)
       .with({ _tag: "PAs" }, ({ pat, name }) =>
         _Result_flatMap(
@@ -3521,16 +1745,7 @@ const inferPatRaw: <A, B, C>(
       .with({ _tag: "PCtor" }, ({ ctor, args, ns, span: sp }) =>
         match(ns)
           .with({ _tag: "Some" }, ({ value: alias }) =>
-            match(
-              _Map_get(
-                ctor,
-                _Map_getOr(
-                  new Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>(),
-                  alias,
-                  ctx.ns,
-                ),
-              ),
-            )
+            match(_Map_get(ctor, _Map_getOr(new Map<string, Scheme>(), alias, ctx.ns)))
               .with(
                 { _tag: "None" },
                 () =>
@@ -3572,7 +1787,7 @@ const inferPatRaw: <A, B, C>(
       .with({ _tag: "PList" }, ({ elems, rest }) => inferSeqPat(ctx, "List", elems, rest, st))
       .with({ _tag: "POr" }, ({ alts, span: sp }) => inferOrPat(ctx, alts, sp, st))
       .exhaustive(),
-);
+  );
 const unifyOrPatBinding: <A, B, C, D>(
   name: A,
   altBindings: Map<A, Ty>,
@@ -3630,11 +1845,8 @@ const unifyOrPatBindings: <A, B, C, D>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferOrPatAlts: <A, B, C>(
-  ctx: {
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
-    env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
-  } & C,
+const inferOrPatAlts: <A>(
+  ctx: Ctx<A>,
   alts: Pattern[],
   i: number,
   t: Ty,
@@ -3642,17 +1854,7 @@ const inferOrPatAlts: <A, B, C>(
   st: St,
 ) => Result<St, IErr> = _curry(
   6,
-  <A, B, C>(
-    ctx: {
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
-      env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
-    } & C,
-    alts: Pattern[],
-    i: number,
-    t: Ty,
-    bindings: Map<string, Ty>,
-    st: St,
-  ) =>
+  <A>(ctx: Ctx<A>, alts: Pattern[], i: number, t: Ty, bindings: Map<string, Ty>, st: St) =>
     match(_Array_get(i, alts))
       .with({ _tag: "None" }, () => Ok(st) as Result<St, IErr>)
       .with({ _tag: "Some" }, ({ value: alt }) =>
@@ -3677,25 +1879,14 @@ const inferOrPatAlts: <A, B, C>(
       )
       .exhaustive(),
 );
-const inferOrPat: <A, B, C>(
-  ctx: {
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
-    env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
-  } & C,
+const inferOrPat: <A>(
+  ctx: Ctx<A>,
   alts: Pattern[],
   sp: Span,
   st: St,
 ) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
   4,
-  <A, B, C>(
-    ctx: {
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
-      env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
-    } & C,
-    alts: Pattern[],
-    sp: Span,
-    st: St,
-  ) =>
+  <A>(ctx: Ctx<A>, alts: Pattern[], sp: Span, st: St) =>
     match(alts)
       .with(
         (_v) => {
@@ -4704,156 +2895,85 @@ const preBindGroupFrom: <A, B>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferGroupFrom: <A, B, C, D, E, F, G>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & D)[];
-      } & E
-    >;
-    plugins: ({
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: St,
-              d: { end: A; start: B } & F,
-            ) => Result<St, { message: string; start: B; end: A }>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    } & G)[];
-    loopStack: Ty[][];
-    letOwner: Map<string, Span>;
-  },
+const inferGroupFrom: <A>(
+  ctx: Ctx<A>,
   group: Stmt[],
   st: St,
-) => Result<[Map<string, Ty>, St], IErr> = _curry(
-  3,
-  <A, B, C, D, E, F, G>(
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & D)[];
-        } & E
-      >;
-      plugins: ({
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: St,
-                d: { end: A; start: B } & F,
-              ) => Result<St, { message: string; start: B; end: A }>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      } & G)[];
-      loopStack: Ty[][];
-      letOwner: Map<string, Span>;
-    },
-    group: Stmt[],
-    st: St,
-  ) =>
-    match(group)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => Ok(_tuple(new Map<string, Ty>(), st)) as Result<[Map<string, Ty>, St], IErr>,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([s, ...rest]) =>
-          match(s)
-            .with({ _tag: "SLet" }, ({ name, annot, value, span }) =>
-              _Result_flatMap(
-                ([t, st1]) =>
-                  match(_Map_get(name, ctx.env))
-                    .with({ _tag: "Some" }, ({ value: selfSc }) =>
-                      _Result_flatMap(
-                        (st2) =>
-                          _Result_flatMap(
-                            ([pinned, st3]) =>
-                              _Result_flatMap(
-                                ([restTypes, st4]) =>
-                                  Ok(_tuple(_Map_set(name, pinned, restTypes), st4)) as Result<
-                                    [Map<string, Ty>, St],
-                                    IErr
-                                  >,
-                                inferGroupFrom(ctx, rest, st3),
-                              ),
-                            match(annot)
-                              .with({ _tag: "Some" }, ({ value: te }) =>
-                                (([at, _, stA]: [Ty, Map<string, Ty>, St]) =>
-                                  _Result_map(
-                                    (stB: St) => _tuple(at, stB),
-                                    u(t, at, stA, annotSpan(te)),
-                                  ))(
-                                  typeExprToType(
-                                    te,
-                                    new Map<string, Ty>(),
-                                    st2,
-                                    ctx.aliasMap,
-                                    _Set_fromArray([] as string[]),
-                                  ),
+) => Result<[Map<string, Ty>, St], IErr> = _curry(3, <A>(ctx: Ctx<A>, group: Stmt[], st: St) =>
+  match(group)
+    .with(
+      (_v) => {
+        const _g: any = _v;
+        return _g.length === 0;
+      },
+      () => Ok(_tuple(new Map<string, Ty>(), st)) as Result<[Map<string, Ty>, St], IErr>,
+    )
+    .with(
+      (_v) => {
+        const _g: any = _v;
+        return _g.length >= 1;
+      },
+      ([s, ...rest]) =>
+        match(s)
+          .with({ _tag: "SLet" }, ({ name, annot, value, span }) =>
+            _Result_flatMap(
+              ([t, st1]) =>
+                match(_Map_get(name, ctx.env))
+                  .with({ _tag: "Some" }, ({ value: selfSc }) =>
+                    _Result_flatMap(
+                      (st2) =>
+                        _Result_flatMap(
+                          ([pinned, st3]) =>
+                            _Result_flatMap(
+                              ([restTypes, st4]) =>
+                                Ok(_tuple(_Map_set(name, pinned, restTypes), st4)) as Result<
+                                  [Map<string, Ty>, St],
+                                  IErr
+                                >,
+                              inferGroupFrom(ctx, rest, st3),
+                            ),
+                          match(annot)
+                            .with({ _tag: "Some" }, ({ value: te }) =>
+                              (([at, _, stA]: [Ty, Map<string, Ty>, St]) =>
+                                _Result_map(
+                                  (stB: St) => _tuple(at, stB),
+                                  u(t, at, stA, annotSpan(te)),
+                                ))(
+                                typeExprToType(
+                                  te,
+                                  new Map<string, Ty>(),
+                                  st2,
+                                  ctx.aliasMap,
+                                  _Set_fromArray([] as string[]),
                                 ),
-                              )
-                              .with(
-                                { _tag: "None" },
-                                () => Ok(_tuple(t, st2)) as Result<[Ty, St], IErr>,
-                              )
-                              .exhaustive(),
-                          ),
-                        u(selfSc.ty, t, st1, span),
-                      ),
-                    )
-                    .with(
-                      { _tag: "None" },
-                      () =>
-                        Err(
-                          typeErr(`internal: missing self-binding for '${name}'`, span),
-                        ) as Result<[Map<string, Ty>, St], IErr>,
-                    )
-                    .exhaustive(),
-                inferExpr(ctx, value, st),
-              ),
-            )
-            .otherwise(() => inferGroupFrom(ctx, rest, st)),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+                              ),
+                            )
+                            .with(
+                              { _tag: "None" },
+                              () => Ok(_tuple(t, st2)) as Result<[Ty, St], IErr>,
+                            )
+                            .exhaustive(),
+                        ),
+                      u(selfSc.ty, t, st1, span),
+                    ),
+                  )
+                  .with(
+                    { _tag: "None" },
+                    () =>
+                      Err(typeErr(`internal: missing self-binding for '${name}'`, span)) as Result<
+                        [Map<string, Ty>, St],
+                        IErr
+                      >,
+                  )
+                  .exhaustive(),
+              inferExpr(ctx, value, st),
+            ),
+          )
+          .otherwise(() => inferGroupFrom(ctx, rest, st)),
+    )
+    .otherwise(() => {
+      throw new Error("non-exhaustive match");
+    }),
 );
 const dropGroupFrom: <A>(group: Stmt[], env: Map<string, A>) => Map<string, A> = _curry(
   2,
@@ -4992,124 +3112,14 @@ const noteGroupLets: {
       throw new Error("non-exhaustive match");
     }),
 );
-const processGroupsFrom: <A, B, C, D, E, F, G>(
-  ctx: {
-    letOwner: Map<string, Span>;
-    loopStack: Ty[][];
-    plugins: ({
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: St,
-              d: { end: A; start: B } & C,
-            ) => Result<St, { message: string; start: B; end: A }>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    } & D)[];
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & E)[];
-      } & F
-    >;
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
-    open: boolean;
-    env: Map<string, Scheme>;
-  },
+const processGroupsFrom: <A>(
+  ctx: Ctx<A>,
   sccs: number[][],
   lets: Stmt[],
   st: St,
-) => Result<
-  [
-    {
-      letOwner: Map<string, Span>;
-      loopStack: Ty[][];
-      plugins: ({
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: St,
-                d: { end: A; start: B } & C,
-              ) => Result<St, { message: string; start: B; end: A }>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      } & D)[];
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & E)[];
-        } & F
-      >;
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
-      open: boolean;
-      env: Map<string, Scheme>;
-    },
-    St,
-  ],
-  IErr
-> = _curry(
+) => Result<[Ctx<A>, St], IErr> = _curry(
   4,
-  <A, B, C, D, E, F, G>(
-    ctx: {
-      letOwner: Map<string, Span>;
-      loopStack: Ty[][];
-      plugins: ({
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: St,
-                d: { end: A; start: B } & C,
-              ) => Result<St, { message: string; start: B; end: A }>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      } & D)[];
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & E)[];
-        } & F
-      >;
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
-      open: boolean;
-      env: Map<string, Scheme>;
-    },
-    sccs: number[][],
-    lets: Stmt[],
-    st: St,
-  ) =>
+  <A>(ctx: Ctx<A>, sccs: number[][], lets: Stmt[], st: St) =>
     match(sccs)
       .with(
         (_v) => {
@@ -5147,83 +3157,9 @@ const processGroupsFrom: <A, B, C, D, E, F, G>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferExprStmtsFrom: <A, B, C, D, E, F, G>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & D)[];
-      } & E
-    >;
-    plugins: ({
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: St,
-              d: { end: A; start: B } & F,
-            ) => Result<St, { message: string; start: B; end: A }>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    } & G)[];
-    loopStack: Ty[][];
-    letOwner: Map<string, Span>;
-  },
-  stmts: Stmt[],
-  st: St,
-) => Result<St, IErr> = _curry(
+const inferExprStmtsFrom: <A>(ctx: Ctx<A>, stmts: Stmt[], st: St) => Result<St, IErr> = _curry(
   3,
-  <A, B, C, D, E, F, G>(
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & D)[];
-        } & E
-      >;
-      plugins: ({
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: St,
-                d: { end: A; start: B } & F,
-              ) => Result<St, { message: string; start: B; end: A }>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      } & G)[];
-      loopStack: Ty[][];
-      letOwner: Map<string, Span>;
-    },
-    stmts: Stmt[],
-    st: St,
-  ) =>
+  <A>(ctx: Ctx<A>, stmts: Stmt[], st: St) =>
     match(stmts)
       .with(
         (_v) => {
@@ -5568,31 +3504,16 @@ const runInferImports: <A, B, C, D>(
     } & D
   >,
   pluginsOpt: Option<
-    {
-      name: string;
-      parse: Option<
-        (
+    Plugin<
+      (
+        a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+        b: number,
+        c: (
           a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
           b: number,
-          c: (
-            a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-            b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, IErr>;
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    }[]
+        ) => Result<[Expr, number], IErr>,
+      ) => Result<Option<[Expr, number]>, IErr>
+    >[]
   >,
 ) => Result<
   {
@@ -5625,31 +3546,16 @@ const runInferImports: <A, B, C, D>(
       } & D
     >,
     pluginsOpt: Option<
-      {
-        name: string;
-        parse: Option<
-          (
+      Plugin<
+        (
+          a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+          b: number,
+          c: (
             a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
             b: number,
-            c: (
-              a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-              b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, IErr>;
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      }[]
+          ) => Result<[Expr, number], IErr>,
+        ) => Result<Option<[Expr, number]>, IErr>
+      >[]
     >,
   ) => {
     const plugins = resolvePluginsDefault(pluginsOpt);
@@ -5763,31 +3669,16 @@ export const inferProgramImports: <A, B, C, D>(
     } & D
   >,
   pluginsOpt: Option<
-    {
-      name: string;
-      parse: Option<
-        (
+    Plugin<
+      (
+        a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+        b: number,
+        c: (
           a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
           b: number,
-          c: (
-            a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-            b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, IErr>;
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    }[]
+        ) => Result<[Expr, number], IErr>,
+      ) => Result<Option<[Expr, number]>, IErr>
+    >[]
   >,
 ) => Result<Map<string, Scheme>, IErr> = _curry(
   8,
@@ -5812,31 +3703,16 @@ export const inferProgramImports: <A, B, C, D>(
       } & D
     >,
     pluginsOpt: Option<
-      {
-        name: string;
-        parse: Option<
-          (
+      Plugin<
+        (
+          a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+          b: number,
+          c: (
             a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
             b: number,
-            c: (
-              a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-              b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, IErr>;
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      }[]
+          ) => Result<[Expr, number], IErr>,
+        ) => Result<Option<[Expr, number]>, IErr>
+      >[]
     >,
   ) =>
     _Result_map(
@@ -5944,31 +3820,16 @@ export const inferProgramImportsTypes: <A, B, C, D>(
     } & D
   >,
   pluginsOpt: Option<
-    {
-      name: string;
-      parse: Option<
-        (
+    Plugin<
+      (
+        a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+        b: number,
+        c: (
           a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
           b: number,
-          c: (
-            a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-            b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, IErr>;
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    }[]
+        ) => Result<[Expr, number], IErr>,
+      ) => Result<Option<[Expr, number]>, IErr>
+    >[]
   >,
 ) => Result<
   {
@@ -6001,31 +3862,16 @@ export const inferProgramImportsTypes: <A, B, C, D>(
       } & D
     >,
     pluginsOpt: Option<
-      {
-        name: string;
-        parse: Option<
-          (
+      Plugin<
+        (
+          a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+          b: number,
+          c: (
             a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
             b: number,
-            c: (
-              a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-              b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, IErr>;
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      }[]
+          ) => Result<[Expr, number], IErr>,
+        ) => Result<Option<[Expr, number]>, IErr>
+      >[]
     >,
   ) =>
     runInferImports(stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt),
@@ -6166,31 +4012,16 @@ export const inferProgramWith: <A>(
   namespaces: Map<string, Map<string, Ty>>,
   openMode: boolean,
   pluginsOpt: Option<
-    {
-      name: string;
-      parse: Option<
-        (
+    Plugin<
+      (
+        a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+        b: number,
+        c: (
           a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
           b: number,
-          c: (
-            a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-            b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: {
-            unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, IErr>;
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-          },
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    }[]
+        ) => Result<[Expr, number], IErr>,
+      ) => Result<Option<[Expr, number]>, IErr>
+    >[]
   >,
 ) => Result<Map<string, Scheme>, IErr> = _curry(
   5,
@@ -6200,31 +4031,16 @@ export const inferProgramWith: <A>(
     namespaces: Map<string, Map<string, Ty>>,
     openMode: boolean,
     pluginsOpt: Option<
-      {
-        name: string;
-        parse: Option<
-          (
+      Plugin<
+        (
+          a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+          b: number,
+          c: (
             a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
             b: number,
-            c: (
-              a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-              b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: {
-              unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, IErr>;
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-            },
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      }[]
+          ) => Result<[Expr, number], IErr>,
+        ) => Result<Option<[Expr, number]>, IErr>
+      >[]
     >,
   ) =>
     inferProgramImports(

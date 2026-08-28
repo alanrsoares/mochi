@@ -55,7 +55,6 @@ import {
   freshVar,
   freshRowVar,
   zonk,
-  resolve,
 } from "./types";
 import { primTypeNames } from "./ctors";
 
