@@ -1,6 +1,6 @@
 # 0037 — Partial-application overloads for concrete curried functions
 
-- **Status:** Accepted
+- **Status:** Superseded in part by [0093](0093-curry-type-not-overloads.md) — user bindings now type as `_Curry<[params], R>`; the overload set survives for prelude builtins (`flatFnType`) and extern hosts (`flatHostType`), whose types are generic
 - **Source:** `src/dts.ts:467`, `test/codegen-ts.spec.ts:40`, `test/dts.spec.ts:27`, `test/ts-emit-tsc.spec.ts:120`
 
 ## Context

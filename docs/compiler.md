@@ -97,6 +97,13 @@ Two invariants are enforced in CI-style scripts:
 
 Both invariants run in CI: mochi compiles mochi, and the emitted TypeScript typechecks.
 
+`bun scripts/bootstrap-self-tsc.ts` is a third measure, **diagnostic rather than
+gating**: it emits the graph with the SELF-HOSTED backend and counts
+`tsc --strict` errors. Unlike `bootstrap:tsc` its number is not 0 — it is the
+running count of places the mirror's inference is less precise than the oracle's
+(typically generalizing a `Map<string, …>` the oracle infers concretely). Treat a
+rise as a lead, not a build failure.
+
 ### Development ownership
 
 For compiler behavior covered by `bootstrap/`, Mochi is the authoring source:

@@ -57,8 +57,9 @@ Three details are load-bearing, each found by a failing typecheck:
 - Error messages improve: a mismatch now reports
   `'[string] | [string, number] | [string, number, boolean]'` — the readable
   prefix set — instead of a wall of numbered overloads.
-- **`_Curry` is stricter than the overload set**, and the self-hosted emit north
-  star regressed 54 → 58 (`scripts/bootstrap-self-tsc.ts`). All the new errors
+- **`_Curry` is stricter than the overload set**, and the self-hosted emit
+  measure regressed 54 → 58 (`scripts/bootstrap-self-tsc.ts`), since recovered
+  to 56 by the ADR 0092 same-shape fix. All the remaining new errors
   are pre-existing MIRROR inference gaps that the overload set happened to
   accept: the self-host generalizes a `Map<string, …>` to `Map<A, …>` where the
   oracle infers it concretely. The oracle emit is unaffected (0 errors), so this

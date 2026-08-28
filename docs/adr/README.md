@@ -86,7 +86,7 @@ What else was on the table and why not.
 | [0034](0034-open-row-record-generic-param.md) | Open-row record params emit as a scoped `<R>` generic | Accepted |
 | [0035](0035-empty-collection-seed-typing.md) | Type empty collection literals from their inferred element type | Accepted |
 | [0036](0036-tuple-literal-helper.md) | Emit tuple literals via a `_tuple(a, b)` runtime helper | Accepted |
-| [0037](0037-curried-function-partial-application-overloads.md) | Partial-application overloads for concrete curried functions | Accepted |
+| [0037](0037-curried-function-partial-application-overloads.md) | Partial-application overloads for concrete curried functions | Superseded in part by 0093 |
 | [0038](0038-eager-array-match-catchall.md) | Eager-array match with no catch-all: emit an exhaustive-check helper | Accepted |
 | [0039](0039-nullary-ctor-empty-seed-annotation.md) | Annotate nullary-constructor refs like empty-collection seeds | Accepted |
 | [0040](0040-generalize-resolves-through-subst.md) | `generalize` resolves mono-scheme bindings through the substitution | Accepted |
