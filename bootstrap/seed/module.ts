@@ -1,8 +1,8 @@
+import type { PErr, Tok } from "./parser";
 import type { AliasField, Stmt, TypeExpr } from "./ast";
 import type { Ty } from "./types";
-import type { PErr } from "./parser";
 import type { Scheme } from "./schemes";
-import type { QualAliasInfo } from "./infer";
+import type { Plugin, QualAliasInfo } from "./infer";
 
 export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
 export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
@@ -680,7 +680,7 @@ const compileOne: <A>(
                 res.imports,
                 res.nsImports,
                 res.quals,
-                None,
+                None as Option<Plugin<Tok>[]>,
               ),
             )
               .with(
@@ -1120,7 +1120,7 @@ const compileOneTs: <A, B>(
                 res.imports,
                 res.nsImports,
                 res.quals,
-                None,
+                None as Option<Plugin<Tok>[]>,
               ),
             )
               .with(

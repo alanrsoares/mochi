@@ -29,9 +29,16 @@ export type InferApi = {
   inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
   unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, IErr>;
 };
+export type LocTok<A> = { tok: A; start: number; end: number; doc: Option<string> };
 export type Plugin<A> = {
   name: string;
-  parse: Option<A>;
+  parse: Option<
+    (
+      a: LocTok<A>[],
+      b: number,
+      c: (a: LocTok<A>[], b: number) => Result<[Expr, number], IErr>,
+    ) => Result<Option<[Expr, number]>, IErr>
+  >;
   inferCall: Option<
     (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
   >;
@@ -2429,23 +2436,20 @@ const aliasMapFrom: _Curry<
       throw new Error("non-exhaustive match");
     }),
 );
-const registerCtorsFrom: <A, B, C>(
+const registerCtorsFrom: <A, B>(
   ctors: ({ name: A; fields: CtorField[] } & B)[],
   typeName: string,
   params: string[],
-  aliasMap: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: QualAliasField[] } & C>,
+  aliasMap: Map<string, QualAliasInfo>,
   env: Map<A, Scheme>,
   st: St,
 ) => [Map<A, Scheme>, St] = _curry(
   6,
-  <A, B, C>(
+  <A, B>(
     ctors: ({ name: A; fields: CtorField[] } & B)[],
     typeName: string,
     params: string[],
-    aliasMap: Map<
-      string,
-      { expr: Option<TypeExpr>; params: string[]; fields: QualAliasField[] } & C
-    >,
+    aliasMap: Map<string, QualAliasInfo>,
     env: Map<A, Scheme>,
     st: St,
   ) =>
@@ -2466,22 +2470,12 @@ const registerCtorsFrom: <A, B, C>(
         throw new Error("non-exhaustive match");
       }),
 );
-const registerUserCtorsFrom: <A>(
-  stmts: Stmt[],
-  aliasMap: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: QualAliasField[] } & A>,
-  env: Map<string, Scheme>,
-  st: St,
-) => [Map<string, Scheme>, St] = _curry(
+const registerUserCtorsFrom: _Curry<
+  [stmts: Stmt[], aliasMap: Map<string, QualAliasInfo>, env: Map<string, Scheme>, st: St],
+  [Map<string, Scheme>, St]
+> = _curry(
   4,
-  <A>(
-    stmts: Stmt[],
-    aliasMap: Map<
-      string,
-      { expr: Option<TypeExpr>; params: string[]; fields: QualAliasField[] } & A
-    >,
-    env: Map<string, Scheme>,
-    st: St,
-  ) =>
+  (stmts: Stmt[], aliasMap: Map<string, QualAliasInfo>, env: Map<string, Scheme>, st: St) =>
     match(stmts)
       .with(
         (_v) => {
@@ -2509,23 +2503,20 @@ const registerUserCtorsFrom: <A>(
         throw new Error("non-exhaustive match");
       }),
 );
-const registerBuiltinCtorGroup: <A, B, C>(
+const registerBuiltinCtorGroup: <A, B>(
   ctors: ({ name: A; fields: CtorField[] } & B)[],
   typeName: string,
   params: string[],
-  aliasMap: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: QualAliasField[] } & C>,
+  aliasMap: Map<string, QualAliasInfo>,
   env: Map<A, Scheme>,
   st: St,
 ) => [Map<A, Scheme>, St] = _curry(
   6,
-  <A, B, C>(
+  <A, B>(
     ctors: ({ name: A; fields: CtorField[] } & B)[],
     typeName: string,
     params: string[],
-    aliasMap: Map<
-      string,
-      { expr: Option<TypeExpr>; params: string[]; fields: QualAliasField[] } & C
-    >,
+    aliasMap: Map<string, QualAliasInfo>,
     env: Map<A, Scheme>,
     st: St,
   ) =>
@@ -2553,27 +2544,24 @@ const registerBuiltinCtorGroup: <A, B, C>(
         throw new Error("non-exhaustive match");
       }),
 );
-const registerBuiltinCtorsFrom: <A, B, C, D>(
+const registerBuiltinCtorsFrom: <A, B, C>(
   decls: ({
     ctors: ({ name: A; fields: CtorField[] } & B)[];
     name: string;
     params: string[];
   } & C)[],
-  aliasMap: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: QualAliasField[] } & D>,
+  aliasMap: Map<string, QualAliasInfo>,
   env: Map<A, Scheme>,
   st: St,
 ) => [Map<A, Scheme>, St] = _curry(
   4,
-  <A, B, C, D>(
+  <A, B, C>(
     decls: ({
       ctors: ({ name: A; fields: CtorField[] } & B)[];
       name: string;
       params: string[];
     } & C)[],
-    aliasMap: Map<
-      string,
-      { expr: Option<TypeExpr>; params: string[]; fields: QualAliasField[] } & D
-    >,
+    aliasMap: Map<string, QualAliasInfo>,
     env: Map<A, Scheme>,
     st: St,
   ) =>
@@ -2594,22 +2582,12 @@ const registerBuiltinCtorsFrom: <A, B, C, D>(
         throw new Error("non-exhaustive match");
       }),
 );
-const registerExternsFrom: <A>(
-  stmts: Stmt[],
-  aliasMap: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: QualAliasField[] } & A>,
-  env: Map<string, Scheme>,
-  st: St,
-) => [Map<string, Scheme>, St] = _curry(
+const registerExternsFrom: _Curry<
+  [stmts: Stmt[], aliasMap: Map<string, QualAliasInfo>, env: Map<string, Scheme>, st: St],
+  [Map<string, Scheme>, St]
+> = _curry(
   4,
-  <A>(
-    stmts: Stmt[],
-    aliasMap: Map<
-      string,
-      { expr: Option<TypeExpr>; params: string[]; fields: QualAliasField[] } & A
-    >,
-    env: Map<string, Scheme>,
-    st: St,
-  ) =>
+  (stmts: Stmt[], aliasMap: Map<string, QualAliasInfo>, env: Map<string, Scheme>, st: St) =>
     match(stmts)
       .with(
         (_v) => {
@@ -3380,7 +3358,7 @@ const resolveLetParamsFrom: _Curry<[keys: string[], st: St], TypeAt[]> = _curry(
 );
 const resolveLetParams: (st: St) => TypeAt[] = (st: St) =>
   resolveLetParamsFrom(_Map_keys(st.letSpans), st);
-const runInferImports: <A, B, C, D>(
+const runInferImports: <A, B, C>(
   stmts: Stmt[],
   builtins: Map<string, Ty>,
   namespaces: Map<string, Map<string, Ty>>,
@@ -3394,24 +3372,13 @@ const runInferImports: <A, B, C, D>(
         string,
         {
           expr: Option<TypeExpr>;
-          fields: ({ fieldType: TypeExpr; name: string } & B)[];
+          fields: ({ fieldType: TypeExpr; name: string } & A)[];
           params: string[];
-        } & C
+        } & B
       >;
-    } & D
+    } & C
   >,
-  pluginsOpt: Option<
-    Plugin<
-      (
-        a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-        b: number,
-        c: (
-          a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-          b: number,
-        ) => Result<[Expr, number], IErr>,
-      ) => Result<Option<[Expr, number]>, IErr>
-    >[]
-  >,
+  pluginsOpt: Option<Plugin<Tok>[]>,
 ) => Result<
   {
     env: Map<string, Scheme>;
@@ -3422,7 +3389,7 @@ const runInferImports: <A, B, C, D>(
   IErr
 > = _curry(
   8,
-  <A, B, C, D>(
+  <A, B, C>(
     stmts: Stmt[],
     builtins: Map<string, Ty>,
     namespaces: Map<string, Map<string, Ty>>,
@@ -3436,26 +3403,15 @@ const runInferImports: <A, B, C, D>(
           string,
           {
             expr: Option<TypeExpr>;
-            fields: ({ fieldType: TypeExpr; name: string } & B)[];
+            fields: ({ fieldType: TypeExpr; name: string } & A)[];
             params: string[];
-          } & C
+          } & B
         >;
-      } & D
+      } & C
     >,
-    pluginsOpt: Option<
-      Plugin<
-        (
-          a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-          b: number,
-          c: (
-            a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-            b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
-      >[]
-    >,
+    pluginsOpt: Option<Plugin<Tok>[]>,
   ) => {
-    const plugins = resolvePluginsDefault(pluginsOpt);
+    const plugins: Plugin<Tok>[] = resolvePluginsDefault(pluginsOpt);
     const st0: St = mkSt(1000);
     const env0: Map<string, Scheme> = seedBuiltins(builtins, new Map<string, Scheme>(), st0);
     const ns0: Map<string, Map<string, Scheme>> = seedNsImports(
@@ -3490,7 +3446,10 @@ const runInferImports: <A, B, C, D>(
             ),
           )
             .with(
-              (_v) => _v._tag === "Ok",
+              (_v): _v is Extract<Result<[Ctx<Tok>, St], IErr>, { _tag: "Ok" }> => {
+                const _g: any = _v;
+                return _g._tag === "Ok";
+              },
               ({ value: [finalCtx, st4] }) =>
                 match(inferExprStmtsFrom(finalCtx, stmts, st4))
                   .with(
@@ -3545,7 +3504,7 @@ const runInferImports: <A, B, C, D>(
       ))(registerUserCtorsFrom(stmts, aliasMap, env0, st0));
   },
 );
-export const inferProgramImports: <A, B, C, D>(
+export const inferProgramImports: <A, B, C>(
   stmts: Stmt[],
   builtins: Map<string, Ty>,
   namespaces: Map<string, Map<string, Ty>>,
@@ -3559,27 +3518,16 @@ export const inferProgramImports: <A, B, C, D>(
         string,
         {
           expr: Option<TypeExpr>;
-          fields: ({ fieldType: TypeExpr; name: string } & B)[];
+          fields: ({ fieldType: TypeExpr; name: string } & A)[];
           params: string[];
-        } & C
+        } & B
       >;
-    } & D
+    } & C
   >,
-  pluginsOpt: Option<
-    Plugin<
-      (
-        a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-        b: number,
-        c: (
-          a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-          b: number,
-        ) => Result<[Expr, number], IErr>,
-      ) => Result<Option<[Expr, number]>, IErr>
-    >[]
-  >,
+  pluginsOpt: Option<Plugin<Tok>[]>,
 ) => Result<Map<string, Scheme>, IErr> = _curry(
   8,
-  <A, B, C, D>(
+  <A, B, C>(
     stmts: Stmt[],
     builtins: Map<string, Ty>,
     namespaces: Map<string, Map<string, Ty>>,
@@ -3593,24 +3541,13 @@ export const inferProgramImports: <A, B, C, D>(
           string,
           {
             expr: Option<TypeExpr>;
-            fields: ({ fieldType: TypeExpr; name: string } & B)[];
+            fields: ({ fieldType: TypeExpr; name: string } & A)[];
             params: string[];
-          } & C
+          } & B
         >;
-      } & D
+      } & C
     >,
-    pluginsOpt: Option<
-      Plugin<
-        (
-          a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-          b: number,
-          c: (
-            a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-            b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
-      >[]
-    >,
+    pluginsOpt: Option<Plugin<Tok>[]>,
   ) =>
     _Result_map(
       (r: {
@@ -3648,10 +3585,10 @@ export const inferProgram: _Curry<
       new Map<string, Scheme>(),
       new Map<string, Map<string, Scheme>>(),
       emptyQuals,
-      None,
+      None as Option<Plugin<Tok>[]>,
     ),
 );
-export const inferProgramImportsTypes: <A, B, C, D>(
+export const inferProgramImportsTypes: <A, B, C>(
   stmts: Stmt[],
   builtins: Map<string, Ty>,
   namespaces: Map<string, Map<string, Ty>>,
@@ -3665,24 +3602,13 @@ export const inferProgramImportsTypes: <A, B, C, D>(
         string,
         {
           expr: Option<TypeExpr>;
-          fields: ({ fieldType: TypeExpr; name: string } & B)[];
+          fields: ({ fieldType: TypeExpr; name: string } & A)[];
           params: string[];
-        } & C
+        } & B
       >;
-    } & D
+    } & C
   >,
-  pluginsOpt: Option<
-    Plugin<
-      (
-        a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-        b: number,
-        c: (
-          a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-          b: number,
-        ) => Result<[Expr, number], IErr>,
-      ) => Result<Option<[Expr, number]>, IErr>
-    >[]
-  >,
+  pluginsOpt: Option<Plugin<Tok>[]>,
 ) => Result<
   {
     env: Map<string, Scheme>;
@@ -3693,7 +3619,7 @@ export const inferProgramImportsTypes: <A, B, C, D>(
   IErr
 > = _curry(
   8,
-  <A, B, C, D>(
+  <A, B, C>(
     stmts: Stmt[],
     builtins: Map<string, Ty>,
     namespaces: Map<string, Map<string, Ty>>,
@@ -3707,24 +3633,13 @@ export const inferProgramImportsTypes: <A, B, C, D>(
           string,
           {
             expr: Option<TypeExpr>;
-            fields: ({ fieldType: TypeExpr; name: string } & B)[];
+            fields: ({ fieldType: TypeExpr; name: string } & A)[];
             params: string[];
-          } & C
+          } & B
         >;
-      } & D
+      } & C
     >,
-    pluginsOpt: Option<
-      Plugin<
-        (
-          a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-          b: number,
-          c: (
-            a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-            b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
-      >[]
-    >,
+    pluginsOpt: Option<Plugin<Tok>[]>,
   ) =>
     runInferImports(stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt),
 );
@@ -3760,45 +3675,26 @@ export const inferProgramTypes: _Curry<
       new Map<string, Scheme>(),
       new Map<string, Map<string, Scheme>>(),
       emptyQuals,
-      None,
+      None as Option<Plugin<Tok>[]>,
     ),
 );
-export const inferProgramWith: <A>(
-  stmts: Stmt[],
-  builtins: Map<string, Ty>,
-  namespaces: Map<string, Map<string, Ty>>,
-  openMode: boolean,
-  pluginsOpt: Option<
-    Plugin<
-      (
-        a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-        b: number,
-        c: (
-          a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-          b: number,
-        ) => Result<[Expr, number], IErr>,
-      ) => Result<Option<[Expr, number]>, IErr>
-    >[]
-  >,
-) => Result<Map<string, Scheme>, IErr> = _curry(
-  5,
-  <A>(
+export const inferProgramWith: _Curry<
+  [
     stmts: Stmt[],
     builtins: Map<string, Ty>,
     namespaces: Map<string, Map<string, Ty>>,
     openMode: boolean,
-    pluginsOpt: Option<
-      Plugin<
-        (
-          a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-          b: number,
-          c: (
-            a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-            b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
-      >[]
-    >,
+    pluginsOpt: Option<Plugin<Tok>[]>,
+  ],
+  Result<Map<string, Scheme>, IErr>
+> = _curry(
+  5,
+  (
+    stmts: Stmt[],
+    builtins: Map<string, Ty>,
+    namespaces: Map<string, Map<string, Ty>>,
+    openMode: boolean,
+    pluginsOpt: Option<Plugin<Tok>[]>,
   ) =>
     inferProgramImports(
       stmts,

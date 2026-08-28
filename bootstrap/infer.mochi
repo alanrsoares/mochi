@@ -1150,7 +1150,7 @@ let aliasMapFrom = (stmts, acc) => switch stmts {
     }
 }
 
-let registerCtorsFrom = (ctors, typeName, params, aliasMap, env, st: Types.St) => switch ctors {
+let registerCtorsFrom = (ctors, typeName, params, aliasMap: Map<string, QualAliasInfo>, env, st: Types.St) => switch ctors {
   | [] => (env, st)
   | [c, ...rest] => let (sc, st1) = ctorScheme(
       typeName,
@@ -1169,7 +1169,7 @@ let registerCtorsFrom = (ctors, typeName, params, aliasMap, env, st: Types.St) =
       )
 }
 // constructors first, so `let`s (in any order after their type) can use them
-let registerUserCtorsFrom = (stmts, aliasMap, env, st: Types.St) => switch stmts {
+let registerUserCtorsFrom = (stmts, aliasMap: Map<string, QualAliasInfo>, env, st: Types.St) => switch stmts {
   | [] => (env, st)
   | [s, ...rest] => switch s {
       | Ast.SType(name, params, ctors, _, _, _, _, _) => let (env1, st1) = registerCtorsFrom(
@@ -1185,7 +1185,7 @@ let registerUserCtorsFrom = (stmts, aliasMap, env, st: Types.St) => switch stmts
     }
 }
 
-let registerBuiltinCtorGroup = (ctors, typeName, params, aliasMap, env, st: Types.St) => switch ctors {
+let registerBuiltinCtorGroup = (ctors, typeName, params, aliasMap: Map<string, QualAliasInfo>, env, st: Types.St) => switch ctors {
   | [] => (env, st)
   | [c, ...rest] => Map.has(c.name, env)
       ? registerBuiltinCtorGroup(rest, typeName, params, aliasMap, env, st)
@@ -1202,7 +1202,7 @@ let registerBuiltinCtorGroup = (ctors, typeName, params, aliasMap, env, st: Type
 // unless the program already declared its own type of that name — a user
 // redeclaration wins, so `Map.get : ... -> Option v` and a hand-written
 // Some/None still type-check against whichever one is in scope.
-let registerBuiltinCtorsFrom = (decls, aliasMap, env, st: Types.St) => switch decls {
+let registerBuiltinCtorsFrom = (decls, aliasMap: Map<string, QualAliasInfo>, env, st: Types.St) => switch decls {
   | [] => (env, st)
   | [d, ...rest] => let (env1, st1) = registerBuiltinCtorGroup(
       d.ctors,
@@ -1217,7 +1217,7 @@ let registerBuiltinCtorsFrom = (decls, aliasMap, env, st: Types.St) => switch de
 
 // externs next — their declared type is authoritative; generalize so a
 // polymorphic signature (e.g. `a -> a`) instantiates fresh at each use site.
-let registerExternsFrom = (stmts, aliasMap, env, st: Types.St) => switch stmts {
+let registerExternsFrom = (stmts, aliasMap: Map<string, QualAliasInfo>, env, st: Types.St) => switch stmts {
   | [] => (env, st)
   | [s, ...rest] => switch s {
       | Ast.SExtern(name, _, params, typeExpr, _, _, _, _, _, _) => let (vars, st0) = Array.reduce(
@@ -1591,7 +1591,7 @@ let resolveLetParams = st => resolveLetParamsFrom(Map.keys(st.letSpans), st)
 
 /// Full inference result — the metadata the TS backend needs on top of `env`
 /// (ADR 0090), including `letParams` (ADR 0035).
-let runInferImports = (stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt) =>
+let runInferImports = (stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt: Option<[Plugin<a>]>) =>
   let plugins = resolvePluginsDefault(pluginsOpt) in
   let st0 = mkSt(1000) in
   let env0 = seedBuiltins(builtins, #{}, st0) in
@@ -1626,7 +1626,7 @@ let runInferImports = (stmts, builtins, namespaces, openMode, imports, nsImports
 
 /// Env-only view — the shape every existing caller (compile.mochi,
 /// module.mochi) and the TS parity oracle expect.
-export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt) =>
+export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt: Option<[Plugin<a>]>) =>
   runInferImports(
     stmts,
     builtins,
@@ -1661,12 +1661,18 @@ type InferApi = {
   unify: Types.Ty -> Types.Ty -> Types.St -> Ast.Span -> Result<Types.St, IErr>
 }
 
-/// A plugin as INFERENCE sees it. `parse` stays a type PARAMETER: its hook is
-/// token-shaped and `Tok` lives in parser.mochi, which imports extensions.mochi
-/// - naming it here would close a module cycle.
-type Plugin<p> = {
+/// A located token as the PARSE hook sees it. Inference never inspects one, so
+/// `tok` stays a type parameter — that keeps the record nameable here without
+/// importing parser.mochi (which declares the real `Tok`) just to spell it.
+/// Structural, so it still unifies with the parser's own `LocTok`.
+type LocTok<t> = { tok: t, start: number, end: number, doc: Option<string> }
+
+/// A plugin as INFERENCE sees it. The parse hook is written INLINE rather than
+/// behind its own alias: a parameterized alias whose body is an arrow emits as
+/// an opaque brand, not a transparent type.
+type Plugin<t> = {
   name: string,
-  parse: Option<p>,
+  parse: Option<[LocTok<t>] -> number -> ([LocTok<t>] -> number -> Result<(Ast.Expr, number), IErr>) -> Result<Option<(Ast.Expr, number)> , IErr> >,
   inferCall: Option<Ast.Expr -> [Ast.Expr] -> Option<string> -> Types.St -> InferApi -> Result<Option<(Types.Ty, Types.St)> , IErr> >
 }
 
@@ -1703,7 +1709,7 @@ export let inferProgram = (stmts, builtins, namespaces, openMode) =>
 /// `inferProgramImports` throws away everything but `env`; a module in a graph
 /// still has to annotate from its span -> type table, so the driver calls this
 /// instead and reads `env` off the record itself.
-export let inferProgramImportsTypes = (stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt) =>
+export let inferProgramImportsTypes = (stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt: Option<[Plugin<a>]>) =>
   runInferImports(
     stmts,
     builtins,
@@ -1729,7 +1735,7 @@ export let inferProgramTypes = (stmts, builtins, namespaces, openMode) =>
     None
   )
 
-export let inferProgramWith = (stmts, builtins, namespaces, openMode, pluginsOpt) =>
+export let inferProgramWith = (stmts, builtins, namespaces, openMode, pluginsOpt: Option<[Plugin<a>]>) =>
   inferProgramImports(
     stmts,
     builtins,
