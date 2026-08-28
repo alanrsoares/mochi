@@ -191,7 +191,10 @@ const stripped = (rel: string): string =>
 
 // Data-only modules whose ctors other modules import. Prepended into the eval
 // sandbox (guarded by existsSync so this works before/after each is extracted).
-const CTOR_MODULES = ["ast", "usefulness", "types", "ctors", "schemes", "scc"];
+const CTOR_MODULES = ["ast", "usefulness", "types", "ctors", "schemes", "scc", "lexer"];
+
+// Modules prepended for their constructors only, not their whole body.
+const CTOR_DEFS_ONLY = new Set(["lexer"]);
 
 // CapCase `const` bindings a stripped ctor module defines — used to rebuild an
 // `import * as Alias` namespace object after imports are stripped (ADR 0002).
@@ -203,6 +206,36 @@ const exportedCtorNames = (js: string): string[] =>
 // concatenating a dep module with the target would declare those twice. Ctor
 // factories are CapCase and module locals lowerCamel, so this never collides
 // meaningfully — it only removes the duplicate shared preamble.
+/**
+ * Index of the line ending the statement that starts at `i`. Some emitted consts
+ * are multi-line match chains and prelude defs like `_curry` are multi-line
+ * function bodies, so a trailing `;` only ends the statement once every bracket
+ * it opened has closed — `return (...b) => c(...a, ...b);` inside a body does
+ * not. Brackets inside a STRING are text, not structure: the lexer's punctuation
+ * tables are full of `"("` / `"}"` and would otherwise drive `depth` negative
+ * and swallow every following declaration.
+ */
+const endOfStatement = (lines: readonly string[], i: number): number => {
+  let depth = 0;
+  let quote = "";
+  for (let j = i; j < lines.length; j++) {
+    const text = lines[j] ?? "";
+    for (let k = 0; k < text.length; k++) {
+      const ch = text[k]!;
+      if (quote) {
+        if (ch === "\\") k++;
+        else if (ch === quote) quote = "";
+        continue;
+      }
+      if (ch === '"' || ch === "'" || ch === "`") quote = ch;
+      else if ("({[".includes(ch)) depth += 1;
+      else if (")}]".includes(ch)) depth -= 1;
+    }
+    if (depth <= 0 && /;\s*$/.test(text)) return j;
+  }
+  return lines.length - 1;
+};
+
 const dedupeConsts = (js: string): string => {
   const lines = js.split("\n");
   const seen = new Set<string>();
@@ -215,25 +248,29 @@ const dedupeConsts = (js: string): string => {
       i++;
       continue;
     }
-    // Consume the whole statement (some emitted consts are multi-line match
-    // chains, and prelude defs like `_curry` are multi-line function bodies) so
-    // dropping a duplicate leaves no orphaned `.with(…)` or dangling `};` line.
-    // A trailing `;` only ends the statement once every bracket it opened has
-    // closed — `return (...b) => c(...a, ...b);` inside a body does not.
-    let j = i;
-    let depth = 0;
-    for (; j < lines.length; j++) {
-      const text = lines[j] ?? "";
-      for (const ch of text) {
-        if ("({[".includes(ch)) depth += 1;
-        else if (")}]".includes(ch)) depth -= 1;
-      }
-      if (depth <= 0 && /;\s*$/.test(text)) break;
-    }
+    const j = endOfStatement(lines, i);
     if (!seen.has(name)) {
       seen.add(name);
       out.push(...lines.slice(i, j + 1));
     }
+    i = j + 1;
+  }
+  return out.join("\n");
+};
+
+/**
+ * Just the constructor declarations of a module, plus the `_`-prefixed runtime
+ * preamble they call (`_curry`). `lexer` is pulled in for its `Tok` constructors
+ * alone; prepending its whole body would redeclare `lex`, which the pipeline
+ * specs inject as an eval parameter.
+ */
+const ctorDefsOnly = (js: string): string => {
+  const lines = js.split("\n");
+  const out: string[] = [];
+  for (let i = 0; i < lines.length; ) {
+    const name = (lines[i] ?? "").match(/^const (\w+) =/)?.[1];
+    const j = name ? endOfStatement(lines, i) : i;
+    if (name && /^[A-Z_]/.test(name)) out.push(...lines.slice(i, j + 1));
     i = j + 1;
   }
   return out.join("\n");
@@ -273,7 +310,8 @@ export const bootstrapModuleJs = (nameOrPath: string): string => {
   const consider = (jsSrc: string): void => {
     for (const d of CTOR_MODULES) {
       if (needed.has(d)) continue;
-      if (new RegExp(`from "\\./${d}\\.js"`).test(jsSrc)) {
+      // `\.\.?/` — plugins/jsx.js reaches the root modules as `../lexer.js`.
+      if (new RegExp(`from "\\.\\.?/${d}\\.js"`).test(jsSrc)) {
         needed.add(d);
         consider(raw(d));
       }
@@ -290,7 +328,7 @@ export const bootstrapModuleJs = (nameOrPath: string): string => {
   for (const d of CTOR_MODULES) {
     if (!needed.has(d)) continue;
     injectNs(raw(d)); // namespace aliases before the module body uses them
-    parts.push(stripped(d));
+    parts.push(CTOR_DEFS_ONLY.has(d) ? ctorDefsOnly(stripped(d)) : stripped(d));
   }
   for (const d of PLUGIN_SEAM) {
     if (!needed.has(d)) continue;

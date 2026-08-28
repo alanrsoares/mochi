@@ -101,8 +101,9 @@ Both invariants run in CI: mochi compiles mochi, and the emitted TypeScript type
 gating**: it emits the graph with the SELF-HOSTED backend and counts
 `tsc --strict` errors. Unlike `bootstrap:tsc` its number is not 0 — it is the
 running count of places the mirror's inference is less precise than the oracle's
-(typically generalizing a `Map<string, …>` the oracle infers concretely). Treat a
-rise as a lead, not a build failure.
+(what remains: `#{}` seeded as `Map<unknown, unknown>` per ADR 0042, and inline
+struct types where the oracle folds a named alias). Treat a rise as a lead, not a
+build failure.
 
 ### Development ownership
 

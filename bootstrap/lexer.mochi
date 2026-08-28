@@ -14,7 +14,9 @@
 //   check.mochi ctorLoop note in the loop/recur commit history. The smaller
 //   scan loops below don't hit this and stay converted.)
 
-type Tok =
+/// Shared with parser.mochi and plugins/jsx.mochi — one declaration, not
+/// three structurally-equal ones.
+export type Tok =
   | TLet
   | TType
   | TExtern

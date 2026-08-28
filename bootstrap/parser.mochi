@@ -9,69 +9,13 @@
 // - `ParseAbort` (throw/catch) becomes Result threading: one `let?` bind per
 //   sequenced step (ADR 0017 — this file's original `Result.flatMap` chains
 //   were the pain measurement that motivated it, docs/PATH_TO_BOOTSTRAP.md §2.4).
-// - `Tok` is declared here again (same shape as bootstrap/lexer.mochi) — modules
-//   arrive with Slice F; until then the differential suite keeps both honest,
-//   and the `_tag` runtime shape makes the two declarations interchangeable.
+// - `Tok` and its constructors come from bootstrap/lexer.mochi. They were once
+//   redeclared here (structurally equal, kept honest by the differential suite)
+//   because the module graph did not exist yet; it does, and lexer.mochi imports
+//   nothing, so the edge adds no cycle.
 // - TS optional fields become Options (`doc`, `guard`, `rest`, `alias`), the
 //   `exported?` flag a plain bool, and `CtorField.type` is `fieldType` (`type`
 //   is a keyword here). The test harness canonicalizes both shapes.
-
-type Tok =
-  | TLet
-  | TType
-  | TExtern
-  | TSwitch
-  | TLoop
-  | TRecur
-  | TDo
-  | TImport
-  | TExport
-  | TEq
-  | TArrow
-  | TTarrow
-  | TPipe
-  | TCompose
-  | TConcat
-  | TBar
-  | TLparen
-  | TRparen
-  | TLbrace
-  | TRbrace
-  | TLbracket
-  | TRbracket
-  | TSpread
-  | TPlus
-  | TMinus
-  | TStar
-  | TSlash
-  | TPercent
-  | TAt
-  | THash
-  | TDot
-  | TColon
-  | TQuestion
-  | TEqeq
-  | TNeq
-  | TLte
-  | TGte
-  | TLt
-  | TGt
-  | TAndand
-  | TOror
-  | TBang
-  | TBacktick
-  | TComma
-  | TSemi
-  | TNum(value: number, raw: string)
-  | TBool(value: bool)
-  | TStr(value: string)
-  // ${} interpolation (ADR 0023): tmplstart/tmplmid/tmplend bracket a
-  // literal chunk before/between/after holes.
-  | TTmplStart(value: string)
-  | TTmplMid(value: string)
-  | TTmplEnd(value: string)
-  | TId(value: string)
-  | TEof
 
 import * as Ast from "./ast.mochi"
 import {
@@ -79,7 +23,68 @@ import {
   resolvePluginsDefault,
   runParseHooks
 } from "./extensions.mochi"
-type LocTok = { tok: Tok, start: number, end: number, doc: Option<string> }
+import * as Lexer from "./lexer.mochi"
+import {
+  TLet,
+  TType,
+  TExtern,
+  TSwitch,
+  TLoop,
+  TRecur,
+  TDo,
+  TImport,
+  TExport,
+  TEq,
+  TArrow,
+  TTarrow,
+  TPipe,
+  TCompose,
+  TConcat,
+  TBar,
+  TLparen,
+  TRparen,
+  TLbrace,
+  TRbrace,
+  TLbracket,
+  TRbracket,
+  TSpread,
+  TPlus,
+  TMinus,
+  TStar,
+  TSlash,
+  TPercent,
+  TAt,
+  THash,
+  TDot,
+  TColon,
+  TQuestion,
+  TEqeq,
+  TNeq,
+  TLte,
+  TGte,
+  TLt,
+  TGt,
+  TAndand,
+  TOror,
+  TBang,
+  TBacktick,
+  TComma,
+  TSemi,
+  TNum,
+  TBool,
+  TStr,
+  TTmplStart,
+  TTmplMid,
+  TTmplEnd,
+  TId,
+  TEof
+} from "./lexer.mochi"
+type LocTok = {
+  tok: Lexer.Tok,
+  start: number,
+  end: number,
+  doc: Option<string>
+}
 type PErr = { message: string, start: number, end: number }
 
 // --- the AST (mirrors src/ast.ts; `kind` strings become constructors) ---
