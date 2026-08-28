@@ -1,6 +1,6 @@
 import type { Tok } from "./parser";
 import type { Expr, Span } from "./ast";
-import type { Row, Ty } from "./types";
+import type { St, Ty } from "./types";
 
 export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
 export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
@@ -33,7 +33,7 @@ export const resolvePlugins: <A>(pluginsOpt: Option<A[]>, builtins: A[]) => A[] 
       )
       .exhaustive(),
 );
-export const resolvePluginsDefault: <A, B, C, D, E>(
+export const resolvePluginsDefault: <A, B, C, D>(
   pluginsOpt: Option<
     {
       name: string;
@@ -52,20 +52,12 @@ export const resolvePluginsDefault: <A, B, C, D, E>(
           a: B,
           b: Expr[],
           c: Option<string>,
-          d: { tv: Map<number, Ty>; rv: Map<number, Row> } & D,
+          d: St,
           e: {
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-              d: Span,
-            ) => Result<{ tv: Map<number, Ty>; rv: Map<number, Row> } & D, C>;
-            inferExpr: (
-              a: Expr,
-              b: { tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-            ) => Result<[Ty, { tv: Map<number, Ty>; rv: Map<number, Row> } & D], C>;
-          } & E,
-        ) => Result<Option<[Ty, { tv: Map<number, Ty>; rv: Map<number, Row> } & D]>, C>
+            unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, C>;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], C>;
+          } & D,
+        ) => Result<Option<[Ty, St]>, C>
       >;
     }[]
   >,
@@ -86,22 +78,14 @@ export const resolvePluginsDefault: <A, B, C, D, E>(
       a: B,
       b: Expr[],
       c: Option<string>,
-      d: { tv: Map<number, Ty>; rv: Map<number, Row> } & D,
+      d: St,
       e: {
-        unify: (
-          a: Ty,
-          b: Ty,
-          c: { tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-          d: Span,
-        ) => Result<{ tv: Map<number, Ty>; rv: Map<number, Row> } & D, C>;
-        inferExpr: (
-          a: Expr,
-          b: { tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-        ) => Result<[Ty, { tv: Map<number, Ty>; rv: Map<number, Row> } & D], C>;
-      } & E,
-    ) => Result<Option<[Ty, { tv: Map<number, Ty>; rv: Map<number, Row> } & D]>, C>
+        unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, C>;
+        inferExpr: (a: Expr, b: St) => Result<[Ty, St], C>;
+      } & D,
+    ) => Result<Option<[Ty, St]>, C>
   >;
-}[] = <A, B, C, D, E>(
+}[] = <A, B, C, D>(
   pluginsOpt: Option<
     {
       name: string;
@@ -120,20 +104,12 @@ export const resolvePluginsDefault: <A, B, C, D, E>(
           a: B,
           b: Expr[],
           c: Option<string>,
-          d: { tv: Map<number, Ty>; rv: Map<number, Row> } & D,
+          d: St,
           e: {
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-              d: Span,
-            ) => Result<{ tv: Map<number, Ty>; rv: Map<number, Row> } & D, C>;
-            inferExpr: (
-              a: Expr,
-              b: { tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-            ) => Result<[Ty, { tv: Map<number, Ty>; rv: Map<number, Row> } & D], C>;
-          } & E,
-        ) => Result<Option<[Ty, { tv: Map<number, Ty>; rv: Map<number, Row> } & D]>, C>
+            unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, C>;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], C>;
+          } & D,
+        ) => Result<Option<[Ty, St]>, C>
       >;
     }[]
   >,

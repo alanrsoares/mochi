@@ -603,7 +603,7 @@ const resolveImportsFrom: <A, B, C, D>(
       .with({ _tag: "Some" }, () => resolveImportsFrom(ctx, stmts, add(i, 1), path, res))
       .exhaustive(),
 );
-const compileOne: <A, B>(
+const compileOne: <A>(
   ctx: {
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
@@ -611,7 +611,7 @@ const compileOne: <A, B>(
     qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
     outputs: { path: string; js: string }[];
   } & A,
-  loaded: { stmts: Stmt[]; path: string } & B,
+  loaded: Loaded,
 ) => Result<
   {
     exportsByPath: Map<string, Map<string, Scheme>>;
@@ -623,7 +623,7 @@ const compileOne: <A, B>(
   MErr
 > = _curry(
   2,
-  <A, B>(
+  <A>(
     ctx: {
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
@@ -631,7 +631,7 @@ const compileOne: <A, B>(
       qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
       outputs: { path: string; js: string }[];
     } & A,
-    loaded: { stmts: Stmt[]; path: string } & B,
+    loaded: Loaded,
   ) =>
     match(
       resolveImportsFrom(ctx, loaded.stmts, 0, loaded.path, {
@@ -750,18 +750,15 @@ const compileOne: <A, B>(
       )
       .exhaustive(),
 );
-const compileAll: <A>(
-  ctx: {
+const compileAll: {
+  (ctx: {
     outputs: { path: string; js: string }[];
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
     qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
-  },
-  graph: ({ stmts: Stmt[]; path: string } & A)[],
-) => Result<{ path: string; js: string }[], MErr> = _curry(
-  2,
-  <A>(
+  }): (graph: Loaded[]) => Result<{ path: string; js: string }[], MErr>;
+  (
     ctx: {
       outputs: { path: string; js: string }[];
       exportsByPath: Map<string, Map<string, Scheme>>;
@@ -769,7 +766,19 @@ const compileAll: <A>(
       keysByPath: Map<string, Map<string, string[]>>;
       qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
     },
-    graph: ({ stmts: Stmt[]; path: string } & A)[],
+    graph: Loaded[],
+  ): Result<{ path: string; js: string }[], MErr>;
+} = _curry(
+  2,
+  (
+    ctx: {
+      outputs: { path: string; js: string }[];
+      exportsByPath: Map<string, Map<string, Scheme>>;
+      regByPath: Map<string, Registry>;
+      keysByPath: Map<string, Map<string, string[]>>;
+      qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
+    },
+    graph: Loaded[],
   ) =>
     match(graph)
       .with(
@@ -797,10 +806,8 @@ const compileAll: <A>(
         throw new Error("non-exhaustive match");
       }),
 );
-export const compileGraph: <A>(
-  graph: ({ stmts: Stmt[]; path: string } & A)[],
-) => Result<{ path: string; js: string }[], MErr> = <A>(
-  graph: ({ stmts: Stmt[]; path: string } & A)[],
+export const compileGraph: (graph: Loaded[]) => Result<{ path: string; js: string }[], MErr> = (
+  graph: Loaded[],
 ) =>
   compileAll(
     {

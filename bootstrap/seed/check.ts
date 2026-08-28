@@ -590,58 +590,51 @@ const armUnguardedCatchAll: <A, B>(a: { pattern: Pattern; guard: Option<A> } & B
 >(
   a: { pattern: Pattern; guard: Option<A> } & B,
 ) => and(isCatchAll(a.pattern), _Option_isNone(a.guard));
-const guardErrs: <A>(
-  arms: ({ guard: Option<Expr>; pattern: Pattern } & A)[],
-  listSwitch: boolean,
-) => Option<CErr> = _curry(
-  2,
-  <A>(arms: ({ guard: Option<Expr>; pattern: Pattern } & A)[], listSwitch: boolean) =>
-    firstSome(
-      (a: { guard: Option<Expr>; pattern: Pattern } & A) =>
-        match(a.guard)
-          .with(
-            { _tag: "None" },
-            () => None as Option<{ message: string; start: number; end: number }>,
-          )
-          .with({ _tag: "Some" }, ({ value: g }) =>
-            or(isPList(a.pattern), listSwitch)
-              ? (Some(
-                  checkErr(
-                    "`when` guards are unsupported in a lazy-List switch (matching pulls from the sequence)",
-                    exprSpan(g),
-                  ),
-                ) as Option<{ message: string; start: number; end: number }>)
-              : (None as Option<{ message: string; start: number; end: number }>),
-          )
-          .exhaustive(),
-      arms,
-    ),
-);
-const firstCatchIdx: <A, B>(
-  arms: ({ pattern: Pattern; guard: Option<A> } & B)[],
-  i0: number,
-) => Option<number> = _curry(
-  2,
-  <A, B>(arms: ({ pattern: Pattern; guard: Option<A> } & B)[], i0: number) => {
-    let i: number = i0;
-    while (true) {
-      const _step = match(_Array_get(i, arms))
-        .with({ _tag: "None" }, () => _done(None as Option<number>))
-        .with({ _tag: "Some" }, ({ value: a }) =>
-          armUnguardedCatchAll(a) ? _done(Some(i) as Option<number>) : _recur(add(i, 1)),
+const guardErrs: {
+  (arms: MatchArm[]): (listSwitch: boolean) => Option<CErr>;
+  (arms: MatchArm[], listSwitch: boolean): Option<CErr>;
+} = _curry(2, (arms: MatchArm[], listSwitch: boolean) =>
+  firstSome(
+    (a: MatchArm) =>
+      match(a.guard)
+        .with(
+          { _tag: "None" },
+          () => None as Option<{ message: string; start: number; end: number }>,
         )
-        .exhaustive();
-      if (_step._tag === "recur") {
-        i = _step.args[0];
-        continue;
-      }
-      return _step.value;
-    }
-  },
+        .with({ _tag: "Some" }, ({ value: g }) =>
+          or(isPList(a.pattern), listSwitch)
+            ? (Some(
+                checkErr(
+                  "`when` guards are unsupported in a lazy-List switch (matching pulls from the sequence)",
+                  exprSpan(g),
+                ),
+              ) as Option<{ message: string; start: number; end: number }>)
+            : (None as Option<{ message: string; start: number; end: number }>),
+        )
+        .exhaustive(),
+    arms,
+  ),
 );
-const unreachableAfterCatch: <A, B>(
-  arms: ({ pattern: Pattern; guard: Option<A> } & B)[],
-) => Option<CErr> = <A, B>(arms: ({ pattern: Pattern; guard: Option<A> } & B)[]) =>
+const firstCatchIdx: {
+  (arms: MatchArm[]): (i0: number) => Option<number>;
+  (arms: MatchArm[], i0: number): Option<number>;
+} = _curry(2, (arms: MatchArm[], i0: number) => {
+  let i: number = i0;
+  while (true) {
+    const _step = match(_Array_get(i, arms))
+      .with({ _tag: "None" }, () => _done(None as Option<number>))
+      .with({ _tag: "Some" }, ({ value: a }) =>
+        armUnguardedCatchAll(a) ? _done(Some(i) as Option<number>) : _recur(add(i, 1)),
+      )
+      .exhaustive();
+    if (_step._tag === "recur") {
+      i = _step.args[0];
+      continue;
+    }
+    return _step.value;
+  }
+});
+const unreachableAfterCatch: (arms: MatchArm[]) => Option<CErr> = (arms: MatchArm[]) =>
   match(firstCatchIdx(arms, 0))
     .with({ _tag: "None" }, () => None as Option<{ message: string; start: number; end: number }>)
     .with({ _tag: "Some" }, ({ value: i }) =>
@@ -666,50 +659,29 @@ const unreachableAfterCatch: <A, B>(
 const SeqNotSeq: SeqCheck = { _tag: "SeqNotSeq" };
 const SeqTotal: SeqCheck = { _tag: "SeqTotal" };
 const SeqFail = (e: CErr): SeqCheck => ({ _tag: "SeqFail", e });
-const checkSeqExhaustive: <A, B, C>(
-  arms: ({ guard: Option<A>; pattern: Pattern } & B)[],
-  mSpan: { end: number; start: number } & C,
-) => SeqCheck = _curry(
-  2,
-  <A, B, C>(
-    arms: ({ guard: Option<A>; pattern: Pattern } & B)[],
-    mSpan: { end: number; start: number } & C,
-  ) => {
-    const seqs: Pattern[] = map(
-      (a: { pattern: Pattern; guard: Option<A> } & B) => a.pattern,
-      filter(
-        (a: { guard: Option<A>; pattern: Pattern } & B) =>
-          and(_Option_isNone(a.guard), _Option_isSome(seqElemsRest(a.pattern))),
-        arms,
-      ),
-    );
-    return eq(length(seqs), 0)
-      ? (SeqNotSeq as SeqCheck)
-      : ((hasEmpty: boolean) =>
-          ((hasCons: boolean) =>
-            and(hasEmpty, hasCons)
-              ? (SeqTotal as SeqCheck)
-              : SeqFail(
-                  checkErr(
-                    "non-exhaustive list switch: cover `[]` and `[x, ...xs]` (or add `_`)",
-                    mSpan,
-                  ),
-                ))(
-            someOf(
-              (p: Pattern) =>
-                match(seqElemsRest(p))
-                  .with(
-                    (_v): _v is Extract<Option<[Pattern[], Option<Pattern>]>, { _tag: "Some" }> => {
-                      const _g: any = _v;
-                      return _g._tag === "Some";
-                    },
-                    ({ value: [elems, rest] }) => and(eq(length(elems), 1), _Option_isSome(rest)),
-                  )
-                  .with({ _tag: "None" }, () => false)
-                  .exhaustive(),
-              seqs,
-            ),
-          ))(
+const checkSeqExhaustive: <A>(
+  arms: MatchArm[],
+  mSpan: { end: number; start: number } & A,
+) => SeqCheck = _curry(2, <A>(arms: MatchArm[], mSpan: { end: number; start: number } & A) => {
+  const seqs: Pattern[] = map(
+    (a: MatchArm) => a.pattern,
+    filter(
+      (a: MatchArm) => and(_Option_isNone(a.guard), _Option_isSome(seqElemsRest(a.pattern))),
+      arms,
+    ),
+  );
+  return eq(length(seqs), 0)
+    ? (SeqNotSeq as SeqCheck)
+    : ((hasEmpty: boolean) =>
+        ((hasCons: boolean) =>
+          and(hasEmpty, hasCons)
+            ? (SeqTotal as SeqCheck)
+            : SeqFail(
+                checkErr(
+                  "non-exhaustive list switch: cover `[]` and `[x, ...xs]` (or add `_`)",
+                  mSpan,
+                ),
+              ))(
           someOf(
             (p: Pattern) =>
               match(seqElemsRest(p))
@@ -718,15 +690,29 @@ const checkSeqExhaustive: <A, B, C>(
                     const _g: any = _v;
                     return _g._tag === "Some";
                   },
-                  ({ value: [elems, rest] }) => and(eq(length(elems), 0), _Option_isNone(rest)),
+                  ({ value: [elems, rest] }) => and(eq(length(elems), 1), _Option_isSome(rest)),
                 )
                 .with({ _tag: "None" }, () => false)
                 .exhaustive(),
             seqs,
           ),
-        );
-  },
-);
+        ))(
+        someOf(
+          (p: Pattern) =>
+            match(seqElemsRest(p))
+              .with(
+                (_v): _v is Extract<Option<[Pattern[], Option<Pattern>]>, { _tag: "Some" }> => {
+                  const _g: any = _v;
+                  return _g._tag === "Some";
+                },
+                ({ value: [elems, rest] }) => and(eq(length(elems), 0), _Option_isNone(rest)),
+              )
+              .with({ _tag: "None" }, () => false)
+              .exhaustive(),
+          seqs,
+        ),
+      );
+});
 const ctorLoop: <A, B, C, D>(
   arms: ({ pattern: Pattern; guard: Option<A> } & B)[],
   i: number,
@@ -803,21 +789,14 @@ const ctorLoop: <A, B, C, D>(
       )
       .exhaustive(),
 );
-const seqVerdict: <A, B, C>(
-  arms: ({ guard: Option<A>; pattern: Pattern } & B)[],
-  mSpan: { end: number; start: number } & C,
-) => Option<CErr> = _curry(
-  2,
-  <A, B, C>(
-    arms: ({ guard: Option<A>; pattern: Pattern } & B)[],
-    mSpan: { end: number; start: number } & C,
-  ) =>
+const seqVerdict: <A>(arms: MatchArm[], mSpan: { end: number; start: number } & A) => Option<CErr> =
+  _curry(2, <A>(arms: MatchArm[], mSpan: { end: number; start: number } & A) =>
     match(checkSeqExhaustive(arms, mSpan))
       .with({ _tag: "SeqTotal" }, () => None as Option<CErr>)
       .with({ _tag: "SeqFail" }, ({ e }) => Some(e) as Option<CErr>)
       .with({ _tag: "SeqNotSeq" }, () => None as Option<CErr>)
       .exhaustive(),
-);
+  );
 const unguardedPatterns: <A, B, C>(arms: ({ guard: Option<A>; pattern: B } & C)[]) => B[] = <
   A,
   B,
@@ -842,26 +821,26 @@ const namedUnguarded: <A, B>(
       leaves,
     ),
   );
-const matrixVerdict: <A, B, C, D, E, F, G, H, I>(
-  arms: ({ guard: Option<A>; pattern: Pattern } & E)[],
-  leaves: ({ pattern: Pattern; guard: Option<B> } & F)[],
+const matrixVerdict: <A, B, C, D, E, F, G>(
+  arms: MatchArm[],
+  leaves: ({ pattern: Pattern; guard: Option<A> } & D)[],
   ownerOpt: Option<string>,
-  mSpan: { end: C; start: D } & G,
+  mSpan: { end: B; start: C } & E,
   reg: {
-    ctors: Map<string, { owner: string; arity: number } & H>;
+    ctors: Map<string, { owner: string; arity: number } & F>;
     types: Map<string, string[]>;
-  } & I,
-) => Option<{ message: string; start: D; end: C }> = _curry(
+  } & G,
+) => Option<{ message: string; start: C; end: B }> = _curry(
   5,
-  <A, B, C, D, E, F, G, H, I>(
-    arms: ({ guard: Option<A>; pattern: Pattern } & E)[],
-    leaves: ({ pattern: Pattern; guard: Option<B> } & F)[],
+  <A, B, C, D, E, F, G>(
+    arms: MatchArm[],
+    leaves: ({ pattern: Pattern; guard: Option<A> } & D)[],
     ownerOpt: Option<string>,
-    mSpan: { end: C; start: D } & G,
+    mSpan: { end: B; start: C } & E,
     reg: {
-      ctors: Map<string, { owner: string; arity: number } & H>;
+      ctors: Map<string, { owner: string; arity: number } & F>;
       types: Map<string, string[]>;
-    } & I,
+    } & G,
   ) =>
     match(checkExhaustiveM(unguardedPatterns(arms), reg))
       .with({ _tag: "ExOk" }, () => None)
@@ -898,29 +877,24 @@ const leavesOfArm: <A, B>(
       map((alt: Pattern) => ({ pattern: alt, guard: a.guard }), alts),
     )
     .otherwise(() => [{ pattern: a.pattern, guard: a.guard }]);
-const checkMatch: <A, B, C, D>(
-  arms: ({ pattern: Pattern; guard: Option<Expr> } & A)[],
-  mSpan: { end: number; start: number } & B,
+const checkMatch: <A, B, C>(
+  arms: MatchArm[],
+  mSpan: { end: number; start: number } & A,
   reg: {
-    ctors: Map<string, { arity: number; owner: string } & C>;
+    ctors: Map<string, { arity: number; owner: string } & B>;
     types: Map<string, string[]>;
-  } & D,
+  } & C,
 ) => Option<CErr> = _curry(
   3,
-  <A, B, C, D>(
-    arms: ({ pattern: Pattern; guard: Option<Expr> } & A)[],
-    mSpan: { end: number; start: number } & B,
+  <A, B, C>(
+    arms: MatchArm[],
+    mSpan: { end: number; start: number } & A,
     reg: {
-      ctors: Map<string, { arity: number; owner: string } & C>;
+      ctors: Map<string, { arity: number; owner: string } & B>;
       types: Map<string, string[]>;
-    } & D,
+    } & C,
   ) =>
-    match(
-      firstSome(
-        (a: { pattern: Pattern; guard: Option<Expr> } & A) => checkPattern(a.pattern, reg, true),
-        arms,
-      ),
-    )
+    match(firstSome((a: MatchArm) => checkPattern(a.pattern, reg, true), arms))
       .with({ _tag: "Some" }, ({ value: e }) => Some(e) as Option<CErr>)
       .with({ _tag: "None" }, () =>
         ((listSwitch: boolean) =>
@@ -933,10 +907,7 @@ const checkMatch: <A, B, C, D>(
                   ((hasCatchAll: boolean) =>
                     ((leaves: { pattern: Pattern; guard: Option<Expr> }[]) =>
                       ((ctorArms: { pattern: Pattern; guard: Option<Expr> }[]) =>
-                        someOf(
-                          (a: { pattern: Pattern; guard: Option<Expr> } & A) => isPList(a.pattern),
-                          arms,
-                        )
+                        someOf((a: MatchArm) => isPList(a.pattern), arms)
                           ? hasCatchAll
                             ? (None as Option<CErr>)
                             : seqVerdict(arms, mSpan)
@@ -973,11 +944,7 @@ const checkMatch: <A, B, C, D>(
                 .exhaustive(),
             )
             .exhaustive())(
-          someOf(
-            (a: { pattern: Pattern; guard: Option<Expr> } & A) =>
-              and(isPList(a.pattern), not(isCatchAll(a.pattern))),
-            arms,
-          ),
+          someOf((a: MatchArm) => and(isPList(a.pattern), not(isCatchAll(a.pattern))), arms),
         ),
       )
       .exhaustive(),

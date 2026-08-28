@@ -17,7 +17,7 @@ import type {
   Stmt,
   TypeExpr,
 } from "./ast";
-import type { Row, Ty } from "./types";
+import type { St, Ty } from "./types";
 
 export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
 export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
@@ -4627,7 +4627,7 @@ const stmtsLoop: {
     }
   },
 );
-export const parseRecovering: <A, B, C, D>(
+export const parseRecovering: <A, B, C>(
   toks: LocTok[],
   pluginsOpt: Option<
     {
@@ -4644,26 +4644,18 @@ export const parseRecovering: <A, B, C, D>(
           a: A,
           b: Expr[],
           c: Option<string>,
-          d: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
+          d: St,
           e: {
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-              d: Span,
-            ) => Result<{ tv: Map<number, Ty>; rv: Map<number, Row> } & C, B>;
-            inferExpr: (
-              a: Expr,
-              b: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-            ) => Result<[Ty, { tv: Map<number, Ty>; rv: Map<number, Row> } & C], B>;
-          } & D,
-        ) => Result<Option<[Ty, { tv: Map<number, Ty>; rv: Map<number, Row> } & C]>, B>
+            unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, B>;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], B>;
+          } & C,
+        ) => Result<Option<[Ty, St]>, B>
       >;
     }[]
   >,
 ) => { stmts: Stmt[]; diagnostics: PErr[] } = _curry(
   2,
-  <A, B, C, D>(
+  <A, B, C>(
     toks: LocTok[],
     pluginsOpt: Option<
       {
@@ -4680,20 +4672,12 @@ export const parseRecovering: <A, B, C, D>(
             a: A,
             b: Expr[],
             c: Option<string>,
-            d: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
+            d: St,
             e: {
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-                d: Span,
-              ) => Result<{ tv: Map<number, Ty>; rv: Map<number, Row> } & C, B>;
-              inferExpr: (
-                a: Expr,
-                b: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-              ) => Result<[Ty, { tv: Map<number, Ty>; rv: Map<number, Row> } & C], B>;
-            } & D,
-          ) => Result<Option<[Ty, { tv: Map<number, Ty>; rv: Map<number, Row> } & C]>, B>
+              unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, B>;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], B>;
+            } & C,
+          ) => Result<Option<[Ty, St]>, B>
         >;
       }[]
     >,
@@ -4717,7 +4701,7 @@ export const parseRecovering: <A, B, C, D>(
 );
 export const parse: (toks: LocTok[]) => Result<Stmt[], PErr> = (toks: LocTok[]) =>
   parseWith(toks, None);
-export const parseWith: <A, B, C, D>(
+export const parseWith: <A, B, C>(
   toks: LocTok[],
   pluginsOpt: Option<
     {
@@ -4734,26 +4718,18 @@ export const parseWith: <A, B, C, D>(
           a: A,
           b: Expr[],
           c: Option<string>,
-          d: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
+          d: St,
           e: {
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-              d: Span,
-            ) => Result<{ tv: Map<number, Ty>; rv: Map<number, Row> } & C, B>;
-            inferExpr: (
-              a: Expr,
-              b: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-            ) => Result<[Ty, { tv: Map<number, Ty>; rv: Map<number, Row> } & C], B>;
-          } & D,
-        ) => Result<Option<[Ty, { tv: Map<number, Ty>; rv: Map<number, Row> } & C]>, B>
+            unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, B>;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], B>;
+          } & C,
+        ) => Result<Option<[Ty, St]>, B>
       >;
     }[]
   >,
 ) => Result<Stmt[], PErr> = _curry(
   2,
-  <A, B, C, D>(
+  <A, B, C>(
     toks: LocTok[],
     pluginsOpt: Option<
       {
@@ -4770,20 +4746,12 @@ export const parseWith: <A, B, C, D>(
             a: A,
             b: Expr[],
             c: Option<string>,
-            d: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
+            d: St,
             e: {
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-                d: Span,
-              ) => Result<{ tv: Map<number, Ty>; rv: Map<number, Row> } & C, B>;
-              inferExpr: (
-                a: Expr,
-                b: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-              ) => Result<[Ty, { tv: Map<number, Ty>; rv: Map<number, Row> } & C], B>;
-            } & D,
-          ) => Result<Option<[Ty, { tv: Map<number, Ty>; rv: Map<number, Row> } & C]>, B>
+              unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, B>;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], B>;
+            } & C,
+          ) => Result<Option<[Ty, St]>, B>
         >;
       }[]
     >,

@@ -1,6 +1,7 @@
 import type { PErr, Tok } from "./parser";
 import type {
   AliasField,
+  CtorField,
   Expr,
   Field,
   InterpPart,
@@ -2440,33 +2441,22 @@ const aliasMapFrom: {
       throw new Error("non-exhaustive match");
     }),
 );
-const registerCtorsFrom: <A, B, C, D, E>(
-  ctors: ({ name: A; fields: ({ fieldType: TypeExpr } & B)[] } & C)[],
+const registerCtorsFrom: <A, B, C>(
+  ctors: ({ name: A; fields: CtorField[] } & B)[],
   typeName: string,
   params: string[],
-  aliasMap: Map<
-    string,
-    {
-      expr: Option<TypeExpr>;
-      params: string[];
-      fields: ({ name: string; fieldType: TypeExpr } & D)[];
-    } & E
-  >,
+  aliasMap: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: QualAliasField[] } & C>,
   env: Map<A, Scheme>,
   st: St,
 ) => [Map<A, Scheme>, St] = _curry(
   6,
-  <A, B, C, D, E>(
-    ctors: ({ name: A; fields: ({ fieldType: TypeExpr } & B)[] } & C)[],
+  <A, B, C>(
+    ctors: ({ name: A; fields: CtorField[] } & B)[],
     typeName: string,
     params: string[],
     aliasMap: Map<
       string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & D)[];
-      } & E
+      { expr: Option<TypeExpr>; params: string[]; fields: QualAliasField[] } & C
     >,
     env: Map<A, Scheme>,
     st: St,
@@ -2488,29 +2478,18 @@ const registerCtorsFrom: <A, B, C, D, E>(
         throw new Error("non-exhaustive match");
       }),
 );
-const registerUserCtorsFrom: <A, B>(
+const registerUserCtorsFrom: <A>(
   stmts: Stmt[],
-  aliasMap: Map<
-    string,
-    {
-      expr: Option<TypeExpr>;
-      params: string[];
-      fields: ({ name: string; fieldType: TypeExpr } & A)[];
-    } & B
-  >,
+  aliasMap: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: QualAliasField[] } & A>,
   env: Map<string, Scheme>,
   st: St,
 ) => [Map<string, Scheme>, St] = _curry(
   4,
-  <A, B>(
+  <A>(
     stmts: Stmt[],
     aliasMap: Map<
       string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & A)[];
-      } & B
+      { expr: Option<TypeExpr>; params: string[]; fields: QualAliasField[] } & A
     >,
     env: Map<string, Scheme>,
     st: St,
@@ -2542,33 +2521,22 @@ const registerUserCtorsFrom: <A, B>(
         throw new Error("non-exhaustive match");
       }),
 );
-const registerBuiltinCtorGroup: <A, B, C, D, E>(
-  ctors: ({ name: A; fields: ({ fieldType: TypeExpr } & B)[] } & C)[],
+const registerBuiltinCtorGroup: <A, B, C>(
+  ctors: ({ name: A; fields: CtorField[] } & B)[],
   typeName: string,
   params: string[],
-  aliasMap: Map<
-    string,
-    {
-      expr: Option<TypeExpr>;
-      params: string[];
-      fields: ({ name: string; fieldType: TypeExpr } & D)[];
-    } & E
-  >,
+  aliasMap: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: QualAliasField[] } & C>,
   env: Map<A, Scheme>,
   st: St,
 ) => [Map<A, Scheme>, St] = _curry(
   6,
-  <A, B, C, D, E>(
-    ctors: ({ name: A; fields: ({ fieldType: TypeExpr } & B)[] } & C)[],
+  <A, B, C>(
+    ctors: ({ name: A; fields: CtorField[] } & B)[],
     typeName: string,
     params: string[],
     aliasMap: Map<
       string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & D)[];
-      } & E
+      { expr: Option<TypeExpr>; params: string[]; fields: QualAliasField[] } & C
     >,
     env: Map<A, Scheme>,
     st: St,
@@ -2597,37 +2565,26 @@ const registerBuiltinCtorGroup: <A, B, C, D, E>(
         throw new Error("non-exhaustive match");
       }),
 );
-const registerBuiltinCtorsFrom: <A, B, C, D, E, F>(
+const registerBuiltinCtorsFrom: <A, B, C, D>(
   decls: ({
-    ctors: ({ name: A; fields: ({ fieldType: TypeExpr } & B)[] } & C)[];
+    ctors: ({ name: A; fields: CtorField[] } & B)[];
     name: string;
     params: string[];
-  } & D)[],
-  aliasMap: Map<
-    string,
-    {
-      expr: Option<TypeExpr>;
-      params: string[];
-      fields: ({ name: string; fieldType: TypeExpr } & E)[];
-    } & F
-  >,
+  } & C)[],
+  aliasMap: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: QualAliasField[] } & D>,
   env: Map<A, Scheme>,
   st: St,
 ) => [Map<A, Scheme>, St] = _curry(
   4,
-  <A, B, C, D, E, F>(
+  <A, B, C, D>(
     decls: ({
-      ctors: ({ name: A; fields: ({ fieldType: TypeExpr } & B)[] } & C)[];
+      ctors: ({ name: A; fields: CtorField[] } & B)[];
       name: string;
       params: string[];
-    } & D)[],
+    } & C)[],
     aliasMap: Map<
       string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & E)[];
-      } & F
+      { expr: Option<TypeExpr>; params: string[]; fields: QualAliasField[] } & D
     >,
     env: Map<A, Scheme>,
     st: St,
@@ -2649,29 +2606,18 @@ const registerBuiltinCtorsFrom: <A, B, C, D, E, F>(
         throw new Error("non-exhaustive match");
       }),
 );
-const registerExternsFrom: <A, B>(
+const registerExternsFrom: <A>(
   stmts: Stmt[],
-  aliasMap: Map<
-    string,
-    {
-      expr: Option<TypeExpr>;
-      params: string[];
-      fields: ({ name: string; fieldType: TypeExpr } & A)[];
-    } & B
-  >,
+  aliasMap: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: QualAliasField[] } & A>,
   env: Map<string, Scheme>,
   st: St,
 ) => [Map<string, Scheme>, St] = _curry(
   4,
-  <A, B>(
+  <A>(
     stmts: Stmt[],
     aliasMap: Map<
       string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & A)[];
-      } & B
+      { expr: Option<TypeExpr>; params: string[]; fields: QualAliasField[] } & A
     >,
     env: Map<string, Scheme>,
     st: St,

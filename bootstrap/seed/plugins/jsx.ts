@@ -1,5 +1,5 @@
 import type { Expr, Field, Name, SeqElem, Span } from "../ast";
-import type { Row, Ty } from "../types";
+import type { Row, St, Ty } from "../types";
 
 export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
 export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
@@ -784,49 +784,33 @@ const jsxPropsWithSynthesizedChildren: {
     )
     .exhaustive(),
 );
-const inferJsxCall: <A, B, C>(
+const inferJsxCall: <A, B>(
   tagExpr: Expr,
   propsExpr: Expr,
   restArgs: Expr[],
-  st: { tv: Map<number, Ty>; rv: Map<number, Row> } & B,
+  st: St,
   api: {
-    unify: (
-      a: Ty,
-      b: Ty,
-      c: { tv: Map<number, Ty>; rv: Map<number, Row> } & B,
-      d: Span,
-    ) => Result<{ tv: Map<number, Ty>; rv: Map<number, Row> } & B, A>;
-    inferExpr: (
-      a: Expr,
-      b: { tv: Map<number, Ty>; rv: Map<number, Row> } & B,
-    ) => Result<[Ty, { tv: Map<number, Ty>; rv: Map<number, Row> } & B], A>;
-  } & C,
-) => Result<[Ty, { tv: Map<number, Ty>; rv: Map<number, Row> } & B], A> = _curry(
+    unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, A>;
+    inferExpr: (a: Expr, b: St) => Result<[Ty, St], A>;
+  } & B,
+) => Result<[Ty, St], A> = _curry(
   5,
-  <A, B, C>(
+  <A, B>(
     tagExpr: Expr,
     propsExpr: Expr,
     restArgs: Expr[],
-    st: { tv: Map<number, Ty>; rv: Map<number, Row> } & B,
+    st: St,
     api: {
-      unify: (
-        a: Ty,
-        b: Ty,
-        c: { tv: Map<number, Ty>; rv: Map<number, Row> } & B,
-        d: Span,
-      ) => Result<{ tv: Map<number, Ty>; rv: Map<number, Row> } & B, A>;
-      inferExpr: (
-        a: Expr,
-        b: { tv: Map<number, Ty>; rv: Map<number, Row> } & B,
-      ) => Result<[Ty, { tv: Map<number, Ty>; rv: Map<number, Row> } & B], A>;
-    } & C,
+      unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, A>;
+      inferExpr: (a: Expr, b: St) => Result<[Ty, St], A>;
+    } & B,
   ) =>
     _Result_flatMap(
-      ([tagT, st1]: [Ty, { tv: Map<number, Ty>; rv: Map<number, Row> } & B]) =>
+      ([tagT, st1]: [Ty, St]) =>
         _Result_flatMap(
-          ([propsT, st2]: [Ty, { tv: Map<number, Ty>; rv: Map<number, Row> } & B]) =>
+          ([propsT, st2]: [Ty, St]) =>
             _Result_flatMap(
-              (st3: { tv: Map<number, Ty>; rv: Map<number, Row> } & B) => {
+              (st3: St) => {
                 const zonkedTag: Ty = zonk(tagT, st3);
                 return match(zonkedTag)
                   .with({ _tag: "TyFn" }, ({ from, to }) =>
@@ -834,8 +818,7 @@ const inferJsxCall: <A, B, C>(
                       .with({ _tag: "TyRecord" }, ({ row: expectedRow }) =>
                         ((propsForCheck: Ty) =>
                           _Result_map(
-                            (st4: { tv: Map<number, Ty>; rv: Map<number, Row> } & B) =>
-                              _tuple(zonk(to, st4), st4),
+                            (st4: St) => _tuple(zonk(to, st4), st4),
                             api.unify(propsForCheck, from, st3, jxExprSpan(propsExpr)),
                           ))(
                           jsxPropsWithSynthesizedChildren(propsT, propsExpr, expectedRow, restArgs),
@@ -852,42 +835,26 @@ const inferJsxCall: <A, B, C>(
       api.inferExpr(tagExpr, st),
     ),
 );
-export const inferJsxCallHook: <A, B, C, D>(
+export const inferJsxCallHook: <A, B, C>(
   _fn: A,
   args: Expr[],
   origin: Option<string>,
-  st: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
+  st: St,
   api: {
-    unify: (
-      a: Ty,
-      b: Ty,
-      c: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-      d: Span,
-    ) => Result<{ tv: Map<number, Ty>; rv: Map<number, Row> } & C, B>;
-    inferExpr: (
-      a: Expr,
-      b: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-    ) => Result<[Ty, { tv: Map<number, Ty>; rv: Map<number, Row> } & C], B>;
-  } & D,
-) => Result<Option<[Ty, { tv: Map<number, Ty>; rv: Map<number, Row> } & C]>, B> = _curry(
+    unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, B>;
+    inferExpr: (a: Expr, b: St) => Result<[Ty, St], B>;
+  } & C,
+) => Result<Option<[Ty, St]>, B> = _curry(
   5,
-  <A, B, C, D>(
+  <A, B, C>(
     _fn: A,
     args: Expr[],
     origin: Option<string>,
-    st: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
+    st: St,
     api: {
-      unify: (
-        a: Ty,
-        b: Ty,
-        c: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-        d: Span,
-      ) => Result<{ tv: Map<number, Ty>; rv: Map<number, Row> } & C, B>;
-      inferExpr: (
-        a: Expr,
-        b: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-      ) => Result<[Ty, { tv: Map<number, Ty>; rv: Map<number, Row> } & C], B>;
-    } & D,
+      unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, B>;
+      inferExpr: (a: Expr, b: St) => Result<[Ty, St], B>;
+    } & C,
   ) =>
     match(origin)
       .with({ _tag: "Some" }, ({ value: o }) =>
@@ -900,14 +867,14 @@ export const inferJsxCallHook: <A, B, C, D>(
                 },
                 ([tagExpr, propsExpr, ...rest]) =>
                   _Result_map(
-                    (r: [Ty, { tv: Map<number, Ty>; rv: Map<number, Row> } & C]) => Some(r),
+                    (r: [Ty, St]) => Some(r) as Option<[Ty, St]>,
                     inferJsxCall(tagExpr, propsExpr, rest, st, api),
                   ),
               )
-              .otherwise(() => Ok(None))
-          : Ok(None),
+              .otherwise(() => Ok(None as Option<[Ty, St]>))
+          : Ok(None as Option<[Ty, St]>),
       )
-      .with({ _tag: "None" }, () => Ok(None))
+      .with({ _tag: "None" }, () => Ok(None as Option<[Ty, St]>))
       .exhaustive(),
 );
 export const jsxPlugin = {

@@ -78,7 +78,7 @@ let fieldTs = (te, params, aliases, recs) =>
 /// Keys come from `keysOf` (the same projection the runtime shape uses, so a
 /// declared field name and its emitted key can never drift); this loop only
 /// ever reads `fieldType`.
-let ctorFieldsFrom = (fields, keys, params, aliases, recs, i) => switch Array.get(i, fields) {
+let ctorFieldsFrom = (fields: [Ast.CtorField], keys, params, aliases, recs, i) => switch Array.get(i, fields) {
   | None => []
   | Some(fld) => Array.prepend(
       "${Option.unwrapOr("_${show(i)}", Array.get(i, keys))}: ${fieldTs(fld.fieldType, params, aliases, recs)}",
@@ -87,7 +87,7 @@ let ctorFieldsFrom = (fields, keys, params, aliases, recs, i) => switch Array.ge
 }
 
 /// One ctor's runtime shape: the `_tag` discriminant plus its fields.
-let ctorVariant = (c, params, aliases, recs) =>
+let ctorVariant = (c: Ast.Ctor, params, aliases, recs) =>
   let fields = ctorFieldsFrom(
     c.fields,
     keysOf(c.fields),
@@ -100,7 +100,7 @@ let ctorVariant = (c, params, aliases, recs) =>
       ? "{ _tag: \"${c.name}\" }"
       : "{ _tag: \"${c.name}\"; ${Str.join("; ", fields)} }"
 
-let ctorVariantsFrom = (ctors, params, aliases, recs, i) => switch Array.get(i, ctors) {
+let ctorVariantsFrom = (ctors: [Ast.Ctor], params, aliases, recs, i) => switch Array.get(i, ctors) {
   | None => []
   | Some(c) => Array.prepend(
       "  | ${ctorVariant(c, params, aliases, recs)}",
@@ -109,11 +109,11 @@ let ctorVariantsFrom = (ctors, params, aliases, recs, i) => switch Array.get(i, 
 }
 
 /// A `type` decl -> an exported tagged union matching the runtime shape.
-export let typeDecl = (name, params, ctors, aliases, recs) =>
+export let typeDecl = (name, params, ctors: [Ast.Ctor], aliases, recs) =>
   let head = "${name}${genericHead(params, 0, [])}" in
     "export type ${head} =\n${Str.join("\n", ctorVariantsFrom(ctors, params, aliases, recs, 0))};"
 
-let aliasFieldsFrom = (fields, params, aliases, recs, i) => switch Array.get(i, fields) {
+let aliasFieldsFrom = (fields: [Ast.AliasField], params, aliases, recs, i) => switch Array.get(i, fields) {
   | None => []
   | Some(f) => Array.prepend(
       "${f.name}: ${fieldTs(f.fieldType, params, aliases, recs)}",
@@ -123,7 +123,7 @@ let aliasFieldsFrom = (fields, params, aliases, recs, i) => switch Array.get(i, 
 
 /// A record alias (`type Point = { x: number, y: number }`) -> an exported
 /// object type. Structural, so it renders through the same `tsOf` encoder.
-export let recordAliasDecl = (name, params, fields, aliases, recs) =>
+export let recordAliasDecl = (name, params, fields: [Ast.AliasField], aliases, recs) =>
   let head = "${name}${genericHead(params, 0, [])}" in
   let body = aliasFieldsFrom(fields, params, aliases, recs, 0) in
     Array.length(body) == 0
@@ -285,7 +285,7 @@ let neverArgs = (params, i, acc) => switch Array.get(i, params) {
   | Some(_) => neverArgs(params, i + 1, Array.append("never", acc))
 }
 
-let ctorParamTypes = (fields, params, aliases, recs, i) => switch Array.get(i, fields) {
+let ctorParamTypes = (fields: [Ast.CtorField], params, aliases, recs, i) => switch Array.get(i, fields) {
   | None => []
   | Some(fld) => Array.prepend(
       fieldTs(fld.fieldType, params, aliases, recs),
@@ -293,7 +293,7 @@ let ctorParamTypes = (fields, params, aliases, recs, i) => switch Array.get(i, f
     )
 }
 
-export let ctorFactoryTs = (typeName, params, c, aliases, recs) =>
+export let ctorFactoryTs = (typeName, params, c: Ast.Ctor, aliases, recs) =>
   let head = genericHead(params, 0, []) in
   let monos = neverArgs(params, 0, []) in
     {
@@ -535,7 +535,7 @@ let builtinDeclsInBody = (body, header, i, aliases, recs) => switch Array.get(i,
 /// A declared record alias lowered back to the row its USES carry. ADR 0005
 /// expands a record alias at `typeExprToType`, so this reproduces exactly what
 /// inference will have put in the type table for a value of that alias.
-let aliasRowOf = (fields, aliases, i) => switch Array.get(i, fields) {
+let aliasRowOf = (fields: [Ast.AliasField], aliases, i) => switch Array.get(i, fields) {
   | None => RowEmpty
   | Some(f) => let (t, _vars, _st) = typeExprToType(
       f.fieldType,
@@ -547,7 +547,7 @@ let aliasRowOf = (fields, aliases, i) => switch Array.get(i, fields) {
       RowExtend(f.name, t, aliasRowOf(fields, aliases, i + 1))
 }
 
-let aliasShapeKey = (fields, aliases) =>
+let aliasShapeKey = (fields: [Ast.AliasField], aliases) =>
   rowShapeKey(aliasRowOf(fields, aliases, 0), #{})
 
 /// Every record alias IN SCOPE, keyed by canonical row shape (ADR 0092). Built
@@ -594,7 +594,7 @@ export let recordAliasIndex = aliases =>
 
 /// The index an alias's OWN body renders against — itself removed, so it cannot
 /// come out as `export type Span = Span;`.
-let withoutOwnShape = (fields, params, aliases, recs) => switch Array.get(0, params) {
+let withoutOwnShape = (fields: [Ast.AliasField], params, aliases, recs) => switch Array.get(0, params) {
   | Some(_) => recs
   | None => switch aliasShapeKey(fields, aliases) {
       | Some(k) => Map.delete(k, recs)

@@ -1,5 +1,5 @@
-import type { AliasField, TypeExpr } from "./ast";
-import type { Row, Ty } from "./types";
+import type { AliasField, CtorField, TypeExpr } from "./ast";
+import type { Row, St, Ty } from "./types";
 
 export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
 export type Scheme = { vars: number[]; rvars: number[]; ty: Ty };
@@ -56,6 +56,7 @@ import {
   freshRowVar,
   zonk,
 } from "./types";
+import * as Types from "./types";
 import { primTypeNames } from "./ctors";
 
 export const mono: <A, B, C>(t: A) => { vars: B[]; rvars: C[]; ty: A } = <A, B, C>(t: A) => ({
@@ -177,17 +178,17 @@ const freeInEnv: <A, B>(env: Map<A, { ty: Ty; rvars: number[]; vars: number[] } 
 >(
   env: Map<A, { ty: Ty; rvars: number[]; vars: number[] } & B>,
 ) => freeInEnvFrom(_Map_values(env), emptyVarSets);
-export const generalize: <A, B, C>(
+export const generalize: <A, B>(
   env: Map<A, { ty: Ty; rvars: number[]; vars: number[] } & B>,
   t: Ty,
-  st: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
+  st: St,
   widen: boolean,
 ) => Scheme = _curry(
   4,
-  <A, B, C>(
+  <A, B>(
     env: Map<A, { ty: Ty; rvars: number[]; vars: number[] } & B>,
     t: Ty,
-    st: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
+    st: St,
     widen: boolean,
   ) => {
     const zt: Ty = widen ? widenLits(zonk(t, st)) : zonk(t, st);
@@ -223,13 +224,9 @@ const widenRow: (row: Row) => Row = (row: Row) =>
       rExtend(label, widenLits(fieldType), widenRow(rest)),
     )
     .exhaustive();
-const instMapFrom: <A, B>(
-  vars: A[],
-  acc: Map<A, Ty>,
-  st: { next: number } & B,
-) => [Map<A, Ty>, { next: number } & B] = _curry(
+const instMapFrom: <A>(vars: A[], acc: Map<A, Ty>, st: St) => [Map<A, Ty>, St] = _curry(
   3,
-  <A, B>(vars: A[], acc: Map<A, Ty>, st: { next: number } & B) =>
+  <A>(vars: A[], acc: Map<A, Ty>, st: St) =>
     match(vars)
       .with(
         (_v) => _v.length === 0,
@@ -238,21 +235,15 @@ const instMapFrom: <A, B>(
       .with(
         (_v) => _v.length >= 1,
         ([v, ...rest]) =>
-          (([fv, st1]: [Ty, { next: number } & B]) => instMapFrom(rest, _Map_set(v, fv, acc), st1))(
-            freshVar(st),
-          ),
+          (([fv, st1]: [Ty, St]) => instMapFrom(rest, _Map_set(v, fv, acc), st1))(freshVar(st)),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
       }),
 );
-const instRowMapFrom: <A, B>(
-  vars: A[],
-  acc: Map<A, Row>,
-  st: { next: number } & B,
-) => [Map<A, Row>, { next: number } & B] = _curry(
+const instRowMapFrom: <A>(vars: A[], acc: Map<A, Row>, st: St) => [Map<A, Row>, St] = _curry(
   3,
-  <A, B>(vars: A[], acc: Map<A, Row>, st: { next: number } & B) =>
+  <A>(vars: A[], acc: Map<A, Row>, st: St) =>
     match(vars)
       .with(
         (_v) => _v.length === 0,
@@ -261,8 +252,9 @@ const instRowMapFrom: <A, B>(
       .with(
         (_v) => _v.length >= 1,
         ([v, ...rest]) =>
-          (([fr, st1]: [Row, { next: number } & B]) =>
-            instRowMapFrom(rest, _Map_set(v, fr, acc), st1))(freshRowVar(st)),
+          (([fr, st1]: [Row, St]) => instRowMapFrom(rest, _Map_set(v, fr, acc), st1))(
+            freshRowVar(st),
+          ),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -306,17 +298,14 @@ const instSubRow: {
     .with({ _tag: "RowEmpty" }, () => row)
     .exhaustive(),
 );
-export const instantiate: <A, B>(
+export const instantiate: <A>(
   sc: { ty: Ty; rvars: number[]; vars: number[] } & A,
-  st: { next: number } & B,
-) => [Ty, { next: number } & B] = _curry(
-  2,
-  <A, B>(sc: { ty: Ty; rvars: number[]; vars: number[] } & A, st: { next: number } & B) =>
-    (([tmap, st1]: [Map<number, Ty>, { next: number } & B]) =>
-      (([rmap, st2]: [Map<number, Row>, { next: number } & B]) =>
-        _tuple(instSub(sc.ty, tmap, rmap), st2))(
-        instRowMapFrom(sc.rvars, new Map<number, Row>(), st1),
-      ))(instMapFrom(sc.vars, new Map<number, Ty>(), st)),
+  st: St,
+) => [Ty, St] = _curry(2, <A>(sc: { ty: Ty; rvars: number[]; vars: number[] } & A, st: St) =>
+  (([tmap, st1]: [Map<number, Ty>, St]) =>
+    (([rmap, st2]: [Map<number, Row>, St]) => _tuple(instSub(sc.ty, tmap, rmap), st2))(
+      instRowMapFrom(sc.rvars, new Map<number, Row>(), st1),
+    ))(instMapFrom(sc.vars, new Map<number, Ty>(), st)),
 );
 export const isUpperStart: (s: string) => boolean = (s: string) =>
   match(_Str_codeAt(0, s))
@@ -324,33 +313,19 @@ export const isUpperStart: (s: string) => boolean = (s: string) =>
     .with({ _tag: "None" }, () => false)
     .exhaustive();
 
-export const typeExprListToType: <A, B, C>(
+export const typeExprListToType: <A>(
   tes: TypeExpr[],
   vars: Map<string, Ty>,
-  st: { next: number } & A,
-  aliases: Map<
-    string,
-    {
-      expr: Option<TypeExpr>;
-      params: string[];
-      fields: ({ name: string; fieldType: TypeExpr } & B)[];
-    } & C
-  >,
+  st: St,
+  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
   expanding: Set<string>,
-) => [Ty[], Map<string, Ty>, { next: number } & A] = _curry(
+) => [Ty[], Map<string, Ty>, St] = _curry(
   5,
-  <A, B, C>(
+  <A>(
     tes: TypeExpr[],
     vars: Map<string, Ty>,
-    st: { next: number } & A,
-    aliases: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & B)[];
-      } & C
-    >,
+    st: St,
+    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
     expanding: Set<string>,
   ) =>
     match(tes)
@@ -367,8 +342,8 @@ export const typeExprListToType: <A, B, C>(
           return _g.length >= 1;
         },
         ([te, ...rest]) =>
-          (([t, vars1, st1]: [Ty, Map<string, Ty>, { next: number } & A]) =>
-            (([restTs, vars2, st2]: [Ty[], Map<string, Ty>, { next: number } & A]) =>
+          (([t, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
+            (([restTs, vars2, st2]: [Ty[], Map<string, Ty>, St]) =>
               _tuple(_Array_prepend(t, restTs), vars2, st2))(
               typeExprListToType(rest, vars1, st1, aliases, expanding),
             ))(typeExprToType(te, vars, st, aliases, expanding)),
@@ -377,33 +352,19 @@ export const typeExprListToType: <A, B, C>(
         throw new Error("non-exhaustive match");
       }),
 );
-export const typeExprName: <A, B, C>(
+export const typeExprName: <A>(
   name: string,
   vars: Map<string, Ty>,
-  st: { next: number } & A,
-  aliases: Map<
-    string,
-    {
-      expr: Option<TypeExpr>;
-      params: string[];
-      fields: ({ name: string; fieldType: TypeExpr } & B)[];
-    } & C
-  >,
+  st: St,
+  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
   expanding: Set<string>,
-) => [Ty, Map<string, Ty>, { next: number } & A] = _curry(
+) => [Ty, Map<string, Ty>, St] = _curry(
   5,
-  <A, B, C>(
+  <A>(
     name: string,
     vars: Map<string, Ty>,
-    st: { next: number } & A,
-    aliases: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & B)[];
-      } & C
-    >,
+    st: St,
+    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
     expanding: Set<string>,
   ) =>
     _Array_contains(name, primTypeNames)
@@ -413,62 +374,47 @@ export const typeExprName: <A, B, C>(
           .with({ _tag: "None" }, () =>
             match(_Map_get(name, aliases))
               .with({ _tag: "Some" }, ({ value: info }) =>
-                (([t, st1]: [Ty, { next: number } & A]) => _tuple(t, vars, st1))(
+                (([t, st1]: [Ty, St]) => _tuple(t, vars, st1))(
                   aliasRow(name, info, [] as Ty[], st, aliases, expanding),
                 ),
               )
               .with({ _tag: "None" }, () =>
                 isUpperStart(name)
                   ? _tuple(tPrim(name), vars, st)
-                  : (([v, st1]: [Ty, { next: number } & A]) =>
-                      _tuple(v, _Map_set(name, v, vars), st1))(freshVar(st)),
+                  : (([v, st1]: [Ty, St]) => _tuple(v, _Map_set(name, v, vars), st1))(freshVar(st)),
               )
               .exhaustive(),
           )
           .exhaustive(),
 );
-export const typeExprToType: <A, B, C>(
+export const typeExprToType: <A>(
   te: TypeExpr,
   vars: Map<string, Ty>,
-  st: { next: number } & A,
-  aliases: Map<
-    string,
-    {
-      expr: Option<TypeExpr>;
-      params: string[];
-      fields: ({ name: string; fieldType: TypeExpr } & B)[];
-    } & C
-  >,
+  st: St,
+  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
   expanding: Set<string>,
-) => [Ty, Map<string, Ty>, { next: number } & A] = _curry(
+) => [Ty, Map<string, Ty>, St] = _curry(
   5,
-  <A, B, C>(
+  <A>(
     te: TypeExpr,
     vars: Map<string, Ty>,
-    st: { next: number } & A,
-    aliases: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & B)[];
-      } & C
-    >,
+    st: St,
+    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
     expanding: Set<string>,
   ) =>
     match(te)
       .with({ _tag: "TyArrow" }, ({ from: fromTe, to: toTe }) =>
-        (([fromT, vars1, st1]: [Ty, Map<string, Ty>, { next: number } & A]) =>
-          (([toT, vars2, st2]: [Ty, Map<string, Ty>, { next: number } & A]) =>
+        (([fromT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
+          (([toT, vars2, st2]: [Ty, Map<string, Ty>, St]) =>
             _tuple(tArrow(fromT, toT), vars2, st2))(
             typeExprToType(toTe, vars1, st1, aliases, expanding),
           ))(typeExprToType(fromTe, vars, st, aliases, expanding)),
       )
       .with({ _tag: "TyApp" }, ({ ctor, args: argTes }) =>
-        (([args, vars1, st1]: [Ty[], Map<string, Ty>, { next: number } & A]) =>
+        (([args, vars1, st1]: [Ty[], Map<string, Ty>, St]) =>
           match(_Map_get(ctor, aliases))
             .with({ _tag: "Some" }, ({ value: info }) =>
-              (([t, st2]: [Ty, { next: number } & A]) => _tuple(t, vars1, st2))(
+              (([t, st2]: [Ty, St]) => _tuple(t, vars1, st2))(
                 aliasRow(ctor, info, args, st1, aliases, expanding),
               ),
             )
@@ -476,23 +422,22 @@ export const typeExprToType: <A, B, C>(
             .exhaustive())(typeExprListToType(argTes, vars, st, aliases, expanding)),
       )
       .with({ _tag: "TyTuple" }, ({ elems: elemTes }) =>
-        (([elems, vars1, st1]: [Ty[], Map<string, Ty>, { next: number } & A]) =>
-          _tuple(tTuple(elems), vars1, st1))(
+        (([elems, vars1, st1]: [Ty[], Map<string, Ty>, St]) => _tuple(tTuple(elems), vars1, st1))(
           typeExprListToType(elemTes, vars, st, aliases, expanding),
         ),
       )
       .with({ _tag: "TyList" }, ({ elem: elemTe }) =>
-        (([elemT, vars1, st1]: [Ty, Map<string, Ty>, { next: number } & A]) =>
+        (([elemT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
           _tuple(tCon("Array", [elemT]), vars1, st1))(
           typeExprToType(elemTe, vars, st, aliases, expanding),
         ),
       )
       .with({ _tag: "TyName" }, ({ name }) => typeExprName(name, vars, st, aliases, expanding))
       .with({ _tag: "TyQual" }, ({ alias, name, args: argTes }) =>
-        (([args, vars1, st1]: [Ty[], Map<string, Ty>, { next: number } & A]) =>
+        (([args, vars1, st1]: [Ty[], Map<string, Ty>, St]) =>
           match(_Map_get(`${alias}.${name}`, aliases))
             .with({ _tag: "Some" }, ({ value: info }) =>
-              (([t, st2]: [Ty, { next: number } & A]) => _tuple(t, vars1, st2))(
+              (([t, st2]: [Ty, St]) => _tuple(t, vars1, st2))(
                 aliasRow(name, info, args, st1, aliases, expanding),
               ),
             )
@@ -501,20 +446,15 @@ export const typeExprToType: <A, B, C>(
       )
       .with({ _tag: "TyLit" }, ({ value }) => _tuple(tLit(value), vars, st))
       .with({ _tag: "TyUnion" }, ({ members }) =>
-        (([ts, vars1, st1]: [Ty[], Map<string, Ty>, { next: number } & A]) =>
-          _tuple(tUnion(ts), vars1, st1))(
+        (([ts, vars1, st1]: [Ty[], Map<string, Ty>, St]) => _tuple(tUnion(ts), vars1, st1))(
           typeExprListToType(members, vars, st, aliases, expanding),
         ),
       )
       .exhaustive(),
 );
-const aliasLocalVarsFrom: <A, B>(
-  params: A[],
-  args: Ty[],
-  st: { next: number } & B,
-) => [Map<A, Ty>, { next: number } & B] = _curry(
+const aliasLocalVarsFrom: <A>(params: A[], args: Ty[], st: St) => [Map<A, Ty>, St] = _curry(
   3,
-  <A, B>(params: A[], args: Ty[], st: { next: number } & B) =>
+  <A>(params: A[], args: Ty[], st: St) =>
     match(params)
       .with(
         (_v) => _v.length === 0,
@@ -530,8 +470,7 @@ const aliasLocalVarsFrom: <A, B>(
                 return _g.length >= 1;
               },
               ([a, ...restArgs]) =>
-                (([restMap, st1]: [Map<A, Ty>, { next: number } & B]) =>
-                  _tuple(_Map_set(p, a, restMap), st1))(
+                (([restMap, st1]: [Map<A, Ty>, St]) => _tuple(_Map_set(p, a, restMap), st1))(
                   aliasLocalVarsFrom(restParams, restArgs, st),
                 ),
             )
@@ -541,9 +480,8 @@ const aliasLocalVarsFrom: <A, B>(
                 return _g.length === 0;
               },
               () =>
-                (([v, st1]: [Ty, { next: number } & B]) =>
-                  (([restMap, st2]: [Map<A, Ty>, { next: number } & B]) =>
-                    _tuple(_Map_set(p, v, restMap), st2))(
+                (([v, st1]: [Ty, St]) =>
+                  (([restMap, st2]: [Map<A, Ty>, St]) => _tuple(_Map_set(p, v, restMap), st2))(
                     aliasLocalVarsFrom(restParams, [] as Ty[], st1),
                   ))(freshVar(st)),
             )
@@ -555,33 +493,19 @@ const aliasLocalVarsFrom: <A, B>(
         throw new Error("non-exhaustive match");
       }),
 );
-const aliasFieldsFrom: <A, B, C>(
-  fields: ({ name: string; fieldType: TypeExpr } & A)[],
+const aliasFieldsFrom: <A>(
+  fields: AliasField[],
   vars: Map<string, Ty>,
-  st: { next: number } & B,
-  aliases: Map<
-    string,
-    {
-      expr: Option<TypeExpr>;
-      params: string[];
-      fields: ({ name: string; fieldType: TypeExpr } & A)[];
-    } & C
-  >,
+  st: St,
+  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
   expanding: Set<string>,
-) => [Row, { next: number } & B] = _curry(
+) => [Row, St] = _curry(
   5,
-  <A, B, C>(
-    fields: ({ name: string; fieldType: TypeExpr } & A)[],
+  <A>(
+    fields: AliasField[],
     vars: Map<string, Ty>,
-    st: { next: number } & B,
-    aliases: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & A)[];
-      } & C
-    >,
+    st: St,
+    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
     expanding: Set<string>,
   ) =>
     match(fields)
@@ -598,9 +522,8 @@ const aliasFieldsFrom: <A, B, C>(
           return _g.length >= 1;
         },
         ([fld, ...rest]) =>
-          (([ft, vars1, st1]: [Ty, Map<string, Ty>, { next: number } & B]) =>
-            (([restRow, st2]: [Row, { next: number } & B]) =>
-              _tuple(rExtend(fld.name, ft, restRow), st2))(
+          (([ft, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
+            (([restRow, st2]: [Row, St]) => _tuple(rExtend(fld.name, ft, restRow), st2))(
               aliasFieldsFrom(rest, vars1, st1, aliases, expanding),
             ))(typeExprToType(fld.fieldType, vars, st, aliases, expanding)),
       )
@@ -608,70 +531,45 @@ const aliasFieldsFrom: <A, B, C>(
         throw new Error("non-exhaustive match");
       }),
 );
-export const aliasRow: <A, B, C>(
+export const aliasRow: <A>(
   name: string,
-  info: {
-    expr: Option<TypeExpr>;
-    params: string[];
-    fields: ({ name: string; fieldType: TypeExpr } & A)[];
-  } & B,
+  info: { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A,
   args: Ty[],
-  st: { next: number } & C,
-  aliases: Map<
-    string,
-    {
-      expr: Option<TypeExpr>;
-      params: string[];
-      fields: ({ name: string; fieldType: TypeExpr } & A)[];
-    } & B
-  >,
+  st: St,
+  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
   expanding: Set<string>,
-) => [Ty, { next: number } & C] = _curry(
+) => [Ty, St] = _curry(
   6,
-  <A, B, C>(
+  <A>(
     name: string,
-    info: {
-      expr: Option<TypeExpr>;
-      params: string[];
-      fields: ({ name: string; fieldType: TypeExpr } & A)[];
-    } & B,
+    info: { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A,
     args: Ty[],
-    st: { next: number } & C,
-    aliases: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & A)[];
-      } & B
-    >,
+    st: St,
+    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
     expanding: Set<string>,
   ) =>
     _Set_has(name, expanding)
       ? _tuple(tCon(name, args), st)
       : match(info.expr)
           .with({ _tag: "Some" }, ({ value: te }) =>
-            (([local, st1]: [Map<string, Ty>, { next: number } & C]) =>
-              (([t, _, st2]: [Ty, Map<string, Ty>, { next: number } & C]) => _tuple(t, st2))(
+            (([local, st1]: [Map<string, Ty>, St]) =>
+              (([t, _, st2]: [Ty, Map<string, Ty>, St]) => _tuple(t, st2))(
                 typeExprToType(te, local, st1, aliases, _Set_add(name, expanding)),
               ))(aliasLocalVarsFrom(info.params, args, st)),
           )
           .with({ _tag: "None" }, () =>
-            (([local, st1]: [Map<string, Ty>, { next: number } & C]) => {
+            (([local, st1]: [Map<string, Ty>, St]) => {
               const next: Set<string> = _Set_add(name, expanding);
-              return (([row, st2]: [Row, { next: number } & C]) => _tuple(tRecord(row), st2))(
+              return (([row, st2]: [Row, St]) => _tuple(tRecord(row), st2))(
                 aliasFieldsFrom(info.fields, local, st1, aliases, next),
               );
             })(aliasLocalVarsFrom(info.params, args, st)),
           )
           .exhaustive(),
 );
-const pvarsFrom: <A, B>(
-  params: A[],
-  st: { next: number } & B,
-) => [Map<A, Ty>, Ty[], { next: number } & B] = _curry(
+const pvarsFrom: <A>(params: A[], st: St) => [Map<A, Ty>, Ty[], St] = _curry(
   2,
-  <A, B>(params: A[], st: { next: number } & B) =>
+  <A>(params: A[], st: St) =>
     match(params)
       .with(
         (_v) => _v.length === 0,
@@ -680,8 +578,8 @@ const pvarsFrom: <A, B>(
       .with(
         (_v) => _v.length >= 1,
         ([p, ...rest]) =>
-          (([v, st1]: [Ty, { next: number } & B]) =>
-            (([restMap, restVars, st2]: [Map<A, Ty>, Ty[], { next: number } & B]) =>
+          (([v, st1]: [Ty, St]) =>
+            (([restMap, restVars, st2]: [Map<A, Ty>, Ty[], St]) =>
               _tuple(_Map_set(p, v, restMap), _Array_prepend(v, restVars), st2))(
               pvarsFrom(rest, st1),
             ))(freshVar(st)),
@@ -690,33 +588,19 @@ const pvarsFrom: <A, B>(
         throw new Error("non-exhaustive match");
       }),
 );
-const ctorFieldsArrowFrom: <A, B, C, D>(
-  fields: ({ fieldType: TypeExpr } & A)[],
+const ctorFieldsArrowFrom: <A>(
+  fields: CtorField[],
   pvars: Map<string, Ty>,
-  st: { next: number } & B,
-  aliases: Map<
-    string,
-    {
-      expr: Option<TypeExpr>;
-      params: string[];
-      fields: ({ name: string; fieldType: TypeExpr } & C)[];
-    } & D
-  >,
+  st: St,
+  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
   result: Ty,
-) => [Ty, { next: number } & B] = _curry(
+) => [Ty, St] = _curry(
   5,
-  <A, B, C, D>(
-    fields: ({ fieldType: TypeExpr } & A)[],
+  <A>(
+    fields: CtorField[],
     pvars: Map<string, Ty>,
-    st: { next: number } & B,
-    aliases: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & C)[];
-      } & D
-    >,
+    st: St,
+    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
     result: Ty,
   ) =>
     match(fields)
@@ -733,8 +617,8 @@ const ctorFieldsArrowFrom: <A, B, C, D>(
           return _g.length >= 1;
         },
         ([fld, ...rest]) =>
-          (([ft, _, st1]: [Ty, Map<string, Ty>, { next: number } & B]) =>
-            (([restT, st2]: [Ty, { next: number } & B]) => _tuple(tArrow(ft, restT), st2))(
+          (([ft, _, st1]: [Ty, Map<string, Ty>, St]) =>
+            (([restT, st2]: [Ty, St]) => _tuple(tArrow(ft, restT), st2))(
               ctorFieldsArrowFrom(rest, pvars, st1, aliases, result),
             ))(typeExprToType(fld.fieldType, pvars, st, aliases, _Set_fromArray([] as string[]))),
       )
@@ -742,38 +626,24 @@ const ctorFieldsArrowFrom: <A, B, C, D>(
         throw new Error("non-exhaustive match");
       }),
 );
-export const ctorScheme: <A, B, C, D, E>(
+export const ctorScheme: <A, B>(
   typeName: string,
   params: string[],
-  c: { fields: ({ fieldType: TypeExpr } & A)[] } & B,
-  st: { next: number } & C,
-  aliases: Map<
-    string,
-    {
-      expr: Option<TypeExpr>;
-      params: string[];
-      fields: ({ name: string; fieldType: TypeExpr } & D)[];
-    } & E
-  >,
-) => [Scheme, { next: number } & C] = _curry(
+  c: { fields: CtorField[] } & A,
+  st: St,
+  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & B>,
+) => [Scheme, St] = _curry(
   5,
-  <A, B, C, D, E>(
+  <A, B>(
     typeName: string,
     params: string[],
-    c: { fields: ({ fieldType: TypeExpr } & A)[] } & B,
-    st: { next: number } & C,
-    aliases: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & D)[];
-      } & E
-    >,
+    c: { fields: CtorField[] } & A,
+    st: St,
+    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & B>,
   ) =>
-    (([pvars, pvarTypes, st1]: [Map<string, Ty>, Ty[], { next: number } & C]) => {
+    (([pvars, pvarTypes, st1]: [Map<string, Ty>, Ty[], St]) => {
       const result: Ty = tCon(typeName, pvarTypes);
-      return (([ty, st2]: [Ty, { next: number } & C]) => {
+      return (([ty, st2]: [Ty, St]) => {
         const sets: VarSets = collect(ty, emptyVarSets);
         return _tuple({ vars: _Set_toArray(sets.tv), rvars: _Set_toArray(sets.rv), ty: ty }, st2);
       })(ctorFieldsArrowFrom(c.fields, pvars, st1, aliases, result));

@@ -303,7 +303,7 @@ let armUnguardedCatchAll = a => isCatchAll(a.pattern) && Option.isNone(a.guard)
 
 // Guards vs lazy Lists: a guarded arm still pulls from the sequence to test
 // its pattern, and the buffering codegen has no guard slot — reject.
-let guardErrs = (arms, listSwitch) =>
+let guardErrs = (arms: [Ast.MatchArm], listSwitch) =>
   firstSome(
     a => switch a.guard {
       | None => None
@@ -321,7 +321,7 @@ let guardErrs = (arms, listSwitch) =>
 
 // An arm after an unguarded catch-all can never match — reject rather than
 // let codegen silently reorder it.
-let firstCatchIdx = (arms, i0) =>
+let firstCatchIdx = (arms: [Ast.MatchArm], i0) =>
   loop (i = i0) {
     switch Array.get(i, arms) {
       | None => None
@@ -349,7 +349,7 @@ type SeqCheck =
 
 // A list switch is total iff it covers `[]` and single-head cons `[x, ...xs]`
 // (length 0 and length ≥ 1); fixed-length arms don't prove totality.
-let checkSeqExhaustive = (arms, mSpan) =>
+let checkSeqExhaustive = (arms: [Ast.MatchArm], mSpan) =>
   let seqs = arms
     |> filter(a =>
       Option.isNone(a.guard) && Option.isSome(seqElemsRest(a.pattern)))
@@ -422,7 +422,7 @@ let ctorLoop = (arms, i, reg, owner, covered) => switch Array.get(i, arms) {
 // Lazy Lists keep their own depth-1 rule: matching one pulls from its
 // generator, so it cannot be reasoned about positionally and the matrix treats
 // the column as opaque.
-let seqVerdict = (arms, mSpan) => switch checkSeqExhaustive(arms, mSpan) {
+let seqVerdict = (arms: [Ast.MatchArm], mSpan) => switch checkSeqExhaustive(arms, mSpan) {
   | SeqTotal => None
   | SeqFail(e) => Some(e)
   | SeqNotSeq => None
@@ -443,7 +443,7 @@ let namedUnguarded = leaves =>
           : [])
   )
 
-let matrixVerdict = (arms, leaves, ownerOpt, mSpan, reg) => switch checkExhaustiveM(unguardedPatterns(arms), reg) {
+let matrixVerdict = (arms: [Ast.MatchArm], leaves, ownerOpt, mSpan, reg) => switch checkExhaustiveM(unguardedPatterns(arms), reg) {
   | ExOk => None
   | ExFuel => Some(
       checkErr(
@@ -481,7 +481,7 @@ let leavesOfArm = a => switch a.pattern {
   | _ => [{ pattern: a.pattern, guard: a.guard }]
 }
 
-let checkMatch = (arms, mSpan, reg) => switch firstSome(a => checkPattern(a.pattern, reg, true), arms) {
+let checkMatch = (arms: [Ast.MatchArm], mSpan, reg) => switch firstSome(a => checkPattern(a.pattern, reg, true), arms) {
   | Some(e) => Some(e)
   | None => let listSwitch = someOf(
       a => isPList(a.pattern) && !isCatchAll(a.pattern),
