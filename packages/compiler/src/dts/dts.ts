@@ -319,10 +319,16 @@ function fieldTs(
   te: TypeExpr,
   params: string[],
   qualify: ReadonlyMap<string, string> = new Map(),
+  aliases: AliasDef[] = [],
 ): string {
   const vars = new Map(params.map((p, i): [string, Type] => [p, tVar(i)]));
   const names = new Map(params.map((_, i): [number, string] => [i, LETTERS[i] ?? `T${i}`]));
-  return tsOf(qualifyTypeNames(typeExprToType(te, vars, mkFresh(params.length)), qualify), names);
+  // A field naming another record alias lowers to that alias's ROW (aliases are
+  // structural), so fold it back or a declaration re-prints its neighbour's body
+  // inline — `QualScope` spelling out `QualAliasInfo` three lines below its own
+  // declaration (ADR 0092).
+  const t = typeExprToType(te, vars, mkFresh(params.length));
+  return tsOf(qualifyTypeNames(foldAliases(t, aliases), qualify), names);
 }
 
 /** Free type-var ids in a Type, first-appearance order. */
@@ -636,9 +642,12 @@ export function guardParamTs(scrutType: Type, aliases: AliasDef[]): string | nul
 export function aliasTsDecl(
   def: AliasDef,
   qualify: ReadonlyMap<string, string> = new Map(),
+  aliases: AliasDef[] = [],
 ): string {
   const names = new Map(def.params.map((_, i) => [aliasParamId(i), LETTERS[i] ?? `T${i}`]));
-  const body = tsOf(qualifyTypeNames(def.template, qualify), names);
+  // Its OWN entry is dropped, or the alias renders as itself (`type Span = Span`).
+  const others = aliases.filter((a) => a.name !== def.name);
+  const body = tsOf(qualifyTypeNames(foldAliases(def.template, others), qualify), names);
   const head = def.params.length ? `${def.name}<${[...names.values()].join(", ")}>` : def.name;
   return `export type ${head} = ${body};`;
 }
@@ -649,11 +658,12 @@ export function typeDecl(
   params: string[],
   ctors: Ctor[],
   qualify: ReadonlyMap<string, string> = new Map(),
+  aliases: AliasDef[] = [],
 ): string {
   const gmap = paramGmap(params);
   const variant = (c: Ctor): string => {
     const fields = c.fields.map(
-      (fld, i) => `${fld.name ?? `_${i}`}: ${fieldTs(fld.type, params, qualify)}`,
+      (fld, i) => `${fld.name ?? `_${i}`}: ${fieldTs(fld.type, params, qualify, aliases)}`,
     );
     return `{ _tag: "${c.name}"${fields.length ? `; ${fields.join("; ")}` : ""} }`;
   };
@@ -681,7 +691,9 @@ const declOf = (
       if (type.ctors.length === 0 && !type.alias && !type.aliasType)
         return `declare const ${type.name}: unique symbol;\nexport type ${type.name} = { readonly [${type.name}]: never };`;
       const a = aliasByName.get(type.name);
-      return a ? aliasTsDecl(a, qualify) : typeDecl(type.name, type.params, type.ctors, qualify);
+      return a
+        ? aliasTsDecl(a, qualify, aliases)
+        : typeDecl(type.name, type.params, type.ctors, qualify, aliases);
     })
     .with({ kind: "let" }, (letin) => {
       const sc = schemeOf(letin.name);

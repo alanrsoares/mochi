@@ -154,7 +154,11 @@ export type TsEmitContext = {
  * driver for `build --emit=ts`).
  */
 export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
-  const aliasByName = new Map(ctx.aliases.map((a) => [a.name, a]));
+  // `ctx.aliases` is local-first, then the rest of the graph (ADR 0092): keep the
+  // FIRST of a repeated name so a dep's same-named alias cannot displace the
+  // declaration this module is actually emitting.
+  const aliasByName = new Map<string, AliasDef>();
+  for (const a of ctx.aliases) if (!aliasByName.has(a.name)) aliasByName.set(a.name, a);
   const typeHeader = [
     ...referencedBuiltinTypeDecls(prog, (n) => ctx.env.get(n)),
     ...prog.stmts.flatMap((s) => {
@@ -165,7 +169,11 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
           `type ${s.name} = { readonly [${s.name}]: never };`,
         ];
       const a = aliasByName.get(s.name);
-      return [a ? aliasTsDecl(a) : typeDecl(s.name, s.params, s.ctors)];
+      return [
+        a
+          ? aliasTsDecl(a, new Map(), ctx.aliases)
+          : typeDecl(s.name, s.params, s.ctors, new Map(), ctx.aliases),
+      ];
     }),
   ];
 
