@@ -37,6 +37,12 @@ export let compile = src =>
   let? prog = src->pipeline() in
     Ok(prog->codegen(#{}, true, namespaceRuntime, preludeJsDefs, runtimeDeps))
 
+// A single file resolves no imports, so it has no imported ctor keys and no
+// cross-module import lines. Annotated (ADR 0044): a bare `#{}` here would
+// generalize and leave the emitted TS a `Map<string, unknown>` against
+// `emitTsModule`'s pinned key type.
+let noImportedKeys : Map<string, [string]> = #{}
+
 /// compileTs : string -> Result string Err — the SAME railway, but the typed
 /// TypeScript backend (ADR 0026 / 0090). Inference runs through
 /// `inferProgramTypes` so the emitter gets the span -> type table its
@@ -49,6 +55,8 @@ export let compileTs = (src, runtimeImport) =>
         r.env,
         r.types,
         r.aliases,
+        noImportedKeys,
+        [],
         namespaceRuntime,
         preludeJsDefs,
         runtimeDeps,

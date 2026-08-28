@@ -304,6 +304,10 @@ extern namespaceRuntime : Map<string, Map<string, string> > = "./prelude.gen.mjs
 extern preludeJsDefs : Map<string, string> = "./prelude.gen.mjs" "preludeJsDefs"
 extern runtimeDeps : Map<string, [string]> = "./prelude.gen.mjs" "runtimeDeps"
 
+// A single file resolves no imports: no imported ctor keys, no cross-module
+// import lines. Annotated so the empty map does not generalize (ADR 0044).
+let noImportedKeys : Map<string, [string]> = #{}
+
 /// Full railway: source -> typed TypeScript.
 let emitTs = src =>
   lex(src)
@@ -317,6 +321,8 @@ let emitTs = src =>
             r.env,
             r.types,
             r.aliases,
+            noImportedKeys,
+            [],
             namespaceRuntime,
             preludeJsDefs,
             runtimeDeps,

@@ -426,6 +426,11 @@ export let typeAtTable = types => typeAtFrom(types, 0, #{})
 /// Every `con` name a type mentions — used to decide which builtin variant
 /// decls a module has to carry so its own references resolve.
 let consInTy = (t, acc) => switch t {
+  | TyCon("Task", [value, error]) =>
+    // `Task a e` renders as `() => Promise<Result<a, e>>` (ts-types.mochi) with no
+    // `Result` con anywhere in the semantic type, so record it explicitly or its
+    // decl never gets emitted.
+    consInTy(error, consInTy(value, Set.add("Result", Set.add("Task", acc))))
   | TyCon(name, args) => consInAll(args, Set.add(name, acc), 0)
   | TyFn(fromT, toT) => consInTy(toT, consInTy(fromT, acc))
   | TyRecord(row) => consInRow(row, acc)
@@ -593,9 +598,15 @@ export let tsGenOpts = (stmts, env, types, aliases) =>
       moduleExt: ""
     }
 
-/// Emit one module's typed TS: type header, then the runtime import, then the
-/// codegen body with per-binding / per-ctor annotations and pipe flattening.
-export let emitTsModule = (stmts, env, types, aliases, ns, jsDefs, runtimeDeps, runtimeImport) =>
+/// Emit one module's typed TS: type header, then any cross-module imports, then
+/// the runtime import, then the codegen body with per-binding / per-ctor
+/// annotations and pipe flattening.
+///
+/// `imported` / `importLines` are the GRAPH seam (TS's `TsEmitContext`): a
+/// single file passes `#{}` / `[]`, a module in a graph passes its deps' ctor
+/// field keys (so destructuring an imported ctor emits the right names) and the
+/// `import type { … }` lines its driver computed from the emitted text.
+export let emitTsModule = (stmts, env, types, aliases, imported, importLines, ns, jsDefs, runtimeDeps, runtimeImport) =>
   let declared = declaredTypeNames(stmts, 0, Set.fromArray([])) in
   let wanted = referencedCons(stmts, env, 0, Set.fromArray([])) in
   let typeHeader = Array.concat(
@@ -604,7 +615,7 @@ export let emitTsModule = (stmts, env, types, aliases, ns, jsDefs, runtimeDeps, 
   ) in
   let body = codegenWith(
     stmts,
-    #{},
+    imported,
     false,
     ns,
     jsDefs,
@@ -613,7 +624,7 @@ export let emitTsModule = (stmts, env, types, aliases, ns, jsDefs, runtimeDeps, 
   ) in
   // `_tuple` is a TS-emit device with no AST reference for the dep scan to
   // find (ADR 0036), so pull it in from the emitted text.
-  let deps0 = runtimeDepNames(stmts, #{}, ns, jsDefs, runtimeDeps) in
+  let deps0 = runtimeDepNames(stmts, imported, ns, jsDefs, runtimeDeps) in
   let deps = Str.contains("_tuple(", body)
     ? Array.append("_tuple", deps0)
     : deps0 in
@@ -629,7 +640,133 @@ export let emitTsModule = (stmts, env, types, aliases, ns, jsDefs, runtimeDeps, 
       "\n\n",
       Array.filter(
         part => part != "",
-        [Str.join("\n", header), runtimeLine, body]
+        [Str.join("\n", header), Str.join("\n", importLines), runtimeLine, body]
+      )
+    )
+      ++ "\n"
+
+// ---- extern host declarations (ADR 0026 / 0064) ----------------------------
+//
+// A graph module `extern`s bindings out of real JS hosts (`host.mjs`,
+// `prelude.gen.mjs`). Those hosts carry no mochi-visible declaration, so an
+// emitted `.ts` importing one is a tsc TS2307 "cannot find module" unless a
+// sidecar `.d.ts` / `.d.mts` is emitted beside it. Ports src/dts/dts.ts's
+// `externModuleDts` / `curriedHostType`.
+
+/// Free TYPE vars in FIRST-OCCURRENCE order. Not `freeInType`: its Sets lose the
+/// order letters are assigned in, and it also collects row vars, which a bare
+/// type has no head to bind — a record's trailing row var is skipped here and
+/// the declaration prints the closed body.
+let freeIdsIn = (t, acc) => switch t {
+  | TyVar(id) => Array.contains(id, acc) ? acc : Array.append(id, acc)
+  | TyCon(_, args) => args->freeIdsInAll(acc)
+  | TyFn(fromT, toT) => toT->freeIdsIn(fromT->freeIdsIn(acc))
+  | TyRecord(row) => row->freeIdsInRow(acc)
+  | TySingleton(_, _) => acc
+  | TyOneOf(members) => members->freeIdsInAll(acc)
+}
+
+let freeIdsInAll = (ts, acc) =>
+  ts |> Array.reduce((a, t) => freeIdsIn(t, a), acc)
+
+let freeIdsInRow = (row, acc) => switch row {
+  | RowExtend(_, fieldType, rest) => rest->freeIdsInRow(
+      freeIdsIn(fieldType, acc)
+    )
+  | _ => acc
+}
+
+/// id -> letter, positionally. Accumulator-first so `Map.values` comes back in
+/// index order — the generic head and the rendered params must agree.
+let lettersFor = (ids, i, acc) => switch Array.get(i, ids) {
+  | None => acc
+  | Some(id) => lettersFor(ids, i + 1, Map.set(id, letterAt(i), acc))
+}
+
+/// id -> `any`. A VALUE extern is a const: it has no generic head to bind its
+/// escaped vars to, and the host is untyped JS, so `any` is the honest boundary.
+let anyFor = ids =>
+  ids |> Array.reduce((acc, id) => Map.set(id, "any", acc), #{})
+
+let genericHeadOf = (ids, names) =>
+  Array.length(ids) == 0 ? "" : "<${Str.join(", ", Map.values(names))}>"
+
+/// Arrows on the spine — the extern's declared arity.
+let arrowCount = t => switch t {
+  | TyFn(_, toT) => 1 + arrowCount(toT)
+  | _ => 0
+}
+
+/// Peel `arity` arrows into `a: T`, `b: T`, … — the same positional naming
+/// `tsArrow` uses, so a declaration and a call site read alike.
+let hostParams = (t, arity, names, i) =>
+  i >= arity
+    ? []
+    : switch t {
+      | TyFn(fromT, toT) => Array.prepend(
+          "${Str.fromCode(97 + i)}: ${tsOf(fromT, names)}",
+          hostParams(toT, arity, names, i + 1)
+        )
+      | _ => []
+    }
+
+let hostReturn = (t, arity, i) =>
+  i >= arity
+    ? t
+    : switch t { | TyFn(_, toT) => hostReturn(toT, arity, i + 1) | _ => t }
+
+/// `(a: A) => (b: B) => R` — a CURRIED host's own shape (ADR 0064). Unlike
+/// `flatHostType` there are no partial-application overloads to offer: `_curry`
+/// is built AROUND this host, not exported by it, so it takes exactly one
+/// argument per call. Folded right-to-left, hence the reverse.
+let curriedHostType = (t, arity) =>
+  let ids = freeIdsIn(t, []) in
+  let names = lettersFor(ids, 0, #{}) in
+    "${genericHeadOf(ids, names)}${hostParams(t, arity, names, 0) |> Array.reverse |> Array.reduce((acc, p) => "(${p}) => ${acc}", tsOf(hostReturn(t, arity, 0), names))}"
+
+/// An UNCURRIED function host gets the same overloaded signature a runtime
+/// builtin does, so both `f(a)(b)` and `f(a, b)` call sites resolve (ADR 0037).
+let flatHostType = (t, arity) =>
+  let ids = freeIdsIn(t, []) in
+  let names = lettersFor(ids, 0, #{}) in
+  let head = genericHeadOf(ids, names) in
+    arity == 0
+      ? "${head}${tsOf(t, names)}"
+      : curriedOverloads(
+        head,
+        hostParams(t, arity, names, 0),
+        tsOf(hostReturn(t, arity, 0), names)
+      )
+
+/// One `export declare const` for a host binding. `e` is
+/// `{ imported, scheme, curried }` — `imported` is the JS export name the
+/// emitted `import { … }` binds, not the mochi-side name.
+let externDecl = e =>
+  let t = e.scheme.ty in
+  let n = arrowCount(t) in
+    n >= 1 && e.curried
+      ? "export declare const ${e.imported}: ${curriedHostType(t, n)};"
+      : n == 0
+      ? "export declare const ${e.imported}: ${tsOf(t, anyFor(freeIdsIn(t, [])))};"
+      : "export declare const ${e.imported}: ${flatHostType(t, n)};"
+
+/// One extern host module's declaration file. Referenced builtin variants are
+/// inlined, so the sidecar is self-contained and needs no import of its own.
+/// `dedupeBy` keeps the FIRST of two mochi bindings aliasing one host export —
+/// a repeated `export declare const` is a TS2323.
+export let externModuleDts = (externs, aliases) =>
+  let wanted = externs
+    |> Array.reduce(
+      (acc, e) => consInTy(e.scheme.ty, acc),
+      Set.fromArray([])
+    ) in
+    Str.join(
+      "\n",
+      Array.concat(
+        builtinTypeDecls
+          |> filter(bt => Set.has(bt.name, wanted))
+          |> map(bt => typeDecl(bt.name, bt.params, bt.ctors, aliases)),
+        externs |> Array.dedupeBy(e => e.imported) |> map(externDecl)
       )
     )
       ++ "\n"
