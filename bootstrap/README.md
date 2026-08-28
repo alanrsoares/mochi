@@ -7,10 +7,10 @@ matching `.mochi` source instead.
 
 For a bootstrap-covered core change, work in this directory first, then port the
 same behavior to `packages/compiler/src/`. `seed/` is the checked-in,
-SHA-256-manifested JavaScript bridge while the self-hosted typed backend lands;
-it is a reviewed executable artifact, never an authoring source. ADR 0090's
-target stage 1 is a TypeScript graph emitted by Mochi. The TypeScript compiler
-remains the independent parity oracle; it is not a second design source.
+SHA-256-manifested TypeScript stage-1 graph (ADR 0090): an emitted artifact
+Bun executes, never an authoring source. Compiler behavior remains a change
+to `bootstrap/*.mochi`. The TypeScript compiler remains the independent
+parity oracle; it is not a second design source.
 
 Keep these checks green before handing off a core change:
 
@@ -18,6 +18,9 @@ Keep these checks green before handing off a core change:
 bun run fixpoint       # frozen stage 1 -> stage 2 == stage 3 == TS reference
 bun run bootstrap:tsc  # emitted graph remains strict-tsc clean
 ```
+
+Refresh the stage-1 snapshot with `bun run seed:freeze` when today's sources
+need a compiler feature the current seed does not have.
 
 The boundary is intentional. `host.mjs` is the small hand-written IO/resolver
 seam, `prelude.gen.mjs` is generated from the TypeScript runtime/prelude, and

@@ -11,10 +11,11 @@ dist
 # `.js` in the tree is a build artifact and safe to ignore wholesale.
 *.js
 
-# The stage-1 bootstrap binary is a reviewed source artifact, not ordinary
-# `mochi build` output. Its manifest records the exact frozen graph.
+# The stage-1 bootstrap binary is a reviewed emitted artifact (ADR 0090),
+# not ordinary `mochi build` output. Its manifest records the exact frozen graph.
 !/bootstrap/seed/
-!/bootstrap/seed/**/*.js
+!/bootstrap/seed/**/*.ts
+!/bootstrap/seed/**/*.d.mts
 
 # bootstrap `build --emit=ts` drops `.ts` / `.d.mts` beside the `.mochi` sources
 # (JS emit is already covered by `*.js` above).

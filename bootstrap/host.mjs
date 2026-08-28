@@ -77,10 +77,16 @@ export const argv = process.argv.slice(2);
 
 // isCliEntry : () -> bool — a bootstrap CLI module is also imported by its
 // colocated unit spec. Only invoke its top-level driver when Bun executed the
-// emitted cli.js itself, not when another module imported it.
-export const isCliEntry = () =>
-  process.argv[1] !== undefined &&
-  resolve(process.argv[1]) === resolve(new URL("./cli.js", import.meta.url).pathname);
+// sibling cli.js / cli.ts itself, not when another module imported it.
+export const isCliEntry = () => {
+  if (process.argv[1] === undefined) return false;
+  const self = resolve(process.argv[1]);
+  const here = new URL(".", import.meta.url);
+  return (
+    self === resolve(new URL("./cli.js", here).pathname) ||
+    self === resolve(new URL("./cli.ts", here).pathname)
+  );
+};
 
 // print : string -> string  — write a line to stderr; returns its argument so
 // it threads inside a pipeline. (stderr keeps stdout clean for emitted JS.)

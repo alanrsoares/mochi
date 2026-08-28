@@ -50,6 +50,9 @@ deleted once the emitted TypeScript graph is the executable stage 1.
 
 - The bootstrap chain can eventually run without a hand-authored TypeScript
   implementation of the core while retaining strict TypeScript validation.
+- `bootstrap/seed/` holds that emitted graph, SHA-256 manifested, and is what
+  `scripts/fixpoint.ts` copies and runs as stage 1. Refresh with
+  `bun run seed:freeze`.
 - The bootstrap graph gains a typed-emission backend and graph driver before
   the TypeScript core is deleted.
 - The TypeScript core and its differential build remain temporarily; this ADR

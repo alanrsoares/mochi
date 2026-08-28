@@ -95,8 +95,8 @@ export let buildMulti = entry =>
     |> Result.mapErr(e => e.message)
     |> Result.flatMap(writeAll)
 
-/// Invoke only when Bun executes cli.js directly. Importing it from a colocated
-/// unit spec must expose the helpers above without exiting the test process.
+/// Invoke only when Bun executes cli.js / cli.ts directly. Importing it from a
+/// colocated unit spec must expose the helpers above without exiting the test process.
 let runEntry = isCliEntry(())
   ? switch Array.get(0, argv) {
     | None => die(

@@ -17,6 +17,7 @@
       "examples/snake/src/**/*.ts",
       "examples/snake/src/**/*.tsx",
       "examples/snake/*.ts",
+      "bootstrap/seed/**/*.ts",
       "!packages/compiler/src/prelude/js-defs.gen.ts"
     ]
   },
@@ -81,10 +82,16 @@
   "overrides": [
     {
       "includes": ["**", "!biome/plugins/**", "!packages/compiler/src/prelude/runtime.ts"],
-      "plugins": [
-        "./biome/plugins/no-promise-result.grit",
-        "./biome/plugins/no-inline-struct-type.grit"
-      ]
+      "plugins": ["./biome/plugins/no-promise-result.grit"]
+    },
+    {
+      "includes": [
+        "**",
+        "!biome/plugins/**",
+        "!packages/compiler/src/prelude/runtime.ts",
+        "!bootstrap/seed/**"
+      ],
+      "plugins": ["./biome/plugins/no-inline-struct-type.grit"]
     },
     {
       "includes": [
@@ -125,6 +132,33 @@
         "rules": {
           "suspicious": {
             "noExplicitAny": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["bootstrap/seed/**"],
+      "assist": {
+        "actions": {
+          "source": {
+            "organizeImports": "off"
+          }
+        }
+      },
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noExplicitAny": "off"
+          },
+          "correctness": {
+            "noUnusedImports": "off",
+            "noUnusedVariables": "off",
+            "noUnusedFunctionParameters": "off"
+          },
+          "complexity": {
+            "noUselessContinue": "off",
+            "noExcessiveCognitiveComplexity": "off",
+            "useLiteralKeys": "off"
           }
         }
       }

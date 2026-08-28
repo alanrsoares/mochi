@@ -1,8 +1,9 @@
 // Ticket 0007 / 0013 — self-hosting fixpoint driven through the SHIPPED binary
 // (bootstrap/cli.mochi), not the TS test harness. Real disk IO, real CLI.
 //
-// Ceremony (PATH_TO_BOOTSTRAP §4, lifted to disk):
-//   seed  : the reviewed bootstrap/seed graph -> a runnable mochic (stage 1).
+// Ceremony (PATH_TO_BOOTSTRAP §4, lifted to disk; ADR 0090):
+//   seed  : the reviewed bootstrap/seed TypeScript graph -> a runnable mochic
+//           (stage 1, executed by Bun).
 //   stage2: the seed binary rebuilds the whole graph (`mochic build cli.mochi`).
 //   stage3: a binary assembled from the stage-2 outputs rebuilds it again.
 // Self-hosting is proved when stage2 ≡ stage3 byte-for-byte for every module.
@@ -58,10 +59,14 @@ const RUNTIME_DEPS = ["host.mjs", "prelude.gen.mjs"];
 const seedManifest = (): SeedManifest =>
   JSON.parse(readFileSync(join(seedRoot, "manifest.json"), "utf8")) as SeedManifest;
 
-const SEED_MODULES = (): string[] =>
-  Object.keys(seedManifest().files)
-    .filter((f) => f.endsWith(".js"))
-    .map((f) => f.slice(0, -3));
+const seedFiles = (): string[] => Object.keys(seedManifest().files);
+
+const seedEntry = (): string => {
+  const files = seedFiles();
+  if (files.includes("cli.ts")) return "cli.ts";
+  if (files.includes("cli.js")) return "cli.js";
+  throw new Error("bootstrap seed missing cli.ts");
+};
 
 type SeedManifest = {
   sourceRevision: string;
@@ -84,13 +89,22 @@ const copyModule = (fromRoot: string, toRoot: string, m: string, ext: string) =>
 
 const verifySeed = (): void => {
   const manifest = seedManifest();
-  for (const file of [...SEED_MODULES().map((m) => `${m}.js`), ...RUNTIME_DEPS]) {
+  for (const file of seedFiles()) {
     const expected = manifest.files[file];
     if (!expected) throw new Error(`bootstrap seed manifest omits '${file}'`);
     const actual = createHash("sha256")
       .update(readFileSync(join(seedRoot, file)))
       .digest("hex");
     if (actual !== expected) throw new Error(`bootstrap seed hash mismatch for '${file}'`);
+  }
+};
+
+const copySeed = (toRoot: string): void => {
+  mkdirSync(toRoot, { recursive: true });
+  for (const file of seedFiles()) {
+    const dest = join(toRoot, file);
+    mkdirSync(join(dest, ".."), { recursive: true });
+    cpSync(join(seedRoot, file), dest);
   }
 };
 
@@ -108,9 +122,9 @@ const readModules = (dir: string): Record<string, string> => {
   return out;
 };
 
-const compileAllWith = (binDir: string, outDir: string): Record<string, string> => {
+const compileAllWith = (binDir: string, outDir: string, entry: string): Record<string, string> => {
   copyBootstrapSources(outDir);
-  bun([join(binDir, "cli.js"), "build", join(outDir, "cli.mochi")]);
+  bun([join(binDir, entry), "build", join(outDir, "cli.mochi")]);
   return readModules(outDir);
 };
 
@@ -131,19 +145,17 @@ export const runFixpoint = (): FixpointResult => {
   mkdirSync(work, { recursive: true });
   verifySeed();
 
-  // --- frozen stage-1 binary ---
+  // --- frozen stage-1 binary (emitted TypeScript, executed by Bun) ---
   const seed = join(work, "seed");
-  mkdirSync(seed, { recursive: true });
-  for (const m of SEED_MODULES()) copyModule(seedRoot, seed, m, ".js");
-  placeRuntimeDeps(seedRoot, seed);
+  copySeed(seed);
 
   // --- stage 2: seed binary rebuilds the whole graph ---
   const s2dir = join(work, "s2");
-  const stage2 = compileAllWith(seed, s2dir);
+  const stage2 = compileAllWith(seed, s2dir, seedEntry());
   placeRuntimeDeps(bootstrap, s2dir); // s2 is now itself a runnable binary
 
   // --- stage 3: stage-2 binary rebuilds it again ---
-  const stage3 = compileAllWith(s2dir, join(work, "s3"));
+  const stage3 = compileAllWith(s2dir, join(work, "s3"), "cli.js");
 
   // --- independent TypeScript parity build, isolated from the seed ---
   const tsSingle = compileAllWithTs(join(work, "ts"));
