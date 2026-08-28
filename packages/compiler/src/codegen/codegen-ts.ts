@@ -154,7 +154,11 @@ export type TsEmitContext = {
  * driver for `build --emit=ts`).
  */
 export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
-  const aliasByName = new Map(ctx.aliases.map((a) => [a.name, a]));
+  // `ctx.aliases` is local-first, then the rest of the graph (ADR 0092): keep the
+  // FIRST of a repeated name so a dep's same-named alias cannot displace the
+  // declaration this module is actually emitting.
+  const aliasByName = new Map<string, AliasDef>();
+  for (const a of ctx.aliases) if (!aliasByName.has(a.name)) aliasByName.set(a.name, a);
   const typeHeader = [
     ...referencedBuiltinTypeDecls(prog, (n) => ctx.env.get(n)),
     ...prog.stmts.flatMap((s) => {
@@ -165,7 +169,11 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
           `type ${s.name} = { readonly [${s.name}]: never };`,
         ];
       const a = aliasByName.get(s.name);
-      return [a ? aliasTsDecl(a) : typeDecl(s.name, s.params, s.ctors)];
+      return [
+        a
+          ? aliasTsDecl(a, new Map(), ctx.aliases)
+          : typeDecl(s.name, s.params, s.ctors, new Map(), ctx.aliases),
+      ];
     }),
   ];
 
@@ -296,6 +304,12 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
   // A guard predicate can name a builtin variant (`Option`) the header didn't
   // already emit — inject its decl now that the body text exists (ADR 0031).
   const header = [...builtinDeclsIn(body, typeHeader.join("\n")), ...typeHeader];
+  // `_Curry` lives in the runtime, not inline: a decl per module cost ~13 lines
+  // × every file in a graph. It is a TYPE, so it rides its own `import type`
+  // line rather than the value import below (ADR 0093).
+  const curryLine = `${header.join("\n")}\n${body}`.includes("_Curry<")
+    ? `import type { _Curry } from ${JSON.stringify(ctx.runtimeImport)};`
+    : "";
 
   // `_tuple` isn't reachable by `collectRuntimeDeps` (a tuple AST node carries no
   // runtime-name reference); it's a TS-emit device, so pull it in from the body
@@ -305,9 +319,13 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
     ? `import { ${allDeps.join(", ")} } from ${JSON.stringify(ctx.runtimeImport)};`
     : "";
 
-  const parts = [header.join("\n"), ctx.importLines.join("\n"), runtimeLine, body].filter(
-    (p) => p !== "",
-  );
+  const parts = [
+    header.join("\n"),
+    ctx.importLines.join("\n"),
+    curryLine,
+    runtimeLine,
+    body,
+  ].filter((p) => p !== "");
   return `${parts.join("\n\n")}\n`;
 };
 

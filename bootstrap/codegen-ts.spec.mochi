@@ -1,0 +1,458 @@
+import { assertEq, test } from "@mochi/test"
+import * as Ast from "./ast.mochi"
+import { check } from "./check.mochi"
+import { lex } from "./lexer.mochi"
+import { parse } from "./parser.mochi"
+import { inferProgramTypes } from "./infer.mochi"
+import { plainEnv, recsEnv, tsEnv } from "./ts-types.mochi"
+import {
+  aliasTsDecl,
+  ctorCallTs,
+  ctorFactoryTs,
+  emptyCollTs,
+  genericLambdaParams,
+  guardParamTs,
+  lambdaParamTypesTs,
+  opaqueTypeDecl,
+  recordAliasDecl,
+  recordAliasIndex,
+  typeDecl,
+  bindingTsType,
+  curriedOverloads,
+  emitTsModule,
+  unionGenericNames
+} from "./codegen-ts.mochi"
+import {
+  tArrow,
+  tCon,
+  tPrim,
+  tVar,
+  rVar,
+  rExtend,
+  tRecord
+} from "./types.mochi"
+
+let sp = { start: 0, end: 0 }
+
+/// `type Light = Red | Green`
+test("a nullary variant renders as a tagged union", () =>
+  assertEq(
+    "export type Light =\n  | { _tag: \"Red\" }\n  | { _tag: \"Green\" };",
+    typeDecl(
+      "Light",
+      [],
+      [{ name: "Red", fields: [] }, { name: "Green", fields: [] }],
+      #{},
+      #{}
+    )
+  ))
+
+/// `type Box a = Wrap(value: a)` — the param binds positionally to letter `A`.
+test("a parameterised variant scopes its letters", () =>
+  assertEq(
+    "export type Box<A> =\n  | { _tag: \"Wrap\"; value: A };",
+    typeDecl(
+      "Box",
+      ["a"],
+      [
+        {
+          name: "Wrap",
+          fields: [{ name: Some("value"), fieldType: Ast.TyName("a", sp) }]
+        }
+      ],
+      #{},
+      #{}
+    )
+  ))
+
+test("an unnamed ctor field takes a positional key", () =>
+  assertEq(
+    "export type Box<A> =\n  | { _tag: \"Wrap\"; _0: A };",
+    typeDecl(
+      "Box",
+      ["a"],
+      [
+        {
+          name: "Wrap",
+          fields: [{ name: None, fieldType: Ast.TyName("a", sp) }]
+        }
+      ],
+      #{},
+      #{}
+    )
+  ))
+
+test("a record alias renders structurally", () =>
+  assertEq(
+    "export type Point = { x: number; y: number };",
+    recordAliasDecl(
+      "Point",
+      [],
+      [
+        { name: "x", fieldType: Ast.TyName("number", sp) },
+        { name: "y", fieldType: Ast.TyName("number", sp) }
+      ],
+      #{},
+      #{}
+    )
+  ))
+
+test("a transparent alias renders its aliased type", () =>
+  assertEq(
+    "export type Id = number;",
+    aliasTsDecl("Id", [], Ast.TyName("number", sp), #{}, #{})
+  ))
+
+test("an opaque extern type stays nominal", () =>
+  assertEq(
+    "declare const Handle: unique symbol;\nexport type Handle = { readonly [Handle]: never };",
+    opaqueTypeDecl("Handle")
+  ))
+
+test("unionGenericNames merges letters across schemes", () =>
+  assertEq(
+    2,
+    Map.size(
+      unionGenericNames(
+        [
+          { vars: [1], rvars: [], ty: Ast.TyName("a", sp) },
+          { vars: [2], rvars: [], ty: Ast.TyName("b", sp) }
+        ]
+      )
+    )
+  ))
+
+// ---- annotation hooks ------------------------------------------------------
+
+test("emptyCollTs pins a concrete seed and skips a free one", () => {
+  assertEq(
+    Some("Map<string, number>"),
+    emptyCollTs(tCon("Map", [tPrim("string"), tPrim("number")]), plainEnv(#{}))
+  );
+  assertEq(
+    None,
+    emptyCollTs(tCon("Map", [tPrim("string"), tVar(1)]), plainEnv(#{}))
+  )
+})
+
+test("emptyCollTs renders an in-scope var as its letter (ADR 0042)", () =>
+  assertEq(
+    Some("A[]"),
+    emptyCollTs(tCon("Array", [tVar(1)]), tsEnv(#{ 1: "A" }, #{}))
+  ))
+
+test("emptyCollTs needs the row tail in scope too", () => {
+  assertEq(
+    None,
+    emptyCollTs(tRecord(rExtend("x", tPrim("number"), rVar(9))), plainEnv(#{}))
+  );
+  assertEq(
+    Some("({ x: number } & R)"),
+    emptyCollTs(
+      tRecord(rExtend("x", tPrim("number"), rVar(9))),
+      tsEnv(#{ 9: "R" }, #{})
+    )
+  )
+})
+
+test("ctorCallTs casts only a concrete APPLIED con", () => {
+  assertEq(
+    Some("Result<number, string>"),
+    ctorCallTs(tCon("Result", [tPrim("number"), tPrim("string")]), #{})
+  );
+  assertEq(None, ctorCallTs(tCon("Result", [tPrim("number"), tVar(3)]), #{}));
+  assertEq(None, ctorCallTs(tPrim("number"), #{}))
+})
+// phantom param still free -> tsc's `unknown` is no worse than ours
+// nullary con carries no type args to pin
+test("guardParamTs supplies a concrete scrutinee base only", () => {
+  assertEq(Some("Shape"), guardParamTs(tCon("Shape", []), #{}));
+  assertEq(None, guardParamTs(tCon("Box", [tVar(1)]), #{}))
+})
+
+test("lambdaParamTypesTs peels one arrow per param", () =>
+  assertEq(
+    [Some("number"), Some("string")],
+    lambdaParamTypesTs(
+      tArrow(tPrim("number"), tArrow(tPrim("string"), tPrim("bool"))),
+      2,
+      tsEnv(#{}, #{})
+    )
+  ))
+
+test("lambdaParamTypesTs leaves an out-of-scope generic param bare", () =>
+  assertEq(
+    [None, Some("number")],
+    lambdaParamTypesTs(
+      tArrow(tVar(1), tArrow(tPrim("number"), tPrim("bool"))),
+      2,
+      tsEnv(#{}, #{})
+    )
+  ))
+
+test("lambdaParamTypesTs pads when arity outruns the arrow spine", () =>
+  assertEq(
+    [Some("number"), None],
+    lambdaParamTypesTs(
+      tArrow(tPrim("number"), tPrim("bool")),
+      2,
+      tsEnv(#{}, #{})
+    )
+  ))
+
+test("genericLambdaParams scopes the scheme's own letters", () =>
+  assertEq(
+    Some({ generics: "<A>", params: [Some("A"), Some("A[]")] }),
+    genericLambdaParams(
+      {
+        vars: [1],
+        rvars: [],
+        ty: tArrow(tVar(1), tArrow(tCon("Array", [tVar(1)]), tPrim("bool")))
+      },
+      2,
+      #{}
+    )
+  ))
+
+test("genericLambdaParams declines a non-generic binding", () =>
+  assertEq(
+    None,
+    genericLambdaParams(
+      { vars: [], rvars: [], ty: tArrow(tPrim("number"), tPrim("bool")) },
+      1,
+      #{}
+    )
+  ))
+
+test("ctorFactoryTs types a parameterised factory", () =>
+  assertEq(
+    {
+      generics: "<A>",
+      paramTypes: ["A"],
+      ret: "Box<A>",
+      retMono: "Box<never>"
+    },
+    ctorFactoryTs(
+      "Box",
+      ["a"],
+      {
+        name: "Wrap",
+        fields: [{ name: Some("value"), fieldType: Ast.TyName("a", sp) }]
+      },
+      #{},
+      #{}
+    )
+  ))
+
+test("ctorFactoryTs leaves a nullary type unparameterised", () =>
+  assertEq(
+    { generics: "", paramTypes: [], ret: "Light", retMono: "Light" },
+    ctorFactoryTs("Light", [], { name: "Red", fields: [] }, #{}, #{})
+  ))
+
+// ---- binding types (ADR 0037) ----------------------------------------------
+
+test("a single param needs no overloads", () =>
+  assertEq("(a: number) => bool", curriedOverloads("", ["a: number"], "bool")))
+
+test("arity 2 covers both groupings, flat form last", () =>
+  assertEq(
+    "{ (a: number): (b: string) => bool; (a: number, b: string): bool; }",
+    curriedOverloads("", ["a: number", "b: string"], "bool")
+  ))
+
+test("arity 3 covers every composition, longest first", () =>
+  assertEq(
+    "{ (a: A): (b: B) => (c: C) => R; (a: A): (b: B, c: C) => R; (a: A, b: B): (c: C) => R; (a: A, b: B, c: C): R; }",
+    curriedOverloads("", ["a: A", "b: B", "c: C"], "R")
+  ))
+
+test("the generic head sits inside each call signature", () =>
+  assertEq(
+    "{ <A>(a: A): (b: A) => A; <A>(a: A, b: A): A; }",
+    curriedOverloads("<A>", ["a: A", "b: A"], "A")
+  ))
+
+let lam = (names, body) =>
+  Ast.ELambda(names |> map(n => Ast.LPName(n, None)), body, sp)
+
+let unitE = Ast.EUnit(sp)
+
+test("a concrete function binding gets a curry-compatible type", () =>
+  assertEq(
+    "_Curry<[a: number, b: number], number>",
+    bindingTsType(
+      {
+        vars: [],
+        rvars: [],
+        ty: tArrow(tPrim("number"), tArrow(tPrim("number"), tPrim("number")))
+      },
+      lam(["a", "b"], unitE),
+      #{}
+    )
+  ))
+
+test("a generic function binding keeps the nested arrow", () =>
+  assertEq(
+    "<A>(value: A) => A",
+    bindingTsType(
+      { vars: [1], rvars: [], ty: tArrow(tVar(1), tVar(1)) },
+      lam(["value"], unitE),
+      #{}
+    )
+  ))
+
+test("a non-function binding renders its type directly", () =>
+  assertEq(
+    "number[]",
+    bindingTsType(
+      { vars: [], rvars: [], ty: tCon("Array", [tPrim("number")]) },
+      unitE,
+      #{}
+    )
+  ))
+
+test("a zero-param lambda consumes the erased unit arrow", () =>
+  assertEq(
+    "() => number",
+    bindingTsType(
+      { vars: [], rvars: [], ty: tArrow(tPrim("unit"), tPrim("number")) },
+      Ast.ELambda([], unitE, sp),
+      #{}
+    )
+  ))
+
+// ---- end-to-end module emission --------------------------------------------
+
+extern builtins : Map<string, a> = "./prelude.gen.mjs" "builtins"
+extern namespaces : Map<string, Map<string, a> > = "./prelude.gen.mjs" "namespaces"
+extern namespaceRuntime : Map<string, Map<string, string> > = "./prelude.gen.mjs" "namespaceRuntime"
+extern preludeJsDefs : Map<string, string> = "./prelude.gen.mjs" "preludeJsDefs"
+extern runtimeDeps : Map<string, [string]> = "./prelude.gen.mjs" "runtimeDeps"
+
+// A single file resolves no imports: no imported ctor keys, no cross-module
+// import lines. Annotated so the empty map does not generalize (ADR 0044).
+let noImportedKeys : Map<string, [string]> = #{}
+
+/// Full railway: source -> typed TypeScript.
+let emitTs = src =>
+  lex(src)
+    |> Result.flatMap(parse)
+    |> Result.flatMap(check)
+    |> Result.flatMap(stmts =>
+      inferProgramTypes(stmts, builtins, namespaces, false)
+        |> Result.map(r =>
+          emitTsModule(
+            stmts,
+            r.env,
+            r.types,
+            r.letParams,
+            r.aliases,
+            noImportedKeys,
+            [],
+            namespaceRuntime,
+            preludeJsDefs,
+            runtimeDeps,
+            "@mochi/runtime"
+          )))
+
+let tsOf = src => emitTs(src) |> Result.unwrapOr("<error>")
+
+test("emits a typed const for a concrete function binding", () =>
+  assertEq(
+    true,
+    tsOf("let addPair = (a, b) => add(a, b)")
+      |> Str.contains("const addPair: _Curry<[a: number, b: number], number>")
+  ))
+
+test("emits a tagged union for a variant decl", () =>
+  assertEq(
+    true,
+    tsOf("type Light = Red | Green\nlet start = Red")
+      |> Str.contains(
+        "export type Light =\n  | { _tag: \"Red\" }\n  | { _tag: \"Green\" };"
+      )
+  ))
+
+test("a generic binding keeps its letters on the value lambda", () =>
+  assertEq(
+    true,
+    tsOf("let identity = value => value")
+      |> Str.contains("const identity: <A>(value: A) => A")
+  ))
+
+test("a tuple emits through the _tuple helper (ADR 0036)", () =>
+  assertEq(true, tsOf("let pt = (1, 2)") |> Str.contains("_tuple(1, 2)")))
+
+test("a pipe emits flattened so tsc infers from all args (ADR 0026)", () =>
+  assertEq(true, tsOf("let n = 1 |> add(2)") |> Str.contains("add(2, 1)")))
+
+test("a referenced builtin variant is declared", () =>
+  assertEq(
+    true,
+    tsOf("let first = xs => Array.head(xs)")
+      |> Str.contains("export type Option<A> =")
+  ))
+
+test("emits the runtime import for referenced helpers", () =>
+  assertEq(
+    true,
+    tsOf("let addPair = (a, b) => add(a, b)")
+      |> Str.contains("import { _curry, add } from \"@mochi/runtime\";")
+  ))
+
+test("pulls in _tuple when the body uses it (ADR 0036)", () =>
+  assertEq(true, tsOf("let pt = (1, 2)") |> Str.contains("_tuple")))
+
+// ---- record alias index (ADR 0092) -----------------------------------------
+
+test("recordAliasIndex keys a nullary record alias by sorted shape", () =>
+  assertEq(
+    #{ "end: number; start: number": "Span" },
+    recordAliasIndex(
+      #{
+        "Span": {
+          params: [],
+          fields: [
+            { name: "start", fieldType: Ast.TyName("number", sp) },
+            { name: "end", fieldType: Ast.TyName("number", sp) }
+          ],
+          expr: None
+        }
+      }
+    )
+  ))
+
+test("recordAliasIndex skips a parameterised alias", () =>
+  // Matching one would mean matching a row up to substitution.
+  assertEq(
+    #{},
+    recordAliasIndex(
+      #{
+        "Box": {
+          params: ["a"],
+          fields: [{ name: "value", fieldType: Ast.TyName("a", sp) }],
+          expr: None
+        }
+      }
+    )
+  ))
+
+test("a use of a record alias renders as the alias name", () =>
+  assertEq(
+    true,
+    tsOf(
+      "type Span = { start: number, end: number }\nlet at = (s: Span) => s.start"
+    )
+      |> Str.contains(": Span")
+  ))
+
+test("an alias declaration still renders its own body structurally", () =>
+  // Without the self-exclusion this comes out `export type Span = Span;`.
+  assertEq(
+    true,
+    tsOf(
+      "type Span = { start: number, end: number }\nlet at = (s: Span) => s.start"
+    )
+      |> Str.contains("export type Span = { start: number; end: number };")
+  ))

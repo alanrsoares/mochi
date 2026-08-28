@@ -3,7 +3,7 @@
 // Mascot art served from `public/illustrations/` — plain URLs, no bundler alias.
 extern BASE_URL : string = "./base-url" "BASE_URL"
 
-let asset = p => BASE_URL ++ p
+let asset = concat(BASE_URL)
 
 export let bootstrapPartyImg = asset("illustrations/mochi_bootstrap_party.jpg")
 export let coderMascotImg = asset("illustrations/mochi_coder_mascot.jpg")

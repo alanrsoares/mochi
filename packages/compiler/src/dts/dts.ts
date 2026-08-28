@@ -19,6 +19,7 @@ import {
   type ConType,
   foldAliases,
   isUnit,
+  matchTemplate,
   mkFresh,
   qualifyTypeNames,
   type Row,
@@ -319,10 +320,16 @@ function fieldTs(
   te: TypeExpr,
   params: string[],
   qualify: ReadonlyMap<string, string> = new Map(),
+  aliases: AliasDef[] = [],
 ): string {
   const vars = new Map(params.map((p, i): [string, Type] => [p, tVar(i)]));
   const names = new Map(params.map((_, i): [number, string] => [i, LETTERS[i] ?? `T${i}`]));
-  return tsOf(qualifyTypeNames(typeExprToType(te, vars, mkFresh(params.length)), qualify), names);
+  // A field naming another record alias lowers to that alias's ROW (aliases are
+  // structural), so fold it back or a declaration re-prints its neighbour's body
+  // inline — `QualScope` spelling out `QualAliasInfo` three lines below its own
+  // declaration (ADR 0092).
+  const t = typeExprToType(te, vars, mkFresh(params.length));
+  return tsOf(qualifyTypeNames(foldAliases(t, aliases), qualify), names);
 }
 
 /** Free type-var ids in a Type, first-appearance order. */
@@ -394,6 +401,19 @@ function curriedOverloads(head: string, params: string[], ret: string): string {
     return `${head}(${slices[0]!.join(", ")}): ${tail};`;
   };
   return `{ ${compositions(params.length).map(sig).join(" ")} }`;
+}
+
+/**
+ * The CONCRETE curry-compatible function type. Same contract as
+ * `curriedOverloads` — every partial-application grouping `_curry` accepts must
+ * typecheck — but expressed once as `_Curry<[params], ret>` instead of one
+ * signature per composition of the arity. A monomorphic arity-n binding cost
+ * 2^(n-1) lines; this costs one (ADR 0093). Only CONCRETE bindings can use it:
+ * `infer` erases a generic head, so a generic binding keeps the nested arrow.
+ */
+export function curriedFnType(params: readonly string[], ret: string): string {
+  if (params.length <= 1) return `(${params.join(", ")}) => ${ret}`;
+  return `_Curry<[${params.join(", ")}], ${ret}>`;
 }
 
 /**
@@ -483,7 +503,7 @@ export function bindingTsType(
     // (params collapse to `Option<never>`/`any`). See ADR 0037.
     if (head === "") {
       const { params, ret } = flatBindingParams(folded, value, names);
-      return curriedOverloads("", params, ret);
+      return curriedFnType(params, ret);
     }
     return `${head}${declType(folded, value, names)}`;
   }
@@ -636,9 +656,17 @@ export function guardParamTs(scrutType: Type, aliases: AliasDef[]): string | nul
 export function aliasTsDecl(
   def: AliasDef,
   qualify: ReadonlyMap<string, string> = new Map(),
+  aliases: AliasDef[] = [],
 ): string {
   const names = new Map(def.params.map((_, i) => [aliasParamId(i), LETTERS[i] ?? `T${i}`]));
-  const body = tsOf(qualifyTypeNames(def.template, qualify), names);
+  // Its OWN entry is dropped, or the alias renders as itself (`type Span = Span`)
+  // — and every SAME-SHAPED alias with it. Two structurally identical aliases in
+  // different modules would otherwise each fold to the other's name, emitting a
+  // mutually circular `type A = B;` / `type B = A;` (TS2456).
+  const others = aliases.filter(
+    (a) => a.name !== def.name && !matchTemplate(a.template, def.template, new Map()),
+  );
+  const body = tsOf(qualifyTypeNames(foldAliases(def.template, others), qualify), names);
   const head = def.params.length ? `${def.name}<${[...names.values()].join(", ")}>` : def.name;
   return `export type ${head} = ${body};`;
 }
@@ -649,11 +677,12 @@ export function typeDecl(
   params: string[],
   ctors: Ctor[],
   qualify: ReadonlyMap<string, string> = new Map(),
+  aliases: AliasDef[] = [],
 ): string {
   const gmap = paramGmap(params);
   const variant = (c: Ctor): string => {
     const fields = c.fields.map(
-      (fld, i) => `${fld.name ?? `_${i}`}: ${fieldTs(fld.type, params, qualify)}`,
+      (fld, i) => `${fld.name ?? `_${i}`}: ${fieldTs(fld.type, params, qualify, aliases)}`,
     );
     return `{ _tag: "${c.name}"${fields.length ? `; ${fields.join("; ")}` : ""} }`;
   };
@@ -681,7 +710,9 @@ const declOf = (
       if (type.ctors.length === 0 && !type.alias && !type.aliasType)
         return `declare const ${type.name}: unique symbol;\nexport type ${type.name} = { readonly [${type.name}]: never };`;
       const a = aliasByName.get(type.name);
-      return a ? aliasTsDecl(a, qualify) : typeDecl(type.name, type.params, type.ctors, qualify);
+      return a
+        ? aliasTsDecl(a, qualify, aliases)
+        : typeDecl(type.name, type.params, type.ctors, qualify, aliases);
     })
     .with({ kind: "let" }, (letin) => {
       const sc = schemeOf(letin.name);
@@ -875,6 +906,8 @@ export type EmitDtsOptions = {
   plugins?: LanguagePlugin[];
   /** Permit unbound host globals; `"use open"` remains file-local. */
   open?: boolean;
+  /** Module specifier a `_Curry` type import resolves to (ADR 0093). */
+  runtimeImport?: string;
   /**
    * Nominal rename for imported variants (`Shape` → `D.Shape`). Graph callers
    * pass `qualifierMap` from the module's `qualTypes` (inferred types too).
@@ -981,8 +1014,14 @@ export function emitDtsFromTyped(
   // from `Map.get`) needs its type decl emitted too, unless the program declares
   // its own. Prepend so the reference resolves.
   const builtins = referencedBuiltinTypeDecls(prog, (n) => env.get(n));
-  const body = `${[...builtins, ...lines].join("\n")}\n`;
-  const imports = nsTypeImports(prog, body);
+  const decls = [...builtins, ...lines];
+  const body = `${decls.join("\n")}\n`;
+  // `_Curry` is a runtime type (ADR 0093), so a `.d.ts` naming it imports it
+  // rather than redeclaring — the same reason the emitted `.ts` does.
+  const curry = body.includes("_Curry<")
+    ? [`import type { _Curry } from ${JSON.stringify(opts.runtimeImport ?? "@mochi/runtime")};`]
+    : [];
+  const imports = [...curry, ...nsTypeImports(prog, body)];
   return imports.length === 0 ? body : `${imports.join("\n")}\n${body}`;
 }
 

@@ -36,8 +36,7 @@ type CErr = { message: string, start: number, end: number }
 type CtorInfo = { owner: string, arity: number }
 type Registry = { ctors: Map<string, CtorInfo>, types: Map<string, [string]> }
 
-let checkErr = (message, sp) =>
-  { message: message, start: sp.start, end: sp.end }
+let checkErr = (message, sp) => { message, start: sp.start, end: sp.end }
 
 // --- generic loops (early-exit `for` loops from the TS original) ---
 
@@ -304,7 +303,7 @@ let armUnguardedCatchAll = a => isCatchAll(a.pattern) && Option.isNone(a.guard)
 
 // Guards vs lazy Lists: a guarded arm still pulls from the sequence to test
 // its pattern, and the buffering codegen has no guard slot — reject.
-let guardErrs = (arms, listSwitch) =>
+let guardErrs = (arms: [Ast.MatchArm], listSwitch) =>
   firstSome(
     a => switch a.guard {
       | None => None
@@ -322,7 +321,7 @@ let guardErrs = (arms, listSwitch) =>
 
 // An arm after an unguarded catch-all can never match — reject rather than
 // let codegen silently reorder it.
-let firstCatchIdx = (arms, i0) =>
+let firstCatchIdx = (arms: [Ast.MatchArm], i0) =>
   loop (i = i0) {
     switch Array.get(i, arms) {
       | None => None
@@ -350,7 +349,7 @@ type SeqCheck =
 
 // A list switch is total iff it covers `[]` and single-head cons `[x, ...xs]`
 // (length 0 and length ≥ 1); fixed-length arms don't prove totality.
-let checkSeqExhaustive = (arms, mSpan) =>
+let checkSeqExhaustive = (arms: [Ast.MatchArm], mSpan) =>
   let seqs = arms
     |> filter(a =>
       Option.isNone(a.guard) && Option.isSome(seqElemsRest(a.pattern)))
@@ -423,7 +422,7 @@ let ctorLoop = (arms, i, reg, owner, covered) => switch Array.get(i, arms) {
 // Lazy Lists keep their own depth-1 rule: matching one pulls from its
 // generator, so it cannot be reasoned about positionally and the matrix treats
 // the column as opaque.
-let seqVerdict = (arms, mSpan) => switch checkSeqExhaustive(arms, mSpan) {
+let seqVerdict = (arms: [Ast.MatchArm], mSpan) => switch checkSeqExhaustive(arms, mSpan) {
   | SeqTotal => None
   | SeqFail(e) => Some(e)
   | SeqNotSeq => None
@@ -444,7 +443,7 @@ let namedUnguarded = leaves =>
           : [])
   )
 
-let matrixVerdict = (arms, leaves, ownerOpt, mSpan, reg) => switch checkExhaustiveM(unguardedPatterns(arms), reg) {
+let matrixVerdict = (arms: [Ast.MatchArm], leaves, ownerOpt, mSpan, reg) => switch checkExhaustiveM(unguardedPatterns(arms), reg) {
   | ExOk => None
   | ExFuel => Some(
       checkErr(
@@ -482,7 +481,7 @@ let leavesOfArm = a => switch a.pattern {
   | _ => [{ pattern: a.pattern, guard: a.guard }]
 }
 
-let checkMatch = (arms, mSpan, reg) => switch firstSome(a => checkPattern(a.pattern, reg, true), arms) {
+let checkMatch = (arms: [Ast.MatchArm], mSpan, reg) => switch firstSome(a => checkPattern(a.pattern, reg, true), arms) {
   | Some(e) => Some(e)
   | None => let listSwitch = someOf(
       a => isPList(a.pattern) && !isCatchAll(a.pattern),
@@ -666,49 +665,43 @@ let isUpperStart = s => switch Str.codeAt(0, s) {
 
 // A lowercase leaf that is neither a declared param nor a primitive is a
 // stray type variable (would be existential) — report (name, span).
-let strayTypeVar = (te, params) => switch te {
+let strayTypeVar = (params, te) => switch te {
   | Ast.TyName(name, sp) => isUpperStart(
       name
     ) || (Array.contains(name, primTypeNames) || Array.contains(name, params))
       ? None
       : Some((name, sp))
-  | Ast.TyArrow(from, to, _) => strayTypeVar(from, params)
-      |> Option.orElse(strayTypeVar(to, params))
-  | Ast.TyApp(_, args, _) => firstSome(a => strayTypeVar(a, params), args)
-  | Ast.TyTuple(elems, _) => firstSome(el => strayTypeVar(el, params), elems)
-  | Ast.TyList(elem, _) => strayTypeVar(elem, params)
+  | Ast.TyArrow(from, to, _) => params->strayTypeVar(from)
+      |> Option.orElse(params->strayTypeVar(to))
+  | Ast.TyApp(_, args, _) => args |> firstSome(strayTypeVar(params))
+  | Ast.TyTuple(elems, _) => elems |> firstSome(strayTypeVar(params))
+  | Ast.TyList(elem, _) => params->strayTypeVar(elem)
   | Ast.TyQual(_, _, _, args, _) =>
     // `Alias.Name` is always a constructor reference, never a bare type variable
     // (that is what motivates the single TyQual variant, ADR 0046) — only its
     // applied args can hide a stray var.
-    firstSome(a => strayTypeVar(a, params), args)
+    args |> firstSome(strayTypeVar(params))
   | Ast.TyLit(_, _) => None
-  | Ast.TyUnion(members, _) => firstSome(m => strayTypeVar(m, params), members)
+  | Ast.TyUnion(members, _) => members |> firstSome(strayTypeVar(params))
 }
 
 let checkCtorFieldVars = stmts =>
-  firstSome(
-    s => switch s {
-      | Ast.SType(name, params, ctors, _, _, _, _, _) => firstSome(
-          c =>
-            firstSome(
-              f => switch strayTypeVar(f.fieldType, params) {
+  stmts
+    |> firstSome(s => switch s {
+      | Ast.SType(name, params, ctors, _, _, _, _, _) => ctors
+          |> firstSome(c =>
+            c.fields
+              |> firstSome(f => switch params->strayTypeVar(f.fieldType) {
                 | Some((vn, vsp)) => Some(
-                    checkErr(
-                      "unknown type parameter '${vn}' in constructor '${c.name}' — declare it: type ${name} ${Str.join(" ", Array.append(vn, params))} = ...",
-                      vsp
-                    )
+                    vsp
+                      |> checkErr(
+                        "unknown type parameter '${vn}' in constructor '${c.name}' — declare it: type ${name} ${Str.join(" ", Array.append(vn, params))} = ..."
+                      )
                   )
                 | None => None
-              },
-              c.fields
-            ),
-          ctors
-        )
+              }))
       | _ => None
-    },
-    stmts
-  )
+    })
 
 // --- qualified type names (C5 slice d, ADR 0046) ---
 
@@ -720,7 +713,7 @@ let qualRefsFrom = te => switch te {
   | Ast.TyTuple(elems, _) => Array.flatMap(qualRefsFrom, elems)
   | Ast.TyList(elem, _) => qualRefsFrom(elem)
   | Ast.TyQual(alias, name, nameSpan, args, sp) => [
-      { alias: alias, name: name, nameSpan: nameSpan, qualSpan: sp },
+      { alias, name, nameSpan, qualSpan: sp },
       ...Array.flatMap(qualRefsFrom, args)
     ]
   | Ast.TyLit(_, _) => []
@@ -842,4 +835,4 @@ export let checkWith = (stmts, imported, quals) => switch checkReservedNames(stm
 }
 
 export let check = stmts =>
-  checkWith(stmts, { ctors: #{}, types: #{} }, emptyQuals)
+  stmts->checkWith({ ctors: #{}, types: #{} }, emptyQuals)

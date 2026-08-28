@@ -1,5 +1,5 @@
-import { ok, testEach } from "@mochi/test"
-import { codegen } from "./codegen.mochi"
+import { assertEq, ok, test, testEach } from "@mochi/test"
+import { codegen, codegenWith, jsGenOpts } from "./codegen.mochi"
 import { lex } from "./lexer.mochi"
 import { parse } from "./parser.mochi"
 
@@ -54,3 +54,224 @@ testEach("codegen emits match support only when needed", [
       : js |> Str.contains(row.want) |> ok
   | Err(_) => false |> ok
 })
+
+// ---- GenOpts: the TS backend's knobs on the shared codegen (ADR 0026 / 0090) ----
+//
+// The all-`None` JS path is guarded byte-for-byte by test/bootstrap-codegen.spec.ts
+// and the fixpoint; these cases prove each hook actually fires and that its text
+// lands in the right syntactic slot.
+
+/// Every hook answers unconditionally, so one source exercises all of them.
+let stubOpts = {
+  ...jsGenOpts,
+  annotateLet: Some((name, _) => name == "pair" ? Some(": Pair") : None),
+  annotateParams: Some((_, arity) =>
+    { generics: arity >= 2 ? "<A, B>" : "", params: [Some("A"), Some("B")] }),
+  annotateEmpty: Some(_ => Some("Map<string, number>")),
+  annotateLetin: Some(_ => Some("number")),
+  annotateCall: Some(_ => Some("Result<number, string>")),
+  flattenPipe: true,
+  tupleHelper: true,
+  moduleExt: ""
+}
+
+/// A ctor factory typing, keyed off field count so all three emission shapes
+/// (nullary const, single-field arrow, multi-field cast) are exercised.
+let ctorOpts = {
+  ...jsGenOpts,
+  annotateCtor: Some((_, c) =>
+    Some(
+      {
+        generics: Array.length(c.fields) >= 2 ? "<A>" : "",
+        paramTypes: ["A", "B"],
+        ret: "Shape<A>",
+        retMono: "Shape<never>"
+      }
+    ))
+}
+
+/// A fixed scrutinee base, so the predicate targets are predictable.
+let guardOpts = { ...jsGenOpts, guardBaseType: Some(_ => Some("Shape")) }
+
+let genWith = (opts, src) =>
+  lex(src)
+    |> Result.flatMap(parse)
+    |> Result.map(stmts =>
+      codegenWith(
+        stmts,
+        #{},
+        true,
+        namespaceRuntime,
+        preludeJsDefs,
+        runtimeDeps,
+        opts
+      ))
+
+let emitted = (opts, src) => genWith(opts, src) |> Result.unwrapOr("<error>")
+
+testEach("GenOpts hooks reach their emission site", [
+  {
+    label: "annotateLet suffixes the binding",
+    src: "let pair = 1",
+    want: "const pair: Pair = 1;"
+  },
+  {
+    label: "annotateParams annotates params and scopes generics",
+    src: "let addPair = (a, b) => add(a, b)",
+    want: "_curry(2, <A, B>(a: A, b: B) =>"
+  },
+  {
+    label: "annotateEmpty pins an empty map literal",
+    src: "let table = #{}",
+    want: "new Map<string, number>()"
+  },
+  {
+    label: "annotateLetin annotates the IIFE param",
+    src: "let value = let inner = 1 in inner",
+    want: "((inner: number) =>"
+  },
+  {
+    label: "annotateCall casts an applied ctor",
+    src: "let value = Ok(1)",
+    want: "(Ok(1) as Result<number, string>)"
+  },
+  {
+    label: "tupleHelper wraps a tuple literal",
+    src: "let pt = (1, 2)",
+    want: "_tuple(1, 2)"
+  },
+  {
+    label: "flattenPipe appends the piped argument",
+    src: "let n = 1 |> add(2)",
+    want: "add(2, 1)"
+  },
+  {
+    label: "moduleExt drops the sibling extension",
+    src: "import { thing } from \"./dep.mochi\"\nlet n = thing",
+    want: "from \"./dep\""
+  }
+], row => emitted(stubOpts, row.src) |> Str.contains(row.want) |> ok)
+
+testEach("the JS backend leaves every hook slot bare", [
+  { label: "no let annotation", src: "let pair = 1", want: "const pair = 1;" },
+  {
+    label: "bare lambda params",
+    src: "let addPair = (a, b) => add(a, b)",
+    want: "_curry(2, (a, b) =>"
+  },
+  { label: "bare empty map", src: "let table = #{}", want: "new Map([])" },
+  {
+    label: "bare IIFE param",
+    src: "let value = let inner = 1 in inner",
+    want: "((inner) =>"
+  },
+  {
+    label: "uncast ctor call",
+    src: "let value = Ok(1)",
+    want: "const value = Ok(1);"
+  },
+  {
+    label: "bare tuple literal",
+    src: "let pt = (1, 2)",
+    want: "const pt = [1, 2];"
+  },
+  { label: "curried pipe", src: "let n = 1 |> add(2)", want: "add(2)(1)" },
+  {
+    label: "sibling keeps .js",
+    src: "import { thing } from \"./dep.mochi\"\nlet n = thing",
+    want: "from \"./dep.js\""
+  }
+], row => emitted(jsGenOpts, row.src) |> Str.contains(row.want) |> ok)
+
+test("codegen matches codegenWith under the JS options", () =>
+  assertEq(
+    emitted(jsGenOpts, "let addPair = (a, b) => add(a, b)"),
+    genSrc("let addPair = (a, b) => add(a, b)") |> Result.unwrapOr("<error>")
+  ))
+
+testEach("annotateCtor types each factory shape", [
+  {
+    label: "nullary ctor gets a const annotation",
+    src: "type Shape a = Dot\nlet d = Dot",
+    want: "const Dot: Shape<never> = { _tag: \"Dot\" };"
+  },
+  {
+    label: "single-field ctor gets a typed arrow",
+    src: "type Shape a = Wrap(value: a)\nlet w = Wrap(1)",
+    want: "const Wrap = (value: A): Shape<A> => ({ _tag: \"Wrap\", value });"
+  },
+  {
+    label: "multi-field ctor casts the curried impl",
+    src: "type Shape a = Pair(left: a, right: a)\nlet p = Pair",
+    want: "as <A>(left: A, right: B) => Shape<A>;"
+  }
+], row => emitted(ctorOpts, row.src) |> Str.contains(row.want) |> ok)
+
+testEach("the JS backend leaves ctor factories untyped", [
+  {
+    label: "nullary",
+    src: "type Shape a = Dot\nlet d = Dot",
+    want: "const Dot = { _tag: \"Dot\" };"
+  },
+  {
+    label: "single-field",
+    src: "type Shape a = Wrap(value: a)\nlet w = Wrap(1)",
+    want: "const Wrap = (value) => ({ _tag: \"Wrap\", value });"
+  },
+  {
+    label: "multi-field",
+    src: "type Shape a = Pair(left: a, right: a)\nlet p = Pair",
+    want: "const Pair = _curry(2, (left, right) => ({ _tag: \"Pair\", left, right }));"
+  }
+], row => emitted(jsGenOpts, row.src) |> Str.contains(row.want) |> ok)
+
+testEach("guardBaseType turns refining arms into type predicates", [
+  {
+    label: "nested ctor arm narrows via Extract",
+    src: "type Shape = Wrap(value: Shape) | Dot\nlet f = s => switch s { | Wrap(Wrap(inner)) => inner | Wrap(x) => x | Dot => Dot }",
+    want: "_v is Extract<Shape, { _tag: \"Wrap\" }> & { \"value\": Extract<Extract<Shape, { _tag: \"Wrap\" }>[\"value\"], { _tag: \"Wrap\" }> }"
+  },
+  {
+    label: "guard body tests the widened copy",
+    src: "type Shape = Dot | Line\nlet f = s => switch s { | Dot when true => 1 | _ => 2 }",
+    want: "const _g: any = _v;"
+  },
+  {
+    label: "non-refining whole-value arm stays a plain boolean guard",
+    src: "type Shape = Dot | Line\nlet f = s => switch s { | _ when true => 1 | _ => 2 }",
+    want: ".with((_v) => { const _g: any = _v; return (true); }"
+  },
+  {
+    label: "eager-array match closes with a throwing otherwise (ADR 0038)",
+    src: "let f = xs => switch xs { | [] => 0 | [h, ...t] => h }",
+    want: ".otherwise(() => { throw new Error(\"non-exhaustive match\"); })"
+  }
+], row => emitted(guardOpts, row.src) |> Str.contains(row.want) |> ok)
+
+testEach("the JS backend emits bare boolean guards", [
+  {
+    label: "no type predicate",
+    src: "type Shape = Wrap(value: Shape) | Dot\nlet f = s => switch s { | Wrap(Wrap(inner)) => inner | Wrap(x) => x | Dot => Dot }",
+    want: ".with((_v) => _v._tag === \"Wrap\""
+  },
+  {
+    label: "no widened copy",
+    src: "type Shape = Dot | Line\nlet f = s => switch s { | Dot when true => 1 | _ => 2 }",
+    want: ".with((_v) => _v._tag === \"Dot\""
+  },
+  {
+    label: "eager-array match keeps .exhaustive()",
+    src: "let f = xs => switch xs { | [] => 0 | [h, ...t] => h }",
+    want: ".exhaustive()"
+  }
+], row => emitted(jsGenOpts, row.src) |> Str.contains(row.want) |> ok)
+
+test("guardBaseType leaves the JS scrutinee root untouched", () =>
+  assertEq(
+    false,
+    emitted(
+      jsGenOpts,
+      "type Shape = Dot | Line\nlet f = s => switch s { | Dot => 1 | Line => 2 }"
+    )
+      |> Str.contains("_g")
+  ))

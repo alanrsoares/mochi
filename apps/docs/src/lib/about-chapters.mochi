@@ -9,7 +9,14 @@ import {
   stickersImg
 } from "./illustrations"
 
-export type AboutChapter = { id: string, kicker: string, title: string, body: [string], src: string, alt: string }
+export type AboutChapter = {
+  id: string,
+  kicker: string,
+  title: string,
+  body: [string],
+  src: string,
+  alt: string
+}
 
 export let SPARK_TALK_URL = "https://www.youtube.com/watch?v=24S5u_4gx7w"
 

@@ -11,7 +11,12 @@ import {
   stickersImg
 } from "./illustrations"
 
-export type HeroSlide = { src: string, alt: string, kicker: string, title: string }
+export type HeroSlide = {
+  src: string,
+  alt: string,
+  kicker: string,
+  title: string
+}
 
 export let HERO_INTERVAL_MS = 5200
 

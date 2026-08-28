@@ -103,7 +103,7 @@ let seedRegCtorsFrom = (ctors, i, owner, acc) => switch Array.get(i, ctors) {
       owner,
       Map.has(c.name, acc)
         ? acc
-        : Map.set(c.name, { owner: owner, arity: Array.length(c.fields) }, acc)
+        : Map.set(c.name, { owner, arity: Array.length(c.fields) }, acc)
     )
 }
 
@@ -121,8 +121,7 @@ let seedRegDeclsFrom = (decls, i, reg) => switch Array.get(i, decls) {
     )
 }
 
-let ctorErr = (message, sp) =>
-  { message: message, start: sp.start, end: sp.end }
+let ctorErr = (message, sp) => { message, start: sp.start, end: sp.end }
 
 let ctorsInto = (ctors, i, owner, sp, acc) => switch Array.get(i, ctors) {
   | None => Ok(acc)
@@ -132,7 +131,7 @@ let ctorsInto = (ctors, i, owner, sp, acc) => switch Array.get(i, ctors) {
         i + 1,
         owner,
         sp,
-        Map.set(c.name, { owner: owner, arity: Array.length(c.fields) }, acc)
+        Map.set(c.name, { owner, arity: Array.length(c.fields) }, acc)
       )
 }
 

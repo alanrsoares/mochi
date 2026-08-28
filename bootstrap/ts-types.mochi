@@ -1,0 +1,175 @@
+// TypeScript type rendering for the self-hosted TS backend (ADR 0090).
+// This is deliberately below emission: it owns the HM Type -> TS grammar used
+// by both typed source and future declarations, while codegen owns syntax.
+//
+// Every renderer takes a `TsEnv` (ADR 0092): generic letters plus a record
+// alias index. A record alias is STRUCTURAL (ADR 0005), so `typeExprToType` has
+// already expanded it away by the time a Ty reaches here; the index maps a
+// canonical row shape back to the name the module declared, which is what keeps
+// the emit from re-printing one record type at hundreds of sites. `plainEnv`
+// renders fully structurally.
+
+import {
+  TyVar,
+  TyCon,
+  TyFn,
+  TyRecord,
+  TySingleton,
+  TyOneOf,
+  RowEmpty,
+  RowVar,
+  RowExtend,
+  isUnit
+} from "./types.mochi"
+import { widenLits } from "./schemes.mochi"
+
+/// The rendering environment: generic letters for type AND row vars, plus the
+/// record alias index. ONE record rather than two threaded arguments — every
+/// emitted function is curried and `curriedOverloads` writes a signature per
+/// composition of its arity (ADR 0037), so a second argument DOUBLES the
+/// overload block of every renderer carrying it. Annotated at each use so the
+/// row stays closed and folds to `TsEnv` rather than printing `{ vars: … } & R`.
+export type TsEnv = { vars: Map<number, string>, recs: Map<string, string> }
+
+export let tsEnv = (vars, recs) => { vars, recs }
+
+/// Pinned (ADR 0044): a bare `#{}` generalizes to `Map<unknown, unknown>`, which
+/// `_Curry`'s exact argument prefixes reject where the old overload block let it
+/// through.
+let noVars : Map<number, string> = #{}
+
+let noRecs : Map<string, string> = #{}
+
+/// Letters but no index — the many call sites with no module scope to fold in.
+export let plainEnv = vars => tsEnv(vars, noRecs)
+
+/// Index but no letters: a fully concrete type has no generic head to name.
+export let recsEnv = recs => tsEnv(noVars, recs)
+
+let letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+/// `A`, `B`, … then `T26`, `T27`, … past the alphabet.
+export let letterAt = i => Option.unwrapOr("T${show(i)}", Str.get(i, letters))
+
+/// Generic names for both type and row variables. The fresh supply is shared,
+/// so the two lists have no colliding ids.
+export let genericNames = sc =>
+  genericNamesFrom(Array.concat(sc.vars, sc.rvars), 0, #{})
+
+let genericNamesFrom = (ids, i, names) => switch Array.get(i, ids) {
+  | None => names
+  | Some(id) => genericNamesFrom(ids, i + 1, Map.set(id, letterAt(i), names))
+}
+
+let primitiveTs = name => switch name {
+  | "number" => "number"
+  | "int" => "number"
+  | "float" => "number"
+  | "string" => "string"
+  | "bool" => "boolean"
+  | "unit" => "undefined"
+  | _ => name
+}
+
+let namesOf = (ts, env: TsEnv) =>
+  Str.join(", ", ts |> map(t => tsOfRaw(t, env)))
+
+let nominal = (name, args, env: TsEnv) =>
+  Array.length(args) == 0 ? primitiveTs(name) : "${name}<${namesOf(args, env)}>"
+
+let tsRowFields = (row, env: TsEnv) => switch row {
+  | RowEmpty => ([], None)
+  | RowVar(id) => ([], Some(id))
+  | RowExtend(label, fieldType, rest) => let (fields, tail) = tsRowFields(
+      rest,
+      env
+    ) in
+      (Array.prepend("${label}: ${tsOfRaw(fieldType, env)}", fields), tail)
+}
+
+/// Fields of a CLOSED row, each rendered with NO index. `None` for an open row:
+/// `{ … } & R` is not the alias, only its prefix, so it has no name to take.
+let shapeFieldsFrom = (row, vars) => switch row {
+  | RowEmpty => Some([])
+  | RowVar(_) => None
+  | RowExtend(label, fieldType, rest) => shapeFieldsFrom(rest, vars)
+      |> Option.map(fs =>
+        Array.prepend("${label}: ${tsOf(fieldType, plainEnv(vars))}", fs))
+}
+
+/// The index key for a row. Sorted, because a row carries fields in the order
+/// `unify` extended it: the same record type reaches `tsRow` as both
+/// `{ ty; rvars; vars }` and `{ vars; rvars; ty }`, and both must key alike.
+/// Rendered index-free so building the index and looking a row up in it can
+/// never disagree about a nested field's spelling.
+export let rowShapeKey = (row, vars) =>
+  shapeFieldsFrom(row, vars) |> Option.map(fs => Str.join("; ", Array.sort(fs)))
+
+/// The declared name for a row, when the emitting module declared one. The
+/// empty-index short-circuit keeps the key off the hot path for the many call
+/// sites that render with no index at all.
+let aliasNameFor = (row, env) =>
+  Map.size(env.recs) == 0
+    ? None
+    : rowShapeKey(row, env.vars) |> Option.flatMap(k => Map.get(k, env.recs))
+
+let tsRow = (row, env: TsEnv) => switch aliasNameFor(row, env) {
+  | Some(alias) => alias
+  | None => let (fields, tail) = tsRowFields(row, env) in
+    let body = Array.length(fields) == 0
+      ? "{}"
+      : "{ ${Str.join("; ", fields)} }" in
+      switch tail {
+        | None => body
+        | Some(id) => switch Map.get(id, env.vars) {
+            | None => body
+            | Some(name) => Array.length(fields) == 0
+                ? name
+                : "(${body} & ${name})"
+          }
+      }
+}
+
+let tsArrow = (fromT, toT, env: TsEnv) =>
+  isUnit(fromT)
+    ? "() => ${tsOfRaw(toT, env)}"
+    : tsArrowParams(fromT, toT, env, 0, [])
+
+let tsArrowParams = (fromT, toT, env: TsEnv, i, params) =>
+  let params1 = Array.append(
+    "${Str.fromCode(97 + i)}: ${tsOfRaw(fromT, env)}",
+    params
+  ) in
+    switch toT {
+      | TyFn(nextFrom, nextTo) when !isUnit(nextFrom) => tsArrowParams(
+          nextFrom,
+          nextTo,
+          env,
+          i + 1,
+          params1
+        )
+      | _ => "(${Str.join(", ", params1)}) => ${tsOfRaw(toT, env)}"
+    }
+
+/// Render an already-zonked HM type into strict TypeScript syntax. Bare
+/// singleton types widen at this boundary just as the TS backend does.
+export let tsOf = (t, env: TsEnv) => tsOfRaw(widenLits(t), env)
+
+let tsOfRaw = (t, env: TsEnv) => switch t {
+  | TyVar(id) => Option.unwrapOr("unknown", Map.get(id, env.vars))
+  | TyCon("Array", [elem]) => let inner = tsOfRaw(elem, env) in
+      switch elem {
+        | TyFn(_, _) => "(${inner})[]"
+        | TyOneOf(_) => "(${inner})[]"
+        | _ => "${inner}[]"
+      }
+  | TyCon("List", [elem]) => "Iterable<${tsOfRaw(elem, env)}>"
+  | TyCon("Task", [value, error]) => "() => Promise<Result<${tsOfRaw(value, env)}, ${tsOfRaw(error, env)}>>"
+  | TyCon("tuple", elems) => "[${namesOf(elems, env)}]"
+  | TyCon(name, args) => nominal(name, args, env)
+  | TyFn(fromT, toT) => tsArrow(fromT, toT, env)
+  | TyRecord(row) => tsRow(row, env)
+  | TySingleton("string", value) => "\"${value}\""
+  | TySingleton(_, value) => value
+  | TyOneOf(members) => Str.join(" | ", members |> map(m => tsOfRaw(m, env)))
+}

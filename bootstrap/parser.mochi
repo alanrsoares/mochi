@@ -157,8 +157,7 @@ let spanning = (a, b) => { start: a.start, end: b.end }
 let toEnd = (start, toks, pos) =>
   { start: start.start, end: tokAt(toks, pos - 1).end }
 
-let errAt = (message, lt) =>
-  Err({ message: message, start: lt.start, end: lt.end })
+let errAt = (message, lt) => Err({ message, start: lt.start, end: lt.end })
 
 let expectTok = (t, toks, pos) =>
   let lt = toks->tokAt(pos) in
@@ -169,7 +168,7 @@ let expectTok = (t, toks, pos) =>
 let expectId = (toks, pos) =>
   let lt = toks->tokAt(pos) in
     switch lt.tok {
-      | TId(name) => Ok(({ name: name, span: spanOf(lt) }, pos + 1))
+      | TId(name) => Ok(({ name, span: spanOf(lt) }, pos + 1))
       | t => errAt("expected id, got ${tokName(t)}", lt)
     }
 
@@ -197,7 +196,7 @@ let keywordText = t => switch t {
 let expectLabel = (toks, pos) =>
   let lt = tokAt(toks, pos) in
     switch keywordText(lt.tok) {
-      | Some(name) => Ok(({ name: name, span: spanOf(lt) }, pos + 1))
+      | Some(name) => Ok(({ name, span: spanOf(lt) }, pos + 1))
       | None => expectId(toks, pos)
     }
 
@@ -523,13 +522,7 @@ let binCallOrLeftSection = (toks, left, lt, pos, bp, fnName, hooks) =>
   tokAt(toks, pos + 1).tok == TRparen
     ? Ok({ left: sectionLeft(left, lt), p: pos + 1, matched: true })
     : let? (right, p) = toks->parseExprBp(bp + 1, pos + 1, hooks) in
-      Ok(
-        {
-          left: mkBinCall(fnName, spanOf(lt), left, right),
-          p: p,
-          matched: true
-        }
-      )
+      Ok({ left: mkBinCall(fnName, spanOf(lt), left, right), p, matched: true })
 
 let isCmpTok = t => switch t {
   | TEqeq => true
@@ -564,7 +557,7 @@ let parseInfix = (toks, minBp, left, pos, hooks) =>
               right,
               spanning(exprSpan(left), exprSpan(right))
             ),
-            p: p,
+            p,
             matched: true
           }
         )
@@ -579,7 +572,7 @@ let parseInfix = (toks, minBp, left, pos, hooks) =>
                   origin,
                   spanning(exprSpan(left), rightSpan)
                 ),
-                p: p,
+                p,
                 matched: true
               }
             )
@@ -604,7 +597,7 @@ let parseInfix = (toks, minBp, left, pos, hooks) =>
         outerCall,
         spanning(exprSpan(left), exprSpan(right))
       ) in
-        Ok({ left: fn, p: p, matched: true })
+        Ok({ left: fn, p, matched: true })
       : isCmpTok(lt.tok) && CMP_BP >= minBp
       ? tokAt(toks, pos + 1).tok == TRparen
         ? Ok({ left: sectionLeft(left, lt), p: pos + 1, matched: true })
@@ -619,7 +612,7 @@ let parseInfix = (toks, minBp, left, pos, hooks) =>
             spanning(exprSpan(left), exprSpan(right))
           )
           : inner in
-          Ok({ left: result, p: p, matched: true })
+          Ok({ left: result, p, matched: true })
       : lt.tok == TAndand || lt.tok == TOror && (lt.tok == TAndand
         ? AND_BP
         : OR_BP) >= minBp
@@ -654,7 +647,7 @@ let parseInfix = (toks, minBp, left, pos, hooks) =>
         ? "div"
         : "mod" in
         toks->binCallOrLeftSection(left, lt, pos, MUL_BP, fnName, hooks)
-      : Ok({ left: left, p: pos, matched: false })
+      : Ok({ left, p: pos, matched: false })
 
 let infixLoop = (toks, minBp, left, pos, hooks) =>
   let? res = toks->parseInfix(minBp, left, pos, hooks) in
@@ -843,7 +836,7 @@ let parseField = (toks, pos, hooks) =>
   let? (nm, p) = toks->expectLabel(pos) in
     tokAt(toks, p).tok == TColon
       ? let? (value, p2) = toks->parseExpr(p + 1, hooks) in
-        Ok(({ name: nm.name, value: value }, p2))
+        Ok(({ name: nm.name, value }, p2))
       : keywordText(lt.tok) != None
       ? errAt("'${nm.name}' is a keyword — write '${nm.name}: <expr>'", lt)
       : Ok(({ name: nm.name, value: Ast.ERef(nm.name, nm.span) }, p))
@@ -893,8 +886,7 @@ let parseList = (toks, pos, hooks) =>
 let parseMapEntry = (toks, pos, hooks) =>
   let? (key, p) = toks->parseExpr(pos, hooks) in
   let? p2 = expectTok(TColon, toks, p) in
-  let? (value, p3) = toks->parseExpr(p2, hooks) in
-    Ok(({ key: key, value: value }, p3))
+  let? (value, p3) = toks->parseExpr(p2, hooks) in Ok(({ key, value }, p3))
 
 // `#{}` empty Map; `#{k: v}` Map; `#{a, b}` / `#{...s}` Set (ADR 0001).
 let parseHash = (toks, pos, hooks) =>
@@ -924,7 +916,7 @@ let parseHash = (toks, pos, hooks) =>
           let? p6 = expectTok(TRbrace, toks, p5) in
             Ok((
               Ast.EMap(
-                Array.prepend({ key: first, value: value }, rest),
+                Array.prepend({ key: first, value }, rest),
                 toEnd(start, toks, p6)
               ),
               p6
@@ -985,12 +977,7 @@ let armsLoop = (toks, pos, acc, hooks) =>
     let? (guard, p3) = parseGuard(toks, p2, hooks) in
     let? p4 = expectTok(TArrow, toks, p3) in
     let? (body, p5) = toks->parseExpr(p4, hooks) in
-      armsLoop(
-        toks,
-        p5,
-        Array.append({ pattern: pattern, guard: guard, body: body }, acc),
-        hooks
-      )
+      armsLoop(toks, p5, Array.append({ pattern, guard, body }, acc), hooks)
     : Ok((acc, pos))
 
 // `loop (acc = 0, i = 0) { body }` — tail-recursion loop (ADR 0056).
@@ -1034,10 +1021,7 @@ let loopParamsLoop = (toks, pos, acc, hooks) =>
   let? (id, pid) = expectId(toks, pos) in
   let? p = expectTok(TEq, toks, pid) in
   let? (init, p1) = parseExpr(toks, p, hooks) in
-  let next = Array.append(
-    { name: id.name, nameSpan: id.span, init: init },
-    acc
-  ) in
+  let next = Array.append({ name: id.name, nameSpan: id.span, init }, acc) in
     switch tokAt(toks, p1).tok {
       | TComma => loopParamsLoop(toks, p1 + 1, next, hooks)
       | _ => Ok((next, p1))
@@ -1185,7 +1169,7 @@ let parsePatField = (toks, pos) =>
   let? (nm, p) = expectLabel(toks, pos) in
     tokAt(toks, p).tok == TColon
       ? let? (pat, p2) = parsePattern(toks, p + 1) in
-        Ok(({ label: nm.name, pat: pat }, p2))
+        Ok(({ label: nm.name, pat }, p2))
       : keywordText(lt.tok) != None
       ? errAt("'${nm.name}' is a keyword — write '${nm.name}: <pattern>'", lt)
       : Ok(({ label: nm.name, pat: Ast.PBind(nm.name, nm.span) }, p))
@@ -1340,7 +1324,7 @@ let parseCtor = (toks, pos) =>
     tokAt(toks, p).tok == TLparen
       ? let? (fields, p2) = listUntil(TRparen, parseCtorField, toks, p + 1) in
       let? p3 = expectTok(TRparen, toks, p2) in
-        Ok(({ name: nm.name, fields: fields }, p3))
+        Ok(({ name: nm.name, fields }, p3))
       : Ok(({ name: nm.name, fields: [] }, p))
 
 let ctorsLoop = (toks, pos, acc) =>
@@ -1670,7 +1654,7 @@ let setExternMeta = (exported, doc, s) => switch s {
     )
   | other => other
 }
-let setExternExported = s => setExternMeta(true, None, s)
+let setExternExported = setExternMeta(true, None)
 
 // Top-level expression statement (ADR 0087). Trailing `;` is optional.
 let parseExprStmt = (toks, pos, tmp, hooks) =>

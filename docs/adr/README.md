@@ -86,7 +86,7 @@ What else was on the table and why not.
 | [0034](0034-open-row-record-generic-param.md) | Open-row record params emit as a scoped `<R>` generic | Accepted |
 | [0035](0035-empty-collection-seed-typing.md) | Type empty collection literals from their inferred element type | Accepted |
 | [0036](0036-tuple-literal-helper.md) | Emit tuple literals via a `_tuple(a, b)` runtime helper | Accepted |
-| [0037](0037-curried-function-partial-application-overloads.md) | Partial-application overloads for concrete curried functions | Accepted |
+| [0037](0037-curried-function-partial-application-overloads.md) | Partial-application overloads for concrete curried functions | Superseded in part by 0093 |
 | [0038](0038-eager-array-match-catchall.md) | Eager-array match with no catch-all: emit an exhaustive-check helper | Accepted |
 | [0039](0039-nullary-ctor-empty-seed-annotation.md) | Annotate nullary-constructor refs like empty-collection seeds | Accepted |
 | [0040](0040-generalize-resolves-through-subst.md) | `generalize` resolves mono-scheme bindings through the substitution | Accepted |
@@ -134,6 +134,10 @@ What else was on the table and why not.
 | [0087](0087-expr-statements.md) | Top-level expression statements are unit | Accepted |
 | [0088](0088-table-and-pbt.md) | Table tests (`testEach`) and PBT (`check`) | Accepted |
 | [0089](0089-task-tests.md) | Async Task tests, `checkTask`, timeouts | Accepted |
+| [0090](0090-bootstrap-chain.md) | Mochi-emitted TypeScript for stage 1 | Accepted |
+| [0091](0091-eta-partial-format.md) | `fmt` eta-contracts `x => f(a, x)` to `f(a)` when that is a clean refactor | Accepted |
+| [0092](0092-record-alias-index.md) | the TS backend re-attaches record alias names at the print boundary | Accepted |
+| [0093](0093-curry-type-not-overloads.md) | a concrete curried binding types as `_Curry<[params], R>`, not an overload set | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

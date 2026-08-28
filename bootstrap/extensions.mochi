@@ -23,12 +23,12 @@ export let resolvePluginsDefault = pluginsOpt =>
 /// Collect parse hooks (skip plugins with None parse).
 let parseHooksFrom = (plugins, i, acc) => switch Array.get(i, plugins) {
   | None => acc
-  | Some(p) => switch p.parse {
+  | Some({ parse }) => switch parse {
       | Some(hook) => plugins->parseHooksFrom(i + 1, Array.append(hook, acc))
       | None => plugins->parseHooksFrom(i + 1, acc)
     }
 }
-export let parseHooksOf = plugins => parseHooksFrom(plugins, 0, [])
+export let parseHooksOf = plugins => plugins->parseHooksFrom(0, [])
 
 let inferHooksFrom = (plugins, i, acc) => switch Array.get(i, plugins) {
   | None => acc
@@ -37,16 +37,17 @@ let inferHooksFrom = (plugins, i, acc) => switch Array.get(i, plugins) {
       | None => plugins->inferHooksFrom(i + 1, acc)
     }
 }
-export let inferCallHooksOf = plugins => inferHooksFrom(plugins, 0, [])
+
+export let inferCallHooksOf = plugins => plugins->inferHooksFrom(0, [])
 
 /// First hook to claim wins. Ok(None) = fall through; Ok(Some((e, pos))) =
 /// claimed; Err = parse diagnostic. `parseExpr` is (toks, pos) -> Result.
 export let runParseHooks = (hooks, toks, pos, parseExpr) => switch hooks {
   | [] => Ok(None)
-  | [hook, ...rest] => switch hook(toks, pos, parseExpr) {
+  | [hook, ...rest] => switch toks->hook(pos, parseExpr) {
       | Err(e) => Err(e)
       | Ok(v) => switch v {
-          | None => runParseHooks(rest, toks, pos, parseExpr)
+          | None => rest->runParseHooks(toks, pos, parseExpr)
           | Some(claim) => Ok(Some(claim))
         }
     }
@@ -58,7 +59,7 @@ export let runInferCallHooks = (hooks, fn, args, origin, st, api) => switch hook
   | [hook, ...rest] => switch hook(fn, args, origin, st, api) {
       | Err(e) => Err(e)
       | Ok(v) => switch v {
-          | None => runInferCallHooks(rest, fn, args, origin, st, api)
+          | None => rest->runInferCallHooks(fn, args, origin, st, api)
           | Some(claim) => Ok(Some(claim))
         }
     }

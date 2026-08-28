@@ -79,18 +79,30 @@ inferCall live in `bootstrap/plugins/jsx.mochi`, registered through
 `bootstrap/extensions.mochi` (`resolvePlugins` — same opt-in/opt-out rule as
 `src/`). Hooks are Result/(toks, pos) shaped (no imperative `ParserApi`);
 format/dts hooks are absent because those passes do not exist in bootstrap.
-`fixpoint` (below) still compares *emitted output*.
+`fixpoint` (below) still compares *emitted output*. The checked-in
+`bootstrap/seed/` graph is the stage-1 TypeScript snapshot. It is a
+reviewed emitted artifact with a SHA-256 manifest, not an editable source;
+ADR 0090's chain is Mochi → that graph → stage-2 JS → stage-3 JS. The TypeScript
+implementation remains an independent differential oracle during the migration.
 
 Two invariants are enforced in CI-style scripts:
 
-- **`bun run fixpoint`** — the shipped binary compiles `bootstrap/`, and the output
-  reproduces itself byte-for-byte across stages (stage2 ≡ stage3), and matches the TS
-  reference build (stage2 ≡ TS).
+- **`bun run fixpoint`** — the frozen stage-1 TypeScript graph compiles `bootstrap/`,
+  and the output reproduces itself byte-for-byte across stages (stage2 ≡ stage3),
+  and matches the independent TS reference build (stage2 ≡ TS). Refresh the
+  snapshot with `bun run seed:freeze`.
 - **`bun run bootstrap:tsc`** — emit the whole graph as TypeScript and count
   `tsc --strict` errors. The north-star number is **0**; a ratchet fails the build if it
   regresses above 0.
 
 Both invariants run in CI: mochi compiles mochi, and the emitted TypeScript typechecks.
+
+`bun scripts/bootstrap-self-tsc.ts` is a third measure, **diagnostic rather than
+gating**: it emits the graph with the SELF-HOSTED backend and counts
+`tsc --strict` errors. Unlike `bootstrap:tsc` its number is not 0 — it is the
+running count of places the mirror's inference is less precise than the oracle's
+(typically generalizing a `Map<string, …>` the oracle infers concretely). Treat a
+rise as a lead, not a build failure.
 
 ### Development ownership
 

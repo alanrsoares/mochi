@@ -38,7 +38,14 @@ type Ref<a> = { current: a }
 
 type Board = { snake: [(number, number)], food: (number, number) }
 type Motion = { changedAt: number, previous: Board, current: Board }
-type Particle = { x: number, y: number, vx: number, vy: number, life: number, color: string }
+type Particle = {
+  x: number,
+  y: number,
+  vx: number,
+  vy: number,
+  life: number,
+  color: string
+}
 type EatWatch = { len: number, food: (number, number) }
 type BoardProps = { food: (number, number), snake: [(number, number)] }
 

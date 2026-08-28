@@ -8,8 +8,9 @@
 import { lex } from "./lexer.mochi"
 import { parse } from "./parser.mochi"
 import { check } from "./check.mochi"
-import { inferProgram } from "./infer.mochi"
+import { inferProgram, inferProgramTypes } from "./infer.mochi"
 import { codegen } from "./codegen.mochi"
+import { emitTsModule } from "./codegen-ts.mochi"
 
 // Prelude tables from the standalone shim. builtins/namespaces carry the
 // inferrer's Ty; compile never inspects them, so a polymorphic `a` lets them
@@ -24,13 +25,42 @@ extern runtimeDeps : Map<string, [string]> = "./prelude.gen.mjs" "runtimeDeps"
 let typecheck = prog =>
   let? $env = prog->inferProgram(builtins, namespaces, false) in Ok(prog)
 
+// lex -> parse -> check. Shared by both backends: the JS one adds the
+// `typecheck` gate, the TS one re-runs inference for its span -> type table.
+let frontend = lex >> Result.flatMap(parse) >> Result.flatMap(check)
+
 // The front-end pipeline: lex -> parse -> check -> typecheck
-let pipeline = lex
-  >> Result.flatMap(parse)
-  >> Result.flatMap(check)
-  >> Result.flatMap(typecheck)
+let pipeline = frontend >> Result.flatMap(typecheck)
 
 /// compile : string -> Result string Err
 export let compile = src =>
   let? prog = src->pipeline() in
     Ok(prog->codegen(#{}, true, namespaceRuntime, preludeJsDefs, runtimeDeps))
+
+// A single file resolves no imports, so it has no imported ctor keys and no
+// cross-module import lines. Annotated (ADR 0044): a bare `#{}` here would
+// generalize and leave the emitted TS a `Map<string, unknown>` against
+// `emitTsModule`'s pinned key type.
+let noImportedKeys : Map<string, [string]> = #{}
+
+/// compileTs : string -> Result string Err — the SAME railway, but the typed
+/// TypeScript backend (ADR 0026 / 0090). Inference runs through
+/// `inferProgramTypes` so the emitter gets the span -> type table its
+/// annotation hooks are driven from, not just the final env.
+export let compileTs = (src, runtimeImport) =>
+  let? stmts = src->frontend() in
+  let? r = stmts->inferProgramTypes(builtins, namespaces, false) in
+    Ok(
+      stmts->emitTsModule(
+        r.env,
+        r.types,
+        r.letParams,
+        r.aliases,
+        noImportedKeys,
+        [],
+        namespaceRuntime,
+        preludeJsDefs,
+        runtimeDeps,
+        runtimeImport
+      )
+    )

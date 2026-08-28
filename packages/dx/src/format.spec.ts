@@ -14,6 +14,10 @@ test("a single-param lambda drops its parentheses", () => {
   expect(fmt("let f=(x)=>x")).toBe("let f = x => x\n");
 });
 
+test("an annotated single-param lambda keeps its parentheses and the annotation", () => {
+  expect(fmt("let f=(x:number)=>x")).toBe("let f = (x: number) => x\n");
+});
+
 test("a multi-param lambda keeps its parentheses", () => {
   expect(fmt("let g=(a,b)=>add(a,b)")).toBe("let g = (a, b) => a + b\n");
 });
@@ -107,6 +111,20 @@ test("formats a string-literal union type (ADR 0081)", () => {
 
 test("record destructuring is re-folded from its desugared form", () => {
   expect(fmt("let {x,y}=p")).toBe("let { x, y } = p\n");
+});
+
+test("record field puns collapse to shorthand (ADR 0068)", () => {
+  expect(fmt("let x=1\nlet r={x:x}")).toBe("let x = 1\nlet r = { x }\n");
+  expect(fmt("let x=1\nlet r={x}")).toBe("let x = 1\nlet r = { x }\n");
+  expect(fmt("let x=1\nlet y=2\nlet r={x:x,y:1}")).toBe(
+    "let x = 1\nlet y = 2\nlet r = { x, y: 1 }\n",
+  );
+  expect(fmt("let x=1\nlet r={...base,x}")).toBe("let x = 1\nlet r = { ...base, x }\n");
+});
+
+test("a record field that does not pun stays explicit", () => {
+  expect(fmt("let r={x:1}")).toBe("let r = { x: 1 }\n");
+  expect(fmt("let x=1\nlet y=2\nlet r={x:y}")).toBe("let x = 1\nlet y = 2\nlet r = { x: y }\n");
 });
 
 test("formatting is idempotent", () => {
@@ -466,4 +484,34 @@ test("long loop bodies break inside the braces", () => {
   const out = fmt(src);
   expect(out).toContain("loop (accumulated = 0, index = 0) {\n");
   expect(fmt(out)).toBe(out);
+});
+
+test("a short record type alias stays on one line", () => {
+  expect(fmt("type P={x:number,y:number}")).toBe("type P = { x: number, y: number }\n");
+});
+
+test("a wide record type alias breaks one field per line", () => {
+  // A record alias is laid out with the same `braced` group as a record
+  // literal — a flat string could not break, leaving 400-char declarations.
+  const src =
+    "type GenOpts={annotateLet:Option<string>,annotateCtor:Option<string>,annotateParams:Option<string>,annotateEmpty:Option<string>,flattenPipe:bool,moduleExt:string}";
+  const out = fmt(src);
+  expect(out.split("\n").every((l) => l.length <= 80)).toBe(true);
+  expect(out).toBe(
+    [
+      "type GenOpts = {",
+      "  annotateLet: Option<string>,",
+      "  annotateCtor: Option<string>,",
+      "  annotateParams: Option<string>,",
+      "  annotateEmpty: Option<string>,",
+      "  flattenPipe: bool,",
+      "  moduleExt: string",
+      "}",
+      "",
+    ].join("\n"),
+  );
+});
+
+test("an empty record type alias keeps the flat form", () => {
+  expect(fmt("type Empty={}")).toBe("type Empty = {}\n");
 });

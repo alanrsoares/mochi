@@ -16,7 +16,7 @@ import { ctorTableOf } from "../ast/ctors";
 import type { Span } from "../ast/span";
 import type { CtorFactoryTs, GenCtx } from "./codegen-core";
 import { genStmt } from "./codegen-decl";
-import { preludePreamble, usesMatchLib } from "./codegen-deps";
+import { collectValueRefs, preludePreamble, usesMatchLib } from "./codegen-deps";
 
 export type { CtorFactoryTs } from "./codegen-core";
 export { collectRuntimeDeps } from "./codegen-deps";
@@ -63,6 +63,7 @@ export const codegen = (
     annotateLetin: opts.annotateLetin ?? null,
     annotateCall: opts.annotateCall ?? null,
     moduleExt: opts.moduleExt ?? ".js",
+    valueRefs: collectValueRefs(prog),
   };
   const needsMatch = prog.stmts.some(
     (s) => (s.kind === "let" || s.kind === "expr") && usesMatchLib(s.value),

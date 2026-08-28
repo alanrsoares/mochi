@@ -27,6 +27,157 @@ import { keysOf, ctorKeysFromStmts, seedBuiltinCtorKeys } from "./ctors.mochi"
 // hole expression. TS: an untagged `string | Expr` union — mochi has no raw
 // unions, so this is a proper variant (mirrors parser.mochi's own copy).
 
+// --- GenOpts: the TS backend's knobs on the shared codegen (ADR 0026 / 0090) ---
+//
+// TS's `GenCtx` carries these inline; here they are one record folded into the
+// threaded ctx, so every generator keeps its `ctx->` shape. All hooks are
+// `Option<fn>` (TS's `| null`): `jsGenOpts` leaves every one `None` and the JS
+// backend's output stays byte-for-byte identical — test/bootstrap-codegen.spec.ts
+// and the fixpoint guard that.
+
+/// What a typed ctor factory carries (TS's `CtorFactoryTs`).
+type CtorFactoryTs = {
+  generics: string,
+  paramTypes: [string],
+  ret: string,
+  retMono: string
+}
+
+/// A lambda's generic head plus one annotation per collapsed param (`None` =
+/// leave it bare, i.e. generic or JS mode).
+type ParamAnnots = { generics: string, params: [Option<string>] }
+
+// Each hook mirrors the same-named field on TS's `GenCtx`:
+// - `annotateLet` — type suffix for a top-level `let` (`": (x: A) => A"`).
+// - `annotateCtor` — typing for one variant ctor's factory.
+// - `annotateParams` — per-param annotations for the lambda at a span, given
+//   its collapsed arity (ADR 0028 / 0032).
+// - `annotateEmpty` — concrete type for an EMPTY collection literal or a
+//   nullary ctor (ADR 0035 / 0039).
+// - `annotateLetin` — monomorphic type for a `let x = v in …` IIFE param.
+// - `annotateCall` — type to cast an applied parametric ctor call to (ADR 0043).
+// - `guardBaseType` — the type a guard-form arm's predicate narrows FROM (ADR 0031).
+// - `flattenPipe` — lower `a |> f(x)` to `f(x, a)`, so tsc infers from all args
+//   at once.
+// - `tupleHelper` — emit `_tuple(a, b)` instead of `[a, b]` (ADR 0036).
+// - `moduleExt` — relative-import suffix: `".js"` for JS, `""` for TS.
+/// Structural stand-ins for a ctor and its fields. NOT `Ast.Ctor`: naming the
+/// imported alias makes the record nominal across the module boundary, and the
+/// frozen stage-1 seed cannot expand a cross-module record alias against an
+/// open row (ADR 0046 landed after it was frozen). Declared here, these expand
+/// locally and still unify structurally with the real AST values.
+type CtorFieldLike = { name: Option<string>, fieldType: Ast.TypeExpr }
+
+type CtorLike = { name: string, fields: [CtorFieldLike] }
+
+type GenOpts = {
+  annotateLet: Option<string -> Ast.Expr -> Option<string> >,
+  annotateCtor: Option<Ast.Stmt -> CtorLike -> Option<CtorFactoryTs> >,
+  annotateParams: Option<Ast.Span -> number -> ParamAnnots>,
+  annotateEmpty: Option<Ast.Expr -> Option<string> >,
+  annotateLetin: Option<Ast.Expr -> Option<string> >,
+  annotateCall: Option<Ast.Expr -> Option<string> >,
+  guardBaseType: Option<Ast.Expr -> Option<string> >,
+  flattenPipe: bool,
+  tupleHelper: bool,
+  moduleExt: string
+}
+
+/// Everything threaded through the generators: the `GenOpts` knobs, flattened,
+/// plus the ctor field-key registry, the namespace runtime table, and the
+/// value-reference set. Declared and annotated at every `ctx` parameter for the
+/// reason scc.mochi pins `TSt` (ADR 0044) — each generator generalizes the
+/// record's open tail on its own, so the emitted TS reprinted the whole shape
+/// once per function instead of naming it.
+type GCtx = {
+  keys: Map<string, [string]>,
+  ns: Map<string, Map<string, string> >,
+  annotateLet: Option<string -> Ast.Expr -> Option<string> >,
+  annotateCtor: Option<Ast.Stmt -> CtorLike -> Option<CtorFactoryTs> >,
+  annotateParams: Option<Ast.Span -> number -> ParamAnnots>,
+  annotateEmpty: Option<Ast.Expr -> Option<string> >,
+  annotateLetin: Option<Ast.Expr -> Option<string> >,
+  annotateCall: Option<Ast.Expr -> Option<string> >,
+  guardBaseType: Option<Ast.Expr -> Option<string> >,
+  flattenPipe: bool,
+  tupleHelper: bool,
+  moduleExt: string,
+  valueRefs: Set<string>
+}
+
+/// The JS backend's knobs: no annotation, no rewriting, `.js` siblings.
+/// Annotated so the emitted TS keeps the hook types instead of widening the
+/// bare `None`s to `Option<unknown>` (ADR 0044).
+export let jsGenOpts : GenOpts = {
+  annotateLet: None,
+  annotateCtor: None,
+  annotateParams: None,
+  annotateEmpty: None,
+  annotateLetin: None,
+  annotateCall: None,
+  guardBaseType: None,
+  flattenPipe: false,
+  tupleHelper: false,
+  moduleExt: ".js"
+}
+
+/// Apply a one-argument `Option<fn>` hook, flattening "no hook" and "hook
+/// declined" into the same `None` — TS's `ctx.hook?.(x) ?? null`.
+let hook1 = (h, x) => switch h { | None => None | Some(f) => f(x) }
+
+/// `hook1` for the two-argument hooks.
+let hook2 = (h, x, y) => switch h { | None => None | Some(f) => f(x, y) }
+
+/// `new Map<K, V>()` when annotated, `new Map()` otherwise.
+let emptyNsCtor = (con, ann) => switch ann {
+  | None => "new ${con}()"
+  | Some(t) => "new ${t}()"
+}
+
+/// Uppercase-initial name — a constructor, not an ordinary binding.
+let isUpperStart = s =>
+  Str.codeAt(0, s) |> Option.exists(n => n >= 65 && n <= 90)
+
+/// A 0-field ctor reference (`None`), per this program's ctor-key table.
+let isNullaryCtor = (name, keys) =>
+  Map.get(name, keys) |> Option.exists(ks => Array.length(ks) == 0)
+
+/// Callee that is a bare uppercase ref — gates the applied-ctor cast.
+let isCtorRef = fn => switch fn {
+  | Ast.ERef(name, _) => isUpperStart(name)
+  | _ => false
+}
+
+/// `name: T` when annotated, bare name otherwise.
+let suffixOr = (name, ann) => switch ann {
+  | None => name
+  | Some(t) => "${name}: ${t}"
+}
+
+/// No annotations at all — the JS backend's shape for every lambda.
+let bareParamAnnots : ParamAnnots = { generics: "", params: [] }
+
+let paramAnnotsFor = (h, sp, arity) => switch h {
+  | None => bareParamAnnots
+  | Some(f) => f(sp, arity)
+}
+
+/// Zip collapsed params with their annotations; a missing or `None` entry
+/// leaves the param bare (generic position, or JS mode).
+let annotatedParams = (cparams, annots, i) => switch Array.get(i, cparams) {
+  | None => []
+  | Some(p) => Array.prepend(
+      suffixOr(genParam(p), Option.unwrapOr(None, Array.get(i, annots))),
+      annotatedParams(cparams, annots, i + 1)
+    )
+}
+
+/// `expr as T` when annotated, bare otherwise.
+let castOr = (js, ann) => switch ann {
+  | None => js
+  | Some(t) => "(${js} as ${t})"
+}
+
 // --- small generic helpers (duplicated per bootstrap file, same as check.mochi/infer.mochi) ---
 
 let bindRuntime = monad =>
@@ -88,14 +239,14 @@ let escapeTemplateLiteral = s => escTemplateLoop(Str.chars(s), 0, "")
 // constructor-knowledge module — so factory, pattern destructure, and the
 // TS pass all derive from one source.
 
-let keyAt = (ctx, ctor, i) => switch Map.get(ctor, ctx.keys) {
+let keyAt = (ctx: GCtx, ctor, i) => switch Map.get(ctor, ctx.keys) {
   | Some(ks) => Option.unwrapOr("_${show(i)}", Array.get(i, ks))
   | None => "_${show(i)}"
 }
 
 // `Ns.member` access on a namespace ref (`List.map`) -> the JS identifier
 // its runtime is defined under, None if it isn't namespace access.
-let nsRuntimeId = (ctx, target, name) => switch target {
+let nsRuntimeId = (ctx: GCtx, target, name) => switch target {
   | Ast.ERef(refName, _) => switch Map.get(refName, ctx.ns) {
       | Some(members) => Map.get(name, members)
       | None => None
@@ -105,12 +256,15 @@ let nsRuntimeId = (ctx, target, name) => switch target {
 
 // `Set.empty` / `Map.empty` / `List.empty` lower to the same runtime as
 // `#{}` / `@{}` (ADR 0080). Not namespaceRuntime ids — inline constructors.
-let emptyNsEmit = (target, name) => switch target {
+/// `Set.empty` / `Map.empty` / `List.empty` lower to the same runtime as
+/// `@{}` / `#{}` (ADR 0080). `ann` is the resolved element typing when the TS
+/// backend supplies one — a bare `new Set()` infers `Set<never>` (ADR 0035).
+let emptyNsEmit = (target, name, ann) => switch target {
   | Ast.ERef(refName, _) => name == "empty"
       ? refName == "Set"
-        ? Some("new Set()")
+        ? Some(emptyNsCtor("Set", ann))
         : refName == "Map"
-        ? Some("new Map()")
+        ? Some(emptyNsCtor("Map", ann))
         : refName == "List"
         ? Some("_list(function* () {})")
         : None
@@ -133,19 +287,42 @@ let collapseLambda = (params, body) => switch body {
 
 // ---- expressions -----------------------------------------------------------
 
-let genExpr = (ctx, e) => switch e {
+let genExpr = (ctx: GCtx, e) => switch e {
   | Ast.ENum(_, raw, _) => raw
   | Ast.EUnit(_) => "undefined"
   | Ast.EBool(value, _) => value ? "true" : "false"
   | Ast.EStr(value, _) => jsStringLit(value)
-  | Ast.ERef(name, _) => name
-  | Ast.ECall(fn, args, _, _) => "${ctx->genCallee(fn)}(${Str.join(", ", args |> map(a => ctx->genExpr(a)))})"
-  | Ast.ELambda(params, body, _) => let (cparams, cbody) = collapseLambda(
+  | Ast.ERef(name, _) =>
+    // A parametric nullary ctor (`None`) infers `Option<never>`, which won't
+    // flow where a concrete `Option<C>` is expected — annotate it in place (TS
+    // backend, ADR 0039). Gated on a 0-field ctor so plain value refs are
+    // untouched; the hook itself declines unless the type is fully concrete.
+    castOr(
+      name,
+      isNullaryCtor(name, ctx.keys) ? hook1(ctx.annotateEmpty, e) : None
+    )
+  | Ast.ECall(fn, args, _, _) =>
+    // An applied parametric ctor (`Ok("")`) leaves the type param its argument
+    // does not determine free, so tsc widens it to `unknown`. Cast the call to
+    // its resolved type (ADR 0043). Gated on an uppercase callee — a ctor.
+    let inner = "${ctx->genCallee(fn)}(${Str.join(", ", args |> map(a => ctx->genExpr(a)))})" in
+      castOr(inner, isCtorRef(fn) ? hook1(ctx.annotateCall, e) : None)
+  | Ast.ELambda(params, body, sp) => let (cparams, cbody) = collapseLambda(
       params,
       body
     ) in
     let bound = paramNameSet(cparams, 0, Set.fromArray([])) in
-    let arrow = "(${Str.join(", ", cparams |> map(genParam))}) => ${ctx->genLambdaBodyIn(cbody, bound)}" in
+    // TS backend: annotate each param from the lambda's inferred curried type
+    // (ADR 0028), else strict tsc infers `any`. `sp` is the OUTER (un-collapsed)
+    // lambda's span, which carries the full `A -> B -> …` type; the hook peels
+    // it per collapsed param. A generic binding's value lambda also scopes its
+    // letters on the arrow here (ADR 0032) so its params can name them.
+    let annots = paramAnnotsFor(
+      ctx.annotateParams,
+      sp,
+      Array.length(cparams)
+    ) in
+    let arrow = "${annots.generics}(${Str.join(", ", annotatedParams(cparams, annots.params, 0))}) => ${ctx->genLambdaBodyIn(cbody, bound)}" in
       // Curried type, JS impl: arity >= 2 lowers to a `_curry`-wrapped
       // function so any call grouping works (CRITIQUE §4.4). Arity 1 needs none.
       Array.length(cparams) >= 2
@@ -154,16 +331,29 @@ let genExpr = (ctx, e) => switch e {
   | Ast.ELetIn(name, _, value, body, _) =>
     // let x = v in b -> an IIFE binding x: `((x) => b)(v)`. Non-recursive, so
     // plain arg-application is enough; nested let-ins chain as curried IIFEs.
-    "((${name}) => ${ctx->genLambdaBody(body)})(${ctx->genExpr(value)})"
+    // Annotating the param flows contextual types into `v`'s empty collections
+    // through the IIFE, which arg-based inference alone cannot do (ADR 0035).
+    let param = suffixOr(name, hook1(ctx.annotateLetin, value)) in
+      "((${param}) => ${ctx->genLambdaBody(body)})(${ctx->genExpr(value)})"
   | Ast.ELetBind(param, _, monad, value, body, _) =>
     // let? / let! p = v in b -> `_Option_flatMap` / `_Result_flatMap` /
     // `_Task_andThen`((p) => b)(v). `let?` monad is Result or Option after
     // infer dispatch (ADR 0079); `let!` is Task.
+    // Under `flattenPipe` (TS backend) both args go in ONE grouping, so tsc
+    // infers `p`'s type from `v` in the all-at-once overload; the curried split
+    // leaves `p` unconstrained. Equivalent under `_curry`.
     let rt = bindRuntime(monad) in
-      "${rt}((${genParam(param)}) => ${ctx->genLambdaBody(body)})(${ctx->genExpr(value)})"
+    let f = "(${genParam(param)}) => ${ctx->genLambdaBody(body)}" in
+    let v = ctx->genExpr(value) in
+      ctx.flattenPipe ? "${rt}(${f}, ${v})" : "${rt}(${f})(${v})"
   | Ast.EPipe(left, right, _) =>
-    // desugar inline: a |> f  ->  f(a)
-    "${ctx->genCallee(right)}(${ctx->genExpr(left)})"
+    // desugar inline: a |> f  ->  f(a). Under `flattenPipe` (TS backend) a pipe
+    // into a call appends the arg — `a |> f(x)` -> `f(x, a)` — so tsc infers type
+    // args from every argument at once; otherwise the curried `f(x)(a)`.
+    switch right {
+      | Ast.ECall(rfn, rargs, _, _) when ctx.flattenPipe => "${ctx->genCallee(rfn)}(${Str.join(", ", Array.append(left, rargs) |> map(a => ctx->genExpr(a)))})"
+      | _ => "${ctx->genCallee(right)}(${ctx->genExpr(left)})"
+    }
   | Ast.EDo(exprs, _) => ctx->genDo(exprs)
   | Ast.ETernary(cond, thenE, elseE, _) => "(${ctx->genExpr(cond)} ? ${ctx->genExpr(thenE)} : ${ctx->genExpr(elseE)})"
   | Ast.EMatch(scrutinee, arms, _) => ctx->genMatch(scrutinee, arms)
@@ -188,7 +378,7 @@ let genExpr = (ctx, e) => switch e {
               ? "{ ${spreadStr} }"
               : "{ ${spreadStr}, ${fieldStrs} }"
       }
-  | Ast.EField(target, name, _) => switch emptyNsEmit(target, name) {
+  | Ast.EField(target, name, _) => switch emptyNsEmit(target, name, hook1(ctx.annotateEmpty, e)) {
       | Some(js) => js
       | None => switch ctx->nsRuntimeId(target, name) {
           | Some(rt) => rt
@@ -197,12 +387,28 @@ let genExpr = (ctx, e) => switch e {
     }
   | Ast.ETuple(elements, _) =>
     // A tuple erases to a JS array `[a, b]` (like ReScript); the type system
-    // keeps it distinct from an mochi Array, the runtime shares the shape.
-    "[${Str.join(", ", elements |> map(el => ctx->genExpr(el)))}]"
-  | Ast.EArr(elements, _) => "[${Str.join(", ", elements |> map(el => ctx->genSeqSlot(el)))}]"
+    // keeps it distinct from an mochi Array, the runtime shares the shape. TS
+    // emit wraps it in `_tuple(…)` so tsc infers a tuple, not a widened array
+    // (ADR 0036); the JS backend keeps the bare literal (byte-identical).
+    let elems = Str.join(", ", elements |> map(el => ctx->genExpr(el))) in
+      ctx.tupleHelper ? "_tuple(${elems})" : "[${elems}]"
+  | Ast.EArr(elements, _) =>
+    // Empty `[]` infers `never[]` — annotate with the resolved element type so
+    // it flows where a concrete array is expected (ADR 0035).
+    let body = "[${Str.join(", ", elements |> map(el => ctx->genSeqSlot(el)))}]" in
+      castOr(
+        body,
+        Array.length(elements) == 0 ? hook1(ctx.annotateEmpty, e) : None
+      )
   | Ast.EList(elements, _) => ctx->genList(elements)
   | Ast.ESet(elements, _) => "new Set([${Str.join(", ", elements |> map(el => ctx->genSeqSlot(el)))}])"
-  | Ast.EMap(entries, _) => "new Map([${Str.join(", ", entries |> map(en => "[${ctx->genExpr(en.key)}, ${ctx->genExpr(en.value)}]"))}])"
+  | Ast.EMap(entries, _) =>
+    // Empty `#{}` infers `Map<unknown, unknown>` — emit `new Map<K, V>()` with
+    // the resolved key/value types instead (ADR 0035).
+    switch Array.length(entries) == 0 ? hook1(ctx.annotateEmpty, e) : None {
+      | Some(t) => "new ${t}()"
+      | None => "new Map([${Str.join(", ", entries |> map(en => "[${ctx->genExpr(en.key)}, ${ctx->genExpr(en.value)}]"))}])"
+    }
   | Ast.EInterp(parts, _) =>
     // "…${x}…" (ADR 0023) → a native JS template literal — emitted JS reads
     // exactly like the source.
@@ -217,20 +423,20 @@ let genExpr = (ctx, e) => switch e {
       "`${body}`"
 }
 
-let genDo = (ctx, exprs) => "(() => { ${ctx->genDoSteps(exprs)} })()"
-let genDoSteps = (ctx, exprs) => switch exprs {
+let genDo = (ctx: GCtx, exprs) => "(() => { ${ctx->genDoSteps(exprs)} })()"
+let genDoSteps = (ctx: GCtx, exprs) => switch exprs {
   | [last] => "return ${ctx->genExpr(last)};"
   | [first, ...rest] => "${ctx->genExpr(first)}; ${ctx->genDoSteps(rest)}"
   | [] => "throw new Error(\"empty do block\");"
 }
 
-let genSeqSlot = (ctx, el) => switch el {
+let genSeqSlot = (ctx: GCtx, el) => switch el {
   | Ast.SEExpr(ex) => ctx->genExpr(ex)
   | Ast.SESpread(ex) => "...${ctx->genExpr(ex)}"
 }
 
 // A `@{...}` literal -> a lazy iterable. Spreads `yield*` another List.
-let genList = (ctx, elements) =>
+let genList = (ctx: GCtx, elements) =>
   let yields = Str.join(
     " ",
     elements
@@ -249,13 +455,13 @@ let genParam = p => switch p {
 }
 
 // A lambda in callee position must be parenthesized: `((x) => ...)(arg)`.
-let genCallee = (ctx, e) => switch e {
+let genCallee = (ctx: GCtx, e) => switch e {
   | Ast.ELambda(_, _, _) => "(${ctx->genExpr(e)})"
   | _ => ctx->genExpr(e)
 }
 
 // A record or lambda in member-target position needs parens: `({...}).x`.
-let genMember = (ctx, e) => switch e {
+let genMember = (ctx: GCtx, e) => switch e {
   | Ast.ERecord(_, _, _) => "(${ctx->genExpr(e)})"
   | Ast.ELambda(_, _, _) => "(${ctx->genExpr(e)})"
   | _ => ctx->genExpr(e)
@@ -373,7 +579,7 @@ let wrapDoStepTail = (exprs, sp) => switch exprs {
 let loopParamNames = params => Str.join(", ", params |> map(p => p.name))
 
 // Lower one loop-body tail to statements inside `while (true)`.
-let genLoopTail = (ctx, e, params) => switch e {
+let genLoopTail = (ctx: GCtx, e, params) => switch e {
   | Ast.ERecur(args, _) => switch (params, args) {
       | ([p], [a]) => "${p.name} = ${ctx->genExpr(a)}; continue;"
       | (_, _) => "[${loopParamNames(params)}] = [${Str.join(", ", args |> map(a => ctx->genExpr(a)))}]; continue;"
@@ -382,7 +588,12 @@ let genLoopTail = (ctx, e, params) => switch e {
       ? "if (${ctx->genExpr(cond)}) { ${ctx->genLoopTail(thenE, params)} } else { ${ctx->genLoopTail(elseE, params)} }"
       : "return ${ctx->genExpr(e)};"
   | Ast.ELetIn(name, _, value, body, _) => hasRecur(e)
-      ? "{ const ${name} = ${ctx->genExpr(value)}; ${ctx->genLoopTail(body, params)} }"
+      ?
+        // A let-in in loop-tail position stays a JS block rather than flattening
+        // into the loop body: consecutive `let _ = … in` effects and shadowing
+        // rebinds would otherwise redeclare the same `const`. It takes the same
+        // ADR 0035 annotation the IIFE form does.
+        "{ const ${suffixOr(name, hook1(ctx.annotateLetin, value))} = ${ctx->genExpr(value)}; ${ctx->genLoopTail(body, params)} }"
       : "return ${ctx->genExpr(e)};"
   | Ast.EDo(exprs, _) => hasRecur(e)
       ? "{ ${ctx->genDoLoopTail(exprs, params)} }"
@@ -398,17 +609,19 @@ let genLoopTail = (ctx, e, params) => switch e {
   | _ => "return ${ctx->genExpr(e)};"
 }
 
-let genDoLoopTail = (ctx, exprs, params) => switch exprs {
+let genDoLoopTail = (ctx: GCtx, exprs, params) => switch exprs {
   | [last] => ctx->genLoopTail(last, params)
   | [first, ...rest] => "${ctx->genExpr(first)}; ${ctx->genDoLoopTail(rest, params)}"
   | [] => "return undefined;"
 }
 
 // The statement body of a lowered loop: param `let`s + `while (true)`.
-let genLoopBlock = (ctx, params, body) =>
+let genLoopBlock = (ctx: GCtx, params, body) =>
   let decls = Str.join(
     " ",
-    params |> map(p => "let ${p.name} = ${ctx->genExpr(p.init)};")
+    params
+      |> map(p =>
+        "let ${suffixOr(p.name, hook1(ctx.annotateLetin, p.init))} = ${ctx->genExpr(p.init)};")
   ) in
     "${decls} while (true) { ${ctx->genLoopTail(body, params)} }"
 
@@ -419,7 +632,7 @@ let loopParamFree = (params, i, seen) => switch Array.get(i, params) {
       : loopParamFree(params, i + 1, seen)
 }
 
-let genLambdaBody = (ctx, e) => switch e {
+let genLambdaBody = (ctx: GCtx, e) => switch e {
   | Ast.ERecord(_, _, _) => "(${ctx->genExpr(e)})"
   | _ => ctx->genExpr(e)
 }
@@ -446,7 +659,7 @@ let paramNameSet = (params, i, acc) => switch Array.get(i, params) {
 // stops at the first link a `const` would capture: one whose name is already
 // bound (by the arrow's params or an earlier link), or a non-lambda value whose
 // own name it mentions. Lambda values are locally recursive (ADR 0067).
-let letBlockLoop = (ctx, e, seen, decls) => switch e {
+let letBlockLoop = (ctx: GCtx, e, seen, decls) => switch e {
   | Ast.ELetIn(name, _, value, body, _) => Set.has(
       name,
       seen
@@ -467,7 +680,7 @@ let letBlockLoop = (ctx, e, seen, decls) => switch e {
 // rather than nested IIFEs, so the emitted JS reads like the source instead
 // of nesting one closure per binding. Whatever the chain stopped at falls
 // back to the IIFE form, which scopes it correctly.
-let genLambdaBodyIn = (ctx, e, bound) =>
+let genLambdaBodyIn = (ctx: GCtx, e, bound) =>
   let (decls, rest, seen) = ctx->letBlockLoop(e, bound, []) in
     Array.length(decls) == 0
       ? switch e {
@@ -527,7 +740,7 @@ let isPList = p => switch p { | Ast.PList(_, _, _) => true | _ => false }
 // `{ key: sub }` entry, punned when the bound name IS the key.
 let keyedSlot = (key, sub) => sub == key ? key : "${key}: ${sub}"
 
-let pctorEntries = (ctx, ctor, args, i) => switch Array.get(i, args) {
+let pctorEntries = (ctx: GCtx, ctor, args, i) => switch Array.get(i, args) {
   | None => []
   | Some(a) => let s = ctx->patSlot(a) in
     let restEntries = ctx->pctorEntries(ctor, args, i + 1) in
@@ -536,14 +749,14 @@ let pctorEntries = (ctx, ctor, args, i) => switch Array.get(i, args) {
         : Array.prepend(keyedSlot(ctx->keyAt(ctor, i), s), restEntries)
 }
 
-let precordEntries = (ctx, fields, i) => switch Array.get(i, fields) {
+let precordEntries = (ctx: GCtx, fields, i) => switch Array.get(i, fields) {
   | None => []
   | Some(f) => let s = ctx->patSlot(f.pat) in
     let restEntries = ctx->precordEntries(fields, i + 1) in
       s == "" ? restEntries : Array.prepend(keyedSlot(f.label, s), restEntries)
 }
 
-let patSlot = (ctx, p) => switch p {
+let patSlot = (ctx: GCtx, p) => switch p {
   | Ast.PAs(pat, name, _, _) => let inner = ctx->patSlot(pat) in
       inner == "" ? name : "${inner}, ${name}"
   | Ast.PBind(name, _) => name
@@ -579,28 +792,28 @@ let patSlot = (ctx, p) => switch p {
     }
 }
 
-let pctorConds = (ctx, ctor, args, i, path) => switch Array.get(i, args) {
+let pctorConds = (ctx: GCtx, ctor, args, i, path) => switch Array.get(i, args) {
   | None => []
   | Some(a) => Array.concat(
       ctx->patConds(a, "${path}.${ctx->keyAt(ctor, i)}"),
       ctx->pctorConds(ctor, args, i + 1, path)
     )
 }
-let precordConds = (ctx, fields, i, path) => switch Array.get(i, fields) {
+let precordConds = (ctx: GCtx, fields, i, path) => switch Array.get(i, fields) {
   | None => []
   | Some(f) => Array.concat(
       ctx->patConds(f.pat, "${path}.${f.label}"),
       ctx->precordConds(fields, i + 1, path)
     )
 }
-let ptupleConds = (ctx, elems, i, path) => switch Array.get(i, elems) {
+let ptupleConds = (ctx: GCtx, elems, i, path) => switch Array.get(i, elems) {
   | None => []
   | Some(el) => Array.concat(
       ctx->patConds(el, "${path}[${show(i)}]"),
       ctx->ptupleConds(elems, i + 1, path)
     )
 }
-let parrConds = (ctx, elems, i, path) => switch Array.get(i, elems) {
+let parrConds = (ctx: GCtx, elems, i, path) => switch Array.get(i, elems) {
   | None => []
   | Some(el) => Array.concat(
       ctx->patConds(el, "${path}[${show(i)}]"),
@@ -608,7 +821,7 @@ let parrConds = (ctx, elems, i, path) => switch Array.get(i, elems) {
     )
 }
 
-let patConds = (ctx, p, path) => switch p {
+let patConds = (ctx: GCtx, p, path) => switch p {
   | Ast.PAs(pat, _, _, _) => ctx->patConds(pat, path)
   | Ast.PWild(_) => []
   | Ast.PUnit(_) =>
@@ -643,7 +856,7 @@ let patConds = (ctx, p, path) => switch p {
 
 // The handler parameter for a catch-all pattern: bind the name, destructure a
 // record's/tuple's binds, or ignore the value.
-let catchAllParam = (ctx, p) => switch p {
+let catchAllParam = (ctx: GCtx, p) => switch p {
   | Ast.PArr(_, rest, _) =>
     // `[...all]` / `@{...all}` binds the whole collection to the rest name —
     // NOT a destructure: `[...all]` would copy the array and force a lazy List.
@@ -669,14 +882,14 @@ let listTail = from =>
     ++ "; _i < _b.length; _i++) yield _b[_i]; "
     ++ "if (!_done) { let _s; while (!(_s = _it.next()).done) yield _s.value; } })"
 
-let listArmGuards = (ctx, elems, i) => switch Array.get(i, elems) {
+let listArmGuards = (ctx: GCtx, elems, i) => switch Array.get(i, elems) {
   | None => []
   | Some(el) => Array.concat(
       ctx->patConds(el, "_b[${show(i)}]"),
       ctx->listArmGuards(elems, i + 1)
     )
 }
-let listArmBinds = (ctx, elems, i) => switch Array.get(i, elems) {
+let listArmBinds = (ctx: GCtx, elems, i) => switch Array.get(i, elems) {
   | None => ([], [])
   | Some(el) => let (restParams, restArgs) = ctx->listArmBinds(elems, i + 1) in
     let slot = ctx->patSlot(el) in
@@ -693,7 +906,7 @@ let listArmBinds = (ctx, elems, i) => switch Array.get(i, elems) {
 // `@{h, ...t}` needs n pulls (length >= n) and binds its tail to a lazy List
 // over the rest. Element sub-patterns guard/bind via the general compiler
 // against the buffer (`_b[i]` is already pulled, nested tests force nothing extra).
-let genListArm = (ctx, p, body) => switch p {
+let genListArm = (ctx: GCtx, p, body) => switch p {
   | Ast.PList(elems, rest, _) => let n = Array.length(elems) in
     let guards = ctx->listArmGuards(elems, 0) in
     let head = Option.isSome(rest)
@@ -712,7 +925,7 @@ let genListArm = (ctx, p, body) => switch p {
   | _ => ""
 }
 
-let listMatchLoop = (ctx, arms, i) => switch Array.get(i, arms) {
+let listMatchLoop = (ctx: GCtx, arms, i) => switch Array.get(i, arms) {
   | None => (
       [],
       "(() => { throw new Error(\"non-exhaustive lazy-list switch\"); })()"
@@ -737,7 +950,7 @@ let listMatchLoop = (ctx, arms, i) => switch Array.get(i, arms) {
 // each arm, buffering them so later arms can re-examine a prefix without
 // re-forcing the iterator — @onrails/pattern isn't length-indexable.
 // check.ts proved totality.
-let genListMatch = (ctx, scrutinee, arms) =>
+let genListMatch = (ctx: GCtx, scrutinee, arms) =>
   let (armLines, fallback) = ctx->listMatchLoop(arms, 0) in
     "((_it) => { const _b = []; let _done = false; "
       ++ "const _pull = (_n) => { while (_b.length < _n && !_done) { const _s = _it.next(); "
@@ -749,13 +962,20 @@ let genListMatch = (ctx, scrutinee, arms) =>
       ++ ctx->genExpr(scrutinee)
       ++ "[Symbol.iterator]())"
 
-let matchArmsLoop = (ctx, arms, i) => switch Array.get(i, arms) {
+let matchArmsLoop = (ctx: GCtx, arms, i, base) => switch Array.get(i, arms) {
   | None => ([], None)
-  | Some(a) => let (restLines, restCatch) = ctx->matchArmsLoop(arms, i + 1) in
+  | Some(a) => let (restLines, restCatch) = ctx->matchArmsLoop(
+      arms,
+      i + 1,
+      base
+    ) in
       switch a.guard {
-        | Some(g) => (
+        | Some(g) =>
+          // A guarded arm narrows regardless of its pattern (the guard can be
+          // false), so it always takes guard form — even `_ when g`.
+          (
             Array.prepend(
-              "  ${ctx->genGuardArm(a.pattern, a.body, Some(g))}",
+              "  ${ctx->genGuardArm(a.pattern, a.body, Some(g), base)}",
               restLines
             ),
             restCatch
@@ -764,7 +984,7 @@ let matchArmsLoop = (ctx, arms, i) => switch Array.get(i, arms) {
             ? (restLines, Some((a.pattern, a.body)))
             : (
               Array.prepend(
-                "  ${ctx->genWithArm(a.pattern, a.body)}",
+                "  ${ctx->genWithArm(a.pattern, a.body, base)}",
                 restLines
               ),
               restCatch
@@ -772,21 +992,43 @@ let matchArmsLoop = (ctx, arms, i) => switch Array.get(i, arms) {
       }
 }
 
-let genMatch = (ctx, scrutinee, arms) =>
+/// Any eager-array arm? Decides the ADR 0038 close-out below.
+let hasArrArm = arms =>
+  someOf(
+    a => switch a.pattern { | Ast.PArr(_, _, _) => true | _ => false },
+    arms
+  )
+
+let genMatch = (ctx: GCtx, scrutinee, arms) =>
   isListMatch(arms)
     ? ctx->genListMatch(scrutinee, arms)
-    : let (armLines, catchAll) = ctx->matchArmsLoop(arms, 0) in
-    let tail = switch catchAll {
-      | Some((p, body)) => "  .otherwise(${ctx->catchAllParam(p)} => ${ctx->genLambdaBody(body)})"
-      | None => "  .exhaustive()"
-    } in
-      Str.join(
-        "\n",
-        Array.concat(
-          Array.prepend("match(${ctx->genExpr(scrutinee)})", armLines),
-          [tail]
+    :
+      // The concrete type a guard-form arm's predicate narrows FROM; `None` in
+      // JS mode or for a generic scrutinee, which leaves the bare guard form.
+      let base = hook1(ctx.guardBaseType, scrutinee) in
+      let (armLines, catchAll) = ctx->matchArmsLoop(arms, 0, base) in
+      let tail = switch catchAll {
+        | Some((p, body)) => "  .otherwise(${ctx->catchAllParam(p)} => ${ctx->genLambdaBody(body)})"
+        | None => Option.isSome(ctx.guardBaseType) && hasArrArm(arms)
+            ?
+              // TS backend (ADR 0038): an eager-array match with no catch-all is
+              // the `[]` + `[h, ...t]` length partition check.mochi proved total.
+              // Its guard arms test `.length` — they do not narrow `A[]`
+              // structurally, so `.exhaustive()` still sees `A[]` leftover and
+              // types as `NonExhaustiveError<A[]>` (TS2322). Close with a
+              // throwing `.otherwise` instead: its `never` return is assignable
+              // to the declared type, and the branch is dead. JS mode keeps
+              // `.exhaustive()` — emitted JS stays byte-identical.
+              "  .otherwise(() => { throw new Error(\"non-exhaustive match\"); })"
+            : "  .exhaustive()"
+      } in
+        Str.join(
+          "\n",
+          Array.concat(
+            Array.prepend("match(${ctx->genExpr(scrutinee)})", armLines),
+            [tail]
+          )
         )
-      )
 
 let litValue = p => switch p {
   | Ast.PStr(v, _) => jsStringLit(v)
@@ -795,13 +1037,118 @@ let litValue = p => switch p {
   | _ => ""
 }
 
+// ---- type-predicate targets (ADR 0031) -------------------------------------
+//
+// `@onrails/pattern`'s `Narrow` only refines a handler's input for an `x is U`
+// guard, not a plain boolean one — so a nested-pattern handler would otherwise
+// see the whole union. `patTarget` builds that `U`, narrowing `base` the same
+// way the arm's structural tests do.
+
+/// A field's refined type when its sub-pattern narrows it, else `None` — a
+/// bind/wildcard/literal needs no narrowing and keeps its declared type.
+let fieldRefine = (ctx: GCtx, p, fieldBase) => switch p {
+  | Ast.PCtor(_, _, _, _) => Some(ctx->patTarget(p, fieldBase))
+  | Ast.PRecord(_, _) => let t = ctx->patTarget(p, fieldBase) in
+      t == fieldBase ? None : Some(t)
+  | _ => None
+}
+
+let ctorRefines = (ctx: GCtx, args, keys, member, i) => switch Array.get(i, args) {
+  | None => []
+  | Some(a) => let rest = ctx->ctorRefines(args, keys, member, i + 1) in
+    let key = Option.unwrapOr("_${show(i)}", Array.get(i, keys)) in
+      switch ctx->fieldRefine(a, "${member}[${jsStringLit(key)}]") {
+        | Some(sub) => Array.prepend("${jsStringLit(key)}: ${sub}", rest)
+        | None => rest
+      }
+}
+
+let recordRefines = (ctx: GCtx, fields, base, i) => switch Array.get(i, fields) {
+  | None => []
+  | Some(f) => let rest = ctx->recordRefines(fields, base, i + 1) in
+      switch ctx->fieldRefine(f.pat, "${base}[${jsStringLit(f.label)}]") {
+        | Some(sub) => Array.prepend("${jsStringLit(f.label)}: ${sub}", rest)
+        | None => rest
+      }
+}
+
+/// A tuple slot is indexed positionally, so each element has its own base.
+let tupleSlotBase = (base, i) => "(${base})[${show(i)}]"
+
+let tupleTargets = (ctx: GCtx, elems, base, i) => switch Array.get(i, elems) {
+  | None => []
+  | Some(el) => let slotBase = tupleSlotBase(base, i) in
+      Array.prepend(
+        Option.unwrapOr(slotBase, ctx->fieldRefine(el, slotBase)),
+        ctx->tupleTargets(elems, base, i + 1)
+      )
+}
+
+let tupleRefines = (ctx: GCtx, elems, base, i) => switch Array.get(i, elems) {
+  | None => false
+  | Some(el) => Option.isSome(
+      ctx->fieldRefine(el, tupleSlotBase(base, i))
+    ) || ctx->tupleRefines(elems, base, i + 1)
+}
+
+/// Array elements all share one element base (`T[number]`).
+let arrTargets = (ctx: GCtx, elems, elemBase, i) => switch Array.get(i, elems) {
+  | None => []
+  | Some(el) => Array.prepend(
+      Option.unwrapOr(elemBase, ctx->fieldRefine(el, elemBase)),
+      ctx->arrTargets(elems, elemBase, i + 1)
+    )
+}
+
+let arrRefines = (ctx: GCtx, elems, elemBase, i) => switch Array.get(i, elems) {
+  | None => false
+  | Some(el) => Option.isSome(
+      ctx->fieldRefine(el, elemBase)
+    ) || ctx->arrRefines(elems, elemBase, i + 1)
+}
+
+/// Refine `base` by everything the pattern structurally tests. An or-pattern
+/// keeps the base — per-alternative narrowing would need a union target.
+let patTarget = (ctx: GCtx, p, base) => switch p {
+  | Ast.PAs(pat, _, _, _) => ctx->patTarget(pat, base)
+  | Ast.PCtor(ctor, args, _, _) => let member = "Extract<${base}, { _tag: ${jsStringLit(ctor)} }>" in
+    let keys = Option.unwrapOr([], Map.get(ctor, ctx.keys)) in
+    let refines = ctx->ctorRefines(args, keys, member, 0) in
+      Array.length(refines) == 0
+        ? member
+        : "${member} & { ${Str.join("; ", refines)} }"
+  | Ast.PRecord(fields, _) => let refines = ctx->recordRefines(
+      fields,
+      base,
+      0
+    ) in
+      Array.length(refines) == 0
+        ? base
+        : "${base} & { ${Str.join("; ", refines)} }"
+  | Ast.PTuple(elems, _) => !(ctx->tupleRefines(elems, base, 0))
+      ? base
+      : "[${Str.join(", ", ctx->tupleTargets(elems, base, 0))}]"
+  | Ast.PArr(elems, restOpt, _) => let elemBase = "(${base})[number]" in
+      !(ctx->arrRefines(elems, elemBase, 0))
+        ? base
+        : let heads = Str.join(", ", ctx->arrTargets(elems, elemBase, 0)) in
+          switch restOpt {
+            | Some(_) => "[${heads}, ...${base}]"
+            | None => "[${heads}]"
+          }
+  | _ => base
+}
+
 // General arm: predicate + destructuring handler, built by the pattern
 // compiler. Handles arbitrary nesting (`Sm(Sm(n))`, `Ok((a, b))`, ctors
 // inside tuples/arrays) and `when` guards. A guard runs after the
 // structural tests (&&-short-circuit); the pattern's binds are rebound
 // from `_v` by the same destructuring slot handler uses.
-let genGuardArm = (ctx, p, body, guardOpt) =>
-  let conds0 = ctx->patConds(p, "_v") in
+let genGuardArm = (ctx: GCtx, p, body, guardOpt, base) =>
+  // TS mode tests a widened `_g` copy so the boolean body does not fight
+  // `_v`'s narrowed type; JS mode tests `_v` directly.
+  let root = Option.isSome(base) ? "_g" : "_v" in
+  let conds0 = ctx->patConds(p, root) in
   let slot = switch p {
     | Ast.PAs(pat, _, _, _) => ctx->patSlot(pat)
     | _ => ctx->patSlot(p)
@@ -810,23 +1157,36 @@ let genGuardArm = (ctx, p, body, guardOpt) =>
     | Some(g) => switch p {
         | Ast.PAs(_, name, _, _) => Array.append(
             slot == ""
-              ? "((${name}) => ${ctx->genExpr(g)})(_v)"
-              : "((${name}) => ((${slot}) => ${ctx->genExpr(g)})(${name}))(_v)",
+              ? "((${name}) => ${ctx->genExpr(g)})(${root})"
+              : "((${name}) => ((${slot}) => ${ctx->genExpr(g)})(${name}))(${root})",
             conds0
           )
         | _ => Array.append(
             slot == ""
               ? "(${ctx->genExpr(g)})"
-              : "((${slot}) => ${ctx->genExpr(g)})(_v)",
+              : "((${slot}) => ${ctx->genExpr(g)})(${root})",
             conds0
           )
       }
     | None => conds0
   } in
   let test = Array.length(conds) == 0 ? "true" : Str.join(" && ", conds) in
-    switch p {
-      | Ast.PAs(_, name, _, _) => ".with((_v) => ${test}, (${name}) => ${slot == "" ? ctx->genLambdaBody(body) : "((${slot}) => ${ctx->genLambdaBody(body)})(${name})"})"
-      | _ => ".with((_v) => ${test}, ${slot == "" ? "()" : "(${slot})"} => ${ctx->genLambdaBody(body)})"
+  let handler = switch p {
+    | Ast.PAs(_, name, _, _) => "(${name}) => ${slot == "" ? ctx->genLambdaBody(body) : "((${slot}) => ${ctx->genLambdaBody(body)})(${name})"}"
+    | _ => "${slot == "" ? "()" : "(${slot})"} => ${ctx->genLambdaBody(body)}"
+  } in
+    // Emit a type predicate ONLY when it actually refines (target /= base): a
+    // whole-value pattern with no field narrowing (`[]`, `_ when g`) gains
+    // nothing from `_v is base`, and would trip TS2677 when `base` is a
+    // row-polymorphic `{…} & R` param — the closed `base` string is not
+    // assignable to the open param type. The plain boolean guard leaves `_v` at
+    // its declared (open) type (ADR 0031 / 0034).
+    switch base {
+      | None => ".with((_v) => ${test}, ${handler})"
+      | Some(b) => let target = ctx->patTarget(p, b) in
+          target == b
+            ? ".with((_v) => { const _g: any = _v; return ${test}; }, ${handler})"
+            : ".with((_v): _v is ${target} => { const _g: any = _v; return ${test}; }, ${handler})"
     }
 
 // Sub-pattern flat matcher-object form can express: bind, wildcard, or a
@@ -862,7 +1222,7 @@ let recordLits = (fields, i) => switch Array.get(i, fields) {
       }
 }
 
-let ctorArgParts = (ctx, ctor, args, i) => switch Array.get(i, args) {
+let ctorArgParts = (ctx: GCtx, ctor, args, i) => switch Array.get(i, args) {
   | None => ([], [])
   | Some(a) => let (restBinds, restLits) = ctx->ctorArgParts(
       ctor,
@@ -891,13 +1251,13 @@ let ctorArgParts = (ctx, ctor, args, i) => switch Array.get(i, args) {
       }
 }
 
-let genWithArm = (ctx, p, body) => switch p {
-  | Ast.PAs(_, _, _, _) => ctx->genGuardArm(p, body, None)
+let genWithArm = (ctx: GCtx, p, body, base) => switch p {
+  | Ast.PAs(_, _, _, _) => ctx->genGuardArm(p, body, None, base)
   | Ast.PArr(_, _, _) =>
     // Array/tuple/or arms always take guard form (not matcher-object-able).
-    ctx->genGuardArm(p, body, None)
-  | Ast.PTuple(_, _) => ctx->genGuardArm(p, body, None)
-  | Ast.POr(_, _) => ctx->genGuardArm(p, body, None)
+    ctx->genGuardArm(p, body, None, base)
+  | Ast.PTuple(_, _) => ctx->genGuardArm(p, body, None, base)
+  | Ast.POr(_, _) => ctx->genGuardArm(p, body, None, base)
   | Ast.PLit(_, _, _) => ".with(${litValue(p)}, () => ${ctx->genLambdaBody(body)})"
   | Ast.PBool(_, _) => ".with(${litValue(p)}, () => ${ctx->genLambdaBody(body)})"
   | Ast.PStr(_, _) => ".with(${litValue(p)}, () => ${ctx->genLambdaBody(body)})"
@@ -905,7 +1265,7 @@ let genWithArm = (ctx, p, body) => switch p {
       ? let lits = recordLits(fields, 0) in
       let slot = ctx->patSlot(p) in
         ".with({ ${Str.join(", ", lits)} }, ${slot == "" ? "()" : "(${slot})"} => ${ctx->genLambdaBody(body)})"
-      : ctx->genGuardArm(p, body, None)
+      : ctx->genGuardArm(p, body, None, base)
   | Ast.PCtor(ctor, args, _, _) =>
     // pctor flat fast path keeps readable matcher-object form.
     allOf(isFlatSub, args)
@@ -918,8 +1278,8 @@ let genWithArm = (ctx, p, body) => switch p {
         ? "()"
         : "({ ${Str.join(", ", binds)} })" in
         ".with({ ${patObj} }, ${param} => ${ctx->genLambdaBody(body)})"
-      : ctx->genGuardArm(p, body, None)
-  | _ => ctx->genGuardArm(p, body, None)
+      : ctx->genGuardArm(p, body, None, base)
+  | _ => ctx->genGuardArm(p, body, None, base)
 }
 
 // ---- statements -------------------------------------------------------------
@@ -929,20 +1289,61 @@ let genWithArm = (ctx, p, body) => switch p {
 // The discriminant key is `_tag`, matching the @onrails ecosystem
 // convention (@onrails/result, @onrails/maybe), so type guards (isOk/isSome/…)
 // recognize mochi values at the JS boundary.
-let genCtor = c =>
+/// `k0: T0, k1: T1` — a typed factory's parameter list.
+let typedCtorParams = (keys, paramTypes, i) => switch Array.get(i, keys) {
+  | None => []
+  | Some(k) => Array.prepend(
+      "${k}: ${Option.unwrapOr("unknown", Array.get(i, paramTypes))}",
+      typedCtorParams(keys, paramTypes, i + 1)
+    )
+}
+
+let genCtor = (c, ts) =>
   let tag = jsStringLit(c.name) in
     Array.length(c.fields) == 0
-      ? "const ${c.name} = { _tag: ${tag} };"
-      : let params = Str.join(", ", keysOf(c.fields)) in
+      ? switch ts {
+        | Some(t) =>
+          // Annotate the nullary const so `_tag` stays the literal (`"Leaf"`)
+          // instead of widening to `string` — else it will not match the union.
+          "const ${c.name}: ${t.retMono} = { _tag: ${tag} };"
+        | None => "const ${c.name} = { _tag: ${tag} };"
+      }
+      : let keys = keysOf(c.fields) in
+      let params = Str.join(", ", keys) in
       let impl = "(${params}) => ({ _tag: ${tag}, ${params} })" in
         Array.length(c.fields) >= 2
-          ? "const ${c.name} = _curry(${show(Array.length(c.fields))}, ${impl});"
-          : "const ${c.name} = ${impl};"
+          ?
+            // Multi-field: curried so partial application works (CRITIQUE
+            // §4.4). The typed form casts `_curry`'s `any` to the public
+            // signature — the impl's params stay `any`, so no generic-scope
+            // gymnastics.
+            let curried = "_curry(${show(Array.length(c.fields))}, ${impl})" in
+              switch ts {
+                | Some(t) => "const ${c.name} = ${curried} as ${t.generics}(${Str.join(", ", typedCtorParams(keys, t.paramTypes, 0))}) => ${t.ret};"
+                | None => "const ${c.name} = ${curried};"
+              }
+          :
+            // Single-field: a typed arrow scopes its own generics.
+            switch ts {
+              | Some(t) => "const ${c.name} = ${t.generics}(${Str.join(", ", typedCtorParams(keys, t.paramTypes, 0))}): ${t.ret} => ({ _tag: ${tag}, ${params} });"
+              | None => "const ${c.name} = ${impl};"
+            }
 
-let genType = s => switch s {
-  | Ast.SType(_, _, ctors, _, _, _, _, _) => Str.join(
+let genCtorsFrom = (s, ctors, h, refs, exported, i) => switch Array.get(i, ctors) {
+  | None => []
+  | Some(c) => let rest = genCtorsFrom(s, ctors, h, refs, exported, i + 1) in
+      // Exported variants are a public runtime API — emit every factory.
+      // Locals: a pattern `| TLet =>` only matches `_tag`, so skip the const
+      // unless the ctor is referenced as a value (`tok == TGt`, `jxExpectTok(TEof)`).
+      exported || Set.has(c.name, refs)
+        ? Array.prepend(genCtor(c, hook2(h, s, c)), rest)
+        : rest
+}
+
+let genType = (ctx: GCtx, s) => switch s {
+  | Ast.SType(_, _, ctors, _, _, exported, _, _) => Str.join(
       "\n",
-      ctors |> map(genCtor)
+      genCtorsFrom(s, ctors, ctx.annotateCtor, ctx.valueRefs, exported, 0)
     )
   | _ => ""
 }
@@ -1024,43 +1425,45 @@ let genExtern = s => switch s {
 let stripAlExt = s =>
   Str.endsWith(".mochi", s) ? Str.slice(0, Str.length(s) - 6, s) : s
 
-/// Relative `./` / `../` get `.js`; bare package specs keep their name (ADR 0015).
-let rewriteImportPath = from =>
+/// Relative `./` / `../` get `ext` (`.js` for the JS backend, `""` for TS —
+/// tsc resolves the extensionless sibling); bare package specs keep their
+/// name, since a suffix would break package `exports` (ADR 0015).
+let rewriteImportPath = (from, ext) =>
   let bare = stripAlExt(from) in
     Str.startsWith("./", bare) || Str.startsWith("../", bare)
-      ? "${bare}.js"
+      ? "${bare}${ext}"
       : bare
 
 // import { a, b } from "./mod"  ->  compiled sibling `./mod.js`. Source paths
 // name an `.mochi` module (with or without extension); output targets `.js`.
 // Bare package specs keep their name (ADR 0015).
 // import * as Alias from "./mod" -> ESM namespace import (ADR 0002).
-let genImport = s => switch s {
+let genImport = (s, ext) => switch s {
   | Ast.SImport(names, from, _) => let nameList = Str.join(
       ", ",
       names |> map(n => n.name)
     ) in
-    let path = rewriteImportPath(from) in
+    let path = rewriteImportPath(from, ext) in
       "import { ${nameList} } from ${jsStringLit(path)};"
-  | Ast.SImportNs(alias, from, _) => let path = rewriteImportPath(from) in
+  | Ast.SImportNs(alias, from, _) => let path = rewriteImportPath(from, ext) in
       "import * as ${alias.name} from ${jsStringLit(path)};"
   | _ => ""
 }
 
 let exportLine = l => "export ${l}"
 
-let genStmt = (ctx, s) => switch s {
+let genStmt = (ctx: GCtx, s) => switch s {
   | Ast.SError(sp) =>
     // Unreachable by construction: the railway stops on parse diagnostics, so a
     // Program reaching codegen has no error nodes (ADR 0045 decision 6). Codegen is
     // pure here (no throw), so the invariant is emitted as a loud runtime throw
     // rather than a placeholder — silently-wrong output is worse than a bug report.
     "throw new Error(\"codegen invariant: error node reached codegen at ${show(sp.start)}\");"
-  | Ast.SImport(_, _, _) => genImport(s)
-  | Ast.SImportNs(_, _, _) => genImport(s)
-  | Ast.SType(_, _, _, _, _, exported, _, _) => let decls = genType(s) in
+  | Ast.SImport(_, _, _) => genImport(s, ctx.moduleExt)
+  | Ast.SImportNs(_, _, _) => genImport(s, ctx.moduleExt)
+  | Ast.SType(_, _, _, _, _, exported, _, _) => let decls = genType(ctx, s) in
       decls == ""
-        ? "" // record alias: pure type, no runtime
+        ? "" // record alias, or every ctor is pattern-only
         : exported
         ? Str.join("\n", Str.split("\n", decls) |> map(exportLine))
         : decls
@@ -1071,7 +1474,8 @@ let genStmt = (ctx, s) => switch s {
       "$",
       name
     ) in // never export destructure temps
-      "${doExport ? "export " : ""}const ${name} = ${ctx->genExpr(value)};"
+      // TS backend annotates; the JS backend leaves the binding bare.
+      "${doExport ? "export " : ""}const ${name}${Option.unwrapOr("", hook2(ctx.annotateLet, name, value))} = ${ctx->genExpr(value)};"
   | Ast.SExpr(value, _) => "${ctx->genExpr(value)};"
 }
 
@@ -1148,16 +1552,16 @@ let usesMatchLib = e => switch e {
 // A name referenced anywhere in an expression. Coarse — counts locally
 // shadowed uses too, but only ever consulted against prelude names, never
 // worth shadowing, so the over-count is harmless.
-let loopInitRefsFrom = (ctx, params, i, acc) => switch Array.get(i, params) {
+let loopInitRefsFrom = (ctx: GCtx, params, i, acc) => switch Array.get(i, params) {
   | None => acc
   | Some(p) => ctx->loopInitRefsFrom(params, i + 1, ctx->exprRefs(p.init, acc))
 }
 
-let exprRefsListFrom = (ctx, xs, i, acc) => switch Array.get(i, xs) {
+let exprRefsListFrom = (ctx: GCtx, xs, i, acc) => switch Array.get(i, xs) {
   | None => acc
   | Some(x) => ctx->exprRefsListFrom(xs, i + 1, ctx->exprRefs(x, acc))
 }
-let exprRefsInterpPartsFrom = (ctx, parts, i, acc) => switch Array.get(i, parts) {
+let exprRefsInterpPartsFrom = (ctx: GCtx, parts, i, acc) => switch Array.get(i, parts) {
   | None => acc
   | Some(p) => ctx->exprRefsInterpPartsFrom(
       parts,
@@ -1168,7 +1572,7 @@ let exprRefsInterpPartsFrom = (ctx, parts, i, acc) => switch Array.get(i, parts)
       }
     )
 }
-let exprRefsArmsFrom = (ctx, arms, i, acc) => switch Array.get(i, arms) {
+let exprRefsArmsFrom = (ctx: GCtx, arms, i, acc) => switch Array.get(i, arms) {
   | None => acc
   | Some(a) => let acc1 = switch a.guard {
       | Some(g) => ctx->exprRefs(g, acc)
@@ -1176,7 +1580,7 @@ let exprRefsArmsFrom = (ctx, arms, i, acc) => switch Array.get(i, arms) {
     } in
       ctx->exprRefsArmsFrom(arms, i + 1, ctx->exprRefs(a.body, acc1))
 }
-let exprRefsFieldsFrom = (ctx, fields, i, acc) => switch Array.get(i, fields) {
+let exprRefsFieldsFrom = (ctx: GCtx, fields, i, acc) => switch Array.get(i, fields) {
   | None => acc
   | Some(f) => ctx->exprRefsFieldsFrom(
       fields,
@@ -1184,7 +1588,7 @@ let exprRefsFieldsFrom = (ctx, fields, i, acc) => switch Array.get(i, fields) {
       ctx->exprRefs(f.value, acc)
     )
 }
-let exprRefsEntriesFrom = (ctx, entries, i, acc) => switch Array.get(i, entries) {
+let exprRefsEntriesFrom = (ctx: GCtx, entries, i, acc) => switch Array.get(i, entries) {
   | None => acc
   | Some(en) => ctx->exprRefsEntriesFrom(
       entries,
@@ -1193,7 +1597,7 @@ let exprRefsEntriesFrom = (ctx, entries, i, acc) => switch Array.get(i, entries)
     )
 }
 
-let exprRefs = (ctx, e, acc) => switch e {
+let exprRefs = (ctx: GCtx, e, acc) => switch e {
   | Ast.ENum(_, _, _) => acc
   | Ast.EUnit(_) => acc
   | Ast.EBool(_, _) => acc
@@ -1245,7 +1649,7 @@ let exprRefs = (ctx, e, acc) => switch e {
       0,
       switch spread { | Some(s) => ctx->exprRefs(s, acc) | None => acc }
     )
-  | Ast.EField(target, name, _) => switch emptyNsEmit(target, name) {
+  | Ast.EField(target, name, _) => switch emptyNsEmit(target, name, None) {
       | Some(_) => switch target {
           | Ast.ERef("List", _) => Set.add("_list", acc)
           | _ => acc
@@ -1318,13 +1722,35 @@ let boundNamesFrom = (stmts, i, acc) => switch Array.get(i, stmts) {
 }
 let boundNames = stmts => boundNamesFrom(stmts, 0, Set.fromArray([]))
 
-let refsForStmt = (ctx, s) => switch s {
+/// Names referenced in let/expr values — not patterns. `| TLet =>` does not
+/// count, so a local unused ctor factory can be dropped.
+let collectValueRefs = (ctx: GCtx, stmts, i, acc) => switch Array.get(i, stmts) {
+  | None => acc
+  | Some(s) => ctx->collectValueRefs(
+      stmts,
+      i + 1,
+      switch s {
+        | Ast.SLet(_, _, _, value, _, _, _) => ctx->exprRefs(value, acc)
+        | Ast.SExpr(value, _) => ctx->exprRefs(value, acc)
+        | _ => acc
+      }
+    )
+}
+
+let refsForStmt = (ctx: GCtx, s) => switch s {
   | Ast.SLet(_, _, _, value, _, _, _) => ctx->exprRefs(value, Set.fromArray([]))
   | Ast.SExpr(value, _) => ctx->exprRefs(value, Set.fromArray([]))
-  | Ast.SType(_, _, ctors, _, _, _, _, _) =>
+  | Ast.SType(_, _, ctors, _, _, exported, _, _) =>
     // A multi-field constructor lowers to `_curry(...)` in genType (which
-    // exprRefs never walks), so seed the dep here.
-    someOf(c => Array.length(c.fields) >= 2, ctors)
+    // exprRefs never walks), so seed the dep here — but only for factories
+    // that will actually be emitted (exported, or used as a value).
+    someOf(
+      c =>
+        Array.length(
+          c.fields
+        ) >= 2 && (exported || Set.has(c.name, ctx.valueRefs)),
+      ctors
+    )
       ? Set.add("_curry", Set.fromArray([]))
       : Set.fromArray([])
   | Ast.SExtern(_, _, _, typeExpr, _, _, _, _, _, _) =>
@@ -1334,7 +1760,7 @@ let refsForStmt = (ctx, s) => switch s {
       : Set.fromArray([])
   | _ => Set.fromArray([])
 }
-let collectRefsFrom = (ctx, stmts, i, acc) => switch Array.get(i, stmts) {
+let collectRefsFrom = (ctx: GCtx, stmts, i, acc) => switch Array.get(i, stmts) {
   | None => acc
   | Some(s) => ctx->collectRefsFrom(
       stmts,
@@ -1361,19 +1787,24 @@ let closeRefsFrom = (queue, i, refs, runtimeDeps) => switch Array.get(i, queue) 
 
 // The prelude runtime a program needs inlined: every builtin it references
 // and does not itself define, emitted in prelude declaration order for determinism.
-let preludePreamble = (ctx, stmts, jsDefs, runtimeDeps) =>
+/// The runtime helper names a program actually references, transitively closed
+/// over `runtimeDeps` and minus anything the program binds itself. The JS
+/// backend inlines their defs (`preludePreamble`); the TS backend imports them
+/// from the typed runtime instead (ADR 0026 / 0075), so both start here.
+let runtimeRefNames = (ctx: GCtx, stmts, jsDefs, runtimeDeps) =>
   let refs0 = ctx->collectRefsFrom(stmts, 0, Set.fromArray([])) in
   let refs = closeRefsFrom(Set.toArray(refs0), 0, refs0, runtimeDeps) in
   let bound = boundNames(stmts) in
-  let names = Map.keys(jsDefs) in
-  let defs = names
-    |> filter(n => Set.has(n, refs) && !Set.has(n, bound))
-    |> map(n => Map.getOr("", n, jsDefs)) in
+    Map.keys(jsDefs) |> filter(n => Set.has(n, refs) && !Set.has(n, bound))
+
+let preludePreamble = (ctx: GCtx, stmts, jsDefs, runtimeDeps) =>
+  let names = ctx->runtimeRefNames(stmts, jsDefs, runtimeDeps) in
+  let defs = names |> map(n => Map.getOr("", n, jsDefs)) in
     Array.length(defs) == 0 ? "" : "${Str.join("\n", defs)}\n\n"
 
 // ---- top-level entry --------------------------------------------------------
 
-let genStmtAllFrom = (ctx, stmts, i) => switch Array.get(i, stmts) {
+let genStmtAllFrom = (ctx: GCtx, stmts, i) => switch Array.get(i, stmts) {
   | None => []
   | Some(s) => Array.prepend(ctx->genStmt(s), ctx->genStmtAllFrom(stmts, i + 1))
 }
@@ -1382,10 +1813,29 @@ let genStmtAllFrom = (ctx, stmts, i) => switch Array.get(i, stmts) {
 /// module runs standalone. `ns`/`jsDefs`/`runtimeDeps` are the TS prelude's
 /// `namespaceRuntime`/`preludeJsDefs`/`runtimeDeps` tables, converted to
 /// mochi Maps — the same tables the TS codegen consults, not a fork of them.
-export let codegen = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps) =>
+/// Emit one program under explicit backend options. The JS backend calls
+/// `codegen` (all hooks `None`); the TS backend supplies annotation hooks and
+/// the `flattenPipe` / `tupleHelper` / `moduleExt` switches (ADR 0026 / 0090).
+export let codegenWith = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps, opts) =>
   let keys0 = ctorKeysFromStmts(stmts, imported) in
   let keys = seedBuiltinCtorKeys(stmts, keys0) in
-  let ctx = { keys: keys, ns: ns } in
+  let ctx0 = {
+    keys,
+    ns,
+    annotateLet: opts.annotateLet,
+    annotateCtor: opts.annotateCtor,
+    annotateParams: opts.annotateParams,
+    annotateEmpty: opts.annotateEmpty,
+    annotateLetin: opts.annotateLetin,
+    annotateCall: opts.annotateCall,
+    guardBaseType: opts.guardBaseType,
+    flattenPipe: opts.flattenPipe,
+    tupleHelper: opts.tupleHelper,
+    moduleExt: opts.moduleExt,
+    valueRefs: Set.fromArray([])
+  } in
+  let valueRefs = collectValueRefs(ctx0, stmts, 0, Set.fromArray([])) in
+  let ctx = { ...ctx0, valueRefs } in
   let needsMatch = someOf(
     s => switch s {
       | Ast.SLet(_, _, _, value, _, _, _) => usesMatchLib(value)
@@ -1402,3 +1852,31 @@ export let codegen = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps) =>
     : "" in
   let body = Str.join("\n", ctx->genStmtAllFrom(stmts, 0)) in
     "${header}${preamble}${body}\n"
+
+/// The runtime helpers a program references, for the TS backend's
+/// `import { … } from "@mochi/runtime"` line. Builds the same ctx `codegenWith`
+/// does, so the two agree on ctor keys and namespace ids.
+export let runtimeDepNames = (stmts, imported, ns, jsDefs, runtimeDeps) =>
+  let keys = stmts->seedBuiltinCtorKeys(ctorKeysFromStmts(stmts, imported)) in
+  let ctx0 = {
+    keys,
+    ns,
+    annotateLet: None,
+    annotateCtor: None,
+    annotateParams: None,
+    annotateEmpty: None,
+    annotateLetin: None,
+    annotateCall: None,
+    guardBaseType: None,
+    flattenPipe: false,
+    tupleHelper: false,
+    moduleExt: ".js",
+    valueRefs: Set.fromArray([])
+  } in
+  let valueRefs = collectValueRefs(ctx0, stmts, 0, Set.fromArray([])) in
+    runtimeRefNames({ ...ctx0, valueRefs }, stmts, jsDefs, runtimeDeps)
+
+/// The JS backend: no annotations, `.js` siblings — byte-identical to the
+/// output before `codegenWith` existed.
+export let codegen = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps) =>
+  stmts->codegenWith(imported, useRuntime, ns, jsDefs, runtimeDeps, jsGenOpts)

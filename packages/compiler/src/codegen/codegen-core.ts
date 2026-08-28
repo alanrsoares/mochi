@@ -114,6 +114,11 @@ export type GenCtx = {
   // compiled sibling), `""` for the TS backend (`import … from "./mod"`, which
   // tsc/bundlers resolve to the sibling `.ts`). Set per `codegen` call.
   readonly moduleExt: string;
+
+  // Names referenced in let/expr values — not patterns. A local `| TLet =>`
+  // arm only matches `_tag`, so `genType` can skip that ctor's factory unless
+  // the name appears here (`tok == TGt`) or the type stmt is exported.
+  readonly valueRefs: ReadonlySet<string>;
 };
 
 /** `Set.empty` / `Map.empty` / `List.empty` lower to the same runtime as `#{}` / `@{}` (ADR 0080). */

@@ -61,7 +61,7 @@ export let offline = Task.run(describe(0))
 let nameOf = id =>
   fetchUser(id) |> Task.mapErr(classify(id)) |> Task.map(u => u.name)
 
-let roster = ids => Task.traverse(nameOf, ids)
+let roster = Task.traverse(nameOf)
 
 export let everyone = Task.run(roster([1, 1]))
 

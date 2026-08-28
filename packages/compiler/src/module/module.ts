@@ -9,7 +9,7 @@ import { err, isErr, ok, type Result, ResultAsync } from "@onrails/result";
 import type { Program, Stmt } from "../ast/ast";
 import { exportedCtorKeys, exportedCtorTable } from "../ast/ctors";
 import type { Span } from "../ast/span";
-import { qualifierMap } from "../ast/types";
+import { type AliasDef, qualifierMap } from "../ast/types";
 import type { Registry } from "../check/check";
 import { codegen } from "../codegen/codegen";
 import { DEFAULT_RUNTIME_IMPORT, emitTsModule } from "../codegen/codegen-ts";
@@ -367,6 +367,16 @@ const compileGraphTs = (
   for (const { path, prog } of graph)
     for (const s of prog.stmts) if (s.kind === "type") typeOwner.set(s.name, path);
 
+  // Alias fold templates seen so far, in graph order. `graph` is deps-first, so
+  // by the time a module emits, every alias it can reference is here. A dep's
+  // alias has to fold or a `Span` crossing a module edge re-prints its row at
+  // every use (ADR 0092); `import type` needs no new plumbing, since
+  // `crossModuleTypeImports` reads the names out of the emitted text.
+  //
+  // EMISSION only. Inference keeps its own local-alias list, so a diagnostic
+  // still names types the way the module reporting it can see them.
+  const depAliasDefs: AliasDef[] = [];
+
   // Extern modules referenced across the graph → one `.d.ts` each.
   const externDts = new Map<string, ExternBinding[]>();
 
@@ -401,10 +411,14 @@ const compileGraphTs = (
     const localTypes = new Set(
       prog.stmts.filter((s) => s.kind === "type").map((s) => (s as { name: string }).name),
     );
+    // Local aliases first: a name declared here wins over a same-named dep one,
+    // since `foldAliases` takes the first match.
+    const emitAliases = [...aliases, ...depAliasDefs];
+    depAliasDefs.push(...aliases);
     // Emit body first, then prepend `import type` for every non-local type name referenced.
     const body = emitTsModule(prog, {
       env,
-      aliases,
+      aliases: emitAliases,
       types,
       letParams,
       importedKeys,

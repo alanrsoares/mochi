@@ -1,0 +1,108 @@
+import { assertEq, test } from "@mochi/test"
+import {
+  RowEmpty,
+  rExtend,
+  rVar,
+  tArrow,
+  tCon,
+  tPrim,
+  tRecord,
+  tVar
+} from "./types.mochi"
+import {
+  genericNames,
+  plainEnv,
+  recsEnv,
+  rowShapeKey,
+  tsEnv,
+  tsOf
+} from "./ts-types.mochi"
+
+test("TS types render primitives, arrows, and tuples", () => {
+  assertEq("number", tsOf(tPrim("number"), tsEnv(#{}, #{})));
+  assertEq(
+    "(a: number, b: string) => boolean",
+    tsOf(
+      tArrow(tPrim("number"), tArrow(tPrim("string"), tPrim("bool"))),
+      tsEnv(#{}, #{})
+    )
+  );
+  assertEq(
+    "[number, string]",
+    tsOf(tCon("tuple", [tPrim("number"), tPrim("string")]), tsEnv(#{}, #{}))
+  )
+})
+
+test("TS types preserve a named open row", () =>
+  let names = genericNames({ vars: [], rvars: [7], ty: tRecord(rVar(7)) }) in
+    assertEq(
+      "({ x: number } & A)",
+      tsOf(tRecord(rExtend("x", tPrim("number"), rVar(7))), tsEnv(names, #{}))
+    ))
+
+test("TS types use generic names for type variables", () =>
+  assertEq(
+    "A[]",
+    tsOf(
+      tCon("Array", [tVar(3)]),
+      tsEnv(genericNames({ vars: [3], rvars: [], ty: tVar(3) }), #{})
+    )
+  ))
+
+// ---- record alias index (ADR 0092) -----------------------------------------
+
+let span = rExtend(
+  "start",
+  tPrim("number"),
+  rExtend("end", tPrim("number"), RowEmpty)
+)
+
+let spanIdx = #{ "end: number; start: number": "Span" }
+
+test("a closed row matching the index renders as the declared alias", () =>
+  assertEq("Span", tsOf(tRecord(span), tsEnv(#{}, spanIdx))))
+
+test("the index key is field-order independent", () =>
+  // `unify` extends a row in whatever order it met the fields, so the SAME
+  // record type reaches `tsOf` under either spelling and both must fold.
+  assertEq(
+    "Span",
+    tsOf(
+      tRecord(
+        rExtend(
+          "end",
+          tPrim("number"),
+          rExtend("start", tPrim("number"), RowEmpty)
+        )
+      ),
+      tsEnv(#{}, spanIdx)
+    )
+  ))
+
+test("an OPEN row keeps its structure", () =>
+  // `{ start; end } & A` is a row the alias only prefixes, not the alias.
+  let names = genericNames({ vars: [], rvars: [7], ty: tRecord(rVar(7)) }) in
+    assertEq(
+      "({ start: number; end: number } & A)",
+      tsOf(
+        tRecord(
+          rExtend(
+            "start",
+            tPrim("number"),
+            rExtend("end", tPrim("number"), rVar(7))
+          )
+        ),
+        tsEnv(names, spanIdx)
+      )
+    ))
+
+test("an empty index leaves every row structural", () =>
+  assertEq(
+    "{ start: number; end: number }",
+    tsOf(tRecord(span), tsEnv(#{}, #{}))
+  ))
+
+test("rowShapeKey sorts fields and declines an open row", () => {
+  assertEq(Some("end: number; start: number"), rowShapeKey(span, #{}));
+  assertEq(None, rowShapeKey(rExtend("start", tPrim("number"), rVar(7)), #{}))
+})

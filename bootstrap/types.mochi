@@ -202,18 +202,71 @@ let someOf = (f, xs) => someOfFrom(f, xs, 0)
 /// returns a NEW St rather than mutating in place. Type vars and row vars
 /// draw from the same `next` counter so ids never collide across the two
 /// maps (mirrors types.ts's original Fresh).
-export type St = { tv: Map<number, Ty>, rv: Map<number, Row>, next: number }
+/// Inferred type at a source span. Structural on purpose: types.mochi stays
+/// AST-free (gen-prelude compiles it standalone), so ast.mochi's `Span` fits
+/// this shape rather than being imported.
+export type SpanAt = { start: number, end: number }
+
+export type TypeAt = { span: SpanAt, ty: Ty }
+
+/// `recorded` accumulates one entry per inferred Expr/Pattern node, newest
+/// first (prepend is O(1)); `inferProgramImports` reverses it once so later
+/// records win when two nodes share a span, matching src/infer.ts.
+///
+/// `letSpans` / `letUses` are the ADR 0035 side-channel: every `let`'s VALUE
+/// span, plus each type its body instantiated that binding at. src/infer.ts
+/// keys both on the `Scheme` OBJECT (a JS `Map` over identities); Mochi has no
+/// reference identity, so the key is the value span's `"start:end"` instead —
+/// unique per binding by construction, and the same string the TS backend's
+/// `spanKey` builds when it looks the annotation back up.
+export type St = {
+  tv: Map<number, Ty>,
+  rv: Map<number, Row>,
+  next: number,
+  recorded: [TypeAt],
+  letSpans: Map<string, SpanAt>,
+  letUses: Map<string, [Ty]>
+}
 export type TypeErr = { message: string }
 
-export let mkSt = start => { tv: #{}, rv: #{}, next: start }
-export let fail = message => Err({ message: message })
+export let mkSt : number -> St = start =>
+  { tv: #{}, rv: #{}, next: start, recorded: [], letSpans: #{}, letUses: #{} }
+
+/// Prepend an inferred node type onto the threaded record log.
+export let recordAt = (span, t, st: St) =>
+  { ...st, recorded: Array.prepend({ span, ty: t }, st.recorded) }
+
+let spanKeyOf = sp => "${show(sp.start)}:${show(sp.end)}"
+
+/// Register a `let`'s value span as an ADR 0035 annotation candidate. Resets its
+/// use list, mirroring src/infer.ts's `noteLet` (a re-noted scheme starts over).
+export let noteLet = (span, st: St) =>
+  let k = spanKeyOf(span) in
+    {
+      ...st,
+      letSpans: Map.set(k, span, st.letSpans),
+      letUses: Map.set(k, [], st.letUses)
+    }
+
+/// Record one instantiation of a noted `let`. A span that was never noted (a
+/// builtin, an import, a lambda param) is not a candidate and is dropped.
+export let noteUse = (span, t, st: St) =>
+  let k = spanKeyOf(span) in
+    switch Map.get(k, st.letUses) {
+      | None => st
+      | Some(uses) => {
+          ...st,
+          letUses: Map.set(k, Array.append(t, uses), st.letUses)
+        }
+    }
+export let fail = message => Err({ message })
 
 export let freshVar = st => (tVar(st.next), { ...st, next: st.next + 1 })
 export let freshRowVar = st => (rVar(st.next), { ...st, next: st.next + 1 })
 
 // ---- resolution: follow a variable chain one level to a head ----
 
-export let resolve = (t, st) => switch t {
+export let resolve = (t, st: St) => switch t {
   | TyVar(id) => switch Map.get(id, st.tv) {
       | Some(next) => resolve(next, st)
       | None => t
@@ -221,7 +274,7 @@ export let resolve = (t, st) => switch t {
   | _ => t
 }
 
-let resolveRow = (r, st) => switch r {
+let resolveRow = (r, st: St) => switch r {
   | RowVar(id) => switch Map.get(id, st.rv) {
       | Some(next) => resolveRow(next, st)
       | None => r
@@ -230,7 +283,7 @@ let resolveRow = (r, st) => switch r {
 }
 
 /// Fully apply the substitution ("zonk") — for display and assertions.
-export let zonk = (t, st) => switch resolve(t, st) {
+export let zonk = (t, st: St) => switch resolve(t, st) {
   | TyVar(id) => tVar(id)
   | TyCon(name, args) => tCon(name, args |> map(a => zonk(a, st)))
   | TyFn(from, to) => tArrow(zonk(from, st), zonk(to, st))
@@ -239,7 +292,7 @@ export let zonk = (t, st) => switch resolve(t, st) {
   | TyOneOf(members) => tUnion(members |> map(m => zonk(m, st)))
 }
 
-let zonkRow = (row, st) => switch resolveRow(row, st) {
+let zonkRow = (row, st: St) => switch resolveRow(row, st) {
   | RowExtend(label, fieldType, rest) => rExtend(
       label,
       zonk(fieldType, st),
@@ -250,7 +303,7 @@ let zonkRow = (row, st) => switch resolveRow(row, st) {
 
 // ---- occurs checks ----
 
-export let occurs = (id, t, st) => switch resolve(t, st) {
+export let occurs = (id, t, st: St) => switch resolve(t, st) {
   | TyVar(rid) => rid == id
   | TyCon(_, args) => someOf(a => occurs(id, a, st), args)
   | TyFn(from, to) => occurs(id, from, st) || occurs(id, to, st)
@@ -259,7 +312,7 @@ export let occurs = (id, t, st) => switch resolve(t, st) {
   | TyOneOf(members) => someOf(m => occurs(id, m, st), members)
 }
 
-let occursRow = (id, row, st) => switch resolveRow(row, st) {
+let occursRow = (id, row, st: St) => switch resolveRow(row, st) {
   | RowExtend(_, fieldType, rest) => occurs(
       id,
       fieldType,
@@ -268,7 +321,7 @@ let occursRow = (id, row, st) => switch resolveRow(row, st) {
   | _ => false
 }
 
-export let rowVarOccurs = (id, row, st) => switch resolveRow(row, st) {
+export let rowVarOccurs = (id, row, st: St) => switch resolveRow(row, st) {
   | RowVar(rid) => rid == id
   | RowExtend(_, fieldType, rest) => rowVarOccursInType(
       id,
@@ -278,7 +331,7 @@ export let rowVarOccurs = (id, row, st) => switch resolveRow(row, st) {
   | RowEmpty => false
 }
 
-let rowVarOccursInType = (id, t, st) => switch resolve(t, st) {
+let rowVarOccursInType = (id, t, st: St) => switch resolve(t, st) {
   | TyVar(_) => false
   | TyCon(_, args) => someOf(a => rowVarOccursInType(id, a, st), args)
   | TyFn(from, to) => rowVarOccursInType(
@@ -338,7 +391,7 @@ let unifyMismatch = (ra, rb) =>
       tupleParenMsg(ra, rb, "cannot unify ${showType(ra)} with ${showType(rb)}")
     )
 
-let unifyArgs = (as_, bs, i, st) => switch Array.get(i, as_) {
+let unifyArgs = (as_, bs, i, st: St) => switch Array.get(i, as_) {
   | None => Ok(st)
   | Some(a) => switch Array.get(i, bs) {
       | None => Ok(st)
@@ -358,7 +411,7 @@ let isLitOnlyUnion = members => switch members {
   | _ => false
 }
 
-let widenLitBindingsFrom = (ids, lit, st) => switch ids {
+let widenLitBindingsFrom = (ids, lit, st: St) => switch ids {
   | [] => st
   | [id, ...rest] => switch Map.get(id, st.tv) {
       | Some(t) => switch resolve(t, st) {
@@ -378,10 +431,10 @@ let widenLitBindingsFrom = (ids, lit, st) => switch ids {
     }
 }
 
-let widenLitBindings = (lit, st) =>
+let widenLitBindings = (lit, st: St) =>
   widenLitBindingsFrom(Map.keys(st.tv), lit, st)
 
-let litInUnionFrom = (lit, members, i, st) => switch Array.get(i, members) {
+let litInUnionFrom = (lit, members, i, st: St) => switch Array.get(i, members) {
   | None => fail(
       "cannot unify ${showType(lit)} with ${showType(TyOneOf(members))}"
     )
@@ -399,13 +452,13 @@ let litInUnionFrom = (lit, members, i, st) => switch Array.get(i, members) {
     }
 }
 
-let unifyMemberAgainstUnionFrom = (member, members, i, st) => switch member {
+let unifyMemberAgainstUnionFrom = (member, members, i, st: St) => switch member {
   | TySingleton(_, _) => litInUnionFrom(member, members, 0, st)
   | _ => unifyConcreteAgainstUnionFrom(member, members, i, st)
 }
 
 /// Split so `fail` sits beside `Ok` in one match (tsc-clean Result, ADR 0026).
-let unifyConcreteAgainstUnionFrom = (member, members, i, st) => switch Array.get(i, members) {
+let unifyConcreteAgainstUnionFrom = (member, members, i, st: St) => switch Array.get(i, members) {
   | None => fail(
       "cannot unify ${showType(member)} with ${showType(TyOneOf(members))}"
     )
@@ -415,7 +468,7 @@ let unifyConcreteAgainstUnionFrom = (member, members, i, st) => switch Array.get
     }
 }
 
-let unifyUnionMembersFrom = (members, u, i, st) => switch Array.get(i, members) {
+let unifyUnionMembersFrom = (members, u, i, st: St) => switch Array.get(i, members) {
   | None => Ok(st)
   | Some(m) => switch u {
       | TyOneOf(ums) => unifyMemberAgainstUnionFrom(m, ums, 0, st)
@@ -424,7 +477,7 @@ let unifyUnionMembersFrom = (members, u, i, st) => switch Array.get(i, members) 
     }
 }
 
-let unifyLitUnion = (a, b, st) => switch a {
+let unifyLitUnion = (a, b, st: St) => switch a {
   | TySingleton(abase, aval) => switch b {
       | TySingleton(bbase, bval) => abase == bbase && aval == bval
           ? Ok(st)
@@ -455,7 +508,7 @@ let unifyLitUnion = (a, b, st) => switch a {
     }
 }
 
-export let unify = (a, b, st) =>
+export let unify = (a, b, st: St) =>
   let ra = resolve(a, st) in
   let rb = resolve(b, st) in
     switch ra {
@@ -509,7 +562,7 @@ export let unify = (a, b, st) =>
         }
     }
 
-let bindVar = (id, t, st) =>
+let bindVar = (id, t, st: St) =>
   occurs(id, t, st)
     ? fail("infinite type: 't${show(id)} occurs in ${showType(zonk(t, st))}")
     : Ok({ ...st, tv: Map.set(id, t, st.tv) })
@@ -519,7 +572,7 @@ let bindVar = (id, t, st) =>
 /// Bring `label` to the head of a row, extending an open tail if needed.
 /// Returns the field's type, the row remaining after removing it, and the
 /// (possibly grown) state.
-let rewriteRow = (row, label, st) => switch resolveRow(row, st) {
+let rewriteRow = (row, label, st: St) => switch resolveRow(row, st) {
   | RowEmpty => fail("record missing field '${label}'")
   | RowExtend(rlabel, rtype, rrest) => rlabel == label
       ? Ok((rtype, rrest, st))
@@ -536,7 +589,7 @@ let rewriteRow = (row, label, st) => switch resolveRow(row, st) {
 }
 
 /// both rows extend: pull a's label out of b, unify the field types, recurse
-export let unifyRows = (r1, r2, st) =>
+export let unifyRows = (r1, r2, st: St) =>
   let a = resolveRow(r1, st) in
   let b = resolveRow(r2, st) in
     switch a {
@@ -556,9 +609,9 @@ export let unifyRows = (r1, r2, st) =>
         }
     }
 
-let bindRowVar = (id, row, st) => switch resolveRow(row, st) {
+let bindRowVar = (id, row, st: St) => switch resolveRow(row, st) {
   | RowVar(rid) when rid == id => Ok(st)
   | r => rowVarOccurs(id, r, st)
       ? fail("infinite record type")
-      : Ok({ tv: st.tv, rv: Map.set(id, r, st.rv), next: st.next })
+      : Ok({ ...st, rv: Map.set(id, r, st.rv) })
 }

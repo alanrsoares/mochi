@@ -62,20 +62,52 @@ test("lambda piped and immediately applied", () => {
 // ---- variants + pattern matching ----
 
 test("variant decl → constructor factories (plain JS, no type annotations)", () => {
-  expect(js("type Shape = | Circle(float) | Rect(float, float)")).toBe(
+  expect(
+    js("type Shape = | Circle(float) | Rect(float, float)\nlet c = Circle\nlet r = Rect"),
+  ).toBe(
     [
       `const Circle = (_0) => ({ _tag: "Circle", _0 });`,
       // Multi-field ctors curry too, so partial application works (§4.4).
       `const Rect = _curry(2, (_0, _1) => ({ _tag: "Rect", _0, _1 }));`,
+      `const c = Circle;`,
+      `const r = Rect;`,
       "",
     ].join("\n"),
   );
 });
 
+test("type-only local variant emits no runtime factories", () => {
+  expect(js("type Color = | Red | Green")).toBe("\n");
+});
+
 test("nullary constructor → value, not function", () => {
-  expect(js("type Color = | Red | Green")).toBe(
-    [`const Red = { _tag: "Red" };`, `const Green = { _tag: "Green" };`, ""].join("\n"),
+  expect(js("type Color = | Red | Green\nlet r = Red")).toBe(
+    [`const Red = { _tag: "Red" };`, `const r = Red;`, ""].join("\n"),
   );
+});
+
+test("pattern-only local ctors omit factories", () => {
+  const out = js(
+    "type Color = | Red | Green\nlet name = c => switch c { | Red => 0 | Green => 1 }",
+  );
+  expect(out).not.toContain("const Red");
+  expect(out).not.toContain("const Green");
+  expect(out).toContain(`.with({ _tag: "Red" }`);
+});
+
+test("exported variant keeps unused ctor factories", () => {
+  expect(js("export type Color = | Red | Green")).toBe(
+    [`export const Red = { _tag: "Red" };`, `export const Green = { _tag: "Green" };`, ""].join(
+      "\n",
+    ),
+  );
+});
+
+test("unused payload ctors do not seed _curry", () => {
+  const out = js("type Shape = | Circle(float) | Rect(float, float)\nlet c = Circle");
+  expect(out).toContain("const Circle");
+  expect(out).not.toContain("const Rect");
+  expect(out).not.toContain("_curry");
 });
 
 test("exhaustive switch → @onrails/pattern .exhaustive()", () => {
