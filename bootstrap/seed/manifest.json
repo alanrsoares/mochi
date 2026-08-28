@@ -1,5 +1,5 @@
 {
-  "sourceRevision": "2e45bafce37fff55b14b87479c6523b2a43c6bf0",
+  "sourceRevision": "cca58ab610e813babdc66c60c69063f2ceea2e5a",
   "files": {
     "ast.ts": "33fd16c2f4603e3d625b1de9833892284b2e89badb4021b2bce126ac09b5b6f7",
     "check.ts": "3d81e528887e6f29ee296ea80bb41e1dc6295aa4dcfacbd6d9021561daa671cd",
@@ -11,7 +11,7 @@
     "extensions.ts": "8a8c85deae4443f73584f735a32f02e106df2249df35b60fa4d36b5cf3380ff7",
     "host.d.mts": "d29bd19de680c7937528fe2e47d15b5c4884850deb0f607c7aa3d3150518c4fe",
     "host.mjs": "fbc28c671826039700205ecbe789289e313fb3f1bd87bb2e9131b4e5f91da3ad",
-    "infer.ts": "8fc134a5a64889291e495ec0693a9efc19149e21ec15aaea074f3b5a6fdf62af",
+    "infer.ts": "5f0c6150099afd9cd25e4e165227a3b7888e23ff6b739502dcf85ea82467d365",
     "lexer.ts": "c5aebaf3c4e0ea1b3b0a81443d48910d6be860acf83b0bd7d27e907d98285bdc",
     "module.ts": "6f83fe7f32693df7bb4cfcbabc6c021e5b3018f0cd7b6a5fd07273b12654d41f",
     "parser.ts": "d44247d60c2aefc1502cf6aa965409ef57db0cc14da9f98cb0fab7041437ee46",

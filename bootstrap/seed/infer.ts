@@ -50,6 +50,7 @@ import {
   _Map_delete,
   _Map_keys,
   _Map_get,
+  _Option_map,
   _Result_map,
   _Result_flatMap,
   _Array_head,
@@ -8802,14 +8803,101 @@ const seedImportsFrom: <A, B>(keys: A[], imports: Map<A, B>, env: Map<A, B>) => 
         throw new Error("non-exhaustive match");
       }),
 );
-const qualAliasSeedFrom: <A>(
+const qualifyTe: <A>(te: TypeExpr, alias: string, from: Map<string, A>) => TypeExpr = _curry(
+  3,
+  <A>(te: TypeExpr, alias: string, from: Map<string, A>) =>
+    match(te)
+      .with({ _tag: "TyName" }, ({ name, span: sp }) =>
+        _Map_has(name, from) ? Ast.TyQual(alias, name, sp, [] as TypeExpr[], sp) : te,
+      )
+      .with({ _tag: "TyApp" }, ({ ctor, args, span: sp }) =>
+        ((args1: TypeExpr[]) =>
+          _Map_has(ctor, from)
+            ? Ast.TyQual(alias, ctor, sp, args1, sp)
+            : Ast.TyApp(ctor, args1, sp))(map((a: TypeExpr) => qualifyTe(a, alias, from), args)),
+      )
+      .with({ _tag: "TyArrow" }, ({ from: fromTe, to: toTe, span: sp }) =>
+        Ast.TyArrow(qualifyTe(fromTe, alias, from), qualifyTe(toTe, alias, from), sp),
+      )
+      .with({ _tag: "TyTuple" }, ({ elems, span: sp }) =>
+        Ast.TyTuple(
+          map((e: TypeExpr) => qualifyTe(e, alias, from), elems),
+          sp,
+        ),
+      )
+      .with({ _tag: "TyList" }, ({ elem, span: sp }) =>
+        Ast.TyList(qualifyTe(elem, alias, from), sp),
+      )
+      .with({ _tag: "TyUnion" }, ({ members, span: sp }) =>
+        Ast.TyUnion(
+          map((m: TypeExpr) => qualifyTe(m, alias, from), members),
+          sp,
+        ),
+      )
+      .otherwise(() => te),
+);
+const qualifyField: <A, B, C>(
+  fld: { fieldType: TypeExpr; name: A } & C,
+  alias: string,
+  from: Map<string, B>,
+) => { name: A; fieldType: TypeExpr } = _curry(
+  3,
+  <A, B, C>(fld: { fieldType: TypeExpr; name: A } & C, alias: string, from: Map<string, B>) => ({
+    name: fld.name,
+    fieldType: qualifyTe(fld.fieldType, alias, from),
+  }),
+);
+const qualifyInfo: <A, B, C, D, E>(
+  info: { expr: Option<TypeExpr>; fields: ({ fieldType: TypeExpr; name: A } & D)[]; params: B } & E,
+  alias: string,
+  from: Map<string, C>,
+) => { params: B; fields: { name: A; fieldType: TypeExpr }[]; expr: Option<TypeExpr> } = _curry(
+  3,
+  <A, B, C, D, E>(
+    info: {
+      expr: Option<TypeExpr>;
+      fields: ({ fieldType: TypeExpr; name: A } & D)[];
+      params: B;
+    } & E,
+    alias: string,
+    from: Map<string, C>,
+  ) => ({
+    params: info.params,
+    fields: map(
+      (f: { fieldType: TypeExpr; name: A } & D) => qualifyField(f, alias, from),
+      info.fields,
+    ),
+    expr: _Option_map((te: TypeExpr) => qualifyTe(te, alias, from), info.expr),
+  }),
+);
+const qualAliasSeedFrom: <A, B, C, D>(
   names: string[],
   alias: string,
-  from: Map<string, A>,
-  acc: Map<string, A>,
-) => Map<string, A> = _curry(
+  from: Map<
+    string,
+    { expr: Option<TypeExpr>; fields: ({ fieldType: TypeExpr; name: A } & C)[]; params: B } & D
+  >,
+  acc: Map<
+    string,
+    { params: B; fields: { name: A; fieldType: TypeExpr }[]; expr: Option<TypeExpr> }
+  >,
+) => Map<
+  string,
+  { params: B; fields: { name: A; fieldType: TypeExpr }[]; expr: Option<TypeExpr> }
+> = _curry(
   4,
-  <A>(names: string[], alias: string, from: Map<string, A>, acc: Map<string, A>) =>
+  <A, B, C, D>(
+    names: string[],
+    alias: string,
+    from: Map<
+      string,
+      { expr: Option<TypeExpr>; fields: ({ fieldType: TypeExpr; name: A } & C)[]; params: B } & D
+    >,
+    acc: Map<
+      string,
+      { params: B; fields: { name: A; fieldType: TypeExpr }[]; expr: Option<TypeExpr> }
+    >,
+  ) =>
     match(names)
       .with(
         (_v) => {
@@ -8829,7 +8917,9 @@ const qualAliasSeedFrom: <A>(
             alias,
             from,
             match(_Map_get(n, from))
-              .with({ _tag: "Some" }, ({ value: info }) => _Map_set(`${alias}.${n}`, info, acc))
+              .with({ _tag: "Some" }, ({ value: info }) =>
+                _Map_set(`${alias}.${n}`, qualifyInfo(info, alias, from), acc),
+              )
               .with({ _tag: "None" }, () => acc)
               .exhaustive(),
           ),
@@ -8838,13 +8928,46 @@ const qualAliasSeedFrom: <A>(
         throw new Error("non-exhaustive match");
       }),
 );
-const qualAliasSeed: <A, B>(
+const qualAliasSeed: <A, B, C, D, E>(
   stmts: Stmt[],
-  quals: Map<string, { aliases: Map<string, A> } & B>,
-  acc: Map<string, A>,
-) => Map<string, A> = _curry(
+  quals: Map<
+    string,
+    {
+      aliases: Map<
+        string,
+        { expr: Option<TypeExpr>; fields: ({ fieldType: TypeExpr; name: A } & C)[]; params: B } & D
+      >;
+    } & E
+  >,
+  acc: Map<
+    string,
+    { params: B; fields: { name: A; fieldType: TypeExpr }[]; expr: Option<TypeExpr> }
+  >,
+) => Map<
+  string,
+  { params: B; fields: { name: A; fieldType: TypeExpr }[]; expr: Option<TypeExpr> }
+> = _curry(
   3,
-  <A, B>(stmts: Stmt[], quals: Map<string, { aliases: Map<string, A> } & B>, acc: Map<string, A>) =>
+  <A, B, C, D, E>(
+    stmts: Stmt[],
+    quals: Map<
+      string,
+      {
+        aliases: Map<
+          string,
+          {
+            expr: Option<TypeExpr>;
+            fields: ({ fieldType: TypeExpr; name: A } & C)[];
+            params: B;
+          } & D
+        >;
+      } & E
+    >,
+    acc: Map<
+      string,
+      { params: B; fields: { name: A; fieldType: TypeExpr }[]; expr: Option<TypeExpr> }
+    >,
+  ) =>
     match(stmts)
       .with(
         (_v) => {
@@ -8964,14 +9087,26 @@ const resolveLetParams: <A, B, C>(
 ) => { span: B; ty: Ty }[] = <A, B, C>(
   st: { letSpans: Map<A, B>; tv: Map<number, Ty>; rv: Map<number, Row>; letUses: Map<A, Ty[]> } & C,
 ) => resolveLetParamsFrom(_Map_keys(st.letSpans), st);
-const runInferImports: <A, B>(
+const runInferImports: <A, B, C, D>(
   stmts: Stmt[],
   builtins: Map<string, Ty>,
   namespaces: Map<string, Map<string, Ty>>,
   openMode: boolean,
   imports: Map<string, Scheme>,
   nsImports: Map<string, Map<string, Scheme>>,
-  quals: Map<string, { aliases: Map<string, QualAliasInfo> } & B>,
+  quals: Map<
+    string,
+    {
+      aliases: Map<
+        string,
+        {
+          expr: Option<TypeExpr>;
+          fields: ({ fieldType: TypeExpr; name: string } & B)[];
+          params: string[];
+        } & C
+      >;
+    } & D
+  >,
   pluginsOpt: Option<
     {
       name: string;
@@ -9009,14 +9144,26 @@ const runInferImports: <A, B>(
   IErr
 > = _curry(
   8,
-  <A, B>(
+  <A, B, C, D>(
     stmts: Stmt[],
     builtins: Map<string, Ty>,
     namespaces: Map<string, Map<string, Ty>>,
     openMode: boolean,
     imports: Map<string, Scheme>,
     nsImports: Map<string, Map<string, Scheme>>,
-    quals: Map<string, { aliases: Map<string, QualAliasInfo> } & B>,
+    quals: Map<
+      string,
+      {
+        aliases: Map<
+          string,
+          {
+            expr: Option<TypeExpr>;
+            fields: ({ fieldType: TypeExpr; name: string } & B)[];
+            params: string[];
+          } & C
+        >;
+      } & D
+    >,
     pluginsOpt: Option<
       {
         name: string;
@@ -9135,14 +9282,26 @@ const runInferImports: <A, B>(
       ))(registerUserCtorsFrom(stmts, aliasMap, env0, st0));
   },
 );
-export const inferProgramImports: <A, B>(
+export const inferProgramImports: <A, B, C, D>(
   stmts: Stmt[],
   builtins: Map<string, Ty>,
   namespaces: Map<string, Map<string, Ty>>,
   openMode: boolean,
   imports: Map<string, Scheme>,
   nsImports: Map<string, Map<string, Scheme>>,
-  quals: Map<string, { aliases: Map<string, QualAliasInfo> } & B>,
+  quals: Map<
+    string,
+    {
+      aliases: Map<
+        string,
+        {
+          expr: Option<TypeExpr>;
+          fields: ({ fieldType: TypeExpr; name: string } & B)[];
+          params: string[];
+        } & C
+      >;
+    } & D
+  >,
   pluginsOpt: Option<
     {
       name: string;
@@ -9172,14 +9331,26 @@ export const inferProgramImports: <A, B>(
   >,
 ) => Result<Map<string, Scheme>, IErr> = _curry(
   8,
-  <A, B>(
+  <A, B, C, D>(
     stmts: Stmt[],
     builtins: Map<string, Ty>,
     namespaces: Map<string, Map<string, Ty>>,
     openMode: boolean,
     imports: Map<string, Scheme>,
     nsImports: Map<string, Map<string, Scheme>>,
-    quals: Map<string, { aliases: Map<string, QualAliasInfo> } & B>,
+    quals: Map<
+      string,
+      {
+        aliases: Map<
+          string,
+          {
+            expr: Option<TypeExpr>;
+            fields: ({ fieldType: TypeExpr; name: string } & B)[];
+            params: string[];
+          } & C
+        >;
+      } & D
+    >,
     pluginsOpt: Option<
       {
         name: string;
@@ -9292,14 +9463,26 @@ export const inferProgram: {
       None,
     ),
 );
-export const inferProgramImportsTypes: <A, B>(
+export const inferProgramImportsTypes: <A, B, C, D>(
   stmts: Stmt[],
   builtins: Map<string, Ty>,
   namespaces: Map<string, Map<string, Ty>>,
   openMode: boolean,
   imports: Map<string, Scheme>,
   nsImports: Map<string, Map<string, Scheme>>,
-  quals: Map<string, { aliases: Map<string, QualAliasInfo> } & B>,
+  quals: Map<
+    string,
+    {
+      aliases: Map<
+        string,
+        {
+          expr: Option<TypeExpr>;
+          fields: ({ fieldType: TypeExpr; name: string } & B)[];
+          params: string[];
+        } & C
+      >;
+    } & D
+  >,
   pluginsOpt: Option<
     {
       name: string;
@@ -9337,14 +9520,26 @@ export const inferProgramImportsTypes: <A, B>(
   IErr
 > = _curry(
   8,
-  <A, B>(
+  <A, B, C, D>(
     stmts: Stmt[],
     builtins: Map<string, Ty>,
     namespaces: Map<string, Map<string, Ty>>,
     openMode: boolean,
     imports: Map<string, Scheme>,
     nsImports: Map<string, Map<string, Scheme>>,
-    quals: Map<string, { aliases: Map<string, QualAliasInfo> } & B>,
+    quals: Map<
+      string,
+      {
+        aliases: Map<
+          string,
+          {
+            expr: Option<TypeExpr>;
+            fields: ({ fieldType: TypeExpr; name: string } & B)[];
+            params: string[];
+          } & C
+        >;
+      } & D
+    >,
     pluginsOpt: Option<
       {
         name: string;

@@ -1455,6 +1455,56 @@ let seedImportsFrom = (keys, imports, env) => switch keys {
 // dep-type-scope map the module driver threads in; an alias absent from it (plain
 // single-file infer) simply contributes nothing, and its qualified names then
 // lower nominally. schemes.mochi's `TyQual` arm reads these keys.
+/// Re-point a dep alias's OWN type references at the dep. A field written in
+/// the dep names a sibling alias BARE (`letSpans: Map<string, SpanAt>`), but the
+/// seeded table lives in the IMPORTER, where that bare name means nothing — so
+/// `SpanAt` would lower nominally and then refuse to unify with the row it
+/// stands for. src/schemes.ts has no such problem: it expands an alias in the
+/// DECLARING module's scope (`TypeScope`), where the sibling is in plain sight.
+/// Qualifying the reference at seed time is that same resolution, done once and
+/// carried in the TypeExpr, so nothing downstream needs a scope threaded
+/// through it.
+///
+/// Only names the dep declares as ALIASES move: a variant crosses under its
+/// bare name already, and a type PARAM is lowercase and never an alias key.
+let qualifyTe = (te, alias, from) => switch te {
+  | Ast.TyName(name, sp) => Map.has(name, from)
+      ? Ast.TyQual(alias, name, sp, [], sp)
+      : te
+  | Ast.TyApp(ctor, args, sp) => let args1 = args
+      |> map(a => qualifyTe(a, alias, from)) in
+      Map.has(ctor, from)
+        ? Ast.TyQual(alias, ctor, sp, args1, sp)
+        : Ast.TyApp(ctor, args1, sp)
+  | Ast.TyArrow(fromTe, toTe, sp) => Ast.TyArrow(
+      qualifyTe(fromTe, alias, from),
+      qualifyTe(toTe, alias, from),
+      sp
+    )
+  | Ast.TyTuple(elems, sp) => Ast.TyTuple(
+      elems |> map(e => qualifyTe(e, alias, from)),
+      sp
+    )
+  | Ast.TyList(elem, sp) => Ast.TyList(qualifyTe(elem, alias, from), sp)
+  | Ast.TyUnion(members, sp) => Ast.TyUnion(
+      members |> map(m => qualifyTe(m, alias, from)),
+      sp
+    )
+  | _ =>
+    // Already qualified, or nothing to resolve.
+    te
+}
+
+let qualifyField = (fld, alias, from) =>
+  { name: fld.name, fieldType: qualifyTe(fld.fieldType, alias, from) }
+
+let qualifyInfo = (info, alias, from) =>
+  {
+    params: info.params,
+    fields: info.fields |> map(f => qualifyField(f, alias, from)),
+    expr: info.expr |> Option.map(te => qualifyTe(te, alias, from))
+  }
+
 let qualAliasSeedFrom = (names, alias, from, acc) => switch names {
   | [] => acc
   | [n, ...rest] => qualAliasSeedFrom(
@@ -1462,7 +1512,11 @@ let qualAliasSeedFrom = (names, alias, from, acc) => switch names {
       alias,
       from,
       switch Map.get(n, from) {
-        | Some(info) => Map.set("${alias}.${n}", info, acc)
+        | Some(info) => Map.set(
+            "${alias}.${n}",
+            qualifyInfo(info, alias, from),
+            acc
+          )
         | None => acc
       }
     )
