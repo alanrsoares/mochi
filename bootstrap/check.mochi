@@ -666,49 +666,43 @@ let isUpperStart = s => switch Str.codeAt(0, s) {
 
 // A lowercase leaf that is neither a declared param nor a primitive is a
 // stray type variable (would be existential) — report (name, span).
-let strayTypeVar = (te, params) => switch te {
+let strayTypeVar = (params, te) => switch te {
   | Ast.TyName(name, sp) => isUpperStart(
       name
     ) || (Array.contains(name, primTypeNames) || Array.contains(name, params))
       ? None
       : Some((name, sp))
-  | Ast.TyArrow(from, to, _) => strayTypeVar(from, params)
-      |> Option.orElse(strayTypeVar(to, params))
-  | Ast.TyApp(_, args, _) => firstSome(a => strayTypeVar(a, params), args)
-  | Ast.TyTuple(elems, _) => firstSome(el => strayTypeVar(el, params), elems)
-  | Ast.TyList(elem, _) => strayTypeVar(elem, params)
+  | Ast.TyArrow(from, to, _) => params->strayTypeVar(from)
+      |> Option.orElse(params->strayTypeVar(to))
+  | Ast.TyApp(_, args, _) => args |> firstSome(strayTypeVar(params))
+  | Ast.TyTuple(elems, _) => elems |> firstSome(strayTypeVar(params))
+  | Ast.TyList(elem, _) => strayTypeVar(params, elem)
   | Ast.TyQual(_, _, _, args, _) =>
     // `Alias.Name` is always a constructor reference, never a bare type variable
     // (that is what motivates the single TyQual variant, ADR 0046) — only its
     // applied args can hide a stray var.
-    firstSome(a => strayTypeVar(a, params), args)
+    args |> firstSome(strayTypeVar(params))
   | Ast.TyLit(_, _) => None
-  | Ast.TyUnion(members, _) => firstSome(m => strayTypeVar(m, params), members)
+  | Ast.TyUnion(members, _) => members |> firstSome(strayTypeVar(params))
 }
 
 let checkCtorFieldVars = stmts =>
-  firstSome(
-    s => switch s {
-      | Ast.SType(name, params, ctors, _, _, _, _, _) => firstSome(
-          c =>
-            firstSome(
-              f => switch strayTypeVar(f.fieldType, params) {
+  stmts
+    |> firstSome(s => switch s {
+      | Ast.SType(name, params, ctors, _, _, _, _, _) => ctors
+          |> firstSome(c =>
+            c.fields
+              |> firstSome(f => switch strayTypeVar(params, f.fieldType) {
                 | Some((vn, vsp)) => Some(
-                    checkErr(
-                      "unknown type parameter '${vn}' in constructor '${c.name}' — declare it: type ${name} ${Str.join(" ", Array.append(vn, params))} = ...",
-                      vsp
-                    )
+                    vsp
+                      |> checkErr(
+                        "unknown type parameter '${vn}' in constructor '${c.name}' — declare it: type ${name} ${Str.join(" ", Array.append(vn, params))} = ..."
+                      )
                   )
                 | None => None
-              },
-              c.fields
-            ),
-          ctors
-        )
+              }))
       | _ => None
-    },
-    stmts
-  )
+    })
 
 // --- qualified type names (C5 slice d, ADR 0046) ---
 
@@ -842,4 +836,4 @@ export let checkWith = (stmts, imported, quals) => switch checkReservedNames(stm
 }
 
 export let check = stmts =>
-  checkWith(stmts, { ctors: #{}, types: #{} }, emptyQuals)
+  stmts->checkWith({ ctors: #{}, types: #{} }, emptyQuals)
