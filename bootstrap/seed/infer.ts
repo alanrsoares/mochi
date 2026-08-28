@@ -46,6 +46,8 @@ export type Ctx<A> = {
   letOwner: Map<string, Span>;
 };
 
+import type { _Curry } from "@mochi/compiler/runtime";
+
 import {
   _curry,
   _recur,
@@ -389,8 +391,9 @@ const constrainParamAnnotsFrom: <A>(
         throw new Error("non-exhaustive match");
       }),
 );
-const arrowChain: { (paramTypes: Ty[]): (resultT: Ty) => Ty; (paramTypes: Ty[], resultT: Ty): Ty } =
-  _curry(2, (paramTypes: Ty[], resultT: Ty) =>
+const arrowChain: _Curry<[paramTypes: Ty[], resultT: Ty], Ty> = _curry(
+  2,
+  (paramTypes: Ty[], resultT: Ty) =>
     match(paramTypes)
       .with(
         (_v) => {
@@ -416,7 +419,7 @@ const arrowChain: { (paramTypes: Ty[]): (resultT: Ty) => Ty; (paramTypes: Ty[], 
       .otherwise(() => {
         throw new Error("non-exhaustive match");
       }),
-  );
+);
 const ctxWithEnv: <A, B>(
   ctx: Ctx<A>,
   env: B,
@@ -873,16 +876,14 @@ const inferRecordRow: <A>(ctx: Ctx<A>, fields: Field[], st: St) => Result<[Row, 
         throw new Error("non-exhaustive match");
       }),
 );
-const rWithTail: { (row: Row): (tail: Row) => Row; (row: Row, tail: Row): Row } = _curry(
-  2,
-  (row: Row, tail: Row) =>
-    match(row)
-      .with({ _tag: "RowEmpty" }, () => tail)
-      .with({ _tag: "RowVar" }, ({ id }) => rVar(id))
-      .with({ _tag: "RowExtend" }, ({ label, fieldType, rest }) =>
-        rExtend(label, fieldType, rWithTail(rest, tail)),
-      )
-      .exhaustive(),
+const rWithTail: _Curry<[row: Row, tail: Row], Row> = _curry(2, (row: Row, tail: Row) =>
+  match(row)
+    .with({ _tag: "RowEmpty" }, () => tail)
+    .with({ _tag: "RowVar" }, ({ id }) => rVar(id))
+    .with({ _tag: "RowExtend" }, ({ label, fieldType, rest }) =>
+      rExtend(label, fieldType, rWithTail(rest, tail)),
+    )
+    .exhaustive(),
 );
 const inferFieldAccess: <A>(
   ctx: Ctx<A>,
@@ -1960,38 +1961,36 @@ const addAllFrom: <A>(names: A[], set: Set<A>) => Set<A> = _curry(2, <A>(names: 
       throw new Error("non-exhaustive match");
     }),
 );
-const paramBound: {
-  (p: LamParam): (bound: Set<string>) => Set<string>;
-  (p: LamParam, bound: Set<string>): Set<string>;
-} = _curry(2, (p: LamParam, bound: Set<string>) =>
-  match(p)
-    .with({ _tag: "LPName" }, ({ name }) => _Set_add(name, bound))
-    .with({ _tag: "LPTuple" }, ({ names }) => addAllFrom(names, bound))
-    .with({ _tag: "LPRecord" }, ({ fields }) => addAllFrom(fields, bound))
-    .exhaustive(),
+const paramBound: _Curry<[p: LamParam, bound: Set<string>], Set<string>> = _curry(
+  2,
+  (p: LamParam, bound: Set<string>) =>
+    match(p)
+      .with({ _tag: "LPName" }, ({ name }) => _Set_add(name, bound))
+      .with({ _tag: "LPTuple" }, ({ names }) => addAllFrom(names, bound))
+      .with({ _tag: "LPRecord" }, ({ fields }) => addAllFrom(fields, bound))
+      .exhaustive(),
 );
-const lambdaBound: {
-  (params: LamParam[]): (bound: Set<string>) => Set<string>;
-  (params: LamParam[], bound: Set<string>): Set<string>;
-} = _curry(2, (params: LamParam[], bound: Set<string>) =>
-  match(params)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => bound,
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length >= 1;
-      },
-      ([p, ...rest]) => lambdaBound(rest, paramBound(p, bound)),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+const lambdaBound: _Curry<[params: LamParam[], bound: Set<string>], Set<string>> = _curry(
+  2,
+  (params: LamParam[], bound: Set<string>) =>
+    match(params)
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length === 0;
+        },
+        () => bound,
+      )
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length >= 1;
+        },
+        ([p, ...rest]) => lambdaBound(rest, paramBound(p, bound)),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
 );
 const loopBound: <A, B>(params: ({ name: A } & B)[], bound: Set<A>) => Set<A> = _curry(
   2,
@@ -2002,16 +2001,10 @@ const loopBound: <A, B>(params: ({ name: A } & B)[], bound: Set<A>) => Set<A> = 
       params,
     ),
 );
-const loopInitRefsFrom: {
-  (params: LoopParam[]): (i: number) => (bound: Set<string>) => (acc: Set<string>) => Set<string>;
-  (params: LoopParam[]): (i: number) => (bound: Set<string>, acc: Set<string>) => Set<string>;
-  (params: LoopParam[]): (i: number, bound: Set<string>) => (acc: Set<string>) => Set<string>;
-  (params: LoopParam[], i: number): (bound: Set<string>) => (acc: Set<string>) => Set<string>;
-  (params: LoopParam[]): (i: number, bound: Set<string>, acc: Set<string>) => Set<string>;
-  (params: LoopParam[], i: number): (bound: Set<string>, acc: Set<string>) => Set<string>;
-  (params: LoopParam[], i: number, bound: Set<string>): (acc: Set<string>) => Set<string>;
-  (params: LoopParam[], i: number, bound: Set<string>, acc: Set<string>): Set<string>;
-} = _curry(4, (params: LoopParam[], i: number, bound: Set<string>, acc: Set<string>) =>
+const loopInitRefsFrom: _Curry<
+  [params: LoopParam[], i: number, bound: Set<string>, acc: Set<string>],
+  Set<string>
+> = _curry(4, (params: LoopParam[], i: number, bound: Set<string>, acc: Set<string>) =>
   match(_Array_get(i, params))
     .with({ _tag: "None" }, () => acc)
     .with({ _tag: "Some" }, ({ value: p }) =>
@@ -2019,12 +2012,10 @@ const loopInitRefsFrom: {
     )
     .exhaustive(),
 );
-const freeRefsList: {
-  (es: Expr[]): (bound: Set<string>) => (acc: Set<string>) => Set<string>;
-  (es: Expr[]): (bound: Set<string>, acc: Set<string>) => Set<string>;
-  (es: Expr[], bound: Set<string>): (acc: Set<string>) => Set<string>;
-  (es: Expr[], bound: Set<string>, acc: Set<string>): Set<string>;
-} = _curry(3, (es: Expr[], bound: Set<string>, acc: Set<string>) =>
+const freeRefsList: _Curry<
+  [es: Expr[], bound: Set<string>, acc: Set<string>],
+  Set<string>
+> = _curry(3, (es: Expr[], bound: Set<string>, acc: Set<string>) =>
   match(es)
     .with(
       (_v) => {
@@ -2044,12 +2035,10 @@ const freeRefsList: {
       throw new Error("non-exhaustive match");
     }),
 );
-const freeRefsFields: {
-  (fields: Field[]): (bound: Set<string>) => (acc: Set<string>) => Set<string>;
-  (fields: Field[]): (bound: Set<string>, acc: Set<string>) => Set<string>;
-  (fields: Field[], bound: Set<string>): (acc: Set<string>) => Set<string>;
-  (fields: Field[], bound: Set<string>, acc: Set<string>): Set<string>;
-} = _curry(3, (fields: Field[], bound: Set<string>, acc: Set<string>) =>
+const freeRefsFields: _Curry<
+  [fields: Field[], bound: Set<string>, acc: Set<string>],
+  Set<string>
+> = _curry(3, (fields: Field[], bound: Set<string>, acc: Set<string>) =>
   match(fields)
     .with(
       (_v) => {
@@ -2069,12 +2058,10 @@ const freeRefsFields: {
       throw new Error("non-exhaustive match");
     }),
 );
-const freeRefsEntries: {
-  (entries: MapEntry[]): (bound: Set<string>) => (acc: Set<string>) => Set<string>;
-  (entries: MapEntry[]): (bound: Set<string>, acc: Set<string>) => Set<string>;
-  (entries: MapEntry[], bound: Set<string>): (acc: Set<string>) => Set<string>;
-  (entries: MapEntry[], bound: Set<string>, acc: Set<string>): Set<string>;
-} = _curry(3, (entries: MapEntry[], bound: Set<string>, acc: Set<string>) =>
+const freeRefsEntries: _Curry<
+  [entries: MapEntry[], bound: Set<string>, acc: Set<string>],
+  Set<string>
+> = _curry(3, (entries: MapEntry[], bound: Set<string>, acc: Set<string>) =>
   match(entries)
     .with(
       (_v) => {
@@ -2095,12 +2082,10 @@ const freeRefsEntries: {
       throw new Error("non-exhaustive match");
     }),
 );
-const freeRefsInterpParts: {
-  (parts: InterpPart[]): (bound: Set<string>) => (acc: Set<string>) => Set<string>;
-  (parts: InterpPart[]): (bound: Set<string>, acc: Set<string>) => Set<string>;
-  (parts: InterpPart[], bound: Set<string>): (acc: Set<string>) => Set<string>;
-  (parts: InterpPart[], bound: Set<string>, acc: Set<string>): Set<string>;
-} = _curry(3, (parts: InterpPart[], bound: Set<string>, acc: Set<string>) =>
+const freeRefsInterpParts: _Curry<
+  [parts: InterpPart[], bound: Set<string>, acc: Set<string>],
+  Set<string>
+> = _curry(3, (parts: InterpPart[], bound: Set<string>, acc: Set<string>) =>
   match(parts)
     .with(
       (_v) => {
@@ -2127,12 +2112,10 @@ const freeRefsInterpParts: {
       throw new Error("non-exhaustive match");
     }),
 );
-const freeRefsArms: {
-  (arms: MatchArm[]): (bound: Set<string>) => (acc: Set<string>) => Set<string>;
-  (arms: MatchArm[]): (bound: Set<string>, acc: Set<string>) => Set<string>;
-  (arms: MatchArm[], bound: Set<string>): (acc: Set<string>) => Set<string>;
-  (arms: MatchArm[], bound: Set<string>, acc: Set<string>): Set<string>;
-} = _curry(3, (arms: MatchArm[], bound: Set<string>, acc: Set<string>) =>
+const freeRefsArms: _Curry<
+  [arms: MatchArm[], bound: Set<string>, acc: Set<string>],
+  Set<string>
+> = _curry(3, (arms: MatchArm[], bound: Set<string>, acc: Set<string>) =>
   match(arms)
     .with(
       (_v) => {
@@ -2159,69 +2142,74 @@ const freeRefsArms: {
       throw new Error("non-exhaustive match");
     }),
 );
-const freeRefs: {
-  (e: Expr): (bound: Set<string>) => (acc: Set<string>) => Set<string>;
-  (e: Expr): (bound: Set<string>, acc: Set<string>) => Set<string>;
-  (e: Expr, bound: Set<string>): (acc: Set<string>) => Set<string>;
-  (e: Expr, bound: Set<string>, acc: Set<string>): Set<string>;
-} = _curry(3, (e: Expr, bound: Set<string>, acc: Set<string>) =>
-  match(e)
-    .with({ _tag: "ENum" }, () => acc)
-    .with({ _tag: "EUnit" }, () => acc)
-    .with({ _tag: "EBool" }, () => acc)
-    .with({ _tag: "EStr" }, () => acc)
-    .with({ _tag: "ERef" }, ({ name }) => (_Set_has(name, bound) ? acc : _Set_add(name, acc)))
-    .with({ _tag: "ECall" }, ({ fn, args }) => freeRefsList(args, bound, freeRefs(fn, bound, acc)))
-    .with({ _tag: "ELambda" }, ({ params, body }) =>
-      freeRefs(body, lambdaBound(params, bound), acc),
-    )
-    .with({ _tag: "ELetIn" }, ({ name, value, body }) =>
-      ((valueBound: Set<string>) =>
-        ((acc1: Set<string>) => freeRefs(body, _Set_add(name, bound), acc1))(
-          freeRefs(value, valueBound, acc),
-        ))(
-        match(value)
-          .with({ _tag: "ELambda" }, () => _Set_add(name, bound))
-          .otherwise(() => bound),
-      ),
-    )
-    .with({ _tag: "ELetBind" }, ({ param, value, body }) =>
-      ((acc1: Set<string>) => freeRefs(body, paramBound(param, bound), acc1))(
-        freeRefs(value, bound, acc),
-      ),
-    )
-    .with({ _tag: "EPipe" }, ({ left, right }) =>
-      freeRefs(right, bound, freeRefs(left, bound, acc)),
-    )
-    .with({ _tag: "EDo" }, ({ exprs }) => freeRefsList(exprs, bound, acc))
-    .with({ _tag: "ETernary" }, ({ cond, thenE, elseE }) =>
-      freeRefs(elseE, bound, freeRefs(thenE, bound, freeRefs(cond, bound, acc))),
-    )
-    .with({ _tag: "EMatch" }, ({ scrutinee, arms }) =>
-      freeRefsArms(arms, bound, freeRefs(scrutinee, bound, acc)),
-    )
-    .with({ _tag: "ELoop" }, ({ params, body }) =>
-      freeRefs(body, loopBound(params, bound), loopInitRefsFrom(params, 0, bound, acc)),
-    )
-    .with({ _tag: "ERecur" }, ({ args }) => freeRefsList(args, bound, acc))
-    .with({ _tag: "ERecord" }, ({ fields, spread }) =>
-      freeRefsFields(
-        fields,
-        bound,
-        match(spread)
-          .with({ _tag: "Some" }, ({ value: s }) => freeRefs(s, bound, acc))
-          .with({ _tag: "None" }, () => acc)
-          .exhaustive(),
-      ),
-    )
-    .with({ _tag: "EField" }, ({ target }) => freeRefs(target, bound, acc))
-    .with({ _tag: "ETuple" }, ({ elements }) => freeRefsList(elements, bound, acc))
-    .with({ _tag: "EArr" }, ({ elements }) => freeRefsList(map(seqElemExpr, elements), bound, acc))
-    .with({ _tag: "EList" }, ({ elements }) => freeRefsList(map(seqElemExpr, elements), bound, acc))
-    .with({ _tag: "ESet" }, ({ elements }) => freeRefsList(map(seqElemExpr, elements), bound, acc))
-    .with({ _tag: "EMap" }, ({ entries }) => freeRefsEntries(entries, bound, acc))
-    .with({ _tag: "EInterp" }, ({ parts }) => freeRefsInterpParts(parts, bound, acc))
-    .exhaustive(),
+const freeRefs: _Curry<[e: Expr, bound: Set<string>, acc: Set<string>], Set<string>> = _curry(
+  3,
+  (e: Expr, bound: Set<string>, acc: Set<string>) =>
+    match(e)
+      .with({ _tag: "ENum" }, () => acc)
+      .with({ _tag: "EUnit" }, () => acc)
+      .with({ _tag: "EBool" }, () => acc)
+      .with({ _tag: "EStr" }, () => acc)
+      .with({ _tag: "ERef" }, ({ name }) => (_Set_has(name, bound) ? acc : _Set_add(name, acc)))
+      .with({ _tag: "ECall" }, ({ fn, args }) =>
+        freeRefsList(args, bound, freeRefs(fn, bound, acc)),
+      )
+      .with({ _tag: "ELambda" }, ({ params, body }) =>
+        freeRefs(body, lambdaBound(params, bound), acc),
+      )
+      .with({ _tag: "ELetIn" }, ({ name, value, body }) =>
+        ((valueBound: Set<string>) =>
+          ((acc1: Set<string>) => freeRefs(body, _Set_add(name, bound), acc1))(
+            freeRefs(value, valueBound, acc),
+          ))(
+          match(value)
+            .with({ _tag: "ELambda" }, () => _Set_add(name, bound))
+            .otherwise(() => bound),
+        ),
+      )
+      .with({ _tag: "ELetBind" }, ({ param, value, body }) =>
+        ((acc1: Set<string>) => freeRefs(body, paramBound(param, bound), acc1))(
+          freeRefs(value, bound, acc),
+        ),
+      )
+      .with({ _tag: "EPipe" }, ({ left, right }) =>
+        freeRefs(right, bound, freeRefs(left, bound, acc)),
+      )
+      .with({ _tag: "EDo" }, ({ exprs }) => freeRefsList(exprs, bound, acc))
+      .with({ _tag: "ETernary" }, ({ cond, thenE, elseE }) =>
+        freeRefs(elseE, bound, freeRefs(thenE, bound, freeRefs(cond, bound, acc))),
+      )
+      .with({ _tag: "EMatch" }, ({ scrutinee, arms }) =>
+        freeRefsArms(arms, bound, freeRefs(scrutinee, bound, acc)),
+      )
+      .with({ _tag: "ELoop" }, ({ params, body }) =>
+        freeRefs(body, loopBound(params, bound), loopInitRefsFrom(params, 0, bound, acc)),
+      )
+      .with({ _tag: "ERecur" }, ({ args }) => freeRefsList(args, bound, acc))
+      .with({ _tag: "ERecord" }, ({ fields, spread }) =>
+        freeRefsFields(
+          fields,
+          bound,
+          match(spread)
+            .with({ _tag: "Some" }, ({ value: s }) => freeRefs(s, bound, acc))
+            .with({ _tag: "None" }, () => acc)
+            .exhaustive(),
+        ),
+      )
+      .with({ _tag: "EField" }, ({ target }) => freeRefs(target, bound, acc))
+      .with({ _tag: "ETuple" }, ({ elements }) => freeRefsList(elements, bound, acc))
+      .with({ _tag: "EArr" }, ({ elements }) =>
+        freeRefsList(map(seqElemExpr, elements), bound, acc),
+      )
+      .with({ _tag: "EList" }, ({ elements }) =>
+        freeRefsList(map(seqElemExpr, elements), bound, acc),
+      )
+      .with({ _tag: "ESet" }, ({ elements }) =>
+        freeRefsList(map(seqElemExpr, elements), bound, acc),
+      )
+      .with({ _tag: "EMap" }, ({ entries }) => freeRefsEntries(entries, bound, acc))
+      .with({ _tag: "EInterp" }, ({ parts }) => freeRefsInterpParts(parts, bound, acc))
+      .exhaustive(),
 );
 const seedBuiltinsFrom: <A>(
   keys: A[],
@@ -2374,10 +2362,10 @@ const seedNsImports: <A, B>(nsImports: Map<A, B>, ns: Map<A, B>) => Map<A, B> = 
   <A, B>(nsImports: Map<A, B>, ns: Map<A, B>) =>
     seedNsImportsFrom(_Map_keys(nsImports), nsImports, ns),
 );
-const aliasMapFrom: {
-  (stmts: Stmt[]): (acc: Map<string, QualAliasInfo>) => Map<string, QualAliasInfo>;
-  (stmts: Stmt[], acc: Map<string, QualAliasInfo>): Map<string, QualAliasInfo>;
-} = _curry(2, (stmts: Stmt[], acc: Map<string, QualAliasInfo>) =>
+const aliasMapFrom: _Curry<
+  [stmts: Stmt[], acc: Map<string, QualAliasInfo>],
+  Map<string, QualAliasInfo>
+> = _curry(2, (stmts: Stmt[], acc: Map<string, QualAliasInfo>) =>
   match(stmts)
     .with(
       (_v) => {
@@ -2727,12 +2715,10 @@ const localTail: (e: Expr) => Expr = (e: Expr) =>
       ({ body }) => localTail(body),
     )
     .otherwise(() => e);
-const idxOfFrom: {
-  (lets: Stmt[]): (i0: number) => (acc0: Map<string, number>) => Map<string, number>;
-  (lets: Stmt[]): (i0: number, acc0: Map<string, number>) => Map<string, number>;
-  (lets: Stmt[], i0: number): (acc0: Map<string, number>) => Map<string, number>;
-  (lets: Stmt[], i0: number, acc0: Map<string, number>): Map<string, number>;
-} = _curry(3, (lets: Stmt[], i0: number, acc0: Map<string, number>) => {
+const idxOfFrom: _Curry<
+  [lets: Stmt[], i0: number, acc0: Map<string, number>],
+  Map<string, number>
+> = _curry(3, (lets: Stmt[], i0: number, acc0: Map<string, number>) => {
   let i: number = i0;
   let acc: Map<string, number> = acc0;
   while (true) {
@@ -2946,39 +2932,10 @@ const dropGroupFrom: <A>(group: Stmt[], env: Map<string, A>) => Map<string, A> =
         throw new Error("non-exhaustive match");
       }),
 );
-const generalizeGroupFrom: {
-  (
-    group: Stmt[],
-  ): (bodyTypes: Map<string, Ty>) => (env: Map<string, Scheme>) => (st: St) => Map<string, Scheme>;
-  (
-    group: Stmt[],
-  ): (bodyTypes: Map<string, Ty>) => (env: Map<string, Scheme>, st: St) => Map<string, Scheme>;
-  (
-    group: Stmt[],
-  ): (bodyTypes: Map<string, Ty>, env: Map<string, Scheme>) => (st: St) => Map<string, Scheme>;
-  (
-    group: Stmt[],
-    bodyTypes: Map<string, Ty>,
-  ): (env: Map<string, Scheme>) => (st: St) => Map<string, Scheme>;
-  (
-    group: Stmt[],
-  ): (bodyTypes: Map<string, Ty>, env: Map<string, Scheme>, st: St) => Map<string, Scheme>;
-  (
-    group: Stmt[],
-    bodyTypes: Map<string, Ty>,
-  ): (env: Map<string, Scheme>, st: St) => Map<string, Scheme>;
-  (
-    group: Stmt[],
-    bodyTypes: Map<string, Ty>,
-    env: Map<string, Scheme>,
-  ): (st: St) => Map<string, Scheme>;
-  (
-    group: Stmt[],
-    bodyTypes: Map<string, Ty>,
-    env: Map<string, Scheme>,
-    st: St,
-  ): Map<string, Scheme>;
-} = _curry(4, (group: Stmt[], bodyTypes: Map<string, Ty>, env: Map<string, Scheme>, st: St) =>
+const generalizeGroupFrom: _Curry<
+  [group: Stmt[], bodyTypes: Map<string, Ty>, env: Map<string, Scheme>, st: St],
+  Map<string, Scheme>
+> = _curry(4, (group: Stmt[], bodyTypes: Map<string, Ty>, env: Map<string, Scheme>, st: St) =>
   match(group)
     .with(
       (_v) => {
@@ -3019,12 +2976,10 @@ const generalizeGroupFrom: {
       throw new Error("non-exhaustive match");
     }),
 );
-const noteGroupLets: {
-  (group: Stmt[]): (letOwner: Map<string, Span>) => (st: St) => [Map<string, Span>, St];
-  (group: Stmt[]): (letOwner: Map<string, Span>, st: St) => [Map<string, Span>, St];
-  (group: Stmt[], letOwner: Map<string, Span>): (st: St) => [Map<string, Span>, St];
-  (group: Stmt[], letOwner: Map<string, Span>, st: St): [Map<string, Span>, St];
-} = _curry(3, (group: Stmt[], letOwner: Map<string, Span>, st: St) =>
+const noteGroupLets: _Curry<
+  [group: Stmt[], letOwner: Map<string, Span>, st: St],
+  [Map<string, Span>, St]
+> = _curry(3, (group: Stmt[], letOwner: Map<string, Span>, st: St) =>
   match(group)
     .with(
       (_v) => {
@@ -3368,64 +3323,60 @@ const isConcrete: (t: Ty) => boolean = (t: Ty) => {
   const f: VarSets = freeInType(t);
   return and(eq(_Set_size(f.tv), 0), eq(_Set_size(f.rv), 0));
 };
-const allSameConcreteFrom: {
-  (shown: string): (uses: Ty[]) => (i: number) => boolean;
-  (shown: string): (uses: Ty[], i: number) => boolean;
-  (shown: string, uses: Ty[]): (i: number) => boolean;
-  (shown: string, uses: Ty[], i: number): boolean;
-} = _curry(3, (shown: string, uses: Ty[], i: number) =>
-  match(_Array_get(i, uses))
-    .with({ _tag: "None" }, () => true)
-    .with({ _tag: "Some" }, ({ value: t }) =>
-      and(isConcrete(t), eq(showType(t), shown))
-        ? allSameConcreteFrom(shown, uses, add(i, 1))
-        : false,
-    )
-    .exhaustive(),
+const allSameConcreteFrom: _Curry<[shown: string, uses: Ty[], i: number], boolean> = _curry(
+  3,
+  (shown: string, uses: Ty[], i: number) =>
+    match(_Array_get(i, uses))
+      .with({ _tag: "None" }, () => true)
+      .with({ _tag: "Some" }, ({ value: t }) =>
+        and(isConcrete(t), eq(showType(t), shown))
+          ? allSameConcreteFrom(shown, uses, add(i, 1))
+          : false,
+      )
+      .exhaustive(),
 );
-const allSameConcrete: {
-  (shown: string): (uses: Ty[]) => boolean;
-  (shown: string, uses: Ty[]): boolean;
-} = _curry(2, (shown: string, uses: Ty[]) => allSameConcreteFrom(shown, uses, 0));
-const resolveLetParamsFrom: {
-  (keys: string[]): (st: St) => TypeAt[];
-  (keys: string[], st: St): TypeAt[];
-} = _curry(2, (keys: string[], st: St) =>
-  match(keys)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => [] as TypeAt[],
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length >= 1;
-      },
-      ([k, ...rest]) =>
-        ((tail: TypeAt[]) =>
-          ((uses: Ty[]) =>
-            match(_Array_get(0, uses))
-              .with({ _tag: "None" }, () => tail)
-              .with({ _tag: "Some" }, ({ value: first }) =>
-                allSameConcrete(showType(first), uses)
-                  ? match(_Map_get(k, st.letSpans))
-                      .with({ _tag: "Some" }, ({ value: span }) =>
-                        _Array_prepend({ span: span, ty: first }, tail),
-                      )
-                      .with({ _tag: "None" }, () => tail)
-                      .exhaustive()
-                  : tail,
-              )
-              .exhaustive())(map((t: Ty) => zonk(t, st), _Map_getOr([] as Ty[], k, st.letUses))))(
-          resolveLetParamsFrom(rest, st),
-        ),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+const allSameConcrete: _Curry<[shown: string, uses: Ty[]], boolean> = _curry(
+  2,
+  (shown: string, uses: Ty[]) => allSameConcreteFrom(shown, uses, 0),
+);
+const resolveLetParamsFrom: _Curry<[keys: string[], st: St], TypeAt[]> = _curry(
+  2,
+  (keys: string[], st: St) =>
+    match(keys)
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length === 0;
+        },
+        () => [] as TypeAt[],
+      )
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length >= 1;
+        },
+        ([k, ...rest]) =>
+          ((tail: TypeAt[]) =>
+            ((uses: Ty[]) =>
+              match(_Array_get(0, uses))
+                .with({ _tag: "None" }, () => tail)
+                .with({ _tag: "Some" }, ({ value: first }) =>
+                  allSameConcrete(showType(first), uses)
+                    ? match(_Map_get(k, st.letSpans))
+                        .with({ _tag: "Some" }, ({ value: span }) =>
+                          _Array_prepend({ span: span, ty: first }, tail),
+                        )
+                        .with({ _tag: "None" }, () => tail)
+                        .exhaustive()
+                    : tail,
+                )
+                .exhaustive())(map((t: Ty) => zonk(t, st), _Map_getOr([] as Ty[], k, st.letUses))))(
+            resolveLetParamsFrom(rest, st),
+          ),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
 );
 const resolveLetParams: (st: St) => TypeAt[] = (st: St) =>
   resolveLetParamsFrom(_Map_keys(st.letSpans), st);
@@ -3673,60 +3624,15 @@ export const inferProgramImports: <A, B, C, D>(
 );
 
 const emptyQuals: Map<string, QualScope> = new Map<string, QualScope>();
-export const inferProgram: {
-  (
-    stmts: Stmt[],
-  ): (
-    builtins: Map<string, Ty>,
-  ) => (
-    namespaces: Map<string, Map<string, Ty>>,
-  ) => (openMode: boolean) => Result<Map<string, Scheme>, IErr>;
-  (
-    stmts: Stmt[],
-  ): (
-    builtins: Map<string, Ty>,
-  ) => (
-    namespaces: Map<string, Map<string, Ty>>,
-    openMode: boolean,
-  ) => Result<Map<string, Scheme>, IErr>;
-  (
-    stmts: Stmt[],
-  ): (
-    builtins: Map<string, Ty>,
-    namespaces: Map<string, Map<string, Ty>>,
-  ) => (openMode: boolean) => Result<Map<string, Scheme>, IErr>;
-  (
-    stmts: Stmt[],
-    builtins: Map<string, Ty>,
-  ): (
-    namespaces: Map<string, Map<string, Ty>>,
-  ) => (openMode: boolean) => Result<Map<string, Scheme>, IErr>;
-  (
-    stmts: Stmt[],
-  ): (
-    builtins: Map<string, Ty>,
-    namespaces: Map<string, Map<string, Ty>>,
-    openMode: boolean,
-  ) => Result<Map<string, Scheme>, IErr>;
-  (
-    stmts: Stmt[],
-    builtins: Map<string, Ty>,
-  ): (
-    namespaces: Map<string, Map<string, Ty>>,
-    openMode: boolean,
-  ) => Result<Map<string, Scheme>, IErr>;
-  (
-    stmts: Stmt[],
-    builtins: Map<string, Ty>,
-    namespaces: Map<string, Map<string, Ty>>,
-  ): (openMode: boolean) => Result<Map<string, Scheme>, IErr>;
-  (
+export const inferProgram: _Curry<
+  [
     stmts: Stmt[],
     builtins: Map<string, Ty>,
     namespaces: Map<string, Map<string, Ty>>,
     openMode: boolean,
-  ): Result<Map<string, Scheme>, IErr>;
-} = _curry(
+  ],
+  Result<Map<string, Scheme>, IErr>
+> = _curry(
   4,
   (
     stmts: Stmt[],
@@ -3822,109 +3728,14 @@ export const inferProgramImportsTypes: <A, B, C, D>(
   ) =>
     runInferImports(stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt),
 );
-export const inferProgramTypes: {
-  (
-    stmts: Stmt[],
-  ): (builtins: Map<string, Ty>) => (namespaces: Map<string, Map<string, Ty>>) => (
-    openMode: boolean,
-  ) => Result<
-    {
-      env: Map<string, Scheme>;
-      types: TypeAt[];
-      aliases: Map<string, QualAliasInfo>;
-      letParams: TypeAt[];
-    },
-    IErr
-  >;
-  (
-    stmts: Stmt[],
-  ): (builtins: Map<string, Ty>) => (
-    namespaces: Map<string, Map<string, Ty>>,
-    openMode: boolean,
-  ) => Result<
-    {
-      env: Map<string, Scheme>;
-      types: TypeAt[];
-      aliases: Map<string, QualAliasInfo>;
-      letParams: TypeAt[];
-    },
-    IErr
-  >;
-  (
-    stmts: Stmt[],
-  ): (
-    builtins: Map<string, Ty>,
-    namespaces: Map<string, Map<string, Ty>>,
-  ) => (openMode: boolean) => Result<
-    {
-      env: Map<string, Scheme>;
-      types: TypeAt[];
-      aliases: Map<string, QualAliasInfo>;
-      letParams: TypeAt[];
-    },
-    IErr
-  >;
-  (
-    stmts: Stmt[],
-    builtins: Map<string, Ty>,
-  ): (namespaces: Map<string, Map<string, Ty>>) => (openMode: boolean) => Result<
-    {
-      env: Map<string, Scheme>;
-      types: TypeAt[];
-      aliases: Map<string, QualAliasInfo>;
-      letParams: TypeAt[];
-    },
-    IErr
-  >;
-  (
-    stmts: Stmt[],
-  ): (
-    builtins: Map<string, Ty>,
-    namespaces: Map<string, Map<string, Ty>>,
-    openMode: boolean,
-  ) => Result<
-    {
-      env: Map<string, Scheme>;
-      types: TypeAt[];
-      aliases: Map<string, QualAliasInfo>;
-      letParams: TypeAt[];
-    },
-    IErr
-  >;
-  (
-    stmts: Stmt[],
-    builtins: Map<string, Ty>,
-  ): (
-    namespaces: Map<string, Map<string, Ty>>,
-    openMode: boolean,
-  ) => Result<
-    {
-      env: Map<string, Scheme>;
-      types: TypeAt[];
-      aliases: Map<string, QualAliasInfo>;
-      letParams: TypeAt[];
-    },
-    IErr
-  >;
-  (
-    stmts: Stmt[],
-    builtins: Map<string, Ty>,
-    namespaces: Map<string, Map<string, Ty>>,
-  ): (openMode: boolean) => Result<
-    {
-      env: Map<string, Scheme>;
-      types: TypeAt[];
-      aliases: Map<string, QualAliasInfo>;
-      letParams: TypeAt[];
-    },
-    IErr
-  >;
-  (
+export const inferProgramTypes: _Curry<
+  [
     stmts: Stmt[],
     builtins: Map<string, Ty>,
     namespaces: Map<string, Map<string, Ty>>,
     openMode: boolean,
-  ): Result<
+  ],
+  Result<
     {
       env: Map<string, Scheme>;
       types: TypeAt[];
@@ -3932,8 +3743,8 @@ export const inferProgramTypes: {
       letParams: TypeAt[];
     },
     IErr
-  >;
-} = _curry(
+  >
+> = _curry(
   4,
   (
     stmts: Stmt[],

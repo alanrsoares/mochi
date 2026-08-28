@@ -278,9 +278,9 @@ let lam = (names, body) =>
 
 let unitE = Ast.EUnit(sp)
 
-test("a concrete function binding gets curried overloads", () =>
+test("a concrete function binding gets a curry-compatible type", () =>
   assertEq(
-    "{ (a: number): (b: number) => number; (a: number, b: number): number; }",
+    "_Curry<[a: number, b: number], number>",
     bindingTsType(
       {
         vars: [],
@@ -362,9 +362,7 @@ test("emits a typed const for a concrete function binding", () =>
   assertEq(
     true,
     tsOf("let addPair = (a, b) => add(a, b)")
-      |> Str.contains(
-        "const addPair: { (a: number): (b: number) => number; (a: number, b: number): number; }"
-      )
+      |> Str.contains("const addPair: _Curry<[a: number, b: number], number>")
   ))
 
 test("emits a tagged union for a variant decl", () =>

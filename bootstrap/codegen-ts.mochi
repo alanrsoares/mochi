@@ -361,6 +361,17 @@ export let curriedOverloads = (head, params, ret) =>
     ? "${head}(${Str.join(", ", params)}) => ${ret}"
     : "{ ${Str.join(" ", Array.sortBy(g => 0 - Array.length(g), compositions(Array.length(params))) |> map(overloadSig(head, params, ret)))} }"
 
+/// The CONCRETE curry-compatible function type. Same contract as
+/// `curriedOverloads` — every partial-application grouping `_curry` accepts must
+/// typecheck — but expressed once as `_Curry<[params], ret>` instead of one
+/// signature per composition of the arity. A monomorphic arity-n binding cost
+/// 2^(n-1) lines; this costs one (ADR 0093). Only CONCRETE bindings can use it:
+/// `infer` erases a generic head, so a generic binding keeps the nested arrow.
+export let curriedFnType = (params, ret) =>
+  Array.length(params) <= 1
+    ? "(${Str.join(", ", params)}) => ${ret}"
+    : "_Curry<[${Str.join(", ", params)}], ${ret}>"
+
 /// Walk the value's lambda spine and the type's arrow spine together,
 /// collecting one rendered `name: T` per param. A zero-param lambda consumes
 /// the `unit` arrow the JS side erases.
@@ -422,7 +433,7 @@ export let bindingTsType = (sc, value, recs) =>
     switch value {
       | Ast.ELambda(_, _, _) => head == ""
           ? let (params, ret) = flatParamsFrom(sc.ty, value, env, 0, []) in
-            curriedOverloads("", params, ret)
+            curriedFnType(params, ret)
           : "${head}${declType(sc.ty, value, env)}"
       | _ => tsOf(sc.ty, recsEnv(recs))
     }
@@ -771,11 +782,23 @@ export let emitTsModule = (stmts, env, types, letParams, aliases, imported, impo
     builtinDeclsInBody(body, headerText, 0, aliases, recs),
     typeHeader
   ) in
+  // `_Curry` lives in the runtime, not inline: a decl per module cost ~13 lines
+  // x every file in a graph. It is a TYPE, so it rides its own `import type`
+  // line rather than the value import (ADR 0093).
+  let curryLine = Str.contains("_Curry<", "${Str.join("\n", header)}\n${body}")
+    ? "import type { _Curry } from \"${runtimeImport}\";"
+    : "" in
     Str.join(
       "\n\n",
       Array.filter(
         part => part != "",
-        [Str.join("\n", header), Str.join("\n", importLines), runtimeLine, body]
+        [
+          Str.join("\n", header),
+          Str.join("\n", importLines),
+          curryLine,
+          runtimeLine,
+          body
+        ]
       )
     )
       ++ "\n"

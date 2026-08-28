@@ -43,11 +43,9 @@ test("Option let? flattens to the all-at-once Option flatMap grouping (ADR 0079)
   );
 });
 
-test("a concrete multi-param function annotates with partial-application overloads (ADR 0037)", () => {
+test("a concrete multi-param function annotates with a curry-compatible type (ADR 0093)", () => {
   const out = ts("let sum = (a, b) => add(a, b)");
-  expect(out).toContain(
-    "const sum: { (a: number): (b: number) => number; (a: number, b: number): number; } = _curry(2,",
-  );
+  expect(out).toContain("const sum: _Curry<[a: number, b: number], number> = _curry(2,");
 });
 
 test("a non-function binding is left for TS to infer (no annotation)", () => {

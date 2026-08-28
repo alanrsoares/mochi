@@ -78,6 +78,8 @@ export type Tok =
 export type LocTok = { tok: Tok; start: number; end: number; doc: Option<string> };
 export type PErr = { message: string; start: number; end: number };
 
+import type { _Curry } from "@mochi/compiler/runtime";
+
 import {
   _curry,
   _recur,
@@ -855,22 +857,15 @@ const ADD_BP: number = 10;
 const BACKTICK_BP: number = 15;
 const MUL_BP: number = 20;
 const FAST_PIPE_BP: number = 21;
-const mkBinCall: {
-  (fnName: string): (opSpan: Span) => (left: Expr) => (right: Expr) => Expr;
-  (fnName: string): (opSpan: Span) => (left: Expr, right: Expr) => Expr;
-  (fnName: string): (opSpan: Span, left: Expr) => (right: Expr) => Expr;
-  (fnName: string, opSpan: Span): (left: Expr) => (right: Expr) => Expr;
-  (fnName: string): (opSpan: Span, left: Expr, right: Expr) => Expr;
-  (fnName: string, opSpan: Span): (left: Expr, right: Expr) => Expr;
-  (fnName: string, opSpan: Span, left: Expr): (right: Expr) => Expr;
-  (fnName: string, opSpan: Span, left: Expr, right: Expr): Expr;
-} = _curry(4, (fnName: string, opSpan: Span, left: Expr, right: Expr) =>
-  Ast.ECall(
-    Ast.ERef(fnName, opSpan),
-    [left, right],
-    None as Option<string>,
-    spanning(exprSpan(left), exprSpan(right)),
-  ),
+const mkBinCall: _Curry<[fnName: string, opSpan: Span, left: Expr, right: Expr], Expr> = _curry(
+  4,
+  (fnName: string, opSpan: Span, left: Expr, right: Expr) =>
+    Ast.ECall(
+      Ast.ERef(fnName, opSpan),
+      [left, right],
+      None as Option<string>,
+      spanning(exprSpan(left), exprSpan(right)),
+    ),
 );
 const opFnName: (t: Tok) => string = (t: Tok) =>
   match(t)
@@ -905,26 +900,20 @@ const isSectionOp: (t: Tok) => boolean = (t: Tok) =>
     .with({ _tag: "TGt" }, () => true)
     .with({ _tag: "TGte" }, () => true)
     .otherwise(() => false);
-const sectionBody: {
-  (opTok: Tok): (x: Expr) => (y: Expr) => (opSpan: Span) => Expr;
-  (opTok: Tok): (x: Expr) => (y: Expr, opSpan: Span) => Expr;
-  (opTok: Tok): (x: Expr, y: Expr) => (opSpan: Span) => Expr;
-  (opTok: Tok, x: Expr): (y: Expr) => (opSpan: Span) => Expr;
-  (opTok: Tok): (x: Expr, y: Expr, opSpan: Span) => Expr;
-  (opTok: Tok, x: Expr): (y: Expr, opSpan: Span) => Expr;
-  (opTok: Tok, x: Expr, y: Expr): (opSpan: Span) => Expr;
-  (opTok: Tok, x: Expr, y: Expr, opSpan: Span): Expr;
-} = _curry(4, (opTok: Tok, x: Expr, y: Expr, opSpan: Span) => {
-  const full: Span = spanning(exprSpan(x), exprSpan(y));
-  return eq(opTok, TNeq as Tok)
-    ? Ast.ECall(
-        Ast.ERef("not", opSpan),
-        [mkBinCall("eq", opSpan, x, y)],
-        None as Option<string>,
-        full,
-      )
-    : mkBinCall(opFnName(opTok), opSpan, x, y);
-});
+const sectionBody: _Curry<[opTok: Tok, x: Expr, y: Expr, opSpan: Span], Expr> = _curry(
+  4,
+  (opTok: Tok, x: Expr, y: Expr, opSpan: Span) => {
+    const full: Span = spanning(exprSpan(x), exprSpan(y));
+    return eq(opTok, TNeq as Tok)
+      ? Ast.ECall(
+          Ast.ERef("not", opSpan),
+          [mkBinCall("eq", opSpan, x, y)],
+          None as Option<string>,
+          full,
+        )
+      : mkBinCall(opFnName(opTok), opSpan, x, y);
+  },
+);
 const sectionLeft: <A>(provided: Expr, opLt: { end: number; start: number; tok: Tok } & A) => Expr =
   _curry(2, <A>(provided: Expr, opLt: { end: number; start: number; tok: Tok } & A) => {
     const opSpan: Span = spanOf(opLt);
@@ -3774,46 +3763,37 @@ const parseLet: <A>(
     );
   },
 );
-const setLetMeta: {
-  (exported: boolean): (doc: Option<string>) => (s: Stmt) => Stmt;
-  (exported: boolean): (doc: Option<string>, s: Stmt) => Stmt;
-  (exported: boolean, doc: Option<string>): (s: Stmt) => Stmt;
-  (exported: boolean, doc: Option<string>, s: Stmt): Stmt;
-} = _curry(3, (exported: boolean, doc: Option<string>, s: Stmt) =>
-  match(s)
-    .with({ _tag: "SLet" }, ({ name, nameSpan, annot, value, span }) =>
-      Ast.SLet(name, nameSpan, annot, value, exported, doc, span),
-    )
-    .otherwise((other) => other),
+const setLetMeta: _Curry<[exported: boolean, doc: Option<string>, s: Stmt], Stmt> = _curry(
+  3,
+  (exported: boolean, doc: Option<string>, s: Stmt) =>
+    match(s)
+      .with({ _tag: "SLet" }, ({ name, nameSpan, annot, value, span }) =>
+        Ast.SLet(name, nameSpan, annot, value, exported, doc, span),
+      )
+      .otherwise((other) => other),
 );
-const setTypeMeta: {
-  (exported: boolean): (doc: Option<string>) => (s: Stmt) => Stmt;
-  (exported: boolean): (doc: Option<string>, s: Stmt) => Stmt;
-  (exported: boolean, doc: Option<string>): (s: Stmt) => Stmt;
-  (exported: boolean, doc: Option<string>, s: Stmt): Stmt;
-} = _curry(3, (exported: boolean, doc: Option<string>, s: Stmt) =>
-  match(s)
-    .with({ _tag: "SType" }, ({ name, params, ctors, alias, aliasType, span }) =>
-      Ast.SType(name, params, ctors, alias, aliasType, exported, doc, span),
-    )
-    .otherwise((other) => other),
+const setTypeMeta: _Curry<[exported: boolean, doc: Option<string>, s: Stmt], Stmt> = _curry(
+  3,
+  (exported: boolean, doc: Option<string>, s: Stmt) =>
+    match(s)
+      .with({ _tag: "SType" }, ({ name, params, ctors, alias, aliasType, span }) =>
+        Ast.SType(name, params, ctors, alias, aliasType, exported, doc, span),
+      )
+      .otherwise((other) => other),
 );
-const setExternMeta: {
-  (exported: boolean): (doc: Option<string>) => (s: Stmt) => Stmt;
-  (exported: boolean): (doc: Option<string>, s: Stmt) => Stmt;
-  (exported: boolean, doc: Option<string>): (s: Stmt) => Stmt;
-  (exported: boolean, doc: Option<string>, s: Stmt): Stmt;
-} = _curry(3, (exported: boolean, doc: Option<string>, s: Stmt) =>
-  match(s)
-    .with(
-      { _tag: "SExtern" },
-      ({ name, nameSpan, params, typeExpr: t, module: m, imported: i, curried, span }) =>
-        Ast.SExtern(name, nameSpan, params, t, m, i, curried, exported, doc, span),
-    )
-    .with({ _tag: "SType" }, ({ name, params, ctors, alias, aliasType, span }) =>
-      Ast.SType(name, params, ctors, alias, aliasType, exported, doc, span),
-    )
-    .otherwise((other) => other),
+const setExternMeta: _Curry<[exported: boolean, doc: Option<string>, s: Stmt], Stmt> = _curry(
+  3,
+  (exported: boolean, doc: Option<string>, s: Stmt) =>
+    match(s)
+      .with(
+        { _tag: "SExtern" },
+        ({ name, nameSpan, params, typeExpr: t, module: m, imported: i, curried, span }) =>
+          Ast.SExtern(name, nameSpan, params, t, m, i, curried, exported, doc, span),
+      )
+      .with({ _tag: "SType" }, ({ name, params, ctors, alias, aliasType, span }) =>
+        Ast.SType(name, params, ctors, alias, aliasType, exported, doc, span),
+      )
+      .otherwise((other) => other),
 );
 const setExternExported = setExternMeta(true, None as Option<string>);
 const parseExprStmt: <A, B>(
@@ -3853,90 +3833,8 @@ const parseExprStmt: <A, B>(
     );
   },
 );
-const parseStmt: {
-  (
-    toks: LocTok[],
-  ): (
-    pos: number,
-  ) => (
-    tmp: number,
-  ) => (
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => Result<[Stmt[], number, number], PErr>;
-  (
-    toks: LocTok[],
-  ): (
-    pos: number,
-  ) => (
-    tmp: number,
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => Result<[Stmt[], number, number], PErr>;
-  (
-    toks: LocTok[],
-  ): (
-    pos: number,
-    tmp: number,
-  ) => (
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => Result<[Stmt[], number, number], PErr>;
-  (
-    toks: LocTok[],
-    pos: number,
-  ): (
-    tmp: number,
-  ) => (
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => Result<[Stmt[], number, number], PErr>;
-  (
-    toks: LocTok[],
-  ): (
-    pos: number,
-    tmp: number,
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => Result<[Stmt[], number, number], PErr>;
-  (
-    toks: LocTok[],
-    pos: number,
-  ): (
-    tmp: number,
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => Result<[Stmt[], number, number], PErr>;
-  (
-    toks: LocTok[],
-    pos: number,
-    tmp: number,
-  ): (
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => Result<[Stmt[], number, number], PErr>;
-  (
+const parseStmt: _Curry<
+  [
     toks: LocTok[],
     pos: number,
     tmp: number,
@@ -3945,8 +3843,9 @@ const parseStmt: {
       b: number,
       c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>)[],
-  ): Result<[Stmt[], number, number], PErr>;
-} = _curry(
+  ],
+  Result<[Stmt[], number, number], PErr>
+> = _curry(
   4,
   (
     toks: LocTok[],
@@ -4078,460 +3977,8 @@ const recoverFrom: <A, B>(
     };
   },
 );
-const stmtsLoop: {
-  (
-    toks: LocTok[],
-  ): (
-    pos0: number,
-  ) => (
-    tmp0: number,
-  ) => (
-    acc0: Stmt[],
-  ) => (
-    diags0: PErr[],
-  ) => (
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-  ): (
-    pos0: number,
-  ) => (
-    tmp0: number,
-  ) => (
-    acc0: Stmt[],
-  ) => (
-    diags0: PErr[],
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-  ): (
-    pos0: number,
-  ) => (
-    tmp0: number,
-  ) => (
-    acc0: Stmt[],
-    diags0: PErr[],
-  ) => (
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-  ): (
-    pos0: number,
-  ) => (
-    tmp0: number,
-    acc0: Stmt[],
-  ) => (
-    diags0: PErr[],
-  ) => (
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-  ): (
-    pos0: number,
-    tmp0: number,
-  ) => (
-    acc0: Stmt[],
-  ) => (
-    diags0: PErr[],
-  ) => (
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-    pos0: number,
-  ): (
-    tmp0: number,
-  ) => (
-    acc0: Stmt[],
-  ) => (
-    diags0: PErr[],
-  ) => (
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-  ): (
-    pos0: number,
-  ) => (
-    tmp0: number,
-  ) => (
-    acc0: Stmt[],
-    diags0: PErr[],
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-  ): (
-    pos0: number,
-  ) => (
-    tmp0: number,
-    acc0: Stmt[],
-  ) => (
-    diags0: PErr[],
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-  ): (
-    pos0: number,
-  ) => (
-    tmp0: number,
-    acc0: Stmt[],
-    diags0: PErr[],
-  ) => (
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-  ): (
-    pos0: number,
-    tmp0: number,
-  ) => (
-    acc0: Stmt[],
-  ) => (
-    diags0: PErr[],
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-  ): (
-    pos0: number,
-    tmp0: number,
-  ) => (
-    acc0: Stmt[],
-    diags0: PErr[],
-  ) => (
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-  ): (
-    pos0: number,
-    tmp0: number,
-    acc0: Stmt[],
-  ) => (
-    diags0: PErr[],
-  ) => (
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-    pos0: number,
-  ): (
-    tmp0: number,
-  ) => (
-    acc0: Stmt[],
-  ) => (
-    diags0: PErr[],
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-    pos0: number,
-  ): (
-    tmp0: number,
-  ) => (
-    acc0: Stmt[],
-    diags0: PErr[],
-  ) => (
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-    pos0: number,
-  ): (
-    tmp0: number,
-    acc0: Stmt[],
-  ) => (
-    diags0: PErr[],
-  ) => (
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-    pos0: number,
-    tmp0: number,
-  ): (
-    acc0: Stmt[],
-  ) => (
-    diags0: PErr[],
-  ) => (
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-  ): (
-    pos0: number,
-  ) => (
-    tmp0: number,
-    acc0: Stmt[],
-    diags0: PErr[],
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-  ): (
-    pos0: number,
-    tmp0: number,
-  ) => (
-    acc0: Stmt[],
-    diags0: PErr[],
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-  ): (
-    pos0: number,
-    tmp0: number,
-    acc0: Stmt[],
-  ) => (
-    diags0: PErr[],
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-  ): (
-    pos0: number,
-    tmp0: number,
-    acc0: Stmt[],
-    diags0: PErr[],
-  ) => (
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-    pos0: number,
-  ): (
-    tmp0: number,
-  ) => (
-    acc0: Stmt[],
-    diags0: PErr[],
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-    pos0: number,
-  ): (
-    tmp0: number,
-    acc0: Stmt[],
-  ) => (
-    diags0: PErr[],
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-    pos0: number,
-  ): (
-    tmp0: number,
-    acc0: Stmt[],
-    diags0: PErr[],
-  ) => (
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-    pos0: number,
-    tmp0: number,
-  ): (
-    acc0: Stmt[],
-  ) => (
-    diags0: PErr[],
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-    pos0: number,
-    tmp0: number,
-  ): (
-    acc0: Stmt[],
-    diags0: PErr[],
-  ) => (
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-    pos0: number,
-    tmp0: number,
-    acc0: Stmt[],
-  ): (
-    diags0: PErr[],
-  ) => (
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-  ): (
-    pos0: number,
-    tmp0: number,
-    acc0: Stmt[],
-    diags0: PErr[],
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-    pos0: number,
-  ): (
-    tmp0: number,
-    acc0: Stmt[],
-    diags0: PErr[],
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-    pos0: number,
-    tmp0: number,
-  ): (
-    acc0: Stmt[],
-    diags0: PErr[],
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-    pos0: number,
-    tmp0: number,
-    acc0: Stmt[],
-  ): (
-    diags0: PErr[],
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
-    toks: LocTok[],
-    pos0: number,
-    tmp0: number,
-    acc0: Stmt[],
-    diags0: PErr[],
-  ): (
-    hooks: ((
-      a: LocTok[],
-      b: number,
-      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
-    ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) => { stmts: Stmt[]; diagnostics: PErr[] };
-  (
+const stmtsLoop: _Curry<
+  [
     toks: LocTok[],
     pos0: number,
     tmp0: number,
@@ -4542,8 +3989,9 @@ const stmtsLoop: {
       b: number,
       c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>)[],
-  ): { stmts: Stmt[]; diagnostics: PErr[] };
-} = _curry(
+  ],
+  { stmts: Stmt[]; diagnostics: PErr[] }
+> = _curry(
   6,
   (
     toks: LocTok[],

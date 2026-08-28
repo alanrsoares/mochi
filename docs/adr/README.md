@@ -137,6 +137,7 @@ What else was on the table and why not.
 | [0090](0090-bootstrap-chain.md) | Mochi-emitted TypeScript for stage 1 | Accepted |
 | [0091](0091-eta-partial-format.md) | `fmt` eta-contracts `x => f(a, x)` to `f(a)` when that is a clean refactor | Accepted |
 | [0092](0092-record-alias-index.md) | the TS backend re-attaches record alias names at the print boundary | Accepted |
+| [0093](0093-curry-type-not-overloads.md) | a concrete curried binding types as `_Curry<[params], R>`, not an overload set | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

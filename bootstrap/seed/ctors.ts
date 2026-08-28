@@ -6,6 +6,8 @@ export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
 export type CtorInfo = { owner: string; arity: number };
 export type Registry = { ctors: Map<string, CtorInfo>; types: Map<string, string[]> };
 
+import type { _Curry } from "@mochi/compiler/runtime";
+
 import {
   _curry,
   _recur,
@@ -86,27 +88,24 @@ export const builtinTypeDecls: { name: string; params: string[]; ctors: Ctor[] }
     ],
   },
 ];
-const declaresType: {
-  (stmts: Stmt[]): (i: number) => (name: string) => boolean;
-  (stmts: Stmt[]): (i: number, name: string) => boolean;
-  (stmts: Stmt[], i: number): (name: string) => boolean;
-  (stmts: Stmt[], i: number, name: string): boolean;
-} = _curry(3, (stmts: Stmt[], i: number, name: string) =>
-  match(_Array_get(i, stmts))
-    .with({ _tag: "None" }, () => false)
-    .with(
-      (
-        _v,
-      ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
-        value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
-      } => {
-        const _g: any = _v;
-        return _g._tag === "Some" && _g.value._tag === "SType";
-      },
-      ({ value: { name: n } }) => (eq(n, name) ? true : declaresType(stmts, add(i, 1), name)),
-    )
-    .with({ _tag: "Some" }, () => declaresType(stmts, add(i, 1), name))
-    .exhaustive(),
+const declaresType: _Curry<[stmts: Stmt[], i: number, name: string], boolean> = _curry(
+  3,
+  (stmts: Stmt[], i: number, name: string) =>
+    match(_Array_get(i, stmts))
+      .with({ _tag: "None" }, () => false)
+      .with(
+        (
+          _v,
+        ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
+          value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
+        } => {
+          const _g: any = _v;
+          return _g._tag === "Some" && _g.value._tag === "SType";
+        },
+        ({ value: { name: n } }) => (eq(n, name) ? true : declaresType(stmts, add(i, 1), name)),
+      )
+      .with({ _tag: "Some" }, () => declaresType(stmts, add(i, 1), name))
+      .exhaustive(),
 );
 export const builtinDeclsFor: (
   stmts: Stmt[],
@@ -209,58 +208,11 @@ const ctorsInto: <A, B, C, D, E, F>(
         )
         .exhaustive(),
   );
-const buildLoop: {
-  (stmts: Stmt[]): (i: number) => (reg: Registry) => Result<Registry, PErr>;
-  (stmts: Stmt[]): (i: number, reg: Registry) => Result<Registry, PErr>;
-  (stmts: Stmt[], i: number): (reg: Registry) => Result<Registry, PErr>;
-  (stmts: Stmt[], i: number, reg: Registry): Result<Registry, PErr>;
-} = _curry(3, (stmts: Stmt[], i: number, reg: Registry) =>
-  match(_Array_get(i, stmts))
-    .with({ _tag: "None" }, () => Ok(reg) as Result<Registry, PErr>)
-    .with(
-      (
-        _v,
-      ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
-        value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
-      } => {
-        const _g: any = _v;
-        return _g._tag === "Some" && _g.value._tag === "SType";
-      },
-      ({ value: { name, ctors, span: sp } }) =>
-        _Map_has(name, reg.types)
-          ? (Err(ctorErr(`duplicate type '${name}'`, sp)) as Result<Registry, PErr>)
-          : _Result_flatMap(
-              (cs: Map<string, CtorInfo>) =>
-                buildLoop(stmts, add(i, 1), {
-                  ctors: cs,
-                  types: _Map_set(
-                    name,
-                    map((c: Ctor) => c.name, ctors),
-                    reg.types,
-                  ),
-                }),
-              ctorsInto(ctors, 0, name, sp, reg.ctors),
-            ),
-    )
-    .with({ _tag: "Some" }, () => buildLoop(stmts, add(i, 1), reg))
-    .exhaustive(),
-);
-export const buildRegistry: (stmts: Stmt[]) => Result<Registry, PErr> = (stmts: Stmt[]) =>
-  _Result_map(
-    (reg: Registry) => seedRegDeclsFrom(builtinDeclsFor(stmts), 0, reg),
-    buildLoop(stmts, 0, emptyRegistry),
-  );
-const exportedRegLoop: {
-  (stmts: Stmt[]): (i0: number) => (reg0: Registry) => Registry;
-  (stmts: Stmt[]): (i0: number, reg0: Registry) => Registry;
-  (stmts: Stmt[], i0: number): (reg0: Registry) => Registry;
-  (stmts: Stmt[], i0: number, reg0: Registry): Registry;
-} = _curry(3, (stmts: Stmt[], i0: number, reg0: Registry) => {
-  let i: number = i0;
-  let reg: Registry = reg0;
-  while (true) {
-    const _step = match(_Array_get(i, stmts))
-      .with({ _tag: "None" }, () => _done(reg))
+const buildLoop: _Curry<[stmts: Stmt[], i: number, reg: Registry], Result<Registry, PErr>> = _curry(
+  3,
+  (stmts: Stmt[], i: number, reg: Registry) =>
+    match(_Array_get(i, stmts))
+      .with({ _tag: "None" }, () => Ok(reg) as Result<Registry, PErr>)
       .with(
         (
           _v,
@@ -268,27 +220,69 @@ const exportedRegLoop: {
           value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
         } => {
           const _g: any = _v;
-          return _g._tag === "Some" && _g.value._tag === "SType" && _g.value.exported === true;
+          return _g._tag === "Some" && _g.value._tag === "SType";
         },
-        ({ value: { name, ctors } }) =>
-          _recur(add(i, 1), {
-            ctors: seedRegCtorsFrom(ctors, 0, name, reg.ctors),
-            types: _Map_set(
-              name,
-              map((c: Ctor) => c.name, ctors),
-              reg.types,
-            ),
-          }),
+        ({ value: { name, ctors, span: sp } }) =>
+          _Map_has(name, reg.types)
+            ? (Err(ctorErr(`duplicate type '${name}'`, sp)) as Result<Registry, PErr>)
+            : _Result_flatMap(
+                (cs: Map<string, CtorInfo>) =>
+                  buildLoop(stmts, add(i, 1), {
+                    ctors: cs,
+                    types: _Map_set(
+                      name,
+                      map((c: Ctor) => c.name, ctors),
+                      reg.types,
+                    ),
+                  }),
+                ctorsInto(ctors, 0, name, sp, reg.ctors),
+              ),
       )
-      .with({ _tag: "Some" }, () => _recur(add(i, 1), reg))
-      .exhaustive();
-    if (_step._tag === "recur") {
-      [i, reg] = _step.args;
-      continue;
+      .with({ _tag: "Some" }, () => buildLoop(stmts, add(i, 1), reg))
+      .exhaustive(),
+);
+export const buildRegistry: (stmts: Stmt[]) => Result<Registry, PErr> = (stmts: Stmt[]) =>
+  _Result_map(
+    (reg: Registry) => seedRegDeclsFrom(builtinDeclsFor(stmts), 0, reg),
+    buildLoop(stmts, 0, emptyRegistry),
+  );
+const exportedRegLoop: _Curry<[stmts: Stmt[], i0: number, reg0: Registry], Registry> = _curry(
+  3,
+  (stmts: Stmt[], i0: number, reg0: Registry) => {
+    let i: number = i0;
+    let reg: Registry = reg0;
+    while (true) {
+      const _step = match(_Array_get(i, stmts))
+        .with({ _tag: "None" }, () => _done(reg))
+        .with(
+          (
+            _v,
+          ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
+            value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
+          } => {
+            const _g: any = _v;
+            return _g._tag === "Some" && _g.value._tag === "SType" && _g.value.exported === true;
+          },
+          ({ value: { name, ctors } }) =>
+            _recur(add(i, 1), {
+              ctors: seedRegCtorsFrom(ctors, 0, name, reg.ctors),
+              types: _Map_set(
+                name,
+                map((c: Ctor) => c.name, ctors),
+                reg.types,
+              ),
+            }),
+        )
+        .with({ _tag: "Some" }, () => _recur(add(i, 1), reg))
+        .exhaustive();
+      if (_step._tag === "recur") {
+        [i, reg] = _step.args;
+        continue;
+      }
+      return _step.value;
     }
-    return _step.value;
-  }
-});
+  },
+);
 export const exportedRegistry: (stmts: Stmt[]) => Registry = (stmts: Stmt[]) =>
   exportedRegLoop(stmts, 0, emptyRegistry);
 const ctorKeysInto: <A, B, C>(
@@ -311,12 +305,10 @@ const ctorKeysInto: <A, B, C>(
       )
       .exhaustive(),
 );
-const ctorKeysFrom: {
-  (stmts: Stmt[]): (i: number) => (m: Map<string, string[]>) => Map<string, string[]>;
-  (stmts: Stmt[]): (i: number, m: Map<string, string[]>) => Map<string, string[]>;
-  (stmts: Stmt[], i: number): (m: Map<string, string[]>) => Map<string, string[]>;
-  (stmts: Stmt[], i: number, m: Map<string, string[]>): Map<string, string[]>;
-} = _curry(3, (stmts: Stmt[], i: number, m: Map<string, string[]>) =>
+const ctorKeysFrom: _Curry<
+  [stmts: Stmt[], i: number, m: Map<string, string[]>],
+  Map<string, string[]>
+> = _curry(3, (stmts: Stmt[], i: number, m: Map<string, string[]>) =>
   match(_Array_get(i, stmts))
     .with({ _tag: "None" }, () => m)
     .with(
@@ -333,10 +325,10 @@ const ctorKeysFrom: {
     .with({ _tag: "Some" }, () => ctorKeysFrom(stmts, add(i, 1), m))
     .exhaustive(),
 );
-export const ctorKeysFromStmts: {
-  (stmts: Stmt[]): (m: Map<string, string[]>) => Map<string, string[]>;
-  (stmts: Stmt[], m: Map<string, string[]>): Map<string, string[]>;
-} = _curry(2, (stmts: Stmt[], m: Map<string, string[]>) => ctorKeysFrom(stmts, 0, m));
+export const ctorKeysFromStmts: _Curry<
+  [stmts: Stmt[], m: Map<string, string[]>],
+  Map<string, string[]>
+> = _curry(2, (stmts: Stmt[], m: Map<string, string[]>) => ctorKeysFrom(stmts, 0, m));
 const seedKeyCtorsFrom: <A, B, C>(
   ctors: ({ fields: ({ name: Option<string> } & B)[]; name: A } & C)[],
   i: number,
@@ -380,18 +372,16 @@ const seedKeyDeclsFrom: <A, B, C, D>(
       )
       .exhaustive(),
 );
-export const seedBuiltinCtorKeys: {
-  (stmts: Stmt[]): (m: Map<string, string[]>) => Map<string, string[]>;
-  (stmts: Stmt[], m: Map<string, string[]>): Map<string, string[]>;
-} = _curry(2, (stmts: Stmt[], m: Map<string, string[]>) =>
+export const seedBuiltinCtorKeys: _Curry<
+  [stmts: Stmt[], m: Map<string, string[]>],
+  Map<string, string[]>
+> = _curry(2, (stmts: Stmt[], m: Map<string, string[]>) =>
   seedKeyDeclsFrom(builtinDeclsFor(stmts), 0, m),
 );
-const exportedCtorKeysFrom: {
-  (stmts: Stmt[]): (i: number) => (m: Map<string, string[]>) => Map<string, string[]>;
-  (stmts: Stmt[]): (i: number, m: Map<string, string[]>) => Map<string, string[]>;
-  (stmts: Stmt[], i: number): (m: Map<string, string[]>) => Map<string, string[]>;
-  (stmts: Stmt[], i: number, m: Map<string, string[]>): Map<string, string[]>;
-} = _curry(3, (stmts: Stmt[], i: number, m: Map<string, string[]>) =>
+const exportedCtorKeysFrom: _Curry<
+  [stmts: Stmt[], i: number, m: Map<string, string[]>],
+  Map<string, string[]>
+> = _curry(3, (stmts: Stmt[], i: number, m: Map<string, string[]>) =>
   match(_Array_get(i, stmts))
     .with({ _tag: "None" }, () => m)
     .with(

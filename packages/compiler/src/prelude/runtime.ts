@@ -12,6 +12,31 @@ export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
 export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
 export type Task<A, E> = () => Promise<Result<A, E>>;
 
+/**
+ * The curry-compatible function type (ADR 0093). `_curry` makes an arity-n
+ * binding callable in ANY partial-application grouping — `f(a, b)`, `f(a)(b)`,
+ * `f(a, b)(c)` — which the TS backend used to type as one overload per
+ * composition of the arity, 2^(n-1) of them. `_Curry` says the same thing once.
+ *
+ * A prefix is EXACT and NON-EMPTY: not `Partial<A>`, which would let a caller
+ * skip a leading argument by passing `undefined` and have `_curry` bind it; and
+ * not `[]`, which widens every partial-application result to a union tsc cannot
+ * resolve. Both conditionals are wrapped in tuples so a `T` inferred as a union
+ * of prefixes does not distribute and leave the result unresolved.
+ */
+export type _CurryPre<A extends unknown[]> = A extends [infer H, ...infer R]
+  ? [H] | [H, ..._CurryPre<R>]
+  : never;
+export type _CurryTail<T extends unknown[]> = T extends [unknown, ...infer R] ? R : [];
+export type _CurryDrop<A extends unknown[], T extends unknown[]> = T extends [unknown, ...infer TR]
+  ? _CurryDrop<_CurryTail<A>, TR>
+  : A;
+export type _Curry<A extends unknown[], R> = [A] extends [[]]
+  ? R
+  : <T extends _CurryPre<A>>(
+      ...args: T
+    ) => [_CurryDrop<A, T>] extends [[]] ? R : _Curry<_CurryDrop<A, T>, R>;
+
 export const _list = <T>(g: () => Iterator<T>): Iterable<T> => ({ [Symbol.iterator]: g });
 export const _curry = (n: number, f: (...args: any[]) => any): ((...args: any[]) => any) =>
   function c(...a: any[]): any {

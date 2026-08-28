@@ -6,6 +6,8 @@ export type Scheme = { vars: number[]; rvars: number[]; ty: Ty };
 export type VarSets = { tv: Set<number>; rv: Set<number> };
 export type AliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
 
+import type { _Curry } from "@mochi/compiler/runtime";
+
 import {
   _curry,
   Some,
@@ -96,50 +98,45 @@ const diffVarSets: <A, B, C, D>(
     rv: _Set_diff(a.rv, b.rv),
   }),
 );
-export const collect: { (t: Ty): (acc: VarSets) => VarSets; (t: Ty, acc: VarSets): VarSets } =
-  _curry(2, (t: Ty, acc: VarSets) =>
-    match(t)
-      .with({ _tag: "TyVar" }, ({ id }) => ({ tv: _Set_add(id, acc.tv), rv: acc.rv }))
-      .with({ _tag: "TyCon" }, ({ args }) => collectArgs(args, acc))
-      .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) => collect(toT, collect(fromT, acc)))
-      .with({ _tag: "TyRecord" }, ({ row }) => collectRow(row, acc))
-      .with({ _tag: "TySingleton" }, () => acc)
-      .with({ _tag: "TyOneOf" }, ({ members }) => collectArgs(members, acc))
-      .exhaustive(),
-  );
-const collectArgs: {
-  (args: Ty[]): (acc: VarSets) => VarSets;
-  (args: Ty[], acc: VarSets): VarSets;
-} = _curry(2, (args: Ty[], acc: VarSets) =>
-  match(args)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => acc,
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length >= 1;
-      },
-      ([a, ...rest]) => collectArgs(rest, collect(a, acc)),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+export const collect: _Curry<[t: Ty, acc: VarSets], VarSets> = _curry(2, (t: Ty, acc: VarSets) =>
+  match(t)
+    .with({ _tag: "TyVar" }, ({ id }) => ({ tv: _Set_add(id, acc.tv), rv: acc.rv }))
+    .with({ _tag: "TyCon" }, ({ args }) => collectArgs(args, acc))
+    .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) => collect(toT, collect(fromT, acc)))
+    .with({ _tag: "TyRecord" }, ({ row }) => collectRow(row, acc))
+    .with({ _tag: "TySingleton" }, () => acc)
+    .with({ _tag: "TyOneOf" }, ({ members }) => collectArgs(members, acc))
+    .exhaustive(),
 );
-const collectRow: { (row: Row): (acc: VarSets) => VarSets; (row: Row, acc: VarSets): VarSets } =
-  _curry(2, (row: Row, acc: VarSets) =>
-    match(row)
-      .with({ _tag: "RowVar" }, ({ id }) => ({ tv: acc.tv, rv: _Set_add(id, acc.rv) }))
-      .with({ _tag: "RowExtend" }, ({ fieldType, rest }) =>
-        collectRow(rest, collect(fieldType, acc)),
+const collectArgs: _Curry<[args: Ty[], acc: VarSets], VarSets> = _curry(
+  2,
+  (args: Ty[], acc: VarSets) =>
+    match(args)
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length === 0;
+        },
+        () => acc,
       )
-      .with({ _tag: "RowEmpty" }, () => acc)
-      .exhaustive(),
-  );
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length >= 1;
+        },
+        ([a, ...rest]) => collectArgs(rest, collect(a, acc)),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
+);
+const collectRow: _Curry<[row: Row, acc: VarSets], VarSets> = _curry(2, (row: Row, acc: VarSets) =>
+  match(row)
+    .with({ _tag: "RowVar" }, ({ id }) => ({ tv: acc.tv, rv: _Set_add(id, acc.rv) }))
+    .with({ _tag: "RowExtend" }, ({ fieldType, rest }) => collectRow(rest, collect(fieldType, acc)))
+    .with({ _tag: "RowEmpty" }, () => acc)
+    .exhaustive(),
+);
 export const freeInType: (t: Ty) => VarSets = (t: Ty) => collect(t, emptyVarSets);
 const freeInScheme: <A>(sc: { ty: Ty; rvars: number[]; vars: number[] } & A) => VarSets = <A>(
   sc: { ty: Ty; rvars: number[]; vars: number[] } & A,
@@ -260,43 +257,37 @@ const instRowMapFrom: <A>(vars: A[], acc: Map<A, Row>, st: St) => [Map<A, Row>, 
         throw new Error("non-exhaustive match");
       }),
 );
-const instSub: {
-  (t: Ty): (tmap: Map<number, Ty>) => (rmap: Map<number, Row>) => Ty;
-  (t: Ty): (tmap: Map<number, Ty>, rmap: Map<number, Row>) => Ty;
-  (t: Ty, tmap: Map<number, Ty>): (rmap: Map<number, Row>) => Ty;
-  (t: Ty, tmap: Map<number, Ty>, rmap: Map<number, Row>): Ty;
-} = _curry(3, (t: Ty, tmap: Map<number, Ty>, rmap: Map<number, Row>) =>
-  match(t)
-    .with({ _tag: "TyVar" }, ({ id }) => _Map_getOr(t, id, tmap))
-    .with({ _tag: "TyCon" }, ({ name, args }) =>
-      tCon(
-        name,
-        map((a: Ty) => instSub(a, tmap, rmap), args),
-      ),
-    )
-    .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
-      tArrow(instSub(fromT, tmap, rmap), instSub(toT, tmap, rmap)),
-    )
-    .with({ _tag: "TyRecord" }, ({ row }) => tRecord(instSubRow(row, tmap, rmap)))
-    .with({ _tag: "TySingleton" }, ({ base, value }) => TySingleton(base, value))
-    .with({ _tag: "TyOneOf" }, ({ members }) =>
-      tUnion(map((m: Ty) => instSub(m, tmap, rmap), members)),
-    )
-    .exhaustive(),
+const instSub: _Curry<[t: Ty, tmap: Map<number, Ty>, rmap: Map<number, Row>], Ty> = _curry(
+  3,
+  (t: Ty, tmap: Map<number, Ty>, rmap: Map<number, Row>) =>
+    match(t)
+      .with({ _tag: "TyVar" }, ({ id }) => _Map_getOr(t, id, tmap))
+      .with({ _tag: "TyCon" }, ({ name, args }) =>
+        tCon(
+          name,
+          map((a: Ty) => instSub(a, tmap, rmap), args),
+        ),
+      )
+      .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
+        tArrow(instSub(fromT, tmap, rmap), instSub(toT, tmap, rmap)),
+      )
+      .with({ _tag: "TyRecord" }, ({ row }) => tRecord(instSubRow(row, tmap, rmap)))
+      .with({ _tag: "TySingleton" }, ({ base, value }) => TySingleton(base, value))
+      .with({ _tag: "TyOneOf" }, ({ members }) =>
+        tUnion(map((m: Ty) => instSub(m, tmap, rmap), members)),
+      )
+      .exhaustive(),
 );
-const instSubRow: {
-  (row: Row): (tmap: Map<number, Ty>) => (rmap: Map<number, Row>) => Row;
-  (row: Row): (tmap: Map<number, Ty>, rmap: Map<number, Row>) => Row;
-  (row: Row, tmap: Map<number, Ty>): (rmap: Map<number, Row>) => Row;
-  (row: Row, tmap: Map<number, Ty>, rmap: Map<number, Row>): Row;
-} = _curry(3, (row: Row, tmap: Map<number, Ty>, rmap: Map<number, Row>) =>
-  match(row)
-    .with({ _tag: "RowVar" }, ({ id }) => _Map_getOr(row, id, rmap))
-    .with({ _tag: "RowExtend" }, ({ label, fieldType, rest }) =>
-      rExtend(label, instSub(fieldType, tmap, rmap), instSubRow(rest, tmap, rmap)),
-    )
-    .with({ _tag: "RowEmpty" }, () => row)
-    .exhaustive(),
+const instSubRow: _Curry<[row: Row, tmap: Map<number, Ty>, rmap: Map<number, Row>], Row> = _curry(
+  3,
+  (row: Row, tmap: Map<number, Ty>, rmap: Map<number, Row>) =>
+    match(row)
+      .with({ _tag: "RowVar" }, ({ id }) => _Map_getOr(row, id, rmap))
+      .with({ _tag: "RowExtend" }, ({ label, fieldType, rest }) =>
+        rExtend(label, instSub(fieldType, tmap, rmap), instSubRow(rest, tmap, rmap)),
+      )
+      .with({ _tag: "RowEmpty" }, () => row)
+      .exhaustive(),
 );
 export const instantiate: <A>(
   sc: { ty: Ty; rvars: number[]; vars: number[] } & A,

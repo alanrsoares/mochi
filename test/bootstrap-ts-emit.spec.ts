@@ -57,9 +57,9 @@ const tscErrors = (ts: string): string => {
   }
 };
 
-test("a concrete function binding gets curried overloads (ADR 0037)", () => {
+test("a concrete function binding gets a curry-compatible type (ADR 0093)", () => {
   expect(emit("let addPair = (a, b) => add(a, b)")).toContain(
-    "const addPair: { (a: number): (b: number) => number; (a: number, b: number): number; } =",
+    "const addPair: _Curry<[a: number, b: number], number> =",
   );
 });
 

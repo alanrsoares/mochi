@@ -12,6 +12,8 @@ export type Acc = { state: Map<string, string>; order: Loaded[] };
 export type CtorInfo = { owner: string; arity: number };
 export type Registry = { ctors: Map<string, CtorInfo>; types: Map<string, string[]> };
 
+import type { _Curry } from "@mochi/compiler/runtime";
+
 import {
   _curry,
   Some,
@@ -82,111 +84,104 @@ const mErr: <A>(message: A) => { message: A; start: number; end: number } = <A>(
 });
 const parseModule: ($x: string) => Result<Stmt[], MErr> = ($x: string) =>
   _Result_flatMap(parse)(lex($x));
-const importFromsFrom: {
-  (stmts: Stmt[]): (i: number) => (acc: string[]) => string[];
-  (stmts: Stmt[]): (i: number, acc: string[]) => string[];
-  (stmts: Stmt[], i: number): (acc: string[]) => string[];
-  (stmts: Stmt[], i: number, acc: string[]): string[];
-} = _curry(3, (stmts: Stmt[], i: number, acc: string[]) =>
-  match(_Array_get(i, stmts))
-    .with({ _tag: "None" }, () => acc)
-    .with({ _tag: "Some" }, ({ value: s }) =>
-      match(s)
-        .with({ _tag: "SImport" }, ({ from }) =>
-          importFromsFrom(stmts, add(i, 1), _Array_append(from, acc)),
-        )
-        .with({ _tag: "SImportNs" }, ({ from }) =>
-          importFromsFrom(stmts, add(i, 1), _Array_append(from, acc)),
-        )
-        .otherwise(() => importFromsFrom(stmts, add(i, 1), acc)),
-    )
-    .exhaustive(),
+const importFromsFrom: _Curry<[stmts: Stmt[], i: number, acc: string[]], string[]> = _curry(
+  3,
+  (stmts: Stmt[], i: number, acc: string[]) =>
+    match(_Array_get(i, stmts))
+      .with({ _tag: "None" }, () => acc)
+      .with({ _tag: "Some" }, ({ value: s }) =>
+        match(s)
+          .with({ _tag: "SImport" }, ({ from }) =>
+            importFromsFrom(stmts, add(i, 1), _Array_append(from, acc)),
+          )
+          .with({ _tag: "SImportNs" }, ({ from }) =>
+            importFromsFrom(stmts, add(i, 1), _Array_append(from, acc)),
+          )
+          .otherwise(() => importFromsFrom(stmts, add(i, 1), acc)),
+      )
+      .exhaustive(),
 );
 const importFroms: (stmts: Stmt[]) => string[] = (stmts: Stmt[]) =>
   importFromsFrom(stmts, 0, [] as string[]);
 
-const visit: {
-  (path: string): (acc: Acc) => Result<Acc, MErr>;
-  (path: string, acc: Acc): Result<Acc, MErr>;
-} = _curry(2, (path: string, acc: Acc) =>
-  match(_Map_get(path, acc.state))
-    .with({ _tag: "Some", value: "done" }, () => Ok(acc) as Result<Acc, MErr>)
-    .with(
-      { _tag: "Some", value: "loading" },
-      () => Err(mErr(`import cycle through '${path}'`)) as Result<Acc, MErr>,
-    )
-    .otherwise(() =>
-      ((acc1: Acc) =>
-        match(readFile(path))
-          .with(
-            { _tag: "Err" },
-            () =>
-              Err(mErr(`cannot read module '${path}'`)) as Result<
-                { state: Map<string, string>; order: Loaded[] },
-                MErr
-              >,
-          )
-          .with({ _tag: "Ok" }, ({ value: src }) =>
-            match(parseModule(src))
-              .with(
-                { _tag: "Err" },
-                ({ error: e }) =>
-                  Err(e) as Result<{ state: Map<string, string>; order: Loaded[] }, MErr>,
-              )
-              .with({ _tag: "Ok" }, ({ value: stmts }) =>
-                match(visitAll(importFroms(stmts), path, acc1))
-                  .with(
-                    { _tag: "Err" },
-                    ({ error: e }) =>
-                      Err(e) as Result<{ state: Map<string, string>; order: Loaded[] }, MErr>,
-                  )
-                  .with(
-                    { _tag: "Ok" },
-                    ({ value: acc2 }) =>
-                      Ok({
-                        state: _Map_set(path, "done", acc2.state),
-                        order: _Array_append({ path: path, stmts: stmts }, acc2.order),
-                      }) as Result<{ state: Map<string, string>; order: Loaded[] }, MErr>,
-                  )
-                  .exhaustive(),
-              )
-              .exhaustive(),
-          )
-          .exhaustive())({ state: _Map_set(path, "loading", acc.state), order: acc.order }),
-    ),
+const visit: _Curry<[path: string, acc: Acc], Result<Acc, MErr>> = _curry(
+  2,
+  (path: string, acc: Acc) =>
+    match(_Map_get(path, acc.state))
+      .with({ _tag: "Some", value: "done" }, () => Ok(acc) as Result<Acc, MErr>)
+      .with(
+        { _tag: "Some", value: "loading" },
+        () => Err(mErr(`import cycle through '${path}'`)) as Result<Acc, MErr>,
+      )
+      .otherwise(() =>
+        ((acc1: Acc) =>
+          match(readFile(path))
+            .with(
+              { _tag: "Err" },
+              () =>
+                Err(mErr(`cannot read module '${path}'`)) as Result<
+                  { state: Map<string, string>; order: Loaded[] },
+                  MErr
+                >,
+            )
+            .with({ _tag: "Ok" }, ({ value: src }) =>
+              match(parseModule(src))
+                .with(
+                  { _tag: "Err" },
+                  ({ error: e }) =>
+                    Err(e) as Result<{ state: Map<string, string>; order: Loaded[] }, MErr>,
+                )
+                .with({ _tag: "Ok" }, ({ value: stmts }) =>
+                  match(visitAll(importFroms(stmts), path, acc1))
+                    .with(
+                      { _tag: "Err" },
+                      ({ error: e }) =>
+                        Err(e) as Result<{ state: Map<string, string>; order: Loaded[] }, MErr>,
+                    )
+                    .with(
+                      { _tag: "Ok" },
+                      ({ value: acc2 }) =>
+                        Ok({
+                          state: _Map_set(path, "done", acc2.state),
+                          order: _Array_append({ path: path, stmts: stmts }, acc2.order),
+                        }) as Result<{ state: Map<string, string>; order: Loaded[] }, MErr>,
+                    )
+                    .exhaustive(),
+                )
+                .exhaustive(),
+            )
+            .exhaustive())({ state: _Map_set(path, "loading", acc.state), order: acc.order }),
+      ),
 );
-const visitAll: {
-  (froms: string[]): (importer: string) => (acc: Acc) => Result<Acc, MErr>;
-  (froms: string[]): (importer: string, acc: Acc) => Result<Acc, MErr>;
-  (froms: string[], importer: string): (acc: Acc) => Result<Acc, MErr>;
-  (froms: string[], importer: string, acc: Acc): Result<Acc, MErr>;
-} = _curry(3, (froms: string[], importer: string, acc: Acc) =>
-  match(froms)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => Ok(acc) as Result<Acc, MErr>,
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length >= 1;
-      },
-      ([from, ...rest]) =>
-        match(visit(resolveImport(importer, from), acc))
-          .with(
-            { _tag: "Err" },
-            ({ error: e }) =>
-              Err(e) as Result<{ order: Loaded[]; state: Map<string, string> }, MErr>,
-          )
-          .with({ _tag: "Ok" }, ({ value: acc1 }) => visitAll(rest, importer, acc1))
-          .exhaustive(),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+const visitAll: _Curry<[froms: string[], importer: string, acc: Acc], Result<Acc, MErr>> = _curry(
+  3,
+  (froms: string[], importer: string, acc: Acc) =>
+    match(froms)
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length === 0;
+        },
+        () => Ok(acc) as Result<Acc, MErr>,
+      )
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length >= 1;
+        },
+        ([from, ...rest]) =>
+          match(visit(resolveImport(importer, from), acc))
+            .with(
+              { _tag: "Err" },
+              ({ error: e }) =>
+                Err(e) as Result<{ order: Loaded[]; state: Map<string, string> }, MErr>,
+            )
+            .with({ _tag: "Ok" }, ({ value: acc1 }) => visitAll(rest, importer, acc1))
+            .exhaustive(),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
 );
 export const loadGraph: (entry: string) => Result<Loaded[], MErr> = (entry: string) =>
   _Result_flatMap(
@@ -750,15 +745,8 @@ const compileOne: <A>(
       )
       .exhaustive(),
 );
-const compileAll: {
-  (ctx: {
-    outputs: { path: string; js: string }[];
-    exportsByPath: Map<string, Map<string, Scheme>>;
-    regByPath: Map<string, Registry>;
-    keysByPath: Map<string, Map<string, string[]>>;
-    qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
-  }): (graph: Loaded[]) => Result<{ path: string; js: string }[], MErr>;
-  (
+const compileAll: _Curry<
+  [
     ctx: {
       outputs: { path: string; js: string }[];
       exportsByPath: Map<string, Map<string, Scheme>>;
@@ -767,8 +755,9 @@ const compileAll: {
       qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
     },
     graph: Loaded[],
-  ): Result<{ path: string; js: string }[], MErr>;
-} = _curry(
+  ],
+  Result<{ path: string; js: string }[], MErr>
+> = _curry(
   2,
   (
     ctx: {
@@ -848,49 +837,47 @@ const endsAtBoundary: (part: string) => boolean = (part: string) =>
     : not(isIdentChar(_Option_unwrapOr("", _Str_get(sub(_Str_length(part), 1), part))));
 const startsAtBoundary: (part: string) => boolean = (part: string) =>
   eq(_Str_length(part), 0) ? true : not(isIdentChar(_Option_unwrapOr("", _Str_get(0, part))));
-const occursAsWordFrom: {
-  (parts: string[]): (i: number) => boolean;
-  (parts: string[], i: number): boolean;
-} = _curry(2, (parts: string[], i: number) =>
-  match(_Array_get(i, parts))
-    .with({ _tag: "None" }, () => false)
-    .with({ _tag: "Some" }, ({ value: after }) =>
-      and(
-        _Option_mapOr(false, endsAtBoundary, _Array_get(sub(i, 1), parts)),
-        startsAtBoundary(after),
+const occursAsWordFrom: _Curry<[parts: string[], i: number], boolean> = _curry(
+  2,
+  (parts: string[], i: number) =>
+    match(_Array_get(i, parts))
+      .with({ _tag: "None" }, () => false)
+      .with({ _tag: "Some" }, ({ value: after }) =>
+        and(
+          _Option_mapOr(false, endsAtBoundary, _Array_get(sub(i, 1), parts)),
+          startsAtBoundary(after),
+        )
+          ? true
+          : occursAsWordFrom(parts, add(i, 1)),
       )
-        ? true
-        : occursAsWordFrom(parts, add(i, 1)),
-    )
-    .exhaustive(),
+      .exhaustive(),
 );
-const occursAsWord: {
-  (name: string): (text: string) => boolean;
-  (name: string, text: string): boolean;
-} = _curry(2, (name: string, text: string) => occursAsWordFrom(_Str_split(name, text), 1));
+const occursAsWord: _Curry<[name: string, text: string], boolean> = _curry(
+  2,
+  (name: string, text: string) => occursAsWordFrom(_Str_split(name, text), 1),
+);
 const importedBinding: (spec: string) => string = (spec: string) => {
   const parts: string[] = _Str_split(" as ", spec);
   return _Str_trim(_Option_unwrapOr(spec, _Array_get(sub(length(parts), 1), parts)));
 };
-const bindingsInLine: {
-  (line: string): (acc: Set<string>) => Set<string>;
-  (line: string, acc: Set<string>): Set<string>;
-} = _curry(2, (line: string, acc: Set<string>) =>
-  match(_Array_get(1, _Str_split("{", line)))
-    .with({ _tag: "None" }, () => acc)
-    .with({ _tag: "Some" }, ({ value: rest }) =>
-      match(_Array_get(0, _Str_split("}", rest)))
-        .with({ _tag: "None" }, () => acc)
-        .with({ _tag: "Some" }, ({ value: names }) =>
-          reduce(
-            _curry(2, (a: Set<string>, n: string) => _Set_add(importedBinding(n), a)),
-            acc,
-            _Str_split(",", names),
-          ),
-        )
-        .exhaustive(),
-    )
-    .exhaustive(),
+const bindingsInLine: _Curry<[line: string, acc: Set<string>], Set<string>> = _curry(
+  2,
+  (line: string, acc: Set<string>) =>
+    match(_Array_get(1, _Str_split("{", line)))
+      .with({ _tag: "None" }, () => acc)
+      .with({ _tag: "Some" }, ({ value: rest }) =>
+        match(_Array_get(0, _Str_split("}", rest)))
+          .with({ _tag: "None" }, () => acc)
+          .with({ _tag: "Some" }, ({ value: names }) =>
+            reduce(
+              _curry(2, (a: Set<string>, n: string) => _Set_add(importedBinding(n), a)),
+              acc,
+              _Str_split(",", names),
+            ),
+          )
+          .exhaustive(),
+      )
+      .exhaustive(),
 );
 const valueImported: (ts: string) => Set<string> = (ts: string) =>
   reduce(
@@ -972,36 +959,10 @@ const groupByOwner: <A>(
       names,
     ),
 );
-const crossModuleTypeImports: {
-  (
-    ts: string,
-  ): (
-    importer: string,
-  ) => (localTypes: Set<string>) => (typeOwner: Map<string, string>) => string[];
-  (
-    ts: string,
-  ): (importer: string) => (localTypes: Set<string>, typeOwner: Map<string, string>) => string[];
-  (
-    ts: string,
-  ): (importer: string, localTypes: Set<string>) => (typeOwner: Map<string, string>) => string[];
-  (
-    ts: string,
-    importer: string,
-  ): (localTypes: Set<string>) => (typeOwner: Map<string, string>) => string[];
-  (
-    ts: string,
-  ): (importer: string, localTypes: Set<string>, typeOwner: Map<string, string>) => string[];
-  (
-    ts: string,
-    importer: string,
-  ): (localTypes: Set<string>, typeOwner: Map<string, string>) => string[];
-  (
-    ts: string,
-    importer: string,
-    localTypes: Set<string>,
-  ): (typeOwner: Map<string, string>) => string[];
-  (ts: string, importer: string, localTypes: Set<string>, typeOwner: Map<string, string>): string[];
-} = _curry(
+const crossModuleTypeImports: _Curry<
+  [ts: string, importer: string, localTypes: Set<string>, typeOwner: Map<string, string>],
+  string[]
+> = _curry(
   4,
   (ts: string, importer: string, localTypes: Set<string>, typeOwner: Map<string, string>) => {
     const byOwner: Map<string, string[]> = groupByOwner(_Map_keys(typeOwner), {
@@ -1364,9 +1325,9 @@ export const compileGraphTs: <A>(
       graph,
     ),
 );
-export const buildModulesTs: {
-  (entry: string): (runtimeImport: string) => Result<{ path: string; js: string }[], MErr>;
-  (entry: string, runtimeImport: string): Result<{ path: string; js: string }[], MErr>;
-} = _curry(2, (entry: string, runtimeImport: string) =>
+export const buildModulesTs: _Curry<
+  [entry: string, runtimeImport: string],
+  Result<{ path: string; js: string }[], MErr>
+> = _curry(2, (entry: string, runtimeImport: string) =>
   _Result_flatMap((graph) => compileGraphTs(graph, runtimeImport), loadGraph(entry)),
 );

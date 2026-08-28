@@ -3,6 +3,8 @@ import type { PErr } from "./parser";
 
 export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
 
+import type { _Curry } from "@mochi/compiler/runtime";
+
 import { _curry, Ok, _Result_flatMap } from "@mochi/compiler/runtime";
 
 import { lex } from "./lexer";
@@ -41,31 +43,30 @@ export const compile: (src: string) => Result<string, PErr> = (src: string) =>
     pipeline(src),
   );
 const noImportedKeys: Map<string, string[]> = new Map<string, string[]>();
-export const compileTs: {
-  (src: string): (runtimeImport: string) => Result<string, PErr>;
-  (src: string, runtimeImport: string): Result<string, PErr>;
-} = _curry(2, (src: string, runtimeImport: string) =>
-  _Result_flatMap(
-    (stmts) =>
-      _Result_flatMap(
-        (r) =>
-          Ok(
-            emitTsModule(
-              stmts,
-              r.env,
-              r.types,
-              r.letParams,
-              r.aliases,
-              noImportedKeys,
-              [] as string[],
-              namespaceRuntime,
-              preludeJsDefs,
-              runtimeDeps,
-              runtimeImport,
-            ),
-          ) as Result<string, PErr>,
-        inferProgramTypes(stmts, builtins, namespaces, false),
-      ),
-    frontend(src),
-  ),
+export const compileTs: _Curry<[src: string, runtimeImport: string], Result<string, PErr>> = _curry(
+  2,
+  (src: string, runtimeImport: string) =>
+    _Result_flatMap(
+      (stmts) =>
+        _Result_flatMap(
+          (r) =>
+            Ok(
+              emitTsModule(
+                stmts,
+                r.env,
+                r.types,
+                r.letParams,
+                r.aliases,
+                noImportedKeys,
+                [] as string[],
+                namespaceRuntime,
+                preludeJsDefs,
+                runtimeDeps,
+                runtimeImport,
+              ),
+            ) as Result<string, PErr>,
+          inferProgramTypes(stmts, builtins, namespaces, false),
+        ),
+      frontend(src),
+    ),
 );

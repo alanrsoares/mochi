@@ -56,6 +56,8 @@ export type GCtx = {
   valueRefs: Set<string>;
 };
 
+import type { _Curry } from "@mochi/compiler/runtime";
+
 import {
   _list,
   _curry,
@@ -140,14 +142,13 @@ const hook2: <A, B, C>(h: Option<(a: A, b: B) => Option<C>>, x: A, y: B) => Opti
       .with({ _tag: "Some" }, ({ value: f }) => f(x, y))
       .exhaustive(),
 );
-const emptyNsCtor: {
-  (con: string): (ann: Option<string>) => string;
-  (con: string, ann: Option<string>): string;
-} = _curry(2, (con: string, ann: Option<string>) =>
-  match(ann)
-    .with({ _tag: "None" }, () => `new ${con}()`)
-    .with({ _tag: "Some" }, ({ value: t }) => `new ${t}()`)
-    .exhaustive(),
+const emptyNsCtor: _Curry<[con: string, ann: Option<string>], string> = _curry(
+  2,
+  (con: string, ann: Option<string>) =>
+    match(ann)
+      .with({ _tag: "None" }, () => `new ${con}()`)
+      .with({ _tag: "Some" }, ({ value: t }) => `new ${t}()`)
+      .exhaustive(),
 );
 const isUpperStart: (s: string) => boolean = (s: string) =>
   _Option_exists((n: number) => and(gte(n, 65), lte(n, 90)), _Str_codeAt(0, s));
@@ -160,14 +161,13 @@ const isCtorRef: (fn: Expr) => boolean = (fn: Expr) =>
   match(fn)
     .with({ _tag: "ERef" }, ({ name }) => isUpperStart(name))
     .otherwise(() => false);
-const suffixOr: {
-  (name: string): (ann: Option<string>) => string;
-  (name: string, ann: Option<string>): string;
-} = _curry(2, (name: string, ann: Option<string>) =>
-  match(ann)
-    .with({ _tag: "None" }, () => name)
-    .with({ _tag: "Some" }, ({ value: t }) => `${name}: ${t}`)
-    .exhaustive(),
+const suffixOr: _Curry<[name: string, ann: Option<string>], string> = _curry(
+  2,
+  (name: string, ann: Option<string>) =>
+    match(ann)
+      .with({ _tag: "None" }, () => name)
+      .with({ _tag: "Some" }, ({ value: t }) => `${name}: ${t}`)
+      .exhaustive(),
 );
 const bareParamAnnots: ParamAnnots = { generics: "", params: [] as Option<string>[] };
 const paramAnnotsFor: <A, B>(
@@ -180,12 +180,10 @@ const paramAnnotsFor: <A, B>(
     .with({ _tag: "Some" }, ({ value: f }) => f(sp, arity))
     .exhaustive(),
 );
-const annotatedParams: {
-  (cparams: LamParam[]): (annots: Option<string>[]) => (i: number) => string[];
-  (cparams: LamParam[]): (annots: Option<string>[], i: number) => string[];
-  (cparams: LamParam[], annots: Option<string>[]): (i: number) => string[];
-  (cparams: LamParam[], annots: Option<string>[], i: number): string[];
-} = _curry(3, (cparams: LamParam[], annots: Option<string>[], i: number) =>
+const annotatedParams: _Curry<
+  [cparams: LamParam[], annots: Option<string>[], i: number],
+  string[]
+> = _curry(3, (cparams: LamParam[], annots: Option<string>[], i: number) =>
   match(_Array_get(i, cparams))
     .with({ _tag: "None" }, () => [] as string[])
     .with({ _tag: "Some" }, ({ value: p }) =>
@@ -196,14 +194,13 @@ const annotatedParams: {
     )
     .exhaustive(),
 );
-const castOr: {
-  (js: string): (ann: Option<string>) => string;
-  (js: string, ann: Option<string>): string;
-} = _curry(2, (js: string, ann: Option<string>) =>
-  match(ann)
-    .with({ _tag: "None" }, () => js)
-    .with({ _tag: "Some" }, ({ value: t }) => `(${js} as ${t})`)
-    .exhaustive(),
+const castOr: _Curry<[js: string, ann: Option<string>], string> = _curry(
+  2,
+  (js: string, ann: Option<string>) =>
+    match(ann)
+      .with({ _tag: "None" }, () => js)
+      .with({ _tag: "Some" }, ({ value: t }) => `(${js} as ${t})`)
+      .exhaustive(),
 );
 const bindRuntime: (monad: string) => string = (monad: string) =>
   eq(monad, "Option")
@@ -244,73 +241,63 @@ const escChar: (c: string) => string = (c: string) =>
     .otherwise(() => c);
 const jsStringLit: (s: string) => string = (s: string) =>
   `"${_Str_join("", map(escChar, _Str_chars(s)))}"`;
-const escTemplateLoop: {
-  (chars: string[]): (i0: number) => (acc0: string) => string;
-  (chars: string[]): (i0: number, acc0: string) => string;
-  (chars: string[], i0: number): (acc0: string) => string;
-  (chars: string[], i0: number, acc0: string): string;
-} = _curry(3, (chars: string[], i0: number, acc0: string) => {
-  let i: number = i0;
-  let acc: string = acc0;
-  while (true) {
-    const _step = match(_Array_get(i, chars))
-      .with({ _tag: "None" }, () => _done(acc))
-      .with({ _tag: "Some", value: "\\" }, () => _recur(add(i, 1), `${acc}\\\\`))
-      .with({ _tag: "Some", value: "`" }, () => _recur(add(i, 1), `${acc}\\\``))
-      .with(
-        (_v): _v is Extract<Option<string>, { _tag: "Some" }> => {
-          const _g: any = _v;
-          return (
-            _g._tag === "Some" &&
-            _g.value === "$" &&
-            _Option_contains("{", _Array_get(add(i, 1), chars))
-          );
-        },
-        () => _recur(add(i, 2), `${acc}\\\${`),
-      )
-      .with({ _tag: "Some" }, ({ value: c }) => _recur(add(i, 1), `${acc}${c}`))
-      .exhaustive();
-    if (_step._tag === "recur") {
-      [i, acc] = _step.args;
-      continue;
+const escTemplateLoop: _Curry<[chars: string[], i0: number, acc0: string], string> = _curry(
+  3,
+  (chars: string[], i0: number, acc0: string) => {
+    let i: number = i0;
+    let acc: string = acc0;
+    while (true) {
+      const _step = match(_Array_get(i, chars))
+        .with({ _tag: "None" }, () => _done(acc))
+        .with({ _tag: "Some", value: "\\" }, () => _recur(add(i, 1), `${acc}\\\\`))
+        .with({ _tag: "Some", value: "`" }, () => _recur(add(i, 1), `${acc}\\\``))
+        .with(
+          (_v): _v is Extract<Option<string>, { _tag: "Some" }> => {
+            const _g: any = _v;
+            return (
+              _g._tag === "Some" &&
+              _g.value === "$" &&
+              _Option_contains("{", _Array_get(add(i, 1), chars))
+            );
+          },
+          () => _recur(add(i, 2), `${acc}\\\${`),
+        )
+        .with({ _tag: "Some" }, ({ value: c }) => _recur(add(i, 1), `${acc}${c}`))
+        .exhaustive();
+      if (_step._tag === "recur") {
+        [i, acc] = _step.args;
+        continue;
+      }
+      return _step.value;
     }
-    return _step.value;
-  }
-});
+  },
+);
 const escapeTemplateLiteral: (s: string) => string = (s: string) =>
   escTemplateLoop(_Str_chars(s), 0, "");
-const keyAt: {
-  (ctx: GCtx): (ctor: string) => (i: number) => string;
-  (ctx: GCtx): (ctor: string, i: number) => string;
-  (ctx: GCtx, ctor: string): (i: number) => string;
-  (ctx: GCtx, ctor: string, i: number): string;
-} = _curry(3, (ctx: GCtx, ctor: string, i: number) =>
-  match(_Map_get(ctor, ctx.keys))
-    .with({ _tag: "Some" }, ({ value: ks }) => _Option_unwrapOr(`_${show(i)}`, _Array_get(i, ks)))
-    .with({ _tag: "None" }, () => `_${show(i)}`)
-    .exhaustive(),
+const keyAt: _Curry<[ctx: GCtx, ctor: string, i: number], string> = _curry(
+  3,
+  (ctx: GCtx, ctor: string, i: number) =>
+    match(_Map_get(ctor, ctx.keys))
+      .with({ _tag: "Some" }, ({ value: ks }) => _Option_unwrapOr(`_${show(i)}`, _Array_get(i, ks)))
+      .with({ _tag: "None" }, () => `_${show(i)}`)
+      .exhaustive(),
 );
-const nsRuntimeId: {
-  (ctx: GCtx): (target: Expr) => (name: string) => Option<string>;
-  (ctx: GCtx): (target: Expr, name: string) => Option<string>;
-  (ctx: GCtx, target: Expr): (name: string) => Option<string>;
-  (ctx: GCtx, target: Expr, name: string): Option<string>;
-} = _curry(3, (ctx: GCtx, target: Expr, name: string) =>
-  match(target)
-    .with({ _tag: "ERef" }, ({ name: refName }) =>
-      match(_Map_get(refName, ctx.ns))
-        .with({ _tag: "Some" }, ({ value: members }) => _Map_get(name, members))
-        .with({ _tag: "None" }, () => None as Option<string>)
-        .exhaustive(),
-    )
-    .otherwise(() => None as Option<string>),
+const nsRuntimeId: _Curry<[ctx: GCtx, target: Expr, name: string], Option<string>> = _curry(
+  3,
+  (ctx: GCtx, target: Expr, name: string) =>
+    match(target)
+      .with({ _tag: "ERef" }, ({ name: refName }) =>
+        match(_Map_get(refName, ctx.ns))
+          .with({ _tag: "Some" }, ({ value: members }) => _Map_get(name, members))
+          .with({ _tag: "None" }, () => None as Option<string>)
+          .exhaustive(),
+      )
+      .otherwise(() => None as Option<string>),
 );
-const emptyNsEmit: {
-  (target: Expr): (name: string) => (ann: Option<string>) => Option<string>;
-  (target: Expr): (name: string, ann: Option<string>) => Option<string>;
-  (target: Expr, name: string): (ann: Option<string>) => Option<string>;
-  (target: Expr, name: string, ann: Option<string>): Option<string>;
-} = _curry(3, (target: Expr, name: string, ann: Option<string>) =>
+const emptyNsEmit: _Curry<
+  [target: Expr, name: string, ann: Option<string>],
+  Option<string>
+> = _curry(3, (target: Expr, name: string, ann: Option<string>) =>
   match(target)
     .with({ _tag: "ERef" }, ({ name: refName }) =>
       eq(name, "empty")
@@ -325,187 +312,187 @@ const emptyNsEmit: {
     )
     .otherwise(() => None as Option<string>),
 );
-const collapseLambda: {
-  (params: LamParam[]): (body: Expr) => [LamParam[], Expr];
-  (params: LamParam[], body: Expr): [LamParam[], Expr];
-} = _curry(2, (params: LamParam[], body: Expr) =>
-  match(body)
-    .with({ _tag: "ELambda" }, ({ params: params2, body: body2 }) =>
-      collapseLambda(_Array_concat(params, params2), body2),
-    )
-    .otherwise(() => _tuple(params, body)),
-);
-const genExpr: { (ctx: GCtx): (e: Expr) => string; (ctx: GCtx, e: Expr): string } = _curry(
+const collapseLambda: _Curry<[params: LamParam[], body: Expr], [LamParam[], Expr]> = _curry(
   2,
-  (ctx: GCtx, e: Expr) =>
-    match(e)
-      .with({ _tag: "ENum" }, ({ raw }) => raw)
-      .with({ _tag: "EUnit" }, () => "undefined")
-      .with({ _tag: "EBool" }, ({ value }) => (value ? "true" : "false"))
-      .with({ _tag: "EStr" }, ({ value }) => jsStringLit(value))
-      .with({ _tag: "ERef" }, ({ name }) =>
-        castOr(
-          name,
-          isNullaryCtor(name, ctx.keys) ? hook1(ctx.annotateEmpty, e) : (None as Option<string>),
-        ),
+  (params: LamParam[], body: Expr) =>
+    match(body)
+      .with({ _tag: "ELambda" }, ({ params: params2, body: body2 }) =>
+        collapseLambda(_Array_concat(params, params2), body2),
       )
-      .with({ _tag: "ECall" }, ({ fn, args }) =>
-        ((inner: string) =>
-          castOr(inner, isCtorRef(fn) ? hook1(ctx.annotateCall, e) : (None as Option<string>)))(
-          `${genCallee(ctx, fn)}(${_Str_join(
-            ", ",
-            map((a: Expr) => genExpr(ctx, a), args),
-          )})`,
-        ),
-      )
-      .with({ _tag: "ELambda" }, ({ params, body, span: sp }) =>
-        (([cparams, cbody]: [LamParam[], Expr]) => {
-          const bound: Set<string> = paramNameSet(cparams, 0, _Set_fromArray([] as string[]));
-          const annots: ParamAnnots = paramAnnotsFor(ctx.annotateParams, sp, length(cparams));
-          const arrow: string = `${annots.generics}(${_Str_join(", ", annotatedParams(cparams, annots.params, 0))}) => ${genLambdaBodyIn(ctx, cbody, bound)}`;
-          return gte(length(cparams), 2) ? `_curry(${show(length(cparams))}, ${arrow})` : arrow;
-        })(collapseLambda(params, body)),
-      )
-      .with({ _tag: "ELetIn" }, ({ name, value, body }) =>
-        ((param: string) => `((${param}) => ${genLambdaBody(ctx, body)})(${genExpr(ctx, value)})`)(
-          suffixOr(name, hook1(ctx.annotateLetin, value)),
-        ),
-      )
-      .with({ _tag: "ELetBind" }, ({ param, monad, value, body }) =>
-        ((rt: string) =>
-          ((f: string) =>
-            ((v: string) => (ctx.flattenPipe ? `${rt}(${f}, ${v})` : `${rt}(${f})(${v})`))(
-              genExpr(ctx, value),
-            ))(`(${genParam(param)}) => ${genLambdaBody(ctx, body)}`))(bindRuntime(monad)),
-      )
-      .with({ _tag: "EPipe" }, ({ left, right }) =>
-        match(right)
-          .with(
-            (_v): _v is Extract<Expr, { _tag: "ECall" }> => {
-              const _g: any = _v;
-              return _g._tag === "ECall" && (({ fn: rfn, args: rargs }) => ctx.flattenPipe)(_g);
-            },
-            ({ fn: rfn, args: rargs }) =>
-              `${genCallee(ctx, rfn)}(${_Str_join(
-                ", ",
-                map((a: Expr) => genExpr(ctx, a), _Array_append(left, rargs)),
-              )})`,
-          )
-          .otherwise(() => `${genCallee(ctx, right)}(${genExpr(ctx, left)})`),
-      )
-      .with({ _tag: "EDo" }, ({ exprs }) => genDo(ctx, exprs))
-      .with(
-        { _tag: "ETernary" },
-        ({ cond, thenE, elseE }) =>
-          `(${genExpr(ctx, cond)} ? ${genExpr(ctx, thenE)} : ${genExpr(ctx, elseE)})`,
-      )
-      .with({ _tag: "EMatch" }, ({ scrutinee, arms }) => genMatch(ctx, scrutinee, arms))
-      .with(
-        { _tag: "ELoop" },
-        ({ params, body }) => `(() => { ${genLoopBlock(ctx, params, body)} })()`,
-      )
-      .with(
-        { _tag: "ERecur" },
-        ({ args }) =>
-          `_recur(${_Str_join(
-            ", ",
-            map((a: Expr) => genExpr(ctx, a), args),
-          )})`,
-      )
-      .with({ _tag: "ERecord" }, ({ fields, spread }) =>
-        ((fieldStrs: string) =>
-          match(spread)
-            .with({ _tag: "None" }, () => (eq(length(fields), 0) ? "{}" : `{ ${fieldStrs} }`))
-            .with({ _tag: "Some" }, ({ value: s }) =>
-              ((spreadStr: string) =>
-                eq(length(fields), 0) ? `{ ${spreadStr} }` : `{ ${spreadStr}, ${fieldStrs} }`)(
-                `...${genExpr(ctx, s)}`,
-              ),
-            )
-            .exhaustive())(
-          _Str_join(
-            ", ",
-            map((f: Field) => `${f.name}: ${genExpr(ctx, f.value)}`, fields),
-          ),
-        ),
-      )
-      .with({ _tag: "EField" }, ({ target, name }) =>
-        match(emptyNsEmit(target, name, hook1(ctx.annotateEmpty, e)))
-          .with({ _tag: "Some" }, ({ value: js }) => js)
-          .with({ _tag: "None" }, () =>
-            match(nsRuntimeId(ctx, target, name))
-              .with({ _tag: "Some" }, ({ value: rt }) => rt)
-              .with({ _tag: "None" }, () => `${genMember(ctx, target)}.${name}`)
-              .exhaustive(),
-          )
-          .exhaustive(),
-      )
-      .with({ _tag: "ETuple" }, ({ elements }) =>
-        ((elems: string) => (ctx.tupleHelper ? `_tuple(${elems})` : `[${elems}]`))(
-          _Str_join(
-            ", ",
-            map((el: Expr) => genExpr(ctx, el), elements),
-          ),
-        ),
-      )
-      .with({ _tag: "EArr" }, ({ elements }) =>
-        ((body: string) =>
-          castOr(
-            body,
-            eq(length(elements), 0) ? hook1(ctx.annotateEmpty, e) : (None as Option<string>),
-          ))(
-          `[${_Str_join(
-            ", ",
-            map((el: SeqElem) => genSeqSlot(ctx, el), elements),
-          )}]`,
-        ),
-      )
-      .with({ _tag: "EList" }, ({ elements }) => genList(ctx, elements))
-      .with(
-        { _tag: "ESet" },
-        ({ elements }) =>
-          `new Set([${_Str_join(
-            ", ",
-            map((el: SeqElem) => genSeqSlot(ctx, el), elements),
-          )}])`,
-      )
-      .with({ _tag: "EMap" }, ({ entries }) =>
-        match(eq(length(entries), 0) ? hook1(ctx.annotateEmpty, e) : (None as Option<string>))
-          .with({ _tag: "Some" }, ({ value: t }) => `new ${t}()`)
-          .with(
-            { _tag: "None" },
-            () =>
-              `new Map([${_Str_join(
-                ", ",
-                map(
-                  (en: MapEntry) => `[${genExpr(ctx, en.key)}, ${genExpr(ctx, en.value)}]`,
-                  entries,
-                ),
-              )}])`,
-          )
-          .exhaustive(),
-      )
-      .with({ _tag: "EInterp" }, ({ parts }) =>
-        ((body: string) => `\`${body}\``)(
-          _Str_join(
-            "",
-            map(
-              (p: InterpPart) =>
-                match(p)
-                  .with({ _tag: "IPLit" }, ({ value }) => escapeTemplateLiteral(value))
-                  .with({ _tag: "IPExpr" }, ({ expr: ex }) => `\${${genExpr(ctx, ex)}}`)
-                  .exhaustive(),
-              parts,
-            ),
-          ),
-        ),
-      )
-      .exhaustive(),
+      .otherwise(() => _tuple(params, body)),
 );
-const genDo: { (ctx: GCtx): (exprs: Expr[]) => string; (ctx: GCtx, exprs: Expr[]): string } =
-  _curry(2, (ctx: GCtx, exprs: Expr[]) => `(() => { ${genDoSteps(ctx, exprs)} })()`);
-const genDoSteps: { (ctx: GCtx): (exprs: Expr[]) => string; (ctx: GCtx, exprs: Expr[]): string } =
-  _curry(2, (ctx: GCtx, exprs: Expr[]) =>
+const genExpr: _Curry<[ctx: GCtx, e: Expr], string> = _curry(2, (ctx: GCtx, e: Expr) =>
+  match(e)
+    .with({ _tag: "ENum" }, ({ raw }) => raw)
+    .with({ _tag: "EUnit" }, () => "undefined")
+    .with({ _tag: "EBool" }, ({ value }) => (value ? "true" : "false"))
+    .with({ _tag: "EStr" }, ({ value }) => jsStringLit(value))
+    .with({ _tag: "ERef" }, ({ name }) =>
+      castOr(
+        name,
+        isNullaryCtor(name, ctx.keys) ? hook1(ctx.annotateEmpty, e) : (None as Option<string>),
+      ),
+    )
+    .with({ _tag: "ECall" }, ({ fn, args }) =>
+      ((inner: string) =>
+        castOr(inner, isCtorRef(fn) ? hook1(ctx.annotateCall, e) : (None as Option<string>)))(
+        `${genCallee(ctx, fn)}(${_Str_join(
+          ", ",
+          map((a: Expr) => genExpr(ctx, a), args),
+        )})`,
+      ),
+    )
+    .with({ _tag: "ELambda" }, ({ params, body, span: sp }) =>
+      (([cparams, cbody]: [LamParam[], Expr]) => {
+        const bound: Set<string> = paramNameSet(cparams, 0, _Set_fromArray([] as string[]));
+        const annots: ParamAnnots = paramAnnotsFor(ctx.annotateParams, sp, length(cparams));
+        const arrow: string = `${annots.generics}(${_Str_join(", ", annotatedParams(cparams, annots.params, 0))}) => ${genLambdaBodyIn(ctx, cbody, bound)}`;
+        return gte(length(cparams), 2) ? `_curry(${show(length(cparams))}, ${arrow})` : arrow;
+      })(collapseLambda(params, body)),
+    )
+    .with({ _tag: "ELetIn" }, ({ name, value, body }) =>
+      ((param: string) => `((${param}) => ${genLambdaBody(ctx, body)})(${genExpr(ctx, value)})`)(
+        suffixOr(name, hook1(ctx.annotateLetin, value)),
+      ),
+    )
+    .with({ _tag: "ELetBind" }, ({ param, monad, value, body }) =>
+      ((rt: string) =>
+        ((f: string) =>
+          ((v: string) => (ctx.flattenPipe ? `${rt}(${f}, ${v})` : `${rt}(${f})(${v})`))(
+            genExpr(ctx, value),
+          ))(`(${genParam(param)}) => ${genLambdaBody(ctx, body)}`))(bindRuntime(monad)),
+    )
+    .with({ _tag: "EPipe" }, ({ left, right }) =>
+      match(right)
+        .with(
+          (_v): _v is Extract<Expr, { _tag: "ECall" }> => {
+            const _g: any = _v;
+            return _g._tag === "ECall" && (({ fn: rfn, args: rargs }) => ctx.flattenPipe)(_g);
+          },
+          ({ fn: rfn, args: rargs }) =>
+            `${genCallee(ctx, rfn)}(${_Str_join(
+              ", ",
+              map((a: Expr) => genExpr(ctx, a), _Array_append(left, rargs)),
+            )})`,
+        )
+        .otherwise(() => `${genCallee(ctx, right)}(${genExpr(ctx, left)})`),
+    )
+    .with({ _tag: "EDo" }, ({ exprs }) => genDo(ctx, exprs))
+    .with(
+      { _tag: "ETernary" },
+      ({ cond, thenE, elseE }) =>
+        `(${genExpr(ctx, cond)} ? ${genExpr(ctx, thenE)} : ${genExpr(ctx, elseE)})`,
+    )
+    .with({ _tag: "EMatch" }, ({ scrutinee, arms }) => genMatch(ctx, scrutinee, arms))
+    .with(
+      { _tag: "ELoop" },
+      ({ params, body }) => `(() => { ${genLoopBlock(ctx, params, body)} })()`,
+    )
+    .with(
+      { _tag: "ERecur" },
+      ({ args }) =>
+        `_recur(${_Str_join(
+          ", ",
+          map((a: Expr) => genExpr(ctx, a), args),
+        )})`,
+    )
+    .with({ _tag: "ERecord" }, ({ fields, spread }) =>
+      ((fieldStrs: string) =>
+        match(spread)
+          .with({ _tag: "None" }, () => (eq(length(fields), 0) ? "{}" : `{ ${fieldStrs} }`))
+          .with({ _tag: "Some" }, ({ value: s }) =>
+            ((spreadStr: string) =>
+              eq(length(fields), 0) ? `{ ${spreadStr} }` : `{ ${spreadStr}, ${fieldStrs} }`)(
+              `...${genExpr(ctx, s)}`,
+            ),
+          )
+          .exhaustive())(
+        _Str_join(
+          ", ",
+          map((f: Field) => `${f.name}: ${genExpr(ctx, f.value)}`, fields),
+        ),
+      ),
+    )
+    .with({ _tag: "EField" }, ({ target, name }) =>
+      match(emptyNsEmit(target, name, hook1(ctx.annotateEmpty, e)))
+        .with({ _tag: "Some" }, ({ value: js }) => js)
+        .with({ _tag: "None" }, () =>
+          match(nsRuntimeId(ctx, target, name))
+            .with({ _tag: "Some" }, ({ value: rt }) => rt)
+            .with({ _tag: "None" }, () => `${genMember(ctx, target)}.${name}`)
+            .exhaustive(),
+        )
+        .exhaustive(),
+    )
+    .with({ _tag: "ETuple" }, ({ elements }) =>
+      ((elems: string) => (ctx.tupleHelper ? `_tuple(${elems})` : `[${elems}]`))(
+        _Str_join(
+          ", ",
+          map((el: Expr) => genExpr(ctx, el), elements),
+        ),
+      ),
+    )
+    .with({ _tag: "EArr" }, ({ elements }) =>
+      ((body: string) =>
+        castOr(
+          body,
+          eq(length(elements), 0) ? hook1(ctx.annotateEmpty, e) : (None as Option<string>),
+        ))(
+        `[${_Str_join(
+          ", ",
+          map((el: SeqElem) => genSeqSlot(ctx, el), elements),
+        )}]`,
+      ),
+    )
+    .with({ _tag: "EList" }, ({ elements }) => genList(ctx, elements))
+    .with(
+      { _tag: "ESet" },
+      ({ elements }) =>
+        `new Set([${_Str_join(
+          ", ",
+          map((el: SeqElem) => genSeqSlot(ctx, el), elements),
+        )}])`,
+    )
+    .with({ _tag: "EMap" }, ({ entries }) =>
+      match(eq(length(entries), 0) ? hook1(ctx.annotateEmpty, e) : (None as Option<string>))
+        .with({ _tag: "Some" }, ({ value: t }) => `new ${t}()`)
+        .with(
+          { _tag: "None" },
+          () =>
+            `new Map([${_Str_join(
+              ", ",
+              map(
+                (en: MapEntry) => `[${genExpr(ctx, en.key)}, ${genExpr(ctx, en.value)}]`,
+                entries,
+              ),
+            )}])`,
+        )
+        .exhaustive(),
+    )
+    .with({ _tag: "EInterp" }, ({ parts }) =>
+      ((body: string) => `\`${body}\``)(
+        _Str_join(
+          "",
+          map(
+            (p: InterpPart) =>
+              match(p)
+                .with({ _tag: "IPLit" }, ({ value }) => escapeTemplateLiteral(value))
+                .with({ _tag: "IPExpr" }, ({ expr: ex }) => `\${${genExpr(ctx, ex)}}`)
+                .exhaustive(),
+            parts,
+          ),
+        ),
+      ),
+    )
+    .exhaustive(),
+);
+const genDo: _Curry<[ctx: GCtx, exprs: Expr[]], string> = _curry(
+  2,
+  (ctx: GCtx, exprs: Expr[]) => `(() => { ${genDoSteps(ctx, exprs)} })()`,
+);
+const genDoSteps: _Curry<[ctx: GCtx, exprs: Expr[]], string> = _curry(
+  2,
+  (ctx: GCtx, exprs: Expr[]) =>
     match(exprs)
       .with(
         (_v) => {
@@ -531,51 +518,46 @@ const genDoSteps: { (ctx: GCtx): (exprs: Expr[]) => string; (ctx: GCtx, exprs: E
       .otherwise(() => {
         throw new Error("non-exhaustive match");
       }),
-  );
-const genSeqSlot: { (ctx: GCtx): (el: SeqElem) => string; (ctx: GCtx, el: SeqElem): string } =
-  _curry(2, (ctx: GCtx, el: SeqElem) =>
-    match(el)
-      .with({ _tag: "SEExpr" }, ({ expr: ex }) => genExpr(ctx, ex))
-      .with({ _tag: "SESpread" }, ({ expr: ex }) => `...${genExpr(ctx, ex)}`)
-      .exhaustive(),
-  );
-const genList: {
-  (ctx: GCtx): (elements: SeqElem[]) => string;
-  (ctx: GCtx, elements: SeqElem[]): string;
-} = _curry(2, (ctx: GCtx, elements: SeqElem[]) => {
-  const yields: string = _Str_join(
-    " ",
-    map(
-      (el: SeqElem) =>
-        match(el)
-          .with({ _tag: "SEExpr" }, ({ expr: ex }) => `yield (${genExpr(ctx, ex)});`)
-          .with({ _tag: "SESpread" }, ({ expr: ex }) => `yield* (${genExpr(ctx, ex)});`)
-          .exhaustive(),
-      elements,
-    ),
-  );
-  return `_list(function* () {${eq(yields, "") ? "" : ` ${yields} `}})`;
-});
+);
+const genSeqSlot: _Curry<[ctx: GCtx, el: SeqElem], string> = _curry(2, (ctx: GCtx, el: SeqElem) =>
+  match(el)
+    .with({ _tag: "SEExpr" }, ({ expr: ex }) => genExpr(ctx, ex))
+    .with({ _tag: "SESpread" }, ({ expr: ex }) => `...${genExpr(ctx, ex)}`)
+    .exhaustive(),
+);
+const genList: _Curry<[ctx: GCtx, elements: SeqElem[]], string> = _curry(
+  2,
+  (ctx: GCtx, elements: SeqElem[]) => {
+    const yields: string = _Str_join(
+      " ",
+      map(
+        (el: SeqElem) =>
+          match(el)
+            .with({ _tag: "SEExpr" }, ({ expr: ex }) => `yield (${genExpr(ctx, ex)});`)
+            .with({ _tag: "SESpread" }, ({ expr: ex }) => `yield* (${genExpr(ctx, ex)});`)
+            .exhaustive(),
+        elements,
+      ),
+    );
+    return `_list(function* () {${eq(yields, "") ? "" : ` ${yields} `}})`;
+  },
+);
 const genParam: (p: LamParam) => string = (p: LamParam) =>
   match(p)
     .with({ _tag: "LPName" }, ({ name }) => name)
     .with({ _tag: "LPTuple" }, ({ names }) => `[${_Str_join(", ", names)}]`)
     .with({ _tag: "LPRecord" }, ({ fields }) => `{ ${_Str_join(", ", fields)} }`)
     .exhaustive();
-const genCallee: { (ctx: GCtx): (e: Expr) => string; (ctx: GCtx, e: Expr): string } = _curry(
-  2,
-  (ctx: GCtx, e: Expr) =>
-    match(e)
-      .with({ _tag: "ELambda" }, () => `(${genExpr(ctx, e)})`)
-      .otherwise(() => genExpr(ctx, e)),
+const genCallee: _Curry<[ctx: GCtx, e: Expr], string> = _curry(2, (ctx: GCtx, e: Expr) =>
+  match(e)
+    .with({ _tag: "ELambda" }, () => `(${genExpr(ctx, e)})`)
+    .otherwise(() => genExpr(ctx, e)),
 );
-const genMember: { (ctx: GCtx): (e: Expr) => string; (ctx: GCtx, e: Expr): string } = _curry(
-  2,
-  (ctx: GCtx, e: Expr) =>
-    match(e)
-      .with({ _tag: "ERecord" }, () => `(${genExpr(ctx, e)})`)
-      .with({ _tag: "ELambda" }, () => `(${genExpr(ctx, e)})`)
-      .otherwise(() => genExpr(ctx, e)),
+const genMember: _Curry<[ctx: GCtx, e: Expr], string> = _curry(2, (ctx: GCtx, e: Expr) =>
+  match(e)
+    .with({ _tag: "ERecord" }, () => `(${genExpr(ctx, e)})`)
+    .with({ _tag: "ELambda" }, () => `(${genExpr(ctx, e)})`)
+    .otherwise(() => genExpr(ctx, e)),
 );
 const seqElemExpr: (el: SeqElem) => Expr = (el: SeqElem) =>
   match(el)
@@ -680,36 +662,35 @@ const lastDoExpr: (exprs: Expr[]) => Expr = (exprs: Expr[]) =>
     .otherwise(() => {
       throw new Error("non-exhaustive match");
     });
-const wrapStepTails: { (e: Expr): (sp: Span) => Expr; (e: Expr, sp: Span): Expr } = _curry(
-  2,
-  (e: Expr, sp: Span) =>
-    match(e)
-      .with({ _tag: "ERecur" }, () => e)
-      .with({ _tag: "ETernary" }, ({ cond, thenE, elseE, span: tsp }) =>
-        Ast.ETernary(cond, wrapStepTails(thenE, sp), wrapStepTails(elseE, sp), tsp),
-      )
-      .with({ _tag: "ELetIn" }, ({ name, nameSpan, value, body, span: lsp }) =>
-        Ast.ELetIn(name, nameSpan, value, wrapStepTails(body, sp), lsp),
-      )
-      .with({ _tag: "EDo" }, ({ exprs, span: dsp }) => Ast.EDo(wrapDoStepTail(exprs, sp), dsp))
-      .with({ _tag: "EMatch" }, ({ scrutinee, arms, span: msp }) =>
-        Ast.EMatch(
-          scrutinee,
-          map(
-            (a: MatchArm) => ({
-              pattern: a.pattern,
-              guard: a.guard,
-              body: wrapStepTails(a.body, sp),
-            }),
-            arms,
-          ),
-          msp,
+const wrapStepTails: _Curry<[e: Expr, sp: Span], Expr> = _curry(2, (e: Expr, sp: Span) =>
+  match(e)
+    .with({ _tag: "ERecur" }, () => e)
+    .with({ _tag: "ETernary" }, ({ cond, thenE, elseE, span: tsp }) =>
+      Ast.ETernary(cond, wrapStepTails(thenE, sp), wrapStepTails(elseE, sp), tsp),
+    )
+    .with({ _tag: "ELetIn" }, ({ name, nameSpan, value, body, span: lsp }) =>
+      Ast.ELetIn(name, nameSpan, value, wrapStepTails(body, sp), lsp),
+    )
+    .with({ _tag: "EDo" }, ({ exprs, span: dsp }) => Ast.EDo(wrapDoStepTail(exprs, sp), dsp))
+    .with({ _tag: "EMatch" }, ({ scrutinee, arms, span: msp }) =>
+      Ast.EMatch(
+        scrutinee,
+        map(
+          (a: MatchArm) => ({
+            pattern: a.pattern,
+            guard: a.guard,
+            body: wrapStepTails(a.body, sp),
+          }),
+          arms,
         ),
-      )
-      .otherwise(() => Ast.ECall(Ast.ERef("_done", sp), [e], None as Option<string>, sp)),
+        msp,
+      ),
+    )
+    .otherwise(() => Ast.ECall(Ast.ERef("_done", sp), [e], None as Option<string>, sp)),
 );
-const wrapDoStepTail: { (exprs: Expr[]): (sp: Span) => Expr[]; (exprs: Expr[], sp: Span): Expr[] } =
-  _curry(2, (exprs: Expr[], sp: Span) =>
+const wrapDoStepTail: _Curry<[exprs: Expr[], sp: Span], Expr[]> = _curry(
+  2,
+  (exprs: Expr[], sp: Span) =>
     match(exprs)
       .with(
         (_v) => {
@@ -735,7 +716,7 @@ const wrapDoStepTail: { (exprs: Expr[]): (sp: Span) => Expr[]; (exprs: Expr[], s
       .otherwise(() => {
         throw new Error("non-exhaustive match");
       }),
-  );
+);
 const loopParamNames: <A>(params: ({ name: string } & A)[]) => string = <A>(
   params: ({ name: string } & A)[],
 ) =>
@@ -743,110 +724,102 @@ const loopParamNames: <A>(params: ({ name: string } & A)[]) => string = <A>(
     ", ",
     map((p: { name: string } & A) => p.name, params),
   );
-const genLoopTail: {
-  (ctx: GCtx): (e: Expr) => (params: LoopParam[]) => string;
-  (ctx: GCtx): (e: Expr, params: LoopParam[]) => string;
-  (ctx: GCtx, e: Expr): (params: LoopParam[]) => string;
-  (ctx: GCtx, e: Expr, params: LoopParam[]): string;
-} = _curry(3, (ctx: GCtx, e: Expr, params: LoopParam[]) =>
-  match(e)
-    .with({ _tag: "ERecur" }, ({ args }) =>
-      match(_tuple(params, args))
-        .with(
-          (_v) => {
-            const _g: any = _v;
-            return _g[0].length === 1 && _g[1].length === 1;
-          },
-          ([[p], [a]]) => `${p.name} = ${genExpr(ctx, a)}; continue;`,
-        )
-        .otherwise(
-          () =>
-            `[${loopParamNames(params)}] = [${_Str_join(
-              ", ",
-              map((a: Expr) => genExpr(ctx, a), args),
-            )}]; continue;`,
-        ),
-    )
-    .with({ _tag: "ETernary" }, ({ cond, thenE, elseE }) =>
-      hasRecur(e)
-        ? `if (${genExpr(ctx, cond)}) { ${genLoopTail(ctx, thenE, params)} } else { ${genLoopTail(ctx, elseE, params)} }`
-        : `return ${genExpr(ctx, e)};`,
-    )
-    .with({ _tag: "ELetIn" }, ({ name, value, body }) =>
-      hasRecur(e)
-        ? `{ const ${suffixOr(name, hook1(ctx.annotateLetin, value))} = ${genExpr(ctx, value)}; ${genLoopTail(ctx, body, params)} }`
-        : `return ${genExpr(ctx, e)};`,
-    )
-    .with({ _tag: "EDo" }, ({ exprs }) =>
-      hasRecur(e) ? `{ ${genDoLoopTail(ctx, exprs, params)} }` : `return ${genExpr(ctx, e)};`,
-    )
-    .with({ _tag: "EMatch" }, ({ span: sp }) =>
-      hasRecur(e)
-        ? ((step: string) =>
-            ((rebind: string) =>
-              `const _step = ${step}; if (_step._tag === ${jsStringLit("recur")}) { ${rebind} continue; } return _step.value;`)(
-              match(params)
-                .with(
-                  (_v) => {
-                    const _g: any = _v;
-                    return _g.length === 1;
-                  },
-                  ([p]) => `${p.name} = _step.args[0];`,
-                )
-                .otherwise(() => `[${loopParamNames(params)}] = _step.args;`),
-            ))(genExpr(ctx, wrapStepTails(e, sp)))
-        : `return ${genExpr(ctx, e)};`,
-    )
-    .otherwise(() => `return ${genExpr(ctx, e)};`),
+const genLoopTail: _Curry<[ctx: GCtx, e: Expr, params: LoopParam[]], string> = _curry(
+  3,
+  (ctx: GCtx, e: Expr, params: LoopParam[]) =>
+    match(e)
+      .with({ _tag: "ERecur" }, ({ args }) =>
+        match(_tuple(params, args))
+          .with(
+            (_v) => {
+              const _g: any = _v;
+              return _g[0].length === 1 && _g[1].length === 1;
+            },
+            ([[p], [a]]) => `${p.name} = ${genExpr(ctx, a)}; continue;`,
+          )
+          .otherwise(
+            () =>
+              `[${loopParamNames(params)}] = [${_Str_join(
+                ", ",
+                map((a: Expr) => genExpr(ctx, a), args),
+              )}]; continue;`,
+          ),
+      )
+      .with({ _tag: "ETernary" }, ({ cond, thenE, elseE }) =>
+        hasRecur(e)
+          ? `if (${genExpr(ctx, cond)}) { ${genLoopTail(ctx, thenE, params)} } else { ${genLoopTail(ctx, elseE, params)} }`
+          : `return ${genExpr(ctx, e)};`,
+      )
+      .with({ _tag: "ELetIn" }, ({ name, value, body }) =>
+        hasRecur(e)
+          ? `{ const ${suffixOr(name, hook1(ctx.annotateLetin, value))} = ${genExpr(ctx, value)}; ${genLoopTail(ctx, body, params)} }`
+          : `return ${genExpr(ctx, e)};`,
+      )
+      .with({ _tag: "EDo" }, ({ exprs }) =>
+        hasRecur(e) ? `{ ${genDoLoopTail(ctx, exprs, params)} }` : `return ${genExpr(ctx, e)};`,
+      )
+      .with({ _tag: "EMatch" }, ({ span: sp }) =>
+        hasRecur(e)
+          ? ((step: string) =>
+              ((rebind: string) =>
+                `const _step = ${step}; if (_step._tag === ${jsStringLit("recur")}) { ${rebind} continue; } return _step.value;`)(
+                match(params)
+                  .with(
+                    (_v) => {
+                      const _g: any = _v;
+                      return _g.length === 1;
+                    },
+                    ([p]) => `${p.name} = _step.args[0];`,
+                  )
+                  .otherwise(() => `[${loopParamNames(params)}] = _step.args;`),
+              ))(genExpr(ctx, wrapStepTails(e, sp)))
+          : `return ${genExpr(ctx, e)};`,
+      )
+      .otherwise(() => `return ${genExpr(ctx, e)};`),
 );
-const genDoLoopTail: {
-  (ctx: GCtx): (exprs: Expr[]) => (params: LoopParam[]) => string;
-  (ctx: GCtx): (exprs: Expr[], params: LoopParam[]) => string;
-  (ctx: GCtx, exprs: Expr[]): (params: LoopParam[]) => string;
-  (ctx: GCtx, exprs: Expr[], params: LoopParam[]): string;
-} = _curry(3, (ctx: GCtx, exprs: Expr[], params: LoopParam[]) =>
-  match(exprs)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 1;
-      },
-      ([last]) => genLoopTail(ctx, last, params),
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length >= 1;
-      },
-      ([first, ...rest]) => `${genExpr(ctx, first)}; ${genDoLoopTail(ctx, rest, params)}`,
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => "return undefined;",
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+const genDoLoopTail: _Curry<[ctx: GCtx, exprs: Expr[], params: LoopParam[]], string> = _curry(
+  3,
+  (ctx: GCtx, exprs: Expr[], params: LoopParam[]) =>
+    match(exprs)
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length === 1;
+        },
+        ([last]) => genLoopTail(ctx, last, params),
+      )
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length >= 1;
+        },
+        ([first, ...rest]) => `${genExpr(ctx, first)}; ${genDoLoopTail(ctx, rest, params)}`,
+      )
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length === 0;
+        },
+        () => "return undefined;",
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
 );
-const genLoopBlock: {
-  (ctx: GCtx): (params: LoopParam[]) => (body: Expr) => string;
-  (ctx: GCtx): (params: LoopParam[], body: Expr) => string;
-  (ctx: GCtx, params: LoopParam[]): (body: Expr) => string;
-  (ctx: GCtx, params: LoopParam[], body: Expr): string;
-} = _curry(3, (ctx: GCtx, params: LoopParam[], body: Expr) => {
-  const decls: string = _Str_join(
-    " ",
-    map(
-      (p: LoopParam) =>
-        `let ${suffixOr(p.name, hook1(ctx.annotateLetin, p.init))} = ${genExpr(ctx, p.init)};`,
-      params,
-    ),
-  );
-  return `${decls} while (true) { ${genLoopTail(ctx, body, params)} }`;
-});
+const genLoopBlock: _Curry<[ctx: GCtx, params: LoopParam[], body: Expr], string> = _curry(
+  3,
+  (ctx: GCtx, params: LoopParam[], body: Expr) => {
+    const decls: string = _Str_join(
+      " ",
+      map(
+        (p: LoopParam) =>
+          `let ${suffixOr(p.name, hook1(ctx.annotateLetin, p.init))} = ${genExpr(ctx, p.init)};`,
+        params,
+      ),
+    );
+    return `${decls} while (true) { ${genLoopTail(ctx, body, params)} }`;
+  },
+);
 const loopParamFree: <A, B>(params: ({ name: A } & B)[], i: number, seen: Set<A>) => boolean =
   _curry(3, <A, B>(params: ({ name: A } & B)[], i: number, seen: Set<A>) =>
     match(_Array_get(i, params))
@@ -856,12 +829,10 @@ const loopParamFree: <A, B>(params: ({ name: A } & B)[], i: number, seen: Set<A>
       )
       .exhaustive(),
   );
-const genLambdaBody: { (ctx: GCtx): (e: Expr) => string; (ctx: GCtx, e: Expr): string } = _curry(
-  2,
-  (ctx: GCtx, e: Expr) =>
-    match(e)
-      .with({ _tag: "ERecord" }, () => `(${genExpr(ctx, e)})`)
-      .otherwise(() => genExpr(ctx, e)),
+const genLambdaBody: _Curry<[ctx: GCtx, e: Expr], string> = _curry(2, (ctx: GCtx, e: Expr) =>
+  match(e)
+    .with({ _tag: "ERecord" }, () => `(${genExpr(ctx, e)})`)
+    .otherwise(() => genExpr(ctx, e)),
 );
 const paramNames: (p: LamParam) => string[] = (p: LamParam) =>
   match(p)
@@ -877,31 +848,20 @@ const addNames: <A>(names: A[], i: number, acc: Set<A>) => Set<A> = _curry(
       .with({ _tag: "Some" }, ({ value: n }) => addNames(names, add(i, 1), _Set_add(n, acc)))
       .exhaustive(),
 );
-const paramNameSet: {
-  (params: LamParam[]): (i: number) => (acc: Set<string>) => Set<string>;
-  (params: LamParam[]): (i: number, acc: Set<string>) => Set<string>;
-  (params: LamParam[], i: number): (acc: Set<string>) => Set<string>;
-  (params: LamParam[], i: number, acc: Set<string>): Set<string>;
-} = _curry(3, (params: LamParam[], i: number, acc: Set<string>) =>
-  match(_Array_get(i, params))
-    .with({ _tag: "None" }, () => acc)
-    .with({ _tag: "Some" }, ({ value: p }) =>
-      paramNameSet(params, add(i, 1), addNames(paramNames(p), 0, acc)),
-    )
-    .exhaustive(),
+const paramNameSet: _Curry<[params: LamParam[], i: number, acc: Set<string>], Set<string>> = _curry(
+  3,
+  (params: LamParam[], i: number, acc: Set<string>) =>
+    match(_Array_get(i, params))
+      .with({ _tag: "None" }, () => acc)
+      .with({ _tag: "Some" }, ({ value: p }) =>
+        paramNameSet(params, add(i, 1), addNames(paramNames(p), 0, acc)),
+      )
+      .exhaustive(),
 );
-const letBlockLoop: {
-  (
-    ctx: GCtx,
-  ): (e: Expr) => (seen: Set<string>) => (decls: string[]) => [string[], Expr, Set<string>];
-  (ctx: GCtx): (e: Expr) => (seen: Set<string>, decls: string[]) => [string[], Expr, Set<string>];
-  (ctx: GCtx): (e: Expr, seen: Set<string>) => (decls: string[]) => [string[], Expr, Set<string>];
-  (ctx: GCtx, e: Expr): (seen: Set<string>) => (decls: string[]) => [string[], Expr, Set<string>];
-  (ctx: GCtx): (e: Expr, seen: Set<string>, decls: string[]) => [string[], Expr, Set<string>];
-  (ctx: GCtx, e: Expr): (seen: Set<string>, decls: string[]) => [string[], Expr, Set<string>];
-  (ctx: GCtx, e: Expr, seen: Set<string>): (decls: string[]) => [string[], Expr, Set<string>];
-  (ctx: GCtx, e: Expr, seen: Set<string>, decls: string[]): [string[], Expr, Set<string>];
-} = _curry(4, (ctx: GCtx, e: Expr, seen: Set<string>, decls: string[]) =>
+const letBlockLoop: _Curry<
+  [ctx: GCtx, e: Expr, seen: Set<string>, decls: string[]],
+  [string[], Expr, Set<string>]
+> = _curry(4, (ctx: GCtx, e: Expr, seen: Set<string>, decls: string[]) =>
   match(e)
     .with({ _tag: "ELetIn" }, ({ name, value, body }) =>
       or(
@@ -920,31 +880,28 @@ const letBlockLoop: {
     )
     .otherwise(() => _tuple(decls, e, seen)),
 );
-const genLambdaBodyIn: {
-  (ctx: GCtx): (e: Expr) => (bound: Set<string>) => string;
-  (ctx: GCtx): (e: Expr, bound: Set<string>) => string;
-  (ctx: GCtx, e: Expr): (bound: Set<string>) => string;
-  (ctx: GCtx, e: Expr, bound: Set<string>): string;
-} = _curry(3, (ctx: GCtx, e: Expr, bound: Set<string>) =>
-  (([decls, rest, seen]: [string[], Expr, Set<string>]) =>
-    eq(length(decls), 0)
-      ? match(e)
-          .with({ _tag: "ELoop" }, ({ params, body }) =>
-            loopParamFree(params, 0, bound)
-              ? `{ ${genLoopBlock(ctx, params, body)} }`
-              : genLambdaBody(ctx, e),
-          )
-          .otherwise(() => genLambdaBody(ctx, e))
-      : ((block: string) =>
-          match(rest)
+const genLambdaBodyIn: _Curry<[ctx: GCtx, e: Expr, bound: Set<string>], string> = _curry(
+  3,
+  (ctx: GCtx, e: Expr, bound: Set<string>) =>
+    (([decls, rest, seen]: [string[], Expr, Set<string>]) =>
+      eq(length(decls), 0)
+        ? match(e)
             .with({ _tag: "ELoop" }, ({ params, body }) =>
-              loopParamFree(params, 0, seen)
-                ? `{ ${block} ${genLoopBlock(ctx, params, body)} }`
-                : `{ ${block} return ${genExpr(ctx, rest)}; }`,
+              loopParamFree(params, 0, bound)
+                ? `{ ${genLoopBlock(ctx, params, body)} }`
+                : genLambdaBody(ctx, e),
             )
-            .otherwise(() => `{ ${block} return ${genExpr(ctx, rest)}; }`))(_Str_join(" ", decls)))(
-    letBlockLoop(ctx, e, bound, [] as string[]),
-  ),
+            .otherwise(() => genLambdaBody(ctx, e))
+        : ((block: string) =>
+            match(rest)
+              .with({ _tag: "ELoop" }, ({ params, body }) =>
+                loopParamFree(params, 0, seen)
+                  ? `{ ${block} ${genLoopBlock(ctx, params, body)} }`
+                  : `{ ${block} return ${genExpr(ctx, rest)}; }`,
+              )
+              .otherwise(() => `{ ${block} return ${genExpr(ctx, rest)}; }`))(
+            _Str_join(" ", decls),
+          ))(letBlockLoop(ctx, e, bound, [] as string[])),
 );
 const isCatchAll: (p: Pattern) => boolean = (p: Pattern) =>
   match(p)
@@ -961,124 +918,101 @@ const isPList: (p: Pattern) => boolean = (p: Pattern) =>
   match(p)
     .with({ _tag: "PList" }, () => true)
     .otherwise(() => false);
-const keyedSlot: { (key: string): (sub: string) => string; (key: string, sub: string): string } =
-  _curry(2, (key: string, sub: string) => (eq(sub, key) ? key : `${key}: ${sub}`));
-const pctorEntries: {
-  (ctx: GCtx): (ctor: string) => (args: Pattern[]) => (i: number) => string[];
-  (ctx: GCtx): (ctor: string) => (args: Pattern[], i: number) => string[];
-  (ctx: GCtx): (ctor: string, args: Pattern[]) => (i: number) => string[];
-  (ctx: GCtx, ctor: string): (args: Pattern[]) => (i: number) => string[];
-  (ctx: GCtx): (ctor: string, args: Pattern[], i: number) => string[];
-  (ctx: GCtx, ctor: string): (args: Pattern[], i: number) => string[];
-  (ctx: GCtx, ctor: string, args: Pattern[]): (i: number) => string[];
-  (ctx: GCtx, ctor: string, args: Pattern[], i: number): string[];
-} = _curry(4, (ctx: GCtx, ctor: string, args: Pattern[], i: number) =>
-  match(_Array_get(i, args))
-    .with({ _tag: "None" }, () => [] as string[])
-    .with({ _tag: "Some" }, ({ value: a }) =>
-      ((s: string) =>
-        ((restEntries: string[]) =>
-          eq(s, "") ? restEntries : _Array_prepend(keyedSlot(keyAt(ctx, ctor, i), s), restEntries))(
-          pctorEntries(ctx, ctor, args, add(i, 1)),
-        ))(patSlot(ctx, a)),
-    )
-    .exhaustive(),
-);
-const precordEntries: {
-  (ctx: GCtx): (fields: PatField[]) => (i: number) => string[];
-  (ctx: GCtx): (fields: PatField[], i: number) => string[];
-  (ctx: GCtx, fields: PatField[]): (i: number) => string[];
-  (ctx: GCtx, fields: PatField[], i: number): string[];
-} = _curry(3, (ctx: GCtx, fields: PatField[], i: number) =>
-  match(_Array_get(i, fields))
-    .with({ _tag: "None" }, () => [] as string[])
-    .with({ _tag: "Some" }, ({ value: f }) =>
-      ((s: string) =>
-        ((restEntries: string[]) =>
-          eq(s, "") ? restEntries : _Array_prepend(keyedSlot(f.label, s), restEntries))(
-          precordEntries(ctx, fields, add(i, 1)),
-        ))(patSlot(ctx, f.pat)),
-    )
-    .exhaustive(),
-);
-const patSlot: { (ctx: GCtx): (p: Pattern) => string; (ctx: GCtx, p: Pattern): string } = _curry(
+const keyedSlot: _Curry<[key: string, sub: string], string> = _curry(
   2,
-  (ctx: GCtx, p: Pattern) =>
-    match(p)
-      .with({ _tag: "PAs" }, ({ pat, name }) =>
-        ((inner: string) => (eq(inner, "") ? name : `${inner}, ${name}`))(patSlot(ctx, pat)),
+  (key: string, sub: string) => (eq(sub, key) ? key : `${key}: ${sub}`),
+);
+const pctorEntries: _Curry<[ctx: GCtx, ctor: string, args: Pattern[], i: number], string[]> =
+  _curry(4, (ctx: GCtx, ctor: string, args: Pattern[], i: number) =>
+    match(_Array_get(i, args))
+      .with({ _tag: "None" }, () => [] as string[])
+      .with({ _tag: "Some" }, ({ value: a }) =>
+        ((s: string) =>
+          ((restEntries: string[]) =>
+            eq(s, "")
+              ? restEntries
+              : _Array_prepend(keyedSlot(keyAt(ctx, ctor, i), s), restEntries))(
+            pctorEntries(ctx, ctor, args, add(i, 1)),
+          ))(patSlot(ctx, a)),
       )
-      .with({ _tag: "PBind" }, ({ name }) => name)
-      .with({ _tag: "PWild" }, () => "")
-      .with({ _tag: "PUnit" }, () => "")
-      .with({ _tag: "PLit" }, () => "")
-      .with({ _tag: "PBool" }, () => "")
-      .with({ _tag: "PStr" }, () => "")
-      .with({ _tag: "PList" }, () => "")
-      .with({ _tag: "PCtor" }, ({ ctor, args }) =>
-        ((entries: string[]) => (eq(length(entries), 0) ? "" : `{ ${_Str_join(", ", entries)} }`))(
-          pctorEntries(ctx, ctor, args, 0),
-        ),
-      )
-      .with({ _tag: "PRecord" }, ({ fields }) =>
-        ((entries: string[]) => (eq(length(entries), 0) ? "" : `{ ${_Str_join(", ", entries)} }`))(
-          precordEntries(ctx, fields, 0),
-        ),
-      )
-      .with({ _tag: "PTuple" }, ({ elems }) =>
-        ((slots: string[]) =>
-          someOf((s: string) => not(eq(s, "")), slots) ? `[${_Str_join(", ", slots)}]` : "")(
-          map((el: Pattern) => patSlot(ctx, el), elems),
-        ),
-      )
-      .with({ _tag: "PArr" }, ({ elems, rest }) =>
-        ((slots: string[]) =>
-          ((slots2: string[]) =>
-            someOf((s: string) => not(eq(s, "")), slots2) ? `[${_Str_join(", ", slots2)}]` : "")(
-            match(rest)
-              .with(
-                (
-                  _v,
-                ): _v is Extract<Option<Pattern>, { _tag: "Some" }> & {
-                  value: Extract<
-                    Extract<Option<Pattern>, { _tag: "Some" }>["value"],
-                    { _tag: "PBind" }
-                  >;
-                } => {
-                  const _g: any = _v;
-                  return _g._tag === "Some" && _g.value._tag === "PBind";
-                },
-                ({ value: { name } }) => _Array_append(`...${name}`, slots),
-              )
-              .otherwise(() => slots),
-          ))(map((el: Pattern) => patSlot(ctx, el), elems)),
-      )
-      .with({ _tag: "POr" }, ({ alts }) =>
-        match(_Array_head(alts))
-          .with({ _tag: "Some" }, ({ value: first }) => patSlot(ctx, first))
-          .with({ _tag: "None" }, () => "")
-          .exhaustive(),
+      .exhaustive(),
+  );
+const precordEntries: _Curry<[ctx: GCtx, fields: PatField[], i: number], string[]> = _curry(
+  3,
+  (ctx: GCtx, fields: PatField[], i: number) =>
+    match(_Array_get(i, fields))
+      .with({ _tag: "None" }, () => [] as string[])
+      .with({ _tag: "Some" }, ({ value: f }) =>
+        ((s: string) =>
+          ((restEntries: string[]) =>
+            eq(s, "") ? restEntries : _Array_prepend(keyedSlot(f.label, s), restEntries))(
+            precordEntries(ctx, fields, add(i, 1)),
+          ))(patSlot(ctx, f.pat)),
       )
       .exhaustive(),
 );
-const pctorConds: {
-  (ctx: GCtx): (ctor: string) => (args: Pattern[]) => (i: number) => (path: string) => string[];
-  (ctx: GCtx): (ctor: string) => (args: Pattern[]) => (i: number, path: string) => string[];
-  (ctx: GCtx): (ctor: string) => (args: Pattern[], i: number) => (path: string) => string[];
-  (ctx: GCtx): (ctor: string, args: Pattern[]) => (i: number) => (path: string) => string[];
-  (ctx: GCtx, ctor: string): (args: Pattern[]) => (i: number) => (path: string) => string[];
-  (ctx: GCtx): (ctor: string) => (args: Pattern[], i: number, path: string) => string[];
-  (ctx: GCtx): (ctor: string, args: Pattern[]) => (i: number, path: string) => string[];
-  (ctx: GCtx): (ctor: string, args: Pattern[], i: number) => (path: string) => string[];
-  (ctx: GCtx, ctor: string): (args: Pattern[]) => (i: number, path: string) => string[];
-  (ctx: GCtx, ctor: string): (args: Pattern[], i: number) => (path: string) => string[];
-  (ctx: GCtx, ctor: string, args: Pattern[]): (i: number) => (path: string) => string[];
-  (ctx: GCtx): (ctor: string, args: Pattern[], i: number, path: string) => string[];
-  (ctx: GCtx, ctor: string): (args: Pattern[], i: number, path: string) => string[];
-  (ctx: GCtx, ctor: string, args: Pattern[]): (i: number, path: string) => string[];
-  (ctx: GCtx, ctor: string, args: Pattern[], i: number): (path: string) => string[];
-  (ctx: GCtx, ctor: string, args: Pattern[], i: number, path: string): string[];
-} = _curry(5, (ctx: GCtx, ctor: string, args: Pattern[], i: number, path: string) =>
+const patSlot: _Curry<[ctx: GCtx, p: Pattern], string> = _curry(2, (ctx: GCtx, p: Pattern) =>
+  match(p)
+    .with({ _tag: "PAs" }, ({ pat, name }) =>
+      ((inner: string) => (eq(inner, "") ? name : `${inner}, ${name}`))(patSlot(ctx, pat)),
+    )
+    .with({ _tag: "PBind" }, ({ name }) => name)
+    .with({ _tag: "PWild" }, () => "")
+    .with({ _tag: "PUnit" }, () => "")
+    .with({ _tag: "PLit" }, () => "")
+    .with({ _tag: "PBool" }, () => "")
+    .with({ _tag: "PStr" }, () => "")
+    .with({ _tag: "PList" }, () => "")
+    .with({ _tag: "PCtor" }, ({ ctor, args }) =>
+      ((entries: string[]) => (eq(length(entries), 0) ? "" : `{ ${_Str_join(", ", entries)} }`))(
+        pctorEntries(ctx, ctor, args, 0),
+      ),
+    )
+    .with({ _tag: "PRecord" }, ({ fields }) =>
+      ((entries: string[]) => (eq(length(entries), 0) ? "" : `{ ${_Str_join(", ", entries)} }`))(
+        precordEntries(ctx, fields, 0),
+      ),
+    )
+    .with({ _tag: "PTuple" }, ({ elems }) =>
+      ((slots: string[]) =>
+        someOf((s: string) => not(eq(s, "")), slots) ? `[${_Str_join(", ", slots)}]` : "")(
+        map((el: Pattern) => patSlot(ctx, el), elems),
+      ),
+    )
+    .with({ _tag: "PArr" }, ({ elems, rest }) =>
+      ((slots: string[]) =>
+        ((slots2: string[]) =>
+          someOf((s: string) => not(eq(s, "")), slots2) ? `[${_Str_join(", ", slots2)}]` : "")(
+          match(rest)
+            .with(
+              (
+                _v,
+              ): _v is Extract<Option<Pattern>, { _tag: "Some" }> & {
+                value: Extract<
+                  Extract<Option<Pattern>, { _tag: "Some" }>["value"],
+                  { _tag: "PBind" }
+                >;
+              } => {
+                const _g: any = _v;
+                return _g._tag === "Some" && _g.value._tag === "PBind";
+              },
+              ({ value: { name } }) => _Array_append(`...${name}`, slots),
+            )
+            .otherwise(() => slots),
+        ))(map((el: Pattern) => patSlot(ctx, el), elems)),
+    )
+    .with({ _tag: "POr" }, ({ alts }) =>
+      match(_Array_head(alts))
+        .with({ _tag: "Some" }, ({ value: first }) => patSlot(ctx, first))
+        .with({ _tag: "None" }, () => "")
+        .exhaustive(),
+    )
+    .exhaustive(),
+);
+const pctorConds: _Curry<
+  [ctx: GCtx, ctor: string, args: Pattern[], i: number, path: string],
+  string[]
+> = _curry(5, (ctx: GCtx, ctor: string, args: Pattern[], i: number, path: string) =>
   match(_Array_get(i, args))
     .with({ _tag: "None" }, () => [] as string[])
     .with({ _tag: "Some" }, ({ value: a }) =>
@@ -1089,151 +1023,121 @@ const pctorConds: {
     )
     .exhaustive(),
 );
-const precordConds: {
-  (ctx: GCtx): (fields: PatField[]) => (i: number) => (path: string) => string[];
-  (ctx: GCtx): (fields: PatField[]) => (i: number, path: string) => string[];
-  (ctx: GCtx): (fields: PatField[], i: number) => (path: string) => string[];
-  (ctx: GCtx, fields: PatField[]): (i: number) => (path: string) => string[];
-  (ctx: GCtx): (fields: PatField[], i: number, path: string) => string[];
-  (ctx: GCtx, fields: PatField[]): (i: number, path: string) => string[];
-  (ctx: GCtx, fields: PatField[], i: number): (path: string) => string[];
-  (ctx: GCtx, fields: PatField[], i: number, path: string): string[];
-} = _curry(4, (ctx: GCtx, fields: PatField[], i: number, path: string) =>
-  match(_Array_get(i, fields))
-    .with({ _tag: "None" }, () => [] as string[])
-    .with({ _tag: "Some" }, ({ value: f }) =>
-      _Array_concat(
-        patConds(ctx, f.pat, `${path}.${f.label}`),
-        precordConds(ctx, fields, add(i, 1), path),
-      ),
-    )
-    .exhaustive(),
-);
-const ptupleConds: {
-  (ctx: GCtx): (elems: Pattern[]) => (i: number) => (path: string) => string[];
-  (ctx: GCtx): (elems: Pattern[]) => (i: number, path: string) => string[];
-  (ctx: GCtx): (elems: Pattern[], i: number) => (path: string) => string[];
-  (ctx: GCtx, elems: Pattern[]): (i: number) => (path: string) => string[];
-  (ctx: GCtx): (elems: Pattern[], i: number, path: string) => string[];
-  (ctx: GCtx, elems: Pattern[]): (i: number, path: string) => string[];
-  (ctx: GCtx, elems: Pattern[], i: number): (path: string) => string[];
-  (ctx: GCtx, elems: Pattern[], i: number, path: string): string[];
-} = _curry(4, (ctx: GCtx, elems: Pattern[], i: number, path: string) =>
-  match(_Array_get(i, elems))
-    .with({ _tag: "None" }, () => [] as string[])
-    .with({ _tag: "Some" }, ({ value: el }) =>
-      _Array_concat(
-        patConds(ctx, el, `${path}[${show(i)}]`),
-        ptupleConds(ctx, elems, add(i, 1), path),
-      ),
-    )
-    .exhaustive(),
-);
-const parrConds: {
-  (ctx: GCtx): (elems: Pattern[]) => (i: number) => (path: string) => string[];
-  (ctx: GCtx): (elems: Pattern[]) => (i: number, path: string) => string[];
-  (ctx: GCtx): (elems: Pattern[], i: number) => (path: string) => string[];
-  (ctx: GCtx, elems: Pattern[]): (i: number) => (path: string) => string[];
-  (ctx: GCtx): (elems: Pattern[], i: number, path: string) => string[];
-  (ctx: GCtx, elems: Pattern[]): (i: number, path: string) => string[];
-  (ctx: GCtx, elems: Pattern[], i: number): (path: string) => string[];
-  (ctx: GCtx, elems: Pattern[], i: number, path: string): string[];
-} = _curry(4, (ctx: GCtx, elems: Pattern[], i: number, path: string) =>
-  match(_Array_get(i, elems))
-    .with({ _tag: "None" }, () => [] as string[])
-    .with({ _tag: "Some" }, ({ value: el }) =>
-      _Array_concat(
-        patConds(ctx, el, `${path}[${show(i)}]`),
-        parrConds(ctx, elems, add(i, 1), path),
-      ),
-    )
-    .exhaustive(),
-);
-const patConds: {
-  (ctx: GCtx): (p: Pattern) => (path: string) => string[];
-  (ctx: GCtx): (p: Pattern, path: string) => string[];
-  (ctx: GCtx, p: Pattern): (path: string) => string[];
-  (ctx: GCtx, p: Pattern, path: string): string[];
-} = _curry(3, (ctx: GCtx, p: Pattern, path: string) =>
-  match(p)
-    .with({ _tag: "PAs" }, ({ pat }) => patConds(ctx, pat, path))
-    .with({ _tag: "PWild" }, () => [] as string[])
-    .with({ _tag: "PUnit" }, () => [] as string[])
-    .with({ _tag: "PBind" }, () => [] as string[])
-    .with({ _tag: "PList" }, () => [] as string[])
-    .with({ _tag: "PLit" }, () => [`${path} === ${litValue(p)}`])
-    .with({ _tag: "PBool" }, () => [`${path} === ${litValue(p)}`])
-    .with({ _tag: "PStr" }, () => [`${path} === ${litValue(p)}`])
-    .with({ _tag: "PCtor" }, ({ ctor, args }) =>
-      _Array_prepend(`${path}._tag === ${jsStringLit(ctor)}`, pctorConds(ctx, ctor, args, 0, path)),
-    )
-    .with({ _tag: "PRecord" }, ({ fields }) => precordConds(ctx, fields, 0, path))
-    .with({ _tag: "PTuple" }, ({ elems }) => ptupleConds(ctx, elems, 0, path))
-    .with({ _tag: "PArr" }, ({ elems, rest }) =>
-      _Array_prepend(
-        `${path}.length ${_Option_isSome(rest) ? ">=" : "==="} ${show(length(elems))}`,
-        parrConds(ctx, elems, 0, path),
-      ),
-    )
-    .with({ _tag: "POr" }, ({ alts }) =>
-      ((altCond: (a: Pattern) => string) => [
-        _Str_join(
-          " || ",
-          map((alt: Pattern) => `(${altCond(alt)})`, alts),
+const precordConds: _Curry<[ctx: GCtx, fields: PatField[], i: number, path: string], string[]> =
+  _curry(4, (ctx: GCtx, fields: PatField[], i: number, path: string) =>
+    match(_Array_get(i, fields))
+      .with({ _tag: "None" }, () => [] as string[])
+      .with({ _tag: "Some" }, ({ value: f }) =>
+        _Array_concat(
+          patConds(ctx, f.pat, `${path}.${f.label}`),
+          precordConds(ctx, fields, add(i, 1), path),
         ),
-      ])((alt: Pattern) => {
-        const conds: string[] = patConds(ctx, alt, path);
-        return eq(length(conds), 0)
-          ? "true"
-          : _Str_join(
-              " && ",
-              map((c: string) => `(${c})`, conds),
-            );
-      }),
-    )
-    .exhaustive(),
-);
-const catchAllParam: { (ctx: GCtx): (p: Pattern) => string; (ctx: GCtx, p: Pattern): string } =
-  _curry(2, (ctx: GCtx, p: Pattern) =>
-    match(p)
-      .with({ _tag: "PArr" }, ({ rest }) =>
-        match(rest)
-          .with(
-            (
-              _v,
-            ): _v is Extract<Option<Pattern>, { _tag: "Some" }> & {
-              value: Extract<
-                Extract<Option<Pattern>, { _tag: "Some" }>["value"],
-                { _tag: "PBind" }
-              >;
-            } => {
-              const _g: any = _v;
-              return _g._tag === "Some" && _g.value._tag === "PBind";
-            },
-            ({ value: { name } }) => `(${name})`,
-          )
-          .otherwise(() => "()"),
       )
-      .with({ _tag: "PList" }, ({ rest }) =>
-        match(rest)
-          .with(
-            (
-              _v,
-            ): _v is Extract<Option<Pattern>, { _tag: "Some" }> & {
-              value: Extract<
-                Extract<Option<Pattern>, { _tag: "Some" }>["value"],
-                { _tag: "PBind" }
-              >;
-            } => {
-              const _g: any = _v;
-              return _g._tag === "Some" && _g.value._tag === "PBind";
-            },
-            ({ value: { name } }) => `(${name})`,
-          )
-          .otherwise(() => "()"),
-      )
-      .otherwise(() => ((slot: string) => (eq(slot, "") ? "()" : `(${slot})`))(patSlot(ctx, p))),
+      .exhaustive(),
   );
+const ptupleConds: _Curry<[ctx: GCtx, elems: Pattern[], i: number, path: string], string[]> =
+  _curry(4, (ctx: GCtx, elems: Pattern[], i: number, path: string) =>
+    match(_Array_get(i, elems))
+      .with({ _tag: "None" }, () => [] as string[])
+      .with({ _tag: "Some" }, ({ value: el }) =>
+        _Array_concat(
+          patConds(ctx, el, `${path}[${show(i)}]`),
+          ptupleConds(ctx, elems, add(i, 1), path),
+        ),
+      )
+      .exhaustive(),
+  );
+const parrConds: _Curry<[ctx: GCtx, elems: Pattern[], i: number, path: string], string[]> = _curry(
+  4,
+  (ctx: GCtx, elems: Pattern[], i: number, path: string) =>
+    match(_Array_get(i, elems))
+      .with({ _tag: "None" }, () => [] as string[])
+      .with({ _tag: "Some" }, ({ value: el }) =>
+        _Array_concat(
+          patConds(ctx, el, `${path}[${show(i)}]`),
+          parrConds(ctx, elems, add(i, 1), path),
+        ),
+      )
+      .exhaustive(),
+);
+const patConds: _Curry<[ctx: GCtx, p: Pattern, path: string], string[]> = _curry(
+  3,
+  (ctx: GCtx, p: Pattern, path: string) =>
+    match(p)
+      .with({ _tag: "PAs" }, ({ pat }) => patConds(ctx, pat, path))
+      .with({ _tag: "PWild" }, () => [] as string[])
+      .with({ _tag: "PUnit" }, () => [] as string[])
+      .with({ _tag: "PBind" }, () => [] as string[])
+      .with({ _tag: "PList" }, () => [] as string[])
+      .with({ _tag: "PLit" }, () => [`${path} === ${litValue(p)}`])
+      .with({ _tag: "PBool" }, () => [`${path} === ${litValue(p)}`])
+      .with({ _tag: "PStr" }, () => [`${path} === ${litValue(p)}`])
+      .with({ _tag: "PCtor" }, ({ ctor, args }) =>
+        _Array_prepend(
+          `${path}._tag === ${jsStringLit(ctor)}`,
+          pctorConds(ctx, ctor, args, 0, path),
+        ),
+      )
+      .with({ _tag: "PRecord" }, ({ fields }) => precordConds(ctx, fields, 0, path))
+      .with({ _tag: "PTuple" }, ({ elems }) => ptupleConds(ctx, elems, 0, path))
+      .with({ _tag: "PArr" }, ({ elems, rest }) =>
+        _Array_prepend(
+          `${path}.length ${_Option_isSome(rest) ? ">=" : "==="} ${show(length(elems))}`,
+          parrConds(ctx, elems, 0, path),
+        ),
+      )
+      .with({ _tag: "POr" }, ({ alts }) =>
+        ((altCond: (a: Pattern) => string) => [
+          _Str_join(
+            " || ",
+            map((alt: Pattern) => `(${altCond(alt)})`, alts),
+          ),
+        ])((alt: Pattern) => {
+          const conds: string[] = patConds(ctx, alt, path);
+          return eq(length(conds), 0)
+            ? "true"
+            : _Str_join(
+                " && ",
+                map((c: string) => `(${c})`, conds),
+              );
+        }),
+      )
+      .exhaustive(),
+);
+const catchAllParam: _Curry<[ctx: GCtx, p: Pattern], string> = _curry(2, (ctx: GCtx, p: Pattern) =>
+  match(p)
+    .with({ _tag: "PArr" }, ({ rest }) =>
+      match(rest)
+        .with(
+          (
+            _v,
+          ): _v is Extract<Option<Pattern>, { _tag: "Some" }> & {
+            value: Extract<Extract<Option<Pattern>, { _tag: "Some" }>["value"], { _tag: "PBind" }>;
+          } => {
+            const _g: any = _v;
+            return _g._tag === "Some" && _g.value._tag === "PBind";
+          },
+          ({ value: { name } }) => `(${name})`,
+        )
+        .otherwise(() => "()"),
+    )
+    .with({ _tag: "PList" }, ({ rest }) =>
+      match(rest)
+        .with(
+          (
+            _v,
+          ): _v is Extract<Option<Pattern>, { _tag: "Some" }> & {
+            value: Extract<Extract<Option<Pattern>, { _tag: "Some" }>["value"], { _tag: "PBind" }>;
+          } => {
+            const _g: any = _v;
+            return _g._tag === "Some" && _g.value._tag === "PBind";
+          },
+          ({ value: { name } }) => `(${name})`,
+        )
+        .otherwise(() => "()"),
+    )
+    .otherwise(() => ((slot: string) => (eq(slot, "") ? "()" : `(${slot})`))(patSlot(ctx, p))),
+);
 const isListMatch: <A>(arms: ({ pattern: Pattern } & A)[]) => boolean = <A>(
   arms: ({ pattern: Pattern } & A)[],
 ) =>
@@ -1249,147 +1153,136 @@ const listTail: <A>(from: A) => string = <A>(from: A) =>
     ),
     "if (!_done) { let _s; while (!(_s = _it.next()).done) yield _s.value; } })",
   );
-const listArmGuards: {
-  (ctx: GCtx): (elems: Pattern[]) => (i: number) => string[];
-  (ctx: GCtx): (elems: Pattern[], i: number) => string[];
-  (ctx: GCtx, elems: Pattern[]): (i: number) => string[];
-  (ctx: GCtx, elems: Pattern[], i: number): string[];
-} = _curry(3, (ctx: GCtx, elems: Pattern[], i: number) =>
-  match(_Array_get(i, elems))
-    .with({ _tag: "None" }, () => [] as string[])
-    .with({ _tag: "Some" }, ({ value: el }) =>
-      _Array_concat(patConds(ctx, el, `_b[${show(i)}]`), listArmGuards(ctx, elems, add(i, 1))),
-    )
-    .exhaustive(),
+const listArmGuards: _Curry<[ctx: GCtx, elems: Pattern[], i: number], string[]> = _curry(
+  3,
+  (ctx: GCtx, elems: Pattern[], i: number) =>
+    match(_Array_get(i, elems))
+      .with({ _tag: "None" }, () => [] as string[])
+      .with({ _tag: "Some" }, ({ value: el }) =>
+        _Array_concat(patConds(ctx, el, `_b[${show(i)}]`), listArmGuards(ctx, elems, add(i, 1))),
+      )
+      .exhaustive(),
 );
-const listArmBinds: {
-  (ctx: GCtx): (elems: Pattern[]) => (i: number) => [string[], string[]];
-  (ctx: GCtx): (elems: Pattern[], i: number) => [string[], string[]];
-  (ctx: GCtx, elems: Pattern[]): (i: number) => [string[], string[]];
-  (ctx: GCtx, elems: Pattern[], i: number): [string[], string[]];
-} = _curry(3, (ctx: GCtx, elems: Pattern[], i: number) =>
-  match(_Array_get(i, elems))
-    .with({ _tag: "None" }, () => _tuple([] as string[], [] as string[]))
-    .with({ _tag: "Some" }, ({ value: el }) =>
-      (([restParams, restArgs]: [string[], string[]]) => {
-        const slot: string = patSlot(ctx, el);
-        return eq(slot, "")
-          ? _tuple(restParams, restArgs)
-          : _tuple(_Array_prepend(slot, restParams), _Array_prepend(`_b[${show(i)}]`, restArgs));
-      })(listArmBinds(ctx, elems, add(i, 1))),
-    )
-    .exhaustive(),
+const listArmBinds: _Curry<[ctx: GCtx, elems: Pattern[], i: number], [string[], string[]]> = _curry(
+  3,
+  (ctx: GCtx, elems: Pattern[], i: number) =>
+    match(_Array_get(i, elems))
+      .with({ _tag: "None" }, () => _tuple([] as string[], [] as string[]))
+      .with({ _tag: "Some" }, ({ value: el }) =>
+        (([restParams, restArgs]: [string[], string[]]) => {
+          const slot: string = patSlot(ctx, el);
+          return eq(slot, "")
+            ? _tuple(restParams, restArgs)
+            : _tuple(_Array_prepend(slot, restParams), _Array_prepend(`_b[${show(i)}]`, restArgs));
+        })(listArmBinds(ctx, elems, add(i, 1))),
+      )
+      .exhaustive(),
 );
-const genListArm: {
-  (ctx: GCtx): (p: Pattern) => (body: Expr) => string;
-  (ctx: GCtx): (p: Pattern, body: Expr) => string;
-  (ctx: GCtx, p: Pattern): (body: Expr) => string;
-  (ctx: GCtx, p: Pattern, body: Expr): string;
-} = _curry(3, (ctx: GCtx, p: Pattern, body: Expr) =>
-  match(p)
-    .with({ _tag: "PList" }, ({ elems, rest }) =>
-      ((n: number) =>
-        ((guards: string[]) =>
-          ((head: string) =>
-            ((cond: string) =>
-              (([params0, args0]: [string[], string[]]) =>
-                (([params, args]: [string[], string[]]) =>
-                  `  if (${cond}) return ((${_Str_join(", ", params)}) => ${genLambdaBody(ctx, body)})(${_Str_join(", ", args)});`)(
-                  match(rest)
+const genListArm: _Curry<[ctx: GCtx, p: Pattern, body: Expr], string> = _curry(
+  3,
+  (ctx: GCtx, p: Pattern, body: Expr) =>
+    match(p)
+      .with({ _tag: "PList" }, ({ elems, rest }) =>
+        ((n: number) =>
+          ((guards: string[]) =>
+            ((head: string) =>
+              ((cond: string) =>
+                (([params0, args0]: [string[], string[]]) =>
+                  (([params, args]: [string[], string[]]) =>
+                    `  if (${cond}) return ((${_Str_join(", ", params)}) => ${genLambdaBody(ctx, body)})(${_Str_join(", ", args)});`)(
+                    match(rest)
+                      .with(
+                        (
+                          _v,
+                        ): _v is Extract<Option<Pattern>, { _tag: "Some" }> & {
+                          value: Extract<
+                            Extract<Option<Pattern>, { _tag: "Some" }>["value"],
+                            { _tag: "PBind" }
+                          >;
+                        } => {
+                          const _g: any = _v;
+                          return _g._tag === "Some" && _g.value._tag === "PBind";
+                        },
+                        ({ value: { name } }) =>
+                          _tuple(_Array_append(name, params0), _Array_append(listTail(n), args0)),
+                      )
+                      .otherwise(() => _tuple(params0, args0)),
+                  ))(listArmBinds(ctx, elems, 0)))(
+                _Str_join(" && ", _Array_prepend(head, guards)),
+              ))(
+              _Option_isSome(rest)
+                ? `_pull(${show(n)})`
+                : `!_pull(${show(add(n, 1))}) && _b.length === ${show(n)}`,
+            ))(listArmGuards(ctx, elems, 0)))(length(elems)),
+      )
+      .otherwise(() => ""),
+);
+const listMatchLoop: _Curry<[ctx: GCtx, arms: MatchArm[], i: number], [string[], string]> = _curry(
+  3,
+  (ctx: GCtx, arms: MatchArm[], i: number) =>
+    match(_Array_get(i, arms))
+      .with({ _tag: "None" }, () =>
+        _tuple([] as string[], '(() => { throw new Error("non-exhaustive lazy-list switch"); })()'),
+      )
+      .with({ _tag: "Some" }, ({ value: a }) =>
+        and(isPList(a.pattern), not(isCatchAll(a.pattern)))
+          ? (([restLines, fallback]: [string[], string]) =>
+              _tuple(_Array_prepend(genListArm(ctx, a.pattern, a.body), restLines), fallback))(
+              listMatchLoop(ctx, arms, add(i, 1)),
+            )
+          : isCatchAll(a.pattern)
+            ? ((restName: Option<string>) =>
+                ((fallback: string) => _tuple([] as string[], fallback))(
+                  match(restName)
                     .with(
-                      (
-                        _v,
-                      ): _v is Extract<Option<Pattern>, { _tag: "Some" }> & {
+                      { _tag: "Some" },
+                      ({ value: name }) =>
+                        `((${name}) => ${genLambdaBody(ctx, a.body)})(${listTail(0)})`,
+                    )
+                    .with({ _tag: "None" }, () => genExpr(ctx, a.body))
+                    .exhaustive(),
+                ))(
+                match(a.pattern)
+                  .with(
+                    (
+                      _v,
+                    ): _v is Extract<Pattern, { _tag: "PList" }> & {
+                      rest: Extract<
+                        Extract<Pattern, { _tag: "PList" }>["rest"],
+                        { _tag: "Some" }
+                      > & {
                         value: Extract<
-                          Extract<Option<Pattern>, { _tag: "Some" }>["value"],
+                          Extract<
+                            Extract<Pattern, { _tag: "PList" }>["rest"],
+                            { _tag: "Some" }
+                          >["value"],
                           { _tag: "PBind" }
                         >;
-                      } => {
-                        const _g: any = _v;
-                        return _g._tag === "Some" && _g.value._tag === "PBind";
-                      },
-                      ({ value: { name } }) =>
-                        _tuple(_Array_append(name, params0), _Array_append(listTail(n), args0)),
-                    )
-                    .otherwise(() => _tuple(params0, args0)),
-                ))(listArmBinds(ctx, elems, 0)))(_Str_join(" && ", _Array_prepend(head, guards))))(
-            _Option_isSome(rest)
-              ? `_pull(${show(n)})`
-              : `!_pull(${show(add(n, 1))}) && _b.length === ${show(n)}`,
-          ))(listArmGuards(ctx, elems, 0)))(length(elems)),
-    )
-    .otherwise(() => ""),
-);
-const listMatchLoop: {
-  (ctx: GCtx): (arms: MatchArm[]) => (i: number) => [string[], string];
-  (ctx: GCtx): (arms: MatchArm[], i: number) => [string[], string];
-  (ctx: GCtx, arms: MatchArm[]): (i: number) => [string[], string];
-  (ctx: GCtx, arms: MatchArm[], i: number): [string[], string];
-} = _curry(3, (ctx: GCtx, arms: MatchArm[], i: number) =>
-  match(_Array_get(i, arms))
-    .with({ _tag: "None" }, () =>
-      _tuple([] as string[], '(() => { throw new Error("non-exhaustive lazy-list switch"); })()'),
-    )
-    .with({ _tag: "Some" }, ({ value: a }) =>
-      and(isPList(a.pattern), not(isCatchAll(a.pattern)))
-        ? (([restLines, fallback]: [string[], string]) =>
-            _tuple(_Array_prepend(genListArm(ctx, a.pattern, a.body), restLines), fallback))(
-            listMatchLoop(ctx, arms, add(i, 1)),
-          )
-        : isCatchAll(a.pattern)
-          ? ((restName: Option<string>) =>
-              ((fallback: string) => _tuple([] as string[], fallback))(
-                match(restName)
-                  .with(
-                    { _tag: "Some" },
-                    ({ value: name }) =>
-                      `((${name}) => ${genLambdaBody(ctx, a.body)})(${listTail(0)})`,
-                  )
-                  .with({ _tag: "None" }, () => genExpr(ctx, a.body))
-                  .exhaustive(),
-              ))(
-              match(a.pattern)
-                .with(
-                  (
-                    _v,
-                  ): _v is Extract<Pattern, { _tag: "PList" }> & {
-                    rest: Extract<Extract<Pattern, { _tag: "PList" }>["rest"], { _tag: "Some" }> & {
-                      value: Extract<
-                        Extract<
-                          Extract<Pattern, { _tag: "PList" }>["rest"],
-                          { _tag: "Some" }
-                        >["value"],
-                        { _tag: "PBind" }
-                      >;
-                    };
-                  } => {
-                    const _g: any = _v;
-                    return (
-                      _g._tag === "PList" &&
-                      _g.rest._tag === "Some" &&
-                      _g.rest.value._tag === "PBind"
-                    );
-                  },
-                  ({
-                    rest: {
-                      value: { name },
+                      };
+                    } => {
+                      const _g: any = _v;
+                      return (
+                        _g._tag === "PList" &&
+                        _g.rest._tag === "Some" &&
+                        _g.rest.value._tag === "PBind"
+                      );
                     },
-                  }) => Some(name) as Option<string>,
-                )
-                .otherwise(() => None as Option<string>),
-            )
-          : listMatchLoop(ctx, arms, add(i, 1)),
-    )
-    .exhaustive(),
+                    ({
+                      rest: {
+                        value: { name },
+                      },
+                    }) => Some(name) as Option<string>,
+                  )
+                  .otherwise(() => None as Option<string>),
+              )
+            : listMatchLoop(ctx, arms, add(i, 1)),
+      )
+      .exhaustive(),
 );
-const genListMatch: {
-  (ctx: GCtx): (scrutinee: Expr) => (arms: MatchArm[]) => string;
-  (ctx: GCtx): (scrutinee: Expr, arms: MatchArm[]) => string;
-  (ctx: GCtx, scrutinee: Expr): (arms: MatchArm[]) => string;
-  (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): string;
-} = _curry(3, (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]) =>
-  (([armLines, fallback]: [string[], string]) =>
-    concat(
+const genListMatch: _Curry<[ctx: GCtx, scrutinee: Expr, arms: MatchArm[]], string> = _curry(
+  3,
+  (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]) =>
+    (([armLines, fallback]: [string[], string]) =>
       concat(
         concat(
           concat(
@@ -1397,59 +1290,29 @@ const genListMatch: {
               concat(
                 concat(
                   concat(
-                    "((_it) => { const _b = []; let _done = false; ",
-                    "const _pull = (_n) => { while (_b.length < _n && !_done) { const _s = _it.next(); ",
+                    concat(
+                      "((_it) => { const _b = []; let _done = false; ",
+                      "const _pull = (_n) => { while (_b.length < _n && !_done) { const _s = _it.next(); ",
+                    ),
+                    "if (_s.done) _done = true; else _b.push(_s.value); } return _b.length >= _n; };\n",
                   ),
-                  "if (_s.done) _done = true; else _b.push(_s.value); } return _b.length >= _n; };\n",
+                  _Str_join("\n", armLines),
                 ),
-                _Str_join("\n", armLines),
+                "\n  return ",
               ),
-              "\n  return ",
+              fallback,
             ),
-            fallback,
+            ";\n})(",
           ),
-          ";\n})(",
+          genExpr(ctx, scrutinee),
         ),
-        genExpr(ctx, scrutinee),
-      ),
-      "[Symbol.iterator]())",
-    ))(listMatchLoop(ctx, arms, 0)),
+        "[Symbol.iterator]())",
+      ))(listMatchLoop(ctx, arms, 0)),
 );
-const matchArmsLoop: {
-  (
-    ctx: GCtx,
-  ): (
-    arms: MatchArm[],
-  ) => (i: number) => (base: Option<string>) => [string[], Option<[Pattern, Expr]>];
-  (
-    ctx: GCtx,
-  ): (arms: MatchArm[]) => (i: number, base: Option<string>) => [string[], Option<[Pattern, Expr]>];
-  (
-    ctx: GCtx,
-  ): (arms: MatchArm[], i: number) => (base: Option<string>) => [string[], Option<[Pattern, Expr]>];
-  (
-    ctx: GCtx,
-    arms: MatchArm[],
-  ): (i: number) => (base: Option<string>) => [string[], Option<[Pattern, Expr]>];
-  (
-    ctx: GCtx,
-  ): (arms: MatchArm[], i: number, base: Option<string>) => [string[], Option<[Pattern, Expr]>];
-  (
-    ctx: GCtx,
-    arms: MatchArm[],
-  ): (i: number, base: Option<string>) => [string[], Option<[Pattern, Expr]>];
-  (
-    ctx: GCtx,
-    arms: MatchArm[],
-    i: number,
-  ): (base: Option<string>) => [string[], Option<[Pattern, Expr]>];
-  (
-    ctx: GCtx,
-    arms: MatchArm[],
-    i: number,
-    base: Option<string>,
-  ): [string[], Option<[Pattern, Expr]>];
-} = _curry(4, (ctx: GCtx, arms: MatchArm[], i: number, base: Option<string>) =>
+const matchArmsLoop: _Curry<
+  [ctx: GCtx, arms: MatchArm[], i: number, base: Option<string>],
+  [string[], Option<[Pattern, Expr]>]
+> = _curry(4, (ctx: GCtx, arms: MatchArm[], i: number, base: Option<string>) =>
   match(_Array_get(i, arms))
     .with({ _tag: "None" }, () => _tuple([] as string[], None as Option<[Pattern, Expr]>))
     .with({ _tag: "Some" }, ({ value: a }) =>
@@ -1486,36 +1349,33 @@ const hasArrArm: <A>(arms: ({ pattern: Pattern } & A)[]) => boolean = <A>(
         .otherwise(() => false),
     arms,
   );
-const genMatch: {
-  (ctx: GCtx): (scrutinee: Expr) => (arms: MatchArm[]) => string;
-  (ctx: GCtx): (scrutinee: Expr, arms: MatchArm[]) => string;
-  (ctx: GCtx, scrutinee: Expr): (arms: MatchArm[]) => string;
-  (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): string;
-} = _curry(3, (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]) =>
-  isListMatch(arms)
-    ? genListMatch(ctx, scrutinee, arms)
-    : ((base: Option<string>) =>
-        (([armLines, catchAll]: [string[], Option<[Pattern, Expr]>]) => {
-          const tail: string = match(catchAll)
-            .with(
-              (_v): _v is Extract<Option<[Pattern, Expr]>, { _tag: "Some" }> => {
-                const _g: any = _v;
-                return _g._tag === "Some";
-              },
-              ({ value: [p, body] }) =>
-                `  .otherwise(${catchAllParam(ctx, p)} => ${genLambdaBody(ctx, body)})`,
-            )
-            .with({ _tag: "None" }, () =>
-              and(_Option_isSome(ctx.guardBaseType), hasArrArm(arms))
-                ? '  .otherwise(() => { throw new Error("non-exhaustive match"); })'
-                : "  .exhaustive()",
-            )
-            .exhaustive();
-          return _Str_join(
-            "\n",
-            _Array_concat(_Array_prepend(`match(${genExpr(ctx, scrutinee)})`, armLines), [tail]),
-          );
-        })(matchArmsLoop(ctx, arms, 0, base)))(hook1(ctx.guardBaseType, scrutinee)),
+const genMatch: _Curry<[ctx: GCtx, scrutinee: Expr, arms: MatchArm[]], string> = _curry(
+  3,
+  (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]) =>
+    isListMatch(arms)
+      ? genListMatch(ctx, scrutinee, arms)
+      : ((base: Option<string>) =>
+          (([armLines, catchAll]: [string[], Option<[Pattern, Expr]>]) => {
+            const tail: string = match(catchAll)
+              .with(
+                (_v): _v is Extract<Option<[Pattern, Expr]>, { _tag: "Some" }> => {
+                  const _g: any = _v;
+                  return _g._tag === "Some";
+                },
+                ({ value: [p, body] }) =>
+                  `  .otherwise(${catchAllParam(ctx, p)} => ${genLambdaBody(ctx, body)})`,
+              )
+              .with({ _tag: "None" }, () =>
+                and(_Option_isSome(ctx.guardBaseType), hasArrArm(arms))
+                  ? '  .otherwise(() => { throw new Error("non-exhaustive match"); })'
+                  : "  .exhaustive()",
+              )
+              .exhaustive();
+            return _Str_join(
+              "\n",
+              _Array_concat(_Array_prepend(`match(${genExpr(ctx, scrutinee)})`, armLines), [tail]),
+            );
+          })(matchArmsLoop(ctx, arms, 0, base)))(hook1(ctx.guardBaseType, scrutinee)),
 );
 const litValue: (p: Pattern) => string = (p: Pattern) =>
   match(p)
@@ -1523,39 +1383,23 @@ const litValue: (p: Pattern) => string = (p: Pattern) =>
     .with({ _tag: "PLit" }, ({ raw }) => raw)
     .with({ _tag: "PBool" }, ({ value: v }) => (v ? "true" : "false"))
     .otherwise(() => "");
-const fieldRefine: {
-  (ctx: GCtx): (p: Pattern) => (fieldBase: string) => Option<string>;
-  (ctx: GCtx): (p: Pattern, fieldBase: string) => Option<string>;
-  (ctx: GCtx, p: Pattern): (fieldBase: string) => Option<string>;
-  (ctx: GCtx, p: Pattern, fieldBase: string): Option<string>;
-} = _curry(3, (ctx: GCtx, p: Pattern, fieldBase: string) =>
-  match(p)
-    .with({ _tag: "PCtor" }, () => Some(patTarget(ctx, p, fieldBase)) as Option<string>)
-    .with({ _tag: "PRecord" }, () =>
-      ((t: string) => (eq(t, fieldBase) ? (None as Option<string>) : (Some(t) as Option<string>)))(
-        patTarget(ctx, p, fieldBase),
-      ),
-    )
-    .otherwise(() => None as Option<string>),
+const fieldRefine: _Curry<[ctx: GCtx, p: Pattern, fieldBase: string], Option<string>> = _curry(
+  3,
+  (ctx: GCtx, p: Pattern, fieldBase: string) =>
+    match(p)
+      .with({ _tag: "PCtor" }, () => Some(patTarget(ctx, p, fieldBase)) as Option<string>)
+      .with({ _tag: "PRecord" }, () =>
+        ((t: string) =>
+          eq(t, fieldBase) ? (None as Option<string>) : (Some(t) as Option<string>))(
+          patTarget(ctx, p, fieldBase),
+        ),
+      )
+      .otherwise(() => None as Option<string>),
 );
-const ctorRefines: {
-  (ctx: GCtx): (args: Pattern[]) => (keys: string[]) => (member: string) => (i: number) => string[];
-  (ctx: GCtx): (args: Pattern[]) => (keys: string[]) => (member: string, i: number) => string[];
-  (ctx: GCtx): (args: Pattern[]) => (keys: string[], member: string) => (i: number) => string[];
-  (ctx: GCtx): (args: Pattern[], keys: string[]) => (member: string) => (i: number) => string[];
-  (ctx: GCtx, args: Pattern[]): (keys: string[]) => (member: string) => (i: number) => string[];
-  (ctx: GCtx): (args: Pattern[]) => (keys: string[], member: string, i: number) => string[];
-  (ctx: GCtx): (args: Pattern[], keys: string[]) => (member: string, i: number) => string[];
-  (ctx: GCtx): (args: Pattern[], keys: string[], member: string) => (i: number) => string[];
-  (ctx: GCtx, args: Pattern[]): (keys: string[]) => (member: string, i: number) => string[];
-  (ctx: GCtx, args: Pattern[]): (keys: string[], member: string) => (i: number) => string[];
-  (ctx: GCtx, args: Pattern[], keys: string[]): (member: string) => (i: number) => string[];
-  (ctx: GCtx): (args: Pattern[], keys: string[], member: string, i: number) => string[];
-  (ctx: GCtx, args: Pattern[]): (keys: string[], member: string, i: number) => string[];
-  (ctx: GCtx, args: Pattern[], keys: string[]): (member: string, i: number) => string[];
-  (ctx: GCtx, args: Pattern[], keys: string[], member: string): (i: number) => string[];
-  (ctx: GCtx, args: Pattern[], keys: string[], member: string, i: number): string[];
-} = _curry(5, (ctx: GCtx, args: Pattern[], keys: string[], member: string, i: number) =>
+const ctorRefines: _Curry<
+  [ctx: GCtx, args: Pattern[], keys: string[], member: string, i: number],
+  string[]
+> = _curry(5, (ctx: GCtx, args: Pattern[], keys: string[], member: string, i: number) =>
   match(_Array_get(i, args))
     .with({ _tag: "None" }, () => [] as string[])
     .with({ _tag: "Some" }, ({ value: a }) =>
@@ -1572,186 +1416,118 @@ const ctorRefines: {
     )
     .exhaustive(),
 );
-const recordRefines: {
-  (ctx: GCtx): (fields: PatField[]) => (base: string) => (i: number) => string[];
-  (ctx: GCtx): (fields: PatField[]) => (base: string, i: number) => string[];
-  (ctx: GCtx): (fields: PatField[], base: string) => (i: number) => string[];
-  (ctx: GCtx, fields: PatField[]): (base: string) => (i: number) => string[];
-  (ctx: GCtx): (fields: PatField[], base: string, i: number) => string[];
-  (ctx: GCtx, fields: PatField[]): (base: string, i: number) => string[];
-  (ctx: GCtx, fields: PatField[], base: string): (i: number) => string[];
-  (ctx: GCtx, fields: PatField[], base: string, i: number): string[];
-} = _curry(4, (ctx: GCtx, fields: PatField[], base: string, i: number) =>
-  match(_Array_get(i, fields))
-    .with({ _tag: "None" }, () => [] as string[])
-    .with({ _tag: "Some" }, ({ value: f }) =>
-      ((rest: string[]) =>
-        match(fieldRefine(ctx, f.pat, `${base}[${jsStringLit(f.label)}]`))
-          .with({ _tag: "Some" }, ({ value: sub }) =>
-            _Array_prepend(`${jsStringLit(f.label)}: ${sub}`, rest),
-          )
-          .with({ _tag: "None" }, () => rest)
-          .exhaustive())(recordRefines(ctx, fields, base, add(i, 1))),
-    )
-    .exhaustive(),
-);
+const recordRefines: _Curry<[ctx: GCtx, fields: PatField[], base: string, i: number], string[]> =
+  _curry(4, (ctx: GCtx, fields: PatField[], base: string, i: number) =>
+    match(_Array_get(i, fields))
+      .with({ _tag: "None" }, () => [] as string[])
+      .with({ _tag: "Some" }, ({ value: f }) =>
+        ((rest: string[]) =>
+          match(fieldRefine(ctx, f.pat, `${base}[${jsStringLit(f.label)}]`))
+            .with({ _tag: "Some" }, ({ value: sub }) =>
+              _Array_prepend(`${jsStringLit(f.label)}: ${sub}`, rest),
+            )
+            .with({ _tag: "None" }, () => rest)
+            .exhaustive())(recordRefines(ctx, fields, base, add(i, 1))),
+      )
+      .exhaustive(),
+  );
 const tupleSlotBase: <A>(base: string, i: A) => string = _curry(
   2,
   <A>(base: string, i: A) => `(${base})[${show(i)}]`,
 );
-const tupleTargets: {
-  (ctx: GCtx): (elems: Pattern[]) => (base: string) => (i: number) => string[];
-  (ctx: GCtx): (elems: Pattern[]) => (base: string, i: number) => string[];
-  (ctx: GCtx): (elems: Pattern[], base: string) => (i: number) => string[];
-  (ctx: GCtx, elems: Pattern[]): (base: string) => (i: number) => string[];
-  (ctx: GCtx): (elems: Pattern[], base: string, i: number) => string[];
-  (ctx: GCtx, elems: Pattern[]): (base: string, i: number) => string[];
-  (ctx: GCtx, elems: Pattern[], base: string): (i: number) => string[];
-  (ctx: GCtx, elems: Pattern[], base: string, i: number): string[];
-} = _curry(4, (ctx: GCtx, elems: Pattern[], base: string, i: number) =>
-  match(_Array_get(i, elems))
-    .with({ _tag: "None" }, () => [] as string[])
-    .with({ _tag: "Some" }, ({ value: el }) =>
-      ((slotBase: string) =>
+const tupleTargets: _Curry<[ctx: GCtx, elems: Pattern[], base: string, i: number], string[]> =
+  _curry(4, (ctx: GCtx, elems: Pattern[], base: string, i: number) =>
+    match(_Array_get(i, elems))
+      .with({ _tag: "None" }, () => [] as string[])
+      .with({ _tag: "Some" }, ({ value: el }) =>
+        ((slotBase: string) =>
+          _Array_prepend(
+            _Option_unwrapOr(slotBase, fieldRefine(ctx, el, slotBase)),
+            tupleTargets(ctx, elems, base, add(i, 1)),
+          ))(tupleSlotBase(base, i)),
+      )
+      .exhaustive(),
+  );
+const tupleRefines: _Curry<[ctx: GCtx, elems: Pattern[], base: string, i: number], boolean> =
+  _curry(4, (ctx: GCtx, elems: Pattern[], base: string, i: number) =>
+    match(_Array_get(i, elems))
+      .with({ _tag: "None" }, () => false)
+      .with({ _tag: "Some" }, ({ value: el }) =>
+        or(
+          _Option_isSome(fieldRefine(ctx, el, tupleSlotBase(base, i))),
+          tupleRefines(ctx, elems, base, add(i, 1)),
+        ),
+      )
+      .exhaustive(),
+  );
+const arrTargets: _Curry<[ctx: GCtx, elems: Pattern[], elemBase: string, i: number], string[]> =
+  _curry(4, (ctx: GCtx, elems: Pattern[], elemBase: string, i: number) =>
+    match(_Array_get(i, elems))
+      .with({ _tag: "None" }, () => [] as string[])
+      .with({ _tag: "Some" }, ({ value: el }) =>
         _Array_prepend(
-          _Option_unwrapOr(slotBase, fieldRefine(ctx, el, slotBase)),
-          tupleTargets(ctx, elems, base, add(i, 1)),
-        ))(tupleSlotBase(base, i)),
-    )
-    .exhaustive(),
-);
-const tupleRefines: {
-  (ctx: GCtx): (elems: Pattern[]) => (base: string) => (i: number) => boolean;
-  (ctx: GCtx): (elems: Pattern[]) => (base: string, i: number) => boolean;
-  (ctx: GCtx): (elems: Pattern[], base: string) => (i: number) => boolean;
-  (ctx: GCtx, elems: Pattern[]): (base: string) => (i: number) => boolean;
-  (ctx: GCtx): (elems: Pattern[], base: string, i: number) => boolean;
-  (ctx: GCtx, elems: Pattern[]): (base: string, i: number) => boolean;
-  (ctx: GCtx, elems: Pattern[], base: string): (i: number) => boolean;
-  (ctx: GCtx, elems: Pattern[], base: string, i: number): boolean;
-} = _curry(4, (ctx: GCtx, elems: Pattern[], base: string, i: number) =>
-  match(_Array_get(i, elems))
-    .with({ _tag: "None" }, () => false)
-    .with({ _tag: "Some" }, ({ value: el }) =>
-      or(
-        _Option_isSome(fieldRefine(ctx, el, tupleSlotBase(base, i))),
-        tupleRefines(ctx, elems, base, add(i, 1)),
-      ),
-    )
-    .exhaustive(),
-);
-const arrTargets: {
-  (ctx: GCtx): (elems: Pattern[]) => (elemBase: string) => (i: number) => string[];
-  (ctx: GCtx): (elems: Pattern[]) => (elemBase: string, i: number) => string[];
-  (ctx: GCtx): (elems: Pattern[], elemBase: string) => (i: number) => string[];
-  (ctx: GCtx, elems: Pattern[]): (elemBase: string) => (i: number) => string[];
-  (ctx: GCtx): (elems: Pattern[], elemBase: string, i: number) => string[];
-  (ctx: GCtx, elems: Pattern[]): (elemBase: string, i: number) => string[];
-  (ctx: GCtx, elems: Pattern[], elemBase: string): (i: number) => string[];
-  (ctx: GCtx, elems: Pattern[], elemBase: string, i: number): string[];
-} = _curry(4, (ctx: GCtx, elems: Pattern[], elemBase: string, i: number) =>
-  match(_Array_get(i, elems))
-    .with({ _tag: "None" }, () => [] as string[])
-    .with({ _tag: "Some" }, ({ value: el }) =>
-      _Array_prepend(
-        _Option_unwrapOr(elemBase, fieldRefine(ctx, el, elemBase)),
-        arrTargets(ctx, elems, elemBase, add(i, 1)),
-      ),
-    )
-    .exhaustive(),
-);
-const arrRefines: {
-  (ctx: GCtx): (elems: Pattern[]) => (elemBase: string) => (i: number) => boolean;
-  (ctx: GCtx): (elems: Pattern[]) => (elemBase: string, i: number) => boolean;
-  (ctx: GCtx): (elems: Pattern[], elemBase: string) => (i: number) => boolean;
-  (ctx: GCtx, elems: Pattern[]): (elemBase: string) => (i: number) => boolean;
-  (ctx: GCtx): (elems: Pattern[], elemBase: string, i: number) => boolean;
-  (ctx: GCtx, elems: Pattern[]): (elemBase: string, i: number) => boolean;
-  (ctx: GCtx, elems: Pattern[], elemBase: string): (i: number) => boolean;
-  (ctx: GCtx, elems: Pattern[], elemBase: string, i: number): boolean;
-} = _curry(4, (ctx: GCtx, elems: Pattern[], elemBase: string, i: number) =>
-  match(_Array_get(i, elems))
-    .with({ _tag: "None" }, () => false)
-    .with({ _tag: "Some" }, ({ value: el }) =>
-      or(
-        _Option_isSome(fieldRefine(ctx, el, elemBase)),
-        arrRefines(ctx, elems, elemBase, add(i, 1)),
-      ),
-    )
-    .exhaustive(),
-);
-const patTarget: {
-  (ctx: GCtx): (p: Pattern) => (base: string) => string;
-  (ctx: GCtx): (p: Pattern, base: string) => string;
-  (ctx: GCtx, p: Pattern): (base: string) => string;
-  (ctx: GCtx, p: Pattern, base: string): string;
-} = _curry(3, (ctx: GCtx, p: Pattern, base: string) =>
-  match(p)
-    .with({ _tag: "PAs" }, ({ pat }) => patTarget(ctx, pat, base))
-    .with({ _tag: "PCtor" }, ({ ctor, args }) =>
-      ((member: string) =>
-        ((keys: string[]) =>
-          ((refines: string[]) =>
-            eq(length(refines), 0) ? member : `${member} & { ${_Str_join("; ", refines)} }`)(
-            ctorRefines(ctx, args, keys, member, 0),
-          ))(_Option_unwrapOr([] as string[], _Map_get(ctor, ctx.keys))))(
-        `Extract<${base}, { _tag: ${jsStringLit(ctor)} }>`,
-      ),
-    )
-    .with({ _tag: "PRecord" }, ({ fields }) =>
-      ((refines: string[]) =>
-        eq(length(refines), 0) ? base : `${base} & { ${_Str_join("; ", refines)} }`)(
-        recordRefines(ctx, fields, base, 0),
-      ),
-    )
-    .with({ _tag: "PTuple" }, ({ elems }) =>
-      not(tupleRefines(ctx, elems, base, 0))
-        ? base
-        : `[${_Str_join(", ", tupleTargets(ctx, elems, base, 0))}]`,
-    )
-    .with({ _tag: "PArr" }, ({ elems, rest: restOpt }) =>
-      ((elemBase: string) =>
-        not(arrRefines(ctx, elems, elemBase, 0))
+          _Option_unwrapOr(elemBase, fieldRefine(ctx, el, elemBase)),
+          arrTargets(ctx, elems, elemBase, add(i, 1)),
+        ),
+      )
+      .exhaustive(),
+  );
+const arrRefines: _Curry<[ctx: GCtx, elems: Pattern[], elemBase: string, i: number], boolean> =
+  _curry(4, (ctx: GCtx, elems: Pattern[], elemBase: string, i: number) =>
+    match(_Array_get(i, elems))
+      .with({ _tag: "None" }, () => false)
+      .with({ _tag: "Some" }, ({ value: el }) =>
+        or(
+          _Option_isSome(fieldRefine(ctx, el, elemBase)),
+          arrRefines(ctx, elems, elemBase, add(i, 1)),
+        ),
+      )
+      .exhaustive(),
+  );
+const patTarget: _Curry<[ctx: GCtx, p: Pattern, base: string], string> = _curry(
+  3,
+  (ctx: GCtx, p: Pattern, base: string) =>
+    match(p)
+      .with({ _tag: "PAs" }, ({ pat }) => patTarget(ctx, pat, base))
+      .with({ _tag: "PCtor" }, ({ ctor, args }) =>
+        ((member: string) =>
+          ((keys: string[]) =>
+            ((refines: string[]) =>
+              eq(length(refines), 0) ? member : `${member} & { ${_Str_join("; ", refines)} }`)(
+              ctorRefines(ctx, args, keys, member, 0),
+            ))(_Option_unwrapOr([] as string[], _Map_get(ctor, ctx.keys))))(
+          `Extract<${base}, { _tag: ${jsStringLit(ctor)} }>`,
+        ),
+      )
+      .with({ _tag: "PRecord" }, ({ fields }) =>
+        ((refines: string[]) =>
+          eq(length(refines), 0) ? base : `${base} & { ${_Str_join("; ", refines)} }`)(
+          recordRefines(ctx, fields, base, 0),
+        ),
+      )
+      .with({ _tag: "PTuple" }, ({ elems }) =>
+        not(tupleRefines(ctx, elems, base, 0))
           ? base
-          : ((heads: string) =>
-              match(restOpt)
-                .with({ _tag: "Some" }, () => `[${heads}, ...${base}]`)
-                .with({ _tag: "None" }, () => `[${heads}]`)
-                .exhaustive())(_Str_join(", ", arrTargets(ctx, elems, elemBase, 0))))(
-        `(${base})[number]`,
-      ),
-    )
-    .otherwise(() => base),
+          : `[${_Str_join(", ", tupleTargets(ctx, elems, base, 0))}]`,
+      )
+      .with({ _tag: "PArr" }, ({ elems, rest: restOpt }) =>
+        ((elemBase: string) =>
+          not(arrRefines(ctx, elems, elemBase, 0))
+            ? base
+            : ((heads: string) =>
+                match(restOpt)
+                  .with({ _tag: "Some" }, () => `[${heads}, ...${base}]`)
+                  .with({ _tag: "None" }, () => `[${heads}]`)
+                  .exhaustive())(_Str_join(", ", arrTargets(ctx, elems, elemBase, 0))))(
+          `(${base})[number]`,
+        ),
+      )
+      .otherwise(() => base),
 );
-const genGuardArm: {
-  (
-    ctx: GCtx,
-  ): (p: Pattern) => (body: Expr) => (guardOpt: Option<Expr>) => (base: Option<string>) => string;
-  (
-    ctx: GCtx,
-  ): (p: Pattern) => (body: Expr) => (guardOpt: Option<Expr>, base: Option<string>) => string;
-  (
-    ctx: GCtx,
-  ): (p: Pattern) => (body: Expr, guardOpt: Option<Expr>) => (base: Option<string>) => string;
-  (
-    ctx: GCtx,
-  ): (p: Pattern, body: Expr) => (guardOpt: Option<Expr>) => (base: Option<string>) => string;
-  (
-    ctx: GCtx,
-    p: Pattern,
-  ): (body: Expr) => (guardOpt: Option<Expr>) => (base: Option<string>) => string;
-  (ctx: GCtx): (p: Pattern) => (body: Expr, guardOpt: Option<Expr>, base: Option<string>) => string;
-  (ctx: GCtx): (p: Pattern, body: Expr) => (guardOpt: Option<Expr>, base: Option<string>) => string;
-  (ctx: GCtx): (p: Pattern, body: Expr, guardOpt: Option<Expr>) => (base: Option<string>) => string;
-  (ctx: GCtx, p: Pattern): (body: Expr) => (guardOpt: Option<Expr>, base: Option<string>) => string;
-  (ctx: GCtx, p: Pattern): (body: Expr, guardOpt: Option<Expr>) => (base: Option<string>) => string;
-  (ctx: GCtx, p: Pattern, body: Expr): (guardOpt: Option<Expr>) => (base: Option<string>) => string;
-  (ctx: GCtx): (p: Pattern, body: Expr, guardOpt: Option<Expr>, base: Option<string>) => string;
-  (ctx: GCtx, p: Pattern): (body: Expr, guardOpt: Option<Expr>, base: Option<string>) => string;
-  (ctx: GCtx, p: Pattern, body: Expr): (guardOpt: Option<Expr>, base: Option<string>) => string;
-  (ctx: GCtx, p: Pattern, body: Expr, guardOpt: Option<Expr>): (base: Option<string>) => string;
-  (ctx: GCtx, p: Pattern, body: Expr, guardOpt: Option<Expr>, base: Option<string>): string;
-} = _curry(5, (ctx: GCtx, p: Pattern, body: Expr, guardOpt: Option<Expr>, base: Option<string>) => {
+const genGuardArm: _Curry<
+  [ctx: GCtx, p: Pattern, body: Expr, guardOpt: Option<Expr>, base: Option<string>],
+  string
+> = _curry(5, (ctx: GCtx, p: Pattern, body: Expr, guardOpt: Option<Expr>, base: Option<string>) => {
   const root: string = _Option_isSome(base) ? "_g" : "_v";
   const conds0: string[] = patConds(ctx, p, root);
   const slot: string = match(p)
@@ -1820,16 +1596,10 @@ const recordLits: <A>(fields: ({ pat: Pattern; label: string } & A)[], i: number
       )
       .exhaustive(),
   );
-const ctorArgParts: {
-  (ctx: GCtx): (ctor: string) => (args: Pattern[]) => (i: number) => [string[], string[]];
-  (ctx: GCtx): (ctor: string) => (args: Pattern[], i: number) => [string[], string[]];
-  (ctx: GCtx): (ctor: string, args: Pattern[]) => (i: number) => [string[], string[]];
-  (ctx: GCtx, ctor: string): (args: Pattern[]) => (i: number) => [string[], string[]];
-  (ctx: GCtx): (ctor: string, args: Pattern[], i: number) => [string[], string[]];
-  (ctx: GCtx, ctor: string): (args: Pattern[], i: number) => [string[], string[]];
-  (ctx: GCtx, ctor: string, args: Pattern[]): (i: number) => [string[], string[]];
-  (ctx: GCtx, ctor: string, args: Pattern[], i: number): [string[], string[]];
-} = _curry(4, (ctx: GCtx, ctor: string, args: Pattern[], i: number) =>
+const ctorArgParts: _Curry<
+  [ctx: GCtx, ctor: string, args: Pattern[], i: number],
+  [string[], string[]]
+> = _curry(4, (ctx: GCtx, ctor: string, args: Pattern[], i: number) =>
   match(_Array_get(i, args))
     .with({ _tag: "None" }, () => _tuple([] as string[], [] as string[]))
     .with({ _tag: "Some" }, ({ value: a }) =>
@@ -1853,62 +1623,51 @@ const ctorArgParts: {
     )
     .exhaustive(),
 );
-const genWithArm: {
-  (ctx: GCtx): (p: Pattern) => (body: Expr) => (base: Option<string>) => string;
-  (ctx: GCtx): (p: Pattern) => (body: Expr, base: Option<string>) => string;
-  (ctx: GCtx): (p: Pattern, body: Expr) => (base: Option<string>) => string;
-  (ctx: GCtx, p: Pattern): (body: Expr) => (base: Option<string>) => string;
-  (ctx: GCtx): (p: Pattern, body: Expr, base: Option<string>) => string;
-  (ctx: GCtx, p: Pattern): (body: Expr, base: Option<string>) => string;
-  (ctx: GCtx, p: Pattern, body: Expr): (base: Option<string>) => string;
-  (ctx: GCtx, p: Pattern, body: Expr, base: Option<string>): string;
-} = _curry(4, (ctx: GCtx, p: Pattern, body: Expr, base: Option<string>) =>
-  match(p)
-    .with({ _tag: "PAs" }, () => genGuardArm(ctx, p, body, None as Option<Expr>, base))
-    .with({ _tag: "PArr" }, () => genGuardArm(ctx, p, body, None as Option<Expr>, base))
-    .with({ _tag: "PTuple" }, () => genGuardArm(ctx, p, body, None as Option<Expr>, base))
-    .with({ _tag: "POr" }, () => genGuardArm(ctx, p, body, None as Option<Expr>, base))
-    .with({ _tag: "PLit" }, () => `.with(${litValue(p)}, () => ${genLambdaBody(ctx, body)})`)
-    .with({ _tag: "PBool" }, () => `.with(${litValue(p)}, () => ${genLambdaBody(ctx, body)})`)
-    .with({ _tag: "PStr" }, () => `.with(${litValue(p)}, () => ${genLambdaBody(ctx, body)})`)
-    .with({ _tag: "PRecord" }, ({ fields }) =>
-      allOf((f: PatField) => isFlatSub(f.pat), fields)
-        ? ((lits: string[]) =>
-            ((slot: string) =>
-              `.with({ ${_Str_join(", ", lits)} }, ${eq(slot, "") ? "()" : `(${slot})`} => ${genLambdaBody(ctx, body)})`)(
-              patSlot(ctx, p),
-            ))(recordLits(fields, 0))
-        : genGuardArm(ctx, p, body, None as Option<Expr>, base),
-    )
-    .with({ _tag: "PCtor" }, ({ ctor, args }) =>
-      allOf(isFlatSub, args)
-        ? (([binds, litFields]: [string[], string[]]) => {
-            const patObj: string = _Str_join(
-              ", ",
-              _Array_prepend(`_tag: ${jsStringLit(ctor)}`, litFields),
-            );
-            const param: string = eq(length(binds), 0) ? "()" : `({ ${_Str_join(", ", binds)} })`;
-            return `.with({ ${patObj} }, ${param} => ${genLambdaBody(ctx, body)})`;
-          })(ctorArgParts(ctx, ctor, args, 0))
-        : genGuardArm(ctx, p, body, None as Option<Expr>, base),
-    )
-    .otherwise(() => genGuardArm(ctx, p, body, None as Option<Expr>, base)),
-);
-const typedCtorParams: {
-  (keys: string[]): (paramTypes: string[]) => (i: number) => string[];
-  (keys: string[]): (paramTypes: string[], i: number) => string[];
-  (keys: string[], paramTypes: string[]): (i: number) => string[];
-  (keys: string[], paramTypes: string[], i: number): string[];
-} = _curry(3, (keys: string[], paramTypes: string[], i: number) =>
-  match(_Array_get(i, keys))
-    .with({ _tag: "None" }, () => [] as string[])
-    .with({ _tag: "Some" }, ({ value: k }) =>
-      _Array_prepend(
-        `${k}: ${_Option_unwrapOr("unknown", _Array_get(i, paramTypes))}`,
-        typedCtorParams(keys, paramTypes, add(i, 1)),
-      ),
-    )
-    .exhaustive(),
+const genWithArm: _Curry<[ctx: GCtx, p: Pattern, body: Expr, base: Option<string>], string> =
+  _curry(4, (ctx: GCtx, p: Pattern, body: Expr, base: Option<string>) =>
+    match(p)
+      .with({ _tag: "PAs" }, () => genGuardArm(ctx, p, body, None as Option<Expr>, base))
+      .with({ _tag: "PArr" }, () => genGuardArm(ctx, p, body, None as Option<Expr>, base))
+      .with({ _tag: "PTuple" }, () => genGuardArm(ctx, p, body, None as Option<Expr>, base))
+      .with({ _tag: "POr" }, () => genGuardArm(ctx, p, body, None as Option<Expr>, base))
+      .with({ _tag: "PLit" }, () => `.with(${litValue(p)}, () => ${genLambdaBody(ctx, body)})`)
+      .with({ _tag: "PBool" }, () => `.with(${litValue(p)}, () => ${genLambdaBody(ctx, body)})`)
+      .with({ _tag: "PStr" }, () => `.with(${litValue(p)}, () => ${genLambdaBody(ctx, body)})`)
+      .with({ _tag: "PRecord" }, ({ fields }) =>
+        allOf((f: PatField) => isFlatSub(f.pat), fields)
+          ? ((lits: string[]) =>
+              ((slot: string) =>
+                `.with({ ${_Str_join(", ", lits)} }, ${eq(slot, "") ? "()" : `(${slot})`} => ${genLambdaBody(ctx, body)})`)(
+                patSlot(ctx, p),
+              ))(recordLits(fields, 0))
+          : genGuardArm(ctx, p, body, None as Option<Expr>, base),
+      )
+      .with({ _tag: "PCtor" }, ({ ctor, args }) =>
+        allOf(isFlatSub, args)
+          ? (([binds, litFields]: [string[], string[]]) => {
+              const patObj: string = _Str_join(
+                ", ",
+                _Array_prepend(`_tag: ${jsStringLit(ctor)}`, litFields),
+              );
+              const param: string = eq(length(binds), 0) ? "()" : `({ ${_Str_join(", ", binds)} })`;
+              return `.with({ ${patObj} }, ${param} => ${genLambdaBody(ctx, body)})`;
+            })(ctorArgParts(ctx, ctor, args, 0))
+          : genGuardArm(ctx, p, body, None as Option<Expr>, base),
+      )
+      .otherwise(() => genGuardArm(ctx, p, body, None as Option<Expr>, base)),
+  );
+const typedCtorParams: _Curry<[keys: string[], paramTypes: string[], i: number], string[]> = _curry(
+  3,
+  (keys: string[], paramTypes: string[], i: number) =>
+    match(_Array_get(i, keys))
+      .with({ _tag: "None" }, () => [] as string[])
+      .with({ _tag: "Some" }, ({ value: k }) =>
+        _Array_prepend(
+          `${k}: ${_Option_unwrapOr("unknown", _Array_get(i, paramTypes))}`,
+          typedCtorParams(keys, paramTypes, add(i, 1)),
+        ),
+      )
+      .exhaustive(),
 );
 const genCtor: <A, B, C>(
   c: { name: string; fields: ({ name: Option<string> } & A)[] } & B,
@@ -1990,14 +1749,12 @@ const genCtorsFrom: <A, B, C, D>(
       )
       .exhaustive(),
 );
-const genType: { (ctx: GCtx): (s: Stmt) => string; (ctx: GCtx, s: Stmt): string } = _curry(
-  2,
-  (ctx: GCtx, s: Stmt) =>
-    match(s)
-      .with({ _tag: "SType" }, ({ ctors, exported }) =>
-        _Str_join("\n", genCtorsFrom(s, ctors, ctx.annotateCtor, ctx.valueRefs, exported, 0)),
-      )
-      .otherwise(() => ""),
+const genType: _Curry<[ctx: GCtx, s: Stmt], string> = _curry(2, (ctx: GCtx, s: Stmt) =>
+  match(s)
+    .with({ _tag: "SType" }, ({ ctors, exported }) =>
+      _Str_join("\n", genCtorsFrom(s, ctors, ctx.annotateCtor, ctx.valueRefs, exported, 0)),
+    )
+    .otherwise(() => ""),
 );
 const typeExprArity: (te: TypeExpr) => number = (te: TypeExpr) =>
   match(te)
@@ -2100,69 +1857,65 @@ const ${name} = _curry(${show(arity)}, ${flat});`)(
     .otherwise(() => "");
 const stripAlExt: (s: string) => string = (s: string) =>
   _Str_endsWith(".mochi", s) ? _Str_slice(0, sub(_Str_length(s), 6), s) : s;
-const rewriteImportPath: {
-  (from: string): (ext: string) => string;
-  (from: string, ext: string): string;
-} = _curry(2, (from: string, ext: string) => {
-  const bare: string = stripAlExt(from);
-  return or(_Str_startsWith("./", bare), _Str_startsWith("../", bare)) ? `${bare}${ext}` : bare;
-});
-const genImport: { (s: Stmt): (ext: string) => string; (s: Stmt, ext: string): string } = _curry(
+const rewriteImportPath: _Curry<[from: string, ext: string], string> = _curry(
   2,
-  (s: Stmt, ext: string) =>
-    match(s)
-      .with({ _tag: "SImport" }, ({ names, from }) =>
-        ((nameList: string) =>
-          ((path: string) => `import { ${nameList} } from ${jsStringLit(path)};`)(
-            rewriteImportPath(from, ext),
-          ))(
-          _Str_join(
-            ", ",
-            map((n: Name) => n.name, names),
-          ),
-        ),
-      )
-      .with({ _tag: "SImportNs" }, ({ alias, from }) =>
-        ((path: string) => `import * as ${alias.name} from ${jsStringLit(path)};`)(
+  (from: string, ext: string) => {
+    const bare: string = stripAlExt(from);
+    return or(_Str_startsWith("./", bare), _Str_startsWith("../", bare)) ? `${bare}${ext}` : bare;
+  },
+);
+const genImport: _Curry<[s: Stmt, ext: string], string> = _curry(2, (s: Stmt, ext: string) =>
+  match(s)
+    .with({ _tag: "SImport" }, ({ names, from }) =>
+      ((nameList: string) =>
+        ((path: string) => `import { ${nameList} } from ${jsStringLit(path)};`)(
           rewriteImportPath(from, ext),
+        ))(
+        _Str_join(
+          ", ",
+          map((n: Name) => n.name, names),
         ),
-      )
-      .otherwise(() => ""),
+      ),
+    )
+    .with({ _tag: "SImportNs" }, ({ alias, from }) =>
+      ((path: string) => `import * as ${alias.name} from ${jsStringLit(path)};`)(
+        rewriteImportPath(from, ext),
+      ),
+    )
+    .otherwise(() => ""),
 );
 const exportLine: (l: string) => string = (l: string) => `export ${l}`;
-const genStmt: { (ctx: GCtx): (s: Stmt) => string; (ctx: GCtx, s: Stmt): string } = _curry(
-  2,
-  (ctx: GCtx, s: Stmt) =>
-    match(s)
-      .with(
-        { _tag: "SError" },
-        ({ span: sp }) =>
-          `throw new Error("codegen invariant: error node reached codegen at ${show(sp.start)}");`,
-      )
-      .with({ _tag: "SImport" }, () => genImport(s, ctx.moduleExt))
-      .with({ _tag: "SImportNs" }, () => genImport(s, ctx.moduleExt))
-      .with({ _tag: "SType" }, ({ exported }) =>
-        ((decls: string) =>
-          eq(decls, "")
-            ? ""
-            : exported
-              ? _Str_join("\n", map(exportLine, _Str_split("\n", decls)))
-              : decls)(genType(ctx, s)),
-      )
-      .with({ _tag: "SExtern" }, ({ name, exported }) =>
-        exported
-          ? `${genExtern(s)}
+const genStmt: _Curry<[ctx: GCtx, s: Stmt], string> = _curry(2, (ctx: GCtx, s: Stmt) =>
+  match(s)
+    .with(
+      { _tag: "SError" },
+      ({ span: sp }) =>
+        `throw new Error("codegen invariant: error node reached codegen at ${show(sp.start)}");`,
+    )
+    .with({ _tag: "SImport" }, () => genImport(s, ctx.moduleExt))
+    .with({ _tag: "SImportNs" }, () => genImport(s, ctx.moduleExt))
+    .with({ _tag: "SType" }, ({ exported }) =>
+      ((decls: string) =>
+        eq(decls, "")
+          ? ""
+          : exported
+            ? _Str_join("\n", map(exportLine, _Str_split("\n", decls)))
+            : decls)(genType(ctx, s)),
+    )
+    .with({ _tag: "SExtern" }, ({ name, exported }) =>
+      exported
+        ? `${genExtern(s)}
 export { ${name} };`
-          : genExtern(s),
-      )
-      .with({ _tag: "SLet" }, ({ name, value, exported }) =>
-        ((doExport: boolean) =>
-          `${doExport ? "export " : ""}const ${name}${_Option_unwrapOr("", hook2(ctx.annotateLet, name, value))} = ${genExpr(ctx, value)};`)(
-          and(exported, not(_Str_startsWith("$", name))),
-        ),
-      )
-      .with({ _tag: "SExpr" }, ({ value }) => `${genExpr(ctx, value)};`)
-      .exhaustive(),
+        : genExtern(s),
+    )
+    .with({ _tag: "SLet" }, ({ name, value, exported }) =>
+      ((doExport: boolean) =>
+        `${doExport ? "export " : ""}const ${name}${_Option_unwrapOr("", hook2(ctx.annotateLet, name, value))} = ${genExpr(ctx, value)};`)(
+        and(exported, not(_Str_startsWith("$", name))),
+      ),
+    )
+    .with({ _tag: "SExpr" }, ({ value }) => `${genExpr(ctx, value)};`)
+    .exhaustive(),
 );
 const usesMatchLibArm: (a: MatchArm) => boolean = (a: MatchArm) =>
   or(
@@ -2259,16 +2012,10 @@ const usesMatchLib: (e: Expr) => boolean = (e: Expr) =>
       ),
     )
     .exhaustive();
-const loopInitRefsFrom: {
-  (ctx: GCtx): (params: LoopParam[]) => (i: number) => (acc: Set<string>) => Set<string>;
-  (ctx: GCtx): (params: LoopParam[]) => (i: number, acc: Set<string>) => Set<string>;
-  (ctx: GCtx): (params: LoopParam[], i: number) => (acc: Set<string>) => Set<string>;
-  (ctx: GCtx, params: LoopParam[]): (i: number) => (acc: Set<string>) => Set<string>;
-  (ctx: GCtx): (params: LoopParam[], i: number, acc: Set<string>) => Set<string>;
-  (ctx: GCtx, params: LoopParam[]): (i: number, acc: Set<string>) => Set<string>;
-  (ctx: GCtx, params: LoopParam[], i: number): (acc: Set<string>) => Set<string>;
-  (ctx: GCtx, params: LoopParam[], i: number, acc: Set<string>): Set<string>;
-} = _curry(4, (ctx: GCtx, params: LoopParam[], i: number, acc: Set<string>) =>
+const loopInitRefsFrom: _Curry<
+  [ctx: GCtx, params: LoopParam[], i: number, acc: Set<string>],
+  Set<string>
+> = _curry(4, (ctx: GCtx, params: LoopParam[], i: number, acc: Set<string>) =>
   match(_Array_get(i, params))
     .with({ _tag: "None" }, () => acc)
     .with({ _tag: "Some" }, ({ value: p }) =>
@@ -2276,16 +2023,10 @@ const loopInitRefsFrom: {
     )
     .exhaustive(),
 );
-const exprRefsListFrom: {
-  (ctx: GCtx): (xs: Expr[]) => (i: number) => (acc: Set<string>) => Set<string>;
-  (ctx: GCtx): (xs: Expr[]) => (i: number, acc: Set<string>) => Set<string>;
-  (ctx: GCtx): (xs: Expr[], i: number) => (acc: Set<string>) => Set<string>;
-  (ctx: GCtx, xs: Expr[]): (i: number) => (acc: Set<string>) => Set<string>;
-  (ctx: GCtx): (xs: Expr[], i: number, acc: Set<string>) => Set<string>;
-  (ctx: GCtx, xs: Expr[]): (i: number, acc: Set<string>) => Set<string>;
-  (ctx: GCtx, xs: Expr[], i: number): (acc: Set<string>) => Set<string>;
-  (ctx: GCtx, xs: Expr[], i: number, acc: Set<string>): Set<string>;
-} = _curry(4, (ctx: GCtx, xs: Expr[], i: number, acc: Set<string>) =>
+const exprRefsListFrom: _Curry<
+  [ctx: GCtx, xs: Expr[], i: number, acc: Set<string>],
+  Set<string>
+> = _curry(4, (ctx: GCtx, xs: Expr[], i: number, acc: Set<string>) =>
   match(_Array_get(i, xs))
     .with({ _tag: "None" }, () => acc)
     .with({ _tag: "Some" }, ({ value: x }) =>
@@ -2293,16 +2034,10 @@ const exprRefsListFrom: {
     )
     .exhaustive(),
 );
-const exprRefsInterpPartsFrom: {
-  (ctx: GCtx): (parts: InterpPart[]) => (i: number) => (acc: Set<string>) => Set<string>;
-  (ctx: GCtx): (parts: InterpPart[]) => (i: number, acc: Set<string>) => Set<string>;
-  (ctx: GCtx): (parts: InterpPart[], i: number) => (acc: Set<string>) => Set<string>;
-  (ctx: GCtx, parts: InterpPart[]): (i: number) => (acc: Set<string>) => Set<string>;
-  (ctx: GCtx): (parts: InterpPart[], i: number, acc: Set<string>) => Set<string>;
-  (ctx: GCtx, parts: InterpPart[]): (i: number, acc: Set<string>) => Set<string>;
-  (ctx: GCtx, parts: InterpPart[], i: number): (acc: Set<string>) => Set<string>;
-  (ctx: GCtx, parts: InterpPart[], i: number, acc: Set<string>): Set<string>;
-} = _curry(4, (ctx: GCtx, parts: InterpPart[], i: number, acc: Set<string>) =>
+const exprRefsInterpPartsFrom: _Curry<
+  [ctx: GCtx, parts: InterpPart[], i: number, acc: Set<string>],
+  Set<string>
+> = _curry(4, (ctx: GCtx, parts: InterpPart[], i: number, acc: Set<string>) =>
   match(_Array_get(i, parts))
     .with({ _tag: "None" }, () => acc)
     .with({ _tag: "Some" }, ({ value: p }) =>
@@ -2318,16 +2053,10 @@ const exprRefsInterpPartsFrom: {
     )
     .exhaustive(),
 );
-const exprRefsArmsFrom: {
-  (ctx: GCtx): (arms: MatchArm[]) => (i: number) => (acc: Set<string>) => Set<string>;
-  (ctx: GCtx): (arms: MatchArm[]) => (i: number, acc: Set<string>) => Set<string>;
-  (ctx: GCtx): (arms: MatchArm[], i: number) => (acc: Set<string>) => Set<string>;
-  (ctx: GCtx, arms: MatchArm[]): (i: number) => (acc: Set<string>) => Set<string>;
-  (ctx: GCtx): (arms: MatchArm[], i: number, acc: Set<string>) => Set<string>;
-  (ctx: GCtx, arms: MatchArm[]): (i: number, acc: Set<string>) => Set<string>;
-  (ctx: GCtx, arms: MatchArm[], i: number): (acc: Set<string>) => Set<string>;
-  (ctx: GCtx, arms: MatchArm[], i: number, acc: Set<string>): Set<string>;
-} = _curry(4, (ctx: GCtx, arms: MatchArm[], i: number, acc: Set<string>) =>
+const exprRefsArmsFrom: _Curry<
+  [ctx: GCtx, arms: MatchArm[], i: number, acc: Set<string>],
+  Set<string>
+> = _curry(4, (ctx: GCtx, arms: MatchArm[], i: number, acc: Set<string>) =>
   match(_Array_get(i, arms))
     .with({ _tag: "None" }, () => acc)
     .with({ _tag: "Some" }, ({ value: a }) =>
@@ -2340,16 +2069,10 @@ const exprRefsArmsFrom: {
     )
     .exhaustive(),
 );
-const exprRefsFieldsFrom: {
-  (ctx: GCtx): (fields: Field[]) => (i: number) => (acc: Set<string>) => Set<string>;
-  (ctx: GCtx): (fields: Field[]) => (i: number, acc: Set<string>) => Set<string>;
-  (ctx: GCtx): (fields: Field[], i: number) => (acc: Set<string>) => Set<string>;
-  (ctx: GCtx, fields: Field[]): (i: number) => (acc: Set<string>) => Set<string>;
-  (ctx: GCtx): (fields: Field[], i: number, acc: Set<string>) => Set<string>;
-  (ctx: GCtx, fields: Field[]): (i: number, acc: Set<string>) => Set<string>;
-  (ctx: GCtx, fields: Field[], i: number): (acc: Set<string>) => Set<string>;
-  (ctx: GCtx, fields: Field[], i: number, acc: Set<string>): Set<string>;
-} = _curry(4, (ctx: GCtx, fields: Field[], i: number, acc: Set<string>) =>
+const exprRefsFieldsFrom: _Curry<
+  [ctx: GCtx, fields: Field[], i: number, acc: Set<string>],
+  Set<string>
+> = _curry(4, (ctx: GCtx, fields: Field[], i: number, acc: Set<string>) =>
   match(_Array_get(i, fields))
     .with({ _tag: "None" }, () => acc)
     .with({ _tag: "Some" }, ({ value: f }) =>
@@ -2357,16 +2080,10 @@ const exprRefsFieldsFrom: {
     )
     .exhaustive(),
 );
-const exprRefsEntriesFrom: {
-  (ctx: GCtx): (entries: MapEntry[]) => (i: number) => (acc: Set<string>) => Set<string>;
-  (ctx: GCtx): (entries: MapEntry[]) => (i: number, acc: Set<string>) => Set<string>;
-  (ctx: GCtx): (entries: MapEntry[], i: number) => (acc: Set<string>) => Set<string>;
-  (ctx: GCtx, entries: MapEntry[]): (i: number) => (acc: Set<string>) => Set<string>;
-  (ctx: GCtx): (entries: MapEntry[], i: number, acc: Set<string>) => Set<string>;
-  (ctx: GCtx, entries: MapEntry[]): (i: number, acc: Set<string>) => Set<string>;
-  (ctx: GCtx, entries: MapEntry[], i: number): (acc: Set<string>) => Set<string>;
-  (ctx: GCtx, entries: MapEntry[], i: number, acc: Set<string>): Set<string>;
-} = _curry(4, (ctx: GCtx, entries: MapEntry[], i: number, acc: Set<string>) =>
+const exprRefsEntriesFrom: _Curry<
+  [ctx: GCtx, entries: MapEntry[], i: number, acc: Set<string>],
+  Set<string>
+> = _curry(4, (ctx: GCtx, entries: MapEntry[], i: number, acc: Set<string>) =>
   match(_Array_get(i, entries))
     .with({ _tag: "None" }, () => acc)
     .with({ _tag: "Some" }, ({ value: en }) =>
@@ -2379,196 +2096,187 @@ const exprRefsEntriesFrom: {
     )
     .exhaustive(),
 );
-const exprRefs: {
-  (ctx: GCtx): (e: Expr) => (acc: Set<string>) => Set<string>;
-  (ctx: GCtx): (e: Expr, acc: Set<string>) => Set<string>;
-  (ctx: GCtx, e: Expr): (acc: Set<string>) => Set<string>;
-  (ctx: GCtx, e: Expr, acc: Set<string>): Set<string>;
-} = _curry(3, (ctx: GCtx, e: Expr, acc: Set<string>) =>
-  match(e)
-    .with({ _tag: "ENum" }, () => acc)
-    .with({ _tag: "EUnit" }, () => acc)
-    .with({ _tag: "EBool" }, () => acc)
-    .with({ _tag: "EStr" }, () => acc)
-    .with({ _tag: "ERef" }, ({ name }) => _Set_add(name, acc))
-    .with({ _tag: "ECall" }, ({ fn, args }) =>
-      exprRefsListFrom(ctx, args, 0, exprRefs(ctx, fn, acc)),
-    )
-    .with({ _tag: "ELambda" }, ({ params, body }) =>
-      (([cparams, cbody]: [LamParam[], Expr]) => {
-        const acc2: Set<string> = gte(length(cparams), 2) ? _Set_add("_curry", acc) : acc;
-        return exprRefs(ctx, cbody, acc2);
-      })(collapseLambda(params, body)),
-    )
-    .with({ _tag: "ELetIn" }, ({ value, body }) => exprRefs(ctx, body, exprRefs(ctx, value, acc)))
-    .with({ _tag: "ELetBind" }, ({ monad, value, body }) =>
-      exprRefs(ctx, body, exprRefs(ctx, value, _Set_add(bindRuntime(monad), acc))),
-    )
-    .with({ _tag: "EPipe" }, ({ left, right }) => exprRefs(ctx, right, exprRefs(ctx, left, acc)))
-    .with({ _tag: "EDo" }, ({ exprs }) => exprRefsListFrom(ctx, exprs, 0, acc))
-    .with({ _tag: "ETernary" }, ({ cond, thenE, elseE }) =>
-      exprRefs(ctx, elseE, exprRefs(ctx, thenE, exprRefs(ctx, cond, acc))),
-    )
-    .with({ _tag: "EMatch" }, ({ scrutinee, arms }) =>
-      ((acc1: Set<string>) =>
-        ((acc2: Set<string>) => exprRefsArmsFrom(ctx, arms, 0, acc2))(
-          someOf(
-            (a: MatchArm) =>
-              match(a.pattern)
-                .with(
-                  (
-                    _v,
-                  ): _v is Extract<Pattern, { _tag: "PList" }> & {
-                    rest: Extract<Extract<Pattern, { _tag: "PList" }>["rest"], { _tag: "Some" }> & {
-                      value: Extract<
-                        Extract<
-                          Extract<Pattern, { _tag: "PList" }>["rest"],
-                          { _tag: "Some" }
-                        >["value"],
-                        { _tag: "PBind" }
-                      >;
-                    };
-                  } => {
-                    const _g: any = _v;
-                    return (
-                      _g._tag === "PList" &&
-                      _g.rest._tag === "Some" &&
-                      _g.rest.value._tag === "PBind"
-                    );
-                  },
-                  () => true,
-                )
-                .otherwise(() => false),
-            arms,
-          )
-            ? _Set_add("_list", acc1)
-            : acc1,
-        ))(exprRefs(ctx, scrutinee, acc)),
-    )
-    .with({ _tag: "ERecord" }, ({ fields, spread }) =>
-      exprRefsFieldsFrom(
-        ctx,
-        fields,
-        0,
-        match(spread)
-          .with({ _tag: "Some" }, ({ value: s }) => exprRefs(ctx, s, acc))
-          .with({ _tag: "None" }, () => acc)
-          .exhaustive(),
-      ),
-    )
-    .with({ _tag: "EField" }, ({ target, name }) =>
-      match(emptyNsEmit(target, name, None as Option<string>))
-        .with({ _tag: "Some" }, () =>
-          match(target)
-            .with({ _tag: "ERef", name: "List" }, () => _Set_add("_list", acc))
-            .otherwise(() => acc),
-        )
-        .with({ _tag: "None" }, () =>
-          match(nsRuntimeId(ctx, target, name))
-            .with({ _tag: "Some" }, ({ value: rt }) => _Set_add(rt, acc))
-            .with({ _tag: "None" }, () => exprRefs(ctx, target, acc))
+const exprRefs: _Curry<[ctx: GCtx, e: Expr, acc: Set<string>], Set<string>> = _curry(
+  3,
+  (ctx: GCtx, e: Expr, acc: Set<string>) =>
+    match(e)
+      .with({ _tag: "ENum" }, () => acc)
+      .with({ _tag: "EUnit" }, () => acc)
+      .with({ _tag: "EBool" }, () => acc)
+      .with({ _tag: "EStr" }, () => acc)
+      .with({ _tag: "ERef" }, ({ name }) => _Set_add(name, acc))
+      .with({ _tag: "ECall" }, ({ fn, args }) =>
+        exprRefsListFrom(ctx, args, 0, exprRefs(ctx, fn, acc)),
+      )
+      .with({ _tag: "ELambda" }, ({ params, body }) =>
+        (([cparams, cbody]: [LamParam[], Expr]) => {
+          const acc2: Set<string> = gte(length(cparams), 2) ? _Set_add("_curry", acc) : acc;
+          return exprRefs(ctx, cbody, acc2);
+        })(collapseLambda(params, body)),
+      )
+      .with({ _tag: "ELetIn" }, ({ value, body }) => exprRefs(ctx, body, exprRefs(ctx, value, acc)))
+      .with({ _tag: "ELetBind" }, ({ monad, value, body }) =>
+        exprRefs(ctx, body, exprRefs(ctx, value, _Set_add(bindRuntime(monad), acc))),
+      )
+      .with({ _tag: "EPipe" }, ({ left, right }) => exprRefs(ctx, right, exprRefs(ctx, left, acc)))
+      .with({ _tag: "EDo" }, ({ exprs }) => exprRefsListFrom(ctx, exprs, 0, acc))
+      .with({ _tag: "ETernary" }, ({ cond, thenE, elseE }) =>
+        exprRefs(ctx, elseE, exprRefs(ctx, thenE, exprRefs(ctx, cond, acc))),
+      )
+      .with({ _tag: "EMatch" }, ({ scrutinee, arms }) =>
+        ((acc1: Set<string>) =>
+          ((acc2: Set<string>) => exprRefsArmsFrom(ctx, arms, 0, acc2))(
+            someOf(
+              (a: MatchArm) =>
+                match(a.pattern)
+                  .with(
+                    (
+                      _v,
+                    ): _v is Extract<Pattern, { _tag: "PList" }> & {
+                      rest: Extract<
+                        Extract<Pattern, { _tag: "PList" }>["rest"],
+                        { _tag: "Some" }
+                      > & {
+                        value: Extract<
+                          Extract<
+                            Extract<Pattern, { _tag: "PList" }>["rest"],
+                            { _tag: "Some" }
+                          >["value"],
+                          { _tag: "PBind" }
+                        >;
+                      };
+                    } => {
+                      const _g: any = _v;
+                      return (
+                        _g._tag === "PList" &&
+                        _g.rest._tag === "Some" &&
+                        _g.rest.value._tag === "PBind"
+                      );
+                    },
+                    () => true,
+                  )
+                  .otherwise(() => false),
+              arms,
+            )
+              ? _Set_add("_list", acc1)
+              : acc1,
+          ))(exprRefs(ctx, scrutinee, acc)),
+      )
+      .with({ _tag: "ERecord" }, ({ fields, spread }) =>
+        exprRefsFieldsFrom(
+          ctx,
+          fields,
+          0,
+          match(spread)
+            .with({ _tag: "Some" }, ({ value: s }) => exprRefs(ctx, s, acc))
+            .with({ _tag: "None" }, () => acc)
             .exhaustive(),
-        )
-        .exhaustive(),
-    )
-    .with({ _tag: "ELoop" }, ({ params, body }) =>
-      ((acc1: Set<string>) =>
-        ((acc2: Set<string>) => exprRefs(ctx, body, acc2))(loopInitRefsFrom(ctx, params, 0, acc1)))(
-        loopNeedsStep(body) ? _Set_add("_recur", _Set_add("_done", acc)) : acc,
-      ),
-    )
-    .with({ _tag: "ERecur" }, ({ args }) => exprRefsListFrom(ctx, args, 0, acc))
-    .with({ _tag: "ETuple" }, ({ elements }) => exprRefsListFrom(ctx, elements, 0, acc))
-    .with({ _tag: "EArr" }, ({ elements }) =>
-      exprRefsListFrom(
-        ctx,
-        map(
-          (el: SeqElem) =>
-            match(el)
-              .with({ _tag: "SEExpr" }, ({ expr: e }) => e)
-              .with({ _tag: "SESpread" }, ({ expr: e }) => e)
-              .exhaustive(),
-          elements,
         ),
-        0,
-        acc,
-      ),
-    )
-    .with({ _tag: "EList" }, ({ elements }) =>
-      exprRefsListFrom(
-        ctx,
-        map(
-          (el: SeqElem) =>
-            match(el)
-              .with({ _tag: "SEExpr" }, ({ expr: e }) => e)
-              .with({ _tag: "SESpread" }, ({ expr: e }) => e)
-              .exhaustive(),
-          elements,
-        ),
-        0,
-        _Set_add("_list", acc),
-      ),
-    )
-    .with({ _tag: "ESet" }, ({ elements }) =>
-      exprRefsListFrom(
-        ctx,
-        map(
-          (el: SeqElem) =>
-            match(el)
-              .with({ _tag: "SEExpr" }, ({ expr: e }) => e)
-              .with({ _tag: "SESpread" }, ({ expr: e }) => e)
-              .exhaustive(),
-          elements,
-        ),
-        0,
-        acc,
-      ),
-    )
-    .with({ _tag: "EMap" }, ({ entries }) => exprRefsEntriesFrom(ctx, entries, 0, acc))
-    .with({ _tag: "EInterp" }, ({ parts }) => exprRefsInterpPartsFrom(ctx, parts, 0, acc))
-    .exhaustive(),
-);
-const boundNamesFrom: {
-  (stmts: Stmt[]): (i: number) => (acc: Set<string>) => Set<string>;
-  (stmts: Stmt[]): (i: number, acc: Set<string>) => Set<string>;
-  (stmts: Stmt[], i: number): (acc: Set<string>) => Set<string>;
-  (stmts: Stmt[], i: number, acc: Set<string>): Set<string>;
-} = _curry(3, (stmts: Stmt[], i: number, acc: Set<string>) =>
-  match(_Array_get(i, stmts))
-    .with({ _tag: "None" }, () => acc)
-    .with({ _tag: "Some" }, ({ value: s }) =>
-      boundNamesFrom(
-        stmts,
-        add(i, 1),
-        match(s)
-          .with({ _tag: "SLet" }, ({ name }) => _Set_add(name, acc))
-          .with({ _tag: "SExtern" }, ({ name }) => _Set_add(name, acc))
-          .with({ _tag: "SType" }, ({ ctors }) =>
-            _Set_union(acc, _Set_fromArray(map((c: CtorLike) => c.name, ctors))),
+      )
+      .with({ _tag: "EField" }, ({ target, name }) =>
+        match(emptyNsEmit(target, name, None as Option<string>))
+          .with({ _tag: "Some" }, () =>
+            match(target)
+              .with({ _tag: "ERef", name: "List" }, () => _Set_add("_list", acc))
+              .otherwise(() => acc),
           )
-          .with({ _tag: "SImport" }, ({ names }) =>
-            _Set_union(acc, _Set_fromArray(map((n: Name) => n.name, names))),
+          .with({ _tag: "None" }, () =>
+            match(nsRuntimeId(ctx, target, name))
+              .with({ _tag: "Some" }, ({ value: rt }) => _Set_add(rt, acc))
+              .with({ _tag: "None" }, () => exprRefs(ctx, target, acc))
+              .exhaustive(),
           )
-          .with({ _tag: "SImportNs" }, ({ alias }) => _Set_add(alias.name, acc))
-          .with({ _tag: "SError" }, () => acc)
-          .with({ _tag: "SExpr" }, () => acc)
           .exhaustive(),
-      ),
-    )
-    .exhaustive(),
+      )
+      .with({ _tag: "ELoop" }, ({ params, body }) =>
+        ((acc1: Set<string>) =>
+          ((acc2: Set<string>) => exprRefs(ctx, body, acc2))(
+            loopInitRefsFrom(ctx, params, 0, acc1),
+          ))(loopNeedsStep(body) ? _Set_add("_recur", _Set_add("_done", acc)) : acc),
+      )
+      .with({ _tag: "ERecur" }, ({ args }) => exprRefsListFrom(ctx, args, 0, acc))
+      .with({ _tag: "ETuple" }, ({ elements }) => exprRefsListFrom(ctx, elements, 0, acc))
+      .with({ _tag: "EArr" }, ({ elements }) =>
+        exprRefsListFrom(
+          ctx,
+          map(
+            (el: SeqElem) =>
+              match(el)
+                .with({ _tag: "SEExpr" }, ({ expr: e }) => e)
+                .with({ _tag: "SESpread" }, ({ expr: e }) => e)
+                .exhaustive(),
+            elements,
+          ),
+          0,
+          acc,
+        ),
+      )
+      .with({ _tag: "EList" }, ({ elements }) =>
+        exprRefsListFrom(
+          ctx,
+          map(
+            (el: SeqElem) =>
+              match(el)
+                .with({ _tag: "SEExpr" }, ({ expr: e }) => e)
+                .with({ _tag: "SESpread" }, ({ expr: e }) => e)
+                .exhaustive(),
+            elements,
+          ),
+          0,
+          _Set_add("_list", acc),
+        ),
+      )
+      .with({ _tag: "ESet" }, ({ elements }) =>
+        exprRefsListFrom(
+          ctx,
+          map(
+            (el: SeqElem) =>
+              match(el)
+                .with({ _tag: "SEExpr" }, ({ expr: e }) => e)
+                .with({ _tag: "SESpread" }, ({ expr: e }) => e)
+                .exhaustive(),
+            elements,
+          ),
+          0,
+          acc,
+        ),
+      )
+      .with({ _tag: "EMap" }, ({ entries }) => exprRefsEntriesFrom(ctx, entries, 0, acc))
+      .with({ _tag: "EInterp" }, ({ parts }) => exprRefsInterpPartsFrom(ctx, parts, 0, acc))
+      .exhaustive(),
+);
+const boundNamesFrom: _Curry<[stmts: Stmt[], i: number, acc: Set<string>], Set<string>> = _curry(
+  3,
+  (stmts: Stmt[], i: number, acc: Set<string>) =>
+    match(_Array_get(i, stmts))
+      .with({ _tag: "None" }, () => acc)
+      .with({ _tag: "Some" }, ({ value: s }) =>
+        boundNamesFrom(
+          stmts,
+          add(i, 1),
+          match(s)
+            .with({ _tag: "SLet" }, ({ name }) => _Set_add(name, acc))
+            .with({ _tag: "SExtern" }, ({ name }) => _Set_add(name, acc))
+            .with({ _tag: "SType" }, ({ ctors }) =>
+              _Set_union(acc, _Set_fromArray(map((c: CtorLike) => c.name, ctors))),
+            )
+            .with({ _tag: "SImport" }, ({ names }) =>
+              _Set_union(acc, _Set_fromArray(map((n: Name) => n.name, names))),
+            )
+            .with({ _tag: "SImportNs" }, ({ alias }) => _Set_add(alias.name, acc))
+            .with({ _tag: "SError" }, () => acc)
+            .with({ _tag: "SExpr" }, () => acc)
+            .exhaustive(),
+        ),
+      )
+      .exhaustive(),
 );
 const boundNames: (stmts: Stmt[]) => Set<string> = (stmts: Stmt[]) =>
   boundNamesFrom(stmts, 0, _Set_fromArray([] as string[]));
-const collectValueRefs: {
-  (ctx: GCtx): (stmts: Stmt[]) => (i: number) => (acc: Set<string>) => Set<string>;
-  (ctx: GCtx): (stmts: Stmt[]) => (i: number, acc: Set<string>) => Set<string>;
-  (ctx: GCtx): (stmts: Stmt[], i: number) => (acc: Set<string>) => Set<string>;
-  (ctx: GCtx, stmts: Stmt[]): (i: number) => (acc: Set<string>) => Set<string>;
-  (ctx: GCtx): (stmts: Stmt[], i: number, acc: Set<string>) => Set<string>;
-  (ctx: GCtx, stmts: Stmt[]): (i: number, acc: Set<string>) => Set<string>;
-  (ctx: GCtx, stmts: Stmt[], i: number): (acc: Set<string>) => Set<string>;
-  (ctx: GCtx, stmts: Stmt[], i: number, acc: Set<string>): Set<string>;
-} = _curry(4, (ctx: GCtx, stmts: Stmt[], i: number, acc: Set<string>) =>
+const collectValueRefs: _Curry<
+  [ctx: GCtx, stmts: Stmt[], i: number, acc: Set<string>],
+  Set<string>
+> = _curry(4, (ctx: GCtx, stmts: Stmt[], i: number, acc: Set<string>) =>
   match(_Array_get(i, stmts))
     .with({ _tag: "None" }, () => acc)
     .with({ _tag: "Some" }, ({ value: s }) =>
@@ -2584,37 +2292,30 @@ const collectValueRefs: {
     )
     .exhaustive(),
 );
-const refsForStmt: { (ctx: GCtx): (s: Stmt) => Set<string>; (ctx: GCtx, s: Stmt): Set<string> } =
-  _curry(2, (ctx: GCtx, s: Stmt) =>
-    match(s)
-      .with({ _tag: "SLet" }, ({ value }) => exprRefs(ctx, value, _Set_fromArray([] as string[])))
-      .with({ _tag: "SExpr" }, ({ value }) => exprRefs(ctx, value, _Set_fromArray([] as string[])))
-      .with({ _tag: "SType" }, ({ ctors, exported }) =>
-        someOf(
-          (c: CtorLike) =>
-            and(gte(length(c.fields), 2), or(exported, _Set_has(c.name, ctx.valueRefs))),
-          ctors,
-        )
-          ? _Set_add("_curry", _Set_fromArray([] as string[]))
-          : _Set_fromArray([] as string[]),
+const refsForStmt: _Curry<[ctx: GCtx, s: Stmt], Set<string>> = _curry(2, (ctx: GCtx, s: Stmt) =>
+  match(s)
+    .with({ _tag: "SLet" }, ({ value }) => exprRefs(ctx, value, _Set_fromArray([] as string[])))
+    .with({ _tag: "SExpr" }, ({ value }) => exprRefs(ctx, value, _Set_fromArray([] as string[])))
+    .with({ _tag: "SType" }, ({ ctors, exported }) =>
+      someOf(
+        (c: CtorLike) =>
+          and(gte(length(c.fields), 2), or(exported, _Set_has(c.name, ctx.valueRefs))),
+        ctors,
       )
-      .with({ _tag: "SExtern" }, ({ typeExpr }) =>
-        gte(typeExprArity(typeExpr), 2)
-          ? _Set_add("_curry", _Set_fromArray([] as string[]))
-          : _Set_fromArray([] as string[]),
-      )
-      .otherwise(() => _Set_fromArray([] as string[])),
-  );
-const collectRefsFrom: {
-  (ctx: GCtx): (stmts: Stmt[]) => (i: number) => (acc: Set<string>) => Set<string>;
-  (ctx: GCtx): (stmts: Stmt[]) => (i: number, acc: Set<string>) => Set<string>;
-  (ctx: GCtx): (stmts: Stmt[], i: number) => (acc: Set<string>) => Set<string>;
-  (ctx: GCtx, stmts: Stmt[]): (i: number) => (acc: Set<string>) => Set<string>;
-  (ctx: GCtx): (stmts: Stmt[], i: number, acc: Set<string>) => Set<string>;
-  (ctx: GCtx, stmts: Stmt[]): (i: number, acc: Set<string>) => Set<string>;
-  (ctx: GCtx, stmts: Stmt[], i: number): (acc: Set<string>) => Set<string>;
-  (ctx: GCtx, stmts: Stmt[], i: number, acc: Set<string>): Set<string>;
-} = _curry(4, (ctx: GCtx, stmts: Stmt[], i: number, acc: Set<string>) =>
+        ? _Set_add("_curry", _Set_fromArray([] as string[]))
+        : _Set_fromArray([] as string[]),
+    )
+    .with({ _tag: "SExtern" }, ({ typeExpr }) =>
+      gte(typeExprArity(typeExpr), 2)
+        ? _Set_add("_curry", _Set_fromArray([] as string[]))
+        : _Set_fromArray([] as string[]),
+    )
+    .otherwise(() => _Set_fromArray([] as string[])),
+);
+const collectRefsFrom: _Curry<
+  [ctx: GCtx, stmts: Stmt[], i: number, acc: Set<string>],
+  Set<string>
+> = _curry(4, (ctx: GCtx, stmts: Stmt[], i: number, acc: Set<string>) =>
   match(_Array_get(i, stmts))
     .with({ _tag: "None" }, () => acc)
     .with({ _tag: "Some" }, ({ value: s }) =>
@@ -2664,41 +2365,10 @@ const runtimeRefNames: <A>(
     );
   },
 );
-const preludePreamble: {
-  (
-    ctx: GCtx,
-  ): (
-    stmts: Stmt[],
-  ) => (jsDefs: Map<string, string>) => (runtimeDeps: Map<string, string[]>) => string;
-  (
-    ctx: GCtx,
-  ): (stmts: Stmt[]) => (jsDefs: Map<string, string>, runtimeDeps: Map<string, string[]>) => string;
-  (
-    ctx: GCtx,
-  ): (stmts: Stmt[], jsDefs: Map<string, string>) => (runtimeDeps: Map<string, string[]>) => string;
-  (
-    ctx: GCtx,
-    stmts: Stmt[],
-  ): (jsDefs: Map<string, string>) => (runtimeDeps: Map<string, string[]>) => string;
-  (
-    ctx: GCtx,
-  ): (stmts: Stmt[], jsDefs: Map<string, string>, runtimeDeps: Map<string, string[]>) => string;
-  (
-    ctx: GCtx,
-    stmts: Stmt[],
-  ): (jsDefs: Map<string, string>, runtimeDeps: Map<string, string[]>) => string;
-  (
-    ctx: GCtx,
-    stmts: Stmt[],
-    jsDefs: Map<string, string>,
-  ): (runtimeDeps: Map<string, string[]>) => string;
-  (
-    ctx: GCtx,
-    stmts: Stmt[],
-    jsDefs: Map<string, string>,
-    runtimeDeps: Map<string, string[]>,
-  ): string;
-} = _curry(
+const preludePreamble: _Curry<
+  [ctx: GCtx, stmts: Stmt[], jsDefs: Map<string, string>, runtimeDeps: Map<string, string[]>],
+  string
+> = _curry(
   4,
   (ctx: GCtx, stmts: Stmt[], jsDefs: Map<string, string>, runtimeDeps: Map<string, string[]>) => {
     const names: string[] = runtimeRefNames(ctx, stmts, jsDefs, runtimeDeps);
@@ -2710,18 +2380,15 @@ const preludePreamble: {
 `;
   },
 );
-const genStmtAllFrom: {
-  (ctx: GCtx): (stmts: Stmt[]) => (i: number) => string[];
-  (ctx: GCtx): (stmts: Stmt[], i: number) => string[];
-  (ctx: GCtx, stmts: Stmt[]): (i: number) => string[];
-  (ctx: GCtx, stmts: Stmt[], i: number): string[];
-} = _curry(3, (ctx: GCtx, stmts: Stmt[], i: number) =>
-  match(_Array_get(i, stmts))
-    .with({ _tag: "None" }, () => [] as string[])
-    .with({ _tag: "Some" }, ({ value: s }) =>
-      _Array_prepend(genStmt(ctx, s), genStmtAllFrom(ctx, stmts, add(i, 1))),
-    )
-    .exhaustive(),
+const genStmtAllFrom: _Curry<[ctx: GCtx, stmts: Stmt[], i: number], string[]> = _curry(
+  3,
+  (ctx: GCtx, stmts: Stmt[], i: number) =>
+    match(_Array_get(i, stmts))
+      .with({ _tag: "None" }, () => [] as string[])
+      .with({ _tag: "Some" }, ({ value: s }) =>
+        _Array_prepend(genStmt(ctx, s), genStmtAllFrom(ctx, stmts, add(i, 1))),
+      )
+      .exhaustive(),
 );
 export const codegenWith: <A>(
   stmts: Stmt[],
@@ -2836,272 +2503,17 @@ export const runtimeDepNames: <A>(
     return runtimeRefNames({ ...ctx0, valueRefs: valueRefs }, stmts, jsDefs, runtimeDeps);
   },
 );
-export const codegen: {
-  (
-    stmts: Stmt[],
-  ): (
-    imported: Map<string, string[]>,
-  ) => (
-    useRuntime: boolean,
-  ) => (
-    ns: Map<string, Map<string, string>>,
-  ) => (jsDefs: Map<string, string>) => (runtimeDeps: Map<string, string[]>) => string;
-  (
-    stmts: Stmt[],
-  ): (
-    imported: Map<string, string[]>,
-  ) => (
-    useRuntime: boolean,
-  ) => (
-    ns: Map<string, Map<string, string>>,
-  ) => (jsDefs: Map<string, string>, runtimeDeps: Map<string, string[]>) => string;
-  (
-    stmts: Stmt[],
-  ): (
-    imported: Map<string, string[]>,
-  ) => (
-    useRuntime: boolean,
-  ) => (
-    ns: Map<string, Map<string, string>>,
-    jsDefs: Map<string, string>,
-  ) => (runtimeDeps: Map<string, string[]>) => string;
-  (
-    stmts: Stmt[],
-  ): (
-    imported: Map<string, string[]>,
-  ) => (
-    useRuntime: boolean,
-    ns: Map<string, Map<string, string>>,
-  ) => (jsDefs: Map<string, string>) => (runtimeDeps: Map<string, string[]>) => string;
-  (
-    stmts: Stmt[],
-  ): (
-    imported: Map<string, string[]>,
-    useRuntime: boolean,
-  ) => (
-    ns: Map<string, Map<string, string>>,
-  ) => (jsDefs: Map<string, string>) => (runtimeDeps: Map<string, string[]>) => string;
-  (
-    stmts: Stmt[],
-    imported: Map<string, string[]>,
-  ): (
-    useRuntime: boolean,
-  ) => (
-    ns: Map<string, Map<string, string>>,
-  ) => (jsDefs: Map<string, string>) => (runtimeDeps: Map<string, string[]>) => string;
-  (
-    stmts: Stmt[],
-  ): (
-    imported: Map<string, string[]>,
-  ) => (
-    useRuntime: boolean,
-  ) => (
-    ns: Map<string, Map<string, string>>,
-    jsDefs: Map<string, string>,
-    runtimeDeps: Map<string, string[]>,
-  ) => string;
-  (
-    stmts: Stmt[],
-  ): (
-    imported: Map<string, string[]>,
-  ) => (
-    useRuntime: boolean,
-    ns: Map<string, Map<string, string>>,
-  ) => (jsDefs: Map<string, string>, runtimeDeps: Map<string, string[]>) => string;
-  (
-    stmts: Stmt[],
-  ): (
-    imported: Map<string, string[]>,
-  ) => (
-    useRuntime: boolean,
-    ns: Map<string, Map<string, string>>,
-    jsDefs: Map<string, string>,
-  ) => (runtimeDeps: Map<string, string[]>) => string;
-  (
-    stmts: Stmt[],
-  ): (
-    imported: Map<string, string[]>,
-    useRuntime: boolean,
-  ) => (
-    ns: Map<string, Map<string, string>>,
-  ) => (jsDefs: Map<string, string>, runtimeDeps: Map<string, string[]>) => string;
-  (
-    stmts: Stmt[],
-  ): (
-    imported: Map<string, string[]>,
-    useRuntime: boolean,
-  ) => (
-    ns: Map<string, Map<string, string>>,
-    jsDefs: Map<string, string>,
-  ) => (runtimeDeps: Map<string, string[]>) => string;
-  (
-    stmts: Stmt[],
-  ): (
-    imported: Map<string, string[]>,
-    useRuntime: boolean,
-    ns: Map<string, Map<string, string>>,
-  ) => (jsDefs: Map<string, string>) => (runtimeDeps: Map<string, string[]>) => string;
-  (
-    stmts: Stmt[],
-    imported: Map<string, string[]>,
-  ): (
-    useRuntime: boolean,
-  ) => (
-    ns: Map<string, Map<string, string>>,
-  ) => (jsDefs: Map<string, string>, runtimeDeps: Map<string, string[]>) => string;
-  (
-    stmts: Stmt[],
-    imported: Map<string, string[]>,
-  ): (
-    useRuntime: boolean,
-  ) => (
-    ns: Map<string, Map<string, string>>,
-    jsDefs: Map<string, string>,
-  ) => (runtimeDeps: Map<string, string[]>) => string;
-  (
-    stmts: Stmt[],
-    imported: Map<string, string[]>,
-  ): (
-    useRuntime: boolean,
-    ns: Map<string, Map<string, string>>,
-  ) => (jsDefs: Map<string, string>) => (runtimeDeps: Map<string, string[]>) => string;
-  (
-    stmts: Stmt[],
-    imported: Map<string, string[]>,
-    useRuntime: boolean,
-  ): (
-    ns: Map<string, Map<string, string>>,
-  ) => (jsDefs: Map<string, string>) => (runtimeDeps: Map<string, string[]>) => string;
-  (
-    stmts: Stmt[],
-  ): (
-    imported: Map<string, string[]>,
-  ) => (
-    useRuntime: boolean,
-    ns: Map<string, Map<string, string>>,
-    jsDefs: Map<string, string>,
-    runtimeDeps: Map<string, string[]>,
-  ) => string;
-  (
-    stmts: Stmt[],
-  ): (
-    imported: Map<string, string[]>,
-    useRuntime: boolean,
-  ) => (
-    ns: Map<string, Map<string, string>>,
-    jsDefs: Map<string, string>,
-    runtimeDeps: Map<string, string[]>,
-  ) => string;
-  (
-    stmts: Stmt[],
-  ): (
-    imported: Map<string, string[]>,
-    useRuntime: boolean,
-    ns: Map<string, Map<string, string>>,
-  ) => (jsDefs: Map<string, string>, runtimeDeps: Map<string, string[]>) => string;
-  (
-    stmts: Stmt[],
-  ): (
-    imported: Map<string, string[]>,
-    useRuntime: boolean,
-    ns: Map<string, Map<string, string>>,
-    jsDefs: Map<string, string>,
-  ) => (runtimeDeps: Map<string, string[]>) => string;
-  (
-    stmts: Stmt[],
-    imported: Map<string, string[]>,
-  ): (
-    useRuntime: boolean,
-  ) => (
-    ns: Map<string, Map<string, string>>,
-    jsDefs: Map<string, string>,
-    runtimeDeps: Map<string, string[]>,
-  ) => string;
-  (
-    stmts: Stmt[],
-    imported: Map<string, string[]>,
-  ): (
-    useRuntime: boolean,
-    ns: Map<string, Map<string, string>>,
-  ) => (jsDefs: Map<string, string>, runtimeDeps: Map<string, string[]>) => string;
-  (
-    stmts: Stmt[],
-    imported: Map<string, string[]>,
-  ): (
-    useRuntime: boolean,
-    ns: Map<string, Map<string, string>>,
-    jsDefs: Map<string, string>,
-  ) => (runtimeDeps: Map<string, string[]>) => string;
-  (
-    stmts: Stmt[],
-    imported: Map<string, string[]>,
-    useRuntime: boolean,
-  ): (
-    ns: Map<string, Map<string, string>>,
-  ) => (jsDefs: Map<string, string>, runtimeDeps: Map<string, string[]>) => string;
-  (
-    stmts: Stmt[],
-    imported: Map<string, string[]>,
-    useRuntime: boolean,
-  ): (
-    ns: Map<string, Map<string, string>>,
-    jsDefs: Map<string, string>,
-  ) => (runtimeDeps: Map<string, string[]>) => string;
-  (
-    stmts: Stmt[],
-    imported: Map<string, string[]>,
-    useRuntime: boolean,
-    ns: Map<string, Map<string, string>>,
-  ): (jsDefs: Map<string, string>) => (runtimeDeps: Map<string, string[]>) => string;
-  (
-    stmts: Stmt[],
-  ): (
-    imported: Map<string, string[]>,
-    useRuntime: boolean,
-    ns: Map<string, Map<string, string>>,
-    jsDefs: Map<string, string>,
-    runtimeDeps: Map<string, string[]>,
-  ) => string;
-  (
-    stmts: Stmt[],
-    imported: Map<string, string[]>,
-  ): (
-    useRuntime: boolean,
-    ns: Map<string, Map<string, string>>,
-    jsDefs: Map<string, string>,
-    runtimeDeps: Map<string, string[]>,
-  ) => string;
-  (
-    stmts: Stmt[],
-    imported: Map<string, string[]>,
-    useRuntime: boolean,
-  ): (
-    ns: Map<string, Map<string, string>>,
-    jsDefs: Map<string, string>,
-    runtimeDeps: Map<string, string[]>,
-  ) => string;
-  (
-    stmts: Stmt[],
-    imported: Map<string, string[]>,
-    useRuntime: boolean,
-    ns: Map<string, Map<string, string>>,
-  ): (jsDefs: Map<string, string>, runtimeDeps: Map<string, string[]>) => string;
-  (
-    stmts: Stmt[],
-    imported: Map<string, string[]>,
-    useRuntime: boolean,
-    ns: Map<string, Map<string, string>>,
-    jsDefs: Map<string, string>,
-  ): (runtimeDeps: Map<string, string[]>) => string;
-  (
+export const codegen: _Curry<
+  [
     stmts: Stmt[],
     imported: Map<string, string[]>,
     useRuntime: boolean,
     ns: Map<string, Map<string, string>>,
     jsDefs: Map<string, string>,
     runtimeDeps: Map<string, string[]>,
-  ): string;
-} = _curry(
+  ],
+  string
+> = _curry(
   6,
   (
     stmts: Stmt[],

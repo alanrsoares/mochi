@@ -33,11 +33,18 @@ export type TsEnv = { vars: Map<number, string>, recs: Map<string, string> }
 
 export let tsEnv = (vars, recs) => { vars, recs }
 
+/// Pinned (ADR 0044): a bare `#{}` generalizes to `Map<unknown, unknown>`, which
+/// `_Curry`'s exact argument prefixes reject where the old overload block let it
+/// through.
+let noVars : Map<number, string> = #{}
+
+let noRecs : Map<string, string> = #{}
+
 /// Letters but no index — the many call sites with no module scope to fold in.
-export let plainEnv = vars => tsEnv(vars, #{})
+export let plainEnv = vars => tsEnv(vars, noRecs)
 
 /// Index but no letters: a fully concrete type has no generic head to name.
-export let recsEnv = recs => tsEnv(#{}, recs)
+export let recsEnv = recs => tsEnv(noVars, recs)
 
 let letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 

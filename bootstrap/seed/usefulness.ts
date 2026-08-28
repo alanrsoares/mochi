@@ -29,6 +29,8 @@ export type ExhaustVerdict =
   | { _tag: "ExFuel" };
 export type ArrShape = { fixed: number[]; restFrom: Option<number> };
 
+import type { _Curry } from "@mochi/compiler/runtime";
+
 import {
   _curry,
   Some,
@@ -169,12 +171,11 @@ const headsOf: (col: MP[]) => MHead[] = (col: MP[]) =>
 const addLabel: <A>(acc: A[], l: A) => A[] = _curry(2, <A>(acc: A[], l: A) =>
   _Array_contains(l, acc) ? acc : _Array_append(l, acc),
 );
-const labelsOfMP: { (acc: string[]): (mp: MP) => string[]; (acc: string[], mp: MP): string[] } =
-  _curry(2, (acc: string[], mp: MP) =>
-    match(mp)
-      .with({ _tag: "MRecord" }, ({ labels: ls }) => reduce(addLabel, acc, ls))
-      .otherwise(() => acc),
-  );
+const labelsOfMP: _Curry<[acc: string[], mp: MP], string[]> = _curry(2, (acc: string[], mp: MP) =>
+  match(mp)
+    .with({ _tag: "MRecord" }, ({ labels: ls }) => reduce(addLabel, acc, ls))
+    .otherwise(() => acc),
+);
 const recordLabelsOf: (col: MP[]) => string[] = (col: MP[]) =>
   reduce(labelsOfMP, [] as string[], col);
 const indexOfLabel: <A>(l: A, labels: A[], i: number) => number = _curry(
@@ -193,29 +194,25 @@ const fieldOf: <A>(l: A, labels: A[], pats: MP[]) => MP = _curry(
   },
 );
 
-const arrShapeStep: { (acc: ArrShape): (mp: MP) => ArrShape; (acc: ArrShape, mp: MP): ArrShape } =
-  _curry(2, (acc: ArrShape, mp: MP) =>
-    match(mp)
-      .with({ _tag: "MArr" }, ({ elems, rest }) =>
-        ((n: number) =>
-          rest
-            ? {
-                fixed: acc.fixed,
-                restFrom: match(acc.restFrom)
-                  .with({ _tag: "None" }, () => Some(n) as Option<number>)
-                  .with(
-                    { _tag: "Some" },
-                    ({ value: m }) => Some(lt(m, n) ? m : n) as Option<number>,
-                  )
-                  .exhaustive(),
-              }
-            : {
-                fixed: _Array_contains(n, acc.fixed) ? acc.fixed : _Array_append(n, acc.fixed),
-                restFrom: acc.restFrom,
-              })(length(elems)),
-      )
-      .otherwise(() => acc),
-  );
+const arrShapeStep: _Curry<[acc: ArrShape, mp: MP], ArrShape> = _curry(2, (acc: ArrShape, mp: MP) =>
+  match(mp)
+    .with({ _tag: "MArr" }, ({ elems, rest }) =>
+      ((n: number) =>
+        rest
+          ? {
+              fixed: acc.fixed,
+              restFrom: match(acc.restFrom)
+                .with({ _tag: "None" }, () => Some(n) as Option<number>)
+                .with({ _tag: "Some" }, ({ value: m }) => Some(lt(m, n) ? m : n) as Option<number>)
+                .exhaustive(),
+            }
+          : {
+              fixed: _Array_contains(n, acc.fixed) ? acc.fixed : _Array_append(n, acc.fixed),
+              restFrom: acc.restFrom,
+            })(length(elems)),
+    )
+    .otherwise(() => acc),
+);
 const arrShapeOf: (col: MP[]) => ArrShape = (col: MP[]) =>
   reduce(arrShapeStep, { fixed: [] as number[], restFrom: None as Option<number> }, col);
 const rangeCovered: <A>(shape: { fixed: number[] } & A, i: number, n: number) => boolean = _curry(
@@ -244,10 +241,9 @@ const arrMissingLen: <A>(
     ? n
     : arrMissingLen(shape, add(n, 1)),
 );
-const rangeArr: { (i: number): (top: number) => number[]; (i: number, top: number): number[] } =
-  _curry(2, (i: number, top: number) =>
-    gt(i, top) ? ([] as number[]) : _Array_prepend(i, rangeArr(add(i, 1), top)),
-  );
+const rangeArr: _Curry<[i: number, top: number], number[]> = _curry(2, (i: number, top: number) =>
+  gt(i, top) ? ([] as number[]) : _Array_prepend(i, rangeArr(add(i, 1), top)),
+);
 const arrLengths: <A>(shape: { restFrom: Option<number>; fixed: number[] } & A) => number[] = <A>(
   shape: { restFrom: Option<number>; fixed: number[] } & A,
 ) => {
@@ -258,105 +254,87 @@ const arrLengths: <A>(shape: { restFrom: Option<number>; fixed: number[] } & A) 
   );
   return rangeArr(0, top);
 };
-const specializeRow: {
-  (h: MHead): (mp: MP) => (labels: string[]) => Option<MP[]>;
-  (h: MHead): (mp: MP, labels: string[]) => Option<MP[]>;
-  (h: MHead, mp: MP): (labels: string[]) => Option<MP[]>;
-  (h: MHead, mp: MP, labels: string[]): Option<MP[]>;
-} = _curry(3, (h: MHead, mp: MP, labels: string[]) =>
-  match(h)
-    .with({ _tag: "HCtor" }, ({ name }) =>
-      match(mp)
-        .with({ _tag: "MCtor" }, ({ name: n, args }) =>
-          eq(n, name) ? (Some(args) as Option<MP[]>) : (None as Option<MP[]>),
-        )
-        .otherwise(() => None as Option<MP[]>),
-    )
-    .with({ _tag: "HBool" }, ({ value: v }) =>
-      match(mp)
-        .with({ _tag: "MBool" }, ({ value: b }) =>
-          eq(b, v) ? (Some([] as MP[]) as Option<MP[]>) : (None as Option<MP[]>),
-        )
-        .otherwise(() => None as Option<MP[]>),
-    )
-    .with({ _tag: "HNum" }, ({ value: v }) =>
-      match(mp)
-        .with({ _tag: "MNum" }, ({ value: x }) =>
-          eq(x, v) ? (Some([] as MP[]) as Option<MP[]>) : (None as Option<MP[]>),
-        )
-        .otherwise(() => None as Option<MP[]>),
-    )
-    .with({ _tag: "HStr" }, ({ value: v }) =>
-      match(mp)
-        .with({ _tag: "MStr" }, ({ value: x }) =>
-          eq(x, v) ? (Some([] as MP[]) as Option<MP[]>) : (None as Option<MP[]>),
-        )
-        .otherwise(() => None as Option<MP[]>),
-    )
-    .with({ _tag: "HTuple" }, () =>
-      match(mp)
-        .with({ _tag: "MTuple" }, ({ elems }) => Some(elems) as Option<MP[]>)
-        .otherwise(() => None as Option<MP[]>),
-    )
-    .with({ _tag: "HRecord" }, () =>
-      match(mp)
-        .with(
-          { _tag: "MRecord" },
-          ({ labels: ls, pats: ps }) =>
-            Some(map((l: string) => fieldOf(l, ls, ps), labels)) as Option<MP[]>,
-        )
-        .otherwise(() => None as Option<MP[]>),
-    )
-    .with({ _tag: "HArr" }, ({ len }) =>
-      match(mp)
-        .with({ _tag: "MArr" }, ({ elems, rest }) =>
-          ((k: number) =>
-            rest
-              ? lte(k, len)
-                ? (Some(_Array_concat(elems, mWilds(sub(len, k)))) as Option<MP[]>)
-                : (None as Option<MP[]>)
-              : eq(k, len)
-                ? (Some(elems) as Option<MP[]>)
-                : (None as Option<MP[]>))(length(elems)),
-        )
-        .otherwise(() => None as Option<MP[]>),
-    )
-    .exhaustive(),
+const specializeRow: _Curry<[h: MHead, mp: MP, labels: string[]], Option<MP[]>> = _curry(
+  3,
+  (h: MHead, mp: MP, labels: string[]) =>
+    match(h)
+      .with({ _tag: "HCtor" }, ({ name }) =>
+        match(mp)
+          .with({ _tag: "MCtor" }, ({ name: n, args }) =>
+            eq(n, name) ? (Some(args) as Option<MP[]>) : (None as Option<MP[]>),
+          )
+          .otherwise(() => None as Option<MP[]>),
+      )
+      .with({ _tag: "HBool" }, ({ value: v }) =>
+        match(mp)
+          .with({ _tag: "MBool" }, ({ value: b }) =>
+            eq(b, v) ? (Some([] as MP[]) as Option<MP[]>) : (None as Option<MP[]>),
+          )
+          .otherwise(() => None as Option<MP[]>),
+      )
+      .with({ _tag: "HNum" }, ({ value: v }) =>
+        match(mp)
+          .with({ _tag: "MNum" }, ({ value: x }) =>
+            eq(x, v) ? (Some([] as MP[]) as Option<MP[]>) : (None as Option<MP[]>),
+          )
+          .otherwise(() => None as Option<MP[]>),
+      )
+      .with({ _tag: "HStr" }, ({ value: v }) =>
+        match(mp)
+          .with({ _tag: "MStr" }, ({ value: x }) =>
+            eq(x, v) ? (Some([] as MP[]) as Option<MP[]>) : (None as Option<MP[]>),
+          )
+          .otherwise(() => None as Option<MP[]>),
+      )
+      .with({ _tag: "HTuple" }, () =>
+        match(mp)
+          .with({ _tag: "MTuple" }, ({ elems }) => Some(elems) as Option<MP[]>)
+          .otherwise(() => None as Option<MP[]>),
+      )
+      .with({ _tag: "HRecord" }, () =>
+        match(mp)
+          .with(
+            { _tag: "MRecord" },
+            ({ labels: ls, pats: ps }) =>
+              Some(map((l: string) => fieldOf(l, ls, ps), labels)) as Option<MP[]>,
+          )
+          .otherwise(() => None as Option<MP[]>),
+      )
+      .with({ _tag: "HArr" }, ({ len }) =>
+        match(mp)
+          .with({ _tag: "MArr" }, ({ elems, rest }) =>
+            ((k: number) =>
+              rest
+                ? lte(k, len)
+                  ? (Some(_Array_concat(elems, mWilds(sub(len, k)))) as Option<MP[]>)
+                  : (None as Option<MP[]>)
+                : eq(k, len)
+                  ? (Some(elems) as Option<MP[]>)
+                  : (None as Option<MP[]>))(length(elems)),
+          )
+          .otherwise(() => None as Option<MP[]>),
+      )
+      .exhaustive(),
 );
-const specializeOne: {
-  (h: MHead): (arity: number) => (labels: string[]) => (row: MP[]) => MP[][];
-  (h: MHead): (arity: number) => (labels: string[], row: MP[]) => MP[][];
-  (h: MHead): (arity: number, labels: string[]) => (row: MP[]) => MP[][];
-  (h: MHead, arity: number): (labels: string[]) => (row: MP[]) => MP[][];
-  (h: MHead): (arity: number, labels: string[], row: MP[]) => MP[][];
-  (h: MHead, arity: number): (labels: string[], row: MP[]) => MP[][];
-  (h: MHead, arity: number, labels: string[]): (row: MP[]) => MP[][];
-  (h: MHead, arity: number, labels: string[], row: MP[]): MP[][];
-} = _curry(4, (h: MHead, arity: number, labels: string[], row: MP[]) =>
-  match(_Array_head(row))
-    .with({ _tag: "None" }, () => [] as MP[][])
-    .with({ _tag: "Some" }, ({ value: hd }) =>
-      ((rest: MP[]) =>
-        isWildMP(hd)
-          ? [_Array_concat(mWilds(arity), rest)]
-          : match(specializeRow(h, hd, labels))
-              .with({ _tag: "None" }, () => [] as MP[][])
-              .with({ _tag: "Some" }, ({ value: sub }) => [_Array_concat(sub, rest)])
-              .exhaustive())(_Array_tail(row)),
-    )
-    .exhaustive(),
-);
-const specializeM: {
-  (m: MP[][]): (h: MHead) => (arity: number) => (labels: string[]) => MP[][];
-  (m: MP[][]): (h: MHead) => (arity: number, labels: string[]) => MP[][];
-  (m: MP[][]): (h: MHead, arity: number) => (labels: string[]) => MP[][];
-  (m: MP[][], h: MHead): (arity: number) => (labels: string[]) => MP[][];
-  (m: MP[][]): (h: MHead, arity: number, labels: string[]) => MP[][];
-  (m: MP[][], h: MHead): (arity: number, labels: string[]) => MP[][];
-  (m: MP[][], h: MHead, arity: number): (labels: string[]) => MP[][];
-  (m: MP[][], h: MHead, arity: number, labels: string[]): MP[][];
-} = _curry(4, (m: MP[][], h: MHead, arity: number, labels: string[]) =>
-  _Array_flatMap((row: MP[]) => specializeOne(h, arity, labels, row), m),
+const specializeOne: _Curry<[h: MHead, arity: number, labels: string[], row: MP[]], MP[][]> =
+  _curry(4, (h: MHead, arity: number, labels: string[], row: MP[]) =>
+    match(_Array_head(row))
+      .with({ _tag: "None" }, () => [] as MP[][])
+      .with({ _tag: "Some" }, ({ value: hd }) =>
+        ((rest: MP[]) =>
+          isWildMP(hd)
+            ? [_Array_concat(mWilds(arity), rest)]
+            : match(specializeRow(h, hd, labels))
+                .with({ _tag: "None" }, () => [] as MP[][])
+                .with({ _tag: "Some" }, ({ value: sub }) => [_Array_concat(sub, rest)])
+                .exhaustive())(_Array_tail(row)),
+      )
+      .exhaustive(),
+  );
+const specializeM: _Curry<[m: MP[][], h: MHead, arity: number, labels: string[]], MP[][]> = _curry(
+  4,
+  (m: MP[][], h: MHead, arity: number, labels: string[]) =>
+    _Array_flatMap((row: MP[]) => specializeOne(h, arity, labels, row), m),
 );
 const defaultM: (m: MP[][]) => MP[][] = (m: MP[][]) =>
   _Array_flatMap(
@@ -369,21 +347,18 @@ const defaultM: (m: MP[][]) => MP[][] = (m: MP[][]) =>
         .exhaustive(),
     m,
   );
-const rebuild: {
-  (h: MHead): (args: MP[]) => (labels: string[]) => MP;
-  (h: MHead): (args: MP[], labels: string[]) => MP;
-  (h: MHead, args: MP[]): (labels: string[]) => MP;
-  (h: MHead, args: MP[], labels: string[]): MP;
-} = _curry(3, (h: MHead, args: MP[], labels: string[]) =>
-  match(h)
-    .with({ _tag: "HCtor" }, ({ name }) => MCtor(name, args))
-    .with({ _tag: "HTuple" }, () => MTuple(args))
-    .with({ _tag: "HRecord" }, () => MRecord(labels, args))
-    .with({ _tag: "HArr" }, () => MArr(args, false))
-    .with({ _tag: "HBool" }, ({ value: v }) => MBool(v))
-    .with({ _tag: "HNum" }, ({ value: v }) => MNum(v))
-    .with({ _tag: "HStr" }, ({ value: v }) => MStr(v))
-    .exhaustive(),
+const rebuild: _Curry<[h: MHead, args: MP[], labels: string[]], MP> = _curry(
+  3,
+  (h: MHead, args: MP[], labels: string[]) =>
+    match(h)
+      .with({ _tag: "HCtor" }, ({ name }) => MCtor(name, args))
+      .with({ _tag: "HTuple" }, () => MTuple(args))
+      .with({ _tag: "HRecord" }, () => MRecord(labels, args))
+      .with({ _tag: "HArr" }, () => MArr(args, false))
+      .with({ _tag: "HBool" }, ({ value: v }) => MBool(v))
+      .with({ _tag: "HNum" }, ({ value: v }) => MNum(v))
+      .with({ _tag: "HStr" }, ({ value: v }) => MStr(v))
+      .exhaustive(),
 );
 const takenNums: (heads: MHead[]) => number[] = (heads: MHead[]) =>
   _Array_flatMap(
@@ -393,10 +368,10 @@ const takenNums: (heads: MHead[]) => number[] = (heads: MHead[]) =>
         .otherwise(() => [] as number[]),
     heads,
   );
-const freshNum: { (taken: number[]): (i: number) => number; (taken: number[], i: number): number } =
-  _curry(2, (taken: number[], i: number) =>
-    _Array_contains(i, taken) ? freshNum(taken, add(i, 1)) : i,
-  );
+const freshNum: _Curry<[taken: number[], i: number], number> = _curry(
+  2,
+  (taken: number[], i: number) => (_Array_contains(i, taken) ? freshNum(taken, add(i, 1)) : i),
+);
 const takenStrs: (heads: MHead[]) => string[] = (heads: MHead[]) =>
   _Array_flatMap(
     (h: MHead) =>
@@ -407,11 +382,13 @@ const takenStrs: (heads: MHead[]) => string[] = (heads: MHead[]) =>
   );
 const starsOf: (n: number) => string = (n: number) =>
   lte(n, 0) ? "" : _Str_concat("*", starsOf(sub(n, 1)));
-const freshStr: { (taken: string[]): (i: number) => string; (taken: string[], i: number): string } =
-  _curry(2, (taken: string[], i: number) => {
+const freshStr: _Curry<[taken: string[], i: number], string> = _curry(
+  2,
+  (taken: string[], i: number) => {
     const s: string = starsOf(i);
     return _Array_contains(s, taken) ? freshStr(taken, add(i, 1)) : s;
-  });
+  },
+);
 const ctorNames: (heads: MHead[]) => string[] = (heads: MHead[]) =>
   _Array_flatMap(
     (h: MHead) =>
@@ -534,14 +511,12 @@ const usefulSplit: <A, B, C>(
       .exhaustive();
   },
 );
-const prependWitness: { (mp: MP): (r: URes) => URes; (mp: MP, r: URes): URes } = _curry(
-  2,
-  (mp: MP, r: URes) =>
-    match(r)
-      .with({ _tag: "UFuel" }, () => UFuel as URes)
-      .with({ _tag: "UNone" }, ({ fuel: f }) => UNone(f))
-      .with({ _tag: "USome" }, ({ row, fuel: f }) => USome(_Array_prepend(mp, row), f))
-      .exhaustive(),
+const prependWitness: _Curry<[mp: MP, r: URes], URes> = _curry(2, (mp: MP, r: URes) =>
+  match(r)
+    .with({ _tag: "UFuel" }, () => UFuel as URes)
+    .with({ _tag: "UNone" }, ({ fuel: f }) => UNone(f))
+    .with({ _tag: "USome" }, ({ row, fuel: f }) => USome(_Array_prepend(mp, row), f))
+    .exhaustive(),
 );
 const tryHeads: <A, B, C>(
   m: MP[][],
@@ -732,21 +707,18 @@ const usefulArr: <A, B, C>(
         );
   },
 );
-const showFields: {
-  (labels: string[]): (pats: MP[]) => (i: number) => string[];
-  (labels: string[]): (pats: MP[], i: number) => string[];
-  (labels: string[], pats: MP[]): (i: number) => string[];
-  (labels: string[], pats: MP[], i: number): string[];
-} = _curry(3, (labels: string[], pats: MP[], i: number) =>
-  match(_Array_get(i, labels))
-    .with({ _tag: "None" }, () => [] as string[])
-    .with({ _tag: "Some" }, ({ value: l }) =>
-      _Array_prepend(
-        `${l}: ${showWitness(_Option_unwrapOr(MWild as MP, _Array_get(i, pats)))}`,
-        showFields(labels, pats, add(i, 1)),
-      ),
-    )
-    .exhaustive(),
+const showFields: _Curry<[labels: string[], pats: MP[], i: number], string[]> = _curry(
+  3,
+  (labels: string[], pats: MP[], i: number) =>
+    match(_Array_get(i, labels))
+      .with({ _tag: "None" }, () => [] as string[])
+      .with({ _tag: "Some" }, ({ value: l }) =>
+        _Array_prepend(
+          `${l}: ${showWitness(_Option_unwrapOr(MWild as MP, _Array_get(i, pats)))}`,
+          showFields(labels, pats, add(i, 1)),
+        ),
+      )
+      .exhaustive(),
 );
 export const showWitness: (mp: MP) => string = (mp: MP) =>
   match(mp)

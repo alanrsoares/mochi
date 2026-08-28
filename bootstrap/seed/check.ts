@@ -26,6 +26,8 @@ export type Registry = { ctors: Map<string, CtorInfo>; types: Map<string, string
 export type SeqCheck = { _tag: "SeqNotSeq" } | { _tag: "SeqTotal" } | { _tag: "SeqFail"; e: CErr };
 export type QualScope = { types: Set<string> };
 
+import type { _Curry } from "@mochi/compiler/runtime";
+
 import {
   _curry,
   _recur,
@@ -226,14 +228,13 @@ const ctorNameOf: (p: Pattern) => string = (p: Pattern) =>
   match(p)
     .with({ _tag: "PCtor" }, ({ ctor: name }) => name)
     .otherwise(() => "");
-const patCtorKey: {
-  (ctor: string): (ns: Option<string>) => string;
-  (ctor: string, ns: Option<string>): string;
-} = _curry(2, (ctor: string, ns: Option<string>) =>
-  match(ns)
-    .with({ _tag: "Some" }, ({ value: alias }) => `${alias}.${ctor}`)
-    .with({ _tag: "None" }, () => ctor)
-    .exhaustive(),
+const patCtorKey: _Curry<[ctor: string, ns: Option<string>], string> = _curry(
+  2,
+  (ctor: string, ns: Option<string>) =>
+    match(ns)
+      .with({ _tag: "Some" }, ({ value: alias }) => `${alias}.${ctor}`)
+      .with({ _tag: "None" }, () => ctor)
+      .exhaustive(),
 );
 const seqElemsRest: (p: Pattern) => Option<[Pattern[], Option<Pattern>]> = (p: Pattern) =>
   match(p)
@@ -308,39 +309,10 @@ const checkPattern: <A, B>(
       .with({ _tag: "POr" }, ({ alts, span: sp }) => checkOrPattern(alts, sp, reg))
       .otherwise(() => None as Option<CErr>),
 );
-const binderPathsArgs: {
-  (
-    args: Pattern[],
-  ): (i: number) => (at: string) => (acc: Map<string, string>) => Result<Map<string, string>, CErr>;
-  (
-    args: Pattern[],
-  ): (i: number) => (at: string, acc: Map<string, string>) => Result<Map<string, string>, CErr>;
-  (
-    args: Pattern[],
-  ): (i: number, at: string) => (acc: Map<string, string>) => Result<Map<string, string>, CErr>;
-  (
-    args: Pattern[],
-    i: number,
-  ): (at: string) => (acc: Map<string, string>) => Result<Map<string, string>, CErr>;
-  (
-    args: Pattern[],
-  ): (i: number, at: string, acc: Map<string, string>) => Result<Map<string, string>, CErr>;
-  (
-    args: Pattern[],
-    i: number,
-  ): (at: string, acc: Map<string, string>) => Result<Map<string, string>, CErr>;
-  (
-    args: Pattern[],
-    i: number,
-    at: string,
-  ): (acc: Map<string, string>) => Result<Map<string, string>, CErr>;
-  (
-    args: Pattern[],
-    i: number,
-    at: string,
-    acc: Map<string, string>,
-  ): Result<Map<string, string>, CErr>;
-} = _curry(4, (args: Pattern[], i: number, at: string, acc: Map<string, string>) =>
+const binderPathsArgs: _Curry<
+  [args: Pattern[], i: number, at: string, acc: Map<string, string>],
+  Result<Map<string, string>, CErr>
+> = _curry(4, (args: Pattern[], i: number, at: string, acc: Map<string, string>) =>
   match(_Array_get(i, args))
     .with({ _tag: "None" }, () => Ok(acc) as Result<Map<string, string>, CErr>)
     .with({ _tag: "Some" }, ({ value: a }) =>
@@ -351,39 +323,10 @@ const binderPathsArgs: {
     )
     .exhaustive(),
 );
-const binderPathsFields: {
-  (
-    fields: PatField[],
-  ): (i: number) => (at: string) => (acc: Map<string, string>) => Result<Map<string, string>, CErr>;
-  (
-    fields: PatField[],
-  ): (i: number) => (at: string, acc: Map<string, string>) => Result<Map<string, string>, CErr>;
-  (
-    fields: PatField[],
-  ): (i: number, at: string) => (acc: Map<string, string>) => Result<Map<string, string>, CErr>;
-  (
-    fields: PatField[],
-    i: number,
-  ): (at: string) => (acc: Map<string, string>) => Result<Map<string, string>, CErr>;
-  (
-    fields: PatField[],
-  ): (i: number, at: string, acc: Map<string, string>) => Result<Map<string, string>, CErr>;
-  (
-    fields: PatField[],
-    i: number,
-  ): (at: string, acc: Map<string, string>) => Result<Map<string, string>, CErr>;
-  (
-    fields: PatField[],
-    i: number,
-    at: string,
-  ): (acc: Map<string, string>) => Result<Map<string, string>, CErr>;
-  (
-    fields: PatField[],
-    i: number,
-    at: string,
-    acc: Map<string, string>,
-  ): Result<Map<string, string>, CErr>;
-} = _curry(4, (fields: PatField[], i: number, at: string, acc: Map<string, string>) =>
+const binderPathsFields: _Curry<
+  [fields: PatField[], i: number, at: string, acc: Map<string, string>],
+  Result<Map<string, string>, CErr>
+> = _curry(4, (fields: PatField[], i: number, at: string, acc: Map<string, string>) =>
   match(_Array_get(i, fields))
     .with({ _tag: "None" }, () => Ok(acc) as Result<Map<string, string>, CErr>)
     .with({ _tag: "Some" }, ({ value: f }) =>
@@ -394,39 +337,10 @@ const binderPathsFields: {
     )
     .exhaustive(),
 );
-const binderPathsElems: {
-  (
-    elems: Pattern[],
-  ): (i: number) => (at: string) => (acc: Map<string, string>) => Result<Map<string, string>, CErr>;
-  (
-    elems: Pattern[],
-  ): (i: number) => (at: string, acc: Map<string, string>) => Result<Map<string, string>, CErr>;
-  (
-    elems: Pattern[],
-  ): (i: number, at: string) => (acc: Map<string, string>) => Result<Map<string, string>, CErr>;
-  (
-    elems: Pattern[],
-    i: number,
-  ): (at: string) => (acc: Map<string, string>) => Result<Map<string, string>, CErr>;
-  (
-    elems: Pattern[],
-  ): (i: number, at: string, acc: Map<string, string>) => Result<Map<string, string>, CErr>;
-  (
-    elems: Pattern[],
-    i: number,
-  ): (at: string, acc: Map<string, string>) => Result<Map<string, string>, CErr>;
-  (
-    elems: Pattern[],
-    i: number,
-    at: string,
-  ): (acc: Map<string, string>) => Result<Map<string, string>, CErr>;
-  (
-    elems: Pattern[],
-    i: number,
-    at: string,
-    acc: Map<string, string>,
-  ): Result<Map<string, string>, CErr>;
-} = _curry(4, (elems: Pattern[], i: number, at: string, acc: Map<string, string>) =>
+const binderPathsElems: _Curry<
+  [elems: Pattern[], i: number, at: string, acc: Map<string, string>],
+  Result<Map<string, string>, CErr>
+> = _curry(4, (elems: Pattern[], i: number, at: string, acc: Map<string, string>) =>
   match(_Array_get(i, elems))
     .with({ _tag: "None" }, () => Ok(acc) as Result<Map<string, string>, CErr>)
     .with({ _tag: "Some" }, ({ value: e }) =>
@@ -437,12 +351,10 @@ const binderPathsElems: {
     )
     .exhaustive(),
 );
-const binderPaths: {
-  (p: Pattern): (at: string) => (acc: Map<string, string>) => Result<Map<string, string>, CErr>;
-  (p: Pattern): (at: string, acc: Map<string, string>) => Result<Map<string, string>, CErr>;
-  (p: Pattern, at: string): (acc: Map<string, string>) => Result<Map<string, string>, CErr>;
-  (p: Pattern, at: string, acc: Map<string, string>): Result<Map<string, string>, CErr>;
-} = _curry(3, (p: Pattern, at: string, acc: Map<string, string>) =>
+const binderPaths: _Curry<
+  [p: Pattern, at: string, acc: Map<string, string>],
+  Result<Map<string, string>, CErr>
+> = _curry(3, (p: Pattern, at: string, acc: Map<string, string>) =>
   match(p)
     .with({ _tag: "PAs" }, ({ pat, name, nameSpan: nameSp }) =>
       _Result_flatMap(
@@ -590,50 +502,49 @@ const armUnguardedCatchAll: <A, B>(a: { pattern: Pattern; guard: Option<A> } & B
 >(
   a: { pattern: Pattern; guard: Option<A> } & B,
 ) => and(isCatchAll(a.pattern), _Option_isNone(a.guard));
-const guardErrs: {
-  (arms: MatchArm[]): (listSwitch: boolean) => Option<CErr>;
-  (arms: MatchArm[], listSwitch: boolean): Option<CErr>;
-} = _curry(2, (arms: MatchArm[], listSwitch: boolean) =>
-  firstSome(
-    (a: MatchArm) =>
-      match(a.guard)
-        .with(
-          { _tag: "None" },
-          () => None as Option<{ message: string; start: number; end: number }>,
-        )
-        .with({ _tag: "Some" }, ({ value: g }) =>
-          or(isPList(a.pattern), listSwitch)
-            ? (Some(
-                checkErr(
-                  "`when` guards are unsupported in a lazy-List switch (matching pulls from the sequence)",
-                  exprSpan(g),
-                ),
-              ) as Option<{ message: string; start: number; end: number }>)
-            : (None as Option<{ message: string; start: number; end: number }>),
-        )
-        .exhaustive(),
-    arms,
-  ),
+const guardErrs: _Curry<[arms: MatchArm[], listSwitch: boolean], Option<CErr>> = _curry(
+  2,
+  (arms: MatchArm[], listSwitch: boolean) =>
+    firstSome(
+      (a: MatchArm) =>
+        match(a.guard)
+          .with(
+            { _tag: "None" },
+            () => None as Option<{ message: string; start: number; end: number }>,
+          )
+          .with({ _tag: "Some" }, ({ value: g }) =>
+            or(isPList(a.pattern), listSwitch)
+              ? (Some(
+                  checkErr(
+                    "`when` guards are unsupported in a lazy-List switch (matching pulls from the sequence)",
+                    exprSpan(g),
+                  ),
+                ) as Option<{ message: string; start: number; end: number }>)
+              : (None as Option<{ message: string; start: number; end: number }>),
+          )
+          .exhaustive(),
+      arms,
+    ),
 );
-const firstCatchIdx: {
-  (arms: MatchArm[]): (i0: number) => Option<number>;
-  (arms: MatchArm[], i0: number): Option<number>;
-} = _curry(2, (arms: MatchArm[], i0: number) => {
-  let i: number = i0;
-  while (true) {
-    const _step = match(_Array_get(i, arms))
-      .with({ _tag: "None" }, () => _done(None as Option<number>))
-      .with({ _tag: "Some" }, ({ value: a }) =>
-        armUnguardedCatchAll(a) ? _done(Some(i) as Option<number>) : _recur(add(i, 1)),
-      )
-      .exhaustive();
-    if (_step._tag === "recur") {
-      i = _step.args[0];
-      continue;
+const firstCatchIdx: _Curry<[arms: MatchArm[], i0: number], Option<number>> = _curry(
+  2,
+  (arms: MatchArm[], i0: number) => {
+    let i: number = i0;
+    while (true) {
+      const _step = match(_Array_get(i, arms))
+        .with({ _tag: "None" }, () => _done(None as Option<number>))
+        .with({ _tag: "Some" }, ({ value: a }) =>
+          armUnguardedCatchAll(a) ? _done(Some(i) as Option<number>) : _recur(add(i, 1)),
+        )
+        .exhaustive();
+      if (_step._tag === "recur") {
+        i = _step.args[0];
+        continue;
+      }
+      return _step.value;
     }
-    return _step.value;
-  }
-});
+  },
+);
 const unreachableAfterCatch: (arms: MatchArm[]) => Option<CErr> = (arms: MatchArm[]) =>
   match(firstCatchIdx(arms, 0))
     .with({ _tag: "None" }, () => None as Option<{ message: string; start: number; end: number }>)
@@ -1154,29 +1065,28 @@ const isUpperStart: (s: string) => boolean = (s: string) =>
     .with({ _tag: "Some" }, ({ value: c }) => and(gte(c, 65), lte(c, 90)))
     .with({ _tag: "None" }, () => false)
     .exhaustive();
-const strayTypeVar: {
-  (params: string[]): (te: TypeExpr) => Option<[string, Span]>;
-  (params: string[], te: TypeExpr): Option<[string, Span]>;
-} = _curry(2, (params: string[], te: TypeExpr) =>
-  match(te)
-    .with({ _tag: "TyName" }, ({ name, span: sp }) =>
-      or(
-        isUpperStart(name),
-        or(_Array_contains(name, primTypeNames), _Array_contains(name, params)),
+const strayTypeVar: _Curry<[params: string[], te: TypeExpr], Option<[string, Span]>> = _curry(
+  2,
+  (params: string[], te: TypeExpr) =>
+    match(te)
+      .with({ _tag: "TyName" }, ({ name, span: sp }) =>
+        or(
+          isUpperStart(name),
+          or(_Array_contains(name, primTypeNames), _Array_contains(name, params)),
+        )
+          ? (None as Option<[string, Span]>)
+          : (Some(_tuple(name, sp)) as Option<[string, Span]>),
       )
-        ? (None as Option<[string, Span]>)
-        : (Some(_tuple(name, sp)) as Option<[string, Span]>),
-    )
-    .with({ _tag: "TyArrow" }, ({ from, to }) =>
-      _Option_orElse(strayTypeVar(params, to), strayTypeVar(params, from)),
-    )
-    .with({ _tag: "TyApp" }, ({ args }) => firstSome(strayTypeVar(params), args))
-    .with({ _tag: "TyTuple" }, ({ elems }) => firstSome(strayTypeVar(params), elems))
-    .with({ _tag: "TyList" }, ({ elem }) => strayTypeVar(params, elem))
-    .with({ _tag: "TyQual" }, ({ args }) => firstSome(strayTypeVar(params), args))
-    .with({ _tag: "TyLit" }, () => None as Option<[string, Span]>)
-    .with({ _tag: "TyUnion" }, ({ members }) => firstSome(strayTypeVar(params), members))
-    .exhaustive(),
+      .with({ _tag: "TyArrow" }, ({ from, to }) =>
+        _Option_orElse(strayTypeVar(params, to), strayTypeVar(params, from)),
+      )
+      .with({ _tag: "TyApp" }, ({ args }) => firstSome(strayTypeVar(params), args))
+      .with({ _tag: "TyTuple" }, ({ elems }) => firstSome(strayTypeVar(params), elems))
+      .with({ _tag: "TyList" }, ({ elem }) => strayTypeVar(params, elem))
+      .with({ _tag: "TyQual" }, ({ args }) => firstSome(strayTypeVar(params), args))
+      .with({ _tag: "TyLit" }, () => None as Option<[string, Span]>)
+      .with({ _tag: "TyUnion" }, ({ members }) => firstSome(strayTypeVar(params), members))
+      .exhaustive(),
 );
 const checkCtorFieldVars: (stmts: Stmt[]) => Option<CErr> = (stmts: Stmt[]) =>
   firstSome(

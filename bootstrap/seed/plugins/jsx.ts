@@ -59,6 +59,8 @@ export type Tok =
   | { _tag: "TEof" };
 export type LocTok = { tok: Tok; start: number; end: number; doc: Option<string> };
 
+import type { _Curry } from "@mochi/compiler/runtime";
+
 import {
   _curry,
   Some,
@@ -715,17 +717,16 @@ const inferJsxChildren: <A, B, C>(
         throw new Error("non-exhaustive match");
       }),
 );
-const rowField: {
-  (row: Row): (label: string) => Option<Ty>;
-  (row: Row, label: string): Option<Ty>;
-} = _curry(2, (row: Row, label: string) =>
-  match(row)
-    .with({ _tag: "RowExtend" }, ({ label: l, fieldType, rest }) =>
-      eq(l, label) ? (Some(fieldType) as Option<Ty>) : rowField(rest, label),
-    )
-    .with({ _tag: "RowEmpty" }, () => None as Option<Ty>)
-    .with({ _tag: "RowVar" }, () => None as Option<Ty>)
-    .exhaustive(),
+const rowField: _Curry<[row: Row, label: string], Option<Ty>> = _curry(
+  2,
+  (row: Row, label: string) =>
+    match(row)
+      .with({ _tag: "RowExtend" }, ({ label: l, fieldType, rest }) =>
+        eq(l, label) ? (Some(fieldType) as Option<Ty>) : rowField(rest, label),
+      )
+      .with({ _tag: "RowEmpty" }, () => None as Option<Ty>)
+      .with({ _tag: "RowVar" }, () => None as Option<Ty>)
+      .exhaustive(),
 );
 const fieldNamed: <A, B>(label: A, fields: ({ name: A } & B)[]) => boolean = _curry(
   2,
@@ -743,13 +744,12 @@ const fieldNamed: <A, B>(label: A, fields: ({ name: A } & B)[]) => boolean = _cu
         throw new Error("non-exhaustive match");
       }),
 );
-const recordHasAttr: {
-  (expr: Expr): (label: string) => boolean;
-  (expr: Expr, label: string): boolean;
-} = _curry(2, (expr: Expr, label: string) =>
-  match(expr)
-    .with({ _tag: "ERecord" }, ({ fields }) => fieldNamed(label, fields))
-    .otherwise(() => false),
+const recordHasAttr: _Curry<[expr: Expr, label: string], boolean> = _curry(
+  2,
+  (expr: Expr, label: string) =>
+    match(expr)
+      .with({ _tag: "ERecord" }, ({ fields }) => fieldNamed(label, fields))
+      .otherwise(() => false),
 );
 const jsxChildCount: (restArgs: Expr[]) => number = (restArgs: Expr[]) =>
   match(restArgs)
@@ -761,16 +761,10 @@ const jsxChildCount: (restArgs: Expr[]) => number = (restArgs: Expr[]) =>
       ([{ elements }]) => length(elements),
     )
     .otherwise(() => 0);
-const jsxPropsWithSynthesizedChildren: {
-  (propsT: Ty): (propsExpr: Expr) => (expectedRow: Row) => (restArgs: Expr[]) => Ty;
-  (propsT: Ty): (propsExpr: Expr) => (expectedRow: Row, restArgs: Expr[]) => Ty;
-  (propsT: Ty): (propsExpr: Expr, expectedRow: Row) => (restArgs: Expr[]) => Ty;
-  (propsT: Ty, propsExpr: Expr): (expectedRow: Row) => (restArgs: Expr[]) => Ty;
-  (propsT: Ty): (propsExpr: Expr, expectedRow: Row, restArgs: Expr[]) => Ty;
-  (propsT: Ty, propsExpr: Expr): (expectedRow: Row, restArgs: Expr[]) => Ty;
-  (propsT: Ty, propsExpr: Expr, expectedRow: Row): (restArgs: Expr[]) => Ty;
-  (propsT: Ty, propsExpr: Expr, expectedRow: Row, restArgs: Expr[]): Ty;
-} = _curry(4, (propsT: Ty, propsExpr: Expr, expectedRow: Row, restArgs: Expr[]) =>
+const jsxPropsWithSynthesizedChildren: _Curry<
+  [propsT: Ty, propsExpr: Expr, expectedRow: Row, restArgs: Expr[]],
+  Ty
+> = _curry(4, (propsT: Ty, propsExpr: Expr, expectedRow: Row, restArgs: Expr[]) =>
   match(rowField(expectedRow, "children"))
     .with({ _tag: "None" }, () => propsT)
     .with({ _tag: "Some" }, ({ value: expectedChildren }) =>

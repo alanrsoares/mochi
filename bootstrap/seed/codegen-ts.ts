@@ -6,6 +6,8 @@ import type { TsEnv } from "./ts-types";
 export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
 export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
 
+import type { _Curry } from "@mochi/compiler/runtime";
+
 import {
   _list,
   _curry,
@@ -365,86 +367,65 @@ const allVarsInRow: <A>(row: Row, names: Map<number, A>) => boolean = _curry(
       .exhaustive(),
 );
 const isConcrete: (t: Ty) => boolean = (t: Ty) => allVarsIn(t, new Map([]));
-export const emptyCollTs: {
-  (t: Ty): (env: TsEnv) => Option<string>;
-  (t: Ty, env: TsEnv): Option<string>;
-} = _curry(2, (t: Ty, env: TsEnv) =>
-  allVarsIn(t, env.vars) ? (Some(tsOf(t, env)) as Option<string>) : (None as Option<string>),
+export const emptyCollTs: _Curry<[t: Ty, env: TsEnv], Option<string>> = _curry(
+  2,
+  (t: Ty, env: TsEnv) =>
+    allVarsIn(t, env.vars) ? (Some(tsOf(t, env)) as Option<string>) : (None as Option<string>),
 );
-export const ctorCallTs: {
-  (t: Ty): (recs: Map<string, string>) => Option<string>;
-  (t: Ty, recs: Map<string, string>): Option<string>;
-} = _curry(2, (t: Ty, recs: Map<string, string>) =>
-  match(t)
-    .with({ _tag: "TyCon" }, ({ args }) =>
-      or(eq(length(args), 0), not(isConcrete(t)))
-        ? (None as Option<string>)
-        : (Some(tsOf(t, recsEnv(recs))) as Option<string>),
-    )
-    .otherwise(() => None as Option<string>),
+export const ctorCallTs: _Curry<[t: Ty, recs: Map<string, string>], Option<string>> = _curry(
+  2,
+  (t: Ty, recs: Map<string, string>) =>
+    match(t)
+      .with({ _tag: "TyCon" }, ({ args }) =>
+        or(eq(length(args), 0), not(isConcrete(t)))
+          ? (None as Option<string>)
+          : (Some(tsOf(t, recsEnv(recs))) as Option<string>),
+      )
+      .otherwise(() => None as Option<string>),
 );
-export const guardParamTs: {
-  (t: Ty): (recs: Map<string, string>) => Option<string>;
-  (t: Ty, recs: Map<string, string>): Option<string>;
-} = _curry(2, (t: Ty, recs: Map<string, string>) =>
-  isConcrete(t) ? (Some(tsOf(t, recsEnv(recs))) as Option<string>) : (None as Option<string>),
+export const guardParamTs: _Curry<[t: Ty, recs: Map<string, string>], Option<string>> = _curry(
+  2,
+  (t: Ty, recs: Map<string, string>) =>
+    isConcrete(t) ? (Some(tsOf(t, recsEnv(recs))) as Option<string>) : (None as Option<string>),
 );
-const lambdaParamsFrom: {
-  (t: Ty): (arity: number) => (env: TsEnv) => (i: number) => Option<string>[];
-  (t: Ty): (arity: number) => (env: TsEnv, i: number) => Option<string>[];
-  (t: Ty): (arity: number, env: TsEnv) => (i: number) => Option<string>[];
-  (t: Ty, arity: number): (env: TsEnv) => (i: number) => Option<string>[];
-  (t: Ty): (arity: number, env: TsEnv, i: number) => Option<string>[];
-  (t: Ty, arity: number): (env: TsEnv, i: number) => Option<string>[];
-  (t: Ty, arity: number, env: TsEnv): (i: number) => Option<string>[];
-  (t: Ty, arity: number, env: TsEnv, i: number): Option<string>[];
-} = _curry(4, (t: Ty, arity: number, env: TsEnv, i: number) =>
-  gte(i, arity)
-    ? ([] as Option<string>[])
-    : match(t)
-        .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
-          _Array_prepend(
-            allVarsIn(fromT, env.vars)
-              ? (Some(tsOf(fromT, env)) as Option<string>)
-              : isConcrete(fromT)
-                ? (Some(tsOf(fromT, recsEnv(env.recs))) as Option<string>)
-                : (None as Option<string>),
-            lambdaParamsFrom(toT, arity, env, add(i, 1)),
+const lambdaParamsFrom: _Curry<[t: Ty, arity: number, env: TsEnv, i: number], Option<string>[]> =
+  _curry(4, (t: Ty, arity: number, env: TsEnv, i: number) =>
+    gte(i, arity)
+      ? ([] as Option<string>[])
+      : match(t)
+          .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
+            _Array_prepend(
+              allVarsIn(fromT, env.vars)
+                ? (Some(tsOf(fromT, env)) as Option<string>)
+                : isConcrete(fromT)
+                  ? (Some(tsOf(fromT, recsEnv(env.recs))) as Option<string>)
+                  : (None as Option<string>),
+              lambdaParamsFrom(toT, arity, env, add(i, 1)),
+            ),
+          )
+          .otherwise(() =>
+            _Array_prepend(None as Option<string>, lambdaParamsFrom(t, arity, env, add(i, 1))),
           ),
-        )
-        .otherwise(() =>
-          _Array_prepend(None as Option<string>, lambdaParamsFrom(t, arity, env, add(i, 1))),
-        ),
-);
-export const lambdaParamTypesTs: {
-  (lamType: Ty): (arity: number) => (env: TsEnv) => Option<string>[];
-  (lamType: Ty): (arity: number, env: TsEnv) => Option<string>[];
-  (lamType: Ty, arity: number): (env: TsEnv) => Option<string>[];
-  (lamType: Ty, arity: number, env: TsEnv): Option<string>[];
-} = _curry(3, (lamType: Ty, arity: number, env: TsEnv) => lambdaParamsFrom(lamType, arity, env, 0));
-const genericParamsFrom: {
-  (t: Ty): (arity: number) => (env: TsEnv) => (i: number) => Option<string>[];
-  (t: Ty): (arity: number) => (env: TsEnv, i: number) => Option<string>[];
-  (t: Ty): (arity: number, env: TsEnv) => (i: number) => Option<string>[];
-  (t: Ty, arity: number): (env: TsEnv) => (i: number) => Option<string>[];
-  (t: Ty): (arity: number, env: TsEnv, i: number) => Option<string>[];
-  (t: Ty, arity: number): (env: TsEnv, i: number) => Option<string>[];
-  (t: Ty, arity: number, env: TsEnv): (i: number) => Option<string>[];
-  (t: Ty, arity: number, env: TsEnv, i: number): Option<string>[];
-} = _curry(4, (t: Ty, arity: number, env: TsEnv, i: number) =>
-  gte(i, arity)
-    ? ([] as Option<string>[])
-    : match(t)
-        .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
-          _Array_prepend(
-            Some(tsOf(fromT, env)) as Option<string>,
-            genericParamsFrom(toT, arity, env, add(i, 1)),
+  );
+export const lambdaParamTypesTs: _Curry<
+  [lamType: Ty, arity: number, env: TsEnv],
+  Option<string>[]
+> = _curry(3, (lamType: Ty, arity: number, env: TsEnv) => lambdaParamsFrom(lamType, arity, env, 0));
+const genericParamsFrom: _Curry<[t: Ty, arity: number, env: TsEnv, i: number], Option<string>[]> =
+  _curry(4, (t: Ty, arity: number, env: TsEnv, i: number) =>
+    gte(i, arity)
+      ? ([] as Option<string>[])
+      : match(t)
+          .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
+            _Array_prepend(
+              Some(tsOf(fromT, env)) as Option<string>,
+              genericParamsFrom(toT, arity, env, add(i, 1)),
+            ),
+          )
+          .otherwise(() =>
+            _Array_prepend(None as Option<string>, genericParamsFrom(t, arity, env, add(i, 1))),
           ),
-        )
-        .otherwise(() =>
-          _Array_prepend(None as Option<string>, genericParamsFrom(t, arity, env, add(i, 1))),
-        ),
-);
+  );
 export const genericLambdaParams: <A>(
   sc: { vars: number[]; rvars: number[]; ty: Ty } & A,
   arity: number,
@@ -531,16 +512,15 @@ const paramDeclName: <A>(p: LamParam, i: A) => string = _curry(2, <A>(p: LamPara
 );
 const compositions: (n: number) => number[][] = (n: number) =>
   eq(n, 0) ? [[] as number[]] : compositionsFrom(n, 1);
-const compositionsFrom: {
-  (n: number): (k: number) => number[][];
-  (n: number, k: number): number[][];
-} = _curry(2, (n: number, k: number) =>
-  gt(k, n)
-    ? ([] as number[][])
-    : _Array_concat(
-        map(_Array_prepend(k), compositions(sub(n, k))),
-        compositionsFrom(n, add(k, 1)),
-      ),
+const compositionsFrom: _Curry<[n: number, k: number], number[][]> = _curry(
+  2,
+  (n: number, k: number) =>
+    gt(k, n)
+      ? ([] as number[][])
+      : _Array_concat(
+          map(_Array_prepend(k), compositions(sub(n, k))),
+          compositionsFrom(n, add(k, 1)),
+        ),
 );
 const sliceGroups: <A>(params: A[], groups: number[], i: number, at: number) => A[][] = _curry(
   4,
@@ -555,68 +535,46 @@ const sliceGroups: <A>(params: A[], groups: number[], i: number, at: number) => 
       )
       .exhaustive(),
 );
-const curriedTail: {
-  (slices: string[][]): (i: number) => (acc: string) => string;
-  (slices: string[][]): (i: number, acc: string) => string;
-  (slices: string[][], i: number): (acc: string) => string;
-  (slices: string[][], i: number, acc: string): string;
-} = _curry(3, (slices: string[][], i: number, acc: string) =>
-  lt(i, 1)
-    ? acc
-    : curriedTail(
-        slices,
-        sub(i, 1),
-        `(${_Str_join(", ", _Option_unwrapOr([] as string[], _Array_get(i, slices)))}) => ${acc}`,
-      ),
-);
-const overloadSig: {
-  (head: string): (params: string[]) => (ret: string) => (groups: number[]) => string;
-  (head: string): (params: string[]) => (ret: string, groups: number[]) => string;
-  (head: string): (params: string[], ret: string) => (groups: number[]) => string;
-  (head: string, params: string[]): (ret: string) => (groups: number[]) => string;
-  (head: string): (params: string[], ret: string, groups: number[]) => string;
-  (head: string, params: string[]): (ret: string, groups: number[]) => string;
-  (head: string, params: string[], ret: string): (groups: number[]) => string;
-  (head: string, params: string[], ret: string, groups: number[]): string;
-} = _curry(4, (head: string, params: string[], ret: string, groups: number[]) => {
-  const slices: string[][] = sliceGroups(params, groups, 0, 0);
-  const tail: string = curriedTail(slices, sub(length(slices), 1), ret);
-  return `${head}(${_Str_join(", ", _Option_unwrapOr([] as string[], _Array_get(0, slices)))}): ${tail};`;
-});
-export const curriedOverloads: {
-  (head: string): (params: string[]) => (ret: string) => string;
-  (head: string): (params: string[], ret: string) => string;
-  (head: string, params: string[]): (ret: string) => string;
-  (head: string, params: string[], ret: string): string;
-} = _curry(3, (head: string, params: string[], ret: string) =>
-  lte(length(params), 1)
-    ? `${head}(${_Str_join(", ", params)}) => ${ret}`
-    : `{ ${_Str_join(
-        " ",
-        map(
-          overloadSig(head, params, ret),
-          _Array_sortBy((g: number[]) => sub(0, length(g)), compositions(length(params))),
+const curriedTail: _Curry<[slices: string[][], i: number, acc: string], string> = _curry(
+  3,
+  (slices: string[][], i: number, acc: string) =>
+    lt(i, 1)
+      ? acc
+      : curriedTail(
+          slices,
+          sub(i, 1),
+          `(${_Str_join(", ", _Option_unwrapOr([] as string[], _Array_get(i, slices)))}) => ${acc}`,
         ),
-      )} }`,
 );
-const flatParamsFrom: {
-  (t: Ty): (value: Expr) => (env: TsEnv) => (n: number) => (acc: string[]) => [string[], string];
-  (t: Ty): (value: Expr) => (env: TsEnv) => (n: number, acc: string[]) => [string[], string];
-  (t: Ty): (value: Expr) => (env: TsEnv, n: number) => (acc: string[]) => [string[], string];
-  (t: Ty): (value: Expr, env: TsEnv) => (n: number) => (acc: string[]) => [string[], string];
-  (t: Ty, value: Expr): (env: TsEnv) => (n: number) => (acc: string[]) => [string[], string];
-  (t: Ty): (value: Expr) => (env: TsEnv, n: number, acc: string[]) => [string[], string];
-  (t: Ty): (value: Expr, env: TsEnv) => (n: number, acc: string[]) => [string[], string];
-  (t: Ty): (value: Expr, env: TsEnv, n: number) => (acc: string[]) => [string[], string];
-  (t: Ty, value: Expr): (env: TsEnv) => (n: number, acc: string[]) => [string[], string];
-  (t: Ty, value: Expr): (env: TsEnv, n: number) => (acc: string[]) => [string[], string];
-  (t: Ty, value: Expr, env: TsEnv): (n: number) => (acc: string[]) => [string[], string];
-  (t: Ty): (value: Expr, env: TsEnv, n: number, acc: string[]) => [string[], string];
-  (t: Ty, value: Expr): (env: TsEnv, n: number, acc: string[]) => [string[], string];
-  (t: Ty, value: Expr, env: TsEnv): (n: number, acc: string[]) => [string[], string];
-  (t: Ty, value: Expr, env: TsEnv, n: number): (acc: string[]) => [string[], string];
-  (t: Ty, value: Expr, env: TsEnv, n: number, acc: string[]): [string[], string];
-} = _curry(5, (t: Ty, value: Expr, env: TsEnv, n: number, acc: string[]) =>
+const overloadSig: _Curry<[head: string, params: string[], ret: string, groups: number[]], string> =
+  _curry(4, (head: string, params: string[], ret: string, groups: number[]) => {
+    const slices: string[][] = sliceGroups(params, groups, 0, 0);
+    const tail: string = curriedTail(slices, sub(length(slices), 1), ret);
+    return `${head}(${_Str_join(", ", _Option_unwrapOr([] as string[], _Array_get(0, slices)))}): ${tail};`;
+  });
+export const curriedOverloads: _Curry<[head: string, params: string[], ret: string], string> =
+  _curry(3, (head: string, params: string[], ret: string) =>
+    lte(length(params), 1)
+      ? `${head}(${_Str_join(", ", params)}) => ${ret}`
+      : `{ ${_Str_join(
+          " ",
+          map(
+            overloadSig(head, params, ret),
+            _Array_sortBy((g: number[]) => sub(0, length(g)), compositions(length(params))),
+          ),
+        )} }`,
+  );
+export const curriedFnType: _Curry<[params: string[], ret: string], string> = _curry(
+  2,
+  (params: string[], ret: string) =>
+    lte(length(params), 1)
+      ? `(${_Str_join(", ", params)}) => ${ret}`
+      : `_Curry<[${_Str_join(", ", params)}], ${ret}>`,
+);
+const flatParamsFrom: _Curry<
+  [t: Ty, value: Expr, env: TsEnv, n: number, acc: string[]],
+  [string[], string]
+> = _curry(5, (t: Ty, value: Expr, env: TsEnv, n: number, acc: string[]) =>
   match(value)
     .with({ _tag: "ELambda" }, ({ params, body }) =>
       eq(length(params), 0)
@@ -637,182 +595,10 @@ const flatParamsFrom: {
     )
     .otherwise(() => _tuple(acc, tsOf(t, env))),
 );
-const takeParams: {
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-  ) => (env: TsEnv) => (i: number) => (n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-  ) => (env: TsEnv) => (i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-  ) => (env: TsEnv) => (i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-  ) => (env: TsEnv, i: number) => (n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-    env: TsEnv,
-  ) => (i: number) => (n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-  ): (env: TsEnv) => (i: number) => (n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-  ) => (env: TsEnv) => (i: number, n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-  ) => (env: TsEnv, i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-  ) => (env: TsEnv, i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-    env: TsEnv,
-  ) => (i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-    env: TsEnv,
-  ) => (i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-    env: TsEnv,
-    i: number,
-  ) => (n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-  ): (env: TsEnv) => (i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-  ): (env: TsEnv) => (i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-  ): (env: TsEnv, i: number) => (n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-    env: TsEnv,
-  ): (i: number) => (n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-  ) => (env: TsEnv, i: number, n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-    env: TsEnv,
-  ) => (i: number, n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-    env: TsEnv,
-    i: number,
-  ) => (n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-    env: TsEnv,
-    i: number,
-    n: number,
-  ) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-  ): (env: TsEnv) => (i: number, n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-  ): (env: TsEnv, i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-  ): (env: TsEnv, i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-    env: TsEnv,
-  ): (i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-    env: TsEnv,
-  ): (i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-    env: TsEnv,
-    i: number,
-  ): (n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-    env: TsEnv,
-    i: number,
-    n: number,
-    acc: string[],
-  ) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-  ): (env: TsEnv, i: number, n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-    env: TsEnv,
-  ): (i: number, n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-    env: TsEnv,
-    i: number,
-  ): (n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-    env: TsEnv,
-    i: number,
-    n: number,
-  ): (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-    env: TsEnv,
-    i: number,
-    n: number,
-    acc: string[],
-  ): [Ty, number, string[]];
-} = _curry(6, (t: Ty, params: LamParam[], env: TsEnv, i: number, n: number, acc: string[]) =>
+const takeParams: _Curry<
+  [t: Ty, params: LamParam[], env: TsEnv, i: number, n: number, acc: string[]],
+  [Ty, number, string[]]
+> = _curry(6, (t: Ty, params: LamParam[], env: TsEnv, i: number, n: number, acc: string[]) =>
   match(_Array_get(i, params))
     .with({ _tag: "None" }, () => _tuple(t, n, acc))
     .with({ _tag: "Some" }, ({ value: p }) =>
@@ -831,32 +617,29 @@ const takeParams: {
     )
     .exhaustive(),
 );
-const declType: {
-  (t: Ty): (value: Expr) => (env: TsEnv) => string;
-  (t: Ty): (value: Expr, env: TsEnv) => string;
-  (t: Ty, value: Expr): (env: TsEnv) => string;
-  (t: Ty, value: Expr, env: TsEnv): string;
-} = _curry(3, (t: Ty, value: Expr, env: TsEnv) =>
-  match(value)
-    .with({ _tag: "ELambda" }, ({ params, body }) =>
-      eq(length(params), 0)
-        ? ((next: Ty) => `() => ${declType(next, body, env)}`)(
-            match(t)
-              .with(
-                (_v): _v is Extract<Ty, { _tag: "TyFn" }> => {
-                  const _g: any = _v;
-                  return _g._tag === "TyFn" && (({ from: fromT, to: toT }) => isUnit(fromT))(_g);
-                },
-                ({ from: fromT, to: toT }) => toT,
-              )
-              .otherwise(() => t),
-          )
-        : (([t1, _n, ps]: [Ty, number, string[]]) =>
-            `(${_Str_join(", ", ps)}) => ${declType(t1, body, env)}`)(
-            takeParams(t, params, env, 0, 0, [] as string[]),
-          ),
-    )
-    .otherwise(() => tsOf(t, env)),
+const declType: _Curry<[t: Ty, value: Expr, env: TsEnv], string> = _curry(
+  3,
+  (t: Ty, value: Expr, env: TsEnv) =>
+    match(value)
+      .with({ _tag: "ELambda" }, ({ params, body }) =>
+        eq(length(params), 0)
+          ? ((next: Ty) => `() => ${declType(next, body, env)}`)(
+              match(t)
+                .with(
+                  (_v): _v is Extract<Ty, { _tag: "TyFn" }> => {
+                    const _g: any = _v;
+                    return _g._tag === "TyFn" && (({ from: fromT, to: toT }) => isUnit(fromT))(_g);
+                  },
+                  ({ from: fromT, to: toT }) => toT,
+                )
+                .otherwise(() => t),
+            )
+          : (([t1, _n, ps]: [Ty, number, string[]]) =>
+              `(${_Str_join(", ", ps)}) => ${declType(t1, body, env)}`)(
+              takeParams(t, params, env, 0, 0, [] as string[]),
+            ),
+      )
+      .otherwise(() => tsOf(t, env)),
 );
 export const bindingTsType: <A>(
   sc: { vars: number[]; rvars: number[]; ty: Ty } & A,
@@ -875,7 +658,7 @@ export const bindingTsType: <A>(
     return match(value)
       .with({ _tag: "ELambda" }, () =>
         eq(head, "")
-          ? (([params, ret]: [string[], string]) => curriedOverloads("", params, ret))(
+          ? (([params, ret]: [string[], string]) => curriedFnType(params, ret))(
               flatParamsFrom(sc.ty, value, env, 0, [] as string[]),
             )
           : `${head}${declType(sc.ty, value, env)}`,
@@ -908,65 +691,59 @@ export const typeAtTable: <A, B, C, D, E>(
   types: ({ span: { start: A; end: B } & D; ty: C } & E)[],
 ) => Map<string, C> = <A, B, C, D, E>(types: ({ span: { start: A; end: B } & D; ty: C } & E)[]) =>
   typeAtFrom(types, 0, new Map<string, C>());
-const consInTy: {
-  (t: Ty): (acc: Set<string>) => Set<string>;
-  (t: Ty, acc: Set<string>): Set<string>;
-} = _curry(2, (t: Ty, acc: Set<string>) =>
-  match(t)
-    .with(
-      (_v): _v is Extract<Ty, { _tag: "TyCon" }> => {
-        const _g: any = _v;
-        return _g._tag === "TyCon" && _g.name === "Task" && _g.args.length === 2;
-      },
-      ({ args: [value, error] }) =>
-        consInTy(error, consInTy(value, _Set_add("Result", _Set_add("Task", acc)))),
-    )
-    .with({ _tag: "TyCon" }, ({ name, args }) => consInAll(args, _Set_add(name, acc), 0))
-    .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) => consInTy(toT, consInTy(fromT, acc)))
-    .with({ _tag: "TyRecord" }, ({ row }) => consInRow(row, acc))
-    .with({ _tag: "TyOneOf" }, ({ members }) => consInAll(members, acc, 0))
-    .otherwise(() => acc),
+const consInTy: _Curry<[t: Ty, acc: Set<string>], Set<string>> = _curry(
+  2,
+  (t: Ty, acc: Set<string>) =>
+    match(t)
+      .with(
+        (_v): _v is Extract<Ty, { _tag: "TyCon" }> => {
+          const _g: any = _v;
+          return _g._tag === "TyCon" && _g.name === "Task" && _g.args.length === 2;
+        },
+        ({ args: [value, error] }) =>
+          consInTy(error, consInTy(value, _Set_add("Result", _Set_add("Task", acc)))),
+      )
+      .with({ _tag: "TyCon" }, ({ name, args }) => consInAll(args, _Set_add(name, acc), 0))
+      .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) => consInTy(toT, consInTy(fromT, acc)))
+      .with({ _tag: "TyRecord" }, ({ row }) => consInRow(row, acc))
+      .with({ _tag: "TyOneOf" }, ({ members }) => consInAll(members, acc, 0))
+      .otherwise(() => acc),
 );
-const consInAll: {
-  (ts: Ty[]): (acc: Set<string>) => (i: number) => Set<string>;
-  (ts: Ty[]): (acc: Set<string>, i: number) => Set<string>;
-  (ts: Ty[], acc: Set<string>): (i: number) => Set<string>;
-  (ts: Ty[], acc: Set<string>, i: number): Set<string>;
-} = _curry(3, (ts: Ty[], acc: Set<string>, i: number) =>
-  match(_Array_get(i, ts))
-    .with({ _tag: "None" }, () => acc)
-    .with({ _tag: "Some" }, ({ value: t }) => consInAll(ts, consInTy(t, acc), add(i, 1)))
-    .exhaustive(),
+const consInAll: _Curry<[ts: Ty[], acc: Set<string>, i: number], Set<string>> = _curry(
+  3,
+  (ts: Ty[], acc: Set<string>, i: number) =>
+    match(_Array_get(i, ts))
+      .with({ _tag: "None" }, () => acc)
+      .with({ _tag: "Some" }, ({ value: t }) => consInAll(ts, consInTy(t, acc), add(i, 1)))
+      .exhaustive(),
 );
-const consInRow: {
-  (row: Row): (acc: Set<string>) => Set<string>;
-  (row: Row, acc: Set<string>): Set<string>;
-} = _curry(2, (row: Row, acc: Set<string>) =>
-  match(row)
-    .with({ _tag: "RowExtend" }, ({ fieldType, rest }) => consInRow(rest, consInTy(fieldType, acc)))
-    .otherwise(() => acc),
+const consInRow: _Curry<[row: Row, acc: Set<string>], Set<string>> = _curry(
+  2,
+  (row: Row, acc: Set<string>) =>
+    match(row)
+      .with({ _tag: "RowExtend" }, ({ fieldType, rest }) =>
+        consInRow(rest, consInTy(fieldType, acc)),
+      )
+      .otherwise(() => acc),
 );
-const declaredTypeNames: {
-  (stmts: Stmt[]): (i: number) => (acc: Set<string>) => Set<string>;
-  (stmts: Stmt[]): (i: number, acc: Set<string>) => Set<string>;
-  (stmts: Stmt[], i: number): (acc: Set<string>) => Set<string>;
-  (stmts: Stmt[], i: number, acc: Set<string>): Set<string>;
-} = _curry(3, (stmts: Stmt[], i: number, acc: Set<string>) =>
-  match(_Array_get(i, stmts))
-    .with({ _tag: "None" }, () => acc)
-    .with(
-      (
-        _v,
-      ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
-        value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
-      } => {
-        const _g: any = _v;
-        return _g._tag === "Some" && _g.value._tag === "SType";
-      },
-      ({ value: { name } }) => declaredTypeNames(stmts, add(i, 1), _Set_add(name, acc)),
-    )
-    .with({ _tag: "Some" }, () => declaredTypeNames(stmts, add(i, 1), acc))
-    .exhaustive(),
+const declaredTypeNames: _Curry<[stmts: Stmt[], i: number, acc: Set<string>], Set<string>> = _curry(
+  3,
+  (stmts: Stmt[], i: number, acc: Set<string>) =>
+    match(_Array_get(i, stmts))
+      .with({ _tag: "None" }, () => acc)
+      .with(
+        (
+          _v,
+        ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
+          value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
+        } => {
+          const _g: any = _v;
+          return _g._tag === "Some" && _g.value._tag === "SType";
+        },
+        ({ value: { name } }) => declaredTypeNames(stmts, add(i, 1), _Set_add(name, acc)),
+      )
+      .with({ _tag: "Some" }, () => declaredTypeNames(stmts, add(i, 1), acc))
+      .exhaustive(),
 );
 const referencedCons: <A>(
   stmts: Stmt[],
@@ -1445,50 +1222,52 @@ export const emitTsModule: <A, B, C, D, E, F, G, H, I, J>(
       builtinDeclsInBody(body, headerText, 0, aliases, recs),
       typeHeader,
     );
+    const curryLine: string = _Str_contains(
+      "_Curry<",
+      `${_Str_join("\n", header)}
+${body}`,
+    )
+      ? `import type { _Curry } from "${runtimeImport}";`
+      : "";
     return concat(
       _Str_join(
         "\n\n",
         filter(
           (part: string) => not(eq(part, "")),
-          [_Str_join("\n", header), _Str_join("\n", importLines), runtimeLine, body],
+          [_Str_join("\n", header), _Str_join("\n", importLines), curryLine, runtimeLine, body],
         ),
       ),
       "\n",
     );
   },
 );
-const freeIdsIn: { (t: Ty): (acc: number[]) => number[]; (t: Ty, acc: number[]): number[] } =
-  _curry(2, (t: Ty, acc: number[]) =>
-    match(t)
-      .with({ _tag: "TyVar" }, ({ id }) =>
-        _Array_contains(id, acc) ? acc : _Array_append(id, acc),
-      )
-      .with({ _tag: "TyCon" }, ({ args }) => freeIdsInAll(args, acc))
-      .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) => freeIdsIn(toT, freeIdsIn(fromT, acc)))
-      .with({ _tag: "TyRecord" }, ({ row }) => freeIdsInRow(row, acc))
-      .with({ _tag: "TySingleton" }, () => acc)
-      .with({ _tag: "TyOneOf" }, ({ members }) => freeIdsInAll(members, acc))
-      .exhaustive(),
-  );
-const freeIdsInAll: {
-  (ts: Ty[]): (acc: number[]) => number[];
-  (ts: Ty[], acc: number[]): number[];
-} = _curry(2, (ts: Ty[], acc: number[]) =>
-  reduce(
-    _curry(2, (a: number[], t: Ty) => freeIdsIn(t, a)),
-    acc,
-    ts,
-  ),
+const freeIdsIn: _Curry<[t: Ty, acc: number[]], number[]> = _curry(2, (t: Ty, acc: number[]) =>
+  match(t)
+    .with({ _tag: "TyVar" }, ({ id }) => (_Array_contains(id, acc) ? acc : _Array_append(id, acc)))
+    .with({ _tag: "TyCon" }, ({ args }) => freeIdsInAll(args, acc))
+    .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) => freeIdsIn(toT, freeIdsIn(fromT, acc)))
+    .with({ _tag: "TyRecord" }, ({ row }) => freeIdsInRow(row, acc))
+    .with({ _tag: "TySingleton" }, () => acc)
+    .with({ _tag: "TyOneOf" }, ({ members }) => freeIdsInAll(members, acc))
+    .exhaustive(),
 );
-const freeIdsInRow: {
-  (row: Row): (acc: number[]) => number[];
-  (row: Row, acc: number[]): number[];
-} = _curry(2, (row: Row, acc: number[]) =>
-  match(row)
-    .with({ _tag: "RowExtend" }, ({ fieldType, rest }) =>
-      freeIdsInRow(rest, freeIdsIn(fieldType, acc)),
-    )
-    .otherwise(() => acc),
+const freeIdsInAll: _Curry<[ts: Ty[], acc: number[]], number[]> = _curry(
+  2,
+  (ts: Ty[], acc: number[]) =>
+    reduce(
+      _curry(2, (a: number[], t: Ty) => freeIdsIn(t, a)),
+      acc,
+      ts,
+    ),
+);
+const freeIdsInRow: _Curry<[row: Row, acc: number[]], number[]> = _curry(
+  2,
+  (row: Row, acc: number[]) =>
+    match(row)
+      .with({ _tag: "RowExtend" }, ({ fieldType, rest }) =>
+        freeIdsInRow(rest, freeIdsIn(fieldType, acc)),
+      )
+      .otherwise(() => acc),
 );
 const lettersFor: <A>(ids: A[], i: number, acc: Map<A, string>) => Map<A, string> = _curry(
   3,
@@ -1515,41 +1294,31 @@ const arrowCount: (t: Ty) => number = (t: Ty) =>
   match(t)
     .with({ _tag: "TyFn" }, ({ to: toT }) => add(1, arrowCount(toT)))
     .otherwise(() => 0);
-const hostParams: {
-  (t: Ty): (arity: number) => (names: Map<number, string>) => (i: number) => string[];
-  (t: Ty): (arity: number) => (names: Map<number, string>, i: number) => string[];
-  (t: Ty): (arity: number, names: Map<number, string>) => (i: number) => string[];
-  (t: Ty, arity: number): (names: Map<number, string>) => (i: number) => string[];
-  (t: Ty): (arity: number, names: Map<number, string>, i: number) => string[];
-  (t: Ty, arity: number): (names: Map<number, string>, i: number) => string[];
-  (t: Ty, arity: number, names: Map<number, string>): (i: number) => string[];
-  (t: Ty, arity: number, names: Map<number, string>, i: number): string[];
-} = _curry(4, (t: Ty, arity: number, names: Map<number, string>, i: number) =>
-  gte(i, arity)
-    ? ([] as string[])
-    : match(t)
-        .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
-          _Array_prepend(
-            `${_Str_fromCode(add(97, i))}: ${tsOf(fromT, plainEnv(names))}`,
-            hostParams(toT, arity, names, add(i, 1)),
-          ),
-        )
-        .otherwise(() => [] as string[]),
+const hostParams: _Curry<[t: Ty, arity: number, names: Map<number, string>, i: number], string[]> =
+  _curry(4, (t: Ty, arity: number, names: Map<number, string>, i: number) =>
+    gte(i, arity)
+      ? ([] as string[])
+      : match(t)
+          .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
+            _Array_prepend(
+              `${_Str_fromCode(add(97, i))}: ${tsOf(fromT, plainEnv(names))}`,
+              hostParams(toT, arity, names, add(i, 1)),
+            ),
+          )
+          .otherwise(() => [] as string[]),
+  );
+const hostReturn: _Curry<[t: Ty, arity: number, i: number], Ty> = _curry(
+  3,
+  (t: Ty, arity: number, i: number) =>
+    gte(i, arity)
+      ? t
+      : match(t)
+          .with({ _tag: "TyFn" }, ({ to: toT }) => hostReturn(toT, arity, add(i, 1)))
+          .otherwise(() => t),
 );
-const hostReturn: {
-  (t: Ty): (arity: number) => (i: number) => Ty;
-  (t: Ty): (arity: number, i: number) => Ty;
-  (t: Ty, arity: number): (i: number) => Ty;
-  (t: Ty, arity: number, i: number): Ty;
-} = _curry(3, (t: Ty, arity: number, i: number) =>
-  gte(i, arity)
-    ? t
-    : match(t)
-        .with({ _tag: "TyFn" }, ({ to: toT }) => hostReturn(toT, arity, add(i, 1)))
-        .otherwise(() => t),
-);
-const curriedHostType: { (t: Ty): (arity: number) => string; (t: Ty, arity: number): string } =
-  _curry(2, (t: Ty, arity: number) => {
+const curriedHostType: _Curry<[t: Ty, arity: number], string> = _curry(
+  2,
+  (t: Ty, arity: number) => {
     const ids: number[] = freeIdsIn(t, [] as number[]);
     const names: Map<number, string> = lettersFor(ids, 0, new Map<number, string>());
     return `${genericHeadOf(ids, names)}${reduce(
@@ -1557,22 +1326,20 @@ const curriedHostType: { (t: Ty): (arity: number) => string; (t: Ty, arity: numb
       tsOf(hostReturn(t, arity, 0), plainEnv(names)),
       _Array_reverse(hostParams(t, arity, names, 0)),
     )}`;
-  });
-const flatHostType: { (t: Ty): (arity: number) => string; (t: Ty, arity: number): string } = _curry(
-  2,
-  (t: Ty, arity: number) => {
-    const ids: number[] = freeIdsIn(t, [] as number[]);
-    const names: Map<number, string> = lettersFor(ids, 0, new Map<number, string>());
-    const head: string = genericHeadOf(ids, names);
-    return eq(arity, 0)
-      ? `${head}${tsOf(t, plainEnv(names))}`
-      : curriedOverloads(
-          head,
-          hostParams(t, arity, names, 0),
-          tsOf(hostReturn(t, arity, 0), plainEnv(names)),
-        );
   },
 );
+const flatHostType: _Curry<[t: Ty, arity: number], string> = _curry(2, (t: Ty, arity: number) => {
+  const ids: number[] = freeIdsIn(t, [] as number[]);
+  const names: Map<number, string> = lettersFor(ids, 0, new Map<number, string>());
+  const head: string = genericHeadOf(ids, names);
+  return eq(arity, 0)
+    ? `${head}${tsOf(t, plainEnv(names))}`
+    : curriedOverloads(
+        head,
+        hostParams(t, arity, names, 0),
+        tsOf(hostReturn(t, arity, 0), plainEnv(names)),
+      );
+});
 const externDecl: <A, B>(
   e: { scheme: { ty: Ty } & A; curried: boolean; imported: string } & B,
 ) => string = <A, B>(e: { scheme: { ty: Ty } & A; curried: boolean; imported: string } & B) => {

@@ -3,6 +3,8 @@ import type { PErr } from "./parser";
 export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
 export type Diag = PErr;
 
+import type { _Curry } from "@mochi/compiler/runtime";
+
 import {
   _curry,
   _recur,
@@ -47,10 +49,10 @@ export const buildOne: (path: string) => Result<string, string> = (path: string)
       ),
     readFile(path),
   );
-export const buildOneTs: {
-  (path: string): (runtimeImport: string) => Result<string, string>;
-  (path: string, runtimeImport: string): Result<string, string>;
-} = _curry(2, (path: string, runtimeImport: string) =>
+export const buildOneTs: _Curry<
+  [path: string, runtimeImport: string],
+  Result<string, string>
+> = _curry(2, (path: string, runtimeImport: string) =>
   _Result_flatMap(
     (src) =>
       _Result_flatMap(
@@ -141,10 +143,10 @@ export const writeAllTs: <A>(outs: ({ path: string; js: string } & A)[]) => Resu
       return _step.value;
     }
   };
-export const buildMultiTs: {
-  (entry: string): (runtimeImport: string) => Result<string, string>;
-  (entry: string, runtimeImport: string): Result<string, string>;
-} = _curry(2, (entry: string, runtimeImport: string) =>
+export const buildMultiTs: _Curry<
+  [entry: string, runtimeImport: string],
+  Result<string, string>
+> = _curry(2, (entry: string, runtimeImport: string) =>
   _Result_flatMap(
     writeAllTs,
     _Result_mapErr((e: Diag) => e.message, buildModulesTs(entry, runtimeImport)),

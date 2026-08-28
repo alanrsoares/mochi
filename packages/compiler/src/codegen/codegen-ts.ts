@@ -304,6 +304,12 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
   // A guard predicate can name a builtin variant (`Option`) the header didn't
   // already emit — inject its decl now that the body text exists (ADR 0031).
   const header = [...builtinDeclsIn(body, typeHeader.join("\n")), ...typeHeader];
+  // `_Curry` lives in the runtime, not inline: a decl per module cost ~13 lines
+  // × every file in a graph. It is a TYPE, so it rides its own `import type`
+  // line rather than the value import below (ADR 0093).
+  const curryLine = `${header.join("\n")}\n${body}`.includes("_Curry<")
+    ? `import type { _Curry } from ${JSON.stringify(ctx.runtimeImport)};`
+    : "";
 
   // `_tuple` isn't reachable by `collectRuntimeDeps` (a tuple AST node carries no
   // runtime-name reference); it's a TS-emit device, so pull it in from the body
@@ -313,9 +319,13 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
     ? `import { ${allDeps.join(", ")} } from ${JSON.stringify(ctx.runtimeImport)};`
     : "";
 
-  const parts = [header.join("\n"), ctx.importLines.join("\n"), runtimeLine, body].filter(
-    (p) => p !== "",
-  );
+  const parts = [
+    header.join("\n"),
+    ctx.importLines.join("\n"),
+    curryLine,
+    runtimeLine,
+    body,
+  ].filter((p) => p !== "");
   return `${parts.join("\n\n")}\n`;
 };
 

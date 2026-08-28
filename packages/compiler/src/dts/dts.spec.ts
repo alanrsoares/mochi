@@ -31,11 +31,18 @@ test("an array of functions parenthesizes the arrow (Wave 8)", () => {
   );
 });
 
-test("a concrete multi-param lambda declares partial-application overloads (ADR 0037)", () => {
+test("a concrete multi-param lambda declares a curry-compatible type (ADR 0093)", () => {
   // `_curry` makes it callable in any grouping — `sum(a, b)` or `sum(a)(b)` —
-  // so the type is an overload set, flat signature last (see `curriedOverloads`).
-  expect(dts("let sum = (a, b) => add(a, b)")).toBe(
-    "export declare const sum: { (a: number): (b: number) => number; (a: number, b: number): number; };",
+  // so the type is `_Curry`, which accepts every argument prefix. This replaced
+  // the 2^(n-1) overload set of ADR 0037; the helper decls ride along.
+  expect(dts("let sum = (a, b) => add(a, b)")).toContain(
+    "export declare const sum: _Curry<[a: number, b: number], number>;",
+  );
+});
+
+test("a .d.ts naming _Curry imports it from the runtime, not redeclares it", () => {
+  expect(dts("let sum = (a, b) => add(a, b)")).toContain(
+    'import type { _Curry } from "@mochi/runtime";',
   );
 });
 

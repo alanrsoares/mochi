@@ -403,6 +403,19 @@ function curriedOverloads(head: string, params: string[], ret: string): string {
 }
 
 /**
+ * The CONCRETE curry-compatible function type. Same contract as
+ * `curriedOverloads` — every partial-application grouping `_curry` accepts must
+ * typecheck — but expressed once as `_Curry<[params], ret>` instead of one
+ * signature per composition of the arity. A monomorphic arity-n binding cost
+ * 2^(n-1) lines; this costs one (ADR 0093). Only CONCRETE bindings can use it:
+ * `infer` erases a generic head, so a generic binding keeps the nested arrow.
+ */
+export function curriedFnType(params: readonly string[], ret: string): string {
+  if (params.length <= 1) return `(${params.join(", ")}) => ${ret}`;
+  return `_Curry<[${params.join(", ")}], ${ret}>`;
+}
+
+/**
  * A prelude builtin's HM type rendered for the typed runtime (ADR 0026). The JS
  * backend curries every arity-≥2 builtin via `_curry`, so a call site emits ANY
  * partial-application grouping — `map(f, xs)`, `xs |> map(f)` → `map(f)(xs)`,
@@ -489,7 +502,7 @@ export function bindingTsType(
     // (params collapse to `Option<never>`/`any`). See ADR 0037.
     if (head === "") {
       const { params, ret } = flatBindingParams(folded, value, names);
-      return curriedOverloads("", params, ret);
+      return curriedFnType(params, ret);
     }
     return `${head}${declType(folded, value, names)}`;
   }
@@ -887,6 +900,8 @@ export type EmitDtsOptions = {
   plugins?: LanguagePlugin[];
   /** Permit unbound host globals; `"use open"` remains file-local. */
   open?: boolean;
+  /** Module specifier a `_Curry` type import resolves to (ADR 0093). */
+  runtimeImport?: string;
   /**
    * Nominal rename for imported variants (`Shape` → `D.Shape`). Graph callers
    * pass `qualifierMap` from the module's `qualTypes` (inferred types too).
@@ -993,8 +1008,14 @@ export function emitDtsFromTyped(
   // from `Map.get`) needs its type decl emitted too, unless the program declares
   // its own. Prepend so the reference resolves.
   const builtins = referencedBuiltinTypeDecls(prog, (n) => env.get(n));
-  const body = `${[...builtins, ...lines].join("\n")}\n`;
-  const imports = nsTypeImports(prog, body);
+  const decls = [...builtins, ...lines];
+  const body = `${decls.join("\n")}\n`;
+  // `_Curry` is a runtime type (ADR 0093), so a `.d.ts` naming it imports it
+  // rather than redeclaring — the same reason the emitted `.ts` does.
+  const curry = body.includes("_Curry<")
+    ? [`import type { _Curry } from ${JSON.stringify(opts.runtimeImport ?? "@mochi/runtime")};`]
+    : [];
+  const imports = [...curry, ...nsTypeImports(prog, body)];
   return imports.length === 0 ? body : `${imports.join("\n")}\n${body}`;
 }
 
