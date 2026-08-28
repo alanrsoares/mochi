@@ -1,3 +1,5 @@
+import type { Span } from "./ast";
+
 export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
 export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
 export type Ty =
@@ -11,13 +13,15 @@ export type Row =
   | { _tag: "RowEmpty" }
   | { _tag: "RowVar"; id: number }
   | { _tag: "RowExtend"; label: string; fieldType: Ty; rest: Row };
-export type SpanAt = { start: number; end: number };
-export type TypeAt = { span: { start: number; end: number }; ty: Ty };
+export type SpanAt = Span;
+export type TypeAt = { span: SpanAt; ty: Ty };
 export type St = {
   tv: Map<number, Ty>;
   rv: Map<number, Row>;
   next: number;
-  recorded: { span: { start: number; end: number }; ty: Ty }[];
+  recorded: TypeAt[];
+  letSpans: Map<string, SpanAt>;
+  letUses: Map<string, Ty[]>;
 };
 export type TypeErr = { message: string };
 
@@ -321,6 +325,8 @@ export const mkSt: (start: number) => St = (start: number) => ({
   rv: new Map<number, Row>(),
   next: start,
   recorded: [] as TypeAt[],
+  letSpans: new Map<string, SpanAt>(),
+  letUses: new Map<string, Ty[]>(),
 });
 export const recordAt: <A, B, C>(
   span: A,
@@ -332,6 +338,43 @@ export const recordAt: <A, B, C>(
     ...st,
     recorded: _Array_prepend({ span: span, ty: t }, st.recorded),
   }),
+);
+const spanKeyOf: <A, B, C>(sp: { start: A; end: B } & C) => string = <A, B, C>(
+  sp: { start: A; end: B } & C,
+) => `${show(sp.start)}:${show(sp.end)}`;
+export const noteLet: <A, B, C, D, E>(
+  span: { start: A; end: B } & D,
+  st: { letUses: Map<string, C[]>; letSpans: Map<string, { start: A; end: B } & D> } & E,
+) => { letUses: Map<string, C[]>; letSpans: Map<string, { start: A; end: B } & D> } & E = _curry(
+  2,
+  <A, B, C, D, E>(
+    span: { start: A; end: B } & D,
+    st: { letUses: Map<string, C[]>; letSpans: Map<string, { start: A; end: B } & D> } & E,
+  ) => {
+    const k: string = spanKeyOf(span);
+    return {
+      ...st,
+      letSpans: _Map_set(k, span, st.letSpans),
+      letUses: _Map_set(k, [] as C[], st.letUses),
+    };
+  },
+);
+export const noteUse: <A, B, C, D, E>(
+  span: { start: A; end: B } & D,
+  t: C,
+  st: { letUses: Map<string, C[]> } & E,
+) => { letUses: Map<string, C[]> } & E = _curry(
+  3,
+  <A, B, C, D, E>(span: { start: A; end: B } & D, t: C, st: { letUses: Map<string, C[]> } & E) => {
+    const k: string = spanKeyOf(span);
+    return match(_Map_get(k, st.letUses))
+      .with({ _tag: "None" }, () => st)
+      .with({ _tag: "Some" }, ({ value: uses }) => ({
+        ...st,
+        letUses: _Map_set(k, _Array_append(t, uses), st.letUses),
+      }))
+      .exhaustive();
+  },
 );
 export const fail: <A, B>(message: A) => Result<B, { message: A }> = <A, B>(message: A) =>
   Err({ message: message });

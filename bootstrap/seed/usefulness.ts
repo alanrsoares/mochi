@@ -1,4 +1,4 @@
-import type { Pattern } from "./ast";
+import type { PatField, Pattern } from "./ast";
 
 export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
 export type MP =
@@ -128,8 +128,8 @@ const toMP: (p: Pattern) => MP = (p: Pattern) =>
     .with({ _tag: "PCtor" }, ({ ctor: name, args }) => MCtor(name, map(toMP, args)))
     .with({ _tag: "PRecord" }, ({ fields }) =>
       MRecord(
-        map((f: { label: string; pat: Pattern }) => f.label, fields),
-        map((f: { pat: Pattern; label: string }) => toMP(f.pat), fields),
+        map((f: PatField) => f.label, fields),
+        map((f: PatField) => toMP(f.pat), fields),
       ),
     )
     .with({ _tag: "PArr" }, ({ elems, rest }) => MArr(map(toMP, elems), _Option_isSome(rest)))

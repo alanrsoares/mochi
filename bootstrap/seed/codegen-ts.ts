@@ -1,5 +1,6 @@
-import type { Expr, LamParam, Stmt, TypeExpr } from "./ast";
-import type { Row, Ty } from "./types";
+import type { Ctor, Expr, LamParam, Span, Stmt, TypeExpr } from "./ast";
+import type { Row, St, Ty } from "./types";
+import type { CtorFactoryTs, GenOpts, ParamAnnots } from "./codegen";
 
 export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
 export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
@@ -31,10 +32,12 @@ import {
   _Set_add,
   _Set_fromArray,
   _Map_set,
+  _Map_delete,
   _Map_size,
   _Map_keys,
   _Map_values,
   _Map_get,
+  _Option_map,
   _Option_flatMap,
   _Option_unwrapOr,
   _Option_isSome,
@@ -49,6 +52,7 @@ import {
   _Array_sort,
   _Array_sortBy,
   _Array_dedupeBy,
+  _Str_split,
   _Str_join,
   _Str_contains,
   _Str_startsWith,
@@ -78,7 +82,7 @@ import { typeExprToType, collect, emptyVarSets } from "./schemes";
 import { builtinTypeDecls, keysOf } from "./ctors";
 import { codegenWith, jsGenOpts, runtimeDepNames } from "./codegen";
 import { inferProgramTypes, exprSpan } from "./infer";
-import { genericNames, letterAt, tsOf } from "./ts-types";
+import { genericNames, letterAt, rowShapeKey, tsOf } from "./ts-types";
 const paramVarsFrom: <A>(params: A[], i: number) => Map<A, Ty> = _curry(
   2,
   <A>(params: A[], i: number) =>
@@ -116,8 +120,9 @@ const fieldTs: <A, B>(
       fields: ({ name: string; fieldType: TypeExpr } & A)[];
     } & B
   >,
+  recs: Map<string, string>,
 ) => string = _curry(
-  3,
+  4,
   <A, B>(
     te: TypeExpr,
     params: string[],
@@ -129,19 +134,11 @@ const fieldTs: <A, B>(
         fields: ({ name: string; fieldType: TypeExpr } & A)[];
       } & B
     >,
+    recs: Map<string, string>,
   ) => {
     const vars: Map<string, Ty> = paramVarsFrom(params, 0);
     const names: Map<number, string> = paramNamesFrom(params, 0);
-    return (([t, _vars, _st]: [
-      Ty,
-      Map<string, Ty>,
-      {
-        next: number;
-        tv: Map<number, Ty>;
-        rv: Map<number, Row>;
-        recorded: { span: { start: number; end: number }; ty: Ty }[];
-      },
-    ]) => tsOf(t, names))(
+    return (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) => tsOf(t, names, recs))(
       typeExprToType(te, vars, mkSt(length(params)), aliases, _Set_fromArray([] as string[])),
     );
   },
@@ -158,9 +155,10 @@ const ctorFieldsFrom: <A, B, C>(
       fields: ({ name: string; fieldType: TypeExpr } & B)[];
     } & C
   >,
+  recs: Map<string, string>,
   i: number,
 ) => string[] = _curry(
-  5,
+  6,
   <A, B, C>(
     fields: ({ fieldType: TypeExpr } & A)[],
     keys: string[],
@@ -173,14 +171,15 @@ const ctorFieldsFrom: <A, B, C>(
         fields: ({ name: string; fieldType: TypeExpr } & B)[];
       } & C
     >,
+    recs: Map<string, string>,
     i: number,
   ) =>
     match(_Array_get(i, fields))
       .with({ _tag: "None" }, () => [] as string[])
       .with({ _tag: "Some" }, ({ value: fld }) =>
         _Array_prepend(
-          `${_Option_unwrapOr(`_${show(i)}`, _Array_get(i, keys))}: ${fieldTs(fld.fieldType, params, aliases)}`,
-          ctorFieldsFrom(fields, keys, params, aliases, add(i, 1)),
+          `${_Option_unwrapOr(`_${show(i)}`, _Array_get(i, keys))}: ${fieldTs(fld.fieldType, params, aliases, recs)}`,
+          ctorFieldsFrom(fields, keys, params, aliases, recs, add(i, 1)),
         ),
       )
       .exhaustive(),
@@ -196,8 +195,9 @@ const ctorVariant: <A, B, C, D>(
       fields: ({ name: string; fieldType: TypeExpr } & C)[];
     } & D
   >,
+  recs: Map<string, string>,
 ) => string = _curry(
-  3,
+  4,
   <A, B, C, D>(
     c: { fields: ({ fieldType: TypeExpr; name: Option<string> } & A)[]; name: string } & B,
     params: string[],
@@ -209,8 +209,9 @@ const ctorVariant: <A, B, C, D>(
         fields: ({ name: string; fieldType: TypeExpr } & C)[];
       } & D
     >,
+    recs: Map<string, string>,
   ) => {
-    const fields: string[] = ctorFieldsFrom(c.fields, keysOf(c.fields), params, aliases, 0);
+    const fields: string[] = ctorFieldsFrom(c.fields, keysOf(c.fields), params, aliases, recs, 0);
     return eq(length(fields), 0)
       ? `{ _tag: "${c.name}" }`
       : `{ _tag: "${c.name}"; ${_Str_join("; ", fields)} }`;
@@ -227,9 +228,10 @@ const ctorVariantsFrom: <A, B, C, D>(
       fields: ({ name: string; fieldType: TypeExpr } & C)[];
     } & D
   >,
+  recs: Map<string, string>,
   i: number,
 ) => string[] = _curry(
-  4,
+  5,
   <A, B, C, D>(
     ctors: ({ fields: ({ fieldType: TypeExpr; name: Option<string> } & A)[]; name: string } & B)[],
     params: string[],
@@ -241,14 +243,15 @@ const ctorVariantsFrom: <A, B, C, D>(
         fields: ({ name: string; fieldType: TypeExpr } & C)[];
       } & D
     >,
+    recs: Map<string, string>,
     i: number,
   ) =>
     match(_Array_get(i, ctors))
       .with({ _tag: "None" }, () => [] as string[])
       .with({ _tag: "Some" }, ({ value: c }) =>
         _Array_prepend(
-          `  | ${ctorVariant(c, params, aliases)}`,
-          ctorVariantsFrom(ctors, params, aliases, add(i, 1)),
+          `  | ${ctorVariant(c, params, aliases, recs)}`,
+          ctorVariantsFrom(ctors, params, aliases, recs, add(i, 1)),
         ),
       )
       .exhaustive(),
@@ -265,8 +268,9 @@ export const typeDecl: <A, B, C, D>(
       fields: ({ name: string; fieldType: TypeExpr } & C)[];
     } & D
   >,
+  recs: Map<string, string>,
 ) => string = _curry(
-  4,
+  5,
   <A, B, C, D>(
     name: string,
     params: string[],
@@ -279,10 +283,11 @@ export const typeDecl: <A, B, C, D>(
         fields: ({ name: string; fieldType: TypeExpr } & C)[];
       } & D
     >,
+    recs: Map<string, string>,
   ) => {
     const head: string = `${name}${genericHead(params, 0, [] as string[])}`;
     return `export type ${head} =
-${_Str_join("\n", ctorVariantsFrom(ctors, params, aliases, 0))};`;
+${_Str_join("\n", ctorVariantsFrom(ctors, params, aliases, recs, 0))};`;
   },
 );
 const aliasFieldsFrom: <A, B, C>(
@@ -296,9 +301,10 @@ const aliasFieldsFrom: <A, B, C>(
       fields: ({ name: string; fieldType: TypeExpr } & B)[];
     } & C
   >,
+  recs: Map<string, string>,
   i: number,
 ) => string[] = _curry(
-  4,
+  5,
   <A, B, C>(
     fields: ({ name: string; fieldType: TypeExpr } & A)[],
     params: string[],
@@ -310,14 +316,15 @@ const aliasFieldsFrom: <A, B, C>(
         fields: ({ name: string; fieldType: TypeExpr } & B)[];
       } & C
     >,
+    recs: Map<string, string>,
     i: number,
   ) =>
     match(_Array_get(i, fields))
       .with({ _tag: "None" }, () => [] as string[])
       .with({ _tag: "Some" }, ({ value: f }) =>
         _Array_prepend(
-          `${f.name}: ${fieldTs(f.fieldType, params, aliases)}`,
-          aliasFieldsFrom(fields, params, aliases, add(i, 1)),
+          `${f.name}: ${fieldTs(f.fieldType, params, aliases, recs)}`,
+          aliasFieldsFrom(fields, params, aliases, recs, add(i, 1)),
         ),
       )
       .exhaustive(),
@@ -334,8 +341,9 @@ export const recordAliasDecl: <A, B, C>(
       fields: ({ name: string; fieldType: TypeExpr } & B)[];
     } & C
   >,
+  recs: Map<string, string>,
 ) => string = _curry(
-  4,
+  5,
   <A, B, C>(
     name: string,
     params: string[],
@@ -348,9 +356,10 @@ export const recordAliasDecl: <A, B, C>(
         fields: ({ name: string; fieldType: TypeExpr } & B)[];
       } & C
     >,
+    recs: Map<string, string>,
   ) => {
     const head: string = `${name}${genericHead(params, 0, [] as string[])}`;
-    const body: string[] = aliasFieldsFrom(fields, params, aliases, 0);
+    const body: string[] = aliasFieldsFrom(fields, params, aliases, recs, 0);
     return eq(length(body), 0)
       ? `export type ${head} = {};`
       : `export type ${head} = { ${_Str_join("; ", body)} };`;
@@ -368,8 +377,9 @@ export const aliasTsDecl: <A, B>(
       fields: ({ name: string; fieldType: TypeExpr } & A)[];
     } & B
   >,
+  recs: Map<string, string>,
 ) => string = _curry(
-  4,
+  5,
   <A, B>(
     name: string,
     params: string[],
@@ -382,9 +392,10 @@ export const aliasTsDecl: <A, B>(
         fields: ({ name: string; fieldType: TypeExpr } & A)[];
       } & B
     >,
+    recs: Map<string, string>,
   ) => {
     const head: string = `${name}${genericHead(params, 0, [] as string[])}`;
-    return `export type ${head} = ${fieldTs(template, params, aliases)};`;
+    return `export type ${head} = ${fieldTs(template, params, aliases, recs)};`;
   },
 );
 export const opaqueTypeDecl: (name: string) => string = (
@@ -466,94 +477,308 @@ const allVarsInRow: <A>(row: Row, names: Map<number, A>) => boolean = _curry(
 );
 const isConcrete: (t: Ty) => boolean = (t: Ty) => allVarsIn(t, new Map([]));
 export const emptyCollTs: {
-  (t: Ty): (names: Map<number, string>) => Option<string>;
-  (t: Ty, names: Map<number, string>): Option<string>;
-} = _curry(2, (t: Ty, names: Map<number, string>) =>
-  allVarsIn(t, names) ? (Some(tsOf(t, names)) as Option<string>) : (None as Option<string>),
+  (t: Ty): (names: Map<number, string>) => (recs: Map<string, string>) => Option<string>;
+  (t: Ty): (names: Map<number, string>, recs: Map<string, string>) => Option<string>;
+  (t: Ty, names: Map<number, string>): (recs: Map<string, string>) => Option<string>;
+  (t: Ty, names: Map<number, string>, recs: Map<string, string>): Option<string>;
+} = _curry(3, (t: Ty, names: Map<number, string>, recs: Map<string, string>) =>
+  allVarsIn(t, names) ? (Some(tsOf(t, names, recs)) as Option<string>) : (None as Option<string>),
 );
-export const ctorCallTs: (t: Ty) => Option<string> = (t: Ty) =>
+export const ctorCallTs: {
+  (t: Ty): (recs: Map<string, string>) => Option<string>;
+  (t: Ty, recs: Map<string, string>): Option<string>;
+} = _curry(2, (t: Ty, recs: Map<string, string>) =>
   match(t)
     .with({ _tag: "TyCon" }, ({ args }) =>
       or(eq(length(args), 0), not(isConcrete(t)))
         ? (None as Option<string>)
-        : (Some(tsOf(t, new Map<number, string>())) as Option<string>),
+        : (Some(tsOf(t, new Map<number, string>(), recs)) as Option<string>),
     )
-    .otherwise(() => None as Option<string>);
-export const guardParamTs: (t: Ty) => Option<string> = (t: Ty) =>
+    .otherwise(() => None as Option<string>),
+);
+export const guardParamTs: {
+  (t: Ty): (recs: Map<string, string>) => Option<string>;
+  (t: Ty, recs: Map<string, string>): Option<string>;
+} = _curry(2, (t: Ty, recs: Map<string, string>) =>
   isConcrete(t)
-    ? (Some(tsOf(t, new Map<number, string>())) as Option<string>)
-    : (None as Option<string>);
+    ? (Some(tsOf(t, new Map<number, string>(), recs)) as Option<string>)
+    : (None as Option<string>),
+);
 const lambdaParamsFrom: {
-  (t: Ty): (arity: number) => (names: Map<number, string>) => (i: number) => Option<string>[];
-  (t: Ty): (arity: number) => (names: Map<number, string>, i: number) => Option<string>[];
-  (t: Ty): (arity: number, names: Map<number, string>) => (i: number) => Option<string>[];
-  (t: Ty, arity: number): (names: Map<number, string>) => (i: number) => Option<string>[];
-  (t: Ty): (arity: number, names: Map<number, string>, i: number) => Option<string>[];
-  (t: Ty, arity: number): (names: Map<number, string>, i: number) => Option<string>[];
-  (t: Ty, arity: number, names: Map<number, string>): (i: number) => Option<string>[];
-  (t: Ty, arity: number, names: Map<number, string>, i: number): Option<string>[];
-} = _curry(4, (t: Ty, arity: number, names: Map<number, string>, i: number) =>
-  gte(i, arity)
-    ? ([] as Option<string>[])
-    : match(t)
-        .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
-          _Array_prepend(
-            allVarsIn(fromT, names)
-              ? (Some(tsOf(fromT, names)) as Option<string>)
-              : isConcrete(fromT)
-                ? (Some(tsOf(fromT, new Map<number, string>())) as Option<string>)
-                : (None as Option<string>),
-            lambdaParamsFrom(toT, arity, names, add(i, 1)),
+  (
+    t: Ty,
+  ): (
+    arity: number,
+  ) => (
+    names: Map<number, string>,
+  ) => (recs: Map<string, string>) => (i: number) => Option<string>[];
+  (
+    t: Ty,
+  ): (
+    arity: number,
+  ) => (names: Map<number, string>) => (recs: Map<string, string>, i: number) => Option<string>[];
+  (
+    t: Ty,
+  ): (
+    arity: number,
+  ) => (names: Map<number, string>, recs: Map<string, string>) => (i: number) => Option<string>[];
+  (
+    t: Ty,
+  ): (
+    arity: number,
+    names: Map<number, string>,
+  ) => (recs: Map<string, string>) => (i: number) => Option<string>[];
+  (
+    t: Ty,
+    arity: number,
+  ): (names: Map<number, string>) => (recs: Map<string, string>) => (i: number) => Option<string>[];
+  (
+    t: Ty,
+  ): (
+    arity: number,
+  ) => (names: Map<number, string>, recs: Map<string, string>, i: number) => Option<string>[];
+  (
+    t: Ty,
+  ): (
+    arity: number,
+    names: Map<number, string>,
+  ) => (recs: Map<string, string>, i: number) => Option<string>[];
+  (
+    t: Ty,
+  ): (
+    arity: number,
+    names: Map<number, string>,
+    recs: Map<string, string>,
+  ) => (i: number) => Option<string>[];
+  (
+    t: Ty,
+    arity: number,
+  ): (names: Map<number, string>) => (recs: Map<string, string>, i: number) => Option<string>[];
+  (
+    t: Ty,
+    arity: number,
+  ): (names: Map<number, string>, recs: Map<string, string>) => (i: number) => Option<string>[];
+  (
+    t: Ty,
+    arity: number,
+    names: Map<number, string>,
+  ): (recs: Map<string, string>) => (i: number) => Option<string>[];
+  (
+    t: Ty,
+  ): (
+    arity: number,
+    names: Map<number, string>,
+    recs: Map<string, string>,
+    i: number,
+  ) => Option<string>[];
+  (
+    t: Ty,
+    arity: number,
+  ): (names: Map<number, string>, recs: Map<string, string>, i: number) => Option<string>[];
+  (
+    t: Ty,
+    arity: number,
+    names: Map<number, string>,
+  ): (recs: Map<string, string>, i: number) => Option<string>[];
+  (
+    t: Ty,
+    arity: number,
+    names: Map<number, string>,
+    recs: Map<string, string>,
+  ): (i: number) => Option<string>[];
+  (
+    t: Ty,
+    arity: number,
+    names: Map<number, string>,
+    recs: Map<string, string>,
+    i: number,
+  ): Option<string>[];
+} = _curry(
+  5,
+  (t: Ty, arity: number, names: Map<number, string>, recs: Map<string, string>, i: number) =>
+    gte(i, arity)
+      ? ([] as Option<string>[])
+      : match(t)
+          .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
+            _Array_prepend(
+              allVarsIn(fromT, names)
+                ? (Some(tsOf(fromT, names, recs)) as Option<string>)
+                : isConcrete(fromT)
+                  ? (Some(tsOf(fromT, new Map<number, string>(), recs)) as Option<string>)
+                  : (None as Option<string>),
+              lambdaParamsFrom(toT, arity, names, recs, add(i, 1)),
+            ),
+          )
+          .otherwise(() =>
+            _Array_prepend(
+              None as Option<string>,
+              lambdaParamsFrom(t, arity, names, recs, add(i, 1)),
+            ),
           ),
-        )
-        .otherwise(() =>
-          _Array_prepend(None as Option<string>, lambdaParamsFrom(t, arity, names, add(i, 1))),
-        ),
 );
 export const lambdaParamTypesTs: {
-  (lamType: Ty): (arity: number) => (names: Map<number, string>) => Option<string>[];
-  (lamType: Ty): (arity: number, names: Map<number, string>) => Option<string>[];
-  (lamType: Ty, arity: number): (names: Map<number, string>) => Option<string>[];
-  (lamType: Ty, arity: number, names: Map<number, string>): Option<string>[];
-} = _curry(3, (lamType: Ty, arity: number, names: Map<number, string>) =>
-  lambdaParamsFrom(lamType, arity, names, 0),
+  (
+    lamType: Ty,
+  ): (
+    arity: number,
+  ) => (names: Map<number, string>) => (recs: Map<string, string>) => Option<string>[];
+  (
+    lamType: Ty,
+  ): (arity: number) => (names: Map<number, string>, recs: Map<string, string>) => Option<string>[];
+  (
+    lamType: Ty,
+  ): (arity: number, names: Map<number, string>) => (recs: Map<string, string>) => Option<string>[];
+  (
+    lamType: Ty,
+    arity: number,
+  ): (names: Map<number, string>) => (recs: Map<string, string>) => Option<string>[];
+  (
+    lamType: Ty,
+  ): (arity: number, names: Map<number, string>, recs: Map<string, string>) => Option<string>[];
+  (
+    lamType: Ty,
+    arity: number,
+  ): (names: Map<number, string>, recs: Map<string, string>) => Option<string>[];
+  (
+    lamType: Ty,
+    arity: number,
+    names: Map<number, string>,
+  ): (recs: Map<string, string>) => Option<string>[];
+  (
+    lamType: Ty,
+    arity: number,
+    names: Map<number, string>,
+    recs: Map<string, string>,
+  ): Option<string>[];
+} = _curry(4, (lamType: Ty, arity: number, names: Map<number, string>, recs: Map<string, string>) =>
+  lambdaParamsFrom(lamType, arity, names, recs, 0),
 );
 const genericParamsFrom: {
-  (t: Ty): (arity: number) => (names: Map<number, string>) => (i: number) => Option<string>[];
-  (t: Ty): (arity: number) => (names: Map<number, string>, i: number) => Option<string>[];
-  (t: Ty): (arity: number, names: Map<number, string>) => (i: number) => Option<string>[];
-  (t: Ty, arity: number): (names: Map<number, string>) => (i: number) => Option<string>[];
-  (t: Ty): (arity: number, names: Map<number, string>, i: number) => Option<string>[];
-  (t: Ty, arity: number): (names: Map<number, string>, i: number) => Option<string>[];
-  (t: Ty, arity: number, names: Map<number, string>): (i: number) => Option<string>[];
-  (t: Ty, arity: number, names: Map<number, string>, i: number): Option<string>[];
-} = _curry(4, (t: Ty, arity: number, names: Map<number, string>, i: number) =>
-  gte(i, arity)
-    ? ([] as Option<string>[])
-    : match(t)
-        .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
-          _Array_prepend(
-            Some(tsOf(fromT, names)) as Option<string>,
-            genericParamsFrom(toT, arity, names, add(i, 1)),
+  (
+    t: Ty,
+  ): (
+    arity: number,
+  ) => (
+    names: Map<number, string>,
+  ) => (recs: Map<string, string>) => (i: number) => Option<string>[];
+  (
+    t: Ty,
+  ): (
+    arity: number,
+  ) => (names: Map<number, string>) => (recs: Map<string, string>, i: number) => Option<string>[];
+  (
+    t: Ty,
+  ): (
+    arity: number,
+  ) => (names: Map<number, string>, recs: Map<string, string>) => (i: number) => Option<string>[];
+  (
+    t: Ty,
+  ): (
+    arity: number,
+    names: Map<number, string>,
+  ) => (recs: Map<string, string>) => (i: number) => Option<string>[];
+  (
+    t: Ty,
+    arity: number,
+  ): (names: Map<number, string>) => (recs: Map<string, string>) => (i: number) => Option<string>[];
+  (
+    t: Ty,
+  ): (
+    arity: number,
+  ) => (names: Map<number, string>, recs: Map<string, string>, i: number) => Option<string>[];
+  (
+    t: Ty,
+  ): (
+    arity: number,
+    names: Map<number, string>,
+  ) => (recs: Map<string, string>, i: number) => Option<string>[];
+  (
+    t: Ty,
+  ): (
+    arity: number,
+    names: Map<number, string>,
+    recs: Map<string, string>,
+  ) => (i: number) => Option<string>[];
+  (
+    t: Ty,
+    arity: number,
+  ): (names: Map<number, string>) => (recs: Map<string, string>, i: number) => Option<string>[];
+  (
+    t: Ty,
+    arity: number,
+  ): (names: Map<number, string>, recs: Map<string, string>) => (i: number) => Option<string>[];
+  (
+    t: Ty,
+    arity: number,
+    names: Map<number, string>,
+  ): (recs: Map<string, string>) => (i: number) => Option<string>[];
+  (
+    t: Ty,
+  ): (
+    arity: number,
+    names: Map<number, string>,
+    recs: Map<string, string>,
+    i: number,
+  ) => Option<string>[];
+  (
+    t: Ty,
+    arity: number,
+  ): (names: Map<number, string>, recs: Map<string, string>, i: number) => Option<string>[];
+  (
+    t: Ty,
+    arity: number,
+    names: Map<number, string>,
+  ): (recs: Map<string, string>, i: number) => Option<string>[];
+  (
+    t: Ty,
+    arity: number,
+    names: Map<number, string>,
+    recs: Map<string, string>,
+  ): (i: number) => Option<string>[];
+  (
+    t: Ty,
+    arity: number,
+    names: Map<number, string>,
+    recs: Map<string, string>,
+    i: number,
+  ): Option<string>[];
+} = _curry(
+  5,
+  (t: Ty, arity: number, names: Map<number, string>, recs: Map<string, string>, i: number) =>
+    gte(i, arity)
+      ? ([] as Option<string>[])
+      : match(t)
+          .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
+            _Array_prepend(
+              Some(tsOf(fromT, names, recs)) as Option<string>,
+              genericParamsFrom(toT, arity, names, recs, add(i, 1)),
+            ),
+          )
+          .otherwise(() =>
+            _Array_prepend(
+              None as Option<string>,
+              genericParamsFrom(t, arity, names, recs, add(i, 1)),
+            ),
           ),
-        )
-        .otherwise(() =>
-          _Array_prepend(None as Option<string>, genericParamsFrom(t, arity, names, add(i, 1))),
-        ),
 );
 export const genericLambdaParams: <A>(
   sc: { vars: number[]; rvars: number[]; ty: Ty } & A,
   arity: number,
-) => Option<{ generics: string; params: Option<string>[] }> = _curry(
-  2,
-  <A>(sc: { vars: number[]; rvars: number[]; ty: Ty } & A, arity: number) => {
+  recs: Map<string, string>,
+) => Option<ParamAnnots> = _curry(
+  3,
+  <A>(
+    sc: { vars: number[]; rvars: number[]; ty: Ty } & A,
+    arity: number,
+    recs: Map<string, string>,
+  ) => {
     const names: Map<number, string> = genericNames(sc);
     return eq(_Map_size(names), 0)
-      ? (None as Option<{ generics: string; params: Option<string>[] }>)
+      ? (None as Option<ParamAnnots>)
       : (Some({
           generics: `<${_Str_join(", ", _Map_values(names))}>`,
-          params: genericParamsFrom(sc.ty, arity, names, 0),
-        }) as Option<{ generics: string; params: Option<string>[] }>);
+          params: genericParamsFrom(sc.ty, arity, names, recs, 0),
+        }) as Option<ParamAnnots>);
   },
 );
 const neverArgs: <A>(params: A[], i: number, acc: string[]) => string[] = _curry(
@@ -575,9 +800,10 @@ const ctorParamTypes: <A, B, C>(
       fields: ({ name: string; fieldType: TypeExpr } & B)[];
     } & C
   >,
+  recs: Map<string, string>,
   i: number,
 ) => string[] = _curry(
-  4,
+  5,
   <A, B, C>(
     fields: ({ fieldType: TypeExpr } & A)[],
     params: string[],
@@ -589,14 +815,15 @@ const ctorParamTypes: <A, B, C>(
         fields: ({ name: string; fieldType: TypeExpr } & B)[];
       } & C
     >,
+    recs: Map<string, string>,
     i: number,
   ) =>
     match(_Array_get(i, fields))
       .with({ _tag: "None" }, () => [] as string[])
       .with({ _tag: "Some" }, ({ value: fld }) =>
         _Array_prepend(
-          fieldTs(fld.fieldType, params, aliases),
-          ctorParamTypes(fields, params, aliases, add(i, 1)),
+          fieldTs(fld.fieldType, params, aliases, recs),
+          ctorParamTypes(fields, params, aliases, recs, add(i, 1)),
         ),
       )
       .exhaustive(),
@@ -613,8 +840,9 @@ export const ctorFactoryTs: <A, B, C, D>(
       fields: ({ name: string; fieldType: TypeExpr } & C)[];
     } & D
   >,
-) => { generics: string; paramTypes: string[]; ret: string; retMono: string } = _curry(
-  4,
+  recs: Map<string, string>,
+) => CtorFactoryTs = _curry(
+  5,
   <A, B, C, D>(
     typeName: string,
     params: string[],
@@ -627,12 +855,13 @@ export const ctorFactoryTs: <A, B, C, D>(
         fields: ({ name: string; fieldType: TypeExpr } & C)[];
       } & D
     >,
+    recs: Map<string, string>,
   ) => {
     const head: string = genericHead(params, 0, [] as string[]);
     const monos: string[] = neverArgs(params, 0, [] as string[]);
     return {
       generics: head,
-      paramTypes: ctorParamTypes(c.fields, params, aliases, 0),
+      paramTypes: ctorParamTypes(c.fields, params, aliases, recs, 0),
       ret: `${typeName}${head}`,
       retMono: eq(length(monos), 0) ? typeName : `${typeName}<${_Str_join(", ", monos)}>`,
     };
@@ -718,88 +947,252 @@ const flatParamsFrom: {
     t: Ty,
   ): (
     value: Expr,
-  ) => (names: Map<number, string>) => (n: number) => (acc: string[]) => [string[], string];
+  ) => (
+    names: Map<number, string>,
+  ) => (recs: Map<string, string>) => (n: number) => (acc: string[]) => [string[], string];
   (
     t: Ty,
   ): (
     value: Expr,
-  ) => (names: Map<number, string>) => (n: number, acc: string[]) => [string[], string];
+  ) => (
+    names: Map<number, string>,
+  ) => (recs: Map<string, string>) => (n: number, acc: string[]) => [string[], string];
   (
     t: Ty,
   ): (
     value: Expr,
-  ) => (names: Map<number, string>, n: number) => (acc: string[]) => [string[], string];
+  ) => (
+    names: Map<number, string>,
+  ) => (recs: Map<string, string>, n: number) => (acc: string[]) => [string[], string];
+  (
+    t: Ty,
+  ): (
+    value: Expr,
+  ) => (
+    names: Map<number, string>,
+    recs: Map<string, string>,
+  ) => (n: number) => (acc: string[]) => [string[], string];
   (
     t: Ty,
   ): (
     value: Expr,
     names: Map<number, string>,
+  ) => (recs: Map<string, string>) => (n: number) => (acc: string[]) => [string[], string];
+  (
+    t: Ty,
+    value: Expr,
+  ): (
+    names: Map<number, string>,
+  ) => (recs: Map<string, string>) => (n: number) => (acc: string[]) => [string[], string];
+  (
+    t: Ty,
+  ): (
+    value: Expr,
+  ) => (
+    names: Map<number, string>,
+  ) => (recs: Map<string, string>, n: number, acc: string[]) => [string[], string];
+  (
+    t: Ty,
+  ): (
+    value: Expr,
+  ) => (
+    names: Map<number, string>,
+    recs: Map<string, string>,
+  ) => (n: number, acc: string[]) => [string[], string];
+  (
+    t: Ty,
+  ): (
+    value: Expr,
+  ) => (
+    names: Map<number, string>,
+    recs: Map<string, string>,
+    n: number,
+  ) => (acc: string[]) => [string[], string];
+  (
+    t: Ty,
+  ): (
+    value: Expr,
+    names: Map<number, string>,
+  ) => (recs: Map<string, string>) => (n: number, acc: string[]) => [string[], string];
+  (
+    t: Ty,
+  ): (
+    value: Expr,
+    names: Map<number, string>,
+  ) => (recs: Map<string, string>, n: number) => (acc: string[]) => [string[], string];
+  (
+    t: Ty,
+  ): (
+    value: Expr,
+    names: Map<number, string>,
+    recs: Map<string, string>,
   ) => (n: number) => (acc: string[]) => [string[], string];
   (
     t: Ty,
     value: Expr,
-  ): (names: Map<number, string>) => (n: number) => (acc: string[]) => [string[], string];
-  (
-    t: Ty,
-  ): (value: Expr) => (names: Map<number, string>, n: number, acc: string[]) => [string[], string];
-  (
-    t: Ty,
-  ): (value: Expr, names: Map<number, string>) => (n: number, acc: string[]) => [string[], string];
-  (
-    t: Ty,
-  ): (value: Expr, names: Map<number, string>, n: number) => (acc: string[]) => [string[], string];
+  ): (
+    names: Map<number, string>,
+  ) => (recs: Map<string, string>) => (n: number, acc: string[]) => [string[], string];
   (
     t: Ty,
     value: Expr,
-  ): (names: Map<number, string>) => (n: number, acc: string[]) => [string[], string];
+  ): (
+    names: Map<number, string>,
+  ) => (recs: Map<string, string>, n: number) => (acc: string[]) => [string[], string];
   (
     t: Ty,
     value: Expr,
-  ): (names: Map<number, string>, n: number) => (acc: string[]) => [string[], string];
+  ): (
+    names: Map<number, string>,
+    recs: Map<string, string>,
+  ) => (n: number) => (acc: string[]) => [string[], string];
   (
     t: Ty,
     value: Expr,
     names: Map<number, string>,
+  ): (recs: Map<string, string>) => (n: number) => (acc: string[]) => [string[], string];
+  (
+    t: Ty,
+  ): (
+    value: Expr,
+  ) => (
+    names: Map<number, string>,
+    recs: Map<string, string>,
+    n: number,
+    acc: string[],
+  ) => [string[], string];
+  (
+    t: Ty,
+  ): (
+    value: Expr,
+    names: Map<number, string>,
+  ) => (recs: Map<string, string>, n: number, acc: string[]) => [string[], string];
+  (
+    t: Ty,
+  ): (
+    value: Expr,
+    names: Map<number, string>,
+    recs: Map<string, string>,
+  ) => (n: number, acc: string[]) => [string[], string];
+  (
+    t: Ty,
+  ): (
+    value: Expr,
+    names: Map<number, string>,
+    recs: Map<string, string>,
+    n: number,
+  ) => (acc: string[]) => [string[], string];
+  (
+    t: Ty,
+    value: Expr,
+  ): (
+    names: Map<number, string>,
+  ) => (recs: Map<string, string>, n: number, acc: string[]) => [string[], string];
+  (
+    t: Ty,
+    value: Expr,
+  ): (
+    names: Map<number, string>,
+    recs: Map<string, string>,
+  ) => (n: number, acc: string[]) => [string[], string];
+  (
+    t: Ty,
+    value: Expr,
+  ): (
+    names: Map<number, string>,
+    recs: Map<string, string>,
+    n: number,
+  ) => (acc: string[]) => [string[], string];
+  (
+    t: Ty,
+    value: Expr,
+    names: Map<number, string>,
+  ): (recs: Map<string, string>) => (n: number, acc: string[]) => [string[], string];
+  (
+    t: Ty,
+    value: Expr,
+    names: Map<number, string>,
+  ): (recs: Map<string, string>, n: number) => (acc: string[]) => [string[], string];
+  (
+    t: Ty,
+    value: Expr,
+    names: Map<number, string>,
+    recs: Map<string, string>,
   ): (n: number) => (acc: string[]) => [string[], string];
   (
     t: Ty,
-  ): (value: Expr, names: Map<number, string>, n: number, acc: string[]) => [string[], string];
+  ): (
+    value: Expr,
+    names: Map<number, string>,
+    recs: Map<string, string>,
+    n: number,
+    acc: string[],
+  ) => [string[], string];
   (
     t: Ty,
     value: Expr,
-  ): (names: Map<number, string>, n: number, acc: string[]) => [string[], string];
+  ): (
+    names: Map<number, string>,
+    recs: Map<string, string>,
+    n: number,
+    acc: string[],
+  ) => [string[], string];
   (
     t: Ty,
     value: Expr,
     names: Map<number, string>,
+  ): (recs: Map<string, string>, n: number, acc: string[]) => [string[], string];
+  (
+    t: Ty,
+    value: Expr,
+    names: Map<number, string>,
+    recs: Map<string, string>,
   ): (n: number, acc: string[]) => [string[], string];
   (
     t: Ty,
     value: Expr,
     names: Map<number, string>,
+    recs: Map<string, string>,
     n: number,
   ): (acc: string[]) => [string[], string];
-  (t: Ty, value: Expr, names: Map<number, string>, n: number, acc: string[]): [string[], string];
-} = _curry(5, (t: Ty, value: Expr, names: Map<number, string>, n: number, acc: string[]) =>
-  match(value)
-    .with({ _tag: "ELambda" }, ({ params, body }) =>
-      eq(length(params), 0)
-        ? ((next: Ty) => flatParamsFrom(next, body, names, n, acc))(
-            match(t)
-              .with(
-                (_v): _v is Extract<Ty, { _tag: "TyFn" }> => {
-                  const _g: any = _v;
-                  return _g._tag === "TyFn" && (({ from: fromT, to: toT }) => isUnit(fromT))(_g);
-                },
-                ({ from: fromT, to: toT }) => toT,
-              )
-              .otherwise(() => t),
-          )
-        : (([t1, n1, acc1]: [Ty, number, string[]]) => flatParamsFrom(t1, body, names, n1, acc1))(
-            takeParams(t, params, names, 0, n, acc),
-          ),
-    )
-    .otherwise(() => _tuple(acc, tsOf(t, names))),
+  (
+    t: Ty,
+    value: Expr,
+    names: Map<number, string>,
+    recs: Map<string, string>,
+    n: number,
+    acc: string[],
+  ): [string[], string];
+} = _curry(
+  6,
+  (
+    t: Ty,
+    value: Expr,
+    names: Map<number, string>,
+    recs: Map<string, string>,
+    n: number,
+    acc: string[],
+  ) =>
+    match(value)
+      .with({ _tag: "ELambda" }, ({ params, body }) =>
+        eq(length(params), 0)
+          ? ((next: Ty) => flatParamsFrom(next, body, names, recs, n, acc))(
+              match(t)
+                .with(
+                  (_v): _v is Extract<Ty, { _tag: "TyFn" }> => {
+                    const _g: any = _v;
+                    return _g._tag === "TyFn" && (({ from: fromT, to: toT }) => isUnit(fromT))(_g);
+                  },
+                  ({ from: fromT, to: toT }) => toT,
+                )
+                .otherwise(() => t),
+            )
+          : (([t1, n1, acc1]: [Ty, number, string[]]) =>
+              flatParamsFrom(t1, body, names, recs, n1, acc1))(
+              takeParams(t, params, names, recs, 0, n, acc),
+            ),
+      )
+      .otherwise(() => _tuple(acc, tsOf(t, names, recs))),
 );
 const takeParams: {
   (
@@ -808,6 +1201,8 @@ const takeParams: {
     params: LamParam[],
   ) => (
     names: Map<number, string>,
+  ) => (
+    recs: Map<string, string>,
   ) => (i: number) => (n: number) => (acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
@@ -815,6 +1210,8 @@ const takeParams: {
     params: LamParam[],
   ) => (
     names: Map<number, string>,
+  ) => (
+    recs: Map<string, string>,
   ) => (i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
@@ -822,6 +1219,8 @@ const takeParams: {
     params: LamParam[],
   ) => (
     names: Map<number, string>,
+  ) => (
+    recs: Map<string, string>,
   ) => (i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
@@ -829,19 +1228,33 @@ const takeParams: {
     params: LamParam[],
   ) => (
     names: Map<number, string>,
+  ) => (
+    recs: Map<string, string>,
     i: number,
   ) => (n: number) => (acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
   ): (
     params: LamParam[],
+  ) => (
     names: Map<number, string>,
+    recs: Map<string, string>,
+  ) => (i: number) => (n: number) => (acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+  ): (
+    params: LamParam[],
+    names: Map<number, string>,
+  ) => (
+    recs: Map<string, string>,
   ) => (i: number) => (n: number) => (acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
     params: LamParam[],
   ): (
     names: Map<number, string>,
+  ) => (
+    recs: Map<string, string>,
   ) => (i: number) => (n: number) => (acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
@@ -849,6 +1262,8 @@ const takeParams: {
     params: LamParam[],
   ) => (
     names: Map<number, string>,
+  ) => (
+    recs: Map<string, string>,
   ) => (i: number, n: number, acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
@@ -856,6 +1271,8 @@ const takeParams: {
     params: LamParam[],
   ) => (
     names: Map<number, string>,
+  ) => (
+    recs: Map<string, string>,
     i: number,
   ) => (n: number, acc: string[]) => [Ty, number, string[]];
   (
@@ -864,6 +1281,138 @@ const takeParams: {
     params: LamParam[],
   ) => (
     names: Map<number, string>,
+  ) => (
+    recs: Map<string, string>,
+    i: number,
+    n: number,
+  ) => (acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+  ): (
+    params: LamParam[],
+  ) => (
+    names: Map<number, string>,
+    recs: Map<string, string>,
+  ) => (i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+  ): (
+    params: LamParam[],
+  ) => (
+    names: Map<number, string>,
+    recs: Map<string, string>,
+  ) => (i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+  ): (
+    params: LamParam[],
+  ) => (
+    names: Map<number, string>,
+    recs: Map<string, string>,
+    i: number,
+  ) => (n: number) => (acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+  ): (
+    params: LamParam[],
+    names: Map<number, string>,
+  ) => (
+    recs: Map<string, string>,
+  ) => (i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+  ): (
+    params: LamParam[],
+    names: Map<number, string>,
+  ) => (
+    recs: Map<string, string>,
+  ) => (i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+  ): (
+    params: LamParam[],
+    names: Map<number, string>,
+  ) => (
+    recs: Map<string, string>,
+    i: number,
+  ) => (n: number) => (acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+  ): (
+    params: LamParam[],
+    names: Map<number, string>,
+    recs: Map<string, string>,
+  ) => (i: number) => (n: number) => (acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+    params: LamParam[],
+  ): (
+    names: Map<number, string>,
+  ) => (
+    recs: Map<string, string>,
+  ) => (i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+    params: LamParam[],
+  ): (
+    names: Map<number, string>,
+  ) => (
+    recs: Map<string, string>,
+  ) => (i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+    params: LamParam[],
+  ): (
+    names: Map<number, string>,
+  ) => (
+    recs: Map<string, string>,
+    i: number,
+  ) => (n: number) => (acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+    params: LamParam[],
+  ): (
+    names: Map<number, string>,
+    recs: Map<string, string>,
+  ) => (i: number) => (n: number) => (acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+    params: LamParam[],
+    names: Map<number, string>,
+  ): (
+    recs: Map<string, string>,
+  ) => (i: number) => (n: number) => (acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+  ): (
+    params: LamParam[],
+  ) => (
+    names: Map<number, string>,
+  ) => (recs: Map<string, string>, i: number, n: number, acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+  ): (
+    params: LamParam[],
+  ) => (
+    names: Map<number, string>,
+    recs: Map<string, string>,
+  ) => (i: number, n: number, acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+  ): (
+    params: LamParam[],
+  ) => (
+    names: Map<number, string>,
+    recs: Map<string, string>,
+    i: number,
+  ) => (n: number, acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+  ): (
+    params: LamParam[],
+  ) => (
+    names: Map<number, string>,
+    recs: Map<string, string>,
     i: number,
     n: number,
   ) => (acc: string[]) => [Ty, number, string[]];
@@ -872,18 +1421,48 @@ const takeParams: {
   ): (
     params: LamParam[],
     names: Map<number, string>,
+  ) => (
+    recs: Map<string, string>,
+  ) => (i: number, n: number, acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+  ): (
+    params: LamParam[],
+    names: Map<number, string>,
+  ) => (
+    recs: Map<string, string>,
+    i: number,
+  ) => (n: number, acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+  ): (
+    params: LamParam[],
+    names: Map<number, string>,
+  ) => (
+    recs: Map<string, string>,
+    i: number,
+    n: number,
+  ) => (acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+  ): (
+    params: LamParam[],
+    names: Map<number, string>,
+    recs: Map<string, string>,
   ) => (i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
   ): (
     params: LamParam[],
     names: Map<number, string>,
+    recs: Map<string, string>,
   ) => (i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
   ): (
     params: LamParam[],
     names: Map<number, string>,
+    recs: Map<string, string>,
     i: number,
   ) => (n: number) => (acc: string[]) => [Ty, number, string[]];
   (
@@ -891,41 +1470,108 @@ const takeParams: {
     params: LamParam[],
   ): (
     names: Map<number, string>,
+  ) => (
+    recs: Map<string, string>,
+  ) => (i: number, n: number, acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+    params: LamParam[],
+  ): (
+    names: Map<number, string>,
+  ) => (
+    recs: Map<string, string>,
+    i: number,
+  ) => (n: number, acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+    params: LamParam[],
+  ): (
+    names: Map<number, string>,
+  ) => (
+    recs: Map<string, string>,
+    i: number,
+    n: number,
+  ) => (acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+    params: LamParam[],
+  ): (
+    names: Map<number, string>,
+    recs: Map<string, string>,
   ) => (i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
     params: LamParam[],
   ): (
     names: Map<number, string>,
+    recs: Map<string, string>,
   ) => (i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
     params: LamParam[],
   ): (
     names: Map<number, string>,
+    recs: Map<string, string>,
     i: number,
   ) => (n: number) => (acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
     params: LamParam[],
     names: Map<number, string>,
+  ): (
+    recs: Map<string, string>,
+  ) => (i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+    params: LamParam[],
+    names: Map<number, string>,
+  ): (
+    recs: Map<string, string>,
+  ) => (i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+    params: LamParam[],
+    names: Map<number, string>,
+  ): (
+    recs: Map<string, string>,
+    i: number,
+  ) => (n: number) => (acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+    params: LamParam[],
+    names: Map<number, string>,
+    recs: Map<string, string>,
   ): (i: number) => (n: number) => (acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
   ): (
     params: LamParam[],
-  ) => (names: Map<number, string>, i: number, n: number, acc: string[]) => [Ty, number, string[]];
+  ) => (
+    names: Map<number, string>,
+    recs: Map<string, string>,
+    i: number,
+    n: number,
+    acc: string[],
+  ) => [Ty, number, string[]];
   (
     t: Ty,
   ): (
     params: LamParam[],
     names: Map<number, string>,
+  ) => (recs: Map<string, string>, i: number, n: number, acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+  ): (
+    params: LamParam[],
+    names: Map<number, string>,
+    recs: Map<string, string>,
   ) => (i: number, n: number, acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
   ): (
     params: LamParam[],
     names: Map<number, string>,
+    recs: Map<string, string>,
     i: number,
   ) => (n: number, acc: string[]) => [Ty, number, string[]];
   (
@@ -933,6 +1579,7 @@ const takeParams: {
   ): (
     params: LamParam[],
     names: Map<number, string>,
+    recs: Map<string, string>,
     i: number,
     n: number,
   ) => (acc: string[]) => [Ty, number, string[]];
@@ -941,12 +1588,20 @@ const takeParams: {
     params: LamParam[],
   ): (
     names: Map<number, string>,
+  ) => (recs: Map<string, string>, i: number, n: number, acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+    params: LamParam[],
+  ): (
+    names: Map<number, string>,
+    recs: Map<string, string>,
   ) => (i: number, n: number, acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
     params: LamParam[],
   ): (
     names: Map<number, string>,
+    recs: Map<string, string>,
     i: number,
   ) => (n: number, acc: string[]) => [Ty, number, string[]];
   (
@@ -954,6 +1609,7 @@ const takeParams: {
     params: LamParam[],
   ): (
     names: Map<number, string>,
+    recs: Map<string, string>,
     i: number,
     n: number,
   ) => (acc: string[]) => [Ty, number, string[]];
@@ -961,16 +1617,34 @@ const takeParams: {
     t: Ty,
     params: LamParam[],
     names: Map<number, string>,
+  ): (recs: Map<string, string>) => (i: number, n: number, acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+    params: LamParam[],
+    names: Map<number, string>,
+  ): (recs: Map<string, string>, i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+    params: LamParam[],
+    names: Map<number, string>,
+  ): (recs: Map<string, string>, i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+    params: LamParam[],
+    names: Map<number, string>,
+    recs: Map<string, string>,
   ): (i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
     params: LamParam[],
     names: Map<number, string>,
+    recs: Map<string, string>,
   ): (i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
     params: LamParam[],
     names: Map<number, string>,
+    recs: Map<string, string>,
     i: number,
   ): (n: number) => (acc: string[]) => [Ty, number, string[]];
   (
@@ -978,6 +1652,7 @@ const takeParams: {
   ): (
     params: LamParam[],
     names: Map<number, string>,
+    recs: Map<string, string>,
     i: number,
     n: number,
     acc: string[],
@@ -985,22 +1660,36 @@ const takeParams: {
   (
     t: Ty,
     params: LamParam[],
-  ): (names: Map<number, string>, i: number, n: number, acc: string[]) => [Ty, number, string[]];
+  ): (
+    names: Map<number, string>,
+    recs: Map<string, string>,
+    i: number,
+    n: number,
+    acc: string[],
+  ) => [Ty, number, string[]];
   (
     t: Ty,
     params: LamParam[],
     names: Map<number, string>,
+  ): (recs: Map<string, string>, i: number, n: number, acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+    params: LamParam[],
+    names: Map<number, string>,
+    recs: Map<string, string>,
   ): (i: number, n: number, acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
     params: LamParam[],
     names: Map<number, string>,
+    recs: Map<string, string>,
     i: number,
   ): (n: number, acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
     params: LamParam[],
     names: Map<number, string>,
+    recs: Map<string, string>,
     i: number,
     n: number,
   ): (acc: string[]) => [Ty, number, string[]];
@@ -1008,13 +1697,22 @@ const takeParams: {
     t: Ty,
     params: LamParam[],
     names: Map<number, string>,
+    recs: Map<string, string>,
     i: number,
     n: number,
     acc: string[],
   ): [Ty, number, string[]];
 } = _curry(
-  6,
-  (t: Ty, params: LamParam[], names: Map<number, string>, i: number, n: number, acc: string[]) =>
+  7,
+  (
+    t: Ty,
+    params: LamParam[],
+    names: Map<number, string>,
+    recs: Map<string, string>,
+    i: number,
+    n: number,
+    acc: string[],
+  ) =>
     match(_Array_get(i, params))
       .with({ _tag: "None" }, () => _tuple(t, n, acc))
       .with({ _tag: "Some" }, ({ value: p }) =>
@@ -1024,9 +1722,10 @@ const takeParams: {
               toT,
               params,
               names,
+              recs,
               add(i, 1),
               add(n, 1),
-              _Array_append(`${paramDeclName(p, n)}: ${tsOf(fromT, names)}`, acc),
+              _Array_append(`${paramDeclName(p, n)}: ${tsOf(fromT, names, recs)}`, acc),
             ),
           )
           .otherwise(() => _tuple(t, n, acc)),
@@ -1034,15 +1733,19 @@ const takeParams: {
       .exhaustive(),
 );
 const declType: {
-  (t: Ty): (value: Expr) => (names: Map<number, string>) => string;
-  (t: Ty): (value: Expr, names: Map<number, string>) => string;
-  (t: Ty, value: Expr): (names: Map<number, string>) => string;
-  (t: Ty, value: Expr, names: Map<number, string>): string;
-} = _curry(3, (t: Ty, value: Expr, names: Map<number, string>) =>
+  (t: Ty): (value: Expr) => (names: Map<number, string>) => (recs: Map<string, string>) => string;
+  (t: Ty): (value: Expr) => (names: Map<number, string>, recs: Map<string, string>) => string;
+  (t: Ty): (value: Expr, names: Map<number, string>) => (recs: Map<string, string>) => string;
+  (t: Ty, value: Expr): (names: Map<number, string>) => (recs: Map<string, string>) => string;
+  (t: Ty): (value: Expr, names: Map<number, string>, recs: Map<string, string>) => string;
+  (t: Ty, value: Expr): (names: Map<number, string>, recs: Map<string, string>) => string;
+  (t: Ty, value: Expr, names: Map<number, string>): (recs: Map<string, string>) => string;
+  (t: Ty, value: Expr, names: Map<number, string>, recs: Map<string, string>): string;
+} = _curry(4, (t: Ty, value: Expr, names: Map<number, string>, recs: Map<string, string>) =>
   match(value)
     .with({ _tag: "ELambda" }, ({ params, body }) =>
       eq(length(params), 0)
-        ? ((next: Ty) => `() => ${declType(next, body, names)}`)(
+        ? ((next: Ty) => `() => ${declType(next, body, names, recs)}`)(
             match(t)
               .with(
                 (_v): _v is Extract<Ty, { _tag: "TyFn" }> => {
@@ -1054,28 +1757,36 @@ const declType: {
               .otherwise(() => t),
           )
         : (([t1, _n, ps]: [Ty, number, string[]]) =>
-            `(${_Str_join(", ", ps)}) => ${declType(t1, body, names)}`)(
-            takeParams(t, params, names, 0, 0, [] as string[]),
+            `(${_Str_join(", ", ps)}) => ${declType(t1, body, names, recs)}`)(
+            takeParams(t, params, names, recs, 0, 0, [] as string[]),
           ),
     )
-    .otherwise(() => tsOf(t, names)),
+    .otherwise(() => tsOf(t, names, recs)),
 );
 export const bindingTsType: <A>(
   sc: { vars: number[]; rvars: number[]; ty: Ty } & A,
   value: Expr,
-) => string = _curry(2, <A>(sc: { vars: number[]; rvars: number[]; ty: Ty } & A, value: Expr) => {
-  const names: Map<number, string> = genericNames(sc);
-  const head: string = eq(_Map_size(names), 0) ? "" : `<${_Str_join(", ", _Map_values(names))}>`;
-  return match(value)
-    .with({ _tag: "ELambda" }, () =>
-      eq(head, "")
-        ? (([params, ret]: [string[], string]) => curriedOverloads("", params, ret))(
-            flatParamsFrom(sc.ty, value, names, 0, [] as string[]),
-          )
-        : `${head}${declType(sc.ty, value, names)}`,
-    )
-    .otherwise(() => tsOf(sc.ty, new Map<number, string>()));
-});
+  recs: Map<string, string>,
+) => string = _curry(
+  3,
+  <A>(
+    sc: { vars: number[]; rvars: number[]; ty: Ty } & A,
+    value: Expr,
+    recs: Map<string, string>,
+  ) => {
+    const names: Map<number, string> = genericNames(sc);
+    const head: string = eq(_Map_size(names), 0) ? "" : `<${_Str_join(", ", _Map_values(names))}>`;
+    return match(value)
+      .with({ _tag: "ELambda" }, () =>
+        eq(head, "")
+          ? (([params, ret]: [string[], string]) => curriedOverloads("", params, ret))(
+              flatParamsFrom(sc.ty, value, names, recs, 0, [] as string[]),
+            )
+          : `${head}${declType(sc.ty, value, names, recs)}`,
+      )
+      .otherwise(() => tsOf(sc.ty, new Map<number, string>(), recs));
+  },
+);
 const spanKey: <A, B, C>(sp: { start: A; end: B } & C) => string = <A, B, C>(
   sp: { start: A; end: B } & C,
 ) => `${show(sp.start)}:${show(sp.end)}`;
@@ -1208,8 +1919,9 @@ const builtinDeclsFor: <A, B>(
       fields: ({ name: string; fieldType: TypeExpr } & A)[];
     } & B
   >,
+  recs: Map<string, string>,
 ) => string[] = _curry(
-  4,
+  5,
   <A, B>(
     declared: Set<string>,
     wanted: Set<string>,
@@ -1222,14 +1934,15 @@ const builtinDeclsFor: <A, B>(
         fields: ({ name: string; fieldType: TypeExpr } & A)[];
       } & B
     >,
+    recs: Map<string, string>,
   ) =>
     match(_Array_get(i, builtinTypeDecls))
       .with({ _tag: "None" }, () => [] as string[])
       .with({ _tag: "Some" }, ({ value: bt }) =>
         ((rest: string[]) =>
           and(_Set_has(bt.name, wanted), not(_Set_has(bt.name, declared)))
-            ? _Array_prepend(typeDecl(bt.name, bt.params, bt.ctors, aliases), rest)
-            : rest)(builtinDeclsFor(declared, wanted, add(i, 1), aliases)),
+            ? _Array_prepend(typeDecl(bt.name, bt.params, bt.ctors, aliases, recs), rest)
+            : rest)(builtinDeclsFor(declared, wanted, add(i, 1), aliases, recs)),
       )
       .exhaustive(),
 );
@@ -1245,8 +1958,9 @@ const builtinDeclsInBody: <A, B>(
       fields: ({ name: string; fieldType: TypeExpr } & A)[];
     } & B
   >,
+  recs: Map<string, string>,
 ) => string[] = _curry(
-  4,
+  5,
   <A, B>(
     body: string,
     header: string,
@@ -1259,14 +1973,223 @@ const builtinDeclsInBody: <A, B>(
         fields: ({ name: string; fieldType: TypeExpr } & A)[];
       } & B
     >,
+    recs: Map<string, string>,
   ) =>
     match(_Array_get(i, builtinTypeDecls))
       .with({ _tag: "None" }, () => [] as string[])
       .with({ _tag: "Some" }, ({ value: bt }) =>
         ((rest: string[]) =>
           and(not(_Str_contains(`type ${bt.name}`, header)), _Str_contains(bt.name, body))
-            ? _Array_prepend(typeDecl(bt.name, bt.params, bt.ctors, aliases), rest)
-            : rest)(builtinDeclsInBody(body, header, add(i, 1), aliases)),
+            ? _Array_prepend(typeDecl(bt.name, bt.params, bt.ctors, aliases, recs), rest)
+            : rest)(builtinDeclsInBody(body, header, add(i, 1), aliases, recs)),
+      )
+      .exhaustive(),
+);
+const aliasRowOf: <A, B, C>(
+  fields: ({ name: string; fieldType: TypeExpr } & A)[],
+  aliases: Map<
+    string,
+    {
+      expr: Option<TypeExpr>;
+      params: string[];
+      fields: ({ name: string; fieldType: TypeExpr } & B)[];
+    } & C
+  >,
+  i: number,
+) => Row = _curry(
+  3,
+  <A, B, C>(
+    fields: ({ name: string; fieldType: TypeExpr } & A)[],
+    aliases: Map<
+      string,
+      {
+        expr: Option<TypeExpr>;
+        params: string[];
+        fields: ({ name: string; fieldType: TypeExpr } & B)[];
+      } & C
+    >,
+    i: number,
+  ) =>
+    match(_Array_get(i, fields))
+      .with({ _tag: "None" }, () => RowEmpty as Row)
+      .with({ _tag: "Some" }, ({ value: f }) =>
+        (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) =>
+          RowExtend(f.name, t, aliasRowOf(fields, aliases, add(i, 1))))(
+          typeExprToType(
+            f.fieldType,
+            new Map<string, Ty>(),
+            mkSt(0),
+            aliases,
+            _Set_fromArray([] as string[]),
+          ),
+        ),
+      )
+      .exhaustive(),
+);
+const aliasShapeKey: <A, B, C>(
+  fields: ({ name: string; fieldType: TypeExpr } & A)[],
+  aliases: Map<
+    string,
+    {
+      expr: Option<TypeExpr>;
+      params: string[];
+      fields: ({ name: string; fieldType: TypeExpr } & B)[];
+    } & C
+  >,
+) => Option<string> = _curry(
+  2,
+  <A, B, C>(
+    fields: ({ name: string; fieldType: TypeExpr } & A)[],
+    aliases: Map<
+      string,
+      {
+        expr: Option<TypeExpr>;
+        params: string[];
+        fields: ({ name: string; fieldType: TypeExpr } & B)[];
+      } & C
+    >,
+  ) => rowShapeKey(aliasRowOf(fields, aliases, 0), new Map<number, string>()),
+);
+const bareName: (name: string) => string = (name: string) => {
+  const parts: string[] = _Str_split(".", name);
+  return _Option_unwrapOr(name, _Array_get(sub(length(parts), 1), parts));
+};
+const indexAlias: <A, B, C>(
+  key: string,
+  name: A,
+  aliases: Map<
+    string,
+    {
+      expr: Option<TypeExpr>;
+      params: string[];
+      fields: ({ name: string; fieldType: TypeExpr } & B)[];
+    } & C
+  >,
+  acc: Map<string, A>,
+) => Map<string, A> = _curry(
+  4,
+  <A, B, C>(
+    key: string,
+    name: A,
+    aliases: Map<
+      string,
+      {
+        expr: Option<TypeExpr>;
+        params: string[];
+        fields: ({ name: string; fieldType: TypeExpr } & B)[];
+      } & C
+    >,
+    acc: Map<string, A>,
+  ) =>
+    match(_Map_get(key, aliases))
+      .with({ _tag: "None" }, () => acc)
+      .with({ _tag: "Some" }, ({ value: info }) =>
+        match(info.expr)
+          .with({ _tag: "Some" }, () => acc)
+          .with({ _tag: "None" }, () =>
+            or(not(eq(length(info.params), 0)), eq(length(info.fields), 0))
+              ? acc
+              : match(aliasShapeKey(info.fields, aliases))
+                  .with({ _tag: "Some" }, ({ value: k }) => _Map_set(k, name, acc))
+                  .with({ _tag: "None" }, () => acc)
+                  .exhaustive(),
+          )
+          .exhaustive(),
+      )
+      .exhaustive(),
+);
+const recordAliasIndexFrom: <A, B>(
+  keys: string[],
+  aliases: Map<
+    string,
+    {
+      expr: Option<TypeExpr>;
+      params: string[];
+      fields: ({ name: string; fieldType: TypeExpr } & A)[];
+    } & B
+  >,
+  i: number,
+  acc: Map<string, string>,
+) => Map<string, string> = _curry(
+  4,
+  <A, B>(
+    keys: string[],
+    aliases: Map<
+      string,
+      {
+        expr: Option<TypeExpr>;
+        params: string[];
+        fields: ({ name: string; fieldType: TypeExpr } & A)[];
+      } & B
+    >,
+    i: number,
+    acc: Map<string, string>,
+  ) =>
+    match(_Array_get(i, keys))
+      .with({ _tag: "None" }, () => acc)
+      .with({ _tag: "Some" }, ({ value: key }) =>
+        recordAliasIndexFrom(
+          keys,
+          aliases,
+          add(i, 1),
+          indexAlias(key, bareName(key), aliases, acc),
+        ),
+      )
+      .exhaustive(),
+);
+export const recordAliasIndex: <A, B>(
+  aliases: Map<
+    string,
+    {
+      expr: Option<TypeExpr>;
+      params: string[];
+      fields: ({ name: string; fieldType: TypeExpr } & A)[];
+    } & B
+  >,
+) => Map<string, string> = <A, B>(
+  aliases: Map<
+    string,
+    {
+      expr: Option<TypeExpr>;
+      params: string[];
+      fields: ({ name: string; fieldType: TypeExpr } & A)[];
+    } & B
+  >,
+) => recordAliasIndexFrom(_Array_sort(_Map_keys(aliases)), aliases, 0, new Map<string, string>());
+const withoutOwnShape: <A, B, C, D, E>(
+  fields: ({ name: string; fieldType: TypeExpr } & C)[],
+  params: A[],
+  aliases: Map<
+    string,
+    {
+      expr: Option<TypeExpr>;
+      params: string[];
+      fields: ({ name: string; fieldType: TypeExpr } & D)[];
+    } & E
+  >,
+  recs: Map<string, B>,
+) => Map<string, B> = _curry(
+  4,
+  <A, B, C, D, E>(
+    fields: ({ name: string; fieldType: TypeExpr } & C)[],
+    params: A[],
+    aliases: Map<
+      string,
+      {
+        expr: Option<TypeExpr>;
+        params: string[];
+        fields: ({ name: string; fieldType: TypeExpr } & D)[];
+      } & E
+    >,
+    recs: Map<string, B>,
+  ) =>
+    match(_Array_get(0, params))
+      .with({ _tag: "Some" }, () => recs)
+      .with({ _tag: "None" }, () =>
+        match(aliasShapeKey(fields, aliases))
+          .with({ _tag: "Some" }, ({ value: k }) => _Map_delete(k, recs))
+          .with({ _tag: "None" }, () => recs)
+          .exhaustive(),
       )
       .exhaustive(),
 );
@@ -1280,9 +2203,10 @@ const typeHeaderFrom: <A, B>(
       fields: ({ name: string; fieldType: TypeExpr } & A)[];
     } & B
   >,
+  recs: Map<string, string>,
   i: number,
 ) => string[] = _curry(
-  3,
+  4,
   <A, B>(
     stmts: Stmt[],
     aliases: Map<
@@ -1293,6 +2217,7 @@ const typeHeaderFrom: <A, B>(
         fields: ({ name: string; fieldType: TypeExpr } & A)[];
       } & B
     >,
+    recs: Map<string, string>,
     i: number,
   ) =>
     match(_Array_get(i, stmts))
@@ -1310,23 +2235,32 @@ const typeHeaderFrom: <A, B>(
           ((rest: string[]) =>
             match(alias)
               .with({ _tag: "Some" }, ({ value: fields }) =>
-                _Array_prepend(recordAliasDecl(name, params, fields, aliases), rest),
+                _Array_prepend(
+                  recordAliasDecl(
+                    name,
+                    params,
+                    fields,
+                    aliases,
+                    withoutOwnShape(fields, params, aliases, recs),
+                  ),
+                  rest,
+                ),
               )
               .with({ _tag: "None" }, () =>
                 match(aliasType)
                   .with({ _tag: "Some" }, ({ value: te }) =>
-                    _Array_prepend(aliasTsDecl(name, params, te, aliases), rest),
+                    _Array_prepend(aliasTsDecl(name, params, te, aliases, recs), rest),
                   )
                   .with({ _tag: "None" }, () =>
                     eq(length(ctors), 0)
                       ? _Array_prepend(opaqueTypeDecl(name), rest)
-                      : _Array_prepend(typeDecl(name, params, ctors, aliases), rest),
+                      : _Array_prepend(typeDecl(name, params, ctors, aliases, recs), rest),
                   )
                   .exhaustive(),
               )
-              .exhaustive())(typeHeaderFrom(stmts, aliases, add(i, 1))),
+              .exhaustive())(typeHeaderFrom(stmts, aliases, recs, add(i, 1))),
       )
-      .with({ _tag: "Some" }, () => typeHeaderFrom(stmts, aliases, add(i, 1)))
+      .with({ _tag: "Some" }, () => typeHeaderFrom(stmts, aliases, recs, add(i, 1)))
       .exhaustive(),
 );
 const genericLambdasFrom: <A, B, C>(
@@ -1382,58 +2316,44 @@ const genericLambdasFrom: <A, B, C>(
       .with({ _tag: "Some" }, () => genericLambdasFrom(stmts, env, add(i, 1), acc))
       .exhaustive(),
 );
-export const tsGenOpts: <A, B, C, D, E, F, G>(
+export const tsGenOpts: <A, B, C, D, E, F, G, H, I, J, K>(
   stmts: Stmt[],
-  env: Map<string, { vars: number[]; rvars: number[]; ty: Ty } & C>,
-  types: ({ span: { start: A; end: B } & D; ty: Ty } & E)[],
+  env: Map<string, { vars: number[]; rvars: number[]; ty: Ty } & E>,
+  types: ({ span: { start: A; end: B } & F; ty: Ty } & G)[],
+  letParams: ({ span: { start: C; end: D } & H; ty: Ty } & I)[],
   aliases: Map<
     string,
     {
       expr: Option<TypeExpr>;
       params: string[];
-      fields: ({ name: string; fieldType: TypeExpr } & F)[];
-    } & G
+      fields: ({ name: string; fieldType: TypeExpr } & J)[];
+    } & K
   >,
-) => {
-  annotateLet: Option<(a: string, b: Expr) => Option<string>>;
-  annotateCtor: Option<
-    (
-      a: Stmt,
-      b: { name: string; fields: { name: Option<string>; fieldType: TypeExpr }[] },
-    ) => Option<{ generics: string; paramTypes: string[]; ret: string; retMono: string }>
-  >;
-  annotateParams: Option<
-    (a: { start: number; end: number }, b: number) => { generics: string; params: Option<string>[] }
-  >;
-  annotateEmpty: Option<(a: Expr) => Option<string>>;
-  annotateLetin: Option<(a: Expr) => Option<string>>;
-  annotateCall: Option<(a: Expr) => Option<string>>;
-  guardBaseType: Option<(a: Expr) => Option<string>>;
-  flattenPipe: boolean;
-  tupleHelper: boolean;
-  moduleExt: string;
-} = _curry(
-  4,
-  <A, B, C, D, E, F, G>(
+) => GenOpts = _curry(
+  5,
+  <A, B, C, D, E, F, G, H, I, J, K>(
     stmts: Stmt[],
-    env: Map<string, { vars: number[]; rvars: number[]; ty: Ty } & C>,
-    types: ({ span: { start: A; end: B } & D; ty: Ty } & E)[],
+    env: Map<string, { vars: number[]; rvars: number[]; ty: Ty } & E>,
+    types: ({ span: { start: A; end: B } & F; ty: Ty } & G)[],
+    letParams: ({ span: { start: C; end: D } & H; ty: Ty } & I)[],
     aliases: Map<
       string,
       {
         expr: Option<TypeExpr>;
         params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & F)[];
-      } & G
+        fields: ({ name: string; fieldType: TypeExpr } & J)[];
+      } & K
     >,
   ) => {
     const typeAt: Map<string, Ty> = typeAtTable(types);
+    const letParamAt: Map<string, Ty> = typeAtTable(letParams);
     const genericLams = genericLambdasFrom(
       stmts,
       env,
       0,
-      new Map<string, { vars: number[]; rvars: number[]; ty: Ty } & C>(),
+      new Map<string, { vars: number[]; rvars: number[]; ty: Ty } & E>(),
     );
+    const recs: Map<string, string> = recordAliasIndex(aliases);
     const typeOf: (a: Expr) => Option<Ty> = (e: Expr) => _Map_get(spanKey(exprSpan(e)), typeAt);
     return {
       ...jsGenOpts,
@@ -1446,97 +2366,88 @@ export const tsGenOpts: <A, B, C, D, E, F, G>(
                   match(_Map_get(name, env))
                     .with(
                       { _tag: "Some" },
-                      ({ value: sc }) => Some(`: ${bindingTsType(sc, value)}`) as Option<string>,
+                      ({ value: sc }) =>
+                        Some(`: ${bindingTsType(sc, value, recs)}`) as Option<string>,
                     )
                     .with({ _tag: "None" }, () => None as Option<string>)
                     .exhaustive(),
                 )
-                .otherwise(() => None as Option<string>),
+                .otherwise(() =>
+                  _Option_map(
+                    (ts: string) => `: ${ts}`,
+                    _Option_flatMap(
+                      (t: Ty) => emptyCollTs(t, new Map<number, string>(), recs),
+                      _Map_get(spanKey(exprSpan(value)), letParamAt),
+                    ),
+                  ),
+                ),
         ),
       ) as Option<(a: string, b: Expr) => Option<string>>,
       annotateCtor: Some(
-        _curry(
-          2,
-          (s: Stmt, c: { fields: { fieldType: TypeExpr; name: Option<string> }[]; name: string }) =>
-            match(s)
-              .with(
-                { _tag: "SType" },
-                ({ name, params }) =>
-                  Some(ctorFactoryTs(name, params, c, aliases)) as Option<{
-                    generics: string;
-                    paramTypes: string[];
-                    ret: string;
-                    retMono: string;
-                  }>,
-              )
-              .otherwise(
-                () =>
-                  None as Option<{
-                    generics: string;
-                    paramTypes: string[];
-                    ret: string;
-                    retMono: string;
-                  }>,
-              ),
+        _curry(2, (s: Stmt, c: Ctor) =>
+          match(s)
+            .with(
+              { _tag: "SType" },
+              ({ name, params }) =>
+                Some(ctorFactoryTs(name, params, c, aliases, recs)) as Option<CtorFactoryTs>,
+            )
+            .otherwise(() => None as Option<CtorFactoryTs>),
         ),
-      ) as Option<
-        (
-          a: Stmt,
-          b: { fields: { fieldType: TypeExpr; name: Option<string> }[]; name: string },
-        ) => Option<{ generics: string; paramTypes: string[]; ret: string; retMono: string }>
-      >,
+      ) as Option<(a: Stmt, b: Ctor) => Option<CtorFactoryTs>>,
       annotateParams: Some(
-        _curry(2, (sp: { start: number; end: number }, arity: number) =>
+        _curry(2, (sp: Span, arity: number) =>
           match(_Map_get(spanKey(sp), genericLams))
             .with({ _tag: "Some" }, ({ value: sc }) =>
               _Option_unwrapOr(
                 { generics: "", params: [] as Option<string>[] },
-                genericLambdaParams(sc, arity),
+                genericLambdaParams(sc, arity, recs),
               ),
             )
             .with({ _tag: "None" }, () => ({
               generics: "",
               params: match(_Map_get(spanKey(sp), typeAt))
                 .with({ _tag: "Some" }, ({ value: t }) =>
-                  lambdaParamTypesTs(t, arity, new Map<number, string>()),
+                  lambdaParamTypesTs(t, arity, new Map<number, string>(), recs),
                 )
                 .with({ _tag: "None" }, () => [] as Option<string>[])
                 .exhaustive(),
             }))
             .exhaustive(),
         ),
-      ) as Option<
-        (
-          a: { start: number; end: number },
-          b: number,
-        ) => { generics: string; params: Option<string>[] }
-      >,
+      ) as Option<(a: Span, b: number) => { generics: string; params: Option<string>[] }>,
       annotateEmpty: Some((e: Expr) =>
-        _Option_flatMap((t: Ty) => emptyCollTs(t, new Map<number, string>()), typeOf(e)),
+        _Option_flatMap((t: Ty) => emptyCollTs(t, new Map<number, string>(), recs), typeOf(e)),
       ) as Option<(a: Expr) => Option<string>>,
-      annotateCall: Some((e: Expr) => _Option_flatMap(ctorCallTs, typeOf(e))) as Option<
-        (a: Expr) => Option<string>
-      >,
-      guardBaseType: Some((e: Expr) => _Option_flatMap(guardParamTs, typeOf(e))) as Option<
-        (a: Expr) => Option<string>
-      >,
+      annotateLetin: Some((value: Expr) =>
+        _Option_flatMap(
+          (t: Ty) => emptyCollTs(t, new Map<number, string>(), recs),
+          _Map_get(spanKey(exprSpan(value)), letParamAt),
+        ),
+      ) as Option<(a: Expr) => Option<string>>,
+      annotateCall: Some((e: Expr) =>
+        _Option_flatMap((t: Ty) => ctorCallTs(t, recs), typeOf(e)),
+      ) as Option<(a: Expr) => Option<string>>,
+      guardBaseType: Some((e: Expr) =>
+        _Option_flatMap((t: Ty) => guardParamTs(t, recs), typeOf(e)),
+      ) as Option<(a: Expr) => Option<string>>,
       flattenPipe: true,
       tupleHelper: true,
       moduleExt: "",
     };
   },
 );
-export const emitTsModule: <A, B, C, D, E, F, G>(
+export const emitTsModule: <A, B, C, D, E, F, G, H, I, J, K>(
   stmts: Stmt[],
-  env: Map<string, { ty: Ty; vars: number[]; rvars: number[] } & C>,
-  types: ({ span: { start: A; end: B } & D; ty: Ty } & E)[],
+  env: Map<string, { ty: Ty; vars: number[]; rvars: number[] } & E>,
+  types: ({ span: { start: A; end: B } & F; ty: Ty } & G)[],
+  letParams: ({ span: { start: C; end: D } & H; ty: Ty } & I)[],
   aliases: Map<
     string,
     {
       expr: Option<TypeExpr>;
       params: string[];
-      fields: ({ name: string; fieldType: TypeExpr } & F)[];
-    } & G
+      fields: ({ name: string; fieldType: TypeExpr } & J)[];
+    } & K
   >,
   imported: Map<string, string[]>,
   importLines: string[],
@@ -1545,18 +2456,19 @@ export const emitTsModule: <A, B, C, D, E, F, G>(
   runtimeDeps: Map<string, string[]>,
   runtimeImport: string,
 ) => string = _curry(
-  10,
-  <A, B, C, D, E, F, G>(
+  11,
+  <A, B, C, D, E, F, G, H, I, J, K>(
     stmts: Stmt[],
-    env: Map<string, { ty: Ty; vars: number[]; rvars: number[] } & C>,
-    types: ({ span: { start: A; end: B } & D; ty: Ty } & E)[],
+    env: Map<string, { ty: Ty; vars: number[]; rvars: number[] } & E>,
+    types: ({ span: { start: A; end: B } & F; ty: Ty } & G)[],
+    letParams: ({ span: { start: C; end: D } & H; ty: Ty } & I)[],
     aliases: Map<
       string,
       {
         expr: Option<TypeExpr>;
         params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & F)[];
-      } & G
+        fields: ({ name: string; fieldType: TypeExpr } & J)[];
+      } & K
     >,
     imported: Map<string, string[]>,
     importLines: string[],
@@ -1567,9 +2479,10 @@ export const emitTsModule: <A, B, C, D, E, F, G>(
   ) => {
     const declared: Set<string> = declaredTypeNames(stmts, 0, _Set_fromArray([] as string[]));
     const wanted: Set<string> = referencedCons(stmts, env, 0, _Set_fromArray([] as string[]));
+    const recs: Map<string, string> = recordAliasIndex(aliases);
     const typeHeader: string[] = _Array_concat(
-      builtinDeclsFor(declared, wanted, 0, aliases),
-      typeHeaderFrom(stmts, aliases, 0),
+      builtinDeclsFor(declared, wanted, 0, aliases, recs),
+      typeHeaderFrom(stmts, aliases, recs, 0),
     );
     const body: string = codegenWith(
       stmts,
@@ -1578,7 +2491,7 @@ export const emitTsModule: <A, B, C, D, E, F, G>(
       ns,
       jsDefs,
       runtimeDeps,
-      tsGenOpts(stmts, env, types, aliases),
+      tsGenOpts(stmts, env, types, letParams, aliases),
     );
     const deps0: string[] = runtimeDepNames(stmts, imported, ns, jsDefs, runtimeDeps);
     const deps: string[] = _Str_contains("_tuple(", body) ? _Array_append("_tuple", deps0) : deps0;
@@ -1587,7 +2500,7 @@ export const emitTsModule: <A, B, C, D, E, F, G>(
       : `import { ${_Str_join(", ", _Array_sort(deps))} } from "${runtimeImport}";`;
     const headerText: string = _Str_join("\n", typeHeader);
     const header: string[] = _Array_concat(
-      builtinDeclsInBody(body, headerText, 0, aliases),
+      builtinDeclsInBody(body, headerText, 0, aliases, recs),
       typeHeader,
     );
     return concat(
@@ -1675,7 +2588,7 @@ const hostParams: {
     : match(t)
         .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
           _Array_prepend(
-            `${_Str_fromCode(add(97, i))}: ${tsOf(fromT, names)}`,
+            `${_Str_fromCode(add(97, i))}: ${tsOf(fromT, names, new Map<string, string>())}`,
             hostParams(toT, arity, names, add(i, 1)),
           ),
         )
@@ -1699,7 +2612,7 @@ const curriedHostType: { (t: Ty): (arity: number) => string; (t: Ty, arity: numb
     const names: Map<number, string> = lettersFor(ids, 0, new Map<number, string>());
     return `${genericHeadOf(ids, names)}${reduce(
       _curry(2, (acc: string, p: string) => `(${p}) => ${acc}`),
-      tsOf(hostReturn(t, arity, 0), names),
+      tsOf(hostReturn(t, arity, 0), names, new Map<string, string>()),
       _Array_reverse(hostParams(t, arity, names, 0)),
     )}`;
   });
@@ -1710,11 +2623,11 @@ const flatHostType: { (t: Ty): (arity: number) => string; (t: Ty, arity: number)
     const names: Map<number, string> = lettersFor(ids, 0, new Map<number, string>());
     const head: string = genericHeadOf(ids, names);
     return eq(arity, 0)
-      ? `${head}${tsOf(t, names)}`
+      ? `${head}${tsOf(t, names, new Map<string, string>())}`
       : curriedOverloads(
           head,
           hostParams(t, arity, names, 0),
-          tsOf(hostReturn(t, arity, 0), names),
+          tsOf(hostReturn(t, arity, 0), names, new Map<string, string>()),
         );
   },
 );
@@ -1726,7 +2639,7 @@ const externDecl: <A, B>(
   return and(gte(n, 1), e.curried)
     ? `export declare const ${e.imported}: ${curriedHostType(t, n)};`
     : eq(n, 0)
-      ? `export declare const ${e.imported}: ${tsOf(t, anyFor(freeIdsIn(t, [] as number[])))};`
+      ? `export declare const ${e.imported}: ${tsOf(t, anyFor(freeIdsIn(t, [] as number[])), new Map<string, string>())};`
       : `export declare const ${e.imported}: ${flatHostType(t, n)};`;
 };
 export const externModuleDts: <A, B, C, D>(
@@ -1766,17 +2679,10 @@ export const externModuleDts: <A, B, C, D>(
         "\n",
         _Array_concat(
           map(
-            (bt: {
-              name: string;
-              params: string[];
-              ctors: { fields: { fieldType: TypeExpr; name: Option<string> }[]; name: string }[];
-            }) => typeDecl(bt.name, bt.params, bt.ctors, aliases),
+            (bt: { name: string; params: string[]; ctors: Ctor[] }) =>
+              typeDecl(bt.name, bt.params, bt.ctors, aliases, new Map<string, string>()),
             filter(
-              (bt: {
-                name: string;
-                params: string[];
-                ctors: { name: string; fields: { name: Option<string>; fieldType: TypeExpr }[] }[];
-              }) => _Set_has(bt.name, wanted),
+              (bt: { name: string; params: string[]; ctors: Ctor[] }) => _Set_has(bt.name, wanted),
               builtinTypeDecls,
             ),
           ),

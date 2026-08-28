@@ -1,6 +1,6 @@
 export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
 export type Span = { start: number; end: number };
-export type Name = { name: string; span: { start: number; end: number } };
+export type Name = { name: string; span: Span };
 export type LamParam =
   | { _tag: "LPName"; name: string; annot: Option<TypeExpr> }
   | { _tag: "LPRecord"; fields: string[] }
@@ -8,7 +8,7 @@ export type LamParam =
 export type Field = { name: string; value: Expr };
 export type MapEntry = { key: Expr; value: Expr };
 export type MatchArm = { pattern: Pattern; guard: Option<Expr>; body: Expr };
-export type LoopParam = { name: string; nameSpan: { start: number; end: number }; init: Expr };
+export type LoopParam = { name: string; nameSpan: Span; init: Expr };
 export type PatField = { label: string; pat: Pattern };
 export type SeqElem = { _tag: "SEExpr"; expr: Expr } | { _tag: "SESpread"; expr: Expr };
 export type Expr =
@@ -68,7 +68,7 @@ export type TypeExpr =
   | { _tag: "TyLit"; value: string; span: Span }
   | { _tag: "TyUnion"; members: TypeExpr[]; span: Span };
 export type CtorField = { name: Option<string>; fieldType: TypeExpr };
-export type Ctor = { name: string; fields: { name: Option<string>; fieldType: TypeExpr }[] };
+export type Ctor = { name: string; fields: CtorField[] };
 export type AliasField = { name: string; fieldType: TypeExpr };
 export type Stmt =
   | {

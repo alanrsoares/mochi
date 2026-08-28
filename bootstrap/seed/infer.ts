@@ -1,22 +1,29 @@
-import type { Tok } from "./parser";
-import type { Expr, InterpPart, LamParam, Pattern, SeqElem, Stmt, TypeExpr } from "./ast";
-import type { Row, Ty } from "./types";
+import type { PErr, Tok } from "./parser";
+import type {
+  AliasField,
+  Expr,
+  Field,
+  InterpPart,
+  LamParam,
+  LoopParam,
+  MapEntry,
+  MatchArm,
+  PatField,
+  Pattern,
+  SeqElem,
+  Span,
+  Stmt,
+  TypeExpr,
+} from "./ast";
+import type { Row, St, Ty, TypeAt } from "./types";
+import type { VarSets } from "./schemes";
 
 export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
 export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
-export type IErr = { message: string; start: number; end: number };
-export type QualAliasField = { name: string; fieldType: TypeExpr };
-export type QualAliasInfo = {
-  params: string[];
-  fields: { name: string; fieldType: TypeExpr }[];
-  expr: Option<TypeExpr>;
-};
-export type QualScope = {
-  aliases: Map<
-    string,
-    { params: string[]; fields: { name: string; fieldType: TypeExpr }[]; expr: Option<TypeExpr> }
-  >;
-};
+export type IErr = PErr;
+export type QualAliasField = AliasField;
+export type QualAliasInfo = { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> };
+export type QualScope = { aliases: Map<string, QualAliasInfo> };
 
 import {
   _curry,
@@ -34,6 +41,7 @@ import {
   reduce,
   _Set_has,
   _Set_add,
+  _Set_size,
   _Set_toArray,
   _Set_fromArray,
   _Map_has,
@@ -51,6 +59,7 @@ import {
   _Array_append,
   _Array_prepend,
   _Array_flatMap,
+  _Str_startsWith,
   _tuple,
 } from "@mochi/compiler/runtime";
 
@@ -76,6 +85,8 @@ import {
   showType,
   mkSt,
   recordAt,
+  noteLet,
+  noteUse,
   freshVar,
   freshRowVar,
   resolve,
@@ -99,9 +110,10 @@ import {
   typeExprListToType,
   ctorScheme,
   isUpperStart,
+  freeInType,
 } from "./schemes";
 import { stronglyConnected } from "./scc";
-export const exprSpan: (e: Expr) => { start: number; end: number } = (e: Expr) =>
+export const exprSpan: (e: Expr) => Span = (e: Expr) =>
   match(e)
     .with({ _tag: "ENum" }, ({ span: sp }) => sp)
     .with({ _tag: "EUnit" }, ({ span: sp }) => sp)
@@ -127,7 +139,7 @@ export const exprSpan: (e: Expr) => { start: number; end: number } = (e: Expr) =
     .with({ _tag: "EMap" }, ({ span: sp }) => sp)
     .with({ _tag: "EInterp" }, ({ span: sp }) => sp)
     .exhaustive();
-const patSpan: (p: Pattern) => { start: number; end: number } = (p: Pattern) =>
+const patSpan: (p: Pattern) => Span = (p: Pattern) =>
   match(p)
     .with({ _tag: "PWild" }, ({ span: sp }) => sp)
     .with({ _tag: "PUnit" }, ({ span: sp }) => sp)
@@ -144,7 +156,7 @@ const patSpan: (p: Pattern) => { start: number; end: number } = (p: Pattern) =>
     .with({ _tag: "POr" }, ({ span: sp }) => sp)
     .exhaustive();
 
-const annotSpan: (t: TypeExpr) => { start: number; end: number } = (t: TypeExpr) =>
+const annotSpan: (t: TypeExpr) => Span = (t: TypeExpr) =>
   match(t)
     .with({ _tag: "TyName" }, ({ span: sp }) => sp)
     .with({ _tag: "TyArrow" }, ({ span: sp }) => sp)
@@ -458,14 +470,14 @@ const arrowChain: { (paramTypes: Ty[]): (resultT: Ty) => Ty; (paramTypes: Ty[], 
         throw new Error("non-exhaustive match");
       }),
   );
-const ctxWithEnv: <A, B, C, D, E, F, G>(
-  ctx: { loopStack: A; plugins: B; aliasMap: C; ns: D; open: E } & G,
-  env: F,
-) => { env: F; open: E; ns: D; aliasMap: C; plugins: B; loopStack: A } = _curry(
+const ctxWithEnv: <A, B, C, D, E, F, G, H>(
+  ctx: { letOwner: A; loopStack: B; plugins: C; aliasMap: D; ns: E; open: F } & H,
+  env: G,
+) => { env: G; open: F; ns: E; aliasMap: D; plugins: C; loopStack: B; letOwner: A } = _curry(
   2,
-  <A, B, C, D, E, F, G>(
-    ctx: { loopStack: A; plugins: B; aliasMap: C; ns: D; open: E } & G,
-    env: F,
+  <A, B, C, D, E, F, G, H>(
+    ctx: { letOwner: A; loopStack: B; plugins: C; aliasMap: D; ns: E; open: F } & H,
+    env: G,
   ) => ({
     env: env,
     open: ctx.open,
@@ -473,18 +485,41 @@ const ctxWithEnv: <A, B, C, D, E, F, G>(
     aliasMap: ctx.aliasMap,
     plugins: ctx.plugins,
     loopStack: ctx.loopStack,
+    letOwner: ctx.letOwner,
   }),
 );
-const ctxWithLoop: <A, B, C, D, E, F, G>(
-  ctx: { loopStack: A[]; plugins: B; aliasMap: C; ns: D; open: E } & G,
+const ctxWithLets: <A, B, C, D, E, F, G, H>(
+  ctx: { loopStack: A; plugins: B; aliasMap: C; ns: D; open: E } & H,
+  env: F,
+  letOwner: G,
+) => { env: F; open: E; ns: D; aliasMap: C; plugins: B; loopStack: A; letOwner: G } = _curry(
+  3,
+  <A, B, C, D, E, F, G, H>(
+    ctx: { loopStack: A; plugins: B; aliasMap: C; ns: D; open: E } & H,
+    env: F,
+    letOwner: G,
+  ) => ({
+    env: env,
+    open: ctx.open,
+    ns: ctx.ns,
+    aliasMap: ctx.aliasMap,
+    plugins: ctx.plugins,
+    loopStack: ctx.loopStack,
+    letOwner: letOwner,
+  }),
+);
+const ctxWithLoop: <A, B, C, D, E, F, G, H>(
+  ctx: { loopStack: A[]; plugins: B; aliasMap: C; ns: D; open: E } & H,
   env: F,
   frame: A,
-) => { env: F; open: E; ns: D; aliasMap: C; plugins: B; loopStack: A[] } = _curry(
-  3,
-  <A, B, C, D, E, F, G>(
-    ctx: { loopStack: A[]; plugins: B; aliasMap: C; ns: D; open: E } & G,
+  letOwner: G,
+) => { env: F; open: E; ns: D; aliasMap: C; plugins: B; loopStack: A[]; letOwner: G } = _curry(
+  4,
+  <A, B, C, D, E, F, G, H>(
+    ctx: { loopStack: A[]; plugins: B; aliasMap: C; ns: D; open: E } & H,
     env: F,
     frame: A,
+    letOwner: G,
   ) => ({
     env: env,
     open: ctx.open,
@@ -492,6 +527,7 @@ const ctxWithLoop: <A, B, C, D, E, F, G>(
     aliasMap: ctx.aliasMap,
     plugins: ctx.plugins,
     loopStack: _Array_prepend(frame, ctx.loopStack),
+    letOwner: letOwner,
   }),
 );
 const inferLoopParamsFrom: <A, B, C, D, E, F, G, H, I>(
@@ -515,15 +551,19 @@ const inferLoopParamsFrom: <A, B, C, D, E, F, G, H, I>(
           c: Option<string>,
           d: {
             next: number;
+            letUses: Map<string, Ty[]>;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & F,
           e: {
             inferExpr: (
               a: Expr,
               b: {
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
@@ -532,7 +572,9 @@ const inferLoopParamsFrom: <A, B, C, D, E, F, G, H, I>(
               [
                 Ty,
                 {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -556,9 +598,11 @@ const inferLoopParamsFrom: <A, B, C, D, E, F, G, H, I>(
               Ty,
               {
                 next: number;
+                letUses: Map<string, Ty[]>;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
               } & F,
             ]
           >,
@@ -567,13 +611,17 @@ const inferLoopParamsFrom: <A, B, C, D, E, F, G, H, I>(
       >;
     } & I)[];
     loopStack: Ty[][];
+    letOwner: Map<string, Span>;
   },
-  params: { init: Expr; name: string; nameSpan: { start: number; end: number } }[],
+  params: LoopParam[],
   i: number,
   envAcc: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>,
   frameAcc: Ty[],
+  ownerAcc: Map<string, Span>,
   st: {
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letUses: Map<string, Ty[]>;
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
     next: number;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
@@ -582,8 +630,11 @@ const inferLoopParamsFrom: <A, B, C, D, E, F, G, H, I>(
   [
     Ty[],
     Map<string, { vars: number[]; rvars: number[]; ty: Ty }>,
+    Map<string, Span>,
     {
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
       next: number;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
@@ -591,7 +642,7 @@ const inferLoopParamsFrom: <A, B, C, D, E, F, G, H, I>(
   ],
   IErr
 > = _curry(
-  6,
+  7,
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
       env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
@@ -613,15 +664,19 @@ const inferLoopParamsFrom: <A, B, C, D, E, F, G, H, I>(
             c: Option<string>,
             d: {
               next: number;
+              letUses: Map<string, Ty[]>;
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & F,
             e: {
               inferExpr: (
                 a: Expr,
                 b: {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -630,7 +685,9 @@ const inferLoopParamsFrom: <A, B, C, D, E, F, G, H, I>(
                 [
                   Ty,
                   {
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letUses: Map<string, Ty[]>;
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                     next: number;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
@@ -654,9 +711,11 @@ const inferLoopParamsFrom: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & F,
               ]
             >,
@@ -665,31 +724,37 @@ const inferLoopParamsFrom: <A, B, C, D, E, F, G, H, I>(
         >;
       } & I)[];
       loopStack: Ty[][];
+      letOwner: Map<string, Span>;
     },
-    params: { init: Expr; name: string; nameSpan: { start: number; end: number } }[],
+    params: LoopParam[],
     i: number,
     envAcc: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>,
     frameAcc: Ty[],
+    ownerAcc: Map<string, Span>,
     st: {
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
       next: number;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
     } & F,
   ) =>
     match(_Array_get(i, params))
-      .with({ _tag: "None" }, () => Ok(_tuple(frameAcc, envAcc, st)))
+      .with({ _tag: "None" }, () => Ok(_tuple(frameAcc, envAcc, ownerAcc, st)))
       .with({ _tag: "Some" }, ({ value: p }) =>
         _Result_flatMap(
           ([t, st1]) =>
-            inferLoopParamsFrom(
-              ctx,
-              params,
-              add(i, 1),
-              _Map_set(p.name, mono(t), envAcc),
-              _Array_append(t, frameAcc),
-              st1,
-            ),
+            ((sp: Span) =>
+              inferLoopParamsFrom(
+                ctx,
+                params,
+                add(i, 1),
+                _Map_set(p.name, mono(t), envAcc),
+                _Array_append(t, frameAcc),
+                _Map_set(p.name, sp, ownerAcc),
+                noteLet(sp, st1),
+              ))(exprSpan(p.init)),
           inferExpr(ctx, p.init, st),
         ),
       )
@@ -716,15 +781,19 @@ const unifyRecurArgsFrom: <A, B, C, D, E, F, G, H, I>(
           c: Option<string>,
           d: {
             next: number;
+            letUses: Map<string, Ty[]>;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & F,
           e: {
             inferExpr: (
               a: Expr,
               b: {
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
@@ -733,7 +802,9 @@ const unifyRecurArgsFrom: <A, B, C, D, E, F, G, H, I>(
               [
                 Ty,
                 {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -757,9 +828,11 @@ const unifyRecurArgsFrom: <A, B, C, D, E, F, G, H, I>(
               Ty,
               {
                 next: number;
+                letUses: Map<string, Ty[]>;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
               } & F,
             ]
           >,
@@ -768,19 +841,24 @@ const unifyRecurArgsFrom: <A, B, C, D, E, F, G, H, I>(
       >;
     } & I)[];
     loopStack: Ty[][];
+    letOwner: Map<string, Span>;
   },
   args: Expr[],
   frame: Ty[],
   i: number,
   st: {
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letUses: Map<string, Ty[]>;
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
     next: number;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
   } & F,
 ) => Result<
   {
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letUses: Map<string, Ty[]>;
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
     next: number;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
@@ -809,15 +887,19 @@ const unifyRecurArgsFrom: <A, B, C, D, E, F, G, H, I>(
             c: Option<string>,
             d: {
               next: number;
+              letUses: Map<string, Ty[]>;
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & F,
             e: {
               inferExpr: (
                 a: Expr,
                 b: {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -826,7 +908,9 @@ const unifyRecurArgsFrom: <A, B, C, D, E, F, G, H, I>(
                 [
                   Ty,
                   {
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letUses: Map<string, Ty[]>;
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                     next: number;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
@@ -850,9 +934,11 @@ const unifyRecurArgsFrom: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & F,
               ]
             >,
@@ -861,12 +947,15 @@ const unifyRecurArgsFrom: <A, B, C, D, E, F, G, H, I>(
         >;
       } & I)[];
       loopStack: Ty[][];
+      letOwner: Map<string, Span>;
     },
     args: Expr[],
     frame: Ty[],
     i: number,
     st: {
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
       next: number;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
@@ -895,6 +984,7 @@ const inferRecur: <A, B, C, D, E, F, G, H, I>(
   ctx: {
     loopStack: Ty[][];
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+    letOwner: Map<string, Span>;
     open: boolean;
     aliasMap: Map<
       string,
@@ -912,15 +1002,19 @@ const inferRecur: <A, B, C, D, E, F, G, H, I>(
           c: Option<string>,
           d: {
             next: number;
+            letUses: Map<string, Ty[]>;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & E,
           e: {
             inferExpr: (
               a: Expr,
               b: {
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
@@ -929,7 +1023,9 @@ const inferRecur: <A, B, C, D, E, F, G, H, I>(
               [
                 Ty,
                 {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -953,9 +1049,11 @@ const inferRecur: <A, B, C, D, E, F, G, H, I>(
               Ty,
               {
                 next: number;
+                letUses: Map<string, Ty[]>;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
               } & E,
             ]
           >,
@@ -966,21 +1064,25 @@ const inferRecur: <A, B, C, D, E, F, G, H, I>(
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
   },
   args: Expr[],
-  sp: { end: number; start: number },
+  sp: Span,
   st: {
     next: number;
+    letUses: Map<string, Ty[]>;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
   } & E,
 ) => Result<
   [
     Ty,
     {
       next: number;
+      letUses: Map<string, Ty[]>;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
     } & E,
   ],
   IErr
@@ -990,6 +1092,7 @@ const inferRecur: <A, B, C, D, E, F, G, H, I>(
     ctx: {
       loopStack: Ty[][];
       env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+      letOwner: Map<string, Span>;
       open: boolean;
       aliasMap: Map<
         string,
@@ -1007,15 +1110,19 @@ const inferRecur: <A, B, C, D, E, F, G, H, I>(
             c: Option<string>,
             d: {
               next: number;
+              letUses: Map<string, Ty[]>;
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & E,
             e: {
               inferExpr: (
                 a: Expr,
                 b: {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -1024,7 +1131,9 @@ const inferRecur: <A, B, C, D, E, F, G, H, I>(
                 [
                   Ty,
                   {
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letUses: Map<string, Ty[]>;
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                     next: number;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
@@ -1048,9 +1157,11 @@ const inferRecur: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & E,
               ]
             >,
@@ -1061,12 +1172,14 @@ const inferRecur: <A, B, C, D, E, F, G, H, I>(
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
     },
     args: Expr[],
-    sp: { end: number; start: number },
+    sp: Span,
     st: {
       next: number;
+      letUses: Map<string, Ty[]>;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
     } & E,
   ) =>
     match(ctx.loopStack)
@@ -1089,9 +1202,11 @@ const inferRecur: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & E,
               ]) => Ok(_tuple(t, st2)))(freshVar(st1)),
             unifyRecurArgsFrom(ctx, args, frame, 0, st),
@@ -1122,15 +1237,19 @@ const inferCallArgs: <A, B, C, D, E, F, G, H, I>(
           c: Option<string>,
           d: {
             next: number;
+            letUses: Map<string, Ty[]>;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & F,
           e: {
             inferExpr: (
               a: Expr,
               b: {
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
@@ -1139,7 +1258,9 @@ const inferCallArgs: <A, B, C, D, E, F, G, H, I>(
               [
                 Ty,
                 {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -1163,9 +1284,11 @@ const inferCallArgs: <A, B, C, D, E, F, G, H, I>(
               Ty,
               {
                 next: number;
+                letUses: Map<string, Ty[]>;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
               } & F,
             ]
           >,
@@ -1174,21 +1297,26 @@ const inferCallArgs: <A, B, C, D, E, F, G, H, I>(
       >;
     } & I)[];
     loopStack: Ty[][];
+    letOwner: Map<string, Span>;
   },
   fnT: Ty,
   args: Expr[],
   st: {
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letUses: Map<string, Ty[]>;
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
     next: number;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
   } & F,
-  callSpan: { start: number; end: number },
+  callSpan: Span,
 ) => Result<
   [
     Ty,
     {
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
       next: number;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
@@ -1218,15 +1346,19 @@ const inferCallArgs: <A, B, C, D, E, F, G, H, I>(
             c: Option<string>,
             d: {
               next: number;
+              letUses: Map<string, Ty[]>;
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & F,
             e: {
               inferExpr: (
                 a: Expr,
                 b: {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -1235,7 +1367,9 @@ const inferCallArgs: <A, B, C, D, E, F, G, H, I>(
                 [
                   Ty,
                   {
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letUses: Map<string, Ty[]>;
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                     next: number;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
@@ -1259,9 +1393,11 @@ const inferCallArgs: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & F,
               ]
             >,
@@ -1270,16 +1406,19 @@ const inferCallArgs: <A, B, C, D, E, F, G, H, I>(
         >;
       } & I)[];
       loopStack: Ty[][];
+      letOwner: Map<string, Span>;
     },
     fnT: Ty,
     args: Expr[],
     st: {
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
       next: number;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
     } & F,
-    callSpan: { start: number; end: number },
+    callSpan: Span,
   ) =>
     match(args)
       .with(
@@ -1303,7 +1442,9 @@ const inferCallArgs: <A, B, C, D, E, F, G, H, I>(
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
                   next: number;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & F,
               ]) =>
                 _Result_flatMap(
@@ -1338,15 +1479,19 @@ const inferNormalCall: <A, B, C, D, E, F, G, H, I>(
           c: Option<string>,
           d: {
             next: number;
+            letUses: Map<string, Ty[]>;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & F,
           e: {
             inferExpr: (
               a: Expr,
               b: {
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
@@ -1355,7 +1500,9 @@ const inferNormalCall: <A, B, C, D, E, F, G, H, I>(
               [
                 Ty,
                 {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -1379,9 +1526,11 @@ const inferNormalCall: <A, B, C, D, E, F, G, H, I>(
               Ty,
               {
                 next: number;
+                letUses: Map<string, Ty[]>;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
               } & F,
             ]
           >,
@@ -1390,11 +1539,14 @@ const inferNormalCall: <A, B, C, D, E, F, G, H, I>(
       >;
     } & I)[];
     loopStack: Ty[][];
+    letOwner: Map<string, Span>;
   },
   fn: Expr,
   args: Expr[],
   st: {
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letUses: Map<string, Ty[]>;
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
     next: number;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
@@ -1406,7 +1558,9 @@ const inferNormalCall: <A, B, C, D, E, F, G, H, I>(
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
       next: number;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
     } & F,
   ],
   IErr
@@ -1433,15 +1587,19 @@ const inferNormalCall: <A, B, C, D, E, F, G, H, I>(
             c: Option<string>,
             d: {
               next: number;
+              letUses: Map<string, Ty[]>;
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & F,
             e: {
               inferExpr: (
                 a: Expr,
                 b: {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -1450,7 +1608,9 @@ const inferNormalCall: <A, B, C, D, E, F, G, H, I>(
                 [
                   Ty,
                   {
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letUses: Map<string, Ty[]>;
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                     next: number;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
@@ -1474,9 +1634,11 @@ const inferNormalCall: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & F,
               ]
             >,
@@ -1485,11 +1647,14 @@ const inferNormalCall: <A, B, C, D, E, F, G, H, I>(
         >;
       } & I)[];
       loopStack: Ty[][];
+      letOwner: Map<string, Span>;
     },
     fn: Expr,
     args: Expr[],
     st: {
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
       next: number;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
@@ -1510,7 +1675,9 @@ const inferNormalCall: <A, B, C, D, E, F, G, H, I>(
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
                   next: number;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & F,
               ]) =>
                 _Result_flatMap(
@@ -1543,15 +1710,19 @@ const inferTernary: <A, B, C, D, E, F, G, H, I>(
           c: Option<string>,
           d: {
             next: number;
+            letUses: Map<string, Ty[]>;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & F,
           e: {
             inferExpr: (
               a: Expr,
               b: {
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
@@ -1560,7 +1731,9 @@ const inferTernary: <A, B, C, D, E, F, G, H, I>(
               [
                 Ty,
                 {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -1584,9 +1757,11 @@ const inferTernary: <A, B, C, D, E, F, G, H, I>(
               Ty,
               {
                 next: number;
+                letUses: Map<string, Ty[]>;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
               } & F,
             ]
           >,
@@ -1595,12 +1770,15 @@ const inferTernary: <A, B, C, D, E, F, G, H, I>(
       >;
     } & I)[];
     loopStack: Ty[][];
+    letOwner: Map<string, Span>;
   },
   cond: Expr,
   thenE: Expr,
   elseE: Expr,
   st: {
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letUses: Map<string, Ty[]>;
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
     next: number;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
@@ -1612,7 +1790,9 @@ const inferTernary: <A, B, C, D, E, F, G, H, I>(
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
       next: number;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
     } & F,
   ],
   IErr
@@ -1639,15 +1819,19 @@ const inferTernary: <A, B, C, D, E, F, G, H, I>(
             c: Option<string>,
             d: {
               next: number;
+              letUses: Map<string, Ty[]>;
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & F,
             e: {
               inferExpr: (
                 a: Expr,
                 b: {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -1656,7 +1840,9 @@ const inferTernary: <A, B, C, D, E, F, G, H, I>(
                 [
                   Ty,
                   {
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letUses: Map<string, Ty[]>;
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                     next: number;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
@@ -1680,9 +1866,11 @@ const inferTernary: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & F,
               ]
             >,
@@ -1691,12 +1879,15 @@ const inferTernary: <A, B, C, D, E, F, G, H, I>(
         >;
       } & I)[];
       loopStack: Ty[][];
+      letOwner: Map<string, Span>;
     },
     cond: Expr,
     thenE: Expr,
     elseE: Expr,
     st: {
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
       next: number;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
@@ -1725,6 +1916,7 @@ const inferTernary: <A, B, C, D, E, F, G, H, I>(
 );
 const inferBindBody: <A, B, C, D, E, F, G, H, I>(
   ctx: {
+    letOwner: Map<string, Span>;
     loopStack: Ty[][];
     plugins: ({
       inferCall: Option<
@@ -1734,15 +1926,19 @@ const inferBindBody: <A, B, C, D, E, F, G, H, I>(
           c: Option<string>,
           d: {
             next: number;
+            letUses: Map<string, Ty[]>;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & C,
           e: {
             inferExpr: (
               a: Expr,
               b: {
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
@@ -1751,7 +1947,9 @@ const inferBindBody: <A, B, C, D, E, F, G, H, I>(
               [
                 Ty,
                 {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -1775,9 +1973,11 @@ const inferBindBody: <A, B, C, D, E, F, G, H, I>(
               Ty,
               {
                 next: number;
+                letUses: Map<string, Ty[]>;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
               } & C,
             ]
           >,
@@ -1798,7 +1998,7 @@ const inferBindBody: <A, B, C, D, E, F, G, H, I>(
     env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
   },
   param: LamParam,
-  paramSpan: { end: number; start: number },
+  paramSpan: Span,
   body: Expr,
   payloadT: Ty,
   mkBody: (a: Ty) => Ty,
@@ -1806,7 +2006,9 @@ const inferBindBody: <A, B, C, D, E, F, G, H, I>(
     next: number;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letUses: Map<string, Ty[]>;
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
   } & C,
 ) => Result<
   [
@@ -1815,7 +2017,9 @@ const inferBindBody: <A, B, C, D, E, F, G, H, I>(
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
       next: number;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
     } & C,
   ],
   IErr
@@ -1823,6 +2027,7 @@ const inferBindBody: <A, B, C, D, E, F, G, H, I>(
   7,
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
+      letOwner: Map<string, Span>;
       loopStack: Ty[][];
       plugins: ({
         inferCall: Option<
@@ -1832,15 +2037,19 @@ const inferBindBody: <A, B, C, D, E, F, G, H, I>(
             c: Option<string>,
             d: {
               next: number;
+              letUses: Map<string, Ty[]>;
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & C,
             e: {
               inferExpr: (
                 a: Expr,
                 b: {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -1849,7 +2058,9 @@ const inferBindBody: <A, B, C, D, E, F, G, H, I>(
                 [
                   Ty,
                   {
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letUses: Map<string, Ty[]>;
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                     next: number;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
@@ -1873,9 +2084,11 @@ const inferBindBody: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & C,
               ]
             >,
@@ -1896,7 +2109,7 @@ const inferBindBody: <A, B, C, D, E, F, G, H, I>(
       env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
     },
     param: LamParam,
-    paramSpan: { end: number; start: number },
+    paramSpan: Span,
     body: Expr,
     payloadT: Ty,
     mkBody: (a: Ty) => Ty,
@@ -1904,7 +2117,9 @@ const inferBindBody: <A, B, C, D, E, F, G, H, I>(
       next: number;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
     } & C,
   ) =>
     (([paramT, bodyEnv, st1]: [
@@ -1914,7 +2129,9 @@ const inferBindBody: <A, B, C, D, E, F, G, H, I>(
         tv: Map<number, Ty>;
         rv: Map<number, Row>;
         next: number;
-        recorded: { span: { start: number; end: number }; ty: Ty }[];
+        letUses: Map<string, Ty[]>;
+        letSpans: Map<string, Span>;
+        recorded: TypeAt[];
       } & C,
     ]) =>
       _Result_flatMap(
@@ -1927,7 +2144,9 @@ const inferBindBody: <A, B, C, D, E, F, G, H, I>(
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
                   next: number;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & C,
               ]) => {
                 const wantBody: Ty = mkBody(resT);
@@ -1962,15 +2181,19 @@ const inferTwoSlotBind: <A, B, C, D, E, F, G, H, I>(
           c: Option<string>,
           d: {
             next: number;
+            letUses: Map<string, Ty[]>;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & F,
           e: {
             inferExpr: (
               a: Expr,
               b: {
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
@@ -1979,7 +2202,9 @@ const inferTwoSlotBind: <A, B, C, D, E, F, G, H, I>(
               [
                 Ty,
                 {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -2003,9 +2228,11 @@ const inferTwoSlotBind: <A, B, C, D, E, F, G, H, I>(
               Ty,
               {
                 next: number;
+                letUses: Map<string, Ty[]>;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
               } & F,
             ]
           >,
@@ -2014,9 +2241,10 @@ const inferTwoSlotBind: <A, B, C, D, E, F, G, H, I>(
       >;
     } & I)[];
     loopStack: Ty[][];
+    letOwner: Map<string, Span>;
   },
   param: LamParam,
-  paramSpan: { start: number; end: number },
+  paramSpan: Span,
   value: Expr,
   body: Expr,
   valT: Ty,
@@ -2025,16 +2253,20 @@ const inferTwoSlotBind: <A, B, C, D, E, F, G, H, I>(
     next: number;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letUses: Map<string, Ty[]>;
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
   } & F,
 ) => Result<
   [
     Ty,
     {
       next: number;
+      letUses: Map<string, Ty[]>;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
     } & F,
   ],
   IErr
@@ -2061,15 +2293,19 @@ const inferTwoSlotBind: <A, B, C, D, E, F, G, H, I>(
             c: Option<string>,
             d: {
               next: number;
+              letUses: Map<string, Ty[]>;
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & F,
             e: {
               inferExpr: (
                 a: Expr,
                 b: {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -2078,7 +2314,9 @@ const inferTwoSlotBind: <A, B, C, D, E, F, G, H, I>(
                 [
                   Ty,
                   {
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letUses: Map<string, Ty[]>;
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                     next: number;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
@@ -2102,9 +2340,11 @@ const inferTwoSlotBind: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & F,
               ]
             >,
@@ -2113,9 +2353,10 @@ const inferTwoSlotBind: <A, B, C, D, E, F, G, H, I>(
         >;
       } & I)[];
       loopStack: Ty[][];
+      letOwner: Map<string, Span>;
     },
     param: LamParam,
-    paramSpan: { start: number; end: number },
+    paramSpan: Span,
     value: Expr,
     body: Expr,
     valT: Ty,
@@ -2124,7 +2365,9 @@ const inferTwoSlotBind: <A, B, C, D, E, F, G, H, I>(
       next: number;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
     } & F,
   ) =>
     (([payloadT, st1]: [
@@ -2133,7 +2376,9 @@ const inferTwoSlotBind: <A, B, C, D, E, F, G, H, I>(
         next: number;
         tv: Map<number, Ty>;
         rv: Map<number, Row>;
-        recorded: { span: { start: number; end: number }; ty: Ty }[];
+        letUses: Map<string, Ty[]>;
+        letSpans: Map<string, Span>;
+        recorded: TypeAt[];
       } & F,
     ]) =>
       (([errT, st2]: [
@@ -2142,7 +2387,9 @@ const inferTwoSlotBind: <A, B, C, D, E, F, G, H, I>(
           tv: Map<number, Ty>;
           rv: Map<number, Row>;
           next: number;
-          recorded: { span: { start: number; end: number }; ty: Ty }[];
+          letUses: Map<string, Ty[]>;
+          letSpans: Map<string, Span>;
+          recorded: TypeAt[];
         } & F,
       ]) =>
         _Result_flatMap(
@@ -2180,15 +2427,19 @@ const inferQuestionBind: <A, B, C, D, E, F, G, H, I>(
           c: Option<string>,
           d: {
             next: number;
+            letUses: Map<string, Ty[]>;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & F,
           e: {
             inferExpr: (
               a: Expr,
               b: {
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
@@ -2197,7 +2448,9 @@ const inferQuestionBind: <A, B, C, D, E, F, G, H, I>(
               [
                 Ty,
                 {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -2221,9 +2474,11 @@ const inferQuestionBind: <A, B, C, D, E, F, G, H, I>(
               Ty,
               {
                 next: number;
+                letUses: Map<string, Ty[]>;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
               } & F,
             ]
           >,
@@ -2232,16 +2487,19 @@ const inferQuestionBind: <A, B, C, D, E, F, G, H, I>(
       >;
     } & I)[];
     loopStack: Ty[][];
+    letOwner: Map<string, Span>;
   },
   bind: Expr,
   param: LamParam,
-  paramSpan: { start: number; end: number },
+  paramSpan: Span,
   value: Expr,
   body: Expr,
   valT: Ty,
   st: {
     tv: Map<number, Ty>;
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letUses: Map<string, Ty[]>;
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
     next: number;
     rv: Map<number, Row>;
   } & F,
@@ -2250,9 +2508,11 @@ const inferQuestionBind: <A, B, C, D, E, F, G, H, I>(
     Ty,
     {
       next: number;
+      letUses: Map<string, Ty[]>;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
     } & F,
   ],
   IErr
@@ -2279,15 +2539,19 @@ const inferQuestionBind: <A, B, C, D, E, F, G, H, I>(
             c: Option<string>,
             d: {
               next: number;
+              letUses: Map<string, Ty[]>;
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & F,
             e: {
               inferExpr: (
                 a: Expr,
                 b: {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -2296,7 +2560,9 @@ const inferQuestionBind: <A, B, C, D, E, F, G, H, I>(
                 [
                   Ty,
                   {
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letUses: Map<string, Ty[]>;
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                     next: number;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
@@ -2320,9 +2586,11 @@ const inferQuestionBind: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & F,
               ]
             >,
@@ -2331,16 +2599,19 @@ const inferQuestionBind: <A, B, C, D, E, F, G, H, I>(
         >;
       } & I)[];
       loopStack: Ty[][];
+      letOwner: Map<string, Span>;
     },
     bind: Expr,
     param: LamParam,
-    paramSpan: { start: number; end: number },
+    paramSpan: Span,
     value: Expr,
     body: Expr,
     valT: Ty,
     st: {
       tv: Map<number, Ty>;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
       next: number;
       rv: Map<number, Row>;
     } & F,
@@ -2360,7 +2631,9 @@ const inferQuestionBind: <A, B, C, D, E, F, G, H, I>(
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
                   next: number;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & F,
               ]) =>
                 _Result_flatMap(
@@ -2418,15 +2691,19 @@ const inferLetBind: <A, B, C, D, E, F, G, H, I>(
           c: Option<string>,
           d: {
             next: number;
+            letUses: Map<string, Ty[]>;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & F,
           e: {
             inferExpr: (
               a: Expr,
               b: {
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
@@ -2435,7 +2712,9 @@ const inferLetBind: <A, B, C, D, E, F, G, H, I>(
               [
                 Ty,
                 {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -2459,9 +2738,11 @@ const inferLetBind: <A, B, C, D, E, F, G, H, I>(
               Ty,
               {
                 next: number;
+                letUses: Map<string, Ty[]>;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
               } & F,
             ]
           >,
@@ -2470,15 +2751,18 @@ const inferLetBind: <A, B, C, D, E, F, G, H, I>(
       >;
     } & I)[];
     loopStack: Ty[][];
+    letOwner: Map<string, Span>;
   },
   bind: Expr,
   param: LamParam,
-  paramSpan: { start: number; end: number },
+  paramSpan: Span,
   monad: string,
   value: Expr,
   body: Expr,
   st: {
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letUses: Map<string, Ty[]>;
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
     next: number;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
@@ -2488,9 +2772,11 @@ const inferLetBind: <A, B, C, D, E, F, G, H, I>(
     Ty,
     {
       next: number;
+      letUses: Map<string, Ty[]>;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
     } & F,
   ],
   IErr
@@ -2517,15 +2803,19 @@ const inferLetBind: <A, B, C, D, E, F, G, H, I>(
             c: Option<string>,
             d: {
               next: number;
+              letUses: Map<string, Ty[]>;
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & F,
             e: {
               inferExpr: (
                 a: Expr,
                 b: {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -2534,7 +2824,9 @@ const inferLetBind: <A, B, C, D, E, F, G, H, I>(
                 [
                   Ty,
                   {
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letUses: Map<string, Ty[]>;
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                     next: number;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
@@ -2558,9 +2850,11 @@ const inferLetBind: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & F,
               ]
             >,
@@ -2569,15 +2863,18 @@ const inferLetBind: <A, B, C, D, E, F, G, H, I>(
         >;
       } & I)[];
       loopStack: Ty[][];
+      letOwner: Map<string, Span>;
     },
     bind: Expr,
     param: LamParam,
-    paramSpan: { start: number; end: number },
+    paramSpan: Span,
     monad: string,
     value: Expr,
     body: Expr,
     st: {
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
       next: number;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
@@ -2594,6 +2891,7 @@ const inferLetBind: <A, B, C, D, E, F, G, H, I>(
 const inferRecordRow: <A, B, C, D, E, F, G, H, I>(
   ctx: {
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+    letOwner: Map<string, Span>;
     open: boolean;
     aliasMap: Map<
       string,
@@ -2612,15 +2910,19 @@ const inferRecordRow: <A, B, C, D, E, F, G, H, I>(
           c: Option<string>,
           d: {
             next: number;
+            letUses: Map<string, Ty[]>;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & E,
           e: {
             inferExpr: (
               a: Expr,
               b: {
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
@@ -2629,7 +2931,9 @@ const inferRecordRow: <A, B, C, D, E, F, G, H, I>(
               [
                 Ty,
                 {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -2653,9 +2957,11 @@ const inferRecordRow: <A, B, C, D, E, F, G, H, I>(
               Ty,
               {
                 next: number;
+                letUses: Map<string, Ty[]>;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
               } & E,
             ]
           >,
@@ -2665,21 +2971,25 @@ const inferRecordRow: <A, B, C, D, E, F, G, H, I>(
     } & H)[];
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
   },
-  fields: { name: string; value: Expr }[],
+  fields: Field[],
   st: {
     next: number;
+    letUses: Map<string, Ty[]>;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
   } & E,
 ) => Result<
   [
     Row,
     {
       next: number;
+      letUses: Map<string, Ty[]>;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
     } & E,
   ],
   IErr
@@ -2688,6 +2998,7 @@ const inferRecordRow: <A, B, C, D, E, F, G, H, I>(
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
       env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+      letOwner: Map<string, Span>;
       open: boolean;
       aliasMap: Map<
         string,
@@ -2706,15 +3017,19 @@ const inferRecordRow: <A, B, C, D, E, F, G, H, I>(
             c: Option<string>,
             d: {
               next: number;
+              letUses: Map<string, Ty[]>;
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & E,
             e: {
               inferExpr: (
                 a: Expr,
                 b: {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -2723,7 +3038,9 @@ const inferRecordRow: <A, B, C, D, E, F, G, H, I>(
                 [
                   Ty,
                   {
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letUses: Map<string, Ty[]>;
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                     next: number;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
@@ -2747,9 +3064,11 @@ const inferRecordRow: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & E,
               ]
             >,
@@ -2759,12 +3078,14 @@ const inferRecordRow: <A, B, C, D, E, F, G, H, I>(
       } & H)[];
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
     },
-    fields: { name: string; value: Expr }[],
+    fields: Field[],
     st: {
       next: number;
+      letUses: Map<string, Ty[]>;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
     } & E,
   ) =>
     match(fields)
@@ -2826,15 +3147,19 @@ const inferFieldAccess: <A, B, C, D, E, F, G, H, I>(
           c: Option<string>,
           d: {
             next: number;
+            letUses: Map<string, Ty[]>;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & F,
           e: {
             inferExpr: (
               a: Expr,
               b: {
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
@@ -2843,7 +3168,9 @@ const inferFieldAccess: <A, B, C, D, E, F, G, H, I>(
               [
                 Ty,
                 {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -2867,9 +3194,11 @@ const inferFieldAccess: <A, B, C, D, E, F, G, H, I>(
               Ty,
               {
                 next: number;
+                letUses: Map<string, Ty[]>;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
               } & F,
             ]
           >,
@@ -2878,12 +3207,15 @@ const inferFieldAccess: <A, B, C, D, E, F, G, H, I>(
       >;
     } & I)[];
     loopStack: Ty[][];
+    letOwner: Map<string, Span>;
   },
   target: Expr,
   name: string,
-  sp: { end: number; start: number },
+  sp: Span,
   st: {
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letUses: Map<string, Ty[]>;
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
     next: number;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
@@ -2895,7 +3227,9 @@ const inferFieldAccess: <A, B, C, D, E, F, G, H, I>(
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
       next: number;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
     } & F,
   ],
   IErr
@@ -2922,15 +3256,19 @@ const inferFieldAccess: <A, B, C, D, E, F, G, H, I>(
             c: Option<string>,
             d: {
               next: number;
+              letUses: Map<string, Ty[]>;
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & F,
             e: {
               inferExpr: (
                 a: Expr,
                 b: {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -2939,7 +3277,9 @@ const inferFieldAccess: <A, B, C, D, E, F, G, H, I>(
                 [
                   Ty,
                   {
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letUses: Map<string, Ty[]>;
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                     next: number;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
@@ -2963,9 +3303,11 @@ const inferFieldAccess: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & F,
               ]
             >,
@@ -2974,12 +3316,15 @@ const inferFieldAccess: <A, B, C, D, E, F, G, H, I>(
         >;
       } & I)[];
       loopStack: Ty[][];
+      letOwner: Map<string, Span>;
     },
     target: Expr,
     name: string,
-    sp: { end: number; start: number },
+    sp: Span,
     st: {
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
       next: number;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
@@ -2993,7 +3338,9 @@ const inferFieldAccess: <A, B, C, D, E, F, G, H, I>(
             next: number;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letUses: Map<string, Ty[]>;
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & F,
         ]) =>
           (([restRow, st3]: [
@@ -3002,7 +3349,9 @@ const inferFieldAccess: <A, B, C, D, E, F, G, H, I>(
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
               next: number;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letUses: Map<string, Ty[]>;
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & F,
           ]) =>
             _Result_flatMap(
@@ -3046,6 +3395,7 @@ const inferNsField: <A, B, C, D, E, F>(
 const inferInterpParts: <A, B, C, D, E, F, G, H, I>(
   ctx: {
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+    letOwner: Map<string, Span>;
     open: boolean;
     aliasMap: Map<
       string,
@@ -3064,15 +3414,19 @@ const inferInterpParts: <A, B, C, D, E, F, G, H, I>(
           c: Option<string>,
           d: {
             next: number;
+            letUses: Map<string, Ty[]>;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & E,
           e: {
             inferExpr: (
               a: Expr,
               b: {
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
@@ -3081,7 +3435,9 @@ const inferInterpParts: <A, B, C, D, E, F, G, H, I>(
               [
                 Ty,
                 {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -3105,9 +3461,11 @@ const inferInterpParts: <A, B, C, D, E, F, G, H, I>(
               Ty,
               {
                 next: number;
+                letUses: Map<string, Ty[]>;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
               } & E,
             ]
           >,
@@ -3120,16 +3478,20 @@ const inferInterpParts: <A, B, C, D, E, F, G, H, I>(
   parts: InterpPart[],
   st: {
     next: number;
+    letUses: Map<string, Ty[]>;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
   } & E,
 ) => Result<
   {
     next: number;
+    letUses: Map<string, Ty[]>;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
   } & E,
   IErr
 > = _curry(
@@ -3137,6 +3499,7 @@ const inferInterpParts: <A, B, C, D, E, F, G, H, I>(
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
       env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+      letOwner: Map<string, Span>;
       open: boolean;
       aliasMap: Map<
         string,
@@ -3155,15 +3518,19 @@ const inferInterpParts: <A, B, C, D, E, F, G, H, I>(
             c: Option<string>,
             d: {
               next: number;
+              letUses: Map<string, Ty[]>;
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & E,
             e: {
               inferExpr: (
                 a: Expr,
                 b: {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -3172,7 +3539,9 @@ const inferInterpParts: <A, B, C, D, E, F, G, H, I>(
                 [
                   Ty,
                   {
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letUses: Map<string, Ty[]>;
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                     next: number;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
@@ -3196,9 +3565,11 @@ const inferInterpParts: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & E,
               ]
             >,
@@ -3211,9 +3582,11 @@ const inferInterpParts: <A, B, C, D, E, F, G, H, I>(
     parts: InterpPart[],
     st: {
       next: number;
+      letUses: Map<string, Ty[]>;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
     } & E,
   ) =>
     match(parts)
@@ -3271,15 +3644,19 @@ const inferTupleElems: <A, B, C, D, E, F, G, H, I>(
           c: Option<string>,
           d: {
             next: number;
+            letUses: Map<string, Ty[]>;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & F,
           e: {
             inferExpr: (
               a: Expr,
               b: {
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
@@ -3288,7 +3665,9 @@ const inferTupleElems: <A, B, C, D, E, F, G, H, I>(
               [
                 Ty,
                 {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -3312,9 +3691,11 @@ const inferTupleElems: <A, B, C, D, E, F, G, H, I>(
               Ty,
               {
                 next: number;
+                letUses: Map<string, Ty[]>;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
               } & F,
             ]
           >,
@@ -3323,10 +3704,13 @@ const inferTupleElems: <A, B, C, D, E, F, G, H, I>(
       >;
     } & I)[];
     loopStack: Ty[][];
+    letOwner: Map<string, Span>;
   },
   elements: Expr[],
   st: {
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letUses: Map<string, Ty[]>;
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
     next: number;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
@@ -3335,7 +3719,9 @@ const inferTupleElems: <A, B, C, D, E, F, G, H, I>(
   [
     Ty[],
     {
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
       next: number;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
@@ -3365,15 +3751,19 @@ const inferTupleElems: <A, B, C, D, E, F, G, H, I>(
             c: Option<string>,
             d: {
               next: number;
+              letUses: Map<string, Ty[]>;
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & F,
             e: {
               inferExpr: (
                 a: Expr,
                 b: {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -3382,7 +3772,9 @@ const inferTupleElems: <A, B, C, D, E, F, G, H, I>(
                 [
                   Ty,
                   {
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letUses: Map<string, Ty[]>;
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                     next: number;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
@@ -3406,9 +3798,11 @@ const inferTupleElems: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & F,
               ]
             >,
@@ -3417,10 +3811,13 @@ const inferTupleElems: <A, B, C, D, E, F, G, H, I>(
         >;
       } & I)[];
       loopStack: Ty[][];
+      letOwner: Map<string, Span>;
     },
     elements: Expr[],
     st: {
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
       next: number;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
@@ -3479,15 +3876,19 @@ const inferSeqSlotsElems: <A, B, C, D, E, F, G, H, I>(
           c: Option<string>,
           d: {
             next: number;
+            letUses: Map<string, Ty[]>;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & F,
           e: {
             inferExpr: (
               a: Expr,
               b: {
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
@@ -3496,7 +3897,9 @@ const inferSeqSlotsElems: <A, B, C, D, E, F, G, H, I>(
               [
                 Ty,
                 {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -3520,9 +3923,11 @@ const inferSeqSlotsElems: <A, B, C, D, E, F, G, H, I>(
               Ty,
               {
                 next: number;
+                letUses: Map<string, Ty[]>;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
               } & F,
             ]
           >,
@@ -3531,19 +3936,24 @@ const inferSeqSlotsElems: <A, B, C, D, E, F, G, H, I>(
       >;
     } & I)[];
     loopStack: Ty[][];
+    letOwner: Map<string, Span>;
   },
   con: string,
   elem: Ty,
   elements: SeqElem[],
   st: {
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letUses: Map<string, Ty[]>;
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
     next: number;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
   } & F,
 ) => Result<
   {
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letUses: Map<string, Ty[]>;
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
     next: number;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
@@ -3572,15 +3982,19 @@ const inferSeqSlotsElems: <A, B, C, D, E, F, G, H, I>(
             c: Option<string>,
             d: {
               next: number;
+              letUses: Map<string, Ty[]>;
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & F,
             e: {
               inferExpr: (
                 a: Expr,
                 b: {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -3589,7 +4003,9 @@ const inferSeqSlotsElems: <A, B, C, D, E, F, G, H, I>(
                 [
                   Ty,
                   {
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letUses: Map<string, Ty[]>;
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                     next: number;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
@@ -3613,9 +4029,11 @@ const inferSeqSlotsElems: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & F,
               ]
             >,
@@ -3624,12 +4042,15 @@ const inferSeqSlotsElems: <A, B, C, D, E, F, G, H, I>(
         >;
       } & I)[];
       loopStack: Ty[][];
+      letOwner: Map<string, Span>;
     },
     con: string,
     elem: Ty,
     elements: SeqElem[],
     st: {
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
       next: number;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
@@ -3672,6 +4093,7 @@ const inferSeqSlotsElems: <A, B, C, D, E, F, G, H, I>(
 const inferSeqSlots: <A, B, C, D, E, F, G, H, I>(
   ctx: {
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+    letOwner: Map<string, Span>;
     open: boolean;
     aliasMap: Map<
       string,
@@ -3690,15 +4112,19 @@ const inferSeqSlots: <A, B, C, D, E, F, G, H, I>(
           c: Option<string>,
           d: {
             next: number;
+            letUses: Map<string, Ty[]>;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & E,
           e: {
             inferExpr: (
               a: Expr,
               b: {
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
@@ -3707,7 +4133,9 @@ const inferSeqSlots: <A, B, C, D, E, F, G, H, I>(
               [
                 Ty,
                 {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -3731,9 +4159,11 @@ const inferSeqSlots: <A, B, C, D, E, F, G, H, I>(
               Ty,
               {
                 next: number;
+                letUses: Map<string, Ty[]>;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
               } & E,
             ]
           >,
@@ -3747,18 +4177,22 @@ const inferSeqSlots: <A, B, C, D, E, F, G, H, I>(
   elements: SeqElem[],
   st: {
     next: number;
+    letUses: Map<string, Ty[]>;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
   } & E,
 ) => Result<
   [
     Ty,
     {
       next: number;
+      letUses: Map<string, Ty[]>;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
     } & E,
   ],
   IErr
@@ -3767,6 +4201,7 @@ const inferSeqSlots: <A, B, C, D, E, F, G, H, I>(
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
       env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+      letOwner: Map<string, Span>;
       open: boolean;
       aliasMap: Map<
         string,
@@ -3785,15 +4220,19 @@ const inferSeqSlots: <A, B, C, D, E, F, G, H, I>(
             c: Option<string>,
             d: {
               next: number;
+              letUses: Map<string, Ty[]>;
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & E,
             e: {
               inferExpr: (
                 a: Expr,
                 b: {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -3802,7 +4241,9 @@ const inferSeqSlots: <A, B, C, D, E, F, G, H, I>(
                 [
                   Ty,
                   {
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letUses: Map<string, Ty[]>;
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                     next: number;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
@@ -3826,9 +4267,11 @@ const inferSeqSlots: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & E,
               ]
             >,
@@ -3842,18 +4285,22 @@ const inferSeqSlots: <A, B, C, D, E, F, G, H, I>(
     elements: SeqElem[],
     st: {
       next: number;
+      letUses: Map<string, Ty[]>;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
     } & E,
   ) =>
     (([elem, st1]: [
       Ty,
       {
         next: number;
+        letUses: Map<string, Ty[]>;
         tv: Map<number, Ty>;
         rv: Map<number, Row>;
-        recorded: { span: { start: number; end: number }; ty: Ty }[];
+        letSpans: Map<string, Span>;
+        recorded: TypeAt[];
       } & E,
     ]) =>
       _Result_flatMap(
@@ -3882,15 +4329,19 @@ const inferMapEntries: <A, B, C, D, E, F, G, H, I>(
           c: Option<string>,
           d: {
             next: number;
+            letUses: Map<string, Ty[]>;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & F,
           e: {
             inferExpr: (
               a: Expr,
               b: {
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
@@ -3899,7 +4350,9 @@ const inferMapEntries: <A, B, C, D, E, F, G, H, I>(
               [
                 Ty,
                 {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -3923,9 +4376,11 @@ const inferMapEntries: <A, B, C, D, E, F, G, H, I>(
               Ty,
               {
                 next: number;
+                letUses: Map<string, Ty[]>;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
               } & F,
             ]
           >,
@@ -3934,19 +4389,24 @@ const inferMapEntries: <A, B, C, D, E, F, G, H, I>(
       >;
     } & I)[];
     loopStack: Ty[][];
+    letOwner: Map<string, Span>;
   },
   k: Ty,
   v: Ty,
-  entries: { key: Expr; value: Expr }[],
+  entries: MapEntry[],
   st: {
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letUses: Map<string, Ty[]>;
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
     next: number;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
   } & F,
 ) => Result<
   {
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letUses: Map<string, Ty[]>;
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
     next: number;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
@@ -3975,15 +4435,19 @@ const inferMapEntries: <A, B, C, D, E, F, G, H, I>(
             c: Option<string>,
             d: {
               next: number;
+              letUses: Map<string, Ty[]>;
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & F,
             e: {
               inferExpr: (
                 a: Expr,
                 b: {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -3992,7 +4456,9 @@ const inferMapEntries: <A, B, C, D, E, F, G, H, I>(
                 [
                   Ty,
                   {
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letUses: Map<string, Ty[]>;
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                     next: number;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
@@ -4016,9 +4482,11 @@ const inferMapEntries: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & F,
               ]
             >,
@@ -4027,12 +4495,15 @@ const inferMapEntries: <A, B, C, D, E, F, G, H, I>(
         >;
       } & I)[];
       loopStack: Ty[][];
+      letOwner: Map<string, Span>;
     },
     k: Ty,
     v: Ty,
-    entries: { key: Expr; value: Expr }[],
+    entries: MapEntry[],
     st: {
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
       next: number;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
@@ -4076,6 +4547,7 @@ const inferMapEntries: <A, B, C, D, E, F, G, H, I>(
 const inferMapExpr: <A, B, C, D, E, F, G, H, I>(
   ctx: {
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+    letOwner: Map<string, Span>;
     open: boolean;
     aliasMap: Map<
       string,
@@ -4094,15 +4566,19 @@ const inferMapExpr: <A, B, C, D, E, F, G, H, I>(
           c: Option<string>,
           d: {
             next: number;
+            letUses: Map<string, Ty[]>;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & E,
           e: {
             inferExpr: (
               a: Expr,
               b: {
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
@@ -4111,7 +4587,9 @@ const inferMapExpr: <A, B, C, D, E, F, G, H, I>(
               [
                 Ty,
                 {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -4135,9 +4613,11 @@ const inferMapExpr: <A, B, C, D, E, F, G, H, I>(
               Ty,
               {
                 next: number;
+                letUses: Map<string, Ty[]>;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
               } & E,
             ]
           >,
@@ -4147,21 +4627,25 @@ const inferMapExpr: <A, B, C, D, E, F, G, H, I>(
     } & H)[];
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
   },
-  entries: { key: Expr; value: Expr }[],
+  entries: MapEntry[],
   st: {
     next: number;
+    letUses: Map<string, Ty[]>;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
   } & E,
 ) => Result<
   [
     Ty,
     {
       next: number;
+      letUses: Map<string, Ty[]>;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
     } & E,
   ],
   IErr
@@ -4170,6 +4654,7 @@ const inferMapExpr: <A, B, C, D, E, F, G, H, I>(
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
       env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+      letOwner: Map<string, Span>;
       open: boolean;
       aliasMap: Map<
         string,
@@ -4188,15 +4673,19 @@ const inferMapExpr: <A, B, C, D, E, F, G, H, I>(
             c: Option<string>,
             d: {
               next: number;
+              letUses: Map<string, Ty[]>;
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & E,
             e: {
               inferExpr: (
                 a: Expr,
                 b: {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -4205,7 +4694,9 @@ const inferMapExpr: <A, B, C, D, E, F, G, H, I>(
                 [
                   Ty,
                   {
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letUses: Map<string, Ty[]>;
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                     next: number;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
@@ -4229,9 +4720,11 @@ const inferMapExpr: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & E,
               ]
             >,
@@ -4241,30 +4734,36 @@ const inferMapExpr: <A, B, C, D, E, F, G, H, I>(
       } & H)[];
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
     },
-    entries: { key: Expr; value: Expr }[],
+    entries: MapEntry[],
     st: {
       next: number;
+      letUses: Map<string, Ty[]>;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
     } & E,
   ) =>
     (([k, st1]: [
       Ty,
       {
         next: number;
+        letUses: Map<string, Ty[]>;
         tv: Map<number, Ty>;
         rv: Map<number, Row>;
-        recorded: { span: { start: number; end: number }; ty: Ty }[];
+        letSpans: Map<string, Span>;
+        recorded: TypeAt[];
       } & E,
     ]) =>
       (([v, st2]: [
         Ty,
         {
           next: number;
+          letUses: Map<string, Ty[]>;
           tv: Map<number, Ty>;
           rv: Map<number, Row>;
-          recorded: { span: { start: number; end: number }; ty: Ty }[];
+          letSpans: Map<string, Span>;
+          recorded: TypeAt[];
         } & E,
       ]) =>
         _Result_flatMap(
@@ -4335,6 +4834,7 @@ const inferArms: <A, B, C, D, E, F, G, H, I>(
   ctx: {
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+    letOwner: Map<string, Span>;
     loopStack: Ty[][];
     plugins: ({
       inferCall: Option<
@@ -4344,15 +4844,19 @@ const inferArms: <A, B, C, D, E, F, G, H, I>(
           c: Option<string>,
           d: {
             next: number;
+            letUses: Map<string, Ty[]>;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & D,
           e: {
             inferExpr: (
               a: Expr,
               b: {
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
@@ -4361,7 +4865,9 @@ const inferArms: <A, B, C, D, E, F, G, H, I>(
               [
                 Ty,
                 {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -4385,9 +4891,11 @@ const inferArms: <A, B, C, D, E, F, G, H, I>(
               Ty,
               {
                 next: number;
+                letUses: Map<string, Ty[]>;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
               } & D,
             ]
           >,
@@ -4407,19 +4915,23 @@ const inferArms: <A, B, C, D, E, F, G, H, I>(
   },
   scrutT: Ty,
   resultT: Ty,
-  arms: { pattern: Pattern; guard: Option<Expr>; body: Expr }[],
+  arms: MatchArm[],
   st: {
     next: number;
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    recorded: TypeAt[];
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
+    letUses: Map<string, Ty[]>;
+    letSpans: Map<string, Span>;
   } & D,
 ) => Result<
   {
     next: number;
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    recorded: TypeAt[];
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
+    letUses: Map<string, Ty[]>;
+    letSpans: Map<string, Span>;
   } & D,
   IErr
 > = _curry(
@@ -4428,6 +4940,7 @@ const inferArms: <A, B, C, D, E, F, G, H, I>(
     ctx: {
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
       env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+      letOwner: Map<string, Span>;
       loopStack: Ty[][];
       plugins: ({
         inferCall: Option<
@@ -4437,15 +4950,19 @@ const inferArms: <A, B, C, D, E, F, G, H, I>(
             c: Option<string>,
             d: {
               next: number;
+              letUses: Map<string, Ty[]>;
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & D,
             e: {
               inferExpr: (
                 a: Expr,
                 b: {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -4454,7 +4971,9 @@ const inferArms: <A, B, C, D, E, F, G, H, I>(
                 [
                   Ty,
                   {
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letUses: Map<string, Ty[]>;
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                     next: number;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
@@ -4478,9 +4997,11 @@ const inferArms: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & D,
               ]
             >,
@@ -4500,12 +5021,14 @@ const inferArms: <A, B, C, D, E, F, G, H, I>(
     },
     scrutT: Ty,
     resultT: Ty,
-    arms: { pattern: Pattern; guard: Option<Expr>; body: Expr }[],
+    arms: MatchArm[],
     st: {
       next: number;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      recorded: TypeAt[];
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
     } & D,
   ) =>
     match(arms)
@@ -4577,15 +5100,19 @@ const inferMatch: <A, B, C, D, E, F, G, H, I>(
           c: Option<string>,
           d: {
             next: number;
+            letUses: Map<string, Ty[]>;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & F,
           e: {
             inferExpr: (
               a: Expr,
               b: {
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
@@ -4594,7 +5121,9 @@ const inferMatch: <A, B, C, D, E, F, G, H, I>(
               [
                 Ty,
                 {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -4618,9 +5147,11 @@ const inferMatch: <A, B, C, D, E, F, G, H, I>(
               Ty,
               {
                 next: number;
+                letUses: Map<string, Ty[]>;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
               } & F,
             ]
           >,
@@ -4629,11 +5160,14 @@ const inferMatch: <A, B, C, D, E, F, G, H, I>(
       >;
     } & I)[];
     loopStack: Ty[][];
+    letOwner: Map<string, Span>;
   },
   scrutinee: Expr,
-  arms: { pattern: Pattern; guard: Option<Expr>; body: Expr }[],
+  arms: MatchArm[],
   st: {
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letUses: Map<string, Ty[]>;
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
     next: number;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
@@ -4643,9 +5177,11 @@ const inferMatch: <A, B, C, D, E, F, G, H, I>(
     Ty,
     {
       next: number;
+      letUses: Map<string, Ty[]>;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
     } & F,
   ],
   IErr
@@ -4672,15 +5208,19 @@ const inferMatch: <A, B, C, D, E, F, G, H, I>(
             c: Option<string>,
             d: {
               next: number;
+              letUses: Map<string, Ty[]>;
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & F,
             e: {
               inferExpr: (
                 a: Expr,
                 b: {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -4689,7 +5229,9 @@ const inferMatch: <A, B, C, D, E, F, G, H, I>(
                 [
                   Ty,
                   {
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letUses: Map<string, Ty[]>;
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                     next: number;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
@@ -4713,9 +5255,11 @@ const inferMatch: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & F,
               ]
             >,
@@ -4724,11 +5268,14 @@ const inferMatch: <A, B, C, D, E, F, G, H, I>(
         >;
       } & I)[];
       loopStack: Ty[][];
+      letOwner: Map<string, Span>;
     },
     scrutinee: Expr,
-    arms: { pattern: Pattern; guard: Option<Expr>; body: Expr }[],
+    arms: MatchArm[],
     st: {
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
       next: number;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
@@ -4740,7 +5287,9 @@ const inferMatch: <A, B, C, D, E, F, G, H, I>(
           Ty,
           {
             next: number;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letUses: Map<string, Ty[]>;
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
           } & F,
@@ -4773,15 +5322,19 @@ const inferExpr: <A, B, C, D, E, F, G, H, I>(
           c: Option<string>,
           d: {
             next: number;
+            letUses: Map<string, Ty[]>;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & F,
           e: {
             inferExpr: (
               a: Expr,
               b: {
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
@@ -4790,7 +5343,9 @@ const inferExpr: <A, B, C, D, E, F, G, H, I>(
               [
                 Ty,
                 {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -4814,9 +5369,11 @@ const inferExpr: <A, B, C, D, E, F, G, H, I>(
               Ty,
               {
                 next: number;
+                letUses: Map<string, Ty[]>;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
               } & F,
             ]
           >,
@@ -4825,10 +5382,13 @@ const inferExpr: <A, B, C, D, E, F, G, H, I>(
       >;
     } & I)[];
     loopStack: Ty[][];
+    letOwner: Map<string, Span>;
   },
   e: Expr,
   st: {
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letUses: Map<string, Ty[]>;
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
     next: number;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
@@ -4837,7 +5397,9 @@ const inferExpr: <A, B, C, D, E, F, G, H, I>(
   [
     Ty,
     {
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      recorded: TypeAt[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
       next: number;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
@@ -4867,15 +5429,19 @@ const inferExpr: <A, B, C, D, E, F, G, H, I>(
             c: Option<string>,
             d: {
               next: number;
+              letUses: Map<string, Ty[]>;
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & F,
             e: {
               inferExpr: (
                 a: Expr,
                 b: {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -4884,7 +5450,9 @@ const inferExpr: <A, B, C, D, E, F, G, H, I>(
                 [
                   Ty,
                   {
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letUses: Map<string, Ty[]>;
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                     next: number;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
@@ -4908,9 +5476,11 @@ const inferExpr: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & F,
               ]
             >,
@@ -4919,10 +5489,13 @@ const inferExpr: <A, B, C, D, E, F, G, H, I>(
         >;
       } & I)[];
       loopStack: Ty[][];
+      letOwner: Map<string, Span>;
     },
     e: Expr,
     st: {
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
       next: number;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
@@ -4936,6 +5509,7 @@ const inferExpr: <A, B, C, D, E, F, G, H, I>(
 const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
   ctx: {
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+    letOwner: Map<string, Span>;
     open: boolean;
     aliasMap: Map<
       string,
@@ -4954,15 +5528,19 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
           c: Option<string>,
           d: {
             next: number;
+            letUses: Map<string, Ty[]>;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & E,
           e: {
             inferExpr: (
               a: Expr,
               b: {
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
@@ -4971,7 +5549,9 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
               [
                 Ty,
                 {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -4995,9 +5575,11 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
               Ty,
               {
                 next: number;
+                letUses: Map<string, Ty[]>;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
               } & E,
             ]
           >,
@@ -5010,18 +5592,22 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
   e: Expr,
   st: {
     next: number;
+    letUses: Map<string, Ty[]>;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
   } & E,
 ) => Result<
   [
     Ty,
     {
       next: number;
+      letUses: Map<string, Ty[]>;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
     } & E,
   ],
   IErr
@@ -5030,6 +5616,7 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
       env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+      letOwner: Map<string, Span>;
       open: boolean;
       aliasMap: Map<
         string,
@@ -5048,15 +5635,19 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
             c: Option<string>,
             d: {
               next: number;
+              letUses: Map<string, Ty[]>;
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & E,
             e: {
               inferExpr: (
                 a: Expr,
                 b: {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -5065,7 +5656,9 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
                 [
                   Ty,
                   {
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letUses: Map<string, Ty[]>;
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                     next: number;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
@@ -5089,9 +5682,11 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & E,
               ]
             >,
@@ -5104,9 +5699,11 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
     e: Expr,
     st: {
       next: number;
+      letUses: Map<string, Ty[]>;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
     } & E,
   ) =>
     match(e)
@@ -5120,12 +5717,23 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
             (([t, st1]: [
               Ty,
               {
+                letUses: Map<string, Ty[]>;
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
               } & E,
-            ]) => Ok(_tuple(t, st1)))(instantiate(sc, st)),
+            ]) =>
+              Ok(
+                _tuple(
+                  t,
+                  match(_Map_get(name, ctx.letOwner))
+                    .with({ _tag: "Some" }, ({ value: vsp }) => noteUse(vsp, t, st1))
+                    .with({ _tag: "None" }, () => st1)
+                    .exhaustive(),
+                ),
+              ))(instantiate(sc, st)),
           )
           .with({ _tag: "None" }, () =>
             ctx.open
@@ -5133,9 +5741,11 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
                   Ty,
                   {
                     next: number;
+                    letUses: Map<string, Ty[]>;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                   } & E,
                 ]) => Ok(_tuple(t, st1)))(freshVar(st))
               : Err(typeErr(`unbound variable '${name}'`, sp)),
@@ -5150,7 +5760,9 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
             next: number;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letUses: Map<string, Ty[]>;
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & E,
         ]) =>
           _Result_flatMap(
@@ -5177,9 +5789,14 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
             _Result_flatMap(
               ([valT, st1]) =>
                 ((sc: { vars: number[]; rvars: number[]; ty: Ty }) =>
-                  (($ctx) => inferExpr($ctx, body, st1))(
-                    ctxWithEnv(ctx, _Map_set(name, sc, ctx.env)),
-                  ))(generalize(ctx.env, valT, st1, true)),
+                  ((vsp: Span) =>
+                    (($ctx) => inferExpr($ctx, body, noteLet(vsp, st1)))(
+                      ctxWithLets(
+                        ctx,
+                        _Map_set(name, sc, ctx.env),
+                        _Map_set(name, vsp, ctx.letOwner),
+                      ),
+                    ))(exprSpan(value)))(generalize(ctx.env, valT, st1, true)),
               inferExpr(ctx, value, st),
             ),
           ),
@@ -5202,7 +5819,9 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
             (
               e: Expr,
               st0: {
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
@@ -5238,7 +5857,9 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
                         tv: Map<number, Ty>;
                         rv: Map<number, Row>;
                         next: number;
-                        recorded: { span: { start: number; end: number }; ty: Ty }[];
+                        letUses: Map<string, Ty[]>;
+                        letSpans: Map<string, Span>;
+                        recorded: TypeAt[];
                       } & E,
                     ]) =>
                       _Result_flatMap(
@@ -5274,8 +5895,9 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
       .with({ _tag: "EMatch" }, ({ scrutinee, arms }) => inferMatch(ctx, scrutinee, arms, st))
       .with({ _tag: "ELoop" }, ({ params, body }) =>
         _Result_flatMap(
-          ([frame, bodyEnv, st1]) => inferExpr(ctxWithLoop(ctx, bodyEnv, frame), body, st1),
-          inferLoopParamsFrom(ctx, params, 0, ctx.env, [] as Ty[], st),
+          ([frame, bodyEnv, bodyOwner, st1]) =>
+            inferExpr(ctxWithLoop(ctx, bodyEnv, frame, bodyOwner), body, st1),
+          inferLoopParamsFrom(ctx, params, 0, ctx.env, [] as Ty[], ctx.letOwner, st),
         ),
       )
       .with({ _tag: "ERecur" }, ({ args, span: sp }) => inferRecur(ctx, args, sp, st))
@@ -5305,15 +5927,19 @@ const inferDo: <A, B, C, D, E, F, G, H, I>(
           c: Option<string>,
           d: {
             next: number;
+            letUses: Map<string, Ty[]>;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & F,
           e: {
             inferExpr: (
               a: Expr,
               b: {
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
@@ -5322,7 +5948,9 @@ const inferDo: <A, B, C, D, E, F, G, H, I>(
               [
                 Ty,
                 {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -5346,9 +5974,11 @@ const inferDo: <A, B, C, D, E, F, G, H, I>(
               Ty,
               {
                 next: number;
+                letUses: Map<string, Ty[]>;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
               } & F,
             ]
           >,
@@ -5357,10 +5987,13 @@ const inferDo: <A, B, C, D, E, F, G, H, I>(
       >;
     } & I)[];
     loopStack: Ty[][];
+    letOwner: Map<string, Span>;
   },
   exprs: Expr[],
   st: {
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letUses: Map<string, Ty[]>;
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
     next: number;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
@@ -5369,7 +6002,9 @@ const inferDo: <A, B, C, D, E, F, G, H, I>(
   [
     Ty,
     {
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
       next: number;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
@@ -5399,15 +6034,19 @@ const inferDo: <A, B, C, D, E, F, G, H, I>(
             c: Option<string>,
             d: {
               next: number;
+              letUses: Map<string, Ty[]>;
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & F,
             e: {
               inferExpr: (
                 a: Expr,
                 b: {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -5416,7 +6055,9 @@ const inferDo: <A, B, C, D, E, F, G, H, I>(
                 [
                   Ty,
                   {
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letUses: Map<string, Ty[]>;
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                     next: number;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
@@ -5440,9 +6081,11 @@ const inferDo: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & F,
               ]
             >,
@@ -5451,10 +6094,13 @@ const inferDo: <A, B, C, D, E, F, G, H, I>(
         >;
       } & I)[];
       loopStack: Ty[][];
+      letOwner: Map<string, Span>;
     },
     exprs: Expr[],
     st: {
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
       next: number;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
@@ -5492,25 +6138,15 @@ const inferPatRecordFrom: <A, B, C, D>(
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
   } & C,
-  fields: { pat: Pattern; label: string }[],
+  fields: PatField[],
   row: Row,
   bindings: Map<string, Ty>,
-  st: {
-    next: number;
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & D,
+  st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
 ) => Result<
   [
     Row,
     Map<string, Ty>,
-    {
-      next: number;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & D,
+    { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
   ],
   IErr
 > = _curry(
@@ -5520,15 +6156,10 @@ const inferPatRecordFrom: <A, B, C, D>(
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
       env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
     } & C,
-    fields: { pat: Pattern; label: string }[],
+    fields: PatField[],
     row: Row,
     bindings: Map<string, Ty>,
-    st: {
-      next: number;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & D,
+    st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
   ) =>
     match(fields)
       .with(
@@ -5565,23 +6196,13 @@ const inferPatRecord: <A, B, C, D>(
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
   } & C,
-  fields: { label: string; pat: Pattern }[],
-  st: {
-    next: number;
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & D,
+  fields: PatField[],
+  st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
 ) => Result<
   [
     Ty,
     Map<string, Ty>,
-    {
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & D,
+    { recorded: TypeAt[]; next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
   ],
   IErr
 > = _curry(
@@ -5591,22 +6212,12 @@ const inferPatRecord: <A, B, C, D>(
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
       env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
     } & C,
-    fields: { label: string; pat: Pattern }[],
-    st: {
-      next: number;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & D,
+    fields: PatField[],
+    st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
   ) =>
     (([rowBase, _st1]: [
       Row,
-      {
-        next: number;
-        recorded: { span: { start: number; end: number }; ty: Ty }[];
-        tv: Map<number, Ty>;
-        rv: Map<number, Row>;
-      } & D,
+      { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
     ]) =>
       _Result_flatMap(
         ([row, bindings, st2]) => Ok(_tuple(tRecord(row), bindings, st2)),
@@ -5621,24 +6232,14 @@ const inferPatCtorArgs: <A, B, C, D>(
   ctor: string,
   curT: Ty,
   args: Pattern[],
-  st: {
-    tv: Map<number, Ty>;
-    next: number;
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
-    rv: Map<number, Row>;
-  } & D,
+  st: { tv: Map<number, Ty>; next: number; recorded: TypeAt[]; rv: Map<number, Row> } & D,
   bindings: Map<string, Ty>,
-  sp: { start: number; end: number },
+  sp: Span,
 ) => Result<
   [
     Ty,
     Map<string, Ty>,
-    {
-      tv: Map<number, Ty>;
-      next: number;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
-      rv: Map<number, Row>;
-    } & D,
+    { tv: Map<number, Ty>; next: number; recorded: TypeAt[]; rv: Map<number, Row> } & D,
   ],
   IErr
 > = _curry(
@@ -5651,14 +6252,9 @@ const inferPatCtorArgs: <A, B, C, D>(
     ctor: string,
     curT: Ty,
     args: Pattern[],
-    st: {
-      tv: Map<number, Ty>;
-      next: number;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
-      rv: Map<number, Row>;
-    } & D,
+    st: { tv: Map<number, Ty>; next: number; recorded: TypeAt[]; rv: Map<number, Row> } & D,
     bindings: Map<string, Ty>,
-    sp: { start: number; end: number },
+    sp: Span,
   ) =>
     match(args)
       .with(
@@ -5708,22 +6304,12 @@ const inferPatTupleFrom: <A, B, C, D>(
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
   } & C,
   elems: Pattern[],
-  st: {
-    next: number;
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & D,
+  st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
 ) => Result<
   [
     Ty[],
     Map<string, Ty>,
-    {
-      next: number;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & D,
+    { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
   ],
   IErr
 > = _curry(
@@ -5734,12 +6320,7 @@ const inferPatTupleFrom: <A, B, C, D>(
       env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
     } & C,
     elems: Pattern[],
-    st: {
-      next: number;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & D,
+    st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
   ) =>
     match(elems)
       .with(
@@ -5781,22 +6362,12 @@ const inferPatTuple: <A, B, C, D>(
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
   } & C,
   elems: Pattern[],
-  st: {
-    next: number;
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & D,
+  st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
 ) => Result<
   [
     Ty,
     Map<string, Ty>,
-    {
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & D,
+    { recorded: TypeAt[]; next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
   ],
   IErr
 > = _curry(
@@ -5807,12 +6378,7 @@ const inferPatTuple: <A, B, C, D>(
       env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
     } & C,
     elems: Pattern[],
-    st: {
-      next: number;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & D,
+    st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
   ) =>
     _Result_flatMap(
       ([elemTs, bindings, st1]) => Ok(_tuple(tTuple(elemTs), bindings, st1)),
@@ -5826,21 +6392,11 @@ const inferSeqPatElems: <A, B, C, D>(
   } & C,
   elem: Ty,
   elems: Pattern[],
-  st: {
-    next: number;
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & D,
+  st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
 ) => Result<
   [
     Map<string, Ty>,
-    {
-      next: number;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & D,
+    { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
   ],
   IErr
 > = _curry(
@@ -5852,12 +6408,7 @@ const inferSeqPatElems: <A, B, C, D>(
     } & C,
     elem: Ty,
     elems: Pattern[],
-    st: {
-      next: number;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & D,
+    st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
   ) =>
     match(elems)
       .with(
@@ -5899,22 +6450,12 @@ const inferSeqPat: <A, B, C, D>(
   con: string,
   elems: Pattern[],
   restPat: Option<Pattern>,
-  st: {
-    next: number;
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & D,
+  st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
 ) => Result<
   [
     Ty,
     Map<string, Ty>,
-    {
-      next: number;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & D,
+    { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
   ],
   IErr
 > = _curry(
@@ -5927,21 +6468,11 @@ const inferSeqPat: <A, B, C, D>(
     con: string,
     elems: Pattern[],
     restPat: Option<Pattern>,
-    st: {
-      next: number;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & D,
+    st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
   ) =>
     (([elem, st1]: [
       Ty,
-      {
-        next: number;
-        recorded: { span: { start: number; end: number }; ty: Ty }[];
-        tv: Map<number, Ty>;
-        rv: Map<number, Row>;
-      } & D,
+      { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
     ]) => {
       const seqT: Ty = tCon(con, [elem]);
       return _Result_flatMap(
@@ -5969,22 +6500,12 @@ const inferPat: <A, B, C, D>(
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
   } & C,
   p: Pattern,
-  st: {
-    next: number;
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & D,
+  st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
 ) => Result<
   [
     Ty,
     Map<string, Ty>,
-    {
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & D,
+    { recorded: TypeAt[]; next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
   ],
   IErr
 > = _curry(
@@ -5995,12 +6516,7 @@ const inferPat: <A, B, C, D>(
       env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
     } & C,
     p: Pattern,
-    st: {
-      next: number;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & D,
+    st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
   ) =>
     _Result_flatMap(
       ([t, bindings, st1]) => Ok(_tuple(t, bindings, recordAt(patSpan(p), t, st1))),
@@ -6013,22 +6529,12 @@ const inferPatRaw: <A, B, C, D>(
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
   } & C,
   p: Pattern,
-  st: {
-    next: number;
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & D,
+  st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
 ) => Result<
   [
     Ty,
     Map<string, Ty>,
-    {
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & D,
+    { recorded: TypeAt[]; next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
   ],
   IErr
 > = _curry(
@@ -6039,12 +6545,7 @@ const inferPatRaw: <A, B, C, D>(
       env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
     } & C,
     p: Pattern,
-    st: {
-      next: number;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & D,
+    st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
   ) =>
     match(p)
       .with({ _tag: "PAs" }, ({ pat, name }) =>
@@ -6056,12 +6557,7 @@ const inferPatRaw: <A, B, C, D>(
       .with({ _tag: "PWild" }, () =>
         (([t, st1]: [
           Ty,
-          {
-            next: number;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-          } & D,
+          { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
         ]) => Ok(_tuple(t, new Map<string, Ty>(), st1)))(freshVar(st)),
       )
       .with({ _tag: "PUnit" }, () => Ok(_tuple(tUnit, new Map<string, Ty>(), st)))
@@ -6071,12 +6567,7 @@ const inferPatRaw: <A, B, C, D>(
       .with({ _tag: "PBind" }, ({ name }) =>
         (([t, st1]: [
           Ty,
-          {
-            next: number;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-          } & D,
+          { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
         ]) => Ok(_tuple(t, _Map_set(name, t, new Map<string, Ty>()), st1)))(freshVar(st)),
       )
       .with({ _tag: "PRecord" }, ({ fields }) => inferPatRecord(ctx, fields, st))
@@ -6099,7 +6590,7 @@ const inferPatRaw: <A, B, C, D>(
                   Ty,
                   {
                     next: number;
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    recorded: TypeAt[];
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
                   } & D,
@@ -6117,7 +6608,7 @@ const inferPatRaw: <A, B, C, D>(
                   Ty,
                   {
                     next: number;
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    recorded: TypeAt[];
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
                   } & D,
@@ -6207,19 +6698,9 @@ const inferOrPatAlts: <A, B, C, D>(
   i: number,
   t: Ty,
   bindings: Map<string, Ty>,
-  st: {
-    next: number;
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & D,
+  st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
 ) => Result<
-  {
-    next: number;
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & D,
+  { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
   IErr
 > = _curry(
   6,
@@ -6232,12 +6713,7 @@ const inferOrPatAlts: <A, B, C, D>(
     i: number,
     t: Ty,
     bindings: Map<string, Ty>,
-    st: {
-      next: number;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & D,
+    st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
   ) =>
     match(_Array_get(i, alts))
       .with({ _tag: "None" }, () => Ok(st))
@@ -6269,23 +6745,13 @@ const inferOrPat: <A, B, C, D>(
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
   } & C,
   alts: Pattern[],
-  sp: { end: number; start: number },
-  st: {
-    next: number;
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & D,
+  sp: Span,
+  st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
 ) => Result<
   [
     Ty,
     Map<string, Ty>,
-    {
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & D,
+    { recorded: TypeAt[]; next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
   ],
   IErr
 > = _curry(
@@ -6296,13 +6762,8 @@ const inferOrPat: <A, B, C, D>(
       env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
     } & C,
     alts: Pattern[],
-    sp: { end: number; start: number },
-    st: {
-      next: number;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & D,
+    sp: Span,
+    st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
   ) =>
     match(alts)
       .with(
@@ -6341,7 +6802,7 @@ const patternBinds: (p: Pattern) => string[] = (p: Pattern) =>
     .with({ _tag: "PAs" }, ({ pat, name }) => _Array_append(name, patternBinds(pat)))
     .with({ _tag: "PBind" }, ({ name }) => [name])
     .with({ _tag: "PRecord" }, ({ fields }) =>
-      _Array_flatMap((f: { pat: Pattern; label: string }) => patternBinds(f.pat), fields),
+      _Array_flatMap((f: PatField) => patternBinds(f.pat), fields),
     )
     .with({ _tag: "PCtor" }, ({ args }) => _Array_flatMap(patternBinds, args))
     .with({ _tag: "PTuple" }, ({ elems }) => _Array_flatMap(patternBinds, elems))
@@ -6415,51 +6876,21 @@ const loopBound: <A, B>(params: ({ name: A } & B)[], bound: Set<A>) => Set<A> = 
     ),
 );
 const loopInitRefsFrom: {
-  (
-    params: { name: string; nameSpan: { start: number; end: number }; init: Expr }[],
-  ): (i: number) => (bound: Set<string>) => (acc: Set<string>) => Set<string>;
-  (
-    params: { name: string; nameSpan: { start: number; end: number }; init: Expr }[],
-  ): (i: number) => (bound: Set<string>, acc: Set<string>) => Set<string>;
-  (
-    params: { name: string; nameSpan: { start: number; end: number }; init: Expr }[],
-  ): (i: number, bound: Set<string>) => (acc: Set<string>) => Set<string>;
-  (
-    params: { name: string; nameSpan: { start: number; end: number }; init: Expr }[],
-    i: number,
-  ): (bound: Set<string>) => (acc: Set<string>) => Set<string>;
-  (
-    params: { name: string; nameSpan: { start: number; end: number }; init: Expr }[],
-  ): (i: number, bound: Set<string>, acc: Set<string>) => Set<string>;
-  (
-    params: { name: string; nameSpan: { start: number; end: number }; init: Expr }[],
-    i: number,
-  ): (bound: Set<string>, acc: Set<string>) => Set<string>;
-  (
-    params: { name: string; nameSpan: { start: number; end: number }; init: Expr }[],
-    i: number,
-    bound: Set<string>,
-  ): (acc: Set<string>) => Set<string>;
-  (
-    params: { name: string; nameSpan: { start: number; end: number }; init: Expr }[],
-    i: number,
-    bound: Set<string>,
-    acc: Set<string>,
-  ): Set<string>;
-} = _curry(
-  4,
-  (
-    params: { name: string; nameSpan: { start: number; end: number }; init: Expr }[],
-    i: number,
-    bound: Set<string>,
-    acc: Set<string>,
-  ) =>
-    match(_Array_get(i, params))
-      .with({ _tag: "None" }, () => acc)
-      .with({ _tag: "Some" }, ({ value: p }) =>
-        loopInitRefsFrom(params, add(i, 1), bound, freeRefs(p.init, bound, acc)),
-      )
-      .exhaustive(),
+  (params: LoopParam[]): (i: number) => (bound: Set<string>) => (acc: Set<string>) => Set<string>;
+  (params: LoopParam[]): (i: number) => (bound: Set<string>, acc: Set<string>) => Set<string>;
+  (params: LoopParam[]): (i: number, bound: Set<string>) => (acc: Set<string>) => Set<string>;
+  (params: LoopParam[], i: number): (bound: Set<string>) => (acc: Set<string>) => Set<string>;
+  (params: LoopParam[]): (i: number, bound: Set<string>, acc: Set<string>) => Set<string>;
+  (params: LoopParam[], i: number): (bound: Set<string>, acc: Set<string>) => Set<string>;
+  (params: LoopParam[], i: number, bound: Set<string>): (acc: Set<string>) => Set<string>;
+  (params: LoopParam[], i: number, bound: Set<string>, acc: Set<string>): Set<string>;
+} = _curry(4, (params: LoopParam[], i: number, bound: Set<string>, acc: Set<string>) =>
+  match(_Array_get(i, params))
+    .with({ _tag: "None" }, () => acc)
+    .with({ _tag: "Some" }, ({ value: p }) =>
+      loopInitRefsFrom(params, add(i, 1), bound, freeRefs(p.init, bound, acc)),
+    )
+    .exhaustive(),
 );
 const freeRefsList: {
   (es: Expr[]): (bound: Set<string>) => (acc: Set<string>) => Set<string>;
@@ -6487,13 +6918,11 @@ const freeRefsList: {
     }),
 );
 const freeRefsFields: {
-  (
-    fields: { name: string; value: Expr }[],
-  ): (bound: Set<string>) => (acc: Set<string>) => Set<string>;
-  (fields: { name: string; value: Expr }[]): (bound: Set<string>, acc: Set<string>) => Set<string>;
-  (fields: { name: string; value: Expr }[], bound: Set<string>): (acc: Set<string>) => Set<string>;
-  (fields: { name: string; value: Expr }[], bound: Set<string>, acc: Set<string>): Set<string>;
-} = _curry(3, (fields: { name: string; value: Expr }[], bound: Set<string>, acc: Set<string>) =>
+  (fields: Field[]): (bound: Set<string>) => (acc: Set<string>) => Set<string>;
+  (fields: Field[]): (bound: Set<string>, acc: Set<string>) => Set<string>;
+  (fields: Field[], bound: Set<string>): (acc: Set<string>) => Set<string>;
+  (fields: Field[], bound: Set<string>, acc: Set<string>): Set<string>;
+} = _curry(3, (fields: Field[], bound: Set<string>, acc: Set<string>) =>
   match(fields)
     .with(
       (_v) => {
@@ -6514,13 +6943,11 @@ const freeRefsFields: {
     }),
 );
 const freeRefsEntries: {
-  (
-    entries: { key: Expr; value: Expr }[],
-  ): (bound: Set<string>) => (acc: Set<string>) => Set<string>;
-  (entries: { key: Expr; value: Expr }[]): (bound: Set<string>, acc: Set<string>) => Set<string>;
-  (entries: { key: Expr; value: Expr }[], bound: Set<string>): (acc: Set<string>) => Set<string>;
-  (entries: { key: Expr; value: Expr }[], bound: Set<string>, acc: Set<string>): Set<string>;
-} = _curry(3, (entries: { key: Expr; value: Expr }[], bound: Set<string>, acc: Set<string>) =>
+  (entries: MapEntry[]): (bound: Set<string>) => (acc: Set<string>) => Set<string>;
+  (entries: MapEntry[]): (bound: Set<string>, acc: Set<string>) => Set<string>;
+  (entries: MapEntry[], bound: Set<string>): (acc: Set<string>) => Set<string>;
+  (entries: MapEntry[], bound: Set<string>, acc: Set<string>): Set<string>;
+} = _curry(3, (entries: MapEntry[], bound: Set<string>, acc: Set<string>) =>
   match(entries)
     .with(
       (_v) => {
@@ -6574,53 +7001,36 @@ const freeRefsInterpParts: {
     }),
 );
 const freeRefsArms: {
-  (
-    arms: { pattern: Pattern; guard: Option<Expr>; body: Expr }[],
-  ): (bound: Set<string>) => (acc: Set<string>) => Set<string>;
-  (
-    arms: { pattern: Pattern; guard: Option<Expr>; body: Expr }[],
-  ): (bound: Set<string>, acc: Set<string>) => Set<string>;
-  (
-    arms: { pattern: Pattern; guard: Option<Expr>; body: Expr }[],
-    bound: Set<string>,
-  ): (acc: Set<string>) => Set<string>;
-  (
-    arms: { pattern: Pattern; guard: Option<Expr>; body: Expr }[],
-    bound: Set<string>,
-    acc: Set<string>,
-  ): Set<string>;
-} = _curry(
-  3,
-  (
-    arms: { pattern: Pattern; guard: Option<Expr>; body: Expr }[],
-    bound: Set<string>,
-    acc: Set<string>,
-  ) =>
-    match(arms)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => acc,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([arm, ...rest]) =>
-          ((armBound: Set<string>) =>
-            ((acc1: Set<string>) => freeRefsArms(rest, bound, freeRefs(arm.body, armBound, acc1)))(
-              match(arm.guard)
-                .with({ _tag: "Some" }, ({ value: g }) => freeRefs(g, armBound, acc))
-                .with({ _tag: "None" }, () => acc)
-                .exhaustive(),
-            ))(addAllFrom(patternBinds(arm.pattern), bound)),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+  (arms: MatchArm[]): (bound: Set<string>) => (acc: Set<string>) => Set<string>;
+  (arms: MatchArm[]): (bound: Set<string>, acc: Set<string>) => Set<string>;
+  (arms: MatchArm[], bound: Set<string>): (acc: Set<string>) => Set<string>;
+  (arms: MatchArm[], bound: Set<string>, acc: Set<string>): Set<string>;
+} = _curry(3, (arms: MatchArm[], bound: Set<string>, acc: Set<string>) =>
+  match(arms)
+    .with(
+      (_v) => {
+        const _g: any = _v;
+        return _g.length === 0;
+      },
+      () => acc,
+    )
+    .with(
+      (_v) => {
+        const _g: any = _v;
+        return _g.length >= 1;
+      },
+      ([arm, ...rest]) =>
+        ((armBound: Set<string>) =>
+          ((acc1: Set<string>) => freeRefsArms(rest, bound, freeRefs(arm.body, armBound, acc1)))(
+            match(arm.guard)
+              .with({ _tag: "Some" }, ({ value: g }) => freeRefs(g, armBound, acc))
+              .with({ _tag: "None" }, () => acc)
+              .exhaustive(),
+          ))(addAllFrom(patternBinds(arm.pattern), bound)),
+    )
+    .otherwise(() => {
+      throw new Error("non-exhaustive match");
+    }),
 );
 const freeRefs: {
   (e: Expr): (bound: Set<string>) => (acc: Set<string>) => Set<string>;
@@ -7436,15 +7846,19 @@ const inferGroupFrom: <A, B, C, D, E, F, G, H, I>(
           c: Option<string>,
           d: {
             next: number;
+            letUses: Map<string, Ty[]>;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & F,
           e: {
             inferExpr: (
               a: Expr,
               b: {
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
@@ -7453,7 +7867,9 @@ const inferGroupFrom: <A, B, C, D, E, F, G, H, I>(
               [
                 Ty,
                 {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -7477,9 +7893,11 @@ const inferGroupFrom: <A, B, C, D, E, F, G, H, I>(
               Ty,
               {
                 next: number;
+                letUses: Map<string, Ty[]>;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
               } & F,
             ]
           >,
@@ -7488,10 +7906,13 @@ const inferGroupFrom: <A, B, C, D, E, F, G, H, I>(
       >;
     } & I)[];
     loopStack: Ty[][];
+    letOwner: Map<string, Span>;
   },
   group: Stmt[],
   st: {
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letUses: Map<string, Ty[]>;
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
     next: number;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
@@ -7500,7 +7921,9 @@ const inferGroupFrom: <A, B, C, D, E, F, G, H, I>(
   [
     Map<string, Ty>,
     {
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
       next: number;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
@@ -7530,15 +7953,19 @@ const inferGroupFrom: <A, B, C, D, E, F, G, H, I>(
             c: Option<string>,
             d: {
               next: number;
+              letUses: Map<string, Ty[]>;
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & F,
             e: {
               inferExpr: (
                 a: Expr,
                 b: {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -7547,7 +7974,9 @@ const inferGroupFrom: <A, B, C, D, E, F, G, H, I>(
                 [
                   Ty,
                   {
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letUses: Map<string, Ty[]>;
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                     next: number;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
@@ -7571,9 +8000,11 @@ const inferGroupFrom: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & F,
               ]
             >,
@@ -7582,10 +8013,13 @@ const inferGroupFrom: <A, B, C, D, E, F, G, H, I>(
         >;
       } & I)[];
       loopStack: Ty[][];
+      letOwner: Map<string, Span>;
     },
     group: Stmt[],
     st: {
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
       next: number;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
@@ -7629,7 +8063,9 @@ const inferGroupFrom: <A, B, C, D, E, F, G, H, I>(
                                     tv: Map<number, Ty>;
                                     rv: Map<number, Row>;
                                     next: number;
-                                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                                    letUses: Map<string, Ty[]>;
+                                    letSpans: Map<string, Span>;
+                                    recorded: TypeAt[];
                                   } & F,
                                 ]) =>
                                   _Result_map(
@@ -7638,10 +8074,9 @@ const inferGroupFrom: <A, B, C, D, E, F, G, H, I>(
                                         tv: Map<number, Ty>;
                                         rv: Map<number, Row>;
                                         next: number;
-                                        recorded: {
-                                          span: { start: number; end: number };
-                                          ty: Ty;
-                                        }[];
+                                        letUses: Map<string, Ty[]>;
+                                        letSpans: Map<string, Span>;
+                                        recorded: TypeAt[];
                                       } & F,
                                     ) => _tuple(at, stB),
                                     u(t, at, stA, annotSpan(te)),
@@ -7752,8 +8187,53 @@ const generalizeGroupFrom: <A>(
         throw new Error("non-exhaustive match");
       }),
 );
+const noteGroupLets: <A, B>(
+  group: Stmt[],
+  letOwner: Map<string, Span>,
+  st: { letUses: Map<string, A[]>; letSpans: Map<string, Span> } & B,
+) => [Map<string, Span>, { letUses: Map<string, A[]>; letSpans: Map<string, Span> } & B] = _curry(
+  3,
+  <A, B>(
+    group: Stmt[],
+    letOwner: Map<string, Span>,
+    st: { letUses: Map<string, A[]>; letSpans: Map<string, Span> } & B,
+  ) =>
+    match(group)
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length === 0;
+        },
+        () => _tuple(letOwner, st),
+      )
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length >= 1;
+        },
+        ([s, ...rest]) =>
+          match(s)
+            .with(
+              (_v): _v is Extract<Stmt, { _tag: "SLet" }> => {
+                const _g: any = _v;
+                return (
+                  _g._tag === "SLet" && (({ name, value }) => not(_Str_startsWith("$", name)))(_g)
+                );
+              },
+              ({ name, value }) =>
+                ((sp: Span) => noteGroupLets(rest, _Map_set(name, sp, letOwner), noteLet(sp, st)))(
+                  exprSpan(value),
+                ),
+            )
+            .otherwise(() => noteGroupLets(rest, letOwner, st)),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
+);
 const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
   ctx: {
+    letOwner: Map<string, Span>;
     loopStack: Ty[][];
     plugins: ({
       inferCall: Option<
@@ -7763,15 +8243,19 @@ const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
           c: Option<string>,
           d: {
             next: number;
+            letUses: Map<string, Ty[]>;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & C,
           e: {
             inferExpr: (
               a: Expr,
               b: {
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
@@ -7780,7 +8264,9 @@ const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
               [
                 Ty,
                 {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -7804,9 +8290,11 @@ const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
               Ty,
               {
                 next: number;
+                letUses: Map<string, Ty[]>;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
               } & C,
             ]
           >,
@@ -7830,13 +8318,16 @@ const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
   lets: Stmt[],
   st: {
     next: number;
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letUses: Map<string, Ty[]>;
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
   } & C,
 ) => Result<
   [
     {
+      letOwner: Map<string, Span>;
       loopStack: Ty[][];
       plugins: ({
         inferCall: Option<
@@ -7846,15 +8337,19 @@ const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
             c: Option<string>,
             d: {
               next: number;
+              letUses: Map<string, Ty[]>;
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & C,
             e: {
               inferExpr: (
                 a: Expr,
                 b: {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -7863,7 +8358,9 @@ const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
                 [
                   Ty,
                   {
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letUses: Map<string, Ty[]>;
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                     next: number;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
@@ -7887,9 +8384,11 @@ const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & C,
               ]
             >,
@@ -7911,7 +8410,9 @@ const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
     },
     {
       next: number;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
     } & C,
@@ -7921,6 +8422,7 @@ const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
   4,
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
+      letOwner: Map<string, Span>;
       loopStack: Ty[][];
       plugins: ({
         inferCall: Option<
@@ -7930,15 +8432,19 @@ const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
             c: Option<string>,
             d: {
               next: number;
+              letUses: Map<string, Ty[]>;
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & C,
             e: {
               inferExpr: (
                 a: Expr,
                 b: {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -7947,7 +8453,9 @@ const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
                 [
                   Ty,
                   {
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letUses: Map<string, Ty[]>;
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                     next: number;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
@@ -7971,9 +8479,11 @@ const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & C,
               ]
             >,
@@ -7997,7 +8507,9 @@ const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
     lets: Stmt[],
     st: {
       next: number;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
     } & C,
@@ -8021,7 +8533,9 @@ const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
               Map<string, { ty: Ty; rvars: number[]; vars: number[] }>,
               {
                 next: number;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
               } & C,
@@ -8030,7 +8544,23 @@ const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
               return _Result_flatMap(
                 ([bodyTypes, st2]) =>
                   ((finalEnv: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>) =>
-                    processGroupsFrom(ctxWithEnv(ctx, finalEnv), restSccs, lets, st2))(
+                    (([finalOwner, st3]: [
+                      Map<string, Span>,
+                      {
+                        next: number;
+                        letUses: Map<string, Ty[]>;
+                        tv: Map<number, Ty>;
+                        rv: Map<number, Row>;
+                        letSpans: Map<string, Span>;
+                        recorded: TypeAt[];
+                      } & C,
+                    ]) =>
+                      processGroupsFrom(
+                        ctxWithLets(ctx, finalEnv, finalOwner),
+                        restSccs,
+                        lets,
+                        st3,
+                      ))(noteGroupLets(group, ctx.letOwner, st2)))(
                     generalizeGroupFrom(group, bodyTypes, dropGroupFrom(group, preEnv), st2),
                   ),
                 inferGroupFrom(preCtx, group, st1),
@@ -8062,15 +8592,19 @@ const inferExprStmtsFrom: <A, B, C, D, E, F, G, H, I>(
           c: Option<string>,
           d: {
             next: number;
+            letUses: Map<string, Ty[]>;
             tv: Map<number, Ty>;
             rv: Map<number, Row>;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            recorded: TypeAt[];
           } & F,
           e: {
             inferExpr: (
               a: Expr,
               b: {
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letUses: Map<string, Ty[]>;
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
                 next: number;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
@@ -8079,7 +8613,9 @@ const inferExprStmtsFrom: <A, B, C, D, E, F, G, H, I>(
               [
                 Ty,
                 {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -8103,9 +8639,11 @@ const inferExprStmtsFrom: <A, B, C, D, E, F, G, H, I>(
               Ty,
               {
                 next: number;
+                letUses: Map<string, Ty[]>;
                 tv: Map<number, Ty>;
                 rv: Map<number, Row>;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                recorded: TypeAt[];
               } & F,
             ]
           >,
@@ -8114,17 +8652,22 @@ const inferExprStmtsFrom: <A, B, C, D, E, F, G, H, I>(
       >;
     } & I)[];
     loopStack: Ty[][];
+    letOwner: Map<string, Span>;
   },
   stmts: Stmt[],
   st: {
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letUses: Map<string, Ty[]>;
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
     next: number;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
   } & F,
 ) => Result<
   {
-    recorded: { span: { start: number; end: number }; ty: Ty }[];
+    letUses: Map<string, Ty[]>;
+    letSpans: Map<string, Span>;
+    recorded: TypeAt[];
     next: number;
     tv: Map<number, Ty>;
     rv: Map<number, Row>;
@@ -8153,15 +8696,19 @@ const inferExprStmtsFrom: <A, B, C, D, E, F, G, H, I>(
             c: Option<string>,
             d: {
               next: number;
+              letUses: Map<string, Ty[]>;
               tv: Map<number, Ty>;
               rv: Map<number, Row>;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              recorded: TypeAt[];
             } & F,
             e: {
               inferExpr: (
                 a: Expr,
                 b: {
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letUses: Map<string, Ty[]>;
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                   next: number;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
@@ -8170,7 +8717,9 @@ const inferExprStmtsFrom: <A, B, C, D, E, F, G, H, I>(
                 [
                   Ty,
                   {
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
+                    letUses: Map<string, Ty[]>;
+                    letSpans: Map<string, Span>;
+                    recorded: TypeAt[];
                     next: number;
                     tv: Map<number, Ty>;
                     rv: Map<number, Row>;
@@ -8194,9 +8743,11 @@ const inferExprStmtsFrom: <A, B, C, D, E, F, G, H, I>(
                 Ty,
                 {
                   next: number;
+                  letUses: Map<string, Ty[]>;
                   tv: Map<number, Ty>;
                   rv: Map<number, Row>;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  recorded: TypeAt[];
                 } & F,
               ]
             >,
@@ -8205,10 +8756,13 @@ const inferExprStmtsFrom: <A, B, C, D, E, F, G, H, I>(
         >;
       } & I)[];
       loopStack: Ty[][];
+      letOwner: Map<string, Span>;
     },
     stmts: Stmt[],
     st: {
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
+      letUses: Map<string, Ty[]>;
+      letSpans: Map<string, Span>;
+      recorded: TypeAt[];
       next: number;
       tv: Map<number, Ty>;
       rv: Map<number, Row>;
@@ -8357,6 +8911,78 @@ const zonkRecorded: <A, B, C>(
       _Array_reverse(recorded),
     ),
 );
+const isConcrete: (t: Ty) => boolean = (t: Ty) => {
+  const f: VarSets = freeInType(t);
+  return and(eq(_Set_size(f.tv), 0), eq(_Set_size(f.rv), 0));
+};
+const allSameConcreteFrom: {
+  (shown: string): (uses: Ty[]) => (i: number) => boolean;
+  (shown: string): (uses: Ty[], i: number) => boolean;
+  (shown: string, uses: Ty[]): (i: number) => boolean;
+  (shown: string, uses: Ty[], i: number): boolean;
+} = _curry(3, (shown: string, uses: Ty[], i: number) =>
+  match(_Array_get(i, uses))
+    .with({ _tag: "None" }, () => true)
+    .with({ _tag: "Some" }, ({ value: t }) =>
+      and(isConcrete(t), eq(showType(t), shown))
+        ? allSameConcreteFrom(shown, uses, add(i, 1))
+        : false,
+    )
+    .exhaustive(),
+);
+const allSameConcrete: {
+  (shown: string): (uses: Ty[]) => boolean;
+  (shown: string, uses: Ty[]): boolean;
+} = _curry(2, (shown: string, uses: Ty[]) => allSameConcreteFrom(shown, uses, 0));
+const resolveLetParamsFrom: <A, B, C>(
+  keys: A[],
+  st: { tv: Map<number, Ty>; rv: Map<number, Row>; letUses: Map<A, Ty[]>; letSpans: Map<A, B> } & C,
+) => { span: B; ty: Ty }[] = _curry(
+  2,
+  <A, B, C>(
+    keys: A[],
+    st: {
+      tv: Map<number, Ty>;
+      rv: Map<number, Row>;
+      letUses: Map<A, Ty[]>;
+      letSpans: Map<A, B>;
+    } & C,
+  ) =>
+    match(keys)
+      .with(
+        (_v) => _v.length === 0,
+        () => [] as { span: B; ty: Ty }[],
+      )
+      .with(
+        (_v) => _v.length >= 1,
+        ([k, ...rest]) =>
+          ((tail) =>
+            ((uses: Ty[]) =>
+              match(_Array_get(0, uses))
+                .with({ _tag: "None" }, () => tail)
+                .with({ _tag: "Some" }, ({ value: first }) =>
+                  allSameConcrete(showType(first), uses)
+                    ? match(_Map_get(k, st.letSpans))
+                        .with({ _tag: "Some" }, ({ value: span }) =>
+                          _Array_prepend({ span: span, ty: first }, tail),
+                        )
+                        .with({ _tag: "None" }, () => tail)
+                        .exhaustive()
+                    : tail,
+                )
+                .exhaustive())(map((t: Ty) => zonk(t, st), _Map_getOr([] as Ty[], k, st.letUses))))(
+            resolveLetParamsFrom(rest, st),
+          ),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
+);
+const resolveLetParams: <A, B, C>(
+  st: { letSpans: Map<A, B>; tv: Map<number, Ty>; rv: Map<number, Row>; letUses: Map<A, Ty[]> } & C,
+) => { span: B; ty: Ty }[] = <A, B, C>(
+  st: { letSpans: Map<A, B>; tv: Map<number, Ty>; rv: Map<number, Row>; letUses: Map<A, Ty[]> } & C,
+) => resolveLetParamsFrom(_Map_keys(st.letSpans), st);
 const runInferImports: <A, B>(
   stmts: Stmt[],
   builtins: Map<string, Ty>,
@@ -8383,75 +9009,21 @@ const runInferImports: <A, B>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            next: number;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
-          },
+          d: St,
           e: {
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: {
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                next: number;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
-              },
-              d: { start: number; end: number },
-            ) => Result<
-              {
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                next: number;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
-              },
-              IErr
-            >;
-            inferExpr: (
-              a: Expr,
-              b: {
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                next: number;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
-              },
-            ) => Result<
-              [
-                Ty,
-                {
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  next: number;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
-                },
-              ],
-              IErr
-            >;
+            unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, IErr>;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                next: number;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
-              },
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
     }[]
   >,
 ) => Result<
   {
     env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
-    types: { span: { start: number; end: number }; ty: Ty }[];
+    types: TypeAt[];
     aliases: Map<string, QualAliasInfo>;
+    letParams: TypeAt[];
   },
   IErr
 > = _curry(
@@ -8482,78 +9054,18 @@ const runInferImports: <A, B>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              next: number;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
-            },
+            d: St,
             e: {
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: {
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  next: number;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
-                },
-                d: { start: number; end: number },
-              ) => Result<
-                {
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  next: number;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
-                },
-                IErr
-              >;
-              inferExpr: (
-                a: Expr,
-                b: {
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  next: number;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
-                },
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                    next: number;
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
-                  },
-                ],
-                IErr
-              >;
+              unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, IErr>;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  next: number;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
-                },
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
       }[]
     >,
   ) => {
     const plugins = resolvePluginsDefault(pluginsOpt);
-    const st0: {
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-      next: number;
-      recorded: { span: { start: number; end: number }; ty: Ty }[];
-    } = mkSt(1000);
+    const st0: St = mkSt(1000);
     const env0: Map<string, { ty: Ty; rvars: number[]; vars: number[] }> = seedBuiltins(
       builtins,
       new Map<string, { ty: Ty; rvars: number[]; vars: number[] }>(),
@@ -8567,33 +9079,9 @@ const runInferImports: <A, B>(
       stmts,
       qualAliasSeed(stmts, quals, new Map<string, QualAliasInfo>()),
     );
-    return (([env1, st1]: [
-      Map<string, { vars: number[]; rvars: number[]; ty: Ty }>,
-      {
-        next: number;
-        tv: Map<number, Ty>;
-        rv: Map<number, Row>;
-        recorded: { span: { start: number; end: number }; ty: Ty }[];
-      },
-    ]) =>
-      (([env2, st2]: [
-        Map<string, { ty: Ty; rvars: number[]; vars: number[] }>,
-        {
-          next: number;
-          tv: Map<number, Ty>;
-          rv: Map<number, Row>;
-          recorded: { span: { start: number; end: number }; ty: Ty }[];
-        },
-      ]) =>
-        (([env3, st3]: [
-          Map<string, { vars: number[]; rvars: number[]; ty: Ty }>,
-          {
-            next: number;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-          },
-        ]) => {
+    return (([env1, st1]: [Map<string, { vars: number[]; rvars: number[]; ty: Ty }>, St]) =>
+      (([env2, st2]: [Map<string, { ty: Ty; rvars: number[]; vars: number[] }>, St]) =>
+        (([env3, st3]: [Map<string, { vars: number[]; rvars: number[]; ty: Ty }>, St]) => {
           const env4: Map<string, { vars: number[]; rvars: number[]; ty: Ty }> = seedImportsFrom(
             _Map_keys(imports),
             imports,
@@ -8611,6 +9099,7 @@ const runInferImports: <A, B>(
                 aliasMap: aliasMap,
                 plugins: plugins,
                 loopStack: [] as Ty[][],
+                letOwner: new Map<string, Span>(),
               },
               sccs,
               lets,
@@ -8628,11 +9117,13 @@ const runInferImports: <A, B>(
                         env: finalCtx.env,
                         types: zonkRecorded(st5.recorded, st5),
                         aliases: aliasMap,
+                        letParams: resolveLetParams(st5),
                       }) as Result<
                         {
                           env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
-                          types: { span: { start: number; end: number }; ty: Ty }[];
+                          types: TypeAt[];
                           aliases: Map<string, QualAliasInfo>;
+                          letParams: TypeAt[];
                         },
                         IErr
                       >,
@@ -8643,8 +9134,9 @@ const runInferImports: <A, B>(
                       Err(e) as Result<
                         {
                           env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
-                          types: { span: { start: number; end: number }; ty: Ty }[];
+                          types: TypeAt[];
                           aliases: Map<string, QualAliasInfo>;
+                          letParams: TypeAt[];
                         },
                         IErr
                       >,
@@ -8657,8 +9149,9 @@ const runInferImports: <A, B>(
                 Err(e) as Result<
                   {
                     env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
-                    types: { span: { start: number; end: number }; ty: Ty }[];
+                    types: TypeAt[];
                     aliases: Map<string, QualAliasInfo>;
+                    letParams: TypeAt[];
                   },
                   IErr
                 >,
@@ -8695,67 +9188,12 @@ export const inferProgramImports: <A, B>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            next: number;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
-          },
+          d: St,
           e: {
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: {
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                next: number;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
-              },
-              d: { start: number; end: number },
-            ) => Result<
-              {
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                next: number;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
-              },
-              IErr
-            >;
-            inferExpr: (
-              a: Expr,
-              b: {
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                next: number;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
-              },
-            ) => Result<
-              [
-                Ty,
-                {
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  next: number;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
-                },
-              ],
-              IErr
-            >;
+            unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, IErr>;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                next: number;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
-              },
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
     }[]
   >,
@@ -8787,67 +9225,12 @@ export const inferProgramImports: <A, B>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              next: number;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
-            },
+            d: St,
             e: {
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: {
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  next: number;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
-                },
-                d: { start: number; end: number },
-              ) => Result<
-                {
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  next: number;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
-                },
-                IErr
-              >;
-              inferExpr: (
-                a: Expr,
-                b: {
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  next: number;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
-                },
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                    next: number;
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
-                  },
-                ],
-                IErr
-              >;
+              unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, IErr>;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  next: number;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
-                },
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
       }[]
     >,
@@ -8855,8 +9238,9 @@ export const inferProgramImports: <A, B>(
     _Result_map(
       (r: {
         env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
-        types: { span: { start: number; end: number }; ty: Ty }[];
+        types: TypeAt[];
         aliases: Map<string, QualAliasInfo>;
+        letParams: TypeAt[];
       }) => r.env,
       runInferImports(stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt),
     ),
@@ -8967,75 +9351,21 @@ export const inferProgramImportsTypes: <A, B>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            next: number;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
-          },
+          d: St,
           e: {
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: {
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                next: number;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
-              },
-              d: { start: number; end: number },
-            ) => Result<
-              {
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                next: number;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
-              },
-              IErr
-            >;
-            inferExpr: (
-              a: Expr,
-              b: {
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                next: number;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
-              },
-            ) => Result<
-              [
-                Ty,
-                {
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  next: number;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
-                },
-              ],
-              IErr
-            >;
+            unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, IErr>;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                next: number;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
-              },
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
     }[]
   >,
 ) => Result<
   {
     env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
-    types: { span: { start: number; end: number }; ty: Ty }[];
+    types: TypeAt[];
     aliases: Map<string, QualAliasInfo>;
+    letParams: TypeAt[];
   },
   IErr
 > = _curry(
@@ -9066,67 +9396,12 @@ export const inferProgramImportsTypes: <A, B>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              next: number;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
-            },
+            d: St,
             e: {
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: {
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  next: number;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
-                },
-                d: { start: number; end: number },
-              ) => Result<
-                {
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  next: number;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
-                },
-                IErr
-              >;
-              inferExpr: (
-                a: Expr,
-                b: {
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  next: number;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
-                },
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                    next: number;
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
-                  },
-                ],
-                IErr
-              >;
+              unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, IErr>;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  next: number;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
-                },
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
       }[]
     >,
@@ -9141,8 +9416,9 @@ export const inferProgramTypes: {
   ) => Result<
     {
       env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
-      types: { span: { start: number; end: number }; ty: Ty }[];
+      types: TypeAt[];
       aliases: Map<string, QualAliasInfo>;
+      letParams: TypeAt[];
     },
     IErr
   >;
@@ -9154,8 +9430,9 @@ export const inferProgramTypes: {
   ) => Result<
     {
       env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
-      types: { span: { start: number; end: number }; ty: Ty }[];
+      types: TypeAt[];
       aliases: Map<string, QualAliasInfo>;
+      letParams: TypeAt[];
     },
     IErr
   >;
@@ -9167,8 +9444,9 @@ export const inferProgramTypes: {
   ) => (openMode: boolean) => Result<
     {
       env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
-      types: { span: { start: number; end: number }; ty: Ty }[];
+      types: TypeAt[];
       aliases: Map<string, QualAliasInfo>;
+      letParams: TypeAt[];
     },
     IErr
   >;
@@ -9178,8 +9456,9 @@ export const inferProgramTypes: {
   ): (namespaces: Map<string, Map<string, Ty>>) => (openMode: boolean) => Result<
     {
       env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
-      types: { span: { start: number; end: number }; ty: Ty }[];
+      types: TypeAt[];
       aliases: Map<string, QualAliasInfo>;
+      letParams: TypeAt[];
     },
     IErr
   >;
@@ -9192,8 +9471,9 @@ export const inferProgramTypes: {
   ) => Result<
     {
       env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
-      types: { span: { start: number; end: number }; ty: Ty }[];
+      types: TypeAt[];
       aliases: Map<string, QualAliasInfo>;
+      letParams: TypeAt[];
     },
     IErr
   >;
@@ -9206,8 +9486,9 @@ export const inferProgramTypes: {
   ) => Result<
     {
       env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
-      types: { span: { start: number; end: number }; ty: Ty }[];
+      types: TypeAt[];
       aliases: Map<string, QualAliasInfo>;
+      letParams: TypeAt[];
     },
     IErr
   >;
@@ -9218,8 +9499,9 @@ export const inferProgramTypes: {
   ): (openMode: boolean) => Result<
     {
       env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
-      types: { span: { start: number; end: number }; ty: Ty }[];
+      types: TypeAt[];
       aliases: Map<string, QualAliasInfo>;
+      letParams: TypeAt[];
     },
     IErr
   >;
@@ -9231,8 +9513,9 @@ export const inferProgramTypes: {
   ): Result<
     {
       env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
-      types: { span: { start: number; end: number }; ty: Ty }[];
+      types: TypeAt[];
       aliases: Map<string, QualAliasInfo>;
+      letParams: TypeAt[];
     },
     IErr
   >;
@@ -9278,67 +9561,12 @@ export const inferProgramWith: <A>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            next: number;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
-          },
+          d: St,
           e: {
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: {
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                next: number;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
-              },
-              d: { start: number; end: number },
-            ) => Result<
-              {
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                next: number;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
-              },
-              IErr
-            >;
-            inferExpr: (
-              a: Expr,
-              b: {
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                next: number;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
-              },
-            ) => Result<
-              [
-                Ty,
-                {
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  next: number;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
-                },
-              ],
-              IErr
-            >;
+            unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, IErr>;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                next: number;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
-              },
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
     }[]
   >,
@@ -9367,67 +9595,12 @@ export const inferProgramWith: <A>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              next: number;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
-            },
+            d: St,
             e: {
-              unify: (
-                a: Ty,
-                b: Ty,
-                c: {
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  next: number;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
-                },
-                d: { start: number; end: number },
-              ) => Result<
-                {
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  next: number;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
-                },
-                IErr
-              >;
-              inferExpr: (
-                a: Expr,
-                b: {
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  next: number;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
-                },
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                    next: number;
-                    recorded: { span: { start: number; end: number }; ty: Ty }[];
-                  },
-                ],
-                IErr
-              >;
+              unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, IErr>;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  next: number;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
-                },
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
       }[]
     >,

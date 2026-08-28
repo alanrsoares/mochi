@@ -1,5 +1,5 @@
 import type { Tok } from "./parser";
-import type { Expr } from "./ast";
+import type { Expr, Span } from "./ast";
 import type { Row, Ty } from "./types";
 
 export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
@@ -58,7 +58,7 @@ export const resolvePluginsDefault: <A, B, C, D, E>(
               a: Ty,
               b: Ty,
               c: { tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-              d: { start: number; end: number },
+              d: Span,
             ) => Result<{ tv: Map<number, Ty>; rv: Map<number, Row> } & D, C>;
             inferExpr: (
               a: Expr,
@@ -92,7 +92,7 @@ export const resolvePluginsDefault: <A, B, C, D, E>(
           a: Ty,
           b: Ty,
           c: { tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-          d: { start: number; end: number },
+          d: Span,
         ) => Result<{ tv: Map<number, Ty>; rv: Map<number, Row> } & D, C>;
         inferExpr: (
           a: Expr,
@@ -126,7 +126,7 @@ export const resolvePluginsDefault: <A, B, C, D, E>(
               a: Ty,
               b: Ty,
               c: { tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-              d: { start: number; end: number },
+              d: Span,
             ) => Result<{ tv: Map<number, Ty>; rv: Map<number, Row> } & D, C>;
             inferExpr: (
               a: Expr,

@@ -1,5 +1,7 @@
+import type { PErr } from "./parser";
+
 export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
-export type Diag = { message: string; start: number; end: number };
+export type Diag = PErr;
 
 import {
   _curry,

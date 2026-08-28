@@ -1,16 +1,15 @@
-import type { Stmt, TypeExpr } from "./ast";
+import type { AliasField, Stmt, TypeExpr } from "./ast";
 import type { Ty } from "./types";
+import type { PErr } from "./parser";
+import type { QualAliasInfo } from "./infer";
 
 export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
 export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
 export type Loaded = { path: string; stmts: Stmt[] };
-export type MErr = { message: string; start: number; end: number };
-export type Acc = { state: Map<string, string>; order: { path: string; stmts: Stmt[] }[] };
+export type MErr = PErr;
+export type Acc = { state: Map<string, string>; order: Loaded[] };
 export type CtorInfo = { owner: string; arity: number };
-export type Registry = {
-  ctors: Map<string, { owner: string; arity: number }>;
-  types: Map<string, string[]>;
-};
+export type Registry = { ctors: Map<string, CtorInfo>; types: Map<string, string[]> };
 
 import {
   _curry,
@@ -236,78 +235,45 @@ const exportedTypeNames: (stmts: Stmt[]) => Set<string> = (stmts: Stmt[]) =>
       stmts,
     ),
   );
-const aliasesOf: (
-  stmts: Stmt[],
-) => Map<
-  string,
-  { params: string[]; fields: { name: string; fieldType: TypeExpr }[]; expr: Option<TypeExpr> }
-> = (stmts: Stmt[]) =>
+const aliasesOf: (stmts: Stmt[]) => Map<string, QualAliasInfo> = (stmts: Stmt[]) =>
   reduce(
-    _curry(
-      2,
-      (
-        acc: Map<
-          string,
-          {
-            params: string[];
-            fields: { name: string; fieldType: TypeExpr }[];
-            expr: Option<TypeExpr>;
-          }
-        >,
-        s: Stmt,
-      ) =>
-        match(s)
-          .with(
-            (
-              _v,
-            ): _v is Extract<Stmt, { _tag: "SType" }> & {
-              alias: Extract<Extract<Stmt, { _tag: "SType" }>["alias"], { _tag: "Some" }>;
-            } => {
-              const _g: any = _v;
-              return _g._tag === "SType" && _g.alias._tag === "Some";
-            },
-            ({ name, params, alias: { value: fields } }) =>
-              _Map_set(
-                name,
-                { params: params, fields: fields, expr: None as Option<TypeExpr> },
-                acc,
-              ),
-          )
-          .with(
-            (
-              _v,
-            ): _v is Extract<Stmt, { _tag: "SType" }> & {
-              aliasType: Extract<Extract<Stmt, { _tag: "SType" }>["aliasType"], { _tag: "Some" }>;
-            } => {
-              const _g: any = _v;
-              return _g._tag === "SType" && _g.aliasType._tag === "Some";
-            },
-            ({ name, params, aliasType: { value: te } }) =>
-              _Map_set(
-                name,
-                {
-                  params: params,
-                  fields: [] as { name: string; fieldType: TypeExpr }[],
-                  expr: Some(te) as Option<TypeExpr>,
-                },
-                acc,
-              ),
-          )
-          .otherwise(() => acc),
+    _curry(2, (acc: Map<string, QualAliasInfo>, s: Stmt) =>
+      match(s)
+        .with(
+          (
+            _v,
+          ): _v is Extract<Stmt, { _tag: "SType" }> & {
+            alias: Extract<Extract<Stmt, { _tag: "SType" }>["alias"], { _tag: "Some" }>;
+          } => {
+            const _g: any = _v;
+            return _g._tag === "SType" && _g.alias._tag === "Some";
+          },
+          ({ name, params, alias: { value: fields } }) =>
+            _Map_set(name, { params: params, fields: fields, expr: None as Option<TypeExpr> }, acc),
+        )
+        .with(
+          (
+            _v,
+          ): _v is Extract<Stmt, { _tag: "SType" }> & {
+            aliasType: Extract<Extract<Stmt, { _tag: "SType" }>["aliasType"], { _tag: "Some" }>;
+          } => {
+            const _g: any = _v;
+            return _g._tag === "SType" && _g.aliasType._tag === "Some";
+          },
+          ({ name, params, aliasType: { value: te } }) =>
+            _Map_set(
+              name,
+              { params: params, fields: [] as AliasField[], expr: Some(te) as Option<TypeExpr> },
+              acc,
+            ),
+        )
+        .otherwise(() => acc),
     ),
-    new Map<
-      string,
-      { params: string[]; fields: { name: string; fieldType: TypeExpr }[]; expr: Option<TypeExpr> }
-    >(),
+    new Map<string, QualAliasInfo>(),
     stmts,
   );
-const qualScopeOf: (stmts: Stmt[]) => {
-  types: Set<string>;
-  aliases: Map<
-    string,
-    { params: string[]; fields: { name: string; fieldType: TypeExpr }[]; expr: Option<TypeExpr> }
-  >;
-} = (stmts: Stmt[]) => ({ types: exportedTypeNames(stmts), aliases: aliasesOf(stmts) });
+const qualScopeOf: (stmts: Stmt[]) => { types: Set<string>; aliases: Map<string, QualAliasInfo> } =
+  (stmts: Stmt[]) => ({ types: exportedTypeNames(stmts), aliases: aliasesOf(stmts) });
 const withNamedCtor: <A, B, C, D, E, F, G, H, I, J, K>(
   name: A,
   info: { owner: B } & H,
@@ -641,20 +607,7 @@ const compileOne: <A, B>(
     exportsByPath: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
-    qualsByPath: Map<
-      string,
-      {
-        types: Set<string>;
-        aliases: Map<
-          string,
-          {
-            params: string[];
-            fields: { name: string; fieldType: TypeExpr }[];
-            expr: Option<TypeExpr>;
-          }
-        >;
-      }
-    >;
+    qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
     outputs: { path: string; js: string }[];
   } & A,
   loaded: { stmts: Stmt[]; path: string } & B,
@@ -663,20 +616,7 @@ const compileOne: <A, B>(
     exportsByPath: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
-    qualsByPath: Map<
-      string,
-      {
-        types: Set<string>;
-        aliases: Map<
-          string,
-          {
-            params: string[];
-            fields: { name: string; fieldType: TypeExpr }[];
-            expr: Option<TypeExpr>;
-          }
-        >;
-      }
-    >;
+    qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
     outputs: { path: string; js: string }[];
   },
   MErr
@@ -687,20 +627,7 @@ const compileOne: <A, B>(
       exportsByPath: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
-      qualsByPath: Map<
-        string,
-        {
-          types: Set<string>;
-          aliases: Map<
-            string,
-            {
-              params: string[];
-              fields: { name: string; fieldType: TypeExpr }[];
-              expr: Option<TypeExpr>;
-            }
-          >;
-        }
-      >;
+      qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
       outputs: { path: string; js: string }[];
     } & A,
     loaded: { stmts: Stmt[]; path: string } & B,
@@ -711,20 +638,7 @@ const compileOne: <A, B>(
         nsImports: new Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>(),
         reg: emptyReg,
         keys: new Map<string, string[]>(),
-        quals: new Map<
-          string,
-          {
-            types: Set<string>;
-            aliases: Map<
-              string,
-              {
-                params: string[];
-                fields: { name: string; fieldType: TypeExpr }[];
-                expr: Option<TypeExpr>;
-              }
-            >;
-          }
-        >(),
+        quals: new Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>(),
       }),
     )
       .with(
@@ -735,20 +649,7 @@ const compileOne: <A, B>(
               exportsByPath: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>;
               regByPath: Map<string, Registry>;
               keysByPath: Map<string, Map<string, string[]>>;
-              qualsByPath: Map<
-                string,
-                {
-                  types: Set<string>;
-                  aliases: Map<
-                    string,
-                    {
-                      params: string[];
-                      fields: { name: string; fieldType: TypeExpr }[];
-                      expr: Option<TypeExpr>;
-                    }
-                  >;
-                }
-              >;
+              qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
               outputs: { path: string; js: string }[];
             },
             MErr
@@ -769,17 +670,7 @@ const compileOne: <A, B>(
                   keysByPath: Map<string, Map<string, string[]>>;
                   qualsByPath: Map<
                     string,
-                    {
-                      types: Set<string>;
-                      aliases: Map<
-                        string,
-                        {
-                          params: string[];
-                          fields: { name: string; fieldType: TypeExpr }[];
-                          expr: Option<TypeExpr>;
-                        }
-                      >;
-                    }
+                    { types: Set<string>; aliases: Map<string, QualAliasInfo> }
                   >;
                   outputs: { path: string; js: string }[];
                 },
@@ -812,17 +703,7 @@ const compileOne: <A, B>(
                       keysByPath: Map<string, Map<string, string[]>>;
                       qualsByPath: Map<
                         string,
-                        {
-                          types: Set<string>;
-                          aliases: Map<
-                            string,
-                            {
-                              params: string[];
-                              fields: { name: string; fieldType: TypeExpr }[];
-                              expr: Option<TypeExpr>;
-                            }
-                          >;
-                        }
+                        { types: Set<string>; aliases: Map<string, QualAliasInfo> }
                       >;
                       outputs: { path: string; js: string }[];
                     },
@@ -855,17 +736,7 @@ const compileOne: <A, B>(
                       keysByPath: Map<string, Map<string, string[]>>;
                       qualsByPath: Map<
                         string,
-                        {
-                          types: Set<string>;
-                          aliases: Map<
-                            string,
-                            {
-                              params: string[];
-                              fields: { name: string; fieldType: TypeExpr }[];
-                              expr: Option<TypeExpr>;
-                            }
-                          >;
-                        }
+                        { types: Set<string>; aliases: Map<string, QualAliasInfo> }
                       >;
                       outputs: { path: string; js: string }[];
                     },
@@ -893,20 +764,7 @@ const compileAll: <A>(
     exportsByPath: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
-    qualsByPath: Map<
-      string,
-      {
-        types: Set<string>;
-        aliases: Map<
-          string,
-          {
-            params: string[];
-            fields: { name: string; fieldType: TypeExpr }[];
-            expr: Option<TypeExpr>;
-          }
-        >;
-      }
-    >;
+    qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
   },
   graph: ({ stmts: Stmt[]; path: string } & A)[],
 ) => Result<{ path: string; js: string }[], MErr> = _curry(
@@ -917,20 +775,7 @@ const compileAll: <A>(
       exportsByPath: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
-      qualsByPath: Map<
-        string,
-        {
-          types: Set<string>;
-          aliases: Map<
-            string,
-            {
-              params: string[];
-              fields: { name: string; fieldType: TypeExpr }[];
-              expr: Option<TypeExpr>;
-            }
-          >;
-        }
-      >;
+      qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
     },
     graph: ({ stmts: Stmt[]; path: string } & A)[],
   ) =>
@@ -970,20 +815,7 @@ export const compileGraph: <A>(
       exportsByPath: new Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>(),
       regByPath: new Map<string, Registry>(),
       keysByPath: new Map<string, Map<string, string[]>>(),
-      qualsByPath: new Map<
-        string,
-        {
-          types: Set<string>;
-          aliases: Map<
-            string,
-            {
-              params: string[];
-              fields: { name: string; fieldType: TypeExpr }[];
-              expr: Option<TypeExpr>;
-            }
-          >;
-        }
-      >(),
+      qualsByPath: new Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>(),
       outputs: [] as { path: string; js: string }[],
     },
     graph,
@@ -1236,20 +1068,7 @@ const compileOneTs: <A, B>(
     exportsByPath: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
-    qualsByPath: Map<
-      string,
-      {
-        types: Set<string>;
-        aliases: Map<
-          string,
-          {
-            params: string[];
-            fields: { name: string; fieldType: TypeExpr }[];
-            expr: Option<TypeExpr>;
-          }
-        >;
-      }
-    >;
+    qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
     runtimeImport: string;
     typeOwner: Map<string, string>;
     outputs: { path: string; js: string }[];
@@ -1264,20 +1083,7 @@ const compileOneTs: <A, B>(
     exportsByPath: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
-    qualsByPath: Map<
-      string,
-      {
-        types: Set<string>;
-        aliases: Map<
-          string,
-          {
-            params: string[];
-            fields: { name: string; fieldType: TypeExpr }[];
-            expr: Option<TypeExpr>;
-          }
-        >;
-      }
-    >;
+    qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
     typeOwner: Map<string, string>;
     runtimeImport: string;
     externs: Map<
@@ -1294,20 +1100,7 @@ const compileOneTs: <A, B>(
       exportsByPath: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
-      qualsByPath: Map<
-        string,
-        {
-          types: Set<string>;
-          aliases: Map<
-            string,
-            {
-              params: string[];
-              fields: { name: string; fieldType: TypeExpr }[];
-              expr: Option<TypeExpr>;
-            }
-          >;
-        }
-      >;
+      qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
       runtimeImport: string;
       typeOwner: Map<string, string>;
       outputs: { path: string; js: string }[];
@@ -1328,20 +1121,7 @@ const compileOneTs: <A, B>(
         nsImports: new Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>(),
         reg: emptyReg,
         keys: new Map<string, string[]>(),
-        quals: new Map<
-          string,
-          {
-            types: Set<string>;
-            aliases: Map<
-              string,
-              {
-                params: string[];
-                fields: { name: string; fieldType: TypeExpr }[];
-                expr: Option<TypeExpr>;
-              }
-            >;
-          }
-        >(),
+        quals: new Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>(),
       }),
     )
       .with(
@@ -1352,20 +1132,7 @@ const compileOneTs: <A, B>(
               exportsByPath: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>;
               regByPath: Map<string, Registry>;
               keysByPath: Map<string, Map<string, string[]>>;
-              qualsByPath: Map<
-                string,
-                {
-                  types: Set<string>;
-                  aliases: Map<
-                    string,
-                    {
-                      params: string[];
-                      fields: { name: string; fieldType: TypeExpr }[];
-                      expr: Option<TypeExpr>;
-                    }
-                  >;
-                }
-              >;
+              qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
               typeOwner: Map<string, string>;
               runtimeImport: string;
               externs: Map<
@@ -1396,17 +1163,7 @@ const compileOneTs: <A, B>(
                   keysByPath: Map<string, Map<string, string[]>>;
                   qualsByPath: Map<
                     string,
-                    {
-                      types: Set<string>;
-                      aliases: Map<
-                        string,
-                        {
-                          params: string[];
-                          fields: { name: string; fieldType: TypeExpr }[];
-                          expr: Option<TypeExpr>;
-                        }
-                      >;
-                    }
+                    { types: Set<string>; aliases: Map<string, QualAliasInfo> }
                   >;
                   typeOwner: Map<string, string>;
                   runtimeImport: string;
@@ -1449,17 +1206,7 @@ const compileOneTs: <A, B>(
                       keysByPath: Map<string, Map<string, string[]>>;
                       qualsByPath: Map<
                         string,
-                        {
-                          types: Set<string>;
-                          aliases: Map<
-                            string,
-                            {
-                              params: string[];
-                              fields: { name: string; fieldType: TypeExpr }[];
-                              expr: Option<TypeExpr>;
-                            }
-                          >;
-                        }
+                        { types: Set<string>; aliases: Map<string, QualAliasInfo> }
                       >;
                       typeOwner: Map<string, string>;
                       runtimeImport: string;
@@ -1515,17 +1262,7 @@ const compileOneTs: <A, B>(
                           keysByPath: Map<string, Map<string, string[]>>;
                           qualsByPath: Map<
                             string,
-                            {
-                              types: Set<string>;
-                              aliases: Map<
-                                string,
-                                {
-                                  params: string[];
-                                  fields: { name: string; fieldType: TypeExpr }[];
-                                  expr: Option<TypeExpr>;
-                                }
-                              >;
-                            }
+                            { types: Set<string>; aliases: Map<string, QualAliasInfo> }
                           >;
                           typeOwner: Map<string, string>;
                           runtimeImport: string;
@@ -1558,6 +1295,7 @@ ${body}`,
                     loaded.stmts,
                     r.env,
                     r.types,
+                    r.letParams,
                     r.aliases,
                     res.keys,
                     [] as string[],
@@ -1574,10 +1312,7 @@ ${body}`,
       )
       .exhaustive(),
 );
-const noAliases: Map<
-  string,
-  { params: string[]; fields: { name: string; fieldType: TypeExpr }[]; expr: Option<TypeExpr> }
-> = aliasesOf([] as Stmt[]);
+const noAliases: Map<string, QualAliasInfo> = aliasesOf([] as Stmt[]);
 const externOutputs: <A, B, C>(
   externs: Map<A, ({ scheme: { ty: Ty } & B; imported: string; curried: boolean } & C)[]>,
 ) => { path: A; js: string }[] = <A, B, C>(
@@ -1607,20 +1342,7 @@ const compileAllTs: <A>(
     exportsByPath: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
-    qualsByPath: Map<
-      string,
-      {
-        types: Set<string>;
-        aliases: Map<
-          string,
-          {
-            params: string[];
-            fields: { name: string; fieldType: TypeExpr }[];
-            expr: Option<TypeExpr>;
-          }
-        >;
-      }
-    >;
+    qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
     runtimeImport: string;
     typeOwner: Map<string, string>;
   },
@@ -1641,20 +1363,7 @@ const compileAllTs: <A>(
       exportsByPath: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
-      qualsByPath: Map<
-        string,
-        {
-          types: Set<string>;
-          aliases: Map<
-            string,
-            {
-              params: string[];
-              fields: { name: string; fieldType: TypeExpr }[];
-              expr: Option<TypeExpr>;
-            }
-          >;
-        }
-      >;
+      qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
       runtimeImport: string;
       typeOwner: Map<string, string>;
     },
@@ -1701,20 +1410,7 @@ export const compileGraphTs: <A>(
         exportsByPath: new Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>(),
         regByPath: new Map<string, Registry>(),
         keysByPath: new Map<string, Map<string, string[]>>(),
-        qualsByPath: new Map<
-          string,
-          {
-            types: Set<string>;
-            aliases: Map<
-              string,
-              {
-                params: string[];
-                fields: { name: string; fieldType: TypeExpr }[];
-                expr: Option<TypeExpr>;
-              }
-            >;
-          }
-        >(),
+        qualsByPath: new Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>(),
         typeOwner: typeOwnerOf(graph),
         runtimeImport: runtimeImport,
         externs: new Map<

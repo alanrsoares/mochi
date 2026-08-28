@@ -1,4 +1,5 @@
 import type { Stmt } from "./ast";
+import type { PErr } from "./parser";
 
 export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
 
@@ -15,21 +16,16 @@ import { namespaces } from "./prelude.gen.mjs";
 import { namespaceRuntime } from "./prelude.gen.mjs";
 import { preludeJsDefs } from "./prelude.gen.mjs";
 import { runtimeDeps } from "./prelude.gen.mjs";
-const typecheck: (prog: Stmt[]) => Result<Stmt[], { message: string; start: number; end: number }> =
-  (prog: Stmt[]) =>
-    _Result_flatMap(
-      ($env) => Ok(prog) as Result<Stmt[], { message: string; start: number; end: number }>,
-      inferProgram(prog, builtins, namespaces, false),
-    );
-const frontend: ($x: string) => Result<Stmt[], { message: string; start: number; end: number }> = (
-  $x: string,
-) => _Result_flatMap(check)((($x) => _Result_flatMap(parse)(lex($x)))($x));
-const pipeline: ($x: string) => Result<Stmt[], { message: string; start: number; end: number }> = (
-  $x: string,
-) => _Result_flatMap(typecheck)(frontend($x));
-export const compile: (
-  src: string,
-) => Result<string, { message: string; start: number; end: number }> = (src: string) =>
+const typecheck: (prog: Stmt[]) => Result<Stmt[], PErr> = (prog: Stmt[]) =>
+  _Result_flatMap(
+    ($env) => Ok(prog) as Result<Stmt[], PErr>,
+    inferProgram(prog, builtins, namespaces, false),
+  );
+const frontend: ($x: string) => Result<Stmt[], PErr> = ($x: string) =>
+  _Result_flatMap(check)((($x) => _Result_flatMap(parse)(lex($x)))($x));
+const pipeline: ($x: string) => Result<Stmt[], PErr> = ($x: string) =>
+  _Result_flatMap(typecheck)(frontend($x));
+export const compile: (src: string) => Result<string, PErr> = (src: string) =>
   _Result_flatMap(
     (prog) =>
       Ok(
@@ -41,18 +37,13 @@ export const compile: (
           preludeJsDefs,
           runtimeDeps,
         ),
-      ) as Result<string, { message: string; start: number; end: number }>,
+      ) as Result<string, PErr>,
     pipeline(src),
   );
 const noImportedKeys: Map<string, string[]> = new Map<string, string[]>();
 export const compileTs: {
-  (
-    src: string,
-  ): (runtimeImport: string) => Result<string, { message: string; start: number; end: number }>;
-  (
-    src: string,
-    runtimeImport: string,
-  ): Result<string, { message: string; start: number; end: number }>;
+  (src: string): (runtimeImport: string) => Result<string, PErr>;
+  (src: string, runtimeImport: string): Result<string, PErr>;
 } = _curry(2, (src: string, runtimeImport: string) =>
   _Result_flatMap(
     (stmts) =>
@@ -63,6 +54,7 @@ export const compileTs: {
               stmts,
               r.env,
               r.types,
+              r.letParams,
               r.aliases,
               noImportedKeys,
               [] as string[],
@@ -71,7 +63,7 @@ export const compileTs: {
               runtimeDeps,
               runtimeImport,
             ),
-          ) as Result<string, { message: string; start: number; end: number }>,
+          ) as Result<string, PErr>,
         inferProgramTypes(stmts, builtins, namespaces, false),
       ),
     frontend(src),

@@ -1,13 +1,28 @@
-import type { Expr, InterpPart, Pattern, SeqElem, Stmt, TypeExpr } from "./ast";
+import type {
+  AliasField,
+  Ctor,
+  CtorField,
+  Expr,
+  Field,
+  InterpPart,
+  LoopParam,
+  MapEntry,
+  MatchArm,
+  Name,
+  PatField,
+  Pattern,
+  SeqElem,
+  Span,
+  Stmt,
+  TypeExpr,
+} from "./ast";
+import type { PErr } from "./parser";
 
 export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
 export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
-export type CErr = { message: string; start: number; end: number };
+export type CErr = PErr;
 export type CtorInfo = { owner: string; arity: number };
-export type Registry = {
-  ctors: Map<string, { owner: string; arity: number }>;
-  types: Map<string, string[]>;
-};
+export type Registry = { ctors: Map<string, CtorInfo>; types: Map<string, string[]> };
 export type SeqCheck = { _tag: "SeqNotSeq" } | { _tag: "SeqTotal" } | { _tag: "SeqFail"; e: CErr };
 export type QualScope = { types: Set<string> };
 
@@ -146,7 +161,7 @@ const someOf: <A>(f: (a: A) => boolean, xs: A[]) => boolean = _curry(
   2,
   <A>(f: (a: A) => boolean, xs: A[]) => someOfFrom(f, xs, 0),
 );
-const exprSpan: (e: Expr) => { start: number; end: number } = (e: Expr) =>
+const exprSpan: (e: Expr) => Span = (e: Expr) =>
   match(e)
     .with({ _tag: "ENum" }, ({ span: sp }) => sp)
     .with({ _tag: "EUnit" }, ({ span: sp }) => sp)
@@ -172,7 +187,7 @@ const exprSpan: (e: Expr) => { start: number; end: number } = (e: Expr) =>
     .with({ _tag: "EMap" }, ({ span: sp }) => sp)
     .with({ _tag: "EInterp" }, ({ span: sp }) => sp)
     .exhaustive();
-const patSpan: (p: Pattern) => { start: number; end: number } = (p: Pattern) =>
+const patSpan: (p: Pattern) => Span = (p: Pattern) =>
   match(p)
     .with({ _tag: "PWild" }, ({ span: sp }) => sp)
     .with({ _tag: "PUnit" }, ({ span: sp }) => sp)
@@ -194,9 +209,7 @@ const isCatchAll: (p: Pattern) => boolean = (p: Pattern) =>
     .with({ _tag: "PUnit" }, () => true)
     .with({ _tag: "PBind" }, () => true)
     .with({ _tag: "PAs" }, ({ pat }) => isCatchAll(pat))
-    .with({ _tag: "PRecord" }, ({ fields }) =>
-      allOf((f: { pat: Pattern; label: string }) => isCatchAll(f.pat), fields),
-    )
+    .with({ _tag: "PRecord" }, ({ fields }) => allOf((f: PatField) => isCatchAll(f.pat), fields))
     .with({ _tag: "PTuple" }, ({ elems }) => allOf(isCatchAll, elems))
     .with({ _tag: "PArr" }, ({ elems, rest }) => and(eq(length(elems), 0), _Option_isSome(rest)))
     .with({ _tag: "PList" }, ({ elems, rest }) => and(eq(length(elems), 0), _Option_isSome(rest)))
@@ -262,7 +275,7 @@ const checkPattern: <A, B>(
             .exhaustive())(patCtorKey(ctor, ns)),
       )
       .with({ _tag: "PRecord" }, ({ fields }) =>
-        firstSome((f: { pat: Pattern; label: string }) => checkPattern(f.pat, reg, false), fields),
+        firstSome((f: PatField) => checkPattern(f.pat, reg, false), fields),
       )
       .with({ _tag: "PTuple" }, ({ elems }) =>
         firstSome((el: Pattern) => checkPattern(el, reg, false), elems),
@@ -340,48 +353,46 @@ const binderPathsArgs: {
 );
 const binderPathsFields: {
   (
-    fields: { label: string; pat: Pattern }[],
+    fields: PatField[],
   ): (i: number) => (at: string) => (acc: Map<string, string>) => Result<Map<string, string>, CErr>;
   (
-    fields: { label: string; pat: Pattern }[],
+    fields: PatField[],
   ): (i: number) => (at: string, acc: Map<string, string>) => Result<Map<string, string>, CErr>;
   (
-    fields: { label: string; pat: Pattern }[],
+    fields: PatField[],
   ): (i: number, at: string) => (acc: Map<string, string>) => Result<Map<string, string>, CErr>;
   (
-    fields: { label: string; pat: Pattern }[],
+    fields: PatField[],
     i: number,
   ): (at: string) => (acc: Map<string, string>) => Result<Map<string, string>, CErr>;
   (
-    fields: { label: string; pat: Pattern }[],
+    fields: PatField[],
   ): (i: number, at: string, acc: Map<string, string>) => Result<Map<string, string>, CErr>;
   (
-    fields: { label: string; pat: Pattern }[],
+    fields: PatField[],
     i: number,
   ): (at: string, acc: Map<string, string>) => Result<Map<string, string>, CErr>;
   (
-    fields: { label: string; pat: Pattern }[],
+    fields: PatField[],
     i: number,
     at: string,
   ): (acc: Map<string, string>) => Result<Map<string, string>, CErr>;
   (
-    fields: { label: string; pat: Pattern }[],
+    fields: PatField[],
     i: number,
     at: string,
     acc: Map<string, string>,
   ): Result<Map<string, string>, CErr>;
-} = _curry(
-  4,
-  (fields: { label: string; pat: Pattern }[], i: number, at: string, acc: Map<string, string>) =>
-    match(_Array_get(i, fields))
-      .with({ _tag: "None" }, () => Ok(acc) as Result<Map<string, string>, CErr>)
-      .with({ _tag: "Some" }, ({ value: f }) =>
-        _Result_flatMap(
-          (acc2: Map<string, string>) => binderPathsFields(fields, add(i, 1), at, acc2),
-          binderPaths(f.pat, `${at}.${f.label}`, acc),
-        ),
-      )
-      .exhaustive(),
+} = _curry(4, (fields: PatField[], i: number, at: string, acc: Map<string, string>) =>
+  match(_Array_get(i, fields))
+    .with({ _tag: "None" }, () => Ok(acc) as Result<Map<string, string>, CErr>)
+    .with({ _tag: "Some" }, ({ value: f }) =>
+      _Result_flatMap(
+        (acc2: Map<string, string>) => binderPathsFields(fields, add(i, 1), at, acc2),
+        binderPaths(f.pat, `${at}.${f.label}`, acc),
+      ),
+    )
+    .exhaustive(),
 );
 const binderPathsElems: {
   (
@@ -558,15 +569,11 @@ const consistentBindsFrom: <A, B, C>(
 );
 const checkOrPattern: <A, B>(
   alts: Pattern[],
-  sp: { end: number; start: number },
+  sp: Span,
   reg: { ctors: Map<string, { arity: number } & A> } & B,
 ) => Option<CErr> = _curry(
   3,
-  <A, B>(
-    alts: Pattern[],
-    sp: { end: number; start: number },
-    reg: { ctors: Map<string, { arity: number } & A> } & B,
-  ) =>
+  <A, B>(alts: Pattern[], sp: Span, reg: { ctors: Map<string, { arity: number } & A> } & B) =>
     match(altMapsFrom(alts, 0, reg, [] as Map<string, string>[]))
       .with({ _tag: "Err" }, ({ error: e }) => Some(e) as Option<CErr>)
       .with({ _tag: "Ok" }, ({ value: maps }) =>
@@ -1024,7 +1031,7 @@ const checkExpr: <A, B>(
           checkMatch(arms, sp, reg),
           _Option_orElse(
             firstSome(
-              (a: { body: Expr; guard: Option<Expr>; pattern: Pattern }) =>
+              (a: MatchArm) =>
                 _Option_orElse(
                   checkExpr(a.body, reg),
                   match(a.guard)
@@ -1040,7 +1047,7 @@ const checkExpr: <A, B>(
       )
       .with({ _tag: "ERecord" }, ({ fields, spread }) =>
         _Option_orElse(
-          firstSome((f: { value: Expr; name: string }) => checkExpr(f.value, reg), fields),
+          firstSome((f: Field) => checkExpr(f.value, reg), fields),
           match(spread)
             .with({ _tag: "Some" }, ({ value: s }) => checkExpr(s, reg))
             .with({ _tag: "None" }, () => None as Option<CErr>)
@@ -1051,11 +1058,7 @@ const checkExpr: <A, B>(
       .with({ _tag: "ELoop" }, ({ params, body }) =>
         _Option_orElse(
           checkExpr(body, reg),
-          firstSome(
-            (p: { init: Expr; name: string; nameSpan: { start: number; end: number } }) =>
-              checkExpr(p.init, reg),
-            params,
-          ),
+          firstSome((p: LoopParam) => checkExpr(p.init, reg), params),
         ),
       )
       .with({ _tag: "ERecur" }, ({ args }) => firstSome((a: Expr) => checkExpr(a, reg), args))
@@ -1103,8 +1106,7 @@ const checkExpr: <A, B>(
       )
       .with({ _tag: "EMap" }, ({ entries }) =>
         firstSome(
-          (en: { value: Expr; key: Expr }) =>
-            _Option_orElse(checkExpr(en.value, reg), checkExpr(en.key, reg)),
+          (en: MapEntry) => _Option_orElse(checkExpr(en.value, reg), checkExpr(en.key, reg)),
           entries,
         ),
       )
@@ -1153,7 +1155,7 @@ const checkReservedNames: (stmts: Stmt[]) => Option<CErr> = (stmts: Stmt[]) =>
         )
         .with({ _tag: "SImport" }, ({ names }) =>
           firstSome(
-            (n: { name: string; span: { end: number; start: number } }) =>
+            (n: Name) =>
               _Array_contains(n.name, reservedNames)
                 ? (Some(
                     checkErr(
@@ -1186,8 +1188,8 @@ const isUpperStart: (s: string) => boolean = (s: string) =>
     .with({ _tag: "None" }, () => false)
     .exhaustive();
 const strayTypeVar: {
-  (params: string[]): (te: TypeExpr) => Option<[string, { start: number; end: number }]>;
-  (params: string[], te: TypeExpr): Option<[string, { start: number; end: number }]>;
+  (params: string[]): (te: TypeExpr) => Option<[string, Span]>;
+  (params: string[], te: TypeExpr): Option<[string, Span]>;
 } = _curry(2, (params: string[], te: TypeExpr) =>
   match(te)
     .with({ _tag: "TyName" }, ({ name, span: sp }) =>
@@ -1195,8 +1197,8 @@ const strayTypeVar: {
         isUpperStart(name),
         or(_Array_contains(name, primTypeNames), _Array_contains(name, params)),
       )
-        ? (None as Option<[string, { start: number; end: number }]>)
-        : (Some(_tuple(name, sp)) as Option<[string, { start: number; end: number }]>),
+        ? (None as Option<[string, Span]>)
+        : (Some(_tuple(name, sp)) as Option<[string, Span]>),
     )
     .with({ _tag: "TyArrow" }, ({ from, to }) =>
       _Option_orElse(strayTypeVar(params, to), strayTypeVar(params, from)),
@@ -1205,7 +1207,7 @@ const strayTypeVar: {
     .with({ _tag: "TyTuple" }, ({ elems }) => firstSome(strayTypeVar(params), elems))
     .with({ _tag: "TyList" }, ({ elem }) => strayTypeVar(params, elem))
     .with({ _tag: "TyQual" }, ({ args }) => firstSome(strayTypeVar(params), args))
-    .with({ _tag: "TyLit" }, () => None as Option<[string, { start: number; end: number }]>)
+    .with({ _tag: "TyLit" }, () => None as Option<[string, Span]>)
     .with({ _tag: "TyUnion" }, ({ members }) => firstSome(strayTypeVar(params), members))
     .exhaustive(),
 );
@@ -1215,17 +1217,12 @@ const checkCtorFieldVars: (stmts: Stmt[]) => Option<CErr> = (stmts: Stmt[]) =>
       match(s)
         .with({ _tag: "SType" }, ({ name, params, ctors }) =>
           firstSome(
-            (c: { name: string; fields: { fieldType: TypeExpr; name: Option<string> }[] }) =>
+            (c: Ctor) =>
               firstSome(
-                (f: { fieldType: TypeExpr; name: Option<string> }) =>
+                (f: CtorField) =>
                   match(strayTypeVar(params, f.fieldType))
                     .with(
-                      (
-                        _v,
-                      ): _v is Extract<
-                        Option<[string, { start: number; end: number }]>,
-                        { _tag: "Some" }
-                      > => {
+                      (_v): _v is Extract<Option<[string, Span]>, { _tag: "Some" }> => {
                         const _g: any = _v;
                         return _g._tag === "Some";
                       },
@@ -1247,22 +1244,13 @@ const checkCtorFieldVars: (stmts: Stmt[]) => Option<CErr> = (stmts: Stmt[]) =>
         .otherwise(() => None as Option<CErr>),
     stmts,
   );
-const qualRefsFrom: (te: TypeExpr) => {
-  alias: string;
-  name: string;
-  nameSpan: { start: number; end: number };
-  qualSpan: { start: number; end: number };
-}[] = (te: TypeExpr) =>
+const qualRefsFrom: (
+  te: TypeExpr,
+) => { alias: string; name: string; nameSpan: Span; qualSpan: Span }[] = (te: TypeExpr) =>
   match(te)
     .with(
       { _tag: "TyName" },
-      () =>
-        [] as {
-          alias: string;
-          name: string;
-          nameSpan: { start: number; end: number };
-          qualSpan: { start: number; end: number };
-        }[],
+      () => [] as { alias: string; name: string; nameSpan: Span; qualSpan: Span }[],
     )
     .with({ _tag: "TyArrow" }, ({ from, to }) => [...qualRefsFrom(from), ...qualRefsFrom(to)])
     .with({ _tag: "TyApp" }, ({ args }) => _Array_flatMap(qualRefsFrom, args))
@@ -1274,13 +1262,7 @@ const qualRefsFrom: (te: TypeExpr) => {
     ])
     .with(
       { _tag: "TyLit" },
-      () =>
-        [] as {
-          alias: string;
-          name: string;
-          nameSpan: { start: number; end: number };
-          qualSpan: { start: number; end: number };
-        }[],
+      () => [] as { alias: string; name: string; nameSpan: Span; qualSpan: Span }[],
     )
     .with({ _tag: "TyUnion" }, ({ members }) => _Array_flatMap(qualRefsFrom, members))
     .exhaustive();
@@ -1296,14 +1278,10 @@ const writtenTypeExprs: (stmts: Stmt[]) => TypeExpr[] = (stmts: Stmt[]) =>
             .exhaustive(),
         )
         .with({ _tag: "SType" }, ({ ctors, alias, aliasType }) => [
-          ..._Array_flatMap(
-            (c: { fields: { fieldType: TypeExpr; name: Option<string> }[]; name: string }) =>
-              map((f: { fieldType: TypeExpr; name: Option<string> }) => f.fieldType, c.fields),
-            ctors,
-          ),
+          ..._Array_flatMap((c: Ctor) => map((f: CtorField) => f.fieldType, c.fields), ctors),
           ...match(alias)
             .with({ _tag: "Some" }, ({ value: fields }) =>
-              map((f: { fieldType: TypeExpr; name: string }) => f.fieldType, fields),
+              map((f: AliasField) => f.fieldType, fields),
             )
             .with({ _tag: "None" }, () => [] as TypeExpr[])
             .exhaustive(),
@@ -1333,12 +1311,7 @@ const checkQualifiedTypeNames: <A>(
       ),
     );
     return firstSome(
-      (q: {
-        alias: string;
-        name: string;
-        nameSpan: { end: number; start: number };
-        qualSpan: { end: number; start: number };
-      }) =>
+      (q: { alias: string; name: string; nameSpan: Span; qualSpan: Span }) =>
         _Set_has(q.alias, nsAliases)
           ? match(_Map_get(q.alias, quals))
               .with({ _tag: "None" }, () => None as Option<CErr>)

@@ -1,4 +1,21 @@
-import type { Expr, InterpPart, LamParam, Pattern, SeqElem, Stmt, TypeExpr } from "./ast";
+import type {
+  Ctor,
+  CtorField,
+  Expr,
+  Field,
+  InterpPart,
+  LamParam,
+  LoopParam,
+  MapEntry,
+  MatchArm,
+  Name,
+  PatField,
+  Pattern,
+  SeqElem,
+  Span,
+  Stmt,
+  TypeExpr,
+} from "./ast";
 
 export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
 export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
@@ -9,19 +26,12 @@ export type CtorFactoryTs = {
   retMono: string;
 };
 export type ParamAnnots = { generics: string; params: Option<string>[] };
-export type CtorFieldLike = { name: Option<string>; fieldType: TypeExpr };
-export type CtorLike = { name: string; fields: { name: Option<string>; fieldType: TypeExpr }[] };
+export type CtorFieldLike = CtorField;
+export type CtorLike = Ctor;
 export type GenOpts = {
   annotateLet: Option<(a: string, b: Expr) => Option<string>>;
-  annotateCtor: Option<
-    (
-      a: Stmt,
-      b: { name: string; fields: { name: Option<string>; fieldType: TypeExpr }[] },
-    ) => Option<{ generics: string; paramTypes: string[]; ret: string; retMono: string }>
-  >;
-  annotateParams: Option<
-    (a: { start: number; end: number }, b: number) => { generics: string; params: Option<string>[] }
-  >;
+  annotateCtor: Option<(a: Stmt, b: CtorLike) => Option<CtorFactoryTs>>;
+  annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
   annotateEmpty: Option<(a: Expr) => Option<string>>;
   annotateLetin: Option<(a: Expr) => Option<string>>;
   annotateCall: Option<(a: Expr) => Option<string>>;
@@ -90,7 +100,7 @@ import { keysOf, ctorKeysFromStmts, seedBuiltinCtorKeys } from "./ctors";
 export const jsGenOpts: GenOpts = {
   annotateLet: None as Option<(a: string, b: Expr) => Option<string>>,
   annotateCtor: None as Option<(a: Stmt, b: CtorLike) => Option<CtorFactoryTs>>,
-  annotateParams: None as Option<(a: { start: number; end: number }, b: number) => ParamAnnots>,
+  annotateParams: None as Option<(a: Span, b: number) => ParamAnnots>,
   annotateEmpty: None as Option<(a: Expr) => Option<string>>,
   annotateLetin: None as Option<(a: Expr) => Option<string>>,
   annotateCall: None as Option<(a: Expr) => Option<string>>,
@@ -313,7 +323,7 @@ const genExpr: <A>(
     keys: Map<string, string[]>;
     annotateEmpty: Option<(a: Expr) => Option<string>>;
     annotateCall: Option<(a: Expr) => Option<string>>;
-    annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+    annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
     annotateLetin: Option<(a: Expr) => Option<string>>;
     flattenPipe: boolean;
     ns: Map<string, Map<string, string>>;
@@ -328,7 +338,7 @@ const genExpr: <A>(
       keys: Map<string, string[]>;
       annotateEmpty: Option<(a: Expr) => Option<string>>;
       annotateCall: Option<(a: Expr) => Option<string>>;
-      annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+      annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
       annotateLetin: Option<(a: Expr) => Option<string>>;
       flattenPipe: boolean;
       ns: Map<string, Map<string, string>>;
@@ -424,10 +434,7 @@ const genExpr: <A>(
             .exhaustive())(
           _Str_join(
             ", ",
-            map(
-              (f: { name: string; value: Expr }) => `${f.name}: ${genExpr(ctx, f.value)}`,
-              fields,
-            ),
+            map((f: Field) => `${f.name}: ${genExpr(ctx, f.value)}`, fields),
           ),
         ),
       )
@@ -480,8 +487,7 @@ const genExpr: <A>(
               `new Map([${_Str_join(
                 ", ",
                 map(
-                  (en: { key: Expr; value: Expr }) =>
-                    `[${genExpr(ctx, en.key)}, ${genExpr(ctx, en.value)}]`,
+                  (en: MapEntry) => `[${genExpr(ctx, en.key)}, ${genExpr(ctx, en.value)}]`,
                   entries,
                 ),
               )}])`,
@@ -510,7 +516,7 @@ const genDo: <A>(
     keys: Map<string, string[]>;
     annotateEmpty: Option<(a: Expr) => Option<string>>;
     annotateCall: Option<(a: Expr) => Option<string>>;
-    annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+    annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
     annotateLetin: Option<(a: Expr) => Option<string>>;
     flattenPipe: boolean;
     ns: Map<string, Map<string, string>>;
@@ -525,7 +531,7 @@ const genDo: <A>(
       keys: Map<string, string[]>;
       annotateEmpty: Option<(a: Expr) => Option<string>>;
       annotateCall: Option<(a: Expr) => Option<string>>;
-      annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+      annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
       annotateLetin: Option<(a: Expr) => Option<string>>;
       flattenPipe: boolean;
       ns: Map<string, Map<string, string>>;
@@ -540,7 +546,7 @@ const genDoSteps: <A>(
     keys: Map<string, string[]>;
     annotateEmpty: Option<(a: Expr) => Option<string>>;
     annotateCall: Option<(a: Expr) => Option<string>>;
-    annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+    annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
     annotateLetin: Option<(a: Expr) => Option<string>>;
     flattenPipe: boolean;
     ns: Map<string, Map<string, string>>;
@@ -555,7 +561,7 @@ const genDoSteps: <A>(
       keys: Map<string, string[]>;
       annotateEmpty: Option<(a: Expr) => Option<string>>;
       annotateCall: Option<(a: Expr) => Option<string>>;
-      annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+      annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
       annotateLetin: Option<(a: Expr) => Option<string>>;
       flattenPipe: boolean;
       ns: Map<string, Map<string, string>>;
@@ -595,7 +601,7 @@ const genSeqSlot: <A>(
     keys: Map<string, string[]>;
     annotateEmpty: Option<(a: Expr) => Option<string>>;
     annotateCall: Option<(a: Expr) => Option<string>>;
-    annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+    annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
     annotateLetin: Option<(a: Expr) => Option<string>>;
     flattenPipe: boolean;
     ns: Map<string, Map<string, string>>;
@@ -610,7 +616,7 @@ const genSeqSlot: <A>(
       keys: Map<string, string[]>;
       annotateEmpty: Option<(a: Expr) => Option<string>>;
       annotateCall: Option<(a: Expr) => Option<string>>;
-      annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+      annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
       annotateLetin: Option<(a: Expr) => Option<string>>;
       flattenPipe: boolean;
       ns: Map<string, Map<string, string>>;
@@ -629,7 +635,7 @@ const genList: <A>(
     keys: Map<string, string[]>;
     annotateEmpty: Option<(a: Expr) => Option<string>>;
     annotateCall: Option<(a: Expr) => Option<string>>;
-    annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+    annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
     annotateLetin: Option<(a: Expr) => Option<string>>;
     flattenPipe: boolean;
     ns: Map<string, Map<string, string>>;
@@ -644,7 +650,7 @@ const genList: <A>(
       keys: Map<string, string[]>;
       annotateEmpty: Option<(a: Expr) => Option<string>>;
       annotateCall: Option<(a: Expr) => Option<string>>;
-      annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+      annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
       annotateLetin: Option<(a: Expr) => Option<string>>;
       flattenPipe: boolean;
       ns: Map<string, Map<string, string>>;
@@ -678,7 +684,7 @@ const genCallee: <A>(
     keys: Map<string, string[]>;
     annotateEmpty: Option<(a: Expr) => Option<string>>;
     annotateCall: Option<(a: Expr) => Option<string>>;
-    annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+    annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
     annotateLetin: Option<(a: Expr) => Option<string>>;
     flattenPipe: boolean;
     ns: Map<string, Map<string, string>>;
@@ -693,7 +699,7 @@ const genCallee: <A>(
       keys: Map<string, string[]>;
       annotateEmpty: Option<(a: Expr) => Option<string>>;
       annotateCall: Option<(a: Expr) => Option<string>>;
-      annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+      annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
       annotateLetin: Option<(a: Expr) => Option<string>>;
       flattenPipe: boolean;
       ns: Map<string, Map<string, string>>;
@@ -711,7 +717,7 @@ const genMember: <A>(
     keys: Map<string, string[]>;
     annotateEmpty: Option<(a: Expr) => Option<string>>;
     annotateCall: Option<(a: Expr) => Option<string>>;
-    annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+    annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
     annotateLetin: Option<(a: Expr) => Option<string>>;
     flattenPipe: boolean;
     ns: Map<string, Map<string, string>>;
@@ -726,7 +732,7 @@ const genMember: <A>(
       keys: Map<string, string[]>;
       annotateEmpty: Option<(a: Expr) => Option<string>>;
       annotateCall: Option<(a: Expr) => Option<string>>;
-      annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+      annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
       annotateLetin: Option<(a: Expr) => Option<string>>;
       flattenPipe: boolean;
       ns: Map<string, Map<string, string>>;
@@ -772,7 +778,7 @@ const hasRecur: (e: Expr) => boolean = (e: Expr) =>
       or(
         hasRecur(scrutinee),
         someOf(
-          (a: { guard: Option<Expr>; body: Expr; pattern: Pattern }) =>
+          (a: MatchArm) =>
             or(
               match(a.guard)
                 .with({ _tag: "Some" }, ({ value: g }) => hasRecur(g))
@@ -790,7 +796,7 @@ const hasRecur: (e: Expr) => boolean = (e: Expr) =>
           .with({ _tag: "Some" }, ({ value: sp }) => hasRecur(sp))
           .with({ _tag: "None" }, () => false)
           .exhaustive(),
-        someOf((f: { value: Expr; name: string }) => hasRecur(f.value), fields),
+        someOf((f: Field) => hasRecur(f.value), fields),
       ),
     )
     .with({ _tag: "EField" }, ({ target }) => hasRecur(target))
@@ -805,7 +811,7 @@ const hasRecur: (e: Expr) => boolean = (e: Expr) =>
       someOf((el: SeqElem) => hasRecur(seqElemExpr(el)), elements),
     )
     .with({ _tag: "EMap" }, ({ entries }) =>
-      someOf((en: { key: Expr; value: Expr }) => or(hasRecur(en.key), hasRecur(en.value)), entries),
+      someOf((en: MapEntry) => or(hasRecur(en.key), hasRecur(en.value)), entries),
     )
     .otherwise(() => false);
 const loopNeedsStep: (e: Expr) => boolean = (e: Expr) =>
@@ -843,65 +849,62 @@ const lastDoExpr: (exprs: Expr[]) => Expr = (exprs: Expr[]) =>
     .otherwise(() => {
       throw new Error("non-exhaustive match");
     });
-const wrapStepTails: {
-  (e: Expr): (sp: { start: number; end: number }) => Expr;
-  (e: Expr, sp: { start: number; end: number }): Expr;
-} = _curry(2, (e: Expr, sp: { start: number; end: number }) =>
-  match(e)
-    .with({ _tag: "ERecur" }, () => e)
-    .with({ _tag: "ETernary" }, ({ cond, thenE, elseE, span: tsp }) =>
-      Ast.ETernary(cond, wrapStepTails(thenE, sp), wrapStepTails(elseE, sp), tsp),
-    )
-    .with({ _tag: "ELetIn" }, ({ name, nameSpan, value, body, span: lsp }) =>
-      Ast.ELetIn(name, nameSpan, value, wrapStepTails(body, sp), lsp),
-    )
-    .with({ _tag: "EDo" }, ({ exprs, span: dsp }) => Ast.EDo(wrapDoStepTail(exprs, sp), dsp))
-    .with({ _tag: "EMatch" }, ({ scrutinee, arms, span: msp }) =>
-      Ast.EMatch(
-        scrutinee,
-        map(
-          (a: { body: Expr; guard: Option<Expr>; pattern: Pattern }) => ({
-            pattern: a.pattern,
-            guard: a.guard,
-            body: wrapStepTails(a.body, sp),
-          }),
-          arms,
+const wrapStepTails: { (e: Expr): (sp: Span) => Expr; (e: Expr, sp: Span): Expr } = _curry(
+  2,
+  (e: Expr, sp: Span) =>
+    match(e)
+      .with({ _tag: "ERecur" }, () => e)
+      .with({ _tag: "ETernary" }, ({ cond, thenE, elseE, span: tsp }) =>
+        Ast.ETernary(cond, wrapStepTails(thenE, sp), wrapStepTails(elseE, sp), tsp),
+      )
+      .with({ _tag: "ELetIn" }, ({ name, nameSpan, value, body, span: lsp }) =>
+        Ast.ELetIn(name, nameSpan, value, wrapStepTails(body, sp), lsp),
+      )
+      .with({ _tag: "EDo" }, ({ exprs, span: dsp }) => Ast.EDo(wrapDoStepTail(exprs, sp), dsp))
+      .with({ _tag: "EMatch" }, ({ scrutinee, arms, span: msp }) =>
+        Ast.EMatch(
+          scrutinee,
+          map(
+            (a: MatchArm) => ({
+              pattern: a.pattern,
+              guard: a.guard,
+              body: wrapStepTails(a.body, sp),
+            }),
+            arms,
+          ),
+          msp,
         ),
-        msp,
-      ),
-    )
-    .otherwise(() => Ast.ECall(Ast.ERef("_done", sp), [e], None as Option<string>, sp)),
+      )
+      .otherwise(() => Ast.ECall(Ast.ERef("_done", sp), [e], None as Option<string>, sp)),
 );
-const wrapDoStepTail: {
-  (exprs: Expr[]): (sp: { start: number; end: number }) => Expr[];
-  (exprs: Expr[], sp: { start: number; end: number }): Expr[];
-} = _curry(2, (exprs: Expr[], sp: { start: number; end: number }) =>
-  match(exprs)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 1;
-      },
-      ([last]) => [wrapStepTails(last, sp)],
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length >= 1;
-      },
-      ([first, ...rest]) => [first, ...wrapDoStepTail(rest, sp)],
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => [] as Expr[],
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
-);
+const wrapDoStepTail: { (exprs: Expr[]): (sp: Span) => Expr[]; (exprs: Expr[], sp: Span): Expr[] } =
+  _curry(2, (exprs: Expr[], sp: Span) =>
+    match(exprs)
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length === 1;
+        },
+        ([last]) => [wrapStepTails(last, sp)],
+      )
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length >= 1;
+        },
+        ([first, ...rest]) => [first, ...wrapDoStepTail(rest, sp)],
+      )
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length === 0;
+        },
+        () => [] as Expr[],
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
+  );
 const loopParamNames: <A>(params: ({ name: string } & A)[]) => string = <A>(
   params: ({ name: string } & A)[],
 ) =>
@@ -914,7 +917,7 @@ const genLoopTail: <A>(
     keys: Map<string, string[]>;
     annotateEmpty: Option<(a: Expr) => Option<string>>;
     annotateCall: Option<(a: Expr) => Option<string>>;
-    annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+    annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
     annotateLetin: Option<(a: Expr) => Option<string>>;
     flattenPipe: boolean;
     ns: Map<string, Map<string, string>>;
@@ -922,7 +925,7 @@ const genLoopTail: <A>(
     guardBaseType: Option<(a: Expr) => Option<string>>;
   } & A,
   e: Expr,
-  params: { name: string; init: Expr; nameSpan: { start: number; end: number } }[],
+  params: LoopParam[],
 ) => string = _curry(
   3,
   <A>(
@@ -930,7 +933,7 @@ const genLoopTail: <A>(
       keys: Map<string, string[]>;
       annotateEmpty: Option<(a: Expr) => Option<string>>;
       annotateCall: Option<(a: Expr) => Option<string>>;
-      annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+      annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
       annotateLetin: Option<(a: Expr) => Option<string>>;
       flattenPipe: boolean;
       ns: Map<string, Map<string, string>>;
@@ -938,7 +941,7 @@ const genLoopTail: <A>(
       guardBaseType: Option<(a: Expr) => Option<string>>;
     } & A,
     e: Expr,
-    params: { name: string; init: Expr; nameSpan: { start: number; end: number } }[],
+    params: LoopParam[],
   ) =>
     match(e)
       .with({ _tag: "ERecur" }, ({ args }) =>
@@ -965,7 +968,7 @@ const genLoopTail: <A>(
       )
       .with({ _tag: "ELetIn" }, ({ name, value, body }) =>
         hasRecur(e)
-          ? `{ const ${name} = ${genExpr(ctx, value)}; ${genLoopTail(ctx, body, params)} }`
+          ? `{ const ${suffixOr(name, hook1(ctx.annotateLetin, value))} = ${genExpr(ctx, value)}; ${genLoopTail(ctx, body, params)} }`
           : `return ${genExpr(ctx, e)};`,
       )
       .with({ _tag: "EDo" }, ({ exprs }) =>
@@ -992,34 +995,34 @@ const genLoopTail: <A>(
 );
 const genDoLoopTail: <A>(
   ctx: {
+    annotateLetin: Option<(a: Expr) => Option<string>>;
     keys: Map<string, string[]>;
     annotateEmpty: Option<(a: Expr) => Option<string>>;
     annotateCall: Option<(a: Expr) => Option<string>>;
-    annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
-    annotateLetin: Option<(a: Expr) => Option<string>>;
+    annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
     flattenPipe: boolean;
     ns: Map<string, Map<string, string>>;
     tupleHelper: boolean;
     guardBaseType: Option<(a: Expr) => Option<string>>;
   } & A,
   exprs: Expr[],
-  params: { name: string; init: Expr; nameSpan: { start: number; end: number } }[],
+  params: LoopParam[],
 ) => string = _curry(
   3,
   <A>(
     ctx: {
+      annotateLetin: Option<(a: Expr) => Option<string>>;
       keys: Map<string, string[]>;
       annotateEmpty: Option<(a: Expr) => Option<string>>;
       annotateCall: Option<(a: Expr) => Option<string>>;
-      annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
-      annotateLetin: Option<(a: Expr) => Option<string>>;
+      annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
       flattenPipe: boolean;
       ns: Map<string, Map<string, string>>;
       tupleHelper: boolean;
       guardBaseType: Option<(a: Expr) => Option<string>>;
     } & A,
     exprs: Expr[],
-    params: { name: string; init: Expr; nameSpan: { start: number; end: number } }[],
+    params: LoopParam[],
   ) =>
     match(exprs)
       .with(
@@ -1049,40 +1052,40 @@ const genDoLoopTail: <A>(
 );
 const genLoopBlock: <A>(
   ctx: {
+    annotateLetin: Option<(a: Expr) => Option<string>>;
     keys: Map<string, string[]>;
     annotateEmpty: Option<(a: Expr) => Option<string>>;
     annotateCall: Option<(a: Expr) => Option<string>>;
-    annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
-    annotateLetin: Option<(a: Expr) => Option<string>>;
+    annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
     flattenPipe: boolean;
     ns: Map<string, Map<string, string>>;
     tupleHelper: boolean;
     guardBaseType: Option<(a: Expr) => Option<string>>;
   } & A,
-  params: { name: string; init: Expr; nameSpan: { start: number; end: number } }[],
+  params: LoopParam[],
   body: Expr,
 ) => string = _curry(
   3,
   <A>(
     ctx: {
+      annotateLetin: Option<(a: Expr) => Option<string>>;
       keys: Map<string, string[]>;
       annotateEmpty: Option<(a: Expr) => Option<string>>;
       annotateCall: Option<(a: Expr) => Option<string>>;
-      annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
-      annotateLetin: Option<(a: Expr) => Option<string>>;
+      annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
       flattenPipe: boolean;
       ns: Map<string, Map<string, string>>;
       tupleHelper: boolean;
       guardBaseType: Option<(a: Expr) => Option<string>>;
     } & A,
-    params: { name: string; init: Expr; nameSpan: { start: number; end: number } }[],
+    params: LoopParam[],
     body: Expr,
   ) => {
     const decls: string = _Str_join(
       " ",
       map(
-        (p: { name: string; init: Expr; nameSpan: { start: number; end: number } }) =>
-          `let ${p.name} = ${genExpr(ctx, p.init)};`,
+        (p: LoopParam) =>
+          `let ${suffixOr(p.name, hook1(ctx.annotateLetin, p.init))} = ${genExpr(ctx, p.init)};`,
         params,
       ),
     );
@@ -1103,7 +1106,7 @@ const genLambdaBody: <A>(
     keys: Map<string, string[]>;
     annotateEmpty: Option<(a: Expr) => Option<string>>;
     annotateCall: Option<(a: Expr) => Option<string>>;
-    annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+    annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
     annotateLetin: Option<(a: Expr) => Option<string>>;
     flattenPipe: boolean;
     ns: Map<string, Map<string, string>>;
@@ -1118,7 +1121,7 @@ const genLambdaBody: <A>(
       keys: Map<string, string[]>;
       annotateEmpty: Option<(a: Expr) => Option<string>>;
       annotateCall: Option<(a: Expr) => Option<string>>;
-      annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+      annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
       annotateLetin: Option<(a: Expr) => Option<string>>;
       flattenPipe: boolean;
       ns: Map<string, Map<string, string>>;
@@ -1164,7 +1167,7 @@ const letBlockLoop: <A>(
     keys: Map<string, string[]>;
     annotateEmpty: Option<(a: Expr) => Option<string>>;
     annotateCall: Option<(a: Expr) => Option<string>>;
-    annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+    annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
     annotateLetin: Option<(a: Expr) => Option<string>>;
     flattenPipe: boolean;
     tupleHelper: boolean;
@@ -1181,7 +1184,7 @@ const letBlockLoop: <A>(
       keys: Map<string, string[]>;
       annotateEmpty: Option<(a: Expr) => Option<string>>;
       annotateCall: Option<(a: Expr) => Option<string>>;
-      annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+      annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
       annotateLetin: Option<(a: Expr) => Option<string>>;
       flattenPipe: boolean;
       tupleHelper: boolean;
@@ -1214,7 +1217,7 @@ const genLambdaBodyIn: <A>(
     keys: Map<string, string[]>;
     annotateEmpty: Option<(a: Expr) => Option<string>>;
     annotateCall: Option<(a: Expr) => Option<string>>;
-    annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+    annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
     annotateLetin: Option<(a: Expr) => Option<string>>;
     flattenPipe: boolean;
     ns: Map<string, Map<string, string>>;
@@ -1230,7 +1233,7 @@ const genLambdaBodyIn: <A>(
       keys: Map<string, string[]>;
       annotateEmpty: Option<(a: Expr) => Option<string>>;
       annotateCall: Option<(a: Expr) => Option<string>>;
-      annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+      annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
       annotateLetin: Option<(a: Expr) => Option<string>>;
       flattenPipe: boolean;
       ns: Map<string, Map<string, string>>;
@@ -1266,9 +1269,7 @@ const isCatchAll: (p: Pattern) => boolean = (p: Pattern) =>
     .with({ _tag: "PWild" }, () => true)
     .with({ _tag: "PUnit" }, () => true)
     .with({ _tag: "PBind" }, () => true)
-    .with({ _tag: "PRecord" }, ({ fields }) =>
-      allOf((f: { pat: Pattern; label: string }) => isCatchAll(f.pat), fields),
-    )
+    .with({ _tag: "PRecord" }, ({ fields }) => allOf((f: PatField) => isCatchAll(f.pat), fields))
     .with({ _tag: "PTuple" }, ({ elems }) => allOf(isCatchAll, elems))
     .with({ _tag: "PArr" }, ({ elems, rest }) => and(eq(length(elems), 0), _Option_isSome(rest)))
     .with({ _tag: "PList" }, ({ elems, rest }) => and(eq(length(elems), 0), _Option_isSome(rest)))
@@ -1302,15 +1303,11 @@ const pctorEntries: <A>(
 );
 const precordEntries: <A>(
   ctx: { keys: Map<string, string[]> } & A,
-  fields: { pat: Pattern; label: string }[],
+  fields: PatField[],
   i: number,
 ) => string[] = _curry(
   3,
-  <A>(
-    ctx: { keys: Map<string, string[]> } & A,
-    fields: { pat: Pattern; label: string }[],
-    i: number,
-  ) =>
+  <A>(ctx: { keys: Map<string, string[]> } & A, fields: PatField[], i: number) =>
     match(_Array_get(i, fields))
       .with({ _tag: "None" }, () => [] as string[])
       .with({ _tag: "Some" }, ({ value: f }) =>
@@ -1409,17 +1406,12 @@ const pctorConds: <A>(
 );
 const precordConds: <A>(
   ctx: { keys: Map<string, string[]> } & A,
-  fields: { pat: Pattern; label: string }[],
+  fields: PatField[],
   i: number,
   path: string,
 ) => string[] = _curry(
   4,
-  <A>(
-    ctx: { keys: Map<string, string[]> } & A,
-    fields: { pat: Pattern; label: string }[],
-    i: number,
-    path: string,
-  ) =>
+  <A>(ctx: { keys: Map<string, string[]> } & A, fields: PatField[], i: number, path: string) =>
     match(_Array_get(i, fields))
       .with({ _tag: "None" }, () => [] as string[])
       .with({ _tag: "Some" }, ({ value: f }) =>
@@ -1604,7 +1596,7 @@ const genListArm: <A>(
     keys: Map<string, string[]>;
     annotateEmpty: Option<(a: Expr) => Option<string>>;
     annotateCall: Option<(a: Expr) => Option<string>>;
-    annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+    annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
     annotateLetin: Option<(a: Expr) => Option<string>>;
     flattenPipe: boolean;
     ns: Map<string, Map<string, string>>;
@@ -1620,7 +1612,7 @@ const genListArm: <A>(
       keys: Map<string, string[]>;
       annotateEmpty: Option<(a: Expr) => Option<string>>;
       annotateCall: Option<(a: Expr) => Option<string>>;
-      annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+      annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
       annotateLetin: Option<(a: Expr) => Option<string>>;
       flattenPipe: boolean;
       ns: Map<string, Map<string, string>>;
@@ -1671,14 +1663,14 @@ const listMatchLoop: <A>(
     keys: Map<string, string[]>;
     annotateEmpty: Option<(a: Expr) => Option<string>>;
     annotateCall: Option<(a: Expr) => Option<string>>;
-    annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+    annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
     annotateLetin: Option<(a: Expr) => Option<string>>;
     flattenPipe: boolean;
     ns: Map<string, Map<string, string>>;
     tupleHelper: boolean;
     guardBaseType: Option<(a: Expr) => Option<string>>;
   } & A,
-  arms: { pattern: Pattern; body: Expr; guard: Option<Expr> }[],
+  arms: MatchArm[],
   i: number,
 ) => [string[], string] = _curry(
   3,
@@ -1687,14 +1679,14 @@ const listMatchLoop: <A>(
       keys: Map<string, string[]>;
       annotateEmpty: Option<(a: Expr) => Option<string>>;
       annotateCall: Option<(a: Expr) => Option<string>>;
-      annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+      annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
       annotateLetin: Option<(a: Expr) => Option<string>>;
       flattenPipe: boolean;
       ns: Map<string, Map<string, string>>;
       tupleHelper: boolean;
       guardBaseType: Option<(a: Expr) => Option<string>>;
     } & A,
-    arms: { pattern: Pattern; body: Expr; guard: Option<Expr> }[],
+    arms: MatchArm[],
     i: number,
   ) =>
     match(_Array_get(i, arms))
@@ -1761,7 +1753,7 @@ const genListMatch: <A>(
     keys: Map<string, string[]>;
     annotateEmpty: Option<(a: Expr) => Option<string>>;
     annotateCall: Option<(a: Expr) => Option<string>>;
-    annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+    annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
     annotateLetin: Option<(a: Expr) => Option<string>>;
     flattenPipe: boolean;
     ns: Map<string, Map<string, string>>;
@@ -1769,7 +1761,7 @@ const genListMatch: <A>(
     guardBaseType: Option<(a: Expr) => Option<string>>;
   } & A,
   scrutinee: Expr,
-  arms: { pattern: Pattern; guard: Option<Expr>; body: Expr }[],
+  arms: MatchArm[],
 ) => string = _curry(
   3,
   <A>(
@@ -1777,7 +1769,7 @@ const genListMatch: <A>(
       keys: Map<string, string[]>;
       annotateEmpty: Option<(a: Expr) => Option<string>>;
       annotateCall: Option<(a: Expr) => Option<string>>;
-      annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+      annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
       annotateLetin: Option<(a: Expr) => Option<string>>;
       flattenPipe: boolean;
       ns: Map<string, Map<string, string>>;
@@ -1785,7 +1777,7 @@ const genListMatch: <A>(
       guardBaseType: Option<(a: Expr) => Option<string>>;
     } & A,
     scrutinee: Expr,
-    arms: { pattern: Pattern; guard: Option<Expr>; body: Expr }[],
+    arms: MatchArm[],
   ) =>
     (([armLines, fallback]: [string[], string]) =>
       concat(
@@ -1820,13 +1812,13 @@ const matchArmsLoop: <A>(
     keys: Map<string, string[]>;
     annotateEmpty: Option<(a: Expr) => Option<string>>;
     annotateCall: Option<(a: Expr) => Option<string>>;
-    annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+    annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
     annotateLetin: Option<(a: Expr) => Option<string>>;
     flattenPipe: boolean;
     ns: Map<string, Map<string, string>>;
     tupleHelper: boolean;
   } & A,
-  arms: { guard: Option<Expr>; pattern: Pattern; body: Expr }[],
+  arms: MatchArm[],
   i: number,
   base: Option<string>,
 ) => [string[], Option<[Pattern, Expr]>] = _curry(
@@ -1837,13 +1829,13 @@ const matchArmsLoop: <A>(
       keys: Map<string, string[]>;
       annotateEmpty: Option<(a: Expr) => Option<string>>;
       annotateCall: Option<(a: Expr) => Option<string>>;
-      annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+      annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
       annotateLetin: Option<(a: Expr) => Option<string>>;
       flattenPipe: boolean;
       ns: Map<string, Map<string, string>>;
       tupleHelper: boolean;
     } & A,
-    arms: { guard: Option<Expr>; pattern: Pattern; body: Expr }[],
+    arms: MatchArm[],
     i: number,
     base: Option<string>,
   ) =>
@@ -1889,14 +1881,14 @@ const genMatch: <A>(
     keys: Map<string, string[]>;
     annotateEmpty: Option<(a: Expr) => Option<string>>;
     annotateCall: Option<(a: Expr) => Option<string>>;
-    annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+    annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
     annotateLetin: Option<(a: Expr) => Option<string>>;
     flattenPipe: boolean;
     ns: Map<string, Map<string, string>>;
     tupleHelper: boolean;
   } & A,
   scrutinee: Expr,
-  arms: { pattern: Pattern; guard: Option<Expr>; body: Expr }[],
+  arms: MatchArm[],
 ) => string = _curry(
   3,
   <A>(
@@ -1905,14 +1897,14 @@ const genMatch: <A>(
       keys: Map<string, string[]>;
       annotateEmpty: Option<(a: Expr) => Option<string>>;
       annotateCall: Option<(a: Expr) => Option<string>>;
-      annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+      annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
       annotateLetin: Option<(a: Expr) => Option<string>>;
       flattenPipe: boolean;
       ns: Map<string, Map<string, string>>;
       tupleHelper: boolean;
     } & A,
     scrutinee: Expr,
-    arms: { pattern: Pattern; guard: Option<Expr>; body: Expr }[],
+    arms: MatchArm[],
   ) =>
     isListMatch(arms)
       ? genListMatch(ctx, scrutinee, arms)
@@ -1995,17 +1987,12 @@ const ctorRefines: <A>(
 );
 const recordRefines: <A>(
   ctx: { keys: Map<string, string[]> } & A,
-  fields: { label: string; pat: Pattern }[],
+  fields: PatField[],
   base: string,
   i: number,
 ) => string[] = _curry(
   4,
-  <A>(
-    ctx: { keys: Map<string, string[]> } & A,
-    fields: { label: string; pat: Pattern }[],
-    base: string,
-    i: number,
-  ) =>
+  <A>(ctx: { keys: Map<string, string[]> } & A, fields: PatField[], base: string, i: number) =>
     match(_Array_get(i, fields))
       .with({ _tag: "None" }, () => [] as string[])
       .with({ _tag: "Some" }, ({ value: f }) =>
@@ -2140,7 +2127,7 @@ const genGuardArm: <A>(
     keys: Map<string, string[]>;
     annotateEmpty: Option<(a: Expr) => Option<string>>;
     annotateCall: Option<(a: Expr) => Option<string>>;
-    annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+    annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
     annotateLetin: Option<(a: Expr) => Option<string>>;
     flattenPipe: boolean;
     ns: Map<string, Map<string, string>>;
@@ -2158,7 +2145,7 @@ const genGuardArm: <A>(
       keys: Map<string, string[]>;
       annotateEmpty: Option<(a: Expr) => Option<string>>;
       annotateCall: Option<(a: Expr) => Option<string>>;
-      annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+      annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
       annotateLetin: Option<(a: Expr) => Option<string>>;
       flattenPipe: boolean;
       ns: Map<string, Map<string, string>>;
@@ -2276,7 +2263,7 @@ const genWithArm: <A>(
     keys: Map<string, string[]>;
     annotateEmpty: Option<(a: Expr) => Option<string>>;
     annotateCall: Option<(a: Expr) => Option<string>>;
-    annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+    annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
     annotateLetin: Option<(a: Expr) => Option<string>>;
     flattenPipe: boolean;
     ns: Map<string, Map<string, string>>;
@@ -2293,7 +2280,7 @@ const genWithArm: <A>(
       keys: Map<string, string[]>;
       annotateEmpty: Option<(a: Expr) => Option<string>>;
       annotateCall: Option<(a: Expr) => Option<string>>;
-      annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+      annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
       annotateLetin: Option<(a: Expr) => Option<string>>;
       flattenPipe: boolean;
       ns: Map<string, Map<string, string>>;
@@ -2312,7 +2299,7 @@ const genWithArm: <A>(
       .with({ _tag: "PBool" }, () => `.with(${litValue(p)}, () => ${genLambdaBody(ctx, body)})`)
       .with({ _tag: "PStr" }, () => `.with(${litValue(p)}, () => ${genLambdaBody(ctx, body)})`)
       .with({ _tag: "PRecord" }, ({ fields }) =>
-        allOf((f: { pat: Pattern; label: string }) => isFlatSub(f.pat), fields)
+        allOf((f: PatField) => isFlatSub(f.pat), fields)
           ? ((lits: string[]) =>
               ((slot: string) =>
                 `.with({ ${_Str_join(", ", lits)} }, ${eq(slot, "") ? "()" : `(${slot})`} => ${genLambdaBody(ctx, body)})`)(
@@ -2580,7 +2567,7 @@ const genImport: { (s: Stmt): (ext: string) => string; (s: Stmt, ext: string): s
           ))(
           _Str_join(
             ", ",
-            map((n: { name: string; span: { start: number; end: number } }) => n.name, names),
+            map((n: Name) => n.name, names),
           ),
         ),
       )
@@ -2606,7 +2593,7 @@ const genStmt: <A, B>(
     keys: Map<string, string[]>;
     annotateEmpty: Option<(a: Expr) => Option<string>>;
     annotateCall: Option<(a: Expr) => Option<string>>;
-    annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+    annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
     annotateLetin: Option<(a: Expr) => Option<string>>;
     flattenPipe: boolean;
     ns: Map<string, Map<string, string>>;
@@ -2630,7 +2617,7 @@ const genStmt: <A, B>(
       keys: Map<string, string[]>;
       annotateEmpty: Option<(a: Expr) => Option<string>>;
       annotateCall: Option<(a: Expr) => Option<string>>;
-      annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+      annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
       annotateLetin: Option<(a: Expr) => Option<string>>;
       flattenPipe: boolean;
       ns: Map<string, Map<string, string>>;
@@ -2670,11 +2657,7 @@ export { ${name} };`
       .with({ _tag: "SExpr" }, ({ value }) => `${genExpr(ctx, value)};`)
       .exhaustive(),
 );
-const usesMatchLibArm: (a: { guard: Option<Expr>; body: Expr; pattern: Pattern }) => boolean = (a: {
-  guard: Option<Expr>;
-  body: Expr;
-  pattern: Pattern;
-}) =>
+const usesMatchLibArm: (a: MatchArm) => boolean = (a: MatchArm) =>
   or(
     match(a.guard)
       .with({ _tag: "Some" }, ({ value: g }) => usesMatchLib(g))
@@ -2703,11 +2686,7 @@ const usesMatchLib: (e: Expr) => boolean = (e: Expr) =>
     )
     .with({ _tag: "ELoop" }, ({ params, body }) =>
       or(
-        someOf(
-          (p: { init: Expr; name: string; nameSpan: { start: number; end: number } }) =>
-            usesMatchLib(p.init),
-          params,
-        ),
+        someOf((p: LoopParam) => usesMatchLib(p.init), params),
         usesMatchLib(body),
       ),
     )
@@ -2718,7 +2697,7 @@ const usesMatchLib: (e: Expr) => boolean = (e: Expr) =>
           .with({ _tag: "Some" }, ({ value: s }) => usesMatchLib(s))
           .with({ _tag: "None" }, () => false)
           .exhaustive(),
-        someOf((f: { value: Expr; name: string }) => usesMatchLib(f.value), fields),
+        someOf((f: Field) => usesMatchLib(f.value), fields),
       ),
     )
     .with({ _tag: "EField" }, ({ target }) => usesMatchLib(target))
@@ -2760,10 +2739,7 @@ const usesMatchLib: (e: Expr) => boolean = (e: Expr) =>
       ),
     )
     .with({ _tag: "EMap" }, ({ entries }) =>
-      someOf(
-        (en: { key: Expr; value: Expr }) => or(usesMatchLib(en.key), usesMatchLib(en.value)),
-        entries,
-      ),
+      someOf((en: MapEntry) => or(usesMatchLib(en.key), usesMatchLib(en.value)), entries),
     )
     .with({ _tag: "EInterp" }, ({ parts }) =>
       someOf(
@@ -2778,14 +2754,14 @@ const usesMatchLib: (e: Expr) => boolean = (e: Expr) =>
     .exhaustive();
 const loopInitRefsFrom: <A>(
   ctx: { ns: Map<string, Map<string, string>> } & A,
-  params: { name: string; nameSpan: { start: number; end: number }; init: Expr }[],
+  params: LoopParam[],
   i: number,
   acc: Set<string>,
 ) => Set<string> = _curry(
   4,
   <A>(
     ctx: { ns: Map<string, Map<string, string>> } & A,
-    params: { name: string; nameSpan: { start: number; end: number }; init: Expr }[],
+    params: LoopParam[],
     i: number,
     acc: Set<string>,
   ) =>
@@ -2841,14 +2817,14 @@ const exprRefsInterpPartsFrom: <A>(
 );
 const exprRefsArmsFrom: <A>(
   ctx: { ns: Map<string, Map<string, string>> } & A,
-  arms: { guard: Option<Expr>; pattern: Pattern; body: Expr }[],
+  arms: MatchArm[],
   i: number,
   acc: Set<string>,
 ) => Set<string> = _curry(
   4,
   <A>(
     ctx: { ns: Map<string, Map<string, string>> } & A,
-    arms: { guard: Option<Expr>; pattern: Pattern; body: Expr }[],
+    arms: MatchArm[],
     i: number,
     acc: Set<string>,
   ) =>
@@ -2867,14 +2843,14 @@ const exprRefsArmsFrom: <A>(
 );
 const exprRefsFieldsFrom: <A>(
   ctx: { ns: Map<string, Map<string, string>> } & A,
-  fields: { name: string; value: Expr }[],
+  fields: Field[],
   i: number,
   acc: Set<string>,
 ) => Set<string> = _curry(
   4,
   <A>(
     ctx: { ns: Map<string, Map<string, string>> } & A,
-    fields: { name: string; value: Expr }[],
+    fields: Field[],
     i: number,
     acc: Set<string>,
   ) =>
@@ -2887,14 +2863,14 @@ const exprRefsFieldsFrom: <A>(
 );
 const exprRefsEntriesFrom: <A>(
   ctx: { ns: Map<string, Map<string, string>> } & A,
-  entries: { key: Expr; value: Expr }[],
+  entries: MapEntry[],
   i: number,
   acc: Set<string>,
 ) => Set<string> = _curry(
   4,
   <A>(
     ctx: { ns: Map<string, Map<string, string>> } & A,
-    entries: { key: Expr; value: Expr }[],
+    entries: MapEntry[],
     i: number,
     acc: Set<string>,
   ) =>
@@ -2945,7 +2921,7 @@ const exprRefs: <A>(
         ((acc1: Set<string>) =>
           ((acc2: Set<string>) => exprRefsArmsFrom(ctx, arms, 0, acc2))(
             someOf(
-              (a: { pattern: Pattern; guard: Option<Expr>; body: Expr }) =>
+              (a: MatchArm) =>
                 match(a.pattern)
                   .with(
                     (
@@ -3082,12 +3058,7 @@ const boundNamesFrom: {
             _Set_union(acc, _Set_fromArray(map((c: CtorLike) => c.name, ctors))),
           )
           .with({ _tag: "SImport" }, ({ names }) =>
-            _Set_union(
-              acc,
-              _Set_fromArray(
-                map((n: { name: string; span: { start: number; end: number } }) => n.name, names),
-              ),
-            ),
+            _Set_union(acc, _Set_fromArray(map((n: Name) => n.name, names))),
           )
           .with({ _tag: "SImportNs" }, ({ alias }) => _Set_add(alias.name, acc))
           .with({ _tag: "SError" }, () => acc)
@@ -3255,7 +3226,7 @@ const genStmtAllFrom: <A, B>(
     keys: Map<string, string[]>;
     annotateEmpty: Option<(a: Expr) => Option<string>>;
     annotateCall: Option<(a: Expr) => Option<string>>;
-    annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+    annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
     annotateLetin: Option<(a: Expr) => Option<string>>;
     flattenPipe: boolean;
     ns: Map<string, Map<string, string>>;
@@ -3280,7 +3251,7 @@ const genStmtAllFrom: <A, B>(
       keys: Map<string, string[]>;
       annotateEmpty: Option<(a: Expr) => Option<string>>;
       annotateCall: Option<(a: Expr) => Option<string>>;
-      annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+      annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
       annotateLetin: Option<(a: Expr) => Option<string>>;
       flattenPipe: boolean;
       ns: Map<string, Map<string, string>>;
@@ -3312,7 +3283,7 @@ export const codegenWith: <A, B>(
     annotateCall: Option<(a: Expr) => Option<string>>;
     annotateLetin: Option<(a: Expr) => Option<string>>;
     annotateEmpty: Option<(a: Expr) => Option<string>>;
-    annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+    annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
     annotateCtor: Option<
       (
         a: Stmt,
@@ -3338,7 +3309,7 @@ export const codegenWith: <A, B>(
       annotateCall: Option<(a: Expr) => Option<string>>;
       annotateLetin: Option<(a: Expr) => Option<string>>;
       annotateEmpty: Option<(a: Expr) => Option<string>>;
-      annotateParams: Option<(a: { start: number; end: number }, b: number) => ParamAnnots>;
+      annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
       annotateCtor: Option<
         (
           a: Stmt,

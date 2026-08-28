@@ -1,12 +1,10 @@
-import type { Stmt, TypeExpr } from "./ast";
+import type { Ctor, CtorField, Span, Stmt } from "./ast";
+import type { PErr } from "./parser";
 
 export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
 export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
 export type CtorInfo = { owner: string; arity: number };
-export type Registry = {
-  ctors: Map<string, { owner: string; arity: number }>;
-  types: Map<string, string[]>;
-};
+export type Registry = { ctors: Map<string, CtorInfo>; types: Map<string, string[]> };
 
 import {
   _curry,
@@ -54,12 +52,8 @@ const keysOfFrom: <A>(fields: ({ name: Option<string> } & A)[], i: number) => st
 export const keysOf: <A>(fields: ({ name: Option<string> } & A)[]) => string[] = <A>(
   fields: ({ name: Option<string> } & A)[],
 ) => keysOfFrom(fields, 0);
-const builtinSpan: { start: number; end: number } = { start: 0, end: 0 };
-export const builtinTypeDecls: {
-  name: string;
-  params: string[];
-  ctors: { name: string; fields: { name: Option<string>; fieldType: TypeExpr }[] }[];
-}[] = [
+const builtinSpan: Span = { start: 0, end: 0 };
+export const builtinTypeDecls: { name: string; params: string[]; ctors: Ctor[] }[] = [
   {
     name: "Option",
     params: ["a"],
@@ -70,7 +64,7 @@ export const builtinTypeDecls: {
           { name: Some("value") as Option<string>, fieldType: Ast.TyName("a", builtinSpan) },
         ],
       },
-      { name: "None", fields: [] as { name: Option<string>; fieldType: TypeExpr }[] },
+      { name: "None", fields: [] as CtorField[] },
     ],
   },
   {
@@ -114,17 +108,11 @@ const declaresType: {
     .with({ _tag: "Some" }, () => declaresType(stmts, add(i, 1), name))
     .exhaustive(),
 );
-export const builtinDeclsFor: (stmts: Stmt[]) => {
-  name: string;
-  params: string[];
-  ctors: { name: string; fields: { name: Option<string>; fieldType: TypeExpr }[] }[];
-}[] = (stmts: Stmt[]) =>
+export const builtinDeclsFor: (
+  stmts: Stmt[],
+) => { name: string; params: string[]; ctors: Ctor[] }[] = (stmts: Stmt[]) =>
   filter(
-    (bt: {
-      name: string;
-      params: string[];
-      ctors: { name: string; fields: { name: Option<string>; fieldType: TypeExpr }[] }[];
-    }) => not(declaresType(stmts, 0, bt.name)),
+    (bt: { name: string; params: string[]; ctors: Ctor[] }) => not(declaresType(stmts, 0, bt.name)),
     builtinTypeDecls,
   );
 const seedRegCtorsFrom: <A, B, C, D>(
@@ -222,32 +210,13 @@ const ctorsInto: <A, B, C, D, E, F>(
         .exhaustive(),
   );
 const buildLoop: {
-  (
-    stmts: Stmt[],
-  ): (
-    i: number,
-  ) => (reg: Registry) => Result<Registry, { message: string; start: number; end: number }>;
-  (
-    stmts: Stmt[],
-  ): (
-    i: number,
-    reg: Registry,
-  ) => Result<Registry, { message: string; start: number; end: number }>;
-  (
-    stmts: Stmt[],
-    i: number,
-  ): (reg: Registry) => Result<Registry, { message: string; start: number; end: number }>;
-  (
-    stmts: Stmt[],
-    i: number,
-    reg: Registry,
-  ): Result<Registry, { message: string; start: number; end: number }>;
+  (stmts: Stmt[]): (i: number) => (reg: Registry) => Result<Registry, PErr>;
+  (stmts: Stmt[]): (i: number, reg: Registry) => Result<Registry, PErr>;
+  (stmts: Stmt[], i: number): (reg: Registry) => Result<Registry, PErr>;
+  (stmts: Stmt[], i: number, reg: Registry): Result<Registry, PErr>;
 } = _curry(3, (stmts: Stmt[], i: number, reg: Registry) =>
   match(_Array_get(i, stmts))
-    .with(
-      { _tag: "None" },
-      () => Ok(reg) as Result<Registry, { message: string; start: number; end: number }>,
-    )
+    .with({ _tag: "None" }, () => Ok(reg) as Result<Registry, PErr>)
     .with(
       (
         _v,
@@ -259,23 +228,14 @@ const buildLoop: {
       },
       ({ value: { name, ctors, span: sp } }) =>
         _Map_has(name, reg.types)
-          ? (Err(ctorErr(`duplicate type '${name}'`, sp)) as Result<
-              Registry,
-              { message: string; start: number; end: number }
-            >)
+          ? (Err(ctorErr(`duplicate type '${name}'`, sp)) as Result<Registry, PErr>)
           : _Result_flatMap(
               (cs: Map<string, CtorInfo>) =>
                 buildLoop(stmts, add(i, 1), {
                   ctors: cs,
                   types: _Map_set(
                     name,
-                    map(
-                      (c: {
-                        name: string;
-                        fields: { name: Option<string>; fieldType: TypeExpr }[];
-                      }) => c.name,
-                      ctors,
-                    ),
+                    map((c: Ctor) => c.name, ctors),
                     reg.types,
                   ),
                 }),
@@ -285,9 +245,7 @@ const buildLoop: {
     .with({ _tag: "Some" }, () => buildLoop(stmts, add(i, 1), reg))
     .exhaustive(),
 );
-export const buildRegistry: (
-  stmts: Stmt[],
-) => Result<Registry, { message: string; start: number; end: number }> = (stmts: Stmt[]) =>
+export const buildRegistry: (stmts: Stmt[]) => Result<Registry, PErr> = (stmts: Stmt[]) =>
   _Result_map(
     (reg: Registry) => seedRegDeclsFrom(builtinDeclsFor(stmts), 0, reg),
     buildLoop(stmts, 0, emptyRegistry),
@@ -317,11 +275,7 @@ const exportedRegLoop: {
             ctors: seedRegCtorsFrom(ctors, 0, name, reg.ctors),
             types: _Map_set(
               name,
-              map(
-                (c: { name: string; fields: { name: Option<string>; fieldType: TypeExpr }[] }) =>
-                  c.name,
-                ctors,
-              ),
+              map((c: Ctor) => c.name, ctors),
               reg.types,
             ),
           }),

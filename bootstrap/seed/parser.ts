@@ -1,4 +1,22 @@
-import type { Expr, InterpPart, LamParam, Pattern, SeqElem, Stmt, TypeExpr } from "./ast";
+import type {
+  AliasField,
+  Ctor,
+  CtorField,
+  Expr,
+  Field,
+  InterpPart,
+  LamParam,
+  LoopParam,
+  MapEntry,
+  MatchArm,
+  Name,
+  PatField,
+  Pattern,
+  SeqElem,
+  Span,
+  Stmt,
+  TypeExpr,
+} from "./ast";
 import type { Row, Ty } from "./types";
 
 export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
@@ -250,7 +268,7 @@ const expectTok: <A>(
 const expectId: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   pos: number,
-) => Result<[{ name: string; span: { start: number; end: number } }, number], PErr> = _curry(
+) => Result<[Name, number], PErr> = _curry(
   2,
   <A>(toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number) => {
     const lt = tokAt(toks, pos);
@@ -258,10 +276,7 @@ const expectId: <A>(
       .with(
         { _tag: "TId" },
         ({ value: name }) =>
-          Ok(_tuple({ name: name, span: spanOf(lt) }, add(pos, 1))) as Result<
-            [{ name: string; span: { start: number; end: number } }, number],
-            PErr
-          >,
+          Ok(_tuple({ name: name, span: spanOf(lt) }, add(pos, 1))) as Result<[Name, number], PErr>,
       )
       .otherwise((t) => errAt(`expected id, got ${tokName(t)}`, lt));
   },
@@ -281,7 +296,7 @@ const keywordText: (t: Tok) => Option<string> = (t: Tok) =>
 const expectLabel: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   pos: number,
-) => Result<[{ name: string; span: { start: number; end: number } }, number], PErr> = _curry(
+) => Result<[Name, number], PErr> = _curry(
   2,
   <A>(toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number) => {
     const lt = tokAt(toks, pos);
@@ -289,10 +304,7 @@ const expectLabel: <A>(
       .with(
         { _tag: "Some" },
         ({ value: name }) =>
-          Ok(_tuple({ name: name, span: spanOf(lt) }, add(pos, 1))) as Result<
-            [{ name: string; span: { start: number; end: number } }, number],
-            PErr
-          >,
+          Ok(_tuple({ name: name, span: spanOf(lt) }, add(pos, 1))) as Result<[Name, number], PErr>,
       )
       .with({ _tag: "None" }, () => expectId(toks, pos))
       .exhaustive();
@@ -469,7 +481,7 @@ const looksLikeLambda: <A>(
       .with({ _tag: "TLparen" }, () => scanLambdaDepth(toks, pos, 0))
       .otherwise(() => false),
 );
-const exprSpan: (e: Expr) => { start: number; end: number } = (e: Expr) =>
+const exprSpan: (e: Expr) => Span = (e: Expr) =>
   match(e)
     .with({ _tag: "ENum" }, ({ span: sp }) => sp)
     .with({ _tag: "EUnit" }, ({ span: sp }) => sp)
@@ -495,7 +507,7 @@ const exprSpan: (e: Expr) => { start: number; end: number } = (e: Expr) =>
     .with({ _tag: "EMap" }, ({ span: sp }) => sp)
     .with({ _tag: "EInterp" }, ({ span: sp }) => sp)
     .exhaustive();
-const tySpan: (t: TypeExpr) => { start: number; end: number } = (t: TypeExpr) =>
+const tySpan: (t: TypeExpr) => Span = (t: TypeExpr) =>
   match(t)
     .with({ _tag: "TyName" }, ({ span: sp }) => sp)
     .with({ _tag: "TyArrow" }, ({ span: sp }) => sp)
@@ -518,17 +530,10 @@ const parseParam: <A>(
           ([fields, p]) =>
             _Result_flatMap(
               (p2) =>
-                Ok(
-                  _tuple(
-                    Ast.LPRecord(
-                      map(
-                        (f: { name: string; span: { start: number; end: number } }) => f.name,
-                        fields,
-                      ),
-                    ),
-                    p2,
-                  ),
-                ) as Result<[LamParam, number], PErr>,
+                Ok(_tuple(Ast.LPRecord(map((f: Name) => f.name, fields)), p2)) as Result<
+                  [LamParam, number],
+                  PErr
+                >,
               expectTok(TRbrace as Tok, toks, p),
             ),
           listUntil(TRbrace as Tok, expectId, toks, add(pos, 1)),
@@ -548,26 +553,11 @@ const parseParam: <A>(
                       },
                       ([single]) => _tuple(Ast.LPName(single.name, None as Option<TypeExpr>), p2),
                     )
-                    .otherwise((many) =>
-                      _tuple(
-                        Ast.LPTuple(
-                          map(
-                            (n: { name: string; span: { start: number; end: number } }) => n.name,
-                            many,
-                          ),
-                        ),
-                        p2,
-                      ),
-                    ),
+                    .otherwise((many) => _tuple(Ast.LPTuple(map((n: Name) => n.name, many)), p2)),
                 ) as Result<[LamParam, number], PErr>,
               expectTok(TRparen as Tok, toks, p),
             ),
-          sepBy(
-            expectId,
-            toks,
-            add(pos, 1),
-            [] as { name: string; span: { start: number; end: number } }[],
-          ),
+          sepBy(expectId, toks, add(pos, 1), [] as Name[]),
         ),
       )
       .otherwise(() =>
@@ -612,7 +602,7 @@ const parseLambda: <A>(
       ) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) => {
-    const start: { start: number; end: number } = spanOf(tokAt(toks, pos));
+    const start: Span = spanOf(tokAt(toks, pos));
     return match(tokAt(toks, pos).tok)
       .with({ _tag: "TId" }, ({ value: name }) =>
         _Result_flatMap(
@@ -738,12 +728,12 @@ const parseLetIn: <A>(
       ) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) => {
-    const start: { start: number; end: number } = spanOf(tokAt(toks, pos));
+    const start: Span = spanOf(tokAt(toks, pos));
     return _Result_flatMap(
       (p) =>
         or(eq(tokAt(toks, p).tok, TQuestion as Tok), eq(tokAt(toks, p).tok, TBang as Tok))
           ? ((monad: string) =>
-              ((paramSpan: { start: number; end: number }) =>
+              ((paramSpan: Span) =>
                 _Result_flatMap(
                   ([param, p1]) =>
                     _Result_flatMap(
@@ -780,7 +770,7 @@ const parseLetIn: <A>(
               eq(tokAt(toks, p).tok, TQuestion as Tok) ? "Result" : "Task",
             )
           : eq(tokAt(toks, p).tok, TLparen as Tok)
-            ? ((paramStart: { start: number; end: number }) =>
+            ? ((paramStart: Span) =>
                 _Result_flatMap(
                   ([param, p1]) =>
                     _Result_flatMap(
@@ -866,17 +856,15 @@ const BACKTICK_BP: number = 15;
 const MUL_BP: number = 20;
 const FAST_PIPE_BP: number = 21;
 const mkBinCall: {
-  (
-    fnName: string,
-  ): (opSpan: { start: number; end: number }) => (left: Expr) => (right: Expr) => Expr;
-  (fnName: string): (opSpan: { start: number; end: number }) => (left: Expr, right: Expr) => Expr;
-  (fnName: string): (opSpan: { start: number; end: number }, left: Expr) => (right: Expr) => Expr;
-  (fnName: string, opSpan: { start: number; end: number }): (left: Expr) => (right: Expr) => Expr;
-  (fnName: string): (opSpan: { start: number; end: number }, left: Expr, right: Expr) => Expr;
-  (fnName: string, opSpan: { start: number; end: number }): (left: Expr, right: Expr) => Expr;
-  (fnName: string, opSpan: { start: number; end: number }, left: Expr): (right: Expr) => Expr;
-  (fnName: string, opSpan: { start: number; end: number }, left: Expr, right: Expr): Expr;
-} = _curry(4, (fnName: string, opSpan: { start: number; end: number }, left: Expr, right: Expr) =>
+  (fnName: string): (opSpan: Span) => (left: Expr) => (right: Expr) => Expr;
+  (fnName: string): (opSpan: Span) => (left: Expr, right: Expr) => Expr;
+  (fnName: string): (opSpan: Span, left: Expr) => (right: Expr) => Expr;
+  (fnName: string, opSpan: Span): (left: Expr) => (right: Expr) => Expr;
+  (fnName: string): (opSpan: Span, left: Expr, right: Expr) => Expr;
+  (fnName: string, opSpan: Span): (left: Expr, right: Expr) => Expr;
+  (fnName: string, opSpan: Span, left: Expr): (right: Expr) => Expr;
+  (fnName: string, opSpan: Span, left: Expr, right: Expr): Expr;
+} = _curry(4, (fnName: string, opSpan: Span, left: Expr, right: Expr) =>
   Ast.ECall(
     Ast.ERef(fnName, opSpan),
     [left, right],
@@ -918,16 +906,16 @@ const isSectionOp: (t: Tok) => boolean = (t: Tok) =>
     .with({ _tag: "TGte" }, () => true)
     .otherwise(() => false);
 const sectionBody: {
-  (opTok: Tok): (x: Expr) => (y: Expr) => (opSpan: { start: number; end: number }) => Expr;
-  (opTok: Tok): (x: Expr) => (y: Expr, opSpan: { start: number; end: number }) => Expr;
-  (opTok: Tok): (x: Expr, y: Expr) => (opSpan: { start: number; end: number }) => Expr;
-  (opTok: Tok, x: Expr): (y: Expr) => (opSpan: { start: number; end: number }) => Expr;
-  (opTok: Tok): (x: Expr, y: Expr, opSpan: { start: number; end: number }) => Expr;
-  (opTok: Tok, x: Expr): (y: Expr, opSpan: { start: number; end: number }) => Expr;
-  (opTok: Tok, x: Expr, y: Expr): (opSpan: { start: number; end: number }) => Expr;
-  (opTok: Tok, x: Expr, y: Expr, opSpan: { start: number; end: number }): Expr;
-} = _curry(4, (opTok: Tok, x: Expr, y: Expr, opSpan: { start: number; end: number }) => {
-  const full: { start: number; end: number } = spanning(exprSpan(x), exprSpan(y));
+  (opTok: Tok): (x: Expr) => (y: Expr) => (opSpan: Span) => Expr;
+  (opTok: Tok): (x: Expr) => (y: Expr, opSpan: Span) => Expr;
+  (opTok: Tok): (x: Expr, y: Expr) => (opSpan: Span) => Expr;
+  (opTok: Tok, x: Expr): (y: Expr) => (opSpan: Span) => Expr;
+  (opTok: Tok): (x: Expr, y: Expr, opSpan: Span) => Expr;
+  (opTok: Tok, x: Expr): (y: Expr, opSpan: Span) => Expr;
+  (opTok: Tok, x: Expr, y: Expr): (opSpan: Span) => Expr;
+  (opTok: Tok, x: Expr, y: Expr, opSpan: Span): Expr;
+} = _curry(4, (opTok: Tok, x: Expr, y: Expr, opSpan: Span) => {
+  const full: Span = spanning(exprSpan(x), exprSpan(y));
   return eq(opTok, TNeq as Tok)
     ? Ast.ECall(
         Ast.ERef("not", opSpan),
@@ -939,7 +927,7 @@ const sectionBody: {
 });
 const sectionLeft: <A>(provided: Expr, opLt: { end: number; start: number; tok: Tok } & A) => Expr =
   _curry(2, <A>(provided: Expr, opLt: { end: number; start: number; tok: Tok } & A) => {
-    const opSpan: { start: number; end: number } = spanOf(opLt);
+    const opSpan: Span = spanOf(opLt);
     const paramRef: Expr = Ast.ERef("$s", opSpan);
     return Ast.ELambda(
       [Ast.LPName("$s", None as Option<TypeExpr>)],
@@ -949,7 +937,7 @@ const sectionLeft: <A>(provided: Expr, opLt: { end: number; start: number; tok: 
   });
 const parseRightSection: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-  lparenSpan: { start: number; end: number },
+  lparenSpan: Span,
   pos: number,
   hooks: ((
     a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
@@ -963,7 +951,7 @@ const parseRightSection: <A>(
   4,
   <A>(
     toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-    lparenSpan: { start: number; end: number },
+    lparenSpan: Span,
     pos: number,
     hooks: ((
       a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
@@ -1128,7 +1116,7 @@ const parseInfix: <A>(
         : and(eq(lt.tok, TCompose as Tok), gte(COMPOSE_BP, minBp))
           ? _Result_flatMap(
               ([right, p]) =>
-                ((opSpan: { start: number; end: number }) =>
+                ((opSpan: Span) =>
                   ((xRef: Expr) =>
                     ((innerCall: Expr) =>
                       ((outerCall: Expr) =>
@@ -1162,7 +1150,7 @@ const parseInfix: <A>(
                 >)
               : _Result_flatMap(
                   ([right, p]) =>
-                    ((opSpan: { start: number; end: number }) =>
+                    ((opSpan: Span) =>
                       ((inner: Expr) =>
                         ((result: Expr) =>
                           Ok({ left: result, p: p, matched: true }) as Result<
@@ -1521,7 +1509,7 @@ const parseAtom: <A>(
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) => {
     const lt = tokAt(toks, pos);
-    const sp: { start: number; end: number } = spanOf(lt);
+    const sp: Span = spanOf(lt);
     return match(lt.tok)
       .with({ _tag: "TSwitch" }, () => parseMatch(toks, pos, hooks))
       .with({ _tag: "TDo" }, () => parseDo(toks, pos, hooks))
@@ -1615,7 +1603,7 @@ const parseAtom: <A>(
 const parseInterpLoop: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   pos: number,
-  start: { start: number; end: number },
+  start: Span,
   acc: InterpPart[],
   hooks: ((
     a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
@@ -1630,7 +1618,7 @@ const parseInterpLoop: <A>(
   <A>(
     toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
     pos: number,
-    start: { start: number; end: number },
+    start: Span,
     acc: InterpPart[],
     hooks: ((
       a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
@@ -1718,7 +1706,7 @@ const parseField: <A>(
       b: number,
     ) => Result<[Expr, number], PErr>,
   ) => Result<Option<[Expr, number]>, PErr>)[],
-) => Result<[{ name: string; value: Expr }, number], PErr> = _curry(
+) => Result<[Field, number], PErr> = _curry(
   3,
   <A>(
     toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
@@ -1738,16 +1726,13 @@ const parseField: <A>(
         eq(tokAt(toks, p).tok, TColon as Tok)
           ? _Result_flatMap(
               ([value, p2]) =>
-                Ok(_tuple({ name: nm.name, value: value }, p2)) as Result<
-                  [{ name: string; value: Expr }, number],
-                  PErr
-                >,
+                Ok(_tuple({ name: nm.name, value: value }, p2)) as Result<[Field, number], PErr>,
               parseExpr(toks, add(p, 1), hooks),
             )
           : not(eq(keywordText(lt.tok), None as Option<string>))
             ? errAt(`'${nm.name}' is a keyword — write '${nm.name}: <expr>'`, lt)
             : (Ok(_tuple({ name: nm.name, value: Ast.ERef(nm.name, nm.span) }, p)) as Result<
-                [{ name: string; value: Expr }, number],
+                [Field, number],
                 PErr
               >),
       expectLabel(toks, pos),
@@ -1779,7 +1764,7 @@ const parseRecord: <A>(
       ) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) => {
-    const start: { start: number; end: number } = spanOf(tokAt(toks, pos));
+    const start: Span = spanOf(tokAt(toks, pos));
     return _Result_flatMap(
       (p) =>
         eq(tokAt(toks, p).tok, TSpread as Tok)
@@ -1886,7 +1871,7 @@ const parseArr: <A>(
       ) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) => {
-    const start: { start: number; end: number } = spanOf(tokAt(toks, pos));
+    const start: Span = spanOf(tokAt(toks, pos));
     return _Result_flatMap(
       (p) =>
         _Result_flatMap(
@@ -1930,7 +1915,7 @@ const parseList: <A>(
       ) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) => {
-    const start: { start: number; end: number } = spanOf(tokAt(toks, pos));
+    const start: Span = spanOf(tokAt(toks, pos));
     return _Result_flatMap(
       (p) =>
         _Result_flatMap(
@@ -1964,7 +1949,7 @@ const parseMapEntry: <A>(
       b: number,
     ) => Result<[Expr, number], PErr>,
   ) => Result<Option<[Expr, number]>, PErr>)[],
-) => Result<[{ key: Expr; value: Expr }, number], PErr> = _curry(
+) => Result<[MapEntry, number], PErr> = _curry(
   3,
   <A>(
     toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
@@ -1984,10 +1969,7 @@ const parseMapEntry: <A>(
           (p2) =>
             _Result_flatMap(
               ([value, p3]) =>
-                Ok(_tuple({ key: key, value: value }, p3)) as Result<
-                  [{ key: Expr; value: Expr }, number],
-                  PErr
-                >,
+                Ok(_tuple({ key: key, value: value }, p3)) as Result<[MapEntry, number], PErr>,
               parseExpr(toks, p2, hooks),
             ),
           expectTok(TColon as Tok, toks, p),
@@ -2020,7 +2002,7 @@ const parseHash: <A>(
       ) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) => {
-    const start: { start: number; end: number } = spanOf(tokAt(toks, pos));
+    const start: Span = spanOf(tokAt(toks, pos));
     return _Result_flatMap(
       (p) =>
         _Result_flatMap(
@@ -2028,12 +2010,10 @@ const parseHash: <A>(
             eq(tokAt(toks, p1).tok, TRbrace as Tok)
               ? _Result_flatMap(
                   (p2) =>
-                    Ok(
-                      _tuple(
-                        Ast.EMap([] as { key: Expr; value: Expr }[], toEnd(start, toks, p2)),
-                        p2,
-                      ),
-                    ) as Result<[Expr, number], PErr>,
+                    Ok(_tuple(Ast.EMap([] as MapEntry[], toEnd(start, toks, p2)), p2)) as Result<
+                      [Expr, number],
+                      PErr
+                    >,
                   expectTok(TRbrace as Tok, toks, p1),
                 )
               : eq(tokAt(toks, p1).tok, TSpread as Tok)
@@ -2079,9 +2059,10 @@ const parseHash: <A>(
                                           add(p4, 1),
                                           hooks,
                                         )
-                                      : (Ok(
-                                          _tuple([] as { key: Expr; value: Expr }[], p4),
-                                        ) as Result<[{ key: Expr; value: Expr }[], number], PErr>),
+                                      : (Ok(_tuple([] as MapEntry[], p4)) as Result<
+                                          [MapEntry[], number],
+                                          PErr
+                                        >),
                                   ),
                                 parseExpr(toks, p3, hooks),
                               ),
@@ -2153,7 +2134,7 @@ const parseGuard: <A>(
         () => Ok(_tuple(None as Option<Expr>, pos)) as Result<[Option<Expr>, number], PErr>,
       ),
 );
-const patSpan: (p: Pattern) => { start: number; end: number } = (p: Pattern) =>
+const patSpan: (p: Pattern) => Span = (p: Pattern) =>
   match(p)
     .with({ _tag: "PWild" }, ({ span: sp }) => sp)
     .with({ _tag: "PUnit" }, ({ span: sp }) => sp)
@@ -2173,29 +2154,26 @@ const altsLoop: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   pos: number,
   acc: Pattern[],
-  lastSpan: { start: number; end: number },
-) => Result<[Pattern[], number, { start: number; end: number }], PErr> = _curry(
+  lastSpan: Span,
+) => Result<[Pattern[], number, Span], PErr> = _curry(
   4,
   <A>(
     toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
     pos: number,
     acc: Pattern[],
-    lastSpan: { start: number; end: number },
+    lastSpan: Span,
   ) =>
     eq(tokAt(toks, pos).tok, TBar as Tok)
       ? _Result_flatMap(
           ([alt, p1]) => altsLoop(toks, p1, _Array_append(alt, acc), patSpan(alt)),
           parsePattern(toks, add(pos, 1)),
         )
-      : (Ok(_tuple(acc, pos, lastSpan)) as Result<
-          [Pattern[], number, { start: number; end: number }],
-          PErr
-        >),
+      : (Ok(_tuple(acc, pos, lastSpan)) as Result<[Pattern[], number, Span], PErr>),
 );
 const armsLoop: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   pos: number,
-  acc: { pattern: Pattern; guard: Option<Expr>; body: Expr }[],
+  acc: MatchArm[],
   hooks: ((
     a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
     b: number,
@@ -2204,12 +2182,12 @@ const armsLoop: <A>(
       b: number,
     ) => Result<[Expr, number], PErr>,
   ) => Result<Option<[Expr, number]>, PErr>)[],
-) => Result<[{ pattern: Pattern; guard: Option<Expr>; body: Expr }[], number], PErr> = _curry(
+) => Result<[MatchArm[], number], PErr> = _curry(
   4,
   <A>(
     toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
     pos: number,
-    acc: { pattern: Pattern; guard: Option<Expr>; body: Expr }[],
+    acc: MatchArm[],
     hooks: ((
       a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
       b: number,
@@ -2249,10 +2227,7 @@ const armsLoop: <A>(
             ),
           parsePattern(toks, add(pos, 1)),
         )
-      : (Ok(_tuple(acc, pos)) as Result<
-          [{ pattern: Pattern; guard: Option<Expr>; body: Expr }[], number],
-          PErr
-        >),
+      : (Ok(_tuple(acc, pos)) as Result<[MatchArm[], number], PErr>),
 );
 const parseDo: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
@@ -2279,7 +2254,7 @@ const parseDo: <A>(
       ) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) => {
-    const start: { start: number; end: number } = spanOf(tokAt(toks, pos));
+    const start: Span = spanOf(tokAt(toks, pos));
     return _Result_flatMap(
       (p) => parseDoBlockFrom(toks, start, p, hooks),
       expectTok(TDo as Tok, toks, pos),
@@ -2314,7 +2289,7 @@ const parseDoBlock: <A>(
 );
 const parseDoBlockFrom: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-  start: { start: number; end: number },
+  start: Span,
   pos: number,
   hooks: ((
     a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
@@ -2328,7 +2303,7 @@ const parseDoBlockFrom: <A>(
   4,
   <A>(
     toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-    start: { start: number; end: number },
+    start: Span,
     pos: number,
     hooks: ((
       a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
@@ -2421,7 +2396,7 @@ const parseLoop: <A>(
       ) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) => {
-    const start: { start: number; end: number } = spanOf(tokAt(toks, pos));
+    const start: Span = spanOf(tokAt(toks, pos));
     return _Result_flatMap(
       (p) =>
         _Result_flatMap(
@@ -2445,12 +2420,7 @@ const parseLoop: <A>(
                     ),
                   expectTok(TRparen as Tok, toks, p2),
                 ),
-              loopParamsLoop(
-                toks,
-                p1,
-                [] as { name: string; nameSpan: { start: number; end: number }; init: Expr }[],
-                hooks,
-              ),
+              loopParamsLoop(toks, p1, [] as LoopParam[], hooks),
             ),
           expectTok(TLparen as Tok, toks, p),
         ),
@@ -2461,7 +2431,7 @@ const parseLoop: <A>(
 const loopParamsLoop: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   pos: number,
-  acc: { name: string; nameSpan: { start: number; end: number }; init: Expr }[],
+  acc: LoopParam[],
   hooks: ((
     a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
     b: number,
@@ -2470,15 +2440,12 @@ const loopParamsLoop: <A>(
       b: number,
     ) => Result<[Expr, number], PErr>,
   ) => Result<Option<[Expr, number]>, PErr>)[],
-) => Result<
-  [{ name: string; nameSpan: { start: number; end: number }; init: Expr }[], number],
-  PErr
-> = _curry(
+) => Result<[LoopParam[], number], PErr> = _curry(
   4,
   <A>(
     toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
     pos: number,
-    acc: { name: string; nameSpan: { start: number; end: number }; init: Expr }[],
+    acc: LoopParam[],
     hooks: ((
       a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
       b: number,
@@ -2494,23 +2461,12 @@ const loopParamsLoop: <A>(
           (p) =>
             _Result_flatMap(
               ([init, p1]) =>
-                ((next: { name: string; nameSpan: { start: number; end: number }; init: Expr }[]) =>
+                ((next: LoopParam[]) =>
                   match(tokAt(toks, p1).tok)
                     .with({ _tag: "TComma" }, () => loopParamsLoop(toks, add(p1, 1), next, hooks))
-                    .otherwise(
-                      () =>
-                        Ok(_tuple(next, p1)) as Result<
-                          [
-                            {
-                              name: string;
-                              nameSpan: { start: number; end: number };
-                              init: Expr;
-                            }[],
-                            number,
-                          ],
-                          PErr
-                        >,
-                    ))(_Array_append({ name: id.name, nameSpan: id.span, init: init }, acc)),
+                    .otherwise(() => Ok(_tuple(next, p1)) as Result<[LoopParam[], number], PErr>))(
+                  _Array_append({ name: id.name, nameSpan: id.span, init: init }, acc),
+                ),
               parseExpr(toks, p, hooks),
             ),
           expectTok(TEq as Tok, toks, pid),
@@ -2543,7 +2499,7 @@ const parseRecur: <A>(
       ) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) => {
-    const start: { start: number; end: number } = spanOf(tokAt(toks, pos));
+    const start: Span = spanOf(tokAt(toks, pos));
     return _Result_flatMap(
       (p) =>
         _Result_flatMap(
@@ -2597,7 +2553,7 @@ const parseMatch: <A>(
       ) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) => {
-    const start: { start: number; end: number } = spanOf(tokAt(toks, pos));
+    const start: Span = spanOf(tokAt(toks, pos));
     return _Result_flatMap(
       (p) =>
         _Result_flatMap(
@@ -2615,12 +2571,7 @@ const parseMatch: <A>(
                           expectTok(TRbrace as Tok, toks, p3),
                         ),
                       ),
-                  armsLoop(
-                    toks,
-                    p2,
-                    [] as { pattern: Pattern; guard: Option<Expr>; body: Expr }[],
-                    hooks,
-                  ),
+                  armsLoop(toks, p2, [] as MatchArm[], hooks),
                 ),
               expectTok(TLbrace as Tok, toks, p1),
             ),
@@ -2634,7 +2585,7 @@ const parseCtorArgs: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   ctor: string,
   ns: Option<string>,
-  nameSpan: { start: number; end: number },
+  nameSpan: Span,
   pos: number,
 ) => Result<[Pattern, number], PErr> = _curry(
   5,
@@ -2642,7 +2593,7 @@ const parseCtorArgs: <A>(
     toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
     ctor: string,
     ns: Option<string>,
-    nameSpan: { start: number; end: number },
+    nameSpan: Span,
     pos: number,
   ) =>
     eq(tokAt(toks, pos).tok, TLparen as Tok)
@@ -2669,7 +2620,7 @@ const parsePatternAtom: <A>(
   2,
   <A>(toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number) => {
     const lt = tokAt(toks, pos);
-    const sp: { start: number; end: number } = spanOf(lt);
+    const sp: Span = spanOf(lt);
     return match(lt.tok)
       .with(
         { _tag: "TNum" },
@@ -2842,7 +2793,7 @@ const parseArrPattern: <A>(
 ) => Result<[Pattern, number], PErr> = _curry(
   2,
   <A>(toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number) => {
-    const start: { start: number; end: number } = spanOf(tokAt(toks, pos));
+    const start: Span = spanOf(tokAt(toks, pos));
     return _Result_flatMap(
       (p) =>
         eq(tokAt(toks, p).tok, TRbracket as Tok)
@@ -2872,7 +2823,7 @@ const parseListPattern: <A>(
 ) => Result<[Pattern, number], PErr> = _curry(
   2,
   <A>(toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number) => {
-    const start: { start: number; end: number } = spanOf(tokAt(toks, pos));
+    const start: Span = spanOf(tokAt(toks, pos));
     return _Result_flatMap(
       (p) =>
         _Result_flatMap(
@@ -2908,7 +2859,7 @@ const parseListPattern: <A>(
 const parsePatField: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   pos: number,
-) => Result<[{ label: string; pat: Pattern }, number], PErr> = _curry(
+) => Result<[PatField, number], PErr> = _curry(
   2,
   <A>(toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number) => {
     const lt = tokAt(toks, pos);
@@ -2917,16 +2868,13 @@ const parsePatField: <A>(
         eq(tokAt(toks, p).tok, TColon as Tok)
           ? _Result_flatMap(
               ([pat, p2]) =>
-                Ok(_tuple({ label: nm.name, pat: pat }, p2)) as Result<
-                  [{ label: string; pat: Pattern }, number],
-                  PErr
-                >,
+                Ok(_tuple({ label: nm.name, pat: pat }, p2)) as Result<[PatField, number], PErr>,
               parsePattern(toks, add(p, 1)),
             )
           : not(eq(keywordText(lt.tok), None as Option<string>))
             ? errAt(`'${nm.name}' is a keyword — write '${nm.name}: <pattern>'`, lt)
             : (Ok(_tuple({ label: nm.name, pat: Ast.PBind(nm.name, nm.span) }, p)) as Result<
-                [{ label: string; pat: Pattern }, number],
+                [PatField, number],
                 PErr
               >),
       expectLabel(toks, pos),
@@ -2940,7 +2888,7 @@ const parseTypeAtom: <A>(
   2,
   <A>(toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number) => {
     const lt = tokAt(toks, pos);
-    const sp: { start: number; end: number } = spanOf(lt);
+    const sp: Span = spanOf(lt);
     return match(lt.tok)
       .with({ _tag: "TLparen" }, () =>
         eq(tokAt(toks, add(pos, 1)).tok, TRparen as Tok)
@@ -3031,30 +2979,22 @@ const legacyTypeArgsLoop: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   pos: number,
   acc: TypeExpr[],
-  lastSp: Option<{ end: number; start: number }>,
-) => Result<[TypeExpr[], Option<{ end: number; start: number }>, number], PErr> = _curry(
+  lastSp: Option<Span>,
+) => Result<[TypeExpr[], Option<Span>, number], PErr> = _curry(
   4,
   <A>(
     toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
     pos: number,
     acc: TypeExpr[],
-    lastSp: Option<{ end: number; start: number }>,
+    lastSp: Option<Span>,
   ) =>
     startsTypeAtom(tokAt(toks, pos).tok)
       ? _Result_flatMap(
           ([a, p]) =>
-            legacyTypeArgsLoop(
-              toks,
-              p,
-              _Array_append(a, acc),
-              Some(tySpan(a)) as Option<{ start: number; end: number }>,
-            ),
+            legacyTypeArgsLoop(toks, p, _Array_append(a, acc), Some(tySpan(a)) as Option<Span>),
           parseTypeAtom(toks, pos),
         )
-      : (Ok(_tuple(acc, lastSp, pos)) as Result<
-          [TypeExpr[], Option<{ end: number; start: number }>, number],
-          PErr
-        >),
+      : (Ok(_tuple(acc, lastSp, pos)) as Result<[TypeExpr[], Option<Span>, number], PErr>),
 );
 const parseTypeApp: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
@@ -3094,12 +3034,7 @@ const parseTypeApp: <A>(
                           )
                           .exhaustive(),
                       ) as Result<[TypeExpr, number], PErr>,
-                    legacyTypeArgsLoop(
-                      toks,
-                      p,
-                      [] as TypeExpr[],
-                      None as Option<{ start: number; end: number }>,
-                    ),
+                    legacyTypeArgsLoop(toks, p, [] as TypeExpr[], None as Option<Span>),
                   ),
           )
           .with({ _tag: "TyQual" }, ({ alias, name: nm, nameSpan, span: sp }) =>
@@ -3125,12 +3060,7 @@ const parseTypeApp: <A>(
                         )
                         .exhaustive(),
                     ) as Result<[TypeExpr, number], PErr>,
-                  legacyTypeArgsLoop(
-                    toks,
-                    p,
-                    [] as TypeExpr[],
-                    None as Option<{ start: number; end: number }>,
-                  ),
+                  legacyTypeArgsLoop(toks, p, [] as TypeExpr[], None as Option<Span>),
                 ),
           )
           .otherwise(() => Ok(_tuple(head, p)) as Result<[TypeExpr, number], PErr>),
@@ -3141,24 +3071,21 @@ const parseTypeUnionRest: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   pos: number,
   acc: TypeExpr[],
-  lastSp: { end: number; start: number },
-) => Result<[TypeExpr[], { end: number; start: number }, number], PErr> = _curry(
+  lastSp: Span,
+) => Result<[TypeExpr[], Span, number], PErr> = _curry(
   4,
   <A>(
     toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
     pos: number,
     acc: TypeExpr[],
-    lastSp: { end: number; start: number },
+    lastSp: Span,
   ) =>
     eq(tokAt(toks, pos).tok, TBar as Tok)
       ? _Result_flatMap(
           ([m, p]) => parseTypeUnionRest(toks, p, _Array_append(m, acc), tySpan(m)),
           parseTypeApp(toks, add(pos, 1)),
         )
-      : (Ok(_tuple(acc, lastSp, pos)) as Result<
-          [TypeExpr[], { end: number; start: number }, number],
-          PErr
-        >),
+      : (Ok(_tuple(acc, lastSp, pos)) as Result<[TypeExpr[], Span, number], PErr>),
 );
 const parseTypeUnion: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
@@ -3205,7 +3132,7 @@ const parseTypeExpr: <A>(
 const parseCtorField: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   pos: number,
-) => Result<[{ name: Option<string>; fieldType: TypeExpr }, number], PErr> = _curry(
+) => Result<[CtorField, number], PErr> = _curry(
   2,
   <A>(toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number) => {
     const isLabel: boolean = match(tokAt(toks, pos).tok)
@@ -3217,7 +3144,7 @@ const parseCtorField: <A>(
             _Result_flatMap(
               ([t, p2]) =>
                 Ok(_tuple({ name: Some(nm.name) as Option<string>, fieldType: t }, p2)) as Result<
-                  [{ name: Option<string>; fieldType: TypeExpr }, number],
+                  [CtorField, number],
                   PErr
                 >,
               parseTypeExpr(toks, add(p, 1)),
@@ -3233,73 +3160,51 @@ const parseCtorField: <A>(
 const parseCtor: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   pos: number,
-) => Result<
-  [{ name: string; fields: { name: Option<string>; fieldType: TypeExpr }[] }, number],
-  PErr
-> = _curry(2, <A>(toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number) =>
-  _Result_flatMap(
-    ([nm, p]) =>
-      eq(tokAt(toks, p).tok, TLparen as Tok)
-        ? _Result_flatMap(
-            ([fields, p2]) =>
-              _Result_flatMap(
-                (p3) =>
-                  Ok(_tuple({ name: nm.name, fields: fields }, p3)) as Result<
-                    [
-                      { name: string; fields: { name: Option<string>; fieldType: TypeExpr }[] },
-                      number,
-                    ],
-                    PErr
-                  >,
-                expectTok(TRparen as Tok, toks, p2),
-              ),
-            listUntil(TRparen as Tok, parseCtorField, toks, add(p, 1)),
-          )
-        : (Ok(
-            _tuple(
-              { name: nm.name, fields: [] as { name: Option<string>; fieldType: TypeExpr }[] },
-              p,
-            ),
-          ) as Result<
-            [{ name: string; fields: { name: Option<string>; fieldType: TypeExpr }[] }, number],
-            PErr
-          >),
-    expectId(toks, pos),
-  ),
+) => Result<[Ctor, number], PErr> = _curry(
+  2,
+  <A>(toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number) =>
+    _Result_flatMap(
+      ([nm, p]) =>
+        eq(tokAt(toks, p).tok, TLparen as Tok)
+          ? _Result_flatMap(
+              ([fields, p2]) =>
+                _Result_flatMap(
+                  (p3) =>
+                    Ok(_tuple({ name: nm.name, fields: fields }, p3)) as Result<
+                      [Ctor, number],
+                      PErr
+                    >,
+                  expectTok(TRparen as Tok, toks, p2),
+                ),
+              listUntil(TRparen as Tok, parseCtorField, toks, add(p, 1)),
+            )
+          : (Ok(_tuple({ name: nm.name, fields: [] as CtorField[] }, p)) as Result<
+              [Ctor, number],
+              PErr
+            >),
+      expectId(toks, pos),
+    ),
 );
 const ctorsLoop: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   pos: number,
-  acc: { name: string; fields: { name: Option<string>; fieldType: TypeExpr }[] }[],
-) => Result<
-  [{ name: string; fields: { name: Option<string>; fieldType: TypeExpr }[] }[], number],
-  PErr
-> = _curry(
+  acc: Ctor[],
+) => Result<[Ctor[], number], PErr> = _curry(
   3,
-  <A>(
-    toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-    pos: number,
-    acc: { name: string; fields: { name: Option<string>; fieldType: TypeExpr }[] }[],
-  ) =>
+  <A>(toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number, acc: Ctor[]) =>
     _Result_flatMap(
       ([c, p]) =>
-        ((cs: { name: string; fields: { name: Option<string>; fieldType: TypeExpr }[] }[]) =>
+        ((cs: Ctor[]) =>
           eq(tokAt(toks, p).tok, TBar as Tok)
             ? ctorsLoop(toks, add(p, 1), cs)
-            : (Ok(_tuple(cs, p)) as Result<
-                [
-                  { name: string; fields: { name: Option<string>; fieldType: TypeExpr }[] }[],
-                  number,
-                ],
-                PErr
-              >))(_Array_append(c, acc)),
+            : (Ok(_tuple(cs, p)) as Result<[Ctor[], number], PErr>))(_Array_append(c, acc)),
       parseCtor(toks, pos),
     ),
 );
 const parseAliasField: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   pos: number,
-) => Result<[{ name: string; fieldType: TypeExpr }, number], PErr> = _curry(
+) => Result<[AliasField, number], PErr> = _curry(
   2,
   <A>(toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number) =>
     _Result_flatMap(
@@ -3309,7 +3214,7 @@ const parseAliasField: <A>(
             _Result_flatMap(
               ([t, p3]) =>
                 Ok(_tuple({ name: nm.name, fieldType: t }, p3)) as Result<
-                  [{ name: string; fieldType: TypeExpr }, number],
+                  [AliasField, number],
                   PErr
                 >,
               parseTypeExpr(toks, p2),
@@ -3322,7 +3227,7 @@ const parseAliasField: <A>(
 const parseAliasBody: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   pos: number,
-) => Result<[{ name: string; fieldType: TypeExpr }[], number], PErr> = _curry(
+) => Result<[AliasField[], number], PErr> = _curry(
   2,
   <A>(toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number) =>
     _Result_flatMap(
@@ -3330,11 +3235,7 @@ const parseAliasBody: <A>(
         _Result_flatMap(
           ([fields, p2]) =>
             _Result_flatMap(
-              (p3) =>
-                Ok(_tuple(fields, p3)) as Result<
-                  [{ name: string; fieldType: TypeExpr }[], number],
-                  PErr
-                >,
+              (p3) => Ok(_tuple(fields, p3)) as Result<[AliasField[], number], PErr>,
               expectTok(TRbrace as Tok, toks, p2),
             ),
           listUntil(TRbrace as Tok, parseAliasField, toks, p),
@@ -3371,7 +3272,7 @@ const parseTypeParams: <A>(
             _Result_map(
               (p2: number) =>
                 _tuple(
-                  map((n: { name: string; span: { start: number; end: number } }) => n.name, names),
+                  map((n: Name) => n.name, names),
                   p2,
                 ),
               expectTok(TGt as Tok, toks, p),
@@ -3392,7 +3293,7 @@ const parseType: <A>(
 ) => Result<[Stmt, number], PErr> = _curry(
   2,
   <A>(toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number) => {
-    const start: { start: number; end: number } = spanOf(tokAt(toks, pos));
+    const start: Span = spanOf(tokAt(toks, pos));
     return _Result_flatMap(
       (p) =>
         _Result_flatMap(
@@ -3403,16 +3304,13 @@ const parseType: <A>(
                   (p3) =>
                     eq(tokAt(toks, p3).tok, TLbrace as Tok)
                       ? _Result_map(
-                          ([alias, p4]: [{ name: string; fieldType: TypeExpr }[], number]) =>
+                          ([alias, p4]: [AliasField[], number]) =>
                             _tuple(
                               Ast.SType(
                                 nm.name,
                                 params,
-                                [] as {
-                                  name: string;
-                                  fields: { name: Option<string>; fieldType: TypeExpr }[];
-                                }[],
-                                Some(alias) as Option<{ name: string; fieldType: TypeExpr }[]>,
+                                [] as Ctor[],
+                                Some(alias) as Option<AliasField[]>,
                                 None as Option<TypeExpr>,
                                 false,
                                 None as Option<string>,
@@ -3430,11 +3328,8 @@ const parseType: <A>(
                                   Ast.SType(
                                     nm.name,
                                     params,
-                                    [] as {
-                                      name: string;
-                                      fields: { name: Option<string>; fieldType: TypeExpr }[];
-                                    }[],
-                                    None as Option<{ name: string; fieldType: TypeExpr }[]>,
+                                    [] as Ctor[],
+                                    None as Option<AliasField[]>,
                                     Some(te) as Option<TypeExpr>,
                                     false,
                                     None as Option<string>,
@@ -3447,19 +3342,13 @@ const parseType: <A>(
                           )
                         : ((afterBar: number) =>
                             _Result_map(
-                              ([ctors, p4]: [
-                                {
-                                  name: string;
-                                  fields: { name: Option<string>; fieldType: TypeExpr }[];
-                                }[],
-                                number,
-                              ]) =>
+                              ([ctors, p4]: [Ctor[], number]) =>
                                 _tuple(
                                   Ast.SType(
                                     nm.name,
                                     params,
                                     ctors,
-                                    None as Option<{ name: string; fieldType: TypeExpr }[]>,
+                                    None as Option<AliasField[]>,
                                     None as Option<TypeExpr>,
                                     false,
                                     None as Option<string>,
@@ -3467,14 +3356,7 @@ const parseType: <A>(
                                   ),
                                   p4,
                                 ),
-                              ctorsLoop(
-                                toks,
-                                afterBar,
-                                [] as {
-                                  name: string;
-                                  fields: { name: Option<string>; fieldType: TypeExpr }[];
-                                }[],
-                              ),
+                              ctorsLoop(toks, afterBar, [] as Ctor[]),
                             ))(eq(tokAt(toks, p3).tok, TBar as Tok) ? add(p3, 1) : p3),
                   expectTok(TEq as Tok, toks, p2),
                 ),
@@ -3492,7 +3374,7 @@ const parseExtern: <A>(
 ) => Result<[Stmt, number], PErr> = _curry(
   2,
   <A>(toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number) => {
-    const start: { start: number; end: number } = spanOf(tokAt(toks, pos));
+    const start: Span = spanOf(tokAt(toks, pos));
     return _Result_flatMap(
       (p) =>
         eq(tokAt(toks, p).tok, TType as Tok)
@@ -3505,11 +3387,8 @@ const parseExtern: <A>(
                         Ast.SType(
                           nm.name,
                           [] as string[],
-                          [] as {
-                            name: string;
-                            fields: { name: Option<string>; fieldType: TypeExpr }[];
-                          }[],
-                          None as Option<{ name: string; fieldType: TypeExpr }[]>,
+                          [] as Ctor[],
+                          None as Option<AliasField[]>,
                           None as Option<TypeExpr>,
                           false,
                           None as Option<string>,
@@ -3637,11 +3516,7 @@ const parseExtern: <A>(
                             (pAfter) =>
                               Ok(
                                 _tuple(
-                                  map(
-                                    (n: { name: string; span: { start: number; end: number } }) =>
-                                      n.name,
-                                    names,
-                                  ),
+                                  map((n: Name) => n.name, names),
                                   pAfter,
                                 ),
                               ) as Result<[string[], number], PErr>,
@@ -3696,7 +3571,7 @@ const parseImport: <A>(
 ) => Result<[Stmt, number], PErr> = _curry(
   2,
   <A>(toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number) => {
-    const start: { start: number; end: number } = spanOf(tokAt(toks, pos));
+    const start: Span = spanOf(tokAt(toks, pos));
     return _Result_flatMap(
       (p) =>
         eq(tokAt(toks, p).tok, TStar as Tok)
@@ -3763,28 +3638,23 @@ const parseRecordDestructure: <A, B>(
       ) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) => {
-    const openSp: { start: number; end: number } = spanOf(tokAt(toks, pos));
+    const openSp: Span = spanOf(tokAt(toks, pos));
     return _Result_flatMap(
       (p) =>
         _Result_flatMap(
           ([fields, p1]) =>
-            ((closeSp: { start: number; end: number }) =>
+            ((closeSp: Span) =>
               _Result_flatMap(
                 (p2) =>
                   _Result_flatMap(
                     (p3) =>
                       _Result_flatMap(
                         ([value, p4]) =>
-                          ((whole: { start: number; end: number }) =>
-                            ((patSpan: { start: number; end: number }) =>
+                          ((whole: Span) =>
+                            ((patSpan: Span) =>
                               ((tmpName: string) =>
                                 ((header: Stmt) =>
-                                  ((
-                                    access: (a: {
-                                      name: string;
-                                      span: { start: number; end: number };
-                                    }) => Stmt,
-                                  ) =>
+                                  ((access: (a: Name) => Stmt) =>
                                     Ok(
                                       _tuple(
                                         _Array_prepend(header, map(access, fields)),
@@ -3792,7 +3662,7 @@ const parseRecordDestructure: <A, B>(
                                         add(tmp, 1),
                                       ),
                                     ) as Result<[Stmt[], number, number], PErr>)(
-                                    (f: { name: string; span: { start: number; end: number } }) =>
+                                    (f: { name: string; span: Span }) =>
                                       Ast.SLet(
                                         f.name,
                                         f.span,
@@ -3854,7 +3724,7 @@ const parseLet: <A>(
       ) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) => {
-    const start: { start: number; end: number } = spanOf(tokAt(toks, pos));
+    const start: Span = spanOf(tokAt(toks, pos));
     return _Result_flatMap(
       (p) =>
         eq(tokAt(toks, p).tok, TLbrace as Tok)
@@ -4780,7 +4650,7 @@ export const parseRecovering: <A, B, C, D>(
               a: Ty,
               b: Ty,
               c: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-              d: { start: number; end: number },
+              d: Span,
             ) => Result<{ tv: Map<number, Ty>; rv: Map<number, Row> } & C, B>;
             inferExpr: (
               a: Expr,
@@ -4816,7 +4686,7 @@ export const parseRecovering: <A, B, C, D>(
                 a: Ty,
                 b: Ty,
                 c: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-                d: { start: number; end: number },
+                d: Span,
               ) => Result<{ tv: Map<number, Ty>; rv: Map<number, Row> } & C, B>;
               inferExpr: (
                 a: Expr,
@@ -4870,7 +4740,7 @@ export const parseWith: <A, B, C, D>(
               a: Ty,
               b: Ty,
               c: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-              d: { start: number; end: number },
+              d: Span,
             ) => Result<{ tv: Map<number, Ty>; rv: Map<number, Row> } & C, B>;
             inferExpr: (
               a: Expr,
@@ -4906,7 +4776,7 @@ export const parseWith: <A, B, C, D>(
                 a: Ty,
                 b: Ty,
                 c: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-                d: { start: number; end: number },
+                d: Span,
               ) => Result<{ tv: Map<number, Ty>; rv: Map<number, Row> } & C, B>;
               inferExpr: (
                 a: Expr,

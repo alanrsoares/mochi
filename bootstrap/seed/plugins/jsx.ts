@@ -1,4 +1,4 @@
-import type { Expr, SeqElem } from "../ast";
+import type { Expr, Field, Name, SeqElem, Span } from "../ast";
 import type { Row, Ty } from "../types";
 
 export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
@@ -175,10 +175,7 @@ const jxExpectTok: <A>(
 const jxExpectId: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   pos: number,
-) => Result<
-  [{ name: string; span: { start: number; end: number } }, number],
-  { message: string; start: number; end: number }
-> = _curry(
+) => Result<[Name, number], { message: string; start: number; end: number }> = _curry(
   2,
   <A>(toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number) => {
     const lt = jxTokAt(toks, pos);
@@ -187,7 +184,7 @@ const jxExpectId: <A>(
         { _tag: "TId" },
         ({ value: name }) =>
           Ok(_tuple({ name: name, span: jxSpanOf(lt) }, add(pos, 1))) as Result<
-            [{ name: string; span: { start: number; end: number } }, number],
+            [Name, number],
             { message: string; start: number; end: number }
           >,
       )
@@ -209,10 +206,7 @@ const jxKeywordText: (t: Tok) => Option<string> = (t: Tok) =>
 const jxExpectLabel: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   pos: number,
-) => Result<
-  [{ name: string; span: { start: number; end: number } }, number],
-  { message: string; start: number; end: number }
-> = _curry(
+) => Result<[Name, number], { message: string; start: number; end: number }> = _curry(
   2,
   <A>(toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number) => {
     const lt = jxTokAt(toks, pos);
@@ -221,7 +215,7 @@ const jxExpectLabel: <A>(
         { _tag: "Some" },
         ({ value: name }) =>
           Ok(_tuple({ name: name, span: jxSpanOf(lt) }, add(pos, 1))) as Result<
-            [{ name: string; span: { start: number; end: number } }, number],
+            [Name, number],
             { message: string; start: number; end: number }
           >,
       )
@@ -231,7 +225,7 @@ const jxExpectLabel: <A>(
 );
 const jxIsUpper: (s: string) => boolean = (s: string) =>
   _Option_exists((n: number) => and(gte(n, 65), lte(n, 90)), _Str_codeAt(0, s));
-const jxExprSpan: (e: Expr) => { start: number; end: number } = (e: Expr) =>
+const jxExprSpan: (e: Expr) => Span = (e: Expr) =>
   match(e)
     .with({ _tag: "ENum" }, ({ span: sp }) => sp)
     .with({ _tag: "EUnit" }, ({ span: sp }) => sp)
@@ -259,7 +253,7 @@ const jxExprSpan: (e: Expr) => { start: number; end: number } = (e: Expr) =>
     .exhaustive();
 const makeJsxCall: <A, B>(
   tagExpr: Expr,
-  fields: { name: string; value: Expr }[],
+  fields: Field[],
   spreadOpt: Option<Expr>,
   children: SeqElem[],
   startTok: { end: number; start: number } & B,
@@ -269,14 +263,14 @@ const makeJsxCall: <A, B>(
   7,
   <A, B>(
     tagExpr: Expr,
-    fields: { name: string; value: Expr }[],
+    fields: Field[],
     spreadOpt: Option<Expr>,
     children: SeqElem[],
     startTok: { end: number; start: number } & B,
     toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
     endPos: number,
   ) => {
-    const fullSpan: { start: number; end: number } = jxToEnd(jxSpanOf(startTok), toks, endPos);
+    const fullSpan: Span = jxToEnd(jxSpanOf(startTok), toks, endPos);
     const pragmaRef: Expr = Ast.ERef("h", jxSpanOf(startTok));
     const propsRecord: Expr = Ast.ERecord(fields, spreadOpt, fullSpan);
     const childrenArr: Expr = Ast.EArr(children, fullSpan);
@@ -291,99 +285,99 @@ const makeJsxCall: <A, B>(
 const parseJsxAttributes: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   pos: number,
-  fieldsAcc: { name: string; value: Expr }[],
+  fieldsAcc: Field[],
   spreadAcc: Option<Expr>,
   parseExpr: (
     a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
     b: number,
   ) => Result<[Expr, number], { message: string; start: number; end: number }>,
-) => Result<
-  [{ name: string; value: Expr }[], Option<Expr>, number],
-  { message: string; start: number; end: number }
-> = _curry(
-  5,
-  <A>(
-    toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-    pos: number,
-    fieldsAcc: { name: string; value: Expr }[],
-    spreadAcc: Option<Expr>,
-    parseExpr: (
-      a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-      b: number,
-    ) => Result<[Expr, number], { message: string; start: number; end: number }>,
-  ) => {
-    const tk: Tok = jxTokAt(toks, pos).tok;
-    const nxt: Tok = jxTokAt(toks, add(pos, 1)).tok;
-    return or(eq(tk, TGt as Tok), and(eq(tk, TSlash as Tok), eq(nxt, TGt as Tok)))
-      ? (Ok(_tuple(fieldsAcc, spreadAcc, pos)) as Result<
-          [{ name: string; value: Expr }[], Option<Expr>, number],
-          { message: string; start: number; end: number }
-        >)
-      : eq(tk, TLbrace as Tok)
-        ? _Result_flatMap(
-            (p1) =>
-              _Result_flatMap(
-                ([spExpr, p2]: [Expr, number]) =>
-                  _Result_flatMap(
-                    (p3) =>
-                      parseJsxAttributes(
-                        toks,
-                        p3,
-                        fieldsAcc,
-                        Some(spExpr) as Option<Expr>,
-                        parseExpr,
-                      ),
-                    jxExpectTok(TRbrace as Tok, toks, p2),
-                  ),
-                parseExpr(toks, p1),
-              ),
-            jxExpectTok(TSpread as Tok, toks, add(pos, 1)),
-          )
-        : _Result_flatMap(
-            ([attrId, p1]) =>
-              (([valExpr, p2]: [Expr, number]) => {
-                const field: { name: string; value: Expr } = { name: attrId.name, value: valExpr };
-                return parseJsxAttributes(
-                  toks,
-                  p2,
-                  _Array_append(field, fieldsAcc),
-                  spreadAcc,
-                  parseExpr,
-                );
-              })(
-                eq(jxTokAt(toks, p1).tok, TEq as Tok)
-                  ? ((pEq: number) =>
-                      match(jxTokAt(toks, pEq).tok)
-                        .with({ _tag: "TStr" }, ({ value: v }) =>
-                          _tuple(Ast.EStr(v, jxSpanOf(jxTokAt(toks, pEq))), add(pEq, 1)),
-                        )
-                        .with({ _tag: "TLbrace" }, () =>
-                          match(parseExpr(toks, add(pEq, 1)))
-                            .with(
-                              (
-                                _v,
-                              ): _v is Extract<
-                                Result<
-                                  [Expr, number],
-                                  { message: string; start: number; end: number }
-                                >,
-                                { _tag: "Ok" }
-                              > => {
-                                const _g: any = _v;
-                                return _g._tag === "Ok";
-                              },
-                              ({ value: [e, pR] }) => _tuple(e, add(pR, 1)),
-                            )
-                            .with({ _tag: "Err" }, () => _tuple(Ast.EBool(true, attrId.span), pEq))
-                            .exhaustive(),
-                        )
-                        .otherwise(() => _tuple(Ast.EBool(true, attrId.span), pEq)))(add(p1, 1))
-                  : _tuple(Ast.EBool(true, attrId.span), p1),
-              ),
-            jxExpectLabel(toks, pos),
-          );
-  },
-);
+) => Result<[Field[], Option<Expr>, number], { message: string; start: number; end: number }> =
+  _curry(
+    5,
+    <A>(
+      toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+      pos: number,
+      fieldsAcc: Field[],
+      spreadAcc: Option<Expr>,
+      parseExpr: (
+        a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+        b: number,
+      ) => Result<[Expr, number], { message: string; start: number; end: number }>,
+    ) => {
+      const tk: Tok = jxTokAt(toks, pos).tok;
+      const nxt: Tok = jxTokAt(toks, add(pos, 1)).tok;
+      return or(eq(tk, TGt as Tok), and(eq(tk, TSlash as Tok), eq(nxt, TGt as Tok)))
+        ? (Ok(_tuple(fieldsAcc, spreadAcc, pos)) as Result<
+            [Field[], Option<Expr>, number],
+            { message: string; start: number; end: number }
+          >)
+        : eq(tk, TLbrace as Tok)
+          ? _Result_flatMap(
+              (p1) =>
+                _Result_flatMap(
+                  ([spExpr, p2]: [Expr, number]) =>
+                    _Result_flatMap(
+                      (p3) =>
+                        parseJsxAttributes(
+                          toks,
+                          p3,
+                          fieldsAcc,
+                          Some(spExpr) as Option<Expr>,
+                          parseExpr,
+                        ),
+                      jxExpectTok(TRbrace as Tok, toks, p2),
+                    ),
+                  parseExpr(toks, p1),
+                ),
+              jxExpectTok(TSpread as Tok, toks, add(pos, 1)),
+            )
+          : _Result_flatMap(
+              ([attrId, p1]) =>
+                (([valExpr, p2]: [Expr, number]) => {
+                  const field: Field = { name: attrId.name, value: valExpr };
+                  return parseJsxAttributes(
+                    toks,
+                    p2,
+                    _Array_append(field, fieldsAcc),
+                    spreadAcc,
+                    parseExpr,
+                  );
+                })(
+                  eq(jxTokAt(toks, p1).tok, TEq as Tok)
+                    ? ((pEq: number) =>
+                        match(jxTokAt(toks, pEq).tok)
+                          .with({ _tag: "TStr" }, ({ value: v }) =>
+                            _tuple(Ast.EStr(v, jxSpanOf(jxTokAt(toks, pEq))), add(pEq, 1)),
+                          )
+                          .with({ _tag: "TLbrace" }, () =>
+                            match(parseExpr(toks, add(pEq, 1)))
+                              .with(
+                                (
+                                  _v,
+                                ): _v is Extract<
+                                  Result<
+                                    [Expr, number],
+                                    { message: string; start: number; end: number }
+                                  >,
+                                  { _tag: "Ok" }
+                                > => {
+                                  const _g: any = _v;
+                                  return _g._tag === "Ok";
+                                },
+                                ({ value: [e, pR] }) => _tuple(e, add(pR, 1)),
+                              )
+                              .with({ _tag: "Err" }, () =>
+                                _tuple(Ast.EBool(true, attrId.span), pEq),
+                              )
+                              .exhaustive(),
+                          )
+                          .otherwise(() => _tuple(Ast.EBool(true, attrId.span), pEq)))(add(p1, 1))
+                    : _tuple(Ast.EBool(true, attrId.span), p1),
+                ),
+              jxExpectLabel(toks, pos),
+            );
+    },
+  );
 const parseJsxChildren: <A>(
   expectedTag: string,
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
@@ -543,7 +537,7 @@ const parseJsx: <A>(
               _tuple(
                 makeJsxCall(
                   Ast.EStr("Fragment", jxSpanOf(startTok)),
-                  [] as { name: string; value: Expr }[],
+                  [] as Field[],
                   None as Option<Expr>,
                   children,
                   startTok,
@@ -560,11 +554,7 @@ const parseJsx: <A>(
             ((tagRef: Expr) =>
               ((tagNameStr: string) =>
                 _Result_flatMap(
-                  ([fields, spreadOpt, p2]: [
-                    { name: string; value: Expr }[],
-                    Option<Expr>,
-                    number,
-                  ]) => {
+                  ([fields, spreadOpt, p2]: [Field[], Option<Expr>, number]) => {
                     const isSelfClosing: boolean = eq(jxTokAt(toks, p2).tok, TSlash as Tok);
                     return _Result_flatMap(
                       (p3) =>
@@ -612,13 +602,7 @@ const parseJsx: <A>(
                         : jxExpectTok(TGt as Tok, toks, p2),
                     );
                   },
-                  parseJsxAttributes(
-                    toks,
-                    p1,
-                    [] as { name: string; value: Expr }[],
-                    None as Option<Expr>,
-                    parseExpr,
-                  ),
+                  parseJsxAttributes(toks, p1, [] as Field[], None as Option<Expr>, parseExpr),
                 ))(firstId.name))(
               jxIsUpper(firstId.name)
                 ? Ast.ERef(firstId.name, firstId.span)
@@ -810,7 +794,7 @@ const inferJsxCall: <A, B, C>(
       a: Ty,
       b: Ty,
       c: { tv: Map<number, Ty>; rv: Map<number, Row> } & B,
-      d: { start: number; end: number },
+      d: Span,
     ) => Result<{ tv: Map<number, Ty>; rv: Map<number, Row> } & B, A>;
     inferExpr: (
       a: Expr,
@@ -829,7 +813,7 @@ const inferJsxCall: <A, B, C>(
         a: Ty,
         b: Ty,
         c: { tv: Map<number, Ty>; rv: Map<number, Row> } & B,
-        d: { start: number; end: number },
+        d: Span,
       ) => Result<{ tv: Map<number, Ty>; rv: Map<number, Row> } & B, A>;
       inferExpr: (
         a: Expr,
@@ -878,7 +862,7 @@ export const inferJsxCallHook: <A, B, C, D>(
       a: Ty,
       b: Ty,
       c: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-      d: { start: number; end: number },
+      d: Span,
     ) => Result<{ tv: Map<number, Ty>; rv: Map<number, Row> } & C, B>;
     inferExpr: (
       a: Expr,
@@ -897,7 +881,7 @@ export const inferJsxCallHook: <A, B, C, D>(
         a: Ty,
         b: Ty,
         c: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-        d: { start: number; end: number },
+        d: Span,
       ) => Result<{ tv: Map<number, Ty>; rv: Map<number, Row> } & C, B>;
       inferExpr: (
         a: Expr,
