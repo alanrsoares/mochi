@@ -12,8 +12,9 @@
  * into `let { x, y } = e`; a destructuring `let (a, b) = e in body` desugars to
  * an applied lambda, which the printer re-folds too. Record field puns
  * (`{ x: x }` → `{ x }`) collapse the same way (ADR 0068). A saturating
- * trailing eta `x => f(a, x)` collapses to the partial `f(a)` when `f`'s
- * arity is known and `a` is inert (ADR 0091).
+ * trailing eta `x => f(a, x)` collapses to the partial `f(a)` when `f` is a
+ * prelude or namespace builtin (known overload table, ADR 0037) and `a` is
+ * inert (ADR 0091).
  *
  * Sugar a *plugin* owns re-folds through its `format` hook (ADR 0011) — JSX's
  * `h(tag, props, children)` → `<tag …>` lives in `plugins/jsx.ts`, not here.
@@ -1164,10 +1165,25 @@ const mentionsRef = (e: Expr, name: string): boolean =>
   e.kind === "ref" ? e.name === name : e.kind === "field" && mentionsRef(e.target, name);
 
 /**
- * `x => f(a, x)` → `f(a)` when that is a clean refactor (ADR 0091): `f`'s
- * emitted arity is known, the eta argument saturates the last slot, prefix
- * args are inert (so lifting them out of the lambda does not change how
- * often they run), and `x` is not free in `f` or the prefix. `$`-prefixed
+ * Prelude / namespace arity only. Same-file lets are in `calleeArity` for
+ * ADR 0065 flattening, but eta of a generic user binding is tsc-unclean:
+ * ADR 0037 emits partial-application overloads only for concrete functions,
+ * and `fmt` cannot see schemes. Prelude/namespace builtins always carry them.
+ */
+const etaCalleeArity = (fn: Expr): number | null => {
+  if (fn.kind === "ref") {
+    if (shadowedNames.has(fn.name)) return null;
+    const n = runtimeArity[fn.name];
+    return n !== undefined && n >= 2 ? n : null;
+  }
+  return fn.kind === "field" ? namespaceArity(fn.target, fn.name) : null;
+};
+
+/**
+ * `x => f(a, x)` → `f(a)` when that is a clean refactor (ADR 0091): `f` is a
+ * prelude or namespace builtin, the eta argument saturates the last slot,
+ * prefix args are inert (so lifting them out of the lambda does not change
+ * how often they run), and `x` is not free in `f` or the prefix. `$`-prefixed
  * params are owned by sections / compose; a param annotation is load-bearing.
  */
 const etaPartial = (e: LambdaExpr): CallExpr | null => {
@@ -1183,7 +1199,7 @@ const etaPartial = (e: LambdaExpr): CallExpr | null => {
   const prefix = body.args.slice(0, -1);
   if (!isInert(body.fn) || prefix.some((a) => !isInert(a))) return null;
   if (mentionsRef(body.fn, name) || prefix.some((a) => mentionsRef(a, name))) return null;
-  const arity = calleeArity(body.fn);
+  const arity = etaCalleeArity(body.fn);
   if (arity === null || body.args.length !== arity) return null;
   return { ...body, args: prefix };
 };

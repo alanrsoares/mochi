@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-08-28
 - **Source:** `packages/dx/src/format.ts` (`etaPartial`), `test/eta-partial.spec.ts`
-- **Amends:** [0065](0065-canonical-flat-calls.md) (same arity table, a second rewrite)
+- **Amends:** [0065](0065-canonical-flat-calls.md) (flatten table), [0037](0037-curried-function-partial-application-overloads.md) (why not same-file lets)
 
 ## Context
 
@@ -11,8 +11,8 @@ Mochi functions of arity ≥ 2 lower to one `_curry`-wrapped JS function, so a
 saturating trailing lambda and the equivalent partial are the same callable:
 
 ```mochi
-map(foo => bar(baz, foo), xs)   // unary lambda, calls `bar` per element
-map(bar(baz), xs)               // partial, remaining arity 1
+map(foo => add(1, foo), xs)   // unary lambda, calls `add` per element
+map(add(1), xs)               // partial, remaining arity 1
 ```
 
 Authors write the lambda because it reads as "the argument goes last". `fmt`
@@ -31,8 +31,12 @@ convention. Unknown callees (`import { bar }`) have no emitted arity, so
 `fmt` rewrites a unary name-param lambda `x => f(a₁, …, aₙ, x)` to the partial
 `f(a₁, …, aₙ)` when every one of these holds, and leaves the lambda otherwise:
 
-1. **Known flat arity** — same table as ADR 0065 (same-file top-level lambda
-   chain, or prelude / namespace builtin). No inference, no imports, no externs.
+1. **Prelude or namespace builtin** — `runtimeArity` / `namespaceRuntime`, the
+   table whose emitted TS always carries ADR 0037 partial-application overloads.
+   Same-file lets are in ADR 0065's flatten table but **not** here: a generic
+   user binding is emitted as one saturated signature, so `map(unify(a, b), …)`
+   is a `tsc --strict` error, and `fmt` cannot see schemes. No inference, no
+   imports, no externs.
 2. **Saturating last slot** — `n + 1` equals that arity. The residual is a
    1-arg function, matching the lambda's calling convention. A curried chain
    `a => b => f(a, b)` is excluded: eta of the inner param would drop it from
@@ -51,8 +55,9 @@ does not emit `f(a)(b)` and wait for a second `fmt` to settle.
 
 - `map(foo => add(1, foo), xs)` becomes `map(add(1), xs)`. Applied to the repo
   this is a one-time corpus `fmt` diff, same class as 0065 / 0068.
-- The rule is deliberately incomplete: an imported `bar`, a call in the prefix,
-  or an unsaturated `x => f(a, x)` (arity 3) stay written as lambdas.
+- The rule is deliberately incomplete: a same-file `bar`, an imported name, a
+  call in the prefix, or an unsaturated `x => f(a, x)` (arity 3) stay written
+  as lambdas. `map(foo => add(1, foo), xs)` still becomes `map(add(1), xs)`.
 - Idempotent with ADR 0065: the collapsed partial is a single argument group,
   which 0065 leaves alone; re-parsing it is not a lambda, so paren decisions
   must see through eta (`printsAsLambda`) or pass one would leave sticky `()`.
@@ -69,6 +74,10 @@ does not emit `f(a)(b)` and wait for a second `fmt` to settle.
   so `let plus = a => b => a + b` would emit a unary `a => add(a)` instead of
   `_curry(2, …)` and `reduce(plus, 0)` would break. Callbacks nested *inside*
   a lambda body still contract.
+- **Eta same-file lets (ADR 0065's full table).** Sound at the JS `_curry`
+  layer, but generic bindings have no partial overloads (ADR 0037). Collapsing
+  `s => unify(a, b, s)` to `unify(a, b)` put 8 `tsc` errors on the bootstrap
+  graph. Formatter has no types, so it cannot keep only the concrete lets.
 - **Treat calls as inert when they look pure.** `fmt` does not infer. `g()` in
   the prefix stays a lambda; authors who want the lift write `f(g())` themselves.
 - **Canonicalize to operator sections (`x => add(1, x)` → `(1 +)`).** Sections

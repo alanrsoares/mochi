@@ -459,7 +459,7 @@ let unifyLitUnion = (a, b, st) => switch a {
   | TyOneOf(amembers) => switch b {
       | TySingleton(_, _) => litInUnionFrom(b, amembers, 0, st)
       | TyOneOf(bmembers) => unifyUnionMembersFrom(amembers, b, 0, st)
-          |> Result.flatMap(unifyUnionMembersFrom(bmembers, a, 0))
+          |> Result.flatMap(s1 => unifyUnionMembersFrom(bmembers, a, 0, s1))
       | _ => isLitOnlyUnion(amembers)
           ? fail("cannot unify ${showType(a)} with ${showType(b)}")
           : unifyMemberAgainstUnionFrom(b, amembers, 0, st)
@@ -507,7 +507,7 @@ export let unify = (a, b, st) =>
       | TyFn(afrom, ato) => switch rb {
           | TyVar(bid) => bindVar(bid, ra, st)
           | TyFn(bfrom, bto) => unify(afrom, bfrom, st)
-              |> Result.flatMap(unify(ato, bto))
+              |> Result.flatMap(s1 => unify(ato, bto, s1))
           | TySingleton(_, _) => unifyLitUnion(ra, rb, st)
           | TyOneOf(_) => unifyLitUnion(ra, rb, st)
           | _ => unifyMismatch(ra, rb)
@@ -572,7 +572,7 @@ export let unifyRows = (r1, r2, st) =>
           | RowExtend(_, _, _) => rewriteRow(b, alabel, st)
               |> Result.flatMap(((btype, brest, s1)) =>
                 unify(atype, btype, s1)
-                  |> Result.flatMap(unifyRows(arest, brest)))
+                  |> Result.flatMap(s2 => unifyRows(arest, brest, s2)))
         }
     }
 
