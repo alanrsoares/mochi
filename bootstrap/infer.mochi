@@ -1518,6 +1518,22 @@ export let inferProgram = (stmts, builtins, namespaces, openMode) =>
     None
   )
 
+/// The imports-aware full result — what the TS GRAPH driver needs (ADR 0090).
+/// `inferProgramImports` throws away everything but `env`; a module in a graph
+/// still has to annotate from its span -> type table, so the driver calls this
+/// instead and reads `env` off the record itself.
+export let inferProgramImportsTypes = (stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt) =>
+  runInferImports(
+    stmts,
+    builtins,
+    namespaces,
+    openMode,
+    imports,
+    nsImports,
+    quals,
+    pluginsOpt
+  )
+
 /// Like `inferProgram`, but also returns the span -> type map and alias scope
 /// the TS backend drives annotation from (ADR 0090).
 export let inferProgramTypes = (stmts, builtins, namespaces, openMode) =>
