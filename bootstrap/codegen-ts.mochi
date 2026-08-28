@@ -513,43 +513,23 @@ let referencedCons = (stmts, env, i, acc) => switch Array.get(i, stmts) {
   | Some(_) => referencedCons(stmts, env, i + 1, acc)
 }
 
-/// Builtin variant decls a module references but does not itself declare, so
-/// those references resolve (`Option<number>` from `Map.get`, etc).
-let builtinDeclsFor = (declared, wanted, i, aliases: Map<string, AliasInfo>, recs) => switch Array.get(i, builtinTypeDecls) {
+/// Builtin variant TYPES a module references but does not itself declare, so
+/// those references resolve (`Option<number>` from `Map.get`, etc). They ride
+/// an `import type` off the runtime rather than a decl per module — the same
+/// trade `_Curry` takes (ADR 0093), and these are two decls x every file in a
+/// graph. A module declaring its own `Result` keeps it and takes no import.
+///
+/// `wanted` is the scheme scan; a guard predicate can name a builtin it missed,
+/// since it looks at binding types, not match-scrutinee types — `match(opt)` on
+/// an `Option<Stmt>` never surfaces `Option`. The body text covers that (ADR 0031).
+let builtinTypeNamesFor = (declared, wanted, body, i) => switch Array.get(i, builtinTypeDecls) {
   | None => []
-  | Some(bt) => let rest = builtinDeclsFor(
-      declared,
-      wanted,
-      i + 1,
-      aliases,
-      recs
-    ) in
-      Set.has(bt.name, wanted) && !Set.has(bt.name, declared)
-        ? Array.prepend(
-          typeDecl(bt.name, bt.params, bt.ctors, aliases, recs),
-          rest
-        )
-        : rest
-}
-
-/// A guard predicate can name a builtin variant the scheme scan missed — it
-/// looks at binding types, not match-scrutinee types, so `match(opt)` on an
-/// `Option<Stmt>` never surfaces `Option`. Scan the emitted body text and skip
-/// anything the header already declares, so no duplicate decl (ADR 0031).
-let builtinDeclsInBody = (body, header, i, aliases: Map<string, AliasInfo>, recs) => switch Array.get(i, builtinTypeDecls) {
-  | None => []
-  | Some(bt) => let rest = builtinDeclsInBody(
-      body,
-      header,
-      i + 1,
-      aliases,
-      recs
-    ) in
-      !Str.contains("type ${bt.name}", header) && Str.contains(bt.name, body)
-        ? Array.prepend(
-          typeDecl(bt.name, bt.params, bt.ctors, aliases, recs),
-          rest
-        )
+  | Some(bt) => let rest = builtinTypeNamesFor(declared, wanted, body, i + 1) in
+      !Set.has(
+        bt.name,
+        declared
+      ) && (Set.has(bt.name, wanted) || Str.contains(bt.name, body))
+        ? Array.prepend(bt.name, rest)
         : rest
 }
 
@@ -765,10 +745,7 @@ export let emitTsModule = (stmts, env, types, letParams, aliases: Map<string, Al
   let declared = declaredTypeNames(stmts, 0, Set.fromArray([])) in
   let wanted = referencedCons(stmts, env, 0, Set.fromArray([])) in
   let recs = recordAliasIndex(aliases) in
-  let typeHeader = Array.concat(
-    builtinDeclsFor(declared, wanted, 0, aliases, recs),
-    typeHeaderFrom(stmts, aliases, recs, 0)
-  ) in
+  let typeHeader = typeHeaderFrom(stmts, aliases, recs, 0) in
   let body = codegenWith(
     stmts,
     imported,
@@ -787,17 +764,19 @@ export let emitTsModule = (stmts, env, types, letParams, aliases: Map<string, Al
   let runtimeLine = Array.length(deps) == 0
     ? ""
     : "import { ${Str.join(", ", Array.sort(deps))} } from \"${runtimeImport}\";" in
-  let headerText = Str.join("\n", typeHeader) in
-  let header = Array.concat(
-    builtinDeclsInBody(body, headerText, 0, aliases, recs),
-    typeHeader
+  let header = typeHeader in
+  // `_Curry` and the builtin variants live in the runtime, not inline: a decl
+  // per module cost ~13 lines x every file in a graph. They are TYPES, so they
+  // ride their own `import type` line, not the value import (ADR 0093).
+  let typeDeps = Array.concat(
+    Str.contains("_Curry<", "${Str.join("\n", header)}\n${body}")
+      ? ["_Curry"]
+      : [],
+    builtinTypeNamesFor(declared, wanted, body, 0)
   ) in
-  // `_Curry` lives in the runtime, not inline: a decl per module cost ~13 lines
-  // x every file in a graph. It is a TYPE, so it rides its own `import type`
-  // line rather than the value import (ADR 0093).
-  let curryLine = Str.contains("_Curry<", "${Str.join("\n", header)}\n${body}")
-    ? "import type { _Curry } from \"${runtimeImport}\";"
-    : "" in
+  let typeImportLine = Array.length(typeDeps) == 0
+    ? ""
+    : "import type { ${Str.join(", ", Array.sort(typeDeps))} } from \"${runtimeImport}\";" in
     Str.join(
       "\n\n",
       Array.filter(
@@ -805,7 +784,7 @@ export let emitTsModule = (stmts, env, types, letParams, aliases: Map<string, Al
         [
           Str.join("\n", header),
           Str.join("\n", importLines),
-          curryLine,
+          typeImportLine,
           runtimeLine,
           body
         ]
