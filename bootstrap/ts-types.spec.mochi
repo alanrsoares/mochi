@@ -9,21 +9,27 @@ import {
   tRecord,
   tVar
 } from "./types.mochi"
-import { genericNames, rowShapeKey, tsOf } from "./ts-types.mochi"
+import {
+  genericNames,
+  plainEnv,
+  recsEnv,
+  rowShapeKey,
+  tsEnv,
+  tsOf
+} from "./ts-types.mochi"
 
 test("TS types render primitives, arrows, and tuples", () => {
-  assertEq("number", tsOf(tPrim("number"), #{}, #{}));
+  assertEq("number", tsOf(tPrim("number"), tsEnv(#{}, #{})));
   assertEq(
     "(a: number, b: string) => boolean",
     tsOf(
       tArrow(tPrim("number"), tArrow(tPrim("string"), tPrim("bool"))),
-      #{},
-      #{}
+      tsEnv(#{}, #{})
     )
   );
   assertEq(
     "[number, string]",
-    tsOf(tCon("tuple", [tPrim("number"), tPrim("string")]), #{}, #{})
+    tsOf(tCon("tuple", [tPrim("number"), tPrim("string")]), tsEnv(#{}, #{}))
   )
 })
 
@@ -31,7 +37,7 @@ test("TS types preserve a named open row", () =>
   let names = genericNames({ vars: [], rvars: [7], ty: tRecord(rVar(7)) }) in
     assertEq(
       "({ x: number } & A)",
-      tsOf(tRecord(rExtend("x", tPrim("number"), rVar(7))), names, #{})
+      tsOf(tRecord(rExtend("x", tPrim("number"), rVar(7))), tsEnv(names, #{}))
     ))
 
 test("TS types use generic names for type variables", () =>
@@ -39,8 +45,7 @@ test("TS types use generic names for type variables", () =>
     "A[]",
     tsOf(
       tCon("Array", [tVar(3)]),
-      genericNames({ vars: [3], rvars: [], ty: tVar(3) }),
-      #{}
+      tsEnv(genericNames({ vars: [3], rvars: [], ty: tVar(3) }), #{})
     )
   ))
 
@@ -55,7 +60,7 @@ let span = rExtend(
 let spanIdx = #{ "end: number; start: number": "Span" }
 
 test("a closed row matching the index renders as the declared alias", () =>
-  assertEq("Span", tsOf(tRecord(span), #{}, spanIdx)))
+  assertEq("Span", tsOf(tRecord(span), tsEnv(#{}, spanIdx))))
 
 test("the index key is field-order independent", () =>
   // `unify` extends a row in whatever order it met the fields, so the SAME
@@ -70,8 +75,7 @@ test("the index key is field-order independent", () =>
           rExtend("start", tPrim("number"), RowEmpty)
         )
       ),
-      #{},
-      spanIdx
+      tsEnv(#{}, spanIdx)
     )
   ))
 
@@ -88,13 +92,15 @@ test("an OPEN row keeps its structure", () =>
             rExtend("end", tPrim("number"), rVar(7))
           )
         ),
-        names,
-        spanIdx
+        tsEnv(names, spanIdx)
       )
     ))
 
 test("an empty index leaves every row structural", () =>
-  assertEq("{ start: number; end: number }", tsOf(tRecord(span), #{}, #{})))
+  assertEq(
+    "{ start: number; end: number }",
+    tsOf(tRecord(span), tsEnv(#{}, #{}))
+  ))
 
 test("rowShapeKey sorts fields and declines an open row", () => {
   assertEq(Some("end: number; start: number"), rowShapeKey(span, #{}));

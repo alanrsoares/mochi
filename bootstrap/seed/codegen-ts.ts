@@ -1,6 +1,7 @@
 import type { Ctor, Expr, LamParam, Span, Stmt, TypeExpr } from "./ast";
 import type { Row, St, Ty } from "./types";
 import type { CtorFactoryTs, GenOpts, ParamAnnots } from "./codegen";
+import type { TsEnv } from "./ts-types";
 
 export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
 export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
@@ -82,7 +83,7 @@ import { typeExprToType, collect, emptyVarSets } from "./schemes";
 import { builtinTypeDecls, keysOf } from "./ctors";
 import { codegenWith, jsGenOpts, runtimeDepNames } from "./codegen";
 import { inferProgramTypes, exprSpan } from "./infer";
-import { genericNames, letterAt, rowShapeKey, tsOf } from "./ts-types";
+import { genericNames, letterAt, plainEnv, recsEnv, rowShapeKey, tsEnv, tsOf } from "./ts-types";
 const paramVarsFrom: <A>(params: A[], i: number) => Map<A, Ty> = _curry(
   2,
   <A>(params: A[], i: number) =>
@@ -138,7 +139,7 @@ const fieldTs: <A, B>(
   ) => {
     const vars: Map<string, Ty> = paramVarsFrom(params, 0);
     const names: Map<number, string> = paramNamesFrom(params, 0);
-    return (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) => tsOf(t, names, recs))(
+    return (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) => tsOf(t, tsEnv(names, recs)))(
       typeExprToType(te, vars, mkSt(length(params)), aliases, _Set_fromArray([] as string[])),
     );
   },
@@ -477,12 +478,10 @@ const allVarsInRow: <A>(row: Row, names: Map<number, A>) => boolean = _curry(
 );
 const isConcrete: (t: Ty) => boolean = (t: Ty) => allVarsIn(t, new Map([]));
 export const emptyCollTs: {
-  (t: Ty): (names: Map<number, string>) => (recs: Map<string, string>) => Option<string>;
-  (t: Ty): (names: Map<number, string>, recs: Map<string, string>) => Option<string>;
-  (t: Ty, names: Map<number, string>): (recs: Map<string, string>) => Option<string>;
-  (t: Ty, names: Map<number, string>, recs: Map<string, string>): Option<string>;
-} = _curry(3, (t: Ty, names: Map<number, string>, recs: Map<string, string>) =>
-  allVarsIn(t, names) ? (Some(tsOf(t, names, recs)) as Option<string>) : (None as Option<string>),
+  (t: Ty): (env: TsEnv) => Option<string>;
+  (t: Ty, env: TsEnv): Option<string>;
+} = _curry(2, (t: Ty, env: TsEnv) =>
+  allVarsIn(t, env.vars) ? (Some(tsOf(t, env)) as Option<string>) : (None as Option<string>),
 );
 export const ctorCallTs: {
   (t: Ty): (recs: Map<string, string>) => Option<string>;
@@ -492,7 +491,7 @@ export const ctorCallTs: {
     .with({ _tag: "TyCon" }, ({ args }) =>
       or(eq(length(args), 0), not(isConcrete(t)))
         ? (None as Option<string>)
-        : (Some(tsOf(t, new Map<number, string>(), recs)) as Option<string>),
+        : (Some(tsOf(t, recsEnv(recs))) as Option<string>),
     )
     .otherwise(() => None as Option<string>),
 );
@@ -500,266 +499,63 @@ export const guardParamTs: {
   (t: Ty): (recs: Map<string, string>) => Option<string>;
   (t: Ty, recs: Map<string, string>): Option<string>;
 } = _curry(2, (t: Ty, recs: Map<string, string>) =>
-  isConcrete(t)
-    ? (Some(tsOf(t, new Map<number, string>(), recs)) as Option<string>)
-    : (None as Option<string>),
+  isConcrete(t) ? (Some(tsOf(t, recsEnv(recs))) as Option<string>) : (None as Option<string>),
 );
 const lambdaParamsFrom: {
-  (
-    t: Ty,
-  ): (
-    arity: number,
-  ) => (
-    names: Map<number, string>,
-  ) => (recs: Map<string, string>) => (i: number) => Option<string>[];
-  (
-    t: Ty,
-  ): (
-    arity: number,
-  ) => (names: Map<number, string>) => (recs: Map<string, string>, i: number) => Option<string>[];
-  (
-    t: Ty,
-  ): (
-    arity: number,
-  ) => (names: Map<number, string>, recs: Map<string, string>) => (i: number) => Option<string>[];
-  (
-    t: Ty,
-  ): (
-    arity: number,
-    names: Map<number, string>,
-  ) => (recs: Map<string, string>) => (i: number) => Option<string>[];
-  (
-    t: Ty,
-    arity: number,
-  ): (names: Map<number, string>) => (recs: Map<string, string>) => (i: number) => Option<string>[];
-  (
-    t: Ty,
-  ): (
-    arity: number,
-  ) => (names: Map<number, string>, recs: Map<string, string>, i: number) => Option<string>[];
-  (
-    t: Ty,
-  ): (
-    arity: number,
-    names: Map<number, string>,
-  ) => (recs: Map<string, string>, i: number) => Option<string>[];
-  (
-    t: Ty,
-  ): (
-    arity: number,
-    names: Map<number, string>,
-    recs: Map<string, string>,
-  ) => (i: number) => Option<string>[];
-  (
-    t: Ty,
-    arity: number,
-  ): (names: Map<number, string>) => (recs: Map<string, string>, i: number) => Option<string>[];
-  (
-    t: Ty,
-    arity: number,
-  ): (names: Map<number, string>, recs: Map<string, string>) => (i: number) => Option<string>[];
-  (
-    t: Ty,
-    arity: number,
-    names: Map<number, string>,
-  ): (recs: Map<string, string>) => (i: number) => Option<string>[];
-  (
-    t: Ty,
-  ): (
-    arity: number,
-    names: Map<number, string>,
-    recs: Map<string, string>,
-    i: number,
-  ) => Option<string>[];
-  (
-    t: Ty,
-    arity: number,
-  ): (names: Map<number, string>, recs: Map<string, string>, i: number) => Option<string>[];
-  (
-    t: Ty,
-    arity: number,
-    names: Map<number, string>,
-  ): (recs: Map<string, string>, i: number) => Option<string>[];
-  (
-    t: Ty,
-    arity: number,
-    names: Map<number, string>,
-    recs: Map<string, string>,
-  ): (i: number) => Option<string>[];
-  (
-    t: Ty,
-    arity: number,
-    names: Map<number, string>,
-    recs: Map<string, string>,
-    i: number,
-  ): Option<string>[];
-} = _curry(
-  5,
-  (t: Ty, arity: number, names: Map<number, string>, recs: Map<string, string>, i: number) =>
-    gte(i, arity)
-      ? ([] as Option<string>[])
-      : match(t)
-          .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
-            _Array_prepend(
-              allVarsIn(fromT, names)
-                ? (Some(tsOf(fromT, names, recs)) as Option<string>)
-                : isConcrete(fromT)
-                  ? (Some(tsOf(fromT, new Map<number, string>(), recs)) as Option<string>)
-                  : (None as Option<string>),
-              lambdaParamsFrom(toT, arity, names, recs, add(i, 1)),
-            ),
-          )
-          .otherwise(() =>
-            _Array_prepend(
-              None as Option<string>,
-              lambdaParamsFrom(t, arity, names, recs, add(i, 1)),
-            ),
+  (t: Ty): (arity: number) => (env: TsEnv) => (i: number) => Option<string>[];
+  (t: Ty): (arity: number) => (env: TsEnv, i: number) => Option<string>[];
+  (t: Ty): (arity: number, env: TsEnv) => (i: number) => Option<string>[];
+  (t: Ty, arity: number): (env: TsEnv) => (i: number) => Option<string>[];
+  (t: Ty): (arity: number, env: TsEnv, i: number) => Option<string>[];
+  (t: Ty, arity: number): (env: TsEnv, i: number) => Option<string>[];
+  (t: Ty, arity: number, env: TsEnv): (i: number) => Option<string>[];
+  (t: Ty, arity: number, env: TsEnv, i: number): Option<string>[];
+} = _curry(4, (t: Ty, arity: number, env: TsEnv, i: number) =>
+  gte(i, arity)
+    ? ([] as Option<string>[])
+    : match(t)
+        .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
+          _Array_prepend(
+            allVarsIn(fromT, env.vars)
+              ? (Some(tsOf(fromT, env)) as Option<string>)
+              : isConcrete(fromT)
+                ? (Some(tsOf(fromT, recsEnv(env.recs))) as Option<string>)
+                : (None as Option<string>),
+            lambdaParamsFrom(toT, arity, env, add(i, 1)),
           ),
+        )
+        .otherwise(() =>
+          _Array_prepend(None as Option<string>, lambdaParamsFrom(t, arity, env, add(i, 1))),
+        ),
 );
 export const lambdaParamTypesTs: {
-  (
-    lamType: Ty,
-  ): (
-    arity: number,
-  ) => (names: Map<number, string>) => (recs: Map<string, string>) => Option<string>[];
-  (
-    lamType: Ty,
-  ): (arity: number) => (names: Map<number, string>, recs: Map<string, string>) => Option<string>[];
-  (
-    lamType: Ty,
-  ): (arity: number, names: Map<number, string>) => (recs: Map<string, string>) => Option<string>[];
-  (
-    lamType: Ty,
-    arity: number,
-  ): (names: Map<number, string>) => (recs: Map<string, string>) => Option<string>[];
-  (
-    lamType: Ty,
-  ): (arity: number, names: Map<number, string>, recs: Map<string, string>) => Option<string>[];
-  (
-    lamType: Ty,
-    arity: number,
-  ): (names: Map<number, string>, recs: Map<string, string>) => Option<string>[];
-  (
-    lamType: Ty,
-    arity: number,
-    names: Map<number, string>,
-  ): (recs: Map<string, string>) => Option<string>[];
-  (
-    lamType: Ty,
-    arity: number,
-    names: Map<number, string>,
-    recs: Map<string, string>,
-  ): Option<string>[];
-} = _curry(4, (lamType: Ty, arity: number, names: Map<number, string>, recs: Map<string, string>) =>
-  lambdaParamsFrom(lamType, arity, names, recs, 0),
-);
+  (lamType: Ty): (arity: number) => (env: TsEnv) => Option<string>[];
+  (lamType: Ty): (arity: number, env: TsEnv) => Option<string>[];
+  (lamType: Ty, arity: number): (env: TsEnv) => Option<string>[];
+  (lamType: Ty, arity: number, env: TsEnv): Option<string>[];
+} = _curry(3, (lamType: Ty, arity: number, env: TsEnv) => lambdaParamsFrom(lamType, arity, env, 0));
 const genericParamsFrom: {
-  (
-    t: Ty,
-  ): (
-    arity: number,
-  ) => (
-    names: Map<number, string>,
-  ) => (recs: Map<string, string>) => (i: number) => Option<string>[];
-  (
-    t: Ty,
-  ): (
-    arity: number,
-  ) => (names: Map<number, string>) => (recs: Map<string, string>, i: number) => Option<string>[];
-  (
-    t: Ty,
-  ): (
-    arity: number,
-  ) => (names: Map<number, string>, recs: Map<string, string>) => (i: number) => Option<string>[];
-  (
-    t: Ty,
-  ): (
-    arity: number,
-    names: Map<number, string>,
-  ) => (recs: Map<string, string>) => (i: number) => Option<string>[];
-  (
-    t: Ty,
-    arity: number,
-  ): (names: Map<number, string>) => (recs: Map<string, string>) => (i: number) => Option<string>[];
-  (
-    t: Ty,
-  ): (
-    arity: number,
-  ) => (names: Map<number, string>, recs: Map<string, string>, i: number) => Option<string>[];
-  (
-    t: Ty,
-  ): (
-    arity: number,
-    names: Map<number, string>,
-  ) => (recs: Map<string, string>, i: number) => Option<string>[];
-  (
-    t: Ty,
-  ): (
-    arity: number,
-    names: Map<number, string>,
-    recs: Map<string, string>,
-  ) => (i: number) => Option<string>[];
-  (
-    t: Ty,
-    arity: number,
-  ): (names: Map<number, string>) => (recs: Map<string, string>, i: number) => Option<string>[];
-  (
-    t: Ty,
-    arity: number,
-  ): (names: Map<number, string>, recs: Map<string, string>) => (i: number) => Option<string>[];
-  (
-    t: Ty,
-    arity: number,
-    names: Map<number, string>,
-  ): (recs: Map<string, string>) => (i: number) => Option<string>[];
-  (
-    t: Ty,
-  ): (
-    arity: number,
-    names: Map<number, string>,
-    recs: Map<string, string>,
-    i: number,
-  ) => Option<string>[];
-  (
-    t: Ty,
-    arity: number,
-  ): (names: Map<number, string>, recs: Map<string, string>, i: number) => Option<string>[];
-  (
-    t: Ty,
-    arity: number,
-    names: Map<number, string>,
-  ): (recs: Map<string, string>, i: number) => Option<string>[];
-  (
-    t: Ty,
-    arity: number,
-    names: Map<number, string>,
-    recs: Map<string, string>,
-  ): (i: number) => Option<string>[];
-  (
-    t: Ty,
-    arity: number,
-    names: Map<number, string>,
-    recs: Map<string, string>,
-    i: number,
-  ): Option<string>[];
-} = _curry(
-  5,
-  (t: Ty, arity: number, names: Map<number, string>, recs: Map<string, string>, i: number) =>
-    gte(i, arity)
-      ? ([] as Option<string>[])
-      : match(t)
-          .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
-            _Array_prepend(
-              Some(tsOf(fromT, names, recs)) as Option<string>,
-              genericParamsFrom(toT, arity, names, recs, add(i, 1)),
-            ),
-          )
-          .otherwise(() =>
-            _Array_prepend(
-              None as Option<string>,
-              genericParamsFrom(t, arity, names, recs, add(i, 1)),
-            ),
+  (t: Ty): (arity: number) => (env: TsEnv) => (i: number) => Option<string>[];
+  (t: Ty): (arity: number) => (env: TsEnv, i: number) => Option<string>[];
+  (t: Ty): (arity: number, env: TsEnv) => (i: number) => Option<string>[];
+  (t: Ty, arity: number): (env: TsEnv) => (i: number) => Option<string>[];
+  (t: Ty): (arity: number, env: TsEnv, i: number) => Option<string>[];
+  (t: Ty, arity: number): (env: TsEnv, i: number) => Option<string>[];
+  (t: Ty, arity: number, env: TsEnv): (i: number) => Option<string>[];
+  (t: Ty, arity: number, env: TsEnv, i: number): Option<string>[];
+} = _curry(4, (t: Ty, arity: number, env: TsEnv, i: number) =>
+  gte(i, arity)
+    ? ([] as Option<string>[])
+    : match(t)
+        .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
+          _Array_prepend(
+            Some(tsOf(fromT, env)) as Option<string>,
+            genericParamsFrom(toT, arity, env, add(i, 1)),
           ),
+        )
+        .otherwise(() =>
+          _Array_prepend(None as Option<string>, genericParamsFrom(t, arity, env, add(i, 1))),
+        ),
 );
 export const genericLambdaParams: <A>(
   sc: { vars: number[]; rvars: number[]; ty: Ty } & A,
@@ -773,11 +569,12 @@ export const genericLambdaParams: <A>(
     recs: Map<string, string>,
   ) => {
     const names: Map<number, string> = genericNames(sc);
+    const env: TsEnv = tsEnv(names, recs);
     return eq(_Map_size(names), 0)
       ? (None as Option<ParamAnnots>)
       : (Some({
           generics: `<${_Str_join(", ", _Map_values(names))}>`,
-          params: genericParamsFrom(sc.ty, arity, names, recs, 0),
+          params: genericParamsFrom(sc.ty, arity, env, 0),
         }) as Option<ParamAnnots>);
   },
 );
@@ -943,716 +740,184 @@ export const curriedOverloads: {
       )} }`,
 );
 const flatParamsFrom: {
-  (
-    t: Ty,
-  ): (
-    value: Expr,
-  ) => (
-    names: Map<number, string>,
-  ) => (recs: Map<string, string>) => (n: number) => (acc: string[]) => [string[], string];
-  (
-    t: Ty,
-  ): (
-    value: Expr,
-  ) => (
-    names: Map<number, string>,
-  ) => (recs: Map<string, string>) => (n: number, acc: string[]) => [string[], string];
-  (
-    t: Ty,
-  ): (
-    value: Expr,
-  ) => (
-    names: Map<number, string>,
-  ) => (recs: Map<string, string>, n: number) => (acc: string[]) => [string[], string];
-  (
-    t: Ty,
-  ): (
-    value: Expr,
-  ) => (
-    names: Map<number, string>,
-    recs: Map<string, string>,
-  ) => (n: number) => (acc: string[]) => [string[], string];
-  (
-    t: Ty,
-  ): (
-    value: Expr,
-    names: Map<number, string>,
-  ) => (recs: Map<string, string>) => (n: number) => (acc: string[]) => [string[], string];
-  (
-    t: Ty,
-    value: Expr,
-  ): (
-    names: Map<number, string>,
-  ) => (recs: Map<string, string>) => (n: number) => (acc: string[]) => [string[], string];
-  (
-    t: Ty,
-  ): (
-    value: Expr,
-  ) => (
-    names: Map<number, string>,
-  ) => (recs: Map<string, string>, n: number, acc: string[]) => [string[], string];
-  (
-    t: Ty,
-  ): (
-    value: Expr,
-  ) => (
-    names: Map<number, string>,
-    recs: Map<string, string>,
-  ) => (n: number, acc: string[]) => [string[], string];
-  (
-    t: Ty,
-  ): (
-    value: Expr,
-  ) => (
-    names: Map<number, string>,
-    recs: Map<string, string>,
-    n: number,
-  ) => (acc: string[]) => [string[], string];
-  (
-    t: Ty,
-  ): (
-    value: Expr,
-    names: Map<number, string>,
-  ) => (recs: Map<string, string>) => (n: number, acc: string[]) => [string[], string];
-  (
-    t: Ty,
-  ): (
-    value: Expr,
-    names: Map<number, string>,
-  ) => (recs: Map<string, string>, n: number) => (acc: string[]) => [string[], string];
-  (
-    t: Ty,
-  ): (
-    value: Expr,
-    names: Map<number, string>,
-    recs: Map<string, string>,
-  ) => (n: number) => (acc: string[]) => [string[], string];
-  (
-    t: Ty,
-    value: Expr,
-  ): (
-    names: Map<number, string>,
-  ) => (recs: Map<string, string>) => (n: number, acc: string[]) => [string[], string];
-  (
-    t: Ty,
-    value: Expr,
-  ): (
-    names: Map<number, string>,
-  ) => (recs: Map<string, string>, n: number) => (acc: string[]) => [string[], string];
-  (
-    t: Ty,
-    value: Expr,
-  ): (
-    names: Map<number, string>,
-    recs: Map<string, string>,
-  ) => (n: number) => (acc: string[]) => [string[], string];
-  (
-    t: Ty,
-    value: Expr,
-    names: Map<number, string>,
-  ): (recs: Map<string, string>) => (n: number) => (acc: string[]) => [string[], string];
-  (
-    t: Ty,
-  ): (
-    value: Expr,
-  ) => (
-    names: Map<number, string>,
-    recs: Map<string, string>,
-    n: number,
-    acc: string[],
-  ) => [string[], string];
-  (
-    t: Ty,
-  ): (
-    value: Expr,
-    names: Map<number, string>,
-  ) => (recs: Map<string, string>, n: number, acc: string[]) => [string[], string];
-  (
-    t: Ty,
-  ): (
-    value: Expr,
-    names: Map<number, string>,
-    recs: Map<string, string>,
-  ) => (n: number, acc: string[]) => [string[], string];
-  (
-    t: Ty,
-  ): (
-    value: Expr,
-    names: Map<number, string>,
-    recs: Map<string, string>,
-    n: number,
-  ) => (acc: string[]) => [string[], string];
-  (
-    t: Ty,
-    value: Expr,
-  ): (
-    names: Map<number, string>,
-  ) => (recs: Map<string, string>, n: number, acc: string[]) => [string[], string];
-  (
-    t: Ty,
-    value: Expr,
-  ): (
-    names: Map<number, string>,
-    recs: Map<string, string>,
-  ) => (n: number, acc: string[]) => [string[], string];
-  (
-    t: Ty,
-    value: Expr,
-  ): (
-    names: Map<number, string>,
-    recs: Map<string, string>,
-    n: number,
-  ) => (acc: string[]) => [string[], string];
-  (
-    t: Ty,
-    value: Expr,
-    names: Map<number, string>,
-  ): (recs: Map<string, string>) => (n: number, acc: string[]) => [string[], string];
-  (
-    t: Ty,
-    value: Expr,
-    names: Map<number, string>,
-  ): (recs: Map<string, string>, n: number) => (acc: string[]) => [string[], string];
-  (
-    t: Ty,
-    value: Expr,
-    names: Map<number, string>,
-    recs: Map<string, string>,
-  ): (n: number) => (acc: string[]) => [string[], string];
-  (
-    t: Ty,
-  ): (
-    value: Expr,
-    names: Map<number, string>,
-    recs: Map<string, string>,
-    n: number,
-    acc: string[],
-  ) => [string[], string];
-  (
-    t: Ty,
-    value: Expr,
-  ): (
-    names: Map<number, string>,
-    recs: Map<string, string>,
-    n: number,
-    acc: string[],
-  ) => [string[], string];
-  (
-    t: Ty,
-    value: Expr,
-    names: Map<number, string>,
-  ): (recs: Map<string, string>, n: number, acc: string[]) => [string[], string];
-  (
-    t: Ty,
-    value: Expr,
-    names: Map<number, string>,
-    recs: Map<string, string>,
-  ): (n: number, acc: string[]) => [string[], string];
-  (
-    t: Ty,
-    value: Expr,
-    names: Map<number, string>,
-    recs: Map<string, string>,
-    n: number,
-  ): (acc: string[]) => [string[], string];
-  (
-    t: Ty,
-    value: Expr,
-    names: Map<number, string>,
-    recs: Map<string, string>,
-    n: number,
-    acc: string[],
-  ): [string[], string];
-} = _curry(
-  6,
-  (
-    t: Ty,
-    value: Expr,
-    names: Map<number, string>,
-    recs: Map<string, string>,
-    n: number,
-    acc: string[],
-  ) =>
-    match(value)
-      .with({ _tag: "ELambda" }, ({ params, body }) =>
-        eq(length(params), 0)
-          ? ((next: Ty) => flatParamsFrom(next, body, names, recs, n, acc))(
-              match(t)
-                .with(
-                  (_v): _v is Extract<Ty, { _tag: "TyFn" }> => {
-                    const _g: any = _v;
-                    return _g._tag === "TyFn" && (({ from: fromT, to: toT }) => isUnit(fromT))(_g);
-                  },
-                  ({ from: fromT, to: toT }) => toT,
-                )
-                .otherwise(() => t),
-            )
-          : (([t1, n1, acc1]: [Ty, number, string[]]) =>
-              flatParamsFrom(t1, body, names, recs, n1, acc1))(
-              takeParams(t, params, names, recs, 0, n, acc),
-            ),
-      )
-      .otherwise(() => _tuple(acc, tsOf(t, names, recs))),
+  (t: Ty): (value: Expr) => (env: TsEnv) => (n: number) => (acc: string[]) => [string[], string];
+  (t: Ty): (value: Expr) => (env: TsEnv) => (n: number, acc: string[]) => [string[], string];
+  (t: Ty): (value: Expr) => (env: TsEnv, n: number) => (acc: string[]) => [string[], string];
+  (t: Ty): (value: Expr, env: TsEnv) => (n: number) => (acc: string[]) => [string[], string];
+  (t: Ty, value: Expr): (env: TsEnv) => (n: number) => (acc: string[]) => [string[], string];
+  (t: Ty): (value: Expr) => (env: TsEnv, n: number, acc: string[]) => [string[], string];
+  (t: Ty): (value: Expr, env: TsEnv) => (n: number, acc: string[]) => [string[], string];
+  (t: Ty): (value: Expr, env: TsEnv, n: number) => (acc: string[]) => [string[], string];
+  (t: Ty, value: Expr): (env: TsEnv) => (n: number, acc: string[]) => [string[], string];
+  (t: Ty, value: Expr): (env: TsEnv, n: number) => (acc: string[]) => [string[], string];
+  (t: Ty, value: Expr, env: TsEnv): (n: number) => (acc: string[]) => [string[], string];
+  (t: Ty): (value: Expr, env: TsEnv, n: number, acc: string[]) => [string[], string];
+  (t: Ty, value: Expr): (env: TsEnv, n: number, acc: string[]) => [string[], string];
+  (t: Ty, value: Expr, env: TsEnv): (n: number, acc: string[]) => [string[], string];
+  (t: Ty, value: Expr, env: TsEnv, n: number): (acc: string[]) => [string[], string];
+  (t: Ty, value: Expr, env: TsEnv, n: number, acc: string[]): [string[], string];
+} = _curry(5, (t: Ty, value: Expr, env: TsEnv, n: number, acc: string[]) =>
+  match(value)
+    .with({ _tag: "ELambda" }, ({ params, body }) =>
+      eq(length(params), 0)
+        ? ((next: Ty) => flatParamsFrom(next, body, env, n, acc))(
+            match(t)
+              .with(
+                (_v): _v is Extract<Ty, { _tag: "TyFn" }> => {
+                  const _g: any = _v;
+                  return _g._tag === "TyFn" && (({ from: fromT, to: toT }) => isUnit(fromT))(_g);
+                },
+                ({ from: fromT, to: toT }) => toT,
+              )
+              .otherwise(() => t),
+          )
+        : (([t1, n1, acc1]: [Ty, number, string[]]) => flatParamsFrom(t1, body, env, n1, acc1))(
+            takeParams(t, params, env, 0, n, acc),
+          ),
+    )
+    .otherwise(() => _tuple(acc, tsOf(t, env))),
 );
 const takeParams: {
   (
     t: Ty,
   ): (
     params: LamParam[],
-  ) => (
-    names: Map<number, string>,
-  ) => (
-    recs: Map<string, string>,
-  ) => (i: number) => (n: number) => (acc: string[]) => [Ty, number, string[]];
+  ) => (env: TsEnv) => (i: number) => (n: number) => (acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
   ): (
     params: LamParam[],
-  ) => (
-    names: Map<number, string>,
-  ) => (
-    recs: Map<string, string>,
+  ) => (env: TsEnv) => (i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+  ): (
+    params: LamParam[],
+  ) => (env: TsEnv) => (i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+  ): (
+    params: LamParam[],
+  ) => (env: TsEnv, i: number) => (n: number) => (acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+  ): (
+    params: LamParam[],
+    env: TsEnv,
+  ) => (i: number) => (n: number) => (acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+    params: LamParam[],
+  ): (env: TsEnv) => (i: number) => (n: number) => (acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+  ): (
+    params: LamParam[],
+  ) => (env: TsEnv) => (i: number, n: number, acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+  ): (
+    params: LamParam[],
+  ) => (env: TsEnv, i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+  ): (
+    params: LamParam[],
+  ) => (env: TsEnv, i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
+  (
+    t: Ty,
+  ): (
+    params: LamParam[],
+    env: TsEnv,
   ) => (i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
   ): (
     params: LamParam[],
-  ) => (
-    names: Map<number, string>,
-  ) => (
-    recs: Map<string, string>,
+    env: TsEnv,
   ) => (i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
   ): (
     params: LamParam[],
-  ) => (
-    names: Map<number, string>,
-  ) => (
-    recs: Map<string, string>,
-    i: number,
-  ) => (n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-  ) => (
-    names: Map<number, string>,
-    recs: Map<string, string>,
-  ) => (i: number) => (n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-    names: Map<number, string>,
-  ) => (
-    recs: Map<string, string>,
-  ) => (i: number) => (n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-  ): (
-    names: Map<number, string>,
-  ) => (
-    recs: Map<string, string>,
-  ) => (i: number) => (n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-  ) => (
-    names: Map<number, string>,
-  ) => (
-    recs: Map<string, string>,
-  ) => (i: number, n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-  ) => (
-    names: Map<number, string>,
-  ) => (
-    recs: Map<string, string>,
-    i: number,
-  ) => (n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-  ) => (
-    names: Map<number, string>,
-  ) => (
-    recs: Map<string, string>,
-    i: number,
-    n: number,
-  ) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-  ) => (
-    names: Map<number, string>,
-    recs: Map<string, string>,
-  ) => (i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-  ) => (
-    names: Map<number, string>,
-    recs: Map<string, string>,
-  ) => (i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-  ) => (
-    names: Map<number, string>,
-    recs: Map<string, string>,
-    i: number,
-  ) => (n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-    names: Map<number, string>,
-  ) => (
-    recs: Map<string, string>,
-  ) => (i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-    names: Map<number, string>,
-  ) => (
-    recs: Map<string, string>,
-  ) => (i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-    names: Map<number, string>,
-  ) => (
-    recs: Map<string, string>,
-    i: number,
-  ) => (n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-    names: Map<number, string>,
-    recs: Map<string, string>,
-  ) => (i: number) => (n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-  ): (
-    names: Map<number, string>,
-  ) => (
-    recs: Map<string, string>,
-  ) => (i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-  ): (
-    names: Map<number, string>,
-  ) => (
-    recs: Map<string, string>,
-  ) => (i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-  ): (
-    names: Map<number, string>,
-  ) => (
-    recs: Map<string, string>,
+    env: TsEnv,
     i: number,
   ) => (n: number) => (acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
     params: LamParam[],
-  ): (
-    names: Map<number, string>,
-    recs: Map<string, string>,
-  ) => (i: number) => (n: number) => (acc: string[]) => [Ty, number, string[]];
+  ): (env: TsEnv) => (i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
     params: LamParam[],
-    names: Map<number, string>,
-  ): (
-    recs: Map<string, string>,
-  ) => (i: number) => (n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-  ) => (
-    names: Map<number, string>,
-  ) => (recs: Map<string, string>, i: number, n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-  ) => (
-    names: Map<number, string>,
-    recs: Map<string, string>,
-  ) => (i: number, n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-  ) => (
-    names: Map<number, string>,
-    recs: Map<string, string>,
-    i: number,
-  ) => (n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-  ) => (
-    names: Map<number, string>,
-    recs: Map<string, string>,
-    i: number,
-    n: number,
-  ) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-    names: Map<number, string>,
-  ) => (
-    recs: Map<string, string>,
-  ) => (i: number, n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-    names: Map<number, string>,
-  ) => (
-    recs: Map<string, string>,
-    i: number,
-  ) => (n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-    names: Map<number, string>,
-  ) => (
-    recs: Map<string, string>,
-    i: number,
-    n: number,
-  ) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-    names: Map<number, string>,
-    recs: Map<string, string>,
-  ) => (i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-    names: Map<number, string>,
-    recs: Map<string, string>,
-  ) => (i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-    names: Map<number, string>,
-    recs: Map<string, string>,
-    i: number,
-  ) => (n: number) => (acc: string[]) => [Ty, number, string[]];
+  ): (env: TsEnv) => (i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
     params: LamParam[],
-  ): (
-    names: Map<number, string>,
-  ) => (
-    recs: Map<string, string>,
-  ) => (i: number, n: number, acc: string[]) => [Ty, number, string[]];
+  ): (env: TsEnv, i: number) => (n: number) => (acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
     params: LamParam[],
-  ): (
-    names: Map<number, string>,
-  ) => (
-    recs: Map<string, string>,
-    i: number,
-  ) => (n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-  ): (
-    names: Map<number, string>,
-  ) => (
-    recs: Map<string, string>,
-    i: number,
-    n: number,
-  ) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-  ): (
-    names: Map<number, string>,
-    recs: Map<string, string>,
-  ) => (i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-  ): (
-    names: Map<number, string>,
-    recs: Map<string, string>,
-  ) => (i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-  ): (
-    names: Map<number, string>,
-    recs: Map<string, string>,
-    i: number,
-  ) => (n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-    names: Map<number, string>,
-  ): (
-    recs: Map<string, string>,
-  ) => (i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-    names: Map<number, string>,
-  ): (
-    recs: Map<string, string>,
-  ) => (i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-    names: Map<number, string>,
-  ): (
-    recs: Map<string, string>,
-    i: number,
-  ) => (n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-    names: Map<number, string>,
-    recs: Map<string, string>,
+    env: TsEnv,
   ): (i: number) => (n: number) => (acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
   ): (
     params: LamParam[],
-  ) => (
-    names: Map<number, string>,
-    recs: Map<string, string>,
-    i: number,
-    n: number,
-    acc: string[],
-  ) => [Ty, number, string[]];
+  ) => (env: TsEnv, i: number, n: number, acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
   ): (
     params: LamParam[],
-    names: Map<number, string>,
-  ) => (recs: Map<string, string>, i: number, n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-  ): (
-    params: LamParam[],
-    names: Map<number, string>,
-    recs: Map<string, string>,
+    env: TsEnv,
   ) => (i: number, n: number, acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
   ): (
     params: LamParam[],
-    names: Map<number, string>,
-    recs: Map<string, string>,
+    env: TsEnv,
     i: number,
   ) => (n: number, acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
   ): (
     params: LamParam[],
-    names: Map<number, string>,
-    recs: Map<string, string>,
+    env: TsEnv,
     i: number,
     n: number,
   ) => (acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
     params: LamParam[],
-  ): (
-    names: Map<number, string>,
-  ) => (recs: Map<string, string>, i: number, n: number, acc: string[]) => [Ty, number, string[]];
+  ): (env: TsEnv) => (i: number, n: number, acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
     params: LamParam[],
-  ): (
-    names: Map<number, string>,
-    recs: Map<string, string>,
-  ) => (i: number, n: number, acc: string[]) => [Ty, number, string[]];
+  ): (env: TsEnv, i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
     params: LamParam[],
-  ): (
-    names: Map<number, string>,
-    recs: Map<string, string>,
-    i: number,
-  ) => (n: number, acc: string[]) => [Ty, number, string[]];
+  ): (env: TsEnv, i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
     params: LamParam[],
-  ): (
-    names: Map<number, string>,
-    recs: Map<string, string>,
-    i: number,
-    n: number,
-  ) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-    names: Map<number, string>,
-  ): (recs: Map<string, string>) => (i: number, n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-    names: Map<number, string>,
-  ): (recs: Map<string, string>, i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-    names: Map<number, string>,
-  ): (recs: Map<string, string>, i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-    names: Map<number, string>,
-    recs: Map<string, string>,
+    env: TsEnv,
   ): (i: number) => (n: number, acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
     params: LamParam[],
-    names: Map<number, string>,
-    recs: Map<string, string>,
+    env: TsEnv,
   ): (i: number, n: number) => (acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
     params: LamParam[],
-    names: Map<number, string>,
-    recs: Map<string, string>,
+    env: TsEnv,
     i: number,
   ): (n: number) => (acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
   ): (
     params: LamParam[],
-    names: Map<number, string>,
-    recs: Map<string, string>,
+    env: TsEnv,
     i: number,
     n: number,
     acc: string[],
@@ -1660,92 +925,62 @@ const takeParams: {
   (
     t: Ty,
     params: LamParam[],
-  ): (
-    names: Map<number, string>,
-    recs: Map<string, string>,
-    i: number,
-    n: number,
-    acc: string[],
-  ) => [Ty, number, string[]];
+  ): (env: TsEnv, i: number, n: number, acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
     params: LamParam[],
-    names: Map<number, string>,
-  ): (recs: Map<string, string>, i: number, n: number, acc: string[]) => [Ty, number, string[]];
-  (
-    t: Ty,
-    params: LamParam[],
-    names: Map<number, string>,
-    recs: Map<string, string>,
+    env: TsEnv,
   ): (i: number, n: number, acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
     params: LamParam[],
-    names: Map<number, string>,
-    recs: Map<string, string>,
+    env: TsEnv,
     i: number,
   ): (n: number, acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
     params: LamParam[],
-    names: Map<number, string>,
-    recs: Map<string, string>,
+    env: TsEnv,
     i: number,
     n: number,
   ): (acc: string[]) => [Ty, number, string[]];
   (
     t: Ty,
     params: LamParam[],
-    names: Map<number, string>,
-    recs: Map<string, string>,
+    env: TsEnv,
     i: number,
     n: number,
     acc: string[],
   ): [Ty, number, string[]];
-} = _curry(
-  7,
-  (
-    t: Ty,
-    params: LamParam[],
-    names: Map<number, string>,
-    recs: Map<string, string>,
-    i: number,
-    n: number,
-    acc: string[],
-  ) =>
-    match(_Array_get(i, params))
-      .with({ _tag: "None" }, () => _tuple(t, n, acc))
-      .with({ _tag: "Some" }, ({ value: p }) =>
-        match(t)
-          .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
-            takeParams(
-              toT,
-              params,
-              names,
-              recs,
-              add(i, 1),
-              add(n, 1),
-              _Array_append(`${paramDeclName(p, n)}: ${tsOf(fromT, names, recs)}`, acc),
-            ),
-          )
-          .otherwise(() => _tuple(t, n, acc)),
-      )
-      .exhaustive(),
+} = _curry(6, (t: Ty, params: LamParam[], env: TsEnv, i: number, n: number, acc: string[]) =>
+  match(_Array_get(i, params))
+    .with({ _tag: "None" }, () => _tuple(t, n, acc))
+    .with({ _tag: "Some" }, ({ value: p }) =>
+      match(t)
+        .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
+          takeParams(
+            toT,
+            params,
+            env,
+            add(i, 1),
+            add(n, 1),
+            _Array_append(`${paramDeclName(p, n)}: ${tsOf(fromT, env)}`, acc),
+          ),
+        )
+        .otherwise(() => _tuple(t, n, acc)),
+    )
+    .exhaustive(),
 );
 const declType: {
-  (t: Ty): (value: Expr) => (names: Map<number, string>) => (recs: Map<string, string>) => string;
-  (t: Ty): (value: Expr) => (names: Map<number, string>, recs: Map<string, string>) => string;
-  (t: Ty): (value: Expr, names: Map<number, string>) => (recs: Map<string, string>) => string;
-  (t: Ty, value: Expr): (names: Map<number, string>) => (recs: Map<string, string>) => string;
-  (t: Ty): (value: Expr, names: Map<number, string>, recs: Map<string, string>) => string;
-  (t: Ty, value: Expr): (names: Map<number, string>, recs: Map<string, string>) => string;
-  (t: Ty, value: Expr, names: Map<number, string>): (recs: Map<string, string>) => string;
-  (t: Ty, value: Expr, names: Map<number, string>, recs: Map<string, string>): string;
-} = _curry(4, (t: Ty, value: Expr, names: Map<number, string>, recs: Map<string, string>) =>
+  (t: Ty): (value: Expr) => (env: TsEnv) => string;
+  (t: Ty): (value: Expr, env: TsEnv) => string;
+  (t: Ty, value: Expr): (env: TsEnv) => string;
+  (t: Ty, value: Expr, env: TsEnv): string;
+} = _curry(3, (t: Ty, value: Expr, env: TsEnv) =>
   match(value)
     .with({ _tag: "ELambda" }, ({ params, body }) =>
       eq(length(params), 0)
-        ? ((next: Ty) => `() => ${declType(next, body, names, recs)}`)(
+        ? ((next: Ty) => `() => ${declType(next, body, env)}`)(
             match(t)
               .with(
                 (_v): _v is Extract<Ty, { _tag: "TyFn" }> => {
@@ -1757,11 +992,11 @@ const declType: {
               .otherwise(() => t),
           )
         : (([t1, _n, ps]: [Ty, number, string[]]) =>
-            `(${_Str_join(", ", ps)}) => ${declType(t1, body, names, recs)}`)(
-            takeParams(t, params, names, recs, 0, 0, [] as string[]),
+            `(${_Str_join(", ", ps)}) => ${declType(t1, body, env)}`)(
+            takeParams(t, params, env, 0, 0, [] as string[]),
           ),
     )
-    .otherwise(() => tsOf(t, names, recs)),
+    .otherwise(() => tsOf(t, env)),
 );
 export const bindingTsType: <A>(
   sc: { vars: number[]; rvars: number[]; ty: Ty } & A,
@@ -1775,16 +1010,17 @@ export const bindingTsType: <A>(
     recs: Map<string, string>,
   ) => {
     const names: Map<number, string> = genericNames(sc);
+    const env: TsEnv = tsEnv(names, recs);
     const head: string = eq(_Map_size(names), 0) ? "" : `<${_Str_join(", ", _Map_values(names))}>`;
     return match(value)
       .with({ _tag: "ELambda" }, () =>
         eq(head, "")
           ? (([params, ret]: [string[], string]) => curriedOverloads("", params, ret))(
-              flatParamsFrom(sc.ty, value, names, recs, 0, [] as string[]),
+              flatParamsFrom(sc.ty, value, env, 0, [] as string[]),
             )
-          : `${head}${declType(sc.ty, value, names, recs)}`,
+          : `${head}${declType(sc.ty, value, env)}`,
       )
-      .otherwise(() => tsOf(sc.ty, new Map<number, string>(), recs));
+      .otherwise(() => tsOf(sc.ty, recsEnv(recs)));
   },
 );
 const spanKey: <A, B, C>(sp: { start: A; end: B } & C) => string = <A, B, C>(
@@ -2376,7 +1612,7 @@ export const tsGenOpts: <A, B, C, D, E, F, G, H, I, J, K>(
                   _Option_map(
                     (ts: string) => `: ${ts}`,
                     _Option_flatMap(
-                      (t: Ty) => emptyCollTs(t, new Map<number, string>(), recs),
+                      (t: Ty) => emptyCollTs(t, recsEnv(recs)),
                       _Map_get(spanKey(exprSpan(value)), letParamAt),
                     ),
                   ),
@@ -2407,7 +1643,7 @@ export const tsGenOpts: <A, B, C, D, E, F, G, H, I, J, K>(
               generics: "",
               params: match(_Map_get(spanKey(sp), typeAt))
                 .with({ _tag: "Some" }, ({ value: t }) =>
-                  lambdaParamTypesTs(t, arity, new Map<number, string>(), recs),
+                  lambdaParamTypesTs(t, arity, recsEnv(recs)),
                 )
                 .with({ _tag: "None" }, () => [] as Option<string>[])
                 .exhaustive(),
@@ -2416,11 +1652,11 @@ export const tsGenOpts: <A, B, C, D, E, F, G, H, I, J, K>(
         ),
       ) as Option<(a: Span, b: number) => { generics: string; params: Option<string>[] }>,
       annotateEmpty: Some((e: Expr) =>
-        _Option_flatMap((t: Ty) => emptyCollTs(t, new Map<number, string>(), recs), typeOf(e)),
+        _Option_flatMap((t: Ty) => emptyCollTs(t, recsEnv(recs)), typeOf(e)),
       ) as Option<(a: Expr) => Option<string>>,
       annotateLetin: Some((value: Expr) =>
         _Option_flatMap(
-          (t: Ty) => emptyCollTs(t, new Map<number, string>(), recs),
+          (t: Ty) => emptyCollTs(t, recsEnv(recs)),
           _Map_get(spanKey(exprSpan(value)), letParamAt),
         ),
       ) as Option<(a: Expr) => Option<string>>,
@@ -2588,7 +1824,7 @@ const hostParams: {
     : match(t)
         .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
           _Array_prepend(
-            `${_Str_fromCode(add(97, i))}: ${tsOf(fromT, names, new Map<string, string>())}`,
+            `${_Str_fromCode(add(97, i))}: ${tsOf(fromT, plainEnv(names))}`,
             hostParams(toT, arity, names, add(i, 1)),
           ),
         )
@@ -2612,7 +1848,7 @@ const curriedHostType: { (t: Ty): (arity: number) => string; (t: Ty, arity: numb
     const names: Map<number, string> = lettersFor(ids, 0, new Map<number, string>());
     return `${genericHeadOf(ids, names)}${reduce(
       _curry(2, (acc: string, p: string) => `(${p}) => ${acc}`),
-      tsOf(hostReturn(t, arity, 0), names, new Map<string, string>()),
+      tsOf(hostReturn(t, arity, 0), plainEnv(names)),
       _Array_reverse(hostParams(t, arity, names, 0)),
     )}`;
   });
@@ -2623,11 +1859,11 @@ const flatHostType: { (t: Ty): (arity: number) => string; (t: Ty, arity: number)
     const names: Map<number, string> = lettersFor(ids, 0, new Map<number, string>());
     const head: string = genericHeadOf(ids, names);
     return eq(arity, 0)
-      ? `${head}${tsOf(t, names, new Map<string, string>())}`
+      ? `${head}${tsOf(t, plainEnv(names))}`
       : curriedOverloads(
           head,
           hostParams(t, arity, names, 0),
-          tsOf(hostReturn(t, arity, 0), names, new Map<string, string>()),
+          tsOf(hostReturn(t, arity, 0), plainEnv(names)),
         );
   },
 );
@@ -2639,7 +1875,7 @@ const externDecl: <A, B>(
   return and(gte(n, 1), e.curried)
     ? `export declare const ${e.imported}: ${curriedHostType(t, n)};`
     : eq(n, 0)
-      ? `export declare const ${e.imported}: ${tsOf(t, anyFor(freeIdsIn(t, [] as number[])), new Map<string, string>())};`
+      ? `export declare const ${e.imported}: ${tsOf(t, plainEnv(anyFor(freeIdsIn(t, [] as number[]))))};`
       : `export declare const ${e.imported}: ${flatHostType(t, n)};`;
 };
 export const externModuleDts: <A, B, C, D>(

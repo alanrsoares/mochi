@@ -31,7 +31,15 @@ import { typeExprToType, collect, emptyVarSets } from "./schemes.mochi"
 import { builtinTypeDecls, keysOf } from "./ctors.mochi"
 import { codegenWith, jsGenOpts, runtimeDepNames } from "./codegen.mochi"
 import { inferProgramTypes, exprSpan } from "./infer.mochi"
-import { genericNames, letterAt, rowShapeKey, tsOf } from "./ts-types.mochi"
+import {
+  genericNames,
+  letterAt,
+  plainEnv,
+  recsEnv,
+  rowShapeKey,
+  tsEnv,
+  tsOf
+} from "./ts-types.mochi"
 
 /// Type params are bound POSITIONALLY: the i-th param is var `i`, rendered as
 /// the i-th letter. Both maps are built from one index so a field type and the
@@ -65,7 +73,7 @@ let fieldTs = (te, params, aliases, recs) =>
     aliases,
     Set.fromArray([])
   ) in
-    tsOf(t, names, recs)
+    tsOf(t, tsEnv(names, recs))
 
 /// Keys come from `keysOf` (the same projection the runtime shape uses, so a
 /// declared field name and its emitted key can never drift); this loop only
@@ -194,8 +202,8 @@ let isConcrete = t => allVarsIn(t, #{})
 /// is one of those renders as the letter instead of being skipped; with no such
 /// scope only a fully concrete type renders, since a free var would become
 /// `unknown` — no better than tsc's own guess.
-export let emptyCollTs = (t, names, recs) =>
-  allVarsIn(t, names) ? Some(tsOf(t, names, recs)) : None
+export let emptyCollTs = (t, env) =>
+  allVarsIn(t, env.vars) ? Some(tsOf(t, env)) : None
 
 /// TS type for an APPLIED parametric ctor call (`Ok(x)`), else `None`. A ctor's
 /// argument pins only the params it mentions; a phantom one (`Ok`'s error type)
@@ -205,7 +213,7 @@ export let emptyCollTs = (t, names, recs) =>
 export let ctorCallTs = (t, recs) => switch t {
   | TyCon(_, args) => Array.length(args) == 0 || !isConcrete(t)
       ? None
-      : Some(tsOf(t, #{}, recs))
+      : Some(tsOf(t, recsEnv(recs)))
   | _ => None
 }
 
@@ -214,30 +222,30 @@ export let ctorCallTs = (t, recs) => switch t {
 /// name its generics in value position (TS2304), so those keep the bare boolean
 /// guard and their handlers keep the polymorphic tail.
 export let guardParamTs = (t, recs) =>
-  isConcrete(t) ? Some(tsOf(t, #{}, recs)) : None
+  isConcrete(t) ? Some(tsOf(t, recsEnv(recs))) : None
 
 /// Peel one arrow per collapsed lambda param, annotating each (ADR 0028).
 /// A param whose vars are ALL in scope renders with those letters (ADR 0042);
 /// otherwise only a fully concrete param renders, because a generic binding's
 /// letters live on the const's TYPE head and naming one in a value position
 /// would be an out-of-scope TS2304.
-let lambdaParamsFrom = (t, arity, names, recs, i) =>
+let lambdaParamsFrom = (t, arity, env, i) =>
   i >= arity
     ? []
     : switch t {
       | TyFn(fromT, toT) => Array.prepend(
-          allVarsIn(fromT, names)
-            ? Some(tsOf(fromT, names, recs))
+          allVarsIn(fromT, env.vars)
+            ? Some(tsOf(fromT, env))
             : isConcrete(fromT)
-            ? Some(tsOf(fromT, #{}, recs))
+            ? Some(tsOf(fromT, recsEnv(env.recs)))
             : None,
-          lambdaParamsFrom(toT, arity, names, recs, i + 1)
+          lambdaParamsFrom(toT, arity, env, i + 1)
         )
-      | _ => Array.prepend(None, lambdaParamsFrom(t, arity, names, recs, i + 1))
+      | _ => Array.prepend(None, lambdaParamsFrom(t, arity, env, i + 1))
     }
 
-export let lambdaParamTypesTs = (lamType, arity, names, recs) =>
-  lambdaParamsFrom(lamType, arity, names, recs, 0)
+export let lambdaParamTypesTs = (lamType, arity, env) =>
+  lambdaParamsFrom(lamType, arity, env, 0)
 
 /// Every param annotated with the scheme's OWN letters, scoped by a generic
 /// head on the arrow itself (ADR 0032). This closes the polymorphic
@@ -246,28 +254,26 @@ export let lambdaParamTypesTs = (lamType, arity, names, recs) =>
 /// expression, so `_curry` erased them to `any`. Scoping the SAME letters on
 /// the lambda brings them into value scope. `None` when the binding is not
 /// generic — the concrete-only path already covers it.
-let genericParamsFrom = (t, arity, names, recs, i) =>
+let genericParamsFrom = (t, arity, env, i) =>
   i >= arity
     ? []
     : switch t {
       | TyFn(fromT, toT) => Array.prepend(
-          Some(tsOf(fromT, names, recs)),
-          genericParamsFrom(toT, arity, names, recs, i + 1)
+          Some(tsOf(fromT, env)),
+          genericParamsFrom(toT, arity, env, i + 1)
         )
-      | _ => Array.prepend(
-          None,
-          genericParamsFrom(t, arity, names, recs, i + 1)
-        )
+      | _ => Array.prepend(None, genericParamsFrom(t, arity, env, i + 1))
     }
 
 export let genericLambdaParams = (sc, arity, recs) =>
   let names = genericNames(sc) in
+  let env = tsEnv(names, recs) in
     Map.size(names) == 0
       ? None
       : Some(
         {
           generics: "<${Str.join(", ", Map.values(names))}>",
-          params: genericParamsFrom(sc.ty, arity, names, recs, 0)
+          params: genericParamsFrom(sc.ty, arity, env, 0)
         }
       )
 
@@ -358,32 +364,28 @@ export let curriedOverloads = (head, params, ret) =>
 /// Walk the value's lambda spine and the type's arrow spine together,
 /// collecting one rendered `name: T` per param. A zero-param lambda consumes
 /// the `unit` arrow the JS side erases.
-let flatParamsFrom = (t, value, names, recs, n, acc) => switch value {
+let flatParamsFrom = (t, value, env, n, acc) => switch value {
   | Ast.ELambda(params, body, _) => Array.length(params) == 0
       ? let next = switch t {
         | TyFn(fromT, toT) when isUnit(fromT) => toT
         | _ => t
       } in
-        flatParamsFrom(next, body, names, recs, n, acc)
-      : let (t1, n1, acc1) = takeParams(t, params, names, recs, 0, n, acc) in
-        flatParamsFrom(t1, body, names, recs, n1, acc1)
-  | _ => (acc, tsOf(t, names, recs))
+        flatParamsFrom(next, body, env, n, acc)
+      : let (t1, n1, acc1) = takeParams(t, params, env, 0, n, acc) in
+        flatParamsFrom(t1, body, env, n1, acc1)
+  | _ => (acc, tsOf(t, env))
 }
 
-let takeParams = (t, params, names, recs, i, n, acc) => switch Array.get(i, params) {
+let takeParams = (t, params, env, i, n, acc) => switch Array.get(i, params) {
   | None => (t, n, acc)
   | Some(p) => switch t {
       | TyFn(fromT, toT) => takeParams(
           toT,
           params,
-          names,
-          recs,
+          env,
           i + 1,
           n + 1,
-          Array.append(
-            "${paramDeclName(p, n)}: ${tsOf(fromT, names, recs)}",
-            acc
-          )
+          Array.append("${paramDeclName(p, n)}: ${tsOf(fromT, env)}", acc)
         )
       | _ => (t, n, acc)
     }
@@ -391,16 +393,16 @@ let takeParams = (t, params, names, recs, i, n, acc) => switch Array.get(i, para
 
 /// Arity-aware nested form: one arrow peeled per param, recursing into the body
 /// so a curried definition keeps its shape.
-let declType = (t, value, names, recs) => switch value {
+let declType = (t, value, env) => switch value {
   | Ast.ELambda(params, body, _) => Array.length(params) == 0
       ? let next = switch t {
         | TyFn(fromT, toT) when isUnit(fromT) => toT
         | _ => t
       } in
-        "() => ${declType(next, body, names, recs)}"
-      : let (t1, _n, ps) = takeParams(t, params, names, recs, 0, 0, []) in
-        "(${Str.join(", ", ps)}) => ${declType(t1, body, names, recs)}"
-  | _ => tsOf(t, names, recs)
+        "() => ${declType(next, body, env)}"
+      : let (t1, _n, ps) = takeParams(t, params, env, 0, 0, []) in
+        "(${Str.join(", ", ps)}) => ${declType(t1, body, env)}"
+  | _ => tsOf(t, env)
 }
 
 /// The TS type of a binding, WITHOUT the `const name:` wrapper — the piece the
@@ -413,22 +415,16 @@ let declType = (t, value, names, recs) => switch value {
 /// escaped vars fall back to `unknown`.
 export let bindingTsType = (sc, value, recs) =>
   let names = genericNames(sc) in
+  let env = tsEnv(names, recs) in
   let head = Map.size(names) == 0
     ? ""
     : "<${Str.join(", ", Map.values(names))}>" in
     switch value {
       | Ast.ELambda(_, _, _) => head == ""
-          ? let (params, ret) = flatParamsFrom(
-            sc.ty,
-            value,
-            names,
-            recs,
-            0,
-            []
-          ) in
+          ? let (params, ret) = flatParamsFrom(sc.ty, value, env, 0, []) in
             curriedOverloads("", params, ret)
-          : "${head}${declType(sc.ty, value, names, recs)}"
-      | _ => tsOf(sc.ty, #{}, recs)
+          : "${head}${declType(sc.ty, value, env)}"
+      | _ => tsOf(sc.ty, recsEnv(recs))
     }
 
 // ---- module assembly -------------------------------------------------------
@@ -696,7 +692,7 @@ export let tsGenOpts = (stmts, env, types, letParams, aliases) =>
               // empty collections inside its value get a element type instead
               // of tsc's `never`/`unknown`.
               Map.get(spanKey(exprSpan(value)), letParamAt)
-                |> Option.flatMap(t => emptyCollTs(t, #{}, recs))
+                |> Option.flatMap(t => emptyCollTs(t, recsEnv(recs)))
                 |> Option.map(ts => ": ${ts}")
           }),
       annotateCtor: Some((s, c) => switch s {
@@ -713,20 +709,20 @@ export let tsGenOpts = (stmts, env, types, letParams, aliases) =>
         | None => {
             generics: "",
             params: switch Map.get(spanKey(sp), typeAt) {
-              | Some(t) => lambdaParamTypesTs(t, arity, #{}, recs)
+              | Some(t) => lambdaParamTypesTs(t, arity, recsEnv(recs))
               | None => []
             }
           }
       }),
       annotateEmpty: Some(e =>
-        typeOf(e) |> Option.flatMap(t => emptyCollTs(t, #{}, recs))),
+        typeOf(e) |> Option.flatMap(t => emptyCollTs(t, recsEnv(recs)))),
       annotateLetin: // A `let x = v in …` (and a lowered loop param) whose value is
       // polymorphic but used at ONE concrete type: annotate the IIFE param so
       // tsc contextually types the empty collections inside `v` (ADR 0035).
       // Keyed by VALUE span, which is what `infer`'s `letParams` records.
       Some(value =>
         Map.get(spanKey(exprSpan(value)), letParamAt)
-          |> Option.flatMap(t => emptyCollTs(t, #{}, recs))),
+          |> Option.flatMap(t => emptyCollTs(t, recsEnv(recs)))),
       annotateCall: Some(e =>
         typeOf(e) |> Option.flatMap(t => ctorCallTs(t, recs))),
       guardBaseType: Some(e =>
@@ -843,7 +839,7 @@ let hostParams = (t, arity, names, i) =>
     ? []
     : switch t {
       | TyFn(fromT, toT) => Array.prepend(
-          "${Str.fromCode(97 + i)}: ${tsOf(fromT, names, #{})}",
+          "${Str.fromCode(97 + i)}: ${tsOf(fromT, plainEnv(names))}",
           hostParams(toT, arity, names, i + 1)
         )
       | _ => []
@@ -861,7 +857,7 @@ let hostReturn = (t, arity, i) =>
 let curriedHostType = (t, arity) =>
   let ids = freeIdsIn(t, []) in
   let names = lettersFor(ids, 0, #{}) in
-    "${genericHeadOf(ids, names)}${hostParams(t, arity, names, 0) |> Array.reverse |> Array.reduce((acc, p) => "(${p}) => ${acc}", tsOf(hostReturn(t, arity, 0), names, #{}))}"
+    "${genericHeadOf(ids, names)}${hostParams(t, arity, names, 0) |> Array.reverse |> Array.reduce((acc, p) => "(${p}) => ${acc}", tsOf(hostReturn(t, arity, 0), plainEnv(names)))}"
 
 /// An UNCURRIED function host gets the same overloaded signature a runtime
 /// builtin does, so both `f(a)(b)` and `f(a, b)` call sites resolve (ADR 0037).
@@ -870,11 +866,11 @@ let flatHostType = (t, arity) =>
   let names = lettersFor(ids, 0, #{}) in
   let head = genericHeadOf(ids, names) in
     arity == 0
-      ? "${head}${tsOf(t, names, #{})}"
+      ? "${head}${tsOf(t, plainEnv(names))}"
       : curriedOverloads(
         head,
         hostParams(t, arity, names, 0),
-        tsOf(hostReturn(t, arity, 0), names, #{})
+        tsOf(hostReturn(t, arity, 0), plainEnv(names))
       )
 
 /// One `export declare const` for a host binding. `e` is
@@ -886,7 +882,7 @@ let externDecl = e =>
     n >= 1 && e.curried
       ? "export declare const ${e.imported}: ${curriedHostType(t, n)};"
       : n == 0
-      ? "export declare const ${e.imported}: ${tsOf(t, anyFor(freeIdsIn(t, [])), #{})};"
+      ? "export declare const ${e.imported}: ${tsOf(t, plainEnv(anyFor(freeIdsIn(t, []))))};"
       : "export declare const ${e.imported}: ${flatHostType(t, n)};"
 
 /// One extern host module's declaration file. Referenced builtin variants are

@@ -4,6 +4,7 @@ import { check } from "./check.mochi"
 import { lex } from "./lexer.mochi"
 import { parse } from "./parser.mochi"
 import { inferProgramTypes } from "./infer.mochi"
+import { plainEnv, recsEnv, tsEnv } from "./ts-types.mochi"
 import {
   aliasTsDecl,
   ctorCallTs,
@@ -126,28 +127,30 @@ test("unionGenericNames merges letters across schemes", () =>
 test("emptyCollTs pins a concrete seed and skips a free one", () => {
   assertEq(
     Some("Map<string, number>"),
-    emptyCollTs(tCon("Map", [tPrim("string"), tPrim("number")]), #{}, #{})
+    emptyCollTs(tCon("Map", [tPrim("string"), tPrim("number")]), plainEnv(#{}))
   );
-  assertEq(None, emptyCollTs(tCon("Map", [tPrim("string"), tVar(1)]), #{}, #{}))
+  assertEq(
+    None,
+    emptyCollTs(tCon("Map", [tPrim("string"), tVar(1)]), plainEnv(#{}))
+  )
 })
 
 test("emptyCollTs renders an in-scope var as its letter (ADR 0042)", () =>
   assertEq(
     Some("A[]"),
-    emptyCollTs(tCon("Array", [tVar(1)]), #{ 1: "A" }, #{})
+    emptyCollTs(tCon("Array", [tVar(1)]), tsEnv(#{ 1: "A" }, #{}))
   ))
 
 test("emptyCollTs needs the row tail in scope too", () => {
   assertEq(
     None,
-    emptyCollTs(tRecord(rExtend("x", tPrim("number"), rVar(9))), #{}, #{})
+    emptyCollTs(tRecord(rExtend("x", tPrim("number"), rVar(9))), plainEnv(#{}))
   );
   assertEq(
     Some("({ x: number } & R)"),
     emptyCollTs(
       tRecord(rExtend("x", tPrim("number"), rVar(9))),
-      #{ 9: "R" },
-      #{}
+      tsEnv(#{ 9: "R" }, #{})
     )
   )
 })
@@ -173,8 +176,7 @@ test("lambdaParamTypesTs peels one arrow per param", () =>
     lambdaParamTypesTs(
       tArrow(tPrim("number"), tArrow(tPrim("string"), tPrim("bool"))),
       2,
-      #{},
-      #{}
+      tsEnv(#{}, #{})
     )
   ))
 
@@ -184,15 +186,18 @@ test("lambdaParamTypesTs leaves an out-of-scope generic param bare", () =>
     lambdaParamTypesTs(
       tArrow(tVar(1), tArrow(tPrim("number"), tPrim("bool"))),
       2,
-      #{},
-      #{}
+      tsEnv(#{}, #{})
     )
   ))
 
 test("lambdaParamTypesTs pads when arity outruns the arrow spine", () =>
   assertEq(
     [Some("number"), None],
-    lambdaParamTypesTs(tArrow(tPrim("number"), tPrim("bool")), 2, #{}, #{})
+    lambdaParamTypesTs(
+      tArrow(tPrim("number"), tPrim("bool")),
+      2,
+      tsEnv(#{}, #{})
+    )
   ))
 
 test("genericLambdaParams scopes the scheme's own letters", () =>
