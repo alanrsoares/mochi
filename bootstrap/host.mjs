@@ -5,7 +5,7 @@
 // `Promise<Result>`, per the railway conventions).
 import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 
 // mochi Result runtime shape: { _tag: "Ok", value } | { _tag: "Err", error }.
 const Ok = (value) => ({ _tag: "Ok", value });
@@ -50,6 +50,24 @@ export const resolveImport = (importer, spec) => {
     return resolve(dirname(importer), `${spec}.mochi`);
   }
 };
+// relSpec : string -> string -> string  — the module specifier for `to` as
+// imported from `from`, extension stripped and `./`-prefixed. The emitted TS
+// graph's cross-module `import type` lines are written with it (ADR 0090).
+export const relSpec = (from, to) => {
+  const rel = relative(dirname(from), to).replace(/\.mochi$/, "");
+  return rel.startsWith(".") ? rel : `./${rel}`;
+};
+
+// externDtsPath : string -> string -> string  — the sidecar declaration path for
+// an `extern … = "<module>" "<name>"` written in the module at `importer`.
+// `.mjs` hosts resolve to `.d.mts`, `.js`/`.ts` hosts to `.d.ts`; anything else
+// (a bare specifier) keeps its own directory-relative shape.
+export const externDtsPath = (importer, module) => {
+  const base = module.replace(/\.m?[jt]s$/, "");
+  const ext = /\.mjs$/.test(module) ? ".d.mts" : ".d.ts";
+  return `${resolve(dirname(importer), base)}${ext}`;
+};
+
 // absPath : string -> string  — absolutize an entry path against the cwd, so
 // the graph loader keys every module on one canonical path.
 export const absPath = (p) => resolve(p);

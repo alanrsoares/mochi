@@ -11,8 +11,13 @@ import { lex } from "./lexer.mochi"
 import { parse } from "./parser.mochi"
 import { checkWith } from "./check.mochi"
 import { exportedRegistry, exportedCtorKeys } from "./ctors.mochi"
-import { inferProgramImports, exportedSchemes } from "./infer.mochi"
+import {
+  inferProgramImports,
+  inferProgramImportsTypes,
+  exportedSchemes
+} from "./infer.mochi"
 import { codegen } from "./codegen.mochi"
+import { emitTsModule, externModuleDts } from "./codegen-ts.mochi"
 
 // Prelude tables from the generated shim (as in compile.mochi). Threaded opaquely
 // into inferProgramImports / codegen; module.mochi never inspects them.
@@ -380,3 +385,276 @@ export let compileGraph = graph =>
 /// Resolve the graph then compile it — one sync railway (host IO is sync).
 export let buildModules = entry =>
   let? graph = entry->loadGraph() in graph->compileGraph()
+
+// --- part (d): the typed-TypeScript graph driver (ADR 0090) -----------------
+// The same railway as compileGraph, but each module emits typed `.ts` instead of
+// `.js`. Three things a single-file `compileTs` never needs show up here:
+//
+//   1. inference must KEEP its span -> type table across the graph, so the
+//      driver calls `inferProgramImportsTypes` rather than the env-only view;
+//   2. a type declared in one module and referenced in another needs an
+//      `import type` line, computed from the EMITTED text (a type name can
+//      surface through an annotation with no AST reference to find);
+//   3. every `extern` host module needs a sidecar `.d.ts` / `.d.mts`, or the
+//      emitted `import` of it is a tsc TS2307.
+//
+// Mirrors src/module.ts's `compileGraphTs`.
+
+extern relSpec : string -> string -> string = "./host.mjs" "relSpec"
+extern externDtsPath : string -> string -> string = "./host.mjs" "externDtsPath"
+
+// A TS identifier character — the poor man's `\b`, since mochi has no regex.
+let isIdentChar = c => switch Str.codeAt(0, c) {
+  | None => false
+  | Some(n) => n >= 48 && n <= 57 || (n >= 65 && n <= 90) || (n >= 97 && n <= 122) || n == 95 || n == 36
+}
+
+// A run flanking an occurrence: empty means the occurrence sat at the very
+// start (or end) of the text, which is a boundary too.
+let endsAtBoundary = part =>
+  Str.length(part) == 0
+    ? true
+    : !isIdentChar(Option.unwrapOr("", Str.get(Str.length(part) - 1, part)))
+
+let startsAtBoundary = part =>
+  Str.length(part) == 0
+    ? true
+    : !isIdentChar(Option.unwrapOr("", Str.get(0, part)))
+
+// `\bname\b` without a regex: split ONCE on the name, then test the characters
+// flanking each occurrence. `Rest` must not match inside `Restriction`, and a
+// per-index scan over every emitted module for every candidate name is the
+// quadratic version of this.
+let occursAsWordFrom = (parts, i) => switch Array.get(i, parts) {
+  | None => false
+  | Some(after) => (Array.get(i - 1, parts)
+      |> Option.mapOr(false, endsAtBoundary)) && startsAtBoundary(after)
+      ? true
+      : occursAsWordFrom(parts, i + 1)
+}
+
+let occursAsWord = (name, text) => occursAsWordFrom(Str.split(name, text), 1)
+
+// The name an import clause entry BINDS — `x as y` binds `y`.
+let importedBinding = spec =>
+  let parts = Str.split(" as ", spec) in
+    Str.trim(Option.unwrapOr(spec, Array.get(Array.length(parts) - 1, parts)))
+
+let bindingsInLine = (line, acc) => switch Array.get(1, Str.split("{", line)) {
+  | None => acc
+  | Some(rest) => switch Array.get(0, Str.split("}", rest)) {
+      | None => acc
+      | Some(names) => Str.split(",", names)
+          |> Array.reduce((a, n) => Set.add(importedBinding(n), a), acc)
+    }
+}
+
+// Names already bound by a VALUE import in the emitted text. Re-importing one as
+// a type is a TS2300 duplicate identifier, so those are skipped below.
+let valueImported = ts =>
+  ts
+    |> Str.split("\n")
+    |> filter(Str.startsWith("import {"))
+    |> Array.reduce((acc, line) => bindingsInLine(line, acc), Set.fromArray([]))
+
+// Every top-level `type` name in the graph -> the module that declares it. Type
+// names are globally visible, so one flat table serves every importer.
+let ownTypesInto = (stmts, path, acc) =>
+  stmts
+    |> Array.reduce(
+      (a, s) => switch s {
+        | Ast.SType(name, _, _, _, _, _, _, _) => a |> Map.set(name, path)
+        | _ => a
+      },
+      acc
+    )
+
+let typeOwnerOf = graph =>
+  graph |> Array.reduce((acc, m) => ownTypesInto(m.stmts, m.path, acc), #{})
+
+let localTypeNames = stmts =>
+  stmts
+    |> Array.flatMap(s => switch s {
+      | Ast.SType(name, _, _, _, _, _, _, _) => [name]
+      | _ => []
+    })
+    |> Set.fromArray
+
+// Group the wanted type names by the spec of their declaring module. A name is
+// wanted when another module declares it, no value import already binds it, and
+// it actually occurs in the emitted text.
+let groupByOwner = (names, ctx) =>
+  names
+    |> Array.reduce(
+      (acc, name) =>
+        let owner = ctx.typeOwner |> Map.getOr("", name) in
+          owner == ctx.importer || Set.has(
+            name,
+            ctx.localTypes
+          ) || Set.has(name, ctx.bound) || !occursAsWord(name, ctx.ts)
+            ? acc
+            : let spec = relSpec(ctx.importer, owner) in
+              acc
+                |> Map.set(spec, Array.append(name, Map.getOr([], spec, acc))),
+      #{}
+    )
+
+/// `import type { … }` lines for every non-local type name the EMITTED text
+/// references, grouped by declaring module. Builtin variants never appear in
+/// `typeOwner` — the emitter inlines their decls instead (ADR 0031).
+let crossModuleTypeImports = (ts, importer, localTypes, typeOwner) =>
+  let byOwner = groupByOwner(
+    Map.keys(typeOwner),
+    {
+      ts: ts,
+      importer: importer,
+      localTypes: localTypes,
+      typeOwner: typeOwner,
+      bound: valueImported(ts)
+    }
+  ) in
+    Map.keys(byOwner)
+      |> map(spec =>
+        "import type { ${Str.join(", ", Array.sort(Map.getOr([], spec, byOwner)))} } from \"${spec}\";")
+
+// Bucket this module's externs by the sidecar path they belong in. A `mochi:`
+// module lowers inline — a JS convention, not a host import — so it has no
+// sidecar to declare. Duplicates are fine here: two mochi bindings may alias one
+// host export, and `externModuleDts` dedupes on `imported` when it renders.
+let externBindingsInto = (stmts, path, env, acc) =>
+  stmts
+    |> Array.reduce(
+      (a, s) => switch s {
+        | Ast.SExtern(name, _, _, _, hostModule, imported, curried, _, _, _) => Str.startsWith(
+            "mochi:",
+            hostModule
+          )
+            ? a
+            : switch Map.get(name, env) {
+              | None => a
+              | Some(sc) => let dp = externDtsPath(path, hostModule) in
+                  a
+                    |> Map.set(
+                      dp,
+                      Array.append(
+                        { imported: imported, scheme: sc, curried: curried },
+                        Map.getOr([], dp, a)
+                      )
+                    )
+            }
+        | _ => a
+      },
+      acc
+    )
+
+// Compile one module to typed TS: the same resolve/check/infer prefix as
+// `compileOne`, then emit, then prepend the `import type` lines the emitted text
+// turned out to need.
+let compileOneTs = (ctx, loaded) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }) {
+  | Err(e) => Err(e)
+  | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
+      | Err(e) => Err(e)
+      | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, true, res.imports, res.nsImports, res.quals, None) {
+          | Err(e) => Err(e)
+          | Ok(r) => let body = emitTsModule(
+              loaded.stmts,
+              r.env,
+              r.types,
+              r.aliases,
+              res.keys,
+              [],
+              namespaceRuntime,
+              preludeJsDefs,
+              runtimeDeps,
+              ctx.runtimeImport
+            ) in
+            let lines = crossModuleTypeImports(
+              body,
+              loaded.path,
+              localTypeNames(loaded.stmts),
+              ctx.typeOwner
+            ) in
+            let ts = Array.length(lines) == 0
+              ? body
+              : "${Str.join("\n", lines)}\n\n${body}" in
+              Ok(
+                {
+                  exportsByPath: Map.set(
+                    loaded.path,
+                    exportedSchemes(loaded.stmts, r.env),
+                    ctx.exportsByPath
+                  ),
+                  regByPath: Map.set(
+                    loaded.path,
+                    exportedRegistry(loaded.stmts),
+                    ctx.regByPath
+                  ),
+                  keysByPath: Map.set(
+                    loaded.path,
+                    exportedCtorKeys(loaded.stmts),
+                    ctx.keysByPath
+                  ),
+                  qualsByPath: Map.set(
+                    loaded.path,
+                    qualScopeOf(loaded.stmts),
+                    ctx.qualsByPath
+                  ),
+                  typeOwner: ctx.typeOwner,
+                  runtimeImport: ctx.runtimeImport,
+                  externs: externBindingsInto(
+                    loaded.stmts,
+                    loaded.path,
+                    r.env,
+                    ctx.externs
+                  ),
+                  outputs: [...ctx.outputs, { path: loaded.path, js: ts }]
+                }
+              )
+        }
+    }
+}
+
+// A builtin ctor's field types never name a user alias, so the sidecars render
+// under an EMPTY alias scope. Built through `aliasesOf` rather than written as a
+// bare `#{}`, which generalizes and leaves the emitted TS a `Map<string,
+// unknown>` against `externModuleDts`'s pinned parameter (ADR 0044).
+let noAliases = aliasesOf([])
+
+// The sidecar declaration files, one per host module the graph externs from.
+// Appended after every module, so a host imported by several modules collects
+// all of their bindings into one file.
+let externOutputs = externs =>
+  Map.keys(externs)
+    |> map(dp =>
+      { path: dp, js: externModuleDts(Map.getOr([], dp, externs), noAliases) })
+
+let compileAllTs = (ctx, graph) => switch graph {
+  | [] => Ok(Array.concat(ctx.outputs, externOutputs(ctx.externs)))
+  | [m, ...rest] => switch ctx->compileOneTs(m) {
+      | Err(e) => Err(e)
+      | Ok(ctx1) => ctx1->compileAllTs(rest)
+    }
+}
+
+/// compileGraphTs : [Loaded] -> string -> Result [ModuleOutput] MErr
+/// Emit the whole ordered graph as typed TypeScript (ADR 0090). Outputs are the
+/// `.mochi` module paths (the writer swaps the extension) followed by the extern
+/// sidecars, which already carry their own `.d.ts` / `.d.mts` extension.
+export let compileGraphTs = (graph, runtimeImport) =>
+  compileAllTs(
+    {
+      exportsByPath: #{},
+      regByPath: #{},
+      keysByPath: #{},
+      qualsByPath: #{},
+      typeOwner: typeOwnerOf(graph),
+      runtimeImport: runtimeImport,
+      externs: #{},
+      outputs: []
+    },
+    graph
+  )
+
+/// buildModulesTs : string -> string -> Result [ModuleOutput] MErr
+export let buildModulesTs = (entry, runtimeImport) =>
+  let? graph = entry->loadGraph() in graph->compileGraphTs(runtimeImport)

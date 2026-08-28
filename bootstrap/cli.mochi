@@ -10,7 +10,7 @@
 //
 // Runs as emitted JS under Bun; the only npm deps are @onrails/{pattern,result}.
 import { compile, compileTs } from "./compile.mochi"
-import { buildModules } from "./module.mochi"
+import { buildModules, buildModulesTs } from "./module.mochi"
 
 type Diag = { message: string, start: number, end: number }
 
@@ -59,6 +59,33 @@ export let writeAll = outs =>
     }
   }
 
+// Typed-emit writer. A module output keeps its `.mochi` path (swapped to `.ts`
+// here); an extern sidecar (`host.d.mts`) is already a real declaration path and
+// is written as-is.
+let tsWritePath = path => Str.endsWith(".mochi", path) ? tsOutPath(path) : path
+
+export let writeAllTs = outs =>
+  loop (remaining = outs) {
+    switch remaining {
+      | [] => Ok("")
+      | [o, ...rest] => switch writeFile(tsWritePath(o.path), o.js) {
+          | Err(e) => Err(e)
+          | Ok(w) => do {
+              print("  wrote ${w}");
+              recur(rest)
+            }
+        }
+    }
+  }
+
+// Multi-file TYPED build (ADR 0090): the stage-1 graph. Same shape as
+// `buildMulti`, but through the TypeScript backend, so it also drops one
+// declaration sidecar per extern host module.
+export let buildMultiTs = (entry, runtimeImport) =>
+  buildModulesTs(entry, runtimeImport)
+    |> Result.mapErr(e => e.message)
+    |> Result.flatMap(writeAllTs)
+
 // Multi-file build: resolve + compile the graph, then write all outputs. The
 // driver's diagnostic (a graph/type/exhaustiveness error) has no single source
 // file to anchor a line:col against, so we surface its message (as src/cli.ts's
@@ -73,7 +100,7 @@ export let buildMulti = entry =>
 let runEntry = isCliEntry(())
   ? switch Array.get(0, argv) {
     | None => die(
-        "usage: mochic <file.mochi>  |  mochic ts <file.mochi>  |  mochic build <entry.mochi>"
+        "usage: mochic <file.mochi>  |  mochic ts <file.mochi>  |  mochic build [--emit=ts] <entry.mochi>"
       )
     | Some("ts") => switch Array.get(1, argv) {
         | None => die("usage: mochic ts <file.mochi>")
@@ -83,7 +110,14 @@ let runEntry = isCliEntry(())
           }
       }
     | Some("build") => switch Array.get(1, argv) {
-        | None => die("usage: mochic build <entry.mochi>")
+        | None => die("usage: mochic build [--emit=ts] <entry.mochi>")
+        | Some("--emit=ts") => switch Array.get(2, argv) {
+            | None => die("usage: mochic build --emit=ts <entry.mochi>")
+            | Some(entry) => switch buildMultiTs(entry, "@mochi/runtime") {
+                | Ok(_) => print("build ok")
+                | Err(msg) => die(msg)
+              }
+          }
         | Some(entry) => switch buildMulti(entry) {
             | Ok(_) => print("build ok")
             | Err(msg) => die(msg)
