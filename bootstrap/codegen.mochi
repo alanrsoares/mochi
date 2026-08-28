@@ -566,7 +566,12 @@ let genLoopTail = (ctx, e, params) => switch e {
       ? "if (${ctx->genExpr(cond)}) { ${ctx->genLoopTail(thenE, params)} } else { ${ctx->genLoopTail(elseE, params)} }"
       : "return ${ctx->genExpr(e)};"
   | Ast.ELetIn(name, _, value, body, _) => hasRecur(e)
-      ? "{ const ${name} = ${ctx->genExpr(value)}; ${ctx->genLoopTail(body, params)} }"
+      ?
+        // A let-in in loop-tail position stays a JS block rather than flattening
+        // into the loop body: consecutive `let _ = … in` effects and shadowing
+        // rebinds would otherwise redeclare the same `const`. It takes the same
+        // ADR 0035 annotation the IIFE form does.
+        "{ const ${suffixOr(name, hook1(ctx.annotateLetin, value))} = ${ctx->genExpr(value)}; ${ctx->genLoopTail(body, params)} }"
       : "return ${ctx->genExpr(e)};"
   | Ast.EDo(exprs, _) => hasRecur(e)
       ? "{ ${ctx->genDoLoopTail(exprs, params)} }"
@@ -592,7 +597,9 @@ let genDoLoopTail = (ctx, exprs, params) => switch exprs {
 let genLoopBlock = (ctx, params, body) =>
   let decls = Str.join(
     " ",
-    params |> map(p => "let ${p.name} = ${ctx->genExpr(p.init)};")
+    params
+      |> map(p =>
+        "let ${suffixOr(p.name, hook1(ctx.annotateLetin, p.init))} = ${ctx->genExpr(p.init)};")
   ) in
     "${decls} while (true) { ${ctx->genLoopTail(body, params)} }"
 

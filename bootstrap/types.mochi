@@ -212,20 +212,53 @@ export type TypeAt = { span: SpanAt, ty: Ty }
 /// `recorded` accumulates one entry per inferred Expr/Pattern node, newest
 /// first (prepend is O(1)); `inferProgramImports` reverses it once so later
 /// records win when two nodes share a span, matching src/infer.ts.
+///
+/// `letSpans` / `letUses` are the ADR 0035 side-channel: every `let`'s VALUE
+/// span, plus each type its body instantiated that binding at. src/infer.ts
+/// keys both on the `Scheme` OBJECT (a JS `Map` over identities); Mochi has no
+/// reference identity, so the key is the value span's `"start:end"` instead —
+/// unique per binding by construction, and the same string the TS backend's
+/// `spanKey` builds when it looks the annotation back up.
 export type St = {
   tv: Map<number, Ty>,
   rv: Map<number, Row>,
   next: number,
-  recorded: [TypeAt]
+  recorded: [TypeAt],
+  letSpans: Map<string, SpanAt>,
+  letUses: Map<string, [Ty]>
 }
 export type TypeErr = { message: string }
 
 export let mkSt : number -> St = start =>
-  { tv: #{}, rv: #{}, next: start, recorded: [] }
+  { tv: #{}, rv: #{}, next: start, recorded: [], letSpans: #{}, letUses: #{} }
 
 /// Prepend an inferred node type onto the threaded record log.
 export let recordAt = (span, t, st) =>
   { ...st, recorded: Array.prepend({ span, ty: t }, st.recorded) }
+
+let spanKeyOf = sp => "${show(sp.start)}:${show(sp.end)}"
+
+/// Register a `let`'s value span as an ADR 0035 annotation candidate. Resets its
+/// use list, mirroring src/infer.ts's `noteLet` (a re-noted scheme starts over).
+export let noteLet = (span, st) =>
+  let k = spanKeyOf(span) in
+    {
+      ...st,
+      letSpans: Map.set(k, span, st.letSpans),
+      letUses: Map.set(k, [], st.letUses)
+    }
+
+/// Record one instantiation of a noted `let`. A span that was never noted (a
+/// builtin, an import, a lambda param) is not a candidate and is dropped.
+export let noteUse = (span, t, st) =>
+  let k = spanKeyOf(span) in
+    switch Map.get(k, st.letUses) {
+      | None => st
+      | Some(uses) => {
+          ...st,
+          letUses: Map.set(k, Array.append(t, uses), st.letUses)
+        }
+    }
 export let fail = message => Err({ message })
 
 export let freshVar = st => (tVar(st.next), { ...st, next: st.next + 1 })

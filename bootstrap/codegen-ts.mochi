@@ -550,8 +550,9 @@ let genericLambdasFrom = (stmts, env, i, acc) => switch Array.get(i, stmts) {
 
 /// The TS-backend options: every hook resolved against this module's inference
 /// metadata. This is where `inferProgramTypes` and `codegenWith` actually meet.
-export let tsGenOpts = (stmts, env, types, aliases) =>
+export let tsGenOpts = (stmts, env, types, letParams, aliases) =>
   let typeAt = typeAtTable(types) in
+  let letParamAt = typeAtTable(letParams) in
   let genericLams = genericLambdasFrom(stmts, env, 0, #{}) in
   let typeOf = e => Map.get(spanKey(exprSpan(e)), typeAt) in
     {
@@ -565,10 +566,14 @@ export let tsGenOpts = (stmts, env, types, aliases) =>
                 | None => None
               }
             | _ =>
-              // A non-lambda polymorphic binding has nowhere to bind generics,
-              // so annotating it would be worse than tsc's own inference.
-              // (`letParams`, ADR 0035, would refine this — not yet ported.)
-              None
+              // A non-lambda binding has nowhere to bind generics, so a
+              // POLYMORPHIC one is better left to tsc. One used at a single
+              // concrete type is in `letParams` (ADR 0035): annotate it, so the
+              // empty collections inside its value get a element type instead
+              // of tsc's `never`/`unknown`.
+              Map.get(spanKey(exprSpan(value)), letParamAt)
+                |> Option.flatMap(t => emptyCollTs(t, #{}))
+                |> Option.map(ts => ": ${ts}")
           }),
       annotateCtor: Some((s, c) => switch s {
         | Ast.SType(name, params, _, _, _, _, _, _) => Some(
@@ -591,6 +596,13 @@ export let tsGenOpts = (stmts, env, types, aliases) =>
       }),
       annotateEmpty: Some(e =>
         typeOf(e) |> Option.flatMap(t => emptyCollTs(t, #{}))),
+      annotateLetin: // A `let x = v in …` (and a lowered loop param) whose value is
+      // polymorphic but used at ONE concrete type: annotate the IIFE param so
+      // tsc contextually types the empty collections inside `v` (ADR 0035).
+      // Keyed by VALUE span, which is what `infer`'s `letParams` records.
+      Some(value =>
+        Map.get(spanKey(exprSpan(value)), letParamAt)
+          |> Option.flatMap(t => emptyCollTs(t, #{}))),
       annotateCall: Some(e => typeOf(e) |> Option.flatMap(ctorCallTs)),
       guardBaseType: Some(e => typeOf(e) |> Option.flatMap(guardParamTs)),
       flattenPipe: true,
@@ -606,7 +618,7 @@ export let tsGenOpts = (stmts, env, types, aliases) =>
 /// single file passes `#{}` / `[]`, a module in a graph passes its deps' ctor
 /// field keys (so destructuring an imported ctor emits the right names) and the
 /// `import type { … }` lines its driver computed from the emitted text.
-export let emitTsModule = (stmts, env, types, aliases, imported, importLines, ns, jsDefs, runtimeDeps, runtimeImport) =>
+export let emitTsModule = (stmts, env, types, letParams, aliases, imported, importLines, ns, jsDefs, runtimeDeps, runtimeImport) =>
   let declared = declaredTypeNames(stmts, 0, Set.fromArray([])) in
   let wanted = referencedCons(stmts, env, 0, Set.fromArray([])) in
   let typeHeader = Array.concat(
@@ -620,7 +632,7 @@ export let emitTsModule = (stmts, env, types, aliases, imported, importLines, ns
     ns,
     jsDefs,
     runtimeDeps,
-    tsGenOpts(stmts, env, types, aliases)
+    tsGenOpts(stmts, env, types, letParams, aliases)
   ) in
   // `_tuple` is a TS-emit device with no AST reference for the dep scan to
   // find (ADR 0036), so pull it in from the emitted text.

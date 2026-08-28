@@ -320,6 +320,7 @@ let emitTs = src =>
             stmts,
             r.env,
             r.types,
+            r.letParams,
             r.aliases,
             noImportedKeys,
             [],

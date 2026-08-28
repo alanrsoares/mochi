@@ -54,6 +54,7 @@ export let compileTs = (src, runtimeImport) =>
       stmts->emitTsModule(
         r.env,
         r.types,
+        r.letParams,
         r.aliases,
         noImportedKeys,
         [],

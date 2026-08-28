@@ -44,6 +44,8 @@ import {
   showType,
   mkSt,
   recordAt,
+  noteLet,
+  noteUse,
   freshVar,
   freshRowVar,
   resolve,
@@ -87,7 +89,8 @@ import {
   typeExprToType,
   typeExprListToType,
   ctorScheme,
-  isUpperStart
+  isUpperStart,
+  freeInType
 } from "./schemes.mochi"
 import { stronglyConnected } from "./scc.mochi"
 
@@ -255,32 +258,53 @@ let ctxWithEnv = (ctx, env) =>
     ns: ctx.ns,
     aliasMap: ctx.aliasMap,
     plugins: ctx.plugins,
-    loopStack: ctx.loopStack
+    loopStack: ctx.loopStack,
+    letOwner: ctx.letOwner
   }
 
-// Enter a loop body: params bound in env, frame pushed innermost-FIRST
-// (`recur` reads the head — nearest enclosing loop, ADR 0056).
-let ctxWithLoop = (ctx, env, frame) =>
+// Enter a scope where `letOwner` also carries the bindings a group / a `let …
+// in` just introduced (ADR 0035): name -> the value span its scheme came from.
+// This is the identity src/infer.ts gets for free from its `Map<Scheme, …>` —
+// scoped exactly like `env`, so a shadowing rebind takes over the annotation.
+let ctxWithLets = (ctx, env, letOwner) =>
   {
     env,
     open: ctx.open,
     ns: ctx.ns,
     aliasMap: ctx.aliasMap,
     plugins: ctx.plugins,
-    loopStack: Array.prepend(frame, ctx.loopStack)
+    loopStack: ctx.loopStack,
+    letOwner
+  }
+
+// Enter a loop body: params bound in env, frame pushed innermost-FIRST
+// (`recur` reads the head — nearest enclosing loop, ADR 0056).
+let ctxWithLoop = (ctx, env, frame, letOwner) =>
+  {
+    env,
+    open: ctx.open,
+    ns: ctx.ns,
+    aliasMap: ctx.aliasMap,
+    plugins: ctx.plugins,
+    loopStack: Array.prepend(frame, ctx.loopStack),
+    letOwner
   }
 
 // loop params: inits infer in the OUTER ctx; each binds monomorphic —
-// `recur` rebinds them, so generalizing would let iterations disagree.
-let inferLoopParamsFrom = (ctx, params, i, envAcc, frameAcc, st) => switch Array.get(i, params) {
-  | None => Ok((frameAcc, envAcc, st))
+// `recur` rebinds them, so generalizing would let iterations disagree. Each
+// init span is an ADR 0035 candidate: the lowered `let name = init;` declaration
+// takes the same annotation a `let … in` IIFE param does.
+let inferLoopParamsFrom = (ctx, params, i, envAcc, frameAcc, ownerAcc, st) => switch Array.get(i, params) {
+  | None => Ok((frameAcc, envAcc, ownerAcc, st))
   | Some(p) => let? (t, st1) = ctx->inferExpr(p.init, st) in
+    let sp = exprSpan(p.init) in
       ctx->inferLoopParamsFrom(
         params,
         i + 1,
         Map.set(p.name, mono(t), envAcc),
         Array.append(t, frameAcc),
-        st1
+        Map.set(p.name, sp, ownerAcc),
+        noteLet(sp, st1)
       )
 }
 
@@ -544,7 +568,14 @@ let inferExprRaw = (ctx, e, st) => switch e {
   | Ast.EBool(_, _) => Ok((tBool, st))
   | Ast.EStr(value, _) => Ok((tLit(value), st))
   | Ast.ERef(name, sp) => switch Map.get(name, ctx.env) {
-      | Some(sc) => let (t, st1) = instantiate(sc, st) in Ok((t, st1))
+      | Some(sc) => let (t, st1) = instantiate(sc, st) in
+          Ok((
+            t,
+            switch Map.get(name, ctx.letOwner) {
+              | Some(vsp) => noteUse(vsp, t, st1)
+              | None => st1
+            }
+          ))
       | None => ctx.open
           ? let (t, st1) = freshVar(st) in Ok((t, st1))
           : Err(typeErr("unbound variable '${name}'", sp))
@@ -572,8 +603,13 @@ let inferExprRaw = (ctx, e, st) => switch e {
           localCtx->inferExpr(tail, localSt)
       | _ => let? (valT, st1) = ctx->inferExpr(value, st) in
         let sc = generalize(ctx.env, valT, st1, true) in
-        let $ctx = ctxWithEnv(ctx, Map.set(name, sc, ctx.env)) in
-          $ctx->inferExpr(body, st1)
+        let vsp = exprSpan(value) in
+        let $ctx = ctxWithLets(
+          ctx,
+          Map.set(name, sc, ctx.env),
+          Map.set(name, vsp, ctx.letOwner)
+        ) in
+          $ctx->inferExpr(body, noteLet(vsp, st1))
     }
   | Ast.ELetBind(param, paramSpan, monad, value, body, _) => ctx->inferLetBind(
       e,
@@ -641,14 +677,15 @@ let inferExprRaw = (ctx, e, st) => switch e {
   | Ast.ESet(elements, _) => ctx->inferSeqSlots("Set", elements, st)
   | Ast.EMap(entries, _) => ctx->inferMapExpr(entries, st)
   | Ast.EMatch(scrutinee, arms, _) => ctx->inferMatch(scrutinee, arms, st)
-  | Ast.ELoop(params, body, _) => let? (frame, bodyEnv, st1) = ctx->inferLoopParamsFrom(
+  | Ast.ELoop(params, body, _) => let? (frame, bodyEnv, bodyOwner, st1) = ctx->inferLoopParamsFrom(
       params,
       0,
       ctx.env,
       [],
+      ctx.letOwner,
       st
     ) in
-      ctxWithLoop(ctx, bodyEnv, frame)->inferExpr(body, st1)
+      ctxWithLoop(ctx, bodyEnv, frame, bodyOwner)->inferExpr(body, st1)
   | Ast.ERecur(args, sp) => ctx->inferRecur(args, sp, st)
   | Ast.EInterp(parts, _) => let? st1 = ctx->inferInterpParts(parts, st) in
       Ok((tString, st1))
@@ -1347,6 +1384,21 @@ let generalizeGroupFrom = (group, bodyTypes, env, st) => switch group {
     }
 }
 
+// Register a generalized group's bindings as ADR 0035 candidates: name -> value
+// span in `letOwner` (so a later group's / the tail's references note their
+// instantiation), plus the span itself in `st`. `$`-prefixed synthetic
+// destructure temps are skipped — they are excluded from annotation anyway.
+let noteGroupLets = (group, letOwner, st) => switch group {
+  | [] => (letOwner, st)
+  | [s, ...rest] => switch s {
+      | Ast.SLet(name, _, _, value, _, _, _) when !Str.startsWith("$", name) => let sp = exprSpan(
+          value
+        ) in
+          noteGroupLets(rest, Map.set(name, sp, letOwner), noteLet(sp, st))
+      | _ => noteGroupLets(rest, letOwner, st)
+    }
+}
+
 // `let`s, grouped into mutually-recursive components (SCCs of the reference
 // graph) and inferred group-by-group in dependency-first order.
 let processGroupsFrom = (ctx, sccs, lets, st) => switch sccs {
@@ -1361,7 +1413,12 @@ let processGroupsFrom = (ctx, sccs, lets, st) => switch sccs {
       dropGroupFrom(group, preEnv),
       st2
     ) in
-      ctxWithEnv(ctx, finalEnv)->processGroupsFrom(restSccs, lets, st2)
+    let (finalOwner, st3) = noteGroupLets(group, ctx.letOwner, st2) in
+      ctxWithLets(
+        ctx,
+        finalEnv,
+        finalOwner
+      )->processGroupsFrom(restSccs, lets, st3)
 }
 
 // Top-level expression statements after every let is generalized (ADR 0087).
@@ -1438,9 +1495,45 @@ let qualAliasSeed = (stmts, quals, acc) => switch stmts {
 let zonkRecorded = (recorded, st) =>
   Array.reverse(recorded) |> map(r => { span: r.span, ty: zonk(r.ty, st) })
 
+/// A type with no free type OR row vars — the only kind worth annotating from:
+/// a generic position has nowhere to bind letters at a `const` / IIFE param.
+let isConcrete = t =>
+  let f = freeInType(t) in Set.size(f.tv) == 0 && Set.size(f.rv) == 0
+
+// Every use agrees, concretely, with the first one. Hand-rolled rather than an
+// `Array.filter` count so a disagreeing use short-circuits the rest.
+let allSameConcreteFrom = (shown, uses, i) => switch Array.get(i, uses) {
+  | None => true
+  | Some(t) => isConcrete(t) && showType(t) == shown
+      ? allSameConcreteFrom(shown, uses, i + 1)
+      : false
+}
+
+let allSameConcrete = (shown, uses) => allSameConcreteFrom(shown, uses, 0)
+
+/// Resolve `letParams` for TS emit (ADR 0035): a noted `let` is annotated only
+/// when its body instantiated it at ONE fully-concrete type. Uses zonk against
+/// the FINAL state, like `zonkRecorded` — a use recorded mid-inference is still
+/// full of unsolved vars.
+let resolveLetParamsFrom = (keys, st) => switch keys {
+  | [] => []
+  | [k, ...rest] => let tail = resolveLetParamsFrom(rest, st) in
+    let uses = Map.getOr([], k, st.letUses) |> map(t => zonk(t, st)) in
+      switch Array.get(0, uses) {
+        | None => tail
+        | Some(first) => allSameConcrete(showType(first), uses)
+            ? switch Map.get(k, st.letSpans) {
+              | Some(span) => Array.prepend({ span, ty: first }, tail)
+              | None => tail
+            }
+            : tail
+      }
+}
+
+let resolveLetParams = st => resolveLetParamsFrom(Map.keys(st.letSpans), st)
+
 /// Full inference result — the metadata the TS backend needs on top of `env`
-/// (ADR 0090). `letParams` (ADR 0035) is not yet ported; it needs
-/// scheme-keyed maps, which Mochi's `Map` cannot express directly.
+/// (ADR 0090), including `letParams` (ADR 0035).
 let runInferImports = (stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt) =>
   let plugins = resolvePluginsDefault(pluginsOpt) in
   let st0 = mkSt(1000) in
@@ -1459,13 +1552,14 @@ let runInferImports = (stmts, builtins, namespaces, openMode, imports, nsImports
   let lets = letsOfFrom(stmts) in
   let idxOf = idxOfMap(lets) in
   let sccs = stronglyConnected(adjOf(lets, idxOf)) in
-    switch processGroupsFrom({ env: env4, open: openMode, ns: ns0, aliasMap, plugins, loopStack: [] }, sccs, lets, st3) {
+    switch processGroupsFrom({ env: env4, open: openMode, ns: ns0, aliasMap, plugins, loopStack: [], letOwner: #{} }, sccs, lets, st3) {
       | Ok((finalCtx, st4)) => switch finalCtx->inferExprStmtsFrom(stmts, st4) {
           | Ok(st5) => Ok(
               {
                 env: finalCtx.env,
                 types: zonkRecorded(st5.recorded, st5),
-                aliases: aliasMap
+                aliases: aliasMap,
+                letParams: resolveLetParams(st5)
               }
             )
           | Err(e) => Err(e)
