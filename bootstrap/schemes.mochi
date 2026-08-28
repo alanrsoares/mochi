@@ -33,6 +33,12 @@ import { primTypeNames } from "./ctors.mochi"
 
 // --- polymorphic type schemes ---
 
+/// A generalized binding type: the quantified type vars, the quantified ROW
+/// vars, and the body. Declared purely so the TS backend has a NAME to fold
+/// this row back to (ADR 0092) — a record alias is structural and nothing
+/// annotates with it, so this changes no inference.
+export type Scheme = { vars: [number], rvars: [number], ty: Ty }
+
 export let mono = t => { vars: [], rvars: [], ty: t }
 
 export let tNumber = tPrim("number")

@@ -1,6 +1,7 @@
 import type { AliasField, Stmt, TypeExpr } from "./ast";
 import type { Ty } from "./types";
 import type { PErr } from "./parser";
+import type { Scheme } from "./schemes";
 import type { QualAliasInfo } from "./infer";
 
 export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
@@ -604,7 +605,7 @@ const resolveImportsFrom: <A, B, C, D>(
 );
 const compileOne: <A, B>(
   ctx: {
-    exportsByPath: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>;
+    exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
     qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
@@ -613,7 +614,7 @@ const compileOne: <A, B>(
   loaded: { stmts: Stmt[]; path: string } & B,
 ) => Result<
   {
-    exportsByPath: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>;
+    exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
     qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
@@ -624,7 +625,7 @@ const compileOne: <A, B>(
   2,
   <A, B>(
     ctx: {
-      exportsByPath: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>;
+      exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
       qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
@@ -634,8 +635,8 @@ const compileOne: <A, B>(
   ) =>
     match(
       resolveImportsFrom(ctx, loaded.stmts, 0, loaded.path, {
-        imports: new Map<string, { vars: number[]; rvars: number[]; ty: Ty }>(),
-        nsImports: new Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>(),
+        imports: new Map<string, Scheme>(),
+        nsImports: new Map<string, Map<string, Scheme>>(),
         reg: emptyReg,
         keys: new Map<string, string[]>(),
         quals: new Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>(),
@@ -646,7 +647,7 @@ const compileOne: <A, B>(
         ({ error: e }) =>
           Err(e) as Result<
             {
-              exportsByPath: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>;
+              exportsByPath: Map<string, Map<string, Scheme>>;
               regByPath: Map<string, Registry>;
               keysByPath: Map<string, Map<string, string[]>>;
               qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
@@ -662,10 +663,7 @@ const compileOne: <A, B>(
             ({ error: e }) =>
               Err(e) as Result<
                 {
-                  exportsByPath: Map<
-                    string,
-                    Map<string, { vars: number[]; rvars: number[]; ty: Ty }>
-                  >;
+                  exportsByPath: Map<string, Map<string, Scheme>>;
                   regByPath: Map<string, Registry>;
                   keysByPath: Map<string, Map<string, string[]>>;
                   qualsByPath: Map<
@@ -695,10 +693,7 @@ const compileOne: <A, B>(
                 ({ error: e }) =>
                   Err(e) as Result<
                     {
-                      exportsByPath: Map<
-                        string,
-                        Map<string, { vars: number[]; rvars: number[]; ty: Ty }>
-                      >;
+                      exportsByPath: Map<string, Map<string, Scheme>>;
                       regByPath: Map<string, Registry>;
                       keysByPath: Map<string, Map<string, string[]>>;
                       qualsByPath: Map<
@@ -728,10 +723,7 @@ const compileOne: <A, B>(
                     outputs: [...ctx.outputs, { path: loaded.path, js: js }],
                   }) as Result<
                     {
-                      exportsByPath: Map<
-                        string,
-                        Map<string, { vars: number[]; rvars: number[]; ty: Ty }>
-                      >;
+                      exportsByPath: Map<string, Map<string, Scheme>>;
                       regByPath: Map<string, Registry>;
                       keysByPath: Map<string, Map<string, string[]>>;
                       qualsByPath: Map<
@@ -761,7 +753,7 @@ const compileOne: <A, B>(
 const compileAll: <A>(
   ctx: {
     outputs: { path: string; js: string }[];
-    exportsByPath: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>;
+    exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
     qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
@@ -772,7 +764,7 @@ const compileAll: <A>(
   <A>(
     ctx: {
       outputs: { path: string; js: string }[];
-      exportsByPath: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>;
+      exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
       qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
@@ -812,7 +804,7 @@ export const compileGraph: <A>(
 ) =>
   compileAll(
     {
-      exportsByPath: new Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>(),
+      exportsByPath: new Map<string, Map<string, Scheme>>(),
       regByPath: new Map<string, Registry>(),
       keysByPath: new Map<string, Map<string, string[]>>(),
       qualsByPath: new Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>(),
@@ -1065,31 +1057,25 @@ const externBindingsInto: <A>(
 );
 const compileOneTs: <A, B>(
   ctx: {
-    exportsByPath: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>;
+    exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
     qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
     runtimeImport: string;
     typeOwner: Map<string, string>;
     outputs: { path: string; js: string }[];
-    externs: Map<
-      string,
-      { imported: string; scheme: { vars: number[]; rvars: number[]; ty: Ty }; curried: boolean }[]
-    >;
+    externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
   } & A,
   loaded: { stmts: Stmt[]; path: string } & B,
 ) => Result<
   {
-    exportsByPath: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>;
+    exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
     qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
     typeOwner: Map<string, string>;
     runtimeImport: string;
-    externs: Map<
-      string,
-      { imported: string; scheme: { vars: number[]; rvars: number[]; ty: Ty }; curried: boolean }[]
-    >;
+    externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
     outputs: { path: string; js: string }[];
   },
   MErr
@@ -1097,28 +1083,21 @@ const compileOneTs: <A, B>(
   2,
   <A, B>(
     ctx: {
-      exportsByPath: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>;
+      exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
       qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
       runtimeImport: string;
       typeOwner: Map<string, string>;
       outputs: { path: string; js: string }[];
-      externs: Map<
-        string,
-        {
-          imported: string;
-          scheme: { vars: number[]; rvars: number[]; ty: Ty };
-          curried: boolean;
-        }[]
-      >;
+      externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
     } & A,
     loaded: { stmts: Stmt[]; path: string } & B,
   ) =>
     match(
       resolveImportsFrom(ctx, loaded.stmts, 0, loaded.path, {
-        imports: new Map<string, { vars: number[]; rvars: number[]; ty: Ty }>(),
-        nsImports: new Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>(),
+        imports: new Map<string, Scheme>(),
+        nsImports: new Map<string, Map<string, Scheme>>(),
         reg: emptyReg,
         keys: new Map<string, string[]>(),
         quals: new Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>(),
@@ -1129,20 +1108,13 @@ const compileOneTs: <A, B>(
         ({ error: e }) =>
           Err(e) as Result<
             {
-              exportsByPath: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>;
+              exportsByPath: Map<string, Map<string, Scheme>>;
               regByPath: Map<string, Registry>;
               keysByPath: Map<string, Map<string, string[]>>;
               qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
               typeOwner: Map<string, string>;
               runtimeImport: string;
-              externs: Map<
-                string,
-                {
-                  imported: string;
-                  scheme: { vars: number[]; rvars: number[]; ty: Ty };
-                  curried: boolean;
-                }[]
-              >;
+              externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
               outputs: { path: string; js: string }[];
             },
             MErr
@@ -1155,10 +1127,7 @@ const compileOneTs: <A, B>(
             ({ error: e }) =>
               Err(e) as Result<
                 {
-                  exportsByPath: Map<
-                    string,
-                    Map<string, { vars: number[]; rvars: number[]; ty: Ty }>
-                  >;
+                  exportsByPath: Map<string, Map<string, Scheme>>;
                   regByPath: Map<string, Registry>;
                   keysByPath: Map<string, Map<string, string[]>>;
                   qualsByPath: Map<
@@ -1167,14 +1136,7 @@ const compileOneTs: <A, B>(
                   >;
                   typeOwner: Map<string, string>;
                   runtimeImport: string;
-                  externs: Map<
-                    string,
-                    {
-                      imported: string;
-                      scheme: { vars: number[]; rvars: number[]; ty: Ty };
-                      curried: boolean;
-                    }[]
-                  >;
+                  externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
                   outputs: { path: string; js: string }[];
                 },
                 MErr
@@ -1198,10 +1160,7 @@ const compileOneTs: <A, B>(
                 ({ error: e }) =>
                   Err(e) as Result<
                     {
-                      exportsByPath: Map<
-                        string,
-                        Map<string, { vars: number[]; rvars: number[]; ty: Ty }>
-                      >;
+                      exportsByPath: Map<string, Map<string, Scheme>>;
                       regByPath: Map<string, Registry>;
                       keysByPath: Map<string, Map<string, string[]>>;
                       qualsByPath: Map<
@@ -1212,11 +1171,7 @@ const compileOneTs: <A, B>(
                       runtimeImport: string;
                       externs: Map<
                         string,
-                        {
-                          imported: string;
-                          scheme: { vars: number[]; rvars: number[]; ty: Ty };
-                          curried: boolean;
-                        }[]
+                        { imported: string; scheme: Scheme; curried: boolean }[]
                       >;
                       outputs: { path: string; js: string }[];
                     },
@@ -1254,10 +1209,7 @@ const compileOneTs: <A, B>(
                         outputs: [...ctx.outputs, { path: loaded.path, js: ts }],
                       }) as Result<
                         {
-                          exportsByPath: Map<
-                            string,
-                            Map<string, { vars: number[]; rvars: number[]; ty: Ty }>
-                          >;
+                          exportsByPath: Map<string, Map<string, Scheme>>;
                           regByPath: Map<string, Registry>;
                           keysByPath: Map<string, Map<string, string[]>>;
                           qualsByPath: Map<
@@ -1268,11 +1220,7 @@ const compileOneTs: <A, B>(
                           runtimeImport: string;
                           externs: Map<
                             string,
-                            {
-                              imported: string;
-                              scheme: { vars: number[]; rvars: number[]; ty: Ty };
-                              curried: boolean;
-                            }[]
+                            { imported: string; scheme: Scheme; curried: boolean }[]
                           >;
                           outputs: { path: string; js: string }[];
                         },
@@ -1335,11 +1283,8 @@ const externOutputs: <A, B, C>(
 const compileAllTs: <A>(
   ctx: {
     outputs: { path: string; js: string }[];
-    externs: Map<
-      string,
-      { scheme: { ty: Ty; vars: number[]; rvars: number[] }; imported: string; curried: boolean }[]
-    >;
-    exportsByPath: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>;
+    externs: Map<string, { scheme: Scheme; imported: string; curried: boolean }[]>;
+    exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
     qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
@@ -1352,15 +1297,8 @@ const compileAllTs: <A>(
   <A>(
     ctx: {
       outputs: { path: string; js: string }[];
-      externs: Map<
-        string,
-        {
-          scheme: { ty: Ty; vars: number[]; rvars: number[] };
-          imported: string;
-          curried: boolean;
-        }[]
-      >;
-      exportsByPath: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>;
+      externs: Map<string, { scheme: Scheme; imported: string; curried: boolean }[]>;
+      exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
       qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
@@ -1407,20 +1345,13 @@ export const compileGraphTs: <A>(
   <A>(graph: ({ stmts: Stmt[]; path: string } & A)[], runtimeImport: string) =>
     compileAllTs(
       {
-        exportsByPath: new Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>(),
+        exportsByPath: new Map<string, Map<string, Scheme>>(),
         regByPath: new Map<string, Registry>(),
         keysByPath: new Map<string, Map<string, string[]>>(),
         qualsByPath: new Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>(),
         typeOwner: typeOwnerOf(graph),
         runtimeImport: runtimeImport,
-        externs: new Map<
-          string,
-          {
-            scheme: { ty: Ty; vars: number[]; rvars: number[] };
-            imported: string;
-            curried: boolean;
-          }[]
-        >(),
+        externs: new Map<string, { scheme: Scheme; imported: string; curried: boolean }[]>(),
         outputs: [] as { path: string; js: string }[],
       },
       graph,

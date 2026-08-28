@@ -2,6 +2,7 @@ import type { AliasField, TypeExpr } from "./ast";
 import type { Row, Ty } from "./types";
 
 export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
+export type Scheme = { vars: number[]; rvars: number[]; ty: Ty };
 export type VarSets = { tv: Set<number>; rv: Set<number> };
 export type AliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
 
@@ -57,6 +58,7 @@ import {
   resolve,
 } from "./types";
 import { primTypeNames } from "./ctors";
+
 export const mono: <A, B, C>(t: A) => { vars: B[]; rvars: C[]; ty: A } = <A, B, C>(t: A) => ({
   vars: [] as B[],
   rvars: [] as C[],
@@ -181,7 +183,7 @@ export const generalize: <A, B, C>(
   t: Ty,
   st: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
   widen: boolean,
-) => { vars: number[]; rvars: number[]; ty: Ty } = _curry(
+) => Scheme = _curry(
   4,
   <A, B, C>(
     env: Map<A, { ty: Ty; rvars: number[]; vars: number[] } & B>,
@@ -754,7 +756,7 @@ export const ctorScheme: <A, B, C, D, E>(
       fields: ({ name: string; fieldType: TypeExpr } & D)[];
     } & E
   >,
-) => [{ vars: number[]; rvars: number[]; ty: Ty }, { next: number } & C] = _curry(
+) => [Scheme, { next: number } & C] = _curry(
   5,
   <A, B, C, D, E>(
     typeName: string,

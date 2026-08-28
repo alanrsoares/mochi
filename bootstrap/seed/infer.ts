@@ -16,7 +16,7 @@ import type {
   TypeExpr,
 } from "./ast";
 import type { Row, St, Ty, TypeAt } from "./types";
-import type { VarSets } from "./schemes";
+import type { Scheme, VarSets } from "./schemes";
 
 export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
 export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
@@ -532,7 +532,7 @@ const ctxWithLoop: <A, B, C, D, E, F, G, H>(
 );
 const inferLoopParamsFrom: <A, B, C, D, E, F, G, H, I>(
   ctx: {
-    env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+    env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
     aliasMap: Map<
@@ -615,7 +615,7 @@ const inferLoopParamsFrom: <A, B, C, D, E, F, G, H, I>(
   },
   params: LoopParam[],
   i: number,
-  envAcc: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>,
+  envAcc: Map<string, Scheme>,
   frameAcc: Ty[],
   ownerAcc: Map<string, Span>,
   st: {
@@ -629,7 +629,7 @@ const inferLoopParamsFrom: <A, B, C, D, E, F, G, H, I>(
 ) => Result<
   [
     Ty[],
-    Map<string, { vars: number[]; rvars: number[]; ty: Ty }>,
+    Map<string, Scheme>,
     Map<string, Span>,
     {
       letUses: Map<string, Ty[]>;
@@ -645,7 +645,7 @@ const inferLoopParamsFrom: <A, B, C, D, E, F, G, H, I>(
   7,
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
       aliasMap: Map<
@@ -728,7 +728,7 @@ const inferLoopParamsFrom: <A, B, C, D, E, F, G, H, I>(
     },
     params: LoopParam[],
     i: number,
-    envAcc: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>,
+    envAcc: Map<string, Scheme>,
     frameAcc: Ty[],
     ownerAcc: Map<string, Span>,
     st: {
@@ -762,7 +762,7 @@ const inferLoopParamsFrom: <A, B, C, D, E, F, G, H, I>(
 );
 const unifyRecurArgsFrom: <A, B, C, D, E, F, G, H, I>(
   ctx: {
-    env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+    env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
     aliasMap: Map<
@@ -868,7 +868,7 @@ const unifyRecurArgsFrom: <A, B, C, D, E, F, G, H, I>(
   5,
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
       aliasMap: Map<
@@ -983,7 +983,7 @@ const unifyRecurArgsFrom: <A, B, C, D, E, F, G, H, I>(
 const inferRecur: <A, B, C, D, E, F, G, H, I>(
   ctx: {
     loopStack: Ty[][];
-    env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+    env: Map<string, Scheme>;
     letOwner: Map<string, Span>;
     open: boolean;
     aliasMap: Map<
@@ -1091,7 +1091,7 @@ const inferRecur: <A, B, C, D, E, F, G, H, I>(
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
       loopStack: Ty[][];
-      env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+      env: Map<string, Scheme>;
       letOwner: Map<string, Span>;
       open: boolean;
       aliasMap: Map<
@@ -1218,7 +1218,7 @@ const inferRecur: <A, B, C, D, E, F, G, H, I>(
 );
 const inferCallArgs: <A, B, C, D, E, F, G, H, I>(
   ctx: {
-    env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+    env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
     aliasMap: Map<
@@ -1327,7 +1327,7 @@ const inferCallArgs: <A, B, C, D, E, F, G, H, I>(
   5,
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
       aliasMap: Map<
@@ -1460,7 +1460,7 @@ const inferCallArgs: <A, B, C, D, E, F, G, H, I>(
 );
 const inferNormalCall: <A, B, C, D, E, F, G, H, I>(
   ctx: {
-    env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+    env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
     aliasMap: Map<
@@ -1568,7 +1568,7 @@ const inferNormalCall: <A, B, C, D, E, F, G, H, I>(
   4,
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
       aliasMap: Map<
@@ -1691,7 +1691,7 @@ const inferNormalCall: <A, B, C, D, E, F, G, H, I>(
 );
 const inferTernary: <A, B, C, D, E, F, G, H, I>(
   ctx: {
-    env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+    env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
     aliasMap: Map<
@@ -1800,7 +1800,7 @@ const inferTernary: <A, B, C, D, E, F, G, H, I>(
   5,
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
       aliasMap: Map<
@@ -1995,7 +1995,7 @@ const inferBindBody: <A, B, C, D, E, F, G, H, I>(
     >;
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
     open: boolean;
-    env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+    env: Map<string, Scheme>;
   },
   param: LamParam,
   paramSpan: Span,
@@ -2106,7 +2106,7 @@ const inferBindBody: <A, B, C, D, E, F, G, H, I>(
       >;
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
       open: boolean;
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
     },
     param: LamParam,
     paramSpan: Span,
@@ -2124,7 +2124,7 @@ const inferBindBody: <A, B, C, D, E, F, G, H, I>(
   ) =>
     (([paramT, bodyEnv, st1]: [
       Ty,
-      Map<string, { vars: number[]; rvars: number[]; ty: Ty }>,
+      Map<string, Scheme>,
       {
         tv: Map<number, Ty>;
         rv: Map<number, Row>;
@@ -2162,7 +2162,7 @@ const inferBindBody: <A, B, C, D, E, F, G, H, I>(
 );
 const inferTwoSlotBind: <A, B, C, D, E, F, G, H, I>(
   ctx: {
-    env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+    env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
     aliasMap: Map<
@@ -2274,7 +2274,7 @@ const inferTwoSlotBind: <A, B, C, D, E, F, G, H, I>(
   8,
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
       aliasMap: Map<
@@ -2408,7 +2408,7 @@ const inferTwoSlotBind: <A, B, C, D, E, F, G, H, I>(
 );
 const inferQuestionBind: <A, B, C, D, E, F, G, H, I>(
   ctx: {
-    env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+    env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
     aliasMap: Map<
@@ -2520,7 +2520,7 @@ const inferQuestionBind: <A, B, C, D, E, F, G, H, I>(
   8,
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
       aliasMap: Map<
@@ -2672,7 +2672,7 @@ const inferQuestionBind: <A, B, C, D, E, F, G, H, I>(
 );
 const inferLetBind: <A, B, C, D, E, F, G, H, I>(
   ctx: {
-    env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+    env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
     aliasMap: Map<
@@ -2784,7 +2784,7 @@ const inferLetBind: <A, B, C, D, E, F, G, H, I>(
   8,
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
       aliasMap: Map<
@@ -2890,7 +2890,7 @@ const inferLetBind: <A, B, C, D, E, F, G, H, I>(
 );
 const inferRecordRow: <A, B, C, D, E, F, G, H, I>(
   ctx: {
-    env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+    env: Map<string, Scheme>;
     letOwner: Map<string, Span>;
     open: boolean;
     aliasMap: Map<
@@ -2997,7 +2997,7 @@ const inferRecordRow: <A, B, C, D, E, F, G, H, I>(
   3,
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
-      env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+      env: Map<string, Scheme>;
       letOwner: Map<string, Span>;
       open: boolean;
       aliasMap: Map<
@@ -3128,7 +3128,7 @@ const rWithTail: { (row: Row): (tail: Row) => Row; (row: Row, tail: Row): Row } 
 );
 const inferFieldAccess: <A, B, C, D, E, F, G, H, I>(
   ctx: {
-    env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+    env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
     aliasMap: Map<
@@ -3237,7 +3237,7 @@ const inferFieldAccess: <A, B, C, D, E, F, G, H, I>(
   5,
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
       aliasMap: Map<
@@ -3394,7 +3394,7 @@ const inferNsField: <A, B, C, D, E, F>(
 );
 const inferInterpParts: <A, B, C, D, E, F, G, H, I>(
   ctx: {
-    env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+    env: Map<string, Scheme>;
     letOwner: Map<string, Span>;
     open: boolean;
     aliasMap: Map<
@@ -3498,7 +3498,7 @@ const inferInterpParts: <A, B, C, D, E, F, G, H, I>(
   3,
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
-      env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+      env: Map<string, Scheme>;
       letOwner: Map<string, Span>;
       open: boolean;
       aliasMap: Map<
@@ -3625,7 +3625,7 @@ const inferInterpParts: <A, B, C, D, E, F, G, H, I>(
 );
 const inferTupleElems: <A, B, C, D, E, F, G, H, I>(
   ctx: {
-    env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+    env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
     aliasMap: Map<
@@ -3732,7 +3732,7 @@ const inferTupleElems: <A, B, C, D, E, F, G, H, I>(
   3,
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
       aliasMap: Map<
@@ -3857,7 +3857,7 @@ const seqElemExpr: (el: SeqElem) => Expr = (el: SeqElem) =>
     .exhaustive();
 const inferSeqSlotsElems: <A, B, C, D, E, F, G, H, I>(
   ctx: {
-    env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+    env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
     aliasMap: Map<
@@ -3963,7 +3963,7 @@ const inferSeqSlotsElems: <A, B, C, D, E, F, G, H, I>(
   5,
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
       aliasMap: Map<
@@ -4092,7 +4092,7 @@ const inferSeqSlotsElems: <A, B, C, D, E, F, G, H, I>(
 );
 const inferSeqSlots: <A, B, C, D, E, F, G, H, I>(
   ctx: {
-    env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+    env: Map<string, Scheme>;
     letOwner: Map<string, Span>;
     open: boolean;
     aliasMap: Map<
@@ -4200,7 +4200,7 @@ const inferSeqSlots: <A, B, C, D, E, F, G, H, I>(
   4,
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
-      env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+      env: Map<string, Scheme>;
       letOwner: Map<string, Span>;
       open: boolean;
       aliasMap: Map<
@@ -4310,7 +4310,7 @@ const inferSeqSlots: <A, B, C, D, E, F, G, H, I>(
 );
 const inferMapEntries: <A, B, C, D, E, F, G, H, I>(
   ctx: {
-    env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+    env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
     aliasMap: Map<
@@ -4416,7 +4416,7 @@ const inferMapEntries: <A, B, C, D, E, F, G, H, I>(
   5,
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
       aliasMap: Map<
@@ -4546,7 +4546,7 @@ const inferMapEntries: <A, B, C, D, E, F, G, H, I>(
 );
 const inferMapExpr: <A, B, C, D, E, F, G, H, I>(
   ctx: {
-    env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+    env: Map<string, Scheme>;
     letOwner: Map<string, Span>;
     open: boolean;
     aliasMap: Map<
@@ -4653,7 +4653,7 @@ const inferMapExpr: <A, B, C, D, E, F, G, H, I>(
   3,
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
-      env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+      env: Map<string, Scheme>;
       letOwner: Map<string, Span>;
       open: boolean;
       aliasMap: Map<
@@ -4833,7 +4833,7 @@ const mergeEnvBindings: <A, B, C, D>(
 const inferArms: <A, B, C, D, E, F, G, H, I>(
   ctx: {
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-    env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+    env: Map<string, Scheme>;
     letOwner: Map<string, Span>;
     loopStack: Ty[][];
     plugins: ({
@@ -4939,7 +4939,7 @@ const inferArms: <A, B, C, D, E, F, G, H, I>(
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
-      env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+      env: Map<string, Scheme>;
       letOwner: Map<string, Span>;
       loopStack: Ty[][];
       plugins: ({
@@ -5081,7 +5081,7 @@ const inferArms: <A, B, C, D, E, F, G, H, I>(
 );
 const inferMatch: <A, B, C, D, E, F, G, H, I>(
   ctx: {
-    env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+    env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
     aliasMap: Map<
@@ -5189,7 +5189,7 @@ const inferMatch: <A, B, C, D, E, F, G, H, I>(
   4,
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
       aliasMap: Map<
@@ -5303,7 +5303,7 @@ const inferMatch: <A, B, C, D, E, F, G, H, I>(
 );
 const inferExpr: <A, B, C, D, E, F, G, H, I>(
   ctx: {
-    env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+    env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
     aliasMap: Map<
@@ -5410,7 +5410,7 @@ const inferExpr: <A, B, C, D, E, F, G, H, I>(
   3,
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
       aliasMap: Map<
@@ -5508,7 +5508,7 @@ const inferExpr: <A, B, C, D, E, F, G, H, I>(
 );
 const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
   ctx: {
-    env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+    env: Map<string, Scheme>;
     letOwner: Map<string, Span>;
     open: boolean;
     aliasMap: Map<
@@ -5615,7 +5615,7 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
   3,
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
-      env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>;
+      env: Map<string, Scheme>;
       letOwner: Map<string, Span>;
       open: boolean;
       aliasMap: Map<
@@ -5755,7 +5755,7 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
       .with({ _tag: "ELambda" }, ({ params, body }) =>
         (([paramTypes, bodyEnv, st1]: [
           Ty[],
-          Map<string, { vars: number[]; rvars: number[]; ty: Ty }>,
+          Map<string, Scheme>,
           {
             next: number;
             tv: Map<number, Ty>;
@@ -5788,7 +5788,7 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
           .otherwise(() =>
             _Result_flatMap(
               ([valT, st1]) =>
-                ((sc: { vars: number[]; rvars: number[]; ty: Ty }) =>
+                ((sc: Scheme) =>
                   ((vsp: Span) =>
                     (($ctx) => inferExpr($ctx, body, noteLet(vsp, st1)))(
                       ctxWithLets(
@@ -5908,7 +5908,7 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
 );
 const inferDo: <A, B, C, D, E, F, G, H, I>(
   ctx: {
-    env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+    env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
     aliasMap: Map<
@@ -6015,7 +6015,7 @@ const inferDo: <A, B, C, D, E, F, G, H, I>(
   3,
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
       aliasMap: Map<
@@ -7099,14 +7099,14 @@ const freeRefs: {
 const seedBuiltinsFrom: <A, B>(
   keys: A[],
   builtins: Map<A, Ty>,
-  env: Map<A, { ty: Ty; rvars: number[]; vars: number[] }>,
+  env: Map<A, Scheme>,
   st: { tv: Map<number, Ty>; rv: Map<number, Row> } & B,
-) => Map<A, { ty: Ty; rvars: number[]; vars: number[] }> = _curry(
+) => Map<A, Scheme> = _curry(
   4,
   <A, B>(
     keys: A[],
     builtins: Map<A, Ty>,
-    env: Map<A, { ty: Ty; rvars: number[]; vars: number[] }>,
+    env: Map<A, Scheme>,
     st: { tv: Map<number, Ty>; rv: Map<number, Row> } & B,
   ) =>
     match(keys)
@@ -7130,13 +7130,13 @@ const seedBuiltinsFrom: <A, B>(
 );
 const seedBuiltins: <A, B>(
   builtins: Map<A, Ty>,
-  env: Map<A, { ty: Ty; rvars: number[]; vars: number[] }>,
+  env: Map<A, Scheme>,
   st: { tv: Map<number, Ty>; rv: Map<number, Row> } & B,
-) => Map<A, { ty: Ty; rvars: number[]; vars: number[] }> = _curry(
+) => Map<A, Scheme> = _curry(
   3,
   <A, B>(
     builtins: Map<A, Ty>,
-    env: Map<A, { ty: Ty; rvars: number[]; vars: number[] }>,
+    env: Map<A, Scheme>,
     st: { tv: Map<number, Ty>; rv: Map<number, Row> } & B,
   ) => seedBuiltinsFrom(_Map_keys(builtins), builtins, env, st),
 );
@@ -7145,15 +7145,15 @@ const seedNsMembersFrom: <A, B, C, D>(
   members: Map<A, Ty>,
   env: Map<B, { ty: Ty; rvars: number[]; vars: number[] } & C>,
   st: { tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-  acc: Map<A, { vars: number[]; rvars: number[]; ty: Ty }>,
-) => Map<A, { vars: number[]; rvars: number[]; ty: Ty }> = _curry(
+  acc: Map<A, Scheme>,
+) => Map<A, Scheme> = _curry(
   5,
   <A, B, C, D>(
     keys: A[],
     members: Map<A, Ty>,
     env: Map<B, { ty: Ty; rvars: number[]; vars: number[] } & C>,
     st: { tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-    acc: Map<A, { vars: number[]; rvars: number[]; ty: Ty }>,
+    acc: Map<A, Scheme>,
   ) =>
     match(keys)
       .with(
@@ -7185,15 +7185,15 @@ const seedNsFrom: <A, B, C, D, E>(
   namespaces: Map<A, Map<B, Ty>>,
   env: Map<C, { ty: Ty; rvars: number[]; vars: number[] } & D>,
   st: { tv: Map<number, Ty>; rv: Map<number, Row> } & E,
-  acc: Map<A, Map<B, { vars: number[]; rvars: number[]; ty: Ty }>>,
-) => Map<A, Map<B, { vars: number[]; rvars: number[]; ty: Ty }>> = _curry(
+  acc: Map<A, Map<B, Scheme>>,
+) => Map<A, Map<B, Scheme>> = _curry(
   5,
   <A, B, C, D, E>(
     nsNames: A[],
     namespaces: Map<A, Map<B, Ty>>,
     env: Map<C, { ty: Ty; rvars: number[]; vars: number[] } & D>,
     st: { tv: Map<number, Ty>; rv: Map<number, Row> } & E,
-    acc: Map<A, Map<B, { vars: number[]; rvars: number[]; ty: Ty }>>,
+    acc: Map<A, Map<B, Scheme>>,
   ) =>
     match(nsNames)
       .with(
@@ -7212,13 +7212,7 @@ const seedNsFrom: <A, B, C, D, E>(
                 st,
                 _Map_set(
                   nsName,
-                  seedNsMembersFrom(
-                    _Map_keys(members),
-                    members,
-                    env,
-                    st,
-                    new Map<B, { vars: number[]; rvars: number[]; ty: Ty }>(),
-                  ),
+                  seedNsMembersFrom(_Map_keys(members), members, env, st, new Map<B, Scheme>()),
                   acc,
                 ),
               ),
@@ -7234,20 +7228,13 @@ const seedNs: <A, B, C, D, E>(
   namespaces: Map<A, Map<B, Ty>>,
   env: Map<C, { ty: Ty; rvars: number[]; vars: number[] } & D>,
   st: { tv: Map<number, Ty>; rv: Map<number, Row> } & E,
-) => Map<A, Map<B, { vars: number[]; rvars: number[]; ty: Ty }>> = _curry(
+) => Map<A, Map<B, Scheme>> = _curry(
   3,
   <A, B, C, D, E>(
     namespaces: Map<A, Map<B, Ty>>,
     env: Map<C, { ty: Ty; rvars: number[]; vars: number[] } & D>,
     st: { tv: Map<number, Ty>; rv: Map<number, Row> } & E,
-  ) =>
-    seedNsFrom(
-      _Map_keys(namespaces),
-      namespaces,
-      env,
-      st,
-      new Map<A, Map<B, { vars: number[]; rvars: number[]; ty: Ty }>>(),
-    ),
+  ) => seedNsFrom(_Map_keys(namespaces), namespaces, env, st, new Map<A, Map<B, Scheme>>()),
 );
 const seedNsImportsFrom: <A, B>(aliases: A[], nsImports: Map<A, B>, ns: Map<A, B>) => Map<A, B> =
   _curry(3, <A, B>(aliases: A[], nsImports: Map<A, B>, ns: Map<A, B>) =>
@@ -7354,9 +7341,9 @@ const registerCtorsFrom: <A, B, C, D, E, F>(
       fields: ({ name: string; fieldType: TypeExpr } & D)[];
     } & E
   >,
-  env: Map<A, { vars: number[]; rvars: number[]; ty: Ty }>,
+  env: Map<A, Scheme>,
   st: { next: number } & F,
-) => [Map<A, { vars: number[]; rvars: number[]; ty: Ty }>, { next: number } & F] = _curry(
+) => [Map<A, Scheme>, { next: number } & F] = _curry(
   6,
   <A, B, C, D, E, F>(
     ctors: ({ name: A; fields: ({ fieldType: TypeExpr } & B)[] } & C)[],
@@ -7370,7 +7357,7 @@ const registerCtorsFrom: <A, B, C, D, E, F>(
         fields: ({ name: string; fieldType: TypeExpr } & D)[];
       } & E
     >,
-    env: Map<A, { vars: number[]; rvars: number[]; ty: Ty }>,
+    env: Map<A, Scheme>,
     st: { next: number } & F,
   ) =>
     match(ctors)
@@ -7381,7 +7368,7 @@ const registerCtorsFrom: <A, B, C, D, E, F>(
       .with(
         (_v) => _v.length >= 1,
         ([c, ...rest]) =>
-          (([sc, st1]: [{ vars: number[]; rvars: number[]; ty: Ty }, { next: number } & F]) =>
+          (([sc, st1]: [Scheme, { next: number } & F]) =>
             registerCtorsFrom(rest, typeName, params, aliasMap, _Map_set(c.name, sc, env), st1))(
             ctorScheme(typeName, params, c, st, aliasMap),
           ),
@@ -7400,9 +7387,9 @@ const registerUserCtorsFrom: <A, B, C>(
       fields: ({ name: string; fieldType: TypeExpr } & A)[];
     } & B
   >,
-  env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>,
+  env: Map<string, Scheme>,
   st: { next: number } & C,
-) => [Map<string, { vars: number[]; rvars: number[]; ty: Ty }>, { next: number } & C] = _curry(
+) => [Map<string, Scheme>, { next: number } & C] = _curry(
   4,
   <A, B, C>(
     stmts: Stmt[],
@@ -7414,7 +7401,7 @@ const registerUserCtorsFrom: <A, B, C>(
         fields: ({ name: string; fieldType: TypeExpr } & A)[];
       } & B
     >,
-    env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>,
+    env: Map<string, Scheme>,
     st: { next: number } & C,
   ) =>
     match(stmts)
@@ -7433,10 +7420,8 @@ const registerUserCtorsFrom: <A, B, C>(
         ([s, ...rest]) =>
           match(s)
             .with({ _tag: "SType" }, ({ name, params, ctors }) =>
-              (([env1, st1]: [
-                Map<string, { vars: number[]; rvars: number[]; ty: Ty }>,
-                { next: number } & C,
-              ]) => registerUserCtorsFrom(rest, aliasMap, env1, st1))(
+              (([env1, st1]: [Map<string, Scheme>, { next: number } & C]) =>
+                registerUserCtorsFrom(rest, aliasMap, env1, st1))(
                 registerCtorsFrom(ctors, name, params, aliasMap, env, st),
               ),
             )
@@ -7458,9 +7443,9 @@ const registerBuiltinCtorGroup: <A, B, C, D, E, F>(
       fields: ({ name: string; fieldType: TypeExpr } & D)[];
     } & E
   >,
-  env: Map<A, { vars: number[]; rvars: number[]; ty: Ty }>,
+  env: Map<A, Scheme>,
   st: { next: number } & F,
-) => [Map<A, { vars: number[]; rvars: number[]; ty: Ty }>, { next: number } & F] = _curry(
+) => [Map<A, Scheme>, { next: number } & F] = _curry(
   6,
   <A, B, C, D, E, F>(
     ctors: ({ name: A; fields: ({ fieldType: TypeExpr } & B)[] } & C)[],
@@ -7474,7 +7459,7 @@ const registerBuiltinCtorGroup: <A, B, C, D, E, F>(
         fields: ({ name: string; fieldType: TypeExpr } & D)[];
       } & E
     >,
-    env: Map<A, { vars: number[]; rvars: number[]; ty: Ty }>,
+    env: Map<A, Scheme>,
     st: { next: number } & F,
   ) =>
     match(ctors)
@@ -7487,7 +7472,7 @@ const registerBuiltinCtorGroup: <A, B, C, D, E, F>(
         ([c, ...rest]) =>
           _Map_has(c.name, env)
             ? registerBuiltinCtorGroup(rest, typeName, params, aliasMap, env, st)
-            : (([sc, st1]: [{ vars: number[]; rvars: number[]; ty: Ty }, { next: number } & F]) =>
+            : (([sc, st1]: [Scheme, { next: number } & F]) =>
                 registerBuiltinCtorGroup(
                   rest,
                   typeName,
@@ -7515,9 +7500,9 @@ const registerBuiltinCtorsFrom: <A, B, C, D, E, F, G>(
       fields: ({ name: string; fieldType: TypeExpr } & E)[];
     } & F
   >,
-  env: Map<A, { vars: number[]; rvars: number[]; ty: Ty }>,
+  env: Map<A, Scheme>,
   st: { next: number } & G,
-) => [Map<A, { vars: number[]; rvars: number[]; ty: Ty }>, { next: number } & G] = _curry(
+) => [Map<A, Scheme>, { next: number } & G] = _curry(
   4,
   <A, B, C, D, E, F, G>(
     decls: ({
@@ -7533,7 +7518,7 @@ const registerBuiltinCtorsFrom: <A, B, C, D, E, F, G>(
         fields: ({ name: string; fieldType: TypeExpr } & E)[];
       } & F
     >,
-    env: Map<A, { vars: number[]; rvars: number[]; ty: Ty }>,
+    env: Map<A, Scheme>,
     st: { next: number } & G,
   ) =>
     match(decls)
@@ -7544,10 +7529,8 @@ const registerBuiltinCtorsFrom: <A, B, C, D, E, F, G>(
       .with(
         (_v) => _v.length >= 1,
         ([d, ...rest]) =>
-          (([env1, st1]: [
-            Map<A, { vars: number[]; rvars: number[]; ty: Ty }>,
-            { next: number } & G,
-          ]) => registerBuiltinCtorsFrom(rest, aliasMap, env1, st1))(
+          (([env1, st1]: [Map<A, Scheme>, { next: number } & G]) =>
+            registerBuiltinCtorsFrom(rest, aliasMap, env1, st1))(
             registerBuiltinCtorGroup(d.ctors, d.name, d.params, aliasMap, env, st),
           ),
       )
@@ -7565,85 +7548,83 @@ const registerExternsFrom: <A, B, C>(
       fields: ({ name: string; fieldType: TypeExpr } & A)[];
     } & B
   >,
-  env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>,
+  env: Map<string, Scheme>,
   st: { next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-) => [
-  Map<string, { ty: Ty; rvars: number[]; vars: number[] }>,
-  { next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-] = _curry(
-  4,
-  <A, B, C>(
-    stmts: Stmt[],
-    aliasMap: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & A)[];
-      } & B
-    >,
-    env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>,
-    st: { next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-  ) =>
-    match(stmts)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => _tuple(env, st),
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([s, ...rest]) =>
-          match(s)
-            .with({ _tag: "SExtern" }, ({ name, params, typeExpr }) =>
-              (([vars, st0]: [
-                Map<string, Ty>,
-                { next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-              ]) =>
-                (([t, _, st1]: [
-                  Ty,
+) => [Map<string, Scheme>, { next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & C] =
+  _curry(
+    4,
+    <A, B, C>(
+      stmts: Stmt[],
+      aliasMap: Map<
+        string,
+        {
+          expr: Option<TypeExpr>;
+          params: string[];
+          fields: ({ name: string; fieldType: TypeExpr } & A)[];
+        } & B
+      >,
+      env: Map<string, Scheme>,
+      st: { next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & C,
+    ) =>
+      match(stmts)
+        .with(
+          (_v) => {
+            const _g: any = _v;
+            return _g.length === 0;
+          },
+          () => _tuple(env, st),
+        )
+        .with(
+          (_v) => {
+            const _g: any = _v;
+            return _g.length >= 1;
+          },
+          ([s, ...rest]) =>
+            match(s)
+              .with({ _tag: "SExtern" }, ({ name, params, typeExpr }) =>
+                (([vars, st0]: [
                   Map<string, Ty>,
-                  { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & C,
+                  { next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & C,
                 ]) =>
-                  registerExternsFrom(
-                    rest,
-                    aliasMap,
-                    _Map_set(name, generalize(env, t, st1, false), env),
-                    st1,
+                  (([t, _, st1]: [
+                    Ty,
+                    Map<string, Ty>,
+                    { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & C,
+                  ]) =>
+                    registerExternsFrom(
+                      rest,
+                      aliasMap,
+                      _Map_set(name, generalize(env, t, st1, false), env),
+                      st1,
+                    ))(
+                    typeExprToType(typeExpr, vars, st0, aliasMap, _Set_fromArray([] as string[])),
                   ))(
-                  typeExprToType(typeExpr, vars, st0, aliasMap, _Set_fromArray([] as string[])),
-                ))(
-                reduce(
-                  _curry(
-                    2,
-                    (
-                      [vs, s]: [
-                        Map<string, Ty>,
-                        { next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-                      ],
-                      param: string,
-                    ) =>
-                      (([v, s1]: [
-                        Ty,
-                        { next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-                      ]) => _tuple(_Map_set(param, v, vs), s1))(freshVar(s)),
+                  reduce(
+                    _curry(
+                      2,
+                      (
+                        [vs, s]: [
+                          Map<string, Ty>,
+                          { next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & C,
+                        ],
+                        param: string,
+                      ) =>
+                        (([v, s1]: [
+                          Ty,
+                          { next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & C,
+                        ]) => _tuple(_Map_set(param, v, vs), s1))(freshVar(s)),
+                    ),
+                    _tuple(new Map<string, Ty>(), st),
+                    params,
                   ),
-                  _tuple(new Map<string, Ty>(), st),
-                  params,
                 ),
-              ),
-            )
-            .otherwise(() => registerExternsFrom(rest, aliasMap, env, st)),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
-);
+              )
+              .otherwise(() => registerExternsFrom(rest, aliasMap, env, st)),
+        )
+        .otherwise(() => {
+          throw new Error("non-exhaustive match");
+        }),
+  );
 const letsOfFrom: (stmts: Stmt[]) => Stmt[] = (stmts: Stmt[]) =>
   match(stmts)
     .with(
@@ -7827,7 +7808,7 @@ const preBindGroupFrom: <A, B, C>(
 );
 const inferGroupFrom: <A, B, C, D, E, F, G, H, I>(
   ctx: {
-    env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+    env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
     aliasMap: Map<
@@ -7934,7 +7915,7 @@ const inferGroupFrom: <A, B, C, D, E, F, G, H, I>(
   3,
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
       aliasMap: Map<
@@ -8137,14 +8118,14 @@ const dropGroupFrom: <A>(group: Stmt[], env: Map<string, A>) => Map<string, A> =
 const generalizeGroupFrom: <A>(
   group: Stmt[],
   bodyTypes: Map<string, Ty>,
-  env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>,
+  env: Map<string, Scheme>,
   st: { tv: Map<number, Ty>; rv: Map<number, Row> } & A,
-) => Map<string, { ty: Ty; rvars: number[]; vars: number[] }> = _curry(
+) => Map<string, Scheme> = _curry(
   4,
   <A>(
     group: Stmt[],
     bodyTypes: Map<string, Ty>,
-    env: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>,
+    env: Map<string, Scheme>,
     st: { tv: Map<number, Ty>; rv: Map<number, Row> } & A,
   ) =>
     match(group)
@@ -8312,7 +8293,7 @@ const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
     >;
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
     open: boolean;
-    env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+    env: Map<string, Scheme>;
   },
   sccs: number[][],
   lets: Stmt[],
@@ -8406,7 +8387,7 @@ const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
       >;
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
       open: boolean;
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
     },
     {
       next: number;
@@ -8501,7 +8482,7 @@ const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
       >;
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
       open: boolean;
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
     },
     sccs: number[][],
     lets: Stmt[],
@@ -8530,7 +8511,7 @@ const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
         ([comp, ...restSccs]) =>
           ((group: Stmt[]) =>
             (([preEnv, st1]: [
-              Map<string, { ty: Ty; rvars: number[]; vars: number[] }>,
+              Map<string, Scheme>,
               {
                 next: number;
                 letUses: Map<string, Ty[]>;
@@ -8543,7 +8524,7 @@ const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
               const preCtx = ctxWithEnv(ctx, preEnv);
               return _Result_flatMap(
                 ([bodyTypes, st2]) =>
-                  ((finalEnv: Map<string, { ty: Ty; rvars: number[]; vars: number[] }>) =>
+                  ((finalEnv: Map<string, Scheme>) =>
                     (([finalOwner, st3]: [
                       Map<string, Span>,
                       {
@@ -8573,7 +8554,7 @@ const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
 );
 const inferExprStmtsFrom: <A, B, C, D, E, F, G, H, I>(
   ctx: {
-    env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+    env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
     aliasMap: Map<
@@ -8677,7 +8658,7 @@ const inferExprStmtsFrom: <A, B, C, D, E, F, G, H, I>(
   3,
   <A, B, C, D, E, F, G, H, I>(
     ctx: {
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
       aliasMap: Map<
@@ -8988,8 +8969,8 @@ const runInferImports: <A, B>(
   builtins: Map<string, Ty>,
   namespaces: Map<string, Map<string, Ty>>,
   openMode: boolean,
-  imports: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>,
-  nsImports: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>,
+  imports: Map<string, Scheme>,
+  nsImports: Map<string, Map<string, Scheme>>,
   quals: Map<string, { aliases: Map<string, QualAliasInfo> } & B>,
   pluginsOpt: Option<
     {
@@ -9020,7 +9001,7 @@ const runInferImports: <A, B>(
   >,
 ) => Result<
   {
-    env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+    env: Map<string, Scheme>;
     types: TypeAt[];
     aliases: Map<string, QualAliasInfo>;
     letParams: TypeAt[];
@@ -9033,8 +9014,8 @@ const runInferImports: <A, B>(
     builtins: Map<string, Ty>,
     namespaces: Map<string, Map<string, Ty>>,
     openMode: boolean,
-    imports: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>,
-    nsImports: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>,
+    imports: Map<string, Scheme>,
+    nsImports: Map<string, Map<string, Scheme>>,
     quals: Map<string, { aliases: Map<string, QualAliasInfo> } & B>,
     pluginsOpt: Option<
       {
@@ -9066,27 +9047,19 @@ const runInferImports: <A, B>(
   ) => {
     const plugins = resolvePluginsDefault(pluginsOpt);
     const st0: St = mkSt(1000);
-    const env0: Map<string, { ty: Ty; rvars: number[]; vars: number[] }> = seedBuiltins(
-      builtins,
-      new Map<string, { ty: Ty; rvars: number[]; vars: number[] }>(),
-      st0,
+    const env0: Map<string, Scheme> = seedBuiltins(builtins, new Map<string, Scheme>(), st0);
+    const ns0: Map<string, Map<string, Scheme>> = seedNsImports(
+      nsImports,
+      seedNs(namespaces, env0, st0),
     );
-    const ns0: Map<
-      string,
-      Map<string, { vars: number[]; rvars: number[]; ty: Ty }>
-    > = seedNsImports(nsImports, seedNs(namespaces, env0, st0));
     const aliasMap: Map<string, QualAliasInfo> = aliasMapFrom(
       stmts,
       qualAliasSeed(stmts, quals, new Map<string, QualAliasInfo>()),
     );
-    return (([env1, st1]: [Map<string, { vars: number[]; rvars: number[]; ty: Ty }>, St]) =>
-      (([env2, st2]: [Map<string, { ty: Ty; rvars: number[]; vars: number[] }>, St]) =>
-        (([env3, st3]: [Map<string, { vars: number[]; rvars: number[]; ty: Ty }>, St]) => {
-          const env4: Map<string, { vars: number[]; rvars: number[]; ty: Ty }> = seedImportsFrom(
-            _Map_keys(imports),
-            imports,
-            env3,
-          );
+    return (([env1, st1]: [Map<string, Scheme>, St]) =>
+      (([env2, st2]: [Map<string, Scheme>, St]) =>
+        (([env3, st3]: [Map<string, Scheme>, St]) => {
+          const env4: Map<string, Scheme> = seedImportsFrom(_Map_keys(imports), imports, env3);
           const lets: Stmt[] = letsOfFrom(stmts);
           const idxOf: Map<string, number> = idxOfMap(lets);
           const sccs: number[][] = stronglyConnected(adjOf(lets, idxOf));
@@ -9120,7 +9093,7 @@ const runInferImports: <A, B>(
                         letParams: resolveLetParams(st5),
                       }) as Result<
                         {
-                          env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+                          env: Map<string, Scheme>;
                           types: TypeAt[];
                           aliases: Map<string, QualAliasInfo>;
                           letParams: TypeAt[];
@@ -9133,7 +9106,7 @@ const runInferImports: <A, B>(
                     ({ error: e }) =>
                       Err(e) as Result<
                         {
-                          env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+                          env: Map<string, Scheme>;
                           types: TypeAt[];
                           aliases: Map<string, QualAliasInfo>;
                           letParams: TypeAt[];
@@ -9148,7 +9121,7 @@ const runInferImports: <A, B>(
               ({ error: e }) =>
                 Err(e) as Result<
                   {
-                    env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+                    env: Map<string, Scheme>;
                     types: TypeAt[];
                     aliases: Map<string, QualAliasInfo>;
                     letParams: TypeAt[];
@@ -9167,8 +9140,8 @@ export const inferProgramImports: <A, B>(
   builtins: Map<string, Ty>,
   namespaces: Map<string, Map<string, Ty>>,
   openMode: boolean,
-  imports: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>,
-  nsImports: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>,
+  imports: Map<string, Scheme>,
+  nsImports: Map<string, Map<string, Scheme>>,
   quals: Map<string, { aliases: Map<string, QualAliasInfo> } & B>,
   pluginsOpt: Option<
     {
@@ -9197,15 +9170,15 @@ export const inferProgramImports: <A, B>(
       >;
     }[]
   >,
-) => Result<Map<string, { vars: number[]; rvars: number[]; ty: Ty }>, IErr> = _curry(
+) => Result<Map<string, Scheme>, IErr> = _curry(
   8,
   <A, B>(
     stmts: Stmt[],
     builtins: Map<string, Ty>,
     namespaces: Map<string, Map<string, Ty>>,
     openMode: boolean,
-    imports: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>,
-    nsImports: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>,
+    imports: Map<string, Scheme>,
+    nsImports: Map<string, Map<string, Scheme>>,
     quals: Map<string, { aliases: Map<string, QualAliasInfo> } & B>,
     pluginsOpt: Option<
       {
@@ -9237,7 +9210,7 @@ export const inferProgramImports: <A, B>(
   ) =>
     _Result_map(
       (r: {
-        env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+        env: Map<string, Scheme>;
         types: TypeAt[];
         aliases: Map<string, QualAliasInfo>;
         letParams: TypeAt[];
@@ -9254,9 +9227,7 @@ export const inferProgram: {
     builtins: Map<string, Ty>,
   ) => (
     namespaces: Map<string, Map<string, Ty>>,
-  ) => (
-    openMode: boolean,
-  ) => Result<Map<string, { vars: number[]; rvars: number[]; ty: Ty }>, IErr>;
+  ) => (openMode: boolean) => Result<Map<string, Scheme>, IErr>;
   (
     stmts: Stmt[],
   ): (
@@ -9264,48 +9235,44 @@ export const inferProgram: {
   ) => (
     namespaces: Map<string, Map<string, Ty>>,
     openMode: boolean,
-  ) => Result<Map<string, { vars: number[]; rvars: number[]; ty: Ty }>, IErr>;
+  ) => Result<Map<string, Scheme>, IErr>;
   (
     stmts: Stmt[],
   ): (
     builtins: Map<string, Ty>,
     namespaces: Map<string, Map<string, Ty>>,
-  ) => (
-    openMode: boolean,
-  ) => Result<Map<string, { vars: number[]; rvars: number[]; ty: Ty }>, IErr>;
+  ) => (openMode: boolean) => Result<Map<string, Scheme>, IErr>;
   (
     stmts: Stmt[],
     builtins: Map<string, Ty>,
   ): (
     namespaces: Map<string, Map<string, Ty>>,
-  ) => (
-    openMode: boolean,
-  ) => Result<Map<string, { vars: number[]; rvars: number[]; ty: Ty }>, IErr>;
+  ) => (openMode: boolean) => Result<Map<string, Scheme>, IErr>;
   (
     stmts: Stmt[],
   ): (
     builtins: Map<string, Ty>,
     namespaces: Map<string, Map<string, Ty>>,
     openMode: boolean,
-  ) => Result<Map<string, { vars: number[]; rvars: number[]; ty: Ty }>, IErr>;
+  ) => Result<Map<string, Scheme>, IErr>;
   (
     stmts: Stmt[],
     builtins: Map<string, Ty>,
   ): (
     namespaces: Map<string, Map<string, Ty>>,
     openMode: boolean,
-  ) => Result<Map<string, { vars: number[]; rvars: number[]; ty: Ty }>, IErr>;
+  ) => Result<Map<string, Scheme>, IErr>;
   (
     stmts: Stmt[],
     builtins: Map<string, Ty>,
     namespaces: Map<string, Map<string, Ty>>,
-  ): (openMode: boolean) => Result<Map<string, { vars: number[]; rvars: number[]; ty: Ty }>, IErr>;
+  ): (openMode: boolean) => Result<Map<string, Scheme>, IErr>;
   (
     stmts: Stmt[],
     builtins: Map<string, Ty>,
     namespaces: Map<string, Map<string, Ty>>,
     openMode: boolean,
-  ): Result<Map<string, { vars: number[]; rvars: number[]; ty: Ty }>, IErr>;
+  ): Result<Map<string, Scheme>, IErr>;
 } = _curry(
   4,
   (
@@ -9319,8 +9286,8 @@ export const inferProgram: {
       builtins,
       namespaces,
       openMode,
-      new Map<string, { vars: number[]; rvars: number[]; ty: Ty }>(),
-      new Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>(),
+      new Map<string, Scheme>(),
+      new Map<string, Map<string, Scheme>>(),
       emptyQuals,
       None,
     ),
@@ -9330,8 +9297,8 @@ export const inferProgramImportsTypes: <A, B>(
   builtins: Map<string, Ty>,
   namespaces: Map<string, Map<string, Ty>>,
   openMode: boolean,
-  imports: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>,
-  nsImports: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>,
+  imports: Map<string, Scheme>,
+  nsImports: Map<string, Map<string, Scheme>>,
   quals: Map<string, { aliases: Map<string, QualAliasInfo> } & B>,
   pluginsOpt: Option<
     {
@@ -9362,7 +9329,7 @@ export const inferProgramImportsTypes: <A, B>(
   >,
 ) => Result<
   {
-    env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+    env: Map<string, Scheme>;
     types: TypeAt[];
     aliases: Map<string, QualAliasInfo>;
     letParams: TypeAt[];
@@ -9375,8 +9342,8 @@ export const inferProgramImportsTypes: <A, B>(
     builtins: Map<string, Ty>,
     namespaces: Map<string, Map<string, Ty>>,
     openMode: boolean,
-    imports: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>,
-    nsImports: Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>,
+    imports: Map<string, Scheme>,
+    nsImports: Map<string, Map<string, Scheme>>,
     quals: Map<string, { aliases: Map<string, QualAliasInfo> } & B>,
     pluginsOpt: Option<
       {
@@ -9415,7 +9382,7 @@ export const inferProgramTypes: {
     openMode: boolean,
   ) => Result<
     {
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
       types: TypeAt[];
       aliases: Map<string, QualAliasInfo>;
       letParams: TypeAt[];
@@ -9429,7 +9396,7 @@ export const inferProgramTypes: {
     openMode: boolean,
   ) => Result<
     {
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
       types: TypeAt[];
       aliases: Map<string, QualAliasInfo>;
       letParams: TypeAt[];
@@ -9443,7 +9410,7 @@ export const inferProgramTypes: {
     namespaces: Map<string, Map<string, Ty>>,
   ) => (openMode: boolean) => Result<
     {
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
       types: TypeAt[];
       aliases: Map<string, QualAliasInfo>;
       letParams: TypeAt[];
@@ -9455,7 +9422,7 @@ export const inferProgramTypes: {
     builtins: Map<string, Ty>,
   ): (namespaces: Map<string, Map<string, Ty>>) => (openMode: boolean) => Result<
     {
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
       types: TypeAt[];
       aliases: Map<string, QualAliasInfo>;
       letParams: TypeAt[];
@@ -9470,7 +9437,7 @@ export const inferProgramTypes: {
     openMode: boolean,
   ) => Result<
     {
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
       types: TypeAt[];
       aliases: Map<string, QualAliasInfo>;
       letParams: TypeAt[];
@@ -9485,7 +9452,7 @@ export const inferProgramTypes: {
     openMode: boolean,
   ) => Result<
     {
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
       types: TypeAt[];
       aliases: Map<string, QualAliasInfo>;
       letParams: TypeAt[];
@@ -9498,7 +9465,7 @@ export const inferProgramTypes: {
     namespaces: Map<string, Map<string, Ty>>,
   ): (openMode: boolean) => Result<
     {
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
       types: TypeAt[];
       aliases: Map<string, QualAliasInfo>;
       letParams: TypeAt[];
@@ -9512,7 +9479,7 @@ export const inferProgramTypes: {
     openMode: boolean,
   ): Result<
     {
-      env: Map<string, { vars: number[]; rvars: number[]; ty: Ty }>;
+      env: Map<string, Scheme>;
       types: TypeAt[];
       aliases: Map<string, QualAliasInfo>;
       letParams: TypeAt[];
@@ -9532,8 +9499,8 @@ export const inferProgramTypes: {
       builtins,
       namespaces,
       openMode,
-      new Map<string, { vars: number[]; rvars: number[]; ty: Ty }>(),
-      new Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>(),
+      new Map<string, Scheme>(),
+      new Map<string, Map<string, Scheme>>(),
       emptyQuals,
       None,
     ),
@@ -9570,7 +9537,7 @@ export const inferProgramWith: <A>(
       >;
     }[]
   >,
-) => Result<Map<string, { vars: number[]; rvars: number[]; ty: Ty }>, IErr> = _curry(
+) => Result<Map<string, Scheme>, IErr> = _curry(
   5,
   <A>(
     stmts: Stmt[],
@@ -9610,8 +9577,8 @@ export const inferProgramWith: <A>(
       builtins,
       namespaces,
       openMode,
-      new Map<string, { vars: number[]; rvars: number[]; ty: Ty }>(),
-      new Map<string, Map<string, { vars: number[]; rvars: number[]; ty: Ty }>>(),
+      new Map<string, Scheme>(),
+      new Map<string, Map<string, Scheme>>(),
       emptyQuals,
       pluginsOpt,
     ),
