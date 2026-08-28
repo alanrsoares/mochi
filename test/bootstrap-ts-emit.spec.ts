@@ -74,8 +74,8 @@ test("a variant emits a tagged union plus typed ctor factories", () => {
   expect(ts).toContain(
     'export type Shape<A> =\n  | { _tag: "Dot" }\n  | { _tag: "Wrap"; value: A };',
   );
-  // nullary const keeps its literal `_tag` instead of widening to string
-  expect(ts).toContain('const Dot: Shape<never> = { _tag: "Dot" };');
+  // unused nullary Dot is pattern-only in this snippet — no factory
+  expect(ts).not.toContain("const Dot:");
   expect(ts).toContain('const Wrap = <A>(value: A): Shape<A> => ({ _tag: "Wrap", value });');
   // applied ctor cast pins the phantom param (ADR 0043)
   expect(ts).toContain("(Wrap(1) as Shape<number>)");

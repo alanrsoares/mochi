@@ -192,17 +192,17 @@ test("codegen matches codegenWith under the JS options", () =>
 testEach("annotateCtor types each factory shape", [
   {
     label: "nullary ctor gets a const annotation",
-    src: "type Shape a = Dot",
+    src: "type Shape a = Dot\nlet d = Dot",
     want: "const Dot: Shape<never> = { _tag: \"Dot\" };"
   },
   {
     label: "single-field ctor gets a typed arrow",
-    src: "type Shape a = Wrap(value: a)",
+    src: "type Shape a = Wrap(value: a)\nlet w = Wrap(1)",
     want: "const Wrap = (value: A): Shape<A> => ({ _tag: \"Wrap\", value });"
   },
   {
     label: "multi-field ctor casts the curried impl",
-    src: "type Shape a = Pair(left: a, right: a)",
+    src: "type Shape a = Pair(left: a, right: a)\nlet p = Pair",
     want: "as <A>(left: A, right: B) => Shape<A>;"
   }
 ], row => emitted(ctorOpts, row.src) |> Str.contains(row.want) |> ok)
@@ -210,17 +210,17 @@ testEach("annotateCtor types each factory shape", [
 testEach("the JS backend leaves ctor factories untyped", [
   {
     label: "nullary",
-    src: "type Shape a = Dot",
+    src: "type Shape a = Dot\nlet d = Dot",
     want: "const Dot = { _tag: \"Dot\" };"
   },
   {
     label: "single-field",
-    src: "type Shape a = Wrap(value: a)",
+    src: "type Shape a = Wrap(value: a)\nlet w = Wrap(1)",
     want: "const Wrap = (value) => ({ _tag: \"Wrap\", value });"
   },
   {
     label: "multi-field",
-    src: "type Shape a = Pair(left: a, right: a)",
+    src: "type Shape a = Pair(left: a, right: a)\nlet p = Pair",
     want: "const Pair = _curry(2, (left, right) => ({ _tag: \"Pair\", left, right }));"
   }
 ], row => emitted(jsGenOpts, row.src) |> Str.contains(row.want) |> ok)

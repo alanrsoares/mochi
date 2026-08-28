@@ -10,9 +10,17 @@ import { type GenCtx, genExpr, typeExprArity } from "./codegen-core";
  * discriminant key is `_tag`, matching the @onrails ecosystem convention
  * (@onrails/result, @onrails/maybe), so their type guards (isOk/isSome/...)
  * recognize mochi values at the JS boundary.
+ *
+ * Exported variants are a public runtime API — every factory is emitted.
+ * Locals: a pattern `| TLet =>` only matches `_tag`, so skip the const unless
+ * the ctor is referenced as a value (`tok == TGt`, `jxExpectTok(TEof)`).
  */
+const ctorFactoryNeeded = (s: TypeStmt, name: string, valueRefs: ReadonlySet<string>): boolean =>
+  Boolean(s.exported) || valueRefs.has(name);
+
 const genType = (s: TypeStmt, ctx: GenCtx): string =>
   s.ctors
+    .filter((c) => ctorFactoryNeeded(s, c.name, ctx.valueRefs))
     .map((c) => {
       const tag = JSON.stringify(c.name);
       if (c.fields.length === 0) {
@@ -134,7 +142,7 @@ export const genStmt = (s: Stmt, ctx: GenCtx): string =>
     .with({ kind: "import" }, (s) => genImport(s, ctx))
     .with({ kind: "type" }, (s) => {
       const decls = genType(s, ctx);
-      if (decls === "") return "";
+      if (decls === "") return ""; // record alias, or every ctor is pattern-only
       return s.exported
         ? decls
             .split("\n")

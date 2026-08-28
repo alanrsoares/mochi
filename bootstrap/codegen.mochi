@@ -1300,18 +1300,21 @@ let genCtor = (c, ts) =>
               | None => "const ${c.name} = ${impl};"
             }
 
-let genCtorsFrom = (s, ctors, h, i) => switch Array.get(i, ctors) {
+let genCtorsFrom = (s, ctors, h, refs, exported, i) => switch Array.get(i, ctors) {
   | None => []
-  | Some(c) => Array.prepend(
-      genCtor(c, hook2(h, s, c)),
-      genCtorsFrom(s, ctors, h, i + 1)
-    )
+  | Some(c) => let rest = genCtorsFrom(s, ctors, h, refs, exported, i + 1) in
+      // Exported variants are a public runtime API — emit every factory.
+      // Locals: a pattern `| TLet =>` only matches `_tag`, so skip the const
+      // unless the ctor is referenced as a value (`tok == TGt`, `jxExpectTok(TEof)`).
+      exported || Set.has(c.name, refs)
+        ? Array.prepend(genCtor(c, hook2(h, s, c)), rest)
+        : rest
 }
 
-let genType = (s, h) => switch s {
-  | Ast.SType(_, _, ctors, _, _, _, _, _) => Str.join(
+let genType = (ctx, s) => switch s {
+  | Ast.SType(_, _, ctors, _, _, exported, _, _) => Str.join(
       "\n",
-      genCtorsFrom(s, ctors, h, 0)
+      genCtorsFrom(s, ctors, ctx.annotateCtor, ctx.valueRefs, exported, 0)
     )
   | _ => ""
 }
@@ -1429,12 +1432,9 @@ let genStmt = (ctx, s) => switch s {
     "throw new Error(\"codegen invariant: error node reached codegen at ${show(sp.start)}\");"
   | Ast.SImport(_, _, _) => genImport(s, ctx.moduleExt)
   | Ast.SImportNs(_, _, _) => genImport(s, ctx.moduleExt)
-  | Ast.SType(_, _, _, _, _, exported, _, _) => let decls = genType(
-      s,
-      ctx.annotateCtor
-    ) in
+  | Ast.SType(_, _, _, _, _, exported, _, _) => let decls = genType(ctx, s) in
       decls == ""
-        ? "" // record alias: pure type, no runtime
+        ? "" // record alias, or every ctor is pattern-only
         : exported
         ? Str.join("\n", Str.split("\n", decls) |> map(exportLine))
         : decls
@@ -1693,13 +1693,35 @@ let boundNamesFrom = (stmts, i, acc) => switch Array.get(i, stmts) {
 }
 let boundNames = stmts => boundNamesFrom(stmts, 0, Set.fromArray([]))
 
+/// Names referenced in let/expr values — not patterns. `| TLet =>` does not
+/// count, so a local unused ctor factory can be dropped.
+let collectValueRefs = (ctx, stmts, i, acc) => switch Array.get(i, stmts) {
+  | None => acc
+  | Some(s) => ctx->collectValueRefs(
+      stmts,
+      i + 1,
+      switch s {
+        | Ast.SLet(_, _, _, value, _, _, _) => ctx->exprRefs(value, acc)
+        | Ast.SExpr(value, _) => ctx->exprRefs(value, acc)
+        | _ => acc
+      }
+    )
+}
+
 let refsForStmt = (ctx, s) => switch s {
   | Ast.SLet(_, _, _, value, _, _, _) => ctx->exprRefs(value, Set.fromArray([]))
   | Ast.SExpr(value, _) => ctx->exprRefs(value, Set.fromArray([]))
-  | Ast.SType(_, _, ctors, _, _, _, _, _) =>
+  | Ast.SType(_, _, ctors, _, _, exported, _, _) =>
     // A multi-field constructor lowers to `_curry(...)` in genType (which
-    // exprRefs never walks), so seed the dep here.
-    someOf(c => Array.length(c.fields) >= 2, ctors)
+    // exprRefs never walks), so seed the dep here — but only for factories
+    // that will actually be emitted (exported, or used as a value).
+    someOf(
+      c =>
+        Array.length(
+          c.fields
+        ) >= 2 && (exported || Set.has(c.name, ctx.valueRefs)),
+      ctors
+    )
       ? Set.add("_curry", Set.fromArray([]))
       : Set.fromArray([])
   | Ast.SExtern(_, _, _, typeExpr, _, _, _, _, _, _) =>
@@ -1768,7 +1790,7 @@ let genStmtAllFrom = (ctx, stmts, i) => switch Array.get(i, stmts) {
 export let codegenWith = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps, opts) =>
   let keys0 = ctorKeysFromStmts(stmts, imported) in
   let keys = seedBuiltinCtorKeys(stmts, keys0) in
-  let ctx = {
+  let ctx0 = {
     keys,
     ns,
     annotateLet: opts.annotateLet,
@@ -1780,8 +1802,11 @@ export let codegenWith = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps, 
     guardBaseType: opts.guardBaseType,
     flattenPipe: opts.flattenPipe,
     tupleHelper: opts.tupleHelper,
-    moduleExt: opts.moduleExt
+    moduleExt: opts.moduleExt,
+    valueRefs: Set.fromArray([])
   } in
+  let valueRefs = collectValueRefs(ctx0, stmts, 0, Set.fromArray([])) in
+  let ctx = { ...ctx0, valueRefs } in
   let needsMatch = someOf(
     s => switch s {
       | Ast.SLet(_, _, _, value, _, _, _) => usesMatchLib(value)
@@ -1804,7 +1829,9 @@ export let codegenWith = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps, 
 /// does, so the two agree on ctor keys and namespace ids.
 export let runtimeDepNames = (stmts, imported, ns, jsDefs, runtimeDeps) =>
   let keys = stmts->seedBuiltinCtorKeys(ctorKeysFromStmts(stmts, imported)) in
-    runtimeRefNames({ keys, ns }, stmts, jsDefs, runtimeDeps)
+  let ctx0 = { keys, ns, valueRefs: Set.fromArray([]) } in
+  let valueRefs = collectValueRefs(ctx0, stmts, 0, Set.fromArray([])) in
+    runtimeRefNames({ keys, ns, valueRefs }, stmts, jsDefs, runtimeDeps)
 
 /// The JS backend: no annotations, `.js` siblings — byte-identical to the
 /// output before `codegenWith` existed.

@@ -107,18 +107,28 @@ test("a ctor call with a free type param stays bare (ADR 0043)", () => {
 });
 
 test("a variant decl emits an export type union alongside its typed ctor factories", () => {
-  const out = ts("type Color = | Red | Green");
+  const out = ts("type Color = | Red | Green\nlet r = Red");
   expect(out).toContain('export type Color =\n  | { _tag: "Red" }\n  | { _tag: "Green" };');
   // Nullary ctors are annotated so `_tag` stays a literal, not widened to string.
   expect(out).toContain('const Red: Color = { _tag: "Red" };');
+  expect(out).not.toContain("const Green:");
 });
 
 test("a payload ctor factory is typed: params from fields, return the variant", () => {
-  const out = ts("type Shape = | Circle(float) | Rect(float, float)");
+  const out = ts("type Shape = | Circle(float) | Rect(float, float)\nlet c = Circle\nlet r = Rect");
   expect(out).toContain('const Circle = (_0: number): Shape => ({ _tag: "Circle", _0 });');
   expect(out).toContain(
     'const Rect = _curry(2, (_0, _1) => ({ _tag: "Rect", _0, _1 })) as (_0: number, _1: number) => Shape;',
   );
+});
+
+test("pattern-only local ctors omit factories but keep the union", () => {
+  const out = ts(
+    "type Color = | Red | Green\nlet name = c => switch c { | Red => 0 | Green => 1 }",
+  );
+  expect(out).toContain('export type Color =\n  | { _tag: "Red" }\n  | { _tag: "Green" };');
+  expect(out).not.toContain("const Red");
+  expect(out).not.toContain("const Green");
 });
 
 test("runtime builtins are imported from the typed runtime, not inlined", () => {

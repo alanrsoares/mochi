@@ -11,8 +11,9 @@ const js = (src: string) => compileJs(src, { runtime: true });
 const RESULT = "type Result a e =\n  | Ok(value: a)\n  | Err(error: e)\n";
 
 test("a labelled field lowers to that runtime key", () => {
-  expect(js(RESULT)).toContain('const Ok = (value) => ({ _tag: "Ok", value });');
-  expect(js(RESULT)).toContain('const Err = (error) => ({ _tag: "Err", error });');
+  const out = js(`${RESULT}let ok = Ok\nlet err = Err`);
+  expect(out).toContain('const Ok = (value) => ({ _tag: "Ok", value });');
+  expect(out).toContain('const Err = (error) => ({ _tag: "Err", error });');
 });
 
 test("a pattern destructures by the labelled key", () => {
@@ -22,7 +23,7 @@ test("a pattern destructures by the labelled key", () => {
 });
 
 test("a positional field keeps its `_0` key (back-compat)", () => {
-  const out = js("type Box a = | Box(a)\nlet f = b => switch b { | Box(x) => x }");
+  const out = js("type Box a = | Box(a)\nlet mk = Box\nlet f = b => switch b { | Box(x) => x }");
   expect(out).toContain('const Box = (_0) => ({ _tag: "Box", _0 });');
   expect(out).toContain('.with({ _tag: "Box" }, ({ _0: x }) => x)');
 });

@@ -160,6 +160,18 @@ export const exprRefs = (e: Expr, acc: Set<string>): void => {
 };
 
 /**
+ * Names referenced in let/expr values — not patterns. `| TLet =>` does not
+ * count, so a local unused ctor factory can be dropped.
+ */
+export const collectValueRefs = (prog: Program): Set<string> => {
+  const refs = new Set<string>();
+  for (const s of prog.stmts) {
+    if (s.kind === "let" || s.kind === "expr") exprRefs(s.value, refs);
+  }
+  return refs;
+};
+
+/**
  * The names a program binds at module scope — anything that would shadow a
  * prelude builtin, so its runtime def must NOT be inlined (else a duplicate
  * `const` and a JS SyntaxError, e.g. a user `let hypot = …`).
@@ -183,12 +195,16 @@ const boundNames = (prog: Program): Set<string> => {
  * (inlines the defs) and the TS backend (imports them from the typed runtime).
  */
 export const collectRuntimeDeps = (prog: Program): string[] => {
-  const refs = new Set<string>();
+  const refs = collectValueRefs(prog);
   for (const s of prog.stmts) {
-    if (s.kind === "let" || s.kind === "expr") exprRefs(s.value, refs);
     // A multi-field constructor lowers to `_curry(...)` in genType (which
-    // exprRefs never walks), so seed the dep here.
-    else if (s.kind === "type" && s.ctors.some((c) => c.fields.length >= 2)) refs.add("_curry");
+    // exprRefs never walks), so seed the dep here — but only for factories
+    // that will actually be emitted (exported, or used as a value).
+    if (
+      s.kind === "type" &&
+      s.ctors.some((c) => c.fields.length >= 2 && (s.exported || refs.has(c.name)))
+    )
+      refs.add("_curry");
     // Multi-arg externs wrap the host import in `_curry` (genExtern).
     else if (s.kind === "extern" && typeExprArity(s.typeExpr) >= 2) refs.add("_curry");
   }
