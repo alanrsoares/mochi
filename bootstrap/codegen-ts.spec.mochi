@@ -14,6 +14,7 @@ import {
   lambdaParamTypesTs,
   opaqueTypeDecl,
   recordAliasDecl,
+  recordAliasIndex,
   typeDecl,
   bindingTsType,
   curriedOverloads,
@@ -40,6 +41,7 @@ test("a nullary variant renders as a tagged union", () =>
       "Light",
       [],
       [{ name: "Red", fields: [] }, { name: "Green", fields: [] }],
+      #{},
       #{}
     )
   ))
@@ -57,6 +59,7 @@ test("a parameterised variant scopes its letters", () =>
           fields: [{ name: Some("value"), fieldType: Ast.TyName("a", sp) }]
         }
       ],
+      #{},
       #{}
     )
   ))
@@ -73,6 +76,7 @@ test("an unnamed ctor field takes a positional key", () =>
           fields: [{ name: None, fieldType: Ast.TyName("a", sp) }]
         }
       ],
+      #{},
       #{}
     )
   ))
@@ -87,6 +91,7 @@ test("a record alias renders structurally", () =>
         { name: "x", fieldType: Ast.TyName("number", sp) },
         { name: "y", fieldType: Ast.TyName("number", sp) }
       ],
+      #{},
       #{}
     )
   ))
@@ -94,7 +99,7 @@ test("a record alias renders structurally", () =>
 test("a transparent alias renders its aliased type", () =>
   assertEq(
     "export type Id = number;",
-    aliasTsDecl("Id", [], Ast.TyName("number", sp), #{})
+    aliasTsDecl("Id", [], Ast.TyName("number", sp), #{}, #{})
   ))
 
 test("an opaque extern type stays nominal", () =>
@@ -121,38 +126,45 @@ test("unionGenericNames merges letters across schemes", () =>
 test("emptyCollTs pins a concrete seed and skips a free one", () => {
   assertEq(
     Some("Map<string, number>"),
-    emptyCollTs(tCon("Map", [tPrim("string"), tPrim("number")]), #{})
+    emptyCollTs(tCon("Map", [tPrim("string"), tPrim("number")]), #{}, #{})
   );
-  assertEq(None, emptyCollTs(tCon("Map", [tPrim("string"), tVar(1)]), #{}))
+  assertEq(None, emptyCollTs(tCon("Map", [tPrim("string"), tVar(1)]), #{}, #{}))
 })
 
 test("emptyCollTs renders an in-scope var as its letter (ADR 0042)", () =>
-  assertEq(Some("A[]"), emptyCollTs(tCon("Array", [tVar(1)]), #{ 1: "A" })))
+  assertEq(
+    Some("A[]"),
+    emptyCollTs(tCon("Array", [tVar(1)]), #{ 1: "A" }, #{})
+  ))
 
 test("emptyCollTs needs the row tail in scope too", () => {
   assertEq(
     None,
-    emptyCollTs(tRecord(rExtend("x", tPrim("number"), rVar(9))), #{})
+    emptyCollTs(tRecord(rExtend("x", tPrim("number"), rVar(9))), #{}, #{})
   );
   assertEq(
     Some("({ x: number } & R)"),
-    emptyCollTs(tRecord(rExtend("x", tPrim("number"), rVar(9))), #{ 9: "R" })
+    emptyCollTs(
+      tRecord(rExtend("x", tPrim("number"), rVar(9))),
+      #{ 9: "R" },
+      #{}
+    )
   )
 })
 
 test("ctorCallTs casts only a concrete APPLIED con", () => {
   assertEq(
     Some("Result<number, string>"),
-    ctorCallTs(tCon("Result", [tPrim("number"), tPrim("string")]))
+    ctorCallTs(tCon("Result", [tPrim("number"), tPrim("string")]), #{})
   );
-  assertEq(None, ctorCallTs(tCon("Result", [tPrim("number"), tVar(3)])));
-  assertEq(None, ctorCallTs(tPrim("number")))
+  assertEq(None, ctorCallTs(tCon("Result", [tPrim("number"), tVar(3)]), #{}));
+  assertEq(None, ctorCallTs(tPrim("number"), #{}))
 })
 // phantom param still free -> tsc's `unknown` is no worse than ours
 // nullary con carries no type args to pin
 test("guardParamTs supplies a concrete scrutinee base only", () => {
-  assertEq(Some("Shape"), guardParamTs(tCon("Shape", [])));
-  assertEq(None, guardParamTs(tCon("Box", [tVar(1)])))
+  assertEq(Some("Shape"), guardParamTs(tCon("Shape", []), #{}));
+  assertEq(None, guardParamTs(tCon("Box", [tVar(1)]), #{}))
 })
 
 test("lambdaParamTypesTs peels one arrow per param", () =>
@@ -161,6 +173,7 @@ test("lambdaParamTypesTs peels one arrow per param", () =>
     lambdaParamTypesTs(
       tArrow(tPrim("number"), tArrow(tPrim("string"), tPrim("bool"))),
       2,
+      #{},
       #{}
     )
   ))
@@ -171,6 +184,7 @@ test("lambdaParamTypesTs leaves an out-of-scope generic param bare", () =>
     lambdaParamTypesTs(
       tArrow(tVar(1), tArrow(tPrim("number"), tPrim("bool"))),
       2,
+      #{},
       #{}
     )
   ))
@@ -178,7 +192,7 @@ test("lambdaParamTypesTs leaves an out-of-scope generic param bare", () =>
 test("lambdaParamTypesTs pads when arity outruns the arrow spine", () =>
   assertEq(
     [Some("number"), None],
-    lambdaParamTypesTs(tArrow(tPrim("number"), tPrim("bool")), 2, #{})
+    lambdaParamTypesTs(tArrow(tPrim("number"), tPrim("bool")), 2, #{}, #{})
   ))
 
 test("genericLambdaParams scopes the scheme's own letters", () =>
@@ -190,7 +204,8 @@ test("genericLambdaParams scopes the scheme's own letters", () =>
         rvars: [],
         ty: tArrow(tVar(1), tArrow(tCon("Array", [tVar(1)]), tPrim("bool")))
       },
-      2
+      2,
+      #{}
     )
   ))
 
@@ -199,7 +214,8 @@ test("genericLambdaParams declines a non-generic binding", () =>
     None,
     genericLambdaParams(
       { vars: [], rvars: [], ty: tArrow(tPrim("number"), tPrim("bool")) },
-      1
+      1,
+      #{}
     )
   ))
 
@@ -218,6 +234,7 @@ test("ctorFactoryTs types a parameterised factory", () =>
         name: "Wrap",
         fields: [{ name: Some("value"), fieldType: Ast.TyName("a", sp) }]
       },
+      #{},
       #{}
     )
   ))
@@ -225,7 +242,7 @@ test("ctorFactoryTs types a parameterised factory", () =>
 test("ctorFactoryTs leaves a nullary type unparameterised", () =>
   assertEq(
     { generics: "", paramTypes: [], ret: "Light", retMono: "Light" },
-    ctorFactoryTs("Light", [], { name: "Red", fields: [] }, #{})
+    ctorFactoryTs("Light", [], { name: "Red", fields: [] }, #{}, #{})
   ))
 
 // ---- binding types (ADR 0037) ----------------------------------------------
@@ -265,7 +282,8 @@ test("a concrete function binding gets curried overloads", () =>
         rvars: [],
         ty: tArrow(tPrim("number"), tArrow(tPrim("number"), tPrim("number")))
       },
-      lam(["a", "b"], unitE)
+      lam(["a", "b"], unitE),
+      #{}
     )
   ))
 
@@ -274,7 +292,8 @@ test("a generic function binding keeps the nested arrow", () =>
     "<A>(value: A) => A",
     bindingTsType(
       { vars: [1], rvars: [], ty: tArrow(tVar(1), tVar(1)) },
-      lam(["value"], unitE)
+      lam(["value"], unitE),
+      #{}
     )
   ))
 
@@ -283,7 +302,8 @@ test("a non-function binding renders its type directly", () =>
     "number[]",
     bindingTsType(
       { vars: [], rvars: [], ty: tCon("Array", [tPrim("number")]) },
-      unitE
+      unitE,
+      #{}
     )
   ))
 
@@ -292,7 +312,8 @@ test("a zero-param lambda consumes the erased unit arrow", () =>
     "() => number",
     bindingTsType(
       { vars: [], rvars: [], ty: tArrow(tPrim("unit"), tPrim("number")) },
-      Ast.ELambda([], unitE, sp)
+      Ast.ELambda([], unitE, sp),
+      #{}
     )
   ))
 
@@ -379,3 +400,56 @@ test("emits the runtime import for referenced helpers", () =>
 
 test("pulls in _tuple when the body uses it (ADR 0036)", () =>
   assertEq(true, tsOf("let pt = (1, 2)") |> Str.contains("_tuple")))
+
+// ---- record alias index (ADR 0092) -----------------------------------------
+
+test("recordAliasIndex keys a nullary record alias by sorted shape", () =>
+  assertEq(
+    #{ "end: number; start: number": "Span" },
+    recordAliasIndex(
+      #{
+        "Span": {
+          params: [],
+          fields: [
+            { name: "start", fieldType: Ast.TyName("number", sp) },
+            { name: "end", fieldType: Ast.TyName("number", sp) }
+          ],
+          expr: None
+        }
+      }
+    )
+  ))
+
+test("recordAliasIndex skips a parameterised alias", () =>
+  // Matching one would mean matching a row up to substitution.
+  assertEq(
+    #{},
+    recordAliasIndex(
+      #{
+        "Box": {
+          params: ["a"],
+          fields: [{ name: "value", fieldType: Ast.TyName("a", sp) }],
+          expr: None
+        }
+      }
+    )
+  ))
+
+test("a use of a record alias renders as the alias name", () =>
+  assertEq(
+    true,
+    tsOf(
+      "type Span = { start: number, end: number }\nlet at = (s: Span) => s.start"
+    )
+      |> Str.contains(": Span")
+  ))
+
+test("an alias declaration still renders its own body structurally", () =>
+  // Without the self-exclusion this comes out `export type Span = Span;`.
+  assertEq(
+    true,
+    tsOf(
+      "type Span = { start: number, end: number }\nlet at = (s: Span) => s.start"
+    )
+      |> Str.contains("export type Span = { start: number; end: number };")
+  ))

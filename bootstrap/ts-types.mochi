@@ -1,6 +1,12 @@
 // TypeScript type rendering for the self-hosted TS backend (ADR 0090).
 // This is deliberately below emission: it owns the HM Type -> TS grammar used
 // by both typed source and future declarations, while codegen owns syntax.
+//
+// Every renderer takes a `recs` index (ADR 0092): a record alias is STRUCTURAL
+// (ADR 0005), so `typeExprToType` has already expanded it away by the time a Ty
+// reaches here. `recs` maps a canonical row shape back to the alias name the
+// module declared, which is what keeps the emit from re-printing one record
+// type at hundreds of sites. Pass `#{}` to render fully structurally.
 
 import {
   TyVar,
@@ -44,46 +50,80 @@ let primitiveTs = name => switch name {
   | _ => name
 }
 
-let namesOf = (ts, names) => Str.join(", ", ts |> map(t => tsOfRaw(t, names)))
+let namesOf = (ts, names, recs) =>
+  Str.join(", ", ts |> map(t => tsOfRaw(t, names, recs)))
 
-let nominal = (name, args, names) =>
+let nominal = (name, args, names, recs) =>
   Array.length(args) == 0
     ? primitiveTs(name)
-    : "${name}<${namesOf(args, names)}>"
+    : "${name}<${namesOf(args, names, recs)}>"
 
-let tsRowFields = (row, names) => switch row {
+let tsRowFields = (row, names, recs) => switch row {
   | RowEmpty => ([], None)
   | RowVar(id) => ([], Some(id))
   | RowExtend(label, fieldType, rest) => let (fields, tail) = tsRowFields(
       rest,
-      names
+      names,
+      recs
     ) in
-      (Array.prepend("${label}: ${tsOfRaw(fieldType, names)}", fields), tail)
+      (
+        Array.prepend("${label}: ${tsOfRaw(fieldType, names, recs)}", fields),
+        tail
+      )
 }
 
-let tsRow = (row, names) =>
-  let (fields, tail) = tsRowFields(row, names) in
-  let body = Array.length(fields) == 0
-    ? "{}"
-    : "{ ${Str.join("; ", fields)} }" in
-    switch tail {
-      | None => body
-      | Some(id) => switch Map.get(id, names) {
-          | None => body
-          | Some(name) => Array.length(fields) == 0
-              ? name
-              : "(${body} & ${name})"
-        }
-    }
+/// Fields of a CLOSED row, each rendered with NO index. `None` for an open row:
+/// `{ … } & R` is not the alias, only its prefix, so it has no name to take.
+let shapeFieldsFrom = (row, names) => switch row {
+  | RowEmpty => Some([])
+  | RowVar(_) => None
+  | RowExtend(label, fieldType, rest) => shapeFieldsFrom(rest, names)
+      |> Option.map(fs =>
+        Array.prepend("${label}: ${tsOf(fieldType, names, #{})}", fs))
+}
 
-let tsArrow = (fromT, toT, names) =>
+/// The index key for a row. Sorted, because a row carries fields in the order
+/// `unify` extended it: the same record type reaches `tsRow` as both
+/// `{ ty; rvars; vars }` and `{ vars; rvars; ty }`, and both must key alike.
+/// Rendered index-free so building the index and looking a row up in it can
+/// never disagree about a nested field's spelling.
+export let rowShapeKey = (row, names) =>
+  shapeFieldsFrom(row, names)
+    |> Option.map(fs => Str.join("; ", Array.sort(fs)))
+
+/// The declared name for a row, when the emitting module declared one. The
+/// empty-index short-circuit keeps the key off the hot path for the many call
+/// sites that render with no index at all.
+let aliasNameFor = (row, names, recs) =>
+  Map.size(recs) == 0
+    ? None
+    : rowShapeKey(row, names) |> Option.flatMap(k => Map.get(k, recs))
+
+let tsRow = (row, names, recs) => switch aliasNameFor(row, names, recs) {
+  | Some(alias) => alias
+  | None => let (fields, tail) = tsRowFields(row, names, recs) in
+    let body = Array.length(fields) == 0
+      ? "{}"
+      : "{ ${Str.join("; ", fields)} }" in
+      switch tail {
+        | None => body
+        | Some(id) => switch Map.get(id, names) {
+            | None => body
+            | Some(name) => Array.length(fields) == 0
+                ? name
+                : "(${body} & ${name})"
+          }
+      }
+}
+
+let tsArrow = (fromT, toT, names, recs) =>
   isUnit(fromT)
-    ? "() => ${tsOfRaw(toT, names)}"
-    : tsArrowParams(fromT, toT, names, 0, [])
+    ? "() => ${tsOfRaw(toT, names, recs)}"
+    : tsArrowParams(fromT, toT, names, recs, 0, [])
 
-let tsArrowParams = (fromT, toT, names, i, params) =>
+let tsArrowParams = (fromT, toT, names, recs, i, params) =>
   let params1 = Array.append(
-    "${Str.fromCode(97 + i)}: ${tsOfRaw(fromT, names)}",
+    "${Str.fromCode(97 + i)}: ${tsOfRaw(fromT, names, recs)}",
     params
   ) in
     switch toT {
@@ -91,31 +131,35 @@ let tsArrowParams = (fromT, toT, names, i, params) =>
           nextFrom,
           nextTo,
           names,
+          recs,
           i + 1,
           params1
         )
-      | _ => "(${Str.join(", ", params1)}) => ${tsOfRaw(toT, names)}"
+      | _ => "(${Str.join(", ", params1)}) => ${tsOfRaw(toT, names, recs)}"
     }
 
 /// Render an already-zonked HM type into strict TypeScript syntax. Bare
 /// singleton types widen at this boundary just as the TS backend does.
-export let tsOf = (t, names) => tsOfRaw(widenLits(t), names)
+export let tsOf = (t, names, recs) => tsOfRaw(widenLits(t), names, recs)
 
-let tsOfRaw = (t, names) => switch t {
+let tsOfRaw = (t, names, recs) => switch t {
   | TyVar(id) => Option.unwrapOr("unknown", Map.get(id, names))
-  | TyCon("Array", [elem]) => let inner = tsOfRaw(elem, names) in
+  | TyCon("Array", [elem]) => let inner = tsOfRaw(elem, names, recs) in
       switch elem {
         | TyFn(_, _) => "(${inner})[]"
         | TyOneOf(_) => "(${inner})[]"
         | _ => "${inner}[]"
       }
-  | TyCon("List", [elem]) => "Iterable<${tsOfRaw(elem, names)}>"
-  | TyCon("Task", [value, error]) => "() => Promise<Result<${tsOfRaw(value, names)}, ${tsOfRaw(error, names)}>>"
-  | TyCon("tuple", elems) => "[${namesOf(elems, names)}]"
-  | TyCon(name, args) => nominal(name, args, names)
-  | TyFn(fromT, toT) => tsArrow(fromT, toT, names)
-  | TyRecord(row) => tsRow(row, names)
+  | TyCon("List", [elem]) => "Iterable<${tsOfRaw(elem, names, recs)}>"
+  | TyCon("Task", [value, error]) => "() => Promise<Result<${tsOfRaw(value, names, recs)}, ${tsOfRaw(error, names, recs)}>>"
+  | TyCon("tuple", elems) => "[${namesOf(elems, names, recs)}]"
+  | TyCon(name, args) => nominal(name, args, names, recs)
+  | TyFn(fromT, toT) => tsArrow(fromT, toT, names, recs)
+  | TyRecord(row) => tsRow(row, names, recs)
   | TySingleton("string", value) => "\"${value}\""
   | TySingleton(_, value) => value
-  | TyOneOf(members) => Str.join(" | ", members |> map(m => tsOfRaw(m, names)))
+  | TyOneOf(members) => Str.join(
+      " | ",
+      members |> map(m => tsOfRaw(m, names, recs))
+    )
 }
