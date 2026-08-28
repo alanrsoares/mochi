@@ -97,6 +97,7 @@ import {
   unifyRows,
 } from "./types";
 import * as Ast from "./ast";
+import * as Types from "./types";
 const setLetBindMonad = _curry(2, ($receiver, $value) => ($receiver["monad"] = $value));
 import { inferCallHooksOf, resolvePluginsDefault, runInferCallHooks } from "./extensions";
 import { builtinDeclsFor } from "./ctors";
@@ -179,38 +180,26 @@ const typeErr: <A, B, C, D>(
     end: sp.end,
   }),
 );
-const u: <A, B, C, D>(
+const u: <A, B, C>(
   a: Ty,
   b: Ty,
-  st: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & C,
-  sp: { end: A; start: B } & D,
-) => Result<
-  { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & C,
-  { message: string; start: B; end: A }
-> = _curry(
+  st: St,
+  sp: { end: A; start: B } & C,
+) => Result<St, { message: string; start: B; end: A }> = _curry(
   4,
-  <A, B, C, D>(
-    a: Ty,
-    b: Ty,
-    st: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & C,
-    sp: { end: A; start: B } & D,
-  ) =>
+  <A, B, C>(a: Ty, b: Ty, st: St, sp: { end: A; start: B } & C) =>
     match(unify(a, b, st))
       .with({ _tag: "Ok" }, ({ value: newSt }) => Ok(newSt))
       .with({ _tag: "Err" }, ({ error: e }) => Err(typeErr(e.message, sp)))
       .exhaustive(),
 );
-const bindParamNamesFrom: <A, B, C, D>(
+const bindParamNamesFrom: <A, B, C>(
   names: A[],
   env: Map<A, { vars: B[]; rvars: C[]; ty: Ty }>,
-  st: { next: number } & D,
-) => [Ty[], Map<A, { vars: B[]; rvars: C[]; ty: Ty }>, { next: number } & D] = _curry(
+  st: St,
+) => [Ty[], Map<A, { vars: B[]; rvars: C[]; ty: Ty }>, St] = _curry(
   3,
-  <A, B, C, D>(
-    names: A[],
-    env: Map<A, { vars: B[]; rvars: C[]; ty: Ty }>,
-    st: { next: number } & D,
-  ) =>
+  <A, B, C>(names: A[], env: Map<A, { vars: B[]; rvars: C[]; ty: Ty }>, st: St) =>
     match(names)
       .with(
         (_v) => _v.length === 0,
@@ -219,12 +208,9 @@ const bindParamNamesFrom: <A, B, C, D>(
       .with(
         (_v) => _v.length >= 1,
         ([n, ...rest]) =>
-          (([t, st1]: [Ty, { next: number } & D]) =>
-            (([restTs, env2, st2]: [
-              Ty[],
-              Map<A, { vars: B[]; rvars: C[]; ty: Ty }>,
-              { next: number } & D,
-            ]) => _tuple(_Array_prepend(t, restTs), env2, st2))(
+          (([t, st1]: [Ty, St]) =>
+            (([restTs, env2, st2]: [Ty[], Map<A, { vars: B[]; rvars: C[]; ty: Ty }>, St]) =>
+              _tuple(_Array_prepend(t, restTs), env2, st2))(
               bindParamNamesFrom(rest, _Map_set(n, mono(t), env), st1),
             ))(freshVar(st)),
       )
@@ -232,19 +218,14 @@ const bindParamNamesFrom: <A, B, C, D>(
         throw new Error("non-exhaustive match");
       }),
 );
-const bindParamFieldsFrom: <A, B, C>(
+const bindParamFieldsFrom: <A, B>(
   fields: string[],
   env: Map<string, { vars: A[]; rvars: B[]; ty: Ty }>,
   row: Row,
-  st: { next: number } & C,
-) => [Row, Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, { next: number } & C] = _curry(
+  st: St,
+) => [Row, Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, St] = _curry(
   4,
-  <A, B, C>(
-    fields: string[],
-    env: Map<string, { vars: A[]; rvars: B[]; ty: Ty }>,
-    row: Row,
-    st: { next: number } & C,
-  ) =>
+  <A, B>(fields: string[], env: Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, row: Row, st: St) =>
     match(fields)
       .with(
         (_v) => {
@@ -259,7 +240,7 @@ const bindParamFieldsFrom: <A, B, C>(
           return _g.length >= 1;
         },
         ([f, ...rest]) =>
-          (([ft, st1]: [Ty, { next: number } & C]) =>
+          (([ft, st1]: [Ty, St]) =>
             bindParamFieldsFrom(rest, _Map_set(f, mono(ft), env), rExtend(f, ft, row), st1))(
             freshVar(st),
           ),
@@ -268,53 +249,37 @@ const bindParamFieldsFrom: <A, B, C>(
         throw new Error("non-exhaustive match");
       }),
 );
-const bindParam: <A, B, C>(
+const bindParam: <A, B>(
   p: LamParam,
   env: Map<string, { vars: A[]; rvars: B[]; ty: Ty }>,
-  st: { next: number } & C,
-) => [Ty, Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, { next: number } & C] = _curry(
+  st: St,
+) => [Ty, Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, St] = _curry(
   3,
-  <A, B, C>(
-    p: LamParam,
-    env: Map<string, { vars: A[]; rvars: B[]; ty: Ty }>,
-    st: { next: number } & C,
-  ) =>
+  <A, B>(p: LamParam, env: Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, st: St) =>
     match(p)
       .with({ _tag: "LPName" }, ({ name }) =>
-        (([t, st1]: [Ty, { next: number } & C]) => _tuple(t, _Map_set(name, mono(t), env), st1))(
-          freshVar(st),
-        ),
+        (([t, st1]: [Ty, St]) => _tuple(t, _Map_set(name, mono(t), env), st1))(freshVar(st)),
       )
       .with({ _tag: "LPTuple" }, ({ names }) =>
-        (([elems, env1, st1]: [
-          Ty[],
-          Map<string, { vars: A[]; rvars: B[]; ty: Ty }>,
-          { next: number } & C,
-        ]) => _tuple(tTuple(elems), env1, st1))(bindParamNamesFrom(names, env, st)),
+        (([elems, env1, st1]: [Ty[], Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, St]) =>
+          _tuple(tTuple(elems), env1, st1))(bindParamNamesFrom(names, env, st)),
       )
       .with({ _tag: "LPRecord" }, ({ fields }) =>
-        (([rowBase, st1]: [Row, { next: number } & C]) =>
-          (([row, env1, st2]: [
-            Row,
-            Map<string, { vars: A[]; rvars: B[]; ty: Ty }>,
-            { next: number } & C,
-          ]) => _tuple(tRecord(row), env1, st2))(bindParamFieldsFrom(fields, env, rowBase, st1)))(
+        (([rowBase, st1]: [Row, St]) =>
+          (([row, env1, st2]: [Row, Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, St]) =>
+            _tuple(tRecord(row), env1, st2))(bindParamFieldsFrom(fields, env, rowBase, st1)))(
           freshRowVar(st),
         ),
       )
       .exhaustive(),
 );
-const bindParamsFrom: <A, B, C>(
+const bindParamsFrom: <A, B>(
   params: LamParam[],
   env: Map<string, { vars: A[]; rvars: B[]; ty: Ty }>,
-  st: { next: number } & C,
-) => [Ty[], Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, { next: number } & C] = _curry(
+  st: St,
+) => [Ty[], Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, St] = _curry(
   3,
-  <A, B, C>(
-    params: LamParam[],
-    env: Map<string, { vars: A[]; rvars: B[]; ty: Ty }>,
-    st: { next: number } & C,
-  ) =>
+  <A, B>(params: LamParam[], env: Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, st: St) =>
     match(params)
       .with(
         (_v) => {
@@ -329,16 +294,9 @@ const bindParamsFrom: <A, B, C>(
           return _g.length >= 1;
         },
         ([p, ...rest]) =>
-          (([t, env1, st1]: [
-            Ty,
-            Map<string, { vars: A[]; rvars: B[]; ty: Ty }>,
-            { next: number } & C,
-          ]) =>
-            (([restTs, env2, st2]: [
-              Ty[],
-              Map<string, { vars: A[]; rvars: B[]; ty: Ty }>,
-              { next: number } & C,
-            ]) => _tuple(_Array_prepend(t, restTs), env2, st2))(bindParamsFrom(rest, env1, st1)))(
+          (([t, env1, st1]: [Ty, Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, St]) =>
+            (([restTs, env2, st2]: [Ty[], Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, St]) =>
+              _tuple(_Array_prepend(t, restTs), env2, st2))(bindParamsFrom(rest, env1, st1)))(
             bindParam(p, env, st),
           ),
       )
@@ -346,7 +304,7 @@ const bindParamsFrom: <A, B, C>(
         throw new Error("non-exhaustive match");
       }),
 );
-const constrainParamAnnotsFrom: <A, B, C, D>(
+const constrainParamAnnotsFrom: <A, B, C>(
   ctx: {
     aliasMap: Map<
       string,
@@ -360,10 +318,10 @@ const constrainParamAnnotsFrom: <A, B, C, D>(
   params: LamParam[],
   paramTypes: Ty[],
   vars: Map<string, Ty>,
-  st: { next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-) => Result<{ next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & D, IErr> = _curry(
+  st: St,
+) => Result<St, IErr> = _curry(
   5,
-  <A, B, C, D>(
+  <A, B, C>(
     ctx: {
       aliasMap: Map<
         string,
@@ -377,7 +335,7 @@ const constrainParamAnnotsFrom: <A, B, C, D>(
     params: LamParam[],
     paramTypes: Ty[],
     vars: Map<string, Ty>,
-    st: { next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
+    st: St,
   ) =>
     match(params)
       .with(
@@ -385,7 +343,7 @@ const constrainParamAnnotsFrom: <A, B, C, D>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(st),
+        () => Ok(st) as Result<St, IErr>,
       )
       .with(
         (_v) => {
@@ -399,7 +357,7 @@ const constrainParamAnnotsFrom: <A, B, C, D>(
                 const _g: any = _v;
                 return _g.length === 0;
               },
-              () => Ok(st),
+              () => Ok(st) as Result<St, IErr>,
             )
             .with(
               (_v) => {
@@ -421,11 +379,7 @@ const constrainParamAnnotsFrom: <A, B, C, D>(
                       return _g._tag === "LPName" && _g.annot._tag === "Some";
                     },
                     ({ annot: { value: te } }) =>
-                      (([annotT, vars1, st1]: [
-                        Ty,
-                        Map<string, Ty>,
-                        { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & D,
-                      ]) =>
+                      (([annotT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
                         _Result_flatMap(
                           (st2) => constrainParamAnnotsFrom(ctx, rest, restTypes, vars1, st2),
                           u(paramT, annotT, st1, annotSpan(te)),
@@ -531,7 +485,7 @@ const ctxWithLoop: <A, B, C, D, E, F, G, H>(
     letOwner: letOwner,
   }),
 );
-const inferLoopParamsFrom: <A, B, C, D, E, F, G, H, I>(
+const inferLoopParamsFrom: <A, B, C, D, E, F, G>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -550,67 +504,19 @@ const inferLoopParamsFrom: <A, B, C, D, E, F, G, H, I>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            next: number;
-            letUses: Map<string, Ty[]>;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & F,
+          d: St,
           e: {
-            inferExpr: (
-              a: Expr,
-              b: {
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & F,
-            ) => Result<
-              [
-                Ty,
-                {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ],
-              IErr
-            >;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             unify: (
               a: Ty,
               b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              d: { end: A; start: B } & H,
-            ) => Result<
-              { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              { message: string; start: B; end: A }
-            >;
+              c: St,
+              d: { end: A; start: B } & F,
+            ) => Result<St, { message: string; start: B; end: A }>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                next: number;
-                letUses: Map<string, Ty[]>;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-              } & F,
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
-    } & I)[];
+    } & G)[];
     loopStack: Ty[][];
     letOwner: Map<string, Span>;
   },
@@ -619,32 +525,10 @@ const inferLoopParamsFrom: <A, B, C, D, E, F, G, H, I>(
   envAcc: Map<string, Scheme>,
   frameAcc: Ty[],
   ownerAcc: Map<string, Span>,
-  st: {
-    letUses: Map<string, Ty[]>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-    next: number;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & F,
-) => Result<
-  [
-    Ty[],
-    Map<string, Scheme>,
-    Map<string, Span>,
-    {
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & F,
-  ],
-  IErr
-> = _curry(
+  st: St,
+) => Result<[Ty[], Map<string, Scheme>, Map<string, Span>, St], IErr> = _curry(
   7,
-  <A, B, C, D, E, F, G, H, I>(
+  <A, B, C, D, E, F, G>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
@@ -663,67 +547,19 @@ const inferLoopParamsFrom: <A, B, C, D, E, F, G, H, I>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              next: number;
-              letUses: Map<string, Ty[]>;
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & F,
+            d: St,
             e: {
-              inferExpr: (
-                a: Expr,
-                b: {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    letUses: Map<string, Ty[]>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                    next: number;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & F,
-                ],
-                IErr
-              >;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
               unify: (
                 a: Ty,
                 b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                d: { end: A; start: B } & H,
-              ) => Result<
-                { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                { message: string; start: B; end: A }
-              >;
+                c: St,
+                d: { end: A; start: B } & F,
+              ) => Result<St, { message: string; start: B; end: A }>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & F,
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
-      } & I)[];
+      } & G)[];
       loopStack: Ty[][];
       letOwner: Map<string, Span>;
     },
@@ -732,17 +568,17 @@ const inferLoopParamsFrom: <A, B, C, D, E, F, G, H, I>(
     envAcc: Map<string, Scheme>,
     frameAcc: Ty[],
     ownerAcc: Map<string, Span>,
-    st: {
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & F,
+    st: St,
   ) =>
     match(_Array_get(i, params))
-      .with({ _tag: "None" }, () => Ok(_tuple(frameAcc, envAcc, ownerAcc, st)))
+      .with(
+        { _tag: "None" },
+        () =>
+          Ok(_tuple(frameAcc, envAcc, ownerAcc, st)) as Result<
+            [Ty[], Map<string, Scheme>, Map<string, Span>, St],
+            IErr
+          >,
+      )
       .with({ _tag: "Some" }, ({ value: p }) =>
         _Result_flatMap(
           ([t, st1]) =>
@@ -761,7 +597,7 @@ const inferLoopParamsFrom: <A, B, C, D, E, F, G, H, I>(
       )
       .exhaustive(),
 );
-const unifyRecurArgsFrom: <A, B, C, D, E, F, G, H, I>(
+const unifyRecurArgsFrom: <A, B, C, D, E, F, G>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -780,94 +616,29 @@ const unifyRecurArgsFrom: <A, B, C, D, E, F, G, H, I>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            next: number;
-            letUses: Map<string, Ty[]>;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & F,
+          d: St,
           e: {
-            inferExpr: (
-              a: Expr,
-              b: {
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & F,
-            ) => Result<
-              [
-                Ty,
-                {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ],
-              IErr
-            >;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             unify: (
               a: Ty,
               b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              d: { end: A; start: B } & H,
-            ) => Result<
-              { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              { message: string; start: B; end: A }
-            >;
+              c: St,
+              d: { end: A; start: B } & F,
+            ) => Result<St, { message: string; start: B; end: A }>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                next: number;
-                letUses: Map<string, Ty[]>;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-              } & F,
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
-    } & I)[];
+    } & G)[];
     loopStack: Ty[][];
     letOwner: Map<string, Span>;
   },
   args: Expr[],
   frame: Ty[],
   i: number,
-  st: {
-    letUses: Map<string, Ty[]>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-    next: number;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & F,
-) => Result<
-  {
-    letUses: Map<string, Ty[]>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-    next: number;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & F,
-  IErr
-> = _curry(
+  st: St,
+) => Result<St, IErr> = _curry(
   5,
-  <A, B, C, D, E, F, G, H, I>(
+  <A, B, C, D, E, F, G>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
@@ -886,84 +657,29 @@ const unifyRecurArgsFrom: <A, B, C, D, E, F, G, H, I>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              next: number;
-              letUses: Map<string, Ty[]>;
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & F,
+            d: St,
             e: {
-              inferExpr: (
-                a: Expr,
-                b: {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    letUses: Map<string, Ty[]>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                    next: number;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & F,
-                ],
-                IErr
-              >;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
               unify: (
                 a: Ty,
                 b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                d: { end: A; start: B } & H,
-              ) => Result<
-                { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                { message: string; start: B; end: A }
-              >;
+                c: St,
+                d: { end: A; start: B } & F,
+              ) => Result<St, { message: string; start: B; end: A }>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & F,
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
-      } & I)[];
+      } & G)[];
       loopStack: Ty[][];
       letOwner: Map<string, Span>;
     },
     args: Expr[],
     frame: Ty[],
     i: number,
-    st: {
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & F,
+    st: St,
   ) =>
     match(_Array_get(i, args))
-      .with({ _tag: "None" }, () => Ok(st))
+      .with({ _tag: "None" }, () => Ok(st) as Result<St, IErr>)
       .with({ _tag: "Some" }, ({ value: a }) =>
         _Result_flatMap(
           ([at, st1]) =>
@@ -981,7 +697,7 @@ const unifyRecurArgsFrom: <A, B, C, D, E, F, G, H, I>(
       )
       .exhaustive(),
 );
-const inferRecur: <A, B, C, D, E, F, G, H, I>(
+const inferRecur: <A, B, C, D, E, F, G>(
   ctx: {
     loopStack: Ty[][];
     env: Map<string, Scheme>;
@@ -1001,95 +717,27 @@ const inferRecur: <A, B, C, D, E, F, G, H, I>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            next: number;
-            letUses: Map<string, Ty[]>;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & E,
+          d: St,
           e: {
-            inferExpr: (
-              a: Expr,
-              b: {
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & E,
-            ) => Result<
-              [
-                Ty,
-                {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & E,
-              ],
-              IErr
-            >;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             unify: (
               a: Ty,
               b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & F,
-              d: { end: A; start: B } & G,
-            ) => Result<
-              { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & F,
-              { message: string; start: B; end: A }
-            >;
+              c: St,
+              d: { end: A; start: B } & E,
+            ) => Result<St, { message: string; start: B; end: A }>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                next: number;
-                letUses: Map<string, Ty[]>;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-              } & E,
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
-    } & H)[];
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
+    } & F)[];
+    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
   },
   args: Expr[],
   sp: Span,
-  st: {
-    next: number;
-    letUses: Map<string, Ty[]>;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-  } & E,
-) => Result<
-  [
-    Ty,
-    {
-      next: number;
-      letUses: Map<string, Ty[]>;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-    } & E,
-  ],
-  IErr
-> = _curry(
+  st: St,
+) => Result<[Ty, St], IErr> = _curry(
   4,
-  <A, B, C, D, E, F, G, H, I>(
+  <A, B, C, D, E, F, G>(
     ctx: {
       loopStack: Ty[][];
       env: Map<string, Scheme>;
@@ -1109,79 +757,24 @@ const inferRecur: <A, B, C, D, E, F, G, H, I>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              next: number;
-              letUses: Map<string, Ty[]>;
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & E,
+            d: St,
             e: {
-              inferExpr: (
-                a: Expr,
-                b: {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & E,
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    letUses: Map<string, Ty[]>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                    next: number;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & E,
-                ],
-                IErr
-              >;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
               unify: (
                 a: Ty,
                 b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & F,
-                d: { end: A; start: B } & G,
-              ) => Result<
-                { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & F,
-                { message: string; start: B; end: A }
-              >;
+                c: St,
+                d: { end: A; start: B } & E,
+              ) => Result<St, { message: string; start: B; end: A }>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & E,
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
-      } & H)[];
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
+      } & F)[];
+      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
     },
     args: Expr[],
     sp: Span,
-    st: {
-      next: number;
-      letUses: Map<string, Ty[]>;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-    } & E,
+    st: St,
   ) =>
     match(ctx.loopStack)
       .with(
@@ -1189,7 +782,11 @@ const inferRecur: <A, B, C, D, E, F, G, H, I>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Err(typeErr("'recur' is only legal inside a loop body", sp)),
+        () =>
+          Err(typeErr("'recur' is only legal inside a loop body", sp)) as Result<
+            [Ty, St],
+            { message: string; start: number; end: number }
+          >,
       )
       .with(
         (_v) => {
@@ -1199,17 +796,11 @@ const inferRecur: <A, B, C, D, E, F, G, H, I>(
         ([frame]) =>
           _Result_flatMap(
             (st1) =>
-              (([t, st2]: [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & E,
-              ]) => Ok(_tuple(t, st2)))(freshVar(st1)),
+              (([t, st2]: [Ty, St]) =>
+                Ok(_tuple(t, st2)) as Result<
+                  [Ty, St],
+                  { message: string; start: number; end: number }
+                >)(freshVar(st1)),
             unifyRecurArgsFrom(ctx, args, frame, 0, st),
           ),
       )
@@ -1217,7 +808,7 @@ const inferRecur: <A, B, C, D, E, F, G, H, I>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferCallArgs: <A, B, C, D, E, F, G, H, I>(
+const inferCallArgs: <A, B, C, D, E, F, G>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -1236,97 +827,29 @@ const inferCallArgs: <A, B, C, D, E, F, G, H, I>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            next: number;
-            letUses: Map<string, Ty[]>;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & F,
+          d: St,
           e: {
-            inferExpr: (
-              a: Expr,
-              b: {
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & F,
-            ) => Result<
-              [
-                Ty,
-                {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ],
-              IErr
-            >;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             unify: (
               a: Ty,
               b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              d: { end: A; start: B } & H,
-            ) => Result<
-              { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              { message: string; start: B; end: A }
-            >;
+              c: St,
+              d: { end: A; start: B } & F,
+            ) => Result<St, { message: string; start: B; end: A }>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                next: number;
-                letUses: Map<string, Ty[]>;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-              } & F,
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
-    } & I)[];
+    } & G)[];
     loopStack: Ty[][];
     letOwner: Map<string, Span>;
   },
   fnT: Ty,
   args: Expr[],
-  st: {
-    letUses: Map<string, Ty[]>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-    next: number;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & F,
+  st: St,
   callSpan: Span,
-) => Result<
-  [
-    Ty,
-    {
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & F,
-  ],
-  IErr
-> = _curry(
+) => Result<[Ty, St], IErr> = _curry(
   5,
-  <A, B, C, D, E, F, G, H, I>(
+  <A, B, C, D, E, F, G>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
@@ -1345,80 +868,25 @@ const inferCallArgs: <A, B, C, D, E, F, G, H, I>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              next: number;
-              letUses: Map<string, Ty[]>;
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & F,
+            d: St,
             e: {
-              inferExpr: (
-                a: Expr,
-                b: {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    letUses: Map<string, Ty[]>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                    next: number;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & F,
-                ],
-                IErr
-              >;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
               unify: (
                 a: Ty,
                 b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                d: { end: A; start: B } & H,
-              ) => Result<
-                { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                { message: string; start: B; end: A }
-              >;
+                c: St,
+                d: { end: A; start: B } & F,
+              ) => Result<St, { message: string; start: B; end: A }>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & F,
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
-      } & I)[];
+      } & G)[];
       loopStack: Ty[][];
       letOwner: Map<string, Span>;
     },
     fnT: Ty,
     args: Expr[],
-    st: {
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & F,
+    st: St,
     callSpan: Span,
   ) =>
     match(args)
@@ -1427,7 +895,7 @@ const inferCallArgs: <A, B, C, D, E, F, G, H, I>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(_tuple(fnT, st)),
+        () => Ok(_tuple(fnT, st)) as Result<[Ty, St], IErr>,
       )
       .with(
         (_v) => {
@@ -1437,17 +905,7 @@ const inferCallArgs: <A, B, C, D, E, F, G, H, I>(
         ([arg, ...rest]) =>
           _Result_flatMap(
             ([argT, st1]) =>
-              (([resultT, st2]: [
-                Ty,
-                {
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & F,
-              ]) =>
+              (([resultT, st2]: [Ty, St]) =>
                 _Result_flatMap(
                   (st3) => inferCallArgs(ctx, resultT, rest, st3, callSpan),
                   u(fnT, tArrow(argT, resultT), st2, exprSpan(arg)),
@@ -1459,7 +917,7 @@ const inferCallArgs: <A, B, C, D, E, F, G, H, I>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferNormalCall: <A, B, C, D, E, F, G, H, I>(
+const inferNormalCall: <A, B, C, D, E, F, G>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -1478,96 +936,28 @@ const inferNormalCall: <A, B, C, D, E, F, G, H, I>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            next: number;
-            letUses: Map<string, Ty[]>;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & F,
+          d: St,
           e: {
-            inferExpr: (
-              a: Expr,
-              b: {
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & F,
-            ) => Result<
-              [
-                Ty,
-                {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ],
-              IErr
-            >;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             unify: (
               a: Ty,
               b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              d: { end: A; start: B } & H,
-            ) => Result<
-              { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              { message: string; start: B; end: A }
-            >;
+              c: St,
+              d: { end: A; start: B } & F,
+            ) => Result<St, { message: string; start: B; end: A }>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                next: number;
-                letUses: Map<string, Ty[]>;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-              } & F,
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
-    } & I)[];
+    } & G)[];
     loopStack: Ty[][];
     letOwner: Map<string, Span>;
   },
   fn: Expr,
   args: Expr[],
-  st: {
-    letUses: Map<string, Ty[]>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-    next: number;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & F,
-) => Result<
-  [
-    Ty,
-    {
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-      next: number;
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-    } & F,
-  ],
-  IErr
-> = _curry(
+  st: St,
+) => Result<[Ty, St], IErr> = _curry(
   4,
-  <A, B, C, D, E, F, G, H, I>(
+  <A, B, C, D, E, F, G>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
@@ -1586,80 +976,25 @@ const inferNormalCall: <A, B, C, D, E, F, G, H, I>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              next: number;
-              letUses: Map<string, Ty[]>;
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & F,
+            d: St,
             e: {
-              inferExpr: (
-                a: Expr,
-                b: {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    letUses: Map<string, Ty[]>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                    next: number;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & F,
-                ],
-                IErr
-              >;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
               unify: (
                 a: Ty,
                 b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                d: { end: A; start: B } & H,
-              ) => Result<
-                { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                { message: string; start: B; end: A }
-              >;
+                c: St,
+                d: { end: A; start: B } & F,
+              ) => Result<St, { message: string; start: B; end: A }>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & F,
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
-      } & I)[];
+      } & G)[];
       loopStack: Ty[][];
       letOwner: Map<string, Span>;
     },
     fn: Expr,
     args: Expr[],
-    st: {
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & F,
+    st: St,
   ) =>
     _Result_flatMap(
       ([fnT, st1]) =>
@@ -1670,19 +1005,9 @@ const inferNormalCall: <A, B, C, D, E, F, G, H, I>(
               return _g.length === 0;
             },
             () =>
-              (([resultT, st2]: [
-                Ty,
-                {
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & F,
-              ]) =>
+              (([resultT, st2]: [Ty, St]) =>
                 _Result_flatMap(
-                  (st3) => Ok(_tuple(resultT, st3)),
+                  (st3) => Ok(_tuple(resultT, st3)) as Result<[Ty, St], IErr>,
                   u(fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)),
                 ))(freshVar(st1)),
           )
@@ -1690,7 +1015,7 @@ const inferNormalCall: <A, B, C, D, E, F, G, H, I>(
       inferExpr(ctx, fn, st),
     ),
 );
-const inferTernary: <A, B, C, D, E, F, G, H, I>(
+const inferTernary: <A, B, C, D, E, F, G>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -1709,97 +1034,29 @@ const inferTernary: <A, B, C, D, E, F, G, H, I>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            next: number;
-            letUses: Map<string, Ty[]>;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & F,
+          d: St,
           e: {
-            inferExpr: (
-              a: Expr,
-              b: {
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & F,
-            ) => Result<
-              [
-                Ty,
-                {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ],
-              IErr
-            >;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             unify: (
               a: Ty,
               b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              d: { end: A; start: B } & H,
-            ) => Result<
-              { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              { message: string; start: B; end: A }
-            >;
+              c: St,
+              d: { end: A; start: B } & F,
+            ) => Result<St, { message: string; start: B; end: A }>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                next: number;
-                letUses: Map<string, Ty[]>;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-              } & F,
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
-    } & I)[];
+    } & G)[];
     loopStack: Ty[][];
     letOwner: Map<string, Span>;
   },
   cond: Expr,
   thenE: Expr,
   elseE: Expr,
-  st: {
-    letUses: Map<string, Ty[]>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-    next: number;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & F,
-) => Result<
-  [
-    Ty,
-    {
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-      next: number;
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-    } & F,
-  ],
-  IErr
-> = _curry(
+  st: St,
+) => Result<[Ty, St], IErr> = _curry(
   5,
-  <A, B, C, D, E, F, G, H, I>(
+  <A, B, C, D, E, F, G>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
@@ -1818,81 +1075,26 @@ const inferTernary: <A, B, C, D, E, F, G, H, I>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              next: number;
-              letUses: Map<string, Ty[]>;
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & F,
+            d: St,
             e: {
-              inferExpr: (
-                a: Expr,
-                b: {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    letUses: Map<string, Ty[]>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                    next: number;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & F,
-                ],
-                IErr
-              >;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
               unify: (
                 a: Ty,
                 b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                d: { end: A; start: B } & H,
-              ) => Result<
-                { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                { message: string; start: B; end: A }
-              >;
+                c: St,
+                d: { end: A; start: B } & F,
+              ) => Result<St, { message: string; start: B; end: A }>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & F,
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
-      } & I)[];
+      } & G)[];
       loopStack: Ty[][];
       letOwner: Map<string, Span>;
     },
     cond: Expr,
     thenE: Expr,
     elseE: Expr,
-    st: {
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & F,
+    st: St,
   ) =>
     _Result_flatMap(
       ([condT, st1]) =>
@@ -1903,7 +1105,7 @@ const inferTernary: <A, B, C, D, E, F, G, H, I>(
                 _Result_flatMap(
                   ([elseT, st4]) =>
                     _Result_flatMap(
-                      (st5) => Ok(_tuple(thenT, st5)),
+                      (st5) => Ok(_tuple(thenT, st5)) as Result<[Ty, St], IErr>,
                       u(thenT, elseT, st4, exprSpan(elseE)),
                     ),
                   inferExpr(ctx, elseE, st3),
@@ -1915,7 +1117,7 @@ const inferTernary: <A, B, C, D, E, F, G, H, I>(
       inferExpr(ctx, cond, st),
     ),
 );
-const inferBindBody: <A, B, C, D, E, F, G, H, I>(
+const inferBindBody: <A, B, C, D, E, F, G>(
   ctx: {
     letOwner: Map<string, Span>;
     loopStack: Ty[][];
@@ -1925,76 +1127,28 @@ const inferBindBody: <A, B, C, D, E, F, G, H, I>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            next: number;
-            letUses: Map<string, Ty[]>;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & C,
+          d: St,
           e: {
-            inferExpr: (
-              a: Expr,
-              b: {
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & C,
-            ) => Result<
-              [
-                Ty,
-                {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & C,
-              ],
-              IErr
-            >;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             unify: (
               a: Ty,
               b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & D,
-              d: { end: A; start: B } & E,
-            ) => Result<
-              { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & D,
-              { message: string; start: B; end: A }
-            >;
+              c: St,
+              d: { end: A; start: B } & C,
+            ) => Result<St, { message: string; start: B; end: A }>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                next: number;
-                letUses: Map<string, Ty[]>;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-              } & C,
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
-    } & F)[];
+    } & D)[];
     aliasMap: Map<
       string,
       {
         expr: Option<TypeExpr>;
         params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & G)[];
-      } & H
+        fields: ({ name: string; fieldType: TypeExpr } & E)[];
+      } & F
     >;
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
+    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
     open: boolean;
     env: Map<string, Scheme>;
   },
@@ -2003,30 +1157,10 @@ const inferBindBody: <A, B, C, D, E, F, G, H, I>(
   body: Expr,
   payloadT: Ty,
   mkBody: (a: Ty) => Ty,
-  st: {
-    next: number;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-    letUses: Map<string, Ty[]>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-  } & C,
-) => Result<
-  [
-    Ty,
-    {
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-      next: number;
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-    } & C,
-  ],
-  IErr
-> = _curry(
+  st: St,
+) => Result<[Ty, St], IErr> = _curry(
   7,
-  <A, B, C, D, E, F, G, H, I>(
+  <A, B, C, D, E, F, G>(
     ctx: {
       letOwner: Map<string, Span>;
       loopStack: Ty[][];
@@ -2036,76 +1170,28 @@ const inferBindBody: <A, B, C, D, E, F, G, H, I>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              next: number;
-              letUses: Map<string, Ty[]>;
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & C,
+            d: St,
             e: {
-              inferExpr: (
-                a: Expr,
-                b: {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & C,
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    letUses: Map<string, Ty[]>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                    next: number;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & C,
-                ],
-                IErr
-              >;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
               unify: (
                 a: Ty,
                 b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & D,
-                d: { end: A; start: B } & E,
-              ) => Result<
-                { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & D,
-                { message: string; start: B; end: A }
-              >;
+                c: St,
+                d: { end: A; start: B } & C,
+              ) => Result<St, { message: string; start: B; end: A }>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & C,
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
-      } & F)[];
+      } & D)[];
       aliasMap: Map<
         string,
         {
           expr: Option<TypeExpr>;
           params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & G)[];
-        } & H
+          fields: ({ name: string; fieldType: TypeExpr } & E)[];
+        } & F
       >;
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
+      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
       open: boolean;
       env: Map<string, Scheme>;
     },
@@ -2114,45 +1200,17 @@ const inferBindBody: <A, B, C, D, E, F, G, H, I>(
     body: Expr,
     payloadT: Ty,
     mkBody: (a: Ty) => Ty,
-    st: {
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-    } & C,
+    st: St,
   ) =>
-    (([paramT, bodyEnv, st1]: [
-      Ty,
-      Map<string, Scheme>,
-      {
-        tv: Map<number, Ty>;
-        rv: Map<number, Row>;
-        next: number;
-        letUses: Map<string, Ty[]>;
-        letSpans: Map<string, Span>;
-        recorded: TypeAt[];
-      } & C,
-    ]) =>
+    (([paramT, bodyEnv, st1]: [Ty, Map<string, Scheme>, St]) =>
       _Result_flatMap(
         (st2) =>
           _Result_flatMap(
             ([bodyT, st3]) =>
-              (([resT, st4]: [
-                Ty,
-                {
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & C,
-              ]) => {
+              (([resT, st4]: [Ty, St]) => {
                 const wantBody: Ty = mkBody(resT);
                 return _Result_flatMap(
-                  (st5) => Ok(_tuple(wantBody, st5)),
+                  (st5) => Ok(_tuple(wantBody, st5)) as Result<[Ty, St], IErr>,
                   u(bodyT, wantBody, st4, exprSpan(body)),
                 );
               })(freshVar(st3)),
@@ -2161,7 +1219,7 @@ const inferBindBody: <A, B, C, D, E, F, G, H, I>(
         u(paramT, payloadT, st1, paramSpan),
       ))(bindParam(param, ctx.env, st)),
 );
-const inferTwoSlotBind: <A, B, C, D, E, F, G, H, I>(
+const inferTwoSlotBind: <A, B, C, D, E, F, G>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -2180,67 +1238,19 @@ const inferTwoSlotBind: <A, B, C, D, E, F, G, H, I>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            next: number;
-            letUses: Map<string, Ty[]>;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & F,
+          d: St,
           e: {
-            inferExpr: (
-              a: Expr,
-              b: {
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & F,
-            ) => Result<
-              [
-                Ty,
-                {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ],
-              IErr
-            >;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             unify: (
               a: Ty,
               b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              d: { end: A; start: B } & H,
-            ) => Result<
-              { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              { message: string; start: B; end: A }
-            >;
+              c: St,
+              d: { end: A; start: B } & F,
+            ) => Result<St, { message: string; start: B; end: A }>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                next: number;
-                letUses: Map<string, Ty[]>;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-              } & F,
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
-    } & I)[];
+    } & G)[];
     loopStack: Ty[][];
     letOwner: Map<string, Span>;
   },
@@ -2250,30 +1260,10 @@ const inferTwoSlotBind: <A, B, C, D, E, F, G, H, I>(
   body: Expr,
   valT: Ty,
   ctor: string,
-  st: {
-    next: number;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-    letUses: Map<string, Ty[]>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-  } & F,
-) => Result<
-  [
-    Ty,
-    {
-      next: number;
-      letUses: Map<string, Ty[]>;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-    } & F,
-  ],
-  IErr
-> = _curry(
+  st: St,
+) => Result<[Ty, St], IErr> = _curry(
   8,
-  <A, B, C, D, E, F, G, H, I>(
+  <A, B, C, D, E, F, G>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
@@ -2292,67 +1282,19 @@ const inferTwoSlotBind: <A, B, C, D, E, F, G, H, I>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              next: number;
-              letUses: Map<string, Ty[]>;
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & F,
+            d: St,
             e: {
-              inferExpr: (
-                a: Expr,
-                b: {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    letUses: Map<string, Ty[]>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                    next: number;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & F,
-                ],
-                IErr
-              >;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
               unify: (
                 a: Ty,
                 b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                d: { end: A; start: B } & H,
-              ) => Result<
-                { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                { message: string; start: B; end: A }
-              >;
+                c: St,
+                d: { end: A; start: B } & F,
+              ) => Result<St, { message: string; start: B; end: A }>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & F,
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
-      } & I)[];
+      } & G)[];
       loopStack: Ty[][];
       letOwner: Map<string, Span>;
     },
@@ -2362,37 +1304,10 @@ const inferTwoSlotBind: <A, B, C, D, E, F, G, H, I>(
     body: Expr,
     valT: Ty,
     ctor: string,
-    st: {
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-    } & F,
+    st: St,
   ) =>
-    (([payloadT, st1]: [
-      Ty,
-      {
-        next: number;
-        tv: Map<number, Ty>;
-        rv: Map<number, Row>;
-        letUses: Map<string, Ty[]>;
-        letSpans: Map<string, Span>;
-        recorded: TypeAt[];
-      } & F,
-    ]) =>
-      (([errT, st2]: [
-        Ty,
-        {
-          tv: Map<number, Ty>;
-          rv: Map<number, Row>;
-          next: number;
-          letUses: Map<string, Ty[]>;
-          letSpans: Map<string, Span>;
-          recorded: TypeAt[];
-        } & F,
-      ]) =>
+    (([payloadT, st1]: [Ty, St]) =>
+      (([errT, st2]: [Ty, St]) =>
         _Result_flatMap(
           (st3) =>
             inferBindBody(
@@ -2407,7 +1322,7 @@ const inferTwoSlotBind: <A, B, C, D, E, F, G, H, I>(
           u(valT, tCon(ctor, [payloadT, errT]), st2, exprSpan(value)),
         ))(freshVar(st1)))(freshVar(st)),
 );
-const inferQuestionBind: <A, B, C, D, E, F, G, H, I>(
+const inferQuestionBind: <A, B, C, D, E, F, G>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -2426,67 +1341,19 @@ const inferQuestionBind: <A, B, C, D, E, F, G, H, I>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            next: number;
-            letUses: Map<string, Ty[]>;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & F,
+          d: St,
           e: {
-            inferExpr: (
-              a: Expr,
-              b: {
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & F,
-            ) => Result<
-              [
-                Ty,
-                {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ],
-              IErr
-            >;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             unify: (
               a: Ty,
               b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              d: { end: A; start: B } & H,
-            ) => Result<
-              { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              { message: string; start: B; end: A }
-            >;
+              c: St,
+              d: { end: A; start: B } & F,
+            ) => Result<St, { message: string; start: B; end: A }>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                next: number;
-                letUses: Map<string, Ty[]>;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-              } & F,
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
-    } & I)[];
+    } & G)[];
     loopStack: Ty[][];
     letOwner: Map<string, Span>;
   },
@@ -2496,30 +1363,10 @@ const inferQuestionBind: <A, B, C, D, E, F, G, H, I>(
   value: Expr,
   body: Expr,
   valT: Ty,
-  st: {
-    tv: Map<number, Ty>;
-    letUses: Map<string, Ty[]>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-    next: number;
-    rv: Map<number, Row>;
-  } & F,
-) => Result<
-  [
-    Ty,
-    {
-      next: number;
-      letUses: Map<string, Ty[]>;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-    } & F,
-  ],
-  IErr
-> = _curry(
+  st: St,
+) => Result<[Ty, St], IErr> = _curry(
   8,
-  <A, B, C, D, E, F, G, H, I>(
+  <A, B, C, D, E, F, G>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
@@ -2538,67 +1385,19 @@ const inferQuestionBind: <A, B, C, D, E, F, G, H, I>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              next: number;
-              letUses: Map<string, Ty[]>;
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & F,
+            d: St,
             e: {
-              inferExpr: (
-                a: Expr,
-                b: {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    letUses: Map<string, Ty[]>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                    next: number;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & F,
-                ],
-                IErr
-              >;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
               unify: (
                 a: Ty,
                 b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                d: { end: A; start: B } & H,
-              ) => Result<
-                { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                { message: string; start: B; end: A }
-              >;
+                c: St,
+                d: { end: A; start: B } & F,
+              ) => Result<St, { message: string; start: B; end: A }>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & F,
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
-      } & I)[];
+      } & G)[];
       loopStack: Ty[][];
       letOwner: Map<string, Span>;
     },
@@ -2608,14 +1407,7 @@ const inferQuestionBind: <A, B, C, D, E, F, G, H, I>(
     value: Expr,
     body: Expr,
     valT: Ty,
-    st: {
-      tv: Map<number, Ty>;
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-      next: number;
-      rv: Map<number, Row>;
-    } & F,
+    st: St,
   ) =>
     match(resolve(valT, st))
       .with({ _tag: "TyVar" }, () =>
@@ -2626,17 +1418,7 @@ const inferQuestionBind: <A, B, C, D, E, F, G, H, I>(
       .with({ _tag: "TyCon" }, ({ name }) =>
         eq(name, "Option")
           ? (($written) =>
-              (([payloadT, st1]: [
-                Ty,
-                {
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & F,
-              ]) =>
+              (([payloadT, st1]: [Ty, St]) =>
                 _Result_flatMap(
                   (st2) =>
                     inferBindBody(
@@ -2655,23 +1437,24 @@ const inferQuestionBind: <A, B, C, D, E, F, G, H, I>(
                 inferTwoSlotBind(ctx, param, paramSpan, value, body, valT, "Result", st))(
                 setLetBindMonad(bind, "Result"),
               )
-            : Err(
+            : (Err(
                 typeErr(
                   `let? requires Option or Result, got ${showType(zonk(valT, st))}`,
                   exprSpan(value),
                 ),
-              ),
+              ) as Result<[Ty, St], IErr>),
       )
-      .otherwise(() =>
-        Err(
-          typeErr(
-            `let? requires Option or Result, got ${showType(zonk(valT, st))}`,
-            exprSpan(value),
-          ),
-        ),
+      .otherwise(
+        () =>
+          Err(
+            typeErr(
+              `let? requires Option or Result, got ${showType(zonk(valT, st))}`,
+              exprSpan(value),
+            ),
+          ) as Result<[Ty, St], IErr>,
       ),
 );
-const inferLetBind: <A, B, C, D, E, F, G, H, I>(
+const inferLetBind: <A, B, C, D, E, F, G>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -2690,67 +1473,19 @@ const inferLetBind: <A, B, C, D, E, F, G, H, I>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            next: number;
-            letUses: Map<string, Ty[]>;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & F,
+          d: St,
           e: {
-            inferExpr: (
-              a: Expr,
-              b: {
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & F,
-            ) => Result<
-              [
-                Ty,
-                {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ],
-              IErr
-            >;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             unify: (
               a: Ty,
               b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              d: { end: A; start: B } & H,
-            ) => Result<
-              { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              { message: string; start: B; end: A }
-            >;
+              c: St,
+              d: { end: A; start: B } & F,
+            ) => Result<St, { message: string; start: B; end: A }>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                next: number;
-                letUses: Map<string, Ty[]>;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-              } & F,
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
-    } & I)[];
+    } & G)[];
     loopStack: Ty[][];
     letOwner: Map<string, Span>;
   },
@@ -2760,30 +1495,10 @@ const inferLetBind: <A, B, C, D, E, F, G, H, I>(
   monad: string,
   value: Expr,
   body: Expr,
-  st: {
-    letUses: Map<string, Ty[]>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-    next: number;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & F,
-) => Result<
-  [
-    Ty,
-    {
-      next: number;
-      letUses: Map<string, Ty[]>;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-    } & F,
-  ],
-  IErr
-> = _curry(
+  st: St,
+) => Result<[Ty, St], IErr> = _curry(
   8,
-  <A, B, C, D, E, F, G, H, I>(
+  <A, B, C, D, E, F, G>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
@@ -2802,67 +1517,19 @@ const inferLetBind: <A, B, C, D, E, F, G, H, I>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              next: number;
-              letUses: Map<string, Ty[]>;
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & F,
+            d: St,
             e: {
-              inferExpr: (
-                a: Expr,
-                b: {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    letUses: Map<string, Ty[]>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                    next: number;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & F,
-                ],
-                IErr
-              >;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
               unify: (
                 a: Ty,
                 b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                d: { end: A; start: B } & H,
-              ) => Result<
-                { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                { message: string; start: B; end: A }
-              >;
+                c: St,
+                d: { end: A; start: B } & F,
+              ) => Result<St, { message: string; start: B; end: A }>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & F,
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
-      } & I)[];
+      } & G)[];
       loopStack: Ty[][];
       letOwner: Map<string, Span>;
     },
@@ -2872,14 +1539,7 @@ const inferLetBind: <A, B, C, D, E, F, G, H, I>(
     monad: string,
     value: Expr,
     body: Expr,
-    st: {
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & F,
+    st: St,
   ) =>
     _Result_flatMap(
       ([valT, st1]) =>
@@ -2889,7 +1549,7 @@ const inferLetBind: <A, B, C, D, E, F, G, H, I>(
       inferExpr(ctx, value, st),
     ),
 );
-const inferRecordRow: <A, B, C, D, E, F, G, H, I>(
+const inferRecordRow: <A, B, C, D, E, F, G>(
   ctx: {
     env: Map<string, Scheme>;
     letOwner: Map<string, Span>;
@@ -2909,94 +1569,26 @@ const inferRecordRow: <A, B, C, D, E, F, G, H, I>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            next: number;
-            letUses: Map<string, Ty[]>;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & E,
+          d: St,
           e: {
-            inferExpr: (
-              a: Expr,
-              b: {
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & E,
-            ) => Result<
-              [
-                Ty,
-                {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & E,
-              ],
-              IErr
-            >;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             unify: (
               a: Ty,
               b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & F,
-              d: { end: A; start: B } & G,
-            ) => Result<
-              { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & F,
-              { message: string; start: B; end: A }
-            >;
+              c: St,
+              d: { end: A; start: B } & E,
+            ) => Result<St, { message: string; start: B; end: A }>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                next: number;
-                letUses: Map<string, Ty[]>;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-              } & E,
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
-    } & H)[];
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
+    } & F)[];
+    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
   },
   fields: Field[],
-  st: {
-    next: number;
-    letUses: Map<string, Ty[]>;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-  } & E,
-) => Result<
-  [
-    Row,
-    {
-      next: number;
-      letUses: Map<string, Ty[]>;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-    } & E,
-  ],
-  IErr
-> = _curry(
+  st: St,
+) => Result<[Row, St], IErr> = _curry(
   3,
-  <A, B, C, D, E, F, G, H, I>(
+  <A, B, C, D, E, F, G>(
     ctx: {
       env: Map<string, Scheme>;
       letOwner: Map<string, Span>;
@@ -3016,78 +1608,23 @@ const inferRecordRow: <A, B, C, D, E, F, G, H, I>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              next: number;
-              letUses: Map<string, Ty[]>;
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & E,
+            d: St,
             e: {
-              inferExpr: (
-                a: Expr,
-                b: {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & E,
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    letUses: Map<string, Ty[]>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                    next: number;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & E,
-                ],
-                IErr
-              >;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
               unify: (
                 a: Ty,
                 b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & F,
-                d: { end: A; start: B } & G,
-              ) => Result<
-                { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & F,
-                { message: string; start: B; end: A }
-              >;
+                c: St,
+                d: { end: A; start: B } & E,
+              ) => Result<St, { message: string; start: B; end: A }>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & E,
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
-      } & H)[];
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
+      } & F)[];
+      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
     },
     fields: Field[],
-    st: {
-      next: number;
-      letUses: Map<string, Ty[]>;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-    } & E,
+    st: St,
   ) =>
     match(fields)
       .with(
@@ -3095,7 +1632,7 @@ const inferRecordRow: <A, B, C, D, E, F, G, H, I>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(_tuple(RowEmpty as Row, st)),
+        () => Ok(_tuple(RowEmpty as Row, st)) as Result<[Row, St], IErr>,
       )
       .with(
         (_v) => {
@@ -3106,7 +1643,8 @@ const inferRecordRow: <A, B, C, D, E, F, G, H, I>(
           _Result_flatMap(
             ([restRow, st1]) =>
               _Result_flatMap(
-                ([ft, st2]) => Ok(_tuple(rExtend(f.name, ft, restRow), st2)),
+                ([ft, st2]) =>
+                  Ok(_tuple(rExtend(f.name, ft, restRow), st2)) as Result<[Row, St], IErr>,
                 inferExpr(ctx, f.value, st1),
               ),
             inferRecordRow(ctx, rest, st),
@@ -3127,7 +1665,7 @@ const rWithTail: { (row: Row): (tail: Row) => Row; (row: Row, tail: Row): Row } 
       )
       .exhaustive(),
 );
-const inferFieldAccess: <A, B, C, D, E, F, G, H, I>(
+const inferFieldAccess: <A, B, C, D, E, F, G>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -3146,97 +1684,29 @@ const inferFieldAccess: <A, B, C, D, E, F, G, H, I>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            next: number;
-            letUses: Map<string, Ty[]>;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & F,
+          d: St,
           e: {
-            inferExpr: (
-              a: Expr,
-              b: {
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & F,
-            ) => Result<
-              [
-                Ty,
-                {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ],
-              IErr
-            >;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             unify: (
               a: Ty,
               b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              d: { end: A; start: B } & H,
-            ) => Result<
-              { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              { message: string; start: B; end: A }
-            >;
+              c: St,
+              d: { end: A; start: B } & F,
+            ) => Result<St, { message: string; start: B; end: A }>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                next: number;
-                letUses: Map<string, Ty[]>;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-              } & F,
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
-    } & I)[];
+    } & G)[];
     loopStack: Ty[][];
     letOwner: Map<string, Span>;
   },
   target: Expr,
   name: string,
   sp: Span,
-  st: {
-    letUses: Map<string, Ty[]>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-    next: number;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & F,
-) => Result<
-  [
-    Ty,
-    {
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-      next: number;
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-    } & F,
-  ],
-  IErr
-> = _curry(
+  st: St,
+) => Result<[Ty, St], IErr> = _curry(
   5,
-  <A, B, C, D, E, F, G, H, I>(
+  <A, B, C, D, E, F, G>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
@@ -3255,127 +1725,52 @@ const inferFieldAccess: <A, B, C, D, E, F, G, H, I>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              next: number;
-              letUses: Map<string, Ty[]>;
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & F,
+            d: St,
             e: {
-              inferExpr: (
-                a: Expr,
-                b: {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    letUses: Map<string, Ty[]>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                    next: number;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & F,
-                ],
-                IErr
-              >;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
               unify: (
                 a: Ty,
                 b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                d: { end: A; start: B } & H,
-              ) => Result<
-                { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                { message: string; start: B; end: A }
-              >;
+                c: St,
+                d: { end: A; start: B } & F,
+              ) => Result<St, { message: string; start: B; end: A }>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & F,
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
-      } & I)[];
+      } & G)[];
       loopStack: Ty[][];
       letOwner: Map<string, Span>;
     },
     target: Expr,
     name: string,
     sp: Span,
-    st: {
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & F,
+    st: St,
   ) =>
     _Result_flatMap(
       ([targetT, st1]) =>
-        (([fieldT, st2]: [
-          Ty,
-          {
-            next: number;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letUses: Map<string, Ty[]>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & F,
-        ]) =>
-          (([restRow, st3]: [
-            Row,
-            {
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              next: number;
-              letUses: Map<string, Ty[]>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & F,
-          ]) =>
+        (([fieldT, st2]: [Ty, St]) =>
+          (([restRow, st3]: [Row, St]) =>
             _Result_flatMap(
-              (st4) => Ok(_tuple(fieldT, st4)),
+              (st4) => Ok(_tuple(fieldT, st4)) as Result<[Ty, St], IErr>,
               u(targetT, tRecord(rExtend(name, fieldT, restRow)), st3, sp),
             ))(freshRowVar(st2)))(freshVar(st1)),
       inferExpr(ctx, target, st),
     ),
 );
-const inferNsField: <A, B, C, D, E, F>(
+const inferNsField: <A, B, C, D, E>(
   ctx: { ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>> } & D,
   tname: string,
   name: string,
   sp: { end: A; start: B } & E,
-  st: { next: number } & F,
-) => Result<[Ty, { next: number } & F], { message: string; start: B; end: A }> = _curry(
+  st: St,
+) => Result<[Ty, St], { message: string; start: B; end: A }> = _curry(
   5,
-  <A, B, C, D, E, F>(
+  <A, B, C, D, E>(
     ctx: { ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>> } & D,
     tname: string,
     name: string,
     sp: { end: A; start: B } & E,
-    st: { next: number } & F,
+    st: St,
   ) =>
     match(
       _Map_get(
@@ -3388,12 +1783,12 @@ const inferNsField: <A, B, C, D, E, F>(
       ),
     )
       .with({ _tag: "Some" }, ({ value: sc }) =>
-        (([t, st1]: [Ty, { next: number } & F]) => Ok(_tuple(t, st1)))(instantiate(sc, st)),
+        (([t, st1]: [Ty, St]) => Ok(_tuple(t, st1)))(instantiate(sc, st)),
       )
       .with({ _tag: "None" }, () => Err(typeErr(`'${tname}' has no member '${name}'`, sp)))
       .exhaustive(),
 );
-const inferInterpParts: <A, B, C, D, E, F, G, H, I>(
+const inferInterpParts: <A, B, C, D, E, F, G>(
   ctx: {
     env: Map<string, Scheme>;
     letOwner: Map<string, Span>;
@@ -3413,91 +1808,26 @@ const inferInterpParts: <A, B, C, D, E, F, G, H, I>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            next: number;
-            letUses: Map<string, Ty[]>;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & E,
+          d: St,
           e: {
-            inferExpr: (
-              a: Expr,
-              b: {
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & E,
-            ) => Result<
-              [
-                Ty,
-                {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & E,
-              ],
-              IErr
-            >;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             unify: (
               a: Ty,
               b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & F,
-              d: { end: A; start: B } & G,
-            ) => Result<
-              { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & F,
-              { message: string; start: B; end: A }
-            >;
+              c: St,
+              d: { end: A; start: B } & E,
+            ) => Result<St, { message: string; start: B; end: A }>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                next: number;
-                letUses: Map<string, Ty[]>;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-              } & E,
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
-    } & H)[];
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
+    } & F)[];
+    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
   },
   parts: InterpPart[],
-  st: {
-    next: number;
-    letUses: Map<string, Ty[]>;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-  } & E,
-) => Result<
-  {
-    next: number;
-    letUses: Map<string, Ty[]>;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-  } & E,
-  IErr
-> = _curry(
+  st: St,
+) => Result<St, IErr> = _curry(
   3,
-  <A, B, C, D, E, F, G, H, I>(
+  <A, B, C, D, E, F, G>(
     ctx: {
       env: Map<string, Scheme>;
       letOwner: Map<string, Span>;
@@ -3517,78 +1847,23 @@ const inferInterpParts: <A, B, C, D, E, F, G, H, I>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              next: number;
-              letUses: Map<string, Ty[]>;
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & E,
+            d: St,
             e: {
-              inferExpr: (
-                a: Expr,
-                b: {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & E,
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    letUses: Map<string, Ty[]>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                    next: number;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & E,
-                ],
-                IErr
-              >;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
               unify: (
                 a: Ty,
                 b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & F,
-                d: { end: A; start: B } & G,
-              ) => Result<
-                { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & F,
-                { message: string; start: B; end: A }
-              >;
+                c: St,
+                d: { end: A; start: B } & E,
+              ) => Result<St, { message: string; start: B; end: A }>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & E,
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
-      } & H)[];
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
+      } & F)[];
+      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
     },
     parts: InterpPart[],
-    st: {
-      next: number;
-      letUses: Map<string, Ty[]>;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-    } & E,
+    st: St,
   ) =>
     match(parts)
       .with(
@@ -3596,7 +1871,7 @@ const inferInterpParts: <A, B, C, D, E, F, G, H, I>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(st),
+        () => Ok(st) as Result<St, IErr>,
       )
       .with(
         (_v): _v is [Extract<InterpPart[][number], { _tag: "IPLit" }>, ...InterpPart[]] => {
@@ -3624,7 +1899,7 @@ const inferInterpParts: <A, B, C, D, E, F, G, H, I>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferTupleElems: <A, B, C, D, E, F, G, H, I>(
+const inferTupleElems: <A, B, C, D, E, F, G>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -3643,95 +1918,27 @@ const inferTupleElems: <A, B, C, D, E, F, G, H, I>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            next: number;
-            letUses: Map<string, Ty[]>;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & F,
+          d: St,
           e: {
-            inferExpr: (
-              a: Expr,
-              b: {
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & F,
-            ) => Result<
-              [
-                Ty,
-                {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ],
-              IErr
-            >;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             unify: (
               a: Ty,
               b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              d: { end: A; start: B } & H,
-            ) => Result<
-              { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              { message: string; start: B; end: A }
-            >;
+              c: St,
+              d: { end: A; start: B } & F,
+            ) => Result<St, { message: string; start: B; end: A }>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                next: number;
-                letUses: Map<string, Ty[]>;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-              } & F,
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
-    } & I)[];
+    } & G)[];
     loopStack: Ty[][];
     letOwner: Map<string, Span>;
   },
   elements: Expr[],
-  st: {
-    letUses: Map<string, Ty[]>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-    next: number;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & F,
-) => Result<
-  [
-    Ty[],
-    {
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & F,
-  ],
-  IErr
-> = _curry(
+  st: St,
+) => Result<[Ty[], St], IErr> = _curry(
   3,
-  <A, B, C, D, E, F, G, H, I>(
+  <A, B, C, D, E, F, G>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
@@ -3750,79 +1957,24 @@ const inferTupleElems: <A, B, C, D, E, F, G, H, I>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              next: number;
-              letUses: Map<string, Ty[]>;
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & F,
+            d: St,
             e: {
-              inferExpr: (
-                a: Expr,
-                b: {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    letUses: Map<string, Ty[]>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                    next: number;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & F,
-                ],
-                IErr
-              >;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
               unify: (
                 a: Ty,
                 b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                d: { end: A; start: B } & H,
-              ) => Result<
-                { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                { message: string; start: B; end: A }
-              >;
+                c: St,
+                d: { end: A; start: B } & F,
+              ) => Result<St, { message: string; start: B; end: A }>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & F,
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
-      } & I)[];
+      } & G)[];
       loopStack: Ty[][];
       letOwner: Map<string, Span>;
     },
     elements: Expr[],
-    st: {
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & F,
+    st: St,
   ) =>
     match(elements)
       .with(
@@ -3830,7 +1982,7 @@ const inferTupleElems: <A, B, C, D, E, F, G, H, I>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(_tuple([] as Ty[], st)),
+        () => Ok(_tuple([] as Ty[], st)) as Result<[Ty[], St], IErr>,
       )
       .with(
         (_v) => {
@@ -3841,7 +1993,8 @@ const inferTupleElems: <A, B, C, D, E, F, G, H, I>(
           _Result_flatMap(
             ([t, st1]) =>
               _Result_flatMap(
-                ([restTs, st2]) => Ok(_tuple(_Array_prepend(t, restTs), st2)),
+                ([restTs, st2]) =>
+                  Ok(_tuple(_Array_prepend(t, restTs), st2)) as Result<[Ty[], St], IErr>,
                 inferTupleElems(ctx, rest, st1),
               ),
             inferExpr(ctx, el, st),
@@ -3856,7 +2009,7 @@ const seqElemExpr: (el: SeqElem) => Expr = (el: SeqElem) =>
     .with({ _tag: "SEExpr" }, ({ expr: e }) => e)
     .with({ _tag: "SESpread" }, ({ expr: e }) => e)
     .exhaustive();
-const inferSeqSlotsElems: <A, B, C, D, E, F, G, H, I>(
+const inferSeqSlotsElems: <A, B, C, D, E, F, G>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -3875,94 +2028,29 @@ const inferSeqSlotsElems: <A, B, C, D, E, F, G, H, I>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            next: number;
-            letUses: Map<string, Ty[]>;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & F,
+          d: St,
           e: {
-            inferExpr: (
-              a: Expr,
-              b: {
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & F,
-            ) => Result<
-              [
-                Ty,
-                {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ],
-              IErr
-            >;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             unify: (
               a: Ty,
               b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              d: { end: A; start: B } & H,
-            ) => Result<
-              { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              { message: string; start: B; end: A }
-            >;
+              c: St,
+              d: { end: A; start: B } & F,
+            ) => Result<St, { message: string; start: B; end: A }>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                next: number;
-                letUses: Map<string, Ty[]>;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-              } & F,
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
-    } & I)[];
+    } & G)[];
     loopStack: Ty[][];
     letOwner: Map<string, Span>;
   },
   con: string,
   elem: Ty,
   elements: SeqElem[],
-  st: {
-    letUses: Map<string, Ty[]>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-    next: number;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & F,
-) => Result<
-  {
-    letUses: Map<string, Ty[]>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-    next: number;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & F,
-  IErr
-> = _curry(
+  st: St,
+) => Result<St, IErr> = _curry(
   5,
-  <A, B, C, D, E, F, G, H, I>(
+  <A, B, C, D, E, F, G>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
@@ -3981,81 +2069,26 @@ const inferSeqSlotsElems: <A, B, C, D, E, F, G, H, I>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              next: number;
-              letUses: Map<string, Ty[]>;
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & F,
+            d: St,
             e: {
-              inferExpr: (
-                a: Expr,
-                b: {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    letUses: Map<string, Ty[]>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                    next: number;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & F,
-                ],
-                IErr
-              >;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
               unify: (
                 a: Ty,
                 b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                d: { end: A; start: B } & H,
-              ) => Result<
-                { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                { message: string; start: B; end: A }
-              >;
+                c: St,
+                d: { end: A; start: B } & F,
+              ) => Result<St, { message: string; start: B; end: A }>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & F,
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
-      } & I)[];
+      } & G)[];
       loopStack: Ty[][];
       letOwner: Map<string, Span>;
     },
     con: string,
     elem: Ty,
     elements: SeqElem[],
-    st: {
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & F,
+    st: St,
   ) =>
     match(elements)
       .with(
@@ -4063,7 +2096,7 @@ const inferSeqSlotsElems: <A, B, C, D, E, F, G, H, I>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(st),
+        () => Ok(st) as Result<St, IErr>,
       )
       .with(
         (_v) => {
@@ -4091,7 +2124,7 @@ const inferSeqSlotsElems: <A, B, C, D, E, F, G, H, I>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferSeqSlots: <A, B, C, D, E, F, G, H, I>(
+const inferSeqSlots: <A, B, C, D, E, F, G>(
   ctx: {
     env: Map<string, Scheme>;
     letOwner: Map<string, Span>;
@@ -4111,95 +2144,27 @@ const inferSeqSlots: <A, B, C, D, E, F, G, H, I>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            next: number;
-            letUses: Map<string, Ty[]>;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & E,
+          d: St,
           e: {
-            inferExpr: (
-              a: Expr,
-              b: {
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & E,
-            ) => Result<
-              [
-                Ty,
-                {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & E,
-              ],
-              IErr
-            >;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             unify: (
               a: Ty,
               b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & F,
-              d: { end: A; start: B } & G,
-            ) => Result<
-              { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & F,
-              { message: string; start: B; end: A }
-            >;
+              c: St,
+              d: { end: A; start: B } & E,
+            ) => Result<St, { message: string; start: B; end: A }>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                next: number;
-                letUses: Map<string, Ty[]>;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-              } & E,
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
-    } & H)[];
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
+    } & F)[];
+    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
   },
   con: string,
   elements: SeqElem[],
-  st: {
-    next: number;
-    letUses: Map<string, Ty[]>;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-  } & E,
-) => Result<
-  [
-    Ty,
-    {
-      next: number;
-      letUses: Map<string, Ty[]>;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-    } & E,
-  ],
-  IErr
-> = _curry(
+  st: St,
+) => Result<[Ty, St], IErr> = _curry(
   4,
-  <A, B, C, D, E, F, G, H, I>(
+  <A, B, C, D, E, F, G>(
     ctx: {
       env: Map<string, Scheme>;
       letOwner: Map<string, Span>;
@@ -4219,97 +2184,32 @@ const inferSeqSlots: <A, B, C, D, E, F, G, H, I>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              next: number;
-              letUses: Map<string, Ty[]>;
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & E,
+            d: St,
             e: {
-              inferExpr: (
-                a: Expr,
-                b: {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & E,
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    letUses: Map<string, Ty[]>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                    next: number;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & E,
-                ],
-                IErr
-              >;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
               unify: (
                 a: Ty,
                 b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & F,
-                d: { end: A; start: B } & G,
-              ) => Result<
-                { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & F,
-                { message: string; start: B; end: A }
-              >;
+                c: St,
+                d: { end: A; start: B } & E,
+              ) => Result<St, { message: string; start: B; end: A }>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & E,
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
-      } & H)[];
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
+      } & F)[];
+      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
     },
     con: string,
     elements: SeqElem[],
-    st: {
-      next: number;
-      letUses: Map<string, Ty[]>;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-    } & E,
+    st: St,
   ) =>
-    (([elem, st1]: [
-      Ty,
-      {
-        next: number;
-        letUses: Map<string, Ty[]>;
-        tv: Map<number, Ty>;
-        rv: Map<number, Row>;
-        letSpans: Map<string, Span>;
-        recorded: TypeAt[];
-      } & E,
-    ]) =>
+    (([elem, st1]: [Ty, St]) =>
       _Result_flatMap(
-        (st2) => Ok(_tuple(tCon(con, [elem]), st2)),
+        (st2) => Ok(_tuple(tCon(con, [elem]), st2)) as Result<[Ty, St], IErr>,
         inferSeqSlotsElems(ctx, con, elem, elements, st1),
       ))(freshVar(st)),
 );
-const inferMapEntries: <A, B, C, D, E, F, G, H, I>(
+const inferMapEntries: <A, B, C, D, E, F, G>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -4328,94 +2228,29 @@ const inferMapEntries: <A, B, C, D, E, F, G, H, I>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            next: number;
-            letUses: Map<string, Ty[]>;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & F,
+          d: St,
           e: {
-            inferExpr: (
-              a: Expr,
-              b: {
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & F,
-            ) => Result<
-              [
-                Ty,
-                {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ],
-              IErr
-            >;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             unify: (
               a: Ty,
               b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              d: { end: A; start: B } & H,
-            ) => Result<
-              { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              { message: string; start: B; end: A }
-            >;
+              c: St,
+              d: { end: A; start: B } & F,
+            ) => Result<St, { message: string; start: B; end: A }>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                next: number;
-                letUses: Map<string, Ty[]>;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-              } & F,
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
-    } & I)[];
+    } & G)[];
     loopStack: Ty[][];
     letOwner: Map<string, Span>;
   },
   k: Ty,
   v: Ty,
   entries: MapEntry[],
-  st: {
-    letUses: Map<string, Ty[]>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-    next: number;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & F,
-) => Result<
-  {
-    letUses: Map<string, Ty[]>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-    next: number;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & F,
-  IErr
-> = _curry(
+  st: St,
+) => Result<St, IErr> = _curry(
   5,
-  <A, B, C, D, E, F, G, H, I>(
+  <A, B, C, D, E, F, G>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
@@ -4434,81 +2269,26 @@ const inferMapEntries: <A, B, C, D, E, F, G, H, I>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              next: number;
-              letUses: Map<string, Ty[]>;
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & F,
+            d: St,
             e: {
-              inferExpr: (
-                a: Expr,
-                b: {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    letUses: Map<string, Ty[]>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                    next: number;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & F,
-                ],
-                IErr
-              >;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
               unify: (
                 a: Ty,
                 b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                d: { end: A; start: B } & H,
-              ) => Result<
-                { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                { message: string; start: B; end: A }
-              >;
+                c: St,
+                d: { end: A; start: B } & F,
+              ) => Result<St, { message: string; start: B; end: A }>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & F,
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
-      } & I)[];
+      } & G)[];
       loopStack: Ty[][];
       letOwner: Map<string, Span>;
     },
     k: Ty,
     v: Ty,
     entries: MapEntry[],
-    st: {
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & F,
+    st: St,
   ) =>
     match(entries)
       .with(
@@ -4516,7 +2296,7 @@ const inferMapEntries: <A, B, C, D, E, F, G, H, I>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(st),
+        () => Ok(st) as Result<St, IErr>,
       )
       .with(
         (_v) => {
@@ -4545,7 +2325,7 @@ const inferMapEntries: <A, B, C, D, E, F, G, H, I>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferMapExpr: <A, B, C, D, E, F, G, H, I>(
+const inferMapExpr: <A, B, C, D, E, F, G>(
   ctx: {
     env: Map<string, Scheme>;
     letOwner: Map<string, Span>;
@@ -4565,94 +2345,26 @@ const inferMapExpr: <A, B, C, D, E, F, G, H, I>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            next: number;
-            letUses: Map<string, Ty[]>;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & E,
+          d: St,
           e: {
-            inferExpr: (
-              a: Expr,
-              b: {
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & E,
-            ) => Result<
-              [
-                Ty,
-                {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & E,
-              ],
-              IErr
-            >;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             unify: (
               a: Ty,
               b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & F,
-              d: { end: A; start: B } & G,
-            ) => Result<
-              { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & F,
-              { message: string; start: B; end: A }
-            >;
+              c: St,
+              d: { end: A; start: B } & E,
+            ) => Result<St, { message: string; start: B; end: A }>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                next: number;
-                letUses: Map<string, Ty[]>;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-              } & E,
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
-    } & H)[];
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
+    } & F)[];
+    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
   },
   entries: MapEntry[],
-  st: {
-    next: number;
-    letUses: Map<string, Ty[]>;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-  } & E,
-) => Result<
-  [
-    Ty,
-    {
-      next: number;
-      letUses: Map<string, Ty[]>;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-    } & E,
-  ],
-  IErr
-> = _curry(
+  st: St,
+) => Result<[Ty, St], IErr> = _curry(
   3,
-  <A, B, C, D, E, F, G, H, I>(
+  <A, B, C, D, E, F, G>(
     ctx: {
       env: Map<string, Scheme>;
       letOwner: Map<string, Span>;
@@ -4672,103 +2384,28 @@ const inferMapExpr: <A, B, C, D, E, F, G, H, I>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              next: number;
-              letUses: Map<string, Ty[]>;
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & E,
+            d: St,
             e: {
-              inferExpr: (
-                a: Expr,
-                b: {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & E,
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    letUses: Map<string, Ty[]>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                    next: number;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & E,
-                ],
-                IErr
-              >;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
               unify: (
                 a: Ty,
                 b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & F,
-                d: { end: A; start: B } & G,
-              ) => Result<
-                { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & F,
-                { message: string; start: B; end: A }
-              >;
+                c: St,
+                d: { end: A; start: B } & E,
+              ) => Result<St, { message: string; start: B; end: A }>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & E,
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
-      } & H)[];
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
+      } & F)[];
+      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
     },
     entries: MapEntry[],
-    st: {
-      next: number;
-      letUses: Map<string, Ty[]>;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-    } & E,
+    st: St,
   ) =>
-    (([k, st1]: [
-      Ty,
-      {
-        next: number;
-        letUses: Map<string, Ty[]>;
-        tv: Map<number, Ty>;
-        rv: Map<number, Row>;
-        letSpans: Map<string, Span>;
-        recorded: TypeAt[];
-      } & E,
-    ]) =>
-      (([v, st2]: [
-        Ty,
-        {
-          next: number;
-          letUses: Map<string, Ty[]>;
-          tv: Map<number, Ty>;
-          rv: Map<number, Row>;
-          letSpans: Map<string, Span>;
-          recorded: TypeAt[];
-        } & E,
-      ]) =>
+    (([k, st1]: [Ty, St]) =>
+      (([v, st2]: [Ty, St]) =>
         _Result_flatMap(
-          (st3) => Ok(_tuple(tCon("Map", [k, v]), st3)),
+          (st3) => Ok(_tuple(tCon("Map", [k, v]), st3)) as Result<[Ty, St], IErr>,
           inferMapEntries(ctx, k, v, entries, st2),
         ))(freshVar(st1)))(freshVar(st)),
 );
@@ -4831,7 +2468,7 @@ const mergeEnvBindings: <A, B, C, D>(
   <A, B, C, D>(bindings: Map<A, B>, env: Map<A, { vars: C[]; rvars: D[]; ty: B }>) =>
     mergeEnvBindingsFrom(_Map_keys(bindings), bindings, env),
 );
-const inferArms: <A, B, C, D, E, F, G, H, I>(
+const inferArms: <A, B, C, D, E, F, G>(
   ctx: {
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
     env: Map<string, Scheme>;
@@ -4843,101 +2480,36 @@ const inferArms: <A, B, C, D, E, F, G, H, I>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            next: number;
-            letUses: Map<string, Ty[]>;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & D,
+          d: St,
           e: {
-            inferExpr: (
-              a: Expr,
-              b: {
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & D,
-            ) => Result<
-              [
-                Ty,
-                {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & D,
-              ],
-              IErr
-            >;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             unify: (
               a: Ty,
               b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & E,
-              d: { end: A; start: B } & F,
-            ) => Result<
-              { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & E,
-              { message: string; start: B; end: A }
-            >;
+              c: St,
+              d: { end: A; start: B } & D,
+            ) => Result<St, { message: string; start: B; end: A }>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                next: number;
-                letUses: Map<string, Ty[]>;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-              } & D,
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
-    } & G)[];
+    } & E)[];
     aliasMap: Map<
       string,
       {
         expr: Option<TypeExpr>;
         params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & H)[];
-      } & I
+        fields: ({ name: string; fieldType: TypeExpr } & F)[];
+      } & G
     >;
     open: boolean;
   },
   scrutT: Ty,
   resultT: Ty,
   arms: MatchArm[],
-  st: {
-    next: number;
-    recorded: TypeAt[];
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-    letUses: Map<string, Ty[]>;
-    letSpans: Map<string, Span>;
-  } & D,
-) => Result<
-  {
-    next: number;
-    recorded: TypeAt[];
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-    letUses: Map<string, Ty[]>;
-    letSpans: Map<string, Span>;
-  } & D,
-  IErr
-> = _curry(
+  st: St,
+) => Result<St, IErr> = _curry(
   5,
-  <A, B, C, D, E, F, G, H, I>(
+  <A, B, C, D, E, F, G>(
     ctx: {
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & C>>;
       env: Map<string, Scheme>;
@@ -4949,88 +2521,33 @@ const inferArms: <A, B, C, D, E, F, G, H, I>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              next: number;
-              letUses: Map<string, Ty[]>;
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & D,
+            d: St,
             e: {
-              inferExpr: (
-                a: Expr,
-                b: {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & D,
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    letUses: Map<string, Ty[]>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                    next: number;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & D,
-                ],
-                IErr
-              >;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
               unify: (
                 a: Ty,
                 b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & E,
-                d: { end: A; start: B } & F,
-              ) => Result<
-                { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & E,
-                { message: string; start: B; end: A }
-              >;
+                c: St,
+                d: { end: A; start: B } & D,
+              ) => Result<St, { message: string; start: B; end: A }>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & D,
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
-      } & G)[];
+      } & E)[];
       aliasMap: Map<
         string,
         {
           expr: Option<TypeExpr>;
           params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & H)[];
-        } & I
+          fields: ({ name: string; fieldType: TypeExpr } & F)[];
+        } & G
       >;
       open: boolean;
     },
     scrutT: Ty,
     resultT: Ty,
     arms: MatchArm[],
-    st: {
-      next: number;
-      recorded: TypeAt[];
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-    } & D,
+    st: St,
   ) =>
     match(arms)
       .with(
@@ -5038,7 +2555,7 @@ const inferArms: <A, B, C, D, E, F, G, H, I>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(st),
+        () => Ok(st) as Result<St, IErr>,
       )
       .with(
         (_v) => {
@@ -5062,7 +2579,7 @@ const inferArms: <A, B, C, D, E, F, G, H, I>(
                           inferExpr(armCtx, arm.body, st3),
                         ),
                       match(arm.guard)
-                        .with({ _tag: "None" }, () => Ok(st2))
+                        .with({ _tag: "None" }, () => Ok(st2) as Result<St, IErr>)
                         .with({ _tag: "Some" }, ({ value: g }) =>
                           _Result_flatMap(
                             ([guardT, stg]) => u(tBool, guardT, stg, exprSpan(g)),
@@ -5080,7 +2597,7 @@ const inferArms: <A, B, C, D, E, F, G, H, I>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferMatch: <A, B, C, D, E, F, G, H, I>(
+const inferMatch: <A, B, C, D, E, F, G>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -5099,96 +2616,28 @@ const inferMatch: <A, B, C, D, E, F, G, H, I>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            next: number;
-            letUses: Map<string, Ty[]>;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & F,
+          d: St,
           e: {
-            inferExpr: (
-              a: Expr,
-              b: {
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & F,
-            ) => Result<
-              [
-                Ty,
-                {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ],
-              IErr
-            >;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             unify: (
               a: Ty,
               b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              d: { end: A; start: B } & H,
-            ) => Result<
-              { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              { message: string; start: B; end: A }
-            >;
+              c: St,
+              d: { end: A; start: B } & F,
+            ) => Result<St, { message: string; start: B; end: A }>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                next: number;
-                letUses: Map<string, Ty[]>;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-              } & F,
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
-    } & I)[];
+    } & G)[];
     loopStack: Ty[][];
     letOwner: Map<string, Span>;
   },
   scrutinee: Expr,
   arms: MatchArm[],
-  st: {
-    letUses: Map<string, Ty[]>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-    next: number;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & F,
-) => Result<
-  [
-    Ty,
-    {
-      next: number;
-      letUses: Map<string, Ty[]>;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-    } & F,
-  ],
-  IErr
-> = _curry(
+  st: St,
+) => Result<[Ty, St], IErr> = _curry(
   4,
-  <A, B, C, D, E, F, G, H, I>(
+  <A, B, C, D, E, F, G>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
@@ -5207,102 +2656,37 @@ const inferMatch: <A, B, C, D, E, F, G, H, I>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              next: number;
-              letUses: Map<string, Ty[]>;
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & F,
+            d: St,
             e: {
-              inferExpr: (
-                a: Expr,
-                b: {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    letUses: Map<string, Ty[]>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                    next: number;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & F,
-                ],
-                IErr
-              >;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
               unify: (
                 a: Ty,
                 b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                d: { end: A; start: B } & H,
-              ) => Result<
-                { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                { message: string; start: B; end: A }
-              >;
+                c: St,
+                d: { end: A; start: B } & F,
+              ) => Result<St, { message: string; start: B; end: A }>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & F,
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
-      } & I)[];
+      } & G)[];
       loopStack: Ty[][];
       letOwner: Map<string, Span>;
     },
     scrutinee: Expr,
     arms: MatchArm[],
-    st: {
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & F,
+    st: St,
   ) =>
     _Result_flatMap(
       ([scrutT, st1]) =>
-        (([resultT, st2]: [
-          Ty,
-          {
-            next: number;
-            letUses: Map<string, Ty[]>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-          } & F,
-        ]) =>
+        (([resultT, st2]: [Ty, St]) =>
           _Result_flatMap(
-            (st3) => Ok(_tuple(resultT, st3)),
+            (st3) => Ok(_tuple(resultT, st3)) as Result<[Ty, St], IErr>,
             inferArms(ctx, scrutT, resultT, arms, st2),
           ))(freshVar(st1)),
       inferExpr(ctx, scrutinee, st),
     ),
 );
-const inferExpr: <A, B, C, D, E, F, G, H, I>(
+const inferExpr: <A, B, C, D, E, F, G>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -5321,95 +2705,27 @@ const inferExpr: <A, B, C, D, E, F, G, H, I>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            next: number;
-            letUses: Map<string, Ty[]>;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & F,
+          d: St,
           e: {
-            inferExpr: (
-              a: Expr,
-              b: {
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & F,
-            ) => Result<
-              [
-                Ty,
-                {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ],
-              IErr
-            >;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             unify: (
               a: Ty,
               b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              d: { end: A; start: B } & H,
-            ) => Result<
-              { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              { message: string; start: B; end: A }
-            >;
+              c: St,
+              d: { end: A; start: B } & F,
+            ) => Result<St, { message: string; start: B; end: A }>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                next: number;
-                letUses: Map<string, Ty[]>;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-              } & F,
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
-    } & I)[];
+    } & G)[];
     loopStack: Ty[][];
     letOwner: Map<string, Span>;
   },
   e: Expr,
-  st: {
-    letUses: Map<string, Ty[]>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-    next: number;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & F,
-) => Result<
-  [
-    Ty,
-    {
-      recorded: TypeAt[];
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & F,
-  ],
-  IErr
-> = _curry(
+  st: St,
+) => Result<[Ty, St], IErr> = _curry(
   3,
-  <A, B, C, D, E, F, G, H, I>(
+  <A, B, C, D, E, F, G>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
@@ -5428,86 +2744,31 @@ const inferExpr: <A, B, C, D, E, F, G, H, I>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              next: number;
-              letUses: Map<string, Ty[]>;
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & F,
+            d: St,
             e: {
-              inferExpr: (
-                a: Expr,
-                b: {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    letUses: Map<string, Ty[]>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                    next: number;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & F,
-                ],
-                IErr
-              >;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
               unify: (
                 a: Ty,
                 b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                d: { end: A; start: B } & H,
-              ) => Result<
-                { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                { message: string; start: B; end: A }
-              >;
+                c: St,
+                d: { end: A; start: B } & F,
+              ) => Result<St, { message: string; start: B; end: A }>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & F,
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
-      } & I)[];
+      } & G)[];
       loopStack: Ty[][];
       letOwner: Map<string, Span>;
     },
     e: Expr,
-    st: {
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & F,
+    st: St,
   ) =>
     _Result_flatMap(
-      ([t, st1]) => Ok(_tuple(t, recordAt(exprSpan(e), t, st1))),
+      ([t, st1]) => Ok(_tuple(t, recordAt(exprSpan(e), t, st1))) as Result<[Ty, St], IErr>,
       inferExprRaw(ctx, e, st),
     ),
 );
-const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
+const inferExprRaw: <A, B, C, D, E, F, G>(
   ctx: {
     env: Map<string, Scheme>;
     letOwner: Map<string, Span>;
@@ -5527,94 +2788,26 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            next: number;
-            letUses: Map<string, Ty[]>;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & E,
+          d: St,
           e: {
-            inferExpr: (
-              a: Expr,
-              b: {
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & E,
-            ) => Result<
-              [
-                Ty,
-                {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & E,
-              ],
-              IErr
-            >;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             unify: (
               a: Ty,
               b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & F,
-              d: { end: A; start: B } & G,
-            ) => Result<
-              { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & F,
-              { message: string; start: B; end: A }
-            >;
+              c: St,
+              d: { end: A; start: B } & E,
+            ) => Result<St, { message: string; start: B; end: A }>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                next: number;
-                letUses: Map<string, Ty[]>;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-              } & E,
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
-    } & H)[];
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
+    } & F)[];
+    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
   },
   e: Expr,
-  st: {
-    next: number;
-    letUses: Map<string, Ty[]>;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-  } & E,
-) => Result<
-  [
-    Ty,
-    {
-      next: number;
-      letUses: Map<string, Ty[]>;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-    } & E,
-  ],
-  IErr
-> = _curry(
+  st: St,
+) => Result<[Ty, St], IErr> = _curry(
   3,
-  <A, B, C, D, E, F, G, H, I>(
+  <A, B, C, D, E, F, G>(
     ctx: {
       env: Map<string, Scheme>;
       letOwner: Map<string, Span>;
@@ -5634,98 +2827,33 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              next: number;
-              letUses: Map<string, Ty[]>;
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & E,
+            d: St,
             e: {
-              inferExpr: (
-                a: Expr,
-                b: {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & E,
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    letUses: Map<string, Ty[]>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                    next: number;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & E,
-                ],
-                IErr
-              >;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
               unify: (
                 a: Ty,
                 b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & F,
-                d: { end: A; start: B } & G,
-              ) => Result<
-                { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & F,
-                { message: string; start: B; end: A }
-              >;
+                c: St,
+                d: { end: A; start: B } & E,
+              ) => Result<St, { message: string; start: B; end: A }>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & E,
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
-      } & H)[];
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
+      } & F)[];
+      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
     },
     e: Expr,
-    st: {
-      next: number;
-      letUses: Map<string, Ty[]>;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-    } & E,
+    st: St,
   ) =>
     match(e)
-      .with({ _tag: "ENum" }, () => Ok(_tuple(tNumber, st)))
-      .with({ _tag: "EUnit" }, () => Ok(_tuple(tUnit, st)))
-      .with({ _tag: "EBool" }, () => Ok(_tuple(tBool, st)))
-      .with({ _tag: "EStr" }, ({ value }) => Ok(_tuple(tLit(value), st)))
+      .with({ _tag: "ENum" }, () => Ok(_tuple(tNumber, st)) as Result<[Ty, St], IErr>)
+      .with({ _tag: "EUnit" }, () => Ok(_tuple(tUnit, st)) as Result<[Ty, St], IErr>)
+      .with({ _tag: "EBool" }, () => Ok(_tuple(tBool, st)) as Result<[Ty, St], IErr>)
+      .with({ _tag: "EStr" }, ({ value }) => Ok(_tuple(tLit(value), st)) as Result<[Ty, St], IErr>)
       .with({ _tag: "ERef" }, ({ name, span: sp }) =>
         match(_Map_get(name, ctx.env))
           .with({ _tag: "Some" }, ({ value: sc }) =>
-            (([t, st1]: [
-              Ty,
-              {
-                letUses: Map<string, Ty[]>;
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-              } & E,
-            ]) =>
+            (([t, st1]: [Ty, St]) =>
               Ok(
                 _tuple(
                   t,
@@ -5734,42 +2862,22 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
                     .with({ _tag: "None" }, () => st1)
                     .exhaustive(),
                 ),
-              ))(instantiate(sc, st)),
+              ) as Result<[Ty, St], IErr>)(instantiate(sc, st)),
           )
           .with({ _tag: "None" }, () =>
             ctx.open
-              ? (([t, st1]: [
-                  Ty,
-                  {
-                    next: number;
-                    letUses: Map<string, Ty[]>;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                  } & E,
-                ]) => Ok(_tuple(t, st1)))(freshVar(st))
-              : Err(typeErr(`unbound variable '${name}'`, sp)),
+              ? (([t, st1]: [Ty, St]) => Ok(_tuple(t, st1)) as Result<[Ty, St], IErr>)(freshVar(st))
+              : (Err(typeErr(`unbound variable '${name}'`, sp)) as Result<[Ty, St], IErr>),
           )
           .exhaustive(),
       )
       .with({ _tag: "ELambda" }, ({ params, body }) =>
-        (([paramTypes, bodyEnv, st1]: [
-          Ty[],
-          Map<string, Scheme>,
-          {
-            next: number;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letUses: Map<string, Ty[]>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & E,
-        ]) =>
+        (([paramTypes, bodyEnv, st1]: [Ty[], Map<string, Scheme>, St]) =>
           _Result_flatMap(
             (st2) =>
               _Result_flatMap(
-                ([bodyT, st3]) => Ok(_tuple(arrowChain(paramTypes, bodyT), st3)),
+                ([bodyT, st3]) =>
+                  Ok(_tuple(arrowChain(paramTypes, bodyT), st3)) as Result<[Ty, St], IErr>,
                 inferExpr(ctxWithEnv(ctx, bodyEnv), body, st2),
               ),
             constrainParamAnnotsFrom(ctx, params, paramTypes, new Map<string, Ty>(), st1),
@@ -5810,27 +2918,11 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
           _Result_flatMap(
             (claimed) =>
               match(claimed)
-                .with({ _tag: "Some" }, ({ value: r }) => Ok(r))
+                .with({ _tag: "Some" }, ({ value: r }) => Ok(r) as Result<[Ty, St], IErr>)
                 .with({ _tag: "None" }, () => inferNormalCall(ctx, fn, args, st))
                 .exhaustive(),
             runInferCallHooks(inferCallHooksOf(ctx.plugins), fn, args, origin, st, api),
-          ))({
-          inferExpr: _curry(
-            2,
-            (
-              e: Expr,
-              st0: {
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & E,
-            ) => inferExpr(ctx, e, st0),
-          ),
-          unify: u,
-        }),
+          ))({ inferExpr: _curry(2, (e: Expr, st0: St) => inferExpr(ctx, e, st0)), unify: u }),
       )
       .with({ _tag: "EPipe" }, ({ left, right, span: sp }) =>
         inferExpr(ctx, Ast.ECall(right, [left], None as Option<string>, sp), st),
@@ -5843,7 +2935,7 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
         match(spread)
           .with({ _tag: "None" }, () =>
             _Result_flatMap(
-              ([row, st1]) => Ok(_tuple(tRecord(row), st1)),
+              ([row, st1]) => Ok(_tuple(tRecord(row), st1)) as Result<[Ty, St], IErr>,
               inferRecordRow(ctx, fields, st),
             ),
           )
@@ -5852,19 +2944,9 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
               ([row, st1]) =>
                 _Result_flatMap(
                   ([baseT, st2]) =>
-                    (([tailVar, st3]: [
-                      Row,
-                      {
-                        tv: Map<number, Ty>;
-                        rv: Map<number, Row>;
-                        next: number;
-                        letUses: Map<string, Ty[]>;
-                        letSpans: Map<string, Span>;
-                        recorded: TypeAt[];
-                      } & E,
-                    ]) =>
+                    (([tailVar, st3]: [Row, St]) =>
                       _Result_flatMap(
-                        (st4) => Ok(_tuple(baseT, st4)),
+                        (st4) => Ok(_tuple(baseT, st4)) as Result<[Ty, St], IErr>,
                         u(baseT, tRecord(rWithTail(row, tailVar)), st3, sp),
                       ))(freshRowVar(st2)),
                   inferExpr(ctx, spreadExpr, st1),
@@ -5885,7 +2967,7 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
       )
       .with({ _tag: "ETuple" }, ({ elements }) =>
         _Result_flatMap(
-          ([elems, st1]) => Ok(_tuple(tTuple(elems), st1)),
+          ([elems, st1]) => Ok(_tuple(tTuple(elems), st1)) as Result<[Ty, St], IErr>,
           inferTupleElems(ctx, elements, st),
         ),
       )
@@ -5903,11 +2985,14 @@ const inferExprRaw: <A, B, C, D, E, F, G, H, I>(
       )
       .with({ _tag: "ERecur" }, ({ args, span: sp }) => inferRecur(ctx, args, sp, st))
       .with({ _tag: "EInterp" }, ({ parts }) =>
-        _Result_flatMap((st1) => Ok(_tuple(tString, st1)), inferInterpParts(ctx, parts, st)),
+        _Result_flatMap(
+          (st1) => Ok(_tuple(tString, st1)) as Result<[Ty, St], IErr>,
+          inferInterpParts(ctx, parts, st),
+        ),
       )
       .exhaustive(),
 );
-const inferDo: <A, B, C, D, E, F, G, H, I>(
+const inferDo: <A, B, C, D, E, F, G>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -5926,95 +3011,27 @@ const inferDo: <A, B, C, D, E, F, G, H, I>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            next: number;
-            letUses: Map<string, Ty[]>;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & F,
+          d: St,
           e: {
-            inferExpr: (
-              a: Expr,
-              b: {
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & F,
-            ) => Result<
-              [
-                Ty,
-                {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ],
-              IErr
-            >;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             unify: (
               a: Ty,
               b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              d: { end: A; start: B } & H,
-            ) => Result<
-              { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              { message: string; start: B; end: A }
-            >;
+              c: St,
+              d: { end: A; start: B } & F,
+            ) => Result<St, { message: string; start: B; end: A }>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                next: number;
-                letUses: Map<string, Ty[]>;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-              } & F,
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
-    } & I)[];
+    } & G)[];
     loopStack: Ty[][];
     letOwner: Map<string, Span>;
   },
   exprs: Expr[],
-  st: {
-    letUses: Map<string, Ty[]>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-    next: number;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & F,
-) => Result<
-  [
-    Ty,
-    {
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & F,
-  ],
-  IErr
-> = _curry(
+  st: St,
+) => Result<[Ty, St], IErr> = _curry(
   3,
-  <A, B, C, D, E, F, G, H, I>(
+  <A, B, C, D, E, F, G>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
@@ -6033,79 +3050,24 @@ const inferDo: <A, B, C, D, E, F, G, H, I>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              next: number;
-              letUses: Map<string, Ty[]>;
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & F,
+            d: St,
             e: {
-              inferExpr: (
-                a: Expr,
-                b: {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    letUses: Map<string, Ty[]>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                    next: number;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & F,
-                ],
-                IErr
-              >;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
               unify: (
                 a: Ty,
                 b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                d: { end: A; start: B } & H,
-              ) => Result<
-                { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                { message: string; start: B; end: A }
-              >;
+                c: St,
+                d: { end: A; start: B } & F,
+              ) => Result<St, { message: string; start: B; end: A }>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & F,
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
-      } & I)[];
+      } & G)[];
       loopStack: Ty[][];
       letOwner: Map<string, Span>;
     },
     exprs: Expr[],
-    st: {
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & F,
+    st: St,
   ) =>
     match(exprs)
       .with(
@@ -6113,7 +3075,11 @@ const inferDo: <A, B, C, D, E, F, G, H, I>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Err(typeErr("internal: empty do block", { start: 0, end: 0 })),
+        () =>
+          Err(typeErr("internal: empty do block", { start: 0, end: 0 })) as Result<
+            [Ty, St],
+            { message: string; start: number; end: number }
+          >,
       )
       .with(
         (_v) => {
@@ -6134,7 +3100,7 @@ const inferDo: <A, B, C, D, E, F, G, H, I>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferPatRecordFrom: <A, B, C, D>(
+const inferPatRecordFrom: <A, B, C>(
   ctx: {
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
@@ -6142,17 +3108,10 @@ const inferPatRecordFrom: <A, B, C, D>(
   fields: PatField[],
   row: Row,
   bindings: Map<string, Ty>,
-  st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-) => Result<
-  [
-    Row,
-    Map<string, Ty>,
-    { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-  ],
-  IErr
-> = _curry(
+  st: St,
+) => Result<[Row, Map<string, Ty>, St], IErr> = _curry(
   5,
-  <A, B, C, D>(
+  <A, B, C>(
     ctx: {
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
       env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
@@ -6160,7 +3119,7 @@ const inferPatRecordFrom: <A, B, C, D>(
     fields: PatField[],
     row: Row,
     bindings: Map<string, Ty>,
-    st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
+    st: St,
   ) =>
     match(fields)
       .with(
@@ -6168,7 +3127,7 @@ const inferPatRecordFrom: <A, B, C, D>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(_tuple(row, bindings, st)),
+        () => Ok(_tuple(row, bindings, st)) as Result<[Row, Map<string, Ty>, St], IErr>,
       )
       .with(
         (_v) => {
@@ -6192,40 +3151,31 @@ const inferPatRecordFrom: <A, B, C, D>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferPatRecord: <A, B, C, D>(
+const inferPatRecord: <A, B, C>(
   ctx: {
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
   } & C,
   fields: PatField[],
-  st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-) => Result<
-  [
-    Ty,
-    Map<string, Ty>,
-    { recorded: TypeAt[]; next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-  ],
-  IErr
-> = _curry(
+  st: St,
+) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
   3,
-  <A, B, C, D>(
+  <A, B, C>(
     ctx: {
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
       env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
     } & C,
     fields: PatField[],
-    st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
+    st: St,
   ) =>
-    (([rowBase, _st1]: [
-      Row,
-      { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-    ]) =>
+    (([rowBase, _st1]: [Row, St]) =>
       _Result_flatMap(
-        ([row, bindings, st2]) => Ok(_tuple(tRecord(row), bindings, st2)),
+        ([row, bindings, st2]) =>
+          Ok(_tuple(tRecord(row), bindings, st2)) as Result<[Ty, Map<string, Ty>, St], IErr>,
         inferPatRecordFrom(ctx, fields, rowBase, new Map<string, Ty>(), st),
       ))(freshRowVar(st)),
 );
-const inferPatCtorArgs: <A, B, C, D>(
+const inferPatCtorArgs: <A, B, C>(
   ctx: {
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
@@ -6233,19 +3183,12 @@ const inferPatCtorArgs: <A, B, C, D>(
   ctor: string,
   curT: Ty,
   args: Pattern[],
-  st: { tv: Map<number, Ty>; next: number; recorded: TypeAt[]; rv: Map<number, Row> } & D,
+  st: St,
   bindings: Map<string, Ty>,
   sp: Span,
-) => Result<
-  [
-    Ty,
-    Map<string, Ty>,
-    { tv: Map<number, Ty>; next: number; recorded: TypeAt[]; rv: Map<number, Row> } & D,
-  ],
-  IErr
-> = _curry(
+) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
   7,
-  <A, B, C, D>(
+  <A, B, C>(
     ctx: {
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
       env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
@@ -6253,7 +3196,7 @@ const inferPatCtorArgs: <A, B, C, D>(
     ctor: string,
     curT: Ty,
     args: Pattern[],
-    st: { tv: Map<number, Ty>; next: number; recorded: TypeAt[]; rv: Map<number, Row> } & D,
+    st: St,
     bindings: Map<string, Ty>,
     sp: Span,
   ) =>
@@ -6263,7 +3206,7 @@ const inferPatCtorArgs: <A, B, C, D>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(_tuple(curT, bindings, st)),
+        () => Ok(_tuple(curT, bindings, st)) as Result<[Ty, Map<string, Ty>, St], IErr>,
       )
       .with(
         (_v) => {
@@ -6291,37 +3234,34 @@ const inferPatCtorArgs: <A, B, C, D>(
                 inferPat(ctx, argPat, st),
               ),
             )
-            .otherwise(() =>
-              Err(typeErr(`constructor '${ctor}' applied to too many arguments`, sp)),
+            .otherwise(
+              () =>
+                Err(typeErr(`constructor '${ctor}' applied to too many arguments`, sp)) as Result<
+                  [Ty, Map<string, Ty>, St],
+                  IErr
+                >,
             ),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
       }),
 );
-const inferPatTupleFrom: <A, B, C, D>(
+const inferPatTupleFrom: <A, B, C>(
   ctx: {
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
   } & C,
   elems: Pattern[],
-  st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-) => Result<
-  [
-    Ty[],
-    Map<string, Ty>,
-    { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-  ],
-  IErr
-> = _curry(
+  st: St,
+) => Result<[Ty[], Map<string, Ty>, St], IErr> = _curry(
   3,
-  <A, B, C, D>(
+  <A, B, C>(
     ctx: {
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
       env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
     } & C,
     elems: Pattern[],
-    st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
+    st: St,
   ) =>
     match(elems)
       .with(
@@ -6329,7 +3269,11 @@ const inferPatTupleFrom: <A, B, C, D>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(_tuple([] as Ty[], new Map<string, Ty>(), st)),
+        () =>
+          Ok(_tuple([] as Ty[], new Map<string, Ty>(), st)) as Result<
+            [Ty[], Map<string, Ty>, St],
+            IErr
+          >,
       )
       .with(
         (_v) => {
@@ -6347,7 +3291,7 @@ const inferPatTupleFrom: <A, B, C, D>(
                       mergeBindingMaps(restBindings, bindings),
                       st2,
                     ),
-                  ),
+                  ) as Result<[Ty[], Map<string, Ty>, St], IErr>,
                 inferPatTupleFrom(ctx, rest, st1),
               ),
             inferPat(ctx, ep, st),
@@ -6357,59 +3301,47 @@ const inferPatTupleFrom: <A, B, C, D>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferPatTuple: <A, B, C, D>(
+const inferPatTuple: <A, B, C>(
   ctx: {
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
   } & C,
   elems: Pattern[],
-  st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-) => Result<
-  [
-    Ty,
-    Map<string, Ty>,
-    { recorded: TypeAt[]; next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-  ],
-  IErr
-> = _curry(
+  st: St,
+) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
   3,
-  <A, B, C, D>(
+  <A, B, C>(
     ctx: {
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
       env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
     } & C,
     elems: Pattern[],
-    st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
+    st: St,
   ) =>
     _Result_flatMap(
-      ([elemTs, bindings, st1]) => Ok(_tuple(tTuple(elemTs), bindings, st1)),
+      ([elemTs, bindings, st1]) =>
+        Ok(_tuple(tTuple(elemTs), bindings, st1)) as Result<[Ty, Map<string, Ty>, St], IErr>,
       inferPatTupleFrom(ctx, elems, st),
     ),
 );
-const inferSeqPatElems: <A, B, C, D>(
+const inferSeqPatElems: <A, B, C>(
   ctx: {
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
   } & C,
   elem: Ty,
   elems: Pattern[],
-  st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-) => Result<
-  [
-    Map<string, Ty>,
-    { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-  ],
-  IErr
-> = _curry(
+  st: St,
+) => Result<[Map<string, Ty>, St], IErr> = _curry(
   4,
-  <A, B, C, D>(
+  <A, B, C>(
     ctx: {
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
       env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
     } & C,
     elem: Ty,
     elems: Pattern[],
-    st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
+    st: St,
   ) =>
     match(elems)
       .with(
@@ -6417,7 +3349,7 @@ const inferSeqPatElems: <A, B, C, D>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(_tuple(new Map<string, Ty>(), st)),
+        () => Ok(_tuple(new Map<string, Ty>(), st)) as Result<[Map<string, Ty>, St], IErr>,
       )
       .with(
         (_v) => {
@@ -6431,7 +3363,10 @@ const inferSeqPatElems: <A, B, C, D>(
                 (st2) =>
                   _Result_flatMap(
                     ([restBindings, st3]) =>
-                      Ok(_tuple(mergeBindingMaps(restBindings, subBindings), st3)),
+                      Ok(_tuple(mergeBindingMaps(restBindings, subBindings), st3)) as Result<
+                        [Map<string, Ty>, St],
+                        IErr
+                      >,
                     inferSeqPatElems(ctx, elem, rest, st2),
                   ),
                 u(elem, subT, st1, patSpan(ep)),
@@ -6443,7 +3378,7 @@ const inferSeqPatElems: <A, B, C, D>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferSeqPat: <A, B, C, D>(
+const inferSeqPat: <A, B, C>(
   ctx: {
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
@@ -6451,17 +3386,10 @@ const inferSeqPat: <A, B, C, D>(
   con: string,
   elems: Pattern[],
   restPat: Option<Pattern>,
-  st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-) => Result<
-  [
-    Ty,
-    Map<string, Ty>,
-    { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-  ],
-  IErr
-> = _curry(
+  st: St,
+) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
   5,
-  <A, B, C, D>(
+  <A, B, C>(
     ctx: {
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
       env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
@@ -6469,22 +3397,26 @@ const inferSeqPat: <A, B, C, D>(
     con: string,
     elems: Pattern[],
     restPat: Option<Pattern>,
-    st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
+    st: St,
   ) =>
-    (([elem, st1]: [
-      Ty,
-      { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-    ]) => {
+    (([elem, st1]: [Ty, St]) => {
       const seqT: Ty = tCon(con, [elem]);
       return _Result_flatMap(
         ([bindings, st2]) =>
           match(restPat)
-            .with({ _tag: "None" }, () => Ok(_tuple(seqT, bindings, st2)))
+            .with(
+              { _tag: "None" },
+              () => Ok(_tuple(seqT, bindings, st2)) as Result<[Ty, Map<string, Ty>, St], IErr>,
+            )
             .with({ _tag: "Some" }, ({ value: r }) =>
               _Result_flatMap(
                 ([subT, subBindings, st3]) =>
                   _Result_flatMap(
-                    (st4) => Ok(_tuple(seqT, mergeBindingMaps(bindings, subBindings), st4)),
+                    (st4) =>
+                      Ok(_tuple(seqT, mergeBindingMaps(bindings, subBindings), st4)) as Result<
+                        [Ty, Map<string, Ty>, St],
+                        IErr
+                      >,
                     u(subT, seqT, st3, patSpan(r)),
                   ),
                 inferPat(ctx, r, st2),
@@ -6495,81 +3427,95 @@ const inferSeqPat: <A, B, C, D>(
       );
     })(freshVar(st)),
 );
-const inferPat: <A, B, C, D>(
+const inferPat: <A, B, C>(
   ctx: {
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
   } & C,
   p: Pattern,
-  st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-) => Result<
-  [
-    Ty,
-    Map<string, Ty>,
-    { recorded: TypeAt[]; next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-  ],
-  IErr
-> = _curry(
+  st: St,
+) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
   3,
-  <A, B, C, D>(
+  <A, B, C>(
     ctx: {
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
       env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
     } & C,
     p: Pattern,
-    st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
+    st: St,
   ) =>
     _Result_flatMap(
-      ([t, bindings, st1]) => Ok(_tuple(t, bindings, recordAt(patSpan(p), t, st1))),
+      ([t, bindings, st1]) =>
+        Ok(_tuple(t, bindings, recordAt(patSpan(p), t, st1))) as Result<
+          [Ty, Map<string, Ty>, St],
+          IErr
+        >,
       inferPatRaw(ctx, p, st),
     ),
 );
-const inferPatRaw: <A, B, C, D>(
+const inferPatRaw: <A, B, C>(
   ctx: {
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
   } & C,
   p: Pattern,
-  st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-) => Result<
-  [
-    Ty,
-    Map<string, Ty>,
-    { recorded: TypeAt[]; next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-  ],
-  IErr
-> = _curry(
+  st: St,
+) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
   3,
-  <A, B, C, D>(
+  <A, B, C>(
     ctx: {
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
       env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
     } & C,
     p: Pattern,
-    st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
+    st: St,
   ) =>
     match(p)
       .with({ _tag: "PAs" }, ({ pat, name }) =>
         _Result_flatMap(
-          ([t, bindings, st1]) => Ok(_tuple(t, _Map_set(name, t, bindings), st1)),
+          ([t, bindings, st1]) =>
+            Ok(_tuple(t, _Map_set(name, t, bindings), st1)) as Result<
+              [Ty, Map<string, Ty>, St],
+              IErr
+            >,
           inferPat(ctx, pat, st),
         ),
       )
       .with({ _tag: "PWild" }, () =>
-        (([t, st1]: [
-          Ty,
-          { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-        ]) => Ok(_tuple(t, new Map<string, Ty>(), st1)))(freshVar(st)),
+        (([t, st1]: [Ty, St]) =>
+          Ok(_tuple(t, new Map<string, Ty>(), st1)) as Result<[Ty, Map<string, Ty>, St], IErr>)(
+          freshVar(st),
+        ),
       )
-      .with({ _tag: "PUnit" }, () => Ok(_tuple(tUnit, new Map<string, Ty>(), st)))
-      .with({ _tag: "PLit" }, () => Ok(_tuple(tNumber, new Map<string, Ty>(), st)))
-      .with({ _tag: "PBool" }, () => Ok(_tuple(tBool, new Map<string, Ty>(), st)))
-      .with({ _tag: "PStr" }, ({ value }) => Ok(_tuple(tLit(value), new Map<string, Ty>(), st)))
+      .with(
+        { _tag: "PUnit" },
+        () =>
+          Ok(_tuple(tUnit, new Map<string, Ty>(), st)) as Result<[Ty, Map<string, Ty>, St], IErr>,
+      )
+      .with(
+        { _tag: "PLit" },
+        () =>
+          Ok(_tuple(tNumber, new Map<string, Ty>(), st)) as Result<[Ty, Map<string, Ty>, St], IErr>,
+      )
+      .with(
+        { _tag: "PBool" },
+        () =>
+          Ok(_tuple(tBool, new Map<string, Ty>(), st)) as Result<[Ty, Map<string, Ty>, St], IErr>,
+      )
+      .with(
+        { _tag: "PStr" },
+        ({ value }) =>
+          Ok(_tuple(tLit(value), new Map<string, Ty>(), st)) as Result<
+            [Ty, Map<string, Ty>, St],
+            IErr
+          >,
+      )
       .with({ _tag: "PBind" }, ({ name }) =>
-        (([t, st1]: [
-          Ty,
-          { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-        ]) => Ok(_tuple(t, _Map_set(name, t, new Map<string, Ty>()), st1)))(freshVar(st)),
+        (([t, st1]: [Ty, St]) =>
+          Ok(_tuple(t, _Map_set(name, t, new Map<string, Ty>()), st1)) as Result<
+            [Ty, Map<string, Ty>, St],
+            IErr
+          >)(freshVar(st)),
       )
       .with({ _tag: "PRecord" }, ({ fields }) => inferPatRecord(ctx, fields, st))
       .with({ _tag: "PCtor" }, ({ ctor, args, ns, span: sp }) =>
@@ -6585,17 +3531,17 @@ const inferPatRaw: <A, B, C, D>(
                 ),
               ),
             )
-              .with({ _tag: "None" }, () => Err(typeErr(`'${alias}' has no member '${ctor}'`, sp)))
+              .with(
+                { _tag: "None" },
+                () =>
+                  Err(typeErr(`'${alias}' has no member '${ctor}'`, sp)) as Result<
+                    [Ty, Map<string, Ty>, St],
+                    IErr
+                  >,
+              )
               .with({ _tag: "Some" }, ({ value: sc }) =>
-                (([curT, st1]: [
-                  Ty,
-                  {
-                    next: number;
-                    recorded: TypeAt[];
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & D,
-                ]) => inferPatCtorArgs(ctx, ctor, curT, args, st1, new Map<string, Ty>(), sp))(
+                (([curT, st1]: [Ty, St]) =>
+                  inferPatCtorArgs(ctx, ctor, curT, args, st1, new Map<string, Ty>(), sp))(
                   instantiate(sc, st),
                 ),
               )
@@ -6603,17 +3549,17 @@ const inferPatRaw: <A, B, C, D>(
           )
           .with({ _tag: "None" }, () =>
             match(_Map_get(ctor, ctx.env))
-              .with({ _tag: "None" }, () => Err(typeErr(`unknown constructor '${ctor}'`, sp)))
+              .with(
+                { _tag: "None" },
+                () =>
+                  Err(typeErr(`unknown constructor '${ctor}'`, sp)) as Result<
+                    [Ty, Map<string, Ty>, St],
+                    IErr
+                  >,
+              )
               .with({ _tag: "Some" }, ({ value: sc }) =>
-                (([curT, st1]: [
-                  Ty,
-                  {
-                    next: number;
-                    recorded: TypeAt[];
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & D,
-                ]) => inferPatCtorArgs(ctx, ctor, curT, args, st1, new Map<string, Ty>(), sp))(
+                (([curT, st1]: [Ty, St]) =>
+                  inferPatCtorArgs(ctx, ctor, curT, args, st1, new Map<string, Ty>(), sp))(
                   instantiate(sc, st),
                 ),
               )
@@ -6627,23 +3573,20 @@ const inferPatRaw: <A, B, C, D>(
       .with({ _tag: "POr" }, ({ alts, span: sp }) => inferOrPat(ctx, alts, sp, st))
       .exhaustive(),
 );
-const unifyOrPatBinding: <A, B, C, D, E>(
+const unifyOrPatBinding: <A, B, C, D>(
   name: A,
   altBindings: Map<A, Ty>,
   bindings: Map<A, Ty>,
-  st: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & D,
-  sp: { end: B; start: C } & E,
-) => Result<
-  { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & D,
-  { message: string; start: C; end: B }
-> = _curry(
+  st: St,
+  sp: { end: B; start: C } & D,
+) => Result<St, { message: string; start: C; end: B }> = _curry(
   5,
-  <A, B, C, D, E>(
+  <A, B, C, D>(
     name: A,
     altBindings: Map<A, Ty>,
     bindings: Map<A, Ty>,
-    st: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & D,
-    sp: { end: B; start: C } & E,
+    st: St,
+    sp: { end: B; start: C } & D,
   ) =>
     match(_Map_get(name, bindings))
       .with({ _tag: "None" }, () => Ok(st))
@@ -6655,23 +3598,20 @@ const unifyOrPatBinding: <A, B, C, D, E>(
       )
       .exhaustive(),
 );
-const unifyOrPatBindings: <A, B, C, D, E>(
+const unifyOrPatBindings: <A, B, C, D>(
   names: A[],
   altBindings: Map<A, Ty>,
   bindings: Map<A, Ty>,
-  st: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & D,
-  sp: { end: B; start: C } & E,
-) => Result<
-  { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & D,
-  { message: string; start: C; end: B }
-> = _curry(
+  st: St,
+  sp: { end: B; start: C } & D,
+) => Result<St, { message: string; start: C; end: B }> = _curry(
   5,
-  <A, B, C, D, E>(
+  <A, B, C, D>(
     names: A[],
     altBindings: Map<A, Ty>,
     bindings: Map<A, Ty>,
-    st: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & D,
-    sp: { end: B; start: C } & E,
+    st: St,
+    sp: { end: B; start: C } & D,
   ) =>
     match(names)
       .with(
@@ -6690,7 +3630,7 @@ const unifyOrPatBindings: <A, B, C, D, E>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferOrPatAlts: <A, B, C, D>(
+const inferOrPatAlts: <A, B, C>(
   ctx: {
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
@@ -6699,13 +3639,10 @@ const inferOrPatAlts: <A, B, C, D>(
   i: number,
   t: Ty,
   bindings: Map<string, Ty>,
-  st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-) => Result<
-  { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-  IErr
-> = _curry(
+  st: St,
+) => Result<St, IErr> = _curry(
   6,
-  <A, B, C, D>(
+  <A, B, C>(
     ctx: {
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
       env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
@@ -6714,10 +3651,10 @@ const inferOrPatAlts: <A, B, C, D>(
     i: number,
     t: Ty,
     bindings: Map<string, Ty>,
-    st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
+    st: St,
   ) =>
     match(_Array_get(i, alts))
-      .with({ _tag: "None" }, () => Ok(st))
+      .with({ _tag: "None" }, () => Ok(st) as Result<St, IErr>)
       .with({ _tag: "Some" }, ({ value: alt }) =>
         _Result_flatMap(
           ([altT, altBindings, st1]) =>
@@ -6740,31 +3677,24 @@ const inferOrPatAlts: <A, B, C, D>(
       )
       .exhaustive(),
 );
-const inferOrPat: <A, B, C, D>(
+const inferOrPat: <A, B, C>(
   ctx: {
     ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
   } & C,
   alts: Pattern[],
   sp: Span,
-  st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-) => Result<
-  [
-    Ty,
-    Map<string, Ty>,
-    { recorded: TypeAt[]; next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
-  ],
-  IErr
-> = _curry(
+  st: St,
+) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
   4,
-  <A, B, C, D>(
+  <A, B, C>(
     ctx: {
       ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>>;
       env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & B>;
     } & C,
     alts: Pattern[],
     sp: Span,
-    st: { next: number; recorded: TypeAt[]; tv: Map<number, Ty>; rv: Map<number, Row> } & D,
+    st: St,
   ) =>
     match(alts)
       .with(
@@ -6772,7 +3702,11 @@ const inferOrPat: <A, B, C, D>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Err(typeErr("or-pattern needs at least one alternative", sp)),
+        () =>
+          Err(typeErr("or-pattern needs at least one alternative", sp)) as Result<
+            [Ty, Map<string, Ty>, St],
+            { message: string; start: number; end: number }
+          >,
       )
       .with(
         (_v) => {
@@ -6783,7 +3717,7 @@ const inferOrPat: <A, B, C, D>(
           _Result_flatMap(
             ([t, bindings, st1]) =>
               _Result_flatMap(
-                (st2) => Ok(_tuple(t, bindings, st2)),
+                (st2) => Ok(_tuple(t, bindings, st2)) as Result<[Ty, Map<string, Ty>, St], IErr>,
                 inferOrPatAlts(ctx, rest, 0, t, bindings, st1),
               ),
             inferPat(ctx, first, st),
@@ -7097,63 +4031,48 @@ const freeRefs: {
     .with({ _tag: "EInterp" }, ({ parts }) => freeRefsInterpParts(parts, bound, acc))
     .exhaustive(),
 );
-const seedBuiltinsFrom: <A, B>(
+const seedBuiltinsFrom: <A>(
   keys: A[],
   builtins: Map<A, Ty>,
   env: Map<A, Scheme>,
-  st: { tv: Map<number, Ty>; rv: Map<number, Row> } & B,
-) => Map<A, Scheme> = _curry(
-  4,
-  <A, B>(
-    keys: A[],
-    builtins: Map<A, Ty>,
-    env: Map<A, Scheme>,
-    st: { tv: Map<number, Ty>; rv: Map<number, Row> } & B,
-  ) =>
-    match(keys)
-      .with(
-        (_v) => _v.length === 0,
-        () => env,
-      )
-      .with(
-        (_v) => _v.length >= 1,
-        ([n, ...rest]) =>
-          match(_Map_get(n, builtins))
-            .with({ _tag: "Some" }, ({ value: t }) =>
-              seedBuiltinsFrom(rest, builtins, _Map_set(n, generalize(env, t, st, true), env), st),
-            )
-            .with({ _tag: "None" }, () => seedBuiltinsFrom(rest, builtins, env, st))
-            .exhaustive(),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+  st: St,
+) => Map<A, Scheme> = _curry(4, <A>(keys: A[], builtins: Map<A, Ty>, env: Map<A, Scheme>, st: St) =>
+  match(keys)
+    .with(
+      (_v) => _v.length === 0,
+      () => env,
+    )
+    .with(
+      (_v) => _v.length >= 1,
+      ([n, ...rest]) =>
+        match(_Map_get(n, builtins))
+          .with({ _tag: "Some" }, ({ value: t }) =>
+            seedBuiltinsFrom(rest, builtins, _Map_set(n, generalize(env, t, st, true), env), st),
+          )
+          .with({ _tag: "None" }, () => seedBuiltinsFrom(rest, builtins, env, st))
+          .exhaustive(),
+    )
+    .otherwise(() => {
+      throw new Error("non-exhaustive match");
+    }),
 );
-const seedBuiltins: <A, B>(
-  builtins: Map<A, Ty>,
-  env: Map<A, Scheme>,
-  st: { tv: Map<number, Ty>; rv: Map<number, Row> } & B,
-) => Map<A, Scheme> = _curry(
-  3,
-  <A, B>(
-    builtins: Map<A, Ty>,
-    env: Map<A, Scheme>,
-    st: { tv: Map<number, Ty>; rv: Map<number, Row> } & B,
-  ) => seedBuiltinsFrom(_Map_keys(builtins), builtins, env, st),
-);
-const seedNsMembersFrom: <A, B, C, D>(
+const seedBuiltins: <A>(builtins: Map<A, Ty>, env: Map<A, Scheme>, st: St) => Map<A, Scheme> =
+  _curry(3, <A>(builtins: Map<A, Ty>, env: Map<A, Scheme>, st: St) =>
+    seedBuiltinsFrom(_Map_keys(builtins), builtins, env, st),
+  );
+const seedNsMembersFrom: <A, B, C>(
   keys: A[],
   members: Map<A, Ty>,
   env: Map<B, { ty: Ty; rvars: number[]; vars: number[] } & C>,
-  st: { tv: Map<number, Ty>; rv: Map<number, Row> } & D,
+  st: St,
   acc: Map<A, Scheme>,
 ) => Map<A, Scheme> = _curry(
   5,
-  <A, B, C, D>(
+  <A, B, C>(
     keys: A[],
     members: Map<A, Ty>,
     env: Map<B, { ty: Ty; rvars: number[]; vars: number[] } & C>,
-    st: { tv: Map<number, Ty>; rv: Map<number, Row> } & D,
+    st: St,
     acc: Map<A, Scheme>,
   ) =>
     match(keys)
@@ -7181,19 +4100,19 @@ const seedNsMembersFrom: <A, B, C, D>(
         throw new Error("non-exhaustive match");
       }),
 );
-const seedNsFrom: <A, B, C, D, E>(
+const seedNsFrom: <A, B, C, D>(
   nsNames: A[],
   namespaces: Map<A, Map<B, Ty>>,
   env: Map<C, { ty: Ty; rvars: number[]; vars: number[] } & D>,
-  st: { tv: Map<number, Ty>; rv: Map<number, Row> } & E,
+  st: St,
   acc: Map<A, Map<B, Scheme>>,
 ) => Map<A, Map<B, Scheme>> = _curry(
   5,
-  <A, B, C, D, E>(
+  <A, B, C, D>(
     nsNames: A[],
     namespaces: Map<A, Map<B, Ty>>,
     env: Map<C, { ty: Ty; rvars: number[]; vars: number[] } & D>,
-    st: { tv: Map<number, Ty>; rv: Map<number, Row> } & E,
+    st: St,
     acc: Map<A, Map<B, Scheme>>,
   ) =>
     match(nsNames)
@@ -7225,16 +4144,16 @@ const seedNsFrom: <A, B, C, D, E>(
         throw new Error("non-exhaustive match");
       }),
 );
-const seedNs: <A, B, C, D, E>(
+const seedNs: <A, B, C, D>(
   namespaces: Map<A, Map<B, Ty>>,
   env: Map<C, { ty: Ty; rvars: number[]; vars: number[] } & D>,
-  st: { tv: Map<number, Ty>; rv: Map<number, Row> } & E,
+  st: St,
 ) => Map<A, Map<B, Scheme>> = _curry(
   3,
-  <A, B, C, D, E>(
+  <A, B, C, D>(
     namespaces: Map<A, Map<B, Ty>>,
     env: Map<C, { ty: Ty; rvars: number[]; vars: number[] } & D>,
-    st: { tv: Map<number, Ty>; rv: Map<number, Row> } & E,
+    st: St,
   ) => seedNsFrom(_Map_keys(namespaces), namespaces, env, st, new Map<A, Map<B, Scheme>>()),
 );
 const seedNsImportsFrom: <A, B>(aliases: A[], nsImports: Map<A, B>, ns: Map<A, B>) => Map<A, B> =
@@ -7330,7 +4249,7 @@ const aliasMapFrom: {
       throw new Error("non-exhaustive match");
     }),
 );
-const registerCtorsFrom: <A, B, C, D, E, F>(
+const registerCtorsFrom: <A, B, C, D, E>(
   ctors: ({ name: A; fields: ({ fieldType: TypeExpr } & B)[] } & C)[],
   typeName: string,
   params: string[],
@@ -7343,10 +4262,10 @@ const registerCtorsFrom: <A, B, C, D, E, F>(
     } & E
   >,
   env: Map<A, Scheme>,
-  st: { next: number } & F,
-) => [Map<A, Scheme>, { next: number } & F] = _curry(
+  st: St,
+) => [Map<A, Scheme>, St] = _curry(
   6,
-  <A, B, C, D, E, F>(
+  <A, B, C, D, E>(
     ctors: ({ name: A; fields: ({ fieldType: TypeExpr } & B)[] } & C)[],
     typeName: string,
     params: string[],
@@ -7359,7 +4278,7 @@ const registerCtorsFrom: <A, B, C, D, E, F>(
       } & E
     >,
     env: Map<A, Scheme>,
-    st: { next: number } & F,
+    st: St,
   ) =>
     match(ctors)
       .with(
@@ -7369,7 +4288,7 @@ const registerCtorsFrom: <A, B, C, D, E, F>(
       .with(
         (_v) => _v.length >= 1,
         ([c, ...rest]) =>
-          (([sc, st1]: [Scheme, { next: number } & F]) =>
+          (([sc, st1]: [Scheme, St]) =>
             registerCtorsFrom(rest, typeName, params, aliasMap, _Map_set(c.name, sc, env), st1))(
             ctorScheme(typeName, params, c, st, aliasMap),
           ),
@@ -7378,7 +4297,7 @@ const registerCtorsFrom: <A, B, C, D, E, F>(
         throw new Error("non-exhaustive match");
       }),
 );
-const registerUserCtorsFrom: <A, B, C>(
+const registerUserCtorsFrom: <A, B>(
   stmts: Stmt[],
   aliasMap: Map<
     string,
@@ -7389,10 +4308,10 @@ const registerUserCtorsFrom: <A, B, C>(
     } & B
   >,
   env: Map<string, Scheme>,
-  st: { next: number } & C,
-) => [Map<string, Scheme>, { next: number } & C] = _curry(
+  st: St,
+) => [Map<string, Scheme>, St] = _curry(
   4,
-  <A, B, C>(
+  <A, B>(
     stmts: Stmt[],
     aliasMap: Map<
       string,
@@ -7403,7 +4322,7 @@ const registerUserCtorsFrom: <A, B, C>(
       } & B
     >,
     env: Map<string, Scheme>,
-    st: { next: number } & C,
+    st: St,
   ) =>
     match(stmts)
       .with(
@@ -7421,7 +4340,7 @@ const registerUserCtorsFrom: <A, B, C>(
         ([s, ...rest]) =>
           match(s)
             .with({ _tag: "SType" }, ({ name, params, ctors }) =>
-              (([env1, st1]: [Map<string, Scheme>, { next: number } & C]) =>
+              (([env1, st1]: [Map<string, Scheme>, St]) =>
                 registerUserCtorsFrom(rest, aliasMap, env1, st1))(
                 registerCtorsFrom(ctors, name, params, aliasMap, env, st),
               ),
@@ -7432,7 +4351,7 @@ const registerUserCtorsFrom: <A, B, C>(
         throw new Error("non-exhaustive match");
       }),
 );
-const registerBuiltinCtorGroup: <A, B, C, D, E, F>(
+const registerBuiltinCtorGroup: <A, B, C, D, E>(
   ctors: ({ name: A; fields: ({ fieldType: TypeExpr } & B)[] } & C)[],
   typeName: string,
   params: string[],
@@ -7445,10 +4364,10 @@ const registerBuiltinCtorGroup: <A, B, C, D, E, F>(
     } & E
   >,
   env: Map<A, Scheme>,
-  st: { next: number } & F,
-) => [Map<A, Scheme>, { next: number } & F] = _curry(
+  st: St,
+) => [Map<A, Scheme>, St] = _curry(
   6,
-  <A, B, C, D, E, F>(
+  <A, B, C, D, E>(
     ctors: ({ name: A; fields: ({ fieldType: TypeExpr } & B)[] } & C)[],
     typeName: string,
     params: string[],
@@ -7461,7 +4380,7 @@ const registerBuiltinCtorGroup: <A, B, C, D, E, F>(
       } & E
     >,
     env: Map<A, Scheme>,
-    st: { next: number } & F,
+    st: St,
   ) =>
     match(ctors)
       .with(
@@ -7473,7 +4392,7 @@ const registerBuiltinCtorGroup: <A, B, C, D, E, F>(
         ([c, ...rest]) =>
           _Map_has(c.name, env)
             ? registerBuiltinCtorGroup(rest, typeName, params, aliasMap, env, st)
-            : (([sc, st1]: [Scheme, { next: number } & F]) =>
+            : (([sc, st1]: [Scheme, St]) =>
                 registerBuiltinCtorGroup(
                   rest,
                   typeName,
@@ -7487,7 +4406,7 @@ const registerBuiltinCtorGroup: <A, B, C, D, E, F>(
         throw new Error("non-exhaustive match");
       }),
 );
-const registerBuiltinCtorsFrom: <A, B, C, D, E, F, G>(
+const registerBuiltinCtorsFrom: <A, B, C, D, E, F>(
   decls: ({
     ctors: ({ name: A; fields: ({ fieldType: TypeExpr } & B)[] } & C)[];
     name: string;
@@ -7502,10 +4421,10 @@ const registerBuiltinCtorsFrom: <A, B, C, D, E, F, G>(
     } & F
   >,
   env: Map<A, Scheme>,
-  st: { next: number } & G,
-) => [Map<A, Scheme>, { next: number } & G] = _curry(
+  st: St,
+) => [Map<A, Scheme>, St] = _curry(
   4,
-  <A, B, C, D, E, F, G>(
+  <A, B, C, D, E, F>(
     decls: ({
       ctors: ({ name: A; fields: ({ fieldType: TypeExpr } & B)[] } & C)[];
       name: string;
@@ -7520,7 +4439,7 @@ const registerBuiltinCtorsFrom: <A, B, C, D, E, F, G>(
       } & F
     >,
     env: Map<A, Scheme>,
-    st: { next: number } & G,
+    st: St,
   ) =>
     match(decls)
       .with(
@@ -7530,7 +4449,7 @@ const registerBuiltinCtorsFrom: <A, B, C, D, E, F, G>(
       .with(
         (_v) => _v.length >= 1,
         ([d, ...rest]) =>
-          (([env1, st1]: [Map<A, Scheme>, { next: number } & G]) =>
+          (([env1, st1]: [Map<A, Scheme>, St]) =>
             registerBuiltinCtorsFrom(rest, aliasMap, env1, st1))(
             registerBuiltinCtorGroup(d.ctors, d.name, d.params, aliasMap, env, st),
           ),
@@ -7539,7 +4458,7 @@ const registerBuiltinCtorsFrom: <A, B, C, D, E, F, G>(
         throw new Error("non-exhaustive match");
       }),
 );
-const registerExternsFrom: <A, B, C>(
+const registerExternsFrom: <A, B>(
   stmts: Stmt[],
   aliasMap: Map<
     string,
@@ -7550,82 +4469,63 @@ const registerExternsFrom: <A, B, C>(
     } & B
   >,
   env: Map<string, Scheme>,
-  st: { next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-) => [Map<string, Scheme>, { next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & C] =
-  _curry(
-    4,
-    <A, B, C>(
-      stmts: Stmt[],
-      aliasMap: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & A)[];
-        } & B
-      >,
-      env: Map<string, Scheme>,
-      st: { next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-    ) =>
-      match(stmts)
-        .with(
-          (_v) => {
-            const _g: any = _v;
-            return _g.length === 0;
-          },
-          () => _tuple(env, st),
-        )
-        .with(
-          (_v) => {
-            const _g: any = _v;
-            return _g.length >= 1;
-          },
-          ([s, ...rest]) =>
-            match(s)
-              .with({ _tag: "SExtern" }, ({ name, params, typeExpr }) =>
-                (([vars, st0]: [
-                  Map<string, Ty>,
-                  { next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-                ]) =>
-                  (([t, _, st1]: [
-                    Ty,
-                    Map<string, Ty>,
-                    { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & C,
-                  ]) =>
-                    registerExternsFrom(
-                      rest,
-                      aliasMap,
-                      _Map_set(name, generalize(env, t, st1, false), env),
-                      st1,
-                    ))(
-                    typeExprToType(typeExpr, vars, st0, aliasMap, _Set_fromArray([] as string[])),
+  st: St,
+) => [Map<string, Scheme>, St] = _curry(
+  4,
+  <A, B>(
+    stmts: Stmt[],
+    aliasMap: Map<
+      string,
+      {
+        expr: Option<TypeExpr>;
+        params: string[];
+        fields: ({ name: string; fieldType: TypeExpr } & A)[];
+      } & B
+    >,
+    env: Map<string, Scheme>,
+    st: St,
+  ) =>
+    match(stmts)
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length === 0;
+        },
+        () => _tuple(env, st),
+      )
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length >= 1;
+        },
+        ([s, ...rest]) =>
+          match(s)
+            .with({ _tag: "SExtern" }, ({ name, params, typeExpr }) =>
+              (([vars, st0]: [Map<string, Ty>, St]) =>
+                (([t, _, st1]: [Ty, Map<string, Ty>, St]) =>
+                  registerExternsFrom(
+                    rest,
+                    aliasMap,
+                    _Map_set(name, generalize(env, t, st1, false), env),
+                    st1,
                   ))(
-                  reduce(
-                    _curry(
-                      2,
-                      (
-                        [vs, s]: [
-                          Map<string, Ty>,
-                          { next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-                        ],
-                        param: string,
-                      ) =>
-                        (([v, s1]: [
-                          Ty,
-                          { next: number; tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-                        ]) => _tuple(_Map_set(param, v, vs), s1))(freshVar(s)),
-                    ),
-                    _tuple(new Map<string, Ty>(), st),
-                    params,
+                  typeExprToType(typeExpr, vars, st0, aliasMap, _Set_fromArray([] as string[])),
+                ))(
+                reduce(
+                  _curry(2, ([vs, s]: [Map<string, Ty>, St], param: string) =>
+                    (([v, s1]: [Ty, St]) => _tuple(_Map_set(param, v, vs), s1))(freshVar(s)),
                   ),
+                  _tuple(new Map<string, Ty>(), st),
+                  params,
                 ),
-              )
-              .otherwise(() => registerExternsFrom(rest, aliasMap, env, st)),
-        )
-        .otherwise(() => {
-          throw new Error("non-exhaustive match");
-        }),
-  );
+              ),
+            )
+            .otherwise(() => registerExternsFrom(rest, aliasMap, env, st)),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
+);
 const letsOfFrom: (stmts: Stmt[]) => Stmt[] = (stmts: Stmt[]) =>
   match(stmts)
     .with(
@@ -7771,17 +4671,13 @@ const groupOfFrom: <A>(idxs: number[], lets: A[]) => A[] = _curry(
         throw new Error("non-exhaustive match");
       }),
 );
-const preBindGroupFrom: <A, B, C>(
+const preBindGroupFrom: <A, B>(
   group: Stmt[],
   env: Map<string, { vars: A[]; rvars: B[]; ty: Ty }>,
-  st: { next: number } & C,
-) => [Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, { next: number } & C] = _curry(
+  st: St,
+) => [Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, St] = _curry(
   3,
-  <A, B, C>(
-    group: Stmt[],
-    env: Map<string, { vars: A[]; rvars: B[]; ty: Ty }>,
-    st: { next: number } & C,
-  ) =>
+  <A, B>(group: Stmt[], env: Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, st: St) =>
     match(group)
       .with(
         (_v) => {
@@ -7798,8 +4694,9 @@ const preBindGroupFrom: <A, B, C>(
         ([s, ...rest]) =>
           match(s)
             .with({ _tag: "SLet" }, ({ name }) =>
-              (([v, st1]: [Ty, { next: number } & C]) =>
-                preBindGroupFrom(rest, _Map_set(name, mono(v), env), st1))(freshVar(st)),
+              (([v, st1]: [Ty, St]) => preBindGroupFrom(rest, _Map_set(name, mono(v), env), st1))(
+                freshVar(st),
+              ),
             )
             .otherwise(() => preBindGroupFrom(rest, env, st)),
       )
@@ -7807,7 +4704,7 @@ const preBindGroupFrom: <A, B, C>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferGroupFrom: <A, B, C, D, E, F, G, H, I>(
+const inferGroupFrom: <A, B, C, D, E, F, G>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -7826,95 +4723,27 @@ const inferGroupFrom: <A, B, C, D, E, F, G, H, I>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            next: number;
-            letUses: Map<string, Ty[]>;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & F,
+          d: St,
           e: {
-            inferExpr: (
-              a: Expr,
-              b: {
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & F,
-            ) => Result<
-              [
-                Ty,
-                {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ],
-              IErr
-            >;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             unify: (
               a: Ty,
               b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              d: { end: A; start: B } & H,
-            ) => Result<
-              { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              { message: string; start: B; end: A }
-            >;
+              c: St,
+              d: { end: A; start: B } & F,
+            ) => Result<St, { message: string; start: B; end: A }>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                next: number;
-                letUses: Map<string, Ty[]>;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-              } & F,
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
-    } & I)[];
+    } & G)[];
     loopStack: Ty[][];
     letOwner: Map<string, Span>;
   },
   group: Stmt[],
-  st: {
-    letUses: Map<string, Ty[]>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-    next: number;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & F,
-) => Result<
-  [
-    Map<string, Ty>,
-    {
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & F,
-  ],
-  IErr
-> = _curry(
+  st: St,
+) => Result<[Map<string, Ty>, St], IErr> = _curry(
   3,
-  <A, B, C, D, E, F, G, H, I>(
+  <A, B, C, D, E, F, G>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
@@ -7933,79 +4762,24 @@ const inferGroupFrom: <A, B, C, D, E, F, G, H, I>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              next: number;
-              letUses: Map<string, Ty[]>;
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & F,
+            d: St,
             e: {
-              inferExpr: (
-                a: Expr,
-                b: {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    letUses: Map<string, Ty[]>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                    next: number;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & F,
-                ],
-                IErr
-              >;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
               unify: (
                 a: Ty,
                 b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                d: { end: A; start: B } & H,
-              ) => Result<
-                { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                { message: string; start: B; end: A }
-              >;
+                c: St,
+                d: { end: A; start: B } & F,
+              ) => Result<St, { message: string; start: B; end: A }>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & F,
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
-      } & I)[];
+      } & G)[];
       loopStack: Ty[][];
       letOwner: Map<string, Span>;
     },
     group: Stmt[],
-    st: {
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & F,
+    st: St,
   ) =>
     match(group)
       .with(
@@ -8013,7 +4787,7 @@ const inferGroupFrom: <A, B, C, D, E, F, G, H, I>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(_tuple(new Map<string, Ty>(), st)),
+        () => Ok(_tuple(new Map<string, Ty>(), st)) as Result<[Map<string, Ty>, St], IErr>,
       )
       .with(
         (_v) => {
@@ -8033,34 +4807,17 @@ const inferGroupFrom: <A, B, C, D, E, F, G, H, I>(
                             ([pinned, st3]) =>
                               _Result_flatMap(
                                 ([restTypes, st4]) =>
-                                  Ok(_tuple(_Map_set(name, pinned, restTypes), st4)),
+                                  Ok(_tuple(_Map_set(name, pinned, restTypes), st4)) as Result<
+                                    [Map<string, Ty>, St],
+                                    IErr
+                                  >,
                                 inferGroupFrom(ctx, rest, st3),
                               ),
                             match(annot)
                               .with({ _tag: "Some" }, ({ value: te }) =>
-                                (([at, _, stA]: [
-                                  Ty,
-                                  Map<string, Ty>,
-                                  {
-                                    tv: Map<number, Ty>;
-                                    rv: Map<number, Row>;
-                                    next: number;
-                                    letUses: Map<string, Ty[]>;
-                                    letSpans: Map<string, Span>;
-                                    recorded: TypeAt[];
-                                  } & F,
-                                ]) =>
+                                (([at, _, stA]: [Ty, Map<string, Ty>, St]) =>
                                   _Result_map(
-                                    (
-                                      stB: {
-                                        tv: Map<number, Ty>;
-                                        rv: Map<number, Row>;
-                                        next: number;
-                                        letUses: Map<string, Ty[]>;
-                                        letSpans: Map<string, Span>;
-                                        recorded: TypeAt[];
-                                      } & F,
-                                    ) => _tuple(at, stB),
+                                    (stB: St) => _tuple(at, stB),
                                     u(t, at, stA, annotSpan(te)),
                                   ))(
                                   typeExprToType(
@@ -8072,14 +4829,21 @@ const inferGroupFrom: <A, B, C, D, E, F, G, H, I>(
                                   ),
                                 ),
                               )
-                              .with({ _tag: "None" }, () => Ok(_tuple(t, st2)))
+                              .with(
+                                { _tag: "None" },
+                                () => Ok(_tuple(t, st2)) as Result<[Ty, St], IErr>,
+                              )
                               .exhaustive(),
                           ),
                         u(selfSc.ty, t, st1, span),
                       ),
                     )
-                    .with({ _tag: "None" }, () =>
-                      Err(typeErr(`internal: missing self-binding for '${name}'`, span)),
+                    .with(
+                      { _tag: "None" },
+                      () =>
+                        Err(
+                          typeErr(`internal: missing self-binding for '${name}'`, span),
+                        ) as Result<[Map<string, Ty>, St], IErr>,
                     )
                     .exhaustive(),
                 inferExpr(ctx, value, st),
@@ -8116,104 +4880,119 @@ const dropGroupFrom: <A>(group: Stmt[], env: Map<string, A>) => Map<string, A> =
         throw new Error("non-exhaustive match");
       }),
 );
-const generalizeGroupFrom: <A>(
-  group: Stmt[],
-  bodyTypes: Map<string, Ty>,
-  env: Map<string, Scheme>,
-  st: { tv: Map<number, Ty>; rv: Map<number, Row> } & A,
-) => Map<string, Scheme> = _curry(
-  4,
-  <A>(
+const generalizeGroupFrom: {
+  (
+    group: Stmt[],
+  ): (bodyTypes: Map<string, Ty>) => (env: Map<string, Scheme>) => (st: St) => Map<string, Scheme>;
+  (
+    group: Stmt[],
+  ): (bodyTypes: Map<string, Ty>) => (env: Map<string, Scheme>, st: St) => Map<string, Scheme>;
+  (
+    group: Stmt[],
+  ): (bodyTypes: Map<string, Ty>, env: Map<string, Scheme>) => (st: St) => Map<string, Scheme>;
+  (
+    group: Stmt[],
+    bodyTypes: Map<string, Ty>,
+  ): (env: Map<string, Scheme>) => (st: St) => Map<string, Scheme>;
+  (
+    group: Stmt[],
+  ): (bodyTypes: Map<string, Ty>, env: Map<string, Scheme>, st: St) => Map<string, Scheme>;
+  (
+    group: Stmt[],
+    bodyTypes: Map<string, Ty>,
+  ): (env: Map<string, Scheme>, st: St) => Map<string, Scheme>;
+  (
     group: Stmt[],
     bodyTypes: Map<string, Ty>,
     env: Map<string, Scheme>,
-    st: { tv: Map<number, Ty>; rv: Map<number, Row> } & A,
-  ) =>
-    match(group)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => env,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([s, ...rest]) =>
-          match(s)
-            .with({ _tag: "SLet" }, ({ name, annot }) =>
-              match(_Map_get(name, bodyTypes))
-                .with({ _tag: "Some" }, ({ value: t }) =>
-                  ((widen: boolean) =>
-                    generalizeGroupFrom(
-                      rest,
-                      bodyTypes,
-                      _Map_set(name, generalize(env, t, st, widen), env),
-                      st,
-                    ))(
-                    match(annot)
-                      .with({ _tag: "None" }, () => true)
-                      .with({ _tag: "Some" }, () => false)
-                      .exhaustive(),
-                  ),
-                )
-                .with({ _tag: "None" }, () => generalizeGroupFrom(rest, bodyTypes, env, st))
-                .exhaustive(),
-            )
-            .otherwise(() => generalizeGroupFrom(rest, bodyTypes, env, st)),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
-);
-const noteGroupLets: <A, B>(
-  group: Stmt[],
-  letOwner: Map<string, Span>,
-  st: { letUses: Map<string, A[]>; letSpans: Map<string, Span> } & B,
-) => [Map<string, Span>, { letUses: Map<string, A[]>; letSpans: Map<string, Span> } & B] = _curry(
-  3,
-  <A, B>(
+  ): (st: St) => Map<string, Scheme>;
+  (
     group: Stmt[],
-    letOwner: Map<string, Span>,
-    st: { letUses: Map<string, A[]>; letSpans: Map<string, Span> } & B,
-  ) =>
-    match(group)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => _tuple(letOwner, st),
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([s, ...rest]) =>
-          match(s)
-            .with(
-              (_v): _v is Extract<Stmt, { _tag: "SLet" }> => {
-                const _g: any = _v;
-                return (
-                  _g._tag === "SLet" && (({ name, value }) => not(_Str_startsWith("$", name)))(_g)
-                );
-              },
-              ({ name, value }) =>
-                ((sp: Span) => noteGroupLets(rest, _Map_set(name, sp, letOwner), noteLet(sp, st)))(
-                  exprSpan(value),
+    bodyTypes: Map<string, Ty>,
+    env: Map<string, Scheme>,
+    st: St,
+  ): Map<string, Scheme>;
+} = _curry(4, (group: Stmt[], bodyTypes: Map<string, Ty>, env: Map<string, Scheme>, st: St) =>
+  match(group)
+    .with(
+      (_v) => {
+        const _g: any = _v;
+        return _g.length === 0;
+      },
+      () => env,
+    )
+    .with(
+      (_v) => {
+        const _g: any = _v;
+        return _g.length >= 1;
+      },
+      ([s, ...rest]) =>
+        match(s)
+          .with({ _tag: "SLet" }, ({ name, annot }) =>
+            match(_Map_get(name, bodyTypes))
+              .with({ _tag: "Some" }, ({ value: t }) =>
+                ((widen: boolean) =>
+                  generalizeGroupFrom(
+                    rest,
+                    bodyTypes,
+                    _Map_set(name, generalize(env, t, st, widen), env),
+                    st,
+                  ))(
+                  match(annot)
+                    .with({ _tag: "None" }, () => true)
+                    .with({ _tag: "Some" }, () => false)
+                    .exhaustive(),
                 ),
-            )
-            .otherwise(() => noteGroupLets(rest, letOwner, st)),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+              )
+              .with({ _tag: "None" }, () => generalizeGroupFrom(rest, bodyTypes, env, st))
+              .exhaustive(),
+          )
+          .otherwise(() => generalizeGroupFrom(rest, bodyTypes, env, st)),
+    )
+    .otherwise(() => {
+      throw new Error("non-exhaustive match");
+    }),
 );
-const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
+const noteGroupLets: {
+  (group: Stmt[]): (letOwner: Map<string, Span>) => (st: St) => [Map<string, Span>, St];
+  (group: Stmt[]): (letOwner: Map<string, Span>, st: St) => [Map<string, Span>, St];
+  (group: Stmt[], letOwner: Map<string, Span>): (st: St) => [Map<string, Span>, St];
+  (group: Stmt[], letOwner: Map<string, Span>, st: St): [Map<string, Span>, St];
+} = _curry(3, (group: Stmt[], letOwner: Map<string, Span>, st: St) =>
+  match(group)
+    .with(
+      (_v) => {
+        const _g: any = _v;
+        return _g.length === 0;
+      },
+      () => _tuple(letOwner, st),
+    )
+    .with(
+      (_v) => {
+        const _g: any = _v;
+        return _g.length >= 1;
+      },
+      ([s, ...rest]) =>
+        match(s)
+          .with(
+            (_v): _v is Extract<Stmt, { _tag: "SLet" }> => {
+              const _g: any = _v;
+              return (
+                _g._tag === "SLet" && (({ name, value }) => not(_Str_startsWith("$", name)))(_g)
+              );
+            },
+            ({ name, value }) =>
+              ((sp: Span) => noteGroupLets(rest, _Map_set(name, sp, letOwner), noteLet(sp, st)))(
+                exprSpan(value),
+              ),
+          )
+          .otherwise(() => noteGroupLets(rest, letOwner, st)),
+    )
+    .otherwise(() => {
+      throw new Error("non-exhaustive match");
+    }),
+);
+const processGroupsFrom: <A, B, C, D, E, F, G>(
   ctx: {
     letOwner: Map<string, Span>;
     loopStack: Ty[][];
@@ -8223,89 +5002,34 @@ const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            next: number;
-            letUses: Map<string, Ty[]>;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & C,
+          d: St,
           e: {
-            inferExpr: (
-              a: Expr,
-              b: {
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & C,
-            ) => Result<
-              [
-                Ty,
-                {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & C,
-              ],
-              IErr
-            >;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             unify: (
               a: Ty,
               b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & D,
-              d: { end: A; start: B } & E,
-            ) => Result<
-              { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & D,
-              { message: string; start: B; end: A }
-            >;
+              c: St,
+              d: { end: A; start: B } & C,
+            ) => Result<St, { message: string; start: B; end: A }>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                next: number;
-                letUses: Map<string, Ty[]>;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-              } & C,
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
-    } & F)[];
+    } & D)[];
     aliasMap: Map<
       string,
       {
         expr: Option<TypeExpr>;
         params: string[];
-        fields: ({ name: string; fieldType: TypeExpr } & G)[];
-      } & H
+        fields: ({ name: string; fieldType: TypeExpr } & E)[];
+      } & F
     >;
-    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
+    ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
     open: boolean;
     env: Map<string, Scheme>;
   },
   sccs: number[][],
   lets: Stmt[],
-  st: {
-    next: number;
-    letUses: Map<string, Ty[]>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & C,
+  st: St,
 ) => Result<
   [
     {
@@ -8317,92 +5041,37 @@ const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              next: number;
-              letUses: Map<string, Ty[]>;
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & C,
+            d: St,
             e: {
-              inferExpr: (
-                a: Expr,
-                b: {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & C,
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    letUses: Map<string, Ty[]>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                    next: number;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & C,
-                ],
-                IErr
-              >;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
               unify: (
                 a: Ty,
                 b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & D,
-                d: { end: A; start: B } & E,
-              ) => Result<
-                { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & D,
-                { message: string; start: B; end: A }
-              >;
+                c: St,
+                d: { end: A; start: B } & C,
+              ) => Result<St, { message: string; start: B; end: A }>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & C,
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
-      } & F)[];
+      } & D)[];
       aliasMap: Map<
         string,
         {
           expr: Option<TypeExpr>;
           params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & G)[];
-        } & H
+          fields: ({ name: string; fieldType: TypeExpr } & E)[];
+        } & F
       >;
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
+      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
       open: boolean;
       env: Map<string, Scheme>;
     },
-    {
-      next: number;
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & C,
+    St,
   ],
   IErr
 > = _curry(
   4,
-  <A, B, C, D, E, F, G, H, I>(
+  <A, B, C, D, E, F, G>(
     ctx: {
       letOwner: Map<string, Span>;
       loopStack: Ty[][];
@@ -8412,89 +5081,34 @@ const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              next: number;
-              letUses: Map<string, Ty[]>;
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & C,
+            d: St,
             e: {
-              inferExpr: (
-                a: Expr,
-                b: {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & C,
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    letUses: Map<string, Ty[]>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                    next: number;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & C,
-                ],
-                IErr
-              >;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
               unify: (
                 a: Ty,
                 b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & D,
-                d: { end: A; start: B } & E,
-              ) => Result<
-                { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & D,
-                { message: string; start: B; end: A }
-              >;
+                c: St,
+                d: { end: A; start: B } & C,
+              ) => Result<St, { message: string; start: B; end: A }>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & C,
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
-      } & F)[];
+      } & D)[];
       aliasMap: Map<
         string,
         {
           expr: Option<TypeExpr>;
           params: string[];
-          fields: ({ name: string; fieldType: TypeExpr } & G)[];
-        } & H
+          fields: ({ name: string; fieldType: TypeExpr } & E)[];
+        } & F
       >;
-      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & I>>;
+      ns: Map<string, Map<string, { ty: Ty; rvars: number[]; vars: number[] } & G>>;
       open: boolean;
       env: Map<string, Scheme>;
     },
     sccs: number[][],
     lets: Stmt[],
-    st: {
-      next: number;
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & C,
+    st: St,
   ) =>
     match(sccs)
       .with(
@@ -8511,32 +5125,12 @@ const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
         },
         ([comp, ...restSccs]) =>
           ((group: Stmt[]) =>
-            (([preEnv, st1]: [
-              Map<string, Scheme>,
-              {
-                next: number;
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & C,
-            ]) => {
+            (([preEnv, st1]: [Map<string, Scheme>, St]) => {
               const preCtx = ctxWithEnv(ctx, preEnv);
               return _Result_flatMap(
                 ([bodyTypes, st2]) =>
                   ((finalEnv: Map<string, Scheme>) =>
-                    (([finalOwner, st3]: [
-                      Map<string, Span>,
-                      {
-                        next: number;
-                        letUses: Map<string, Ty[]>;
-                        tv: Map<number, Ty>;
-                        rv: Map<number, Row>;
-                        letSpans: Map<string, Span>;
-                        recorded: TypeAt[];
-                      } & C,
-                    ]) =>
+                    (([finalOwner, st3]: [Map<string, Span>, St]) =>
                       processGroupsFrom(
                         ctxWithLets(ctx, finalEnv, finalOwner),
                         restSccs,
@@ -8553,7 +5147,7 @@ const processGroupsFrom: <A, B, C, D, E, F, G, H, I>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferExprStmtsFrom: <A, B, C, D, E, F, G, H, I>(
+const inferExprStmtsFrom: <A, B, C, D, E, F, G>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -8572,92 +5166,27 @@ const inferExprStmtsFrom: <A, B, C, D, E, F, G, H, I>(
           a: Expr,
           b: Expr[],
           c: Option<string>,
-          d: {
-            next: number;
-            letUses: Map<string, Ty[]>;
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            letSpans: Map<string, Span>;
-            recorded: TypeAt[];
-          } & F,
+          d: St,
           e: {
-            inferExpr: (
-              a: Expr,
-              b: {
-                letUses: Map<string, Ty[]>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-                next: number;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-              } & F,
-            ) => Result<
-              [
-                Ty,
-                {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ],
-              IErr
-            >;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
             unify: (
               a: Ty,
               b: Ty,
-              c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              d: { end: A; start: B } & H,
-            ) => Result<
-              { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-              { message: string; start: B; end: A }
-            >;
+              c: St,
+              d: { end: A; start: B } & F,
+            ) => Result<St, { message: string; start: B; end: A }>;
           },
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                next: number;
-                letUses: Map<string, Ty[]>;
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                letSpans: Map<string, Span>;
-                recorded: TypeAt[];
-              } & F,
-            ]
-          >,
-          IErr
-        >
+        ) => Result<Option<[Ty, St]>, IErr>
       >;
-    } & I)[];
+    } & G)[];
     loopStack: Ty[][];
     letOwner: Map<string, Span>;
   },
   stmts: Stmt[],
-  st: {
-    letUses: Map<string, Ty[]>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-    next: number;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & F,
-) => Result<
-  {
-    letUses: Map<string, Ty[]>;
-    letSpans: Map<string, Span>;
-    recorded: TypeAt[];
-    next: number;
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-  } & F,
-  IErr
-> = _curry(
+  st: St,
+) => Result<St, IErr> = _curry(
   3,
-  <A, B, C, D, E, F, G, H, I>(
+  <A, B, C, D, E, F, G>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
@@ -8676,79 +5205,24 @@ const inferExprStmtsFrom: <A, B, C, D, E, F, G, H, I>(
             a: Expr,
             b: Expr[],
             c: Option<string>,
-            d: {
-              next: number;
-              letUses: Map<string, Ty[]>;
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              letSpans: Map<string, Span>;
-              recorded: TypeAt[];
-            } & F,
+            d: St,
             e: {
-              inferExpr: (
-                a: Expr,
-                b: {
-                  letUses: Map<string, Ty[]>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                  next: number;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                } & F,
-              ) => Result<
-                [
-                  Ty,
-                  {
-                    letUses: Map<string, Ty[]>;
-                    letSpans: Map<string, Span>;
-                    recorded: TypeAt[];
-                    next: number;
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                  } & F,
-                ],
-                IErr
-              >;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
               unify: (
                 a: Ty,
                 b: Ty,
-                c: { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                d: { end: A; start: B } & H,
-              ) => Result<
-                { tv: Map<number, Ty>; rv: Map<number, Row>; next: number } & G,
-                { message: string; start: B; end: A }
-              >;
+                c: St,
+                d: { end: A; start: B } & F,
+              ) => Result<St, { message: string; start: B; end: A }>;
             },
-          ) => Result<
-            Option<
-              [
-                Ty,
-                {
-                  next: number;
-                  letUses: Map<string, Ty[]>;
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  letSpans: Map<string, Span>;
-                  recorded: TypeAt[];
-                } & F,
-              ]
-            >,
-            IErr
-          >
+          ) => Result<Option<[Ty, St]>, IErr>
         >;
-      } & I)[];
+      } & G)[];
       loopStack: Ty[][];
       letOwner: Map<string, Span>;
     },
     stmts: Stmt[],
-    st: {
-      letUses: Map<string, Ty[]>;
-      letSpans: Map<string, Span>;
-      recorded: TypeAt[];
-      next: number;
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-    } & F,
+    st: St,
   ) =>
     match(stmts)
       .with(
@@ -8756,7 +5230,7 @@ const inferExprStmtsFrom: <A, B, C, D, E, F, G, H, I>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(st),
+        () => Ok(st) as Result<St, IErr>,
       )
       .with(
         (_v) => {
@@ -9001,20 +5475,13 @@ const qualAliasSeed: <A, B, C, D, E>(
         throw new Error("non-exhaustive match");
       }),
 );
-const zonkRecorded: <A, B, C>(
-  recorded: ({ ty: Ty; span: A } & B)[],
-  st: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-) => { span: A; ty: Ty }[] = _curry(
-  2,
-  <A, B, C>(
-    recorded: ({ ty: Ty; span: A } & B)[],
-    st: { tv: Map<number, Ty>; rv: Map<number, Row> } & C,
-  ) =>
+const zonkRecorded: <A, B>(recorded: ({ ty: Ty; span: A } & B)[], st: St) => { span: A; ty: Ty }[] =
+  _curry(2, <A, B>(recorded: ({ ty: Ty; span: A } & B)[], st: St) =>
     map(
       (r: { ty: Ty; span: A } & B) => ({ span: r.span, ty: zonk(r.ty, st) }),
       _Array_reverse(recorded),
     ),
-);
+  );
 const isConcrete: (t: Ty) => boolean = (t: Ty) => {
   const f: VarSets = freeInType(t);
   return and(eq(_Set_size(f.tv), 0), eq(_Set_size(f.rv), 0));
@@ -9038,55 +5505,48 @@ const allSameConcrete: {
   (shown: string): (uses: Ty[]) => boolean;
   (shown: string, uses: Ty[]): boolean;
 } = _curry(2, (shown: string, uses: Ty[]) => allSameConcreteFrom(shown, uses, 0));
-const resolveLetParamsFrom: <A, B, C>(
-  keys: A[],
-  st: { tv: Map<number, Ty>; rv: Map<number, Row>; letUses: Map<A, Ty[]>; letSpans: Map<A, B> } & C,
-) => { span: B; ty: Ty }[] = _curry(
-  2,
-  <A, B, C>(
-    keys: A[],
-    st: {
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-      letUses: Map<A, Ty[]>;
-      letSpans: Map<A, B>;
-    } & C,
-  ) =>
-    match(keys)
-      .with(
-        (_v) => _v.length === 0,
-        () => [] as { span: B; ty: Ty }[],
-      )
-      .with(
-        (_v) => _v.length >= 1,
-        ([k, ...rest]) =>
-          ((tail) =>
-            ((uses: Ty[]) =>
-              match(_Array_get(0, uses))
-                .with({ _tag: "None" }, () => tail)
-                .with({ _tag: "Some" }, ({ value: first }) =>
-                  allSameConcrete(showType(first), uses)
-                    ? match(_Map_get(k, st.letSpans))
-                        .with({ _tag: "Some" }, ({ value: span }) =>
-                          _Array_prepend({ span: span, ty: first }, tail),
-                        )
-                        .with({ _tag: "None" }, () => tail)
-                        .exhaustive()
-                    : tail,
-                )
-                .exhaustive())(map((t: Ty) => zonk(t, st), _Map_getOr([] as Ty[], k, st.letUses))))(
-            resolveLetParamsFrom(rest, st),
-          ),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+const resolveLetParamsFrom: {
+  (keys: string[]): (st: St) => TypeAt[];
+  (keys: string[], st: St): TypeAt[];
+} = _curry(2, (keys: string[], st: St) =>
+  match(keys)
+    .with(
+      (_v) => {
+        const _g: any = _v;
+        return _g.length === 0;
+      },
+      () => [] as TypeAt[],
+    )
+    .with(
+      (_v) => {
+        const _g: any = _v;
+        return _g.length >= 1;
+      },
+      ([k, ...rest]) =>
+        ((tail: TypeAt[]) =>
+          ((uses: Ty[]) =>
+            match(_Array_get(0, uses))
+              .with({ _tag: "None" }, () => tail)
+              .with({ _tag: "Some" }, ({ value: first }) =>
+                allSameConcrete(showType(first), uses)
+                  ? match(_Map_get(k, st.letSpans))
+                      .with({ _tag: "Some" }, ({ value: span }) =>
+                        _Array_prepend({ span: span, ty: first }, tail),
+                      )
+                      .with({ _tag: "None" }, () => tail)
+                      .exhaustive()
+                  : tail,
+              )
+              .exhaustive())(map((t: Ty) => zonk(t, st), _Map_getOr([] as Ty[], k, st.letUses))))(
+          resolveLetParamsFrom(rest, st),
+        ),
+    )
+    .otherwise(() => {
+      throw new Error("non-exhaustive match");
+    }),
 );
-const resolveLetParams: <A, B, C>(
-  st: { letSpans: Map<A, B>; tv: Map<number, Ty>; rv: Map<number, Row>; letUses: Map<A, Ty[]> } & C,
-) => { span: B; ty: Ty }[] = <A, B, C>(
-  st: { letSpans: Map<A, B>; tv: Map<number, Ty>; rv: Map<number, Row>; letUses: Map<A, Ty[]> } & C,
-) => resolveLetParamsFrom(_Map_keys(st.letSpans), st);
+const resolveLetParams: (st: St) => TypeAt[] = (st: St) =>
+  resolveLetParamsFrom(_Map_keys(st.letSpans), st);
 const runInferImports: <A, B, C, D>(
   stmts: Stmt[],
   builtins: Map<string, Ty>,
