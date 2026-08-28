@@ -4,7 +4,7 @@ import {
   diagnostics,
   moduleDiagnostics,
   toPublish,
-  unusedLocalDiagnostics,
+  unusedBindingDiagnostics,
 } from "@mochi/dx/diagnostics";
 import { memRead } from "@mochi/test-support";
 import { isErr } from "@onrails/result";
@@ -15,7 +15,7 @@ test("clean source produces no diagnostics", () => {
 
 test("unused locals publish warning diagnostics by binding identity", () => {
   const src = "let f = value => let value = 1 in value";
-  const warnings = unusedLocalDiagnostics(src).filter((d) => d.code === "unused-local");
+  const warnings = unusedBindingDiagnostics(src).filter((d) => d.code === "unused-local");
   expect(warnings).toEqual([
     {
       range: {
@@ -29,8 +29,48 @@ test("unused locals publish warning diagnostics by binding identity", () => {
   ]);
 });
 
+const unusedTopLevel = (src: string): string[] =>
+  unusedBindingDiagnostics(src)
+    .filter((d) => d.code === "unused-top-level")
+    .map((d) => d.message);
+
+test("an unexported, unreferenced top-level binding warns", () => {
+  expect(unusedBindingDiagnostics("let helper = x => add(x, 1)\nlet n = 1")).toEqual([
+    {
+      range: { start: { line: 0, character: 4 }, end: { line: 0, character: 10 } },
+      message: "unused binding 'helper'",
+      severity: "warning",
+      code: "unused-top-level",
+    },
+    {
+      range: { start: { line: 1, character: 4 }, end: { line: 1, character: 5 } },
+      message: "unused binding 'n'",
+      severity: "warning",
+      code: "unused-top-level",
+    },
+  ]);
+});
+
+test("an exported top-level binding is public API, never unused", () => {
+  expect(unusedTopLevel("export let helper = x => add(x, 1)")).toEqual([]);
+});
+
+test("a top-level binding used by another one is live", () => {
+  expect(unusedTopLevel("let helper = x => add(x, 1)\nexport let n = helper(1)")).toEqual([]);
+});
+
+test("self-reference does not keep a dead recursive function alive", () => {
+  expect(unusedTopLevel("let countdown = n => eq(n, 0) ? 0 : countdown(sub(n, 1))")).toEqual([
+    "unused binding 'countdown'",
+  ]);
+});
+
+test("underscore-prefixed top-level bindings suppress the warning", () => {
+  expect(unusedTopLevel('let _entry = print("hi")')).toEqual([]);
+});
+
 test("underscore-prefixed locals intentionally suppress unused warnings", () => {
-  const warnings = unusedLocalDiagnostics("let f = _ignored => 1").filter(
+  const warnings = unusedBindingDiagnostics("let f = _ignored => 1").filter(
     (d) => d.code === "unused-local",
   );
   expect(warnings).toEqual([]);

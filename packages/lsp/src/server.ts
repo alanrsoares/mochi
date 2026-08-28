@@ -13,7 +13,7 @@ import { type CompletionItem as MochiCompletion, moduleCompleteAt } from "@mochi
 import {
   moduleDiagnostics,
   type PublishDiagnostic,
-  unusedLocalDiagnostics,
+  unusedBindingDiagnostics,
 } from "@mochi/dx/diagnostics";
 import { format } from "@mochi/dx/format";
 import { moduleHoverAt } from "@mochi/dx/hover";
@@ -417,7 +417,7 @@ export function startServer(opts: ServerOptions = {}): void {
     const text = doc.getText();
     const computed = [
       ...(await moduleDiagnostics(path, text, read, opts)),
-      ...unusedLocalDiagnostics(text, path, opts),
+      ...unusedBindingDiagnostics(text, path, opts),
     ];
     diagnosticsCache.set(doc.uri, computed);
     const diags: Diagnostic[] = computed.map((d) => ({
