@@ -305,7 +305,7 @@ let compositionsFrom = (n, k) =>
   k > n
     ? []
     : Array.concat(
-      compositions(n - k) |> map(rest => Array.prepend(k, rest)),
+      compositions(n - k) |> map(Array.prepend(k)),
       compositionsFrom(n, k + 1)
     )
 
@@ -342,7 +342,7 @@ let overloadSig = (head, params, ret, groups) =>
 export let curriedOverloads = (head, params, ret) =>
   Array.length(params) <= 1
     ? "${head}(${Str.join(", ", params)}) => ${ret}"
-    : "{ ${Str.join(" ", Array.sortBy(g => 0 - Array.length(g), compositions(Array.length(params))) |> map(g => overloadSig(head, params, ret, g)))} }"
+    : "{ ${Str.join(" ", Array.sortBy(g => 0 - Array.length(g), compositions(Array.length(params))) |> map(overloadSig(head, params, ret)))} }"
 
 /// Walk the value's lambda spine and the type's arrow spine together,
 /// collecting one rendered `name: T` per param. A zero-param lambda consumes

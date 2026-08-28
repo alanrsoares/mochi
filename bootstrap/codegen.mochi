@@ -1769,8 +1769,8 @@ export let codegenWith = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps, 
   let keys0 = ctorKeysFromStmts(stmts, imported) in
   let keys = seedBuiltinCtorKeys(stmts, keys0) in
   let ctx = {
-    keys: keys,
-    ns: ns,
+    keys,
+    ns,
     annotateLet: opts.annotateLet,
     annotateCtor: opts.annotateCtor,
     annotateParams: opts.annotateParams,
@@ -1803,10 +1803,10 @@ export let codegenWith = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps, 
 /// `import { … } from "@mochi/runtime"` line. Builds the same ctx `codegenWith`
 /// does, so the two agree on ctor keys and namespace ids.
 export let runtimeDepNames = (stmts, imported, ns, jsDefs, runtimeDeps) =>
-  let keys = seedBuiltinCtorKeys(stmts, ctorKeysFromStmts(stmts, imported)) in
-    { keys: keys, ns: ns }->runtimeRefNames(stmts, jsDefs, runtimeDeps)
+  let keys = stmts->seedBuiltinCtorKeys(ctorKeysFromStmts(stmts, imported)) in
+    runtimeRefNames({ keys, ns }, stmts, jsDefs, runtimeDeps)
 
 /// The JS backend: no annotations, `.js` siblings — byte-identical to the
 /// output before `codegenWith` existed.
 export let codegen = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps) =>
-  codegenWith(stmts, imported, useRuntime, ns, jsDefs, runtimeDeps, jsGenOpts)
+  stmts->codegenWith(imported, useRuntime, ns, jsDefs, runtimeDeps, jsGenOpts)

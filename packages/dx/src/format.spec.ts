@@ -14,6 +14,10 @@ test("a single-param lambda drops its parentheses", () => {
   expect(fmt("let f=(x)=>x")).toBe("let f = x => x\n");
 });
 
+test("an annotated single-param lambda keeps its parentheses and the annotation", () => {
+  expect(fmt("let f=(x:number)=>x")).toBe("let f = (x: number) => x\n");
+});
+
 test("a multi-param lambda keeps its parentheses", () => {
   expect(fmt("let g=(a,b)=>add(a,b)")).toBe("let g = (a, b) => a + b\n");
 });
@@ -107,6 +111,20 @@ test("formats a string-literal union type (ADR 0081)", () => {
 
 test("record destructuring is re-folded from its desugared form", () => {
   expect(fmt("let {x,y}=p")).toBe("let { x, y } = p\n");
+});
+
+test("record field puns collapse to shorthand (ADR 0068)", () => {
+  expect(fmt("let x=1\nlet r={x:x}")).toBe("let x = 1\nlet r = { x }\n");
+  expect(fmt("let x=1\nlet r={x}")).toBe("let x = 1\nlet r = { x }\n");
+  expect(fmt("let x=1\nlet y=2\nlet r={x:x,y:1}")).toBe(
+    "let x = 1\nlet y = 2\nlet r = { x, y: 1 }\n",
+  );
+  expect(fmt("let x=1\nlet r={...base,x}")).toBe("let x = 1\nlet r = { ...base, x }\n");
+});
+
+test("a record field that does not pun stays explicit", () => {
+  expect(fmt("let r={x:1}")).toBe("let r = { x: 1 }\n");
+  expect(fmt("let x=1\nlet y=2\nlet r={x:y}")).toBe("let x = 1\nlet y = 2\nlet r = { x: y }\n");
 });
 
 test("formatting is idempotent", () => {

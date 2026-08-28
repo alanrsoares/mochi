@@ -10,7 +10,10 @@
  * Record destructuring is desugared by the parser into a temp binding plus
  * field-access lets, so the printer detects that shape and re-folds it back
  * into `let { x, y } = e`; a destructuring `let (a, b) = e in body` desugars to
- * an applied lambda, which the printer re-folds too.
+ * an applied lambda, which the printer re-folds too. Record field puns
+ * (`{ x: x }` → `{ x }`) collapse the same way (ADR 0068). A saturating
+ * trailing eta `x => f(a, x)` collapses to the partial `f(a)` when `f`'s
+ * arity is known and `a` is inert (ADR 0091).
  *
  * Sugar a *plugin* owns re-folds through its `format` hook (ADR 0011) — JSX's
  * `h(tag, props, children)` → `<tag …>` lives in `plugins/jsx.ts`, not here.
@@ -24,6 +27,7 @@ import type {
   CtorField,
   Expr,
   ExternStmt,
+  Field,
   FieldExpr,
   ImportStmt,
   InterpExpr,
@@ -77,9 +81,11 @@ const param = (p: LamParam): string =>
       ? `(${p.names.join(", ")})`
       : `{ ${p.fields.join(", ")} }`;
 
-/** A lone plain-name param drops its parens (`x => ...`); anything else keeps them (`(a, b) => ...`, `({ x }) => ...`). */
+/** A lone un-annotated name drops its parens (`x => ...`); annotations and everything else keep them (`(x: number) => ...`, `(a, b) => ...`, `({ x }) => ...`). */
 const params = (ps: LamParam[]): string =>
-  ps.length === 1 && ps[0]!.kind === "name" ? ps[0]!.name : `(${ps.map(param).join(", ")})`;
+  ps.length === 1 && ps[0]!.kind === "name" && !ps[0]!.annot
+    ? ps[0]!.name
+    : `(${ps.map(param).join(", ")})`;
 
 /**
  * `JSON.stringify` handles \n \t \\ \" escaping but leaves a literal `${`
@@ -404,6 +410,12 @@ const withComments = (node: Expr | Stmt | Ctor, doc: Doc): Doc => {
 
 const hasLead = (node: Expr): boolean => (LEADING.get(node)?.length ?? 0) > 0;
 
+const hasComments = (node: Expr): boolean => hasLead(node) || (TRAILING.get(node)?.length ?? 0) > 0;
+
+/** False when the lambda eta-contracts to a partial, so paren decisions match pass two (ADR 0091). */
+const printsAsLambda = (e: Expr): e is LambdaExpr =>
+  e.kind === "lambda" && (etaChainSkip || etaPartial(e) === null);
+
 const parenIf = (cond: boolean, d: Doc): Doc => (cond ? seq(txt("("), d, txt(")")) : d);
 
 /**
@@ -414,14 +426,14 @@ const parenIf = (cond: boolean, d: Doc): Doc => (cond ? seq(txt("("), d, txt(")"
 const calleeD = (e: Expr): Doc =>
   e.kind === "call"
     ? callD(e, true)
-    : parenIf(e.kind === "lambda" || e.kind === "ternary" || e.kind === "pipe", exprD(e));
+    : parenIf(printsAsLambda(e) || e.kind === "ternary" || e.kind === "pipe", exprD(e));
 const memberD = (e: Expr): Doc =>
   parenIf(
-    e.kind === "lambda" || e.kind === "record" || e.kind === "ternary" || e.kind === "pipe",
+    printsAsLambda(e) || e.kind === "record" || e.kind === "ternary" || e.kind === "pipe",
     exprD(e),
   );
 const operandD = (e: Expr): Doc =>
-  parenIf(e.kind === "lambda" || e.kind === "ternary" || e.kind === "pipe", exprD(e));
+  parenIf(printsAsLambda(e) || e.kind === "ternary" || e.kind === "pipe", exprD(e));
 
 /** `(a, b)` / `[a, b]` / `@{a, b}` / `#{a, b}` — no inner padding; breaks one element per line when it overflows. */
 const seqElemD = (el: SeqElem): Doc =>
@@ -519,15 +531,23 @@ const lambdaD = (e: LambdaExpr): Doc => {
     );
   }
 
+  const eta = etaChainSkip ? null : etaPartial(e);
+  if (eta) return exprD(eta);
+
   const head = txt(`${params(e.params)} =>`);
-  if (e.body.kind === "do") return seq(head, txt(" "), doBlockD(e.body.exprs));
+  const prevSkip = etaChainSkip;
+  etaChainSkip = e.body.kind === "lambda";
   const discarded = discardedLetExprs(e.body);
-  if (discarded) return seq(head, txt(" "), doBlockD(discarded));
-  // A switch body attaches to the arrow (`xs => switch xs {`) — unless it
-  // carries a leading comment, which forces it onto its own indented line.
-  return e.body.kind === "match" && !hasLead(e.body)
-    ? seq(head, txt(" "), exprD(e.body))
-    : group(seq(head, indent(seq(line, exprD(e.body)))));
+  const printed =
+    e.body.kind === "do"
+      ? seq(head, txt(" "), doBlockD(e.body.exprs))
+      : discarded
+        ? seq(head, txt(" "), doBlockD(discarded))
+        : e.body.kind === "match" && !hasLead(e.body)
+          ? seq(head, txt(" "), exprD(e.body))
+          : group(seq(head, indent(seq(line, exprD(e.body)))));
+  etaChainSkip = prevSkip;
+  return printed;
 };
 
 /** A ternary branch after its `?` / `:` marker; a commented branch drops to its own indented line so the comment stays own-line (and the layout idempotent). */
@@ -611,8 +631,14 @@ const letLikeD = (head: string, value: Expr, body: Expr): Doc => {
   );
 };
 
+/** `{ x }` when the value is a same-name ref, else `{ x: e }` (ADR 0068). */
+const recordFieldD = (f: Field): Doc =>
+  f.value.kind === "ref" && f.value.name === f.name
+    ? exprD(f.value)
+    : seq(txt(`${f.name}: `), exprD(f.value));
+
 const recordD = (e: RecordExpr): Doc => {
-  const fields = e.fields.map((f) => seq(txt(`${f.name}: `), exprD(f.value)));
+  const fields = e.fields.map(recordFieldD);
   const items = e.spread ? [seq(txt("..."), exprD(e.spread)), ...fields] : fields;
   return braced("{", "}", items);
 };
@@ -683,7 +709,7 @@ const infixPrec = (e: Expr): number | null =>
 const binOperandD = (e: Expr, parentPrec: number, isRight: boolean): Doc => {
   const prec = infixPrec(e);
   const needsParens =
-    e.kind === "lambda" || e.kind === "ternary"
+    printsAsLambda(e) || e.kind === "ternary"
       ? true
       : prec !== null && (isRight ? prec <= parentPrec : prec < parentPrec);
   return parenIf(needsParens, exprD(e));
@@ -696,7 +722,7 @@ const binOperandD = (e: Expr, parentPrec: number, isRight: boolean): Doc => {
 const pipeLeftD = (e: Expr, parentPrec: number): Doc => {
   const prec = infixPrec(e);
   const needsParens =
-    e.kind === "lambda" || e.kind === "ternary" ? true : prec !== null && prec < parentPrec;
+    printsAsLambda(e) || e.kind === "ternary" ? true : prec !== null && prec < parentPrec;
   return parenIf(needsParens, exprD(e));
 };
 
@@ -747,7 +773,7 @@ const unaryD = (e: CallExpr): Doc | null => {
   if (!symbol) return null;
   const operand = e.args[0]!;
   const needsParens =
-    operand.kind === "lambda" ||
+    printsAsLambda(operand) ||
     operand.kind === "ternary" ||
     operand.kind === "pipe" ||
     binOpOf(operand) !== null ||
@@ -839,7 +865,7 @@ const callD = (e: CallExpr, asCallee = false): Doc => {
   // tuple becomes `Ok((\n  …\n))`, rather than a staircase of lone closers.
   if (e.args.length === 1 && last.kind === "tuple")
     return group(seq(fn, txt("("), exprD(last), txt(")")));
-  if (last.kind === "lambda") {
+  if (printsAsLambda(last)) {
     const braced =
       last.body.kind === "match" ||
       last.body.kind === "loop" ||
@@ -925,6 +951,13 @@ const formatApi: FormatApi = { exprD, memberD, flat, strLit };
  * `format` is synchronous, so a call never observes another call's hooks.
  */
 let formatHooks: FormatHook[] = [];
+
+/**
+ * True while printing a lambda whose body is itself a lambda (`a => b => …`).
+ * Eta-contracting the inner param would drop it from `collapseLambda`'s count
+ * and change a multi-arg `_curry` binding into a unary arrow (ADR 0091).
+ */
+let etaChainSkip = false;
 
 /**
  * Flat-callable arity of every name the printer can be sure of (ADR 0065):
@@ -1103,6 +1136,58 @@ const namespaceArity = (target: Expr, member: string): number | null => {
   return n !== undefined && n >= 2 ? n : null;
 };
 
+/** Flat arity of a ref or namespace member, or null when ADR 0065 cannot see it. */
+const calleeArity = (fn: Expr): number | null =>
+  fn.kind === "ref"
+    ? (flatArity.get(fn.name) ?? null)
+    : fn.kind === "field"
+      ? namespaceArity(fn.target, fn.name)
+      : null;
+
+/** Values whose evaluation is observationally the same once or per call. */
+const isInert = (e: Expr): boolean => {
+  switch (e.kind) {
+    case "ref":
+    case "num":
+    case "bool":
+    case "str":
+    case "unit":
+      return true;
+    case "field":
+      return isInert(e.target);
+    default:
+      return false;
+  }
+};
+
+const mentionsRef = (e: Expr, name: string): boolean =>
+  e.kind === "ref" ? e.name === name : e.kind === "field" && mentionsRef(e.target, name);
+
+/**
+ * `x => f(a, x)` → `f(a)` when that is a clean refactor (ADR 0091): `f`'s
+ * emitted arity is known, the eta argument saturates the last slot, prefix
+ * args are inert (so lifting them out of the lambda does not change how
+ * often they run), and `x` is not free in `f` or the prefix. `$`-prefixed
+ * params are owned by sections / compose; a param annotation is load-bearing.
+ */
+const etaPartial = (e: LambdaExpr): CallExpr | null => {
+  if (e.params.length !== 1) return null;
+  const p = e.params[0]!;
+  if (p.kind !== "name" || p.annot || p.name.startsWith("$")) return null;
+  const { name } = p;
+  if (e.body.kind !== "call") return null;
+  const body = flattenCallSpine(e.body) ?? e.body;
+  if (body.origin || body.args.length === 0) return null;
+  const last = body.args[body.args.length - 1]!;
+  if (last.kind !== "ref" || last.name !== name || hasComments(last)) return null;
+  const prefix = body.args.slice(0, -1);
+  if (!isInert(body.fn) || prefix.some((a) => !isInert(a))) return null;
+  if (mentionsRef(body.fn, name) || prefix.some((a) => mentionsRef(a, name))) return null;
+  const arity = calleeArity(body.fn);
+  if (arity === null || body.args.length !== arity) return null;
+  return { ...body, args: prefix };
+};
+
 /**
  * `f(a)(b)` → `f(a, b)` when `f`'s flat arity is known (ADR 0065): a same-file
  * top-level lambda binding, or a prelude builtin. Both lower to one
@@ -1115,6 +1200,9 @@ const namespaceArity = (target: Expr, member: string): number | null => {
  * JSX), a nullary group (`f()(x)` passes `unit`, which merging would drop), and
  * over-application past the known arity, where the extra groups apply the RESULT
  * rather than the callable.
+ *
+ * An eta-lambda head is substituted first so `(x => f(a, x))(b)` flattens to
+ * `f(a, b)` in one pass rather than printing `f(a)(b)` and waiting for pass two.
  */
 const flattenCallSpine = (e: CallExpr): CallExpr | null => {
   // Walked outermost-first, so the collected groups are reversed back into
@@ -1126,14 +1214,16 @@ const flattenCallSpine = (e: CallExpr): CallExpr | null => {
     outward.push(cur.args);
     cur = cur.fn;
   }
+  if (cur.kind === "lambda") {
+    const eta = etaPartial(cur);
+    if (eta) {
+      outward.push(eta.args);
+      cur = eta.fn;
+    }
+  }
   const groups = outward.toReversed();
   if (groups.length < 2 || groups.some((g) => g.length === 0)) return null;
-  const arity =
-    cur.kind === "ref"
-      ? (flatArity.get(cur.name) ?? null)
-      : cur.kind === "field"
-        ? namespaceArity(cur.target, cur.name)
-        : null;
+  const arity = calleeArity(cur);
   if (arity === null) return null;
   const args = groups.flat();
   return args.length > arity || args.some((a) => a.kind === "unit")
@@ -1297,6 +1387,7 @@ const layoutProgram = (prog: Program, src: string): string => {
   // even though it does not shadow an unqualified prelude name of its own.
   shadowedNames = new Set([...innerBound, ...topLevelNames(prog.stmts)]);
   flatArity = buildFlatArity(prog.stmts, innerBound);
+  etaChainSkip = false;
   const errorSpans = prog.stmts.filter((s) => s.kind === "error").map((s) => s.span);
   const openDirective = /^\s*"use open"[ \t]*(?:\r?\n|$)/.test(src);
   const comments = collectComments(src).filter(

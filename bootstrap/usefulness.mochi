@@ -243,7 +243,7 @@ let specializeOne = (h, arity, labels, row) => switch Array.head(row) {
 }
 
 let specializeM = (m, h, arity, labels) =>
-  m |> Array.flatMap(row => specializeOne(h, arity, labels, row))
+  m |> Array.flatMap(specializeOne(h, arity, labels))
 
 // Rows whose head matches anything, with that column dropped.
 let defaultM = m =>
@@ -411,7 +411,7 @@ let usefulCtor = (m, heads, width, reg, fuel) =>
       ? tryHeads(
         m,
         all |> map(n => HCtor(n)),
-        all |> map(n => arityOfCtor(reg, n)),
+        all |> map(arityOfCtor(reg)),
         [],
         width,
         reg,

@@ -135,6 +135,7 @@ What else was on the table and why not.
 | [0088](0088-table-and-pbt.md) | Table tests (`testEach`) and PBT (`check`) | Accepted |
 | [0089](0089-task-tests.md) | Async Task tests, `checkTask`, timeouts | Accepted |
 | [0090](0090-bootstrap-chain.md) | Mochi-emitted TypeScript for stage 1 | Accepted |
+| [0091](0091-eta-partial-format.md) | `fmt` eta-contracts `x => f(a, x)` to `f(a)` when that is a clean refactor | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

@@ -36,8 +36,7 @@ type CErr = { message: string, start: number, end: number }
 type CtorInfo = { owner: string, arity: number }
 type Registry = { ctors: Map<string, CtorInfo>, types: Map<string, [string]> }
 
-let checkErr = (message, sp) =>
-  { message: message, start: sp.start, end: sp.end }
+let checkErr = (message, sp) => { message, start: sp.start, end: sp.end }
 
 // --- generic loops (early-exit `for` loops from the TS original) ---
 
@@ -714,7 +713,7 @@ let qualRefsFrom = te => switch te {
   | Ast.TyTuple(elems, _) => Array.flatMap(qualRefsFrom, elems)
   | Ast.TyList(elem, _) => qualRefsFrom(elem)
   | Ast.TyQual(alias, name, nameSpan, args, sp) => [
-      { alias: alias, name: name, nameSpan: nameSpan, qualSpan: sp },
+      { alias, name, nameSpan, qualSpan: sp },
       ...Array.flatMap(qualRefsFrom, args)
     ]
   | Ast.TyLit(_, _) => []

@@ -42,7 +42,7 @@ extern readFile : string -> Result<string, string> = "./host.mjs" "readFile"
 extern resolveImport : string -> string -> string = "./host.mjs" "resolveImport"
 extern absPath : string -> string = "./host.mjs" "absPath"
 
-let mErr = message => { message: message, start: 0, end: 0 }
+let mErr = message => { message, start: 0, end: 0 }
 
 // Lex + parse a source file to statements. No check/infer — both need the whole
 // graph's exports resolved first, which only happens in a later part.
@@ -90,10 +90,7 @@ let visit = (path, acc) => switch Map.get(path, acc.state) {
                 | Ok(acc2) => Ok(
                     {
                       state: Map.set(path, "done", acc2.state),
-                      order: Array.append(
-                        { path: path, stmts: stmts },
-                        acc2.order
-                      )
+                      order: Array.append({ path, stmts }, acc2.order)
                     }
                   )
               }
@@ -167,9 +164,9 @@ let aliasesOf = stmts =>
     |> Array.reduce(
       (acc, s) => switch s {
         | Ast.SType(name, params, _, Some(fields), _, _, _, _) => acc
-            |> Map.set(name, { params: params, fields: fields, expr: None })
+            |> Map.set(name, { params, fields, expr: None })
         | Ast.SType(name, params, _, _, Some(te), _, _, _) => acc
-            |> Map.set(name, { params: params, fields: [], expr: Some(te) })
+            |> Map.set(name, { params, fields: [], expr: Some(te) })
         | _ => acc
       },
       #{}
@@ -350,7 +347,7 @@ let compileOne = (ctx, loaded) => switch ctx->resolveImportsFrom(loaded.stmts, 0
                     qualScopeOf(loaded.stmts),
                     ctx.qualsByPath
                   ),
-                  outputs: [...ctx.outputs, { path: loaded.path, js: js }]
+                  outputs: [...ctx.outputs, { path: loaded.path, js }]
                 }
               )
         }
@@ -505,13 +502,7 @@ let groupByOwner = (names, ctx) =>
 let crossModuleTypeImports = (ts, importer, localTypes, typeOwner) =>
   let byOwner = groupByOwner(
     Map.keys(typeOwner),
-    {
-      ts: ts,
-      importer: importer,
-      localTypes: localTypes,
-      typeOwner: typeOwner,
-      bound: valueImported(ts)
-    }
+    { ts, importer, localTypes, typeOwner, bound: valueImported(ts) }
   ) in
     Map.keys(byOwner)
       |> map(spec =>
@@ -537,7 +528,7 @@ let externBindingsInto = (stmts, path, env, acc) =>
                     |> Map.set(
                       dp,
                       Array.append(
-                        { imported: imported, scheme: sc, curried: curried },
+                        { imported, scheme: sc, curried },
                         Map.getOr([], dp, a)
                       )
                     )
@@ -648,7 +639,7 @@ export let compileGraphTs = (graph, runtimeImport) =>
       keysByPath: #{},
       qualsByPath: #{},
       typeOwner: typeOwnerOf(graph),
-      runtimeImport: runtimeImport,
+      runtimeImport,
       externs: #{},
       outputs: []
     },

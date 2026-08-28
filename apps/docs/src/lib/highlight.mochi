@@ -69,7 +69,7 @@ export let tokenClass = kind => switch kind {
 export let isHoverable = kind => Set.has(kind, hoverable)
 
 /// Plain span sentinel: `start: -1` means no byte offset (not hoverable).
-let plainSpan = (text, start) => { text: text, kind: "plain", start: start }
+let plainSpan = (text, start) => { text, kind: "plain", start }
 
 let highlightGo = (code, tokens, i, curPos, spans) =>
   loop (j = i, pos = curPos, acc = spans) {
@@ -169,7 +169,7 @@ export let processTwoslash = code =>
   let collected = collectTwoslash(lines, 0, [], []) in
   let cleanCode = Str.join("\n", collected.clean) in
     {
-      cleanCode: cleanCode,
+      cleanCode,
       annotations: annotate(
         cleanCode,
         collected.clean,

@@ -95,8 +95,7 @@ let jxSpanOf = lt => { start: lt.start, end: lt.end }
 let jxSpanning = (a, b) => { start: a.start, end: b.end }
 let jxToEnd = (start, toks, pos) =>
   { start: start.start, end: jxTokAt(toks, pos - 1).end }
-let jxErrAt = (message, lt) =>
-  Err({ message: message, start: lt.start, end: lt.end })
+let jxErrAt = (message, lt) => Err({ message, start: lt.start, end: lt.end })
 
 let jxExpectTok = (t, toks, pos) =>
   let lt = jxTokAt(toks, pos) in
@@ -107,7 +106,7 @@ let jxExpectTok = (t, toks, pos) =>
 let jxExpectId = (toks, pos) =>
   let lt = jxTokAt(toks, pos) in
     switch lt.tok {
-      | TId(name) => Ok(({ name: name, span: jxSpanOf(lt) }, pos + 1))
+      | TId(name) => Ok(({ name, span: jxSpanOf(lt) }, pos + 1))
       | t => jxErrAt("expected id, got ${jxTokName(t)}", lt)
     }
 
@@ -133,7 +132,7 @@ let jxKeywordText = t => switch t {
 let jxExpectLabel = (toks, pos) =>
   let lt = jxTokAt(toks, pos) in
     switch jxKeywordText(lt.tok) {
-      | Some(name) => Ok(({ name: name, span: jxSpanOf(lt) }, pos + 1))
+      | Some(name) => Ok(({ name, span: jxSpanOf(lt) }, pos + 1))
       | None => jxExpectId(toks, pos)
     }
 

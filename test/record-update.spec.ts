@@ -64,6 +64,7 @@ test("formatter round-trips a record update", () => {
   expect(unwrapOk(format(once))).toBe(once);
 });
 
-test("formatter expands record shorthand to its canonical field form", () => {
-  expect(unwrapOk(format("let x=1\nlet r={x}\n"))).toBe("let x = 1\nlet r = { x: x }\n");
+test("formatter canonicalizes record field puns to shorthand (ADR 0068)", () => {
+  expect(unwrapOk(format("let x=1\nlet r={x:x}\n"))).toBe("let x = 1\nlet r = { x }\n");
+  expect(unwrapOk(format("let x=1\nlet r={x}\n"))).toBe("let x = 1\nlet r = { x }\n");
 });

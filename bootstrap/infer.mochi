@@ -250,7 +250,7 @@ let arrowChain = (paramTypes, resultT) => switch paramTypes {
 
 let ctxWithEnv = (ctx, env) =>
   {
-    env: env,
+    env,
     open: ctx.open,
     ns: ctx.ns,
     aliasMap: ctx.aliasMap,
@@ -262,7 +262,7 @@ let ctxWithEnv = (ctx, env) =>
 // (`recur` reads the head — nearest enclosing loop, ADR 0056).
 let ctxWithLoop = (ctx, env, frame) =>
   {
-    env: env,
+    env,
     open: ctx.open,
     ns: ctx.ns,
     aliasMap: ctx.aliasMap,
@@ -1100,11 +1100,11 @@ let aliasMapFrom = (stmts, acc) => switch stmts {
   | [s, ...rest] => switch s {
       | Ast.SType(name, params, _, Some(fields), _, _, _, _) => aliasMapFrom(
           rest,
-          Map.set(name, { params: params, fields: fields, expr: None }, acc)
+          Map.set(name, { params, fields, expr: None }, acc)
         )
       | Ast.SType(name, params, _, _, Some(te), _, _, _) => aliasMapFrom(
           rest,
-          Map.set(name, { params: params, fields: [], expr: Some(te) }, acc)
+          Map.set(name, { params, fields: [], expr: Some(te) }, acc)
         )
       | _ => aliasMapFrom(rest, acc)
     }
@@ -1459,7 +1459,7 @@ let runInferImports = (stmts, builtins, namespaces, openMode, imports, nsImports
   let lets = letsOfFrom(stmts) in
   let idxOf = idxOfMap(lets) in
   let sccs = stronglyConnected(adjOf(lets, idxOf)) in
-    switch processGroupsFrom({ env: env4, open: openMode, ns: ns0, aliasMap: aliasMap, plugins: plugins, loopStack: [] }, sccs, lets, st3) {
+    switch processGroupsFrom({ env: env4, open: openMode, ns: ns0, aliasMap, plugins, loopStack: [] }, sccs, lets, st3) {
       | Ok((finalCtx, st4)) => switch finalCtx->inferExprStmtsFrom(stmts, st4) {
           | Ok(st5) => Ok(
               {

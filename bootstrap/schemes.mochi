@@ -413,4 +413,4 @@ export let ctorScheme = (typeName, params, c, st, aliases) =>
   let result = tCon(typeName, pvarTypes) in
   let (ty, st2) = ctorFieldsArrowFrom(c.fields, pvars, st1, aliases, result) in
   let sets = collect(ty, emptyVarSets) in
-    ({ vars: Set.toArray(sets.tv), rvars: Set.toArray(sets.rv), ty: ty }, st2)
+    ({ vars: Set.toArray(sets.tv), rvars: Set.toArray(sets.rv), ty }, st2)

@@ -280,17 +280,11 @@ let scanComment = (src, start, lineTok) =>
 
 // Attach the pending doc block (if any) and build the located token.
 let mkTok = (tok, start, stop, doc) => switch doc {
-  | [] => { tok: tok, start: start, end: stop, doc: None }
-  | lines => {
-      tok: tok,
-      start: start,
-      end: stop,
-      doc: Some(Str.join("\n", lines))
-    }
+  | [] => { tok, start, end: stop, doc: None }
+  | lines => { tok, start, end: stop, doc: Some(Str.join("\n", lines)) }
 }
 
-let lexError = (message, start, stop) =>
-  Err({ message: message, start: start, end: stop })
+let lexError = (message, start, stop) => Err({ message, start, end: stop })
 
 // `Number(raw)` in the TS original can be NaN (e.g. "1.2.3"); div(0, 0) mirrors it.
 let numValue = raw => Str.toNumber(raw) |> Option.unwrapOr(0 / 0)
