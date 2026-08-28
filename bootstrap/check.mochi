@@ -675,7 +675,7 @@ let strayTypeVar = (params, te) => switch te {
       |> Option.orElse(params->strayTypeVar(to))
   | Ast.TyApp(_, args, _) => args |> firstSome(strayTypeVar(params))
   | Ast.TyTuple(elems, _) => elems |> firstSome(strayTypeVar(params))
-  | Ast.TyList(elem, _) => strayTypeVar(params, elem)
+  | Ast.TyList(elem, _) => params->strayTypeVar(elem)
   | Ast.TyQual(_, _, _, args, _) =>
     // `Alias.Name` is always a constructor reference, never a bare type variable
     // (that is what motivates the single TyQual variant, ADR 0046) — only its
@@ -691,7 +691,7 @@ let checkCtorFieldVars = stmts =>
       | Ast.SType(name, params, ctors, _, _, _, _, _) => ctors
           |> firstSome(c =>
             c.fields
-              |> firstSome(f => switch strayTypeVar(params, f.fieldType) {
+              |> firstSome(f => switch params->strayTypeVar(f.fieldType) {
                 | Some((vn, vsp)) => Some(
                     vsp
                       |> checkErr(
