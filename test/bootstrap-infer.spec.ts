@@ -205,6 +205,32 @@ for (const file of corpus) {
   });
 }
 
+// ---- targeted cases: scheme parity -----------------------------------------
+// The corpus above only compares TOP-LEVEL schemes, so a generalization gap that
+// only shows through a lambda-local binder can hide in it. Issue #72: bootstrap
+// read an env scheme's vars raw, missing that unification had since repointed
+// them, and quantified a var the enclosing lambda still owned.
+
+const schemeCases: Record<string, string> = {
+  "let … in binder stays monomorphic": [
+    "let idsOf = (params, i) => switch Array.get(i, params) {",
+    "  | None => #{}",
+    "  | Some(p) => Map.set(p, i, idsOf(params, i + 1))",
+    "}",
+    "let take : Map<string, number> -> number = m => Map.size(m)",
+    "let render = params =>",
+    "  let vars = idsOf(params, 0) in",
+    "  take(vars)",
+  ].join("\n"),
+};
+
+for (const [name, src] of Object.entries(schemeCases)) {
+  test(`infer scheme parity: ${name}`, () => {
+    const prog = unwrapOk(parse(unwrapOk(lex(src))));
+    expect(alInferVerdict(src, prog)).toEqual(tsInferVerdict(src));
+  });
+}
+
 // ---- targeted cases: strict-mode (open: false) error parity ---------------
 
 const strictTsVerdict = (src: string): Verdict => {
