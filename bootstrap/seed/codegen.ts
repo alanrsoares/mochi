@@ -1,6 +1,4 @@
 import type {
-  Ctor,
-  CtorField,
   Expr,
   Field,
   InterpPart,
@@ -26,8 +24,8 @@ export type CtorFactoryTs = {
   retMono: string;
 };
 export type ParamAnnots = { generics: string; params: Option<string>[] };
-export type CtorFieldLike = CtorField;
-export type CtorLike = Ctor;
+export type CtorFieldLike = { name: Option<string>; fieldType: TypeExpr };
+export type CtorLike = { name: string; fields: CtorFieldLike[] };
 export type GenOpts = {
   annotateLet: Option<(a: string, b: Expr) => Option<string>>;
   annotateCtor: Option<(a: Stmt, b: CtorLike) => Option<CtorFactoryTs>>;

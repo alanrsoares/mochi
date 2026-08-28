@@ -1,13 +1,14 @@
-import type { PErr, Tok } from "./parser";
+import type { Tok } from "./parser";
 import type { AliasField, Stmt, TypeExpr } from "./ast";
 import type { Ty } from "./types";
 import type { Scheme } from "./schemes";
-import type { Plugin, QualAliasInfo } from "./infer";
+import type { AliasInfo } from "./codegen-ts";
+import type { Plugin } from "./infer";
 
 export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
 export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
 export type Loaded = { path: string; stmts: Stmt[] };
-export type MErr = PErr;
+export type MErr = { message: string; start: number; end: number };
 export type Acc = { state: Map<string, string>; order: Loaded[] };
 export type CtorInfo = { owner: string; arity: number };
 export type Registry = { ctors: Map<string, CtorInfo>; types: Map<string, string[]> };
@@ -231,9 +232,9 @@ const exportedTypeNames: (stmts: Stmt[]) => Set<string> = (stmts: Stmt[]) =>
       stmts,
     ),
   );
-const aliasesOf: (stmts: Stmt[]) => Map<string, QualAliasInfo> = (stmts: Stmt[]) =>
+const aliasesOf: (stmts: Stmt[]) => Map<string, AliasInfo> = (stmts: Stmt[]) =>
   reduce(
-    _curry(2, (acc: Map<string, QualAliasInfo>, s: Stmt) =>
+    _curry(2, (acc: Map<string, AliasInfo>, s: Stmt) =>
       match(s)
         .with(
           (
@@ -265,11 +266,12 @@ const aliasesOf: (stmts: Stmt[]) => Map<string, QualAliasInfo> = (stmts: Stmt[])
         )
         .otherwise(() => acc),
     ),
-    new Map<string, QualAliasInfo>(),
+    new Map<string, AliasInfo>(),
     stmts,
   );
-const qualScopeOf: (stmts: Stmt[]) => { types: Set<string>; aliases: Map<string, QualAliasInfo> } =
-  (stmts: Stmt[]) => ({ types: exportedTypeNames(stmts), aliases: aliasesOf(stmts) });
+const qualScopeOf: (stmts: Stmt[]) => { types: Set<string>; aliases: Map<string, AliasInfo> } = (
+  stmts: Stmt[],
+) => ({ types: exportedTypeNames(stmts), aliases: aliasesOf(stmts) });
 const withNamedCtor: <A, B, C, D, E, F, G, H, I, J, K>(
   name: A,
   info: { owner: B } & H,
@@ -603,7 +605,7 @@ const compileOne: <A>(
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
-    qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
+    qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
     outputs: { path: string; js: string }[];
   } & A,
   loaded: Loaded,
@@ -612,7 +614,7 @@ const compileOne: <A>(
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
-    qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
+    qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
     outputs: { path: string; js: string }[];
   },
   MErr
@@ -623,7 +625,7 @@ const compileOne: <A>(
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
-      qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
+      qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
       outputs: { path: string; js: string }[];
     } & A,
     loaded: Loaded,
@@ -634,7 +636,7 @@ const compileOne: <A>(
         nsImports: new Map<string, Map<string, Scheme>>(),
         reg: emptyReg,
         keys: new Map<string, string[]>(),
-        quals: new Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>(),
+        quals: new Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>(),
       }),
     )
       .with(
@@ -645,7 +647,7 @@ const compileOne: <A>(
               exportsByPath: Map<string, Map<string, Scheme>>;
               regByPath: Map<string, Registry>;
               keysByPath: Map<string, Map<string, string[]>>;
-              qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
+              qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
               outputs: { path: string; js: string }[];
             },
             MErr
@@ -661,10 +663,7 @@ const compileOne: <A>(
                   exportsByPath: Map<string, Map<string, Scheme>>;
                   regByPath: Map<string, Registry>;
                   keysByPath: Map<string, Map<string, string[]>>;
-                  qualsByPath: Map<
-                    string,
-                    { types: Set<string>; aliases: Map<string, QualAliasInfo> }
-                  >;
+                  qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
                   outputs: { path: string; js: string }[];
                 },
                 MErr
@@ -693,7 +692,7 @@ const compileOne: <A>(
                       keysByPath: Map<string, Map<string, string[]>>;
                       qualsByPath: Map<
                         string,
-                        { types: Set<string>; aliases: Map<string, QualAliasInfo> }
+                        { types: Set<string>; aliases: Map<string, AliasInfo> }
                       >;
                       outputs: { path: string; js: string }[];
                     },
@@ -723,7 +722,7 @@ const compileOne: <A>(
                       keysByPath: Map<string, Map<string, string[]>>;
                       qualsByPath: Map<
                         string,
-                        { types: Set<string>; aliases: Map<string, QualAliasInfo> }
+                        { types: Set<string>; aliases: Map<string, AliasInfo> }
                       >;
                       outputs: { path: string; js: string }[];
                     },
@@ -752,7 +751,7 @@ const compileAll: _Curry<
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
-      qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
+      qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
     },
     graph: Loaded[],
   ],
@@ -765,7 +764,7 @@ const compileAll: _Curry<
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
-      qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
+      qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
     },
     graph: Loaded[],
   ) =>
@@ -803,7 +802,7 @@ export const compileGraph: (graph: Loaded[]) => Result<{ path: string; js: strin
       exportsByPath: new Map<string, Map<string, Scheme>>(),
       regByPath: new Map<string, Registry>(),
       keysByPath: new Map<string, Map<string, string[]>>(),
-      qualsByPath: new Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>(),
+      qualsByPath: new Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>(),
       outputs: [] as { path: string; js: string }[],
     },
     graph,
@@ -1028,7 +1027,7 @@ const compileOneTs: <A, B>(
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
-    qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
+    qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
     runtimeImport: string;
     typeOwner: Map<string, string>;
     outputs: { path: string; js: string }[];
@@ -1040,7 +1039,7 @@ const compileOneTs: <A, B>(
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
-    qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
+    qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
     typeOwner: Map<string, string>;
     runtimeImport: string;
     externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
@@ -1054,7 +1053,7 @@ const compileOneTs: <A, B>(
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
-      qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
+      qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
       runtimeImport: string;
       typeOwner: Map<string, string>;
       outputs: { path: string; js: string }[];
@@ -1068,7 +1067,7 @@ const compileOneTs: <A, B>(
         nsImports: new Map<string, Map<string, Scheme>>(),
         reg: emptyReg,
         keys: new Map<string, string[]>(),
-        quals: new Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>(),
+        quals: new Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>(),
       }),
     )
       .with(
@@ -1079,7 +1078,7 @@ const compileOneTs: <A, B>(
               exportsByPath: Map<string, Map<string, Scheme>>;
               regByPath: Map<string, Registry>;
               keysByPath: Map<string, Map<string, string[]>>;
-              qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
+              qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
               typeOwner: Map<string, string>;
               runtimeImport: string;
               externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
@@ -1098,10 +1097,7 @@ const compileOneTs: <A, B>(
                   exportsByPath: Map<string, Map<string, Scheme>>;
                   regByPath: Map<string, Registry>;
                   keysByPath: Map<string, Map<string, string[]>>;
-                  qualsByPath: Map<
-                    string,
-                    { types: Set<string>; aliases: Map<string, QualAliasInfo> }
-                  >;
+                  qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
                   typeOwner: Map<string, string>;
                   runtimeImport: string;
                   externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
@@ -1133,7 +1129,7 @@ const compileOneTs: <A, B>(
                       keysByPath: Map<string, Map<string, string[]>>;
                       qualsByPath: Map<
                         string,
-                        { types: Set<string>; aliases: Map<string, QualAliasInfo> }
+                        { types: Set<string>; aliases: Map<string, AliasInfo> }
                       >;
                       typeOwner: Map<string, string>;
                       runtimeImport: string;
@@ -1182,7 +1178,7 @@ const compileOneTs: <A, B>(
                           keysByPath: Map<string, Map<string, string[]>>;
                           qualsByPath: Map<
                             string,
-                            { types: Set<string>; aliases: Map<string, QualAliasInfo> }
+                            { types: Set<string>; aliases: Map<string, AliasInfo> }
                           >;
                           typeOwner: Map<string, string>;
                           runtimeImport: string;
@@ -1228,7 +1224,7 @@ ${body}`,
       )
       .exhaustive(),
 );
-const noAliases: Map<string, QualAliasInfo> = aliasesOf([] as Stmt[]);
+const noAliases: Map<string, AliasInfo> = aliasesOf([] as Stmt[]);
 const externOutputs: <A, B, C>(
   externs: Map<A, ({ scheme: { ty: Ty } & B; imported: string; curried: boolean } & C)[]>,
 ) => { path: A; js: string }[] = <A, B, C>(
@@ -1255,7 +1251,7 @@ const compileAllTs: <A>(
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
-    qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
+    qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
     runtimeImport: string;
     typeOwner: Map<string, string>;
   },
@@ -1269,7 +1265,7 @@ const compileAllTs: <A>(
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
-      qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>;
+      qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
       runtimeImport: string;
       typeOwner: Map<string, string>;
     },
@@ -1316,7 +1312,7 @@ export const compileGraphTs: <A>(
         exportsByPath: new Map<string, Map<string, Scheme>>(),
         regByPath: new Map<string, Registry>(),
         keysByPath: new Map<string, Map<string, string[]>>(),
-        qualsByPath: new Map<string, { types: Set<string>; aliases: Map<string, QualAliasInfo> }>(),
+        qualsByPath: new Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>(),
         typeOwner: typeOwnerOf(graph),
         runtimeImport: runtimeImport,
         externs: new Map<string, { scheme: Scheme; imported: string; curried: boolean }[]>(),

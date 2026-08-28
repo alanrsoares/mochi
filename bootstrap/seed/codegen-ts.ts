@@ -5,6 +5,7 @@ import type { TsEnv } from "./ts-types";
 
 export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
 export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
+export type AliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
 
 import type { _Curry } from "@mochi/compiler/runtime";
 
@@ -112,19 +113,12 @@ const genericHead: <A>(params: A[], i: number, acc: string[]) => string = _curry
       .with({ _tag: "Some" }, () => genericHead(params, add(i, 1), _Array_append(letterAt(i), acc)))
       .exhaustive(),
 );
-const fieldTs: <A>(
-  te: TypeExpr,
-  params: string[],
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-  recs: Map<string, string>,
-) => string = _curry(
+const fieldTs: _Curry<
+  [te: TypeExpr, params: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>],
+  string
+> = _curry(
   4,
-  <A>(
-    te: TypeExpr,
-    params: string[],
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-    recs: Map<string, string>,
-  ) => {
+  (te: TypeExpr, params: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>) => {
     const vars: Map<string, Ty> = paramVarsFrom(params, 0);
     const names: Map<number, string> = paramNamesFrom(params, 0);
     return (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) => tsOf(t, tsEnv(names, recs)))(
@@ -132,20 +126,23 @@ const fieldTs: <A>(
     );
   },
 );
-const ctorFieldsFrom: <A>(
-  fields: CtorField[],
-  keys: string[],
-  params: string[],
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-  recs: Map<string, string>,
-  i: number,
-) => string[] = _curry(
-  6,
-  <A>(
+const ctorFieldsFrom: _Curry<
+  [
     fields: CtorField[],
     keys: string[],
     params: string[],
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
+    aliases: Map<string, AliasInfo>,
+    recs: Map<string, string>,
+    i: number,
+  ],
+  string[]
+> = _curry(
+  6,
+  (
+    fields: CtorField[],
+    keys: string[],
+    params: string[],
+    aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
     i: number,
   ) =>
@@ -159,37 +156,33 @@ const ctorFieldsFrom: <A>(
       )
       .exhaustive(),
 );
-const ctorVariant: <A>(
-  c: Ctor,
-  params: string[],
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-  recs: Map<string, string>,
-) => string = _curry(
+const ctorVariant: _Curry<
+  [c: Ctor, params: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>],
+  string
+> = _curry(
   4,
-  <A>(
-    c: Ctor,
-    params: string[],
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-    recs: Map<string, string>,
-  ) => {
+  (c: Ctor, params: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>) => {
     const fields: string[] = ctorFieldsFrom(c.fields, keysOf(c.fields), params, aliases, recs, 0);
     return eq(length(fields), 0)
       ? `{ _tag: "${c.name}" }`
       : `{ _tag: "${c.name}"; ${_Str_join("; ", fields)} }`;
   },
 );
-const ctorVariantsFrom: <A>(
-  ctors: Ctor[],
-  params: string[],
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-  recs: Map<string, string>,
-  i: number,
-) => string[] = _curry(
-  5,
-  <A>(
+const ctorVariantsFrom: _Curry<
+  [
     ctors: Ctor[],
     params: string[],
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
+    aliases: Map<string, AliasInfo>,
+    recs: Map<string, string>,
+    i: number,
+  ],
+  string[]
+> = _curry(
+  5,
+  (
+    ctors: Ctor[],
+    params: string[],
+    aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
     i: number,
   ) =>
@@ -203,19 +196,22 @@ const ctorVariantsFrom: <A>(
       )
       .exhaustive(),
 );
-export const typeDecl: <A>(
-  name: string,
-  params: string[],
-  ctors: Ctor[],
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-  recs: Map<string, string>,
-) => string = _curry(
-  5,
-  <A>(
+export const typeDecl: _Curry<
+  [
     name: string,
     params: string[],
     ctors: Ctor[],
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
+    aliases: Map<string, AliasInfo>,
+    recs: Map<string, string>,
+  ],
+  string
+> = _curry(
+  5,
+  (
+    name: string,
+    params: string[],
+    ctors: Ctor[],
+    aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
   ) => {
     const head: string = `${name}${genericHead(params, 0, [] as string[])}`;
@@ -223,18 +219,21 @@ export const typeDecl: <A>(
 ${_Str_join("\n", ctorVariantsFrom(ctors, params, aliases, recs, 0))};`;
   },
 );
-const aliasFieldsFrom: <A>(
-  fields: AliasField[],
-  params: string[],
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-  recs: Map<string, string>,
-  i: number,
-) => string[] = _curry(
-  5,
-  <A>(
+const aliasFieldsFrom: _Curry<
+  [
     fields: AliasField[],
     params: string[],
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
+    aliases: Map<string, AliasInfo>,
+    recs: Map<string, string>,
+    i: number,
+  ],
+  string[]
+> = _curry(
+  5,
+  (
+    fields: AliasField[],
+    params: string[],
+    aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
     i: number,
   ) =>
@@ -248,19 +247,22 @@ const aliasFieldsFrom: <A>(
       )
       .exhaustive(),
 );
-export const recordAliasDecl: <A>(
-  name: string,
-  params: string[],
-  fields: AliasField[],
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-  recs: Map<string, string>,
-) => string = _curry(
-  5,
-  <A>(
+export const recordAliasDecl: _Curry<
+  [
     name: string,
     params: string[],
     fields: AliasField[],
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
+    aliases: Map<string, AliasInfo>,
+    recs: Map<string, string>,
+  ],
+  string
+> = _curry(
+  5,
+  (
+    name: string,
+    params: string[],
+    fields: AliasField[],
+    aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
   ) => {
     const head: string = `${name}${genericHead(params, 0, [] as string[])}`;
@@ -270,19 +272,22 @@ export const recordAliasDecl: <A>(
       : `export type ${head} = { ${_Str_join("; ", body)} };`;
   },
 );
-export const aliasTsDecl: <A>(
-  name: string,
-  params: string[],
-  template: TypeExpr,
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-  recs: Map<string, string>,
-) => string = _curry(
-  5,
-  <A>(
+export const aliasTsDecl: _Curry<
+  [
     name: string,
     params: string[],
     template: TypeExpr,
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
+    aliases: Map<string, AliasInfo>,
+    recs: Map<string, string>,
+  ],
+  string
+> = _curry(
+  5,
+  (
+    name: string,
+    params: string[],
+    template: TypeExpr,
+    aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
   ) => {
     const head: string = `${name}${genericHead(params, 0, [] as string[])}`;
@@ -455,18 +460,21 @@ const neverArgs: <A>(params: A[], i: number, acc: string[]) => string[] = _curry
       .with({ _tag: "Some" }, () => neverArgs(params, add(i, 1), _Array_append("never", acc)))
       .exhaustive(),
 );
-const ctorParamTypes: <A>(
-  fields: CtorField[],
-  params: string[],
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-  recs: Map<string, string>,
-  i: number,
-) => string[] = _curry(
-  5,
-  <A>(
+const ctorParamTypes: _Curry<
+  [
     fields: CtorField[],
     params: string[],
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
+    aliases: Map<string, AliasInfo>,
+    recs: Map<string, string>,
+    i: number,
+  ],
+  string[]
+> = _curry(
+  5,
+  (
+    fields: CtorField[],
+    params: string[],
+    aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
     i: number,
   ) =>
@@ -480,19 +488,22 @@ const ctorParamTypes: <A>(
       )
       .exhaustive(),
 );
-export const ctorFactoryTs: <A>(
-  typeName: string,
-  params: string[],
-  c: Ctor,
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-  recs: Map<string, string>,
-) => CtorFactoryTs = _curry(
-  5,
-  <A>(
+export const ctorFactoryTs: _Curry<
+  [
     typeName: string,
     params: string[],
     c: Ctor,
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
+    aliases: Map<string, AliasInfo>,
+    recs: Map<string, string>,
+  ],
+  CtorFactoryTs
+> = _curry(
+  5,
+  (
+    typeName: string,
+    params: string[],
+    c: Ctor,
+    aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
   ) => {
     const head: string = genericHead(params, 0, [] as string[]);
@@ -564,6 +575,7 @@ export const curriedOverloads: _Curry<[head: string, params: string[], ret: stri
           ),
         )} }`,
   );
+
 export const curriedFnType: _Curry<[params: string[], ret: string], string> = _curry(
   2,
   (params: string[], ret: string) =>
@@ -780,19 +792,22 @@ const referencedCons: <A>(
       .with({ _tag: "Some" }, () => referencedCons(stmts, env, add(i, 1), acc))
       .exhaustive(),
 );
-const builtinDeclsFor: <A>(
-  declared: Set<string>,
-  wanted: Set<string>,
-  i: number,
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-  recs: Map<string, string>,
-) => string[] = _curry(
-  5,
-  <A>(
+const builtinDeclsFor: _Curry<
+  [
     declared: Set<string>,
     wanted: Set<string>,
     i: number,
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
+    aliases: Map<string, AliasInfo>,
+    recs: Map<string, string>,
+  ],
+  string[]
+> = _curry(
+  5,
+  (
+    declared: Set<string>,
+    wanted: Set<string>,
+    i: number,
+    aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
   ) =>
     match(_Array_get(i, builtinTypeDecls))
@@ -805,19 +820,22 @@ const builtinDeclsFor: <A>(
       )
       .exhaustive(),
 );
-const builtinDeclsInBody: <A>(
-  body: string,
-  header: string,
-  i: number,
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-  recs: Map<string, string>,
-) => string[] = _curry(
-  5,
-  <A>(
+const builtinDeclsInBody: _Curry<
+  [
     body: string,
     header: string,
     i: number,
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
+    aliases: Map<string, AliasInfo>,
+    recs: Map<string, string>,
+  ],
+  string[]
+> = _curry(
+  5,
+  (
+    body: string,
+    header: string,
+    i: number,
+    aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
   ) =>
     match(_Array_get(i, builtinTypeDecls))
@@ -830,17 +848,8 @@ const builtinDeclsInBody: <A>(
       )
       .exhaustive(),
 );
-const aliasRowOf: <A>(
-  fields: AliasField[],
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-  i: number,
-) => Row = _curry(
-  3,
-  <A>(
-    fields: AliasField[],
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-    i: number,
-  ) =>
+const aliasRowOf: _Curry<[fields: AliasField[], aliases: Map<string, AliasInfo>, i: number], Row> =
+  _curry(3, (fields: AliasField[], aliases: Map<string, AliasInfo>, i: number) =>
     match(_Array_get(i, fields))
       .with({ _tag: "None" }, () => RowEmpty as Row)
       .with({ _tag: "Some" }, ({ value: f }) =>
@@ -856,34 +865,25 @@ const aliasRowOf: <A>(
         ),
       )
       .exhaustive(),
-);
-const aliasShapeKey: <A>(
-  fields: AliasField[],
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-) => Option<string> = _curry(
-  2,
-  <A>(
-    fields: AliasField[],
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-  ) => rowShapeKey(aliasRowOf(fields, aliases, 0), new Map<number, string>()),
+  );
+const aliasShapeKey: _Curry<
+  [fields: AliasField[], aliases: Map<string, AliasInfo>],
+  Option<string>
+> = _curry(2, (fields: AliasField[], aliases: Map<string, AliasInfo>) =>
+  rowShapeKey(aliasRowOf(fields, aliases, 0), new Map<number, string>()),
 );
 const bareName: (name: string) => string = (name: string) => {
   const parts: string[] = _Str_split(".", name);
   return _Option_unwrapOr(name, _Array_get(sub(length(parts), 1), parts));
 };
-const indexAlias: <A, B>(
+const indexAlias: <A>(
   key: string,
   name: A,
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & B>,
+  aliases: Map<string, AliasInfo>,
   acc: Map<string, A>,
 ) => Map<string, A> = _curry(
   4,
-  <A, B>(
-    key: string,
-    name: A,
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & B>,
-    acc: Map<string, A>,
-  ) =>
+  <A>(key: string, name: A, aliases: Map<string, AliasInfo>, acc: Map<string, A>) =>
     match(_Map_get(key, aliases))
       .with({ _tag: "None" }, () => acc)
       .with({ _tag: "Some" }, ({ value: info }) =>
@@ -901,19 +901,12 @@ const indexAlias: <A, B>(
       )
       .exhaustive(),
 );
-const recordAliasIndexFrom: <A>(
-  keys: string[],
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-  i: number,
-  acc: Map<string, string>,
-) => Map<string, string> = _curry(
+const recordAliasIndexFrom: _Curry<
+  [keys: string[], aliases: Map<string, AliasInfo>, i: number, acc: Map<string, string>],
+  Map<string, string>
+> = _curry(
   4,
-  <A>(
-    keys: string[],
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-    i: number,
-    acc: Map<string, string>,
-  ) =>
+  (keys: string[], aliases: Map<string, AliasInfo>, i: number, acc: Map<string, string>) =>
     match(_Array_get(i, keys))
       .with({ _tag: "None" }, () => acc)
       .with({ _tag: "Some" }, ({ value: key }) =>
@@ -926,22 +919,20 @@ const recordAliasIndexFrom: <A>(
       )
       .exhaustive(),
 );
-export const recordAliasIndex: <A>(
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-) => Map<string, string> = <A>(
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
+export const recordAliasIndex: (aliases: Map<string, AliasInfo>) => Map<string, string> = (
+  aliases: Map<string, AliasInfo>,
 ) => recordAliasIndexFrom(_Array_sort(_Map_keys(aliases)), aliases, 0, new Map<string, string>());
-const withoutOwnShape: <A, B, C>(
+const withoutOwnShape: <A, B>(
   fields: AliasField[],
   params: A[],
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & C>,
+  aliases: Map<string, AliasInfo>,
   recs: Map<string, B>,
 ) => Map<string, B> = _curry(
   4,
-  <A, B, C>(
+  <A, B>(
     fields: AliasField[],
     params: A[],
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & C>,
+    aliases: Map<string, AliasInfo>,
     recs: Map<string, B>,
   ) =>
     match(_Array_get(0, params))
@@ -954,19 +945,12 @@ const withoutOwnShape: <A, B, C>(
       )
       .exhaustive(),
 );
-const typeHeaderFrom: <A>(
-  stmts: Stmt[],
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-  recs: Map<string, string>,
-  i: number,
-) => string[] = _curry(
+const typeHeaderFrom: _Curry<
+  [stmts: Stmt[], aliases: Map<string, AliasInfo>, recs: Map<string, string>, i: number],
+  string[]
+> = _curry(
   4,
-  <A>(
-    stmts: Stmt[],
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-    recs: Map<string, string>,
-    i: number,
-  ) =>
+  (stmts: Stmt[], aliases: Map<string, AliasInfo>, recs: Map<string, string>, i: number) =>
     match(_Array_get(i, stmts))
       .with({ _tag: "None" }, () => [] as string[])
       .with(
@@ -1063,20 +1047,20 @@ const genericLambdasFrom: <A, B, C>(
       .with({ _tag: "Some" }, () => genericLambdasFrom(stmts, env, add(i, 1), acc))
       .exhaustive(),
 );
-export const tsGenOpts: <A, B, C, D, E, F, G, H, I, J>(
+export const tsGenOpts: <A, B, C, D, E, F, G, H, I>(
   stmts: Stmt[],
   env: Map<string, { vars: number[]; rvars: number[]; ty: Ty } & E>,
   types: ({ span: { start: A; end: B } & F; ty: Ty } & G)[],
   letParams: ({ span: { start: C; end: D } & H; ty: Ty } & I)[],
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & J>,
+  aliases: Map<string, AliasInfo>,
 ) => GenOpts = _curry(
   5,
-  <A, B, C, D, E, F, G, H, I, J>(
+  <A, B, C, D, E, F, G, H, I>(
     stmts: Stmt[],
     env: Map<string, { vars: number[]; rvars: number[]; ty: Ty } & E>,
     types: ({ span: { start: A; end: B } & F; ty: Ty } & G)[],
     letParams: ({ span: { start: C; end: D } & H; ty: Ty } & I)[],
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & J>,
+    aliases: Map<string, AliasInfo>,
   ) => {
     const typeAt: Map<string, Ty> = typeAtTable(types);
     const letParamAt: Map<string, Ty> = typeAtTable(letParams);
@@ -1169,12 +1153,12 @@ export const tsGenOpts: <A, B, C, D, E, F, G, H, I, J>(
     };
   },
 );
-export const emitTsModule: <A, B, C, D, E, F, G, H, I, J>(
+export const emitTsModule: <A, B, C, D, E, F, G, H, I>(
   stmts: Stmt[],
   env: Map<string, { ty: Ty; vars: number[]; rvars: number[] } & E>,
   types: ({ span: { start: A; end: B } & F; ty: Ty } & G)[],
   letParams: ({ span: { start: C; end: D } & H; ty: Ty } & I)[],
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & J>,
+  aliases: Map<string, AliasInfo>,
   imported: Map<string, string[]>,
   importLines: string[],
   ns: Map<string, Map<string, string>>,
@@ -1183,12 +1167,12 @@ export const emitTsModule: <A, B, C, D, E, F, G, H, I, J>(
   runtimeImport: string,
 ) => string = _curry(
   11,
-  <A, B, C, D, E, F, G, H, I, J>(
+  <A, B, C, D, E, F, G, H, I>(
     stmts: Stmt[],
     env: Map<string, { ty: Ty; vars: number[]; rvars: number[] } & E>,
     types: ({ span: { start: A; end: B } & F; ty: Ty } & G)[],
     letParams: ({ span: { start: C; end: D } & H; ty: Ty } & I)[],
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & J>,
+    aliases: Map<string, AliasInfo>,
     imported: Map<string, string[]>,
     importLines: string[],
     ns: Map<string, Map<string, string>>,
@@ -1351,14 +1335,14 @@ const externDecl: <A, B>(
       ? `export declare const ${e.imported}: ${tsOf(t, plainEnv(anyFor(freeIdsIn(t, [] as number[]))))};`
       : `export declare const ${e.imported}: ${flatHostType(t, n)};`;
 };
-export const externModuleDts: <A, B, C>(
+export const externModuleDts: <A, B>(
   externs: ({ scheme: { ty: Ty } & A; imported: string; curried: boolean } & B)[],
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & C>,
+  aliases: Map<string, AliasInfo>,
 ) => string = _curry(
   2,
-  <A, B, C>(
+  <A, B>(
     externs: ({ scheme: { ty: Ty } & A; imported: string; curried: boolean } & B)[],
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & C>,
+    aliases: Map<string, AliasInfo>,
   ) => {
     const wanted: Set<string> = reduce(
       _curry(

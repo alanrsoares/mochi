@@ -97,9 +97,9 @@ export type TypeExpr =
   | TyLit(value: string, span: Span)
   | TyUnion(members: [TypeExpr], span: Span)
 
-type CtorField = { name: Option<string>, fieldType: TypeExpr }
+export type CtorField = { name: Option<string>, fieldType: TypeExpr }
 type Ctor = { name: string, fields: [CtorField] }
-type AliasField = { name: string, fieldType: TypeExpr }
+export type AliasField = { name: string, fieldType: TypeExpr }
 
 export type Stmt =
   | SLet(name: string, nameSpan: Span, annot: Option<TypeExpr>, value: Expr, exported: bool, doc: Option<string>, span: Span)

@@ -19,6 +19,7 @@ import {
   type ConType,
   foldAliases,
   isUnit,
+  matchTemplate,
   mkFresh,
   qualifyTypeNames,
   type Row,
@@ -658,8 +659,13 @@ export function aliasTsDecl(
   aliases: AliasDef[] = [],
 ): string {
   const names = new Map(def.params.map((_, i) => [aliasParamId(i), LETTERS[i] ?? `T${i}`]));
-  // Its OWN entry is dropped, or the alias renders as itself (`type Span = Span`).
-  const others = aliases.filter((a) => a.name !== def.name);
+  // Its OWN entry is dropped, or the alias renders as itself (`type Span = Span`)
+  // — and every SAME-SHAPED alias with it. Two structurally identical aliases in
+  // different modules would otherwise each fold to the other's name, emitting a
+  // mutually circular `type A = B;` / `type B = A;` (TS2456).
+  const others = aliases.filter(
+    (a) => a.name !== def.name && !matchTemplate(a.template, def.template, new Map()),
+  );
   const body = tsOf(qualifyTypeNames(foldAliases(def.template, others), qualify), names);
   const head = def.params.length ? `${def.name}<${[...names.values()].join(", ")}>` : def.name;
   return `export type ${head} = ${body};`;

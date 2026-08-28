@@ -1,6 +1,5 @@
-import type { PErr, Tok } from "./parser";
+import type { Tok } from "./parser";
 import type {
-  AliasField,
   CtorField,
   Expr,
   Field,
@@ -21,8 +20,8 @@ import type { Scheme, VarSets } from "./schemes";
 
 export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
 export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
-export type IErr = PErr;
-export type QualAliasField = AliasField;
+export type IErr = { message: string; start: number; end: number };
+export type QualAliasField = { name: string; fieldType: TypeExpr };
 export type QualAliasInfo = { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> };
 export type QualScope = { aliases: Map<string, QualAliasInfo> };
 export type InferApi = {

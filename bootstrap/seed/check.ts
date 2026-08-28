@@ -16,11 +16,10 @@ import type {
   Stmt,
   TypeExpr,
 } from "./ast";
-import type { PErr } from "./parser";
 
 export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
 export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
-export type CErr = PErr;
+export type CErr = { message: string; start: number; end: number };
 export type CtorInfo = { owner: string; arity: number };
 export type Registry = { ctors: Map<string, CtorInfo>; types: Map<string, string[]> };
 export type SeqCheck = { _tag: "SeqNotSeq" } | { _tag: "SeqTotal" } | { _tag: "SeqFail"; e: CErr };
@@ -732,26 +731,20 @@ const namedUnguarded: <A, B>(
       leaves,
     ),
   );
-const matrixVerdict: <A, B, C, D, E, F, G>(
+const matrixVerdict: <A, B, C, D, E>(
   arms: MatchArm[],
   leaves: ({ pattern: Pattern; guard: Option<A> } & D)[],
   ownerOpt: Option<string>,
   mSpan: { end: B; start: C } & E,
-  reg: {
-    ctors: Map<string, { owner: string; arity: number } & F>;
-    types: Map<string, string[]>;
-  } & G,
+  reg: Registry,
 ) => Option<{ message: string; start: C; end: B }> = _curry(
   5,
-  <A, B, C, D, E, F, G>(
+  <A, B, C, D, E>(
     arms: MatchArm[],
     leaves: ({ pattern: Pattern; guard: Option<A> } & D)[],
     ownerOpt: Option<string>,
     mSpan: { end: B; start: C } & E,
-    reg: {
-      ctors: Map<string, { owner: string; arity: number } & F>;
-      types: Map<string, string[]>;
-    } & G,
+    reg: Registry,
   ) =>
     match(checkExhaustiveM(unguardedPatterns(arms), reg))
       .with({ _tag: "ExOk" }, () => None)
@@ -788,23 +781,13 @@ const leavesOfArm: <A, B>(
       map((alt: Pattern) => ({ pattern: alt, guard: a.guard }), alts),
     )
     .otherwise(() => [{ pattern: a.pattern, guard: a.guard }]);
-const checkMatch: <A, B, C>(
+const checkMatch: <A>(
   arms: MatchArm[],
   mSpan: { end: number; start: number } & A,
-  reg: {
-    ctors: Map<string, { arity: number; owner: string } & B>;
-    types: Map<string, string[]>;
-  } & C,
+  reg: Registry,
 ) => Option<CErr> = _curry(
   3,
-  <A, B, C>(
-    arms: MatchArm[],
-    mSpan: { end: number; start: number } & A,
-    reg: {
-      ctors: Map<string, { arity: number; owner: string } & B>;
-      types: Map<string, string[]>;
-    } & C,
-  ) =>
+  <A>(arms: MatchArm[], mSpan: { end: number; start: number } & A, reg: Registry) =>
     match(firstSome((a: MatchArm) => checkPattern(a.pattern, reg, true), arms))
       .with({ _tag: "Some" }, ({ value: e }) => Some(e) as Option<CErr>)
       .with({ _tag: "None" }, () =>
@@ -860,21 +843,9 @@ const checkMatch: <A, B, C>(
       )
       .exhaustive(),
 );
-const checkExpr: <A, B>(
-  e: Expr,
-  reg: {
-    ctors: Map<string, { arity: number; owner: string } & A>;
-    types: Map<string, string[]>;
-  } & B,
-) => Option<CErr> = _curry(
+const checkExpr: _Curry<[e: Expr, reg: Registry], Option<CErr>> = _curry(
   2,
-  <A, B>(
-    e: Expr,
-    reg: {
-      ctors: Map<string, { arity: number; owner: string } & A>;
-      types: Map<string, string[]>;
-    } & B,
-  ) =>
+  (e: Expr, reg: Registry) =>
     match(e)
       .with({ _tag: "ENum" }, () => None as Option<CErr>)
       .with({ _tag: "EUnit" }, () => None as Option<CErr>)

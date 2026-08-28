@@ -63,7 +63,7 @@ let genericHead = (params, i, acc) => switch Array.get(i, params) {
 /// A ctor field's type is a full TypeExpr (ADR 0015). Lower it to a Ty first —
 /// params bound positionally, aliases left nominal — then render through `tsOf`,
 /// so the TS grammar has exactly one encoder.
-let fieldTs = (te, params, aliases, recs) =>
+let fieldTs = (te, params, aliases: Map<string, AliasInfo>, recs) =>
   let vars = paramVarsFrom(params, 0) in
   let names = paramNamesFrom(params, 0) in
   let (t, _vars, _st) = typeExprToType(
@@ -78,7 +78,7 @@ let fieldTs = (te, params, aliases, recs) =>
 /// Keys come from `keysOf` (the same projection the runtime shape uses, so a
 /// declared field name and its emitted key can never drift); this loop only
 /// ever reads `fieldType`.
-let ctorFieldsFrom = (fields: [Ast.CtorField], keys, params, aliases, recs, i) => switch Array.get(i, fields) {
+let ctorFieldsFrom = (fields: [Ast.CtorField], keys, params, aliases: Map<string, AliasInfo>, recs, i) => switch Array.get(i, fields) {
   | None => []
   | Some(fld) => Array.prepend(
       "${Option.unwrapOr("_${show(i)}", Array.get(i, keys))}: ${fieldTs(fld.fieldType, params, aliases, recs)}",
@@ -87,7 +87,7 @@ let ctorFieldsFrom = (fields: [Ast.CtorField], keys, params, aliases, recs, i) =
 }
 
 /// One ctor's runtime shape: the `_tag` discriminant plus its fields.
-let ctorVariant = (c: Ast.Ctor, params, aliases, recs) =>
+let ctorVariant = (c: Ast.Ctor, params, aliases: Map<string, AliasInfo>, recs) =>
   let fields = ctorFieldsFrom(
     c.fields,
     keysOf(c.fields),
@@ -100,7 +100,7 @@ let ctorVariant = (c: Ast.Ctor, params, aliases, recs) =>
       ? "{ _tag: \"${c.name}\" }"
       : "{ _tag: \"${c.name}\"; ${Str.join("; ", fields)} }"
 
-let ctorVariantsFrom = (ctors: [Ast.Ctor], params, aliases, recs, i) => switch Array.get(i, ctors) {
+let ctorVariantsFrom = (ctors: [Ast.Ctor], params, aliases: Map<string, AliasInfo>, recs, i) => switch Array.get(i, ctors) {
   | None => []
   | Some(c) => Array.prepend(
       "  | ${ctorVariant(c, params, aliases, recs)}",
@@ -109,11 +109,11 @@ let ctorVariantsFrom = (ctors: [Ast.Ctor], params, aliases, recs, i) => switch A
 }
 
 /// A `type` decl -> an exported tagged union matching the runtime shape.
-export let typeDecl = (name, params, ctors: [Ast.Ctor], aliases, recs) =>
+export let typeDecl = (name, params, ctors: [Ast.Ctor], aliases: Map<string, AliasInfo>, recs) =>
   let head = "${name}${genericHead(params, 0, [])}" in
     "export type ${head} =\n${Str.join("\n", ctorVariantsFrom(ctors, params, aliases, recs, 0))};"
 
-let aliasFieldsFrom = (fields: [Ast.AliasField], params, aliases, recs, i) => switch Array.get(i, fields) {
+let aliasFieldsFrom = (fields: [Ast.AliasField], params, aliases: Map<string, AliasInfo>, recs, i) => switch Array.get(i, fields) {
   | None => []
   | Some(f) => Array.prepend(
       "${f.name}: ${fieldTs(f.fieldType, params, aliases, recs)}",
@@ -123,7 +123,7 @@ let aliasFieldsFrom = (fields: [Ast.AliasField], params, aliases, recs, i) => sw
 
 /// A record alias (`type Point = { x: number, y: number }`) -> an exported
 /// object type. Structural, so it renders through the same `tsOf` encoder.
-export let recordAliasDecl = (name, params, fields: [Ast.AliasField], aliases, recs) =>
+export let recordAliasDecl = (name, params, fields: [Ast.AliasField], aliases: Map<string, AliasInfo>, recs) =>
   let head = "${name}${genericHead(params, 0, [])}" in
   let body = aliasFieldsFrom(fields, params, aliases, recs, 0) in
     Array.length(body) == 0
@@ -131,7 +131,7 @@ export let recordAliasDecl = (name, params, fields: [Ast.AliasField], aliases, r
       : "export type ${head} = { ${Str.join("; ", body)} };"
 
 /// A transparent type alias (`type Id = number`) -> the aliased type directly.
-export let aliasTsDecl = (name, params, template, aliases, recs) =>
+export let aliasTsDecl = (name, params, template, aliases: Map<string, AliasInfo>, recs) =>
   let head = "${name}${genericHead(params, 0, [])}" in
     "export type ${head} = ${fieldTs(template, params, aliases, recs)};"
 
@@ -285,7 +285,7 @@ let neverArgs = (params, i, acc) => switch Array.get(i, params) {
   | Some(_) => neverArgs(params, i + 1, Array.append("never", acc))
 }
 
-let ctorParamTypes = (fields: [Ast.CtorField], params, aliases, recs, i) => switch Array.get(i, fields) {
+let ctorParamTypes = (fields: [Ast.CtorField], params, aliases: Map<string, AliasInfo>, recs, i) => switch Array.get(i, fields) {
   | None => []
   | Some(fld) => Array.prepend(
       fieldTs(fld.fieldType, params, aliases, recs),
@@ -293,7 +293,7 @@ let ctorParamTypes = (fields: [Ast.CtorField], params, aliases, recs, i) => swit
     )
 }
 
-export let ctorFactoryTs = (typeName, params, c: Ast.Ctor, aliases, recs) =>
+export let ctorFactoryTs = (typeName, params, c: Ast.Ctor, aliases: Map<string, AliasInfo>, recs) =>
   let head = genericHead(params, 0, []) in
   let monos = neverArgs(params, 0, []) in
     {
@@ -360,6 +360,16 @@ export let curriedOverloads = (head, params, ret) =>
   Array.length(params) <= 1
     ? "${head}(${Str.join(", ", params)}) => ${ret}"
     : "{ ${Str.join(" ", Array.sortBy(g => 0 - Array.length(g), compositions(Array.length(params))) |> map(overloadSig(head, params, ret)))} }"
+
+/// A declared type alias as the printer reads it: its parameters, plus EITHER a
+/// record body (`fields`) or a transparent template (`expr`). Declared here as
+/// well as in schemes.mochi rather than shared through an import — a local
+/// record alias expands, so both copies unify structurally (ADR 0044).
+type AliasInfo = {
+  params: [string],
+  fields: [Ast.AliasField],
+  expr: Option<Ast.TypeExpr>
+}
 
 /// The CONCRETE curry-compatible function type. Same contract as
 /// `curriedOverloads` — every partial-application grouping `_curry` accepts must
@@ -505,7 +515,7 @@ let referencedCons = (stmts, env, i, acc) => switch Array.get(i, stmts) {
 
 /// Builtin variant decls a module references but does not itself declare, so
 /// those references resolve (`Option<number>` from `Map.get`, etc).
-let builtinDeclsFor = (declared, wanted, i, aliases, recs) => switch Array.get(i, builtinTypeDecls) {
+let builtinDeclsFor = (declared, wanted, i, aliases: Map<string, AliasInfo>, recs) => switch Array.get(i, builtinTypeDecls) {
   | None => []
   | Some(bt) => let rest = builtinDeclsFor(
       declared,
@@ -526,7 +536,7 @@ let builtinDeclsFor = (declared, wanted, i, aliases, recs) => switch Array.get(i
 /// looks at binding types, not match-scrutinee types, so `match(opt)` on an
 /// `Option<Stmt>` never surfaces `Option`. Scan the emitted body text and skip
 /// anything the header already declares, so no duplicate decl (ADR 0031).
-let builtinDeclsInBody = (body, header, i, aliases, recs) => switch Array.get(i, builtinTypeDecls) {
+let builtinDeclsInBody = (body, header, i, aliases: Map<string, AliasInfo>, recs) => switch Array.get(i, builtinTypeDecls) {
   | None => []
   | Some(bt) => let rest = builtinDeclsInBody(
       body,
@@ -546,7 +556,7 @@ let builtinDeclsInBody = (body, header, i, aliases, recs) => switch Array.get(i,
 /// A declared record alias lowered back to the row its USES carry. ADR 0005
 /// expands a record alias at `typeExprToType`, so this reproduces exactly what
 /// inference will have put in the type table for a value of that alias.
-let aliasRowOf = (fields: [Ast.AliasField], aliases, i) => switch Array.get(i, fields) {
+let aliasRowOf = (fields: [Ast.AliasField], aliases: Map<string, AliasInfo>, i) => switch Array.get(i, fields) {
   | None => RowEmpty
   | Some(f) => let (t, _vars, _st) = typeExprToType(
       f.fieldType,
@@ -558,7 +568,7 @@ let aliasRowOf = (fields: [Ast.AliasField], aliases, i) => switch Array.get(i, f
       RowExtend(f.name, t, aliasRowOf(fields, aliases, i + 1))
 }
 
-let aliasShapeKey = (fields: [Ast.AliasField], aliases) =>
+let aliasShapeKey = (fields: [Ast.AliasField], aliases: Map<string, AliasInfo>) =>
   rowShapeKey(aliasRowOf(fields, aliases, 0), #{})
 
 /// Every record alias IN SCOPE, keyed by canonical row shape (ADR 0092). Built
@@ -577,7 +587,7 @@ let bareName = name =>
   let parts = Str.split(".", name) in
     Option.unwrapOr(name, Array.get(Array.length(parts) - 1, parts))
 
-let indexAlias = (key, name, aliases, acc) => switch Map.get(key, aliases) {
+let indexAlias = (key, name, aliases: Map<string, AliasInfo>, acc) => switch Map.get(key, aliases) {
   | None => acc
   | Some(info) => switch info.expr {
       | Some(_) => acc
@@ -590,7 +600,7 @@ let indexAlias = (key, name, aliases, acc) => switch Map.get(key, aliases) {
     }
 }
 
-let recordAliasIndexFrom = (keys, aliases, i, acc) => switch Array.get(i, keys) {
+let recordAliasIndexFrom = (keys, aliases: Map<string, AliasInfo>, i, acc) => switch Array.get(i, keys) {
   | None => acc
   | Some(key) => recordAliasIndexFrom(
       keys,
@@ -605,7 +615,7 @@ export let recordAliasIndex = aliases =>
 
 /// The index an alias's OWN body renders against — itself removed, so it cannot
 /// come out as `export type Span = Span;`.
-let withoutOwnShape = (fields: [Ast.AliasField], params, aliases, recs) => switch Array.get(0, params) {
+let withoutOwnShape = (fields: [Ast.AliasField], params, aliases: Map<string, AliasInfo>, recs) => switch Array.get(0, params) {
   | Some(_) => recs
   | None => switch aliasShapeKey(fields, aliases) {
       | Some(k) => Map.delete(k, recs)
@@ -613,7 +623,7 @@ let withoutOwnShape = (fields: [Ast.AliasField], params, aliases, recs) => switc
     }
 }
 
-let typeHeaderFrom = (stmts, aliases, recs, i) => switch Array.get(i, stmts) {
+let typeHeaderFrom = (stmts, aliases: Map<string, AliasInfo>, recs, i) => switch Array.get(i, stmts) {
   | None => []
   | Some(Ast.SType(name, params, ctors, alias, aliasType, _, _, _)) => let rest = typeHeaderFrom(
       stmts,
@@ -680,7 +690,7 @@ let genericLambdasFrom = (stmts, env, i, acc) => switch Array.get(i, stmts) {
 
 /// The TS-backend options: every hook resolved against this module's inference
 /// metadata. This is where `inferProgramTypes` and `codegenWith` actually meet.
-export let tsGenOpts = (stmts, env, types, letParams, aliases) =>
+export let tsGenOpts = (stmts, env, types, letParams, aliases: Map<string, AliasInfo>) =>
   let typeAt = typeAtTable(types) in
   let letParamAt = typeAtTable(letParams) in
   let genericLams = genericLambdasFrom(stmts, env, 0, #{}) in
@@ -751,7 +761,7 @@ export let tsGenOpts = (stmts, env, types, letParams, aliases) =>
 /// single file passes `#{}` / `[]`, a module in a graph passes its deps' ctor
 /// field keys (so destructuring an imported ctor emits the right names) and the
 /// `import type { … }` lines its driver computed from the emitted text.
-export let emitTsModule = (stmts, env, types, letParams, aliases, imported, importLines, ns, jsDefs, runtimeDeps, runtimeImport) =>
+export let emitTsModule = (stmts, env, types, letParams, aliases: Map<string, AliasInfo>, imported, importLines, ns, jsDefs, runtimeDeps, runtimeImport) =>
   let declared = declaredTypeNames(stmts, 0, Set.fromArray([])) in
   let wanted = referencedCons(stmts, env, 0, Set.fromArray([])) in
   let recs = recordAliasIndex(aliases) in
@@ -912,7 +922,7 @@ let externDecl = e =>
 /// inlined, so the sidecar is self-contained and needs no import of its own.
 /// `dedupeBy` keeps the FIRST of two mochi bindings aliasing one host export —
 /// a repeated `export declare const` is a TS2323.
-export let externModuleDts = (externs, aliases) =>
+export let externModuleDts = (externs, aliases: Map<string, AliasInfo>) =>
   let wanted = externs
     |> Array.reduce(
       (acc, e) => consInTy(e.scheme.ty, acc),

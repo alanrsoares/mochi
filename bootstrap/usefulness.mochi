@@ -141,6 +141,13 @@ let fieldOf = (l, labels, pats) =>
   let i = indexOfLabel(l, labels, 0) in
     i < 0 ? MWild : Option.unwrapOr(MWild, Array.get(i, pats))
 
+/// The ctor registry as usefulness reads it. Declared here rather than imported
+/// from check.mochi, which imports THIS module — a local record alias expands,
+/// so it still unifies structurally with the caller's registry (ADR 0044).
+type CtorInfo = { owner: string, arity: number }
+
+type Registry = { ctors: Map<string, CtorInfo>, types: Map<string, [string]> }
+
 type ArrShape = { fixed: [number], restFrom: Option<number> }
 
 let arrShapeStep = (acc, mp) => switch mp {
@@ -289,24 +296,24 @@ let boolVals = heads =>
   heads |> Array.flatMap(h => switch h { | HBool(v) => [v] | _ => [] })
 
 // Bare `Circle`, or `S.Circle` after `import * as S` (ADR 0082).
-let ctorInfoSuffixed = (keys, reg, n) => switch keys {
+let ctorInfoSuffixed = (keys, reg: Registry, n) => switch keys {
   | [] => None
   | [k, ...rest] => Str.endsWith(".${n}", k)
       ? Map.get(k, reg.ctors)
       : ctorInfoSuffixed(rest, reg, n)
 }
 
-let ctorInfoOf = (reg, n) => switch Map.get(n, reg.ctors) {
+let ctorInfoOf = (reg: Registry, n) => switch Map.get(n, reg.ctors) {
   | Some(info) => Some(info)
   | None => ctorInfoSuffixed(Map.keys(reg.ctors), reg, n)
 }
 
-let arityOfCtor = (reg, n) => switch ctorInfoOf(reg, n) {
+let arityOfCtor = (reg: Registry, n) => switch ctorInfoOf(reg, n) {
   | None => 0
   | Some(info) => info.arity
 }
 
-let ownerOfCtor = (reg, n) => switch ctorInfoOf(reg, n) {
+let ownerOfCtor = (reg: Registry, n) => switch ctorInfoOf(reg, n) {
   | None => None
   | Some(info) => Some(info.owner)
 }
@@ -314,7 +321,7 @@ let ownerOfCtor = (reg, n) => switch ctorInfoOf(reg, n) {
 let allNamesIn = (all, names) =>
   Array.reduce((acc, n) => acc && Array.contains(n, names), true, all)
 
-let useful = (m, width, reg, fuel) =>
+let useful = (m, width, reg: Registry, fuel) =>
   fuel <= 0
     ? UFuel
     : width == 0
@@ -323,7 +330,7 @@ let useful = (m, width, reg, fuel) =>
     ? USome(mWilds(width), fuel - 1)
     : usefulSplit(m, width, reg, fuel - 1)
 
-let usefulSplit = (m, width, reg, fuel) =>
+let usefulSplit = (m, width, reg: Registry, fuel) =>
   let col = colOf(m) in
   let heads = headsOf(col) in
     switch Array.head(heads) {
@@ -339,7 +346,7 @@ let prependWitness = (mp, r) => switch r {
   | USome(row, f) => USome(Array.prepend(mp, row), f)
 }
 
-let tryHeads = (m, heads, arities, labels, width, reg, fuel, i) => switch Array.get(i, heads) {
+let tryHeads = (m, heads, arities, labels, width, reg: Registry, fuel, i) => switch Array.get(i, heads) {
   | None => UNone(fuel)
   | Some(h) => let arity = Option.unwrapOr(0, Array.get(i, arities)) in
       switch useful(specializeM(m, h, arity, labels), arity + width - 1, reg, fuel) {
@@ -364,7 +371,7 @@ let tryHeads = (m, heads, arities, labels, width, reg, fuel, i) => switch Array.
       }
 }
 
-let usefulHead = (m, col, heads, h0, width, reg, fuel) => switch h0 {
+let usefulHead = (m, col, heads, h0, width, reg: Registry, fuel) => switch h0 {
   | HTuple(arity) =>
     // Products: one constructor, always complete — descend straight in.
     tryHeads(m, [HTuple(arity)], [arity], [], width, reg, fuel, 0)
@@ -397,7 +404,7 @@ let usefulHead = (m, col, heads, h0, width, reg, fuel) => switch h0 {
     )
 }
 
-let usefulCtor = (m, heads, width, reg, fuel) =>
+let usefulCtor = (m, heads, width, reg: Registry, fuel) =>
   let names = ctorNames(heads) in
   let ownerOpt = switch Array.head(names) {
     | None => None
@@ -428,7 +435,7 @@ let usefulCtor = (m, heads, width, reg, fuel) =>
           useful(defaultM(m), width - 1, reg, fuel)
         )
 
-let usefulBool = (m, heads, width, reg, fuel) =>
+let usefulBool = (m, heads, width, reg: Registry, fuel) =>
   let vs = boolVals(heads) in
   let hasTrue = Array.contains(true, vs) in
     hasTrue && Array.contains(false, vs)
@@ -447,7 +454,7 @@ let usefulBool = (m, heads, width, reg, fuel) =>
         useful(defaultM(m), width - 1, reg, fuel)
       )
 
-let usefulArr = (m, col, width, reg, fuel) =>
+let usefulArr = (m, col, width, reg: Registry, fuel) =>
   let shape = arrShapeOf(col) in
     arrComplete(shape)
       ? let lens = arrLengths(shape) in
@@ -496,7 +503,7 @@ export let isWideWitnessM = mp => switch mp {
 
 /// Is this set of (unguarded) arm patterns total? Guarded arms must not be
 /// passed — a guard can be false, so such an arm proves nothing.
-export let checkExhaustiveM = (patterns, reg) =>
+export let checkExhaustiveM = (patterns, reg: Registry) =>
   let rows = patterns
     |> Array.flatMap(p => explodePat(p) |> map(alt => [toMP(alt)])) in
     switch useful(rows, 1, reg, 20000) {

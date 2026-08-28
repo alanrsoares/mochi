@@ -245,7 +245,7 @@ const rowEq = (a: Row, b: Row): boolean => {
 /**
  * One-way match: does concrete type `actual` fit alias `template`? Marker vars in the template bind to concrete types; repeats must agree. Records match only when CLOSED with the exact same label set (so open/partial rows stay structural, never over-eagerly folded).
  */
-const matchTemplate = (template: Type, actual: Type, binds: Map<number, Type>): boolean => {
+export const matchTemplate = (template: Type, actual: Type, binds: Map<number, Type>): boolean => {
   if (template.kind === "var" && template.id < 0) {
     const prev = binds.get(template.id);
     if (prev) return typeEq(prev, actual);

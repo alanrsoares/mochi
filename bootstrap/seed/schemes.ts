@@ -304,19 +304,22 @@ export const isUpperStart: (s: string) => boolean = (s: string) =>
     .with({ _tag: "None" }, () => false)
     .exhaustive();
 
-export const typeExprListToType: <A>(
-  tes: TypeExpr[],
-  vars: Map<string, Ty>,
-  st: St,
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-  expanding: Set<string>,
-) => [Ty[], Map<string, Ty>, St] = _curry(
-  5,
-  <A>(
+export const typeExprListToType: _Curry<
+  [
     tes: TypeExpr[],
     vars: Map<string, Ty>,
     st: St,
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
+    aliases: Map<string, AliasInfo>,
+    expanding: Set<string>,
+  ],
+  [Ty[], Map<string, Ty>, St]
+> = _curry(
+  5,
+  (
+    tes: TypeExpr[],
+    vars: Map<string, Ty>,
+    st: St,
+    aliases: Map<string, AliasInfo>,
     expanding: Set<string>,
   ) =>
     match(tes)
@@ -343,19 +346,22 @@ export const typeExprListToType: <A>(
         throw new Error("non-exhaustive match");
       }),
 );
-export const typeExprName: <A>(
-  name: string,
-  vars: Map<string, Ty>,
-  st: St,
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-  expanding: Set<string>,
-) => [Ty, Map<string, Ty>, St] = _curry(
-  5,
-  <A>(
+export const typeExprName: _Curry<
+  [
     name: string,
     vars: Map<string, Ty>,
     st: St,
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
+    aliases: Map<string, AliasInfo>,
+    expanding: Set<string>,
+  ],
+  [Ty, Map<string, Ty>, St]
+> = _curry(
+  5,
+  (
+    name: string,
+    vars: Map<string, Ty>,
+    st: St,
+    aliases: Map<string, AliasInfo>,
     expanding: Set<string>,
   ) =>
     _Array_contains(name, primTypeNames)
@@ -378,19 +384,22 @@ export const typeExprName: <A>(
           )
           .exhaustive(),
 );
-export const typeExprToType: <A>(
-  te: TypeExpr,
-  vars: Map<string, Ty>,
-  st: St,
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-  expanding: Set<string>,
-) => [Ty, Map<string, Ty>, St] = _curry(
-  5,
-  <A>(
+export const typeExprToType: _Curry<
+  [
     te: TypeExpr,
     vars: Map<string, Ty>,
     st: St,
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
+    aliases: Map<string, AliasInfo>,
+    expanding: Set<string>,
+  ],
+  [Ty, Map<string, Ty>, St]
+> = _curry(
+  5,
+  (
+    te: TypeExpr,
+    vars: Map<string, Ty>,
+    st: St,
+    aliases: Map<string, AliasInfo>,
     expanding: Set<string>,
   ) =>
     match(te)
@@ -484,19 +493,22 @@ const aliasLocalVarsFrom: <A>(params: A[], args: Ty[], st: St) => [Map<A, Ty>, S
         throw new Error("non-exhaustive match");
       }),
 );
-const aliasFieldsFrom: <A>(
-  fields: AliasField[],
-  vars: Map<string, Ty>,
-  st: St,
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-  expanding: Set<string>,
-) => [Row, St] = _curry(
-  5,
-  <A>(
+const aliasFieldsFrom: _Curry<
+  [
     fields: AliasField[],
     vars: Map<string, Ty>,
     st: St,
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
+    aliases: Map<string, AliasInfo>,
+    expanding: Set<string>,
+  ],
+  [Row, St]
+> = _curry(
+  5,
+  (
+    fields: AliasField[],
+    vars: Map<string, Ty>,
+    st: St,
+    aliases: Map<string, AliasInfo>,
     expanding: Set<string>,
   ) =>
     match(fields)
@@ -522,21 +534,24 @@ const aliasFieldsFrom: <A>(
         throw new Error("non-exhaustive match");
       }),
 );
-export const aliasRow: <A>(
-  name: string,
-  info: { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A,
-  args: Ty[],
-  st: St,
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-  expanding: Set<string>,
-) => [Ty, St] = _curry(
-  6,
-  <A>(
+export const aliasRow: _Curry<
+  [
     name: string,
-    info: { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A,
+    info: AliasInfo,
     args: Ty[],
     st: St,
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
+    aliases: Map<string, AliasInfo>,
+    expanding: Set<string>,
+  ],
+  [Ty, St]
+> = _curry(
+  6,
+  (
+    name: string,
+    info: AliasInfo,
+    args: Ty[],
+    st: St,
+    aliases: Map<string, AliasInfo>,
     expanding: Set<string>,
   ) =>
     _Set_has(name, expanding)
@@ -579,19 +594,22 @@ const pvarsFrom: <A>(params: A[], st: St) => [Map<A, Ty>, Ty[], St] = _curry(
         throw new Error("non-exhaustive match");
       }),
 );
-const ctorFieldsArrowFrom: <A>(
-  fields: CtorField[],
-  pvars: Map<string, Ty>,
-  st: St,
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
-  result: Ty,
-) => [Ty, St] = _curry(
-  5,
-  <A>(
+const ctorFieldsArrowFrom: _Curry<
+  [
     fields: CtorField[],
     pvars: Map<string, Ty>,
     st: St,
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & A>,
+    aliases: Map<string, AliasInfo>,
+    result: Ty,
+  ],
+  [Ty, St]
+> = _curry(
+  5,
+  (
+    fields: CtorField[],
+    pvars: Map<string, Ty>,
+    st: St,
+    aliases: Map<string, AliasInfo>,
     result: Ty,
   ) =>
     match(fields)
@@ -617,20 +635,20 @@ const ctorFieldsArrowFrom: <A>(
         throw new Error("non-exhaustive match");
       }),
 );
-export const ctorScheme: <A, B>(
+export const ctorScheme: <A>(
   typeName: string,
   params: string[],
   c: { fields: CtorField[] } & A,
   st: St,
-  aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & B>,
+  aliases: Map<string, AliasInfo>,
 ) => [Scheme, St] = _curry(
   5,
-  <A, B>(
+  <A>(
     typeName: string,
     params: string[],
     c: { fields: CtorField[] } & A,
     st: St,
-    aliases: Map<string, { expr: Option<TypeExpr>; params: string[]; fields: AliasField[] } & B>,
+    aliases: Map<string, AliasInfo>,
   ) =>
     (([pvars, pvarTypes, st1]: [Map<string, Ty>, Ty[], St]) => {
       const result: Ty = tCon(typeName, pvarTypes);

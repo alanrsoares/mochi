@@ -1,5 +1,3 @@
-import type { Span } from "./ast";
-
 export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
 export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
 export type Ty =
@@ -13,7 +11,7 @@ export type Row =
   | { _tag: "RowEmpty" }
   | { _tag: "RowVar"; id: number }
   | { _tag: "RowExtend"; label: string; fieldType: Ty; rest: Row };
-export type SpanAt = Span;
+export type SpanAt = { start: number; end: number };
 export type TypeAt = { span: SpanAt; ty: Ty };
 export type St = {
   tv: Map<number, Ty>;
