@@ -21,6 +21,7 @@ dist
 # (JS emit is already covered by `*.js` above).
 /bootstrap/*.ts
 /bootstrap/*.d.mts
+/bootstrap/plugins/*.ts
 /examples/**/*.ts
 /examples/**/*.d.mts
 /examples/snake/leaderboard.json
