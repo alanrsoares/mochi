@@ -1,6 +1,5 @@
 import type { PatField, Pattern } from "./ast";
 
-export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
 export type MP =
   | { _tag: "MWild" }
   | { _tag: "MCtor"; name: string; args: MP[] }
@@ -31,7 +30,7 @@ export type CtorInfo = { owner: string; arity: number };
 export type Registry = { ctors: Map<string, CtorInfo>; types: Map<string, string[]> };
 export type ArrShape = { fixed: number[]; restFrom: Option<number> };
 
-import type { _Curry } from "@mochi/compiler/runtime";
+import type { Option, _Curry } from "@mochi/compiler/runtime";
 
 import {
   _curry,

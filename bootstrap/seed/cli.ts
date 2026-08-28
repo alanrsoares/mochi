@@ -1,7 +1,6 @@
-export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
 export type Diag = { message: string; start: number; end: number };
 
-import type { _Curry } from "@mochi/compiler/runtime";
+import type { Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
   _curry,

@@ -17,15 +17,13 @@ import type {
   TypeExpr,
 } from "./ast";
 
-export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
-export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
 export type CErr = { message: string; start: number; end: number };
 export type CtorInfo = { owner: string; arity: number };
 export type Registry = { ctors: Map<string, CtorInfo>; types: Map<string, string[]> };
 export type SeqCheck = { _tag: "SeqNotSeq" } | { _tag: "SeqTotal" } | { _tag: "SeqFail"; e: CErr };
 export type QualScope = { types: Set<string> };
 
-import type { _Curry } from "@mochi/compiler/runtime";
+import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
   _curry,

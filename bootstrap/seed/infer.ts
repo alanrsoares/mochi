@@ -1,4 +1,4 @@
-import type { Tok } from "./parser";
+import type { Tok } from "./lexer";
 import type {
   CtorField,
   Expr,
@@ -18,8 +18,6 @@ import type {
 import type { Row, St, Ty, TypeAt } from "./types";
 import type { Scheme, VarSets } from "./schemes";
 
-export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
-export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
 export type IErr = { message: string; start: number; end: number };
 export type QualAliasField = { name: string; fieldType: TypeExpr };
 export type QualAliasInfo = { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> };
@@ -52,7 +50,7 @@ export type Ctx<A> = {
   letOwner: Map<string, Span>;
 };
 
-import type { _Curry } from "@mochi/compiler/runtime";
+import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
   _curry,

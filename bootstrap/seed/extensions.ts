@@ -1,9 +1,8 @@
-import type { Tok } from "./parser";
+import type { Tok } from "./lexer";
 import type { Expr, Span } from "./ast";
 import type { St, Ty } from "./types";
 
-export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
-export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
+import type { Option, Result } from "@mochi/compiler/runtime";
 
 import {
   _curry,

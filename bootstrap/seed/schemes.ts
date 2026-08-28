@@ -1,12 +1,11 @@
 import type { AliasField, CtorField, TypeExpr } from "./ast";
 import type { Row, St, Ty } from "./types";
 
-export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
 export type Scheme = { vars: number[]; rvars: number[]; ty: Ty };
 export type VarSets = { tv: Set<number>; rv: Set<number> };
 export type AliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
 
-import type { _Curry } from "@mochi/compiler/runtime";
+import type { Option, _Curry } from "@mochi/compiler/runtime";
 
 import {
   _curry,
@@ -21,7 +20,6 @@ import {
   _Set_add,
   _Set_toArray,
   _Set_fromArray,
-  _Set_union,
   _Set_diff,
   _Map_getOr,
   _Map_set,
@@ -78,16 +76,6 @@ export const primType: (name: string) => Ty = (name: string) =>
     .otherwise(() => tPrim(name));
 
 export const emptyVarSets: VarSets = { tv: _Set_fromArray([]), rv: _Set_fromArray([]) };
-const unionVarSets: <A, B, C, D>(
-  a: { rv: Set<A>; tv: Set<B> } & C,
-  b: { rv: Set<A>; tv: Set<B> } & D,
-) => { tv: Set<B>; rv: Set<A> } = _curry(
-  2,
-  <A, B, C, D>(a: { rv: Set<A>; tv: Set<B> } & C, b: { rv: Set<A>; tv: Set<B> } & D) => ({
-    tv: _Set_union(a.tv, b.tv),
-    rv: _Set_union(a.rv, b.rv),
-  }),
-);
 const diffVarSets: <A, B, C, D>(
   a: { rv: Set<A>; tv: Set<B> } & C,
   b: { rv: Set<A>; tv: Set<B> } & D,
@@ -138,18 +126,83 @@ const collectRow: _Curry<[row: Row, acc: VarSets], VarSets> = _curry(2, (row: Ro
     .exhaustive(),
 );
 export const freeInType: (t: Ty) => VarSets = (t: Ty) => collect(t, emptyVarSets);
-const freeInScheme: <A>(sc: { ty: Ty; rvars: number[]; vars: number[] } & A) => VarSets = <A>(
+const collectFree: _Curry<[t: Ty, bound: VarSets, st: St, acc: VarSets], VarSets> = _curry(
+  4,
+  (t: Ty, bound: VarSets, st: St, acc: VarSets) =>
+    match(t)
+      .with({ _tag: "TyVar" }, ({ id }) =>
+        _Set_has(id, bound.tv)
+          ? acc
+          : match(_Map_get(id, st.tv))
+              .with({ _tag: "Some" }, ({ value: next }) => collectFree(next, bound, st, acc))
+              .with({ _tag: "None" }, () => ({ tv: _Set_add(id, acc.tv), rv: acc.rv }))
+              .exhaustive(),
+      )
+      .with({ _tag: "TyCon" }, ({ args }) => collectFreeArgs(args, bound, st, acc))
+      .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
+        collectFree(toT, bound, st, collectFree(fromT, bound, st, acc)),
+      )
+      .with({ _tag: "TyRecord" }, ({ row }) => collectFreeRow(row, bound, st, acc))
+      .with({ _tag: "TySingleton" }, () => acc)
+      .with({ _tag: "TyOneOf" }, ({ members }) => collectFreeArgs(members, bound, st, acc))
+      .exhaustive(),
+);
+const collectFreeArgs: _Curry<[args: Ty[], bound: VarSets, st: St, acc: VarSets], VarSets> = _curry(
+  4,
+  (args: Ty[], bound: VarSets, st: St, acc: VarSets) =>
+    match(args)
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length === 0;
+        },
+        () => acc,
+      )
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length >= 1;
+        },
+        ([a, ...rest]) => collectFreeArgs(rest, bound, st, collectFree(a, bound, st, acc)),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
+);
+const collectFreeRow: _Curry<[row: Row, bound: VarSets, st: St, acc: VarSets], VarSets> = _curry(
+  4,
+  (row: Row, bound: VarSets, st: St, acc: VarSets) =>
+    match(row)
+      .with({ _tag: "RowVar" }, ({ id }) =>
+        _Set_has(id, bound.rv)
+          ? acc
+          : match(_Map_get(id, st.rv))
+              .with({ _tag: "Some" }, ({ value: next }) => collectFreeRow(next, bound, st, acc))
+              .with({ _tag: "None" }, () => ({ tv: acc.tv, rv: _Set_add(id, acc.rv) }))
+              .exhaustive(),
+      )
+      .with({ _tag: "RowExtend" }, ({ fieldType, rest }) =>
+        collectFreeRow(rest, bound, st, collectFree(fieldType, bound, st, acc)),
+      )
+      .with({ _tag: "RowEmpty" }, () => acc)
+      .exhaustive(),
+);
+const freeInScheme: <A>(
   sc: { ty: Ty; rvars: number[]; vars: number[] } & A,
-) => {
-  const f: VarSets = freeInType(sc.ty);
-  return diffVarSets(f, { tv: _Set_fromArray(sc.vars), rv: _Set_fromArray(sc.rvars) });
-};
-const freeInEnvFrom: <A>(
-  schemes: ({ ty: Ty; rvars: number[]; vars: number[] } & A)[],
+  st: St,
   acc: VarSets,
 ) => VarSets = _curry(
-  2,
-  <A>(schemes: ({ ty: Ty; rvars: number[]; vars: number[] } & A)[], acc: VarSets) =>
+  3,
+  <A>(sc: { ty: Ty; rvars: number[]; vars: number[] } & A, st: St, acc: VarSets) =>
+    collectFree(sc.ty, { tv: _Set_fromArray(sc.vars), rv: _Set_fromArray(sc.rvars) }, st, acc),
+);
+const freeInEnvFrom: <A>(
+  schemes: ({ ty: Ty; rvars: number[]; vars: number[] } & A)[],
+  st: St,
+  acc: VarSets,
+) => VarSets = _curry(
+  3,
+  <A>(schemes: ({ ty: Ty; rvars: number[]; vars: number[] } & A)[], st: St, acc: VarSets) =>
     match(schemes)
       .with(
         (_v) => {
@@ -163,18 +216,20 @@ const freeInEnvFrom: <A>(
           const _g: any = _v;
           return _g.length >= 1;
         },
-        ([sc, ...rest]) => freeInEnvFrom(rest, unionVarSets(acc, freeInScheme(sc))),
+        ([sc, ...rest]) => freeInEnvFrom(rest, st, freeInScheme(sc, st, acc)),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
       }),
 );
-const freeInEnv: <A, B>(env: Map<A, { ty: Ty; rvars: number[]; vars: number[] } & B>) => VarSets = <
-  A,
-  B,
->(
+const freeInEnv: <A, B>(
   env: Map<A, { ty: Ty; rvars: number[]; vars: number[] } & B>,
-) => freeInEnvFrom(_Map_values(env), emptyVarSets);
+  st: St,
+) => VarSets = _curry(
+  2,
+  <A, B>(env: Map<A, { ty: Ty; rvars: number[]; vars: number[] } & B>, st: St) =>
+    freeInEnvFrom(_Map_values(env), st, emptyVarSets),
+);
 export const generalize: <A, B>(
   env: Map<A, { ty: Ty; rvars: number[]; vars: number[] } & B>,
   t: Ty,
@@ -189,7 +244,7 @@ export const generalize: <A, B>(
     widen: boolean,
   ) => {
     const zt: Ty = widen ? widenLits(zonk(t, st)) : zonk(t, st);
-    const free: VarSets = diffVarSets(freeInType(zt), freeInEnv(env));
+    const free: VarSets = diffVarSets(freeInType(zt), freeInEnv(env, st));
     return { vars: _Set_toArray(free.tv), rvars: _Set_toArray(free.rv), ty: zt };
   },
 );

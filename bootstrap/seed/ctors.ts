@@ -1,12 +1,10 @@
 import type { Ctor, CtorField, Span, Stmt } from "./ast";
 import type { PErr } from "./parser";
 
-export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
-export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
 export type CtorInfo = { owner: string; arity: number };
 export type Registry = { ctors: Map<string, CtorInfo>; types: Map<string, string[]> };
 
-import type { _Curry } from "@mochi/compiler/runtime";
+import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
   _curry,
