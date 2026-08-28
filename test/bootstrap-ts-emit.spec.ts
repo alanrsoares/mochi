@@ -16,7 +16,7 @@ const REPO = resolve(import.meta.dir, "..");
 const RUNTIME = join(REPO, "packages/compiler/src/prelude/runtime");
 
 type AlResult = { _tag: "Ok"; value: string } | { _tag: "Err"; error: unknown };
-const { compileTs } = (await import("../bootstrap/compile.js")) as {
+const { compileTs } = (await import(join(REPO, "bootstrap/compile.js"))) as {
   compileTs: (src: string, runtimeImport: string) => AlResult;
 };
 
@@ -109,7 +109,7 @@ test("emitted TypeScript is strict-clean", () => {
 // the SELF-HOSTED `buildModulesTs`.
 
 type Output = { path: string; js: string };
-const { buildModulesTs } = (await import("../bootstrap/module.js")) as {
+const { buildModulesTs } = (await import(join(REPO, "bootstrap/module.js"))) as {
   buildModulesTs: (
     entry: string,
     runtimeImport: string,
