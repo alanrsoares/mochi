@@ -3,8 +3,8 @@
  * and republishes the resulting diagnostics. All real logic lives in the
  * compiler; this file only speaks LSP.
  */
-import { readFile } from "node:fs/promises";
-import { basename } from "node:path";
+import { readdir, readFile } from "node:fs/promises";
+import { basename, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import { createModuleCache } from "@mochi/compiler/module";
@@ -125,6 +125,45 @@ export function startServer(opts: ServerOptions = {}): void {
   const fixedPlugins = opts.plugins;
   let loadProjectPlugins = opts.loadProjectPlugins === true && fixedPlugins === undefined;
   let allowedRoots: string[] = [];
+
+  /** Directories never worth walking for project sources. */
+  const SKIP_DIRS = new Set(["node_modules", ".git", "dist", "build", ".fixpoint-work", ".cache"]);
+
+  /** How long a workspace file listing stays fresh, in milliseconds. */
+  const FILE_LIST_TTL_MS = 5_000;
+
+  let fileListCache: { at: number; files: string[] } | null = null;
+
+  /**
+   * Every `.mochi` file under the trusted workspace roots.
+   *
+   * References and rename need the modules that IMPORT the definition, and the
+   * module graph only walks imports downward — so without a project listing a
+   * query raised on a definition finds nothing but the definition itself. Cached
+   * briefly because both queries are interactive and a cold walk is O(project).
+   */
+  const collectMochiFiles = async (root: string): Promise<string[]> => {
+    const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
+    const out: string[] = [];
+    for (const e of entries) {
+      if (e.isDirectory()) {
+        if (SKIP_DIRS.has(e.name)) continue;
+        out.push(...(await collectMochiFiles(join(root, e.name))));
+      } else if (e.isFile() && e.name.endsWith(".mochi")) {
+        out.push(join(root, e.name));
+      }
+    }
+    return out;
+  };
+
+  const listFiles = async (): Promise<readonly string[]> => {
+    const now = Date.now();
+    if (fileListCache && now - fileListCache.at < FILE_LIST_TTL_MS) return fileListCache.files;
+    const files = (await Promise.all(allowedRoots.map(collectMochiFiles))).flat();
+    fileListCache = { at: now, files };
+    return files;
+  };
+
   // One memo for the session: a keystroke re-infers the edited buffer, not the
   // whole import graph behind it (ADR 0095). Dropped wholesale when a plugin
   // manifest changes, since that changes what every call site means.
@@ -316,7 +355,13 @@ export function startServer(opts: ServerOptions = {}): void {
     const doc = documents.get(textDocument.uri);
     if (!doc) return [];
     const path = docPath(textDocument.uri);
-    const refs = await moduleReferencesAt(path, doc.getText(), doc.offsetAt(position), read);
+    const refs = await moduleReferencesAt(
+      path,
+      doc.getText(),
+      doc.offsetAt(position),
+      read,
+      listFiles,
+    );
     return Promise.all(refs.map((r) => rangeAtPath(r.location.path, r.location.span)));
   });
 
@@ -337,7 +382,14 @@ export function startServer(opts: ServerOptions = {}): void {
     const doc = documents.get(textDocument.uri);
     if (!doc) return null;
     const path = docPath(textDocument.uri);
-    const edits = await moduleRenameAt(path, doc.getText(), doc.offsetAt(position), newName, read);
+    const edits = await moduleRenameAt(
+      path,
+      doc.getText(),
+      doc.offsetAt(position),
+      newName,
+      read,
+      listFiles,
+    );
     if (!edits) return null;
     const changes: Record<string, TextEdit[]> = {};
     for (const e of edits) {

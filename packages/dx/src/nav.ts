@@ -56,6 +56,27 @@ type RelativeModuleSpecifier = {
 
 type ReadFile = (path: string) => Promise<string>;
 
+/**
+ * Every `.mochi` file the project owns. Supplied by the host (the language
+ * server globs its workspace roots) because DX cannot discover a project from a
+ * single buffer.
+ *
+ * References and rename need DEPENDENTS, and the module graph only has
+ * dependencies: `loadModuleGraph(entry)` walks imports downward, so a query
+ * raised on a definition sees only what that file imports — never the modules
+ * that import IT. Without this list, "find all references" on an exported
+ * binding returns just its own definition, and rename silently misses every
+ * call site outside the defining file.
+ */
+export type ListFiles = () => Promise<readonly string[]>;
+
+/** One module as `loadModuleGraph` yields it. */
+type ModuleOf<G> = G extends readonly (infer R)[]
+  ? R extends { readonly _tag: "Ok"; readonly value: readonly (infer M)[] }
+    ? M
+    : never
+  : never;
+
 // Recovering: symbols/definitions on the intact declarations survive a hole
 // elsewhere in the file (C9 slice e).
 const parseProgram = (src: string) => {
@@ -337,28 +358,90 @@ export const referencesAt = (src: string, offset: number, path = "<buffer>"): Re
     () => [],
   );
 
+/**
+ * Project files whose import closure reaches `target`, plus `target` itself.
+ *
+ * One parse per file and a reverse walk, rather than a module-graph load per
+ * candidate: the graph loader resolves and typechecks, and only the import
+ * edges matter here.
+ */
+const dependentsOf = async (
+  target: string,
+  files: readonly string[],
+  read: ReadFile,
+): Promise<string[]> => {
+  const importers = new Map<string, string[]>(); // imported path -> files importing it
+  await Promise.all(
+    files.map(async (file) => {
+      const src = await read(file).catch(() => null);
+      const prog = src === null ? null : parseProgram(src);
+      if (!prog) return;
+      for (const st of prog.stmts) {
+        if (st.kind !== "import") continue;
+        const dep = resolveImport(file, st.from);
+        const at = importers.get(dep);
+        if (at) at.push(file);
+        else importers.set(dep, [file]);
+      }
+    }),
+  );
+  // Transitive: a module re-exporting through an intermediate is still a site
+  // the binding's name can appear in.
+  const seen = new Set<string>([target]);
+  const queue = [target];
+  // Cursor rather than `.pop()`: the queue is append-only, so walking it by
+  // index keeps the receiver unmutated (`prefer-immutable-arrays`).
+  for (let i = 0; i < queue.length; i++) {
+    for (const importer of importers.get(queue[i] as string) ?? []) {
+      if (seen.has(importer)) continue;
+      seen.add(importer);
+      queue.push(importer);
+    }
+  }
+  return [...seen];
+};
+
 const collectGraphRefs = async (
   entryPath: string,
   entrySrc: string,
   binding: Binding,
   readFile: ReadFile,
+  listFiles?: ListFiles,
 ): Promise<Ref[]> => {
   const read = (p: string): Promise<string> =>
     resolve(p) === entryPath ? Promise.resolve(entrySrc) : readFile(p);
-  const graph = await loadModuleGraph(entryPath, read);
-  if (isErr(graph)) {
+  // Search from every module that can SEE the binding, not just from the cursor's
+  // file: a query raised on a definition has an import closure that excludes its
+  // own callers. Each dependent is walked as its own graph entry, so the modules
+  // it imports come along and the union covers both directions.
+  const defPath = resolve(binding.def.path);
+  const entries =
+    listFiles && !isPreludePath(binding.def.path)
+      ? await dependentsOf(defPath, await listFiles(), read)
+      : [entryPath];
+  if (!entries.includes(entryPath)) entries.push(entryPath);
+  const graphs = await Promise.all(entries.map((e) => loadModuleGraph(e, read)));
+  const byPath = new Map<string, ModuleOf<typeof graphs>>();
+  for (const g of graphs) {
+    if (isErr(g)) continue;
+    for (const m of g.value) if (!byPath.has(m.path)) byPath.set(m.path, m);
+  }
+  // Every entry failed to load (unreadable dep, cycle): fall back to the file
+  // in hand rather than reporting nothing.
+  if (byPath.size === 0) {
     return (
       indexSrc(entryPath, entrySrc)
         ?.occurrences(binding)
         .map((o) => ({ location: { path: entryPath, span: o.span }, role: o.role })) ?? []
     );
   }
+  const modules = [...byPath.values()];
 
   const refs: Ref[] = [];
-  for (const { path, prog } of graph.value) {
+  for (const { path, prog } of modules) {
     const src = path === entryPath ? entrySrc : await read(path);
     const fileOrigins = emptyOrigins();
-    for (const dep of graph.value) {
+    for (const dep of modules) {
       if (dep.path === path) continue;
       mergeOrigins(fileOrigins, originsOf(dep.path, dep.prog));
     }
@@ -389,6 +472,7 @@ export const moduleReferencesAt = async (
   src: string,
   offset: number,
   readFile: ReadFile,
+  listFiles?: ListFiles,
 ): Promise<Ref[]> => {
   const entryPath = resolve(path);
   const hit = matchMaybe(
@@ -398,7 +482,10 @@ export const moduleReferencesAt = async (
   );
   return !hit
     ? []
-    : withDefRef(hit.binding, await collectGraphRefs(entryPath, src, hit.binding, readFile));
+    : withDefRef(
+        hit.binding,
+        await collectGraphRefs(entryPath, src, hit.binding, readFile, listFiles),
+      );
 };
 
 const isRenameableName = (name: string): boolean =>
@@ -468,6 +555,7 @@ export const moduleRenameAt = async (
   offset: number,
   newName: string,
   readFile: ReadFile,
+  listFiles?: ListFiles,
 ): Promise<RenameEdit[] | null> => {
   if (!isRenameableName(newName)) return null;
   const entryPath = resolve(path);
@@ -478,7 +566,7 @@ export const moduleRenameAt = async (
   );
   if (!hit || !canRename(hit.binding)) return null;
   if (hit.binding.name === newName) return [];
-  const refs = await collectGraphRefs(entryPath, src, hit.binding, readFile);
+  const refs = await collectGraphRefs(entryPath, src, hit.binding, readFile, listFiles);
   return refs.map((r) => ({ location: r.location, newText: newName }));
 };
 
