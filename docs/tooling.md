@@ -126,7 +126,8 @@ extension).
 - **Document / workspace symbols** — outline of top-level lets/types/ctors; workspace
   search over the open module graph.
 - **Code actions** — `Diagnostic.suggestions` become quick fixes (e.g. did-you-mean on
-unbound names). A file using `"use open"` deliberately treats unknown names as
+unbound names), filtered to the diagnostics overlapping the requested range. A file
+  using `"use open"` deliberately treats unknown names as
   host globals, so typo suggestions are not guessed there.
 - **Diagnostics** — the same `Diagnostic` values the compiler produces, with spans; a
   `--json` structured form is available for machine consumers. Check/infer may emit
@@ -139,6 +140,9 @@ unbound names). A file using `"use open"` deliberately treats unknown names as
   with no use, as warnings; prefix an intentionally unused binding with `_` to suppress
   the warning ([ADR 0070](adr/0070-lsp-unused-locals.md),
   [ADR 0094](adr/0094-lsp-unused-top-level.md)).
+  Publishing is debounced (a burst of keystrokes compiles the graph once), each batch
+  carries the buffer `version` it describes and is dropped if the buffer moved while it
+  compiled, and closing a document retracts its diagnostics.
 - **Formatter** — width-based pretty-printing that runs on lex + parse only (no type
   information needed), which is why it can format even code that doesn't yet type-check.
 - **`.d.ts`** — HM types lowered to TypeScript declarations, including declarations for

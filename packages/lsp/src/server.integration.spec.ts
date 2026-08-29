@@ -170,3 +170,91 @@ test("unused local bindings publish LSP warnings", async () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("closing a document retracts its diagnostics", async () => {
+  const root = mkdtempSync(join(import.meta.dir, ".server-close-"));
+  const source = join(root, "app.mochi");
+  const uri = pathToFileURL(source).href;
+  const server = startLsp();
+  try {
+    const text = "let n = nope\n";
+    writeFileSync(source, text);
+    server.send({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: { rootUri: pathToFileURL(root).href, capabilities: {} },
+    });
+    await server.waitFor('"id":1');
+    server.send({ jsonrpc: "2.0", method: "initialized", params: {} });
+    server.send({
+      jsonrpc: "2.0",
+      method: "textDocument/didOpen",
+      params: { textDocument: { uri, languageId: "mochi", version: 7, text } },
+    });
+    const published = await server.waitFor("unbound variable 'nope'");
+    // The batch carries the buffer version it describes, so a client can drop
+    // a batch that an in-flight edit has already superseded.
+    expect(published).toContain('"version":7');
+
+    server.send({
+      jsonrpc: "2.0",
+      method: "textDocument/didClose",
+      params: { textDocument: { uri } },
+    });
+    const cleared = await server.waitFor('"diagnostics":[]');
+    expect(cleared).toContain(uri);
+  } finally {
+    server.process.kill();
+    await server.process.exited;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("code actions answer for the requested range, not the whole file", async () => {
+  const root = mkdtempSync(join(import.meta.dir, ".server-actions-"));
+  const source = join(root, "app.mochi");
+  const uri = pathToFileURL(source).href;
+  const server = startLsp();
+  try {
+    // Two did-you-mean diagnostics, on their own lines.
+    const text = "let count = 1\nlet alpha = 2\nlet a = coun\nlet b = alphb\n";
+    writeFileSync(source, text);
+    server.send({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: { rootUri: pathToFileURL(root).href, capabilities: {} },
+    });
+    await server.waitFor('"id":1');
+    server.send({ jsonrpc: "2.0", method: "initialized", params: {} });
+    server.send({
+      jsonrpc: "2.0",
+      method: "textDocument/didOpen",
+      params: { textDocument: { uri, languageId: "mochi", version: 1, text } },
+    });
+    await server.waitFor("did you mean 'count'?");
+    server.send({
+      jsonrpc: "2.0",
+      id: 2,
+      method: "textDocument/codeAction",
+      params: {
+        textDocument: { uri },
+        // The `coun` on line 3 (0-based line 2).
+        range: {
+          start: { line: 2, character: 8 },
+          end: { line: 2, character: 12 },
+        },
+        context: { diagnostics: [] },
+      },
+    });
+    const response = await server.waitFor('"id":2');
+    const body = response.slice(response.indexOf('"id":2'));
+    expect(body).toContain('"count"');
+    expect(body).not.toContain('"alpha"');
+  } finally {
+    server.process.kill();
+    await server.process.exited;
+    rmSync(root, { recursive: true, force: true });
+  }
+});

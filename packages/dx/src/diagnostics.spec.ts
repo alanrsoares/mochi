@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { toTypedProgram } from "@mochi/compiler/compile";
 import {
   diagnostics,
+  documentDiagnostics,
   moduleDiagnostics,
   toPublish,
   unusedBindingDiagnostics,
@@ -148,4 +149,26 @@ test("diagnostics surface did-you-mean suggestions", () => {
   const d = toPublish(src, r.error[0]!, "/t.mochi");
   expect(d.message).toContain("help: did you mean 'count'?");
   expect(d.suggestions?.[0]?.replaceWith).toBe("count");
+});
+
+test("documentDiagnostics unions the graph errors and the liveness warnings", async () => {
+  const src = "let dead = 1\nlet n = nope\n";
+  const read = memRead({ "/t.mochi": src });
+  const both = await documentDiagnostics("/t.mochi", src, read);
+  expect(both.some((d) => d.message.includes("unbound variable 'nope'"))).toBe(true);
+  expect(both.filter((d) => d.code === "unused-top-level").map((d) => d.message)).toEqual([
+    "unused binding 'dead'",
+    "unused binding 'n'",
+  ]);
+  expect(both).toEqual([
+    ...(await moduleDiagnostics("/t.mochi", src, read)),
+    ...unusedBindingDiagnostics(src, "/t.mochi"),
+  ]);
+});
+
+test("documentDiagnostics on an unparsable buffer reports only the parse errors", async () => {
+  const src = "let dead = (";
+  const both = await documentDiagnostics("/t.mochi", src, memRead({ "/t.mochi": src }));
+  expect(both.length).toBeGreaterThan(0);
+  expect(both.every((d) => d.message.startsWith("parse:"))).toBe(true);
 });

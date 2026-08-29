@@ -10,11 +10,7 @@ import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import { isPreludePath, PRELUDE_PATH, preludeVirtualSource } from "@mochi/compiler/prelude-virtual";
 import type { Span } from "@mochi/compiler/span";
 import { type CompletionItem as MochiCompletion, moduleCompleteAt } from "@mochi/dx/complete";
-import {
-  moduleDiagnostics,
-  type PublishDiagnostic,
-  unusedBindingDiagnostics,
-} from "@mochi/dx/diagnostics";
+import { documentDiagnostics, type PublishDiagnostic } from "@mochi/dx/diagnostics";
 import { format } from "@mochi/dx/format";
 import { moduleHoverAt } from "@mochi/dx/hover";
 import {
@@ -44,7 +40,9 @@ import {
   type Location,
   type LocationLink,
   MarkupKind,
+  type Position,
   ProposedFeatures,
+  type Range,
   SymbolKind,
   type TextDocumentPositionParams,
   TextDocumentSyncKind,
@@ -64,7 +62,7 @@ export type MochiInitOptions = {
 };
 
 /** Cached diagnostics for a document, keyed by URI — the raw result of
- * `moduleDiagnostics`, retained so `onCodeAction` can read `.suggestions`
+ * `documentDiagnostics`, retained so `onCodeAction` can read `.suggestions`
  * without re-running the compiler on every lightbulb request. */
 export type CachedDiagnostics = PublishDiagnostic[];
 
@@ -87,6 +85,18 @@ const rangeOf = (doc: TextDocument, span: Span) => ({
 });
 
 const read = (p: string): Promise<string> => readFile(p, "utf8");
+
+/** Keystroke coalescing window for `validate`, in milliseconds. */
+const VALIDATE_DEBOUNCE_MS = 150;
+
+/** Strictly-earlier document position. */
+const before = (a: Position, b: Position): boolean =>
+  a.line < b.line || (a.line === b.line && a.character < b.character);
+
+/** Ranges share at least a point. Touching endpoints count, so a zero-width
+ * cursor parked at either edge of a diagnostic still offers its fixes. */
+const overlaps = (a: Range, b: Range): boolean =>
+  !before(a.end, b.start) && !before(b.end, a.start);
 
 const symbolKind = (kind: string): SymbolKind => {
   switch (kind) {
@@ -369,18 +379,21 @@ export function startServer(opts: ServerOptions = {}): void {
   /** Quick fixes from Diagnostic.suggestions — read from the cache `validate`
    * populates on every content change, so this doesn't re-run the compiler
    * per lightbulb request. Falls back to computing (and caching) once if a
-   * code action arrives before the first `validate` (rare). */
-  connection.onCodeAction(async ({ textDocument }): Promise<CodeAction[]> => {
+   * code action arrives before the first `validate` (rare). Only diagnostics
+   * overlapping the requested range contribute: the lightbulb answers for the
+   * cursor, not for the whole file. */
+  connection.onCodeAction(async ({ textDocument, range }): Promise<CodeAction[]> => {
     const doc = documents.get(textDocument.uri);
     if (!doc) return [];
     const path = docPath(textDocument.uri);
     let published = diagnosticsCache.get(textDocument.uri);
     if (!published) {
-      published = await moduleDiagnostics(path, doc.getText(), read, await dxOpts(path));
+      published = await documentDiagnostics(path, doc.getText(), read, await dxOpts(path));
       diagnosticsCache.set(textDocument.uri, published);
     }
     const actions: CodeAction[] = [];
     for (const d of published) {
+      if (!overlaps(d.range, range)) continue;
       for (const s of d.suggestions ?? []) {
         actions.push({
           title: s.title,
@@ -413,12 +426,15 @@ export function startServer(opts: ServerOptions = {}): void {
 
   const validate = async (doc: TextDocument): Promise<void> => {
     const path = docPath(doc.uri);
+    // Pin the version this batch describes: compiling the graph is async, and
+    // an edit that lands mid-flight makes every range below stale.
+    const version = doc.version;
     const opts = await dxOpts(path);
     const text = doc.getText();
-    const computed = [
-      ...(await moduleDiagnostics(path, text, read, opts)),
-      ...unusedBindingDiagnostics(text, path, opts),
-    ];
+    const computed = await documentDiagnostics(path, text, read, opts);
+    // Buffer moved on (or closed) while we compiled — drop this batch rather
+    // than racing the newer one. The edit that superseded it publishes its own.
+    if (documents.get(doc.uri)?.version !== version) return;
     diagnosticsCache.set(doc.uri, computed);
     const diags: Diagnostic[] = computed.map((d) => ({
       range: d.range,
@@ -434,14 +450,45 @@ export function startServer(opts: ServerOptions = {}): void {
         },
       })),
     }));
-    connection.sendDiagnostics({ uri: doc.uri, diagnostics: diags });
+    connection.sendDiagnostics({ uri: doc.uri, version, diagnostics: diags });
+  };
+
+  /** Pending debounced validations, keyed by URI. */
+  const pendingValidations = new Map<string, ReturnType<typeof setTimeout>>();
+
+  const cancelValidation = (uri: string): void => {
+    const timer = pendingValidations.get(uri);
+    if (timer === undefined) return;
+    clearTimeout(timer);
+    pendingValidations.delete(uri);
+  };
+
+  /**
+   * Coalesce a burst of keystrokes into one compile. Every change otherwise
+   * re-reads and re-checks the whole import graph, so typing a word costs one
+   * graph compile per character.
+   */
+  const scheduleValidate = (doc: TextDocument): void => {
+    cancelValidation(doc.uri);
+    pendingValidations.set(
+      doc.uri,
+      setTimeout(() => {
+        pendingValidations.delete(doc.uri);
+        const current = documents.get(doc.uri);
+        if (current) void validate(current);
+      }, VALIDATE_DEBOUNCE_MS),
+    );
   };
 
   documents.onDidChangeContent((e) => {
-    void validate(e.document);
+    scheduleValidate(e.document);
   });
   documents.onDidClose((e) => {
+    cancelValidation(e.document.uri);
     diagnosticsCache.delete(e.document.uri);
+    // Nothing checks this buffer any more — retract its squiggles instead of
+    // leaving them in the client's problem list forever.
+    connection.sendDiagnostics({ uri: e.document.uri, diagnostics: [] });
   });
   documents.listen(connection);
 
@@ -460,7 +507,7 @@ export function startServer(opts: ServerOptions = {}): void {
     if (!manifestChanged) return;
     clearPluginsCache();
     for (const doc of documents.all()) {
-      if (doc.uri.endsWith(".mochi")) void validate(doc);
+      if (doc.uri.endsWith(".mochi")) scheduleValidate(doc);
     }
   });
 
