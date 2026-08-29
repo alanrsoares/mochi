@@ -85,7 +85,9 @@ let PlateStack = _ =>
     )}
   </div>
 
-export let AboutScrolly = _ =>
+export type Props = {}
+
+export let AboutScrolly : Props -> VNode = _ =>
   let _fx = useEffect(() => startAboutScrollFx())(hookDeps0()) in
     <div className="grid grid-cols-1 gap-10 md:grid-cols-2 md:gap-14 lg:gap-20">
       <div className="md:space-y-6">

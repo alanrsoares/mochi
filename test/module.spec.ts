@@ -1,7 +1,13 @@
 // Multi-file module driver: graph resolution, dependency order, and
 // cross-module type inference. Files live in an in-memory map (no fs).
 import { expect, test } from "bun:test";
-import { buildModules, type ModuleOutput } from "@mochi/compiler/module";
+import {
+  buildModules,
+  createModuleCache,
+  type ModuleCache,
+  type ModuleOutput,
+} from "@mochi/compiler/module";
+import { moduleDiagnostics } from "@mochi/dx/diagnostics";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 
 // Build from a `{ path: source }` fixture; paths are absolute so node:path
@@ -198,4 +204,80 @@ test("the same ctor imported twice from one module is the same type (ADR 0082)",
       "let n = switch x { | Hold(v) => v }\n",
   };
   expect(isErr(await build(files, "/p/main.mochi"))).toBe(false);
+});
+
+// --- moduleContext cache (ADR 0095) -----------------------------------------
+//
+// `moduleContext` infers every dependency of its entry, so checking N modules
+// that share a graph re-infers that graph N times. The cache removes that
+// redundancy; these guard that it never changes an ANSWER.
+
+/** Diagnostics for `entry` against a `{ path: source }` fixture. */
+const diagnose = (files: Record<string, string>, entry: string, cache?: ModuleCache) => {
+  const read = async (p: string): Promise<string> => {
+    const src = files[p];
+    if (src === undefined) throw new Error(`no such file ${p}`);
+    return src;
+  };
+  return moduleDiagnostics(entry, files[entry]!, read, { cache });
+};
+
+test("a cached run answers exactly what an uncached run answers", async () => {
+  const files = {
+    "/lib.mochi": 'export let one = 1\nexport let name = "mochi"\n',
+    "/mid.mochi": 'import { one } from "/lib.mochi"\nexport let two = one + 1\n',
+    "/app.mochi": 'import { two } from "/mid.mochi"\nexport let three = two + 1\n',
+  };
+  const cache = createModuleCache();
+  for (const entry of ["/lib.mochi", "/mid.mochi", "/app.mochi"]) {
+    expect(await diagnose(files, entry, cache)).toEqual(await diagnose(files, entry));
+  }
+  // The shared dependency was inferred once, not once per entry.
+  expect(cache.entries.size).toBeGreaterThan(0);
+});
+
+test("editing a dependency invalidates the modules downstream of it", async () => {
+  const cache = createModuleCache();
+  const before = {
+    "/lib.mochi": "export let one = 1\n",
+    "/app.mochi": 'import { one } from "/lib.mochi"\nexport let sum = one + 1\n',
+  };
+  expect(await diagnose(before, "/app.mochi", cache)).toEqual([]);
+
+  // `one` is a string now, so `one + 1` in the UNCHANGED entry must start failing.
+  const after = {
+    "/lib.mochi": 'export let one = "1"\n',
+    "/app.mochi": before["/app.mochi"],
+  };
+  const stale = await diagnose(after, "/app.mochi", cache);
+  expect(stale.map((d) => d.message)).toEqual(
+    (await diagnose(after, "/app.mochi")).map((d) => d.message),
+  );
+  expect(stale.length).toBeGreaterThan(0);
+});
+
+test("a dependency that reverts is answered as it was, not as it briefly became", async () => {
+  const cache = createModuleCache();
+  const good = {
+    "/lib.mochi": "export let one = 1\n",
+    "/app.mochi": 'import { one } from "/lib.mochi"\nexport let sum = one + 1\n',
+  };
+  const bad = { ...good, "/lib.mochi": 'export let one = "1"\n' };
+  expect(await diagnose(good, "/app.mochi", cache)).toEqual([]);
+  expect((await diagnose(bad, "/app.mochi", cache)).length).toBeGreaterThan(0);
+  expect(await diagnose(good, "/app.mochi", cache)).toEqual([]);
+});
+
+test("plugin lists are part of the cache key", async () => {
+  const cache = createModuleCache();
+  const files = {
+    "/lib.mochi": "export let one = 1\n",
+    "/app.mochi": 'import { one } from "/lib.mochi"\nexport let sum = one + 1\n',
+  };
+  const read = async (p: string): Promise<string> => files[p as keyof typeof files]!;
+  // Two distinct lists must not share an entry, even though both are empty.
+  await moduleDiagnostics("/app.mochi", files["/app.mochi"], read, { cache, plugins: [] });
+  const afterFirst = cache.entries.size;
+  await moduleDiagnostics("/app.mochi", files["/app.mochi"], read, { cache, plugins: [] });
+  expect(cache.entries.size).toBe(afterFirst * 2);
 });

@@ -1,0 +1,13 @@
+"use open"
+
+import { DiagBox } from "../ui/primitives"
+
+type Props = { diagnosticsFormatted: string, hasProblems: bool }
+
+export let PlaygroundProblems : Props -> VNode = props =>
+  props.hasProblems
+    ? <DiagBox className="max-h-none">
+      <div className="mb-1 font-bold">{"diagnostics"}</div>
+      {props.diagnosticsFormatted}
+    </DiagBox>
+    : <p className="font-mono text-mute text-xs">{"No problems."}</p>

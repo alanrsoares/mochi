@@ -8,7 +8,7 @@
  * Node-safe: imported by the Vite config, so nothing here touches the DOM at
  * module scope.
  */
-import { COLOR_SCHEME_KEY } from "./color-scheme.ts";
+import { COLOR_SCHEME_KEY } from "./color-scheme-key.ts";
 
 /** Mirrors `--color-paper` (light/dark) from `index.css` `@theme` — browser UI chrome needs hex. */
 export const themeColors = { light: "#fdf4e8", dark: "#2e2552" } as const;

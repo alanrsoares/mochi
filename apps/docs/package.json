@@ -8,7 +8,7 @@
     "build": "bun ../../scripts/gen-mochi-dts.ts && bunx --bun vite build",
     "preview": "bunx --bun vite preview",
     "gen:emit": "bun ../../scripts/gen-docs-emit.ts",
-    "check": "bun ../../scripts/gen-mochi-dts.ts && tsc --noEmit && bun test src && bunx --bun vite build"
+    "check": "bun ../../scripts/gen-mochi-dts.ts && tsc --noEmit && bun test && bunx --bun vite build"
   },
   "dependencies": {
     "@mochi/compiler": "workspace:*",

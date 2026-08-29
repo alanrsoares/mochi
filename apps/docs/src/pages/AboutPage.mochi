@@ -13,7 +13,9 @@ import {
 import { AboutScrolly } from "../components/AboutScrolly"
 import { NavLink } from "../ui/primitives"
 
-export let AboutPage = props =>
+export type Props = { logo: string, homeHref: string, playgroundHref: string }
+
+export let AboutPage : Props -> VNode = props =>
   <div className="site-grain flex min-h-screen flex-col bg-paper text-ink">
     <header
       className="sticky top-0 z-50 border-line border-b-2 bg-paper/90 backdrop-blur-md"

@@ -1,0 +1,46 @@
+"use open"
+
+import { TooltipAnchor, TooltipCard } from "../ui/primitives"
+import { when } from "../lib/vnode"
+
+export type TipPlace = "top" | "bottom"
+
+let arrowClass : TipPlace -> string = place => switch place {
+  | "top" => "-mt-1 border-r-2 border-b-2"
+  | _ => "-mb-1 border-t-2 border-l-2"
+}
+
+type Props = {
+  hoverCode: string,
+  hoverDoc: string,
+  tipX: number,
+  tipY: number,
+  tipPlace: TipPlace
+}
+
+export let TokenTooltip : Props -> VNode = props =>
+  let arrow = arrowClass(props.tipPlace) in
+  let arrowSpan = <span
+    className={"mx-auto block h-2 w-2 rotate-45 border-line-strong bg-foam "
+      ++ arrow}
+  /> in
+    <TooltipAnchor
+      $place={props.tipPlace}
+      style={{ left: show(props.tipX) ++ "px", top: show(props.tipY) ++ "px" }}
+    >
+      {when(props.tipPlace == "bottom", arrowSpan)}
+      <TooltipCard>
+        <span
+          className="mb-1 block border-line border-b pb-1 font-bold text-fur-deep"
+        >
+          {props.hoverCode}
+        </span>
+        {when(
+          props.hoverDoc != "",
+          <span className="mt-1 block font-sans text-3xs text-mute italic">
+            {props.hoverDoc}
+          </span>
+        )}
+      </TooltipCard>
+      {when(props.tipPlace == "top", arrowSpan)}
+    </TooltipAnchor>

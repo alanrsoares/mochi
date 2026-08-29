@@ -1,0 +1,15 @@
+"use open"
+
+export type StatusState = "ok" | "err"
+export type PlaygroundStatus = { text: string, state: StatusState }
+
+export let formatStatus : bool -> Option<string> -> bool -> PlaygroundStatus = (compiling, timingText, ok) =>
+  compiling
+    ? { text: "compiling…", state: "ok" }
+    : switch timingText {
+      | None => { text: ok ? "ready" : "error", state: ok ? "ok" : "err" }
+      | Some(t) => {
+          text: (ok ? "ok · " : "error · ") ++ t ++ "ms",
+          state: ok ? "ok" : "err"
+        }
+    }

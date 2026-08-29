@@ -1,0 +1,32 @@
+"use open"
+
+export let COLOR_SCHEME_KEY = "mochi-color-scheme"
+
+export type ColorSchemePref = "system" | "light" | "dark"
+export type ResolvedScheme = "light" | "dark"
+
+export let isPref = v => v == "system" || v == "light" || v == "dark"
+
+export let cyclePref = pref => switch pref {
+  | "system" => "light"
+  | "light" => "dark"
+  | _ => "system"
+}
+
+export let resolveSchemeWithSystem = (pref, systemDark) => switch pref {
+  | "dark" => "dark"
+  | "system" => systemDark ? "dark" : "light"
+  | _ => "light"
+}
+
+export let prefLabel = pref => switch pref {
+  | "system" => "auto"
+  | "light" => "light"
+  | _ => "dark"
+}
+
+export let prefIcon = pref => switch pref {
+  | "system" => "monitor"
+  | "light" => "sun"
+  | _ => "moon"
+}

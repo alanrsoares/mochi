@@ -6,6 +6,7 @@
 // components are intentionally host-provided at that boundary.
 import { Icon } from "../host/icon.host"
 import { StatusLabel, ToolBtn, ToolBtnSolid } from "../ui/primitives"
+import { when } from "../lib/vnode"
 
 type Props = {
   onToggleAutoRun: () -> (),
@@ -16,11 +17,14 @@ type Props = {
   onShare: () -> (),
   shareCopied: bool,
   compiling: bool,
-  statusState: string,
+  statusState: "ok" | "err",
   statusText: string,
   body: VNode
 }
-
+// Inline rather than `Status.StatusState`: a qualified type in the row makes
+// the sidecar inline this alias and widen `body`, which is the open-props-bag
+// regression ADR 0055 exists to prevent. Kept honest by `StatusLabel`'s own
+// `$state` union — a drift here is a type error at the call site below.
 export let PlaygroundView : Props -> VNode = props =>
   <div className="flex min-h-0 flex-1 flex-col bg-paper">
     <div
@@ -54,12 +58,13 @@ export let PlaygroundView : Props -> VNode = props =>
         <span>{props.shareCopied ? "Copied!" : "Share"}</span>
       </ToolBtnSolid>
       <div className="ml-auto flex items-center gap-1.5 font-mono text-2xs">
-        {props.compiling
-          ? <Icon
+        {when(
+          props.compiling,
+          <Icon
             name="loader-2"
             className="size-3.5 shrink-0 animate-spin text-ok"
           />
-          : <></>}
+        )}
         <StatusLabel $state={props.statusState}>{props.statusText}</StatusLabel>
       </div>
     </div>

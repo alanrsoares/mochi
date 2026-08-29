@@ -1,17 +1,27 @@
-/** Color scheme: derive from system, persist override, apply `data-theme`. */
+import {
+  COLOR_SCHEME_KEY,
+  type ColorSchemePref,
+  cyclePref,
+  isPref,
+  prefIcon,
+  prefLabel,
+  type ResolvedScheme,
+  resolveSchemeWithSystem,
+} from "./color-scheme.mochi";
 
-export type ColorSchemePref = "system" | "light" | "dark";
-export type ResolvedScheme = "light" | "dark";
-
-export const COLOR_SCHEME_KEY = "mochi-color-scheme";
-
-const isPref = (v: string | null): v is ColorSchemePref =>
-  v === "system" || v === "light" || v === "dark";
+export {
+  COLOR_SCHEME_KEY,
+  type ColorSchemePref,
+  cyclePref,
+  prefIcon,
+  prefLabel,
+  type ResolvedScheme,
+};
 
 export const readPref = (): ColorSchemePref => {
   try {
     const raw = localStorage.getItem(COLOR_SCHEME_KEY);
-    return isPref(raw) ? raw : "system";
+    return raw && isPref(raw) ? (raw as ColorSchemePref) : "system";
   } catch {
     return "system";
   }
@@ -21,7 +31,7 @@ export const systemPrefersDark = (): boolean =>
   typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches;
 
 export const resolveScheme = (pref: ColorSchemePref): ResolvedScheme =>
-  pref === "dark" || (pref === "system" && systemPrefersDark()) ? "dark" : "light";
+  resolveSchemeWithSystem(pref, systemPrefersDark()) as ResolvedScheme;
 
 export const applyScheme = (pref: ColorSchemePref): ResolvedScheme => {
   const resolved = resolveScheme(pref);
@@ -39,9 +49,6 @@ export const setPref = (pref: ColorSchemePref): ResolvedScheme => {
   }
   return applyScheme(pref);
 };
-
-export const cyclePref = (pref: ColorSchemePref): ColorSchemePref =>
-  pref === "system" ? "light" : pref === "light" ? "dark" : "system";
 
 export const listenStorage = (onStorage: (key: string) => void): (() => void) => {
   const handler = (e: StorageEvent) => onStorage(e.key ?? "");

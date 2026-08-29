@@ -1,0 +1,37 @@
+import { assertEq, describe, ok, test } from "@mochi/test"
+import {
+  cyclePref,
+  isPref,
+  prefIcon,
+  prefLabel,
+  resolveSchemeWithSystem
+} from "./color-scheme.mochi"
+
+describe("color-scheme.mochi", () => {
+  test("isPref recognizes valid preferences", () => {
+    isPref("system") |> ok;
+    isPref("light") |> ok;
+    isPref("dark") |> ok;
+    isPref("invalid") == false |> ok
+  });
+  test("cyclePref rotates system -> light -> dark -> system", () => {
+    cyclePref("system") |> assertEq("light");
+    cyclePref("light") |> assertEq("dark");
+    cyclePref("dark") |> assertEq("system");
+    cyclePref("unknown") |> assertEq("system")
+  });
+  test("resolveSchemeWithSystem resolves accurately", () => {
+    resolveSchemeWithSystem("system", true) |> assertEq("dark");
+    resolveSchemeWithSystem("system", false) |> assertEq("light");
+    resolveSchemeWithSystem("light", true) |> assertEq("light");
+    resolveSchemeWithSystem("dark", false) |> assertEq("dark")
+  });
+  test("prefLabel and prefIcon map preferences to UI tokens", () => {
+    prefLabel("system") |> assertEq("auto");
+    prefLabel("light") |> assertEq("light");
+    prefLabel("dark") |> assertEq("dark");
+    prefIcon("system") |> assertEq("monitor");
+    prefIcon("light") |> assertEq("sun");
+    prefIcon("dark") |> assertEq("moon")
+  })
+})

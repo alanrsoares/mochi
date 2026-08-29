@@ -5,16 +5,10 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "preac
 import { presetEntries } from "../lib/playground/presets.mochi";
 import { clearPreview, renderPreview } from "../lib/playground/preview";
 import { persistAutorun, readAutorun } from "../lib/playground/session";
-import {
-  DiagBox,
-  EditorInput,
-  EditorMirror,
-  EmitPane,
-  PaneTab,
-  PreviewPane,
-} from "../ui/primitives.mochi";
+import { EditorInput, EditorMirror, EmitPane, PaneTab, PreviewPane } from "../ui/primitives.mochi";
 import { HighlightedCode } from "./HighlightCode";
 import { Icon } from "./Icon";
+import { PlaygroundProblems } from "./PlaygroundProblems.mochi";
 import { PlaygroundRight, PlaygroundSettings } from "./PlaygroundRight.mochi";
 import { PlaygroundView } from "./PlaygroundView.mochi";
 import { playgroundStatus, usePlaygroundCompile } from "./use-playground-compile";
@@ -215,15 +209,12 @@ export function Playground() {
       </EmitPane>
     );
   } else if (activeTab === "problems") {
-    activePane =
-      diagnostics.length > 0 ? (
-        <DiagBox className="max-h-none">
-          <div className="mb-1 font-bold">diagnostics</div>
-          {diagnostics.map((d) => formatError(d, code)).join("\n\n")}
-        </DiagBox>
-      ) : (
-        <p className="font-mono text-mute text-xs">No problems.</p>
-      );
+    activePane = (
+      <PlaygroundProblems
+        hasProblems={diagnostics.length > 0}
+        diagnosticsFormatted={diagnostics.map((d) => formatError(d, code)).join("\n\n")}
+      />
+    );
   } else if (activeTab === "settings") {
     activePane = (
       <PlaygroundSettings
