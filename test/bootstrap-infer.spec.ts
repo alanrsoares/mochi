@@ -222,6 +222,10 @@ const schemeCases: Record<string, string> = {
     "  let vars = idsOf(params, 0) in",
     "  take(vars)",
   ].join("\n"),
+  // ADR 0098 §2 — one lowercase annotation variable spans ALL of a lambda's
+  // parameter annotations, and the labeled group is no exception: `a` here must
+  // be the SAME var, giving `'a -> { y: 'a } -> 'a`, not two independent vars.
+  "an annotation variable links a positional and a labeled param": "let f = (x: a, ~y: a) => x",
 };
 
 for (const [name, src] of Object.entries(schemeCases)) {

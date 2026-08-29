@@ -112,9 +112,6 @@ and that is what keeps it sound: it introduces no new HM machinery.
 
 - Do optional fields interact with the record-alias index (ADR 0092) and the
   emitted TS well enough to keep `bootstrap:tsc` at 0?
-- Labeled parameters currently share one type-variable scope per group but not
-  with the positional annotations beside them, so `(x: a, ~y: a)` does not link
-  the two `a`s. Exotic enough to leave until something needs it.
 - Labels are a lambda-parameter feature; `extern` signatures stay positional.
 
 Optionality belongs on the field flag, not as `Option<T>` in a normal field:

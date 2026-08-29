@@ -236,10 +236,13 @@ let bindParamsFrom = (params, env, st: Types.St) => switch params {
 // Lambda parameter annotations constrain the fresh parameter type before the
 // body is inferred. One `vars` map shares lowercase type variables across a
 // lambda's parameter annotations, matching the TS backend.
+// Returns the accumulated `vars` map as well as `st`: ONE lowercase annotation
+// variable spans every parameter annotation of a lambda, and the labeled group
+// (ADR 0098 §2) shares that scope, so `(x: a, ~y: a)` links both to one var.
 let constrainParamAnnotsFrom = (ctx: Ctx<a>, params, paramTypes, vars, st: Types.St) => switch params {
-  | [] => Ok(st)
+  | [] => Ok((vars, st))
   | [param, ...rest] => switch paramTypes {
-      | [] => Ok(st)
+      | [] => Ok((vars, st))
       | [paramT, ...restTypes] => switch param {
           | Ast.LPName(_, Some(te)) => let (annotT, vars1, st1) = typeExprToType(
               te,
@@ -768,8 +771,18 @@ let inferExprRaw = (ctx: Ctx<a>, e, st: Types.St) => switch e {
     // after the positional prefix (ADR 0098 §2).
     let (posParams, labParams) = splitLamParams(params, [], []) in
     let (paramTypes, bodyEnv, st1) = bindParamsFrom(posParams, ctx.env, st) in
-    let? st2 = ctx->constrainParamAnnotsFrom(posParams, paramTypes, #{}, st1) in
-    let? (labFields, st3) = ctx->labFieldsFrom(labParams, bodyEnv, #{}, st2) in
+    let? (annotVars, st2) = ctx->constrainParamAnnotsFrom(
+      posParams,
+      paramTypes,
+      #{},
+      st1
+    ) in
+    let? (labFields, st3) = ctx->labFieldsFrom(
+      labParams,
+      bodyEnv,
+      annotVars,
+      st2
+    ) in
     let allTypes = switch labParams {
       | [] => paramTypes
       | _ => Array.append(tRecord(rowOfLabFields(labFields)), paramTypes)
