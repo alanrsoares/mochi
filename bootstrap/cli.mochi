@@ -97,7 +97,9 @@ export let buildMulti = entry =>
 
 /// Invoke only when Bun executes cli.js / cli.ts directly. Importing it from a
 /// colocated unit spec must expose the helpers above without exiting the test process.
-let runEntry = isCliEntry(())
+/// `_`-prefixed because the name exists to hold an effect, not to be read — mochi
+/// has no top-level expression statement (ADR 0094).
+let _runEntry = isCliEntry(())
   ? switch Array.get(0, argv) {
     | None => die(
         "usage: mochic <file.mochi>  |  mochic ts <file.mochi>  |  mochic build [--emit=ts] <entry.mochi>"

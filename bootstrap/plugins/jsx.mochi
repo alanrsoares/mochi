@@ -65,7 +65,6 @@ let jxTokName = t => switch t {
 let jxEofTok = { tok: TEof, start: 0, end: 0, doc: None }
 let jxTokAt = (toks, i) => Array.get(i, toks) |> Option.unwrapOr(jxEofTok)
 let jxSpanOf = lt => { start: lt.start, end: lt.end }
-let jxSpanning = (a, b) => { start: a.start, end: b.end }
 let jxToEnd = (start, toks, pos) =>
   { start: start.start, end: jxTokAt(toks, pos - 1).end }
 let jxErrAt = (message, lt) => Err({ message, start: lt.start, end: lt.end })

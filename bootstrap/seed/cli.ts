@@ -154,7 +154,7 @@ export const buildMulti: (entry: string) => Result<string, string> = (entry: str
     writeAll,
     _Result_mapErr((e: Diag) => e.message, buildModules(entry)),
   );
-const runEntry = isCliEntry(undefined)
+const _runEntry = isCliEntry(undefined)
   ? match(_Array_get(0, argv))
       .with({ _tag: "None" }, () =>
         die(

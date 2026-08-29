@@ -1659,7 +1659,6 @@ let setExternMeta = (exported, doc, s) => switch s {
     )
   | other => other
 }
-let setExternExported = setExternMeta(true, None)
 
 // Top-level expression statement (ADR 0087). Trailing `;` is optional.
 let parseExprStmt = (toks, pos, tmp, hooks) =>
