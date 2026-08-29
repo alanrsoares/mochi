@@ -12,6 +12,7 @@ type SpanTok = { text: string, kind: string, start: number }
 let keywords = Set.fromArray(
   ["let", "type", "extern", "switch", "loop", "recur", "do", "import", "export"]
 )
+let keywordIds = Set.fromArray(["as", "from", "in"])
 let strings = Set.fromArray(["str", "tmplstart", "tmplmid", "tmplend"])
 let ops = Set.fromArray(
   ["eq", "arrow", "tarrow", "pipe", "plus", "minus", "star", "slash"]
@@ -35,10 +36,22 @@ let isUpperId = s => switch Str.codeAt(0, s) {
   | Some(c) => c >= 65 && c <= 90
 }
 
-/// Map a lexer tag (+ optional id text) to a highlight kind.
+let nonGuardNext = Set.fromArray(
+  ["lparen", "rbrace", "comma", "colon", "eq", "arrow"]
+)
+let nonGuardPrev = Set.fromArray(["let", "lbrace", "comma", "dot", "pipe"])
+
+let isWhenGuard = (prevTag, nextTag) =>
+  !Set.has(prevTag, nonGuardPrev) && !Set.has(nextTag, nonGuardNext)
+
+/// Map a lexer tag (+ optional id text and surrounding token context) to a highlight kind.
 /// Field is `kind` not `type` — `type` is a mochi keyword.
-let tokenKindFromLexTag = (tag, value) =>
+let tokenKindFromLexTag = (tag, value, prevTag, nextTag) =>
   Set.has(tag, keywords)
+    ? "keyword"
+    : tag == "id" && Set.has(value, keywordIds)
+    ? "keyword"
+    : tag == "id" && value == "when" && isWhenGuard(prevTag, nextTag)
     ? "keyword"
     : tag == "num"
     ? "number"
@@ -81,11 +94,19 @@ let highlightGo = (code, tokens, i, curPos, spans) =>
           ? [...acc, plainSpan(Str.slice(pos, t.span.start, code), -1)]
           : acc in
         let value = t.t == "id" ? t.v : "" in
+        let prevTag = switch Array.get(j - 1, tokens) {
+          | Some(p) => p.t == "id" && p.v == "let" ? "let" : p.t
+          | None => ""
+        } in
+        let nextTag = switch Array.get(j + 1, tokens) {
+          | Some(n) => n.t
+          | None => ""
+        } in
         let spans2 = [
           ...spans1,
           {
             text: Str.slice(t.span.start, t.span.end, code),
-            kind: tokenKindFromLexTag(t.t, value),
+            kind: tokenKindFromLexTag(t.t, value, prevTag, nextTag),
             start: t.span.start
           }
         ] in

@@ -1,0 +1,22 @@
+import { assertEq, describe, test } from "@mochi/test"
+import { formatStatus } from "./status.mochi"
+
+describe("status.mochi", () => {
+  test("formatStatus reports compiling state", () => {
+    formatStatus(true, None, true)
+      |> assertEq({ text: "compiling…", state: "ok" });
+    formatStatus(true, Some("100"), false)
+      |> assertEq({ text: "compiling…", state: "ok" })
+  });
+  test("formatStatus reports ready vs error when timing is absent", () => {
+    formatStatus(false, None, true) |> assertEq({ text: "ready", state: "ok" });
+    formatStatus(false, None, false)
+      |> assertEq({ text: "error", state: "err" })
+  });
+  test("formatStatus formats elapsed compile time", () => {
+    formatStatus(false, Some("42"), true)
+      |> assertEq({ text: "ok · 42ms", state: "ok" });
+    formatStatus(false, Some("1500"), false)
+      |> assertEq({ text: "error · 1500ms", state: "err" })
+  })
+})

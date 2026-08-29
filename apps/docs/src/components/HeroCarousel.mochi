@@ -35,7 +35,9 @@ let mapIndexed = (f, xs) =>
     }
   }
 
-export let HeroCarousel = _ =>
+export type Props = {}
+
+export let HeroCarousel : Props -> VNode = _ =>
   let (index, setIndex) = useState(0) in
   let (paused, setPaused) = useState(false) in
   let startX = useRef(0) in

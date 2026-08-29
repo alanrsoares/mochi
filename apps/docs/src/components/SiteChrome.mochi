@@ -9,8 +9,10 @@ import { NavLink } from "../ui/primitives"
 
 export let githubUrl = "https://github.com/alanrsoares/mochi"
 
+export type BrandLinkProps = { compact: bool, href: string, logo: string }
+
 /// Logo + wordmark link. `compact` fits the playground's h-12 header.
-export let BrandLink = props =>
+export let BrandLink : BrandLinkProps -> VNode = props =>
   props.compact
     ? <a href={props.href} className="flex items-center gap-2.5 no-underline">
       <img
@@ -36,7 +38,7 @@ export let BrandLink = props =>
     </a>
 
 /// Plain nav-style GitHub repo link (icon + label).
-export let GithubLink = () =>
+export let GithubLink : () -> VNode = () =>
   <a
     href={githubUrl}
     target="_blank"
@@ -47,14 +49,22 @@ export let GithubLink = () =>
     <span>{"GitHub"}</span>
   </a>
 
+export type ActiveNavItemProps = { label: string }
+
 /// Current-page marker in the nav.
-export let ActiveNavItem = props =>
+export let ActiveNavItem : ActiveNavItemProps -> VNode = props =>
   <span className="border-fur border-b-2 pb-0.5 font-semibold text-fur-deep">
     {props.label}
   </span>
 
+export type SiteFooterProps = {
+  logo: string,
+  linkHref: string,
+  linkLabel: string
+}
+
 /// Shared footer: brand mark + one outbound link.
-export let SiteFooter = props =>
+export let SiteFooter : SiteFooterProps -> VNode = props =>
   <footer className="border-line border-t-2 bg-peach py-8">
     <div
       className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-6 font-mono text-mute text-xs sm:flex-row"

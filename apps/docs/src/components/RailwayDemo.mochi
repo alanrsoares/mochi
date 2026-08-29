@@ -105,7 +105,9 @@ let RailStage = props =>
     />
   </g>
 
-export let RailwayDemo = _ =>
+export type Props = {}
+
+export let RailwayDemo : Props -> VNode = _ =>
   let (raw, setRaw) = useState("mochi") in
   let rail = runRail(raw) in
   let derailedAt = rail.derailedAt in

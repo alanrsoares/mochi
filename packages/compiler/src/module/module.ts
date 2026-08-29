@@ -35,7 +35,88 @@ export type ModuleGraphOptions = {
    * Bun/Vite plugins pass `.mochi` so sibling modules re-enter the loader.
    */
   moduleExt?: string;
+  /**
+   * Optional cross-call memo for `moduleContext` (see {@link createModuleCache}).
+   * Omitted = no reuse, the historical behavior.
+   */
+  cache?: ModuleCache;
+  /**
+   * The open-mode the caller will infer the ENTRY with. Supplying it lets
+   * `moduleContext` hand back {@link ModuleContext.entryDiagnostics} when the
+   * cache already holds an answer for these exact bytes — but only if that
+   * answer was produced in the same mode. Deps run `openMode(src, open)`, which
+   * honors a file's `"use open"`; a caller that forces strict (the editor does)
+   * must not be handed a leniently-inferred result. Omitted = never reuse.
+   */
+  entryOpen?: boolean;
 };
+
+/** What a dependency contributes to the modules that import it. */
+type CachedModule = {
+  exports: Env;
+  reg: Registry;
+  keys: Map<string, string[]>;
+  quals: QualScope;
+};
+
+type CacheEntry = {
+  /** Exact source this result was inferred from — compared, never hashed, so a
+   * stale hit is impossible. */
+  src: string;
+  /** Revisions of this module's direct deps at the time it was inferred. */
+  depRevs: string;
+  /** Identifies THIS result; a dependent records it in its own `depRevs`. */
+  rev: number;
+  result: Result<CachedModule, Diagnostic[]>;
+};
+
+/**
+ * Cross-call memo of per-module inference results, keyed by path.
+ *
+ * `moduleContext` infers every dependency of its entry, so checking N modules
+ * that share a graph re-infers that graph N times — the whole self-hosted
+ * compiler costs ~1.8s, and a 34-file sweep of `bootstrap/` paid it 34 times.
+ * Inference is ~98% of that (lex + parse of all 34 files is 30ms), so reuse is
+ * the only lever that matters.
+ *
+ * A cached result is reused only when the module's source is byte-identical AND
+ * every direct dependency is at the same revision it was inferred against, so a
+ * change anywhere in the graph invalidates exactly the modules downstream of it.
+ * The entry itself is never cached: it is the live buffer.
+ *
+ * The caller owns the lifetime. A CLI sweep wants one per process; a language
+ * server wants one per session; a one-shot compile wants none.
+ */
+export type ModuleCache = {
+  entries: Map<string, CacheEntry>;
+  /** Monotonic revision counter — see {@link CacheEntry.rev}. */
+  next: number;
+  /** Parsed dependency programs, so re-walking a shared graph costs no re-parse. */
+  progs: Map<string, { src: string; prog: Program }>;
+};
+
+export const createModuleCache = (): ModuleCache => ({
+  entries: new Map(),
+  next: 0,
+  progs: new Map(),
+});
+
+/** Plugin lists are compared by identity — two lists are the same config only
+ * if they are the same array, which is what every caller already reuses. */
+const pluginListIds = new WeakMap<object, number>();
+let nextPluginListId = 0;
+const pluginListId = (plugins: LanguagePlugin[] | undefined): number => {
+  if (!plugins) return 0;
+  const seen = pluginListIds.get(plugins);
+  if (seen !== undefined) return seen;
+  nextPluginListId += 1;
+  pluginListIds.set(plugins, nextPluginListId);
+  return nextPluginListId;
+};
+
+/** Cache key: the module, plus every option that changes what inferring it means. */
+const cacheKey = (path: string, opts: ModuleGraphOptions): string =>
+  `${pluginListId(opts.plugins)}|${opts.open === undefined ? "-" : String(opts.open)}|${path}`;
 
 /** Relative / absolute specs — everything else is a bare package or package subpath. */
 const isPathSpec = (spec: string): boolean =>
@@ -158,6 +239,13 @@ export type ModuleContext = {
   importedKeys: Map<string, string[]>;
   /** `import * as Alias` → Alias's exported TYPE scope, so `Alias.T` resolves (C5 slice b). */
   qualTypes: QualMap;
+  /**
+   * The entry's OWN diagnostics, when a cached inference of it was reusable —
+   * `[]` meaning it is clean. `undefined` means the caller must infer the entry
+   * itself, which is the normal case for a live editor buffer. See ADR 0095 and
+   * {@link ModuleGraphOptions.entryOpen}.
+   */
+  entryDiagnostics?: Diagnostic[];
 };
 
 /** Bring one named constructor into the importer, or error on a colliding owner. */
@@ -276,15 +364,27 @@ const loadGraph = (
           path,
         );
       }
-      const parsed = parseModule(src, opts);
-      if (isErr(parsed)) return atPath(parsed.error, path);
+      // Parse is cheap next to inference, but `loadGraph` re-walks the whole
+      // graph for every entry, so a shared cache still saves a full re-parse of
+      // every dependency per entry.
+      const progKey = `${pluginListId(opts.plugins)}|${path}`;
+      const cachedProg = opts.cache?.progs.get(progKey);
+      let prog: Program;
+      if (cachedProg && cachedProg.src === src) {
+        prog = cachedProg.prog;
+      } else {
+        const parsed = parseModule(src, opts);
+        if (isErr(parsed)) return atPath(parsed.error, path);
+        prog = parsed.value;
+        opts.cache?.progs.set(progKey, { src, prog });
+      }
 
-      for (const imp of importsOf(parsed.value)) {
+      for (const imp of importsOf(prog)) {
         const dep = await visit(resolveImport(path, imp.from));
         if (dep) return dep;
       }
       state.set(path, "done");
-      order.push({ path, prog: parsed.value, src });
+      order.push({ path, prog, src });
       return null;
     };
 
@@ -514,20 +614,60 @@ export const moduleContext = (
     const keysByPath = new Map<string, Map<string, string[]>>();
     const qualsByPath = new Map<string, QualScope>();
 
+    // Revision each module settled at IN THIS RUN — a dependent's cache entry is
+    // only valid while its deps still carry the revisions it was inferred against.
+    const revs = new Map<string, number>();
     for (const { path, prog, src } of graph) {
       const gathered = gatherImports(path, prog, exportsByPath, regByPath, keysByPath, qualsByPath);
       if (isErr(gathered)) return err(atPath(gathered.error, path));
-      // Entry is last in dependency order; hand back its context without compiling it.
-      if (path === entryPath) return ok(gathered.value);
-      const typed = toTypedProgramWith(prog, gathered.value, {
-        plugins: opts.plugins,
-        open: openMode(src, opts.open),
-      });
-      if (isErr(typed)) return err(atPath(typed.error, path));
-      exportsByPath.set(path, exportsOf(prog, typed.value.res.env));
-      regByPath.set(path, exportedCtorTable(prog));
-      keysByPath.set(path, exportedCtorKeys(prog));
-      qualsByPath.set(path, qualScopeOf(prog, gathered.value.qualTypes));
+      const depRevs = importsOf(prog)
+        .map((imp) => revs.get(resolveImport(path, imp.from)) ?? 0)
+        .join(",");
+      const key = cacheKey(path, opts);
+      // Entry is last in dependency order; hand back its context without
+      // compiling it — but if something else already inferred it as a
+      // dependency of ITS graph, from these same bytes and the same dependency
+      // revisions, that answer is this answer (ADR 0095).
+      if (path === entryPath) {
+        const reusable =
+          opts.entryOpen !== undefined && opts.entryOpen === openMode(src, opts.open);
+        const prior = reusable ? opts.cache?.entries.get(key) : undefined;
+        if (!prior || prior.src !== src || prior.depRevs !== depRevs) return ok(gathered.value);
+        return ok({
+          ...gathered.value,
+          entryDiagnostics: isErr(prior.result) ? prior.result.error : [],
+        });
+      }
+
+      const hit = opts.cache?.entries.get(key);
+      let result: Result<CachedModule, Diagnostic[]>;
+      if (hit && hit.src === src && hit.depRevs === depRevs) {
+        result = hit.result;
+        revs.set(path, hit.rev);
+      } else {
+        const typed = toTypedProgramWith(prog, gathered.value, {
+          plugins: opts.plugins,
+          open: openMode(src, opts.open),
+        });
+        result = isErr(typed)
+          ? err(atPath(typed.error, path))
+          : ok({
+              exports: exportsOf(prog, typed.value.res.env),
+              reg: exportedCtorTable(prog),
+              keys: exportedCtorKeys(prog),
+              quals: qualScopeOf(prog, gathered.value.qualTypes),
+            });
+        if (opts.cache) {
+          opts.cache.next += 1;
+          opts.cache.entries.set(key, { src, depRevs, rev: opts.cache.next, result });
+          revs.set(path, opts.cache.next);
+        }
+      }
+      if (isErr(result)) return err(result.error);
+      exportsByPath.set(path, result.value.exports);
+      regByPath.set(path, result.value.reg);
+      keysByPath.set(path, result.value.keys);
+      qualsByPath.set(path, result.value.quals);
     }
     // Entry has no imports (graph = [entry]) — empty context.
     return ok({

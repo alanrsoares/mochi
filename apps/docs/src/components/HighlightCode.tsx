@@ -7,7 +7,8 @@ import {
   splitSpansIntoLines,
   tokenClass,
 } from "../lib/highlight.mochi";
-import { HoverToken, TooltipAnchor, TooltipCard, TypeHint } from "../ui/primitives.mochi";
+import { HoverToken, TypeHint } from "../ui/primitives.mochi";
+import { TokenTooltip } from "./TokenTooltip.mochi";
 
 export type HighlightLanguage = "mochi" | "js" | "ts";
 
@@ -86,31 +87,6 @@ function placeTooltip(el: HTMLElement): TipPos {
   };
 }
 
-type TokenTooltipProps = { hover: HoverInfo; tip: TipPos };
-
-function TokenTooltip({ hover, tip }: TokenTooltipProps) {
-  const arrow = tip.place === "top" ? "-mt-1 border-r-2 border-b-2" : "-mb-1 border-t-2 border-l-2";
-
-  return (
-    <TooltipAnchor $place={tip.place} style={{ left: `${tip.x}px`, top: `${tip.y}px` }}>
-      {tip.place === "bottom" && (
-        <span className={`mx-auto block h-2 w-2 rotate-45 border-line-strong bg-foam ${arrow}`} />
-      )}
-      <TooltipCard>
-        <span className="mb-1 block border-line border-b pb-1 font-bold text-fur-deep">
-          {hover.code}
-        </span>
-        {hover.doc && (
-          <span className="mt-1 block font-sans text-3xs text-mute italic">{hover.doc}</span>
-        )}
-      </TooltipCard>
-      {tip.place === "top" && (
-        <span className={`mx-auto block h-2 w-2 rotate-45 border-line-strong bg-foam ${arrow}`} />
-      )}
-    </TooltipAnchor>
-  );
-}
-
 type HoverResolver = (offset: number) => HoverInfo | null;
 
 type CodeTokenProps = {
@@ -160,7 +136,15 @@ function CodeToken({ span, resolveHover, hasError }: CodeTokenProps) {
       onMouseLeave={() => setTip(null)}
     >
       {span.text}
-      {tip && hoverRef.current ? <TokenTooltip hover={hoverRef.current} tip={tip} /> : null}
+      {tip && hoverRef.current ? (
+        <TokenTooltip
+          hoverCode={hoverRef.current.code}
+          hoverDoc={hoverRef.current.doc ?? ""}
+          tipX={tip.x}
+          tipY={tip.y}
+          tipPlace={tip.place}
+        />
+      ) : null}
     </HoverToken>
   );
 }

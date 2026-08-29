@@ -13,7 +13,9 @@ import {
 import { AboutScrolly } from "../components/AboutScrolly"
 import { NavLink } from "../ui/primitives"
 
-export let AboutPage = props =>
+export type Props = { logo: string, homeHref: string, playgroundHref: string }
+
+export let AboutPage : Props -> VNode = props =>
   <div className="site-grain flex min-h-screen flex-col bg-paper text-ink">
     <header
       className="sticky top-0 z-50 border-line border-b-2 bg-paper/90 backdrop-blur-md"
@@ -43,10 +45,10 @@ export let AboutPage = props =>
         <h1
           className="mt-2 font-display font-extrabold text-4xl text-ink tracking-tight"
         >
-          {"A small language, looking back"}
+          {"How Mochi got here"}
         </h1>
         <p className="mt-3 text-copy text-mute leading-relaxed">
-          {"mochi wasn't a master plan. It was one question, answered a step at a time. This is the story as I can tell it in hindsight."}
+          {"Mochi began with a question: what belongs in a language, and what belongs in its tools? I followed it far enough to build a compiler. This is what I learned along the way."}
         </p>
       </div>
       <div className="mt-12 lg:mt-16"><AboutScrolly /></div>

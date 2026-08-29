@@ -22,6 +22,7 @@ bun run mochi <file.mochi>       # compile one file to JS on stdout (also: ts, f
 bun packages/cli/src/cli.ts ts <file.mochi>   # emit typed TypeScript (build --emit=ts for the graph)
 bun run bootstrap:tsc         # north-star: count tsc --strict errors on the self-host (0)
 bun run test | test:full | typecheck | lint | lint:fix | format | build:ext | loc
+bun run lint:mochi [globs…]     # LSP diagnostics over .mochi sources (graph-aware; not in the gate)
 ```
 
 ## Pipeline

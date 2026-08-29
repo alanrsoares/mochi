@@ -4,7 +4,24 @@
 import { Icon } from "../host/icon.host"
 import { CarouselNav } from "../ui/primitives"
 
-export let HeroCarouselView = props =>
+export type TrackStyle = { transform: string }
+
+export type Props = {
+  onPause: () -> (),
+  onResume: () -> (),
+  onPointerDown: any -> (),
+  onPointerUp: any -> (),
+  onPointerCancel: () -> (),
+  trackStyle: TrackStyle,
+  images: [VNode],
+  kicker: string,
+  title: string,
+  onPrev: () -> (),
+  dots: [VNode],
+  onNext: () -> ()
+}
+
+export let HeroCarouselView : Props -> VNode = props =>
   <figure
     className="hero-carousel relative"
     onMouseEnter={props.onPause}

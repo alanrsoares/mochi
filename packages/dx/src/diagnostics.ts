@@ -11,14 +11,14 @@ import { toTypedProgram, toTypedProgramWith } from "@mochi/compiler/compile";
 import { checkErr, type Diagnostic } from "@mochi/compiler/errors";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import { lex } from "@mochi/compiler/lexer";
-import { moduleContext, resolveImport } from "@mochi/compiler/module";
+import { type ModuleCache, moduleContext, resolveImport } from "@mochi/compiler/module";
 import { parse } from "@mochi/compiler/parser";
 import { preludeNamespaces } from "@mochi/compiler/prelude";
 import type { Env, Scheme } from "@mochi/compiler/schemes";
 import { lineCol, type Span } from "@mochi/compiler/span";
 import { indexProgram, type SymbolIndex } from "@mochi/compiler/symbols";
 import { tVar } from "@mochi/compiler/types";
-import { isErr } from "@onrails/result";
+import { err, isErr, ok, type Result } from "@onrails/result";
 
 /** 0-based line/character — matches the LSP `Position` shape. */
 export type Position = { line: number; character: number };
@@ -98,8 +98,8 @@ export function toPublish(
   };
 }
 
-/** Options threaded into `moduleDiagnostics` / single-file `diagnostics` — `plugins` (styled-cva, …), same list Vite / `gen-mochi-dts` use. Omitted = default/builtin resolution (`resolvePlugins`, ADR 0011). */
-export type ModuleDiagnosticsOptions = { plugins?: LanguagePlugin[] };
+/** Options threaded into `moduleDiagnostics` / single-file `diagnostics` — `plugins` (styled-cva, …), same list Vite / `gen-mochi-dts` use. Omitted = default/builtin resolution (`resolvePlugins`, ADR 0011). `cache` reuses dependency inference across calls (`createModuleCache`); omitted = no reuse. */
+export type ModuleDiagnosticsOptions = { plugins?: LanguagePlugin[]; cache?: ModuleCache };
 
 /**
  * Check + infer may emit several diagnostics (ADR 0004); so may parse, since
@@ -143,28 +143,82 @@ export async function moduleDiagnostics(
   readFile: (p: string) => Promise<string>,
   opts: ModuleDiagnosticsOptions = {},
 ): Promise<PublishDiagnostic[]> {
+  const parsed = parseForDiagnostics(src, path, opts);
+  return isErr(parsed)
+    ? parsed.error
+    : moduleDiagnosticsFor(parsed.value, src, path, readFile, opts);
+}
+
+/**
+ * The front of every diagnostic pass: lex + parse once, with failures already
+ * mapped onto the publish DTO. Callers that need both the graph diagnostics and
+ * the liveness warnings ({@link documentDiagnostics}) share this one parse
+ * instead of paying for two.
+ */
+const parseForDiagnostics = (
+  src: string,
+  path: string,
+  opts: ModuleDiagnosticsOptions,
+): Result<Program, PublishDiagnostic[]> => {
   const lexed = lex(src);
-  if (isErr(lexed)) return [toPublish(src, lexed.error, path)];
+  if (isErr(lexed)) return err([toPublish(src, lexed.error, path)]);
   const parsed = parse(lexed.value, { plugins: opts.plugins });
   // Every parse diagnostic, not just the first (ADR 0045).
-  if (isErr(parsed)) return parsed.error.map((d) => toPublish(src, d, path));
-  const prog = parsed.value;
+  return isErr(parsed) ? err(parsed.error.map((d) => toPublish(src, d, path))) : ok(parsed.value);
+};
 
+/** {@link moduleDiagnostics} past its lex/parse front — see that doc comment. */
+async function moduleDiagnosticsFor(
+  prog: Program,
+  src: string,
+  path: string,
+  readFile: (p: string) => Promise<string>,
+  opts: ModuleDiagnosticsOptions,
+): Promise<PublishDiagnostic[]> {
   const entry = resolve(path);
   const read = (p: string): Promise<string> =>
     resolve(p) === entry ? Promise.resolve(src) : readFile(p);
-  const ctx = await moduleContext(entry, read, { plugins: opts.plugins });
+  // `entryOpen: false` mirrors the strict mode the entry is inferred with below,
+  // and is what lets `moduleContext` hand back a cached answer for the entry
+  // itself when the buffer matches what is already on disk (ADR 0095).
+  const ctx = await moduleContext(entry, read, {
+    plugins: opts.plugins,
+    cache: opts.cache,
+    entryOpen: false,
+  });
   if (isErr(ctx))
     return [
       ...graphFailureDiagnostics(src, prog, entry, ctx.error),
       ...fallbackDiagnostics(src, prog, entry, opts),
     ];
 
+  const cached = ctx.value.entryDiagnostics;
+  if (cached) return cached.map((e) => toPublish(src, e, entry));
   const typed = toTypedProgramWith(prog, ctx.value, {
     plugins: opts.plugins,
     open: false,
   });
   return isErr(typed) ? typed.error.map((e) => toPublish(src, e, entry)) : [];
+}
+
+/**
+ * Everything the editor publishes for one buffer: {@link moduleDiagnostics}
+ * plus the liveness warnings, off a single lex/parse. A buffer that does not
+ * lex or parse has no bindings to judge, so its parse errors are the whole
+ * answer — the same degradation the two passes had separately.
+ */
+export async function documentDiagnostics(
+  path: string,
+  src: string,
+  readFile: (p: string) => Promise<string>,
+  opts: ModuleDiagnosticsOptions = {},
+): Promise<PublishDiagnostic[]> {
+  const parsed = parseForDiagnostics(src, path, opts);
+  if (isErr(parsed)) return parsed.error;
+  return [
+    ...(await moduleDiagnosticsFor(parsed.value, src, path, readFile, opts)),
+    ...unusedBindingDiagnosticsFor(parsed.value, src, path),
+  ];
 }
 
 /** Warning-only liveness diagnostics, derived from lexical binding identity. */
@@ -173,16 +227,21 @@ export function unusedBindingDiagnostics(
   path = "<buffer>",
   opts: ModuleDiagnosticsOptions = {},
 ): PublishDiagnostic[] {
-  const lexed = lex(src);
-  if (isErr(lexed)) return [];
-  const parsed = parse(lexed.value, { plugins: opts.plugins });
-  if (isErr(parsed)) return [];
-  const idx = indexProgram(path, parsed.value);
+  const parsed = parseForDiagnostics(src, path, opts);
+  return isErr(parsed) ? [] : unusedBindingDiagnosticsFor(parsed.value, src, path);
+}
+
+const unusedBindingDiagnosticsFor = (
+  prog: Program,
+  src: string,
+  path: string,
+): PublishDiagnostic[] => {
+  const idx = indexProgram(path, prog);
   return [
     ...unusedLocalDiagnosticsFromProgram(src, idx),
-    ...unusedTopLevelDiagnosticsFromProgram(src, parsed.value, idx),
+    ...unusedTopLevelDiagnosticsFromProgram(src, prog, idx),
   ];
-}
+};
 
 const unusedLocalDiagnosticsFromProgram = (src: string, idx: SymbolIndex): PublishDiagnostic[] =>
   idx.localBindings().flatMap((binding) => {

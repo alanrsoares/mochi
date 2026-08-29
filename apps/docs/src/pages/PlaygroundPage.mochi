@@ -5,7 +5,9 @@
 import { Playground, ColorSchemeToggle } from "../host/widgets.host"
 import { ActiveNavItem, BrandLink, GithubLink } from "../components/SiteChrome"
 
-export let PlaygroundPage = props =>
+export type Props = { logo: string, homeHref: string }
+
+export let PlaygroundPage : Props -> VNode = props =>
   <div
     className="site-grain flex h-dvh flex-col overflow-hidden bg-paper text-ink"
   >

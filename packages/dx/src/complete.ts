@@ -20,7 +20,7 @@ import type {
 import { resolvePlugins, runCompleteMemberHooks } from "@mochi/compiler/extensions";
 import type { Env, InferResult, TypeAt } from "@mochi/compiler/infer";
 import { lex } from "@mochi/compiler/lexer";
-import { moduleContext } from "@mochi/compiler/module";
+import { type ModuleCache, moduleContext } from "@mochi/compiler/module";
 import { parseRecovering } from "@mochi/compiler/parser";
 import { preludeEnv, preludeNamespaces } from "@mochi/compiler/prelude";
 import { isPreludePath } from "@mochi/compiler/prelude-virtual";
@@ -413,7 +413,7 @@ export const completeAt = (
     : dedupeSort(filterPrefix(valueItems(src, offset, opts.plugins), identPrefixAt(src, offset)));
 };
 
-export type ModuleCompleteOptions = { plugins?: LanguagePlugin[] };
+export type ModuleCompleteOptions = { plugins?: LanguagePlugin[]; cache?: ModuleCache };
 
 /**
  * Module-aware completion: resolve imports so `import * as R` members,
@@ -433,7 +433,7 @@ export const moduleCompleteAt = async (
   const load = async (buffer: string) => {
     const read = (p: string): Promise<string> =>
       resolve(p) === entry ? Promise.resolve(buffer) : readFile(p);
-    return moduleContext(entry, read, { plugins: opts.plugins });
+    return moduleContext(entry, read, { plugins: opts.plugins, cache: opts.cache });
   };
 
   let ctx = await load(src);

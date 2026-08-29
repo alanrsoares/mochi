@@ -1,0 +1,18 @@
+"use open"
+
+extern h<A> : A = "preact" "h"
+
+/// Empty fragment sentinel for absent nodes.
+export let empty : VNode = <></>
+
+/// Render `node` when `cond` is true, otherwise empty fragment.
+export let when = (cond, node) => cond ? node : empty
+
+/// Render `node` when `cond` is false, otherwise empty fragment.
+export let unless = (cond, node) => cond ? empty : node
+
+/// Render an Option value with `renderFn`, otherwise empty fragment.
+export let renderOption = (opt, renderFn) => switch opt {
+  | Some(val) => renderFn(val)
+  | None => empty
+}

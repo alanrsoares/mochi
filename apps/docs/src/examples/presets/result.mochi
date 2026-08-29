@@ -1,15 +1,16 @@
-// Ok and Err come from the prelude. Drop either arm and the compiler stops you.
+// Result is a sum type (Ok | Err). Pattern matching is exhaustive,
+// and `let?` provides monadic unwrapping with early error return.
 
-let mapOk = (res, f) => switch res {
-  | Ok(val) => Ok(f(val))
-  | Err(err) => Err(err)
-}
+let half = n => n % 2 == 0 ? Ok(n / 2) : Err("odd number")
 
-let res = Ok(21)
-let doubled = mapOk(res, x => x * 2)
+let quarter = n => let? h = half(n) in let? q = half(h) in Ok(q)
+
+let step1 = quarter(40)
+let step2 = quarter(10)
 
 let app = <div
-  className="w-full max-w-md p-4 bg-paper border-2 border-line rounded-panel font-mono text-xs text-fur-deep"
+  className="w-full max-w-md p-4 bg-paper border-2 border-line rounded-panel font-mono text-xs text-fur-deep space-y-2"
 >
-  {"doubled = " ++ show(doubled)}
+  <div>{"quarter(40) = " ++ show(step1)}</div>
+  <div>{"quarter(10) = " ++ show(step2)}</div>
 </div>

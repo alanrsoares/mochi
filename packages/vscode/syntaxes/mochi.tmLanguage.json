@@ -9,6 +9,7 @@
         { "include": "#comments" },
         { "include": "#strings" },
         { "include": "#jsx" },
+        { "include": "#imports" },
         { "include": "#braces" },
         { "include": "#declarations" },
         { "include": "#keywords" },
@@ -240,12 +241,35 @@
         }
       ]
     },
+    "imports": {
+      "comment": "import { a, b } from '...'",
+      "begin": "\\b(import)\\b",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.import.mochi" }
+      },
+      "end": "(?=\"|')",
+      "patterns": [
+        { "include": "#comments" },
+        {
+          "match": "\\b(from|as)\\b",
+          "name": "keyword.control.import.mochi"
+        },
+        {
+          "match": "\\b[A-Z][A-Za-z0-9_]*\\b",
+          "name": "entity.name.type.mochi"
+        },
+        {
+          "match": "\\b[a-z_][A-Za-z0-9_]*\\b",
+          "name": "variable.other.readwrite.mochi"
+        }
+      ]
+    },
     "keywords": {
       "patterns": [
         {
-          "comment": "Control + contextual (`in`/`when`) + sequencing (`do`, ADR 0071) + loop (`loop`/`recur`, ADR 0056). Must stay ahead of #function-calls so `loop (` / `recur(` are not painted as calls.",
+          "comment": "Control + contextual (`in`/`when`/`as`/`from`) + sequencing (`do`, ADR 0071) + loop (`loop`/`recur`, ADR 0056). Must stay ahead of #function-calls so `loop (` / `recur(` are not painted as calls. `when` only matches as keyword in guard position (not followed by `(`, `,`, `}`, `)`).",
           "name": "keyword.control.mochi",
-          "match": "\\b(switch|import|export|in|when|do|loop|recur)\\b"
+          "match": "\\b(switch|import|export|in|as|from|do|loop|recur)\\b|\\bwhen\\b(?!\\s*[\\(,}):;=])"
         },
         {
           "name": "keyword.declaration.mochi",

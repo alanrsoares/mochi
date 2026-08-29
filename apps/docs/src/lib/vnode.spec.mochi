@@ -1,0 +1,22 @@
+import { assertEq, describe, test } from "@mochi/test"
+import { empty, renderOption, unless, when } from "./vnode.mochi"
+
+extern h<A> : A = "preact" "h"
+
+let dummyNode = <div>{"hello"}</div>
+let spanNode = <span>{"world"}</span>
+
+describe("vnode.mochi", () => {
+  test("when returns node when cond is true, empty when false", () => {
+    when(true, dummyNode) |> assertEq(dummyNode);
+    when(false, dummyNode) |> assertEq(empty)
+  });
+  test("unless returns empty when cond is true, node when false", () => {
+    unless(true, dummyNode) |> assertEq(empty);
+    unless(false, dummyNode) |> assertEq(dummyNode)
+  });
+  test("renderOption unboxes Some and falls back to empty on None", () => {
+    renderOption(Some("world"), _ => spanNode) |> assertEq(spanNode);
+    renderOption(None, _ => spanNode) |> assertEq(empty)
+  })
+})

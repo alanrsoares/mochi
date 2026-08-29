@@ -5,10 +5,20 @@ extern BASE_URL : string = "./base-url" "BASE_URL"
 
 let asset = concat(BASE_URL)
 
-export let bootstrapPartyImg = asset("illustrations/mochi_bootstrap_party.jpg")
-export let coderMascotImg = asset("illustrations/mochi_coder_mascot.jpg")
-export let compilerMagicImg = asset("illustrations/mochi_compiler_magic.jpg")
-export let cosmicTypesImg = asset("illustrations/mochi_cosmic_types.jpg")
-export let lspInspectorImg = asset("illustrations/mochi_lsp_inspector.jpg")
-export let stickersImg = asset("illustrations/mochi_stickers.jpg")
-export let logoImg = asset("logo.png")
+export let bootstrapPartyImg : string = asset(
+  "illustrations/mochi_bootstrap_party.jpg"
+)
+export let coderMascotImg : string = asset(
+  "illustrations/mochi_coder_mascot.jpg"
+)
+export let compilerMagicImg : string = asset(
+  "illustrations/mochi_compiler_magic.jpg"
+)
+export let cosmicTypesImg : string = asset(
+  "illustrations/mochi_cosmic_types.jpg"
+)
+export let lspInspectorImg : string = asset(
+  "illustrations/mochi_lsp_inspector.jpg"
+)
+export let stickersImg : string = asset("illustrations/mochi_stickers.jpg")
+export let logoImg : string = asset("logo.png")

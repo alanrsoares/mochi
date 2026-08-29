@@ -5,15 +5,8 @@
 import { render, type VNode } from "preact";
 import "../index.css";
 import { initColorScheme } from "./color-scheme";
-import { logoImg } from "./illustrations.mochi";
 
-export const logoUrl: string = logoImg;
-
-export const siteHrefs = {
-  home: import.meta.env.BASE_URL,
-  playground: `${import.meta.env.BASE_URL}playground.html`,
-  about: `${import.meta.env.BASE_URL}about.html`,
-} as const;
+export { logoUrl, siteHrefs } from "./site-hrefs.mochi";
 
 export const mountPage = (page: VNode): void => {
   initColorScheme();

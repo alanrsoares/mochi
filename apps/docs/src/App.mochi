@@ -117,7 +117,20 @@ let InteropRow = props =>
     </div>
   </div>
 
-export let App = props =>
+export type Props = {
+  logo: string,
+  playgroundHref: string,
+  aboutHref: string,
+  codeEmitSrc: string,
+  codeEmitJs: string,
+  codeEmitTs: string,
+  codeEmitDts: string,
+  codeVariants: string,
+  codeRecords: string,
+  codeJsx: string
+}
+
+export let App : Props -> VNode = props =>
   <div className="site-grain min-h-screen flex flex-col bg-paper text-ink">
     <SiteHeader
       logo={props.logo}

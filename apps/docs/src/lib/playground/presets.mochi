@@ -13,7 +13,7 @@ export type Preset = { name: string, code: string }
 /// runtime string, which a closed record type can't answer.
 export let presetEntries : [(string, Preset)] = [
   ("jsx", { name: "JSX → h()", code: presetJsx }),
-  ("result", { name: "Result + switch", code: presetResult }),
+  ("result", { name: "Result + let?", code: presetResult }),
   ("task", { name: "Async with typed errors", code: presetTask }),
   ("rowPoly", { name: "Flexible records", code: presetRowPoly }),
   ("fib", { name: "Fibonacci", code: presetFib })

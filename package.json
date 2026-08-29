@@ -9,6 +9,7 @@
   "scripts": {
     "mochi": "bun packages/cli/src/cli.ts",
     "lint": "biome check .",
+    "lint:mochi": "bun scripts/lint-mochi.ts",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "typecheck": "tsc --noEmit",

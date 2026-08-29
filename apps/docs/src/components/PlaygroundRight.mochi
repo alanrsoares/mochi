@@ -3,7 +3,9 @@
 // Right-hand pane chrome: tab strip + pane body.
 import { PresetSelect } from "../ui/primitives"
 
-export let PlaygroundRight = props =>
+export type PlaygroundRightProps = { tabs: [VNode], pane: VNode }
+
+export let PlaygroundRight : PlaygroundRightProps -> VNode = props =>
   <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-peach">
     <div
       className="flex shrink-0 items-center gap-0.5 overflow-x-auto border-line border-b-2 px-2 scrollbar-none [&::-webkit-scrollbar]:hidden"
@@ -17,7 +19,12 @@ export let PlaygroundRight = props =>
     </div>
   </div>
 
-export let PlaygroundSettings = props =>
+export type PlaygroundSettingsProps = {
+  onPreset: any -> (),
+  presetOptions: [VNode]
+}
+
+export let PlaygroundSettings : PlaygroundSettingsProps -> VNode = props =>
   <div className="max-w-sm space-y-4 font-mono text-xs">
     <div>
       <label

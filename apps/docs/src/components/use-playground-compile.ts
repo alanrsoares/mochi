@@ -5,8 +5,10 @@
  * testable without the editor UI.
  */
 import type { Diagnostic } from "@mochi/compiler";
+import { None, Some } from "@mochi/compiler/runtime";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { createPlaygroundCompiler } from "../lib/playground/compiler";
+import { formatStatus, type PlaygroundStatus } from "../lib/playground/status.mochi";
 
 const COMPILE_DEBOUNCE_MS = 280;
 
@@ -83,21 +85,13 @@ export function usePlaygroundCompile(
   return { outputJs, outputTs, outputDts, diagnostics, compileMs, compiling, evaluate };
 }
 
-export type PlaygroundStatus = { text: string; state: "ok" | "err" };
+export type { PlaygroundStatus };
 
 export const playgroundStatus = (
   compiling: boolean,
   compileMs: number | null,
   ok: boolean,
 ): PlaygroundStatus => {
-  const text = compiling
-    ? "compiling…"
-    : compileMs === null
-      ? ok
-        ? "ready"
-        : "error"
-      : ok
-        ? `ok · ${compileMs.toFixed(1)}ms`
-        : `error · ${compileMs.toFixed(1)}ms`;
-  return { text, state: compiling || ok ? "ok" : "err" };
+  const timing = compileMs === null ? None : Some(compileMs.toFixed(1));
+  return formatStatus(compiling, timing, ok);
 };

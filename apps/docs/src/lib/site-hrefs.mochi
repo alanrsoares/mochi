@@ -1,0 +1,13 @@
+"use open"
+
+import { logoImg } from "./illustrations.mochi"
+
+extern BASE_URL : string = "./base-url" "BASE_URL"
+
+export let logoUrl : string = logoImg
+
+export let siteHrefs = {
+  home: BASE_URL,
+  playground: BASE_URL ++ "playground.html",
+  about: BASE_URL ++ "about.html"
+}

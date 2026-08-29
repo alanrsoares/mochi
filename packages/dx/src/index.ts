@@ -2,6 +2,7 @@
 export { type CompletionItem, type CompletionKind, completeAt, moduleCompleteAt } from "./complete";
 export {
   diagnostics,
+  documentDiagnostics,
   moduleDiagnostics,
   type Position,
   type PublishDiagnostic,

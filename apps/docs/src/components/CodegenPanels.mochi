@@ -18,7 +18,9 @@ let OutputTab = props =>
     {props.label}
   </PaneTab>
 
-export let CodegenPanels = props =>
+export type Props = { src: string, js: string, ts: string, dts: string }
+
+export let CodegenPanels : Props -> VNode = props =>
   let (tab, setTab) = useState("js") in
   let caption = tab == "js"
     ? "bun run mochi"

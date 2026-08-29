@@ -56,7 +56,11 @@ const pluginsFor = (dir: string) => {
 };
 
 const files = targets
-  .flatMap((dir) => [...new Bun.Glob("**/*.mochi").scanSync({ cwd: dir })].map((f) => join(dir, f)))
+  .flatMap((dir) =>
+    [...new Bun.Glob("**/*.mochi").scanSync({ cwd: dir })]
+      .filter((f) => !f.endsWith(".spec.mochi"))
+      .map((f) => join(dir, f)),
+  )
   .toSorted();
 
 const drift: string[] = [];
