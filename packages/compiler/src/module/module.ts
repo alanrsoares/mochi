@@ -82,9 +82,15 @@ export type ModuleCache = {
   entries: Map<string, CacheEntry>;
   /** Monotonic revision counter — see {@link CacheEntry.rev}. */
   next: number;
+  /** Parsed dependency programs, so re-walking a shared graph costs no re-parse. */
+  progs: Map<string, { src: string; prog: Program }>;
 };
 
-export const createModuleCache = (): ModuleCache => ({ entries: new Map(), next: 0 });
+export const createModuleCache = (): ModuleCache => ({
+  entries: new Map(),
+  next: 0,
+  progs: new Map(),
+});
 
 /** Plugin lists are compared by identity — two lists are the same config only
  * if they are the same array, which is what every caller already reuses. */
@@ -342,15 +348,27 @@ const loadGraph = (
           path,
         );
       }
-      const parsed = parseModule(src, opts);
-      if (isErr(parsed)) return atPath(parsed.error, path);
+      // Parse is cheap next to inference, but `loadGraph` re-walks the whole
+      // graph for every entry, so a shared cache still saves a full re-parse of
+      // every dependency per entry.
+      const progKey = `${pluginListId(opts.plugins)}|${path}`;
+      const cachedProg = opts.cache?.progs.get(progKey);
+      let prog: Program;
+      if (cachedProg && cachedProg.src === src) {
+        prog = cachedProg.prog;
+      } else {
+        const parsed = parseModule(src, opts);
+        if (isErr(parsed)) return atPath(parsed.error, path);
+        prog = parsed.value;
+        opts.cache?.progs.set(progKey, { src, prog });
+      }
 
-      for (const imp of importsOf(parsed.value)) {
+      for (const imp of importsOf(prog)) {
         const dep = await visit(resolveImport(path, imp.from));
         if (dep) return dep;
       }
       state.set(path, "done");
-      order.push({ path, prog: parsed.value, src });
+      order.push({ path, prog, src });
       return null;
     };
 

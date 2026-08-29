@@ -8,6 +8,7 @@
 // command would take.
 import { readFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
+import { createModuleCache } from "@mochi/compiler/module";
 import { moduleDiagnostics, type PublishDiagnostic } from "@mochi/dx/diagnostics";
 import { pluginsForDocument } from "@mochi/lsp/load-plugins";
 
@@ -27,13 +28,13 @@ const files = (globs.length > 0 ? globs : ["**/*.mochi"])
 // One read per path for the whole sweep. Neighbouring entries share most of
 // their dependency graph, so the same prelude/module text is asked for dozens
 // of times.
-const cache = new Map<string, Promise<string>>();
+const reads = new Map<string, Promise<string>>();
 const read = (p: string): Promise<string> => {
   const key = resolve(p);
-  const hit = cache.get(key);
+  const hit = reads.get(key);
   if (hit) return hit;
   const pending = readFile(key, "utf8");
-  cache.set(key, pending);
+  reads.set(key, pending);
   return pending;
 };
 
@@ -58,6 +59,10 @@ const report = (file: string, d: PublishDiagnostic): string => {
   return [`${at} ${head}`, ...rest.map((line) => `  ${line}`)].join("\n");
 };
 
+// Neighbouring entries share almost all of their graph — without this the
+// 34-file `bootstrap/` sweep infers the whole compiler 34 times.
+const cache = createModuleCache();
+
 const started = Date.now();
 let failures = 0;
 let done = 0;
@@ -74,7 +79,7 @@ for (const file of files) {
       console.error(`${relative(root, manifest)}: failed to load — ${String(error)}`);
     },
   });
-  for (const d of await moduleDiagnostics(path, await read(path), read, { plugins })) {
+  for (const d of await moduleDiagnostics(path, await read(path), read, { plugins, cache })) {
     failures += 1;
     clearProgress();
     console.log(report(file, d));

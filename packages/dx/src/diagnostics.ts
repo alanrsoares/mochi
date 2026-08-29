@@ -11,7 +11,7 @@ import { toTypedProgram, toTypedProgramWith } from "@mochi/compiler/compile";
 import { checkErr, type Diagnostic } from "@mochi/compiler/errors";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import { lex } from "@mochi/compiler/lexer";
-import { moduleContext, resolveImport } from "@mochi/compiler/module";
+import { type ModuleCache, moduleContext, resolveImport } from "@mochi/compiler/module";
 import { parse } from "@mochi/compiler/parser";
 import { preludeNamespaces } from "@mochi/compiler/prelude";
 import type { Env, Scheme } from "@mochi/compiler/schemes";
@@ -98,8 +98,8 @@ export function toPublish(
   };
 }
 
-/** Options threaded into `moduleDiagnostics` / single-file `diagnostics` — `plugins` (styled-cva, …), same list Vite / `gen-mochi-dts` use. Omitted = default/builtin resolution (`resolvePlugins`, ADR 0011). */
-export type ModuleDiagnosticsOptions = { plugins?: LanguagePlugin[] };
+/** Options threaded into `moduleDiagnostics` / single-file `diagnostics` — `plugins` (styled-cva, …), same list Vite / `gen-mochi-dts` use. Omitted = default/builtin resolution (`resolvePlugins`, ADR 0011). `cache` reuses dependency inference across calls (`createModuleCache`); omitted = no reuse. */
+export type ModuleDiagnosticsOptions = { plugins?: LanguagePlugin[]; cache?: ModuleCache };
 
 /**
  * Check + infer may emit several diagnostics (ADR 0004); so may parse, since
@@ -178,7 +178,7 @@ async function moduleDiagnosticsFor(
   const entry = resolve(path);
   const read = (p: string): Promise<string> =>
     resolve(p) === entry ? Promise.resolve(src) : readFile(p);
-  const ctx = await moduleContext(entry, read, { plugins: opts.plugins });
+  const ctx = await moduleContext(entry, read, { plugins: opts.plugins, cache: opts.cache });
   if (isErr(ctx))
     return [
       ...graphFailureDiagnostics(src, prog, entry, ctx.error),
