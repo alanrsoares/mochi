@@ -9,7 +9,12 @@ import { openMode, toTypedProgramRecovering, toTypedProgramWith } from "@mochi/c
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import type { InferResult, TypeAt } from "@mochi/compiler/infer";
 import { lex } from "@mochi/compiler/lexer";
-import { loadModuleGraph, moduleContext, resolveImport } from "@mochi/compiler/module";
+import {
+  loadModuleGraph,
+  type ModuleCache,
+  moduleContext,
+  resolveImport,
+} from "@mochi/compiler/module";
 import { parseRecovering } from "@mochi/compiler/parser";
 import { preludeNamespaces } from "@mochi/compiler/prelude";
 import { isPreludePath } from "@mochi/compiler/prelude-virtual";
@@ -236,7 +241,7 @@ export const typeDefinitionAt = (
 };
 
 /** Options threaded into module-* nav helpers that typecheck — `plugins` (styled-cva, …), same list hover/diagnostics take. */
-export type ModuleNavOptions = { plugins?: LanguagePlugin[] };
+export type ModuleNavOptions = { plugins?: LanguagePlugin[]; cache?: ModuleCache };
 
 /** Module-aware go-to-type (imported variants/aliases via export origins). */
 export const moduleTypeDefinitionAt = async (
@@ -257,7 +262,7 @@ export const moduleTypeDefinitionAt = async (
   const entry = resolve(path);
   const read = (p: string): Promise<string> =>
     resolve(p) === entry ? Promise.resolve(src) : readFile(p);
-  const ctx = await moduleContext(entry, read, { plugins: opts.plugins });
+  const ctx = await moduleContext(entry, read, { plugins: opts.plugins, cache: opts.cache });
   if (isErr(ctx)) return typeDefinitionAt(src, offset, entry);
 
   const typed = toTypedProgramWith(program, ctx.value, {

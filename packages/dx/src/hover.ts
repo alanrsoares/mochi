@@ -12,7 +12,7 @@ import { openMode, toTypedProgramRecovering, toTypedProgramWith } from "@mochi/c
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import { type InferResult, type SymbolInfo, showScheme, type TypeAt } from "@mochi/compiler/infer";
 import { type Located, lex, type Tok } from "@mochi/compiler/lexer";
-import { type ModuleContext, moduleContext } from "@mochi/compiler/module";
+import { type ModuleCache, type ModuleContext, moduleContext } from "@mochi/compiler/module";
 import { parseRecovering } from "@mochi/compiler/parser";
 import { preludeNamespaces } from "@mochi/compiler/prelude";
 import { preludeDocForBinding } from "@mochi/compiler/prelude-virtual";
@@ -286,7 +286,7 @@ export const hoverAtOption = (src: string, offset: number, path = "<buffer>"): M
 };
 
 /** Options threaded into module-aware nav/hover/diagnostics — `plugins` (styled-cva, …), same list Vite / `gen-mochi-dts` use. Omitted = default/builtin resolution (`resolvePlugins`, ADR 0011). */
-export type ModuleHoverOptions = { plugins?: LanguagePlugin[] };
+export type ModuleHoverOptions = { plugins?: LanguagePlugin[]; cache?: ModuleCache };
 
 /**
  * Module-aware hover: resolve `path`'s dependency graph (deps from disk via
@@ -315,7 +315,7 @@ export const moduleHoverAt = async (
   const entry = resolve(path);
   const read = (p: string): Promise<string> =>
     resolve(p) === entry ? Promise.resolve(src) : readFile(p);
-  const ctx = await moduleContext(entry, read, { plugins: opts.plugins });
+  const ctx = await moduleContext(entry, read, { plugins: opts.plugins, cache: opts.cache });
   if (isErr(ctx)) return hoverAt(src, offset, entry);
   const imported = importHoverAt(program, offset, ctx.value);
   if (imported) return imported;

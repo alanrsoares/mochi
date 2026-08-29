@@ -88,7 +88,20 @@ Add an **optional, caller-owned** `ModuleCache` to `ModuleGraphOptions`.
 20.5s → 2.2s.
 
 The editor gains more than the sweep does, because a keystroke changes only the
-entry. Second-validation latency, `bootstrap/`:
+entry. Every typechecking DX surface resolves the whole graph behind the edited
+file, so they all share the session's cache — hover and completion have no
+debounce in front of them, and were paying full price per request:
+
+| query, in `bootstrap/cli.mochi` | before | after |
+|---|---|---|
+| `moduleHoverAt` | 1771ms | **14ms** |
+| `moduleCompleteAt` | 1655ms | **2ms** |
+| `moduleTypeDefinitionAt` | 1806ms | **33ms** |
+
+`moduleDefinitionAt` / `moduleHighlightsAt` / `moduleReferencesAt` are 17–25ms
+and take no cache: they run off the symbol index and never infer.
+
+Second-validation latency, `bootstrap/`:
 
 | edited file | before | after |
 |---|---|---|
