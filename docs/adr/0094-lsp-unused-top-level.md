@@ -19,7 +19,9 @@ is the entire search space — the same closed world the local analysis enjoys.
 Running the check over this repo's own `.mochi` corpus found three dead
 bindings in the self-hosted compiler (`bootstrap/parser.mochi`'s
 `setExternExported`, `bootstrap/plugins/jsx.mochi`'s `jxSpanning`) that no
-existing gate reports.
+existing gate reports. `test/mochi-unused.spec.ts` now holds `bootstrap/`,
+`packages/`, and `test/` at zero; `examples/` and `apps/` are exempt by root,
+so no suppression comments scatter through the sources that are held.
 
 ## Decision
 
