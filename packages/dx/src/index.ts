@@ -17,6 +17,7 @@ export {
   documentSymbolsAt,
   type Highlight,
   highlightsAt,
+  type ListFiles,
   moduleDefinitionAt,
   moduleHighlightsAt,
   modulePrepareRenameAt,

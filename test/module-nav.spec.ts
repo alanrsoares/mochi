@@ -16,6 +16,9 @@ const modules = resolve(root, "examples/modules");
 const mainPath = resolve(modules, "main.mochi");
 const geomPath = resolve(modules, "geometry.mochi");
 const read = (p: string) => readFile(p, "utf8");
+// What the language server supplies from its workspace roots: references and
+// rename need dependents, which no single-entry graph walk can reach.
+const listFiles = async (): Promise<readonly string[]> => [mainPath, geomPath];
 
 test("moduleDefinitionAt jumps import use to export file", async () => {
   const src = await read(mainPath);
@@ -81,6 +84,38 @@ test("moduleReferencesAt spans importer and exporter", async () => {
   expect(paths).toContain(mainPath);
   expect(paths).toContain(geomPath);
   expect(refs.some((r) => r.role === "def")).toBe(true);
+});
+
+// The bug this guards: `loadModuleGraph` walks imports DOWNWARD, so a query
+// raised on a definition sees only what that file imports — never its importers.
+// Every reference/rename test above queries from a USE site, where the entry
+// already reaches the definition, which is why the gap went unnoticed.
+test("moduleReferencesAt from the DEFINITION reaches importers", async () => {
+  const geom = await read(geomPath);
+  const def = geom.indexOf("export let hypot") + "export let ".length;
+
+  // Without a project listing there is nothing to walk upward from.
+  const local = await moduleReferencesAt(geomPath, geom, def, read);
+  expect([...new Set(local.map((r) => r.location.path))]).toEqual([geomPath]);
+
+  const refs = await moduleReferencesAt(geomPath, geom, def, read, listFiles);
+  const paths = [...new Set(refs.map((r) => r.location.path))];
+  expect(paths).toContain(geomPath);
+  expect(paths).toContain(mainPath);
+
+  // Same answer from either end, which is the property that was broken.
+  const main = await read(mainPath);
+  const fromUse = await moduleReferencesAt(mainPath, main, main.indexOf("hypot("), read);
+  expect(refs.length).toBe(fromUse.length);
+});
+
+test("moduleRenameAt from the DEFINITION rewrites importers too", async () => {
+  const geom = await read(geomPath);
+  const def = geom.indexOf("export let hypot") + "export let ".length;
+  const edits = await moduleRenameAt(geomPath, geom, def, "hyp", read, listFiles);
+  expect(edits).not.toBeNull();
+  const paths = [...new Set(edits!.map((e) => e.location.path))];
+  expect(paths).toContain(mainPath);
 });
 
 test("moduleRenameAt rewrites export and import sites", async () => {
