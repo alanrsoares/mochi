@@ -7,6 +7,7 @@ import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
+import { createModuleCache } from "@mochi/compiler/module";
 import { isPreludePath, PRELUDE_PATH, preludeVirtualSource } from "@mochi/compiler/prelude-virtual";
 import type { Span } from "@mochi/compiler/span";
 import { type CompletionItem as MochiCompletion, moduleCompleteAt } from "@mochi/dx/complete";
@@ -124,7 +125,12 @@ export function startServer(opts: ServerOptions = {}): void {
   const fixedPlugins = opts.plugins;
   let loadProjectPlugins = opts.loadProjectPlugins === true && fixedPlugins === undefined;
   let allowedRoots: string[] = [];
+  // One memo for the session: a keystroke re-infers the edited buffer, not the
+  // whole import graph behind it (ADR 0095). Dropped wholesale when a plugin
+  // manifest changes, since that changes what every call site means.
+  let cache = createModuleCache();
   const dxOpts = async (path: string) => ({
+    cache,
     plugins: loadProjectPlugins
       ? await pluginsForDocument(path, {
           allowedRoots,
@@ -506,6 +512,7 @@ export function startServer(opts: ServerOptions = {}): void {
     );
     if (!manifestChanged) return;
     clearPluginsCache();
+    cache = createModuleCache();
     for (const doc of documents.all()) {
       if (doc.uri.endsWith(".mochi")) scheduleValidate(doc);
     }

@@ -139,6 +139,7 @@ What else was on the table and why not.
 | [0092](0092-record-alias-index.md) | the TS backend re-attaches record alias names at the print boundary | Accepted |
 | [0093](0093-curry-type-not-overloads.md) | a concrete curried binding types as `_Curry<[params], R>`, not an overload set | Accepted |
 | [0094](0094-lsp-unused-top-level.md) | the LSP warns on unexported top-level bindings with no use | Accepted |
+| [0095](0095-module-context-cache.md) | `moduleContext` takes a caller-owned per-module memo | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was
