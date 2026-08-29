@@ -3753,7 +3753,6 @@ const setExternMeta: _Curry<[exported: boolean, doc: Option<string>, s: Stmt], S
       )
       .otherwise((other) => other),
 );
-const setExternExported = setExternMeta(true, None as Option<string>);
 const parseExprStmt: <A, B>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   pos: number,

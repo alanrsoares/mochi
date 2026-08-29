@@ -97,11 +97,6 @@ const jxTokAt: <A>(
 const jxSpanOf: <A, B, C>(lt: { end: A; start: B } & C) => { start: B; end: A } = <A, B, C>(
   lt: { end: A; start: B } & C,
 ) => ({ start: lt.start, end: lt.end });
-const jxSpanning: <A, B, C, D>(a: { start: A } & C, b: { end: B } & D) => { start: A; end: B } =
-  _curry(2, <A, B, C, D>(a: { start: A } & C, b: { end: B } & D) => ({
-    start: a.start,
-    end: b.end,
-  }));
 const jxToEnd: <A, B, C>(
   start: { start: A } & C,
   toks: { tok: Tok; start: number; end: number; doc: Option<B> }[],
