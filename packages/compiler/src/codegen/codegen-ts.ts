@@ -37,7 +37,7 @@ import { preludeNamespaces } from "../prelude/prelude";
 import { codegen, collectRuntimeDeps } from "./codegen";
 import { jsDoc } from "./codegen-core";
 
-export type CodegenTsOptions = { runtimeImport?: string; open?: boolean };
+export type CodegenTsOptions = { runtimeImport?: string; open?: boolean; docs?: boolean };
 
 export const DEFAULT_RUNTIME_IMPORT = "@mochi/runtime";
 
@@ -144,6 +144,8 @@ export type TsEmitContext = {
    * that typing here only. Build it with `bindingTypeHooks(resolvePlugins(…))`.
    */
   bindingTypeHooks: BindingTypeHook[];
+  /** Whether to retain docstrings as JSDoc comments (defaults to true). */
+  docs?: boolean;
 };
 
 /**
@@ -164,7 +166,7 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
   const typeHeader = [
     ...prog.stmts.flatMap((s) => {
       if (s.kind !== "type") return [];
-      const doc = jsDoc(s.doc);
+      const doc = ctx.docs !== false ? jsDoc(s.doc) : "";
       if (s.ctors.length === 0 && !s.alias)
         return [
           `declare const ${s.name}: unique symbol;`,
@@ -291,6 +293,7 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
   // ctor's field TypeExprs — ADR 0015) so `Circle(2)` is a `Shape`, not `any`.
   const body = codegen(prog, ctx.importedKeys, {
     runtime: false,
+    docs: ctx.docs,
     annotate,
     annotateParams,
     guardBaseType,
@@ -360,6 +363,7 @@ export const codegenTs = (
       // Single-file `mochi ts` exposes no plugin list (its `toTypedProgram` call
       // above doesn't either), so both passes see the builtins — one resolution.
       bindingTypeHooks: bindingTypeHooks(resolvePlugins(undefined)),
+      docs: opts.docs,
     }),
   );
 };

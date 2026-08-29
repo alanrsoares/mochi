@@ -194,3 +194,10 @@ test("docstrings with comment terminators are safely escaped", () => {
   const src = "/// Contains */ terminator.\nlet safe = 42";
   expect(ts(src)).toContain("/**\n * Contains *\\/ terminator.\n */\nconst safe = 42;");
 });
+
+test("docstrings are omitted when docs: false is passed", () => {
+  const src =
+    "/// Increment by one.\nlet inc = x => add(x, 1)\n\n/// A point.\ntype Point = { x: number }";
+  const out = unwrapOk(codegenTs(src, { docs: false }));
+  expect(out).not.toContain("/**");
+});

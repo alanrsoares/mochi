@@ -33,11 +33,17 @@ Retain `doc` comments by formatting them as standard JSDoc `/** ... */` block co
 4. **Declaration Emit (`dts.ts`)**:
    - Prepend `jsDoc(s.doc)` before `export declare const ${letin.name}: ${ty};` and `export type ${type.name} = ...;`.
 
-5. **Self-Hosted Bootstrap Parity (`bootstrap/`)**:
-   - `bootstrap/codegen.mochi` and `bootstrap/codegen-ts.mochi` mirror the TypeScript oracle's `jsDoc` formatting logic to maintain byte-for-byte fixpoint parity (`bun run fixpoint`) and strict typing (`bun run bootstrap:tsc`).
+5. **Configurability (`docs?: boolean` & `--no-docs`)**:
+   - Docstring retention is enabled by default across all passes (`docs: true`).
+   - Callers can opt out programmatically by passing `docs: false` in `CodegenOptions`, `CodegenTsOptions`, `EmitDtsOptions`, `CompileOptions`, and `ModuleGraphOptions`.
+   - CLI commands (`mochi`, `mochi ts`, `mochi dts`, `mochi build`) accept `--no-docs` to strip doc comments during emission.
+
+6. **Self-Hosted Bootstrap Parity (`bootstrap/`)**:
+   - `bootstrap/codegen.mochi` and `bootstrap/codegen-ts.mochi` mirror the TypeScript oracle's `jsDoc` formatting logic and `docs: bool` threading to maintain byte-for-byte fixpoint parity (`bun run fixpoint`) and strict typing (`bun run bootstrap:tsc`).
 
 ## Consequences
 
-- All exported and top-level functions, values, types, and externs carry clean JSDoc comments into emitted `.js`, `.ts`, and `.d.ts` files.
+- All exported and top-level functions, values, types, and externs carry clean JSDoc comments into emitted `.js`, `.ts`, and `.d.ts` files by default.
+- Programmatic callers and CLI users can opt out via `docs: false` / `--no-docs`.
 - Full IDE hover documentation and autocomplete descriptions work seamlessly for downstream TypeScript and JavaScript consumers.
 - Self-hosted compiler maintains byte-for-byte fixpoint reproducibility (`stage2 ≡ stage3 ≡ TS reference`).

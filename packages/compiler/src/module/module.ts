@@ -49,6 +49,8 @@ export type ModuleGraphOptions = {
    * must not be handed a leniently-inferred result. Omitted = never reuse.
    */
   entryOpen?: boolean;
+  /** Whether to retain docstrings as JSDoc comments (defaults to true). */
+  docs?: boolean;
 };
 
 /** What a dependency contributes to the modules that import it. */
@@ -424,6 +426,7 @@ const compileGraph = (
       path,
       js: codegen(prog, gathered.value.importedKeys, {
         runtime: true,
+        docs: opts.docs,
         moduleExt: opts.moduleExt,
       }),
     });
@@ -525,6 +528,7 @@ const compileGraphTs = (
       importLines: [],
       runtimeImport,
       bindingTypeHooks: tsBindingTypeHooks,
+      docs: opts.docs,
     });
     const typeImports = crossModuleTypeImports(body, path, localTypes, typeOwner);
     const ts = typeImports.length ? `${typeImports.join("\n")}\n\n${body}` : body;
@@ -705,6 +709,7 @@ export const emitDtsForFile = (
       emitDtsFromTyped(typed.value.prog, typed.value.res, {
         plugins: opts.plugins,
         qualify: qualifierMap(ctx.qualTypes, local),
+        docs: opts.docs,
       }),
     );
   });

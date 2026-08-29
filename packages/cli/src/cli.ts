@@ -19,7 +19,7 @@ import { match } from "@onrails/pattern";
 import { isErr } from "@onrails/result";
 
 const USAGE =
-  "usage: mochi [--open] <file.mochi>  |  mochi fmt [--write] <file.mochi>  |  mochi codemod <transform.ts> [--write|--check] [--strict] <globs…>  |  mochi build [--emit=ts] [--open] <entry.mochi>  |  mochi dts [--open] <file.mochi>  |  mochi ts [--open] <file.mochi>";
+  "usage: mochi [--open] [--no-docs] <file.mochi>  |  mochi fmt [--write] <file.mochi>  |  mochi codemod <transform.ts> [--write|--check] [--strict] <globs…>  |  mochi build [--emit=ts] [--open] [--no-docs] <entry.mochi>  |  mochi dts [--open] [--no-docs] <file.mochi>  |  mochi ts [--open] [--no-docs] <file.mochi>";
 
 const [cmd, ...rest] = process.argv.slice(2);
 
@@ -85,37 +85,40 @@ await match(cmd)
   })
   .with("dts", async () => {
     const open = rest.includes("--open");
+    const docs = !rest.includes("--no-docs");
     const path = requireArg(
       rest.find((a) => !a.startsWith("-")),
-      `usage: mochi dts [--open] <file.mochi>\n${USAGE}`,
+      `usage: mochi dts [--open] [--no-docs] <file.mochi>\n${USAGE}`,
     );
     const src = await Bun.file(path).text();
-    const r = await emitDtsForFile(path, src, (p) => Bun.file(p).text(), { open });
+    const r = await emitDtsForFile(path, src, (p) => Bun.file(p).text(), { open, docs });
     if (isErr(r)) die(r.error, src);
     process.stdout.write(r.value);
   })
   .with("ts", async () => {
     const open = rest.includes("--open");
+    const docs = !rest.includes("--no-docs");
     const path = requireArg(
       rest.find((a) => !a.startsWith("-")),
-      `usage: mochi ts [--open] <file.mochi>\n${USAGE}`,
+      `usage: mochi ts [--open] [--no-docs] <file.mochi>\n${USAGE}`,
     );
     const src = await Bun.file(path).text();
-    const r = codegenTs(src, { open });
+    const r = codegenTs(src, { open, docs });
     if (isErr(r)) die(r.error, src);
     process.stdout.write(r.value);
   })
   .with("build", async () => {
     const emitTs = rest.includes("--emit=ts");
     const open = rest.includes("--open");
+    const docs = !rest.includes("--no-docs");
     const entry = requireArg(
       rest.find((a) => !a.startsWith("-")),
-      `usage: mochi build [--emit=ts] [--open] <entry.mochi>\n${USAGE}`,
+      `usage: mochi build [--emit=ts] [--open] [--no-docs] <entry.mochi>\n${USAGE}`,
     );
     const read = (p: string): Promise<string> => Bun.file(p).text();
     const result = await (emitTs
-      ? buildModulesTs(entry, read, { open })
-      : buildModules(entry, read, { open }));
+      ? buildModulesTs(entry, read, { open, docs })
+      : buildModules(entry, read, { open, docs }));
     if (isErr(result)) die(result.error);
     const ext = emitTs ? ".ts" : ".js";
     for (const { path, js } of result.value) {
@@ -126,9 +129,13 @@ await match(cmd)
   })
   .otherwise(async (path) => {
     const open = rest.includes("--open") || path === "--open";
-    const file = requireArg(path === "--open" ? rest.find((a) => !a.startsWith("-")) : path, USAGE);
+    const docs = !rest.includes("--no-docs") && path !== "--no-docs";
+    const file = requireArg(
+      path?.startsWith("-") ? rest.find((a) => !a.startsWith("-")) : path,
+      USAGE,
+    );
     const src = await Bun.file(file).text();
-    const r = compile(src, { open });
+    const r = compile(src, { open, docs });
     if (isErr(r)) die(r.error, src);
     process.stdout.write(r.value);
   });

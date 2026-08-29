@@ -51,6 +51,7 @@ export type GenOpts = {
   flattenPipe: boolean;
   tupleHelper: boolean;
   moduleExt: string;
+  docs: boolean;
 };
 /**
  * Everything threaded through the generators: the `GenOpts` knobs, flattened,
@@ -74,6 +75,7 @@ export type GCtx = {
   tupleHelper: boolean;
   moduleExt: string;
   valueRefs: Set<string>;
+  docs: boolean;
 };
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
@@ -152,6 +154,7 @@ export const jsGenOpts: GenOpts = {
   flattenPipe: false,
   tupleHelper: false,
   moduleExt: ".js",
+  docs: true,
 };
 /**
  * Apply a one-argument `Option<fn>` hook, flattening "no hook" and "hook
@@ -2046,13 +2049,13 @@ const genStmt: _Curry<[ctx: GCtx, s: Stmt], string> = _curry(2, (ctx: GCtx, s: S
         exported
           ? `${docComment}${genExtern(s)}
 export { ${name} };`
-          : `${docComment}${genExtern(s)}`)(jsDoc(doc)),
+          : `${docComment}${genExtern(s)}`)(ctx.docs ? jsDoc(doc) : ""),
     )
     .with({ _tag: "SLet" }, ({ name, value, exported, doc }) =>
       ((doExport: boolean) =>
         ((docComment: string) =>
           `${docComment}${doExport ? "export " : ""}const ${name}${_Option_unwrapOr("", hook2(ctx.annotateLet, name, value))} = ${genExpr(ctx, value)};`)(
-          _Str_startsWith("$", name) ? "" : jsDoc(doc),
+          and(ctx.docs, not(_Str_startsWith("$", name))) ? jsDoc(doc) : "",
         ))(and(exported, not(_Str_startsWith("$", name)))),
     )
     .with({ _tag: "SExpr" }, ({ value }) => `${genExpr(ctx, value)};`)
@@ -2558,6 +2561,7 @@ export const codegenWith: <A>(
   jsDefs: Map<string, string>,
   runtimeDeps: Map<string, string[]>,
   opts: {
+    docs: boolean;
     moduleExt: string;
     tupleHelper: boolean;
     flattenPipe: boolean;
@@ -2579,6 +2583,7 @@ export const codegenWith: <A>(
     jsDefs: Map<string, string>,
     runtimeDeps: Map<string, string[]>,
     opts: {
+      docs: boolean;
       moduleExt: string;
       tupleHelper: boolean;
       flattenPipe: boolean;
@@ -2607,6 +2612,7 @@ export const codegenWith: <A>(
       tupleHelper: opts.tupleHelper,
       moduleExt: opts.moduleExt,
       valueRefs: _Set_fromArray([]),
+      docs: opts.docs,
     };
     const valueRefs: Set<string> = collectValueRefs(ctx0, stmts, 0, _Set_fromArray([] as string[]));
     const ctx: GCtx = { ...ctx0, valueRefs: valueRefs };
@@ -2663,6 +2669,7 @@ export const runtimeDepNames: <A>(
       tupleHelper: false,
       moduleExt: ".js",
       valueRefs: _Set_fromArray([]),
+      docs: false,
     };
     const valueRefs: Set<string> = collectValueRefs(ctx0, stmts, 0, _Set_fromArray([] as string[]));
     return runtimeRefNames({ ...ctx0, valueRefs: valueRefs }, stmts, jsDefs, runtimeDeps);

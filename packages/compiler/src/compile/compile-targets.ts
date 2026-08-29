@@ -35,6 +35,7 @@ export function compileTargets(
 
   const js = codegen(prog, undefined, {
     runtime: opts.runtime ?? true,
+    docs: opts.docs,
     moduleExt: opts.moduleExt,
   });
   const ts = emitTsModule(prog, {
@@ -46,7 +47,8 @@ export function compileTargets(
     importLines: [],
     runtimeImport: DEFAULT_RUNTIME_IMPORT,
     bindingTypeHooks: bindingHooks,
+    docs: opts.docs,
   });
-  const dts = emitDtsFromTyped(prog, res, { plugins: opts.plugins });
+  const dts = emitDtsFromTyped(prog, res, { plugins: opts.plugins, docs: opts.docs });
   return ok({ js, ts, dts });
 }

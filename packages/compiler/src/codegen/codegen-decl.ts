@@ -151,13 +151,13 @@ export const genStmt = (s: Stmt, ctx: GenCtx): string =>
         : decls;
     })
     .with({ kind: "extern" }, (s) => {
-      const doc = jsDoc(s.doc);
+      const doc = ctx.docs ? jsDoc(s.doc) : "";
       return s.exported ? `${doc}${genExtern(s)}\nexport { ${s.name} };` : `${doc}${genExtern(s)}`;
     })
     .with({ kind: "let" }, (s) => {
       const doExport = s.exported && !s.name.startsWith("$"); // never export destructure temps
       const ann = ctx.annotateLet?.(s.name, s.value) ?? ""; // TS backend annotates; JS leaves bare
-      const doc = !s.name.startsWith("$") ? jsDoc(s.doc) : "";
+      const doc = ctx.docs && !s.name.startsWith("$") ? jsDoc(s.doc) : "";
       return `${doc}${doExport ? "export " : ""}const ${s.name}${ann} = ${genExpr(s.value, ctx)};`;
     })
     .with({ kind: "expr" }, (s) => `${genExpr(s.value, ctx)};`)

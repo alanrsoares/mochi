@@ -129,6 +129,9 @@ export type GenCtx = {
   // arm only matches `_tag`, so `genType` can skip that ctor's factory unless
   // the name appears here (`tok == TGt`) or the type stmt is exported.
   readonly valueRefs: ReadonlySet<string>;
+
+  // Whether to retain docstrings as JSDoc comments (defaults to true).
+  readonly docs: boolean;
 };
 
 /** `Set.empty` / `Map.empty` / `List.empty` lower to the same runtime as `#{}` / `@{}` (ADR 0080). */

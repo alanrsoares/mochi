@@ -28,6 +28,7 @@ export { collectRuntimeDeps } from "./codegen-deps";
  */
 export type CodegenOptions = {
   runtime?: boolean;
+  docs?: boolean;
   annotate?: (name: string, value: Expr) => string | null;
   annotateCtor?: (s: TypeStmt, c: Ctor) => CtorFactoryTs | null;
   flattenPipe?: boolean;
@@ -64,6 +65,7 @@ export const codegen = (
     annotateCall: opts.annotateCall ?? null,
     moduleExt: opts.moduleExt ?? ".js",
     valueRefs: collectValueRefs(prog),
+    docs: opts.docs ?? true,
   };
   const needsMatch = prog.stmts.some(
     (s) => (s.kind === "let" || s.kind === "expr") && usesMatchLib(s.value),
