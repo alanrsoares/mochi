@@ -22,7 +22,7 @@ import type { Env, InferResult, TypeAt } from "@mochi/compiler/infer";
 import { lex } from "@mochi/compiler/lexer";
 import { type ModuleCache, moduleContext } from "@mochi/compiler/module";
 import { parseRecovering } from "@mochi/compiler/parser";
-import { INTRINSIC_ELEMENTS } from "@mochi/compiler/plugins/jsx";
+import { INTRINSIC_ELEMENTS } from "@mochi/compiler/plugins/jsx-schema";
 import { preludeEnv, preludeNamespaces } from "@mochi/compiler/prelude";
 import { isPreludePath } from "@mochi/compiler/prelude-virtual";
 import { spanContainsClosed, tightestHit } from "@mochi/compiler/span";

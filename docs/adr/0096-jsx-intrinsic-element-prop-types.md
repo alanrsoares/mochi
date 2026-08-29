@@ -48,5 +48,12 @@ This created four major DX gaps:
 
 ## Alternatives Rejected
 
-- **Full closed record in HM prelude:** Rejected. HTML elements have dozens of optional attributes; requiring an exact closed record row would force every `<div>` to specify all attributes.
+- **Full closed record in HM prelude:** Rejected, but for a reason worth stating
+  precisely. This is how ReScript does it (`JsxDOM.domProps`), and it is the better
+  end state: validation would fall out of ordinary row unification instead of a
+  bespoke validator. It depends on record fields that may be ABSENT, and mochi's
+  rows are `empty | rvar | extend` with no optionality — so a closed `domProps`
+  would force every `<div>` to list every attribute. Revisit if optional fields
+  land; see [ADR 0097](0097-jsx-schema-single-source.md) for how the schema data is
+  kept single-sourced until then.
 - **Relying solely on external `.d.ts`:** Rejected ([ADR 0012](0012-host-interop-end-state.md)). Mochi's compiler and DX must be self-contained and fast without running an external TypeScript typechecker.

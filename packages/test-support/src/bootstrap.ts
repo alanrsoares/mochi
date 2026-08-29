@@ -283,6 +283,31 @@ const importRel = (spec: string): string => spec.replace(/^\.\//, "").replace(/\
 // imports the LanguagePlugin seam (Wave 8).
 const PLUGIN_SEAM = ["plugins/jsx", "extensions"];
 
+// Generated host-seam shims the plugin reaches through `extern`. Module wiring
+// is stripped for the sandbox, so inline the shim's own defs and bind the
+// extern's local name to the export it aliases — otherwise
+// `jsxIntrinsicElements` is simply undefined and every JSX corpus case dies on a
+// ReferenceError rather than producing a verdict (ADR 0097).
+//
+// Keyed by the LOCAL name the extern introduces, not by the import line: the
+// import statements are already gone by the time the body is assembled.
+const HOST_SHIMS: Readonly<Record<string, { readonly rel: string; readonly exported: string }>> = {
+  jsxIntrinsicElements: {
+    rel: "plugins/jsx-schema.gen.mjs",
+    exported: "intrinsicElements",
+  },
+};
+
+const shimDefs = (body: string): string[] =>
+  Object.entries(HOST_SHIMS).flatMap(([local, { rel, exported }]) => {
+    if (!body.includes(local)) return [];
+    const defs = readFileSync(join(root, "bootstrap", rel), "utf8").replace(
+      /^export (const|let|var) /gm,
+      "$1 ",
+    );
+    return [`${defs}\nconst ${local} = ${exported};`];
+  });
+
 // The compiled JS of one bootstrap module, ready to eval in isolation.
 // Accepts either a bare name ("check") or a repo path ("bootstrap/check.mochi").
 export const bootstrapModuleJs = (nameOrPath: string): string => {
@@ -337,5 +362,9 @@ export const bootstrapModuleJs = (nameOrPath: string): string => {
   }
   injectNs(src);
   parts.push(stripped(name));
-  return dedupeConsts(parts.join("\n"));
+  const body = parts.join("\n");
+  // Shim defs go FIRST and are scanned over the assembled body: the module that
+  // reaches a host shim is usually a dep pulled in above (`plugins/jsx`), not
+  // the target itself.
+  return dedupeConsts([...shimDefs(body), body].join("\n"));
 };

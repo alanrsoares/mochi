@@ -72,8 +72,10 @@ const loadBootstrapModule = async (dir: string): Promise<BootstrapModule> => {
   }
   // The host seam and prelude shim are hand-written / generated JS the emitted
   // modules `import` by relative path — copy them in beside the graph.
-  for (const shim of ["host.mjs", "prelude.gen.mjs"])
+  for (const shim of ["host.mjs", "prelude.gen.mjs", "plugins/jsx-schema.gen.mjs"]) {
+    await mkdir(dirname(join(dir, shim)), { recursive: true });
     await writeFile(join(dir, shim), await read(join(BOOTSTRAP, shim)));
+  }
   return (await import(join(dir, "module.js"))) as BootstrapModule;
 };
 

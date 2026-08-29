@@ -22,6 +22,7 @@
     "./parser": "./src/parser/index.ts",
     "./plugin-kit": "./src/extensions/plugin-kit.ts",
     "./plugins/jsx": "./src/extensions/plugins/jsx.ts",
+    "./plugins/jsx-schema": "./src/extensions/plugins/jsx-schema.ts",
     "./prelude": "./src/prelude/index.ts",
     "./prelude-virtual": "./src/prelude/prelude-virtual.ts",
     "./runtime": "./src/prelude/runtime.ts",

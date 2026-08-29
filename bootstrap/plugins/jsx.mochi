@@ -419,30 +419,36 @@ let jsxPropsWithSynthesizedChildren = (propsT, propsExpr, expectedRow, restArgs)
     }
 }
 
-let isBoolAttr = attr =>
-  attr == "disabled" || attr == "checked" || attr == "defaultChecked" || attr == "readOnly" || attr == "required" || attr == "autoFocus" || attr == "multiple" || attr == "hidden" || attr == "open" || attr == "loop" || attr == "muted" || attr == "autoPlay" || attr == "controls" || attr == "noValidate" || attr == "reversed" || attr == "async" || attr == "defer" || attr == "spellCheck" || attr == "draggable"
+// The intrinsic element schema crosses the host seam as DATA, generated from
+// `packages/compiler/src/extensions/plugins/jsx-schema.ts` (ADR 0097) — the same
+// arrangement `prelude.gen.mjs` uses for the prelude tables (ADR 0075). The
+// plugin only looks attributes up, never matches over the schema's shape, so a
+// flat `Map` per element is enough and the graph stays free of 600 lines of table.
+extern jsxIntrinsicElements : Map<string, Map<string, string> > = "./jsx-schema.gen.mjs" "intrinsicElements"
 
-let isStringAttr = attr =>
-  attr == "id" || attr == "className" || attr == "title" || attr == "placeholder" || attr == "href" || attr == "src" || attr == "alt" || attr == "name" || attr == "htmlFor" || attr == "value" || attr == "defaultValue" || attr == "pattern" || attr == "accept" || attr == "autoComplete" || attr == "rel" || attr == "lang" || attr == "role" || attr == "viewBox" || attr == "xmlns" || attr == "fill" || attr == "stroke" || attr == "d" || attr == "points" || attr == "transform" || attr == "textAnchor" || attr == "dominantBaseline" || attr == "fontFamily" || attr == "clipPath" || attr == "mask" || attr == "ariaLabel"
-
-let isNumAttr = attr =>
-  attr == "tabIndex" || attr == "rows" || attr == "cols" || attr == "maxLength" || attr == "minLength" || attr == "size" || attr == "start" || attr == "span" || attr == "colSpan" || attr == "rowSpan"
-
-let isNumOrStrAttr = attr =>
-  attr == "width" || attr == "height" || attr == "min" || attr == "max" || attr == "step" || attr == "strokeWidth" || attr == "opacity" || attr == "x" || attr == "y" || attr == "cx" || attr == "cy" || attr == "r" || attr == "rx" || attr == "ry" || attr == "x1" || attr == "y1" || attr == "x2" || attr == "y2" || attr == "fontSize" || attr == "fontWeight"
+/// A kind string from the generated schema as an HM type. `event` and `any` are
+/// SHAPE checks rather than unifications, so they carry no expected type here.
+let attrKindType = kind =>
+  kind == "string"
+    ? Some(tPrim("string"))
+    : kind == "number"
+    ? Some(tPrim("number"))
+    : kind == "bool"
+    ? Some(tPrim("bool"))
+    : kind == "string|number"
+    ? Some(tUnion([tPrim("string"), tPrim("number")]))
+    : kind == "string|bool"
+    ? Some(tUnion([tPrim("string"), tPrim("bool")]))
+    : Str.startsWith("enum:", kind)
+    ? Some(
+      tUnion(Str.split(",", Str.slice(5, Str.length(kind), kind)) |> map(tLit))
+    )
+    : None
 
 let intrinsicAttrType = (tag, attr) =>
-  isBoolAttr(attr)
-    ? Some(tPrim("bool"))
-    : isStringAttr(attr)
-    ? Some(tPrim("string"))
-    : isNumAttr(attr)
-    ? Some(tPrim("number"))
-    : isNumOrStrAttr(attr)
-    ? Some(tUnion([tPrim("string"), tPrim("number")]))
-    : tag == "button" && attr == "type"
-    ? Some(tUnion([tLit("button"), tLit("submit"), tLit("reset")]))
-    : None
+  Map.get(tag, jsxIntrinsicElements)
+    |> Option.flatMap(Map.get(attr))
+    |> Option.flatMap(attrKindType)
 
 let inferIntrinsicFields = (tag, fields, st, api) => switch fields {
   | [] => Ok(st)
