@@ -143,6 +143,7 @@ What else was on the table and why not.
 | [0096](0096-jsx-intrinsic-element-prop-types.md) | Intrinsic JSX element prop types, validation, and DX | Accepted |
 | [0097](0097-jsx-schema-single-source.md) | One source of truth for the intrinsic JSX schema | Accepted |
 | [0098](0098-optional-record-fields-and-labeled-props.md) | Optional record fields and labeled props | Proposed |
+| [0099](0099-retain-docstrings-in-emitted-js-ts.md) | Retain docstrings in emitted JS, TS, and .d.ts | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

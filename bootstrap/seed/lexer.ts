@@ -1,3 +1,7 @@
+/**
+ * Shared with parser.mochi and plugins/jsx.mochi — one declaration, not
+ * three structurally-equal ones.
+ */
 export type Tok =
   | { _tag: "TLet" }
   | { _tag: "TType" }

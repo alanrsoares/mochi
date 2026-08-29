@@ -165,3 +165,39 @@ test("exported bindings keep the export keyword and gain the annotation", () => 
     "export const inc: (x: number) => number =",
   );
 });
+
+test("docstrings on let bindings emit as JSDoc comments", () => {
+  const src = "/// Increment by one.\nlet inc = x => add(x, 1)";
+  expect(ts(src)).toContain("/**\n * Increment by one.\n */\nconst inc: (x: number) => number =");
+});
+
+test("multi-line docstrings on let bindings preserve paragraph breaks", () => {
+  const src = "/// First line.\n///\n/// Second line.\nexport let inc = x => add(x, 1)";
+  expect(ts(src)).toContain(
+    "/**\n * First line.\n *\n * Second line.\n */\nexport const inc: (x: number) => number =",
+  );
+});
+
+test("docstrings on type declarations emit as JSDoc comments in type header", () => {
+  const src = "/// A 2D point.\ntype Point = { x: number, y: number }";
+  expect(ts(src)).toContain(
+    "/**\n * A 2D point.\n */\nexport type Point = { x: number; y: number };",
+  );
+});
+
+test("docstrings on variant types emit as JSDoc comments", () => {
+  const src = "/// Result type.\ntype Result a e = | Ok(a) | Err(e)";
+  expect(ts(src)).toContain("/**\n * Result type.\n */\nexport type Result<A, B> =");
+});
+
+test("docstrings with comment terminators are safely escaped", () => {
+  const src = "/// Contains */ terminator.\nlet safe = 42";
+  expect(ts(src)).toContain("/**\n * Contains *\\/ terminator.\n */\nconst safe = 42;");
+});
+
+test("docstrings are omitted when docs: false is passed", () => {
+  const src =
+    "/// Increment by one.\nlet inc = x => add(x, 1)\n\n/// A point.\ntype Point = { x: number }";
+  const out = unwrapOk(codegenTs(src, { docs: false }));
+  expect(out).not.toContain("/**");
+});

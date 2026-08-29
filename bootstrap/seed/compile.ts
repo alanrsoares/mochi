@@ -25,6 +25,9 @@ const frontend: ($x: string) => Result<Stmt[], PErr> = ($x: string) =>
   _Result_flatMap(check)((($x) => _Result_flatMap(parse)(lex($x)))($x));
 const pipeline: ($x: string) => Result<Stmt[], PErr> = ($x: string) =>
   _Result_flatMap(typecheck)(frontend($x));
+/**
+ * compile : string -> Result string Err
+ */
 export const compile: (src: string) => Result<string, PErr> = (src: string) =>
   _Result_flatMap(
     (prog) =>
@@ -41,6 +44,12 @@ export const compile: (src: string) => Result<string, PErr> = (src: string) =>
     pipeline(src),
   );
 const noImportedKeys: Map<string, string[]> = new Map<string, string[]>();
+/**
+ * compileTs : string -> Result string Err — the SAME railway, but the typed
+ * TypeScript backend (ADR 0026 / 0090). Inference runs through
+ * `inferProgramTypes` so the emitter gets the span -> type table its
+ * annotation hooks are driven from, not just the final env.
+ */
 export const compileTs: _Curry<[src: string, runtimeImport: string], Result<string, PErr>> = _curry(
   2,
   (src: string, runtimeImport: string) =>

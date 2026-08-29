@@ -9,6 +9,9 @@ export type MapEntry = { key: Expr; value: Expr };
 export type MatchArm = { pattern: Pattern; guard: Option<Expr>; body: Expr };
 export type LoopParam = { name: string; nameSpan: Span; init: Expr };
 export type PatField = { label: string; pat: Pattern };
+/**
+ * One slot in an Array / List / Set literal (ADR 0001).
+ */
 export type SeqElem = { _tag: "SEExpr"; expr: Expr } | { _tag: "SESpread"; expr: Expr };
 export type Expr =
   | { _tag: "ENum"; value: number; raw: string; span: Span }

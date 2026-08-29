@@ -29,7 +29,7 @@ import {
 } from "./types.mochi"
 import { typeExprToType, collect, emptyVarSets } from "./schemes.mochi"
 import { builtinTypeDecls, keysOf } from "./ctors.mochi"
-import { codegenWith, jsGenOpts, runtimeDepNames } from "./codegen.mochi"
+import { codegenWith, jsDoc, jsGenOpts, runtimeDepNames } from "./codegen.mochi"
 import { inferProgramTypes, exprSpan } from "./infer.mochi"
 import {
   genericNames,
@@ -605,35 +605,33 @@ let withoutOwnShape = (fields: [Ast.AliasField], params, aliases: Map<string, Al
 
 let typeHeaderFrom = (stmts, aliases: Map<string, AliasInfo>, recs, i) => switch Array.get(i, stmts) {
   | None => []
-  | Some(Ast.SType(name, params, ctors, alias, aliasType, _, _, _)) => let rest = typeHeaderFrom(
+  | Some(Ast.SType(name, params, ctors, alias, aliasType, _, doc, _)) => let rest = typeHeaderFrom(
       stmts,
       aliases,
       recs,
       i + 1
     ) in
+    let docComment = jsDoc(doc) in
       switch alias {
         | Some(fields) => Array.prepend(
             // Its OWN entry is dropped, or the alias would render as itself
             // (`export type Span = Span;`). Sibling aliases stay, so one alias
             // whose field is another's shape still names it.
-            recordAliasDecl(
-              name,
-              params,
-              fields,
-              aliases,
-              withoutOwnShape(fields, params, aliases, recs)
-            ),
+            "${docComment}${recordAliasDecl(name, params, fields, aliases, withoutOwnShape(fields, params, aliases, recs))}",
             rest
           )
         | None => switch aliasType {
             | Some(te) => Array.prepend(
-                aliasTsDecl(name, params, te, aliases, recs),
+                "${docComment}${aliasTsDecl(name, params, te, aliases, recs)}",
                 rest
               )
             | None => Array.length(ctors) == 0
-                ? Array.prepend(opaqueTypeDecl(name), rest)
+                ? Array.prepend(
+                  "declare const ${name}: unique symbol;\n${docComment}type ${name} = { readonly [${name}]: never };",
+                  rest
+                )
                 : Array.prepend(
-                  typeDecl(name, params, ctors, aliases, recs),
+                  "${docComment}${typeDecl(name, params, ctors, aliases, recs)}",
                   rest
                 )
           }

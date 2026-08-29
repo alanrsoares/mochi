@@ -119,3 +119,21 @@ test("a written D.Shape folds back with a type-only star import (C5 dts)", () =>
   expect(out).toContain('import type * as D from "./shapes.mochi";');
   expect(out).toContain("export declare const c: D.Shape;");
 });
+
+test("docstrings on let bindings emit in .d.ts", () => {
+  expect(dts("/// The answer to life.\nlet answer = 42")).toBe(
+    "/**\n * The answer to life.\n */\nexport declare const answer: number;",
+  );
+});
+
+test("docstrings on type declarations emit in .d.ts", () => {
+  expect(dts("/// Result type.\ntype Result a e = | Ok(a) | Err(e)")).toBe(
+    '/**\n * Result type.\n */\nexport type Result<A, B> =\n  | { _tag: "Ok"; _0: A }\n  | { _tag: "Err"; _0: B };',
+  );
+});
+
+test("docstrings are omitted from .d.ts when docs: false is passed", () => {
+  const src = "/// Result type.\ntype Result a e = | Ok(a) | Err(e)\n/// A binding.\nlet x = 1";
+  const out = unwrapOk(emitDts(src, { docs: false }));
+  expect(out).not.toContain("/**");
+});

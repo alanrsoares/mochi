@@ -26,6 +26,7 @@ import {
   type Type,
   tVar,
 } from "../ast/types";
+import { jsDoc } from "../codegen/codegen-core";
 import { toTypedProgram } from "../compile/compile";
 import type { Diagnostic } from "../errors/errors";
 import type { BindingTypeHook, DtsBindingHook, LanguagePlugin } from "../extensions/extensions";
@@ -700,6 +701,7 @@ const declOf = (
   aliases: AliasDef[],
   hooks: DeclHooks,
   qualify: ReadonlyMap<string, string>,
+  docs = true,
 ): string | null =>
   match(s)
     // An unparsable region declares nothing (ADR 0045 decision 4).
@@ -707,12 +709,13 @@ const declOf = (
     .with({ kind: "import" }, () => null)
     .with({ kind: "extern" }, () => null)
     .with({ kind: "type" }, (type) => {
+      const doc = docs ? jsDoc(type.doc) : "";
       if (type.ctors.length === 0 && !type.alias && !type.aliasType)
-        return `declare const ${type.name}: unique symbol;\nexport type ${type.name} = { readonly [${type.name}]: never };`;
+        return `declare const ${type.name}: unique symbol;\n${doc}export type ${type.name} = { readonly [${type.name}]: never };`;
       const a = aliasByName.get(type.name);
       return a
-        ? aliasTsDecl(a, qualify, aliases)
-        : typeDecl(type.name, type.params, type.ctors, qualify, aliases);
+        ? `${doc}${aliasTsDecl(a, qualify, aliases)}`
+        : `${doc}${typeDecl(type.name, type.params, type.ctors, qualify, aliases)}`;
     })
     .with({ kind: "let" }, (letin) => {
       const sc = schemeOf(letin.name);
@@ -729,7 +732,8 @@ const declOf = (
         fallback,
         { folded, tsType: (t) => tsOf(t, new Map()) },
       );
-      return `export declare const ${letin.name}: ${ty};`;
+      const doc = docs ? jsDoc(letin.doc) : "";
+      return `${doc}export declare const ${letin.name}: ${ty};`;
     })
     .with({ kind: "expr" }, () => null)
     .exhaustive();
@@ -922,6 +926,8 @@ export type EmitDtsOptions = {
    * Omitted → fold only names written qualified in this file (C5 dts).
    */
   qualify?: ReadonlyMap<string, string>;
+  /** Whether to retain docstrings as JSDoc comments (defaults to true). */
+  docs?: boolean;
 };
 
 /** Collect `tqual` nodes so single-file dts can print `D.Shape` without a graph. */
@@ -1016,7 +1022,9 @@ export function emitDtsFromTyped(
   const qualify = new Map(opts.qualify ?? []);
   for (const [k, v] of writtenQualifierMap(prog)) if (!qualify.has(k)) qualify.set(k, v);
   const lines = prog.stmts
-    .map((s) => declOf(s, (n) => env.get(n), aliasByName, aliases, hooks, qualify))
+    .map((s) =>
+      declOf(s, (n) => env.get(n), aliasByName, aliases, hooks, qualify, opts.docs !== false),
+    )
     .filter((l): l is string => l !== null);
   // A builtin variant used in an exported binding's type (e.g. `Option<number>`
   // from `Map.get`) needs its type decl emitted too, unless the program declares

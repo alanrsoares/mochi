@@ -1,4 +1,5 @@
 import type {
+  Ctor,
   Expr,
   Field,
   InterpPart,
@@ -14,14 +15,29 @@ import type {
   Stmt,
   TypeExpr,
 } from "./ast";
+import type { TSt } from "./scc";
 
+/**
+ * What a typed ctor factory carries (TS's `CtorFactoryTs`).
+ */
 export type CtorFactoryTs = {
   generics: string;
   paramTypes: string[];
   ret: string;
   retMono: string;
 };
+/**
+ * A lambda's generic head plus one annotation per collapsed param (`None` =
+ * leave it bare, i.e. generic or JS mode).
+ */
 export type ParamAnnots = { generics: string; params: Option<string>[] };
+/**
+ * Structural stand-ins for a ctor and its fields. NOT `Ast.Ctor`: naming the
+ * imported alias makes the record nominal across the module boundary, and the
+ * frozen stage-1 seed cannot expand a cross-module record alias against an
+ * open row (ADR 0046 landed after it was frozen). Declared here, these expand
+ * locally and still unify structurally with the real AST values.
+ */
 export type CtorFieldLike = { name: Option<string>; fieldType: TypeExpr };
 export type CtorLike = { name: string; fields: CtorFieldLike[] };
 export type GenOpts = {
@@ -35,7 +51,16 @@ export type GenOpts = {
   flattenPipe: boolean;
   tupleHelper: boolean;
   moduleExt: string;
+  docs: boolean;
 };
+/**
+ * Everything threaded through the generators: the `GenOpts` knobs, flattened,
+ * plus the ctor field-key registry, the namespace runtime table, and the
+ * value-reference set. Declared and annotated at every `ctx` parameter for the
+ * reason scc.mochi pins `TSt` (ADR 0044) — each generator generalizes the
+ * record's open tail on its own, so the emitted TS reprinted the whole shape
+ * once per function instead of naming it.
+ */
 export type GCtx = {
   keys: Map<string, string[]>;
   ns: Map<string, Map<string, string>>;
@@ -50,6 +75,7 @@ export type GCtx = {
   tupleHelper: boolean;
   moduleExt: string;
   valueRefs: Set<string>;
+  docs: boolean;
 };
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
@@ -67,6 +93,7 @@ import {
   eq,
   show,
   lt,
+  gt,
   gte,
   lte,
   not,
@@ -100,6 +127,7 @@ import {
   _Str_startsWith,
   _Str_endsWith,
   _Str_slice,
+  _Str_replace,
   _Str_codeAt,
   _Str_chars,
   _tuple,
@@ -110,6 +138,11 @@ import { match } from "@onrails/pattern";
 import * as Ast from "./ast";
 import { keysOf, ctorKeysFromStmts, seedBuiltinCtorKeys } from "./ctors";
 
+/**
+ * The JS backend's knobs: no annotation, no rewriting, `.js` siblings.
+ * Annotated so the emitted TS keeps the hook types instead of widening the
+ * bare `None`s to `Option<unknown>` (ADR 0044).
+ */
 export const jsGenOpts: GenOpts = {
   annotateLet: None as Option<(a: string, b: Expr) => Option<string>>,
   annotateCtor: None as Option<(a: Stmt, b: CtorLike) => Option<CtorFactoryTs>>,
@@ -121,7 +154,12 @@ export const jsGenOpts: GenOpts = {
   flattenPipe: false,
   tupleHelper: false,
   moduleExt: ".js",
+  docs: true,
 };
+/**
+ * Apply a one-argument `Option<fn>` hook, flattening "no hook" and "hook
+ * declined" into the same `None` — TS's `ctx.hook?.(x) ?? null`.
+ */
 const hook1: <A, B>(h: Option<(a: A) => Option<B>>, x: A) => Option<B> = _curry(
   2,
   <A, B>(h: Option<(a: A) => Option<B>>, x: A) =>
@@ -130,6 +168,9 @@ const hook1: <A, B>(h: Option<(a: A) => Option<B>>, x: A) => Option<B> = _curry(
       .with({ _tag: "Some" }, ({ value: f }) => f(x))
       .exhaustive(),
 );
+/**
+ * `hook1` for the two-argument hooks.
+ */
 const hook2: <A, B, C>(h: Option<(a: A, b: B) => Option<C>>, x: A, y: B) => Option<C> = _curry(
   3,
   <A, B, C>(h: Option<(a: A, b: B) => Option<C>>, x: A, y: B) =>
@@ -138,6 +179,9 @@ const hook2: <A, B, C>(h: Option<(a: A, b: B) => Option<C>>, x: A, y: B) => Opti
       .with({ _tag: "Some" }, ({ value: f }) => f(x, y))
       .exhaustive(),
 );
+/**
+ * `new Map<K, V>()` when annotated, `new Map()` otherwise.
+ */
 const emptyNsCtor: _Curry<[con: string, ann: Option<string>], string> = _curry(
   2,
   (con: string, ann: Option<string>) =>
@@ -146,17 +190,47 @@ const emptyNsCtor: _Curry<[con: string, ann: Option<string>], string> = _curry(
       .with({ _tag: "Some" }, ({ value: t }) => `new ${t}()`)
       .exhaustive(),
 );
+/**
+ * Uppercase-initial name — a constructor, not an ordinary binding.
+ * A record field name emits BARE only when it is a valid JS identifier;
+ * anything else (`data-testid`, `aria-label`) must be quoted or the object
+ * literal is a syntax error. Mirrors the oracle's `/^[$A-Za-z_][\w$]*$/`.
+ */
+const isIdentStart: (c: number) => boolean = (c: number) =>
+  or(or(or(and(gte(c, 65), lte(c, 90)), and(gte(c, 97), lte(c, 122))), eq(c, 95)), eq(c, 36));
+const isIdentPart: (c: number) => boolean = (c: number) =>
+  or(isIdentStart(c), and(gte(c, 48), lte(c, 57)));
+const identPartsFrom: _Curry<[s: string, i: number], boolean> = _curry(2, (s: string, i: number) =>
+  match(_Str_codeAt(i, s))
+    .with({ _tag: "None" }, () => true)
+    .with({ _tag: "Some" }, ({ value: c }) => and(isIdentPart(c), identPartsFrom(s, add(i, 1))))
+    .exhaustive(),
+);
+const isJsIdent: (s: string) => boolean = (s: string) =>
+  match(_Str_codeAt(0, s))
+    .with({ _tag: "None" }, () => false)
+    .with({ _tag: "Some" }, ({ value: c }) => and(isIdentStart(c), identPartsFrom(s, 1)))
+    .exhaustive();
 const isUpperStart: (s: string) => boolean = (s: string) =>
   _Option_exists((n: number) => and(gte(n, 65), lte(n, 90)), _Str_codeAt(0, s));
+/**
+ * A 0-field ctor reference (`None`), per this program's ctor-key table.
+ */
 const isNullaryCtor: <A, B>(name: A, keys: Map<A, B[]>) => boolean = _curry(
   2,
   <A, B>(name: A, keys: Map<A, B[]>) =>
     _Option_exists((ks: B[]) => eq(length(ks), 0), _Map_get(name, keys)),
 );
+/**
+ * Callee that is a bare uppercase ref — gates the applied-ctor cast.
+ */
 const isCtorRef: (fn: Expr) => boolean = (fn: Expr) =>
   match(fn)
     .with({ _tag: "ERef" }, ({ name }) => isUpperStart(name))
     .otherwise(() => false);
+/**
+ * `name: T` when annotated, bare name otherwise.
+ */
 const suffixOr: _Curry<[name: string, ann: Option<string>], string> = _curry(
   2,
   (name: string, ann: Option<string>) =>
@@ -165,6 +239,9 @@ const suffixOr: _Curry<[name: string, ann: Option<string>], string> = _curry(
       .with({ _tag: "Some" }, ({ value: t }) => `${name}: ${t}`)
       .exhaustive(),
 );
+/**
+ * No annotations at all — the JS backend's shape for every lambda.
+ */
 const bareParamAnnots: ParamAnnots = { generics: "", params: [] as Option<string>[] };
 const paramAnnotsFor: <A, B>(
   h: Option<(a: A, b: B) => ParamAnnots>,
@@ -176,6 +253,10 @@ const paramAnnotsFor: <A, B>(
     .with({ _tag: "Some" }, ({ value: f }) => f(sp, arity))
     .exhaustive(),
 );
+/**
+ * Zip collapsed params with their annotations; a missing or `None` entry
+ * leaves the param bare (generic position, or JS mode).
+ */
 const annotatedParams: _Curry<
   [cparams: LamParam[], annots: Option<string>[], i: number],
   string[]
@@ -190,6 +271,9 @@ const annotatedParams: _Curry<
     )
     .exhaustive(),
 );
+/**
+ * `expr as T` when annotated, bare otherwise.
+ */
 const castOr: _Curry<[js: string, ann: Option<string>], string> = _curry(
   2,
   (js: string, ann: Option<string>) =>
@@ -290,6 +374,11 @@ const nsRuntimeId: _Curry<[ctx: GCtx, target: Expr, name: string], Option<string
       )
       .otherwise(() => None as Option<string>),
 );
+/**
+ * `Set.empty` / `Map.empty` / `List.empty` lower to the same runtime as
+ * `@{}` / `#{}` (ADR 0080). `ann` is the resolved element typing when the TS
+ * backend supplies one — a bare `new Set()` infers `Set<never>` (ADR 0035).
+ */
 const emptyNsEmit: _Curry<
   [target: Expr, name: string, ann: Option<string>],
   Option<string>
@@ -405,7 +494,11 @@ const genExpr: _Curry<[ctx: GCtx, e: Expr], string> = _curry(2, (ctx: GCtx, e: E
           .exhaustive())(
         _Str_join(
           ", ",
-          map((f: Field) => `${f.name}: ${genExpr(ctx, f.value)}`, fields),
+          map(
+            (f: Field) =>
+              `${isJsIdent(f.name) ? f.name : jsStringLit(f.name)}: ${genExpr(ctx, f.value)}`,
+            fields,
+          ),
         ),
       ),
     )
@@ -871,7 +964,10 @@ const letBlockLoop: _Curry<
             ctx,
             body,
             _Set_add(name, seen),
-            _Array_append(`const ${name} = ${genExpr(ctx, value)};`, decls),
+            _Array_append(
+              `const ${suffixOr(name, hook1(ctx.annotateLetin, value))} = ${genExpr(ctx, value)};`,
+              decls,
+            ),
           ),
     )
     .otherwise(() => _tuple(decls, e, seen)),
@@ -1335,6 +1431,9 @@ const matchArmsLoop: _Curry<
     )
     .exhaustive(),
 );
+/**
+ * Any eager-array arm? Decides the ADR 0038 close-out below.
+ */
 const hasArrArm: <A>(arms: ({ pattern: Pattern } & A)[]) => boolean = <A>(
   arms: ({ pattern: Pattern } & A)[],
 ) =>
@@ -1379,6 +1478,10 @@ const litValue: (p: Pattern) => string = (p: Pattern) =>
     .with({ _tag: "PLit" }, ({ raw }) => raw)
     .with({ _tag: "PBool" }, ({ value: v }) => (v ? "true" : "false"))
     .otherwise(() => "");
+/**
+ * A field's refined type when its sub-pattern narrows it, else `None` — a
+ * bind/wildcard/literal needs no narrowing and keeps its declared type.
+ */
 const fieldRefine: _Curry<[ctx: GCtx, p: Pattern, fieldBase: string], Option<string>> = _curry(
   3,
   (ctx: GCtx, p: Pattern, fieldBase: string) =>
@@ -1427,6 +1530,9 @@ const recordRefines: _Curry<[ctx: GCtx, fields: PatField[], base: string, i: num
       )
       .exhaustive(),
   );
+/**
+ * A tuple slot is indexed positionally, so each element has its own base.
+ */
 const tupleSlotBase: <A>(base: string, i: A) => string = _curry(
   2,
   <A>(base: string, i: A) => `(${base})[${show(i)}]`,
@@ -1456,6 +1562,9 @@ const tupleRefines: _Curry<[ctx: GCtx, elems: Pattern[], base: string, i: number
       )
       .exhaustive(),
   );
+/**
+ * Array elements all share one element base (`T[number]`).
+ */
 const arrTargets: _Curry<[ctx: GCtx, elems: Pattern[], elemBase: string, i: number], string[]> =
   _curry(4, (ctx: GCtx, elems: Pattern[], elemBase: string, i: number) =>
     match(_Array_get(i, elems))
@@ -1480,6 +1589,10 @@ const arrRefines: _Curry<[ctx: GCtx, elems: Pattern[], elemBase: string, i: numb
       )
       .exhaustive(),
   );
+/**
+ * Refine `base` by everything the pattern structurally tests. An or-pattern
+ * keeps the base — per-alternative narrowing would need a union target.
+ */
 const patTarget: _Curry<[ctx: GCtx, p: Pattern, base: string], string> = _curry(
   3,
   (ctx: GCtx, p: Pattern, base: string) =>
@@ -1652,6 +1765,9 @@ const genWithArm: _Curry<[ctx: GCtx, p: Pattern, body: Expr, base: Option<string
       )
       .otherwise(() => genGuardArm(ctx, p, body, None as Option<Expr>, base)),
   );
+/**
+ * `k0: T0, k1: T1` — a typed factory's parameter list.
+ */
 const typedCtorParams: _Curry<[keys: string[], paramTypes: string[], i: number], string[]> = _curry(
   3,
   (keys: string[], paramTypes: string[], i: number) =>
@@ -1752,10 +1868,16 @@ const genType: _Curry<[ctx: GCtx, s: Stmt], string> = _curry(2, (ctx: GCtx, s: S
     )
     .otherwise(() => ""),
 );
+/**
+ * Top-level arrow spine length (`a -> b -> c` → 2).
+ */
 const typeExprArity: (te: TypeExpr) => number = (te: TypeExpr) =>
   match(te)
     .with({ _tag: "TyArrow" }, ({ to }) => add(1, typeExprArity(to)))
     .otherwise(() => 0);
+/**
+ * `$a0, $a1, …` — must stay byte-for-byte aligned with TS codegen.
+ */
 const externArgs: (n: number) => string = (n: number) => {
   let i: number = 0;
   let acc: string = "";
@@ -1768,6 +1890,9 @@ const externArgs: (n: number) => string = (n: number) => {
     }
   }
 };
+/**
+ * `($a0)($a1)…` — one argument per call, for a `curried` host (ADR 0064).
+ */
 const externApplied: (n: number) => string = (n: number) => {
   let i: number = 0;
   let acc: string = "";
@@ -1780,6 +1905,10 @@ const externApplied: (n: number) => string = (n: number) => {
     }
   }
 };
+/**
+ * extern → ESM import. Arity ≥ 2 wraps the host in `_curry` (ADR 0005 / #24).
+ * `imported == "default"` emits a default import (ADR 0009 / styled-cva).
+ */
 const genExtern: (s: Stmt) => string = (s: Stmt) =>
   match(s)
     .with({ _tag: "SExtern" }, ({ name, typeExpr, module: modName, imported, curried }) =>
@@ -1853,6 +1982,11 @@ const ${name} = _curry(${show(arity)}, ${flat});`)(
     .otherwise(() => "");
 const stripAlExt: (s: string) => string = (s: string) =>
   _Str_endsWith(".mochi", s) ? _Str_slice(0, sub(_Str_length(s), 6), s) : s;
+/**
+ * Relative `./` / `../` get `ext` (`.js` for the JS backend, `""` for TS —
+ * tsc resolves the extensionless sibling); bare package specs keep their
+ * name, since a suffix would break package `exports` (ADR 0015).
+ */
 const rewriteImportPath: _Curry<[from: string, ext: string], string> = _curry(
   2,
   (from: string, ext: string) => {
@@ -1881,6 +2015,18 @@ const genImport: _Curry<[s: Stmt, ext: string], string> = _curry(2, (s: Stmt, ex
     .otherwise(() => ""),
 );
 const exportLine: (l: string) => string = (l: string) => `export ${l}`;
+const jsDocLine: (l: string) => string = (l: string) =>
+  gt(_Str_length(l), 0) ? ` * ${_Str_replace("*/", "*\\/", l)}` : " *";
+export const jsDoc: (docOpt: Option<string>) => string = (docOpt: Option<string>) =>
+  match(docOpt)
+    .with({ _tag: "None" }, () => "")
+    .with({ _tag: "Some" }, ({ value: doc }) =>
+      ((lines: string[]) => `/**
+${_Str_join("\n", lines)}
+ */
+`)(map(jsDocLine, _Str_split("\n", doc))),
+    )
+    .exhaustive();
 const genStmt: _Curry<[ctx: GCtx, s: Stmt], string> = _curry(2, (ctx: GCtx, s: Stmt) =>
   match(s)
     .with(
@@ -1898,17 +2044,19 @@ const genStmt: _Curry<[ctx: GCtx, s: Stmt], string> = _curry(2, (ctx: GCtx, s: S
             ? _Str_join("\n", map(exportLine, _Str_split("\n", decls)))
             : decls)(genType(ctx, s)),
     )
-    .with({ _tag: "SExtern" }, ({ name, exported }) =>
-      exported
-        ? `${genExtern(s)}
+    .with({ _tag: "SExtern" }, ({ name, exported, doc }) =>
+      ((docComment: string) =>
+        exported
+          ? `${docComment}${genExtern(s)}
 export { ${name} };`
-        : genExtern(s),
+          : `${docComment}${genExtern(s)}`)(ctx.docs ? jsDoc(doc) : ""),
     )
-    .with({ _tag: "SLet" }, ({ name, value, exported }) =>
+    .with({ _tag: "SLet" }, ({ name, value, exported, doc }) =>
       ((doExport: boolean) =>
-        `${doExport ? "export " : ""}const ${name}${_Option_unwrapOr("", hook2(ctx.annotateLet, name, value))} = ${genExpr(ctx, value)};`)(
-        and(exported, not(_Str_startsWith("$", name))),
-      ),
+        ((docComment: string) =>
+          `${docComment}${doExport ? "export " : ""}const ${name}${_Option_unwrapOr("", hook2(ctx.annotateLet, name, value))} = ${genExpr(ctx, value)};`)(
+          and(ctx.docs, not(_Str_startsWith("$", name))) ? jsDoc(doc) : "",
+        ))(and(exported, not(_Str_startsWith("$", name)))),
     )
     .with({ _tag: "SExpr" }, ({ value }) => `${genExpr(ctx, value)};`)
     .exhaustive(),
@@ -2269,6 +2417,10 @@ const boundNamesFrom: _Curry<[stmts: Stmt[], i: number, acc: Set<string>], Set<s
 );
 const boundNames: (stmts: Stmt[]) => Set<string> = (stmts: Stmt[]) =>
   boundNamesFrom(stmts, 0, _Set_fromArray([] as string[]));
+/**
+ * Names referenced in let/expr values — not patterns. `| TLet =>` does not
+ * count, so a local unused ctor factory can be dropped.
+ */
 const collectValueRefs: _Curry<
   [ctx: GCtx, stmts: Stmt[], i: number, acc: Set<string>],
   Set<string>
@@ -2344,6 +2496,12 @@ const closeRefsFrom: <A>(queue: A[], i: number, refs: Set<A>, runtimeDeps: Map<A
       )
       .exhaustive(),
   );
+/**
+ * The runtime helper names a program actually references, transitively closed
+ * over `runtimeDeps` and minus anything the program binds itself. The JS
+ * backend inlines their defs (`preludePreamble`); the TS backend imports them
+ * from the typed runtime instead (ADR 0026 / 0075), so both start here.
+ */
 const runtimeRefNames: <A>(
   ctx: GCtx,
   stmts: Stmt[],
@@ -2386,6 +2544,15 @@ const genStmtAllFrom: _Curry<[ctx: GCtx, stmts: Stmt[], i: number], string[]> = 
       )
       .exhaustive(),
 );
+/**
+ * `useRuntime`: inline the prelude builtins the program uses, so the emitted
+ * module runs standalone. `ns`/`jsDefs`/`runtimeDeps` are the TS prelude's
+ * `namespaceRuntime`/`preludeJsDefs`/`runtimeDeps` tables, converted to
+ * mochi Maps — the same tables the TS codegen consults, not a fork of them.
+ * Emit one program under explicit backend options. The JS backend calls
+ * `codegen` (all hooks `None`); the TS backend supplies annotation hooks and
+ * the `flattenPipe` / `tupleHelper` / `moduleExt` switches (ADR 0026 / 0090).
+ */
 export const codegenWith: <A>(
   stmts: Stmt[],
   imported: Map<string, string[]>,
@@ -2394,6 +2561,7 @@ export const codegenWith: <A>(
   jsDefs: Map<string, string>,
   runtimeDeps: Map<string, string[]>,
   opts: {
+    docs: boolean;
     moduleExt: string;
     tupleHelper: boolean;
     flattenPipe: boolean;
@@ -2415,6 +2583,7 @@ export const codegenWith: <A>(
     jsDefs: Map<string, string>,
     runtimeDeps: Map<string, string[]>,
     opts: {
+      docs: boolean;
       moduleExt: string;
       tupleHelper: boolean;
       flattenPipe: boolean;
@@ -2443,6 +2612,7 @@ export const codegenWith: <A>(
       tupleHelper: opts.tupleHelper,
       moduleExt: opts.moduleExt,
       valueRefs: _Set_fromArray([]),
+      docs: opts.docs,
     };
     const valueRefs: Set<string> = collectValueRefs(ctx0, stmts, 0, _Set_fromArray([] as string[]));
     const ctx: GCtx = { ...ctx0, valueRefs: valueRefs };
@@ -2461,6 +2631,11 @@ export const codegenWith: <A>(
 `;
   },
 );
+/**
+ * The runtime helpers a program references, for the TS backend's
+ * `import { … } from "@mochi/runtime"` line. Builds the same ctx `codegenWith`
+ * does, so the two agree on ctor keys and namespace ids.
+ */
 export const runtimeDepNames: <A>(
   stmts: Stmt[],
   imported: Map<string, string[]>,
@@ -2494,11 +2669,16 @@ export const runtimeDepNames: <A>(
       tupleHelper: false,
       moduleExt: ".js",
       valueRefs: _Set_fromArray([]),
+      docs: false,
     };
     const valueRefs: Set<string> = collectValueRefs(ctx0, stmts, 0, _Set_fromArray([] as string[]));
     return runtimeRefNames({ ...ctx0, valueRefs: valueRefs }, stmts, jsDefs, runtimeDeps);
   },
 );
+/**
+ * The JS backend: no annotations, `.js` siblings — byte-identical to the
+ * output before `codegenWith` existed.
+ */
 export const codegen: _Curry<
   [
     stmts: Stmt[],

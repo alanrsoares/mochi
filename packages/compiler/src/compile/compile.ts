@@ -111,6 +111,7 @@ export function toTypedProgramWith(
 /** `runtime` (default on): inline the prelude builtins the program uses so the emitted module runs standalone. Off yields prelude-free lowering — for tests that supply their own prelude, or callers that bundle it separately. `moduleExt` (default `.js`): suffix rewritten onto relative import paths — Vite uses `.mochi` so sibling modules re-enter the plugin. `plugins`: host kits (styled-cva) plus builtins (`resolvePlugins`, ADR 0011). */
 export type CompileOptions = {
   runtime?: boolean;
+  docs?: boolean;
   moduleExt?: string;
   plugins?: LanguagePlugin[];
   /** Permit unbound host globals for this invocation; `"use open"` is per-file. */
@@ -137,6 +138,7 @@ export function compile(src: string, opts: CompileOptions = {}): Result<string, 
     : ok(
         codegen(typed.value, undefined, {
           runtime: opts.runtime ?? true,
+          docs: opts.docs,
           moduleExt: opts.moduleExt,
         }),
       );

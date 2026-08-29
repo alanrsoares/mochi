@@ -15,18 +15,33 @@ import type {
   Stmt,
   TypeExpr,
 } from "./ast";
-import type { Row, St, Ty, TypeAt } from "./types";
+import type { Row, SpanAt, St, Ty, TypeAt } from "./types";
 import type { Scheme, VarSets } from "./schemes";
+import type { TSt } from "./scc";
 
 export type IErr = { message: string; start: number; end: number };
 export type QualAliasField = { name: string; fieldType: TypeExpr };
 export type QualAliasInfo = { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> };
 export type QualScope = { aliases: Map<string, QualAliasInfo> };
+/**
+ * The API an `inferCall` plugin hook is handed (ADR 0011 6).
+ */
 export type InferApi = {
   inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
   unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, IErr>;
 };
+/**
+ * A located token as the PARSE hook sees it. Inference never inspects one, so
+ * `tok` stays a type parameter — that keeps the record nameable here without
+ * importing parser.mochi (which declares the real `Tok`) just to spell it.
+ * Structural, so it still unifies with the parser's own `LocTok`.
+ */
 export type LocTok<A> = { tok: A; start: number; end: number; doc: Option<string> };
+/**
+ * A plugin as INFERENCE sees it. The parse hook is written INLINE rather than
+ * behind its own alias: a parameterized alias whose body is an arrow emits as
+ * an opaque brand, not a transparent type.
+ */
 export type Plugin<A> = {
   name: string;
   parse: Option<
@@ -40,6 +55,13 @@ export type Plugin<A> = {
     (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
   >;
 };
+/**
+ * The context threaded through Algorithm W. Declared and annotated at every
+ * `ctx` parameter for the same reason scc.mochi pins `TSt` (ADR 0044): each
+ * reader generalizes the record's open tail on its own, so the emitted TS
+ * reprinted `{ ns: Map<string, Map<string, { ty; rvars; vars } & C>>; ... }`
+ * once per function instead of naming it.
+ */
 export type Ctx<A> = {
   env: Map<string, Scheme>;
   open: boolean;
@@ -137,6 +159,9 @@ import {
 } from "./schemes";
 import * as Schemes from "./schemes";
 import { stronglyConnected } from "./scc";
+/**
+ * Exported for the TS backend: hooks look node types up by span.
+ */
 export const exprSpan: (e: Expr) => Span = (e: Expr) =>
   match(e)
     .with({ _tag: "ENum" }, ({ span: sp }) => sp)
@@ -1239,6 +1264,11 @@ const inferMatch: <A>(
       inferExpr(ctx, scrutinee, st),
     ),
 );
+/**
+ * Recording wrapper over `inferExprRaw` (mirrors src/infer.ts's `infer`):
+ * every expression node's inferred type lands in `st.recorded`, keyed by span,
+ * so the TS backend can annotate lambda params and empty literals (ADR 0090).
+ */
 const inferExpr: <A>(ctx: Ctx<A>, e: Expr, st: St) => Result<[Ty, St], IErr> = _curry(
   3,
   <A>(ctx: Ctx<A>, e: Expr, st: St) =>
@@ -1477,11 +1507,11 @@ const inferPatRecord: <A>(
 ) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
   3,
   <A>(ctx: Ctx<A>, fields: PatField[], st: St) =>
-    (([rowBase, _st1]: [Row, St]) =>
+    (([rowBase, st1]: [Row, St]) =>
       _Result_flatMap(
         ([row, bindings, st2]) =>
           Ok(_tuple(tRecord(row), bindings, st2)) as Result<[Ty, Map<string, Ty>, St], IErr>,
-        inferPatRecordFrom(ctx, fields, rowBase, new Map<string, Ty>(), st),
+        inferPatRecordFrom(ctx, fields, rowBase, new Map<string, Ty>(), st1),
       ))(freshRowVar(st)),
 );
 const inferPatCtorArgs: <A>(
@@ -1687,6 +1717,10 @@ const inferSeqPat: <A>(
       );
     })(freshVar(st)),
 );
+/**
+ * Pattern-side analogue of `inferExpr` — records every pattern node's span
+ * and type, so a pattern-bound param can be annotated by span.
+ */
 const inferPat: <A>(ctx: Ctx<A>, p: Pattern, st: St) => Result<[Ty, Map<string, Ty>, St], IErr> =
   _curry(3, <A>(ctx: Ctx<A>, p: Pattern, st: St) =>
     _Result_flatMap(
@@ -3089,6 +3123,20 @@ const seedImportsFrom: <A, B>(keys: A[], imports: Map<A, B>, env: Map<A, B>) => 
         throw new Error("non-exhaustive match");
       }),
 );
+/**
+ * Re-point a dep alias's OWN type references at the dep. A field written in
+ * the dep names a sibling alias BARE (`letSpans: Map<string, SpanAt>`), but the
+ * seeded table lives in the IMPORTER, where that bare name means nothing — so
+ * `SpanAt` would lower nominally and then refuse to unify with the row it
+ * stands for. src/schemes.ts has no such problem: it expands an alias in the
+ * DECLARING module's scope (`TypeScope`), where the sibling is in plain sight.
+ * Qualifying the reference at seed time is that same resolution, done once and
+ * carried in the TypeExpr, so nothing downstream needs a scope threaded
+ * through it.
+ *
+ * Only names the dep declares as ALIASES move: a variant crosses under its
+ * bare name already, and a type PARAM is lowercase and never an alias key.
+ */
 const qualifyTe: <A>(te: TypeExpr, alias: string, from: Map<string, A>) => TypeExpr = _curry(
   3,
   <A>(te: TypeExpr, alias: string, from: Map<string, A>) =>
@@ -3287,6 +3335,12 @@ const qualAliasSeed: <A, B, C, D, E>(
         throw new Error("non-exhaustive match");
       }),
 );
+/**
+ * Zonk every recorded node type against the FINAL state and restore source
+ * order (`recordAt` prepends). Mirrors src/infer.ts: types are only resolved
+ * once the whole program's substitution is settled, and later records win when
+ * two nodes share a span.
+ */
 const zonkRecorded: <A, B>(recorded: ({ ty: Ty; span: A } & B)[], st: St) => { span: A; ty: Ty }[] =
   _curry(2, <A, B>(recorded: ({ ty: Ty; span: A } & B)[], st: St) =>
     map(
@@ -3294,6 +3348,10 @@ const zonkRecorded: <A, B>(recorded: ({ ty: Ty; span: A } & B)[], st: St) => { s
       _Array_reverse(recorded),
     ),
   );
+/**
+ * A type with no free type OR row vars — the only kind worth annotating from:
+ * a generic position has nowhere to bind letters at a `const` / IIFE param.
+ */
 const isConcrete: (t: Ty) => boolean = (t: Ty) => {
   const f: VarSets = freeInType(t);
   return and(eq(_Set_size(f.tv), 0), eq(_Set_size(f.rv), 0));
@@ -3314,6 +3372,12 @@ const allSameConcrete: _Curry<[shown: string, uses: Ty[]], boolean> = _curry(
   2,
   (shown: string, uses: Ty[]) => allSameConcreteFrom(shown, uses, 0),
 );
+/**
+ * Resolve `letParams` for TS emit (ADR 0035): a noted `let` is annotated only
+ * when its body instantiated it at ONE fully-concrete type. Uses zonk against
+ * the FINAL state, like `zonkRecorded` — a use recorded mid-inference is still
+ * full of unsolved vars.
+ */
 const resolveLetParamsFrom: _Curry<[keys: string[], st: St], TypeAt[]> = _curry(
   2,
   (keys: string[], st: St) =>
@@ -3355,6 +3419,10 @@ const resolveLetParamsFrom: _Curry<[keys: string[], st: St], TypeAt[]> = _curry(
 );
 const resolveLetParams: (st: St) => TypeAt[] = (st: St) =>
   resolveLetParamsFrom(_Map_keys(st.letSpans), st);
+/**
+ * Full inference result — the metadata the TS backend needs on top of `env`
+ * (ADR 0090), including `letParams` (ADR 0035).
+ */
 const runInferImports: <A, B, C>(
   stmts: Stmt[],
   builtins: Map<string, Ty>,
@@ -3501,6 +3569,10 @@ const runInferImports: <A, B, C>(
       ))(registerUserCtorsFrom(stmts, aliasMap, env0, st0));
   },
 );
+/**
+ * Env-only view — the shape every existing caller (compile.mochi,
+ * module.mochi) and the TS parity oracle expect.
+ */
 export const inferProgramImports: <A, B, C>(
   stmts: Stmt[],
   builtins: Map<string, Ty>,
@@ -3585,6 +3657,12 @@ export const inferProgram: _Curry<
       None as Option<Plugin<Tok>[]>,
     ),
 );
+/**
+ * The imports-aware full result — what the TS GRAPH driver needs (ADR 0090).
+ * `inferProgramImports` throws away everything but `env`; a module in a graph
+ * still has to annotate from its span -> type table, so the driver calls this
+ * instead and reads `env` off the record itself.
+ */
 export const inferProgramImportsTypes: <A, B, C>(
   stmts: Stmt[],
   builtins: Map<string, Ty>,
@@ -3640,6 +3718,10 @@ export const inferProgramImportsTypes: <A, B, C>(
   ) =>
     runInferImports(stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt),
 );
+/**
+ * Like `inferProgram`, but also returns the span -> type map and alias scope
+ * the TS backend drives annotation from (ADR 0090).
+ */
 export const inferProgramTypes: _Curry<
   [
     stmts: Stmt[],

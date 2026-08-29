@@ -212,3 +212,17 @@ let t : Tone = "rose"`;
   expect(isErr(compile(src))).toBe(false);
   expect(isErr(compile(`type Tone = "rose" | "amber"\nlet t : Tone = "taupe"`))).toBe(true);
 });
+
+test("docstrings are retained across JS, TS, and .d.ts targets (ADR 0094)", () => {
+  const src = `/// Add two integers.
+export let addInt = (a, b) => add(a, b)
+
+/// Point in 2D space.
+export type Point = { x: number, y: number }`;
+  const targets = unwrapOk(compileTargets(src));
+  expect(targets.js).toContain("/**\n * Add two integers.\n */\nexport const addInt");
+  expect(targets.ts).toContain("/**\n * Add two integers.\n */\nexport const addInt");
+  expect(targets.ts).toContain("/**\n * Point in 2D space.\n */\nexport type Point =");
+  expect(targets.dts).toContain("/**\n * Add two integers.\n */\nexport declare const addInt");
+  expect(targets.dts).toContain("/**\n * Point in 2D space.\n */\nexport type Point =");
+});

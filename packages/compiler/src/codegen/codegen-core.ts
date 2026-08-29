@@ -31,6 +31,16 @@ export const nsRuntimeId = (e: FieldExpr): string | null =>
 export const bindRuntime = (monad: "Option" | "Result" | "Task"): string =>
   monad === "Option" ? "_Option_flatMap" : monad === "Result" ? "_Result_flatMap" : "_Task_andThen";
 
+/** Format a raw doc comment into a clean JSDoc block comment. */
+export const jsDoc = (doc?: string): string => {
+  if (!doc) return "";
+  const lines = doc.split("\n");
+  const body = lines
+    .map((l) => (l.length > 0 ? ` * ${l.replaceAll("*/", "*\\/")}` : " *"))
+    .join("\n");
+  return `/**\n${body}\n */\n`;
+};
+
 /** The typing a TS-mode ctor factory carries (see `GenCtx.annotateCtor`). */
 export type CtorFactoryTs = {
   generics: string;
@@ -119,6 +129,9 @@ export type GenCtx = {
   // arm only matches `_tag`, so `genType` can skip that ctor's factory unless
   // the name appears here (`tok == TGt`) or the type stmt is exported.
   readonly valueRefs: ReadonlySet<string>;
+
+  // Whether to retain docstrings as JSDoc comments (defaults to true).
+  readonly docs: boolean;
 };
 
 /** `Set.empty` / `Map.empty` / `List.empty` lower to the same runtime as `#{}` / `@{}` (ADR 0080). */

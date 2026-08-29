@@ -1,3 +1,6 @@
+import type { Expr, Pattern, Span } from "./ast";
+import type { Scheme } from "./schemes";
+
 export type Ty =
   | { _tag: "TyVar"; id: number }
   | { _tag: "TyCon"; name: string; args: Ty[] }
@@ -9,8 +12,30 @@ export type Row =
   | { _tag: "RowEmpty" }
   | { _tag: "RowVar"; id: number }
   | { _tag: "RowExtend"; label: string; fieldType: Ty; rest: Row };
+/**
+ * TS's `Subst` (mutable Map pair) + `Fresh` (mutable counter) become one
+ * immutable, threaded `St` — every fresh-var mint AND every unify call
+ * returns a NEW St rather than mutating in place. Type vars and row vars
+ * draw from the same `next` counter so ids never collide across the two
+ * maps (mirrors types.ts's original Fresh).
+ * Inferred type at a source span. Structural on purpose: types.mochi stays
+ * AST-free (gen-prelude compiles it standalone), so ast.mochi's `Span` fits
+ * this shape rather than being imported.
+ */
 export type SpanAt = { start: number; end: number };
 export type TypeAt = { span: SpanAt; ty: Ty };
+/**
+ * `recorded` accumulates one entry per inferred Expr/Pattern node, newest
+ * first (prepend is O(1)); `inferProgramImports` reverses it once so later
+ * records win when two nodes share a span, matching src/infer.ts.
+ *
+ * `letSpans` / `letUses` are the ADR 0035 side-channel: every `let`'s VALUE
+ * span, plus each type its body instantiated that binding at. src/infer.ts
+ * keys both on the `Scheme` OBJECT (a JS `Map` over identities); Mochi has no
+ * reference identity, so the key is the value span's `"start:end"` instead —
+ * unique per binding by construction, and the same string the TS backend's
+ * `spanKey` builds when it looks the annotation back up.
+ */
 export type St = {
   tv: Map<number, Ty>;
   rv: Map<number, Row>;
@@ -200,6 +225,9 @@ const flattenUnionFrom: _Curry<[members: Ty[], acc: Ty[], i: number], Ty[]> = _c
       )
       .exhaustive(),
 );
+/**
+ * Finite union. Flattens nested unions, dedupes, unwraps a singleton.
+ */
 export const tUnion: (members: Ty[]) => Ty = (members: Ty[]) => {
   const flat: Ty[] = flattenUnionFrom(members, [] as Ty[], 0);
   return match(flat)
@@ -221,6 +249,11 @@ export const tUnion: (members: Ty[]) => Ty = (members: Ty[]) => {
 };
 const TUPLE: string = "tuple";
 export const tTuple: (elems: Ty[]) => Ty = (elems: Ty[]) => TyCon(TUPLE, elems);
+/**
+ * The one-inhabitant type (ADR 0054), also the nullary-function domain (ADR
+ * 0014): surface `() => T` and the call `f()` both use `unit -> T`. `unit` is an
+ * ordinary primitive type name and `()` is its literal — value, type, pattern.
+ */
 export const UNIT: string = "unit";
 export const tUnit = TyCon(UNIT, [] as Ty[]);
 export const isUnit: (t: Ty) => boolean = (t: Ty) =>
@@ -233,6 +266,10 @@ export const rExtend: _Curry<[label: string, fieldType: Ty, rest: Row], Row> = _
   (label: string, fieldType: Ty, rest: Row) => RowExtend(label, fieldType, rest),
 );
 const showTypeArgs: (args: Ty[]) => string = (args: Ty[]) => _Str_join(", ", map(showType, args));
+/**
+ * `unit` renders as its literal `()` in every position (ADR 0054), which also
+ * covers the nullary-arrow domain: `unit -> T` prints `() -> T` (ADR 0014).
+ */
 export const showType: (t: Ty) => string = (t: Ty) =>
   match(t)
     .with({ _tag: "TyVar" }, ({ id }) => `'t${show(id)}`)
@@ -271,6 +308,9 @@ export const showType: (t: Ty) => string = (t: Ty) =>
     .with({ _tag: "TySingleton" }, ({ base, value }) => (eq(base, "string") ? show(value) : value))
     .with({ _tag: "TyOneOf" }, ({ members }) => _Str_join(" | ", map(showType, members)))
     .exhaustive();
+/**
+ * walk a row to its tail, collecting `label: type` field strings on the way
+ */
 const showRowFields: (row: Row) => [string[], Option<number>] = (row: Row) =>
   match(row)
     .with({ _tag: "RowExtend" }, ({ label, fieldType, rest }) =>
@@ -316,6 +356,9 @@ export const mkSt: (start: number) => St = (start: number) => ({
   letSpans: new Map<string, SpanAt>(),
   letUses: new Map<string, Ty[]>(),
 });
+/**
+ * Prepend an inferred node type onto the threaded record log.
+ */
 export const recordAt: _Curry<[span: SpanAt, t: Ty, st: St], St> = _curry(
   3,
   (span: SpanAt, t: Ty, st: St) => ({
@@ -326,6 +369,10 @@ export const recordAt: _Curry<[span: SpanAt, t: Ty, st: St], St> = _curry(
 const spanKeyOf: <A, B, C>(sp: { start: A; end: B } & C) => string = <A, B, C>(
   sp: { start: A; end: B } & C,
 ) => `${show(sp.start)}:${show(sp.end)}`;
+/**
+ * Register a `let`'s value span as an ADR 0035 annotation candidate. Resets its
+ * use list, mirroring src/infer.ts's `noteLet` (a re-noted scheme starts over).
+ */
 export const noteLet: _Curry<[span: SpanAt, st: St], St> = _curry(2, (span: SpanAt, st: St) => {
   const k: string = spanKeyOf(span);
   return {
@@ -334,6 +381,10 @@ export const noteLet: _Curry<[span: SpanAt, st: St], St> = _curry(2, (span: Span
     letUses: _Map_set(k, [] as Ty[], st.letUses),
   };
 });
+/**
+ * Record one instantiation of a noted `let`. A span that was never noted (a
+ * builtin, an import, a lambda param) is not a candidate and is dropped.
+ */
 export const noteUse: <A, B, C>(span: { start: A; end: B } & C, t: Ty, st: St) => St = _curry(
   3,
   <A, B, C>(span: { start: A; end: B } & C, t: Ty, st: St) => {
@@ -375,6 +426,9 @@ const resolveRow: _Curry<[r: Row, st: St], Row> = _curry(2, (r: Row, st: St) =>
     )
     .otherwise(() => r),
 );
+/**
+ * Fully apply the substitution ("zonk") — for display and assertions.
+ */
 export const zonk: _Curry<[t: Ty, st: St], Ty> = _curry(2, (t: Ty, st: St) =>
   match(resolve(t, st))
     .with({ _tag: "TyVar" }, ({ id }) => tVar(id))
@@ -607,6 +661,9 @@ const unifyMemberAgainstUnionFrom: _Curry<
     .with({ _tag: "TySingleton" }, () => litInUnionFrom(member, members, 0, st))
     .otherwise(() => unifyConcreteAgainstUnionFrom(member, members, i, st)),
 );
+/**
+ * Split so `fail` sits beside `Ok` in one match (tsc-clean Result, ADR 0026).
+ */
 const unifyConcreteAgainstUnionFrom: _Curry<
   [member: Ty, members: Ty[], i: number, st: St],
   Result<St, TypeErr>
@@ -764,6 +821,11 @@ const bindVar: _Curry<[id: number, t: Ty, st: St], Result<St, TypeErr>> = _curry
       ? fail(`infinite type: 't${show(id)} occurs in ${showType(zonk(t, st))}`)
       : (Ok({ ...st, tv: _Map_set(id, t, st.tv) }) as Result<St, TypeErr>),
 );
+/**
+ * Bring `label` to the head of a row, extending an open tail if needed.
+ * Returns the field's type, the row remaining after removing it, and the
+ * (possibly grown) state.
+ */
 const rewriteRow: _Curry<
   [row: Row, label: string, st: St],
   Result<[Ty, Row, St], TypeErr>
@@ -791,6 +853,9 @@ const rewriteRow: _Curry<
     )
     .exhaustive(),
 );
+/**
+ * both rows extend: pull a's label out of b, unify the field types, recurse
+ */
 export const unifyRows: _Curry<[r1: Row, r2: Row, st: St], Result<St, TypeErr>> = _curry(
   3,
   (r1: Row, r2: Row, st: St) => {

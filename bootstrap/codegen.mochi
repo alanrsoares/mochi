@@ -80,7 +80,8 @@ type GenOpts = {
   guardBaseType: Option<Ast.Expr -> Option<string> >,
   flattenPipe: bool,
   tupleHelper: bool,
-  moduleExt: string
+  moduleExt: string,
+  docs: bool
 }
 
 /// Everything threaded through the generators: the `GenOpts` knobs, flattened,
@@ -102,7 +103,8 @@ type GCtx = {
   flattenPipe: bool,
   tupleHelper: bool,
   moduleExt: string,
-  valueRefs: Set<string>
+  valueRefs: Set<string>,
+  docs: bool
 }
 
 /// The JS backend's knobs: no annotation, no rewriting, `.js` siblings.
@@ -118,7 +120,8 @@ export let jsGenOpts : GenOpts = {
   guardBaseType: None,
   flattenPipe: false,
   tupleHelper: false,
-  moduleExt: ".js"
+  moduleExt: ".js",
+  docs: true
 }
 
 /// Apply a one-argument `Option<fn>` hook, flattening "no hook" and "hook
@@ -1475,6 +1478,15 @@ let genImport = (s, ext) => switch s {
 
 let exportLine = l => "export ${l}"
 
+let jsDocLine = l =>
+  Str.length(l) > 0 ? " * ${Str.replace("*/", "*\\/", l)}" : " *"
+
+export let jsDoc = docOpt => switch docOpt {
+  | None => ""
+  | Some(doc) => let lines = Str.split("\n", doc) |> map(jsDocLine) in
+      "/**\n${Str.join("\n", lines)}\n */\n"
+}
+
 let genStmt = (ctx: GCtx, s) => switch s {
   | Ast.SError(sp) =>
     // Unreachable by construction: the railway stops on parse diagnostics, so a
@@ -1490,15 +1502,19 @@ let genStmt = (ctx: GCtx, s) => switch s {
         : exported
         ? Str.join("\n", Str.split("\n", decls) |> map(exportLine))
         : decls
-  | Ast.SExtern(name, _, _, _, _, _, _, exported, _, _) =>
+  | Ast.SExtern(name, _, _, _, _, _, _, exported, doc, _) =>
     // An extern is itself an import; re-export the local binding when exported.
-    exported ? "${genExtern(s)}\nexport { ${name} };" : genExtern(s)
-  | Ast.SLet(name, _, _, value, exported, _, _) => let doExport = exported && !Str.startsWith(
+    let docComment = ctx.docs ? jsDoc(doc) : "" in
+      exported
+        ? "${docComment}${genExtern(s)}\nexport { ${name} };"
+        : "${docComment}${genExtern(s)}"
+  | Ast.SLet(name, _, _, value, exported, doc, _) => let doExport = exported && !Str.startsWith(
       "$",
       name
     ) in // never export destructure temps
+    let docComment = ctx.docs && !Str.startsWith("$", name) ? jsDoc(doc) : "" in
       // TS backend annotates; the JS backend leaves the binding bare.
-      "${doExport ? "export " : ""}const ${name}${Option.unwrapOr("", hook2(ctx.annotateLet, name, value))} = ${ctx->genExpr(value)};"
+      "${docComment}${doExport ? "export " : ""}const ${name}${Option.unwrapOr("", hook2(ctx.annotateLet, name, value))} = ${ctx->genExpr(value)};"
   | Ast.SExpr(value, _) => "${ctx->genExpr(value)};"
 }
 
@@ -1855,7 +1871,8 @@ export let codegenWith = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps, 
     flattenPipe: opts.flattenPipe,
     tupleHelper: opts.tupleHelper,
     moduleExt: opts.moduleExt,
-    valueRefs: Set.fromArray([])
+    valueRefs: Set.fromArray([]),
+    docs: opts.docs
   } in
   let valueRefs = collectValueRefs(ctx0, stmts, 0, Set.fromArray([])) in
   let ctx = { ...ctx0, valueRefs } in
@@ -1894,7 +1911,8 @@ export let runtimeDepNames = (stmts, imported, ns, jsDefs, runtimeDeps) =>
     flattenPipe: false,
     tupleHelper: false,
     moduleExt: ".js",
-    valueRefs: Set.fromArray([])
+    valueRefs: Set.fromArray([]),
+    docs: false
   } in
   let valueRefs = collectValueRefs(ctx0, stmts, 0, Set.fromArray([])) in
     runtimeRefNames({ ...ctx0, valueRefs }, stmts, jsDefs, runtimeDeps)

@@ -26,6 +26,11 @@ export type ExhaustVerdict =
   | { _tag: "ExOk" }
   | { _tag: "ExWitness"; witness: MP }
   | { _tag: "ExFuel" };
+/**
+ * The ctor registry as usefulness reads it. Declared here rather than imported
+ * from check.mochi, which imports THIS module — a local record alias expands,
+ * so it still unifies structurally with the caller's registry (ADR 0044).
+ */
 export type CtorInfo = { owner: string; arity: number };
 export type Registry = { ctors: Map<string, CtorInfo>; types: Map<string, string[]> };
 export type ArrShape = { fixed: number[]; restFrom: Option<number> };
@@ -113,6 +118,9 @@ const isWildMP: (mp: MP) => boolean = (mp: MP) =>
   match(mp)
     .with({ _tag: "MWild" }, () => true)
     .otherwise(() => false);
+/**
+ * Split top-level or-patterns into separate rows — each alt is its own row.
+ */
 export const explodePat: (p: Pattern) => Pattern[] = (p: Pattern) =>
   match(p)
     .with({ _tag: "PAs" }, ({ pat }) => explodePat(pat))
@@ -648,6 +656,9 @@ const showFields: _Curry<[labels: string[], pats: MP[], i: number], string[]> = 
       )
       .exhaustive(),
 );
+/**
+ * Render a witness the way the user would have to write it as an arm.
+ */
 export const showWitness: (mp: MP) => string = (mp: MP) =>
   match(mp)
     .with({ _tag: "MWild" }, () => "_")
@@ -669,6 +680,14 @@ export const showWitness: (mp: MP) => string = (mp: MP) =>
         `[${_Str_join(", ", _Array_concat(map(showWitness, elems), rest ? ["..."] : ([] as string[])))}]`,
     )
     .exhaustive();
+/**
+ * A witness that is one constructor over nothing but wildcards is the shape the
+ * pre-matrix checker reported as `missing X` — check.mochi keeps that wording
+ * for it, so the everyday "you forgot a variant" case reads as it always has.
+ * Witnesses that say nothing a constructor name would not say better: a bare
+ * wildcard (every arm was guarded, so nothing is covered) or one constructor
+ * over wildcards. For these check.mochi keeps the legacy `missing X` wording.
+ */
 export const isWideWitnessM: (mp: MP) => boolean = (mp: MP) =>
   match(mp)
     .with({ _tag: "MWild" }, () => true)
@@ -680,6 +699,10 @@ export const isWideWitnessM: (mp: MP) => boolean = (mp: MP) =>
       ),
     )
     .otherwise(() => false);
+/**
+ * Is this set of (unguarded) arm patterns total? Guarded arms must not be
+ * passed — a guard can be false, so such an arm proves nothing.
+ */
 export const checkExhaustiveM: _Curry<[patterns: Pattern[], reg: Registry], ExhaustVerdict> =
   _curry(2, (patterns: Pattern[], reg: Registry) => {
     const rows: MP[][] = _Array_flatMap(
