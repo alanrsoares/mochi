@@ -113,6 +113,9 @@ const cases: Record<string, string> = {
   ternary: "let f = b => b ? 1 : 0",
   pipe: "let f = x => x |> add(1)",
   "map literal": 'let m = #{ "a": 1, "b": 2 }',
+  // A field name that is not a valid JS identifier must emit quoted, or the
+  // object literal is a syntax error (ADR 0096's `data-*` / `aria-*` attrs).
+  "record key needing quotes": 'let r = <div data-testid="x" aria-label="y" />',
   "nullary + n-ary ctors": "type T = | A | B(number) | C(number, number)",
   "string escapes": 'let s = "a\\tb\\nc\\"d\\\\e"',
   // biome-ignore lint/suspicious/noTemplateCurlyInString: mochi source, not a JS template

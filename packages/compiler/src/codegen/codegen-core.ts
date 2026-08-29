@@ -268,7 +268,10 @@ export const genExpr = (e: Expr, ctx: GenCtx): string =>
     .with({ kind: "recur" }, (r) => `_recur(${r.args.map((a) => genExpr(a, ctx)).join(", ")})`)
     .with({ kind: "match" }, (m) => genMatch(m, ctx))
     .with({ kind: "record" }, (r) => {
-      const fields = r.fields.map((f) => `${f.name}: ${genExpr(f.value, ctx)}`);
+      const fields = r.fields.map((f) => {
+        const key = /^[$A-Za-z_][\w$]*$/.test(f.name) ? f.name : JSON.stringify(f.name);
+        return `${key}: ${genExpr(f.value, ctx)}`;
+      });
       const parts = r.spread ? [`...${genExpr(r.spread, ctx)}`, ...fields] : fields;
       return parts.length === 0 ? "{}" : `{ ${parts.join(", ")} }`;
     })
