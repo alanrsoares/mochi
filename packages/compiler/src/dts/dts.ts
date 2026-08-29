@@ -26,6 +26,7 @@ import {
   type Type,
   tVar,
 } from "../ast/types";
+import { jsDoc } from "../codegen/codegen-core";
 import { toTypedProgram } from "../compile/compile";
 import type { Diagnostic } from "../errors/errors";
 import type { BindingTypeHook, DtsBindingHook, LanguagePlugin } from "../extensions/extensions";
@@ -707,12 +708,13 @@ const declOf = (
     .with({ kind: "import" }, () => null)
     .with({ kind: "extern" }, () => null)
     .with({ kind: "type" }, (type) => {
+      const doc = jsDoc(type.doc);
       if (type.ctors.length === 0 && !type.alias && !type.aliasType)
-        return `declare const ${type.name}: unique symbol;\nexport type ${type.name} = { readonly [${type.name}]: never };`;
+        return `declare const ${type.name}: unique symbol;\n${doc}export type ${type.name} = { readonly [${type.name}]: never };`;
       const a = aliasByName.get(type.name);
       return a
-        ? aliasTsDecl(a, qualify, aliases)
-        : typeDecl(type.name, type.params, type.ctors, qualify, aliases);
+        ? `${doc}${aliasTsDecl(a, qualify, aliases)}`
+        : `${doc}${typeDecl(type.name, type.params, type.ctors, qualify, aliases)}`;
     })
     .with({ kind: "let" }, (letin) => {
       const sc = schemeOf(letin.name);
@@ -729,7 +731,8 @@ const declOf = (
         fallback,
         { folded, tsType: (t) => tsOf(t, new Map()) },
       );
-      return `export declare const ${letin.name}: ${ty};`;
+      const doc = jsDoc(letin.doc);
+      return `${doc}export declare const ${letin.name}: ${ty};`;
     })
     .with({ kind: "expr" }, () => null)
     .exhaustive();

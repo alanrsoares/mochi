@@ -31,6 +31,16 @@ export const nsRuntimeId = (e: FieldExpr): string | null =>
 export const bindRuntime = (monad: "Option" | "Result" | "Task"): string =>
   monad === "Option" ? "_Option_flatMap" : monad === "Result" ? "_Result_flatMap" : "_Task_andThen";
 
+/** Format a raw doc comment into a clean JSDoc block comment. */
+export const jsDoc = (doc?: string): string => {
+  if (!doc) return "";
+  const lines = doc.split("\n");
+  const body = lines
+    .map((l) => (l.length > 0 ? ` * ${l.replaceAll("*/", "*\\/")}` : " *"))
+    .join("\n");
+  return `/**\n${body}\n */\n`;
+};
+
 /** The typing a TS-mode ctor factory carries (see `GenCtx.annotateCtor`). */
 export type CtorFactoryTs = {
   generics: string;

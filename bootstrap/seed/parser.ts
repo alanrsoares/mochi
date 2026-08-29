@@ -119,6 +119,9 @@ import {
   TEof,
 } from "./lexer";
 
+/**
+ * The TS `t` tag of a token — error messages must match the TS parser's.
+ */
 const tokName: (t: Tok) => string = (t: Tok) =>
   match(t)
     .with({ _tag: "TLet" }, () => "let")
@@ -175,6 +178,9 @@ const tokName: (t: Tok) => string = (t: Tok) =>
     .with({ _tag: "TId" }, () => "id")
     .with({ _tag: "TEof" }, () => "eof")
     .exhaustive();
+/**
+ * The stream is TEof-terminated, so the fallback is unreachable in practice.
+ */
 const eofTok = { tok: TEof as Tok, start: 0, end: 0, doc: None };
 const tokAt: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
@@ -192,6 +198,9 @@ const spanning: <A, B, C, D>(a: { start: A } & C, b: { end: B } & D) => { start:
     start: a.start,
     end: b.end,
   }));
+/**
+ * Span from a start marker to the last consumed token (TS `to(start)`).
+ */
 const toEnd: <A, B, C>(
   start: { start: A } & C,
   toks: { tok: Tok; start: number; end: number; doc: Option<B> }[],
@@ -241,6 +250,11 @@ const expectId: <A>(
       .otherwise((t) => errAt(`expected id, got ${tokName(t)}`, lt));
   },
 );
+/**
+ * The word a keyword token was written as, or `None` if `t` is not a keyword.
+ * Mirrors `lexer.ts`'s `keywordText` (ADR 0077). `TBool` stays out: it carries
+ * a value rather than a spelling, so `true`/`false` are not labels.
+ */
 const keywordText: (t: Tok) => Option<string> = (t: Tok) =>
   match(t)
     .with({ _tag: "TLet" }, () => Some("let") as Option<string>)
@@ -253,6 +267,13 @@ const keywordText: (t: Tok) => Option<string> = (t: Tok) =>
     .with({ _tag: "TImport" }, () => Some("import") as Option<string>)
     .with({ _tag: "TExport" }, () => Some("export") as Option<string>)
     .otherwise(() => None as Option<string>);
+/**
+ * Label in JSX attrs / record fields / `.field` projection: `tone` or `$tone`
+ * (styled-cva). Since ADR 0047 `$` is an ordinary identifier char, so a plain
+ * label is just an id — the name survives as a seam because `parser.ts` exposes
+ * it to plugins. A keyword is also a label (ADR 0077): nothing here can start a
+ * statement or an expression, so `{ type: 1 }` and `x.type` are unambiguous.
+ */
 const expectLabel: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   pos: number,
@@ -285,6 +306,9 @@ const expectStr: <A>(
       .otherwise((t) => errAt(`expected str, got ${tokName(t)}`, lt));
   },
 );
+/**
+ * Consume the contextual `in` keyword after a let binding's value.
+ */
 const expectIn: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   pos: number,
@@ -301,6 +325,9 @@ const expectIn: <A>(
 );
 const isUpper: (s: string) => boolean = (s: string) =>
   _Option_exists((n: number) => and(gte(n, 65), lte(n, 90)), _Str_codeAt(0, s));
+/**
+ * `item (, item)*` — at least one item; the caller peeks the closer for empty.
+ */
 const sepBy: <A, B, C>(
   parseItem: (
     a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
@@ -330,6 +357,11 @@ const sepBy: <A, B, C>(
       parseItem(toks, pos),
     ),
 );
+/**
+ * Like `sepBy`, but `parseItem` takes `(toks, pos, hooks)` — used when the
+ * item parser needs the plugin hook list (avoids a `_curry`-wrapped lambda
+ * that would erase the element type under `tsc --strict`).
+ */
 const sepByH: <A, B, C, D>(
   parseItem: (
     a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
@@ -363,6 +395,9 @@ const sepByH: <A, B, C, D>(
       parseItem(toks, pos, hooks),
     ),
 );
+/**
+ * A possibly-empty comma list ended by `close`; does NOT consume the closer.
+ */
 const listUntil: <A, B, C>(
   close: Tok,
   parseItem: (
@@ -413,6 +448,9 @@ const listUntilH: <A, B, C, D>(
       ? Ok(_tuple([] as C[], pos))
       : sepByH(parseItem, toks, pos, [] as C[], hooks),
 );
+/**
+ * `(…) =>` needs unbounded lookahead: scan to the matching rparen.
+ */
 const scanLambdaDepth: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   k: number,
@@ -441,6 +479,9 @@ const looksLikeLambda: <A>(
       .with({ _tag: "TLparen" }, () => scanLambdaDepth(toks, pos, 0))
       .otherwise(() => false),
 );
+/**
+ * The span of a node, for composite spans (TS reads `.span` directly).
+ */
 const exprSpan: (e: Expr) => Span = (e: Expr) =>
   match(e)
     .with({ _tag: "ENum" }, ({ span: sp }) => sp)
@@ -3867,6 +3908,11 @@ const parseStmt: _Curry<
       .otherwise(() => parseExprStmt(toks, pos, tmp, hooks));
   },
 );
+/**
+ * Core sync set for panic-mode recovery: the language's own declaration keywords.
+ * TEof always terminates. TS lets plugins contribute `syncTokens`; no builtin
+ * plugin declares any, so this mirror carries the core set only.
+ */
 const isSyncTok: (t: Tok) => boolean = (t: Tok) =>
   match(t)
     .with({ _tag: "TLet" }, () => true)
@@ -3879,7 +3925,17 @@ const isOpener: (t: Tok) => boolean = (t: Tok) =>
   or(or(eq(t, TLparen as Tok), eq(t, TLbrace as Tok)), eq(t, TLbracket as Tok));
 const isCloser: (t: Tok) => boolean = (t: Tok) =>
   or(or(eq(t, TRparen as Tok), eq(t, TRbrace as Tok)), eq(t, TRbracket as Tok));
+/**
+ * Hard stop on pathological input, so one keystroke cannot publish a novel of
+ * diagnostics (ADR 0045 decision 5).
+ */
 const maxParseErrors: number = 100;
+/**
+ * The first token at-or-after byte offset `at`, scanning forward from `pos`.
+ * Recovering *by span* is what makes the rule mirrorable here: a `Result`
+ * failure leaves no cursor behind, but the error record carries the offending
+ * token's offsets, so TS and bootstrap resume on the same token.
+ */
 const resumeAt: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   pos: number,
@@ -3891,6 +3947,11 @@ const resumeAt: <A>(
       ? resumeAt(toks, add(pos, 1), at)
       : pos,
 );
+/**
+ * Panic-mode skip: stop at the first sync token whose bracket depth relative to
+ * the resume point is 0 — never inside a half-open record, argument list or
+ * `switch` block, where a `let` is a `let … in`.
+ */
 const skipToSync: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   pos: number,
@@ -3912,6 +3973,11 @@ const skipToSync: <A>(
         );
   },
 );
+/**
+ * The skipped region as an `SError`, plus the position to resume parsing from.
+ * Forward progress: when the offending token *is* the statement's own first
+ * token there is nothing to rewind to, so consume one unconditionally.
+ */
 const recoverFrom: <A, B>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   before: number,
@@ -3934,6 +4000,10 @@ const recoverFrom: <A, B>(
     };
   },
 );
+/**
+ * The recovering statement loop: always yields statements (unparsable regions
+ * become `SError`) plus every parse diagnostic in source order.
+ */
 const stmtsLoop: _Curry<
   [
     toks: LocTok[],
@@ -4032,6 +4102,10 @@ const stmtsLoop: _Curry<
     }
   },
 );
+/**
+ * The recovering parse (ADR 0045). `parse` is the hard-fail wrapper over this;
+ * tooling that wants the partial tree calls this and says so.
+ */
 export const parseRecovering: <A, B, C>(
   toks: LocTok[],
   pluginsOpt: Option<
@@ -4106,6 +4180,11 @@ export const parseRecovering: <A, B, C>(
 );
 export const parse: (toks: LocTok[]) => Result<Stmt[], PErr> = (toks: LocTok[]) =>
   parseWith(toks, None);
+/**
+ * Hard-fail railway entry: the bootstrap railway carries one error record, so
+ * this reports the first diagnostic in source order.
+ * `pluginsOpt`: None = default builtins (JSX on); Some([]) = hard opt-out.
+ */
 export const parseWith: <A, B, C>(
   toks: LocTok[],
   pluginsOpt: Option<

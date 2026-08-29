@@ -182,6 +182,10 @@ const visitAll: _Curry<[froms: string[], importer: string, acc: Acc], Result<Acc
         throw new Error("non-exhaustive match");
       }),
 );
+/**
+ * loadGraph : string -> Result [Loaded] MErr
+ * Load every module reachable from `entry`, in dependency order.
+ */
 export const loadGraph: (entry: string) => Result<Loaded[], MErr> = (entry: string) =>
   _Result_flatMap(
     (acc) => Ok(acc.order) as Result<Loaded[], MErr>,
@@ -792,6 +796,11 @@ const compileAll: _Curry<
         throw new Error("non-exhaustive match");
       }),
 );
+/**
+ * compileGraph : [Loaded] -> Result [ModuleOutput] MErr
+ * Spelled out (not point-free `compileAll(ctx0)`): the TS backend types a
+ * multi-param function uncurried, so a partial application is a tsc error.
+ */
 export const compileGraph: (graph: Loaded[]) => Result<{ path: string; js: string }[], MErr> = (
   graph: Loaded[],
 ) =>
@@ -805,6 +814,10 @@ export const compileGraph: (graph: Loaded[]) => Result<{ path: string; js: strin
     },
     graph,
   );
+/**
+ * buildModules : string -> Result [ModuleOutput] MErr
+ * Resolve the graph then compile it — one sync railway (host IO is sync).
+ */
 export const buildModules: (entry: string) => Result<{ path: string; js: string }[], MErr> = (
   entry: string,
 ) => _Result_flatMap((graph) => compileGraph(graph), loadGraph(entry));
@@ -956,6 +969,11 @@ const groupByOwner: <A>(
       names,
     ),
 );
+/**
+ * `import type { … }` lines for every non-local type name the EMITTED text
+ * references, grouped by declaring module. Builtin variants never appear in
+ * `typeOwner` — the emitter inlines their decls instead (ADR 0031).
+ */
 const crossModuleTypeImports: _Curry<
   [ts: string, importer: string, localTypes: Set<string>, typeOwner: Map<string, string>],
   string[]
@@ -1299,6 +1317,12 @@ const compileAllTs: <A>(
         throw new Error("non-exhaustive match");
       }),
 );
+/**
+ * compileGraphTs : [Loaded] -> string -> Result [ModuleOutput] MErr
+ * Emit the whole ordered graph as typed TypeScript (ADR 0090). Outputs are the
+ * `.mochi` module paths (the writer swaps the extension) followed by the extern
+ * sidecars, which already carry their own `.d.ts` / `.d.mts` extension.
+ */
 export const compileGraphTs: <A>(
   graph: ({ stmts: Stmt[]; path: string } & A)[],
   runtimeImport: string,
@@ -1319,6 +1343,9 @@ export const compileGraphTs: <A>(
       graph,
     ),
 );
+/**
+ * buildModulesTs : string -> string -> Result [ModuleOutput] MErr
+ */
 export const buildModulesTs: _Curry<
   [entry: string, runtimeImport: string],
   Result<{ path: string; js: string }[], MErr>

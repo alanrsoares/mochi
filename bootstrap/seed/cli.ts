@@ -154,6 +154,12 @@ export const buildMulti: (entry: string) => Result<string, string> = (entry: str
     writeAll,
     _Result_mapErr((e: Diag) => e.message, buildModules(entry)),
   );
+/**
+ * Invoke only when Bun executes cli.js / cli.ts directly. Importing it from a
+ * colocated unit spec must expose the helpers above without exiting the test process.
+ * `_`-prefixed because the name exists to hold an effect, not to be read — mochi
+ * has no top-level expression statement (ADR 0094).
+ */
 const _runEntry = isCliEntry(undefined)
   ? match(_Array_get(0, argv))
       .with({ _tag: "None" }, () =>

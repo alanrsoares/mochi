@@ -1,6 +1,7 @@
 import type { Tok } from "../lexer";
 import type { Expr, Field, Name, SeqElem, Span } from "../ast";
 import type { Row, St, Ty } from "../types";
+import type { Ctx } from "../infer";
 
 export type LocTok = { tok: Tok; start: number; end: number; doc: Option<string> };
 
@@ -21,12 +22,19 @@ import {
   and,
   or,
   length,
+  map,
+  _Map_get,
+  _Option_flatMap,
   _Option_exists,
   _Option_unwrapOr,
   _Result_map,
   _Result_flatMap,
   _Array_get,
   _Array_append,
+  _Str_length,
+  _Str_split,
+  _Str_startsWith,
+  _Str_slice,
   _Str_codeAt,
   _tuple,
 } from "@mochi/compiler/runtime";
@@ -38,6 +46,8 @@ import {
   zonk,
   tPrim,
   tRecord,
+  tLit,
+  tUnion,
   rExtend,
   TyFn,
   TyRecord,
@@ -61,6 +71,7 @@ import {
   TRbrace,
   TSpread,
   TSlash,
+  TMinus,
   TLt,
   TGt,
   TNum,
@@ -149,6 +160,11 @@ const jxExpectId: <A>(
       .otherwise((t) => jxErrAt(`expected id, got ${jxTokName(t)}`, lt));
   },
 );
+/**
+ * Keyword spelling, mirroring `parser.mochi`'s `keywordText` (ADR 0077). The
+ * plugin carries its own copy for the same reason it carries `jxTokName`: it
+ * sees the token stream, not the parser's internals.
+ */
 const jxKeywordText: (t: Tok) => Option<string> = (t: Tok) =>
   match(t)
     .with({ _tag: "TLet" }, () => Some("let") as Option<string>)
@@ -161,6 +177,11 @@ const jxKeywordText: (t: Tok) => Option<string> = (t: Tok) =>
     .with({ _tag: "TImport" }, () => Some("import") as Option<string>)
     .with({ _tag: "TExport" }, () => Some("export") as Option<string>)
     .otherwise(() => None as Option<string>);
+/**
+ * Attribute name. A keyword is legal here (ADR 0077) — `type="button"` is the
+ * case that forced it. A valueless attr lowers to `true`, not a reference, so
+ * there is no pun to reject.
+ */
 const jxExpectLabel: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   pos: number,
@@ -180,6 +201,65 @@ const jxExpectLabel: <A>(
       .with({ _tag: "None" }, () => jxExpectId(toks, pos))
       .exhaustive();
   },
+);
+/**
+ * Attribute names may contain hyphens (`data-testid`, `aria-label`). The lexer
+ * splits those into label/minus/label, so glue the parts back together — but
+ * only while the tokens are ADJACENT, or `<div id - x="1">` would silently
+ * become `id-x`.
+ */
+const jxAttrNameFrom: <A, B>(
+  toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+  pos: number,
+  acc: { span: { end: number; start: B }; name: string },
+) => [{ span: { end: number; start: B }; name: string }, number] = _curry(
+  3,
+  <A, B>(
+    toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+    pos: number,
+    acc: { span: { end: number; start: B }; name: string },
+  ) => {
+    const minusTok = jxTokAt(toks, pos);
+    const partTok = jxTokAt(toks, add(pos, 1));
+    return and(
+      and(eq(minusTok.tok, TMinus as Tok), eq(minusTok.start, acc.span.end)),
+      eq(partTok.start, minusTok.end),
+    )
+      ? match(jxExpectLabel(toks, add(pos, 1)))
+          .with(
+            (
+              _v,
+            ): _v is Extract<
+              Result<[Name, number], { message: string; start: number; end: number }>,
+              { _tag: "Ok" }
+            > => {
+              const _g: any = _v;
+              return _g._tag === "Ok";
+            },
+            ({ value: [part, p1] }) =>
+              jxAttrNameFrom(toks, p1, {
+                name: `${acc.name}-${part.name}`,
+                span: { start: acc.span.start, end: part.span.end },
+              }),
+          )
+          .with({ _tag: "Err" }, () => _tuple(acc, pos))
+          .exhaustive()
+      : _tuple(acc, pos);
+  },
+);
+/**
+ * `jxExpectLabel` plus any adjacent `-part` continuations.
+ */
+const jxExpectAttrName: <A>(
+  toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+  pos: number,
+) => Result<[Name, number], { message: string; start: number; end: number }> = _curry(
+  2,
+  <A>(toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number) =>
+    _Result_map(
+      ([head, p1]: [Name, number]) => jxAttrNameFrom(toks, p1, head),
+      jxExpectLabel(toks, pos),
+    ),
 );
 const jxIsUpper: (s: string) => boolean = (s: string) =>
   _Option_exists((n: number) => and(gte(n, 65), lte(n, 90)), _Str_codeAt(0, s));
@@ -332,7 +412,7 @@ const parseJsxAttributes: <A>(
                           .otherwise(() => _tuple(Ast.EBool(true, attrId.span), pEq)))(add(p1, 1))
                     : _tuple(Ast.EBool(true, attrId.span), p1),
                 ),
-              jxExpectLabel(toks, pos),
+              jxExpectAttrName(toks, pos),
             );
     },
   );
@@ -570,6 +650,9 @@ const parseJsx: <A>(
         );
   },
 );
+/**
+ * Parse hook: claim a leading `<…>`; otherwise Ok(None) fall-through.
+ */
 export const parseJsxAtom: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   pos: number,
@@ -673,6 +756,9 @@ const inferJsxChildren: <A, B, C>(
         throw new Error("non-exhaustive match");
       }),
 );
+/**
+ * Walk a row for `label`; open tails / missing labels → None.
+ */
 const rowField: _Curry<[row: Row, label: string], Option<Ty>> = _curry(
   2,
   (row: Row, label: string) =>
@@ -717,6 +803,11 @@ const jsxChildCount: (restArgs: Expr[]) => number = (restArgs: Expr[]) =>
       ([{ elements }]) => length(elements),
     )
     .otherwise(() => 0);
+/**
+ * Runtime hosts fold h's 3rd arg into props.children. When the component
+ * expects that field and the JSX body supplied kids, synthesize it onto the
+ * attrs type before unify (mirrors TS `jsxPropsWithSynthesizedChildren`).
+ */
 const jsxPropsWithSynthesizedChildren: _Curry<
   [propsT: Ty, propsExpr: Expr, expectedRow: Row, restArgs: Expr[]],
   Ty
@@ -733,6 +824,91 @@ const jsxPropsWithSynthesizedChildren: _Curry<
         .otherwise(() => propsT),
     )
     .exhaustive(),
+);
+import { intrinsicElements as jsxIntrinsicElements } from "./jsx-schema.gen.mjs";
+/**
+ * A kind string from the generated schema as an HM type. `event` and `any` are
+ * SHAPE checks rather than unifications, so they carry no expected type here.
+ */
+const attrKindType: (kind: string) => Option<Ty> = (kind: string) =>
+  eq(kind, "string")
+    ? (Some(tPrim("string")) as Option<Ty>)
+    : eq(kind, "number")
+      ? (Some(tPrim("number")) as Option<Ty>)
+      : eq(kind, "bool")
+        ? (Some(tPrim("bool")) as Option<Ty>)
+        : eq(kind, "string|number")
+          ? (Some(tUnion([tPrim("string"), tPrim("number")])) as Option<Ty>)
+          : eq(kind, "string|bool")
+            ? (Some(tUnion([tPrim("string"), tPrim("bool")])) as Option<Ty>)
+            : _Str_startsWith("enum:", kind)
+              ? (Some(
+                  tUnion(map(tLit, _Str_split(",", _Str_slice(5, _Str_length(kind), kind)))),
+                ) as Option<Ty>)
+              : (None as Option<Ty>);
+const intrinsicAttrType: _Curry<[tag: string, attr: string], Option<Ty>> = _curry(
+  2,
+  (tag: string, attr: string) =>
+    _Option_flatMap(
+      attrKindType,
+      _Option_flatMap(_Map_get(attr), _Map_get(tag, jsxIntrinsicElements)),
+    ),
+);
+const inferIntrinsicFields: <A, B, C, D, E>(
+  tag: string,
+  fields: ({ name: string; value: Expr } & D)[],
+  st: A,
+  api: {
+    unify: (a: B, b: Ty, c: A, d: Span) => Result<A, C>;
+    inferExpr: (a: Expr, b: A) => Result<[B, A], C>;
+  } & E,
+) => Result<A, C> = _curry(
+  4,
+  <A, B, C, D, E>(
+    tag: string,
+    fields: ({ name: string; value: Expr } & D)[],
+    st: A,
+    api: {
+      unify: (a: B, b: Ty, c: A, d: Span) => Result<A, C>;
+      inferExpr: (a: Expr, b: A) => Result<[B, A], C>;
+    } & E,
+  ) =>
+    match(fields)
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length === 0;
+        },
+        () => Ok(st),
+      )
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length >= 1;
+        },
+        ([f, ...rest]) =>
+          match(intrinsicAttrType(tag, f.name))
+            .with({ _tag: "Some" }, ({ value: expectedT }) =>
+              _Result_flatMap(
+                ([valT, st1]: [B, A]) =>
+                  _Result_flatMap(
+                    (st2: A) => inferIntrinsicFields(tag, rest, st2, api),
+                    api.unify(valT, expectedT, st1, jxExprSpan(f.value)),
+                  ),
+                api.inferExpr(f.value, st),
+              ),
+            )
+            .with({ _tag: "None" }, () =>
+              _Result_flatMap(
+                ([_, st1]: [B, A]) => inferIntrinsicFields(tag, rest, st1, api),
+                api.inferExpr(f.value, st),
+              ),
+            )
+            .exhaustive(),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
 );
 const inferJsxCall: <A, B>(
   tagExpr: Expr,
@@ -776,7 +952,20 @@ const inferJsxCall: <A, B>(
                       )
                       .otherwise(() => Ok(_tuple(tPrim("VNode"), st3))),
                   )
-                  .otherwise(() => Ok(_tuple(tPrim("VNode"), st3)));
+                  .otherwise(() =>
+                    match(tagExpr)
+                      .with({ _tag: "EStr" }, ({ value: tagName }) =>
+                        match(propsExpr)
+                          .with({ _tag: "ERecord" }, ({ fields }) =>
+                            _Result_map(
+                              (st4: St) => _tuple(tPrim("VNode"), st4),
+                              inferIntrinsicFields(tagName, fields, st3, api),
+                            ),
+                          )
+                          .otherwise(() => Ok(_tuple(tPrim("VNode"), st3))),
+                      )
+                      .otherwise(() => Ok(_tuple(tPrim("VNode"), st3))),
+                  );
               },
               inferJsxChildren(restArgs, st2, api.inferExpr),
             ),
@@ -785,6 +974,11 @@ const inferJsxCall: <A, B>(
       api.inferExpr(tagExpr, st),
     ),
 );
+/**
+ * Infer-call hook: claim `origin == Some("jsx")`; otherwise Ok(None).
+ * `api.inferExpr` is `(expr, st) -> Result` — closes over Ctx so hooks stay
+ * free of a recursive Ctx type (occurs-check).
+ */
 export const inferJsxCallHook: <A, B, C>(
   _fn: A,
   args: Expr[],

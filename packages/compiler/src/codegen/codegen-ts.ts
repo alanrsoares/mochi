@@ -35,6 +35,7 @@ import { bindingTypeHooks, resolvePlugins } from "../extensions/extensions";
 import type { Env, Scheme, TypeAt } from "../infer/infer";
 import { preludeNamespaces } from "../prelude/prelude";
 import { codegen, collectRuntimeDeps } from "./codegen";
+import { jsDoc } from "./codegen-core";
 
 export type CodegenTsOptions = { runtimeImport?: string; open?: boolean };
 
@@ -163,16 +164,17 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
   const typeHeader = [
     ...prog.stmts.flatMap((s) => {
       if (s.kind !== "type") return [];
+      const doc = jsDoc(s.doc);
       if (s.ctors.length === 0 && !s.alias)
         return [
           `declare const ${s.name}: unique symbol;`,
-          `type ${s.name} = { readonly [${s.name}]: never };`,
+          `${doc}type ${s.name} = { readonly [${s.name}]: never };`,
         ];
       const a = aliasByName.get(s.name);
       return [
         a
-          ? aliasTsDecl(a, new Map(), ctx.aliases)
-          : typeDecl(s.name, s.params, s.ctors, new Map(), ctx.aliases),
+          ? `${doc}${aliasTsDecl(a, new Map(), ctx.aliases)}`
+          : `${doc}${typeDecl(s.name, s.params, s.ctors, new Map(), ctx.aliases)}`,
       ];
     }),
   ];

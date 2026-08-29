@@ -2,7 +2,7 @@
 import { match } from "@onrails/pattern";
 import type { ExternStmt, ImportStmt, Stmt, TypeStmt } from "../ast/ast";
 import { keysOf } from "../ast/ctors";
-import { type GenCtx, genExpr, typeExprArity } from "./codegen-core";
+import { type GenCtx, genExpr, jsDoc, typeExprArity } from "./codegen-core";
 
 /**
  * A variant decl has no runtime type in JS — it lowers to constructor
@@ -150,13 +150,15 @@ export const genStmt = (s: Stmt, ctx: GenCtx): string =>
             .join("\n")
         : decls;
     })
-    .with({ kind: "extern" }, (s) =>
-      s.exported ? `${genExtern(s)}\nexport { ${s.name} };` : genExtern(s),
-    )
+    .with({ kind: "extern" }, (s) => {
+      const doc = jsDoc(s.doc);
+      return s.exported ? `${doc}${genExtern(s)}\nexport { ${s.name} };` : `${doc}${genExtern(s)}`;
+    })
     .with({ kind: "let" }, (s) => {
       const doExport = s.exported && !s.name.startsWith("$"); // never export destructure temps
       const ann = ctx.annotateLet?.(s.name, s.value) ?? ""; // TS backend annotates; JS leaves bare
-      return `${doExport ? "export " : ""}const ${s.name}${ann} = ${genExpr(s.value, ctx)};`;
+      const doc = !s.name.startsWith("$") ? jsDoc(s.doc) : "";
+      return `${doc}${doExport ? "export " : ""}const ${s.name}${ann} = ${genExpr(s.value, ctx)};`;
     })
     .with({ kind: "expr" }, (s) => `${genExpr(s.value, ctx)};`)
     .exhaustive();

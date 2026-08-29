@@ -1,11 +1,17 @@
 import type { AliasField, CtorField, TypeExpr } from "./ast";
 import type { Row, St, Ty } from "./types";
 
+/**
+ * A generalized binding type: the quantified type vars, the quantified ROW
+ * vars, and the body. Declared purely so the TS backend has a NAME to fold
+ * this row back to (ADR 0092) — a record alias is structural and nothing
+ * annotates with it, so this changes no inference.
+ */
 export type Scheme = { vars: number[]; rvars: number[]; ty: Ty };
 export type VarSets = { tv: Set<number>; rv: Set<number> };
 export type AliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
 
-import type { Option, _Curry } from "@mochi/compiler/runtime";
+import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
   _curry,
@@ -67,6 +73,10 @@ export const mono: <A, B, C>(t: A) => { vars: B[]; rvars: C[]; ty: A } = <A, B, 
 export const tNumber: Ty = tPrim("number");
 export const tBool: Ty = tPrim("bool");
 export const tString: Ty = tPrim("string");
+/**
+ * surface `float`/`int`/`string`/`bool` type-expr names -> HM primitive type
+ * (used by typeExprToType, further down, for extern signatures)
+ */
 export const primType: (name: string) => Ty = (name: string) =>
   match(name)
     .with("float", () => tNumber)
@@ -126,6 +136,15 @@ const collectRow: _Curry<[row: Row, acc: VarSets], VarSets> = _curry(2, (row: Ro
     .exhaustive(),
 );
 export const freeInType: (t: Ty) => VarSets = (t: Ty) => collect(t, emptyVarSets);
+/**
+ * Free vars of an env type, resolved THROUGH the substitution. An env scheme
+ * keeps the var it was built with, and unification may since have pointed that
+ * var at another one; reading `sc.ty` raw reports a var the env no longer owns
+ * and misses the one it now does, so `generalize` quantifies a var that is
+ * still monomorphic (issue #72 — `let … in` over-generalization). Bound vars
+ * stay OPAQUE, and the check precedes the resolve: a generalized scheme's own
+ * quantified var can collide with a subst key.
+ */
 const collectFree: _Curry<[t: Ty, bound: VarSets, st: St, acc: VarSets], VarSets> = _curry(
   4,
   (t: Ty, bound: VarSets, st: St, acc: VarSets) =>
@@ -248,6 +267,11 @@ export const generalize: <A, B>(
     return { vars: _Set_toArray(free.tv), rvars: _Set_toArray(free.rv), ty: zt };
   },
 );
+/**
+ * Bare string/number singletons widen to their base prim at generalization
+ * of an unannotated binding (TypeScript `let`). Written types skip this
+ * pass so `"hi"` stays `"hi"` (ADR 0081). Finite unions of lits stay precise.
+ */
 export const widenLits: (t: Ty) => Ty = (t: Ty) =>
   match(t)
     .with({ _tag: "TySingleton", base: "string" }, () => tString)
@@ -401,6 +425,10 @@ export const typeExprListToType: _Curry<
         throw new Error("non-exhaustive match");
       }),
 );
+/**
+ * `unit` is an ordinary primitive name (ADR 0054), so `()` in TypeExpr — which the
+ * parser lowers to `TyName("unit")` — needs no special case here.
+ */
 export const typeExprName: _Curry<
   [
     name: string,
@@ -439,6 +467,12 @@ export const typeExprName: _Curry<
           )
           .exhaustive(),
 );
+/**
+ * surface type-expr -> HM type. Prim names map to their type; Uppercase names
+ * are nullary constructors (unless a transparent alias expands them);
+ * lowercase names are type variables, shared by name within one signature
+ * via the threaded `vars` cache.
+ */
 export const typeExprToType: _Curry<
   [
     te: TypeExpr,
@@ -589,6 +623,13 @@ const aliasFieldsFrom: _Curry<
         throw new Error("non-exhaustive match");
       }),
 );
+/**
+ * Expand a record alias to its structural row. `args` binds its type params
+ * positionally; params past `args.length` become fresh generic vars.
+ * `expanding` breaks reference cycles (`type T = { self: T }`) by falling
+ * back to the bare nominal `con(name, args)` — finite, though that field
+ * then unifies nominally.
+ */
 export const aliasRow: _Curry<
   [
     name: string,
@@ -690,6 +731,13 @@ const ctorFieldsArrowFrom: _Curry<
         throw new Error("non-exhaustive match");
       }),
 );
+/**
+ * A variant's constructors become curried functions into that variant type,
+ * polymorphic over the type's parameters. `type Result a e = | Ok(a) | Err(e)`
+ * gives `Ok : forall a e. a -> Result a e` — a ctor scheme is closed by
+ * construction (quantifies every var the fields introduced), nothing leaks
+ * from env.
+ */
 export const ctorScheme: <A>(
   typeName: string,
   params: string[],

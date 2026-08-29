@@ -1204,6 +1204,12 @@ const mergeMissing: <A, B>(keys: A[], from: Map<A, B>, into: Map<A, B>) => Map<A
         throw new Error("non-exhaustive match");
       }),
 );
+/**
+ * check threaded with an imported registry (dep modules' exported variant
+ * types) so a `switch` on an imported variant is exhaustiveness-checked against
+ * every constructor — even ones the importer never named (those force a
+ * catch-all). Mirrors src/check.ts's `check(prog, imported)`.
+ */
 export const checkWith: <A, B>(
   stmts: Stmt[],
   imported: { types: Map<string, string[]>; ctors: Map<string, CtorInfo> } & A,

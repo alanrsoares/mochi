@@ -1,5 +1,13 @@
 import type { Row, Ty } from "./types";
 
+/**
+ * The rendering environment: generic letters for type AND row vars, plus the
+ * record alias index. ONE record rather than two threaded arguments — every
+ * emitted function is curried and `curriedOverloads` writes a signature per
+ * composition of its arity (ADR 0037), so a second argument DOUBLES the
+ * overload block of every renderer carrying it. Annotated at each use so the
+ * row stays closed and folds to `TsEnv` rather than printing `{ vars: … } & R`.
+ */
 export type TsEnv = { vars: Map<number, string>; recs: Map<string, string> };
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
@@ -52,15 +60,33 @@ export const tsEnv: <A, B>(vars: A, recs: B) => { vars: A; recs: B } = _curry(
   2,
   <A, B>(vars: A, recs: B) => ({ vars: vars, recs: recs }),
 );
+/**
+ * Pinned (ADR 0044): a bare `#{}` generalizes to `Map<unknown, unknown>`, which
+ * `_Curry`'s exact argument prefixes reject where the old overload block let it
+ * through.
+ */
 const noVars: Map<number, string> = new Map<number, string>();
 const noRecs: Map<string, string> = new Map<string, string>();
+/**
+ * Letters but no index — the many call sites with no module scope to fold in.
+ */
 export const plainEnv: <A>(vars: A) => { vars: A; recs: Map<string, string> } = <A>(vars: A) =>
   tsEnv(vars, noRecs);
+/**
+ * Index but no letters: a fully concrete type has no generic head to name.
+ */
 export const recsEnv: <A>(recs: A) => { vars: Map<number, string>; recs: A } = <A>(recs: A) =>
   tsEnv(noVars, recs);
 const letters: string = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+/**
+ * `A`, `B`, … then `T26`, `T27`, … past the alphabet.
+ */
 export const letterAt: (i: number) => string = (i: number) =>
   _Option_unwrapOr(`T${show(i)}`, _Str_get(i, letters));
+/**
+ * Generic names for both type and row variables. The fresh supply is shared,
+ * so the two lists have no colliding ids.
+ */
 export const genericNames: <A, B>(sc: { vars: A[]; rvars: A[] } & B) => Map<A, string> = <A, B>(
   sc: { vars: A[]; rvars: A[] } & B,
 ) => genericNamesFrom(_Array_concat(sc.vars, sc.rvars), 0, new Map<A, string>());
@@ -108,6 +134,10 @@ const tsRowFields: _Curry<[row: Row, env: TsEnv], [string[], Option<number>]> = 
       )
       .exhaustive(),
 );
+/**
+ * Fields of a CLOSED row, each rendered with NO index. `None` for an open row:
+ * `{ … } & R` is not the alias, only its prefix, so it has no name to take.
+ */
 const shapeFieldsFrom: _Curry<[row: Row, vars: Map<number, string>], Option<string[]>> = _curry(
   2,
   (row: Row, vars: Map<number, string>) =>
@@ -122,11 +152,23 @@ const shapeFieldsFrom: _Curry<[row: Row, vars: Map<number, string>], Option<stri
       )
       .exhaustive(),
 );
+/**
+ * The index key for a row. Sorted, because a row carries fields in the order
+ * `unify` extended it: the same record type reaches `tsRow` as both
+ * `{ ty; rvars; vars }` and `{ vars; rvars; ty }`, and both must key alike.
+ * Rendered index-free so building the index and looking a row up in it can
+ * never disagree about a nested field's spelling.
+ */
 export const rowShapeKey: _Curry<[row: Row, vars: Map<number, string>], Option<string>> = _curry(
   2,
   (row: Row, vars: Map<number, string>) =>
     _Option_map((fs: string[]) => _Str_join("; ", _Array_sort(fs)), shapeFieldsFrom(row, vars)),
 );
+/**
+ * The declared name for a row, when the emitting module declared one. The
+ * empty-index short-circuit keeps the key off the hot path for the many call
+ * sites that render with no index at all.
+ */
 const aliasNameFor: _Curry<[row: Row, env: TsEnv], Option<string>> = _curry(
   2,
   (row: Row, env: TsEnv) =>
@@ -181,6 +223,10 @@ const tsArrowParams: _Curry<[fromT: Ty, toT: Ty, env: TsEnv, i: number, params: 
       )
       .otherwise(() => `(${_Str_join(", ", params1)}) => ${tsOfRaw(toT, env)}`);
   });
+/**
+ * Render an already-zonked HM type into strict TypeScript syntax. Bare
+ * singleton types widen at this boundary just as the TS backend does.
+ */
 export const tsOf: _Curry<[t: Ty, env: TsEnv], string> = _curry(2, (t: Ty, env: TsEnv) =>
   tsOfRaw(widenLits(t), env),
 );

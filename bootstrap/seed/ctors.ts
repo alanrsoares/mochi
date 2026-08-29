@@ -38,6 +38,11 @@ const emptyRegistry: Registry = {
   ctors: new Map<string, CtorInfo>(),
   types: new Map<string, string[]>(),
 };
+/**
+ * The primitive type names legal in a ctor field / type expression. Shared by
+ * check (stray-type-var validation) and any future prim consumer — previously
+ * check.mochi's private `ctorPrims`.
+ */
 export const primTypeNames = ["number", "int", "float", "string", "bool", "unit"];
 const keysOfFrom: <A>(fields: ({ name: Option<string> } & A)[], i: number) => string[] = _curry(
   2,
@@ -105,6 +110,12 @@ const declaresType: _Curry<[stmts: Stmt[], i: number, name: string], boolean> = 
       .with({ _tag: "Some" }, () => declaresType(stmts, add(i, 1), name))
       .exhaustive(),
 );
+/**
+ * The builtin decls a program does NOT shadow: a user `type` of the same name
+ * suppresses the whole builtin type (the type-name-shadow rule, matching
+ * src/ctors.ts's seedBuiltins). Consumers seed from this list so all three
+ * passes share one shadowing semantics.
+ */
 export const builtinDeclsFor: (
   stmts: Stmt[],
 ) => { name: string; params: string[]; ctors: Ctor[] }[] = (stmts: Stmt[]) =>
@@ -239,6 +250,11 @@ const buildLoop: _Curry<[stmts: Stmt[], i: number, reg: Registry], Result<Regist
       .with({ _tag: "Some" }, () => buildLoop(stmts, add(i, 1), reg))
       .exhaustive(),
 );
+/**
+ * The failing builder — check's entry point: duplicate-decl detection lives
+ * here, at the single derivation, so no later pass can see a registry check
+ * didn't vouch for.
+ */
 export const buildRegistry: (stmts: Stmt[]) => Result<Registry, PErr> = (stmts: Stmt[]) =>
   _Result_map(
     (reg: Registry) => seedRegDeclsFrom(builtinDeclsFor(stmts), 0, reg),
@@ -370,6 +386,11 @@ const seedKeyDeclsFrom: <A, B, C, D>(
       )
       .exhaustive(),
 );
+/**
+ * Seed builtin variant ctor keys (Some/Ok/…) unless the program declares its
+ * own type of that name, or the key is already present (a user decl or an
+ * imported ctor's keys win).
+ */
 export const seedBuiltinCtorKeys: _Curry<
   [stmts: Stmt[], m: Map<string, string[]>],
   Map<string, string[]>

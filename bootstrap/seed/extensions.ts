@@ -22,6 +22,9 @@ import { match } from "@onrails/pattern";
 
 import { jsxPlugin } from "./plugins/jsx";
 export const DEFAULT_PLUGINS = [jsxPlugin];
+/**
+ * `pluginsOpt` is Option [LanguagePlugin]: None = default, Some([]) = opt-out.
+ */
 export const resolvePlugins: <A>(pluginsOpt: Option<A[]>, builtins: A[]) => A[] = _curry(
   2,
   <A>(pluginsOpt: Option<A[]>, builtins: A[]) =>
@@ -113,6 +116,9 @@ export const resolvePluginsDefault: <A, B, C, D>(
     }[]
   >,
 ) => resolvePlugins(pluginsOpt, DEFAULT_PLUGINS);
+/**
+ * Collect parse hooks (skip plugins with None parse).
+ */
 const parseHooksFrom: <A, B>(plugins: ({ parse: Option<A> } & B)[], i: number, acc: A[]) => A[] =
   _curry(3, <A, B>(plugins: ({ parse: Option<A> } & B)[], i: number, acc: A[]) =>
     match(_Array_get(i, plugins))
@@ -152,6 +158,10 @@ const inferHooksFrom: <A, B>(
 export const inferCallHooksOf: <A, B>(plugins: ({ inferCall: Option<A> } & B)[]) => A[] = <A, B>(
   plugins: ({ inferCall: Option<A> } & B)[],
 ) => inferHooksFrom(plugins, 0, [] as A[]);
+/**
+ * First hook to claim wins. Ok(None) = fall through; Ok(Some((e, pos))) =
+ * claimed; Err = parse diagnostic. `parseExpr` is (toks, pos) -> Result.
+ */
 export const runParseHooks: <A, B, C, D, E>(
   hooks: ((a: A, b: B, c: C) => Result<Option<D>, E>)[],
   toks: A,
@@ -187,6 +197,9 @@ export const runParseHooks: <A, B, C, D, E>(
         throw new Error("non-exhaustive match");
       }),
 );
+/**
+ * First hook to claim wins. Ok(None) = fall through to core call inference.
+ */
 export const runInferCallHooks: <A, B, C, D, E, F, G>(
   hooks: ((a: A, b: B, c: C, d: D, e: E) => Result<Option<F>, G>)[],
   fn: A,

@@ -54,7 +54,6 @@ import type {
 import { type CallExpr, rowField } from "../plugin-kit";
 import {
   type ElementSchema,
-  GLOBAL_HTML_ATTRS,
   INTRINSIC_ELEMENTS,
   type IntrinsicAttrType,
   JSX_MISMATCH_HINTS,
