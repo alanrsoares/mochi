@@ -3,20 +3,19 @@ import { formatStatus } from "./status.mochi"
 
 describe("status.mochi", () => {
   test("formatStatus reports compiling state", () => {
-    formatStatus(true, None, true)
+    formatStatus(true, ~ok=true)
       |> assertEq({ text: "compiling…", state: "ok" });
-    formatStatus(true, Some("100"), false)
+    formatStatus(true, ~timing="100", ~ok=false)
       |> assertEq({ text: "compiling…", state: "ok" })
   });
   test("formatStatus reports ready vs error when timing is absent", () => {
-    formatStatus(false, None, true) |> assertEq({ text: "ready", state: "ok" });
-    formatStatus(false, None, false)
-      |> assertEq({ text: "error", state: "err" })
+    formatStatus(false, ~ok=true) |> assertEq({ text: "ready", state: "ok" });
+    formatStatus(false, ~ok=false) |> assertEq({ text: "error", state: "err" })
   });
   test("formatStatus formats elapsed compile time", () => {
-    formatStatus(false, Some("42"), true)
+    formatStatus(false, ~timing="42", ~ok=true)
       |> assertEq({ text: "ok · 42ms", state: "ok" });
-    formatStatus(false, Some("1500"), false)
+    formatStatus(false, ~timing="1500", ~ok=false)
       |> assertEq({ text: "error · 1500ms", state: "err" })
   })
 })

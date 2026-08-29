@@ -92,6 +92,9 @@ export const playgroundStatus = (
   compileMs: number | null,
   ok: boolean,
 ): PlaygroundStatus => {
-  const timing = compileMs === null ? None : Some(compileMs.toFixed(1));
-  return formatStatus(compiling, timing, ok);
+  // Labeled params compile to one optional-field record, so the host omits
+  // `timing` rather than threading an explicit `None` (ADR 0098 §2).
+  return compileMs === null
+    ? formatStatus(compiling, { ok })
+    : formatStatus(compiling, { timing: compileMs.toFixed(1), ok });
 };
