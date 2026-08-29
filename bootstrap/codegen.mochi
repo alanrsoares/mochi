@@ -671,7 +671,10 @@ let letBlockLoop = (ctx: GCtx, e, seen, decls) => switch e {
       : ctx->letBlockLoop(
         body,
         Set.add(name, seen),
-        Array.append("const ${name} = ${ctx->genExpr(value)};", decls)
+        Array.append(
+          "const ${suffixOr(name, hook1(ctx.annotateLetin, value))} = ${ctx->genExpr(value)};",
+          decls
+        )
       )
   | _ => (decls, e, seen)
 }

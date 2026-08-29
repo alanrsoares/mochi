@@ -99,11 +99,10 @@ Both invariants run in CI: mochi compiles mochi, and the emitted TypeScript type
 
 `bun scripts/bootstrap-self-tsc.ts` is a third measure, **diagnostic rather than
 gating**: it emits the graph with the SELF-HOSTED backend and counts
-`tsc --strict` errors. Unlike `bootstrap:tsc` its number is not 0 — it is the
-running count of places the mirror's inference is less precise than the oracle's
-(what remains: `#{}` seeded as `Map<unknown, unknown>` per ADR 0042, and inline
-struct types where the oracle folds a named alias). Treat a rise as a lead, not a
-build failure.
+`tsc --strict` errors. It now reads **0**, matching `bootstrap:tsc` — Mochi
+compiling Mochi to typed TypeScript typechecks strict-clean, which is the
+stage-1 precondition ADR 0090 asks for. It is still ungated; treat a rise as a
+lead, not a build failure.
 
 ### Development ownership
 

@@ -394,6 +394,35 @@ test("a referenced builtin variant rides the runtime type import", () =>
       |> Str.contains("import type { Option } from \"@mochi/runtime\";")
   ))
 
+// A record PATTERN mints a fresh row var for its open tail. If inference drops
+// the bumped counter there, the next fresh TYPE var reuses that id and the two
+// namespaces collide in `genericNames`' single id-keyed map — the row tail then
+// renders with the type var's letter (`name: C } & C` instead of `name: A } & C`).
+test("a record pattern's row tail gets its own letter, not the type var's", () =>
+  assertEq(
+    true,
+    tsOf(
+      "let keysOfFrom = (fields, i) => switch Array.get(i, fields) {\n  | None => []\n  | Some(f) => Array.prepend(Option.unwrapOr(\"_\", f.name), keysOfFrom(fields, i + 1))\n}\nlet keysOf = fields => keysOfFrom(fields, 0)\nlet seedFrom = (ctors, i, m) => switch Array.get(i, ctors) {\n  | None => m\n  | Some({ name, fields }) => seedFrom(ctors, i + 1, Map.has(name, m) ? m : Map.set(name, keysOf(fields), m))\n}"
+    )
+      |> Str.contains("name: A } & C")
+  ))
+
+test("an empty seed in a generic binding names the enclosing letter (ADR 0042)", () =>
+  assertEq(
+    true,
+    tsOf("let stash = (k, v) => Map.set(k, v, #{})")
+      |> Str.contains("new Map<A, B>()")
+  ))
+
+test("a let-chain const carries its monomorphic annotation (ADR 0035)", () =>
+  assertEq(
+    true,
+    tsOf(
+      "let tally = xs => let seed = #{} in let n = Array.length(xs) in Map.set(\"n\", n, seed)"
+    )
+      |> Str.contains("const seed: Map<string, number> =")
+  ))
+
 test("emits the runtime import for referenced helpers", () =>
   assertEq(
     true,
