@@ -113,14 +113,17 @@ and that is what keeps it sound: it introduces no new HM machinery.
   (`type Opts = { ok?: bool }`). This is a pre-existing limit of `TypeExpr`
   rather than something labels introduce, and it points the same way as
   `no-inline-struct-type`, so we leave it. Dropping the annotation entirely
-  also works, since the labeled group is inferred.
+  also works, since the labeled group is inferred. See *Prior art* for the
+  principled fix (labels in the arrow type) if this starts to chafe.
 - **With a positional prefix, the whole labeled group cannot be omitted.**
   `f(x)` on `f = (x, ~dx = 0) => …` is an ordinary partial application of the
   curried `x -> { dx?: number } -> T`, so it yields a function, not a result.
   Only the nullary case `f()` can auto-apply `{}` (see above) — everywhere else
   currying and "all labels defaulted" are indistinguishable, and preserving
   partial application wins. Callers that must omit everything write `f(x, {})`.
-  In practice this steers labels toward params that are usually supplied.
+  In practice this steers labels toward params that are usually supplied. See
+  *Prior art*: ReScript only escapes this by being uncurried, and keeps the very
+  same sentinel-argument workaround for its curried mode.
 
 ## Open questions
 
@@ -131,6 +134,44 @@ and that is what keeps it sound: it introduces no new HM machinery.
 Optionality belongs on the field flag, not as `Option<T>` in a normal field:
 the latter forces `Some`/`None` at every JSX attribute, which is not acceptable
 ergonomics for `<div id="x" />`.
+
+## Prior art: ReScript / OCaml
+
+ReScript inherits OCaml's labeled arguments and has already paid for both
+consequences above. Checked against the ReScript compiler source, it confirms
+one of our choices and shows the price of fixing the other two.
+
+**Callee-side defaults are what ReScript does too.** The default lives on the
+lambda node (`Exp.fun_ ~arity lbl default_expr pat expr`), the parameter's type
+is `option<'a>`, and the body sees the unwrapped value — the same shape as our
+`$lab` fills. Nothing to change.
+
+**Labels in the arrow type are the real fix for annotating a labeled binding.**
+ReScript makes the label a component of the arrow rather than a separate
+record — `Tarrow of arg * type_expr * commutable * arity` with
+`arg = {lbl: arg_label; typ: type_expr}` — and the surface type mirrors it,
+using `=?` for optional: `(~compiling: bool, ~timing: string=?) => status`.
+That removes the need for a named option type entirely. It is portable to Mochi
+*without* touching `unify`, since a labeled group could still lower to a row
+internally; the work is parser, printer, and `typeExprToType`. Deferred, not
+rejected. The same representation is what would allow labels to be interleaved
+with positional params and reordered freely — our trailing-group rule is a
+consequence of collapsing the group into one record, not of labels as such.
+
+**Omitting a whole labeled group requires giving up currying.** ReScript fills
+remaining optional params with `None` only when the supplied argument count is
+below the function's *arity* and the application is flagged `total_app`
+(`type_unknown_args` in `typecore.ml`). Both conditions depend on arity being
+carried in the arrow type, which is only sound because uncurried is the default
+since v11: `f(x)` on an arity-3 function is a complete call, over-application is
+`Uncurried_arity_mismatch`, and partial application must be written `f(x, ...)`.
+So there is no fix for this inside a curried language, and Mochi's `_curry`
+convention is not up for renegotiation here. Notably ReScript still keeps the
+curried-mode escape hatch — a lone `()` argument is treated as an *empty*
+application when every remaining param is optional, i.e. OCaml's
+`let f ?(x = 1) () = x` idiom. Our `f(x, {})` is that same sentinel with a
+record instead of unit, so the documented workaround is the reference answer;
+only its spelling could be improved.
 
 ## Alternatives rejected
 
