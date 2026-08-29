@@ -1,3 +1,4 @@
+import type { Tok } from "./lexer";
 import type {
   AliasField,
   Ctor,
@@ -19,66 +20,10 @@ import type {
 } from "./ast";
 import type { St, Ty } from "./types";
 
-export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
-export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
-export type Tok =
-  | { _tag: "TLet" }
-  | { _tag: "TType" }
-  | { _tag: "TExtern" }
-  | { _tag: "TSwitch" }
-  | { _tag: "TLoop" }
-  | { _tag: "TRecur" }
-  | { _tag: "TDo" }
-  | { _tag: "TImport" }
-  | { _tag: "TExport" }
-  | { _tag: "TEq" }
-  | { _tag: "TArrow" }
-  | { _tag: "TTarrow" }
-  | { _tag: "TPipe" }
-  | { _tag: "TCompose" }
-  | { _tag: "TConcat" }
-  | { _tag: "TBar" }
-  | { _tag: "TLparen" }
-  | { _tag: "TRparen" }
-  | { _tag: "TLbrace" }
-  | { _tag: "TRbrace" }
-  | { _tag: "TLbracket" }
-  | { _tag: "TRbracket" }
-  | { _tag: "TSpread" }
-  | { _tag: "TPlus" }
-  | { _tag: "TMinus" }
-  | { _tag: "TStar" }
-  | { _tag: "TSlash" }
-  | { _tag: "TPercent" }
-  | { _tag: "TAt" }
-  | { _tag: "THash" }
-  | { _tag: "TDot" }
-  | { _tag: "TColon" }
-  | { _tag: "TQuestion" }
-  | { _tag: "TEqeq" }
-  | { _tag: "TNeq" }
-  | { _tag: "TLte" }
-  | { _tag: "TGte" }
-  | { _tag: "TLt" }
-  | { _tag: "TGt" }
-  | { _tag: "TAndand" }
-  | { _tag: "TOror" }
-  | { _tag: "TBang" }
-  | { _tag: "TBacktick" }
-  | { _tag: "TComma" }
-  | { _tag: "TSemi" }
-  | { _tag: "TNum"; value: number; raw: string }
-  | { _tag: "TBool"; value: boolean }
-  | { _tag: "TStr"; value: string }
-  | { _tag: "TTmplStart"; value: string }
-  | { _tag: "TTmplMid"; value: string }
-  | { _tag: "TTmplEnd"; value: string }
-  | { _tag: "TId"; value: string }
-  | { _tag: "TEof" };
 export type LocTok = { tok: Tok; start: number; end: number; doc: Option<string> };
 export type PErr = { message: string; start: number; end: number };
 
-import type { _Curry } from "@mochi/compiler/runtime";
+import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
   _curry,
@@ -115,51 +60,64 @@ import {
 
 import { match } from "@onrails/pattern";
 
-const TLet: Tok = { _tag: "TLet" };
-const TType: Tok = { _tag: "TType" };
-const TExtern: Tok = { _tag: "TExtern" };
-const TSwitch: Tok = { _tag: "TSwitch" };
-const TLoop: Tok = { _tag: "TLoop" };
-const TRecur: Tok = { _tag: "TRecur" };
-const TDo: Tok = { _tag: "TDo" };
-const TImport: Tok = { _tag: "TImport" };
-const TEq: Tok = { _tag: "TEq" };
-const TArrow: Tok = { _tag: "TArrow" };
-const TTarrow: Tok = { _tag: "TTarrow" };
-const TPipe: Tok = { _tag: "TPipe" };
-const TCompose: Tok = { _tag: "TCompose" };
-const TConcat: Tok = { _tag: "TConcat" };
-const TBar: Tok = { _tag: "TBar" };
-const TLparen: Tok = { _tag: "TLparen" };
-const TRparen: Tok = { _tag: "TRparen" };
-const TLbrace: Tok = { _tag: "TLbrace" };
-const TRbrace: Tok = { _tag: "TRbrace" };
-const TLbracket: Tok = { _tag: "TLbracket" };
-const TRbracket: Tok = { _tag: "TRbracket" };
-const TSpread: Tok = { _tag: "TSpread" };
-const TPlus: Tok = { _tag: "TPlus" };
-const TMinus: Tok = { _tag: "TMinus" };
-const TStar: Tok = { _tag: "TStar" };
-const TSlash: Tok = { _tag: "TSlash" };
-const TPercent: Tok = { _tag: "TPercent" };
-const TAt: Tok = { _tag: "TAt" };
-const THash: Tok = { _tag: "THash" };
-const TDot: Tok = { _tag: "TDot" };
-const TColon: Tok = { _tag: "TColon" };
-const TQuestion: Tok = { _tag: "TQuestion" };
-const TNeq: Tok = { _tag: "TNeq" };
-const TLt: Tok = { _tag: "TLt" };
-const TGt: Tok = { _tag: "TGt" };
-const TAndand: Tok = { _tag: "TAndand" };
-const TOror: Tok = { _tag: "TOror" };
-const TBang: Tok = { _tag: "TBang" };
-const TBacktick: Tok = { _tag: "TBacktick" };
-const TComma: Tok = { _tag: "TComma" };
-const TSemi: Tok = { _tag: "TSemi" };
-const TId = (value: string): Tok => ({ _tag: "TId", value });
-const TEof: Tok = { _tag: "TEof" };
 import * as Ast from "./ast";
 import { parseHooksOf, resolvePluginsDefault, runParseHooks } from "./extensions";
+import * as Lexer from "./lexer";
+import {
+  TLet,
+  TType,
+  TExtern,
+  TSwitch,
+  TLoop,
+  TRecur,
+  TDo,
+  TImport,
+  TExport,
+  TEq,
+  TArrow,
+  TTarrow,
+  TPipe,
+  TCompose,
+  TConcat,
+  TBar,
+  TLparen,
+  TRparen,
+  TLbrace,
+  TRbrace,
+  TLbracket,
+  TRbracket,
+  TSpread,
+  TPlus,
+  TMinus,
+  TStar,
+  TSlash,
+  TPercent,
+  TAt,
+  THash,
+  TDot,
+  TColon,
+  TQuestion,
+  TEqeq,
+  TNeq,
+  TLte,
+  TGte,
+  TLt,
+  TGt,
+  TAndand,
+  TOror,
+  TBang,
+  TBacktick,
+  TComma,
+  TSemi,
+  TNum,
+  TBool,
+  TStr,
+  TTmplStart,
+  TTmplMid,
+  TTmplEnd,
+  TId,
+  TEof,
+} from "./lexer";
 
 const tokName: (t: Tok) => string = (t: Tok) =>
   match(t)

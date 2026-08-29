@@ -13,7 +13,8 @@ definition and uses across shadowed scopes.
 ## Decision
 
 The LSP publishes an `unused-local` warning when a named local value binding has no use.
-Top-level declarations and imports are excluded. A leading `_` explicitly marks a local
+Top-level declarations and imports are excluded (unexported top-level bindings were
+later brought in by [ADR 0094](0094-lsp-unused-top-level.md)). A leading `_` explicitly marks a local
 as intentionally unused. The warning is derived from the shared lexical symbol index,
 not a second AST walk.
 

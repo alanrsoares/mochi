@@ -3,11 +3,9 @@ import type { Row, St, Ty } from "./types";
 import type { CtorFactoryTs, GenOpts, ParamAnnots } from "./codegen";
 import type { TsEnv } from "./ts-types";
 
-export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
-export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
 export type AliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
 
-import type { _Curry } from "@mochi/compiler/runtime";
+import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
   _list,
@@ -792,61 +790,22 @@ const referencedCons: <A>(
       .with({ _tag: "Some" }, () => referencedCons(stmts, env, add(i, 1), acc))
       .exhaustive(),
 );
-const builtinDeclsFor: _Curry<
-  [
-    declared: Set<string>,
-    wanted: Set<string>,
-    i: number,
-    aliases: Map<string, AliasInfo>,
-    recs: Map<string, string>,
-  ],
+const builtinTypeNamesFor: _Curry<
+  [declared: Set<string>, wanted: Set<string>, body: string, i: number],
   string[]
-> = _curry(
-  5,
-  (
-    declared: Set<string>,
-    wanted: Set<string>,
-    i: number,
-    aliases: Map<string, AliasInfo>,
-    recs: Map<string, string>,
-  ) =>
-    match(_Array_get(i, builtinTypeDecls))
-      .with({ _tag: "None" }, () => [] as string[])
-      .with({ _tag: "Some" }, ({ value: bt }) =>
-        ((rest: string[]) =>
-          and(_Set_has(bt.name, wanted), not(_Set_has(bt.name, declared)))
-            ? _Array_prepend(typeDecl(bt.name, bt.params, bt.ctors, aliases, recs), rest)
-            : rest)(builtinDeclsFor(declared, wanted, add(i, 1), aliases, recs)),
-      )
-      .exhaustive(),
-);
-const builtinDeclsInBody: _Curry<
-  [
-    body: string,
-    header: string,
-    i: number,
-    aliases: Map<string, AliasInfo>,
-    recs: Map<string, string>,
-  ],
-  string[]
-> = _curry(
-  5,
-  (
-    body: string,
-    header: string,
-    i: number,
-    aliases: Map<string, AliasInfo>,
-    recs: Map<string, string>,
-  ) =>
-    match(_Array_get(i, builtinTypeDecls))
-      .with({ _tag: "None" }, () => [] as string[])
-      .with({ _tag: "Some" }, ({ value: bt }) =>
-        ((rest: string[]) =>
-          and(not(_Str_contains(`type ${bt.name}`, header)), _Str_contains(bt.name, body))
-            ? _Array_prepend(typeDecl(bt.name, bt.params, bt.ctors, aliases, recs), rest)
-            : rest)(builtinDeclsInBody(body, header, add(i, 1), aliases, recs)),
-      )
-      .exhaustive(),
+> = _curry(4, (declared: Set<string>, wanted: Set<string>, body: string, i: number) =>
+  match(_Array_get(i, builtinTypeDecls))
+    .with({ _tag: "None" }, () => [] as string[])
+    .with({ _tag: "Some" }, ({ value: bt }) =>
+      ((rest: string[]) =>
+        and(
+          not(_Set_has(bt.name, declared)),
+          or(_Set_has(bt.name, wanted), _Str_contains(bt.name, body)),
+        )
+          ? _Array_prepend(bt.name, rest)
+          : rest)(builtinTypeNamesFor(declared, wanted, body, add(i, 1))),
+    )
+    .exhaustive(),
 );
 const aliasRowOf: _Curry<[fields: AliasField[], aliases: Map<string, AliasInfo>, i: number], Row> =
   _curry(3, (fields: AliasField[], aliases: Map<string, AliasInfo>, i: number) =>
@@ -1183,10 +1142,7 @@ export const emitTsModule: <A, B, C, D, E, F, G, H, I>(
     const declared: Set<string> = declaredTypeNames(stmts, 0, _Set_fromArray([] as string[]));
     const wanted: Set<string> = referencedCons(stmts, env, 0, _Set_fromArray([] as string[]));
     const recs: Map<string, string> = recordAliasIndex(aliases);
-    const typeHeader: string[] = _Array_concat(
-      builtinDeclsFor(declared, wanted, 0, aliases, recs),
-      typeHeaderFrom(stmts, aliases, recs, 0),
-    );
+    const typeHeader: string[] = typeHeaderFrom(stmts, aliases, recs, 0);
     const body: string = codegenWith(
       stmts,
       imported,
@@ -1201,24 +1157,32 @@ export const emitTsModule: <A, B, C, D, E, F, G, H, I>(
     const runtimeLine: string = eq(length(deps), 0)
       ? ""
       : `import { ${_Str_join(", ", _Array_sort(deps))} } from "${runtimeImport}";`;
-    const headerText: string = _Str_join("\n", typeHeader);
-    const header: string[] = _Array_concat(
-      builtinDeclsInBody(body, headerText, 0, aliases, recs),
-      typeHeader,
-    );
-    const curryLine: string = _Str_contains(
-      "_Curry<",
-      `${_Str_join("\n", header)}
+    const header: string[] = typeHeader;
+    const typeDeps: string[] = _Array_concat(
+      _Str_contains(
+        "_Curry<",
+        `${_Str_join("\n", header)}
 ${body}`,
-    )
-      ? `import type { _Curry } from "${runtimeImport}";`
-      : "";
+      )
+        ? ["_Curry"]
+        : ([] as string[]),
+      builtinTypeNamesFor(declared, wanted, body, 0),
+    );
+    const typeImportLine: string = eq(length(typeDeps), 0)
+      ? ""
+      : `import type { ${_Str_join(", ", _Array_sort(typeDeps))} } from "${runtimeImport}";`;
     return concat(
       _Str_join(
         "\n\n",
         filter(
           (part: string) => not(eq(part, "")),
-          [_Str_join("\n", header), _Str_join("\n", importLines), curryLine, runtimeLine, body],
+          [
+            _Str_join("\n", header),
+            _Str_join("\n", importLines),
+            typeImportLine,
+            runtimeLine,
+            body,
+          ],
         ),
       ),
       "\n",

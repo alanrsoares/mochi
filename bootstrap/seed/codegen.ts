@@ -15,8 +15,6 @@ import type {
   TypeExpr,
 } from "./ast";
 
-export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
-export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
 export type CtorFactoryTs = {
   generics: string;
   paramTypes: string[];
@@ -54,7 +52,7 @@ export type GCtx = {
   valueRefs: Set<string>;
 };
 
-import type { _Curry } from "@mochi/compiler/runtime";
+import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
   _list,

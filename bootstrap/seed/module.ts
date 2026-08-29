@@ -1,19 +1,17 @@
-import type { Tok } from "./parser";
+import type { Tok } from "./lexer";
 import type { AliasField, Stmt, TypeExpr } from "./ast";
 import type { Ty } from "./types";
 import type { Scheme } from "./schemes";
 import type { AliasInfo } from "./codegen-ts";
 import type { Plugin } from "./infer";
 
-export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
-export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
 export type Loaded = { path: string; stmts: Stmt[] };
 export type MErr = { message: string; start: number; end: number };
 export type Acc = { state: Map<string, string>; order: Loaded[] };
 export type CtorInfo = { owner: string; arity: number };
 export type Registry = { ctors: Map<string, CtorInfo>; types: Map<string, string[]> };
 
-import type { _Curry } from "@mochi/compiler/runtime";
+import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
   _curry,

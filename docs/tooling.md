@@ -135,8 +135,10 @@ unbound names). A file using `"use open"` deliberately treats unknown names as
   help is appended to the message). Suggestions ride along for code actions
   ([ADR 0003](adr/0003-rich-diagnostics.md), [ADR 0004](adr/0004-multi-error-diagnostics.md),
   [tracer bullets](dx-tracer-bullets.md)).
-  The LSP also reports unused named local bindings as warnings; prefix an intentionally
-  unused local with `_` to suppress the warning ([ADR 0070](adr/0070-lsp-unused-locals.md)).
+  The LSP also reports unused named local bindings, and unexported top-level bindings
+  with no use, as warnings; prefix an intentionally unused binding with `_` to suppress
+  the warning ([ADR 0070](adr/0070-lsp-unused-locals.md),
+  [ADR 0094](adr/0094-lsp-unused-top-level.md)).
 - **Formatter** — width-based pretty-printing that runs on lex + parse only (no type
   information needed), which is why it can format even code that doesn't yet type-check.
 - **`.d.ts`** — HM types lowered to TypeScript declarations, including declarations for

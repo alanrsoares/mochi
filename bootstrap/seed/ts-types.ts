@@ -1,10 +1,8 @@
 import type { Row, Ty } from "./types";
 
-export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
-export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
 export type TsEnv = { vars: Map<number, string>; recs: Map<string, string> };
 
-import type { _Curry } from "@mochi/compiler/runtime";
+import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
   _curry,

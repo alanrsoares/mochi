@@ -1,5 +1,3 @@
-export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
-export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
 export type Ty =
   | { _tag: "TyVar"; id: number }
   | { _tag: "TyCon"; name: string; args: Ty[] }
@@ -23,7 +21,7 @@ export type St = {
 };
 export type TypeErr = { message: string };
 
-import type { _Curry } from "@mochi/compiler/runtime";
+import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
   _curry,

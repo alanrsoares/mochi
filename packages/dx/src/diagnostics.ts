@@ -15,8 +15,8 @@ import { moduleContext, resolveImport } from "@mochi/compiler/module";
 import { parse } from "@mochi/compiler/parser";
 import { preludeNamespaces } from "@mochi/compiler/prelude";
 import type { Env, Scheme } from "@mochi/compiler/schemes";
-import { lineCol } from "@mochi/compiler/span";
-import { indexProgram } from "@mochi/compiler/symbols";
+import { lineCol, type Span } from "@mochi/compiler/span";
+import { indexProgram, type SymbolIndex } from "@mochi/compiler/symbols";
 import { tVar } from "@mochi/compiler/types";
 import { isErr } from "@onrails/result";
 
@@ -167,8 +167,8 @@ export async function moduleDiagnostics(
   return isErr(typed) ? typed.error.map((e) => toPublish(src, e, entry)) : [];
 }
 
-/** Warning-only local liveness diagnostics, derived from lexical binding identity. */
-export function unusedLocalDiagnostics(
+/** Warning-only liveness diagnostics, derived from lexical binding identity. */
+export function unusedBindingDiagnostics(
   src: string,
   path = "<buffer>",
   opts: ModuleDiagnosticsOptions = {},
@@ -176,16 +176,16 @@ export function unusedLocalDiagnostics(
   const lexed = lex(src);
   if (isErr(lexed)) return [];
   const parsed = parse(lexed.value, { plugins: opts.plugins });
-  return isErr(parsed) ? [] : unusedLocalDiagnosticsFromProgram(src, path, parsed.value);
+  if (isErr(parsed)) return [];
+  const idx = indexProgram(path, parsed.value);
+  return [
+    ...unusedLocalDiagnosticsFromProgram(src, idx),
+    ...unusedTopLevelDiagnosticsFromProgram(src, parsed.value, idx),
+  ];
 }
 
-const unusedLocalDiagnosticsFromProgram = (
-  src: string,
-  path: string,
-  prog: Program,
-): PublishDiagnostic[] => {
-  const idx = indexProgram(path, prog);
-  return idx.localBindings().flatMap((binding) => {
+const unusedLocalDiagnosticsFromProgram = (src: string, idx: SymbolIndex): PublishDiagnostic[] =>
+  idx.localBindings().flatMap((binding) => {
     const used = idx.occurrences(binding).some((occurrence) => occurrence.role === "use");
     return used
       ? []
@@ -198,7 +198,43 @@ const unusedLocalDiagnosticsFromProgram = (
           },
         ];
   });
-};
+
+/**
+ * A module-scope `let` that is not exported and never referenced is dead — only
+ * this file can see it, so one file is the whole search. References from INSIDE
+ * the binding's own statement do not count, or every self-recursive function
+ * would keep itself alive. A mutually recursive dead pair still reads as used;
+ * that blind spot is the same one `tsc` has, and closing it needs reachability,
+ * not liveness.
+ */
+const unusedTopLevelDiagnosticsFromProgram = (
+  src: string,
+  prog: Program,
+  idx: SymbolIndex,
+): PublishDiagnostic[] =>
+  prog.stmts.flatMap((s) => {
+    // `_`/`$` mirror the local convention: deliberately parked, and synthetic.
+    if (s.kind !== "let" || s.exported) return [];
+    if (s.name.startsWith("_") || s.name.startsWith("$")) return [];
+    const binding = idx.binding("value", s.name);
+    if (!binding || binding.def.span.start !== s.nameSpan.start) return [];
+    const usedElsewhere = idx
+      .occurrences(binding)
+      .some((o) => o.role === "use" && !spanWithin(o.span, s.span));
+    return usedElsewhere
+      ? []
+      : [
+          {
+            range: spanRange(src, s.nameSpan.start, s.nameSpan.end),
+            message: `unused binding '${s.name}'`,
+            severity: "warning" as const,
+            code: "unused-top-level",
+          },
+        ];
+  });
+
+const spanWithin = (inner: Span, outer: Span): boolean =>
+  outer.start <= inner.start && inner.end <= outer.end;
 
 const importsOf = (prog: Program): ImportStmt[] =>
   prog.stmts.filter((s): s is ImportStmt => s.kind === "import");

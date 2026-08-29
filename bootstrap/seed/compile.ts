@@ -1,9 +1,7 @@
 import type { Stmt } from "./ast";
 import type { PErr } from "./parser";
 
-export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
-
-import type { _Curry } from "@mochi/compiler/runtime";
+import type { Result, _Curry } from "@mochi/compiler/runtime";
 
 import { _curry, Ok, _Result_flatMap } from "@mochi/compiler/runtime";
 

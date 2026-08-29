@@ -59,8 +59,6 @@ export let primType = name => switch name {
 
 type VarSets = { tv: Set<number>, rv: Set<number> }
 export let emptyVarSets = { tv: Set.fromArray([]), rv: Set.fromArray([]) }
-let unionVarSets = (a, b) =>
-  { tv: Set.union(a.tv, b.tv), rv: Set.union(a.rv, b.rv) }
 let diffVarSets = (a, b) =>
   { tv: Set.diff(a.tv, b.tv), rv: Set.diff(a.rv, b.rv) }
 
@@ -84,19 +82,74 @@ let collectRow = (row, acc) => switch row {
 
 export let freeInType = t => collect(t, emptyVarSets)
 
-let freeInScheme = sc =>
-  let f = freeInType(sc.ty) in
-    diffVarSets(f, { tv: Set.fromArray(sc.vars), rv: Set.fromArray(sc.rvars) })
-
-let freeInEnvFrom = (schemes, acc) => switch schemes {
-  | [] => acc
-  | [sc, ...rest] => freeInEnvFrom(rest, unionVarSets(acc, freeInScheme(sc)))
+/// Free vars of an env type, resolved THROUGH the substitution. An env scheme
+/// keeps the var it was built with, and unification may since have pointed that
+/// var at another one; reading `sc.ty` raw reports a var the env no longer owns
+/// and misses the one it now does, so `generalize` quantifies a var that is
+/// still monomorphic (issue #72 — `let … in` over-generalization). Bound vars
+/// stay OPAQUE, and the check precedes the resolve: a generalized scheme's own
+/// quantified var can collide with a subst key.
+let collectFree = (t, bound: VarSets, st: Types.St, acc) => switch t {
+  | TyVar(id) => Set.has(id, bound.tv)
+      ? acc
+      : switch Map.get(id, st.tv) {
+        | Some(next) => collectFree(next, bound, st, acc)
+        | None => { tv: Set.add(id, acc.tv), rv: acc.rv }
+      }
+  | TyCon(_, args) => collectFreeArgs(args, bound, st, acc)
+  | TyFn(fromT, toT) => collectFree(
+      toT,
+      bound,
+      st,
+      collectFree(fromT, bound, st, acc)
+    )
+  | TyRecord(row) => collectFreeRow(row, bound, st, acc)
+  | TySingleton(_, _) => acc
+  | TyOneOf(members) => collectFreeArgs(members, bound, st, acc)
 }
-let freeInEnv = env => freeInEnvFrom(Map.values(env), emptyVarSets)
+let collectFreeArgs = (args, bound: VarSets, st: Types.St, acc) => switch args {
+  | [] => acc
+  | [a, ...rest] => collectFreeArgs(
+      rest,
+      bound,
+      st,
+      collectFree(a, bound, st, acc)
+    )
+}
+let collectFreeRow = (row, bound: VarSets, st: Types.St, acc) => switch row {
+  | RowVar(id) => Set.has(id, bound.rv)
+      ? acc
+      : switch Map.get(id, st.rv) {
+        | Some(next) => collectFreeRow(next, bound, st, acc)
+        | None => { tv: acc.tv, rv: Set.add(id, acc.rv) }
+      }
+  | RowExtend(_, fieldType, rest) => collectFreeRow(
+      rest,
+      bound,
+      st,
+      collectFree(fieldType, bound, st, acc)
+    )
+  | RowEmpty => acc
+}
+
+let freeInScheme = (sc, st: Types.St, acc) =>
+  collectFree(
+    sc.ty,
+    { tv: Set.fromArray(sc.vars), rv: Set.fromArray(sc.rvars) },
+    st,
+    acc
+  )
+
+let freeInEnvFrom = (schemes, st: Types.St, acc) => switch schemes {
+  | [] => acc
+  | [sc, ...rest] => freeInEnvFrom(rest, st, freeInScheme(sc, st, acc))
+}
+let freeInEnv = (env, st: Types.St) =>
+  freeInEnvFrom(Map.values(env), st, emptyVarSets)
 
 export let generalize = (env, t, st: Types.St, widen) =>
   let zt = widen ? widenLits(zonk(t, st)) : zonk(t, st) in
-  let free = diffVarSets(freeInType(zt), freeInEnv(env)) in
+  let free = diffVarSets(freeInType(zt), freeInEnv(env, st)) in
     { vars: Set.toArray(free.tv), rvars: Set.toArray(free.rv), ty: zt }
 
 /// Bare string/number singletons widen to their base prim at generalization

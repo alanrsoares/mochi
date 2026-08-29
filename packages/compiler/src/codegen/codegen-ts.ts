@@ -18,14 +18,14 @@ import { toTypedProgram } from "../compile/compile";
 import {
   aliasTsDecl,
   bindingTsType,
-  builtinDeclsIn,
+  builtinNamesIn,
   ctorCallTs,
   ctorFactoryTs,
   emptyCollTs,
   genericLambdaParams,
   guardParamTs,
   lambdaParamTypesTs,
-  referencedBuiltinTypeDecls,
+  referencedBuiltinTypeNames,
   typeDecl,
   unionGenericNames,
 } from "../dts/dts";
@@ -157,10 +157,10 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
   // `ctx.aliases` is local-first, then the rest of the graph (ADR 0092): keep the
   // FIRST of a repeated name so a dep's same-named alias cannot displace the
   // declaration this module is actually emitting.
+  const declaredTypeNames = new Set(prog.stmts.flatMap((s) => (s.kind === "type" ? [s.name] : [])));
   const aliasByName = new Map<string, AliasDef>();
   for (const a of ctx.aliases) if (!aliasByName.has(a.name)) aliasByName.set(a.name, a);
   const typeHeader = [
-    ...referencedBuiltinTypeDecls(prog, (n) => ctx.env.get(n)),
     ...prog.stmts.flatMap((s) => {
       if (s.kind !== "type") return [];
       if (s.ctors.length === 0 && !s.alias)
@@ -301,14 +301,19 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
     moduleExt: "", // `import … from "./mod"` — tsc resolves to the sibling `.ts`
   });
 
-  // A guard predicate can name a builtin variant (`Option`) the header didn't
-  // already emit — inject its decl now that the body text exists (ADR 0031).
-  const header = [...builtinDeclsIn(body, typeHeader.join("\n")), ...typeHeader];
-  // `_Curry` lives in the runtime, not inline: a decl per module cost ~13 lines
-  // × every file in a graph. It is a TYPE, so it rides its own `import type`
-  // line rather than the value import below (ADR 0093).
-  const curryLine = `${header.join("\n")}\n${body}`.includes("_Curry<")
-    ? `import type { _Curry } from ${JSON.stringify(ctx.runtimeImport)};`
+  const header = typeHeader;
+  // `_Curry` and the builtin variants (`Option`/`Result`) live in the runtime,
+  // not inline: a decl per module cost ~13 lines × every file in a graph. They
+  // are TYPES, so they ride their own `import type` line rather than the value
+  // import below (ADR 0093). A guard predicate can name a builtin the scheme
+  // scan missed, so the body text gets a second look (ADR 0031).
+  const typeDeps = [
+    ...(`${header.join("\n")}\n${body}`.includes("_Curry<") ? ["_Curry"] : []),
+    ...referencedBuiltinTypeNames(prog, (n) => ctx.env.get(n)),
+    ...builtinNamesIn(body, declaredTypeNames),
+  ];
+  const typeImportLine = typeDeps.length
+    ? `import type { ${[...new Set(typeDeps)].sort().join(", ")} } from ${JSON.stringify(ctx.runtimeImport)};`
     : "";
 
   // `_tuple` isn't reachable by `collectRuntimeDeps` (a tuple AST node carries no
@@ -322,7 +327,7 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
   const parts = [
     header.join("\n"),
     ctx.importLines.join("\n"),
-    curryLine,
+    typeImportLine,
     runtimeLine,
     body,
   ].filter((p) => p !== "");

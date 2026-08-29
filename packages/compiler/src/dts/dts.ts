@@ -769,12 +769,12 @@ function teConNames(te: TypeExpr, acc: Set<string>): void {
 }
 
 /**
- * Builtin variant type decls a program's types reference but that the program
+ * Builtin variant type NAMES a program's types reference but that the program
  * does not itself declare (e.g. `Option<number>` from `Map.get`, or a variant
- * field typed `Option<Expr>`). Emitted so those references resolve. Shared by
- * the `.d.ts` writer and the `.ts` backend.
+ * field typed `Option<Expr>`). The `.d.ts` writer turns these into decls; the
+ * `.ts` backend imports them from the runtime instead (ADR 0093).
  */
-export function referencedBuiltinTypeDecls(
+export function referencedBuiltinTypeNames(
   prog: Program,
   schemeOf: (n: string) => Scheme | undefined,
 ): string[] {
@@ -800,24 +800,32 @@ export function referencedBuiltinTypeDecls(
   }
   return builtinTypeDecls
     .filter((bt) => referenced.has(bt.name) && !declared.has(bt.name))
-    .map((bt) => typeDecl(bt.name, bt.params, bt.ctors));
+    .map((bt) => bt.name);
 }
 
+/** The decls behind `referencedBuiltinTypeNames` — the `.d.ts` writer's view. */
+export const referencedBuiltinTypeDecls = (
+  prog: Program,
+  schemeOf: (n: string) => Scheme | undefined,
+): string[] => referencedBuiltinTypeNames(prog, schemeOf).map(builtinTypeDeclOf);
+
+const builtinTypeDeclOf = (name: string): string => {
+  const bt = builtinTypeDecls.find((b) => b.name === name);
+  if (!bt) throw new Error(`no builtin type decl named '${name}'`);
+  return typeDecl(bt.name, bt.params, bt.ctors);
+};
+
 /**
- * Builtin variant decls a guard-form type predicate (ADR 0031) names in the
- * emitted body but that `referencedBuiltinTypeDecls` missed — it scans binding
+ * Builtin variant names a guard-form type predicate (ADR 0031) uses in the
+ * emitted body but that `referencedBuiltinTypeNames` missed — it scans binding
  * schemes and type-decl fields, not match-scrutinee types, so `match(opt)` on an
- * `Option<Stmt>` never surfaced `Option`. Scans the body text and skips any name
- * the header already declares (a builtin the module also uses at binding level,
- * or a locally-declared `type Result`), so no duplicate decl.
+ * `Option<Stmt>` never surfaced `Option`. `declared` is the module's own type
+ * names: a local `type Result` keeps its declaration and takes no runtime name.
  */
-export const builtinDeclsIn = (bodyText: string, headerText: string): string[] =>
+export const builtinNamesIn = (bodyText: string, declared: ReadonlySet<string>): string[] =>
   builtinTypeDecls
-    .filter(
-      (bt) =>
-        !headerText.includes(`type ${bt.name}<`) && new RegExp(`\\b${bt.name}\\b`).test(bodyText),
-    )
-    .map((bt) => typeDecl(bt.name, bt.params, bt.ctors));
+    .filter((bt) => !declared.has(bt.name) && new RegExp(`\\b${bt.name}\\b`).test(bodyText))
+    .map((bt) => bt.name);
 
 /**
  * An extern binding paired with the inferred scheme its declared type resolved to.

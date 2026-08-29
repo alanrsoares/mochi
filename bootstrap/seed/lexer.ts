@@ -1,5 +1,3 @@
-export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
-export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
 export type Tok =
   | { _tag: "TLet" }
   | { _tag: "TType" }
@@ -60,7 +58,7 @@ export type Comment =
   | { _tag: "Trailing"; stop: number };
 export type TPart = { _tag: "PLit"; value: string } | { _tag: "PHole"; start: number; end: number };
 
-import type { _Curry } from "@mochi/compiler/runtime";
+import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
   _curry,
@@ -98,62 +96,62 @@ import {
 
 import { match } from "@onrails/pattern";
 
-const TLet: Tok = { _tag: "TLet" };
-const TType: Tok = { _tag: "TType" };
-const TExtern: Tok = { _tag: "TExtern" };
-const TSwitch: Tok = { _tag: "TSwitch" };
-const TLoop: Tok = { _tag: "TLoop" };
-const TRecur: Tok = { _tag: "TRecur" };
-const TDo: Tok = { _tag: "TDo" };
-const TImport: Tok = { _tag: "TImport" };
-const TExport: Tok = { _tag: "TExport" };
-const TEq: Tok = { _tag: "TEq" };
-const TArrow: Tok = { _tag: "TArrow" };
-const TTarrow: Tok = { _tag: "TTarrow" };
-const TPipe: Tok = { _tag: "TPipe" };
-const TCompose: Tok = { _tag: "TCompose" };
-const TConcat: Tok = { _tag: "TConcat" };
-const TBar: Tok = { _tag: "TBar" };
-const TLparen: Tok = { _tag: "TLparen" };
-const TRparen: Tok = { _tag: "TRparen" };
-const TLbrace: Tok = { _tag: "TLbrace" };
-const TRbrace: Tok = { _tag: "TRbrace" };
-const TLbracket: Tok = { _tag: "TLbracket" };
-const TRbracket: Tok = { _tag: "TRbracket" };
-const TSpread: Tok = { _tag: "TSpread" };
-const TPlus: Tok = { _tag: "TPlus" };
-const TMinus: Tok = { _tag: "TMinus" };
-const TStar: Tok = { _tag: "TStar" };
-const TSlash: Tok = { _tag: "TSlash" };
-const TPercent: Tok = { _tag: "TPercent" };
-const TAt: Tok = { _tag: "TAt" };
-const THash: Tok = { _tag: "THash" };
-const TDot: Tok = { _tag: "TDot" };
-const TColon: Tok = { _tag: "TColon" };
-const TQuestion: Tok = { _tag: "TQuestion" };
-const TEqeq: Tok = { _tag: "TEqeq" };
-const TNeq: Tok = { _tag: "TNeq" };
-const TLte: Tok = { _tag: "TLte" };
-const TGte: Tok = { _tag: "TGte" };
-const TLt: Tok = { _tag: "TLt" };
-const TGt: Tok = { _tag: "TGt" };
-const TAndand: Tok = { _tag: "TAndand" };
-const TOror: Tok = { _tag: "TOror" };
-const TBang: Tok = { _tag: "TBang" };
-const TBacktick: Tok = { _tag: "TBacktick" };
-const TComma: Tok = { _tag: "TComma" };
-const TSemi: Tok = { _tag: "TSemi" };
-const TNum = _curry(2, (value, raw) => ({ _tag: "TNum", value, raw })) as (
+export const TLet: Tok = { _tag: "TLet" };
+export const TType: Tok = { _tag: "TType" };
+export const TExtern: Tok = { _tag: "TExtern" };
+export const TSwitch: Tok = { _tag: "TSwitch" };
+export const TLoop: Tok = { _tag: "TLoop" };
+export const TRecur: Tok = { _tag: "TRecur" };
+export const TDo: Tok = { _tag: "TDo" };
+export const TImport: Tok = { _tag: "TImport" };
+export const TExport: Tok = { _tag: "TExport" };
+export const TEq: Tok = { _tag: "TEq" };
+export const TArrow: Tok = { _tag: "TArrow" };
+export const TTarrow: Tok = { _tag: "TTarrow" };
+export const TPipe: Tok = { _tag: "TPipe" };
+export const TCompose: Tok = { _tag: "TCompose" };
+export const TConcat: Tok = { _tag: "TConcat" };
+export const TBar: Tok = { _tag: "TBar" };
+export const TLparen: Tok = { _tag: "TLparen" };
+export const TRparen: Tok = { _tag: "TRparen" };
+export const TLbrace: Tok = { _tag: "TLbrace" };
+export const TRbrace: Tok = { _tag: "TRbrace" };
+export const TLbracket: Tok = { _tag: "TLbracket" };
+export const TRbracket: Tok = { _tag: "TRbracket" };
+export const TSpread: Tok = { _tag: "TSpread" };
+export const TPlus: Tok = { _tag: "TPlus" };
+export const TMinus: Tok = { _tag: "TMinus" };
+export const TStar: Tok = { _tag: "TStar" };
+export const TSlash: Tok = { _tag: "TSlash" };
+export const TPercent: Tok = { _tag: "TPercent" };
+export const TAt: Tok = { _tag: "TAt" };
+export const THash: Tok = { _tag: "THash" };
+export const TDot: Tok = { _tag: "TDot" };
+export const TColon: Tok = { _tag: "TColon" };
+export const TQuestion: Tok = { _tag: "TQuestion" };
+export const TEqeq: Tok = { _tag: "TEqeq" };
+export const TNeq: Tok = { _tag: "TNeq" };
+export const TLte: Tok = { _tag: "TLte" };
+export const TGte: Tok = { _tag: "TGte" };
+export const TLt: Tok = { _tag: "TLt" };
+export const TGt: Tok = { _tag: "TGt" };
+export const TAndand: Tok = { _tag: "TAndand" };
+export const TOror: Tok = { _tag: "TOror" };
+export const TBang: Tok = { _tag: "TBang" };
+export const TBacktick: Tok = { _tag: "TBacktick" };
+export const TComma: Tok = { _tag: "TComma" };
+export const TSemi: Tok = { _tag: "TSemi" };
+export const TNum = _curry(2, (value, raw) => ({ _tag: "TNum", value, raw })) as (
   value: number,
   raw: string,
 ) => Tok;
-const TBool = (value: boolean): Tok => ({ _tag: "TBool", value });
-const TStr = (value: string): Tok => ({ _tag: "TStr", value });
-const TTmplStart = (value: string): Tok => ({ _tag: "TTmplStart", value });
-const TTmplMid = (value: string): Tok => ({ _tag: "TTmplMid", value });
-const TTmplEnd = (value: string): Tok => ({ _tag: "TTmplEnd", value });
-const TId = (value: string): Tok => ({ _tag: "TId", value });
-const TEof: Tok = { _tag: "TEof" };
+export const TBool = (value: boolean): Tok => ({ _tag: "TBool", value });
+export const TStr = (value: string): Tok => ({ _tag: "TStr", value });
+export const TTmplStart = (value: string): Tok => ({ _tag: "TTmplStart", value });
+export const TTmplMid = (value: string): Tok => ({ _tag: "TTmplMid", value });
+export const TTmplEnd = (value: string): Tok => ({ _tag: "TTmplEnd", value });
+export const TId = (value: string): Tok => ({ _tag: "TId", value });
+export const TEof: Tok = { _tag: "TEof" };
 const DocLine = _curry(2, (text, stop) => ({ _tag: "DocLine", text, stop })) as (
   text: string,
   stop: number,

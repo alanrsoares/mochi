@@ -1,4 +1,3 @@
-export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
 export type Span = { start: number; end: number };
 export type Name = { name: string; span: Span };
 export type LamParam =
@@ -109,6 +108,8 @@ export type Stmt =
   | { _tag: "SImportNs"; alias: Name; from: string; span: Span }
   | { _tag: "SExpr"; value: Expr; span: Span }
   | { _tag: "SError"; span: Span };
+
+import type { Option } from "@mochi/compiler/runtime";
 
 import { _curry } from "@mochi/compiler/runtime";
 

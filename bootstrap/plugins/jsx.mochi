@@ -14,64 +14,37 @@ import {
   RowEmpty,
   RowVar
 } from "../types.mochi"
+import * as Lexer from "../lexer.mochi"
+import {
+  TLet,
+  TType,
+  TExtern,
+  TSwitch,
+  TLoop,
+  TRecur,
+  TDo,
+  TImport,
+  TExport,
+  TEq,
+  TLbrace,
+  TRbrace,
+  TSpread,
+  TSlash,
+  TLt,
+  TGt,
+  TNum,
+  TBool,
+  TStr,
+  TId,
+  TEof
+} from "../lexer.mochi"
 
-// Tok redeclared (same `_tag` shape as lexer/parser — structural ==).
-type Tok =
-  | TLet
-  | TType
-  | TExtern
-  | TSwitch
-  | TDo
-  | TLoop
-  | TRecur
-  | TImport
-  | TExport
-  | TEq
-  | TArrow
-  | TTarrow
-  | TPipe
-  | TCompose
-  | TConcat
-  | TBar
-  | TLparen
-  | TRparen
-  | TLbrace
-  | TRbrace
-  | TLbracket
-  | TRbracket
-  | TSpread
-  | TPlus
-  | TMinus
-  | TStar
-  | TSlash
-  | TPercent
-  | TAt
-  | THash
-  | TDot
-  | TColon
-  | TQuestion
-  | TEqeq
-  | TNeq
-  | TLte
-  | TGte
-  | TLt
-  | TGt
-  | TAndand
-  | TOror
-  | TBang
-  | TBacktick
-  | TComma
-  | TSemi
-  | TNum(value: number, raw: string)
-  | TBool(value: bool)
-  | TStr(value: string)
-  | TTmplStart(value: string)
-  | TTmplMid(value: string)
-  | TTmplEnd(value: string)
-  | TId(value: string)
-  | TEof
-
-type LocTok = { tok: Tok, start: number, end: number, doc: Option<string> }
+type LocTok = {
+  tok: Lexer.Tok,
+  start: number,
+  end: number,
+  doc: Option<string>
+}
 
 let jxTokName = t => switch t {
   | TEq => "eq"

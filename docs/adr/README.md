@@ -114,7 +114,7 @@ What else was on the table and why not.
 | [0067](0067-local-recursion.md) | Local recursion: a `let … in` whose RHS is a lambda scopes its own name | Proposed |
 | [0068](0068-parse-only-syntax-batch.md) | Param annotations, as-patterns, record field shorthand (parse-only) | Proposed |
 | [0069](0069-fast-pipe.md) | Fast pipe inserts into a call's first argument | Accepted |
-| [0070](0070-lsp-unused-locals.md) | Unused local bindings are LSP warnings | Accepted |
+| [0070](0070-lsp-unused-locals.md) | Unused local bindings are LSP warnings | Extended by 0094 |
 | [0071](0071-do-notation.md) | `do` is the canonical sequencing expression | Accepted |
 | [0072](0072-use-open-directive.md) | Open-world mode uses a header directive | Accepted |
 | [0073](0073-fast-pipe-precedence.md) | Fast pipe is method-call tight (above every infix) | Accepted |
@@ -138,6 +138,7 @@ What else was on the table and why not.
 | [0091](0091-eta-partial-format.md) | `fmt` eta-contracts `x => f(a, x)` to `f(a)` when that is a clean refactor | Accepted |
 | [0092](0092-record-alias-index.md) | the TS backend re-attaches record alias names at the print boundary | Accepted |
 | [0093](0093-curry-type-not-overloads.md) | a concrete curried binding types as `_Curry<[params], R>`, not an overload set | Accepted |
+| [0094](0094-lsp-unused-top-level.md) | the LSP warns on unexported top-level bindings with no use | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was
