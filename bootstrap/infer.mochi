@@ -719,12 +719,16 @@ let inferPatRecordFrom = (ctx: Ctx<a>, fields, row, bindings, st: Types.St) => s
       )
 }
 let inferPatRecord = (ctx: Ctx<a>, fields, st: Types.St) =>
-  let (rowBase, _st1) = freshRowVar(st) in
+  // Thread `st1`: the row var just minted OWNS that id. Dropping the bumped
+  // counter hands the same number back as the next fresh TYPE var, and the two
+  // namespaces then collide in any map keyed by raw id — `genericNames` renders
+  // the row tail with the type var's letter (ADR 0032/0042).
+  let (rowBase, st1) = freshRowVar(st) in
   let? (row, bindings, st2) = ctx->inferPatRecordFrom(
     fields,
     rowBase,
     #{},
-    st
+    st1
   ) in
     Ok((tRecord(row), bindings, st2))
 
