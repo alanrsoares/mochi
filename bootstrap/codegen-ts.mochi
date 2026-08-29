@@ -668,14 +668,188 @@ let genericLambdasFrom = (stmts, env, i, acc) => switch Array.get(i, stmts) {
   | Some(_) => genericLambdasFrom(stmts, env, i + 1, acc)
 }
 
+/// Spans of every lambda AND every empty-collection literal (`#{}` / `[]` /
+/// `@{}` / `Set.empty`) in an expression subtree, root included (ADR 0042).
+/// A generic binding's `<A, B>` head lexically scopes its whole body, so each
+/// of these nodes may name those letters: an inner lambda param renders the
+/// letter instead of `unknown`, and an empty seed renders `Map<string, A>`
+/// instead of inferring `Map<unknown, unknown>`. The binding's OWN value-lambda
+/// span is collected too, but `annotateParams` resolves that one through
+/// `genericLams` first, so the extra entry is harmless.
+let scopedSpans = e => switch e {
+  | Ast.ELambda(_, body, sp) => Array.prepend(sp, scopedSpans(body))
+  | Ast.ECall(fn, args, _, _) => Array.concat(
+      scopedSpans(fn),
+      scopedSpansAt(args, 0)
+    )
+  | Ast.ELetIn(_, _, value, body, _) => Array.concat(
+      scopedSpans(value),
+      scopedSpans(body)
+    )
+  | Ast.ELetBind(_, _, _, value, body, _) => Array.concat(
+      scopedSpans(value),
+      scopedSpans(body)
+    )
+  | Ast.EPipe(left, right, _) => Array.concat(
+      scopedSpans(left),
+      scopedSpans(right)
+    )
+  | Ast.EDo(exprs, _) => scopedSpansAt(exprs, 0)
+  | Ast.ETernary(cond, thenE, elseE, _) => Array.concat(
+      scopedSpans(cond),
+      Array.concat(scopedSpans(thenE), scopedSpans(elseE))
+    )
+  | Ast.EMatch(scrutinee, arms, _) => Array.concat(
+      scopedSpans(scrutinee),
+      scopedSpansInArms(arms, 0)
+    )
+  | Ast.ERecord(fields, spread, _) => Array.concat(
+      scopedSpansInFields(fields, 0),
+      switch spread { | Some(s) => scopedSpans(s) | None => [] }
+    )
+  | Ast.EField(target, name, sp) =>
+    // `Set.empty` / `Map.empty` / `List.empty` is a seed like `@{}` / `#{}`.
+    let rest = scopedSpans(target) in
+      name == "empty" && isRefExpr(target) ? Array.prepend(sp, rest) : rest
+  | Ast.ETuple(elements, _) => scopedSpansAt(elements, 0)
+  | Ast.EArr(elements, sp) => scopedSpansInSeq(elements, sp)
+  | Ast.EList(elements, sp) => scopedSpansInSeq(elements, sp)
+  | Ast.ESet(elements, sp) => scopedSpansInSeq(elements, sp)
+  | Ast.EMap(entries, sp) => let inner = scopedSpansInEntries(entries, 0) in
+      Array.length(entries) == 0 ? Array.prepend(sp, inner) : inner
+  | Ast.ELoop(params, body, _) => Array.concat(
+      scopedSpansInLoop(params, 0),
+      scopedSpans(body)
+    )
+  | Ast.ERecur(args, _) => scopedSpansAt(args, 0)
+  | Ast.EInterp(parts, _) => scopedSpansInParts(parts, 0)
+  | _ =>
+    // num / bool / str / unit / ref — no nested expressions.
+    []
+}
+
+let isRefExpr = e => switch e { | Ast.ERef(_, _) => true | _ => false }
+
+let scopedSpansAt = (exprs, i) => switch Array.get(i, exprs) {
+  | None => []
+  | Some(e) => Array.concat(scopedSpans(e), scopedSpansAt(exprs, i + 1))
+}
+
+let scopedSpansInArms = (arms, i) => switch Array.get(i, arms) {
+  | None => []
+  | Some(a) => Array.concat(
+      switch a.guard { | Some(g) => scopedSpans(g) | None => [] },
+      Array.concat(scopedSpans(a.body), scopedSpansInArms(arms, i + 1))
+    )
+}
+
+let scopedSpansInFields = (fields, i) => switch Array.get(i, fields) {
+  | None => []
+  | Some(f) => Array.concat(
+      scopedSpans(f.value),
+      scopedSpansInFields(fields, i + 1)
+    )
+}
+
+let scopedSpansInEntries = (entries, i) => switch Array.get(i, entries) {
+  | None => []
+  | Some(en) => Array.concat(
+      scopedSpans(en.key),
+      Array.concat(scopedSpans(en.value), scopedSpansInEntries(entries, i + 1))
+    )
+}
+
+let scopedSpansInElems = (elements, i) => switch Array.get(i, elements) {
+  | None => []
+  | Some(Ast.SEExpr(e)) => Array.concat(
+      scopedSpans(e),
+      scopedSpansInElems(elements, i + 1)
+    )
+  | Some(Ast.SESpread(e)) => Array.concat(
+      scopedSpans(e),
+      scopedSpansInElems(elements, i + 1)
+    )
+}
+
+/// An EMPTY `[]` / `@{}` / `#{}` is itself annotatable; a populated one only
+/// carries its elements' nested nodes.
+let scopedSpansInSeq = (elements, sp) =>
+  let inner = scopedSpansInElems(elements, 0) in
+    Array.length(elements) == 0 ? Array.prepend(sp, inner) : inner
+
+let scopedSpansInLoop = (params, i) => switch Array.get(i, params) {
+  | None => []
+  | Some(p) => Array.concat(
+      scopedSpans(p.init),
+      scopedSpansInLoop(params, i + 1)
+    )
+}
+
+let scopedSpansInParts = (parts, i) => switch Array.get(i, parts) {
+  | None => []
+  | Some(Ast.IPExpr(e)) => Array.concat(
+      scopedSpans(e),
+      scopedSpansInParts(parts, i + 1)
+    )
+  | Some(_) => scopedSpansInParts(parts, i + 1)
+}
+
+let scopedNamesAt = (spans, i, names, acc) => switch Array.get(i, spans) {
+  | None => acc
+  | Some(sp) => scopedNamesAt(
+      spans,
+      i + 1,
+      names,
+      Map.set(spanKey(sp), names, acc)
+    )
+}
+
+/// Each annotatable node nested in a GENERIC binding's value body -> that
+/// binding's letter map (ADR 0042). Scoped PER binding, never a global union:
+/// letters are positional, so the same var id can be `A` under one scheme and
+/// `C` under another, and a nested node must use exactly the assignment of the
+/// head it renders under.
+let scopedNamesFrom = (stmts, env, i, acc) => switch Array.get(i, stmts) {
+  | None => acc
+  | Some(Ast.SLet(name, _, _, value, _, _, _)) => scopedNamesFrom(
+      stmts,
+      env,
+      i + 1,
+      switch value {
+        | Ast.ELambda(_, _, _) when !Str.startsWith("$", name) => switch Map.get(name, env) {
+            | Some(sc) => Array.length(
+                sc.vars
+              ) > 0 || Array.length(sc.rvars) > 0
+                ? scopedNamesAt(
+                  scopedSpans(value),
+                  0,
+                  unionGenericNames([sc]),
+                  acc
+                )
+                : acc
+            | None => acc
+          }
+        | _ => acc
+      }
+    )
+  | Some(_) => scopedNamesFrom(stmts, env, i + 1, acc)
+}
+
 /// The TS-backend options: every hook resolved against this module's inference
 /// metadata. This is where `inferProgramTypes` and `codegenWith` actually meet.
 export let tsGenOpts = (stmts, env, types, letParams, aliases: Map<string, AliasInfo>) =>
   let typeAt = typeAtTable(types) in
   let letParamAt = typeAtTable(letParams) in
   let genericLams = genericLambdasFrom(stmts, env, 0, #{}) in
+  let scopedNames = scopedNamesFrom(stmts, env, 0, #{}) in
   let recs = recordAliasIndex(aliases) in
   let typeOf = e => Map.get(spanKey(exprSpan(e)), typeAt) in
+  // ADR 0042: a node inside a generic binding renders under that binding's
+  // letters; elsewhere only concrete types render (a free var would be `unknown`).
+  let envAt = key => switch Map.get(key, scopedNames) {
+    | Some(vars) => tsEnv(vars, recs)
+    | None => recsEnv(recs)
+  } in
     {
       ...jsGenOpts,
       annotateLet: Some((name, value) =>
@@ -710,13 +884,15 @@ export let tsGenOpts = (stmts, env, types, letParams, aliases: Map<string, Alias
         | None => {
             generics: "",
             params: switch Map.get(spanKey(sp), typeAt) {
-              | Some(t) => lambdaParamTypesTs(t, arity, recsEnv(recs))
+              | Some(t) => lambdaParamTypesTs(t, arity, envAt(spanKey(sp)))
               | None => []
             }
           }
       }),
       annotateEmpty: Some(e =>
-        typeOf(e) |> Option.flatMap(t => emptyCollTs(t, recsEnv(recs)))),
+        let key = spanKey(exprSpan(e)) in
+          Map.get(key, typeAt)
+            |> Option.flatMap(t => emptyCollTs(t, envAt(key)))),
       annotateLetin: // A `let x = v in …` (and a lowered loop param) whose value is
       // polymorphic but used at ONE concrete type: annotate the IIFE param so
       // tsc contextually types the empty collections inside `v` (ADR 0035).
