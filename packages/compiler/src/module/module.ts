@@ -40,6 +40,15 @@ export type ModuleGraphOptions = {
    * Omitted = no reuse, the historical behavior.
    */
   cache?: ModuleCache;
+  /**
+   * The open-mode the caller will infer the ENTRY with. Supplying it lets
+   * `moduleContext` hand back {@link ModuleContext.entryDiagnostics} when the
+   * cache already holds an answer for these exact bytes — but only if that
+   * answer was produced in the same mode. Deps run `openMode(src, open)`, which
+   * honors a file's `"use open"`; a caller that forces strict (the editor does)
+   * must not be handed a leniently-inferred result. Omitted = never reuse.
+   */
+  entryOpen?: boolean;
 };
 
 /** What a dependency contributes to the modules that import it. */
@@ -230,6 +239,13 @@ export type ModuleContext = {
   importedKeys: Map<string, string[]>;
   /** `import * as Alias` → Alias's exported TYPE scope, so `Alias.T` resolves (C5 slice b). */
   qualTypes: QualMap;
+  /**
+   * The entry's OWN diagnostics, when a cached inference of it was reusable —
+   * `[]` meaning it is clean. `undefined` means the caller must infer the entry
+   * itself, which is the normal case for a live editor buffer. See ADR 0095 and
+   * {@link ModuleGraphOptions.entryOpen}.
+   */
+  entryDiagnostics?: Diagnostic[];
 };
 
 /** Bring one named constructor into the importer, or error on a colliding owner. */
@@ -604,13 +620,25 @@ export const moduleContext = (
     for (const { path, prog, src } of graph) {
       const gathered = gatherImports(path, prog, exportsByPath, regByPath, keysByPath, qualsByPath);
       if (isErr(gathered)) return err(atPath(gathered.error, path));
-      // Entry is last in dependency order; hand back its context without compiling it.
-      if (path === entryPath) return ok(gathered.value);
-
       const depRevs = importsOf(prog)
         .map((imp) => revs.get(resolveImport(path, imp.from)) ?? 0)
         .join(",");
       const key = cacheKey(path, opts);
+      // Entry is last in dependency order; hand back its context without
+      // compiling it — but if something else already inferred it as a
+      // dependency of ITS graph, from these same bytes and the same dependency
+      // revisions, that answer is this answer (ADR 0095).
+      if (path === entryPath) {
+        const reusable =
+          opts.entryOpen !== undefined && opts.entryOpen === openMode(src, opts.open);
+        const prior = reusable ? opts.cache?.entries.get(key) : undefined;
+        if (!prior || prior.src !== src || prior.depRevs !== depRevs) return ok(gathered.value);
+        return ok({
+          ...gathered.value,
+          entryDiagnostics: isErr(prior.result) ? prior.result.error : [],
+        });
+      }
+
       const hit = opts.cache?.entries.get(key);
       let result: Result<CachedModule, Diagnostic[]>;
       if (hit && hit.src === src && hit.depRevs === depRevs) {

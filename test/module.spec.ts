@@ -281,3 +281,47 @@ test("plugin lists are part of the cache key", async () => {
   await moduleDiagnostics("/app.mochi", files["/app.mochi"], read, { cache, plugins: [] });
   expect(cache.entries.size).toBe(afterFirst * 2);
 });
+
+test("an entry seen earlier as a dependency reuses that inference", async () => {
+  const files = {
+    "/lib.mochi": "export let one = 1\n",
+    "/app.mochi": 'import { one } from "/lib.mochi"\nexport let sum = one + 1\n',
+  };
+  const cache = createModuleCache();
+  // Diagnosing the importer infers `/lib.mochi` as a dependency...
+  expect(await diagnose(files, "/app.mochi", cache)).toEqual([]);
+  const beforeEntries = cache.entries.size;
+  // ...so asking about `/lib.mochi` itself must not infer it a second time.
+  expect(await diagnose(files, "/lib.mochi", cache)).toEqual(await diagnose(files, "/lib.mochi"));
+  expect(cache.entries.size).toBe(beforeEntries);
+});
+
+test("a reused entry still reports the diagnostics it had as a dependency", async () => {
+  const files = {
+    "/lib.mochi": 'export let bad = 1 + "nope"\n',
+    "/app.mochi": 'import { bad } from "/lib.mochi"\nexport let use = bad\n',
+  };
+  const cache = createModuleCache();
+  await diagnose(files, "/app.mochi", cache);
+  const reused = await diagnose(files, "/lib.mochi", cache);
+  expect(reused.map((d) => d.message)).toEqual(
+    (await diagnose(files, "/lib.mochi")).map((d) => d.message),
+  );
+  expect(reused.length).toBeGreaterThan(0);
+});
+
+test('a "use open" entry does not reuse its lenient dependency inference', async () => {
+  // As a dependency this file infers OPEN, so `hostGlobal` is allowed. As an
+  // entry the editor infers it STRICT, so the same bytes must still be flagged.
+  const files = {
+    "/open.mochi": '"use open"\nexport let value = hostGlobal + 1\n',
+    "/app.mochi": 'import { value } from "/open.mochi"\nexport let use = value\n',
+  };
+  const cache = createModuleCache();
+  expect(await diagnose(files, "/app.mochi", cache)).toEqual([]);
+  const asEntry = await diagnose(files, "/open.mochi", cache);
+  expect(asEntry.map((d) => d.message)).toEqual(
+    (await diagnose(files, "/open.mochi")).map((d) => d.message),
+  );
+  expect(asEntry.some((d) => d.message.includes("hostGlobal"))).toBe(true);
+});

@@ -58,8 +58,19 @@ Add an **optional, caller-owned** `ModuleCache` to `ModuleGraphOptions`.
    leave the broken-graph case — the case an editor sits in most — paying full
    price on every keystroke.
 
-4. **The entry is never cached.** It is the live buffer; in the LSP it is
-   usually the only thing that changed.
+4. **The entry is not inferred as part of the graph, but it may *reuse* an
+   inference of itself.** The entry is normally a live buffer, so it is never
+   written to the cache by `moduleContext`. It is, however, read from it: if
+   something else already inferred this same file as a dependency of its own
+   graph — same bytes, same dependency revisions, same open-mode — that answer
+   *is* this answer, and `moduleContext` hands it back as `entryDiagnostics`.
+
+   The open-mode condition is not incidental. Dependencies infer with
+   `openMode(src, open)`, which honors a file's `"use open"`; the editor infers
+   an entry strictly so it can flag typos. A `"use open"` file is therefore
+   lenient as a dependency and strict as an entry, and must keep recomputing.
+   Callers opt in by declaring the mode they will use (`entryOpen`); omitting it
+   disables the reuse entirely.
 
 5. **Plugin lists key by array identity.** A vendor plugin's `inferCall` changes
    what a call site means, so two different plugin lists must not share an
@@ -73,8 +84,8 @@ Add an **optional, caller-owned** `ModuleCache` to `ModuleGraphOptions`.
 
 ## Consequences
 
-`bun run lint:mochi` over the repo: **22s → 5.2s**. `bootstrap/` alone:
-20.5s → 4.0s.
+`bun run lint:mochi` over the repo: **22s → 3.2s**. `bootstrap/` alone:
+20.5s → 2.2s.
 
 The editor gains more than the sweep does, because a keystroke changes only the
 entry. Second-validation latency, `bootstrap/`:
@@ -88,21 +99,27 @@ entry. Second-validation latency, `bootstrap/`:
 The last row is the shape of the remaining limit, not a miss: the entry is never
 cached, so a file whose own inference dominates cannot be helped by reuse.
 
-The remaining 4.0s is architectural, not incidental: each module is inferred
-once as a *dependency* (cached) and once as an *entry* (not cached, by design),
-so a per-file sweep has a floor of roughly twice one graph compile. Removing
-that means not checking file-by-file — compiling whole graphs from their DAG
-roots and reporting every module's diagnostics — which is a different API, not a
-cache. Left for later.
+Entry reuse is what takes the sweep from 5.2s to 3.2s. Without it every module
+was inferred twice — once as a dependency inside someone else's graph, once as
+an entry — and a per-file sweep had a floor of roughly twice one graph compile.
+What remains is close to the real floor: one inference per module, plus the
+DAG roots, which are nobody's dependency and so always recompute.
+
+The residue is single files that are simply expensive to infer:
+`bootstrap/infer.mochi` is 64.5K and costs ~720ms on its own. No caching
+strategy touches that; making inference itself faster is a different project.
 
 This is not multicore work and does not become multicore work. The sweep uses
-1.22 of 16 cores. Parallelising across graph components saves ~1.2s (components
-are wildly uneven — `bootstrap/` alone is 4.0s of the 5.2s), and parallelising
+1.22 of 16 cores, and after the cache the per-file tail is ~17ms — there is
+nothing left worth spreading. Parallelising across graph components is bounded
+by how uneven they are (`bootstrap/` alone dominates), and parallelising
 *within* a component is bounded by the dependency chain and would need schemes
-serialised across worker heaps. The cheap win was the redundancy, and it is now
-taken.
+serialised across worker heaps. The redundancy was the win, and it is taken.
 
 Guards in `test/module.spec.ts`: a cached run answers exactly what an uncached
 run answers; editing a dependency invalidates the modules downstream of it; a
 dependency that reverts is answered as it was, not as it briefly became; plugin
-lists are part of the key.
+lists are part of the key; an entry seen earlier as a dependency reuses that
+inference, keeps the diagnostics it had, and — the one that fails loudly if the
+open-mode condition is dropped — a `"use open"` entry does not reuse its lenient
+dependency inference.

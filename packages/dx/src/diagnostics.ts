@@ -178,13 +178,22 @@ async function moduleDiagnosticsFor(
   const entry = resolve(path);
   const read = (p: string): Promise<string> =>
     resolve(p) === entry ? Promise.resolve(src) : readFile(p);
-  const ctx = await moduleContext(entry, read, { plugins: opts.plugins, cache: opts.cache });
+  // `entryOpen: false` mirrors the strict mode the entry is inferred with below,
+  // and is what lets `moduleContext` hand back a cached answer for the entry
+  // itself when the buffer matches what is already on disk (ADR 0095).
+  const ctx = await moduleContext(entry, read, {
+    plugins: opts.plugins,
+    cache: opts.cache,
+    entryOpen: false,
+  });
   if (isErr(ctx))
     return [
       ...graphFailureDiagnostics(src, prog, entry, ctx.error),
       ...fallbackDiagnostics(src, prog, entry, opts),
     ];
 
+  const cached = ctx.value.entryDiagnostics;
+  if (cached) return cached.map((e) => toPublish(src, e, entry));
   const typed = toTypedProgramWith(prog, ctx.value, {
     plugins: opts.plugins,
     open: false,
