@@ -7,6 +7,8 @@ import {
   zonk,
   tPrim,
   tRecord,
+  tLit,
+  tUnion,
   rExtend,
   TyFn,
   TyRecord,
@@ -30,6 +32,7 @@ import {
   TRbrace,
   TSpread,
   TSlash,
+  TMinus,
   TLt,
   TGt,
   TNum,
@@ -108,6 +111,32 @@ let jxExpectLabel = (toks, pos) =>
       | None => jxExpectId(toks, pos)
     }
 
+/// Attribute names may contain hyphens (`data-testid`, `aria-label`). The lexer
+/// splits those into label/minus/label, so glue the parts back together — but
+/// only while the tokens are ADJACENT, or `<div id - x="1">` would silently
+/// become `id-x`.
+let jxAttrNameFrom = (toks, pos, acc) =>
+  let minusTok = jxTokAt(toks, pos) in
+  let partTok = jxTokAt(toks, pos + 1) in
+    minusTok.tok == TMinus && minusTok.start == acc.span.end && partTok.start == minusTok.end
+      ? switch jxExpectLabel(toks, pos + 1) {
+        | Ok((part, p1)) => jxAttrNameFrom(
+            toks,
+            p1,
+            {
+              name: "${acc.name}-${part.name}",
+              span: { start: acc.span.start, end: part.span.end }
+            }
+          )
+        | Err(_) => (acc, pos)
+      }
+      : (acc, pos)
+
+/// `jxExpectLabel` plus any adjacent `-part` continuations.
+let jxExpectAttrName = (toks, pos) =>
+  jxExpectLabel(toks, pos)
+    |> Result.map(((head, p1)) => jxAttrNameFrom(toks, p1, head))
+
 let jxIsUpper = s => Str.codeAt(0, s) |> Option.exists(n => n >= 65 && n <= 90)
 
 let jxExprSpan = e => switch e {
@@ -161,7 +190,7 @@ let parseJsxAttributes = (toks, pos, fieldsAcc, spreadAcc, parseExpr) =>
           |> Result.flatMap(((spExpr, p2)) =>
             let? p3 = jxExpectTok(TRbrace, toks, p2) in
               parseJsxAttributes(toks, p3, fieldsAcc, Some(spExpr), parseExpr))
-      : let? (attrId, p1) = jxExpectLabel(toks, pos) in
+      : let? (attrId, p1) = jxExpectAttrName(toks, pos) in
       let (valExpr, p2) = jxTokAt(toks, p1).tok == TEq
         ? let pEq = p1 + 1 in
           switch jxTokAt(toks, pEq).tok {
@@ -390,6 +419,45 @@ let jsxPropsWithSynthesizedChildren = (propsT, propsExpr, expectedRow, restArgs)
     }
 }
 
+let isBoolAttr = attr =>
+  attr == "disabled" || attr == "checked" || attr == "defaultChecked" || attr == "readOnly" || attr == "required" || attr == "autoFocus" || attr == "multiple" || attr == "hidden" || attr == "open" || attr == "loop" || attr == "muted" || attr == "autoPlay" || attr == "controls" || attr == "noValidate" || attr == "reversed" || attr == "async" || attr == "defer" || attr == "spellCheck" || attr == "draggable"
+
+let isStringAttr = attr =>
+  attr == "id" || attr == "className" || attr == "title" || attr == "placeholder" || attr == "href" || attr == "src" || attr == "alt" || attr == "name" || attr == "htmlFor" || attr == "value" || attr == "defaultValue" || attr == "pattern" || attr == "accept" || attr == "autoComplete" || attr == "rel" || attr == "lang" || attr == "role" || attr == "viewBox" || attr == "xmlns" || attr == "fill" || attr == "stroke" || attr == "d" || attr == "points" || attr == "transform" || attr == "textAnchor" || attr == "dominantBaseline" || attr == "fontFamily" || attr == "clipPath" || attr == "mask" || attr == "ariaLabel"
+
+let isNumAttr = attr =>
+  attr == "tabIndex" || attr == "rows" || attr == "cols" || attr == "maxLength" || attr == "minLength" || attr == "size" || attr == "start" || attr == "span" || attr == "colSpan" || attr == "rowSpan"
+
+let isNumOrStrAttr = attr =>
+  attr == "width" || attr == "height" || attr == "min" || attr == "max" || attr == "step" || attr == "strokeWidth" || attr == "opacity" || attr == "x" || attr == "y" || attr == "cx" || attr == "cy" || attr == "r" || attr == "rx" || attr == "ry" || attr == "x1" || attr == "y1" || attr == "x2" || attr == "y2" || attr == "fontSize" || attr == "fontWeight"
+
+let intrinsicAttrType = (tag, attr) =>
+  isBoolAttr(attr)
+    ? Some(tPrim("bool"))
+    : isStringAttr(attr)
+    ? Some(tPrim("string"))
+    : isNumAttr(attr)
+    ? Some(tPrim("number"))
+    : isNumOrStrAttr(attr)
+    ? Some(tUnion([tPrim("string"), tPrim("number")]))
+    : tag == "button" && attr == "type"
+    ? Some(tUnion([tLit("button"), tLit("submit"), tLit("reset")]))
+    : None
+
+let inferIntrinsicFields = (tag, fields, st, api) => switch fields {
+  | [] => Ok(st)
+  | [f, ...rest] => switch intrinsicAttrType(tag, f.name) {
+      | Some(expectedT) => api.inferExpr(f.value, st)
+          |> Result.flatMap(((valT, st1)) =>
+            api.unify(valT, expectedT, st1, jxExprSpan(f.value))
+              |> Result.flatMap(st2 =>
+                inferIntrinsicFields(tag, rest, st2, api)))
+      | None => api.inferExpr(f.value, st)
+          |> Result.flatMap(((_, st1)) =>
+            inferIntrinsicFields(tag, rest, st1, api))
+    }
+}
+
 let inferJsxCall = (tagExpr, propsExpr, restArgs, st, api) =>
   api.inferExpr(tagExpr, st)
     |> Result.flatMap(((tagT, st1)) =>
@@ -415,7 +483,19 @@ let inferJsxCall = (tagExpr, propsExpr, restArgs, st, api) =>
                             |> Result.map(st4 => (zonk(to, st4), st4))
                       | _ => Ok((tPrim("VNode"), st3))
                     }
-                  | _ => Ok((tPrim("VNode"), st3))
+                  | _ => switch tagExpr {
+                      | Ast.EStr(tagName, _) => switch propsExpr {
+                          | Ast.ERecord(fields, _, _) => inferIntrinsicFields(
+                              tagName,
+                              fields,
+                              st3,
+                              api
+                            )
+                              |> Result.map(st4 => (tPrim("VNode"), st4))
+                          | _ => Ok((tPrim("VNode"), st3))
+                        }
+                      | _ => Ok((tPrim("VNode"), st3))
+                    }
                 })))
 
 /// Infer-call hook: claim `origin == Some("jsx")`; otherwise Ok(None).
