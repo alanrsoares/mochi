@@ -107,6 +107,20 @@ and that is what keeps it sound: it introduces no new HM machinery.
 - Every consumer of `Row` must handle the new field. That is a wide but
   mechanical change, and the exhaustiveness rules make the compiler enumerate
   the sites.
+- **A labeled binding needs a named option type to stay annotated.** A record
+  type is only spellable in a `type` declaration, so
+  `let f : bool -> { ok?: bool } -> T` does not parse; the row must be named
+  (`type Opts = { ok?: bool }`). This is a pre-existing limit of `TypeExpr`
+  rather than something labels introduce, and it points the same way as
+  `no-inline-struct-type`, so we leave it. Dropping the annotation entirely
+  also works, since the labeled group is inferred.
+- **With a positional prefix, the whole labeled group cannot be omitted.**
+  `f(x)` on `f = (x, ~dx = 0) => …` is an ordinary partial application of the
+  curried `x -> { dx?: number } -> T`, so it yields a function, not a result.
+  Only the nullary case `f()` can auto-apply `{}` (see above) — everywhere else
+  currying and "all labels defaulted" are indistinguishable, and preserving
+  partial application wins. Callers that must omit everything write `f(x, {})`.
+  In practice this steers labels toward params that are usually supplied.
 
 ## Open questions
 
