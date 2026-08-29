@@ -19,7 +19,7 @@ import {
   tUnion,
   tVar,
 } from "@mochi/compiler/types";
-import { emptySubst, type Subst, unify, zonk } from "@mochi/compiler/unify";
+import { emptySubst, fits, type Subst, unify, zonk } from "@mochi/compiler/unify";
 import { isErr, isOk, unwrapErr } from "@onrails/result";
 
 // Unify a and b in a fresh context; return the zonked form of `view` (default a).
@@ -198,4 +198,50 @@ test("equal literal unions unify", () => {
   const a = tUnion([tLit("rose"), tLit("amber")]);
   const b = tUnion([tLit("amber"), tLit("rose")]);
   expect(run(a, b).ok).toBe(true);
+});
+
+// ---- optional record fields (ADR 0098) ----
+
+test("showType prints optional fields with ?", () => {
+  expect(showType(tRecord(rExtend("x", tNumber, rEmpty, true)))).toBe("{ x?: number }");
+  expect(showType(tRecord(rExtend("x", tNumber, rExtend("y", tString, rEmpty, true))))).toBe(
+    "{ x: number, y?: string }",
+  );
+});
+
+test("invariant unify does not equate required with optional", () => {
+  const req = tRecord(rExtend("x", tNumber, rEmpty));
+  const opt = tRecord(rExtend("x", tNumber, rEmpty, true));
+  expect(run(req, opt).ok).toBe(false);
+});
+
+test("fits: a closed value may omit optional expected fields", () => {
+  const actual = tRecord(rExtend("n", tNumber, rEmpty));
+  const expected = tRecord(rExtend("id", tString, rExtend("n", tNumber, rEmpty, false), true));
+  const s = emptySubst();
+  expect(isOk(fits(actual, expected, s, mkFresh(100)))).toBe(true);
+});
+
+test("fits: required actual field satisfies optional expected", () => {
+  const actual = tRecord(rExtend("x", tNumber, rEmpty));
+  const expected = tRecord(rExtend("x", tNumber, rEmpty, true));
+  expect(isOk(fits(actual, expected, emptySubst(), mkFresh(100)))).toBe(true);
+});
+
+test("fits: optional actual does not satisfy required expected", () => {
+  const actual = tRecord(rExtend("x", tNumber, rEmpty, true));
+  const expected = tRecord(rExtend("x", tNumber, rEmpty));
+  expect(isErr(fits(actual, expected, emptySubst(), mkFresh(100)))).toBe(true);
+});
+
+test("fits: empty record satisfies a fully-optional closed row", () => {
+  const actual = tRecord(rEmpty);
+  const expected = tRecord(rExtend("id", tString, rEmpty, true));
+  expect(isOk(fits(actual, expected, emptySubst(), mkFresh(100)))).toBe(true);
+});
+
+test("fits: extra actual field still fails against a closed expected row", () => {
+  const actual = tRecord(rExtend("x", tNumber, rExtend("z", tBool, rEmpty)));
+  const expected = tRecord(rExtend("x", tNumber, rEmpty, true));
+  expect(isErr(fits(actual, expected, emptySubst(), mkFresh(100)))).toBe(true);
 });

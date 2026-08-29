@@ -62,7 +62,9 @@ export const zonk = (t: Type, s: Subst): Type => {
 
 const zonkRow = (row: Row, s: Subst): Row => {
   const r = resolveRow(row, s);
-  return r.kind === "extend" ? rExtend(r.label, zonk(r.type, s), zonkRow(r.rest, s)) : r;
+  return r.kind === "extend"
+    ? rExtend(r.label, zonk(r.type, s), zonkRow(r.rest, s), r.optional)
+    : r;
 };
 
 const occurs = (id: number, t: Type, s: Subst): boolean => {
@@ -359,6 +361,12 @@ const unifyRows = (
   if (a.kind === "extend" && b.kind === "extend") {
     const rw = rewriteRow(b, a.label, s, f);
     if (isErr(rw)) return rw;
+    if (a.optional !== rw.value.optional)
+      return fail(
+        a.optional
+          ? `record field '${a.label}' is optional but required on the other side`
+          : `record field '${a.label}' is required but optional on the other side`,
+      );
     const s1 = unify(a.type, rw.value.type, s, f, show);
     return isErr(s1) ? s1 : unifyRows(a.rest, rw.value.rest, s1.value, f, show);
   }
@@ -366,27 +374,77 @@ const unifyRows = (
   return fail("cannot unify records");
 };
 
+type FieldHit = { type: Type; optional: boolean; rest: Row };
+
 /** Bring `label` to the head of a row, extending an open tail if needed. */
-const rewriteRow = (
-  row: Row,
-  label: string,
-  s: Subst,
-  f: Fresh,
-): Result<{ type: Type; rest: Row }, TypeErr> => {
+const rewriteRow = (row: Row, label: string, s: Subst, f: Fresh): Result<FieldHit, TypeErr> => {
   const r = resolveRow(row, s);
   if (r.kind === "empty") return fail(`record missing field '${label}'`);
   if (r.kind === "extend") {
-    if (r.label === label) return ok({ type: r.type, rest: r.rest });
+    if (r.label === label) return ok({ type: r.type, optional: r.optional, rest: r.rest });
     const sub = rewriteRow(r.rest, label, s, f);
     return isErr(sub)
       ? sub
-      : ok({ type: sub.value.type, rest: rExtend(r.label, r.type, sub.value.rest) });
+      : ok({
+          type: sub.value.type,
+          optional: sub.value.optional,
+          rest: rExtend(r.label, r.type, sub.value.rest, r.optional),
+        });
   }
   // open tail: invent the field and a fresh tail, growing the record
   const freshT = freshVar(f);
   const freshTail = freshRowVar(f);
   s.rvars.set(r.id, rExtend(label, freshT, freshTail));
-  return ok({ type: freshT, rest: freshTail });
+  return ok({ type: freshT, optional: false, rest: freshTail });
+};
+
+/**
+ * Directional record check: `actual` may be used where `expected` is required
+ * (ADR 0098). Missing optional expected fields are allowed; a required actual
+ * field satisfies an optional expected one; the reverse is not.
+ */
+export const fits = (
+  actual: Type,
+  expected: Type,
+  s: Subst,
+  f: Fresh,
+  show: (t: Type) => string = showType,
+): Result<Subst, TypeErr> => {
+  const ra = resolve(actual, s);
+  const rb = resolve(expected, s);
+  if (ra.kind === "var") return bindVar(ra.id, rb, s, show);
+  if (rb.kind === "var") return bindVar(rb.id, ra, s, show);
+  if (ra.kind === "record" && rb.kind === "record") return fitsRows(ra.row, rb.row, s, f, show);
+  return unify(actual, expected, s, f, show);
+};
+
+const fitsRows = (
+  actual: Row,
+  expected: Row,
+  s: Subst,
+  f: Fresh,
+  show: (t: Type) => string,
+): Result<Subst, TypeErr> => {
+  const exp = resolveRow(expected, s);
+  const act = resolveRow(actual, s);
+
+  if (exp.kind === "rvar") return bindRowVar(exp.id, act, s);
+  if (exp.kind === "empty") {
+    if (act.kind === "empty") return ok(s);
+    if (act.kind === "rvar") return bindRowVar(act.id, exp, s);
+    return fail(`record has extra field '${act.label}'`);
+  }
+
+  // expected extend
+  const rw = rewriteRow(act, exp.label, s, f);
+  if (isErr(rw)) {
+    if (exp.optional) return fitsRows(act, exp.rest, s, f, show);
+    return rw;
+  }
+  if (rw.value.optional && !exp.optional)
+    return fail(`record field '${exp.label}' is required but missing or optional`);
+  const s1 = unify(rw.value.type, exp.type, s, f, show);
+  return isErr(s1) ? s1 : fitsRows(rw.value.rest, exp.rest, s1.value, f, show);
 };
 
 const bindRowVar = (id: number, row: Row, s: Subst): Result<Subst, TypeErr> => {

@@ -1341,9 +1341,11 @@ let ctorsLoop = (toks, pos, acc) =>
 // is spelled like a mochi keyword — `{ type: string }` (ADR 0077).
 let parseAliasField = (toks, pos) =>
   let? (nm, p) = expectLabel(toks, pos) in
-  let? p2 = expectTok(TColon, toks, p) in
+  let optional = tokAt(toks, p).tok == TQuestion in
+  let p1 = optional ? p + 1 : p in
+  let? p2 = expectTok(TColon, toks, p1) in
   let? (t, p3) = parseTypeExpr(toks, p2) in
-    Ok(({ name: nm.name, fieldType: t }, p3))
+    Ok(({ name: nm.name, fieldType: t, optional }, p3))
 
 // The `{ x: T, y: U }` body of a transparent record alias.
 let parseAliasBody = (toks, pos) =>

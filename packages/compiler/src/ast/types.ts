@@ -27,7 +27,7 @@ export type LitBase = "string" | "number";
 export type Row =
   | { kind: "empty" } // closed tail: {}
   | { kind: "rvar"; id: number } // open tail: | 'r
-  | { kind: "extend"; label: string; type: Type; rest: Row }; // { label: type | rest }
+  | { kind: "extend"; label: string; type: Type; optional: boolean; rest: Row }; // { label: type | rest }
 
 export const tVar = (id: number): Type => ({ kind: "var", id });
 export const tCon = (name: string, args: Type[] = []): Type => ({ kind: "con", name, args });
@@ -63,10 +63,11 @@ export const isUnit = (t: Type): boolean =>
 
 export const rEmpty: Row = { kind: "empty" };
 export const rVar = (id: number): Row => ({ kind: "rvar", id });
-export const rExtend = (label: string, type: Type, rest: Row): Row => ({
+export const rExtend = (label: string, type: Type, rest: Row, optional = false): Row => ({
   kind: "extend",
   label,
   type,
+  optional,
   rest,
 });
 
@@ -139,7 +140,9 @@ export const qualifyTypeNames = (t: Type, qualify: ReadonlyMap<string, string>):
     if (row.kind !== "extend") return row;
     const type = go(row.type);
     const rest = goRow(row.rest);
-    return type === row.type && rest === row.rest ? row : rExtend(row.label, type, rest);
+    return type === row.type && rest === row.rest
+      ? row
+      : rExtend(row.label, type, rest, row.optional);
   };
   return go(t);
 };
@@ -172,7 +175,7 @@ const showRow = (row: Row): string => {
   const fields: string[] = [];
   let cur = row;
   while (cur.kind === "extend") {
-    fields.push(`${cur.label}: ${showType(cur.type)}`);
+    fields.push(`${cur.label}${cur.optional ? "?" : ""}: ${showType(cur.type)}`);
     cur = cur.rest;
   }
   const tail = cur.kind === "rvar" ? `${fields.length ? " " : ""}| 'r${cur.id}` : "";
@@ -223,11 +226,13 @@ export const tUnion = (members: Type[]): Type => {
   return { kind: "union", members: flat };
 };
 
-const rowFields = (row: Row): { map: Map<string, Type>; closed: boolean } => {
-  const map = new Map<string, Type>();
+const rowFields = (
+  row: Row,
+): { map: Map<string, { type: Type; optional: boolean }>; closed: boolean } => {
+  const map = new Map<string, { type: Type; optional: boolean }>();
   let cur = row;
   while (cur.kind === "extend") {
-    map.set(cur.label, cur.type);
+    map.set(cur.label, { type: cur.type, optional: cur.optional });
     cur = cur.rest;
   }
   return { map, closed: cur.kind === "empty" };
@@ -239,7 +244,7 @@ const rowEq = (a: Row, b: Row): boolean => {
   if (fa.closed !== fb.closed || fa.map.size !== fb.map.size) return false;
   for (const [k, t] of fa.map) {
     const u = fb.map.get(k);
-    if (!u || !typeEq(t, u)) return false;
+    if (!u || t.optional !== u.optional || !typeEq(t.type, u.type)) return false;
   }
   return true;
 };
@@ -272,7 +277,8 @@ export const matchTemplate = (template: Type, actual: Type, binds: Map<number, T
     if (!ft.closed || !fa.closed || ft.map.size !== fa.map.size) return false;
     for (const [label, tt] of ft.map) {
       const at = fa.map.get(label);
-      if (!at || !matchTemplate(tt, at, binds)) return false;
+      if (!at || tt.optional !== at.optional || !matchTemplate(tt.type, at.type, binds))
+        return false;
     }
     return true;
   }
@@ -311,14 +317,20 @@ export const foldAliases = (t: Type, aliases: AliasDef[]): Type => {
     case "arrow":
       return tArrow(foldAliases(t.from, aliases), foldAliases(t.to, aliases));
     case "record": {
-      const fields: { label: string; type: Type }[] = [];
+      const fields: { label: string; type: Type; optional: boolean }[] = [];
       let cur: Row = t.row;
       while (cur.kind === "extend") {
-        fields.push({ label: cur.label, type: foldAliases(cur.type, aliases) });
+        fields.push({
+          label: cur.label,
+          type: foldAliases(cur.type, aliases),
+          optional: cur.optional,
+        });
         cur = cur.rest;
       }
       const tail: Row = cur;
-      return tRecord(fields.reduceRight<Row>((rest, f) => rExtend(f.label, f.type, rest), tail));
+      return tRecord(
+        fields.reduceRight<Row>((rest, f) => rExtend(f.label, f.type, rest, f.optional), tail),
+      );
     }
     case "union":
       return tUnion(t.members.map((m) => foldAliases(m, aliases)));

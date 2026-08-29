@@ -154,7 +154,7 @@ function tsRow(row: Row, names: Map<number, string>): string {
   const fields: string[] = [];
   let cur = row;
   while (cur.kind === "extend") {
-    fields.push(`${cur.label}: ${tsOfRaw(cur.type, names)}`);
+    fields.push(`${cur.label}${cur.optional ? "?" : ""}: ${tsOfRaw(cur.type, names)}`);
     cur = cur.rest;
   }
   const body = fields.length === 0 ? "{}" : `{ ${fields.join("; ")} }`;

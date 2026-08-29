@@ -1,6 +1,6 @@
 # 0098 — Optional record fields and labeled props
 
-- **Status:** Proposed (draft)
+- **Status:** Accepted (§1); §2 deferred
 - **Date:** 2026-08-29
 - **Source:** [ADR 0096](0096-jsx-intrinsic-element-prop-types.md), [ADR 0097](0097-jsx-schema-single-source.md), [ADR 0055](0055-component-prop-contracts.md), `packages/plugin-styled-cva/src/index.ts`, ReasonReact / ReScript `JsxDOM.domProps`
 
@@ -37,10 +37,10 @@ parameters. ReasonReact's ergonomics come from labeled arguments with defaults
 (`~tone: string=?`), which is the same optionality applied to call syntax rather
 than record syntax.
 
-## Decision (proposed)
+## Decision
 
-Two changes, sequenced. The first is the load-bearing one; the second is
-ergonomics on top and could be deferred or dropped.
+Two changes, sequenced. **§1 is accepted.** §2 is ergonomics on top and remains
+deferred (unproven; not part of this slice).
 
 ### 1. Optional fields in rows
 
@@ -50,19 +50,23 @@ Extend `Row` so a field carries an optionality flag:
 { kind: "extend"; label: string; type: Type; optional: boolean; rest: Row }
 ```
 
-Unification rules to settle in the spike:
+HM `unify` stays **invariant** (optionality must match when both sides have the
+field). Optional-field *assignment* is directional subtyping via `fits`:
 
-- A closed row missing an optional field unifies with a row declaring it.
-- A supplied field unifies against the declared type as today.
-- Optionality is part of the type, so `{ a?: number }` and `{ a: number }` are
-  distinct; assigning the latter to the former is fine, the reverse is not.
-- Row polymorphism composes with it: `{ a?: number | 'r }` stays meaningful.
+- A closed row may omit an optional expected field.
+- A required actual field satisfies an optional expected field; the reverse does
+  not.
+- Extra actual fields vs a closed expected row still fail.
+- `fits` is used at annotations, and at application only when the known arrow
+  domain is a record that has at least one optional field. Other calls stay on
+  invariant `unify` (recursive lets with record parameters would otherwise
+  occur-check).
 
-Surface syntax `{ name?: string }`. Codegen erases it (the field is simply
-absent at runtime); `.d.ts` emits `name?: string`, which is already how the TS
-backend would want to print it. `showType` renders the `?`.
+Surface syntax `{ name?: string }`. Construction still takes raw `T`. Field
+access on an optional field is `Option<T>`. Codegen erases it (the field is
+simply absent at runtime); `.d.ts` / `showType` / the formatter print `name?:`.
 
-### 2. Labeled parameters with optional/default arguments
+### 2. Labeled parameters with optional/default arguments (deferred)
 
 `let f = (~tone: string = "rose", ~size?: number) => …`, called as
 `f(~tone="amber")`. Lowered to a single record parameter, so it is sugar over 1
@@ -89,13 +93,14 @@ rather than a second calling convention. Defaults evaluate at the call site.
 
 ## Open questions
 
-- Does optionality belong on the field, or is `Option<T>` in a normal field
-  enough? The latter needs no type-system change but forces `Some`/`None` at
-  every JSX attribute, which is not acceptable ergonomics for `<div id="x" />`.
 - Do optional fields interact with the record-alias index (ADR 0092) and the
   emitted TS well enough to keep `bootstrap:tsc` at 0?
 - Should labeled parameters land at all, or is the record-based prop pattern
   already sufficient? Section 2 is separable and unproven.
+
+Optionality belongs on the field flag, not as `Option<T>` in a normal field:
+the latter forces `Some`/`None` at every JSX attribute, which is not acceptable
+ergonomics for `<div id="x" />`.
 
 ## Alternatives rejected
 

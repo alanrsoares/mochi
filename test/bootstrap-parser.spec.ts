@@ -269,7 +269,11 @@ const cCtor = (c: Ctor): Canon => ({
   fields: c.fields.map((f) => ({ name: f.name, type: cTy(f.type) })),
 });
 
-const cAliasField = (f: AliasField): Canon => ({ name: f.name, type: cTy(f.type) });
+const cAliasField = (f: AliasField): Canon => ({
+  name: f.name,
+  type: cTy(f.type),
+  optional: f.optional,
+});
 
 const cStmt = (s: Stmt): Canon => {
   switch (s.kind) {
@@ -525,7 +529,9 @@ const A_STMT: Record<string, (s: Al) => Canon> = {
     name: s.name,
     params: s.params,
     ctors: s.ctors.map(aCtor),
-    alias: opt(s.alias, (fs: Al) => fs.map((f: Al) => ({ name: f.name, type: aTy(f.fieldType) }))),
+    alias: opt(s.alias, (fs: Al) =>
+      fs.map((f: Al) => ({ name: f.name, type: aTy(f.fieldType), optional: f.optional })),
+    ),
     aliasType: opt(s.aliasType, aTy),
     exported: s.exported,
     span: s.span,

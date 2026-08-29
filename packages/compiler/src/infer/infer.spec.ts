@@ -91,6 +91,51 @@ test("record literal is a closed record", () => {
   expect(typeOf(env, "p")).toBe("{ x: number, y: number }");
 });
 
+// ADR 0098 — optional record fields.
+test("a value may omit optional alias fields", () => {
+  const src = "type Props = { id?: string, n: number }\nlet ok : Props = { n: 1 }";
+  const env = unwrapOk(infer(src, {}));
+  expect(typeOf(env, "ok")).toBe("{ id?: string, n: number }");
+});
+
+test("a required field still cannot be omitted", () => {
+  const r = infer('type Props = { id?: string, n: number }\nlet bad : Props = { id: "x" }', {});
+  expect(isErr(r)).toBe(true);
+  expect(unwrapErr(r)[0]!.message).toContain("n");
+});
+
+test("a required field satisfies an optional expected field", () => {
+  const src = "type Opt = { x?: number }\nlet ok : Opt = { x: 1 }";
+  expect(isErr(infer(src, {}))).toBe(false);
+});
+
+test("an optional-typed value does not satisfy a required field", () => {
+  const r = infer(
+    "type Opt = { x?: number }\ntype Req = { x: number }\nlet o : Opt = {}\nlet bad : Req = o",
+    {},
+  );
+  expect(isErr(r)).toBe(true);
+});
+
+test("reading an optional field yields Option", () => {
+  const src = "type Props = { id?: string }\nlet getId = (p: Props) => p.id";
+  const env = unwrapOk(infer(src, {}));
+  expect(typeOf(env, "getId")).toBe("{ id?: string } -> Option<string>");
+});
+
+test("reading a required field stays the raw type", () => {
+  const src = "type Props = { id?: string, n: number }\nlet getN = (p: Props) => p.n";
+  const env = unwrapOk(infer(src, {}));
+  expect(typeOf(env, "getN")).toBe("{ id?: string, n: number } -> number");
+});
+
+test("a function expecting optional fields accepts a subset record", () => {
+  const src =
+    "type Props = { id?: string, n: number }\nlet f = (p: Props) => p.n\nlet r = f({ n: 2 })";
+  const env = unwrapOk(infer(src, {}));
+  expect(typeOf(env, "r")).toBe("number");
+});
+
 test("field access is row-polymorphic: works on ANY record with that field", () => {
   const env = unwrapOk(infer("let getX = p => p.x", {}));
   // p : { x: 'a | 'r } -> 'a

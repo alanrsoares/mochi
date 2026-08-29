@@ -28,6 +28,7 @@ import {
   TyVar,
   TyCon,
   TyFn,
+  TyRecord,
   RowEmpty,
   RowVar,
   RowExtend,
@@ -39,6 +40,7 @@ import {
   tLit,
   rVar,
   rExtend,
+  rField,
   showType,
   mkSt,
   recordAt,
@@ -48,7 +50,8 @@ import {
   freshRowVar,
   resolve,
   zonk,
-  unify
+  unify,
+  fits
 } from "./types.mochi"
 
 // ============================================================
@@ -171,6 +174,12 @@ let u = (a, b, st: Types.St, sp) => switch unify(a, b, st) {
   | Err(e) => Err(typeErr(e.message, sp))
 }
 
+/// `actual` may be used as `expected` (ADR 0098 optional fields).
+let checkFits = (actual, expected, st: Types.St, sp) => switch fits(actual, expected, st) {
+  | Ok(newSt) => Ok(newSt)
+  | Err(e) => Err(typeErr(e.message, sp))
+}
+
 // Scheme machinery lives in schemes.mochi (ticket 0030).
 
 // --- lambda-param binding. TS mutates `env` in place and returns just the
@@ -235,7 +244,7 @@ let constrainParamAnnotsFrom = (ctx: Ctx<a>, params, paramTypes, vars, st: Types
               ctx.aliasMap,
               Set.fromArray([])
             ) in
-            let? st2 = u(paramT, annotT, st1, annotSpan(te)) in
+            let? st2 = checkFits(paramT, annotT, st1, annotSpan(te)) in
               ctx->constrainParamAnnotsFrom(rest, restTypes, vars1, st2)
           | _ => ctx->constrainParamAnnotsFrom(rest, restTypes, vars, st)
         }
@@ -329,12 +338,30 @@ let inferRecur = (ctx: Ctx<a>, args, sp, st: Types.St) => switch ctx.loopStack {
     let (t, st2) = freshVar(st1) in Ok((t, st2))
 }
 
+let rowHasOptional = row => switch row {
+  | RowExtend(_, _, optional, rest) => optional || rowHasOptional(rest)
+  | _ => false
+}
+
+let domainNeedsFits = (t, st: Types.St) => switch zonk(t, st) {
+  | TyRecord(row) => rowHasOptional(row)
+  | _ => false
+}
+
 let inferCallArgs = (ctx: Ctx<a>, fnT, args, st: Types.St, callSpan) => switch args {
   | [] => Ok((fnT, st))
   | [arg, ...rest] => let? (argT, st1) = ctx->inferExpr(arg, st) in
-    let (resultT, st2) = freshVar(st1) in
-    let? st3 = u(fnT, tArrow(argT, resultT), st2, exprSpan(arg)) in
-      ctx->inferCallArgs(resultT, rest, st3, callSpan)
+      switch resolve(fnT, st1) {
+        | TyFn(fromT, toT) => domainNeedsFits(fromT, st1)
+            ? let? st2 = checkFits(argT, fromT, st1, exprSpan(arg)) in
+              ctx->inferCallArgs(toT, rest, st2, callSpan)
+            : let (resultT, st2) = freshVar(st1) in
+            let? st3 = u(fnT, tArrow(argT, resultT), st2, exprSpan(arg)) in
+              ctx->inferCallArgs(resultT, rest, st3, callSpan)
+        | _ => let (resultT, st2) = freshVar(st1) in
+          let? st3 = u(fnT, tArrow(argT, resultT), st2, exprSpan(arg)) in
+            ctx->inferCallArgs(resultT, rest, st3, callSpan)
+      }
 }
 
 let inferNormalCall = (ctx: Ctx<a>, fn, args, st: Types.St) =>
@@ -436,19 +463,49 @@ let inferRecordRow = (ctx: Ctx<a>, fields, st: Types.St) => switch fields {
 let rWithTail = (row, tail) => switch row {
   | RowEmpty => tail
   | RowVar(id) => rVar(id)
-  | RowExtend(label, fieldType, rest) => rExtend(
+  | RowExtend(label, fieldType, optional, rest) => rField(
       label,
       fieldType,
-      rWithTail(rest, tail)
+      rWithTail(rest, tail),
+      optional
     )
 }
 
 // duck-typed record field access: target's type unifies against an open row
 // with `name` in it, unless target is a bare namespace ref (`List.map`) —
-// then it's a qualified lookup into ctx.ns, not row inference.
+// then it's a qualified lookup into ctx.ns, not row inference. An optional
+// field on a known record yields `Option<T>` (ADR 0098).
+let lookupField = (row, name) => switch row {
+  | RowExtend(label, fieldType, optional, rest) => label == name
+      ? Some((fieldType, optional))
+      : lookupField(rest, name)
+  | _ => None
+}
+
+let rowEndsEmpty = row => switch row {
+  | RowEmpty => true
+  | RowExtend(_, _, _, rest) => rowEndsEmpty(rest)
+  | RowVar(_) => false
+}
+
 let inferFieldAccess = (ctx: Ctx<a>, target, name, sp, st: Types.St) =>
   let? (targetT, st1) = ctx->inferExpr(target, st) in
-  let (fieldT, st2) = freshVar(st1) in
+  let zonked = zonk(targetT, st1) in
+    switch zonked {
+      | TyRecord(row) => switch lookupField(row, name) {
+          | Some((ft, optional)) => Ok((
+              optional ? tCon("Option", [ft]) : ft,
+              st1
+            ))
+          | None => rowEndsEmpty(row)
+              ? Err(typeErr("record missing field '${name}'", sp))
+              : inferDuckField(targetT, name, sp, st1)
+        }
+      | _ => inferDuckField(targetT, name, sp, st1)
+    }
+
+let inferDuckField = (targetT, name, sp, st: Types.St) =>
+  let (fieldT, st2) = freshVar(st) in
   let (restRow, st3) = freshRowVar(st2) in
   let? st4 = u(targetT, tRecord(rExtend(name, fieldT, restRow)), st3, sp) in
     Ok((fieldT, st4))
@@ -1345,7 +1402,8 @@ let inferGroupFrom = (ctx: Ctx<a>, group, st: Types.St) => switch group {
                     ctx.aliasMap,
                     Set.fromArray([])
                   ) in
-                    u(t, at, stA, annotSpan(te)) |> Result.map(stB => (at, stB))
+                    checkFits(t, at, stA, annotSpan(te))
+                      |> Result.map(stB => (at, stB))
                 | None => Ok((t, st2))
               } in
               let? (restTypes, st4) = ctx->inferGroupFrom(rest, st3) in
@@ -1503,7 +1561,11 @@ let qualifyTe = (te, alias, from) => switch te {
 }
 
 let qualifyField = (fld, alias, from) =>
-  { name: fld.name, fieldType: qualifyTe(fld.fieldType, alias, from) }
+  {
+    name: fld.name,
+    fieldType: qualifyTe(fld.fieldType, alias, from),
+    optional: fld.optional
+  }
 
 let qualifyInfo = (info, alias, from) =>
   {
@@ -1649,7 +1711,7 @@ export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports
 // empty map (ADR 0044) — an unannotated `#{}` generalizes and leaves the
 // emitted TS a `Map<string, unknown>`. Structural, so module.mochi's richer
 // `{ types, aliases }` scope still fits.
-type QualAliasField = { name: string, fieldType: Ast.TypeExpr }
+type QualAliasField = { name: string, fieldType: Ast.TypeExpr, optional: bool }
 
 type QualAliasInfo = {
   params: [string],

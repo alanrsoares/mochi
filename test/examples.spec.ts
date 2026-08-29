@@ -213,6 +213,18 @@ let t : Tone = "rose"`;
   expect(isErr(compile(`type Tone = "rose" | "amber"\nlet t : Tone = "taupe"`))).toBe(true);
 });
 
+test("an optional record field may be omitted and reads as Option (ADR 0098)", () => {
+  const src = `type Props = { id?: string, n: number }
+let ok : Props = { n: 1 }
+let getId = (p: Props) => p.id`;
+  expect(isErr(compile(src))).toBe(false);
+  expect(
+    isErr(compile(`type Props = { id?: string, n: number }\nlet bad : Props = { id: "x" }`)),
+  ).toBe(true);
+  const dts = unwrapOk(compileTargets(src)).dts;
+  expect(dts).toContain("id?: string");
+});
+
 test("docstrings are retained across JS, TS, and .d.ts targets (ADR 0094)", () => {
   const src = `/// Add two integers.
 export let addInt = (a, b) => add(a, b)

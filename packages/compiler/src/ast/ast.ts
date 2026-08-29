@@ -161,7 +161,7 @@ export type Ctor = { name: string; fields: CtorField[]; span: Span };
 export type CtorField = { name: string | null; type: TypeExpr };
 
 /** One field of a transparent record-type alias: `type Point = { x: number, y: a }`. The field type is a full `TypeExpr` (like a `CtorField`'s), so aliases can carry generics and applied/nested types. */
-export type AliasField = { name: string; nameSpan: Span; type: TypeExpr };
+export type AliasField = { name: string; nameSpan: Span; type: TypeExpr; optional: boolean };
 
 /** A surface type expression, used in `extern` signatures. Lowercase names are type variables (generalized); prim names (number/string/bool/...) map to their HM type; others become nullary constructors. */
 export type TypeExpr =

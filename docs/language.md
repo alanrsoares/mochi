@@ -81,6 +81,18 @@ let distToOrigin = p => hypot(p.x, p.y)   // works on ANY record with x and y
 let translate = (p, dx, dy) => { x: p.x + dx, y: p.y + dy }
 ```
 
+A field marked `?` may be omitted at construction. Reading it yields `Option<T>`;
+a required field still yields `T`. A record that *has* the field may be used where
+an optional field is expected; the reverse is not
+([ADR 0098](adr/0098-optional-record-fields-and-labeled-props.md) §1). JS emit
+leaves the field absent at runtime.
+
+```mochi
+type Props = { id?: string, n: number }
+let ok : Props = { n: 1 }
+let getId = (p: Props) => p.id   // Option<string>
+```
+
 **Tuples** are real product types that erase to JS arrays. **One numeric type**
 (`number`); `int`/`float` are documentation aliases with zero extra semantics —
 `let z : int = 2.5` typechecks ([ADR 0085](adr/0085-int-float-aliases.md)).

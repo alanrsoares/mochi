@@ -1152,8 +1152,10 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
     // `expectLabel`: a record type must be able to describe a host shape whose
     // field is spelled like a mochi keyword — `{ type: string }` (ADR 0077).
     const id = expectLabel();
+    const optional = peek().t === "question";
+    if (optional) next();
     expect("colon");
-    return { name: id.name, nameSpan: id.span, type: parseTypeExpr() };
+    return { name: id.name, nameSpan: id.span, type: parseTypeExpr(), optional };
   }
 
   function parseCtor(): Ctor {

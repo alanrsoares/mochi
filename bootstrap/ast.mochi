@@ -99,7 +99,7 @@ export type TypeExpr =
 
 export type CtorField = { name: Option<string>, fieldType: TypeExpr }
 type Ctor = { name: string, fields: [CtorField] }
-export type AliasField = { name: string, fieldType: TypeExpr }
+export type AliasField = { name: string, fieldType: TypeExpr, optional: bool }
 
 export type Stmt =
   | SLet(name: string, nameSpan: Span, annot: Option<TypeExpr>, value: Expr, exported: bool, doc: Option<string>, span: Span)

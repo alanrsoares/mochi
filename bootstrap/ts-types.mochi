@@ -80,11 +80,17 @@ let nominal = (name, args, env: TsEnv) =>
 let tsRowFields = (row, env: TsEnv) => switch row {
   | RowEmpty => ([], None)
   | RowVar(id) => ([], Some(id))
-  | RowExtend(label, fieldType, rest) => let (fields, tail) = tsRowFields(
+  | RowExtend(label, fieldType, optional, rest) => let (fields, tail) = tsRowFields(
       rest,
       env
     ) in
-      (Array.prepend("${label}: ${tsOfRaw(fieldType, env)}", fields), tail)
+      (
+        Array.prepend(
+          "${label}${optional ? "?" : ""}: ${tsOfRaw(fieldType, env)}",
+          fields
+        ),
+        tail
+      )
 }
 
 /// Fields of a CLOSED row, each rendered with NO index. `None` for an open row:
@@ -92,9 +98,12 @@ let tsRowFields = (row, env: TsEnv) => switch row {
 let shapeFieldsFrom = (row, vars) => switch row {
   | RowEmpty => Some([])
   | RowVar(_) => None
-  | RowExtend(label, fieldType, rest) => shapeFieldsFrom(rest, vars)
+  | RowExtend(label, fieldType, optional, rest) => shapeFieldsFrom(rest, vars)
       |> Option.map(fs =>
-        Array.prepend("${label}: ${tsOf(fieldType, plainEnv(vars))}", fs))
+        Array.prepend(
+          "${label}${optional ? "?" : ""}: ${tsOf(fieldType, plainEnv(vars))}",
+          fs
+        ))
 }
 
 /// The index key for a row. Sorted, because a row carries fields in the order

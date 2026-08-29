@@ -381,7 +381,7 @@ let inferJsxChildren = (children, st, inferExpr) => switch children {
 
 /// Walk a row for `label`; open tails / missing labels → None.
 let rowField = (row, label) => switch row {
-  | RowExtend(l, fieldType, rest) => l == label
+  | RowExtend(l, fieldType, _, rest) => l == label
       ? Some(fieldType)
       : rowField(rest, label)
   | RowEmpty => None
