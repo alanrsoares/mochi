@@ -145,6 +145,13 @@ unbound names), filtered to the diagnostics overlapping the requested range. A f
   compiled, and closing a document retracts its diagnostics.
 - **Formatter** — width-based pretty-printing that runs on lex + parse only (no type
   information needed), which is why it can format even code that doesn't yet type-check.
+- **`bun run lint:mochi [globs…]`** — the same `moduleDiagnostics` the LSP publishes, run
+  over the repo's `.mochi` sources from the command line. Each file resolves its own
+  `mochi.plugins.ts` by the upward walk `pluginsForDocument` does for the editor: sweeping
+  without a tree's manifest reports its vendor call sites (`on(…)`, `tw.*`) as type errors.
+  A graph resolve per file costs seconds, so this is not wired into `lint` (biome, sub-second)
+  or the `check` gate — it is the standalone sweep, and the shape a `mochi check` command
+  would take.
 - **`.d.ts`** — HM types lowered to TypeScript declarations, including declarations for
   `extern` host modules.
 
