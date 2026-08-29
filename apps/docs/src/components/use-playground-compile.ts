@@ -5,7 +5,6 @@
  * testable without the editor UI.
  */
 import type { Diagnostic } from "@mochi/compiler";
-import { None, Some } from "@mochi/compiler/runtime";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { createPlaygroundCompiler } from "../lib/playground/compiler";
 import { formatStatus, type PlaygroundStatus } from "../lib/playground/status.mochi";
