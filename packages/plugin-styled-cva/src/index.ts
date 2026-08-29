@@ -23,31 +23,23 @@ import type {
 } from "@mochi/compiler/extensions";
 import type { CallExpr, RecordExpr } from "@mochi/compiler/plugin-kit";
 import { inferArgs } from "@mochi/compiler/plugin-kit";
-import type { Span } from "@mochi/compiler/span";
-import type { Row, Type } from "@mochi/compiler/types";
 // Explicit extension: crossing the package boundary, this specifier is resolved
 // by Node/Vite's config loader without a bundler, which needs the real filename.
+import { INTRINSIC_ELEMENTS } from "@mochi/compiler/plugins/jsx-schema";
+import type { Span } from "@mochi/compiler/span";
+import type { Row, Type } from "@mochi/compiler/types";
 import { rExtend, tArrow, tCon, tLit, tRecord, tUnion } from "@mochi/compiler/types";
 import { err, isErr, ok, type Result } from "@onrails/result";
 
 const isTwFactoryCall = (e: CallExpr): boolean =>
   e.fn.kind === "field" && e.fn.target.kind === "ref" && e.fn.target.name === "tw";
 
-// All current HTML elements (WHATWG living standard). `tw.<member>` factories
-// address intrinsic tags, so a member outside this set is a typo — `tw` is a
-// runtime proxy that would happily render an unknown element.
-const HTML_ELEMENTS = new Set([
-  ...(
-    "a abbr address area article aside audio b base bdi bdo blockquote body br " +
-    "button canvas caption cite code col colgroup data datalist dd del details dfn " +
-    "dialog div dl dt em embed fieldset figcaption figure footer form h1 h2 h3 h4 h5 " +
-    "h6 head header hgroup hr html i iframe img input ins kbd label legend li link " +
-    "main map mark menu meta meter nav noscript object ol optgroup option output p " +
-    "picture pre progress q rp rt ruby s samp script search section select slot " +
-    "small source span strong style sub summary sup table tbody td template textarea " +
-    "tfoot th thead time title tr track u ul var video wbr"
-  ).split(" "),
-]);
+// Intrinsic tags `tw.<member>` may address. Shared with the JSX schema (ADR
+// 0097) rather than kept as a third copy of the element list: `tw` is a runtime
+// proxy that would happily render an unknown element, and the two lists drifting
+// is exactly how `<dl>` ended up rejected by JSX while `tw.dl` stayed legal.
+// SVG tags come along for free, which styled SVG wants anyway.
+const HTML_ELEMENTS = new Set(Object.keys(INTRINSIC_ELEMENTS));
 
 const inferTwFactory: InferCallHook = (
   e: CallExpr,

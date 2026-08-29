@@ -615,6 +615,9 @@ const cases: Record<string, string> = {
   "call and field chains": "let a = f(1)(2).x.y(3)",
   "jsx element and fragment provenance":
     'let el = <div className="c">{"hi"}</div>\nlet frag = <><span>{"1"}</span></>',
+  // ADR 0096: `data-testid` lexes as label/minus/label; both parsers must glue
+  // the parts back the same way, and only while the tokens abut.
+  "jsx hyphenated attribute names": 'let el = <div data-testid="x" aria-label="y">{"hi"}</div>',
   "tuple vs grouping": "let t = (1, 2, 3)\nlet g = (1)",
   "collection literals":
     'let a = []\nlet b = [1, 2]\nlet c = @{}\nlet d = @{1, 2}\nlet e = #{}\nlet f = #{ "k": 1, "j": 2 }\nlet r = { x: 1, y: 2 }\nlet z = {}',

@@ -135,6 +135,24 @@ let emptyNsCtor = (con, ann) => switch ann {
 }
 
 /// Uppercase-initial name — a constructor, not an ordinary binding.
+/// A record field name emits BARE only when it is a valid JS identifier;
+/// anything else (`data-testid`, `aria-label`) must be quoted or the object
+/// literal is a syntax error. Mirrors the oracle's `/^[$A-Za-z_][\w$]*$/`.
+let isIdentStart = c =>
+  c >= 65 && c <= 90 || (c >= 97 && c <= 122) || c == 95 || c == 36
+
+let isIdentPart = c => isIdentStart(c) || (c >= 48 && c <= 57)
+
+let identPartsFrom = (s, i) => switch Str.codeAt(i, s) {
+  | None => true
+  | Some(c) => isIdentPart(c) && identPartsFrom(s, i + 1)
+}
+
+let isJsIdent = s => switch Str.codeAt(0, s) {
+  | None => false
+  | Some(c) => isIdentStart(c) && identPartsFrom(s, 1)
+}
+
 let isUpperStart = s =>
   Str.codeAt(0, s) |> Option.exists(n => n >= 65 && n <= 90)
 
@@ -369,7 +387,9 @@ let genExpr = (ctx: GCtx, e) => switch e {
     // === 0` (bare `{}`) is only possible with no spread and no fields.
     let fieldStrs = Str.join(
       ", ",
-      fields |> map(f => "${f.name}: ${ctx->genExpr(f.value)}")
+      fields
+        |> map(f =>
+          "${isJsIdent(f.name) ? f.name : jsStringLit(f.name)}: ${ctx->genExpr(f.value)}")
     ) in
       switch spread {
         | None => Array.length(fields) == 0 ? "{}" : "{ ${fieldStrs} }"

@@ -48,7 +48,7 @@ const MODULES = [
   "cli",
 ];
 // Runtime deps the emitted compiler imports (hand-written + generated shim).
-const RUNTIME_DEPS = ["host.mjs", "prelude.gen.mjs"];
+const RUNTIME_DEPS = ["host.mjs", "prelude.gen.mjs", "plugins/jsx-schema.gen.mjs"];
 /**
  * The frozen seed is an OLDER graph than `MODULES` by construction: it is the
  * binary that compiles today's sources, so it predates any module those sources
@@ -78,7 +78,10 @@ const bun = (args: string[], cwd = root) => execFileSync("bun", args, { cwd, enc
 // Copy the files that make a directory a runnable mochic: the compiled module
 // JS already present there, plus the runtime deps.
 const placeRuntimeDeps = (fromDir: string, dir: string) => {
-  for (const dep of RUNTIME_DEPS) cpSync(join(fromDir, dep), join(dir, dep));
+  for (const dep of RUNTIME_DEPS) {
+    mkdirSync(join(dir, dep, ".."), { recursive: true });
+    cpSync(join(fromDir, dep), join(dir, dep));
+  }
 };
 
 const copyModule = (fromRoot: string, toRoot: string, m: string, ext: string) => {

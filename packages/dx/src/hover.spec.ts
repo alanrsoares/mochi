@@ -254,3 +254,11 @@ let broken = add(1, "nope")`;
   expect(hoverAt(src, src.indexOf("number") + 1)?.code).toBe("type number");
   expect(hoverAt(src, src.indexOf("Point") + 1)?.code).toBe("type Point<A> = { x: A, y: number }");
 });
+
+test("hover on intrinsic JSX attribute reports its property type", () => {
+  const src = 'let el = <button disabled={true} type="submit" />';
+  expect(hoverAt(src, src.indexOf("disabled") + 1)?.code).toBe("(property) disabled: bool");
+  expect(hoverAt(src, src.indexOf("type") + 1)?.code).toBe(
+    '(property) type: "button" | "submit" | "reset"',
+  );
+});

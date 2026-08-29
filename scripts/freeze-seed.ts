@@ -21,7 +21,7 @@ const REPO = resolve(import.meta.dir, "..");
 const BOOTSTRAP = join(REPO, "bootstrap");
 const ENTRY = join(BOOTSTRAP, "cli.mochi");
 const SEED = join(BOOTSTRAP, "seed");
-const HOST_SHIMS = ["host.mjs", "prelude.gen.mjs"];
+const HOST_SHIMS = ["host.mjs", "prelude.gen.mjs", "plugins/jsx-schema.gen.mjs"];
 // Package export, not `@mochi/runtime`: the latter is the published name the
 // CLI writes into *user* TS emit, and it does not resolve in-repo. Nested
 // seed modules (`plugins/jsx.ts`) cannot share one relative path.

@@ -19,12 +19,27 @@
  * The lexer stays generic: `<`, `>`, `/`, strings and identifiers are plain
  * tokens, and the grammar that gives them JSX meaning is entirely below.
  */
-import { isErr, ok, type Result } from "@onrails/result";
+import { err, isErr, ok, type Result } from "@onrails/result";
 import { type Expr, type Field, isCtorName, type RecordExpr, type SeqElem } from "../../ast/ast";
 import { type Span, spanning } from "../../ast/span";
-import { type Row, rExtend, type Type, tCon, tRecord } from "../../ast/types";
+import {
+  type ArrowType,
+  type RecordType,
+  type Row,
+  rExtend,
+  type Type,
+  tArrow,
+  tBool,
+  tCon,
+  tLit,
+  tNumber,
+  tRecord,
+  tString,
+  tUnion,
+} from "../../ast/types";
 import { cat, type Doc, group, indent, line, seq, softline, txt } from "../../doc/doc";
 import type { Diagnostic } from "../../errors/errors";
+import { closestName } from "../../infer/suggest";
 import type {
   BindingTypeApi,
   BindingTypeHook,
@@ -37,10 +52,37 @@ import type {
   ParserApi,
 } from "../extensions";
 import { type CallExpr, rowField } from "../plugin-kit";
+import {
+  type ElementSchema,
+  GLOBAL_HTML_ATTRS,
+  INTRINSIC_ELEMENTS,
+  type IntrinsicAttrType,
+  JSX_MISMATCH_HINTS,
+} from "./jsx-schema";
 
 /** The JSX pragma name the parser desugars to, and the fragment tag it uses for `<>…</>`. */
 const PRAGMA = "h";
 const FRAGMENT = "Fragment";
+
+export const intrinsicAttrTypeToType = (attr: IntrinsicAttrType): Type => {
+  if (Array.isArray(attr)) {
+    return tUnion(attr.map((v) => tLit(v, "string")));
+  }
+  switch (attr) {
+    case "string":
+      return tString;
+    case "number":
+      return tNumber;
+    case "bool":
+      return tBool;
+    case "string|number":
+      return tUnion([tString, tNumber]);
+    case "string|bool":
+      return tUnion([tString, tBool]);
+    default:
+      return tCon("any");
+  }
+};
 
 /** Parser-synthesized `h(tag, props, …children)` (ADR 0011 §5 sugar provenance). */
 const isJsxCall = (e: CallExpr): boolean => e.origin === "jsx" && e.args.length >= 2;
@@ -198,7 +240,22 @@ const parseJsxElement = (api: ParserApi): Expr => {
       api.expect("rbrace");
       continue;
     }
-    const attrId = api.expectLabel();
+    let attrId = api.expectLabel();
+    // `data-testid` / `aria-label` lex as label/minus/label. Glue them back —
+    // but only while the tokens ABUT, or `<div id - x="1">` would silently
+    // become `id-x`.
+    while (
+      api.peek().t === "minus" &&
+      api.peek().span.start === attrId.span.end &&
+      api.peek(1).span.start === api.peek().span.end
+    ) {
+      api.next();
+      const part = api.expectLabel();
+      attrId = {
+        name: `${attrId.name}-${part.name}`,
+        span: spanning(attrId.span, part.span),
+      };
+    }
     let valExpr: Expr = { kind: "bool", value: true, span: attrId.span };
     if (api.peek().t === "eq") {
       api.next(); // consume '='
@@ -234,7 +291,185 @@ const parseJsxAtom: ParseHook = (api: ParserApi): Expr | null =>
 // ---------------------------------------------------------------- infer
 
 /**
- * Infer `h(tag, props, childrenArr)`. Component tags (arrow from record) check
+ * If the component expects `props.children` and attrs omitted it (normal JSX),
+ * but the body supplied children, add `children` to the attrs type so unify
+ * matches the runtime fold. Empty body + required children → still missing.
+ */
+const jsxPropsWithSynthesizedChildren = (
+  propsType: Type,
+  propsExpr: Expr,
+  expectedRow: Row,
+  childElems: readonly SeqElem[],
+): Type => {
+  const expectedChildren = rowField(expectedRow, "children");
+  if (!expectedChildren || propsType.kind !== "record") return propsType;
+  const attrsHaveChildren =
+    propsExpr.kind === "record" && propsExpr.fields.some((f) => f.name === "children");
+  return attrsHaveChildren || childElems.length === 0
+    ? propsType
+    : tRecord(rExtend("children", expectedChildren, propsType.row));
+};
+
+const validateIntrinsicProp = (
+  tagName: string,
+  tagSchema: ElementSchema | undefined,
+  isCustomElement: boolean,
+  f: Field,
+  api: InferCallApi,
+): Result<void, Diagnostic> => {
+  const hint = JSX_MISMATCH_HINTS[f.name];
+  if (hint) {
+    return err({
+      kind: "type",
+      message: hint,
+      span: f.nameSpan,
+    });
+  }
+
+  if (f.name.startsWith("data-") || f.name.startsWith("aria-")) {
+    const valT = api.infer(f.value);
+    if (isErr(valT)) return valT;
+    api.noteType(f.nameSpan, valT.value, { kind: "property", name: f.name });
+    return ok(undefined);
+  }
+
+  if (isCustomElement && !tagSchema) {
+    const valT = api.infer(f.value);
+    if (isErr(valT)) return valT;
+    api.noteType(f.nameSpan, valT.value, { kind: "property", name: f.name });
+    return ok(undefined);
+  }
+
+  let expectedAttr = tagSchema?.[f.name];
+  if (
+    !expectedAttr &&
+    f.name.startsWith("on") &&
+    f.name.length > 2 &&
+    f.name[2] === f.name[2]?.toUpperCase()
+  ) {
+    expectedAttr = "event";
+  }
+  if (!expectedAttr) {
+    const suggestion = tagSchema ? closestName(f.name, Object.keys(tagSchema)) : null;
+    const didYouMean = suggestion ? ` Did you mean '${suggestion}'?` : "";
+    return err({
+      kind: "type",
+      message: `Property '${f.name}' does not exist on '<${tagName}>'.${didYouMean}`,
+      span: f.nameSpan,
+    });
+  }
+
+  const valT = api.infer(f.value);
+  if (isErr(valT)) return valT;
+
+  if (expectedAttr === "event") {
+    const zonkedVal = api.zonk(valT.value);
+    if (
+      zonkedVal.kind !== "arrow" &&
+      zonkedVal.kind !== "var" &&
+      !(zonkedVal.kind === "con" && zonkedVal.name === "any")
+    ) {
+      return err({
+        kind: "type",
+        message: `Expected function for event handler '${f.name}'`,
+        span: f.value.span,
+      });
+    }
+    api.noteType(f.nameSpan, tArrow(tCon("Event"), tCon("unit")), {
+      kind: "property",
+      name: f.name,
+    });
+    return ok(undefined);
+  }
+
+  if (expectedAttr === "any") {
+    api.noteType(f.nameSpan, tCon("any"), { kind: "property", name: f.name });
+    return ok(undefined);
+  }
+
+  const expectedType = intrinsicAttrTypeToType(expectedAttr);
+  const uni = api.unify(valT.value, expectedType, f.value.span);
+  if (isErr(uni)) return uni;
+  api.noteType(f.nameSpan, expectedType, { kind: "property", name: f.name });
+  return ok(undefined);
+};
+
+const inferIntrinsicJsxElement = (
+  tagName: string,
+  tagSpan: Span,
+  propsExpr: Expr,
+  api: InferCallApi,
+): Result<Type, Diagnostic> => {
+  if (tagName === FRAGMENT) {
+    if (propsExpr.kind === "record") {
+      for (const f of propsExpr.fields) {
+        if (f.name !== "key") {
+          return err({
+            kind: "type",
+            message: `JSX fragments only accept the 'key' prop, got '${f.name}'`,
+            span: f.nameSpan,
+          });
+        }
+      }
+    }
+    return ok(tCon("VNode"));
+  }
+
+  const isCustomElement = tagName.includes("-");
+  const tagSchema = INTRINSIC_ELEMENTS[tagName];
+
+  if (!tagSchema && !isCustomElement) {
+    const suggestion = closestName(tagName, Object.keys(INTRINSIC_ELEMENTS));
+    const didYouMean = suggestion ? ` Did you mean '<${suggestion}>'?` : "";
+    return err({
+      kind: "type",
+      message: `Unknown JSX element '<${tagName}>'.${didYouMean}`,
+      span: tagSpan,
+    });
+  }
+
+  if (propsExpr.kind === "record") {
+    for (const f of propsExpr.fields) {
+      const res = validateIntrinsicProp(tagName, tagSchema, isCustomElement, f, api);
+      if (isErr(res)) return res;
+    }
+  }
+
+  return ok(tCon("VNode"));
+};
+
+type ComponentTagType = ArrowType & { from: RecordType };
+
+const inferComponentJsxElement = (
+  zonkedTag: ComponentTagType,
+  propsType: Type,
+  propsExpr: Expr,
+  childElems: readonly SeqElem[],
+  api: InferCallApi,
+): Result<Type, Diagnostic> => {
+  const propsForCheck = jsxPropsWithSynthesizedChildren(
+    propsType,
+    propsExpr,
+    zonkedTag.from.row,
+    childElems,
+  );
+  const uni = api.unify(propsForCheck, zonkedTag.from, propsExpr.span);
+  if (isErr(uni)) return uni;
+  if (propsExpr.kind === "record") {
+    for (const f of propsExpr.fields) {
+      const expected = rowField(zonkedTag.from.row, f.name);
+      if (expected)
+        api.noteType(f.nameSpan, api.zonk(expected), { kind: "property", name: f.name });
+    }
+  }
+  return ok(api.zonk(zonkedTag.to));
+};
+
+/**
+ * Infer a JSX call desugared to `h(tag, props, [children…])`.
+ *
+ * User components (`<Badge />`) unify `props` against their signature and hover
+ * shows their prop types; intrinsic tags (`<button />`) typecheck against HTML
  * attrs; string tags stay open-world on props.
  *
  * Children are a heterogeneous array (text + elements). Do **not** run normal
@@ -271,47 +506,20 @@ const inferJsxCall: InferCallHook = (
 
   const zonkedTag = api.zonk(tagT.value);
   if (zonkedTag.kind === "arrow" && zonkedTag.from.kind === "record") {
-    const propsForCheck = jsxPropsWithSynthesizedChildren(
+    return inferComponentJsxElement(
+      zonkedTag as ArrowType & { from: RecordType },
       propsT.value,
       propsExpr,
-      zonkedTag.from.row,
       childElems,
+      api,
     );
-    const uni = api.unify(propsForCheck, zonkedTag.from, propsExpr.span);
-    if (isErr(uni)) return uni;
-    // Expected prop types on attr names — hover shows `"rose" | …`, not the
-    // value-side lit that widenLits would turn into `string`.
-    if (propsExpr.kind === "record") {
-      for (const f of propsExpr.fields) {
-        const expected = rowField(zonkedTag.from.row, f.name);
-        if (expected)
-          api.noteType(f.nameSpan, api.zonk(expected), { kind: "property", name: f.name });
-      }
-    }
-    return ok(api.zonk(zonkedTag.to));
   }
-  // Intrinsic / unknown tag: open props, result is VNode.
-  return ok(tCon("VNode"));
-};
 
-/**
- * If the component expects `props.children` and attrs omitted it (normal JSX),
- * but the body supplied children, add `children` to the attrs type so unify
- * matches the runtime fold. Empty body + required children → still missing.
- */
-const jsxPropsWithSynthesizedChildren = (
-  propsType: Type,
-  propsExpr: Expr,
-  expectedRow: Row,
-  childElems: readonly SeqElem[],
-): Type => {
-  const expectedChildren = rowField(expectedRow, "children");
-  if (!expectedChildren || propsType.kind !== "record") return propsType;
-  const attrsHaveChildren =
-    propsExpr.kind === "record" && propsExpr.fields.some((f) => f.name === "children");
-  return attrsHaveChildren || childElems.length === 0
-    ? propsType
-    : tRecord(rExtend("children", expectedChildren, propsType.row));
+  if (tagExpr.kind === "str") {
+    return inferIntrinsicJsxElement(tagExpr.value, tagExpr.span, propsExpr, api);
+  }
+
+  return ok(tCon("VNode"));
 };
 
 // --------------------------------------------------------------- format

@@ -7,6 +7,8 @@ import {
   zonk,
   tPrim,
   tRecord,
+  tLit,
+  tUnion,
   rExtend,
   TyFn,
   TyRecord,
@@ -30,6 +32,7 @@ import {
   TRbrace,
   TSpread,
   TSlash,
+  TMinus,
   TLt,
   TGt,
   TNum,
@@ -108,6 +111,32 @@ let jxExpectLabel = (toks, pos) =>
       | None => jxExpectId(toks, pos)
     }
 
+/// Attribute names may contain hyphens (`data-testid`, `aria-label`). The lexer
+/// splits those into label/minus/label, so glue the parts back together — but
+/// only while the tokens are ADJACENT, or `<div id - x="1">` would silently
+/// become `id-x`.
+let jxAttrNameFrom = (toks, pos, acc) =>
+  let minusTok = jxTokAt(toks, pos) in
+  let partTok = jxTokAt(toks, pos + 1) in
+    minusTok.tok == TMinus && minusTok.start == acc.span.end && partTok.start == minusTok.end
+      ? switch jxExpectLabel(toks, pos + 1) {
+        | Ok((part, p1)) => jxAttrNameFrom(
+            toks,
+            p1,
+            {
+              name: "${acc.name}-${part.name}",
+              span: { start: acc.span.start, end: part.span.end }
+            }
+          )
+        | Err(_) => (acc, pos)
+      }
+      : (acc, pos)
+
+/// `jxExpectLabel` plus any adjacent `-part` continuations.
+let jxExpectAttrName = (toks, pos) =>
+  jxExpectLabel(toks, pos)
+    |> Result.map(((head, p1)) => jxAttrNameFrom(toks, p1, head))
+
 let jxIsUpper = s => Str.codeAt(0, s) |> Option.exists(n => n >= 65 && n <= 90)
 
 let jxExprSpan = e => switch e {
@@ -161,7 +190,7 @@ let parseJsxAttributes = (toks, pos, fieldsAcc, spreadAcc, parseExpr) =>
           |> Result.flatMap(((spExpr, p2)) =>
             let? p3 = jxExpectTok(TRbrace, toks, p2) in
               parseJsxAttributes(toks, p3, fieldsAcc, Some(spExpr), parseExpr))
-      : let? (attrId, p1) = jxExpectLabel(toks, pos) in
+      : let? (attrId, p1) = jxExpectAttrName(toks, pos) in
       let (valExpr, p2) = jxTokAt(toks, p1).tok == TEq
         ? let pEq = p1 + 1 in
           switch jxTokAt(toks, pEq).tok {
@@ -390,6 +419,51 @@ let jsxPropsWithSynthesizedChildren = (propsT, propsExpr, expectedRow, restArgs)
     }
 }
 
+// The intrinsic element schema crosses the host seam as DATA, generated from
+// `packages/compiler/src/extensions/plugins/jsx-schema.ts` (ADR 0097) — the same
+// arrangement `prelude.gen.mjs` uses for the prelude tables (ADR 0075). The
+// plugin only looks attributes up, never matches over the schema's shape, so a
+// flat `Map` per element is enough and the graph stays free of 600 lines of table.
+extern jsxIntrinsicElements : Map<string, Map<string, string> > = "./jsx-schema.gen.mjs" "intrinsicElements"
+
+/// A kind string from the generated schema as an HM type. `event` and `any` are
+/// SHAPE checks rather than unifications, so they carry no expected type here.
+let attrKindType = kind =>
+  kind == "string"
+    ? Some(tPrim("string"))
+    : kind == "number"
+    ? Some(tPrim("number"))
+    : kind == "bool"
+    ? Some(tPrim("bool"))
+    : kind == "string|number"
+    ? Some(tUnion([tPrim("string"), tPrim("number")]))
+    : kind == "string|bool"
+    ? Some(tUnion([tPrim("string"), tPrim("bool")]))
+    : Str.startsWith("enum:", kind)
+    ? Some(
+      tUnion(Str.split(",", Str.slice(5, Str.length(kind), kind)) |> map(tLit))
+    )
+    : None
+
+let intrinsicAttrType = (tag, attr) =>
+  Map.get(tag, jsxIntrinsicElements)
+    |> Option.flatMap(Map.get(attr))
+    |> Option.flatMap(attrKindType)
+
+let inferIntrinsicFields = (tag, fields, st, api) => switch fields {
+  | [] => Ok(st)
+  | [f, ...rest] => switch intrinsicAttrType(tag, f.name) {
+      | Some(expectedT) => api.inferExpr(f.value, st)
+          |> Result.flatMap(((valT, st1)) =>
+            api.unify(valT, expectedT, st1, jxExprSpan(f.value))
+              |> Result.flatMap(st2 =>
+                inferIntrinsicFields(tag, rest, st2, api)))
+      | None => api.inferExpr(f.value, st)
+          |> Result.flatMap(((_, st1)) =>
+            inferIntrinsicFields(tag, rest, st1, api))
+    }
+}
+
 let inferJsxCall = (tagExpr, propsExpr, restArgs, st, api) =>
   api.inferExpr(tagExpr, st)
     |> Result.flatMap(((tagT, st1)) =>
@@ -415,7 +489,19 @@ let inferJsxCall = (tagExpr, propsExpr, restArgs, st, api) =>
                             |> Result.map(st4 => (zonk(to, st4), st4))
                       | _ => Ok((tPrim("VNode"), st3))
                     }
-                  | _ => Ok((tPrim("VNode"), st3))
+                  | _ => switch tagExpr {
+                      | Ast.EStr(tagName, _) => switch propsExpr {
+                          | Ast.ERecord(fields, _, _) => inferIntrinsicFields(
+                              tagName,
+                              fields,
+                              st3,
+                              api
+                            )
+                              |> Result.map(st4 => (tPrim("VNode"), st4))
+                          | _ => Ok((tPrim("VNode"), st3))
+                        }
+                      | _ => Ok((tPrim("VNode"), st3))
+                    }
                 })))
 
 /// Infer-call hook: claim `origin == Some("jsx")`; otherwise Ok(None).

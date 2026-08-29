@@ -15,6 +15,8 @@ export type Type =
   | { kind: "union"; members: Type[] }; // "rose" | "amber" (finite; ≥2 after normalize)
 
 /** Applied constructor (`number`, `List<'a>`, …). */
+export type ArrowType = Extract<Type, { kind: "arrow" }>;
+export type RecordType = Extract<Type, { kind: "record" }>;
 export type ConType = Extract<Type, { kind: "con" }>;
 export type LitType = Extract<Type, { kind: "lit" }>;
 export type UnionType = Extract<Type, { kind: "union" }>;
