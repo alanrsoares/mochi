@@ -95,7 +95,8 @@ import {
   instantiate,
   typeExprToType,
   ctorScheme,
-  freeInType
+  freeInType,
+  widenLits
 } from "./schemes.mochi"
 import * as Schemes from "./schemes.mochi"
 import { stronglyConnected } from "./scc.mochi"
@@ -413,7 +414,7 @@ let labFieldsFrom = (ctx: Ctx<a>, labs, env, vars, st: Types.St) => switch labs 
                 | None =>
                   // No annotation: a literal default must not pin the field to a
                   // singleton type — `~tone = "rose"` is `string`, not `"rose"`.
-                  let widened = Schemes.widenLits(zonk(dt, s2)) in
+                  let widened = widenLits(zonk(dt, s2)) in
                   let? s3 = u(fieldT, widened, s2, exprSpan(d)) in
                     Ok((widened, s3))
               }
