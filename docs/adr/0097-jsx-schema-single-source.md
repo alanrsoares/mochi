@@ -71,4 +71,5 @@ nothing — the plugin never matches over the schema's shape.
 approach, and the right end state, but it needs record fields that may be absent.
 mochi's rows are `empty | rvar | extend` with no optionality, so a closed
 `domProps` would force every `<div>` to list every attribute — exactly the
-objection ADR 0096 raises. Revisit if optional fields land.
+objection ADR 0096 raises. [ADR 0098](0098-optional-record-fields-and-labeled-props.md)
+proposes that feature; if it lands, this ADR's generator retires with it.

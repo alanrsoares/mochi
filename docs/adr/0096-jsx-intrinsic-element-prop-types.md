@@ -53,7 +53,8 @@ This created four major DX gaps:
   end state: validation would fall out of ordinary row unification instead of a
   bespoke validator. It depends on record fields that may be ABSENT, and mochi's
   rows are `empty | rvar | extend` with no optionality — so a closed `domProps`
-  would force every `<div>` to list every attribute. Revisit if optional fields
-  land; see [ADR 0097](0097-jsx-schema-single-source.md) for how the schema data is
-  kept single-sourced until then.
+  would force every `<div>` to list every attribute.
+  [ADR 0098](0098-optional-record-fields-and-labeled-props.md) proposes that
+  feature; see [ADR 0097](0097-jsx-schema-single-source.md) for how the schema
+  data is kept single-sourced until then.
 - **Relying solely on external `.d.ts`:** Rejected ([ADR 0012](0012-host-interop-end-state.md)). Mochi's compiler and DX must be self-contained and fast without running an external TypeScript typechecker.
