@@ -272,6 +272,62 @@ export const INTRINSIC_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
   summary: GLOBAL_HTML_ATTRS,
   ul: GLOBAL_HTML_ATTRS,
 
+  // Remaining WHATWG HTML elements. `INTRINSIC_ELEMENTS` is a closed allowlist —
+  // a tag missing from it is a hard "Unknown JSX element" error, not a silent
+  // pass — so an element being standard is reason enough to list it.
+  dl: GLOBAL_HTML_ATTRS,
+  dt: GLOBAL_HTML_ATTRS,
+  dd: GLOBAL_HTML_ATTRS,
+  hgroup: GLOBAL_HTML_ATTRS,
+  search: GLOBAL_HTML_ATTRS,
+  menu: GLOBAL_HTML_ATTRS,
+  legend: GLOBAL_HTML_ATTRS,
+  ruby: GLOBAL_HTML_ATTRS,
+  rp: GLOBAL_HTML_ATTRS,
+  rt: GLOBAL_HTML_ATTRS,
+  datalist: GLOBAL_HTML_ATTRS,
+  html: makeSchema(GLOBAL_HTML_ATTRS, { lang: "string", xmlns: "string" }),
+  head: GLOBAL_HTML_ATTRS,
+  body: GLOBAL_HTML_ATTRS,
+  title: GLOBAL_HTML_ATTRS,
+  base: makeSchema(GLOBAL_HTML_ATTRS, { href: "string", target: "string" }),
+  data: makeSchema(GLOBAL_HTML_ATTRS, { value: "string|number" }),
+  slot: makeSchema(GLOBAL_HTML_ATTRS, { name: "string" }),
+  map: makeSchema(GLOBAL_HTML_ATTRS, { name: "string" }),
+  area: makeSchema(GLOBAL_HTML_ATTRS, {
+    alt: "string",
+    coords: "string",
+    download: "string",
+    href: "string",
+    rel: "string",
+    shape: ["rect", "circle", "poly", "default"],
+    target: "string",
+  }),
+  embed: makeSchema(GLOBAL_HTML_ATTRS, {
+    src: "string",
+    type: "string",
+    width: "string|number",
+    height: "string|number",
+  }),
+  object: makeSchema(GLOBAL_HTML_ATTRS, {
+    data: "string",
+    type: "string",
+    name: "string",
+    form: "string",
+    width: "string|number",
+    height: "string|number",
+  }),
+  output: makeSchema(GLOBAL_HTML_ATTRS, {
+    htmlFor: "string",
+    form: "string",
+    name: "string",
+  }),
+  fieldset: makeSchema(GLOBAL_HTML_ATTRS, {
+    disabled: "bool",
+    form: "string",
+    name: "string",
+  }),
+
   // Interactive / specific HTML elements
   button: makeSchema(GLOBAL_HTML_ATTRS, {
     type: ["button", "submit", "reset"],

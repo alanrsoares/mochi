@@ -276,6 +276,13 @@ describe("intrinsic HTML element prop validation (ADR 0096)", () => {
     expect(isErr(compile(src))).toBe(false);
   });
 
+  it("accepts the standard HTML elements", () => {
+    // The schema is a closed allowlist: a standard tag missing from it is a hard
+    // "Unknown JSX element" error, so the list being complete is behavior.
+    const tags = "dl dt dd hgroup search menu legend ruby rp rt datalist output fieldset area";
+    for (const tag of tags.split(" ")) expect(isErr(compile(`let el = <${tag} />`))).toBe(false);
+  });
+
   it("glues a hyphenated attr name only while the tokens abut", () => {
     // `data-testid` lexes as label/minus/label. Without an adjacency check a
     // stray spaced hyphen would silently become part of the name.
