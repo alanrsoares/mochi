@@ -24,10 +24,10 @@ export let aboutChapters : [AboutChapter] = [
   {
     id: "spark",
     kicker: "origin",
-    title: "Why would I write a language?",
+    title: "The question that started it",
     body: [
-      "It started as a question I couldn't put down: what is actually in a language? Not the surface of syntax, but the principles underneath it — and how much of correctness could live in enforceable constraints and tooling, instead of docs and hope.",
-      "Building one felt like the only honest way to find out."
+      "I wanted to know what a language really consists of: not syntax, but the constraints that make correct code easier to write and mistakes easier to catch. How much could the compiler and its tools guarantee, instead of leaving it to documentation and discipline?",
+      "There was only one way to find out: build one."
     ],
     src: cosmicTypesImg,
     alt: "Astronaut Mochi floating through type-system constellations"
@@ -35,10 +35,10 @@ export let aboutChapters : [AboutChapter] = [
   {
     id: "core",
     kicker: "compiler",
-    title: "Start with a small compiler",
+    title: "Keep the compiler small",
     body: [
-      "I kept the first version small enough to hold in my head: a lexer, a parser, Hindley–Milner inference, and a code generator that writes the JavaScript I would have written by hand.",
-      "One rule shaped everything after it: every pass returns a value, errors included. No exceptions flying across the pipeline, no partial states to reason about."
+      "The first version was small enough to hold in my head: a lexer, a parser, Hindley–Milner inference, and a code generator for readable JavaScript.",
+      "One rule held it together: failures are values. Each stage reports what went wrong instead of throwing control flow across the compiler."
     ],
     src: compilerMagicImg,
     alt: "Mochi the corgi conjuring an AST into JavaScript and TypeScript"
@@ -46,10 +46,10 @@ export let aboutChapters : [AboutChapter] = [
   {
     id: "selfhost",
     kicker: "self-hosting",
-    title: "Teach it to rebuild itself",
+    title: "Make it prove itself",
     body: [
-      "The honesty check came later: rewrite the compiler in mochi, compile that to TypeScript, and let tsc --strict be the judge.",
-      "Watching the error count fall from 537 to 0 taught me more about my own type system than any spec could have. It still runs on every push, so the language can't quietly drift."
+      "Eventually, I rewrote the compiler in Mochi, compiled it to TypeScript, and let tsc --strict judge the result.",
+      "Watching the error count fall from 537 to zero taught me more about the type system than any specification could. That check still runs on every push."
     ],
     src: bootstrapPartyImg,
     alt: "Corgi crowd celebrating a zero-error bootstrap build"
@@ -57,10 +57,10 @@ export let aboutChapters : [AboutChapter] = [
   {
     id: "editor",
     kicker: "tooling",
-    title: "Make the editor tell the truth",
+    title: "Make tooling part of the language",
     body: [
-      "Hover, diagnostics, and the formatter all come from the same passes as the compiler — there is no second model of the language that can slowly drift out of sync.",
-      "If the editor lies, the language lies. Looking back, pulling tooling into the language early is the decision I'm happiest with."
+      "Hover, diagnostics, and navigation draw on the compiler's own model of the program. There is no separate language-server model waiting to drift away.",
+      "If the editor tells you something, it should be true. Building that in early is the decision I'm happiest with."
     ],
     src: lspInspectorImg,
     alt: "Detective Mochi inspecting types with a magnifying glass"
@@ -68,10 +68,10 @@ export let aboutChapters : [AboutChapter] = [
   {
     id: "friends",
     kicker: "interop",
-    title: "Let it live with friends",
+    title: "Work with the code you already have",
     body: [
-      "mochi isn't trying to replace a codebase; it moves in with one. JSX compiles to any h()-shaped host, extern bindings call npm packages directly, and generated .d.ts files let TypeScript import it back with full types.",
-      "These pages are the dogfood — the site you're reading is written in mochi and rendered by Preact."
+      "Mochi is not here to replace a codebase. It is designed to join one: JSX targets any h()-shaped host, typed externs call npm packages directly, and generated .d.ts files let TypeScript consume Mochi code with its types intact.",
+      "This site is the proof: it is written in Mochi and rendered by Preact."
     ],
     src: coderMascotImg,
     alt: "Mochi the corgi typing away at a keyboard"
@@ -79,9 +79,9 @@ export let aboutChapters : [AboutChapter] = [
   {
     id: "name",
     kicker: "coda",
-    title: "Named after a good dog",
+    title: "Named after the real Mochi",
     body: [
-      "The name was the easiest decision of the whole project: Mochi is my beautiful corgi girl. She has no opinions about type systems, and that keeps things in perspective."
+      "The easiest decision was the name. Mochi is my corgi. She has no opinion on type systems, which is probably healthy."
     ],
     src: stickersImg,
     alt: "Sticker sheet of Mochi the corgi mascot"
