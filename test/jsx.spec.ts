@@ -157,7 +157,7 @@ describe("keyword attribute names (ADR 0077)", () => {
   it("keeps the attribute out of binding position", () => {
     // `type` is a label here, so the surrounding statement still parses as an
     // ordinary `let` — the keyword has not leaked into expression position.
-    expect(isErr(compile(`let type = <button type="x" />`))).toBe(true);
+    expect(isErr(compile(`let type = <button type="button" />`))).toBe(true);
   });
 });
 
@@ -198,5 +198,87 @@ describe("component prop contracts (ADR 0055)", () => {
     if (!isErr(r)) {
       expect(r.value).toContain('h("Fragment", {}, [])');
     }
+  });
+});
+
+describe("intrinsic HTML element prop validation (ADR 0096)", () => {
+  it("validates standard HTML attributes and literal types", () => {
+    const src = `
+      let btn = <button type="submit" disabled={false} className="primary" onClick={() => ()}>{"Submit"}</button>
+      let inp = <input type="text" placeholder="Enter name" value="Mochi" disabled />
+      let link = <a href="https://example.com" target="_blank">{"Home"}</a>
+    `;
+    expect(isErr(compile(src))).toBe(false);
+  });
+
+  it("rejects unknown attributes on intrinsic tags with did-you-mean suggestion", () => {
+    const r = compile(`let btn = <button disbaled />`);
+    expect(isErr(r)).toBe(true);
+    if (isErr(r)) {
+      expect(
+        r.error.some((d) =>
+          d.message.includes(
+            "Property 'disbaled' does not exist on '<button>'. Did you mean 'disabled'?",
+          ),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it("warns on common React/JSX attribute mistakes", () => {
+    const classErr = compile(`let el = <div class="container" />`);
+    expect(isErr(classErr)).toBe(true);
+    if (isErr(classErr)) {
+      expect(
+        classErr.error.some((d) => d.message.includes("use 'className' instead of 'class'")),
+      ).toBe(true);
+    }
+
+    const forErr = compile(`let el = <label for="username" />`);
+    expect(isErr(forErr)).toBe(true);
+    if (isErr(forErr)) {
+      expect(forErr.error.some((d) => d.message.includes("use 'htmlFor' instead of 'for'"))).toBe(
+        true,
+      );
+    }
+
+    const onclickErr = compile(`let el = <button onclick={() => ()} />`);
+    expect(isErr(onclickErr)).toBe(true);
+    if (isErr(onclickErr)) {
+      expect(
+        onclickErr.error.some((d) => d.message.includes("use 'onClick' instead of 'onclick'")),
+      ).toBe(true);
+    }
+  });
+
+  it("rejects invalid literal union values on intrinsic attributes", () => {
+    const r = compile(`let btn = <button type="invalid" />`);
+    expect(isErr(r)).toBe(true);
+  });
+
+  it("rejects invalid types on intrinsic attributes", () => {
+    const r = compile(`let btn = <button disabled="notABool" />`);
+    expect(isErr(r)).toBe(true);
+  });
+
+  it("rejects non-function values for event handlers", () => {
+    const r = compile(`let btn = <button onClick="notAFunction" />`);
+    expect(isErr(r)).toBe(true);
+    if (isErr(r)) {
+      expect(
+        r.error.some((d) => d.message.includes("Expected function for event handler 'onClick'")),
+      ).toBe(true);
+    }
+  });
+
+  it("permits data-* and aria-* open attributes", () => {
+    const src = `let el = <div data-testid="card-1" data-count={5} aria-hidden={true} />`;
+    expect(isErr(compile(src))).toBe(false);
+  });
+
+  it("glues a hyphenated attr name only while the tokens abut", () => {
+    // `data-testid` lexes as label/minus/label. Without an adjacency check a
+    // stray spaced hyphen would silently become part of the name.
+    expect(isErr(compile(`let el = <div id - x="1" />`))).toBe(true);
   });
 });
