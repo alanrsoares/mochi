@@ -22,6 +22,7 @@ import type { Env, InferResult, TypeAt } from "@mochi/compiler/infer";
 import { lex } from "@mochi/compiler/lexer";
 import { type ModuleCache, moduleContext } from "@mochi/compiler/module";
 import { parseRecovering } from "@mochi/compiler/parser";
+import { INTRINSIC_ELEMENTS } from "@mochi/compiler/plugins/jsx";
 import { preludeEnv, preludeNamespaces } from "@mochi/compiler/prelude";
 import { isPreludePath } from "@mochi/compiler/prelude-virtual";
 import { spanContainsClosed, tightestHit } from "@mochi/compiler/span";
@@ -73,8 +74,8 @@ const memberTriggerAt = (src: string, offset: number): MemberTrigger | null => {
 };
 
 /**
- * Cursor inside an unclosed JSX open tag: attr name (`<Tag $to`) or string
- * value (`<Tag $tone="ro`). Intrinsic lowercase tags are skipped — no prop row.
+ * Cursor inside an unclosed JSX open tag: attr name (`<Tag $to` / `<button dis`) or string
+ * value (`<Tag $tone="ro` / `<button type="sub`).
  */
 const jsxAttrTriggerAt = (src: string, offset: number): JsxAttrTrigger | null => {
   const before = src.slice(0, offset);
@@ -85,8 +86,6 @@ const jsxAttrTriggerAt = (src: string, offset: number): JsxAttrTrigger | null =>
   const afterTag = tagM[2]!.replace(/[\t ]+$/, "");
   const afterTrim = afterTag.replace(/\n$/, "");
   if (afterTrim.includes(">")) return null;
-  // Components are capitalized / dotted; lowercase = intrinsic string tag.
-  if (tag[0] !== undefined && tag[0] === tag[0].toLowerCase() && !tag.includes(".")) return null;
 
   const valDq = afterTrim.match(/(\$?[A-Za-z_][\w]*)\s*=\s*"([^"]*)$/);
   const valSq = afterTrim.match(/(\$?[A-Za-z_][\w]*)\s*=\s*'([^']*)$/);
@@ -320,6 +319,32 @@ const jsxAttrItems = (
   trigger: JsxAttrTrigger,
   opts: CompleteOptions,
 ): CompletionItem[] => {
+  const intrinsic = INTRINSIC_ELEMENTS[trigger.tag];
+  if (intrinsic) {
+    if (trigger.kind === "name") {
+      return filterPrefix(
+        Object.keys(intrinsic).map((label) => ({
+          label,
+          kind: "field" as const,
+          detail: "prop",
+        })),
+        trigger.prefix,
+      );
+    }
+    const attrType = intrinsic[trigger.attr];
+    if (Array.isArray(attrType)) {
+      return filterPrefix(
+        attrType.map((label) => ({
+          label,
+          kind: "literal" as const,
+          detail: trigger.attr,
+        })),
+        trigger.prefix,
+      );
+    }
+    return [];
+  }
+
   const props = propsRowForTag(src, trigger, opts);
   if (!props) return [];
   if (trigger.kind === "name") {

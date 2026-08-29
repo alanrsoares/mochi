@@ -117,3 +117,25 @@ test("shadowed local completes as the inner binding", () => {
   const items = completeAt(src, src.length).filter((i) => i.label === "x");
   expect(items.some((i) => i.detail === "local")).toBe(true);
 });
+
+test("intrinsic HTML tag attribute completion", () => {
+  const src = "let el = <button ";
+  const labels = completeAt(src, src.length).map((i) => i.label);
+  expect(labels).toContain("disabled");
+  expect(labels).toContain("type");
+  expect(labels).toContain("onClick");
+  expect(labels).toContain("className");
+});
+
+test("intrinsic HTML tag attribute prefix filtering", () => {
+  const src = "let el = <button dis";
+  const labels = completeAt(src, src.length).map((i) => i.label);
+  expect(labels).toEqual(["disabled"]);
+});
+
+test("intrinsic HTML tag attribute literal union value completion", () => {
+  const src = 'let el = <button type="';
+  const items = completeAt(src, src.length);
+  expect(items.map((i) => i.label).toSorted()).toEqual(["button", "reset", "submit"]);
+  expect(items.every((i) => i.kind === "literal")).toBe(true);
+});
