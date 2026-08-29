@@ -80,6 +80,7 @@ const TAG_TO_T: Record<string, string> = {
   TPercent: "percent",
   TAt: "at",
   THash: "hash",
+  TTilde: "tilde",
   TDot: "dot",
   TColon: "colon",
   TDo: "do",
@@ -166,7 +167,7 @@ const cases: Record<string, string> = {
   "number with trailing dot chars": "let n = 1.2\nlet m = -0.5",
   "string escapes decode": 'let s = "a\\nb\\tc\\\\d\\"e"',
   "digraphs before single chars": "let f = x => x |> g\nextern h : number -> number",
-  "all punctuation": "| = ( ) { } [ ] , . : @ # $",
+  "all punctuation": "| = ( ) { } [ ] , . : @ # ~ $",
   "arithmetic and comparison operators":
     "let r = 1 + 2 * 3 - 4 / 5 % 6\nlet c = a == b && c != d || e < f",
   "unary operators, chained": "let n = -x\nlet b = !x\nlet c = !!x\nlet d = -!x",
@@ -219,7 +220,8 @@ test("unterminated string: same message and span", () => {
 });
 
 test("unexpected char: same message and span", () => {
-  expectSameError("let x = ~1");
+  // `~` lexes as a labeled-argument marker now (ADR 0098 §2).
+  expectSameError("let x = \\1");
 });
 
 test("unterminated hole: same message and span", () => {

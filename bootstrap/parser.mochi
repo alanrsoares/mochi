@@ -55,6 +55,7 @@ import {
   TPercent,
   TAt,
   THash,
+  TTilde,
   TDot,
   TColon,
   TQuestion,
@@ -127,6 +128,7 @@ let tokName = t => switch t {
   | TPercent => "percent"
   | TAt => "at"
   | THash => "hash"
+  | TTilde => "tilde"
   | TDot => "dot"
   | TColon => "colon"
   | TQuestion => "question"
@@ -293,7 +295,7 @@ let exprSpan = e => switch e {
   | Ast.ELoop(_, _, sp) => sp
   | Ast.ERecur(_, sp) => sp
   | Ast.ERecord(_, _, sp) => sp
-  | Ast.EField(_, _, sp) => sp
+  | Ast.EField(_, _, _, sp) => sp
   | Ast.ETuple(_, sp) => sp
   | Ast.EArr(_, sp) => sp
   | Ast.EList(_, sp) => sp
@@ -334,6 +336,41 @@ let parseParam = (toks, pos) => switch tokAt(toks, pos).tok {
         : Ok((Ast.LPName(nm.name, None), p))
 }
 
+/// `~name`, `~name?`, `~name: T`, `~name = e`, `~name: T = e` (ADR 0098 §2).
+/// A labeled parameter is sugar: `inferLambda` folds a trailing labeled group
+/// into ONE record parameter, so there is no second calling convention.
+let parseLabeledParam = (toks, pos, hooks) =>
+  let? p0 = expectTok(TTilde, toks, pos) in
+  let? (nm, p1) = toks->expectLabel(p0) in
+  let optional = tokAt(toks, p1).tok == TQuestion in
+  let p2 = optional ? p1 + 1 : p1 in
+  let? (annot, p3) = tokAt(toks, p2).tok == TColon
+    ? parseTypeExpr(toks, p2 + 1) |> Result.map(((t, k)) => (Some(t), k))
+    : Ok((None, p2)) in
+    tokAt(toks, p3).tok == TEq
+      ? parseExpr(toks, p3 + 1, hooks)
+        |> Result.map(((d, k)) =>
+          (Ast.LPLabeled(nm.name, annot, optional, Some(d)), k))
+      : Ok((Ast.LPLabeled(nm.name, annot, optional, None), p3))
+
+let parseLamParam = (toks, pos, hooks) =>
+  tokAt(toks, pos).tok == TTilde
+    ? toks->parseLabeledParam(pos, hooks)
+    : toks->parseParam(pos)
+
+let isLabeledParam = p => switch p {
+  | Ast.LPLabeled(_, _, _, _) => true
+  | _ => false
+}
+
+/// True when every labeled parameter (if any) sits after every positional one.
+let labeledTrailing = (params, seen) => switch params {
+  | [] => true
+  | [p, ...rest] => isLabeledParam(p)
+      ? labeledTrailing(rest, true)
+      : !seen && labeledTrailing(rest, false)
+}
+
 let parseLambda = (toks, pos, hooks) =>
   let start = spanOf(tokAt(toks, pos)) in
     switch tokAt(toks, pos).tok {
@@ -348,11 +385,28 @@ let parseLambda = (toks, pos, hooks) =>
             p2
           ))
       | _ => let? p = expectTok(TLparen, toks, pos) in
-        let? (params, p2) = listUntil(TRparen, parseParam, toks, p) in
+        let? (params, p2) = listUntilH(
+          TRparen,
+          parseLamParam,
+          toks,
+          p,
+          hooks
+        ) in
         let? p3 = expectTok(TRparen, toks, p2) in
-        let? p4 = expectTok(TArrow, toks, p3) in
-        let? (body, p5) = parseLambdaBody(toks, p4, hooks) in
-          Ok((Ast.ELambda(params, body, spanning(start, exprSpan(body))), p5))
+          // The guard yields the whole parse, not a position: binding an
+          // `errAt` through a ternary would widen its Ok slot to `unknown` in
+          // the emitted TS and cost the `bootstrap:tsc` zero.
+          labeledTrailing(params, false)
+            ? let? p4 = expectTok(TArrow, toks, p3) in
+            let? (body, p5) = parseLambdaBody(toks, p4, hooks) in
+              Ok((
+                Ast.ELambda(params, body, spanning(start, exprSpan(body))),
+                p5
+              ))
+            : errAt(
+              "labeled parameters must be a trailing group",
+              tokAt(toks, p)
+            )
     }
 
 let parseLambdaBody = (toks, pos, hooks) =>
@@ -698,18 +752,88 @@ let parseExprBp = (toks, minBp, pos, hooks) => switch tokAt(toks, pos).tok {
 
 let parseExpr = (toks, pos, hooks) => toks->parseExprBp(0, pos, hooks)
 
+/// One slot in `f(…)`: a positional expression, or `~name` / `~name = e`.
+type CallPart =
+  | CPPos(value: Ast.Expr)
+  | CPLab(name: string, value: Ast.Expr, labelSpan: Ast.Span)
+
+/// `~name` alone is punning — it means `~name = name` (ADR 0098 §2).
+let parseCallPart = (toks, pos, hooks) =>
+  tokAt(toks, pos).tok == TTilde
+    ? let? (nm, p) = toks->expectLabel(pos + 1) in
+      tokAt(toks, p).tok == TEq
+        ? parseExpr(toks, p + 1, hooks)
+          |> Result.map(((v, k)) => (CPLab(nm.name, v, nm.span), k))
+        : Ok((CPLab(nm.name, Ast.ERef(nm.name, nm.span), nm.span), p))
+    : parseExpr(toks, pos, hooks) |> Result.map(((v, k)) => (CPPos(v), k))
+
+let callPartSpan = p => switch p {
+  | CPPos(value) => exprSpan(value)
+  | CPLab(_, value, labelSpan) => spanning(labelSpan, exprSpan(value))
+}
+
+/// Positionals first, then a single trailing labeled group; a positional after
+/// a label is an error, so the record argument is always last.
+let splitCallParts = (parts, positional, labeled) => switch parts {
+  | [] => Ok((positional, labeled))
+  | [p, ...rest] => switch p {
+      | CPLab(_, _, _) => splitCallParts(
+          rest,
+          positional,
+          Array.append(p, labeled)
+        )
+      | CPPos(value) => switch labeled {
+          | [] => splitCallParts(rest, Array.append(value, positional), labeled)
+          | _ => errAt(
+              "labeled arguments must be a trailing group",
+              callPartSpan(p)
+            )
+        }
+    }
+}
+
+let labeledField = p => switch p {
+  | CPLab(name, value, _) => { name, value }
+  | CPPos(value) => { name: "", value }
+}
+
+let unionSpans = (parts, acc) => switch parts {
+  | [] => acc
+  | [p, ...rest] => unionSpans(rest, spanning(acc, callPartSpan(p)))
+}
+
+/// A trailing labeled group collapses to one record argument, tagged
+/// `origin = Some("labeled")` so the formatter can re-fold the sugar.
+let callArgsOf = parts =>
+  splitCallParts(parts, [], [])
+    |> Result.map(((positional, labeled)) => switch labeled {
+      | [] => (positional, None)
+      | [first, ...rest] => (
+          Array.append(
+            Ast.ERecord(
+              labeled |> map(labeledField),
+              None,
+              unionSpans(rest, callPartSpan(first))
+            ),
+            positional
+          ),
+          Some("labeled")
+        )
+    })
+
 // Postfix chain: calls `f(...)` and field access `.name`.
 let postfixLoop = (toks, e, pos, hooks) => switch tokAt(toks, pos).tok {
-  | TLparen => let? (args, p) = listUntilH(
+  | TLparen => let? (parts, p) = listUntilH(
       TRparen,
-      parseExpr,
+      parseCallPart,
       toks,
       pos + 1,
       hooks
     ) in
     let? p2 = expectTok(TRparen, toks, p) in
+    let? (args, origin) = callArgsOf(parts) in
       toks->postfixLoop(
-        Ast.ECall(e, args, None, toEnd(exprSpan(e), toks, p2)),
+        Ast.ECall(e, args, origin, toEnd(exprSpan(e), toks, p2)),
         p2,
         hooks
       )
@@ -719,7 +843,7 @@ let postfixLoop = (toks, e, pos, hooks) => switch tokAt(toks, pos).tok {
     // reads the field `{ $tone: … }` writes. Mirrors `parser.ts`'s dot production.
     let? (id, p) = toks->expectLabel(pos + 1) in
       toks->postfixLoop(
-        Ast.EField(e, id.name, spanning(exprSpan(e), id.span)),
+        Ast.EField(e, id.name, false, spanning(exprSpan(e), id.span)),
         p,
         hooks
       )
@@ -1576,7 +1700,7 @@ let parseRecordDestructure = (toks, start, pos, tmp, hooks) =>
       f.name,
       f.span,
       None,
-      Ast.EField(Ast.ERef(tmpName, f.span), f.name, f.span),
+      Ast.EField(Ast.ERef(tmpName, f.span), f.name, false, f.span),
       false,
       None,
       f.span

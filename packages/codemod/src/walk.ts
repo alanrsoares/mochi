@@ -21,7 +21,13 @@ export const mapExpr = (expr: Expr, fn: (e: Expr) => Expr): Expr => {
       case "call":
         return { ...next, fn: walk(next.fn), args: next.args.map(walk) };
       case "lambda":
-        return { ...next, body: walk(next.body) };
+        return {
+          ...next,
+          params: next.params.map((p) =>
+            p.kind === "labeled" && p.default ? { ...p, default: walk(p.default) } : p,
+          ),
+          body: walk(next.body),
+        };
       case "loop":
         return {
           ...next,

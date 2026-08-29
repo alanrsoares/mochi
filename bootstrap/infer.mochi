@@ -123,7 +123,7 @@ export let exprSpan = e => switch e {
   | Ast.ELoop(_, _, sp) => sp
   | Ast.ERecur(_, sp) => sp
   | Ast.ERecord(_, _, sp) => sp
-  | Ast.EField(_, _, sp) => sp
+  | Ast.EField(_, _, _, sp) => sp
   | Ast.ETuple(_, sp) => sp
   | Ast.EArr(_, sp) => sp
   | Ast.EList(_, sp) => sp
@@ -220,6 +220,10 @@ let bindParam = (p, env, st: Types.St) => switch p {
   | Ast.LPRecord(fields) => let (rowBase, st1) = freshRowVar(st) in
     let (row, env1, st2) = bindParamFieldsFrom(fields, env, rowBase, st1) in
       (tRecord(row), env1, st2)
+  | Ast.LPLabeled(name, _, _, _) =>
+    // Unreachable for a lambda — `inferLambda` splits the labeled group off
+    // first — but `let?` shares this binder, so it needs a case.
+    let (t, st1) = freshVar(st) in (t, Map.set(name, mono(t), env), st1)
 }
 
 let bindParamsFrom = (params, env, st: Types.St) => switch params {
@@ -348,6 +352,109 @@ let domainNeedsFits = (t, st: Types.St) => switch zonk(t, st) {
   | _ => false
 }
 
+// ============================================================
+// Labeled parameters (ADR 0098 §2). A trailing `~name` group is ONE record
+// parameter, so there is no second calling convention and no new HM machinery:
+// the group becomes a row whose omittable labels are optional fields, which
+// `fits` already knows how to accept a subset of.
+// ============================================================
+
+/// True when every known field is optional. This is what makes `f()` legal:
+/// the nullary call applies `{}`, which only `fits` an all-optional domain.
+let rowAllOptional = row => switch row {
+  | RowExtend(_, _, optional, rest) => optional && rowAllOptional(rest)
+  | _ => true
+}
+
+let domainIsOmittableRecord = (t, st: Types.St) => switch zonk(t, st) {
+  | TyRecord(row) => rowAllOptional(row)
+  | _ => false
+}
+
+let isLabeledParam = p => switch p {
+  | Ast.LPLabeled(_, _, _, _) => true
+  | _ => false
+}
+
+let splitLamParams = (params, positional, labeled) => switch params {
+  | [] => (positional, labeled)
+  | [p, ...rest] => isLabeledParam(p)
+      ? splitLamParams(rest, positional, Array.append(p, labeled))
+      : splitLamParams(rest, Array.append(p, positional), labeled)
+}
+
+/// One pass per label, threading `st` but NOT `env`: a default is inferred in
+/// the positional-only scope, so one label's default cannot read another's.
+let labFieldsFrom = (ctx: Ctx<a>, labs, env, vars, st: Types.St) => switch labs {
+  | [] => Ok(([], st))
+  | [lab, ...rest] => switch lab {
+      | Ast.LPLabeled(name, annot, optional, defaultValue) => let (fieldT, vars1, st1) = switch annot {
+          | Some(te) => typeExprToType(
+              te,
+              vars,
+              st,
+              ctx.aliasMap,
+              Set.fromArray([])
+            )
+          | None => let (t, s1) = freshVar(st) in (t, vars, s1)
+        } in
+        let? (fieldT1, st2) = switch defaultValue {
+          | None => Ok((fieldT, st1))
+          | Some(d) => let? (dt, s2) = ctxWithEnv(
+              ctx,
+              env
+            )->inferExpr(d, st1) in
+              switch annot {
+                | Some(_) => let? s3 = checkFits(dt, fieldT, s2, exprSpan(d)) in
+                    Ok((fieldT, s3))
+                | None =>
+                  // No annotation: a literal default must not pin the field to a
+                  // singleton type — `~tone = "rose"` is `string`, not `"rose"`.
+                  let widened = Schemes.widenLits(zonk(dt, s2)) in
+                  let? s3 = u(fieldT, widened, s2, exprSpan(d)) in
+                    Ok((widened, s3))
+              }
+        } in
+        // The body sees `Option<T>` only when the label is omittable with no
+        // default to fill it; a default makes the body see a plain `T`.
+        let bodyT = switch defaultValue {
+          | Some(_) => fieldT1
+          | None => optional ? tCon("Option", [fieldT1]) : fieldT1
+        } in
+        let omittable = optional || switch defaultValue {
+          | Some(_) => true
+          | None => false
+        } in
+        let? (fields, stN) = ctx->labFieldsFrom(rest, env, vars1, st2) in
+          Ok((
+            Array.prepend(
+              { name, fieldType: fieldT1, omittable, bodyType: bodyT },
+              fields
+            ),
+            stN
+          ))
+      | _ => ctx->labFieldsFrom(rest, env, vars, st)
+    }
+}
+
+let rowOfLabFields = fields => switch fields {
+  | [] => RowEmpty
+  | [f, ...rest] => rField(
+      f.name,
+      f.fieldType,
+      rowOfLabFields(rest),
+      f.omittable
+    )
+}
+
+let envWithLabFields = (fields, env) => switch fields {
+  | [] => env
+  | [f, ...rest] => envWithLabFields(
+      rest,
+      Map.set(f.name, mono(f.bodyType), env)
+    )
+}
+
 let inferCallArgs = (ctx: Ctx<a>, fnT, args, st: Types.St, callSpan) => switch args {
   | [] => Ok((fnT, st))
   | [arg, ...rest] => let? (argT, st1) = ctx->inferExpr(arg, st) in
@@ -367,9 +474,25 @@ let inferCallArgs = (ctx: Ctx<a>, fnT, args, st: Types.St, callSpan) => switch a
 let inferNormalCall = (ctx: Ctx<a>, fn, args, st: Types.St) =>
   let? (fnT, st1) = ctx->inferExpr(fn, st) in
     switch args {
-      | [] => let (resultT, st2) = freshVar(st1) in
-        let? st3 = u(fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)) in
-          Ok((resultT, st3))
+      | [] =>
+        // `f()` peels one `unit -> T` (ADR 0014), or applies `{}` when the
+        // domain is an all-optional record — every label omitted (ADR 0098 §2).
+        switch resolve(fnT, st1) {
+          | TyFn(fromT, toT) => domainIsOmittableRecord(fromT, st1)
+              ? let? st2 = checkFits(
+                tRecord(RowEmpty),
+                fromT,
+                st1,
+                exprSpan(fn)
+              ) in
+                Ok((toT, st2))
+              : let (resultT, st2) = freshVar(st1) in
+              let? st3 = u(fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)) in
+                Ok((resultT, st3))
+          | _ => let (resultT, st2) = freshVar(st1) in
+            let? st3 = u(fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)) in
+              Ok((resultT, st3))
+        }
       | _ => ctx->inferCallArgs(fnT, args, st1, exprSpan(fn))
     }
 
@@ -640,14 +763,22 @@ let inferExprRaw = (ctx: Ctx<a>, e, st: Types.St) => switch e {
           ? let (t, st1) = freshVar(st) in Ok((t, st1))
           : Err(typeErr("unbound variable '${name}'", sp))
     }
-  | Ast.ELambda(params, body, _) => let (paramTypes, bodyEnv, st1) = bindParamsFrom(
-      params,
-      ctx.env,
-      st
-    ) in
-    let? st2 = ctx->constrainParamAnnotsFrom(params, paramTypes, #{}, st1) in
-    let? (bodyT, st3) = ctxWithEnv(ctx, bodyEnv)->inferExpr(body, st2) in
-      Ok((arrowChain(paramTypes, bodyT), st3))
+  | Ast.ELambda(params, body, _) =>
+    // A trailing labeled group collapses to one record parameter appended
+    // after the positional prefix (ADR 0098 §2).
+    let (posParams, labParams) = splitLamParams(params, [], []) in
+    let (paramTypes, bodyEnv, st1) = bindParamsFrom(posParams, ctx.env, st) in
+    let? st2 = ctx->constrainParamAnnotsFrom(posParams, paramTypes, #{}, st1) in
+    let? (labFields, st3) = ctx->labFieldsFrom(labParams, bodyEnv, #{}, st2) in
+    let allTypes = switch labParams {
+      | [] => paramTypes
+      | _ => Array.append(tRecord(rowOfLabFields(labFields)), paramTypes)
+    } in
+    let? (bodyT, st4) = ctxWithEnv(
+      ctx,
+      envWithLabFields(labFields, bodyEnv)
+    )->inferExpr(body, st3) in
+      Ok((arrowChain(allTypes, bodyT), st4))
   | Ast.ELetIn(name, _nameSpan, value, body, _span) => switch value {
       | Ast.ELambda(_, _, _) =>
         // Adjacent lambda locals share the top-level SCC machinery (ADR 0067):
@@ -721,7 +852,7 @@ let inferExprRaw = (ctx: Ctx<a>, e, st: Types.St) => switch e {
         let? st4 = u(baseT, tRecord(rWithTail(row, tailVar)), st3, sp) in
           Ok((baseT, st4))
     }
-  | Ast.EField(target, name, sp) => switch target {
+  | Ast.EField(target, name, _, sp) => switch target {
       | Ast.ERef(tname, _) => Map.has(tname, ctx.ns) && !Map.has(tname, ctx.env)
           ? ctx->inferNsField(tname, name, sp, st)
           : ctx->inferFieldAccess(target, name, sp, st)
@@ -969,10 +1100,25 @@ let paramBound = (p, bound) => switch p {
   | Ast.LPName(name, _) => Set.add(name, bound)
   | Ast.LPTuple(names) => addAllFrom(names, bound)
   | Ast.LPRecord(fields) => addAllFrom(fields, bound)
+  | Ast.LPLabeled(name, _, _, _) => Set.add(name, bound)
 }
 let lambdaBound = (params, bound) => switch params {
   | [] => bound
   | [p, ...rest] => lambdaBound(rest, paramBound(p, bound))
+}
+
+/// A labeled default names the enclosing scope, not the lambda's own params,
+/// so its refs are free in the lambda — the SCC needs that edge (ADR 0098 §2).
+let labeledDefaultRefs = (params, bound, acc) => switch params {
+  | [] => acc
+  | [p, ...rest] => switch p {
+      | Ast.LPLabeled(_, _, _, Some(d)) => labeledDefaultRefs(
+          rest,
+          bound,
+          freeRefs(d, bound, acc)
+        )
+      | _ => labeledDefaultRefs(rest, bound, acc)
+    }
 }
 
 let loopBound = (params, bound) =>
@@ -1043,7 +1189,7 @@ let freeRefs = (e, bound, acc) => switch e {
   | Ast.ELambda(params, body, _) => freeRefs(
       body,
       lambdaBound(params, bound),
-      acc
+      labeledDefaultRefs(params, bound, acc)
     )
   | Ast.ELetIn(name, _, value, body, _) => let valueBound = switch value {
       | Ast.ELambda(_, _, _) => Set.add(name, bound)
@@ -1084,7 +1230,7 @@ let freeRefs = (e, bound, acc) => switch e {
       bound,
       switch spread { | Some(s) => freeRefs(s, bound, acc) | None => acc }
     )
-  | Ast.EField(target, _, _) => freeRefs(target, bound, acc)
+  | Ast.EField(target, _, _, _) => freeRefs(target, bound, acc)
   | Ast.ETuple(elements, _) => freeRefsList(elements, bound, acc)
   | Ast.EArr(elements, _) => freeRefsList(
       elements |> map(seqElemExpr),

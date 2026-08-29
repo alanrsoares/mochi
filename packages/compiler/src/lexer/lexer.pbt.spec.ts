@@ -27,6 +27,7 @@ const lexeme = fc.constantFrom(
   ",",
   "|",
   "=",
+  "~",
   "|>",
   "=>",
 );

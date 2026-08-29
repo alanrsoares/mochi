@@ -18,7 +18,7 @@ test("fast pipe becomes a call with the piped value first", () => switch parseSr
 })
 
 test("keyword labels are valid in records and projections", () => switch parseSrc("let button = { type: \"button\" }\nlet kind = button.type") {
-  | Ok([Ast.SLet("button", _, None, Ast.ERecord([{ name: "type", value: Ast.EStr("button", _) }], None, _), false, None, _), Ast.SLet("kind", _, None, Ast.EField(Ast.ERef("button", _), "type", _), false, None, _)]) => true
+  | Ok([Ast.SLet("button", _, None, Ast.ERecord([{ name: "type", value: Ast.EStr("button", _) }], None, _), false, None, _), Ast.SLet("kind", _, None, Ast.EField(Ast.ERef("button", _), "type", _, _), false, None, _)]) => true
       |> ok
   | _ => false |> ok
 })

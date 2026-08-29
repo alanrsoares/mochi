@@ -37,6 +37,7 @@ export type Tok =
   | { t: "percent" } // %
   | { t: "at" } // @ — lazy-List sigil (@{...})
   | { t: "hash" } // # — Map sigil (#{...})
+  | { t: "tilde" } // ~ — labeled argument / param (ADR 0098 §2)
   | { t: "dot" } // .
   | { t: "colon" } // :
   | { t: "question" } // ? (ternary)
@@ -143,6 +144,7 @@ const PUNCT: Record<string, Tok | undefined> = {
   "?": { t: "question" },
   "@": { t: "at" },
   "#": { t: "hash" },
+  "~": { t: "tilde" },
 };
 
 const isSpace = (c: string): boolean => c === " " || c === "\t" || c === "\n" || c === "\r";

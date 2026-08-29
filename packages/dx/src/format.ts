@@ -32,6 +32,7 @@ import type {
   FieldExpr,
   ImportStmt,
   InterpExpr,
+  LabeledParam,
   LambdaExpr,
   LamParam,
   LoopExpr,
@@ -75,12 +76,21 @@ import { map, mapErr, pipe, type Result } from "@onrails/result";
 
 const WIDTH = 80;
 
+const labeledParam = (p: LabeledParam): string => {
+  const opt = p.optional ? "?" : "";
+  const annot = p.annot ? `: ${typeExpr(p.annot)}` : "";
+  const def = p.default ? ` = ${flat(exprD(p.default))}` : "";
+  return `~${p.name}${opt}${annot}${def}`;
+};
+
 const param = (p: LamParam): string =>
   p.kind === "name"
     ? `${p.name}${p.annot ? `: ${typeExpr(p.annot)}` : ""}`
     : p.kind === "ptuple"
       ? `(${p.names.join(", ")})`
-      : `{ ${p.fields.join(", ")} }`;
+      : p.kind === "labeled"
+        ? labeledParam(p)
+        : `{ ${p.fields.join(", ")} }`;
 
 /** A lone un-annotated name drops its parens (`x => ...`); annotations and everything else keep them (`(x: number) => ...`, `(a, b) => ...`, `({ x }) => ...`). */
 const params = (ps: LamParam[]): string =>
@@ -278,6 +288,7 @@ const collectAnchors = (stmts: Stmt[]): Anchor[] => {
         break;
       case "lambda":
         visit(e.body);
+        for (const p of e.params) if (p.kind === "labeled" && p.default) visit(p.default);
         break;
       case "loop":
         e.params.forEach((lp) => {
@@ -853,6 +864,18 @@ const refoldCall = (e: CallExpr): Doc | null => {
  * apply can still hug a multiline callee's `)` (`…)(deps)`), instead of being
  * locked into the callee's break decision.
  */
+const labeledFieldD = (f: Field): Doc =>
+  f.value.kind === "ref" && f.value.name === f.name
+    ? txt(`~${f.name}`)
+    : seq(txt(`~${f.name}=`), exprD(f.value));
+
+const callArgDocs = (e: CallExpr): Doc[] => {
+  if (e.origin !== "labeled") return e.args.map(exprD);
+  const last = e.args[e.args.length - 1];
+  if (last?.kind !== "record" || last.spread) return e.args.map(exprD);
+  return [...e.args.slice(0, -1).map(exprD), ...last.fields.map(labeledFieldD)];
+};
+
 const callD = (e: CallExpr, asCallee = false): Doc => {
   const refold = refoldCall(e);
   if (refold) return refold;
@@ -862,6 +885,7 @@ const callD = (e: CallExpr, asCallee = false): Doc => {
   if (flattened) return callD(flattened, asCallee);
   const fn = calleeD(e.fn);
   if (e.args.length === 0) return seq(fn, txt("()"));
+  const argDocs = callArgDocs(e);
   const last = e.args[e.args.length - 1]!;
   // A singleton tuple argument needs both parenthesis pairs to preserve the
   // AST (`Ok((value, next))`). Keep the call glued to that tuple so a broken
@@ -876,23 +900,13 @@ const callD = (e: CallExpr, asCallee = false): Doc => {
       discardedLetExprs(last.body) !== null;
     const hugCloser = braced || !asCallee;
     return group(
-      seq(
-        fn,
-        txt("("),
-        join(txt(", "), e.args.map(exprD)),
-        hugCloser ? txt(")") : seq(softline, txt(")")),
-      ),
+      seq(fn, txt("("), join(txt(", "), argDocs), hugCloser ? txt(")") : seq(softline, txt(")"))),
     );
   }
   return seq(
     fn,
     group(
-      seq(
-        txt("("),
-        indent(seq(softline, join(seq(txt(","), line), e.args.map(exprD)))),
-        softline,
-        txt(")"),
-      ),
+      seq(txt("("), indent(seq(softline, join(seq(txt(","), line), argDocs))), softline, txt(")")),
     ),
   );
 };
@@ -980,10 +994,15 @@ let shadowedNames: ReadonlySet<string> = new Set();
 
 /** Params codegen collapses into one flat JS function — `x => y => e` and `(x, y) => e` alike (`collapseLambda`). */
 const collapsedArity = (e: Expr): number =>
-  e.kind === "lambda" ? e.params.length + collapsedArity(e.body) : 0;
+  e.kind === "lambda" ? jsArity(e.params) + collapsedArity(e.body) : 0;
+
+const jsArity = (params: LamParam[]): number => {
+  const nLabs = params.filter((p) => p.kind === "labeled").length;
+  return params.length - nLabs + (nLabs > 0 ? 1 : 0);
+};
 
 const paramNames = (p: LamParam): string[] =>
-  p.kind === "name" ? [p.name] : p.kind === "ptuple" ? p.names : p.fields;
+  p.kind === "name" || p.kind === "labeled" ? [p.name] : p.kind === "ptuple" ? p.names : p.fields;
 
 /** Every name the file binds somewhere other than a top-level `let` — the shadowing over-approximation. */
 const innerBindings = (stmts: Stmt[]): Set<string> => {
@@ -1017,6 +1036,7 @@ const innerBindings = (stmts: Stmt[]): Set<string> => {
     match(e)
       .with({ kind: "lambda" }, (l) => {
         for (const p of l.params) for (const n of paramNames(p)) out.add(n);
+        for (const p of l.params) if (p.kind === "labeled" && p.default) visit(p.default);
         visit(l.body);
       })
       .with({ kind: "letin" }, (l) => {

@@ -708,7 +708,7 @@ let scopedSpans = e => switch e {
       scopedSpansInFields(fields, 0),
       switch spread { | Some(s) => scopedSpans(s) | None => [] }
     )
-  | Ast.EField(target, name, sp) =>
+  | Ast.EField(target, name, _, sp) =>
     // `Set.empty` / `Map.empty` / `List.empty` is a seed like `@{}` / `#{}`.
     let rest = scopedSpans(target) in
       name == "empty" && isRefExpr(target) ? Array.prepend(sp, rest) : rest

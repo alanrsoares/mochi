@@ -17,6 +17,7 @@ export type LamParam =
   | LPName(name: string, annot: Option<TypeExpr>)
   | LPRecord(fields: [string])
   | LPTuple(names: [string])
+  | LPLabeled(name: string, annot: Option<TypeExpr>, optional: bool, defaultValue: Option<Expr>)
 
 type Field = { name: string, value: Expr }
 type MapEntry = { key: Expr, value: Expr }
@@ -50,7 +51,7 @@ export type Expr =
   | ETernary(cond: Expr, thenE: Expr, elseE: Expr, span: Span)
   | EMatch(scrutinee: Expr, arms: [MatchArm], span: Span)
   | ERecord(fields: [Field], spread: Option<Expr>, span: Span)
-  | EField(target: Expr, name: string, span: Span)
+  | EField(target: Expr, name: string, optional: bool, span: Span)
   | ETuple(elements: [Expr], span: Span)
   | EArr(elements: [SeqElem], span: Span)
   | EList(elements: [SeqElem], span: Span)

@@ -32,6 +32,7 @@ type LoopExpr = Extract<Expr, { kind: "loop" }>;
 type RecurExpr = Extract<Expr, { kind: "recur" }>;
 
 import { ctorTableOf } from "../ast/ctors";
+import { labeledFieldOmittable, labeledIsTrailing, splitLamParams } from "../ast/labeled";
 import {
   type AliasMap,
   aliasRow,
@@ -45,6 +46,7 @@ import {
   type Scheme,
   type TypeScope,
   typeExprToType,
+  widenLits,
 } from "./schemes";
 
 /** Re-exported: `Scheme`/`Env` are this module's result vocabulary. */
@@ -146,6 +148,21 @@ const domainNeedsFits = (t: Type, subst: Subst): boolean => {
   return r.kind === "record" && rowHasOptional(r.row, subst);
 };
 
+/** True when every known field is optional (incl. empty / open-tail rows). */
+const rowAllOptional = (row: Row, subst: Subst): boolean => {
+  let cur = resolveRow(row, subst);
+  while (cur.kind === "extend") {
+    if (!cur.optional) return false;
+    cur = resolveRow(cur.rest, subst);
+  }
+  return true;
+};
+
+const domainIsOmittableRecord = (t: Type, subst: Subst): boolean => {
+  const r = resolve(t, subst);
+  return r.kind === "record" && rowAllOptional(r.row, subst);
+};
+
 /**
  * Wrapper over `inferExpr`: records the type of every expression node in one
  * place, so hover can look up any subexpression's type by span.
@@ -210,6 +227,11 @@ const bindParam = (p: LamParam, env: Env, ctx: Ctx): Type => {
     for (let i = 0; i < p.names.length; i++)
       ctx.record?.(p.nameSpans[i]!, elems[i]!, { kind: "parameter", name: p.names[i]! });
     return tTuple(elems);
+  }
+  if (p.kind === "labeled") {
+    const t = freshVar(ctx.fresh);
+    env.set(p.name, mono(t));
+    return t;
   }
   let row: Row = freshRowVar(ctx.fresh);
   for (let i = 0; i < p.fields.length; i++) {
@@ -364,20 +386,62 @@ function inferRef(e: RefExpr, ctx: Ctx): Result<Type, Diagnostic> {
 }
 
 function inferLambda(e: LambdaExpr, ctx: Ctx): Result<Type, Diagnostic> {
+  if (!labeledIsTrailing(e.params))
+    return err(typeErr("labeled parameters must be a trailing group", e.span));
+  const { pos, labs } = splitLamParams(e.params);
   const bodyEnv: Env = new Map(ctx.env);
-  const paramTypes: Type[] = e.params.map((p) => bindParam(p, bodyEnv, ctx));
+  const paramTypes: Type[] = pos.map((p) => bindParam(p, bodyEnv, ctx));
   const annotVars = new Map<string, Type>();
-  for (let i = 0; i < e.params.length; i++) {
-    const p = e.params[i]!;
+  for (let i = 0; i < pos.length; i++) {
+    const p = pos[i]!;
     if (p.kind !== "name" || !p.annot) continue;
     const declared = typeExprToType(p.annot, annotVars, ctx.fresh, ctx.typeScope);
     const uni = checkFits(paramTypes[i]!, declared, ctx, p.annot.span);
     if (isErr(uni)) return uni;
   }
+  if (labs.length > 0) {
+    const fields: { name: string; type: Type; omittable: boolean; span: Span }[] = [];
+    for (const lab of labs) {
+      let fieldT: Type;
+      if (lab.annot) {
+        fieldT = typeExprToType(lab.annot, annotVars, ctx.fresh, ctx.typeScope);
+      } else {
+        fieldT = freshVar(ctx.fresh);
+      }
+      if (lab.default) {
+        const dt = infer(lab.default, { ...ctx, env: bodyEnv });
+        if (isErr(dt)) return dt;
+        const actual = lab.annot ? dt.value : widenLits(dt.value);
+        const uni = lab.annot
+          ? checkFits(actual, fieldT, ctx, lab.default.span)
+          : u(fieldT, actual, ctx, lab.default.span);
+        if (isErr(uni)) return uni;
+        if (!lab.annot) fieldT = actual;
+      }
+      fields.push({
+        name: lab.name,
+        type: fieldT,
+        omittable: labeledFieldOmittable(lab),
+        span: lab.span,
+      });
+    }
+    let row: Row = rEmpty;
+    for (let i = fields.length - 1; i >= 0; i--) {
+      const f = fields[i]!;
+      row = rExtend(f.name, f.type, row, f.omittable);
+    }
+    for (const lab of labs) {
+      const f = fields.find((x) => x.name === lab.name)!;
+      const bodyT = lab.default ? f.type : lab.optional ? tCon("Option", [f.type]) : f.type;
+      bodyEnv.set(lab.name, mono(bodyT));
+      ctx.record?.(lab.span, bodyT, { kind: "parameter", name: lab.name });
+    }
+    paramTypes.push(tRecord(row));
+  }
   const bodyT = infer(e.body, { ...ctx, env: bodyEnv });
   if (isErr(bodyT)) return bodyT;
-  for (let i = 0; i < e.params.length; i++) {
-    const param = e.params[i]!;
+  for (let i = 0; i < pos.length; i++) {
+    const param = pos[i]!;
     if (param.kind === "name")
       ctx.record?.(param.span, paramTypes[i]!, { kind: "parameter", name: param.name });
   }
@@ -484,8 +548,14 @@ function inferCall(e: CallExpr, ctx: Ctx): Result<Type, Diagnostic> {
   const fnT = infer(e.fn, ctx);
   if (isErr(fnT)) return fnT;
   let cur = fnT.value;
-  // Nullary call `f()` peels one `unit -> T` (ADR 0014).
+  // Nullary call `f()` peels one `unit -> T` (ADR 0014), or applies `{}`
+  // when the domain is a fully-optional record (ADR 0098 §2).
   if (e.args.length === 0) {
+    const fn = resolve(cur, ctx.subst);
+    if (fn.kind === "arrow" && domainIsOmittableRecord(fn.from, ctx.subst)) {
+      const uni = checkFits(tRecord(rEmpty), fn.from, ctx, e.span);
+      return isErr(uni) ? uni : ok(fn.to);
+    }
     const resultT = freshVar(ctx.fresh);
     const uni = u(cur, tArrow(tUnit, resultT), ctx, e.span);
     return isErr(uni) ? uni : ok(resultT);
@@ -542,6 +612,7 @@ function inferField(e: FieldExpr, ctx: Ctx): Result<Type, Diagnostic> {
     while (cur.kind === "extend") {
       if (cur.label === e.name) {
         const ft = zonk(cur.type, ctx.subst);
+        if (cur.optional) e.optional = true;
         return ok(cur.optional ? tCon("Option", [ft]) : ft);
       }
       cur = resolveRow(cur.rest, ctx.subst);
@@ -954,9 +1025,11 @@ function freeRefs(e: Expr, bound: Set<string>, acc: Set<string>): void {
       for (const a of call.args) freeRefs(a, bound, acc);
     })
     .with({ kind: "lambda" }, (lambda) => {
+      for (const p of lambda.params)
+        if (p.kind === "labeled" && p.default) freeRefs(p.default, bound, acc);
       const inner = new Set(bound);
       for (const p of lambda.params)
-        if (p.kind === "name") inner.add(p.name);
+        if (p.kind === "name" || p.kind === "labeled") inner.add(p.name);
         else if (p.kind === "ptuple") for (const n of p.names) inner.add(n);
         else for (const f of p.fields) inner.add(f);
       freeRefs(lambda.body, inner, acc);
@@ -973,7 +1046,8 @@ function freeRefs(e: Expr, bound: Set<string>, acc: Set<string>): void {
     .with({ kind: "letbind" }, (letbind) => {
       freeRefs(letbind.value, bound, acc);
       const inner = new Set(bound);
-      if (letbind.param.kind === "name") inner.add(letbind.param.name);
+      if (letbind.param.kind === "name" || letbind.param.kind === "labeled")
+        inner.add(letbind.param.name);
       else if (letbind.param.kind === "ptuple") for (const n of letbind.param.names) inner.add(n);
       else for (const f of letbind.param.fields) inner.add(f);
       freeRefs(letbind.body, inner, acc);

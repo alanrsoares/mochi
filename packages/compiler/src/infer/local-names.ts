@@ -20,6 +20,10 @@ import type { Expr, LamParam, Pattern, Program } from "../ast/ast";
 const paramNames = (p: LamParam, out: Set<string>): void => {
   match(p)
     .with({ kind: "name" }, (name) => void out.add(name.name))
+    .with({ kind: "labeled" }, (lab) => {
+      out.add(lab.name);
+      if (lab.default) exprNames(lab.default, out);
+    })
     .with({ kind: "precord" }, (precord) => {
       for (const f of precord.fields) out.add(f);
     })

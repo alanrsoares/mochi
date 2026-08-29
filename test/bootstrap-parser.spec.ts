@@ -65,7 +65,15 @@ const cParam = (p: LamParam): Canon =>
     ? { kind: "name", name: p.name, annot: p.annot ? cTy(p.annot) : null }
     : p.kind === "precord"
       ? { kind: "precord", fields: p.fields }
-      : { kind: "ptuple", names: p.names };
+      : p.kind === "ptuple"
+        ? { kind: "ptuple", names: p.names }
+        : {
+            kind: "labeled",
+            name: p.name,
+            annot: p.annot ? cTy(p.annot) : null,
+            optional: p.optional,
+            default: p.default ? cExpr(p.default) : null,
+          };
 
 const cArm = (a: MatchArm): Canon => ({
   pattern: cPat(a.pattern),
@@ -338,6 +346,14 @@ const opt = <T>(o: Al, f: (v: Al) => T): T | null => (o._tag === "Some" ? f(o.va
 const aParam = (p: Al): Canon => {
   if (p._tag === "LPName") return { kind: "name", name: p.name, annot: opt(p.annot, aTy) };
   if (p._tag === "LPRecord") return { kind: "precord", fields: p.fields };
+  if (p._tag === "LPLabeled")
+    return {
+      kind: "labeled",
+      name: p.name,
+      annot: opt(p.annot, aTy),
+      optional: p.optional,
+      default: opt(p.defaultValue, aExpr),
+    };
   return { kind: "ptuple", names: p.names };
 };
 
@@ -684,6 +700,12 @@ const cases: Record<string, string> = {
     "let a = (2 *)\nlet b = (+ 5)\nlet c = (10 <)\nlet d = (!= 0)\nlet e = (- 2)\nlet f = (5 -)",
   "top-level expression statements (ADR 0087)":
     "let f = () => ()\nf()\nignore(1)\ndo { f(); ignore(2) }",
+  // ADR 0098 §2 — labeled params stay in the AST; a labeled CALL is lowered to
+  // a record argument tagged `origin: "labeled"` by both parsers.
+  "labeled params: annot, optional, and default":
+    'let f = (~tone: string = "rose", ~size?: number, ~flag) => tone',
+  "labeled call: lowered to a record argument, with punning":
+    'let a = f(~tone="amber", ~size=3)\nlet b = f(~tone)\nlet c = f(x, ~tone="plum")',
 };
 
 for (const [name, src] of Object.entries(cases)) {

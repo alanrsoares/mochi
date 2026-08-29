@@ -22,6 +22,14 @@ test("a multi-param lambda keeps its parentheses", () => {
   expect(fmt("let g=(a,b)=>add(a,b)")).toBe("let g = (a, b) => a + b\n");
 });
 
+test("labeled params and calls round-trip (ADR 0098 §2)", () => {
+  expect(fmt('let f=(~tone:string="rose",~size?:number)=>tone')).toBe(
+    'let f = (~tone: string = "rose", ~size?: number) => tone\n',
+  );
+  expect(fmt('let r=f(~tone="amber")')).toBe('let r = f(~tone="amber")\n');
+  expect(fmt("let r=f(~tone)")).toBe("let r = f(~tone)\n");
+});
+
 test("lambda paren count is load-bearing (ADR 0083)", () => {
   expect(fmt("let f=(x)=>x")).toBe("let f = x => x\n");
   expect(fmt("let g=(a,b)=>a")).toBe("let g = (a, b) => a\n");

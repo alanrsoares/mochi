@@ -156,7 +156,7 @@ let jxExprSpan = e => switch e {
   | Ast.ELoop(_, _, sp) => sp
   | Ast.ERecur(_, sp) => sp
   | Ast.ERecord(_, _, sp) => sp
-  | Ast.EField(_, _, sp) => sp
+  | Ast.EField(_, _, _, sp) => sp
   | Ast.ETuple(_, sp) => sp
   | Ast.EArr(_, sp) => sp
   | Ast.EList(_, sp) => sp

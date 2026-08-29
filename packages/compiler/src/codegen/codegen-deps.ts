@@ -19,7 +19,14 @@ export const usesMatchLib = (e: Expr): boolean =>
     )
     .with({ kind: "interp" }, (i) => i.parts.some((p) => typeof p !== "string" && usesMatchLib(p)))
     .with({ kind: "call" }, (c) => usesMatchLib(c.fn) || c.args.some(usesMatchLib))
-    .with({ kind: "lambda" }, (l) => usesMatchLib(l.body))
+    .with({ kind: "lambda" }, (l) => {
+      const { body, fills } = collapseLambda(l);
+      return (
+        fills.some((g) =>
+          g.labs.some((lab) => lab.default !== undefined && usesMatchLib(lab.default)),
+        ) || usesMatchLib(body)
+      );
+    })
     .with({ kind: "letin" }, (l) => usesMatchLib(l.value) || usesMatchLib(l.body))
     .with({ kind: "letbind" }, (l) => usesMatchLib(l.value) || usesMatchLib(l.body))
     .with(
@@ -74,8 +81,9 @@ export const exprRefs = (e: Expr, acc: Set<string>): void => {
       for (const a of c.args) exprRefs(a, acc);
     })
     .with({ kind: "lambda" }, (l) => {
-      const { params, body } = collapseLambda(l);
+      const { params, body, fills } = collapseLambda(l);
       if (params.length >= 2) acc.add("_curry"); // arity ≥ 2 lowers to `_curry(...)`
+      for (const g of fills) for (const lab of g.labs) if (lab.default) exprRefs(lab.default, acc);
       exprRefs(body, acc);
     })
     .with({ kind: "letin" }, (l) => {

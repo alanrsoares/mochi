@@ -1,6 +1,6 @@
 # 0098 — Optional record fields and labeled props
 
-- **Status:** Accepted (§1); §2 deferred
+- **Status:** Accepted
 - **Date:** 2026-08-29
 - **Source:** [ADR 0096](0096-jsx-intrinsic-element-prop-types.md), [ADR 0097](0097-jsx-schema-single-source.md), [ADR 0055](0055-component-prop-contracts.md), `packages/plugin-styled-cva/src/index.ts`, ReasonReact / ReScript `JsxDOM.domProps`
 
@@ -39,8 +39,8 @@ than record syntax.
 
 ## Decision
 
-Two changes, sequenced. **§1 is accepted.** §2 is ergonomics on top and remains
-deferred (unproven; not part of this slice).
+Two changes, sequenced. Both are accepted: §1 is the type-system feature, §2 is
+ergonomics built on top of it and adds no new HM machinery.
 
 ### 1. Optional fields in rows
 
@@ -66,11 +66,28 @@ Surface syntax `{ name?: string }`. Construction still takes raw `T`. Field
 access on an optional field is `Option<T>`. Codegen erases it (the field is
 simply absent at runtime); `.d.ts` / `showType` / the formatter print `name?:`.
 
-### 2. Labeled parameters with optional/default arguments (deferred)
+### 2. Labeled parameters with optional/default arguments
 
 `let f = (~tone: string = "rose", ~size?: number) => …`, called as
-`f(~tone="amber")`. Lowered to a single record parameter, so it is sugar over 1
-rather than a second calling convention. Defaults evaluate at the call site.
+`f(~tone="amber")`. This is **sugar over §1**, not a second calling convention,
+and that is what keeps it sound: it introduces no new HM machinery.
+
+- A **trailing** labeled group is one record parameter. Positionals keep their
+  curried arrow (`(x: number, ~tone: string)` is `number -> { tone: string } -> number`).
+  A positional after a label is a parse error, so the record is always last.
+- A label is an **optional row field** when written `~x?` or given a default;
+  omitting it at the call site is then the ordinary `fits` subset check.
+- `f(~tone="amber")` desugars in the parser to `f({ tone: "amber" })`, tagged
+  `origin: "labeled"` (sugar provenance, ADR 0011 §5) so the formatter re-folds
+  the surface syntax. `~tone` alone is punning for `~tone=tone`.
+- `f()` applies `{}` when the domain is an all-optional record — every label
+  omitted — alongside the existing `unit ->` peel (ADR 0014).
+- **Defaults are filled in the callee, not at the call site.** The body sees a
+  plain `T` for a defaulted label and `Option<T>` for a bare `~x?`. Filling in
+  the callee means the default lives in exactly one place, `f()` stays callable,
+  and a plain record argument typechecks the same as the sugar — a call-site fill
+  would make the parameter required from the outside and duplicate the default
+  expression at every call.
 
 ## Consequences
 
@@ -95,8 +112,10 @@ rather than a second calling convention. Defaults evaluate at the call site.
 
 - Do optional fields interact with the record-alias index (ADR 0092) and the
   emitted TS well enough to keep `bootstrap:tsc` at 0?
-- Should labeled parameters land at all, or is the record-based prop pattern
-  already sufficient? Section 2 is separable and unproven.
+- Labeled parameters currently share one type-variable scope per group but not
+  with the positional annotations beside them, so `(x: a, ~y: a)` does not link
+  the two `a`s. Exotic enough to leave until something needs it.
+- Labels are a lambda-parameter feature; `extern` signatures stay positional.
 
 Optionality belongs on the field flag, not as `Option<T>` in a normal field:
 the latter forces `Some`/`None` at every JSX attribute, which is not acceptable
