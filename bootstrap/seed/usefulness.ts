@@ -64,7 +64,6 @@ import {
   eq,
   filter,
   gt,
-  gte,
   length,
   lt,
   lte,
@@ -113,7 +112,7 @@ export const ExOk: ExhaustVerdict = { _tag: "ExOk" };
 export const ExWitness = (witness: MP): ExhaustVerdict => ({ _tag: "ExWitness", witness });
 export const ExFuel: ExhaustVerdict = { _tag: "ExFuel" };
 const mWilds: (n: number) => MP[] = (n: number) =>
-  lte(n, 0) ? ([] as MP[]) : _Array_prepend(MWild as MP, mWilds(sub(n, 1)));
+  n <= 0 ? ([] as MP[]) : _Array_prepend(MWild as MP, mWilds(n - 1));
 const isWildMP: (mp: MP) => boolean = (mp: MP) =>
   match(mp)
     .with({ _tag: "MWild" }, () => true)
@@ -191,15 +190,15 @@ const indexOfLabel: <A>(l: A, labels: A[], i: number) => number = _curry(
   3,
   <A>(l: A, labels: A[], i: number) =>
     match(_Array_get(i, labels))
-      .with({ _tag: "None" }, () => sub(0, 1))
-      .with({ _tag: "Some" }, ({ value: x }) => (eq(x, l) ? i : indexOfLabel(l, labels, add(i, 1))))
+      .with({ _tag: "None" }, () => 0 - 1)
+      .with({ _tag: "Some" }, ({ value: x }) => (eq(x, l) ? i : indexOfLabel(l, labels, i + 1)))
       .exhaustive(),
 );
 const fieldOf: <A>(l: A, labels: A[], pats: MP[]) => MP = _curry(
   3,
   <A>(l: A, labels: A[], pats: MP[]) => {
     const i: number = indexOfLabel(l, labels, 0);
-    return lt(i, 0) ? (MWild as MP) : _Option_unwrapOr(MWild as MP, _Array_get(i, pats));
+    return i < 0 ? (MWild as MP) : _Option_unwrapOr(MWild as MP, _Array_get(i, pats));
   },
 );
 
@@ -212,7 +211,7 @@ const arrShapeStep: _Curry<[acc: ArrShape, mp: MP], ArrShape> = _curry(2, (acc: 
               fixed: acc.fixed,
               restFrom: match(acc.restFrom)
                 .with({ _tag: "None" }, () => Some(n) as Option<number>)
-                .with({ _tag: "Some" }, ({ value: m }) => Some(lt(m, n) ? m : n) as Option<number>)
+                .with({ _tag: "Some" }, ({ value: m }) => Some(m < n ? m : n) as Option<number>)
                 .exhaustive(),
             }
           : {
@@ -227,7 +226,7 @@ const arrShapeOf: (col: MP[]) => ArrShape = (col: MP[]) =>
 const rangeCovered: <A>(shape: { fixed: number[] } & A, i: number, n: number) => boolean = _curry(
   3,
   <A>(shape: { fixed: number[] } & A, i: number, n: number) =>
-    gte(i, n) ? true : and(_Array_contains(i, shape.fixed), rangeCovered(shape, add(i, 1), n)),
+    i >= n ? true : and(_Array_contains(i, shape.fixed), rangeCovered(shape, i + 1, n)),
 );
 const arrComplete: <A>(shape: { restFrom: Option<number>; fixed: number[] } & A) => boolean = <A>(
   shape: { restFrom: Option<number>; fixed: number[] } & A,
@@ -244,20 +243,20 @@ const arrMissingLen: <A>(
     not(_Array_contains(n, shape.fixed)),
     match(shape.restFrom)
       .with({ _tag: "None" }, () => true)
-      .with({ _tag: "Some" }, ({ value: r }) => lt(n, r))
+      .with({ _tag: "Some" }, ({ value: r }) => n < r)
       .exhaustive(),
   )
     ? n
-    : arrMissingLen(shape, add(n, 1)),
+    : arrMissingLen(shape, n + 1),
 );
 const rangeArr: _Curry<[i: number, top: number], number[]> = _curry(2, (i: number, top: number) =>
-  gt(i, top) ? ([] as number[]) : _Array_prepend(i, rangeArr(add(i, 1), top)),
+  i > top ? ([] as number[]) : _Array_prepend(i, rangeArr(i + 1, top)),
 );
 const arrLengths: <A>(shape: { restFrom: Option<number>; fixed: number[] } & A) => number[] = <A>(
   shape: { restFrom: Option<number>; fixed: number[] } & A,
 ) => {
   const top: number = reduce(
-    _curry(2, (a: number, x: number) => (gt(x, a) ? x : a)),
+    _curry(2, (a: number, x: number) => (x > a ? x : a)),
     _Option_unwrapOr(0, shape.restFrom),
     shape.fixed,
   );
@@ -314,8 +313,8 @@ const specializeRow: _Curry<[h: MHead, mp: MP, labels: string[]], Option<MP[]>> 
           .with({ _tag: "MArr" }, ({ elems, rest }) =>
             ((k: number) =>
               rest
-                ? lte(k, len)
-                  ? (Some(_Array_concat(elems, mWilds(sub(len, k)))) as Option<MP[]>)
+                ? k <= len
+                  ? (Some(_Array_concat(elems, mWilds(len - k))) as Option<MP[]>)
                   : (None as Option<MP[]>)
                 : eq(k, len)
                   ? (Some(elems) as Option<MP[]>)
@@ -379,7 +378,7 @@ const takenNums: (heads: MHead[]) => number[] = (heads: MHead[]) =>
   );
 const freshNum: _Curry<[taken: number[], i: number], number> = _curry(
   2,
-  (taken: number[], i: number) => (_Array_contains(i, taken) ? freshNum(taken, add(i, 1)) : i),
+  (taken: number[], i: number) => (_Array_contains(i, taken) ? freshNum(taken, i + 1) : i),
 );
 const takenStrs: (heads: MHead[]) => string[] = (heads: MHead[]) =>
   _Array_flatMap(
@@ -390,12 +389,12 @@ const takenStrs: (heads: MHead[]) => string[] = (heads: MHead[]) =>
     heads,
   );
 const starsOf: (n: number) => string = (n: number) =>
-  lte(n, 0) ? "" : _Str_concat("*", starsOf(sub(n, 1)));
+  n <= 0 ? "" : _Str_concat("*", starsOf(n - 1));
 const freshStr: _Curry<[taken: string[], i: number], string> = _curry(
   2,
   (taken: string[], i: number) => {
     const s: string = starsOf(i);
-    return _Array_contains(s, taken) ? freshStr(taken, add(i, 1)) : s;
+    return _Array_contains(s, taken) ? freshStr(taken, i + 1) : s;
   },
 );
 const ctorNames: (heads: MHead[]) => string[] = (heads: MHead[]) =>
@@ -472,15 +471,15 @@ const allNamesIn: <A>(all: A[], names: A[]) => boolean = _curry(2, <A>(all: A[],
 const useful: _Curry<[m: MP[][], width: number, reg: Registry, fuel: number], URes> = _curry(
   4,
   (m: MP[][], width: number, reg: Registry, fuel: number) =>
-    lte(fuel, 0)
+    fuel <= 0
       ? (UFuel as URes)
       : eq(width, 0)
         ? eq(length(m), 0)
-          ? USome([] as MP[], sub(fuel, 1))
-          : UNone(sub(fuel, 1))
+          ? USome([] as MP[], fuel - 1)
+          : UNone(fuel - 1)
         : eq(length(m), 0)
-          ? USome(mWilds(width), sub(fuel, 1))
-          : usefulSplit(m, width, reg, sub(fuel, 1)),
+          ? USome(mWilds(width), fuel - 1)
+          : usefulSplit(m, width, reg, fuel - 1),
 );
 const usefulSplit: _Curry<[m: MP[][], width: number, reg: Registry, fuel: number], URes> = _curry(
   4,
@@ -489,7 +488,7 @@ const usefulSplit: _Curry<[m: MP[][], width: number, reg: Registry, fuel: number
     const heads: MHead[] = headsOf(col);
     return match(_Array_head(heads))
       .with({ _tag: "None" }, () =>
-        prependWitness(MWild as MP, useful(defaultM(m), sub(width, 1), reg, fuel)),
+        prependWitness(MWild as MP, useful(defaultM(m), width - 1, reg, fuel)),
       )
       .with({ _tag: "Some" }, ({ value: h0 }) => usefulHead(m, col, heads, h0, width, reg, fuel))
       .exhaustive();
@@ -530,10 +529,10 @@ const tryHeads: _Curry<
       .with({ _tag: "None" }, () => UNone(fuel))
       .with({ _tag: "Some" }, ({ value: h }) =>
         ((arity: number) =>
-          match(useful(specializeM(m, h, arity, labels), sub(add(arity, width), 1), reg, fuel))
+          match(useful(specializeM(m, h, arity, labels), arity + width - 1, reg, fuel))
             .with({ _tag: "UFuel" }, () => UFuel as URes)
             .with({ _tag: "UNone" }, ({ fuel: f2 }) =>
-              tryHeads(m, heads, arities, labels, width, reg, f2, add(i, 1)),
+              tryHeads(m, heads, arities, labels, width, reg, f2, i + 1),
             )
             .with({ _tag: "USome" }, ({ row, fuel: f2 }) =>
               USome(
@@ -570,13 +569,13 @@ const usefulHead: _Curry<
       .with({ _tag: "HNum" }, () =>
         prependWitness(
           MNum(freshNum(takenNums(heads), 0)),
-          useful(defaultM(m), sub(width, 1), reg, fuel),
+          useful(defaultM(m), width - 1, reg, fuel),
         ),
       )
       .with({ _tag: "HStr" }, () =>
         prependWitness(
           MStr(freshStr(takenStrs(heads), 0)),
-          useful(defaultM(m), sub(width, 1), reg, fuel),
+          useful(defaultM(m), width - 1, reg, fuel),
         ),
       )
       .exhaustive(),
@@ -594,7 +593,7 @@ const usefulCtor: _Curry<
     .with({ _tag: "None" }, () => [] as string[])
     .with({ _tag: "Some" }, ({ value: o }) => _Map_getOr([] as string[], o, reg.types))
     .exhaustive();
-  return and(gt(length(all), 0), allNamesIn(all, names))
+  return and(length(all) > 0, allNamesIn(all, names))
     ? tryHeads(
         m,
         map((n: string) => HCtor(n), all),
@@ -610,7 +609,7 @@ const usefulCtor: _Curry<
           .with({ _tag: "None" }, () => MWild as MP)
           .with({ _tag: "Some" }, ({ value: n }) => MCtor(n, mWilds(arityOfCtor(reg, n))))
           .exhaustive(),
-        useful(defaultM(m), sub(width, 1), reg, fuel),
+        useful(defaultM(m), width - 1, reg, fuel),
       );
 });
 const usefulBool: _Curry<
@@ -621,7 +620,7 @@ const usefulBool: _Curry<
   const hasTrue: boolean = _Array_contains(true, vs);
   return and(hasTrue, _Array_contains(false, vs))
     ? tryHeads(m, [HBool(true), HBool(false)], [0, 0], [] as string[], width, reg, fuel, 0)
-    : prependWitness(MBool(not(hasTrue)), useful(defaultM(m), sub(width, 1), reg, fuel));
+    : prependWitness(MBool(not(hasTrue)), useful(defaultM(m), width - 1, reg, fuel));
 });
 const usefulArr: _Curry<[m: MP[][], col: MP[], width: number, reg: Registry, fuel: number], URes> =
   _curry(5, (m: MP[][], col: MP[], width: number, reg: Registry, fuel: number) => {
@@ -640,7 +639,7 @@ const usefulArr: _Curry<[m: MP[][], col: MP[], width: number, reg: Registry, fue
           ))(arrLengths(shape))
       : prependWitness(
           MArr(mWilds(arrMissingLen(shape, 0)), false),
-          useful(defaultM(m), sub(width, 1), reg, fuel),
+          useful(defaultM(m), width - 1, reg, fuel),
         );
   });
 const showFields: _Curry<[labels: string[], pats: MP[], i: number], string[]> = _curry(
@@ -651,7 +650,7 @@ const showFields: _Curry<[labels: string[], pats: MP[], i: number], string[]> = 
       .with({ _tag: "Some" }, ({ value: l }) =>
         _Array_prepend(
           `${l}: ${showWitness(_Option_unwrapOr(MWild as MP, _Array_get(i, pats)))}`,
-          showFields(labels, pats, add(i, 1)),
+          showFields(labels, pats, i + 1),
         ),
       )
       .exhaustive(),

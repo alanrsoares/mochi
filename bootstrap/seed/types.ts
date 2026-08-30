@@ -64,7 +64,6 @@ import {
   _Str_join,
   _curry,
   _tuple,
-  add,
   and,
   eq,
   length,
@@ -158,9 +157,7 @@ const typeEqList: _Curry<[as_: Ty[], bs: Ty[], i: number], boolean> = _curry(
       .with({ _tag: "Some" }, ({ value: a }) =>
         match(_Array_get(i, bs))
           .with({ _tag: "None" }, () => false)
-          .with({ _tag: "Some" }, ({ value: b }) =>
-            and(typeEq(a, b), typeEqList(as_, bs, add(i, 1))),
-          )
+          .with({ _tag: "Some" }, ({ value: b }) => and(typeEq(a, b), typeEqList(as_, bs, i + 1)))
           .exhaustive(),
       )
       .exhaustive(),
@@ -170,9 +167,7 @@ const memberEqIn: _Curry<[t: Ty, xs: Ty[], i: number], boolean> = _curry(
   (t: Ty, xs: Ty[], i: number) =>
     match(_Array_get(i, xs))
       .with({ _tag: "None" }, () => false)
-      .with({ _tag: "Some" }, ({ value: x }) =>
-        typeEq(t, x) ? true : memberEqIn(t, xs, add(i, 1)),
-      )
+      .with({ _tag: "Some" }, ({ value: x }) => (typeEq(t, x) ? true : memberEqIn(t, xs, i + 1)))
       .exhaustive(),
 );
 const allMembersIn: _Curry<[am: Ty[], bm: Ty[], i: number], boolean> = _curry(
@@ -181,7 +176,7 @@ const allMembersIn: _Curry<[am: Ty[], bm: Ty[], i: number], boolean> = _curry(
     match(_Array_get(i, am))
       .with({ _tag: "None" }, () => true)
       .with({ _tag: "Some" }, ({ value: m }) =>
-        and(memberEqIn(m, bm, 0), allMembersIn(am, bm, add(i, 1))),
+        and(memberEqIn(m, bm, 0), allMembersIn(am, bm, i + 1)),
       )
       .exhaustive(),
 );
@@ -214,14 +209,10 @@ const flattenUnionFrom: _Curry<[members: Ty[], acc: Ty[], i: number], Ty[]> = _c
       .with({ _tag: "Some" }, ({ value: t }) =>
         match(t)
           .with({ _tag: "TyOneOf" }, ({ members: ms }) =>
-            flattenUnionFrom(members, flattenUnionFrom(ms, acc, 0), add(i, 1)),
+            flattenUnionFrom(members, flattenUnionFrom(ms, acc, 0), i + 1),
           )
           .otherwise(() =>
-            flattenUnionFrom(
-              members,
-              memberEqIn(t, acc, 0) ? acc : _Array_append(t, acc),
-              add(i, 1),
-            ),
+            flattenUnionFrom(members, memberEqIn(t, acc, 0) ? acc : _Array_append(t, acc), i + 1),
           ),
       )
       .exhaustive(),
@@ -346,7 +337,7 @@ const someOfFrom: <A>(f: (a: A) => boolean, xs: A[], i: number) => boolean = _cu
   <A>(f: (a: A) => boolean, xs: A[], i: number) =>
     match(_Array_get(i, xs))
       .with({ _tag: "None" }, () => false)
-      .with({ _tag: "Some" }, ({ value: x }) => (f(x) ? true : someOfFrom(f, xs, add(i, 1))))
+      .with({ _tag: "Some" }, ({ value: x }) => (f(x) ? true : someOfFrom(f, xs, i + 1)))
       .exhaustive(),
 );
 const someOf: <A>(f: (a: A) => boolean, xs: A[]) => boolean = _curry(
@@ -408,10 +399,10 @@ export const fail: <A, B>(message: A) => Result<B, { message: A }> = <A, B>(mess
   Err({ message: message });
 export const freshVar: <A>(st: { next: number } & A) => [Ty, { next: number } & A] = <A>(
   st: { next: number } & A,
-) => _tuple(tVar(st.next), { ...st, next: add(st.next, 1) });
+) => _tuple(tVar(st.next), { ...st, next: st.next + 1 });
 export const freshRowVar: <A>(st: { next: number } & A) => [Row, { next: number } & A] = <A>(
   st: { next: number } & A,
-) => _tuple(rVar(st.next), { ...st, next: add(st.next, 1) });
+) => _tuple(rVar(st.next), { ...st, next: st.next + 1 });
 export const resolve: _Curry<[t: Ty, st: St], Ty> = _curry(2, (t: Ty, st: St) =>
   match(t)
     .with({ _tag: "TyVar" }, ({ id }) =>
@@ -559,7 +550,7 @@ const unifyArgs: _Curry<[as_: Ty[], bs: Ty[], i: number, st: St], Result<St, Typ
         match(_Array_get(i, bs))
           .with({ _tag: "None" }, () => Ok(st) as Result<St, TypeErr>)
           .with({ _tag: "Some" }, ({ value: b }) =>
-            _Result_flatMap((s1: St) => unifyArgs(as_, bs, add(i, 1), s1), unify(a, b, st)),
+            _Result_flatMap((s1: St) => unifyArgs(as_, bs, i + 1, s1), unify(a, b, st)),
           )
           .exhaustive(),
       )
@@ -646,14 +637,14 @@ const litInUnionFrom: _Curry<
             .with({ _tag: "TySingleton" }, ({ base: lbase, value: lvalue }) =>
               and(eq(base, lbase), eq(value, lvalue))
                 ? (Ok(st) as Result<St, TypeErr>)
-                : litInUnionFrom(lit, members, add(i, 1), st),
+                : litInUnionFrom(lit, members, i + 1, st),
             )
-            .otherwise(() => litInUnionFrom(lit, members, add(i, 1), st)),
+            .otherwise(() => litInUnionFrom(lit, members, i + 1, st)),
         )
         .otherwise(() =>
           match(unify(lit, m, st))
             .with({ _tag: "Ok" }, ({ value: st1 }) => Ok(st1) as Result<St, TypeErr>)
-            .with({ _tag: "Err" }, () => litInUnionFrom(lit, members, add(i, 1), st))
+            .with({ _tag: "Err" }, () => litInUnionFrom(lit, members, i + 1, st))
             .exhaustive(),
         ),
     )
@@ -681,7 +672,7 @@ const unifyConcreteAgainstUnionFrom: _Curry<
     .with({ _tag: "Some" }, ({ value: m }) =>
       match(unify(member, m, st))
         .with({ _tag: "Ok" }, ({ value: st1 }) => Ok(st1) as Result<St, TypeErr>)
-        .with({ _tag: "Err" }, () => unifyConcreteAgainstUnionFrom(member, members, add(i, 1), st))
+        .with({ _tag: "Err" }, () => unifyConcreteAgainstUnionFrom(member, members, i + 1, st))
         .exhaustive(),
     )
     .exhaustive(),
@@ -696,7 +687,7 @@ const unifyUnionMembersFrom: _Curry<
       match(u)
         .with({ _tag: "TyOneOf" }, ({ members: ums }) =>
           _Result_flatMap(
-            (s1: St) => unifyUnionMembersFrom(members, u, add(i, 1), s1),
+            (s1: St) => unifyUnionMembersFrom(members, u, i + 1, s1),
             unifyMemberAgainstUnionFrom(m, ums, 0, st),
           ),
         )

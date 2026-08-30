@@ -148,7 +148,8 @@ await match(cmd)
           })();
     const ext = emitTs ? ".ts" : ".js";
     for (const { path, js } of outputs) {
-      const out = path.endsWith(".ts") ? path : path.replace(/\.mochi$/, ext);
+      const typedExt = js.startsWith("/** @jsx h */") ? ".tsx" : ext;
+      const out = path.endsWith(".ts") ? path : path.replace(/\.mochi$/, typedExt);
       await Bun.write(out, js);
       console.error(`  ${out}`);
     }

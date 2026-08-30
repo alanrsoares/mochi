@@ -34,7 +34,7 @@ import type { BindingTypeHook } from "../extensions/extensions";
 import { bindingTypeHooks, resolvePlugins } from "../extensions/extensions";
 import type { Env, Scheme, TypeAt } from "../infer/infer";
 import { preludeNamespaces } from "../prelude/prelude";
-import { codegen, collectRuntimeDeps } from "./codegen";
+import { codegen, collectRuntimeDeps, programHasJsx } from "./codegen";
 import { jsDoc } from "./codegen-core";
 
 export type CodegenTsOptions = { runtimeImport?: string; open?: boolean; docs?: boolean };
@@ -303,6 +303,8 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
     annotateCtor: (s, c) => ctorFactoryTs(s.name, s.params, c),
     flattenPipe: true,
     tupleHelper: true, // emit `_tuple(a, b)` so tsc infers a tuple (ADR 0036)
+    preserveInfix: true,
+    preserveJsx: true,
     moduleExt: "", // `import … from "./mod"` — tsc resolves to the sibling `.ts`
   });
 
@@ -324,12 +326,17 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
   // `_tuple` isn't reachable by `collectRuntimeDeps` (a tuple AST node carries no
   // runtime-name reference); it's a TS-emit device, so pull it in from the body
   // text once emitted (ADR 0036), like `builtinDeclsIn` above.
-  const allDeps = body.includes("_tuple(") ? [...deps, "_tuple"] : deps;
+  const allDeps = (body.includes("_tuple(") ? [...deps, "_tuple"] : deps).filter(
+    (name) =>
+      !["add", "sub", "mul", "div", "lt", "lte", "gt", "gte"].includes(name) ||
+      new RegExp(`\\b${name}\\b`).test(body),
+  );
   const runtimeLine = allDeps.length
     ? `import { ${allDeps.join(", ")} } from ${JSON.stringify(ctx.runtimeImport)};`
     : "";
 
   const parts = [
+    ...(programHasJsx(prog) ? ["/** @jsx h */"] : []),
     header.join("\n"),
     ctx.importLines.join("\n"),
     typeImportLine,

@@ -31,7 +31,6 @@ import {
   _Str_join,
   _curry,
   _tuple,
-  add,
   compare,
   eq,
   length,
@@ -96,7 +95,7 @@ const genericNamesFrom: <A>(ids: A[], i: number, names: Map<A, string>) => Map<A
     match(_Array_get(i, ids))
       .with({ _tag: "None" }, () => names)
       .with({ _tag: "Some" }, ({ value: id }) =>
-        genericNamesFrom(ids, add(i, 1), _Map_set(id, letterAt(i), names)),
+        genericNamesFrom(ids, i + 1, _Map_set(id, letterAt(i), names)),
       )
       .exhaustive(),
 );
@@ -212,7 +211,7 @@ const tsArrow: _Curry<[fromT: Ty, toT: Ty, env: TsEnv], string> = _curry(
 const tsArrowParams: _Curry<[fromT: Ty, toT: Ty, env: TsEnv, i: number, params: string[]], string> =
   _curry(5, (fromT: Ty, toT: Ty, env: TsEnv, i: number, params: string[]) => {
     const params1: string[] = _Array_append(
-      `${_Str_fromCode(add(97, i))}: ${tsOfRaw(fromT, env)}`,
+      `${_Str_fromCode(97 + i)}: ${tsOfRaw(fromT, env)}`,
       params,
     );
     return match(toT)
@@ -223,8 +222,7 @@ const tsArrowParams: _Curry<[fromT: Ty, toT: Ty, env: TsEnv, i: number, params: 
             _g._tag === "TyFn" && (({ from: nextFrom, to: nextTo }) => not(isUnit(nextFrom)))(_g)
           );
         },
-        ({ from: nextFrom, to: nextTo }) =>
-          tsArrowParams(nextFrom, nextTo, env, add(i, 1), params1),
+        ({ from: nextFrom, to: nextTo }) => tsArrowParams(nextFrom, nextTo, env, i + 1, params1),
       )
       .otherwise(() => `(${_Str_join(", ", params1)}) => ${tsOfRaw(toT, env)}`);
   });

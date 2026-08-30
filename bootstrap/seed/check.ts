@@ -58,7 +58,6 @@ import {
   eq,
   filter,
   gt,
-  gte,
   length,
   lte,
   map,
@@ -101,7 +100,7 @@ const firstSomeFrom: <A, B>(f: (a: A) => Option<B>, xs: A[], i0: number) => Opti
         .with({ _tag: "Some" }, ({ value: x }) =>
           match(f(x))
             .with({ _tag: "Some" }, ({ value: e }) => _done(Some(e)))
-            .with({ _tag: "None" }, () => _recur(add(i, 1)))
+            .with({ _tag: "None" }, () => _recur(i + 1))
             .exhaustive(),
         )
         .exhaustive();
@@ -124,7 +123,7 @@ const allOfFrom: <A>(f: (a: A) => boolean, xs: A[], i0: number) => boolean = _cu
     while (true) {
       const _step = match(_Array_get(i, xs))
         .with({ _tag: "None" }, () => _done(true))
-        .with({ _tag: "Some" }, ({ value: x }) => (f(x) ? _recur(add(i, 1)) : _done(false)))
+        .with({ _tag: "Some" }, ({ value: x }) => (f(x) ? _recur(i + 1) : _done(false)))
         .exhaustive();
       if (_step._tag === "recur") {
         i = _step.args[0];
@@ -145,7 +144,7 @@ const someOfFrom: <A>(f: (a: A) => boolean, xs: A[], i0: number) => boolean = _c
     while (true) {
       const _step = match(_Array_get(i, xs))
         .with({ _tag: "None" }, () => _done(false))
-        .with({ _tag: "Some" }, ({ value: x }) => (f(x) ? _done(true) : _recur(add(i, 1))))
+        .with({ _tag: "Some" }, ({ value: x }) => (f(x) ? _done(true) : _recur(i + 1)))
         .exhaustive();
       if (_step._tag === "recur") {
         i = _step.args[0];
@@ -313,7 +312,7 @@ const binderPathsArgs: _Curry<
     .with({ _tag: "None" }, () => Ok(acc) as Result<Map<string, string>, PErr>)
     .with({ _tag: "Some" }, ({ value: a }) =>
       _Result_flatMap(
-        (acc2: Map<string, string>) => binderPathsArgs(args, add(i, 1), at, acc2),
+        (acc2: Map<string, string>) => binderPathsArgs(args, i + 1, at, acc2),
         binderPaths(a, `${at}.a${show(i)}`, acc),
       ),
     )
@@ -327,7 +326,7 @@ const binderPathsFields: _Curry<
     .with({ _tag: "None" }, () => Ok(acc) as Result<Map<string, string>, PErr>)
     .with({ _tag: "Some" }, ({ value: f }) =>
       _Result_flatMap(
-        (acc2: Map<string, string>) => binderPathsFields(fields, add(i, 1), at, acc2),
+        (acc2: Map<string, string>) => binderPathsFields(fields, i + 1, at, acc2),
         binderPaths(f.pat, `${at}.${f.label}`, acc),
       ),
     )
@@ -341,7 +340,7 @@ const binderPathsElems: _Curry<
     .with({ _tag: "None" }, () => Ok(acc) as Result<Map<string, string>, PErr>)
     .with({ _tag: "Some" }, ({ value: e }) =>
       _Result_flatMap(
-        (acc2: Map<string, string>) => binderPathsElems(elems, add(i, 1), at, acc2),
+        (acc2: Map<string, string>) => binderPathsElems(elems, i + 1, at, acc2),
         binderPaths(e, `${at}.t${show(i)}`, acc),
       ),
     )
@@ -414,7 +413,7 @@ const altMapsFrom: <A, B>(
                 )
                 .with({ _tag: "None" }, () =>
                   _Result_flatMap(
-                    (m) => altMapsFrom(alts, add(i, 1), reg, _Array_append(m, acc)),
+                    (m) => altMapsFrom(alts, i + 1, reg, _Array_append(m, acc)),
                     binderPaths(alt, "", new Map<string, string>()),
                   ),
                 )
@@ -450,7 +449,7 @@ const consistentBindsFrom: <A, B, C>(
       .with({ _tag: "None" }, () => None)
       .with({ _tag: "Some" }, ({ value: m }) =>
         _Option_orElse(
-          consistentBindsFrom(maps, add(i, 1), ref, sp),
+          consistentBindsFrom(maps, i + 1, ref, sp),
           _Option_orElse(
             firstSome(
               (name: string) =>
@@ -527,7 +526,7 @@ const firstCatchIdx: _Curry<[arms: MatchArm[], i0: number], Option<number>> = _c
       const _step = match(_Array_get(i, arms))
         .with({ _tag: "None" }, () => _done(None as Option<number>))
         .with({ _tag: "Some" }, ({ value: a }) =>
-          armUnguardedCatchAll(a) ? _done(Some(i) as Option<number>) : _recur(add(i, 1)),
+          armUnguardedCatchAll(a) ? _done(Some(i) as Option<number>) : _recur(i + 1),
         )
         .exhaustive();
       if (_step._tag === "recur") {
@@ -542,7 +541,7 @@ const unreachableAfterCatch: (arms: MatchArm[]) => Option<PErr> = (arms: MatchAr
   match(firstCatchIdx(arms, 0))
     .with({ _tag: "None" }, () => None as Option<PErr>)
     .with({ _tag: "Some" }, ({ value: i }) =>
-      match(_Array_get(add(i, 1), arms))
+      match(_Array_get(i + 1, arms))
         .with({ _tag: "None" }, () => None as Option<PErr>)
         .with(
           { _tag: "Some" },
@@ -673,7 +672,7 @@ const ctorLoop: <A, B, C, D>(
                           ((covered2: Set<string>) =>
                             ctorLoop(
                               arms,
-                              add(i, 1),
+                              i + 1,
                               reg,
                               Some(info.owner) as Option<string>,
                               covered2,
@@ -686,7 +685,7 @@ const ctorLoop: <A, B, C, D>(
                 )
                 .exhaustive())(patCtorKey(ctor, ns)),
           )
-          .otherwise(() => ctorLoop(arms, add(i, 1), reg, owner, covered)),
+          .otherwise(() => ctorLoop(arms, i + 1, reg, owner, covered)),
       )
       .exhaustive(),
 );
@@ -746,7 +745,7 @@ const matrixVerdict: <A, B, C, D, E>(
         ((own: string) =>
           ((named: Set<string>) =>
             ((absent: string[]) =>
-              and(and(isWideWitnessM(w), not(eq(own, ""))), gt(length(absent), 0))
+              and(and(isWideWitnessM(w), not(eq(own, ""))), length(absent) > 0)
                 ? Some(
                     checkErr(
                       `non-exhaustive switch on '${own}': missing ${_Str_join(", ", absent)}`,
@@ -1029,7 +1028,7 @@ const checkReservedNames: (stmts: Stmt[]) => Option<PErr> = (stmts: Stmt[]) =>
   );
 const isUpperStart: (s: string) => boolean = (s: string) =>
   match(_Str_codeAt(0, s))
-    .with({ _tag: "Some" }, ({ value: c }) => and(gte(c, 65), lte(c, 90)))
+    .with({ _tag: "Some" }, ({ value: c }) => and(c >= 65, c <= 90))
     .with({ _tag: "None" }, () => false)
     .exhaustive();
 const strayTypeVar: _Curry<[params: string[], te: TypeExpr], Option<[string, SpanAt]>> = _curry(

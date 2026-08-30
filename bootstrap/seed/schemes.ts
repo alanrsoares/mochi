@@ -32,8 +32,6 @@ import {
   _tuple,
   and,
   eq,
-  gte,
-  lte,
   map,
 } from "@mochi/compiler/runtime";
 
@@ -373,7 +371,7 @@ export const instantiate: <A>(
 );
 export const isUpperStart: (s: string) => boolean = (s: string) =>
   match(_Str_codeAt(0, s))
-    .with({ _tag: "Some" }, ({ value: c }) => and(gte(c, 65), lte(c, 90)))
+    .with({ _tag: "Some" }, ({ value: c }) => and(c >= 65, c <= 90))
     .with({ _tag: "None" }, () => false)
     .exhaustive();
 

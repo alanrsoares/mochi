@@ -399,6 +399,19 @@ test("a tuple emits through the _tuple helper (ADR 0036)", () =>
 test("a pipe emits flattened so tsc infers from all args (ADR 0026)", () =>
   assertEq(true, tsOf("let n = 1 |> add(2)") |> Str.contains("add(2, 1)")))
 
+test("typed emit re-folds numeric calls and parser JSX", () => {
+  assertEq(
+    true,
+    tsOf("let cmp = (a, b) => gte(add(a, 1), b)")
+      |> Str.contains("((a + 1) >= b)")
+  );
+  assertEq(
+    true,
+    tsOf("let el = <button disabled>{\"go\"}</button>")
+      |> Str.contains("<button disabled>{\"go\"}</button>")
+  )
+})
+
 test("a referenced builtin variant rides the runtime type import", () =>
   assertEq(
     true,

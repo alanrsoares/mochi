@@ -21,6 +21,8 @@ import { exprRefs } from "./codegen-deps";
 import { genLoopBlock } from "./codegen-loop";
 import { genMatch } from "./codegen-match";
 
+type CallExpr = Extract<Expr, { kind: "call" }>;
+
 /** Top-level arrow spine length of a surface type (`a -> b -> c` → 2). */
 export const typeExprArity = (te: TypeExpr): number =>
   te.kind === "tarrow" ? 1 + typeExprArity(te.to) : 0;
@@ -82,6 +84,13 @@ export type GenCtx = {
   // widen to `(A | B)[]` (no contextual tuple type flows through `Some(…)`/`Ok(…)`
   // /@onrails/pattern arm returns). Off for the JS backend — output stays byte-identical.
   readonly tupleHelper: boolean;
+
+  // TS backend: reprint direct runtime-equivalent numeric calls as operators.
+  readonly preserveInfix: boolean;
+
+  // TSX emit: re-fold parser-originated JSX calls back into JSX syntax. This is
+  // deliberately provenance-gated: a source-written `h(...)` remains a call.
+  readonly preserveJsx: boolean;
 
   // TS backend (ADR 0028): given a lambda's span and its collapsed parameter count,
   // return a `generics` head (`<A, B>` or `""`) to scope over the arrow plus one
@@ -153,6 +162,53 @@ export const emptyNsEmit = (e: FieldExpr, ctx: GenCtx): string | null => {
     default:
       return null;
   }
+};
+
+/** Operators whose Mochi and JavaScript semantics coincide for a saturated call. */
+const tsInfix = (e: CallExpr, ctx: GenCtx): string | null => {
+  if (!ctx.preserveInfix || e.fn.kind !== "ref" || e.args.length !== 2) return null;
+  const op = (
+    { add: "+", sub: "-", mul: "*", div: "/", lt: "<", lte: "<=", gt: ">", gte: ">=" } as const
+  )[e.fn.name as "add" | "sub" | "mul" | "div" | "lt" | "lte" | "gt" | "gte"];
+  return op ? `(${genExpr(e.args[0]!, ctx)} ${op} ${genExpr(e.args[1]!, ctx)})` : null;
+};
+
+/** Re-fold only parser-synthesized JSX; handwritten `h(...)` stays an ordinary call. */
+const tsxCall = (e: CallExpr, ctx: GenCtx): string | null => {
+  if (
+    !ctx.preserveJsx ||
+    e.origin !== "jsx" ||
+    e.fn.kind !== "ref" ||
+    e.fn.name !== "h" ||
+    e.args.length !== 3 ||
+    e.args[1]?.kind !== "record" ||
+    e.args[2]?.kind !== "arr"
+  )
+    return null;
+  const [tag, props, children] = e.args as [
+    Expr,
+    Extract<Expr, { kind: "record" }>,
+    Extract<Expr, { kind: "arr" }>,
+  ];
+  if (children.elements.some((child) => child.kind === "spread")) return null;
+  const fragment = tag.kind === "str" && tag.value === "Fragment";
+  const name = fragment ? "" : tag.kind === "str" ? tag.value : genMember(tag, ctx);
+  const attrs = [
+    ...(props.spread ? [` {...${genExpr(props.spread, ctx)}}`] : []),
+    ...props.fields.map((field) =>
+      field.value.kind === "bool" && field.value.value
+        ? ` ${field.name}`
+        : ` ${field.name}={${genExpr(field.value, ctx)}}`,
+    ),
+  ].join("");
+  if (children.elements.length === 0 && !fragment) return `<${name}${attrs} />`;
+  const body = children.elements
+    .map((child) => {
+      const nested = child.expr.kind === "call" ? tsxCall(child.expr, ctx) : null;
+      return nested ?? `{${genExpr(child.expr, ctx)}}`;
+    })
+    .join("");
+  return fragment ? `<>${body}</>` : `<${name}${attrs}>${body}</${name}>`;
 };
 
 /**
@@ -256,6 +312,10 @@ export const genExpr = (e: Expr, ctx: GenCtx): string =>
       return ann ? `(${r.name} as ${ann})` : r.name;
     })
     .with({ kind: "call" }, (c) => {
+      const jsx = tsxCall(c, ctx);
+      if (jsx) return jsx;
+      const infix = tsInfix(c, ctx);
+      if (infix) return infix;
       const inner = `${genCallee(c.fn, ctx)}(${c.args.map((a) => genExpr(a, ctx)).join(", ")})`;
       // TS backend (ADR 0043): an applied parametric ctor (`Ok("")`, `Err(e)`)
       // leaves the type param its argument doesn't determine free, so tsc widens

@@ -13,7 +13,6 @@ import {
   _Array_concat,
   _Array_get,
   _curry,
-  add,
   eq,
   length,
 } from "@mochi/compiler/runtime";
@@ -128,9 +127,9 @@ const parseHooksFrom: <A, B>(plugins: ({ parse: Option<A> } & B)[], i: number, a
         ({ value: { parse } }) =>
           match(parse)
             .with({ _tag: "Some" }, ({ value: hook }) =>
-              parseHooksFrom(plugins, add(i, 1), _Array_append(hook, acc)),
+              parseHooksFrom(plugins, i + 1, _Array_append(hook, acc)),
             )
-            .with({ _tag: "None" }, () => parseHooksFrom(plugins, add(i, 1), acc))
+            .with({ _tag: "None" }, () => parseHooksFrom(plugins, i + 1, acc))
             .exhaustive(),
       )
       .exhaustive(),
@@ -148,9 +147,9 @@ const inferHooksFrom: <A, B>(
     .with({ _tag: "Some" }, ({ value: p }) =>
       match(p.inferCall)
         .with({ _tag: "Some" }, ({ value: hook }) =>
-          inferHooksFrom(plugins, add(i, 1), _Array_append(hook, acc)),
+          inferHooksFrom(plugins, i + 1, _Array_append(hook, acc)),
         )
-        .with({ _tag: "None" }, () => inferHooksFrom(plugins, add(i, 1), acc))
+        .with({ _tag: "None" }, () => inferHooksFrom(plugins, i + 1, acc))
         .exhaustive(),
     )
     .exhaustive(),

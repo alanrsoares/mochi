@@ -47,14 +47,12 @@ import {
   compare,
   eq,
   filter,
-  gte,
   length,
   lte,
   map,
   not,
   or,
   reduce,
-  sub,
 } from "@mochi/compiler/runtime";
 
 import { match } from "@onrails/pattern";
@@ -92,12 +90,12 @@ const importFromsFrom: _Curry<[stmts: Stmt[], i: number, acc: string[]], string[
       .with({ _tag: "Some" }, ({ value: s }) =>
         match(s)
           .with({ _tag: "SImport" }, ({ from }) =>
-            importFromsFrom(stmts, add(i, 1), _Array_append(from, acc)),
+            importFromsFrom(stmts, i + 1, _Array_append(from, acc)),
           )
           .with({ _tag: "SImportNs" }, ({ from }) =>
-            importFromsFrom(stmts, add(i, 1), _Array_append(from, acc)),
+            importFromsFrom(stmts, i + 1, _Array_append(from, acc)),
           )
-          .otherwise(() => importFromsFrom(stmts, add(i, 1), acc)),
+          .otherwise(() => importFromsFrom(stmts, i + 1, acc)),
       )
       .exhaustive(),
 );
@@ -543,7 +541,7 @@ const resolveImportsFrom: <A, B, C, D>(
                   match(resolveNames(names, from, depExports, depReg, depKeys, res))
                     .with({ _tag: "Err" }, ({ error: e }) => Err(e))
                     .with({ _tag: "Ok" }, ({ value: res1 }) =>
-                      resolveImportsFrom(ctx, stmts, add(i, 1), path, res1),
+                      resolveImportsFrom(ctx, stmts, i + 1, path, res1),
                     )
                     .exhaustive())(_Map_getOr(new Map<string, B>(), dp, ctx.keysByPath)))(
                 _Map_getOr(emptyReg, dp, ctx.regByPath),
@@ -565,7 +563,7 @@ const resolveImportsFrom: <A, B, C, D>(
             ((depExports) =>
               ((depReg: Registry) =>
                 ((depKeys) =>
-                  resolveImportsFrom(ctx, stmts, add(i, 1), path, {
+                  resolveImportsFrom(ctx, stmts, i + 1, path, {
                     imports: res.imports,
                     nsImports: _Map_set(alias.name, depExports, res.nsImports),
                     reg: {
@@ -588,7 +586,7 @@ const resolveImportsFrom: <A, B, C, D>(
             resolveImport(path, from),
           ),
       )
-      .with({ _tag: "Some" }, () => resolveImportsFrom(ctx, stmts, add(i, 1), path, res))
+      .with({ _tag: "Some" }, () => resolveImportsFrom(ctx, stmts, i + 1, path, res))
       .exhaustive(),
 );
 const compileOne: <A>(
@@ -896,13 +894,7 @@ const isIdentChar: (c: string) => boolean = (c: string) =>
     .with({ _tag: "None" }, () => false)
     .with({ _tag: "Some" }, ({ value: n }) =>
       or(
-        or(
-          or(
-            or(and(gte(n, 48), lte(n, 57)), and(gte(n, 65), lte(n, 90))),
-            and(gte(n, 97), lte(n, 122)),
-          ),
-          eq(n, 95),
-        ),
+        or(or(or(and(n >= 48, n <= 57), and(n >= 65, n <= 90)), and(n >= 97, n <= 122)), eq(n, 95)),
         eq(n, 36),
       ),
     )
@@ -910,7 +902,7 @@ const isIdentChar: (c: string) => boolean = (c: string) =>
 const endsAtBoundary: (part: string) => boolean = (part: string) =>
   eq(_Str_length(part), 0)
     ? true
-    : not(isIdentChar(_Option_unwrapOr("", _Str_get(sub(_Str_length(part), 1), part))));
+    : not(isIdentChar(_Option_unwrapOr("", _Str_get(_Str_length(part) - 1, part))));
 const startsAtBoundary: (part: string) => boolean = (part: string) =>
   eq(_Str_length(part), 0) ? true : not(isIdentChar(_Option_unwrapOr("", _Str_get(0, part))));
 const occursAsWordFrom: _Curry<[parts: string[], i: number], boolean> = _curry(
@@ -919,12 +911,9 @@ const occursAsWordFrom: _Curry<[parts: string[], i: number], boolean> = _curry(
     match(_Array_get(i, parts))
       .with({ _tag: "None" }, () => false)
       .with({ _tag: "Some" }, ({ value: after }) =>
-        and(
-          _Option_mapOr(false, endsAtBoundary, _Array_get(sub(i, 1), parts)),
-          startsAtBoundary(after),
-        )
+        and(_Option_mapOr(false, endsAtBoundary, _Array_get(i - 1, parts)), startsAtBoundary(after))
           ? true
-          : occursAsWordFrom(parts, add(i, 1)),
+          : occursAsWordFrom(parts, i + 1),
       )
       .exhaustive(),
 );
@@ -934,7 +923,7 @@ const occursAsWord: _Curry<[name: string, text: string], boolean> = _curry(
 );
 const importedBinding: (spec: string) => string = (spec: string) => {
   const parts: string[] = _Str_split(" as ", spec);
-  return _Str_trim(_Option_unwrapOr(spec, _Array_get(sub(length(parts), 1), parts)));
+  return _Str_trim(_Option_unwrapOr(spec, _Array_get(length(parts) - 1, parts)));
 };
 const bindingsInLine: _Curry<[line: string, acc: Set<string>], Set<string>> = _curry(
   2,

@@ -62,13 +62,18 @@ export let writeAll = outs =>
 // Typed-emit writer. A module output keeps its `.mochi` path (swapped to `.ts`
 // here); an extern sidecar (`host.d.mts`) is already a real declaration path and
 // is written as-is.
-let tsWritePath = path => Str.endsWith(".mochi", path) ? tsOutPath(path) : path
+let tsWritePath = (path, body) =>
+  Str.endsWith(".mochi", path)
+    ? Str.startsWith("/** @jsx h */", body)
+      ? "${Str.slice(0, Str.length(path) - 6, path)}.tsx"
+      : tsOutPath(path)
+    : path
 
 export let writeAllTs = outs =>
   loop (remaining = outs) {
     switch remaining {
       | [] => Ok("")
-      | [o, ...rest] => switch writeFile(tsWritePath(o.path), o.js) {
+      | [o, ...rest] => switch writeFile(tsWritePath(o.path, o.js), o.js) {
           | Err(e) => Err(e)
           | Ok(w) => do {
               print("  wrote ${w}");

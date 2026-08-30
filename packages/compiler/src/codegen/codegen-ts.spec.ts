@@ -16,7 +16,7 @@ test("a function binding is annotated with its inferred type", () => {
 test("an inner lambda's concrete params are annotated (ADR 0028)", () => {
   // `y` inside the map callback would infer `any` under strict tsc; annotate it.
   const out = ts("let mapInc = xs => xs |> map(y => add(y, 1))");
-  expect(out).toContain("(y: number) => add(y, 1)");
+  expect(out).toContain("(y: number) => (y + 1)");
 });
 
 test("a generic binding's value lambda scopes the letters so its params can name them (ADR 0032)", () => {
@@ -33,13 +33,13 @@ test("let? flattens to the all-at-once flatMap grouping so tsc infers the bind p
   // two calls (`unknown`); the flat `_Result_flatMap(f, v)` infers it from `v`.
   // The value's head must be concrete at the bind site (ADR 0079).
   const out = ts("let chain = n => let? v = Ok(n) in Ok(add(v, 1))");
-  expect(out).toContain("_Result_flatMap((v) => Ok(add(v, 1)), Ok(n))");
+  expect(out).toContain("_Result_flatMap((v) => Ok((v + 1)), Ok(n))");
 });
 
 test("Option let? flattens to the all-at-once Option flatMap grouping (ADR 0079)", () => {
   const out = ts("let chain = n => let? v = Some(n) in Some(add(v, 1))");
   expect(out).toContain(
-    "_Option_flatMap((v) => (Some(add(v, 1)) as Option<number>), (Some(n) as Option<number>))",
+    "_Option_flatMap((v) => (Some((v + 1)) as Option<number>), (Some(n) as Option<number>))",
   );
 });
 
@@ -131,8 +131,30 @@ test("pattern-only local ctors omit factories but keep the union", () => {
 
 test("runtime builtins are imported from the typed runtime, not inlined", () => {
   const out = ts("let inc = x => add(x, 1)");
-  expect(out).toContain('import { _curry, add } from "@mochi/runtime";');
+  expect(out).toContain('import { _curry } from "@mochi/runtime";');
   expect(out).not.toContain("const add = _curry"); // no inlined preamble
+});
+
+test("runtime-equivalent numeric calls re-fold to TS operators", () => {
+  const out = ts("let compare = (a, b) => gte(add(a, 1), b)");
+  expect(out).toContain("((a + 1) >= b)");
+  expect(out).not.toContain("add(");
+  expect(out).not.toContain("gte(");
+});
+
+test("structural equality remains a runtime call", () => {
+  const out = ts("let same = (a, b) => eq(a, b)");
+  expect(out).toContain("eq(a, b)");
+  expect(out).toContain('import { _curry, eq } from "@mochi/runtime";');
+});
+
+test("parser-originated JSX re-folds to TSX while handwritten h remains a call", () => {
+  const jsx = ts('let el = <button disabled>{"go"}</button>');
+  expect(jsx).toContain("/** @jsx h */");
+  expect(jsx).toContain('<button disabled>{"go"}</button>');
+  expect(ts('extern h : a = "./host" "h"\nlet el = h("button", {}, [])')).toContain(
+    'h("button", {}, [])',
+  );
 });
 
 test("a polymorphic function keeps its generics in the annotation", () => {

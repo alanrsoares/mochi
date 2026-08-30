@@ -952,7 +952,7 @@ const inferLoopParamsFrom: <A>(
               inferLoopParamsFrom(
                 ctx,
                 params,
-                add(i, 1),
+                i + 1,
                 _Map_set(p.name, mono(t), envAcc),
                 _Array_append(t, frameAcc),
                 _Map_set(p.name, sp, ownerAcc),
@@ -1042,10 +1042,10 @@ const unifyRecurArgsFrom: <A>(
         _Result_flatMap(
           ([at, st1]) =>
             match(_Array_get(i, frame))
-              .with({ _tag: "None" }, () => unifyRecurArgsFrom(ctx, args, frame, add(i, 1), st1))
+              .with({ _tag: "None" }, () => unifyRecurArgsFrom(ctx, args, frame, i + 1, st1))
               .with({ _tag: "Some" }, ({ value: pt }) =>
                 _Result_flatMap(
-                  (st2) => unifyRecurArgsFrom(ctx, args, frame, add(i, 1), st2),
+                  (st2) => unifyRecurArgsFrom(ctx, args, frame, i + 1, st2),
                   u(at, pt, st1, exprSpan(a)),
                 ),
               )
@@ -4789,7 +4789,7 @@ const inferOrPatAlts: <A>(
             _Result_flatMap(
               (st2) =>
                 _Result_flatMap(
-                  (st3) => inferOrPatAlts(ctx, alts, add(i, 1), t, bindings, st3),
+                  (st3) => inferOrPatAlts(ctx, alts, i + 1, t, bindings, st3),
                   unifyOrPatBindings(
                     _Map_keys(altBindings),
                     altBindings,
@@ -5040,7 +5040,7 @@ const loopInitRefsFrom: _Curry<
   match(_Array_get(i, params))
     .with({ _tag: "None" }, () => acc)
     .with({ _tag: "Some" }, ({ value: p }) =>
-      loopInitRefsFrom(params, add(i, 1), bound, freeRefs(p.init, bound, acc)),
+      loopInitRefsFrom(params, i + 1, bound, freeRefs(p.init, bound, acc)),
     )
     .exhaustive(),
 );
@@ -5730,9 +5730,9 @@ const idxOfFrom: _Curry<
           const _g: any = _v;
           return _g._tag === "Some" && _g.value._tag === "SLet";
         },
-        ({ value: { name } }) => _recur(add(i, 1), _Map_set(name, i, acc)),
+        ({ value: { name } }) => _recur(i + 1, _Map_set(name, i, acc)),
       )
-      .with({ _tag: "Some" }, () => _recur(add(i, 1), acc))
+      .with({ _tag: "Some" }, () => _recur(i + 1, acc))
       .exhaustive();
     if (_step._tag === "recur") {
       [i, acc] = _step.args;
@@ -6603,7 +6603,7 @@ const allSameConcreteFrom: _Curry<[shown: string, uses: Ty[], i: number], boolea
       .with({ _tag: "None" }, () => true)
       .with({ _tag: "Some" }, ({ value: t }) =>
         and(isConcrete(t), eq(showType(t), shown))
-          ? allSameConcreteFrom(shown, uses, add(i, 1))
+          ? allSameConcreteFrom(shown, uses, i + 1)
           : false,
       )
       .exhaustive(),
@@ -7336,7 +7336,7 @@ const exportCtorsInto: <A, B, C>(
     match(_Array_get(i, ctors))
       .with({ _tag: "None" }, () => acc)
       .with({ _tag: "Some" }, ({ value: c }) =>
-        exportCtorsInto(ctors, add(i, 1), env, takeScheme(c.name, env, acc)),
+        exportCtorsInto(ctors, i + 1, env, takeScheme(c.name, env, acc)),
       )
       .exhaustive(),
 );
@@ -7362,7 +7362,7 @@ const exportedSchemesFrom: <A>(
             const _g: any = _v;
             return _g._tag === "Some" && _g.value._tag === "SLet" && _g.value.exported === true;
           },
-          ({ value: { name } }) => _recur(add(i, 1), takeScheme(name, env, acc)),
+          ({ value: { name } }) => _recur(i + 1, takeScheme(name, env, acc)),
         )
         .with(
           (
@@ -7373,7 +7373,7 @@ const exportedSchemesFrom: <A>(
             const _g: any = _v;
             return _g._tag === "Some" && _g.value._tag === "SExtern" && _g.value.exported === true;
           },
-          ({ value: { name } }) => _recur(add(i, 1), takeScheme(name, env, acc)),
+          ({ value: { name } }) => _recur(i + 1, takeScheme(name, env, acc)),
         )
         .with(
           (
@@ -7384,9 +7384,9 @@ const exportedSchemesFrom: <A>(
             const _g: any = _v;
             return _g._tag === "Some" && _g.value._tag === "SType" && _g.value.exported === true;
           },
-          ({ value: { ctors } }) => _recur(add(i, 1), exportCtorsInto(ctors, 0, env, acc)),
+          ({ value: { ctors } }) => _recur(i + 1, exportCtorsInto(ctors, 0, env, acc)),
         )
-        .with({ _tag: "Some" }, () => _recur(add(i, 1), acc))
+        .with({ _tag: "Some" }, () => _recur(i + 1, acc))
         .exhaustive();
       if (_step._tag === "recur") {
         [i, acc] = _step.args;

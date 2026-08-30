@@ -22,7 +22,6 @@ import {
   _curry,
   _done,
   _recur,
-  add,
   eq,
   filter,
   length,
@@ -51,7 +50,7 @@ const keysOfFrom: <A>(fields: ({ name: Option<string> } & A)[], i: number) => st
     match(_Array_get(i, fields))
       .with({ _tag: "None" }, () => [] as string[])
       .with({ _tag: "Some" }, ({ value: f }) =>
-        _Array_prepend(_Option_unwrapOr(`_${show(i)}`, f.name), keysOfFrom(fields, add(i, 1))),
+        _Array_prepend(_Option_unwrapOr(`_${show(i)}`, f.name), keysOfFrom(fields, i + 1)),
       )
       .exhaustive(),
 );
@@ -106,9 +105,9 @@ const declaresType: _Curry<[stmts: Stmt[], i: number, name: string], boolean> = 
           const _g: any = _v;
           return _g._tag === "Some" && _g.value._tag === "SType";
         },
-        ({ value: { name: n } }) => (eq(n, name) ? true : declaresType(stmts, add(i, 1), name)),
+        ({ value: { name: n } }) => (eq(n, name) ? true : declaresType(stmts, i + 1, name)),
       )
-      .with({ _tag: "Some" }, () => declaresType(stmts, add(i, 1), name))
+      .with({ _tag: "Some" }, () => declaresType(stmts, i + 1, name))
       .exhaustive(),
 );
 /**
@@ -142,7 +141,7 @@ const seedRegCtorsFrom: <A, B, C, D>(
       .with({ _tag: "Some" }, ({ value: c }) =>
         seedRegCtorsFrom(
           ctors,
-          add(i, 1),
+          i + 1,
           owner,
           _Map_has(c.name, acc)
             ? acc
@@ -165,7 +164,7 @@ const seedRegDeclsFrom: <A, B, C, D, E>(
     match(_Array_get(i, decls))
       .with({ _tag: "None" }, () => reg)
       .with({ _tag: "Some" }, ({ value: bt }) =>
-        seedRegDeclsFrom(decls, add(i, 1), {
+        seedRegDeclsFrom(decls, i + 1, {
           ctors: seedRegCtorsFrom(bt.ctors, 0, bt.name, reg.ctors),
           types: _Map_set(
             bt.name,
@@ -210,7 +209,7 @@ const ctorsInto: <A, B, C, D, E, F>(
             ? Err(ctorErr(`duplicate constructor '${c.name}'`, sp))
             : ctorsInto(
                 ctors,
-                add(i, 1),
+                i + 1,
                 owner,
                 sp,
                 _Map_set(c.name, { owner: owner, arity: length(c.fields) }, acc),
@@ -237,7 +236,7 @@ const buildLoop: _Curry<[stmts: Stmt[], i: number, reg: Registry], Result<Regist
             ? (Err(ctorErr(`duplicate type '${name}'`, sp)) as Result<Registry, PErr>)
             : _Result_flatMap(
                 (cs: Map<string, CtorInfo>) =>
-                  buildLoop(stmts, add(i, 1), {
+                  buildLoop(stmts, i + 1, {
                     ctors: cs,
                     types: _Map_set(
                       name,
@@ -248,7 +247,7 @@ const buildLoop: _Curry<[stmts: Stmt[], i: number, reg: Registry], Result<Regist
                 ctorsInto(ctors, 0, name, sp, reg.ctors),
               ),
       )
-      .with({ _tag: "Some" }, () => buildLoop(stmts, add(i, 1), reg))
+      .with({ _tag: "Some" }, () => buildLoop(stmts, i + 1, reg))
       .exhaustive(),
 );
 /**
@@ -279,7 +278,7 @@ const exportedRegLoop: _Curry<[stmts: Stmt[], i0: number, reg0: Registry], Regis
             return _g._tag === "Some" && _g.value._tag === "SType" && _g.value.exported === true;
           },
           ({ value: { name, ctors } }) =>
-            _recur(add(i, 1), {
+            _recur(i + 1, {
               ctors: seedRegCtorsFrom(ctors, 0, name, reg.ctors),
               types: _Map_set(
                 name,
@@ -288,7 +287,7 @@ const exportedRegLoop: _Curry<[stmts: Stmt[], i0: number, reg0: Registry], Regis
               ),
             }),
         )
-        .with({ _tag: "Some" }, () => _recur(add(i, 1), reg))
+        .with({ _tag: "Some" }, () => _recur(i + 1, reg))
         .exhaustive();
       if (_step._tag === "recur") {
         [i, reg] = _step.args;
@@ -316,7 +315,7 @@ const ctorKeysInto: <A, B, C>(
       .with(
         (_v) => _v._tag === "Some",
         ({ value: { name, fields } }) =>
-          ctorKeysInto(ctors, add(i, 1), _Map_set(name, keysOf(fields), m)),
+          ctorKeysInto(ctors, i + 1, _Map_set(name, keysOf(fields), m)),
       )
       .exhaustive(),
 );
@@ -335,9 +334,9 @@ const ctorKeysFrom: _Curry<
         const _g: any = _v;
         return _g._tag === "Some" && _g.value._tag === "SType";
       },
-      ({ value: { ctors } }) => ctorKeysFrom(stmts, add(i, 1), ctorKeysInto(ctors, 0, m)),
+      ({ value: { ctors } }) => ctorKeysFrom(stmts, i + 1, ctorKeysInto(ctors, 0, m)),
     )
-    .with({ _tag: "Some" }, () => ctorKeysFrom(stmts, add(i, 1), m))
+    .with({ _tag: "Some" }, () => ctorKeysFrom(stmts, i + 1, m))
     .exhaustive(),
 );
 export const ctorKeysFromStmts: _Curry<
@@ -360,11 +359,7 @@ const seedKeyCtorsFrom: <A, B, C>(
       .with(
         (_v) => _v._tag === "Some",
         ({ value: { name, fields } }) =>
-          seedKeyCtorsFrom(
-            ctors,
-            add(i, 1),
-            _Map_has(name, m) ? m : _Map_set(name, keysOf(fields), m),
-          ),
+          seedKeyCtorsFrom(ctors, i + 1, _Map_has(name, m) ? m : _Map_set(name, keysOf(fields), m)),
       )
       .exhaustive(),
 );
@@ -383,7 +378,7 @@ const seedKeyDeclsFrom: <A, B, C, D>(
       .with({ _tag: "None" }, () => m)
       .with(
         (_v) => _v._tag === "Some",
-        ({ value: { ctors } }) => seedKeyDeclsFrom(decls, add(i, 1), seedKeyCtorsFrom(ctors, 0, m)),
+        ({ value: { ctors } }) => seedKeyDeclsFrom(decls, i + 1, seedKeyCtorsFrom(ctors, 0, m)),
       )
       .exhaustive(),
 );
@@ -413,9 +408,9 @@ const exportedCtorKeysFrom: _Curry<
         const _g: any = _v;
         return _g._tag === "Some" && _g.value._tag === "SType" && _g.value.exported === true;
       },
-      ({ value: { ctors } }) => exportedCtorKeysFrom(stmts, add(i, 1), ctorKeysInto(ctors, 0, m)),
+      ({ value: { ctors } }) => exportedCtorKeysFrom(stmts, i + 1, ctorKeysInto(ctors, 0, m)),
     )
-    .with({ _tag: "Some" }, () => exportedCtorKeysFrom(stmts, add(i, 1), m))
+    .with({ _tag: "Some" }, () => exportedCtorKeysFrom(stmts, i + 1, m))
     .exhaustive(),
 );
 export const exportedCtorKeys: (stmts: Stmt[]) => Map<string, string[]> = (stmts: Stmt[]) =>
