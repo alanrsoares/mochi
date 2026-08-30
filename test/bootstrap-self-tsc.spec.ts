@@ -7,4 +7,7 @@ import { bootstrapSelfTsc } from "../scripts/bootstrap-self-tsc";
 test("the bootstrap seed emits strict-clean TypeScript", async () => {
   const { total, byCode } = await bootstrapSelfTsc();
   expect({ total, byCode }).toEqual({ total: 0, byCode: {} });
-}, 30_000);
+  // `check:full` intentionally runs coverage and workspace builds alongside this
+  // compiler-sized `tsc` process; lower-core CI runners may need longer than the
+  // local baseline despite a healthy result.
+}, 90_000);
