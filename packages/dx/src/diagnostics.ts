@@ -113,7 +113,19 @@ export async function bootstrapModuleDiagnostics(
   readFile: (p: string) => Promise<string>,
 ): Promise<PublishDiagnostic[]> {
   const result = await (await loadBootstrapCore()).checkGraph(path, src, readFile);
-  return result._tag === "Ok" ? [] : [toPublish(src, { kind: "type", ...result.error }, path)];
+  return result._tag === "Ok"
+    ? []
+    : [
+        toPublish(
+          src,
+          {
+            kind: "type",
+            message: result.error.message,
+            span: { start: result.error.start, end: result.error.end },
+          },
+          path,
+        ),
+      ];
 }
 
 /**
