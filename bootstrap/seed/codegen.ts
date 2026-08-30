@@ -81,56 +81,57 @@ export type GCtx = {
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
-  _list,
-  _curry,
-  _recur,
-  _done,
-  Some,
   None,
-  add,
-  sub,
-  concat,
-  eq,
-  show,
-  lt,
-  gt,
-  gte,
-  lte,
-  not,
-  and,
-  or,
-  length,
-  map,
-  filter,
+  Some,
+  _Array_append,
+  _Array_concat,
+  _Array_get,
+  _Array_head,
+  _Array_prepend,
   _List_concat,
-  _Set_has,
-  _Set_add,
-  _Set_toArray,
-  _Set_fromArray,
-  _Set_union,
+  _Map_get,
   _Map_getOr,
   _Map_keys,
-  _Map_get,
-  _Option_exists,
   _Option_contains,
-  _Option_unwrapOr,
+  _Option_exists,
   _Option_isSome,
-  _Array_head,
-  _Array_get,
-  _Array_concat,
-  _Array_append,
-  _Array_prepend,
-  _Str_length,
-  _Str_concat,
-  _Str_split,
-  _Str_join,
-  _Str_startsWith,
-  _Str_endsWith,
-  _Str_slice,
-  _Str_replace,
-  _Str_codeAt,
+  _Option_unwrapOr,
+  _Set_add,
+  _Set_fromArray,
+  _Set_has,
+  _Set_toArray,
+  _Set_union,
   _Str_chars,
+  _Str_codeAt,
+  _Str_concat,
+  _Str_endsWith,
+  _Str_join,
+  _Str_length,
+  _Str_replace,
+  _Str_slice,
+  _Str_split,
+  _Str_startsWith,
+  _curry,
+  _done,
+  _list,
+  _recur,
   _tuple,
+  add,
+  and,
+  concat,
+  eq,
+  filter,
+  gt,
+  gte,
+  length,
+  lt,
+  lte,
+  map,
+  not,
+  or,
+  reduce,
+  show,
+  sub,
 } from "@mochi/compiler/runtime";
 
 import { match } from "@onrails/pattern";
@@ -397,14 +398,108 @@ const emptyNsEmit: _Curry<
     )
     .otherwise(() => None as Option<string>),
 );
-const collapseLambda: _Curry<[params: LamParam[], body: Expr], [LamParam[], Expr]> = _curry(
-  2,
-  (params: LamParam[], body: Expr) =>
-    match(body)
-      .with({ _tag: "ELambda" }, ({ params: params2, body: body2 }) =>
-        collapseLambda(_Array_concat(params, params2), body2),
-      )
-      .otherwise(() => _tuple(params, body)),
+const isLabeledParam: (p: LamParam) => boolean = (p: LamParam) =>
+  match(p)
+    .with({ _tag: "LPLabeled" }, () => true)
+    .otherwise(() => false);
+const splitLamParams: _Curry<
+  [params: LamParam[], positional: LamParam[], labeled: LamParam[]],
+  [LamParam[], LamParam[]]
+> = _curry(3, (params: LamParam[], positional: LamParam[], labeled: LamParam[]) =>
+  match(params)
+    .with(
+      (_v) => {
+        const _g: any = _v;
+        return _g.length === 0;
+      },
+      () => _tuple(positional, labeled),
+    )
+    .with(
+      (_v) => {
+        const _g: any = _v;
+        return _g.length >= 1;
+      },
+      ([p, ...rest]) =>
+        isLabeledParam(p)
+          ? splitLamParams(rest, positional, _Array_append(p, labeled))
+          : splitLamParams(rest, _Array_append(p, positional), labeled),
+    )
+    .otherwise(() => {
+      throw new Error("non-exhaustive match");
+    }),
+);
+const absorbParams: _Curry<
+  [
+    params: LamParam[],
+    acc: LamParam[],
+    fills: { labVar: string; labs: LamParam[] }[],
+    labN: number,
+  ],
+  [LamParam[], { labVar: string; labs: LamParam[] }[], number]
+> = _curry(
+  4,
+  (
+    params: LamParam[],
+    acc: LamParam[],
+    fills: { labVar: string; labs: LamParam[] }[],
+    labN: number,
+  ) =>
+    (([positional, labeled]: [LamParam[], LamParam[]]) => {
+      const acc1: LamParam[] = _Array_concat(acc, positional);
+      return match(labeled)
+        .with(
+          (_v) => {
+            const _g: any = _v;
+            return _g.length === 0;
+          },
+          () => _tuple(acc1, fills, labN),
+        )
+        .otherwise(() =>
+          ((labVar: string) =>
+            _tuple(
+              _Array_append(Ast.LPName(labVar, None as Option<TypeExpr>), acc1),
+              _Array_append({ labVar: labVar, labs: labeled }, fills),
+              add(labN, 1),
+            ))(eq(labN, 0) ? "$lab" : `$lab${show(labN)}`),
+        );
+    })(splitLamParams(params, [] as LamParam[], [] as LamParam[])),
+);
+const collapseLambdaFrom: _Curry<
+  [
+    params: LamParam[],
+    body: Expr,
+    acc: LamParam[],
+    fills: { labVar: string; labs: LamParam[] }[],
+    labN: number,
+  ],
+  [LamParam[], Expr, { labVar: string; labs: LamParam[] }[]]
+> = _curry(
+  5,
+  (
+    params: LamParam[],
+    body: Expr,
+    acc: LamParam[],
+    fills: { labVar: string; labs: LamParam[] }[],
+    labN: number,
+  ) =>
+    (([acc1, fills1, labN1]: [LamParam[], { labVar: string; labs: LamParam[] }[], number]) =>
+      match(body)
+        .with({ _tag: "ELambda" }, ({ params: params2, body: body2 }) =>
+          collapseLambdaFrom(params2, body2, acc1, fills1, labN1),
+        )
+        .otherwise(() => _tuple(acc1, body, fills1)))(absorbParams(params, acc, fills, labN)),
+);
+const collapseLambda: _Curry<
+  [params: LamParam[], body: Expr],
+  [LamParam[], Expr, { labVar: string; labs: LamParam[] }[]]
+> = _curry(2, (params: LamParam[], body: Expr) =>
+  collapseLambdaFrom(
+    params,
+    body,
+    [] as LamParam[],
+    [] as { labVar: string; labs: LamParam[] }[],
+    0,
+  ),
 );
 const genExpr: _Curry<[ctx: GCtx, e: Expr], string> = _curry(2, (ctx: GCtx, e: Expr) =>
   match(e)
@@ -428,10 +523,13 @@ const genExpr: _Curry<[ctx: GCtx, e: Expr], string> = _curry(2, (ctx: GCtx, e: E
       ),
     )
     .with({ _tag: "ELambda" }, ({ params, body, span: sp }) =>
-      (([cparams, cbody]: [LamParam[], Expr]) => {
-        const bound: Set<string> = paramNameSet(cparams, 0, _Set_fromArray([] as string[]));
+      (([cparams, cbody, fills]: [LamParam[], Expr, { labs: LamParam[]; labVar: string }[]]) => {
+        const bound: Set<string> = fillNames(
+          fills,
+          paramNameSet(cparams, 0, _Set_fromArray([] as string[])),
+        );
         const annots: ParamAnnots = paramAnnotsFor(ctx.annotateParams, sp, length(cparams));
-        const arrow: string = `${annots.generics}(${_Str_join(", ", annotatedParams(cparams, annots.params, 0))}) => ${genLambdaBodyIn(ctx, cbody, bound)}`;
+        const arrow: string = `${annots.generics}(${_Str_join(", ", annotatedParams(cparams, annots.params, 0))}) => ${genLambdaBodyIn(ctx, cbody, bound, genFillDecls(ctx, fills))}`;
         return gte(length(cparams), 2) ? `_curry(${show(length(cparams))}, ${arrow})` : arrow;
       })(collapseLambda(params, body)),
     )
@@ -502,13 +600,18 @@ const genExpr: _Curry<[ctx: GCtx, e: Expr], string> = _curry(2, (ctx: GCtx, e: E
         ),
       ),
     )
-    .with({ _tag: "EField" }, ({ target, name }) =>
+    .with({ _tag: "EField" }, ({ target, name, optional }) =>
       match(emptyNsEmit(target, name, hook1(ctx.annotateEmpty, e)))
         .with({ _tag: "Some" }, ({ value: js }) => js)
         .with({ _tag: "None" }, () =>
           match(nsRuntimeId(ctx, target, name))
             .with({ _tag: "Some" }, ({ value: rt }) => rt)
-            .with({ _tag: "None" }, () => `${genMember(ctx, target)}.${name}`)
+            .with({ _tag: "None" }, () =>
+              ((member: string) =>
+                optional
+                  ? `((v) => v != null ? { _tag: "Some", value: v } : { _tag: "None" })(${member})`
+                  : member)(`${genMember(ctx, target)}.${name}`),
+            )
             .exhaustive(),
         )
         .exhaustive(),
@@ -636,6 +739,7 @@ const genParam: (p: LamParam) => string = (p: LamParam) =>
     .with({ _tag: "LPName" }, ({ name }) => name)
     .with({ _tag: "LPTuple" }, ({ names }) => `[${_Str_join(", ", names)}]`)
     .with({ _tag: "LPRecord" }, ({ fields }) => `{ ${_Str_join(", ", fields)} }`)
+    .with({ _tag: "LPLabeled" }, ({ name }) => name)
     .exhaustive();
 const genCallee: _Curry<[ctx: GCtx, e: Expr], string> = _curry(2, (ctx: GCtx, e: Expr) =>
   match(e)
@@ -928,7 +1032,82 @@ const paramNames: (p: LamParam) => string[] = (p: LamParam) =>
     .with({ _tag: "LPName" }, ({ name }) => [name])
     .with({ _tag: "LPTuple" }, ({ names }) => names)
     .with({ _tag: "LPRecord" }, ({ fields }) => fields)
+    .with({ _tag: "LPLabeled" }, ({ name }) => [name])
     .exhaustive();
+const genLabeledFill: _Curry<[ctx: GCtx, labVar: string, lab: LamParam], string> = _curry(
+  3,
+  (ctx: GCtx, labVar: string, lab: LamParam) =>
+    match(lab)
+      .with({ _tag: "LPLabeled" }, ({ name, optional, defaultValue }) =>
+        ((access: string) =>
+          match(defaultValue)
+            .with(
+              { _tag: "Some" },
+              ({ value: d }) =>
+                `const ${name} = ${access} != null ? ${access} : ${genExpr(ctx, d)};`,
+            )
+            .with({ _tag: "None" }, () =>
+              optional
+                ? `const ${name} = ${access} != null ? { _tag: "Some", value: ${access} } : { _tag: "None" };`
+                : `const ${name} = ${access};`,
+            )
+            .exhaustive())(`(${labVar} ?? {}).${name}`),
+      )
+      .otherwise(() => ""),
+);
+const genFillDecls: _Curry<[ctx: GCtx, fills: { labVar: string; labs: LamParam[] }[]], string> =
+  _curry(2, (ctx: GCtx, fills: { labVar: string; labs: LamParam[] }[]) =>
+    match(fills)
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length === 0;
+        },
+        () => "",
+      )
+      .otherwise(
+        () =>
+          `${_Str_join(
+            " ",
+            map(
+              (g: { labVar: string; labs: LamParam[] }) =>
+                _Str_join(
+                  " ",
+                  map((lab: LamParam) => genLabeledFill(ctx, g.labVar, lab), g.labs),
+                ),
+              fills,
+            ),
+          )} `,
+      ),
+  );
+const fillNames: <A>(fills: ({ labs: LamParam[] } & A)[], acc: Set<string>) => Set<string> = _curry(
+  2,
+  <A>(fills: ({ labs: LamParam[] } & A)[], acc: Set<string>) =>
+    match(fills)
+      .with(
+        (_v) => _v.length === 0,
+        () => acc,
+      )
+      .with(
+        (_v) => _v.length >= 1,
+        ([g, ...rest]) =>
+          fillNames(
+            rest,
+            reduce(
+              _curry(2, (s: Set<string>, lab: LamParam) =>
+                match(lab)
+                  .with({ _tag: "LPLabeled" }, ({ name }) => _Set_add(name, s))
+                  .otherwise(() => s),
+              ),
+              acc,
+              g.labs,
+            ),
+          ),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
+);
 const addNames: <A>(names: A[], i: number, acc: Set<A>) => Set<A> = _curry(
   3,
   <A>(names: A[], i: number, acc: Set<A>) =>
@@ -972,29 +1151,34 @@ const letBlockLoop: _Curry<
     )
     .otherwise(() => _tuple(decls, e, seen)),
 );
-const genLambdaBodyIn: _Curry<[ctx: GCtx, e: Expr, bound: Set<string>], string> = _curry(
-  3,
-  (ctx: GCtx, e: Expr, bound: Set<string>) =>
+const genLambdaBodyIn: _Curry<[ctx: GCtx, e: Expr, bound: Set<string>, prefix: string], string> =
+  _curry(4, (ctx: GCtx, e: Expr, bound: Set<string>, prefix: string) =>
     (([decls, rest, seen]: [string[], Expr, Set<string>]) =>
       eq(length(decls), 0)
         ? match(e)
             .with({ _tag: "ELoop" }, ({ params, body }) =>
               loopParamFree(params, 0, bound)
-                ? `{ ${genLoopBlock(ctx, params, body)} }`
-                : genLambdaBody(ctx, e),
+                ? `{ ${prefix}${genLoopBlock(ctx, params, body)} }`
+                : eq(prefix, "")
+                  ? genLambdaBody(ctx, e)
+                  : `{ ${prefix}return ${genLambdaBody(ctx, e)}; }`,
             )
-            .otherwise(() => genLambdaBody(ctx, e))
+            .otherwise(() =>
+              eq(prefix, "")
+                ? genLambdaBody(ctx, e)
+                : `{ ${prefix}return ${genLambdaBody(ctx, e)}; }`,
+            )
         : ((block: string) =>
             match(rest)
               .with({ _tag: "ELoop" }, ({ params, body }) =>
                 loopParamFree(params, 0, seen)
-                  ? `{ ${block} ${genLoopBlock(ctx, params, body)} }`
-                  : `{ ${block} return ${genExpr(ctx, rest)}; }`,
+                  ? `{ ${prefix}${block} ${genLoopBlock(ctx, params, body)} }`
+                  : `{ ${prefix}${block} return ${genExpr(ctx, rest)}; }`,
               )
-              .otherwise(() => `{ ${block} return ${genExpr(ctx, rest)}; }`))(
+              .otherwise(() => `{ ${prefix}${block} return ${genExpr(ctx, rest)}; }`))(
             _Str_join(" ", decls),
           ))(letBlockLoop(ctx, e, bound, [] as string[])),
-);
+  );
 const isCatchAll: (p: Pattern) => boolean = (p: Pattern) =>
   match(p)
     .with({ _tag: "PAs" }, ({ pat }) => isCatchAll(pat))
@@ -2253,9 +2437,37 @@ const exprRefs: _Curry<[ctx: GCtx, e: Expr, acc: Set<string>], Set<string>> = _c
         exprRefsListFrom(ctx, args, 0, exprRefs(ctx, fn, acc)),
       )
       .with({ _tag: "ELambda" }, ({ params, body }) =>
-        (([cparams, cbody]: [LamParam[], Expr]) => {
+        (([cparams, cbody, fills]: [LamParam[], Expr, { labs: LamParam[]; labVar: string }[]]) => {
           const acc2: Set<string> = gte(length(cparams), 2) ? _Set_add("_curry", acc) : acc;
-          return exprRefs(ctx, cbody, acc2);
+          const acc3: Set<string> = reduce(
+            _curry(2, (a: Set<string>, g: { labs: LamParam[]; labVar: string }) =>
+              reduce(
+                _curry(2, (b: Set<string>, lab: LamParam) =>
+                  match(lab)
+                    .with(
+                      (
+                        _v,
+                      ): _v is Extract<LamParam, { _tag: "LPLabeled" }> & {
+                        defaultValue: Extract<
+                          Extract<LamParam, { _tag: "LPLabeled" }>["defaultValue"],
+                          { _tag: "Some" }
+                        >;
+                      } => {
+                        const _g: any = _v;
+                        return _g._tag === "LPLabeled" && _g.defaultValue._tag === "Some";
+                      },
+                      ({ defaultValue: { value: d } }) => exprRefs(ctx, d, b),
+                    )
+                    .otherwise(() => b),
+                ),
+                a,
+                g.labs,
+              ),
+            ),
+            acc2,
+            fills,
+          );
+          return exprRefs(ctx, cbody, acc3);
         })(collapseLambda(params, body)),
       )
       .with({ _tag: "ELetIn" }, ({ value, body }) => exprRefs(ctx, body, exprRefs(ctx, value, acc)))

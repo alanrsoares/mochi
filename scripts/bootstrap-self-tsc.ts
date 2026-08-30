@@ -1,6 +1,7 @@
 // The SELF-HOSTED half of the ADR 0090 north star: how many `tsc --strict`
 // errors the `bootstrap/` graph emits when the emitter is `bootstrap/`'s own
-// `buildModulesTs` rather than the TypeScript oracle's.
+// `buildModulesTs` from the executable bootstrap seed rather than the
+// TypeScript oracle's.
 //
 // `scripts/bootstrap-tsc.ts` measures the same graph through
 // `@mochi/compiler/module` and holds at 0. This script measures the emitted
@@ -13,10 +14,8 @@
 //   bun scripts/bootstrap-self-tsc.ts --keep     # leave the scratch dir for inspection
 
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
-import { buildModules } from "@mochi/compiler/module";
-import { isErr } from "@onrails/result";
+import { loadBootstrapCore } from "@mochi/compiler/bootstrap";
 
 const REPO = resolve(import.meta.dir, "..");
 const ENTRY = join(REPO, "bootstrap", "cli.mochi");
@@ -47,47 +46,18 @@ export type TscReport = {
   errors: string[]; // raw `path.ts(line,col): error TSxxxx: …` lines
 };
 
-// The emitted-JS view of `bootstrap/module.mochi`: `buildModulesTs` is SYNC there
-// (the host IO returns `Result` directly) and takes two positional args, unlike
-// the oracle's async `(entry, read, opts)`.
-type MochiResult<T> = { _tag: "Ok"; value: T } | { _tag: "Err"; error: unknown };
-type ModuleOutput = { path: string; js: string };
-type BootstrapModule = {
-  buildModulesTs: (entry: string, runtimeImport: string) => MochiResult<ModuleOutput[]>;
-};
-
-/**
- * Build a runnable JS view of `bootstrap/` into `dir` and import its `module.js`.
- * Emitted fresh rather than importing the sibling `bootstrap/*.js`: those are
- * gitignored build artifacts, so a stale one silently measures an older graph.
- */
-const loadBootstrapModule = async (dir: string): Promise<BootstrapModule> => {
-  const read = (p: string): Promise<string> => Bun.file(p).text();
-  const built = await buildModules(ENTRY, read);
-  if (isErr(built)) throw new Error(`bootstrap JS build failed: ${JSON.stringify(built.error)}`);
-  for (const { path, js } of built.value) {
-    const dest = join(dir, relative(BOOTSTRAP, path).replace(/\.mochi$/, ".js"));
-    await mkdir(dirname(dest), { recursive: true });
-    await writeFile(dest, js);
-  }
-  // The host seam and prelude shim are hand-written / generated JS the emitted
-  // modules `import` by relative path — copy them in beside the graph.
-  for (const shim of ["host.mjs", "prelude.gen.mjs", "plugins/jsx-schema.gen.mjs"]) {
-    await mkdir(dirname(join(dir, shim)), { recursive: true });
-    await writeFile(join(dir, shim), await read(join(BOOTSTRAP, shim)));
-  }
-  return (await import(join(dir, "module.js"))) as BootstrapModule;
-};
-
 // Emit the graph with bootstrap's own driver, run tsc over it, parse diagnostics.
 export const bootstrapSelfTsc = async (keep = false): Promise<TscReport> => {
-  const jsDir = await mkdtemp(join(tmpdir(), "mochi-self-js-"));
-  const mod = await loadBootstrapModule(jsDir);
-  const built = mod.buildModulesTs(ENTRY, RUNTIME);
+  const bootstrap = await loadBootstrapCore();
+  const built = bootstrap.buildModulesTs(ENTRY, RUNTIME);
   if (built._tag === "Err")
     throw new Error(`bootstrap self-emit failed: ${JSON.stringify(built.error)}`);
 
-  const dir = await mkdtemp(join(tmpdir(), "mochi-self-bts-"));
+  // Keep generated TS inside the repository so its bare imports resolve through
+  // this workspace's node_modules. OS temp directories sit outside that tree.
+  const cache = join(REPO, ".cache");
+  await mkdir(cache, { recursive: true });
+  const dir = await mkdtemp(join(cache, "mochi-self-bts-"));
   try {
     for (const { path, js } of built.value) {
       // Same layout rule as the oracle script: keep bootstrap-relative paths so
@@ -125,7 +95,6 @@ export const bootstrapSelfTsc = async (keep = false): Promise<TscReport> => {
     return { total: errors.length, byCode, byFile, errors };
   } finally {
     if (!keep) await rm(dir, { recursive: true, force: true });
-    await rm(jsDir, { recursive: true, force: true });
   }
 };
 

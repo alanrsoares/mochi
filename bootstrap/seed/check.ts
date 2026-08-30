@@ -1,6 +1,5 @@
 import type {
   AliasField,
-  Ctor,
   CtorField,
   Expr,
   Field,
@@ -8,7 +7,6 @@ import type {
   LoopParam,
   MapEntry,
   MatchArm,
-  Name,
   PatField,
   Pattern,
   SeqElem,
@@ -26,46 +24,46 @@ export type QualScope = { types: Set<string> };
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
-  _curry,
-  _recur,
-  _done,
-  Some,
+  Err,
   None,
   Ok,
-  Err,
-  add,
-  eq,
-  show,
-  gt,
-  gte,
-  lte,
-  not,
-  and,
-  or,
-  length,
-  map,
-  filter,
-  _Set_has,
+  Some,
+  _Array_append,
+  _Array_contains,
+  _Array_flatMap,
+  _Array_get,
+  _Array_head,
+  _Map_get,
+  _Map_getOr,
+  _Map_has,
+  _Map_keys,
+  _Map_set,
+  _Option_isNone,
+  _Option_isSome,
+  _Option_orElse,
+  _Option_unwrapOr,
+  _Result_flatMap,
   _Set_add,
   _Set_fromArray,
-  _Map_has,
-  _Map_getOr,
-  _Map_set,
-  _Map_keys,
-  _Map_get,
-  _Option_unwrapOr,
-  _Option_orElse,
-  _Option_isSome,
-  _Option_isNone,
-  _Result_flatMap,
-  _Array_head,
-  _Array_get,
-  _Array_append,
-  _Array_flatMap,
-  _Array_contains,
-  _Str_join,
+  _Set_has,
   _Str_codeAt,
+  _Str_join,
+  _curry,
+  _done,
+  _recur,
   _tuple,
+  add,
+  and,
+  eq,
+  filter,
+  gt,
+  gte,
+  length,
+  lte,
+  map,
+  not,
+  or,
+  show,
 } from "@mochi/compiler/runtime";
 
 import { match } from "@onrails/pattern";
@@ -301,7 +299,7 @@ const checkPattern: <A, B>(
                 "lazy-List pattern cannot nest inside another pattern (matching pulls from the sequence)",
                 sp,
               ),
-            ) as Option<{ message: string; start: number; end: number }>),
+            ) as Option<CErr>),
       )
       .with({ _tag: "POr" }, ({ alts, span: sp }) => checkOrPattern(alts, sp, reg))
       .otherwise(() => None as Option<CErr>),
@@ -505,10 +503,7 @@ const guardErrs: _Curry<[arms: MatchArm[], listSwitch: boolean], Option<CErr>> =
     firstSome(
       (a: MatchArm) =>
         match(a.guard)
-          .with(
-            { _tag: "None" },
-            () => None as Option<{ message: string; start: number; end: number }>,
-          )
+          .with({ _tag: "None" }, () => None as Option<CErr>)
           .with({ _tag: "Some" }, ({ value: g }) =>
             or(isPList(a.pattern), listSwitch)
               ? (Some(
@@ -516,8 +511,8 @@ const guardErrs: _Curry<[arms: MatchArm[], listSwitch: boolean], Option<CErr>> =
                     "`when` guards are unsupported in a lazy-List switch (matching pulls from the sequence)",
                     exprSpan(g),
                   ),
-                ) as Option<{ message: string; start: number; end: number }>)
-              : (None as Option<{ message: string; start: number; end: number }>),
+                ) as Option<CErr>)
+              : (None as Option<CErr>),
           )
           .exhaustive(),
       arms,
@@ -544,13 +539,10 @@ const firstCatchIdx: _Curry<[arms: MatchArm[], i0: number], Option<number>> = _c
 );
 const unreachableAfterCatch: (arms: MatchArm[]) => Option<CErr> = (arms: MatchArm[]) =>
   match(firstCatchIdx(arms, 0))
-    .with({ _tag: "None" }, () => None as Option<{ message: string; start: number; end: number }>)
+    .with({ _tag: "None" }, () => None as Option<CErr>)
     .with({ _tag: "Some" }, ({ value: i }) =>
       match(_Array_get(add(i, 1), arms))
-        .with(
-          { _tag: "None" },
-          () => None as Option<{ message: string; start: number; end: number }>,
-        )
+        .with({ _tag: "None" }, () => None as Option<CErr>)
         .with(
           { _tag: "Some" },
           ({ value: a }) =>
@@ -559,7 +551,7 @@ const unreachableAfterCatch: (arms: MatchArm[]) => Option<CErr> = (arms: MatchAr
                 "unreachable arm: a catch-all arm above it matches first",
                 patSpan(a.pattern),
               ),
-            ) as Option<{ message: string; start: number; end: number }>,
+            ) as Option<CErr>,
         )
         .exhaustive(),
     )
@@ -782,10 +774,14 @@ const leavesOfArm: <A, B>(
 const checkMatch: <A>(
   arms: MatchArm[],
   mSpan: { end: number; start: number } & A,
-  reg: Registry,
+  reg: { ctors: Map<string, CtorInfo>; types: Map<string, string[]> },
 ) => Option<CErr> = _curry(
   3,
-  <A>(arms: MatchArm[], mSpan: { end: number; start: number } & A, reg: Registry) =>
+  <A>(
+    arms: MatchArm[],
+    mSpan: { end: number; start: number } & A,
+    reg: { ctors: Map<string, CtorInfo>; types: Map<string, string[]> },
+  ) =>
     match(firstSome((a: MatchArm) => checkPattern(a.pattern, reg, true), arms))
       .with({ _tag: "Some" }, ({ value: e }) => Some(e) as Option<CErr>)
       .with({ _tag: "None" }, () =>
@@ -841,133 +837,134 @@ const checkMatch: <A>(
       )
       .exhaustive(),
 );
-const checkExpr: _Curry<[e: Expr, reg: Registry], Option<CErr>> = _curry(
-  2,
-  (e: Expr, reg: Registry) =>
-    match(e)
-      .with({ _tag: "ENum" }, () => None as Option<CErr>)
-      .with({ _tag: "EUnit" }, () => None as Option<CErr>)
-      .with({ _tag: "EBool" }, () => None as Option<CErr>)
-      .with({ _tag: "EStr" }, () => None as Option<CErr>)
-      .with({ _tag: "ERef" }, () => None as Option<CErr>)
-      .with({ _tag: "ECall" }, ({ fn, args }) =>
+const checkExpr: _Curry<
+  [e: Expr, reg: { ctors: Map<string, CtorInfo>; types: Map<string, string[]> }],
+  Option<CErr>
+> = _curry(2, (e: Expr, reg: { ctors: Map<string, CtorInfo>; types: Map<string, string[]> }) =>
+  match(e)
+    .with({ _tag: "ENum" }, () => None as Option<CErr>)
+    .with({ _tag: "EUnit" }, () => None as Option<CErr>)
+    .with({ _tag: "EBool" }, () => None as Option<CErr>)
+    .with({ _tag: "EStr" }, () => None as Option<CErr>)
+    .with({ _tag: "ERef" }, () => None as Option<CErr>)
+    .with({ _tag: "ECall" }, ({ fn, args }) =>
+      _Option_orElse(
+        firstSome((a: Expr) => checkExpr(a, reg), args),
+        checkExpr(fn, reg),
+      ),
+    )
+    .with({ _tag: "ELambda" }, ({ body }) => checkExpr(body, reg))
+    .with({ _tag: "ELetIn" }, ({ value, body }) =>
+      _Option_orElse(checkExpr(body, reg), checkExpr(value, reg)),
+    )
+    .with({ _tag: "ELetBind" }, ({ value, body }) =>
+      _Option_orElse(checkExpr(body, reg), checkExpr(value, reg)),
+    )
+    .with({ _tag: "EPipe" }, ({ left, right }) =>
+      _Option_orElse(checkExpr(right, reg), checkExpr(left, reg)),
+    )
+    .with({ _tag: "EDo" }, ({ exprs }) => firstSome((x: Expr) => checkExpr(x, reg), exprs))
+    .with({ _tag: "ETernary" }, ({ cond, thenE, elseE }) =>
+      _Option_orElse(
+        checkExpr(elseE, reg),
+        _Option_orElse(checkExpr(thenE, reg), checkExpr(cond, reg)),
+      ),
+    )
+    .with({ _tag: "EMatch" }, ({ scrutinee, arms, span: sp }) =>
+      _Option_orElse(
+        checkMatch(arms, sp, reg),
         _Option_orElse(
-          firstSome((a: Expr) => checkExpr(a, reg), args),
-          checkExpr(fn, reg),
-        ),
-      )
-      .with({ _tag: "ELambda" }, ({ body }) => checkExpr(body, reg))
-      .with({ _tag: "ELetIn" }, ({ value, body }) =>
-        _Option_orElse(checkExpr(body, reg), checkExpr(value, reg)),
-      )
-      .with({ _tag: "ELetBind" }, ({ value, body }) =>
-        _Option_orElse(checkExpr(body, reg), checkExpr(value, reg)),
-      )
-      .with({ _tag: "EPipe" }, ({ left, right }) =>
-        _Option_orElse(checkExpr(right, reg), checkExpr(left, reg)),
-      )
-      .with({ _tag: "EDo" }, ({ exprs }) => firstSome((x: Expr) => checkExpr(x, reg), exprs))
-      .with({ _tag: "ETernary" }, ({ cond, thenE, elseE }) =>
-        _Option_orElse(
-          checkExpr(elseE, reg),
-          _Option_orElse(checkExpr(thenE, reg), checkExpr(cond, reg)),
-        ),
-      )
-      .with({ _tag: "EMatch" }, ({ scrutinee, arms, span: sp }) =>
-        _Option_orElse(
-          checkMatch(arms, sp, reg),
-          _Option_orElse(
-            firstSome(
-              (a: MatchArm) =>
-                _Option_orElse(
-                  checkExpr(a.body, reg),
-                  match(a.guard)
-                    .with({ _tag: "Some" }, ({ value: g }) => checkExpr(g, reg))
-                    .with({ _tag: "None" }, () => None as Option<CErr>)
-                    .exhaustive(),
-                ),
-              arms,
-            ),
-            checkExpr(scrutinee, reg),
+          firstSome(
+            (a: MatchArm) =>
+              _Option_orElse(
+                checkExpr(a.body, reg),
+                match(a.guard)
+                  .with({ _tag: "Some" }, ({ value: g }) => checkExpr(g, reg))
+                  .with({ _tag: "None" }, () => None as Option<CErr>)
+                  .exhaustive(),
+              ),
+            arms,
           ),
+          checkExpr(scrutinee, reg),
         ),
-      )
-      .with({ _tag: "ERecord" }, ({ fields, spread }) =>
-        _Option_orElse(
-          firstSome((f: Field) => checkExpr(f.value, reg), fields),
-          match(spread)
-            .with({ _tag: "Some" }, ({ value: s }) => checkExpr(s, reg))
-            .with({ _tag: "None" }, () => None as Option<CErr>)
-            .exhaustive(),
-        ),
-      )
-      .with({ _tag: "EField" }, ({ target }) => checkExpr(target, reg))
-      .with({ _tag: "ELoop" }, ({ params, body }) =>
-        _Option_orElse(
-          checkExpr(body, reg),
-          firstSome((p: LoopParam) => checkExpr(p.init, reg), params),
-        ),
-      )
-      .with({ _tag: "ERecur" }, ({ args }) => firstSome((a: Expr) => checkExpr(a, reg), args))
-      .with({ _tag: "ETuple" }, ({ elements }) =>
-        firstSome((el: Expr) => checkExpr(el, reg), elements),
-      )
-      .with({ _tag: "EArr" }, ({ elements }) =>
-        firstSome(
-          (el: SeqElem) =>
-            checkExpr(
-              match(el)
-                .with({ _tag: "SEExpr" }, ({ expr: e }) => e)
-                .with({ _tag: "SESpread" }, ({ expr: e }) => e)
-                .exhaustive(),
-              reg,
-            ),
-          elements,
-        ),
-      )
-      .with({ _tag: "EList" }, ({ elements }) =>
-        firstSome(
-          (el: SeqElem) =>
-            checkExpr(
-              match(el)
-                .with({ _tag: "SEExpr" }, ({ expr: e }) => e)
-                .with({ _tag: "SESpread" }, ({ expr: e }) => e)
-                .exhaustive(),
-              reg,
-            ),
-          elements,
-        ),
-      )
-      .with({ _tag: "ESet" }, ({ elements }) =>
-        firstSome(
-          (el: SeqElem) =>
-            checkExpr(
-              match(el)
-                .with({ _tag: "SEExpr" }, ({ expr: e }) => e)
-                .with({ _tag: "SESpread" }, ({ expr: e }) => e)
-                .exhaustive(),
-              reg,
-            ),
-          elements,
-        ),
-      )
-      .with({ _tag: "EMap" }, ({ entries }) =>
-        firstSome(
-          (en: MapEntry) => _Option_orElse(checkExpr(en.value, reg), checkExpr(en.key, reg)),
-          entries,
-        ),
-      )
-      .with({ _tag: "EInterp" }, ({ parts }) =>
-        firstSome(
-          (p: InterpPart) =>
-            match(p)
-              .with({ _tag: "IPLit" }, () => None as Option<CErr>)
-              .with({ _tag: "IPExpr" }, ({ expr: ex }) => checkExpr(ex, reg))
+      ),
+    )
+    .with({ _tag: "ERecord" }, ({ fields, spread }) =>
+      _Option_orElse(
+        firstSome((f: Field) => checkExpr(f.value, reg), fields),
+        match(spread)
+          .with({ _tag: "Some" }, ({ value: s }) => checkExpr(s, reg))
+          .with({ _tag: "None" }, () => None as Option<CErr>)
+          .exhaustive(),
+      ),
+    )
+    .with({ _tag: "EField" }, ({ target }) => checkExpr(target, reg))
+    .with({ _tag: "ELoop" }, ({ params, body }) =>
+      _Option_orElse(
+        checkExpr(body, reg),
+        firstSome((p: LoopParam) => checkExpr(p.init, reg), params),
+      ),
+    )
+    .with({ _tag: "ERecur" }, ({ args }) => firstSome((a: Expr) => checkExpr(a, reg), args))
+    .with({ _tag: "ETuple" }, ({ elements }) =>
+      firstSome((el: Expr) => checkExpr(el, reg), elements),
+    )
+    .with({ _tag: "EArr" }, ({ elements }) =>
+      firstSome(
+        (el: SeqElem) =>
+          checkExpr(
+            match(el)
+              .with({ _tag: "SEExpr" }, ({ expr: e }) => e)
+              .with({ _tag: "SESpread" }, ({ expr: e }) => e)
               .exhaustive(),
-          parts,
-        ),
-      )
-      .exhaustive(),
+            reg,
+          ),
+        elements,
+      ),
+    )
+    .with({ _tag: "EList" }, ({ elements }) =>
+      firstSome(
+        (el: SeqElem) =>
+          checkExpr(
+            match(el)
+              .with({ _tag: "SEExpr" }, ({ expr: e }) => e)
+              .with({ _tag: "SESpread" }, ({ expr: e }) => e)
+              .exhaustive(),
+            reg,
+          ),
+        elements,
+      ),
+    )
+    .with({ _tag: "ESet" }, ({ elements }) =>
+      firstSome(
+        (el: SeqElem) =>
+          checkExpr(
+            match(el)
+              .with({ _tag: "SEExpr" }, ({ expr: e }) => e)
+              .with({ _tag: "SESpread" }, ({ expr: e }) => e)
+              .exhaustive(),
+            reg,
+          ),
+        elements,
+      ),
+    )
+    .with({ _tag: "EMap" }, ({ entries }) =>
+      firstSome(
+        (en: MapEntry) => _Option_orElse(checkExpr(en.value, reg), checkExpr(en.key, reg)),
+        entries,
+      ),
+    )
+    .with({ _tag: "EInterp" }, ({ parts }) =>
+      firstSome(
+        (p: InterpPart) =>
+          match(p)
+            .with({ _tag: "IPLit" }, () => None as Option<CErr>)
+            .with({ _tag: "IPExpr" }, ({ expr: ex }) => checkExpr(ex, reg))
+            .exhaustive(),
+        parts,
+      ),
+    )
+    .exhaustive(),
 );
 const reservedNames: string[] = ["Array", "List", "Set", "Map", "Option", "Result", "Str"];
 const redeclarableTypes: string[] = ["Option", "Result"];
@@ -1002,7 +999,7 @@ const checkReservedNames: (stmts: Stmt[]) => Option<CErr> = (stmts: Stmt[]) =>
         )
         .with({ _tag: "SImport" }, ({ names }) =>
           firstSome(
-            (n: Name) =>
+            (n: { name: string; span: Span }) =>
               _Array_contains(n.name, reservedNames)
                 ? (Some(
                     checkErr(
@@ -1063,7 +1060,7 @@ const checkCtorFieldVars: (stmts: Stmt[]) => Option<CErr> = (stmts: Stmt[]) =>
       match(s)
         .with({ _tag: "SType" }, ({ name, params, ctors }) =>
           firstSome(
-            (c: Ctor) =>
+            (c: { name: string; fields: CtorField[] }) =>
               firstSome(
                 (f: CtorField) =>
                   match(strayTypeVar(params, f.fieldType))
@@ -1124,7 +1121,11 @@ const writtenTypeExprs: (stmts: Stmt[]) => TypeExpr[] = (stmts: Stmt[]) =>
             .exhaustive(),
         )
         .with({ _tag: "SType" }, ({ ctors, alias, aliasType }) => [
-          ..._Array_flatMap((c: Ctor) => map((f: CtorField) => f.fieldType, c.fields), ctors),
+          ..._Array_flatMap(
+            (c: { fields: CtorField[]; name: string }) =>
+              map((f: CtorField) => f.fieldType, c.fields),
+            ctors,
+          ),
           ...match(alias)
             .with({ _tag: "Some" }, ({ value: fields }) =>
               map((f: AliasField) => f.fieldType, fields),

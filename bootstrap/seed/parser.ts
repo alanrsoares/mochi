@@ -18,44 +18,50 @@ import type {
   Stmt,
   TypeExpr,
 } from "./ast";
-import type { St, Ty } from "./types";
+import type { Row, Ty } from "./types";
 
 export type LocTok = { tok: Tok; start: number; end: number; doc: Option<string> };
 export type PErr = { message: string; start: number; end: number };
+/**
+ * One slot in `f(…)`: a positional expression, or `~name` / `~name = e`.
+ */
+export type CallPart =
+  | { _tag: "CPPos"; value: Expr }
+  | { _tag: "CPLab"; name: string; value: Expr; labelSpan: Span };
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
-  _curry,
-  _recur,
-  _done,
-  Some,
+  Err,
   None,
   Ok,
-  Err,
-  add,
-  sub,
-  eq,
-  show,
-  lt,
-  gt,
-  gte,
-  lte,
-  not,
-  and,
-  or,
-  length,
-  map,
+  Some,
+  _Array_append,
+  _Array_concat,
+  _Array_get,
+  _Array_prepend,
   _Option_exists,
   _Option_unwrapOr,
-  _Result_map,
   _Result_flatMap,
-  _Array_get,
-  _Array_concat,
-  _Array_append,
-  _Array_prepend,
+  _Result_map,
   _Str_codeAt,
+  _curry,
+  _done,
+  _recur,
   _tuple,
+  add,
+  and,
+  eq,
+  gt,
+  gte,
+  length,
+  lt,
+  lte,
+  map,
+  not,
+  or,
+  show,
+  sub,
 } from "@mochi/compiler/runtime";
 
 import { match } from "@onrails/pattern";
@@ -94,6 +100,7 @@ import {
   TPercent,
   TAt,
   THash,
+  TTilde,
   TDot,
   TColon,
   TQuestion,
@@ -154,6 +161,7 @@ const tokName: (t: Tok) => string = (t: Tok) =>
     .with({ _tag: "TPercent" }, () => "percent")
     .with({ _tag: "TAt" }, () => "at")
     .with({ _tag: "THash" }, () => "hash")
+    .with({ _tag: "TTilde" }, () => "tilde")
     .with({ _tag: "TDot" }, () => "dot")
     .with({ _tag: "TColon" }, () => "colon")
     .with({ _tag: "TQuestion" }, () => "question")
@@ -578,6 +586,132 @@ const parseParam: <A>(
         ),
       ),
 );
+/**
+ * `~name`, `~name?`, `~name: T`, `~name = e`, `~name: T = e` (ADR 0098 §2).
+ * A labeled parameter is sugar: `inferLambda` folds a trailing labeled group
+ * into ONE record parameter, so there is no second calling convention.
+ */
+const parseLabeledParam: <A>(
+  toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+  pos: number,
+  hooks: ((
+    a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+    b: number,
+    c: (
+      a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+      b: number,
+    ) => Result<[Expr, number], PErr>,
+  ) => Result<Option<[Expr, number]>, PErr>)[],
+) => Result<[LamParam, number], PErr> = _curry(
+  3,
+  <A>(
+    toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+    pos: number,
+    hooks: ((
+      a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+      b: number,
+      c: (
+        a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+        b: number,
+      ) => Result<[Expr, number], PErr>,
+    ) => Result<Option<[Expr, number]>, PErr>)[],
+  ) =>
+    _Result_flatMap(
+      (p0) =>
+        _Result_flatMap(
+          ([nm, p1]) =>
+            ((optional: boolean) =>
+              ((p2: number) =>
+                _Result_flatMap(
+                  ([annot, p3]) =>
+                    eq(tokAt(toks, p3).tok, TEq as Tok)
+                      ? _Result_map(
+                          ([d, k]: [Expr, number]) =>
+                            _tuple(
+                              Ast.LPLabeled(nm.name, annot, optional, Some(d) as Option<Expr>),
+                              k,
+                            ),
+                          parseExpr(toks, add(p3, 1), hooks),
+                        )
+                      : (Ok(
+                          _tuple(Ast.LPLabeled(nm.name, annot, optional, None as Option<Expr>), p3),
+                        ) as Result<[LamParam, number], PErr>),
+                  eq(tokAt(toks, p2).tok, TColon as Tok)
+                    ? _Result_map(
+                        ([t, k]: [TypeExpr, number]) => _tuple(Some(t) as Option<TypeExpr>, k),
+                        parseTypeExpr(toks, add(p2, 1)),
+                      )
+                    : (Ok(_tuple(None as Option<TypeExpr>, p2)) as Result<
+                        [Option<TypeExpr>, number],
+                        PErr
+                      >),
+                ))(optional ? add(p1, 1) : p1))(eq(tokAt(toks, p1).tok, TQuestion as Tok)),
+          expectLabel(toks, p0),
+        ),
+      expectTok(TTilde as Tok, toks, pos),
+    ),
+);
+const parseLamParam: <A>(
+  toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+  pos: number,
+  hooks: ((
+    a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+    b: number,
+    c: (
+      a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+      b: number,
+    ) => Result<[Expr, number], PErr>,
+  ) => Result<Option<[Expr, number]>, PErr>)[],
+) => Result<[LamParam, number], PErr> = _curry(
+  3,
+  <A>(
+    toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+    pos: number,
+    hooks: ((
+      a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+      b: number,
+      c: (
+        a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+        b: number,
+      ) => Result<[Expr, number], PErr>,
+    ) => Result<Option<[Expr, number]>, PErr>)[],
+  ) =>
+    eq(tokAt(toks, pos).tok, TTilde as Tok)
+      ? parseLabeledParam(toks, pos, hooks)
+      : parseParam(toks, pos),
+);
+const isLabeledParam: (p: LamParam) => boolean = (p: LamParam) =>
+  match(p)
+    .with({ _tag: "LPLabeled" }, () => true)
+    .otherwise(() => false);
+/**
+ * True when every labeled parameter (if any) sits after every positional one.
+ */
+const labeledTrailing: _Curry<[params: LamParam[], seen: boolean], boolean> = _curry(
+  2,
+  (params: LamParam[], seen: boolean) =>
+    match(params)
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length === 0;
+        },
+        () => true,
+      )
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length >= 1;
+        },
+        ([p, ...rest]) =>
+          isLabeledParam(p)
+            ? labeledTrailing(rest, true)
+            : and(not(seen), labeledTrailing(rest, false)),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
+);
 const parseLambda: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   pos: number,
@@ -632,23 +766,25 @@ const parseLambda: <A>(
               ([params, p2]) =>
                 _Result_flatMap(
                   (p3) =>
-                    _Result_flatMap(
-                      (p4) =>
-                        _Result_flatMap(
-                          ([body, p5]) =>
-                            Ok(
-                              _tuple(
-                                Ast.ELambda(params, body, spanning(start, exprSpan(body))),
-                                p5,
-                              ),
-                            ) as Result<[Expr, number], PErr>,
-                          parseLambdaBody(toks, p4, hooks),
-                        ),
-                      expectTok(TArrow as Tok, toks, p3),
-                    ),
+                    labeledTrailing(params, false)
+                      ? _Result_flatMap(
+                          (p4) =>
+                            _Result_flatMap(
+                              ([body, p5]) =>
+                                Ok(
+                                  _tuple(
+                                    Ast.ELambda(params, body, spanning(start, exprSpan(body))),
+                                    p5,
+                                  ),
+                                ) as Result<[Expr, number], PErr>,
+                              parseLambdaBody(toks, p4, hooks),
+                            ),
+                          expectTok(TArrow as Tok, toks, p3),
+                        )
+                      : errAt("labeled parameters must be a trailing group", tokAt(toks, p)),
                   expectTok(TRparen as Tok, toks, p2),
                 ),
-              listUntil(TRparen as Tok, parseParam, toks, p),
+              listUntilH(TRparen as Tok, parseLamParam, toks, p, hooks),
             ),
           expectTok(TLparen as Tok, toks, pos),
         ),
@@ -1091,10 +1227,7 @@ const parseInfix: <A>(
                       ),
                       p: p,
                       matched: true,
-                    }) as Result<
-                      { left: Expr; p: number; matched: boolean },
-                      { message: string; start: number; end: number }
-                    >,
+                    }) as Result<{ left: Expr; p: number; matched: boolean }, PErr>,
                 )
                 .otherwise(() =>
                   errAt("fast pipe needs a call on the right, like `a -> f(b)`", lt),
@@ -1372,6 +1505,175 @@ const parseExpr: <A>(
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) => parseExprBp(toks, 0, pos, hooks),
 );
+const CPPos = (value: Expr): CallPart => ({ _tag: "CPPos", value });
+const CPLab = _curry(3, (name, value, labelSpan) => ({
+  _tag: "CPLab",
+  name,
+  value,
+  labelSpan,
+})) as (name: string, value: Expr, labelSpan: Span) => CallPart;
+/**
+ * `~name` alone is punning — it means `~name = name` (ADR 0098 §2).
+ */
+const parseCallPart: <A>(
+  toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+  pos: number,
+  hooks: ((
+    a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+    b: number,
+    c: (
+      a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+      b: number,
+    ) => Result<[Expr, number], PErr>,
+  ) => Result<Option<[Expr, number]>, PErr>)[],
+) => Result<[CallPart, number], PErr> = _curry(
+  3,
+  <A>(
+    toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+    pos: number,
+    hooks: ((
+      a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+      b: number,
+      c: (
+        a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+        b: number,
+      ) => Result<[Expr, number], PErr>,
+    ) => Result<Option<[Expr, number]>, PErr>)[],
+  ) =>
+    eq(tokAt(toks, pos).tok, TTilde as Tok)
+      ? _Result_flatMap(
+          ([nm, p]) =>
+            eq(tokAt(toks, p).tok, TEq as Tok)
+              ? _Result_map(
+                  ([v, k]: [Expr, number]) => _tuple(CPLab(nm.name, v, nm.span), k),
+                  parseExpr(toks, add(p, 1), hooks),
+                )
+              : (Ok(_tuple(CPLab(nm.name, Ast.ERef(nm.name, nm.span), nm.span), p)) as Result<
+                  [CallPart, number],
+                  PErr
+                >),
+          expectLabel(toks, add(pos, 1)),
+        )
+      : _Result_map(([v, k]: [Expr, number]) => _tuple(CPPos(v), k), parseExpr(toks, pos, hooks)),
+);
+const callPartSpan: (p: CallPart) => Span = (p: CallPart) =>
+  match(p)
+    .with({ _tag: "CPPos" }, ({ value }) => exprSpan(value))
+    .with({ _tag: "CPLab" }, ({ value, labelSpan }) => spanning(labelSpan, exprSpan(value)))
+    .exhaustive();
+/**
+ * Positionals first, then a single trailing labeled group; a positional after
+ * a label is an error, so the record argument is always last.
+ */
+const splitCallParts: _Curry<
+  [parts: CallPart[], positional: Expr[], labeled: CallPart[]],
+  Result<[Expr[], CallPart[]], PErr>
+> = _curry(3, (parts: CallPart[], positional: Expr[], labeled: CallPart[]) =>
+  match(parts)
+    .with(
+      (_v) => {
+        const _g: any = _v;
+        return _g.length === 0;
+      },
+      () => Ok(_tuple(positional, labeled)) as Result<[Expr[], CallPart[]], PErr>,
+    )
+    .with(
+      (_v) => {
+        const _g: any = _v;
+        return _g.length >= 1;
+      },
+      ([p, ...rest]) =>
+        match(p)
+          .with({ _tag: "CPLab" }, () =>
+            splitCallParts(rest, positional, _Array_append(p, labeled)),
+          )
+          .with({ _tag: "CPPos" }, ({ value }) =>
+            match(labeled)
+              .with(
+                (_v) => {
+                  const _g: any = _v;
+                  return _g.length === 0;
+                },
+                () => splitCallParts(rest, _Array_append(value, positional), labeled),
+              )
+              .otherwise(() =>
+                errAt("labeled arguments must be a trailing group", callPartSpan(p)),
+              ),
+          )
+          .exhaustive(),
+    )
+    .otherwise(() => {
+      throw new Error("non-exhaustive match");
+    }),
+);
+const labeledField: (p: CallPart) => Field = (p: CallPart) =>
+  match(p)
+    .with({ _tag: "CPLab" }, ({ name, value }) => ({ name: name, value: value }))
+    .with({ _tag: "CPPos" }, ({ value }) => ({ name: "", value: value }))
+    .exhaustive();
+const unionSpans: <A>(
+  parts: CallPart[],
+  acc: { start: A; end: number },
+) => { start: A; end: number } = _curry(2, <A>(parts: CallPart[], acc: { start: A; end: number }) =>
+  match(parts)
+    .with(
+      (_v) => {
+        const _g: any = _v;
+        return _g.length === 0;
+      },
+      () => acc,
+    )
+    .with(
+      (_v) => {
+        const _g: any = _v;
+        return _g.length >= 1;
+      },
+      ([p, ...rest]) => unionSpans(rest, spanning(acc, callPartSpan(p))),
+    )
+    .otherwise(() => {
+      throw new Error("non-exhaustive match");
+    }),
+);
+/**
+ * A trailing labeled group collapses to one record argument, tagged
+ * `origin = Some("labeled")` so the formatter can re-fold the sugar.
+ */
+const callArgsOf: (parts: CallPart[]) => Result<[Expr[], Option<string>], PErr> = (
+  parts: CallPart[],
+) =>
+  _Result_map(
+    ([positional, labeled]: [Expr[], CallPart[]]) =>
+      match(labeled)
+        .with(
+          (_v) => {
+            const _g: any = _v;
+            return _g.length === 0;
+          },
+          () => _tuple(positional, None as Option<string>),
+        )
+        .with(
+          (_v) => {
+            const _g: any = _v;
+            return _g.length >= 1;
+          },
+          ([first, ...rest]) =>
+            _tuple(
+              _Array_append(
+                Ast.ERecord(
+                  map(labeledField, labeled),
+                  None as Option<Expr>,
+                  unionSpans(rest, callPartSpan(first)),
+                ),
+                positional,
+              ),
+              Some("labeled") as Option<string>,
+            ),
+        )
+        .otherwise(() => {
+          throw new Error("non-exhaustive match");
+        }),
+    splitCallParts(parts, [] as Expr[], [] as CallPart[]),
+  );
 const postfixLoop: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   e: Expr,
@@ -1402,24 +1704,33 @@ const postfixLoop: <A>(
     match(tokAt(toks, pos).tok)
       .with({ _tag: "TLparen" }, () =>
         _Result_flatMap(
-          ([args, p]) =>
+          ([parts, p]) =>
             _Result_flatMap(
               (p2) =>
-                postfixLoop(
-                  toks,
-                  Ast.ECall(e, args, None as Option<string>, toEnd(exprSpan(e), toks, p2)),
-                  p2,
-                  hooks,
+                _Result_flatMap(
+                  ([args, origin]) =>
+                    postfixLoop(
+                      toks,
+                      Ast.ECall(e, args, origin, toEnd(exprSpan(e), toks, p2)),
+                      p2,
+                      hooks,
+                    ),
+                  callArgsOf(parts),
                 ),
               expectTok(TRparen as Tok, toks, p),
             ),
-          listUntilH(TRparen as Tok, parseExpr, toks, add(pos, 1), hooks),
+          listUntilH(TRparen as Tok, parseCallPart, toks, add(pos, 1), hooks),
         ),
       )
       .with({ _tag: "TDot" }, () =>
         _Result_flatMap(
           ([id, p]) =>
-            postfixLoop(toks, Ast.EField(e, id.name, spanning(exprSpan(e), id.span)), p, hooks),
+            postfixLoop(
+              toks,
+              Ast.EField(e, id.name, false, spanning(exprSpan(e), id.span)),
+              p,
+              hooks,
+            ),
           expectLabel(toks, add(pos, 1)),
         ),
       )
@@ -3197,18 +3508,20 @@ const parseAliasField: <A>(
   <A>(toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number) =>
     _Result_flatMap(
       ([nm, p]) =>
-        _Result_flatMap(
-          (p2) =>
+        ((optional: boolean) =>
+          ((p1: number) =>
             _Result_flatMap(
-              ([t, p3]) =>
-                Ok(_tuple({ name: nm.name, fieldType: t }, p3)) as Result<
-                  [AliasField, number],
-                  PErr
-                >,
-              parseTypeExpr(toks, p2),
-            ),
-          expectTok(TColon as Tok, toks, p),
-        ),
+              (p2) =>
+                _Result_flatMap(
+                  ([t, p3]) =>
+                    Ok(_tuple({ name: nm.name, fieldType: t, optional: optional }, p3)) as Result<
+                      [AliasField, number],
+                      PErr
+                    >,
+                  parseTypeExpr(toks, p2),
+                ),
+              expectTok(TColon as Tok, toks, p1),
+            ))(optional ? add(p, 1) : p))(eq(tokAt(toks, p).tok, TQuestion as Tok)),
       expectLabel(toks, pos),
     ),
 );
@@ -3649,17 +3962,16 @@ const parseRecordDestructure: <A, B>(
                                         p4,
                                         add(tmp, 1),
                                       ),
-                                    ) as Result<[Stmt[], number, number], PErr>)(
-                                    (f: { name: string; span: Span }) =>
-                                      Ast.SLet(
-                                        f.name,
-                                        f.span,
-                                        None as Option<TypeExpr>,
-                                        Ast.EField(Ast.ERef(tmpName, f.span), f.name, f.span),
-                                        false,
-                                        None as Option<string>,
-                                        f.span,
-                                      ),
+                                    ) as Result<[Stmt[], number, number], PErr>)((f) =>
+                                    Ast.SLet(
+                                      f.name,
+                                      f.span,
+                                      None as Option<TypeExpr>,
+                                      Ast.EField(Ast.ERef(tmpName, f.span), f.name, false, f.span),
+                                      false,
+                                      None as Option<string>,
+                                      f.span,
+                                    ),
                                   ))(
                                   Ast.SLet(
                                     tmpName,
@@ -4123,12 +4435,79 @@ export const parseRecovering: <A, B, C>(
           a: A,
           b: Expr[],
           c: Option<string>,
-          d: St,
+          d: {
+            tv: Map<number, Ty>;
+            rv: Map<number, Row>;
+            next: number;
+            recorded: { span: Span; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            letUses: Map<string, Ty[]>;
+          },
           e: {
-            unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, B>;
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], B>;
+            unify: (
+              a: Ty,
+              b: Ty,
+              c: {
+                tv: Map<number, Ty>;
+                rv: Map<number, Row>;
+                next: number;
+                recorded: { span: Span; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                letUses: Map<string, Ty[]>;
+              },
+              d: Span,
+            ) => Result<
+              {
+                tv: Map<number, Ty>;
+                rv: Map<number, Row>;
+                next: number;
+                recorded: { span: Span; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                letUses: Map<string, Ty[]>;
+              },
+              B
+            >;
+            inferExpr: (
+              a: Expr,
+              b: {
+                tv: Map<number, Ty>;
+                rv: Map<number, Row>;
+                next: number;
+                recorded: { span: Span; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                letUses: Map<string, Ty[]>;
+              },
+            ) => Result<
+              [
+                Ty,
+                {
+                  tv: Map<number, Ty>;
+                  rv: Map<number, Row>;
+                  next: number;
+                  recorded: { span: Span; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  letUses: Map<string, Ty[]>;
+                },
+              ],
+              B
+            >;
           } & C,
-        ) => Result<Option<[Ty, St]>, B>
+        ) => Result<
+          Option<
+            [
+              Ty,
+              {
+                tv: Map<number, Ty>;
+                rv: Map<number, Row>;
+                next: number;
+                recorded: { span: Span; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                letUses: Map<string, Ty[]>;
+              },
+            ]
+          >,
+          B
+        >
       >;
     }[]
   >,
@@ -4151,12 +4530,79 @@ export const parseRecovering: <A, B, C>(
             a: A,
             b: Expr[],
             c: Option<string>,
-            d: St,
+            d: {
+              tv: Map<number, Ty>;
+              rv: Map<number, Row>;
+              next: number;
+              recorded: { span: Span; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              letUses: Map<string, Ty[]>;
+            },
             e: {
-              unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, B>;
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], B>;
+              unify: (
+                a: Ty,
+                b: Ty,
+                c: {
+                  tv: Map<number, Ty>;
+                  rv: Map<number, Row>;
+                  next: number;
+                  recorded: { span: Span; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  letUses: Map<string, Ty[]>;
+                },
+                d: Span,
+              ) => Result<
+                {
+                  tv: Map<number, Ty>;
+                  rv: Map<number, Row>;
+                  next: number;
+                  recorded: { span: Span; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  letUses: Map<string, Ty[]>;
+                },
+                B
+              >;
+              inferExpr: (
+                a: Expr,
+                b: {
+                  tv: Map<number, Ty>;
+                  rv: Map<number, Row>;
+                  next: number;
+                  recorded: { span: Span; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  letUses: Map<string, Ty[]>;
+                },
+              ) => Result<
+                [
+                  Ty,
+                  {
+                    tv: Map<number, Ty>;
+                    rv: Map<number, Row>;
+                    next: number;
+                    recorded: { span: Span; ty: Ty }[];
+                    letSpans: Map<string, Span>;
+                    letUses: Map<string, Ty[]>;
+                  },
+                ],
+                B
+              >;
             } & C,
-          ) => Result<Option<[Ty, St]>, B>
+          ) => Result<
+            Option<
+              [
+                Ty,
+                {
+                  tv: Map<number, Ty>;
+                  rv: Map<number, Row>;
+                  next: number;
+                  recorded: { span: Span; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  letUses: Map<string, Ty[]>;
+                },
+              ]
+            >,
+            B
+          >
         >;
       }[]
     >,
@@ -4202,12 +4648,79 @@ export const parseWith: <A, B, C>(
           a: A,
           b: Expr[],
           c: Option<string>,
-          d: St,
+          d: {
+            tv: Map<number, Ty>;
+            rv: Map<number, Row>;
+            next: number;
+            recorded: { span: Span; ty: Ty }[];
+            letSpans: Map<string, Span>;
+            letUses: Map<string, Ty[]>;
+          },
           e: {
-            unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, B>;
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], B>;
+            unify: (
+              a: Ty,
+              b: Ty,
+              c: {
+                tv: Map<number, Ty>;
+                rv: Map<number, Row>;
+                next: number;
+                recorded: { span: Span; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                letUses: Map<string, Ty[]>;
+              },
+              d: Span,
+            ) => Result<
+              {
+                tv: Map<number, Ty>;
+                rv: Map<number, Row>;
+                next: number;
+                recorded: { span: Span; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                letUses: Map<string, Ty[]>;
+              },
+              B
+            >;
+            inferExpr: (
+              a: Expr,
+              b: {
+                tv: Map<number, Ty>;
+                rv: Map<number, Row>;
+                next: number;
+                recorded: { span: Span; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                letUses: Map<string, Ty[]>;
+              },
+            ) => Result<
+              [
+                Ty,
+                {
+                  tv: Map<number, Ty>;
+                  rv: Map<number, Row>;
+                  next: number;
+                  recorded: { span: Span; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  letUses: Map<string, Ty[]>;
+                },
+              ],
+              B
+            >;
           } & C,
-        ) => Result<Option<[Ty, St]>, B>
+        ) => Result<
+          Option<
+            [
+              Ty,
+              {
+                tv: Map<number, Ty>;
+                rv: Map<number, Row>;
+                next: number;
+                recorded: { span: Span; ty: Ty }[];
+                letSpans: Map<string, Span>;
+                letUses: Map<string, Ty[]>;
+              },
+            ]
+          >,
+          B
+        >
       >;
     }[]
   >,
@@ -4230,12 +4743,79 @@ export const parseWith: <A, B, C>(
             a: A,
             b: Expr[],
             c: Option<string>,
-            d: St,
+            d: {
+              tv: Map<number, Ty>;
+              rv: Map<number, Row>;
+              next: number;
+              recorded: { span: Span; ty: Ty }[];
+              letSpans: Map<string, Span>;
+              letUses: Map<string, Ty[]>;
+            },
             e: {
-              unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, B>;
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], B>;
+              unify: (
+                a: Ty,
+                b: Ty,
+                c: {
+                  tv: Map<number, Ty>;
+                  rv: Map<number, Row>;
+                  next: number;
+                  recorded: { span: Span; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  letUses: Map<string, Ty[]>;
+                },
+                d: Span,
+              ) => Result<
+                {
+                  tv: Map<number, Ty>;
+                  rv: Map<number, Row>;
+                  next: number;
+                  recorded: { span: Span; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  letUses: Map<string, Ty[]>;
+                },
+                B
+              >;
+              inferExpr: (
+                a: Expr,
+                b: {
+                  tv: Map<number, Ty>;
+                  rv: Map<number, Row>;
+                  next: number;
+                  recorded: { span: Span; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  letUses: Map<string, Ty[]>;
+                },
+              ) => Result<
+                [
+                  Ty,
+                  {
+                    tv: Map<number, Ty>;
+                    rv: Map<number, Row>;
+                    next: number;
+                    recorded: { span: Span; ty: Ty }[];
+                    letSpans: Map<string, Span>;
+                    letUses: Map<string, Ty[]>;
+                  },
+                ],
+                B
+              >;
             } & C,
-          ) => Result<Option<[Ty, St]>, B>
+          ) => Result<
+            Option<
+              [
+                Ty,
+                {
+                  tv: Map<number, Ty>;
+                  rv: Map<number, Row>;
+                  next: number;
+                  recorded: { span: Span; ty: Ty }[];
+                  letSpans: Map<string, Span>;
+                  letUses: Map<string, Ty[]>;
+                },
+              ]
+            >,
+            B
+          >
         >;
       }[]
     >,

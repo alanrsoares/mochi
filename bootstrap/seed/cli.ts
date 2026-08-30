@@ -3,20 +3,20 @@ export type Diag = { message: string; start: number; end: number };
 import type { Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
-  _curry,
-  _recur,
-  _done,
-  Some,
+  Err,
   None,
   Ok,
-  Err,
-  sub,
-  _Result_mapErr,
-  _Result_flatMap,
+  Some,
   _Array_get,
-  _Str_length,
+  _Result_flatMap,
+  _Result_mapErr,
   _Str_endsWith,
+  _Str_length,
   _Str_slice,
+  _curry,
+  _done,
+  _recur,
+  sub,
 } from "@mochi/compiler/runtime";
 
 import { match } from "@onrails/pattern";
@@ -68,17 +68,11 @@ export const writeAll: <A>(outs: ({ path: string; js: string } & A)[]) => Result
   while (true) {
     const _step = match(remaining)
       .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
+        (_v) => _v.length === 0,
         () => _done(Ok("") as Result<string, string>),
       )
       .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
+        (_v) => _v.length >= 1,
         ([o, ...rest]) =>
           match(writeFile(outPath(o.path), o.js))
             .with({ _tag: "Err" }, ({ error: e }) => _done(Err(e) as Result<string, string>))
@@ -108,17 +102,11 @@ export const writeAllTs: <A>(outs: ({ path: string; js: string } & A)[]) => Resu
     while (true) {
       const _step = match(remaining)
         .with(
-          (_v) => {
-            const _g: any = _v;
-            return _g.length === 0;
-          },
+          (_v) => _v.length === 0,
           () => _done(Ok("") as Result<string, string>),
         )
         .with(
-          (_v) => {
-            const _g: any = _v;
-            return _g.length >= 1;
-          },
+          (_v) => _v.length >= 1,
           ([o, ...rest]) =>
             match(writeFile(tsWritePath(o.path), o.js))
               .with({ _tag: "Err" }, ({ error: e }) => _done(Err(e) as Result<string, string>))

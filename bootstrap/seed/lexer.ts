@@ -33,6 +33,7 @@ export type Tok =
   | { _tag: "TPercent" }
   | { _tag: "TAt" }
   | { _tag: "THash" }
+  | { _tag: "TTilde" }
   | { _tag: "TDot" }
   | { _tag: "TColon" }
   | { _tag: "TQuestion" }
@@ -65,37 +66,37 @@ export type TPart = { _tag: "PLit"; value: string } | { _tag: "PHole"; start: nu
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
-  _curry,
-  _recur,
-  _done,
-  Some,
+  Err,
   None,
   Ok,
-  Err,
-  add,
-  sub,
-  div,
-  eq,
-  lt,
-  gte,
-  lte,
-  not,
-  and,
-  or,
-  length,
-  _Option_exists,
-  _Option_contains,
-  _Option_unwrapOr,
-  _Array_head,
+  Some,
   _Array_append,
+  _Array_head,
   _Array_tail,
-  _Str_length,
-  _Str_join,
-  _Str_slice,
-  _Str_get,
+  _Option_contains,
+  _Option_exists,
+  _Option_unwrapOr,
   _Str_codeAt,
   _Str_fromCode,
+  _Str_get,
+  _Str_join,
+  _Str_length,
+  _Str_slice,
   _Str_toNumber,
+  _curry,
+  _done,
+  _recur,
+  add,
+  and,
+  div,
+  eq,
+  gte,
+  length,
+  lt,
+  lte,
+  not,
+  or,
+  sub,
 } from "@mochi/compiler/runtime";
 
 import { match } from "@onrails/pattern";
@@ -130,6 +131,7 @@ export const TSlash: Tok = { _tag: "TSlash" };
 export const TPercent: Tok = { _tag: "TPercent" };
 export const TAt: Tok = { _tag: "TAt" };
 export const THash: Tok = { _tag: "THash" };
+export const TTilde: Tok = { _tag: "TTilde" };
 export const TDot: Tok = { _tag: "TDot" };
 export const TColon: Tok = { _tag: "TColon" };
 export const TQuestion: Tok = { _tag: "TQuestion" };
@@ -225,6 +227,7 @@ const punctTok: (c: string) => Option<Tok> = (c: string) =>
     .with("?", () => Some(TQuestion as Tok) as Option<Tok>)
     .with("@", () => Some(TAt as Tok) as Option<Tok>)
     .with("#", () => Some(THash as Tok) as Option<Tok>)
+    .with("~", () => Some(TTilde as Tok) as Option<Tok>)
     .with("+", () => Some(TPlus as Tok) as Option<Tok>)
     .with("-", () => Some(TMinus as Tok) as Option<Tok>)
     .with("*", () => Some(TStar as Tok) as Option<Tok>)

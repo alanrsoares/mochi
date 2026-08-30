@@ -13,31 +13,31 @@ export type TsEnv = { vars: Map<number, string>; recs: Map<string, string> };
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
-  _curry,
-  Some,
   None,
-  add,
-  eq,
-  compare,
-  show,
-  not,
-  length,
-  map,
-  _Map_set,
-  _Map_size,
-  _Map_get,
-  _Option_map,
-  _Option_flatMap,
-  _Option_unwrapOr,
-  _Array_get,
-  _Array_concat,
+  Some,
   _Array_append,
+  _Array_concat,
+  _Array_get,
   _Array_prepend,
   _Array_sort,
-  _Str_join,
-  _Str_get,
+  _Map_get,
+  _Map_set,
+  _Map_size,
+  _Option_flatMap,
+  _Option_map,
+  _Option_unwrapOr,
   _Str_fromCode,
+  _Str_get,
+  _Str_join,
+  _curry,
   _tuple,
+  add,
+  compare,
+  eq,
+  length,
+  map,
+  not,
+  show,
 } from "@mochi/compiler/runtime";
 
 import { match } from "@onrails/pattern";
@@ -126,11 +126,12 @@ const tsRowFields: _Curry<[row: Row, env: TsEnv], [string[], Option<number>]> = 
     match(row)
       .with({ _tag: "RowEmpty" }, () => _tuple([] as string[], None as Option<number>))
       .with({ _tag: "RowVar" }, ({ id }) => _tuple([] as string[], Some(id) as Option<number>))
-      .with({ _tag: "RowExtend" }, ({ label, fieldType, rest }) =>
+      .with({ _tag: "RowExtend" }, ({ label, fieldType, optional, rest }) =>
         (([fields, tail]: [string[], Option<number>]) =>
-          _tuple(_Array_prepend(`${label}: ${tsOfRaw(fieldType, env)}`, fields), tail))(
-          tsRowFields(rest, env),
-        ),
+          _tuple(
+            _Array_prepend(`${label}${optional ? "?" : ""}: ${tsOfRaw(fieldType, env)}`, fields),
+            tail,
+          ))(tsRowFields(rest, env)),
       )
       .exhaustive(),
 );
@@ -144,9 +145,13 @@ const shapeFieldsFrom: _Curry<[row: Row, vars: Map<number, string>], Option<stri
     match(row)
       .with({ _tag: "RowEmpty" }, () => Some([] as string[]) as Option<string[]>)
       .with({ _tag: "RowVar" }, () => None as Option<string[]>)
-      .with({ _tag: "RowExtend" }, ({ label, fieldType, rest }) =>
+      .with({ _tag: "RowExtend" }, ({ label, fieldType, optional, rest }) =>
         _Option_map(
-          (fs: string[]) => _Array_prepend(`${label}: ${tsOf(fieldType, plainEnv(vars))}`, fs),
+          (fs: string[]) =>
+            _Array_prepend(
+              `${label}${optional ? "?" : ""}: ${tsOf(fieldType, plainEnv(vars))}`,
+              fs,
+            ),
           shapeFieldsFrom(rest, vars),
         ),
       )
