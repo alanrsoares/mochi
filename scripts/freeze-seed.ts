@@ -47,6 +47,11 @@ const emptyDir = (dir: string): void => {
 const sourceRevision = (): string =>
   execFileSync("git", ["rev-parse", "HEAD"], { cwd: REPO, encoding: "utf8" }).trim();
 
+const stripBundleSourceLabels = (file: string): void => {
+  const source = readFileSync(file, "utf8");
+  writeFileSync(file, source.replace(/^\/\/ .*\/mochi-seed-[^\n]+\n/gm, ""));
+};
+
 const tmp = await mkdtemp(join(tmpdir(), "mochi-seed-"));
 const bootstrap = await loadBootstrapCore();
 const built = bootstrap.buildModulesTs(ENTRY, RUNTIME);
@@ -73,7 +78,7 @@ execFileSync(
     "build",
     join(tmp, "compile.ts"),
     "--outfile",
-    join(tmp, "compile.bundle.js"),
+    join(tmp, "compile.bundle.cjs"),
     "--target",
     "bun",
     "--external",
@@ -83,6 +88,24 @@ execFileSync(
   ],
   { cwd: REPO, stdio: "inherit" },
 );
+stripBundleSourceLabels(join(tmp, "compile.bundle.cjs"));
+execFileSync(
+  "bun",
+  [
+    "build",
+    join(tmp, "module.ts"),
+    "--outfile",
+    join(tmp, "module.bundle.cjs"),
+    "--target",
+    "bun",
+    "--external",
+    "@mochi/compiler/runtime",
+    "--external",
+    "@onrails/pattern",
+  ],
+  { cwd: REPO, stdio: "inherit" },
+);
+stripBundleSourceLabels(join(tmp, "module.bundle.cjs"));
 
 emptyDir(SEED);
 cpSync(tmp, SEED, { recursive: true });

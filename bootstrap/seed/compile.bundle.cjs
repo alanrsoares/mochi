@@ -1,8 +1,6 @@
 // @bun
-// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-pzeW5z/compile.ts
 import { Ok as Ok9, _Result_flatMap as _Result_flatMap7, _curry as _curry16 } from "@mochi/compiler/runtime";
 
-// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-pzeW5z/lexer.ts
 import { Err, None, Ok, Some, _Array_append, _Array_head, _Array_tail, _Option_contains, _Option_exists, _Option_unwrapOr, _Str_codeAt, _Str_fromCode, _Str_get, _Str_join, _Str_length, _Str_slice, _Str_toNumber, _curry, _done, _recur, and, eq, length, not, or } from "@mochi/compiler/runtime";
 import { match } from "@onrails/pattern";
 var TLet = { _tag: "TLet" };
@@ -163,11 +161,9 @@ var go = _curry(6, (src, i, doc, nlRun, lineTok, toks) => match(_Str_get(i, src)
 }, () => match(scanComment(src, i, lineTok)).with({ _tag: "Trailing" }, ({ stop }) => go(src, stop, doc, nlRun, lineTok, toks)).with({ _tag: "PlainOwn" }, ({ stop }) => go(src, stop, [], 0, lineTok, toks)).with({ _tag: "DocLine" }, ({ text, stop }) => go(src, stop, _Array_append(text, doc), 0, lineTok, toks)).exhaustive()).with({ _tag: "Some" }, ({ value: c }) => eq(_Str_slice(i, i + 3, src), "...") ? emit(src, TSpread, i, i + 3, doc, toks) : match(digraphTok(_Str_slice(i, i + 2, src))).with({ _tag: "Some" }, ({ value: t }) => emit(src, t, i, i + 2, doc, toks)).with({ _tag: "None" }, () => eq(c, '"') ? lexString(src, i, doc, toks) : numStart(src, i, c) ? ((j) => ((raw) => emit(src, TNum(numValue(raw), raw), i, j, doc, toks))(_Str_slice(i, j, src)))(scanWhile(isNumChar, src, i + 1)) : match(punctTok(c)).with({ _tag: "Some" }, ({ value: t }) => emit(src, t, i, i + 1, doc, toks)).with({ _tag: "None" }, () => isIdStart(c) ? ((j) => emit(src, identTok(_Str_slice(i, j, src)), i, j, doc, toks))(scanWhile(isIdChar, src, i + 1)) : lexError(`unexpected char '${c}'`, i, i + 1)).exhaustive()).exhaustive()).exhaustive());
 var lex = (src) => go(src, 0, [], 0, false, []);
 
-// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-pzeW5z/parser.ts
 import { Err as Err5, None as None5, Ok as Ok5, Some as Some5, _Array_append as _Array_append5, _Array_concat as _Array_concat2, _Array_get as _Array_get4, _Array_prepend as _Array_prepend2, _Option_exists as _Option_exists3, _Option_unwrapOr as _Option_unwrapOr3, _Result_flatMap as _Result_flatMap3, _Result_map as _Result_map3, _Str_codeAt as _Str_codeAt3, _curry as _curry6, _done as _done2, _recur as _recur2, _tuple as _tuple3, and as and4, eq as eq5, length as length5, map as map3, not as not3, or as or4, show as show2 } from "@mochi/compiler/runtime";
 import { match as match5 } from "@onrails/pattern";
 
-// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-pzeW5z/ast.ts
 import { _curry as _curry2 } from "@mochi/compiler/runtime";
 var LPName = _curry2(2, (name, annot) => ({ _tag: "LPName", name, annot }));
 var LPRecord = (fields) => ({ _tag: "LPRecord", fields });
@@ -229,15 +225,12 @@ var SImportNs = _curry2(3, (alias, from, span) => ({ _tag: "SImportNs", alias, f
 var SExpr = _curry2(2, (value, span) => ({ _tag: "SExpr", value, span }));
 var SError = (span) => ({ _tag: "SError", span });
 
-// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-pzeW5z/extensions.ts
 import { Err as Err4, None as None4, Ok as Ok4, Some as Some4, _Array_append as _Array_append4, _Array_concat, _Array_get as _Array_get3, _curry as _curry5, eq as eq4, length as length4 } from "@mochi/compiler/runtime";
 import { match as match4 } from "@onrails/pattern";
 
-// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-pzeW5z/plugins/jsx.ts
 import { Err as Err3, None as None3, Ok as Ok3, Some as Some3, _Array_append as _Array_append3, _Array_get as _Array_get2, _Map_get as _Map_get2, _Option_exists as _Option_exists2, _Option_flatMap, _Option_unwrapOr as _Option_unwrapOr2, _Result_flatMap as _Result_flatMap2, _Result_map as _Result_map2, _Str_codeAt as _Str_codeAt2, _Str_length as _Str_length2, _Str_slice as _Str_slice2, _Str_split, _Str_startsWith, _curry as _curry4, _tuple as _tuple2, and as and3, eq as eq3, length as length3, map as map2, or as or3 } from "@mochi/compiler/runtime";
 import { match as match3 } from "@onrails/pattern";
 
-// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-pzeW5z/types.ts
 import { Err as Err2, None as None2, Ok as Ok2, Some as Some2, _Array_append as _Array_append2, _Array_get, _Array_prepend, _Map_get, _Map_keys, _Map_set, _Result_flatMap, _Result_map, _Str_join as _Str_join2, _curry as _curry3, _tuple, and as and2, eq as eq2, length as length2, map, not as not2, or as or2, show } from "@mochi/compiler/runtime";
 import { match as match2 } from "@onrails/pattern";
 var TyVar = (id) => ({ _tag: "TyVar", id });
@@ -373,7 +366,6 @@ var fitsRows = _curry3(3, (actual, expected, st) => {
   return match2(exp).with({ _tag: "RowVar" }, ({ id: eid }) => bindRowVar(eid, act, st)).with({ _tag: "RowEmpty" }, () => match2(act).with({ _tag: "RowEmpty" }, () => Ok2(st)).with({ _tag: "RowVar" }, ({ id: aid }) => bindRowVar(aid, exp, st)).with({ _tag: "RowExtend" }, ({ label }) => fail(`record has extra field '${label}'`)).exhaustive()).with({ _tag: "RowExtend" }, ({ label: elabel, fieldType: etype, optional: eopt, rest: erest }) => ((rw) => match2(rw).with({ _tag: "Err" }, () => eopt ? fitsRows(act, erest, st) : fail(`record missing field '${elabel}'`)).with({ _tag: "Ok" }, ({ value: hit }) => (([htype, hopt, hrest, s1]) => and2(hopt, not2(eopt)) ? fail(`record field '${elabel}' is required but missing or optional`) : _Result_flatMap((s2) => fitsRows(hrest, erest, s2), unify(htype, etype, s1)))(hit)).exhaustive())(rewriteRow(act, elabel, st))).exhaustive();
 });
 
-// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-pzeW5z/plugins/jsx-schema.gen.mjs
 var _t0 = new Map([
   ["accessKey", "string"],
   ["ariaAtomic", "string|bool"],
@@ -6231,7 +6223,6 @@ var jsxMismatchHints = new Map([
   ["viewbox", "In JSX, use 'viewBox' instead of 'viewbox'."]
 ]);
 
-// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-pzeW5z/plugins/jsx.ts
 var jxTokName = (t) => match3(t).with({ _tag: "TEq" }, () => "eq").with({ _tag: "TLbrace" }, () => "lbrace").with({ _tag: "TRbrace" }, () => "rbrace").with({ _tag: "TSpread" }, () => "spread").with({ _tag: "TSlash" }, () => "slash").with({ _tag: "TLt" }, () => "lt").with({ _tag: "TGt" }, () => "gt").with({ _tag: "TId" }, () => "id").with({ _tag: "TStr" }, () => "str").with({ _tag: "TNum" }, () => "num").with({ _tag: "TBool" }, () => "bool").with({ _tag: "TEof" }, () => "eof").otherwise(() => "tok");
 var jxEofTok = { tok: TEof, start: 0, end: 0, doc: None3 };
 var jxTokAt = _curry4(2, (toks, i) => _Option_unwrapOr2(jxEofTok, _Array_get2(i, toks)));
@@ -6341,7 +6332,6 @@ var inferJsxCallHook = _curry4(5, (_fn, args, origin, st, api) => match3(origin)
 }, ([tagExpr, propsExpr, ...rest]) => _Result_map2((r) => Some3(r), inferJsxCall(tagExpr, propsExpr, rest, st, api))).otherwise(() => Ok3(None3)) : Ok3(None3)).with({ _tag: "None" }, () => Ok3(None3)).exhaustive());
 var jsxPlugin = { name: "jsx", parse: Some3(parseJsxAtom), inferCall: Some3(inferJsxCallHook) };
 
-// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-pzeW5z/extensions.ts
 var DEFAULT_PLUGINS = [jsxPlugin];
 var resolvePlugins = _curry5(2, (pluginsOpt, builtins) => match4(pluginsOpt).with({ _tag: "None" }, () => builtins).with({ _tag: "Some" }, ({ value: ps }) => eq4(length4(ps), 0) ? [] : _Array_concat(builtins, ps)).exhaustive());
 var resolvePluginsDefault = (pluginsOpt) => resolvePlugins(pluginsOpt, DEFAULT_PLUGINS);
@@ -6356,7 +6346,6 @@ var runInferCallHooks = _curry5(6, (hooks, fn, args, origin, st, api) => match4(
   throw new Error("non-exhaustive match");
 }));
 
-// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-pzeW5z/parser.ts
 var tokName = (t) => match5(t).with({ _tag: "TLet" }, () => "let").with({ _tag: "TType" }, () => "type").with({ _tag: "TExtern" }, () => "extern").with({ _tag: "TSwitch" }, () => "switch").with({ _tag: "TLoop" }, () => "loop").with({ _tag: "TRecur" }, () => "recur").with({ _tag: "TDo" }, () => "do").with({ _tag: "TImport" }, () => "import").with({ _tag: "TExport" }, () => "export").with({ _tag: "TEq" }, () => "eq").with({ _tag: "TArrow" }, () => "arrow").with({ _tag: "TTarrow" }, () => "tarrow").with({ _tag: "TPipe" }, () => "pipe").with({ _tag: "TCompose" }, () => "compose").with({ _tag: "TConcat" }, () => "concat").with({ _tag: "TBar" }, () => "bar").with({ _tag: "TLparen" }, () => "lparen").with({ _tag: "TRparen" }, () => "rparen").with({ _tag: "TLbrace" }, () => "lbrace").with({ _tag: "TRbrace" }, () => "rbrace").with({ _tag: "TLbracket" }, () => "lbracket").with({ _tag: "TRbracket" }, () => "rbracket").with({ _tag: "TSpread" }, () => "spread").with({ _tag: "TPlus" }, () => "plus").with({ _tag: "TMinus" }, () => "minus").with({ _tag: "TStar" }, () => "star").with({ _tag: "TSlash" }, () => "slash").with({ _tag: "TPercent" }, () => "percent").with({ _tag: "TAt" }, () => "at").with({ _tag: "THash" }, () => "hash").with({ _tag: "TTilde" }, () => "tilde").with({ _tag: "TDot" }, () => "dot").with({ _tag: "TColon" }, () => "colon").with({ _tag: "TQuestion" }, () => "question").with({ _tag: "TEqeq" }, () => "eqeq").with({ _tag: "TNeq" }, () => "neq").with({ _tag: "TLte" }, () => "lte").with({ _tag: "TGte" }, () => "gte").with({ _tag: "TLt" }, () => "lt").with({ _tag: "TGt" }, () => "gt").with({ _tag: "TAndand" }, () => "andand").with({ _tag: "TOror" }, () => "oror").with({ _tag: "TBang" }, () => "bang").with({ _tag: "TBacktick" }, () => "backtick").with({ _tag: "TComma" }, () => "comma").with({ _tag: "TSemi" }, () => "semi").with({ _tag: "TNum" }, () => "num").with({ _tag: "TBool" }, () => "bool").with({ _tag: "TStr" }, () => "str").with({ _tag: "TTmplStart" }, () => "tmplstart").with({ _tag: "TTmplMid" }, () => "tmplmid").with({ _tag: "TTmplEnd" }, () => "tmplend").with({ _tag: "TId" }, () => "id").with({ _tag: "TEof" }, () => "eof").exhaustive();
 var eofTok = { tok: TEof, start: 0, end: 0, doc: None5 };
 var tokAt = _curry6(2, (toks, i) => _Option_unwrapOr3(eofTok, _Array_get4(i, toks)));
@@ -6696,11 +6685,9 @@ var parseWith = _curry6(2, (toks, pluginsOpt) => {
   return match5(_Array_get4(0, r.diagnostics)).with({ _tag: "Some" }, ({ value: d }) => Err5(d)).with({ _tag: "None" }, () => Ok5(r.stmts)).exhaustive();
 });
 
-// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-pzeW5z/check.ts
 import { Err as Err7, None as None8, Ok as Ok7, Some as Some8, _Array_append as _Array_append7, _Array_contains as _Array_contains2, _Array_flatMap as _Array_flatMap2, _Array_get as _Array_get7, _Array_head as _Array_head3, _Map_get as _Map_get4, _Map_getOr as _Map_getOr2, _Map_has as _Map_has2, _Map_keys as _Map_keys3, _Map_set as _Map_set3, _Option_isNone, _Option_isSome as _Option_isSome2, _Option_orElse, _Option_unwrapOr as _Option_unwrapOr6, _Result_flatMap as _Result_flatMap5, _Set_add, _Set_fromArray, _Set_has, _Str_codeAt as _Str_codeAt4, _Str_join as _Str_join4, _curry as _curry9, _done as _done4, _recur as _recur4, _tuple as _tuple4, and as and6, eq as eq8, filter as filter3, length as length8, map as map6, not as not6, or as or5, show as show5 } from "@mochi/compiler/runtime";
 import { match as match8 } from "@onrails/pattern";
 
-// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-pzeW5z/ctors.ts
 import { Err as Err6, Ok as Ok6, Some as Some6, _Array_get as _Array_get5, _Array_prepend as _Array_prepend3, _Map_has, _Map_set as _Map_set2, _Option_unwrapOr as _Option_unwrapOr4, _Result_flatMap as _Result_flatMap4, _Result_map as _Result_map4, _curry as _curry7, _done as _done3, _recur as _recur3, eq as eq6, filter, length as length6, map as map4, not as not4, show as show3 } from "@mochi/compiler/runtime";
 import { match as match6 } from "@onrails/pattern";
 var emptyRegistry = { ctors: new Map, types: new Map };
@@ -6752,7 +6739,6 @@ var exportedCtorKeysFrom = _curry7(3, (stmts, i, m) => match6(_Array_get5(i, stm
   return _g._tag === "Some" && _g.value._tag === "SType" && _g.value.exported === true;
 }, ({ value: { ctors } }) => exportedCtorKeysFrom(stmts, i + 1, ctorKeysInto(ctors, 0, m))).with({ _tag: "Some" }, () => exportedCtorKeysFrom(stmts, i + 1, m)).exhaustive());
 
-// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-pzeW5z/usefulness.ts
 import { None as None7, Some as Some7, _Array_append as _Array_append6, _Array_concat as _Array_concat3, _Array_contains, _Array_drop, _Array_flatMap, _Array_get as _Array_get6, _Array_head as _Array_head2, _Array_prepend as _Array_prepend4, _Array_tail as _Array_tail2, _Array_take, _Map_get as _Map_get3, _Map_getOr, _Map_keys as _Map_keys2, _Option_isSome, _Option_unwrapOr as _Option_unwrapOr5, _Str_concat, _Str_endsWith, _Str_join as _Str_join3, _curry as _curry8, and as and5, eq as eq7, filter as filter2, length as length7, map as map5, not as not5, reduce, show as show4 } from "@mochi/compiler/runtime";
 import { match as match7 } from "@onrails/pattern";
 var MWild = { _tag: "MWild" };
@@ -6862,7 +6848,6 @@ var checkExhaustiveM = _curry8(2, (patterns, reg) => {
   return match7(useful(rows, 1, reg, 20000)).with({ _tag: "UFuel" }, () => ExFuel).with({ _tag: "UNone" }, () => ExOk).with({ _tag: "USome" }, ({ row }) => ExWitness(_Option_unwrapOr5(MWild, _Array_head2(row)))).exhaustive();
 });
 
-// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-pzeW5z/check.ts
 var checkErr = _curry9(2, (message, sp) => ({ message, start: sp.start, end: sp.end }));
 var firstSomeFrom = _curry9(3, (f, xs, i0) => {
   let i = i0;
@@ -6981,11 +6966,9 @@ var mergeMissing = _curry9(3, (keys, from, into) => match8(keys).with((_v) => _v
 var checkWith = _curry9(3, (stmts, imported, quals) => match8(checkReservedNames(stmts)).with({ _tag: "Some" }, ({ value: e }) => Err7(e)).with({ _tag: "None" }, () => match8(checkCtorFieldVars(stmts)).with({ _tag: "Some" }, ({ value: e }) => Err7(e)).with({ _tag: "None" }, () => match8(checkQualifiedTypeNames(stmts, quals)).with({ _tag: "Some" }, ({ value: e }) => Err7(e)).with({ _tag: "None" }, () => _Result_flatMap5((reg0) => ((reg) => match8(firstSome((s) => match8(s).with({ _tag: "SLet" }, ({ value }) => checkExpr(value, reg)).with({ _tag: "SExpr" }, ({ value }) => checkExpr(value, reg)).otherwise(() => None8), stmts)).with({ _tag: "Some" }, ({ value: e }) => Err7(e)).with({ _tag: "None" }, () => Ok7(stmts)).exhaustive())({ ctors: mergeMissing(_Map_keys3(imported.ctors), imported.ctors, reg0.ctors), types: mergeMissing(_Map_keys3(imported.types), imported.types, reg0.types) }), buildRegistry(stmts))).exhaustive()).exhaustive()).exhaustive());
 var check = (stmts) => checkWith(stmts, { ctors: new Map, types: new Map }, emptyQuals);
 
-// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-pzeW5z/infer.ts
 import { Err as Err8, None as None11, Ok as Ok8, Some as Some11, _Array_append as _Array_append9, _Array_concat as _Array_concat4, _Array_flatMap as _Array_flatMap3, _Array_get as _Array_get9, _Array_head as _Array_head4, _Array_prepend as _Array_prepend6, _Array_reverse, _Map_delete, _Map_get as _Map_get6, _Map_getOr as _Map_getOr5, _Map_has as _Map_has4, _Map_keys as _Map_keys4, _Map_set as _Map_set6, _Option_map, _Result_flatMap as _Result_flatMap6, _Result_map as _Result_map5, _Set_add as _Set_add4, _Set_fromArray as _Set_fromArray4, _Set_has as _Set_has4, _Set_size, _Set_toArray as _Set_toArray2, _Str_startsWith as _Str_startsWith2, _curry as _curry12, _done as _done6, _recur as _recur6, _tuple as _tuple6, and as and8, eq as eq11, map as map8, not as not7, or as or6, reduce as reduce2 } from "@mochi/compiler/runtime";
 import { match as match11 } from "@onrails/pattern";
 
-// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-pzeW5z/schemes.ts
 import { _Array_contains as _Array_contains3, _Array_prepend as _Array_prepend5, _Map_get as _Map_get5, _Map_getOr as _Map_getOr3, _Map_set as _Map_set4, _Map_values, _Set_add as _Set_add2, _Set_diff, _Set_fromArray as _Set_fromArray2, _Set_has as _Set_has2, _Set_toArray, _Str_codeAt as _Str_codeAt5, _curry as _curry10, _tuple as _tuple5, and as and7, map as map7 } from "@mochi/compiler/runtime";
 import { match as match9 } from "@onrails/pattern";
 var mono = (t) => ({ vars: [], rvars: [], ty: t });
@@ -7095,7 +7078,6 @@ var ctorScheme = _curry10(5, (typeName, params, c, st, aliases) => (([pvars, pva
   })(ctorFieldsArrowFrom(c.fields, pvars, st1, aliases, result));
 })(pvarsFrom(params, st)));
 
-// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-pzeW5z/scc.ts
 import { _Array_append as _Array_append8, _Array_drop as _Array_drop2, _Array_get as _Array_get8, _Array_take as _Array_take2, _Map_getOr as _Map_getOr4, _Map_has as _Map_has3, _Map_set as _Map_set5, _Set_add as _Set_add3, _Set_diff as _Set_diff2, _Set_fromArray as _Set_fromArray3, _Set_has as _Set_has3, _curry as _curry11, _done as _done5, _recur as _recur5, eq as eq10, length as length9, min } from "@mochi/compiler/runtime";
 import { match as match10 } from "@onrails/pattern";
 var hasIndex = _curry11(2, (v, st) => _Map_has3(v, st.index));
@@ -7156,7 +7138,6 @@ var stronglyConnected = (adj) => {
   return connectAllFrom(0, n, adj, initSt).sccs;
 };
 
-// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-pzeW5z/infer.ts
 var setLetBindMonad = _curry12(2, ($receiver, $value) => $receiver["monad"] = $value);
 var exprSpan3 = (e) => match11(e).with({ _tag: "ENum" }, ({ span: sp }) => sp).with({ _tag: "EUnit" }, ({ span: sp }) => sp).with({ _tag: "EBool" }, ({ span: sp }) => sp).with({ _tag: "EStr" }, ({ span: sp }) => sp).with({ _tag: "ERef" }, ({ span: sp }) => sp).with({ _tag: "ECall" }, ({ span: sp }) => sp).with({ _tag: "ELambda" }, ({ span: sp }) => sp).with({ _tag: "ELetIn" }, ({ span: sp }) => sp).with({ _tag: "ELetBind" }, ({ span: sp }) => sp).with({ _tag: "EPipe" }, ({ span: sp }) => sp).with({ _tag: "EDo" }, ({ span: sp }) => sp).with({ _tag: "ETernary" }, ({ span: sp }) => sp).with({ _tag: "EMatch" }, ({ span: sp }) => sp).with({ _tag: "ELoop" }, ({ span: sp }) => sp).with({ _tag: "ERecur" }, ({ span: sp }) => sp).with({ _tag: "ERecord" }, ({ span: sp }) => sp).with({ _tag: "EField" }, ({ span: sp }) => sp).with({ _tag: "ETuple" }, ({ span: sp }) => sp).with({ _tag: "EArr" }, ({ span: sp }) => sp).with({ _tag: "EList" }, ({ span: sp }) => sp).with({ _tag: "ESet" }, ({ span: sp }) => sp).with({ _tag: "EMap" }, ({ span: sp }) => sp).with({ _tag: "EInterp" }, ({ span: sp }) => sp).exhaustive();
 var patSpan3 = (p) => match11(p).with({ _tag: "PWild" }, ({ span: sp }) => sp).with({ _tag: "PUnit" }, ({ span: sp }) => sp).with({ _tag: "PBind" }, ({ span: sp }) => sp).with({ _tag: "PAs" }, ({ span: sp }) => sp).with({ _tag: "PLit" }, ({ span: sp }) => sp).with({ _tag: "PBool" }, ({ span: sp }) => sp).with({ _tag: "PStr" }, ({ span: sp }) => sp).with({ _tag: "PTuple" }, ({ span: sp }) => sp).with({ _tag: "PRecord" }, ({ span: sp }) => sp).with({ _tag: "PCtor" }, ({ span: sp }) => sp).with({ _tag: "PArr" }, ({ span: sp }) => sp).with({ _tag: "PList" }, ({ span: sp }) => sp).with({ _tag: "POr" }, ({ span: sp }) => sp).exhaustive();
@@ -7772,7 +7753,6 @@ var exportedSchemesFrom = _curry12(4, (stmts, i0, env, acc0) => {
 });
 var exportedSchemes = _curry12(2, (stmts, env) => exportedSchemesFrom(stmts, 0, env, new Map));
 
-// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-pzeW5z/codegen.ts
 import { None as None12, Some as Some12, _Array_append as _Array_append10, _Array_concat as _Array_concat5, _Array_get as _Array_get10, _Array_head as _Array_head5, _Array_prepend as _Array_prepend7, _Map_get as _Map_get7, _Map_getOr as _Map_getOr6, _Map_keys as _Map_keys5, _Option_contains as _Option_contains2, _Option_exists as _Option_exists4, _Option_isSome as _Option_isSome3, _Option_unwrapOr as _Option_unwrapOr7, _Set_add as _Set_add5, _Set_fromArray as _Set_fromArray5, _Set_has as _Set_has5, _Set_toArray as _Set_toArray3, _Set_union, _Str_chars, _Str_codeAt as _Str_codeAt6, _Str_concat as _Str_concat2, _Str_endsWith as _Str_endsWith2, _Str_join as _Str_join5, _Str_length as _Str_length3, _Str_replace, _Str_slice as _Str_slice3, _Str_split as _Str_split2, _Str_startsWith as _Str_startsWith3, _curry as _curry13, _done as _done7, _recur as _recur7, _tuple as _tuple7, and as and9, concat, eq as eq12, filter as filter4, length as length10, map as map9, not as not8, or as or7, reduce as reduce3, show as show6 } from "@mochi/compiler/runtime";
 import { match as match12 } from "@onrails/pattern";
 var jsGenOpts = { annotateLet: None12, annotateCtor: None12, annotateParams: None12, annotateEmpty: None12, annotateLetin: None12, annotateCall: None12, guardBaseType: None12, flattenPipe: false, tupleHelper: false, preserveInfix: false, preserveJsx: false, moduleExt: ".js", docs: true };
@@ -8163,11 +8143,9 @@ var runtimeDepNames = _curry13(5, (stmts, imported, ns, jsDefs, runtimeDeps) => 
 });
 var codegen = _curry13(6, (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps) => codegenWith(stmts, imported, useRuntime, ns, jsDefs, runtimeDeps, jsGenOpts));
 
-// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-pzeW5z/codegen-ts.ts
 import { None as None14, Some as Some14, _Array_append as _Array_append12, _Array_concat as _Array_concat7, _Array_contains as _Array_contains4, _Array_dedupeBy, _Array_drop as _Array_drop3, _Array_get as _Array_get12, _Array_prepend as _Array_prepend9, _Array_reverse as _Array_reverse2, _Array_sort as _Array_sort2, _Array_sortBy, _Array_take as _Array_take3, _Map_delete as _Map_delete2, _Map_get as _Map_get9, _Map_keys as _Map_keys6, _Map_set as _Map_set8, _Map_size as _Map_size2, _Map_values as _Map_values2, _Option_flatMap as _Option_flatMap3, _Option_isSome as _Option_isSome4, _Option_map as _Option_map3, _Option_unwrapOr as _Option_unwrapOr9, _Set_add as _Set_add6, _Set_fromArray as _Set_fromArray6, _Set_has as _Set_has6, _Str_contains, _Str_fromCode as _Str_fromCode3, _Str_join as _Str_join7, _Str_split as _Str_split3, _Str_startsWith as _Str_startsWith4, _curry as _curry15, _tuple as _tuple9, and as and10, concat as concat2, eq as eq14, filter as filter5, length as length12, map as map11, not as not10, or as or8, reduce as reduce4, show as show8 } from "@mochi/compiler/runtime";
 import { match as match14 } from "@onrails/pattern";
 
-// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-pzeW5z/ts-types.ts
 import { None as None13, Some as Some13, _Array_append as _Array_append11, _Array_concat as _Array_concat6, _Array_get as _Array_get11, _Array_prepend as _Array_prepend8, _Array_sort, _Map_get as _Map_get8, _Map_set as _Map_set7, _Map_size, _Option_flatMap as _Option_flatMap2, _Option_map as _Option_map2, _Option_unwrapOr as _Option_unwrapOr8, _Str_fromCode as _Str_fromCode2, _Str_get as _Str_get2, _Str_join as _Str_join6, _curry as _curry14, _tuple as _tuple8, eq as eq13, length as length11, map as map10, not as not9, show as show7 } from "@mochi/compiler/runtime";
 import { match as match13 } from "@onrails/pattern";
 var tsEnv = _curry14(2, (vars, recs) => ({ vars, recs }));
@@ -8210,7 +8188,6 @@ var tsOfRaw = _curry14(2, (t, env) => match13(t).with({ _tag: "TyVar" }, ({ id }
   return _g._tag === "TyCon" && _g.name === "Task" && _g.args.length === 2;
 }, ({ args: [value, error] }) => `() => Promise<Result<${tsOfRaw(value, env)}, ${tsOfRaw(error, env)}>>`).with({ _tag: "TyCon", name: "tuple" }, ({ args: elems }) => `[${namesOf(elems, env)}]`).with({ _tag: "TyCon" }, ({ name, args }) => nominal(name, args, env)).with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) => tsArrow(fromT, toT, env)).with({ _tag: "TyRecord" }, ({ row }) => tsRow(row, env)).with({ _tag: "TySingleton", base: "string" }, ({ value }) => `"${value}"`).with({ _tag: "TySingleton" }, ({ value }) => value).with({ _tag: "TyOneOf" }, ({ members }) => _Str_join6(" | ", map10((m) => tsOfRaw(m, env), members))).exhaustive());
 
-// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-pzeW5z/codegen-ts.ts
 var paramVarsFrom = _curry15(2, (params, i) => match14(_Array_get12(i, params)).with({ _tag: "None" }, () => new Map).with({ _tag: "Some" }, ({ value: p }) => _Map_set8(p, tVar(i), paramVarsFrom(params, i + 1))).exhaustive());
 var paramNamesFrom = _curry15(2, (params, i) => match14(_Array_get12(i, params)).with({ _tag: "None" }, () => new Map).with({ _tag: "Some" }, () => _Map_set8(i, letterAt(i), paramNamesFrom(params, i + 1))).exhaustive());
 var genericHead = _curry15(3, (params, i, acc) => match14(_Array_get12(i, params)).with({ _tag: "None" }, () => eq14(length12(acc), 0) ? "" : `<${_Str_join7(", ", acc)}>`).with({ _tag: "Some" }, () => genericHead(params, i + 1, _Array_append12(letterAt(i), acc))).exhaustive());
@@ -8433,7 +8410,6 @@ var externModuleDts = _curry15(2, (externs, aliases) => {
 `);
 });
 
-// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-pzeW5z/prelude.gen.mjs
 var _builtins = {
   add: {
     _tag: "TyFn",
@@ -13111,7 +13087,6 @@ var namespaceRuntime = _mapmap(_namespaceRuntime);
 var preludeJsDefs = _map(_preludeJsDefs);
 var runtimeDeps = _map(_runtimeDeps);
 
-// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-pzeW5z/compile.ts
 var typecheck = (prog) => _Result_flatMap7(($env) => Ok9(prog), inferProgram(prog, builtins, namespaces, false));
 var frontend = ($x) => _Result_flatMap7(check)((($x2) => _Result_flatMap7(parse)(lex($x2)))($x));
 var pipeline = ($x) => _Result_flatMap7(typecheck)(frontend($x));

@@ -18,11 +18,6 @@ type MochiJsByPath = Map<string, string>;
 
 const outputCache: MochiJsByPath = new Map();
 
-const readFile = (path: string): Promise<string> => Bun.file(path).text();
-
-const formatCompileFailure = (path: string, diags: Diagnostic[]): string =>
-  `Mochi compilation failed for ${path}:\n${diags.map((d) => formatError(d)).join("\n")}`;
-
 /** Compile `entry` and every reachable `.mochi` module; cache all outputs. */
 export const compileMochiGraph = async (entry: string): Promise<MochiJsByPath> => {
   const abs = resolve(entry);
@@ -56,3 +51,7 @@ export const mochiPlugin: BunPlugin = {
     });
   },
 };
+const readFile = (path: string): Promise<string> => Bun.file(path).text();
+
+const formatCompileFailure = (path: string, diags: Diagnostic[]): string =>
+  `Mochi compilation failed for ${path}:\n${diags.map((d) => formatError(d)).join("\n")}`;

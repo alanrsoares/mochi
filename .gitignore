@@ -16,6 +16,7 @@ dist
 !/bootstrap/seed/
 !/bootstrap/seed/**/*.ts
 !/bootstrap/seed/**/*.js
+!/bootstrap/seed/**/*.cjs
 !/bootstrap/seed/**/*.d.mts
 
 # bootstrap `build --emit=ts` drops `.ts` / `.d.mts` beside the `.mochi` sources

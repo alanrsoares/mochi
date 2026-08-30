@@ -7,7 +7,7 @@ type SeedCompile = {
 };
 
 const seed = createRequire(import.meta.url)(
-  fileURLToPath(new URL("../../../../bootstrap/seed/compile.bundle.js", import.meta.url)),
+  fileURLToPath(new URL("../../../../bootstrap/seed/compile.bundle.cjs", import.meta.url)),
 ) as SeedCompile;
 
 /** Synchronous default-config seam for integrations with sync transform hooks. */
