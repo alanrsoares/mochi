@@ -7,6 +7,7 @@
  */
 import { resolve } from "node:path";
 import type { ImportStmt, Program } from "@mochi/compiler/ast";
+import { loadBootstrapCore } from "@mochi/compiler/bootstrap";
 import { toTypedProgram, toTypedProgramWith } from "@mochi/compiler/compile";
 import { checkErr, type Diagnostic } from "@mochi/compiler/errors";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
@@ -100,6 +101,20 @@ export function toPublish(
 
 /** Options threaded into `moduleDiagnostics` / single-file `diagnostics` — `plugins` (styled-cva, …), same list Vite / `gen-mochi-dts` use. Omitted = default/builtin resolution (`resolvePlugins`, ADR 0011). `cache` reuses dependency inference across calls (`createModuleCache`); omitted = no reuse. */
 export type ModuleDiagnosticsOptions = { plugins?: LanguagePlugin[]; cache?: ModuleCache };
+
+/**
+ * Graph diagnostics through the frozen bootstrap compiler. Project plugins are
+ * intentionally excluded: the seed can run builtin JSX, but not arbitrary
+ * TypeScript plugin modules loaded by the editor.
+ */
+export async function bootstrapModuleDiagnostics(
+  path: string,
+  src: string,
+  readFile: (p: string) => Promise<string>,
+): Promise<PublishDiagnostic[]> {
+  const result = await (await loadBootstrapCore()).checkGraph(path, src, readFile);
+  return result._tag === "Ok" ? [] : [toPublish(src, { kind: "type", ...result.error }, path)];
+}
 
 /**
  * Check + infer may emit several diagnostics (ADR 0004); so may parse, since

@@ -31,3 +31,13 @@ test("bootstrap runtime builds a module graph identically to the TS oracle", asy
     value: unwrapOk(await tsBuildModules(entry, (path) => Bun.file(path).text())),
   });
 });
+
+test("bootstrap runtime checks an editor buffer through its graph", async () => {
+  const bootstrap = await loadBootstrapCore();
+  expect(await bootstrap.checkGraph("/virtual/main.mochi", "let n = nope", async () => "")).toEqual(
+    {
+      _tag: "Err",
+      error: { message: "unbound variable 'nope'", start: 8, end: 12 },
+    },
+  );
+});
