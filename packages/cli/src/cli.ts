@@ -113,6 +113,12 @@ await match(cmd)
       `usage: mochi ts [--open] [--no-docs] <file.mochi>\n${USAGE}`,
     );
     const src = await Bun.file(path).text();
+    if (!open && docs) {
+      const result = (await loadBootstrapCore()).compileTs(src, "@mochi/runtime");
+      if (result._tag === "Err") dieBootstrap(path, src, result.error);
+      process.stdout.write(result.value);
+      return;
+    }
     const r = codegenTs(src, { open, docs });
     if (isErr(r)) die(r.error, src);
     process.stdout.write(r.value);

@@ -11,7 +11,12 @@ import { createModuleCache } from "@mochi/compiler/module";
 import { isPreludePath, PRELUDE_PATH, preludeVirtualSource } from "@mochi/compiler/prelude-virtual";
 import type { Span } from "@mochi/compiler/span";
 import { type CompletionItem as MochiCompletion, moduleCompleteAt } from "@mochi/dx/complete";
-import { documentDiagnostics, type PublishDiagnostic } from "@mochi/dx/diagnostics";
+import {
+  bootstrapModuleDiagnostics,
+  documentDiagnostics,
+  type PublishDiagnostic,
+  unusedBindingDiagnostics,
+} from "@mochi/dx/diagnostics";
 import { format } from "@mochi/dx/format";
 import { moduleHoverAt } from "@mochi/dx/hover";
 import {
@@ -185,6 +190,16 @@ export function startServer(opts: ServerOptions = {}): void {
         })
       : fixedPlugins,
   });
+  const diagnosticsFor = async (path: string, src: string) => {
+    const opts = await dxOpts(path);
+    // Vendor plugins execute in the TypeScript host. Builtin-only workspaces
+    // validate their full graph through the shipped bootstrap compiler.
+    if (opts.plugins === undefined) {
+      const bootstrap = await bootstrapModuleDiagnostics(path, src, read);
+      return [...bootstrap, ...unusedBindingDiagnostics(src, path)];
+    }
+    return documentDiagnostics(path, src, read, opts);
+  };
   const connection = createConnection(ProposedFeatures.all);
   const documents = new TextDocuments(TextDocument);
   /** Last diagnostics computed by `validate`, per document URI — see
@@ -446,7 +461,7 @@ export function startServer(opts: ServerOptions = {}): void {
     const path = docPath(textDocument.uri);
     let published = diagnosticsCache.get(textDocument.uri);
     if (!published) {
-      published = await documentDiagnostics(path, doc.getText(), read, await dxOpts(path));
+      published = await diagnosticsFor(path, doc.getText());
       diagnosticsCache.set(textDocument.uri, published);
     }
     const actions: CodeAction[] = [];
@@ -487,9 +502,8 @@ export function startServer(opts: ServerOptions = {}): void {
     // Pin the version this batch describes: compiling the graph is async, and
     // an edit that lands mid-flight makes every range below stale.
     const version = doc.version;
-    const opts = await dxOpts(path);
     const text = doc.getText();
-    const computed = await documentDiagnostics(path, text, read, opts);
+    const computed = await diagnosticsFor(path, text);
     // Buffer moved on (or closed) while we compiled — drop this batch rather
     // than racing the newer one. The edit that superseded it publishes its own.
     if (documents.get(doc.uri)?.version !== version) return;
