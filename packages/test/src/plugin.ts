@@ -9,8 +9,7 @@
  */
 
 import { resolve } from "node:path";
-import { type Diagnostic, formatError } from "@mochi/compiler/errors";
-import { buildModules } from "@mochi/compiler/module";
+import { buildModulesBootstrap } from "@mochi/compiler/bootstrap/module";
 import { isErr } from "@onrails/result";
 import type { BunPlugin } from "bun";
 
@@ -21,8 +20,8 @@ const outputCache: MochiJsByPath = new Map();
 /** Compile `entry` and every reachable `.mochi` module; cache all outputs. */
 export const compileMochiGraph = async (entry: string): Promise<MochiJsByPath> => {
   const abs = resolve(entry);
-  const result = await buildModules(abs, readFile, { moduleExt: ".mochi" });
-  if (isErr(result)) throw new SyntaxError(formatCompileFailure(abs, result.error));
+  const result = buildModulesBootstrap(abs);
+  if (isErr(result)) throw new SyntaxError(formatCompileFailure(abs, result.error.message));
   const graph: MochiJsByPath = new Map();
   for (const out of result.value) graph.set(out.path, out.js);
   return graph;
@@ -51,7 +50,5 @@ export const mochiPlugin: BunPlugin = {
     });
   },
 };
-const readFile = (path: string): Promise<string> => Bun.file(path).text();
-
-const formatCompileFailure = (path: string, diags: Diagnostic[]): string =>
-  `Mochi compilation failed for ${path}:\n${diags.map((d) => formatError(d)).join("\n")}`;
+const formatCompileFailure = (path: string, message: string): string =>
+  `Mochi compilation failed for ${path}:\n${message}`;
