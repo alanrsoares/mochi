@@ -10,7 +10,9 @@ import {
   printProjectErrors,
   transformProject,
 } from "@mochi/codemod";
-import { type BootstrapDiagnostic, loadBootstrapCore } from "@mochi/compiler/bootstrap";
+import type { BootstrapDiagnostic } from "@mochi/compiler/bootstrap";
+import { buildModulesBootstrap, buildModulesTsBootstrap } from "@mochi/compiler/bootstrap/module";
+import { compileBootstrapSync, compileTsBootstrapSync } from "@mochi/compiler/bootstrap/sync";
 import { codegenTs } from "@mochi/compiler/codegen-ts";
 import { compile } from "@mochi/compiler/compile";
 import { type Diagnostic, formatError } from "@mochi/compiler/errors";
@@ -114,7 +116,7 @@ await match(cmd)
     );
     const src = await Bun.file(path).text();
     if (!open && docs) {
-      const result = (await loadBootstrapCore()).compileTs(src, "@mochi/runtime");
+      const result = compileTsBootstrapSync(src, "@mochi/runtime");
       if (result._tag === "Err") dieBootstrap(path, src, result.error);
       process.stdout.write(result.value);
       return;
@@ -134,10 +136,9 @@ await match(cmd)
     const outputs =
       !open && docs
         ? await (async () => {
-            const bootstrap = await loadBootstrapCore();
             const result = emitTs
-              ? bootstrap.buildModulesTs(entry, "@mochi/runtime")
-              : bootstrap.buildModules(entry);
+              ? buildModulesTsBootstrap(entry, "@mochi/runtime")
+              : buildModulesBootstrap(entry);
             if (result._tag === "Err") {
               const src = await Bun.file(entry).text();
               dieBootstrap(entry, src, result.error);
@@ -169,7 +170,7 @@ await match(cmd)
     );
     const src = await Bun.file(file).text();
     if (!open && docs) {
-      const result = (await loadBootstrapCore()).compile(src);
+      const result = compileBootstrapSync(src);
       if (result._tag === "Err") dieBootstrap(file, src, result.error);
       process.stdout.write(result.value);
       return;
