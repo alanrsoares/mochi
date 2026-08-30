@@ -83,6 +83,22 @@ execFileSync(
   ],
   { cwd: REPO, stdio: "inherit" },
 );
+execFileSync(
+  "bun",
+  [
+    "build",
+    join(tmp, "module.ts"),
+    "--outfile",
+    join(tmp, "module.bundle.js"),
+    "--target",
+    "bun",
+    "--external",
+    "@mochi/compiler/runtime",
+    "--external",
+    "@onrails/pattern",
+  ],
+  { cwd: REPO, stdio: "inherit" },
+);
 
 emptyDir(SEED);
 cpSync(tmp, SEED, { recursive: true });

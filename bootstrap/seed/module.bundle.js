@@ -1,6 +1,7 @@
 // @bun
-// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-RP5CS6/compile.ts
-import { Ok as Ok9, _Result_flatMap as _Result_flatMap7, _curry as _curry16 } from "@mochi/compiler/runtime";
+// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-RP5CS6/module.ts
+import { Err as Err10, None as None15, Ok as Ok10, Some as Some15, _Array_append as _Array_append13, _Array_concat as _Array_concat8, _Array_flatMap as _Array_flatMap4, _Array_get as _Array_get13, _Array_sort as _Array_sort3, _Map_get as _Map_get10, _Map_getOr as _Map_getOr7, _Map_keys as _Map_keys7, _Map_set as _Map_set9, _Option_mapOr, _Option_unwrapOr as _Option_unwrapOr10, _Result_flatMap as _Result_flatMap7, _Set_add as _Set_add7, _Set_fromArray as _Set_fromArray7, _Set_has as _Set_has7, _Str_codeAt as _Str_codeAt7, _Str_get as _Str_get3, _Str_join as _Str_join8, _Str_length as _Str_length4, _Str_split as _Str_split4, _Str_startsWith as _Str_startsWith5, _Str_trim, _curry as _curry16, and as and11, eq as eq15, filter as filter6, length as length13, map as map12, not as not11, or as or9, reduce as reduce5 } from "@mochi/compiler/runtime";
+import { match as match15 } from "@onrails/pattern";
 
 // ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-RP5CS6/lexer.ts
 import { Err, None, Ok, Some, _Array_append, _Array_head, _Array_tail, _Option_contains, _Option_exists, _Option_unwrapOr, _Str_codeAt, _Str_fromCode, _Str_get, _Str_join, _Str_length, _Str_slice, _Str_toNumber, _curry, _done, _recur, and, eq, length, not, or } from "@mochi/compiler/runtime";
@@ -6738,6 +6739,7 @@ var exportedRegLoop = _curry7(3, (stmts, i0, reg0) => {
     return _step.value;
   }
 });
+var exportedRegistry = (stmts) => exportedRegLoop(stmts, 0, emptyRegistry);
 var ctorKeysInto = _curry7(3, (ctors, i, m) => match6(_Array_get5(i, ctors)).with({ _tag: "None" }, () => m).with((_v) => _v._tag === "Some", ({ value: { name, fields } }) => ctorKeysInto(ctors, i + 1, _Map_set2(name, keysOf(fields), m))).exhaustive());
 var ctorKeysFrom = _curry7(3, (stmts, i, m) => match6(_Array_get5(i, stmts)).with({ _tag: "None" }, () => m).with((_v) => {
   const _g = _v;
@@ -6751,6 +6753,7 @@ var exportedCtorKeysFrom = _curry7(3, (stmts, i, m) => match6(_Array_get5(i, stm
   const _g = _v;
   return _g._tag === "Some" && _g.value._tag === "SType" && _g.value.exported === true;
 }, ({ value: { ctors } }) => exportedCtorKeysFrom(stmts, i + 1, ctorKeysInto(ctors, 0, m))).with({ _tag: "Some" }, () => exportedCtorKeysFrom(stmts, i + 1, m)).exhaustive());
+var exportedCtorKeys = (stmts) => exportedCtorKeysFrom(stmts, 0, new Map);
 
 // ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-RP5CS6/usefulness.ts
 import { None as None7, Some as Some7, _Array_append as _Array_append6, _Array_concat as _Array_concat3, _Array_contains, _Array_drop, _Array_flatMap, _Array_get as _Array_get6, _Array_head as _Array_head2, _Array_prepend as _Array_prepend4, _Array_tail as _Array_tail2, _Array_take, _Map_get as _Map_get3, _Map_getOr, _Map_keys as _Map_keys2, _Option_isSome, _Option_unwrapOr as _Option_unwrapOr5, _Str_concat, _Str_endsWith, _Str_join as _Str_join3, _curry as _curry8, and as and5, eq as eq7, filter as filter2, length as length7, map as map5, not as not5, reduce, show as show4 } from "@mochi/compiler/runtime";
@@ -6979,7 +6982,6 @@ var mergeMissing = _curry9(3, (keys, from, into) => match8(keys).with((_v) => _v
   throw new Error("non-exhaustive match");
 }));
 var checkWith = _curry9(3, (stmts, imported, quals) => match8(checkReservedNames(stmts)).with({ _tag: "Some" }, ({ value: e }) => Err7(e)).with({ _tag: "None" }, () => match8(checkCtorFieldVars(stmts)).with({ _tag: "Some" }, ({ value: e }) => Err7(e)).with({ _tag: "None" }, () => match8(checkQualifiedTypeNames(stmts, quals)).with({ _tag: "Some" }, ({ value: e }) => Err7(e)).with({ _tag: "None" }, () => _Result_flatMap5((reg0) => ((reg) => match8(firstSome((s) => match8(s).with({ _tag: "SLet" }, ({ value }) => checkExpr(value, reg)).with({ _tag: "SExpr" }, ({ value }) => checkExpr(value, reg)).otherwise(() => None8), stmts)).with({ _tag: "Some" }, ({ value: e }) => Err7(e)).with({ _tag: "None" }, () => Ok7(stmts)).exhaustive())({ ctors: mergeMissing(_Map_keys3(imported.ctors), imported.ctors, reg0.ctors), types: mergeMissing(_Map_keys3(imported.types), imported.types, reg0.types) }), buildRegistry(stmts))).exhaustive()).exhaustive()).exhaustive());
-var check = (stmts) => checkWith(stmts, { ctors: new Map, types: new Map }, emptyQuals);
 
 // ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-RP5CS6/infer.ts
 import { Err as Err8, None as None11, Ok as Ok8, Some as Some11, _Array_append as _Array_append9, _Array_concat as _Array_concat4, _Array_flatMap as _Array_flatMap3, _Array_get as _Array_get9, _Array_head as _Array_head4, _Array_prepend as _Array_prepend6, _Array_reverse, _Map_delete, _Map_get as _Map_get6, _Map_getOr as _Map_getOr5, _Map_has as _Map_has4, _Map_keys as _Map_keys4, _Map_set as _Map_set6, _Option_map, _Result_flatMap as _Result_flatMap6, _Result_map as _Result_map5, _Set_add as _Set_add4, _Set_fromArray as _Set_fromArray4, _Set_has as _Set_has4, _Set_size, _Set_toArray as _Set_toArray2, _Str_startsWith as _Str_startsWith2, _curry as _curry12, _done as _done6, _recur as _recur6, _tuple as _tuple6, and as and8, eq as eq11, map as map8, not as not7, or as or6, reduce as reduce2 } from "@mochi/compiler/runtime";
@@ -13111,14 +13113,147 @@ var namespaceRuntime = _mapmap(_namespaceRuntime);
 var preludeJsDefs = _map(_preludeJsDefs);
 var runtimeDeps = _map(_runtimeDeps);
 
-// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-RP5CS6/compile.ts
-var typecheck = (prog) => _Result_flatMap7(($env) => Ok9(prog), inferProgram(prog, builtins, namespaces, false));
-var frontend = ($x) => _Result_flatMap7(check)((($x2) => _Result_flatMap7(parse)(lex($x2)))($x));
-var pipeline = ($x) => _Result_flatMap7(typecheck)(frontend($x));
-var compile = (src) => _Result_flatMap7((prog) => Ok9(codegen(prog, new Map, true, namespaceRuntime, preludeJsDefs, runtimeDeps)), pipeline(src));
-var noImportedKeys = new Map;
-var compileTs = _curry16(2, (src, runtimeImport) => _Result_flatMap7((stmts) => _Result_flatMap7((r) => Ok9(emitTsModule(stmts, r.env, r.types, r.letParams, r.aliases, noImportedKeys, [], namespaceRuntime, preludeJsDefs, runtimeDeps, runtimeImport)), inferProgramTypes(stmts, builtins, namespaces, false)), frontend(src)));
+// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-RP5CS6/host.mjs
+import { readFileSync, writeFileSync } from "fs";
+import { createRequire } from "module";
+import { dirname, relative, resolve as resolve2 } from "path";
+var Ok9 = (value) => ({ _tag: "Ok", value });
+var Err9 = (error) => ({ _tag: "Err", error });
+var msg = (e) => String(e && e.message || e);
+var readFile = (path) => {
+  try {
+    return Ok9(readFileSync(path, "utf8"));
+  } catch (e) {
+    return Err9(msg(e));
+  }
+};
+var resolveImport = (importer, spec) => {
+  const isPath = spec.startsWith("./") || spec.startsWith("../") || spec.startsWith("/") || /^[A-Za-z]:[\\/]/.test(spec);
+  if (isPath)
+    return resolve2(dirname(importer), `${spec.replace(/\.mochi$/, "")}.mochi`);
+  try {
+    return createRequire(importer).resolve(spec);
+  } catch {
+    return resolve2(dirname(importer), `${spec}.mochi`);
+  }
+};
+var relSpec = (from, to) => {
+  const rel = relative(dirname(from), to).replace(/\.mochi$/, "");
+  return rel.startsWith(".") ? rel : `./${rel}`;
+};
+var externDtsPath = (importer, module) => {
+  const base = module.replace(/\.m?[jt]s$/, "");
+  const ext = /\.mjs$/.test(module) ? ".d.mts" : ".d.ts";
+  return `${resolve2(dirname(importer), base)}${ext}`;
+};
+var absPath = (p) => resolve2(p);
+var argv = process.argv.slice(2);
+
+// ../../../../private/var/folders/0g/nm7yx6yn5k7_9y28xkghjl300000gn/T/mochi-seed-RP5CS6/module.ts
+var resolveImport2 = _curry16(2, resolveImport);
+var mErr = (message) => ({ message, start: 0, end: 0 });
+var parseModule = ($x) => _Result_flatMap7(parse)(lex($x));
+var importFromsFrom = _curry16(3, (stmts, i, acc) => match15(_Array_get13(i, stmts)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: s }) => match15(s).with({ _tag: "SImport" }, ({ from }) => importFromsFrom(stmts, i + 1, _Array_append13(from, acc))).with({ _tag: "SImportNs" }, ({ from }) => importFromsFrom(stmts, i + 1, _Array_append13(from, acc))).otherwise(() => importFromsFrom(stmts, i + 1, acc))).exhaustive());
+var importFroms = (stmts) => importFromsFrom(stmts, 0, []);
+var visit = _curry16(2, (path, acc) => match15(_Map_get10(path, acc.state)).with({ _tag: "Some", value: "done" }, () => Ok10(acc)).with({ _tag: "Some", value: "loading" }, () => Err10(mErr(`import cycle through '${path}'`))).otherwise(() => ((acc1) => match15(readFile(path)).with({ _tag: "Err" }, () => Err10(mErr(`cannot read module '${path}'`))).with({ _tag: "Ok" }, ({ value: src }) => match15(parseModule(src)).with({ _tag: "Err" }, ({ error: e }) => Err10(e)).with({ _tag: "Ok" }, ({ value: stmts }) => match15(visitAll(importFroms(stmts), path, acc1)).with({ _tag: "Err" }, ({ error: e }) => Err10(e)).with({ _tag: "Ok" }, ({ value: acc2 }) => Ok10({ state: _Map_set9(path, "done", acc2.state), order: _Array_append13({ path, stmts }, acc2.order) })).exhaustive()).exhaustive()).exhaustive())({ state: _Map_set9(path, "loading", acc.state), order: acc.order })));
+var visitAll = _curry16(3, (froms, importer, acc) => match15(froms).with((_v) => {
+  const _g = _v;
+  return _g.length === 0;
+}, () => Ok10(acc)).with((_v) => {
+  const _g = _v;
+  return _g.length >= 1;
+}, ([from, ...rest]) => match15(visit(resolveImport2(importer, from), acc)).with({ _tag: "Err" }, ({ error: e }) => Err10(e)).with({ _tag: "Ok" }, ({ value: acc1 }) => visitAll(rest, importer, acc1)).exhaustive()).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var loadGraph = (entry) => _Result_flatMap7((acc) => Ok10(acc.order), visit(absPath(entry), { state: new Map, order: [] }));
+var emptyReg = { ctors: new Map, types: new Map };
+var mergeInto2 = _curry16(3, (keys, from, into) => match15(keys).with((_v) => _v.length === 0, () => into).with((_v) => _v.length >= 1, ([k, ...rest]) => mergeInto2(rest, from, match15(_Map_get10(k, from)).with({ _tag: "Some" }, ({ value: v }) => _Map_set9(k, v, into)).with({ _tag: "None" }, () => into).exhaustive())).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var mergeMap = _curry16(2, (from, into) => mergeInto2(_Map_keys7(from), from, into));
+var exportedTypeNames = (stmts) => _Set_fromArray7(_Array_flatMap4((s) => match15(s).with({ _tag: "SType", exported: true }, ({ name }) => [name]).otherwise(() => []), stmts));
+var aliasesOf = (stmts) => reduce5(_curry16(2, (acc, s) => match15(s).with((_v) => {
+  const _g = _v;
+  return _g._tag === "SType" && _g.alias._tag === "Some";
+}, ({ name, params, alias: { value: fields } }) => _Map_set9(name, { params, fields, expr: None15 }, acc)).with((_v) => {
+  const _g = _v;
+  return _g._tag === "SType" && _g.aliasType._tag === "Some";
+}, ({ name, params, aliasType: { value: te } }) => _Map_set9(name, { params, fields: [], expr: Some15(te) }, acc)).otherwise(() => acc)), new Map, stmts);
+var qualScopeOf = (stmts) => ({ types: exportedTypeNames(stmts), aliases: aliasesOf(stmts) });
+var withNamedCtor = _curry16(5, (name, info, depReg, depKeys, res) => ({ imports: res.imports, nsImports: res.nsImports, reg: { ctors: _Map_set9(name, info, res.reg.ctors), types: match15(_Map_get10(info.owner, depReg.types)).with({ _tag: "Some" }, ({ value: cs }) => _Map_set9(info.owner, cs, res.reg.types)).with({ _tag: "None" }, () => res.reg.types).exhaustive() }, keys: match15(_Map_get10(name, depKeys)).with({ _tag: "Some" }, ({ value: ks }) => _Map_set9(name, ks, res.keys)).with({ _tag: "None" }, () => res.keys).exhaustive(), quals: res.quals }));
+var takeNamedCtor = _curry16(5, (name, span, depReg, depKeys, res) => match15(_Map_get10(name, depReg.ctors)).with({ _tag: "None" }, () => Ok10(res)).with({ _tag: "Some" }, ({ value: info }) => match15(_Map_get10(name, res.reg.ctors)).with({ _tag: "Some" }, ({ value: prior }) => not11(eq15(prior.owner, info.owner)) ? Err10({ message: `duplicate constructor '${name}'`, start: span.start, end: span.end }) : Ok10(withNamedCtor(name, info, depReg, depKeys, res))).with({ _tag: "None" }, () => Ok10(withNamedCtor(name, info, depReg, depKeys, res))).exhaustive()).exhaustive());
+var prefixCtorsInto = _curry16(4, (keys, alias, from, into) => match15(keys).with((_v) => {
+  const _g = _v;
+  return _g.length === 0;
+}, () => into).with((_v) => {
+  const _g = _v;
+  return _g.length >= 1;
+}, ([k, ...rest]) => prefixCtorsInto(rest, alias, from, match15(_Map_get10(k, from)).with({ _tag: "Some" }, ({ value: v }) => _Map_set9(`${alias}.${k}`, v, into)).with({ _tag: "None" }, () => into).exhaustive())).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var resolveNames = _curry16(6, (names, from, depExports, depReg, depKeys, res) => match15(names).with((_v) => _v.length === 0, () => Ok10(res)).with((_v) => _v.length >= 1, ([n, ...rest]) => match15(_Map_get10(n.name, depExports)).with({ _tag: "None" }, () => Err10({ message: `'${from}' has no export '${n.name}'`, start: n.span.start, end: n.span.end })).with({ _tag: "Some" }, ({ value: sc }) => match15(takeNamedCtor(n.name, n.span, depReg, depKeys, { imports: _Map_set9(n.name, sc, res.imports), nsImports: res.nsImports, reg: res.reg, keys: res.keys, quals: res.quals })).with({ _tag: "Err" }, ({ error: e }) => Err10(e)).with({ _tag: "Ok" }, ({ value: res1 }) => resolveNames(rest, from, depExports, depReg, depKeys, res1)).exhaustive()).exhaustive()).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var resolveImportsFrom = _curry16(5, (ctx, stmts, i, path, res) => match15(_Array_get13(i, stmts)).with({ _tag: "None" }, () => Ok10(res)).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some" && _g.value._tag === "SImport";
+}, ({ value: { names, from } }) => ((dp) => ((depExports) => ((depReg) => ((depKeys) => match15(resolveNames(names, from, depExports, depReg, depKeys, res)).with({ _tag: "Err" }, ({ error: e }) => Err10(e)).with({ _tag: "Ok" }, ({ value: res1 }) => resolveImportsFrom(ctx, stmts, i + 1, path, res1)).exhaustive())(_Map_getOr7(new Map, dp, ctx.keysByPath)))(_Map_getOr7(emptyReg, dp, ctx.regByPath)))(_Map_getOr7(new Map, dp, ctx.exportsByPath)))(resolveImport2(path, from))).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some" && _g.value._tag === "SImportNs";
+}, ({ value: { alias, from } }) => ((dp) => ((depExports) => ((depReg) => ((depKeys) => resolveImportsFrom(ctx, stmts, i + 1, path, { imports: res.imports, nsImports: _Map_set9(alias.name, depExports, res.nsImports), reg: { ctors: prefixCtorsInto(_Map_keys7(depReg.ctors), alias.name, depReg.ctors, res.reg.ctors), types: mergeMap(depReg.types, res.reg.types) }, keys: mergeMap(depKeys, res.keys), quals: match15(_Map_get10(dp, ctx.qualsByPath)).with({ _tag: "Some" }, ({ value: q }) => _Map_set9(alias.name, q, res.quals)).with({ _tag: "None" }, () => res.quals).exhaustive() }))(_Map_getOr7(new Map, dp, ctx.keysByPath)))(_Map_getOr7(emptyReg, dp, ctx.regByPath)))(_Map_getOr7(new Map, dp, ctx.exportsByPath)))(resolveImport2(path, from))).with({ _tag: "Some" }, () => resolveImportsFrom(ctx, stmts, i + 1, path, res)).exhaustive());
+var compileOne = _curry16(2, (ctx, loaded) => match15(resolveImportsFrom(ctx, loaded.stmts, 0, loaded.path, { imports: new Map, nsImports: new Map, reg: emptyReg, keys: new Map, quals: new Map })).with({ _tag: "Err" }, ({ error: e }) => Err10(e)).with({ _tag: "Ok" }, ({ value: res }) => match15(checkWith(loaded.stmts, res.reg, res.quals)).with({ _tag: "Err" }, ({ error: e }) => Err10(e)).with({ _tag: "Ok" }, () => match15(inferProgramImports(loaded.stmts, builtins, namespaces, true, res.imports, res.nsImports, res.quals, None15)).with({ _tag: "Err" }, ({ error: e }) => Err10(e)).with({ _tag: "Ok" }, ({ value: env }) => ((js) => Ok10({ exportsByPath: _Map_set9(loaded.path, exportedSchemes(loaded.stmts, env), ctx.exportsByPath), regByPath: _Map_set9(loaded.path, exportedRegistry(loaded.stmts), ctx.regByPath), keysByPath: _Map_set9(loaded.path, exportedCtorKeys(loaded.stmts), ctx.keysByPath), qualsByPath: _Map_set9(loaded.path, qualScopeOf(loaded.stmts), ctx.qualsByPath), outputs: [...ctx.outputs, { path: loaded.path, js }] }))(codegen(loaded.stmts, res.keys, true, namespaceRuntime, preludeJsDefs, runtimeDeps))).exhaustive()).exhaustive()).exhaustive());
+var compileAll = _curry16(2, (ctx, graph) => match15(graph).with((_v) => {
+  const _g = _v;
+  return _g.length === 0;
+}, () => Ok10(ctx.outputs)).with((_v) => {
+  const _g = _v;
+  return _g.length >= 1;
+}, ([m, ...rest]) => match15(compileOne(ctx, m)).with({ _tag: "Err" }, ({ error: e }) => Err10(e)).with({ _tag: "Ok" }, ({ value: ctx1 }) => compileAll(ctx1, rest)).exhaustive()).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var compileGraph = (graph) => compileAll({ exportsByPath: new Map, regByPath: new Map, keysByPath: new Map, qualsByPath: new Map, outputs: [] }, graph);
+var buildModules = (entry) => _Result_flatMap7((graph) => compileGraph(graph), loadGraph(entry));
+var relSpec2 = _curry16(2, relSpec);
+var externDtsPath2 = _curry16(2, externDtsPath);
+var isIdentChar = (c) => match15(_Str_codeAt7(0, c)).with({ _tag: "None" }, () => false).with({ _tag: "Some" }, ({ value: n }) => or9(or9(or9(or9(and11(n >= 48, n <= 57), and11(n >= 65, n <= 90)), and11(n >= 97, n <= 122)), eq15(n, 95)), eq15(n, 36))).exhaustive();
+var endsAtBoundary = (part) => eq15(_Str_length4(part), 0) ? true : not11(isIdentChar(_Option_unwrapOr10("", _Str_get3(_Str_length4(part) - 1, part))));
+var startsAtBoundary = (part) => eq15(_Str_length4(part), 0) ? true : not11(isIdentChar(_Option_unwrapOr10("", _Str_get3(0, part))));
+var occursAsWordFrom = _curry16(2, (parts, i) => match15(_Array_get13(i, parts)).with({ _tag: "None" }, () => false).with({ _tag: "Some" }, ({ value: after }) => and11(_Option_mapOr(false, endsAtBoundary, _Array_get13(i - 1, parts)), startsAtBoundary(after)) ? true : occursAsWordFrom(parts, i + 1)).exhaustive());
+var occursAsWord = _curry16(2, (name, text) => occursAsWordFrom(_Str_split4(name, text), 1));
+var importedBinding = (spec) => {
+  const parts = _Str_split4(" as ", spec);
+  return _Str_trim(_Option_unwrapOr10(spec, _Array_get13(length13(parts) - 1, parts)));
+};
+var bindingsInLine = _curry16(2, (line, acc) => match15(_Array_get13(1, _Str_split4("{", line))).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: rest }) => match15(_Array_get13(0, _Str_split4("}", rest))).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: names }) => reduce5(_curry16(2, (a, n) => _Set_add7(importedBinding(n), a)), acc, _Str_split4(",", names))).exhaustive()).exhaustive());
+var valueImported = (ts) => reduce5(_curry16(2, (acc, line) => bindingsInLine(line, acc)), _Set_fromArray7([]), filter6(_Str_startsWith5("import {"), _Str_split4(`
+`, ts)));
+var ownTypesInto = _curry16(3, (stmts, path, acc) => reduce5(_curry16(2, (a, s) => match15(s).with({ _tag: "SType" }, ({ name }) => _Map_set9(name, path, a)).otherwise(() => a)), acc, stmts));
+var typeOwnerOf = (graph) => reduce5(_curry16(2, (acc, m) => ownTypesInto(m.stmts, m.path, acc)), new Map, graph);
+var localTypeNames = (stmts) => _Set_fromArray7(_Array_flatMap4((s) => match15(s).with({ _tag: "SType" }, ({ name }) => [name]).otherwise(() => []), stmts));
+var groupByOwner = _curry16(2, (names, ctx) => reduce5(_curry16(2, (acc, name) => {
+  const owner = _Map_getOr7("", name, ctx.typeOwner);
+  return or9(or9(or9(eq15(owner, ctx.importer), _Set_has7(name, ctx.localTypes)), _Set_has7(name, ctx.bound)), not11(occursAsWord(name, ctx.ts))) ? acc : ((spec) => _Map_set9(spec, _Array_append13(name, _Map_getOr7([], spec, acc)), acc))(relSpec2(ctx.importer, owner));
+}), new Map, names));
+var crossModuleTypeImports = _curry16(4, (ts, importer, localTypes, typeOwner) => {
+  const byOwner = groupByOwner(_Map_keys7(typeOwner), { ts, importer, localTypes, typeOwner, bound: valueImported(ts) });
+  return map12((spec) => `import type { ${_Str_join8(", ", _Array_sort3(_Map_getOr7([], spec, byOwner)))} } from "${spec}";`, _Map_keys7(byOwner));
+});
+var externBindingsInto = _curry16(4, (stmts, path, env, acc) => reduce5(_curry16(2, (a, s) => match15(s).with({ _tag: "SExtern" }, ({ name, module: hostModule, imported, curried }) => _Str_startsWith5("mochi:", hostModule) ? a : match15(_Map_get10(name, env)).with({ _tag: "None" }, () => a).with({ _tag: "Some" }, ({ value: sc }) => ((dp) => _Map_set9(dp, _Array_append13({ imported, scheme: sc, curried }, _Map_getOr7([], dp, a)), a))(externDtsPath2(path, hostModule))).exhaustive()).otherwise(() => a)), acc, stmts));
+var compileOneTs = _curry16(2, (ctx, loaded) => match15(resolveImportsFrom(ctx, loaded.stmts, 0, loaded.path, { imports: new Map, nsImports: new Map, reg: emptyReg, keys: new Map, quals: new Map })).with({ _tag: "Err" }, ({ error: e }) => Err10(e)).with({ _tag: "Ok" }, ({ value: res }) => match15(checkWith(loaded.stmts, res.reg, res.quals)).with({ _tag: "Err" }, ({ error: e }) => Err10(e)).with({ _tag: "Ok" }, () => match15(inferProgramImportsTypes(loaded.stmts, builtins, namespaces, true, res.imports, res.nsImports, res.quals, None15)).with({ _tag: "Err" }, ({ error: e }) => Err10(e)).with({ _tag: "Ok" }, ({ value: r }) => ((body) => ((lines) => ((ts) => Ok10({ exportsByPath: _Map_set9(loaded.path, exportedSchemes(loaded.stmts, r.env), ctx.exportsByPath), regByPath: _Map_set9(loaded.path, exportedRegistry(loaded.stmts), ctx.regByPath), keysByPath: _Map_set9(loaded.path, exportedCtorKeys(loaded.stmts), ctx.keysByPath), qualsByPath: _Map_set9(loaded.path, qualScopeOf(loaded.stmts), ctx.qualsByPath), aliases: mergeMap(r.aliases, ctx.aliases), typeOwner: ctx.typeOwner, runtimeImport: ctx.runtimeImport, externs: externBindingsInto(loaded.stmts, loaded.path, r.env, ctx.externs), outputs: [...ctx.outputs, { path: loaded.path, js: ts }] }))(eq15(length13(lines), 0) ? body : `${_Str_join8(`
+`, lines)}
+
+${body}`))(crossModuleTypeImports(body, loaded.path, localTypeNames(loaded.stmts), ctx.typeOwner)))(emitTsModule(loaded.stmts, r.env, r.types, r.letParams, mergeMap(r.aliases, ctx.aliases), res.keys, [], namespaceRuntime, preludeJsDefs, runtimeDeps, ctx.runtimeImport))).exhaustive()).exhaustive()).exhaustive());
+var noAliases = aliasesOf([]);
+var externOutputs = (externs) => map12((dp) => ({ path: dp, js: externModuleDts(_Map_getOr7([], dp, externs), noAliases) }), _Map_keys7(externs));
+var compileAllTs = _curry16(2, (ctx, graph) => match15(graph).with((_v) => _v.length === 0, () => Ok10(_Array_concat8(ctx.outputs, externOutputs(ctx.externs)))).with((_v) => _v.length >= 1, ([m, ...rest]) => match15(compileOneTs(ctx, m)).with({ _tag: "Err" }, ({ error: e }) => Err10(e)).with({ _tag: "Ok" }, ({ value: ctx1 }) => compileAllTs(ctx1, rest)).exhaustive()).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var compileGraphTs = _curry16(2, (graph, runtimeImport) => compileAllTs({ exportsByPath: new Map, regByPath: new Map, keysByPath: new Map, qualsByPath: new Map, aliases: new Map, typeOwner: typeOwnerOf(graph), runtimeImport, externs: new Map, outputs: [] }, graph));
+var buildModulesTs = _curry16(2, (entry, runtimeImport) => _Result_flatMap7((graph) => compileGraphTs(graph, runtimeImport), loadGraph(entry)));
 export {
-  compile,
-  compileTs
+  buildModules,
+  buildModulesTs,
+  compileGraph,
+  compileGraphTs,
+  loadGraph
 };
