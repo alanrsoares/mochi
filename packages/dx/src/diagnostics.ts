@@ -122,6 +122,12 @@ export async function bootstrapModuleDiagnostics(
             kind: "type",
             message: result.error.message,
             span: { start: result.error.start, end: result.error.end },
+            help: result.error.suggestions?.[0]?.title.toLowerCase(),
+            suggestions: result.error.suggestions?.map((suggestion) => ({
+              title: suggestion.title,
+              replaceWith: suggestion.replaceWith,
+              location: { path, span: { start: suggestion.start, end: suggestion.end } },
+            })),
           },
           path,
         ),

@@ -196,9 +196,6 @@ export function startServer(opts: ServerOptions = {}): void {
     // validate their full graph through the shipped bootstrap compiler.
     if (opts.plugins === undefined) {
       const bootstrap = await bootstrapModuleDiagnostics(path, src, read);
-      // Keep TS-owned suggestions (and multi-error recovery) for the editor
-      // presentation layer; the bootstrap result remains the validation gate.
-      if (bootstrap.length > 0) return documentDiagnostics(path, src, read, opts);
       return [...bootstrap, ...unusedBindingDiagnostics(src, path)];
     }
     return documentDiagnostics(path, src, read, opts);

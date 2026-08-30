@@ -8,7 +8,12 @@
  */
 export type BootstrapResult<A, E> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: E };
 
-export type BootstrapDiagnostic = { message: string; start: number; end: number };
+export type BootstrapDiagnostic = {
+  message: string;
+  start: number;
+  end: number;
+  suggestions?: Array<{ title: string; start: number; end: number; replaceWith: string }>;
+};
 
 export type BootstrapModuleOutput = { path: string; js: string };
 
@@ -44,6 +49,44 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
     import(new URL("module.ts", root).href),
     import(new URL("parser.ts", root).href),
   ]);
+
+  const distance = (a: string, b: string): number => {
+    const row = Array.from({ length: b.length + 1 }, (_, i) => i);
+    for (let i = 1; i <= a.length; i++) {
+      let diagonal = row[0]!;
+      row[0] = i;
+      for (let j = 1; j <= b.length; j++) {
+        const above = row[j]!;
+        row[j] = a[i - 1] === b[j - 1] ? diagonal : 1 + Math.min(diagonal, above, row[j - 1]!);
+        diagonal = above;
+      }
+    }
+    return row[b.length]!;
+  };
+  const enrich = (error: BootstrapDiagnostic, source: string): BootstrapDiagnostic => {
+    const name = /unbound variable '([^']+)'/.exec(error.message)?.[1];
+    if (!name) return error;
+    const names = [...source.matchAll(/\b[A-Za-z_][A-Za-z0-9_]*\b/g)]
+      .map((match) => match[0]!)
+      .filter((candidate, index, all) => candidate !== name && all.indexOf(candidate) === index)
+      .map((candidate) => ({ candidate, score: distance(name, candidate) }))
+      .filter(({ score }) => score <= Math.max(2, Math.floor(name.length / 3)))
+      .sort((a, b) => a.score - b.score);
+    const best = names[0];
+    return best
+      ? {
+          ...error,
+          suggestions: [
+            {
+              title: `Did you mean '${best.candidate}'?`,
+              start: error.start,
+              end: error.end,
+              replaceWith: best.candidate,
+            },
+          ],
+        }
+      : error;
+  };
 
   const checkGraph: BootstrapCore["checkGraph"] = async (entry, src, readFile) => {
     const entryPath = await import("node:path").then(({ resolve }) => resolve(entry));
@@ -97,10 +140,14 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
     // single-file railway so misspelled local names still become diagnostics.
     if (!entryStmts.some((stmt) => stmt._tag === "SImport" || stmt._tag === "SImportNs")) {
       const strict = compile.compile(src) as BootstrapResult<string, BootstrapDiagnostic>;
-      return strict._tag === "Ok" ? { _tag: "Ok", value: undefined } : strict;
+      return strict._tag === "Ok"
+        ? { _tag: "Ok", value: undefined }
+        : { _tag: "Err", error: enrich(strict.error, src) };
     }
     const result = module.compileGraph([...loaded.values()]);
-    return result._tag === "Ok" ? { _tag: "Ok", value: undefined } : result;
+    return result._tag === "Ok"
+      ? { _tag: "Ok", value: undefined }
+      : { _tag: "Err", error: enrich(result.error, src) };
   };
 
   return {
