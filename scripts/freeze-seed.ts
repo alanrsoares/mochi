@@ -78,7 +78,7 @@ execFileSync(
     "build",
     join(tmp, "compile.ts"),
     "--outfile",
-    join(tmp, "compile.bundle.js"),
+    join(tmp, "compile.bundle.cjs"),
     "--target",
     "bun",
     "--external",
@@ -88,14 +88,14 @@ execFileSync(
   ],
   { cwd: REPO, stdio: "inherit" },
 );
-stripBundleSourceLabels(join(tmp, "compile.bundle.js"));
+stripBundleSourceLabels(join(tmp, "compile.bundle.cjs"));
 execFileSync(
   "bun",
   [
     "build",
     join(tmp, "module.ts"),
     "--outfile",
-    join(tmp, "module.bundle.js"),
+    join(tmp, "module.bundle.cjs"),
     "--target",
     "bun",
     "--external",
@@ -105,7 +105,7 @@ execFileSync(
   ],
   { cwd: REPO, stdio: "inherit" },
 );
-stripBundleSourceLabels(join(tmp, "module.bundle.js"));
+stripBundleSourceLabels(join(tmp, "module.bundle.cjs"));
 
 emptyDir(SEED);
 cpSync(tmp, SEED, { recursive: true });

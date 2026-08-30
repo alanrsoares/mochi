@@ -11,7 +11,7 @@ type SeedModule = {
 };
 
 const seed = createRequire(import.meta.url)(
-  fileURLToPath(new URL("../../../../bootstrap/seed/module.bundle.js", import.meta.url)),
+  fileURLToPath(new URL("../../../../bootstrap/seed/module.bundle.cjs", import.meta.url)),
 ) as SeedModule;
 
 export const buildModulesBootstrap = (
