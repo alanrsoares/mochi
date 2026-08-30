@@ -14,6 +14,7 @@ export type BootstrapModuleOutput = { path: string; js: string };
 
 export type BootstrapCore = {
   compile: (src: string) => BootstrapResult<string, BootstrapDiagnostic>;
+  compileTs: (src: string, runtimeImport: string) => BootstrapResult<string, BootstrapDiagnostic>;
   buildModules: (entry: string) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic>;
   buildModulesTs: (
     entry: string,
@@ -38,6 +39,7 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
 
   return {
     compile: compile.compile as BootstrapCore["compile"],
+    compileTs: compile.compileTs as BootstrapCore["compileTs"],
     buildModules: module.buildModules as BootstrapCore["buildModules"],
     buildModulesTs: module.buildModulesTs as BootstrapCore["buildModulesTs"],
   };
