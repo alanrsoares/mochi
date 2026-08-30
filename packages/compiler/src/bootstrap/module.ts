@@ -16,7 +16,17 @@ const seed = createRequire(import.meta.url)(
 
 export const buildModulesBootstrap = (
   entry: string,
-): BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic> => seed.buildModules(entry);
+): BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic> => {
+  const result = seed.buildModules(entry);
+  if (result._tag === "Err") return result;
+  return {
+    _tag: "Ok",
+    value: result.value.map((output) => ({
+      ...output,
+      js: output.js.replace(/(from\s+["'][^"']+)\.js(["'])/g, "$1.mochi$2"),
+    })),
+  };
+};
 
 export const buildModulesTsBootstrap = (
   entry: string,

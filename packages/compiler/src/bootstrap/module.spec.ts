@@ -9,5 +9,20 @@ test("bundled bootstrap module graph matches the TypeScript driver", async () =>
   const entry = join(repoRoot(import.meta.url), "examples/modules/main.mochi");
   const bootstrap = buildModulesBootstrap(entry);
   const oracle = await tsBuildModules(entry, (path) => Bun.file(path).text());
-  expect(bootstrap).toEqual({ _tag: "Ok", value: unwrapOk(oracle) });
+  expect(bootstrap).toEqual({
+    _tag: "Ok",
+    value: unwrapOk(oracle).map((output) => ({
+      ...output,
+      js: output.js.replace(/(from\s+["'][^"']+)\.js(["'])/g, "$1.mochi$2"),
+    })),
+  });
+});
+
+test("bundled graph facade preserves Mochi sibling imports", () => {
+  const result = buildModulesBootstrap(
+    join(repoRoot(import.meta.url), "examples/modules/main.mochi"),
+  );
+  expect(unwrapOk(result).some((output) => output.js.includes('from "./geometry.mochi"'))).toBe(
+    true,
+  );
 });
