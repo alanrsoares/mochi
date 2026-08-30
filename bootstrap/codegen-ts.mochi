@@ -907,8 +907,91 @@ export let tsGenOpts = (stmts, env, types, letParams, aliases: Map<string, Alias
         typeOf(e) |> Option.flatMap(t => guardParamTs(t, recs))),
       flattenPipe: true,
       tupleHelper: true,
+      preserveInfix: true,
+      preserveJsx: true,
       moduleExt: ""
     }
+
+let anyOf = (f, xs) => Array.reduce((acc, x) => acc || f(x), false, xs)
+
+let hasJsxExpr = e => switch e {
+  | Ast.ECall(_, _, Some("jsx"), _) => true
+  | Ast.ECall(fn, args, _, _) => hasJsxExpr(fn) || anyOf(hasJsxExpr, args)
+  | Ast.ELambda(_, body, _) => hasJsxExpr(body)
+  | Ast.ELetIn(_, _, value, body, _) => hasJsxExpr(value) || hasJsxExpr(body)
+  | Ast.ELetBind(_, _, _, value, body, _) => hasJsxExpr(
+      value
+    ) || hasJsxExpr(body)
+  | Ast.EPipe(left, right, _) => hasJsxExpr(left) || hasJsxExpr(right)
+  | Ast.EDo(exprs, _) => anyOf(hasJsxExpr, exprs)
+  | Ast.ETernary(cond, thenE, elseE, _) => hasJsxExpr(
+      cond
+    ) || hasJsxExpr(thenE) || hasJsxExpr(elseE)
+  | Ast.EMatch(scrutinee, arms, _) => hasJsxExpr(
+      scrutinee
+    ) || anyOf(
+      a =>
+        switch a.guard {
+          | Some(g) => hasJsxExpr(g)
+          | None => false
+        } || hasJsxExpr(a.body),
+      arms
+    )
+  | Ast.ERecord(fields, spread, _) => anyOf(
+      f => hasJsxExpr(f.value),
+      fields
+    ) || switch spread { | Some(value) => hasJsxExpr(value) | None => false }
+  | Ast.EField(target, _, _, _) => hasJsxExpr(target)
+  | Ast.ETuple(elements, _) => anyOf(hasJsxExpr, elements)
+  | Ast.EArr(elements, _) => anyOf(
+      el => switch el {
+        | Ast.SEExpr(value) => hasJsxExpr(value)
+        | Ast.SESpread(value) => hasJsxExpr(value)
+      },
+      elements
+    )
+  | Ast.EList(elements, _) => anyOf(
+      el => switch el {
+        | Ast.SEExpr(value) => hasJsxExpr(value)
+        | Ast.SESpread(value) => hasJsxExpr(value)
+      },
+      elements
+    )
+  | Ast.ESet(elements, _) => anyOf(
+      el => switch el {
+        | Ast.SEExpr(value) => hasJsxExpr(value)
+        | Ast.SESpread(value) => hasJsxExpr(value)
+      },
+      elements
+    )
+  | Ast.EMap(entries, _) => anyOf(
+      entry => hasJsxExpr(entry.key) || hasJsxExpr(entry.value),
+      entries
+    )
+  | Ast.ELoop(params, body, _) => anyOf(
+      p => hasJsxExpr(p.init),
+      params
+    ) || hasJsxExpr(body)
+  | Ast.ERecur(args, _) => anyOf(hasJsxExpr, args)
+  | Ast.EInterp(parts, _) => anyOf(
+      part => switch part {
+        | Ast.IPLit(_) => false
+        | Ast.IPExpr(value) => hasJsxExpr(value)
+      },
+      parts
+    )
+  | _ => false
+}
+
+let hasJsxStmts = stmts =>
+  anyOf(
+    stmt => switch stmt {
+      | Ast.SLet(_, _, _, value, _, _, _) => hasJsxExpr(value)
+      | Ast.SExpr(value, _) => hasJsxExpr(value)
+      | _ => false
+    },
+    stmts
+  )
 
 /// Emit one module's typed TS: type header, then any cross-module imports, then
 /// the runtime import, then the codegen body with per-binding / per-ctor
@@ -938,6 +1021,12 @@ export let emitTsModule = (stmts, env, types, letParams, aliases: Map<string, Al
   let deps = Str.contains("_tuple(", body)
     ? Array.append("_tuple", deps0)
     : deps0 in
+  let deps = deps
+    |> filter(d =>
+      d != "add" && d != "sub" && d != "mul" && d != "div" && d != "lt" && d != "lte" && d != "gt" && d != "gte" || Str.contains(
+        d,
+        body
+      )) in
   let runtimeLine = Array.length(deps) == 0
     ? ""
     : "import { ${Str.join(", ", Array.sort(deps))} } from \"${runtimeImport}\";" in
@@ -954,19 +1043,7 @@ export let emitTsModule = (stmts, env, types, letParams, aliases: Map<string, Al
   let typeImportLine = Array.length(typeDeps) == 0
     ? ""
     : "import type { ${Str.join(", ", Array.sort(typeDeps))} } from \"${runtimeImport}\";" in
-    Str.join(
-      "\n\n",
-      Array.filter(
-        part => part != "",
-        [
-          Str.join("\n", header),
-          Str.join("\n", importLines),
-          typeImportLine,
-          runtimeLine,
-          body
-        ]
-      )
-    )
+    "${hasJsxStmts(stmts) ? "/** @jsx h */\n\n" : ""}${Str.join("\n\n", Array.filter(part => part != "", [Str.join("\n", header), Str.join("\n", importLines), typeImportLine, runtimeLine, body]))}"
       ++ "\n"
 
 // ---- extern host declarations (ADR 0026 / 0064) ----------------------------

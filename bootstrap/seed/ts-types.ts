@@ -13,31 +13,30 @@ export type TsEnv = { vars: Map<number, string>; recs: Map<string, string> };
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
-  _curry,
-  Some,
   None,
-  add,
-  eq,
-  compare,
-  show,
-  not,
-  length,
-  map,
-  _Map_set,
-  _Map_size,
-  _Map_get,
-  _Option_map,
-  _Option_flatMap,
-  _Option_unwrapOr,
-  _Array_get,
-  _Array_concat,
+  Some,
   _Array_append,
+  _Array_concat,
+  _Array_get,
   _Array_prepend,
   _Array_sort,
-  _Str_join,
-  _Str_get,
+  _Map_get,
+  _Map_set,
+  _Map_size,
+  _Option_flatMap,
+  _Option_map,
+  _Option_unwrapOr,
   _Str_fromCode,
+  _Str_get,
+  _Str_join,
+  _curry,
   _tuple,
+  compare,
+  eq,
+  length,
+  map,
+  not,
+  show,
 } from "@mochi/compiler/runtime";
 
 import { match } from "@onrails/pattern";
@@ -96,7 +95,7 @@ const genericNamesFrom: <A>(ids: A[], i: number, names: Map<A, string>) => Map<A
     match(_Array_get(i, ids))
       .with({ _tag: "None" }, () => names)
       .with({ _tag: "Some" }, ({ value: id }) =>
-        genericNamesFrom(ids, add(i, 1), _Map_set(id, letterAt(i), names)),
+        genericNamesFrom(ids, i + 1, _Map_set(id, letterAt(i), names)),
       )
       .exhaustive(),
 );
@@ -126,11 +125,12 @@ const tsRowFields: _Curry<[row: Row, env: TsEnv], [string[], Option<number>]> = 
     match(row)
       .with({ _tag: "RowEmpty" }, () => _tuple([] as string[], None as Option<number>))
       .with({ _tag: "RowVar" }, ({ id }) => _tuple([] as string[], Some(id) as Option<number>))
-      .with({ _tag: "RowExtend" }, ({ label, fieldType, rest }) =>
+      .with({ _tag: "RowExtend" }, ({ label, fieldType, optional, rest }) =>
         (([fields, tail]: [string[], Option<number>]) =>
-          _tuple(_Array_prepend(`${label}: ${tsOfRaw(fieldType, env)}`, fields), tail))(
-          tsRowFields(rest, env),
-        ),
+          _tuple(
+            _Array_prepend(`${label}${optional ? "?" : ""}: ${tsOfRaw(fieldType, env)}`, fields),
+            tail,
+          ))(tsRowFields(rest, env)),
       )
       .exhaustive(),
 );
@@ -144,9 +144,13 @@ const shapeFieldsFrom: _Curry<[row: Row, vars: Map<number, string>], Option<stri
     match(row)
       .with({ _tag: "RowEmpty" }, () => Some([] as string[]) as Option<string[]>)
       .with({ _tag: "RowVar" }, () => None as Option<string[]>)
-      .with({ _tag: "RowExtend" }, ({ label, fieldType, rest }) =>
+      .with({ _tag: "RowExtend" }, ({ label, fieldType, optional, rest }) =>
         _Option_map(
-          (fs: string[]) => _Array_prepend(`${label}: ${tsOf(fieldType, plainEnv(vars))}`, fs),
+          (fs: string[]) =>
+            _Array_prepend(
+              `${label}${optional ? "?" : ""}: ${tsOf(fieldType, plainEnv(vars))}`,
+              fs,
+            ),
           shapeFieldsFrom(rest, vars),
         ),
       )
@@ -207,7 +211,7 @@ const tsArrow: _Curry<[fromT: Ty, toT: Ty, env: TsEnv], string> = _curry(
 const tsArrowParams: _Curry<[fromT: Ty, toT: Ty, env: TsEnv, i: number, params: string[]], string> =
   _curry(5, (fromT: Ty, toT: Ty, env: TsEnv, i: number, params: string[]) => {
     const params1: string[] = _Array_append(
-      `${_Str_fromCode(add(97, i))}: ${tsOfRaw(fromT, env)}`,
+      `${_Str_fromCode(97 + i)}: ${tsOfRaw(fromT, env)}`,
       params,
     );
     return match(toT)
@@ -218,8 +222,7 @@ const tsArrowParams: _Curry<[fromT: Ty, toT: Ty, env: TsEnv, i: number, params: 
             _g._tag === "TyFn" && (({ from: nextFrom, to: nextTo }) => not(isUnit(nextFrom)))(_g)
           );
         },
-        ({ from: nextFrom, to: nextTo }) =>
-          tsArrowParams(nextFrom, nextTo, env, add(i, 1), params1),
+        ({ from: nextFrom, to: nextTo }) => tsArrowParams(nextFrom, nextTo, env, i + 1, params1),
       )
       .otherwise(() => `(${_Str_join(", ", params1)}) => ${tsOfRaw(toT, env)}`);
   });

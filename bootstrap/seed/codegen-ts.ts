@@ -1,7 +1,4 @@
 import type {
-  AliasField,
-  Ctor,
-  CtorField,
   Expr,
   Field,
   InterpPart,
@@ -14,8 +11,9 @@ import type {
   Stmt,
   TypeExpr,
 } from "./ast";
-import type { Row, St, Ty } from "./types";
-import type { CtorFactoryTs, GenOpts, ParamAnnots } from "./codegen";
+import type { Row, SpanAt, St, Ty } from "./types";
+import type { QualAliasField } from "./infer";
+import type { CtorFactoryTs, CtorFieldLike, CtorLike, GenOpts, ParamAnnots } from "./codegen";
 import type { TsEnv } from "./ts-types";
 
 /**
@@ -24,63 +22,63 @@ import type { TsEnv } from "./ts-types";
  * well as in schemes.mochi rather than shared through an import — a local
  * record alias expands, so both copies unify structurally (ADR 0044).
  */
-export type AliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
+export type AliasInfo = { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> };
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
-  _list,
-  _curry,
-  Some,
   None,
-  add,
-  sub,
-  concat,
-  eq,
-  compare,
-  show,
-  lt,
-  gt,
-  gte,
-  lte,
-  not,
-  and,
-  or,
-  length,
-  map,
-  filter,
-  reduce,
-  _List_concat,
-  _Set_has,
-  _Set_add,
-  _Set_fromArray,
-  _Map_set,
-  _Map_delete,
-  _Map_size,
-  _Map_keys,
-  _Map_values,
-  _Map_get,
-  _Option_map,
-  _Option_flatMap,
-  _Option_unwrapOr,
-  _Option_isSome,
-  _Array_get,
-  _Array_reverse,
-  _Array_concat,
+  Some,
   _Array_append,
-  _Array_prepend,
-  _Array_take,
-  _Array_drop,
+  _Array_concat,
   _Array_contains,
+  _Array_dedupeBy,
+  _Array_drop,
+  _Array_get,
+  _Array_prepend,
+  _Array_reverse,
   _Array_sort,
   _Array_sortBy,
-  _Array_dedupeBy,
-  _Str_split,
-  _Str_join,
+  _Array_take,
+  _List_concat,
+  _Map_delete,
+  _Map_get,
+  _Map_keys,
+  _Map_set,
+  _Map_size,
+  _Map_values,
+  _Option_flatMap,
+  _Option_isSome,
+  _Option_map,
+  _Option_unwrapOr,
+  _Set_add,
+  _Set_fromArray,
+  _Set_has,
   _Str_contains,
-  _Str_startsWith,
   _Str_fromCode,
+  _Str_join,
+  _Str_split,
+  _Str_startsWith,
+  _curry,
+  _list,
   _tuple,
+  add,
+  and,
+  compare,
+  concat,
+  eq,
+  filter,
+  gt,
+  gte,
+  length,
+  lt,
+  lte,
+  map,
+  not,
+  or,
+  reduce,
+  show,
+  sub,
 } from "@mochi/compiler/runtime";
 
 import { match } from "@onrails/pattern";
@@ -116,9 +114,7 @@ const paramVarsFrom: <A>(params: A[], i: number) => Map<A, Ty> = _curry(
   <A>(params: A[], i: number) =>
     match(_Array_get(i, params))
       .with({ _tag: "None" }, () => new Map<A, Ty>())
-      .with({ _tag: "Some" }, ({ value: p }) =>
-        _Map_set(p, tVar(i), paramVarsFrom(params, add(i, 1))),
-      )
+      .with({ _tag: "Some" }, ({ value: p }) => _Map_set(p, tVar(i), paramVarsFrom(params, i + 1)))
       .exhaustive(),
 );
 const paramNamesFrom: <A>(params: A[], i: number) => Map<number, string> = _curry(
@@ -126,7 +122,7 @@ const paramNamesFrom: <A>(params: A[], i: number) => Map<number, string> = _curr
   <A>(params: A[], i: number) =>
     match(_Array_get(i, params))
       .with({ _tag: "None" }, () => new Map<number, string>())
-      .with({ _tag: "Some" }, () => _Map_set(i, letterAt(i), paramNamesFrom(params, add(i, 1))))
+      .with({ _tag: "Some" }, () => _Map_set(i, letterAt(i), paramNamesFrom(params, i + 1)))
       .exhaustive(),
 );
 /**
@@ -137,7 +133,7 @@ const genericHead: <A>(params: A[], i: number, acc: string[]) => string = _curry
   <A>(params: A[], i: number, acc: string[]) =>
     match(_Array_get(i, params))
       .with({ _tag: "None" }, () => (eq(length(acc), 0) ? "" : `<${_Str_join(", ", acc)}>`))
-      .with({ _tag: "Some" }, () => genericHead(params, add(i, 1), _Array_append(letterAt(i), acc)))
+      .with({ _tag: "Some" }, () => genericHead(params, i + 1, _Array_append(letterAt(i), acc)))
       .exhaustive(),
 );
 /**
@@ -165,7 +161,7 @@ const fieldTs: _Curry<
  */
 const ctorFieldsFrom: _Curry<
   [
-    fields: CtorField[],
+    fields: CtorFieldLike[],
     keys: string[],
     params: string[],
     aliases: Map<string, AliasInfo>,
@@ -176,7 +172,7 @@ const ctorFieldsFrom: _Curry<
 > = _curry(
   6,
   (
-    fields: CtorField[],
+    fields: CtorFieldLike[],
     keys: string[],
     params: string[],
     aliases: Map<string, AliasInfo>,
@@ -188,7 +184,7 @@ const ctorFieldsFrom: _Curry<
       .with({ _tag: "Some" }, ({ value: fld }) =>
         _Array_prepend(
           `${_Option_unwrapOr(`_${show(i)}`, _Array_get(i, keys))}: ${fieldTs(fld.fieldType, params, aliases, recs)}`,
-          ctorFieldsFrom(fields, keys, params, aliases, recs, add(i, 1)),
+          ctorFieldsFrom(fields, keys, params, aliases, recs, i + 1),
         ),
       )
       .exhaustive(),
@@ -197,11 +193,11 @@ const ctorFieldsFrom: _Curry<
  * One ctor's runtime shape: the `_tag` discriminant plus its fields.
  */
 const ctorVariant: _Curry<
-  [c: Ctor, params: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>],
+  [c: CtorLike, params: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>],
   string
 > = _curry(
   4,
-  (c: Ctor, params: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>) => {
+  (c: CtorLike, params: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>) => {
     const fields: string[] = ctorFieldsFrom(c.fields, keysOf(c.fields), params, aliases, recs, 0);
     return eq(length(fields), 0)
       ? `{ _tag: "${c.name}" }`
@@ -210,7 +206,7 @@ const ctorVariant: _Curry<
 );
 const ctorVariantsFrom: _Curry<
   [
-    ctors: Ctor[],
+    ctors: CtorLike[],
     params: string[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
@@ -220,7 +216,7 @@ const ctorVariantsFrom: _Curry<
 > = _curry(
   5,
   (
-    ctors: Ctor[],
+    ctors: CtorLike[],
     params: string[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
@@ -231,7 +227,7 @@ const ctorVariantsFrom: _Curry<
       .with({ _tag: "Some" }, ({ value: c }) =>
         _Array_prepend(
           `  | ${ctorVariant(c, params, aliases, recs)}`,
-          ctorVariantsFrom(ctors, params, aliases, recs, add(i, 1)),
+          ctorVariantsFrom(ctors, params, aliases, recs, i + 1),
         ),
       )
       .exhaustive(),
@@ -243,7 +239,7 @@ export const typeDecl: _Curry<
   [
     name: string,
     params: string[],
-    ctors: Ctor[],
+    ctors: CtorLike[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
   ],
@@ -253,7 +249,7 @@ export const typeDecl: _Curry<
   (
     name: string,
     params: string[],
-    ctors: Ctor[],
+    ctors: CtorLike[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
   ) => {
@@ -264,7 +260,7 @@ ${_Str_join("\n", ctorVariantsFrom(ctors, params, aliases, recs, 0))};`;
 );
 const aliasFieldsFrom: _Curry<
   [
-    fields: AliasField[],
+    fields: QualAliasField[],
     params: string[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
@@ -274,7 +270,7 @@ const aliasFieldsFrom: _Curry<
 > = _curry(
   5,
   (
-    fields: AliasField[],
+    fields: QualAliasField[],
     params: string[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
@@ -284,8 +280,8 @@ const aliasFieldsFrom: _Curry<
       .with({ _tag: "None" }, () => [] as string[])
       .with({ _tag: "Some" }, ({ value: f }) =>
         _Array_prepend(
-          `${f.name}: ${fieldTs(f.fieldType, params, aliases, recs)}`,
-          aliasFieldsFrom(fields, params, aliases, recs, add(i, 1)),
+          `${f.name}${f.optional ? "?" : ""}: ${fieldTs(f.fieldType, params, aliases, recs)}`,
+          aliasFieldsFrom(fields, params, aliases, recs, i + 1),
         ),
       )
       .exhaustive(),
@@ -298,7 +294,7 @@ export const recordAliasDecl: _Curry<
   [
     name: string,
     params: string[],
-    fields: AliasField[],
+    fields: QualAliasField[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
   ],
@@ -308,7 +304,7 @@ export const recordAliasDecl: _Curry<
   (
     name: string,
     params: string[],
-    fields: AliasField[],
+    fields: QualAliasField[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
   ) => {
@@ -369,7 +365,7 @@ const mergeInto: <A, B>(keys: A[], src: Map<A, B>, acc: Map<A, B>, i: number) =>
             .with({ _tag: "Some" }, ({ value: v }) => _Map_set(k, v, acc))
             .with({ _tag: "None" }, () => acc)
             .exhaustive(),
-          add(i, 1),
+          i + 1,
         ),
       )
       .exhaustive(),
@@ -384,7 +380,7 @@ const unionNamesFrom: <A, B>(
     match(_Array_get(i, schemes))
       .with({ _tag: "None" }, () => acc)
       .with({ _tag: "Some" }, ({ value: sc }) =>
-        ((names) => unionNamesFrom(schemes, add(i, 1), mergeInto(_Map_keys(names), names, acc, 0)))(
+        ((names) => unionNamesFrom(schemes, i + 1, mergeInto(_Map_keys(names), names, acc, 0)))(
           genericNames(sc),
         ),
       )
@@ -421,7 +417,7 @@ const allVarsInAll: <A>(ts: Ty[], names: Map<number, A>, i: number) => boolean =
     match(_Array_get(i, ts))
       .with({ _tag: "None" }, () => true)
       .with({ _tag: "Some" }, ({ value: t }) =>
-        and(allVarsIn(t, names), allVarsInAll(ts, names, add(i, 1))),
+        and(allVarsIn(t, names), allVarsInAll(ts, names, i + 1)),
       )
       .exhaustive(),
 );
@@ -492,7 +488,7 @@ export const guardParamTs: _Curry<[t: Ty, recs: Map<string, string>], Option<str
  */
 const lambdaParamsFrom: _Curry<[t: Ty, arity: number, env: TsEnv, i: number], Option<string>[]> =
   _curry(4, (t: Ty, arity: number, env: TsEnv, i: number) =>
-    gte(i, arity)
+    i >= arity
       ? ([] as Option<string>[])
       : match(t)
           .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
@@ -502,11 +498,11 @@ const lambdaParamsFrom: _Curry<[t: Ty, arity: number, env: TsEnv, i: number], Op
                 : isConcrete(fromT)
                   ? (Some(tsOf(fromT, recsEnv(env.recs))) as Option<string>)
                   : (None as Option<string>),
-              lambdaParamsFrom(toT, arity, env, add(i, 1)),
+              lambdaParamsFrom(toT, arity, env, i + 1),
             ),
           )
           .otherwise(() =>
-            _Array_prepend(None as Option<string>, lambdaParamsFrom(t, arity, env, add(i, 1))),
+            _Array_prepend(None as Option<string>, lambdaParamsFrom(t, arity, env, i + 1)),
           ),
   );
 export const lambdaParamTypesTs: _Curry<
@@ -524,17 +520,17 @@ export const lambdaParamTypesTs: _Curry<
  */
 const genericParamsFrom: _Curry<[t: Ty, arity: number, env: TsEnv, i: number], Option<string>[]> =
   _curry(4, (t: Ty, arity: number, env: TsEnv, i: number) =>
-    gte(i, arity)
+    i >= arity
       ? ([] as Option<string>[])
       : match(t)
           .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
             _Array_prepend(
               Some(tsOf(fromT, env)) as Option<string>,
-              genericParamsFrom(toT, arity, env, add(i, 1)),
+              genericParamsFrom(toT, arity, env, i + 1),
             ),
           )
           .otherwise(() =>
-            _Array_prepend(None as Option<string>, genericParamsFrom(t, arity, env, add(i, 1))),
+            _Array_prepend(None as Option<string>, genericParamsFrom(t, arity, env, i + 1)),
           ),
   );
 export const genericLambdaParams: <A>(
@@ -568,12 +564,12 @@ const neverArgs: <A>(params: A[], i: number, acc: string[]) => string[] = _curry
   <A>(params: A[], i: number, acc: string[]) =>
     match(_Array_get(i, params))
       .with({ _tag: "None" }, () => acc)
-      .with({ _tag: "Some" }, () => neverArgs(params, add(i, 1), _Array_append("never", acc)))
+      .with({ _tag: "Some" }, () => neverArgs(params, i + 1, _Array_append("never", acc)))
       .exhaustive(),
 );
 const ctorParamTypes: _Curry<
   [
-    fields: CtorField[],
+    fields: CtorFieldLike[],
     params: string[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
@@ -583,7 +579,7 @@ const ctorParamTypes: _Curry<
 > = _curry(
   5,
   (
-    fields: CtorField[],
+    fields: CtorFieldLike[],
     params: string[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
@@ -594,7 +590,7 @@ const ctorParamTypes: _Curry<
       .with({ _tag: "Some" }, ({ value: fld }) =>
         _Array_prepend(
           fieldTs(fld.fieldType, params, aliases, recs),
-          ctorParamTypes(fields, params, aliases, recs, add(i, 1)),
+          ctorParamTypes(fields, params, aliases, recs, i + 1),
         ),
       )
       .exhaustive(),
@@ -603,7 +599,7 @@ export const ctorFactoryTs: _Curry<
   [
     typeName: string,
     params: string[],
-    c: Ctor,
+    c: CtorLike,
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
   ],
@@ -613,7 +609,7 @@ export const ctorFactoryTs: _Curry<
   (
     typeName: string,
     params: string[],
-    c: Ctor,
+    c: CtorLike,
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
   ) => {
@@ -645,12 +641,9 @@ const compositions: (n: number) => number[][] = (n: number) =>
 const compositionsFrom: _Curry<[n: number, k: number], number[][]> = _curry(
   2,
   (n: number, k: number) =>
-    gt(k, n)
+    k > n
       ? ([] as number[][])
-      : _Array_concat(
-          map(_Array_prepend(k), compositions(sub(n, k))),
-          compositionsFrom(n, add(k, 1)),
-        ),
+      : _Array_concat(map(_Array_prepend(k), compositions(n - k)), compositionsFrom(n, k + 1)),
 );
 /**
  * Slice `params` into consecutive groups of the given sizes.
@@ -663,7 +656,7 @@ const sliceGroups: <A>(params: A[], groups: number[], i: number, at: number) => 
       .with({ _tag: "Some" }, ({ value: g }) =>
         _Array_prepend(
           _Array_take(g, _Array_drop(at, params)),
-          sliceGroups(params, groups, add(i, 1), add(at, g)),
+          sliceGroups(params, groups, i + 1, at + g),
         ),
       )
       .exhaustive(),
@@ -674,18 +667,18 @@ const sliceGroups: <A>(params: A[], groups: number[], i: number, at: number) => 
 const curriedTail: _Curry<[slices: string[][], i: number, acc: string], string> = _curry(
   3,
   (slices: string[][], i: number, acc: string) =>
-    lt(i, 1)
+    i < 1
       ? acc
       : curriedTail(
           slices,
-          sub(i, 1),
+          i - 1,
           `(${_Str_join(", ", _Option_unwrapOr([] as string[], _Array_get(i, slices)))}) => ${acc}`,
         ),
 );
 const overloadSig: _Curry<[head: string, params: string[], ret: string, groups: number[]], string> =
   _curry(4, (head: string, params: string[], ret: string, groups: number[]) => {
     const slices: string[][] = sliceGroups(params, groups, 0, 0);
-    const tail: string = curriedTail(slices, sub(length(slices), 1), ret);
+    const tail: string = curriedTail(slices, length(slices) - 1, ret);
     return `${head}(${_Str_join(", ", _Option_unwrapOr([] as string[], _Array_get(0, slices)))}): ${tail};`;
   });
 /**
@@ -698,13 +691,13 @@ const overloadSig: _Curry<[head: string, params: string[], ret: string, groups: 
  */
 export const curriedOverloads: _Curry<[head: string, params: string[], ret: string], string> =
   _curry(3, (head: string, params: string[], ret: string) =>
-    lte(length(params), 1)
+    length(params) <= 1
       ? `${head}(${_Str_join(", ", params)}) => ${ret}`
       : `{ ${_Str_join(
           " ",
           map(
             overloadSig(head, params, ret),
-            _Array_sortBy((g: number[]) => sub(0, length(g)), compositions(length(params))),
+            _Array_sortBy((g: number[]) => 0 - length(g), compositions(length(params))),
           ),
         )} }`,
   );
@@ -720,7 +713,7 @@ export const curriedOverloads: _Curry<[head: string, params: string[], ret: stri
 export const curriedFnType: _Curry<[params: string[], ret: string], string> = _curry(
   2,
   (params: string[], ret: string) =>
-    lte(length(params), 1)
+    length(params) <= 1
       ? `(${_Str_join(", ", params)}) => ${ret}`
       : `_Curry<[${_Str_join(", ", params)}], ${ret}>`,
 );
@@ -766,8 +759,8 @@ const takeParams: _Curry<
             toT,
             params,
             env,
-            add(i, 1),
-            add(n, 1),
+            i + 1,
+            n + 1,
             _Array_append(`${paramDeclName(p, n)}: ${tsOf(fromT, env)}`, acc),
           ),
         )
@@ -858,7 +851,7 @@ const typeAtFrom: <A, B, C, D, E>(
     match(_Array_get(i, types))
       .with({ _tag: "None" }, () => acc)
       .with({ _tag: "Some" }, ({ value: r }) =>
-        typeAtFrom(types, add(i, 1), _Map_set(spanKey(r.span), r.ty, acc)),
+        typeAtFrom(types, i + 1, _Map_set(spanKey(r.span), r.ty, acc)),
       )
       .exhaustive(),
 );
@@ -897,7 +890,7 @@ const consInAll: _Curry<[ts: Ty[], acc: Set<string>, i: number], Set<string>> = 
   (ts: Ty[], acc: Set<string>, i: number) =>
     match(_Array_get(i, ts))
       .with({ _tag: "None" }, () => acc)
-      .with({ _tag: "Some" }, ({ value: t }) => consInAll(ts, consInTy(t, acc), add(i, 1)))
+      .with({ _tag: "Some" }, ({ value: t }) => consInAll(ts, consInTy(t, acc), i + 1))
       .exhaustive(),
 );
 const consInRow: _Curry<[row: Row, acc: Set<string>], Set<string>> = _curry(
@@ -923,9 +916,9 @@ const declaredTypeNames: _Curry<[stmts: Stmt[], i: number, acc: Set<string>], Se
           const _g: any = _v;
           return _g._tag === "Some" && _g.value._tag === "SType";
         },
-        ({ value: { name } }) => declaredTypeNames(stmts, add(i, 1), _Set_add(name, acc)),
+        ({ value: { name } }) => declaredTypeNames(stmts, i + 1, _Set_add(name, acc)),
       )
-      .with({ _tag: "Some" }, () => declaredTypeNames(stmts, add(i, 1), acc))
+      .with({ _tag: "Some" }, () => declaredTypeNames(stmts, i + 1, acc))
       .exhaustive(),
 );
 const referencedCons: <A>(
@@ -951,7 +944,7 @@ const referencedCons: <A>(
           referencedCons(
             stmts,
             env,
-            add(i, 1),
+            i + 1,
             _Str_startsWith("$", name)
               ? acc
               : match(_Map_get(name, env))
@@ -960,7 +953,7 @@ const referencedCons: <A>(
                   .exhaustive(),
           ),
       )
-      .with({ _tag: "Some" }, () => referencedCons(stmts, env, add(i, 1), acc))
+      .with({ _tag: "Some" }, () => referencedCons(stmts, env, i + 1, acc))
       .exhaustive(),
 );
 /**
@@ -987,7 +980,7 @@ const builtinTypeNamesFor: _Curry<
           or(_Set_has(bt.name, wanted), _Str_contains(bt.name, body)),
         )
           ? _Array_prepend(bt.name, rest)
-          : rest)(builtinTypeNamesFor(declared, wanted, body, add(i, 1))),
+          : rest)(builtinTypeNamesFor(declared, wanted, body, i + 1)),
     )
     .exhaustive(),
 );
@@ -996,28 +989,30 @@ const builtinTypeNamesFor: _Curry<
  * expands a record alias at `typeExprToType`, so this reproduces exactly what
  * inference will have put in the type table for a value of that alias.
  */
-const aliasRowOf: _Curry<[fields: AliasField[], aliases: Map<string, AliasInfo>, i: number], Row> =
-  _curry(3, (fields: AliasField[], aliases: Map<string, AliasInfo>, i: number) =>
-    match(_Array_get(i, fields))
-      .with({ _tag: "None" }, () => RowEmpty as Row)
-      .with({ _tag: "Some" }, ({ value: f }) =>
-        (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) =>
-          RowExtend(f.name, t, aliasRowOf(fields, aliases, add(i, 1))))(
-          typeExprToType(
-            f.fieldType,
-            new Map<string, Ty>(),
-            mkSt(0),
-            aliases,
-            _Set_fromArray([] as string[]),
-          ),
+const aliasRowOf: _Curry<
+  [fields: QualAliasField[], aliases: Map<string, AliasInfo>, i: number],
+  Row
+> = _curry(3, (fields: QualAliasField[], aliases: Map<string, AliasInfo>, i: number) =>
+  match(_Array_get(i, fields))
+    .with({ _tag: "None" }, () => RowEmpty as Row)
+    .with({ _tag: "Some" }, ({ value: f }) =>
+      (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) =>
+        RowExtend(f.name, t, f.optional, aliasRowOf(fields, aliases, i + 1)))(
+        typeExprToType(
+          f.fieldType,
+          new Map<string, Ty>(),
+          mkSt(0),
+          aliases,
+          _Set_fromArray([] as string[]),
         ),
-      )
-      .exhaustive(),
-  );
+      ),
+    )
+    .exhaustive(),
+);
 const aliasShapeKey: _Curry<
-  [fields: AliasField[], aliases: Map<string, AliasInfo>],
+  [fields: QualAliasField[], aliases: Map<string, AliasInfo>],
   Option<string>
-> = _curry(2, (fields: AliasField[], aliases: Map<string, AliasInfo>) =>
+> = _curry(2, (fields: QualAliasField[], aliases: Map<string, AliasInfo>) =>
   rowShapeKey(aliasRowOf(fields, aliases, 0), new Map<number, string>()),
 );
 /**
@@ -1036,7 +1031,7 @@ const aliasShapeKey: _Curry<
  */
 const bareName: (name: string) => string = (name: string) => {
   const parts: string[] = _Str_split(".", name);
-  return _Option_unwrapOr(name, _Array_get(sub(length(parts), 1), parts));
+  return _Option_unwrapOr(name, _Array_get(length(parts) - 1, parts));
 };
 const indexAlias: <A>(
   key: string,
@@ -1072,12 +1067,7 @@ const recordAliasIndexFrom: _Curry<
     match(_Array_get(i, keys))
       .with({ _tag: "None" }, () => acc)
       .with({ _tag: "Some" }, ({ value: key }) =>
-        recordAliasIndexFrom(
-          keys,
-          aliases,
-          add(i, 1),
-          indexAlias(key, bareName(key), aliases, acc),
-        ),
+        recordAliasIndexFrom(keys, aliases, i + 1, indexAlias(key, bareName(key), aliases, acc)),
       )
       .exhaustive(),
 );
@@ -1089,14 +1079,14 @@ export const recordAliasIndex: (aliases: Map<string, AliasInfo>) => Map<string, 
  * come out as `export type Span = Span;`.
  */
 const withoutOwnShape: <A, B>(
-  fields: AliasField[],
+  fields: QualAliasField[],
   params: A[],
   aliases: Map<string, AliasInfo>,
   recs: Map<string, B>,
 ) => Map<string, B> = _curry(
   4,
   <A, B>(
-    fields: AliasField[],
+    fields: QualAliasField[],
     params: A[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, B>,
@@ -1160,9 +1150,9 @@ ${docComment}type ${name} = { readonly [${name}]: never };`,
                     )
                     .exhaustive(),
                 )
-                .exhaustive())(jsDoc(doc)))(typeHeaderFrom(stmts, aliases, recs, add(i, 1))),
+                .exhaustive())(jsDoc(doc)))(typeHeaderFrom(stmts, aliases, recs, i + 1)),
       )
-      .with({ _tag: "Some" }, () => typeHeaderFrom(stmts, aliases, recs, add(i, 1)))
+      .with({ _tag: "Some" }, () => typeHeaderFrom(stmts, aliases, recs, i + 1))
       .exhaustive(),
 );
 /**
@@ -1201,7 +1191,7 @@ const genericLambdasFrom: <A, B, C>(
           genericLambdasFrom(
             stmts,
             env,
-            add(i, 1),
+            i + 1,
             match(value)
               .with(
                 (_v): _v is Extract<Expr, { _tag: "ELambda" }> => {
@@ -1213,7 +1203,7 @@ const genericLambdasFrom: <A, B, C>(
                 ({ span: sp }) =>
                   match(_Map_get(name, env))
                     .with({ _tag: "Some" }, ({ value: sc }) =>
-                      or(gt(length(sc.vars), 0), gt(length(sc.rvars), 0))
+                      or(length(sc.vars) > 0, length(sc.rvars) > 0)
                         ? _Map_set(spanKey(sp), sc, acc)
                         : acc,
                     )
@@ -1223,7 +1213,7 @@ const genericLambdasFrom: <A, B, C>(
               .otherwise(() => acc),
           ),
       )
-      .with({ _tag: "Some" }, () => genericLambdasFrom(stmts, env, add(i, 1), acc))
+      .with({ _tag: "Some" }, () => genericLambdasFrom(stmts, env, i + 1, acc))
       .exhaustive(),
 );
 /**
@@ -1236,7 +1226,7 @@ const genericLambdasFrom: <A, B, C>(
  * span is collected too, but `annotateParams` resolves that one through
  * `genericLams` first, so the extra entry is harmless.
  */
-const scopedSpans: (e: Expr) => Span[] = (e: Expr) =>
+const scopedSpans: (e: Expr) => SpanAt[] = (e: Expr) =>
   match(e)
     .with({ _tag: "ELambda" }, ({ body, span: sp }) => _Array_prepend(sp, scopedSpans(body)))
     .with({ _tag: "ECall" }, ({ fn, args }) =>
@@ -1263,12 +1253,12 @@ const scopedSpans: (e: Expr) => Span[] = (e: Expr) =>
         scopedSpansInFields(fields, 0),
         match(spread)
           .with({ _tag: "Some" }, ({ value: s }) => scopedSpans(s))
-          .with({ _tag: "None" }, () => [] as Span[])
+          .with({ _tag: "None" }, () => [] as SpanAt[])
           .exhaustive(),
       ),
     )
     .with({ _tag: "EField" }, ({ target, name, span: sp }) =>
-      ((rest: Span[]) =>
+      ((rest: SpanAt[]) =>
         and(eq(name, "empty"), isRefExpr(target)) ? _Array_prepend(sp, rest) : rest)(
         scopedSpans(target),
       ),
@@ -1278,7 +1268,7 @@ const scopedSpans: (e: Expr) => Span[] = (e: Expr) =>
     .with({ _tag: "EList" }, ({ elements, span: sp }) => scopedSpansInSeq(elements, sp))
     .with({ _tag: "ESet" }, ({ elements, span: sp }) => scopedSpansInSeq(elements, sp))
     .with({ _tag: "EMap" }, ({ entries, span: sp }) =>
-      ((inner: Span[]) => (eq(length(entries), 0) ? _Array_prepend(sp, inner) : inner))(
+      ((inner: SpanAt[]) => (eq(length(entries), 0) ? _Array_prepend(sp, inner) : inner))(
         scopedSpansInEntries(entries, 0),
       ),
     )
@@ -1287,65 +1277,65 @@ const scopedSpans: (e: Expr) => Span[] = (e: Expr) =>
     )
     .with({ _tag: "ERecur" }, ({ args }) => scopedSpansAt(args, 0))
     .with({ _tag: "EInterp" }, ({ parts }) => scopedSpansInParts(parts, 0))
-    .otherwise(() => [] as Span[]);
+    .otherwise(() => [] as SpanAt[]);
 const isRefExpr: (e: Expr) => boolean = (e: Expr) =>
   match(e)
     .with({ _tag: "ERef" }, () => true)
     .otherwise(() => false);
-const scopedSpansAt: _Curry<[exprs: Expr[], i: number], Span[]> = _curry(
+const scopedSpansAt: _Curry<[exprs: Expr[], i: number], SpanAt[]> = _curry(
   2,
   (exprs: Expr[], i: number) =>
     match(_Array_get(i, exprs))
-      .with({ _tag: "None" }, () => [] as Span[])
+      .with({ _tag: "None" }, () => [] as SpanAt[])
       .with({ _tag: "Some" }, ({ value: e }) =>
-        _Array_concat(scopedSpans(e), scopedSpansAt(exprs, add(i, 1))),
+        _Array_concat(scopedSpans(e), scopedSpansAt(exprs, i + 1)),
       )
       .exhaustive(),
 );
-const scopedSpansInArms: _Curry<[arms: MatchArm[], i: number], Span[]> = _curry(
+const scopedSpansInArms: _Curry<[arms: MatchArm[], i: number], SpanAt[]> = _curry(
   2,
   (arms: MatchArm[], i: number) =>
     match(_Array_get(i, arms))
-      .with({ _tag: "None" }, () => [] as Span[])
+      .with({ _tag: "None" }, () => [] as SpanAt[])
       .with({ _tag: "Some" }, ({ value: a }) =>
         _Array_concat(
           match(a.guard)
             .with({ _tag: "Some" }, ({ value: g }) => scopedSpans(g))
-            .with({ _tag: "None" }, () => [] as Span[])
+            .with({ _tag: "None" }, () => [] as SpanAt[])
             .exhaustive(),
-          _Array_concat(scopedSpans(a.body), scopedSpansInArms(arms, add(i, 1))),
+          _Array_concat(scopedSpans(a.body), scopedSpansInArms(arms, i + 1)),
         ),
       )
       .exhaustive(),
 );
-const scopedSpansInFields: _Curry<[fields: Field[], i: number], Span[]> = _curry(
+const scopedSpansInFields: _Curry<[fields: Field[], i: number], SpanAt[]> = _curry(
   2,
   (fields: Field[], i: number) =>
     match(_Array_get(i, fields))
-      .with({ _tag: "None" }, () => [] as Span[])
+      .with({ _tag: "None" }, () => [] as SpanAt[])
       .with({ _tag: "Some" }, ({ value: f }) =>
-        _Array_concat(scopedSpans(f.value), scopedSpansInFields(fields, add(i, 1))),
+        _Array_concat(scopedSpans(f.value), scopedSpansInFields(fields, i + 1)),
       )
       .exhaustive(),
 );
-const scopedSpansInEntries: _Curry<[entries: MapEntry[], i: number], Span[]> = _curry(
+const scopedSpansInEntries: _Curry<[entries: MapEntry[], i: number], SpanAt[]> = _curry(
   2,
   (entries: MapEntry[], i: number) =>
     match(_Array_get(i, entries))
-      .with({ _tag: "None" }, () => [] as Span[])
+      .with({ _tag: "None" }, () => [] as SpanAt[])
       .with({ _tag: "Some" }, ({ value: en }) =>
         _Array_concat(
           scopedSpans(en.key),
-          _Array_concat(scopedSpans(en.value), scopedSpansInEntries(entries, add(i, 1))),
+          _Array_concat(scopedSpans(en.value), scopedSpansInEntries(entries, i + 1)),
         ),
       )
       .exhaustive(),
 );
-const scopedSpansInElems: _Curry<[elements: SeqElem[], i: number], Span[]> = _curry(
+const scopedSpansInElems: _Curry<[elements: SeqElem[], i: number], SpanAt[]> = _curry(
   2,
   (elements: SeqElem[], i: number) =>
     match(_Array_get(i, elements))
-      .with({ _tag: "None" }, () => [] as Span[])
+      .with({ _tag: "None" }, () => [] as SpanAt[])
       .with(
         (
           _v,
@@ -1356,7 +1346,7 @@ const scopedSpansInElems: _Curry<[elements: SeqElem[], i: number], Span[]> = _cu
           return _g._tag === "Some" && _g.value._tag === "SEExpr";
         },
         ({ value: { expr: e } }) =>
-          _Array_concat(scopedSpans(e), scopedSpansInElems(elements, add(i, 1))),
+          _Array_concat(scopedSpans(e), scopedSpansInElems(elements, i + 1)),
       )
       .with(
         (
@@ -1368,7 +1358,7 @@ const scopedSpansInElems: _Curry<[elements: SeqElem[], i: number], Span[]> = _cu
           return _g._tag === "Some" && _g.value._tag === "SESpread";
         },
         ({ value: { expr: e } }) =>
-          _Array_concat(scopedSpans(e), scopedSpansInElems(elements, add(i, 1))),
+          _Array_concat(scopedSpans(e), scopedSpansInElems(elements, i + 1)),
       )
       .exhaustive(),
 );
@@ -1376,28 +1366,28 @@ const scopedSpansInElems: _Curry<[elements: SeqElem[], i: number], Span[]> = _cu
  * An EMPTY `[]` / `@{}` / `#{}` is itself annotatable; a populated one only
  * carries its elements' nested nodes.
  */
-const scopedSpansInSeq: _Curry<[elements: SeqElem[], sp: Span], Span[]> = _curry(
+const scopedSpansInSeq: _Curry<[elements: SeqElem[], sp: SpanAt], SpanAt[]> = _curry(
   2,
-  (elements: SeqElem[], sp: Span) => {
-    const inner: Span[] = scopedSpansInElems(elements, 0);
+  (elements: SeqElem[], sp: SpanAt) => {
+    const inner: SpanAt[] = scopedSpansInElems(elements, 0);
     return eq(length(elements), 0) ? _Array_prepend(sp, inner) : inner;
   },
 );
-const scopedSpansInLoop: _Curry<[params: LoopParam[], i: number], Span[]> = _curry(
+const scopedSpansInLoop: _Curry<[params: LoopParam[], i: number], SpanAt[]> = _curry(
   2,
   (params: LoopParam[], i: number) =>
     match(_Array_get(i, params))
-      .with({ _tag: "None" }, () => [] as Span[])
+      .with({ _tag: "None" }, () => [] as SpanAt[])
       .with({ _tag: "Some" }, ({ value: p }) =>
-        _Array_concat(scopedSpans(p.init), scopedSpansInLoop(params, add(i, 1))),
+        _Array_concat(scopedSpans(p.init), scopedSpansInLoop(params, i + 1)),
       )
       .exhaustive(),
 );
-const scopedSpansInParts: _Curry<[parts: InterpPart[], i: number], Span[]> = _curry(
+const scopedSpansInParts: _Curry<[parts: InterpPart[], i: number], SpanAt[]> = _curry(
   2,
   (parts: InterpPart[], i: number) =>
     match(_Array_get(i, parts))
-      .with({ _tag: "None" }, () => [] as Span[])
+      .with({ _tag: "None" }, () => [] as SpanAt[])
       .with(
         (
           _v,
@@ -1410,10 +1400,9 @@ const scopedSpansInParts: _Curry<[parts: InterpPart[], i: number], Span[]> = _cu
           const _g: any = _v;
           return _g._tag === "Some" && _g.value._tag === "IPExpr";
         },
-        ({ value: { expr: e } }) =>
-          _Array_concat(scopedSpans(e), scopedSpansInParts(parts, add(i, 1))),
+        ({ value: { expr: e } }) => _Array_concat(scopedSpans(e), scopedSpansInParts(parts, i + 1)),
       )
-      .with({ _tag: "Some" }, () => scopedSpansInParts(parts, add(i, 1)))
+      .with({ _tag: "Some" }, () => scopedSpansInParts(parts, i + 1))
       .exhaustive(),
 );
 const scopedNamesAt: <A, B, C, D>(
@@ -1427,7 +1416,7 @@ const scopedNamesAt: <A, B, C, D>(
     match(_Array_get(i, spans))
       .with({ _tag: "None" }, () => acc)
       .with({ _tag: "Some" }, ({ value: sp }) =>
-        scopedNamesAt(spans, add(i, 1), names, _Map_set(spanKey(sp), names, acc)),
+        scopedNamesAt(spans, i + 1, names, _Map_set(spanKey(sp), names, acc)),
       )
       .exhaustive(),
 );
@@ -1466,7 +1455,7 @@ const scopedNamesFrom: <A, B>(
           scopedNamesFrom(
             stmts,
             env,
-            add(i, 1),
+            i + 1,
             match(value)
               .with(
                 (_v): _v is Extract<Expr, { _tag: "ELambda" }> => {
@@ -1476,7 +1465,7 @@ const scopedNamesFrom: <A, B>(
                 () =>
                   match(_Map_get(name, env))
                     .with({ _tag: "Some" }, ({ value: sc }) =>
-                      or(gt(length(sc.vars), 0), gt(length(sc.rvars), 0))
+                      or(length(sc.vars) > 0, length(sc.rvars) > 0)
                         ? scopedNamesAt(scopedSpans(value), 0, unionGenericNames([sc]), acc)
                         : acc,
                     )
@@ -1486,7 +1475,7 @@ const scopedNamesFrom: <A, B>(
               .otherwise(() => acc),
           ),
       )
-      .with({ _tag: "Some" }, () => scopedNamesFrom(stmts, env, add(i, 1), acc))
+      .with({ _tag: "Some" }, () => scopedNamesFrom(stmts, env, i + 1, acc))
       .exhaustive(),
 );
 /**
@@ -1558,7 +1547,7 @@ export const tsGenOpts: <A, B, C, D, E, F, G, H, I>(
         ),
       ) as Option<(a: string, b: Expr) => Option<string>>,
       annotateCtor: Some(
-        _curry(2, (s: Stmt, c: Ctor) =>
+        _curry(2, (s: Stmt, c: CtorLike) =>
           match(s)
             .with(
               { _tag: "SType" },
@@ -1567,9 +1556,9 @@ export const tsGenOpts: <A, B, C, D, E, F, G, H, I>(
             )
             .otherwise(() => None as Option<CtorFactoryTs>),
         ),
-      ) as Option<(a: Stmt, b: Ctor) => Option<CtorFactoryTs>>,
+      ) as Option<(a: Stmt, b: CtorLike) => Option<CtorFactoryTs>>,
       annotateParams: Some(
-        _curry(2, (sp: Span, arity: number) =>
+        _curry(2, (sp: SpanAt, arity: number) =>
           match(_Map_get(spanKey(sp), genericLams))
             .with({ _tag: "Some" }, ({ value: sc }) =>
               _Option_unwrapOr(
@@ -1588,7 +1577,7 @@ export const tsGenOpts: <A, B, C, D, E, F, G, H, I>(
             }))
             .exhaustive(),
         ),
-      ) as Option<(a: Span, b: number) => { generics: string; params: Option<string>[] }>,
+      ) as Option<(a: SpanAt, b: number) => ParamAnnots>,
       annotateEmpty: Some((e: Expr) => {
         const key: string = spanKey(exprSpan(e));
         return _Option_flatMap((t: Ty) => emptyCollTs(t, envAt(key)), _Map_get(key, typeAt));
@@ -1607,10 +1596,130 @@ export const tsGenOpts: <A, B, C, D, E, F, G, H, I>(
       ) as Option<(a: Expr) => Option<string>>,
       flattenPipe: true,
       tupleHelper: true,
+      preserveInfix: true,
+      preserveJsx: true,
       moduleExt: "",
     };
   },
 );
+const anyOf: <A>(f: (a: A) => boolean, xs: A[]) => boolean = _curry(
+  2,
+  <A>(f: (a: A) => boolean, xs: A[]) =>
+    reduce(
+      _curry(2, (acc: boolean, x: A) => or(acc, f(x))),
+      false,
+      xs,
+    ),
+);
+const hasJsxExpr: (e: Expr) => boolean = (e: Expr) =>
+  match(e)
+    .with(
+      (
+        _v,
+      ): _v is Extract<Expr, { _tag: "ECall" }> & {
+        origin: Extract<Extract<Expr, { _tag: "ECall" }>["origin"], { _tag: "Some" }>;
+      } => {
+        const _g: any = _v;
+        return _g._tag === "ECall" && _g.origin._tag === "Some" && _g.origin.value === "jsx";
+      },
+      () => true,
+    )
+    .with({ _tag: "ECall" }, ({ fn, args }) => or(hasJsxExpr(fn), anyOf(hasJsxExpr, args)))
+    .with({ _tag: "ELambda" }, ({ body }) => hasJsxExpr(body))
+    .with({ _tag: "ELetIn" }, ({ value, body }) => or(hasJsxExpr(value), hasJsxExpr(body)))
+    .with({ _tag: "ELetBind" }, ({ value, body }) => or(hasJsxExpr(value), hasJsxExpr(body)))
+    .with({ _tag: "EPipe" }, ({ left, right }) => or(hasJsxExpr(left), hasJsxExpr(right)))
+    .with({ _tag: "EDo" }, ({ exprs }) => anyOf(hasJsxExpr, exprs))
+    .with({ _tag: "ETernary" }, ({ cond, thenE, elseE }) =>
+      or(or(hasJsxExpr(cond), hasJsxExpr(thenE)), hasJsxExpr(elseE)),
+    )
+    .with({ _tag: "EMatch" }, ({ scrutinee, arms }) =>
+      or(
+        hasJsxExpr(scrutinee),
+        anyOf(
+          (a: MatchArm) =>
+            or(
+              match(a.guard)
+                .with({ _tag: "Some" }, ({ value: g }) => hasJsxExpr(g))
+                .with({ _tag: "None" }, () => false)
+                .exhaustive(),
+              hasJsxExpr(a.body),
+            ),
+          arms,
+        ),
+      ),
+    )
+    .with({ _tag: "ERecord" }, ({ fields, spread }) =>
+      or(
+        anyOf((f: Field) => hasJsxExpr(f.value), fields),
+        match(spread)
+          .with({ _tag: "Some" }, ({ value }) => hasJsxExpr(value))
+          .with({ _tag: "None" }, () => false)
+          .exhaustive(),
+      ),
+    )
+    .with({ _tag: "EField" }, ({ target }) => hasJsxExpr(target))
+    .with({ _tag: "ETuple" }, ({ elements }) => anyOf(hasJsxExpr, elements))
+    .with({ _tag: "EArr" }, ({ elements }) =>
+      anyOf(
+        (el: SeqElem) =>
+          match(el)
+            .with({ _tag: "SEExpr" }, ({ expr: value }) => hasJsxExpr(value))
+            .with({ _tag: "SESpread" }, ({ expr: value }) => hasJsxExpr(value))
+            .exhaustive(),
+        elements,
+      ),
+    )
+    .with({ _tag: "EList" }, ({ elements }) =>
+      anyOf(
+        (el: SeqElem) =>
+          match(el)
+            .with({ _tag: "SEExpr" }, ({ expr: value }) => hasJsxExpr(value))
+            .with({ _tag: "SESpread" }, ({ expr: value }) => hasJsxExpr(value))
+            .exhaustive(),
+        elements,
+      ),
+    )
+    .with({ _tag: "ESet" }, ({ elements }) =>
+      anyOf(
+        (el: SeqElem) =>
+          match(el)
+            .with({ _tag: "SEExpr" }, ({ expr: value }) => hasJsxExpr(value))
+            .with({ _tag: "SESpread" }, ({ expr: value }) => hasJsxExpr(value))
+            .exhaustive(),
+        elements,
+      ),
+    )
+    .with({ _tag: "EMap" }, ({ entries }) =>
+      anyOf((entry: MapEntry) => or(hasJsxExpr(entry.key), hasJsxExpr(entry.value)), entries),
+    )
+    .with({ _tag: "ELoop" }, ({ params, body }) =>
+      or(
+        anyOf((p: LoopParam) => hasJsxExpr(p.init), params),
+        hasJsxExpr(body),
+      ),
+    )
+    .with({ _tag: "ERecur" }, ({ args }) => anyOf(hasJsxExpr, args))
+    .with({ _tag: "EInterp" }, ({ parts }) =>
+      anyOf(
+        (part: InterpPart) =>
+          match(part)
+            .with({ _tag: "IPLit" }, () => false)
+            .with({ _tag: "IPExpr" }, ({ expr: value }) => hasJsxExpr(value))
+            .exhaustive(),
+        parts,
+      ),
+    )
+    .otherwise(() => false);
+const hasJsxStmts: (stmts: Stmt[]) => boolean = (stmts: Stmt[]) =>
+  anyOf(
+    (stmt: Stmt) =>
+      match(stmt)
+        .with({ _tag: "SLet" }, ({ value }) => hasJsxExpr(value))
+        .with({ _tag: "SExpr" }, ({ value }) => hasJsxExpr(value))
+        .otherwise(() => false),
+    stmts,
+  );
 /**
  * Emit one module's typed TS: type header, then any cross-module imports, then
  * the runtime import, then the codegen body with per-binding / per-ctor
@@ -1663,38 +1772,69 @@ export const emitTsModule: <A, B, C, D, E, F, G, H, I>(
     );
     const deps0: string[] = runtimeDepNames(stmts, imported, ns, jsDefs, runtimeDeps);
     const deps: string[] = _Str_contains("_tuple(", body) ? _Array_append("_tuple", deps0) : deps0;
-    const runtimeLine: string = eq(length(deps), 0)
-      ? ""
-      : `import { ${_Str_join(", ", _Array_sort(deps))} } from "${runtimeImport}";`;
-    const header: string[] = typeHeader;
-    const typeDeps: string[] = _Array_concat(
-      _Str_contains(
-        "_Curry<",
-        `${_Str_join("\n", header)}
+    return ((deps: string[]) =>
+      ((runtimeLine: string) =>
+        ((header: string[]) =>
+          ((typeDeps: string[]) =>
+            ((typeImportLine: string) =>
+              concat(
+                `${hasJsxStmts(stmts) ? "/** @jsx h */\n\n" : ""}${_Str_join(
+                  "\n\n",
+                  filter(
+                    (part: string) => not(eq(part, "")),
+                    [
+                      _Str_join("\n", header),
+                      _Str_join("\n", importLines),
+                      typeImportLine,
+                      runtimeLine,
+                      body,
+                    ],
+                  ),
+                )}`,
+                "\n",
+              ))(
+              eq(length(typeDeps), 0)
+                ? ""
+                : `import type { ${_Str_join(", ", _Array_sort(typeDeps))} } from "${runtimeImport}";`,
+            ))(
+            _Array_concat(
+              _Str_contains(
+                "_Curry<",
+                `${_Str_join("\n", header)}
 ${body}`,
-      )
-        ? ["_Curry"]
-        : ([] as string[]),
-      builtinTypeNamesFor(declared, wanted, body, 0),
-    );
-    const typeImportLine: string = eq(length(typeDeps), 0)
-      ? ""
-      : `import type { ${_Str_join(", ", _Array_sort(typeDeps))} } from "${runtimeImport}";`;
-    return concat(
-      _Str_join(
-        "\n\n",
-        filter(
-          (part: string) => not(eq(part, "")),
-          [
-            _Str_join("\n", header),
-            _Str_join("\n", importLines),
-            typeImportLine,
-            runtimeLine,
-            body,
-          ],
-        ),
+              )
+                ? ["_Curry"]
+                : ([] as string[]),
+              builtinTypeNamesFor(declared, wanted, body, 0),
+            ),
+          ))(typeHeader))(
+        eq(length(deps), 0)
+          ? ""
+          : `import { ${_Str_join(", ", _Array_sort(deps))} } from "${runtimeImport}";`,
+      ))(
+      filter(
+        (d: string) =>
+          or(
+            and(
+              and(
+                and(
+                  and(
+                    and(
+                      and(and(not(eq(d, "add")), not(eq(d, "sub"))), not(eq(d, "mul"))),
+                      not(eq(d, "div")),
+                    ),
+                    not(eq(d, "lt")),
+                  ),
+                  not(eq(d, "lte")),
+                ),
+                not(eq(d, "gt")),
+              ),
+              not(eq(d, "gte")),
+            ),
+            _Str_contains(d, body),
+          ),
+        deps,
       ),
-      "\n",
     );
   },
 );
@@ -1742,7 +1882,7 @@ const lettersFor: <A>(ids: A[], i: number, acc: Map<A, string>) => Map<A, string
     match(_Array_get(i, ids))
       .with({ _tag: "None" }, () => acc)
       .with({ _tag: "Some" }, ({ value: id }) =>
-        lettersFor(ids, add(i, 1), _Map_set(id, letterAt(i), acc)),
+        lettersFor(ids, i + 1, _Map_set(id, letterAt(i), acc)),
       )
       .exhaustive(),
 );
@@ -1766,7 +1906,7 @@ const genericHeadOf: <A, B>(ids: A[], names: Map<B, string>) => string = _curry(
  */
 const arrowCount: (t: Ty) => number = (t: Ty) =>
   match(t)
-    .with({ _tag: "TyFn" }, ({ to: toT }) => add(1, arrowCount(toT)))
+    .with({ _tag: "TyFn" }, ({ to: toT }) => 1 + arrowCount(toT))
     .otherwise(() => 0);
 /**
  * Peel `arity` arrows into `a: T`, `b: T`, … — the same positional naming
@@ -1774,13 +1914,13 @@ const arrowCount: (t: Ty) => number = (t: Ty) =>
  */
 const hostParams: _Curry<[t: Ty, arity: number, names: Map<number, string>, i: number], string[]> =
   _curry(4, (t: Ty, arity: number, names: Map<number, string>, i: number) =>
-    gte(i, arity)
+    i >= arity
       ? ([] as string[])
       : match(t)
           .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
             _Array_prepend(
-              `${_Str_fromCode(add(97, i))}: ${tsOf(fromT, plainEnv(names))}`,
-              hostParams(toT, arity, names, add(i, 1)),
+              `${_Str_fromCode(97 + i)}: ${tsOf(fromT, plainEnv(names))}`,
+              hostParams(toT, arity, names, i + 1),
             ),
           )
           .otherwise(() => [] as string[]),
@@ -1788,10 +1928,10 @@ const hostParams: _Curry<[t: Ty, arity: number, names: Map<number, string>, i: n
 const hostReturn: _Curry<[t: Ty, arity: number, i: number], Ty> = _curry(
   3,
   (t: Ty, arity: number, i: number) =>
-    gte(i, arity)
+    i >= arity
       ? t
       : match(t)
-          .with({ _tag: "TyFn" }, ({ to: toT }) => hostReturn(toT, arity, add(i, 1)))
+          .with({ _tag: "TyFn" }, ({ to: toT }) => hostReturn(toT, arity, i + 1))
           .otherwise(() => t),
 );
 /**
@@ -1838,7 +1978,7 @@ const externDecl: <A, B>(
 ) => string = <A, B>(e: { scheme: { ty: Ty } & A; curried: boolean; imported: string } & B) => {
   const t: Ty = e.scheme.ty;
   const n: number = arrowCount(t);
-  return and(gte(n, 1), e.curried)
+  return and(n >= 1, e.curried)
     ? `export declare const ${e.imported}: ${curriedHostType(t, n)};`
     : eq(n, 0)
       ? `export declare const ${e.imported}: ${tsOf(t, plainEnv(anyFor(freeIdsIn(t, [] as number[]))))};`
@@ -1873,10 +2013,11 @@ export const externModuleDts: <A, B>(
         "\n",
         _Array_concat(
           map(
-            (bt: { name: string; params: string[]; ctors: Ctor[] }) =>
+            (bt: { name: string; params: string[]; ctors: CtorLike[] }) =>
               typeDecl(bt.name, bt.params, bt.ctors, aliases, new Map<string, string>()),
             filter(
-              (bt: { name: string; params: string[]; ctors: Ctor[] }) => _Set_has(bt.name, wanted),
+              (bt: { name: string; params: string[]; ctors: CtorLike[] }) =>
+                _Set_has(bt.name, wanted),
               builtinTypeDecls,
             ),
           ),

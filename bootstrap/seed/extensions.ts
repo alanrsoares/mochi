@@ -1,21 +1,20 @@
 import type { Tok } from "./lexer";
-import type { Expr, Span } from "./ast";
-import type { St, Ty } from "./types";
+import type { Expr } from "./ast";
+import type { SpanAt, St, Ty } from "./types";
 
 import type { Option, Result } from "@mochi/compiler/runtime";
 
 import {
-  _curry,
-  Some,
+  Err,
   None,
   Ok,
-  Err,
-  add,
+  Some,
+  _Array_append,
+  _Array_concat,
+  _Array_get,
+  _curry,
   eq,
   length,
-  _Array_get,
-  _Array_concat,
-  _Array_append,
 } from "@mochi/compiler/runtime";
 
 import { match } from "@onrails/pattern";
@@ -56,7 +55,7 @@ export const resolvePluginsDefault: <A, B, C, D>(
           c: Option<string>,
           d: St,
           e: {
-            unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, C>;
+            unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, C>;
             inferExpr: (a: Expr, b: St) => Result<[Ty, St], C>;
           } & D,
         ) => Result<Option<[Ty, St]>, C>
@@ -82,7 +81,7 @@ export const resolvePluginsDefault: <A, B, C, D>(
       c: Option<string>,
       d: St,
       e: {
-        unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, C>;
+        unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, C>;
         inferExpr: (a: Expr, b: St) => Result<[Ty, St], C>;
       } & D,
     ) => Result<Option<[Ty, St]>, C>
@@ -108,7 +107,7 @@ export const resolvePluginsDefault: <A, B, C, D>(
           c: Option<string>,
           d: St,
           e: {
-            unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, C>;
+            unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, C>;
             inferExpr: (a: Expr, b: St) => Result<[Ty, St], C>;
           } & D,
         ) => Result<Option<[Ty, St]>, C>
@@ -128,9 +127,9 @@ const parseHooksFrom: <A, B>(plugins: ({ parse: Option<A> } & B)[], i: number, a
         ({ value: { parse } }) =>
           match(parse)
             .with({ _tag: "Some" }, ({ value: hook }) =>
-              parseHooksFrom(plugins, add(i, 1), _Array_append(hook, acc)),
+              parseHooksFrom(plugins, i + 1, _Array_append(hook, acc)),
             )
-            .with({ _tag: "None" }, () => parseHooksFrom(plugins, add(i, 1), acc))
+            .with({ _tag: "None" }, () => parseHooksFrom(plugins, i + 1, acc))
             .exhaustive(),
       )
       .exhaustive(),
@@ -148,9 +147,9 @@ const inferHooksFrom: <A, B>(
     .with({ _tag: "Some" }, ({ value: p }) =>
       match(p.inferCall)
         .with({ _tag: "Some" }, ({ value: hook }) =>
-          inferHooksFrom(plugins, add(i, 1), _Array_append(hook, acc)),
+          inferHooksFrom(plugins, i + 1, _Array_append(hook, acc)),
         )
-        .with({ _tag: "None" }, () => inferHooksFrom(plugins, add(i, 1), acc))
+        .with({ _tag: "None" }, () => inferHooksFrom(plugins, i + 1, acc))
         .exhaustive(),
     )
     .exhaustive(),

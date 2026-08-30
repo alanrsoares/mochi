@@ -1,6 +1,5 @@
 import type {
   AliasField,
-  Ctor,
   CtorField,
   Expr,
   Field,
@@ -8,64 +7,63 @@ import type {
   LoopParam,
   MapEntry,
   MatchArm,
-  Name,
   PatField,
   Pattern,
   SeqElem,
-  Span,
   Stmt,
   TypeExpr,
 } from "./ast";
+import type { SpanAt } from "./types";
+import type { PErr } from "./parser";
 
 export type CErr = { message: string; start: number; end: number };
 export type CtorInfo = { owner: string; arity: number };
 export type Registry = { ctors: Map<string, CtorInfo>; types: Map<string, string[]> };
-export type SeqCheck = { _tag: "SeqNotSeq" } | { _tag: "SeqTotal" } | { _tag: "SeqFail"; e: CErr };
+export type SeqCheck = { _tag: "SeqNotSeq" } | { _tag: "SeqTotal" } | { _tag: "SeqFail"; e: PErr };
 export type QualScope = { types: Set<string> };
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
-  _curry,
-  _recur,
-  _done,
-  Some,
+  Err,
   None,
   Ok,
-  Err,
-  add,
-  eq,
-  show,
-  gt,
-  gte,
-  lte,
-  not,
-  and,
-  or,
-  length,
-  map,
-  filter,
-  _Set_has,
+  Some,
+  _Array_append,
+  _Array_contains,
+  _Array_flatMap,
+  _Array_get,
+  _Array_head,
+  _Map_get,
+  _Map_getOr,
+  _Map_has,
+  _Map_keys,
+  _Map_set,
+  _Option_isNone,
+  _Option_isSome,
+  _Option_orElse,
+  _Option_unwrapOr,
+  _Result_flatMap,
   _Set_add,
   _Set_fromArray,
-  _Map_has,
-  _Map_getOr,
-  _Map_set,
-  _Map_keys,
-  _Map_get,
-  _Option_unwrapOr,
-  _Option_orElse,
-  _Option_isSome,
-  _Option_isNone,
-  _Result_flatMap,
-  _Array_head,
-  _Array_get,
-  _Array_append,
-  _Array_flatMap,
-  _Array_contains,
-  _Str_join,
+  _Set_has,
   _Str_codeAt,
+  _Str_join,
+  _curry,
+  _done,
+  _recur,
   _tuple,
+  add,
+  and,
+  eq,
+  filter,
+  gt,
+  length,
+  lte,
+  map,
+  not,
+  or,
+  show,
 } from "@mochi/compiler/runtime";
 
 import { match } from "@onrails/pattern";
@@ -102,7 +100,7 @@ const firstSomeFrom: <A, B>(f: (a: A) => Option<B>, xs: A[], i0: number) => Opti
         .with({ _tag: "Some" }, ({ value: x }) =>
           match(f(x))
             .with({ _tag: "Some" }, ({ value: e }) => _done(Some(e)))
-            .with({ _tag: "None" }, () => _recur(add(i, 1)))
+            .with({ _tag: "None" }, () => _recur(i + 1))
             .exhaustive(),
         )
         .exhaustive();
@@ -125,7 +123,7 @@ const allOfFrom: <A>(f: (a: A) => boolean, xs: A[], i0: number) => boolean = _cu
     while (true) {
       const _step = match(_Array_get(i, xs))
         .with({ _tag: "None" }, () => _done(true))
-        .with({ _tag: "Some" }, ({ value: x }) => (f(x) ? _recur(add(i, 1)) : _done(false)))
+        .with({ _tag: "Some" }, ({ value: x }) => (f(x) ? _recur(i + 1) : _done(false)))
         .exhaustive();
       if (_step._tag === "recur") {
         i = _step.args[0];
@@ -146,7 +144,7 @@ const someOfFrom: <A>(f: (a: A) => boolean, xs: A[], i0: number) => boolean = _c
     while (true) {
       const _step = match(_Array_get(i, xs))
         .with({ _tag: "None" }, () => _done(false))
-        .with({ _tag: "Some" }, ({ value: x }) => (f(x) ? _done(true) : _recur(add(i, 1))))
+        .with({ _tag: "Some" }, ({ value: x }) => (f(x) ? _done(true) : _recur(i + 1)))
         .exhaustive();
       if (_step._tag === "recur") {
         i = _step.args[0];
@@ -160,7 +158,7 @@ const someOf: <A>(f: (a: A) => boolean, xs: A[]) => boolean = _curry(
   2,
   <A>(f: (a: A) => boolean, xs: A[]) => someOfFrom(f, xs, 0),
 );
-const exprSpan: (e: Expr) => Span = (e: Expr) =>
+const exprSpan: (e: Expr) => SpanAt = (e: Expr) =>
   match(e)
     .with({ _tag: "ENum" }, ({ span: sp }) => sp)
     .with({ _tag: "EUnit" }, ({ span: sp }) => sp)
@@ -186,7 +184,7 @@ const exprSpan: (e: Expr) => Span = (e: Expr) =>
     .with({ _tag: "EMap" }, ({ span: sp }) => sp)
     .with({ _tag: "EInterp" }, ({ span: sp }) => sp)
     .exhaustive();
-const patSpan: (p: Pattern) => Span = (p: Pattern) =>
+const patSpan: (p: Pattern) => SpanAt = (p: Pattern) =>
   match(p)
     .with({ _tag: "PWild" }, ({ span: sp }) => sp)
     .with({ _tag: "PUnit" }, ({ span: sp }) => sp)
@@ -248,7 +246,7 @@ const checkPattern: <A, B>(
   p: Pattern,
   reg: { ctors: Map<string, { arity: number } & A> } & B,
   top: boolean,
-) => Option<CErr> = _curry(
+) => Option<PErr> = _curry(
   3,
   <A, B>(p: Pattern, reg: { ctors: Map<string, { arity: number } & A> } & B, top: boolean) =>
     match(p)
@@ -258,7 +256,7 @@ const checkPattern: <A, B>(
           match(_Map_get(key, reg.ctors))
             .with(
               { _tag: "None" },
-              () => Some(checkErr(`unknown constructor '${key}'`, sp)) as Option<CErr>,
+              () => Some(checkErr(`unknown constructor '${key}'`, sp)) as Option<PErr>,
             )
             .with({ _tag: "Some" }, ({ value: info }) =>
               eq(length(args), info.arity)
@@ -268,7 +266,7 @@ const checkPattern: <A, B>(
                       `constructor '${ctor}' expects ${show(info.arity)} arg(s), got ${show(length(args))}`,
                       sp,
                     ),
-                  ) as Option<CErr>),
+                  ) as Option<PErr>),
             )
             .exhaustive())(patCtorKey(ctor, ns)),
       )
@@ -282,7 +280,7 @@ const checkPattern: <A, B>(
         _Option_orElse(
           match(rest)
             .with({ _tag: "Some" }, ({ value: r }) => checkPattern(r, reg, false))
-            .with({ _tag: "None" }, () => None as Option<CErr>)
+            .with({ _tag: "None" }, () => None as Option<PErr>)
             .exhaustive(),
           firstSome((el: Pattern) => checkPattern(el, reg, false), elems),
         ),
@@ -292,7 +290,7 @@ const checkPattern: <A, B>(
           ? _Option_orElse(
               match(rest)
                 .with({ _tag: "Some" }, ({ value: r }) => checkPattern(r, reg, false))
-                .with({ _tag: "None" }, () => None as Option<CErr>)
+                .with({ _tag: "None" }, () => None as Option<PErr>)
                 .exhaustive(),
               firstSome((el: Pattern) => checkPattern(el, reg, false), elems),
             )
@@ -301,20 +299,20 @@ const checkPattern: <A, B>(
                 "lazy-List pattern cannot nest inside another pattern (matching pulls from the sequence)",
                 sp,
               ),
-            ) as Option<{ message: string; start: number; end: number }>),
+            ) as Option<PErr>),
       )
       .with({ _tag: "POr" }, ({ alts, span: sp }) => checkOrPattern(alts, sp, reg))
-      .otherwise(() => None as Option<CErr>),
+      .otherwise(() => None as Option<PErr>),
 );
 const binderPathsArgs: _Curry<
   [args: Pattern[], i: number, at: string, acc: Map<string, string>],
-  Result<Map<string, string>, CErr>
+  Result<Map<string, string>, PErr>
 > = _curry(4, (args: Pattern[], i: number, at: string, acc: Map<string, string>) =>
   match(_Array_get(i, args))
-    .with({ _tag: "None" }, () => Ok(acc) as Result<Map<string, string>, CErr>)
+    .with({ _tag: "None" }, () => Ok(acc) as Result<Map<string, string>, PErr>)
     .with({ _tag: "Some" }, ({ value: a }) =>
       _Result_flatMap(
-        (acc2: Map<string, string>) => binderPathsArgs(args, add(i, 1), at, acc2),
+        (acc2: Map<string, string>) => binderPathsArgs(args, i + 1, at, acc2),
         binderPaths(a, `${at}.a${show(i)}`, acc),
       ),
     )
@@ -322,13 +320,13 @@ const binderPathsArgs: _Curry<
 );
 const binderPathsFields: _Curry<
   [fields: PatField[], i: number, at: string, acc: Map<string, string>],
-  Result<Map<string, string>, CErr>
+  Result<Map<string, string>, PErr>
 > = _curry(4, (fields: PatField[], i: number, at: string, acc: Map<string, string>) =>
   match(_Array_get(i, fields))
-    .with({ _tag: "None" }, () => Ok(acc) as Result<Map<string, string>, CErr>)
+    .with({ _tag: "None" }, () => Ok(acc) as Result<Map<string, string>, PErr>)
     .with({ _tag: "Some" }, ({ value: f }) =>
       _Result_flatMap(
-        (acc2: Map<string, string>) => binderPathsFields(fields, add(i, 1), at, acc2),
+        (acc2: Map<string, string>) => binderPathsFields(fields, i + 1, at, acc2),
         binderPaths(f.pat, `${at}.${f.label}`, acc),
       ),
     )
@@ -336,13 +334,13 @@ const binderPathsFields: _Curry<
 );
 const binderPathsElems: _Curry<
   [elems: Pattern[], i: number, at: string, acc: Map<string, string>],
-  Result<Map<string, string>, CErr>
+  Result<Map<string, string>, PErr>
 > = _curry(4, (elems: Pattern[], i: number, at: string, acc: Map<string, string>) =>
   match(_Array_get(i, elems))
-    .with({ _tag: "None" }, () => Ok(acc) as Result<Map<string, string>, CErr>)
+    .with({ _tag: "None" }, () => Ok(acc) as Result<Map<string, string>, PErr>)
     .with({ _tag: "Some" }, ({ value: e }) =>
       _Result_flatMap(
-        (acc2: Map<string, string>) => binderPathsElems(elems, add(i, 1), at, acc2),
+        (acc2: Map<string, string>) => binderPathsElems(elems, i + 1, at, acc2),
         binderPaths(e, `${at}.t${show(i)}`, acc),
       ),
     )
@@ -350,7 +348,7 @@ const binderPathsElems: _Curry<
 );
 const binderPaths: _Curry<
   [p: Pattern, at: string, acc: Map<string, string>],
-  Result<Map<string, string>, CErr>
+  Result<Map<string, string>, PErr>
 > = _curry(3, (p: Pattern, at: string, acc: Map<string, string>) =>
   match(p)
     .with({ _tag: "PAs" }, ({ pat, name, nameSpan: nameSp }) =>
@@ -359,9 +357,9 @@ const binderPaths: _Curry<
           _Map_has(name, acc1)
             ? (Err(checkErr(`pattern binds '${name}' more than once`, nameSp)) as Result<
                 Map<string, string>,
-                CErr
+                PErr
               >)
-            : (Ok(_Map_set(name, at, acc1)) as Result<Map<string, string>, CErr>),
+            : (Ok(_Map_set(name, at, acc1)) as Result<Map<string, string>, PErr>),
         binderPaths(pat, at, acc),
       ),
     )
@@ -369,21 +367,21 @@ const binderPaths: _Curry<
       _Map_has(name, acc)
         ? (Err(checkErr(`pattern binds '${name}' more than once`, sp)) as Result<
             Map<string, string>,
-            CErr
+            PErr
           >)
-        : (Ok(_Map_set(name, at, acc)) as Result<Map<string, string>, CErr>),
+        : (Ok(_Map_set(name, at, acc)) as Result<Map<string, string>, PErr>),
     )
     .with({ _tag: "PCtor" }, ({ args }) => binderPathsArgs(args, 0, at, acc))
     .with({ _tag: "PRecord" }, ({ fields }) => binderPathsFields(fields, 0, at, acc))
     .with({ _tag: "PTuple" }, ({ elems }) => binderPathsElems(elems, 0, at, acc))
-    .otherwise(() => Ok(acc) as Result<Map<string, string>, CErr>),
+    .otherwise(() => Ok(acc) as Result<Map<string, string>, PErr>),
 );
 const altMapsFrom: <A, B>(
   alts: Pattern[],
   i: number,
   reg: { ctors: Map<string, { arity: number } & A> } & B,
   acc: Map<string, string>[],
-) => Result<Map<string, string>[], CErr> = _curry(
+) => Result<Map<string, string>[], PErr> = _curry(
   4,
   <A, B>(
     alts: Pattern[],
@@ -392,7 +390,7 @@ const altMapsFrom: <A, B>(
     acc: Map<string, string>[],
   ) =>
     match(_Array_get(i, alts))
-      .with({ _tag: "None" }, () => Ok(acc) as Result<Map<string, string>[], CErr>)
+      .with({ _tag: "None" }, () => Ok(acc) as Result<Map<string, string>[], PErr>)
       .with({ _tag: "Some" }, ({ value: alt }) =>
         isCatchAll(alt)
           ? (Err(
@@ -400,22 +398,22 @@ const altMapsFrom: <A, B>(
                 "an or-pattern alternative can't be a catch-all (`_` or a bare binding)",
                 patSpan(alt),
               ),
-            ) as Result<Map<string, string>[], CErr>)
+            ) as Result<Map<string, string>[], PErr>)
           : _Option_isSome(seqElemsRest(alt))
             ? (Err(
                 checkErr(
                   "array/list patterns can't appear as an or-pattern alternative",
                   patSpan(alt),
                 ),
-              ) as Result<Map<string, string>[], CErr>)
+              ) as Result<Map<string, string>[], PErr>)
             : match(checkPattern(alt, reg, false))
                 .with(
                   { _tag: "Some" },
-                  ({ value: e }) => Err(e) as Result<Map<string, string>[], CErr>,
+                  ({ value: e }) => Err(e) as Result<Map<string, string>[], PErr>,
                 )
                 .with({ _tag: "None" }, () =>
                   _Result_flatMap(
-                    (m) => altMapsFrom(alts, add(i, 1), reg, _Array_append(m, acc)),
+                    (m) => altMapsFrom(alts, i + 1, reg, _Array_append(m, acc)),
                     binderPaths(alt, "", new Map<string, string>()),
                   ),
                 )
@@ -451,7 +449,7 @@ const consistentBindsFrom: <A, B, C>(
       .with({ _tag: "None" }, () => None)
       .with({ _tag: "Some" }, ({ value: m }) =>
         _Option_orElse(
-          consistentBindsFrom(maps, add(i, 1), ref, sp),
+          consistentBindsFrom(maps, i + 1, ref, sp),
           _Option_orElse(
             firstSome(
               (name: string) =>
@@ -478,16 +476,16 @@ const consistentBindsFrom: <A, B, C>(
 );
 const checkOrPattern: <A, B>(
   alts: Pattern[],
-  sp: Span,
+  sp: SpanAt,
   reg: { ctors: Map<string, { arity: number } & A> } & B,
-) => Option<CErr> = _curry(
+) => Option<PErr> = _curry(
   3,
-  <A, B>(alts: Pattern[], sp: Span, reg: { ctors: Map<string, { arity: number } & A> } & B) =>
+  <A, B>(alts: Pattern[], sp: SpanAt, reg: { ctors: Map<string, { arity: number } & A> } & B) =>
     match(altMapsFrom(alts, 0, reg, [] as Map<string, string>[]))
-      .with({ _tag: "Err" }, ({ error: e }) => Some(e) as Option<CErr>)
+      .with({ _tag: "Err" }, ({ error: e }) => Some(e) as Option<PErr>)
       .with({ _tag: "Ok" }, ({ value: maps }) =>
         match(_Array_head(maps))
-          .with({ _tag: "None" }, () => None as Option<CErr>)
+          .with({ _tag: "None" }, () => None as Option<PErr>)
           .with({ _tag: "Some" }, ({ value: ref }) => consistentBindsFrom(maps, 1, ref, sp))
           .exhaustive(),
       )
@@ -499,16 +497,13 @@ const armUnguardedCatchAll: <A, B>(a: { pattern: Pattern; guard: Option<A> } & B
 >(
   a: { pattern: Pattern; guard: Option<A> } & B,
 ) => and(isCatchAll(a.pattern), _Option_isNone(a.guard));
-const guardErrs: _Curry<[arms: MatchArm[], listSwitch: boolean], Option<CErr>> = _curry(
+const guardErrs: _Curry<[arms: MatchArm[], listSwitch: boolean], Option<PErr>> = _curry(
   2,
   (arms: MatchArm[], listSwitch: boolean) =>
     firstSome(
       (a: MatchArm) =>
         match(a.guard)
-          .with(
-            { _tag: "None" },
-            () => None as Option<{ message: string; start: number; end: number }>,
-          )
+          .with({ _tag: "None" }, () => None as Option<PErr>)
           .with({ _tag: "Some" }, ({ value: g }) =>
             or(isPList(a.pattern), listSwitch)
               ? (Some(
@@ -516,8 +511,8 @@ const guardErrs: _Curry<[arms: MatchArm[], listSwitch: boolean], Option<CErr>> =
                     "`when` guards are unsupported in a lazy-List switch (matching pulls from the sequence)",
                     exprSpan(g),
                   ),
-                ) as Option<{ message: string; start: number; end: number }>)
-              : (None as Option<{ message: string; start: number; end: number }>),
+                ) as Option<PErr>)
+              : (None as Option<PErr>),
           )
           .exhaustive(),
       arms,
@@ -531,7 +526,7 @@ const firstCatchIdx: _Curry<[arms: MatchArm[], i0: number], Option<number>> = _c
       const _step = match(_Array_get(i, arms))
         .with({ _tag: "None" }, () => _done(None as Option<number>))
         .with({ _tag: "Some" }, ({ value: a }) =>
-          armUnguardedCatchAll(a) ? _done(Some(i) as Option<number>) : _recur(add(i, 1)),
+          armUnguardedCatchAll(a) ? _done(Some(i) as Option<number>) : _recur(i + 1),
         )
         .exhaustive();
       if (_step._tag === "recur") {
@@ -542,15 +537,12 @@ const firstCatchIdx: _Curry<[arms: MatchArm[], i0: number], Option<number>> = _c
     }
   },
 );
-const unreachableAfterCatch: (arms: MatchArm[]) => Option<CErr> = (arms: MatchArm[]) =>
+const unreachableAfterCatch: (arms: MatchArm[]) => Option<PErr> = (arms: MatchArm[]) =>
   match(firstCatchIdx(arms, 0))
-    .with({ _tag: "None" }, () => None as Option<{ message: string; start: number; end: number }>)
+    .with({ _tag: "None" }, () => None as Option<PErr>)
     .with({ _tag: "Some" }, ({ value: i }) =>
-      match(_Array_get(add(i, 1), arms))
-        .with(
-          { _tag: "None" },
-          () => None as Option<{ message: string; start: number; end: number }>,
-        )
+      match(_Array_get(i + 1, arms))
+        .with({ _tag: "None" }, () => None as Option<PErr>)
         .with(
           { _tag: "Some" },
           ({ value: a }) =>
@@ -559,14 +551,14 @@ const unreachableAfterCatch: (arms: MatchArm[]) => Option<CErr> = (arms: MatchAr
                 "unreachable arm: a catch-all arm above it matches first",
                 patSpan(a.pattern),
               ),
-            ) as Option<{ message: string; start: number; end: number }>,
+            ) as Option<PErr>,
         )
         .exhaustive(),
     )
     .exhaustive();
 const SeqNotSeq: SeqCheck = { _tag: "SeqNotSeq" };
 const SeqTotal: SeqCheck = { _tag: "SeqTotal" };
-const SeqFail = (e: CErr): SeqCheck => ({ _tag: "SeqFail", e });
+const SeqFail = (e: PErr): SeqCheck => ({ _tag: "SeqFail", e });
 const checkSeqExhaustive: <A>(
   arms: MatchArm[],
   mSpan: { end: number; start: number } & A,
@@ -627,7 +619,7 @@ const ctorLoop: <A, B, C, D>(
   reg: { ctors: Map<string, { arity: number; owner: string } & C> } & D,
   owner: Option<string>,
   covered: Set<string>,
-) => Result<[Option<string>, Set<string>], CErr> = _curry(
+) => Result<[Option<string>, Set<string>], PErr> = _curry(
   5,
   <A, B, C, D>(
     arms: ({ pattern: Pattern; guard: Option<A> } & B)[],
@@ -639,7 +631,7 @@ const ctorLoop: <A, B, C, D>(
     match(_Array_get(i, arms))
       .with(
         { _tag: "None" },
-        () => Ok(_tuple(owner, covered)) as Result<[Option<string>, Set<string>], CErr>,
+        () => Ok(_tuple(owner, covered)) as Result<[Option<string>, Set<string>], PErr>,
       )
       .with({ _tag: "Some" }, ({ value: a }) =>
         match(a.pattern)
@@ -651,7 +643,7 @@ const ctorLoop: <A, B, C, D>(
                   () =>
                     Err(checkErr(`unknown constructor '${key}'`, sp)) as Result<
                       [Option<string>, Set<string>],
-                      CErr
+                      PErr
                     >,
                 )
                 .with({ _tag: "Some" }, ({ value: info }) =>
@@ -661,7 +653,7 @@ const ctorLoop: <A, B, C, D>(
                           `constructor '${ctor}' expects ${show(info.arity)} arg(s), got ${show(length(args))}`,
                           sp,
                         ),
-                      ) as Result<[Option<string>, Set<string>], CErr>)
+                      ) as Result<[Option<string>, Set<string>], PErr>)
                     : match(owner)
                         .with(
                           (_v): _v is Extract<Option<string>, { _tag: "Some" }> => {
@@ -674,13 +666,13 @@ const ctorLoop: <A, B, C, D>(
                           ({ value: own }) =>
                             Err(
                               checkErr(`switch mixes variants of '${own}' and '${info.owner}'`, sp),
-                            ) as Result<[Option<string>, Set<string>], CErr>,
+                            ) as Result<[Option<string>, Set<string>], PErr>,
                         )
                         .otherwise(() =>
                           ((covered2: Set<string>) =>
                             ctorLoop(
                               arms,
-                              add(i, 1),
+                              i + 1,
                               reg,
                               Some(info.owner) as Option<string>,
                               covered2,
@@ -693,16 +685,16 @@ const ctorLoop: <A, B, C, D>(
                 )
                 .exhaustive())(patCtorKey(ctor, ns)),
           )
-          .otherwise(() => ctorLoop(arms, add(i, 1), reg, owner, covered)),
+          .otherwise(() => ctorLoop(arms, i + 1, reg, owner, covered)),
       )
       .exhaustive(),
 );
-const seqVerdict: <A>(arms: MatchArm[], mSpan: { end: number; start: number } & A) => Option<CErr> =
+const seqVerdict: <A>(arms: MatchArm[], mSpan: { end: number; start: number } & A) => Option<PErr> =
   _curry(2, <A>(arms: MatchArm[], mSpan: { end: number; start: number } & A) =>
     match(checkSeqExhaustive(arms, mSpan))
-      .with({ _tag: "SeqTotal" }, () => None as Option<CErr>)
-      .with({ _tag: "SeqFail" }, ({ e }) => Some(e) as Option<CErr>)
-      .with({ _tag: "SeqNotSeq" }, () => None as Option<CErr>)
+      .with({ _tag: "SeqTotal" }, () => None as Option<PErr>)
+      .with({ _tag: "SeqFail" }, ({ e }) => Some(e) as Option<PErr>)
+      .with({ _tag: "SeqNotSeq" }, () => None as Option<PErr>)
       .exhaustive(),
   );
 const unguardedPatterns: <A, B, C>(arms: ({ guard: Option<A>; pattern: B } & C)[]) => B[] = <
@@ -753,7 +745,7 @@ const matrixVerdict: <A, B, C, D, E>(
         ((own: string) =>
           ((named: Set<string>) =>
             ((absent: string[]) =>
-              and(and(isWideWitnessM(w), not(eq(own, ""))), gt(length(absent), 0))
+              and(and(isWideWitnessM(w), not(eq(own, ""))), length(absent) > 0)
                 ? Some(
                     checkErr(
                       `non-exhaustive switch on '${own}': missing ${_Str_join(", ", absent)}`,
@@ -782,26 +774,30 @@ const leavesOfArm: <A, B>(
 const checkMatch: <A>(
   arms: MatchArm[],
   mSpan: { end: number; start: number } & A,
-  reg: Registry,
-) => Option<CErr> = _curry(
+  reg: { ctors: Map<string, CtorInfo>; types: Map<string, string[]> },
+) => Option<PErr> = _curry(
   3,
-  <A>(arms: MatchArm[], mSpan: { end: number; start: number } & A, reg: Registry) =>
+  <A>(
+    arms: MatchArm[],
+    mSpan: { end: number; start: number } & A,
+    reg: { ctors: Map<string, CtorInfo>; types: Map<string, string[]> },
+  ) =>
     match(firstSome((a: MatchArm) => checkPattern(a.pattern, reg, true), arms))
-      .with({ _tag: "Some" }, ({ value: e }) => Some(e) as Option<CErr>)
+      .with({ _tag: "Some" }, ({ value: e }) => Some(e) as Option<PErr>)
       .with({ _tag: "None" }, () =>
         ((listSwitch: boolean) =>
           match(guardErrs(arms, listSwitch))
-            .with({ _tag: "Some" }, ({ value: e }) => Some(e) as Option<CErr>)
+            .with({ _tag: "Some" }, ({ value: e }) => Some(e) as Option<PErr>)
             .with({ _tag: "None" }, () =>
               match(unreachableAfterCatch(arms))
-                .with({ _tag: "Some" }, ({ value: e }) => Some(e) as Option<CErr>)
+                .with({ _tag: "Some" }, ({ value: e }) => Some(e) as Option<PErr>)
                 .with({ _tag: "None" }, () =>
                   ((hasCatchAll: boolean) =>
                     ((leaves: { pattern: Pattern; guard: Option<Expr> }[]) =>
                       ((ctorArms: { pattern: Pattern; guard: Option<Expr> }[]) =>
                         someOf((a: MatchArm) => isPList(a.pattern), arms)
                           ? hasCatchAll
-                            ? (None as Option<CErr>)
+                            ? (None as Option<PErr>)
                             : seqVerdict(arms, mSpan)
                           : match(
                               ctorLoop(
@@ -812,12 +808,12 @@ const checkMatch: <A>(
                                 _Set_fromArray([] as string[]),
                               ),
                             )
-                              .with({ _tag: "Err" }, ({ error: e }) => Some(e) as Option<CErr>)
+                              .with({ _tag: "Err" }, ({ error: e }) => Some(e) as Option<PErr>)
                               .with(
                                 (
                                   _v,
                                 ): _v is Extract<
-                                  Result<[Option<string>, Set<string>], CErr>,
+                                  Result<[Option<string>, Set<string>], PErr>,
                                   { _tag: "Ok" }
                                 > => {
                                   const _g: any = _v;
@@ -841,133 +837,134 @@ const checkMatch: <A>(
       )
       .exhaustive(),
 );
-const checkExpr: _Curry<[e: Expr, reg: Registry], Option<CErr>> = _curry(
-  2,
-  (e: Expr, reg: Registry) =>
-    match(e)
-      .with({ _tag: "ENum" }, () => None as Option<CErr>)
-      .with({ _tag: "EUnit" }, () => None as Option<CErr>)
-      .with({ _tag: "EBool" }, () => None as Option<CErr>)
-      .with({ _tag: "EStr" }, () => None as Option<CErr>)
-      .with({ _tag: "ERef" }, () => None as Option<CErr>)
-      .with({ _tag: "ECall" }, ({ fn, args }) =>
+const checkExpr: _Curry<
+  [e: Expr, reg: { ctors: Map<string, CtorInfo>; types: Map<string, string[]> }],
+  Option<PErr>
+> = _curry(2, (e: Expr, reg: { ctors: Map<string, CtorInfo>; types: Map<string, string[]> }) =>
+  match(e)
+    .with({ _tag: "ENum" }, () => None as Option<PErr>)
+    .with({ _tag: "EUnit" }, () => None as Option<PErr>)
+    .with({ _tag: "EBool" }, () => None as Option<PErr>)
+    .with({ _tag: "EStr" }, () => None as Option<PErr>)
+    .with({ _tag: "ERef" }, () => None as Option<PErr>)
+    .with({ _tag: "ECall" }, ({ fn, args }) =>
+      _Option_orElse(
+        firstSome((a: Expr) => checkExpr(a, reg), args),
+        checkExpr(fn, reg),
+      ),
+    )
+    .with({ _tag: "ELambda" }, ({ body }) => checkExpr(body, reg))
+    .with({ _tag: "ELetIn" }, ({ value, body }) =>
+      _Option_orElse(checkExpr(body, reg), checkExpr(value, reg)),
+    )
+    .with({ _tag: "ELetBind" }, ({ value, body }) =>
+      _Option_orElse(checkExpr(body, reg), checkExpr(value, reg)),
+    )
+    .with({ _tag: "EPipe" }, ({ left, right }) =>
+      _Option_orElse(checkExpr(right, reg), checkExpr(left, reg)),
+    )
+    .with({ _tag: "EDo" }, ({ exprs }) => firstSome((x: Expr) => checkExpr(x, reg), exprs))
+    .with({ _tag: "ETernary" }, ({ cond, thenE, elseE }) =>
+      _Option_orElse(
+        checkExpr(elseE, reg),
+        _Option_orElse(checkExpr(thenE, reg), checkExpr(cond, reg)),
+      ),
+    )
+    .with({ _tag: "EMatch" }, ({ scrutinee, arms, span: sp }) =>
+      _Option_orElse(
+        checkMatch(arms, sp, reg),
         _Option_orElse(
-          firstSome((a: Expr) => checkExpr(a, reg), args),
-          checkExpr(fn, reg),
-        ),
-      )
-      .with({ _tag: "ELambda" }, ({ body }) => checkExpr(body, reg))
-      .with({ _tag: "ELetIn" }, ({ value, body }) =>
-        _Option_orElse(checkExpr(body, reg), checkExpr(value, reg)),
-      )
-      .with({ _tag: "ELetBind" }, ({ value, body }) =>
-        _Option_orElse(checkExpr(body, reg), checkExpr(value, reg)),
-      )
-      .with({ _tag: "EPipe" }, ({ left, right }) =>
-        _Option_orElse(checkExpr(right, reg), checkExpr(left, reg)),
-      )
-      .with({ _tag: "EDo" }, ({ exprs }) => firstSome((x: Expr) => checkExpr(x, reg), exprs))
-      .with({ _tag: "ETernary" }, ({ cond, thenE, elseE }) =>
-        _Option_orElse(
-          checkExpr(elseE, reg),
-          _Option_orElse(checkExpr(thenE, reg), checkExpr(cond, reg)),
-        ),
-      )
-      .with({ _tag: "EMatch" }, ({ scrutinee, arms, span: sp }) =>
-        _Option_orElse(
-          checkMatch(arms, sp, reg),
-          _Option_orElse(
-            firstSome(
-              (a: MatchArm) =>
-                _Option_orElse(
-                  checkExpr(a.body, reg),
-                  match(a.guard)
-                    .with({ _tag: "Some" }, ({ value: g }) => checkExpr(g, reg))
-                    .with({ _tag: "None" }, () => None as Option<CErr>)
-                    .exhaustive(),
-                ),
-              arms,
-            ),
-            checkExpr(scrutinee, reg),
+          firstSome(
+            (a: MatchArm) =>
+              _Option_orElse(
+                checkExpr(a.body, reg),
+                match(a.guard)
+                  .with({ _tag: "Some" }, ({ value: g }) => checkExpr(g, reg))
+                  .with({ _tag: "None" }, () => None as Option<PErr>)
+                  .exhaustive(),
+              ),
+            arms,
           ),
+          checkExpr(scrutinee, reg),
         ),
-      )
-      .with({ _tag: "ERecord" }, ({ fields, spread }) =>
-        _Option_orElse(
-          firstSome((f: Field) => checkExpr(f.value, reg), fields),
-          match(spread)
-            .with({ _tag: "Some" }, ({ value: s }) => checkExpr(s, reg))
-            .with({ _tag: "None" }, () => None as Option<CErr>)
-            .exhaustive(),
-        ),
-      )
-      .with({ _tag: "EField" }, ({ target }) => checkExpr(target, reg))
-      .with({ _tag: "ELoop" }, ({ params, body }) =>
-        _Option_orElse(
-          checkExpr(body, reg),
-          firstSome((p: LoopParam) => checkExpr(p.init, reg), params),
-        ),
-      )
-      .with({ _tag: "ERecur" }, ({ args }) => firstSome((a: Expr) => checkExpr(a, reg), args))
-      .with({ _tag: "ETuple" }, ({ elements }) =>
-        firstSome((el: Expr) => checkExpr(el, reg), elements),
-      )
-      .with({ _tag: "EArr" }, ({ elements }) =>
-        firstSome(
-          (el: SeqElem) =>
-            checkExpr(
-              match(el)
-                .with({ _tag: "SEExpr" }, ({ expr: e }) => e)
-                .with({ _tag: "SESpread" }, ({ expr: e }) => e)
-                .exhaustive(),
-              reg,
-            ),
-          elements,
-        ),
-      )
-      .with({ _tag: "EList" }, ({ elements }) =>
-        firstSome(
-          (el: SeqElem) =>
-            checkExpr(
-              match(el)
-                .with({ _tag: "SEExpr" }, ({ expr: e }) => e)
-                .with({ _tag: "SESpread" }, ({ expr: e }) => e)
-                .exhaustive(),
-              reg,
-            ),
-          elements,
-        ),
-      )
-      .with({ _tag: "ESet" }, ({ elements }) =>
-        firstSome(
-          (el: SeqElem) =>
-            checkExpr(
-              match(el)
-                .with({ _tag: "SEExpr" }, ({ expr: e }) => e)
-                .with({ _tag: "SESpread" }, ({ expr: e }) => e)
-                .exhaustive(),
-              reg,
-            ),
-          elements,
-        ),
-      )
-      .with({ _tag: "EMap" }, ({ entries }) =>
-        firstSome(
-          (en: MapEntry) => _Option_orElse(checkExpr(en.value, reg), checkExpr(en.key, reg)),
-          entries,
-        ),
-      )
-      .with({ _tag: "EInterp" }, ({ parts }) =>
-        firstSome(
-          (p: InterpPart) =>
-            match(p)
-              .with({ _tag: "IPLit" }, () => None as Option<CErr>)
-              .with({ _tag: "IPExpr" }, ({ expr: ex }) => checkExpr(ex, reg))
+      ),
+    )
+    .with({ _tag: "ERecord" }, ({ fields, spread }) =>
+      _Option_orElse(
+        firstSome((f: Field) => checkExpr(f.value, reg), fields),
+        match(spread)
+          .with({ _tag: "Some" }, ({ value: s }) => checkExpr(s, reg))
+          .with({ _tag: "None" }, () => None as Option<PErr>)
+          .exhaustive(),
+      ),
+    )
+    .with({ _tag: "EField" }, ({ target }) => checkExpr(target, reg))
+    .with({ _tag: "ELoop" }, ({ params, body }) =>
+      _Option_orElse(
+        checkExpr(body, reg),
+        firstSome((p: LoopParam) => checkExpr(p.init, reg), params),
+      ),
+    )
+    .with({ _tag: "ERecur" }, ({ args }) => firstSome((a: Expr) => checkExpr(a, reg), args))
+    .with({ _tag: "ETuple" }, ({ elements }) =>
+      firstSome((el: Expr) => checkExpr(el, reg), elements),
+    )
+    .with({ _tag: "EArr" }, ({ elements }) =>
+      firstSome(
+        (el: SeqElem) =>
+          checkExpr(
+            match(el)
+              .with({ _tag: "SEExpr" }, ({ expr: e }) => e)
+              .with({ _tag: "SESpread" }, ({ expr: e }) => e)
               .exhaustive(),
-          parts,
-        ),
-      )
-      .exhaustive(),
+            reg,
+          ),
+        elements,
+      ),
+    )
+    .with({ _tag: "EList" }, ({ elements }) =>
+      firstSome(
+        (el: SeqElem) =>
+          checkExpr(
+            match(el)
+              .with({ _tag: "SEExpr" }, ({ expr: e }) => e)
+              .with({ _tag: "SESpread" }, ({ expr: e }) => e)
+              .exhaustive(),
+            reg,
+          ),
+        elements,
+      ),
+    )
+    .with({ _tag: "ESet" }, ({ elements }) =>
+      firstSome(
+        (el: SeqElem) =>
+          checkExpr(
+            match(el)
+              .with({ _tag: "SEExpr" }, ({ expr: e }) => e)
+              .with({ _tag: "SESpread" }, ({ expr: e }) => e)
+              .exhaustive(),
+            reg,
+          ),
+        elements,
+      ),
+    )
+    .with({ _tag: "EMap" }, ({ entries }) =>
+      firstSome(
+        (en: MapEntry) => _Option_orElse(checkExpr(en.value, reg), checkExpr(en.key, reg)),
+        entries,
+      ),
+    )
+    .with({ _tag: "EInterp" }, ({ parts }) =>
+      firstSome(
+        (p: InterpPart) =>
+          match(p)
+            .with({ _tag: "IPLit" }, () => None as Option<PErr>)
+            .with({ _tag: "IPExpr" }, ({ expr: ex }) => checkExpr(ex, reg))
+            .exhaustive(),
+        parts,
+      ),
+    )
+    .exhaustive(),
 );
 const reservedNames: string[] = ["Array", "List", "Set", "Map", "Option", "Result", "Str"];
 const redeclarableTypes: string[] = ["Option", "Result"];
@@ -979,38 +976,38 @@ const reservedErr: <A, B, C>(
   <A, B, C>(name: string, sp: { end: A; start: B } & C) =>
     checkErr(`'${name}' is a reserved collection namespace and cannot be bound`, sp),
 );
-const checkReservedNames: (stmts: Stmt[]) => Option<CErr> = (stmts: Stmt[]) =>
+const checkReservedNames: (stmts: Stmt[]) => Option<PErr> = (stmts: Stmt[]) =>
   firstSome(
     (s: Stmt) =>
       match(s)
         .with({ _tag: "SType" }, ({ name, span: sp }) =>
           _Array_contains(name, redeclarableTypes)
-            ? (None as Option<CErr>)
+            ? (None as Option<PErr>)
             : _Array_contains(name, reservedNames)
-              ? (Some(reservedErr(name, sp)) as Option<CErr>)
-              : (None as Option<CErr>),
+              ? (Some(reservedErr(name, sp)) as Option<PErr>)
+              : (None as Option<PErr>),
         )
         .with({ _tag: "SLet" }, ({ name, span: sp }) =>
           _Array_contains(name, reservedNames)
-            ? (Some(reservedErr(name, sp)) as Option<CErr>)
-            : (None as Option<CErr>),
+            ? (Some(reservedErr(name, sp)) as Option<PErr>)
+            : (None as Option<PErr>),
         )
         .with({ _tag: "SExtern" }, ({ name, span: sp }) =>
           _Array_contains(name, reservedNames)
-            ? (Some(reservedErr(name, sp)) as Option<CErr>)
-            : (None as Option<CErr>),
+            ? (Some(reservedErr(name, sp)) as Option<PErr>)
+            : (None as Option<PErr>),
         )
         .with({ _tag: "SImport" }, ({ names }) =>
           firstSome(
-            (n: Name) =>
+            (n: { name: string; span: SpanAt }) =>
               _Array_contains(n.name, reservedNames)
                 ? (Some(
                     checkErr(
                       `'${n.name}' is a reserved collection namespace and cannot be imported`,
                       n.span,
                     ),
-                  ) as Option<CErr>)
-                : (None as Option<CErr>),
+                  ) as Option<PErr>)
+                : (None as Option<PErr>),
             names,
           ),
         )
@@ -1021,20 +1018,20 @@ const checkReservedNames: (stmts: Stmt[]) => Option<CErr> = (stmts: Stmt[]) =>
                   `'${alias.name}' is a reserved collection namespace and cannot be imported`,
                   alias.span,
                 ),
-              ) as Option<CErr>)
-            : (None as Option<CErr>),
+              ) as Option<PErr>)
+            : (None as Option<PErr>),
         )
-        .with({ _tag: "SError" }, () => None as Option<CErr>)
-        .with({ _tag: "SExpr" }, () => None as Option<CErr>)
+        .with({ _tag: "SError" }, () => None as Option<PErr>)
+        .with({ _tag: "SExpr" }, () => None as Option<PErr>)
         .exhaustive(),
     stmts,
   );
 const isUpperStart: (s: string) => boolean = (s: string) =>
   match(_Str_codeAt(0, s))
-    .with({ _tag: "Some" }, ({ value: c }) => and(gte(c, 65), lte(c, 90)))
+    .with({ _tag: "Some" }, ({ value: c }) => and(c >= 65, c <= 90))
     .with({ _tag: "None" }, () => false)
     .exhaustive();
-const strayTypeVar: _Curry<[params: string[], te: TypeExpr], Option<[string, Span]>> = _curry(
+const strayTypeVar: _Curry<[params: string[], te: TypeExpr], Option<[string, SpanAt]>> = _curry(
   2,
   (params: string[], te: TypeExpr) =>
     match(te)
@@ -1043,8 +1040,8 @@ const strayTypeVar: _Curry<[params: string[], te: TypeExpr], Option<[string, Spa
           isUpperStart(name),
           or(_Array_contains(name, primTypeNames), _Array_contains(name, params)),
         )
-          ? (None as Option<[string, Span]>)
-          : (Some(_tuple(name, sp)) as Option<[string, Span]>),
+          ? (None as Option<[string, SpanAt]>)
+          : (Some(_tuple(name, sp)) as Option<[string, SpanAt]>),
       )
       .with({ _tag: "TyArrow" }, ({ from, to }) =>
         _Option_orElse(strayTypeVar(params, to), strayTypeVar(params, from)),
@@ -1053,22 +1050,22 @@ const strayTypeVar: _Curry<[params: string[], te: TypeExpr], Option<[string, Spa
       .with({ _tag: "TyTuple" }, ({ elems }) => firstSome(strayTypeVar(params), elems))
       .with({ _tag: "TyList" }, ({ elem }) => strayTypeVar(params, elem))
       .with({ _tag: "TyQual" }, ({ args }) => firstSome(strayTypeVar(params), args))
-      .with({ _tag: "TyLit" }, () => None as Option<[string, Span]>)
+      .with({ _tag: "TyLit" }, () => None as Option<[string, SpanAt]>)
       .with({ _tag: "TyUnion" }, ({ members }) => firstSome(strayTypeVar(params), members))
       .exhaustive(),
 );
-const checkCtorFieldVars: (stmts: Stmt[]) => Option<CErr> = (stmts: Stmt[]) =>
+const checkCtorFieldVars: (stmts: Stmt[]) => Option<PErr> = (stmts: Stmt[]) =>
   firstSome(
     (s: Stmt) =>
       match(s)
         .with({ _tag: "SType" }, ({ name, params, ctors }) =>
           firstSome(
-            (c: Ctor) =>
+            (c: { name: string; fields: CtorField[] }) =>
               firstSome(
                 (f: CtorField) =>
                   match(strayTypeVar(params, f.fieldType))
                     .with(
-                      (_v): _v is Extract<Option<[string, Span]>, { _tag: "Some" }> => {
+                      (_v): _v is Extract<Option<[string, SpanAt]>, { _tag: "Some" }> => {
                         const _g: any = _v;
                         return _g._tag === "Some";
                       },
@@ -1078,25 +1075,25 @@ const checkCtorFieldVars: (stmts: Stmt[]) => Option<CErr> = (stmts: Stmt[]) =>
                             `unknown type parameter '${vn}' in constructor '${c.name}' — declare it: type ${name} ${_Str_join(" ", _Array_append(vn, params))} = ...`,
                             vsp,
                           ),
-                        ) as Option<CErr>,
+                        ) as Option<PErr>,
                     )
-                    .with({ _tag: "None" }, () => None as Option<CErr>)
+                    .with({ _tag: "None" }, () => None as Option<PErr>)
                     .exhaustive(),
                 c.fields,
               ),
             ctors,
           ),
         )
-        .otherwise(() => None as Option<CErr>),
+        .otherwise(() => None as Option<PErr>),
     stmts,
   );
 const qualRefsFrom: (
   te: TypeExpr,
-) => { alias: string; name: string; nameSpan: Span; qualSpan: Span }[] = (te: TypeExpr) =>
+) => { alias: string; name: string; nameSpan: SpanAt; qualSpan: SpanAt }[] = (te: TypeExpr) =>
   match(te)
     .with(
       { _tag: "TyName" },
-      () => [] as { alias: string; name: string; nameSpan: Span; qualSpan: Span }[],
+      () => [] as { alias: string; name: string; nameSpan: SpanAt; qualSpan: SpanAt }[],
     )
     .with({ _tag: "TyArrow" }, ({ from, to }) => [...qualRefsFrom(from), ...qualRefsFrom(to)])
     .with({ _tag: "TyApp" }, ({ args }) => _Array_flatMap(qualRefsFrom, args))
@@ -1108,7 +1105,7 @@ const qualRefsFrom: (
     ])
     .with(
       { _tag: "TyLit" },
-      () => [] as { alias: string; name: string; nameSpan: Span; qualSpan: Span }[],
+      () => [] as { alias: string; name: string; nameSpan: SpanAt; qualSpan: SpanAt }[],
     )
     .with({ _tag: "TyUnion" }, ({ members }) => _Array_flatMap(qualRefsFrom, members))
     .exhaustive();
@@ -1124,7 +1121,11 @@ const writtenTypeExprs: (stmts: Stmt[]) => TypeExpr[] = (stmts: Stmt[]) =>
             .exhaustive(),
         )
         .with({ _tag: "SType" }, ({ ctors, alias, aliasType }) => [
-          ..._Array_flatMap((c: Ctor) => map((f: CtorField) => f.fieldType, c.fields), ctors),
+          ..._Array_flatMap(
+            (c: { fields: CtorField[]; name: string }) =>
+              map((f: CtorField) => f.fieldType, c.fields),
+            ctors,
+          ),
           ...match(alias)
             .with({ _tag: "Some" }, ({ value: fields }) =>
               map((f: AliasField) => f.fieldType, fields),
@@ -1144,7 +1145,7 @@ const emptyQuals: Map<string, QualScope> = new Map<string, QualScope>();
 const checkQualifiedTypeNames: <A>(
   stmts: Stmt[],
   quals: Map<string, { types: Set<string> } & A>,
-) => Option<CErr> = _curry(
+) => Option<PErr> = _curry(
   2,
   <A>(stmts: Stmt[], quals: Map<string, { types: Set<string> } & A>) => {
     const nsAliases: Set<string> = _Set_fromArray(
@@ -1157,19 +1158,19 @@ const checkQualifiedTypeNames: <A>(
       ),
     );
     return firstSome(
-      (q: { alias: string; name: string; nameSpan: Span; qualSpan: Span }) =>
+      (q: { alias: string; name: string; nameSpan: SpanAt; qualSpan: SpanAt }) =>
         _Set_has(q.alias, nsAliases)
           ? match(_Map_get(q.alias, quals))
-              .with({ _tag: "None" }, () => None as Option<CErr>)
+              .with({ _tag: "None" }, () => None as Option<PErr>)
               .with({ _tag: "Some" }, ({ value: dep }) =>
                 _Set_has(q.name, dep.types)
-                  ? (None as Option<CErr>)
+                  ? (None as Option<PErr>)
                   : (Some(
                       checkErr(
                         `module alias '${q.alias}' has no exported type '${q.name}' — export it from the imported module ('export type ${q.name} = …')`,
                         q.nameSpan,
                       ),
-                    ) as Option<CErr>),
+                    ) as Option<PErr>),
               )
               .exhaustive()
           : (Some(
@@ -1177,7 +1178,7 @@ const checkQualifiedTypeNames: <A>(
                 `unknown module alias '${q.alias}' in type '${q.alias}.${q.name}' — a qualified type name needs a matching 'import * as ${q.alias} from "…"'`,
                 q.qualSpan,
               ),
-            ) as Option<CErr>),
+            ) as Option<PErr>),
       _Array_flatMap(qualRefsFrom, writtenTypeExprs(stmts)),
     );
   },
@@ -1214,7 +1215,7 @@ export const checkWith: <A, B>(
   stmts: Stmt[],
   imported: { types: Map<string, string[]>; ctors: Map<string, CtorInfo> } & A,
   quals: Map<string, { types: Set<string> } & B>,
-) => Result<Stmt[], CErr> = _curry(
+) => Result<Stmt[], PErr> = _curry(
   3,
   <A, B>(
     stmts: Stmt[],
@@ -1222,13 +1223,13 @@ export const checkWith: <A, B>(
     quals: Map<string, { types: Set<string> } & B>,
   ) =>
     match(checkReservedNames(stmts))
-      .with({ _tag: "Some" }, ({ value: e }) => Err(e) as Result<Stmt[], CErr>)
+      .with({ _tag: "Some" }, ({ value: e }) => Err(e) as Result<Stmt[], PErr>)
       .with({ _tag: "None" }, () =>
         match(checkCtorFieldVars(stmts))
-          .with({ _tag: "Some" }, ({ value: e }) => Err(e) as Result<Stmt[], CErr>)
+          .with({ _tag: "Some" }, ({ value: e }) => Err(e) as Result<Stmt[], PErr>)
           .with({ _tag: "None" }, () =>
             match(checkQualifiedTypeNames(stmts, quals))
-              .with({ _tag: "Some" }, ({ value: e }) => Err(e) as Result<Stmt[], CErr>)
+              .with({ _tag: "Some" }, ({ value: e }) => Err(e) as Result<Stmt[], PErr>)
               .with({ _tag: "None" }, () =>
                 _Result_flatMap(
                   (reg0) =>
@@ -1239,12 +1240,12 @@ export const checkWith: <A, B>(
                             match(s)
                               .with({ _tag: "SLet" }, ({ value }) => checkExpr(value, reg))
                               .with({ _tag: "SExpr" }, ({ value }) => checkExpr(value, reg))
-                              .otherwise(() => None as Option<CErr>),
+                              .otherwise(() => None as Option<PErr>),
                           stmts,
                         ),
                       )
-                        .with({ _tag: "Some" }, ({ value: e }) => Err(e) as Result<Stmt[], CErr>)
-                        .with({ _tag: "None" }, () => Ok(stmts) as Result<Stmt[], CErr>)
+                        .with({ _tag: "Some" }, ({ value: e }) => Err(e) as Result<Stmt[], PErr>)
+                        .with({ _tag: "None" }, () => Ok(stmts) as Result<Stmt[], PErr>)
                         .exhaustive())({
                       ctors: mergeMissing(_Map_keys(imported.ctors), imported.ctors, reg0.ctors),
                       types: mergeMissing(_Map_keys(imported.types), imported.types, reg0.types),
@@ -1258,7 +1259,7 @@ export const checkWith: <A, B>(
       )
       .exhaustive(),
 );
-export const check: (stmts: Stmt[]) => Result<Stmt[], CErr> = (stmts: Stmt[]) =>
+export const check: (stmts: Stmt[]) => Result<Stmt[], PErr> = (stmts: Stmt[]) =>
   checkWith(
     stmts,
     { ctors: new Map<string, CtorInfo>(), types: new Map<string, string[]>() },

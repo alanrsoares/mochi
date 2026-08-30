@@ -1,22 +1,24 @@
+import type { PErr } from "./parser";
+
 export type Diag = { message: string; start: number; end: number };
 
 import type { Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
-  _curry,
-  _recur,
-  _done,
-  Some,
+  Err,
   None,
   Ok,
-  Err,
-  sub,
-  _Result_mapErr,
-  _Result_flatMap,
+  Some,
   _Array_get,
-  _Str_length,
+  _Result_flatMap,
+  _Result_mapErr,
   _Str_endsWith,
+  _Str_length,
   _Str_slice,
+  _Str_startsWith,
+  _curry,
+  _done,
+  _recur,
 } from "@mochi/compiler/runtime";
 
 import { match } from "@onrails/pattern";
@@ -34,15 +36,15 @@ import { die } from "./host.mjs";
 import { formatError as $formatError } from "./host.mjs";
 const formatError = _curry(3, $formatError);
 export const outPath: (path: string) => string = (path: string) =>
-  `${_Str_slice(0, sub(_Str_length(path), 6), path)}.js`;
+  `${_Str_slice(0, _Str_length(path) - 6, path)}.js`;
 export const tsOutPath: (path: string) => string = (path: string) =>
-  `${_Str_slice(0, sub(_Str_length(path), 6), path)}.ts`;
+  `${_Str_slice(0, _Str_length(path) - 6, path)}.ts`;
 export const buildOne: (path: string) => Result<string, string> = (path: string) =>
   _Result_flatMap(
     (src) =>
       _Result_flatMap(
         (js) => writeFile(outPath(path), js),
-        _Result_mapErr((e: Diag) => formatError(path, src, e), compile(src)),
+        _Result_mapErr((e: PErr) => formatError(path, src, e), compile(src)),
       ),
     readFile(path),
   );
@@ -54,7 +56,7 @@ export const buildOneTs: _Curry<
     (src) =>
       _Result_flatMap(
         (ts) => writeFile(tsOutPath(path), ts),
-        _Result_mapErr((e: Diag) => formatError(path, src, e), compileTs(src, runtimeImport)),
+        _Result_mapErr((e: PErr) => formatError(path, src, e), compileTs(src, runtimeImport)),
       ),
     readFile(path),
   ),
@@ -68,17 +70,11 @@ export const writeAll: <A>(outs: ({ path: string; js: string } & A)[]) => Result
   while (true) {
     const _step = match(remaining)
       .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
+        (_v) => _v.length === 0,
         () => _done(Ok("") as Result<string, string>),
       )
       .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
+        (_v) => _v.length >= 1,
         ([o, ...rest]) =>
           match(writeFile(outPath(o.path), o.js))
             .with({ _tag: "Err" }, ({ error: e }) => _done(Err(e) as Result<string, string>))
@@ -100,27 +96,28 @@ export const writeAll: <A>(outs: ({ path: string; js: string } & A)[]) => Result
     return _step.value;
   }
 };
-const tsWritePath: (path: string) => string = (path: string) =>
-  _Str_endsWith(".mochi", path) ? tsOutPath(path) : path;
+const tsWritePath: _Curry<[path: string, body: string], string> = _curry(
+  2,
+  (path: string, body: string) =>
+    _Str_endsWith(".mochi", path)
+      ? _Str_startsWith("/** @jsx h */", body)
+        ? `${_Str_slice(0, _Str_length(path) - 6, path)}.tsx`
+        : tsOutPath(path)
+      : path,
+);
 export const writeAllTs: <A>(outs: ({ path: string; js: string } & A)[]) => Result<string, string> =
   <A>(outs: ({ path: string; js: string } & A)[]) => {
     let remaining = outs;
     while (true) {
       const _step = match(remaining)
         .with(
-          (_v) => {
-            const _g: any = _v;
-            return _g.length === 0;
-          },
+          (_v) => _v.length === 0,
           () => _done(Ok("") as Result<string, string>),
         )
         .with(
-          (_v) => {
-            const _g: any = _v;
-            return _g.length >= 1;
-          },
+          (_v) => _v.length >= 1,
           ([o, ...rest]) =>
-            match(writeFile(tsWritePath(o.path), o.js))
+            match(writeFile(tsWritePath(o.path, o.js), o.js))
               .with({ _tag: "Err" }, ({ error: e }) => _done(Err(e) as Result<string, string>))
               .with({ _tag: "Ok" }, ({ value: w }) =>
                 (() => {
@@ -146,13 +143,13 @@ export const buildMultiTs: _Curry<
 > = _curry(2, (entry: string, runtimeImport: string) =>
   _Result_flatMap(
     writeAllTs,
-    _Result_mapErr((e: Diag) => e.message, buildModulesTs(entry, runtimeImport)),
+    _Result_mapErr((e: PErr) => e.message, buildModulesTs(entry, runtimeImport)),
   ),
 );
 export const buildMulti: (entry: string) => Result<string, string> = (entry: string) =>
   _Result_flatMap(
     writeAll,
-    _Result_mapErr((e: Diag) => e.message, buildModules(entry)),
+    _Result_mapErr((e: PErr) => e.message, buildModules(entry)),
   );
 /**
  * Invoke only when Bun executes cli.js / cli.ts directly. Importing it from a

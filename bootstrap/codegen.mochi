@@ -80,6 +80,8 @@ type GenOpts = {
   guardBaseType: Option<Ast.Expr -> Option<string> >,
   flattenPipe: bool,
   tupleHelper: bool,
+  preserveInfix: bool,
+  preserveJsx: bool,
   moduleExt: string,
   docs: bool
 }
@@ -102,6 +104,8 @@ type GCtx = {
   guardBaseType: Option<Ast.Expr -> Option<string> >,
   flattenPipe: bool,
   tupleHelper: bool,
+  preserveInfix: bool,
+  preserveJsx: bool,
   moduleExt: string,
   valueRefs: Set<string>,
   docs: bool
@@ -120,6 +124,8 @@ export let jsGenOpts : GenOpts = {
   guardBaseType: None,
   flattenPipe: false,
   tupleHelper: false,
+  preserveInfix: false,
+  preserveJsx: false,
   moduleExt: ".js",
   docs: true
 }
@@ -344,6 +350,86 @@ let collapseLambda = (params, body) =>
 
 // ---- expressions -----------------------------------------------------------
 
+/// The numeric calls whose saturated runtime behavior is exactly JavaScript's
+/// infix behavior. `eq` is structural and `mod` is true modulo, so neither
+/// belongs here.
+let tsInfix = (ctx: GCtx, fn, args) =>
+  !ctx.preserveInfix
+    ? None
+    : switch (fn, args) {
+      | (Ast.ERef(name, _), [left, right]) => switch name {
+          | "add" => Some("(${ctx->genExpr(left)} + ${ctx->genExpr(right)})")
+          | "sub" => Some("(${ctx->genExpr(left)} - ${ctx->genExpr(right)})")
+          | "mul" => Some("(${ctx->genExpr(left)} * ${ctx->genExpr(right)})")
+          | "div" => Some("(${ctx->genExpr(left)} / ${ctx->genExpr(right)})")
+          | "lt" => Some("(${ctx->genExpr(left)} < ${ctx->genExpr(right)})")
+          | "lte" => Some("(${ctx->genExpr(left)} <= ${ctx->genExpr(right)})")
+          | "gt" => Some("(${ctx->genExpr(left)} > ${ctx->genExpr(right)})")
+          | "gte" => Some("(${ctx->genExpr(left)} >= ${ctx->genExpr(right)})")
+          | _ => None
+        }
+      | _ => None
+    }
+
+let jsxHasSpread = children => switch children {
+  | [] => false
+  | [Ast.SESpread(_), ..._] => true
+  | [_, ...rest] => jsxHasSpread(rest)
+}
+
+let jsxAttrs = (ctx: GCtx, fields, spread) =>
+  let head = switch spread {
+    | None => ""
+    | Some(value) => " {...${ctx->genExpr(value)}}"
+  } in
+    "${head}${Str.join("", fields |> map(f => switch f.value { | Ast.EBool(true, _) => " ${f.name}" | value => " ${f.name}={${ctx->genExpr(value)}}" }))}"
+
+/// Re-fold only the parser's provenance-tagged `h(tag, props, children)`.
+/// A source-written `h(...)` remains a call, and child spreads retain that
+/// call form because JSX has no equivalent spread-child syntax.
+let tsxArgs = (ctx: GCtx, args) => switch args {
+  | [tag, Ast.ERecord(fields, spread, _), Ast.EArr(children, _)] => jsxHasSpread(
+      children
+    )
+      ? None
+      : let fragment = switch tag {
+        | Ast.EStr("Fragment", _) => true
+        | _ => false
+      } in
+      let name = fragment
+        ? ""
+        : switch tag {
+          | Ast.EStr(value, _) => value
+          | _ => ctx->genMember(tag)
+        } in
+      let attrs = jsxAttrs(ctx, fields, spread) in
+        Array.length(children) == 0 && !fragment
+          ? Some("<${name}${attrs} />")
+          : let body = Str.join(
+            "",
+            children
+              |> map(child => switch child {
+                | Ast.SEExpr(value) => "{${ctx->genExpr(value)}}"
+                | Ast.SESpread(_) => ""
+              })
+          ) in
+            fragment
+              ? Some("<>${body}</>")
+              : Some("<${name}${attrs}>${body}</${name}>")
+  | _ => None
+}
+
+let tsxCall = (ctx: GCtx, fn, args, origin) =>
+  !ctx.preserveJsx
+    ? None
+    : switch origin {
+      | Some("jsx") => switch fn {
+          | Ast.ERef("h", _) => tsxArgs(ctx, args)
+          | _ => None
+        }
+      | _ => None
+    }
+
 let genExpr = (ctx: GCtx, e) => switch e {
   | Ast.ENum(_, raw, _) => raw
   | Ast.EUnit(_) => "undefined"
@@ -358,12 +444,18 @@ let genExpr = (ctx: GCtx, e) => switch e {
       name,
       isNullaryCtor(name, ctx.keys) ? hook1(ctx.annotateEmpty, e) : None
     )
-  | Ast.ECall(fn, args, _, _) =>
+  | Ast.ECall(fn, args, origin, _) =>
     // An applied parametric ctor (`Ok("")`) leaves the type param its argument
     // does not determine free, so tsc widens it to `unknown`. Cast the call to
     // its resolved type (ADR 0043). Gated on an uppercase callee — a ctor.
-    let inner = "${ctx->genCallee(fn)}(${Str.join(", ", args |> map(a => ctx->genExpr(a)))})" in
-      castOr(inner, isCtorRef(fn) ? hook1(ctx.annotateCall, e) : None)
+    switch tsxCall(ctx, fn, args, origin) {
+      | Some(jsx) => jsx
+      | None => switch tsInfix(ctx, fn, args) {
+          | Some(infix) => infix
+          | None => let inner = "${ctx->genCallee(fn)}(${Str.join(", ", args |> map(a => ctx->genExpr(a)))})" in
+              castOr(inner, isCtorRef(fn) ? hook1(ctx.annotateCall, e) : None)
+        }
+    }
   | Ast.ELambda(params, body, sp) => let (cparams, cbody, fills) = collapseLambda(
       params,
       body
@@ -1968,6 +2060,8 @@ export let codegenWith = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps, 
     guardBaseType: opts.guardBaseType,
     flattenPipe: opts.flattenPipe,
     tupleHelper: opts.tupleHelper,
+    preserveInfix: opts.preserveInfix,
+    preserveJsx: opts.preserveJsx,
     moduleExt: opts.moduleExt,
     valueRefs: Set.fromArray([]),
     docs: opts.docs
@@ -2008,6 +2102,8 @@ export let runtimeDepNames = (stmts, imported, ns, jsDefs, runtimeDeps) =>
     guardBaseType: None,
     flattenPipe: false,
     tupleHelper: false,
+    preserveInfix: false,
+    preserveJsx: false,
     moduleExt: ".js",
     valueRefs: Set.fromArray([]),
     docs: false

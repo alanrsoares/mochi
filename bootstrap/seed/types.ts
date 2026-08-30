@@ -11,7 +11,7 @@ export type Ty =
 export type Row =
   | { _tag: "RowEmpty" }
   | { _tag: "RowVar"; id: number }
-  | { _tag: "RowExtend"; label: string; fieldType: Ty; rest: Row };
+  | { _tag: "RowExtend"; label: string; fieldType: Ty; optional: boolean; rest: Row };
 /**
  * TS's `Subst` (mutable Map pair) + `Fresh` (mutable counter) become one
  * immutable, threaded `St` — every fresh-var mint AND every unify call
@@ -49,29 +49,28 @@ export type TypeErr = { message: string };
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
-  _curry,
-  Some,
+  Err,
   None,
   Ok,
-  Err,
-  add,
-  eq,
-  show,
-  not,
+  Some,
+  _Array_append,
+  _Array_get,
+  _Array_prepend,
+  _Map_get,
+  _Map_keys,
+  _Map_set,
+  _Result_flatMap,
+  _Result_map,
+  _Str_join,
+  _curry,
+  _tuple,
   and,
-  or,
+  eq,
   length,
   map,
-  _Map_set,
-  _Map_keys,
-  _Map_get,
-  _Result_map,
-  _Result_flatMap,
-  _Array_get,
-  _Array_append,
-  _Array_prepend,
-  _Str_join,
-  _tuple,
+  not,
+  or,
+  show,
 } from "@mochi/compiler/runtime";
 
 import { match } from "@onrails/pattern";
@@ -93,12 +92,13 @@ export const TySingleton = _curry(2, (base, value) => ({ _tag: "TySingleton", ba
 export const TyOneOf = (members: Ty[]): Ty => ({ _tag: "TyOneOf", members });
 export const RowEmpty: Row = { _tag: "RowEmpty" };
 export const RowVar = (id: number): Row => ({ _tag: "RowVar", id });
-export const RowExtend = _curry(3, (label, fieldType, rest) => ({
+export const RowExtend = _curry(4, (label, fieldType, optional, rest) => ({
   _tag: "RowExtend",
   label,
   fieldType,
+  optional,
   rest,
-})) as (label: string, fieldType: Ty, rest: Row) => Row;
+})) as (label: string, fieldType: Ty, optional: boolean, rest: Row) => Row;
 export const tVar: (id: number) => Ty = (id: number) => TyVar(id);
 export const tCon: _Curry<[name: string, args: Ty[]], Ty> = _curry(2, (name: string, args: Ty[]) =>
   TyCon(name, args),
@@ -157,9 +157,7 @@ const typeEqList: _Curry<[as_: Ty[], bs: Ty[], i: number], boolean> = _curry(
       .with({ _tag: "Some" }, ({ value: a }) =>
         match(_Array_get(i, bs))
           .with({ _tag: "None" }, () => false)
-          .with({ _tag: "Some" }, ({ value: b }) =>
-            and(typeEq(a, b), typeEqList(as_, bs, add(i, 1))),
-          )
+          .with({ _tag: "Some" }, ({ value: b }) => and(typeEq(a, b), typeEqList(as_, bs, i + 1)))
           .exhaustive(),
       )
       .exhaustive(),
@@ -169,9 +167,7 @@ const memberEqIn: _Curry<[t: Ty, xs: Ty[], i: number], boolean> = _curry(
   (t: Ty, xs: Ty[], i: number) =>
     match(_Array_get(i, xs))
       .with({ _tag: "None" }, () => false)
-      .with({ _tag: "Some" }, ({ value: x }) =>
-        typeEq(t, x) ? true : memberEqIn(t, xs, add(i, 1)),
-      )
+      .with({ _tag: "Some" }, ({ value: x }) => (typeEq(t, x) ? true : memberEqIn(t, xs, i + 1)))
       .exhaustive(),
 );
 const allMembersIn: _Curry<[am: Ty[], bm: Ty[], i: number], boolean> = _curry(
@@ -180,7 +176,7 @@ const allMembersIn: _Curry<[am: Ty[], bm: Ty[], i: number], boolean> = _curry(
     match(_Array_get(i, am))
       .with({ _tag: "None" }, () => true)
       .with({ _tag: "Some" }, ({ value: m }) =>
-        and(memberEqIn(m, bm, 0), allMembersIn(am, bm, add(i, 1))),
+        and(memberEqIn(m, bm, 0), allMembersIn(am, bm, i + 1)),
       )
       .exhaustive(),
 );
@@ -196,10 +192,10 @@ const rowEq: _Curry<[a: Row, b: Row], boolean> = _curry(2, (a: Row, b: Row) =>
         .with({ _tag: "RowVar" }, ({ id: bid }) => eq(aid, bid))
         .otherwise(() => false),
     )
-    .with({ _tag: "RowExtend" }, ({ label: al, fieldType: at, rest: ar }) =>
+    .with({ _tag: "RowExtend" }, ({ label: al, fieldType: at, optional: ao, rest: ar }) =>
       match(b)
-        .with({ _tag: "RowExtend" }, ({ label: bl, fieldType: bt, rest: br }) =>
-          and(and(eq(al, bl), typeEq(at, bt)), rowEq(ar, br)),
+        .with({ _tag: "RowExtend" }, ({ label: bl, fieldType: bt, optional: bo, rest: br }) =>
+          and(and(and(eq(al, bl), eq(ao, bo)), typeEq(at, bt)), rowEq(ar, br)),
         )
         .otherwise(() => false),
     )
@@ -213,14 +209,10 @@ const flattenUnionFrom: _Curry<[members: Ty[], acc: Ty[], i: number], Ty[]> = _c
       .with({ _tag: "Some" }, ({ value: t }) =>
         match(t)
           .with({ _tag: "TyOneOf" }, ({ members: ms }) =>
-            flattenUnionFrom(members, flattenUnionFrom(ms, acc, 0), add(i, 1)),
+            flattenUnionFrom(members, flattenUnionFrom(ms, acc, 0), i + 1),
           )
           .otherwise(() =>
-            flattenUnionFrom(
-              members,
-              memberEqIn(t, acc, 0) ? acc : _Array_append(t, acc),
-              add(i, 1),
-            ),
+            flattenUnionFrom(members, memberEqIn(t, acc, 0) ? acc : _Array_append(t, acc), i + 1),
           ),
       )
       .exhaustive(),
@@ -263,8 +255,12 @@ export const isUnit: (t: Ty) => boolean = (t: Ty) =>
 export const rVar: (id: number) => Row = (id: number) => RowVar(id);
 export const rExtend: _Curry<[label: string, fieldType: Ty, rest: Row], Row> = _curry(
   3,
-  (label: string, fieldType: Ty, rest: Row) => RowExtend(label, fieldType, rest),
+  (label: string, fieldType: Ty, rest: Row) => RowExtend(label, fieldType, false, rest),
 );
+export const rField: _Curry<[label: string, fieldType: Ty, rest: Row, optional: boolean], Row> =
+  _curry(4, (label: string, fieldType: Ty, rest: Row, optional: boolean) =>
+    RowExtend(label, fieldType, optional, rest),
+  );
 const showTypeArgs: (args: Ty[]) => string = (args: Ty[]) => _Str_join(", ", map(showType, args));
 /**
  * `unit` renders as its literal `()` in every position (ADR 0054), which also
@@ -313,11 +309,12 @@ export const showType: (t: Ty) => string = (t: Ty) =>
  */
 const showRowFields: (row: Row) => [string[], Option<number>] = (row: Row) =>
   match(row)
-    .with({ _tag: "RowExtend" }, ({ label, fieldType, rest }) =>
+    .with({ _tag: "RowExtend" }, ({ label, fieldType, optional, rest }) =>
       (([fields, tailId]: [string[], Option<number>]) =>
-        _tuple(_Array_prepend(`${label}: ${showType(fieldType)}`, fields), tailId))(
-        showRowFields(rest),
-      ),
+        _tuple(
+          _Array_prepend(`${label}${optional ? "?" : ""}: ${showType(fieldType)}`, fields),
+          tailId,
+        ))(showRowFields(rest)),
     )
     .with({ _tag: "RowVar" }, ({ id }) => _tuple([] as string[], Some(id) as Option<number>))
     .with({ _tag: "RowEmpty" }, () => _tuple([] as string[], None as Option<number>))
@@ -340,7 +337,7 @@ const someOfFrom: <A>(f: (a: A) => boolean, xs: A[], i: number) => boolean = _cu
   <A>(f: (a: A) => boolean, xs: A[], i: number) =>
     match(_Array_get(i, xs))
       .with({ _tag: "None" }, () => false)
-      .with({ _tag: "Some" }, ({ value: x }) => (f(x) ? true : someOfFrom(f, xs, add(i, 1))))
+      .with({ _tag: "Some" }, ({ value: x }) => (f(x) ? true : someOfFrom(f, xs, i + 1)))
       .exhaustive(),
 );
 const someOf: <A>(f: (a: A) => boolean, xs: A[]) => boolean = _curry(
@@ -402,10 +399,10 @@ export const fail: <A, B>(message: A) => Result<B, { message: A }> = <A, B>(mess
   Err({ message: message });
 export const freshVar: <A>(st: { next: number } & A) => [Ty, { next: number } & A] = <A>(
   st: { next: number } & A,
-) => _tuple(tVar(st.next), { ...st, next: add(st.next, 1) });
+) => _tuple(tVar(st.next), { ...st, next: st.next + 1 });
 export const freshRowVar: <A>(st: { next: number } & A) => [Row, { next: number } & A] = <A>(
   st: { next: number } & A,
-) => _tuple(rVar(st.next), { ...st, next: add(st.next, 1) });
+) => _tuple(rVar(st.next), { ...st, next: st.next + 1 });
 export const resolve: _Curry<[t: Ty, st: St], Ty> = _curry(2, (t: Ty, st: St) =>
   match(t)
     .with({ _tag: "TyVar" }, ({ id }) =>
@@ -446,8 +443,8 @@ export const zonk: _Curry<[t: Ty, st: St], Ty> = _curry(2, (t: Ty, st: St) =>
 );
 const zonkRow: _Curry<[row: Row, st: St], Row> = _curry(2, (row: Row, st: St) =>
   match(resolveRow(row, st))
-    .with({ _tag: "RowExtend" }, ({ label, fieldType, rest }) =>
-      rExtend(label, zonk(fieldType, st), zonkRow(rest, st)),
+    .with({ _tag: "RowExtend" }, ({ label, fieldType, optional, rest }) =>
+      rField(label, zonk(fieldType, st), zonkRow(rest, st), optional),
     )
     .otherwise((r) => r),
 );
@@ -553,7 +550,7 @@ const unifyArgs: _Curry<[as_: Ty[], bs: Ty[], i: number, st: St], Result<St, Typ
         match(_Array_get(i, bs))
           .with({ _tag: "None" }, () => Ok(st) as Result<St, TypeErr>)
           .with({ _tag: "Some" }, ({ value: b }) =>
-            _Result_flatMap((s1: St) => unifyArgs(as_, bs, add(i, 1), s1), unify(a, b, st)),
+            _Result_flatMap((s1: St) => unifyArgs(as_, bs, i + 1, s1), unify(a, b, st)),
           )
           .exhaustive(),
       )
@@ -640,14 +637,14 @@ const litInUnionFrom: _Curry<
             .with({ _tag: "TySingleton" }, ({ base: lbase, value: lvalue }) =>
               and(eq(base, lbase), eq(value, lvalue))
                 ? (Ok(st) as Result<St, TypeErr>)
-                : litInUnionFrom(lit, members, add(i, 1), st),
+                : litInUnionFrom(lit, members, i + 1, st),
             )
-            .otherwise(() => litInUnionFrom(lit, members, add(i, 1), st)),
+            .otherwise(() => litInUnionFrom(lit, members, i + 1, st)),
         )
         .otherwise(() =>
           match(unify(lit, m, st))
             .with({ _tag: "Ok" }, ({ value: st1 }) => Ok(st1) as Result<St, TypeErr>)
-            .with({ _tag: "Err" }, () => litInUnionFrom(lit, members, add(i, 1), st))
+            .with({ _tag: "Err" }, () => litInUnionFrom(lit, members, i + 1, st))
             .exhaustive(),
         ),
     )
@@ -675,7 +672,7 @@ const unifyConcreteAgainstUnionFrom: _Curry<
     .with({ _tag: "Some" }, ({ value: m }) =>
       match(unify(member, m, st))
         .with({ _tag: "Ok" }, ({ value: st1 }) => Ok(st1) as Result<St, TypeErr>)
-        .with({ _tag: "Err" }, () => unifyConcreteAgainstUnionFrom(member, members, add(i, 1), st))
+        .with({ _tag: "Err" }, () => unifyConcreteAgainstUnionFrom(member, members, i + 1, st))
         .exhaustive(),
     )
     .exhaustive(),
@@ -690,7 +687,7 @@ const unifyUnionMembersFrom: _Curry<
       match(u)
         .with({ _tag: "TyOneOf" }, ({ members: ums }) =>
           _Result_flatMap(
-            (s1: St) => unifyUnionMembersFrom(members, u, add(i, 1), s1),
+            (s1: St) => unifyUnionMembersFrom(members, u, i + 1, s1),
             unifyMemberAgainstUnionFrom(m, ums, 0, st),
           ),
         )
@@ -823,33 +820,34 @@ const bindVar: _Curry<[id: number, t: Ty, st: St], Result<St, TypeErr>> = _curry
 );
 /**
  * Bring `label` to the head of a row, extending an open tail if needed.
- * Returns the field's type, the row remaining after removing it, and the
- * (possibly grown) state.
+ * Returns the field's type, optionality, the remaining row, and state.
  */
 const rewriteRow: _Curry<
   [row: Row, label: string, st: St],
-  Result<[Ty, Row, St], TypeErr>
+  Result<[Ty, boolean, Row, St], TypeErr>
 > = _curry(3, (row: Row, label: string, st: St) =>
   match(resolveRow(row, st))
     .with({ _tag: "RowEmpty" }, () => fail(`record missing field '${label}'`))
-    .with({ _tag: "RowExtend" }, ({ label: rlabel, fieldType: rtype, rest: rrest }) =>
-      eq(rlabel, label)
-        ? (Ok(_tuple(rtype, rrest, st)) as Result<[Ty, Row, St], TypeErr>)
-        : _Result_map(
-            ([subType, subRest, subSt]: [Ty, Row, St]) =>
-              _tuple(subType, rExtend(rlabel, rtype, subRest), subSt),
-            rewriteRow(rrest, label, st),
-          ),
+    .with(
+      { _tag: "RowExtend" },
+      ({ label: rlabel, fieldType: rtype, optional: ropt, rest: rrest }) =>
+        eq(rlabel, label)
+          ? (Ok(_tuple(rtype, ropt, rrest, st)) as Result<[Ty, boolean, Row, St], TypeErr>)
+          : _Result_map(
+              ([subType, subOpt, subRest, subSt]: [Ty, boolean, Row, St]) =>
+                _tuple(subType, subOpt, rField(rlabel, rtype, subRest, ropt), subSt),
+              rewriteRow(rrest, label, st),
+            ),
     )
     .with({ _tag: "RowVar" }, ({ id: rid }) =>
       (([freshT, st1]: [Ty, St]) =>
         (([freshTail, st2]: [Row, St]) =>
           Ok(
-            _tuple(freshT, freshTail, {
+            _tuple(freshT, false, freshTail, {
               ...st2,
               rv: _Map_set(rid, rExtend(label, freshT, freshTail), st2.rv),
             }),
-          ) as Result<[Ty, Row, St], TypeErr>)(freshRowVar(st1)))(freshVar(st)),
+          ) as Result<[Ty, boolean, Row, St], TypeErr>)(freshRowVar(st1)))(freshVar(st)),
     )
     .exhaustive(),
 );
@@ -870,18 +868,29 @@ export const unifyRows: _Curry<[r1: Row, r2: Row, st: St], Result<St, TypeErr>> 
           .exhaustive(),
       )
       .with({ _tag: "RowVar" }, ({ id: aid }) => bindRowVar(aid, b, st))
-      .with({ _tag: "RowExtend" }, ({ label: alabel, fieldType: atype, rest: arest }) =>
-        match(b)
-          .with({ _tag: "RowEmpty" }, () => fail(`record has extra field '${alabel}'`))
-          .with({ _tag: "RowVar" }, ({ id: bid }) => bindRowVar(bid, a, st))
-          .with({ _tag: "RowExtend" }, () =>
-            _Result_flatMap(
-              ([btype, brest, s1]: [Ty, Row, St]) =>
-                _Result_flatMap((s2: St) => unifyRows(arest, brest, s2), unify(atype, btype, s1)),
-              rewriteRow(b, alabel, st),
-            ),
-          )
-          .exhaustive(),
+      .with(
+        { _tag: "RowExtend" },
+        ({ label: alabel, fieldType: atype, optional: aopt, rest: arest }) =>
+          match(b)
+            .with({ _tag: "RowEmpty" }, () => fail(`record has extra field '${alabel}'`))
+            .with({ _tag: "RowVar" }, ({ id: bid }) => bindRowVar(bid, a, st))
+            .with({ _tag: "RowExtend" }, () =>
+              _Result_flatMap(
+                ([btype, bopt, brest, s1]: [Ty, boolean, Row, St]) =>
+                  eq(aopt, bopt)
+                    ? _Result_flatMap(
+                        (s2: St) => unifyRows(arest, brest, s2),
+                        unify(atype, btype, s1),
+                      )
+                    : fail(
+                        aopt
+                          ? `record field '${alabel}' is optional but required on the other side`
+                          : `record field '${alabel}' is required but optional on the other side`,
+                      ),
+                rewriteRow(b, alabel, st),
+              ),
+            )
+            .exhaustive(),
       )
       .exhaustive();
   },
@@ -895,11 +904,71 @@ const bindRowVar: _Curry<[id: number, row: Row, st: St], Result<St, TypeErr>> = 
           const _g: any = _v;
           return _g._tag === "RowVar" && (({ id: rid }) => eq(rid, id))(_g);
         },
-        ({ id: rid }) => Ok(st) as Result<St, { message: string }>,
+        ({ id: rid }) => Ok(st) as Result<St, TypeErr>,
       )
       .otherwise((r) =>
         rowVarOccurs(id, r, st)
           ? fail("infinite record type")
-          : (Ok({ ...st, rv: _Map_set(id, r, st.rv) }) as Result<St, { message: string }>),
+          : (Ok({ ...st, rv: _Map_set(id, r, st.rv) }) as Result<St, TypeErr>),
       ),
+);
+/**
+ * Directional record check: `actual` may be used where `expected` is required
+ * (ADR 0098). Missing optional expected fields are allowed; a required actual
+ * field satisfies an optional expected one; the reverse is not.
+ */
+export const fits: _Curry<[actual: Ty, expected: Ty, st: St], Result<St, TypeErr>> = _curry(
+  3,
+  (actual: Ty, expected: Ty, st: St) => {
+    const ra: Ty = resolve(actual, st);
+    const rb: Ty = resolve(expected, st);
+    return match(ra)
+      .with({ _tag: "TyVar" }, ({ id: aid }) => bindVar(aid, rb, st))
+      .otherwise(() =>
+        match(rb)
+          .with({ _tag: "TyVar" }, ({ id: bid }) => bindVar(bid, ra, st))
+          .with({ _tag: "TyRecord" }, ({ row: erow }) =>
+            match(ra)
+              .with({ _tag: "TyRecord" }, ({ row: arow }) => fitsRows(arow, erow, st))
+              .otherwise(() => unify(actual, expected, st)),
+          )
+          .otherwise(() => unify(actual, expected, st)),
+      );
+  },
+);
+const fitsRows: _Curry<[actual: Row, expected: Row, st: St], Result<St, TypeErr>> = _curry(
+  3,
+  (actual: Row, expected: Row, st: St) => {
+    const exp: Row = resolveRow(expected, st);
+    const act: Row = resolveRow(actual, st);
+    return match(exp)
+      .with({ _tag: "RowVar" }, ({ id: eid }) => bindRowVar(eid, act, st))
+      .with({ _tag: "RowEmpty" }, () =>
+        match(act)
+          .with({ _tag: "RowEmpty" }, () => Ok(st) as Result<St, TypeErr>)
+          .with({ _tag: "RowVar" }, ({ id: aid }) => bindRowVar(aid, exp, st))
+          .with({ _tag: "RowExtend" }, ({ label }) => fail(`record has extra field '${label}'`))
+          .exhaustive(),
+      )
+      .with(
+        { _tag: "RowExtend" },
+        ({ label: elabel, fieldType: etype, optional: eopt, rest: erest }) =>
+          ((rw: Result<[Ty, boolean, Row, St], TypeErr>) =>
+            match(rw)
+              .with({ _tag: "Err" }, () =>
+                eopt ? fitsRows(act, erest, st) : fail(`record missing field '${elabel}'`),
+              )
+              .with({ _tag: "Ok" }, ({ value: hit }) =>
+                (([htype, hopt, hrest, s1]: [Ty, boolean, Row, St]) =>
+                  and(hopt, not(eopt))
+                    ? fail(`record field '${elabel}' is required but missing or optional`)
+                    : _Result_flatMap(
+                        (s2: St) => fitsRows(hrest, erest, s2),
+                        unify(htype, etype, s1),
+                      ))(hit),
+              )
+              .exhaustive())(rewriteRow(act, elabel, st)),
+      )
+      .exhaustive();
+  },
 );

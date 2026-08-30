@@ -14,27 +14,25 @@ export type AliasInfo = { params: string[]; fields: AliasField[]; expr: Option<T
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
-  _curry,
-  Some,
   None,
-  eq,
-  gte,
-  lte,
-  and,
-  map,
-  _Set_has,
-  _Set_add,
-  _Set_toArray,
-  _Set_fromArray,
-  _Set_diff,
+  Some,
+  _Array_contains,
+  _Array_prepend,
+  _Map_get,
   _Map_getOr,
   _Map_set,
   _Map_values,
-  _Map_get,
-  _Array_prepend,
-  _Array_contains,
+  _Set_add,
+  _Set_diff,
+  _Set_fromArray,
+  _Set_has,
+  _Set_toArray,
   _Str_codeAt,
+  _curry,
   _tuple,
+  and,
+  eq,
+  map,
 } from "@mochi/compiler/runtime";
 
 import { match } from "@onrails/pattern";
@@ -57,7 +55,7 @@ import {
   tTuple,
   tLit,
   tUnion,
-  rExtend,
+  rField,
   freshVar,
   freshRowVar,
   zonk,
@@ -224,17 +222,11 @@ const freeInEnvFrom: <A>(
   <A>(schemes: ({ ty: Ty; rvars: number[]; vars: number[] } & A)[], st: St, acc: VarSets) =>
     match(schemes)
       .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
+        (_v) => _v.length === 0,
         () => acc,
       )
       .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
+        (_v) => _v.length >= 1,
         ([sc, ...rest]) => freeInEnvFrom(rest, st, freeInScheme(sc, st, acc)),
       )
       .otherwise(() => {
@@ -296,8 +288,8 @@ const widenRow: (row: Row) => Row = (row: Row) =>
   match(row)
     .with({ _tag: "RowEmpty" }, () => row)
     .with({ _tag: "RowVar" }, () => row)
-    .with({ _tag: "RowExtend" }, ({ label, fieldType, rest }) =>
-      rExtend(label, widenLits(fieldType), widenRow(rest)),
+    .with({ _tag: "RowExtend" }, ({ label, fieldType, optional, rest }) =>
+      rField(label, widenLits(fieldType), widenRow(rest), optional),
     )
     .exhaustive();
 const instMapFrom: <A>(vars: A[], acc: Map<A, Ty>, st: St) => [Map<A, Ty>, St] = _curry(
@@ -362,8 +354,8 @@ const instSubRow: _Curry<[row: Row, tmap: Map<number, Ty>, rmap: Map<number, Row
   (row: Row, tmap: Map<number, Ty>, rmap: Map<number, Row>) =>
     match(row)
       .with({ _tag: "RowVar" }, ({ id }) => _Map_getOr(row, id, rmap))
-      .with({ _tag: "RowExtend" }, ({ label, fieldType, rest }) =>
-        rExtend(label, instSub(fieldType, tmap, rmap), instSubRow(rest, tmap, rmap)),
+      .with({ _tag: "RowExtend" }, ({ label, fieldType, optional, rest }) =>
+        rField(label, instSub(fieldType, tmap, rmap), instSubRow(rest, tmap, rmap), optional),
       )
       .with({ _tag: "RowEmpty" }, () => row)
       .exhaustive(),
@@ -379,7 +371,7 @@ export const instantiate: <A>(
 );
 export const isUpperStart: (s: string) => boolean = (s: string) =>
   match(_Str_codeAt(0, s))
-    .with({ _tag: "Some" }, ({ value: c }) => and(gte(c, 65), lte(c, 90)))
+    .with({ _tag: "Some" }, ({ value: c }) => and(c >= 65, c <= 90))
     .with({ _tag: "None" }, () => false)
     .exhaustive();
 
@@ -615,7 +607,8 @@ const aliasFieldsFrom: _Curry<
         },
         ([fld, ...rest]) =>
           (([ft, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
-            (([restRow, st2]: [Row, St]) => _tuple(rExtend(fld.name, ft, restRow), st2))(
+            (([restRow, st2]: [Row, St]) =>
+              _tuple(rField(fld.name, ft, restRow, fld.optional), st2))(
               aliasFieldsFrom(rest, vars1, st1, aliases, expanding),
             ))(typeExprToType(fld.fieldType, vars, st, aliases, expanding)),
       )

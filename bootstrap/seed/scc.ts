@@ -10,27 +10,26 @@ export type TSt = {
 import type { _Curry } from "@mochi/compiler/runtime";
 
 import {
-  _curry,
-  _recur,
-  _done,
-  Some,
   None,
+  Some,
+  _Array_append,
+  _Array_drop,
+  _Array_get,
+  _Array_take,
+  _Map_getOr,
+  _Map_has,
+  _Map_set,
+  _Set_add,
+  _Set_diff,
+  _Set_fromArray,
+  _Set_has,
+  _curry,
+  _done,
+  _recur,
   add,
   eq,
-  gte,
-  min,
   length,
-  _Set_has,
-  _Set_add,
-  _Set_fromArray,
-  _Set_diff,
-  _Map_has,
-  _Map_getOr,
-  _Map_set,
-  _Array_get,
-  _Array_append,
-  _Array_take,
-  _Array_drop,
+  min,
 } from "@mochi/compiler/runtime";
 
 import { match } from "@onrails/pattern";
@@ -60,7 +59,7 @@ const indexOfFrom: <A>(v: A, xs: A[], i: number) => number = _curry(
     while (true) {
       const _step = match(_Array_get(j, xs))
         .with({ _tag: "None" }, () => _done(-1))
-        .with({ _tag: "Some" }, ({ value: x }) => (eq(x, v) ? _done(j) : _recur(add(j, 1))))
+        .with({ _tag: "Some" }, ({ value: x }) => (eq(x, v) ? _done(j) : _recur(j + 1)))
         .exhaustive();
       if (_step._tag === "recur") {
         j = _step.args[0];
@@ -123,7 +122,7 @@ const connect: _Curry<[v: number, adj: number[][], st: TSt], TSt> = _curry(
       low: _Map_set(v, st.counter, st.low),
       onStack: _Set_add(v, st.onStack),
       stack: _Array_append(v, st.stack),
-      counter: add(st.counter, 1),
+      counter: st.counter + 1,
     };
     const st2: TSt = visitNeighbors(v, neighborsOf(v, adj), adj, st1);
     return eq(lowOfV(v, st2), indexOfV(v, st2))
@@ -143,10 +142,10 @@ const connectAllFrom: _Curry<[i: number, n: number, adj: number[][], st: TSt], T
     let j: number = i;
     let current: TSt = st;
     while (true) {
-      if (gte(j, n)) {
+      if (j >= n) {
         return current;
       } else {
-        [j, current] = [add(j, 1), hasIndex(j, current) ? current : connect(j, adj, current)];
+        [j, current] = [j + 1, hasIndex(j, current) ? current : connect(j, adj, current)];
         continue;
       }
     }

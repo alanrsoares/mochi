@@ -3,7 +3,14 @@ export type Name = { name: string; span: Span };
 export type LamParam =
   | { _tag: "LPName"; name: string; annot: Option<TypeExpr> }
   | { _tag: "LPRecord"; fields: string[] }
-  | { _tag: "LPTuple"; names: string[] };
+  | { _tag: "LPTuple"; names: string[] }
+  | {
+      _tag: "LPLabeled";
+      name: string;
+      annot: Option<TypeExpr>;
+      optional: boolean;
+      defaultValue: Option<Expr>;
+    };
 export type Field = { name: string; value: Expr };
 export type MapEntry = { key: Expr; value: Expr };
 export type MatchArm = { pattern: Pattern; guard: Option<Expr>; body: Expr };
@@ -36,7 +43,7 @@ export type Expr =
   | { _tag: "ETernary"; cond: Expr; thenE: Expr; elseE: Expr; span: Span }
   | { _tag: "EMatch"; scrutinee: Expr; arms: MatchArm[]; span: Span }
   | { _tag: "ERecord"; fields: Field[]; spread: Option<Expr>; span: Span }
-  | { _tag: "EField"; target: Expr; name: string; span: Span }
+  | { _tag: "EField"; target: Expr; name: string; optional: boolean; span: Span }
   | { _tag: "ETuple"; elements: Expr[]; span: Span }
   | { _tag: "EArr"; elements: SeqElem[]; span: Span }
   | { _tag: "EList"; elements: SeqElem[]; span: Span }
@@ -71,7 +78,7 @@ export type TypeExpr =
   | { _tag: "TyUnion"; members: TypeExpr[]; span: Span };
 export type CtorField = { name: Option<string>; fieldType: TypeExpr };
 export type Ctor = { name: string; fields: CtorField[] };
-export type AliasField = { name: string; fieldType: TypeExpr };
+export type AliasField = { name: string; fieldType: TypeExpr; optional: boolean };
 export type Stmt =
   | {
       _tag: "SLet";
@@ -122,6 +129,18 @@ export const LPName = _curry(2, (name, annot) => ({ _tag: "LPName", name, annot 
 ) => LamParam;
 export const LPRecord = (fields: string[]): LamParam => ({ _tag: "LPRecord", fields });
 export const LPTuple = (names: string[]): LamParam => ({ _tag: "LPTuple", names });
+export const LPLabeled = _curry(4, (name, annot, optional, defaultValue) => ({
+  _tag: "LPLabeled",
+  name,
+  annot,
+  optional,
+  defaultValue,
+})) as (
+  name: string,
+  annot: Option<TypeExpr>,
+  optional: boolean,
+  defaultValue: Option<Expr>,
+) => LamParam;
 
 export const SEExpr = (expr: Expr): SeqElem => ({ _tag: "SEExpr", expr });
 export const SESpread = (expr: Expr): SeqElem => ({ _tag: "SESpread", expr });
@@ -208,12 +227,13 @@ export const ERecord = _curry(3, (fields, spread, span) => ({
   spread,
   span,
 })) as (fields: Field[], spread: Option<Expr>, span: Span) => Expr;
-export const EField = _curry(3, (target, name, span) => ({
+export const EField = _curry(4, (target, name, optional, span) => ({
   _tag: "EField",
   target,
   name,
+  optional,
   span,
-})) as (target: Expr, name: string, span: Span) => Expr;
+})) as (target: Expr, name: string, optional: boolean, span: Span) => Expr;
 export const ETuple = _curry(2, (elements, span) => ({ _tag: "ETuple", elements, span })) as (
   elements: Expr[],
   span: Span,

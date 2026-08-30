@@ -1,6 +1,6 @@
 import type { Tok } from "../lexer";
-import type { Expr, Field, Name, SeqElem, Span } from "../ast";
-import type { Row, St, Ty } from "../types";
+import type { Expr, Field, Name, SeqElem } from "../ast";
+import type { Row, SpanAt, St, Ty } from "../types";
 import type { Ctx } from "../infer";
 
 export type LocTok = { tok: Tok; start: number; end: number; doc: Option<string> };
@@ -8,35 +8,31 @@ export type LocTok = { tok: Tok; start: number; end: number; doc: Option<string>
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
-  _curry,
-  Some,
+  Err,
   None,
   Ok,
-  Err,
-  add,
-  sub,
-  eq,
-  lt,
-  gte,
-  lte,
-  and,
-  or,
-  length,
-  map,
-  _Map_get,
-  _Option_flatMap,
-  _Option_exists,
-  _Option_unwrapOr,
-  _Result_map,
-  _Result_flatMap,
-  _Array_get,
+  Some,
   _Array_append,
+  _Array_get,
+  _Map_get,
+  _Option_exists,
+  _Option_flatMap,
+  _Option_unwrapOr,
+  _Result_flatMap,
+  _Result_map,
+  _Str_codeAt,
   _Str_length,
+  _Str_slice,
   _Str_split,
   _Str_startsWith,
-  _Str_slice,
-  _Str_codeAt,
+  _curry,
   _tuple,
+  and,
+  eq,
+  length,
+  lt,
+  map,
+  or,
 } from "@mochi/compiler/runtime";
 
 import { match } from "@onrails/pattern";
@@ -118,7 +114,7 @@ const jxToEnd: <A, B, C>(
     start: { start: A } & C,
     toks: { tok: Tok; start: number; end: number; doc: Option<B> }[],
     pos: number,
-  ) => ({ start: start.start, end: jxTokAt(toks, sub(pos, 1)).end }),
+  ) => ({ start: start.start, end: jxTokAt(toks, pos - 1).end }),
 );
 const jxErrAt: <A, B, C, D, E>(
   message: A,
@@ -137,7 +133,7 @@ const jxExpectTok: <A>(
   <A>(t: Tok, toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number) => {
     const lt = jxTokAt(toks, pos);
     return eq(lt.tok, t)
-      ? (Ok(add(pos, 1)) as Result<number, { message: string; start: number; end: number }>)
+      ? (Ok(pos + 1) as Result<number, { message: string; start: number; end: number }>)
       : jxErrAt(`expected ${jxTokName(t)}, got ${jxTokName(lt.tok)}`, lt);
   },
 );
@@ -152,7 +148,7 @@ const jxExpectId: <A>(
       .with(
         { _tag: "TId" },
         ({ value: name }) =>
-          Ok(_tuple({ name: name, span: jxSpanOf(lt) }, add(pos, 1))) as Result<
+          Ok(_tuple({ name: name, span: jxSpanOf(lt) }, pos + 1)) as Result<
             [Name, number],
             { message: string; start: number; end: number }
           >,
@@ -193,7 +189,7 @@ const jxExpectLabel: <A>(
       .with(
         { _tag: "Some" },
         ({ value: name }) =>
-          Ok(_tuple({ name: name, span: jxSpanOf(lt) }, add(pos, 1))) as Result<
+          Ok(_tuple({ name: name, span: jxSpanOf(lt) }, pos + 1)) as Result<
             [Name, number],
             { message: string; start: number; end: number }
           >,
@@ -220,12 +216,12 @@ const jxAttrNameFrom: <A, B>(
     acc: { span: { end: number; start: B }; name: string },
   ) => {
     const minusTok = jxTokAt(toks, pos);
-    const partTok = jxTokAt(toks, add(pos, 1));
+    const partTok = jxTokAt(toks, pos + 1);
     return and(
       and(eq(minusTok.tok, TMinus as Tok), eq(minusTok.start, acc.span.end)),
       eq(partTok.start, minusTok.end),
     )
-      ? match(jxExpectLabel(toks, add(pos, 1)))
+      ? match(jxExpectLabel(toks, pos + 1))
           .with(
             (
               _v,
@@ -253,17 +249,18 @@ const jxAttrNameFrom: <A, B>(
 const jxExpectAttrName: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   pos: number,
-) => Result<[Name, number], { message: string; start: number; end: number }> = _curry(
-  2,
-  <A>(toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number) =>
-    _Result_map(
-      ([head, p1]: [Name, number]) => jxAttrNameFrom(toks, p1, head),
-      jxExpectLabel(toks, pos),
-    ),
+) => Result<
+  [{ span: SpanAt; name: string }, number],
+  { message: string; start: number; end: number }
+> = _curry(2, <A>(toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number) =>
+  _Result_map(
+    ([head, p1]: [{ span: SpanAt; name: string }, number]) => jxAttrNameFrom(toks, p1, head),
+    jxExpectLabel(toks, pos),
+  ),
 );
 const jxIsUpper: (s: string) => boolean = (s: string) =>
-  _Option_exists((n: number) => and(gte(n, 65), lte(n, 90)), _Str_codeAt(0, s));
-const jxExprSpan: (e: Expr) => Span = (e: Expr) =>
+  _Option_exists((n: number) => and(n >= 65, n <= 90), _Str_codeAt(0, s));
+const jxExprSpan: (e: Expr) => SpanAt = (e: Expr) =>
   match(e)
     .with({ _tag: "ENum" }, ({ span: sp }) => sp)
     .with({ _tag: "EUnit" }, ({ span: sp }) => sp)
@@ -308,7 +305,7 @@ const makeJsxCall: <A, B>(
     toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
     endPos: number,
   ) => {
-    const fullSpan: Span = jxToEnd(jxSpanOf(startTok), toks, endPos);
+    const fullSpan: SpanAt = jxToEnd(jxSpanOf(startTok), toks, endPos);
     const pragmaRef: Expr = Ast.ERef("h", jxSpanOf(startTok));
     const propsRecord: Expr = Ast.ERecord(fields, spreadOpt, fullSpan);
     const childrenArr: Expr = Ast.EArr(children, fullSpan);
@@ -343,7 +340,7 @@ const parseJsxAttributes: <A>(
       ) => Result<[Expr, number], { message: string; start: number; end: number }>,
     ) => {
       const tk: Tok = jxTokAt(toks, pos).tok;
-      const nxt: Tok = jxTokAt(toks, add(pos, 1)).tok;
+      const nxt: Tok = jxTokAt(toks, pos + 1).tok;
       return or(eq(tk, TGt as Tok), and(eq(tk, TSlash as Tok), eq(nxt, TGt as Tok)))
         ? (Ok(_tuple(fieldsAcc, spreadAcc, pos)) as Result<
             [Field[], Option<Expr>, number],
@@ -367,7 +364,7 @@ const parseJsxAttributes: <A>(
                     ),
                   parseExpr(toks, p1),
                 ),
-              jxExpectTok(TSpread as Tok, toks, add(pos, 1)),
+              jxExpectTok(TSpread as Tok, toks, pos + 1),
             )
           : _Result_flatMap(
               ([attrId, p1]) =>
@@ -385,10 +382,10 @@ const parseJsxAttributes: <A>(
                     ? ((pEq: number) =>
                         match(jxTokAt(toks, pEq).tok)
                           .with({ _tag: "TStr" }, ({ value: v }) =>
-                            _tuple(Ast.EStr(v, jxSpanOf(jxTokAt(toks, pEq))), add(pEq, 1)),
+                            _tuple(Ast.EStr(v, jxSpanOf(jxTokAt(toks, pEq))), pEq + 1),
                           )
                           .with({ _tag: "TLbrace" }, () =>
-                            match(parseExpr(toks, add(pEq, 1)))
+                            match(parseExpr(toks, pEq + 1))
                               .with(
                                 (
                                   _v,
@@ -402,14 +399,14 @@ const parseJsxAttributes: <A>(
                                   const _g: any = _v;
                                   return _g._tag === "Ok";
                                 },
-                                ({ value: [e, pR] }) => _tuple(e, add(pR, 1)),
+                                ({ value: [e, pR] }) => _tuple(e, pR + 1),
                               )
                               .with({ _tag: "Err" }, () =>
                                 _tuple(Ast.EBool(true, attrId.span), pEq),
                               )
                               .exhaustive(),
                           )
-                          .otherwise(() => _tuple(Ast.EBool(true, attrId.span), pEq)))(add(p1, 1))
+                          .otherwise(() => _tuple(Ast.EBool(true, attrId.span), pEq)))(p1 + 1)
                     : _tuple(Ast.EBool(true, attrId.span), p1),
                 ),
               jxExpectAttrName(toks, pos),
@@ -438,7 +435,7 @@ const parseJsxChildren: <A>(
     ) => Result<[Expr, number], { message: string; start: number; end: number }>,
   ) => {
     const lt = jxTokAt(toks, pos);
-    const nxt = jxTokAt(toks, add(pos, 1));
+    const nxt = jxTokAt(toks, pos + 1);
     return eq(lt.tok, TEof as Tok)
       ? jxErrAt(eq(expectedTag, "") ? "unclosed JSX fragment" : "unclosed JSX tag", lt)
       : and(eq(lt.tok, TLt as Tok), eq(nxt.tok, TSlash as Tok))
@@ -449,7 +446,7 @@ const parseJsxChildren: <A>(
                   [SeqElem[], number],
                   { message: string; start: number; end: number }
                 >,
-              jxExpectTok(TGt as Tok, toks, add(pos, 2)),
+              jxExpectTok(TGt as Tok, toks, pos + 2),
             )
           : _Result_flatMap(
               ([closingId, p1]) =>
@@ -463,7 +460,7 @@ const parseJsxChildren: <A>(
                       : jxErrAt("mismatched JSX closing tag", lt),
                   jxExpectTok(TGt as Tok, toks, p1),
                 ),
-              jxExpectId(toks, add(pos, 2)),
+              jxExpectId(toks, pos + 2),
             )
         : eq(lt.tok, TLt as Tok)
           ? _Result_flatMap(
@@ -492,7 +489,7 @@ const parseJsxChildren: <A>(
                         ),
                       jxExpectTok(TRbrace as Tok, toks, p1),
                     ),
-                  parseExpr(toks, add(pos, 2)),
+                  parseExpr(toks, pos + 2),
                 )
               : _Result_flatMap(
                   ([childExpr, p1]: [Expr, number]) =>
@@ -507,14 +504,14 @@ const parseJsxChildren: <A>(
                         ),
                       jxExpectTok(TRbrace as Tok, toks, p1),
                     ),
-                  parseExpr(toks, add(pos, 1)),
+                  parseExpr(toks, pos + 1),
                 )
             : match(lt.tok)
                 .with({ _tag: "TStr" }, ({ value: v }) =>
                   parseJsxChildren(
                     expectedTag,
                     toks,
-                    add(pos, 1),
+                    pos + 1,
                     _Array_append(Ast.SEExpr(Ast.EStr(v, jxSpanOf(lt))), acc),
                     parseExpr,
                   ),
@@ -523,7 +520,7 @@ const parseJsxChildren: <A>(
                   parseJsxChildren(
                     expectedTag,
                     toks,
-                    add(pos, 1),
+                    pos + 1,
                     _Array_append(Ast.SEExpr(Ast.ENum(v, raw, jxSpanOf(lt))), acc),
                     parseExpr,
                   ),
@@ -532,7 +529,7 @@ const parseJsxChildren: <A>(
                   parseJsxChildren(
                     expectedTag,
                     toks,
-                    add(pos, 1),
+                    pos + 1,
                     _Array_append(Ast.SEExpr(Ast.EBool(v, jxSpanOf(lt))), acc),
                     parseExpr,
                   ),
@@ -541,7 +538,7 @@ const parseJsxChildren: <A>(
                   parseJsxChildren(
                     expectedTag,
                     toks,
-                    add(pos, 1),
+                    pos + 1,
                     _Array_append(Ast.SEExpr(Ast.EStr(v, jxSpanOf(lt))), acc),
                     parseExpr,
                   ),
@@ -567,7 +564,7 @@ const parseJsx: <A>(
     ) => Result<[Expr, number], { message: string; start: number; end: number }>,
   ) => {
     const startTok = jxTokAt(toks, pos);
-    const nxt = jxTokAt(toks, add(pos, 1));
+    const nxt = jxTokAt(toks, pos + 1);
     return eq(nxt.tok, TGt as Tok)
       ? _Result_flatMap(
           ([children, p1]: [SeqElem[], number]) =>
@@ -585,7 +582,7 @@ const parseJsx: <A>(
                 p1,
               ),
             ) as Result<[Expr, number], { message: string; start: number; end: number }>,
-          parseJsxChildren("", toks, add(pos, 2), [] as SeqElem[], parseExpr),
+          parseJsxChildren("", toks, pos + 2, [] as SeqElem[], parseExpr),
         )
       : _Result_flatMap(
           ([firstId, p1]) =>
@@ -636,7 +633,7 @@ const parseJsx: <A>(
                               parseJsxChildren(tagNameStr, toks, p3, [] as SeqElem[], parseExpr),
                             ),
                       isSelfClosing
-                        ? jxExpectTok(TGt as Tok, toks, add(p2, 1))
+                        ? jxExpectTok(TGt as Tok, toks, p2 + 1)
                         : jxExpectTok(TGt as Tok, toks, p2),
                     );
                   },
@@ -646,7 +643,7 @@ const parseJsx: <A>(
                 ? Ast.ERef(firstId.name, firstId.span)
                 : Ast.EStr(firstId.name, firstId.span),
             ),
-          jxExpectId(toks, add(pos, 1)),
+          jxExpectId(toks, pos + 1),
         );
   },
 );
@@ -859,7 +856,7 @@ const inferIntrinsicFields: <A, B, C, D, E>(
   fields: ({ name: string; value: Expr } & D)[],
   st: A,
   api: {
-    unify: (a: B, b: Ty, c: A, d: Span) => Result<A, C>;
+    unify: (a: B, b: Ty, c: A, d: SpanAt) => Result<A, C>;
     inferExpr: (a: Expr, b: A) => Result<[B, A], C>;
   } & E,
 ) => Result<A, C> = _curry(
@@ -869,23 +866,17 @@ const inferIntrinsicFields: <A, B, C, D, E>(
     fields: ({ name: string; value: Expr } & D)[],
     st: A,
     api: {
-      unify: (a: B, b: Ty, c: A, d: Span) => Result<A, C>;
+      unify: (a: B, b: Ty, c: A, d: SpanAt) => Result<A, C>;
       inferExpr: (a: Expr, b: A) => Result<[B, A], C>;
     } & E,
   ) =>
     match(fields)
       .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
+        (_v) => _v.length === 0,
         () => Ok(st),
       )
       .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
+        (_v) => _v.length >= 1,
         ([f, ...rest]) =>
           match(intrinsicAttrType(tag, f.name))
             .with({ _tag: "Some" }, ({ value: expectedT }) =>
@@ -916,7 +907,7 @@ const inferJsxCall: <A, B>(
   restArgs: Expr[],
   st: St,
   api: {
-    unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, A>;
+    unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, A>;
     inferExpr: (a: Expr, b: St) => Result<[Ty, St], A>;
   } & B,
 ) => Result<[Ty, St], A> = _curry(
@@ -927,7 +918,7 @@ const inferJsxCall: <A, B>(
     restArgs: Expr[],
     st: St,
     api: {
-      unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, A>;
+      unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, A>;
       inferExpr: (a: Expr, b: St) => Result<[Ty, St], A>;
     } & B,
   ) =>
@@ -985,7 +976,7 @@ export const inferJsxCallHook: <A, B, C>(
   origin: Option<string>,
   st: St,
   api: {
-    unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, B>;
+    unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, B>;
     inferExpr: (a: Expr, b: St) => Result<[Ty, St], B>;
   } & C,
 ) => Result<Option<[Ty, St]>, B> = _curry(
@@ -996,7 +987,7 @@ export const inferJsxCallHook: <A, B, C>(
     origin: Option<string>,
     st: St,
     api: {
-      unify: (a: Ty, b: Ty, c: St, d: Span) => Result<St, B>;
+      unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, B>;
       inferExpr: (a: Expr, b: St) => Result<[Ty, St], B>;
     } & C,
   ) =>

@@ -3,7 +3,7 @@ import type { PErr } from "./parser";
 
 import type { Result, _Curry } from "@mochi/compiler/runtime";
 
-import { _curry, Ok, _Result_flatMap } from "@mochi/compiler/runtime";
+import { Ok, _Result_flatMap, _curry } from "@mochi/compiler/runtime";
 
 import { lex } from "./lexer";
 import { parse } from "./parser";

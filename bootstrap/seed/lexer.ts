@@ -33,6 +33,7 @@ export type Tok =
   | { _tag: "TPercent" }
   | { _tag: "TAt" }
   | { _tag: "THash" }
+  | { _tag: "TTilde" }
   | { _tag: "TDot" }
   | { _tag: "TColon" }
   | { _tag: "TQuestion" }
@@ -65,37 +66,32 @@ export type TPart = { _tag: "PLit"; value: string } | { _tag: "PHole"; start: nu
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
-  _curry,
-  _recur,
-  _done,
-  Some,
+  Err,
   None,
   Ok,
-  Err,
-  add,
-  sub,
-  div,
-  eq,
-  lt,
-  gte,
-  lte,
-  not,
-  and,
-  or,
-  length,
-  _Option_exists,
-  _Option_contains,
-  _Option_unwrapOr,
-  _Array_head,
+  Some,
   _Array_append,
+  _Array_head,
   _Array_tail,
-  _Str_length,
-  _Str_join,
-  _Str_slice,
-  _Str_get,
+  _Option_contains,
+  _Option_exists,
+  _Option_unwrapOr,
   _Str_codeAt,
   _Str_fromCode,
+  _Str_get,
+  _Str_join,
+  _Str_length,
+  _Str_slice,
   _Str_toNumber,
+  _curry,
+  _done,
+  _recur,
+  and,
+  eq,
+  length,
+  lt,
+  not,
+  or,
 } from "@mochi/compiler/runtime";
 
 import { match } from "@onrails/pattern";
@@ -130,6 +126,7 @@ export const TSlash: Tok = { _tag: "TSlash" };
 export const TPercent: Tok = { _tag: "TPercent" };
 export const TAt: Tok = { _tag: "TAt" };
 export const THash: Tok = { _tag: "THash" };
+export const TTilde: Tok = { _tag: "TTilde" };
 export const TDot: Tok = { _tag: "TDot" };
 export const TColon: Tok = { _tag: "TColon" };
 export const TQuestion: Tok = { _tag: "TQuestion" };
@@ -167,7 +164,7 @@ const isSpace: (c: string) => boolean = (c: string) =>
   or(eq(c, " "), or(eq(c, "\t"), or(eq(c, "\n"), eq(c, cr))));
 const inRange: _Curry<[lo: number, hi: number, n: number], boolean> = _curry(
   3,
-  (lo: number, hi: number, n: number) => and(gte(n, lo), lte(n, hi)),
+  (lo: number, hi: number, n: number) => and(n >= lo, n <= hi),
 );
 const isDigit: (c: string) => boolean = (c: string) =>
   _Option_exists(inRange(48, 57), _Str_codeAt(0, c));
@@ -225,6 +222,7 @@ const punctTok: (c: string) => Option<Tok> = (c: string) =>
     .with("?", () => Some(TQuestion as Tok) as Option<Tok>)
     .with("@", () => Some(TAt as Tok) as Option<Tok>)
     .with("#", () => Some(THash as Tok) as Option<Tok>)
+    .with("~", () => Some(TTilde as Tok) as Option<Tok>)
     .with("+", () => Some(TPlus as Tok) as Option<Tok>)
     .with("-", () => Some(TMinus as Tok) as Option<Tok>)
     .with("*", () => Some(TStar as Tok) as Option<Tok>)
@@ -244,7 +242,7 @@ const scanWhile: _Curry<[pred: (a: string) => boolean, src: string, j: number], 
           const _g: any = _v;
           return _g._tag === "Some" && (({ value: c }) => pred(c))(_g);
         },
-        ({ value: c }) => scanWhile(pred, src, add(j, 1)),
+        ({ value: c }) => scanWhile(pred, src, j + 1),
       )
       .otherwise(() => j),
 );
@@ -265,29 +263,27 @@ const skipStrLoop: _Curry<[src: string, j0: number], Option<number>> = _curry(
     while (true) {
       const _step = match(_Str_get(j, src))
         .with({ _tag: "None" }, () => _done(None as Option<number>))
-        .with({ _tag: "Some", value: '"' }, () => _done(Some(add(j, 1)) as Option<number>))
+        .with({ _tag: "Some", value: '"' }, () => _done(Some(j + 1) as Option<number>))
         .with({ _tag: "Some", value: "\\" }, () =>
-          match(_Str_get(add(j, 1), src))
-            .with({ _tag: "Some" }, () => _recur(add(j, 2)))
-            .with({ _tag: "None" }, () => _recur(add(j, 1)))
+          match(_Str_get(j + 1, src))
+            .with({ _tag: "Some" }, () => _recur(j + 2))
+            .with({ _tag: "None" }, () => _recur(j + 1))
             .exhaustive(),
         )
         .with(
           (_v): _v is Extract<Option<string>, { _tag: "Some" }> => {
             const _g: any = _v;
             return (
-              _g._tag === "Some" &&
-              _g.value === "$" &&
-              _Option_contains("{", _Str_get(add(j, 1), src))
+              _g._tag === "Some" && _g.value === "$" && _Option_contains("{", _Str_get(j + 1, src))
             );
           },
           () =>
-            match(findHoleEnd(src, add(j, 2)))
+            match(findHoleEnd(src, j + 2))
               .with({ _tag: "Some" }, ({ value: hEnd }) => _recur(hEnd))
               .with({ _tag: "None" }, () => _done(None as Option<number>))
               .exhaustive(),
         )
-        .with({ _tag: "Some" }, () => _recur(add(j, 1)))
+        .with({ _tag: "Some" }, () => _recur(j + 1))
         .exhaustive();
       if (_step._tag === "recur") {
         j = _step.args[0];
@@ -299,7 +295,7 @@ const skipStrLoop: _Curry<[src: string, j0: number], Option<number>> = _curry(
 );
 const skipStringLiteral: _Curry<[src: string, i: number], Option<number>> = _curry(
   2,
-  (src: string, i: number) => skipStrLoop(src, add(i, 1)),
+  (src: string, i: number) => skipStrLoop(src, i + 1),
 );
 const skipLineCommentTo: _Curry<[src: string, j: number], number> = _curry(
   2,
@@ -307,7 +303,7 @@ const skipLineCommentTo: _Curry<[src: string, j: number], number> = _curry(
     match(_Str_get(j, src))
       .with({ _tag: "None" }, () => j)
       .with({ _tag: "Some", value: "\n" }, () => j)
-      .with({ _tag: "Some" }, () => skipLineCommentTo(src, add(j, 1)))
+      .with({ _tag: "Some" }, () => skipLineCommentTo(src, j + 1))
       .exhaustive(),
 );
 const findHoleLoop: _Curry<[src: string, j0: number, depth0: number], Option<number>> = _curry(
@@ -328,20 +324,16 @@ const findHoleLoop: _Curry<[src: string, j0: number, depth0: number], Option<num
           (_v): _v is Extract<Option<string>, { _tag: "Some" }> => {
             const _g: any = _v;
             return (
-              _g._tag === "Some" &&
-              _g.value === "/" &&
-              _Option_contains("/", _Str_get(add(j, 1), src))
+              _g._tag === "Some" && _g.value === "/" && _Option_contains("/", _Str_get(j + 1, src))
             );
           },
           () => _recur(skipLineCommentTo(src, j), depth),
         )
-        .with({ _tag: "Some", value: "{" }, () => _recur(add(j, 1), add(depth, 1)))
+        .with({ _tag: "Some", value: "{" }, () => _recur(j + 1, depth + 1))
         .with({ _tag: "Some", value: "}" }, () =>
-          eq(depth, 1)
-            ? _done(Some(add(j, 1)) as Option<number>)
-            : _recur(add(j, 1), sub(depth, 1)),
+          eq(depth, 1) ? _done(Some(j + 1) as Option<number>) : _recur(j + 1, depth - 1),
         )
-        .with({ _tag: "Some" }, () => _recur(add(j, 1), depth))
+        .with({ _tag: "Some" }, () => _recur(j + 1, depth))
         .exhaustive();
       if (_step._tag === "recur") {
         [j, depth] = _step.args;
@@ -362,7 +354,7 @@ const literalTok: _Curry<[idx: number, total: number, value: string], Tok> = _cu
       ? TStr(value)
       : eq(idx, 0)
         ? TTmplStart(value)
-        : eq(idx, sub(total, 1))
+        : eq(idx, total - 1)
           ? TTmplEnd(value)
           : TTmplMid(value),
 );
@@ -378,41 +370,37 @@ const scanTemplateLoop: _Curry<
       .with({ _tag: "None" }, () => _done(None as Option<{ parts: TPart[]; end: number }>))
       .with({ _tag: "Some", value: '"' }, () =>
         _done(
-          Some({ parts: _Array_append(PLit(value), parts), end: add(j, 1) }) as Option<{
+          Some({ parts: _Array_append(PLit(value), parts), end: j + 1 }) as Option<{
             parts: TPart[];
             end: number;
           }>,
         ),
       )
       .with({ _tag: "Some", value: "\\" }, () =>
-        match(_Str_get(add(j, 1), src))
-          .with({ _tag: "Some" }, ({ value: n }) =>
-            _recur(add(j, 2), `${value}${escChar(n)}`, parts),
-          )
-          .with({ _tag: "None" }, () => _recur(add(j, 1), `${value}\\`, parts))
+        match(_Str_get(j + 1, src))
+          .with({ _tag: "Some" }, ({ value: n }) => _recur(j + 2, `${value}${escChar(n)}`, parts))
+          .with({ _tag: "None" }, () => _recur(j + 1, `${value}\\`, parts))
           .exhaustive(),
       )
       .with(
         (_v): _v is Extract<Option<string>, { _tag: "Some" }> => {
           const _g: any = _v;
           return (
-            _g._tag === "Some" &&
-            _g.value === "$" &&
-            _Option_contains("{", _Str_get(add(j, 1), src))
+            _g._tag === "Some" && _g.value === "$" && _Option_contains("{", _Str_get(j + 1, src))
           );
         },
         () =>
-          match(findHoleEnd(src, add(j, 2)))
+          match(findHoleEnd(src, j + 2))
             .with({ _tag: "None" }, () => _done(None as Option<{ parts: TPart[]; end: number }>))
             .with({ _tag: "Some" }, ({ value: holeEnd }) =>
               ((withLit: TPart[]) =>
                 ((withHole: TPart[]) => _recur(holeEnd, "", withHole))(
-                  _Array_append(PHole(add(j, 2), sub(holeEnd, 1)), withLit),
+                  _Array_append(PHole(j + 2, holeEnd - 1), withLit),
                 ))(_Array_append(PLit(value), parts)),
             )
             .exhaustive(),
       )
-      .with({ _tag: "Some" }, ({ value: c }) => _recur(add(j, 1), `${value}${c}`, parts))
+      .with({ _tag: "Some" }, ({ value: c }) => _recur(j + 1, `${value}${c}`, parts))
       .exhaustive();
     if (_step._tag === "recur") {
       [j, value, parts] = _step.args;
@@ -424,7 +412,7 @@ const scanTemplateLoop: _Curry<
 const scanTemplate: _Curry<
   [src: string, i: number],
   Option<{ parts: TPart[]; end: number }>
-> = _curry(2, (src: string, i: number) => scanTemplateLoop(src, add(i, 1), "", [] as TPart[]));
+> = _curry(2, (src: string, i: number) => scanTemplateLoop(src, i + 1, "", [] as TPart[]));
 const notNewline: (c: string) => boolean = (c: string) => not(eq(c, "\n"));
 const scanComment: _Curry<[src: string, start: number, lineTok: boolean], Comment> = _curry(
   3,
@@ -432,9 +420,9 @@ const scanComment: _Curry<[src: string, start: number, lineTok: boolean], Commen
     const stop: number = scanWhile(notNewline, src, start);
     return lineTok
       ? Trailing(stop)
-      : _Option_contains("/", _Str_get(add(start, 2), src))
+      : _Option_contains("/", _Str_get(start + 2, src))
         ? ((textStart: number) => DocLine(_Str_slice(textStart, stop, src), stop))(
-            _Option_contains(" ", _Str_get(add(start, 3), src)) ? add(start, 4) : add(start, 3),
+            _Option_contains(" ", _Str_get(start + 3, src)) ? start + 4 : start + 3,
           )
         : PlainOwn(stop);
   },
@@ -471,11 +459,11 @@ const lexError: <A, B, C, D>(
   <A, B, C, D>(message: A, start: B, stop: C) => Err({ message: message, start: start, end: stop }),
 );
 const numValue: (raw: string) => number = (raw: string) =>
-  _Option_unwrapOr(div(0, 0), _Str_toNumber(raw));
+  _Option_unwrapOr(0 / 0, _Str_toNumber(raw));
 const numStart: _Curry<[src: string, i: number, c: string], boolean> = _curry(
   3,
   (src: string, i: number, c: string) =>
-    or(isDigit(c), and(eq(c, "-"), _Option_exists(isDigit, _Str_get(add(i, 1), src)))),
+    or(isDigit(c), and(eq(c, "-"), _Option_exists(isDigit, _Str_get(i + 1, src)))),
 );
 const offsetLocTok: <A, B, C>(
   lt: { doc: A; end: number; start: number; tok: B } & C,
@@ -484,8 +472,8 @@ const offsetLocTok: <A, B, C>(
   2,
   <A, B, C>(lt: { doc: A; end: number; start: number; tok: B } & C, by: number) => ({
     tok: lt.tok,
-    start: add(lt.start, by),
-    end: add(lt.end, by),
+    start: lt.start + by,
+    end: lt.end + by,
     doc: lt.doc,
   }),
 );
@@ -540,7 +528,7 @@ const spliceHole: _Curry<
       .with(
         { _tag: "Err" },
         ({ error: e }) =>
-          Err({ message: e.message, start: add(e.start, start), end: add(e.end, start) }) as Result<
+          Err({ message: e.message, start: e.start + start, end: e.end + start }) as Result<
             { tok: Tok; start: number; end: number; doc: Option<string> }[],
             { message: string; start: number; end: number }
           >,
@@ -590,7 +578,7 @@ const lexParts: _Curry<
               lexParts(
                 src,
                 _Array_tail(parts),
-                add(idx, 1),
+                idx + 1,
                 total,
                 wholeStart,
                 wholeEnd,
@@ -609,16 +597,7 @@ const lexParts: _Curry<
                   >,
               )
               .with({ _tag: "Ok" }, ({ value: toks2 }) =>
-                lexParts(
-                  src,
-                  _Array_tail(parts),
-                  add(idx, 1),
-                  total,
-                  wholeStart,
-                  wholeEnd,
-                  doc,
-                  toks2,
-                ),
+                lexParts(src, _Array_tail(parts), idx + 1, total, wholeStart, wholeEnd, doc, toks2),
               )
               .exhaustive(),
           )
@@ -728,18 +707,16 @@ const go: _Curry<
         ({ value: c }) =>
           eq(c, "\n")
             ? ((n: number) =>
-                ((kept: string[]) => go(src, add(i, 1), kept, n, false, toks))(
-                  lt(n, 2) ? doc : ([] as string[]),
-                ))(add(nlRun, 1))
-            : go(src, add(i, 1), doc, nlRun, lineTok, toks),
+                ((kept: string[]) => go(src, i + 1, kept, n, false, toks))(
+                  n < 2 ? doc : ([] as string[]),
+                ))(nlRun + 1)
+            : go(src, i + 1, doc, nlRun, lineTok, toks),
       )
       .with(
         (_v): _v is Extract<Option<string>, { _tag: "Some" }> => {
           const _g: any = _v;
           return (
-            _g._tag === "Some" &&
-            _g.value === "/" &&
-            _Option_contains("/", _Str_get(add(i, 1), src))
+            _g._tag === "Some" && _g.value === "/" && _Option_contains("/", _Str_get(i + 1, src))
           );
         },
         () =>
@@ -754,10 +731,10 @@ const go: _Curry<
             .exhaustive(),
       )
       .with({ _tag: "Some" }, ({ value: c }) =>
-        eq(_Str_slice(i, add(i, 3), src), "...")
-          ? emit(src, TSpread as Tok, i, add(i, 3), doc, toks)
-          : match(digraphTok(_Str_slice(i, add(i, 2), src)))
-              .with({ _tag: "Some" }, ({ value: t }) => emit(src, t, i, add(i, 2), doc, toks))
+        eq(_Str_slice(i, i + 3, src), "...")
+          ? emit(src, TSpread as Tok, i, i + 3, doc, toks)
+          : match(digraphTok(_Str_slice(i, i + 2, src)))
+              .with({ _tag: "Some" }, ({ value: t }) => emit(src, t, i, i + 2, doc, toks))
               .with({ _tag: "None" }, () =>
                 eq(c, '"')
                   ? lexString(src, i, doc, toks)
@@ -765,18 +742,16 @@ const go: _Curry<
                     ? ((j: number) =>
                         ((raw: string) => emit(src, TNum(numValue(raw), raw), i, j, doc, toks))(
                           _Str_slice(i, j, src),
-                        ))(scanWhile(isNumChar, src, add(i, 1)))
+                        ))(scanWhile(isNumChar, src, i + 1))
                     : match(punctTok(c))
-                        .with({ _tag: "Some" }, ({ value: t }) =>
-                          emit(src, t, i, add(i, 1), doc, toks),
-                        )
+                        .with({ _tag: "Some" }, ({ value: t }) => emit(src, t, i, i + 1, doc, toks))
                         .with({ _tag: "None" }, () =>
                           isIdStart(c)
                             ? ((j: number) =>
                                 emit(src, identTok(_Str_slice(i, j, src)), i, j, doc, toks))(
-                                scanWhile(isIdChar, src, add(i, 1)),
+                                scanWhile(isIdChar, src, i + 1),
                               )
-                            : lexError(`unexpected char '${c}'`, i, add(i, 1)),
+                            : lexError(`unexpected char '${c}'`, i, i + 1),
                         )
                         .exhaustive(),
               )

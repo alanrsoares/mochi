@@ -1,7 +1,7 @@
 // Snapshot today's bootstrap graph as the ADR 0090 stage-1 TypeScript seed.
-// One-time (and refresh) emit via the TypeScript oracle; after this file is
-// checked in, `scripts/fixpoint.ts` copies and *runs* the snapshot — it does
-// not live-compile `bootstrap/` with `packages/compiler`.
+// The current executable seed emits its successor; `scripts/fixpoint.ts` then
+// copies and runs that snapshot. The TypeScript compiler stays a differential
+// oracle, never the seed producer.
 //
 //   bun scripts/freeze-seed.ts
 //
@@ -14,8 +14,7 @@ import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } f
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
-import { buildModulesTs } from "@mochi/compiler/module";
-import { isErr } from "@onrails/result";
+import { loadBootstrapCore } from "@mochi/compiler/bootstrap";
 
 const REPO = resolve(import.meta.dir, "..");
 const BOOTSTRAP = join(REPO, "bootstrap");
@@ -49,9 +48,9 @@ const sourceRevision = (): string =>
   execFileSync("git", ["rev-parse", "HEAD"], { cwd: REPO, encoding: "utf8" }).trim();
 
 const tmp = await mkdtemp(join(tmpdir(), "mochi-seed-"));
-const read = (p: string): Promise<string> => Bun.file(p).text();
-const built = await buildModulesTs(ENTRY, read, { runtimeImport: RUNTIME });
-if (isErr(built)) {
+const bootstrap = await loadBootstrapCore();
+const built = bootstrap.buildModulesTs(ENTRY, RUNTIME);
+if (built._tag === "Err") {
   rmSync(tmp, { recursive: true, force: true });
   throw new Error(`bootstrap emit failed: ${JSON.stringify(built.error)}`);
 }

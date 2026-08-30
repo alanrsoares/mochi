@@ -33,6 +33,8 @@ export type CodegenOptions = {
   annotateCtor?: (s: TypeStmt, c: Ctor) => CtorFactoryTs | null;
   flattenPipe?: boolean;
   tupleHelper?: boolean;
+  preserveInfix?: boolean;
+  preserveJsx?: boolean;
   moduleExt?: string;
   annotateParams?: (span: Span, arity: number) => { generics: string; params: (string | null)[] };
   guardBaseType?: (scrutinee: Expr) => string | null;
@@ -40,6 +42,55 @@ export type CodegenOptions = {
   annotateLetin?: (value: Expr) => string | null;
   annotateCall?: (e: Expr) => string | null;
 };
+
+const exprHasJsx = (e: Expr): boolean => {
+  switch (e.kind) {
+    case "call":
+      return e.origin === "jsx" || exprHasJsx(e.fn) || e.args.some(exprHasJsx);
+    case "interp":
+      return e.parts.some((part) => typeof part !== "string" && exprHasJsx(part));
+    case "lambda":
+      return exprHasJsx(e.body);
+    case "letin":
+    case "letbind":
+      return exprHasJsx(e.value) || exprHasJsx(e.body);
+    case "pipe":
+      return exprHasJsx(e.left) || exprHasJsx(e.right);
+    case "do":
+      return e.exprs.some(exprHasJsx);
+    case "ternary":
+      return exprHasJsx(e.cond) || exprHasJsx(e.then) || exprHasJsx(e.else);
+    case "match":
+      return (
+        exprHasJsx(e.scrutinee) ||
+        e.arms.some((arm) => (arm.guard && exprHasJsx(arm.guard)) || exprHasJsx(arm.body))
+      );
+    case "record":
+      return (
+        (e.spread !== undefined && exprHasJsx(e.spread)) ||
+        e.fields.some((field) => exprHasJsx(field.value))
+      );
+    case "field":
+      return exprHasJsx(e.target);
+    case "tuple":
+      return e.elements.some(exprHasJsx);
+    case "arr":
+    case "list":
+    case "set":
+      return e.elements.some((element) => exprHasJsx(element.expr));
+    case "map":
+      return e.entries.some((entry) => exprHasJsx(entry.key) || exprHasJsx(entry.value));
+    case "loop":
+      return e.params.some((param) => exprHasJsx(param.init)) || exprHasJsx(e.body);
+    case "recur":
+      return e.args.some(exprHasJsx);
+    default:
+      return false;
+  }
+};
+
+export const programHasJsx = (prog: Program): boolean =>
+  prog.stmts.some((s) => (s.kind === "let" || s.kind === "expr") && exprHasJsx(s.value));
 
 export const codegen = (
   prog: Program,
@@ -58,6 +109,8 @@ export const codegen = (
     annotateCtor: opts.annotateCtor ?? null,
     flattenPipe: opts.flattenPipe ?? false,
     tupleHelper: opts.tupleHelper ?? false,
+    preserveInfix: opts.preserveInfix ?? false,
+    preserveJsx: opts.preserveJsx ?? false,
     annotateParams: opts.annotateParams ?? null,
     guardBaseType: opts.guardBaseType ?? null,
     annotateEmpty: opts.annotateEmpty ?? null,
