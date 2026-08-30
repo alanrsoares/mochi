@@ -136,6 +136,15 @@ const cases: Record<string, string> = {
     "type P = | Sm(value: number) | Lg(value: number)\nlet f = p => switch p { | Sm(v) | Lg(v) => v }",
   "or-pattern: nested ctor alts":
     "type N = | Z | Sm(N)\nlet f = n => switch n { | Z | Sm(Z) => 1 | _ => 0 }",
+  // ADR 0098 §2 — a trailing labeled group collapses to one `$lab` parameter
+  // whose fills (defaults, `Option` wrapping) are emitted in the callee.
+  "labeled params: default and optional":
+    'let f = (~tone: string = "rose", ~size?: number) => tone',
+  "labeled call: subset, punning, and fully omitted":
+    'let f = (~tone: string = "rose") => tone\nlet tone = "plum"\nlet a = f()\nlet b = f(~tone="amber")\nlet c = f(~tone)',
+  "labeled group after a positional prefix": "let f = (x: number, ~tone: string) => x",
+  "labeled param with a let-chain body":
+    'let f = (~tone: string = "rose") => let up = concat(tone, "!") in up',
 };
 
 for (const [name, src] of Object.entries(cases)) {

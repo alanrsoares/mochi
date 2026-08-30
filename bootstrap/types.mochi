@@ -30,7 +30,7 @@ export type Ty =
 export type Row =
   | RowEmpty
   | RowVar(id: number)
-  | RowExtend(label: string, fieldType: Ty, rest: Row)
+  | RowExtend(label: string, fieldType: Ty, optional: bool, rest: Row)
 
 export let tVar = id => TyVar(id)
 export let tCon = (name, args) => TyCon(name, args)
@@ -88,8 +88,11 @@ let allMembersIn = (am, bm, i) => switch Array.get(i, am) {
 let rowEq = (a, b) => switch a {
   | RowEmpty => switch b { | RowEmpty => true | _ => false }
   | RowVar(aid) => switch b { | RowVar(bid) => aid == bid | _ => false }
-  | RowExtend(al, at, ar) => switch b {
-      | RowExtend(bl, bt, br) => al == bl && typeEq(at, bt) && rowEq(ar, br)
+  | RowExtend(al, at, ao, ar) => switch b {
+      | RowExtend(bl, bt, bo, br) => al == bl && ao == bo && typeEq(
+          at,
+          bt
+        ) && rowEq(ar, br)
       | _ => false
     }
 }
@@ -137,7 +140,9 @@ export let isUnit = t => switch t {
 
 export let rVar = id => RowVar(id)
 export let rExtend = (label, fieldType, rest) =>
-  RowExtend(label, fieldType, rest)
+  RowExtend(label, fieldType, false, rest)
+export let rField = (label, fieldType, rest, optional) =>
+  RowExtend(label, fieldType, optional, rest)
 
 // ---- pretty-printer (errors + tests) ----
 
@@ -168,10 +173,16 @@ export let showType = t => switch t {
 
 /// walk a row to its tail, collecting `label: type` field strings on the way
 let showRowFields = row => switch row {
-  | RowExtend(label, fieldType, rest) => let (fields, tailId) = showRowFields(
+  | RowExtend(label, fieldType, optional, rest) => let (fields, tailId) = showRowFields(
       rest
     ) in
-      (Array.prepend("${label}: ${showType(fieldType)}", fields), tailId)
+      (
+        Array.prepend(
+          "${label}${optional ? "?" : ""}: ${showType(fieldType)}",
+          fields
+        ),
+        tailId
+      )
   | RowVar(id) => ([], Some(id))
   | RowEmpty => ([], None)
 }
@@ -293,10 +304,11 @@ export let zonk = (t, st: St) => switch resolve(t, st) {
 }
 
 let zonkRow = (row, st: St) => switch resolveRow(row, st) {
-  | RowExtend(label, fieldType, rest) => rExtend(
+  | RowExtend(label, fieldType, optional, rest) => rField(
       label,
       zonk(fieldType, st),
-      zonkRow(rest, st)
+      zonkRow(rest, st),
+      optional
     )
   | r => r
 }
@@ -313,7 +325,7 @@ export let occurs = (id, t, st: St) => switch resolve(t, st) {
 }
 
 let occursRow = (id, row, st: St) => switch resolveRow(row, st) {
-  | RowExtend(_, fieldType, rest) => occurs(
+  | RowExtend(_, fieldType, _, rest) => occurs(
       id,
       fieldType,
       st
@@ -323,7 +335,7 @@ let occursRow = (id, row, st: St) => switch resolveRow(row, st) {
 
 export let rowVarOccurs = (id, row, st: St) => switch resolveRow(row, st) {
   | RowVar(rid) => rid == id
-  | RowExtend(_, fieldType, rest) => rowVarOccursInType(
+  | RowExtend(_, fieldType, _, rest) => rowVarOccursInType(
       id,
       fieldType,
       st
@@ -570,19 +582,19 @@ let bindVar = (id, t, st: St) =>
 // ---- row unification ----
 
 /// Bring `label` to the head of a row, extending an open tail if needed.
-/// Returns the field's type, the row remaining after removing it, and the
-/// (possibly grown) state.
+/// Returns the field's type, optionality, the remaining row, and state.
 let rewriteRow = (row, label, st: St) => switch resolveRow(row, st) {
   | RowEmpty => fail("record missing field '${label}'")
-  | RowExtend(rlabel, rtype, rrest) => rlabel == label
-      ? Ok((rtype, rrest, st))
+  | RowExtend(rlabel, rtype, ropt, rrest) => rlabel == label
+      ? Ok((rtype, ropt, rrest, st))
       : rewriteRow(rrest, label, st)
-        |> Result.map(((subType, subRest, subSt)) =>
-          (subType, rExtend(rlabel, rtype, subRest), subSt))
+        |> Result.map(((subType, subOpt, subRest, subSt)) =>
+          (subType, subOpt, rField(rlabel, rtype, subRest, ropt), subSt))
   | RowVar(rid) => let (freshT, st1) = freshVar(st) in
     let (freshTail, st2) = freshRowVar(st1) in
       Ok((
         freshT,
+        false,
         freshTail,
         { ...st2, rv: Map.set(rid, rExtend(label, freshT, freshTail), st2.rv) }
       ))
@@ -596,16 +608,22 @@ export let unifyRows = (r1, r2, st: St) =>
       | RowEmpty => switch b {
           | RowEmpty => Ok(st)
           | RowVar(bid) => bindRowVar(bid, a, st)
-          | RowExtend(label, _, _) => fail("record missing field '${label}'")
+          | RowExtend(label, _, _, _) => fail("record missing field '${label}'")
         }
       | RowVar(aid) => bindRowVar(aid, b, st)
-      | RowExtend(alabel, atype, arest) => switch b {
+      | RowExtend(alabel, atype, aopt, arest) => switch b {
           | RowEmpty => fail("record has extra field '${alabel}'")
           | RowVar(bid) => bindRowVar(bid, a, st)
-          | RowExtend(_, _, _) => rewriteRow(b, alabel, st)
-              |> Result.flatMap(((btype, brest, s1)) =>
-                unify(atype, btype, s1)
-                  |> Result.flatMap(s2 => unifyRows(arest, brest, s2)))
+          | RowExtend(_, _, _, _) => rewriteRow(b, alabel, st)
+              |> Result.flatMap(((btype, bopt, brest, s1)) =>
+                aopt == bopt
+                  ? unify(atype, btype, s1)
+                    |> Result.flatMap(s2 => unifyRows(arest, brest, s2))
+                  : fail(
+                    aopt
+                      ? "record field '${alabel}' is optional but required on the other side"
+                      : "record field '${alabel}' is required but optional on the other side"
+                  ))
         }
     }
 
@@ -615,3 +633,52 @@ let bindRowVar = (id, row, st: St) => switch resolveRow(row, st) {
       ? fail("infinite record type")
       : Ok({ ...st, rv: Map.set(id, r, st.rv) })
 }
+
+/// Directional record check: `actual` may be used where `expected` is required
+/// (ADR 0098). Missing optional expected fields are allowed; a required actual
+/// field satisfies an optional expected one; the reverse is not.
+export let fits = (actual, expected, st: St) =>
+  let ra = resolve(actual, st) in
+  let rb = resolve(expected, st) in
+    switch ra {
+      | TyVar(aid) => bindVar(aid, rb, st)
+      | _ => switch rb {
+          | TyVar(bid) => bindVar(bid, ra, st)
+          | TyRecord(erow) => switch ra {
+              | TyRecord(arow) => fitsRows(arow, erow, st)
+              | _ => unify(actual, expected, st)
+            }
+          | _ => unify(actual, expected, st)
+        }
+    }
+
+let fitsRows = (actual, expected, st: St) =>
+  let exp = resolveRow(expected, st) in
+  let act = resolveRow(actual, st) in
+    switch exp {
+      | RowVar(eid) => bindRowVar(eid, act, st)
+      | RowEmpty => switch act {
+          | RowEmpty => Ok(st)
+          | RowVar(aid) => bindRowVar(aid, exp, st)
+          | RowExtend(label, _, _, _) => fail(
+              "record has extra field '${label}'"
+            )
+        }
+      | RowExtend(elabel, etype, eopt, erest) => let rw = rewriteRow(
+          act,
+          elabel,
+          st
+        ) in
+          switch rw {
+            | Err(_) => eopt
+                ? fitsRows(act, erest, st)
+                : fail("record missing field '${elabel}'")
+            | Ok(hit) => let (htype, hopt, hrest, s1) = hit in
+                hopt && !eopt
+                  ? fail(
+                    "record field '${elabel}' is required but missing or optional"
+                  )
+                  : unify(htype, etype, s1)
+                    |> Result.flatMap(s2 => fitsRows(hrest, erest, s2))
+          }
+    }

@@ -1,6 +1,6 @@
 # 0098 — Optional record fields and labeled props
 
-- **Status:** Proposed (draft)
+- **Status:** Accepted
 - **Date:** 2026-08-29
 - **Source:** [ADR 0096](0096-jsx-intrinsic-element-prop-types.md), [ADR 0097](0097-jsx-schema-single-source.md), [ADR 0055](0055-component-prop-contracts.md), `packages/plugin-styled-cva/src/index.ts`, ReasonReact / ReScript `JsxDOM.domProps`
 
@@ -37,10 +37,10 @@ parameters. ReasonReact's ergonomics come from labeled arguments with defaults
 (`~tone: string=?`), which is the same optionality applied to call syntax rather
 than record syntax.
 
-## Decision (proposed)
+## Decision
 
-Two changes, sequenced. The first is the load-bearing one; the second is
-ergonomics on top and could be deferred or dropped.
+Two changes, sequenced. Both are accepted: §1 is the type-system feature, §2 is
+ergonomics built on top of it and adds no new HM machinery.
 
 ### 1. Optional fields in rows
 
@@ -50,23 +50,44 @@ Extend `Row` so a field carries an optionality flag:
 { kind: "extend"; label: string; type: Type; optional: boolean; rest: Row }
 ```
 
-Unification rules to settle in the spike:
+HM `unify` stays **invariant** (optionality must match when both sides have the
+field). Optional-field *assignment* is directional subtyping via `fits`:
 
-- A closed row missing an optional field unifies with a row declaring it.
-- A supplied field unifies against the declared type as today.
-- Optionality is part of the type, so `{ a?: number }` and `{ a: number }` are
-  distinct; assigning the latter to the former is fine, the reverse is not.
-- Row polymorphism composes with it: `{ a?: number | 'r }` stays meaningful.
+- A closed row may omit an optional expected field.
+- A required actual field satisfies an optional expected field; the reverse does
+  not.
+- Extra actual fields vs a closed expected row still fail.
+- `fits` is used at annotations, and at application only when the known arrow
+  domain is a record that has at least one optional field. Other calls stay on
+  invariant `unify` (recursive lets with record parameters would otherwise
+  occur-check).
 
-Surface syntax `{ name?: string }`. Codegen erases it (the field is simply
-absent at runtime); `.d.ts` emits `name?: string`, which is already how the TS
-backend would want to print it. `showType` renders the `?`.
+Surface syntax `{ name?: string }`. Construction still takes raw `T`. Field
+access on an optional field is `Option<T>`. Codegen erases it (the field is
+simply absent at runtime); `.d.ts` / `showType` / the formatter print `name?:`.
 
 ### 2. Labeled parameters with optional/default arguments
 
 `let f = (~tone: string = "rose", ~size?: number) => …`, called as
-`f(~tone="amber")`. Lowered to a single record parameter, so it is sugar over 1
-rather than a second calling convention. Defaults evaluate at the call site.
+`f(~tone="amber")`. This is **sugar over §1**, not a second calling convention,
+and that is what keeps it sound: it introduces no new HM machinery.
+
+- A **trailing** labeled group is one record parameter. Positionals keep their
+  curried arrow (`(x: number, ~tone: string)` is `number -> { tone: string } -> number`).
+  A positional after a label is a parse error, so the record is always last.
+- A label is an **optional row field** when written `~x?` or given a default;
+  omitting it at the call site is then the ordinary `fits` subset check.
+- `f(~tone="amber")` desugars in the parser to `f({ tone: "amber" })`, tagged
+  `origin: "labeled"` (sugar provenance, ADR 0011 §5) so the formatter re-folds
+  the surface syntax. `~tone` alone is punning for `~tone=tone`.
+- `f()` applies `{}` when the domain is an all-optional record — every label
+  omitted — alongside the existing `unit ->` peel (ADR 0014).
+- **Defaults are filled in the callee, not at the call site.** The body sees a
+  plain `T` for a defaulted label and `Option<T>` for a bare `~x?`. Filling in
+  the callee means the default lives in exactly one place, `f()` stays callable,
+  and a plain record argument typechecks the same as the sugar — a call-site fill
+  would make the parameter required from the outside and duplicate the default
+  expression at every call.
 
 ## Consequences
 
@@ -86,16 +107,71 @@ rather than a second calling convention. Defaults evaluate at the call site.
 - Every consumer of `Row` must handle the new field. That is a wide but
   mechanical change, and the exhaustiveness rules make the compiler enumerate
   the sites.
+- **A labeled binding needs a named option type to stay annotated.** A record
+  type is only spellable in a `type` declaration, so
+  `let f : bool -> { ok?: bool } -> T` does not parse; the row must be named
+  (`type Opts = { ok?: bool }`). This is a pre-existing limit of `TypeExpr`
+  rather than something labels introduce, and it points the same way as
+  `no-inline-struct-type`, so we leave it. Dropping the annotation entirely
+  also works, since the labeled group is inferred. See *Prior art* for the
+  principled fix (labels in the arrow type) if this starts to chafe.
+- **With a positional prefix, the whole labeled group cannot be omitted.**
+  `f(x)` on `f = (x, ~dx = 0) => …` is an ordinary partial application of the
+  curried `x -> { dx?: number } -> T`, so it yields a function, not a result.
+  Only the nullary case `f()` can auto-apply `{}` (see above) — everywhere else
+  currying and "all labels defaulted" are indistinguishable, and preserving
+  partial application wins. Callers that must omit everything write `f(x, {})`.
+  In practice this steers labels toward params that are usually supplied. See
+  *Prior art*: ReScript only escapes this by being uncurried, and keeps the very
+  same sentinel-argument workaround for its curried mode.
 
 ## Open questions
 
-- Does optionality belong on the field, or is `Option<T>` in a normal field
-  enough? The latter needs no type-system change but forces `Some`/`None` at
-  every JSX attribute, which is not acceptable ergonomics for `<div id="x" />`.
 - Do optional fields interact with the record-alias index (ADR 0092) and the
   emitted TS well enough to keep `bootstrap:tsc` at 0?
-- Should labeled parameters land at all, or is the record-based prop pattern
-  already sufficient? Section 2 is separable and unproven.
+- Labels are a lambda-parameter feature; `extern` signatures stay positional.
+
+Optionality belongs on the field flag, not as `Option<T>` in a normal field:
+the latter forces `Some`/`None` at every JSX attribute, which is not acceptable
+ergonomics for `<div id="x" />`.
+
+## Prior art: ReScript / OCaml
+
+ReScript inherits OCaml's labeled arguments and has already paid for both
+consequences above. Checked against the ReScript compiler source, it confirms
+one of our choices and shows the price of fixing the other two.
+
+**Callee-side defaults are what ReScript does too.** The default lives on the
+lambda node (`Exp.fun_ ~arity lbl default_expr pat expr`), the parameter's type
+is `option<'a>`, and the body sees the unwrapped value — the same shape as our
+`$lab` fills. Nothing to change.
+
+**Labels in the arrow type are the real fix for annotating a labeled binding.**
+ReScript makes the label a component of the arrow rather than a separate
+record — `Tarrow of arg * type_expr * commutable * arity` with
+`arg = {lbl: arg_label; typ: type_expr}` — and the surface type mirrors it,
+using `=?` for optional: `(~compiling: bool, ~timing: string=?) => status`.
+That removes the need for a named option type entirely. It is portable to Mochi
+*without* touching `unify`, since a labeled group could still lower to a row
+internally; the work is parser, printer, and `typeExprToType`. Deferred, not
+rejected. The same representation is what would allow labels to be interleaved
+with positional params and reordered freely — our trailing-group rule is a
+consequence of collapsing the group into one record, not of labels as such.
+
+**Omitting a whole labeled group requires giving up currying.** ReScript fills
+remaining optional params with `None` only when the supplied argument count is
+below the function's *arity* and the application is flagged `total_app`
+(`type_unknown_args` in `typecore.ml`). Both conditions depend on arity being
+carried in the arrow type, which is only sound because uncurried is the default
+since v11: `f(x)` on an arity-3 function is a complete call, over-application is
+`Uncurried_arity_mismatch`, and partial application must be written `f(x, ...)`.
+So there is no fix for this inside a curried language, and Mochi's `_curry`
+convention is not up for renegotiation here. Notably ReScript still keeps the
+curried-mode escape hatch — a lone `()` argument is treated as an *empty*
+application when every remaining param is optional, i.e. OCaml's
+`let f ?(x = 1) () = x` idiom. Our `f(x, {})` is that same sentinel with a
+record instead of unit, so the documented workaround is the reference answer;
+only its spelling could be improved.
 
 ## Alternatives rejected
 

@@ -222,6 +222,15 @@ const schemeCases: Record<string, string> = {
     "  let vars = idsOf(params, 0) in",
     "  take(vars)",
   ].join("\n"),
+  // ADR 0098 §2 — one lowercase annotation variable spans ALL of a lambda's
+  // parameter annotations, and the labeled group is no exception: `a` here must
+  // be the SAME var, giving `'a -> { y: 'a } -> 'a`, not two independent vars.
+  "an annotation variable links a positional and a labeled param": "let f = (x: a, ~y: a) => x",
+  // An UNANNOTATED labeled default widens its literal (`0.3` is `number`, not
+  // the singleton `0.3`), which is the only path through `widenLits` in
+  // `labFieldsFrom` — no corpus file reached it until the snake example did.
+  "an unannotated labeled default widens its literal":
+    'let f = (base, ~dx = 0.3, ~tone = "rose") => base',
 };
 
 for (const [name, src] of Object.entries(schemeCases)) {

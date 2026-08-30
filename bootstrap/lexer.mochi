@@ -47,6 +47,7 @@ export type Tok =
   | TPercent
   | TAt
   | THash
+  | TTilde
   | TDot
   | TColon
   | TQuestion
@@ -144,6 +145,7 @@ let punctTok = c => switch c {
   | "?" => Some(TQuestion)
   | "@" => Some(TAt)
   | "#" => Some(THash)
+  | "~" => Some(TTilde)
   | "+" => Some(TPlus)
   | "-" => Some(TMinus)
   | "*" => Some(TStar)

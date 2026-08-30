@@ -44,6 +44,8 @@ function forEachSubExpr(e: Expr, visit: (x: Expr) => void): void {
     })
     .with({ kind: "lambda" }, (lambda) => {
       forEachSubExpr(lambda.body, visit);
+      for (const p of lambda.params)
+        if (p.kind === "labeled" && p.default) forEachSubExpr(p.default, visit);
     })
     .withOneOf([{ kind: "letin" }, { kind: "letbind" }], (bind) => {
       forEachSubExpr(bind.value, visit);
@@ -673,6 +675,9 @@ const many = (...parts: readonly (Diagnostic | Diagnostic[] | null)[]): Diagnost
 const checkParamBinds = (p: LamParam, span: Span): Diagnostic[] =>
   match(p)
     .with({ kind: "name" }, (name) => many(reservedBind(name.name, span)))
+    .with({ kind: "labeled" }, (lab) =>
+      many(reservedBind(lab.name, span), lab.default ? checkExprBinds(lab.default) : null),
+    )
     .with({ kind: "precord" }, (precord) =>
       many(...precord.fields.map((n) => reservedBind(n, span))),
     )

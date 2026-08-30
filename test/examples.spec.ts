@@ -7,7 +7,7 @@ import { compile } from "@mochi/compiler/compile";
 import { compileTargets } from "@mochi/compiler/compile-targets";
 import { emitDts } from "@mochi/compiler/dts";
 import { buildModules } from "@mochi/compiler/module";
-import { readRepo, repoPath } from "@mochi/test-support";
+import { compileAndEval, readRepo, repoPath } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
 
@@ -211,6 +211,44 @@ test("a string-literal union synonym accepts a member (ADR 0081)", () => {
 let t : Tone = "rose"`;
   expect(isErr(compile(src))).toBe(false);
   expect(isErr(compile(`type Tone = "rose" | "amber"\nlet t : Tone = "taupe"`))).toBe(true);
+});
+
+test("an optional record field may be omitted and reads as Option (ADR 0098)", () => {
+  const src = `type Props = { id?: string, n: number }
+let ok : Props = { n: 1 }
+let getId = (p: Props) => p.id`;
+  expect(isErr(compile(src))).toBe(false);
+  expect(
+    isErr(compile(`type Props = { id?: string, n: number }\nlet bad : Props = { id: "x" }`)),
+  ).toBe(true);
+  const dts = unwrapOk(compileTargets(src)).dts;
+  expect(dts).toContain("id?: string");
+  expect(
+    compileAndEval(
+      `type Props = { id?: string }
+let missing = (p: Props) => p.id
+let hit = (p: Props) => p.id
+let a = missing({})
+let b = hit({ id: "x" })`,
+      "{ a, b }",
+    ),
+  ).toEqual({ a: { _tag: "None" }, b: { _tag: "Some", value: "x" } });
+});
+
+test("labeled params with defaults fill in the callee (ADR 0098 §2)", () => {
+  const src = `let f = (~tone: string = "rose", ~size?: number) => (tone, size)
+let a = f()
+let b = f(~tone="amber")
+let c = f(~tone="amber", ~size=3)
+let tone = "pun"
+let d = f(~tone)`;
+  expect(isErr(compile(src))).toBe(false);
+  expect(compileAndEval(src, "{ a, b, c, d }")).toEqual({
+    a: ["rose", { _tag: "None" }],
+    b: ["amber", { _tag: "None" }],
+    c: ["amber", { _tag: "Some", value: 3 }],
+    d: ["pun", { _tag: "None" }],
+  });
 });
 
 test("docstrings are retained across JS, TS, and .d.ts targets (ADR 0094)", () => {

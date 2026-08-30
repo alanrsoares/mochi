@@ -132,6 +132,12 @@ const bindParam = (b: Builder, p: LamParam): void => {
     if (!p.name.startsWith("$")) bindLocal(b, p.name, p.span);
     return;
   }
+  if (p.kind === "labeled") {
+    if (p.annot) walkTypeExpr(b, p.annot);
+    if (p.default) walkExpr(b, p.default);
+    if (!p.name.startsWith("$")) bindLocal(b, p.name, p.span);
+    return;
+  }
   if (p.kind === "ptuple") {
     for (let i = 0; i < p.names.length; i++) bindLocal(b, p.names[i]!, p.nameSpans[i]!);
     return;

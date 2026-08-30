@@ -91,6 +91,89 @@ test("record literal is a closed record", () => {
   expect(typeOf(env, "p")).toBe("{ x: number, y: number }");
 });
 
+// ADR 0098 — optional record fields.
+test("a value may omit optional alias fields", () => {
+  const src = "type Props = { id?: string, n: number }\nlet ok : Props = { n: 1 }";
+  const env = unwrapOk(infer(src, {}));
+  expect(typeOf(env, "ok")).toBe("{ id?: string, n: number }");
+});
+
+test("a required field still cannot be omitted", () => {
+  const r = infer('type Props = { id?: string, n: number }\nlet bad : Props = { id: "x" }', {});
+  expect(isErr(r)).toBe(true);
+  expect(unwrapErr(r)[0]!.message).toContain("n");
+});
+
+test("a required field satisfies an optional expected field", () => {
+  const src = "type Opt = { x?: number }\nlet ok : Opt = { x: 1 }";
+  expect(isErr(infer(src, {}))).toBe(false);
+});
+
+test("an optional-typed value does not satisfy a required field", () => {
+  const r = infer(
+    "type Opt = { x?: number }\ntype Req = { x: number }\nlet o : Opt = {}\nlet bad : Req = o",
+    {},
+  );
+  expect(isErr(r)).toBe(true);
+});
+
+test("reading an optional field yields Option", () => {
+  const src = "type Props = { id?: string }\nlet getId = (p: Props) => p.id";
+  const env = unwrapOk(infer(src, {}));
+  expect(typeOf(env, "getId")).toBe("{ id?: string } -> Option<string>");
+});
+
+test("reading a required field stays the raw type", () => {
+  const src = "type Props = { id?: string, n: number }\nlet getN = (p: Props) => p.n";
+  const env = unwrapOk(infer(src, {}));
+  expect(typeOf(env, "getN")).toBe("{ id?: string, n: number } -> number");
+});
+
+test("a function expecting optional fields accepts a subset record", () => {
+  const src =
+    "type Props = { id?: string, n: number }\nlet f = (p: Props) => p.n\nlet r = f({ n: 2 })";
+  const env = unwrapOk(infer(src, {}));
+  expect(typeOf(env, "r")).toBe("number");
+});
+
+// ADR 0098 §2 — labeled parameters lower to one record parameter.
+test("a labeled lambda is a unary record function", () => {
+  const src = 'let f = (~tone: string = "rose", ~size?: number) => tone';
+  const env = unwrapOk(infer(src, {}));
+  expect(typeOf(env, "f")).toBe("{ tone?: string, size?: number } -> string");
+});
+
+test("a labeled call supplies a subset of the record", () => {
+  const src = `let f = (~tone: string = "rose", ~size?: number) => tone
+let r = f(~tone="amber")`;
+  const env = unwrapOk(infer(src, {}));
+  expect(typeOf(env, "r")).toBe("string");
+});
+
+test("omitting every labeled argument is f()", () => {
+  const src = `let f = (~tone: string = "rose") => tone
+let r = f()`;
+  const env = unwrapOk(infer(src, {}));
+  expect(typeOf(env, "r")).toBe("string");
+});
+
+test("a required labeled argument cannot be omitted", () => {
+  const r = infer("let f = (~tone: string) => tone\nlet r = f()", {});
+  expect(isErr(r)).toBe(true);
+});
+
+test("an optional labeled param is Option in the body", () => {
+  const src = "let f = (~size?: number) => size";
+  const env = unwrapOk(infer(src, {}));
+  expect(typeOf(env, "f")).toBe("{ size?: number } -> Option<number>");
+});
+
+test("a positional prefix stays curried in front of the labeled group", () => {
+  const src = "let f = (x: number, ~tone: string) => x";
+  const env = unwrapOk(infer(src, {}));
+  expect(typeOf(env, "f")).toBe("number -> { tone: string } -> number");
+});
+
 test("field access is row-polymorphic: works on ANY record with that field", () => {
   const env = unwrapOk(infer("let getX = p => p.x", {}));
   // p : { x: 'a | 'r } -> 'a

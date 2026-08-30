@@ -23,7 +23,7 @@ import {
   tTuple,
   tLit,
   tUnion,
-  rExtend,
+  rField,
   freshVar,
   freshRowVar,
   zonk
@@ -76,7 +76,10 @@ let collectArgs = (args, acc) => switch args {
 }
 let collectRow = (row, acc) => switch row {
   | RowVar(id) => { tv: acc.tv, rv: Set.add(id, acc.rv) }
-  | RowExtend(_, fieldType, rest) => collectRow(rest, collect(fieldType, acc))
+  | RowExtend(_, fieldType, _, rest) => collectRow(
+      rest,
+      collect(fieldType, acc)
+    )
   | RowEmpty => acc
 }
 
@@ -123,7 +126,7 @@ let collectFreeRow = (row, bound: VarSets, st: Types.St, acc) => switch row {
         | Some(next) => collectFreeRow(next, bound, st, acc)
         | None => { tv: acc.tv, rv: Set.add(id, acc.rv) }
       }
-  | RowExtend(_, fieldType, rest) => collectFreeRow(
+  | RowExtend(_, fieldType, _, rest) => collectFreeRow(
       rest,
       bound,
       st,
@@ -171,10 +174,11 @@ export let widenLits = t => switch t {
 let widenRow = row => switch row {
   | RowEmpty => row
   | RowVar(_) => row
-  | RowExtend(label, fieldType, rest) => rExtend(
+  | RowExtend(label, fieldType, optional, rest) => rField(
       label,
       widenLits(fieldType),
-      widenRow(rest)
+      widenRow(rest),
+      optional
     )
 }
 
@@ -202,10 +206,11 @@ let instSub = (t, tmap, rmap) => switch t {
 }
 let instSubRow = (row, tmap, rmap) => switch row {
   | RowVar(id) => Map.getOr(row, id, rmap)
-  | RowExtend(label, fieldType, rest) => rExtend(
+  | RowExtend(label, fieldType, optional, rest) => rField(
       label,
       instSub(fieldType, tmap, rmap),
-      instSubRow(rest, tmap, rmap)
+      instSubRow(rest, tmap, rmap),
+      optional
     )
   | RowEmpty => row
 }
@@ -405,7 +410,7 @@ let aliasFieldsFrom = (fields: [Ast.AliasField], vars, st: Types.St, aliases: Ma
       aliases,
       expanding
     ) in
-      (rExtend(fld.name, ft, restRow), st2)
+      (rField(fld.name, ft, restRow, fld.optional), st2)
 }
 
 /// Expand a record alias to its structural row. `args` binds its type params

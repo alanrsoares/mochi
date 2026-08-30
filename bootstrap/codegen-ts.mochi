@@ -116,7 +116,7 @@ export let typeDecl = (name, params, ctors: [Ast.Ctor], aliases: Map<string, Ali
 let aliasFieldsFrom = (fields: [Ast.AliasField], params, aliases: Map<string, AliasInfo>, recs, i) => switch Array.get(i, fields) {
   | None => []
   | Some(f) => Array.prepend(
-      "${f.name}: ${fieldTs(f.fieldType, params, aliases, recs)}",
+      "${f.name}${f.optional ? "?" : ""}: ${fieldTs(f.fieldType, params, aliases, recs)}",
       aliasFieldsFrom(fields, params, aliases, recs, i + 1)
     )
 }
@@ -184,7 +184,7 @@ let allVarsInAll = (ts, names, i) => switch Array.get(i, ts) {
 let allVarsInRow = (row, names) => switch row {
   | RowEmpty => true
   | RowVar(id) => Option.isSome(Map.get(id, names))
-  | RowExtend(_, fieldType, rest) => allVarsIn(
+  | RowExtend(_, fieldType, _, rest) => allVarsIn(
       fieldType,
       names
     ) && allVarsInRow(rest, names)
@@ -483,7 +483,10 @@ let consInAll = (ts, acc, i) => switch Array.get(i, ts) {
 }
 
 let consInRow = (row, acc) => switch row {
-  | RowExtend(_, fieldType, rest) => consInRow(rest, consInTy(fieldType, acc))
+  | RowExtend(_, fieldType, _, rest) => consInRow(
+      rest,
+      consInTy(fieldType, acc)
+    )
   | _ => acc
 }
 
@@ -545,7 +548,7 @@ let aliasRowOf = (fields: [Ast.AliasField], aliases: Map<string, AliasInfo>, i) 
       aliases,
       Set.fromArray([])
     ) in
-      RowExtend(f.name, t, aliasRowOf(fields, aliases, i + 1))
+      RowExtend(f.name, t, f.optional, aliasRowOf(fields, aliases, i + 1))
 }
 
 let aliasShapeKey = (fields: [Ast.AliasField], aliases: Map<string, AliasInfo>) =>
@@ -705,7 +708,7 @@ let scopedSpans = e => switch e {
       scopedSpansInFields(fields, 0),
       switch spread { | Some(s) => scopedSpans(s) | None => [] }
     )
-  | Ast.EField(target, name, sp) =>
+  | Ast.EField(target, name, _, sp) =>
     // `Set.empty` / `Map.empty` / `List.empty` is a seed like `@{}` / `#{}`.
     let rest = scopedSpans(target) in
       name == "empty" && isRefExpr(target) ? Array.prepend(sp, rest) : rest
@@ -991,7 +994,7 @@ let freeIdsInAll = (ts, acc) =>
   ts |> Array.reduce((a, t) => freeIdsIn(t, a), acc)
 
 let freeIdsInRow = (row, acc) => switch row {
-  | RowExtend(_, fieldType, rest) => rest->freeIdsInRow(
+  | RowExtend(_, fieldType, _, rest) => rest->freeIdsInRow(
       freeIdsIn(fieldType, acc)
     )
   | _ => acc

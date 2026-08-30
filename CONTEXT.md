@@ -78,7 +78,8 @@ buffered pull, not to `@onrails/pattern`.
 
 - **Type** — `var | con | arrow | record`. Constructors `tVar`, `tCon`, `tArrow`,
   `tRecord`, `tApp` (sugar for `tCon` with args).
-- **Row** — `empty | rvar | extend`. Constructors `rEmpty`, `rVar`, `rExtend`. Records
+- **Row** — `empty | rvar | extend` (`extend` carries `optional: bool`, ADR 0098).
+  Constructors `rEmpty`, `rVar`, `rExtend` (optionality defaults to required). Records
   are rows; **row polymorphism** is real (open tails), not faked subtyping.
 - **Scheme** — `{ vars, rvars, type }` — a generalized (∀-quantified) type. **Env** —
   `Map<string, Scheme>`. `mono(t)`, `generalize(env, t, s)`, `instantiate(sc, f)`.
@@ -98,6 +99,17 @@ buffered pull, not to `@onrails/pattern`.
   the `occurs` family (occurs-check), `bindVar`/`bindRowVar`, and `rewriteRow` — which
   brings a label to a row's head, extending an open `rvar` tail with a fresh field +
   fresh tail. That is the mechanism behind row polymorphism.
+- **`fits`** — directional record check (ADR 0098): a value may omit optional
+  expected fields; a required field satisfies an optional one, not the reverse.
+  Used at annotations, and at application when the domain record has optional
+  fields. `unify` itself stays invariant.
+- **Labeled parameter** — a `~name` lambda parameter (ADR 0098 §2). A *trailing*
+  labeled group is folded into ONE record parameter, so labels are sugar over
+  optional fields rather than a second calling convention: a label with a default
+  or written `~x?` is an optional row field, `f(~k=v)` is parsed straight into
+  `f({ k: v })` (`origin: "labeled"`), and `f()` applies `{}` when every label is
+  omittable. Defaults are filled in the **callee** (`ast/labeled.ts` holds the
+  split/collapse helpers shared by infer, codegen, and the formatter).
 
 ## Diagnostics & editor DX
 

@@ -89,9 +89,21 @@ test("a record alias renders structurally", () =>
       "Point",
       [],
       [
-        { name: "x", fieldType: Ast.TyName("number", sp) },
-        { name: "y", fieldType: Ast.TyName("number", sp) }
+        { name: "x", fieldType: Ast.TyName("number", sp), optional: false },
+        { name: "y", fieldType: Ast.TyName("number", sp), optional: false }
       ],
+      #{},
+      #{}
+    )
+  ))
+
+test("an optional alias field renders with ?", () =>
+  assertEq(
+    "export type Props = { id?: string };",
+    recordAliasDecl(
+      "Props",
+      [],
+      [{ name: "id", fieldType: Ast.TyName("string", sp), optional: true }],
       #{},
       #{}
     )
@@ -443,8 +455,16 @@ test("recordAliasIndex keys a nullary record alias by sorted shape", () =>
         "Span": {
           params: [],
           fields: [
-            { name: "start", fieldType: Ast.TyName("number", sp) },
-            { name: "end", fieldType: Ast.TyName("number", sp) }
+            {
+              name: "start",
+              fieldType: Ast.TyName("number", sp),
+              optional: false
+            },
+            {
+              name: "end",
+              fieldType: Ast.TyName("number", sp),
+              optional: false
+            }
           ],
           expr: None
         }
@@ -460,7 +480,9 @@ test("recordAliasIndex skips a parameterised alias", () =>
       #{
         "Box": {
           params: ["a"],
-          fields: [{ name: "value", fieldType: Ast.TyName("a", sp) }],
+          fields: [
+            { name: "value", fieldType: Ast.TyName("a", sp), optional: false }
+          ],
           expr: None
         }
       }

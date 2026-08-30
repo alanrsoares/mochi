@@ -40,6 +40,13 @@ import {
 } from "../extensions/extensions";
 import { keywordText, type Located, type Tok } from "../lexer/lexer";
 
+/** One slot in `f(…)`: a positional expr, or `~name` / `~name=e` (ADR 0098 §2). */
+type CallPart =
+  | { kind: "pos"; expr: Expr }
+  | { kind: "lab"; name: string; nameSpan: Span; value: Expr };
+
+type FinishedCallArgs = { args: Expr[]; origin?: "labeled" };
+
 /**
  * The one throw in the compiler, and it never leaves this module: the top-level
  * statement loop catches it into a diagnostic + recovery. Plugins reach it only
@@ -259,7 +266,7 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
     return false;
   }
 
-  /** One lambda parameter: name, `{ a, b }` record destructure, or `(a, b)` tuple destructure. */
+  /** One lambda parameter: name, `{ a, b }` record destructure, `(a, b)` tuple, or `~name` labeled. */
   function parseParam(): LamParam {
     if (peek().t === "lbrace") {
       next();
@@ -305,6 +312,54 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
     return { kind: "name", name: id.name, span: id.span, annot };
   }
 
+  /** `~name`, `~name: T`, `~name?: T`, `~name = e`, `~name: T = e` (ADR 0098 §2). */
+  function parseLabeledParam(): LamParam {
+    const start = expect("tilde").span;
+    const id = expectLabel();
+    let optional = false;
+    if (peek().t === "question") {
+      next();
+      optional = true;
+    }
+    let annot: TypeExpr | undefined;
+    if (peek().t === "colon") {
+      next();
+      annot = parseTypeExpr();
+    }
+    let def: Expr | undefined;
+    if (peek().t === "eq") {
+      next();
+      def = parseExpr();
+    }
+    const end = def?.span ?? annot?.span ?? id.span;
+    return {
+      kind: "labeled",
+      name: id.name,
+      span: spanning(start, end),
+      annot,
+      optional,
+      default: def,
+    };
+  }
+
+  function parseLamParam(): LamParam {
+    return peek().t === "tilde" ? parseLabeledParam() : parseParam();
+  }
+
+  function checkLabeledTrailing(params: LamParam[]): void {
+    let seen = false;
+    const names = new Set<string>();
+    for (const p of params) {
+      if (p.kind === "labeled") {
+        if (names.has(p.name)) fail(`duplicate labeled parameter '${p.name}'`);
+        names.add(p.name);
+        seen = true;
+      } else if (seen) {
+        fail("labeled parameters must be a trailing group");
+      }
+    }
+  }
+
   function parseLambda(): Expr {
     const start = peek().span;
     const params: LamParam[] = [];
@@ -314,17 +369,60 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
     } else {
       expect("lparen");
       if (peek().t !== "rparen") {
-        params.push(parseParam());
+        params.push(parseLamParam());
         while (peek().t === "comma") {
           next();
-          params.push(parseParam());
+          params.push(parseLamParam());
         }
       }
       expect("rparen");
     }
+    checkLabeledTrailing(params);
     expect("arrow");
     const body = arrowBodyIsDoBlock() ? parseDoBlock(peek().span) : parseExpr();
     return { kind: "lambda", params, body, span: spanning(start, body.span) };
+  }
+
+  function parseCallPart(): CallPart {
+    if (peek().t !== "tilde") return { kind: "pos", expr: parseExpr() };
+    next();
+    const id = expectLabel();
+    let value: Expr;
+    if (peek().t === "eq") {
+      next();
+      value = parseExpr();
+    } else {
+      value = { kind: "ref", name: id.name, span: id.span };
+    }
+    return { kind: "lab", name: id.name, nameSpan: id.span, value };
+  }
+
+  function finishCallArgs(parts: CallPart[]): FinishedCallArgs {
+    const pos: Expr[] = [];
+    const labs: Extract<CallPart, { kind: "lab" }>[] = [];
+    let seenLab = false;
+    for (const p of parts) {
+      if (p.kind === "lab") {
+        seenLab = true;
+        labs.push(p);
+      } else if (seenLab) {
+        fail("labeled arguments must be a trailing group");
+      } else {
+        pos.push(p.expr);
+      }
+    }
+    if (labs.length === 0) return { args: pos };
+    return {
+      args: [
+        ...pos,
+        {
+          kind: "record",
+          fields: labs.map((l) => ({ name: l.name, nameSpan: l.nameSpan, value: l.value })),
+          span: spanning(labs[0]!.nameSpan, labs[labs.length - 1]!.value.span),
+        },
+      ],
+      origin: "labeled",
+    };
   }
 
   /**
@@ -609,16 +707,17 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
     for (;;) {
       if (peek().t === "lparen") {
         next();
-        const args: Expr[] = [];
+        const parts: CallPart[] = [];
         if (peek().t !== "rparen") {
-          args.push(parseExpr());
+          parts.push(parseCallPart());
           while (peek().t === "comma") {
             next();
-            args.push(parseExpr());
+            parts.push(parseCallPart());
           }
         }
         expect("rparen");
-        e = { kind: "call", fn: e, args, span: to(e.span) };
+        const { args, origin } = finishCallArgs(parts);
+        e = { kind: "call", fn: e, args, origin, span: to(e.span) };
       } else if (peek().t === "dot") {
         next();
         // `expectLabel`, not `expectId`: `$tone` is a legal record *key*
@@ -1152,8 +1251,10 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
     // `expectLabel`: a record type must be able to describe a host shape whose
     // field is spelled like a mochi keyword — `{ type: string }` (ADR 0077).
     const id = expectLabel();
+    const optional = peek().t === "question";
+    if (optional) next();
     expect("colon");
-    return { name: id.name, nameSpan: id.span, type: parseTypeExpr() };
+    return { name: id.name, nameSpan: id.span, type: parseTypeExpr(), optional };
   }
 
   function parseCtor(): Ctor {

@@ -13,6 +13,7 @@
 import { match } from "@onrails/pattern";
 import { isErr, ok, type Result } from "@onrails/result";
 import type { Ctor, Expr, Program, Stmt, TypeExpr } from "../ast/ast";
+import { jsLamParams } from "../ast/labeled";
 import {
   type AliasDef,
   aliasParamId,
@@ -154,7 +155,7 @@ function tsRow(row: Row, names: Map<number, string>): string {
   const fields: string[] = [];
   let cur = row;
   while (cur.kind === "extend") {
-    fields.push(`${cur.label}: ${tsOfRaw(cur.type, names)}`);
+    fields.push(`${cur.label}${cur.optional ? "?" : ""}: ${tsOfRaw(cur.type, names)}`);
     cur = cur.rest;
   }
   const body = fields.length === 0 ? "{}" : `{ ${fields.join("; ")} }`;
@@ -254,7 +255,8 @@ function declType(t: Type, value: Expr, names: Map<number, string>): string {
     return `() => ${declType(cur, value.body, names)}`;
   }
   const params: string[] = [];
-  value.params.forEach((p, i) => {
+  const jsParams = jsLamParams(value.params);
+  jsParams.forEach((p, i) => {
     if (cur.kind !== "arrow") return;
     const name = p.kind === "name" ? p.name : `_${i}`;
     params.push(`${name}: ${tsOf(cur.from, names)}`);
@@ -284,7 +286,7 @@ function flatBindingParams(
       v = v.body;
       continue;
     }
-    for (const p of v.params) {
+    for (const p of jsLamParams(v.params)) {
       if (cur.kind !== "arrow") break;
       const name = p.kind === "name" ? p.name : `_${n}`;
       params.push(`${name}: ${tsOf(cur.from, names)}`);

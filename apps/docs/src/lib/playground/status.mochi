@@ -3,10 +3,16 @@
 export type StatusState = "ok" | "err"
 export type PlaygroundStatus = { text: string, state: StatusState }
 
-export let formatStatus : bool -> Option<string> -> bool -> PlaygroundStatus = (compiling, timingText, ok) =>
+/// The trailing labels of `formatStatus` collapse to exactly this record
+/// (ADR 0098 §2) — naming it is what lets the binding keep a type annotation.
+export type StatusOpts = { timing?: string, ok?: bool }
+
+/// `~timing?` has no default, so the body reads it as `Option<string>`, while
+/// `~ok` is filled in the callee and reads as a plain `bool`.
+export let formatStatus : bool -> StatusOpts -> PlaygroundStatus = (compiling, ~timing?: string, ~ok: bool = true) =>
   compiling
     ? { text: "compiling…", state: "ok" }
-    : switch timingText {
+    : switch timing {
       | None => { text: ok ? "ready" : "error", state: ok ? "ok" : "err" }
       | Some(t) => {
           text: (ok ? "ok · " : "error · ") ++ t ++ "ms",

@@ -20,8 +20,9 @@ export type Expr =
    * sniffing source text or callee name later. Absent on a call the user
    * wrote directly (incl. a hand-written `h(...)`). `"jsx"` marks calls
    * `jsxPlugin`'s parse hook synthesized from `<tag>…</tag>` / `<>…</>`.
+   * `"labeled"` marks `f(~k=v)` desugared to `f({ k: v })` (ADR 0098 §2).
    */
-  | { kind: "call"; fn: Expr; args: Expr[]; origin?: "jsx"; span: Span }
+  | { kind: "call"; fn: Expr; args: Expr[]; origin?: "jsx" | "labeled"; span: Span }
   | { kind: "lambda"; params: LamParam[]; body: Expr; span: Span } // (x, y) => body, ({a, b}) => body
   /**
    * `let x = value in body` — a local binding scoped to `body`. Non-recursive:
@@ -74,7 +75,11 @@ export type Expr =
    * in-kind, never added).
    */
   | { kind: "record"; fields: Field[]; spread?: Expr; span: Span }
-  | { kind: "field"; target: Expr; name: string; span: Span } // p.x
+  /**
+   * `p.x`. Infer stamps `optional` when the field is an optional row field
+   * (`Option<T>` at the type, wrapped `{ _tag: "Some" | "None" }` at runtime).
+   */
+  | { kind: "field"; target: Expr; name: string; span: Span; optional?: boolean }
   | { kind: "tuple"; elements: Expr[]; span: Span } // (a, b) — heterogeneous product, arity ≥ 2
   /** `[1, 2]` / `[a, ...xs, b]` — eager Array. Slots are exprs or spreads (ADR 0001). */
   | { kind: "arr"; elements: SeqElem[]; span: Span }
@@ -105,11 +110,26 @@ export type LoopParam = { name: string; nameSpan: Span; init: Expr };
 /** One slot in an Array / List / Set literal: a value, or `...xs` splicing another collection of the same kind. */
 export type SeqElem = { kind: "expr"; expr: Expr } | { kind: "spread"; expr: Expr };
 
-/** A lambda parameter: a plain name, or a record-destructuring pattern that binds each named field. `({ x, y }) => ...` pulls x and y out of the argument. */
+/**
+ * A lambda parameter: a plain name, a record/tuple destructure, or a labeled
+ * `~name` (ADR 0098 §2). A trailing labeled group is one record parameter.
+ */
 export type LamParam =
   | { kind: "name"; name: string; span: Span; annot?: TypeExpr } // span anchors the bound name for nav
   | { kind: "precord"; fields: string[]; fieldSpans: Span[] } // ({ x, y }) => ...
-  | { kind: "ptuple"; names: string[]; nameSpans: Span[] }; // ((a, b)) => ... — tuple-destructuring param
+  | { kind: "ptuple"; names: string[]; nameSpans: Span[] } // ((a, b)) => ... — tuple-destructuring param
+  | {
+      kind: "labeled";
+      name: string;
+      span: Span;
+      annot?: TypeExpr;
+      /** Written `~name?` — body sees `Option<T>` unless a default fills it. */
+      optional: boolean;
+      default?: Expr;
+    };
+
+/** The `~name` variant of `LamParam` (ADR 0098 §2). */
+export type LabeledParam = Extract<LamParam, { kind: "labeled" }>;
 
 export type Field = { name: string; nameSpan: Span; value: Expr };
 
@@ -161,7 +181,7 @@ export type Ctor = { name: string; fields: CtorField[]; span: Span };
 export type CtorField = { name: string | null; type: TypeExpr };
 
 /** One field of a transparent record-type alias: `type Point = { x: number, y: a }`. The field type is a full `TypeExpr` (like a `CtorField`'s), so aliases can carry generics and applied/nested types. */
-export type AliasField = { name: string; nameSpan: Span; type: TypeExpr };
+export type AliasField = { name: string; nameSpan: Span; type: TypeExpr; optional: boolean };
 
 /** A surface type expression, used in `extern` signatures. Lowercase names are type variables (generalized); prim names (number/string/bool/...) map to their HM type; others become nullary constructors. */
 export type TypeExpr =

@@ -58,16 +58,16 @@ export const rowLabels = (row: Row): string[] => {
 
 /** Rebuild a row, mapping each field type (preserves order via reverse reduce). */
 export const mapRow = (row: Row, mapType: (t: Type) => Type): Row => {
-  const fields: { label: string; type: Type }[] = [];
+  const fields: { label: string; type: Type; optional: boolean }[] = [];
   let current = row;
   while (current.kind === "extend") {
-    fields.push({ label: current.label, type: current.type });
+    fields.push({ label: current.label, type: current.type, optional: current.optional });
     current = current.rest;
   }
   let out: Row = current.kind === "rvar" ? current : rEmpty;
   for (let i = fields.length - 1; i >= 0; i--) {
     const f = fields[i]!;
-    out = rExtend(f.label, mapType(f.type), out);
+    out = rExtend(f.label, mapType(f.type), out, f.optional);
   }
   return out;
 };

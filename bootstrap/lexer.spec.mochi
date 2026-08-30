@@ -12,7 +12,7 @@ testEach("lex token count", [
 })
 
 testEach("lex errors", [
-  { label: "tilde", src: "let x = ~1", msg: "unexpected char '~'" },
+  { label: "backslash", src: "let x = \\1", msg: "unexpected char '\\'" },
   {
     label: "unterminated string",
     src: "let s = \"oops",

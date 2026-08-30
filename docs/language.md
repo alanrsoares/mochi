@@ -46,6 +46,24 @@ is a type error; bind it with `let` or discard with `ignore`.
 
 Annotations / `extern` may write the same domain as `() -> T` (ADR 0015).
 
+**Labeled parameters** (`~name`) let a call name its arguments. A *trailing*
+labeled group is sugar for one record parameter, so labels cost no new calling
+convention ([ADR 0098](adr/0098-optional-record-fields-and-labeled-props.md) §2):
+
+```mochi
+let badge = (~tone: string = "rose", ~size?: number) => tone
+let a = badge()                       // "rose" — every label omitted
+let b = badge(~tone="amber")          // "amber"
+let tone = "plum"
+let c = badge(~tone)                  // punning: ~tone means ~tone=tone
+```
+
+A label given a default, or written `~x?`, may be omitted at the call site — it is
+an optional field of that record. Defaults are filled **in the callee**, so the
+body sees a plain `T`; a bare `~x?` with no default is `Option<T>` in the body.
+Positional parameters stay curried in front of the group, and a positional
+argument may not follow a labeled one.
+
 Top-level bindings are grouped into recursive components (Tarjan SCC) and inferred
 together, so **mutual recursion type-checks regardless of definition order**:
 
@@ -79,6 +97,18 @@ named alias folds back in hover and `.d.ts`; duck typing falls out of row polymo
 type Point = { x: number, y: number }
 let distToOrigin = p => hypot(p.x, p.y)   // works on ANY record with x and y
 let translate = (p, dx, dy) => { x: p.x + dx, y: p.y + dy }
+```
+
+A field marked `?` may be omitted at construction. Reading it yields `Option<T>`;
+a required field still yields `T`. A record that *has* the field may be used where
+an optional field is expected; the reverse is not
+([ADR 0098](adr/0098-optional-record-fields-and-labeled-props.md) §1). JS emit
+leaves the field absent at runtime.
+
+```mochi
+type Props = { id?: string, n: number }
+let ok : Props = { n: 1 }
+let getId = (p: Props) => p.id   // Option<string>
 ```
 
 **Tuples** are real product types that erase to JS arrays. **One numeric type**

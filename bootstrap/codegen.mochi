@@ -298,13 +298,49 @@ let emptyNsEmit = (target, name, ann) => switch target {
 // `(x, y) => e` and `x => y => e` identically (`a -> b -> c`), so it's
 // sound to lower a multi-arg function into a single `_curry`-wrapped JS
 // function instead of nested closures (CRITIQUE §4.4).
-let collapseLambda = (params, body) => switch body {
-  | Ast.ELambda(params2, body2, _) => collapseLambda(
-      Array.concat(params, params2),
-      body2
-    )
-  | _ => (params, body)
+// A trailing labeled group is ONE JS parameter (`$lab`, then `$lab1`, … for a
+// curried chain); `genLabeledFill` destructures it back into the body's names,
+// filling defaults there rather than at the call site (ADR 0098 §2).
+let isLabeledParam = p => switch p {
+  | Ast.LPLabeled(_, _, _, _) => true
+  | _ => false
 }
+
+let splitLamParams = (params, positional, labeled) => switch params {
+  | [] => (positional, labeled)
+  | [p, ...rest] => isLabeledParam(p)
+      ? splitLamParams(rest, positional, Array.append(p, labeled))
+      : splitLamParams(rest, Array.append(p, positional), labeled)
+}
+
+let absorbParams = (params, acc, fills, labN) =>
+  let (positional, labeled) = splitLamParams(params, [], []) in
+  let acc1 = Array.concat(acc, positional) in
+    switch labeled {
+      | [] => (acc1, fills, labN)
+      | _ => let labVar = labN == 0 ? "$lab" : "$lab${show(labN)}" in
+          (
+            Array.append(Ast.LPName(labVar, None), acc1),
+            Array.append({ labVar, labs: labeled }, fills),
+            labN + 1
+          )
+    }
+
+let collapseLambdaFrom = (params, body, acc, fills, labN) =>
+  let (acc1, fills1, labN1) = absorbParams(params, acc, fills, labN) in
+    switch body {
+      | Ast.ELambda(params2, body2, _) => collapseLambdaFrom(
+          params2,
+          body2,
+          acc1,
+          fills1,
+          labN1
+        )
+      | _ => (acc1, body, fills1)
+    }
+
+let collapseLambda = (params, body) =>
+  collapseLambdaFrom(params, body, [], [], 0)
 
 // ---- expressions -----------------------------------------------------------
 
@@ -328,11 +364,11 @@ let genExpr = (ctx: GCtx, e) => switch e {
     // its resolved type (ADR 0043). Gated on an uppercase callee — a ctor.
     let inner = "${ctx->genCallee(fn)}(${Str.join(", ", args |> map(a => ctx->genExpr(a)))})" in
       castOr(inner, isCtorRef(fn) ? hook1(ctx.annotateCall, e) : None)
-  | Ast.ELambda(params, body, sp) => let (cparams, cbody) = collapseLambda(
+  | Ast.ELambda(params, body, sp) => let (cparams, cbody, fills) = collapseLambda(
       params,
       body
     ) in
-    let bound = paramNameSet(cparams, 0, Set.fromArray([])) in
+    let bound = fillNames(fills, paramNameSet(cparams, 0, Set.fromArray([]))) in
     // TS backend: annotate each param from the lambda's inferred curried type
     // (ADR 0028), else strict tsc infers `any`. `sp` is the OUTER (un-collapsed)
     // lambda's span, which carries the full `A -> B -> …` type; the hook peels
@@ -343,7 +379,7 @@ let genExpr = (ctx: GCtx, e) => switch e {
       sp,
       Array.length(cparams)
     ) in
-    let arrow = "${annots.generics}(${Str.join(", ", annotatedParams(cparams, annots.params, 0))}) => ${ctx->genLambdaBodyIn(cbody, bound)}" in
+    let arrow = "${annots.generics}(${Str.join(", ", annotatedParams(cparams, annots.params, 0))}) => ${ctx->genLambdaBodyIn(cbody, bound, ctx->genFillDecls(fills))}" in
       // Curried type, JS impl: arity >= 2 lowers to a `_curry`-wrapped
       // function so any call grouping works (CRITIQUE §4.4). Arity 1 needs none.
       Array.length(cparams) >= 2
@@ -401,11 +437,14 @@ let genExpr = (ctx: GCtx, e) => switch e {
               ? "{ ${spreadStr} }"
               : "{ ${spreadStr}, ${fieldStrs} }"
       }
-  | Ast.EField(target, name, _) => switch emptyNsEmit(target, name, hook1(ctx.annotateEmpty, e)) {
+  | Ast.EField(target, name, optional, _) => switch emptyNsEmit(target, name, hook1(ctx.annotateEmpty, e)) {
       | Some(js) => js
       | None => switch ctx->nsRuntimeId(target, name) {
           | Some(rt) => rt
-          | None => "${ctx->genMember(target)}.${name}"
+          | None => let member = "${ctx->genMember(target)}.${name}" in
+              optional
+                ? "((v) => v != null ? { _tag: \"Some\", value: v } : { _tag: \"None\" })(${member})"
+                : member
         }
     }
   | Ast.ETuple(elements, _) =>
@@ -475,6 +514,10 @@ let genParam = p => switch p {
   | Ast.LPName(name, _) => name
   | Ast.LPTuple(names) => "[${Str.join(", ", names)}]"
   | Ast.LPRecord(fields) => "{ ${Str.join(", ", fields)} }"
+  | Ast.LPLabeled(name, _, _, _) =>
+    // `collapseLambda` already replaced a labeled group with its `$lab` name,
+    // so this is unreachable there; `let?` shares this printer.
+    name
 }
 
 // A lambda in callee position must be parenthesized: `((x) => ...)(arg)`.
@@ -531,7 +574,7 @@ let hasRecur = e => switch e {
       | Some(sp) => hasRecur(sp)
       | None => false
     } || someOf(f => hasRecur(f.value), fields)
-  | Ast.EField(target, _, _) => hasRecur(target)
+  | Ast.EField(target, _, _, _) => hasRecur(target)
   | Ast.ETuple(elements, _) => someOf(hasRecur, elements)
   | Ast.EArr(elements, _) => someOf(el => hasRecur(seqElemExpr(el)), elements)
   | Ast.EList(elements, _) => someOf(el => hasRecur(seqElemExpr(el)), elements)
@@ -665,6 +708,41 @@ let paramNames = p => switch p {
   | Ast.LPName(name, _) => [name]
   | Ast.LPTuple(names) => names
   | Ast.LPRecord(fields) => fields
+  | Ast.LPLabeled(name, _, _, _) => [name]
+}
+
+// One `const` per label, reading the collapsed `$lab` record. A default is
+// filled HERE, in the callee, so `f()` and a plain record argument both work;
+// `~x?` with no default surfaces as `Option` to match the inferred type.
+let genLabeledFill = (ctx: GCtx, labVar, lab) => switch lab {
+  | Ast.LPLabeled(name, _, optional, defaultValue) => let access = "(${labVar} ?? {}).${name}" in
+      switch defaultValue {
+        | Some(d) => "const ${name} = ${access} != null ? ${access} : ${ctx->genExpr(d)};"
+        | None => optional
+            ? "const ${name} = ${access} != null ? { _tag: \"Some\", value: ${access} } : { _tag: \"None\" };"
+            : "const ${name} = ${access};"
+      }
+  | _ => ""
+}
+
+let genFillDecls = (ctx: GCtx, fills) => switch fills {
+  | [] => ""
+  | _ => "${Str.join(" ", fills |> map(g => Str.join(" ", g.labs |> map(lab => ctx->genLabeledFill(g.labVar, lab)))))} "
+}
+
+let fillNames = (fills, acc) => switch fills {
+  | [] => acc
+  | [g, ...rest] => fillNames(
+      rest,
+      Array.reduce(
+        (s, lab) => switch lab {
+          | Ast.LPLabeled(name, _, _, _) => Set.add(name, s)
+          | _ => s
+        },
+        acc,
+        g.labs
+      )
+    )
 }
 
 let addNames = (names, i, acc) => switch Array.get(i, names) {
@@ -706,7 +784,9 @@ let letBlockLoop = (ctx: GCtx, e, seen, decls) => switch e {
 // rather than nested IIFEs, so the emitted JS reads like the source instead
 // of nesting one closure per binding. Whatever the chain stopped at falls
 // back to the IIFE form, which scopes it correctly.
-let genLambdaBodyIn = (ctx: GCtx, e, bound) =>
+// `prefix` is the labeled-fill `const` run (ADR 0098 §2), already
+// space-terminated, or "" — it forces a block body wherever it is non-empty.
+let genLambdaBodyIn = (ctx: GCtx, e, bound, prefix) =>
   let (decls, rest, seen) = ctx->letBlockLoop(e, bound, []) in
     Array.length(decls) == 0
       ? switch e {
@@ -715,16 +795,20 @@ let genLambdaBodyIn = (ctx: GCtx, e, bound) =>
           // IIFE. Param names clashing with the arrow's own params would be a JS
           // redeclaration, so those fall through to the IIFE form (ADR 0056).
           loopParamFree(params, 0, bound)
-            ? "{ ${ctx->genLoopBlock(params, body)} }"
-            : ctx->genLambdaBody(e)
-        | _ => ctx->genLambdaBody(e)
+            ? "{ ${prefix}${ctx->genLoopBlock(params, body)} }"
+            : prefix == ""
+            ? ctx->genLambdaBody(e)
+            : "{ ${prefix}return ${ctx->genLambdaBody(e)}; }"
+        | _ => prefix == ""
+            ? ctx->genLambdaBody(e)
+            : "{ ${prefix}return ${ctx->genLambdaBody(e)}; }"
       }
       : let block = Str.join(" ", decls) in
         switch rest {
           | Ast.ELoop(params, body, _) => loopParamFree(params, 0, seen)
-              ? "{ ${block} ${ctx->genLoopBlock(params, body)} }"
-              : "{ ${block} return ${ctx->genExpr(rest)}; }"
-          | _ => "{ ${block} return ${ctx->genExpr(rest)}; }"
+              ? "{ ${prefix}${block} ${ctx->genLoopBlock(params, body)} }"
+              : "{ ${prefix}${block} return ${ctx->genExpr(rest)}; }"
+          | _ => "{ ${prefix}${block} return ${ctx->genExpr(rest)}; }"
         }
 
 // ---- match -> @onrails/pattern chain ---------------------------------------
@@ -1558,7 +1642,7 @@ let usesMatchLib = e => switch e {
       | Some(s) => usesMatchLib(s)
       | None => false
     } || someOf(f => usesMatchLib(f.value), fields)
-  | Ast.EField(target, _, _) => usesMatchLib(target)
+  | Ast.EField(target, _, _, _) => usesMatchLib(target)
   | Ast.ETuple(elements, _) => someOf(usesMatchLib, elements)
   | Ast.EArr(elements, _) => someOf(
       el =>
@@ -1647,14 +1731,28 @@ let exprRefs = (ctx: GCtx, e, acc) => switch e {
       0,
       ctx->exprRefs(fn, acc)
     )
-  | Ast.ELambda(params, body, _) => let (cparams, cbody) = collapseLambda(
+  | Ast.ELambda(params, body, _) => let (cparams, cbody, fills) = collapseLambda(
       params,
       body
     ) in
     let acc2 = Array.length(cparams) >= 2
       ? Set.add("_curry", acc)
       : acc in // arity >= 2 lowers `_curry(...)`
-      ctx->exprRefs(cbody, acc2)
+    // A labeled default is emitted inside the body, so its refs count too.
+    let acc3 = Array.reduce(
+      (a, g) =>
+        Array.reduce(
+          (b, lab) => switch lab {
+            | Ast.LPLabeled(_, _, _, Some(d)) => ctx->exprRefs(d, b)
+            | _ => b
+          },
+          a,
+          g.labs
+        ),
+      acc2,
+      fills
+    ) in
+      ctx->exprRefs(cbody, acc3)
   | Ast.ELetIn(_, _, value, body, _) => ctx->exprRefs(
       body,
       ctx->exprRefs(value, acc)
@@ -1688,7 +1786,7 @@ let exprRefs = (ctx: GCtx, e, acc) => switch e {
       0,
       switch spread { | Some(s) => ctx->exprRefs(s, acc) | None => acc }
     )
-  | Ast.EField(target, name, _) => switch emptyNsEmit(target, name, None) {
+  | Ast.EField(target, name, _, _) => switch emptyNsEmit(target, name, None) {
       | Some(_) => switch target {
           | Ast.ERef("List", _) => Set.add("_list", acc)
           | _ => acc

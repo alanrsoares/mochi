@@ -189,7 +189,9 @@ const widenRow = (row: Row): Row =>
   match(row)
     .with({ kind: "empty" }, (empty) => empty)
     .with({ kind: "rvar" }, (rvar) => rvar)
-    .with({ kind: "extend" }, (ext) => rExtend(ext.label, widenLits(ext.type), widenRow(ext.rest)))
+    .with({ kind: "extend" }, (ext) =>
+      rExtend(ext.label, widenLits(ext.type), widenRow(ext.rest), ext.optional),
+    )
     .exhaustive();
 
 export const instantiate = (sc: Scheme, f: Fresh): Type => {
@@ -213,7 +215,9 @@ export const instantiate = (sc: Scheme, f: Fresh): Type => {
     match(row)
       .with({ kind: "empty" }, (empty) => empty)
       .with({ kind: "rvar" }, (rvar) => rmap.get(rvar.id) ?? rvar)
-      .with({ kind: "extend" }, (ext) => rExtend(ext.label, sub(ext.type), subRow(ext.rest)))
+      .with({ kind: "extend" }, (ext) =>
+        rExtend(ext.label, sub(ext.type), subRow(ext.rest), ext.optional),
+      )
       .exhaustive();
   return sub(sc.type);
 };
@@ -263,7 +267,8 @@ export const aliasRow = (
   const next = new Set(expanding).add(name);
   if (info.expr) return typeExprToType(info.expr, local, f, scope, next);
   const row = info.fields.reduceRight<Row>(
-    (rest, fld) => rExtend(fld.name, typeExprToType(fld.type, local, f, scope, next), rest),
+    (rest, fld) =>
+      rExtend(fld.name, typeExprToType(fld.type, local, f, scope, next), rest, fld.optional),
     rEmpty,
   );
   return tRecord(row);

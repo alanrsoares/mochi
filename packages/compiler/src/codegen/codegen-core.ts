@@ -13,6 +13,8 @@ import type {
   TypeExpr,
   TypeStmt,
 } from "../ast/ast";
+import type { LabeledParam } from "../ast/labeled";
+import { splitLamParams } from "../ast/labeled";
 import type { Span } from "../ast/span";
 import { namespaceRuntime } from "../prelude/prelude";
 import { exprRefs } from "./codegen-deps";
@@ -160,14 +162,69 @@ export const emptyNsEmit = (e: FieldExpr, ctx: GenCtx): string | null => {
  * — it lets a multi-arg function lower to a single `_curry`-wrapped JS function
  * instead of nested closures (CRITIQUE §4.4).
  */
-export const collapseLambda = (l: LambdaExpr): { params: LamParam[]; body: Expr } => {
-  const params = [...l.params];
+/** One labeled group collapsed to a single `$labN` JS parameter. */
+export type LabeledFillGroup = { labVar: string; labs: LabeledParam[] };
+
+export type CollapsedLambda = {
+  params: LamParam[];
+  body: Expr;
+  fills: LabeledFillGroup[];
+};
+
+/**
+ * Collapse `(x) => (y) => e` (curried lambdas), `(x, y) => e`, or a mix
+ * into one flat parameter list plus a final body. A trailing labeled group
+ * becomes one `$lab` parameter (ADR 0098 §2). mochi types treat `(x, y) => e`
+ * and `x => y => e` identically (`a -> b -> c`), so it's sound to lower a
+ * multi-arg function to a single `_curry`-wrapped JS function instead of
+ * nested closures (CRITIQUE §4.4).
+ */
+export const collapseLambda = (l: LambdaExpr): CollapsedLambda => {
+  const params: LamParam[] = [];
+  const fills: LabeledFillGroup[] = [];
+  let labN = 0;
+  const absorb = (ps: LamParam[]): void => {
+    const { pos, labs } = splitLamParams(ps);
+    params.push(...pos);
+    if (labs.length === 0) return;
+    const labVar = labN === 0 ? "$lab" : `$lab${labN}`;
+    labN++;
+    params.push({ kind: "name", name: labVar, span: labs[0]!.span });
+    fills.push({ labVar, labs });
+  };
+  absorb(l.params);
   let body: Expr = l.body;
   while (body.kind === "lambda") {
-    params.push(...body.params);
+    absorb(body.params);
     body = body.body;
   }
-  return { params, body };
+  return { params, body, fills };
+};
+
+const genLabeledFill = (labVar: string, lab: LabeledParam, ctx: GenCtx): string => {
+  const access = `(${labVar} ?? {}).${lab.name}`;
+  if (lab.default !== undefined)
+    return `const ${lab.name} = ${access} != null ? ${access} : ${genExpr(lab.default, ctx)};`;
+  if (lab.optional)
+    return `const ${lab.name} = ${access} != null ? { _tag: "Some", value: ${access} } : { _tag: "None" };`;
+  return `const ${lab.name} = ${access};`;
+};
+
+const genFilledBody = (
+  body: Expr,
+  ctx: GenCtx,
+  bound: ReadonlySet<string>,
+  fills: LabeledFillGroup[],
+): string => {
+  const stmts = fills.flatMap((g) => g.labs.map((lab) => genLabeledFill(g.labVar, lab, ctx)));
+  if (stmts.length === 0) return genLambdaBody(body, ctx, bound);
+  const prefix = stmts.join(" ");
+  const letBlock = body.kind === "letin" ? genLetBlock(body, ctx, bound) : null;
+  if (letBlock) return `{ ${prefix} ${letBlock.slice(2)}`;
+  if (body.kind === "loop" && body.params.every((p) => !bound.has(p.name)))
+    return `{ ${prefix} ${genLoopBlock(body, ctx)} }`;
+  const core = body.kind === "record" ? `(${genExpr(body, ctx)})` : genExpr(body, ctx);
+  return `{ ${prefix} return ${core}; }`;
 };
 
 /** Re-escape a decoded literal chunk for a JS template literal: backslashes first (else the escapes we're about to insert double-escape), then the two chars that would otherwise reopen JS template syntax. */
@@ -210,7 +267,7 @@ export const genExpr = (e: Expr, ctx: GenCtx): string =>
       return ann ? `(${inner} as ${ann})` : inner;
     })
     .with({ kind: "lambda" }, (l) => {
-      const { params, body } = collapseLambda(l);
+      const { params, body, fills } = collapseLambda(l);
       // TS backend: annotate each param from the lambda's inferred curried type
       // (ADR 0028), so `(x) => …` becomes `(x: A) => …` — otherwise strict tsc
       // infers `any`. `l.span` (the outer, un-collapsed lambda) carries the full
@@ -221,9 +278,13 @@ export const genExpr = (e: Expr, ctx: GenCtx): string =>
         const g = genParam(p);
         return anns[i] ? `${g}: ${anns[i]}` : g;
       });
+      const bound = new Set([
+        ...params.flatMap((p) => [...paramNames(p)]),
+        ...fills.flatMap((g) => g.labs.map((lab) => lab.name)),
+      ]);
       // A generic binding's value lambda scopes its letters here (ADR 0032), so
       // its (now fully annotated) params can name them; every other lambda: "".
-      const arrow = `${ann?.generics ?? ""}(${ps.join(", ")}) => ${genLambdaBody(body, ctx, new Set(params.flatMap(paramNames)))}`;
+      const arrow = `${ann?.generics ?? ""}(${ps.join(", ")}) => ${genFilledBody(body, ctx, bound, fills)}`;
       // Curried type, flat JS impl: arity ≥ 2 lowers to a `_curry`-wrapped
       // function so any call grouping works (CRITIQUE §4.4). Arity 1 needs none.
       return params.length >= 2 ? `_curry(${params.length}, ${arrow})` : arrow;
@@ -288,10 +349,14 @@ export const genExpr = (e: Expr, ctx: GenCtx): string =>
       const parts = r.spread ? [`...${genExpr(r.spread, ctx)}`, ...fields] : fields;
       return parts.length === 0 ? "{}" : `{ ${parts.join(", ")} }`;
     })
-    .with(
-      { kind: "field" },
-      (f) => emptyNsEmit(f, ctx) ?? nsRuntimeId(f) ?? `${genMember(f.target, ctx)}.${f.name}`,
-    )
+    .with({ kind: "field" }, (f) => {
+      const ns = emptyNsEmit(f, ctx) ?? nsRuntimeId(f);
+      if (ns) return ns;
+      const member = `${genMember(f.target, ctx)}.${f.name}`;
+      return f.optional
+        ? `((v) => v != null ? { _tag: "Some", value: v } : { _tag: "None" })(${member})`
+        : member;
+    })
     // A tuple erases to a JS array `[a, b]` (like ReScript); the type system
     // keeps it distinct from an `mochi` Array, the runtime shares the shape. TS
     // emit wraps it in `_tuple(…)` so tsc infers a tuple, not a widened array
@@ -347,11 +412,13 @@ export const genParam = (p: LamParam): string =>
     ? p.name
     : p.kind === "ptuple"
       ? `[${p.names.join(", ")}]`
-      : `{ ${p.fields.join(", ")} }`;
+      : p.kind === "labeled"
+        ? p.name
+        : `{ ${p.fields.join(", ")} }`;
 
 /** Every JS binding a lambda parameter introduces — a `const` may not reuse one. */
 export const paramNames = (p: LamParam): readonly string[] =>
-  p.kind === "name" ? [p.name] : p.kind === "ptuple" ? p.names : p.fields;
+  p.kind === "name" || p.kind === "labeled" ? [p.name] : p.kind === "ptuple" ? p.names : p.fields;
 
 /** A lambda in callee position must be parenthesized: `((x) => ...)(arg)`. */
 export const genCallee = (e: Expr, ctx: GenCtx): string =>
