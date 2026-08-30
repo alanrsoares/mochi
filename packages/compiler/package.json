@@ -7,6 +7,7 @@
     ".": "./src/index.ts",
     "./ast": "./src/ast/ast.ts",
     "./bootstrap": "./src/bootstrap/index.ts",
+    "./bootstrap/sync": "./src/bootstrap/sync.ts",
     "./check": "./src/check/index.ts",
     "./codegen": "./src/codegen/index.ts",
     "./codegen-ts": "./src/codegen/codegen-ts.ts",
