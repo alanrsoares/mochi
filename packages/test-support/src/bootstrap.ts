@@ -135,7 +135,12 @@ const buildGraph = (): string => {
     cpSync(join(root, "bootstrap", name), join(tmp, name), { recursive: true });
   }
   try {
-    execFileSync("bun", ["packages/cli/src/cli.ts", "build", join(tmp, "cli.mochi")], {
+    // The host CLI normally runs the frozen bootstrap seed (ADR 0090). This
+    // cache intentionally needs the independent TypeScript oracle instead: it
+    // materialises today's bootstrap sources for parity and binary tests.
+    // `--open` is behaviorally inert for this closed graph but deliberately
+    // selects that oracle path.
+    execFileSync("bun", ["packages/cli/src/cli.ts", "build", "--open", join(tmp, "cli.mochi")], {
       cwd: root,
     });
     try {

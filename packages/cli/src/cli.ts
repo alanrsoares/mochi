@@ -10,6 +10,7 @@ import {
   printProjectErrors,
   transformProject,
 } from "@mochi/codemod";
+import { type BootstrapDiagnostic, loadBootstrapCore } from "@mochi/compiler/bootstrap";
 import { codegenTs } from "@mochi/compiler/codegen-ts";
 import { compile } from "@mochi/compiler/compile";
 import { type Diagnostic, formatError } from "@mochi/compiler/errors";
@@ -41,6 +42,15 @@ function requireArg(path: string | undefined, usage: string): string {
 
 function die(es: Diagnostic | Diagnostic[], src?: string): never {
   printDiags(es, src);
+  process.exit(1);
+}
+
+/** The self-hosted graph's compact diagnostic, rendered by its host-equivalent format. */
+function dieBootstrap(path: string, src: string, error: BootstrapDiagnostic): never {
+  const before = src.slice(0, error.start);
+  const line = before.split("\n").length;
+  const col = error.start - before.lastIndexOf("\n");
+  console.error(`${path}:${line}:${col}: ${error.message}`);
   process.exit(1);
 }
 
@@ -115,13 +125,29 @@ await match(cmd)
       rest.find((a) => !a.startsWith("-")),
       `usage: mochi build [--emit=ts] [--open] [--no-docs] <entry.mochi>\n${USAGE}`,
     );
-    const read = (p: string): Promise<string> => Bun.file(p).text();
-    const result = await (emitTs
-      ? buildModulesTs(entry, read, { open, docs })
-      : buildModules(entry, read, { open, docs }));
-    if (isErr(result)) die(result.error);
+    const outputs =
+      !open && docs
+        ? await (async () => {
+            const bootstrap = await loadBootstrapCore();
+            const result = emitTs
+              ? bootstrap.buildModulesTs(entry, "@mochi/runtime")
+              : bootstrap.buildModules(entry);
+            if (result._tag === "Err") {
+              const src = await Bun.file(entry).text();
+              dieBootstrap(entry, src, result.error);
+            }
+            return result.value;
+          })()
+        : await (async () => {
+            const read = (p: string): Promise<string> => Bun.file(p).text();
+            const result = await (emitTs
+              ? buildModulesTs(entry, read, { open, docs })
+              : buildModules(entry, read, { open, docs }));
+            if (isErr(result)) die(result.error);
+            return result.value;
+          })();
     const ext = emitTs ? ".ts" : ".js";
-    for (const { path, js } of result.value) {
+    for (const { path, js } of outputs) {
       const out = path.endsWith(".ts") ? path : path.replace(/\.mochi$/, ext);
       await Bun.write(out, js);
       console.error(`  ${out}`);
@@ -135,6 +161,12 @@ await match(cmd)
       USAGE,
     );
     const src = await Bun.file(file).text();
+    if (!open && docs) {
+      const result = (await loadBootstrapCore()).compile(src);
+      if (result._tag === "Err") dieBootstrap(file, src, result.error);
+      process.stdout.write(result.value);
+      return;
+    }
     const r = compile(src, { open, docs });
     if (isErr(r)) die(r.error, src);
     process.stdout.write(r.value);
