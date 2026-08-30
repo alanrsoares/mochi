@@ -1,3 +1,5 @@
+import type { PErr } from "./parser";
+
 export type Diag = { message: string; start: number; end: number };
 
 import type { Result, _Curry } from "@mochi/compiler/runtime";
@@ -42,7 +44,7 @@ export const buildOne: (path: string) => Result<string, string> = (path: string)
     (src) =>
       _Result_flatMap(
         (js) => writeFile(outPath(path), js),
-        _Result_mapErr((e: Diag) => formatError(path, src, e), compile(src)),
+        _Result_mapErr((e: PErr) => formatError(path, src, e), compile(src)),
       ),
     readFile(path),
   );
@@ -54,7 +56,7 @@ export const buildOneTs: _Curry<
     (src) =>
       _Result_flatMap(
         (ts) => writeFile(tsOutPath(path), ts),
-        _Result_mapErr((e: Diag) => formatError(path, src, e), compileTs(src, runtimeImport)),
+        _Result_mapErr((e: PErr) => formatError(path, src, e), compileTs(src, runtimeImport)),
       ),
     readFile(path),
   ),
@@ -134,13 +136,13 @@ export const buildMultiTs: _Curry<
 > = _curry(2, (entry: string, runtimeImport: string) =>
   _Result_flatMap(
     writeAllTs,
-    _Result_mapErr((e: Diag) => e.message, buildModulesTs(entry, runtimeImport)),
+    _Result_mapErr((e: PErr) => e.message, buildModulesTs(entry, runtimeImport)),
   ),
 );
 export const buildMulti: (entry: string) => Result<string, string> = (entry: string) =>
   _Result_flatMap(
     writeAll,
-    _Result_mapErr((e: Diag) => e.message, buildModules(entry)),
+    _Result_mapErr((e: PErr) => e.message, buildModules(entry)),
   );
 /**
  * Invoke only when Bun executes cli.js / cli.ts directly. Importing it from a

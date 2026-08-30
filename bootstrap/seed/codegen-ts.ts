@@ -1,7 +1,4 @@
 import type {
-  AliasField,
-  Ctor,
-  CtorField,
   Expr,
   Field,
   InterpPart,
@@ -14,8 +11,10 @@ import type {
   Stmt,
   TypeExpr,
 } from "./ast";
-import type { Row, Ty } from "./types";
-import type { GenOpts } from "./codegen";
+import type { Row, SpanAt, St, Ty } from "./types";
+import type { QualAliasField } from "./infer";
+import type { CtorFactoryTs, CtorFieldLike, CtorLike, GenOpts, ParamAnnots } from "./codegen";
+import type { TsEnv } from "./ts-types";
 
 /**
  * A declared type alias as the printer reads it: its parameters, plus EITHER a
@@ -23,7 +22,7 @@ import type { GenOpts } from "./codegen";
  * well as in schemes.mochi rather than shared through an import — a local
  * record alias expands, so both copies unify structurally (ADR 0044).
  */
-export type AliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
+export type AliasInfo = { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> };
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
@@ -152,18 +151,7 @@ const fieldTs: _Curry<
   (te: TypeExpr, params: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>) => {
     const vars: Map<string, Ty> = paramVarsFrom(params, 0);
     const names: Map<number, string> = paramNamesFrom(params, 0);
-    return (([t, _vars, _st]: [
-      Ty,
-      Map<string, Ty>,
-      {
-        tv: Map<number, Ty>;
-        rv: Map<number, Row>;
-        next: number;
-        recorded: { span: Span; ty: Ty }[];
-        letSpans: Map<string, Span>;
-        letUses: Map<string, Ty[]>;
-      },
-    ]) => tsOf(t, tsEnv(names, recs)))(
+    return (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) => tsOf(t, tsEnv(names, recs)))(
       typeExprToType(te, vars, mkSt(length(params)), aliases, _Set_fromArray([] as string[])),
     );
   },
@@ -175,7 +163,7 @@ const fieldTs: _Curry<
  */
 const ctorFieldsFrom: _Curry<
   [
-    fields: CtorField[],
+    fields: CtorFieldLike[],
     keys: string[],
     params: string[],
     aliases: Map<string, AliasInfo>,
@@ -186,7 +174,7 @@ const ctorFieldsFrom: _Curry<
 > = _curry(
   6,
   (
-    fields: CtorField[],
+    fields: CtorFieldLike[],
     keys: string[],
     params: string[],
     aliases: Map<string, AliasInfo>,
@@ -207,11 +195,11 @@ const ctorFieldsFrom: _Curry<
  * One ctor's runtime shape: the `_tag` discriminant plus its fields.
  */
 const ctorVariant: _Curry<
-  [c: Ctor, params: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>],
+  [c: CtorLike, params: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>],
   string
 > = _curry(
   4,
-  (c: Ctor, params: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>) => {
+  (c: CtorLike, params: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>) => {
     const fields: string[] = ctorFieldsFrom(c.fields, keysOf(c.fields), params, aliases, recs, 0);
     return eq(length(fields), 0)
       ? `{ _tag: "${c.name}" }`
@@ -220,7 +208,7 @@ const ctorVariant: _Curry<
 );
 const ctorVariantsFrom: _Curry<
   [
-    ctors: Ctor[],
+    ctors: CtorLike[],
     params: string[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
@@ -230,7 +218,7 @@ const ctorVariantsFrom: _Curry<
 > = _curry(
   5,
   (
-    ctors: Ctor[],
+    ctors: CtorLike[],
     params: string[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
@@ -253,7 +241,7 @@ export const typeDecl: _Curry<
   [
     name: string,
     params: string[],
-    ctors: Ctor[],
+    ctors: CtorLike[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
   ],
@@ -263,7 +251,7 @@ export const typeDecl: _Curry<
   (
     name: string,
     params: string[],
-    ctors: Ctor[],
+    ctors: CtorLike[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
   ) => {
@@ -274,7 +262,7 @@ ${_Str_join("\n", ctorVariantsFrom(ctors, params, aliases, recs, 0))};`;
 );
 const aliasFieldsFrom: _Curry<
   [
-    fields: AliasField[],
+    fields: QualAliasField[],
     params: string[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
@@ -284,7 +272,7 @@ const aliasFieldsFrom: _Curry<
 > = _curry(
   5,
   (
-    fields: AliasField[],
+    fields: QualAliasField[],
     params: string[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
@@ -308,7 +296,7 @@ export const recordAliasDecl: _Curry<
   [
     name: string,
     params: string[],
-    fields: AliasField[],
+    fields: QualAliasField[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
   ],
@@ -318,7 +306,7 @@ export const recordAliasDecl: _Curry<
   (
     name: string,
     params: string[],
-    fields: AliasField[],
+    fields: QualAliasField[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
   ) => {
@@ -459,11 +447,10 @@ const isConcrete: (t: Ty) => boolean = (t: Ty) => allVarsIn(t, new Map([]));
  * scope only a fully concrete type renders, since a free var would become
  * `unknown` — no better than tsc's own guess.
  */
-export const emptyCollTs: _Curry<
-  [t: Ty, env: { vars: Map<number, string>; recs: Map<string, string> }],
-  Option<string>
-> = _curry(2, (t: Ty, env: { vars: Map<number, string>; recs: Map<string, string> }) =>
-  allVarsIn(t, env.vars) ? (Some(tsOf(t, env)) as Option<string>) : (None as Option<string>),
+export const emptyCollTs: _Curry<[t: Ty, env: TsEnv], Option<string>> = _curry(
+  2,
+  (t: Ty, env: TsEnv) =>
+    allVarsIn(t, env.vars) ? (Some(tsOf(t, env)) as Option<string>) : (None as Option<string>),
 );
 /**
  * TS type for an APPLIED parametric ctor call (`Ok(x)`), else `None`. A ctor's
@@ -501,17 +488,8 @@ export const guardParamTs: _Curry<[t: Ty, recs: Map<string, string>], Option<str
  * letters live on the const's TYPE head and naming one in a value position
  * would be an out-of-scope TS2304.
  */
-const lambdaParamsFrom: _Curry<
-  [t: Ty, arity: number, env: { vars: Map<number, string>; recs: Map<string, string> }, i: number],
-  Option<string>[]
-> = _curry(
-  4,
-  (
-    t: Ty,
-    arity: number,
-    env: { vars: Map<number, string>; recs: Map<string, string> },
-    i: number,
-  ) =>
+const lambdaParamsFrom: _Curry<[t: Ty, arity: number, env: TsEnv, i: number], Option<string>[]> =
+  _curry(4, (t: Ty, arity: number, env: TsEnv, i: number) =>
     gte(i, arity)
       ? ([] as Option<string>[])
       : match(t)
@@ -528,15 +506,11 @@ const lambdaParamsFrom: _Curry<
           .otherwise(() =>
             _Array_prepend(None as Option<string>, lambdaParamsFrom(t, arity, env, add(i, 1))),
           ),
-);
+  );
 export const lambdaParamTypesTs: _Curry<
-  [lamType: Ty, arity: number, env: { vars: Map<number, string>; recs: Map<string, string> }],
+  [lamType: Ty, arity: number, env: TsEnv],
   Option<string>[]
-> = _curry(
-  3,
-  (lamType: Ty, arity: number, env: { vars: Map<number, string>; recs: Map<string, string> }) =>
-    lambdaParamsFrom(lamType, arity, env, 0),
-);
+> = _curry(3, (lamType: Ty, arity: number, env: TsEnv) => lambdaParamsFrom(lamType, arity, env, 0));
 /**
  * Every param annotated with the scheme's OWN letters, scoped by a generic
  * head on the arrow itself (ADR 0032). This closes the polymorphic
@@ -546,17 +520,8 @@ export const lambdaParamTypesTs: _Curry<
  * the lambda brings them into value scope. `None` when the binding is not
  * generic — the concrete-only path already covers it.
  */
-const genericParamsFrom: _Curry<
-  [t: Ty, arity: number, env: { vars: Map<number, string>; recs: Map<string, string> }, i: number],
-  Option<string>[]
-> = _curry(
-  4,
-  (
-    t: Ty,
-    arity: number,
-    env: { vars: Map<number, string>; recs: Map<string, string> },
-    i: number,
-  ) =>
+const genericParamsFrom: _Curry<[t: Ty, arity: number, env: TsEnv, i: number], Option<string>[]> =
+  _curry(4, (t: Ty, arity: number, env: TsEnv, i: number) =>
     gte(i, arity)
       ? ([] as Option<string>[])
       : match(t)
@@ -569,12 +534,12 @@ const genericParamsFrom: _Curry<
           .otherwise(() =>
             _Array_prepend(None as Option<string>, genericParamsFrom(t, arity, env, add(i, 1))),
           ),
-);
+  );
 export const genericLambdaParams: <A>(
   sc: { vars: number[]; rvars: number[]; ty: Ty } & A,
   arity: number,
   recs: Map<string, string>,
-) => Option<{ generics: string; params: Option<string>[] }> = _curry(
+) => Option<ParamAnnots> = _curry(
   3,
   <A>(
     sc: { vars: number[]; rvars: number[]; ty: Ty } & A,
@@ -582,13 +547,13 @@ export const genericLambdaParams: <A>(
     recs: Map<string, string>,
   ) => {
     const names: Map<number, string> = genericNames(sc);
-    const env: { vars: Map<number, string>; recs: Map<string, string> } = tsEnv(names, recs);
+    const env: TsEnv = tsEnv(names, recs);
     return eq(_Map_size(names), 0)
-      ? (None as Option<{ generics: string; params: Option<string>[] }>)
+      ? (None as Option<ParamAnnots>)
       : (Some({
           generics: `<${_Str_join(", ", _Map_values(names))}>`,
           params: genericParamsFrom(sc.ty, arity, env, 0),
-        }) as Option<{ generics: string; params: Option<string>[] }>);
+        }) as Option<ParamAnnots>);
   },
 );
 /**
@@ -606,7 +571,7 @@ const neverArgs: <A>(params: A[], i: number, acc: string[]) => string[] = _curry
 );
 const ctorParamTypes: _Curry<
   [
-    fields: CtorField[],
+    fields: CtorFieldLike[],
     params: string[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
@@ -616,7 +581,7 @@ const ctorParamTypes: _Curry<
 > = _curry(
   5,
   (
-    fields: CtorField[],
+    fields: CtorFieldLike[],
     params: string[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
@@ -636,17 +601,17 @@ export const ctorFactoryTs: _Curry<
   [
     typeName: string,
     params: string[],
-    c: Ctor,
+    c: CtorLike,
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
   ],
-  { generics: string; paramTypes: string[]; ret: string; retMono: string }
+  CtorFactoryTs
 > = _curry(
   5,
   (
     typeName: string,
     params: string[],
-    c: Ctor,
+    c: CtorLike,
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
   ) => {
@@ -763,93 +728,13 @@ export const curriedFnType: _Curry<[params: string[], ret: string], string> = _c
  * the `unit` arrow the JS side erases.
  */
 const flatParamsFrom: _Curry<
-  [
-    t: Ty,
-    value: Expr,
-    env: { vars: Map<number, string>; recs: Map<string, string> },
-    n: number,
-    acc: string[],
-  ],
+  [t: Ty, value: Expr, env: TsEnv, n: number, acc: string[]],
   [string[], string]
-> = _curry(
-  5,
-  (
-    t: Ty,
-    value: Expr,
-    env: { vars: Map<number, string>; recs: Map<string, string> },
-    n: number,
-    acc: string[],
-  ) =>
-    match(value)
-      .with({ _tag: "ELambda" }, ({ params, body }) =>
-        eq(length(params), 0)
-          ? ((next: Ty) => flatParamsFrom(next, body, env, n, acc))(
-              match(t)
-                .with(
-                  (_v): _v is Extract<Ty, { _tag: "TyFn" }> => {
-                    const _g: any = _v;
-                    return _g._tag === "TyFn" && (({ from: fromT, to: toT }) => isUnit(fromT))(_g);
-                  },
-                  ({ from: fromT, to: toT }) => toT,
-                )
-                .otherwise(() => t),
-            )
-          : (([t1, n1, acc1]: [Ty, number, string[]]) => flatParamsFrom(t1, body, env, n1, acc1))(
-              takeParams(t, params, env, 0, n, acc),
-            ),
-      )
-      .otherwise(() => _tuple(acc, tsOf(t, env))),
-);
-const takeParams: _Curry<
-  [
-    t: Ty,
-    params: LamParam[],
-    env: { vars: Map<number, string>; recs: Map<string, string> },
-    i: number,
-    n: number,
-    acc: string[],
-  ],
-  [Ty, number, string[]]
-> = _curry(
-  6,
-  (
-    t: Ty,
-    params: LamParam[],
-    env: { vars: Map<number, string>; recs: Map<string, string> },
-    i: number,
-    n: number,
-    acc: string[],
-  ) =>
-    match(_Array_get(i, params))
-      .with({ _tag: "None" }, () => _tuple(t, n, acc))
-      .with({ _tag: "Some" }, ({ value: p }) =>
-        match(t)
-          .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
-            takeParams(
-              toT,
-              params,
-              env,
-              add(i, 1),
-              add(n, 1),
-              _Array_append(`${paramDeclName(p, n)}: ${tsOf(fromT, env)}`, acc),
-            ),
-          )
-          .otherwise(() => _tuple(t, n, acc)),
-      )
-      .exhaustive(),
-);
-/**
- * Arity-aware nested form: one arrow peeled per param, recursing into the body
- * so a curried definition keeps its shape.
- */
-const declType: _Curry<
-  [t: Ty, value: Expr, env: { vars: Map<number, string>; recs: Map<string, string> }],
-  string
-> = _curry(3, (t: Ty, value: Expr, env: { vars: Map<number, string>; recs: Map<string, string> }) =>
+> = _curry(5, (t: Ty, value: Expr, env: TsEnv, n: number, acc: string[]) =>
   match(value)
     .with({ _tag: "ELambda" }, ({ params, body }) =>
       eq(length(params), 0)
-        ? ((next: Ty) => `() => ${declType(next, body, env)}`)(
+        ? ((next: Ty) => flatParamsFrom(next, body, env, n, acc))(
             match(t)
               .with(
                 (_v): _v is Extract<Ty, { _tag: "TyFn" }> => {
@@ -860,12 +745,61 @@ const declType: _Curry<
               )
               .otherwise(() => t),
           )
-        : (([t1, _n, ps]: [Ty, number, string[]]) =>
-            `(${_Str_join(", ", ps)}) => ${declType(t1, body, env)}`)(
-            takeParams(t, params, env, 0, 0, [] as string[]),
+        : (([t1, n1, acc1]: [Ty, number, string[]]) => flatParamsFrom(t1, body, env, n1, acc1))(
+            takeParams(t, params, env, 0, n, acc),
           ),
     )
-    .otherwise(() => tsOf(t, env)),
+    .otherwise(() => _tuple(acc, tsOf(t, env))),
+);
+const takeParams: _Curry<
+  [t: Ty, params: LamParam[], env: TsEnv, i: number, n: number, acc: string[]],
+  [Ty, number, string[]]
+> = _curry(6, (t: Ty, params: LamParam[], env: TsEnv, i: number, n: number, acc: string[]) =>
+  match(_Array_get(i, params))
+    .with({ _tag: "None" }, () => _tuple(t, n, acc))
+    .with({ _tag: "Some" }, ({ value: p }) =>
+      match(t)
+        .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
+          takeParams(
+            toT,
+            params,
+            env,
+            add(i, 1),
+            add(n, 1),
+            _Array_append(`${paramDeclName(p, n)}: ${tsOf(fromT, env)}`, acc),
+          ),
+        )
+        .otherwise(() => _tuple(t, n, acc)),
+    )
+    .exhaustive(),
+);
+/**
+ * Arity-aware nested form: one arrow peeled per param, recursing into the body
+ * so a curried definition keeps its shape.
+ */
+const declType: _Curry<[t: Ty, value: Expr, env: TsEnv], string> = _curry(
+  3,
+  (t: Ty, value: Expr, env: TsEnv) =>
+    match(value)
+      .with({ _tag: "ELambda" }, ({ params, body }) =>
+        eq(length(params), 0)
+          ? ((next: Ty) => `() => ${declType(next, body, env)}`)(
+              match(t)
+                .with(
+                  (_v): _v is Extract<Ty, { _tag: "TyFn" }> => {
+                    const _g: any = _v;
+                    return _g._tag === "TyFn" && (({ from: fromT, to: toT }) => isUnit(fromT))(_g);
+                  },
+                  ({ from: fromT, to: toT }) => toT,
+                )
+                .otherwise(() => t),
+            )
+          : (([t1, _n, ps]: [Ty, number, string[]]) =>
+              `(${_Str_join(", ", ps)}) => ${declType(t1, body, env)}`)(
+              takeParams(t, params, env, 0, 0, [] as string[]),
+            ),
+      )
+      .otherwise(() => tsOf(t, env)),
 );
 /**
  * The TS type of a binding, WITHOUT the `const name:` wrapper — the piece the
@@ -889,7 +823,7 @@ export const bindingTsType: <A>(
     recs: Map<string, string>,
   ) => {
     const names: Map<number, string> = genericNames(sc);
-    const env: { vars: Map<number, string>; recs: Map<string, string> } = tsEnv(names, recs);
+    const env: TsEnv = tsEnv(names, recs);
     const head: string = eq(_Map_size(names), 0) ? "" : `<${_Str_join(", ", _Map_values(names))}>`;
     return match(value)
       .with({ _tag: "ELambda" }, () =>
@@ -1060,38 +994,30 @@ const builtinTypeNamesFor: _Curry<
  * expands a record alias at `typeExprToType`, so this reproduces exactly what
  * inference will have put in the type table for a value of that alias.
  */
-const aliasRowOf: _Curry<[fields: AliasField[], aliases: Map<string, AliasInfo>, i: number], Row> =
-  _curry(3, (fields: AliasField[], aliases: Map<string, AliasInfo>, i: number) =>
-    match(_Array_get(i, fields))
-      .with({ _tag: "None" }, () => RowEmpty as Row)
-      .with({ _tag: "Some" }, ({ value: f }) =>
-        (([t, _vars, _st]: [
-          Ty,
-          Map<string, Ty>,
-          {
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            next: number;
-            recorded: { span: Span; ty: Ty }[];
-            letSpans: Map<string, Span>;
-            letUses: Map<string, Ty[]>;
-          },
-        ]) => RowExtend(f.name, t, f.optional, aliasRowOf(fields, aliases, add(i, 1))))(
-          typeExprToType(
-            f.fieldType,
-            new Map<string, Ty>(),
-            mkSt(0),
-            aliases,
-            _Set_fromArray([] as string[]),
-          ),
+const aliasRowOf: _Curry<
+  [fields: QualAliasField[], aliases: Map<string, AliasInfo>, i: number],
+  Row
+> = _curry(3, (fields: QualAliasField[], aliases: Map<string, AliasInfo>, i: number) =>
+  match(_Array_get(i, fields))
+    .with({ _tag: "None" }, () => RowEmpty as Row)
+    .with({ _tag: "Some" }, ({ value: f }) =>
+      (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) =>
+        RowExtend(f.name, t, f.optional, aliasRowOf(fields, aliases, add(i, 1))))(
+        typeExprToType(
+          f.fieldType,
+          new Map<string, Ty>(),
+          mkSt(0),
+          aliases,
+          _Set_fromArray([] as string[]),
         ),
-      )
-      .exhaustive(),
-  );
+      ),
+    )
+    .exhaustive(),
+);
 const aliasShapeKey: _Curry<
-  [fields: AliasField[], aliases: Map<string, AliasInfo>],
+  [fields: QualAliasField[], aliases: Map<string, AliasInfo>],
   Option<string>
-> = _curry(2, (fields: AliasField[], aliases: Map<string, AliasInfo>) =>
+> = _curry(2, (fields: QualAliasField[], aliases: Map<string, AliasInfo>) =>
   rowShapeKey(aliasRowOf(fields, aliases, 0), new Map<number, string>()),
 );
 /**
@@ -1163,14 +1089,14 @@ export const recordAliasIndex: (aliases: Map<string, AliasInfo>) => Map<string, 
  * come out as `export type Span = Span;`.
  */
 const withoutOwnShape: <A, B>(
-  fields: AliasField[],
+  fields: QualAliasField[],
   params: A[],
   aliases: Map<string, AliasInfo>,
   recs: Map<string, B>,
 ) => Map<string, B> = _curry(
   4,
   <A, B>(
-    fields: AliasField[],
+    fields: QualAliasField[],
     params: A[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, B>,
@@ -1310,7 +1236,7 @@ const genericLambdasFrom: <A, B, C>(
  * span is collected too, but `annotateParams` resolves that one through
  * `genericLams` first, so the extra entry is harmless.
  */
-const scopedSpans: (e: Expr) => Span[] = (e: Expr) =>
+const scopedSpans: (e: Expr) => SpanAt[] = (e: Expr) =>
   match(e)
     .with({ _tag: "ELambda" }, ({ body, span: sp }) => _Array_prepend(sp, scopedSpans(body)))
     .with({ _tag: "ECall" }, ({ fn, args }) =>
@@ -1337,12 +1263,12 @@ const scopedSpans: (e: Expr) => Span[] = (e: Expr) =>
         scopedSpansInFields(fields, 0),
         match(spread)
           .with({ _tag: "Some" }, ({ value: s }) => scopedSpans(s))
-          .with({ _tag: "None" }, () => [] as Span[])
+          .with({ _tag: "None" }, () => [] as SpanAt[])
           .exhaustive(),
       ),
     )
     .with({ _tag: "EField" }, ({ target, name, span: sp }) =>
-      ((rest: Span[]) =>
+      ((rest: SpanAt[]) =>
         and(eq(name, "empty"), isRefExpr(target)) ? _Array_prepend(sp, rest) : rest)(
         scopedSpans(target),
       ),
@@ -1352,7 +1278,7 @@ const scopedSpans: (e: Expr) => Span[] = (e: Expr) =>
     .with({ _tag: "EList" }, ({ elements, span: sp }) => scopedSpansInSeq(elements, sp))
     .with({ _tag: "ESet" }, ({ elements, span: sp }) => scopedSpansInSeq(elements, sp))
     .with({ _tag: "EMap" }, ({ entries, span: sp }) =>
-      ((inner: Span[]) => (eq(length(entries), 0) ? _Array_prepend(sp, inner) : inner))(
+      ((inner: SpanAt[]) => (eq(length(entries), 0) ? _Array_prepend(sp, inner) : inner))(
         scopedSpansInEntries(entries, 0),
       ),
     )
@@ -1361,52 +1287,52 @@ const scopedSpans: (e: Expr) => Span[] = (e: Expr) =>
     )
     .with({ _tag: "ERecur" }, ({ args }) => scopedSpansAt(args, 0))
     .with({ _tag: "EInterp" }, ({ parts }) => scopedSpansInParts(parts, 0))
-    .otherwise(() => [] as Span[]);
+    .otherwise(() => [] as SpanAt[]);
 const isRefExpr: (e: Expr) => boolean = (e: Expr) =>
   match(e)
     .with({ _tag: "ERef" }, () => true)
     .otherwise(() => false);
-const scopedSpansAt: _Curry<[exprs: Expr[], i: number], Span[]> = _curry(
+const scopedSpansAt: _Curry<[exprs: Expr[], i: number], SpanAt[]> = _curry(
   2,
   (exprs: Expr[], i: number) =>
     match(_Array_get(i, exprs))
-      .with({ _tag: "None" }, () => [] as Span[])
+      .with({ _tag: "None" }, () => [] as SpanAt[])
       .with({ _tag: "Some" }, ({ value: e }) =>
         _Array_concat(scopedSpans(e), scopedSpansAt(exprs, add(i, 1))),
       )
       .exhaustive(),
 );
-const scopedSpansInArms: _Curry<[arms: MatchArm[], i: number], Span[]> = _curry(
+const scopedSpansInArms: _Curry<[arms: MatchArm[], i: number], SpanAt[]> = _curry(
   2,
   (arms: MatchArm[], i: number) =>
     match(_Array_get(i, arms))
-      .with({ _tag: "None" }, () => [] as Span[])
+      .with({ _tag: "None" }, () => [] as SpanAt[])
       .with({ _tag: "Some" }, ({ value: a }) =>
         _Array_concat(
           match(a.guard)
             .with({ _tag: "Some" }, ({ value: g }) => scopedSpans(g))
-            .with({ _tag: "None" }, () => [] as Span[])
+            .with({ _tag: "None" }, () => [] as SpanAt[])
             .exhaustive(),
           _Array_concat(scopedSpans(a.body), scopedSpansInArms(arms, add(i, 1))),
         ),
       )
       .exhaustive(),
 );
-const scopedSpansInFields: _Curry<[fields: Field[], i: number], Span[]> = _curry(
+const scopedSpansInFields: _Curry<[fields: Field[], i: number], SpanAt[]> = _curry(
   2,
   (fields: Field[], i: number) =>
     match(_Array_get(i, fields))
-      .with({ _tag: "None" }, () => [] as Span[])
+      .with({ _tag: "None" }, () => [] as SpanAt[])
       .with({ _tag: "Some" }, ({ value: f }) =>
         _Array_concat(scopedSpans(f.value), scopedSpansInFields(fields, add(i, 1))),
       )
       .exhaustive(),
 );
-const scopedSpansInEntries: _Curry<[entries: MapEntry[], i: number], Span[]> = _curry(
+const scopedSpansInEntries: _Curry<[entries: MapEntry[], i: number], SpanAt[]> = _curry(
   2,
   (entries: MapEntry[], i: number) =>
     match(_Array_get(i, entries))
-      .with({ _tag: "None" }, () => [] as Span[])
+      .with({ _tag: "None" }, () => [] as SpanAt[])
       .with({ _tag: "Some" }, ({ value: en }) =>
         _Array_concat(
           scopedSpans(en.key),
@@ -1415,11 +1341,11 @@ const scopedSpansInEntries: _Curry<[entries: MapEntry[], i: number], Span[]> = _
       )
       .exhaustive(),
 );
-const scopedSpansInElems: _Curry<[elements: SeqElem[], i: number], Span[]> = _curry(
+const scopedSpansInElems: _Curry<[elements: SeqElem[], i: number], SpanAt[]> = _curry(
   2,
   (elements: SeqElem[], i: number) =>
     match(_Array_get(i, elements))
-      .with({ _tag: "None" }, () => [] as Span[])
+      .with({ _tag: "None" }, () => [] as SpanAt[])
       .with(
         (
           _v,
@@ -1450,28 +1376,28 @@ const scopedSpansInElems: _Curry<[elements: SeqElem[], i: number], Span[]> = _cu
  * An EMPTY `[]` / `@{}` / `#{}` is itself annotatable; a populated one only
  * carries its elements' nested nodes.
  */
-const scopedSpansInSeq: _Curry<[elements: SeqElem[], sp: Span], Span[]> = _curry(
+const scopedSpansInSeq: _Curry<[elements: SeqElem[], sp: SpanAt], SpanAt[]> = _curry(
   2,
-  (elements: SeqElem[], sp: Span) => {
-    const inner: Span[] = scopedSpansInElems(elements, 0);
+  (elements: SeqElem[], sp: SpanAt) => {
+    const inner: SpanAt[] = scopedSpansInElems(elements, 0);
     return eq(length(elements), 0) ? _Array_prepend(sp, inner) : inner;
   },
 );
-const scopedSpansInLoop: _Curry<[params: LoopParam[], i: number], Span[]> = _curry(
+const scopedSpansInLoop: _Curry<[params: LoopParam[], i: number], SpanAt[]> = _curry(
   2,
   (params: LoopParam[], i: number) =>
     match(_Array_get(i, params))
-      .with({ _tag: "None" }, () => [] as Span[])
+      .with({ _tag: "None" }, () => [] as SpanAt[])
       .with({ _tag: "Some" }, ({ value: p }) =>
         _Array_concat(scopedSpans(p.init), scopedSpansInLoop(params, add(i, 1))),
       )
       .exhaustive(),
 );
-const scopedSpansInParts: _Curry<[parts: InterpPart[], i: number], Span[]> = _curry(
+const scopedSpansInParts: _Curry<[parts: InterpPart[], i: number], SpanAt[]> = _curry(
   2,
   (parts: InterpPart[], i: number) =>
     match(_Array_get(i, parts))
-      .with({ _tag: "None" }, () => [] as Span[])
+      .with({ _tag: "None" }, () => [] as SpanAt[])
       .with(
         (
           _v,
@@ -1573,24 +1499,7 @@ export const tsGenOpts: <A, B, C, D, E, F, G, H, I>(
   types: ({ span: { start: A; end: B } & F; ty: Ty } & G)[],
   letParams: ({ span: { start: C; end: D } & H; ty: Ty } & I)[],
   aliases: Map<string, AliasInfo>,
-) => {
-  annotateLet: Option<(a: string, b: Expr) => Option<string>>;
-  annotateCtor: Option<
-    (
-      a: Stmt,
-      b: Ctor,
-    ) => Option<{ generics: string; paramTypes: string[]; ret: string; retMono: string }>
-  >;
-  annotateParams: Option<(a: Span, b: number) => { generics: string; params: Option<string>[] }>;
-  annotateEmpty: Option<(a: Expr) => Option<string>>;
-  annotateLetin: Option<(a: Expr) => Option<string>>;
-  annotateCall: Option<(a: Expr) => Option<string>>;
-  guardBaseType: Option<(a: Expr) => Option<string>>;
-  flattenPipe: boolean;
-  tupleHelper: boolean;
-  moduleExt: string;
-  docs: boolean;
-} = _curry(
+) => GenOpts = _curry(
   5,
   <A, B, C, D, E, F, G, H, I>(
     stmts: Stmt[],
@@ -1615,9 +1524,7 @@ export const tsGenOpts: <A, B, C, D, E, F, G, H, I>(
     );
     const recs: Map<string, string> = recordAliasIndex(aliases);
     const typeOf: (a: Expr) => Option<Ty> = (e: Expr) => _Map_get(spanKey(exprSpan(e)), typeAt);
-    const envAt: (a: string) => { vars: Map<number, string>; recs: Map<string, string> } = (
-      key: string,
-    ) =>
+    const envAt: (a: string) => TsEnv = (key: string) =>
       match(_Map_get(key, scopedNames))
         .with({ _tag: "Some" }, ({ value: vars }) => tsEnv(vars, recs))
         .with({ _tag: "None" }, () => recsEnv(recs))
@@ -1651,36 +1558,18 @@ export const tsGenOpts: <A, B, C, D, E, F, G, H, I>(
         ),
       ) as Option<(a: string, b: Expr) => Option<string>>,
       annotateCtor: Some(
-        _curry(2, (s: Stmt, c: Ctor) =>
+        _curry(2, (s: Stmt, c: CtorLike) =>
           match(s)
             .with(
               { _tag: "SType" },
               ({ name, params }) =>
-                Some(ctorFactoryTs(name, params, c, aliases, recs)) as Option<{
-                  generics: string;
-                  paramTypes: string[];
-                  ret: string;
-                  retMono: string;
-                }>,
+                Some(ctorFactoryTs(name, params, c, aliases, recs)) as Option<CtorFactoryTs>,
             )
-            .otherwise(
-              () =>
-                None as Option<{
-                  generics: string;
-                  paramTypes: string[];
-                  ret: string;
-                  retMono: string;
-                }>,
-            ),
+            .otherwise(() => None as Option<CtorFactoryTs>),
         ),
-      ) as Option<
-        (
-          a: Stmt,
-          b: Ctor,
-        ) => Option<{ generics: string; paramTypes: string[]; ret: string; retMono: string }>
-      >,
+      ) as Option<(a: Stmt, b: CtorLike) => Option<CtorFactoryTs>>,
       annotateParams: Some(
-        _curry(2, (sp: Span, arity: number) =>
+        _curry(2, (sp: SpanAt, arity: number) =>
           match(_Map_get(spanKey(sp), genericLams))
             .with({ _tag: "Some" }, ({ value: sc }) =>
               _Option_unwrapOr(
@@ -1699,7 +1588,7 @@ export const tsGenOpts: <A, B, C, D, E, F, G, H, I>(
             }))
             .exhaustive(),
         ),
-      ) as Option<(a: Span, b: number) => { generics: string; params: Option<string>[] }>,
+      ) as Option<(a: SpanAt, b: number) => ParamAnnots>,
       annotateEmpty: Some((e: Expr) => {
         const key: string = spanKey(exprSpan(e));
         return _Option_flatMap((t: Ty) => emptyCollTs(t, envAt(key)), _Map_get(key, typeAt));
@@ -1984,10 +1873,11 @@ export const externModuleDts: <A, B>(
         "\n",
         _Array_concat(
           map(
-            (bt: { name: string; params: string[]; ctors: Ctor[] }) =>
+            (bt: { name: string; params: string[]; ctors: CtorLike[] }) =>
               typeDecl(bt.name, bt.params, bt.ctors, aliases, new Map<string, string>()),
             filter(
-              (bt: { name: string; params: string[]; ctors: Ctor[] }) => _Set_has(bt.name, wanted),
+              (bt: { name: string; params: string[]; ctors: CtorLike[] }) =>
+                _Set_has(bt.name, wanted),
               builtinTypeDecls,
             ),
           ),

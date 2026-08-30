@@ -11,10 +11,10 @@ import type {
   PatField,
   Pattern,
   SeqElem,
-  Span,
   Stmt,
   TypeExpr,
 } from "./ast";
+import type { SpanAt } from "./types";
 import type { TSt } from "./scc";
 
 /**
@@ -43,7 +43,7 @@ export type CtorLike = { name: string; fields: CtorFieldLike[] };
 export type GenOpts = {
   annotateLet: Option<(a: string, b: Expr) => Option<string>>;
   annotateCtor: Option<(a: Stmt, b: CtorLike) => Option<CtorFactoryTs>>;
-  annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
+  annotateParams: Option<(a: SpanAt, b: number) => ParamAnnots>;
   annotateEmpty: Option<(a: Expr) => Option<string>>;
   annotateLetin: Option<(a: Expr) => Option<string>>;
   annotateCall: Option<(a: Expr) => Option<string>>;
@@ -66,7 +66,7 @@ export type GCtx = {
   ns: Map<string, Map<string, string>>;
   annotateLet: Option<(a: string, b: Expr) => Option<string>>;
   annotateCtor: Option<(a: Stmt, b: CtorLike) => Option<CtorFactoryTs>>;
-  annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
+  annotateParams: Option<(a: SpanAt, b: number) => ParamAnnots>;
   annotateEmpty: Option<(a: Expr) => Option<string>>;
   annotateLetin: Option<(a: Expr) => Option<string>>;
   annotateCall: Option<(a: Expr) => Option<string>>;
@@ -147,7 +147,7 @@ import { keysOf, ctorKeysFromStmts, seedBuiltinCtorKeys } from "./ctors";
 export const jsGenOpts: GenOpts = {
   annotateLet: None as Option<(a: string, b: Expr) => Option<string>>,
   annotateCtor: None as Option<(a: Stmt, b: CtorLike) => Option<CtorFactoryTs>>,
-  annotateParams: None as Option<(a: Span, b: number) => ParamAnnots>,
+  annotateParams: None as Option<(a: SpanAt, b: number) => ParamAnnots>,
   annotateEmpty: None as Option<(a: Expr) => Option<string>>,
   annotateLetin: None as Option<(a: Expr) => Option<string>>,
   annotateCall: None as Option<(a: Expr) => Option<string>>,
@@ -855,7 +855,7 @@ const lastDoExpr: (exprs: Expr[]) => Expr = (exprs: Expr[]) =>
     .otherwise(() => {
       throw new Error("non-exhaustive match");
     });
-const wrapStepTails: _Curry<[e: Expr, sp: Span], Expr> = _curry(2, (e: Expr, sp: Span) =>
+const wrapStepTails: _Curry<[e: Expr, sp: SpanAt], Expr> = _curry(2, (e: Expr, sp: SpanAt) =>
   match(e)
     .with({ _tag: "ERecur" }, () => e)
     .with({ _tag: "ETernary" }, ({ cond, thenE, elseE, span: tsp }) =>
@@ -881,9 +881,9 @@ const wrapStepTails: _Curry<[e: Expr, sp: Span], Expr> = _curry(2, (e: Expr, sp:
     )
     .otherwise(() => Ast.ECall(Ast.ERef("_done", sp), [e], None as Option<string>, sp)),
 );
-const wrapDoStepTail: _Curry<[exprs: Expr[], sp: Span], Expr[]> = _curry(
+const wrapDoStepTail: _Curry<[exprs: Expr[], sp: SpanAt], Expr[]> = _curry(
   2,
-  (exprs: Expr[], sp: Span) =>
+  (exprs: Expr[], sp: SpanAt) =>
     match(exprs)
       .with(
         (_v) => {
@@ -2781,7 +2781,7 @@ export const codegenWith: <A>(
     annotateCall: Option<(a: Expr) => Option<string>>;
     annotateLetin: Option<(a: Expr) => Option<string>>;
     annotateEmpty: Option<(a: Expr) => Option<string>>;
-    annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
+    annotateParams: Option<(a: SpanAt, b: number) => ParamAnnots>;
     annotateCtor: Option<(a: Stmt, b: CtorLike) => Option<CtorFactoryTs>>;
     annotateLet: Option<(a: string, b: Expr) => Option<string>>;
   } & A,
@@ -2803,7 +2803,7 @@ export const codegenWith: <A>(
       annotateCall: Option<(a: Expr) => Option<string>>;
       annotateLetin: Option<(a: Expr) => Option<string>>;
       annotateEmpty: Option<(a: Expr) => Option<string>>;
-      annotateParams: Option<(a: Span, b: number) => ParamAnnots>;
+      annotateParams: Option<(a: SpanAt, b: number) => ParamAnnots>;
       annotateCtor: Option<(a: Stmt, b: CtorLike) => Option<CtorFactoryTs>>;
       annotateLet: Option<(a: string, b: Expr) => Option<string>>;
     } & A,

@@ -1,6 +1,6 @@
 import type { Tok } from "./lexer";
 import type { Expr } from "./ast";
-import type { Row, Ty } from "./types";
+import type { SpanAt, St, Ty } from "./types";
 
 import type { Option, Result } from "@mochi/compiler/runtime";
 
@@ -54,79 +54,12 @@ export const resolvePluginsDefault: <A, B, C, D>(
           a: B,
           b: Expr[],
           c: Option<string>,
-          d: {
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            next: number;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
-            letSpans: Map<string, { start: number; end: number }>;
-            letUses: Map<string, Ty[]>;
-          },
+          d: St,
           e: {
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: {
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                next: number;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
-                letSpans: Map<string, { start: number; end: number }>;
-                letUses: Map<string, Ty[]>;
-              },
-              d: { start: number; end: number },
-            ) => Result<
-              {
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                next: number;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
-                letSpans: Map<string, { start: number; end: number }>;
-                letUses: Map<string, Ty[]>;
-              },
-              C
-            >;
-            inferExpr: (
-              a: Expr,
-              b: {
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                next: number;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
-                letSpans: Map<string, { start: number; end: number }>;
-                letUses: Map<string, Ty[]>;
-              },
-            ) => Result<
-              [
-                Ty,
-                {
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  next: number;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
-                  letSpans: Map<string, { start: number; end: number }>;
-                  letUses: Map<string, Ty[]>;
-                },
-              ],
-              C
-            >;
+            unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, C>;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], C>;
           } & D,
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                next: number;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
-                letSpans: Map<string, { start: number; end: number }>;
-                letUses: Map<string, Ty[]>;
-              },
-            ]
-          >,
-          C
-        >
+        ) => Result<Option<[Ty, St]>, C>
       >;
     }[]
   >,
@@ -147,79 +80,12 @@ export const resolvePluginsDefault: <A, B, C, D>(
       a: B,
       b: Expr[],
       c: Option<string>,
-      d: {
-        tv: Map<number, Ty>;
-        rv: Map<number, Row>;
-        next: number;
-        recorded: { span: { start: number; end: number }; ty: Ty }[];
-        letSpans: Map<string, { start: number; end: number }>;
-        letUses: Map<string, Ty[]>;
-      },
+      d: St,
       e: {
-        unify: (
-          a: Ty,
-          b: Ty,
-          c: {
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            next: number;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
-            letSpans: Map<string, { start: number; end: number }>;
-            letUses: Map<string, Ty[]>;
-          },
-          d: { start: number; end: number },
-        ) => Result<
-          {
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            next: number;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
-            letSpans: Map<string, { start: number; end: number }>;
-            letUses: Map<string, Ty[]>;
-          },
-          C
-        >;
-        inferExpr: (
-          a: Expr,
-          b: {
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            next: number;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
-            letSpans: Map<string, { start: number; end: number }>;
-            letUses: Map<string, Ty[]>;
-          },
-        ) => Result<
-          [
-            Ty,
-            {
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              next: number;
-              recorded: { span: { start: number; end: number }; ty: Ty }[];
-              letSpans: Map<string, { start: number; end: number }>;
-              letUses: Map<string, Ty[]>;
-            },
-          ],
-          C
-        >;
+        unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, C>;
+        inferExpr: (a: Expr, b: St) => Result<[Ty, St], C>;
       } & D,
-    ) => Result<
-      Option<
-        [
-          Ty,
-          {
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            next: number;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
-            letSpans: Map<string, { start: number; end: number }>;
-            letUses: Map<string, Ty[]>;
-          },
-        ]
-      >,
-      C
-    >
+    ) => Result<Option<[Ty, St]>, C>
   >;
 }[] = <A, B, C, D>(
   pluginsOpt: Option<
@@ -240,79 +106,12 @@ export const resolvePluginsDefault: <A, B, C, D>(
           a: B,
           b: Expr[],
           c: Option<string>,
-          d: {
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            next: number;
-            recorded: { span: { start: number; end: number }; ty: Ty }[];
-            letSpans: Map<string, { start: number; end: number }>;
-            letUses: Map<string, Ty[]>;
-          },
+          d: St,
           e: {
-            unify: (
-              a: Ty,
-              b: Ty,
-              c: {
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                next: number;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
-                letSpans: Map<string, { start: number; end: number }>;
-                letUses: Map<string, Ty[]>;
-              },
-              d: { start: number; end: number },
-            ) => Result<
-              {
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                next: number;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
-                letSpans: Map<string, { start: number; end: number }>;
-                letUses: Map<string, Ty[]>;
-              },
-              C
-            >;
-            inferExpr: (
-              a: Expr,
-              b: {
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                next: number;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
-                letSpans: Map<string, { start: number; end: number }>;
-                letUses: Map<string, Ty[]>;
-              },
-            ) => Result<
-              [
-                Ty,
-                {
-                  tv: Map<number, Ty>;
-                  rv: Map<number, Row>;
-                  next: number;
-                  recorded: { span: { start: number; end: number }; ty: Ty }[];
-                  letSpans: Map<string, { start: number; end: number }>;
-                  letUses: Map<string, Ty[]>;
-                },
-              ],
-              C
-            >;
+            unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, C>;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], C>;
           } & D,
-        ) => Result<
-          Option<
-            [
-              Ty,
-              {
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                next: number;
-                recorded: { span: { start: number; end: number }; ty: Ty }[];
-                letSpans: Map<string, { start: number; end: number }>;
-                letUses: Map<string, Ty[]>;
-              },
-            ]
-          >,
-          C
-        >
+        ) => Result<Option<[Ty, St]>, C>
       >;
     }[]
   >,

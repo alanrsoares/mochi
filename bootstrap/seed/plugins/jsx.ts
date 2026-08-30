@@ -1,6 +1,6 @@
 import type { Tok } from "../lexer";
-import type { Expr, Field, Name, SeqElem, Span } from "../ast";
-import type { Row, Ty } from "../types";
+import type { Expr, Field, Name, SeqElem } from "../ast";
+import type { Row, SpanAt, St, Ty } from "../types";
 import type { Ctx } from "../infer";
 
 export type LocTok = { tok: Tok; start: number; end: number; doc: Option<string> };
@@ -254,17 +254,17 @@ const jxExpectAttrName: <A>(
   toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
   pos: number,
 ) => Result<
-  [{ span: Span; name: string }, number],
+  [{ span: SpanAt; name: string }, number],
   { message: string; start: number; end: number }
 > = _curry(2, <A>(toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number) =>
   _Result_map(
-    ([head, p1]: [{ span: Span; name: string }, number]) => jxAttrNameFrom(toks, p1, head),
+    ([head, p1]: [{ span: SpanAt; name: string }, number]) => jxAttrNameFrom(toks, p1, head),
     jxExpectLabel(toks, pos),
   ),
 );
 const jxIsUpper: (s: string) => boolean = (s: string) =>
   _Option_exists((n: number) => and(gte(n, 65), lte(n, 90)), _Str_codeAt(0, s));
-const jxExprSpan: (e: Expr) => Span = (e: Expr) =>
+const jxExprSpan: (e: Expr) => SpanAt = (e: Expr) =>
   match(e)
     .with({ _tag: "ENum" }, ({ span: sp }) => sp)
     .with({ _tag: "EUnit" }, ({ span: sp }) => sp)
@@ -309,7 +309,7 @@ const makeJsxCall: <A, B>(
     toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
     endPos: number,
   ) => {
-    const fullSpan: Span = jxToEnd(jxSpanOf(startTok), toks, endPos);
+    const fullSpan: SpanAt = jxToEnd(jxSpanOf(startTok), toks, endPos);
     const pragmaRef: Expr = Ast.ERef("h", jxSpanOf(startTok));
     const propsRecord: Expr = Ast.ERecord(fields, spreadOpt, fullSpan);
     const childrenArr: Expr = Ast.EArr(children, fullSpan);
@@ -860,7 +860,7 @@ const inferIntrinsicFields: <A, B, C, D, E>(
   fields: ({ name: string; value: Expr } & D)[],
   st: A,
   api: {
-    unify: (a: B, b: Ty, c: A, d: Span) => Result<A, C>;
+    unify: (a: B, b: Ty, c: A, d: SpanAt) => Result<A, C>;
     inferExpr: (a: Expr, b: A) => Result<[B, A], C>;
   } & E,
 ) => Result<A, C> = _curry(
@@ -870,7 +870,7 @@ const inferIntrinsicFields: <A, B, C, D, E>(
     fields: ({ name: string; value: Expr } & D)[],
     st: A,
     api: {
-      unify: (a: B, b: Ty, c: A, d: Span) => Result<A, C>;
+      unify: (a: B, b: Ty, c: A, d: SpanAt) => Result<A, C>;
       inferExpr: (a: Expr, b: A) => Result<[B, A], C>;
     } & E,
   ) =>
@@ -909,173 +909,29 @@ const inferJsxCall: <A, B>(
   tagExpr: Expr,
   propsExpr: Expr,
   restArgs: Expr[],
-  st: {
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-    next: number;
-    recorded: { span: Span; ty: Ty }[];
-    letSpans: Map<string, Span>;
-    letUses: Map<string, Ty[]>;
-  },
+  st: St,
   api: {
-    unify: (
-      a: Ty,
-      b: Ty,
-      c: {
-        tv: Map<number, Ty>;
-        rv: Map<number, Row>;
-        next: number;
-        recorded: { span: Span; ty: Ty }[];
-        letSpans: Map<string, Span>;
-        letUses: Map<string, Ty[]>;
-      },
-      d: Span,
-    ) => Result<
-      {
-        tv: Map<number, Ty>;
-        rv: Map<number, Row>;
-        next: number;
-        recorded: { span: Span; ty: Ty }[];
-        letSpans: Map<string, Span>;
-        letUses: Map<string, Ty[]>;
-      },
-      A
-    >;
-    inferExpr: (
-      a: Expr,
-      b: {
-        tv: Map<number, Ty>;
-        rv: Map<number, Row>;
-        next: number;
-        recorded: { span: Span; ty: Ty }[];
-        letSpans: Map<string, Span>;
-        letUses: Map<string, Ty[]>;
-      },
-    ) => Result<
-      [
-        Ty,
-        {
-          tv: Map<number, Ty>;
-          rv: Map<number, Row>;
-          next: number;
-          recorded: { span: Span; ty: Ty }[];
-          letSpans: Map<string, Span>;
-          letUses: Map<string, Ty[]>;
-        },
-      ],
-      A
-    >;
+    unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, A>;
+    inferExpr: (a: Expr, b: St) => Result<[Ty, St], A>;
   } & B,
-) => Result<
-  [
-    Ty,
-    {
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-      next: number;
-      recorded: { span: Span; ty: Ty }[];
-      letSpans: Map<string, Span>;
-      letUses: Map<string, Ty[]>;
-    },
-  ],
-  A
-> = _curry(
+) => Result<[Ty, St], A> = _curry(
   5,
   <A, B>(
     tagExpr: Expr,
     propsExpr: Expr,
     restArgs: Expr[],
-    st: {
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-      next: number;
-      recorded: { span: Span; ty: Ty }[];
-      letSpans: Map<string, Span>;
-      letUses: Map<string, Ty[]>;
-    },
+    st: St,
     api: {
-      unify: (
-        a: Ty,
-        b: Ty,
-        c: {
-          tv: Map<number, Ty>;
-          rv: Map<number, Row>;
-          next: number;
-          recorded: { span: Span; ty: Ty }[];
-          letSpans: Map<string, Span>;
-          letUses: Map<string, Ty[]>;
-        },
-        d: Span,
-      ) => Result<
-        {
-          tv: Map<number, Ty>;
-          rv: Map<number, Row>;
-          next: number;
-          recorded: { span: Span; ty: Ty }[];
-          letSpans: Map<string, Span>;
-          letUses: Map<string, Ty[]>;
-        },
-        A
-      >;
-      inferExpr: (
-        a: Expr,
-        b: {
-          tv: Map<number, Ty>;
-          rv: Map<number, Row>;
-          next: number;
-          recorded: { span: Span; ty: Ty }[];
-          letSpans: Map<string, Span>;
-          letUses: Map<string, Ty[]>;
-        },
-      ) => Result<
-        [
-          Ty,
-          {
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            next: number;
-            recorded: { span: Span; ty: Ty }[];
-            letSpans: Map<string, Span>;
-            letUses: Map<string, Ty[]>;
-          },
-        ],
-        A
-      >;
+      unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, A>;
+      inferExpr: (a: Expr, b: St) => Result<[Ty, St], A>;
     } & B,
   ) =>
     _Result_flatMap(
-      ([tagT, st1]: [
-        Ty,
-        {
-          tv: Map<number, Ty>;
-          rv: Map<number, Row>;
-          next: number;
-          recorded: { span: Span; ty: Ty }[];
-          letSpans: Map<string, Span>;
-          letUses: Map<string, Ty[]>;
-        },
-      ]) =>
+      ([tagT, st1]: [Ty, St]) =>
         _Result_flatMap(
-          ([propsT, st2]: [
-            Ty,
-            {
-              tv: Map<number, Ty>;
-              rv: Map<number, Row>;
-              next: number;
-              recorded: { span: Span; ty: Ty }[];
-              letSpans: Map<string, Span>;
-              letUses: Map<string, Ty[]>;
-            },
-          ]) =>
+          ([propsT, st2]: [Ty, St]) =>
             _Result_flatMap(
-              (st3: {
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                next: number;
-                recorded: { span: Span; ty: Ty }[];
-                letSpans: Map<string, Span>;
-                letUses: Map<string, Ty[]>;
-              }) => {
+              (st3: St) => {
                 const zonkedTag: Ty = zonk(tagT, st3);
                 return match(zonkedTag)
                   .with({ _tag: "TyFn" }, ({ from, to }) =>
@@ -1083,14 +939,7 @@ const inferJsxCall: <A, B>(
                       .with({ _tag: "TyRecord" }, ({ row: expectedRow }) =>
                         ((propsForCheck: Ty) =>
                           _Result_map(
-                            (st4: {
-                              tv: Map<number, Ty>;
-                              rv: Map<number, Row>;
-                              next: number;
-                              recorded: { span: Span; ty: Ty }[];
-                              letSpans: Map<string, Span>;
-                              letUses: Map<string, Ty[]>;
-                            }) => _tuple(zonk(to, st4), st4),
+                            (st4: St) => _tuple(zonk(to, st4), st4),
                             api.unify(propsForCheck, from, st3, jxExprSpan(propsExpr)),
                           ))(
                           jsxPropsWithSynthesizedChildren(propsT, propsExpr, expectedRow, restArgs),
@@ -1104,14 +953,7 @@ const inferJsxCall: <A, B>(
                         match(propsExpr)
                           .with({ _tag: "ERecord" }, ({ fields }) =>
                             _Result_map(
-                              (st4: {
-                                tv: Map<number, Ty>;
-                                rv: Map<number, Row>;
-                                next: number;
-                                recorded: { span: Span; ty: Ty }[];
-                                letSpans: Map<string, Span>;
-                                letUses: Map<string, Ty[]>;
-                              }) => _tuple(tPrim("VNode"), st4),
+                              (st4: St) => _tuple(tPrim("VNode"), st4),
                               inferIntrinsicFields(tagName, fields, st3, api),
                             ),
                           )
@@ -1136,140 +978,21 @@ export const inferJsxCallHook: <A, B, C>(
   _fn: A,
   args: Expr[],
   origin: Option<string>,
-  st: {
-    tv: Map<number, Ty>;
-    rv: Map<number, Row>;
-    next: number;
-    recorded: { span: Span; ty: Ty }[];
-    letSpans: Map<string, Span>;
-    letUses: Map<string, Ty[]>;
-  },
+  st: St,
   api: {
-    unify: (
-      a: Ty,
-      b: Ty,
-      c: {
-        tv: Map<number, Ty>;
-        rv: Map<number, Row>;
-        next: number;
-        recorded: { span: Span; ty: Ty }[];
-        letSpans: Map<string, Span>;
-        letUses: Map<string, Ty[]>;
-      },
-      d: Span,
-    ) => Result<
-      {
-        tv: Map<number, Ty>;
-        rv: Map<number, Row>;
-        next: number;
-        recorded: { span: Span; ty: Ty }[];
-        letSpans: Map<string, Span>;
-        letUses: Map<string, Ty[]>;
-      },
-      B
-    >;
-    inferExpr: (
-      a: Expr,
-      b: {
-        tv: Map<number, Ty>;
-        rv: Map<number, Row>;
-        next: number;
-        recorded: { span: Span; ty: Ty }[];
-        letSpans: Map<string, Span>;
-        letUses: Map<string, Ty[]>;
-      },
-    ) => Result<
-      [
-        Ty,
-        {
-          tv: Map<number, Ty>;
-          rv: Map<number, Row>;
-          next: number;
-          recorded: { span: Span; ty: Ty }[];
-          letSpans: Map<string, Span>;
-          letUses: Map<string, Ty[]>;
-        },
-      ],
-      B
-    >;
+    unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, B>;
+    inferExpr: (a: Expr, b: St) => Result<[Ty, St], B>;
   } & C,
-) => Result<
-  Option<
-    [
-      Ty,
-      {
-        tv: Map<number, Ty>;
-        rv: Map<number, Row>;
-        next: number;
-        recorded: { span: Span; ty: Ty }[];
-        letSpans: Map<string, Span>;
-        letUses: Map<string, Ty[]>;
-      },
-    ]
-  >,
-  B
-> = _curry(
+) => Result<Option<[Ty, St]>, B> = _curry(
   5,
   <A, B, C>(
     _fn: A,
     args: Expr[],
     origin: Option<string>,
-    st: {
-      tv: Map<number, Ty>;
-      rv: Map<number, Row>;
-      next: number;
-      recorded: { span: Span; ty: Ty }[];
-      letSpans: Map<string, Span>;
-      letUses: Map<string, Ty[]>;
-    },
+    st: St,
     api: {
-      unify: (
-        a: Ty,
-        b: Ty,
-        c: {
-          tv: Map<number, Ty>;
-          rv: Map<number, Row>;
-          next: number;
-          recorded: { span: Span; ty: Ty }[];
-          letSpans: Map<string, Span>;
-          letUses: Map<string, Ty[]>;
-        },
-        d: Span,
-      ) => Result<
-        {
-          tv: Map<number, Ty>;
-          rv: Map<number, Row>;
-          next: number;
-          recorded: { span: Span; ty: Ty }[];
-          letSpans: Map<string, Span>;
-          letUses: Map<string, Ty[]>;
-        },
-        B
-      >;
-      inferExpr: (
-        a: Expr,
-        b: {
-          tv: Map<number, Ty>;
-          rv: Map<number, Row>;
-          next: number;
-          recorded: { span: Span; ty: Ty }[];
-          letSpans: Map<string, Span>;
-          letUses: Map<string, Ty[]>;
-        },
-      ) => Result<
-        [
-          Ty,
-          {
-            tv: Map<number, Ty>;
-            rv: Map<number, Row>;
-            next: number;
-            recorded: { span: Span; ty: Ty }[];
-            letSpans: Map<string, Span>;
-            letUses: Map<string, Ty[]>;
-          },
-        ],
-        B
-      >;
+      unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, B>;
+      inferExpr: (a: Expr, b: St) => Result<[Ty, St], B>;
     } & C,
   ) =>
     match(origin)
@@ -1283,85 +1006,14 @@ export const inferJsxCallHook: <A, B, C>(
                 },
                 ([tagExpr, propsExpr, ...rest]) =>
                   _Result_map(
-                    (
-                      r: [
-                        Ty,
-                        {
-                          tv: Map<number, Ty>;
-                          rv: Map<number, Row>;
-                          next: number;
-                          recorded: { span: Span; ty: Ty }[];
-                          letSpans: Map<string, Span>;
-                          letUses: Map<string, Ty[]>;
-                        },
-                      ],
-                    ) =>
-                      Some(r) as Option<
-                        [
-                          Ty,
-                          {
-                            tv: Map<number, Ty>;
-                            rv: Map<number, Row>;
-                            next: number;
-                            recorded: { span: Span; ty: Ty }[];
-                            letSpans: Map<string, Span>;
-                            letUses: Map<string, Ty[]>;
-                          },
-                        ]
-                      >,
+                    (r: [Ty, St]) => Some(r) as Option<[Ty, St]>,
                     inferJsxCall(tagExpr, propsExpr, rest, st, api),
                   ),
               )
-              .otherwise(() =>
-                Ok(
-                  None as Option<
-                    [
-                      Ty,
-                      {
-                        tv: Map<number, Ty>;
-                        rv: Map<number, Row>;
-                        next: number;
-                        recorded: { span: Span; ty: Ty }[];
-                        letSpans: Map<string, Span>;
-                        letUses: Map<string, Ty[]>;
-                      },
-                    ]
-                  >,
-                ),
-              )
-          : Ok(
-              None as Option<
-                [
-                  Ty,
-                  {
-                    tv: Map<number, Ty>;
-                    rv: Map<number, Row>;
-                    next: number;
-                    recorded: { span: Span; ty: Ty }[];
-                    letSpans: Map<string, Span>;
-                    letUses: Map<string, Ty[]>;
-                  },
-                ]
-              >,
-            ),
+              .otherwise(() => Ok(None as Option<[Ty, St]>))
+          : Ok(None as Option<[Ty, St]>),
       )
-      .with({ _tag: "None" }, () =>
-        Ok(
-          None as Option<
-            [
-              Ty,
-              {
-                tv: Map<number, Ty>;
-                rv: Map<number, Row>;
-                next: number;
-                recorded: { span: Span; ty: Ty }[];
-                letSpans: Map<string, Span>;
-                letUses: Map<string, Ty[]>;
-              },
-            ]
-          >,
-        ),
-      )
+      .with({ _tag: "None" }, () => Ok(None as Option<[Ty, St]>))
       .exhaustive(),
 );
 export const jsxPlugin = {

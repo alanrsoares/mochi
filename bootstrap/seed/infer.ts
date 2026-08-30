@@ -15,6 +15,7 @@ import type {
   TypeExpr,
 } from "./ast";
 import type { Row, SpanAt, St, Ty, TypeAt } from "./types";
+import type { PErr } from "./parser";
 import type { Scheme, VarSets } from "./schemes";
 import type { AliasInfo } from "./codegen-ts";
 import type { TSt } from "./scc";
@@ -27,8 +28,8 @@ export type QualScope = { aliases: Map<string, AliasInfo> };
  * The API an `inferCall` plugin hook is handed (ADR 0011 6).
  */
 export type InferApi = {
-  inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-  unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, IErr>;
+  inferExpr: (a: Expr, b: St) => Result<[Ty, St], PErr>;
+  unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, PErr>;
 };
 /**
  * A located token as the PARSE hook sees it. Inference never inspects one, so
@@ -51,11 +52,11 @@ export type Plugin<A> = {
       c: (
         a: { tok: A; start: number; end: number; doc: Option<string> }[],
         b: number,
-      ) => Result<[Expr, number], IErr>,
-    ) => Result<Option<[Expr, number]>, IErr>
+      ) => Result<[Expr, number], PErr>,
+    ) => Result<Option<[Expr, number]>, PErr>
   >;
   inferCall: Option<
-    (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
+    (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, PErr>
   >;
 };
 /**
@@ -79,11 +80,11 @@ export type Ctx<A> = {
         c: (
           a: { tok: A; start: number; end: number; doc: Option<string> }[],
           b: number,
-        ) => Result<[Expr, number], IErr>,
-      ) => Result<Option<[Expr, number]>, IErr>
+        ) => Result<[Expr, number], PErr>,
+      ) => Result<Option<[Expr, number]>, PErr>
     >;
     inferCall: Option<
-      (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
+      (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, PErr>
     >;
   }[];
   loopStack: Ty[][];
@@ -408,8 +409,8 @@ const constrainParamAnnotsFrom: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -418,7 +419,7 @@ const constrainParamAnnotsFrom: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -428,7 +429,7 @@ const constrainParamAnnotsFrom: <A>(
   paramTypes: Ty[],
   vars: Map<string, Ty>,
   st: St,
-) => Result<[Map<string, Ty>, St], IErr> = _curry(
+) => Result<[Map<string, Ty>, St], PErr> = _curry(
   5,
   <A>(
     ctx: {
@@ -445,8 +446,8 @@ const constrainParamAnnotsFrom: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -455,7 +456,7 @@ const constrainParamAnnotsFrom: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -472,7 +473,7 @@ const constrainParamAnnotsFrom: <A>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(_tuple(vars, st)) as Result<[Map<string, Ty>, St], IErr>,
+        () => Ok(_tuple(vars, st)) as Result<[Map<string, Ty>, St], PErr>,
       )
       .with(
         (_v) => {
@@ -486,7 +487,7 @@ const constrainParamAnnotsFrom: <A>(
                 const _g: any = _v;
                 return _g.length === 0;
               },
-              () => Ok(_tuple(vars, st)) as Result<[Map<string, Ty>, St], IErr>,
+              () => Ok(_tuple(vars, st)) as Result<[Map<string, Ty>, St], PErr>,
             )
             .with(
               (_v) => {
@@ -570,8 +571,8 @@ const ctxWithEnv: <A, B>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -580,7 +581,7 @@ const ctxWithEnv: <A, B>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -601,11 +602,11 @@ const ctxWithEnv: <A, B>(
         c: (
           a: { tok: A; start: number; end: number; doc: Option<string> }[],
           b: number,
-        ) => Result<[Expr, number], IErr>,
-      ) => Result<Option<[Expr, number]>, IErr>
+        ) => Result<[Expr, number], PErr>,
+      ) => Result<Option<[Expr, number]>, PErr>
     >;
     inferCall: Option<
-      (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
+      (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, PErr>
     >;
   }[];
   loopStack: Ty[][];
@@ -627,8 +628,8 @@ const ctxWithEnv: <A, B>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -637,7 +638,7 @@ const ctxWithEnv: <A, B>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -669,8 +670,8 @@ const ctxWithLets: <A, B, C>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -679,7 +680,7 @@ const ctxWithLets: <A, B, C>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -701,11 +702,11 @@ const ctxWithLets: <A, B, C>(
         c: (
           a: { tok: A; start: number; end: number; doc: Option<string> }[],
           b: number,
-        ) => Result<[Expr, number], IErr>,
-      ) => Result<Option<[Expr, number]>, IErr>
+        ) => Result<[Expr, number], PErr>,
+      ) => Result<Option<[Expr, number]>, PErr>
     >;
     inferCall: Option<
-      (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
+      (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, PErr>
     >;
   }[];
   loopStack: Ty[][];
@@ -727,8 +728,8 @@ const ctxWithLets: <A, B, C>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -737,7 +738,7 @@ const ctxWithLets: <A, B, C>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -770,8 +771,8 @@ const ctxWithLoop: <A, B, C>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -780,7 +781,7 @@ const ctxWithLoop: <A, B, C>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -803,11 +804,11 @@ const ctxWithLoop: <A, B, C>(
         c: (
           a: { tok: A; start: number; end: number; doc: Option<string> }[],
           b: number,
-        ) => Result<[Expr, number], IErr>,
-      ) => Result<Option<[Expr, number]>, IErr>
+        ) => Result<[Expr, number], PErr>,
+      ) => Result<Option<[Expr, number]>, PErr>
     >;
     inferCall: Option<
-      (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
+      (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, PErr>
     >;
   }[];
   loopStack: Ty[][];
@@ -829,8 +830,8 @@ const ctxWithLoop: <A, B, C>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -839,7 +840,7 @@ const ctxWithLoop: <A, B, C>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -873,8 +874,8 @@ const inferLoopParamsFrom: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -883,7 +884,7 @@ const inferLoopParamsFrom: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -895,7 +896,7 @@ const inferLoopParamsFrom: <A>(
   frameAcc: Ty[],
   ownerAcc: Map<string, SpanAt>,
   st: St,
-) => Result<[Ty[], Map<string, Scheme>, Map<string, SpanAt>, St], IErr> = _curry(
+) => Result<[Ty[], Map<string, Scheme>, Map<string, SpanAt>, St], PErr> = _curry(
   7,
   <A>(
     ctx: {
@@ -912,8 +913,8 @@ const inferLoopParamsFrom: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -922,7 +923,7 @@ const inferLoopParamsFrom: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -941,7 +942,7 @@ const inferLoopParamsFrom: <A>(
         () =>
           Ok(_tuple(frameAcc, envAcc, ownerAcc, st)) as Result<
             [Ty[], Map<string, Scheme>, Map<string, SpanAt>, St],
-            IErr
+            PErr
           >,
       )
       .with({ _tag: "Some" }, ({ value: p }) =>
@@ -977,8 +978,8 @@ const unifyRecurArgsFrom: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -987,7 +988,7 @@ const unifyRecurArgsFrom: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -997,7 +998,7 @@ const unifyRecurArgsFrom: <A>(
   frame: Ty[],
   i: number,
   st: St,
-) => Result<St, IErr> = _curry(
+) => Result<St, PErr> = _curry(
   5,
   <A>(
     ctx: {
@@ -1014,8 +1015,8 @@ const unifyRecurArgsFrom: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -1024,7 +1025,7 @@ const unifyRecurArgsFrom: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -1036,7 +1037,7 @@ const unifyRecurArgsFrom: <A>(
     st: St,
   ) =>
     match(_Array_get(i, args))
-      .with({ _tag: "None" }, () => Ok(st) as Result<St, IErr>)
+      .with({ _tag: "None" }, () => Ok(st) as Result<St, PErr>)
       .with({ _tag: "Some" }, ({ value: a }) =>
         _Result_flatMap(
           ([at, st1]) =>
@@ -1069,8 +1070,8 @@ const inferRecur: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -1079,7 +1080,7 @@ const inferRecur: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -1088,7 +1089,7 @@ const inferRecur: <A>(
   args: Expr[],
   sp: SpanAt,
   st: St,
-) => Result<[Ty, St], IErr> = _curry(
+) => Result<[Ty, St], PErr> = _curry(
   4,
   <A>(
     ctx: {
@@ -1105,8 +1106,8 @@ const inferRecur: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -1115,7 +1116,7 @@ const inferRecur: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -1132,7 +1133,7 @@ const inferRecur: <A>(
           return _g.length === 0;
         },
         () =>
-          Err(typeErr("'recur' is only legal inside a loop body", sp)) as Result<[Ty, St], IErr>,
+          Err(typeErr("'recur' is only legal inside a loop body", sp)) as Result<[Ty, St], PErr>,
       )
       .with(
         (_v) => {
@@ -1142,7 +1143,7 @@ const inferRecur: <A>(
         ([frame]) =>
           _Result_flatMap(
             (st1) =>
-              (([t, st2]: [Ty, St]) => Ok(_tuple(t, st2)) as Result<[Ty, St], IErr>)(freshVar(st1)),
+              (([t, st2]: [Ty, St]) => Ok(_tuple(t, st2)) as Result<[Ty, St], PErr>)(freshVar(st1)),
             unifyRecurArgsFrom(ctx, args, frame, 0, st),
           ),
       )
@@ -1221,8 +1222,8 @@ const labFieldsFrom: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -1231,7 +1232,7 @@ const labFieldsFrom: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -1241,7 +1242,7 @@ const labFieldsFrom: <A>(
   env: Map<string, Scheme>,
   vars: Map<string, Ty>,
   st: St,
-) => Result<[{ name: string; fieldType: Ty; omittable: boolean; bodyType: Ty }[], St], IErr> =
+) => Result<[{ name: string; fieldType: Ty; omittable: boolean; bodyType: Ty }[], St], PErr> =
   _curry(
     5,
     <A>(
@@ -1259,8 +1260,8 @@ const labFieldsFrom: <A>(
               c: (
                 a: { tok: A; start: number; end: number; doc: Option<string> }[],
                 b: number,
-              ) => Result<[Expr, number], IErr>,
-            ) => Result<Option<[Expr, number]>, IErr>
+              ) => Result<[Expr, number], PErr>,
+            ) => Result<Option<[Expr, number]>, PErr>
           >;
           inferCall: Option<
             (
@@ -1269,7 +1270,7 @@ const labFieldsFrom: <A>(
               c: Option<string>,
               d: St,
               e: InferApi,
-            ) => Result<Option<[Ty, St]>, IErr>
+            ) => Result<Option<[Ty, St]>, PErr>
           >;
         }[];
         loopStack: Ty[][];
@@ -1291,7 +1292,7 @@ const labFieldsFrom: <A>(
               _tuple([] as { name: string; fieldType: Ty; omittable: boolean; bodyType: Ty }[], st),
             ) as Result<
               [{ name: string; fieldType: Ty; omittable: boolean; bodyType: Ty }[], St],
-              IErr
+              PErr
             >,
         )
         .with(
@@ -1332,7 +1333,7 @@ const labFieldsFrom: <A>(
                                   }[],
                                   St,
                                 ],
-                                IErr
+                                PErr
                               >,
                             labFieldsFrom(ctx, rest, env, vars1, st2),
                           ))(
@@ -1354,7 +1355,7 @@ const labFieldsFrom: <A>(
                     match(defaultValue)
                       .with(
                         { _tag: "None" },
-                        () => Ok(_tuple(fieldT, st1)) as Result<[Ty, St], IErr>,
+                        () => Ok(_tuple(fieldT, st1)) as Result<[Ty, St], PErr>,
                       )
                       .with({ _tag: "Some" }, ({ value: d }) =>
                         _Result_flatMap(
@@ -1362,14 +1363,14 @@ const labFieldsFrom: <A>(
                             match(annot)
                               .with({ _tag: "Some" }, () =>
                                 _Result_flatMap(
-                                  (s3) => Ok(_tuple(fieldT, s3)) as Result<[Ty, St], IErr>,
+                                  (s3) => Ok(_tuple(fieldT, s3)) as Result<[Ty, St], PErr>,
                                   checkFits(dt, fieldT, s2, exprSpan(d)),
                                 ),
                               )
                               .with({ _tag: "None" }, () =>
                                 ((widened: Ty) =>
                                   _Result_flatMap(
-                                    (s3) => Ok(_tuple(widened, s3)) as Result<[Ty, St], IErr>,
+                                    (s3) => Ok(_tuple(widened, s3)) as Result<[Ty, St], PErr>,
                                     u(fieldT, widened, s2, exprSpan(d)),
                                   ))(widenLits(zonk(dt, s2))),
                               )
@@ -1447,8 +1448,8 @@ const inferCallArgs: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -1457,7 +1458,7 @@ const inferCallArgs: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -1467,7 +1468,7 @@ const inferCallArgs: <A>(
   args: Expr[],
   st: St,
   callSpan: SpanAt,
-) => Result<[Ty, St], IErr> = _curry(
+) => Result<[Ty, St], PErr> = _curry(
   5,
   <A>(
     ctx: {
@@ -1484,8 +1485,8 @@ const inferCallArgs: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -1494,7 +1495,7 @@ const inferCallArgs: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -1511,7 +1512,7 @@ const inferCallArgs: <A>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(_tuple(fnT, st)) as Result<[Ty, St], IErr>,
+        () => Ok(_tuple(fnT, st)) as Result<[Ty, St], PErr>,
       )
       .with(
         (_v) => {
@@ -1563,8 +1564,8 @@ const inferNormalCall: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -1573,7 +1574,7 @@ const inferNormalCall: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -1582,7 +1583,7 @@ const inferNormalCall: <A>(
   fn: Expr,
   args: Expr[],
   st: St,
-) => Result<[Ty, St], IErr> = _curry(
+) => Result<[Ty, St], PErr> = _curry(
   4,
   <A>(
     ctx: {
@@ -1599,8 +1600,8 @@ const inferNormalCall: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -1609,7 +1610,7 @@ const inferNormalCall: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -1632,19 +1633,19 @@ const inferNormalCall: <A>(
                 .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
                   domainIsOmittableRecord(fromT, st1)
                     ? _Result_flatMap(
-                        (st2) => Ok(_tuple(toT, st2)) as Result<[Ty, St], IErr>,
+                        (st2) => Ok(_tuple(toT, st2)) as Result<[Ty, St], PErr>,
                         checkFits(tRecord(RowEmpty as Row), fromT, st1, exprSpan(fn)),
                       )
                     : (([resultT, st2]: [Ty, St]) =>
                         _Result_flatMap(
-                          (st3) => Ok(_tuple(resultT, st3)) as Result<[Ty, St], IErr>,
+                          (st3) => Ok(_tuple(resultT, st3)) as Result<[Ty, St], PErr>,
                           u(fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)),
                         ))(freshVar(st1)),
                 )
                 .otherwise(() =>
                   (([resultT, st2]: [Ty, St]) =>
                     _Result_flatMap(
-                      (st3) => Ok(_tuple(resultT, st3)) as Result<[Ty, St], IErr>,
+                      (st3) => Ok(_tuple(resultT, st3)) as Result<[Ty, St], PErr>,
                       u(fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)),
                     ))(freshVar(st1)),
                 ),
@@ -1668,8 +1669,8 @@ const inferTernary: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -1678,7 +1679,7 @@ const inferTernary: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -1688,7 +1689,7 @@ const inferTernary: <A>(
   thenE: Expr,
   elseE: Expr,
   st: St,
-) => Result<[Ty, St], IErr> = _curry(
+) => Result<[Ty, St], PErr> = _curry(
   5,
   <A>(
     ctx: {
@@ -1705,8 +1706,8 @@ const inferTernary: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -1715,7 +1716,7 @@ const inferTernary: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -1735,7 +1736,7 @@ const inferTernary: <A>(
                 _Result_flatMap(
                   ([elseT, st4]) =>
                     _Result_flatMap(
-                      (st5) => Ok(_tuple(thenT, st5)) as Result<[Ty, St], IErr>,
+                      (st5) => Ok(_tuple(thenT, st5)) as Result<[Ty, St], PErr>,
                       u(thenT, elseT, st4, exprSpan(elseE)),
                     ),
                   inferExpr(ctx, elseE, st3),
@@ -1762,8 +1763,8 @@ const inferBindBody: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -1772,7 +1773,7 @@ const inferBindBody: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -1784,7 +1785,7 @@ const inferBindBody: <A>(
   payloadT: Ty,
   mkBody: (a: Ty) => Ty,
   st: St,
-) => Result<[Ty, St], IErr> = _curry(
+) => Result<[Ty, St], PErr> = _curry(
   7,
   <A>(
     ctx: {
@@ -1801,8 +1802,8 @@ const inferBindBody: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -1811,7 +1812,7 @@ const inferBindBody: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -1832,7 +1833,7 @@ const inferBindBody: <A>(
               (([resT, st4]: [Ty, St]) => {
                 const wantBody: Ty = mkBody(resT);
                 return _Result_flatMap(
-                  (st5) => Ok(_tuple(wantBody, st5)) as Result<[Ty, St], IErr>,
+                  (st5) => Ok(_tuple(wantBody, st5)) as Result<[Ty, St], PErr>,
                   u(bodyT, wantBody, st4, exprSpan(body)),
                 );
               })(freshVar(st3)),
@@ -1856,8 +1857,8 @@ const inferTwoSlotBind: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -1866,7 +1867,7 @@ const inferTwoSlotBind: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -1879,7 +1880,7 @@ const inferTwoSlotBind: <A>(
   valT: Ty,
   ctor: string,
   st: St,
-) => Result<[Ty, St], IErr> = _curry(
+) => Result<[Ty, St], PErr> = _curry(
   8,
   <A>(
     ctx: {
@@ -1896,8 +1897,8 @@ const inferTwoSlotBind: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -1906,7 +1907,7 @@ const inferTwoSlotBind: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -1951,8 +1952,8 @@ const inferQuestionBind: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -1961,7 +1962,7 @@ const inferQuestionBind: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -1974,7 +1975,7 @@ const inferQuestionBind: <A>(
   body: Expr,
   valT: Ty,
   st: St,
-) => Result<[Ty, St], IErr> = _curry(
+) => Result<[Ty, St], PErr> = _curry(
   8,
   <A>(
     ctx: {
@@ -1991,8 +1992,8 @@ const inferQuestionBind: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -2001,7 +2002,7 @@ const inferQuestionBind: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -2048,7 +2049,7 @@ const inferQuestionBind: <A>(
                   `let? requires Option or Result, got ${showType(zonk(valT, st))}`,
                   exprSpan(value),
                 ),
-              ) as Result<[Ty, St], IErr>),
+              ) as Result<[Ty, St], PErr>),
       )
       .otherwise(
         () =>
@@ -2057,7 +2058,7 @@ const inferQuestionBind: <A>(
               `let? requires Option or Result, got ${showType(zonk(valT, st))}`,
               exprSpan(value),
             ),
-          ) as Result<[Ty, St], IErr>,
+          ) as Result<[Ty, St], PErr>,
       ),
 );
 const inferLetBind: <A>(
@@ -2075,8 +2076,8 @@ const inferLetBind: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -2085,7 +2086,7 @@ const inferLetBind: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -2098,7 +2099,7 @@ const inferLetBind: <A>(
   value: Expr,
   body: Expr,
   st: St,
-) => Result<[Ty, St], IErr> = _curry(
+) => Result<[Ty, St], PErr> = _curry(
   8,
   <A>(
     ctx: {
@@ -2115,8 +2116,8 @@ const inferLetBind: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -2125,7 +2126,7 @@ const inferLetBind: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -2162,8 +2163,8 @@ const inferRecordRow: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -2172,7 +2173,7 @@ const inferRecordRow: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -2180,7 +2181,7 @@ const inferRecordRow: <A>(
   },
   fields: Field[],
   st: St,
-) => Result<[Row, St], IErr> = _curry(
+) => Result<[Row, St], PErr> = _curry(
   3,
   <A>(
     ctx: {
@@ -2197,8 +2198,8 @@ const inferRecordRow: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -2207,7 +2208,7 @@ const inferRecordRow: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -2222,7 +2223,7 @@ const inferRecordRow: <A>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(_tuple(RowEmpty as Row, st)) as Result<[Row, St], IErr>,
+        () => Ok(_tuple(RowEmpty as Row, st)) as Result<[Row, St], PErr>,
       )
       .with(
         (_v) => {
@@ -2234,7 +2235,7 @@ const inferRecordRow: <A>(
             ([restRow, st1]) =>
               _Result_flatMap(
                 ([ft, st2]) =>
-                  Ok(_tuple(rExtend(f.name, ft, restRow), st2)) as Result<[Row, St], IErr>,
+                  Ok(_tuple(rExtend(f.name, ft, restRow), st2)) as Result<[Row, St], PErr>,
                 inferExpr(ctx, f.value, st1),
               ),
             inferRecordRow(ctx, rest, st),
@@ -2285,8 +2286,8 @@ const inferFieldAccess: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -2295,7 +2296,7 @@ const inferFieldAccess: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -2305,7 +2306,7 @@ const inferFieldAccess: <A>(
   name: string,
   sp: SpanAt,
   st: St,
-) => Result<[Ty, St], IErr> = _curry(
+) => Result<[Ty, St], PErr> = _curry(
   5,
   <A>(
     ctx: {
@@ -2322,8 +2323,8 @@ const inferFieldAccess: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -2332,7 +2333,7 @@ const inferFieldAccess: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -2355,11 +2356,11 @@ const inferFieldAccess: <A>(
                     return _g._tag === "Some";
                   },
                   ({ value: [ft, optional] }) =>
-                    Ok(_tuple(optional ? tCon("Option", [ft]) : ft, st1)) as Result<[Ty, St], IErr>,
+                    Ok(_tuple(optional ? tCon("Option", [ft]) : ft, st1)) as Result<[Ty, St], PErr>,
                 )
                 .with({ _tag: "None" }, () =>
                   rowEndsEmpty(row)
-                    ? (Err(typeErr(`record missing field '${name}'`, sp)) as Result<[Ty, St], IErr>)
+                    ? (Err(typeErr(`record missing field '${name}'`, sp)) as Result<[Ty, St], PErr>)
                     : inferDuckField(targetT, name, sp, st1),
                 )
                 .exhaustive(),
@@ -2398,8 +2399,8 @@ const inferNsField: <A, B, C, D>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -2408,7 +2409,7 @@ const inferNsField: <A, B, C, D>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -2435,8 +2436,8 @@ const inferNsField: <A, B, C, D>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -2445,7 +2446,7 @@ const inferNsField: <A, B, C, D>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -2478,8 +2479,8 @@ const inferInterpParts: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -2488,7 +2489,7 @@ const inferInterpParts: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -2496,7 +2497,7 @@ const inferInterpParts: <A>(
   },
   parts: InterpPart[],
   st: St,
-) => Result<St, IErr> = _curry(
+) => Result<St, PErr> = _curry(
   3,
   <A>(
     ctx: {
@@ -2513,8 +2514,8 @@ const inferInterpParts: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -2523,7 +2524,7 @@ const inferInterpParts: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -2538,7 +2539,7 @@ const inferInterpParts: <A>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(st) as Result<St, IErr>,
+        () => Ok(st) as Result<St, PErr>,
       )
       .with(
         (_v): _v is [Extract<InterpPart[][number], { _tag: "IPLit" }>, ...InterpPart[]] => {
@@ -2581,8 +2582,8 @@ const inferTupleElems: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -2591,7 +2592,7 @@ const inferTupleElems: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -2599,7 +2600,7 @@ const inferTupleElems: <A>(
   },
   elements: Expr[],
   st: St,
-) => Result<[Ty[], St], IErr> = _curry(
+) => Result<[Ty[], St], PErr> = _curry(
   3,
   <A>(
     ctx: {
@@ -2616,8 +2617,8 @@ const inferTupleElems: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -2626,7 +2627,7 @@ const inferTupleElems: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -2641,7 +2642,7 @@ const inferTupleElems: <A>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(_tuple([] as Ty[], st)) as Result<[Ty[], St], IErr>,
+        () => Ok(_tuple([] as Ty[], st)) as Result<[Ty[], St], PErr>,
       )
       .with(
         (_v) => {
@@ -2653,7 +2654,7 @@ const inferTupleElems: <A>(
             ([t, st1]) =>
               _Result_flatMap(
                 ([restTs, st2]) =>
-                  Ok(_tuple(_Array_prepend(t, restTs), st2)) as Result<[Ty[], St], IErr>,
+                  Ok(_tuple(_Array_prepend(t, restTs), st2)) as Result<[Ty[], St], PErr>,
                 inferTupleElems(ctx, rest, st1),
               ),
             inferExpr(ctx, el, st),
@@ -2683,8 +2684,8 @@ const inferSeqSlotsElems: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -2693,7 +2694,7 @@ const inferSeqSlotsElems: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -2703,7 +2704,7 @@ const inferSeqSlotsElems: <A>(
   elem: Ty,
   elements: SeqElem[],
   st: St,
-) => Result<St, IErr> = _curry(
+) => Result<St, PErr> = _curry(
   5,
   <A>(
     ctx: {
@@ -2720,8 +2721,8 @@ const inferSeqSlotsElems: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -2730,7 +2731,7 @@ const inferSeqSlotsElems: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -2747,7 +2748,7 @@ const inferSeqSlotsElems: <A>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(st) as Result<St, IErr>,
+        () => Ok(st) as Result<St, PErr>,
       )
       .with(
         (_v) => {
@@ -2790,8 +2791,8 @@ const inferSeqSlots: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -2800,7 +2801,7 @@ const inferSeqSlots: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -2809,7 +2810,7 @@ const inferSeqSlots: <A>(
   con: string,
   elements: SeqElem[],
   st: St,
-) => Result<[Ty, St], IErr> = _curry(
+) => Result<[Ty, St], PErr> = _curry(
   4,
   <A>(
     ctx: {
@@ -2826,8 +2827,8 @@ const inferSeqSlots: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -2836,7 +2837,7 @@ const inferSeqSlots: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -2848,7 +2849,7 @@ const inferSeqSlots: <A>(
   ) =>
     (([elem, st1]: [Ty, St]) =>
       _Result_flatMap(
-        (st2) => Ok(_tuple(tCon(con, [elem]), st2)) as Result<[Ty, St], IErr>,
+        (st2) => Ok(_tuple(tCon(con, [elem]), st2)) as Result<[Ty, St], PErr>,
         inferSeqSlotsElems(ctx, con, elem, elements, st1),
       ))(freshVar(st)),
 );
@@ -2867,8 +2868,8 @@ const inferMapEntries: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -2877,7 +2878,7 @@ const inferMapEntries: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -2887,7 +2888,7 @@ const inferMapEntries: <A>(
   v: Ty,
   entries: MapEntry[],
   st: St,
-) => Result<St, IErr> = _curry(
+) => Result<St, PErr> = _curry(
   5,
   <A>(
     ctx: {
@@ -2904,8 +2905,8 @@ const inferMapEntries: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -2914,7 +2915,7 @@ const inferMapEntries: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -2931,7 +2932,7 @@ const inferMapEntries: <A>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(st) as Result<St, IErr>,
+        () => Ok(st) as Result<St, PErr>,
       )
       .with(
         (_v) => {
@@ -2975,8 +2976,8 @@ const inferMapExpr: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -2985,7 +2986,7 @@ const inferMapExpr: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -2993,7 +2994,7 @@ const inferMapExpr: <A>(
   },
   entries: MapEntry[],
   st: St,
-) => Result<[Ty, St], IErr> = _curry(
+) => Result<[Ty, St], PErr> = _curry(
   3,
   <A>(
     ctx: {
@@ -3010,8 +3011,8 @@ const inferMapExpr: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -3020,7 +3021,7 @@ const inferMapExpr: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -3032,7 +3033,7 @@ const inferMapExpr: <A>(
     (([k, st1]: [Ty, St]) =>
       (([v, st2]: [Ty, St]) =>
         _Result_flatMap(
-          (st3) => Ok(_tuple(tCon("Map", [k, v]), st3)) as Result<[Ty, St], IErr>,
+          (st3) => Ok(_tuple(tCon("Map", [k, v]), st3)) as Result<[Ty, St], PErr>,
           inferMapEntries(ctx, k, v, entries, st2),
         ))(freshVar(st1)))(freshVar(st)),
 );
@@ -3110,8 +3111,8 @@ const inferArms: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -3120,7 +3121,7 @@ const inferArms: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -3130,7 +3131,7 @@ const inferArms: <A>(
   resultT: Ty,
   arms: MatchArm[],
   st: St,
-) => Result<St, IErr> = _curry(
+) => Result<St, PErr> = _curry(
   5,
   <A>(
     ctx: {
@@ -3147,8 +3148,8 @@ const inferArms: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -3157,7 +3158,7 @@ const inferArms: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -3174,7 +3175,7 @@ const inferArms: <A>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(st) as Result<St, IErr>,
+        () => Ok(st) as Result<St, PErr>,
       )
       .with(
         (_v) => {
@@ -3198,7 +3199,7 @@ const inferArms: <A>(
                           inferExpr(armCtx, arm.body, st3),
                         ),
                       match(arm.guard)
-                        .with({ _tag: "None" }, () => Ok(st2) as Result<St, IErr>)
+                        .with({ _tag: "None" }, () => Ok(st2) as Result<St, PErr>)
                         .with({ _tag: "Some" }, ({ value: g }) =>
                           _Result_flatMap(
                             ([guardT, stg]) => u(tBool, guardT, stg, exprSpan(g)),
@@ -3231,8 +3232,8 @@ const inferMatch: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -3241,7 +3242,7 @@ const inferMatch: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -3250,7 +3251,7 @@ const inferMatch: <A>(
   scrutinee: Expr,
   arms: MatchArm[],
   st: St,
-) => Result<[Ty, St], IErr> = _curry(
+) => Result<[Ty, St], PErr> = _curry(
   4,
   <A>(
     ctx: {
@@ -3267,8 +3268,8 @@ const inferMatch: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -3277,7 +3278,7 @@ const inferMatch: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -3291,7 +3292,7 @@ const inferMatch: <A>(
       ([scrutT, st1]) =>
         (([resultT, st2]: [Ty, St]) =>
           _Result_flatMap(
-            (st3) => Ok(_tuple(resultT, st3)) as Result<[Ty, St], IErr>,
+            (st3) => Ok(_tuple(resultT, st3)) as Result<[Ty, St], PErr>,
             inferArms(ctx, scrutT, resultT, arms, st2),
           ))(freshVar(st1)),
       inferExpr(ctx, scrutinee, st),
@@ -3317,8 +3318,8 @@ const inferExpr: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -3327,7 +3328,7 @@ const inferExpr: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -3335,7 +3336,7 @@ const inferExpr: <A>(
   },
   e: Expr,
   st: St,
-) => Result<[Ty, St], IErr> = _curry(
+) => Result<[Ty, St], PErr> = _curry(
   3,
   <A>(
     ctx: {
@@ -3352,8 +3353,8 @@ const inferExpr: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -3362,7 +3363,7 @@ const inferExpr: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -3372,7 +3373,7 @@ const inferExpr: <A>(
     st: St,
   ) =>
     _Result_flatMap(
-      ([t, st1]) => Ok(_tuple(t, recordAt(exprSpan(e), t, st1))) as Result<[Ty, St], IErr>,
+      ([t, st1]) => Ok(_tuple(t, recordAt(exprSpan(e), t, st1))) as Result<[Ty, St], PErr>,
       inferExprRaw(ctx, e, st),
     ),
 );
@@ -3391,8 +3392,8 @@ const inferExprRaw: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -3401,7 +3402,7 @@ const inferExprRaw: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -3409,7 +3410,7 @@ const inferExprRaw: <A>(
   },
   e: Expr,
   st: St,
-) => Result<[Ty, St], IErr> = _curry(
+) => Result<[Ty, St], PErr> = _curry(
   3,
   <A>(
     ctx: {
@@ -3426,8 +3427,8 @@ const inferExprRaw: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -3436,7 +3437,7 @@ const inferExprRaw: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -3446,10 +3447,10 @@ const inferExprRaw: <A>(
     st: St,
   ) =>
     match(e)
-      .with({ _tag: "ENum" }, () => Ok(_tuple(tNumber, st)) as Result<[Ty, St], IErr>)
-      .with({ _tag: "EUnit" }, () => Ok(_tuple(tUnit, st)) as Result<[Ty, St], IErr>)
-      .with({ _tag: "EBool" }, () => Ok(_tuple(tBool, st)) as Result<[Ty, St], IErr>)
-      .with({ _tag: "EStr" }, ({ value }) => Ok(_tuple(tLit(value), st)) as Result<[Ty, St], IErr>)
+      .with({ _tag: "ENum" }, () => Ok(_tuple(tNumber, st)) as Result<[Ty, St], PErr>)
+      .with({ _tag: "EUnit" }, () => Ok(_tuple(tUnit, st)) as Result<[Ty, St], PErr>)
+      .with({ _tag: "EBool" }, () => Ok(_tuple(tBool, st)) as Result<[Ty, St], PErr>)
+      .with({ _tag: "EStr" }, ({ value }) => Ok(_tuple(tLit(value), st)) as Result<[Ty, St], PErr>)
       .with({ _tag: "ERef" }, ({ name, span: sp }) =>
         match(_Map_get(name, ctx.env))
           .with({ _tag: "Some" }, ({ value: sc }) =>
@@ -3462,12 +3463,12 @@ const inferExprRaw: <A>(
                     .with({ _tag: "None" }, () => st1)
                     .exhaustive(),
                 ),
-              ) as Result<[Ty, St], IErr>)(instantiate(sc, st)),
+              ) as Result<[Ty, St], PErr>)(instantiate(sc, st)),
           )
           .with({ _tag: "None" }, () =>
             ctx.open
-              ? (([t, st1]: [Ty, St]) => Ok(_tuple(t, st1)) as Result<[Ty, St], IErr>)(freshVar(st))
-              : (Err(typeErr(`unbound variable '${name}'`, sp)) as Result<[Ty, St], IErr>),
+              ? (([t, st1]: [Ty, St]) => Ok(_tuple(t, st1)) as Result<[Ty, St], PErr>)(freshVar(st))
+              : (Err(typeErr(`unbound variable '${name}'`, sp)) as Result<[Ty, St], PErr>),
           )
           .exhaustive(),
       )
@@ -3481,7 +3482,7 @@ const inferExprRaw: <A>(
                     ((allTypes: Ty[]) =>
                       _Result_flatMap(
                         ([bodyT, st4]) =>
-                          Ok(_tuple(arrowChain(allTypes, bodyT), st4)) as Result<[Ty, St], IErr>,
+                          Ok(_tuple(arrowChain(allTypes, bodyT), st4)) as Result<[Ty, St], PErr>,
                         inferExpr(ctxWithEnv(ctx, envWithLabFields(labFields, bodyEnv)), body, st3),
                       ))(
                       match(labParams)
@@ -3535,13 +3536,13 @@ const inferExprRaw: <A>(
       )
       .with({ _tag: "ECall" }, ({ fn, args, origin }) =>
         ((api: {
-          inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
-          unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, IErr>;
+          inferExpr: (a: Expr, b: St) => Result<[Ty, St], PErr>;
+          unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, PErr>;
         }) =>
           _Result_flatMap(
             (claimed) =>
               match(claimed)
-                .with({ _tag: "Some" }, ({ value: r }) => Ok(r) as Result<[Ty, St], IErr>)
+                .with({ _tag: "Some" }, ({ value: r }) => Ok(r) as Result<[Ty, St], PErr>)
                 .with({ _tag: "None" }, () => inferNormalCall(ctx, fn, args, st))
                 .exhaustive(),
             runInferCallHooks(inferCallHooksOf(ctx.plugins), fn, args, origin, st, api),
@@ -3558,7 +3559,7 @@ const inferExprRaw: <A>(
         match(spread)
           .with({ _tag: "None" }, () =>
             _Result_flatMap(
-              ([row, st1]) => Ok(_tuple(tRecord(row), st1)) as Result<[Ty, St], IErr>,
+              ([row, st1]) => Ok(_tuple(tRecord(row), st1)) as Result<[Ty, St], PErr>,
               inferRecordRow(ctx, fields, st),
             ),
           )
@@ -3569,7 +3570,7 @@ const inferExprRaw: <A>(
                   ([baseT, st2]) =>
                     (([tailVar, st3]: [Row, St]) =>
                       _Result_flatMap(
-                        (st4) => Ok(_tuple(baseT, st4)) as Result<[Ty, St], IErr>,
+                        (st4) => Ok(_tuple(baseT, st4)) as Result<[Ty, St], PErr>,
                         u(baseT, tRecord(rWithTail(row, tailVar)), st3, sp),
                       ))(freshRowVar(st2)),
                   inferExpr(ctx, spreadExpr, st1),
@@ -3590,7 +3591,7 @@ const inferExprRaw: <A>(
       )
       .with({ _tag: "ETuple" }, ({ elements }) =>
         _Result_flatMap(
-          ([elems, st1]) => Ok(_tuple(tTuple(elems), st1)) as Result<[Ty, St], IErr>,
+          ([elems, st1]) => Ok(_tuple(tTuple(elems), st1)) as Result<[Ty, St], PErr>,
           inferTupleElems(ctx, elements, st),
         ),
       )
@@ -3609,7 +3610,7 @@ const inferExprRaw: <A>(
       .with({ _tag: "ERecur" }, ({ args, span: sp }) => inferRecur(ctx, args, sp, st))
       .with({ _tag: "EInterp" }, ({ parts }) =>
         _Result_flatMap(
-          (st1) => Ok(_tuple(tString, st1)) as Result<[Ty, St], IErr>,
+          (st1) => Ok(_tuple(tString, st1)) as Result<[Ty, St], PErr>,
           inferInterpParts(ctx, parts, st),
         ),
       )
@@ -3630,8 +3631,8 @@ const inferDo: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -3640,7 +3641,7 @@ const inferDo: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -3648,7 +3649,7 @@ const inferDo: <A>(
   },
   exprs: Expr[],
   st: St,
-) => Result<[Ty, St], IErr> = _curry(
+) => Result<[Ty, St], PErr> = _curry(
   3,
   <A>(
     ctx: {
@@ -3665,8 +3666,8 @@ const inferDo: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -3675,7 +3676,7 @@ const inferDo: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -3691,7 +3692,7 @@ const inferDo: <A>(
           return _g.length === 0;
         },
         () =>
-          Err(typeErr("internal: empty do block", { start: 0, end: 0 })) as Result<[Ty, St], IErr>,
+          Err(typeErr("internal: empty do block", { start: 0, end: 0 })) as Result<[Ty, St], PErr>,
       )
       .with(
         (_v) => {
@@ -3727,8 +3728,8 @@ const inferPatRecordFrom: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -3737,7 +3738,7 @@ const inferPatRecordFrom: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -3747,7 +3748,7 @@ const inferPatRecordFrom: <A>(
   row: Row,
   bindings: Map<string, Ty>,
   st: St,
-) => Result<[Row, Map<string, Ty>, St], IErr> = _curry(
+) => Result<[Row, Map<string, Ty>, St], PErr> = _curry(
   5,
   <A>(
     ctx: {
@@ -3764,8 +3765,8 @@ const inferPatRecordFrom: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -3774,7 +3775,7 @@ const inferPatRecordFrom: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -3791,7 +3792,7 @@ const inferPatRecordFrom: <A>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(_tuple(row, bindings, st)) as Result<[Row, Map<string, Ty>, St], IErr>,
+        () => Ok(_tuple(row, bindings, st)) as Result<[Row, Map<string, Ty>, St], PErr>,
       )
       .with(
         (_v) => {
@@ -3830,8 +3831,8 @@ const inferPatRecord: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -3840,7 +3841,7 @@ const inferPatRecord: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -3848,7 +3849,7 @@ const inferPatRecord: <A>(
   },
   fields: PatField[],
   st: St,
-) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
+) => Result<[Ty, Map<string, Ty>, St], PErr> = _curry(
   3,
   <A>(
     ctx: {
@@ -3865,8 +3866,8 @@ const inferPatRecord: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -3875,7 +3876,7 @@ const inferPatRecord: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -3887,7 +3888,7 @@ const inferPatRecord: <A>(
     (([rowBase, st1]: [Row, St]) =>
       _Result_flatMap(
         ([row, bindings, st2]) =>
-          Ok(_tuple(tRecord(row), bindings, st2)) as Result<[Ty, Map<string, Ty>, St], IErr>,
+          Ok(_tuple(tRecord(row), bindings, st2)) as Result<[Ty, Map<string, Ty>, St], PErr>,
         inferPatRecordFrom(ctx, fields, rowBase, new Map<string, Ty>(), st1),
       ))(freshRowVar(st)),
 );
@@ -3906,8 +3907,8 @@ const inferPatCtorArgs: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -3916,7 +3917,7 @@ const inferPatCtorArgs: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -3928,7 +3929,7 @@ const inferPatCtorArgs: <A>(
   st: St,
   bindings: Map<string, Ty>,
   sp: SpanAt,
-) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
+) => Result<[Ty, Map<string, Ty>, St], PErr> = _curry(
   7,
   <A>(
     ctx: {
@@ -3945,8 +3946,8 @@ const inferPatCtorArgs: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -3955,7 +3956,7 @@ const inferPatCtorArgs: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -3974,7 +3975,7 @@ const inferPatCtorArgs: <A>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(_tuple(curT, bindings, st)) as Result<[Ty, Map<string, Ty>, St], IErr>,
+        () => Ok(_tuple(curT, bindings, st)) as Result<[Ty, Map<string, Ty>, St], PErr>,
       )
       .with(
         (_v) => {
@@ -4006,7 +4007,7 @@ const inferPatCtorArgs: <A>(
               () =>
                 Err(typeErr(`constructor '${ctor}' applied to too many arguments`, sp)) as Result<
                   [Ty, Map<string, Ty>, St],
-                  IErr
+                  PErr
                 >,
             ),
       )
@@ -4029,8 +4030,8 @@ const inferPatTupleFrom: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -4039,7 +4040,7 @@ const inferPatTupleFrom: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -4047,7 +4048,7 @@ const inferPatTupleFrom: <A>(
   },
   elems: Pattern[],
   st: St,
-) => Result<[Ty[], Map<string, Ty>, St], IErr> = _curry(
+) => Result<[Ty[], Map<string, Ty>, St], PErr> = _curry(
   3,
   <A>(
     ctx: {
@@ -4064,8 +4065,8 @@ const inferPatTupleFrom: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -4074,7 +4075,7 @@ const inferPatTupleFrom: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -4092,7 +4093,7 @@ const inferPatTupleFrom: <A>(
         () =>
           Ok(_tuple([] as Ty[], new Map<string, Ty>(), st)) as Result<
             [Ty[], Map<string, Ty>, St],
-            IErr
+            PErr
           >,
       )
       .with(
@@ -4111,7 +4112,7 @@ const inferPatTupleFrom: <A>(
                       mergeBindingMaps(restBindings, bindings),
                       st2,
                     ),
-                  ) as Result<[Ty[], Map<string, Ty>, St], IErr>,
+                  ) as Result<[Ty[], Map<string, Ty>, St], PErr>,
                 inferPatTupleFrom(ctx, rest, st1),
               ),
             inferPat(ctx, ep, st),
@@ -4136,8 +4137,8 @@ const inferPatTuple: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -4146,7 +4147,7 @@ const inferPatTuple: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -4154,7 +4155,7 @@ const inferPatTuple: <A>(
   },
   elems: Pattern[],
   st: St,
-) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
+) => Result<[Ty, Map<string, Ty>, St], PErr> = _curry(
   3,
   <A>(
     ctx: {
@@ -4171,8 +4172,8 @@ const inferPatTuple: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -4181,7 +4182,7 @@ const inferPatTuple: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -4192,7 +4193,7 @@ const inferPatTuple: <A>(
   ) =>
     _Result_flatMap(
       ([elemTs, bindings, st1]) =>
-        Ok(_tuple(tTuple(elemTs), bindings, st1)) as Result<[Ty, Map<string, Ty>, St], IErr>,
+        Ok(_tuple(tTuple(elemTs), bindings, st1)) as Result<[Ty, Map<string, Ty>, St], PErr>,
       inferPatTupleFrom(ctx, elems, st),
     ),
 );
@@ -4211,8 +4212,8 @@ const inferSeqPatElems: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -4221,7 +4222,7 @@ const inferSeqPatElems: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -4230,7 +4231,7 @@ const inferSeqPatElems: <A>(
   elem: Ty,
   elems: Pattern[],
   st: St,
-) => Result<[Map<string, Ty>, St], IErr> = _curry(
+) => Result<[Map<string, Ty>, St], PErr> = _curry(
   4,
   <A>(
     ctx: {
@@ -4247,8 +4248,8 @@ const inferSeqPatElems: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -4257,7 +4258,7 @@ const inferSeqPatElems: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -4273,7 +4274,7 @@ const inferSeqPatElems: <A>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(_tuple(new Map<string, Ty>(), st)) as Result<[Map<string, Ty>, St], IErr>,
+        () => Ok(_tuple(new Map<string, Ty>(), st)) as Result<[Map<string, Ty>, St], PErr>,
       )
       .with(
         (_v) => {
@@ -4289,7 +4290,7 @@ const inferSeqPatElems: <A>(
                     ([restBindings, st3]) =>
                       Ok(_tuple(mergeBindingMaps(restBindings, subBindings), st3)) as Result<
                         [Map<string, Ty>, St],
-                        IErr
+                        PErr
                       >,
                     inferSeqPatElems(ctx, elem, rest, st2),
                   ),
@@ -4317,8 +4318,8 @@ const inferSeqPat: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -4327,7 +4328,7 @@ const inferSeqPat: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -4337,7 +4338,7 @@ const inferSeqPat: <A>(
   elems: Pattern[],
   restPat: Option<Pattern>,
   st: St,
-) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
+) => Result<[Ty, Map<string, Ty>, St], PErr> = _curry(
   5,
   <A>(
     ctx: {
@@ -4354,8 +4355,8 @@ const inferSeqPat: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -4364,7 +4365,7 @@ const inferSeqPat: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -4382,7 +4383,7 @@ const inferSeqPat: <A>(
           match(restPat)
             .with(
               { _tag: "None" },
-              () => Ok(_tuple(seqT, bindings, st2)) as Result<[Ty, Map<string, Ty>, St], IErr>,
+              () => Ok(_tuple(seqT, bindings, st2)) as Result<[Ty, Map<string, Ty>, St], PErr>,
             )
             .with({ _tag: "Some" }, ({ value: r }) =>
               _Result_flatMap(
@@ -4391,7 +4392,7 @@ const inferSeqPat: <A>(
                     (st4) =>
                       Ok(_tuple(seqT, mergeBindingMaps(bindings, subBindings), st4)) as Result<
                         [Ty, Map<string, Ty>, St],
-                        IErr
+                        PErr
                       >,
                     u(subT, seqT, st3, patSpan(r)),
                   ),
@@ -4422,8 +4423,8 @@ const inferPat: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -4432,7 +4433,7 @@ const inferPat: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -4440,7 +4441,7 @@ const inferPat: <A>(
   },
   p: Pattern,
   st: St,
-) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
+) => Result<[Ty, Map<string, Ty>, St], PErr> = _curry(
   3,
   <A>(
     ctx: {
@@ -4457,8 +4458,8 @@ const inferPat: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -4467,7 +4468,7 @@ const inferPat: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -4480,7 +4481,7 @@ const inferPat: <A>(
       ([t, bindings, st1]) =>
         Ok(_tuple(t, bindings, recordAt(patSpan(p), t, st1))) as Result<
           [Ty, Map<string, Ty>, St],
-          IErr
+          PErr
         >,
       inferPatRaw(ctx, p, st),
     ),
@@ -4500,8 +4501,8 @@ const inferPatRaw: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -4510,7 +4511,7 @@ const inferPatRaw: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -4518,7 +4519,7 @@ const inferPatRaw: <A>(
   },
   p: Pattern,
   st: St,
-) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
+) => Result<[Ty, Map<string, Ty>, St], PErr> = _curry(
   3,
   <A>(
     ctx: {
@@ -4535,8 +4536,8 @@ const inferPatRaw: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -4545,7 +4546,7 @@ const inferPatRaw: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -4560,45 +4561,45 @@ const inferPatRaw: <A>(
           ([t, bindings, st1]) =>
             Ok(_tuple(t, _Map_set(name, t, bindings), st1)) as Result<
               [Ty, Map<string, Ty>, St],
-              IErr
+              PErr
             >,
           inferPat(ctx, pat, st),
         ),
       )
       .with({ _tag: "PWild" }, () =>
         (([t, st1]: [Ty, St]) =>
-          Ok(_tuple(t, new Map<string, Ty>(), st1)) as Result<[Ty, Map<string, Ty>, St], IErr>)(
+          Ok(_tuple(t, new Map<string, Ty>(), st1)) as Result<[Ty, Map<string, Ty>, St], PErr>)(
           freshVar(st),
         ),
       )
       .with(
         { _tag: "PUnit" },
         () =>
-          Ok(_tuple(tUnit, new Map<string, Ty>(), st)) as Result<[Ty, Map<string, Ty>, St], IErr>,
+          Ok(_tuple(tUnit, new Map<string, Ty>(), st)) as Result<[Ty, Map<string, Ty>, St], PErr>,
       )
       .with(
         { _tag: "PLit" },
         () =>
-          Ok(_tuple(tNumber, new Map<string, Ty>(), st)) as Result<[Ty, Map<string, Ty>, St], IErr>,
+          Ok(_tuple(tNumber, new Map<string, Ty>(), st)) as Result<[Ty, Map<string, Ty>, St], PErr>,
       )
       .with(
         { _tag: "PBool" },
         () =>
-          Ok(_tuple(tBool, new Map<string, Ty>(), st)) as Result<[Ty, Map<string, Ty>, St], IErr>,
+          Ok(_tuple(tBool, new Map<string, Ty>(), st)) as Result<[Ty, Map<string, Ty>, St], PErr>,
       )
       .with(
         { _tag: "PStr" },
         ({ value }) =>
           Ok(_tuple(tLit(value), new Map<string, Ty>(), st)) as Result<
             [Ty, Map<string, Ty>, St],
-            IErr
+            PErr
           >,
       )
       .with({ _tag: "PBind" }, ({ name }) =>
         (([t, st1]: [Ty, St]) =>
           Ok(_tuple(t, _Map_set(name, t, new Map<string, Ty>()), st1)) as Result<
             [Ty, Map<string, Ty>, St],
-            IErr
+            PErr
           >)(freshVar(st)),
       )
       .with({ _tag: "PRecord" }, ({ fields }) => inferPatRecord(ctx, fields, st))
@@ -4611,7 +4612,7 @@ const inferPatRaw: <A>(
                 () =>
                   Err(typeErr(`'${alias}' has no member '${ctor}'`, sp)) as Result<
                     [Ty, Map<string, Ty>, St],
-                    IErr
+                    PErr
                   >,
               )
               .with({ _tag: "Some" }, ({ value: sc }) =>
@@ -4629,7 +4630,7 @@ const inferPatRaw: <A>(
                 () =>
                   Err(typeErr(`unknown constructor '${ctor}'`, sp)) as Result<
                     [Ty, Map<string, Ty>, St],
-                    IErr
+                    PErr
                   >,
               )
               .with({ _tag: "Some" }, ({ value: sc }) =>
@@ -4720,8 +4721,8 @@ const inferOrPatAlts: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -4730,7 +4731,7 @@ const inferOrPatAlts: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -4741,7 +4742,7 @@ const inferOrPatAlts: <A>(
   t: Ty,
   bindings: Map<string, Ty>,
   st: St,
-) => Result<St, IErr> = _curry(
+) => Result<St, PErr> = _curry(
   6,
   <A>(
     ctx: {
@@ -4758,8 +4759,8 @@ const inferOrPatAlts: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -4768,7 +4769,7 @@ const inferOrPatAlts: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -4781,7 +4782,7 @@ const inferOrPatAlts: <A>(
     st: St,
   ) =>
     match(_Array_get(i, alts))
-      .with({ _tag: "None" }, () => Ok(st) as Result<St, IErr>)
+      .with({ _tag: "None" }, () => Ok(st) as Result<St, PErr>)
       .with({ _tag: "Some" }, ({ value: alt }) =>
         _Result_flatMap(
           ([altT, altBindings, st1]) =>
@@ -4819,8 +4820,8 @@ const inferOrPat: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -4829,7 +4830,7 @@ const inferOrPat: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -4838,7 +4839,7 @@ const inferOrPat: <A>(
   alts: Pattern[],
   sp: SpanAt,
   st: St,
-) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
+) => Result<[Ty, Map<string, Ty>, St], PErr> = _curry(
   4,
   <A>(
     ctx: {
@@ -4855,8 +4856,8 @@ const inferOrPat: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -4865,7 +4866,7 @@ const inferOrPat: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -4884,7 +4885,7 @@ const inferOrPat: <A>(
         () =>
           Err(typeErr("or-pattern needs at least one alternative", sp)) as Result<
             [Ty, Map<string, Ty>, St],
-            IErr
+            PErr
           >,
       )
       .with(
@@ -4896,7 +4897,7 @@ const inferOrPat: <A>(
           _Result_flatMap(
             ([t, bindings, st1]) =>
               _Result_flatMap(
-                (st2) => Ok(_tuple(t, bindings, st2)) as Result<[Ty, Map<string, Ty>, St], IErr>,
+                (st2) => Ok(_tuple(t, bindings, st2)) as Result<[Ty, Map<string, Ty>, St], PErr>,
                 inferOrPatAlts(ctx, rest, 0, t, bindings, st1),
               ),
             inferPat(ctx, first, st),
@@ -5838,8 +5839,8 @@ const inferGroupFrom: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -5848,7 +5849,7 @@ const inferGroupFrom: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -5856,7 +5857,7 @@ const inferGroupFrom: <A>(
   },
   group: Stmt[],
   st: St,
-) => Result<[Map<string, Ty>, St], IErr> = _curry(
+) => Result<[Map<string, Ty>, St], PErr> = _curry(
   3,
   <A>(
     ctx: {
@@ -5873,8 +5874,8 @@ const inferGroupFrom: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -5883,7 +5884,7 @@ const inferGroupFrom: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -5898,7 +5899,7 @@ const inferGroupFrom: <A>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(_tuple(new Map<string, Ty>(), st)) as Result<[Map<string, Ty>, St], IErr>,
+        () => Ok(_tuple(new Map<string, Ty>(), st)) as Result<[Map<string, Ty>, St], PErr>,
       )
       .with(
         (_v) => {
@@ -5920,7 +5921,7 @@ const inferGroupFrom: <A>(
                                 ([restTypes, st4]) =>
                                   Ok(_tuple(_Map_set(name, pinned, restTypes), st4)) as Result<
                                     [Map<string, Ty>, St],
-                                    IErr
+                                    PErr
                                   >,
                                 inferGroupFrom(ctx, rest, st3),
                               ),
@@ -5942,7 +5943,7 @@ const inferGroupFrom: <A>(
                               )
                               .with(
                                 { _tag: "None" },
-                                () => Ok(_tuple(t, st2)) as Result<[Ty, St], IErr>,
+                                () => Ok(_tuple(t, st2)) as Result<[Ty, St], PErr>,
                               )
                               .exhaustive(),
                           ),
@@ -5954,7 +5955,7 @@ const inferGroupFrom: <A>(
                       () =>
                         Err(
                           typeErr(`internal: missing self-binding for '${name}'`, span),
-                        ) as Result<[Map<string, Ty>, St], IErr>,
+                        ) as Result<[Map<string, Ty>, St], PErr>,
                     )
                     .exhaustive(),
                 inferExpr(ctx, value, st),
@@ -6087,8 +6088,8 @@ const processGroupsFrom: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -6097,7 +6098,7 @@ const processGroupsFrom: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -6122,8 +6123,8 @@ const processGroupsFrom: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -6132,7 +6133,7 @@ const processGroupsFrom: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -6140,7 +6141,7 @@ const processGroupsFrom: <A>(
     },
     St,
   ],
-  IErr
+  PErr
 > = _curry(
   4,
   <A>(
@@ -6158,8 +6159,8 @@ const processGroupsFrom: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -6168,7 +6169,7 @@ const processGroupsFrom: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -6230,8 +6231,8 @@ const inferExprStmtsFrom: <A>(
           c: (
             a: { tok: A; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -6240,7 +6241,7 @@ const inferExprStmtsFrom: <A>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[];
     loopStack: Ty[][];
@@ -6248,7 +6249,7 @@ const inferExprStmtsFrom: <A>(
   },
   stmts: Stmt[],
   st: St,
-) => Result<St, IErr> = _curry(
+) => Result<St, PErr> = _curry(
   3,
   <A>(
     ctx: {
@@ -6265,8 +6266,8 @@ const inferExprStmtsFrom: <A>(
             c: (
               a: { tok: A; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -6275,7 +6276,7 @@ const inferExprStmtsFrom: <A>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[];
       loopStack: Ty[][];
@@ -6290,7 +6291,7 @@ const inferExprStmtsFrom: <A>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(st) as Result<St, IErr>,
+        () => Ok(st) as Result<St, PErr>,
       )
       .with(
         (_v) => {
@@ -6692,8 +6693,8 @@ const runInferImports: <A, B, C>(
           c: (
             a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -6702,7 +6703,7 @@ const runInferImports: <A, B, C>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[]
   >,
@@ -6713,7 +6714,7 @@ const runInferImports: <A, B, C>(
     aliases: Map<string, AliasInfo>;
     letParams: TypeAt[];
   },
-  IErr
+  PErr
 > = _curry(
   8,
   <A, B, C>(
@@ -6746,8 +6747,8 @@ const runInferImports: <A, B, C>(
             c: (
               a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -6756,7 +6757,7 @@ const runInferImports: <A, B, C>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[]
     >,
@@ -6770,8 +6771,8 @@ const runInferImports: <A, B, C>(
           c: (
             a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -6780,7 +6781,7 @@ const runInferImports: <A, B, C>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[] = resolvePluginsDefault(pluginsOpt);
     const st0: St = mkSt(1000);
@@ -6836,8 +6837,8 @@ const runInferImports: <A, B, C>(
                             c: (
                               a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
                               b: number,
-                            ) => Result<[Expr, number], IErr>,
-                          ) => Result<Option<[Expr, number]>, IErr>
+                            ) => Result<[Expr, number], PErr>,
+                          ) => Result<Option<[Expr, number]>, PErr>
                         >;
                         inferCall: Option<
                           (
@@ -6846,7 +6847,7 @@ const runInferImports: <A, B, C>(
                             c: Option<string>,
                             d: St,
                             e: InferApi,
-                          ) => Result<Option<[Ty, St]>, IErr>
+                          ) => Result<Option<[Ty, St]>, PErr>
                         >;
                       }[];
                       loopStack: Ty[][];
@@ -6854,7 +6855,7 @@ const runInferImports: <A, B, C>(
                     },
                     St,
                   ],
-                  IErr
+                  PErr
                 >,
                 { _tag: "Ok" }
               > => {
@@ -6878,7 +6879,7 @@ const runInferImports: <A, B, C>(
                           aliases: Map<string, AliasInfo>;
                           letParams: TypeAt[];
                         },
-                        IErr
+                        PErr
                       >,
                   )
                   .with(
@@ -6891,7 +6892,7 @@ const runInferImports: <A, B, C>(
                           aliases: Map<string, AliasInfo>;
                           letParams: TypeAt[];
                         },
-                        IErr
+                        PErr
                       >,
                   )
                   .exhaustive(),
@@ -6906,7 +6907,7 @@ const runInferImports: <A, B, C>(
                     aliases: Map<string, AliasInfo>;
                     letParams: TypeAt[];
                   },
-                  IErr
+                  PErr
                 >,
             )
             .exhaustive();
@@ -6949,8 +6950,8 @@ export const inferProgramImports: <A, B, C>(
           c: (
             a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -6959,11 +6960,11 @@ export const inferProgramImports: <A, B, C>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[]
   >,
-) => Result<Map<string, Scheme>, IErr> = _curry(
+) => Result<Map<string, Scheme>, PErr> = _curry(
   8,
   <A, B, C>(
     stmts: Stmt[],
@@ -6995,8 +6996,8 @@ export const inferProgramImports: <A, B, C>(
             c: (
               a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -7005,7 +7006,7 @@ export const inferProgramImports: <A, B, C>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[]
     >,
@@ -7029,7 +7030,7 @@ export const inferProgram: _Curry<
     namespaces: Map<string, Map<string, Ty>>,
     openMode: boolean,
   ],
-  Result<Map<string, Scheme>, IErr>
+  Result<Map<string, Scheme>, PErr>
 > = _curry(
   4,
   (
@@ -7056,8 +7057,8 @@ export const inferProgram: _Curry<
               c: (
                 a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
                 b: number,
-              ) => Result<[Expr, number], IErr>,
-            ) => Result<Option<[Expr, number]>, IErr>
+              ) => Result<[Expr, number], PErr>,
+            ) => Result<Option<[Expr, number]>, PErr>
           >;
           inferCall: Option<
             (
@@ -7066,7 +7067,7 @@ export const inferProgram: _Curry<
               c: Option<string>,
               d: St,
               e: InferApi,
-            ) => Result<Option<[Ty, St]>, IErr>
+            ) => Result<Option<[Ty, St]>, PErr>
           >;
         }[]
       >,
@@ -7108,8 +7109,8 @@ export const inferProgramImportsTypes: <A, B, C>(
           c: (
             a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
             b: number,
-          ) => Result<[Expr, number], IErr>,
-        ) => Result<Option<[Expr, number]>, IErr>
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
         (
@@ -7118,7 +7119,7 @@ export const inferProgramImportsTypes: <A, B, C>(
           c: Option<string>,
           d: St,
           e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
+        ) => Result<Option<[Ty, St]>, PErr>
       >;
     }[]
   >,
@@ -7129,7 +7130,7 @@ export const inferProgramImportsTypes: <A, B, C>(
     aliases: Map<string, AliasInfo>;
     letParams: TypeAt[];
   },
-  IErr
+  PErr
 > = _curry(
   8,
   <A, B, C>(
@@ -7162,8 +7163,8 @@ export const inferProgramImportsTypes: <A, B, C>(
             c: (
               a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -7172,7 +7173,7 @@ export const inferProgramImportsTypes: <A, B, C>(
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[]
     >,
@@ -7197,7 +7198,7 @@ export const inferProgramTypes: _Curry<
       aliases: Map<string, AliasInfo>;
       letParams: TypeAt[];
     },
-    IErr
+    PErr
   >
 > = _curry(
   4,
@@ -7225,8 +7226,8 @@ export const inferProgramTypes: _Curry<
               c: (
                 a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
                 b: number,
-              ) => Result<[Expr, number], IErr>,
-            ) => Result<Option<[Expr, number]>, IErr>
+              ) => Result<[Expr, number], PErr>,
+            ) => Result<Option<[Expr, number]>, PErr>
           >;
           inferCall: Option<
             (
@@ -7235,7 +7236,7 @@ export const inferProgramTypes: _Curry<
               c: Option<string>,
               d: St,
               e: InferApi,
-            ) => Result<Option<[Ty, St]>, IErr>
+            ) => Result<Option<[Ty, St]>, PErr>
           >;
         }[]
       >,
@@ -7257,8 +7258,8 @@ export const inferProgramWith: _Curry<
             c: (
               a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -7267,12 +7268,12 @@ export const inferProgramWith: _Curry<
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[]
     >,
   ],
-  Result<Map<string, Scheme>, IErr>
+  Result<Map<string, Scheme>, PErr>
 > = _curry(
   5,
   (
@@ -7290,8 +7291,8 @@ export const inferProgramWith: _Curry<
             c: (
               a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
               b: number,
-            ) => Result<[Expr, number], IErr>,
-          ) => Result<Option<[Expr, number]>, IErr>
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
         >;
         inferCall: Option<
           (
@@ -7300,7 +7301,7 @@ export const inferProgramWith: _Curry<
             c: Option<string>,
             d: St,
             e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
+          ) => Result<Option<[Ty, St]>, PErr>
         >;
       }[]
     >,

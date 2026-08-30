@@ -1,4 +1,6 @@
-import type { Ctor, CtorField, Span, Stmt } from "./ast";
+import type { Ctor, CtorField, Stmt } from "./ast";
+import type { SpanAt } from "./types";
+import type { PErr } from "./parser";
 
 export type CtorInfo = { owner: string; arity: number };
 export type Registry = { ctors: Map<string, CtorInfo>; types: Map<string, string[]> };
@@ -56,7 +58,7 @@ const keysOfFrom: <A>(fields: ({ name: Option<string> } & A)[], i: number) => st
 export const keysOf: <A>(fields: ({ name: Option<string> } & A)[]) => string[] = <A>(
   fields: ({ name: Option<string> } & A)[],
 ) => keysOfFrom(fields, 0);
-const builtinSpan: Span = { start: 0, end: 0 };
+const builtinSpan: SpanAt = { start: 0, end: 0 };
 export const builtinTypeDecls: { name: string; params: string[]; ctors: Ctor[] }[] = [
   {
     name: "Option",
@@ -216,54 +218,45 @@ const ctorsInto: <A, B, C, D, E, F>(
         )
         .exhaustive(),
   );
-const buildLoop: _Curry<
-  [stmts: Stmt[], i: number, reg: Registry],
-  Result<Registry, { message: string; start: number; end: number }>
-> = _curry(3, (stmts: Stmt[], i: number, reg: Registry) =>
-  match(_Array_get(i, stmts))
-    .with(
-      { _tag: "None" },
-      () => Ok(reg) as Result<Registry, { message: string; start: number; end: number }>,
-    )
-    .with(
-      (
-        _v,
-      ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
-        value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
-      } => {
-        const _g: any = _v;
-        return _g._tag === "Some" && _g.value._tag === "SType";
-      },
-      ({ value: { name, ctors, span: sp } }) =>
-        _Map_has(name, reg.types)
-          ? (Err(ctorErr(`duplicate type '${name}'`, sp)) as Result<
-              Registry,
-              { message: string; start: number; end: number }
-            >)
-          : _Result_flatMap(
-              (cs: Map<string, CtorInfo>) =>
-                buildLoop(stmts, add(i, 1), {
-                  ctors: cs,
-                  types: _Map_set(
-                    name,
-                    map((c: Ctor) => c.name, ctors),
-                    reg.types,
-                  ),
-                }),
-              ctorsInto(ctors, 0, name, sp, reg.ctors),
-            ),
-    )
-    .with({ _tag: "Some" }, () => buildLoop(stmts, add(i, 1), reg))
-    .exhaustive(),
+const buildLoop: _Curry<[stmts: Stmt[], i: number, reg: Registry], Result<Registry, PErr>> = _curry(
+  3,
+  (stmts: Stmt[], i: number, reg: Registry) =>
+    match(_Array_get(i, stmts))
+      .with({ _tag: "None" }, () => Ok(reg) as Result<Registry, PErr>)
+      .with(
+        (
+          _v,
+        ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
+          value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
+        } => {
+          const _g: any = _v;
+          return _g._tag === "Some" && _g.value._tag === "SType";
+        },
+        ({ value: { name, ctors, span: sp } }) =>
+          _Map_has(name, reg.types)
+            ? (Err(ctorErr(`duplicate type '${name}'`, sp)) as Result<Registry, PErr>)
+            : _Result_flatMap(
+                (cs: Map<string, CtorInfo>) =>
+                  buildLoop(stmts, add(i, 1), {
+                    ctors: cs,
+                    types: _Map_set(
+                      name,
+                      map((c: Ctor) => c.name, ctors),
+                      reg.types,
+                    ),
+                  }),
+                ctorsInto(ctors, 0, name, sp, reg.ctors),
+              ),
+      )
+      .with({ _tag: "Some" }, () => buildLoop(stmts, add(i, 1), reg))
+      .exhaustive(),
 );
 /**
  * The failing builder — check's entry point: duplicate-decl detection lives
  * here, at the single derivation, so no later pass can see a registry check
  * didn't vouch for.
  */
-export const buildRegistry: (
-  stmts: Stmt[],
-) => Result<Registry, { message: string; start: number; end: number }> = (stmts: Stmt[]) =>
+export const buildRegistry: (stmts: Stmt[]) => Result<Registry, PErr> = (stmts: Stmt[]) =>
   _Result_map(
     (reg: Registry) => seedRegDeclsFrom(builtinDeclsFor(stmts), 0, reg),
     buildLoop(stmts, 0, emptyRegistry),
