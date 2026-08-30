@@ -1222,6 +1222,7 @@ const compileOneTs: <A, B>(
         aliases: Map<string, { expr: Option<TypeExpr>; fields: AliasField[]; params: string[] }>;
       }
     >;
+    aliases: Map<string, { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> }>;
     runtimeImport: string;
     typeOwner: Map<string, string>;
     outputs: { path: string; js: string }[];
@@ -1243,6 +1244,7 @@ const compileOneTs: <A, B>(
         aliases: Map<string, { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> }>;
       }
     >;
+    aliases: Map<string, { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> }>;
     typeOwner: Map<string, string>;
     runtimeImport: string;
     externs: Map<
@@ -1266,6 +1268,7 @@ const compileOneTs: <A, B>(
           aliases: Map<string, { expr: Option<TypeExpr>; fields: AliasField[]; params: string[] }>;
         }
       >;
+      aliases: Map<string, { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> }>;
       runtimeImport: string;
       typeOwner: Map<string, string>;
       outputs: { path: string; js: string }[];
@@ -1316,6 +1319,10 @@ const compileOneTs: <A, B>(
                   >;
                 }
               >;
+              aliases: Map<
+                string,
+                { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> }
+              >;
               typeOwner: Map<string, string>;
               runtimeImport: string;
               externs: Map<
@@ -1353,6 +1360,10 @@ const compileOneTs: <A, B>(
                         { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> }
                       >;
                     }
+                  >;
+                  aliases: Map<
+                    string,
+                    { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> }
                   >;
                   typeOwner: Map<string, string>;
                   runtimeImport: string;
@@ -1496,6 +1507,10 @@ const compileOneTs: <A, B>(
                           >;
                         }
                       >;
+                      aliases: Map<
+                        string,
+                        { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> }
+                      >;
                       typeOwner: Map<string, string>;
                       runtimeImport: string;
                       externs: Map<
@@ -1536,6 +1551,7 @@ const compileOneTs: <A, B>(
                           qualScopeOf(loaded.stmts),
                           ctx.qualsByPath,
                         ),
+                        aliases: mergeMap(r.aliases, ctx.aliases),
                         typeOwner: ctx.typeOwner,
                         runtimeImport: ctx.runtimeImport,
                         externs: externBindingsInto(loaded.stmts, loaded.path, r.env, ctx.externs),
@@ -1557,6 +1573,10 @@ const compileOneTs: <A, B>(
                                 { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> }
                               >;
                             }
+                          >;
+                          aliases: Map<
+                            string,
+                            { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> }
                           >;
                           typeOwner: Map<string, string>;
                           runtimeImport: string;
@@ -1590,7 +1610,7 @@ ${body}`,
                     r.env,
                     r.types,
                     r.letParams,
-                    r.aliases,
+                    mergeMap(r.aliases, ctx.aliases),
                     res.keys,
                     [] as string[],
                     namespaceRuntime,
@@ -1644,6 +1664,7 @@ const compileAllTs: <A>(
         aliases: Map<string, { expr: Option<TypeExpr>; fields: AliasField[]; params: string[] }>;
       }
     >;
+    aliases: Map<string, { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> }>;
     runtimeImport: string;
     typeOwner: Map<string, string>;
   },
@@ -1671,6 +1692,7 @@ const compileAllTs: <A>(
           aliases: Map<string, { expr: Option<TypeExpr>; fields: AliasField[]; params: string[] }>;
         }
       >;
+      aliases: Map<string, { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> }>;
       runtimeImport: string;
       typeOwner: Map<string, string>;
     },
@@ -1726,6 +1748,10 @@ export const compileGraphTs: <A>(
               { expr: Option<TypeExpr>; fields: AliasField[]; params: string[] }
             >;
           }
+        >(),
+        aliases: new Map<
+          string,
+          { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> }
         >(),
         typeOwner: typeOwnerOf(graph),
         runtimeImport: runtimeImport,

@@ -552,7 +552,11 @@ let compileOneTs = (ctx, loaded) => switch ctx->resolveImportsFrom(loaded.stmts,
               r.env,
               r.types,
               r.letParams,
-              r.aliases,
+              // Keep dependency aliases in scope for TS rendering. Inference
+              // expands record aliases to rows, so without this accumulated
+              // index a type imported from an earlier module prints inline
+              // instead of as the alias that module declared.
+              mergeMap(r.aliases, ctx.aliases),
               res.keys,
               [],
               namespaceRuntime,
@@ -591,6 +595,7 @@ let compileOneTs = (ctx, loaded) => switch ctx->resolveImportsFrom(loaded.stmts,
                     qualScopeOf(loaded.stmts),
                     ctx.qualsByPath
                   ),
+                  aliases: mergeMap(r.aliases, ctx.aliases),
                   typeOwner: ctx.typeOwner,
                   runtimeImport: ctx.runtimeImport,
                   externs: externBindingsInto(
@@ -639,6 +644,7 @@ export let compileGraphTs = (graph, runtimeImport) =>
       regByPath: #{},
       keysByPath: #{},
       qualsByPath: #{},
+      aliases: #{},
       typeOwner: typeOwnerOf(graph),
       runtimeImport,
       externs: #{},
