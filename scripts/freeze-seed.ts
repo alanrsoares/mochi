@@ -47,6 +47,11 @@ const emptyDir = (dir: string): void => {
 const sourceRevision = (): string =>
   execFileSync("git", ["rev-parse", "HEAD"], { cwd: REPO, encoding: "utf8" }).trim();
 
+const stripBundleSourceLabels = (file: string): void => {
+  const source = readFileSync(file, "utf8");
+  writeFileSync(file, source.replace(/^\/\/ .*\/mochi-seed-[^\n]+\n/gm, ""));
+};
+
 const tmp = await mkdtemp(join(tmpdir(), "mochi-seed-"));
 const bootstrap = await loadBootstrapCore();
 const built = bootstrap.buildModulesTs(ENTRY, RUNTIME);
@@ -83,6 +88,7 @@ execFileSync(
   ],
   { cwd: REPO, stdio: "inherit" },
 );
+stripBundleSourceLabels(join(tmp, "compile.bundle.js"));
 execFileSync(
   "bun",
   [
@@ -99,6 +105,7 @@ execFileSync(
   ],
   { cwd: REPO, stdio: "inherit" },
 );
+stripBundleSourceLabels(join(tmp, "module.bundle.js"));
 
 emptyDir(SEED);
 cpSync(tmp, SEED, { recursive: true });
