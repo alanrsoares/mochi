@@ -4,6 +4,7 @@
  * with JSX pragma support (defaults to Preact `h`) and ES module exports.
  */
 
+import { compileBootstrapSync } from "@mochi/compiler/bootstrap/sync";
 import { compile } from "@mochi/compiler/compile";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import {
@@ -133,15 +134,23 @@ export function mochiPlugin(options: MochiPluginOptions = {}): Plugin {
 
       // Keep sibling imports as `.mochi` so Vite re-enters this plugin
       // (default codegen rewrites to `.js` for the standalone CLI/graph).
-      const res = compile(code, { runtime, moduleExt: ".mochi", plugins, open: options.open });
-      if (isErr(res)) {
-        const errorMessages = res.error.map((d) => `[${d.kind}] ${d.message}`).join("\n");
-        throw new SyntaxError(`Mochi compilation failed for ${id}:\n${errorMessages}`);
+      let transformedCode: string;
+      if (plugins === undefined && options.open === undefined && runtime === true) {
+        const res = compileBootstrapSync(code);
+        if (res._tag === "Err")
+          throw new SyntaxError(`Mochi compilation failed for ${id}:\n[type] ${res.error.message}`);
+        transformedCode = res.value;
+      } else {
+        const res = compile(code, { runtime, moduleExt: ".mochi", plugins, open: options.open });
+        if (isErr(res)) {
+          const errorMessages = res.error.map((d) => `[${d.kind}] ${d.message}`).join("\n");
+          throw new SyntaxError(`Mochi compilation failed for ${id}:\n${errorMessages}`);
+        }
+        transformedCode = res.value;
       }
 
       // Codegen emits honest ESM: `export` in .mochi source is the only export
       // surface (ADR 0052). No re-export scraping, no synthetic default.
-      let transformedCode = res.value;
 
       // Prepend JSX pragma even when the module already has imports (host kits,
       // sibling .mochi imports). Without this, `import { … }` at the top of the

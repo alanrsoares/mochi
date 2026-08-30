@@ -15,6 +15,7 @@ dist
 # not ordinary `mochi build` output. Its manifest records the exact frozen graph.
 !/bootstrap/seed/
 !/bootstrap/seed/**/*.ts
+!/bootstrap/seed/**/*.js
 !/bootstrap/seed/**/*.d.mts
 
 # bootstrap `build --emit=ts` drops `.ts` / `.d.mts` beside the `.mochi` sources

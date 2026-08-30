@@ -64,6 +64,26 @@ for (const { path, js } of built.value) {
 }
 for (const shim of HOST_SHIMS) cpSync(join(BOOTSTRAP, shim), join(tmp, shim));
 
+// Keep a synchronous entry for host integrations whose hooks cannot await
+// dynamic seed loading (notably Vite's transform). The bundle embeds the seed
+// graph, so consumers do not typecheck or import generated TS modules.
+execFileSync(
+  "bun",
+  [
+    "build",
+    join(tmp, "compile.ts"),
+    "--outfile",
+    join(tmp, "compile.bundle.js"),
+    "--target",
+    "bun",
+    "--external",
+    "@mochi/compiler/runtime",
+    "--external",
+    "@onrails/pattern",
+  ],
+  { cwd: REPO, stdio: "inherit" },
+);
+
 emptyDir(SEED);
 cpSync(tmp, SEED, { recursive: true });
 rmSync(tmp, { recursive: true, force: true });
