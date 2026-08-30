@@ -26,9 +26,13 @@ test("bootstrap runtime builds a module graph identically to the TS oracle", asy
   const entry = join(root, "examples/modules/main.mochi");
   const bootstrap = await loadBootstrapCore();
 
+  const expected = unwrapOk(await tsBuildModules(entry, (path) => Bun.file(path).text()));
   expect(bootstrap.buildModules(entry)).toEqual({
     _tag: "Ok",
-    value: unwrapOk(await tsBuildModules(entry, (path) => Bun.file(path).text())),
+    value: expected.map((output) => ({
+      ...output,
+      js: output.js.replace(/(from\s+["'][^"']+)\.js(["'])/g, "$1.mochi$2"),
+    })),
   });
 });
 

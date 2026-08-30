@@ -33,6 +33,9 @@ export type BootstrapCore = {
   ) => Promise<BootstrapResult<undefined, BootstrapDiagnostic>>;
 };
 
+import { buildModulesBootstrap, buildModulesTsBootstrap } from "./module.ts";
+import { compileBootstrapSync, compileTsBootstrapSync } from "./sync.ts";
+
 /**
  * Load the frozen stage-1 graph on demand.
  *
@@ -43,8 +46,7 @@ export type BootstrapCore = {
  */
 export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
   const root = new URL("../../../../bootstrap/seed/", import.meta.url);
-  const [compile, lexer, module, parser] = await Promise.all([
-    import(new URL("compile.ts", root).href),
+  const [lexer, moduleSeed, parser] = await Promise.all([
     import(new URL("lexer.ts", root).href),
     import(new URL("module.ts", root).href),
     import(new URL("parser.ts", root).href),
@@ -139,22 +141,22 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
     // link host globals). For an import-free editor buffer, use the strict
     // single-file railway so misspelled local names still become diagnostics.
     if (!entryStmts.some((stmt) => stmt._tag === "SImport" || stmt._tag === "SImportNs")) {
-      const strict = compile.compile(src) as BootstrapResult<string, BootstrapDiagnostic>;
+      const strict = compileBootstrapSync(src);
       return strict._tag === "Ok"
         ? { _tag: "Ok", value: undefined }
         : { _tag: "Err", error: enrich(strict.error, src) };
     }
-    const result = module.compileGraph([...loaded.values()]);
+    const result = moduleSeed.compileGraph([...loaded.values()]);
     return result._tag === "Ok"
       ? { _tag: "Ok", value: undefined }
       : { _tag: "Err", error: enrich(result.error, src) };
   };
 
   return {
-    compile: compile.compile as BootstrapCore["compile"],
-    compileTs: compile.compileTs as BootstrapCore["compileTs"],
-    buildModules: module.buildModules as BootstrapCore["buildModules"],
-    buildModulesTs: module.buildModulesTs as BootstrapCore["buildModulesTs"],
+    compile: compileBootstrapSync,
+    compileTs: compileTsBootstrapSync,
+    buildModules: buildModulesBootstrap,
+    buildModulesTs: buildModulesTsBootstrap,
     checkGraph,
   };
 };
