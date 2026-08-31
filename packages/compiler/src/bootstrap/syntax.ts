@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 type SeedSyntax = {
   lex: (src: string) => unknown;
   parse: (tokens: unknown) => unknown;
+  parseRecovering: (tokens: unknown, plugins?: unknown) => unknown;
 };
 
 const seed = createRequire(import.meta.url)(
@@ -12,3 +13,4 @@ const seed = createRequire(import.meta.url)(
 
 export const lex = seed.lex;
 export const parse = seed.parse;
+export const parseRecovering = seed.parseRecovering;

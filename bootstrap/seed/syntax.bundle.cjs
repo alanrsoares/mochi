@@ -6678,5 +6678,6 @@ var parseWith = _curry6(2, (toks, pluginsOpt) => {
 });
 export {
   lex,
-  parse
+  parse,
+  parseRecovering
 };
