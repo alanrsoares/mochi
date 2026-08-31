@@ -33,6 +33,7 @@ export type BootstrapGraphInferOutput = {
   types: BootstrapTypeAt[];
   aliases: Map<string, unknown>;
 };
+type BootstrapParsedModule = { path: string; stmts: Array<{ _tag?: string; from?: string }> };
 
 export type BootstrapCore = {
   compile: (src: string) => BootstrapResult<string, BootstrapDiagnostic>;
@@ -42,6 +43,12 @@ export type BootstrapCore = {
     entry: string,
     runtimeImport: string,
   ) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic>;
+  /** Infer source spans through the bootstrap graph with the entry served from an editor buffer. */
+  inferGraphTypes: (
+    entry: string,
+    src: string,
+    readFile: (path: string) => Promise<string>,
+  ) => Promise<BootstrapResult<BootstrapGraphInferOutput[], BootstrapDiagnostic>>;
   /** Check a graph using seed lexer/parser/infer, with the entry served from an editor buffer. */
   checkGraph: (
     entry: string,
@@ -55,8 +62,9 @@ import {
   buildModulesTsBootstrap,
   compileGraphBootstrap,
   compileGraphBootstrapRecovering,
+  inferGraphTypesBootstrap as inferLoadedGraphTypesBootstrap,
 } from "./module.ts";
-import { compileBootstrapSync, compileTsBootstrapSync } from "./sync.ts";
+import { compileBootstrapSync, compileTsBootstrapSync, inferTypesBootstrapSync } from "./sync.ts";
 
 export { inferGraphTypesBootstrap } from "./module.ts";
 
@@ -113,14 +121,15 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
       : error;
   };
 
-  const checkGraph: BootstrapCore["checkGraph"] = async (entry, src, readFile) => {
+  const loadGraph = async (
+    entry: string,
+    src: string,
+    readFile: (path: string) => Promise<string>,
+  ): Promise<BootstrapResult<BootstrapParsedModule[], BootstrapDiagnostic>> => {
     const entryPath = await import("node:path").then(({ resolve }) => resolve(entry));
     const { createRequire } = await import("node:module");
     const { dirname, resolve } = await import("node:path");
-    const loaded = new Map<
-      string,
-      { path: string; stmts: Array<{ _tag?: string; from?: string }> }
-    >();
+    const loaded = new Map<string, BootstrapParsedModule>();
     const visiting = new Set<string>();
     const read = (path: string): Promise<string> =>
       resolve(path) === entryPath ? Promise.resolve(src) : readFile(path);
@@ -166,8 +175,39 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
       return null;
     };
     const loadError = await visit(entryPath);
-    if (loadError) return { _tag: "Err", error: loadError };
-    const entryStmts = loaded.get(entryPath)?.stmts ?? [];
+    return loadError
+      ? { _tag: "Err", error: loadError }
+      : { _tag: "Ok", value: [...loaded.values()] };
+  };
+
+  const inferGraphTypes = async (
+    entry: string,
+    src: string,
+    readFile: (path: string) => Promise<string>,
+  ): Promise<BootstrapResult<BootstrapGraphInferOutput[], BootstrapDiagnostic>> => {
+    const loaded = await loadGraph(entry, src, readFile);
+    if (loaded._tag === "Err") return loaded;
+    const entryPath = await import("node:path").then(({ resolve }) => resolve(entry));
+    const entryStmts = loaded.value.find((module) => module.path === entryPath)?.stmts ?? [];
+    if (!entryStmts.some((stmt) => stmt._tag === "SImport" || stmt._tag === "SImportNs")) {
+      const inferred = inferTypesBootstrapSync(src);
+      return inferred._tag === "Err"
+        ? inferred
+        : {
+            _tag: "Ok",
+            value: [
+              { path: entryPath, types: inferred.value.types, aliases: inferred.value.aliases },
+            ],
+          };
+    }
+    return inferLoadedGraphTypesBootstrap(loaded.value);
+  };
+
+  const checkGraph: BootstrapCore["checkGraph"] = async (entry, src, readFile) => {
+    const loaded = await loadGraph(entry, src, readFile);
+    if (loaded._tag === "Err") return loaded;
+    const entryPath = await import("node:path").then(({ resolve }) => resolve(entry));
+    const entryStmts = loaded.value.find((module) => module.path === entryPath)?.stmts ?? [];
     // The bootstrap graph driver deliberately runs open-world (its CLI can
     // link host globals). For an import-free editor buffer, use the strict
     // single-file railway so misspelled local names still become diagnostics.
@@ -177,7 +217,7 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
         ? { _tag: "Ok", value: undefined }
         : { _tag: "Err", error: enrich(strict.error, src) };
     }
-    const result = compileGraphBootstrap([...loaded.values()]);
+    const result = compileGraphBootstrap(loaded.value);
     return result._tag === "Ok"
       ? { _tag: "Ok", value: undefined }
       : { _tag: "Err", error: enrich(result.error, src) };
@@ -188,6 +228,7 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
     compileTs: compileTsBootstrapSync,
     buildModules: buildModulesBootstrap,
     buildModulesTs: buildModulesTsBootstrap,
+    inferGraphTypes,
     checkGraph,
   };
 };
@@ -199,6 +240,14 @@ export const checkGraphBootstrap = async (
   readFile: (path: string) => Promise<string>,
 ): Promise<BootstrapResult<undefined, BootstrapDiagnostic>> =>
   (await loadBootstrapCore()).checkGraph(entry, src, readFile);
+
+/** Graph typed-query seam for builtin editor integrations. */
+export const inferEntryGraphTypesBootstrap = async (
+  entry: string,
+  src: string,
+  readFile: (path: string) => Promise<string>,
+): Promise<BootstrapResult<BootstrapGraphInferOutput[], BootstrapDiagnostic>> =>
+  (await loadBootstrapCore()).inferGraphTypes(entry, src, readFile);
 
 /** Graph check seam that preserves every recoverable parse diagnostic in the entry buffer. */
 export const checkGraphBootstrapRecovering = async (

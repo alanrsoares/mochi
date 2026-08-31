@@ -4,7 +4,11 @@ import { repoRoot } from "@mochi/test-support";
 import { unwrapOk } from "@onrails/result";
 import { compile as tsCompile } from "../compile/compile.ts";
 import { buildModules as tsBuildModules } from "../module/module.ts";
-import { checkGraphBootstrapRecovering, loadBootstrapCore } from "./index.ts";
+import {
+  checkGraphBootstrapRecovering,
+  inferEntryGraphTypesBootstrap,
+  loadBootstrapCore,
+} from "./index.ts";
 import { inferTypesBootstrapSync } from "./sync.ts";
 
 test("bootstrap runtime loads the manifest-verified seed compiler", async () => {
@@ -46,6 +50,28 @@ test("bootstrap runtime builds a module graph identically to the TS oracle", asy
       ...output,
       js: output.js.replace(/(from\s+["'][^"']+)\.js(["'])/g, "$1.mochi$2"),
     })),
+  });
+});
+
+test("bootstrap graph typed query serves the entry buffer", async () => {
+  const result = await inferEntryGraphTypesBootstrap(
+    "/virtual/main.mochi",
+    'import { value } from "./dep"\nlet answer = value',
+    async (path) => {
+      if (path === "/virtual/dep.mochi") return "export let value = 42";
+      throw new Error(`unexpected read: ${path}`);
+    },
+  );
+  expect(result).toEqual({
+    _tag: "Ok",
+    value: expect.arrayContaining([
+      expect.objectContaining({
+        path: "/virtual/main.mochi",
+        types: expect.arrayContaining([
+          expect.objectContaining({ span: { start: 43, end: 48 }, display: "number" }),
+        ]),
+      }),
+    ]),
   });
 });
 
