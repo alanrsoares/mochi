@@ -80,6 +80,17 @@ const mErr: <A>(message: A) => { message: A; start: number; end: number } = <A>(
   start: 0,
   end: 0,
 });
+const atPath: <A, B, C>(
+  path: string,
+  e: { end: A; start: B; message: string } & C,
+) => { message: string; start: B; end: A } = _curry(
+  2,
+  <A, B, C>(path: string, e: { end: A; start: B; message: string } & C) => ({
+    message: `module '${path}': ${e.message}`,
+    start: e.start,
+    end: e.end,
+  }),
+);
 const parseModule: ($x: string) => Result<Stmt[], PErr> = ($x: string) =>
   _Result_flatMap(parse)(lex($x));
 const importFromsFrom: _Curry<[stmts: Stmt[], i: number, acc: string[]], string[]> = _curry(
@@ -658,7 +669,7 @@ const compileOne: <A>(
       .with(
         { _tag: "Err" },
         ({ error: e }) =>
-          Err(e) as Result<
+          Err(atPath(loaded.path, e)) as Result<
             {
               exportsByPath: Map<string, Map<string, Scheme>>;
               regByPath: Map<string, Registry>;
@@ -674,7 +685,7 @@ const compileOne: <A>(
           .with(
             { _tag: "Err" },
             ({ error: e }) =>
-              Err(e) as Result<
+              Err(atPath(loaded.path, e)) as Result<
                 {
                   exportsByPath: Map<string, Map<string, Scheme>>;
                   regByPath: Map<string, Registry>;
@@ -724,7 +735,7 @@ const compileOne: <A>(
               .with(
                 { _tag: "Err" },
                 ({ error: e }) =>
-                  Err(e) as Result<
+                  Err(atPath(loaded.path, e)) as Result<
                     {
                       exportsByPath: Map<string, Map<string, Scheme>>;
                       regByPath: Map<string, Registry>;
@@ -1174,7 +1185,7 @@ const compileOneTs: <A, B>(
       .with(
         { _tag: "Err" },
         ({ error: e }) =>
-          Err(e) as Result<
+          Err(atPath(loaded.path, e)) as Result<
             {
               exportsByPath: Map<string, Map<string, Scheme>>;
               regByPath: Map<string, Registry>;
@@ -1194,7 +1205,7 @@ const compileOneTs: <A, B>(
           .with(
             { _tag: "Err" },
             ({ error: e }) =>
-              Err(e) as Result<
+              Err(atPath(loaded.path, e)) as Result<
                 {
                   exportsByPath: Map<string, Map<string, Scheme>>;
                   regByPath: Map<string, Registry>;
@@ -1248,7 +1259,7 @@ const compileOneTs: <A, B>(
               .with(
                 { _tag: "Err" },
                 ({ error: e }) =>
-                  Err(e) as Result<
+                  Err(atPath(loaded.path, e)) as Result<
                     {
                       exportsByPath: Map<string, Map<string, Scheme>>;
                       regByPath: Map<string, Registry>;
