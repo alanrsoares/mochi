@@ -106,6 +106,28 @@ execFileSync(
   { cwd: REPO, stdio: "inherit" },
 );
 stripBundleSourceLabels(join(tmp, "module.bundle.cjs"));
+writeFileSync(
+  join(tmp, "syntax-entry.ts"),
+  'export { lex } from "./lexer.ts";\nexport { parse } from "./parser.ts";\n',
+);
+execFileSync(
+  "bun",
+  [
+    "build",
+    join(tmp, "syntax-entry.ts"),
+    "--outfile",
+    join(tmp, "syntax.bundle.cjs"),
+    "--target",
+    "bun",
+    "--external",
+    "@mochi/compiler/runtime",
+    "--external",
+    "@onrails/pattern",
+  ],
+  { cwd: REPO, stdio: "inherit" },
+);
+stripBundleSourceLabels(join(tmp, "syntax.bundle.cjs"));
+rmSync(join(tmp, "syntax-entry.ts"), { force: true });
 
 emptyDir(SEED);
 cpSync(tmp, SEED, { recursive: true });

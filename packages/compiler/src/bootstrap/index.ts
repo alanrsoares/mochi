@@ -35,6 +35,7 @@ export type BootstrapCore = {
 
 import { buildModulesBootstrap, buildModulesTsBootstrap, compileGraphBootstrap } from "./module.ts";
 import { compileBootstrapSync, compileTsBootstrapSync } from "./sync.ts";
+import { lex as bootstrapLex, parse as bootstrapParse } from "./syntax.ts";
 
 /**
  * Load the frozen stage-1 graph on demand.
@@ -45,12 +46,6 @@ import { compileBootstrapSync, compileTsBootstrapSync } from "./sync.ts";
  * accidental requirement of the emitted artifact.
  */
 export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
-  const root = new URL("../../../../bootstrap/seed/", import.meta.url);
-  const [lexer, parser] = await Promise.all([
-    import(new URL("lexer.ts", root).href),
-    import(new URL("parser.ts", root).href),
-  ]);
-
   const distance = (a: string, b: string): number => {
     const row = Array.from({ length: b.length + 1 }, (_, i) => i);
     for (let i = 1; i <= a.length; i++) {
@@ -120,9 +115,17 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
       } catch {
         return { message: `cannot read module '${abs}'`, start: 0, end: 0 };
       }
-      const lexed = lexer.lex(text);
+      const lexed = bootstrapLex(text) as {
+        _tag: "Ok" | "Err";
+        value: Array<unknown>;
+        error: BootstrapDiagnostic;
+      };
       if (lexed._tag === "Err") return lexed.error;
-      const parsed = parser.parse(lexed.value);
+      const parsed = bootstrapParse(lexed.value) as {
+        _tag: "Ok" | "Err";
+        value: Array<{ _tag?: string; from?: string }>;
+        error: BootstrapDiagnostic;
+      };
       if (parsed._tag === "Err") return parsed.error;
       for (const stmt of parsed.value as Array<{ _tag?: string; from?: string }>) {
         if (stmt._tag !== "SImport" && stmt._tag !== "SImportNs") continue;

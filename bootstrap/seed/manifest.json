@@ -1,5 +1,5 @@
 {
-  "sourceRevision": "7fe14af6176fcd910ec2bd0fb8b9acf8618a6df1",
+  "sourceRevision": "b79133349a12627a1a7c7ed50ae1f92c1db2542d",
   "files": {
     "ast.ts": "3a48020be7232d0570d4313704f35d47c82504e04bcd659f47049352baf90923",
     "check.ts": "afc510719ac0b72bbdf16daa3807b4762c6a107b9783357b5e3bf7445c104741",
@@ -24,6 +24,7 @@
     "prelude.gen.mjs": "b7f9f45bb28691df71615d24fd1c733ff78407fc393bb79a7731cfedbbc4efdc",
     "scc.ts": "bd081d0282191e928cef71ec7d3534e3ba3354118a0ee177bdabbf991f14e196",
     "schemes.ts": "315790568ca42b0eb5f3b038fd7d3c48a94343d4808a4f9f8923fed53f7da8ab",
+    "syntax.bundle.cjs": "44161eaaf06b53effdbb78af214ef3a0308fcedde931dfb8408a5c7301baa58d",
     "ts-types.ts": "2902205d6a22ea1b498a04c171e053df59e1684a7fe693fe081eac10dfa62a0e",
     "types.ts": "6eba51ee3221372f12b2455949e8d8e59d7321aa9416c341d8c737446c83bdf3",
     "usefulness.ts": "625d015f7add6c21e167bffb206ed2887f99e40252f5bfc8f84f9155915a1893"
