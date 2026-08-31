@@ -18,7 +18,8 @@ import {
 } from "./infer.mochi"
 import { codegen } from "./codegen.mochi"
 import { emitTsModule, externModuleDts } from "./codegen-ts.mochi"
-import { tVar } from "./types.mochi"
+import { showType, tVar } from "./types.mochi"
+import { widenLits } from "./schemes.mochi"
 
 // Prelude tables from the generated shim (as in compile.mochi). Threaded opaquely
 // into inferProgramImports / codegen; module.mochi never inspects them.
@@ -434,6 +435,84 @@ export let compileGraphRecovering = graph =>
     },
     graph,
     []
+  )
+
+// --- typed graph queries -----------------------------------------------------
+// Editor tooling needs the same imports-aware inference result as TS emission,
+// without paying for code generation or reconstructing the import environment
+// in the TypeScript host. Keep every module's recorded spans together with the
+// alias scope accumulated through its dependencies.
+let inferOne = (ctx, loaded) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
+  | Err(e) => Err(atPath(loaded.path, e))
+  | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
+      | Err(e) => Err(atPath(loaded.path, e))
+      | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, true, res.imports, res.nsImports, res.quals, None) {
+          | Err(e) => Err(atPath(loaded.path, e))
+          | Ok(r) => Ok(
+              {
+                exportsByPath: Map.set(
+                  loaded.path,
+                  exportedSchemes(loaded.stmts, r.env),
+                  ctx.exportsByPath
+                ),
+                regByPath: Map.set(
+                  loaded.path,
+                  exportedRegistry(loaded.stmts),
+                  ctx.regByPath
+                ),
+                keysByPath: Map.set(
+                  loaded.path,
+                  exportedCtorKeys(loaded.stmts),
+                  ctx.keysByPath
+                ),
+                qualsByPath: Map.set(
+                  loaded.path,
+                  qualScopeOf(loaded.stmts),
+                  ctx.qualsByPath
+                ),
+                aliases: mergeMap(r.aliases, ctx.aliases),
+                outputs: [
+                  ...ctx.outputs,
+                  {
+                    path: loaded.path,
+                    types: r.types
+                      |> map(hit =>
+                        {
+                          span: hit.span,
+                          ty: hit.ty,
+                          display: hit.ty->widenLits()->showType()
+                        }),
+                    aliases: mergeMap(r.aliases, ctx.aliases)
+                  }
+                ]
+              }
+            )
+        }
+    }
+}
+
+let inferAll = (ctx, graph) => switch graph {
+  | [] => Ok(ctx.outputs)
+  | [m, ...rest] => switch ctx->inferOne(m) {
+      | Err(e) => Err(e)
+      | Ok(ctx1) => ctx1->inferAll(rest)
+    }
+}
+
+/// inferGraphTypes : [Loaded] -> Result [{ path, types, aliases }] MErr
+/// Infer every dependency-ordered module with the exact import environment its
+/// emitter would use. This is the bootstrap graph typed-query boundary.
+export let inferGraphTypes = graph =>
+  inferAll(
+    {
+      exportsByPath: #{},
+      regByPath: #{},
+      keysByPath: #{},
+      qualsByPath: #{},
+      aliases: #{},
+      outputs: []
+    },
+    graph
   )
 
 /// buildModules : string -> Result [ModuleOutput] MErr

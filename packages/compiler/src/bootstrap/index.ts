@@ -17,12 +17,21 @@ export type BootstrapDiagnostic = {
 };
 
 export type BootstrapModuleOutput = { path: string; js: string };
-export type BootstrapTypeAt = { span: { start: number; end: number }; ty: unknown };
+export type BootstrapTypeAt = {
+  span: { start: number; end: number };
+  ty: unknown;
+  display: string;
+};
 export type BootstrapInferResult = {
   env: Map<string, unknown>;
   types: BootstrapTypeAt[];
   aliases: Map<string, unknown>;
   letParams: unknown[];
+};
+export type BootstrapGraphInferOutput = {
+  path: string;
+  types: BootstrapTypeAt[];
+  aliases: Map<string, unknown>;
 };
 
 export type BootstrapCore = {
@@ -48,6 +57,9 @@ import {
   compileGraphBootstrapRecovering,
 } from "./module.ts";
 import { compileBootstrapSync, compileTsBootstrapSync } from "./sync.ts";
+
+export { inferGraphTypesBootstrap } from "./module.ts";
+
 import {
   lex as bootstrapLex,
   parse as bootstrapParse,

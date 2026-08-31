@@ -27,7 +27,9 @@ test("bootstrap typed query records source spans", () => {
   expect(result).toEqual({
     _tag: "Ok",
     value: expect.objectContaining({
-      types: expect.arrayContaining([expect.objectContaining({ span: { start: 13, end: 15 } })]),
+      types: expect.arrayContaining([
+        expect.objectContaining({ span: { start: 13, end: 15 }, display: "number" }),
+      ]),
     }),
   });
 });

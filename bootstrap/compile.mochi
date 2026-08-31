@@ -11,6 +11,8 @@ import { check } from "./check.mochi"
 import { inferProgram, inferProgramTypes } from "./infer.mochi"
 import { codegen } from "./codegen.mochi"
 import { emitTsModule } from "./codegen-ts.mochi"
+import { showType } from "./types.mochi"
+import { widenLits } from "./schemes.mochi"
 
 // Prelude tables from the standalone shim. builtins/namespaces carry the
 // inferrer's Ty; compile never inspects them, so a polymorphic `a` lets them
@@ -36,7 +38,21 @@ let pipeline = frontend >> Result.flatMap(typecheck)
 /// for host DX. Keeps the recorded span -> type table instead of discarding it.
 export let inferTypes = src =>
   let? stmts = src->frontend() in
-    stmts->inferProgramTypes(builtins, namespaces, false)
+  let? r = stmts->inferProgramTypes(builtins, namespaces, false) in
+    Ok(
+      {
+        env: r.env,
+        types: r.types
+          |> map(hit =>
+            {
+              span: hit.span,
+              ty: hit.ty,
+              display: hit.ty->widenLits()->showType()
+            }),
+        aliases: r.aliases,
+        letParams: r.letParams
+      }
+    )
 
 /// compile : string -> Result string Err
 export let compile = src =>

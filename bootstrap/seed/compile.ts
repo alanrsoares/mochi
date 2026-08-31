@@ -1,12 +1,12 @@
 import type { Stmt } from "./ast";
-import type { TypeAt } from "./types";
+import type { SpanAt, Ty, TypeAt } from "./types";
 import type { PErr } from "./parser";
 import type { Scheme } from "./schemes";
 import type { AliasInfo } from "./codegen-ts";
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
-import { Ok, _Result_flatMap, _curry } from "@mochi/compiler/runtime";
+import { Ok, _Result_flatMap, _curry, map } from "@mochi/compiler/runtime";
 
 import { lex } from "./lexer";
 import { parse } from "./parser";
@@ -14,6 +14,8 @@ import { check } from "./check";
 import { inferProgram, inferProgramTypes } from "./infer";
 import { codegen } from "./codegen";
 import { emitTsModule } from "./codegen-ts";
+import { showType } from "./types";
+import { widenLits } from "./schemes";
 import { builtins } from "./prelude.gen.mjs";
 import { namespaces } from "./prelude.gen.mjs";
 import { namespaceRuntime } from "./prelude.gen.mjs";
@@ -35,13 +37,41 @@ const pipeline: ($x: string) => Result<Stmt[], PErr> = ($x: string) =>
 export const inferTypes: (src: string) => Result<
   {
     env: Map<string, Scheme>;
-    types: TypeAt[];
+    types: { span: SpanAt; ty: Ty; display: string }[];
     aliases: Map<string, AliasInfo>;
     letParams: TypeAt[];
   },
   PErr
 > = (src: string) =>
-  _Result_flatMap((stmts) => inferProgramTypes(stmts, builtins, namespaces, false), frontend(src));
+  _Result_flatMap(
+    (stmts) =>
+      _Result_flatMap(
+        (r) =>
+          Ok({
+            env: r.env,
+            types: map(
+              (hit: TypeAt) => ({
+                span: hit.span,
+                ty: hit.ty,
+                display: showType(widenLits(hit.ty)),
+              }),
+              r.types,
+            ),
+            aliases: r.aliases,
+            letParams: r.letParams,
+          }) as Result<
+            {
+              env: Map<string, Scheme>;
+              types: { span: SpanAt; ty: Ty; display: string }[];
+              aliases: Map<string, AliasInfo>;
+              letParams: TypeAt[];
+            },
+            PErr
+          >,
+        inferProgramTypes(stmts, builtins, namespaces, false),
+      ),
+    frontend(src),
+  );
 /**
  * compile : string -> Result string Err
  */

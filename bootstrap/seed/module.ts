@@ -1,6 +1,6 @@
 import type { Tok } from "./lexer";
 import type { Expr, Stmt, TypeExpr } from "./ast";
-import type { St, Ty } from "./types";
+import type { SpanAt, St, Ty, TypeAt } from "./types";
 import type { PErr } from "./parser";
 import type { Scheme } from "./schemes";
 import type { AliasInfo } from "./codegen-ts";
@@ -66,7 +66,8 @@ import { exportedRegistry, exportedCtorKeys } from "./ctors";
 import { inferProgramImports, inferProgramImportsTypes, exportedSchemes } from "./infer";
 import { codegen } from "./codegen";
 import { emitTsModule, externModuleDts } from "./codegen-ts";
-import { tVar } from "./types";
+import { showType, tVar } from "./types";
+import { widenLits } from "./schemes";
 import { builtins } from "./prelude.gen.mjs";
 import { namespaces } from "./prelude.gen.mjs";
 import { namespaceRuntime } from "./prelude.gen.mjs";
@@ -1028,6 +1029,378 @@ export const compileGraphRecovering: (graph: Loaded[]) => GraphRecovery = (graph
     },
     graph,
     [] as PErr[],
+  );
+const inferOne: <A, B>(
+  ctx: {
+    exportsByPath: Map<string, Map<string, Scheme>>;
+    regByPath: Map<string, Registry>;
+    keysByPath: Map<string, Map<string, string[]>>;
+    qualsByPath: Map<
+      string,
+      {
+        types: Set<string>;
+        aliases: Map<
+          string,
+          { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+        >;
+      }
+    >;
+    outputs: {
+      path: string;
+      types: { span: SpanAt; ty: Ty; display: string }[];
+      aliases: Map<string, AliasInfo>;
+    }[];
+    aliases: Map<string, AliasInfo>;
+  } & A,
+  loaded: { stmts: Stmt[]; path: string } & B,
+) => Result<
+  {
+    exportsByPath: Map<string, Map<string, Scheme>>;
+    regByPath: Map<string, Registry>;
+    keysByPath: Map<string, Map<string, string[]>>;
+    qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
+    aliases: Map<string, AliasInfo>;
+    outputs: {
+      path: string;
+      types: { span: SpanAt; ty: Ty; display: string }[];
+      aliases: Map<string, AliasInfo>;
+    }[];
+  },
+  PErr
+> = _curry(
+  2,
+  <A, B>(
+    ctx: {
+      exportsByPath: Map<string, Map<string, Scheme>>;
+      regByPath: Map<string, Registry>;
+      keysByPath: Map<string, Map<string, string[]>>;
+      qualsByPath: Map<
+        string,
+        {
+          types: Set<string>;
+          aliases: Map<
+            string,
+            { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+          >;
+        }
+      >;
+      outputs: {
+        path: string;
+        types: { span: SpanAt; ty: Ty; display: string }[];
+        aliases: Map<string, AliasInfo>;
+      }[];
+      aliases: Map<string, AliasInfo>;
+    } & A,
+    loaded: { stmts: Stmt[]; path: string } & B,
+  ) =>
+    match(
+      resolveImportsFrom(
+        ctx,
+        loaded.stmts,
+        0,
+        loaded.path,
+        {
+          imports: new Map<string, Scheme>(),
+          nsImports: new Map<string, Map<string, Scheme>>(),
+          reg: emptyReg,
+          keys: new Map<string, string[]>(),
+          quals: new Map<
+            string,
+            {
+              types: Set<string>;
+              aliases: Map<
+                string,
+                { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+              >;
+            }
+          >(),
+        },
+        false,
+      ),
+    )
+      .with(
+        { _tag: "Err" },
+        ({ error: e }) =>
+          Err(atPath(loaded.path, e)) as Result<
+            {
+              exportsByPath: Map<string, Map<string, Scheme>>;
+              regByPath: Map<string, Registry>;
+              keysByPath: Map<string, Map<string, string[]>>;
+              qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
+              aliases: Map<string, AliasInfo>;
+              outputs: {
+                path: string;
+                types: { span: SpanAt; ty: Ty; display: string }[];
+                aliases: Map<string, AliasInfo>;
+              }[];
+            },
+            PErr
+          >,
+      )
+      .with({ _tag: "Ok" }, ({ value: res }) =>
+        match(checkWith(loaded.stmts, res.reg, res.quals))
+          .with(
+            { _tag: "Err" },
+            ({ error: e }) =>
+              Err(atPath(loaded.path, e)) as Result<
+                {
+                  exportsByPath: Map<string, Map<string, Scheme>>;
+                  regByPath: Map<string, Registry>;
+                  keysByPath: Map<string, Map<string, string[]>>;
+                  qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
+                  aliases: Map<string, AliasInfo>;
+                  outputs: {
+                    path: string;
+                    types: { span: SpanAt; ty: Ty; display: string }[];
+                    aliases: Map<string, AliasInfo>;
+                  }[];
+                },
+                PErr
+              >,
+          )
+          .with({ _tag: "Ok" }, () =>
+            match(
+              inferProgramImportsTypes(
+                loaded.stmts,
+                builtins,
+                namespaces,
+                true,
+                res.imports,
+                res.nsImports,
+                res.quals,
+                None as Option<
+                  {
+                    name: string;
+                    parse: Option<
+                      (
+                        a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+                        b: number,
+                        c: (
+                          a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+                          b: number,
+                        ) => Result<[Expr, number], PErr>,
+                      ) => Result<Option<[Expr, number]>, PErr>
+                    >;
+                    inferCall: Option<
+                      (
+                        a: Expr,
+                        b: Expr[],
+                        c: Option<string>,
+                        d: St,
+                        e: InferApi,
+                      ) => Result<Option<[Ty, St]>, PErr>
+                    >;
+                  }[]
+                >,
+              ),
+            )
+              .with(
+                { _tag: "Err" },
+                ({ error: e }) =>
+                  Err(atPath(loaded.path, e)) as Result<
+                    {
+                      exportsByPath: Map<string, Map<string, Scheme>>;
+                      regByPath: Map<string, Registry>;
+                      keysByPath: Map<string, Map<string, string[]>>;
+                      qualsByPath: Map<
+                        string,
+                        { types: Set<string>; aliases: Map<string, AliasInfo> }
+                      >;
+                      aliases: Map<string, AliasInfo>;
+                      outputs: {
+                        path: string;
+                        types: { span: SpanAt; ty: Ty; display: string }[];
+                        aliases: Map<string, AliasInfo>;
+                      }[];
+                    },
+                    PErr
+                  >,
+              )
+              .with(
+                { _tag: "Ok" },
+                ({ value: r }) =>
+                  Ok({
+                    exportsByPath: _Map_set(
+                      loaded.path,
+                      exportedSchemes(loaded.stmts, r.env),
+                      ctx.exportsByPath,
+                    ),
+                    regByPath: _Map_set(loaded.path, exportedRegistry(loaded.stmts), ctx.regByPath),
+                    keysByPath: _Map_set(
+                      loaded.path,
+                      exportedCtorKeys(loaded.stmts),
+                      ctx.keysByPath,
+                    ),
+                    qualsByPath: _Map_set(loaded.path, qualScopeOf(loaded.stmts), ctx.qualsByPath),
+                    aliases: mergeMap(r.aliases, ctx.aliases),
+                    outputs: [
+                      ...ctx.outputs,
+                      {
+                        path: loaded.path,
+                        types: map(
+                          (hit: TypeAt) => ({
+                            span: hit.span,
+                            ty: hit.ty,
+                            display: showType(widenLits(hit.ty)),
+                          }),
+                          r.types,
+                        ),
+                        aliases: mergeMap(r.aliases, ctx.aliases),
+                      },
+                    ],
+                  }) as Result<
+                    {
+                      exportsByPath: Map<string, Map<string, Scheme>>;
+                      regByPath: Map<string, Registry>;
+                      keysByPath: Map<string, Map<string, string[]>>;
+                      qualsByPath: Map<
+                        string,
+                        { types: Set<string>; aliases: Map<string, AliasInfo> }
+                      >;
+                      aliases: Map<string, AliasInfo>;
+                      outputs: {
+                        path: string;
+                        types: { span: SpanAt; ty: Ty; display: string }[];
+                        aliases: Map<string, AliasInfo>;
+                      }[];
+                    },
+                    PErr
+                  >,
+              )
+              .exhaustive(),
+          )
+          .exhaustive(),
+      )
+      .exhaustive(),
+);
+const inferAll: <A>(
+  ctx: {
+    outputs: {
+      path: string;
+      types: { span: SpanAt; ty: Ty; display: string }[];
+      aliases: Map<string, AliasInfo>;
+    }[];
+    exportsByPath: Map<string, Map<string, Scheme>>;
+    regByPath: Map<string, Registry>;
+    keysByPath: Map<string, Map<string, string[]>>;
+    qualsByPath: Map<
+      string,
+      {
+        types: Set<string>;
+        aliases: Map<
+          string,
+          { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+        >;
+      }
+    >;
+    aliases: Map<string, AliasInfo>;
+  },
+  graph: ({ stmts: Stmt[]; path: string } & A)[],
+) => Result<
+  {
+    path: string;
+    types: { span: SpanAt; ty: Ty; display: string }[];
+    aliases: Map<string, AliasInfo>;
+  }[],
+  PErr
+> = _curry(
+  2,
+  <A>(
+    ctx: {
+      outputs: {
+        path: string;
+        types: { span: SpanAt; ty: Ty; display: string }[];
+        aliases: Map<string, AliasInfo>;
+      }[];
+      exportsByPath: Map<string, Map<string, Scheme>>;
+      regByPath: Map<string, Registry>;
+      keysByPath: Map<string, Map<string, string[]>>;
+      qualsByPath: Map<
+        string,
+        {
+          types: Set<string>;
+          aliases: Map<
+            string,
+            { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+          >;
+        }
+      >;
+      aliases: Map<string, AliasInfo>;
+    },
+    graph: ({ stmts: Stmt[]; path: string } & A)[],
+  ) =>
+    match(graph)
+      .with(
+        (_v) => _v.length === 0,
+        () =>
+          Ok(ctx.outputs) as Result<
+            {
+              path: string;
+              types: { span: SpanAt; ty: Ty; display: string }[];
+              aliases: Map<string, AliasInfo>;
+            }[],
+            PErr
+          >,
+      )
+      .with(
+        (_v) => _v.length >= 1,
+        ([m, ...rest]) =>
+          match(inferOne(ctx, m))
+            .with(
+              { _tag: "Err" },
+              ({ error: e }) =>
+                Err(e) as Result<
+                  {
+                    path: string;
+                    types: { span: SpanAt; ty: Ty; display: string }[];
+                    aliases: Map<string, AliasInfo>;
+                  }[],
+                  PErr
+                >,
+            )
+            .with({ _tag: "Ok" }, ({ value: ctx1 }) => inferAll(ctx1, rest))
+            .exhaustive(),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
+);
+/**
+ * inferGraphTypes : [Loaded] -> Result [{ path, types, aliases }] MErr
+ * Infer every dependency-ordered module with the exact import environment its
+ * emitter would use. This is the bootstrap graph typed-query boundary.
+ */
+export const inferGraphTypes: <A>(graph: ({ stmts: Stmt[]; path: string } & A)[]) => Result<
+  {
+    path: string;
+    types: { span: SpanAt; ty: Ty; display: string }[];
+    aliases: Map<string, AliasInfo>;
+  }[],
+  PErr
+> = <A>(graph: ({ stmts: Stmt[]; path: string } & A)[]) =>
+  inferAll(
+    {
+      exportsByPath: new Map<string, Map<string, Scheme>>(),
+      regByPath: new Map<string, Registry>(),
+      keysByPath: new Map<string, Map<string, string[]>>(),
+      qualsByPath: new Map<
+        string,
+        {
+          types: Set<string>;
+          aliases: Map<
+            string,
+            { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+          >;
+        }
+      >(),
+      aliases: new Map<string, AliasInfo>(),
+      outputs: [] as {
+        path: string;
+        types: { span: SpanAt; ty: Ty; display: string }[];
+        aliases: Map<string, AliasInfo>;
+      }[],
+    },
+    graph,
   );
 /**
  * buildModules : string -> Result [ModuleOutput] MErr

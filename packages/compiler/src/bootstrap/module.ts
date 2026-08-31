@@ -1,7 +1,12 @@
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import type { BootstrapDiagnostic, BootstrapModuleOutput, BootstrapResult } from "./index.ts";
+import type {
+  BootstrapDiagnostic,
+  BootstrapGraphInferOutput,
+  BootstrapModuleOutput,
+  BootstrapResult,
+} from "./index.ts";
 import { compileBootstrapSync } from "./sync.ts";
 
 type SeedModule = {
@@ -13,10 +18,13 @@ type SeedModule = {
   compileGraph: (
     modules: BootstrapGraphModule[],
   ) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic>;
+  inferGraphTypes: (
+    modules: BootstrapGraphModule[],
+  ) => BootstrapResult<BootstrapGraphInferOutput[], BootstrapDiagnostic>;
   compileGraphRecovering: (modules: BootstrapGraphModule[]) => BootstrapGraphRecovery;
 };
 
-type BootstrapGraphModule = { path: string; stmts: unknown };
+export type BootstrapGraphModule = { path: string; stmts: unknown };
 export type BootstrapGraphRecovery = {
   outputs: BootstrapModuleOutput[];
   errors: BootstrapDiagnostic[];
@@ -54,6 +62,11 @@ export const buildModulesTsBootstrap = (
 export const compileGraphBootstrap = (
   modules: BootstrapGraphModule[],
 ): BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic> => seed.compileGraph(modules);
+
+export const inferGraphTypesBootstrap = (
+  modules: BootstrapGraphModule[],
+): BootstrapResult<BootstrapGraphInferOutput[], BootstrapDiagnostic> =>
+  seed.inferGraphTypes(modules);
 
 export const compileGraphBootstrapRecovering = (
   modules: BootstrapGraphModule[],
