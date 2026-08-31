@@ -15,7 +15,7 @@
 
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
-import { loadBootstrapCore } from "@mochi/compiler/bootstrap";
+import { buildModulesTsBootstrap } from "@mochi/compiler/bootstrap/module";
 
 const REPO = resolve(import.meta.dir, "..");
 const ENTRY = join(REPO, "bootstrap", "cli.mochi");
@@ -48,8 +48,7 @@ export type TscReport = {
 
 // Emit the graph with bootstrap's own driver, run tsc over it, parse diagnostics.
 export const bootstrapSelfTsc = async (keep = false): Promise<TscReport> => {
-  const bootstrap = await loadBootstrapCore();
-  const built = bootstrap.buildModulesTs(ENTRY, RUNTIME);
+  const built = buildModulesTsBootstrap(ENTRY, RUNTIME);
   if (built._tag === "Err")
     throw new Error(`bootstrap self-emit failed: ${JSON.stringify(built.error)}`);
 
