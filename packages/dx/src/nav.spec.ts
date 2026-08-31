@@ -1,6 +1,13 @@
 import { expect, test } from "bun:test";
 import { resolve } from "node:path";
-import { definitionAt, highlightsAt, prepareRenameAt, referencesAt, renameAt } from "@mochi/dx/nav";
+import {
+  definitionAt,
+  highlightsAt,
+  moduleDefinitionAt,
+  prepareRenameAt,
+  referencesAt,
+  renameAt,
+} from "@mochi/dx/nav";
 import { pos } from "@mochi/test-support";
 
 test("definitionAt jumps from use to def", () => {
@@ -26,6 +33,20 @@ test("definitionAt works when the file does not typecheck", () => {
   const src = "let x = 1\nlet y = z(x)";
   const def = definitionAt(src, pos(src, "x", 1), "/t.mochi");
   expect(def?.span).toEqual({ start: 4, end: 5 });
+});
+
+test("moduleDefinitionAt follows an imported bootstrap graph binding", async () => {
+  const dep = "/proj/dep.mochi";
+  const entry = "/proj/main.mochi";
+  const depSrc = "export let answer = 42";
+  const src = 'import { answer } from "./dep"\nlet result = answer';
+  const read = (path: string): Promise<string> =>
+    resolve(path) === resolve(dep)
+      ? Promise.resolve(depSrc)
+      : Promise.reject(new Error(`no such file ${path}`));
+  const def = await moduleDefinitionAt(entry, src, pos(src, "answer", 1), read);
+  expect(def?.path).toBe(resolve(dep));
+  expect(depSrc.slice(def!.span.start, def!.span.end)).toBe("answer");
 });
 
 test("highlightsAt marks def and uses", () => {

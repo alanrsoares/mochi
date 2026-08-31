@@ -8,6 +8,11 @@ import type { InferApi, QualAliasField } from "./infer";
 
 export type Loaded = { path: string; stmts: Stmt[] };
 export type ModuleOutput = { path: string; js: string };
+export type ExportOrigins = {
+  values: Map<string, SpanAt>;
+  types: Map<string, SpanAt>;
+  ctors: Map<string, SpanAt>;
+};
 export type MErr = { message: string; start: number; end: number };
 export type Acc = { state: Map<string, string>; order: Loaded[] };
 export type CtorInfo = { owner: string; arity: number };
@@ -89,6 +94,81 @@ import { namespaceRuntime } from "./prelude.gen.mjs";
 import { preludeJsDefs } from "./prelude.gen.mjs";
 import { runtimeDeps } from "./prelude.gen.mjs";
 import * as Ast from "./ast";
+
+const addCtorOrigins: <A, B, C>(
+  ctors: ({ name: A } & C)[],
+  typeSpan: B,
+  origins: Map<A, B>,
+) => Map<A, B> = _curry(3, <A, B, C>(ctors: ({ name: A } & C)[], typeSpan: B, origins: Map<A, B>) =>
+  reduce(
+    _curry(2, (acc: Map<A, B>, ctor: { name: A } & C) => _Map_set(ctor.name, typeSpan, acc)),
+    origins,
+    ctors,
+  ),
+);
+const exportedOriginsFrom: _Curry<
+  [stmts: Stmt[], i: number, origins: ExportOrigins],
+  ExportOrigins
+> = _curry(3, (stmts: Stmt[], i: number, origins: ExportOrigins) =>
+  match(_Array_get(i, stmts))
+    .with({ _tag: "None" }, () => origins)
+    .with(
+      (
+        _v,
+      ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
+        value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SLet" }>;
+      } => {
+        const _g: any = _v;
+        return _g._tag === "Some" && _g.value._tag === "SLet" && _g.value.exported === true;
+      },
+      ({ value: { name, nameSpan } }) =>
+        exportedOriginsFrom(stmts, i + 1, {
+          values: _Map_set(name, nameSpan, origins.values),
+          types: origins.types,
+          ctors: origins.ctors,
+        }),
+    )
+    .with(
+      (
+        _v,
+      ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
+        value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SExtern" }>;
+      } => {
+        const _g: any = _v;
+        return _g._tag === "Some" && _g.value._tag === "SExtern" && _g.value.exported === true;
+      },
+      ({ value: { name, nameSpan } }) =>
+        exportedOriginsFrom(stmts, i + 1, {
+          values: _Map_set(name, nameSpan, origins.values),
+          types: origins.types,
+          ctors: origins.ctors,
+        }),
+    )
+    .with(
+      (
+        _v,
+      ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
+        value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
+      } => {
+        const _g: any = _v;
+        return _g._tag === "Some" && _g.value._tag === "SType" && _g.value.exported === true;
+      },
+      ({ value: { name, ctors, span } }) =>
+        exportedOriginsFrom(stmts, i + 1, {
+          values: origins.values,
+          types: _Map_set(name, span, origins.types),
+          ctors: addCtorOrigins(ctors, span, origins.ctors),
+        }),
+    )
+    .with({ _tag: "Some" }, () => exportedOriginsFrom(stmts, i + 1, origins))
+    .exhaustive(),
+);
+export const exportedOrigins: (stmts: Stmt[]) => ExportOrigins = (stmts: Stmt[]) =>
+  exportedOriginsFrom(stmts, 0, {
+    values: new Map<string, SpanAt>(),
+    types: new Map<string, SpanAt>(),
+    ctors: new Map<string, SpanAt>(),
+  });
 
 import { readFile } from "./host.mjs";
 import { resolveImport as $resolveImport } from "./host.mjs";

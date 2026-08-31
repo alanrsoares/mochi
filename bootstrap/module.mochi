@@ -38,6 +38,54 @@ type Loaded = { path: string, stmts: [Stmt] }
 
 type ModuleOutput = { path: string, js: string }
 
+// Export locations are a deliberately shallow graph query for host navigation:
+// values point at their own binders, while ctor names point at their owning
+// type (Ctor carries no source span in the bootstrap AST).
+type ExportOrigins = {
+  values: Map<string, Span>,
+  types: Map<string, Span>,
+  ctors: Map<string, Span>
+}
+
+let addCtorOrigins = (ctors, typeSpan, origins) =>
+  ctors
+    |> Array.reduce((acc, ctor) => Map.set(ctor.name, typeSpan, acc), origins)
+
+let exportedOriginsFrom = (stmts, i, origins) => switch Array.get(i, stmts) {
+  | None => origins
+  | Some(Ast.SLet(name, nameSpan, _, _, true, _, _)) => exportedOriginsFrom(
+      stmts,
+      i + 1,
+      {
+        values: Map.set(name, nameSpan, origins.values),
+        types: origins.types,
+        ctors: origins.ctors
+      }
+    )
+  | Some(Ast.SExtern(name, nameSpan, _, _, _, _, _, true, _, _)) => exportedOriginsFrom(
+      stmts,
+      i + 1,
+      {
+        values: Map.set(name, nameSpan, origins.values),
+        types: origins.types,
+        ctors: origins.ctors
+      }
+    )
+  | Some(Ast.SType(name, _, ctors, _, _, true, _, span)) => exportedOriginsFrom(
+      stmts,
+      i + 1,
+      {
+        values: origins.values,
+        types: Map.set(name, span, origins.types),
+        ctors: addCtorOrigins(ctors, span, origins.ctors)
+      }
+    )
+  | Some(_) => exportedOriginsFrom(stmts, i + 1, origins)
+}
+
+export let exportedOrigins = stmts =>
+  exportedOriginsFrom(stmts, 0, { values: #{}, types: #{}, ctors: #{} })
+
 // A driver error, shaped like the compiler's `CErr`; the graph phase has no
 // meaningful span, so both offsets are 0 (matching src/module.ts).
 type MErr = { message: string, start: number, end: number }

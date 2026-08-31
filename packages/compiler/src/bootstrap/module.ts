@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import type {
   BootstrapDiagnostic,
+  BootstrapExportOrigins,
   BootstrapGraphInferOutput,
   BootstrapGraphInferState,
   BootstrapModuleOutput,
@@ -34,6 +35,7 @@ type SeedModule = {
     modules: BootstrapGraphModule[],
   ) => BootstrapRecoveryGraphState;
   compileGraphRecovering: (modules: BootstrapGraphModule[]) => BootstrapGraphRecovery;
+  exportedOrigins: (stmts: unknown) => BootstrapExportOrigins;
 };
 
 export type BootstrapGraphModule = { path: string; stmts: unknown };
@@ -100,3 +102,6 @@ export const recoverGraphFromBootstrap = (
 export const compileGraphBootstrapRecovering = (
   modules: BootstrapGraphModule[],
 ): BootstrapGraphRecovery => seed.compileGraphRecovering(modules);
+
+export const exportedOriginsBootstrap = (stmts: unknown): BootstrapExportOrigins =>
+  seed.exportedOrigins(stmts);

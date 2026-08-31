@@ -5,6 +5,7 @@
  * typecheck succeeds.
  */
 import { dirname, resolve } from "node:path";
+import { loadBootstrapGraph } from "@mochi/compiler/bootstrap";
 import { openMode, toTypedProgramRecovering, toTypedProgramWith } from "@mochi/compiler/compile";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import type { InferResult, TypeAt } from "@mochi/compiler/infer";
@@ -199,6 +200,28 @@ const originsForEntry = async (
   return origins;
 };
 
+/** Imported symbol origins from the frozen bootstrap parser graph. */
+const bootstrapOriginsForEntry = async (
+  entry: string,
+  src: string,
+  readFile: ReadFile,
+): Promise<Origins> => {
+  const graph = await loadBootstrapGraph(entry, src, readFile);
+  const origins = emptyOrigins();
+  if (graph._tag === "Err") return origins;
+  const entryPath = resolve(entry);
+  for (const module of graph.value) {
+    if (module.path === entryPath) continue;
+    for (const [name, span] of module.origins.values)
+      origins.value.set(name, { path: module.path, span });
+    for (const [name, span] of module.origins.types)
+      origins.type.set(name, { path: module.path, span });
+    for (const [name, span] of module.origins.ctors)
+      origins.ctor.set(name, { path: module.path, span });
+  }
+  return origins;
+};
+
 const indexModule = async (
   path: string,
   src: string,
@@ -303,8 +326,9 @@ export const moduleDefinitionAt = async (
   if (externMember) return externMember;
   const modulePath = relativeModulePathAt(src, offset, path);
   if (modulePath) return modulePath;
+  const origins = await bootstrapOriginsForEntry(path, src, readFile);
   return matchMaybe(
-    flatMap(fromNullable(await indexModule(path, src, readFile)), (idx) => hitAt(idx, offset)),
+    flatMap(fromNullable(indexSrc(path, src, origins)), (idx) => hitAt(idx, offset)),
     (hit) => hit.binding.def,
     () => null,
   );

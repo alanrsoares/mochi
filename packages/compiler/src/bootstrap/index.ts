@@ -35,10 +35,17 @@ export type BootstrapGraphInferOutput = {
 };
 export type BootstrapGraphInferState = { outputs: BootstrapGraphInferOutput[] };
 export type BootstrapRecoveryGraphState = { ctx: unknown; errors: BootstrapDiagnostic[] };
-type BootstrapParsedModule = {
+export type BootstrapExportOrigins = {
+  values: Map<string, { start: number; end: number }>;
+  types: Map<string, { start: number; end: number }>;
+  ctors: Map<string, { start: number; end: number }>;
+};
+/** One dependency-ordered source module parsed by the frozen bootstrap graph. */
+export type BootstrapParsedModule = {
   path: string;
   src: string;
   stmts: Array<{ _tag?: string; from?: string }>;
+  origins: BootstrapExportOrigins;
 };
 
 /**
@@ -77,6 +84,12 @@ export type BootstrapCore = {
     entry: string,
     runtimeImport: string,
   ) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic>;
+  /** Parse the entry and every dependency through the frozen bootstrap graph. */
+  loadGraph: (
+    entry: string,
+    src: string,
+    readFile: (path: string) => Promise<string>,
+  ) => Promise<BootstrapResult<BootstrapParsedModule[], BootstrapDiagnostic>>;
   /** Infer source spans through the bootstrap graph with the entry served from an editor buffer. */
   inferGraphTypes: (
     entry: string,
@@ -96,6 +109,7 @@ import {
   buildModulesBootstrap,
   buildModulesTsBootstrap,
   compileGraphBootstrap,
+  exportedOriginsBootstrap,
   freshInferGraphStateBootstrap,
   freshRecoveryGraphStateBootstrap,
   inferGraphTypesFromBootstrap,
@@ -209,7 +223,12 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
         if (error) return error;
       }
       visiting.delete(abs);
-      loaded.set(abs, { path: abs, src: text, stmts: parsed.value });
+      loaded.set(abs, {
+        path: abs,
+        src: text,
+        stmts: parsed.value,
+        origins: exportedOriginsBootstrap(parsed.value),
+      });
       return null;
     };
     const loadError = await visit(entryPath);
@@ -297,10 +316,19 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
     compileTs: compileTsBootstrapSync,
     buildModules: buildModulesBootstrap,
     buildModulesTs: buildModulesTsBootstrap,
+    loadGraph,
     inferGraphTypes,
     checkGraph,
   };
 };
+
+/** Dependency-ordered bootstrap parse graph for host query façades. */
+export const loadBootstrapGraph = async (
+  entry: string,
+  src: string,
+  readFile: (path: string) => Promise<string>,
+): Promise<BootstrapResult<BootstrapParsedModule[], BootstrapDiagnostic>> =>
+  (await loadBootstrapCore()).loadGraph(entry, src, readFile);
 
 /** Narrow graph-checking seam for editor integrations. */
 export const checkGraphBootstrap = async (

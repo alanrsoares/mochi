@@ -13124,6 +13124,18 @@ var externDtsPath = (importer, module) => {
 var absPath = (p) => resolve2(p);
 var argv = process.argv.slice(2);
 
+var addCtorOrigins = _curry16(3, (ctors, typeSpan, origins) => reduce5(_curry16(2, (acc, ctor) => _Map_set9(ctor.name, typeSpan, acc)), origins, ctors));
+var exportedOriginsFrom = _curry16(3, (stmts, i, origins) => match15(_Array_get13(i, stmts)).with({ _tag: "None" }, () => origins).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some" && _g.value._tag === "SLet" && _g.value.exported === true;
+}, ({ value: { name, nameSpan } }) => exportedOriginsFrom(stmts, i + 1, { values: _Map_set9(name, nameSpan, origins.values), types: origins.types, ctors: origins.ctors })).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some" && _g.value._tag === "SExtern" && _g.value.exported === true;
+}, ({ value: { name, nameSpan } }) => exportedOriginsFrom(stmts, i + 1, { values: _Map_set9(name, nameSpan, origins.values), types: origins.types, ctors: origins.ctors })).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some" && _g.value._tag === "SType" && _g.value.exported === true;
+}, ({ value: { name, ctors, span } }) => exportedOriginsFrom(stmts, i + 1, { values: origins.values, types: _Map_set9(name, span, origins.types), ctors: addCtorOrigins(ctors, span, origins.ctors) })).with({ _tag: "Some" }, () => exportedOriginsFrom(stmts, i + 1, origins)).exhaustive());
+var exportedOrigins = (stmts) => exportedOriginsFrom(stmts, 0, { values: new Map, types: new Map, ctors: new Map });
 var resolveImport2 = _curry16(2, resolveImport);
 var mErr = (message) => ({ message, start: 0, end: 0 });
 var recoveryScheme = { vars: [0], rvars: [], ty: tVar(0) };
@@ -13254,6 +13266,7 @@ export {
   compileGraph,
   compileGraphRecovering,
   compileGraphTs,
+  exportedOrigins,
   freshInferGraphState,
   freshRecoveryGraphState,
   inferGraphTypes,
