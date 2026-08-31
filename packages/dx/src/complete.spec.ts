@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { completeAt } from "@mochi/dx/complete";
+import { completeAt, moduleCompleteAt } from "@mochi/dx/complete";
 import { styledCvaExtension } from "@mochi/plugin-styled-cva";
 
 test("Task. lists prelude namespace members", () => {
@@ -47,6 +47,19 @@ test("bare identifier suggests top-level lets", () => {
   const src = "let answer = 42\nlet z = ans";
   const labels = completeAt(src, src.length).map((i) => i.label);
   expect(labels).toContain("answer");
+});
+
+test("module namespace completion uses bootstrap export origins", async () => {
+  const entry = "/project/main.mochi";
+  const dep = "/project/shapes.mochi";
+  const src = 'import * as Shapes from "./shapes"\nlet shape = Shapes.C';
+  const labels = (
+    await moduleCompleteAt(entry, src, src.length, async (path) => {
+      if (path === dep) return "export type Shape = | Circle(number) | Square(number)";
+      throw new Error(`unexpected path: ${path}`);
+    })
+  ).map((item) => item.label);
+  expect(labels).toEqual(["Circle"]);
 });
 
 test("tw. without plugin yields no members", () => {
