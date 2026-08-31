@@ -26,6 +26,19 @@ test("bootstrap dependency diagnostics anchor at the importing statement", async
   expect(result[0]?.message).toContain("module '/virtual/dep.mochi' failed to compile");
 });
 
+test("bootstrap imported-module semantic diagnostics anchor at the entry import", async () => {
+  const path = "/virtual/main.mochi";
+  const src = 'import { value } from "./dep"\n';
+  const result = await bootstrapModuleDiagnostics(path, src, async (file) => {
+    if (file === "/virtual/dep.mochi")
+      return 'import { helper } from "./leaf"\nlet value = add(helper, "bad")\n';
+    if (file === "/virtual/leaf.mochi") return "let helper = 1\n";
+    throw new Error(`unexpected read: ${file}`);
+  });
+  expect(result[0]?.range.start).toEqual({ line: 0, character: 17 });
+  expect(result[0]?.message).toContain("module '/virtual/dep.mochi' failed to compile");
+});
+
 test("unused locals publish warning diagnostics by binding identity", () => {
   const src = "let f = value => let value = 1 in value";
   const warnings = unusedBindingDiagnostics(src).filter((d) => d.code === "unused-local");
