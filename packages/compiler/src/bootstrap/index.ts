@@ -162,3 +162,11 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
     checkGraph,
   };
 };
+
+/** Narrow graph-checking seam for editor integrations. */
+export const checkGraphBootstrap = async (
+  entry: string,
+  src: string,
+  readFile: (path: string) => Promise<string>,
+): Promise<BootstrapResult<undefined, BootstrapDiagnostic>> =>
+  (await loadBootstrapCore()).checkGraph(entry, src, readFile);

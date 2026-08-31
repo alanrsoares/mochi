@@ -7,7 +7,7 @@
  */
 import { resolve } from "node:path";
 import type { ImportStmt, Program } from "@mochi/compiler/ast";
-import { loadBootstrapCore } from "@mochi/compiler/bootstrap";
+import { checkGraphBootstrap } from "@mochi/compiler/bootstrap";
 import { toTypedProgram, toTypedProgramWith } from "@mochi/compiler/compile";
 import { checkErr, type Diagnostic } from "@mochi/compiler/errors";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
@@ -112,7 +112,7 @@ export async function bootstrapModuleDiagnostics(
   src: string,
   readFile: (p: string) => Promise<string>,
 ): Promise<PublishDiagnostic[]> {
-  const result = await (await loadBootstrapCore()).checkGraph(path, src, readFile);
+  const result = await checkGraphBootstrap(path, src, readFile);
   return result._tag === "Ok"
     ? []
     : [
