@@ -4,7 +4,7 @@ import { repoRoot } from "@mochi/test-support";
 import { unwrapOk } from "@onrails/result";
 import { compile as tsCompile } from "../compile/compile.ts";
 import { buildModules as tsBuildModules } from "../module/module.ts";
-import { loadBootstrapCore } from "./index.ts";
+import { checkGraphBootstrapRecovering, loadBootstrapCore } from "./index.ts";
 
 test("bootstrap runtime loads the manifest-verified seed compiler", async () => {
   const src = "type Flag = On | Off\nlet value = On\n";
@@ -44,4 +44,13 @@ test("bootstrap runtime checks an editor buffer through its graph", async () => 
       error: { message: "unbound variable 'nope'", start: 8, end: 12 },
     },
   );
+});
+
+test("bootstrap graph recovery preserves multiple entry parse diagnostics", async () => {
+  const errors = await checkGraphBootstrapRecovering(
+    "/virtual/main.mochi",
+    "let =\nlet =\n",
+    async () => "",
+  );
+  expect(errors).toHaveLength(2);
 });

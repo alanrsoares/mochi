@@ -7,7 +7,7 @@
  */
 import { resolve } from "node:path";
 import type { ImportStmt, Program } from "@mochi/compiler/ast";
-import { checkGraphBootstrap } from "@mochi/compiler/bootstrap";
+import { checkGraphBootstrapRecovering } from "@mochi/compiler/bootstrap";
 import { toTypedProgram, toTypedProgramWith } from "@mochi/compiler/compile";
 import { checkErr, type Diagnostic } from "@mochi/compiler/errors";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
@@ -112,26 +112,24 @@ export async function bootstrapModuleDiagnostics(
   src: string,
   readFile: (p: string) => Promise<string>,
 ): Promise<PublishDiagnostic[]> {
-  const result = await checkGraphBootstrap(path, src, readFile);
-  return result._tag === "Ok"
-    ? []
-    : [
-        toPublish(
-          src,
-          {
-            kind: "type",
-            message: result.error.message,
-            span: { start: result.error.start, end: result.error.end },
-            help: result.error.suggestions?.[0]?.title.toLowerCase(),
-            suggestions: result.error.suggestions?.map((suggestion) => ({
-              title: suggestion.title,
-              replaceWith: suggestion.replaceWith,
-              location: { path, span: { start: suggestion.start, end: suggestion.end } },
-            })),
-          },
-          path,
-        ),
-      ];
+  const errors = await checkGraphBootstrapRecovering(path, src, readFile);
+  return errors.map((error) =>
+    toPublish(
+      src,
+      {
+        kind: "type",
+        message: error.message,
+        span: { start: error.start, end: error.end },
+        help: error.suggestions?.[0]?.title.toLowerCase(),
+        suggestions: error.suggestions?.map((suggestion) => ({
+          title: suggestion.title,
+          replaceWith: suggestion.replaceWith,
+          location: { path, span: { start: suggestion.start, end: suggestion.end } },
+        })),
+      },
+      path,
+    ),
+  );
 }
 
 /**

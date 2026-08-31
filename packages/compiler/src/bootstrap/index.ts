@@ -35,7 +35,11 @@ export type BootstrapCore = {
 
 import { buildModulesBootstrap, buildModulesTsBootstrap, compileGraphBootstrap } from "./module.ts";
 import { compileBootstrapSync, compileTsBootstrapSync } from "./sync.ts";
-import { lex as bootstrapLex, parse as bootstrapParse } from "./syntax.ts";
+import {
+  lex as bootstrapLex,
+  parse as bootstrapParse,
+  parseRecovering as bootstrapParseRecovering,
+} from "./syntax.ts";
 
 /**
  * Load the frozen stage-1 graph on demand.
@@ -170,3 +174,21 @@ export const checkGraphBootstrap = async (
   readFile: (path: string) => Promise<string>,
 ): Promise<BootstrapResult<undefined, BootstrapDiagnostic>> =>
   (await loadBootstrapCore()).checkGraph(entry, src, readFile);
+
+/** Graph check seam that preserves every recoverable parse diagnostic in the entry buffer. */
+export const checkGraphBootstrapRecovering = async (
+  entry: string,
+  src: string,
+  readFile: (path: string) => Promise<string>,
+): Promise<BootstrapDiagnostic[]> => {
+  const lexed = bootstrapLex(src) as
+    | { _tag: "Ok"; value: unknown }
+    | { _tag: "Err"; error: BootstrapDiagnostic };
+  if (lexed._tag === "Err") return [lexed.error];
+  const recovered = bootstrapParseRecovering(lexed.value, { _tag: "None" }) as {
+    diagnostics: BootstrapDiagnostic[];
+  };
+  if (recovered.diagnostics.length > 0) return recovered.diagnostics;
+  const checked = await checkGraphBootstrap(entry, src, readFile);
+  return checked._tag === "Ok" ? [] : [checked.error];
+};
