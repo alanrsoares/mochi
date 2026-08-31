@@ -15,7 +15,7 @@
 // differential test does) so the embedded data can never drift from the shape
 // the bootstrap inferrer expects.
 
-import { compile } from "@mochi/compiler/compile";
+import { compileBootstrapSync } from "@mochi/compiler/bootstrap/sync";
 import {
   namespaceRuntime,
   preludeEnv,
@@ -25,7 +25,6 @@ import {
 } from "@mochi/compiler/prelude";
 import type { Row, Type } from "@mochi/compiler/types";
 import { match } from "@onrails/pattern";
-import { unwrapOk } from "@onrails/result";
 
 export const SHIM_PATH = "bootstrap/prelude.gen.mjs";
 
@@ -79,7 +78,10 @@ const makeConverters = (al: AlInfer) => {
 // Build the shim's ESM source. Pure function of src/prelude.ts + infer.mochi, so
 // the parity test can call it and compare against the checked-in file.
 export const buildShimSource = (): string => {
-  const alInfer = evalAlNames<AlInfer>(unwrapOk(compile(readTypes())), [
+  const compiled = compileBootstrapSync(readTypes());
+  if (compiled._tag === "Err")
+    throw new Error(`bootstrap types emit failed: ${JSON.stringify(compiled.error)}`);
+  const alInfer = evalAlNames<AlInfer>(compiled.value, [
     "tVar",
     "tCon",
     "tArrow",
