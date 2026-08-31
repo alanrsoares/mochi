@@ -22,8 +22,8 @@ test("bootstrap dependency diagnostics anchor at the importing statement", async
     if (file === "/virtual/dep.mochi") return 'let value = add(1, "bad")\n';
     throw new Error(`unexpected read: ${file}`);
   });
-  expect(result[0]?.range.start).toEqual({ line: 0, character: 17 });
-  expect(result[0]?.message).toContain("module '/virtual/dep.mochi' failed to compile");
+  expect(result[0]?.range.start).toEqual({ line: 0, character: 0 });
+  expect(result[0]?.message).toContain("module './dep' failed to compile");
 });
 
 test("bootstrap imported-module semantic diagnostics anchor at the entry import", async () => {
@@ -35,8 +35,8 @@ test("bootstrap imported-module semantic diagnostics anchor at the entry import"
     if (file === "/virtual/leaf.mochi") return "let helper = 1\n";
     throw new Error(`unexpected read: ${file}`);
   });
-  expect(result[0]?.range.start).toEqual({ line: 0, character: 17 });
-  expect(result[0]?.message).toContain("module '/virtual/dep.mochi' failed to compile");
+  expect(result[0]?.range.start).toEqual({ line: 0, character: 0 });
+  expect(result[0]?.message).toContain("module './dep' failed to compile");
 });
 
 test("unused locals publish warning diagnostics by binding identity", () => {

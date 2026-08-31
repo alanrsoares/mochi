@@ -18,7 +18,6 @@ import {
 } from "./infer.mochi"
 import { codegen } from "./codegen.mochi"
 import { emitTsModule, externModuleDts } from "./codegen-ts.mochi"
-import { mono } from "./schemes.mochi"
 import { tVar } from "./types.mochi"
 
 // Prelude tables from the generated shim (as in compile.mochi). Threaded opaquely
@@ -47,7 +46,10 @@ extern resolveImport : string -> string -> string = "./host.mjs" "resolveImport"
 extern absPath : string -> string = "./host.mjs" "absPath"
 
 let mErr = message => { message, start: 0, end: 0 }
-let recoveryScheme = mono(tVar(0))
+// An unresolved import stands for an independently-instantiable host value,
+// not one shared type variable: `forall a. a` keeps later checks moving
+// without inventing an infinite-type cascade at each use site.
+let recoveryScheme = { vars: [0], rvars: [], ty: tVar(0) }
 let atPath = (path, e) =>
   { message: "module '${path}': ${e.message}", start: e.start, end: e.end }
 
@@ -346,7 +348,7 @@ let compileOne = (ctx, loaded: Loaded, recovering) => switch ctx->resolveImports
   | Err(e) => Err(atPath(loaded.path, e))
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
       | Err(e) => Err(atPath(loaded.path, e))
-      | Ok(_) => switch inferProgramImports(loaded.stmts, builtins, namespaces, true, res.imports, res.nsImports, res.quals, None) {
+      | Ok(_) => switch inferProgramImports(loaded.stmts, builtins, namespaces, !recovering, res.imports, res.nsImports, res.quals, None) {
           | Err(e) => Err(atPath(loaded.path, e))
           | Ok(env) => let js = codegen(
               loaded.stmts,

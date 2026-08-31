@@ -118,15 +118,28 @@ export async function bootstrapModuleDiagnostics(
     const errorPath = error.path ?? tagged?.[1];
     const messageBody = tagged?.[2] ?? error.message;
     const dependency = errorPath && resolve(errorPath) !== resolve(path);
+    const imports = [...src.matchAll(/from\s+["']([^"']+)["']/g)];
+    const lineStart = src.lastIndexOf("\n", Math.max(0, error.start - 1)) + 1;
+    const nextLine = src.indexOf("\n", error.end);
+    const lineEnd = nextLine === -1 ? src.length : nextLine;
+    const importAtError = /^\s*import\b.*\bfrom\s+["']([^"']+)["']/.exec(
+      src.slice(lineStart, lineEnd),
+    );
     let span = { start: error.start, end: error.end };
     let message = messageBody;
     if (dependency) {
-      const imports = [...src.matchAll(/from\s+["']([^"']+)["']/g)];
       const match = imports.find(
         (candidate) => resolveImport(path, candidate[1]!) === resolve(errorPath!),
       );
-      if (match) span = { start: match.index!, end: match.index! + match[0].length };
-      message = `module '${errorPath}' failed to compile: ${messageBody}`;
+      if (match) {
+        const start = src.lastIndexOf("\n", Math.max(0, match.index! - 1)) + 1;
+        const end = src.indexOf("\n", match.index!);
+        span = { start, end: end === -1 ? src.length : end };
+      }
+      message = `module '${match?.[1] ?? errorPath}' failed to compile: ${messageBody}`;
+    } else if (importAtError) {
+      span = { start: lineStart, end: lineEnd };
+      message = `module '${importAtError[1]}' failed to compile: ${messageBody}`;
     }
     return toPublish(
       src,
@@ -189,9 +202,8 @@ export async function moduleDiagnostics(
   opts: ModuleDiagnosticsOptions = {},
 ): Promise<PublishDiagnostic[]> {
   const parsed = parseForDiagnostics(src, path, opts);
-  return isErr(parsed)
-    ? parsed.error
-    : moduleDiagnosticsFor(parsed.value, src, path, readFile, opts);
+  if (isErr(parsed)) return parsed.error;
+  return moduleDiagnosticsFor(parsed.value, src, path, readFile, opts);
 }
 
 /**

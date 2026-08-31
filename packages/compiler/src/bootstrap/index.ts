@@ -274,11 +274,19 @@ export const checkGraphBootstrapRecovering = async (
     const strict = await checkGraphBootstrap(entry, src, readFile);
     return strict._tag === "Ok" ? [] : [strict.error];
   }
-  const checked = compileGraphBootstrapRecovering(
-    [...loaded.entries()].map(([path, module]) => ({ path, stmts: module.stmts })),
-  );
-  return checked.errors.map((error) => {
+  const graph = [...loaded.entries()].map(([path, module]) => ({ path, stmts: module.stmts }));
+  const decode = (error: BootstrapDiagnostic): BootstrapDiagnostic => {
     const tagged = /^module '([^']+)': (.*)$/.exec(error.message);
     return tagged ? { ...error, path: tagged[1], message: tagged[2]! } : error;
+  };
+  const strict = compileGraphBootstrap(graph);
+  const strictErrors = strict._tag === "Err" ? [decode(strict.error)] : [];
+  const recoveredErrors = compileGraphBootstrapRecovering(graph).errors.map(decode);
+  const seen = new Set<string>();
+  return [...strictErrors, ...recoveredErrors].filter((error) => {
+    const key = `${error.path ?? ""}:${error.start}:${error.end}:${error.message}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
   });
 };
