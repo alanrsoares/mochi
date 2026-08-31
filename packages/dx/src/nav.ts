@@ -5,7 +5,7 @@
  * typecheck succeeds.
  */
 import { dirname, resolve } from "node:path";
-import { loadBootstrapGraph } from "@mochi/compiler/bootstrap";
+import { inferEntryGraphTypesBootstrap, loadBootstrapGraph } from "@mochi/compiler/bootstrap";
 import { openMode, toTypedProgramRecovering, toTypedProgramWith } from "@mochi/compiler/compile";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import type { InferResult, TypeAt } from "@mochi/compiler/infer";
@@ -268,6 +268,26 @@ const typeDefFrom = (
     () => null,
   );
 
+const bootstrapNominalName = (display: string): string | null =>
+  display.match(/[A-Z][A-Za-z0-9_]*/g)?.at(-1) ?? null;
+
+/** Bootstrap-native module go-to-type for builtin-only workspaces. */
+const bootstrapTypeDefinitionAt = async (
+  path: string,
+  src: string,
+  offset: number,
+  readFile: ReadFile,
+): Promise<Location | null> => {
+  const inferred = await inferEntryGraphTypesBootstrap(path, src, readFile);
+  if (inferred._tag === "Err") return null;
+  const entryPath = resolve(path);
+  const entry = inferred.value.find((module) => module.path === entryPath);
+  const hit = entry && tightestHit(entry.types, offset, spanContainsClosed);
+  const name = hit && hit._tag === "Some" ? bootstrapNominalName(hit.value.display) : null;
+  if (!name) return null;
+  return (await bootstrapOriginsForEntry(path, src, readFile)).type.get(name) ?? null;
+};
+
 /**
  * Go-to-type at `offset`: jump to the nominal type decl of the expression under
  * the cursor (variant / record alias / prelude). Needs a successful typecheck;
@@ -295,6 +315,10 @@ export const moduleTypeDefinitionAt = async (
   readFile: ReadFile,
   opts: ModuleNavOptions = {},
 ): Promise<Location | null> => {
+  if (opts.plugins === undefined) {
+    const bootstrap = await bootstrapTypeDefinitionAt(path, src, offset, readFile);
+    if (bootstrap) return bootstrap;
+  }
   const origins = await originsForEntry(path, readFile, src);
   const idx = indexSrc(path, src, origins);
   if (!idx) return null;
