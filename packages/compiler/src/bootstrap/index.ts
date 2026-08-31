@@ -194,7 +194,10 @@ export const checkGraphBootstrapRecovering = async (
 
   const { dirname, resolve } = await import("node:path");
   const visiting = new Set<string>();
-  const loaded = new Set<string>();
+  const loaded = new Map<
+    string,
+    { source: string; stmts: Array<{ _tag?: string; from?: string }> }
+  >();
   const dependencyErrors: BootstrapDiagnostic[] = [];
   const visit = async (modulePath: string): Promise<void> => {
     const absolute = resolve(modulePath);
@@ -232,9 +235,21 @@ export const checkGraphBootstrapRecovering = async (
       await visit(resolve(dirname(absolute), `${statement.from!.replace(/\.mochi$/, "")}.mochi`));
     }
     visiting.delete(absolute);
-    loaded.add(absolute);
+    loaded.set(absolute, { source, stmts: dependencyParsed.stmts });
   };
   await visit(entry);
+  if (dependencyErrors.length > 0) return dependencyErrors;
+  for (const [modulePath, module] of loaded) {
+    if (modulePath === resolve(entry)) continue;
+    if (
+      module.stmts.some(
+        (statement) => statement._tag === "SImport" || statement._tag === "SImportNs",
+      )
+    )
+      continue;
+    const checked = compileBootstrapSync(module.source);
+    if (checked._tag === "Err") dependencyErrors.push({ ...checked.error, path: modulePath });
+  }
   if (dependencyErrors.length > 0) return dependencyErrors;
   const checked = await checkGraphBootstrap(entry, src, readFile);
   return checked._tag === "Ok" ? [] : [checked.error];
