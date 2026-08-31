@@ -69,6 +69,26 @@ test("bootstrap graph recovery reports dependency parse diagnostics", async () =
   expect(errors[0]?.path).toBe("/virtual/dep.mochi");
 });
 
+test("bootstrap graph recovery reports an import cycle", async () => {
+  const errors = await checkGraphBootstrapRecovering(
+    "/virtual/main.mochi",
+    'import { value } from "./dep"\nexport let main = value\n',
+    async (path) => {
+      if (path === "/virtual/dep.mochi")
+        return 'import { main } from "./main"\nexport let value = main\n';
+      throw new Error(`unexpected read: ${path}`);
+    },
+  );
+  expect(errors).toEqual([
+    {
+      message: "import cycle through '/virtual/main.mochi'",
+      start: 0,
+      end: 0,
+      path: "/virtual/main.mochi",
+    },
+  ]);
+});
+
 test("bootstrap graph recovery reports dependency semantic diagnostics", async () => {
   const root = "/virtual/main.mochi";
   const errors = await checkGraphBootstrapRecovering(

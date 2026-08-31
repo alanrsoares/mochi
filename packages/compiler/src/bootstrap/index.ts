@@ -197,7 +197,18 @@ export const checkGraphBootstrapRecovering = async (
   };
   if (recovered.diagnostics.length > 0) return recovered.diagnostics;
 
+  const { createRequire } = await import("node:module");
   const { dirname, resolve } = await import("node:path");
+  const entryPath = resolve(entry);
+  const resolveGraphImport = (from: string, spec: string): string => {
+    if (spec.startsWith(".") || spec.startsWith("/"))
+      return resolve(dirname(from), `${spec.replace(/\.mochi$/, "")}.mochi`);
+    try {
+      return createRequire(from).resolve(spec);
+    } catch {
+      return resolve(dirname(from), `${spec}.mochi`);
+    }
+  };
   const visiting = new Set<string>();
   const loaded = new Map<
     string,
@@ -206,11 +217,20 @@ export const checkGraphBootstrapRecovering = async (
   const dependencyErrors: BootstrapDiagnostic[] = [];
   const visit = async (modulePath: string): Promise<void> => {
     const absolute = resolve(modulePath);
-    if (loaded.has(absolute) || visiting.has(absolute)) return;
+    if (loaded.has(absolute)) return;
+    if (visiting.has(absolute)) {
+      dependencyErrors.push({
+        message: `import cycle through '${absolute}'`,
+        start: 0,
+        end: 0,
+        path: absolute,
+      });
+      return;
+    }
     visiting.add(absolute);
     let source: string;
     try {
-      source = absolute === resolve(entry) ? src : await readFile(absolute);
+      source = absolute === entryPath ? src : await readFile(absolute);
     } catch {
       dependencyErrors.push({
         message: `cannot read module '${absolute}'`,
@@ -237,14 +257,14 @@ export const checkGraphBootstrapRecovering = async (
       dependencyErrors.push({ ...error, path: absolute });
     for (const statement of dependencyParsed.stmts) {
       if (statement._tag !== "SImport" && statement._tag !== "SImportNs") continue;
-      await visit(resolve(dirname(absolute), `${statement.from!.replace(/\.mochi$/, "")}.mochi`));
+      await visit(resolveGraphImport(absolute, statement.from!));
     }
     visiting.delete(absolute);
     loaded.set(absolute, { source, stmts: dependencyParsed.stmts });
   };
   await visit(entry);
   if (dependencyErrors.length > 0) return dependencyErrors;
-  const entryModule = loaded.get(resolve(entry));
+  const entryModule = loaded.get(entryPath);
   if (!entryModule) return [{ message: `cannot read module '${entry}'`, start: 0, end: 0 }];
   if (
     !entryModule.stmts.some(
