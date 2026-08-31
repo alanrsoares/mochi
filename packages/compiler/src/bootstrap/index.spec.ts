@@ -5,6 +5,7 @@ import { unwrapOk } from "@onrails/result";
 import { compile as tsCompile } from "../compile/compile.ts";
 import { buildModules as tsBuildModules } from "../module/module.ts";
 import { checkGraphBootstrapRecovering, loadBootstrapCore } from "./index.ts";
+import { inferTypesBootstrapSync } from "./sync.ts";
 
 test("bootstrap runtime loads the manifest-verified seed compiler", async () => {
   const src = "type Flag = On | Off\nlet value = On\n";
@@ -18,6 +19,16 @@ test("bootstrap runtime emits typed TypeScript", async () => {
   expect(bootstrap.compileTs("let answer = 42", "@mochi/runtime")).toEqual({
     _tag: "Ok",
     value: expect.stringContaining("const answer"),
+  });
+});
+
+test("bootstrap typed query records source spans", () => {
+  const result = inferTypesBootstrapSync("let answer = 42");
+  expect(result).toEqual({
+    _tag: "Ok",
+    value: expect.objectContaining({
+      types: expect.arrayContaining([expect.objectContaining({ span: { start: 13, end: 15 } })]),
+    }),
   });
 });
 
