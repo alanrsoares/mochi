@@ -83,3 +83,18 @@ test("bootstrap graph recovery reports dependency semantic diagnostics", async (
   expect(errors[0]?.path).toBe("/virtual/dep.mochi");
   expect(errors[0]?.message).toContain("unify");
 });
+
+test("bootstrap graph recovery collects semantic errors from sibling dependencies", async () => {
+  const root = "/virtual/main.mochi";
+  const errors = await checkGraphBootstrapRecovering(
+    root,
+    'import { left } from "./left"\nimport { right } from "./right"\n',
+    async (path) => {
+      if (path === "/virtual/left.mochi") return 'let left = add(1, "bad")\n';
+      if (path === "/virtual/right.mochi") return 'let right = add(1, "bad")\n';
+      throw new Error(`unexpected read: ${path}`);
+    },
+  );
+  expect(errors).toHaveLength(2);
+  expect(errors.every((error) => error.path)).toBe(true);
+});
