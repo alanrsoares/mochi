@@ -33,7 +33,7 @@ export type BootstrapCore = {
   ) => Promise<BootstrapResult<undefined, BootstrapDiagnostic>>;
 };
 
-import { buildModulesBootstrap, buildModulesTsBootstrap } from "./module.ts";
+import { buildModulesBootstrap, buildModulesTsBootstrap, compileGraphBootstrap } from "./module.ts";
 import { compileBootstrapSync, compileTsBootstrapSync } from "./sync.ts";
 
 /**
@@ -46,9 +46,8 @@ import { compileBootstrapSync, compileTsBootstrapSync } from "./sync.ts";
  */
 export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
   const root = new URL("../../../../bootstrap/seed/", import.meta.url);
-  const [lexer, moduleSeed, parser] = await Promise.all([
+  const [lexer, parser] = await Promise.all([
     import(new URL("lexer.ts", root).href),
-    import(new URL("module.ts", root).href),
     import(new URL("parser.ts", root).href),
   ]);
 
@@ -146,7 +145,7 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
         ? { _tag: "Ok", value: undefined }
         : { _tag: "Err", error: enrich(strict.error, src) };
     }
-    const result = moduleSeed.compileGraph([...loaded.values()]);
+    const result = compileGraphBootstrap([...loaded.values()]);
     return result._tag === "Ok"
       ? { _tag: "Ok", value: undefined }
       : { _tag: "Err", error: enrich(result.error, src) };

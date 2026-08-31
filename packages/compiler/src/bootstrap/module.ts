@@ -10,7 +10,12 @@ type SeedModule = {
     entry: string,
     runtimeImport: string,
   ) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic>;
+  compileGraph: (
+    modules: BootstrapGraphModule[],
+  ) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic>;
 };
+
+type BootstrapGraphModule = { path: string; stmts: unknown };
 
 const seed = createRequire(import.meta.url)(
   fileURLToPath(new URL("../../../../bootstrap/seed/module.bundle.cjs", import.meta.url)),
@@ -40,3 +45,7 @@ export const buildModulesTsBootstrap = (
   runtimeImport: string,
 ): BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic> =>
   seed.buildModulesTs(entry, runtimeImport);
+
+export const compileGraphBootstrap = (
+  modules: BootstrapGraphModule[],
+): BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic> => seed.compileGraph(modules);
