@@ -1,7 +1,10 @@
 import type { Stmt } from "./ast";
+import type { TypeAt } from "./types";
 import type { PErr } from "./parser";
+import type { Scheme } from "./schemes";
+import type { AliasInfo } from "./codegen-ts";
 
-import type { Result, _Curry } from "@mochi/compiler/runtime";
+import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
 import { Ok, _Result_flatMap, _curry } from "@mochi/compiler/runtime";
 
@@ -25,6 +28,20 @@ const frontend: ($x: string) => Result<Stmt[], PErr> = ($x: string) =>
   _Result_flatMap(check)((($x) => _Result_flatMap(parse)(lex($x)))($x));
 const pipeline: ($x: string) => Result<Stmt[], PErr> = ($x: string) =>
   _Result_flatMap(typecheck)(frontend($x));
+/**
+ * inferTypes : string -> Result InferResult Err — strict typed-query seam
+ * for host DX. Keeps the recorded span -> type table instead of discarding it.
+ */
+export const inferTypes: (src: string) => Result<
+  {
+    env: Map<string, Scheme>;
+    types: TypeAt[];
+    aliases: Map<string, AliasInfo>;
+    letParams: TypeAt[];
+  },
+  PErr
+> = (src: string) =>
+  _Result_flatMap((stmts) => inferProgramTypes(stmts, builtins, namespaces, false), frontend(src));
 /**
  * compile : string -> Result string Err
  */

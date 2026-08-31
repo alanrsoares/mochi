@@ -17,6 +17,13 @@ export type BootstrapDiagnostic = {
 };
 
 export type BootstrapModuleOutput = { path: string; js: string };
+export type BootstrapTypeAt = { span: { start: number; end: number }; ty: unknown };
+export type BootstrapInferResult = {
+  env: Map<string, unknown>;
+  types: BootstrapTypeAt[];
+  aliases: Map<string, unknown>;
+  letParams: unknown[];
+};
 
 export type BootstrapCore = {
   compile: (src: string) => BootstrapResult<string, BootstrapDiagnostic>;

@@ -1,10 +1,11 @@
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import type { BootstrapDiagnostic, BootstrapResult } from "./index.ts";
+import type { BootstrapDiagnostic, BootstrapInferResult, BootstrapResult } from "./index.ts";
 
 type SeedCompile = {
   compile: (src: string) => BootstrapResult<string, BootstrapDiagnostic>;
   compileTs: (src: string, runtimeImport: string) => BootstrapResult<string, BootstrapDiagnostic>;
+  inferTypes: (src: string) => BootstrapResult<BootstrapInferResult, BootstrapDiagnostic>;
 };
 
 const seed = createRequire(import.meta.url)(
@@ -19,3 +20,7 @@ export const compileTsBootstrapSync = (
   src: string,
   runtimeImport: string,
 ): BootstrapResult<string, BootstrapDiagnostic> => seed.compileTs(src, runtimeImport);
+
+export const inferTypesBootstrapSync = (
+  src: string,
+): BootstrapResult<BootstrapInferResult, BootstrapDiagnostic> => seed.inferTypes(src);

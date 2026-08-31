@@ -7,6 +7,10 @@
  * `compile(src)()` (same as `Task.run`).
  */
 import { type CompileTargets, compileTargets, type Diagnostic } from "@mochi/compiler";
+import {
+  compileBootstrapBrowser,
+  compileTsBootstrapBrowser,
+} from "@mochi/compiler/bootstrap/browser";
 import { isErr } from "@onrails/result";
 import { err, ok, type Result, type Task } from "../task";
 import type { CompileWorkerRequest, CompileWorkerResponse } from "./compile.worker";
@@ -30,9 +34,13 @@ export type PlaygroundCompiler = {
 const syncCompile = (source: string): Result<PlaygroundCompileOk, PlaygroundCompileErr> => {
   const start = performance.now();
   try {
+    const js = compileBootstrapBrowser(source);
+    const ts = compileTsBootstrapBrowser(source, "@mochi/compiler/runtime");
     const result = compileTargets(source, { runtime: true });
     const ms = performance.now() - start;
-    return isErr(result) ? err({ diagnostics: result.error, ms }) : ok({ ...result.value, ms });
+    if (isErr(result)) return err({ diagnostics: result.error, ms });
+    if (js._tag === "Err" || ts._tag === "Err") return err({ diagnostics: [], ms });
+    return ok({ js: js.value, ts: ts.value, dts: result.value.dts, ms });
   } catch (e: unknown) {
     return err({
       message: e instanceof Error ? e.message : String(e),

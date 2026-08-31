@@ -88,6 +88,31 @@ execFileSync(
   { cwd: REPO, stdio: "inherit" },
 );
 stripBundleSourceLabels(join(tmp, "compile.bundle.cjs"));
+// Browser consumers (the docs playground worker) cannot load the synchronous
+// CommonJS host bundle. Keep an equivalent ESM artifact beside it.
+execFileSync(
+  "bun",
+  [
+    "build",
+    join(tmp, "compile.ts"),
+    "--outfile",
+    join(tmp, "compile.bundle.mjs"),
+    "--target",
+    "browser",
+    "--format",
+    "esm",
+    "--external",
+    "@mochi/compiler/runtime",
+    "--external",
+    "@onrails/pattern",
+  ],
+  { cwd: REPO, stdio: "inherit" },
+);
+stripBundleSourceLabels(join(tmp, "compile.bundle.mjs"));
+writeFileSync(
+  join(tmp, "compile.bundle.d.mts"),
+  `export type BootstrapDiagnostic = { message: string; start: number; end: number };\nexport type BootstrapResult<A> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: BootstrapDiagnostic };\nexport const compile: (src: string) => BootstrapResult<string>;\nexport const compileTs: (src: string, runtimeImport: string) => BootstrapResult<string>;\n`,
+);
 execFileSync(
   "bun",
   [

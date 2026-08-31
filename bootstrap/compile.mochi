@@ -32,6 +32,12 @@ let frontend = lex >> Result.flatMap(parse) >> Result.flatMap(check)
 // The front-end pipeline: lex -> parse -> check -> typecheck
 let pipeline = frontend >> Result.flatMap(typecheck)
 
+/// inferTypes : string -> Result InferResult Err — strict typed-query seam
+/// for host DX. Keeps the recorded span -> type table instead of discarding it.
+export let inferTypes = src =>
+  let? stmts = src->frontend() in
+    stmts->inferProgramTypes(builtins, namespaces, false)
+
 /// compile : string -> Result string Err
 export let compile = src =>
   let? prog = src->pipeline() in
