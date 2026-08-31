@@ -1,6 +1,8 @@
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import type { BootstrapDiagnostic, BootstrapModuleOutput, BootstrapResult } from "./index.ts";
+import { compileBootstrapSync } from "./sync.ts";
 
 type SeedModule = {
   buildModules: (entry: string) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic>;
@@ -8,7 +10,12 @@ type SeedModule = {
     entry: string,
     runtimeImport: string,
   ) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic>;
+  compileGraph: (
+    modules: BootstrapGraphModule[],
+  ) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic>;
 };
+
+type BootstrapGraphModule = { path: string; stmts: unknown };
 
 const seed = createRequire(import.meta.url)(
   fileURLToPath(new URL("../../../../bootstrap/seed/module.bundle.cjs", import.meta.url)),
@@ -19,6 +26,11 @@ export const buildModulesBootstrap = (
 ): BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic> => {
   const result = seed.buildModules(entry);
   if (result._tag === "Err") return result;
+  const source = readFileSync(entry, "utf8");
+  if (!/^\s*import\b/m.test(source)) {
+    const strict = compileBootstrapSync(source);
+    if (strict._tag === "Err") return strict;
+  }
   return {
     _tag: "Ok",
     value: result.value.map((output) => ({
@@ -33,3 +45,7 @@ export const buildModulesTsBootstrap = (
   runtimeImport: string,
 ): BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic> =>
   seed.buildModulesTs(entry, runtimeImport);
+
+export const compileGraphBootstrap = (
+  modules: BootstrapGraphModule[],
+): BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic> => seed.compileGraph(modules);

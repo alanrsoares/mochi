@@ -12,6 +12,7 @@ export type BootstrapDiagnostic = {
   message: string;
   start: number;
   end: number;
+  path?: string;
   suggestions?: Array<{ title: string; start: number; end: number; replaceWith: string }>;
 };
 
@@ -33,6 +34,14 @@ export type BootstrapCore = {
   ) => Promise<BootstrapResult<undefined, BootstrapDiagnostic>>;
 };
 
+import { buildModulesBootstrap, buildModulesTsBootstrap, compileGraphBootstrap } from "./module.ts";
+import { compileBootstrapSync, compileTsBootstrapSync } from "./sync.ts";
+import {
+  lex as bootstrapLex,
+  parse as bootstrapParse,
+  parseRecovering as bootstrapParseRecovering,
+} from "./syntax.ts";
+
 /**
  * Load the frozen stage-1 graph on demand.
  *
@@ -42,14 +51,6 @@ export type BootstrapCore = {
  * accidental requirement of the emitted artifact.
  */
 export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
-  const root = new URL("../../../../bootstrap/seed/", import.meta.url);
-  const [compile, lexer, module, parser] = await Promise.all([
-    import(new URL("compile.ts", root).href),
-    import(new URL("lexer.ts", root).href),
-    import(new URL("module.ts", root).href),
-    import(new URL("parser.ts", root).href),
-  ]);
-
   const distance = (a: string, b: string): number => {
     const row = Array.from({ length: b.length + 1 }, (_, i) => i);
     for (let i = 1; i <= a.length; i++) {
@@ -119,9 +120,17 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
       } catch {
         return { message: `cannot read module '${abs}'`, start: 0, end: 0 };
       }
-      const lexed = lexer.lex(text);
+      const lexed = bootstrapLex(text) as {
+        _tag: "Ok" | "Err";
+        value: Array<unknown>;
+        error: BootstrapDiagnostic;
+      };
       if (lexed._tag === "Err") return lexed.error;
-      const parsed = parser.parse(lexed.value);
+      const parsed = bootstrapParse(lexed.value) as {
+        _tag: "Ok" | "Err";
+        value: Array<{ _tag?: string; from?: string }>;
+        error: BootstrapDiagnostic;
+      };
       if (parsed._tag === "Err") return parsed.error;
       for (const stmt of parsed.value as Array<{ _tag?: string; from?: string }>) {
         if (stmt._tag !== "SImport" && stmt._tag !== "SImportNs") continue;
@@ -139,22 +148,109 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
     // link host globals). For an import-free editor buffer, use the strict
     // single-file railway so misspelled local names still become diagnostics.
     if (!entryStmts.some((stmt) => stmt._tag === "SImport" || stmt._tag === "SImportNs")) {
-      const strict = compile.compile(src) as BootstrapResult<string, BootstrapDiagnostic>;
+      const strict = compileBootstrapSync(src);
       return strict._tag === "Ok"
         ? { _tag: "Ok", value: undefined }
         : { _tag: "Err", error: enrich(strict.error, src) };
     }
-    const result = module.compileGraph([...loaded.values()]);
+    const result = compileGraphBootstrap([...loaded.values()]);
     return result._tag === "Ok"
       ? { _tag: "Ok", value: undefined }
       : { _tag: "Err", error: enrich(result.error, src) };
   };
 
   return {
-    compile: compile.compile as BootstrapCore["compile"],
-    compileTs: compile.compileTs as BootstrapCore["compileTs"],
-    buildModules: module.buildModules as BootstrapCore["buildModules"],
-    buildModulesTs: module.buildModulesTs as BootstrapCore["buildModulesTs"],
+    compile: compileBootstrapSync,
+    compileTs: compileTsBootstrapSync,
+    buildModules: buildModulesBootstrap,
+    buildModulesTs: buildModulesTsBootstrap,
     checkGraph,
   };
+};
+
+/** Narrow graph-checking seam for editor integrations. */
+export const checkGraphBootstrap = async (
+  entry: string,
+  src: string,
+  readFile: (path: string) => Promise<string>,
+): Promise<BootstrapResult<undefined, BootstrapDiagnostic>> =>
+  (await loadBootstrapCore()).checkGraph(entry, src, readFile);
+
+/** Graph check seam that preserves every recoverable parse diagnostic in the entry buffer. */
+export const checkGraphBootstrapRecovering = async (
+  entry: string,
+  src: string,
+  readFile: (path: string) => Promise<string>,
+): Promise<BootstrapDiagnostic[]> => {
+  const lexed = bootstrapLex(src) as
+    | { _tag: "Ok"; value: unknown }
+    | { _tag: "Err"; error: BootstrapDiagnostic };
+  if (lexed._tag === "Err") return [lexed.error];
+  const recovered = bootstrapParseRecovering(lexed.value, { _tag: "None" }) as {
+    stmts: Array<{ _tag?: string; from?: string }>;
+    diagnostics: BootstrapDiagnostic[];
+  };
+  if (recovered.diagnostics.length > 0) return recovered.diagnostics;
+
+  const { dirname, resolve } = await import("node:path");
+  const visiting = new Set<string>();
+  const loaded = new Map<
+    string,
+    { source: string; stmts: Array<{ _tag?: string; from?: string }> }
+  >();
+  const dependencyErrors: BootstrapDiagnostic[] = [];
+  const visit = async (modulePath: string): Promise<void> => {
+    const absolute = resolve(modulePath);
+    if (loaded.has(absolute) || visiting.has(absolute)) return;
+    visiting.add(absolute);
+    let source: string;
+    try {
+      source = absolute === resolve(entry) ? src : await readFile(absolute);
+    } catch {
+      dependencyErrors.push({
+        message: `cannot read module '${absolute}'`,
+        start: 0,
+        end: 0,
+        path: absolute,
+      });
+      visiting.delete(absolute);
+      return;
+    }
+    const dependencyLexed = bootstrapLex(source) as
+      | { _tag: "Ok"; value: unknown }
+      | { _tag: "Err"; error: BootstrapDiagnostic };
+    if (dependencyLexed._tag === "Err") {
+      dependencyErrors.push({ ...dependencyLexed.error, path: absolute });
+      visiting.delete(absolute);
+      return;
+    }
+    const dependencyParsed = bootstrapParseRecovering(dependencyLexed.value, { _tag: "None" }) as {
+      stmts: Array<{ _tag?: string; from?: string }>;
+      diagnostics: BootstrapDiagnostic[];
+    };
+    for (const error of dependencyParsed.diagnostics)
+      dependencyErrors.push({ ...error, path: absolute });
+    for (const statement of dependencyParsed.stmts) {
+      if (statement._tag !== "SImport" && statement._tag !== "SImportNs") continue;
+      await visit(resolve(dirname(absolute), `${statement.from!.replace(/\.mochi$/, "")}.mochi`));
+    }
+    visiting.delete(absolute);
+    loaded.set(absolute, { source, stmts: dependencyParsed.stmts });
+  };
+  await visit(entry);
+  if (dependencyErrors.length > 0) return dependencyErrors;
+  for (const [modulePath, module] of loaded) {
+    if (modulePath === resolve(entry)) continue;
+    if (
+      module.stmts.some(
+        (statement) => statement._tag === "SImport" || statement._tag === "SImportNs",
+      )
+    )
+      continue;
+    const checked = compileBootstrapSync(module.source);
+    if (checked._tag === "Err") dependencyErrors.push({ ...checked.error, path: modulePath });
+  }
+  if (dependencyErrors.length > 0) return dependencyErrors;
+  const checked = await checkGraphBootstrap(entry, src, readFile);
+  return checked._tag === "Ok" ? [] : [checked.error];
 };

@@ -7,7 +7,7 @@
  */
 import { resolve } from "node:path";
 import type { ImportStmt, Program } from "@mochi/compiler/ast";
-import { loadBootstrapCore } from "@mochi/compiler/bootstrap";
+import { checkGraphBootstrapRecovering } from "@mochi/compiler/bootstrap";
 import { toTypedProgram, toTypedProgramWith } from "@mochi/compiler/compile";
 import { checkErr, type Diagnostic } from "@mochi/compiler/errors";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
@@ -112,26 +112,38 @@ export async function bootstrapModuleDiagnostics(
   src: string,
   readFile: (p: string) => Promise<string>,
 ): Promise<PublishDiagnostic[]> {
-  const result = await (await loadBootstrapCore()).checkGraph(path, src, readFile);
-  return result._tag === "Ok"
-    ? []
-    : [
-        toPublish(
-          src,
-          {
-            kind: "type",
-            message: result.error.message,
-            span: { start: result.error.start, end: result.error.end },
-            help: result.error.suggestions?.[0]?.title.toLowerCase(),
-            suggestions: result.error.suggestions?.map((suggestion) => ({
-              title: suggestion.title,
-              replaceWith: suggestion.replaceWith,
-              location: { path, span: { start: suggestion.start, end: suggestion.end } },
-            })),
-          },
-          path,
-        ),
-      ];
+  const errors = await checkGraphBootstrapRecovering(path, src, readFile);
+  return errors.map((error) => {
+    const tagged = /^module '([^']+)': (.*)$/.exec(error.message);
+    const errorPath = error.path ?? tagged?.[1];
+    const messageBody = tagged?.[2] ?? error.message;
+    const dependency = errorPath && resolve(errorPath) !== resolve(path);
+    let span = { start: error.start, end: error.end };
+    let message = messageBody;
+    if (dependency) {
+      const imports = [...src.matchAll(/from\s+["']([^"']+)["']/g)];
+      const match = imports.find(
+        (candidate) => resolveImport(path, candidate[1]!) === resolve(errorPath!),
+      );
+      if (match) span = { start: match.index!, end: match.index! + match[0].length };
+      message = `module '${errorPath}' failed to compile: ${messageBody}`;
+    }
+    return toPublish(
+      src,
+      {
+        kind: "type",
+        message,
+        span,
+        help: error.suggestions?.[0]?.title.toLowerCase(),
+        suggestions: error.suggestions?.map((suggestion) => ({
+          title: suggestion.title,
+          replaceWith: suggestion.replaceWith,
+          location: { path, span: { start: suggestion.start, end: suggestion.end } },
+        })),
+      },
+      path,
+    );
+  });
 }
 
 /**

@@ -4,6 +4,7 @@ import type { BootstrapDiagnostic, BootstrapResult } from "./index.ts";
 
 type SeedCompile = {
   compile: (src: string) => BootstrapResult<string, BootstrapDiagnostic>;
+  compileTs: (src: string, runtimeImport: string) => BootstrapResult<string, BootstrapDiagnostic>;
 };
 
 const seed = createRequire(import.meta.url)(
@@ -13,3 +14,8 @@ const seed = createRequire(import.meta.url)(
 /** Synchronous default-config seam for integrations with sync transform hooks. */
 export const compileBootstrapSync = (src: string): BootstrapResult<string, BootstrapDiagnostic> =>
   seed.compile(src);
+
+export const compileTsBootstrapSync = (
+  src: string,
+  runtimeImport: string,
+): BootstrapResult<string, BootstrapDiagnostic> => seed.compileTs(src, runtimeImport);

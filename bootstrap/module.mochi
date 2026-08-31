@@ -43,6 +43,8 @@ extern resolveImport : string -> string -> string = "./host.mjs" "resolveImport"
 extern absPath : string -> string = "./host.mjs" "absPath"
 
 let mErr = message => { message, start: 0, end: 0 }
+let atPath = (path, e) =>
+  { message: "module '${path}': ${e.message}", start: e.start, end: e.end }
 
 // Lex + parse a source file to statements. No check/infer — both need the whole
 // graph's exports resolved first, which only happens in a later part.
@@ -312,11 +314,11 @@ let resolveImportsFrom = (ctx, stmts, i, path, res) => switch Array.get(i, stmts
 // (with imported schemes), codegen (with imported ctor keys), then publish this
 // module's own exports/registry/keys into the ctx for later dependents.
 let compileOne = (ctx, loaded: Loaded) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }) {
-  | Err(e) => Err(e)
+  | Err(e) => Err(atPath(loaded.path, e))
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
-      | Err(e) => Err(e)
+      | Err(e) => Err(atPath(loaded.path, e))
       | Ok(_) => switch inferProgramImports(loaded.stmts, builtins, namespaces, true, res.imports, res.nsImports, res.quals, None) {
-          | Err(e) => Err(e)
+          | Err(e) => Err(atPath(loaded.path, e))
           | Ok(env) => let js = codegen(
               loaded.stmts,
               res.keys,
@@ -542,11 +544,11 @@ let externBindingsInto = (stmts, path, env, acc) =>
 // `compileOne`, then emit, then prepend the `import type` lines the emitted text
 // turned out to need.
 let compileOneTs = (ctx, loaded) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }) {
-  | Err(e) => Err(e)
+  | Err(e) => Err(atPath(loaded.path, e))
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
-      | Err(e) => Err(e)
+      | Err(e) => Err(atPath(loaded.path, e))
       | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, true, res.imports, res.nsImports, res.quals, None) {
-          | Err(e) => Err(e)
+          | Err(e) => Err(atPath(loaded.path, e))
           | Ok(r) => let body = emitTsModule(
               loaded.stmts,
               r.env,
