@@ -6,6 +6,7 @@ import type {
   BootstrapGraphInferOutput,
   BootstrapGraphInferState,
   BootstrapModuleOutput,
+  BootstrapRecoveryGraphState,
   BootstrapResult,
 } from "./index.ts";
 import { compileBootstrapSync } from "./sync.ts";
@@ -27,6 +28,11 @@ type SeedModule = {
     state: BootstrapGraphInferState,
     modules: BootstrapGraphModule[],
   ) => BootstrapResult<BootstrapGraphInferState, BootstrapDiagnostic>;
+  freshRecoveryGraphState: () => BootstrapRecoveryGraphState;
+  recoverGraphFrom: (
+    state: BootstrapRecoveryGraphState,
+    modules: BootstrapGraphModule[],
+  ) => BootstrapRecoveryGraphState;
   compileGraphRecovering: (modules: BootstrapGraphModule[]) => BootstrapGraphRecovery;
 };
 
@@ -82,6 +88,14 @@ export const inferGraphTypesFromBootstrap = (
   modules: BootstrapGraphModule[],
 ): BootstrapResult<BootstrapGraphInferState, BootstrapDiagnostic> =>
   seed.inferGraphTypesFrom(state, modules);
+
+export const freshRecoveryGraphStateBootstrap = (): BootstrapRecoveryGraphState =>
+  seed.freshRecoveryGraphState();
+
+export const recoverGraphFromBootstrap = (
+  state: BootstrapRecoveryGraphState,
+  modules: BootstrapGraphModule[],
+): BootstrapRecoveryGraphState => seed.recoverGraphFrom(state, modules);
 
 export const compileGraphBootstrapRecovering = (
   modules: BootstrapGraphModule[],

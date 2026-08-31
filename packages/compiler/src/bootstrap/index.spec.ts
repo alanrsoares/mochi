@@ -7,6 +7,7 @@ import { buildModules as tsBuildModules } from "../module/module.ts";
 import {
   checkGraphBootstrapRecovering,
   createBootstrapGraphCache,
+  createBootstrapRecoveryGraphCache,
   inferEntryGraphTypesBootstrap,
   loadBootstrapCore,
 } from "./index.ts";
@@ -106,6 +107,37 @@ test("bootstrap graph typed-query cache keys every dependency source", async () 
   const changed = await inferEntryGraphTypesBootstrap(entry, src, read, cache);
   expect(changed).not.toBe(first);
   expect(cache.entries).toHaveLength(3);
+});
+
+test("bootstrap recovery cache reuses healthy dependency prefixes", async () => {
+  const cache = createBootstrapRecoveryGraphCache();
+  const read = async (path: string): Promise<string> => {
+    if (path === "/virtual/dep.mochi") return "export let value = 42";
+    throw new Error(`unexpected read: ${path}`);
+  };
+  const first = await checkGraphBootstrapRecovering(
+    "/virtual/main.mochi",
+    'import { value } from "./dep"\nlet answer = value',
+    read,
+    cache,
+  );
+  const again = await checkGraphBootstrapRecovering(
+    "/virtual/main.mochi",
+    'import { value } from "./dep"\nlet answer = value',
+    read,
+    cache,
+  );
+  expect(again).toBe(first);
+  expect(cache.prefixes).toHaveLength(2);
+
+  const peer = await checkGraphBootstrapRecovering(
+    "/virtual/peer.mochi",
+    'import { value } from "./dep"\nlet peer = value',
+    read,
+    cache,
+  );
+  expect(peer).toEqual([]);
+  expect(cache.prefixes).toHaveLength(3);
 });
 
 test("bootstrap runtime checks an editor buffer through its graph", async () => {

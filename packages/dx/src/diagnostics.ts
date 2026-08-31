@@ -7,7 +7,10 @@
  */
 import { resolve } from "node:path";
 import type { ImportStmt, Program } from "@mochi/compiler/ast";
-import { checkGraphBootstrapRecovering } from "@mochi/compiler/bootstrap";
+import {
+  type BootstrapRecoveryGraphCache,
+  checkGraphBootstrapRecovering,
+} from "@mochi/compiler/bootstrap";
 import { toTypedProgram, toTypedProgramWith } from "@mochi/compiler/compile";
 import { checkErr, type Diagnostic } from "@mochi/compiler/errors";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
@@ -100,7 +103,13 @@ export function toPublish(
 }
 
 /** Options threaded into `moduleDiagnostics` / single-file `diagnostics` — `plugins` (styled-cva, …), same list Vite / `gen-mochi-dts` use. Omitted = default/builtin resolution (`resolvePlugins`, ADR 0011). `cache` reuses dependency inference across calls (`createModuleCache`); omitted = no reuse. */
-export type ModuleDiagnosticsOptions = { plugins?: LanguagePlugin[]; cache?: ModuleCache };
+export type ModuleDiagnosticsOptions = {
+  plugins?: LanguagePlugin[];
+  /** TS-host graph memo, retained for plugins until their ABI is bootstrap-native. */
+  cache?: ModuleCache;
+  /** Bootstrap graph memo for builtin-only diagnostics. */
+  bootstrapCache?: BootstrapRecoveryGraphCache;
+};
 
 /**
  * Graph diagnostics through the frozen bootstrap compiler. Project plugins are
@@ -111,8 +120,9 @@ export async function bootstrapModuleDiagnostics(
   path: string,
   src: string,
   readFile: (p: string) => Promise<string>,
+  cache?: BootstrapRecoveryGraphCache,
 ): Promise<PublishDiagnostic[]> {
-  const errors = await checkGraphBootstrapRecovering(path, src, readFile);
+  const errors = await checkGraphBootstrapRecovering(path, src, readFile, cache);
   return errors.map((error) => {
     const tagged = /^module '([^']+)': (.*)$/.exec(error.message);
     const errorPath = error.path ?? tagged?.[1];
@@ -213,7 +223,7 @@ export async function moduleDiagnostics(
   // plugin ABI is bootstrap-native. The cache is a TS graph object, so callers
   // that opt into it retain that host until bootstrap owns cache invalidation.
   if (opts.plugins === undefined && opts.cache === undefined)
-    return bootstrapModuleDiagnostics(path, src, readFile);
+    return bootstrapModuleDiagnostics(path, src, readFile, opts.bootstrapCache);
   return moduleDiagnosticsFor(parsed.value, src, path, readFile, opts);
 }
 
@@ -285,7 +295,7 @@ export async function documentDiagnostics(
   if (isErr(parsed)) return parsed.error;
   return [
     ...(opts.plugins === undefined && opts.cache === undefined
-      ? await bootstrapModuleDiagnostics(path, src, readFile)
+      ? await bootstrapModuleDiagnostics(path, src, readFile, opts.bootstrapCache)
       : await moduleDiagnosticsFor(parsed.value, src, path, readFile, opts)),
     ...unusedBindingDiagnosticsFor(parsed.value, src, path),
   ];

@@ -34,6 +34,7 @@ export type BootstrapGraphInferOutput = {
   aliases: Map<string, unknown>;
 };
 export type BootstrapGraphInferState = { outputs: BootstrapGraphInferOutput[] };
+export type BootstrapRecoveryGraphState = { ctx: unknown; errors: BootstrapDiagnostic[] };
 type BootstrapParsedModule = {
   path: string;
   src: string;
@@ -51,6 +52,19 @@ export type BootstrapGraphCache = {
 };
 
 export const createBootstrapGraphCache = (): BootstrapGraphCache => ({
+  entries: new Map(),
+  prefixes: new Map(),
+});
+
+/** Caller-owned memo for strict and recovering bootstrap graph diagnostics. */
+export type BootstrapRecoveryGraphCache = {
+  types: BootstrapGraphCache;
+  entries: Map<string, BootstrapDiagnostic[]>;
+  prefixes: Map<string, BootstrapRecoveryGraphState>;
+};
+
+export const createBootstrapRecoveryGraphCache = (): BootstrapRecoveryGraphCache => ({
+  types: createBootstrapGraphCache(),
   entries: new Map(),
   prefixes: new Map(),
 });
@@ -82,9 +96,10 @@ import {
   buildModulesBootstrap,
   buildModulesTsBootstrap,
   compileGraphBootstrap,
-  compileGraphBootstrapRecovering,
   freshInferGraphStateBootstrap,
+  freshRecoveryGraphStateBootstrap,
   inferGraphTypesFromBootstrap,
+  recoverGraphFromBootstrap,
 } from "./module.ts";
 import { compileBootstrapSync, compileTsBootstrapSync, inferTypesBootstrapSync } from "./sync.ts";
 
@@ -309,6 +324,7 @@ export const checkGraphBootstrapRecovering = async (
   entry: string,
   src: string,
   readFile: (path: string) => Promise<string>,
+  cache?: BootstrapRecoveryGraphCache,
 ): Promise<BootstrapDiagnostic[]> => {
   const lexed = bootstrapLex(src) as
     | { _tag: "Ok"; value: unknown }
@@ -397,19 +413,44 @@ export const checkGraphBootstrapRecovering = async (
     const strict = await checkGraphBootstrap(entry, src, readFile);
     return strict._tag === "Ok" ? [] : [strict.error];
   }
-  const graph = [...loaded.entries()].map(([path, module]) => ({ path, stmts: module.stmts }));
+  const graph = [...loaded.entries()].map(([path, module]) => ({
+    path,
+    src: module.source,
+    stmts: module.stmts,
+  }));
+  const graphKey = JSON.stringify(graph.map(({ path, src: source }) => [path, source]));
+  const cached = cache?.entries.get(graphKey);
+  if (cached) return cached;
   const decode = (error: BootstrapDiagnostic): BootstrapDiagnostic => {
     const tagged = /^module '([^']+)': (.*)$/.exec(error.message);
     return tagged ? { ...error, path: tagged[1], message: tagged[2]! } : error;
   };
-  const strict = compileGraphBootstrap(graph);
+  const strict = await inferEntryGraphTypesBootstrap(entry, src, readFile, cache?.types);
   const strictErrors = strict._tag === "Err" ? [decode(strict.error)] : [];
-  const recoveredErrors = compileGraphBootstrapRecovering(graph).errors.map(decode);
+  const prefixKey = (end: number): string =>
+    JSON.stringify(graph.slice(0, end).map(({ path, src: source }) => [path, source]));
+  let prefixLength = 0;
+  let state = freshRecoveryGraphStateBootstrap();
+  for (let end = graph.length - 1; end > 0; end--) {
+    const hit = cache?.prefixes.get(prefixKey(end));
+    if (hit) {
+      prefixLength = end;
+      state = hit;
+      break;
+    }
+  }
+  for (let index = prefixLength; index < graph.length; index++) {
+    state = recoverGraphFromBootstrap(state, [graph[index]!]);
+    cache?.prefixes.set(prefixKey(index + 1), state);
+  }
+  const recoveredErrors = state.errors.map(decode);
   const seen = new Set<string>();
-  return [...strictErrors, ...recoveredErrors].filter((error) => {
+  const errors = [...strictErrors, ...recoveredErrors].filter((error) => {
     const key = `${error.path ?? ""}:${error.start}:${error.end}:${error.message}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
+  cache?.entries.set(graphKey, errors);
+  return errors;
 };

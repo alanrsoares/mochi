@@ -414,28 +414,65 @@ export let compileGraph = graph =>
 
 type GraphRecovery = { outputs: [ModuleOutput], errors: [MErr] }
 
+// Pin the empty recovery seed. Without this named shape, every empty map and
+// list generalizes independently, making the exported resumable state unusable
+// by `recoverGraphFrom` in strict emitted TypeScript.
+type RecoveryAliasInfo = {
+  params: [string],
+  fields: [Ast.AliasField],
+  expr: Option<Ast.TypeExpr>
+}
+
+type RecoveryQualScope = {
+  types: Set<string>,
+  aliases: Map<string, RecoveryAliasInfo>
+}
+
+type RecoveryScheme = { vars: [number], rvars: [number], ty: Ty }
+
+type RecoveryCtx = {
+  exportsByPath: Map<string, Map<string, RecoveryScheme> >,
+  regByPath: Map<string, Registry>,
+  keysByPath: Map<string, Map<string, [string]> >,
+  qualsByPath: Map<string, RecoveryQualScope>,
+  outputs: [ModuleOutput]
+}
+
+type RecoveryGraphState = { ctx: RecoveryCtx, errors: [MErr] }
+
 let compileAllRecovering = (ctx, graph, errors) => switch graph {
-  | [] => { outputs: ctx.outputs, errors }
+  | [] => { ctx, errors }
   | [m, ...rest] => switch ctx->compileOne(m, true) {
       | Err(e) => compileAllRecovering(ctx, rest, Array.append(e, errors))
       | Ok(ctx1) => compileAllRecovering(ctx1, rest, errors)
     }
 }
 
-/// Recovery graph driver: keeps checking after failures and gives downstream
-/// imports a polymorphic placeholder rather than an unbound-name cascade.
-export let compileGraphRecovering = graph =>
-  compileAllRecovering(
-    {
+/// freshRecoveryGraphState : unit -> RecoveryGraphState
+/// Opaque open-world graph context plus accumulated errors. Hosts retain this
+/// at dependency prefixes so recovery queries can resume at a sibling entry.
+export let freshRecoveryGraphState : () -> RecoveryGraphState = () =>
+  {
+    ctx: {
       exportsByPath: #{},
       regByPath: #{},
       keysByPath: #{},
       qualsByPath: #{},
       outputs: []
     },
-    graph,
-    []
-  )
+    errors: []
+  }
+
+/// recoverGraphFrom : RecoveryGraphState -> [Loaded] -> RecoveryGraphState
+/// Advance a graph recovery state by a dependency-ordered suffix.
+export let recoverGraphFrom = (state, graph) =>
+  compileAllRecovering(state.ctx, graph, state.errors)
+
+/// Recovery graph driver: keeps checking after failures and gives downstream
+/// imports a polymorphic placeholder rather than an unbound-name cascade.
+export let compileGraphRecovering = graph =>
+  let state = freshRecoveryGraphState()->recoverGraphFrom(graph) in
+    { outputs: state.ctx.outputs, errors: state.errors }
 
 // --- typed graph queries -----------------------------------------------------
 // Editor tooling needs the same imports-aware inference result as TS emission,

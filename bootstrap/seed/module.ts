@@ -13,6 +13,21 @@ export type Acc = { state: Map<string, string>; order: Loaded[] };
 export type CtorInfo = { owner: string; arity: number };
 export type Registry = { ctors: Map<string, CtorInfo>; types: Map<string, string[]> };
 export type GraphRecovery = { outputs: ModuleOutput[]; errors: PErr[] };
+export type RecoveryAliasInfo = {
+  params: string[];
+  fields: QualAliasField[];
+  expr: Option<TypeExpr>;
+};
+export type RecoveryQualScope = { types: Set<string>; aliases: Map<string, AliasInfo> };
+export type RecoveryScheme = { vars: number[]; rvars: number[]; ty: Ty };
+export type RecoveryCtx = {
+  exportsByPath: Map<string, Map<string, Scheme>>;
+  regByPath: Map<string, Registry>;
+  keysByPath: Map<string, Map<string, string[]>>;
+  qualsByPath: Map<string, RecoveryQualScope>;
+  outputs: ModuleOutput[];
+};
+export type RecoveryGraphState = { ctx: RecoveryCtx; errors: PErr[] };
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
@@ -274,9 +289,10 @@ const aliasesOf: (stmts: Stmt[]) => Map<string, AliasInfo> = (stmts: Stmt[]) =>
     new Map<string, AliasInfo>(),
     stmts,
   );
-const qualScopeOf: (stmts: Stmt[]) => { types: Set<string>; aliases: Map<string, AliasInfo> } = (
-  stmts: Stmt[],
-) => ({ types: exportedTypeNames(stmts), aliases: aliasesOf(stmts) });
+const qualScopeOf: (stmts: Stmt[]) => RecoveryQualScope = (stmts: Stmt[]) => ({
+  types: exportedTypeNames(stmts),
+  aliases: aliasesOf(stmts),
+});
 const withNamedCtor: <A, B, C, D, E, F, G, H, I, J, K>(
   name: A,
   info: { owner: B } & H,
@@ -666,7 +682,7 @@ const compileOne: <A>(
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
-    qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
+    qualsByPath: Map<string, RecoveryQualScope>;
     outputs: ModuleOutput[];
   },
   PErr
@@ -725,7 +741,7 @@ const compileOne: <A>(
               exportsByPath: Map<string, Map<string, Scheme>>;
               regByPath: Map<string, Registry>;
               keysByPath: Map<string, Map<string, string[]>>;
-              qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
+              qualsByPath: Map<string, RecoveryQualScope>;
               outputs: ModuleOutput[];
             },
             PErr
@@ -741,7 +757,7 @@ const compileOne: <A>(
                   exportsByPath: Map<string, Map<string, Scheme>>;
                   regByPath: Map<string, Registry>;
                   keysByPath: Map<string, Map<string, string[]>>;
-                  qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
+                  qualsByPath: Map<string, RecoveryQualScope>;
                   outputs: ModuleOutput[];
                 },
                 PErr
@@ -791,10 +807,7 @@ const compileOne: <A>(
                       exportsByPath: Map<string, Map<string, Scheme>>;
                       regByPath: Map<string, Registry>;
                       keysByPath: Map<string, Map<string, string[]>>;
-                      qualsByPath: Map<
-                        string,
-                        { types: Set<string>; aliases: Map<string, AliasInfo> }
-                      >;
+                      qualsByPath: Map<string, RecoveryQualScope>;
                       outputs: ModuleOutput[];
                     },
                     PErr
@@ -821,10 +834,7 @@ const compileOne: <A>(
                       exportsByPath: Map<string, Map<string, Scheme>>;
                       regByPath: Map<string, Registry>;
                       keysByPath: Map<string, Map<string, string[]>>;
-                      qualsByPath: Map<
-                        string,
-                        { types: Set<string>; aliases: Map<string, AliasInfo> }
-                      >;
+                      qualsByPath: Map<string, RecoveryQualScope>;
                       outputs: ModuleOutput[];
                     },
                     PErr
@@ -939,7 +949,6 @@ export const compileGraph: (graph: Loaded[]) => Result<ModuleOutput[], PErr> = (
 const compileAllRecovering: _Curry<
   [
     ctx: {
-      outputs: ModuleOutput[];
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
@@ -953,16 +962,13 @@ const compileAllRecovering: _Curry<
           >;
         }
       >;
+      outputs: ModuleOutput[];
     },
     graph: Loaded[],
     errors: PErr[],
   ],
-  GraphRecovery
-> = _curry(
-  3,
-  (
+  {
     ctx: {
-      outputs: ModuleOutput[];
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
@@ -976,6 +982,28 @@ const compileAllRecovering: _Curry<
           >;
         }
       >;
+      outputs: ModuleOutput[];
+    };
+    errors: PErr[];
+  }
+> = _curry(
+  3,
+  (
+    ctx: {
+      exportsByPath: Map<string, Map<string, Scheme>>;
+      regByPath: Map<string, Registry>;
+      keysByPath: Map<string, Map<string, string[]>>;
+      qualsByPath: Map<
+        string,
+        {
+          types: Set<string>;
+          aliases: Map<
+            string,
+            { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+          >;
+        }
+      >;
+      outputs: ModuleOutput[];
     },
     graph: Loaded[],
     errors: PErr[],
@@ -986,7 +1014,7 @@ const compileAllRecovering: _Curry<
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => ({ outputs: ctx.outputs, errors: errors }),
+        () => ({ ctx: ctx, errors: errors }),
       )
       .with(
         (_v) => {
@@ -1006,16 +1034,31 @@ const compileAllRecovering: _Curry<
       }),
 );
 /**
- * Recovery graph driver: keeps checking after failures and gives downstream
- * imports a polymorphic placeholder rather than an unbound-name cascade.
+ * freshRecoveryGraphState : unit -> RecoveryGraphState
+ * Opaque open-world graph context plus accumulated errors. Hosts retain this
+ * at dependency prefixes so recovery queries can resume at a sibling entry.
  */
-export const compileGraphRecovering: (graph: Loaded[]) => GraphRecovery = (graph: Loaded[]) =>
-  compileAllRecovering(
-    {
-      exportsByPath: new Map<string, Map<string, Scheme>>(),
-      regByPath: new Map<string, Registry>(),
-      keysByPath: new Map<string, Map<string, string[]>>(),
-      qualsByPath: new Map<
+export const freshRecoveryGraphState: () => RecoveryGraphState = () => ({
+  ctx: {
+    exportsByPath: new Map<string, Map<string, Scheme>>(),
+    regByPath: new Map<string, Registry>(),
+    keysByPath: new Map<string, Map<string, string[]>>(),
+    qualsByPath: new Map<string, RecoveryQualScope>(),
+    outputs: [] as ModuleOutput[],
+  },
+  errors: [] as PErr[],
+});
+/**
+ * recoverGraphFrom : RecoveryGraphState -> [Loaded] -> RecoveryGraphState
+ * Advance a graph recovery state by a dependency-ordered suffix.
+ */
+export const recoverGraphFrom: <A>(
+  state: {
+    ctx: {
+      exportsByPath: Map<string, Map<string, Scheme>>;
+      regByPath: Map<string, Registry>;
+      keysByPath: Map<string, Map<string, string[]>>;
+      qualsByPath: Map<
         string,
         {
           types: Set<string>;
@@ -1024,12 +1067,81 @@ export const compileGraphRecovering: (graph: Loaded[]) => GraphRecovery = (graph
             { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
           >;
         }
-      >(),
-      outputs: [] as ModuleOutput[],
-    },
-    graph,
-    [] as PErr[],
-  );
+      >;
+      outputs: ModuleOutput[];
+    };
+    errors: PErr[];
+  } & A,
+  graph: Loaded[],
+) => {
+  ctx: {
+    exportsByPath: Map<string, Map<string, Scheme>>;
+    regByPath: Map<string, Registry>;
+    keysByPath: Map<string, Map<string, string[]>>;
+    qualsByPath: Map<
+      string,
+      {
+        types: Set<string>;
+        aliases: Map<
+          string,
+          { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+        >;
+      }
+    >;
+    outputs: ModuleOutput[];
+  };
+  errors: PErr[];
+} = _curry(
+  2,
+  <A>(
+    state: {
+      ctx: {
+        exportsByPath: Map<string, Map<string, Scheme>>;
+        regByPath: Map<string, Registry>;
+        keysByPath: Map<string, Map<string, string[]>>;
+        qualsByPath: Map<
+          string,
+          {
+            types: Set<string>;
+            aliases: Map<
+              string,
+              { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+            >;
+          }
+        >;
+        outputs: ModuleOutput[];
+      };
+      errors: PErr[];
+    } & A,
+    graph: Loaded[],
+  ) => compileAllRecovering(state.ctx, graph, state.errors),
+);
+/**
+ * Recovery graph driver: keeps checking after failures and gives downstream
+ * imports a polymorphic placeholder rather than an unbound-name cascade.
+ */
+export const compileGraphRecovering: (graph: Loaded[]) => GraphRecovery = (graph: Loaded[]) => {
+  const state: {
+    ctx: {
+      exportsByPath: Map<string, Map<string, Scheme>>;
+      regByPath: Map<string, Registry>;
+      keysByPath: Map<string, Map<string, string[]>>;
+      qualsByPath: Map<
+        string,
+        {
+          types: Set<string>;
+          aliases: Map<
+            string,
+            { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+          >;
+        }
+      >;
+      outputs: ModuleOutput[];
+    };
+    errors: PErr[];
+  } = recoverGraphFrom(freshRecoveryGraphState(), graph);
+  return { outputs: state.ctx.outputs, errors: state.errors };
+};
 const inferOne: <A, B>(
   ctx: {
     exportsByPath: Map<string, Map<string, Scheme>>;
@@ -1058,7 +1170,7 @@ const inferOne: <A, B>(
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
-    qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
+    qualsByPath: Map<string, RecoveryQualScope>;
     aliases: Map<string, AliasInfo>;
     outputs: {
       path: string;
@@ -1126,7 +1238,7 @@ const inferOne: <A, B>(
               exportsByPath: Map<string, Map<string, Scheme>>;
               regByPath: Map<string, Registry>;
               keysByPath: Map<string, Map<string, string[]>>;
-              qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
+              qualsByPath: Map<string, RecoveryQualScope>;
               aliases: Map<string, AliasInfo>;
               outputs: {
                 path: string;
@@ -1147,7 +1259,7 @@ const inferOne: <A, B>(
                   exportsByPath: Map<string, Map<string, Scheme>>;
                   regByPath: Map<string, Registry>;
                   keysByPath: Map<string, Map<string, string[]>>;
-                  qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
+                  qualsByPath: Map<string, RecoveryQualScope>;
                   aliases: Map<string, AliasInfo>;
                   outputs: {
                     path: string;
@@ -1202,10 +1314,7 @@ const inferOne: <A, B>(
                       exportsByPath: Map<string, Map<string, Scheme>>;
                       regByPath: Map<string, Registry>;
                       keysByPath: Map<string, Map<string, string[]>>;
-                      qualsByPath: Map<
-                        string,
-                        { types: Set<string>; aliases: Map<string, AliasInfo> }
-                      >;
+                      qualsByPath: Map<string, RecoveryQualScope>;
                       aliases: Map<string, AliasInfo>;
                       outputs: {
                         path: string;
@@ -1253,10 +1362,7 @@ const inferOne: <A, B>(
                       exportsByPath: Map<string, Map<string, Scheme>>;
                       regByPath: Map<string, Registry>;
                       keysByPath: Map<string, Map<string, string[]>>;
-                      qualsByPath: Map<
-                        string,
-                        { types: Set<string>; aliases: Map<string, AliasInfo> }
-                      >;
+                      qualsByPath: Map<string, RecoveryQualScope>;
                       aliases: Map<string, AliasInfo>;
                       outputs: {
                         path: string;
@@ -1777,7 +1883,7 @@ const compileOneTs: <A, B>(
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
-    qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
+    qualsByPath: Map<string, RecoveryQualScope>;
     aliases: Map<string, AliasInfo>;
     typeOwner: Map<string, string>;
     runtimeImport: string;
@@ -1843,7 +1949,7 @@ const compileOneTs: <A, B>(
               exportsByPath: Map<string, Map<string, Scheme>>;
               regByPath: Map<string, Registry>;
               keysByPath: Map<string, Map<string, string[]>>;
-              qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
+              qualsByPath: Map<string, RecoveryQualScope>;
               aliases: Map<string, AliasInfo>;
               typeOwner: Map<string, string>;
               runtimeImport: string;
@@ -1863,7 +1969,7 @@ const compileOneTs: <A, B>(
                   exportsByPath: Map<string, Map<string, Scheme>>;
                   regByPath: Map<string, Registry>;
                   keysByPath: Map<string, Map<string, string[]>>;
-                  qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
+                  qualsByPath: Map<string, RecoveryQualScope>;
                   aliases: Map<string, AliasInfo>;
                   typeOwner: Map<string, string>;
                   runtimeImport: string;
@@ -1917,10 +2023,7 @@ const compileOneTs: <A, B>(
                       exportsByPath: Map<string, Map<string, Scheme>>;
                       regByPath: Map<string, Registry>;
                       keysByPath: Map<string, Map<string, string[]>>;
-                      qualsByPath: Map<
-                        string,
-                        { types: Set<string>; aliases: Map<string, AliasInfo> }
-                      >;
+                      qualsByPath: Map<string, RecoveryQualScope>;
                       aliases: Map<string, AliasInfo>;
                       typeOwner: Map<string, string>;
                       runtimeImport: string;
@@ -1968,10 +2071,7 @@ const compileOneTs: <A, B>(
                           exportsByPath: Map<string, Map<string, Scheme>>;
                           regByPath: Map<string, Registry>;
                           keysByPath: Map<string, Map<string, string[]>>;
-                          qualsByPath: Map<
-                            string,
-                            { types: Set<string>; aliases: Map<string, AliasInfo> }
-                          >;
+                          qualsByPath: Map<string, RecoveryQualScope>;
                           aliases: Map<string, AliasInfo>;
                           typeOwner: Map<string, string>;
                           runtimeImport: string;

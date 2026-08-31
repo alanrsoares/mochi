@@ -1,5 +1,5 @@
 {
-  "sourceRevision": "37155a2436fb80ff65fe56a5a7f556d1574cc7eb",
+  "sourceRevision": "7d6c78958090e59cf74f95d5298f6db552d5151c",
   "files": {
     "ast.ts": "3a48020be7232d0570d4313704f35d47c82504e04bcd659f47049352baf90923",
     "check.ts": "afc510719ac0b72bbdf16daa3807b4762c6a107b9783357b5e3bf7445c104741",
@@ -16,8 +16,8 @@
     "host.mjs": "fbc28c671826039700205ecbe789289e313fb3f1bd87bb2e9131b4e5f91da3ad",
     "infer.ts": "404dd56e72931cf64a2fdd23c6e805fc920ab43a2a4a52e51544b6c5b77eeeaa",
     "lexer.ts": "6ff5f5aad4a508b6b2fdc739f37c0d18e24a590486f4c60f23f07aa36bb37cea",
-    "module.bundle.cjs": "14cd5f0ff222e8edf0668231a8dbad03481e40033a1112bdf9eaf10a60f49262",
-    "module.ts": "02aa311ba86975bb963fa1e49be0e530d24be9021024ab688d99d2054f5cb2a3",
+    "module.bundle.cjs": "f3e73ca2a94a486c3a90cc841ba661e0f3dcfece4c47c664a966614941ef2415",
+    "module.ts": "bee203197b4de0c81d04e4bc87395f03f4d91e237783d976cdb89f2d66d25a65",
     "parser.ts": "6638a748162c1ba34c9aecf2911827309f071974aa922125cceb3b516b97b52d",
     "plugins/jsx-schema.gen.d.mts": "16fd25cd96bf1e2ae11f17e711f91dcbb9f30e1f347737cdd144bf319046d5ef",
     "plugins/jsx-schema.gen.mjs": "94cb1f3512dcd8244cadba7ab74ed0db943bd2df02b907d105eaae26a96e6482",
