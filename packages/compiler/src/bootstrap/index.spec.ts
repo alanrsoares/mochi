@@ -98,3 +98,14 @@ test("bootstrap graph recovery collects semantic errors from sibling dependencie
   expect(errors).toHaveLength(2);
   expect(errors.every((error) => error.path)).toBe(true);
 });
+
+test("bootstrap graph recovery keeps entry errors after a dependency fails", async () => {
+  const errors = await checkGraphBootstrapRecovering(
+    "/virtual/main.mochi",
+    'import { value } from "./dep"\nlet local = add(1, "bad")\n',
+    async () => 'let value = add(1, "bad")\n',
+  );
+  expect(errors).toHaveLength(2);
+  expect(errors.some((error) => error.path === "/virtual/dep.mochi")).toBe(true);
+  expect(errors.some((error) => error.path === "/virtual/main.mochi")).toBe(true);
+});

@@ -34,7 +34,12 @@ export type BootstrapCore = {
   ) => Promise<BootstrapResult<undefined, BootstrapDiagnostic>>;
 };
 
-import { buildModulesBootstrap, buildModulesTsBootstrap, compileGraphBootstrap } from "./module.ts";
+import {
+  buildModulesBootstrap,
+  buildModulesTsBootstrap,
+  compileGraphBootstrap,
+  compileGraphBootstrapRecovering,
+} from "./module.ts";
 import { compileBootstrapSync, compileTsBootstrapSync } from "./sync.ts";
 import {
   lex as bootstrapLex,
@@ -239,18 +244,21 @@ export const checkGraphBootstrapRecovering = async (
   };
   await visit(entry);
   if (dependencyErrors.length > 0) return dependencyErrors;
-  for (const [modulePath, module] of loaded) {
-    if (modulePath === resolve(entry)) continue;
-    if (
-      module.stmts.some(
-        (statement) => statement._tag === "SImport" || statement._tag === "SImportNs",
-      )
+  const entryModule = loaded.get(resolve(entry));
+  if (!entryModule) return [{ message: `cannot read module '${entry}'`, start: 0, end: 0 }];
+  if (
+    !entryModule.stmts.some(
+      (statement) => statement._tag === "SImport" || statement._tag === "SImportNs",
     )
-      continue;
-    const checked = compileBootstrapSync(module.source);
-    if (checked._tag === "Err") dependencyErrors.push({ ...checked.error, path: modulePath });
+  ) {
+    const strict = await checkGraphBootstrap(entry, src, readFile);
+    return strict._tag === "Ok" ? [] : [strict.error];
   }
-  if (dependencyErrors.length > 0) return dependencyErrors;
-  const checked = await checkGraphBootstrap(entry, src, readFile);
-  return checked._tag === "Ok" ? [] : [checked.error];
+  const checked = compileGraphBootstrapRecovering(
+    [...loaded.entries()].map(([path, module]) => ({ path, stmts: module.stmts })),
+  );
+  return checked.errors.map((error) => {
+    const tagged = /^module '([^']+)': (.*)$/.exec(error.message);
+    return tagged ? { ...error, path: tagged[1], message: tagged[2]! } : error;
+  });
 };
