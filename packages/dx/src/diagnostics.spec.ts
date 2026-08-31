@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { toTypedProgram } from "@mochi/compiler/compile";
 import {
+  bootstrapModuleDiagnostics,
   diagnostics,
   documentDiagnostics,
   moduleDiagnostics,
@@ -12,6 +13,17 @@ import { isErr } from "@onrails/result";
 
 test("clean source produces no diagnostics", () => {
   expect(diagnostics("let n = add(mul(2, 3), 4)")).toEqual([]);
+});
+
+test("bootstrap dependency diagnostics anchor at the importing statement", async () => {
+  const path = "/virtual/main.mochi";
+  const src = 'import { value } from "./dep"\n';
+  const result = await bootstrapModuleDiagnostics(path, src, async (file) => {
+    if (file === "/virtual/dep.mochi") return 'let value = add(1, "bad")\n';
+    throw new Error(`unexpected read: ${file}`);
+  });
+  expect(result[0]?.range.start).toEqual({ line: 0, character: 17 });
+  expect(result[0]?.message).toContain("module '/virtual/dep.mochi' failed to compile");
 });
 
 test("unused locals publish warning diagnostics by binding identity", () => {

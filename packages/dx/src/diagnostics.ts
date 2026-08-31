@@ -113,16 +113,24 @@ export async function bootstrapModuleDiagnostics(
   readFile: (p: string) => Promise<string>,
 ): Promise<PublishDiagnostic[]> {
   const errors = await checkGraphBootstrapRecovering(path, src, readFile);
-  return errors.map((error) =>
-    toPublish(
+  return errors.map((error) => {
+    const dependency = error.path && resolve(error.path) !== resolve(path);
+    let span = { start: error.start, end: error.end };
+    let message = error.message;
+    if (dependency) {
+      const imports = [...src.matchAll(/from\s+["']([^"']+)["']/g)];
+      const match = imports.find(
+        (candidate) => resolveImport(path, candidate[1]!) === resolve(error.path!),
+      );
+      if (match) span = { start: match.index!, end: match.index! + match[0].length };
+      message = `module '${error.path}' failed to compile: ${error.message}`;
+    }
+    return toPublish(
       src,
       {
         kind: "type",
-        message:
-          error.path && resolve(error.path) !== resolve(path)
-            ? `${error.path}: ${error.message}`
-            : error.message,
-        span: { start: error.start, end: error.end },
+        message,
+        span,
         help: error.suggestions?.[0]?.title.toLowerCase(),
         suggestions: error.suggestions?.map((suggestion) => ({
           title: suggestion.title,
@@ -131,8 +139,8 @@ export async function bootstrapModuleDiagnostics(
         })),
       },
       path,
-    ),
-  );
+    );
+  });
 }
 
 /**
