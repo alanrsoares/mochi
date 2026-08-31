@@ -340,7 +340,7 @@ let resolveImportsFrom = (ctx, stmts, i, path, res, recovering) => switch Array.
 // Compile one module: resolve imports, check (with imported registry), infer
 // (with imported schemes), codegen (with imported ctor keys), then publish this
 // module's own exports/registry/keys into the ctx for later dependents.
-let compileOne = (ctx, loaded: Loaded) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
+let compileOne = (ctx, loaded: Loaded, recovering) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, recovering) {
   | Err(e) => Err(atPath(loaded.path, e))
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
       | Err(e) => Err(atPath(loaded.path, e))
@@ -386,7 +386,7 @@ let compileOne = (ctx, loaded: Loaded) => switch ctx->resolveImportsFrom(loaded.
 // Compile the whole ordered graph, threading the ctx; first Err short-circuits.
 let compileAll = (ctx, graph) => switch graph {
   | [] => Ok(ctx.outputs)
-  | [m, ...rest] => switch ctx->compileOne(m) {
+  | [m, ...rest] => switch ctx->compileOne(m, false) {
       | Err(e) => Err(e)
       | Ok(ctx1) => ctx1->compileAll(rest)
     }
@@ -405,6 +405,31 @@ export let compileGraph = graph =>
       outputs: []
     },
     graph
+  )
+
+type GraphRecovery = { outputs: [ModuleOutput], errors: [MErr] }
+
+let compileAllRecovering = (ctx, graph, errors) => switch graph {
+  | [] => { outputs: ctx.outputs, errors }
+  | [m, ...rest] => switch ctx->compileOne(m, true) {
+      | Err(e) => compileAllRecovering(ctx, rest, Array.append(e, errors))
+      | Ok(ctx1) => compileAllRecovering(ctx1, rest, errors)
+    }
+}
+
+/// Recovery graph driver: keeps checking after failures and gives downstream
+/// imports a polymorphic placeholder rather than an unbound-name cascade.
+export let compileGraphRecovering = graph =>
+  compileAllRecovering(
+    {
+      exportsByPath: #{},
+      regByPath: #{},
+      keysByPath: #{},
+      qualsByPath: #{},
+      outputs: []
+    },
+    graph,
+    []
   )
 
 /// buildModules : string -> Result [ModuleOutput] MErr

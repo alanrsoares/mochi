@@ -13177,17 +13177,27 @@ var resolveImportsFrom = _curry16(6, (ctx, stmts, i, path, res, recovering) => m
   const _g = _v;
   return _g._tag === "Some" && _g.value._tag === "SImportNs";
 }, ({ value: { alias, from } }) => ((dp) => ((depExports) => ((depReg) => ((depKeys) => resolveImportsFrom(ctx, stmts, i + 1, path, { imports: res.imports, nsImports: _Map_set9(alias.name, depExports, res.nsImports), reg: { ctors: prefixCtorsInto(_Map_keys7(depReg.ctors), alias.name, depReg.ctors, res.reg.ctors), types: mergeMap(depReg.types, res.reg.types) }, keys: mergeMap(depKeys, res.keys), quals: match15(_Map_get10(dp, ctx.qualsByPath)).with({ _tag: "Some" }, ({ value: q }) => _Map_set9(alias.name, q, res.quals)).with({ _tag: "None" }, () => res.quals).exhaustive() }, recovering))(_Map_getOr7(new Map, dp, ctx.keysByPath)))(_Map_getOr7(emptyReg, dp, ctx.regByPath)))(_Map_getOr7(new Map, dp, ctx.exportsByPath)))(resolveImport2(path, from))).with({ _tag: "Some" }, () => resolveImportsFrom(ctx, stmts, i + 1, path, res, recovering)).exhaustive());
-var compileOne = _curry16(2, (ctx, loaded) => match15(resolveImportsFrom(ctx, loaded.stmts, 0, loaded.path, { imports: new Map, nsImports: new Map, reg: emptyReg, keys: new Map, quals: new Map }, false)).with({ _tag: "Err" }, ({ error: e }) => Err10(atPath(loaded.path, e))).with({ _tag: "Ok" }, ({ value: res }) => match15(checkWith(loaded.stmts, res.reg, res.quals)).with({ _tag: "Err" }, ({ error: e }) => Err10(atPath(loaded.path, e))).with({ _tag: "Ok" }, () => match15(inferProgramImports(loaded.stmts, builtins, namespaces, true, res.imports, res.nsImports, res.quals, None15)).with({ _tag: "Err" }, ({ error: e }) => Err10(atPath(loaded.path, e))).with({ _tag: "Ok" }, ({ value: env }) => ((js) => Ok10({ exportsByPath: _Map_set9(loaded.path, exportedSchemes(loaded.stmts, env), ctx.exportsByPath), regByPath: _Map_set9(loaded.path, exportedRegistry(loaded.stmts), ctx.regByPath), keysByPath: _Map_set9(loaded.path, exportedCtorKeys(loaded.stmts), ctx.keysByPath), qualsByPath: _Map_set9(loaded.path, qualScopeOf(loaded.stmts), ctx.qualsByPath), outputs: [...ctx.outputs, { path: loaded.path, js }] }))(codegen(loaded.stmts, res.keys, true, namespaceRuntime, preludeJsDefs, runtimeDeps))).exhaustive()).exhaustive()).exhaustive());
+var compileOne = _curry16(3, (ctx, loaded, recovering) => match15(resolveImportsFrom(ctx, loaded.stmts, 0, loaded.path, { imports: new Map, nsImports: new Map, reg: emptyReg, keys: new Map, quals: new Map }, recovering)).with({ _tag: "Err" }, ({ error: e }) => Err10(atPath(loaded.path, e))).with({ _tag: "Ok" }, ({ value: res }) => match15(checkWith(loaded.stmts, res.reg, res.quals)).with({ _tag: "Err" }, ({ error: e }) => Err10(atPath(loaded.path, e))).with({ _tag: "Ok" }, () => match15(inferProgramImports(loaded.stmts, builtins, namespaces, true, res.imports, res.nsImports, res.quals, None15)).with({ _tag: "Err" }, ({ error: e }) => Err10(atPath(loaded.path, e))).with({ _tag: "Ok" }, ({ value: env }) => ((js) => Ok10({ exportsByPath: _Map_set9(loaded.path, exportedSchemes(loaded.stmts, env), ctx.exportsByPath), regByPath: _Map_set9(loaded.path, exportedRegistry(loaded.stmts), ctx.regByPath), keysByPath: _Map_set9(loaded.path, exportedCtorKeys(loaded.stmts), ctx.keysByPath), qualsByPath: _Map_set9(loaded.path, qualScopeOf(loaded.stmts), ctx.qualsByPath), outputs: [...ctx.outputs, { path: loaded.path, js }] }))(codegen(loaded.stmts, res.keys, true, namespaceRuntime, preludeJsDefs, runtimeDeps))).exhaustive()).exhaustive()).exhaustive());
 var compileAll = _curry16(2, (ctx, graph) => match15(graph).with((_v) => {
   const _g = _v;
   return _g.length === 0;
 }, () => Ok10(ctx.outputs)).with((_v) => {
   const _g = _v;
   return _g.length >= 1;
-}, ([m, ...rest]) => match15(compileOne(ctx, m)).with({ _tag: "Err" }, ({ error: e }) => Err10(e)).with({ _tag: "Ok" }, ({ value: ctx1 }) => compileAll(ctx1, rest)).exhaustive()).otherwise(() => {
+}, ([m, ...rest]) => match15(compileOne(ctx, m, false)).with({ _tag: "Err" }, ({ error: e }) => Err10(e)).with({ _tag: "Ok" }, ({ value: ctx1 }) => compileAll(ctx1, rest)).exhaustive()).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
 var compileGraph = (graph) => compileAll({ exportsByPath: new Map, regByPath: new Map, keysByPath: new Map, qualsByPath: new Map, outputs: [] }, graph);
+var compileAllRecovering = _curry16(3, (ctx, graph, errors) => match15(graph).with((_v) => {
+  const _g = _v;
+  return _g.length === 0;
+}, () => ({ outputs: ctx.outputs, errors })).with((_v) => {
+  const _g = _v;
+  return _g.length >= 1;
+}, ([m, ...rest]) => match15(compileOne(ctx, m, true)).with({ _tag: "Err" }, ({ error: e }) => compileAllRecovering(ctx, rest, _Array_append13(e, errors))).with({ _tag: "Ok" }, ({ value: ctx1 }) => compileAllRecovering(ctx1, rest, errors)).exhaustive()).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var compileGraphRecovering = (graph) => compileAllRecovering({ exportsByPath: new Map, regByPath: new Map, keysByPath: new Map, qualsByPath: new Map, outputs: [] }, graph, []);
 var buildModules = (entry) => _Result_flatMap7((graph) => compileGraph(graph), loadGraph(entry));
 var relSpec2 = _curry16(2, relSpec);
 var externDtsPath2 = _curry16(2, externDtsPath);
@@ -13230,6 +13240,7 @@ export {
   buildModules,
   buildModulesTs,
   compileGraph,
+  compileGraphRecovering,
   compileGraphTs,
   loadGraph
 };

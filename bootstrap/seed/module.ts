@@ -11,6 +11,7 @@ export type MErr = { message: string; start: number; end: number };
 export type Acc = { state: Map<string, string>; order: Loaded[] };
 export type CtorInfo = { owner: string; arity: number };
 export type Registry = { ctors: Map<string, CtorInfo>; types: Map<string, string[]> };
+export type GraphRecovery = { outputs: ModuleOutput[]; errors: PErr[] };
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
@@ -658,6 +659,7 @@ const compileOne: <A>(
     outputs: { path: string; js: string }[];
   } & A,
   loaded: Loaded,
+  recovering: boolean,
 ) => Result<
   {
     exportsByPath: Map<string, Map<string, Scheme>>;
@@ -668,7 +670,7 @@ const compileOne: <A>(
   },
   PErr
 > = _curry(
-  2,
+  3,
   <A>(
     ctx: {
       exportsByPath: Map<string, Map<string, Scheme>>;
@@ -687,6 +689,7 @@ const compileOne: <A>(
       outputs: { path: string; js: string }[];
     } & A,
     loaded: Loaded,
+    recovering: boolean,
   ) =>
     match(
       resolveImportsFrom(
@@ -710,7 +713,7 @@ const compileOne: <A>(
             }
           >(),
         },
-        false,
+        recovering,
       ),
     )
       .with(
@@ -897,7 +900,7 @@ const compileAll: _Curry<
           return _g.length >= 1;
         },
         ([m, ...rest]) =>
-          match(compileOne(ctx, m))
+          match(compileOne(ctx, m, false))
             .with(
               { _tag: "Err" },
               ({ error: e }) => Err(e) as Result<{ path: string; js: string }[], PErr>,
@@ -935,6 +938,104 @@ export const compileGraph: (graph: Loaded[]) => Result<{ path: string; js: strin
       outputs: [] as { path: string; js: string }[],
     },
     graph,
+  );
+
+const compileAllRecovering: _Curry<
+  [
+    ctx: {
+      outputs: { path: string; js: string }[];
+      exportsByPath: Map<string, Map<string, Scheme>>;
+      regByPath: Map<string, Registry>;
+      keysByPath: Map<string, Map<string, string[]>>;
+      qualsByPath: Map<
+        string,
+        {
+          types: Set<string>;
+          aliases: Map<
+            string,
+            { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+          >;
+        }
+      >;
+    },
+    graph: Loaded[],
+    errors: PErr[],
+  ],
+  { outputs: { path: string; js: string }[]; errors: PErr[] }
+> = _curry(
+  3,
+  (
+    ctx: {
+      outputs: { path: string; js: string }[];
+      exportsByPath: Map<string, Map<string, Scheme>>;
+      regByPath: Map<string, Registry>;
+      keysByPath: Map<string, Map<string, string[]>>;
+      qualsByPath: Map<
+        string,
+        {
+          types: Set<string>;
+          aliases: Map<
+            string,
+            { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+          >;
+        }
+      >;
+    },
+    graph: Loaded[],
+    errors: PErr[],
+  ) =>
+    match(graph)
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length === 0;
+        },
+        () => ({ outputs: ctx.outputs, errors: errors }),
+      )
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length >= 1;
+        },
+        ([m, ...rest]) =>
+          match(compileOne(ctx, m, true))
+            .with({ _tag: "Err" }, ({ error: e }) =>
+              compileAllRecovering(ctx, rest, _Array_append(e, errors)),
+            )
+            .with({ _tag: "Ok" }, ({ value: ctx1 }) => compileAllRecovering(ctx1, rest, errors))
+            .exhaustive(),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
+);
+/**
+ * Recovery graph driver: keeps checking after failures and gives downstream
+ * imports a polymorphic placeholder rather than an unbound-name cascade.
+ */
+export const compileGraphRecovering: (graph: Loaded[]) => {
+  outputs: { path: string; js: string }[];
+  errors: PErr[];
+} = (graph: Loaded[]) =>
+  compileAllRecovering(
+    {
+      exportsByPath: new Map<string, Map<string, Scheme>>(),
+      regByPath: new Map<string, Registry>(),
+      keysByPath: new Map<string, Map<string, string[]>>(),
+      qualsByPath: new Map<
+        string,
+        {
+          types: Set<string>;
+          aliases: Map<
+            string,
+            { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+          >;
+        }
+      >(),
+      outputs: [] as { path: string; js: string }[],
+    },
+    graph,
+    [] as PErr[],
   );
 /**
  * buildModules : string -> Result [ModuleOutput] MErr

@@ -13,9 +13,14 @@ type SeedModule = {
   compileGraph: (
     modules: BootstrapGraphModule[],
   ) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic>;
+  compileGraphRecovering: (modules: BootstrapGraphModule[]) => BootstrapGraphRecovery;
 };
 
 type BootstrapGraphModule = { path: string; stmts: unknown };
+export type BootstrapGraphRecovery = {
+  outputs: BootstrapModuleOutput[];
+  errors: BootstrapDiagnostic[];
+};
 
 const seed = createRequire(import.meta.url)(
   fileURLToPath(new URL("../../../../bootstrap/seed/module.bundle.cjs", import.meta.url)),
@@ -49,3 +54,7 @@ export const buildModulesTsBootstrap = (
 export const compileGraphBootstrap = (
   modules: BootstrapGraphModule[],
 ): BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic> => seed.compileGraph(modules);
+
+export const compileGraphBootstrapRecovering = (
+  modules: BootstrapGraphModule[],
+): BootstrapGraphRecovery => seed.compileGraphRecovering(modules);
