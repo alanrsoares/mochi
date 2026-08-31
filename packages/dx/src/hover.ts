@@ -8,6 +8,8 @@
  */
 import { resolve } from "node:path";
 import type { Program, TypeExpr } from "@mochi/compiler/ast";
+import type { BootstrapTypeAt } from "@mochi/compiler/bootstrap";
+import { inferTypesBootstrapBrowser } from "@mochi/compiler/bootstrap/browser";
 import { openMode, toTypedProgramRecovering, toTypedProgramWith } from "@mochi/compiler/compile";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import { type InferResult, type SymbolInfo, showScheme, type TypeAt } from "@mochi/compiler/infer";
@@ -263,6 +265,48 @@ const hoverFrom = (
   );
 
 /**
+ * Bootstrap's rendered type DTO is intentionally opaque: it lets the normal
+ * builtin hover path avoid importing the TypeScript HM representation. Rich
+ * declarations still fall through to `hoverFrom` until bootstrap carries the
+ * corresponding symbol and layout metadata.
+ */
+const bootstrapHoverFrom = (
+  types: BootstrapTypeAt[],
+  aliases: ReadonlyMap<string, unknown>,
+  offset: number,
+  src: string,
+  path: string,
+): HoverInfo | null => {
+  // Alias folding is part of the established hover presentation contract.
+  if (aliases.size > 0) return null;
+  const lexed = lex(src);
+  if (isErr(lexed)) return null;
+  const key = path.startsWith("<") ? path : resolve(path);
+  const occurrence = indexProgram(key, parseRecovering(lexed.value).program).at(offset);
+  // Definitions and field-name occurrences need hover's richer symbol label.
+  // Their enclosing bootstrap expression/pattern span is not specific enough
+  // to distinguish the name from its parent yet.
+  const before = src.slice(0, offset + 1);
+  const tokenStart = before.search(/[A-Za-z_][A-Za-z0-9_]*$/);
+  const beforeToken = tokenStart === -1 ? "" : src.slice(0, tokenStart).trimEnd();
+  const arrow = src.indexOf("=>", offset);
+  const inLambdaParams = arrow !== -1 && !src.slice(offset, arrow).includes("\n");
+  if (
+    occurrence?.role === "def" ||
+    occurrence?.binding.space === "field" ||
+    beforeToken.endsWith(".") ||
+    inLambdaParams
+  )
+    return null;
+  const hit = tightestHit(types, offset, spanContainsClosed);
+  if (hit._tag === "None") return null;
+  // Free vars need the host's letter-scoping renderer; long output needs its
+  // width-aware Doc layout. Both remain compatibility fallbacks for now.
+  if (hit.value.display.includes("'t") || hit.value.display.length > 72) return null;
+  return { code: hit.value.display, doc: docAt(src, path, offset, undefined) };
+};
+
+/**
  * Hover at `offset`, or null when the source doesn't typecheck or nothing sits
  * under the cursor. Strict by default; `"use open"` permits host globals. Single-file: a file with
  * imports won't typecheck (imported constructors are unknown), so prefer
@@ -274,6 +318,17 @@ export const hoverAt = (src: string, offset: number, path = "<buffer>"): HoverIn
   if (isOk(lexed)) {
     const syntax = syntaxHoverAt(parseRecovering(lexed.value).program, offset);
     if (syntax) return syntax;
+  }
+  const bootstrap = inferTypesBootstrapBrowser(src);
+  if (bootstrap._tag === "Ok") {
+    const info = bootstrapHoverFrom(
+      bootstrap.value.types,
+      bootstrap.value.aliases,
+      offset,
+      src,
+      path,
+    );
+    if (info) return info;
   }
   const r = toTypedProgramRecovering(src, { namespaces: preludeNamespaces });
   return isOk(r) ? (hoverFrom(r.value.res, offset, src, path) ?? fallback) : fallback;

@@ -67,6 +67,7 @@ import {
 import { compileBootstrapSync, compileTsBootstrapSync, inferTypesBootstrapSync } from "./sync.ts";
 
 export { inferGraphTypesBootstrap } from "./module.ts";
+export { inferTypesBootstrapSync } from "./sync.ts";
 
 import {
   lex as bootstrapLex,
