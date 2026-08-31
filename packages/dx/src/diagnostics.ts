@@ -141,13 +141,18 @@ export async function bootstrapModuleDiagnostics(
       span = { start: lineStart, end: lineEnd };
       message = `module '${importAtError[1]}' failed to compile: ${messageBody}`;
     }
+    const help =
+      error.suggestions?.[0]?.title.toLowerCase() ??
+      (/^unbound variable /.test(messageBody)
+        ? "bind the name before using it, or check the spelling"
+        : undefined);
     return toPublish(
       src,
       {
         kind: "type",
         message,
         span,
-        help: error.suggestions?.[0]?.title.toLowerCase(),
+        help,
         suggestions: error.suggestions?.map((suggestion) => ({
           title: suggestion.title,
           replaceWith: suggestion.replaceWith,
@@ -203,6 +208,12 @@ export async function moduleDiagnostics(
 ): Promise<PublishDiagnostic[]> {
   const parsed = parseForDiagnostics(src, path, opts);
   if (isErr(parsed)) return parsed.error;
+  // The shipped seed handles the builtin language graph, including recovery.
+  // Arbitrary project plugins still execute in the TypeScript host until their
+  // plugin ABI is bootstrap-native. The cache is a TS graph object, so callers
+  // that opt into it retain that host until bootstrap owns cache invalidation.
+  if (opts.plugins === undefined && opts.cache === undefined)
+    return bootstrapModuleDiagnostics(path, src, readFile);
   return moduleDiagnosticsFor(parsed.value, src, path, readFile, opts);
 }
 
@@ -273,7 +284,9 @@ export async function documentDiagnostics(
   const parsed = parseForDiagnostics(src, path, opts);
   if (isErr(parsed)) return parsed.error;
   return [
-    ...(await moduleDiagnosticsFor(parsed.value, src, path, readFile, opts)),
+    ...(opts.plugins === undefined && opts.cache === undefined
+      ? await bootstrapModuleDiagnostics(path, src, readFile)
+      : await moduleDiagnosticsFor(parsed.value, src, path, readFile, opts)),
     ...unusedBindingDiagnosticsFor(parsed.value, src, path),
   ];
 }
