@@ -114,16 +114,19 @@ export async function bootstrapModuleDiagnostics(
 ): Promise<PublishDiagnostic[]> {
   const errors = await checkGraphBootstrapRecovering(path, src, readFile);
   return errors.map((error) => {
-    const dependency = error.path && resolve(error.path) !== resolve(path);
+    const tagged = /^module '([^']+)': (.*)$/.exec(error.message);
+    const errorPath = error.path ?? tagged?.[1];
+    const messageBody = tagged?.[2] ?? error.message;
+    const dependency = errorPath && resolve(errorPath) !== resolve(path);
     let span = { start: error.start, end: error.end };
-    let message = error.message;
+    let message = messageBody;
     if (dependency) {
       const imports = [...src.matchAll(/from\s+["']([^"']+)["']/g)];
       const match = imports.find(
-        (candidate) => resolveImport(path, candidate[1]!) === resolve(error.path!),
+        (candidate) => resolveImport(path, candidate[1]!) === resolve(errorPath!),
       );
       if (match) span = { start: match.index!, end: match.index! + match[0].length };
-      message = `module '${error.path}' failed to compile: ${error.message}`;
+      message = `module '${errorPath}' failed to compile: ${messageBody}`;
     }
     return toPublish(
       src,
