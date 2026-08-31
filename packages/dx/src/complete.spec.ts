@@ -62,6 +62,19 @@ test("module namespace completion uses bootstrap export origins", async () => {
   expect(labels).toEqual(["Circle"]);
 });
 
+test("module record completion uses bootstrap graph types", async () => {
+  const entry = "/project/main.mochi";
+  const dep = "/project/point.mochi";
+  const src = 'import { point } from "./point"\nlet x = point.';
+  const labels = (
+    await moduleCompleteAt(entry, src, src.length, async (path) => {
+      if (path === dep) return "export let point = { x: 1, y: 2 }";
+      throw new Error(`unexpected path: ${path}`);
+    })
+  ).map((item) => item.label);
+  expect(labels).toEqual(["x", "y"]);
+});
+
 test("tw. without plugin yields no members", () => {
   const src = 'extern tw : a = "@styled-cva/react" "default"\nlet x = tw.';
   expect(completeAt(src, src.length)).toEqual([]);

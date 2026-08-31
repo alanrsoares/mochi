@@ -9,7 +9,11 @@
  */
 import { resolve } from "node:path";
 import type { Program } from "@mochi/compiler/ast";
-import { loadBootstrapGraph } from "@mochi/compiler/bootstrap";
+import {
+  type BootstrapTypeAt,
+  inferEntryGraphTypesBootstrap,
+  loadBootstrapGraph,
+} from "@mochi/compiler/bootstrap";
 import type { Registry } from "@mochi/compiler/check";
 import { toTypedProgramRecovering, toTypedProgramWith } from "@mochi/compiler/compile";
 import type {
@@ -177,6 +181,43 @@ const tightestType = (types: TypeAt[], offset: number) =>
 
 const filterPrefix = (items: CompletionItem[], prefix: string): CompletionItem[] =>
   !prefix ? items : items.filter((i) => i.label.startsWith(prefix));
+
+/** Frozen bootstrap type shapes needed for record-member completion. */
+type BootstrapTy = { _tag: string; row?: BootstrapRow };
+type BootstrapRow = { _tag: string; label?: string; fieldType?: BootstrapTy; rest?: BootstrapRow };
+
+const bootstrapRecordFieldItems = (ty: unknown): CompletionItem[] | null => {
+  if (typeof ty !== "object" || ty === null) return null;
+  const record = ty as BootstrapTy;
+  if (record._tag !== "TyRecord" || !record.row) return null;
+  const items: CompletionItem[] = [];
+  let row: BootstrapRow | undefined = record.row;
+  while (row?._tag === "RowExtend" && row.label && row.fieldType) {
+    items.push({
+      label: row.label,
+      kind: row.fieldType._tag === "TyFn" ? "method" : "field",
+      detail: row.fieldType._tag === "TyFn" ? "method" : undefined,
+    });
+    row = row.rest;
+  }
+  return items;
+};
+
+const bootstrapRecordFieldsAt = async (
+  path: string,
+  src: string,
+  trigger: MemberTrigger,
+  readFile: (path: string) => Promise<string>,
+): Promise<CompletionItem[] | null> => {
+  const rewritten =
+    src.slice(0, trigger.dotStart) + src.slice(trigger.dotStart + 1 + trigger.prefix.length);
+  const inferred = await inferEntryGraphTypesBootstrap(path, rewritten, readFile);
+  if (inferred._tag === "Err") return null;
+  const entry = inferred.value.find((module) => module.path === resolve(path));
+  const hit =
+    entry && tightestHit<BootstrapTypeAt>(entry.types, trigger.recvStart, spanContainsClosed);
+  return hit && hit._tag === "Some" ? bootstrapRecordFieldItems(hit.value.ty) : null;
+};
 
 const dedupeSort = (items: CompletionItem[]): CompletionItem[] => {
   const seen = new Set<string>();
@@ -483,6 +524,8 @@ export const moduleCompleteAt = async (
     if (trigger) {
       const items = await bootstrapNamespaceMembers(path, src, trigger, readFile);
       if (items) return dedupeSort(filterPrefix(items, trigger.prefix));
+      const fields = await bootstrapRecordFieldsAt(path, src, trigger, readFile);
+      if (fields) return dedupeSort(filterPrefix(fields, trigger.prefix));
     }
     if (!trigger && !jsxAttrTriggerAt(src, offset)) return completeAt(src, offset);
   }
