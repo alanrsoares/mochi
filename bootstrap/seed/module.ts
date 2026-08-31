@@ -7,6 +7,7 @@ import type { AliasInfo } from "./codegen-ts";
 import type { InferApi, QualAliasField } from "./infer";
 
 export type Loaded = { path: string; stmts: Stmt[] };
+export type ModuleOutput = { path: string; js: string };
 export type MErr = { message: string; start: number; end: number };
 export type Acc = { state: Map<string, string>; order: Loaded[] };
 export type CtorInfo = { owner: string; arity: number };
@@ -656,7 +657,7 @@ const compileOne: <A>(
         >;
       }
     >;
-    outputs: { path: string; js: string }[];
+    outputs: ModuleOutput[];
   } & A,
   loaded: Loaded,
   recovering: boolean,
@@ -666,7 +667,7 @@ const compileOne: <A>(
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
     qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
-    outputs: { path: string; js: string }[];
+    outputs: ModuleOutput[];
   },
   PErr
 > = _curry(
@@ -686,7 +687,7 @@ const compileOne: <A>(
           >;
         }
       >;
-      outputs: { path: string; js: string }[];
+      outputs: ModuleOutput[];
     } & A,
     loaded: Loaded,
     recovering: boolean,
@@ -725,7 +726,7 @@ const compileOne: <A>(
               regByPath: Map<string, Registry>;
               keysByPath: Map<string, Map<string, string[]>>;
               qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
-              outputs: { path: string; js: string }[];
+              outputs: ModuleOutput[];
             },
             PErr
           >,
@@ -741,7 +742,7 @@ const compileOne: <A>(
                   regByPath: Map<string, Registry>;
                   keysByPath: Map<string, Map<string, string[]>>;
                   qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
-                  outputs: { path: string; js: string }[];
+                  outputs: ModuleOutput[];
                 },
                 PErr
               >,
@@ -794,7 +795,7 @@ const compileOne: <A>(
                         string,
                         { types: Set<string>; aliases: Map<string, AliasInfo> }
                       >;
-                      outputs: { path: string; js: string }[];
+                      outputs: ModuleOutput[];
                     },
                     PErr
                   >,
@@ -824,7 +825,7 @@ const compileOne: <A>(
                         string,
                         { types: Set<string>; aliases: Map<string, AliasInfo> }
                       >;
-                      outputs: { path: string; js: string }[];
+                      outputs: ModuleOutput[];
                     },
                     PErr
                   >)(
@@ -847,7 +848,7 @@ const compileOne: <A>(
 const compileAll: _Curry<
   [
     ctx: {
-      outputs: { path: string; js: string }[];
+      outputs: ModuleOutput[];
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
@@ -864,12 +865,12 @@ const compileAll: _Curry<
     },
     graph: Loaded[],
   ],
-  Result<{ path: string; js: string }[], PErr>
+  Result<ModuleOutput[], PErr>
 > = _curry(
   2,
   (
     ctx: {
-      outputs: { path: string; js: string }[];
+      outputs: ModuleOutput[];
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
@@ -892,7 +893,7 @@ const compileAll: _Curry<
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(ctx.outputs) as Result<{ path: string; js: string }[], PErr>,
+        () => Ok(ctx.outputs) as Result<ModuleOutput[], PErr>,
       )
       .with(
         (_v) => {
@@ -901,10 +902,7 @@ const compileAll: _Curry<
         },
         ([m, ...rest]) =>
           match(compileOne(ctx, m, false))
-            .with(
-              { _tag: "Err" },
-              ({ error: e }) => Err(e) as Result<{ path: string; js: string }[], PErr>,
-            )
+            .with({ _tag: "Err" }, ({ error: e }) => Err(e) as Result<ModuleOutput[], PErr>)
             .with({ _tag: "Ok" }, ({ value: ctx1 }) => compileAll(ctx1, rest))
             .exhaustive(),
       )
@@ -917,9 +915,7 @@ const compileAll: _Curry<
  * Spelled out (not point-free `compileAll(ctx0)`): the TS backend types a
  * multi-param function uncurried, so a partial application is a tsc error.
  */
-export const compileGraph: (graph: Loaded[]) => Result<{ path: string; js: string }[], PErr> = (
-  graph: Loaded[],
-) =>
+export const compileGraph: (graph: Loaded[]) => Result<ModuleOutput[], PErr> = (graph: Loaded[]) =>
   compileAll(
     {
       exportsByPath: new Map<string, Map<string, Scheme>>(),
@@ -935,7 +931,7 @@ export const compileGraph: (graph: Loaded[]) => Result<{ path: string; js: strin
           >;
         }
       >(),
-      outputs: [] as { path: string; js: string }[],
+      outputs: [] as ModuleOutput[],
     },
     graph,
   );
@@ -943,7 +939,7 @@ export const compileGraph: (graph: Loaded[]) => Result<{ path: string; js: strin
 const compileAllRecovering: _Curry<
   [
     ctx: {
-      outputs: { path: string; js: string }[];
+      outputs: ModuleOutput[];
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
@@ -961,12 +957,12 @@ const compileAllRecovering: _Curry<
     graph: Loaded[],
     errors: PErr[],
   ],
-  { outputs: { path: string; js: string }[]; errors: PErr[] }
+  GraphRecovery
 > = _curry(
   3,
   (
     ctx: {
-      outputs: { path: string; js: string }[];
+      outputs: ModuleOutput[];
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
@@ -1013,10 +1009,7 @@ const compileAllRecovering: _Curry<
  * Recovery graph driver: keeps checking after failures and gives downstream
  * imports a polymorphic placeholder rather than an unbound-name cascade.
  */
-export const compileGraphRecovering: (graph: Loaded[]) => {
-  outputs: { path: string; js: string }[];
-  errors: PErr[];
-} = (graph: Loaded[]) =>
+export const compileGraphRecovering: (graph: Loaded[]) => GraphRecovery = (graph: Loaded[]) =>
   compileAllRecovering(
     {
       exportsByPath: new Map<string, Map<string, Scheme>>(),
@@ -1032,7 +1025,7 @@ export const compileGraphRecovering: (graph: Loaded[]) => {
           >;
         }
       >(),
-      outputs: [] as { path: string; js: string }[],
+      outputs: [] as ModuleOutput[],
     },
     graph,
     [] as PErr[],
@@ -1041,9 +1034,8 @@ export const compileGraphRecovering: (graph: Loaded[]) => {
  * buildModules : string -> Result [ModuleOutput] MErr
  * Resolve the graph then compile it — one sync railway (host IO is sync).
  */
-export const buildModules: (entry: string) => Result<{ path: string; js: string }[], PErr> = (
-  entry: string,
-) => _Result_flatMap((graph) => compileGraph(graph), loadGraph(entry));
+export const buildModules: (entry: string) => Result<ModuleOutput[], PErr> = (entry: string) =>
+  _Result_flatMap((graph) => compileGraph(graph), loadGraph(entry));
 import { relSpec as $relSpec } from "./host.mjs";
 const relSpec = _curry(2, $relSpec);
 import { externDtsPath as $externDtsPath } from "./host.mjs";
@@ -1270,7 +1262,7 @@ const compileOneTs: <A, B>(
     aliases: Map<string, AliasInfo>;
     runtimeImport: string;
     typeOwner: Map<string, string>;
-    outputs: { path: string; js: string }[];
+    outputs: ModuleOutput[];
     externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
   } & A,
   loaded: { stmts: Stmt[]; path: string } & B,
@@ -1284,7 +1276,7 @@ const compileOneTs: <A, B>(
     typeOwner: Map<string, string>;
     runtimeImport: string;
     externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
-    outputs: { path: string; js: string }[];
+    outputs: ModuleOutput[];
   },
   PErr
 > = _curry(
@@ -1307,7 +1299,7 @@ const compileOneTs: <A, B>(
       aliases: Map<string, AliasInfo>;
       runtimeImport: string;
       typeOwner: Map<string, string>;
-      outputs: { path: string; js: string }[];
+      outputs: ModuleOutput[];
       externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
     } & A,
     loaded: { stmts: Stmt[]; path: string } & B,
@@ -1350,7 +1342,7 @@ const compileOneTs: <A, B>(
               typeOwner: Map<string, string>;
               runtimeImport: string;
               externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
-              outputs: { path: string; js: string }[];
+              outputs: ModuleOutput[];
             },
             PErr
           >,
@@ -1370,7 +1362,7 @@ const compileOneTs: <A, B>(
                   typeOwner: Map<string, string>;
                   runtimeImport: string;
                   externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
-                  outputs: { path: string; js: string }[];
+                  outputs: ModuleOutput[];
                 },
                 PErr
               >,
@@ -1430,7 +1422,7 @@ const compileOneTs: <A, B>(
                         string,
                         { imported: string; scheme: Scheme; curried: boolean }[]
                       >;
-                      outputs: { path: string; js: string }[];
+                      outputs: ModuleOutput[];
                     },
                     PErr
                   >,
@@ -1481,7 +1473,7 @@ const compileOneTs: <A, B>(
                             string,
                             { imported: string; scheme: Scheme; curried: boolean }[]
                           >;
-                          outputs: { path: string; js: string }[];
+                          outputs: ModuleOutput[];
                         },
                         PErr
                       >)(
@@ -1541,7 +1533,7 @@ const externOutputs: <A, B, C>(
   );
 const compileAllTs: <A>(
   ctx: {
-    outputs: { path: string; js: string }[];
+    outputs: ModuleOutput[];
     externs: Map<string, { scheme: Scheme; imported: string; curried: boolean }[]>;
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
@@ -1561,11 +1553,11 @@ const compileAllTs: <A>(
     typeOwner: Map<string, string>;
   },
   graph: ({ stmts: Stmt[]; path: string } & A)[],
-) => Result<{ path: string; js: string }[], PErr> = _curry(
+) => Result<ModuleOutput[], PErr> = _curry(
   2,
   <A>(
     ctx: {
-      outputs: { path: string; js: string }[];
+      outputs: ModuleOutput[];
       externs: Map<string, { scheme: Scheme; imported: string; curried: boolean }[]>;
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
@@ -1591,7 +1583,7 @@ const compileAllTs: <A>(
         (_v) => _v.length === 0,
         () =>
           Ok(_Array_concat(ctx.outputs, externOutputs(ctx.externs))) as Result<
-            { path: string; js: string }[],
+            ModuleOutput[],
             PErr
           >,
       )
@@ -1599,10 +1591,7 @@ const compileAllTs: <A>(
         (_v) => _v.length >= 1,
         ([m, ...rest]) =>
           match(compileOneTs(ctx, m))
-            .with(
-              { _tag: "Err" },
-              ({ error: e }) => Err(e) as Result<{ path: string; js: string }[], PErr>,
-            )
+            .with({ _tag: "Err" }, ({ error: e }) => Err(e) as Result<ModuleOutput[], PErr>)
             .with({ _tag: "Ok" }, ({ value: ctx1 }) => compileAllTs(ctx1, rest))
             .exhaustive(),
       )
@@ -1619,7 +1608,7 @@ const compileAllTs: <A>(
 export const compileGraphTs: <A>(
   graph: ({ stmts: Stmt[]; path: string } & A)[],
   runtimeImport: string,
-) => Result<{ path: string; js: string }[], PErr> = _curry(
+) => Result<ModuleOutput[], PErr> = _curry(
   2,
   <A>(graph: ({ stmts: Stmt[]; path: string } & A)[], runtimeImport: string) =>
     compileAllTs(
@@ -1641,7 +1630,7 @@ export const compileGraphTs: <A>(
         typeOwner: typeOwnerOf(graph),
         runtimeImport: runtimeImport,
         externs: new Map<string, { scheme: Scheme; imported: string; curried: boolean }[]>(),
-        outputs: [] as { path: string; js: string }[],
+        outputs: [] as ModuleOutput[],
       },
       graph,
     ),
@@ -1651,7 +1640,7 @@ export const compileGraphTs: <A>(
  */
 export const buildModulesTs: _Curry<
   [entry: string, runtimeImport: string],
-  Result<{ path: string; js: string }[], PErr>
+  Result<ModuleOutput[], PErr>
 > = _curry(2, (entry: string, runtimeImport: string) =>
   _Result_flatMap((graph) => compileGraphTs(graph, runtimeImport), loadGraph(entry)),
 );

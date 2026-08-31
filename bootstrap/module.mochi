@@ -36,6 +36,8 @@ import * as Ast from "./ast.mochi"
 // One loaded module: its canonical path and parsed statements.
 type Loaded = { path: string, stmts: [Stmt] }
 
+type ModuleOutput = { path: string, js: string }
+
 // A driver error, shaped like the compiler's `CErr`; the graph phase has no
 // meaningful span, so both offsets are 0 (matching src/module.ts).
 type MErr = { message: string, start: number, end: number }
