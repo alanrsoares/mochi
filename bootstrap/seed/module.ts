@@ -64,6 +64,8 @@ import { exportedRegistry, exportedCtorKeys } from "./ctors";
 import { inferProgramImports, inferProgramImportsTypes, exportedSchemes } from "./infer";
 import { codegen } from "./codegen";
 import { emitTsModule, externModuleDts } from "./codegen-ts";
+import { mono } from "./schemes";
+import { tVar } from "./types";
 import { builtins } from "./prelude.gen.mjs";
 import { namespaces } from "./prelude.gen.mjs";
 import { namespaceRuntime } from "./prelude.gen.mjs";
@@ -80,6 +82,7 @@ const mErr: <A>(message: A) => { message: A; start: number; end: number } = <A>(
   start: 0,
   end: 0,
 });
+const recoveryScheme = mono(tVar(0));
 const atPath: <A, B, C>(
   path: string,
   e: { end: A; start: B; message: string } & C,
@@ -411,43 +414,45 @@ const prefixCtorsInto: <A>(
         throw new Error("non-exhaustive match");
       }),
 );
-const resolveNames: <A, B, C, D, E, F, G, H, I, J, K, L>(
-  names: ({ name: string; span: { end: A; start: B } & I } & J)[],
+const resolveNames: <A, B, C, D, E, F, G, H, I, J, K, L, M>(
+  names: ({ name: string; span: { end: A; start: B } & J } & K)[],
   from: string,
-  depExports: Map<string, C>,
-  depReg: { ctors: Map<string, { owner: D } & K>; types: Map<D, E> } & L,
-  depKeys: Map<string, F>,
+  depExports: Map<string, { vars: C[]; rvars: D[]; ty: Ty }>,
+  depReg: { ctors: Map<string, { owner: E } & L>; types: Map<E, F> } & M,
+  depKeys: Map<string, G>,
   res: {
-    quals: G;
-    keys: Map<string, F>;
-    reg: { ctors: Map<string, { owner: D } & K>; types: Map<D, E> };
-    nsImports: H;
-    imports: Map<string, C>;
+    quals: H;
+    keys: Map<string, G>;
+    reg: { ctors: Map<string, { owner: E } & L>; types: Map<E, F> };
+    nsImports: I;
+    imports: Map<string, { vars: C[]; rvars: D[]; ty: Ty }>;
   },
+  recovering: boolean,
 ) => Result<
   {
-    quals: G;
-    keys: Map<string, F>;
-    reg: { ctors: Map<string, { owner: D } & K>; types: Map<D, E> };
-    nsImports: H;
-    imports: Map<string, C>;
+    quals: H;
+    keys: Map<string, G>;
+    reg: { ctors: Map<string, { owner: E } & L>; types: Map<E, F> };
+    nsImports: I;
+    imports: Map<string, { vars: C[]; rvars: D[]; ty: Ty }>;
   },
   { message: string; start: B; end: A }
 > = _curry(
-  6,
-  <A, B, C, D, E, F, G, H, I, J, K, L>(
-    names: ({ name: string; span: { end: A; start: B } & I } & J)[],
+  7,
+  <A, B, C, D, E, F, G, H, I, J, K, L, M>(
+    names: ({ name: string; span: { end: A; start: B } & J } & K)[],
     from: string,
-    depExports: Map<string, C>,
-    depReg: { ctors: Map<string, { owner: D } & K>; types: Map<D, E> } & L,
-    depKeys: Map<string, F>,
+    depExports: Map<string, { vars: C[]; rvars: D[]; ty: Ty }>,
+    depReg: { ctors: Map<string, { owner: E } & L>; types: Map<E, F> } & M,
+    depKeys: Map<string, G>,
     res: {
-      quals: G;
-      keys: Map<string, F>;
-      reg: { ctors: Map<string, { owner: D } & K>; types: Map<D, E> };
-      nsImports: H;
-      imports: Map<string, C>;
+      quals: H;
+      keys: Map<string, G>;
+      reg: { ctors: Map<string, { owner: E } & L>; types: Map<E, F> };
+      nsImports: I;
+      imports: Map<string, { vars: C[]; rvars: D[]; ty: Ty }>;
     },
+    recovering: boolean,
   ) =>
     match(names)
       .with(
@@ -459,11 +464,27 @@ const resolveNames: <A, B, C, D, E, F, G, H, I, J, K, L>(
         ([n, ...rest]) =>
           match(_Map_get(n.name, depExports))
             .with({ _tag: "None" }, () =>
-              Err({
-                message: `'${from}' has no export '${n.name}'`,
-                start: n.span.start,
-                end: n.span.end,
-              }),
+              recovering
+                ? resolveNames(
+                    rest,
+                    from,
+                    depExports,
+                    depReg,
+                    depKeys,
+                    {
+                      imports: _Map_set(n.name, recoveryScheme, res.imports),
+                      nsImports: res.nsImports,
+                      reg: res.reg,
+                      keys: res.keys,
+                      quals: res.quals,
+                    },
+                    recovering,
+                  )
+                : Err({
+                    message: `'${from}' has no export '${n.name}'`,
+                    start: n.span.start,
+                    end: n.span.end,
+                  }),
             )
             .with({ _tag: "Some" }, ({ value: sc }) =>
               match(
@@ -477,7 +498,7 @@ const resolveNames: <A, B, C, D, E, F, G, H, I, J, K, L>(
               )
                 .with({ _tag: "Err" }, ({ error: e }) => Err(e))
                 .with({ _tag: "Ok" }, ({ value: res1 }) =>
-                  resolveNames(rest, from, depExports, depReg, depKeys, res1),
+                  resolveNames(rest, from, depExports, depReg, depKeys, res1, recovering),
                 )
                 .exhaustive(),
             )
@@ -487,51 +508,53 @@ const resolveNames: <A, B, C, D, E, F, G, H, I, J, K, L>(
         throw new Error("non-exhaustive match");
       }),
 );
-const resolveImportsFrom: <A, B, C, D>(
+const resolveImportsFrom: <A, B, C, D, E>(
   ctx: {
-    exportsByPath: Map<string, Map<string, A>>;
+    exportsByPath: Map<string, Map<string, { vars: A[]; rvars: B[]; ty: Ty }>>;
     regByPath: Map<string, Registry>;
-    keysByPath: Map<string, Map<string, B>>;
-    qualsByPath: Map<string, C>;
-  } & D,
+    keysByPath: Map<string, Map<string, C>>;
+    qualsByPath: Map<string, D>;
+  } & E,
   stmts: Stmt[],
   i: number,
   path: string,
   res: {
-    quals: Map<string, C>;
-    keys: Map<string, B>;
+    quals: Map<string, D>;
+    keys: Map<string, C>;
     reg: Registry;
-    nsImports: Map<string, Map<string, A>>;
-    imports: Map<string, A>;
+    nsImports: Map<string, Map<string, { vars: A[]; rvars: B[]; ty: Ty }>>;
+    imports: Map<string, { vars: A[]; rvars: B[]; ty: Ty }>;
   },
+  recovering: boolean,
 ) => Result<
   {
-    quals: Map<string, C>;
-    keys: Map<string, B>;
+    quals: Map<string, D>;
+    keys: Map<string, C>;
     reg: Registry;
-    nsImports: Map<string, Map<string, A>>;
-    imports: Map<string, A>;
+    nsImports: Map<string, Map<string, { vars: A[]; rvars: B[]; ty: Ty }>>;
+    imports: Map<string, { vars: A[]; rvars: B[]; ty: Ty }>;
   },
   PErr
 > = _curry(
-  5,
-  <A, B, C, D>(
+  6,
+  <A, B, C, D, E>(
     ctx: {
-      exportsByPath: Map<string, Map<string, A>>;
+      exportsByPath: Map<string, Map<string, { vars: A[]; rvars: B[]; ty: Ty }>>;
       regByPath: Map<string, Registry>;
-      keysByPath: Map<string, Map<string, B>>;
-      qualsByPath: Map<string, C>;
-    } & D,
+      keysByPath: Map<string, Map<string, C>>;
+      qualsByPath: Map<string, D>;
+    } & E,
     stmts: Stmt[],
     i: number,
     path: string,
     res: {
-      quals: Map<string, C>;
-      keys: Map<string, B>;
+      quals: Map<string, D>;
+      keys: Map<string, C>;
       reg: Registry;
-      nsImports: Map<string, Map<string, A>>;
-      imports: Map<string, A>;
+      nsImports: Map<string, Map<string, { vars: A[]; rvars: B[]; ty: Ty }>>;
+      imports: Map<string, { vars: A[]; rvars: B[]; ty: Ty }>;
     },
+    recovering: boolean,
   ) =>
     match(_Array_get(i, stmts))
       .with({ _tag: "None" }, () => Ok(res))
@@ -549,16 +572,20 @@ const resolveImportsFrom: <A, B, C, D>(
             ((depExports) =>
               ((depReg: Registry) =>
                 ((depKeys) =>
-                  match(resolveNames(names, from, depExports, depReg, depKeys, res))
+                  match(resolveNames(names, from, depExports, depReg, depKeys, res, recovering))
                     .with({ _tag: "Err" }, ({ error: e }) => Err(e))
                     .with({ _tag: "Ok" }, ({ value: res1 }) =>
-                      resolveImportsFrom(ctx, stmts, i + 1, path, res1),
+                      resolveImportsFrom(ctx, stmts, i + 1, path, res1, recovering),
                     )
-                    .exhaustive())(_Map_getOr(new Map<string, B>(), dp, ctx.keysByPath)))(
+                    .exhaustive())(_Map_getOr(new Map<string, C>(), dp, ctx.keysByPath)))(
                 _Map_getOr(emptyReg, dp, ctx.regByPath),
-              ))(_Map_getOr(new Map<string, A>(), dp, ctx.exportsByPath)))(
-            resolveImport(path, from),
-          ),
+              ))(
+              _Map_getOr(
+                new Map<string, { vars: A[]; rvars: B[]; ty: Ty }>(),
+                dp,
+                ctx.exportsByPath,
+              ),
+            ))(resolveImport(path, from)),
       )
       .with(
         (
@@ -574,30 +601,43 @@ const resolveImportsFrom: <A, B, C, D>(
             ((depExports) =>
               ((depReg: Registry) =>
                 ((depKeys) =>
-                  resolveImportsFrom(ctx, stmts, i + 1, path, {
-                    imports: res.imports,
-                    nsImports: _Map_set(alias.name, depExports, res.nsImports),
-                    reg: {
-                      ctors: prefixCtorsInto(
-                        _Map_keys(depReg.ctors),
-                        alias.name,
-                        depReg.ctors,
-                        res.reg.ctors,
-                      ),
-                      types: mergeMap(depReg.types, res.reg.types),
+                  resolveImportsFrom(
+                    ctx,
+                    stmts,
+                    i + 1,
+                    path,
+                    {
+                      imports: res.imports,
+                      nsImports: _Map_set(alias.name, depExports, res.nsImports),
+                      reg: {
+                        ctors: prefixCtorsInto(
+                          _Map_keys(depReg.ctors),
+                          alias.name,
+                          depReg.ctors,
+                          res.reg.ctors,
+                        ),
+                        types: mergeMap(depReg.types, res.reg.types),
+                      },
+                      keys: mergeMap(depKeys, res.keys),
+                      quals: match(_Map_get(dp, ctx.qualsByPath))
+                        .with({ _tag: "Some" }, ({ value: q }) =>
+                          _Map_set(alias.name, q, res.quals),
+                        )
+                        .with({ _tag: "None" }, () => res.quals)
+                        .exhaustive(),
                     },
-                    keys: mergeMap(depKeys, res.keys),
-                    quals: match(_Map_get(dp, ctx.qualsByPath))
-                      .with({ _tag: "Some" }, ({ value: q }) => _Map_set(alias.name, q, res.quals))
-                      .with({ _tag: "None" }, () => res.quals)
-                      .exhaustive(),
-                  }))(_Map_getOr(new Map<string, B>(), dp, ctx.keysByPath)))(
+                    recovering,
+                  ))(_Map_getOr(new Map<string, C>(), dp, ctx.keysByPath)))(
                 _Map_getOr(emptyReg, dp, ctx.regByPath),
-              ))(_Map_getOr(new Map<string, A>(), dp, ctx.exportsByPath)))(
-            resolveImport(path, from),
-          ),
+              ))(
+              _Map_getOr(
+                new Map<string, { vars: A[]; rvars: B[]; ty: Ty }>(),
+                dp,
+                ctx.exportsByPath,
+              ),
+            ))(resolveImport(path, from)),
       )
-      .with({ _tag: "Some" }, () => resolveImportsFrom(ctx, stmts, i + 1, path, res))
+      .with({ _tag: "Some" }, () => resolveImportsFrom(ctx, stmts, i + 1, path, res, recovering))
       .exhaustive(),
 );
 const compileOne: <A>(
@@ -649,22 +689,29 @@ const compileOne: <A>(
     loaded: Loaded,
   ) =>
     match(
-      resolveImportsFrom(ctx, loaded.stmts, 0, loaded.path, {
-        imports: new Map<string, Scheme>(),
-        nsImports: new Map<string, Map<string, Scheme>>(),
-        reg: emptyReg,
-        keys: new Map<string, string[]>(),
-        quals: new Map<
-          string,
-          {
-            types: Set<string>;
-            aliases: Map<
-              string,
-              { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
-            >;
-          }
-        >(),
-      }),
+      resolveImportsFrom(
+        ctx,
+        loaded.stmts,
+        0,
+        loaded.path,
+        {
+          imports: new Map<string, Scheme>(),
+          nsImports: new Map<string, Map<string, Scheme>>(),
+          reg: emptyReg,
+          keys: new Map<string, string[]>(),
+          quals: new Map<
+            string,
+            {
+              types: Set<string>;
+              aliases: Map<
+                string,
+                { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+              >;
+            }
+          >(),
+        },
+        false,
+      ),
     )
       .with(
         { _tag: "Err" },
@@ -1165,22 +1212,29 @@ const compileOneTs: <A, B>(
     loaded: { stmts: Stmt[]; path: string } & B,
   ) =>
     match(
-      resolveImportsFrom(ctx, loaded.stmts, 0, loaded.path, {
-        imports: new Map<string, Scheme>(),
-        nsImports: new Map<string, Map<string, Scheme>>(),
-        reg: emptyReg,
-        keys: new Map<string, string[]>(),
-        quals: new Map<
-          string,
-          {
-            types: Set<string>;
-            aliases: Map<
-              string,
-              { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
-            >;
-          }
-        >(),
-      }),
+      resolveImportsFrom(
+        ctx,
+        loaded.stmts,
+        0,
+        loaded.path,
+        {
+          imports: new Map<string, Scheme>(),
+          nsImports: new Map<string, Map<string, Scheme>>(),
+          reg: emptyReg,
+          keys: new Map<string, string[]>(),
+          quals: new Map<
+            string,
+            {
+              types: Set<string>;
+              aliases: Map<
+                string,
+                { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+              >;
+            }
+          >(),
+        },
+        false,
+      ),
     )
       .with(
         { _tag: "Err" },

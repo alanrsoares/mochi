@@ -18,6 +18,8 @@ import {
 } from "./infer.mochi"
 import { codegen } from "./codegen.mochi"
 import { emitTsModule, externModuleDts } from "./codegen-ts.mochi"
+import { mono } from "./schemes.mochi"
+import { tVar } from "./types.mochi"
 
 // Prelude tables from the generated shim (as in compile.mochi). Threaded opaquely
 // into inferProgramImports / codegen; module.mochi never inspects them.
@@ -43,6 +45,7 @@ extern resolveImport : string -> string -> string = "./host.mjs" "resolveImport"
 extern absPath : string -> string = "./host.mjs" "absPath"
 
 let mErr = message => { message, start: 0, end: 0 }
+let recoveryScheme = mono(tVar(0))
 let atPath = (path, e) =>
   { message: "module '${path}': ${e.message}", start: e.start, end: e.end }
 
@@ -238,16 +241,32 @@ let prefixCtorsInto = (keys, alias, from, into) => switch keys {
 
 // Pull each imported name's scheme out of the dep's published exports, folding
 // into `res.imports`. A name the dep does not export errors at the name's span.
-let resolveNames = (names, from, depExports, depReg, depKeys, res) => switch names {
+let resolveNames = (names, from, depExports, depReg, depKeys, res, recovering) => switch names {
   | [] => Ok(res)
   | [n, ...rest] => switch Map.get(n.name, depExports) {
-      | None => Err(
-          {
-            message: "'${from}' has no export '${n.name}'",
-            start: n.span.start,
-            end: n.span.end
-          }
-        )
+      | None => recovering
+          ? resolveNames(
+            rest,
+            from,
+            depExports,
+            depReg,
+            depKeys,
+            {
+              imports: Map.set(n.name, recoveryScheme, res.imports),
+              nsImports: res.nsImports,
+              reg: res.reg,
+              keys: res.keys,
+              quals: res.quals
+            },
+            recovering
+          )
+          : Err(
+            {
+              message: "'${from}' has no export '${n.name}'",
+              start: n.span.start,
+              end: n.span.end
+            }
+          )
       | Some(sc) => switch takeNamedCtor(n.name, n.span, depReg, depKeys, { imports: Map.set(n.name, sc, res.imports), nsImports: res.nsImports, reg: res.reg, keys: res.keys, quals: res.quals }) {
           | Err(e) => Err(e)
           | Ok(res1) => resolveNames(
@@ -256,7 +275,8 @@ let resolveNames = (names, from, depExports, depReg, depKeys, res) => switch nam
               depExports,
               depReg,
               depKeys,
-              res1
+              res1,
+              recovering
             )
         }
     }
@@ -266,15 +286,21 @@ let resolveNames = (names, from, depExports, depReg, depKeys, res) => switch nam
 // keys }: named imports bring only the ctors they list; `import * as` registers
 // ctors under `Alias.Ctor` (ADR 0082). Field keys still merge under the bare
 // ctor name so destructure emit stays `Circle`, not `S.Circle`.
-let resolveImportsFrom = (ctx, stmts, i, path, res) => switch Array.get(i, stmts) {
+let resolveImportsFrom = (ctx, stmts, i, path, res, recovering) => switch Array.get(i, stmts) {
   | None => Ok(res)
   | Some(Ast.SImport(names, from, _)) => let dp = resolveImport(path, from) in
     let depExports = Map.getOr(#{}, dp, ctx.exportsByPath) in
     let depReg = Map.getOr(emptyReg, dp, ctx.regByPath) in
     let depKeys = Map.getOr(#{}, dp, ctx.keysByPath) in
-      switch resolveNames(names, from, depExports, depReg, depKeys, res) {
+      switch resolveNames(names, from, depExports, depReg, depKeys, res, recovering) {
         | Err(e) => Err(e)
-        | Ok(res1) => ctx->resolveImportsFrom(stmts, i + 1, path, res1)
+        | Ok(res1) => ctx->resolveImportsFrom(
+            stmts,
+            i + 1,
+            path,
+            res1,
+            recovering
+          )
       }
   | Some(Ast.SImportNs(alias, from, _)) => let dp = resolveImport(path, from) in
     let depExports = Map.getOr(#{}, dp, ctx.exportsByPath) in
@@ -305,15 +331,16 @@ let resolveImportsFrom = (ctx, stmts, i, path, res) => switch Array.get(i, stmts
             | Some(q) => Map.set(alias.name, q, res.quals)
             | None => res.quals
           }
-        }
+        },
+        recovering
       )
-  | Some(_) => ctx->resolveImportsFrom(stmts, i + 1, path, res)
+  | Some(_) => ctx->resolveImportsFrom(stmts, i + 1, path, res, recovering)
 }
 
 // Compile one module: resolve imports, check (with imported registry), infer
 // (with imported schemes), codegen (with imported ctor keys), then publish this
 // module's own exports/registry/keys into the ctx for later dependents.
-let compileOne = (ctx, loaded: Loaded) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }) {
+let compileOne = (ctx, loaded: Loaded) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
   | Err(e) => Err(atPath(loaded.path, e))
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
       | Err(e) => Err(atPath(loaded.path, e))
@@ -543,7 +570,7 @@ let externBindingsInto = (stmts, path, env, acc) =>
 // Compile one module to typed TS: the same resolve/check/infer prefix as
 // `compileOne`, then emit, then prepend the `import type` lines the emitted text
 // turned out to need.
-let compileOneTs = (ctx, loaded) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }) {
+let compileOneTs = (ctx, loaded) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
   | Err(e) => Err(atPath(loaded.path, e))
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
       | Err(e) => Err(atPath(loaded.path, e))
