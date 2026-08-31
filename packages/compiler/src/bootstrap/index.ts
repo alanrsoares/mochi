@@ -12,6 +12,7 @@ export type BootstrapDiagnostic = {
   message: string;
   start: number;
   end: number;
+  path?: string;
   suggestions?: Array<{ title: string; start: number; end: number; replaceWith: string }>;
 };
 
@@ -186,9 +187,55 @@ export const checkGraphBootstrapRecovering = async (
     | { _tag: "Err"; error: BootstrapDiagnostic };
   if (lexed._tag === "Err") return [lexed.error];
   const recovered = bootstrapParseRecovering(lexed.value, { _tag: "None" }) as {
+    stmts: Array<{ _tag?: string; from?: string }>;
     diagnostics: BootstrapDiagnostic[];
   };
   if (recovered.diagnostics.length > 0) return recovered.diagnostics;
+
+  const { dirname, resolve } = await import("node:path");
+  const visiting = new Set<string>();
+  const loaded = new Set<string>();
+  const dependencyErrors: BootstrapDiagnostic[] = [];
+  const visit = async (modulePath: string): Promise<void> => {
+    const absolute = resolve(modulePath);
+    if (loaded.has(absolute) || visiting.has(absolute)) return;
+    visiting.add(absolute);
+    let source: string;
+    try {
+      source = absolute === resolve(entry) ? src : await readFile(absolute);
+    } catch {
+      dependencyErrors.push({
+        message: `cannot read module '${absolute}'`,
+        start: 0,
+        end: 0,
+        path: absolute,
+      });
+      visiting.delete(absolute);
+      return;
+    }
+    const dependencyLexed = bootstrapLex(source) as
+      | { _tag: "Ok"; value: unknown }
+      | { _tag: "Err"; error: BootstrapDiagnostic };
+    if (dependencyLexed._tag === "Err") {
+      dependencyErrors.push({ ...dependencyLexed.error, path: absolute });
+      visiting.delete(absolute);
+      return;
+    }
+    const dependencyParsed = bootstrapParseRecovering(dependencyLexed.value, { _tag: "None" }) as {
+      stmts: Array<{ _tag?: string; from?: string }>;
+      diagnostics: BootstrapDiagnostic[];
+    };
+    for (const error of dependencyParsed.diagnostics)
+      dependencyErrors.push({ ...error, path: absolute });
+    for (const statement of dependencyParsed.stmts) {
+      if (statement._tag !== "SImport" && statement._tag !== "SImportNs") continue;
+      await visit(resolve(dirname(absolute), `${statement.from!.replace(/\.mochi$/, "")}.mochi`));
+    }
+    visiting.delete(absolute);
+    loaded.add(absolute);
+  };
+  await visit(entry);
+  if (dependencyErrors.length > 0) return dependencyErrors;
   const checked = await checkGraphBootstrap(entry, src, readFile);
   return checked._tag === "Ok" ? [] : [checked.error];
 };

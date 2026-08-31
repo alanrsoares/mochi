@@ -54,3 +54,17 @@ test("bootstrap graph recovery preserves multiple entry parse diagnostics", asyn
   );
   expect(errors).toHaveLength(2);
 });
+
+test("bootstrap graph recovery reports dependency parse diagnostics", async () => {
+  const root = "/virtual/main.mochi";
+  const errors = await checkGraphBootstrapRecovering(
+    root,
+    'import { value } from "./dep"\n',
+    async (path) => {
+      if (path === "/virtual/dep.mochi") return "let =\nlet =\n";
+      throw new Error(`unexpected read: ${path}`);
+    },
+  );
+  expect(errors).toHaveLength(2);
+  expect(errors[0]?.path).toBe("/virtual/dep.mochi");
+});

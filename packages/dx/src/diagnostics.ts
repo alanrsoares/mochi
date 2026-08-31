@@ -118,7 +118,10 @@ export async function bootstrapModuleDiagnostics(
       src,
       {
         kind: "type",
-        message: error.message,
+        message:
+          error.path && resolve(error.path) !== resolve(path)
+            ? `${error.path}: ${error.message}`
+            : error.message,
         span: { start: error.start, end: error.end },
         help: error.suggestions?.[0]?.title.toLowerCase(),
         suggestions: error.suggestions?.map((suggestion) => ({
