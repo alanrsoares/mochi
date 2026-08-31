@@ -6,6 +6,7 @@ import { compile as tsCompile } from "../compile/compile.ts";
 import { buildModules as tsBuildModules } from "../module/module.ts";
 import {
   checkGraphBootstrapRecovering,
+  createBootstrapGraphCache,
   inferEntryGraphTypesBootstrap,
   loadBootstrapCore,
 } from "./index.ts";
@@ -73,6 +74,38 @@ test("bootstrap graph typed query serves the entry buffer", async () => {
       }),
     ]),
   });
+});
+
+test("bootstrap graph typed-query cache keys every dependency source", async () => {
+  const cache = createBootstrapGraphCache();
+  const entry = "/virtual/main.mochi";
+  const src = 'import { value } from "./dep"\nlet answer = value';
+  let dep = "export let value = 42";
+  const read = async (path: string): Promise<string> => {
+    if (path === "/virtual/dep.mochi") return dep;
+    throw new Error(`unexpected read: ${path}`);
+  };
+
+  const first = await inferEntryGraphTypesBootstrap(entry, src, read, cache);
+  const again = await inferEntryGraphTypesBootstrap(entry, src, read, cache);
+  expect(again).toBe(first);
+  expect(cache.entries).toHaveLength(1);
+  expect(cache.prefixes).toHaveLength(2);
+
+  const peer = await inferEntryGraphTypesBootstrap(
+    "/virtual/peer.mochi",
+    'import { value } from "./dep"\nlet peer = value',
+    read,
+    cache,
+  );
+  expect(peer).toMatchObject({ _tag: "Ok" });
+  // The dependency state is the shared prefix; only the peer entry adds one.
+  expect(cache.prefixes).toHaveLength(3);
+
+  dep = 'export let value = "changed"';
+  const changed = await inferEntryGraphTypesBootstrap(entry, src, read, cache);
+  expect(changed).not.toBe(first);
+  expect(cache.entries).toHaveLength(3);
 });
 
 test("bootstrap runtime checks an editor buffer through its graph", async () => {

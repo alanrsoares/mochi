@@ -1275,11 +1275,6 @@ const inferOne: <A, B>(
 );
 const inferAll: <A>(
   ctx: {
-    outputs: {
-      path: string;
-      types: { span: SpanAt; ty: Ty; display: string }[];
-      aliases: Map<string, AliasInfo>;
-    }[];
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
@@ -1293,25 +1288,41 @@ const inferAll: <A>(
         >;
       }
     >;
+    outputs: {
+      path: string;
+      types: { span: SpanAt; ty: Ty; display: string }[];
+      aliases: Map<string, AliasInfo>;
+    }[];
     aliases: Map<string, AliasInfo>;
   },
   graph: ({ stmts: Stmt[]; path: string } & A)[],
 ) => Result<
   {
-    path: string;
-    types: { span: SpanAt; ty: Ty; display: string }[];
+    exportsByPath: Map<string, Map<string, Scheme>>;
+    regByPath: Map<string, Registry>;
+    keysByPath: Map<string, Map<string, string[]>>;
+    qualsByPath: Map<
+      string,
+      {
+        types: Set<string>;
+        aliases: Map<
+          string,
+          { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+        >;
+      }
+    >;
+    outputs: {
+      path: string;
+      types: { span: SpanAt; ty: Ty; display: string }[];
+      aliases: Map<string, AliasInfo>;
+    }[];
     aliases: Map<string, AliasInfo>;
-  }[],
+  },
   PErr
 > = _curry(
   2,
   <A>(
     ctx: {
-      outputs: {
-        path: string;
-        types: { span: SpanAt; ty: Ty; display: string }[];
-        aliases: Map<string, AliasInfo>;
-      }[];
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
@@ -1325,6 +1336,11 @@ const inferAll: <A>(
           >;
         }
       >;
+      outputs: {
+        path: string;
+        types: { span: SpanAt; ty: Ty; display: string }[];
+        aliases: Map<string, AliasInfo>;
+      }[];
       aliases: Map<string, AliasInfo>;
     },
     graph: ({ stmts: Stmt[]; path: string } & A)[],
@@ -1333,12 +1349,28 @@ const inferAll: <A>(
       .with(
         (_v) => _v.length === 0,
         () =>
-          Ok(ctx.outputs) as Result<
+          Ok(ctx) as Result<
             {
-              path: string;
-              types: { span: SpanAt; ty: Ty; display: string }[];
+              exportsByPath: Map<string, Map<string, Scheme>>;
+              regByPath: Map<string, Registry>;
+              keysByPath: Map<string, Map<string, string[]>>;
+              qualsByPath: Map<
+                string,
+                {
+                  types: Set<string>;
+                  aliases: Map<
+                    string,
+                    { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+                  >;
+                }
+              >;
+              outputs: {
+                path: string;
+                types: { span: SpanAt; ty: Ty; display: string }[];
+                aliases: Map<string, AliasInfo>;
+              }[];
               aliases: Map<string, AliasInfo>;
-            }[],
+            },
             PErr
           >,
       )
@@ -1351,10 +1383,26 @@ const inferAll: <A>(
               ({ error: e }) =>
                 Err(e) as Result<
                   {
-                    path: string;
-                    types: { span: SpanAt; ty: Ty; display: string }[];
+                    exportsByPath: Map<string, Map<string, Scheme>>;
+                    regByPath: Map<string, Registry>;
+                    keysByPath: Map<string, Map<string, string[]>>;
+                    qualsByPath: Map<
+                      string,
+                      {
+                        types: Set<string>;
+                        aliases: Map<
+                          string,
+                          { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+                        >;
+                      }
+                    >;
+                    outputs: {
+                      path: string;
+                      types: { span: SpanAt; ty: Ty; display: string }[];
+                      aliases: Map<string, AliasInfo>;
+                    }[];
                     aliases: Map<string, AliasInfo>;
-                  }[],
+                  },
                   PErr
                 >,
             )
@@ -1364,6 +1412,104 @@ const inferAll: <A>(
       .otherwise(() => {
         throw new Error("non-exhaustive match");
       }),
+);
+/**
+ * freshInferGraphState : unit -> InferGraphState
+ * Opaque imports-aware inference context for host-owned graph caching. A state
+ * records every dependency's exports plus its accumulated typed outputs.
+ */
+export const freshInferGraphState: <A, B, C, D, E, F, G, H, I, J, K>() => {
+  exportsByPath: Map<A, B>;
+  regByPath: Map<C, D>;
+  keysByPath: Map<E, F>;
+  qualsByPath: Map<G, H>;
+  aliases: Map<I, J>;
+  outputs: K[];
+} = <A, B, C, D, E, F, G, H, I, J, K>() => ({
+  exportsByPath: new Map<A, B>(),
+  regByPath: new Map<C, D>(),
+  keysByPath: new Map<E, F>(),
+  qualsByPath: new Map<G, H>(),
+  aliases: new Map<I, J>(),
+  outputs: [] as K[],
+});
+/**
+ * inferGraphTypesFrom : InferGraphState -> [Loaded] -> Result InferGraphState MErr
+ * Advance an existing dependency-ordered graph state. The host may retain a
+ * state at a shared dependency prefix, then infer only a sibling entry tail.
+ */
+export const inferGraphTypesFrom: <A>(
+  state: {
+    exportsByPath: Map<string, Map<string, Scheme>>;
+    regByPath: Map<string, Registry>;
+    keysByPath: Map<string, Map<string, string[]>>;
+    qualsByPath: Map<
+      string,
+      {
+        types: Set<string>;
+        aliases: Map<
+          string,
+          { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+        >;
+      }
+    >;
+    outputs: {
+      path: string;
+      types: { span: SpanAt; ty: Ty; display: string }[];
+      aliases: Map<string, AliasInfo>;
+    }[];
+    aliases: Map<string, AliasInfo>;
+  },
+  graph: ({ stmts: Stmt[]; path: string } & A)[],
+) => Result<
+  {
+    exportsByPath: Map<string, Map<string, Scheme>>;
+    regByPath: Map<string, Registry>;
+    keysByPath: Map<string, Map<string, string[]>>;
+    qualsByPath: Map<
+      string,
+      {
+        types: Set<string>;
+        aliases: Map<
+          string,
+          { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+        >;
+      }
+    >;
+    outputs: {
+      path: string;
+      types: { span: SpanAt; ty: Ty; display: string }[];
+      aliases: Map<string, AliasInfo>;
+    }[];
+    aliases: Map<string, AliasInfo>;
+  },
+  PErr
+> = _curry(
+  2,
+  <A>(
+    state: {
+      exportsByPath: Map<string, Map<string, Scheme>>;
+      regByPath: Map<string, Registry>;
+      keysByPath: Map<string, Map<string, string[]>>;
+      qualsByPath: Map<
+        string,
+        {
+          types: Set<string>;
+          aliases: Map<
+            string,
+            { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+          >;
+        }
+      >;
+      outputs: {
+        path: string;
+        types: { span: SpanAt; ty: Ty; display: string }[];
+        aliases: Map<string, AliasInfo>;
+      }[];
+      aliases: Map<string, AliasInfo>;
+    },
+    graph: ({ stmts: Stmt[]; path: string } & A)[],
+  ) => inferAll(state, graph),
 );
 /**
  * inferGraphTypes : [Loaded] -> Result [{ path, types, aliases }] MErr
@@ -1378,29 +1524,17 @@ export const inferGraphTypes: <A>(graph: ({ stmts: Stmt[]; path: string } & A)[]
   }[],
   PErr
 > = <A>(graph: ({ stmts: Stmt[]; path: string } & A)[]) =>
-  inferAll(
-    {
-      exportsByPath: new Map<string, Map<string, Scheme>>(),
-      regByPath: new Map<string, Registry>(),
-      keysByPath: new Map<string, Map<string, string[]>>(),
-      qualsByPath: new Map<
-        string,
+  _Result_flatMap(
+    (state) =>
+      Ok(state.outputs) as Result<
         {
-          types: Set<string>;
-          aliases: Map<
-            string,
-            { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
-          >;
-        }
-      >(),
-      aliases: new Map<string, AliasInfo>(),
-      outputs: [] as {
-        path: string;
-        types: { span: SpanAt; ty: Ty; display: string }[];
-        aliases: Map<string, AliasInfo>;
-      }[],
-    },
-    graph,
+          path: string;
+          types: { span: SpanAt; ty: Ty; display: string }[];
+          aliases: Map<string, AliasInfo>;
+        }[],
+        PErr
+      >,
+    inferGraphTypesFrom(freshInferGraphState(), graph),
   );
 /**
  * buildModules : string -> Result [ModuleOutput] MErr

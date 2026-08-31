@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import type {
   BootstrapDiagnostic,
   BootstrapGraphInferOutput,
+  BootstrapGraphInferState,
   BootstrapModuleOutput,
   BootstrapResult,
 } from "./index.ts";
@@ -21,6 +22,11 @@ type SeedModule = {
   inferGraphTypes: (
     modules: BootstrapGraphModule[],
   ) => BootstrapResult<BootstrapGraphInferOutput[], BootstrapDiagnostic>;
+  freshInferGraphState: () => BootstrapGraphInferState;
+  inferGraphTypesFrom: (
+    state: BootstrapGraphInferState,
+    modules: BootstrapGraphModule[],
+  ) => BootstrapResult<BootstrapGraphInferState, BootstrapDiagnostic>;
   compileGraphRecovering: (modules: BootstrapGraphModule[]) => BootstrapGraphRecovery;
 };
 
@@ -67,6 +73,15 @@ export const inferGraphTypesBootstrap = (
   modules: BootstrapGraphModule[],
 ): BootstrapResult<BootstrapGraphInferOutput[], BootstrapDiagnostic> =>
   seed.inferGraphTypes(modules);
+
+export const freshInferGraphStateBootstrap = (): BootstrapGraphInferState =>
+  seed.freshInferGraphState();
+
+export const inferGraphTypesFromBootstrap = (
+  state: BootstrapGraphInferState,
+  modules: BootstrapGraphModule[],
+): BootstrapResult<BootstrapGraphInferState, BootstrapDiagnostic> =>
+  seed.inferGraphTypesFrom(state, modules);
 
 export const compileGraphBootstrapRecovering = (
   modules: BootstrapGraphModule[],

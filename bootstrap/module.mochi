@@ -492,28 +492,37 @@ let inferOne = (ctx, loaded) => switch ctx->resolveImportsFrom(loaded.stmts, 0, 
 }
 
 let inferAll = (ctx, graph) => switch graph {
-  | [] => Ok(ctx.outputs)
+  | [] => Ok(ctx)
   | [m, ...rest] => switch ctx->inferOne(m) {
       | Err(e) => Err(e)
       | Ok(ctx1) => ctx1->inferAll(rest)
     }
 }
 
+/// freshInferGraphState : unit -> InferGraphState
+/// Opaque imports-aware inference context for host-owned graph caching. A state
+/// records every dependency's exports plus its accumulated typed outputs.
+export let freshInferGraphState = () =>
+  {
+    exportsByPath: #{},
+    regByPath: #{},
+    keysByPath: #{},
+    qualsByPath: #{},
+    aliases: #{},
+    outputs: []
+  }
+
+/// inferGraphTypesFrom : InferGraphState -> [Loaded] -> Result InferGraphState MErr
+/// Advance an existing dependency-ordered graph state. The host may retain a
+/// state at a shared dependency prefix, then infer only a sibling entry tail.
+export let inferGraphTypesFrom = (state, graph) => state->inferAll(graph)
+
 /// inferGraphTypes : [Loaded] -> Result [{ path, types, aliases }] MErr
 /// Infer every dependency-ordered module with the exact import environment its
 /// emitter would use. This is the bootstrap graph typed-query boundary.
 export let inferGraphTypes = graph =>
-  inferAll(
-    {
-      exportsByPath: #{},
-      regByPath: #{},
-      keysByPath: #{},
-      qualsByPath: #{},
-      aliases: #{},
-      outputs: []
-    },
-    graph
-  )
+  let? state = freshInferGraphState()->inferGraphTypesFrom(graph) in
+    Ok(state.outputs)
 
 /// buildModules : string -> Result [ModuleOutput] MErr
 /// Resolve the graph then compile it — one sync railway (host IO is sync).

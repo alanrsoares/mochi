@@ -13199,10 +13199,12 @@ var compileAllRecovering = _curry16(3, (ctx, graph, errors) => match15(graph).wi
 }));
 var compileGraphRecovering = (graph) => compileAllRecovering({ exportsByPath: new Map, regByPath: new Map, keysByPath: new Map, qualsByPath: new Map, outputs: [] }, graph, []);
 var inferOne = _curry16(2, (ctx, loaded) => match15(resolveImportsFrom(ctx, loaded.stmts, 0, loaded.path, { imports: new Map, nsImports: new Map, reg: emptyReg, keys: new Map, quals: new Map }, false)).with({ _tag: "Err" }, ({ error: e }) => Err10(atPath(loaded.path, e))).with({ _tag: "Ok" }, ({ value: res }) => match15(checkWith(loaded.stmts, res.reg, res.quals)).with({ _tag: "Err" }, ({ error: e }) => Err10(atPath(loaded.path, e))).with({ _tag: "Ok" }, () => match15(inferProgramImportsTypes(loaded.stmts, builtins, namespaces, true, res.imports, res.nsImports, res.quals, None15)).with({ _tag: "Err" }, ({ error: e }) => Err10(atPath(loaded.path, e))).with({ _tag: "Ok" }, ({ value: r }) => Ok10({ exportsByPath: _Map_set9(loaded.path, exportedSchemes(loaded.stmts, r.env), ctx.exportsByPath), regByPath: _Map_set9(loaded.path, exportedRegistry(loaded.stmts), ctx.regByPath), keysByPath: _Map_set9(loaded.path, exportedCtorKeys(loaded.stmts), ctx.keysByPath), qualsByPath: _Map_set9(loaded.path, qualScopeOf(loaded.stmts), ctx.qualsByPath), aliases: mergeMap(r.aliases, ctx.aliases), outputs: [...ctx.outputs, { path: loaded.path, types: map12((hit) => ({ span: hit.span, ty: hit.ty, display: showType(widenLits(hit.ty)) }), r.types), aliases: mergeMap(r.aliases, ctx.aliases) }] })).exhaustive()).exhaustive()).exhaustive());
-var inferAll = _curry16(2, (ctx, graph) => match15(graph).with((_v) => _v.length === 0, () => Ok10(ctx.outputs)).with((_v) => _v.length >= 1, ([m, ...rest]) => match15(inferOne(ctx, m)).with({ _tag: "Err" }, ({ error: e }) => Err10(e)).with({ _tag: "Ok" }, ({ value: ctx1 }) => inferAll(ctx1, rest)).exhaustive()).otherwise(() => {
+var inferAll = _curry16(2, (ctx, graph) => match15(graph).with((_v) => _v.length === 0, () => Ok10(ctx)).with((_v) => _v.length >= 1, ([m, ...rest]) => match15(inferOne(ctx, m)).with({ _tag: "Err" }, ({ error: e }) => Err10(e)).with({ _tag: "Ok" }, ({ value: ctx1 }) => inferAll(ctx1, rest)).exhaustive()).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
-var inferGraphTypes = (graph) => inferAll({ exportsByPath: new Map, regByPath: new Map, keysByPath: new Map, qualsByPath: new Map, aliases: new Map, outputs: [] }, graph);
+var freshInferGraphState = () => ({ exportsByPath: new Map, regByPath: new Map, keysByPath: new Map, qualsByPath: new Map, aliases: new Map, outputs: [] });
+var inferGraphTypesFrom = _curry16(2, (state, graph) => inferAll(state, graph));
+var inferGraphTypes = (graph) => _Result_flatMap7((state) => Ok10(state.outputs), inferGraphTypesFrom(freshInferGraphState(), graph));
 var buildModules = (entry) => _Result_flatMap7((graph) => compileGraph(graph), loadGraph(entry));
 var relSpec2 = _curry16(2, relSpec);
 var externDtsPath2 = _curry16(2, externDtsPath);
@@ -13247,6 +13249,8 @@ export {
   compileGraph,
   compileGraphRecovering,
   compileGraphTs,
+  freshInferGraphState,
   inferGraphTypes,
+  inferGraphTypesFrom,
   loadGraph
 };
