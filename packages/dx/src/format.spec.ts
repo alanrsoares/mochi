@@ -468,6 +468,15 @@ test("composition operator >> refolds correctly when formatted", () => {
   expect(fmt("let f = a >> b")).toBe("let f = a >> b\n");
 });
 
+// An APPLIED composition kept its `>>` refold but dropped the arguments, so
+// `(f >> g)(x)` formatted to `f >> g` — fmt silently deleted the application.
+// The callee path already parenthesizes a compose lambda, so the refold belongs
+// only to the unapplied lambda.
+test("an applied composition keeps its arguments", () => {
+  expect(fmt("let a = (f >> g)(x)")).toBe("let a = (f >> g)(x)\n");
+  expect(fmt("let b = (f >> g)(x, y)")).toBe("let b = (f >> g)(x, y)\n");
+});
+
 test("operator sections refold and stay idempotent", () => {
   expect(fmt("let a = (+ 1)\nlet b = (2 *)")).toBe("let a = (+ 1)\nlet b = (2 *)\n");
   expect(fmt("let a = (+ 1)")).toBe("let a = (+ 1)\n");

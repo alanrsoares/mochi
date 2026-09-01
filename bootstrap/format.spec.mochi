@@ -192,8 +192,30 @@ testEach("an expression round-trips", [
   "let x : number = 1 in x",
   "let? x = f() in Ok(x)",
   "let! x = t() in Task.of(x)",
+  "a + b",
+  "a - b - c",
+  "a + b * c",
+  "(a + b) * c",
+  "a * b + c",
+  "a == b",
+  "a != b",
+  "a || b && c",
+  "!x",
+  "-x",
+  "!(a && b)",
+  "-(a + b)",
+  "a ++ b ++ c",
+  "(+ 1)",
+  "(2 *)",
+  "f >> g",
+  "f >> g >> h",
+  "(f >> g)(x)",
+  "let (a, b) = p in a",
+  "f(~tone)",
+  "f(~tone=\"amber\", ~size=3)",
+  "(a ++ b)->f(c)",
   "switch x { | Some(n) => n | None => 0 }",
-  "switch x { | Some(n) when isBig(n) => n | _ => 0 }",
+  "switch x { | Some(n) when n == 0 => n | _ => 0 }",
   "loop (i = 0) { recur(i) }",
   "recur(1)"
 ], src => assertEq(exprText(src), src))
@@ -207,10 +229,10 @@ test("a do block prints one expression per line", () =>
 test("a discarded-let chain collapses to a do block", () =>
   assertEq("do {\n  f();\n  g()\n}", exprText("let _ = f() in g()")))
 
-// Pins what the missing re-fold slice still costs: an infix call prints as the
-// call the parser desugared it to. Update this when `refoldCall` lands.
-test("a binary operator still prints desugared (no re-fold yet)", () =>
-  assertEq("eq(n, 0)", exprText("n == 0")))
+// `!=` and `!(a == b)` desugar to the SAME `not(eq(a, b))`, so folding either
+// back to `!=` is deliberate and lossy — the one re-fold that does not round-trip.
+test("an explicit not-of-eq folds to !=", () =>
+  assertEq("a != b", exprText("!(a == b)")))
 
 test("a ternary cascade shares one indent instead of staircasing", () =>
   assertEq("a ? 1 : b ? 2 : 3", exprText("a ? 1 : b ? 2 : 3")))

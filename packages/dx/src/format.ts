@@ -826,24 +826,6 @@ const refoldCall = (e: CallExpr): Doc | null => {
     if (p.kind !== "name") return letLikeD(`let ${param(p)}`, e.args[0]!, e.fn.body);
   }
 
-  // Refold composition: `($x) => g(f($x))` -> `f >> g`
-  if (
-    e.fn.kind === "lambda" &&
-    e.fn.params.length === 1 &&
-    e.fn.params[0]!.kind === "name" &&
-    e.fn.params[0]!.name === "$x" &&
-    e.fn.body.kind === "call" &&
-    e.fn.body.args.length === 1 &&
-    e.fn.body.args[0]!.kind === "call" &&
-    e.fn.body.args[0]!.args.length === 1 &&
-    e.fn.body.args[0]!.args[0]!.kind === "ref" &&
-    e.fn.body.args[0]!.args[0]!.name === "$x"
-  ) {
-    const left = e.fn.body.args[0]!.fn;
-    const right = e.fn.body.fn;
-    return group(seq(operandD(left), txt(" >> "), operandD(right)));
-  }
-
   return binaryD(e) ?? unaryD(e);
 };
 

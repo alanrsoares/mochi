@@ -171,6 +171,313 @@ let loosePrefix = e => switch e {
 /// `LPSpanned` carries binder spans for the IDE; the printer only wants the shape.
 let unspan = p => switch p { | Ast.LPSpanned(inner, _) => inner | _ => p }
 
+// --- sugar re-folds ----------------------------------------------------------
+//
+// The parser desugars infix and prefix operators straight into 2-arg calls, and
+// sections / composition into `$`-prefixed lambdas. Printing those back as calls
+// would still reparse to the same tree, but `$s` and `$x` never lex as source
+// identifiers — so re-folding is required for round-trip correctness, not
+// cosmetics. Precedence here mirrors parser.mochi's *_BP constants exactly: a
+// nested operator call gets parens only when omitting them would reparse to a
+// different tree.
+
+let PIPE_PREC = 5
+let FAST_PIPE_PREC = 21
+let NEQ_PREC = 8
+let CONCAT_PREC = 10
+
+let binOpInfo = name => switch name {
+  | "or" => Some({ symbol: "||", prec: 7 })
+  | "and" => Some({ symbol: "&&", prec: 7 })
+  | "eq" => Some({ symbol: "==", prec: 8 })
+  | "lt" => Some({ symbol: "<", prec: 8 })
+  | "lte" => Some({ symbol: "<=", prec: 8 })
+  | "gt" => Some({ symbol: ">", prec: 8 })
+  | "gte" => Some({ symbol: ">=", prec: 8 })
+  | "concat" => Some({ symbol: "++", prec: 10 })
+  | "add" => Some({ symbol: "+", prec: 10 })
+  | "sub" => Some({ symbol: "-", prec: 10 })
+  | "mul" => Some({ symbol: "*", prec: 20 })
+  | "div" => Some({ symbol: "/", prec: 20 })
+  | "mod" => Some({ symbol: "%", prec: 20 })
+  | _ => None
+}
+
+/// Forced parens for an infix operand: a lambda or ternary binds looser than
+/// any operator. A pipe is NOT here — it carries a precedence of its own.
+let isLambdaOrTernary = e => switch e {
+  | Ast.ELambda(_, _, _) => true
+  | Ast.ETernary(_, _, _, _) => true
+  | _ => false
+}
+
+let binOpFor = (fn, args) => switch (fn, args) {
+  | (Ast.ERef(name, _), [_, _]) => binOpInfo(name)
+  | _ => None
+}
+
+let binOpOf = e => switch e {
+  | Ast.ECall(fn, args, _, _) => binOpFor(fn, args)
+  | _ => None
+}
+
+let unaryOpOf = name => switch name {
+  | "not" => Some("!")
+  | "negate" => Some("-")
+  | _ => None
+}
+
+let pipePrecOf = e => switch e {
+  | Ast.EPipe(_, _, fast, _) => Some(fast ? FAST_PIPE_PREC : PIPE_PREC)
+  | _ => None
+}
+
+/// `!=` desugars to `not(eq(a, b))`, and an explicit `!(a == b)` desugars to the
+/// exact same shape — so folding either back to `!=` is a deliberate (lossy)
+/// simplification, in the same spirit as the composition re-fold.
+let neqFor = (fn, args) => switch (fn, args) {
+  | (Ast.ERef("not", _), [Ast.ECall(Ast.ERef("eq", _), [l, r], _, _)]) => Some((
+      l,
+      r
+    ))
+  | _ => None
+}
+
+let neqOperands = e => switch e {
+  | Ast.ECall(fn, args, _, _) => neqFor(fn, args)
+  | _ => None
+}
+
+let infixPrec = e => switch pipePrecOf(e) {
+  | Some(p) => Some(p)
+  | None => switch binOpOf(e) {
+      | Some(info) => Some(info.prec)
+      | None => switch neqOperands(e) {
+          | Some(_) => Some(NEQ_PREC)
+          | None => None
+        }
+    }
+}
+
+/// An operand of an infix operator. A lambda or ternary always parenthesizes;
+/// otherwise precedence decides, with the right operand also parenthesizing at
+/// EQUAL precedence, since every infix operator here is left-associative.
+let binOperandD = (e, parentPrec, isRight) =>
+  isLambdaOrTernary(e)
+    ? cat([txt("("), exprD(e), txt(")")])
+    : switch infixPrec(e) {
+      | Some(prec) => parenIf(
+          isRight ? prec <= parentPrec : prec < parentPrec,
+          exprD(e)
+        )
+      | None => exprD(e)
+    }
+
+/// A pipe's left operand parenthesizes when dropping the parens would reparse:
+/// a looser infix (`(a ++ b)->f`), a nested pipe, or a lambda / ternary.
+let pipeLeftD = (e, parentPrec) =>
+  isLambdaOrTernary(e)
+    ? cat([txt("("), exprD(e), txt(")")])
+    : switch infixPrec(e) {
+      | Some(prec) => parenIf(prec < parentPrec, exprD(e))
+      | None => exprD(e)
+    }
+
+/// `++` is left-associative (`concat(concat(a, b), c)`); flatten it like `|>` so
+/// a long string build breaks one segment per line instead of overflowing.
+let concatSegmentsFrom = (e, acc) => switch e {
+  | Ast.ECall(Ast.ERef("concat", _), [l, r], _, _) => concatSegmentsFrom(
+      l,
+      Array.prepend(r, acc)
+    )
+  | _ => Array.prepend(e, acc)
+}
+
+let concatD = (l, r) => switch concatSegmentsFrom(l, [r]) {
+  | [] => txt("")
+  | [head, ...rest] => group(
+      cat(
+        [
+          binOperandD(head, CONCAT_PREC, false),
+          indent(
+            cat(
+              rest
+                |> map(s =>
+                  cat([line, txt("++ "), binOperandD(s, CONCAT_PREC, true)]))
+            )
+          )
+        ]
+      )
+    )
+}
+
+let binaryD = (fn, args) => switch neqFor(fn, args) {
+  | Some((l, r)) => Some(
+      group(
+        cat(
+          [
+            binOperandD(l, NEQ_PREC, false),
+            txt(" != "),
+            binOperandD(r, NEQ_PREC, true)
+          ]
+        )
+      )
+    )
+  | None => switch binOpFor(fn, args) {
+      | None => None
+      | Some(info) => switch args {
+          | [l, r] => info.symbol == "++"
+              ? Some(concatD(l, r))
+              : Some(
+                group(
+                  cat(
+                    [
+                      binOperandD(l, info.prec, false),
+                      txt(" ${info.symbol} "),
+                      binOperandD(r, info.prec, true)
+                    ]
+                  )
+                )
+              )
+          | _ => None
+        }
+    }
+}
+
+/// `not(x)` → `!x`, `negate(x)` → `-x`. Unary binds tighter than every infix
+/// operator (its operand parses at atom level), so an operator-shaped operand
+/// always needs parens regardless of precedence.
+let unaryD = (fn, args) => switch (fn, args) {
+  | (Ast.ERef(name, _), [operand]) => switch unaryOpOf(name) {
+      | None => None
+      | Some(symbol) => let forced = loosePrefix(
+          operand
+        ) || Option.isSome(
+          binOpOf(operand)
+        ) || Option.isSome(neqOperands(operand)) in
+          Some(cat([txt(symbol), parenIf(forced, exprD(operand))]))
+    }
+  | _ => None
+}
+
+/// `($s) => op($s, y)` → `(op y)` (right section); `($s) => op(x, $s)` →
+/// `(x op)` (left section) — mirrors parser.mochi's section productions.
+let isSectionParam = p => switch unspan(p) {
+  | Ast.LPName("$s", _) => true
+  | _ => false
+}
+
+let isRef = (e, name) => switch e { | Ast.ERef(n, _) => n == name | _ => false }
+
+let sectionParts = body => switch neqOperands(body) {
+  | Some((l, r)) => Some(({ symbol: "!=", prec: NEQ_PREC }, l, r))
+  | None => switch binOpOf(body) {
+      | None => None
+      | Some(info) => switch body {
+          | Ast.ECall(_, [l, r], _, _) => Some((info, l, r))
+          | _ => None
+        }
+    }
+}
+
+let sectionOf = (params, body) => switch params {
+  | [only] => isSectionParam(only)
+      ? switch sectionParts(body) {
+        | None => None
+        | Some((info, l, r)) => let lIsParam = isRef(l, "$s") in
+          let rIsParam = isRef(r, "$s") in
+            // Both or neither: not a section.
+            lIsParam == rIsParam
+              ? None
+              : lIsParam
+              ? Some(
+                cat(
+                  [
+                    txt("(${info.symbol} "),
+                    binOperandD(r, info.prec, true),
+                    txt(")")
+                  ]
+                )
+              )
+              : Some(
+                cat(
+                  [
+                    txt("("),
+                    binOperandD(l, info.prec, false),
+                    txt(" ${info.symbol})")
+                  ]
+                )
+              )
+      }
+      : None
+  | _ => None
+}
+
+/// `($x) => g(f($x))` — the shape `>>` desugars to.
+let composeParts = (params, body) => switch params {
+  | [only] => switch unspan(only) {
+      | Ast.LPName("$x", _) => switch body {
+          | Ast.ECall(right, [Ast.ECall(left, [inner], _, _)], _, _) => isRef(
+              inner,
+              "$x"
+            )
+              ? Some((left, right))
+              : None
+          | _ => None
+        }
+      | _ => None
+    }
+  | _ => None
+}
+
+/// `>>` is left-associative, so `a >> b >> c` nests to the left; flatten it.
+let composeSegmentsFrom = (e, acc) => switch e {
+  | Ast.ELambda(params, body, _) => switch composeParts(params, body) {
+      | Some((left, right)) => composeSegmentsFrom(
+          left,
+          Array.prepend(right, acc)
+        )
+      | None => Array.prepend(e, acc)
+    }
+  | _ => Array.prepend(e, acc)
+}
+
+/// A destructuring `let (a, b) = e in body` reaches the printer as the IIFE the
+/// parser desugared it to; fold it back. Kept in step with `printsAsLet`.
+let destructureLetD = (fn, args) => switch (fn, args) {
+  | (Ast.ELambda([p], lbody, _), [value]) => switch unspan(p) {
+      | Ast.LPName(_, _) => None
+      | _ => Some(letLikeD("let ${paramText(p)}", value, lbody))
+    }
+  | _ => None
+}
+
+let refoldCall = (fn, args) => switch destructureLetD(fn, args) {
+  | Some(d) => Some(d)
+  | None => switch binaryD(fn, args) {
+      | Some(d) => Some(d)
+      | None => unaryD(fn, args)
+    }
+}
+
+/// `f(~tone="amber")` — a labeled call is lowered to a record argument tagged
+/// `origin: "labeled"` (ADR 0098 §2); print the labels back.
+let labeledFieldD = (f: Ast.Field) => switch f.value {
+  | Ast.ERef(name, _) when name == f.name => txt("~${f.name}")
+  | _ => cat([txt("~${f.name}="), exprD(f.value)])
+}
+
+let callArgDocs = (args, origin) => switch origin {
+  | Some("labeled") => switch Array.get(Array.length(args) - 1, args) {
+      | Some(Ast.ERecord(fields, None, _)) => Array.concat(
+          Array.take(Array.length(args) - 1, args) |> map(exprD),
+          fields |> map(labeledFieldD)
+        )
+      | _ => args |> map(exprD)
+    }
+  | _ => args |> map(exprD)
+}
+
 let labeledParamText = (name, annot, optional, defaultValue) =>
   let ann = switch annot {
     | Some(te) => ": ${showTypeExpr(te)}"
@@ -253,7 +560,30 @@ let doBlockD = exprs =>
 
 let doD = exprs => cat([txt("do "), doBlockD(exprs)])
 
-let lambdaD = (params, body) =>
+let lambdaD = (params, body) => switch sectionOf(params, body) {
+  | Some(section) => section
+  | None => switch composeParts(params, body) {
+      | Some(_) =>
+        // `f >> g >> h` nests to the left; print the flattened chain, one stage
+        // per line when it overflows.
+        switch composeSegmentsFrom(Ast.ELambda(params, body, { start: 0, end: 0 }), []) {
+          | [] => txt("")
+          | [head, ...rest] => group(
+              cat(
+                [
+                  operandD(head),
+                  indent(
+                    cat(rest |> map(s => cat([line, txt(">> "), operandD(s)])))
+                  )
+                ]
+              )
+            )
+        }
+      | None => plainLambdaD(params, body)
+    }
+}
+
+let plainLambdaD = (params, body) =>
   let head = txt("${paramsText(params)} =>") in
     switch body {
       | Ast.EDo(exprs, _) => cat([head, txt(" "), doBlockD(exprs)])
@@ -435,7 +765,12 @@ let lastArgHugs = body => switch body {
   | _ => Option.isSome(discardedLetExprs(body))
 }
 
-let callArgsD = (fn, args, asCallee) =>
+let callArgsD = (fn, args, origin, asCallee) => switch refoldCall(fn, args) {
+  | Some(d) => d
+  | None => plainCallD(fn, args, origin, asCallee)
+}
+
+let plainCallD = (fn, args, origin, asCallee) =>
   let fnD = calleeD(fn) in
     switch args {
       | [] => cat([fnD, txt("()")])
@@ -444,7 +779,7 @@ let callArgsD = (fn, args, asCallee) =>
         // (`Ok((value, next))`). Keep the call glued to the tuple so a broken
         // tuple becomes `Ok((\n  …\n))` rather than a staircase of closers.
         group(cat([fnD, txt("("), exprD(Ast.ETuple(elements, tsp)), txt(")")]))
-      | _ => let argDocs = args |> map(exprD) in
+      | _ => let argDocs = callArgDocs(args, origin) in
           switch Array.get(Array.length(args) - 1, args) {
             | Some(Ast.ELambda(_, lbody, _)) => group(
                 cat(
@@ -478,10 +813,10 @@ let callArgsD = (fn, args, asCallee) =>
           }
     }
 
-let callD = (fn, args) => callArgsD(fn, args, false)
+let callD = (fn, args, origin) => callArgsD(fn, args, origin, false)
 
 let calleeD = e => switch e {
-  | Ast.ECall(fn, args, _, _) => callArgsD(fn, args, true)
+  | Ast.ECall(fn, args, origin, _) => callArgsD(fn, args, origin, true)
   | _ => parenIf(loosePrefix(e), exprD(e))
 }
 
@@ -496,8 +831,8 @@ let memberD = e => switch e {
 
 /// Inline when it fits, else one `|> stage` per line indented under the head.
 let pipeD = e => switch e {
-  | Ast.EPipe(left, Ast.ECall(rfn, rargs, _, _), true, _) => cat(
-      [operandD(left), txt("->"), callD(rfn, rargs)]
+  | Ast.EPipe(left, Ast.ECall(rfn, rargs, rorigin, _), true, _) => cat(
+      [pipeLeftD(left, FAST_PIPE_PREC), txt("->"), callD(rfn, rargs, rorigin)]
     )
   | _ => let segments = pipeSegmentsFrom(e, []) in
       switch segments {
@@ -525,7 +860,7 @@ export let exprD = e => switch e {
   | Ast.EStr(value, _) => txt(strLit(value))
   | Ast.EInterp(parts, _) => txt(interpText(parts))
   | Ast.ERef(name, _) => txt(name)
-  | Ast.ECall(fn, args, _, _) => callD(fn, args)
+  | Ast.ECall(fn, args, origin, _) => callD(fn, args, origin)
   | Ast.ELambda(params, body, _) => lambdaD(params, body)
   | Ast.EPipe(_, _, _, _) => pipeD(e)
   | Ast.EDo(exprs, _) => doD(exprs)
