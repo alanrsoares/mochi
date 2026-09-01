@@ -177,7 +177,7 @@ export function startServer(opts: ServerOptions = {}): void {
   let bootstrapCache = createBootstrapRecoveryGraphCache();
   const dxOpts = async (path: string) => ({
     cache,
-    bootstrapCache,
+    bootstrapCache: bootstrapCache.types,
     plugins: loadProjectPlugins
       ? await pluginsForDocument(path, {
           allowedRoots,
@@ -201,7 +201,7 @@ export function startServer(opts: ServerOptions = {}): void {
       const bootstrap = await bootstrapModuleDiagnostics(path, src, read, bootstrapCache);
       return [...bootstrap, ...unusedBindingDiagnostics(src, path)];
     }
-    return documentDiagnostics(path, src, read, opts);
+    return documentDiagnostics(path, src, read, { cache: opts.cache, plugins: opts.plugins });
   };
   const connection = createConnection(ProposedFeatures.all);
   const documents = new TextDocuments(TextDocument);

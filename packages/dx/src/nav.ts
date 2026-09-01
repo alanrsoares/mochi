@@ -5,7 +5,11 @@
  * typecheck succeeds.
  */
 import { dirname, resolve } from "node:path";
-import { inferEntryGraphTypesBootstrap, loadBootstrapGraph } from "@mochi/compiler/bootstrap";
+import {
+  type BootstrapGraphCache,
+  inferEntryGraphTypesBootstrap,
+  loadBootstrapGraph,
+} from "@mochi/compiler/bootstrap";
 import { openMode, toTypedProgramRecovering, toTypedProgramWith } from "@mochi/compiler/compile";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import type { InferResult, TypeAt } from "@mochi/compiler/infer";
@@ -277,8 +281,9 @@ const bootstrapTypeDefinitionAt = async (
   src: string,
   offset: number,
   readFile: ReadFile,
+  cache?: BootstrapGraphCache,
 ): Promise<Location | null> => {
-  const inferred = await inferEntryGraphTypesBootstrap(path, src, readFile);
+  const inferred = await inferEntryGraphTypesBootstrap(path, src, readFile, cache);
   if (inferred._tag === "Err") return null;
   const entryPath = resolve(path);
   const entry = inferred.value.find((module) => module.path === entryPath);
@@ -305,7 +310,12 @@ export const typeDefinitionAt = (
 };
 
 /** Options threaded into module-* nav helpers that typecheck — `plugins` (styled-cva, …), same list hover/diagnostics take. */
-export type ModuleNavOptions = { plugins?: LanguagePlugin[]; cache?: ModuleCache };
+export type ModuleNavOptions = {
+  plugins?: LanguagePlugin[];
+  cache?: ModuleCache;
+  /** Caller-owned bootstrap graph memo for builtin-only type queries. */
+  bootstrapCache?: BootstrapGraphCache;
+};
 
 /** Module-aware go-to-type (imported variants/aliases via export origins). */
 export const moduleTypeDefinitionAt = async (
@@ -316,7 +326,13 @@ export const moduleTypeDefinitionAt = async (
   opts: ModuleNavOptions = {},
 ): Promise<Location | null> => {
   if (opts.plugins === undefined) {
-    const bootstrap = await bootstrapTypeDefinitionAt(path, src, offset, readFile);
+    const bootstrap = await bootstrapTypeDefinitionAt(
+      path,
+      src,
+      offset,
+      readFile,
+      opts.bootstrapCache,
+    );
     if (bootstrap) return bootstrap;
   }
   const origins = await originsForEntry(path, readFile, src);

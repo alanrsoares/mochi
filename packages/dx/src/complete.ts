@@ -10,6 +10,7 @@
 import { resolve } from "node:path";
 import type { Program } from "@mochi/compiler/ast";
 import {
+  type BootstrapGraphCache,
   type BootstrapTypeAt,
   inferEntryGraphTypesBootstrap,
   loadBootstrapGraph,
@@ -208,10 +209,11 @@ const bootstrapRecordFieldsAt = async (
   src: string,
   trigger: MemberTrigger,
   readFile: (path: string) => Promise<string>,
+  cache?: BootstrapGraphCache,
 ): Promise<CompletionItem[] | null> => {
   const rewritten =
     src.slice(0, trigger.dotStart) + src.slice(trigger.dotStart + 1 + trigger.prefix.length);
-  const inferred = await inferEntryGraphTypesBootstrap(path, rewritten, readFile);
+  const inferred = await inferEntryGraphTypesBootstrap(path, rewritten, readFile, cache);
   if (inferred._tag === "Err") return null;
   const entry = inferred.value.find((module) => module.path === resolve(path));
   const hit =
@@ -503,7 +505,12 @@ export const completeAt = (
     : dedupeSort(filterPrefix(valueItems(src, offset, opts.plugins), identPrefixAt(src, offset)));
 };
 
-export type ModuleCompleteOptions = { plugins?: LanguagePlugin[]; cache?: ModuleCache };
+export type ModuleCompleteOptions = {
+  plugins?: LanguagePlugin[];
+  cache?: ModuleCache;
+  /** Caller-owned bootstrap graph memo for builtin-only member queries. */
+  bootstrapCache?: BootstrapGraphCache;
+};
 
 /**
  * Module-aware completion: resolve imports so `import * as R` members,
@@ -524,7 +531,13 @@ export const moduleCompleteAt = async (
     if (trigger) {
       const items = await bootstrapNamespaceMembers(path, src, trigger, readFile);
       if (items) return dedupeSort(filterPrefix(items, trigger.prefix));
-      const fields = await bootstrapRecordFieldsAt(path, src, trigger, readFile);
+      const fields = await bootstrapRecordFieldsAt(
+        path,
+        src,
+        trigger,
+        readFile,
+        opts.bootstrapCache,
+      );
       if (fields) return dedupeSort(filterPrefix(fields, trigger.prefix));
     }
     if (!trigger && !jsxAttrTriggerAt(src, offset)) return completeAt(src, offset);
