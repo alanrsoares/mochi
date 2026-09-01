@@ -11,6 +11,7 @@ import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import { createModuleCache } from "@mochi/compiler/module";
 import { isPreludePath, PRELUDE_PATH, preludeVirtualSource } from "@mochi/compiler/prelude-virtual";
 import type { Span } from "@mochi/compiler/span";
+import { bootstrapHighlightsAt } from "@mochi/dx/bootstrap-highlights";
 import { moduleBootstrapHoverAt } from "@mochi/dx/bootstrap-hover";
 import {
   bootstrapDocumentSymbolsAt,
@@ -371,7 +372,14 @@ export function startServer(opts: ServerOptions = {}): void {
       const doc = documents.get(textDocument.uri);
       if (!doc) return [];
       const path = docPath(textDocument.uri);
-      const hits = await moduleHighlightsAt(path, doc.getText(), doc.offsetAt(position), read);
+      const dx = await dxOpts(path);
+      const bootstrap =
+        dx.plugins === undefined
+          ? bootstrapHighlightsAt(doc.getText(), doc.offsetAt(position))
+          : null;
+      const hits = bootstrap?.length
+        ? bootstrap
+        : await moduleHighlightsAt(path, doc.getText(), doc.offsetAt(position), read);
       return hits.map((h) => ({
         range: rangeOf(doc, h.span),
         kind: h.role === "def" ? DocumentHighlightKind.Write : DocumentHighlightKind.Read,
