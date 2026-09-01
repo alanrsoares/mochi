@@ -42,6 +42,7 @@ test("all bootstrap modules in the fixpoint graph are covered", () => {
       "plugins/jsx",
       "scc",
       "schemes",
+      "symbols",
       "types",
       "usefulness",
     ].sort(),

@@ -1,0 +1,350 @@
+// bootstrap/symbols.mochi — lexical def/use recovery for the self-host.
+//
+// A binding is identified by its declaration span, never only by `name`.
+// That makes shadowed lets distinct and is the invariant editor rename and
+// highlighting need. This first slice indexes every binder whose AST node has
+// an exact name span; lambda/destructure parameters deliberately wait for the
+// AST span-parity slice instead of manufacturing an imprecise location.
+import * as Ast from "./ast.mochi"
+
+type Binding = { name: string, start: number, end: number }
+export type Occurrence = {
+  name: string,
+  defStart: number,
+  defEnd: number,
+  start: number,
+  end: number,
+  role: string
+}
+
+let def = (name, span) =>
+  {
+    name,
+    defStart: span.start,
+    defEnd: span.end,
+    start: span.start,
+    end: span.end,
+    role: "def"
+  }
+
+let use = (name, span, env) => switch Map.get(name, env) {
+  | None => []
+  | Some(binding) => [
+      {
+        name,
+        defStart: binding.start,
+        defEnd: binding.end,
+        start: span.start,
+        end: span.end,
+        role: "use"
+      }
+    ]
+}
+
+let bind = (name, span, env) =>
+  Map.set(name, { name, start: span.start, end: span.end }, env)
+
+let bindSpannedNames = (names: [string], spans: [Ast.Span], env: Map<string, Binding>, i: number) => switch (Array.get(i, names), Array.get(i, spans)) {
+  | (Some(name), Some(span)) => let tail = bindSpannedNames(
+      names,
+      spans,
+      bind(name, span, env),
+      i + 1
+    ) in
+      {
+        env: tail.env,
+        occurrences: Array.prepend(def(name, span), tail.occurrences)
+      }
+  | _ => { env, occurrences: [] }
+}
+
+let bindParam = (param, env) => switch param {
+  | Ast.LPSpanned(Ast.LPName(name, _), [span]) => {
+      env: bind(name, span, env),
+      occurrences: [def(name, span)]
+    }
+  | Ast.LPSpanned(Ast.LPLabeled(name, _, _, _), [span]) => {
+      env: bind(name, span, env),
+      occurrences: [def(name, span)]
+    }
+  | Ast.LPSpanned(Ast.LPTuple(names), spans) => bindSpannedNames(
+      names,
+      spans,
+      env,
+      0
+    )
+  | Ast.LPSpanned(Ast.LPRecord(names), spans) => bindSpannedNames(
+      names,
+      spans,
+      env,
+      0
+    )
+  | _ => { env, occurrences: [] }
+}
+
+let bindParams = (params, env, i) => switch Array.get(i, params) {
+  | None => { env, occurrences: [] }
+  | Some(param) => let head = bindParam(param, env) in
+    let tail = bindParams(params, head.env, i + 1) in
+      {
+        env: tail.env,
+        occurrences: Array.concat(head.occurrences, tail.occurrences)
+      }
+}
+
+let walkExprs = (exprs, env, i) => switch Array.get(i, exprs) {
+  | None => []
+  | Some(expr) => Array.concat(
+      walkExpr(expr, env),
+      walkExprs(exprs, env, i + 1)
+    )
+}
+
+let walkSeqs = (elems, env, i) => switch Array.get(i, elems) {
+  | None => []
+  | Some(Ast.SEExpr(expr)) => Array.concat(
+      walkExpr(expr, env),
+      walkSeqs(elems, env, i + 1)
+    )
+  | Some(Ast.SESpread(expr)) => Array.concat(
+      walkExpr(expr, env),
+      walkSeqs(elems, env, i + 1)
+    )
+}
+
+let walkPattern = (pat, env) => switch pat {
+  | Ast.PBind(name, span) => {
+      env: bind(name, span, env),
+      occurrences: [def(name, span)]
+    }
+  | Ast.PAs(inner, name, nameSpan, _) => let innerResult = walkPattern(
+      inner,
+      env
+    ) in
+      {
+        env: bind(name, nameSpan, innerResult.env),
+        occurrences: Array.append(def(name, nameSpan), innerResult.occurrences)
+      }
+  | Ast.PTuple(elems, _) => walkPatterns(elems, env, 0)
+  | Ast.PRecord(fields, _) => walkPatFields(fields, env, 0)
+  | Ast.PCtor(_, args, _, _) => walkPatterns(args, env, 0)
+  | Ast.PArr(elems, rest, _) => let result = walkPatterns(elems, env, 0) in
+      switch rest {
+        | None => result
+        | Some(tail) => let tailResult = walkPattern(tail, result.env) in
+            {
+              env: tailResult.env,
+              occurrences: Array.concat(
+                result.occurrences,
+                tailResult.occurrences
+              )
+            }
+      }
+  | Ast.PList(elems, rest, _) => let result = walkPatterns(elems, env, 0) in
+      switch rest {
+        | None => result
+        | Some(tail) => let tailResult = walkPattern(tail, result.env) in
+            {
+              env: tailResult.env,
+              occurrences: Array.concat(
+                result.occurrences,
+                tailResult.occurrences
+              )
+            }
+      }
+  | Ast.POr([first, ..._], _) =>
+    // Every alternative has the same binds; only the first introduces them.
+    walkPattern(first, env)
+  | _ => { env, occurrences: [] }
+}
+
+let walkPatterns = (patterns, env, i) => switch Array.get(i, patterns) {
+  | None => { env, occurrences: [] }
+  | Some(pat) => let head = walkPattern(pat, env) in
+    let tail = walkPatterns(patterns, head.env, i + 1) in
+      {
+        env: tail.env,
+        occurrences: Array.concat(head.occurrences, tail.occurrences)
+      }
+}
+
+let walkPatFields = (fields, env, i) => switch Array.get(i, fields) {
+  | None => { env, occurrences: [] }
+  | Some(field) => let head = walkPattern(field.pat, env) in
+    let tail = walkPatFields(fields, head.env, i + 1) in
+      {
+        env: tail.env,
+        occurrences: Array.concat(head.occurrences, tail.occurrences)
+      }
+}
+
+let walkArms = (arms, env, i) => switch Array.get(i, arms) {
+  | None => []
+  | Some(arm) => let pat = walkPattern(arm.pattern, env) in
+    let guard = switch arm.guard {
+      | None => []
+      | Some(expr) => walkExpr(expr, pat.env)
+    } in
+      Array.concat(
+        pat.occurrences,
+        Array.concat(
+          guard,
+          Array.concat(walkExpr(arm.body, pat.env), walkArms(arms, env, i + 1))
+        )
+      )
+}
+
+let walkFields = (fields, env, i) => switch Array.get(i, fields) {
+  | None => []
+  | Some(field) => Array.concat(
+      walkExpr(field.value, env),
+      walkFields(fields, env, i + 1)
+    )
+}
+
+let walkEntries = (entries, env, i) => switch Array.get(i, entries) {
+  | None => []
+  | Some(entry) => Array.concat(
+      walkExpr(entry.key, env),
+      Array.concat(walkExpr(entry.value, env), walkEntries(entries, env, i + 1))
+    )
+}
+
+let walkLoopParams = (params, env, i) => switch Array.get(i, params) {
+  | None => []
+  | Some(param) => Array.concat(
+      walkExpr(param.init, env),
+      walkLoopParams(params, env, i + 1)
+    )
+}
+
+let loopEnv = (params, env, i) => switch Array.get(i, params) {
+  | None => env
+  | Some(param) => loopEnv(params, bind(param.name, param.nameSpan, env), i + 1)
+}
+
+let loopDefs = (params, i) => switch Array.get(i, params) {
+  | None => []
+  | Some(param) => Array.concat(
+      [def(param.name, param.nameSpan)],
+      loopDefs(params, i + 1)
+    )
+}
+
+let walkExpr = (expr, env) => switch expr {
+  | Ast.ERef(name, span) => use(name, span, env)
+  | Ast.ECall(fn, args, _, _) => Array.concat(
+      walkExpr(fn, env),
+      walkExprs(args, env, 0)
+    )
+  | Ast.ELambda(params, body, _) => let bound = bindParams(params, env, 0) in
+      Array.concat(bound.occurrences, walkExpr(body, bound.env))
+  | Ast.ELetIn(name, nameSpan, value, body, _) => let recursive = switch value {
+      | Ast.ELambda(_, _, _) => true
+      | _ => false
+    } in
+    let bodyEnv = bind(name, nameSpan, env) in
+      recursive
+        ? Array.concat(
+          [def(name, nameSpan)],
+          Array.concat(walkExpr(value, bodyEnv), walkExpr(body, bodyEnv))
+        )
+        : Array.concat(
+          walkExpr(value, env),
+          Array.concat([def(name, nameSpan)], walkExpr(body, bodyEnv))
+        )
+  | Ast.ELetBind(_, _, _, value, body, _) => Array.concat(
+      walkExpr(value, env),
+      walkExpr(body, env)
+    )
+  | Ast.EPipe(left, right, _) => Array.concat(
+      walkExpr(left, env),
+      walkExpr(right, env)
+    )
+  | Ast.EDo(exprs, _) => walkExprs(exprs, env, 0)
+  | Ast.ETernary(cond, thenE, elseE, _) => Array.concat(
+      walkExpr(cond, env),
+      Array.concat(walkExpr(thenE, env), walkExpr(elseE, env))
+    )
+  | Ast.EMatch(scrutinee, arms, _) => Array.concat(
+      walkExpr(scrutinee, env),
+      walkArms(arms, env, 0)
+    )
+  | Ast.ERecord(fields, spread, _) => switch spread {
+      | None => walkFields(fields, env, 0)
+      | Some(base) => Array.concat(
+          walkExpr(base, env),
+          walkFields(fields, env, 0)
+        )
+    }
+  | Ast.EField(target, _, _, _) => walkExpr(target, env)
+  | Ast.ETuple(elements, _) => walkExprs(elements, env, 0)
+  | Ast.EArr(elements, _) => walkSeqs(elements, env, 0)
+  | Ast.EList(elements, _) => walkSeqs(elements, env, 0)
+  | Ast.ESet(elements, _) => walkSeqs(elements, env, 0)
+  | Ast.EMap(entries, _) => walkEntries(entries, env, 0)
+  | Ast.ELoop(params, body, _) => let scoped = loopEnv(params, env, 0) in
+      Array.concat(
+        walkLoopParams(params, env, 0),
+        Array.concat(loopDefs(params, 0), walkExpr(body, scoped))
+      )
+  | Ast.ERecur(args, _) => walkExprs(args, env, 0)
+  | Ast.EInterp(parts, _) => walkInterp(parts, env, 0)
+  | _ => []
+}
+
+let walkInterp = (parts, env, i) => switch Array.get(i, parts) {
+  | None => []
+  | Some(Ast.IPLit(_)) => walkInterp(parts, env, i + 1)
+  | Some(Ast.IPExpr(expr)) => Array.concat(
+      walkExpr(expr, env),
+      walkInterp(parts, env, i + 1)
+    )
+}
+
+let topEnv = (stmts, env, i) => switch Array.get(i, stmts) {
+  | None => env
+  | Some(Ast.SLet(name, span, _, _, _, _, _)) => topEnv(
+      stmts,
+      bind(name, span, env),
+      i + 1
+    )
+  | Some(Ast.SExtern(name, span, _, _, _, _, _, _, _, _)) => topEnv(
+      stmts,
+      bind(name, span, env),
+      i + 1
+    )
+  | Some(_) => topEnv(stmts, env, i + 1)
+}
+
+let topDefs = (stmts, i) => switch Array.get(i, stmts) {
+  | None => []
+  | Some(Ast.SLet(name, span, _, _, _, _, _)) => Array.concat(
+      [def(name, span)],
+      topDefs(stmts, i + 1)
+    )
+  | Some(Ast.SExtern(name, span, _, _, _, _, _, _, _, _)) => Array.concat(
+      [def(name, span)],
+      topDefs(stmts, i + 1)
+    )
+  | Some(_) => topDefs(stmts, i + 1)
+}
+
+let walkStmts = (stmts, env, i) => switch Array.get(i, stmts) {
+  | None => []
+  | Some(Ast.SLet(_, _, _, value, _, _, _)) => Array.concat(
+      walkExpr(value, env),
+      walkStmts(stmts, env, i + 1)
+    )
+  | Some(Ast.SExpr(value, _)) => Array.concat(
+      walkExpr(value, env),
+      walkStmts(stmts, env, i + 1)
+    )
+  | Some(_) => walkStmts(stmts, env, i + 1)
+}
+
+/// index : [Stmt] -> [Occurrence]
+/// The returned list is declaration-first and uses declaration spans as identity.
+export let index = stmts =>
+  let env = topEnv(stmts, #{}, 0) in
+    Array.concat(topDefs(stmts, 0), walkStmts(stmts, env, 0))

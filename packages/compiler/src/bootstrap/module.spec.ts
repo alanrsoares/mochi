@@ -3,7 +3,11 @@ import { join } from "node:path";
 import { repoRoot } from "@mochi/test-support";
 import { unwrapOk } from "@onrails/result";
 import { buildModules as tsBuildModules } from "../module/module.ts";
-import { buildModulesBootstrap, inferGraphTypesBootstrap } from "./module.ts";
+import {
+  buildModulesBootstrap,
+  inferGraphTypesBootstrap,
+  symbolOccurrencesBootstrap,
+} from "./module.ts";
 import { lex, parse } from "./syntax.ts";
 
 const parseBootstrap = (source: string): unknown => {
@@ -55,4 +59,17 @@ test("bundled graph query preserves inferred spans across imports", () => {
       }),
     ]),
   });
+});
+
+test("bundled graph exposes lexical binding identity", () => {
+  const occurrences = symbolOccurrencesBootstrap(
+    parseBootstrap("let x = 1\nlet f = let x = 2 in x\nx"),
+  );
+  expect(occurrences).toEqual([
+    expect.objectContaining({ name: "x", defStart: 4, start: 4, role: "def" }),
+    expect.objectContaining({ name: "f", role: "def" }),
+    expect.objectContaining({ name: "x", defStart: 22, start: 22, role: "def" }),
+    expect.objectContaining({ name: "x", defStart: 22, start: 31, role: "use" }),
+    expect.objectContaining({ name: "x", defStart: 4, start: 33, role: "use" }),
+  ]);
 });

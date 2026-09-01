@@ -43,6 +43,7 @@ const MODULES = [
   "codegen",
   "ts-types",
   "codegen-ts",
+  "symbols",
   "module",
   "compile",
   "cli",

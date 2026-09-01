@@ -20,6 +20,7 @@ import { codegen } from "./codegen.mochi"
 import { emitTsModule, externModuleDts } from "./codegen-ts.mochi"
 import { showType, tVar } from "./types.mochi"
 import { widenLits } from "./schemes.mochi"
+import { index } from "./symbols.mochi"
 
 // Prelude tables from the generated shim (as in compile.mochi). Threaded opaquely
 // into inferProgramImports / codegen; module.mochi never inspects them.
@@ -32,6 +33,11 @@ extern runtimeDeps : Map<string, [string]> = "./prelude.gen.mjs" "runtimeDeps"
 // Stmt/Pattern ctors via namespace import (ADR 0002) — only SImport/SImportNs are
 // destructured here; other stmts flow opaquely to the passes.
 import * as Ast from "./ast.mochi"
+
+/// Host-facing lexical occurrence query. The index itself is source-owned;
+/// this re-export makes it reachable from the frozen graph without teaching
+/// host DX code about bootstrap's internal module layout.
+export let symbolOccurrences = stmts => index(stmts)
 
 // One loaded module: its canonical path and parsed statements.
 type Loaded = { path: string, stmts: [Stmt] }

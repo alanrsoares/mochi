@@ -40,6 +40,15 @@ export type BootstrapExportOrigins = {
   types: Map<string, { start: number; end: number }>;
   ctors: Map<string, { start: number; end: number }>;
 };
+/** One lexical def/use occurrence recovered by the bootstrap symbol pass. */
+export type BootstrapOccurrence = {
+  name: string;
+  defStart: number;
+  defEnd: number;
+  start: number;
+  end: number;
+  role: string;
+};
 /** One dependency-ordered source module parsed by the frozen bootstrap graph. */
 export type BootstrapParsedModule = {
   path: string;

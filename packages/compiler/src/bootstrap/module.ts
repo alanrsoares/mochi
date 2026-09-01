@@ -7,6 +7,7 @@ import type {
   BootstrapGraphInferOutput,
   BootstrapGraphInferState,
   BootstrapModuleOutput,
+  BootstrapOccurrence,
   BootstrapRecoveryGraphState,
   BootstrapResult,
 } from "./index.ts";
@@ -36,6 +37,7 @@ type SeedModule = {
   ) => BootstrapRecoveryGraphState;
   compileGraphRecovering: (modules: BootstrapGraphModule[]) => BootstrapGraphRecovery;
   exportedOrigins: (stmts: unknown) => BootstrapExportOrigins;
+  symbolOccurrences: (stmts: unknown) => BootstrapOccurrence[];
 };
 
 export type BootstrapGraphModule = { path: string; stmts: unknown };
@@ -105,3 +107,6 @@ export const compileGraphBootstrapRecovering = (
 
 export const exportedOriginsBootstrap = (stmts: unknown): BootstrapExportOrigins =>
   seed.exportedOrigins(stmts);
+
+export const symbolOccurrencesBootstrap = (stmts: unknown): BootstrapOccurrence[] =>
+  seed.symbolOccurrences(stmts);
