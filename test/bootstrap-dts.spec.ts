@@ -5,8 +5,12 @@
 // declaration order, builtin variant decls, the `_Curry` import, and the
 // `import type * as D` lines a namespace alias needs.
 import { expect, test } from "bun:test";
-import { emitDtsBootstrap } from "@mochi/compiler/bootstrap";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { emitDtsBootstrap, emitDtsForFileBootstrap } from "@mochi/compiler/bootstrap";
 import { emitDts } from "@mochi/compiler/dts";
+import { emitDtsForFile } from "@mochi/compiler/module";
 import { unwrapOk } from "@onrails/result";
 
 type AlResult = { _tag: "Ok"; value: string } | { _tag: "Err"; error: unknown };
@@ -48,3 +52,27 @@ for (const [name, src] of Object.entries(cases)) {
     expect(alDts(src)).toBe(tsDts(src));
   });
 }
+
+// Graph-aware emit: a namespace-imported type must print as `D.Shape`, which
+// single-file emit cannot know. Written on disk because both drivers resolve
+// imports through the real filesystem.
+test("dts parity: a namespace-imported type qualifies through the graph", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "mochi-dts-"));
+  try {
+    const dep = join(dir, "shapes.mochi");
+    const entry = join(dir, "main.mochi");
+    await writeFile(dep, "export type Shape = | Circle(r: number)\n");
+    await writeFile(
+      entry,
+      'import * as D from "./shapes.mochi"\nexport let mk : number -> D.Shape = r => D.Circle(r)\n',
+    );
+    const src = await Bun.file(entry).text();
+    const ts = unwrapOk(await emitDtsForFile(entry, src, (p: string) => Bun.file(p).text(), {}));
+    const al = emitDtsForFileBootstrap(entry, "@mochi/runtime") as AlResult;
+    if (al._tag === "Err") throw new Error(`bootstrap failed: ${JSON.stringify(al.error)}`);
+    expect(al.value).toBe(ts);
+    expect(al.value).toContain("D.Shape");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

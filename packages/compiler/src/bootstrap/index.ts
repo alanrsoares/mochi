@@ -128,6 +128,7 @@ import { compileBootstrapSync, compileTsBootstrapSync, inferTypesBootstrapSync }
 
 export {
   emitDtsBootstrap,
+  emitDtsForFileBootstrap,
   inferGraphTypesBootstrap,
   symbolOccurrencesBootstrap,
 } from "./module.ts";

@@ -19,11 +19,13 @@ import {
   _Map_get,
   _Map_getOr,
   _Map_has,
+  _Map_keys,
   _Map_set,
   _Result_map,
   _Set_add,
   _Set_fromArray,
   _Set_has,
+  _Set_toArray,
   _Str_contains,
   _Str_endsWith,
   _Str_join,
@@ -528,6 +530,77 @@ export const emitDtsFromTyped: <A>(
       : `${_Str_join("\n", imports)}
 ${body}`;
   },
+);
+/**
+ * `Shape` -> `D.Shape` for every type an `import * as D` brings into type
+ * position (ADR 0046). A name the file declares itself wins — it is already
+ * writable bare, and it shadows. First alias wins on a collision.
+ */
+const addQuals: _Curry<
+  [alias: string, names: string[], local: Set<string>, acc: Map<string, string>, i: number],
+  Map<string, string>
+> = _curry(
+  5,
+  (alias: string, names: string[], local: Set<string>, acc: Map<string, string>, i: number) =>
+    match(_Array_get(i, names))
+      .with({ _tag: "None" }, () => acc)
+      .with({ _tag: "Some" }, ({ value: name }) =>
+        addQuals(
+          alias,
+          names,
+          local,
+          or(_Set_has(name, local), _Map_has(name, acc))
+            ? acc
+            : _Map_set(name, `${alias}.${name}`, acc),
+          i + 1,
+        ),
+      )
+      .exhaustive(),
+);
+const qualsFromAliases: <A>(
+  aliases: string[],
+  quals: Map<string, { types: Set<string> } & A>,
+  local: Set<string>,
+  acc: Map<string, string>,
+  i: number,
+) => Map<string, string> = _curry(
+  5,
+  <A>(
+    aliases: string[],
+    quals: Map<string, { types: Set<string> } & A>,
+    local: Set<string>,
+    acc: Map<string, string>,
+    i: number,
+  ) =>
+    match(_Array_get(i, aliases))
+      .with({ _tag: "None" }, () => acc)
+      .with({ _tag: "Some" }, ({ value: alias }) =>
+        match(_Map_get(alias, quals))
+          .with({ _tag: "None" }, () => qualsFromAliases(aliases, quals, local, acc, i + 1))
+          .with({ _tag: "Some" }, ({ value: scope }) =>
+            qualsFromAliases(
+              aliases,
+              quals,
+              local,
+              addQuals(alias, _Set_toArray(scope.types), local, acc, 0),
+              i + 1,
+            ),
+          )
+          .exhaustive(),
+      )
+      .exhaustive(),
+);
+/**
+ * The graph's contribution to the qualify map: what each namespace alias
+ * exports. `emitDtsFromTyped` merges this file's own written quals over it.
+ */
+export const qualifierMapOf: <A>(
+  quals: Map<string, { types: Set<string> } & A>,
+  local: Set<string>,
+) => Map<string, string> = _curry(
+  2,
+  <A>(quals: Map<string, { types: Set<string> } & A>, local: Set<string>) =>
+    qualsFromAliases(_Map_keys(quals), quals, local, new Map<string, string>(), 0),
 );
 /**
  * Source -> `.d.ts` text. Infers first; type errors surface as diagnostics.

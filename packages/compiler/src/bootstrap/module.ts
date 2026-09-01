@@ -39,6 +39,10 @@ type SeedModule = {
   exportedOrigins: (stmts: unknown) => BootstrapExportOrigins;
   symbolOccurrences: (stmts: unknown) => BootstrapOccurrence[];
   emitDts: (src: string, runtimeImport: string) => BootstrapResult<string, BootstrapDiagnostic>;
+  emitDtsForFile: (
+    entry: string,
+    runtimeImport: string,
+  ) => BootstrapResult<string, BootstrapDiagnostic>;
 };
 
 export type BootstrapGraphModule = { path: string; stmts: unknown };
@@ -117,3 +121,13 @@ export const emitDtsBootstrap = (
   src: string,
   runtimeImport: string,
 ): BootstrapResult<string, BootstrapDiagnostic> => seed.emitDts(src, runtimeImport);
+
+/**
+ * `.d.ts` for one file, typed through its own import graph so a namespace-
+ * imported type prints as `Alias.T` (ADR 0046). Reads dependencies from disk
+ * through the seed's own host shim, like the other graph entry points.
+ */
+export const emitDtsForFileBootstrap = (
+  entry: string,
+  runtimeImport: string,
+): BootstrapResult<string, BootstrapDiagnostic> => seed.emitDtsForFile(entry, runtimeImport);

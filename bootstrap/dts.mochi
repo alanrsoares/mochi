@@ -314,6 +314,41 @@ export let emitDtsFromTyped = (stmts, env, aliases, qualify, runtimeImport) =>
   ) in
     Array.length(imports) == 0 ? body : "${Str.join("\n", imports)}\n${body}"
 
+/// `Shape` -> `D.Shape` for every type an `import * as D` brings into type
+/// position (ADR 0046). A name the file declares itself wins — it is already
+/// writable bare, and it shadows. First alias wins on a collision.
+let addQuals = (alias, names, local, acc, i) => switch Array.get(i, names) {
+  | None => acc
+  | Some(name) => addQuals(
+      alias,
+      names,
+      local,
+      Set.has(name, local) || Map.has(name, acc)
+        ? acc
+        : Map.set(name, "${alias}.${name}", acc),
+      i + 1
+    )
+}
+
+let qualsFromAliases = (aliases, quals, local, acc, i) => switch Array.get(i, aliases) {
+  | None => acc
+  | Some(alias) => switch Map.get(alias, quals) {
+      | None => qualsFromAliases(aliases, quals, local, acc, i + 1)
+      | Some(scope) => qualsFromAliases(
+          aliases,
+          quals,
+          local,
+          addQuals(alias, Set.toArray(scope.types), local, acc, 0),
+          i + 1
+        )
+    }
+}
+
+/// The graph's contribution to the qualify map: what each namespace alias
+/// exports. `emitDtsFromTyped` merges this file's own written quals over it.
+export let qualifierMapOf = (quals, local) =>
+  qualsFromAliases(Map.keys(quals), quals, local, #{}, 0)
+
 /// Source -> `.d.ts` text. Infers first; type errors surface as diagnostics.
 export let emitDtsText = (src, runtimeImport) =>
   typedProgram(src)

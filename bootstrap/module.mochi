@@ -21,7 +21,7 @@ import { emitTsModule, externModuleDts } from "./codegen-ts.mochi"
 import { showType, tVar } from "./types.mochi"
 import { widenLits } from "./schemes.mochi"
 import { index } from "./symbols.mochi"
-import { emitDtsText } from "./dts.mochi"
+import { emitDtsFromTyped, emitDtsText, qualifierMapOf } from "./dts.mochi"
 
 // Prelude tables from the generated shim (as in compile.mochi). Threaded opaquely
 // into inferProgramImports / codegen; module.mochi never inspects them.
@@ -895,6 +895,84 @@ export let compileGraphTs = (graph, runtimeImport) =>
     },
     graph
   )
+
+// Walk the graph exactly as inference does, so a module's imports, registry and
+// qualified type scopes are in place, and emit `.d.ts` for ONE target path. The
+// dependencies are inferred, not emitted — `.d.ts` is a per-file question.
+let dtsOne = (ctx, loaded) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
+  | Err(e) => Err(atPath(loaded.path, e))
+  | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
+      | Err(e) => Err(atPath(loaded.path, e))
+      | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, true, res.imports, res.nsImports, res.quals, None) {
+          | Err(e) => Err(atPath(loaded.path, e))
+          | Ok(r) => Ok(
+              {
+                exportsByPath: Map.set(
+                  loaded.path,
+                  exportedSchemes(loaded.stmts, r.env),
+                  ctx.exportsByPath
+                ),
+                regByPath: Map.set(
+                  loaded.path,
+                  exportedRegistry(loaded.stmts),
+                  ctx.regByPath
+                ),
+                keysByPath: Map.set(
+                  loaded.path,
+                  exportedCtorKeys(loaded.stmts),
+                  ctx.keysByPath
+                ),
+                qualsByPath: Map.set(
+                  loaded.path,
+                  qualScopeOf(loaded.stmts),
+                  ctx.qualsByPath
+                ),
+                aliases: mergeMap(r.aliases, ctx.aliases),
+                runtimeImport: ctx.runtimeImport,
+                target: ctx.target,
+                dts: loaded.path == ctx.target
+                  ? emitDtsFromTyped(
+                    loaded.stmts,
+                    r.env,
+                    // Dependency aliases stay in scope for the same reason the
+                    // `.ts` backend keeps them: inference expands record aliases
+                    // to rows, so without them an imported type prints inline.
+                    mergeMap(r.aliases, ctx.aliases),
+                    qualifierMapOf(res.quals, localTypeNames(loaded.stmts)),
+                    ctx.runtimeImport
+                  )
+                  : ctx.dts
+              }
+            )
+        }
+    }
+}
+
+let dtsAll = (ctx, graph) => switch graph {
+  | [] => Ok(ctx.dts)
+  | [m, ...rest] => switch ctx->dtsOne(m) {
+      | Err(e) => Err(e)
+      | Ok(ctx1) => ctx1->dtsAll(rest)
+    }
+}
+
+/// emitDtsForFile : string -> string -> Result string MErr — `.d.ts` for one
+/// file, typed through its own import graph so `Alias.T` resolves (ADR 0046).
+export let emitDtsForFile = (entry, runtimeImport) =>
+  let? graph = entry->loadGraph() in
+    dtsAll(
+      {
+        exportsByPath: #{},
+        regByPath: #{},
+        keysByPath: #{},
+        qualsByPath: #{},
+        aliases: #{},
+        runtimeImport,
+        target: entry,
+        dts: ""
+      },
+      graph
+    )
 
 /// buildModulesTs : string -> string -> Result [ModuleOutput] MErr
 export let buildModulesTs = (entry, runtimeImport) =>

@@ -90,7 +90,7 @@ import { emitTsModule, externModuleDts } from "./codegen-ts";
 import { showType, tVar } from "./types";
 import { widenLits } from "./schemes";
 import { index } from "./symbols";
-import { emitDtsText } from "./dts";
+import { emitDtsFromTyped, emitDtsText, qualifierMapOf } from "./dts";
 import { builtins } from "./prelude.gen.mjs";
 import { namespaces } from "./prelude.gen.mjs";
 import { namespaceRuntime } from "./prelude.gen.mjs";
@@ -2338,6 +2338,322 @@ export const compileGraphTs: <A>(
       },
       graph,
     ),
+);
+const dtsOne: <A, B>(
+  ctx: {
+    exportsByPath: Map<string, Map<string, Scheme>>;
+    regByPath: Map<string, Registry>;
+    keysByPath: Map<string, Map<string, string[]>>;
+    qualsByPath: Map<
+      string,
+      {
+        types: Set<string>;
+        aliases: Map<
+          string,
+          { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+        >;
+      }
+    >;
+    target: string;
+    aliases: Map<string, AliasInfo>;
+    runtimeImport: string;
+    dts: string;
+  } & A,
+  loaded: { stmts: Stmt[]; path: string } & B,
+) => Result<
+  {
+    exportsByPath: Map<string, Map<string, Scheme>>;
+    regByPath: Map<string, Registry>;
+    keysByPath: Map<string, Map<string, string[]>>;
+    qualsByPath: Map<string, RecoveryQualScope>;
+    aliases: Map<string, AliasInfo>;
+    runtimeImport: string;
+    target: string;
+    dts: string;
+  },
+  PErr
+> = _curry(
+  2,
+  <A, B>(
+    ctx: {
+      exportsByPath: Map<string, Map<string, Scheme>>;
+      regByPath: Map<string, Registry>;
+      keysByPath: Map<string, Map<string, string[]>>;
+      qualsByPath: Map<
+        string,
+        {
+          types: Set<string>;
+          aliases: Map<
+            string,
+            { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+          >;
+        }
+      >;
+      target: string;
+      aliases: Map<string, AliasInfo>;
+      runtimeImport: string;
+      dts: string;
+    } & A,
+    loaded: { stmts: Stmt[]; path: string } & B,
+  ) =>
+    match(
+      resolveImportsFrom(
+        ctx,
+        loaded.stmts,
+        0,
+        loaded.path,
+        {
+          imports: new Map<string, Scheme>(),
+          nsImports: new Map<string, Map<string, Scheme>>(),
+          reg: emptyReg,
+          keys: new Map<string, string[]>(),
+          quals: new Map<
+            string,
+            {
+              types: Set<string>;
+              aliases: Map<
+                string,
+                { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+              >;
+            }
+          >(),
+        },
+        false,
+      ),
+    )
+      .with(
+        { _tag: "Err" },
+        ({ error: e }) =>
+          Err(atPath(loaded.path, e)) as Result<
+            {
+              exportsByPath: Map<string, Map<string, Scheme>>;
+              regByPath: Map<string, Registry>;
+              keysByPath: Map<string, Map<string, string[]>>;
+              qualsByPath: Map<string, RecoveryQualScope>;
+              aliases: Map<string, AliasInfo>;
+              runtimeImport: string;
+              target: string;
+              dts: string;
+            },
+            PErr
+          >,
+      )
+      .with({ _tag: "Ok" }, ({ value: res }) =>
+        match(checkWith(loaded.stmts, res.reg, res.quals))
+          .with(
+            { _tag: "Err" },
+            ({ error: e }) =>
+              Err(atPath(loaded.path, e)) as Result<
+                {
+                  exportsByPath: Map<string, Map<string, Scheme>>;
+                  regByPath: Map<string, Registry>;
+                  keysByPath: Map<string, Map<string, string[]>>;
+                  qualsByPath: Map<string, RecoveryQualScope>;
+                  aliases: Map<string, AliasInfo>;
+                  runtimeImport: string;
+                  target: string;
+                  dts: string;
+                },
+                PErr
+              >,
+          )
+          .with({ _tag: "Ok" }, () =>
+            match(
+              inferProgramImportsTypes(
+                loaded.stmts,
+                builtins,
+                namespaces,
+                true,
+                res.imports,
+                res.nsImports,
+                res.quals,
+                None as Option<
+                  {
+                    name: string;
+                    parse: Option<
+                      (
+                        a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+                        b: number,
+                        c: (
+                          a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+                          b: number,
+                        ) => Result<[Expr, number], PErr>,
+                      ) => Result<Option<[Expr, number]>, PErr>
+                    >;
+                    inferCall: Option<
+                      (
+                        a: Expr,
+                        b: Expr[],
+                        c: Option<string>,
+                        d: St,
+                        e: InferApi,
+                      ) => Result<Option<[Ty, St]>, PErr>
+                    >;
+                  }[]
+                >,
+              ),
+            )
+              .with(
+                { _tag: "Err" },
+                ({ error: e }) =>
+                  Err(atPath(loaded.path, e)) as Result<
+                    {
+                      exportsByPath: Map<string, Map<string, Scheme>>;
+                      regByPath: Map<string, Registry>;
+                      keysByPath: Map<string, Map<string, string[]>>;
+                      qualsByPath: Map<string, RecoveryQualScope>;
+                      aliases: Map<string, AliasInfo>;
+                      runtimeImport: string;
+                      target: string;
+                      dts: string;
+                    },
+                    PErr
+                  >,
+              )
+              .with(
+                { _tag: "Ok" },
+                ({ value: r }) =>
+                  Ok({
+                    exportsByPath: _Map_set(
+                      loaded.path,
+                      exportedSchemes(loaded.stmts, r.env),
+                      ctx.exportsByPath,
+                    ),
+                    regByPath: _Map_set(loaded.path, exportedRegistry(loaded.stmts), ctx.regByPath),
+                    keysByPath: _Map_set(
+                      loaded.path,
+                      exportedCtorKeys(loaded.stmts),
+                      ctx.keysByPath,
+                    ),
+                    qualsByPath: _Map_set(loaded.path, qualScopeOf(loaded.stmts), ctx.qualsByPath),
+                    aliases: mergeMap(r.aliases, ctx.aliases),
+                    runtimeImport: ctx.runtimeImport,
+                    target: ctx.target,
+                    dts: eq(loaded.path, ctx.target)
+                      ? emitDtsFromTyped(
+                          loaded.stmts,
+                          r.env,
+                          mergeMap(r.aliases, ctx.aliases),
+                          qualifierMapOf(res.quals, localTypeNames(loaded.stmts)),
+                          ctx.runtimeImport,
+                        )
+                      : ctx.dts,
+                  }) as Result<
+                    {
+                      exportsByPath: Map<string, Map<string, Scheme>>;
+                      regByPath: Map<string, Registry>;
+                      keysByPath: Map<string, Map<string, string[]>>;
+                      qualsByPath: Map<string, RecoveryQualScope>;
+                      aliases: Map<string, AliasInfo>;
+                      runtimeImport: string;
+                      target: string;
+                      dts: string;
+                    },
+                    PErr
+                  >,
+              )
+              .exhaustive(),
+          )
+          .exhaustive(),
+      )
+      .exhaustive(),
+);
+const dtsAll: <A>(
+  ctx: {
+    dts: string;
+    exportsByPath: Map<string, Map<string, Scheme>>;
+    regByPath: Map<string, Registry>;
+    keysByPath: Map<string, Map<string, string[]>>;
+    qualsByPath: Map<
+      string,
+      {
+        types: Set<string>;
+        aliases: Map<
+          string,
+          { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+        >;
+      }
+    >;
+    target: string;
+    aliases: Map<string, AliasInfo>;
+    runtimeImport: string;
+  },
+  graph: ({ stmts: Stmt[]; path: string } & A)[],
+) => Result<string, PErr> = _curry(
+  2,
+  <A>(
+    ctx: {
+      dts: string;
+      exportsByPath: Map<string, Map<string, Scheme>>;
+      regByPath: Map<string, Registry>;
+      keysByPath: Map<string, Map<string, string[]>>;
+      qualsByPath: Map<
+        string,
+        {
+          types: Set<string>;
+          aliases: Map<
+            string,
+            { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+          >;
+        }
+      >;
+      target: string;
+      aliases: Map<string, AliasInfo>;
+      runtimeImport: string;
+    },
+    graph: ({ stmts: Stmt[]; path: string } & A)[],
+  ) =>
+    match(graph)
+      .with(
+        (_v) => _v.length === 0,
+        () => Ok(ctx.dts) as Result<string, PErr>,
+      )
+      .with(
+        (_v) => _v.length >= 1,
+        ([m, ...rest]) =>
+          match(dtsOne(ctx, m))
+            .with({ _tag: "Err" }, ({ error: e }) => Err(e) as Result<string, PErr>)
+            .with({ _tag: "Ok" }, ({ value: ctx1 }) => dtsAll(ctx1, rest))
+            .exhaustive(),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
+);
+/**
+ * emitDtsForFile : string -> string -> Result string MErr — `.d.ts` for one
+ * file, typed through its own import graph so `Alias.T` resolves (ADR 0046).
+ */
+export const emitDtsForFile: _Curry<
+  [entry: string, runtimeImport: string],
+  Result<string, PErr>
+> = _curry(2, (entry: string, runtimeImport: string) =>
+  _Result_flatMap(
+    (graph) =>
+      dtsAll(
+        {
+          exportsByPath: new Map<string, Map<string, Scheme>>(),
+          regByPath: new Map<string, Registry>(),
+          keysByPath: new Map<string, Map<string, string[]>>(),
+          qualsByPath: new Map<
+            string,
+            {
+              types: Set<string>;
+              aliases: Map<
+                string,
+                { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+              >;
+            }
+          >(),
+          aliases: new Map<string, AliasInfo>(),
+          runtimeImport: runtimeImport,
+          target: entry,
+          dts: "",
+        },
+        graph,
+      ),
+    loadGraph(entry),
+  ),
 );
 /**
  * buildModulesTs : string -> string -> Result [ModuleOutput] MErr

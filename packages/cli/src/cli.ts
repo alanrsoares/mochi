@@ -11,7 +11,11 @@ import {
   transformProject,
 } from "@mochi/codemod";
 import type { BootstrapDiagnostic } from "@mochi/compiler/bootstrap";
-import { buildModulesBootstrap, buildModulesTsBootstrap } from "@mochi/compiler/bootstrap/module";
+import {
+  buildModulesBootstrap,
+  buildModulesTsBootstrap,
+  emitDtsForFileBootstrap,
+} from "@mochi/compiler/bootstrap/module";
 import { compileBootstrapSync, compileTsBootstrapSync } from "@mochi/compiler/bootstrap/sync";
 import { codegenTs } from "@mochi/compiler/codegen-ts";
 import { compile } from "@mochi/compiler/compile";
@@ -103,6 +107,16 @@ await match(cmd)
       `usage: mochi dts [--open] [--no-docs] <file.mochi>\n${USAGE}`,
     );
     const src = await Bun.file(path).text();
+    // The self-host emits the default mode only: it has no `open`/`--no-docs`
+    // switch and no plugin `dtsBinding` seam, so those keep the TypeScript path.
+    if (!open && docs) {
+      const bootstrap = emitDtsForFileBootstrap(path, "@mochi/runtime");
+      if (bootstrap._tag === "Ok") {
+        process.stdout.write(bootstrap.value);
+        return;
+      }
+      dieBootstrap(path, src, bootstrap.error);
+    }
     const r = await emitDtsForFile(path, src, (p) => Bun.file(p).text(), { open, docs });
     if (isErr(r)) die(r.error, src);
     process.stdout.write(r.value);
