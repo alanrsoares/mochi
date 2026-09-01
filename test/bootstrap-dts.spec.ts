@@ -32,6 +32,15 @@ const cases: Record<string, string> = {
   "a synthetic $-binder declares nothing": "let f = ((a, b)) => a + b",
   "an opaque extern type": "extern type Vector3",
   "polymorphic record field access": "let nameOf = r => r.name",
+  "an extern binding": 'extern log : string -> () = "./host.mjs" "log"',
+  "a labeled param collapses to one $lab record": 'let f = (~tone: string = "rose") => tone',
+  "several labeled params share the one record":
+    'let f = (~tone: string = "rose", ~size?: number) => tone',
+  "an optional record alias field": "type Box = { value: number, label?: string }",
+  "a tuple binding": "let pair = (a, b) => (a, b)",
+  "a builtin ctor call in a binding": "let opt = x => Some(x)",
+  "a curried definition keeps its shape": "let add = a => b => a + b",
+  "a record-destructuring param": "let dx = ({ x, y }) => x + y",
 };
 
 for (const [name, src] of Object.entries(cases)) {

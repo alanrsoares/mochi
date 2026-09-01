@@ -631,6 +631,7 @@ const paramDeclName: <A>(p: LamParam, i: A) => string = _curry(2, <A>(p: LamPara
   match(p)
     .with({ _tag: "LPSpanned" }, ({ param: inner }) => paramDeclName(inner, i))
     .with({ _tag: "LPName" }, ({ name }) => name)
+    .with({ _tag: "LPLabeled" }, () => "$lab")
     .otherwise(() => `_${show(i)}`),
 );
 /**

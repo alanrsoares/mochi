@@ -8246,7 +8246,7 @@ var ctorFactoryTs = _curry15(5, (typeName, params, c, aliases, recs) => {
   const monos = neverArgs(params, 0, []);
   return { generics: head, paramTypes: ctorParamTypes(c.fields, params, aliases, recs, 0), ret: `${typeName}${head}`, retMono: eq14(length12(monos), 0) ? typeName : `${typeName}<${_Str_join7(", ", monos)}>` };
 });
-var paramDeclName = _curry15(2, (p, i) => match14(p).with({ _tag: "LPSpanned" }, ({ param: inner }) => paramDeclName(inner, i)).with({ _tag: "LPName" }, ({ name }) => name).otherwise(() => `_${show8(i)}`));
+var paramDeclName = _curry15(2, (p, i) => match14(p).with({ _tag: "LPSpanned" }, ({ param: inner }) => paramDeclName(inner, i)).with({ _tag: "LPName" }, ({ name }) => name).with({ _tag: "LPLabeled" }, () => "$lab").otherwise(() => `_${show8(i)}`));
 var compositions = (n) => eq14(n, 0) ? [[]] : compositionsFrom(n, 1);
 var compositionsFrom = _curry15(2, (n, k) => k > n ? [] : _Array_concat7(map11(_Array_prepend9(k), compositions(n - k)), compositionsFrom(n, k + 1)));
 var sliceGroups = _curry15(4, (params, groups, i, at) => match14(_Array_get12(i, groups)).with({ _tag: "None" }, () => []).with({ _tag: "Some" }, ({ value: g }) => _Array_prepend9(_Array_take3(g, _Array_drop3(at, params)), sliceGroups(params, groups, i + 1, at + g))).exhaustive());

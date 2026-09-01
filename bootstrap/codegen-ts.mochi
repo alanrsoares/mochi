@@ -312,6 +312,10 @@ export let ctorFactoryTs = (typeName, params, c: Ast.Ctor, aliases: Map<string, 
 let paramDeclName = (p, i) => switch p {
   | Ast.LPSpanned(inner, _) => paramDeclName(inner, i)
   | Ast.LPName(name, _) => name
+  | Ast.LPLabeled(_, _, _, _) =>
+    // A trailing labeled group collapses to the one `$lab` record the runtime
+    // actually receives (ADR 0098 §2), so the declared name matches the JS.
+    "$lab"
   | _ => "_${show(i)}"
 }
 
