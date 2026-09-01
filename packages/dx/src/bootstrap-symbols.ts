@@ -1,7 +1,8 @@
 /** Node-only document-outline query over the frozen bootstrap parser. */
+import { loadBootstrapGraph } from "@mochi/compiler/bootstrap";
 import { lex, parseRecovering } from "@mochi/compiler/bootstrap/syntax";
 import { None } from "@mochi/compiler/runtime";
-import type { DocSymbol } from "./nav";
+import type { DocSymbol, WorkspaceSymbol } from "./nav";
 
 type BootstrapSpan = { start: number; end: number };
 type BootstrapToken = { tok: { _tag: string; value?: string }; start: number; end: number };
@@ -59,4 +60,22 @@ export const bootstrapDocumentSymbolsAt = (src: string): DocSymbol[] => {
     }
   }
   return out;
+};
+
+/** Workspace-outline search over the bootstrap dependency graph. */
+export const bootstrapWorkspaceSymbolsAt = async (
+  entry: string,
+  query: string,
+  readFile: (path: string) => Promise<string>,
+  liveSrc?: string,
+): Promise<WorkspaceSymbol[]> => {
+  const src = liveSrc ?? (await readFile(entry).catch(() => ""));
+  const graph = await loadBootstrapGraph(entry, src, readFile);
+  const q = query.toLowerCase();
+  const modules = graph._tag === "Ok" ? graph.value : [{ path: entry, src }];
+  return modules.flatMap((module) =>
+    bootstrapDocumentSymbolsAt(module.src)
+      .filter((symbol) => !q || symbol.name.toLowerCase().includes(q))
+      .map((symbol) => ({ ...symbol, path: module.path })),
+  );
 };

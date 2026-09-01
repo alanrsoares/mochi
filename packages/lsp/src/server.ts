@@ -12,7 +12,10 @@ import { createModuleCache } from "@mochi/compiler/module";
 import { isPreludePath, PRELUDE_PATH, preludeVirtualSource } from "@mochi/compiler/prelude-virtual";
 import type { Span } from "@mochi/compiler/span";
 import { moduleBootstrapHoverAt } from "@mochi/dx/bootstrap-hover";
-import { bootstrapDocumentSymbolsAt } from "@mochi/dx/bootstrap-symbols";
+import {
+  bootstrapDocumentSymbolsAt,
+  bootstrapWorkspaceSymbolsAt,
+} from "@mochi/dx/bootstrap-symbols";
 import { type CompletionItem as MochiCompletion, moduleCompleteAt } from "@mochi/dx/complete";
 import {
   bootstrapModuleDiagnostics,
@@ -451,7 +454,11 @@ export function startServer(opts: ServerOptions = {}): void {
     for (const doc of documents.all()) {
       if (!doc.uri.endsWith(".mochi")) continue;
       const path = docPath(doc.uri);
-      const syms = await workspaceSymbolsAt(path, query, read, doc.getText());
+      const dx = await dxOpts(path);
+      const syms =
+        dx.plugins === undefined
+          ? await bootstrapWorkspaceSymbolsAt(path, query, read, doc.getText())
+          : await workspaceSymbolsAt(path, query, read, doc.getText());
       for (const s of syms) {
         const k = `${s.path}:${s.span.start}:${s.name}`;
         if (seen.has(k)) continue;
