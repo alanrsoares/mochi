@@ -13,11 +13,11 @@ import { isPreludePath, PRELUDE_PATH, preludeVirtualSource } from "@mochi/compil
 import type { Span } from "@mochi/compiler/span";
 import { moduleBootstrapHoverAt } from "@mochi/dx/bootstrap-hover";
 import {
-  bootstrapBindingIsFileLocal,
-  bootstrapHighlightsAt,
-  bootstrapPrepareRenameAt,
-  bootstrapReferencesAt,
-  bootstrapRenameAt,
+  bootstrapBindingAt,
+  bootstrapHighlightsOf,
+  bootstrapPrepareRenameOf,
+  bootstrapReferencesOf,
+  bootstrapRenameOf,
 } from "@mochi/dx/bootstrap-nav";
 import {
   bootstrapDocumentSymbolsAt,
@@ -379,13 +379,12 @@ export function startServer(opts: ServerOptions = {}): void {
       if (!doc) return [];
       const path = docPath(textDocument.uri);
       const dx = await dxOpts(path);
-      const bootstrap =
-        dx.plugins === undefined
-          ? bootstrapHighlightsAt(doc.getText(), doc.offsetAt(position))
-          : null;
-      const hits = bootstrap?.length
-        ? bootstrap
-        : await moduleHighlightsAt(path, doc.getText(), doc.offsetAt(position), read);
+      const src = doc.getText();
+      const offset = doc.offsetAt(position);
+      const binding = dx.plugins === undefined ? bootstrapBindingAt(src, offset) : null;
+      const hits = binding
+        ? bootstrapHighlightsOf(binding)
+        : await moduleHighlightsAt(path, src, offset, read);
       return hits.map((h) => ({
         range: rangeOf(doc, h.span),
         kind: h.role === "def" ? DocumentHighlightKind.Write : DocumentHighlightKind.Read,
@@ -404,10 +403,10 @@ export function startServer(opts: ServerOptions = {}): void {
     // A binding confined to this file cannot be imported, so the single-file
     // bootstrap index is complete for it (ADR 0103); anything top-level still
     // needs the graph-wide walk.
-    const refs =
-      dx.plugins === undefined && bootstrapBindingIsFileLocal(src, offset)
-        ? bootstrapReferencesAt(src, offset, path)
-        : await moduleReferencesAt(path, src, offset, read, listFiles);
+    const binding = dx.plugins === undefined ? bootstrapBindingAt(src, offset) : null;
+    const refs = binding?.fileLocal
+      ? bootstrapReferencesOf(binding, path)
+      : await moduleReferencesAt(path, src, offset, read, listFiles);
     return Promise.all(refs.map((r) => rangeAtPath(r.location.path, r.location.span)));
   });
 
@@ -419,10 +418,10 @@ export function startServer(opts: ServerOptions = {}): void {
     const dx = await dxOpts(path);
     const src = doc.getText();
     const offset = doc.offsetAt(position);
-    const prep =
-      dx.plugins === undefined && bootstrapBindingIsFileLocal(src, offset)
-        ? bootstrapPrepareRenameAt(src, offset)
-        : await modulePrepareRenameAt(path, src, offset, read);
+    const binding = dx.plugins === undefined ? bootstrapBindingAt(src, offset) : null;
+    const prep = binding?.fileLocal
+      ? bootstrapPrepareRenameOf(binding)
+      : await modulePrepareRenameAt(path, src, offset, read);
     return prep ? { range: rangeOf(doc, prep.span), placeholder: prep.name } : null;
   });
 
@@ -433,10 +432,10 @@ export function startServer(opts: ServerOptions = {}): void {
     const dx = await dxOpts(path);
     const src = doc.getText();
     const offset = doc.offsetAt(position);
-    const edits =
-      dx.plugins === undefined && bootstrapBindingIsFileLocal(src, offset)
-        ? bootstrapRenameAt(src, offset, newName, path)
-        : await moduleRenameAt(path, src, offset, newName, read, listFiles);
+    const binding = dx.plugins === undefined ? bootstrapBindingAt(src, offset) : null;
+    const edits = binding?.fileLocal
+      ? bootstrapRenameOf(binding, newName, path)
+      : await moduleRenameAt(path, src, offset, newName, read, listFiles);
     if (!edits) return null;
     const changes: Record<string, TextEdit[]> = {};
     for (const e of edits) {
