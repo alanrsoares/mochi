@@ -696,7 +696,7 @@ let scopedSpans = e => switch e {
       scopedSpans(value),
       scopedSpans(body)
     )
-  | Ast.EPipe(left, right, _) => Array.concat(
+  | Ast.EPipe(left, right, _, _) => Array.concat(
       scopedSpans(left),
       scopedSpans(right)
     )
@@ -927,7 +927,7 @@ let hasJsxExpr = e => switch e {
   | Ast.ELetBind(_, _, _, value, body, _) => hasJsxExpr(
       value
     ) || hasJsxExpr(body)
-  | Ast.EPipe(left, right, _) => hasJsxExpr(left) || hasJsxExpr(right)
+  | Ast.EPipe(left, right, _, _) => hasJsxExpr(left) || hasJsxExpr(right)
   | Ast.EDo(exprs, _) => anyOf(hasJsxExpr, exprs)
   | Ast.ETernary(cond, thenE, elseE, _) => hasJsxExpr(
       cond

@@ -1245,7 +1245,7 @@ const parseInfix: <A>(
       ? _Result_flatMap(
           ([right, p]) =>
             Ok({
-              left: Ast.EPipe(left, right, spanning(exprSpan(left), exprSpan(right))),
+              left: Ast.EPipe(left, right, false, spanning(exprSpan(left), exprSpan(right))),
               p: p,
               matched: true,
             }) as Result<{ left: Expr; p: number; matched: boolean }, PErr>,
@@ -1257,14 +1257,9 @@ const parseInfix: <A>(
               match(right)
                 .with(
                   { _tag: "ECall" },
-                  ({ fn, args, origin, span: rightSpan }) =>
+                  ({ span: rightSpan }) =>
                     Ok({
-                      left: Ast.ECall(
-                        fn,
-                        _Array_prepend(left, args),
-                        origin,
-                        spanning(exprSpan(left), rightSpan),
-                      ),
+                      left: Ast.EPipe(left, right, true, spanning(exprSpan(left), rightSpan)),
                       p: p,
                       matched: true,
                     }) as Result<{ left: Expr; p: number; matched: boolean }, PErr>,

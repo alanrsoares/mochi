@@ -288,7 +288,7 @@ let exprSpan = e => switch e {
   | Ast.ELambda(_, _, sp) => sp
   | Ast.ELetIn(_, _, _, _, sp) => sp
   | Ast.ELetBind(_, _, _, _, _, sp) => sp
-  | Ast.EPipe(_, _, sp) => sp
+  | Ast.EPipe(_, _, _, sp) => sp
   | Ast.EDo(_, sp) => sp
   | Ast.ETernary(_, _, _, sp) => sp
   | Ast.EMatch(_, _, sp) => sp
@@ -645,6 +645,7 @@ let parseInfix = (toks, minBp, left, pos, hooks) =>
             left: Ast.EPipe(
               left,
               right,
+              false,
               spanning(exprSpan(left), exprSpan(right))
             ),
             p,
@@ -653,13 +654,15 @@ let parseInfix = (toks, minBp, left, pos, hooks) =>
         )
       : lt.tok == TTarrow && FAST_PIPE_BP >= minBp
       ? let? (right, p) = parseAtomOrCall(toks, pos + 1, hooks) in
+        // Retained as a node, not desugared: the arg-prepending lowering happens
+        // in infer/codegen, so the formatter can still print `a -> f(b)`.
         switch right {
-          | Ast.ECall(fn, args, origin, rightSpan) => Ok(
+          | Ast.ECall(_, _, _, rightSpan) => Ok(
               {
-                left: Ast.ECall(
-                  fn,
-                  Array.prepend(left, args),
-                  origin,
+                left: Ast.EPipe(
+                  left,
+                  right,
+                  true,
                   spanning(exprSpan(left), rightSpan)
                 ),
                 p,

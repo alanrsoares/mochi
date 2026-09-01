@@ -11,8 +11,16 @@ test("a let declaration preserves its name, doc, and lambda shape", () => switch
   | _ => false |> ok
 })
 
-test("fast pipe becomes a call with the piped value first", () => switch parseSrc("let value = 1->add(2)") {
-  | Ok([Ast.SLet("value", _, None, Ast.ECall(Ast.ERef("add", _), [Ast.ENum(1, "1", _), Ast.ENum(2, "2", _)], None, _), false, None, _)]) => true
+// The parser KEEPS the fast pipe (`fast: true`); the arg-prepending lowering to
+// `add(1, 2)` happens in infer/codegen, so the formatter can print `->` back.
+test("fast pipe is retained as a node, not desugared", () => switch parseSrc("let value = 1->add(2)") {
+  | Ok([Ast.SLet("value", _, None, Ast.EPipe(Ast.ENum(1, "1", _), Ast.ECall(Ast.ERef("add", _), [Ast.ENum(2, "2", _)], None, _), true, _), false, None, _)]) => true
+      |> ok
+  | _ => false |> ok
+})
+
+test("`|>` is retained too, and is not marked fast", () => switch parseSrc("let value = 1 |> add") {
+  | Ok([Ast.SLet("value", _, None, Ast.EPipe(Ast.ENum(1, "1", _), Ast.ERef("add", _), false, _), false, None, _)]) => true
       |> ok
   | _ => false |> ok
 })

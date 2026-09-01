@@ -3569,6 +3569,15 @@ const inferExprRaw: <A>(
             runInferCallHooks(inferCallHooksOf(ctx.plugins), fn, args, origin, st, api),
           ))({ inferExpr: _curry(2, (e: Expr, st0: St) => inferExpr(ctx, e, st0)), unify: u }),
       )
+      .with({ _tag: "EPipe", fast: true }, ({ left, right, span: sp }) =>
+        match(right)
+          .with({ _tag: "ECall" }, ({ fn: rfn, args: rargs, origin }) =>
+            inferExpr(ctx, Ast.ECall(rfn, _Array_prepend(left, rargs), origin, sp), st),
+          )
+          .otherwise(() =>
+            inferExpr(ctx, Ast.ECall(right, [left], None as Option<string>, sp), st),
+          ),
+      )
       .with({ _tag: "EPipe" }, ({ left, right, span: sp }) =>
         inferExpr(ctx, Ast.ECall(right, [left], None as Option<string>, sp), st),
       )

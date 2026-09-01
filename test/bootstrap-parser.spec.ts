@@ -133,15 +133,15 @@ const cExpr = (e: Expr): Canon => {
         span: cSpan(e.span),
       };
     case "pipe":
-      if (e.fast && e.right.kind === "call")
-        return {
-          kind: "call",
-          fn: cExpr(e.right.fn),
-          args: [cExpr(e.left), ...e.right.args.map(cExpr)],
-          origin: e.right.origin ?? null,
-          span: cSpan(e.span),
-        };
-      return { kind: "pipe", left: cExpr(e.left), right: cExpr(e.right), span: cSpan(e.span) };
+      // Both parsers now KEEP the fast pipe as a node (it lowers in infer /
+      // codegen), so `fast` is compared rather than normalised away.
+      return {
+        kind: "pipe",
+        left: cExpr(e.left),
+        right: cExpr(e.right),
+        fast: e.fast === true,
+        span: cSpan(e.span),
+      };
     case "do":
       return { kind: "do", exprs: e.exprs.map(cExpr), span: cSpan(e.span) };
     case "ternary":
@@ -403,7 +403,13 @@ const A_EXPR: Record<string, (e: Al) => Canon> = {
     span: e.span,
   }),
   EDo: (e) => ({ kind: "do", exprs: e.exprs.map(aExpr), span: e.span }),
-  EPipe: (e) => ({ kind: "pipe", left: aExpr(e.left), right: aExpr(e.right), span: e.span }),
+  EPipe: (e) => ({
+    kind: "pipe",
+    left: aExpr(e.left),
+    right: aExpr(e.right),
+    fast: e.fast === true,
+    span: e.span,
+  }),
   // al-side fields are `thenE`/`elseE` (`else` is a JS reserved word); canon
   // folds them back to the TS AST's `then`/`else`.
   ETernary: (e) => ({

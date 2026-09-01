@@ -50,7 +50,10 @@ export type Expr =
   | ELambda(params: [LamParam], body: Expr, span: Span)
   | ELetIn(name: string, nameSpan: Span, value: Expr, body: Expr, span: Span)
   | ELetBind(param: LamParam, paramSpan: Span, monad: string, value: Expr, body: Expr, span: Span)
-  | EPipe(left: Expr, right: Expr, span: Span)
+  // `fast` distinguishes `a -> f(b)` from `a |> f`: both lower to a call, but the
+  // fast pipe PREPENDS its left (ADR 0069) while `|>` is data-last. Kept in the
+  // AST rather than desugared at parse time so the formatter can print it back.
+  | EPipe(left: Expr, right: Expr, fast: bool, span: Span)
   | EDo(exprs: [Expr], span: Span)
   | ETernary(cond: Expr, thenE: Expr, elseE: Expr, span: Span)
   | EMatch(scrutinee: Expr, arms: [MatchArm], span: Span)

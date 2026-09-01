@@ -496,14 +496,24 @@ let genExpr = (ctx: GCtx, e) => switch e {
     let f = "(${genParam(param)}) => ${ctx->genLambdaBody(body)}" in
     let v = ctx->genExpr(value) in
       ctx.flattenPipe ? "${rt}(${f}, ${v})" : "${rt}(${f})(${v})"
-  | Ast.EPipe(left, right, _) =>
-    // desugar inline: a |> f  ->  f(a). Under `flattenPipe` (TS backend) a pipe
-    // into a call appends the arg — `a |> f(x)` -> `f(x, a)` — so tsc infers type
-    // args from every argument at once; otherwise the curried `f(x)(a)`.
-    switch right {
-      | Ast.ECall(rfn, rargs, _, _) when ctx.flattenPipe => "${ctx->genCallee(rfn)}(${Str.join(", ", Array.append(left, rargs) |> map(a => ctx->genExpr(a)))})"
-      | _ => "${ctx->genCallee(right)}(${ctx->genExpr(left)})"
-    }
+  | Ast.EPipe(left, right, fast, sp) =>
+    // A fast pipe IS a call (ADR 0069) — lower it and take the ordinary call
+    // path, so argument order lives in `Ast.pipeCall` alone.
+    fast
+      ? switch right {
+        | Ast.ECall(rfn, rargs, origin, _) => ctx->genExpr(
+            Ast.ECall(rfn, Array.prepend(left, rargs), origin, sp)
+          )
+        | _ => ctx->genExpr(Ast.ECall(right, [left], None, sp))
+      }
+      :
+        // `a |> f` -> `f(a)`. Under `flattenPipe` (the TS backend) a pipe into a
+        // call APPENDS the argument — `a |> f(x)` -> `f(x, a)` — so tsc infers the
+        // type arguments once; otherwise it stays curried as `f(x)(a)`.
+        switch right {
+          | Ast.ECall(rfn, rargs, _, _) when ctx.flattenPipe => "${ctx->genCallee(rfn)}(${Str.join(", ", Array.append(left, rargs) |> map(a => ctx->genExpr(a)))})"
+          | _ => "${ctx->genCallee(right)}(${ctx->genExpr(left)})"
+        }
   | Ast.EDo(exprs, _) => ctx->genDo(exprs)
   | Ast.ETernary(cond, thenE, elseE, _) => "(${ctx->genExpr(cond)} ? ${ctx->genExpr(thenE)} : ${ctx->genExpr(elseE)})"
   | Ast.EMatch(scrutinee, arms, _) => ctx->genMatch(scrutinee, arms)
@@ -649,7 +659,7 @@ let hasRecur = e => switch e {
     )
   | Ast.ECall(fn, args, _, _) => hasRecur(fn) || someOf(hasRecur, args)
   | Ast.ELetIn(_, _, value, body, _) => hasRecur(value) || hasRecur(body)
-  | Ast.EPipe(left, right, _) => hasRecur(left) || hasRecur(right)
+  | Ast.EPipe(left, right, _, _) => hasRecur(left) || hasRecur(right)
   | Ast.EDo(exprs, _) => someOf(hasRecur, exprs)
   | Ast.ETernary(cond, thenE, elseE, _) => hasRecur(
       cond
@@ -1725,7 +1735,7 @@ let usesMatchLib = e => switch e {
   | Ast.ELetBind(_, _, _, value, body, _) => usesMatchLib(
       value
     ) || usesMatchLib(body)
-  | Ast.EPipe(left, right, _) => usesMatchLib(left) || usesMatchLib(right)
+  | Ast.EPipe(left, right, _, _) => usesMatchLib(left) || usesMatchLib(right)
   | Ast.EDo(exprs, _) => someOf(usesMatchLib, exprs)
   | Ast.ETernary(cond, thenE, elseE, _) => usesMatchLib(
       cond
@@ -1865,7 +1875,10 @@ let exprRefs = (ctx: GCtx, e, acc) => switch e {
       body,
       ctx->exprRefs(value, Set.add(bindRuntime(monad), acc))
     )
-  | Ast.EPipe(left, right, _) => ctx->exprRefs(right, ctx->exprRefs(left, acc))
+  | Ast.EPipe(left, right, _, _) => ctx->exprRefs(
+      right,
+      ctx->exprRefs(left, acc)
+    )
   | Ast.EDo(exprs, _) => ctx->exprRefsListFrom(exprs, 0, acc)
   | Ast.ETernary(cond, thenE, elseE, _) => ctx->exprRefs(
       elseE,

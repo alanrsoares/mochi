@@ -39,7 +39,7 @@ export type Expr =
       body: Expr;
       span: Span;
     }
-  | { _tag: "EPipe"; left: Expr; right: Expr; span: Span }
+  | { _tag: "EPipe"; left: Expr; right: Expr; fast: boolean; span: Span }
   | { _tag: "EDo"; exprs: Expr[]; span: Span }
   | { _tag: "ETernary"; cond: Expr; thenE: Expr; elseE: Expr; span: Span }
   | { _tag: "EMatch"; scrutinee: Expr; arms: MatchArm[]; span: Span }
@@ -205,11 +205,13 @@ export const ELetBind = _curry(6, (param, paramSpan, monad, value, body, span) =
   body: Expr,
   span: Span,
 ) => Expr;
-export const EPipe = _curry(3, (left, right, span) => ({ _tag: "EPipe", left, right, span })) as (
-  left: Expr,
-  right: Expr,
-  span: Span,
-) => Expr;
+export const EPipe = _curry(4, (left, right, fast, span) => ({
+  _tag: "EPipe",
+  left,
+  right,
+  fast,
+  span,
+})) as (left: Expr, right: Expr, fast: boolean, span: Span) => Expr;
 export const EDo = _curry(2, (exprs, span) => ({ _tag: "EDo", exprs, span })) as (
   exprs: Expr[],
   span: Span,

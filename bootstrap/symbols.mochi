@@ -257,7 +257,7 @@ let walkExpr = (expr, env) => switch expr {
       walkExpr(value, env),
       walkExpr(body, env)
     )
-  | Ast.EPipe(left, right, _) => Array.concat(
+  | Ast.EPipe(left, right, _, _) => Array.concat(
       walkExpr(left, env),
       walkExpr(right, env)
     )

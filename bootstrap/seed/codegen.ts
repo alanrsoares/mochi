@@ -738,20 +738,26 @@ const genExpr: _Curry<[ctx: GCtx, e: Expr], string> = _curry(2, (ctx: GCtx, e: E
             genExpr(ctx, value),
           ))(`(${genParam(param)}) => ${genLambdaBody(ctx, body)}`))(bindRuntime(monad)),
     )
-    .with({ _tag: "EPipe" }, ({ left, right }) =>
-      match(right)
-        .with(
-          (_v): _v is Extract<Expr, { _tag: "ECall" }> => {
-            const _g: any = _v;
-            return _g._tag === "ECall" && (({ fn: rfn, args: rargs }) => ctx.flattenPipe)(_g);
-          },
-          ({ fn: rfn, args: rargs }) =>
-            `${genCallee(ctx, rfn)}(${_Str_join(
-              ", ",
-              map((a: Expr) => genExpr(ctx, a), _Array_append(left, rargs)),
-            )})`,
-        )
-        .otherwise(() => `${genCallee(ctx, right)}(${genExpr(ctx, left)})`),
+    .with({ _tag: "EPipe" }, ({ left, right, fast, span: sp }) =>
+      fast
+        ? match(right)
+            .with({ _tag: "ECall" }, ({ fn: rfn, args: rargs, origin }) =>
+              genExpr(ctx, Ast.ECall(rfn, _Array_prepend(left, rargs), origin, sp)),
+            )
+            .otherwise(() => genExpr(ctx, Ast.ECall(right, [left], None as Option<string>, sp)))
+        : match(right)
+            .with(
+              (_v): _v is Extract<Expr, { _tag: "ECall" }> => {
+                const _g: any = _v;
+                return _g._tag === "ECall" && (({ fn: rfn, args: rargs }) => ctx.flattenPipe)(_g);
+              },
+              ({ fn: rfn, args: rargs }) =>
+                `${genCallee(ctx, rfn)}(${_Str_join(
+                  ", ",
+                  map((a: Expr) => genExpr(ctx, a), _Array_append(left, rargs)),
+                )})`,
+            )
+            .otherwise(() => `${genCallee(ctx, right)}(${genExpr(ctx, left)})`),
     )
     .with({ _tag: "EDo" }, ({ exprs }) => genDo(ctx, exprs))
     .with(

@@ -117,7 +117,7 @@ export let exprSpan = e => switch e {
   | Ast.ELambda(_, _, sp) => sp
   | Ast.ELetIn(_, _, _, _, sp) => sp
   | Ast.ELetBind(_, _, _, _, _, sp) => sp
-  | Ast.EPipe(_, _, sp) => sp
+  | Ast.EPipe(_, _, _, sp) => sp
   | Ast.EDo(_, sp) => sp
   | Ast.ETernary(_, _, _, sp) => sp
   | Ast.EMatch(_, _, sp) => sp
@@ -850,7 +850,18 @@ let inferExprRaw = (ctx: Ctx<a>, e, st: Types.St) => switch e {
         | Some(r) => Ok(r)
         | None => ctx->inferNormalCall(fn, args, st)
       }
-  | Ast.EPipe(left, right, sp) => ctx->inferExpr(
+  | Ast.EPipe(left, right, true, sp) =>
+    // `a |> f` is `f(a)`; the fast pipe PREPENDS into the call on its right, so
+    // `a -> f(b)` is `f(a, b)` (ADR 0069). codegen.mochi repeats this lowering —
+    // keep the two argument orders in step.
+    switch right {
+      | Ast.ECall(rfn, rargs, origin, _) => ctx->inferExpr(
+          Ast.ECall(rfn, Array.prepend(left, rargs), origin, sp),
+          st
+        )
+      | _ => ctx->inferExpr(Ast.ECall(right, [left], None, sp), st)
+    }
+  | Ast.EPipe(left, right, _, sp) => ctx->inferExpr(
       Ast.ECall(right, [left], None, sp),
       st
     )
@@ -1232,7 +1243,7 @@ let freeRefs = (e, bound, acc) => switch e {
       acc
     ) in
       freeRefs(body, paramBound(param, bound), acc1)
-  | Ast.EPipe(left, right, _) => freeRefs(
+  | Ast.EPipe(left, right, _, _) => freeRefs(
       right,
       bound,
       freeRefs(left, bound, acc)

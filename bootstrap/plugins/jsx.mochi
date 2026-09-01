@@ -149,7 +149,7 @@ let jxExprSpan = e => switch e {
   | Ast.ELambda(_, _, sp) => sp
   | Ast.ELetIn(_, _, _, _, sp) => sp
   | Ast.ELetBind(_, _, _, _, _, sp) => sp
-  | Ast.EPipe(_, _, sp) => sp
+  | Ast.EPipe(_, _, _, sp) => sp
   | Ast.EDo(_, sp) => sp
   | Ast.ETernary(_, _, _, sp) => sp
   | Ast.EMatch(_, _, sp) => sp
