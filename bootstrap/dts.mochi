@@ -20,18 +20,186 @@ import {
   typeDecl,
   withoutOwnShape
 } from "./codegen-ts.mochi"
+import {
+  RowEmpty,
+  RowExtend,
+  RowVar,
+  TyCon,
+  TyFn,
+  TyOneOf,
+  TyRecord,
+  TySingleton,
+  TyVar
+} from "./types.mochi"
 import { jsDoc } from "./codegen.mochi"
 import { typedProgram } from "./compile.mochi"
+
+/// Fold `D.Shape` written in this file back to a name the emitted `.d.ts` can
+/// resolve, without needing the module graph: single-file dts sees the `tqual`
+/// nodes even though it cannot see the dependency's exports.
+let writtenQualsIn = (te, local, acc) => switch te {
+  | Ast.TyName(_, _) => acc
+  | Ast.TyLit(_, _) => acc
+  | Ast.TyArrow(from, to, _) => writtenQualsIn(
+      to,
+      local,
+      writtenQualsIn(from, local, acc)
+    )
+  | Ast.TyApp(_, args, _) => writtenQualsInAll(args, local, acc, 0)
+  | Ast.TyTuple(elems, _) => writtenQualsInAll(elems, local, acc, 0)
+  | Ast.TyList(elem, _) => writtenQualsIn(elem, local, acc)
+  | Ast.TyUnion(members, _) => writtenQualsInAll(members, local, acc, 0)
+  | Ast.TyQual(alias, name, _, args, _) => let acc1 = Set.has(
+      name,
+      local
+    ) || Map.has(name, acc)
+      ? acc
+      : Map.set(name, "${alias}.${name}", acc) in
+      writtenQualsInAll(args, local, acc1, 0)
+}
+
+let writtenQualsInAll = (tes, local, acc, i) => switch Array.get(i, tes) {
+  | None => acc
+  | Some(te) => writtenQualsInAll(
+      tes,
+      local,
+      writtenQualsIn(te, local, acc),
+      i + 1
+    )
+}
+
+let ctorQualsFrom = (ctors: [Ast.Ctor], local, acc, i) => switch Array.get(i, ctors) {
+  | None => acc
+  | Some(c) => ctorQualsFrom(
+      ctors,
+      local,
+      writtenQualsInAll(c.fields |> map(f => f.fieldType), local, acc, 0),
+      i + 1
+    )
+}
+
+let writtenQualsFrom = (stmts, local, acc, i) => switch Array.get(i, stmts) {
+  | None => acc
+  | Some(Ast.SExtern(_, _, _, te, _, _, _, _, _, _)) => writtenQualsFrom(
+      stmts,
+      local,
+      writtenQualsIn(te, local, acc),
+      i + 1
+    )
+  | Some(Ast.SLet(_, _, annot, _, _, _, _)) => writtenQualsFrom(
+      stmts,
+      local,
+      switch annot {
+        | None => acc
+        | Some(te) => writtenQualsIn(te, local, acc)
+      },
+      i + 1
+    )
+  | Some(Ast.SType(_, _, ctors, alias, aliasType, _, _, _)) => let acc1 = ctorQualsFrom(
+      ctors,
+      local,
+      acc,
+      0
+    ) in
+    let acc2 = switch alias {
+      | None => acc1
+      | Some(fields) => writtenQualsInAll(
+          fields |> map(f => f.fieldType),
+          local,
+          acc1,
+          0
+        )
+    } in
+    let acc3 = switch aliasType {
+      | None => acc2
+      | Some(te) => writtenQualsIn(te, local, acc2)
+    } in
+      writtenQualsFrom(stmts, local, acc3, i + 1)
+  | Some(_) => writtenQualsFrom(stmts, local, acc, i + 1)
+}
+
+/// `Shape` -> `D.Shape` for a type an `import * as D` brings into type position
+/// (ADR 0046). Applied to inferred types before they print; the printers stay
+/// qualification-free so the `.ts` backend is untouched.
+let qualifyRow = (row, qualify) => switch row {
+  | RowEmpty => RowEmpty
+  | RowVar(id) => RowVar(id)
+  | RowExtend(label, fieldType, optional, rest) => RowExtend(
+      label,
+      qualifyTy(fieldType, qualify),
+      optional,
+      qualifyRow(rest, qualify)
+    )
+}
+
+let qualifyTy = (t, qualify) => switch t {
+  | TyVar(id) => TyVar(id)
+  | TyCon(name, args) => TyCon(
+      Map.getOr(name, name, qualify),
+      args |> map(a => qualifyTy(a, qualify))
+    )
+  | TyFn(from, to) => TyFn(qualifyTy(from, qualify), qualifyTy(to, qualify))
+  | TyRecord(row) => TyRecord(qualifyRow(row, qualify))
+  | TySingleton(base, value) => TySingleton(base, value)
+  | TyOneOf(members) => TyOneOf(members |> map(m => qualifyTy(m, qualify)))
+}
+
+/// The same rename on a written `TypeExpr` — ctor and alias field types print
+/// from the AST, not from an inferred `Ty`.
+let qualifyTe = (te, qualify) => switch te {
+  | Ast.TyName(name, span) => Ast.TyName(Map.getOr(name, name, qualify), span)
+  | Ast.TyArrow(from, to, span) => Ast.TyArrow(
+      qualifyTe(from, qualify),
+      qualifyTe(to, qualify),
+      span
+    )
+  | Ast.TyApp(ctor, args, span) => Ast.TyApp(
+      Map.getOr(ctor, ctor, qualify),
+      args |> map(a => qualifyTe(a, qualify)),
+      span
+    )
+  | Ast.TyTuple(elems, span) => Ast.TyTuple(
+      elems |> map(e => qualifyTe(e, qualify)),
+      span
+    )
+  | Ast.TyList(elem, span) => Ast.TyList(qualifyTe(elem, qualify), span)
+  | Ast.TyQual(alias, name, nameSpan, args, span) => Ast.TyQual(
+      alias,
+      name,
+      nameSpan,
+      args |> map(a => qualifyTe(a, qualify)),
+      span
+    )
+  | Ast.TyLit(value, span) => Ast.TyLit(value, span)
+  | Ast.TyUnion(members, span) => Ast.TyUnion(
+      members |> map(m => qualifyTe(m, qualify)),
+      span
+    )
+}
+
+let qualifyField = (f: Ast.CtorField, qualify) =>
+  { name: f.name, fieldType: qualifyTe(f.fieldType, qualify) }
+
+let qualifyCtor = (c: Ast.Ctor, qualify) =>
+  { name: c.name, fields: c.fields |> map(f => qualifyField(f, qualify)) }
+
+let qualifyAliasField = (f: Ast.AliasField, qualify) =>
+  {
+    name: f.name,
+    fieldType: qualifyTe(f.fieldType, qualify),
+    optional: f.optional
+  }
 
 /// One `export`ed declaration per `type` statement. `codegen-ts`'s own walker
 /// emits these module-locally for the `.ts` backend; a `.d.ts` exports them, and
 /// an opaque `extern type` goes through `opaqueTypeDecl` for the same reason.
-let typeDeclsFrom = (stmts, aliases, recs, i) => switch Array.get(i, stmts) {
+let typeDeclsFrom = (stmts, aliases, recs, qualify, i) => switch Array.get(i, stmts) {
   | None => []
   | Some(Ast.SType(name, params, ctors, alias, aliasType, _, doc, _)) => let rest = typeDeclsFrom(
       stmts,
       aliases,
       recs,
+      qualify,
       i + 1
     ) in
     let docComment = jsDoc(doc) in
@@ -40,33 +208,34 @@ let typeDeclsFrom = (stmts, aliases, recs, i) => switch Array.get(i, stmts) {
           // Its OWN entry is dropped, or the alias renders as itself
           // (`export type Span = Span;`).
           Array.prepend(
-            "${docComment}${recordAliasDecl(name, params, fields, aliases, withoutOwnShape(fields, params, aliases, recs))}",
+            "${docComment}${recordAliasDecl(name, params, fields |> map(f => qualifyAliasField(f, qualify)), aliases, withoutOwnShape(fields, params, aliases, recs))}",
             rest
           )
         | None => switch aliasType {
             | Some(te) => Array.prepend(
-                "${docComment}${aliasTsDecl(name, params, te, aliases, recs)}",
+                "${docComment}${aliasTsDecl(name, params, qualifyTe(te, qualify), aliases, recs)}",
                 rest
               )
             | None => Array.length(ctors) == 0
                 ? Array.prepend("${docComment}${opaqueTypeDecl(name)}", rest)
                 : Array.prepend(
-                  "${docComment}${typeDecl(name, params, ctors, aliases, recs)}",
+                  "${docComment}${typeDecl(name, params, ctors |> map(c => qualifyCtor(c, qualify)), aliases, recs)}",
                   rest
                 )
           }
       }
-  | Some(_) => typeDeclsFrom(stmts, aliases, recs, i + 1)
+  | Some(_) => typeDeclsFrom(stmts, aliases, recs, qualify, i + 1)
 }
 
 /// `export declare const` per top-level binding that has an inferred scheme.
 /// `$`-prefixed synthetic binders declare nothing.
-let bindingDeclsFrom = (stmts, env, recs, i) => switch Array.get(i, stmts) {
+let bindingDeclsFrom = (stmts, env, recs, qualify, i) => switch Array.get(i, stmts) {
   | None => []
   | Some(Ast.SLet(name, _, _, value, _, doc, _)) => let rest = bindingDeclsFrom(
       stmts,
       env,
       recs,
+      qualify,
       i + 1
     ) in
       Str.startsWith("$", name)
@@ -74,11 +243,11 @@ let bindingDeclsFrom = (stmts, env, recs, i) => switch Array.get(i, stmts) {
         : switch Map.get(name, env) {
           | None => rest
           | Some(sc) => Array.prepend(
-              "${jsDoc(doc)}export declare const ${name}: ${bindingTsType(sc, value, recs)};",
+              "${jsDoc(doc)}export declare const ${name}: ${bindingTsType({ vars: sc.vars, rvars: sc.rvars, ty: qualifyTy(sc.ty, qualify) }, value, recs)};",
               rest
             )
         }
-  | Some(_) => bindingDeclsFrom(stmts, env, recs, i + 1)
+  | Some(_) => bindingDeclsFrom(stmts, env, recs, qualify, i + 1)
 }
 
 /// A builtin variant named in an exported type (`Option<number>` from `Map.get`)
@@ -121,10 +290,14 @@ let nsTypeImportsFrom = (stmts, body, seen, i) => switch Array.get(i, stmts) {
 }
 
 /// Emit `.d.ts` text from an already-typed program.
-export let emitDtsFromTyped = (stmts, env, aliases, runtimeImport) =>
+export let emitDtsFromTyped = (stmts, env, aliases, qualify, runtimeImport) =>
   let recs = recordAliasIndex(aliases) in
-  let types = typeDeclsFrom(stmts, aliases, recs, 0) in
-  let bindings = bindingDeclsFrom(stmts, env, recs, 0) in
+  // A name this file declares itself is already writable bare, so it shadows
+  // any qualification the caller (or the file's own `tqual` nodes) supply.
+  let local = declaredTypeNames(stmts, 0, Set.fromArray([])) in
+  let quals = writtenQualsFrom(stmts, local, qualify, 0) in
+  let types = typeDeclsFrom(stmts, aliases, recs, quals, 0) in
+  let bindings = bindingDeclsFrom(stmts, env, recs, quals, 0) in
   let declared = declaredTypeNames(stmts, 0, Set.fromArray([])) in
   let wanted = referencedCons(stmts, env, 0, Set.fromArray([])) in
   let core = Str.join("\n", Array.concat(types, bindings)) in
@@ -145,4 +318,4 @@ export let emitDtsFromTyped = (stmts, env, aliases, runtimeImport) =>
 export let emitDtsText = (src, runtimeImport) =>
   typedProgram(src)
     |> Result.map(((stmts, r)) =>
-      emitDtsFromTyped(stmts, r.env, r.aliases, runtimeImport))
+      emitDtsFromTyped(stmts, r.env, r.aliases, #{}, runtimeImport))
