@@ -38,6 +38,7 @@ type SeedModule = {
   compileGraphRecovering: (modules: BootstrapGraphModule[]) => BootstrapGraphRecovery;
   exportedOrigins: (stmts: unknown) => BootstrapExportOrigins;
   symbolOccurrences: (stmts: unknown) => BootstrapOccurrence[];
+  emitDts: (src: string, runtimeImport: string) => BootstrapResult<string, BootstrapDiagnostic>;
 };
 
 export type BootstrapGraphModule = { path: string; stmts: unknown };
@@ -110,3 +111,9 @@ export const exportedOriginsBootstrap = (stmts: unknown): BootstrapExportOrigins
 
 export const symbolOccurrencesBootstrap = (stmts: unknown): BootstrapOccurrence[] =>
   seed.symbolOccurrences(stmts);
+
+/** `.d.ts` text for one source file, emitted by the frozen bootstrap graph. */
+export const emitDtsBootstrap = (
+  src: string,
+  runtimeImport: string,
+): BootstrapResult<string, BootstrapDiagnostic> => seed.emitDts(src, runtimeImport);

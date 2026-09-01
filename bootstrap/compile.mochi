@@ -34,6 +34,14 @@ let frontend = lex >> Result.flatMap(parse) >> Result.flatMap(check)
 // The front-end pipeline: lex -> parse -> check -> typecheck
 let pipeline = frontend >> Result.flatMap(typecheck)
 
+/// typedProgram : string -> Result (stmts, InferResult) Err — the AST *and* its
+/// inference, for passes that print declarations (`dts.mochi`) rather than
+/// answering span queries. `inferTypes` deliberately drops the AST.
+export let typedProgram = src =>
+  let? stmts = src->frontend() in
+  let? r = stmts->inferProgramTypes(builtins, namespaces, false) in
+    Ok((stmts, r))
+
 /// inferTypes : string -> Result InferResult Err — strict typed-query seam
 /// for host DX. Keeps the recorded span -> type table instead of discarding it.
 export let inferTypes = src =>

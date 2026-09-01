@@ -126,7 +126,11 @@ import {
 } from "./module.ts";
 import { compileBootstrapSync, compileTsBootstrapSync, inferTypesBootstrapSync } from "./sync.ts";
 
-export { inferGraphTypesBootstrap, symbolOccurrencesBootstrap } from "./module.ts";
+export {
+  emitDtsBootstrap,
+  inferGraphTypesBootstrap,
+  symbolOccurrencesBootstrap,
+} from "./module.ts";
 export { inferTypesBootstrapSync } from "./sync.ts";
 
 import {

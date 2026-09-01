@@ -491,7 +491,7 @@ let consInRow = (row, acc) => switch row {
   | _ => acc
 }
 
-let declaredTypeNames = (stmts, i, acc) => switch Array.get(i, stmts) {
+export let declaredTypeNames = (stmts, i, acc) => switch Array.get(i, stmts) {
   | None => acc
   | Some(Ast.SType(name, _, _, _, _, _, _, _)) => declaredTypeNames(
       stmts,
@@ -501,7 +501,7 @@ let declaredTypeNames = (stmts, i, acc) => switch Array.get(i, stmts) {
   | Some(_) => declaredTypeNames(stmts, i + 1, acc)
 }
 
-let referencedCons = (stmts, env, i, acc) => switch Array.get(i, stmts) {
+export let referencedCons = (stmts, env, i, acc) => switch Array.get(i, stmts) {
   | None => acc
   | Some(Ast.SLet(name, _, _, _, _, _, _)) => referencedCons(
       stmts,
@@ -526,7 +526,7 @@ let referencedCons = (stmts, env, i, acc) => switch Array.get(i, stmts) {
 /// `wanted` is the scheme scan; a guard predicate can name a builtin it missed,
 /// since it looks at binding types, not match-scrutinee types — `match(opt)` on
 /// an `Option<Stmt>` never surfaces `Option`. The body text covers that (ADR 0031).
-let builtinTypeNamesFor = (declared, wanted, body, i) => switch Array.get(i, builtinTypeDecls) {
+export let builtinTypeNamesFor = (declared, wanted, body, i) => switch Array.get(i, builtinTypeDecls) {
   | None => []
   | Some(bt) => let rest = builtinTypeNamesFor(declared, wanted, body, i + 1) in
       !Set.has(
@@ -599,7 +599,7 @@ export let recordAliasIndex = aliases =>
 
 /// The index an alias's OWN body renders against — itself removed, so it cannot
 /// come out as `export type Span = Span;`.
-let withoutOwnShape = (fields: [Ast.AliasField], params, aliases: Map<string, AliasInfo>, recs) => switch Array.get(0, params) {
+export let withoutOwnShape = (fields: [Ast.AliasField], params, aliases: Map<string, AliasInfo>, recs) => switch Array.get(0, params) {
   | Some(_) => recs
   | None => switch aliasShapeKey(fields, aliases) {
       | Some(k) => Map.delete(k, recs)

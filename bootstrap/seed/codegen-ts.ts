@@ -903,26 +903,27 @@ const consInRow: _Curry<[row: Row, acc: Set<string>], Set<string>> = _curry(
       )
       .otherwise(() => acc),
 );
-const declaredTypeNames: _Curry<[stmts: Stmt[], i: number, acc: Set<string>], Set<string>> = _curry(
-  3,
-  (stmts: Stmt[], i: number, acc: Set<string>) =>
-    match(_Array_get(i, stmts))
-      .with({ _tag: "None" }, () => acc)
-      .with(
-        (
-          _v,
-        ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
-          value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
-        } => {
-          const _g: any = _v;
-          return _g._tag === "Some" && _g.value._tag === "SType";
-        },
-        ({ value: { name } }) => declaredTypeNames(stmts, i + 1, _Set_add(name, acc)),
-      )
-      .with({ _tag: "Some" }, () => declaredTypeNames(stmts, i + 1, acc))
-      .exhaustive(),
+export const declaredTypeNames: _Curry<
+  [stmts: Stmt[], i: number, acc: Set<string>],
+  Set<string>
+> = _curry(3, (stmts: Stmt[], i: number, acc: Set<string>) =>
+  match(_Array_get(i, stmts))
+    .with({ _tag: "None" }, () => acc)
+    .with(
+      (
+        _v,
+      ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
+        value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
+      } => {
+        const _g: any = _v;
+        return _g._tag === "Some" && _g.value._tag === "SType";
+      },
+      ({ value: { name } }) => declaredTypeNames(stmts, i + 1, _Set_add(name, acc)),
+    )
+    .with({ _tag: "Some" }, () => declaredTypeNames(stmts, i + 1, acc))
+    .exhaustive(),
 );
-const referencedCons: <A>(
+export const referencedCons: <A>(
   stmts: Stmt[],
   env: Map<string, { ty: Ty } & A>,
   i: number,
@@ -968,7 +969,7 @@ const referencedCons: <A>(
  * since it looks at binding types, not match-scrutinee types — `match(opt)` on
  * an `Option<Stmt>` never surfaces `Option`. The body text covers that (ADR 0031).
  */
-const builtinTypeNamesFor: _Curry<
+export const builtinTypeNamesFor: _Curry<
   [declared: Set<string>, wanted: Set<string>, body: string, i: number],
   string[]
 > = _curry(4, (declared: Set<string>, wanted: Set<string>, body: string, i: number) =>
@@ -1079,7 +1080,7 @@ export const recordAliasIndex: (aliases: Map<string, AliasInfo>) => Map<string, 
  * The index an alias's OWN body renders against — itself removed, so it cannot
  * come out as `export type Span = Span;`.
  */
-const withoutOwnShape: <A, B>(
+export const withoutOwnShape: <A, B>(
   fields: QualAliasField[],
   params: A[],
   aliases: Map<string, AliasInfo>,

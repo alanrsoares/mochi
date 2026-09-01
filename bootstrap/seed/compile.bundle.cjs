@@ -1,5 +1,5 @@
 // @bun
-import { Ok as Ok9, _Result_flatMap as _Result_flatMap7, _curry as _curry16, map as map12 } from "@mochi/compiler/runtime";
+import { Ok as Ok9, _Result_flatMap as _Result_flatMap7, _curry as _curry16, _tuple as _tuple10, map as map12 } from "@mochi/compiler/runtime";
 
 import { Err, None, Ok, Some, _Array_append, _Array_head, _Array_tail, _Option_contains, _Option_exists, _Option_unwrapOr, _Str_codeAt, _Str_fromCode, _Str_get, _Str_join, _Str_length, _Str_slice, _Str_toNumber, _curry, _done, _recur, and, eq, length, not, or } from "@mochi/compiler/runtime";
 import { match } from "@onrails/pattern";
@@ -13094,6 +13094,7 @@ var runtimeDeps = _map(_runtimeDeps);
 var typecheck = (prog) => _Result_flatMap7(($env) => Ok9(prog), inferProgram(prog, builtins, namespaces, false));
 var frontend = ($x) => _Result_flatMap7(check)((($x2) => _Result_flatMap7(parse)(lex($x2)))($x));
 var pipeline = ($x) => _Result_flatMap7(typecheck)(frontend($x));
+var typedProgram = (src) => _Result_flatMap7((stmts) => _Result_flatMap7((r) => Ok9(_tuple10(stmts, r)), inferProgramTypes(stmts, builtins, namespaces, false)), frontend(src));
 var inferTypes = (src) => _Result_flatMap7((stmts) => _Result_flatMap7((r) => Ok9({ env: r.env, types: map12((hit) => ({ span: hit.span, ty: hit.ty, display: showType(widenLits(hit.ty)) }), r.types), aliases: r.aliases, letParams: r.letParams }), inferProgramTypes(stmts, builtins, namespaces, false)), frontend(src));
 var compile = (src) => _Result_flatMap7((prog) => Ok9(codegen(prog, new Map, true, namespaceRuntime, preludeJsDefs, runtimeDeps)), pipeline(src));
 var noImportedKeys = new Map;
@@ -13101,5 +13102,6 @@ var compileTs = _curry16(2, (src, runtimeImport) => _Result_flatMap7((stmts) => 
 export {
   compile,
   compileTs,
-  inferTypes
+  inferTypes,
+  typedProgram
 };

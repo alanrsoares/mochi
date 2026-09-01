@@ -6,7 +6,7 @@ import type { AliasInfo } from "./codegen-ts";
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
-import { Ok, _Result_flatMap, _curry, map } from "@mochi/compiler/runtime";
+import { Ok, _Result_flatMap, _curry, _tuple, map } from "@mochi/compiler/runtime";
 
 import { lex } from "./lexer";
 import { parse } from "./parser";
@@ -30,6 +30,43 @@ const frontend: ($x: string) => Result<Stmt[], PErr> = ($x: string) =>
   _Result_flatMap(check)((($x) => _Result_flatMap(parse)(lex($x)))($x));
 const pipeline: ($x: string) => Result<Stmt[], PErr> = ($x: string) =>
   _Result_flatMap(typecheck)(frontend($x));
+/**
+ * typedProgram : string -> Result (stmts, InferResult) Err — the AST *and* its
+ * inference, for passes that print declarations (`dts.mochi`) rather than
+ * answering span queries. `inferTypes` deliberately drops the AST.
+ */
+export const typedProgram: (src: string) => Result<
+  [
+    Stmt[],
+    {
+      env: Map<string, Scheme>;
+      types: TypeAt[];
+      aliases: Map<string, AliasInfo>;
+      letParams: TypeAt[];
+    },
+  ],
+  PErr
+> = (src: string) =>
+  _Result_flatMap(
+    (stmts) =>
+      _Result_flatMap(
+        (r) =>
+          Ok(_tuple(stmts, r)) as Result<
+            [
+              Stmt[],
+              {
+                env: Map<string, Scheme>;
+                types: TypeAt[];
+                aliases: Map<string, AliasInfo>;
+                letParams: TypeAt[];
+              },
+            ],
+            PErr
+          >,
+        inferProgramTypes(stmts, builtins, namespaces, false),
+      ),
+    frontend(src),
+  );
 /**
  * inferTypes : string -> Result InferResult Err — strict typed-query seam
  * for host DX. Keeps the recorded span -> type table instead of discarding it.

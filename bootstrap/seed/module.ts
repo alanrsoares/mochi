@@ -90,12 +90,22 @@ import { emitTsModule, externModuleDts } from "./codegen-ts";
 import { showType, tVar } from "./types";
 import { widenLits } from "./schemes";
 import { index } from "./symbols";
+import { emitDtsText } from "./dts";
 import { builtins } from "./prelude.gen.mjs";
 import { namespaces } from "./prelude.gen.mjs";
 import { namespaceRuntime } from "./prelude.gen.mjs";
 import { preludeJsDefs } from "./prelude.gen.mjs";
 import { runtimeDeps } from "./prelude.gen.mjs";
 import * as Ast from "./ast";
+/**
+ * Host-facing `.d.ts` emit. Lives here for the same reason the TypeScript
+ * mirror puts `emitDtsForFile` in its module driver: declaration emit is a
+ * whole-file query the graph owns, not a single-expression one.
+ */
+export const emitDts: _Curry<[src: string, runtimeImport: string], Result<string, PErr>> = _curry(
+  2,
+  (src: string, runtimeImport: string) => emitDtsText(src, runtimeImport),
+);
 /**
  * Host-facing lexical occurrence query. The index itself is source-owned;
  * this re-export makes it reachable from the frozen graph without teaching

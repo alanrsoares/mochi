@@ -1,0 +1,148 @@
+// bootstrap/dts.mochi — `.d.ts` emit for the self-host.
+//
+// The `.d.ts` and typed-TS backends share one set of printers (`codegen-ts.mochi`),
+// so this module is only the driver: type declarations, one `export declare const`
+// per exported binding, the builtin variant decls a body references, and the
+// `import type` lines those need. Plugin `dtsBinding` hooks stay a TypeScript-host
+// seam — bootstrap has no dts hook protocol (ADR 0011 §6).
+
+import * as Ast from "./ast.mochi"
+import { builtinTypeDecls } from "./ctors.mochi"
+import {
+  aliasTsDecl,
+  bindingTsType,
+  builtinTypeNamesFor,
+  declaredTypeNames,
+  recordAliasIndex,
+  referencedCons,
+  opaqueTypeDecl,
+  recordAliasDecl,
+  typeDecl,
+  withoutOwnShape
+} from "./codegen-ts.mochi"
+import { jsDoc } from "./codegen.mochi"
+import { typedProgram } from "./compile.mochi"
+
+/// One `export`ed declaration per `type` statement. `codegen-ts`'s own walker
+/// emits these module-locally for the `.ts` backend; a `.d.ts` exports them, and
+/// an opaque `extern type` goes through `opaqueTypeDecl` for the same reason.
+let typeDeclsFrom = (stmts, aliases, recs, i) => switch Array.get(i, stmts) {
+  | None => []
+  | Some(Ast.SType(name, params, ctors, alias, aliasType, _, doc, _)) => let rest = typeDeclsFrom(
+      stmts,
+      aliases,
+      recs,
+      i + 1
+    ) in
+    let docComment = jsDoc(doc) in
+      switch alias {
+        | Some(fields) =>
+          // Its OWN entry is dropped, or the alias renders as itself
+          // (`export type Span = Span;`).
+          Array.prepend(
+            "${docComment}${recordAliasDecl(name, params, fields, aliases, withoutOwnShape(fields, params, aliases, recs))}",
+            rest
+          )
+        | None => switch aliasType {
+            | Some(te) => Array.prepend(
+                "${docComment}${aliasTsDecl(name, params, te, aliases, recs)}",
+                rest
+              )
+            | None => Array.length(ctors) == 0
+                ? Array.prepend("${docComment}${opaqueTypeDecl(name)}", rest)
+                : Array.prepend(
+                  "${docComment}${typeDecl(name, params, ctors, aliases, recs)}",
+                  rest
+                )
+          }
+      }
+  | Some(_) => typeDeclsFrom(stmts, aliases, recs, i + 1)
+}
+
+/// `export declare const` per top-level binding that has an inferred scheme.
+/// `$`-prefixed synthetic binders declare nothing.
+let bindingDeclsFrom = (stmts, env, recs, i) => switch Array.get(i, stmts) {
+  | None => []
+  | Some(Ast.SLet(name, _, _, value, _, doc, _)) => let rest = bindingDeclsFrom(
+      stmts,
+      env,
+      recs,
+      i + 1
+    ) in
+      Str.startsWith("$", name)
+        ? rest
+        : switch Map.get(name, env) {
+          | None => rest
+          | Some(sc) => Array.prepend(
+              "${jsDoc(doc)}export declare const ${name}: ${bindingTsType(sc, value, recs)};",
+              rest
+            )
+        }
+  | Some(_) => bindingDeclsFrom(stmts, env, recs, i + 1)
+}
+
+/// A builtin variant named in an exported type (`Option<number>` from `Map.get`)
+/// has to be DECLARED here — unlike the `.ts` backend, which imports it from the
+/// runtime instead (ADR 0093).
+let builtinDeclsFor = (names, aliases, recs, i) => switch Array.get(i, builtinTypeDecls) {
+  | None => []
+  | Some(bt) => let rest = builtinDeclsFor(names, aliases, recs, i + 1) in
+      Array.contains(bt.name, names)
+        ? Array.prepend(
+          typeDecl(bt.name, bt.params, bt.ctors, aliases, recs),
+          rest
+        )
+        : rest
+}
+
+/// Sidecar imports keep the `.mochi` specifier so `allowArbitraryExtensions`
+/// maps `./shapes.mochi` onto `shapes.d.mochi.ts`. Package specs stay untouched.
+let mochiDtsSpec = from =>
+  let bare = Str.endsWith(".mochi", from)
+    ? Str.slice(0, Str.length(from) - 6, from)
+    : from in
+    Str.startsWith("./", bare) || Str.startsWith("../", bare)
+      ? "${bare}.mochi"
+      : from
+
+/// `import type * as D from "./shapes.mochi"` for each namespace alias the body names.
+let nsTypeImportsFrom = (stmts, body, seen, i) => switch Array.get(i, stmts) {
+  | None => []
+  | Some(Ast.SImportNs(alias, from, _)) => Set.has(
+      alias.name,
+      seen
+    ) || !Str.contains("${alias.name}.", body)
+      ? nsTypeImportsFrom(stmts, body, seen, i + 1)
+      : Array.prepend(
+        "import type * as ${alias.name} from \"${mochiDtsSpec(from)}\";",
+        nsTypeImportsFrom(stmts, body, Set.add(alias.name, seen), i + 1)
+      )
+  | Some(_) => nsTypeImportsFrom(stmts, body, seen, i + 1)
+}
+
+/// Emit `.d.ts` text from an already-typed program.
+export let emitDtsFromTyped = (stmts, env, aliases, runtimeImport) =>
+  let recs = recordAliasIndex(aliases) in
+  let types = typeDeclsFrom(stmts, aliases, recs, 0) in
+  let bindings = bindingDeclsFrom(stmts, env, recs, 0) in
+  let declared = declaredTypeNames(stmts, 0, Set.fromArray([])) in
+  let wanted = referencedCons(stmts, env, 0, Set.fromArray([])) in
+  let core = Str.join("\n", Array.concat(types, bindings)) in
+  let builtinNames = builtinTypeNamesFor(declared, wanted, core, 0) in
+  let body = "${Str.join("\n", Array.concat(builtinDeclsFor(builtinNames, aliases, recs, 0), Array.concat(types, bindings)))}\n" in
+  // `_Curry` is a runtime type (ADR 0093): a `.d.ts` naming it imports it rather
+  // than redeclaring, for the same reason the emitted `.ts` does.
+  let curry = Str.contains("_Curry<", body)
+    ? ["import type { _Curry } from \"${runtimeImport}\";"]
+    : [] in
+  let imports = Array.concat(
+    curry,
+    nsTypeImportsFrom(stmts, body, Set.fromArray([]), 0)
+  ) in
+    Array.length(imports) == 0 ? body : "${Str.join("\n", imports)}\n${body}"
+
+/// Source -> `.d.ts` text. Infers first; type errors surface as diagnostics.
+export let emitDtsText = (src, runtimeImport) =>
+  typedProgram(src)
+    |> Result.map(((stmts, r)) =>
+      emitDtsFromTyped(stmts, r.env, r.aliases, runtimeImport))
