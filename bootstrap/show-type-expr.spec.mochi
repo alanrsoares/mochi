@@ -1,0 +1,53 @@
+import { assertEq, test, testEach } from "@mochi/test"
+import * as Ast from "./ast.mochi"
+import { lex } from "./lexer.mochi"
+import { parse } from "./parser.mochi"
+import { showTypeExpr } from "./show-type-expr.mochi"
+
+// The annotation of `extern x : <annot> = "m" "i"`, printed back out. Parsing
+// the surface rather than building a TypeExpr by hand keeps the corpus readable
+// and makes each case a round-trip.
+let shown = annot => switch lex("extern x : ${annot} = \"m\" \"i\"") |> Result.flatMap(parse) {
+  | Err(e) => "parse error: ${e.message}"
+  | Ok(stmts) => switch Array.get(0, stmts) {
+      | Some(Ast.SExtern(_, _, _, te, _, _, _, _, _, _)) => showTypeExpr(te)
+      | _ => "not an extern"
+    }
+}
+
+testEach("a type annotation round-trips through showTypeExpr", [
+  "number",
+  "string -> number",
+  "a -> b -> c",
+  "[string]",
+  "[[number]]",
+  "(number, string)",
+  "Option<a>",
+  "Map<string, number>",
+  "D.Shape",
+  "D.Shape<a>",
+  "\"rose\"",
+  "\"rose\" | \"amber\""
+], annot => assertEq(shown(annot), annot))
+
+test("`()` prints as the unit sugar, not its reserved lowering", () =>
+  assertEq(shown("()"), "()"))
+
+test("an arrow on the left of an arrow keeps its parens", () =>
+  assertEq(shown("(a -> b) -> c"), "(a -> b) -> c"))
+
+test("an arrow member of a union keeps its parens", () =>
+  assertEq(shown("\"a\" | (number -> string)"), "\"a\" | (number -> string)"))
+
+// `>>` is the composition token, so adjacent closing generics must stay apart.
+test("adjacent closing generics are separated", () =>
+  assertEq(
+    shown("Map<string, Map<string, a> >"),
+    "Map<string, Map<string, a> >"
+  ))
+
+// The separator is added after ANY argument ending in `>`, not only one that a
+// `>` actually follows, so this does not round-trip. Matches src/infer/
+// show-type-expr.ts exactly; widening the condition is a change to both.
+test("a nested generic argument is padded even mid-list", () =>
+  assertEq(shown("Result<Option<a>, string>"), "Result<Option<a> , string>"))
