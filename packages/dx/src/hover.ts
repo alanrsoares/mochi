@@ -270,7 +270,7 @@ const hoverFrom = (
  * declarations still fall through to `hoverFrom` until bootstrap carries the
  * corresponding symbol and layout metadata.
  */
-const bootstrapHoverFrom = (
+export const bootstrapHoverFrom = (
   types: BootstrapTypeAt[],
   aliases: ReadonlyMap<string, unknown>,
   offset: number,

@@ -11,6 +11,7 @@ import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import { createModuleCache } from "@mochi/compiler/module";
 import { isPreludePath, PRELUDE_PATH, preludeVirtualSource } from "@mochi/compiler/prelude-virtual";
 import type { Span } from "@mochi/compiler/span";
+import { moduleBootstrapHoverAt } from "@mochi/dx/bootstrap-hover";
 import { type CompletionItem as MochiCompletion, moduleCompleteAt } from "@mochi/dx/complete";
 import {
   bootstrapModuleDiagnostics,
@@ -259,16 +260,22 @@ export function startServer(opts: ServerOptions = {}): void {
     const doc = documents.get(textDocument.uri);
     if (!doc) return null;
     const path = docPath(textDocument.uri);
-    const info = await moduleHoverAt(
-      path,
-      doc.getText(),
-      doc.offsetAt(position),
-      read,
-      await dxOpts(path),
-    );
-    if (!info) return null;
-    const fence = `\`\`\`mochi\n${info.code}\n\`\`\``;
-    const value = info.doc ? `${fence}\n\n${info.doc}` : fence;
+    const dx = await dxOpts(path);
+    const bootstrap =
+      dx.plugins === undefined
+        ? await moduleBootstrapHoverAt(
+            path,
+            doc.getText(),
+            doc.offsetAt(position),
+            read,
+            dx.bootstrapCache,
+          )
+        : null;
+    const result =
+      bootstrap ?? (await moduleHoverAt(path, doc.getText(), doc.offsetAt(position), read, dx));
+    if (!result) return null;
+    const fence = `\`\`\`mochi\n${result.code}\n\`\`\``;
+    const value = result.doc ? `${fence}\n\n${result.doc}` : fence;
     return { contents: { kind: MarkupKind.Markdown, value } };
   });
 

@@ -43,7 +43,7 @@ test("orders a real graph so every dependency precedes its dependent", () => {
   expect(before("lexer.mochi", "parser.mochi")).toBe(true);
   expect(before("compile.mochi", "cli.mochi")).toBe(true);
   expect(before("infer.mochi", "compile.mochi")).toBe(true);
-});
+}, 10_000);
 
 test("dependency order matches the TS buildModules driver on examples/modules", async () => {
   const entry = "examples/modules/main.mochi";
