@@ -18,6 +18,10 @@ export type LamParam =
   | LPRecord(fields: [string])
   | LPTuple(names: [string])
   | LPLabeled(name: string, annot: Option<TypeExpr>, optional: bool, defaultValue: Option<Expr>)
+  // Source-authored parameters retain one exact span per bound name. Keeping
+  // the legacy shapes inside the wrapper lets synthetic compiler parameters
+  // remain spanless while editor-facing binders never need reconstructed text.
+  | LPSpanned(param: LamParam, nameSpans: [Span])
 
 type Field = { name: string, value: Expr }
 type MapEntry = { key: Expr, value: Expr }

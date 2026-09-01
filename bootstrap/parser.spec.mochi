@@ -6,7 +6,7 @@ import { parse } from "./parser.mochi"
 let parseSrc = src => lex(src) |> Result.flatMap(parse)
 
 test("a let declaration preserves its name, doc, and lambda shape", () => switch parseSrc("/// increments\nlet inc = n => n + 1") {
-  | Ok([Ast.SLet("inc", _, None, Ast.ELambda([Ast.LPName("n", None)], _, _), false, Some("increments"), _)]) => true
+  | Ok([Ast.SLet("inc", _, None, Ast.ELambda([Ast.LPSpanned(Ast.LPName("n", None), [span])], _, _), false, Some("increments"), _)]) => span.start == 25 && span.end == 26
       |> ok
   | _ => false |> ok
 })

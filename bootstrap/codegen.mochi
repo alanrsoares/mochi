@@ -309,6 +309,7 @@ let emptyNsEmit = (target, name, ann) => switch target {
 // filling defaults there rather than at the call site (ADR 0098 §2).
 let isLabeledParam = p => switch p {
   | Ast.LPLabeled(_, _, _, _) => true
+  | Ast.LPSpanned(inner, _) => isLabeledParam(inner)
   | _ => false
 }
 
@@ -603,6 +604,7 @@ let genList = (ctx: GCtx, elements) =>
 
 // A lambda parameter lowers to JS: a name, or native object destructuring.
 let genParam = p => switch p {
+  | Ast.LPSpanned(inner, _) => genParam(inner)
   | Ast.LPName(name, _) => name
   | Ast.LPTuple(names) => "[${Str.join(", ", names)}]"
   | Ast.LPRecord(fields) => "{ ${Str.join(", ", fields)} }"
@@ -797,6 +799,7 @@ let genLambdaBody = (ctx: GCtx, e) => switch e {
 
 // Every JS binding a lambda parameter introduces — a `const` may not reuse one.
 let paramNames = p => switch p {
+  | Ast.LPSpanned(inner, _) => paramNames(inner)
   | Ast.LPName(name, _) => [name]
   | Ast.LPTuple(names) => names
   | Ast.LPRecord(fields) => fields
@@ -807,6 +810,7 @@ let paramNames = p => switch p {
 // filled HERE, in the callee, so `f()` and a plain record argument both work;
 // `~x?` with no default surfaces as `Option` to match the inferred type.
 let genLabeledFill = (ctx: GCtx, labVar, lab) => switch lab {
+  | Ast.LPSpanned(inner, _) => ctx->genLabeledFill(labVar, inner)
   | Ast.LPLabeled(name, _, optional, defaultValue) => let access = "(${labVar} ?? {}).${name}" in
       switch defaultValue {
         | Some(d) => "const ${name} = ${access} != null ? ${access} : ${ctx->genExpr(d)};"
@@ -828,6 +832,10 @@ let fillNames = (fills, acc) => switch fills {
       rest,
       Array.reduce(
         (s, lab) => switch lab {
+          | Ast.LPSpanned(inner, _) => switch inner {
+              | Ast.LPLabeled(name, _, _, _) => Set.add(name, s)
+              | _ => s
+            }
           | Ast.LPLabeled(name, _, _, _) => Set.add(name, s)
           | _ => s
         },
@@ -1835,6 +1843,10 @@ let exprRefs = (ctx: GCtx, e, acc) => switch e {
       (a, g) =>
         Array.reduce(
           (b, lab) => switch lab {
+            | Ast.LPSpanned(Ast.LPLabeled(_, _, _, Some(d)), _) => ctx->exprRefs(
+                d,
+                b
+              )
             | Ast.LPLabeled(_, _, _, Some(d)) => ctx->exprRefs(d, b)
             | _ => b
           },

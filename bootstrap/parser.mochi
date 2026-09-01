@@ -320,20 +320,36 @@ let tySpan = t => switch t {
 let parseParam = (toks, pos) => switch tokAt(toks, pos).tok {
   | TLbrace => let? (fields, p) = listUntil(TRbrace, expectId, toks, pos + 1) in
     let? p2 = expectTok(TRbrace, toks, p) in
-      Ok((Ast.LPRecord(fields |> map(f => f.name)), p2))
+      Ok((
+        Ast.LPSpanned(
+          Ast.LPRecord(fields |> map(f => f.name)),
+          fields |> map(f => f.span)
+        ),
+        p2
+      ))
   | TLparen => let? (names, p) = sepBy(expectId, toks, pos + 1, []) in
     let? p2 = expectTok(TRparen, toks, p) in
       Ok(
         switch names {
-          | [single] => (Ast.LPName(single.name, None), p2)
-          | many => (Ast.LPTuple(many |> map(n => n.name)), p2)
+          | [single] => (
+              Ast.LPSpanned(Ast.LPName(single.name, None), [single.span]),
+              p2
+            )
+          | many => (
+              Ast.LPSpanned(
+                Ast.LPTuple(many |> map(n => n.name)),
+                many |> map(n => n.span)
+              ),
+              p2
+            )
         }
       )
   | _ => let? (nm, p) = expectId(toks, pos) in
       tokAt(toks, p).tok == TColon
         ? parseTypeExpr(toks, p + 1)
-          |> Result.map(((annot, p2)) => (Ast.LPName(nm.name, Some(annot)), p2))
-        : Ok((Ast.LPName(nm.name, None), p))
+          |> Result.map(((annot, p2)) =>
+            (Ast.LPSpanned(Ast.LPName(nm.name, Some(annot)), [nm.span]), p2))
+        : Ok((Ast.LPSpanned(Ast.LPName(nm.name, None), [nm.span]), p))
 }
 
 /// `~name`, `~name?`, `~name: T`, `~name = e`, `~name: T = e` (ADR 0098 §2).
@@ -350,8 +366,17 @@ let parseLabeledParam = (toks, pos, hooks) =>
     tokAt(toks, p3).tok == TEq
       ? parseExpr(toks, p3 + 1, hooks)
         |> Result.map(((d, k)) =>
-          (Ast.LPLabeled(nm.name, annot, optional, Some(d)), k))
-      : Ok((Ast.LPLabeled(nm.name, annot, optional, None), p3))
+          (
+            Ast.LPSpanned(
+              Ast.LPLabeled(nm.name, annot, optional, Some(d)),
+              [nm.span]
+            ),
+            k
+          ))
+      : Ok((
+        Ast.LPSpanned(Ast.LPLabeled(nm.name, annot, optional, None), [nm.span]),
+        p3
+      ))
 
 let parseLamParam = (toks, pos, hooks) =>
   tokAt(toks, pos).tok == TTilde
@@ -360,6 +385,7 @@ let parseLamParam = (toks, pos, hooks) =>
 
 let isLabeledParam = p => switch p {
   | Ast.LPLabeled(_, _, _, _) => true
+  | Ast.LPSpanned(inner, _) => isLabeledParam(inner)
   | _ => false
 }
 
@@ -378,7 +404,12 @@ let parseLambda = (toks, pos, hooks) =>
         let? (body, p2) = parseLambdaBody(toks, p, hooks) in
           Ok((
             Ast.ELambda(
-              [Ast.LPName(name, None)],
+              [
+                Ast.LPSpanned(
+                  Ast.LPName(name, None),
+                  [spanOf(tokAt(toks, pos))]
+                )
+              ],
               body,
               spanning(start, exprSpan(body))
             ),

@@ -210,6 +210,7 @@ let bindParamFieldsFrom = (fields, env, row, st: Types.St) => switch fields {
 }
 
 let bindParam = (p, env, st: Types.St) => switch p {
+  | Ast.LPSpanned(inner, _) => bindParam(inner, env, st)
   | Ast.LPName(name, _) => let (t, st1) = freshVar(st) in
       (t, Map.set(name, mono(t), env), st1)
   | Ast.LPTuple(names) => let (elems, env1, st1) = bindParamNamesFrom(
@@ -245,7 +246,7 @@ let constrainParamAnnotsFrom = (ctx: Ctx<a>, params, paramTypes, vars, st: Types
   | [param, ...rest] => switch paramTypes {
       | [] => Ok((vars, st))
       | [paramT, ...restTypes] => switch param {
-          | Ast.LPName(_, Some(te)) => let (annotT, vars1, st1) = typeExprToType(
+          | Ast.LPSpanned(Ast.LPName(_, Some(te)), _) => let (annotT, vars1, st1) = typeExprToType(
               te,
               vars,
               st,
@@ -377,6 +378,7 @@ let domainIsOmittableRecord = (t, st: Types.St) => switch zonk(t, st) {
 
 let isLabeledParam = p => switch p {
   | Ast.LPLabeled(_, _, _, _) => true
+  | Ast.LPSpanned(inner, _) => isLabeledParam(inner)
   | _ => false
 }
 
@@ -392,6 +394,13 @@ let splitLamParams = (params, positional, labeled) => switch params {
 let labFieldsFrom = (ctx: Ctx<a>, labs, env, vars, st: Types.St) => switch labs {
   | [] => Ok(([], st))
   | [lab, ...rest] => switch lab {
+      | Ast.LPSpanned(inner, _) => labFieldsFrom(
+          ctx,
+          [inner, ...rest],
+          env,
+          vars,
+          st
+        )
       | Ast.LPLabeled(name, annot, optional, defaultValue) => let (fieldT, vars1, st1) = switch annot {
           | Some(te) => typeExprToType(
               te,
@@ -1111,6 +1120,7 @@ let addAllFrom = (names, set) => switch names {
 }
 
 let paramBound = (p, bound) => switch p {
+  | Ast.LPSpanned(inner, _) => paramBound(inner, bound)
   | Ast.LPName(name, _) => Set.add(name, bound)
   | Ast.LPTuple(names) => addAllFrom(names, bound)
   | Ast.LPRecord(fields) => addAllFrom(fields, bound)
@@ -1126,6 +1136,11 @@ let lambdaBound = (params, bound) => switch params {
 let labeledDefaultRefs = (params, bound, acc) => switch params {
   | [] => acc
   | [p, ...rest] => switch p {
+      | Ast.LPSpanned(inner, _) => labeledDefaultRefs(
+          [inner, ...rest],
+          bound,
+          acc
+        )
       | Ast.LPLabeled(_, _, _, Some(d)) => labeledDefaultRefs(
           rest,
           bound,

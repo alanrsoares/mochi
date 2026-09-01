@@ -310,6 +310,7 @@ export let ctorFactoryTs = (typeName, params, c: Ast.Ctor, aliases: Map<string, 
 /// A lambda param's declared NAME (destructuring params take a positional
 /// placeholder — the type is what matters here, not the binder shape).
 let paramDeclName = (p, i) => switch p {
+  | Ast.LPSpanned(inner, _) => paramDeclName(inner, i)
   | Ast.LPName(name, _) => name
   | _ => "_${show(i)}"
 }
