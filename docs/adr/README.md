@@ -146,6 +146,8 @@ What else was on the table and why not.
 | [0099](0099-retain-docstrings-in-emitted-js-ts.md) | Retain docstrings in emitted JS, TS, and .d.ts | Accepted |
 | [0100](0100-readable-ts-and-tsx-emit.md) | Readable TypeScript and TSX emission | Accepted |
 | [0101](0101-bootstrap-query-boundary.md) | Bootstrap typed-query boundary | Accepted |
+| [0102](0102-lambda-param-name-spans.md) | Lambda parameter name spans | Accepted |
+| [0103](0103-binding-identity-is-the-declaration-span.md) | Binding identity is the declaration span | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was
