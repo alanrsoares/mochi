@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-01
-- **Source:** [ADR 0101](0101-bootstrap-query-boundary.md), [ADR 0102](0102-lambda-param-name-spans.md), `bootstrap/symbols.mochi`, `packages/dx/src/bootstrap-highlights.ts`
+- **Source:** [ADR 0101](0101-bootstrap-query-boundary.md), [ADR 0102](0102-lambda-param-name-spans.md), `bootstrap/symbols.mochi`, `packages/dx/src/bootstrap-nav.ts`
 
 ## Context
 
@@ -48,7 +48,7 @@ than guessing.
 The host boundary follows ADR 0101: `symbolOccurrences` is exported from
 `bootstrap/module.mochi`, surfaced as `symbolOccurrencesBootstrap` with a typed
 `BootstrapOccurrence` payload, and adapted into DX protocol values by
-`packages/dx/src/bootstrap-highlights.ts`. DX filters by declaration span; it
+`packages/dx/src/bootstrap-nav.ts`. DX filters by declaration span; it
 never sees the seed's internals.
 
 ## Consequences

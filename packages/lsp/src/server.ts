@@ -11,8 +11,14 @@ import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import { createModuleCache } from "@mochi/compiler/module";
 import { isPreludePath, PRELUDE_PATH, preludeVirtualSource } from "@mochi/compiler/prelude-virtual";
 import type { Span } from "@mochi/compiler/span";
-import { bootstrapHighlightsAt } from "@mochi/dx/bootstrap-highlights";
 import { moduleBootstrapHoverAt } from "@mochi/dx/bootstrap-hover";
+import {
+  bootstrapBindingIsFileLocal,
+  bootstrapHighlightsAt,
+  bootstrapPrepareRenameAt,
+  bootstrapReferencesAt,
+  bootstrapRenameAt,
+} from "@mochi/dx/bootstrap-nav";
 import {
   bootstrapDocumentSymbolsAt,
   bootstrapWorkspaceSymbolsAt,
@@ -392,13 +398,16 @@ export function startServer(opts: ServerOptions = {}): void {
     const doc = documents.get(textDocument.uri);
     if (!doc) return [];
     const path = docPath(textDocument.uri);
-    const refs = await moduleReferencesAt(
-      path,
-      doc.getText(),
-      doc.offsetAt(position),
-      read,
-      listFiles,
-    );
+    const dx = await dxOpts(path);
+    const src = doc.getText();
+    const offset = doc.offsetAt(position);
+    // A binding confined to this file cannot be imported, so the single-file
+    // bootstrap index is complete for it (ADR 0103); anything top-level still
+    // needs the graph-wide walk.
+    const refs =
+      dx.plugins === undefined && bootstrapBindingIsFileLocal(src, offset)
+        ? bootstrapReferencesAt(src, offset, path)
+        : await moduleReferencesAt(path, src, offset, read, listFiles);
     return Promise.all(refs.map((r) => rangeAtPath(r.location.path, r.location.span)));
   });
 
@@ -406,12 +415,14 @@ export function startServer(opts: ServerOptions = {}): void {
   connection.onPrepareRename(async ({ textDocument, position }) => {
     const doc = documents.get(textDocument.uri);
     if (!doc) return null;
-    const prep = await modulePrepareRenameAt(
-      docPath(textDocument.uri),
-      doc.getText(),
-      doc.offsetAt(position),
-      read,
-    );
+    const path = docPath(textDocument.uri);
+    const dx = await dxOpts(path);
+    const src = doc.getText();
+    const offset = doc.offsetAt(position);
+    const prep =
+      dx.plugins === undefined && bootstrapBindingIsFileLocal(src, offset)
+        ? bootstrapPrepareRenameAt(src, offset)
+        : await modulePrepareRenameAt(path, src, offset, read);
     return prep ? { range: rangeOf(doc, prep.span), placeholder: prep.name } : null;
   });
 
@@ -419,14 +430,13 @@ export function startServer(opts: ServerOptions = {}): void {
     const doc = documents.get(textDocument.uri);
     if (!doc) return null;
     const path = docPath(textDocument.uri);
-    const edits = await moduleRenameAt(
-      path,
-      doc.getText(),
-      doc.offsetAt(position),
-      newName,
-      read,
-      listFiles,
-    );
+    const dx = await dxOpts(path);
+    const src = doc.getText();
+    const offset = doc.offsetAt(position);
+    const edits =
+      dx.plugins === undefined && bootstrapBindingIsFileLocal(src, offset)
+        ? bootstrapRenameAt(src, offset, newName, path)
+        : await moduleRenameAt(path, src, offset, newName, read, listFiles);
     if (!edits) return null;
     const changes: Record<string, TextEdit[]> = {};
     for (const e of edits) {

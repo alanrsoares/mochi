@@ -9,7 +9,7 @@
     "./hover": "./src/hover.ts",
     "./bootstrap-hover": "./src/bootstrap-hover.ts",
     "./bootstrap-symbols": "./src/bootstrap-symbols.ts",
-    "./bootstrap-highlights": "./src/bootstrap-highlights.ts",
+    "./bootstrap-nav": "./src/bootstrap-nav.ts",
     "./complete": "./src/complete.ts",
     "./nav": "./src/nav.ts",
     "./diagnostics": "./src/diagnostics.ts"
