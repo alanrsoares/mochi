@@ -12,6 +12,7 @@ import { createModuleCache } from "@mochi/compiler/module";
 import { isPreludePath, PRELUDE_PATH, preludeVirtualSource } from "@mochi/compiler/prelude-virtual";
 import type { Span } from "@mochi/compiler/span";
 import { moduleBootstrapHoverAt } from "@mochi/dx/bootstrap-hover";
+import { bootstrapDocumentSymbolsAt } from "@mochi/dx/bootstrap-symbols";
 import { type CompletionItem as MochiCompletion, moduleCompleteAt } from "@mochi/dx/complete";
 import {
   bootstrapModuleDiagnostics,
@@ -427,11 +428,14 @@ export function startServer(opts: ServerOptions = {}): void {
   });
 
   /** Document / workspace symbols. */
-  connection.onDocumentSymbol(({ textDocument }): DocumentSymbol[] => {
+  connection.onDocumentSymbol(async ({ textDocument }): Promise<DocumentSymbol[]> => {
     const doc = documents.get(textDocument.uri);
+    const dx = doc ? await dxOpts(docPath(textDocument.uri)) : null;
+    const symbols =
+      doc && dx?.plugins === undefined ? bootstrapDocumentSymbolsAt(doc.getText()) : null;
     return !doc
       ? []
-      : documentSymbolsAt(doc.getText()).map((s) => ({
+      : (symbols ?? documentSymbolsAt(doc.getText())).map((s) => ({
           name: s.name,
           detail: s.detail,
           kind: symbolKind(s.kind),

@@ -8,6 +8,7 @@
     "./format": "./src/format.ts",
     "./hover": "./src/hover.ts",
     "./bootstrap-hover": "./src/bootstrap-hover.ts",
+    "./bootstrap-symbols": "./src/bootstrap-symbols.ts",
     "./complete": "./src/complete.ts",
     "./nav": "./src/nav.ts",
     "./diagnostics": "./src/diagnostics.ts"
