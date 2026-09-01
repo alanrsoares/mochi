@@ -478,7 +478,7 @@ let genExpr = (ctx: GCtx, e) => switch e {
       Array.length(cparams) >= 2
         ? "_curry(${show(Array.length(cparams))}, ${arrow})"
         : arrow
-  | Ast.ELetIn(name, _, value, body, _) =>
+  | Ast.ELetIn(name, _, _, value, body, _) =>
     // let x = v in b -> an IIFE binding x: `((x) => b)(v)`. Non-recursive, so
     // plain arg-application is enough; nested let-ins chain as curried IIFEs.
     // Annotating the param flows contextual types into `v`'s empty collections
@@ -658,7 +658,7 @@ let hasRecur = e => switch e {
       parts
     )
   | Ast.ECall(fn, args, _, _) => hasRecur(fn) || someOf(hasRecur, args)
-  | Ast.ELetIn(_, _, value, body, _) => hasRecur(value) || hasRecur(body)
+  | Ast.ELetIn(_, _, _, value, body, _) => hasRecur(value) || hasRecur(body)
   | Ast.EPipe(left, right, _, _) => hasRecur(left) || hasRecur(right)
   | Ast.EDo(exprs, _) => someOf(hasRecur, exprs)
   | Ast.ETernary(cond, thenE, elseE, _) => hasRecur(
@@ -696,7 +696,7 @@ let loopNeedsStep = e => switch e {
   | Ast.ETernary(_, thenE, elseE, _) => loopNeedsStep(
       thenE
     ) || loopNeedsStep(elseE)
-  | Ast.ELetIn(_, _, _, body, _) => loopNeedsStep(body)
+  | Ast.ELetIn(_, _, _, _, body, _) => loopNeedsStep(body)
   | Ast.EDo(exprs, _) => loopNeedsStep(lastDoExpr(exprs))
   | Ast.EMatch(_, _, _) => hasRecur(e)
   | _ => false
@@ -718,9 +718,10 @@ let wrapStepTails = (e, sp) => switch e {
       wrapStepTails(elseE, sp),
       tsp
     )
-  | Ast.ELetIn(name, nameSpan, value, body, lsp) => Ast.ELetIn(
+  | Ast.ELetIn(name, nameSpan, annot, value, body, lsp) => Ast.ELetIn(
       name,
       nameSpan,
+      annot,
       value,
       wrapStepTails(body, sp),
       lsp
@@ -757,7 +758,7 @@ let genLoopTail = (ctx: GCtx, e, params) => switch e {
   | Ast.ETernary(cond, thenE, elseE, _) => hasRecur(e)
       ? "if (${ctx->genExpr(cond)}) { ${ctx->genLoopTail(thenE, params)} } else { ${ctx->genLoopTail(elseE, params)} }"
       : "return ${ctx->genExpr(e)};"
-  | Ast.ELetIn(name, _, value, body, _) => hasRecur(e)
+  | Ast.ELetIn(name, _, _, value, body, _) => hasRecur(e)
       ?
         // A let-in in loop-tail position stays a JS block rather than flattening
         // into the loop body: consecutive `let _ = … in` effects and shadowing
@@ -871,7 +872,7 @@ let paramNameSet = (params, i, acc) => switch Array.get(i, params) {
 // bound (by the arrow's params or an earlier link), or a non-lambda value whose
 // own name it mentions. Lambda values are locally recursive (ADR 0067).
 let letBlockLoop = (ctx: GCtx, e, seen, decls) => switch e {
-  | Ast.ELetIn(name, _, value, body, _) => Set.has(
+  | Ast.ELetIn(name, _, _, value, body, _) => Set.has(
       name,
       seen
     ) || switch value {
@@ -1729,7 +1730,7 @@ let usesMatchLib = e => switch e {
   | Ast.ERef(_, _) => false
   | Ast.ECall(fn, args, _, _) => usesMatchLib(fn) || someOf(usesMatchLib, args)
   | Ast.ELambda(_, body, _) => usesMatchLib(body)
-  | Ast.ELetIn(_, _, value, body, _) => usesMatchLib(
+  | Ast.ELetIn(_, _, _, value, body, _) => usesMatchLib(
       value
     ) || usesMatchLib(body)
   | Ast.ELetBind(_, _, _, value, body, _) => usesMatchLib(
@@ -1867,7 +1868,7 @@ let exprRefs = (ctx: GCtx, e, acc) => switch e {
       fills
     ) in
       ctx->exprRefs(cbody, acc3)
-  | Ast.ELetIn(_, _, value, body, _) => ctx->exprRefs(
+  | Ast.ELetIn(_, _, _, value, body, _) => ctx->exprRefs(
       body,
       ctx->exprRefs(value, acc)
     )

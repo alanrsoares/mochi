@@ -147,7 +147,7 @@ let jxExprSpan = e => switch e {
   | Ast.ERef(_, sp) => sp
   | Ast.ECall(_, _, _, sp) => sp
   | Ast.ELambda(_, _, sp) => sp
-  | Ast.ELetIn(_, _, _, _, sp) => sp
+  | Ast.ELetIn(_, _, _, _, _, sp) => sp
   | Ast.ELetBind(_, _, _, _, _, sp) => sp
   | Ast.EPipe(_, _, _, sp) => sp
   | Ast.EDo(_, sp) => sp

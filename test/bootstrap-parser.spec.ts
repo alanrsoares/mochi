@@ -118,6 +118,7 @@ const cExpr = (e: Expr): Canon => {
         kind: "letin",
         name: e.name,
         nameSpan: cSpan(e.nameSpan),
+        annot: e.annot ? cTy(e.annot) : null,
         value: cExpr(e.value),
         body: cExpr(e.body),
         span: cSpan(e.span),
@@ -389,6 +390,7 @@ const A_EXPR: Record<string, (e: Al) => Canon> = {
     kind: "letin",
     name: e.name,
     nameSpan: e.nameSpan,
+    annot: opt(e.annot, aTy),
     value: aExpr(e.value),
     body: aExpr(e.body),
     span: e.span,
@@ -638,6 +640,8 @@ const cases: Record<string, string> = {
     "let x = 1\nlet r = { x }\nlet typed = (n: number) => n\nlet unwrap = value => switch value { | Some(n) as whole => n | None => 0 }",
   "let-in and tuple let-in":
     "let f = let a = 1 in add(a, 2)\nlet g = let (x, y) = (1, 2) in add(x, y)",
+  "let-in binding annotation (ADR 0044)":
+    'let f = let a : number = 1 in add(a, 2)\nlet g = let s : "rose" | "amber" = "rose" in s\nlet h = let u = 1 in u',
   "pipe chain": "let r = x |> f |> g(1) |> h",
   "fast pipe": "let r = x -> f(1) -> g(2)",
   "fast pipe tighter than concat (ADR 0073)": 'let s = "hi" ++ ctx->gen(1)',

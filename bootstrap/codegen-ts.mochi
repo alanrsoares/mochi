@@ -688,7 +688,7 @@ let scopedSpans = e => switch e {
       scopedSpans(fn),
       scopedSpansAt(args, 0)
     )
-  | Ast.ELetIn(_, _, value, body, _) => Array.concat(
+  | Ast.ELetIn(_, _, _, value, body, _) => Array.concat(
       scopedSpans(value),
       scopedSpans(body)
     )
@@ -923,7 +923,7 @@ let hasJsxExpr = e => switch e {
   | Ast.ECall(_, _, Some("jsx"), _) => true
   | Ast.ECall(fn, args, _, _) => hasJsxExpr(fn) || anyOf(hasJsxExpr, args)
   | Ast.ELambda(_, body, _) => hasJsxExpr(body)
-  | Ast.ELetIn(_, _, value, body, _) => hasJsxExpr(value) || hasJsxExpr(body)
+  | Ast.ELetIn(_, _, _, value, body, _) => hasJsxExpr(value) || hasJsxExpr(body)
   | Ast.ELetBind(_, _, _, value, body, _) => hasJsxExpr(
       value
     ) || hasJsxExpr(body)

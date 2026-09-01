@@ -239,7 +239,7 @@ let walkExpr = (expr, env) => switch expr {
     )
   | Ast.ELambda(params, body, _) => let bound = bindParams(params, env, 0) in
       Array.concat(bound.occurrences, walkExpr(body, bound.env))
-  | Ast.ELetIn(name, nameSpan, value, body, _) => let recursive = switch value {
+  | Ast.ELetIn(name, nameSpan, _, value, body, _) => let recursive = switch value {
       | Ast.ELambda(_, _, _) => true
       | _ => false
     } in

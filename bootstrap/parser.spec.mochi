@@ -25,6 +25,18 @@ test("`|>` is retained too, and is not marked fast", () => switch parseSrc("let 
   | _ => false |> ok
 })
 
+test("a let-in KEEPS its `: T` annotation on the node (ADR 0044)", () => switch parseSrc("let value = let x : number = 1 in x") {
+  | Ok([Ast.SLet("value", _, None, Ast.ELetIn("x", _, Some(Ast.TyName("number", _)), Ast.ENum(1, "1", _), Ast.ERef("x", _), _), false, None, _)]) => true
+      |> ok
+  | _ => false |> ok
+})
+
+test("an unannotated let-in carries None", () => switch parseSrc("let value = let x = 1 in x") {
+  | Ok([Ast.SLet("value", _, None, Ast.ELetIn("x", _, None, _, _, _), false, None, _)]) => true
+      |> ok
+  | _ => false |> ok
+})
+
 test("keyword labels are valid in records and projections", () => switch parseSrc("let button = { type: \"button\" }\nlet kind = button.type") {
   | Ok([Ast.SLet("button", _, None, Ast.ERecord([{ name: "type", value: Ast.EStr("button", _) }], None, _), false, None, _), Ast.SLet("kind", _, None, Ast.EField(Ast.ERef("button", _), "type", _, _), false, None, _)]) => true
       |> ok

@@ -26,6 +26,12 @@ testEach("inference accepts well-typed programs", [
   {
     label: "exhaustive variant",
     src: "type Option a = Some(value: a) | None\nlet withDefault = value => switch value { | Some(n) => n | None => 0 }"
+  },
+  {
+    label: // ADR 0044: the annotation pins the binding, so the literal keeps the
+    // union instead of widening to `string`.
+    "let-in binding annotation",
+    src: "let pick = (tone: \"rose\" | \"amber\") => tone\nlet r = let t : \"rose\" | \"amber\" = \"rose\" in pick(t)"
   }
 ], row => switch inferSrc(row.src) {
   | Ok(_) => true |> ok
@@ -46,6 +52,11 @@ testEach("inference rejects type conflicts", [
   {
     label: "wrong builtin argument",
     src: "let value = mul(1, \"no\")",
+    want: "unify"
+  },
+  {
+    label: "let-in value contradicts its annotation",
+    src: "let r = let x : number = \"no\" in x",
     want: "unify"
   }
 ], row => switch inferSrc(row.src) {

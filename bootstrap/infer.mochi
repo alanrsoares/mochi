@@ -115,7 +115,7 @@ export let exprSpan = e => switch e {
   | Ast.ERef(_, sp) => sp
   | Ast.ECall(_, _, _, sp) => sp
   | Ast.ELambda(_, _, sp) => sp
-  | Ast.ELetIn(_, _, _, _, sp) => sp
+  | Ast.ELetIn(_, _, _, _, _, sp) => sp
   | Ast.ELetBind(_, _, _, _, _, sp) => sp
   | Ast.EPipe(_, _, _, sp) => sp
   | Ast.EDo(_, sp) => sp
@@ -802,7 +802,7 @@ let inferExprRaw = (ctx: Ctx<a>, e, st: Types.St) => switch e {
       envWithLabFields(labFields, bodyEnv)
     )->inferExpr(body, st3) in
       Ok((arrowChain(allTypes, bodyT), st4))
-  | Ast.ELetIn(name, _nameSpan, value, body, _span) => switch value {
+  | Ast.ELetIn(name, _nameSpan, annot, value, body, _span) => switch value {
       | Ast.ELambda(_, _, _) =>
         // Adjacent lambda locals share the top-level SCC machinery (ADR 0067):
         // pre-bind monomorphically, infer dependency-first, then generalize.
@@ -816,14 +816,30 @@ let inferExprRaw = (ctx: Ctx<a>, e, st: Types.St) => switch e {
         ) in
           localCtx->inferExpr(tail, localSt)
       | _ => let? (valT, st1) = ctx->inferExpr(value, st) in
-        let sc = generalize(ctx.env, valT, st1, true) in
+        // `let x : T = v in b` (ADR 0044): pin to the declared type before
+        // generalize, so a literal against a union keeps the union instead of
+        // widening — and an annotated binding never widens its literals.
+        let? (pinned, st2) = switch annot {
+          | Some(te) => let (at, _, stA) = typeExprToType(
+              te,
+              #{},
+              st1,
+              ctx.aliasMap,
+              Set.fromArray([])
+            ) in
+              checkFits(valT, at, stA, annotSpan(te))
+                |> Result.map(stB => (at, stB))
+          | None => Ok((valT, st1))
+        } in
+        let widen = switch annot { | Some(_) => false | None => true } in
+        let sc = generalize(ctx.env, pinned, st2, widen) in
         let vsp = exprSpan(value) in
         let $ctx = ctxWithLets(
           ctx,
           Map.set(name, sc, ctx.env),
           Map.set(name, vsp, ctx.letOwner)
         ) in
-          $ctx->inferExpr(body, noteLet(vsp, st1))
+          $ctx->inferExpr(body, noteLet(vsp, st2))
     }
   | Ast.ELetBind(param, paramSpan, monad, value, body, _) => ctx->inferLetBind(
       e,
@@ -1231,7 +1247,7 @@ let freeRefs = (e, bound, acc) => switch e {
       lambdaBound(params, bound),
       labeledDefaultRefs(params, bound, acc)
     )
-  | Ast.ELetIn(name, _, value, body, _) => let valueBound = switch value {
+  | Ast.ELetIn(name, _, _, value, body, _) => let valueBound = switch value {
       | Ast.ELambda(_, _, _) => Set.add(name, bound)
       | _ => bound
     } in
@@ -1499,16 +1515,17 @@ let letsOfFrom = stmts => switch stmts {
 }
 
 // Convert an adjacent lambda-local chain to the same lightweight SLet shape
-// top-level SCC inference already consumes. `ELetIn` has no `export`/doc/annot.
+// top-level SCC inference already consumes. `ELetIn` has no `export`/doc, but
+// its annotation rides along so the group pins the declared type (ADR 0044).
 let localLetsFrom = e =>
   // Dogfood ADR 0067: this private collector recurses without becoming a
   // bootstrap module binding. Its lambda RHS makes `collect` self-scoped.
   let collect = (current, acc) => switch current {
-    | Ast.ELetIn(name, nameSpan, value, body, span) => switch value {
+    | Ast.ELetIn(name, nameSpan, annot, value, body, span) => switch value {
         | Ast.ELambda(_, _, _) => collect(
             body,
             Array.append(
-              Ast.SLet(name, nameSpan, None, value, false, None, span),
+              Ast.SLet(name, nameSpan, annot, value, false, None, span),
               acc
             )
           )
@@ -1519,7 +1536,7 @@ let localLetsFrom = e =>
     collect(e, [])
 
 let localTail = e => switch e {
-  | Ast.ELetIn(_, _, Ast.ELambda(_, _, _), body, _) => localTail(body)
+  | Ast.ELetIn(_, _, _, Ast.ELambda(_, _, _), body, _) => localTail(body)
   | _ => e
 }
 

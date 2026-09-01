@@ -48,7 +48,9 @@ export type Expr =
   // never mistaken for sugar.
   | ECall(fn: Expr, args: [Expr], origin: Option<string>, span: Span)
   | ELambda(params: [LamParam], body: Expr, span: Span)
-  | ELetIn(name: string, nameSpan: Span, value: Expr, body: Expr, span: Span)
+  // `annot` is the optional `let x : T = v in b` binding annotation (ADR 0044),
+  // kept in the AST so the formatter can print it back and infer can pin it.
+  | ELetIn(name: string, nameSpan: Span, annot: Option<TypeExpr>, value: Expr, body: Expr, span: Span)
   | ELetBind(param: LamParam, paramSpan: Span, monad: string, value: Expr, body: Expr, span: Span)
   // `fast` distinguishes `a -> f(b)` from `a |> f`: both lower to a call, but the
   // fast pipe PREPENDS its left (ADR 0069) while `|>` is data-last. Kept in the

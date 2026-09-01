@@ -286,7 +286,7 @@ let exprSpan = e => switch e {
   | Ast.ERef(_, sp) => sp
   | Ast.ECall(_, _, _, sp) => sp
   | Ast.ELambda(_, _, sp) => sp
-  | Ast.ELetIn(_, _, _, _, sp) => sp
+  | Ast.ELetIn(_, _, _, _, _, sp) => sp
   | Ast.ELetBind(_, _, _, _, _, sp) => sp
   | Ast.EPipe(_, _, _, sp) => sp
   | Ast.EDo(_, sp) => sp
@@ -493,7 +493,12 @@ let parseLetIn = (toks, pos, hooks) =>
       ) in
         Ok((Ast.ECall(fn, [value], None, spanning(start, exprSpan(body))), p5))
       : let? (nm, p1) = expectId(toks, p) in
-      let? p2 = expectTok(TEq, toks, p1) in
+      // Optional `: T` binding annotation, same shape as a top-level `let`
+      // (ADR 0044) — kept on the node, not folded into the value.
+      let? (annot, pA) = tokAt(toks, p1).tok == TColon
+        ? toks->parseTypeExpr(p1 + 1) |> Result.map(((ty, k)) => (Some(ty), k))
+        : Ok((None, p1)) in
+      let? p2 = expectTok(TEq, toks, pA) in
       let? (value, p3) = parseExpr(toks, p2, hooks) in
       let? p4 = expectIn(toks, p3) in
       let? (body, p5) = parseExpr(toks, p4, hooks) in
@@ -501,6 +506,7 @@ let parseLetIn = (toks, pos, hooks) =>
           Ast.ELetIn(
             nm.name,
             nm.span,
+            annot,
             value,
             body,
             spanning(start, exprSpan(body))
