@@ -5,6 +5,7 @@ import type { PErr } from "./parser";
 import type { Scheme } from "./schemes";
 import type { AliasInfo } from "./codegen-ts";
 import type { InferApi, QualAliasField } from "./infer";
+import type { Occurrence } from "./symbols";
 
 export type Loaded = { path: string; stmts: Stmt[] };
 export type ModuleOutput = { path: string; js: string };
@@ -88,12 +89,19 @@ import { codegen } from "./codegen";
 import { emitTsModule, externModuleDts } from "./codegen-ts";
 import { showType, tVar } from "./types";
 import { widenLits } from "./schemes";
+import { index } from "./symbols";
 import { builtins } from "./prelude.gen.mjs";
 import { namespaces } from "./prelude.gen.mjs";
 import { namespaceRuntime } from "./prelude.gen.mjs";
 import { preludeJsDefs } from "./prelude.gen.mjs";
 import { runtimeDeps } from "./prelude.gen.mjs";
 import * as Ast from "./ast";
+/**
+ * Host-facing lexical occurrence query. The index itself is source-owned;
+ * this re-export makes it reachable from the frozen graph without teaching
+ * host DX code about bootstrap's internal module layout.
+ */
+export const symbolOccurrences: (stmts: Stmt[]) => Occurrence[] = (stmts: Stmt[]) => index(stmts);
 
 const addCtorOrigins: <A, B, C>(
   ctors: ({ name: A } & C)[],

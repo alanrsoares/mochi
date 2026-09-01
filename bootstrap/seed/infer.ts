@@ -344,6 +344,7 @@ const bindParam: <A, B>(
   3,
   <A, B>(p: LamParam, env: Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, st: St) =>
     match(p)
+      .with({ _tag: "LPSpanned" }, ({ param: inner }) => bindParam(inner, env, st))
       .with({ _tag: "LPName" }, ({ name }) =>
         (([t, st1]: [Ty, St]) => _tuple(t, _Map_set(name, mono(t), env), st1))(freshVar(st)),
       )
@@ -499,16 +500,32 @@ const constrainParamAnnotsFrom: <A>(
                   .with(
                     (
                       _v,
-                    ): _v is Extract<LamParam, { _tag: "LPName" }> & {
-                      annot: Extract<
-                        Extract<LamParam, { _tag: "LPName" }>["annot"],
-                        { _tag: "Some" }
-                      >;
+                    ): _v is Extract<LamParam, { _tag: "LPSpanned" }> & {
+                      param: Extract<
+                        Extract<LamParam, { _tag: "LPSpanned" }>["param"],
+                        { _tag: "LPName" }
+                      > & {
+                        annot: Extract<
+                          Extract<
+                            Extract<LamParam, { _tag: "LPSpanned" }>["param"],
+                            { _tag: "LPName" }
+                          >["annot"],
+                          { _tag: "Some" }
+                        >;
+                      };
                     } => {
                       const _g: any = _v;
-                      return _g._tag === "LPName" && _g.annot._tag === "Some";
+                      return (
+                        _g._tag === "LPSpanned" &&
+                        _g.param._tag === "LPName" &&
+                        _g.param.annot._tag === "Some"
+                      );
                     },
-                    ({ annot: { value: te } }) =>
+                    ({
+                      param: {
+                        annot: { value: te },
+                      },
+                    }) =>
                       (([annotT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
                         _Result_flatMap(
                           (st2) => constrainParamAnnotsFrom(ctx, rest, restTypes, vars1, st2),
@@ -1176,6 +1193,7 @@ const domainIsOmittableRecord: _Curry<[t: Ty, st: St], boolean> = _curry(2, (t: 
 const isLabeledParam: (p: LamParam) => boolean = (p: LamParam) =>
   match(p)
     .with({ _tag: "LPLabeled" }, () => true)
+    .with({ _tag: "LPSpanned" }, ({ param: inner }) => isLabeledParam(inner))
     .otherwise(() => false);
 const splitLamParams: _Curry<
   [params: LamParam[], positional: LamParam[], labeled: LamParam[]],
@@ -1302,6 +1320,9 @@ const labFieldsFrom: <A>(
           },
           ([lab, ...rest]) =>
             match(lab)
+              .with({ _tag: "LPSpanned" }, ({ param: inner }) =>
+                labFieldsFrom(ctx, [inner, ...rest], env, vars, st),
+              )
               .with({ _tag: "LPLabeled" }, ({ name, annot, optional, defaultValue }) =>
                 (([fieldT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
                   _Result_flatMap(
@@ -4952,6 +4973,7 @@ const paramBound: _Curry<[p: LamParam, bound: Set<string>], Set<string>> = _curr
   2,
   (p: LamParam, bound: Set<string>) =>
     match(p)
+      .with({ _tag: "LPSpanned" }, ({ param: inner }) => paramBound(inner, bound))
       .with({ _tag: "LPName" }, ({ name }) => _Set_add(name, bound))
       .with({ _tag: "LPTuple" }, ({ names }) => addAllFrom(names, bound))
       .with({ _tag: "LPRecord" }, ({ fields }) => addAllFrom(fields, bound))
@@ -5003,6 +5025,9 @@ const labeledDefaultRefs: _Curry<
       },
       ([p, ...rest]) =>
         match(p)
+          .with({ _tag: "LPSpanned" }, ({ param: inner }) =>
+            labeledDefaultRefs([inner, ...rest], bound, acc),
+          )
           .with(
             (
               _v,

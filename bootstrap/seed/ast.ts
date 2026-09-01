@@ -10,7 +10,8 @@ export type LamParam =
       annot: Option<TypeExpr>;
       optional: boolean;
       defaultValue: Option<Expr>;
-    };
+    }
+  | { _tag: "LPSpanned"; param: LamParam; nameSpans: Span[] };
 export type Field = { name: string; value: Expr };
 export type MapEntry = { key: Expr; value: Expr };
 export type MatchArm = { pattern: Pattern; guard: Option<Expr>; body: Expr };
@@ -141,6 +142,11 @@ export const LPLabeled = _curry(4, (name, annot, optional, defaultValue) => ({
   optional: boolean,
   defaultValue: Option<Expr>,
 ) => LamParam;
+export const LPSpanned = _curry(2, (param, nameSpans) => ({
+  _tag: "LPSpanned",
+  param,
+  nameSpans,
+})) as (param: LamParam, nameSpans: Span[]) => LamParam;
 
 export const SEExpr = (expr: Expr): SeqElem => ({ _tag: "SEExpr", expr });
 export const SESpread = (expr: Expr): SeqElem => ({ _tag: "SESpread", expr });

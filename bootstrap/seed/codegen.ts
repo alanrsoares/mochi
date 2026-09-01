@@ -407,6 +407,7 @@ const emptyNsEmit: _Curry<
 const isLabeledParam: (p: LamParam) => boolean = (p: LamParam) =>
   match(p)
     .with({ _tag: "LPLabeled" }, () => true)
+    .with({ _tag: "LPSpanned" }, ({ param: inner }) => isLabeledParam(inner))
     .otherwise(() => false);
 const splitLamParams: _Curry<
   [params: LamParam[], positional: LamParam[], labeled: LamParam[]],
@@ -928,6 +929,7 @@ const genList: _Curry<[ctx: GCtx, elements: SeqElem[]], string> = _curry(
 );
 const genParam: (p: LamParam) => string = (p: LamParam) =>
   match(p)
+    .with({ _tag: "LPSpanned" }, ({ param: inner }) => genParam(inner))
     .with({ _tag: "LPName" }, ({ name }) => name)
     .with({ _tag: "LPTuple" }, ({ names }) => `[${_Str_join(", ", names)}]`)
     .with({ _tag: "LPRecord" }, ({ fields }) => `{ ${_Str_join(", ", fields)} }`)
@@ -1221,6 +1223,7 @@ const genLambdaBody: _Curry<[ctx: GCtx, e: Expr], string> = _curry(2, (ctx: GCtx
 );
 const paramNames: (p: LamParam) => string[] = (p: LamParam) =>
   match(p)
+    .with({ _tag: "LPSpanned" }, ({ param: inner }) => paramNames(inner))
     .with({ _tag: "LPName" }, ({ name }) => [name])
     .with({ _tag: "LPTuple" }, ({ names }) => names)
     .with({ _tag: "LPRecord" }, ({ fields }) => fields)
@@ -1230,6 +1233,7 @@ const genLabeledFill: _Curry<[ctx: GCtx, labVar: string, lab: LamParam], string>
   3,
   (ctx: GCtx, labVar: string, lab: LamParam) =>
     match(lab)
+      .with({ _tag: "LPSpanned" }, ({ param: inner }) => genLabeledFill(ctx, labVar, inner))
       .with({ _tag: "LPLabeled" }, ({ name, optional, defaultValue }) =>
         ((access: string) =>
           match(defaultValue)
@@ -1288,6 +1292,11 @@ const fillNames: <A>(fills: ({ labs: LamParam[] } & A)[], acc: Set<string>) => S
             reduce(
               _curry(2, (s: Set<string>, lab: LamParam) =>
                 match(lab)
+                  .with({ _tag: "LPSpanned" }, ({ param: inner }) =>
+                    match(inner)
+                      .with({ _tag: "LPLabeled" }, ({ name }) => _Set_add(name, s))
+                      .otherwise(() => s),
+                  )
                   .with({ _tag: "LPLabeled" }, ({ name }) => _Set_add(name, s))
                   .otherwise(() => s),
               ),
@@ -2625,6 +2634,36 @@ const exprRefs: _Curry<[ctx: GCtx, e: Expr, acc: Set<string>], Set<string>> = _c
               reduce(
                 _curry(2, (b: Set<string>, lab: LamParam) =>
                   match(lab)
+                    .with(
+                      (
+                        _v,
+                      ): _v is Extract<LamParam, { _tag: "LPSpanned" }> & {
+                        param: Extract<
+                          Extract<LamParam, { _tag: "LPSpanned" }>["param"],
+                          { _tag: "LPLabeled" }
+                        > & {
+                          defaultValue: Extract<
+                            Extract<
+                              Extract<LamParam, { _tag: "LPSpanned" }>["param"],
+                              { _tag: "LPLabeled" }
+                            >["defaultValue"],
+                            { _tag: "Some" }
+                          >;
+                        };
+                      } => {
+                        const _g: any = _v;
+                        return (
+                          _g._tag === "LPSpanned" &&
+                          _g.param._tag === "LPLabeled" &&
+                          _g.param.defaultValue._tag === "Some"
+                        );
+                      },
+                      ({
+                        param: {
+                          defaultValue: { value: d },
+                        },
+                      }) => exprRefs(ctx, d, b),
+                    )
                     .with(
                       (
                         _v,

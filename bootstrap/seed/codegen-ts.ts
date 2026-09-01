@@ -629,6 +629,7 @@ export const ctorFactoryTs: _Curry<
  */
 const paramDeclName: <A>(p: LamParam, i: A) => string = _curry(2, <A>(p: LamParam, i: A) =>
   match(p)
+    .with({ _tag: "LPSpanned" }, ({ param: inner }) => paramDeclName(inner, i))
     .with({ _tag: "LPName" }, ({ name }) => name)
     .otherwise(() => `_${show(i)}`),
 );
