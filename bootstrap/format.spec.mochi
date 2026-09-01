@@ -3,6 +3,7 @@ import * as Ast from "./ast.mochi"
 import { render } from "./doc.mochi"
 import {
   escStrBody,
+  exprD,
   externStmt,
   importNsStmtD,
   importStmtD,
@@ -147,3 +148,87 @@ test("escStrBody re-escapes an interpolation opener", () =>
   assertEq(escStrBody("a\${b}"), "a\\\${b}"))
 
 test("strLit wraps and escapes", () => assertEq(strLit("a\"b"), "\"a\\\"b\""))
+
+// --- expressions -------------------------------------------------------------
+
+// Already-formatted source must print back byte-identical: parse it, print the
+// bound value, compare. Sugar the printer does not re-fold yet (binary and
+// unary calls, operator sections, `>>`, labeled calls) is not listed here —
+// those cases arrive with the re-fold slice.
+let exprText = src => switch firstStmt("let value = ${src}") {
+  | Ok(Some(Ast.SLet(_, _, _, value, _, _, _))) => render(exprD(value), WIDTH)
+  | _ => "unexpected shape"
+}
+
+testEach("an expression round-trips", [
+  "42",
+  "true",
+  "()",
+  "\"hi\"",
+  "value",
+  "f()",
+  "f(x)",
+  "f(x, y)",
+  "f(g(x))",
+  "x.y",
+  "x.y.z",
+  "(1, 2)",
+  "[1, 2]",
+  "@{1, 2}",
+  "#{1, 2}",
+  "{ x: 1, y }",
+  "{ ...base, x: 1 }",
+  "#{ a: 1, b: 2 }",
+  "x => x",
+  "(a, b) => a",
+  "(x: number) => x",
+  "({ x, y }) => x",
+  "f(x, y => y)",
+  "cond ? 1 : 2",
+  "a |> f",
+  "a |> f |> g",
+  "1->f(2)",
+  "let x = 1 in x",
+  "let x : number = 1 in x",
+  "let? x = f() in Ok(x)",
+  "let! x = t() in Task.of(x)",
+  "switch x { | Some(n) => n | None => 0 }",
+  "switch x { | Some(n) when isBig(n) => n | _ => 0 }",
+  "loop (i = 0) { recur(i) }",
+  "recur(1)"
+], src => assertEq(exprText(src), src))
+
+// A `do` block always breaks (`hardline` between exprs), like the TS printer.
+test("a do block prints one expression per line", () =>
+  assertEq("do {\n  f();\n  g()\n}", exprText("do { f(); g() }")))
+
+// A `let _ = … in` chain is sequencing, so it prints as the `do` block it means
+// — the one case that deliberately does not return its input.
+test("a discarded-let chain collapses to a do block", () =>
+  assertEq("do {\n  f();\n  g()\n}", exprText("let _ = f() in g()")))
+
+// Pins what the missing re-fold slice still costs: an infix call prints as the
+// call the parser desugared it to. Update this when `refoldCall` lands.
+test("a binary operator still prints desugared (no re-fold yet)", () =>
+  assertEq("eq(n, 0)", exprText("n == 0")))
+
+test("a ternary cascade shares one indent instead of staircasing", () =>
+  assertEq("a ? 1 : b ? 2 : 3", exprText("a ? 1 : b ? 2 : 3")))
+
+// Layout, not just text: the round-trip cases above all fit on one line, so
+// they never exercise `group`/`indent`. These two overflow 80 columns.
+test("an overflowing call breaks one argument per line", () =>
+  assertEq(
+    "computeSomething(\n  aLongArgumentName,\n  anotherLongArgumentHere,\n  aThirdRatherLongOne\n)",
+    exprText(
+      "computeSomething(aLongArgumentName, anotherLongArgumentHere, aThirdRatherLongOne)"
+    )
+  ))
+
+test("an overflowing pipe chain breaks one stage per line", () =>
+  assertEq(
+    "someInitialValue\n  |> firstTransformation\n  |> secondTransformation\n  |> theThirdLongStage",
+    exprText(
+      "someInitialValue |> firstTransformation |> secondTransformation |> theThirdLongStage"
+    )
+  ))

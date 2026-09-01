@@ -1,9 +1,9 @@
 // bootstrap/format.mochi — the source formatter, in mochi (ADR 0025 / 0048).
 //
-// Mirrors packages/dx/src/format.ts. Being ported in slices; this one covers
-// everything that does not need expression lowering: patterns, constructors,
-// `extern`/`type`/`import` statements, and the two bracket layouts every
-// collection shares.
+// Mirrors packages/dx/src/format.ts. Being ported in slices: patterns,
+// constructors, `extern`/`type`/`import` statements and the shared bracket
+// layouts, plus the expression printer. Still outstanding — the sugar re-folds
+// (`refoldCall` and friends) and comment attachment.
 //
 // Plugin `format` hooks stay a TypeScript-host seam — bootstrap has no format
 // hook protocol (ADR 0011 §6).
@@ -11,6 +11,7 @@
 import * as Ast from "./ast.mochi"
 import {
   cat,
+  flat,
   group,
   hardline,
   indent,
@@ -146,6 +147,419 @@ export let braced = (open, close, items) =>
         [txt(open), indent(cat([line, join(sepLine, items)])), line, txt(close)]
       )
     )
+
+// --- expressions -------------------------------------------------------------
+//
+// Mirrors format.ts's exprCore and the printers it dispatches to. Two things it
+// deliberately does NOT do yet: re-fold desugared sugar (binary/unary calls,
+// operator sections, eta-partials, `>>` composition — every `refoldCall` branch),
+// so `a + b` still prints as `add(a, b)`; and attach comments, which needs a
+// span-keyed side table rather than TS's node-keyed WeakMaps.
+
+let parenIf = (cond, d) => cond ? cat([txt("("), d, txt(")")]) : d
+
+/// A callee / operand needs parens when dropping them would reparse to a
+/// different tree: a lambda or ternary binds looser than application, and a
+/// nested pipe would re-associate.
+let loosePrefix = e => switch e {
+  | Ast.ELambda(_, _, _) => true
+  | Ast.ETernary(_, _, _, _) => true
+  | Ast.EPipe(_, _, _, _) => true
+  | _ => false
+}
+
+/// `LPSpanned` carries binder spans for the IDE; the printer only wants the shape.
+let unspan = p => switch p { | Ast.LPSpanned(inner, _) => inner | _ => p }
+
+let labeledParamText = (name, annot, optional, defaultValue) =>
+  let ann = switch annot {
+    | Some(te) => ": ${showTypeExpr(te)}"
+    | None => ""
+  } in
+  let def = switch defaultValue {
+    | Some(d) => " = ${flat(exprD(d))}"
+    | None => ""
+  } in
+    "~${name}${optional ? "?" : ""}${ann}${def}"
+
+let paramText = p => switch unspan(p) {
+  | Ast.LPName(name, annot) => switch annot {
+      | Some(te) => "${name}: ${showTypeExpr(te)}"
+      | None => name
+    }
+  | Ast.LPTuple(names) => "(${Str.join(", ", names)})"
+  | Ast.LPRecord(fields) => "{ ${Str.join(", ", fields)} }"
+  | Ast.LPLabeled(name, annot, optional, defaultValue) => labeledParamText(
+      name,
+      annot,
+      optional,
+      defaultValue
+    )
+  | Ast.LPSpanned(_, _) =>
+    // `unspan` already stripped the wrapper; a doubly-wrapped param is not built.
+    ""
+}
+
+/// A lone un-annotated name drops its parens (`x => …`); annotations and every
+/// other shape keep them (`(x: number) => …`, `(a, b) => …`, `({ x }) => …`).
+let paramsText = ps => switch ps {
+  | [only] => switch unspan(only) {
+      | Ast.LPName(name, None) => name
+      | _ => "(${commaJoin(paramText, ps)})"
+    }
+  | _ => "(${commaJoin(paramText, ps)})"
+}
+
+/// `"…${x}…"` (ADR 0023) — round-trip the sugar; holes render flat. The body is
+/// escaped per part, so it wraps in quotes directly rather than through `strLit`.
+let quoted = body => "\"" ++ body ++ "\""
+
+let interpText = parts =>
+  let hole = ex => "$" ++ "{" ++ flat(exprD(ex)) ++ "}" in
+    quoted(
+      Str.join(
+        "",
+        parts
+          |> map(p => switch p {
+            | Ast.IPLit(value) => escStrBody(value)
+            | Ast.IPExpr(ex) => hole(ex)
+          })
+      )
+    )
+
+/// `let _ = a in let _ = b in result` is sequencing, not value binding — it
+/// prints as `do { … }`, so the chain collapses to its expression list.
+let discardedFrom = (e, acc) => switch e {
+  | Ast.ELetIn("_", _, _, value, body, _) => discardedFrom(
+      body,
+      Array.append(value, acc)
+    )
+  | _ => Array.length(acc) == 0 ? None : Some(Array.append(e, acc))
+}
+
+let discardedLetExprs = e => discardedFrom(e, [])
+
+let doBlockD = exprs =>
+  cat(
+    [
+      txt("{"),
+      indent(
+        cat([hardline, join(cat([txt(";"), hardline]), exprs |> map(exprD))])
+      ),
+      hardline,
+      txt("}")
+    ]
+  )
+
+let doD = exprs => cat([txt("do "), doBlockD(exprs)])
+
+let lambdaD = (params, body) =>
+  let head = txt("${paramsText(params)} =>") in
+    switch body {
+      | Ast.EDo(exprs, _) => cat([head, txt(" "), doBlockD(exprs)])
+      | _ => switch discardedLetExprs(body) {
+          | Some(exprs) => cat([head, txt(" "), doBlockD(exprs)])
+          | None => switch body {
+              | Ast.EMatch(_, _, _) =>
+                // A `switch` body brings its own braces, so it hugs the arrow
+                // instead of dropping to an indented line.
+                cat([head, txt(" "), exprD(body)])
+              | _ => group(cat([head, indent(cat([line, exprD(body)]))]))
+            }
+        }
+    }
+
+let condD = c => switch c {
+  | Ast.ETernary(_, _, _, _) => cat([txt("("), exprD(c), txt(")")])
+  | _ => exprD(c)
+}
+
+let branchD = (marker, e) => cat([txt("${marker} "), exprD(e)])
+
+/// Right-nested `a ? b : c ? d : e` flattens to one arm list, so a cascading
+/// conditional shares a single indent instead of staircasing.
+let ternaryArmsFrom = (e, acc) => switch e {
+  | Ast.ETernary(cond, thenE, elseE, _) => ternaryArmsFrom(
+      elseE,
+      Array.append({ cond, thenE }, acc)
+    )
+  | _ => (acc, e)
+}
+
+let ternaryRestParts = (arms, i) => switch Array.get(i, arms) {
+  | None => []
+  | Some(a) => [
+      line,
+      cat([txt(": "), condD(a.cond)]),
+      line,
+      branchD("?", a.thenE),
+      ...ternaryRestParts(arms, i + 1)
+    ]
+}
+
+/// Inline when it fits; else `cond` / `? then` / `: cond` / `? then` / `: else`
+/// at one indent — a flat chain, not a nested pyramid.
+let ternaryD = e =>
+  let (arms, elseE) = ternaryArmsFrom(e, []) in
+    switch Array.get(0, arms) {
+      | None =>
+        // `ternaryD` is only reached from the ETernary arm, so `arms` is non-empty.
+        txt("")
+      | Some(first) => group(
+          cat(
+            [
+              condD(first.cond),
+              indent(
+                cat(
+                  [
+                    line,
+                    branchD("?", first.thenE),
+                    ...ternaryRestParts(arms, 1),
+                    line,
+                    branchD(":", elseE)
+                  ]
+                )
+              )
+            ]
+          )
+        )
+    }
+
+/// Does this expression PRINT as `let … in …`? A destructuring
+/// `let (a, b) = v in body` reaches the formatter as the IIFE the parser
+/// desugared it to, and the chain rule has to see through that or every
+/// destructure in a chain adds an indent step.
+let printsAsLet = e => switch e {
+  | Ast.ELetIn(_, _, _, _, _, _) => Option.isNone(discardedLetExprs(e))
+  | Ast.ELetBind(_, _, _, _, _, _) => true
+  | Ast.ECall(Ast.ELambda([p], _, _), [_], _, _) => switch unspan(p) {
+      | Ast.LPName(_, _) => false
+      | _ => true
+    }
+  | _ => false
+}
+
+/// `let x = v in body`; when it overflows, `in` stays at the end of the value
+/// line. A chain of `let … in let … in …` stays left-aligned, but a terminal
+/// non-let body indents under `in` so a ternary branch's payload looks bound.
+let letLikeD = (head, value, body) =>
+  // `line` must sit INSIDE `indent` — indent only affects newlines, so a
+  // sibling `line` then `indent(text)` still prints at the outer column.
+  let cont = printsAsLet(body)
+    ? cat([line, exprD(body)])
+    : indent(cat([line, exprD(body)])) in
+    group(cat([txt("${head} = "), exprD(value), txt(" in"), cont]))
+
+/// `{ x }` when the value is a same-name ref, else `{ x: e }` (ADR 0068).
+let recordFieldD = (f: Ast.Field) => switch f.value {
+  | Ast.ERef(name, _) when name == f.name => exprD(f.value)
+  | _ => cat([txt("${f.name}: "), exprD(f.value)])
+}
+
+let recordD = (fields, spread) =>
+  let fieldDocs = fields |> map(recordFieldD) in
+    braced(
+      "{",
+      "}",
+      switch spread {
+        | Some(s) => Array.prepend(cat([txt("..."), exprD(s)]), fieldDocs)
+        | None => fieldDocs
+      }
+    )
+
+let seqElemD = el => switch el {
+  | Ast.SEExpr(e) => exprD(e)
+  | Ast.SESpread(e) => cat([txt("..."), exprD(e)])
+}
+
+/// `|>` is left-associative, so `a |> b |> c` is pipe(pipe(a, b), c); flatten it
+/// back to source order. Do NOT walk into `->`: the fast pipe inserts first
+/// (ADR 0069) while `|>` is data-last, so flattening a mixed chain would rewrite
+/// `val->fn(a, b) |> g(c)` into `val |> fn(a, b) |> g(c)`.
+let pipeSegmentsFrom = (e, acc) => switch e {
+  | Ast.EPipe(left, right, false, _) => pipeSegmentsFrom(
+      left,
+      Array.prepend(right, acc)
+    )
+  | _ => Array.prepend(e, acc)
+}
+
+let matchArmD = (a: Ast.MatchArm) =>
+  let guard = switch a.guard {
+    | Some(g) => " when ${flat(exprD(g))}"
+    | None => ""
+  } in
+  let head = txt("| ${pattern(a.pattern)}${guard} =>") in
+    cat([head, txt(" "), indent(exprD(a.body))])
+
+/// Inline `switch s { | A => x | _ => y }` when it fits, else one arm per line.
+/// A multi-line arm body nests one level past the arm's `|`, so its own lines
+/// never align with the parent's arms.
+let matchD = (scrutinee, arms) =>
+  group(
+    cat(
+      [
+        txt("switch ${flat(exprD(scrutinee))} {"),
+        indent(cat(arms |> map(a => cat([line, matchArmD(a)])))),
+        line,
+        txt("}")
+      ]
+    )
+  )
+
+/// `loop (acc = 0, i = 0) { body }` (ADR 0056) — inline when it fits, else the
+/// body indents on its own lines, brace layout matching `switch`.
+let loopD = (params, body) =>
+  group(
+    cat(
+      [
+        txt("loop ("),
+        join(
+          txt(", "),
+          params |> map(p => cat([txt("${p.name} = "), exprD(p.init)]))
+        ),
+        txt(") {"),
+        indent(cat([line, exprD(body)])),
+        line,
+        txt("}")
+      ]
+    )
+  )
+
+/// A lambda argument in last position hugs its closing paren, so a `switch` or
+/// `do` body ends `})` rather than staircasing a lone closer onto its own line.
+let lastArgHugs = body => switch body {
+  | Ast.EMatch(_, _, _) => true
+  | Ast.ELoop(_, _, _) => true
+  | Ast.EDo(_, _) => true
+  | _ => Option.isSome(discardedLetExprs(body))
+}
+
+let callArgsD = (fn, args, asCallee) =>
+  let fnD = calleeD(fn) in
+    switch args {
+      | [] => cat([fnD, txt("()")])
+      | [Ast.ETuple(elements, tsp)] =>
+        // A singleton tuple argument needs both paren pairs to preserve the AST
+        // (`Ok((value, next))`). Keep the call glued to the tuple so a broken
+        // tuple becomes `Ok((\n  …\n))` rather than a staircase of closers.
+        group(cat([fnD, txt("("), exprD(Ast.ETuple(elements, tsp)), txt(")")]))
+      | _ => let argDocs = args |> map(exprD) in
+          switch Array.get(Array.length(args) - 1, args) {
+            | Some(Ast.ELambda(_, lbody, _)) => group(
+                cat(
+                  [
+                    fnD,
+                    txt("("),
+                    join(txt(", "), argDocs),
+                    lastArgHugs(lbody) || !asCallee
+                      ? txt(")")
+                      : cat([softline, txt(")")])
+                  ]
+                )
+              )
+            | _ => cat(
+                [
+                  fnD,
+                  group(
+                    cat(
+                      [
+                        txt("("),
+                        indent(
+                          cat([softline, join(cat([txt(","), line]), argDocs)])
+                        ),
+                        softline,
+                        txt(")")
+                      ]
+                    )
+                  )
+                ]
+              )
+          }
+    }
+
+let callD = (fn, args) => callArgsD(fn, args, false)
+
+let calleeD = e => switch e {
+  | Ast.ECall(fn, args, _, _) => callArgsD(fn, args, true)
+  | _ => parenIf(loosePrefix(e), exprD(e))
+}
+
+let operandD = e => parenIf(loosePrefix(e), exprD(e))
+
+/// A record in member position is ambiguous with a block, so it parenthesizes
+/// where a callee would not.
+let memberD = e => switch e {
+  | Ast.ERecord(_, _, _) => cat([txt("("), exprD(e), txt(")")])
+  | _ => parenIf(loosePrefix(e), exprD(e))
+}
+
+/// Inline when it fits, else one `|> stage` per line indented under the head.
+let pipeD = e => switch e {
+  | Ast.EPipe(left, Ast.ECall(rfn, rargs, _, _), true, _) => cat(
+      [operandD(left), txt("->"), callD(rfn, rargs)]
+    )
+  | _ => let segments = pipeSegmentsFrom(e, []) in
+      switch segments {
+        | [] => txt("")
+        | [head, ...rest] => group(
+            cat(
+              [
+                operandD(head),
+                indent(
+                  cat(rest |> map(s => cat([line, txt("|> "), operandD(s)])))
+                )
+              ]
+            )
+          )
+      }
+}
+
+let letBindHead = (monad, param) =>
+  "let${monad == "Task" ? "!" : "?"} ${paramText(param)}"
+
+export let exprD = e => switch e {
+  | Ast.ENum(_, raw, _) => txt(raw)
+  | Ast.EUnit(_) => txt("()")
+  | Ast.EBool(value, _) => txt(show(value))
+  | Ast.EStr(value, _) => txt(strLit(value))
+  | Ast.EInterp(parts, _) => txt(interpText(parts))
+  | Ast.ERef(name, _) => txt(name)
+  | Ast.ECall(fn, args, _, _) => callD(fn, args)
+  | Ast.ELambda(params, body, _) => lambdaD(params, body)
+  | Ast.EPipe(_, _, _, _) => pipeD(e)
+  | Ast.EDo(exprs, _) => doD(exprs)
+  | Ast.ETernary(_, _, _, _) => ternaryD(e)
+  | Ast.ERecord(fields, spread, _) => recordD(fields, spread)
+  | Ast.EField(target, name, _, _) => cat([memberD(target), txt(".${name}")])
+  | Ast.EMatch(scrutinee, arms, _) => matchD(scrutinee, arms)
+  | Ast.ELetIn(name, _, annot, value, body, _) => switch discardedLetExprs(e) {
+      | Some(exprs) => doD(exprs)
+      | None => let ann = switch annot {
+          | Some(te) => " : ${showTypeExpr(te)}"
+          | None => ""
+        } in
+          letLikeD("let ${name}${ann}", value, body)
+    }
+  | Ast.ELetBind(param, _, monad, value, body, _) => letLikeD(
+      letBindHead(monad, param),
+      value,
+      body
+    )
+  | Ast.ELoop(params, body, _) => loopD(params, body)
+  | Ast.ERecur(args, _) => cat(
+      [txt("recur"), bracketed("(", ")", args |> map(exprD))]
+    )
+  | Ast.ETuple(elements, _) => bracketed("(", ")", elements |> map(exprD))
+  | Ast.EArr(elements, _) => bracketed("[", "]", elements |> map(seqElemD))
+  | Ast.EList(elements, _) => bracketed("@{", "}", elements |> map(seqElemD))
+  | Ast.ESet(elements, _) => bracketed("#{", "}", elements |> map(seqElemD))
+  | Ast.EMap(entries, _) => braced(
+      "#{",
+      "}",
+      entries |> map(en => cat([exprD(en.key), txt(": "), exprD(en.value)]))
+    )
+}
 
 // --- statements --------------------------------------------------------------
 

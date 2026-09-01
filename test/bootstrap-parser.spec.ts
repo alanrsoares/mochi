@@ -762,40 +762,43 @@ const corpus = [...new Bun.Glob("**/*.mochi").scanSync({ cwd: root })]
   .filter((p) => !p.includes("node_modules"))
   .sort();
 
-test("every AST field reaches the canonical shape", () => {
-  const tsRaw: KeySets = new Map();
-  const tsCanon: KeySets = new Map();
-  const alRaw: KeySets = new Map();
-  const alCanon: KeySets = new Map();
-  for (const file of corpus) {
-    const src = readFileSync(join(root, file), "utf8");
-    const stmts = unwrapOk(parse(unwrapOk(lex(src)))).stmts;
-    collectKeys(stmts, "kind", "", tsRaw);
-    collectKeys(stmts.map(cStmt), "kind", "", tsCanon);
-    const lr = alLex(src);
-    if (lr._tag !== "Ok") throw new Error(`mochi lexer errored: ${lr.error.message}`);
-    const pr = alParse(lr.value);
-    if (pr._tag !== "Ok") throw new Error(`mochi parser errored: ${pr.error.message}`);
-    collectKeys(pr.value, "_tag", "", alRaw, canonKind);
-    collectKeys((pr.value as Al[]).map(aStmt), "kind", "", alCanon);
-  }
-  expect({
-    ts: holes(tsRaw, tsCanon, (k) => k),
-    mochi: holes(alRaw, alCanon, (k) => k),
-  }).toEqual({ ts: [], mochi: [] });
-});
-
 test("corpus includes the bootstrap parser itself", () => {
   expect(corpus).toContain("bootstrap/parser.mochi");
   expect(corpus).toContain("bootstrap/lexer.mochi");
 });
 
+// Filled in by the per-file tests below rather than by a second pass over the
+// corpus: the key walk is cheap, re-parsing every file is not.
+const tsRaw: KeySets = new Map();
+const tsCanon: KeySets = new Map();
+const alRaw: KeySets = new Map();
+const alCanon: KeySets = new Map();
+
 for (const file of corpus) {
   test(`ASTs agree on ${file}`, () => {
     const src = readFileSync(join(root, file), "utf8");
-    expect(alAst(src)).toEqual(tsAst(src));
+    const ts = unwrapOk(parse(unwrapOk(lex(src)))).stmts;
+    const tsCanonical = ts.map(cStmt);
+    const lr = alLex(src);
+    if (lr._tag !== "Ok") throw new Error(`mochi lexer errored: ${lr.error.message}`);
+    const pr = alParse(lr.value);
+    if (pr._tag !== "Ok") throw new Error(`mochi parser errored: ${pr.error.message}`);
+    const alCanonical = (pr.value as Al[]).map(aStmt);
+    collectKeys(ts, "kind", "", tsRaw);
+    collectKeys(tsCanonical, "kind", "", tsCanon);
+    collectKeys(pr.value, "_tag", "", alRaw, canonKind);
+    collectKeys(alCanonical, "kind", "", alCanon);
+    expect(alCanonical).toEqual(tsCanonical);
   });
 }
+
+// Runs last, over what the corpus tests above already walked.
+test("every AST field reaches the canonical shape", () => {
+  expect({
+    ts: holes(tsRaw, tsCanon, (k) => k),
+    mochi: holes(alRaw, alCanon, (k) => k),
+  }).toEqual({ ts: [], mochi: [] });
+});
 
 // ---- targeted edge cases ---------------------------------------------------------
 
