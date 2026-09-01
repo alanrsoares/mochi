@@ -8,6 +8,7 @@
 // command would take.
 import { readFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
+import { createBootstrapRecoveryGraphCache } from "@mochi/compiler/bootstrap";
 import { createModuleCache } from "@mochi/compiler/module";
 import { moduleDiagnostics, type PublishDiagnostic } from "@mochi/dx/diagnostics";
 import { pluginsForDocument } from "@mochi/lsp/load-plugins";
@@ -62,6 +63,7 @@ const report = (file: string, d: PublishDiagnostic): string => {
 // Neighbouring entries share almost all of their graph — without this the
 // 34-file `bootstrap/` sweep infers the whole compiler 34 times.
 const cache = createModuleCache();
+const bootstrapCache = createBootstrapRecoveryGraphCache();
 
 const started = Date.now();
 let failures = 0;
@@ -79,7 +81,8 @@ for (const file of files) {
       console.error(`${relative(root, manifest)}: failed to load — ${String(error)}`);
     },
   });
-  for (const d of await moduleDiagnostics(path, await read(path), read, { plugins, cache })) {
+  const opts = plugins === undefined ? { bootstrapCache } : { plugins, cache };
+  for (const d of await moduleDiagnostics(path, await read(path), read, opts)) {
     failures += 1;
     clearProgress();
     console.log(report(file, d));
