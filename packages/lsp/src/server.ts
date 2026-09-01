@@ -6,6 +6,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { createBootstrapRecoveryGraphCache } from "@mochi/compiler/bootstrap";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import { createModuleCache } from "@mochi/compiler/module";
 import { isPreludePath, PRELUDE_PATH, preludeVirtualSource } from "@mochi/compiler/prelude-virtual";
@@ -173,8 +174,10 @@ export function startServer(opts: ServerOptions = {}): void {
   // whole import graph behind it (ADR 0095). Dropped wholesale when a plugin
   // manifest changes, since that changes what every call site means.
   let cache = createModuleCache();
+  let bootstrapCache = createBootstrapRecoveryGraphCache();
   const dxOpts = async (path: string) => ({
     cache,
+    bootstrapCache,
     plugins: loadProjectPlugins
       ? await pluginsForDocument(path, {
           allowedRoots,
@@ -195,7 +198,7 @@ export function startServer(opts: ServerOptions = {}): void {
     // Vendor plugins execute in the TypeScript host. Builtin-only workspaces
     // validate their full graph through the shipped bootstrap compiler.
     if (opts.plugins === undefined) {
-      const bootstrap = await bootstrapModuleDiagnostics(path, src, read);
+      const bootstrap = await bootstrapModuleDiagnostics(path, src, read, bootstrapCache);
       return [...bootstrap, ...unusedBindingDiagnostics(src, path)];
     }
     return documentDiagnostics(path, src, read, opts);
@@ -579,6 +582,7 @@ export function startServer(opts: ServerOptions = {}): void {
     if (!manifestChanged) return;
     clearPluginsCache();
     cache = createModuleCache();
+    bootstrapCache = createBootstrapRecoveryGraphCache();
     for (const doc of documents.all()) {
       if (doc.uri.endsWith(".mochi")) scheduleValidate(doc);
     }
