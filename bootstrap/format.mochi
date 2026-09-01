@@ -1,0 +1,195 @@
+// bootstrap/format.mochi — the source formatter, in mochi (ADR 0025 / 0048).
+//
+// Mirrors packages/dx/src/format.ts. Being ported in slices; this one covers
+// everything that does not need expression lowering: patterns, constructors,
+// `extern`/`type`/`import` statements, and the two bracket layouts every
+// collection shares.
+//
+// Plugin `format` hooks stay a TypeScript-host seam — bootstrap has no format
+// hook protocol (ADR 0011 §6).
+
+import * as Ast from "./ast.mochi"
+import {
+  cat,
+  group,
+  hardline,
+  indent,
+  join,
+  line,
+  softline,
+  txt
+} from "./doc.mochi"
+import { showTypeExpr } from "./show-type-expr.mochi"
+
+/// `JSON.stringify` escaping, plus `${` — which would otherwise reopen an
+/// interpolation hole on re-lex (ADR 0023), so a hole-free string round-trips
+/// even when its decoded value happens to contain that sequence.
+let escChar = c => switch c {
+  | "\\" => "\\\\"
+  | "\"" => "\\\""
+  | "\n" => "\\n"
+  | "\t" => "\\t"
+  | _ => c
+}
+
+let escFrom = (chars, i, acc) => switch Array.get(i, chars) {
+  | None => acc
+  | Some("$") when Array.get(i + 1, chars) |> Option.contains("{") => escFrom(
+      chars,
+      i + 2,
+      "${acc}\\\${"
+    )
+  | Some(c) => escFrom(chars, i + 1, "${acc}${escChar(c)}")
+}
+
+export let escStrBody = s => escFrom(Str.chars(s), 0, "")
+
+export let strLit = s => "\"${escStrBody(s)}\""
+
+// --- patterns ----------------------------------------------------------------
+
+let commaJoin = (f, xs) => Str.join(", ", xs |> map(f))
+
+/// `{ x }` when the field puns to its own name, else `{ label: pat }`.
+let patField = (f: Ast.PatField) => switch f.pat {
+  | Ast.PBind(name, _) when name == f.label => f.label
+  | _ => "${f.label}: ${pattern(f.pat)}"
+}
+
+let restOf = rest => switch rest {
+  | None => []
+  | Some(p) => ["...${pattern(p)}"]
+}
+
+export let pattern = p => switch p {
+  | Ast.PAs(inner, name, _, _) => "${pattern(inner)} as ${name}"
+  | Ast.PWild(_) => "_"
+  | Ast.PUnit(_) => "()"
+  | Ast.PBind(name, _) => name
+  | Ast.PLit(_, raw, _) => raw
+  | Ast.PBool(value, _) => show(value)
+  | Ast.PStr(value, _) => strLit(value)
+  | Ast.PRecord(fields, _) => "{ ${commaJoin(patField, fields)} }"
+  | Ast.PTuple(elems, _) => "(${commaJoin(pattern, elems)})"
+  | Ast.PCtor(ctorName, args, ns, _) => let head = switch ns {
+      | None => ctorName
+      | Some(alias) => "${alias}.${ctorName}"
+    } in
+      Array.length(args) == 0 ? head : "${head}(${commaJoin(pattern, args)})"
+  | Ast.PArr(elems, rest, _) => "[${Str.join(", ", Array.concat(elems |> map(pattern), restOf(rest)))}]"
+  | Ast.PList(elems, rest, _) => "@{${Str.join(", ", Array.concat(elems |> map(pattern), restOf(rest)))}}"
+  | Ast.POr(alts, _) => Str.join(" | ", alts |> map(pattern))
+}
+
+// --- declarations ------------------------------------------------------------
+
+let ctorField = (f: Ast.CtorField) => switch f.name {
+  | None => showTypeExpr(f.fieldType)
+  | Some(name) => "${name}: ${showTypeExpr(f.fieldType)}"
+}
+
+export let ctorText = (c: Ast.Ctor) =>
+  Array.length(c.fields) == 0
+    ? c.name
+    : "${c.name}(${commaJoin(ctorField, c.fields)})"
+
+let generics = params =>
+  Array.length(params) == 0 ? "" : "<${Str.join(", ", params)}>"
+
+/// `extern x : T = "mod" "name"`, or one of the host conventions
+/// (`global`/`send`/`get`/`set`/`new`), which print without the module string.
+let conventionOf = module =>
+  ["global", "send", "get", "set", "new"]
+    |> Array.filter(c => Str.startsWith("mochi:${c}:", module))
+    |> Array.get(0)
+
+export let externStmt = (name, params, typeExpr, module, imported, curried) =>
+  let head = "extern ${name}${generics(params)} : ${showTypeExpr(typeExpr)} = " in
+    switch conventionOf(module) {
+      | None =>
+        // `curried` describes the host's shape, not the type (ADR 0064).
+        "${head}${curried ? "curried " : ""}${strLit(module)} ${strLit(imported)}"
+      | Some(convention) => let first = Str.slice(
+          Str.length("mochi:${convention}:"),
+          Str.length(module),
+          module
+        ) in
+        let second = imported == "" ? "" : " ${strLit(imported)}" in
+          "${head}${convention} ${strLit(first)}${second}"
+    }
+
+// --- shared layouts ----------------------------------------------------------
+
+let sepLine = cat([txt(","), line])
+
+/// `[a, b]` / `(a, b)` — tight brackets; breaks one item per line.
+export let bracketed = (open, close, items) =>
+  Array.length(items) == 0
+    ? txt("${open}${close}")
+    : group(
+      cat(
+        [
+          txt(open),
+          indent(cat([softline, join(sepLine, items)])),
+          softline,
+          txt(close)
+        ]
+      )
+    )
+
+/// `{ a: 1, b: 2 }` / `#{ k: v }` — padded braces; breaks one entry per line.
+export let braced = (open, close, items) =>
+  Array.length(items) == 0
+    ? txt("${open}${close}")
+    : group(
+      cat(
+        [txt(open), indent(cat([line, join(sepLine, items)])), line, txt(close)]
+      )
+    )
+
+// --- statements --------------------------------------------------------------
+
+let aliasFieldText = (f: Ast.AliasField) =>
+  "${f.name}${f.optional ? "?" : ""}: ${showTypeExpr(f.fieldType)}"
+
+let ctorArms = (ctors, i) => switch Array.get(i, ctors) {
+  | None => []
+  | Some(c) => Array.prepend(
+      cat([hardline, txt("| ${ctorText(c)}")]),
+      ctorArms(ctors, i + 1)
+    )
+}
+
+/// A Doc rather than a flat string: a record alias with many or long fields must
+/// break one per line like a record literal does, and a comment between
+/// constructors needs a slot to print a leading line into.
+export let typeStmtD = (name, params, ctors, alias, aliasType) =>
+  let head = "type ${name}${generics(params)}" in
+    switch alias {
+      | Some(fields) => cat(
+          [
+            txt("${head} = "),
+            braced("{", "}", fields |> map(f => txt(aliasFieldText(f))))
+          ]
+        )
+      | None => switch aliasType {
+          | Some(te) => txt("${head} = ${showTypeExpr(te)}")
+          | None => Array.length(ctors) == 0
+              ? txt("extern ${head}")
+              : cat([txt("${head} ="), indent(cat(ctorArms(ctors, 0)))])
+        }
+    }
+
+export let importStmtD = (names, from) =>
+  group(
+    cat(
+      [
+        txt("import "),
+        braced("{", "}", names |> map(n => txt(n.name))),
+        txt(" from ${strLit(from)}")
+      ]
+    )
+  )
+
+export let importNsStmtD = (alias, from) =>
+  txt("import * as ${alias} from ${strLit(from)}")

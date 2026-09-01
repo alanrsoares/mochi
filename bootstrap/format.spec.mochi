@@ -1,0 +1,149 @@
+import { assertEq, test, testEach } from "@mochi/test"
+import * as Ast from "./ast.mochi"
+import { render } from "./doc.mochi"
+import {
+  escStrBody,
+  externStmt,
+  importNsStmtD,
+  importStmtD,
+  pattern,
+  strLit,
+  typeStmtD
+} from "./format.mochi"
+import { lex } from "./lexer.mochi"
+import { parse } from "./parser.mochi"
+
+let WIDTH = 80
+
+// Parse a source line and print the piece under test back out, so each case is a
+// round-trip through the real parser rather than a hand-built AST.
+let firstStmt = src =>
+  lex(src) |> Result.flatMap(parse) |> Result.map(Array.get(0))
+
+let matchArmPattern = src => switch firstStmt("let f = x => switch x { | ${src} => 0 }") {
+  | Ok(Some(Ast.SLet(_, _, _, Ast.ELambda(_, Ast.EMatch(_, arms, _), _), _, _, _))) => switch Array.get(0, arms) {
+      | Some(arm) => pattern(arm.pattern)
+      | None => "no arms"
+    }
+  | _ => "unexpected shape"
+}
+
+testEach("a pattern round-trips", [
+  "_",
+  "()",
+  "x",
+  "42",
+  "true",
+  "Circle",
+  "Circle(r)",
+  "D.Circle(r)",
+  "(a, b)",
+  "{ x, y }",
+  "{ x: 1, y }",
+  "[a, b]",
+  "[a, ...rest]",
+  "@{a, b}",
+  "@{a, ...rest}",
+  "1 | 2",
+  "Circle(r) as c"
+], src => assertEq(matchArmPattern(src), src))
+
+test("a string pattern escapes through strLit", () =>
+  assertEq(matchArmPattern("\"a\\nb\""), "\"a\\nb\""))
+
+testEach("an extern statement round-trips", [
+  "extern log : string -> () = \"./host.mjs\" \"log\"",
+  "extern id<a> : a -> a = \"./host.mjs\" \"id\"",
+  "extern send : a -> b = curried \"./host.mjs\" \"send\""
+], src => switch firstStmt(src) {
+  | Ok(Some(Ast.SExtern(name, _, params, te, module, imported, curried, _, _, _))) => assertEq(
+      externStmt(name, params, te, module, imported, curried),
+      src
+    )
+  | _ => assertEq("an extern statement", "unexpected shape")
+})
+
+let typeText = src => switch firstStmt(src) {
+  | Ok(Some(Ast.SType(name, params, ctors, alias, aliasType, _, _, _))) => render(
+      typeStmtD(name, params, ctors, alias, aliasType),
+      WIDTH
+    )
+  | _ => "unexpected shape"
+}
+
+test("a record alias prints padded braces", () =>
+  assertEq(
+    typeText("type Point = { x: number, y: number }"),
+    "type Point = { x: number, y: number }"
+  ))
+
+test("an optional alias field keeps its `?`", () =>
+  assertEq(
+    typeText("type Box = { value: number, label?: string }"),
+    "type Box = { value: number, label?: string }"
+  ))
+
+// `type Id = number` is a ONE-CONSTRUCTOR VARIANT, not an alias — the parser
+// reads `number` as a constructor name. A transparent alias needs a shape no
+// constructor could be, such as a literal union. Both formatters agree here.
+test("a bare name after `=` is a constructor, not an alias", () =>
+  assertEq(typeText("type Id = number"), "type Id =\n  | number"))
+
+test("a transparent alias prints its target", () =>
+  assertEq(
+    typeText("type Tone = \"rose\" | \"amber\""),
+    "type Tone = \"rose\" | \"amber\""
+  ))
+
+test("an opaque extern type has no body", () =>
+  assertEq(typeText("extern type Handle"), "extern type Handle"))
+
+test("a variant prints one arm per line, indented", () =>
+  assertEq(
+    typeText("type Shape = | Circle(r: number) | Square(s: number)"),
+    "type Shape =\n  | Circle(r: number)\n  | Square(s: number)"
+  ))
+
+test("a generic variant keeps its parameters", () =>
+  assertEq(
+    typeText("type Box<a> = | Full(value: a) | Empty"),
+    "type Box<a> =\n  | Full(value: a)\n  | Empty"
+  ))
+
+// A wide alias must break one field per line rather than run past the width.
+test("a wide record alias breaks one field per line", () =>
+  assertEq(
+    typeText(
+      "type Wide = { alpha: string, bravo: string, charlie: string, delta: string, echo: string }"
+    ),
+    "type Wide = {\n  alpha: string,\n  bravo: string,\n  charlie: string,\n  delta: string,\n  echo: string\n}"
+  ))
+
+let importText = src => switch firstStmt(src) {
+  | Ok(Some(Ast.SImport(names, from, _))) => render(
+      importStmtD(names, from),
+      WIDTH
+    )
+  | Ok(Some(Ast.SImportNs(alias, from, _))) => render(
+      importNsStmtD(alias.name, from),
+      WIDTH
+    )
+  | _ => "unexpected shape"
+}
+
+test("a named import prints padded braces", () =>
+  assertEq(
+    importText("import { a, b } from \"./m.mochi\""),
+    "import { a, b } from \"./m.mochi\""
+  ))
+
+test("a namespace import prints its alias", () =>
+  assertEq(
+    importText("import * as M from \"./m.mochi\""),
+    "import * as M from \"./m.mochi\""
+  ))
+
+test("escStrBody re-escapes an interpolation opener", () =>
+  assertEq(escStrBody("a\${b}"), "a\\\${b}"))
+
+test("strLit wraps and escapes", () => assertEq(strLit("a\"b"), "\"a\\\"b\""))
