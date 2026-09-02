@@ -891,15 +891,13 @@ let isLambdaOrTernary = (cts: Ctx, e) => switch e {
   | _ => cts->printsAsLambda(e)
 }
 
-// These read as stepwise switches because of the SEED, not the language. Two
-// things gate the arm's TS type predicate (ADR 0031): the scrutinee's type must
-// be concrete — annotate, or inference widens `args` to `A[]` and the tuple
-// stops being nameable — and the target must refine through tuple/array slots,
-// which `fieldRefine` only learned to do after this seed was frozen. Once
-// `seed:freeze` catches up these collapse back to
-// `switch (fn, args) { | (Ast.ERef(name, _), [_, _]) => … }`.
-let binOpFor = (fn, args) => switch args {
-  | [_, _] => switch fn { | Ast.ERef(name, _) => binOpInfo(name) | _ => None }
+// Annotated, not inferred: a match scrutinee only gets a TS type predicate when
+// its type is concrete (ADR 0031 + ADR 0026). Left to inference `args` widens to
+// `A[]`, the tuple stops being concrete, and the arm's `_tag` test emits as a
+// plain boolean — so the handler destructures an un-narrowed `Expr` and
+// `bootstrap:tsc` reports TS2339. Nesting is fine; unnamed types are not.
+let binOpFor = (fn: Ast.Expr, args: [Ast.Expr]) => switch (fn, args) {
+  | (Ast.ERef(name, _), [_, _]) => binOpInfo(name)
   | _ => None
 }
 
@@ -922,20 +920,11 @@ let pipePrecOf = e => switch e {
 /// `!=` desugars to `not(eq(a, b))`, and an explicit `!(a == b)` desugars to the
 /// exact same shape — so folding either back to `!=` is a deliberate (lossy)
 /// simplification, in the same spirit as the composition re-fold.
-let neqFor = (fn, args) => switch fn {
-  | Ast.ERef("not", _) => switch args {
-      | [only] => switch only {
-          | Ast.ECall(inner, innerArgs, _, _) => switch inner {
-              | Ast.ERef("eq", _) => switch innerArgs {
-                  | [l, r] => Some((l, r))
-                  | _ => None
-                }
-              | _ => None
-            }
-          | _ => None
-        }
-      | _ => None
-    }
+let neqFor = (fn: Ast.Expr, args: [Ast.Expr]) => switch (fn, args) {
+  | (Ast.ERef("not", _), [Ast.ECall(Ast.ERef("eq", _), [l, r], _, _)]) => Some((
+      l,
+      r
+    ))
   | _ => None
 }
 
@@ -1215,23 +1204,11 @@ let sectionOf = (cts, params, body) => switch params {
 }
 
 /// `($x) => g(f($x))` — the shape `>>` desugars to.
-let composeParts = (params, body) => switch params {
-  | [only] => switch unspan(only) {
-      | Ast.LPName("$x", _) => switch body {
-          | Ast.ECall(right, outerArgs, _, _) => switch outerArgs {
-              | [only] => switch only {
-                  | Ast.ECall(left, innerArgs, _, _) => switch innerArgs {
-                      | [inner] => isRef(inner, "$x")
-                          ? Some((left, right))
-                          : None
-                      | _ => None
-                    }
-                  | _ => None
-                }
-              | _ => None
-            }
-          | _ => None
-        }
+let composeParts = (params: [Ast.LamParam], body: Ast.Expr) => switch (params, body) {
+  | ([p], Ast.ECall(right, [Ast.ECall(left, [inner], _, _)], _, _)) =>
+    // `unspan` is a call, so the param cannot be matched inline — bind and peel.
+    switch unspan(p) {
+      | Ast.LPName("$x", _) => isRef(inner, "$x") ? Some((left, right)) : None
       | _ => None
     }
   | _ => None
