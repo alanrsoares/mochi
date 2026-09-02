@@ -411,7 +411,7 @@ let parseLambda = (toks, pos, hooks) =>
                 )
               ],
               body,
-              spanning(start, exprSpan(body))
+              toEnd(start, toks, p2)
             ),
             p2
           ))
@@ -430,10 +430,7 @@ let parseLambda = (toks, pos, hooks) =>
           labeledTrailing(params, false)
             ? let? p4 = expectTok(TArrow, toks, p3) in
             let? (body, p5) = parseLambdaBody(toks, p4, hooks) in
-              Ok((
-                Ast.ELambda(params, body, spanning(start, exprSpan(body))),
-                p5
-              ))
+              Ok((Ast.ELambda(params, body, toEnd(start, toks, p5)), p5))
             : errAt(
               "labeled parameters must be a trailing group",
               tokAt(toks, p)
@@ -475,7 +472,7 @@ let parseLetIn = (toks, pos, hooks) =>
             monad,
             value,
             body,
-            spanning(start, exprSpan(body))
+            toEnd(start, toks, p5)
           ),
           p5
         ))
@@ -486,12 +483,8 @@ let parseLetIn = (toks, pos, hooks) =>
       let? (value, p3) = parseExpr(toks, p2, hooks) in
       let? p4 = expectIn(toks, p3) in
       let? (body, p5) = parseExpr(toks, p4, hooks) in
-      let fn = Ast.ELambda(
-        [param],
-        body,
-        spanning(paramStart, exprSpan(body))
-      ) in
-        Ok((Ast.ECall(fn, [value], None, spanning(start, exprSpan(body))), p5))
+      let fn = Ast.ELambda([param], body, toEnd(paramStart, toks, p5)) in
+        Ok((Ast.ECall(fn, [value], None, toEnd(start, toks, p5)), p5))
       : let? (nm, p1) = expectId(toks, p) in
       // Optional `: T` binding annotation, same shape as a top-level `let`
       // (ADR 0044) — kept on the node, not folded into the value.
@@ -509,7 +502,7 @@ let parseLetIn = (toks, pos, hooks) =>
             annot,
             value,
             body,
-            spanning(start, exprSpan(body))
+            toEnd(start, toks, p5)
           ),
           p5
         ))
@@ -1734,7 +1727,7 @@ let parseRecordDestructure = (toks, start, pos, tmp, hooks) =>
   let? p2 = expectTok(TRbrace, toks, p1) in
   let? p3 = expectTok(TEq, toks, p2) in
   let? (value, p4) = parseExpr(toks, p3, hooks) in
-  let whole = spanning(start, exprSpan(value)) in
+  let whole = toEnd(start, toks, p4) in
   let patSpan = spanning(openSp, closeSp) in
   let tmpName = "$d${show(tmp)}" in
   let header = Ast.SLet(tmpName, patSpan, None, value, false, None, whole) in
@@ -1770,7 +1763,7 @@ let parseLet = (toks, pos, tmp, hooks) =>
               value,
               false,
               None,
-              spanning(start, exprSpan(value))
+              toEnd(start, toks, p3)
             )
           ],
           p3,
@@ -1834,7 +1827,7 @@ let parseExprStmt = (toks, pos, tmp, hooks) =>
   let start = toks->tokAt(pos) in
   let? (value, p) = toks->parseExpr(pos, hooks) in
   let p2 = tokAt(toks, p).tok == TSemi ? p + 1 : p in
-    Ok(([Ast.SExpr(value, spanning(start, exprSpan(value)))], p2, tmp))
+    Ok(([Ast.SExpr(value, toEnd(spanOf(start), toks, p))], p2, tmp))
 
 // A statement can desugar to several (record destructure); the leading `///`
 // doc block rides on the first token and attaches to every produced `let`.

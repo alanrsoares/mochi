@@ -380,7 +380,7 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
     checkLabeledTrailing(params);
     expect("arrow");
     const body = arrowBodyIsDoBlock() ? parseDoBlock(peek().span) : parseExpr();
-    return { kind: "lambda", params, body, span: spanning(start, body.span) };
+    return { kind: "lambda", params, body, span: to(start) };
   }
 
   function parseCallPart(): CallPart {
@@ -468,7 +468,7 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
         paramSpan,
         value,
         body,
-        span: spanning(start, body.span),
+        span: to(start),
       };
     }
     // `let (a, b) = value in body` — tuple destructure, desugared to an applied
@@ -485,9 +485,9 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
         kind: "lambda",
         params: [param],
         body,
-        span: spanning(paramStart, body.span),
+        span: to(paramStart),
       };
-      return { kind: "call", fn, args: [value], span: spanning(start, body.span) };
+      return { kind: "call", fn, args: [value], span: to(start) };
     }
     const { name, span: nameSpan } = expectId();
     const annot = parseOptAnnot();
@@ -495,7 +495,7 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
     const value = parseExpr();
     expectIn();
     const body = parseExpr();
-    return { kind: "letin", name, nameSpan, annot, value, body, span: spanning(start, body.span) };
+    return { kind: "letin", name, nameSpan, annot, value, body, span: to(start) };
   }
 
   /** Optional `: TypeExpr` binding annotation after a let's name (ADR 0044). */
@@ -1295,7 +1295,7 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
     const annot = parseOptAnnot();
     expect("eq");
     const value = parseExpr();
-    return [{ kind: "let", name, nameSpan, annot, value, span: spanning(start, value.span) }];
+    return [{ kind: "let", name, nameSpan, annot, value, span: to(start) }];
   }
 
   /**
@@ -1315,7 +1315,7 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
     const close = expect("rbrace").span;
     expect("eq");
     const value = parseExpr();
-    const whole = spanning(start, value.span);
+    const whole = to(start);
     const patSpan = spanning(open, close);
     const tmp = `$d${tmpCount++}`;
     const stmts: Extract<Stmt, { kind: "let" }>[] = [
@@ -1605,8 +1605,11 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
     // optional — `do` requires it between exprs, top-level does not.
     const start = peek().span;
     const value = parseExpr();
+    // The span stops at the expression: the trailing `;` is optional
+    // punctuation, and ADR 0087's unit check points at the expression.
+    const span = to(start);
     if (peek().t === "semi") next();
-    return [{ kind: "expr", value, span: spanning(start, value.span) }];
+    return [{ kind: "expr", value, span }];
   }
 
   /**

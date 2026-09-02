@@ -94,3 +94,22 @@ test("every child span is contained within its parent's span", () => {
     }),
   );
 });
+
+// A statement's span must cover the statement's own source text. The
+// interesting case is a parenthesized tail — `let v = (a + b)`, `x => (e)` —
+// where the node the parser returns is the INNER expression, so a span built
+// from it stops before the `)`. Statement spans are what the LSP hands back as
+// a range and what `///` doc attachment measures, so a one-character shortfall
+// is visible.
+const paren = expr.map((e) => `(${e})`);
+
+test("a top-level statement's span covers its whole source text", () => {
+  fc.assert(
+    fc.property(fc.oneof(expr, paren), (body) => {
+      for (const src of [`let v = ${body}`, `let f = x => ${body}`, `let g = x => (${body})`]) {
+        const stmt = unwrapOk(parse(unwrapOk(lex(src)))).stmts[0]!;
+        expect(src.slice(stmt.span.start, stmt.span.end)).toBe(src);
+      }
+    }),
+  );
+});
