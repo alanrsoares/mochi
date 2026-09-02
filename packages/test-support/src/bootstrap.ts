@@ -57,8 +57,8 @@ const sourceHash = (): string => {
   return h.digest("hex").slice(0, 16);
 };
 
-// Both roots must be present: a cache written before `format.mochi` became a
-// build root has `cli.js` but no `format.js`, and would be reused as-is.
+// Both must be present: a cache written before `format.mochi` joined the graph
+// has `cli.js` but no `format.js`, and would be reused as-is.
 const ready = (dir: string): boolean =>
   existsSync(join(dir, "cli.js")) && existsSync(join(dir, "format.js"));
 
@@ -146,15 +146,9 @@ const buildGraph = (): string => {
     execFileSync("bun", ["packages/cli/src/cli.ts", "build", "--open", join(tmp, "cli.mochi")], {
       cwd: root,
     });
-    // `format.mochi` is not reachable from `cli.mochi` — the formatter stays
-    // outside the self-hosted graph (ADR 0078) — so its own build root emits
-    // `format.js` into the same cache for the formatter parity spec.
-    execFileSync("bun", ["packages/cli/src/cli.ts", "build", "--open", join(tmp, "format.mochi")], {
-      cwd: root,
-    });
     try {
-      // A cache dir from an older layout (say, before `format.js` was a build
-      // root) exists but is not `ready` — rename onto it would fail, so drop it.
+      // A cache dir from an older layout (say, before `format.js` was emitted)
+      // exists but is not `ready` — a rename onto it would fail, so drop it.
       if (existsSync(dest) && !ready(dest)) rmSync(dest, { recursive: true, force: true });
       renameSync(tmp, dest);
     } catch {

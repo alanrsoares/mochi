@@ -1,20 +1,13 @@
 // bootstrap/format.mochi — the source formatter, in mochi (ADR 0025 / 0048).
 //
-// packages/dx/src/format.ts is the SHIPPED formatter and the source of truth;
-// this is the port. They are kept in step by hand — test/bootstrap-format.spec.ts
-// diffs them over single-line expression output only, so comments, statement
-// layout and blank lines can drift unnoticed. A lefthook pre-push job warns when
-// only one side moves. Flipping this file to mochi-first waits on whole-file
-// parity (every corpus file formatting byte-identically through both), which
-// needs the comment table and the statement layer below.
-//
-// Mirrors packages/dx/src/format.ts. Being ported in slices: patterns,
-// constructors, `extern`/`type`/`import` statements and the shared bracket
-// layouts, plus the expression printer. Still outstanding — the sugar re-folds
-// (`refoldCall` and friends) and comment attachment.
+// packages/dx/src/format.ts is the SHIPPED formatter; this is the self-hosted
+// port, reached from `mochic fmt`. The two are kept in step by hand, and
+// test/bootstrap-format-file.spec.ts holds them there: every non-JSX .mochi
+// file in the repo must format byte-identically through both, so a one-sided
+// change fails the default gate.
 //
 // Plugin `format` hooks stay a TypeScript-host seam — bootstrap has no format
-// hook protocol (ADR 0011 §6).
+// hook protocol (ADR 0011 §6) — which is why JSX files are the one exclusion.
 
 import * as Ast from "./ast.mochi"
 import {
@@ -898,8 +891,12 @@ let isLambdaOrTernary = (cts: Ctx, e) => switch e {
   | _ => cts->printsAsLambda(e)
 }
 
-let binOpFor = (fn, args) => switch (fn, args) {
-  | (Ast.ERef(name, _), [_, _]) => binOpInfo(name)
+// A constructor pattern only narrows the TS backend's scrutinee when it is the
+// OUTERMOST pattern of its switch (ADR 0026): nested inside a tuple or array
+// element it lowers to a `_tag` test, which is not a type guard. Hence the
+// stepwise switches through this file rather than one shapely pattern.
+let binOpFor = (fn, args) => switch args {
+  | [_, _] => switch fn { | Ast.ERef(name, _) => binOpInfo(name) | _ => None }
   | _ => None
 }
 
@@ -922,11 +919,20 @@ let pipePrecOf = e => switch e {
 /// `!=` desugars to `not(eq(a, b))`, and an explicit `!(a == b)` desugars to the
 /// exact same shape — so folding either back to `!=` is a deliberate (lossy)
 /// simplification, in the same spirit as the composition re-fold.
-let neqFor = (fn, args) => switch (fn, args) {
-  | (Ast.ERef("not", _), [Ast.ECall(Ast.ERef("eq", _), [l, r], _, _)]) => Some((
-      l,
-      r
-    ))
+let neqFor = (fn, args) => switch fn {
+  | Ast.ERef("not", _) => switch args {
+      | [only] => switch only {
+          | Ast.ECall(inner, innerArgs, _, _) => switch inner {
+              | Ast.ERef("eq", _) => switch innerArgs {
+                  | [l, r] => Some((l, r))
+                  | _ => None
+                }
+              | _ => None
+            }
+          | _ => None
+        }
+      | _ => None
+    }
   | _ => None
 }
 
@@ -1209,12 +1215,18 @@ let sectionOf = (cts, params, body) => switch params {
 let composeParts = (params, body) => switch params {
   | [only] => switch unspan(only) {
       | Ast.LPName("$x", _) => switch body {
-          | Ast.ECall(right, [Ast.ECall(left, [inner], _, _)], _, _) => isRef(
-              inner,
-              "$x"
-            )
-              ? Some((left, right))
-              : None
+          | Ast.ECall(right, outerArgs, _, _) => switch outerArgs {
+              | [only] => switch only {
+                  | Ast.ECall(left, innerArgs, _, _) => switch innerArgs {
+                      | [inner] => isRef(inner, "$x")
+                          ? Some((left, right))
+                          : None
+                      | _ => None
+                    }
+                  | _ => None
+                }
+              | _ => None
+            }
           | _ => None
         }
       | _ => None

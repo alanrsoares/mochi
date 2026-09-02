@@ -95,6 +95,13 @@ export const print = (s) => {
   return s;
 };
 
+// emit : string -> string  — write to stdout verbatim, no trailing newline
+// added: `fmt` prints a formatted source, which already ends in one. Returns
+// its argument so it threads inside a pipeline, like `print`.
+export const emit = (s) => {
+  process.stdout.write(s);
+  return s;
+};
 // formatError : string -> string -> { message, start, end } -> string
 // Renders a compile diagnostic as `path:line:col: message` (1-based line/col
 // from the byte offset), matching the TS CLI's human-facing form.
