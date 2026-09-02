@@ -1,4 +1,12 @@
 /**
+ * The SHIPPED formatter (scripts/fmt.ts and the CLI import this one).
+ * `bootstrap/format.mochi` is the self-hosted port, kept in step by hand:
+ * test/bootstrap-format.spec.ts diffs the two over single-line expression
+ * output only — comments, statement layout and blank lines are not compared
+ * yet, so a change here can drift silently. A lefthook pre-push job warns when
+ * only one side moves. TypeScript stays the source of truth until whole-file
+ * parity is green (see the notes in bootstrap/format.mochi).
+ *
  * mochi source formatter: parse to the AST, lower to a Wadler/Prettier-style
  * document IR (`doc.ts`), then lay it out against an 80-column target (ADR
  * 0025). Every breakable construct — pipe, switch, ternary, `let … in`,

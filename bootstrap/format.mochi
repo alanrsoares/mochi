@@ -1,5 +1,13 @@
 // bootstrap/format.mochi — the source formatter, in mochi (ADR 0025 / 0048).
 //
+// packages/dx/src/format.ts is the SHIPPED formatter and the source of truth;
+// this is the port. They are kept in step by hand — test/bootstrap-format.spec.ts
+// diffs them over single-line expression output only, so comments, statement
+// layout and blank lines can drift unnoticed. A lefthook pre-push job warns when
+// only one side moves. Flipping this file to mochi-first waits on whole-file
+// parity (every corpus file formatting byte-identically through both), which
+// needs the comment table and the statement layer below.
+//
 // Mirrors packages/dx/src/format.ts. Being ported in slices: patterns,
 // constructors, `extern`/`type`/`import` statements and the shared bracket
 // layouts, plus the expression printer. Still outstanding — the sugar re-folds
