@@ -9,6 +9,12 @@ Format follows [`../dx-tracer-bullets.md`](../dx-tracer-bullets.md) (vertical sl
 and `docs/plan/tickets/` (frontmatter + checklist). Numbering is
 local (`C1`–`C13`) to avoid colliding with `docs/plan/tickets/` ids.
 
+> **Closed out 2026-09-03.** Every finding below has since been resolved or
+> settled by decision — see [Resolution](#resolution-2026-09-03). The findings
+> and priority order are kept as the historical snapshot they were; **do not
+> mine them for work.** The verdict/pain columns describe the tree as of
+> 2026-07-26 and several source citations in them are now stale.
+
 ## What's working (don't touch)
 
 - **Coherent core bet:** HM + row-polymorphic records + parametric variants, curried
@@ -58,3 +64,22 @@ Retired: C8 → merged into C6. C11 → merged into C10.
 
 **2026-07-26: every HITL item was grilled and locked** — the whole tracker is now AFK.
 See the decisions note at the top of [`tracer-bullets.md`](tracer-bullets.md).
+
+## Resolution (2026-09-03)
+
+Each finding, and what closed it. "Decided" means the critique was answered by
+choosing the existing behaviour on purpose, not by changing it.
+
+| # | Outcome | Closed by |
+|---|---|---|
+| C1 | resolved | Inference is strict by default; open-world is opt-in per file via `"use open"` or `open: true` (`compile/compile.ts`, `compile/open-mode.ts`) |
+| C2 | decided + resolved | [ADR 0083](../adr/0083-lambda-paren-rule.md) keeps the paren rule and names it in the diagnostic; [ADR 0102](../adr/0102-lambda-param-name-spans.md) adds the `LamParam` name spans the good error needed |
+| C3 | partly resolved, rest decided | [ADR 0079](../adr/0079-generic-let-question-bind.md) makes one `let?` dispatch between `Option` and `Result`. `let!` stays Task's own sigil — two sigils by choice, not five hardcoded sites |
+| C4 | resolved | [ADR 0084](../adr/0084-structural-eq.md) — `eq`/`show`/`compare` walk collections structurally; `-By` is the override seam |
+| C5 | resolved | [ADR 0046](../adr/0046-qualified-type-names.md) — `TyQual` gives type position its qualified form |
+| C6 | decided | No empty-`Set` literal by design: write `Set.empty` ([`docs/language.md`](../language.md) §collections). The unqualified `map`/`filter` = Array rule is now stated there *and* enforced as a diagnostic that names `List.map` |
+| C7 | resolved | [ADR 0074](../adr/0074-task-fan-out.md) — `Task.all` / `race` / `traverse`, fail-fast and input-ordered |
+| C9 | resolved | [ADR 0045](../adr/0045-parser-error-recovery.md) — sync points, `SError` nodes, no cascade; `parseRecovering` never fails |
+| C10 | resolved | [ADR 0085](../adr/0085-int-float-aliases.md) for the `int`/`float` half. Doc drift is continuous upkeep, not a ticket |
+| C12 | resolved | `docs/adr/` now runs 0000–0103 contiguously with an index in [`README.md`](../adr/README.md) |
+| C13 | resolved | [ADR 0082](../adr/0082-scoped-ctor-imports.md) — named and namespace imports scope the ctor registry instead of merging the dep's whole table |
