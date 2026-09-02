@@ -10,9 +10,6 @@ pre-push:
   jobs:
     - name: check:full
       run: bun run check:full
-    # Warns (never blocks) when only one of the two formatters changed.
-    - name: formatter-drift
-      run: bash scripts/hooks/pre-push-formatter-drift
 
 prepare-commit-msg:
   jobs:

@@ -6,6 +6,11 @@
 // any repeated top-level `const`, and `strLit` is defined by both
 // show-type-expr.mochi and format.mochi — the formatter's would be silently
 // shadowed, and its output diffed against the wrong function.
+//
+// This is the drift gate for the two hand-ported formatters. It replaced the
+// warn-only `pre-push-formatter-drift` hook: a one-sided change to either
+// packages/dx/src/format.ts or bootstrap/format.mochi now fails `bun run check`,
+// so authoring order is free (ADR 0078 still names the formatter TS-owned DX).
 import { beforeAll, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
