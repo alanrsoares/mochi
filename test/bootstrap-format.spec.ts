@@ -1,58 +1,48 @@
 // The self-hosted formatter's expression printer, diffed against the TS one.
 //
-// bootstrap/format.spec.mochi checks hand-written cases; this checks the corpus.
-// Every top-level `let` value in every .mochi file in the repo is re-wrapped as
-// `let value = <source slice>`, formatted by both printers, and compared — so
-// the diff is over thousands of real expressions rather than a case list.
-import { expect, test } from "bun:test";
+// bootstrap/format.spec.mochi checks hand-written cases; this checks expression
+// printing over the corpus, one `let` value at a time. Whole-FILE agreement
+// (statements, comments, blank lines) is test/bootstrap-format-file.spec.ts —
+// this one survives because a failure here names the expression that broke,
+// where the file-level diff names only the file.
+import { beforeAll, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { lex } from "@mochi/compiler/lexer";
 import { parse } from "@mochi/compiler/parser";
 import { format } from "@mochi/dx";
 import { repoRoot } from "@mochi/test-support";
-import { bootstrapModuleJs } from "@mochi/test-support/bootstrap";
+import { ensureInTreeBootstrapBuild } from "@mochi/test-support/bootstrap";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
 
 const root = repoRoot(import.meta.url);
 
-type AlResult = { _tag: "Ok"; value: unknown } | { _tag: "Err"; error: { message: string } };
-
-const evalAl = (js: string, name: string): unknown =>
-  new Function("match", `"use strict";\n${js}\nreturn ${name};`)(match);
-
-const fmtJs = bootstrapModuleJs("bootstrap/format.mochi");
-const alExprD = evalAl(fmtJs, "exprD") as (cts: unknown, e: unknown) => unknown;
-const alNoComments = evalAl(fmtJs, "noComments");
-const alRender = evalAl(bootstrapModuleJs("bootstrap/doc.mochi"), "render") as (
-  d: unknown,
-  width: number,
-) => string;
-const alLex = evalAl(bootstrapModuleJs("bootstrap/lexer.mochi"), "lex") as (
-  src: string,
-) => AlResult;
-const alParse = evalAl(bootstrapModuleJs("bootstrap/parser.mochi"), "parse") as (
-  toks: unknown,
-) => AlResult;
-
 const HEAD = "let value = ";
-// The TS printer lays the expression out with `let value = ` already consuming
-// 12 columns, so the bootstrap side gets the same 68 columns for its first line.
-// Only that first line is comparable: TS indents continuation lines from the
-// line start, not from column 12, so a broken layout would need the full
-// statement printer to compare fairly. Multi-line results are therefore skipped
-// here and covered by the layout cases in bootstrap/format.spec.mochi.
-const WIDTH = 80 - HEAD.length;
 
-/** Print one expression source through the bootstrap printer. */
+type AlOk<T> = { _tag: "Ok"; value: T } | { _tag: "Err"; error: { message: string } };
+let alLex: (src: string) => AlOk<unknown>;
+let alParseRecovering: (toks: unknown, plugins: unknown) => { stmts: unknown[] };
+let alFormatProgram: (stmts: unknown[], src: string) => string;
+
+// The BUILT modules, not `bootstrapModuleJs`'s concatenated sandbox: the
+// formatter reaches the prelude tables through `extern`, which import stripping
+// leaves unbound, and repeated top-level names across concatenated modules
+// shadow each other (`strLit` is defined by show-type-expr.mochi too).
+beforeAll(async () => {
+  ensureInTreeBootstrapBuild();
+  alLex = (await import(join(root, "bootstrap/lexer.js"))).lex;
+  alParseRecovering = (await import(join(root, "bootstrap/parser.js"))).parseRecovering;
+  alFormatProgram = (await import(join(root, "bootstrap/format.js"))).formatProgram;
+});
+
+/** Print one expression by formatting the wrapped program and dropping the head. */
 const alExprText = (src: string): string => {
-  const lr = alLex(`${HEAD}${src}`);
-  if (lr._tag !== "Ok") throw new Error(`mochi lexer: ${lr.error.message}`);
-  const pr = alParse(lr.value);
-  if (pr._tag !== "Ok") throw new Error(`mochi parser: ${pr.error.message}`);
-  const stmts = pr.value as { value: unknown }[];
-  return alRender(alExprD(alNoComments, stmts[0]!.value), WIDTH);
+  const wrapped = `${HEAD}${src}`;
+  const lexed = alLex(wrapped);
+  if (lexed._tag !== "Ok") throw new Error(`mochi lexer: ${lexed.error.message}`);
+  const stmts = alParseRecovering(lexed.value, { _tag: "None" }).stmts;
+  return alFormatProgram(stmts, wrapped).slice(HEAD.length).trimEnd();
 };
 
 /** Print the same source through the TS formatter, minus the `let value = ` head. */
@@ -65,8 +55,6 @@ const tsExprText = (src: string): string => {
 /**
  * Every top-level `let` value, as a source slice. Two kinds are skipped:
  *
- * - slices carrying a comment — the TS printer re-attaches comments and the
- *   bootstrap one has no comment table yet, so they diverge by design;
  * - slices holding JSX. Plugin `format` hooks re-fold `h(...)` back to `<tag>`
  *   and stay a TypeScript-host seam (ADR 0011 §6), so the bootstrap printer
  *   emits the underlying call by design;
@@ -94,7 +82,6 @@ const exprSlices = (file: string): string[] => {
   for (const s of unwrapOk(parsed).stmts) {
     if (s.kind !== "let") continue;
     const slice = src.slice(s.value.span.start, s.value.span.end);
-    if (slice.includes("//")) continue;
     if (isErr(parse(unwrapOk(lex(`${HEAD}${slice}`))))) continue;
     if (hasJsxOrigin(s.value)) continue;
     out.push(slice);
@@ -106,8 +93,7 @@ const corpus = [...new Bun.Glob("**/*.mochi").scanSync({ cwd: root })]
   .filter((p) => !p.includes("node_modules"))
   .sort();
 
-const comparable = (file: string): string[] =>
-  exprSlices(file).filter((slice) => !tsExprText(slice).includes("\n"));
+const comparable = (file: string): string[] => exprSlices(file);
 
 for (const file of corpus) {
   test(`expression printing agrees with the TS formatter on ${file}`, () => {
