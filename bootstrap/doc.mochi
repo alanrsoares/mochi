@@ -24,6 +24,11 @@ export type Doc =
   | DCat(parts: [Doc])
   | DIndent(doc: Doc)
   | DGroup(doc: Doc)
+  // Deferred until just before the next newline (prettier's `lineSuffix`). A
+  // trailing `//` comment must print AFTER whatever separator the enclosing
+  // list adds, or the separator lands inside the comment and the output no
+  // longer parses. Zero-width when measuring whether a line fits.
+  | DLineSuffix(doc: Doc)
   | DBreakParent
 
 let INDENT = 2
@@ -37,6 +42,7 @@ export let hardline = DLine(true, false)
 export let breakParent = DBreakParent
 export let indent = doc => DIndent(doc)
 export let group = doc => DGroup(doc)
+export let lineSuffix = doc => DLineSuffix(doc)
 
 let joinFrom = (sep, parts, i, acc) => switch Array.get(i, parts) {
   | None => acc
@@ -98,6 +104,11 @@ let fits = (width, start) =>
             | DLine(hard, soft) => hard || m == "break"
                 ? true
                 : recur(rem - (soft ? 0 : 1), tail)
+            | DLineSuffix(inner) =>
+              // Deferred, but flushed at the NEXT newline — i.e. still on this
+              // line. Measuring it here keeps a trailing comment from pushing
+              // the line past the width, as it did before becoming a suffix.
+              recur(rem, WCons({ i, m, d: inner }, tail))
             | DBreakParent =>
               // Zero-width here; it only forces the group that CONTAINS it.
               recur(rem, tail)
@@ -120,6 +131,7 @@ let forcesBreak = d => switch d {
   | DCat(parts) => anyForcesBreak(parts, 0)
   | DIndent(inner) => forcesBreak(inner)
   | DGroup(inner) => forcesBreak(inner)
+  | DLineSuffix(_) => false
   | DText(_) => false
 }
 
@@ -135,35 +147,66 @@ let posAfter = (pos, s) =>
         Option.unwrapOr("", Array.get(Array.length(parts) - 1, parts))
       )
 
+/// Prepend deferred suffix items so the first one is processed first.
+let consItems = (items, tail) =>
+  loop (k = Array.length(items) - 1, w = tail) {
+    k < 0
+      ? w
+      : switch Array.get(k, items) {
+        | None => w
+        | Some(it) => recur(k - 1, WCons(it, w))
+      }
+  }
+
 export let render = (root, width) =>
-  loop (out = "", pos = 0, work = WCons({ i: 0, m: "break", d: root }, WNil)) {
+  loop (out = "", pos = 0, work = WCons(
+    { i: 0, m: "break", d: root },
+    WNil
+  ), sfx = []) {
     switch work {
-      | WNil => out
+      | WNil =>
+        // Pending suffixes with nothing left to print (a trailing comment on the
+        // last node) — replay them rather than dropping the text.
+        Array.length(sfx) == 0 ? out : recur(out, pos, consItems(sfx, WNil), [])
       | WCons({ i, m, d }, tail) => switch d {
-          | DText(s) => recur("${out}${s}", pos + Str.length(s), tail)
+          | DText(s) => recur("${out}${s}", pos + Str.length(s), tail, sfx)
           | DVerbatim(s) =>
             // Byte-for-byte; no indentation, wrapping, or reflow. `pos` is
             // recomputed from its last line so column tracking stays accurate.
-            recur("${out}${s}", posAfter(pos, s), tail)
-          | DCat(parts) => recur(out, pos, consParts(parts, i, m, tail))
+            recur("${out}${s}", posAfter(pos, s), tail, sfx)
+          | DCat(parts) => recur(out, pos, consParts(parts, i, m, tail), sfx)
           | DIndent(inner) => recur(
               out,
               pos,
-              WCons({ i: i + INDENT, m, d: inner }, tail)
+              WCons({ i: i + INDENT, m, d: inner }, tail),
+              sfx
             )
           | DLine(hard, soft) => m == "flat" && !hard
               ? let s = soft ? "" : " " in
-                recur("${out}${s}", pos + Str.length(s), tail)
-              : recur("${out}\n${spaces(i)}", i, tail)
+                recur("${out}${s}", pos + Str.length(s), tail, sfx)
+              : Array.length(sfx) == 0
+              ? recur("${out}\n${spaces(i)}", i, tail, [])
+              : recur(out, pos, consItems(sfx, WCons({ i, m, d }, tail)), [])
           | DGroup(inner) => forcesBreak(inner)
-              ? recur(out, pos, WCons({ i, m: "break", d: inner }, tail))
+              ? recur(out, pos, WCons({ i, m: "break", d: inner }, tail), sfx)
               : let cand = WCons({ i, m: "flat", d: inner }, tail) in
                 fits(width - pos, cand)
-                  ? recur(out, pos, cand)
-                  : recur(out, pos, WCons({ i, m: "break", d: inner }, tail))
+                  ? recur(out, pos, cand, sfx)
+                  : recur(
+                    out,
+                    pos,
+                    WCons({ i, m: "break", d: inner }, tail),
+                    sfx
+                  )
+          | DLineSuffix(inner) => recur(
+              out,
+              pos,
+              tail,
+              Array.append({ i, m, d: inner }, sfx)
+            )
           | DBreakParent =>
             // Zero-width; its only effect is through `forcesBreak`.
-            recur(out, pos, tail)
+            recur(out, pos, tail, sfx)
         }
     }
   }

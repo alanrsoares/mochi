@@ -196,7 +196,7 @@ let skipStrLoop = (src, j0) =>
       | Some(_) => recur(j + 1)
     }
   }
-let skipStringLiteral = (src, i) => skipStrLoop(src, i + 1)
+export let skipStringLiteral = (src, i) => skipStrLoop(src, i + 1)
 
 // Skip to (not past) the next newline, or to end of source.
 let skipLineCommentTo = (src, j) => switch Str.get(j, src) {

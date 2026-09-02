@@ -19,6 +19,7 @@ type DocApi<T> = {
   softline: T;
   hardline: T;
   breakParent: T;
+  lineSuffix: (d: T) => T;
 };
 
 type AlDoc = { readonly _tag: string };
@@ -38,6 +39,7 @@ const names = [
   "softline",
   "hardline",
   "breakParent",
+  "lineSuffix",
   "render",
   "flat",
 ];
@@ -105,3 +107,34 @@ for (const [name, build] of Object.entries(docs)) {
     expect(al.flat(build(al))).toBe(D.flat(build(tsApi)));
   });
 }
+
+// A trailing comment defers past the separator the enclosing list adds. Both
+// renderers must replay it in the same place, or one of them emits `x // c,`
+// — the comma swallowed by the comment — and that output does not parse.
+const suffixDoc: Build = (api) =>
+  api.cat([
+    api.txt("f("),
+    api.indent(
+      api.cat([
+        api.hardline,
+        api.txt("x"),
+        api.lineSuffix(api.txt(" // why")),
+        api.txt(","),
+        api.hardline,
+        api.txt("y"),
+      ]),
+    ),
+    api.hardline,
+    api.txt(")"),
+  ]);
+
+test("lineSuffix defers to just before the next newline in both renderers", () => {
+  expect(al.render(suffixDoc(al), 80)).toBe("f(\n  x, // why\n  y\n)");
+  expect(D.render(suffixDoc(tsApi), 80)).toBe(al.render(suffixDoc(al), 80));
+});
+
+test("a lineSuffix pending at the end is still emitted", () => {
+  const trailing: Build = (api) => api.cat([api.txt("x"), api.lineSuffix(api.txt(" // end"))]);
+  expect(al.render(trailing(al), 80)).toBe("x // end");
+  expect(D.render(trailing(tsApi), 80)).toBe(al.render(trailing(al), 80));
+});

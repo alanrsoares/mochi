@@ -23,7 +23,8 @@ const evalAl = (js: string, name: string): unknown =>
   new Function("match", `"use strict";\n${js}\nreturn ${name};`)(match);
 
 const fmtJs = bootstrapModuleJs("bootstrap/format.mochi");
-const alExprD = evalAl(fmtJs, "exprD") as (e: unknown) => unknown;
+const alExprD = evalAl(fmtJs, "exprD") as (cts: unknown, e: unknown) => unknown;
+const alNoComments = evalAl(fmtJs, "noComments");
 const alRender = evalAl(bootstrapModuleJs("bootstrap/doc.mochi"), "render") as (
   d: unknown,
   width: number,
@@ -51,7 +52,7 @@ const alExprText = (src: string): string => {
   const pr = alParse(lr.value);
   if (pr._tag !== "Ok") throw new Error(`mochi parser: ${pr.error.message}`);
   const stmts = pr.value as { value: unknown }[];
-  return alRender(alExprD(stmts[0]!.value), WIDTH);
+  return alRender(alExprD(alNoComments, stmts[0]!.value), WIDTH);
 };
 
 /** Print the same source through the TS formatter, minus the `let value = ` head. */

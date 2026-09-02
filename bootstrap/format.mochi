@@ -18,6 +18,7 @@
 
 import * as Ast from "./ast.mochi"
 import {
+  breakParent,
   cat,
   flat,
   group,
@@ -25,9 +26,11 @@ import {
   indent,
   join,
   line,
+  lineSuffix,
   softline,
   txt
 } from "./doc.mochi"
+import { skipStringLiteral } from "./lexer.mochi"
 import { showTypeExpr } from "./show-type-expr.mochi"
 
 /// `JSON.stringify` escaping, plus `${` — which would otherwise reopen an
@@ -179,6 +182,329 @@ let loosePrefix = e => switch e {
 /// `LPSpanned` carries binder spans for the IDE; the printer only wants the shape.
 let unspan = p => switch p { | Ast.LPSpanned(inner, _) => inner | _ => p }
 
+// --- span extractor (the AST carries `span` on every node) --------------------
+
+let exprSpan = e => switch e {
+  | Ast.ENum(_, _, sp) => sp
+  | Ast.EUnit(sp) => sp
+  | Ast.EBool(_, sp) => sp
+  | Ast.EStr(_, sp) => sp
+  | Ast.ERef(_, sp) => sp
+  | Ast.ECall(_, _, _, sp) => sp
+  | Ast.ELambda(_, _, sp) => sp
+  | Ast.ELetIn(_, _, _, _, _, sp) => sp
+  | Ast.ELetBind(_, _, _, _, _, sp) => sp
+  | Ast.EPipe(_, _, _, sp) => sp
+  | Ast.EDo(_, sp) => sp
+  | Ast.ETernary(_, _, _, sp) => sp
+  | Ast.EMatch(_, _, sp) => sp
+  | Ast.ERecord(_, _, sp) => sp
+  | Ast.EField(_, _, _, sp) => sp
+  | Ast.ETuple(_, sp) => sp
+  | Ast.EArr(_, sp) => sp
+  | Ast.EList(_, sp) => sp
+  | Ast.ESet(_, sp) => sp
+  | Ast.EMap(_, sp) => sp
+  | Ast.ELoop(_, _, sp) => sp
+  | Ast.ERecur(_, sp) => sp
+  | Ast.EInterp(_, sp) => sp
+}
+
+// --- comments ----------------------------------------------------------------
+//
+// Comments are not in the AST — the lexer drops them (`///` docs aside), so the
+// printer re-attaches them from source. TypeScript keys two WeakMaps by node
+// identity; mochi has no identity map and no mutation, so this keys by SPAN,
+// the same shape ReScript's `res_comments_table.ml` uses (leading / trailing
+// tables keyed by location). Two nodes never share a span in a parsed tree, so
+// the key is as precise as identity here.
+
+type Comment = {
+  start: number,
+  end: number,
+  text: string,
+  blankAfter: bool,
+  trailing: bool
+}
+
+export type Comments = {
+  leading: Map<string, [Comment]>,
+  trailing: Map<string, [Comment]>
+}
+
+export let noComments : Comments = { leading: #{}, trailing: #{} }
+
+let spanKey = (sp: Ast.Span) => "${show(sp.start)}:${show(sp.end)}"
+
+let atKey = (table, key) => switch Map.get(key, table) {
+  | Some(cs) => cs
+  | None => []
+}
+
+let pushAt = (key, c, table) =>
+  Map.set(key, Array.append(c, atKey(table, key)), table)
+
+/// Scan every `//` / `///` comment, string-aware: a `//` inside a string
+/// literal (or a `${…}` hole) is not a comment. Uses the lexer's own string
+/// skipper, so the two agree exactly on where a literal ends.
+/// Index of the next newline at or after `i`, or the end of source.
+let lineEndFrom = (src, i) => switch Str.get(i, src) {
+  | None => i
+  | Some("\n") => i
+  | Some(_) => lineEndFrom(src, i + 1)
+}
+
+/// `Str.trim` without touching the leading `//`.
+let trimEndFrom = (s, n) =>
+  n == 0
+    ? ""
+    : switch Str.get(n - 1, s) {
+      | Some(" ") => trimEndFrom(s, n - 1)
+      | Some("\t") => trimEndFrom(s, n - 1)
+      | Some("r") => trimEndFrom(s, n - 1)
+      | _ => Str.slice(0, n, s)
+    }
+
+let trimEnd = s => trimEndFrom(s, Str.length(s))
+
+let commentAt = (src, i, end) =>
+  let lineEnd = lineEndFrom(src, end + 1) in
+    {
+      start: i,
+      end,
+      text: trimEnd(Str.slice(i, end, src)),
+      blankAfter: Str.trim(Str.slice(end + 1, lineEnd, src)) == "",
+      trailing: false
+    }
+
+let scanComments = (src, i, lineHasToken, acc) => switch Str.get(i, src) {
+  | None => acc
+  | Some("\n") => scanComments(src, i + 1, false, acc)
+  | Some(" ") => scanComments(src, i + 1, lineHasToken, acc)
+  | Some("\t") => scanComments(src, i + 1, lineHasToken, acc)
+  | Some("r") => scanComments(src, i + 1, lineHasToken, acc)
+  | Some("\"") => switch skipStringLiteral(src, i) {
+      | Some(end) => scanComments(src, end, true, acc)
+      | None => scanComments(src, i + 1, true, acc)
+    }
+  | Some("/") => Str.get(i + 1, src) == Some("/")
+      ? let end = lineEndFrom(src, i) in
+      let c = commentAt(src, i, end) in
+        scanComments(
+          src,
+          end,
+          lineHasToken,
+          Array.append({ ...c, trailing: lineHasToken }, acc)
+        )
+      : scanComments(src, i + 1, true, acc)
+  | Some(_) => scanComments(src, i + 1, true, acc)
+}
+
+export let collectComments = src => scanComments(src, 0, false, [])
+
+/// Every span-carrying node a comment may attach to: each statement, every
+/// expression under it, and — for a `type` decl — nothing more, since the
+/// bootstrap `Ctor` record carries no span (the TS AST anchors those too, so a
+/// comment between constructors migrates to the next statement here).
+let seqElemExpr = el => switch el {
+  | Ast.SEExpr(e) => e
+  | Ast.SESpread(e) => e
+}
+
+let exprAnchors = e =>
+  Array.append(
+    exprSpan(e),
+    switch e {
+      | Ast.ECall(fn, args, _, _) => Array.concat(
+          exprAnchors(fn),
+          Array.flatMap(exprAnchors, args)
+        )
+      | Ast.ELambda(params, body, _) => Array.concat(
+          exprAnchors(body),
+          Array.flatMap(
+            p => switch unspan(p) {
+              | Ast.LPLabeled(_, _, _, Some(d)) => exprAnchors(d)
+              | _ => []
+            },
+            params
+          )
+        )
+      | Ast.ELetIn(_, _, _, value, body, _) => Array.concat(
+          exprAnchors(value),
+          exprAnchors(body)
+        )
+      | Ast.ELetBind(_, _, _, value, body, _) => Array.concat(
+          exprAnchors(value),
+          exprAnchors(body)
+        )
+      | Ast.EPipe(left, right, _, _) => Array.concat(
+          exprAnchors(left),
+          exprAnchors(right)
+        )
+      | Ast.EDo(exprs, _) => Array.flatMap(exprAnchors, exprs)
+      | Ast.ETernary(cond, thenE, elseE, _) => Array.concat(
+          exprAnchors(cond),
+          Array.concat(exprAnchors(thenE), exprAnchors(elseE))
+        )
+      | Ast.EMatch(scrutinee, arms, _) => Array.concat(
+          exprAnchors(scrutinee),
+          Array.flatMap(
+            (a: Ast.MatchArm) =>
+              Array.concat(
+                switch a.guard { | Some(g) => exprAnchors(g) | None => [] },
+                exprAnchors(a.body)
+              ),
+            arms
+          )
+        )
+      | Ast.ERecord(fields, spread, _) => Array.concat(
+          switch spread { | Some(sp) => exprAnchors(sp) | None => [] },
+          Array.flatMap(f => exprAnchors(f.value), fields)
+        )
+      | Ast.EField(target, _, _, _) => exprAnchors(target)
+      | Ast.ELoop(params, body, _) => Array.concat(
+          Array.flatMap(prm => exprAnchors(prm.init), params),
+          exprAnchors(body)
+        )
+      | Ast.ERecur(args, _) => Array.flatMap(exprAnchors, args)
+      | Ast.ETuple(elements, _) => Array.flatMap(exprAnchors, elements)
+      | Ast.EArr(elements, _) => Array.flatMap(
+          el => exprAnchors(seqElemExpr(el)),
+          elements
+        )
+      | Ast.EList(elements, _) => Array.flatMap(
+          el => exprAnchors(seqElemExpr(el)),
+          elements
+        )
+      | Ast.ESet(elements, _) => Array.flatMap(
+          el => exprAnchors(seqElemExpr(el)),
+          elements
+        )
+      | Ast.EMap(entries, _) => Array.flatMap(
+          en => Array.concat(exprAnchors(en.key), exprAnchors(en.value)),
+          entries
+        )
+      | Ast.EInterp(parts, _) => Array.flatMap(
+          prt => switch prt {
+            | Ast.IPLit(_) => []
+            | Ast.IPExpr(ex) => exprAnchors(ex)
+          },
+          parts
+        )
+      | _ => []
+    }
+  )
+
+/// Sorted so the tightest enclosing anchor wins: by start ascending, then by
+/// end DESCENDING, which puts the outermost node first among equal starts.
+let anchorBefore = (a: Ast.Span, b: Ast.Span) =>
+  a.start == b.start ? a.end > b.end : a.start < b.start
+
+let insertAnchor = (sp, sorted) => switch sorted {
+  | [] => [sp]
+  | [head, ...rest] => anchorBefore(sp, head)
+      ? Array.prepend(sp, sorted)
+      : Array.prepend(head, insertAnchor(sp, rest))
+}
+
+let sortAnchors = spans =>
+  Array.reduce((acc, sp) => insertAnchor(sp, acc), [], spans)
+
+/// The node a trailing comment most tightly follows ON ITS OWN LINE: the
+/// largest `end` at or before the comment's start, with no newline between.
+let trailedBy = (anchors, c: Comment, src, best) => switch anchors {
+  | [] => best
+  | [sp, ...rest] => let fits = sp.end <= c.start && !Str.contains(
+      "\n",
+      Str.slice(sp.end, c.start, src)
+    ) in
+    let better = fits && switch best {
+      | None => true
+      | Some(b) => sp.end > b.end
+    } in
+      trailedBy(rest, c, src, better ? Some(sp) : best)
+}
+
+/// The node an own-line comment most tightly precedes: the first anchor
+/// starting at or after the comment ends (the sort puts outermost first).
+let leadTarget = (anchors, c: Comment) => switch anchors {
+  | [] => None
+  | [sp, ...rest] => sp.start >= c.end ? Some(sp) : leadTarget(rest, c)
+}
+
+let attachOne = (anchors, src, c: Comment, tbl: Comments) =>
+  let trailed = c.trailing ? trailedBy(anchors, c, src, None) : None in
+    switch trailed {
+      | Some(sp) => {
+          leading: tbl.leading,
+          trailing: pushAt(spanKey(sp), c, tbl.trailing)
+        }
+      | None => switch leadTarget(anchors, c) {
+          | None =>
+            // Past the last node: no anchor. The statement printer emits these
+            // after the final statement; the expression printer drops them.
+            tbl
+          | Some(sp) => {
+              leading: pushAt(spanKey(sp), c, tbl.leading),
+              trailing: tbl.trailing
+            }
+        }
+    }
+
+let attachFrom = (comments, i, anchors, src, tbl) => switch Array.get(i, comments) {
+  | None => tbl
+  | Some(c) => attachFrom(
+      comments,
+      i + 1,
+      anchors,
+      src,
+      attachOne(anchors, src, c, tbl)
+    )
+}
+
+/// Build the table for one expression: scan the source, anchor every node.
+export let commentsForExpr = (src, e) =>
+  attachFrom(
+    collectComments(src),
+    0,
+    sortAnchors(exprAnchors(e)),
+    src,
+    noComments
+  )
+
+/// Leading comment lines for a node: each on its own line, with a blank line
+/// kept after any comment the source separated from what follows.
+let leadingDocs = (cts: Comments, sp) =>
+  Array.flatMap(
+    (c: Comment) =>
+      c.blankAfter
+        ? [txt(c.text), hardline, hardline]
+        : [txt(c.text), hardline],
+    atKey(cts.leading, spanKey(sp))
+  )
+
+/// A trailing comment prints ` // text` after the node, then `breakParent` so
+/// whatever follows lands on a new line (otherwise it would be commented out)
+/// without emitting a newline here — the enclosing group supplies it.
+let trailingDocs = (cts: Comments, sp) =>
+  Array.flatMap(
+    // `lineSuffix`, not plain text: the comment must print after whatever
+    // separator the enclosing list adds, else `f(x, // c)` comes back as
+    // `f(x // c,)` — the comma inside the comment, output that no longer parses.
+    (c: Comment) => [lineSuffix(txt(" ${c.text}")), breakParent],
+    atKey(cts.trailing, spanKey(sp))
+  )
+
+let hasLead = (cts: Comments, sp) =>
+  Array.length(atKey(cts.leading, spanKey(sp))) > 0
+
+let withComments = (cts: Comments, sp, doc) =>
+  let lead = leadingDocs(cts, sp) in
+  let trail = trailingDocs(cts, sp) in
+    Array.length(lead) == 0 && Array.length(trail) == 0
+      ? doc
+      : cat([...lead, doc, ...trail])
+
 // --- sugar re-folds ----------------------------------------------------------
 //
 // The parser desugars infix and prefix operators straight into 2-arg calls, and
@@ -270,25 +596,25 @@ let infixPrec = e => switch pipePrecOf(e) {
 /// An operand of an infix operator. A lambda or ternary always parenthesizes;
 /// otherwise precedence decides, with the right operand also parenthesizing at
 /// EQUAL precedence, since every infix operator here is left-associative.
-let binOperandD = (e, parentPrec, isRight) =>
+let binOperandD = (cts, e, parentPrec, isRight) =>
   isLambdaOrTernary(e)
-    ? cat([txt("("), exprD(e), txt(")")])
+    ? cat([txt("("), cts->exprD(e), txt(")")])
     : switch infixPrec(e) {
       | Some(prec) => parenIf(
           isRight ? prec <= parentPrec : prec < parentPrec,
-          exprD(e)
+          cts->exprD(e)
         )
-      | None => exprD(e)
+      | None => cts->exprD(e)
     }
 
 /// A pipe's left operand parenthesizes when dropping the parens would reparse:
 /// a looser infix (`(a ++ b)->f`), a nested pipe, or a lambda / ternary.
-let pipeLeftD = (e, parentPrec) =>
+let pipeLeftD = (cts, e, parentPrec) =>
   isLambdaOrTernary(e)
-    ? cat([txt("("), exprD(e), txt(")")])
+    ? cat([txt("("), cts->exprD(e), txt(")")])
     : switch infixPrec(e) {
-      | Some(prec) => parenIf(prec < parentPrec, exprD(e))
-      | None => exprD(e)
+      | Some(prec) => parenIf(prec < parentPrec, cts->exprD(e))
+      | None => cts->exprD(e)
     }
 
 /// `++` is left-associative (`concat(concat(a, b), c)`); flatten it like `|>` so
@@ -301,17 +627,19 @@ let concatSegmentsFrom = (e, acc) => switch e {
   | _ => Array.prepend(e, acc)
 }
 
-let concatD = (l, r) => switch concatSegmentsFrom(l, [r]) {
+let concatD = (cts, l, r) => switch concatSegmentsFrom(l, [r]) {
   | [] => txt("")
   | [head, ...rest] => group(
       cat(
         [
-          binOperandD(head, CONCAT_PREC, false),
+          cts->binOperandD(head, CONCAT_PREC, false),
           indent(
             cat(
               rest
                 |> map(s =>
-                  cat([line, txt("++ "), binOperandD(s, CONCAT_PREC, true)]))
+                  cat(
+                    [line, txt("++ "), cts->binOperandD(s, CONCAT_PREC, true)]
+                  ))
             )
           )
         ]
@@ -319,14 +647,14 @@ let concatD = (l, r) => switch concatSegmentsFrom(l, [r]) {
     )
 }
 
-let binaryD = (fn, args) => switch neqFor(fn, args) {
+let binaryD = (cts, fn, args) => switch neqFor(fn, args) {
   | Some((l, r)) => Some(
       group(
         cat(
           [
-            binOperandD(l, NEQ_PREC, false),
+            cts->binOperandD(l, NEQ_PREC, false),
             txt(" != "),
-            binOperandD(r, NEQ_PREC, true)
+            cts->binOperandD(r, NEQ_PREC, true)
           ]
         )
       )
@@ -335,14 +663,14 @@ let binaryD = (fn, args) => switch neqFor(fn, args) {
       | None => None
       | Some(info) => switch args {
           | [l, r] => info.symbol == "++"
-              ? Some(concatD(l, r))
+              ? Some(cts->concatD(l, r))
               : Some(
                 group(
                   cat(
                     [
-                      binOperandD(l, info.prec, false),
+                      cts->binOperandD(l, info.prec, false),
                       txt(" ${info.symbol} "),
-                      binOperandD(r, info.prec, true)
+                      cts->binOperandD(r, info.prec, true)
                     ]
                   )
                 )
@@ -355,7 +683,7 @@ let binaryD = (fn, args) => switch neqFor(fn, args) {
 /// `not(x)` → `!x`, `negate(x)` → `-x`. Unary binds tighter than every infix
 /// operator (its operand parses at atom level), so an operator-shaped operand
 /// always needs parens regardless of precedence.
-let unaryD = (fn, args) => switch (fn, args) {
+let unaryD = (cts, fn, args) => switch (fn, args) {
   | (Ast.ERef(name, _), [operand]) => switch unaryOpOf(name) {
       | None => None
       | Some(symbol) => let forced = loosePrefix(
@@ -363,7 +691,7 @@ let unaryD = (fn, args) => switch (fn, args) {
         ) || Option.isSome(
           binOpOf(operand)
         ) || Option.isSome(neqOperands(operand)) in
-          Some(cat([txt(symbol), parenIf(forced, exprD(operand))]))
+          Some(cat([txt(symbol), parenIf(forced, cts->exprD(operand))]))
     }
   | _ => None
 }
@@ -388,7 +716,7 @@ let sectionParts = body => switch neqOperands(body) {
     }
 }
 
-let sectionOf = (params, body) => switch params {
+let sectionOf = (cts, params, body) => switch params {
   | [only] => isSectionParam(only)
       ? switch sectionParts(body) {
         | None => None
@@ -402,7 +730,7 @@ let sectionOf = (params, body) => switch params {
                 cat(
                   [
                     txt("(${info.symbol} "),
-                    binOperandD(r, info.prec, true),
+                    cts->binOperandD(r, info.prec, true),
                     txt(")")
                   ]
                 )
@@ -411,7 +739,7 @@ let sectionOf = (params, body) => switch params {
                 cat(
                   [
                     txt("("),
-                    binOperandD(l, info.prec, false),
+                    cts->binOperandD(l, info.prec, false),
                     txt(" ${info.symbol})")
                   ]
                 )
@@ -452,59 +780,59 @@ let composeSegmentsFrom = (e, acc) => switch e {
 
 /// A destructuring `let (a, b) = e in body` reaches the printer as the IIFE the
 /// parser desugared it to; fold it back. Kept in step with `printsAsLet`.
-let destructureLetD = (fn, args) => switch (fn, args) {
+let destructureLetD = (cts, fn, args) => switch (fn, args) {
   | (Ast.ELambda([p], lbody, _), [value]) => switch unspan(p) {
       | Ast.LPName(_, _) => None
-      | _ => Some(letLikeD("let ${paramText(p)}", value, lbody))
+      | _ => Some(cts->letLikeD("let ${cts->paramText(p)}", value, lbody))
     }
   | _ => None
 }
 
-let refoldCall = (fn, args) => switch destructureLetD(fn, args) {
+let refoldCall = (cts, fn, args) => switch cts->destructureLetD(fn, args) {
   | Some(d) => Some(d)
-  | None => switch binaryD(fn, args) {
+  | None => switch cts->binaryD(fn, args) {
       | Some(d) => Some(d)
-      | None => unaryD(fn, args)
+      | None => cts->unaryD(fn, args)
     }
 }
 
 /// `f(~tone="amber")` — a labeled call is lowered to a record argument tagged
 /// `origin: "labeled"` (ADR 0098 §2); print the labels back.
-let labeledFieldD = (f: Ast.Field) => switch f.value {
+let labeledFieldD = (cts, f: Ast.Field) => switch f.value {
   | Ast.ERef(name, _) when name == f.name => txt("~${f.name}")
-  | _ => cat([txt("~${f.name}="), exprD(f.value)])
+  | _ => cat([txt("~${f.name}="), cts->exprD(f.value)])
 }
 
-let callArgDocs = (args, origin) => switch origin {
+let callArgDocs = (cts, args, origin) => switch origin {
   | Some("labeled") => switch Array.get(Array.length(args) - 1, args) {
       | Some(Ast.ERecord(fields, None, _)) => Array.concat(
-          Array.take(Array.length(args) - 1, args) |> map(exprD),
-          fields |> map(labeledFieldD)
+          Array.take(Array.length(args) - 1, args) |> map(x => cts->exprD(x)),
+          fields |> map(f => cts->labeledFieldD(f))
         )
-      | _ => args |> map(exprD)
+      | _ => args |> map(x => cts->exprD(x))
     }
-  | _ => args |> map(exprD)
+  | _ => args |> map(x => cts->exprD(x))
 }
 
-let labeledParamText = (name, annot, optional, defaultValue) =>
+let labeledParamText = (cts, name, annot, optional, defaultValue) =>
   let ann = switch annot {
     | Some(te) => ": ${showTypeExpr(te)}"
     | None => ""
   } in
   let def = switch defaultValue {
-    | Some(d) => " = ${flat(exprD(d))}"
+    | Some(d) => " = ${flat(cts->exprD(d))}"
     | None => ""
   } in
     "~${name}${optional ? "?" : ""}${ann}${def}"
 
-let paramText = p => switch unspan(p) {
+let paramText = (cts, p) => switch unspan(p) {
   | Ast.LPName(name, annot) => switch annot {
       | Some(te) => "${name}: ${showTypeExpr(te)}"
       | None => name
     }
   | Ast.LPTuple(names) => "(${Str.join(", ", names)})"
   | Ast.LPRecord(fields) => "{ ${Str.join(", ", fields)} }"
-  | Ast.LPLabeled(name, annot, optional, defaultValue) => labeledParamText(
+  | Ast.LPLabeled(name, annot, optional, defaultValue) => cts->labeledParamText(
       name,
       annot,
       optional,
@@ -517,20 +845,20 @@ let paramText = p => switch unspan(p) {
 
 /// A lone un-annotated name drops its parens (`x => …`); annotations and every
 /// other shape keep them (`(x: number) => …`, `(a, b) => …`, `({ x }) => …`).
-let paramsText = ps => switch ps {
+let paramsText = (cts, ps) => switch ps {
   | [only] => switch unspan(only) {
       | Ast.LPName(name, None) => name
-      | _ => "(${commaJoin(paramText, ps)})"
+      | _ => "(${commaJoin(p => cts->paramText(p), ps)})"
     }
-  | _ => "(${commaJoin(paramText, ps)})"
+  | _ => "(${commaJoin(p => cts->paramText(p), ps)})"
 }
 
 /// `"…${x}…"` (ADR 0023) — round-trip the sugar; holes render flat. The body is
 /// escaped per part, so it wraps in quotes directly rather than through `strLit`.
 let quoted = body => "\"" ++ body ++ "\""
 
-let interpText = parts =>
-  let hole = ex => "$" ++ "{" ++ flat(exprD(ex)) ++ "}" in
+let interpText = (cts, parts) =>
+  let hole = ex => "$" ++ "{" ++ flat(cts->exprD(ex)) ++ "}" in
     quoted(
       Str.join(
         "",
@@ -554,21 +882,26 @@ let discardedFrom = (e, acc) => switch e {
 
 let discardedLetExprs = e => discardedFrom(e, [])
 
-let doBlockD = exprs =>
+let doBlockD = (cts, exprs) =>
   cat(
     [
       txt("{"),
       indent(
-        cat([hardline, join(cat([txt(";"), hardline]), exprs |> map(exprD))])
+        cat(
+          [
+            hardline,
+            join(cat([txt(";"), hardline]), exprs |> map(x => cts->exprD(x)))
+          ]
+        )
       ),
       hardline,
       txt("}")
     ]
   )
 
-let doD = exprs => cat([txt("do "), doBlockD(exprs)])
+let doD = (cts, exprs) => cat([txt("do "), cts->doBlockD(exprs)])
 
-let lambdaD = (params, body) => switch sectionOf(params, body) {
+let lambdaD = (cts, params, body) => switch cts->sectionOf(params, body) {
   | Some(section) => section
   | None => switch composeParts(params, body) {
       | Some(_) =>
@@ -579,40 +912,50 @@ let lambdaD = (params, body) => switch sectionOf(params, body) {
           | [head, ...rest] => group(
               cat(
                 [
-                  operandD(head),
+                  cts->operandD(head),
                   indent(
-                    cat(rest |> map(s => cat([line, txt(">> "), operandD(s)])))
+                    cat(
+                      rest
+                        |> map(s => cat([line, txt(">> "), cts->operandD(s)]))
+                    )
                   )
                 ]
               )
             )
         }
-      | None => plainLambdaD(params, body)
+      | None => cts->plainLambdaD(params, body)
     }
 }
 
-let plainLambdaD = (params, body) =>
-  let head = txt("${paramsText(params)} =>") in
+let plainLambdaD = (cts, params, body) =>
+  let head = txt("${cts->paramsText(params)} =>") in
     switch body {
-      | Ast.EDo(exprs, _) => cat([head, txt(" "), doBlockD(exprs)])
+      | Ast.EDo(exprs, _) => cat([head, txt(" "), cts->doBlockD(exprs)])
       | _ => switch discardedLetExprs(body) {
-          | Some(exprs) => cat([head, txt(" "), doBlockD(exprs)])
+          | Some(exprs) => cat([head, txt(" "), cts->doBlockD(exprs)])
           | None => switch body {
-              | Ast.EMatch(_, _, _) =>
-                // A `switch` body brings its own braces, so it hugs the arrow
-                // instead of dropping to an indented line.
-                cat([head, txt(" "), exprD(body)])
-              | _ => group(cat([head, indent(cat([line, exprD(body)]))]))
+              | Ast.EMatch(_, _, _) when // A `switch` body brings its own braces, so it hugs the arrow instead of
+// dropping to an indented line — unless a comment leads it, which has to
+// stay on its own line.
+!hasLead(cts, exprSpan(body)) => cat(
+                  [head, txt(" "), cts->exprD(body)]
+                )
+              | _ => group(cat([head, indent(cat([line, cts->exprD(body)]))]))
             }
         }
     }
 
-let condD = c => switch c {
-  | Ast.ETernary(_, _, _, _) => cat([txt("("), exprD(c), txt(")")])
-  | _ => exprD(c)
+let condD = (cts, c) => switch c {
+  | Ast.ETernary(_, _, _, _) => cat([txt("("), cts->exprD(c), txt(")")])
+  | _ => cts->exprD(c)
 }
 
-let branchD = (marker, e) => cat([txt("${marker} "), exprD(e)])
+/// A commented branch drops to its own indented line, so the comment stays
+/// own-line and the layout stays idempotent.
+let branchD = (cts, marker, e) =>
+  hasLead(cts, exprSpan(e))
+    ? cat([txt(marker), indent(cat([hardline, cts->exprD(e)]))])
+    : cat([txt("${marker} "), cts->exprD(e)])
 
 /// Right-nested `a ? b : c ? d : e` flattens to one arm list, so a cascading
 /// conditional shares a single indent instead of staircasing.
@@ -624,20 +967,22 @@ let ternaryArmsFrom = (e, acc) => switch e {
   | _ => (acc, e)
 }
 
-let ternaryRestParts = (arms, i) => switch Array.get(i, arms) {
+let ternaryRestParts = (cts, arms, i) => switch Array.get(i, arms) {
   | None => []
   | Some(a) => [
       line,
-      cat([txt(": "), condD(a.cond)]),
+      hasLead(cts, exprSpan(a.cond))
+        ? cat([txt(":"), indent(cat([hardline, cts->condD(a.cond)]))])
+        : cat([txt(": "), cts->condD(a.cond)]),
       line,
-      branchD("?", a.thenE),
-      ...ternaryRestParts(arms, i + 1)
+      cts->branchD("?", a.thenE),
+      ...cts->ternaryRestParts(arms, i + 1)
     ]
 }
 
 /// Inline when it fits; else `cond` / `? then` / `: cond` / `? then` / `: else`
 /// at one indent — a flat chain, not a nested pyramid.
-let ternaryD = e =>
+let ternaryD = (cts, e) =>
   let (arms, elseE) = ternaryArmsFrom(e, []) in
     switch Array.get(0, arms) {
       | None =>
@@ -646,15 +991,15 @@ let ternaryD = e =>
       | Some(first) => group(
           cat(
             [
-              condD(first.cond),
+              cts->condD(first.cond),
               indent(
                 cat(
                   [
                     line,
-                    branchD("?", first.thenE),
-                    ...ternaryRestParts(arms, 1),
+                    cts->branchD("?", first.thenE),
+                    ...cts->ternaryRestParts(arms, 1),
                     line,
-                    branchD(":", elseE)
+                    cts->branchD(":", elseE)
                   ]
                 )
               )
@@ -680,34 +1025,45 @@ let printsAsLet = e => switch e {
 /// `let x = v in body`; when it overflows, `in` stays at the end of the value
 /// line. A chain of `let … in let … in …` stays left-aligned, but a terminal
 /// non-let body indents under `in` so a ternary branch's payload looks bound.
-let letLikeD = (head, value, body) =>
+let letLikeD = (cts, head, value, body) =>
   // `line` must sit INSIDE `indent` — indent only affects newlines, so a
   // sibling `line` then `indent(text)` still prints at the outer column.
   let cont = printsAsLet(body)
-    ? cat([line, exprD(body)])
-    : indent(cat([line, exprD(body)])) in
-    group(cat([txt("${head} = "), exprD(value), txt(" in"), cont]))
+    ? cat([line, cts->exprD(body)])
+    : indent(cat([line, cts->exprD(body)])) in
+    group(
+      cat(
+        [
+          txt("${head} = "),
+          ...leadingDocs(cts, exprSpan(value)),
+          cts->exprRaw(value),
+          txt(" in"),
+          ...trailingDocs(cts, exprSpan(value)),
+          cont
+        ]
+      )
+    )
 
 /// `{ x }` when the value is a same-name ref, else `{ x: e }` (ADR 0068).
-let recordFieldD = (f: Ast.Field) => switch f.value {
-  | Ast.ERef(name, _) when name == f.name => exprD(f.value)
-  | _ => cat([txt("${f.name}: "), exprD(f.value)])
+let recordFieldD = (cts, f: Ast.Field) => switch f.value {
+  | Ast.ERef(name, _) when name == f.name => cts->exprD(f.value)
+  | _ => cat([txt("${f.name}: "), cts->exprD(f.value)])
 }
 
-let recordD = (fields, spread) =>
-  let fieldDocs = fields |> map(recordFieldD) in
+let recordD = (cts, fields, spread) =>
+  let fieldDocs = fields |> map(f => cts->recordFieldD(f)) in
     braced(
       "{",
       "}",
       switch spread {
-        | Some(s) => Array.prepend(cat([txt("..."), exprD(s)]), fieldDocs)
+        | Some(s) => Array.prepend(cat([txt("..."), cts->exprD(s)]), fieldDocs)
         | None => fieldDocs
       }
     )
 
-let seqElemD = el => switch el {
-  | Ast.SEExpr(e) => exprD(e)
-  | Ast.SESpread(e) => cat([txt("..."), exprD(e)])
+let seqElemD = (cts, el) => switch el {
+  | Ast.SEExpr(e) => cts->exprD(e)
+  | Ast.SESpread(e) => cat([txt("..."), cts->exprD(e)])
 }
 
 /// `|>` is left-associative, so `a |> b |> c` is pipe(pipe(a, b), c); flatten it
@@ -722,23 +1078,25 @@ let pipeSegmentsFrom = (e, acc) => switch e {
   | _ => Array.prepend(e, acc)
 }
 
-let matchArmD = (a: Ast.MatchArm) =>
+let matchArmD = (cts, a: Ast.MatchArm) =>
   let guard = switch a.guard {
-    | Some(g) => " when ${flat(exprD(g))}"
+    | Some(g) => " when ${flat(cts->exprD(g))}"
     | None => ""
   } in
   let head = txt("| ${pattern(a.pattern)}${guard} =>") in
-    cat([head, txt(" "), indent(exprD(a.body))])
+    hasLead(cts, exprSpan(a.body))
+      ? cat([head, indent(cat([hardline, cts->exprD(a.body)]))])
+      : cat([head, txt(" "), indent(cts->exprD(a.body))])
 
 /// Inline `switch s { | A => x | _ => y }` when it fits, else one arm per line.
 /// A multi-line arm body nests one level past the arm's `|`, so its own lines
 /// never align with the parent's arms.
-let matchD = (scrutinee, arms) =>
+let matchD = (cts, scrutinee, arms) =>
   group(
     cat(
       [
-        txt("switch ${flat(exprD(scrutinee))} {"),
-        indent(cat(arms |> map(a => cat([line, matchArmD(a)])))),
+        txt("switch ${flat(cts->exprD(scrutinee))} {"),
+        indent(cat(arms |> map(a => cat([line, cts->matchArmD(a)])))),
         line,
         txt("}")
       ]
@@ -747,17 +1105,17 @@ let matchD = (scrutinee, arms) =>
 
 /// `loop (acc = 0, i = 0) { body }` (ADR 0056) — inline when it fits, else the
 /// body indents on its own lines, brace layout matching `switch`.
-let loopD = (params, body) =>
+let loopD = (cts, params, body) =>
   group(
     cat(
       [
         txt("loop ("),
         join(
           txt(", "),
-          params |> map(p => cat([txt("${p.name} = "), exprD(p.init)]))
+          params |> map(p => cat([txt("${p.name} = "), cts->exprD(p.init)]))
         ),
         txt(") {"),
-        indent(cat([line, exprD(body)])),
+        indent(cat([line, cts->exprD(body)])),
         line,
         txt("}")
       ]
@@ -773,21 +1131,23 @@ let lastArgHugs = body => switch body {
   | _ => Option.isSome(discardedLetExprs(body))
 }
 
-let callArgsD = (fn, args, origin, asCallee) => switch refoldCall(fn, args) {
+let callArgsD = (cts, fn, args, origin, asCallee) => switch cts->refoldCall(fn, args) {
   | Some(d) => d
-  | None => plainCallD(fn, args, origin, asCallee)
+  | None => cts->plainCallD(fn, args, origin, asCallee)
 }
 
-let plainCallD = (fn, args, origin, asCallee) =>
-  let fnD = calleeD(fn) in
+let plainCallD = (cts, fn, args, origin, asCallee) =>
+  let fnD = cts->calleeD(fn) in
     switch args {
       | [] => cat([fnD, txt("()")])
       | [Ast.ETuple(elements, tsp)] =>
         // A singleton tuple argument needs both paren pairs to preserve the AST
         // (`Ok((value, next))`). Keep the call glued to the tuple so a broken
         // tuple becomes `Ok((\n  …\n))` rather than a staircase of closers.
-        group(cat([fnD, txt("("), exprD(Ast.ETuple(elements, tsp)), txt(")")]))
-      | _ => let argDocs = callArgDocs(args, origin) in
+        group(
+          cat([fnD, txt("("), cts->exprD(Ast.ETuple(elements, tsp)), txt(")")])
+        )
+      | _ => let argDocs = cts->callArgDocs(args, origin) in
           switch Array.get(Array.length(args) - 1, args) {
             | Some(Ast.ELambda(_, lbody, _)) => group(
                 cat(
@@ -821,26 +1181,30 @@ let plainCallD = (fn, args, origin, asCallee) =>
           }
     }
 
-let callD = (fn, args, origin) => callArgsD(fn, args, origin, false)
+let callD = (cts, fn, args, origin) => cts->callArgsD(fn, args, origin, false)
 
-let calleeD = e => switch e {
-  | Ast.ECall(fn, args, origin, _) => callArgsD(fn, args, origin, true)
-  | _ => parenIf(loosePrefix(e), exprD(e))
+let calleeD = (cts, e) => switch e {
+  | Ast.ECall(fn, args, origin, _) => cts->callArgsD(fn, args, origin, true)
+  | _ => parenIf(loosePrefix(e), cts->exprD(e))
 }
 
-let operandD = e => parenIf(loosePrefix(e), exprD(e))
+let operandD = (cts, e) => parenIf(loosePrefix(e), cts->exprD(e))
 
 /// A record in member position is ambiguous with a block, so it parenthesizes
 /// where a callee would not.
-let memberD = e => switch e {
-  | Ast.ERecord(_, _, _) => cat([txt("("), exprD(e), txt(")")])
-  | _ => parenIf(loosePrefix(e), exprD(e))
+let memberD = (cts, e) => switch e {
+  | Ast.ERecord(_, _, _) => cat([txt("("), cts->exprD(e), txt(")")])
+  | _ => parenIf(loosePrefix(e), cts->exprD(e))
 }
 
 /// Inline when it fits, else one `|> stage` per line indented under the head.
-let pipeD = e => switch e {
+let pipeD = (cts, e) => switch e {
   | Ast.EPipe(left, Ast.ECall(rfn, rargs, rorigin, _), true, _) => cat(
-      [pipeLeftD(left, FAST_PIPE_PREC), txt("->"), callD(rfn, rargs, rorigin)]
+      [
+        cts->pipeLeftD(left, FAST_PIPE_PREC),
+        txt("->"),
+        cts->callD(rfn, rargs, rorigin)
+      ]
     )
   | _ => let segments = pipeSegmentsFrom(e, []) in
       switch segments {
@@ -848,9 +1212,11 @@ let pipeD = e => switch e {
         | [head, ...rest] => group(
             cat(
               [
-                operandD(head),
+                cts->operandD(head),
                 indent(
-                  cat(rest |> map(s => cat([line, txt("|> "), operandD(s)])))
+                  cat(
+                    rest |> map(s => cat([line, txt("|> "), cts->operandD(s)]))
+                  )
                 )
               ]
             )
@@ -858,49 +1224,68 @@ let pipeD = e => switch e {
       }
 }
 
-let letBindHead = (monad, param) =>
-  "let${monad == "Task" ? "!" : "?"} ${paramText(param)}"
+let letBindHead = (cts, monad, param) =>
+  "let${monad == "Task" ? "!" : "?"} ${cts->paramText(param)}"
 
-export let exprD = e => switch e {
+let exprRaw = (cts, e) => switch e {
   | Ast.ENum(_, raw, _) => txt(raw)
   | Ast.EUnit(_) => txt("()")
   | Ast.EBool(value, _) => txt(show(value))
   | Ast.EStr(value, _) => txt(strLit(value))
-  | Ast.EInterp(parts, _) => txt(interpText(parts))
+  | Ast.EInterp(parts, _) => txt(cts->interpText(parts))
   | Ast.ERef(name, _) => txt(name)
-  | Ast.ECall(fn, args, origin, _) => callD(fn, args, origin)
-  | Ast.ELambda(params, body, _) => lambdaD(params, body)
-  | Ast.EPipe(_, _, _, _) => pipeD(e)
-  | Ast.EDo(exprs, _) => doD(exprs)
-  | Ast.ETernary(_, _, _, _) => ternaryD(e)
-  | Ast.ERecord(fields, spread, _) => recordD(fields, spread)
-  | Ast.EField(target, name, _, _) => cat([memberD(target), txt(".${name}")])
-  | Ast.EMatch(scrutinee, arms, _) => matchD(scrutinee, arms)
+  | Ast.ECall(fn, args, origin, _) => cts->callD(fn, args, origin)
+  | Ast.ELambda(params, body, _) => cts->lambdaD(params, body)
+  | Ast.EPipe(_, _, _, _) => cts->pipeD(e)
+  | Ast.EDo(exprs, _) => cts->doD(exprs)
+  | Ast.ETernary(_, _, _, _) => cts->ternaryD(e)
+  | Ast.ERecord(fields, spread, _) => cts->recordD(fields, spread)
+  | Ast.EField(target, name, _, _) => cat(
+      [cts->memberD(target), txt(".${name}")]
+    )
+  | Ast.EMatch(scrutinee, arms, _) => cts->matchD(scrutinee, arms)
   | Ast.ELetIn(name, _, annot, value, body, _) => switch discardedLetExprs(e) {
-      | Some(exprs) => doD(exprs)
+      | Some(exprs) => cts->doD(exprs)
       | None => let ann = switch annot {
           | Some(te) => " : ${showTypeExpr(te)}"
           | None => ""
         } in
-          letLikeD("let ${name}${ann}", value, body)
+          cts->letLikeD("let ${name}${ann}", value, body)
     }
-  | Ast.ELetBind(param, _, monad, value, body, _) => letLikeD(
-      letBindHead(monad, param),
+  | Ast.ELetBind(param, _, monad, value, body, _) => cts->letLikeD(
+      cts->letBindHead(monad, param),
       value,
       body
     )
-  | Ast.ELoop(params, body, _) => loopD(params, body)
+  | Ast.ELoop(params, body, _) => cts->loopD(params, body)
   | Ast.ERecur(args, _) => cat(
-      [txt("recur"), bracketed("(", ")", args |> map(exprD))]
+      [txt("recur"), bracketed("(", ")", args |> map(x => cts->exprD(x)))]
     )
-  | Ast.ETuple(elements, _) => bracketed("(", ")", elements |> map(exprD))
-  | Ast.EArr(elements, _) => bracketed("[", "]", elements |> map(seqElemD))
-  | Ast.EList(elements, _) => bracketed("@{", "}", elements |> map(seqElemD))
-  | Ast.ESet(elements, _) => bracketed("#{", "}", elements |> map(seqElemD))
+  | Ast.ETuple(elements, _) => bracketed(
+      "(",
+      ")",
+      elements |> map(x => cts->exprD(x))
+    )
+  | Ast.EArr(elements, _) => bracketed(
+      "[",
+      "]",
+      elements |> map(el => cts->seqElemD(el))
+    )
+  | Ast.EList(elements, _) => bracketed(
+      "@{",
+      "}",
+      elements |> map(el => cts->seqElemD(el))
+    )
+  | Ast.ESet(elements, _) => bracketed(
+      "#{",
+      "}",
+      elements |> map(el => cts->seqElemD(el))
+    )
   | Ast.EMap(entries, _) => braced(
       "#{",
       "}",
-      entries |> map(en => cat([exprD(en.key), txt(": "), exprD(en.value)]))
+      entries
+        |> map(en => cat([cts->exprD(en.key), txt(": "), cts->exprD(en.value)]))
     )
 }
 
@@ -950,3 +1335,6 @@ export let importStmtD = (names, from) =>
 
 export let importNsStmtD = (alias, from) =>
   txt("import * as ${alias} from ${strLit(from)}")
+
+/// Leading comments print above the node, trailing ones inline after it.
+export let exprD = (cts, e) => withComments(cts, exprSpan(e), cts->exprRaw(e))

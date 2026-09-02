@@ -66,6 +66,7 @@ import {
   indent,
   join,
   line,
+  lineSuffix,
   render,
   seq,
   softline,
@@ -421,7 +422,10 @@ const leadingDocs = (node: Expr | Stmt | Ctor): Doc[] => {
  */
 const trailingDocs = (node: Expr | Stmt | Ctor): Doc[] => {
   const cs = TRAILING.get(node);
-  return cs ? cs.flatMap((c) => [txt(` ${c.text}`), breakParent]) : [];
+  // `lineSuffix`, not plain text: the comment has to print after whatever
+  // separator the enclosing list adds. Emitted here it produced `x // c,` —
+  // the comma inside the comment, and output that no longer parses.
+  return cs ? cs.flatMap((c) => [lineSuffix(txt(` ${c.text}`)), breakParent]) : [];
 };
 
 const withComments = (node: Expr | Stmt | Ctor, doc: Doc): Doc => {

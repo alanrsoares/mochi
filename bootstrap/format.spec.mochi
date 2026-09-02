@@ -2,8 +2,10 @@ import { assertEq, test, testEach } from "@mochi/test"
 import * as Ast from "./ast.mochi"
 import { render } from "./doc.mochi"
 import {
+  commentsForExpr,
   escStrBody,
   exprD,
+  noComments,
   externStmt,
   importNsStmtD,
   importStmtD,
@@ -156,9 +158,24 @@ test("strLit wraps and escapes", () => assertEq(strLit("a\"b"), "\"a\\\"b\""))
 // unary calls, operator sections, `>>`, labeled calls) is not listed here —
 // those cases arrive with the re-fold slice.
 let exprText = src => switch firstStmt("let value = ${src}") {
-  | Ok(Some(Ast.SLet(_, _, _, value, _, _, _))) => render(exprD(value), WIDTH)
+  | Ok(Some(Ast.SLet(_, _, _, value, _, _, _))) => render(
+      exprD(noComments, value),
+      WIDTH
+    )
   | _ => "unexpected shape"
 }
+
+// Comments live in the source, not the AST — the printer re-attaches them by
+// span, so the table is built from the same text the parser saw.
+let commentedText = src =>
+  let wrapped = "let value = ${src}" in
+    switch firstStmt(wrapped) {
+      | Ok(Some(Ast.SLet(_, _, _, value, _, _, _))) => render(
+          exprD(commentsForExpr(wrapped, value), value),
+          WIDTH
+        )
+      | _ => "unexpected shape"
+    }
 
 testEach("an expression round-trips", [
   "42",
@@ -254,3 +271,21 @@ test("an overflowing pipe chain breaks one stage per line", () =>
       "someInitialValue |> firstTransformation |> secondTransformation |> theThirdLongStage"
     )
   ))
+
+// --- comments ----------------------------------------------------------------
+
+test("an own-line comment leads the node it precedes", () =>
+  assertEq("f(\n  // why\n  x\n)", commentedText("f(\n  // why\n  x\n)")))
+
+test("a trailing comment stays on the line of the node it follows", () =>
+  assertEq("f(\n  x, // why\n  y\n)", commentedText("f(\n  x, // why\n  y\n)")))
+
+// The blank line keeps the line's indentation, exactly as the TS printer does.
+test("a blank line after a comment survives", () =>
+  assertEq("f(\n  // why\n  \n  x\n)", commentedText("f(\n  // why\n\n  x\n)")))
+
+test("a comment inside a string literal is not a comment", () =>
+  assertEq("\"a // b\"", commentedText("\"a // b\"")))
+
+test("no comments in source leaves the layout untouched", () =>
+  assertEq(exprText("f(x, y)"), commentedText("f(x, y)")))
