@@ -108,7 +108,7 @@ export type TypeExpr =
   | TyUnion(members: [TypeExpr], span: Span)
 
 export type CtorField = { name: Option<string>, fieldType: TypeExpr }
-type Ctor = { name: string, fields: [CtorField] }
+export type Ctor = { name: string, fields: [CtorField], span: Span }
 export type AliasField = { name: string, fieldType: TypeExpr, optional: bool }
 
 export type Stmt =

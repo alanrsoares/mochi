@@ -68,7 +68,7 @@ type ParamAnnots = { generics: string, params: [Option<string>] }
 /// locally and still unify structurally with the real AST values.
 type CtorFieldLike = { name: Option<string>, fieldType: Ast.TypeExpr }
 
-type CtorLike = { name: string, fields: [CtorFieldLike] }
+type CtorLike = { name: string, fields: [CtorFieldLike], span: Ast.Span }
 
 type GenOpts = {
   annotateLet: Option<string -> Ast.Expr -> Option<string> >,

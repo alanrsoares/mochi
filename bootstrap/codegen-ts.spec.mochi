@@ -32,6 +32,10 @@ import {
   tRecord
 } from "./types.mochi"
 
+// Hand-built ctor fixtures need the span real ones carry (ADR 0025 anchors
+// comments on it); the value itself is never read here.
+let zeroSpan = { start: 0, end: 0 }
+
 let sp = { start: 0, end: 0 }
 
 /// `type Light = Red | Green`
@@ -41,7 +45,10 @@ test("a nullary variant renders as a tagged union", () =>
     typeDecl(
       "Light",
       [],
-      [{ name: "Red", fields: [] }, { name: "Green", fields: [] }],
+      [
+        { name: "Red", fields: [], span: zeroSpan },
+        { name: "Green", fields: [], span: zeroSpan }
+      ],
       #{},
       #{}
     )
@@ -57,7 +64,8 @@ test("a parameterised variant scopes its letters", () =>
       [
         {
           name: "Wrap",
-          fields: [{ name: Some("value"), fieldType: Ast.TyName("a", sp) }]
+          fields: [{ name: Some("value"), fieldType: Ast.TyName("a", sp) }],
+          span: zeroSpan
         }
       ],
       #{},
@@ -74,7 +82,8 @@ test("an unnamed ctor field takes a positional key", () =>
       [
         {
           name: "Wrap",
-          fields: [{ name: None, fieldType: Ast.TyName("a", sp) }]
+          fields: [{ name: None, fieldType: Ast.TyName("a", sp) }],
+          span: zeroSpan
         }
       ],
       #{},
@@ -249,7 +258,8 @@ test("ctorFactoryTs types a parameterised factory", () =>
       ["a"],
       {
         name: "Wrap",
-        fields: [{ name: Some("value"), fieldType: Ast.TyName("a", sp) }]
+        fields: [{ name: Some("value"), fieldType: Ast.TyName("a", sp) }],
+        span: zeroSpan
       },
       #{},
       #{}
@@ -259,7 +269,13 @@ test("ctorFactoryTs types a parameterised factory", () =>
 test("ctorFactoryTs leaves a nullary type unparameterised", () =>
   assertEq(
     { generics: "", paramTypes: [], ret: "Light", retMono: "Light" },
-    ctorFactoryTs("Light", [], { name: "Red", fields: [] }, #{}, #{})
+    ctorFactoryTs(
+      "Light",
+      [],
+      { name: "Red", fields: [], span: zeroSpan },
+      #{},
+      #{}
+    )
   ))
 
 // ---- binding types (ADR 0037) ----------------------------------------------

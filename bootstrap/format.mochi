@@ -238,7 +238,16 @@ export type Comments = {
 
 export let noComments : Comments = { leading: #{}, trailing: #{} }
 
-let spanKey = (sp: Ast.Span) => "${show(sp.start)}:${show(sp.end)}"
+/// A statement and its expression can carry the SAME span (`test(…)` as an
+/// expression statement), and TypeScript tells them apart by node identity.
+/// The kind tag restores that: without it the comment attaches once but prints
+/// twice, at the statement and again at the expression.
+let spanKey = (kind, sp: Ast.Span) =>
+  "${kind}:${show(sp.start)}:${show(sp.end)}"
+
+let STMT = "s"
+let EXPR = "e"
+let CTOR = "c"
 
 let atKey = (table, key) => switch Map.get(key, table) {
   | Some(cs) => cs
@@ -326,7 +335,7 @@ let seqElemExpr = el => switch el {
 
 let exprAnchors = e =>
   Array.append(
-    exprSpan(e),
+    { kind: EXPR, sp: exprSpan(e) },
     switch e {
       | Ast.ECall(fn, args, _, _) => Array.concat(
           exprAnchors(fn),
@@ -410,8 +419,8 @@ let exprAnchors = e =>
 
 /// Sorted so the tightest enclosing anchor wins: by start ascending, then by
 /// end DESCENDING, which puts the outermost node first among equal starts.
-let anchorBefore = (a: Ast.Span, b: Ast.Span) =>
-  a.start == b.start ? a.end > b.end : a.start < b.start
+let anchorBefore = (a, b) =>
+  a.sp.start == b.sp.start ? a.sp.end > b.sp.end : a.sp.start < b.sp.start
 
 let insertAnchor = (sp, sorted) => switch sorted {
   | [] => [sp]
@@ -427,13 +436,13 @@ let sortAnchors = spans =>
 /// largest `end` at or before the comment's start, with no newline between.
 let trailedBy = (anchors, c: Comment, src, best) => switch anchors {
   | [] => best
-  | [sp, ...rest] => let fits = sp.end <= c.start && !Str.contains(
+  | [sp, ...rest] => let fits = sp.sp.end <= c.start && !Str.contains(
       "\n",
-      Str.slice(sp.end, c.start, src)
+      Str.slice(sp.sp.end, c.start, src)
     ) in
     let better = fits && switch best {
       | None => true
-      | Some(b) => sp.end > b.end
+      | Some(b) => sp.sp.end > b.sp.end
     } in
       trailedBy(rest, c, src, better ? Some(sp) : best)
 }
@@ -442,7 +451,7 @@ let trailedBy = (anchors, c: Comment, src, best) => switch anchors {
 /// starting at or after the comment ends (the sort puts outermost first).
 let leadTarget = (anchors, c: Comment) => switch anchors {
   | [] => None
-  | [sp, ...rest] => sp.start >= c.end ? Some(sp) : leadTarget(rest, c)
+  | [a, ...rest] => a.sp.start >= c.end ? Some(a) : leadTarget(rest, c)
 }
 
 type Attached = { table: Comments, tail: [Comment] }
@@ -452,17 +461,17 @@ type Attached = { table: Comments, tail: [Comment] }
 let attachOne = (anchors, src, c: Comment, tbl: Comments) =>
   let trailed = c.trailing ? trailedBy(anchors, c, src, None) : None in
     switch trailed {
-      | Some(sp) => Some(
+      | Some(a) => Some(
           {
             leading: tbl.leading,
-            trailing: pushAt(spanKey(sp), c, tbl.trailing)
+            trailing: pushAt(spanKey(a.kind, a.sp), c, tbl.trailing)
           }
         )
       | None => switch leadTarget(anchors, c) {
           | None => None
-          | Some(sp) => Some(
+          | Some(a) => Some(
               {
-                leading: pushAt(spanKey(sp), c, tbl.leading),
+                leading: pushAt(spanKey(a.kind, a.sp), c, tbl.leading),
                 trailing: tbl.trailing
               }
             )
@@ -493,33 +502,33 @@ export let commentsForExpr = (src, e) =>
 
 /// Leading comment lines for a node: each on its own line, with a blank line
 /// kept after any comment the source separated from what follows.
-let leadingDocs = (cts: Comments, sp) =>
+let leadingDocs = (cts: Comments, kind, sp) =>
   Array.flatMap(
     (c: Comment) =>
       c.blankAfter
         ? [txt(c.text), hardline, hardline]
         : [txt(c.text), hardline],
-    atKey(cts.leading, spanKey(sp))
+    atKey(cts.leading, spanKey(kind, sp))
   )
 
 /// A trailing comment prints ` // text` after the node, then `breakParent` so
 /// whatever follows lands on a new line (otherwise it would be commented out)
 /// without emitting a newline here — the enclosing group supplies it.
-let trailingDocs = (cts: Comments, sp) =>
+let trailingDocs = (cts: Comments, kind, sp) =>
   Array.flatMap(
     // `lineSuffix`, not plain text: the comment must print after whatever
     // separator the enclosing list adds, else `f(x, // c)` comes back as
     // `f(x // c,)` — the comma inside the comment, output that no longer parses.
     (c: Comment) => [lineSuffix(txt(" ${c.text}")), breakParent],
-    atKey(cts.trailing, spanKey(sp))
+    atKey(cts.trailing, spanKey(kind, sp))
   )
 
-let hasLead = (cts: Comments, sp) =>
-  Array.length(atKey(cts.leading, spanKey(sp))) > 0
+let hasLead = (cts: Comments, kind, sp) =>
+  Array.length(atKey(cts.leading, spanKey(kind, sp))) > 0
 
-let withComments = (cts: Comments, sp, doc) =>
-  let lead = leadingDocs(cts, sp) in
-  let trail = trailingDocs(cts, sp) in
+let withComments = (cts: Comments, kind, sp, doc) =>
+  let lead = leadingDocs(cts, kind, sp) in
+  let trail = trailingDocs(cts, kind, sp) in
     Array.length(lead) == 0 && Array.length(trail) == 0
       ? doc
       : cat([...lead, doc, ...trail])
@@ -956,7 +965,7 @@ let plainLambdaD = (cts, params, body) =>
               | Ast.EMatch(_, _, _) when // A `switch` body brings its own braces, so it hugs the arrow instead of
 // dropping to an indented line — unless a comment leads it, which has to
 // stay on its own line.
-!hasLead(cts, exprSpan(body)) => cat(
+!hasLead(cts, EXPR, exprSpan(body)) => cat(
                   [head, txt(" "), cts->exprD(body)]
                 )
               | _ => group(cat([head, indent(cat([line, cts->exprD(body)]))]))
@@ -972,7 +981,7 @@ let condD = (cts, c) => switch c {
 /// A commented branch drops to its own indented line, so the comment stays
 /// own-line and the layout stays idempotent.
 let branchD = (cts, marker, e) =>
-  hasLead(cts, exprSpan(e))
+  hasLead(cts, EXPR, exprSpan(e))
     ? cat([txt(marker), indent(cat([hardline, cts->exprD(e)]))])
     : cat([txt("${marker} "), cts->exprD(e)])
 
@@ -990,7 +999,7 @@ let ternaryRestParts = (cts, arms, i) => switch Array.get(i, arms) {
   | None => []
   | Some(a) => [
       line,
-      hasLead(cts, exprSpan(a.cond))
+      hasLead(cts, EXPR, exprSpan(a.cond))
         ? cat([txt(":"), indent(cat([hardline, cts->condD(a.cond)]))])
         : cat([txt(": "), cts->condD(a.cond)]),
       line,
@@ -1054,10 +1063,10 @@ let letLikeD = (cts, head, value, body) =>
       cat(
         [
           txt("${head} = "),
-          ...leadingDocs(cts, exprSpan(value)),
+          ...leadingDocs(cts, EXPR, exprSpan(value)),
           cts->exprRaw(value),
           txt(" in"),
-          ...trailingDocs(cts, exprSpan(value)),
+          ...trailingDocs(cts, EXPR, exprSpan(value)),
           cont
         ]
       )
@@ -1103,7 +1112,7 @@ let matchArmD = (cts, a: Ast.MatchArm) =>
     | None => ""
   } in
   let head = txt("| ${pattern(a.pattern)}${guard} =>") in
-    hasLead(cts, exprSpan(a.body))
+    hasLead(cts, EXPR, exprSpan(a.body))
       ? cat([head, indent(cat([hardline, cts->exprD(a.body)]))])
       : cat([head, txt(" "), indent(cts->exprD(a.body))])
 
@@ -1313,18 +1322,18 @@ let exprRaw = (cts, e) => switch e {
 let aliasFieldText = (f: Ast.AliasField) =>
   "${f.name}${f.optional ? "?" : ""}: ${showTypeExpr(f.fieldType)}"
 
-let ctorArms = (ctors, i) => switch Array.get(i, ctors) {
+let ctorArms = (cts: Comments, ctors, i) => switch Array.get(i, ctors) {
   | None => []
   | Some(c) => Array.prepend(
-      cat([hardline, txt("| ${ctorText(c)}")]),
-      ctorArms(ctors, i + 1)
+      cat([hardline, withComments(cts, CTOR, c.span, txt("| ${ctorText(c)}"))]),
+      cts->ctorArms(ctors, i + 1)
     )
 }
 
 /// A Doc rather than a flat string: a record alias with many or long fields must
 /// break one per line like a record literal does, and a comment between
 /// constructors needs a slot to print a leading line into.
-export let typeStmtD = (name, params, ctors, alias, aliasType) =>
+export let typeStmtD = (cts: Comments, name, params, ctors, alias, aliasType) =>
   let head = "type ${name}${generics(params)}" in
     switch alias {
       | Some(fields) => cat(
@@ -1337,7 +1346,7 @@ export let typeStmtD = (name, params, ctors, alias, aliasType) =>
           | Some(te) => txt("${head} = ${showTypeExpr(te)}")
           | None => Array.length(ctors) == 0
               ? txt("extern ${head}")
-              : cat([txt("${head} ="), indent(cat(ctorArms(ctors, 0)))])
+              : cat([txt("${head} ="), indent(cat(cts->ctorArms(ctors, 0)))])
         }
     }
 
@@ -1356,7 +1365,8 @@ export let importNsStmtD = (alias, from) =>
   txt("import * as ${alias} from ${strLit(from)}")
 
 /// Leading comments print above the node, trailing ones inline after it.
-export let exprD = (cts, e) => withComments(cts, exprSpan(e), cts->exprRaw(e))
+export let exprD = (cts, e) =>
+  withComments(cts, EXPR, exprSpan(e), cts->exprRaw(e))
 
 // --- statements + program ----------------------------------------------------
 
@@ -1404,7 +1414,7 @@ let stmtDoc = (cts: Comments, stmts, i, src) => switch Array.get(i, stmts) {
           doc: cat(
             [
               txt(expPrefix(exported)),
-              typeStmtD(name, params, ctors, alias, aliasType)
+              cts->typeStmtD(name, params, ctors, alias, aliasType)
             ]
           ),
           consumed: 1
@@ -1484,7 +1494,7 @@ let blankBetween = gap => blankBetweenFrom(gap, 0, false)
 /// comment block rather than inside it.
 let anchorStart = (cts: Comments, s) =>
   let sp = stmtSpan(s) in
-    switch Array.get(0, atKey(cts.leading, spanKey(sp))) {
+    switch Array.get(0, atKey(cts.leading, spanKey(STMT, sp))) {
       | Some(c) => c.start
       | None => sp.start
     }
@@ -1511,7 +1521,7 @@ let stmtParts = (cts: Comments, stmts, i, src, prevEnd, acc) => switch Array.get
         Some(end),
         Array.concat(
           acc,
-          Array.append(withComments(cts, stmtSpan(cur), printed.doc), sep)
+          Array.append(withComments(cts, STMT, stmtSpan(cur), printed.doc), sep)
         )
       )
 }
@@ -1545,10 +1555,13 @@ let programDoc = (cts: Comments, stmts, src, tail) =>
 /// it, so a comment binds to the tightest node that follows (or precedes) it.
 let stmtAnchors = s =>
   Array.append(
-    stmtSpan(s),
+    { kind: STMT, sp: stmtSpan(s) },
     switch s {
       | Ast.SLet(_, _, _, value, _, _, _) => exprAnchors(value)
       | Ast.SExpr(value, _) => exprAnchors(value)
+      | Ast.SType(_, _, ctors, _, _, _, _, _) =>
+        // A comment between two constructors anchors to the one it precedes.
+        ctors |> map((c: Ast.Ctor) => { kind: CTOR, sp: c.span })
       | _ => []
     }
   )

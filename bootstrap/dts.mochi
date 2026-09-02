@@ -181,7 +181,11 @@ let qualifyField = (f: Ast.CtorField, qualify) =>
   { name: f.name, fieldType: qualifyTe(f.fieldType, qualify) }
 
 let qualifyCtor = (c: Ast.Ctor, qualify) =>
-  { name: c.name, fields: c.fields |> map(f => qualifyField(f, qualify)) }
+  {
+    name: c.name,
+    fields: c.fields |> map(f => qualifyField(f, qualify)),
+    span: c.span
+  }
 
 let qualifyAliasField = (f: Ast.AliasField, qualify) =>
   {

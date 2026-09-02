@@ -1488,13 +1488,16 @@ let parseCtorField = (toks, pos) =>
       : parseTypeExpr(toks, pos)
         |> Result.map(((t, p)) => ({ name: None, fieldType: t }, p))
 
+// `span` covers the constructor itself, so a comment written between two
+// constructors anchors to the one it precedes instead of migrating to the next
+// statement (the formatter's comment table keys on spans).
 let parseCtor = (toks, pos) =>
   let? (nm, p) = expectId(toks, pos) in
     tokAt(toks, p).tok == TLparen
       ? let? (fields, p2) = listUntil(TRparen, parseCtorField, toks, p + 1) in
       let? p3 = expectTok(TRparen, toks, p2) in
-        Ok(({ name: nm.name, fields }, p3))
-      : Ok(({ name: nm.name, fields: [] }, p))
+        Ok(({ name: nm.name, fields, span: toEnd(nm.span, toks, p3) }, p3))
+      : Ok(({ name: nm.name, fields: [], span: nm.span }, p))
 
 let ctorsLoop = (toks, pos, acc) =>
   let? (c, p) = toks->parseCtor(pos) in

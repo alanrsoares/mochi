@@ -285,6 +285,7 @@ const cTy = (t: TypeExpr): Canon => {
 const cCtor = (c: Ctor): Canon => ({
   name: c.name,
   fields: c.fields.map((f) => ({ name: f.name, type: cTy(f.type) })),
+  span: cSpan(c.span),
 });
 
 const cAliasField = (f: AliasField): Canon => ({
@@ -557,6 +558,7 @@ const aTy = (t: Al): Canon => {
 const aCtor = (c: Al): Canon => ({
   name: c.name,
   fields: c.fields.map((f: Al) => ({ name: opt(f.name, (n) => n), type: aTy(f.fieldType) })),
+  span: c.span,
 });
 
 const A_STMT: Record<string, (s: Al) => Canon> = {

@@ -68,7 +68,7 @@ testEach("an extern statement round-trips", [
 
 let typeText = src => switch firstStmt(src) {
   | Ok(Some(Ast.SType(name, params, ctors, alias, aliasType, _, _, _))) => render(
-      typeStmtD(name, params, ctors, alias, aliasType),
+      typeStmtD(noComments, name, params, ctors, alias, aliasType),
       WIDTH
     )
   | _ => "unexpected shape"
