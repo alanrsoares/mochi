@@ -220,6 +220,7 @@ const CTOR_MODULES = [
   "schemes",
   "scc",
   "lexer",
+  "str-scan",
   "doc",
   "show-type-expr",
 ];

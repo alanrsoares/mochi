@@ -4,9 +4,9 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { compile } from "@mochi/compiler/compile";
 import { type Located, lex } from "@mochi/compiler/lexer";
 import { repoRoot } from "@mochi/test-support";
+import { bootstrapModuleJs } from "@mochi/test-support/bootstrap";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 
@@ -14,10 +14,10 @@ const root = repoRoot(import.meta.url);
 
 // Compile the mochi lexer once; strip the module scaffolding so it evals in a
 // plain function scope (same harness as guards.spec.ts, plus `export`).
-const lexerAlSrc = readFileSync(join(root, "bootstrap/lexer.mochi"), "utf8");
-const js = unwrapOk(compile(lexerAlSrc))
-  .replace(/^import .*$/m, "")
-  .replace(/^export /gm, "");
+// The graph-aware harness, not single-file `compile`: since the pure source
+// scanners moved to `str-scan.mochi` (shared with the formatter), the lexer has
+// a real import, and an open-world single-file compile cannot bind it.
+const js = bootstrapModuleJs("bootstrap/lexer.mochi");
 
 // mochi runtime shapes: variants are `_tag`-tagged records, Option is Some/None.
 type AlTok = { _tag: string; value?: unknown; raw?: string };

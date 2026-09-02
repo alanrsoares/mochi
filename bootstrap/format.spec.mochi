@@ -231,6 +231,7 @@ testEach("an expression round-trips", [
   "f(~tone)",
   "f(~tone=\"amber\", ~size=3)",
   "(a ++ b)->f(c)",
+  "src->compile() |> Result.mapErr(f)",
   "switch x { | Some(n) => n | None => 0 }",
   "switch x { | Some(n) when n == 0 => n | _ => 0 }",
   "loop (i = 0) { recur(i) }",

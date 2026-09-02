@@ -1,3 +1,8 @@
+import {
+  findHoleEnd,
+  skipLineCommentTo,
+  skipStringLiteral
+} from "./str-scan.mochi"
 // bootstrap/lexer.mochi — the mochi lexer, in mochi. Ported from src/lexer.ts
 // (the spec); test/bootstrap-lexer.spec.ts diffs the two token streams over
 // every .mochi file in the repo — including this one.
@@ -173,61 +178,6 @@ let escChar = n => switch n { | "n" => "\n" | "t" => "\t" | c => c }
 type TPart =
   | PLit(value: string)
   | PHole(start: number, end: number)
-
-// Skip to (and including) a "..." literal's closing quote, starting at its
-// opening quote `i`. Descends into any `${...}` holes (which may themselves
-// hold strings/holes) so their braces and quotes don't confuse a caller only
-// counting braces. Returns the index just past the closing quote, or None if
-// unterminated. Used only by `findHoleEnd`'s prescan — decoding happens
-// later, in `scanTemplate`.
-let skipStrLoop = (src, j0) =>
-  loop (j = j0) {
-    switch Str.get(j, src) {
-      | None => None
-      | Some("\"") => Some(j + 1)
-      | Some("\\") => switch Str.get(j + 1, src) {
-          | Some(_) => recur(j + 2)
-          | None => recur(j + 1)
-        }
-      | Some("$") when Str.get(j + 1, src) |> Option.contains("{") => switch findHoleEnd(src, j + 2) {
-          | Some(hEnd) => recur(hEnd)
-          | None => None
-        }
-      | Some(_) => recur(j + 1)
-    }
-  }
-export let skipStringLiteral = (src, i) => skipStrLoop(src, i + 1)
-
-// Skip to (not past) the next newline, or to end of source.
-let skipLineCommentTo = (src, j) => switch Str.get(j, src) {
-  | None => j
-  | Some("\n") => j
-  | Some(_) => skipLineCommentTo(src, j + 1)
-}
-
-// Find the index just past the `}` that closes a `${` hole whose contents
-// start at `start` (right after the `${`). Tracks brace depth so a nested
-// record literal or `switch` inside the hole doesn't close it early, and
-// descends into nested string literals (which may carry their own holes).
-// Mutually recursive with `skipStringLiteral`.
-let findHoleLoop = (src, j0, depth0) =>
-  loop (j = j0, depth = depth0) {
-    switch Str.get(j, src) {
-      | None => None
-      | Some("\"") => switch skipStringLiteral(src, j) {
-          | Some(stop) => recur(stop, depth)
-          | None => None
-        }
-      | Some("/") when Str.get(j + 1, src) |> Option.contains("/") => recur(
-          skipLineCommentTo(src, j),
-          depth
-        )
-      | Some("{") => recur(j + 1, depth + 1)
-      | Some("}") => depth == 1 ? Some(j + 1) : recur(j + 1, depth - 1)
-      | Some(_) => recur(j + 1, depth)
-    }
-  }
-let findHoleEnd = (src, start) => findHoleLoop(src, start, 1)
 
 // A literal chunk's token kind depends only on position: the sole chunk of a
 // hole-free literal stays a plain `str`; otherwise first/middle/last bracket

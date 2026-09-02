@@ -36,6 +36,7 @@ const MODULES = [
   "scc",
   "plugins/jsx",
   "extensions",
+  "str-scan",
   "lexer",
   "parser",
   "check",

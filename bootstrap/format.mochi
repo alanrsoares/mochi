@@ -27,10 +27,12 @@ import {
   join,
   line,
   lineSuffix,
+  render,
   softline,
-  txt
+  txt,
+  verbatim
 } from "./doc.mochi"
-import { skipStringLiteral } from "./lexer.mochi"
+import { skipStringLiteral } from "./str-scan.mochi"
 import { showTypeExpr } from "./show-type-expr.mochi"
 
 /// `JSON.stringify` escaping, plus `${` — which would otherwise reopen an
@@ -57,6 +59,8 @@ let escFrom = (chars, i, acc) => switch Array.get(i, chars) {
 export let escStrBody = s => escFrom(Str.chars(s), 0, "")
 
 export let strLit = s => "\"${escStrBody(s)}\""
+
+let WIDTH = 80
 
 // --- patterns ----------------------------------------------------------------
 
@@ -254,14 +258,17 @@ let lineEndFrom = (src, i) => switch Str.get(i, src) {
   | Some(_) => lineEndFrom(src, i + 1)
 }
 
-/// `Str.trim` without touching the leading `//`.
+/// Trailing horizontal whitespace, by CHAR CODE: mochi string literals have no
+/// `\r` escape (the lexer's `escChar` knows `\n` and `\t` only), so a literal
+/// "\r" would be the letter `r` and this would eat the last letter of every
+/// comment ending in one. Space 32, tab 9, carriage return 13.
 let trimEndFrom = (s, n) =>
   n == 0
     ? ""
-    : switch Str.get(n - 1, s) {
-      | Some(" ") => trimEndFrom(s, n - 1)
-      | Some("\t") => trimEndFrom(s, n - 1)
-      | Some("r") => trimEndFrom(s, n - 1)
+    : switch Str.codeAt(n - 1, s) {
+      | Some(32) => trimEndFrom(s, n - 1)
+      | Some(9) => trimEndFrom(s, n - 1)
+      | Some(13) => trimEndFrom(s, n - 1)
       | _ => Str.slice(0, n, s)
     }
 
@@ -282,7 +289,13 @@ let scanComments = (src, i, lineHasToken, acc) => switch Str.get(i, src) {
   | Some("\n") => scanComments(src, i + 1, false, acc)
   | Some(" ") => scanComments(src, i + 1, lineHasToken, acc)
   | Some("\t") => scanComments(src, i + 1, lineHasToken, acc)
-  | Some("r") => scanComments(src, i + 1, lineHasToken, acc)
+  | Some(_) when // Carriage return by code: see `trimEndFrom` — mochi cannot spell "\r".
+Str.codeAt(i, src) == Some(13) => scanComments(
+      src,
+      i + 1,
+      lineHasToken,
+      acc
+    )
   | Some("\"") => switch skipStringLiteral(src, i) {
       | Some(end) => scanComments(src, end, true, acc)
       | None => scanComments(src, i + 1, true, acc)
@@ -432,36 +445,42 @@ let leadTarget = (anchors, c: Comment) => switch anchors {
   | [sp, ...rest] => sp.start >= c.end ? Some(sp) : leadTarget(rest, c)
 }
 
+type Attached = { table: Comments, tail: [Comment] }
+
+/// `None` when the comment has no anchor at all (it sits past the last node) —
+/// the program printer emits those after the final statement.
 let attachOne = (anchors, src, c: Comment, tbl: Comments) =>
   let trailed = c.trailing ? trailedBy(anchors, c, src, None) : None in
     switch trailed {
-      | Some(sp) => {
-          leading: tbl.leading,
-          trailing: pushAt(spanKey(sp), c, tbl.trailing)
-        }
+      | Some(sp) => Some(
+          {
+            leading: tbl.leading,
+            trailing: pushAt(spanKey(sp), c, tbl.trailing)
+          }
+        )
       | None => switch leadTarget(anchors, c) {
-          | None =>
-            // Past the last node: no anchor. The statement printer emits these
-            // after the final statement; the expression printer drops them.
-            tbl
-          | Some(sp) => {
-              leading: pushAt(spanKey(sp), c, tbl.leading),
-              trailing: tbl.trailing
-            }
+          | None => None
+          | Some(sp) => Some(
+              {
+                leading: pushAt(spanKey(sp), c, tbl.leading),
+                trailing: tbl.trailing
+              }
+            )
         }
     }
-
-let attachFrom = (comments, i, anchors, src, tbl) => switch Array.get(i, comments) {
-  | None => tbl
+let attachFrom = (comments, i, anchors, src, acc: Attached) => switch Array.get(i, comments) {
+  | None => acc
   | Some(c) => attachFrom(
       comments,
       i + 1,
       anchors,
       src,
-      attachOne(anchors, src, c, tbl)
+      switch attachOne(anchors, src, c, acc.table) {
+        | Some(table) => { table, tail: acc.tail }
+        | None => { table: acc.table, tail: Array.append(c, acc.tail) }
+      }
     )
 }
-
 /// Build the table for one expression: scan the source, anchor every node.
 export let commentsForExpr = (src, e) =>
   attachFrom(
@@ -469,8 +488,8 @@ export let commentsForExpr = (src, e) =>
     0,
     sortAnchors(exprAnchors(e)),
     src,
-    noComments
-  )
+    { table: noComments, tail: [] }
+  ).table
 
 /// Leading comment lines for a node: each on its own line, with a blank line
 /// kept after any comment the source separated from what follows.
@@ -1212,7 +1231,7 @@ let pipeD = (cts, e) => switch e {
         | [head, ...rest] => group(
             cat(
               [
-                cts->operandD(head),
+                cts->pipeLeftD(head, PIPE_PREC),
                 indent(
                   cat(
                     rest |> map(s => cat([line, txt("|> "), cts->operandD(s)]))
@@ -1338,3 +1357,238 @@ export let importNsStmtD = (alias, from) =>
 
 /// Leading comments print above the node, trailing ones inline after it.
 export let exprD = (cts, e) => withComments(cts, exprSpan(e), cts->exprRaw(e))
+
+// --- statements + program ----------------------------------------------------
+
+let expPrefix = exported => exported ? "export " : ""
+
+/// A field access `<tmp>.<name>` reading the given destructuring temp.
+let fieldOf = (e, tmp) => switch e {
+  | Ast.EField(Ast.ERef(target, _), name, _, _) => target == tmp
+      ? Some(name)
+      : None
+  | _ => None
+}
+
+/// How many of the `$d` temp's shorthand field-access lets follow it, so the
+/// group re-folds into a single `let { x, y } = e`.
+let destructureFieldsFrom = (stmts, j, tmp, acc) => switch Array.get(j, stmts) {
+  | Some(Ast.SLet(name, _, _, value, _, _, _)) => switch fieldOf(value, tmp) {
+      | Some(f) =>
+        // Shorthand only: `let { x }` re-folds, `let { x: y }` does not.
+        f == name
+          ? destructureFieldsFrom(stmts, j + 1, tmp, Array.append(f, acc))
+          : acc
+      | None => acc
+    }
+  | _ => acc
+}
+
+type StmtDoc = { doc: Doc, consumed: number }
+
+/// Print one statement, re-folding a `$d` destructuring temp plus its
+/// field-access lets back into one `let { … } = e`. Reports how many
+/// statements it consumed.
+let stmtDoc = (cts: Comments, stmts, i, src) => switch Array.get(i, stmts) {
+  | None => { doc: txt(""), consumed: 1 }
+  | Some(s) => switch s {
+      | Ast.SImport(names, from, _) => {
+          doc: importStmtD(names, from),
+          consumed: 1
+        }
+      | Ast.SImportNs(alias, from, _) => {
+          doc: importNsStmtD(alias.name, from),
+          consumed: 1
+        }
+      | Ast.SType(name, params, ctors, alias, aliasType, exported, _, _) => {
+          doc: cat(
+            [
+              txt(expPrefix(exported)),
+              typeStmtD(name, params, ctors, alias, aliasType)
+            ]
+          ),
+          consumed: 1
+        }
+      | Ast.SExtern(name, _, params, te, module, imported, curried, exported, _, _) => {
+          doc: txt(
+            "${expPrefix(exported)}${externStmt(name, params, te, module, imported, curried)}"
+          ),
+          consumed: 1
+        }
+      | Ast.SError(sp) =>
+        // ADR 0045: the span covers every byte skipped during recovery, so
+        // re-emitting it verbatim is what makes `fmt` on a broken file never
+        // destroy code it could not parse. `verbatim`, not `txt`: the raw bytes
+        // stay opaque to the layout engine — no re-indent, no re-wrap.
+        { doc: verbatim(Str.slice(sp.start, sp.end, src)), consumed: 1 }
+      | Ast.SExpr(value, _) => { doc: cts->exprD(value), consumed: 1 }
+      | Ast.SLet(name, _, annot, value, exported, _, _) => Str.startsWith(
+          "$",
+          name
+        )
+          ? let fields = destructureFieldsFrom(stmts, i + 1, name, []) in
+            {
+              doc: cat(
+                [
+                  txt(
+                    "${expPrefix(exported)}let { ${Str.join(", ", fields)} } = "
+                  ),
+                  cts->exprD(value)
+                ]
+              ),
+              consumed: Array.length(fields) + 1
+            }
+          : let ann = switch annot {
+            | Some(te) => " : ${showTypeExpr(te)}"
+            | None => ""
+          } in
+            {
+              doc: cat(
+                [
+                  txt("${expPrefix(exported)}let ${name}${ann} = "),
+                  cts->exprD(value)
+                ]
+              ),
+              consumed: 1
+            }
+    }
+}
+
+let stmtSpan = s => switch s {
+  | Ast.SLet(_, _, _, _, _, _, sp) => sp
+  | Ast.SType(_, _, _, _, _, _, _, sp) => sp
+  | Ast.SExtern(_, _, _, _, _, _, _, _, _, sp) => sp
+  | Ast.SImport(_, _, sp) => sp
+  | Ast.SImportNs(_, _, sp) => sp
+  | Ast.SExpr(_, sp) => sp
+  | Ast.SError(sp) => sp
+}
+
+/// A blank separator between two statements: a newline, only whitespace, then
+/// another newline somewhere in the source gap. Any run of blank lines
+/// collapses to one; a doc comment is not whitespace, so `let a\n/// d\nlet b`
+/// reads as adjacent.
+let blankBetweenFrom = (s, i, seenNl) => switch Str.get(i, s) {
+  | None => false
+  | Some("\n") => seenNl || blankBetweenFrom(s, i + 1, true)
+  | Some(" ") => blankBetweenFrom(s, i + 1, seenNl)
+  | Some("\t") => blankBetweenFrom(s, i + 1, seenNl)
+  | Some("r") => blankBetweenFrom(s, i + 1, seenNl)
+  | Some(_) => blankBetweenFrom(s, i + 1, false)
+}
+
+let blankBetween = gap => blankBetweenFrom(gap, 0, false)
+
+/// Where a statement's rendering begins in source: its first leading comment
+/// when it has one, else its own token — so a kept blank line lands before the
+/// comment block rather than inside it.
+let anchorStart = (cts: Comments, s) =>
+  let sp = stmtSpan(s) in
+    switch Array.get(0, atKey(cts.leading, spanKey(sp))) {
+      | Some(c) => c.start
+      | None => sp.start
+    }
+
+let stmtParts = (cts: Comments, stmts, i, src, prevEnd, acc) => switch Array.get(i, stmts) {
+  | None => (acc, prevEnd)
+  | Some(cur) => let sep = switch prevEnd {
+      | None => []
+      | Some(pe) => blankBetween(Str.slice(pe, anchorStart(cts, cur), src))
+          ? [hardline, hardline]
+          : [hardline]
+    } in
+    let printed = cts->stmtDoc(stmts, i, src) in
+    let lastIdx = i + printed.consumed - 1 in
+    let end = switch Array.get(lastIdx, stmts) {
+      | Some(last) => stmtSpan(last).end
+      | None => 0
+    } in
+      stmtParts(
+        cts,
+        stmts,
+        i + printed.consumed,
+        src,
+        Some(end),
+        Array.concat(
+          acc,
+          Array.append(withComments(cts, stmtSpan(cur), printed.doc), sep)
+        )
+      )
+}
+
+/// Comments after the last statement have no node to attach to; they print
+/// after it, keeping a blank line if the source had one.
+let tailParts = (tail, src, prevEnd) => switch Array.get(0, tail) {
+  | None => []
+  | Some(first) => let sep = switch prevEnd {
+      | None => []
+      | Some(pe) => blankBetween(Str.slice(pe, first.start, src))
+          ? [hardline, hardline]
+          : [hardline]
+    } in
+      Array.append(
+        join(hardline, tail |> map((c: Comment) => txt(c.text))),
+        sep
+      )
+}
+
+let programDoc = (cts: Comments, stmts, src, tail) =>
+  let (parts, prevEnd) = stmtParts(cts, stmts, 0, src, None, []) in
+    cat(
+      Array.concat(
+        Array.concat(parts, tailParts(tail, src, prevEnd)),
+        [hardline]
+      )
+    )
+
+/// Every anchor in a program: each statement span plus every expression under
+/// it, so a comment binds to the tightest node that follows (or precedes) it.
+let stmtAnchors = s =>
+  Array.append(
+    stmtSpan(s),
+    switch s {
+      | Ast.SLet(_, _, _, value, _, _, _) => exprAnchors(value)
+      | Ast.SExpr(value, _) => exprAnchors(value)
+      | _ => []
+    }
+  )
+
+/// A comment inside an unparsable region is part of the bytes `SError` re-emits
+/// verbatim; attaching it too would print it twice.
+let inErrorSpanFrom = (stmts, i, c: Comment) => switch Array.get(i, stmts) {
+  | None => false
+  | Some(Ast.SError(sp)) => c.start >= sp.start && c.start < sp.end || inErrorSpanFrom(
+      stmts,
+      i + 1,
+      c
+    )
+  | Some(_) => inErrorSpanFrom(stmts, i + 1, c)
+}
+
+let inErrorSpan = (stmts, c: Comment) => inErrorSpanFrom(stmts, 0, c)
+
+/// `"use open"` is a directive, not a statement — the parser skips it, so the
+/// printer restores it verbatim.
+let hasOpenDirective = src => switch Array.get(0, Str.split("\n", Str.trim(src))) {
+  | Some(first) => Str.trim(first) == "\"use open\""
+  | None => false
+}
+
+/// Print an already-parsed program with comment and blank-line fidelity to `src`.
+export let formatProgram = (stmts, src) =>
+  let attached = attachFrom(
+    Array.filter(c => !inErrorSpan(stmts, c), collectComments(src)),
+    0,
+    sortAnchors(Array.flatMap(stmtAnchors, stmts)),
+    src,
+    { table: noComments, tail: [] }
+  ) in
+  let body = render(
+    programDoc(attached.table, stmts, src, attached.tail),
+    WIDTH
+  ) in
+    hasOpenDirective(src) ? "\"use open\"\n\n${body}" : body
+
+// The `lex` + `parseRecovering` + `formatProgram` composition lives in the
+// caller (the CLI), not here: this module prints an AST and stays independent
+// of the front end, so the differential specs can drive it directly.
