@@ -13,7 +13,6 @@ import { parse } from "@mochi/compiler/parser";
 import { format } from "@mochi/dx";
 import { repoRoot } from "@mochi/test-support";
 import { ensureInTreeBootstrapBuild } from "@mochi/test-support/bootstrap";
-import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
 
 const root = repoRoot(import.meta.url);
