@@ -891,10 +891,13 @@ let isLambdaOrTernary = (cts: Ctx, e) => switch e {
   | _ => cts->printsAsLambda(e)
 }
 
-// A constructor pattern only narrows the TS backend's scrutinee when it is the
-// OUTERMOST pattern of its switch (ADR 0026): nested inside a tuple or array
-// element it lowers to a `_tag` test, which is not a type guard. Hence the
-// stepwise switches through this file rather than one shapely pattern.
+// These read as stepwise switches because of the SEED, not the language. Two
+// things gate the arm's TS type predicate (ADR 0031): the scrutinee's type must
+// be concrete — annotate, or inference widens `args` to `A[]` and the tuple
+// stops being nameable — and the target must refine through tuple/array slots,
+// which `fieldRefine` only learned to do after this seed was frozen. Once
+// `seed:freeze` catches up these collapse back to
+// `switch (fn, args) { | (Ast.ERef(name, _), [_, _]) => … }`.
 let binOpFor = (fn, args) => switch args {
   | [_, _] => switch fn { | Ast.ERef(name, _) => binOpInfo(name) | _ => None }
   | _ => None
