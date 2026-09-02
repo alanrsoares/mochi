@@ -139,9 +139,10 @@ const compileAllWith = (binDir: string, outDir: string, entry: string): Record<s
 
 const compileAllWithTs = (outDir: string): Record<string, string> => {
   copyBootstrapSources(outDir);
-  // Keep the differential oracle on the hand-authored TypeScript path while
-  // the normal CLI build uses the bootstrap graph.
-  bun(["packages/cli/src/cli.ts", "build", "--open", join(outDir, "cli.mochi")]);
+  // The differential oracle stays on the hand-authored TypeScript compiler. It
+  // has its own entry point now that the CLI's `--open` is a self-hosted option
+  // rather than a fallback into TypeScript.
+  bun(["scripts/ts-oracle-build.ts", join(outDir, "cli.mochi")]);
   return readModules(outDir);
 };
 

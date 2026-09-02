@@ -141,9 +141,9 @@ const buildGraph = (): string => {
     // The host CLI normally runs the frozen bootstrap seed (ADR 0090). This
     // cache intentionally needs the independent TypeScript oracle instead: it
     // materialises today's bootstrap sources for parity and binary tests.
-    // `--open` is behaviorally inert for this closed graph but deliberately
-    // selects that oracle path.
-    execFileSync("bun", ["packages/cli/src/cli.ts", "build", "--open", join(tmp, "cli.mochi")], {
+    // The oracle has its own entry point since every CLI command routes to
+    // the self-hosted core.
+    execFileSync("bun", ["scripts/ts-oracle-build.ts", join(tmp, "cli.mochi")], {
       cwd: root,
     });
     try {
@@ -303,7 +303,7 @@ const ctorDefsOnly = (js: string): string => {
 };
 
 /** Relative module id from an import path: `./extensions.js` → `extensions`, `./plugins/jsx.js` → `plugins/jsx`. */
-const importRel = (spec: string): string => spec.replace(/^\.\//, "").replace(/\.js$/, "");
+const importRel = (spec: string): string => spec.replace(/^\.\//, "").replace(/\.(js|mochi)$/, "");
 
 // Modules that must be prepended (in order) when eval'ing a bootstrap pass that
 // imports the LanguagePlugin seam (Wave 8).
@@ -362,14 +362,14 @@ export const bootstrapModuleJs = (nameOrPath: string): string => {
     for (const d of CTOR_MODULES) {
       if (needed.has(d)) continue;
       // `\.\.?/` — plugins/jsx.js reaches the root modules as `../lexer.js`.
-      if (new RegExp(`from "\\.\\.?/${d}\\.js"`).test(jsSrc)) {
+      if (new RegExp(`from "\\.\\.?/${d}\\.(js|mochi)"`).test(jsSrc)) {
         needed.add(d);
         consider(raw(d));
       }
     }
     for (const d of PLUGIN_SEAM) {
       if (needed.has(d)) continue;
-      if (jsSrc.includes(`from "./${d}.js"`)) {
+      if (new RegExp(`from "\\./${d}\\.(js|mochi)"`).test(jsSrc)) {
         needed.add(d);
         consider(raw(d));
       }
