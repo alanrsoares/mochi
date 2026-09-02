@@ -25,7 +25,9 @@ need a compiler feature the current seed does not have.
 The boundary is intentional. `host.mjs` is the small hand-written IO/resolver
 seam, `prelude.gen.mjs` is generated from the TypeScript runtime/prelude, and
 declaration emit, IDE/LSP, Vite, codemods, and apps remain outside the
-self-hosted graph. The formatter is in it as of `mochic fmt` — `format.mochi`
-reaches fixpoint and stays strict-tsc clean like any other module — but
-`packages/dx/src/format.ts` is still the shipped one, and ADR 0078 still names
-it TypeScript-owned DX. See [ADR 0078](../docs/adr/0078-mochi-first-self-hosted-core.md).
+self-hosted graph. The formatter joined it with `mochic fmt`: `format.mochi`
+reaches fixpoint and stays strict-tsc clean like any other module, and it is
+Mochi-first as of [ADR 0078](../docs/adr/0078-mochi-first-self-hosted-core.md)'s
+2026-09-02 amendment. `packages/dx/src/format.ts` is still the *shipped*
+formatter and the parity oracle — mochi-first sets which one leads a change,
+not which one users run.

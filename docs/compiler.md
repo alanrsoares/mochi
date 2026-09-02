@@ -78,7 +78,9 @@ compiled from the `.mochi` sources.
 inferCall live in `bootstrap/plugins/jsx.mochi`, registered through
 `bootstrap/extensions.mochi` (`resolvePlugins` — same opt-in/opt-out rule as
 `src/`). Hooks are Result/(toks, pos) shaped (no imperative `ParserApi`);
-format/dts hooks are absent because those passes do not exist in bootstrap.
+dts hooks are absent because that pass does not exist in bootstrap, and the
+format hook protocol is unbuilt — `format.mochi` is in the graph (`mochic fmt`,
+ADR 0078's amendment) but plugin `format` hooks stay a TypeScript-host seam.
 `fixpoint` (below) still compares *emitted output*. The checked-in
 `bootstrap/seed/` graph is the stage-1 TypeScript snapshot. It is a
 reviewed emitted artifact with a SHA-256 manifest, not an editable source;

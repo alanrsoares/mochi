@@ -9,8 +9,10 @@
 //
 // This is the drift gate for the two hand-ported formatters. It replaced the
 // warn-only `pre-push-formatter-drift` hook: a one-sided change to either
-// packages/dx/src/format.ts or bootstrap/format.mochi now fails `bun run check`,
-// so authoring order is free (ADR 0078 still names the formatter TS-owned DX).
+// packages/dx/src/format.ts or bootstrap/format.mochi now fails `bun run check`.
+// Passing it was the precondition for ADR 0078's amendment making the formatter
+// Mochi-first, so format.mochi now leads a change and format.ts follows — this
+// spec is what holds the oracle to it.
 import { beforeAll, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
