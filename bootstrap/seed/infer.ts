@@ -3525,7 +3525,7 @@ const inferExprRaw: <A>(
           splitLamParams(params, [] as LamParam[], [] as LamParam[]),
         ),
       )
-      .with({ _tag: "ELetIn" }, ({ name, nameSpan: _nameSpan, value, body, span: _span }) =>
+      .with({ _tag: "ELetIn" }, ({ name, nameSpan: _nameSpan, annot, value, body, span: _span }) =>
         match(value)
           .with({ _tag: "ELambda" }, () =>
             ((lets: Stmt[]) =>
@@ -3539,15 +3539,42 @@ const inferExprRaw: <A>(
           .otherwise(() =>
             _Result_flatMap(
               ([valT, st1]) =>
-                ((sc: Scheme) =>
-                  ((vsp: SpanAt) =>
-                    (($ctx) => inferExpr($ctx, body, noteLet(vsp, st1)))(
-                      ctxWithLets(
-                        ctx,
-                        _Map_set(name, sc, ctx.env),
-                        _Map_set(name, vsp, ctx.letOwner),
+                _Result_flatMap(
+                  ([pinned, st2]) =>
+                    ((widen: boolean) =>
+                      ((sc: Scheme) =>
+                        ((vsp: SpanAt) =>
+                          (($ctx) => inferExpr($ctx, body, noteLet(vsp, st2)))(
+                            ctxWithLets(
+                              ctx,
+                              _Map_set(name, sc, ctx.env),
+                              _Map_set(name, vsp, ctx.letOwner),
+                            ),
+                          ))(exprSpan(value)))(generalize(ctx.env, pinned, st2, widen)))(
+                      match(annot)
+                        .with({ _tag: "Some" }, () => false)
+                        .with({ _tag: "None" }, () => true)
+                        .exhaustive(),
+                    ),
+                  match(annot)
+                    .with({ _tag: "Some" }, ({ value: te }) =>
+                      (([at, _, stA]: [Ty, Map<string, Ty>, St]) =>
+                        _Result_map(
+                          (stB: St) => _tuple(at, stB),
+                          checkFits(valT, at, stA, annotSpan(te)),
+                        ))(
+                        typeExprToType(
+                          te,
+                          new Map<string, Ty>(),
+                          st1,
+                          ctx.aliasMap,
+                          _Set_fromArray([] as string[]),
+                        ),
                       ),
-                    ))(exprSpan(value)))(generalize(ctx.env, valT, st1, true)),
+                    )
+                    .with({ _tag: "None" }, () => Ok(_tuple(valT, st1)) as Result<[Ty, St], PErr>)
+                    .exhaustive(),
+                ),
               inferExpr(ctx, value, st),
             ),
           ),
@@ -5707,21 +5734,13 @@ const letsOfFrom: (stmts: Stmt[]) => Stmt[] = (stmts: Stmt[]) =>
 const localLetsFrom: (e: Expr) => Stmt[] = (e: Expr) => {
   const collect: (a: Expr, b: Stmt[]) => Stmt[] = _curry(2, (current: Expr, acc: Stmt[]) =>
     match(current)
-      .with({ _tag: "ELetIn" }, ({ name, nameSpan, value, body, span }) =>
+      .with({ _tag: "ELetIn" }, ({ name, nameSpan, annot, value, body, span }) =>
         match(value)
           .with({ _tag: "ELambda" }, () =>
             collect(
               body,
               _Array_append(
-                Ast.SLet(
-                  name,
-                  nameSpan,
-                  None as Option<TypeExpr>,
-                  value,
-                  false,
-                  None as Option<string>,
-                  span,
-                ),
+                Ast.SLet(name, nameSpan, annot, value, false, None as Option<string>, span),
                 acc,
               ),
             ),

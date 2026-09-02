@@ -1,7 +1,7 @@
 import type { Tok } from "../lexer";
 import type { Expr, Field, Name, SeqElem } from "../ast";
 import type { Row, SpanAt, St, Ty } from "../types";
-import type { Ctx } from "../infer";
+import type { Ctx } from "../format";
 
 export type LocTok = { tok: Tok; start: number; end: number; doc: Option<string> };
 

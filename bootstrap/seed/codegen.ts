@@ -39,7 +39,7 @@ export type ParamAnnots = { generics: string; params: Option<string>[] };
  * locally and still unify structurally with the real AST values.
  */
 export type CtorFieldLike = { name: Option<string>; fieldType: TypeExpr };
-export type CtorLike = { name: string; fields: CtorFieldLike[] };
+export type CtorLike = { name: string; fields: CtorFieldLike[]; span: SpanAt };
 export type GenOpts = {
   annotateLet: Option<(a: string, b: Expr) => Option<string>>;
   annotateCtor: Option<(a: Stmt, b: CtorLike) => Option<CtorFactoryTs>>;
@@ -1061,8 +1061,8 @@ const wrapStepTails: _Curry<[e: Expr, sp: SpanAt], Expr> = _curry(2, (e: Expr, s
     .with({ _tag: "ETernary" }, ({ cond, thenE, elseE, span: tsp }) =>
       Ast.ETernary(cond, wrapStepTails(thenE, sp), wrapStepTails(elseE, sp), tsp),
     )
-    .with({ _tag: "ELetIn" }, ({ name, nameSpan, value, body, span: lsp }) =>
-      Ast.ELetIn(name, nameSpan, value, wrapStepTails(body, sp), lsp),
+    .with({ _tag: "ELetIn" }, ({ name, nameSpan, annot, value, body, span: lsp }) =>
+      Ast.ELetIn(name, nameSpan, annot, value, wrapStepTails(body, sp), lsp),
     )
     .with({ _tag: "EDo" }, ({ exprs, span: dsp }) => Ast.EDo(wrapDoStepTail(exprs, sp), dsp))
     .with({ _tag: "EMatch" }, ({ scrutinee, arms, span: msp }) =>
@@ -1869,6 +1869,9 @@ const litValue: (p: Pattern) => string = (p: Pattern) =>
 /**
  * A field's refined type when its sub-pattern narrows it, else `None` — a
  * bind/wildcard/literal needs no narrowing and keeps its declared type.
+ * Tuple and array sub-patterns recurse: a ctor under `[Call(f, [g], _, _)]`
+ * is two slots down, and without this the predicate stopped at the top level
+ * while the handler destructured all the way (TS2339 on the inner field).
  */
 const fieldRefine: _Curry<[ctx: GCtx, p: Pattern, fieldBase: string], Option<string>> = _curry(
   3,
@@ -1876,6 +1879,18 @@ const fieldRefine: _Curry<[ctx: GCtx, p: Pattern, fieldBase: string], Option<str
     match(p)
       .with({ _tag: "PCtor" }, () => Some(patTarget(ctx, p, fieldBase)) as Option<string>)
       .with({ _tag: "PRecord" }, () =>
+        ((t: string) =>
+          eq(t, fieldBase) ? (None as Option<string>) : (Some(t) as Option<string>))(
+          patTarget(ctx, p, fieldBase),
+        ),
+      )
+      .with({ _tag: "PTuple" }, () =>
+        ((t: string) =>
+          eq(t, fieldBase) ? (None as Option<string>) : (Some(t) as Option<string>))(
+          patTarget(ctx, p, fieldBase),
+        ),
+      )
+      .with({ _tag: "PArr" }, () =>
         ((t: string) =>
           eq(t, fieldBase) ? (None as Option<string>) : (Some(t) as Option<string>))(
           patTarget(ctx, p, fieldBase),

@@ -295,6 +295,7 @@ const qualifyCtor: _Curry<[c: CtorLike, qualify: Map<string, string>], CtorLike>
   (c: CtorLike, qualify: Map<string, string>) => ({
     name: c.name,
     fields: map((f: CtorFieldLike) => qualifyField(f, qualify), c.fields),
+    span: c.span,
   }),
 );
 const qualifyAliasField: _Curry<[f: QualAliasField, qualify: Map<string, string>], QualAliasField> =

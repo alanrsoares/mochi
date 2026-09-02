@@ -789,7 +789,7 @@ const parseLambda: <A>(
                         ]),
                       ],
                       body,
-                      spanning(start, exprSpan(body)),
+                      toEnd(start, toks, p2),
                     ),
                     p2,
                   ),
@@ -812,10 +812,7 @@ const parseLambda: <A>(
                             _Result_flatMap(
                               ([body, p5]) =>
                                 Ok(
-                                  _tuple(
-                                    Ast.ELambda(params, body, spanning(start, exprSpan(body))),
-                                    p5,
-                                  ),
+                                  _tuple(Ast.ELambda(params, body, toEnd(start, toks, p5)), p5),
                                 ) as Result<[Expr, number], PErr>,
                               parseLambdaBody(toks, p4, hooks),
                             ),
@@ -929,7 +926,7 @@ const parseLetIn: <A>(
                                           monad,
                                           value,
                                           body,
-                                          spanning(start, exprSpan(body)),
+                                          toEnd(start, toks, p5),
                                         ),
                                         p5,
                                       ),
@@ -965,16 +962,12 @@ const parseLetIn: <A>(
                                             fn,
                                             [value],
                                             None as Option<string>,
-                                            spanning(start, exprSpan(body)),
+                                            toEnd(start, toks, p5),
                                           ),
                                           p5,
                                         ),
                                       ) as Result<[Expr, number], PErr>)(
-                                      Ast.ELambda(
-                                        [param],
-                                        body,
-                                        spanning(paramStart, exprSpan(body)),
-                                      ),
+                                      Ast.ELambda([param], body, toEnd(paramStart, toks, p5)),
                                     ),
                                   parseExpr(toks, p4, hooks),
                                 ),
@@ -989,32 +982,45 @@ const parseLetIn: <A>(
             : _Result_flatMap(
                 ([nm, p1]) =>
                   _Result_flatMap(
-                    (p2) =>
+                    ([annot, pA]) =>
                       _Result_flatMap(
-                        ([value, p3]) =>
+                        (p2) =>
                           _Result_flatMap(
-                            (p4) =>
+                            ([value, p3]) =>
                               _Result_flatMap(
-                                ([body, p5]) =>
-                                  Ok(
-                                    _tuple(
-                                      Ast.ELetIn(
-                                        nm.name,
-                                        nm.span,
-                                        value,
-                                        body,
-                                        spanning(start, exprSpan(body)),
-                                      ),
-                                      p5,
-                                    ),
-                                  ) as Result<[Expr, number], PErr>,
-                                parseExpr(toks, p4, hooks),
+                                (p4) =>
+                                  _Result_flatMap(
+                                    ([body, p5]) =>
+                                      Ok(
+                                        _tuple(
+                                          Ast.ELetIn(
+                                            nm.name,
+                                            nm.span,
+                                            annot,
+                                            value,
+                                            body,
+                                            toEnd(start, toks, p5),
+                                          ),
+                                          p5,
+                                        ),
+                                      ) as Result<[Expr, number], PErr>,
+                                    parseExpr(toks, p4, hooks),
+                                  ),
+                                expectIn(toks, p3),
                               ),
-                            expectIn(toks, p3),
+                            parseExpr(toks, p2, hooks),
                           ),
-                        parseExpr(toks, p2, hooks),
+                        expectTok(TEq as Tok, toks, pA),
                       ),
-                    expectTok(TEq as Tok, toks, p1),
+                    eq(tokAt(toks, p1).tok, TColon as Tok)
+                      ? _Result_map(
+                          ([ty, k]: [TypeExpr, number]) => _tuple(Some(ty) as Option<TypeExpr>, k),
+                          parseTypeExpr(toks, p1 + 1),
+                        )
+                      : (Ok(_tuple(None as Option<TypeExpr>, p1)) as Result<
+                          [Option<TypeExpr>, number],
+                          PErr
+                        >),
                   ),
                 expectId(toks, p),
               ),
@@ -3487,15 +3493,14 @@ const parseCtor: <A>(
               ([fields, p2]) =>
                 _Result_flatMap(
                   (p3) =>
-                    Ok(_tuple({ name: nm.name, fields: fields }, p3)) as Result<
-                      [Ctor, number],
-                      PErr
-                    >,
+                    Ok(
+                      _tuple({ name: nm.name, fields: fields, span: toEnd(nm.span, toks, p3) }, p3),
+                    ) as Result<[Ctor, number], PErr>,
                   expectTok(TRparen as Tok, toks, p2),
                 ),
               listUntil(TRparen as Tok, parseCtorField, toks, p + 1),
             )
-          : (Ok(_tuple({ name: nm.name, fields: [] as CtorField[] }, p)) as Result<
+          : (Ok(_tuple({ name: nm.name, fields: [] as CtorField[], span: nm.span }, p)) as Result<
               [Ctor, number],
               PErr
             >),
@@ -4001,7 +4006,7 @@ const parseRecordDestructure: <A, B>(
                                     whole,
                                   ),
                                 ))(`$d${show(tmp)}`))(spanning(openSp, closeSp)))(
-                            spanning(start, exprSpan(value)),
+                            toEnd(start, toks, p4),
                           ),
                         parseExpr(toks, p3, hooks),
                       ),
@@ -4065,7 +4070,7 @@ const parseLet: <A>(
                                     value,
                                     false,
                                     None as Option<string>,
-                                    spanning(start, exprSpan(value)),
+                                    toEnd(start, toks, p3),
                                   ),
                                 ],
                                 p3,
@@ -4154,7 +4159,7 @@ const parseExprStmt: <A, B>(
     const start = tokAt(toks, pos);
     return _Result_flatMap(
       ([value, p]) =>
-        ((p2: number) => Ok(_tuple([Ast.SExpr(value, spanning(start, exprSpan(value)))], p2, tmp)))(
+        ((p2: number) => Ok(_tuple([Ast.SExpr(value, toEnd(spanOf(start), toks, p))], p2, tmp)))(
           eq(tokAt(toks, p).tok, TSemi as Tok) ? p + 1 : p,
         ),
       parseExpr(toks, pos, hooks),
