@@ -1267,9 +1267,16 @@ let litValue = p => switch p {
 
 /// A field's refined type when its sub-pattern narrows it, else `None` — a
 /// bind/wildcard/literal needs no narrowing and keeps its declared type.
+/// Tuple and array sub-patterns recurse: a ctor under `[Call(f, [g], _, _)]`
+/// is two slots down, and without this the predicate stopped at the top level
+/// while the handler destructured all the way (TS2339 on the inner field).
 let fieldRefine = (ctx: GCtx, p, fieldBase) => switch p {
   | Ast.PCtor(_, _, _, _) => Some(ctx->patTarget(p, fieldBase))
   | Ast.PRecord(_, _) => let t = ctx->patTarget(p, fieldBase) in
+      t == fieldBase ? None : Some(t)
+  | Ast.PTuple(_, _) => let t = ctx->patTarget(p, fieldBase) in
+      t == fieldBase ? None : Some(t)
+  | Ast.PArr(_, _, _) => let t = ctx->patTarget(p, fieldBase) in
       t == fieldBase ? None : Some(t)
   | _ => None
 }
