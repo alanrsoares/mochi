@@ -32,7 +32,7 @@ import {
   TyVar
 } from "./types.mochi"
 import { jsDoc } from "./codegen.mochi"
-import { typedProgram } from "./compile.mochi"
+import { typedProgramWith } from "./compile.mochi"
 
 /// Fold `D.Shape` written in this file back to a name the emitted `.d.ts` can
 /// resolve, without needing the module graph: single-file dts sees the `tqual`
@@ -197,16 +197,17 @@ let qualifyAliasField = (f: Ast.AliasField, qualify) =>
 /// One `export`ed declaration per `type` statement. `codegen-ts`'s own walker
 /// emits these module-locally for the `.ts` backend; a `.d.ts` exports them, and
 /// an opaque `extern type` goes through `opaqueTypeDecl` for the same reason.
-let typeDeclsFrom = (stmts, aliases, recs, qualify, i) => switch Array.get(i, stmts) {
+let typeDeclsFrom = (stmts, aliases, recs, qualify, docs, i) => switch Array.get(i, stmts) {
   | None => []
   | Some(Ast.SType(name, params, ctors, alias, aliasType, _, doc, _)) => let rest = typeDeclsFrom(
       stmts,
       aliases,
       recs,
       qualify,
+      docs,
       i + 1
     ) in
-    let docComment = jsDoc(doc) in
+    let docComment = docs ? jsDoc(doc) : "" in
       switch alias {
         | Some(fields) =>
           // Its OWN entry is dropped, or the alias renders as itself
@@ -228,18 +229,19 @@ let typeDeclsFrom = (stmts, aliases, recs, qualify, i) => switch Array.get(i, st
                 )
           }
       }
-  | Some(_) => typeDeclsFrom(stmts, aliases, recs, qualify, i + 1)
+  | Some(_) => typeDeclsFrom(stmts, aliases, recs, qualify, docs, i + 1)
 }
 
 /// `export declare const` per top-level binding that has an inferred scheme.
 /// `$`-prefixed synthetic binders declare nothing.
-let bindingDeclsFrom = (stmts, env, recs, qualify, i) => switch Array.get(i, stmts) {
+let bindingDeclsFrom = (stmts, env, recs, qualify, docs, i) => switch Array.get(i, stmts) {
   | None => []
   | Some(Ast.SLet(name, _, _, value, _, doc, _)) => let rest = bindingDeclsFrom(
       stmts,
       env,
       recs,
       qualify,
+      docs,
       i + 1
     ) in
       Str.startsWith("$", name)
@@ -247,11 +249,11 @@ let bindingDeclsFrom = (stmts, env, recs, qualify, i) => switch Array.get(i, stm
         : switch Map.get(name, env) {
           | None => rest
           | Some(sc) => Array.prepend(
-              "${jsDoc(doc)}export declare const ${name}: ${bindingTsType({ vars: sc.vars, rvars: sc.rvars, ty: qualifyTy(sc.ty, qualify) }, value, recs)};",
+              "${docs ? jsDoc(doc) : ""}export declare const ${name}: ${bindingTsType({ vars: sc.vars, rvars: sc.rvars, ty: qualifyTy(sc.ty, qualify) }, value, recs)};",
               rest
             )
         }
-  | Some(_) => bindingDeclsFrom(stmts, env, recs, qualify, i + 1)
+  | Some(_) => bindingDeclsFrom(stmts, env, recs, qualify, docs, i + 1)
 }
 
 /// A builtin variant named in an exported type (`Option<number>` from `Map.get`)
@@ -294,14 +296,14 @@ let nsTypeImportsFrom = (stmts, body, seen, i) => switch Array.get(i, stmts) {
 }
 
 /// Emit `.d.ts` text from an already-typed program.
-export let emitDtsFromTyped = (stmts, env, aliases, qualify, runtimeImport) =>
+export let emitDtsFromTypedWith = (stmts, env, aliases, qualify, runtimeImport, docs) =>
   let recs = recordAliasIndex(aliases) in
   // A name this file declares itself is already writable bare, so it shadows
   // any qualification the caller (or the file's own `tqual` nodes) supply.
   let local = declaredTypeNames(stmts, 0, Set.fromArray([])) in
   let quals = writtenQualsFrom(stmts, local, qualify, 0) in
-  let types = typeDeclsFrom(stmts, aliases, recs, quals, 0) in
-  let bindings = bindingDeclsFrom(stmts, env, recs, quals, 0) in
+  let types = typeDeclsFrom(stmts, aliases, recs, quals, docs, 0) in
+  let bindings = bindingDeclsFrom(stmts, env, recs, quals, docs, 0) in
   let declared = declaredTypeNames(stmts, 0, Set.fromArray([])) in
   let wanted = referencedCons(stmts, env, 0, Set.fromArray([])) in
   let core = Str.join("\n", Array.concat(types, bindings)) in
@@ -354,7 +356,26 @@ export let qualifierMapOf = (quals, local) =>
   qualsFromAliases(Map.keys(quals), quals, local, #{}, 0)
 
 /// Source -> `.d.ts` text. Infers first; type errors surface as diagnostics.
-export let emitDtsText = (src, runtimeImport) =>
-  typedProgram(src)
+export let emitDtsFromTyped = (stmts, env, aliases, qualify, runtimeImport) =>
+  emitDtsFromTypedWith(stmts, env, aliases, qualify, runtimeImport, true)
+
+/// Source -> `.d.ts` text under caller options. Infers first; type errors
+/// surface as diagnostics.
+export let emitDtsTextWith = (src, runtimeImport, opts) =>
+  typedProgramWith(src, opts)
     |> Result.map(((stmts, r)) =>
-      emitDtsFromTyped(stmts, r.env, r.aliases, #{}, runtimeImport))
+      emitDtsFromTypedWith(
+        stmts,
+        r.env,
+        r.aliases,
+        #{},
+        runtimeImport,
+        opts.docs
+      ))
+
+export let emitDtsText = (src, runtimeImport) =>
+  emitDtsTextWith(
+    src,
+    runtimeImport,
+    { open: false, docs: true, moduleExt: ".js", strictEntry: false }
+  )

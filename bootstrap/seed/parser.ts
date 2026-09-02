@@ -4197,29 +4197,32 @@ const parseStmt: _Curry<
         _Result_map(([s, p]: [Stmt, number]) => _tuple([s], p, tmp), parseImport(toks, pos)),
       )
       .with({ _tag: "TExport" }, () =>
-        match(tokAt(toks, pos + 1).tok)
-          .with({ _tag: "TType" }, () =>
-            _Result_map(
-              ([s, p]: [Stmt, number]) => _tuple([setTypeMeta(true, doc, s)], p, tmp),
-              parseType(toks, pos + 1),
-            ),
-          )
-          .with({ _tag: "TExtern" }, () =>
-            _Result_map(
-              ([s, p]: [Stmt, number]) => _tuple([setExternMeta(true, doc, s)], p, tmp),
-              parseExtern(toks, pos + 1),
-            ),
-          )
-          .with({ _tag: "TLet" }, () =>
-            _Result_map(
-              ([stmts, p, tmp2]: [Stmt[], number, number]) =>
-                _tuple(map(setLetMeta(true, doc), stmts), p, tmp2),
-              parseLet(toks, pos + 1, tmp, hooks),
-            ),
-          )
-          .otherwise(() =>
-            errAt("`export` must precede let, type, or extern", tokAt(toks, pos + 1)),
-          ),
+        ((exportSp: SpanAt) =>
+          match(tokAt(toks, pos + 1).tok)
+            .with({ _tag: "TType" }, () =>
+              _Result_map(
+                ([s, p]: [Stmt, number]) =>
+                  _tuple([widenToExport(exportSp, setTypeMeta(true, doc, s))], p, tmp),
+                parseType(toks, pos + 1),
+              ),
+            )
+            .with({ _tag: "TExtern" }, () =>
+              _Result_map(
+                ([s, p]: [Stmt, number]) =>
+                  _tuple([widenToExport(exportSp, setExternMeta(true, doc, s))], p, tmp),
+                parseExtern(toks, pos + 1),
+              ),
+            )
+            .with({ _tag: "TLet" }, () =>
+              _Result_map(
+                ([stmts, p, tmp2]: [Stmt[], number, number]) =>
+                  _tuple(widenHeadToExport(exportSp, map(setLetMeta(true, doc), stmts)), p, tmp2),
+                parseLet(toks, pos + 1, tmp, hooks),
+              ),
+            )
+            .otherwise(() =>
+              errAt("`export` must precede let, type, or extern", tokAt(toks, pos + 1)),
+            ))(spanOf(lt)),
       )
       .with({ _tag: "TType" }, () =>
         _Result_map(
@@ -4242,6 +4245,53 @@ const parseStmt: _Curry<
       )
       .otherwise(() => parseExprStmt(toks, pos, tmp, hooks));
   },
+);
+/**
+ * `export` precedes the statement it modifies, so the keyword is outside the
+ * span the inner parser built. Grow the statement to cover it. Only the FIRST
+ * statement of a group: `export let { x, y } = e` desugars to a header plus one
+ * field-access `let` per name, and those keep their own field spans.
+ */
+const widenToExport: <A>(start: { start: number } & A, s: Stmt) => Stmt = _curry(
+  2,
+  <A>(start: { start: number } & A, s: Stmt) =>
+    match(s)
+      .with({ _tag: "SLet" }, ({ name, nameSpan, annot, value, exported, doc, span }) =>
+        Ast.SLet(name, nameSpan, annot, value, exported, doc, spanning(start, span)),
+      )
+      .with({ _tag: "SType" }, ({ name, params, ctors, alias, aliasType, exported, doc, span }) =>
+        Ast.SType(name, params, ctors, alias, aliasType, exported, doc, spanning(start, span)),
+      )
+      .with(
+        { _tag: "SExtern" },
+        ({ name, nameSpan, params, typeExpr, module, imported, curried, exported, doc, span }) =>
+          Ast.SExtern(
+            name,
+            nameSpan,
+            params,
+            typeExpr,
+            module,
+            imported,
+            curried,
+            exported,
+            doc,
+            spanning(start, span),
+          ),
+      )
+      .otherwise((other) => other),
+);
+const widenHeadToExport: <A>(start: { start: number } & A, stmts: Stmt[]) => Stmt[] = _curry(
+  2,
+  <A>(start: { start: number } & A, stmts: Stmt[]) =>
+    match(stmts)
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length >= 1;
+        },
+        ([head, ...rest]) => _Array_prepend(widenToExport(start, head), rest),
+      )
+      .otherwise(() => stmts),
 );
 /**
  * Core sync set for panic-mode recovery: the language's own declaration keywords.

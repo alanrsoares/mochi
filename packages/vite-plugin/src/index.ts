@@ -5,7 +5,7 @@
  */
 
 import { resolve } from "node:path";
-import { buildModulesBootstrap } from "@mochi/compiler/bootstrap/module";
+import { buildModulesBootstrapWith } from "@mochi/compiler/bootstrap/module";
 import { compileBootstrapSync } from "@mochi/compiler/bootstrap/sync";
 import { compile } from "@mochi/compiler/compile";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
@@ -139,7 +139,12 @@ export function mochiPlugin(options: MochiPluginOptions = {}): Plugin {
       let transformedCode: string;
       if (plugins === undefined && options.open === undefined && runtime === true) {
         if (/^\s*import\b/m.test(code)) {
-          const graph = buildModulesBootstrap(id);
+          const graph = buildModulesBootstrapWith(id, {
+            open: false,
+            docs: true,
+            moduleExt: ".mochi",
+            strictEntry: false,
+          });
           if (graph._tag === "Err")
             throw new SyntaxError(
               `Mochi compilation failed for ${id}:\n[type] ${graph.error.message}`,

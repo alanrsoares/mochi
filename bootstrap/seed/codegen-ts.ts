@@ -1733,7 +1733,7 @@ const hasJsxStmts: (stmts: Stmt[]) => boolean = (stmts: Stmt[]) =>
  * field keys (so destructuring an imported ctor emits the right names) and the
  * `import type { … }` lines its driver computed from the emitted text.
  */
-export const emitTsModule: <A, B, C, D, E, F, G, H, I>(
+export const emitTsModuleWith: <A, B, C, D, E, F, G, H, I>(
   stmts: Stmt[],
   env: Map<string, { ty: Ty; vars: number[]; rvars: number[] } & E>,
   types: ({ span: { start: A; end: B } & F; ty: Ty } & G)[],
@@ -1745,8 +1745,9 @@ export const emitTsModule: <A, B, C, D, E, F, G, H, I>(
   jsDefs: Map<string, string>,
   runtimeDeps: Map<string, string[]>,
   runtimeImport: string,
+  docs: boolean,
 ) => string = _curry(
-  11,
+  12,
   <A, B, C, D, E, F, G, H, I>(
     stmts: Stmt[],
     env: Map<string, { ty: Ty; vars: number[]; rvars: number[] } & E>,
@@ -1759,20 +1760,16 @@ export const emitTsModule: <A, B, C, D, E, F, G, H, I>(
     jsDefs: Map<string, string>,
     runtimeDeps: Map<string, string[]>,
     runtimeImport: string,
+    docs: boolean,
   ) => {
     const declared: Set<string> = declaredTypeNames(stmts, 0, _Set_fromArray([] as string[]));
     const wanted: Set<string> = referencedCons(stmts, env, 0, _Set_fromArray([] as string[]));
     const recs: Map<string, string> = recordAliasIndex(aliases);
     const typeHeader: string[] = typeHeaderFrom(stmts, aliases, recs, 0);
-    const body: string = codegenWith(
-      stmts,
-      imported,
-      false,
-      ns,
-      jsDefs,
-      runtimeDeps,
-      tsGenOpts(stmts, env, types, letParams, aliases),
-    );
+    const body: string = codegenWith(stmts, imported, false, ns, jsDefs, runtimeDeps, {
+      ...tsGenOpts(stmts, env, types, letParams, aliases),
+      docs: docs,
+    });
     const deps0: string[] = runtimeDepNames(stmts, imported, ns, jsDefs, runtimeDeps);
     const deps: string[] = _Str_contains("_tuple(", body) ? _Array_append("_tuple", deps0) : deps0;
     return ((deps: string[]) =>
@@ -1840,6 +1837,52 @@ ${body}`,
       ),
     );
   },
+);
+/**
+ * The docstring-retaining default (ADR 0099); `--no-docs` callers reach for
+ * `emitTsModuleWith`.
+ */
+export const emitTsModule: <A, B, C, D, E, F, G, H, I>(
+  stmts: Stmt[],
+  env: Map<string, { ty: Ty; vars: number[]; rvars: number[] } & E>,
+  types: ({ span: { start: A; end: B } & F; ty: Ty } & G)[],
+  letParams: ({ span: { start: C; end: D } & H; ty: Ty } & I)[],
+  aliases: Map<string, AliasInfo>,
+  imported: Map<string, string[]>,
+  importLines: string[],
+  ns: Map<string, Map<string, string>>,
+  jsDefs: Map<string, string>,
+  runtimeDeps: Map<string, string[]>,
+  runtimeImport: string,
+) => string = _curry(
+  11,
+  <A, B, C, D, E, F, G, H, I>(
+    stmts: Stmt[],
+    env: Map<string, { ty: Ty; vars: number[]; rvars: number[] } & E>,
+    types: ({ span: { start: A; end: B } & F; ty: Ty } & G)[],
+    letParams: ({ span: { start: C; end: D } & H; ty: Ty } & I)[],
+    aliases: Map<string, AliasInfo>,
+    imported: Map<string, string[]>,
+    importLines: string[],
+    ns: Map<string, Map<string, string>>,
+    jsDefs: Map<string, string>,
+    runtimeDeps: Map<string, string[]>,
+    runtimeImport: string,
+  ) =>
+    emitTsModuleWith(
+      stmts,
+      env,
+      types,
+      letParams,
+      aliases,
+      imported,
+      importLines,
+      ns,
+      jsDefs,
+      runtimeDeps,
+      runtimeImport,
+      true,
+    ),
 );
 /**
  * Free TYPE vars in FIRST-OCCURRENCE order. Not `freeInType`: its Sets lose the

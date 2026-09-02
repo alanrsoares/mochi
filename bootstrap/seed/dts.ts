@@ -5,6 +5,7 @@ import type { Scheme } from "./schemes";
 import type { AliasInfo } from "./codegen-ts";
 import type { QualAliasField } from "./infer";
 import type { CtorFieldLike, CtorLike } from "./codegen";
+import type { Opts } from "./module";
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
@@ -69,7 +70,7 @@ import {
   TyVar,
 } from "./types";
 import { jsDoc } from "./codegen";
-import { typedProgram } from "./compile";
+import { typedProgramWith } from "./compile";
 /**
  * Fold `D.Shape` written in this file back to a name the emitted `.d.ts` can
  * resolve, without needing the module graph: single-file dts sees the `tqual`
@@ -315,16 +316,18 @@ const typeDeclsFrom: _Curry<
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
     qualify: Map<string, string>,
+    docs: boolean,
     i: number,
   ],
   string[]
 > = _curry(
-  5,
+  6,
   (
     stmts: Stmt[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
     qualify: Map<string, string>,
+    docs: boolean,
     i: number,
   ) =>
     match(_Array_get(i, stmts))
@@ -378,9 +381,11 @@ const typeDeclsFrom: _Curry<
                     )
                     .exhaustive(),
                 )
-                .exhaustive())(jsDoc(doc)))(typeDeclsFrom(stmts, aliases, recs, qualify, i + 1)),
+                .exhaustive())(docs ? jsDoc(doc) : ""))(
+            typeDeclsFrom(stmts, aliases, recs, qualify, docs, i + 1),
+          ),
       )
-      .with({ _tag: "Some" }, () => typeDeclsFrom(stmts, aliases, recs, qualify, i + 1))
+      .with({ _tag: "Some" }, () => typeDeclsFrom(stmts, aliases, recs, qualify, docs, i + 1))
       .exhaustive(),
 );
 /**
@@ -392,14 +397,16 @@ const bindingDeclsFrom: <A>(
   env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
   recs: Map<string, string>,
   qualify: Map<string, string>,
+  docs: boolean,
   i: number,
 ) => string[] = _curry(
-  5,
+  6,
   <A>(
     stmts: Stmt[],
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
     recs: Map<string, string>,
     qualify: Map<string, string>,
+    docs: boolean,
     i: number,
   ) =>
     match(_Array_get(i, stmts))
@@ -421,13 +428,13 @@ const bindingDeclsFrom: <A>(
                   .with({ _tag: "None" }, () => rest)
                   .with({ _tag: "Some" }, ({ value: sc }) =>
                     _Array_prepend(
-                      `${jsDoc(doc)}export declare const ${name}: ${bindingTsType({ vars: sc.vars, rvars: sc.rvars, ty: qualifyTy(sc.ty, qualify) }, value, recs)};`,
+                      `${docs ? jsDoc(doc) : ""}export declare const ${name}: ${bindingTsType({ vars: sc.vars, rvars: sc.rvars, ty: qualifyTy(sc.ty, qualify) }, value, recs)};`,
                       rest,
                     ),
                   )
-                  .exhaustive())(bindingDeclsFrom(stmts, env, recs, qualify, i + 1)),
+                  .exhaustive())(bindingDeclsFrom(stmts, env, recs, qualify, docs, i + 1)),
       )
-      .with({ _tag: "Some" }, () => bindingDeclsFrom(stmts, env, recs, qualify, i + 1))
+      .with({ _tag: "Some" }, () => bindingDeclsFrom(stmts, env, recs, qualify, docs, i + 1))
       .exhaustive(),
 );
 /**
@@ -493,26 +500,28 @@ const nsTypeImportsFrom: _Curry<
 /**
  * Emit `.d.ts` text from an already-typed program.
  */
-export const emitDtsFromTyped: <A>(
+export const emitDtsFromTypedWith: <A>(
   stmts: Stmt[],
   env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
   aliases: Map<string, AliasInfo>,
   qualify: Map<string, string>,
   runtimeImport: string,
+  docs: boolean,
 ) => string = _curry(
-  5,
+  6,
   <A>(
     stmts: Stmt[],
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
     aliases: Map<string, AliasInfo>,
     qualify: Map<string, string>,
     runtimeImport: string,
+    docs: boolean,
   ) => {
     const recs: Map<string, string> = recordAliasIndex(aliases);
     const local: Set<string> = declaredTypeNames(stmts, 0, _Set_fromArray([] as string[]));
     const quals: Map<string, string> = writtenQualsFrom(stmts, local, qualify, 0);
-    const types: string[] = typeDeclsFrom(stmts, aliases, recs, quals, 0);
-    const bindings: string[] = bindingDeclsFrom(stmts, env, recs, quals, 0);
+    const types: string[] = typeDeclsFrom(stmts, aliases, recs, quals, docs, 0);
+    const bindings: string[] = bindingDeclsFrom(stmts, env, recs, quals, docs, 0);
     const declared: Set<string> = declaredTypeNames(stmts, 0, _Set_fromArray([] as string[]));
     const wanted: Set<string> = referencedCons(stmts, env, 0, _Set_fromArray([] as string[]));
     const core: string = _Str_join("\n", _Array_concat(types, bindings));
@@ -606,10 +615,30 @@ export const qualifierMapOf: <A>(
 /**
  * Source -> `.d.ts` text. Infers first; type errors surface as diagnostics.
  */
-export const emitDtsText: _Curry<
-  [src: string, runtimeImport: string],
+export const emitDtsFromTyped: <A>(
+  stmts: Stmt[],
+  env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
+  aliases: Map<string, AliasInfo>,
+  qualify: Map<string, string>,
+  runtimeImport: string,
+) => string = _curry(
+  5,
+  <A>(
+    stmts: Stmt[],
+    env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
+    aliases: Map<string, AliasInfo>,
+    qualify: Map<string, string>,
+    runtimeImport: string,
+  ) => emitDtsFromTypedWith(stmts, env, aliases, qualify, runtimeImport, true),
+);
+/**
+ * Source -> `.d.ts` text under caller options. Infers first; type errors
+ * surface as diagnostics.
+ */
+export const emitDtsTextWith: _Curry<
+  [src: string, runtimeImport: string, opts: Opts],
   Result<string, PErr>
-> = _curry(2, (src: string, runtimeImport: string) =>
+> = _curry(3, (src: string, runtimeImport: string, opts: Opts) =>
   _Result_map(
     ([stmts, r]: [
       Stmt[],
@@ -619,7 +648,26 @@ export const emitDtsText: _Curry<
         types: TypeAt[];
         letParams: TypeAt[];
       },
-    ]) => emitDtsFromTyped(stmts, r.env, r.aliases, new Map<string, string>(), runtimeImport),
-    typedProgram(src),
+    ]) =>
+      emitDtsFromTypedWith(
+        stmts,
+        r.env,
+        r.aliases,
+        new Map<string, string>(),
+        runtimeImport,
+        opts.docs,
+      ),
+    typedProgramWith(src, opts),
   ),
+);
+export const emitDtsText: _Curry<
+  [src: string, runtimeImport: string],
+  Result<string, PErr>
+> = _curry(2, (src: string, runtimeImport: string) =>
+  emitDtsTextWith(src, runtimeImport, {
+    open: false,
+    docs: true,
+    moduleExt: ".js",
+    strictEntry: false,
+  }),
 );

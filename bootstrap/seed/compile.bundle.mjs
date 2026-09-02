@@ -1,4 +1,5 @@
-import { Ok as Ok9, _Result_flatMap as _Result_flatMap7, _curry as _curry17, _tuple as _tuple10, map as map12 } from "@mochi/compiler/runtime";
+import { Ok as Ok9, _Result_flatMap as _Result_flatMap7, _Str_get as _Str_get4, _Str_startsWith as _Str_startsWith5, _Str_trim, _curry as _curry17, _tuple as _tuple10, and as and11, map as map12, or as or9 } from "@mochi/compiler/runtime";
+import { match as match16 } from "@onrails/pattern";
 
 import { Err, None as None2, Ok, Some as Some2, _Array_append, _Array_head, _Array_tail, _Option_contains as _Option_contains2, _Option_exists, _Option_unwrapOr, _Str_codeAt, _Str_fromCode, _Str_get as _Str_get2, _Str_join, _Str_length, _Str_slice, _Str_toNumber, _curry as _curry2, _done as _done2, _recur as _recur2, and, eq as eq2, length, not, or } from "@mochi/compiler/runtime";
 import { match as match2 } from "@onrails/pattern";
@@ -6638,8 +6639,13 @@ var parseExprStmt = _curry7(4, (toks, pos, tmp, hooks) => {
 var parseStmt = _curry7(4, (toks, pos, tmp, hooks) => {
   const lt4 = tokAt(toks, pos);
   const doc = lt4.doc;
-  return match6(lt4.tok).with({ _tag: "TImport" }, () => _Result_map3(([s, p]) => _tuple3([s], p, tmp), parseImport(toks, pos))).with({ _tag: "TExport" }, () => match6(tokAt(toks, pos + 1).tok).with({ _tag: "TType" }, () => _Result_map3(([s, p]) => _tuple3([setTypeMeta(true, doc, s)], p, tmp), parseType(toks, pos + 1))).with({ _tag: "TExtern" }, () => _Result_map3(([s, p]) => _tuple3([setExternMeta(true, doc, s)], p, tmp), parseExtern(toks, pos + 1))).with({ _tag: "TLet" }, () => _Result_map3(([stmts, p, tmp2]) => _tuple3(map3(setLetMeta(true, doc), stmts), p, tmp2), parseLet(toks, pos + 1, tmp, hooks))).otherwise(() => errAt("`export` must precede let, type, or extern", tokAt(toks, pos + 1)))).with({ _tag: "TType" }, () => _Result_map3(([s, p]) => _tuple3([setTypeMeta(false, doc, s)], p, tmp), parseType(toks, pos))).with({ _tag: "TExtern" }, () => _Result_map3(([s, p]) => _tuple3([setExternMeta(false, doc, s)], p, tmp), parseExtern(toks, pos))).with({ _tag: "TLet" }, () => _Result_map3(([stmts, p, tmp2]) => _tuple3(map3(setLetMeta(false, doc), stmts), p, tmp2), parseLet(toks, pos, tmp, hooks))).otherwise(() => parseExprStmt(toks, pos, tmp, hooks));
+  return match6(lt4.tok).with({ _tag: "TImport" }, () => _Result_map3(([s, p]) => _tuple3([s], p, tmp), parseImport(toks, pos))).with({ _tag: "TExport" }, () => ((exportSp) => match6(tokAt(toks, pos + 1).tok).with({ _tag: "TType" }, () => _Result_map3(([s, p]) => _tuple3([widenToExport(exportSp, setTypeMeta(true, doc, s))], p, tmp), parseType(toks, pos + 1))).with({ _tag: "TExtern" }, () => _Result_map3(([s, p]) => _tuple3([widenToExport(exportSp, setExternMeta(true, doc, s))], p, tmp), parseExtern(toks, pos + 1))).with({ _tag: "TLet" }, () => _Result_map3(([stmts, p, tmp2]) => _tuple3(widenHeadToExport(exportSp, map3(setLetMeta(true, doc), stmts)), p, tmp2), parseLet(toks, pos + 1, tmp, hooks))).otherwise(() => errAt("`export` must precede let, type, or extern", tokAt(toks, pos + 1))))(spanOf(lt4))).with({ _tag: "TType" }, () => _Result_map3(([s, p]) => _tuple3([setTypeMeta(false, doc, s)], p, tmp), parseType(toks, pos))).with({ _tag: "TExtern" }, () => _Result_map3(([s, p]) => _tuple3([setExternMeta(false, doc, s)], p, tmp), parseExtern(toks, pos))).with({ _tag: "TLet" }, () => _Result_map3(([stmts, p, tmp2]) => _tuple3(map3(setLetMeta(false, doc), stmts), p, tmp2), parseLet(toks, pos, tmp, hooks))).otherwise(() => parseExprStmt(toks, pos, tmp, hooks));
 });
+var widenToExport = _curry7(2, (start, s) => match6(s).with({ _tag: "SLet" }, ({ name, nameSpan, annot, value, exported, doc, span }) => SLet(name, nameSpan, annot, value, exported, doc, spanning(start, span))).with({ _tag: "SType" }, ({ name, params, ctors, alias, aliasType, exported, doc, span }) => SType(name, params, ctors, alias, aliasType, exported, doc, spanning(start, span))).with({ _tag: "SExtern" }, ({ name, nameSpan, params, typeExpr, module, imported, curried, exported, doc, span }) => SExtern(name, nameSpan, params, typeExpr, module, imported, curried, exported, doc, spanning(start, span))).otherwise((other) => other));
+var widenHeadToExport = _curry7(2, (start, stmts) => match6(stmts).with((_v) => {
+  const _g = _v;
+  return _g.length >= 1;
+}, ([head, ...rest]) => _Array_prepend2(widenToExport(start, head), rest)).otherwise(() => stmts));
 var isSyncTok = (t) => match6(t).with({ _tag: "TLet" }, () => true).with({ _tag: "TType" }, () => true).with({ _tag: "TExtern" }, () => true).with({ _tag: "TImport" }, () => true).with({ _tag: "TExport" }, () => true).otherwise(() => false);
 var isOpener = (t) => or4(or4(eq6(t, TLparen), eq6(t, TLbrace)), eq6(t, TLbracket));
 var isCloser = (t) => or4(or4(eq6(t, TRparen), eq6(t, TRbrace)), eq6(t, TRbracket));
@@ -8374,12 +8380,12 @@ var hasJsxExpr = (e) => match15(e).with((_v) => {
   return _g._tag === "ECall" && _g.origin._tag === "Some" && _g.origin.value === "jsx";
 }, () => true).with({ _tag: "ECall" }, ({ fn, args }) => or8(hasJsxExpr(fn), anyOf(hasJsxExpr, args))).with({ _tag: "ELambda" }, ({ body }) => hasJsxExpr(body)).with({ _tag: "ELetIn" }, ({ value, body }) => or8(hasJsxExpr(value), hasJsxExpr(body))).with({ _tag: "ELetBind" }, ({ value, body }) => or8(hasJsxExpr(value), hasJsxExpr(body))).with({ _tag: "EPipe" }, ({ left, right }) => or8(hasJsxExpr(left), hasJsxExpr(right))).with({ _tag: "EDo" }, ({ exprs }) => anyOf(hasJsxExpr, exprs)).with({ _tag: "ETernary" }, ({ cond, thenE, elseE }) => or8(or8(hasJsxExpr(cond), hasJsxExpr(thenE)), hasJsxExpr(elseE))).with({ _tag: "EMatch" }, ({ scrutinee, arms }) => or8(hasJsxExpr(scrutinee), anyOf((a) => or8(match15(a.guard).with({ _tag: "Some" }, ({ value: g }) => hasJsxExpr(g)).with({ _tag: "None" }, () => false).exhaustive(), hasJsxExpr(a.body)), arms))).with({ _tag: "ERecord" }, ({ fields, spread }) => or8(anyOf((f) => hasJsxExpr(f.value), fields), match15(spread).with({ _tag: "Some" }, ({ value }) => hasJsxExpr(value)).with({ _tag: "None" }, () => false).exhaustive())).with({ _tag: "EField" }, ({ target }) => hasJsxExpr(target)).with({ _tag: "ETuple" }, ({ elements }) => anyOf(hasJsxExpr, elements)).with({ _tag: "EArr" }, ({ elements }) => anyOf((el) => match15(el).with({ _tag: "SEExpr" }, ({ expr: value }) => hasJsxExpr(value)).with({ _tag: "SESpread" }, ({ expr: value }) => hasJsxExpr(value)).exhaustive(), elements)).with({ _tag: "EList" }, ({ elements }) => anyOf((el) => match15(el).with({ _tag: "SEExpr" }, ({ expr: value }) => hasJsxExpr(value)).with({ _tag: "SESpread" }, ({ expr: value }) => hasJsxExpr(value)).exhaustive(), elements)).with({ _tag: "ESet" }, ({ elements }) => anyOf((el) => match15(el).with({ _tag: "SEExpr" }, ({ expr: value }) => hasJsxExpr(value)).with({ _tag: "SESpread" }, ({ expr: value }) => hasJsxExpr(value)).exhaustive(), elements)).with({ _tag: "EMap" }, ({ entries }) => anyOf((entry) => or8(hasJsxExpr(entry.key), hasJsxExpr(entry.value)), entries)).with({ _tag: "ELoop" }, ({ params, body }) => or8(anyOf((p) => hasJsxExpr(p.init), params), hasJsxExpr(body))).with({ _tag: "ERecur" }, ({ args }) => anyOf(hasJsxExpr, args)).with({ _tag: "EInterp" }, ({ parts }) => anyOf((part) => match15(part).with({ _tag: "IPLit" }, () => false).with({ _tag: "IPExpr" }, ({ expr: value }) => hasJsxExpr(value)).exhaustive(), parts)).otherwise(() => false);
 var hasJsxStmts = (stmts) => anyOf((stmt) => match15(stmt).with({ _tag: "SLet" }, ({ value }) => hasJsxExpr(value)).with({ _tag: "SExpr" }, ({ value }) => hasJsxExpr(value)).otherwise(() => false), stmts);
-var emitTsModule = _curry16(11, (stmts, env, types, letParams, aliases, imported, importLines, ns, jsDefs, runtimeDeps, runtimeImport) => {
+var emitTsModuleWith = _curry16(12, (stmts, env, types, letParams, aliases, imported, importLines, ns, jsDefs, runtimeDeps, runtimeImport, docs) => {
   const declared = declaredTypeNames(stmts, 0, _Set_fromArray6([]));
   const wanted = referencedCons(stmts, env, 0, _Set_fromArray6([]));
   const recs = recordAliasIndex(aliases);
   const typeHeader = typeHeaderFrom(stmts, aliases, recs, 0);
-  const body = codegenWith(stmts, imported, false, ns, jsDefs, runtimeDeps, tsGenOpts(stmts, env, types, letParams, aliases));
+  const body = codegenWith(stmts, imported, false, ns, jsDefs, runtimeDeps, { ...tsGenOpts(stmts, env, types, letParams, aliases), docs });
   const deps0 = runtimeDepNames(stmts, imported, ns, jsDefs, runtimeDeps);
   const deps = _Str_contains("_tuple(", body) ? _Array_append12("_tuple", deps0) : deps0;
   return ((deps2) => ((runtimeLine) => ((header) => ((typeDeps) => ((typeImportLine) => concat2(`${hasJsxStmts(stmts) ? `/** @jsx h */
@@ -8393,6 +8399,7 @@ var emitTsModule = _curry16(11, (stmts, env, types, letParams, aliases, imported
 `, header)}
 ${body}`) ? ["_Curry"] : [], builtinTypeNamesFor(declared, wanted, body, 0))))(typeHeader))(eq15(length12(deps2), 0) ? "" : `import { ${_Str_join7(", ", _Array_sort2(deps2))} } from "${runtimeImport}";`))(filter5((d) => or8(and10(and10(and10(and10(and10(and10(and10(not10(eq15(d, "add")), not10(eq15(d, "sub"))), not10(eq15(d, "mul"))), not10(eq15(d, "div"))), not10(eq15(d, "lt"))), not10(eq15(d, "lte"))), not10(eq15(d, "gt"))), not10(eq15(d, "gte"))), _Str_contains(d, body)), deps));
 });
+var emitTsModule = _curry16(11, (stmts, env, types, letParams, aliases, imported, importLines, ns, jsDefs, runtimeDeps, runtimeImport) => emitTsModuleWith(stmts, env, types, letParams, aliases, imported, importLines, ns, jsDefs, runtimeDeps, runtimeImport, true));
 var freeIdsIn = _curry16(2, (t, acc) => match15(t).with({ _tag: "TyVar" }, ({ id }) => _Array_contains4(id, acc) ? acc : _Array_append12(id, acc)).with({ _tag: "TyCon" }, ({ args }) => freeIdsInAll(args, acc)).with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) => freeIdsIn(toT, freeIdsIn(fromT, acc))).with({ _tag: "TyRecord" }, ({ row }) => freeIdsInRow(row, acc)).with({ _tag: "TySingleton" }, () => acc).with({ _tag: "TyOneOf" }, ({ members }) => freeIdsInAll(members, acc)).exhaustive());
 var freeIdsInAll = _curry16(2, (ts, acc) => reduce4(_curry16(2, (a, t) => freeIdsIn(t, a)), acc, ts));
 var freeIdsInRow = _curry16(2, (row, acc) => match15(row).with({ _tag: "RowExtend" }, ({ fieldType, rest }) => freeIdsInRow(rest, freeIdsIn(fieldType, acc))).otherwise(() => acc));
@@ -13102,17 +13109,36 @@ var namespaceRuntime = _mapmap(_namespaceRuntime);
 var preludeJsDefs = _map(_preludeJsDefs);
 var runtimeDeps = _map(_runtimeDeps);
 
-var typecheck = (prog) => _Result_flatMap7(($env) => Ok9(prog), inferProgram(prog, builtins, namespaces, false));
+var defaultOpts = { open: false, docs: true, moduleExt: ".js", strictEntry: false };
+var afterBlanks = _curry17(2, (s, i) => match16(_Str_get4(i, s)).with({ _tag: "Some", value: " " }, () => afterBlanks(s, i + 1)).with({ _tag: "Some", value: "\t" }, () => afterBlanks(s, i + 1)).otherwise((other) => other));
+var openDirective = (src) => {
+  const t = _Str_trim(src);
+  return and11(_Str_startsWith5('"use open"', t), match16(afterBlanks(t, 10)).with({ _tag: "None" }, () => true).with({ _tag: "Some", value: `
+` }, () => true).with({ _tag: "Some", value: "r" }, () => true).otherwise(() => false));
+};
+var openMode = _curry17(2, (src, requested) => or9(requested, openDirective(src)));
+var typecheckWith = _curry17(2, (prog, open) => _Result_flatMap7(($env) => Ok9(prog), inferProgram(prog, builtins, namespaces, open)));
 var frontend = ($x) => _Result_flatMap7(check)((($x2) => _Result_flatMap7(parse)(lex($x2)))($x));
-var pipeline = ($x) => _Result_flatMap7(typecheck)(frontend($x));
-var typedProgram = (src) => _Result_flatMap7((stmts) => _Result_flatMap7((r) => Ok9(_tuple10(stmts, r)), inferProgramTypes(stmts, builtins, namespaces, false)), frontend(src));
-var inferTypes = (src) => _Result_flatMap7((stmts) => _Result_flatMap7((r) => Ok9({ env: r.env, types: map12((hit) => ({ span: hit.span, ty: hit.ty, display: showType(widenLits(hit.ty)) }), r.types), aliases: r.aliases, letParams: r.letParams }), inferProgramTypes(stmts, builtins, namespaces, false)), frontend(src));
-var compile = (src) => _Result_flatMap7((prog) => Ok9(codegen(prog, new Map, true, namespaceRuntime, preludeJsDefs, runtimeDeps)), pipeline(src));
+var pipelineWith = _curry17(2, (src, open) => _Result_flatMap7((stmts) => typecheckWith(stmts, open), frontend(src)));
+var typedProgramWith = _curry17(2, (src, opts) => _Result_flatMap7((stmts) => _Result_flatMap7((r) => Ok9(_tuple10(stmts, r)), inferProgramTypes(stmts, builtins, namespaces, openMode(src, opts.open))), frontend(src)));
+var typedProgram = (src) => typedProgramWith(src, defaultOpts);
+var inferTypesWith = _curry17(2, (src, opts) => _Result_flatMap7((stmts) => _Result_flatMap7((r) => Ok9({ env: r.env, types: map12((hit) => ({ span: hit.span, ty: hit.ty, display: showType(widenLits(hit.ty)) }), r.types), aliases: r.aliases, letParams: r.letParams }), inferProgramTypes(stmts, builtins, namespaces, openMode(src, opts.open))), frontend(src)));
+var inferTypes = (src) => inferTypesWith(src, defaultOpts);
+var compileWith = _curry17(2, (src, opts) => _Result_flatMap7((prog) => Ok9(codegenWith(prog, new Map, true, namespaceRuntime, preludeJsDefs, runtimeDeps, { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt })), pipelineWith(src, openMode(src, opts.open))));
+var compile = (src) => compileWith(src, defaultOpts);
 var noImportedKeys = new Map;
-var compileTs = _curry17(2, (src, runtimeImport) => _Result_flatMap7((stmts) => _Result_flatMap7((r) => Ok9(emitTsModule(stmts, r.env, r.types, r.letParams, r.aliases, noImportedKeys, [], namespaceRuntime, preludeJsDefs, runtimeDeps, runtimeImport)), inferProgramTypes(stmts, builtins, namespaces, false)), frontend(src)));
+var compileTsWith = _curry17(3, (src, runtimeImport, opts) => _Result_flatMap7((stmts) => _Result_flatMap7((r) => Ok9(emitTsModuleWith(stmts, r.env, r.types, r.letParams, r.aliases, noImportedKeys, [], namespaceRuntime, preludeJsDefs, runtimeDeps, runtimeImport, opts.docs)), inferProgramTypes(stmts, builtins, namespaces, openMode(src, opts.open))), frontend(src)));
+var compileTs = _curry17(2, (src, runtimeImport) => compileTsWith(src, runtimeImport, defaultOpts));
 export {
   compile,
   compileTs,
+  compileTsWith,
+  compileWith,
+  defaultOpts,
   inferTypes,
-  typedProgram
+  inferTypesWith,
+  openDirective,
+  openMode,
+  typedProgram,
+  typedProgramWith
 };

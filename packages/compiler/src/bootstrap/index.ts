@@ -308,21 +308,10 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
   const checkGraph: BootstrapCore["checkGraph"] = async (entry, src, readFile) => {
     const loaded = await loadGraph(entry, src, readFile);
     if (loaded._tag === "Err") return loaded;
-    const entryPath = await import("node:path").then(({ resolve }) => resolve(entry));
-    const entryStmts = loaded.value.find((module) => module.path === entryPath)?.stmts ?? [];
-    // The bootstrap graph driver deliberately runs open-world (its CLI can
-    // link host globals). For an import-free editor buffer, use the strict
-    // single-file railway so misspelled local names still become diagnostics.
-    if (!entryStmts.some((stmt) => stmt._tag === "SImport" || stmt._tag === "SImportNs")) {
-      const strict = compileBootstrapSync(src);
-      return strict._tag === "Ok"
-        ? { _tag: "Ok", value: undefined }
-        : { _tag: "Err", error: enrich(strict.error, src) };
-    }
     const result = compileGraphBootstrap(loaded.value);
     return result._tag === "Ok"
       ? { _tag: "Ok", value: undefined }
-      : { _tag: "Err", error: enrich(result.error, src) };
+      : { _tag: "Err", error: enrich(decodeModulePath(result.error), src) };
   };
 
   return {
@@ -334,6 +323,16 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
     inferGraphTypes,
     checkGraph,
   };
+};
+
+/**
+ * Graph diagnostics are tagged `module '<path>': <message>` by the driver, so
+ * a caller can tell which module failed. Editors want the bare message plus a
+ * `path`, which is the shape every other façade query already returns.
+ */
+const decodeModulePath = (error: BootstrapDiagnostic): BootstrapDiagnostic => {
+  const tagged = /^module '([^']+)': (.*)$/.exec(error.message);
+  return tagged ? { ...error, path: tagged[1], message: tagged[2]! } : error;
 };
 
 /** Dependency-ordered bootstrap parse graph for host query façades. */

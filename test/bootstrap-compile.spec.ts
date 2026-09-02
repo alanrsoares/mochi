@@ -45,9 +45,10 @@ beforeAll(async () => {
     compileAl("bootstrap/infer.mochi"),
     ["inferProgram"],
   );
-  const { codegen } = evalNames<{ codegen: unknown }>(compileAl("bootstrap/codegen.mochi"), [
-    "codegen",
-  ]);
+  const { codegenWith, jsGenOpts } = evalNames<{ codegenWith: unknown; jsGenOpts: unknown }>(
+    compileAl("bootstrap/codegen.mochi"),
+    ["codegenWith", "jsGenOpts"],
+  );
   alCompile = evalNames<{ compile: (s: string) => AlResult }>(
     compileAl("bootstrap/compile.mochi"),
     ["compile"],
@@ -56,7 +57,8 @@ beforeAll(async () => {
       parse,
       check,
       inferProgram,
-      codegen,
+      codegenWith,
+      jsGenOpts,
       builtins: shim.builtins,
       namespaces: shim.namespaces,
       namespaceRuntime: shim.namespaceRuntime,

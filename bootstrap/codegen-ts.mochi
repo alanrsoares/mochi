@@ -1006,7 +1006,7 @@ let hasJsxStmts = stmts =>
 /// single file passes `#{}` / `[]`, a module in a graph passes its deps' ctor
 /// field keys (so destructuring an imported ctor emits the right names) and the
 /// `import type { … }` lines its driver computed from the emitted text.
-export let emitTsModule = (stmts, env, types, letParams, aliases: Map<string, AliasInfo>, imported, importLines, ns, jsDefs, runtimeDeps, runtimeImport) =>
+export let emitTsModuleWith = (stmts, env, types, letParams, aliases: Map<string, AliasInfo>, imported, importLines, ns, jsDefs, runtimeDeps, runtimeImport, docs) =>
   let declared = declaredTypeNames(stmts, 0, Set.fromArray([])) in
   let wanted = referencedCons(stmts, env, 0, Set.fromArray([])) in
   let recs = recordAliasIndex(aliases) in
@@ -1018,7 +1018,7 @@ export let emitTsModule = (stmts, env, types, letParams, aliases: Map<string, Al
     ns,
     jsDefs,
     runtimeDeps,
-    tsGenOpts(stmts, env, types, letParams, aliases)
+    { ...tsGenOpts(stmts, env, types, letParams, aliases), docs }
   ) in
   // `_tuple` is a TS-emit device with no AST reference for the dep scan to
   // find (ADR 0036), so pull it in from the emitted text.
@@ -1050,6 +1050,23 @@ export let emitTsModule = (stmts, env, types, letParams, aliases: Map<string, Al
     : "import type { ${Str.join(", ", Array.sort(typeDeps))} } from \"${runtimeImport}\";" in
     "${hasJsxStmts(stmts) ? "/** @jsx h */\n\n" : ""}${Str.join("\n\n", Array.filter(part => part != "", [Str.join("\n", header), Str.join("\n", importLines), typeImportLine, runtimeLine, body]))}"
       ++ "\n"
+
+/// The docstring-retaining default (ADR 0099); `--no-docs` callers reach for
+/// `emitTsModuleWith`.
+export let emitTsModule = (stmts, env, types, letParams, aliases: Map<string, AliasInfo>, imported, importLines, ns, jsDefs, runtimeDeps, runtimeImport) =>
+  stmts->emitTsModuleWith(
+    env,
+    types,
+    letParams,
+    aliases,
+    imported,
+    importLines,
+    ns,
+    jsDefs,
+    runtimeDeps,
+    runtimeImport,
+    true
+  )
 
 // ---- extern host declarations (ADR 0026 / 0064) ----------------------------
 //

@@ -1197,16 +1197,16 @@ const isLambdaOrTernary: _Curry<[cts: Ctx, e: Expr], boolean> = _curry(2, (cts: 
     .with({ _tag: "ETernary" }, () => true)
     .otherwise(() => printsAsLambda(cts, e)),
 );
-const binOpFor: <A>(fn: Expr, args: A[]) => Option<{ symbol: string; prec: number }> = _curry(
+const binOpFor: _Curry<[fn: Expr, args: Expr[]], Option<{ symbol: string; prec: number }>> = _curry(
   2,
-  <A>(fn: Expr, args: A[]) =>
-    match(args)
+  (fn: Expr, args: Expr[]) =>
+    match(_tuple(fn, args))
       .with(
-        (_v) => _v.length === 2,
-        () =>
-          match(fn)
-            .with({ _tag: "ERef" }, ({ name }) => binOpInfo(name))
-            .otherwise(() => None as Option<{ symbol: string; prec: number }>),
+        (_v): _v is [Extract<[Expr, Expr[]][0], { _tag: "ERef" }>, [Expr, Expr[]][1]] => {
+          const _g: any = _v;
+          return _g[0]._tag === "ERef" && _g[1].length === 2;
+        },
+        ([{ name }]) => binOpInfo(name),
       )
       .otherwise(() => None as Option<{ symbol: string; prec: number }>),
 );
@@ -1234,34 +1234,40 @@ const pipePrecOf: (e: Expr) => Option<number> = (e: Expr) =>
 const neqFor: _Curry<[fn: Expr, args: Expr[]], Option<[Expr, Expr]>> = _curry(
   2,
   (fn: Expr, args: Expr[]) =>
-    match(fn)
-      .with({ _tag: "ERef", name: "not" }, () =>
-        match(args)
-          .with(
-            (_v) => {
-              const _g: any = _v;
-              return _g.length === 1;
+    match(_tuple(fn, args))
+      .with(
+        (
+          _v,
+        ): _v is [
+          Extract<[Expr, Expr[]][0], { _tag: "ERef" }>,
+          [
+            Extract<[Expr, Expr[]][1][number], { _tag: "ECall" }> & {
+              fn: Extract<
+                Extract<[Expr, Expr[]][1][number], { _tag: "ECall" }>["fn"],
+                { _tag: "ERef" }
+              >;
             },
-            ([only]) =>
-              match(only)
-                .with({ _tag: "ECall" }, ({ fn: inner, args: innerArgs }) =>
-                  match(inner)
-                    .with({ _tag: "ERef", name: "eq" }, () =>
-                      match(innerArgs)
-                        .with(
-                          (_v) => {
-                            const _g: any = _v;
-                            return _g.length === 2;
-                          },
-                          ([l, r]) => Some(_tuple(l, r)) as Option<[Expr, Expr]>,
-                        )
-                        .otherwise(() => None as Option<[Expr, Expr]>),
-                    )
-                    .otherwise(() => None as Option<[Expr, Expr]>),
-                )
-                .otherwise(() => None as Option<[Expr, Expr]>),
-          )
-          .otherwise(() => None as Option<[Expr, Expr]>),
+          ],
+        ] => {
+          const _g: any = _v;
+          return (
+            _g[0]._tag === "ERef" &&
+            _g[0].name === "not" &&
+            _g[1].length === 1 &&
+            _g[1][0]._tag === "ECall" &&
+            _g[1][0].fn._tag === "ERef" &&
+            _g[1][0].fn.name === "eq" &&
+            _g[1][0].args.length === 2
+          );
+        },
+        ([
+          ,
+          [
+            {
+              args: [l, r],
+            },
+          ],
+        ]) => Some(_tuple(l, r)) as Option<[Expr, Expr]>,
       )
       .otherwise(() => None as Option<[Expr, Expr]>),
 );
@@ -1772,44 +1778,47 @@ const sectionOf: _Curry<[cts: Ctx, params: LamParam[], body: Expr], Option<Doc>>
 const composeParts: _Curry<[params: LamParam[], body: Expr], Option<[Expr, Expr]>> = _curry(
   2,
   (params: LamParam[], body: Expr) =>
-    match(params)
+    match(_tuple(params, body))
       .with(
-        (_v) => {
+        (
+          _v,
+        ): _v is [
+          [LamParam[], Expr][0],
+          Extract<[LamParam[], Expr][1], { _tag: "ECall" }> & {
+            args: [
+              Extract<
+                Extract<[LamParam[], Expr][1], { _tag: "ECall" }>["args"][number],
+                { _tag: "ECall" }
+              >,
+            ];
+          },
+        ] => {
           const _g: any = _v;
-          return _g.length === 1;
+          return (
+            _g[0].length === 1 &&
+            _g[1]._tag === "ECall" &&
+            _g[1].args.length === 1 &&
+            _g[1].args[0]._tag === "ECall" &&
+            _g[1].args[0].args.length === 1
+          );
         },
-        ([only]) =>
-          match(unspan(only))
+        ([
+          [p],
+          {
+            fn: right,
+            args: [
+              {
+                fn: left,
+                args: [inner],
+              },
+            ],
+          },
+        ]) =>
+          match(unspan(p))
             .with({ _tag: "LPName", name: "$x" }, () =>
-              match(body)
-                .with({ _tag: "ECall" }, ({ fn: right, args: outerArgs }) =>
-                  match(outerArgs)
-                    .with(
-                      (_v) => {
-                        const _g: any = _v;
-                        return _g.length === 1;
-                      },
-                      ([only]) =>
-                        match(only)
-                          .with({ _tag: "ECall" }, ({ fn: left, args: innerArgs }) =>
-                            match(innerArgs)
-                              .with(
-                                (_v) => {
-                                  const _g: any = _v;
-                                  return _g.length === 1;
-                                },
-                                ([inner]) =>
-                                  isRef(inner, "$x")
-                                    ? (Some(_tuple(left, right)) as Option<[Expr, Expr]>)
-                                    : (None as Option<[Expr, Expr]>),
-                              )
-                              .otherwise(() => None as Option<[Expr, Expr]>),
-                          )
-                          .otherwise(() => None as Option<[Expr, Expr]>),
-                    )
-                    .otherwise(() => None as Option<[Expr, Expr]>),
-                )
-                .otherwise(() => None as Option<[Expr, Expr]>),
+              isRef(inner, "$x")
+                ? (Some(_tuple(left, right)) as Option<[Expr, Expr]>)
+                : (None as Option<[Expr, Expr]>),
             )
             .otherwise(() => None as Option<[Expr, Expr]>),
       )

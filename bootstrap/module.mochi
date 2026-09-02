@@ -16,12 +16,13 @@ import {
   inferProgramImportsTypes,
   exportedSchemes
 } from "./infer.mochi"
-import { codegen } from "./codegen.mochi"
-import { emitTsModule, externModuleDts } from "./codegen-ts.mochi"
+import { codegenWith, jsGenOpts } from "./codegen.mochi"
+import { emitTsModuleWith, externModuleDts } from "./codegen-ts.mochi"
 import { showType, tVar } from "./types.mochi"
 import { widenLits } from "./schemes.mochi"
 import { index } from "./symbols.mochi"
-import { emitDtsFromTyped, emitDtsText, qualifierMapOf } from "./dts.mochi"
+import { emitDtsFromTypedWith, emitDtsText, qualifierMapOf } from "./dts.mochi"
+import { openMode } from "./compile.mochi"
 
 // Prelude tables from the generated shim (as in compile.mochi). Threaded opaquely
 // into inferProgramImports / codegen; module.mochi never inspects them.
@@ -45,8 +46,20 @@ export let emitDts = (src, runtimeImport) => emitDtsText(src, runtimeImport)
 /// host DX code about bootstrap's internal module layout.
 export let symbolOccurrences = stmts => index(stmts)
 
-// One loaded module: its canonical path and parsed statements.
-type Loaded = { path: string, stmts: [Stmt] }
+// Caller knobs, structurally identical to compile.mochi's `Opts` (ADR 0005),
+// so they unify across the module boundary without a type import.
+type Opts = { open: bool, docs: bool, moduleExt: string, strictEntry: bool }
+
+let defaultOpts : Opts = {
+  open: false,
+  docs: true,
+  moduleExt: ".js",
+  strictEntry: false
+}
+
+// One loaded module: its canonical path, source, and parsed statements. The
+// source rides along so every module can honour its own `"use open"`.
+type Loaded = { path: string, src: string, stmts: [Stmt] }
 
 type ModuleOutput = { path: string, js: string }
 
@@ -160,7 +173,7 @@ let visit = (path, acc) => switch Map.get(path, acc.state) {
                 | Ok(acc2) => Ok(
                     {
                       state: Map.set(path, "done", acc2.state),
-                      order: Array.append({ path, stmts }, acc2.order)
+                      order: Array.append({ path, src, stmts }, acc2.order)
                     }
                   )
               }
@@ -405,19 +418,28 @@ let resolveImportsFrom = (ctx, stmts, i, path, res, recovering) => switch Array.
 // Compile one module: resolve imports, check (with imported registry), infer
 // (with imported schemes), codegen (with imported ctor keys), then publish this
 // module's own exports/registry/keys into the ctx for later dependents.
-let compileOne = (ctx, loaded: Loaded, recovering) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, recovering) {
+// Which open mode one module is inferred under. Dependencies always honour
+// their own `"use open"`. Under `strictEntry` the ENTRY instead takes the
+// caller's flag verbatim, so an editor can still flag a typo in a file that
+// opted into host globals — `dx/diagnostics.ts` passes `open: false` there for
+// exactly this reason, while `mochi build` leaves the directive in charge.
+let openFor = (loaded: Loaded, isEntry, opts: Opts) =>
+  isEntry && opts.strictEntry ? opts.open : openMode(loaded.src, opts.open)
+
+let compileOne = (ctx, loaded: Loaded, recovering, isEntry, opts: Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, recovering) {
   | Err(e) => Err(atPath(loaded.path, e))
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
       | Err(e) => Err(atPath(loaded.path, e))
-      | Ok(_) => switch inferProgramImports(loaded.stmts, builtins, namespaces, !recovering, res.imports, res.nsImports, res.quals, None) {
+      | Ok(_) => switch inferProgramImports(loaded.stmts, builtins, namespaces, openFor(loaded, isEntry, opts), res.imports, res.nsImports, res.quals, None) {
           | Err(e) => Err(atPath(loaded.path, e))
-          | Ok(env) => let js = codegen(
+          | Ok(env) => let js = codegenWith(
               loaded.stmts,
               res.keys,
               true,
               namespaceRuntime,
               preludeJsDefs,
-              runtimeDeps
+              runtimeDeps,
+              { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt }
             ) in
               Ok(
                 {
@@ -449,18 +471,18 @@ let compileOne = (ctx, loaded: Loaded, recovering) => switch ctx->resolveImports
 }
 
 // Compile the whole ordered graph, threading the ctx; first Err short-circuits.
-let compileAll = (ctx, graph) => switch graph {
+let compileAll = (ctx, graph, opts) => switch graph {
   | [] => Ok(ctx.outputs)
-  | [m, ...rest] => switch ctx->compileOne(m, false) {
+  | [m, ...rest] => switch ctx->compileOne(m, false, Array.length(rest) == 0, opts) {
       | Err(e) => Err(e)
-      | Ok(ctx1) => ctx1->compileAll(rest)
+      | Ok(ctx1) => ctx1->compileAll(rest, opts)
     }
 }
 
 /// compileGraph : [Loaded] -> Result [ModuleOutput] MErr
 /// Spelled out (not point-free `compileAll(ctx0)`): the TS backend types a
 /// multi-param function uncurried, so a partial application is a tsc error.
-export let compileGraph = graph =>
+export let compileGraphWith = (graph, opts: Opts) =>
   compileAll(
     {
       exportsByPath: #{},
@@ -469,8 +491,11 @@ export let compileGraph = graph =>
       qualsByPath: #{},
       outputs: []
     },
-    graph
+    graph,
+    opts
   )
+
+export let compileGraph = graph => graph->compileGraphWith(defaultOpts)
 
 type GraphRecovery = { outputs: [ModuleOutput], errors: [MErr] }
 
@@ -500,11 +525,11 @@ type RecoveryCtx = {
 
 type RecoveryGraphState = { ctx: RecoveryCtx, errors: [MErr] }
 
-let compileAllRecovering = (ctx, graph, errors) => switch graph {
+let compileAllRecovering = (ctx, graph, errors, opts) => switch graph {
   | [] => { ctx, errors }
-  | [m, ...rest] => switch ctx->compileOne(m, true) {
-      | Err(e) => compileAllRecovering(ctx, rest, Array.append(e, errors))
-      | Ok(ctx1) => compileAllRecovering(ctx1, rest, errors)
+  | [m, ...rest] => switch ctx->compileOne(m, true, Array.length(rest) == 0, opts) {
+      | Err(e) => compileAllRecovering(ctx, rest, Array.append(e, errors), opts)
+      | Ok(ctx1) => compileAllRecovering(ctx1, rest, errors, opts)
     }
 }
 
@@ -525,25 +550,31 @@ export let freshRecoveryGraphState : () -> RecoveryGraphState = () =>
 
 /// recoverGraphFrom : RecoveryGraphState -> [Loaded] -> RecoveryGraphState
 /// Advance a graph recovery state by a dependency-ordered suffix.
+export let recoverGraphFromWith = (state, graph, opts: Opts) =>
+  compileAllRecovering(state.ctx, graph, state.errors, opts)
+
 export let recoverGraphFrom = (state, graph) =>
-  compileAllRecovering(state.ctx, graph, state.errors)
+  state->recoverGraphFromWith(graph, defaultOpts)
 
 /// Recovery graph driver: keeps checking after failures and gives downstream
 /// imports a polymorphic placeholder rather than an unbound-name cascade.
-export let compileGraphRecovering = graph =>
-  let state = freshRecoveryGraphState()->recoverGraphFrom(graph) in
+export let compileGraphRecoveringWith = (graph, opts: Opts) =>
+  let state = freshRecoveryGraphState()->recoverGraphFromWith(graph, opts) in
     { outputs: state.ctx.outputs, errors: state.errors }
+
+export let compileGraphRecovering = graph =>
+  graph->compileGraphRecoveringWith(defaultOpts)
 
 // --- typed graph queries -----------------------------------------------------
 // Editor tooling needs the same imports-aware inference result as TS emission,
 // without paying for code generation or reconstructing the import environment
 // in the TypeScript host. Keep every module's recorded spans together with the
 // alias scope accumulated through its dependencies.
-let inferOne = (ctx, loaded) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
+let inferOne = (ctx, loaded, opts: Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
   | Err(e) => Err(atPath(loaded.path, e))
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
       | Err(e) => Err(atPath(loaded.path, e))
-      | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, true, res.imports, res.nsImports, res.quals, None) {
+      | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, openMode(loaded.src, opts.open), res.imports, res.nsImports, res.quals, None) {
           | Err(e) => Err(atPath(loaded.path, e))
           | Ok(r) => Ok(
               {
@@ -588,11 +619,11 @@ let inferOne = (ctx, loaded) => switch ctx->resolveImportsFrom(loaded.stmts, 0, 
     }
 }
 
-let inferAll = (ctx, graph) => switch graph {
+let inferAll = (ctx, graph, opts) => switch graph {
   | [] => Ok(ctx)
-  | [m, ...rest] => switch ctx->inferOne(m) {
+  | [m, ...rest] => switch ctx->inferOne(m, opts) {
       | Err(e) => Err(e)
-      | Ok(ctx1) => ctx1->inferAll(rest)
+      | Ok(ctx1) => ctx1->inferAll(rest, opts)
     }
 }
 
@@ -612,19 +643,27 @@ export let freshInferGraphState = () =>
 /// inferGraphTypesFrom : InferGraphState -> [Loaded] -> Result InferGraphState MErr
 /// Advance an existing dependency-ordered graph state. The host may retain a
 /// state at a shared dependency prefix, then infer only a sibling entry tail.
-export let inferGraphTypesFrom = (state, graph) => state->inferAll(graph)
+export let inferGraphTypesFromWith = (state, graph, opts: Opts) =>
+  state->inferAll(graph, opts)
+
+export let inferGraphTypesFrom = (state, graph) =>
+  state->inferGraphTypesFromWith(graph, defaultOpts)
 
 /// inferGraphTypes : [Loaded] -> Result [{ path, types, aliases }] MErr
 /// Infer every dependency-ordered module with the exact import environment its
 /// emitter would use. This is the bootstrap graph typed-query boundary.
-export let inferGraphTypes = graph =>
-  let? state = freshInferGraphState()->inferGraphTypesFrom(graph) in
+export let inferGraphTypesWith = (graph, opts: Opts) =>
+  let? state = freshInferGraphState()->inferGraphTypesFromWith(graph, opts) in
     Ok(state.outputs)
+
+export let inferGraphTypes = graph => graph->inferGraphTypesWith(defaultOpts)
 
 /// buildModules : string -> Result [ModuleOutput] MErr
 /// Resolve the graph then compile it — one sync railway (host IO is sync).
-export let buildModules = entry =>
-  let? graph = entry->loadGraph() in graph->compileGraph()
+export let buildModulesWith = (entry, opts: Opts) =>
+  let? graph = entry->loadGraph() in graph->compileGraphWith(opts)
+
+export let buildModules = entry => entry->buildModulesWith(defaultOpts)
 
 // --- part (d): the typed-TypeScript graph driver (ADR 0090) -----------------
 // The same railway as compileGraph, but each module emits typed `.ts` instead of
@@ -784,13 +823,13 @@ let externBindingsInto = (stmts, path, env, acc) =>
 // Compile one module to typed TS: the same resolve/check/infer prefix as
 // `compileOne`, then emit, then prepend the `import type` lines the emitted text
 // turned out to need.
-let compileOneTs = (ctx, loaded) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
+let compileOneTs = (ctx, loaded, opts: Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
   | Err(e) => Err(atPath(loaded.path, e))
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
       | Err(e) => Err(atPath(loaded.path, e))
-      | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, true, res.imports, res.nsImports, res.quals, None) {
+      | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, openMode(loaded.src, opts.open), res.imports, res.nsImports, res.quals, None) {
           | Err(e) => Err(atPath(loaded.path, e))
-          | Ok(r) => let body = emitTsModule(
+          | Ok(r) => let body = emitTsModuleWith(
               loaded.stmts,
               r.env,
               r.types,
@@ -805,7 +844,8 @@ let compileOneTs = (ctx, loaded) => switch ctx->resolveImportsFrom(loaded.stmts,
               namespaceRuntime,
               preludeJsDefs,
               runtimeDeps,
-              ctx.runtimeImport
+              ctx.runtimeImport,
+              opts.docs
             ) in
             let lines = crossModuleTypeImports(
               body,
@@ -868,11 +908,11 @@ let externOutputs = externs =>
     |> map(dp =>
       { path: dp, js: externModuleDts(Map.getOr([], dp, externs), noAliases) })
 
-let compileAllTs = (ctx, graph) => switch graph {
+let compileAllTs = (ctx, graph, opts) => switch graph {
   | [] => Ok(Array.concat(ctx.outputs, externOutputs(ctx.externs)))
-  | [m, ...rest] => switch ctx->compileOneTs(m) {
+  | [m, ...rest] => switch ctx->compileOneTs(m, opts) {
       | Err(e) => Err(e)
-      | Ok(ctx1) => ctx1->compileAllTs(rest)
+      | Ok(ctx1) => ctx1->compileAllTs(rest, opts)
     }
 }
 
@@ -880,7 +920,7 @@ let compileAllTs = (ctx, graph) => switch graph {
 /// Emit the whole ordered graph as typed TypeScript (ADR 0090). Outputs are the
 /// `.mochi` module paths (the writer swaps the extension) followed by the extern
 /// sidecars, which already carry their own `.d.ts` / `.d.mts` extension.
-export let compileGraphTs = (graph, runtimeImport) =>
+export let compileGraphTsWith = (graph, runtimeImport, opts: Opts) =>
   compileAllTs(
     {
       exportsByPath: #{},
@@ -893,17 +933,21 @@ export let compileGraphTs = (graph, runtimeImport) =>
       externs: #{},
       outputs: []
     },
-    graph
+    graph,
+    opts
   )
+
+export let compileGraphTs = (graph, runtimeImport) =>
+  graph->compileGraphTsWith(runtimeImport, defaultOpts)
 
 // Walk the graph exactly as inference does, so a module's imports, registry and
 // qualified type scopes are in place, and emit `.d.ts` for ONE target path. The
 // dependencies are inferred, not emitted — `.d.ts` is a per-file question.
-let dtsOne = (ctx, loaded) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
+let dtsOne = (ctx, loaded, opts: Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
   | Err(e) => Err(atPath(loaded.path, e))
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
       | Err(e) => Err(atPath(loaded.path, e))
-      | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, true, res.imports, res.nsImports, res.quals, None) {
+      | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, openMode(loaded.src, opts.open), res.imports, res.nsImports, res.quals, None) {
           | Err(e) => Err(atPath(loaded.path, e))
           | Ok(r) => Ok(
               {
@@ -931,7 +975,7 @@ let dtsOne = (ctx, loaded) => switch ctx->resolveImportsFrom(loaded.stmts, 0, lo
                 runtimeImport: ctx.runtimeImport,
                 target: ctx.target,
                 dts: loaded.path == ctx.target
-                  ? emitDtsFromTyped(
+                  ? emitDtsFromTypedWith(
                     loaded.stmts,
                     r.env,
                     // Dependency aliases stay in scope for the same reason the
@@ -939,7 +983,8 @@ let dtsOne = (ctx, loaded) => switch ctx->resolveImportsFrom(loaded.stmts, 0, lo
                     // to rows, so without them an imported type prints inline.
                     mergeMap(r.aliases, ctx.aliases),
                     qualifierMapOf(res.quals, localTypeNames(loaded.stmts)),
-                    ctx.runtimeImport
+                    ctx.runtimeImport,
+                    opts.docs
                   )
                   : ctx.dts
               }
@@ -948,17 +993,17 @@ let dtsOne = (ctx, loaded) => switch ctx->resolveImportsFrom(loaded.stmts, 0, lo
     }
 }
 
-let dtsAll = (ctx, graph) => switch graph {
+let dtsAll = (ctx, graph, opts) => switch graph {
   | [] => Ok(ctx.dts)
-  | [m, ...rest] => switch ctx->dtsOne(m) {
+  | [m, ...rest] => switch ctx->dtsOne(m, opts) {
       | Err(e) => Err(e)
-      | Ok(ctx1) => ctx1->dtsAll(rest)
+      | Ok(ctx1) => ctx1->dtsAll(rest, opts)
     }
 }
 
 /// emitDtsForFile : string -> string -> Result string MErr — `.d.ts` for one
 /// file, typed through its own import graph so `Alias.T` resolves (ADR 0046).
-export let emitDtsForFile = (entry, runtimeImport) =>
+export let emitDtsForFileWith = (entry, runtimeImport, opts: Opts) =>
   let? graph = entry->loadGraph() in
     dtsAll(
       {
@@ -968,12 +1013,20 @@ export let emitDtsForFile = (entry, runtimeImport) =>
         qualsByPath: #{},
         aliases: #{},
         runtimeImport,
-        target: entry,
+        target: absPath(entry),
         dts: ""
       },
-      graph
+      graph,
+      opts
     )
 
+export let emitDtsForFile = (entry, runtimeImport) =>
+  entry->emitDtsForFileWith(runtimeImport, defaultOpts)
+
 /// buildModulesTs : string -> string -> Result [ModuleOutput] MErr
+export let buildModulesTsWith = (entry, runtimeImport, opts: Opts) =>
+  let? graph = entry->loadGraph() in
+    graph->compileGraphTsWith(runtimeImport, opts)
+
 export let buildModulesTs = (entry, runtimeImport) =>
-  let? graph = entry->loadGraph() in graph->compileGraphTs(runtimeImport)
+  entry->buildModulesTsWith(runtimeImport, defaultOpts)
