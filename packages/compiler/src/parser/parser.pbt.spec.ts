@@ -113,3 +113,34 @@ test("a top-level statement's span covers its whole source text", () => {
     }),
   );
 });
+
+// The remaining statement kinds are not expression-tailed, so no generator is
+// needed — but they are the same `to(start)`-vs-last-token question, and
+// nothing else pins them. A trailing `)`, `}` or string quote is exactly what
+// an off-by-one drops.
+const STATEMENTS: readonly string[] = [
+  "let v = (1)",
+  "let v : (number) = 1",
+  "export let v = f((1), (2))",
+  "/// doc\nlet v = 1",
+  "type T = { a: number }",
+  "type T = | A(number) | B",
+  "type T a = | A(a)",
+  "type Alias = number",
+  'extern e : number -> number = "./m.mjs" "e"',
+  'import { a, b } from "./m.mochi"',
+  'import * as M from "./m.mochi"',
+  "f((1))",
+  "do { f((1)); g(2) }",
+];
+
+test("every statement kind's span covers its whole source text", () => {
+  for (const src of STATEMENTS) {
+    const prog = unwrapOk(parse(unwrapOk(lex(src))));
+    expect(prog.stmts).toHaveLength(1);
+    const stmt = prog.stmts[0]!;
+    // A doc comment sits outside the statement it annotates.
+    const body = src.startsWith("///") ? src.slice(src.indexOf("\n") + 1) : src;
+    expect(src.slice(stmt.span.start, stmt.span.end)).toBe(body);
+  }
+});

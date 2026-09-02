@@ -1837,19 +1837,36 @@ let parseStmt = (toks, pos, tmp, hooks) =>
     switch lt.tok {
       | TImport => parseImport(toks, pos)
           |> Result.map(((s, p)) => ([s], p, tmp))
-      | TExport => switch tokAt(toks, pos + 1).tok {
-          | TType => toks->parseType(pos + 1)
-              |> Result.map(((s, p)) => ([setTypeMeta(true, doc, s)], p, tmp))
-          | TExtern => toks->parseExtern(pos + 1)
-              |> Result.map(((s, p)) => ([setExternMeta(true, doc, s)], p, tmp))
-          | TLet => toks->parseLet(pos + 1, tmp, hooks)
-              |> Result.map(((stmts, p, tmp2)) =>
-                (stmts |> map(setLetMeta(true, doc)), p, tmp2))
-          | _ => errAt(
-              "`export` must precede let, type, or extern",
-              tokAt(toks, pos + 1)
-            )
-        }
+      | TExport => let exportSp = spanOf(lt) in
+          switch tokAt(toks, pos + 1).tok {
+            | TType => toks->parseType(pos + 1)
+                |> Result.map(((s, p)) =>
+                  (
+                    [widenToExport(exportSp, setTypeMeta(true, doc, s))],
+                    p,
+                    tmp
+                  ))
+            | TExtern => toks->parseExtern(pos + 1)
+                |> Result.map(((s, p)) =>
+                  (
+                    [widenToExport(exportSp, setExternMeta(true, doc, s))],
+                    p,
+                    tmp
+                  ))
+            | TLet => toks->parseLet(pos + 1, tmp, hooks)
+                |> Result.map(((stmts, p, tmp2)) =>
+                  (
+                    stmts
+                      |> map(setLetMeta(true, doc))
+                      |> widenHeadToExport(exportSp),
+                    p,
+                    tmp2
+                  ))
+            | _ => errAt(
+                "`export` must precede let, type, or extern",
+                tokAt(toks, pos + 1)
+              )
+          }
       | TType => toks->parseType(pos)
           |> Result.map(((s, p)) => ([setTypeMeta(false, doc, s)], p, tmp))
       | TExtern => toks->parseExtern(pos)
@@ -1859,6 +1876,50 @@ let parseStmt = (toks, pos, tmp, hooks) =>
             (stmts |> map(setLetMeta(false, doc)), p, tmp2))
       | _ => toks->parseExprStmt(pos, tmp, hooks)
     }
+
+/// `export` precedes the statement it modifies, so the keyword is outside the
+/// span the inner parser built. Grow the statement to cover it. Only the FIRST
+/// statement of a group: `export let { x, y } = e` desugars to a header plus one
+/// field-access `let` per name, and those keep their own field spans.
+let widenToExport = (start, s) => switch s {
+  | Ast.SLet(name, nameSpan, annot, value, exported, doc, span) => Ast.SLet(
+      name,
+      nameSpan,
+      annot,
+      value,
+      exported,
+      doc,
+      spanning(start, span)
+    )
+  | Ast.SType(name, params, ctors, alias, aliasType, exported, doc, span) => Ast.SType(
+      name,
+      params,
+      ctors,
+      alias,
+      aliasType,
+      exported,
+      doc,
+      spanning(start, span)
+    )
+  | Ast.SExtern(name, nameSpan, params, typeExpr, module, imported, curried, exported, doc, span) => Ast.SExtern(
+      name,
+      nameSpan,
+      params,
+      typeExpr,
+      module,
+      imported,
+      curried,
+      exported,
+      doc,
+      spanning(start, span)
+    )
+  | other => other
+}
+
+let widenHeadToExport = (start, stmts) => switch stmts {
+  | [head, ...rest] => Array.prepend(widenToExport(start, head), rest)
+  | _ => stmts
+}
 
 // --- recovery (ADR 0045) ---
 

@@ -1574,21 +1574,34 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
       case "import":
         return [parseImport()];
       case "export": {
-        next();
+        // `export` precedes the statement it modifies, so the keyword sits
+        // outside the span the inner parser builds — grow it to cover the
+        // keyword. Only the FIRST statement of a group: `export let { x, y } =
+        // e` desugars to a header plus one field-access `let` per name, and
+        // those keep their own field spans.
+        const exportSpan = next().span;
+        const widen = <T extends Stmt>(st: T): T => ({
+          ...st,
+          span: spanning(exportSpan, st.span),
+        });
         const inner = peek().t;
         switch (inner) {
           case "type":
-            return [{ ...parseType(), exported: true, doc }];
+            return [widen({ ...parseType(), exported: true, doc })];
           case "extern": {
             const external = parseExtern();
             return [
-              external.kind === "extern"
-                ? { ...external, exported: true, doc }
-                : { ...external, exported: true, doc },
+              widen(
+                external.kind === "extern"
+                  ? { ...external, exported: true, doc }
+                  : { ...external, exported: true, doc },
+              ),
             ];
           }
           case "let":
-            return parseLet().map((s) => ({ ...s, exported: true, doc }));
+            return parseLet()
+              .map((s) => ({ ...s, exported: true, doc }))
+              .map((s, i) => (i === 0 ? widen(s) : s));
         }
         return fail("`export` must precede let, type, or extern");
       }
