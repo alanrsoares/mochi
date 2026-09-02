@@ -85,7 +85,12 @@ ADR 0078's amendment) but plugin `format` hooks stay a TypeScript-host seam.
 `bootstrap/seed/` graph is the stage-1 TypeScript snapshot. It is a
 reviewed emitted artifact with a SHA-256 manifest, not an editable source;
 ADR 0090's chain is Mochi → that graph → stage-2 JS → stage-3 JS. The TypeScript
-implementation remains an independent differential oracle during the migration.
+implementation remains an independent differential oracle during the migration,
+reached through `scripts/ts-oracle-build.ts` — the CLI itself no longer has a
+TypeScript path. `mochi <file>`, `ts`, `dts` and `build` all run the frozen
+graph under every flag, because the self-hosted core takes `open`, `docs`,
+`moduleExt` and `strictEntry` as real options
+([ADR 0104](adr/0104-self-hosted-core-takes-the-compile-options.md)).
 
 Two invariants are enforced in CI-style scripts:
 
