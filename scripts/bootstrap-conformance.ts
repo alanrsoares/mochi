@@ -13,6 +13,7 @@ import {
   compileBootstrapSyncWith,
   compileTsBootstrapSyncWith,
 } from "@mochi/compiler/bootstrap/sync";
+import { match } from "@onrails/pattern";
 
 type CompileCase = { id: string; kind: "compile"; source: string; expect: string };
 type DiagnosticCase = { id: string; kind: "diagnostic"; source: string; expect: string };
@@ -23,8 +24,16 @@ type RuntimeCase = {
   expect: string;
 };
 type GraphCase = { id: string; kind: "graph"; entry: string; expect: string };
+type GraphDiagnosticCase = { id: string; kind: "graph-diagnostic"; entry: string; expect: string };
 type TypedTsCase = { id: string; kind: "typed-ts"; source: string; expect: string };
-type Case = CompileCase | DiagnosticCase | RuntimeCase | GraphCase | TypedTsCase;
+type CompactDiagnostic = { message: string; start: number; end: number };
+type Case =
+  | CompileCase
+  | DiagnosticCase
+  | RuntimeCase
+  | GraphCase
+  | GraphDiagnosticCase
+  | TypedTsCase;
 type Manifest = { version: 1; cases: Case[] };
 
 const options = { open: false, docs: true, moduleExt: ".js", strictEntry: false };
@@ -35,6 +44,17 @@ const text = (path: string): string => readFileSync(join(fixtureRoot, path), "ut
 const expectedJson = (path: string): unknown => JSON.parse(text(path)) as unknown;
 const resultError = (id: string, message: string): string => `${id}: ${message}`;
 const json = (value: unknown): string => `${JSON.stringify(value, null, 2)}\n`;
+const evaluateRuntime = (js: string, names: string[]): unknown =>
+  new Function(
+    "match",
+    `"use strict";\n${js.replace('import { match } from "@onrails/pattern";\n', "")}\nreturn { ${names.join(", ")} };`,
+  )(match) as unknown;
+const graphDiagnostic = (entry: string, error: CompactDiagnostic) => ({
+  message: error.message.replace(fixtureRoot, "<fixtures>"),
+  start: error.start,
+  end: error.end,
+  entry: relative(fixtureRoot, entry),
+});
 
 const typecheck = (id: string, source: string): string | null => {
   const dir = mkdtempSync(join(tmpdir(), "mochi-conformance-"));
@@ -86,9 +106,7 @@ const runCase = (test: Case): string | null => {
       return resultError(test.id, `unexpected diagnostic ${result.error.message}`);
     const expected = expectedJson(test.expect) as Record<string, unknown>;
     const names = Object.keys(expected);
-    const actual = new Function(
-      `"use strict";\n${result.value}\nreturn { ${names.join(", ")} };`,
-    )() as unknown;
+    const actual = evaluateRuntime(result.value, names);
     return JSON.stringify(actual) === JSON.stringify(expected)
       ? null
       : resultError(test.id, `runtime result differs: ${JSON.stringify(actual)}`);
@@ -106,6 +124,16 @@ const runCase = (test: Case): string | null => {
     return JSON.stringify(actual) === JSON.stringify(expectedJson(test.expect))
       ? null
       : resultError(test.id, `module output differs: ${JSON.stringify(actual)}`);
+  }
+
+  if (test.kind === "graph-diagnostic") {
+    const entry = join(fixtureRoot, test.entry);
+    const result = buildModulesBootstrapWith(entry, options);
+    if (result._tag === "Ok") return resultError(test.id, "expected a graph diagnostic");
+    const actual = graphDiagnostic(entry, result.error);
+    return JSON.stringify(actual) === JSON.stringify(expectedJson(test.expect))
+      ? null
+      : resultError(test.id, `graph diagnostic differs: ${JSON.stringify(actual)}`);
   }
 
   const result = compileTsBootstrapSyncWith(text(test.source), "@mochi/runtime", options);
@@ -140,9 +168,7 @@ const candidateFor = (test: Case): { path: string; contents: string } => {
     if (result._tag === "Err") throw new Error(resultError(test.id, result.error.message));
     const expected = expectedJson(test.expect) as Record<string, unknown>;
     const names = Object.keys(expected);
-    const actual = new Function(
-      `"use strict";\n${result.value}\nreturn { ${names.join(", ")} };`,
-    )() as unknown;
+    const actual = evaluateRuntime(result.value, names);
     return { path: test.expect, contents: json(actual) };
   }
 
@@ -156,6 +182,13 @@ const candidateFor = (test: Case): { path: string; contents: string } => {
         result.value.map(({ path, js }) => ({ path: relative(dirname(entry), path), js })),
       ),
     };
+  }
+
+  if (test.kind === "graph-diagnostic") {
+    const entry = join(fixtureRoot, test.entry);
+    const result = buildModulesBootstrapWith(entry, options);
+    if (result._tag === "Ok") throw new Error(resultError(test.id, "expected a graph diagnostic"));
+    return { path: test.expect, contents: json(graphDiagnostic(entry, result.error)) };
   }
 
   const result = compileTsBootstrapSyncWith(text(test.source), "@mochi/runtime", options);

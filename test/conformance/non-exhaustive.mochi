@@ -1,0 +1,4 @@
+type Choice =
+  | One
+  | Two
+let answer = c => switch c { | One => 1 }

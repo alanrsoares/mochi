@@ -1,0 +1,5 @@
+type Shape =
+  | Circle(radius: number)
+  | Square(side: number)
+let area = s => switch s { | Circle(r) => r * r | Square(s) => s * s }
+let answer = area(Circle(4))

@@ -75,7 +75,7 @@ const alEmit = (src: string): string => {
 // ---- the corpus: every .mochi file in the repo --------------------------------
 
 const corpus = [...new Bun.Glob("**/*.mochi").scanSync({ cwd: root })]
-  .filter((p) => !p.includes("node_modules"))
+  .filter((p) => !p.includes("node_modules") && !p.startsWith("test/conformance/"))
   .sort();
 
 test("corpus includes the bootstrap codegen itself", () => {
