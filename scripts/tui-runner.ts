@@ -308,8 +308,9 @@ const showCursor = (): void => {
 
 /**
  * Where a task's output goes. On a TTY it streams live, prefixed by task name;
- * off a TTY it is buffered and printed as one block when the task ends, so a CI
- * log stays readable instead of interleaving seven producers line by line.
+ * off a TTY it is buffered and only a failing task's tail is printed. This keeps
+ * successful Vite/Bun output from pushing the diagnostic that matters out of a
+ * CI log.
  */
 type Sink = {
   readonly line: (text: string, stderr: boolean) => void;
@@ -354,8 +355,15 @@ const makeSink = (spec: TaskSpec, opts: Options): Sink => {
         line: (text, stderr) => {
           if (text.trim() !== "") buffered.push(render(text, stderr));
         },
-        flush: () => {
-          if (buffered.length > 0) write(buffered.join(""));
+        flush: (outcome) => {
+          if (outcome === "passed" || outcome === "cancelled" || buffered.length === 0) return;
+          const capped = opts.tail === 0 ? buffered : buffered.slice(-opts.tail);
+          const dropped = buffered.length - capped.length;
+          const head =
+            dropped > 0
+              ? `${YELLOW}--- ${spec.name} (${dropped} earlier lines omitted)${RESET}\n`
+              : `${YELLOW}--- ${spec.name} (final output)${RESET}\n`;
+          write(`${head}${capped.join("")}\n`);
         },
       };
 };
@@ -425,7 +433,9 @@ const verdict = (
     .with("passed", () => `${head} ${GREEN}passed${RESET} ${GRAY}in ${duration(ms)}${RESET}\n`)
     .with(
       "timeout",
-      () => `${head} ${YELLOW}timed out${RESET} ${GRAY}after ${duration(opts.timeout)}${RESET}\n`,
+      () =>
+        `${head} ${YELLOW}timed out${RESET} ${GRAY}after ${duration(opts.timeout)}${RESET}\n` +
+        `${YELLOW}   ↳ ${spec.name} exceeded the task timeout and was killed; buffered output above is its final tail.${RESET}\n`,
     )
     .with("cancelled", () => `${head} ${GRAY}cancelled${RESET}\n`)
     .with(
@@ -455,9 +465,17 @@ const runTask = async (spec: TaskSpec, opts: Options): Promise<TaskResult> => {
     env: { ...process.env, ...(COLOR ? { FORCE_COLOR: "1" } : {}) },
     stdout: "pipe",
     stderr: "pipe",
-    timeout: opts.timeout,
-    killSignal: "SIGKILL",
   });
+
+  // Track our own deadline instead of inferring it from `signalCode`. A parent
+  // process (a cancelled CI job or an interrupted commit hook) can also send
+  // SIGKILL; calling that a timeout turns the real interruption into a bogus
+  // "after 900s" finding.
+  let timedOut = false;
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    proc.kill("SIGKILL");
+  }, opts.timeout);
 
   // Per-task drain control, wired to the global bail: a timeout kill has to be
   // able to abandon its own pipes without cancelling every sibling's.
@@ -474,6 +492,7 @@ const runTask = async (spec: TaskSpec, opts: Options): Promise<TaskResult> => {
   const exit = await Promise.race([proc.exited, bailed]);
 
   if (exit === "cancelled") {
+    clearTimeout(timeoutId);
     proc.kill();
     bail.signal.removeEventListener("abort", stopDrain);
     const ms = performance.now() - started;
@@ -481,13 +500,7 @@ const runTask = async (spec: TaskSpec, opts: Options): Promise<TaskResult> => {
     if (!opts.compact) write(verdict(spec, "cancelled", ms, 0, opts));
     return { name: spec.name, outcome: "cancelled", ms };
   }
-  /**
-   * `proc.killed` is NOT "we killed it" — Bun sets it on any exited process, so
-   * it labelled every ordinary non-zero exit a timeout. `signalCode` is the real
-   * signal, and SIGKILL can only come from the spawn timeout: the `--bail` path
-   * sends SIGTERM and has already returned above.
-   */
-  const timedOut = proc.signalCode === "SIGKILL";
+  clearTimeout(timeoutId);
 
   // A SIGKILLed `bun run` can leave a grandchild holding the pipe, so a killed
   // task drains on a clock; a task that exited on its own closes it promptly.
@@ -500,7 +513,7 @@ const runTask = async (spec: TaskSpec, opts: Options): Promise<TaskResult> => {
   bail.signal.removeEventListener("abort", stopDrain);
 
   const ms = performance.now() - started;
-  // The only kill left is the spawn timeout — the bail path returned above.
+  // Only our deadline callback sets `timedOut`; external signals remain failures.
   const outcome: Outcome = exit === 0 ? "passed" : timedOut ? "timeout" : "failed";
   setPhase(spec.name, outcome, { ms });
   if (opts.compact) {
