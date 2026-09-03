@@ -39,7 +39,7 @@ export type ParamAnnots = { generics: string; params: Option<string>[] };
  * locally and still unify structurally with the real AST values.
  */
 export type CtorFieldLike = { name: Option<string>; fieldType: TypeExpr };
-export type CtorLike = { name: string; fields: CtorFieldLike[] };
+export type CtorLike = { name: string; fields: CtorFieldLike[]; span: SpanAt };
 export type GenOpts = {
   annotateLet: Option<(a: string, b: Expr) => Option<string>>;
   annotateCtor: Option<(a: Stmt, b: CtorLike) => Option<CtorFactoryTs>>;
@@ -407,6 +407,7 @@ const emptyNsEmit: _Curry<
 const isLabeledParam: (p: LamParam) => boolean = (p: LamParam) =>
   match(p)
     .with({ _tag: "LPLabeled" }, () => true)
+    .with({ _tag: "LPSpanned" }, ({ param: inner }) => isLabeledParam(inner))
     .otherwise(() => false);
 const splitLamParams: _Curry<
   [params: LamParam[], positional: LamParam[], labeled: LamParam[]],
@@ -737,20 +738,26 @@ const genExpr: _Curry<[ctx: GCtx, e: Expr], string> = _curry(2, (ctx: GCtx, e: E
             genExpr(ctx, value),
           ))(`(${genParam(param)}) => ${genLambdaBody(ctx, body)}`))(bindRuntime(monad)),
     )
-    .with({ _tag: "EPipe" }, ({ left, right }) =>
-      match(right)
-        .with(
-          (_v): _v is Extract<Expr, { _tag: "ECall" }> => {
-            const _g: any = _v;
-            return _g._tag === "ECall" && (({ fn: rfn, args: rargs }) => ctx.flattenPipe)(_g);
-          },
-          ({ fn: rfn, args: rargs }) =>
-            `${genCallee(ctx, rfn)}(${_Str_join(
-              ", ",
-              map((a: Expr) => genExpr(ctx, a), _Array_append(left, rargs)),
-            )})`,
-        )
-        .otherwise(() => `${genCallee(ctx, right)}(${genExpr(ctx, left)})`),
+    .with({ _tag: "EPipe" }, ({ left, right, fast, span: sp }) =>
+      fast
+        ? match(right)
+            .with({ _tag: "ECall" }, ({ fn: rfn, args: rargs, origin }) =>
+              genExpr(ctx, Ast.ECall(rfn, _Array_prepend(left, rargs), origin, sp)),
+            )
+            .otherwise(() => genExpr(ctx, Ast.ECall(right, [left], None as Option<string>, sp)))
+        : match(right)
+            .with(
+              (_v): _v is Extract<Expr, { _tag: "ECall" }> => {
+                const _g: any = _v;
+                return _g._tag === "ECall" && (({ fn: rfn, args: rargs }) => ctx.flattenPipe)(_g);
+              },
+              ({ fn: rfn, args: rargs }) =>
+                `${genCallee(ctx, rfn)}(${_Str_join(
+                  ", ",
+                  map((a: Expr) => genExpr(ctx, a), _Array_append(left, rargs)),
+                )})`,
+            )
+            .otherwise(() => `${genCallee(ctx, right)}(${genExpr(ctx, left)})`),
     )
     .with({ _tag: "EDo" }, ({ exprs }) => genDo(ctx, exprs))
     .with(
@@ -928,6 +935,7 @@ const genList: _Curry<[ctx: GCtx, elements: SeqElem[]], string> = _curry(
 );
 const genParam: (p: LamParam) => string = (p: LamParam) =>
   match(p)
+    .with({ _tag: "LPSpanned" }, ({ param: inner }) => genParam(inner))
     .with({ _tag: "LPName" }, ({ name }) => name)
     .with({ _tag: "LPTuple" }, ({ names }) => `[${_Str_join(", ", names)}]`)
     .with({ _tag: "LPRecord" }, ({ fields }) => `{ ${_Str_join(", ", fields)} }`)
@@ -1053,8 +1061,8 @@ const wrapStepTails: _Curry<[e: Expr, sp: SpanAt], Expr> = _curry(2, (e: Expr, s
     .with({ _tag: "ETernary" }, ({ cond, thenE, elseE, span: tsp }) =>
       Ast.ETernary(cond, wrapStepTails(thenE, sp), wrapStepTails(elseE, sp), tsp),
     )
-    .with({ _tag: "ELetIn" }, ({ name, nameSpan, value, body, span: lsp }) =>
-      Ast.ELetIn(name, nameSpan, value, wrapStepTails(body, sp), lsp),
+    .with({ _tag: "ELetIn" }, ({ name, nameSpan, annot, value, body, span: lsp }) =>
+      Ast.ELetIn(name, nameSpan, annot, value, wrapStepTails(body, sp), lsp),
     )
     .with({ _tag: "EDo" }, ({ exprs, span: dsp }) => Ast.EDo(wrapDoStepTail(exprs, sp), dsp))
     .with({ _tag: "EMatch" }, ({ scrutinee, arms, span: msp }) =>
@@ -1221,6 +1229,7 @@ const genLambdaBody: _Curry<[ctx: GCtx, e: Expr], string> = _curry(2, (ctx: GCtx
 );
 const paramNames: (p: LamParam) => string[] = (p: LamParam) =>
   match(p)
+    .with({ _tag: "LPSpanned" }, ({ param: inner }) => paramNames(inner))
     .with({ _tag: "LPName" }, ({ name }) => [name])
     .with({ _tag: "LPTuple" }, ({ names }) => names)
     .with({ _tag: "LPRecord" }, ({ fields }) => fields)
@@ -1230,6 +1239,7 @@ const genLabeledFill: _Curry<[ctx: GCtx, labVar: string, lab: LamParam], string>
   3,
   (ctx: GCtx, labVar: string, lab: LamParam) =>
     match(lab)
+      .with({ _tag: "LPSpanned" }, ({ param: inner }) => genLabeledFill(ctx, labVar, inner))
       .with({ _tag: "LPLabeled" }, ({ name, optional, defaultValue }) =>
         ((access: string) =>
           match(defaultValue)
@@ -1288,6 +1298,11 @@ const fillNames: <A>(fills: ({ labs: LamParam[] } & A)[], acc: Set<string>) => S
             reduce(
               _curry(2, (s: Set<string>, lab: LamParam) =>
                 match(lab)
+                  .with({ _tag: "LPSpanned" }, ({ param: inner }) =>
+                    match(inner)
+                      .with({ _tag: "LPLabeled" }, ({ name }) => _Set_add(name, s))
+                      .otherwise(() => s),
+                  )
                   .with({ _tag: "LPLabeled" }, ({ name }) => _Set_add(name, s))
                   .otherwise(() => s),
               ),
@@ -1854,6 +1869,9 @@ const litValue: (p: Pattern) => string = (p: Pattern) =>
 /**
  * A field's refined type when its sub-pattern narrows it, else `None` — a
  * bind/wildcard/literal needs no narrowing and keeps its declared type.
+ * Tuple and array sub-patterns recurse: a ctor under `[Call(f, [g], _, _)]`
+ * is two slots down, and without this the predicate stopped at the top level
+ * while the handler destructured all the way (TS2339 on the inner field).
  */
 const fieldRefine: _Curry<[ctx: GCtx, p: Pattern, fieldBase: string], Option<string>> = _curry(
   3,
@@ -1861,6 +1879,18 @@ const fieldRefine: _Curry<[ctx: GCtx, p: Pattern, fieldBase: string], Option<str
     match(p)
       .with({ _tag: "PCtor" }, () => Some(patTarget(ctx, p, fieldBase)) as Option<string>)
       .with({ _tag: "PRecord" }, () =>
+        ((t: string) =>
+          eq(t, fieldBase) ? (None as Option<string>) : (Some(t) as Option<string>))(
+          patTarget(ctx, p, fieldBase),
+        ),
+      )
+      .with({ _tag: "PTuple" }, () =>
+        ((t: string) =>
+          eq(t, fieldBase) ? (None as Option<string>) : (Some(t) as Option<string>))(
+          patTarget(ctx, p, fieldBase),
+        ),
+      )
+      .with({ _tag: "PArr" }, () =>
         ((t: string) =>
           eq(t, fieldBase) ? (None as Option<string>) : (Some(t) as Option<string>))(
           patTarget(ctx, p, fieldBase),
@@ -2625,6 +2655,36 @@ const exprRefs: _Curry<[ctx: GCtx, e: Expr, acc: Set<string>], Set<string>> = _c
               reduce(
                 _curry(2, (b: Set<string>, lab: LamParam) =>
                   match(lab)
+                    .with(
+                      (
+                        _v,
+                      ): _v is Extract<LamParam, { _tag: "LPSpanned" }> & {
+                        param: Extract<
+                          Extract<LamParam, { _tag: "LPSpanned" }>["param"],
+                          { _tag: "LPLabeled" }
+                        > & {
+                          defaultValue: Extract<
+                            Extract<
+                              Extract<LamParam, { _tag: "LPSpanned" }>["param"],
+                              { _tag: "LPLabeled" }
+                            >["defaultValue"],
+                            { _tag: "Some" }
+                          >;
+                        };
+                      } => {
+                        const _g: any = _v;
+                        return (
+                          _g._tag === "LPSpanned" &&
+                          _g.param._tag === "LPLabeled" &&
+                          _g.param.defaultValue._tag === "Some"
+                        );
+                      },
+                      ({
+                        param: {
+                          defaultValue: { value: d },
+                        },
+                      }) => exprRefs(ctx, d, b),
+                    )
                     .with(
                       (
                         _v,

@@ -115,9 +115,9 @@ export let exprSpan = e => switch e {
   | Ast.ERef(_, sp) => sp
   | Ast.ECall(_, _, _, sp) => sp
   | Ast.ELambda(_, _, sp) => sp
-  | Ast.ELetIn(_, _, _, _, sp) => sp
+  | Ast.ELetIn(_, _, _, _, _, sp) => sp
   | Ast.ELetBind(_, _, _, _, _, sp) => sp
-  | Ast.EPipe(_, _, sp) => sp
+  | Ast.EPipe(_, _, _, sp) => sp
   | Ast.EDo(_, sp) => sp
   | Ast.ETernary(_, _, _, sp) => sp
   | Ast.EMatch(_, _, sp) => sp
@@ -210,6 +210,7 @@ let bindParamFieldsFrom = (fields, env, row, st: Types.St) => switch fields {
 }
 
 let bindParam = (p, env, st: Types.St) => switch p {
+  | Ast.LPSpanned(inner, _) => bindParam(inner, env, st)
   | Ast.LPName(name, _) => let (t, st1) = freshVar(st) in
       (t, Map.set(name, mono(t), env), st1)
   | Ast.LPTuple(names) => let (elems, env1, st1) = bindParamNamesFrom(
@@ -245,7 +246,7 @@ let constrainParamAnnotsFrom = (ctx: Ctx<a>, params, paramTypes, vars, st: Types
   | [param, ...rest] => switch paramTypes {
       | [] => Ok((vars, st))
       | [paramT, ...restTypes] => switch param {
-          | Ast.LPName(_, Some(te)) => let (annotT, vars1, st1) = typeExprToType(
+          | Ast.LPSpanned(Ast.LPName(_, Some(te)), _) => let (annotT, vars1, st1) = typeExprToType(
               te,
               vars,
               st,
@@ -377,6 +378,7 @@ let domainIsOmittableRecord = (t, st: Types.St) => switch zonk(t, st) {
 
 let isLabeledParam = p => switch p {
   | Ast.LPLabeled(_, _, _, _) => true
+  | Ast.LPSpanned(inner, _) => isLabeledParam(inner)
   | _ => false
 }
 
@@ -392,6 +394,13 @@ let splitLamParams = (params, positional, labeled) => switch params {
 let labFieldsFrom = (ctx: Ctx<a>, labs, env, vars, st: Types.St) => switch labs {
   | [] => Ok(([], st))
   | [lab, ...rest] => switch lab {
+      | Ast.LPSpanned(inner, _) => labFieldsFrom(
+          ctx,
+          [inner, ...rest],
+          env,
+          vars,
+          st
+        )
       | Ast.LPLabeled(name, annot, optional, defaultValue) => let (fieldT, vars1, st1) = switch annot {
           | Some(te) => typeExprToType(
               te,
@@ -793,7 +802,7 @@ let inferExprRaw = (ctx: Ctx<a>, e, st: Types.St) => switch e {
       envWithLabFields(labFields, bodyEnv)
     )->inferExpr(body, st3) in
       Ok((arrowChain(allTypes, bodyT), st4))
-  | Ast.ELetIn(name, _nameSpan, value, body, _span) => switch value {
+  | Ast.ELetIn(name, _nameSpan, annot, value, body, _span) => switch value {
       | Ast.ELambda(_, _, _) =>
         // Adjacent lambda locals share the top-level SCC machinery (ADR 0067):
         // pre-bind monomorphically, infer dependency-first, then generalize.
@@ -807,14 +816,30 @@ let inferExprRaw = (ctx: Ctx<a>, e, st: Types.St) => switch e {
         ) in
           localCtx->inferExpr(tail, localSt)
       | _ => let? (valT, st1) = ctx->inferExpr(value, st) in
-        let sc = generalize(ctx.env, valT, st1, true) in
+        // `let x : T = v in b` (ADR 0044): pin to the declared type before
+        // generalize, so a literal against a union keeps the union instead of
+        // widening — and an annotated binding never widens its literals.
+        let? (pinned, st2) = switch annot {
+          | Some(te) => let (at, _, stA) = typeExprToType(
+              te,
+              #{},
+              st1,
+              ctx.aliasMap,
+              Set.fromArray([])
+            ) in
+              checkFits(valT, at, stA, annotSpan(te))
+                |> Result.map(stB => (at, stB))
+          | None => Ok((valT, st1))
+        } in
+        let widen = switch annot { | Some(_) => false | None => true } in
+        let sc = generalize(ctx.env, pinned, st2, widen) in
         let vsp = exprSpan(value) in
         let $ctx = ctxWithLets(
           ctx,
           Map.set(name, sc, ctx.env),
           Map.set(name, vsp, ctx.letOwner)
         ) in
-          $ctx->inferExpr(body, noteLet(vsp, st1))
+          $ctx->inferExpr(body, noteLet(vsp, st2))
     }
   | Ast.ELetBind(param, paramSpan, monad, value, body, _) => ctx->inferLetBind(
       e,
@@ -841,7 +866,18 @@ let inferExprRaw = (ctx: Ctx<a>, e, st: Types.St) => switch e {
         | Some(r) => Ok(r)
         | None => ctx->inferNormalCall(fn, args, st)
       }
-  | Ast.EPipe(left, right, sp) => ctx->inferExpr(
+  | Ast.EPipe(left, right, true, sp) =>
+    // `a |> f` is `f(a)`; the fast pipe PREPENDS into the call on its right, so
+    // `a -> f(b)` is `f(a, b)` (ADR 0069). codegen.mochi repeats this lowering —
+    // keep the two argument orders in step.
+    switch right {
+      | Ast.ECall(rfn, rargs, origin, _) => ctx->inferExpr(
+          Ast.ECall(rfn, Array.prepend(left, rargs), origin, sp),
+          st
+        )
+      | _ => ctx->inferExpr(Ast.ECall(right, [left], None, sp), st)
+    }
+  | Ast.EPipe(left, right, _, sp) => ctx->inferExpr(
       Ast.ECall(right, [left], None, sp),
       st
     )
@@ -1111,6 +1147,7 @@ let addAllFrom = (names, set) => switch names {
 }
 
 let paramBound = (p, bound) => switch p {
+  | Ast.LPSpanned(inner, _) => paramBound(inner, bound)
   | Ast.LPName(name, _) => Set.add(name, bound)
   | Ast.LPTuple(names) => addAllFrom(names, bound)
   | Ast.LPRecord(fields) => addAllFrom(fields, bound)
@@ -1126,6 +1163,11 @@ let lambdaBound = (params, bound) => switch params {
 let labeledDefaultRefs = (params, bound, acc) => switch params {
   | [] => acc
   | [p, ...rest] => switch p {
+      | Ast.LPSpanned(inner, _) => labeledDefaultRefs(
+          [inner, ...rest],
+          bound,
+          acc
+        )
       | Ast.LPLabeled(_, _, _, Some(d)) => labeledDefaultRefs(
           rest,
           bound,
@@ -1205,7 +1247,7 @@ let freeRefs = (e, bound, acc) => switch e {
       lambdaBound(params, bound),
       labeledDefaultRefs(params, bound, acc)
     )
-  | Ast.ELetIn(name, _, value, body, _) => let valueBound = switch value {
+  | Ast.ELetIn(name, _, _, value, body, _) => let valueBound = switch value {
       | Ast.ELambda(_, _, _) => Set.add(name, bound)
       | _ => bound
     } in
@@ -1217,7 +1259,7 @@ let freeRefs = (e, bound, acc) => switch e {
       acc
     ) in
       freeRefs(body, paramBound(param, bound), acc1)
-  | Ast.EPipe(left, right, _) => freeRefs(
+  | Ast.EPipe(left, right, _, _) => freeRefs(
       right,
       bound,
       freeRefs(left, bound, acc)
@@ -1473,16 +1515,17 @@ let letsOfFrom = stmts => switch stmts {
 }
 
 // Convert an adjacent lambda-local chain to the same lightweight SLet shape
-// top-level SCC inference already consumes. `ELetIn` has no `export`/doc/annot.
+// top-level SCC inference already consumes. `ELetIn` has no `export`/doc, but
+// its annotation rides along so the group pins the declared type (ADR 0044).
 let localLetsFrom = e =>
   // Dogfood ADR 0067: this private collector recurses without becoming a
   // bootstrap module binding. Its lambda RHS makes `collect` self-scoped.
   let collect = (current, acc) => switch current {
-    | Ast.ELetIn(name, nameSpan, value, body, span) => switch value {
+    | Ast.ELetIn(name, nameSpan, annot, value, body, span) => switch value {
         | Ast.ELambda(_, _, _) => collect(
             body,
             Array.append(
-              Ast.SLet(name, nameSpan, None, value, false, None, span),
+              Ast.SLet(name, nameSpan, annot, value, false, None, span),
               acc
             )
           )
@@ -1493,7 +1536,7 @@ let localLetsFrom = e =>
     collect(e, [])
 
 let localTail = e => switch e {
-  | Ast.ELetIn(_, _, Ast.ELambda(_, _, _), body, _) => localTail(body)
+  | Ast.ELetIn(_, _, _, Ast.ELambda(_, _, _), body, _) => localTail(body)
   | _ => e
 }
 

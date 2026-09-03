@@ -1,4 +1,12 @@
 /**
+ * The SHIPPED formatter (scripts/fmt.ts and the CLI import this one).
+ * `bootstrap/format.mochi` is the self-hosted port, kept in step by hand:
+ * test/bootstrap-format.spec.ts diffs the two over single-line expression
+ * output only — comments, statement layout and blank lines are not compared
+ * yet, so a change here can drift silently. A lefthook pre-push job warns when
+ * only one side moves. TypeScript stays the source of truth until whole-file
+ * parity is green (see the notes in bootstrap/format.mochi).
+ *
  * mochi source formatter: parse to the AST, lower to a Wadler/Prettier-style
  * document IR (`doc.ts`), then lay it out against an 80-column target (ADR
  * 0025). Every breakable construct — pipe, switch, ternary, `let … in`,
@@ -58,6 +66,7 @@ import {
   indent,
   join,
   line,
+  lineSuffix,
   render,
   seq,
   softline,
@@ -413,7 +422,10 @@ const leadingDocs = (node: Expr | Stmt | Ctor): Doc[] => {
  */
 const trailingDocs = (node: Expr | Stmt | Ctor): Doc[] => {
   const cs = TRAILING.get(node);
-  return cs ? cs.flatMap((c) => [txt(` ${c.text}`), breakParent]) : [];
+  // `lineSuffix`, not plain text: the comment has to print after whatever
+  // separator the enclosing list adds. Emitted here it produced `x // c,` —
+  // the comma inside the comment, and output that no longer parses.
+  return cs ? cs.flatMap((c) => [lineSuffix(txt(` ${c.text}`)), breakParent]) : [];
 };
 
 const withComments = (node: Expr | Stmt | Ctor, doc: Doc): Doc => {
@@ -824,24 +836,6 @@ const refoldCall = (e: CallExpr): Doc | null => {
   if (e.args.length === 1 && e.fn.kind === "lambda" && e.fn.params.length === 1) {
     const p = e.fn.params[0]!;
     if (p.kind !== "name") return letLikeD(`let ${param(p)}`, e.args[0]!, e.fn.body);
-  }
-
-  // Refold composition: `($x) => g(f($x))` -> `f >> g`
-  if (
-    e.fn.kind === "lambda" &&
-    e.fn.params.length === 1 &&
-    e.fn.params[0]!.kind === "name" &&
-    e.fn.params[0]!.name === "$x" &&
-    e.fn.body.kind === "call" &&
-    e.fn.body.args.length === 1 &&
-    e.fn.body.args[0]!.kind === "call" &&
-    e.fn.body.args[0]!.args.length === 1 &&
-    e.fn.body.args[0]!.args[0]!.kind === "ref" &&
-    e.fn.body.args[0]!.args[0]!.name === "$x"
-  ) {
-    const left = e.fn.body.args[0]!.fn;
-    const right = e.fn.body.fn;
-    return group(seq(operandD(left), txt(" >> "), operandD(right)));
   }
 
   return binaryD(e) ?? unaryD(e);

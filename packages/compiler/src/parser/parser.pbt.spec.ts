@@ -94,3 +94,53 @@ test("every child span is contained within its parent's span", () => {
     }),
   );
 });
+
+// A statement's span must cover the statement's own source text. The
+// interesting case is a parenthesized tail — `let v = (a + b)`, `x => (e)` —
+// where the node the parser returns is the INNER expression, so a span built
+// from it stops before the `)`. Statement spans are what the LSP hands back as
+// a range and what `///` doc attachment measures, so a one-character shortfall
+// is visible.
+const paren = expr.map((e) => `(${e})`);
+
+test("a top-level statement's span covers its whole source text", () => {
+  fc.assert(
+    fc.property(fc.oneof(expr, paren), (body) => {
+      for (const src of [`let v = ${body}`, `let f = x => ${body}`, `let g = x => (${body})`]) {
+        const stmt = unwrapOk(parse(unwrapOk(lex(src)))).stmts[0]!;
+        expect(src.slice(stmt.span.start, stmt.span.end)).toBe(src);
+      }
+    }),
+  );
+});
+
+// The remaining statement kinds are not expression-tailed, so no generator is
+// needed — but they are the same `to(start)`-vs-last-token question, and
+// nothing else pins them. A trailing `)`, `}` or string quote is exactly what
+// an off-by-one drops.
+const STATEMENTS: readonly string[] = [
+  "let v = (1)",
+  "let v : (number) = 1",
+  "export let v = f((1), (2))",
+  "/// doc\nlet v = 1",
+  "type T = { a: number }",
+  "type T = | A(number) | B",
+  "type T a = | A(a)",
+  "type Alias = number",
+  'extern e : number -> number = "./m.mjs" "e"',
+  'import { a, b } from "./m.mochi"',
+  'import * as M from "./m.mochi"',
+  "f((1))",
+  "do { f((1)); g(2) }",
+];
+
+test("every statement kind's span covers its whole source text", () => {
+  for (const src of STATEMENTS) {
+    const prog = unwrapOk(parse(unwrapOk(lex(src))));
+    expect(prog.stmts).toHaveLength(1);
+    const stmt = prog.stmts[0]!;
+    // A doc comment sits outside the statement it annotates.
+    const body = src.startsWith("///") ? src.slice(src.indexOf("\n") + 1) : src;
+    expect(src.slice(stmt.span.start, stmt.span.end)).toBe(body);
+  }
+});

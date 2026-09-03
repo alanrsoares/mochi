@@ -539,10 +539,15 @@ const parseParam: <A>(
           ([fields, p]) =>
             _Result_flatMap(
               (p2) =>
-                Ok(_tuple(Ast.LPRecord(map((f: Name) => f.name, fields)), p2)) as Result<
-                  [LamParam, number],
-                  PErr
-                >,
+                Ok(
+                  _tuple(
+                    Ast.LPSpanned(
+                      Ast.LPRecord(map((f: Name) => f.name, fields)),
+                      map((f: Name) => f.span, fields),
+                    ),
+                    p2,
+                  ),
+                ) as Result<[LamParam, number], PErr>,
               expectTok(TRbrace as Tok, toks, p),
             ),
           listUntil(TRbrace as Tok, expectId, toks, pos + 1),
@@ -560,9 +565,23 @@ const parseParam: <A>(
                         const _g: any = _v;
                         return _g.length === 1;
                       },
-                      ([single]) => _tuple(Ast.LPName(single.name, None as Option<TypeExpr>), p2),
+                      ([single]) =>
+                        _tuple(
+                          Ast.LPSpanned(Ast.LPName(single.name, None as Option<TypeExpr>), [
+                            single.span,
+                          ]),
+                          p2,
+                        ),
                     )
-                    .otherwise((many) => _tuple(Ast.LPTuple(map((n: Name) => n.name, many)), p2)),
+                    .otherwise((many) =>
+                      _tuple(
+                        Ast.LPSpanned(
+                          Ast.LPTuple(map((n: Name) => n.name, many)),
+                          map((n: Name) => n.span, many),
+                        ),
+                        p2,
+                      ),
+                    ),
                 ) as Result<[LamParam, number], PErr>,
               expectTok(TRparen as Tok, toks, p),
             ),
@@ -575,13 +594,20 @@ const parseParam: <A>(
             eq(tokAt(toks, p).tok, TColon as Tok)
               ? _Result_map(
                   ([annot, p2]: [TypeExpr, number]) =>
-                    _tuple(Ast.LPName(nm.name, Some(annot) as Option<TypeExpr>), p2),
+                    _tuple(
+                      Ast.LPSpanned(Ast.LPName(nm.name, Some(annot) as Option<TypeExpr>), [
+                        nm.span,
+                      ]),
+                      p2,
+                    ),
                   parseTypeExpr(toks, p + 1),
                 )
-              : (Ok(_tuple(Ast.LPName(nm.name, None as Option<TypeExpr>), p)) as Result<
-                  [LamParam, number],
-                  PErr
-                >),
+              : (Ok(
+                  _tuple(
+                    Ast.LPSpanned(Ast.LPName(nm.name, None as Option<TypeExpr>), [nm.span]),
+                    p,
+                  ),
+                ) as Result<[LamParam, number], PErr>),
           expectId(toks, pos),
         ),
       ),
@@ -628,13 +654,22 @@ const parseLabeledParam: <A>(
                       ? _Result_map(
                           ([d, k]: [Expr, number]) =>
                             _tuple(
-                              Ast.LPLabeled(nm.name, annot, optional, Some(d) as Option<Expr>),
+                              Ast.LPSpanned(
+                                Ast.LPLabeled(nm.name, annot, optional, Some(d) as Option<Expr>),
+                                [nm.span],
+                              ),
                               k,
                             ),
                           parseExpr(toks, p3 + 1, hooks),
                         )
                       : (Ok(
-                          _tuple(Ast.LPLabeled(nm.name, annot, optional, None as Option<Expr>), p3),
+                          _tuple(
+                            Ast.LPSpanned(
+                              Ast.LPLabeled(nm.name, annot, optional, None as Option<Expr>),
+                              [nm.span],
+                            ),
+                            p3,
+                          ),
                         ) as Result<[LamParam, number], PErr>),
                   eq(tokAt(toks, p2).tok, TColon as Tok)
                     ? _Result_map(
@@ -683,6 +718,7 @@ const parseLamParam: <A>(
 const isLabeledParam: (p: LamParam) => boolean = (p: LamParam) =>
   match(p)
     .with({ _tag: "LPLabeled" }, () => true)
+    .with({ _tag: "LPSpanned" }, ({ param: inner }) => isLabeledParam(inner))
     .otherwise(() => false);
 /**
  * True when every labeled parameter (if any) sits after every positional one.
@@ -747,9 +783,13 @@ const parseLambda: <A>(
                 Ok(
                   _tuple(
                     Ast.ELambda(
-                      [Ast.LPName(name, None as Option<TypeExpr>)],
+                      [
+                        Ast.LPSpanned(Ast.LPName(name, None as Option<TypeExpr>), [
+                          spanOf(tokAt(toks, pos)),
+                        ]),
+                      ],
                       body,
-                      spanning(start, exprSpan(body)),
+                      toEnd(start, toks, p2),
                     ),
                     p2,
                   ),
@@ -772,10 +812,7 @@ const parseLambda: <A>(
                             _Result_flatMap(
                               ([body, p5]) =>
                                 Ok(
-                                  _tuple(
-                                    Ast.ELambda(params, body, spanning(start, exprSpan(body))),
-                                    p5,
-                                  ),
+                                  _tuple(Ast.ELambda(params, body, toEnd(start, toks, p5)), p5),
                                 ) as Result<[Expr, number], PErr>,
                               parseLambdaBody(toks, p4, hooks),
                             ),
@@ -889,7 +926,7 @@ const parseLetIn: <A>(
                                           monad,
                                           value,
                                           body,
-                                          spanning(start, exprSpan(body)),
+                                          toEnd(start, toks, p5),
                                         ),
                                         p5,
                                       ),
@@ -925,16 +962,12 @@ const parseLetIn: <A>(
                                             fn,
                                             [value],
                                             None as Option<string>,
-                                            spanning(start, exprSpan(body)),
+                                            toEnd(start, toks, p5),
                                           ),
                                           p5,
                                         ),
                                       ) as Result<[Expr, number], PErr>)(
-                                      Ast.ELambda(
-                                        [param],
-                                        body,
-                                        spanning(paramStart, exprSpan(body)),
-                                      ),
+                                      Ast.ELambda([param], body, toEnd(paramStart, toks, p5)),
                                     ),
                                   parseExpr(toks, p4, hooks),
                                 ),
@@ -949,32 +982,45 @@ const parseLetIn: <A>(
             : _Result_flatMap(
                 ([nm, p1]) =>
                   _Result_flatMap(
-                    (p2) =>
+                    ([annot, pA]) =>
                       _Result_flatMap(
-                        ([value, p3]) =>
+                        (p2) =>
                           _Result_flatMap(
-                            (p4) =>
+                            ([value, p3]) =>
                               _Result_flatMap(
-                                ([body, p5]) =>
-                                  Ok(
-                                    _tuple(
-                                      Ast.ELetIn(
-                                        nm.name,
-                                        nm.span,
-                                        value,
-                                        body,
-                                        spanning(start, exprSpan(body)),
-                                      ),
-                                      p5,
-                                    ),
-                                  ) as Result<[Expr, number], PErr>,
-                                parseExpr(toks, p4, hooks),
+                                (p4) =>
+                                  _Result_flatMap(
+                                    ([body, p5]) =>
+                                      Ok(
+                                        _tuple(
+                                          Ast.ELetIn(
+                                            nm.name,
+                                            nm.span,
+                                            annot,
+                                            value,
+                                            body,
+                                            toEnd(start, toks, p5),
+                                          ),
+                                          p5,
+                                        ),
+                                      ) as Result<[Expr, number], PErr>,
+                                    parseExpr(toks, p4, hooks),
+                                  ),
+                                expectIn(toks, p3),
                               ),
-                            expectIn(toks, p3),
+                            parseExpr(toks, p2, hooks),
                           ),
-                        parseExpr(toks, p2, hooks),
+                        expectTok(TEq as Tok, toks, pA),
                       ),
-                    expectTok(TEq as Tok, toks, p1),
+                    eq(tokAt(toks, p1).tok, TColon as Tok)
+                      ? _Result_map(
+                          ([ty, k]: [TypeExpr, number]) => _tuple(Some(ty) as Option<TypeExpr>, k),
+                          parseTypeExpr(toks, p1 + 1),
+                        )
+                      : (Ok(_tuple(None as Option<TypeExpr>, p1)) as Result<
+                          [Option<TypeExpr>, number],
+                          PErr
+                        >),
                   ),
                 expectId(toks, p),
               ),
@@ -1205,7 +1251,7 @@ const parseInfix: <A>(
       ? _Result_flatMap(
           ([right, p]) =>
             Ok({
-              left: Ast.EPipe(left, right, spanning(exprSpan(left), exprSpan(right))),
+              left: Ast.EPipe(left, right, false, spanning(exprSpan(left), exprSpan(right))),
               p: p,
               matched: true,
             }) as Result<{ left: Expr; p: number; matched: boolean }, PErr>,
@@ -1217,14 +1263,9 @@ const parseInfix: <A>(
               match(right)
                 .with(
                   { _tag: "ECall" },
-                  ({ fn, args, origin, span: rightSpan }) =>
+                  ({ span: rightSpan }) =>
                     Ok({
-                      left: Ast.ECall(
-                        fn,
-                        _Array_prepend(left, args),
-                        origin,
-                        spanning(exprSpan(left), rightSpan),
-                      ),
+                      left: Ast.EPipe(left, right, true, spanning(exprSpan(left), rightSpan)),
                       p: p,
                       matched: true,
                     }) as Result<{ left: Expr; p: number; matched: boolean }, PErr>,
@@ -3452,15 +3493,14 @@ const parseCtor: <A>(
               ([fields, p2]) =>
                 _Result_flatMap(
                   (p3) =>
-                    Ok(_tuple({ name: nm.name, fields: fields }, p3)) as Result<
-                      [Ctor, number],
-                      PErr
-                    >,
+                    Ok(
+                      _tuple({ name: nm.name, fields: fields, span: toEnd(nm.span, toks, p3) }, p3),
+                    ) as Result<[Ctor, number], PErr>,
                   expectTok(TRparen as Tok, toks, p2),
                 ),
               listUntil(TRparen as Tok, parseCtorField, toks, p + 1),
             )
-          : (Ok(_tuple({ name: nm.name, fields: [] as CtorField[] }, p)) as Result<
+          : (Ok(_tuple({ name: nm.name, fields: [] as CtorField[], span: nm.span }, p)) as Result<
               [Ctor, number],
               PErr
             >),
@@ -3966,7 +4006,7 @@ const parseRecordDestructure: <A, B>(
                                     whole,
                                   ),
                                 ))(`$d${show(tmp)}`))(spanning(openSp, closeSp)))(
-                            spanning(start, exprSpan(value)),
+                            toEnd(start, toks, p4),
                           ),
                         parseExpr(toks, p3, hooks),
                       ),
@@ -4030,7 +4070,7 @@ const parseLet: <A>(
                                     value,
                                     false,
                                     None as Option<string>,
-                                    spanning(start, exprSpan(value)),
+                                    toEnd(start, toks, p3),
                                   ),
                                 ],
                                 p3,
@@ -4119,7 +4159,7 @@ const parseExprStmt: <A, B>(
     const start = tokAt(toks, pos);
     return _Result_flatMap(
       ([value, p]) =>
-        ((p2: number) => Ok(_tuple([Ast.SExpr(value, spanning(start, exprSpan(value)))], p2, tmp)))(
+        ((p2: number) => Ok(_tuple([Ast.SExpr(value, toEnd(spanOf(start), toks, p))], p2, tmp)))(
           eq(tokAt(toks, p).tok, TSemi as Tok) ? p + 1 : p,
         ),
       parseExpr(toks, pos, hooks),
@@ -4157,29 +4197,32 @@ const parseStmt: _Curry<
         _Result_map(([s, p]: [Stmt, number]) => _tuple([s], p, tmp), parseImport(toks, pos)),
       )
       .with({ _tag: "TExport" }, () =>
-        match(tokAt(toks, pos + 1).tok)
-          .with({ _tag: "TType" }, () =>
-            _Result_map(
-              ([s, p]: [Stmt, number]) => _tuple([setTypeMeta(true, doc, s)], p, tmp),
-              parseType(toks, pos + 1),
-            ),
-          )
-          .with({ _tag: "TExtern" }, () =>
-            _Result_map(
-              ([s, p]: [Stmt, number]) => _tuple([setExternMeta(true, doc, s)], p, tmp),
-              parseExtern(toks, pos + 1),
-            ),
-          )
-          .with({ _tag: "TLet" }, () =>
-            _Result_map(
-              ([stmts, p, tmp2]: [Stmt[], number, number]) =>
-                _tuple(map(setLetMeta(true, doc), stmts), p, tmp2),
-              parseLet(toks, pos + 1, tmp, hooks),
-            ),
-          )
-          .otherwise(() =>
-            errAt("`export` must precede let, type, or extern", tokAt(toks, pos + 1)),
-          ),
+        ((exportSp: SpanAt) =>
+          match(tokAt(toks, pos + 1).tok)
+            .with({ _tag: "TType" }, () =>
+              _Result_map(
+                ([s, p]: [Stmt, number]) =>
+                  _tuple([widenToExport(exportSp, setTypeMeta(true, doc, s))], p, tmp),
+                parseType(toks, pos + 1),
+              ),
+            )
+            .with({ _tag: "TExtern" }, () =>
+              _Result_map(
+                ([s, p]: [Stmt, number]) =>
+                  _tuple([widenToExport(exportSp, setExternMeta(true, doc, s))], p, tmp),
+                parseExtern(toks, pos + 1),
+              ),
+            )
+            .with({ _tag: "TLet" }, () =>
+              _Result_map(
+                ([stmts, p, tmp2]: [Stmt[], number, number]) =>
+                  _tuple(widenHeadToExport(exportSp, map(setLetMeta(true, doc), stmts)), p, tmp2),
+                parseLet(toks, pos + 1, tmp, hooks),
+              ),
+            )
+            .otherwise(() =>
+              errAt("`export` must precede let, type, or extern", tokAt(toks, pos + 1)),
+            ))(spanOf(lt)),
       )
       .with({ _tag: "TType" }, () =>
         _Result_map(
@@ -4202,6 +4245,53 @@ const parseStmt: _Curry<
       )
       .otherwise(() => parseExprStmt(toks, pos, tmp, hooks));
   },
+);
+/**
+ * `export` precedes the statement it modifies, so the keyword is outside the
+ * span the inner parser built. Grow the statement to cover it. Only the FIRST
+ * statement of a group: `export let { x, y } = e` desugars to a header plus one
+ * field-access `let` per name, and those keep their own field spans.
+ */
+const widenToExport: <A>(start: { start: number } & A, s: Stmt) => Stmt = _curry(
+  2,
+  <A>(start: { start: number } & A, s: Stmt) =>
+    match(s)
+      .with({ _tag: "SLet" }, ({ name, nameSpan, annot, value, exported, doc, span }) =>
+        Ast.SLet(name, nameSpan, annot, value, exported, doc, spanning(start, span)),
+      )
+      .with({ _tag: "SType" }, ({ name, params, ctors, alias, aliasType, exported, doc, span }) =>
+        Ast.SType(name, params, ctors, alias, aliasType, exported, doc, spanning(start, span)),
+      )
+      .with(
+        { _tag: "SExtern" },
+        ({ name, nameSpan, params, typeExpr, module, imported, curried, exported, doc, span }) =>
+          Ast.SExtern(
+            name,
+            nameSpan,
+            params,
+            typeExpr,
+            module,
+            imported,
+            curried,
+            exported,
+            doc,
+            spanning(start, span),
+          ),
+      )
+      .otherwise((other) => other),
+);
+const widenHeadToExport: <A>(start: { start: number } & A, stmts: Stmt[]) => Stmt[] = _curry(
+  2,
+  <A>(start: { start: number } & A, stmts: Stmt[]) =>
+    match(stmts)
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length >= 1;
+        },
+        ([head, ...rest]) => _Array_prepend(widenToExport(start, head), rest),
+      )
+      .otherwise(() => stmts),
 );
 /**
  * Core sync set for panic-mode recovery: the language's own declaration keywords.

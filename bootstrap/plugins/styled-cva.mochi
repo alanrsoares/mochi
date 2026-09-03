@@ -1,0 +1,93 @@
+// bootstrap/plugins/styled-cva.mochi — inference half of the styled-CVA adapter.
+// Declaration and formatter hooks remain host seams until their bootstrap APIs land.
+
+import * as Ast from "../ast.mochi"
+import {
+  tArrow,
+  tCon,
+  tLit,
+  tRecord,
+  tUnion,
+  rExtend,
+  zonk,
+  freshRowVar
+} from "../types.mochi"
+
+extern intrinsicElements : Map<string, Map<string, string> > = "./jsx-schema.gen.mjs" "intrinsicElements"
+
+let isTwFactory = fn => switch fn {
+  | Ast.EField(Ast.ERef("tw", _), _, _, _) => true
+  | _ => false
+}
+
+let twTag = fn => switch fn {
+  | Ast.EField(_, name, _, _) => Some(name)
+  | _ => None
+}
+
+let twSpan = fn => switch fn {
+  | Ast.EField(_, _, _, span) => span
+  | _ => { start: 0, end: 0 }
+}
+
+let inferArgs = (args, st, inferExpr) => switch args {
+  | [] => Ok(st)
+  | [arg, ...rest] => inferExpr(arg, st)
+      |> Result.flatMap(((_, st1)) => inferArgs(rest, st1, inferExpr))
+}
+
+let fieldValue = (fields, name) => switch fields {
+  | [] => None
+  | [field, ...rest] => field.name == name
+      ? Some(field.value)
+      : fieldValue(rest, name)
+}
+
+let literalsOf = fields => fields |> map(field => tLit(field.name))
+
+let variantRow = (fields, row) => switch fields {
+  | [] => row
+  | [field, ...rest] => let ty = switch field.value {
+      | Ast.ERecord(keys, None, _) => let lits = literalsOf(keys) in
+          Array.length(lits) == 0 ? tCon("string", []) : tUnion(lits)
+      | _ => tCon("string", [])
+    } in
+      rExtend(field.name, ty, variantRow(rest, row))
+}
+
+let propsRow = (args, st) => switch Array.get(1, args) {
+  | Some(Ast.ERecord(config, _, _)) => let (row, st1) = freshRowVar(st) in
+      switch fieldValue(config, "variants") {
+        | Some(Ast.ERecord(variants, None, _)) => (
+            variantRow(variants, row),
+            st1
+          )
+        | _ => (row, st1)
+      }
+  | _ => freshRowVar(st)
+}
+
+export let inferStyledCvaCall = (fn, args, _origin, st, api) =>
+  !isTwFactory(fn)
+    ? Ok(None)
+    : switch twTag(fn) {
+      | None => Ok(None)
+      | Some(tag) => !Map.has(tag, intrinsicElements)
+          ? Err(
+            {
+              message: "tw.${tag}: unknown HTML element '${tag}'",
+              start: twSpan(fn).start,
+              end: twSpan(fn).end
+            }
+          )
+          : inferArgs(args, st, api.inferExpr)
+            |> Result.map(st1 =>
+              let (row, st2) = propsRow(args, st1) in
+                Some((tArrow(tRecord(row), tCon("VNode", [])), st2)))
+    }
+
+export let styledCvaPlugin = {
+  name: "styled-cva",
+  parse: None,
+  inferCall: Some(inferStyledCvaCall)
+}

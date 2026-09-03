@@ -9,7 +9,7 @@
  */
 
 import { resolve } from "node:path";
-import { buildModulesBootstrap } from "@mochi/compiler/bootstrap/module";
+import { buildModulesBootstrapWith } from "@mochi/compiler/bootstrap/module";
 import { isErr } from "@onrails/result";
 import type { BunPlugin } from "bun";
 
@@ -20,7 +20,13 @@ const outputCache: MochiJsByPath = new Map();
 /** Compile `entry` and every reachable `.mochi` module; cache all outputs. */
 export const compileMochiGraph = async (entry: string): Promise<MochiJsByPath> => {
   const abs = resolve(entry);
-  const result = buildModulesBootstrap(abs);
+  const result = buildModulesBootstrapWith(abs, {
+    open: false,
+    docs: true,
+    // Relative imports stay `.mochi` so Bun re-enters this loader for siblings.
+    moduleExt: ".mochi",
+    strictEntry: false,
+  });
   if (isErr(result)) throw new SyntaxError(formatCompileFailure(abs, result.error.message));
   const graph: MochiJsByPath = new Map();
   for (const out of result.value) graph.set(out.path, out.js);

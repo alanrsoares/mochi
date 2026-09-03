@@ -1,0 +1,292 @@
+import { assertEq, test, testEach } from "@mochi/test"
+import * as Ast from "./ast.mochi"
+import { render } from "./doc.mochi"
+import {
+  commentsForExpr,
+  escStrBody,
+  exprD,
+  noComments,
+  externStmt,
+  importNsStmtD,
+  importStmtD,
+  pattern,
+  strLit,
+  typeStmtD
+} from "./format.mochi"
+import { lex } from "./lexer.mochi"
+import { parse } from "./parser.mochi"
+
+let WIDTH = 80
+
+// Parse a source line and print the piece under test back out, so each case is a
+// round-trip through the real parser rather than a hand-built AST.
+let firstStmt = src =>
+  lex(src) |> Result.flatMap(parse) |> Result.map(Array.get(0))
+
+let matchArmPattern = src => switch firstStmt("let f = x => switch x { | ${src} => 0 }") {
+  | Ok(Some(Ast.SLet(_, _, _, Ast.ELambda(_, Ast.EMatch(_, arms, _), _), _, _, _))) => switch Array.get(0, arms) {
+      | Some(arm) => pattern(arm.pattern)
+      | None => "no arms"
+    }
+  | _ => "unexpected shape"
+}
+
+testEach("a pattern round-trips", [
+  "_",
+  "()",
+  "x",
+  "42",
+  "true",
+  "Circle",
+  "Circle(r)",
+  "D.Circle(r)",
+  "(a, b)",
+  "{ x, y }",
+  "{ x: 1, y }",
+  "[a, b]",
+  "[a, ...rest]",
+  "@{a, b}",
+  "@{a, ...rest}",
+  "1 | 2",
+  "Circle(r) as c"
+], src => assertEq(matchArmPattern(src), src))
+
+test("a string pattern escapes through strLit", () =>
+  assertEq(matchArmPattern("\"a\\nb\""), "\"a\\nb\""))
+
+testEach("an extern statement round-trips", [
+  "extern log : string -> () = \"./host.mjs\" \"log\"",
+  "extern id<a> : a -> a = \"./host.mjs\" \"id\"",
+  "extern send : a -> b = curried \"./host.mjs\" \"send\""
+], src => switch firstStmt(src) {
+  | Ok(Some(Ast.SExtern(name, _, params, te, module, imported, curried, _, _, _))) => assertEq(
+      externStmt(name, params, te, module, imported, curried),
+      src
+    )
+  | _ => assertEq("an extern statement", "unexpected shape")
+})
+
+let typeText = src => switch firstStmt(src) {
+  | Ok(Some(Ast.SType(name, params, ctors, alias, aliasType, _, _, _))) => render(
+      typeStmtD(noComments, name, params, ctors, alias, aliasType),
+      WIDTH
+    )
+  | _ => "unexpected shape"
+}
+
+test("a record alias prints padded braces", () =>
+  assertEq(
+    typeText("type Point = { x: number, y: number }"),
+    "type Point = { x: number, y: number }"
+  ))
+
+test("an optional alias field keeps its `?`", () =>
+  assertEq(
+    typeText("type Box = { value: number, label?: string }"),
+    "type Box = { value: number, label?: string }"
+  ))
+
+// `type Id = number` is a ONE-CONSTRUCTOR VARIANT, not an alias — the parser
+// reads `number` as a constructor name. A transparent alias needs a shape no
+// constructor could be, such as a literal union. Both formatters agree here.
+test("a bare name after `=` is a constructor, not an alias", () =>
+  assertEq(typeText("type Id = number"), "type Id =\n  | number"))
+
+test("a transparent alias prints its target", () =>
+  assertEq(
+    typeText("type Tone = \"rose\" | \"amber\""),
+    "type Tone = \"rose\" | \"amber\""
+  ))
+
+test("an opaque extern type has no body", () =>
+  assertEq(typeText("extern type Handle"), "extern type Handle"))
+
+test("a variant prints one arm per line, indented", () =>
+  assertEq(
+    typeText("type Shape = | Circle(r: number) | Square(s: number)"),
+    "type Shape =\n  | Circle(r: number)\n  | Square(s: number)"
+  ))
+
+test("a generic variant keeps its parameters", () =>
+  assertEq(
+    typeText("type Box<a> = | Full(value: a) | Empty"),
+    "type Box<a> =\n  | Full(value: a)\n  | Empty"
+  ))
+
+// A wide alias must break one field per line rather than run past the width.
+test("a wide record alias breaks one field per line", () =>
+  assertEq(
+    typeText(
+      "type Wide = { alpha: string, bravo: string, charlie: string, delta: string, echo: string }"
+    ),
+    "type Wide = {\n  alpha: string,\n  bravo: string,\n  charlie: string,\n  delta: string,\n  echo: string\n}"
+  ))
+
+let importText = src => switch firstStmt(src) {
+  | Ok(Some(Ast.SImport(names, from, _))) => render(
+      importStmtD(names, from),
+      WIDTH
+    )
+  | Ok(Some(Ast.SImportNs(alias, from, _))) => render(
+      importNsStmtD(alias.name, from),
+      WIDTH
+    )
+  | _ => "unexpected shape"
+}
+
+test("a named import prints padded braces", () =>
+  assertEq(
+    importText("import { a, b } from \"./m.mochi\""),
+    "import { a, b } from \"./m.mochi\""
+  ))
+
+test("a namespace import prints its alias", () =>
+  assertEq(
+    importText("import * as M from \"./m.mochi\""),
+    "import * as M from \"./m.mochi\""
+  ))
+
+test("escStrBody re-escapes an interpolation opener", () =>
+  assertEq(escStrBody("a\${b}"), "a\\\${b}"))
+
+test("strLit wraps and escapes", () => assertEq(strLit("a\"b"), "\"a\\\"b\""))
+
+// --- expressions -------------------------------------------------------------
+
+// Already-formatted source must print back byte-identical: parse it, print the
+// bound value, compare. Sugar the printer does not re-fold yet (binary and
+// unary calls, operator sections, `>>`, labeled calls) is not listed here —
+// those cases arrive with the re-fold slice.
+let exprText = src => switch firstStmt("let value = ${src}") {
+  | Ok(Some(Ast.SLet(_, _, _, value, _, _, _))) => render(
+      exprD(noComments, value),
+      WIDTH
+    )
+  | _ => "unexpected shape"
+}
+
+// Comments live in the source, not the AST — the printer re-attaches them by
+// span, so the table is built from the same text the parser saw.
+let commentedText = src =>
+  let wrapped = "let value = ${src}" in
+    switch firstStmt(wrapped) {
+      | Ok(Some(Ast.SLet(_, _, _, value, _, _, _))) => render(
+          exprD(commentsForExpr(wrapped, value), value),
+          WIDTH
+        )
+      | _ => "unexpected shape"
+    }
+
+testEach("an expression round-trips", [
+  "42",
+  "true",
+  "()",
+  "\"hi\"",
+  "value",
+  "f()",
+  "f(x)",
+  "f(x, y)",
+  "f(g(x))",
+  "x.y",
+  "x.y.z",
+  "(1, 2)",
+  "[1, 2]",
+  "@{1, 2}",
+  "#{1, 2}",
+  "{ x: 1, y }",
+  "{ ...base, x: 1 }",
+  "#{ a: 1, b: 2 }",
+  "x => x",
+  "(a, b) => a",
+  "(x: number) => x",
+  "({ x, y }) => x",
+  "f(x, y => y)",
+  "cond ? 1 : 2",
+  "a |> f",
+  "a |> f |> g",
+  "1->f(2)",
+  "let x = 1 in x",
+  "let x : number = 1 in x",
+  "let? x = f() in Ok(x)",
+  "let! x = t() in Task.of(x)",
+  "a + b",
+  "a - b - c",
+  "a + b * c",
+  "(a + b) * c",
+  "a * b + c",
+  "a == b",
+  "a != b",
+  "a || b && c",
+  "!x",
+  "-x",
+  "!(a && b)",
+  "-(a + b)",
+  "a ++ b ++ c",
+  "(+ 1)",
+  "(2 *)",
+  "f >> g",
+  "f >> g >> h",
+  "(f >> g)(x)",
+  "let (a, b) = p in a",
+  "f(~tone)",
+  "f(~tone=\"amber\", ~size=3)",
+  "(a ++ b)->f(c)",
+  "src->compile() |> Result.mapErr(f)",
+  "switch x { | Some(n) => n | None => 0 }",
+  "switch x { | Some(n) when n == 0 => n | _ => 0 }",
+  "loop (i = 0) { recur(i) }",
+  "recur(1)"
+], src => assertEq(exprText(src), src))
+
+// A `do` block always breaks (`hardline` between exprs), like the TS printer.
+test("a do block prints one expression per line", () =>
+  assertEq("do {\n  f();\n  g()\n}", exprText("do { f(); g() }")))
+
+// A `let _ = … in` chain is sequencing, so it prints as the `do` block it means
+// — the one case that deliberately does not return its input.
+test("a discarded-let chain collapses to a do block", () =>
+  assertEq("do {\n  f();\n  g()\n}", exprText("let _ = f() in g()")))
+
+// `!=` and `!(a == b)` desugar to the SAME `not(eq(a, b))`, so folding either
+// back to `!=` is deliberate and lossy — the one re-fold that does not round-trip.
+test("an explicit not-of-eq folds to !=", () =>
+  assertEq("a != b", exprText("!(a == b)")))
+
+test("a ternary cascade shares one indent instead of staircasing", () =>
+  assertEq("a ? 1 : b ? 2 : 3", exprText("a ? 1 : b ? 2 : 3")))
+
+// Layout, not just text: the round-trip cases above all fit on one line, so
+// they never exercise `group`/`indent`. These two overflow 80 columns.
+test("an overflowing call breaks one argument per line", () =>
+  assertEq(
+    "computeSomething(\n  aLongArgumentName,\n  anotherLongArgumentHere,\n  aThirdRatherLongOne\n)",
+    exprText(
+      "computeSomething(aLongArgumentName, anotherLongArgumentHere, aThirdRatherLongOne)"
+    )
+  ))
+
+test("an overflowing pipe chain breaks one stage per line", () =>
+  assertEq(
+    "someInitialValue\n  |> firstTransformation\n  |> secondTransformation\n  |> theThirdLongStage",
+    exprText(
+      "someInitialValue |> firstTransformation |> secondTransformation |> theThirdLongStage"
+    )
+  ))
+
+// --- comments ----------------------------------------------------------------
+
+test("an own-line comment leads the node it precedes", () =>
+  assertEq("f(\n  // why\n  x\n)", commentedText("f(\n  // why\n  x\n)")))
+
+test("a trailing comment stays on the line of the node it follows", () =>
+  assertEq("f(\n  x, // why\n  y\n)", commentedText("f(\n  x, // why\n  y\n)")))
+
+// The blank line keeps the line's indentation, exactly as the TS printer does.
+test("a blank line after a comment survives", () =>
+  assertEq("f(\n  // why\n  \n  x\n)", commentedText("f(\n  // why\n\n  x\n)")))
+
+test("a comment inside a string literal is not a comment", () =>
+  assertEq("\"a // b\"", commentedText("\"a // b\"")))
+
+test("no comments in source leaves the layout untouched", () =>
+  assertEq(exprText("f(x, y)"), commentedText("f(x, y)")))

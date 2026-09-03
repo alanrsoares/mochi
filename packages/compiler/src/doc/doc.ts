@@ -24,6 +24,7 @@ export type Doc =
   | { k: "cat"; parts: Doc[] }
   | { k: "indent"; doc: Doc }
   | { k: "group"; doc: Doc }
+  | { k: "linesuffix"; doc: Doc }
   | { k: "breakparent" };
 
 const INDENT = 2;
@@ -40,6 +41,15 @@ export const txt = (s: string): Doc => ({ k: "text", s });
  */
 export const verbatim = (s: string): Doc => ({ k: "verbatim", s });
 export const cat = (parts: Doc[]): Doc => ({ k: "cat", parts });
+/**
+ * Defer `doc` until just before the next newline (prettier's `lineSuffix`).
+ * A trailing `//` comment must print AFTER whatever separator follows its node
+ * — the argument comma, the record-field comma — or the separator lands inside
+ * the comment and the output no longer parses. The printer cannot place it
+ * itself: the separator is added by the enclosing list, which only ever sees a
+ * finished document. Zero-width when measuring whether a line fits.
+ */
+export const lineSuffix = (doc: Doc): Doc => ({ k: "linesuffix", doc });
 export const seq = (...parts: Doc[]): Doc => ({ k: "cat", parts });
 export const line: Doc = { k: "line", hard: false, soft: false };
 export const softline: Doc = { k: "line", hard: false, soft: true };
@@ -87,6 +97,12 @@ const fits = (width: number, start: Work): boolean => {
         // for fitting purposes: whatever comes after is a fresh line, so a
         // group ending here doesn't need to "fit" past it.
         return true;
+      case "linesuffix":
+        // Deferred, but flushed at the NEXT newline — i.e. still on this line.
+        // Measuring it here keeps a trailing comment from pushing the line past
+        // the width, which is how it laid out before it became a suffix.
+        work = cons({ i, m, d: d.doc }, work);
+        break;
       case "cat":
         work = consParts(d.parts, i, m, work);
         break;
@@ -135,6 +151,8 @@ export const render = (root: Doc, width: number): string => {
   const out: string[] = [];
   let pos = 0;
   let work: Work = cons({ i: 0, m: "break", d: root }, null);
+  // Deferred `lineSuffix` documents, replayed just before the next newline.
+  let suffix: Item[] = [];
   while (work) {
     const { i, m, d } = work.head;
     work = work.tail;
@@ -164,6 +182,15 @@ export const render = (root: Doc, width: number): string => {
           out.push(s);
           pos += s.length;
         } else {
+          // A newline is about to be emitted: replay the deferred suffixes
+          // first, then this same line, so ` // comment` prints after the
+          // separator that followed its node instead of swallowing it.
+          if (suffix.length > 0) {
+            work = cons({ i, m, d }, work);
+            for (let k = suffix.length - 1; k >= 0; k--) work = cons(suffix[k]!, work);
+            suffix = [];
+            break;
+          }
           out.push(`\n${" ".repeat(i)}`);
           pos = i;
         }
@@ -177,8 +204,17 @@ export const render = (root: Doc, width: number): string => {
         work = fits(width - pos, cand) ? cand : cons({ i, m: "break", d: d.doc }, work);
         break;
       }
+      case "linesuffix":
+        suffix.push({ i, m, d: d.doc });
+        break;
       case "breakparent":
         break; // zero-width; its only effect is via forcesBreak
+    }
+    // Nothing left but pending suffixes (a trailing comment on the last node)
+    // — replay them rather than dropping the text.
+    if (!work && suffix.length > 0) {
+      for (let k = suffix.length - 1; k >= 0; k--) work = cons(suffix[k]!, work);
+      suffix = [];
     }
   }
   return out.join("");

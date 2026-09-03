@@ -68,8 +68,9 @@ export const builtinTypeDecls: { name: string; params: string[]; ctors: Ctor[] }
         fields: [
           { name: Some("value") as Option<string>, fieldType: Ast.TyName("a", builtinSpan) },
         ],
+        span: builtinSpan,
       },
-      { name: "None", fields: [] as CtorField[] },
+      { name: "None", fields: [] as CtorField[], span: builtinSpan },
     ],
   },
   {
@@ -81,12 +82,14 @@ export const builtinTypeDecls: { name: string; params: string[]; ctors: Ctor[] }
         fields: [
           { name: Some("value") as Option<string>, fieldType: Ast.TyName("a", builtinSpan) },
         ],
+        span: builtinSpan,
       },
       {
         name: "Err",
         fields: [
           { name: Some("error") as Option<string>, fieldType: Ast.TyName("e", builtinSpan) },
         ],
+        span: builtinSpan,
       },
     ],
   },

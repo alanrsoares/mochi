@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
+import { join } from "node:path";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import { tCon } from "@mochi/compiler/types";
+import { repoRoot } from "@mochi/test-support";
 import { languagePluginsComponent, mochiPlugin } from "@mochi/vite-plugin";
 import { ok, ResultAsync } from "@onrails/result";
 import type { HmrContext, Plugin, ViteDevServer } from "vite";
@@ -79,6 +81,13 @@ let HeaderBadge = props => <BadgeShell>{props.label}</BadgeShell>`;
     expect(result?.code).toMatch(
       /^import \{ h as _h, Fragment as _Fragment \} from "preact";\nconst h = [^\n]+;\nimport \{ BadgeShell \} from "\.\.\/ui\/primitives\.mochi";/,
     );
+  });
+
+  it("uses the bootstrap graph for default module imports", async () => {
+    const entry = join(repoRoot(import.meta.url), "examples/modules/main.mochi");
+    const result = testPlugin().transform(await Bun.file(entry).text(), entry);
+    expect(result?.code).toContain('from "./geometry.mochi"');
+    expect(result?.code).toContain("const circleArea = area(circle)");
   });
 
   it("does not mistake an extern generic binder for JSX", () => {

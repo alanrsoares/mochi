@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
+import { lex } from "@mochi/compiler/lexer";
+import { parse } from "@mochi/compiler/parser";
 import { formatSrc as fmt } from "@mochi/test-support/format";
+import { isErr, unwrapOk } from "@onrails/result";
 
 test("normalizes whitespace in a let binding", () => {
   expect(fmt("let   n=add(1,2)")).toBe("let n = 1 + 2\n");
@@ -466,6 +469,23 @@ test("long ++ chains break one fragment per line", () => {
 
 test("composition operator >> refolds correctly when formatted", () => {
   expect(fmt("let f = a >> b")).toBe("let f = a >> b\n");
+});
+
+// An APPLIED composition kept its `>>` refold but dropped the arguments, so
+// `(f >> g)(x)` formatted to `f >> g` — fmt silently deleted the application.
+// The callee path already parenthesizes a compose lambda, so the refold belongs
+// only to the unapplied lambda.
+// A trailing comment used to print before the separator the enclosing list
+// adds — `f(x // c,` — which swallowed the comma and did not reparse.
+test("a trailing comment prints after the separator, and the output reparses", () => {
+  const out = fmt("let value = f(\n  x, // why\n  y\n)");
+  expect(out).toBe("let value = f(\n  x, // why\n  y\n)\n");
+  expect(isErr(parse(unwrapOk(lex(out))))).toBe(false);
+});
+
+test("an applied composition keeps its arguments", () => {
+  expect(fmt("let a = (f >> g)(x)")).toBe("let a = (f >> g)(x)\n");
+  expect(fmt("let b = (f >> g)(x, y)")).toBe("let b = (f >> g)(x, y)\n");
 });
 
 test("operator sections refold and stay idempotent", () => {

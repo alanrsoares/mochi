@@ -9,6 +9,12 @@
  */
 import { resolve } from "node:path";
 import type { Program } from "@mochi/compiler/ast";
+import {
+  type BootstrapGraphCache,
+  type BootstrapTypeAt,
+  inferEntryGraphTypesBootstrap,
+  loadBootstrapGraph,
+} from "@mochi/compiler/bootstrap";
 import type { Registry } from "@mochi/compiler/check";
 import { toTypedProgramRecovering, toTypedProgramWith } from "@mochi/compiler/compile";
 import type {
@@ -20,7 +26,7 @@ import type {
 import { resolvePlugins, runCompleteMemberHooks } from "@mochi/compiler/extensions";
 import type { Env, InferResult, TypeAt } from "@mochi/compiler/infer";
 import { lex } from "@mochi/compiler/lexer";
-import { type ModuleCache, moduleContext } from "@mochi/compiler/module";
+import { type ModuleCache, moduleContext, resolveImport } from "@mochi/compiler/module";
 import { parseRecovering } from "@mochi/compiler/parser";
 import { INTRINSIC_ELEMENTS } from "@mochi/compiler/plugins/jsx-schema";
 import { preludeEnv, preludeNamespaces } from "@mochi/compiler/prelude";
@@ -176,6 +182,44 @@ const tightestType = (types: TypeAt[], offset: number) =>
 
 const filterPrefix = (items: CompletionItem[], prefix: string): CompletionItem[] =>
   !prefix ? items : items.filter((i) => i.label.startsWith(prefix));
+
+/** Frozen bootstrap type shapes needed for record-member completion. */
+type BootstrapTy = { _tag: string; row?: BootstrapRow };
+type BootstrapRow = { _tag: string; label?: string; fieldType?: BootstrapTy; rest?: BootstrapRow };
+
+const bootstrapRecordFieldItems = (ty: unknown): CompletionItem[] | null => {
+  if (typeof ty !== "object" || ty === null) return null;
+  const record = ty as BootstrapTy;
+  if (record._tag !== "TyRecord" || !record.row) return null;
+  const items: CompletionItem[] = [];
+  let row: BootstrapRow | undefined = record.row;
+  while (row?._tag === "RowExtend" && row.label && row.fieldType) {
+    items.push({
+      label: row.label,
+      kind: row.fieldType._tag === "TyFn" ? "method" : "field",
+      detail: row.fieldType._tag === "TyFn" ? "method" : undefined,
+    });
+    row = row.rest;
+  }
+  return items;
+};
+
+const bootstrapRecordFieldsAt = async (
+  path: string,
+  src: string,
+  trigger: MemberTrigger,
+  readFile: (path: string) => Promise<string>,
+  cache?: BootstrapGraphCache,
+): Promise<CompletionItem[] | null> => {
+  const rewritten =
+    src.slice(0, trigger.dotStart) + src.slice(trigger.dotStart + 1 + trigger.prefix.length);
+  const inferred = await inferEntryGraphTypesBootstrap(path, rewritten, readFile, cache);
+  if (inferred._tag === "Err") return null;
+  const entry = inferred.value.find((module) => module.path === resolve(path));
+  const hit =
+    entry && tightestHit<BootstrapTypeAt>(entry.types, trigger.recvStart, spanContainsClosed);
+  return hit && hit._tag === "Some" ? bootstrapRecordFieldItems(hit.value.ty) : null;
+};
 
 const dedupeSort = (items: CompletionItem[]): CompletionItem[] => {
   const seen = new Set<string>();
@@ -420,6 +464,29 @@ const membersAt = (
       );
 };
 
+/** Namespace members from the frozen graph's exported-name index. */
+const bootstrapNamespaceMembers = async (
+  path: string,
+  src: string,
+  trigger: MemberTrigger,
+  readFile: (path: string) => Promise<string>,
+): Promise<CompletionItem[] | null> => {
+  const program = parseProgram(src);
+  const imported = program?.stmts.find(
+    (stmt) => stmt.kind === "import" && stmt.alias?.name === trigger.receiver,
+  );
+  if (imported?.kind !== "import") return null;
+  const graph = await loadBootstrapGraph(path, src, readFile);
+  if (graph._tag === "Err") return null;
+  const target = graph.value.find((module) => module.path === resolveImport(path, imported.from));
+  if (!target) return null;
+  return [...target.origins.values.keys(), ...target.origins.ctors.keys()].map((label) => ({
+    label,
+    kind: "member" as const,
+    detail: `${trigger.receiver}.${label}`,
+  }));
+};
+
 /**
  * Completions at `offset`. Member trigger (after `.`) prefers namespaces, then
  * record fields, then plugin hooks. JSX attr name/value next. Otherwise values
@@ -438,7 +505,12 @@ export const completeAt = (
     : dedupeSort(filterPrefix(valueItems(src, offset, opts.plugins), identPrefixAt(src, offset)));
 };
 
-export type ModuleCompleteOptions = { plugins?: LanguagePlugin[]; cache?: ModuleCache };
+export type ModuleCompleteOptions = {
+  plugins?: LanguagePlugin[];
+  cache?: ModuleCache;
+  /** Caller-owned bootstrap graph memo for builtin-only member queries. */
+  bootstrapCache?: BootstrapGraphCache;
+};
 
 /**
  * Module-aware completion: resolve imports so `import * as R` members,
@@ -454,6 +526,22 @@ export const moduleCompleteAt = async (
   readFile: (p: string) => Promise<string>,
   opts: ModuleCompleteOptions = {},
 ): Promise<CompletionItem[]> => {
+  if (opts.plugins === undefined) {
+    const trigger = memberTriggerAt(src, offset);
+    if (trigger) {
+      const items = await bootstrapNamespaceMembers(path, src, trigger, readFile);
+      if (items) return dedupeSort(filterPrefix(items, trigger.prefix));
+      const fields = await bootstrapRecordFieldsAt(
+        path,
+        src,
+        trigger,
+        readFile,
+        opts.bootstrapCache,
+      );
+      if (fields) return dedupeSort(filterPrefix(fields, trigger.prefix));
+    }
+    if (!trigger && !jsxAttrTriggerAt(src, offset)) return completeAt(src, offset);
+  }
   const entry = resolve(path);
   const load = async (buffer: string) => {
     const read = (p: string): Promise<string> =>

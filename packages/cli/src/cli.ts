@@ -1,7 +1,9 @@
 /**
- * Host CLI — composes `@mochi/compiler` (compile / build / dts / ts),
+ * Host CLI — composes the self-hosted core (compile / build / dts / ts),
  * `@mochi/dx` (`fmt`), and `@mochi/codemod` (`codemod`). Not part of the
- * bootstrap mirror (ADR 0048).
+ * bootstrap mirror (ADR 0048). Every compile path is the frozen bootstrap
+ * graph: `--open` and `--no-docs` are options it takes, not a TypeScript
+ * fallback.
  */
 
 import {
@@ -11,12 +13,16 @@ import {
   transformProject,
 } from "@mochi/codemod";
 import type { BootstrapDiagnostic } from "@mochi/compiler/bootstrap";
-import { buildModulesBootstrap, buildModulesTsBootstrap } from "@mochi/compiler/bootstrap/module";
-import { compileBootstrapSync, compileTsBootstrapSync } from "@mochi/compiler/bootstrap/sync";
-import { codegenTs } from "@mochi/compiler/codegen-ts";
-import { compile } from "@mochi/compiler/compile";
+import {
+  buildModulesBootstrapWith,
+  buildModulesTsBootstrapWith,
+  emitDtsForFileBootstrapWith,
+} from "@mochi/compiler/bootstrap/module";
+import {
+  compileBootstrapSyncWith,
+  compileTsBootstrapSyncWith,
+} from "@mochi/compiler/bootstrap/sync";
 import { type Diagnostic, formatError } from "@mochi/compiler/errors";
-import { buildModules, buildModulesTs, emitDtsForFile } from "@mochi/compiler/module";
 import { format } from "@mochi/dx/format";
 import { match } from "@onrails/pattern";
 import { isErr } from "@onrails/result";
@@ -103,9 +109,14 @@ await match(cmd)
       `usage: mochi dts [--open] [--no-docs] <file.mochi>\n${USAGE}`,
     );
     const src = await Bun.file(path).text();
-    const r = await emitDtsForFile(path, src, (p) => Bun.file(p).text(), { open, docs });
-    if (isErr(r)) die(r.error, src);
-    process.stdout.write(r.value);
+    const result = emitDtsForFileBootstrapWith(path, "@mochi/runtime", {
+      open,
+      docs,
+      moduleExt: ".js",
+      strictEntry: false,
+    });
+    if (result._tag === "Err") dieBootstrap(path, src, result.error);
+    process.stdout.write(result.value);
   })
   .with("ts", async () => {
     const open = rest.includes("--open");
@@ -115,15 +126,14 @@ await match(cmd)
       `usage: mochi ts [--open] [--no-docs] <file.mochi>\n${USAGE}`,
     );
     const src = await Bun.file(path).text();
-    if (!open && docs) {
-      const result = compileTsBootstrapSync(src, "@mochi/runtime");
-      if (result._tag === "Err") dieBootstrap(path, src, result.error);
-      process.stdout.write(result.value);
-      return;
-    }
-    const r = codegenTs(src, { open, docs });
-    if (isErr(r)) die(r.error, src);
-    process.stdout.write(r.value);
+    const result = compileTsBootstrapSyncWith(src, "@mochi/runtime", {
+      open,
+      docs,
+      moduleExt: ".js",
+      strictEntry: false,
+    });
+    if (result._tag === "Err") dieBootstrap(path, src, result.error);
+    process.stdout.write(result.value);
   })
   .with("build", async () => {
     const emitTs = rest.includes("--emit=ts");
@@ -133,26 +143,19 @@ await match(cmd)
       rest.find((a) => !a.startsWith("-")),
       `usage: mochi build [--emit=ts] [--open] [--no-docs] <entry.mochi>\n${USAGE}`,
     );
-    const outputs =
-      !open && docs
-        ? await (async () => {
-            const result = emitTs
-              ? buildModulesTsBootstrap(entry, "@mochi/runtime")
-              : buildModulesBootstrap(entry);
-            if (result._tag === "Err") {
-              const src = await Bun.file(entry).text();
-              dieBootstrap(entry, src, result.error);
-            }
-            return result.value;
-          })()
-        : await (async () => {
-            const read = (p: string): Promise<string> => Bun.file(p).text();
-            const result = await (emitTs
-              ? buildModulesTs(entry, read, { open, docs })
-              : buildModules(entry, read, { open, docs }));
-            if (isErr(result)) die(result.error);
-            return result.value;
-          })();
+    const result = emitTs
+      ? buildModulesTsBootstrapWith(entry, "@mochi/runtime", {
+          open,
+          docs,
+          moduleExt: ".js",
+          strictEntry: false,
+        })
+      : buildModulesBootstrapWith(entry, { open, docs, moduleExt: ".js", strictEntry: false });
+    if (result._tag === "Err") {
+      const src = await Bun.file(entry).text();
+      dieBootstrap(entry, src, result.error);
+    }
+    const outputs = result.value;
     const ext = emitTs ? ".ts" : ".js";
     for (const { path, js } of outputs) {
       const typedExt = js.startsWith("/** @jsx h */") ? ".tsx" : ext;
@@ -169,13 +172,12 @@ await match(cmd)
       USAGE,
     );
     const src = await Bun.file(file).text();
-    if (!open && docs) {
-      const result = compileBootstrapSync(src);
-      if (result._tag === "Err") dieBootstrap(file, src, result.error);
-      process.stdout.write(result.value);
-      return;
-    }
-    const r = compile(src, { open, docs });
-    if (isErr(r)) die(r.error, src);
-    process.stdout.write(r.value);
+    const result = compileBootstrapSyncWith(src, {
+      open,
+      docs,
+      moduleExt: ".js",
+      strictEntry: false,
+    });
+    if (result._tag === "Err") dieBootstrap(file, src, result.error);
+    process.stdout.write(result.value);
   });

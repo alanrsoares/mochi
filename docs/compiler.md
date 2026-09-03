@@ -78,12 +78,19 @@ compiled from the `.mochi` sources.
 inferCall live in `bootstrap/plugins/jsx.mochi`, registered through
 `bootstrap/extensions.mochi` (`resolvePlugins` — same opt-in/opt-out rule as
 `src/`). Hooks are Result/(toks, pos) shaped (no imperative `ParserApi`);
-format/dts hooks are absent because those passes do not exist in bootstrap.
+dts hooks are absent because that pass does not exist in bootstrap, and the
+format hook protocol is unbuilt — `format.mochi` is in the graph (`mochic fmt`,
+ADR 0078's amendment) but plugin `format` hooks stay a TypeScript-host seam.
 `fixpoint` (below) still compares *emitted output*. The checked-in
 `bootstrap/seed/` graph is the stage-1 TypeScript snapshot. It is a
 reviewed emitted artifact with a SHA-256 manifest, not an editable source;
 ADR 0090's chain is Mochi → that graph → stage-2 JS → stage-3 JS. The TypeScript
-implementation remains an independent differential oracle during the migration.
+implementation remains an independent differential oracle during the migration,
+reached through `scripts/ts-oracle-build.ts` — the CLI itself no longer has a
+TypeScript path. `mochi <file>`, `ts`, `dts` and `build` all run the frozen
+graph under every flag, because the self-hosted core takes `open`, `docs`,
+`moduleExt` and `strictEntry` as real options
+([ADR 0104](adr/0104-self-hosted-core-takes-the-compile-options.md)).
 
 Two invariants are enforced in CI-style scripts:
 

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { bootstrapWorkspaceSymbolsAt } from "@mochi/dx/bootstrap-symbols";
 import {
   documentSymbolsAt,
   moduleDefinitionAt,
@@ -143,5 +144,11 @@ test("documentSymbolsAt lists top-level decls", async () => {
 test("workspaceSymbolsAt finds across the graph", async () => {
   const main = await read(mainPath);
   const hits = await workspaceSymbolsAt(mainPath, "hyp", read, main);
+  expect(hits.some((h) => h.name === "hypot" && h.path === geomPath)).toBe(true);
+});
+
+test("bootstrap workspace symbols find across the graph", async () => {
+  const main = await read(mainPath);
+  const hits = await bootstrapWorkspaceSymbolsAt(mainPath, "hyp", read, main);
   expect(hits.some((h) => h.name === "hypot" && h.path === geomPath)).toBe(true);
 });

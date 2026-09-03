@@ -8,8 +8,14 @@
 //   Some([a, b, …]) → builtins prepended, then caller list
 
 import { jsxPlugin } from "./plugins/jsx.mochi"
+import { preactPlugin } from "./plugins/preact.mochi"
 
 export let DEFAULT_PLUGINS = [jsxPlugin]
+
+/// Vendor adapters remain opt-in. Exporting Preact from the self-hosted graph
+/// makes the reference implementation available to hosts without making hooks
+/// part of the language's default surface.
+export let PREACT_PLUGIN = preactPlugin
 
 /// `pluginsOpt` is Option [LanguagePlugin]: None = default, Some([]) = opt-out.
 export let resolvePlugins = (pluginsOpt, builtins) => switch pluginsOpt {

@@ -1,0 +1,48 @@
+// bootstrap/show-type-expr.mochi — pretty-print a `TypeExpr` surface (extern
+// annots, `type` statements). Mirrors src/infer/show-type-expr.ts; shared by
+// inference diagnostics and the formatter (ADR 0048).
+
+import * as Ast from "./ast.mochi"
+
+// A `"lit"` type prints as its source literal. The alphabet is the same
+// restricted one codegen escapes, so this must byte-match `JSON.stringify`;
+// kept local so the printer depends on nothing but the AST.
+let escChar = c => switch c {
+  | "\\" => "\\\\"
+  | "\"" => "\\\""
+  | "\n" => "\\n"
+  | "\t" => "\\t"
+  | _ => c
+}
+
+let strLit = s => "\"${Str.join("", Str.chars(s) |> map(escChar))}\""
+
+// `>>` is mochi's composition token, so adjacent closing generic delimiters must
+// be separated in source: `Map<string, Map<string, a> >`.
+let typeArg = te =>
+  let shown = showTypeExpr(te) in Str.endsWith(">", shown) ? "${shown} " : shown
+
+let joinWith = (f, sep, tes) => Str.join(sep, tes |> map(f))
+
+/// The left side of an arrow is parenthesised when it is itself an arrow
+/// (`(a -> b) -> c`), and so is an arrow member of a union.
+export let showTypeExpr = te => switch te {
+  | Ast.TyName(name, _) =>
+    // `()` in TypeExpr lowers to the reserved name `unit` (ADR 0014 / 0015).
+    name == "unit" ? "()" : name
+  | Ast.TyApp(ctor, args, _) => "${ctor}<${joinWith(typeArg, ", ", args)}>"
+  | Ast.TyTuple(elems, _) => "(${joinWith(showTypeExpr, ", ", elems)})"
+  | Ast.TyList(elem, _) => "[${showTypeExpr(elem)}]"
+  | Ast.TyQual(alias, name, _, args, _) => let head = "${alias}.${name}" in
+      Array.length(args) == 0
+        ? head
+        : "${head}<${joinWith(typeArg, ", ", args)}>"
+  | Ast.TyLit(value, _) => strLit(value)
+  | Ast.TyUnion(members, _) => joinWith(parenArrow, " | ", members)
+  | Ast.TyArrow(from, to, _) => "${parenArrow(from)} -> ${showTypeExpr(to)}"
+}
+
+let parenArrow = te => switch te {
+  | Ast.TyArrow(_, _, _) => "(${showTypeExpr(te)})"
+  | _ => showTypeExpr(te)
+}

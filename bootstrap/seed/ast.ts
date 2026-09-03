@@ -10,7 +10,8 @@ export type LamParam =
       annot: Option<TypeExpr>;
       optional: boolean;
       defaultValue: Option<Expr>;
-    };
+    }
+  | { _tag: "LPSpanned"; param: LamParam; nameSpans: Span[] };
 export type Field = { name: string; value: Expr };
 export type MapEntry = { key: Expr; value: Expr };
 export type MatchArm = { pattern: Pattern; guard: Option<Expr>; body: Expr };
@@ -28,7 +29,15 @@ export type Expr =
   | { _tag: "ERef"; name: string; span: Span }
   | { _tag: "ECall"; fn: Expr; args: Expr[]; origin: Option<string>; span: Span }
   | { _tag: "ELambda"; params: LamParam[]; body: Expr; span: Span }
-  | { _tag: "ELetIn"; name: string; nameSpan: Span; value: Expr; body: Expr; span: Span }
+  | {
+      _tag: "ELetIn";
+      name: string;
+      nameSpan: Span;
+      annot: Option<TypeExpr>;
+      value: Expr;
+      body: Expr;
+      span: Span;
+    }
   | {
       _tag: "ELetBind";
       param: LamParam;
@@ -38,7 +47,7 @@ export type Expr =
       body: Expr;
       span: Span;
     }
-  | { _tag: "EPipe"; left: Expr; right: Expr; span: Span }
+  | { _tag: "EPipe"; left: Expr; right: Expr; fast: boolean; span: Span }
   | { _tag: "EDo"; exprs: Expr[]; span: Span }
   | { _tag: "ETernary"; cond: Expr; thenE: Expr; elseE: Expr; span: Span }
   | { _tag: "EMatch"; scrutinee: Expr; arms: MatchArm[]; span: Span }
@@ -77,7 +86,7 @@ export type TypeExpr =
   | { _tag: "TyLit"; value: string; span: Span }
   | { _tag: "TyUnion"; members: TypeExpr[]; span: Span };
 export type CtorField = { name: Option<string>; fieldType: TypeExpr };
-export type Ctor = { name: string; fields: CtorField[] };
+export type Ctor = { name: string; fields: CtorField[]; span: Span };
 export type AliasField = { name: string; fieldType: TypeExpr; optional: boolean };
 export type Stmt =
   | {
@@ -141,6 +150,11 @@ export const LPLabeled = _curry(4, (name, annot, optional, defaultValue) => ({
   optional: boolean,
   defaultValue: Option<Expr>,
 ) => LamParam;
+export const LPSpanned = _curry(2, (param, nameSpans) => ({
+  _tag: "LPSpanned",
+  param,
+  nameSpans,
+})) as (param: LamParam, nameSpans: Span[]) => LamParam;
 
 export const SEExpr = (expr: Expr): SeqElem => ({ _tag: "SEExpr", expr });
 export const SESpread = (expr: Expr): SeqElem => ({ _tag: "SESpread", expr });
@@ -175,14 +189,22 @@ export const ELambda = _curry(3, (params, body, span) => ({
   body,
   span,
 })) as (params: LamParam[], body: Expr, span: Span) => Expr;
-export const ELetIn = _curry(5, (name, nameSpan, value, body, span) => ({
+export const ELetIn = _curry(6, (name, nameSpan, annot, value, body, span) => ({
   _tag: "ELetIn",
   name,
   nameSpan,
+  annot,
   value,
   body,
   span,
-})) as (name: string, nameSpan: Span, value: Expr, body: Expr, span: Span) => Expr;
+})) as (
+  name: string,
+  nameSpan: Span,
+  annot: Option<TypeExpr>,
+  value: Expr,
+  body: Expr,
+  span: Span,
+) => Expr;
 export const ELetBind = _curry(6, (param, paramSpan, monad, value, body, span) => ({
   _tag: "ELetBind",
   param,
@@ -199,11 +221,13 @@ export const ELetBind = _curry(6, (param, paramSpan, monad, value, body, span) =
   body: Expr,
   span: Span,
 ) => Expr;
-export const EPipe = _curry(3, (left, right, span) => ({ _tag: "EPipe", left, right, span })) as (
-  left: Expr,
-  right: Expr,
-  span: Span,
-) => Expr;
+export const EPipe = _curry(4, (left, right, fast, span) => ({
+  _tag: "EPipe",
+  left,
+  right,
+  fast,
+  span,
+})) as (left: Expr, right: Expr, fast: boolean, span: Span) => Expr;
 export const EDo = _curry(2, (exprs, span) => ({ _tag: "EDo", exprs, span })) as (
   exprs: Expr[],
   span: Span,

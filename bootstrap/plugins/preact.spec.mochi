@@ -1,0 +1,35 @@
+import { ok, test } from "@mochi/test"
+import { lex } from "../lexer.mochi"
+import { parse } from "../parser.mochi"
+import { inferProgramWith } from "../infer.mochi"
+import { preactPlugin } from "./preact.mochi"
+
+let typecheck = (src, plugins) =>
+  let? toks = lex(src) in
+  let? stmts = parse(toks) in
+    inferProgramWith(stmts, #{}, #{}, true, Some(plugins))
+
+test("useState pins the setter's state type", () => switch typecheck("extern useState : a -> (a, a -> b) = \"preact/hooks\" \"useState\"\nlet test = _ => let (n, setN) = useState(0) in setN(\"oops\")\n", [preactPlugin]) {
+  | Err(_) => true |> ok
+  | Ok(_) => false |> ok
+})
+
+test("without the plugin, the loose useRef extern remains unpinned", () => switch typecheck("extern useRef : a -> b = \"preact/hooks\" \"useRef\"\nlet r = useRef(\"x\")\nlet n : number = r.current\n", []) {
+  | Err(_) => false |> ok
+  | Ok(_) => true |> ok
+})
+
+test("useRef ties current to its initializer", () => switch typecheck("extern useRef : a -> b = \"preact/hooks\" \"useRef\"\nlet r = useRef(\"x\")\nlet n : number = r.current\n", [preactPlugin]) {
+  | Err(_) => true |> ok
+  | Ok(_) => false |> ok
+})
+
+test("useLazyState requires an initializer thunk", () => switch typecheck("extern useLazyState : (() -> a) -> (a, a -> b) = \"preact/hooks\" \"useState\"\nlet test = _ => let (n, _) = useLazyState(0) in n\n", [preactPlugin]) {
+  | Err(_) => true |> ok
+  | Ok(_) => false |> ok
+})
+
+test("useMemo returns its thunk result", () => switch typecheck("extern useMemo : (() -> a) -> b -> a = \"preact/hooks\" \"useMemo\"\nlet value = useMemo(() => \"x\", [])\nlet n : number = value\n", [preactPlugin]) {
+  | Err(_) => true |> ok
+  | Ok(_) => false |> ok
+})

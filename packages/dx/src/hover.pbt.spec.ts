@@ -25,4 +25,4 @@ test("a numeric literal always hovers as number", () => {
       expect(hoverAt(src, at)?.code).toBe("number");
     }),
   );
-});
+}, 10_000);

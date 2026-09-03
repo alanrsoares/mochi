@@ -4,7 +4,14 @@ import { repoRoot } from "@mochi/test-support";
 import { unwrapOk } from "@onrails/result";
 import { compile as tsCompile } from "../compile/compile.ts";
 import { buildModules as tsBuildModules } from "../module/module.ts";
-import { checkGraphBootstrapRecovering, loadBootstrapCore } from "./index.ts";
+import {
+  checkGraphBootstrapRecovering,
+  createBootstrapGraphCache,
+  createBootstrapRecoveryGraphCache,
+  inferEntryGraphTypesBootstrap,
+  loadBootstrapCore,
+} from "./index.ts";
+import { inferTypesBootstrapSync } from "./sync.ts";
 
 test("bootstrap runtime loads the manifest-verified seed compiler", async () => {
   const src = "type Flag = On | Off\nlet value = On\n";
@@ -21,6 +28,18 @@ test("bootstrap runtime emits typed TypeScript", async () => {
   });
 });
 
+test("bootstrap typed query records source spans", () => {
+  const result = inferTypesBootstrapSync("let answer = 42");
+  expect(result).toEqual({
+    _tag: "Ok",
+    value: expect.objectContaining({
+      types: expect.arrayContaining([
+        expect.objectContaining({ span: { start: 13, end: 15 }, display: "number" }),
+      ]),
+    }),
+  });
+});
+
 test("bootstrap runtime builds a module graph identically to the TS oracle", async () => {
   const root = repoRoot(import.meta.url);
   const entry = join(root, "examples/modules/main.mochi");
@@ -29,11 +48,93 @@ test("bootstrap runtime builds a module graph identically to the TS oracle", asy
   const expected = unwrapOk(await tsBuildModules(entry, (path) => Bun.file(path).text()));
   expect(bootstrap.buildModules(entry)).toEqual({
     _tag: "Ok",
-    value: expected.map((output) => ({
-      ...output,
-      js: output.js.replace(/(from\s+["'][^"']+)\.js(["'])/g, "$1.mochi$2"),
-    })),
+    value: expected,
   });
+});
+
+test("bootstrap graph typed query serves the entry buffer", async () => {
+  const result = await inferEntryGraphTypesBootstrap(
+    "/virtual/main.mochi",
+    'import { value } from "./dep"\nlet answer = value',
+    async (path) => {
+      if (path === "/virtual/dep.mochi") return "export let value = 42";
+      throw new Error(`unexpected read: ${path}`);
+    },
+  );
+  expect(result).toEqual({
+    _tag: "Ok",
+    value: expect.arrayContaining([
+      expect.objectContaining({
+        path: "/virtual/main.mochi",
+        types: expect.arrayContaining([
+          expect.objectContaining({ span: { start: 43, end: 48 }, display: "number" }),
+        ]),
+      }),
+    ]),
+  });
+});
+
+test("bootstrap graph typed-query cache keys every dependency source", async () => {
+  const cache = createBootstrapGraphCache();
+  const entry = "/virtual/main.mochi";
+  const src = 'import { value } from "./dep"\nlet answer = value';
+  let dep = "export let value = 42";
+  const read = async (path: string): Promise<string> => {
+    if (path === "/virtual/dep.mochi") return dep;
+    throw new Error(`unexpected read: ${path}`);
+  };
+
+  const first = await inferEntryGraphTypesBootstrap(entry, src, read, cache);
+  const again = await inferEntryGraphTypesBootstrap(entry, src, read, cache);
+  expect(again).toBe(first);
+  expect(cache.entries).toHaveLength(1);
+  expect(cache.prefixes).toHaveLength(2);
+
+  const peer = await inferEntryGraphTypesBootstrap(
+    "/virtual/peer.mochi",
+    'import { value } from "./dep"\nlet peer = value',
+    read,
+    cache,
+  );
+  expect(peer).toMatchObject({ _tag: "Ok" });
+  // The dependency state is the shared prefix; only the peer entry adds one.
+  expect(cache.prefixes).toHaveLength(3);
+
+  dep = 'export let value = "changed"';
+  const changed = await inferEntryGraphTypesBootstrap(entry, src, read, cache);
+  expect(changed).not.toBe(first);
+  expect(cache.entries).toHaveLength(3);
+});
+
+test("bootstrap recovery cache reuses healthy dependency prefixes", async () => {
+  const cache = createBootstrapRecoveryGraphCache();
+  const read = async (path: string): Promise<string> => {
+    if (path === "/virtual/dep.mochi") return "export let value = 42";
+    throw new Error(`unexpected read: ${path}`);
+  };
+  const first = await checkGraphBootstrapRecovering(
+    "/virtual/main.mochi",
+    'import { value } from "./dep"\nlet answer = value',
+    read,
+    cache,
+  );
+  const again = await checkGraphBootstrapRecovering(
+    "/virtual/main.mochi",
+    'import { value } from "./dep"\nlet answer = value',
+    read,
+    cache,
+  );
+  expect(again).toBe(first);
+  expect(cache.prefixes).toHaveLength(2);
+
+  const peer = await checkGraphBootstrapRecovering(
+    "/virtual/peer.mochi",
+    'import { value } from "./dep"\nlet peer = value',
+    read,
+    cache,
+  );
+  expect(peer).toEqual([]);
+  expect(cache.prefixes).toHaveLength(3);
 });
 
 test("bootstrap runtime checks an editor buffer through its graph", async () => {
@@ -41,7 +142,12 @@ test("bootstrap runtime checks an editor buffer through its graph", async () => 
   expect(await bootstrap.checkGraph("/virtual/main.mochi", "let n = nope", async () => "")).toEqual(
     {
       _tag: "Err",
-      error: { message: "unbound variable 'nope'", start: 8, end: 12 },
+      error: {
+        message: "unbound variable 'nope'",
+        path: "/virtual/main.mochi",
+        start: 8,
+        end: 12,
+      },
     },
   );
 });
@@ -67,6 +173,26 @@ test("bootstrap graph recovery reports dependency parse diagnostics", async () =
   );
   expect(errors).toHaveLength(2);
   expect(errors[0]?.path).toBe("/virtual/dep.mochi");
+});
+
+test("bootstrap graph recovery reports an import cycle", async () => {
+  const errors = await checkGraphBootstrapRecovering(
+    "/virtual/main.mochi",
+    'import { value } from "./dep"\nexport let main = value\n',
+    async (path) => {
+      if (path === "/virtual/dep.mochi")
+        return 'import { main } from "./main"\nexport let value = main\n';
+      throw new Error(`unexpected read: ${path}`);
+    },
+  );
+  expect(errors).toEqual([
+    {
+      message: "import cycle through '/virtual/main.mochi'",
+      start: 0,
+      end: 0,
+      path: "/virtual/main.mochi",
+    },
+  ]);
 });
 
 test("bootstrap graph recovery reports dependency semantic diagnostics", async () => {
@@ -97,4 +223,15 @@ test("bootstrap graph recovery collects semantic errors from sibling dependencie
   );
   expect(errors).toHaveLength(2);
   expect(errors.every((error) => error.path)).toBe(true);
+});
+
+test("bootstrap graph recovery keeps entry errors after a dependency fails", async () => {
+  const errors = await checkGraphBootstrapRecovering(
+    "/virtual/main.mochi",
+    'import { value } from "./dep"\nlet local = add(1, "bad")\n',
+    async () => 'let value = add(1, "bad")\n',
+  );
+  expect(errors).toHaveLength(2);
+  expect(errors.some((error) => error.path === "/virtual/dep.mochi")).toBe(true);
+  expect(errors.some((error) => error.path === "/virtual/main.mochi")).toBe(true);
 });

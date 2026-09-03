@@ -286,9 +286,9 @@ let exprSpan = e => switch e {
   | Ast.ERef(_, sp) => sp
   | Ast.ECall(_, _, _, sp) => sp
   | Ast.ELambda(_, _, sp) => sp
-  | Ast.ELetIn(_, _, _, _, sp) => sp
+  | Ast.ELetIn(_, _, _, _, _, sp) => sp
   | Ast.ELetBind(_, _, _, _, _, sp) => sp
-  | Ast.EPipe(_, _, sp) => sp
+  | Ast.EPipe(_, _, _, sp) => sp
   | Ast.EDo(_, sp) => sp
   | Ast.ETernary(_, _, _, sp) => sp
   | Ast.EMatch(_, _, sp) => sp
@@ -320,20 +320,36 @@ let tySpan = t => switch t {
 let parseParam = (toks, pos) => switch tokAt(toks, pos).tok {
   | TLbrace => let? (fields, p) = listUntil(TRbrace, expectId, toks, pos + 1) in
     let? p2 = expectTok(TRbrace, toks, p) in
-      Ok((Ast.LPRecord(fields |> map(f => f.name)), p2))
+      Ok((
+        Ast.LPSpanned(
+          Ast.LPRecord(fields |> map(f => f.name)),
+          fields |> map(f => f.span)
+        ),
+        p2
+      ))
   | TLparen => let? (names, p) = sepBy(expectId, toks, pos + 1, []) in
     let? p2 = expectTok(TRparen, toks, p) in
       Ok(
         switch names {
-          | [single] => (Ast.LPName(single.name, None), p2)
-          | many => (Ast.LPTuple(many |> map(n => n.name)), p2)
+          | [single] => (
+              Ast.LPSpanned(Ast.LPName(single.name, None), [single.span]),
+              p2
+            )
+          | many => (
+              Ast.LPSpanned(
+                Ast.LPTuple(many |> map(n => n.name)),
+                many |> map(n => n.span)
+              ),
+              p2
+            )
         }
       )
   | _ => let? (nm, p) = expectId(toks, pos) in
       tokAt(toks, p).tok == TColon
         ? parseTypeExpr(toks, p + 1)
-          |> Result.map(((annot, p2)) => (Ast.LPName(nm.name, Some(annot)), p2))
-        : Ok((Ast.LPName(nm.name, None), p))
+          |> Result.map(((annot, p2)) =>
+            (Ast.LPSpanned(Ast.LPName(nm.name, Some(annot)), [nm.span]), p2))
+        : Ok((Ast.LPSpanned(Ast.LPName(nm.name, None), [nm.span]), p))
 }
 
 /// `~name`, `~name?`, `~name: T`, `~name = e`, `~name: T = e` (ADR 0098 §2).
@@ -350,8 +366,17 @@ let parseLabeledParam = (toks, pos, hooks) =>
     tokAt(toks, p3).tok == TEq
       ? parseExpr(toks, p3 + 1, hooks)
         |> Result.map(((d, k)) =>
-          (Ast.LPLabeled(nm.name, annot, optional, Some(d)), k))
-      : Ok((Ast.LPLabeled(nm.name, annot, optional, None), p3))
+          (
+            Ast.LPSpanned(
+              Ast.LPLabeled(nm.name, annot, optional, Some(d)),
+              [nm.span]
+            ),
+            k
+          ))
+      : Ok((
+        Ast.LPSpanned(Ast.LPLabeled(nm.name, annot, optional, None), [nm.span]),
+        p3
+      ))
 
 let parseLamParam = (toks, pos, hooks) =>
   tokAt(toks, pos).tok == TTilde
@@ -360,6 +385,7 @@ let parseLamParam = (toks, pos, hooks) =>
 
 let isLabeledParam = p => switch p {
   | Ast.LPLabeled(_, _, _, _) => true
+  | Ast.LPSpanned(inner, _) => isLabeledParam(inner)
   | _ => false
 }
 
@@ -378,9 +404,14 @@ let parseLambda = (toks, pos, hooks) =>
         let? (body, p2) = parseLambdaBody(toks, p, hooks) in
           Ok((
             Ast.ELambda(
-              [Ast.LPName(name, None)],
+              [
+                Ast.LPSpanned(
+                  Ast.LPName(name, None),
+                  [spanOf(tokAt(toks, pos))]
+                )
+              ],
               body,
-              spanning(start, exprSpan(body))
+              toEnd(start, toks, p2)
             ),
             p2
           ))
@@ -399,10 +430,7 @@ let parseLambda = (toks, pos, hooks) =>
           labeledTrailing(params, false)
             ? let? p4 = expectTok(TArrow, toks, p3) in
             let? (body, p5) = parseLambdaBody(toks, p4, hooks) in
-              Ok((
-                Ast.ELambda(params, body, spanning(start, exprSpan(body))),
-                p5
-              ))
+              Ok((Ast.ELambda(params, body, toEnd(start, toks, p5)), p5))
             : errAt(
               "labeled parameters must be a trailing group",
               tokAt(toks, p)
@@ -444,7 +472,7 @@ let parseLetIn = (toks, pos, hooks) =>
             monad,
             value,
             body,
-            spanning(start, exprSpan(body))
+            toEnd(start, toks, p5)
           ),
           p5
         ))
@@ -455,14 +483,15 @@ let parseLetIn = (toks, pos, hooks) =>
       let? (value, p3) = parseExpr(toks, p2, hooks) in
       let? p4 = expectIn(toks, p3) in
       let? (body, p5) = parseExpr(toks, p4, hooks) in
-      let fn = Ast.ELambda(
-        [param],
-        body,
-        spanning(paramStart, exprSpan(body))
-      ) in
-        Ok((Ast.ECall(fn, [value], None, spanning(start, exprSpan(body))), p5))
+      let fn = Ast.ELambda([param], body, toEnd(paramStart, toks, p5)) in
+        Ok((Ast.ECall(fn, [value], None, toEnd(start, toks, p5)), p5))
       : let? (nm, p1) = expectId(toks, p) in
-      let? p2 = expectTok(TEq, toks, p1) in
+      // Optional `: T` binding annotation, same shape as a top-level `let`
+      // (ADR 0044) — kept on the node, not folded into the value.
+      let? (annot, pA) = tokAt(toks, p1).tok == TColon
+        ? toks->parseTypeExpr(p1 + 1) |> Result.map(((ty, k)) => (Some(ty), k))
+        : Ok((None, p1)) in
+      let? p2 = expectTok(TEq, toks, pA) in
       let? (value, p3) = parseExpr(toks, p2, hooks) in
       let? p4 = expectIn(toks, p3) in
       let? (body, p5) = parseExpr(toks, p4, hooks) in
@@ -470,9 +499,10 @@ let parseLetIn = (toks, pos, hooks) =>
           Ast.ELetIn(
             nm.name,
             nm.span,
+            annot,
             value,
             body,
-            spanning(start, exprSpan(body))
+            toEnd(start, toks, p5)
           ),
           p5
         ))
@@ -614,6 +644,7 @@ let parseInfix = (toks, minBp, left, pos, hooks) =>
             left: Ast.EPipe(
               left,
               right,
+              false,
               spanning(exprSpan(left), exprSpan(right))
             ),
             p,
@@ -622,13 +653,15 @@ let parseInfix = (toks, minBp, left, pos, hooks) =>
         )
       : lt.tok == TTarrow && FAST_PIPE_BP >= minBp
       ? let? (right, p) = parseAtomOrCall(toks, pos + 1, hooks) in
+        // Retained as a node, not desugared: the arg-prepending lowering happens
+        // in infer/codegen, so the formatter can still print `a -> f(b)`.
         switch right {
-          | Ast.ECall(fn, args, origin, rightSpan) => Ok(
+          | Ast.ECall(_, _, _, rightSpan) => Ok(
               {
-                left: Ast.ECall(
-                  fn,
-                  Array.prepend(left, args),
-                  origin,
+                left: Ast.EPipe(
+                  left,
+                  right,
+                  true,
                   spanning(exprSpan(left), rightSpan)
                 ),
                 p,
@@ -1448,13 +1481,16 @@ let parseCtorField = (toks, pos) =>
       : parseTypeExpr(toks, pos)
         |> Result.map(((t, p)) => ({ name: None, fieldType: t }, p))
 
+// `span` covers the constructor itself, so a comment written between two
+// constructors anchors to the one it precedes instead of migrating to the next
+// statement (the formatter's comment table keys on spans).
 let parseCtor = (toks, pos) =>
   let? (nm, p) = expectId(toks, pos) in
     tokAt(toks, p).tok == TLparen
       ? let? (fields, p2) = listUntil(TRparen, parseCtorField, toks, p + 1) in
       let? p3 = expectTok(TRparen, toks, p2) in
-        Ok(({ name: nm.name, fields }, p3))
-      : Ok(({ name: nm.name, fields: [] }, p))
+        Ok(({ name: nm.name, fields, span: toEnd(nm.span, toks, p3) }, p3))
+      : Ok(({ name: nm.name, fields: [], span: nm.span }, p))
 
 let ctorsLoop = (toks, pos, acc) =>
   let? (c, p) = toks->parseCtor(pos) in
@@ -1691,7 +1727,7 @@ let parseRecordDestructure = (toks, start, pos, tmp, hooks) =>
   let? p2 = expectTok(TRbrace, toks, p1) in
   let? p3 = expectTok(TEq, toks, p2) in
   let? (value, p4) = parseExpr(toks, p3, hooks) in
-  let whole = spanning(start, exprSpan(value)) in
+  let whole = toEnd(start, toks, p4) in
   let patSpan = spanning(openSp, closeSp) in
   let tmpName = "$d${show(tmp)}" in
   let header = Ast.SLet(tmpName, patSpan, None, value, false, None, whole) in
@@ -1727,7 +1763,7 @@ let parseLet = (toks, pos, tmp, hooks) =>
               value,
               false,
               None,
-              spanning(start, exprSpan(value))
+              toEnd(start, toks, p3)
             )
           ],
           p3,
@@ -1791,7 +1827,7 @@ let parseExprStmt = (toks, pos, tmp, hooks) =>
   let start = toks->tokAt(pos) in
   let? (value, p) = toks->parseExpr(pos, hooks) in
   let p2 = tokAt(toks, p).tok == TSemi ? p + 1 : p in
-    Ok(([Ast.SExpr(value, spanning(start, exprSpan(value)))], p2, tmp))
+    Ok(([Ast.SExpr(value, toEnd(spanOf(start), toks, p))], p2, tmp))
 
 // A statement can desugar to several (record destructure); the leading `///`
 // doc block rides on the first token and attaches to every produced `let`.
@@ -1801,19 +1837,36 @@ let parseStmt = (toks, pos, tmp, hooks) =>
     switch lt.tok {
       | TImport => parseImport(toks, pos)
           |> Result.map(((s, p)) => ([s], p, tmp))
-      | TExport => switch tokAt(toks, pos + 1).tok {
-          | TType => toks->parseType(pos + 1)
-              |> Result.map(((s, p)) => ([setTypeMeta(true, doc, s)], p, tmp))
-          | TExtern => toks->parseExtern(pos + 1)
-              |> Result.map(((s, p)) => ([setExternMeta(true, doc, s)], p, tmp))
-          | TLet => toks->parseLet(pos + 1, tmp, hooks)
-              |> Result.map(((stmts, p, tmp2)) =>
-                (stmts |> map(setLetMeta(true, doc)), p, tmp2))
-          | _ => errAt(
-              "`export` must precede let, type, or extern",
-              tokAt(toks, pos + 1)
-            )
-        }
+      | TExport => let exportSp = spanOf(lt) in
+          switch tokAt(toks, pos + 1).tok {
+            | TType => toks->parseType(pos + 1)
+                |> Result.map(((s, p)) =>
+                  (
+                    [widenToExport(exportSp, setTypeMeta(true, doc, s))],
+                    p,
+                    tmp
+                  ))
+            | TExtern => toks->parseExtern(pos + 1)
+                |> Result.map(((s, p)) =>
+                  (
+                    [widenToExport(exportSp, setExternMeta(true, doc, s))],
+                    p,
+                    tmp
+                  ))
+            | TLet => toks->parseLet(pos + 1, tmp, hooks)
+                |> Result.map(((stmts, p, tmp2)) =>
+                  (
+                    stmts
+                      |> map(setLetMeta(true, doc))
+                      |> widenHeadToExport(exportSp),
+                    p,
+                    tmp2
+                  ))
+            | _ => errAt(
+                "`export` must precede let, type, or extern",
+                tokAt(toks, pos + 1)
+              )
+          }
       | TType => toks->parseType(pos)
           |> Result.map(((s, p)) => ([setTypeMeta(false, doc, s)], p, tmp))
       | TExtern => toks->parseExtern(pos)
@@ -1823,6 +1876,50 @@ let parseStmt = (toks, pos, tmp, hooks) =>
             (stmts |> map(setLetMeta(false, doc)), p, tmp2))
       | _ => toks->parseExprStmt(pos, tmp, hooks)
     }
+
+/// `export` precedes the statement it modifies, so the keyword is outside the
+/// span the inner parser built. Grow the statement to cover it. Only the FIRST
+/// statement of a group: `export let { x, y } = e` desugars to a header plus one
+/// field-access `let` per name, and those keep their own field spans.
+let widenToExport = (start, s) => switch s {
+  | Ast.SLet(name, nameSpan, annot, value, exported, doc, span) => Ast.SLet(
+      name,
+      nameSpan,
+      annot,
+      value,
+      exported,
+      doc,
+      spanning(start, span)
+    )
+  | Ast.SType(name, params, ctors, alias, aliasType, exported, doc, span) => Ast.SType(
+      name,
+      params,
+      ctors,
+      alias,
+      aliasType,
+      exported,
+      doc,
+      spanning(start, span)
+    )
+  | Ast.SExtern(name, nameSpan, params, typeExpr, module, imported, curried, exported, doc, span) => Ast.SExtern(
+      name,
+      nameSpan,
+      params,
+      typeExpr,
+      module,
+      imported,
+      curried,
+      exported,
+      doc,
+      spanning(start, span)
+    )
+  | other => other
+}
+
+let widenHeadToExport = (start, stmts) => switch stmts {
+  | [head, ...rest] => Array.prepend(widenToExport(start, head), rest)
+  | _ => stmts
+}
 
 // --- recovery (ADR 0045) ---
 

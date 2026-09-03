@@ -1,0 +1,2057 @@
+// bootstrap/format.mochi — the source formatter, in mochi (ADR 0025 / 0048).
+//
+// packages/dx/src/format.ts is the SHIPPED formatter; this is the self-hosted
+// port, reached from `mochic fmt`. The two are kept in step by hand, and
+// test/bootstrap-format-file.spec.ts holds them there: every non-JSX .mochi
+// file in the repo must format byte-identically through both, so a one-sided
+// change fails the default gate.
+//
+// Plugin `format` hooks stay a TypeScript-host seam — bootstrap has no format
+// hook protocol (ADR 0011 §6) — which is why JSX files are the one exclusion.
+
+import * as Ast from "./ast.mochi"
+import {
+  breakParent,
+  cat,
+  flat,
+  group,
+  hardline,
+  indent,
+  join,
+  line,
+  lineSuffix,
+  render,
+  softline,
+  txt,
+  verbatim
+} from "./doc.mochi"
+import { skipStringLiteral } from "./str-scan.mochi"
+import { showTypeExpr } from "./show-type-expr.mochi"
+
+/// `JSON.stringify` escaping, plus `${` — which would otherwise reopen an
+/// interpolation hole on re-lex (ADR 0023), so a hole-free string round-trips
+/// even when its decoded value happens to contain that sequence.
+let escChar = c => switch c {
+  | "\\" => "\\\\"
+  | "\"" => "\\\""
+  | "\n" => "\\n"
+  | "\t" => "\\t"
+  | _ => c
+}
+
+let escFrom = (chars, i, acc) => switch Array.get(i, chars) {
+  | None => acc
+  | Some("$") when Array.get(i + 1, chars) |> Option.contains("{") => escFrom(
+      chars,
+      i + 2,
+      "${acc}\\\${"
+    )
+  | Some(c) => escFrom(chars, i + 1, "${acc}${escChar(c)}")
+}
+
+export let escStrBody = s => escFrom(Str.chars(s), 0, "")
+
+export let strLit = s => "\"${escStrBody(s)}\""
+
+let WIDTH = 80
+
+// --- patterns ----------------------------------------------------------------
+
+let commaJoin = (f, xs) => Str.join(", ", xs |> map(f))
+
+/// `{ x }` when the field puns to its own name, else `{ label: pat }`.
+let patField = (f: Ast.PatField) => switch f.pat {
+  | Ast.PBind(name, _) when name == f.label => f.label
+  | _ => "${f.label}: ${pattern(f.pat)}"
+}
+
+let restOf = rest => switch rest {
+  | None => []
+  | Some(p) => ["...${pattern(p)}"]
+}
+
+export let pattern = p => switch p {
+  | Ast.PAs(inner, name, _, _) => "${pattern(inner)} as ${name}"
+  | Ast.PWild(_) => "_"
+  | Ast.PUnit(_) => "()"
+  | Ast.PBind(name, _) => name
+  | Ast.PLit(_, raw, _) => raw
+  | Ast.PBool(value, _) => show(value)
+  | Ast.PStr(value, _) => strLit(value)
+  | Ast.PRecord(fields, _) => "{ ${commaJoin(patField, fields)} }"
+  | Ast.PTuple(elems, _) => "(${commaJoin(pattern, elems)})"
+  | Ast.PCtor(ctorName, args, ns, _) => let head = switch ns {
+      | None => ctorName
+      | Some(alias) => "${alias}.${ctorName}"
+    } in
+      Array.length(args) == 0 ? head : "${head}(${commaJoin(pattern, args)})"
+  | Ast.PArr(elems, rest, _) => "[${Str.join(", ", Array.concat(elems |> map(pattern), restOf(rest)))}]"
+  | Ast.PList(elems, rest, _) => "@{${Str.join(", ", Array.concat(elems |> map(pattern), restOf(rest)))}}"
+  | Ast.POr(alts, _) => Str.join(" | ", alts |> map(pattern))
+}
+
+// --- declarations ------------------------------------------------------------
+
+let ctorField = (f: Ast.CtorField) => switch f.name {
+  | None => showTypeExpr(f.fieldType)
+  | Some(name) => "${name}: ${showTypeExpr(f.fieldType)}"
+}
+
+export let ctorText = (c: Ast.Ctor) =>
+  Array.length(c.fields) == 0
+    ? c.name
+    : "${c.name}(${commaJoin(ctorField, c.fields)})"
+
+let generics = params =>
+  Array.length(params) == 0 ? "" : "<${Str.join(", ", params)}>"
+
+/// `extern x : T = "mod" "name"`, or one of the host conventions
+/// (`global`/`send`/`get`/`set`/`new`), which print without the module string.
+let conventionOf = module =>
+  ["global", "send", "get", "set", "new"]
+    |> Array.filter(c => Str.startsWith("mochi:${c}:", module))
+    |> Array.get(0)
+
+export let externStmt = (name, params, typeExpr, module, imported, curried) =>
+  let head = "extern ${name}${generics(params)} : ${showTypeExpr(typeExpr)} = " in
+    switch conventionOf(module) {
+      | None =>
+        // `curried` describes the host's shape, not the type (ADR 0064).
+        "${head}${curried ? "curried " : ""}${strLit(module)} ${strLit(imported)}"
+      | Some(convention) => let first = Str.slice(
+          Str.length("mochi:${convention}:"),
+          Str.length(module),
+          module
+        ) in
+        let second = imported == "" ? "" : " ${strLit(imported)}" in
+          "${head}${convention} ${strLit(first)}${second}"
+    }
+
+// --- shared layouts ----------------------------------------------------------
+
+let sepLine = cat([txt(","), line])
+
+/// `[a, b]` / `(a, b)` — tight brackets; breaks one item per line.
+export let bracketed = (open, close, items) =>
+  Array.length(items) == 0
+    ? txt("${open}${close}")
+    : group(
+      cat(
+        [
+          txt(open),
+          indent(cat([softline, join(sepLine, items)])),
+          softline,
+          txt(close)
+        ]
+      )
+    )
+
+/// `{ a: 1, b: 2 }` / `#{ k: v }` — padded braces; breaks one entry per line.
+export let braced = (open, close, items) =>
+  Array.length(items) == 0
+    ? txt("${open}${close}")
+    : group(
+      cat(
+        [txt(open), indent(cat([line, join(sepLine, items)])), line, txt(close)]
+      )
+    )
+
+// --- expressions -------------------------------------------------------------
+//
+// Mirrors format.ts's exprCore and the printers it dispatches to. Two things it
+// deliberately does NOT do yet: re-fold desugared sugar (binary/unary calls,
+// operator sections, eta-partials, `>>` composition — every `refoldCall` branch),
+// so `a + b` still prints as `add(a, b)`; and attach comments, which needs a
+// span-keyed side table rather than TS's node-keyed WeakMaps.
+
+let parenIf = (cond, d) => cond ? cat([txt("("), d, txt(")")]) : d
+
+/// A callee / operand needs parens when dropping them would reparse to a
+/// different tree: a lambda or ternary binds looser than application, and a
+/// nested pipe would re-associate.
+let loosePrefix = (cts: Ctx, e) => switch e {
+  | Ast.ETernary(_, _, _, _) => true
+  | Ast.EPipe(_, _, _, _) => true
+  | _ => cts->printsAsLambda(e)
+}
+
+/// `LPSpanned` carries binder spans for the IDE; the printer only wants the shape.
+let unspan = p => switch p { | Ast.LPSpanned(inner, _) => inner | _ => p }
+
+// --- span extractor (the AST carries `span` on every node) --------------------
+
+let exprSpan = e => switch e {
+  | Ast.ENum(_, _, sp) => sp
+  | Ast.EUnit(sp) => sp
+  | Ast.EBool(_, sp) => sp
+  | Ast.EStr(_, sp) => sp
+  | Ast.ERef(_, sp) => sp
+  | Ast.ECall(_, _, _, sp) => sp
+  | Ast.ELambda(_, _, sp) => sp
+  | Ast.ELetIn(_, _, _, _, _, sp) => sp
+  | Ast.ELetBind(_, _, _, _, _, sp) => sp
+  | Ast.EPipe(_, _, _, sp) => sp
+  | Ast.EDo(_, sp) => sp
+  | Ast.ETernary(_, _, _, sp) => sp
+  | Ast.EMatch(_, _, sp) => sp
+  | Ast.ERecord(_, _, sp) => sp
+  | Ast.EField(_, _, _, sp) => sp
+  | Ast.ETuple(_, sp) => sp
+  | Ast.EArr(_, sp) => sp
+  | Ast.EList(_, sp) => sp
+  | Ast.ESet(_, sp) => sp
+  | Ast.EMap(_, sp) => sp
+  | Ast.ELoop(_, _, sp) => sp
+  | Ast.ERecur(_, sp) => sp
+  | Ast.EInterp(_, sp) => sp
+}
+
+// --- comments ----------------------------------------------------------------
+//
+// Comments are not in the AST — the lexer drops them (`///` docs aside), so the
+// printer re-attaches them from source. TypeScript keys two WeakMaps by node
+// identity; mochi has no identity map and no mutation, so this keys by SPAN,
+// the same shape ReScript's `res_comments_table.ml` uses (leading / trailing
+// tables keyed by location). Two nodes never share a span in a parsed tree, so
+// the key is as precise as identity here.
+
+type Comment = {
+  start: number,
+  end: number,
+  text: string,
+  blankAfter: bool,
+  trailing: bool
+}
+
+export type Ctx = {
+  leading: Map<string, [Comment]>,
+  trailing: Map<string, [Comment]>,
+  flatArity: Map<string, number>,
+  shadowed: Set<string>,
+  etaSkip: bool
+}
+// Program-level facts for the ADR 0065 / 0091 re-folds: how many arguments a
+// callable takes in one flat call, and which names the file rebinds.
+// Inside a curried chain (`a => b => …`) the inner lambda does NOT
+// eta-contract: `a => b => a + b` stays written out rather than collapsing to
+// `a => add(a)`. Paren decisions consult the same flag, so pass one and pass
+// two agree on whether a lambda prints as a lambda (ADR 0091).
+export let noComments : Ctx = {
+  leading: #{},
+  trailing: #{},
+  flatArity: #{},
+  shadowed: Set.fromArray([]),
+  etaSkip: false
+}
+
+/// A statement and its expression can carry the SAME span (`test(…)` as an
+/// expression statement), and TypeScript tells them apart by node identity.
+/// The kind tag restores that: without it the comment attaches once but prints
+/// twice, at the statement and again at the expression.
+let spanKey = (kind, sp: Ast.Span) =>
+  "${kind}:${show(sp.start)}:${show(sp.end)}"
+
+let STMT = "s"
+let EXPR = "e"
+let CTOR = "c"
+
+let atKey = (table, key) => switch Map.get(key, table) {
+  | Some(cs) => cs
+  | None => []
+}
+
+let pushAt = (key, c, table) =>
+  Map.set(key, Array.append(c, atKey(table, key)), table)
+
+/// Scan every `//` / `///` comment, string-aware: a `//` inside a string
+/// literal (or a `${…}` hole) is not a comment. Uses the lexer's own string
+/// skipper, so the two agree exactly on where a literal ends.
+/// Index of the next newline at or after `i`, or the end of source.
+let lineEndFrom = (src, i) => switch Str.get(i, src) {
+  | None => i
+  | Some("\n") => i
+  | Some(_) => lineEndFrom(src, i + 1)
+}
+
+/// Trailing horizontal whitespace, by CHAR CODE: mochi string literals have no
+/// `\r` escape (the lexer's `escChar` knows `\n` and `\t` only), so a literal
+/// "\r" would be the letter `r` and this would eat the last letter of every
+/// comment ending in one. Space 32, tab 9, carriage return 13.
+let trimEndFrom = (s, n) =>
+  n == 0
+    ? ""
+    : switch Str.codeAt(n - 1, s) {
+      | Some(32) => trimEndFrom(s, n - 1)
+      | Some(9) => trimEndFrom(s, n - 1)
+      | Some(13) => trimEndFrom(s, n - 1)
+      | _ => Str.slice(0, n, s)
+    }
+
+let trimEnd = s => trimEndFrom(s, Str.length(s))
+
+let commentAt = (src, i, end) =>
+  let lineEnd = lineEndFrom(src, end + 1) in
+    {
+      start: i,
+      end,
+      text: trimEnd(Str.slice(i, end, src)),
+      blankAfter: Str.trim(Str.slice(end + 1, lineEnd, src)) == "",
+      trailing: false
+    }
+
+let scanComments = (src, i, lineHasToken, acc) => switch Str.get(i, src) {
+  | None => acc
+  | Some("\n") => scanComments(src, i + 1, false, acc)
+  | Some(" ") => scanComments(src, i + 1, lineHasToken, acc)
+  | Some("\t") => scanComments(src, i + 1, lineHasToken, acc)
+  | Some(_) when // Carriage return by code: see `trimEndFrom` — mochi cannot spell "\r".
+Str.codeAt(i, src) == Some(13) => scanComments(
+      src,
+      i + 1,
+      lineHasToken,
+      acc
+    )
+  | Some("\"") => switch skipStringLiteral(src, i) {
+      | Some(end) => scanComments(src, end, true, acc)
+      | None => scanComments(src, i + 1, true, acc)
+    }
+  | Some("/") => Str.get(i + 1, src) == Some("/")
+      ? let end = lineEndFrom(src, i) in
+      let c = commentAt(src, i, end) in
+        scanComments(
+          src,
+          end,
+          lineHasToken,
+          Array.append({ ...c, trailing: lineHasToken }, acc)
+        )
+      : scanComments(src, i + 1, true, acc)
+  | Some(_) => scanComments(src, i + 1, true, acc)
+}
+
+export let collectComments = src => scanComments(src, 0, false, [])
+
+/// Every span-carrying node a comment may attach to: each statement, every
+/// expression under it, and — for a `type` decl — nothing more, since the
+/// bootstrap `Ctor` record carries no span (the TS AST anchors those too, so a
+/// comment between constructors migrates to the next statement here).
+let seqElemExpr = el => switch el {
+  | Ast.SEExpr(e) => e
+  | Ast.SESpread(e) => e
+}
+
+let exprAnchors = e =>
+  Array.append(
+    { kind: EXPR, sp: exprSpan(e) },
+    switch e {
+      | Ast.ECall(fn, args, _, _) => Array.concat(
+          exprAnchors(fn),
+          Array.flatMap(exprAnchors, args)
+        )
+      | Ast.ELambda(params, body, _) => Array.concat(
+          exprAnchors(body),
+          Array.flatMap(
+            p => switch unspan(p) {
+              | Ast.LPLabeled(_, _, _, Some(d)) => exprAnchors(d)
+              | _ => []
+            },
+            params
+          )
+        )
+      | Ast.ELetIn(_, _, _, value, body, _) => Array.concat(
+          exprAnchors(value),
+          exprAnchors(body)
+        )
+      | Ast.ELetBind(_, _, _, value, body, _) => Array.concat(
+          exprAnchors(value),
+          exprAnchors(body)
+        )
+      | Ast.EPipe(left, right, _, _) => Array.concat(
+          exprAnchors(left),
+          exprAnchors(right)
+        )
+      | Ast.EDo(exprs, _) => Array.flatMap(exprAnchors, exprs)
+      | Ast.ETernary(cond, thenE, elseE, _) => Array.concat(
+          exprAnchors(cond),
+          Array.concat(exprAnchors(thenE), exprAnchors(elseE))
+        )
+      | Ast.EMatch(scrutinee, arms, _) => Array.concat(
+          exprAnchors(scrutinee),
+          Array.flatMap(
+            (a: Ast.MatchArm) =>
+              Array.concat(
+                switch a.guard { | Some(g) => exprAnchors(g) | None => [] },
+                exprAnchors(a.body)
+              ),
+            arms
+          )
+        )
+      | Ast.ERecord(fields, spread, _) => Array.concat(
+          switch spread { | Some(sp) => exprAnchors(sp) | None => [] },
+          Array.flatMap(f => exprAnchors(f.value), fields)
+        )
+      | Ast.EField(target, _, _, _) => exprAnchors(target)
+      | Ast.ELoop(params, body, _) => Array.concat(
+          Array.flatMap(prm => exprAnchors(prm.init), params),
+          exprAnchors(body)
+        )
+      | Ast.ERecur(args, _) => Array.flatMap(exprAnchors, args)
+      | Ast.ETuple(elements, _) => Array.flatMap(exprAnchors, elements)
+      | Ast.EArr(elements, _) => Array.flatMap(
+          el => exprAnchors(seqElemExpr(el)),
+          elements
+        )
+      | Ast.EList(elements, _) => Array.flatMap(
+          el => exprAnchors(seqElemExpr(el)),
+          elements
+        )
+      | Ast.ESet(elements, _) => Array.flatMap(
+          el => exprAnchors(seqElemExpr(el)),
+          elements
+        )
+      | Ast.EMap(entries, _) => Array.flatMap(
+          en => Array.concat(exprAnchors(en.key), exprAnchors(en.value)),
+          entries
+        )
+      | Ast.EInterp(parts, _) => Array.flatMap(
+          prt => switch prt {
+            | Ast.IPLit(_) => []
+            | Ast.IPExpr(ex) => exprAnchors(ex)
+          },
+          parts
+        )
+      | _ => []
+    }
+  )
+
+/// Sorted so the tightest enclosing anchor wins: by start ascending, then by
+/// end DESCENDING, which puts the outermost node first among equal starts.
+/// Sorted by start ascending, then end DESCENDING so the outermost node comes
+/// first among anchors that share a start. One numeric key encodes both, which
+/// lets the native sort do the work: hand-rolled sorts here were quadratic
+/// (`Array.append` copies), and cost 12 seconds on a 1k-line file.
+let SPAN_SCALE = 10000000
+
+let anchorKey = a => a.sp.start * SPAN_SCALE - a.sp.end
+
+/// `sortBy` is stable, so a statement and its own expression — same span, and
+/// therefore the same key — keep collection order, statement first. That order
+/// is what decides which of the two a leading comment attaches to.
+let sortAnchors = Array.sortBy(anchorKey)
+
+/// The node a trailing comment most tightly follows ON ITS OWN LINE: the
+/// largest `end` at or before the comment's start, with no newline between.
+/// Index-based, not `[head, ...rest]`: a rest pattern copies the tail, which
+/// turns one linear scan into a quadratic one.
+let trailedByFrom = (anchors, i, c: Comment, src, best) => switch Array.get(i, anchors) {
+  | None => best
+  | Some(a) => let fits = a.sp.end <= c.start && !Str.contains(
+      "\n",
+      Str.slice(a.sp.end, c.start, src)
+    ) in
+    let better = fits && switch best {
+      | None => true
+      | Some(b) => a.sp.end > b.sp.end
+    } in
+      trailedByFrom(anchors, i + 1, c, src, better ? Some(a) : best)
+}
+
+let trailedBy = (anchors, c: Comment, src) =>
+  trailedByFrom(anchors, 0, c, src, None)
+
+/// The node an own-line comment most tightly precedes: the first anchor
+/// starting at or after the comment ends (the sort puts outermost first).
+let leadTargetFrom = (anchors, i, c: Comment) => switch Array.get(i, anchors) {
+  | None => None
+  | Some(a) => a.sp.start >= c.end ? Some(a) : leadTargetFrom(anchors, i + 1, c)
+}
+
+let leadTarget = (anchors, c: Comment) => leadTargetFrom(anchors, 0, c)
+
+type Attached = { table: Ctx, tail: [Comment] }
+
+/// `None` when the comment has no anchor at all (it sits past the last node) —
+/// the program printer emits those after the final statement.
+let attachOne = (anchors, src, c: Comment, tbl: Ctx) =>
+  let trailed = c.trailing ? trailedBy(anchors, c, src) : None in
+    switch trailed {
+      | Some(a) => Some(
+          { ...tbl, trailing: pushAt(spanKey(a.kind, a.sp), c, tbl.trailing) }
+        )
+      | None => switch leadTarget(anchors, c) {
+          | None => None
+          | Some(a) => Some(
+              { ...tbl, leading: pushAt(spanKey(a.kind, a.sp), c, tbl.leading) }
+            )
+        }
+    }
+let attachFrom = (comments, i, anchors, src, acc: Attached) => switch Array.get(i, comments) {
+  | None => acc
+  | Some(c) => attachFrom(
+      comments,
+      i + 1,
+      anchors,
+      src,
+      switch attachOne(anchors, src, c, acc.table) {
+        | Some(table) => { table, tail: acc.tail }
+        | None => { table: acc.table, tail: Array.append(c, acc.tail) }
+      }
+    )
+}
+/// Build the table for one expression: scan the source, anchor every node.
+export let commentsForExpr = (src, e) =>
+  attachFrom(
+    collectComments(src),
+    0,
+    sortAnchors(exprAnchors(e)),
+    src,
+    { table: noComments, tail: [] }
+  ).table
+
+/// Leading comment lines for a node: each on its own line, with a blank line
+/// kept after any comment the source separated from what follows.
+let leadingDocs = (cts: Ctx, kind, sp) =>
+  Array.flatMap(
+    (c: Comment) =>
+      c.blankAfter
+        ? [txt(c.text), hardline, hardline]
+        : [txt(c.text), hardline],
+    atKey(cts.leading, spanKey(kind, sp))
+  )
+
+/// A trailing comment prints ` // text` after the node, then `breakParent` so
+/// whatever follows lands on a new line (otherwise it would be commented out)
+/// without emitting a newline here — the enclosing group supplies it.
+let trailingDocs = (cts: Ctx, kind, sp) =>
+  Array.flatMap(
+    // `lineSuffix`, not plain text: the comment must print after whatever
+    // separator the enclosing list adds, else `f(x, // c)` comes back as
+    // `f(x // c,)` — the comma inside the comment, output that no longer parses.
+    (c: Comment) => [lineSuffix(txt(" ${c.text}")), breakParent],
+    atKey(cts.trailing, spanKey(kind, sp))
+  )
+
+let hasLead = (cts: Ctx, kind, sp) =>
+  Array.length(atKey(cts.leading, spanKey(kind, sp))) > 0
+
+let withComments = (cts: Ctx, kind, sp, doc) =>
+  let lead = leadingDocs(cts, kind, sp) in
+  let trail = trailingDocs(cts, kind, sp) in
+    Array.length(lead) == 0 && Array.length(trail) == 0
+      ? doc
+      : cat([...lead, doc, ...trail])
+
+// --- flat arity (ADR 0065 / 0091) --------------------------------------------
+//
+// Two re-folds need to know how many arguments a callable takes in ONE flat
+// call: `f(a)(b)` -> `f(a, b)`, and `x => f(a, x)` -> `f(a)`. The answer comes
+// from the emitted runtime definitions rather than from types — what the
+// runtime actually accepts, which `unit` domains and callback results make
+// differ from the HM signature.
+
+extern namespaceRuntime : Map<string, Map<string, string> > = "./prelude.gen.mjs" "namespaceRuntime"
+
+extern preludeJsDefs : Map<string, string> = "./prelude.gen.mjs" "preludeJsDefs"
+
+/// Digits of the leading `_curry(N,` in an emitted definition, or None.
+let curryArityFrom = (def, i, acc) => switch Str.codeAt(i, def) {
+  | None => acc
+  | Some(code) =>
+    // `0`..`9` by code: mochi's comparisons are numeric, not lexicographic.
+    code >= 48 && code <= 57
+      ? curryArityFrom(def, i + 1, "${acc}${Str.fromCode(code)}")
+      : acc
+}
+
+/// Count the parameters of a bare `const name = (a, b) => …` definition.
+let commaCountFrom = (s, i, acc) => switch Str.get(i, s) {
+  | None => acc
+  | Some(",") => commaCountFrom(s, i + 1, acc + 1)
+  | Some(_) => commaCountFrom(s, i + 1, acc)
+}
+
+let indexOfFrom = (needle, s, i) =>
+  i + Str.length(needle) > Str.length(s)
+    ? -1
+    : Str.slice(i, i + Str.length(needle), s) == needle
+    ? i
+    : indexOfFrom(needle, s, i + 1)
+
+/// The emitted arity of one runtime definition: `_curry(N, …)` states it, a
+/// bare `(a, b) => …` counts its outer params, anything else (a value like
+/// `pi`, a nullary ctor) is 0. Mirrors `arityOfDef` in prelude.ts.
+let arityOfDef = def =>
+  let curried = indexOfFrom("_curry(", def, 0) in
+    curried >= 0
+      ? let digits = curryArityFrom(def, curried + 7, "") in
+        Str.length(digits) == 0 ? 0 : Option.unwrapOr(0, Str.toNumber(digits))
+      : let open = indexOfFrom("= (", def, 0) in
+        open < 0
+          ? 0
+          : let close = indexOfFrom(") =>", def, open) in
+            close < 0
+              ? 0
+              : let params = Str.trim(Str.slice(open + 3, close, def)) in
+                Str.length(params) == 0 ? 0 : commaCountFrom(params, 0, 1)
+
+let runtimeArityOf = jsId => switch Map.get(jsId, preludeJsDefs) {
+  | None => None
+  | Some(def) => let n = arityOfDef(def) in n >= 2 ? Some(n) : None
+}
+
+/// `Array.map` -> its runtime's flat arity, or None when the namespace is
+/// shadowed by a local binding or the member is unknown.
+let namespaceArity = (shadowed, target, member) => switch target {
+  | Ast.ERef(nsName, _) => Set.has(nsName, shadowed)
+      ? None
+      : switch Map.get(nsName, namespaceRuntime) {
+        | None => None
+        | Some(members) => switch Map.get(member, members) {
+            | None => None
+            | Some(jsId) => runtimeArityOf(jsId)
+          }
+      }
+  | _ => None
+}
+
+/// Params codegen collapses into ONE flat JS function — `x => y => e` and
+/// `(x, y) => e` alike.
+let labeledCount = params =>
+  Array.length(
+    Array.filter(
+      p => switch unspan(p) {
+        | Ast.LPLabeled(_, _, _, _) => true
+        | _ => false
+      },
+      params
+    )
+  )
+
+/// A trailing labeled group folds into ONE record parameter (ADR 0098 §2).
+let jsArity = params =>
+  let labs = labeledCount(params) in
+    Array.length(params) - labs + (labs > 0 ? 1 : 0)
+
+let collapsedArity = e => switch e {
+  | Ast.ELambda(params, body, _) => jsArity(params) + collapsedArity(body)
+  | _ => 0
+}
+
+/// Every name a pattern binds.
+let patNames = p => switch p {
+  | Ast.PBind(name, _) => [name]
+  | Ast.PAs(inner, name, _, _) => Array.append(name, patNames(inner))
+  | Ast.PTuple(elems, _) => Array.flatMap(patNames, elems)
+  | Ast.PRecord(fields, _) => Array.flatMap(
+      (f: Ast.PatField) => patNames(f.pat),
+      fields
+    )
+  | Ast.PCtor(_, args, _, _) => Array.flatMap(patNames, args)
+  | Ast.PArr(elems, rest, _) => Array.concat(
+      Array.flatMap(patNames, elems),
+      switch rest { | Some(r) => patNames(r) | None => [] }
+    )
+  | Ast.PList(elems, rest, _) => Array.concat(
+      Array.flatMap(patNames, elems),
+      switch rest { | Some(r) => patNames(r) | None => [] }
+    )
+  | Ast.POr(alts, _) => Array.flatMap(patNames, alts)
+  | _ => []
+}
+
+let paramNames = p => switch unspan(p) {
+  | Ast.LPName(name, _) => [name]
+  | Ast.LPLabeled(name, _, _, _) => [name]
+  | Ast.LPTuple(names) => names
+  | Ast.LPRecord(fields) => fields
+  | _ => []
+}
+
+/// Every name the file binds anywhere OTHER than a top-level `let` — the
+/// over-approximation that guards against regrouping a shadowed callable.
+let innerNames = e => switch e {
+  | Ast.ELambda(params, body, _) => Array.concat(
+      Array.flatMap(paramNames, params),
+      Array.concat(
+        innerNames(body),
+        Array.flatMap(
+          p => switch unspan(p) {
+            | Ast.LPLabeled(_, _, _, Some(d)) => innerNames(d)
+            | _ => []
+          },
+          params
+        )
+      )
+    )
+  | Ast.ELetIn(name, _, _, value, body, _) => Array.append(
+      name,
+      Array.concat(innerNames(value), innerNames(body))
+    )
+  | Ast.ELetBind(param, _, _, value, body, _) => Array.concat(
+      paramNames(param),
+      Array.concat(innerNames(value), innerNames(body))
+    )
+  | Ast.EMatch(scrutinee, arms, _) => Array.concat(
+      innerNames(scrutinee),
+      Array.flatMap(
+        (a: Ast.MatchArm) =>
+          Array.concat(
+            patNames(a.pattern),
+            Array.concat(
+              switch a.guard { | Some(g) => innerNames(g) | None => [] },
+              innerNames(a.body)
+            )
+          ),
+        arms
+      )
+    )
+  | Ast.ELoop(params, body, _) => Array.concat(
+      params |> map((p: Ast.LoopParam) => p.name),
+      Array.concat(
+        Array.flatMap((p: Ast.LoopParam) => innerNames(p.init), params),
+        innerNames(body)
+      )
+    )
+  | Ast.ECall(fn, args, _, _) => Array.concat(
+      innerNames(fn),
+      Array.flatMap(innerNames, args)
+    )
+  | Ast.EPipe(l, r, _, _) => Array.concat(innerNames(l), innerNames(r))
+  | Ast.EDo(exprs, _) => Array.flatMap(innerNames, exprs)
+  | Ast.ETernary(c, t, f, _) => Array.concat(
+      innerNames(c),
+      Array.concat(innerNames(t), innerNames(f))
+    )
+  | Ast.ERecord(fields, spread, _) => Array.concat(
+      switch spread { | Some(s) => innerNames(s) | None => [] },
+      Array.flatMap((f: Ast.Field) => innerNames(f.value), fields)
+    )
+  | Ast.EField(target, _, _, _) => innerNames(target)
+  | Ast.ETuple(els, _) => Array.flatMap(innerNames, els)
+  | Ast.EArr(els, _) => Array.flatMap(el => innerNames(seqElemExpr(el)), els)
+  | Ast.EList(els, _) => Array.flatMap(el => innerNames(seqElemExpr(el)), els)
+  | Ast.ESet(els, _) => Array.flatMap(el => innerNames(seqElemExpr(el)), els)
+  | Ast.EMap(entries, _) => Array.flatMap(
+      (en: Ast.MapEntry) =>
+        Array.concat(innerNames(en.key), innerNames(en.value)),
+      entries
+    )
+  | Ast.ERecur(args, _) => Array.flatMap(innerNames, args)
+  | Ast.EInterp(parts, _) => Array.flatMap(
+      p => switch p { | Ast.IPLit(_) => [] | Ast.IPExpr(ex) => innerNames(ex) },
+      parts
+    )
+  | _ => []
+}
+
+let stmtInnerNames = s => switch s {
+  | Ast.SLet(_, _, _, value, _, _, _) => innerNames(value)
+  | Ast.SExpr(value, _) => innerNames(value)
+  | Ast.SImport(names, _, _) => names |> map((n: Ast.Name) => n.name)
+  | Ast.SImportNs(alias, _, _) => [alias.name]
+  | _ => []
+}
+
+let topLevelNames = stmts =>
+  Array.flatMap(
+    s => switch s {
+      | Ast.SLet(name, _, _, _, _, _, _) => [name]
+      | Ast.SExtern(name, _, _, _, _, _, _, _, _, _) => [name]
+      | _ => []
+    },
+    stmts
+  )
+
+/// Prelude builtins first — their arity is fixed by the emitted runtime — then
+/// top-level lambda bindings, which shadow the prelude entry either way: with
+/// their own arity, or with nothing when the binding is a value. An extern's
+/// host arity is a seam fact the printer must not guess at.
+let preludeArity = innerBound =>
+  Array.reduce(
+    (acc, name) =>
+      Set.has(name, innerBound)
+        ? acc
+        : switch runtimeArityOf(name) {
+          | Some(n) => Map.set(name, n, acc)
+          | None => acc
+        },
+    #{},
+    Map.keys(preludeJsDefs)
+  )
+
+let withLetArities = (stmts, innerBound, base) =>
+  Array.reduce(
+    (acc, s) => switch s {
+      | Ast.SLet(name, _, _, value, _, _, _) => Set.has(name, innerBound)
+          ? Map.delete(name, acc)
+          : let n = collapsedArity(value) in
+            n >= 2 ? Map.set(name, n, acc) : Map.delete(name, acc)
+      | Ast.SExtern(name, _, _, _, _, _, _, _, _, _) => Map.delete(name, acc)
+      | _ => acc
+    },
+    base,
+    stmts
+  )
+
+let buildFlatArity = (stmts, innerBound) =>
+  withLetArities(stmts, innerBound, preludeArity(innerBound))
+
+/// Values whose evaluation is observationally the same once or per call —
+/// lifting one out of a lambda cannot change how often it runs.
+let isInert = e => switch e {
+  | Ast.ERef(_, _) => true
+  | Ast.ENum(_, _, _) => true
+  | Ast.EBool(_, _) => true
+  | Ast.EStr(_, _) => true
+  | Ast.EUnit(_) => true
+  | Ast.EField(target, _, _, _) => isInert(target)
+  | _ => false
+}
+
+let mentionsRef = (e, name) => switch e {
+  | Ast.ERef(n, _) => n == name
+  | Ast.EField(target, _, _, _) => mentionsRef(target, name)
+  | _ => false
+}
+
+/// Flat arity of a ref or namespace member, or None when ADR 0065 cannot see it.
+let calleeArity = (ctx: Ctx, fn) => switch fn {
+  | Ast.ERef(name, _) => Map.get(name, ctx.flatArity)
+  | Ast.EField(target, member, _, _) => namespaceArity(
+      ctx.shadowed,
+      target,
+      member
+    )
+  | _ => None
+}
+
+/// Prelude and namespace arity ONLY. Same-file lets are fine for ADR 0065
+/// flattening, but eta of a generic user binding is tsc-unclean: ADR 0037 emits
+/// partial-application overloads for concrete functions only, and `fmt` cannot
+/// see schemes.
+let etaCalleeArity = (ctx: Ctx, fn) => switch fn {
+  | Ast.ERef(name, _) => Set.has(name, ctx.shadowed)
+      ? None
+      : runtimeArityOf(name)
+  | Ast.EField(target, member, _, _) => namespaceArity(
+      ctx.shadowed,
+      target,
+      member
+    )
+  | _ => None
+}
+
+// --- sugar re-folds ----------------------------------------------------------
+//
+// The parser desugars infix and prefix operators straight into 2-arg calls, and
+// sections / composition into `$`-prefixed lambdas. Printing those back as calls
+// would still reparse to the same tree, but `$s` and `$x` never lex as source
+// identifiers — so re-folding is required for round-trip correctness, not
+// cosmetics. Precedence here mirrors parser.mochi's *_BP constants exactly: a
+// nested operator call gets parens only when omitting them would reparse to a
+// different tree.
+
+let PIPE_PREC = 5
+let FAST_PIPE_PREC = 21
+let NEQ_PREC = 8
+let CONCAT_PREC = 10
+
+let binOpInfo = name => switch name {
+  | "or" => Some({ symbol: "||", prec: 7 })
+  | "and" => Some({ symbol: "&&", prec: 7 })
+  | "eq" => Some({ symbol: "==", prec: 8 })
+  | "lt" => Some({ symbol: "<", prec: 8 })
+  | "lte" => Some({ symbol: "<=", prec: 8 })
+  | "gt" => Some({ symbol: ">", prec: 8 })
+  | "gte" => Some({ symbol: ">=", prec: 8 })
+  | "concat" => Some({ symbol: "++", prec: 10 })
+  | "add" => Some({ symbol: "+", prec: 10 })
+  | "sub" => Some({ symbol: "-", prec: 10 })
+  | "mul" => Some({ symbol: "*", prec: 20 })
+  | "div" => Some({ symbol: "/", prec: 20 })
+  | "mod" => Some({ symbol: "%", prec: 20 })
+  | _ => None
+}
+
+let isLambdaExpr = e => switch e { | Ast.ELambda(_, _, _) => true | _ => false }
+
+/// False when the lambda eta-contracts to a partial: it then prints as a call,
+/// which needs no parens. Keeping this in step with `lambdaD` is what makes the
+/// layout a fixpoint (ADR 0091).
+let printsAsLambda = (cts: Ctx, e) => switch e {
+  | Ast.ELambda(params, body, _) => cts.etaSkip || Option.isNone(
+      cts->etaPartial(params, body)
+    )
+  | _ => false
+}
+
+/// Forced parens for an infix operand: a lambda or ternary binds looser than
+/// any operator. A pipe is NOT here — it carries a precedence of its own.
+let isLambdaOrTernary = (cts: Ctx, e) => switch e {
+  | Ast.ETernary(_, _, _, _) => true
+  | _ => cts->printsAsLambda(e)
+}
+
+// Annotated, not inferred: a match scrutinee only gets a TS type predicate when
+// its type is concrete (ADR 0031 + ADR 0026). Left to inference `args` widens to
+// `A[]`, the tuple stops being concrete, and the arm's `_tag` test emits as a
+// plain boolean — so the handler destructures an un-narrowed `Expr` and
+// `bootstrap:tsc` reports TS2339. Nesting is fine; unnamed types are not.
+let binOpFor = (fn: Ast.Expr, args: [Ast.Expr]) => switch (fn, args) {
+  | (Ast.ERef(name, _), [_, _]) => binOpInfo(name)
+  | _ => None
+}
+
+let binOpOf = e => switch e {
+  | Ast.ECall(fn, args, _, _) => binOpFor(fn, args)
+  | _ => None
+}
+
+let unaryOpOf = name => switch name {
+  | "not" => Some("!")
+  | "negate" => Some("-")
+  | _ => None
+}
+
+let pipePrecOf = e => switch e {
+  | Ast.EPipe(_, _, fast, _) => Some(fast ? FAST_PIPE_PREC : PIPE_PREC)
+  | _ => None
+}
+
+/// `!=` desugars to `not(eq(a, b))`, and an explicit `!(a == b)` desugars to the
+/// exact same shape — so folding either back to `!=` is a deliberate (lossy)
+/// simplification, in the same spirit as the composition re-fold.
+let neqFor = (fn: Ast.Expr, args: [Ast.Expr]) => switch (fn, args) {
+  | (Ast.ERef("not", _), [Ast.ECall(Ast.ERef("eq", _), [l, r], _, _)]) => Some((
+      l,
+      r
+    ))
+  | _ => None
+}
+
+let neqOperands = e => switch e {
+  | Ast.ECall(fn, args, _, _) => neqFor(fn, args)
+  | _ => None
+}
+
+let infixPrec = e => switch pipePrecOf(e) {
+  | Some(p) => Some(p)
+  | None => switch binOpOf(e) {
+      | Some(info) => Some(info.prec)
+      | None => switch neqOperands(e) {
+          | Some(_) => Some(NEQ_PREC)
+          | None => None
+        }
+    }
+}
+
+/// An operand of an infix operator. A lambda or ternary always parenthesizes;
+/// otherwise precedence decides, with the right operand also parenthesizing at
+/// EQUAL precedence, since every infix operator here is left-associative.
+let binOperandD = (cts, e, parentPrec, isRight) =>
+  cts->isLambdaOrTernary(e)
+    ? cat([txt("("), cts->exprD(e), txt(")")])
+    : switch infixPrec(e) {
+      | Some(prec) => parenIf(
+          isRight ? prec <= parentPrec : prec < parentPrec,
+          cts->exprD(e)
+        )
+      | None => cts->exprD(e)
+    }
+
+/// A pipe's left operand parenthesizes when dropping the parens would reparse:
+/// a looser infix (`(a ++ b)->f`), a nested pipe, or a lambda / ternary.
+let pipeLeftD = (cts, e, parentPrec) =>
+  cts->isLambdaOrTernary(e)
+    ? cat([txt("("), cts->exprD(e), txt(")")])
+    : switch infixPrec(e) {
+      | Some(prec) => parenIf(prec < parentPrec, cts->exprD(e))
+      | None => cts->exprD(e)
+    }
+
+/// `++` is left-associative (`concat(concat(a, b), c)`); flatten it like `|>` so
+/// a long string build breaks one segment per line instead of overflowing.
+let concatSegmentsFrom = (e, acc) => switch e {
+  | Ast.ECall(Ast.ERef("concat", _), [l, r], _, _) => concatSegmentsFrom(
+      l,
+      Array.prepend(r, acc)
+    )
+  | _ => Array.prepend(e, acc)
+}
+
+let concatD = (cts, l, r) => switch concatSegmentsFrom(l, [r]) {
+  | [] => txt("")
+  | [head, ...rest] => group(
+      cat(
+        [
+          cts->binOperandD(head, CONCAT_PREC, false),
+          indent(
+            cat(
+              rest
+                |> map(s =>
+                  cat(
+                    [line, txt("++ "), cts->binOperandD(s, CONCAT_PREC, true)]
+                  ))
+            )
+          )
+        ]
+      )
+    )
+}
+
+let binaryD = (cts, fn, args) => switch neqFor(fn, args) {
+  | Some((l, r)) => Some(
+      group(
+        cat(
+          [
+            cts->binOperandD(l, NEQ_PREC, false),
+            txt(" != "),
+            cts->binOperandD(r, NEQ_PREC, true)
+          ]
+        )
+      )
+    )
+  | None => switch binOpFor(fn, args) {
+      | None => None
+      | Some(info) => switch args {
+          | [l, r] => info.symbol == "++"
+              ? Some(cts->concatD(l, r))
+              : Some(
+                group(
+                  cat(
+                    [
+                      cts->binOperandD(l, info.prec, false),
+                      txt(" ${info.symbol} "),
+                      cts->binOperandD(r, info.prec, true)
+                    ]
+                  )
+                )
+              )
+          | _ => None
+        }
+    }
+}
+
+/// `not(x)` → `!x`, `negate(x)` → `-x`. Unary binds tighter than every infix
+/// operator (its operand parses at atom level), so an operator-shaped operand
+/// always needs parens regardless of precedence.
+let unaryD = (cts, fn, args) => switch (fn, args) {
+  | (Ast.ERef(name, _), [operand]) => switch unaryOpOf(name) {
+      | None => None
+      | Some(symbol) => let forced = cts->loosePrefix(
+          operand
+        ) || Option.isSome(
+          binOpOf(operand)
+        ) || Option.isSome(neqOperands(operand)) in
+          Some(cat([txt(symbol), parenIf(forced, cts->exprD(operand))]))
+    }
+  | _ => None
+}
+
+/// `x => f(a, x)` -> `f(a)` when that is a clean refactor (ADR 0091): `f` is a
+/// prelude or namespace builtin, the eta argument saturates the last slot, the
+/// prefix args are inert (so lifting them out of the lambda cannot change how
+/// often they run), and `x` is free in neither `f` nor the prefix. A `$`-prefixed
+/// param belongs to sections / compose, and an annotation is load-bearing.
+let etaPartial = (ctx: Ctx, params, body) => switch params {
+  | [only] => switch unspan(only) {
+      | Ast.LPName(name, None) => Str.startsWith("$", name)
+          ? None
+          : switch body {
+            | Ast.ECall(_, _, _, _) => let flat = switch flattenCallSpine(ctx, body) {
+                | Some(f) => f
+                | None => body
+              } in
+                switch flat {
+                  | Ast.ECall(fn, args, None, sp) => let n = Array.length(
+                      args
+                    ) in
+                      n == 0
+                        ? None
+                        : switch Array.get(n - 1, args) {
+                          | Some(Ast.ERef(lastName, _)) => lastName != name
+                              ? None
+                              : let prefix = Array.take(n - 1, args) in
+                                isInert(
+                                  fn
+                                ) && allInert(
+                                  prefix
+                                ) && !mentionsRef(
+                                  fn,
+                                  name
+                                ) && !anyMentions(prefix, name)
+                                  ? switch etaCalleeArity(ctx, fn) {
+                                    | Some(arity) => n == arity
+                                        ? Some(Ast.ECall(fn, prefix, None, sp))
+                                        : None
+                                    | None => None
+                                  }
+                                  : None
+                          | _ => None
+                        }
+                  | _ => None
+                }
+            | _ => None
+          }
+      | _ => None
+    }
+  | _ => None
+}
+
+let allInert = args => Array.length(Array.filter(a => !isInert(a), args)) == 0
+
+let anyMentions = (args, name) =>
+  Array.length(Array.filter(a => mentionsRef(a, name), args)) > 0
+
+/// `f(a)(b)` -> `f(a, b)` when `f`'s flat arity is known (ADR 0065): both lower
+/// to one `_curry`-wrapped flat function, so every grouping of the same
+/// arguments is the same call and the flat one is canonical. Purely syntactic.
+///
+/// Bails on anything it cannot see through: an unknown callee, a sugar-provenance
+/// call, a nullary group (`f()(x)` passes `unit`, which merging would drop), and
+/// over-application past the known arity, where the extra groups apply the RESULT.
+let spineGroups = (e, acc) => switch e {
+  | Ast.ECall(_, _, Some(_), _) => None
+  | Ast.ECall(fn, args, None, _) => spineGroups(fn, Array.prepend(args, acc))
+  | _ => Some((e, acc))
+}
+
+let flattenCallSpine = (ctx: Ctx, e) => switch spineGroups(e, []) {
+  | None => None
+  | Some((head, groups)) =>
+    // An eta-lambda head is substituted first, so `(x => f(a, x))(b)` flattens
+    // to `f(a, b)` in one pass rather than printing `f(a)(b)` and waiting for
+    // pass two to settle.
+    let (callee, allGroups) = switch head {
+      | Ast.ELambda(params, lbody, _) => switch etaPartial(ctx, params, lbody) {
+          | Some(Ast.ECall(efn, eargs, _, _)) => (
+              efn,
+              Array.prepend(eargs, groups)
+            )
+          | _ => (head, groups)
+        }
+      | _ => (head, groups)
+    } in
+      Array.length(allGroups) < 2 || anyEmptyGroup(allGroups)
+        ? None
+        : switch calleeArity(ctx, callee) {
+          | None => None
+          | Some(arity) => let args = Array.flatMap(g => g, allGroups) in
+              Array.length(args) > arity || anyUnit(args)
+                ? None
+                : Some(Ast.ECall(callee, args, None, exprSpan(e)))
+        }
+}
+
+let anyEmptyGroup = groups =>
+  Array.length(Array.filter(g => Array.length(g) == 0, groups)) > 0
+
+let anyUnit = args =>
+  Array.length(
+    Array.filter(a => switch a { | Ast.EUnit(_) => true | _ => false }, args)
+  ) > 0
+
+/// `($s) => op($s, y)` → `(op y)` (right section); `($s) => op(x, $s)` →
+/// `(x op)` (left section) — mirrors parser.mochi's section productions.
+let isSectionParam = p => switch unspan(p) {
+  | Ast.LPName("$s", _) => true
+  | _ => false
+}
+
+let isRef = (e, name) => switch e { | Ast.ERef(n, _) => n == name | _ => false }
+
+let sectionParts = body => switch neqOperands(body) {
+  | Some((l, r)) => Some(({ symbol: "!=", prec: NEQ_PREC }, l, r))
+  | None => switch binOpOf(body) {
+      | None => None
+      | Some(info) => switch body {
+          | Ast.ECall(_, [l, r], _, _) => Some((info, l, r))
+          | _ => None
+        }
+    }
+}
+
+let sectionOf = (cts, params, body) => switch params {
+  | [only] => isSectionParam(only)
+      ? switch sectionParts(body) {
+        | None => None
+        | Some((info, l, r)) => let lIsParam = isRef(l, "$s") in
+          let rIsParam = isRef(r, "$s") in
+            // Both or neither: not a section.
+            lIsParam == rIsParam
+              ? None
+              : lIsParam
+              ? Some(
+                cat(
+                  [
+                    txt("(${info.symbol} "),
+                    cts->binOperandD(r, info.prec, true),
+                    txt(")")
+                  ]
+                )
+              )
+              : Some(
+                cat(
+                  [
+                    txt("("),
+                    cts->binOperandD(l, info.prec, false),
+                    txt(" ${info.symbol})")
+                  ]
+                )
+              )
+      }
+      : None
+  | _ => None
+}
+
+/// `($x) => g(f($x))` — the shape `>>` desugars to.
+let composeParts = (params: [Ast.LamParam], body: Ast.Expr) => switch (params, body) {
+  | ([p], Ast.ECall(right, [Ast.ECall(left, [inner], _, _)], _, _)) =>
+    // `unspan` is a call, so the param cannot be matched inline — bind and peel.
+    switch unspan(p) {
+      | Ast.LPName("$x", _) => isRef(inner, "$x") ? Some((left, right)) : None
+      | _ => None
+    }
+  | _ => None
+}
+
+/// `>>` is left-associative, so `a >> b >> c` nests to the left; flatten it.
+let composeSegmentsFrom = (e, acc) => switch e {
+  | Ast.ELambda(params, body, _) => switch composeParts(params, body) {
+      | Some((left, right)) => composeSegmentsFrom(
+          left,
+          Array.prepend(right, acc)
+        )
+      | None => Array.prepend(e, acc)
+    }
+  | _ => Array.prepend(e, acc)
+}
+
+/// A destructuring `let (a, b) = e in body` reaches the printer as the IIFE the
+/// parser desugared it to; fold it back. Kept in step with `printsAsLet`.
+let destructureLetD = (cts, fn, args) => switch (fn, args) {
+  | (Ast.ELambda([p], lbody, _), [value]) => switch unspan(p) {
+      | Ast.LPName(_, _) => None
+      | _ => Some(cts->letLikeD("let ${cts->paramText(p)}", value, lbody))
+    }
+  | _ => None
+}
+
+let refoldCall = (cts, fn, args) => switch cts->destructureLetD(fn, args) {
+  | Some(d) => Some(d)
+  | None => switch cts->binaryD(fn, args) {
+      | Some(d) => Some(d)
+      | None => cts->unaryD(fn, args)
+    }
+}
+
+/// `f(~tone="amber")` — a labeled call is lowered to a record argument tagged
+/// `origin: "labeled"` (ADR 0098 §2); print the labels back.
+let labeledFieldD = (cts, f: Ast.Field) => switch f.value {
+  | Ast.ERef(name, _) when name == f.name => txt("~${f.name}")
+  | _ => cat([txt("~${f.name}="), cts->exprD(f.value)])
+}
+
+let callArgDocs = (cts, args, origin) => switch origin {
+  | Some("labeled") => switch Array.get(Array.length(args) - 1, args) {
+      | Some(Ast.ERecord(fields, None, _)) => Array.concat(
+          Array.take(Array.length(args) - 1, args) |> map(x => cts->exprD(x)),
+          fields |> map(f => cts->labeledFieldD(f))
+        )
+      | _ => args |> map(x => cts->exprD(x))
+    }
+  | _ => args |> map(x => cts->exprD(x))
+}
+
+let labeledParamText = (cts, name, annot, optional, defaultValue) =>
+  let ann = switch annot {
+    | Some(te) => ": ${showTypeExpr(te)}"
+    | None => ""
+  } in
+  let def = switch defaultValue {
+    | Some(d) => " = ${flat(cts->exprD(d))}"
+    | None => ""
+  } in
+    "~${name}${optional ? "?" : ""}${ann}${def}"
+
+let paramText = (cts, p) => switch unspan(p) {
+  | Ast.LPName(name, annot) => switch annot {
+      | Some(te) => "${name}: ${showTypeExpr(te)}"
+      | None => name
+    }
+  | Ast.LPTuple(names) => "(${Str.join(", ", names)})"
+  | Ast.LPRecord(fields) => "{ ${Str.join(", ", fields)} }"
+  | Ast.LPLabeled(name, annot, optional, defaultValue) => cts->labeledParamText(
+      name,
+      annot,
+      optional,
+      defaultValue
+    )
+  | Ast.LPSpanned(_, _) =>
+    // `unspan` already stripped the wrapper; a doubly-wrapped param is not built.
+    ""
+}
+
+/// A lone un-annotated name drops its parens (`x => …`); annotations and every
+/// other shape keep them (`(x: number) => …`, `(a, b) => …`, `({ x }) => …`).
+let paramsText = (cts, ps) => switch ps {
+  | [only] => switch unspan(only) {
+      | Ast.LPName(name, None) => name
+      | _ => "(${commaJoin(p => cts->paramText(p), ps)})"
+    }
+  | _ => "(${commaJoin(p => cts->paramText(p), ps)})"
+}
+
+/// `"…${x}…"` (ADR 0023) — round-trip the sugar; holes render flat. The body is
+/// escaped per part, so it wraps in quotes directly rather than through `strLit`.
+let quoted = body => "\"" ++ body ++ "\""
+
+let interpText = (cts, parts) =>
+  let hole = ex => "$" ++ "{" ++ flat(cts->exprD(ex)) ++ "}" in
+    quoted(
+      Str.join(
+        "",
+        parts
+          |> map(p => switch p {
+            | Ast.IPLit(value) => escStrBody(value)
+            | Ast.IPExpr(ex) => hole(ex)
+          })
+      )
+    )
+
+/// `let _ = a in let _ = b in result` is sequencing, not value binding — it
+/// prints as `do { … }`, so the chain collapses to its expression list.
+let discardedFrom = (e, acc) => switch e {
+  | Ast.ELetIn("_", _, _, value, body, _) => discardedFrom(
+      body,
+      Array.append(value, acc)
+    )
+  | _ => Array.length(acc) == 0 ? None : Some(Array.append(e, acc))
+}
+
+let discardedLetExprs = e => discardedFrom(e, [])
+
+let doBlockD = (cts, exprs) =>
+  cat(
+    [
+      txt("{"),
+      indent(
+        cat(
+          [
+            hardline,
+            join(cat([txt(";"), hardline]), exprs |> map(x => cts->exprD(x)))
+          ]
+        )
+      ),
+      hardline,
+      txt("}")
+    ]
+  )
+
+let doD = (cts, exprs) => cat([txt("do "), cts->doBlockD(exprs)])
+
+let lambdaD = (cts, params, body) => switch cts->sectionOf(params, body) {
+  | Some(section) => section
+  | None =>
+    // ADR 0091: `x => f(a, x)` contracts to `f(a)` before the compose and
+    // plain forms, matching the TS printer's order.
+    switch cts.etaSkip ? None : cts->etaPartial(params, body) {
+      | Some(eta) => cts->exprD(eta)
+      | None => switch composeParts(params, body) {
+          | Some(_) =>
+            // `f >> g >> h` nests to the left; print the flattened chain, one stage
+            // per line when it overflows.
+            switch composeSegmentsFrom(Ast.ELambda(params, body, { start: 0, end: 0 }), []) {
+              | [] => txt("")
+              | [head, ...rest] => group(
+                  cat(
+                    [
+                      cts->operandD(head),
+                      indent(
+                        cat(
+                          rest
+                            |> map(s =>
+                              cat([line, txt(">> "), cts->operandD(s)]))
+                        )
+                      )
+                    ]
+                  )
+                )
+            }
+          | None => {
+              ...cts,
+              etaSkip: isLambdaExpr(body)
+            }->plainLambdaD(params, body)
+        }
+    }
+}
+
+let plainLambdaD = (cts, params, body) =>
+  let head = txt("${cts->paramsText(params)} =>") in
+    switch body {
+      | Ast.EDo(exprs, _) => cat([head, txt(" "), cts->doBlockD(exprs)])
+      | _ => switch discardedLetExprs(body) {
+          | Some(exprs) => cat([head, txt(" "), cts->doBlockD(exprs)])
+          | None => switch body {
+              | Ast.EMatch(_, _, _) when // A `switch` body brings its own braces, so it hugs the arrow instead of
+// dropping to an indented line — unless a comment leads it, which has to
+// stay on its own line.
+!hasLead(cts, EXPR, exprSpan(body)) => cat(
+                  [head, txt(" "), cts->exprD(body)]
+                )
+              | _ => group(cat([head, indent(cat([line, cts->exprD(body)]))]))
+            }
+        }
+    }
+
+let condD = (cts, c) => switch c {
+  | Ast.ETernary(_, _, _, _) => cat([txt("("), cts->exprD(c), txt(")")])
+  | _ => cts->exprD(c)
+}
+
+/// A commented branch drops to its own indented line, so the comment stays
+/// own-line and the layout stays idempotent.
+let branchD = (cts, marker, e) =>
+  hasLead(cts, EXPR, exprSpan(e))
+    ? cat([txt(marker), indent(cat([hardline, cts->exprD(e)]))])
+    : cat([txt("${marker} "), cts->exprD(e)])
+
+/// Right-nested `a ? b : c ? d : e` flattens to one arm list, so a cascading
+/// conditional shares a single indent instead of staircasing.
+let ternaryArmsFrom = (e, acc) => switch e {
+  | Ast.ETernary(cond, thenE, elseE, _) => ternaryArmsFrom(
+      elseE,
+      Array.append({ cond, thenE }, acc)
+    )
+  | _ => (acc, e)
+}
+
+let ternaryRestParts = (cts, arms, i) => switch Array.get(i, arms) {
+  | None => []
+  | Some(a) => [
+      line,
+      hasLead(cts, EXPR, exprSpan(a.cond))
+        ? cat([txt(":"), indent(cat([hardline, cts->condD(a.cond)]))])
+        : cat([txt(": "), cts->condD(a.cond)]),
+      line,
+      cts->branchD("?", a.thenE),
+      ...cts->ternaryRestParts(arms, i + 1)
+    ]
+}
+
+/// Inline when it fits; else `cond` / `? then` / `: cond` / `? then` / `: else`
+/// at one indent — a flat chain, not a nested pyramid.
+let ternaryD = (cts, e) =>
+  let (arms, elseE) = ternaryArmsFrom(e, []) in
+    switch Array.get(0, arms) {
+      | None =>
+        // `ternaryD` is only reached from the ETernary arm, so `arms` is non-empty.
+        txt("")
+      | Some(first) => group(
+          cat(
+            [
+              cts->condD(first.cond),
+              indent(
+                cat(
+                  [
+                    line,
+                    cts->branchD("?", first.thenE),
+                    ...cts->ternaryRestParts(arms, 1),
+                    line,
+                    cts->branchD(":", elseE)
+                  ]
+                )
+              )
+            ]
+          )
+        )
+    }
+
+/// Does this expression PRINT as `let … in …`? A destructuring
+/// `let (a, b) = v in body` reaches the formatter as the IIFE the parser
+/// desugared it to, and the chain rule has to see through that or every
+/// destructure in a chain adds an indent step.
+let printsAsLet = e => switch e {
+  | Ast.ELetIn(_, _, _, _, _, _) => Option.isNone(discardedLetExprs(e))
+  | Ast.ELetBind(_, _, _, _, _, _) => true
+  | Ast.ECall(Ast.ELambda([p], _, _), [_], _, _) => switch unspan(p) {
+      | Ast.LPName(_, _) => false
+      | _ => true
+    }
+  | _ => false
+}
+
+/// `let x = v in body`; when it overflows, `in` stays at the end of the value
+/// line. A chain of `let … in let … in …` stays left-aligned, but a terminal
+/// non-let body indents under `in` so a ternary branch's payload looks bound.
+let letLikeD = (cts, head, value, body) =>
+  // `line` must sit INSIDE `indent` — indent only affects newlines, so a
+  // sibling `line` then `indent(text)` still prints at the outer column.
+  let cont = printsAsLet(body)
+    ? cat([line, cts->exprD(body)])
+    : indent(cat([line, cts->exprD(body)])) in
+    group(
+      cat(
+        [
+          txt("${head} = "),
+          ...leadingDocs(cts, EXPR, exprSpan(value)),
+          cts->exprRaw(value),
+          txt(" in"),
+          ...trailingDocs(cts, EXPR, exprSpan(value)),
+          cont
+        ]
+      )
+    )
+
+/// `{ x }` when the value is a same-name ref, else `{ x: e }` (ADR 0068).
+let recordFieldD = (cts, f: Ast.Field) => switch f.value {
+  | Ast.ERef(name, _) when name == f.name => cts->exprD(f.value)
+  | _ => cat([txt("${f.name}: "), cts->exprD(f.value)])
+}
+
+let recordD = (cts, fields, spread) =>
+  let fieldDocs = fields |> map(f => cts->recordFieldD(f)) in
+    braced(
+      "{",
+      "}",
+      switch spread {
+        | Some(s) => Array.prepend(cat([txt("..."), cts->exprD(s)]), fieldDocs)
+        | None => fieldDocs
+      }
+    )
+
+let seqElemD = (cts, el) => switch el {
+  | Ast.SEExpr(e) => cts->exprD(e)
+  | Ast.SESpread(e) => cat([txt("..."), cts->exprD(e)])
+}
+
+/// `|>` is left-associative, so `a |> b |> c` is pipe(pipe(a, b), c); flatten it
+/// back to source order. Do NOT walk into `->`: the fast pipe inserts first
+/// (ADR 0069) while `|>` is data-last, so flattening a mixed chain would rewrite
+/// `val->fn(a, b) |> g(c)` into `val |> fn(a, b) |> g(c)`.
+let pipeSegmentsFrom = (e, acc) => switch e {
+  | Ast.EPipe(left, right, false, _) => pipeSegmentsFrom(
+      left,
+      Array.prepend(right, acc)
+    )
+  | _ => Array.prepend(e, acc)
+}
+
+let matchArmD = (cts, a: Ast.MatchArm) =>
+  let guard = switch a.guard {
+    | Some(g) => " when ${flat(cts->exprD(g))}"
+    | None => ""
+  } in
+  let head = txt("| ${pattern(a.pattern)}${guard} =>") in
+    hasLead(cts, EXPR, exprSpan(a.body))
+      ? cat([head, indent(cat([hardline, cts->exprD(a.body)]))])
+      : cat([head, txt(" "), indent(cts->exprD(a.body))])
+
+/// Inline `switch s { | A => x | _ => y }` when it fits, else one arm per line.
+/// A multi-line arm body nests one level past the arm's `|`, so its own lines
+/// never align with the parent's arms.
+let matchD = (cts, scrutinee, arms) =>
+  group(
+    cat(
+      [
+        txt("switch ${flat(cts->exprD(scrutinee))} {"),
+        indent(cat(arms |> map(a => cat([line, cts->matchArmD(a)])))),
+        line,
+        txt("}")
+      ]
+    )
+  )
+
+/// `loop (acc = 0, i = 0) { body }` (ADR 0056) — inline when it fits, else the
+/// body indents on its own lines, brace layout matching `switch`.
+let loopD = (cts, params, body) =>
+  group(
+    cat(
+      [
+        txt("loop ("),
+        join(
+          txt(", "),
+          params |> map(p => cat([txt("${p.name} = "), cts->exprD(p.init)]))
+        ),
+        txt(") {"),
+        indent(cat([line, cts->exprD(body)])),
+        line,
+        txt("}")
+      ]
+    )
+  )
+
+/// A lambda argument in last position hugs its closing paren, so a `switch` or
+/// `do` body ends `})` rather than staircasing a lone closer onto its own line.
+let lastArgHugs = body => switch body {
+  | Ast.EMatch(_, _, _) => true
+  | Ast.ELoop(_, _, _) => true
+  | Ast.EDo(_, _) => true
+  | _ => Option.isSome(discardedLetExprs(body))
+}
+
+let callArgsD = (cts, fn, args, origin, asCallee) => switch cts->refoldCall(fn, args) {
+  | Some(d) => d
+  | None =>
+    // `f(a)(b)` -> `f(a, b)` for a flat callable (ADR 0065). The result carries a
+    // single argument group, so this recurses at most once.
+    switch cts->flattenCallSpine(Ast.ECall(fn, args, origin, { start: 0, end: 0 })) {
+      | Some(Ast.ECall(ffn, fargs, forigin, _)) => cts->plainCallD(
+          ffn,
+          fargs,
+          forigin,
+          asCallee
+        )
+      | _ => cts->plainCallD(fn, args, origin, asCallee)
+    }
+}
+
+let plainCallD = (cts, fn, args, origin, asCallee) =>
+  let fnD = cts->calleeD(fn) in
+    switch args {
+      | [] => cat([fnD, txt("()")])
+      | [Ast.ETuple(elements, tsp)] =>
+        // A singleton tuple argument needs both paren pairs to preserve the AST
+        // (`Ok((value, next))`). Keep the call glued to the tuple so a broken
+        // tuple becomes `Ok((\n  …\n))` rather than a staircase of closers.
+        group(
+          cat([fnD, txt("("), cts->exprD(Ast.ETuple(elements, tsp)), txt(")")])
+        )
+      | _ => let argDocs = cts->callArgDocs(args, origin) in
+          switch Array.get(Array.length(args) - 1, args) {
+            | Some(Ast.ELambda(_, lbody, _)) => group(
+                cat(
+                  [
+                    fnD,
+                    txt("("),
+                    join(txt(", "), argDocs),
+                    lastArgHugs(lbody) || !asCallee
+                      ? txt(")")
+                      : cat([softline, txt(")")])
+                  ]
+                )
+              )
+            | _ => cat(
+                [
+                  fnD,
+                  group(
+                    cat(
+                      [
+                        txt("("),
+                        indent(
+                          cat([softline, join(cat([txt(","), line]), argDocs)])
+                        ),
+                        softline,
+                        txt(")")
+                      ]
+                    )
+                  )
+                ]
+              )
+          }
+    }
+
+let callD = (cts, fn, args, origin) => cts->callArgsD(fn, args, origin, false)
+
+let calleeD = (cts, e) => switch e {
+  | Ast.ECall(fn, args, origin, _) => cts->callArgsD(fn, args, origin, true)
+  | _ => parenIf(cts->loosePrefix(e), cts->exprD(e))
+}
+
+let operandD = (cts, e) => parenIf(cts->loosePrefix(e), cts->exprD(e))
+
+/// A record in member position is ambiguous with a block, so it parenthesizes
+/// where a callee would not.
+let memberD = (cts, e) => switch e {
+  | Ast.ERecord(_, _, _) => cat([txt("("), cts->exprD(e), txt(")")])
+  | _ => parenIf(cts->loosePrefix(e), cts->exprD(e))
+}
+
+/// Inline when it fits, else one `|> stage` per line indented under the head.
+let pipeD = (cts, e) => switch e {
+  | Ast.EPipe(left, Ast.ECall(rfn, rargs, rorigin, _), true, _) => cat(
+      [
+        cts->pipeLeftD(left, FAST_PIPE_PREC),
+        txt("->"),
+        cts->callD(rfn, rargs, rorigin)
+      ]
+    )
+  | _ => let segments = pipeSegmentsFrom(e, []) in
+      switch segments {
+        | [] => txt("")
+        | [head, ...rest] => group(
+            cat(
+              [
+                cts->pipeLeftD(head, PIPE_PREC),
+                indent(
+                  cat(
+                    rest |> map(s => cat([line, txt("|> "), cts->operandD(s)]))
+                  )
+                )
+              ]
+            )
+          )
+      }
+}
+
+let letBindHead = (cts, monad, param) =>
+  "let${monad == "Task" ? "!" : "?"} ${cts->paramText(param)}"
+
+let exprRaw = (cts, e) => switch e {
+  | Ast.ENum(_, raw, _) => txt(raw)
+  | Ast.EUnit(_) => txt("()")
+  | Ast.EBool(value, _) => txt(show(value))
+  | Ast.EStr(value, _) => txt(strLit(value))
+  | Ast.EInterp(parts, _) => txt(cts->interpText(parts))
+  | Ast.ERef(name, _) => txt(name)
+  | Ast.ECall(fn, args, origin, _) => cts->callD(fn, args, origin)
+  | Ast.ELambda(params, body, _) => cts->lambdaD(params, body)
+  | Ast.EPipe(_, _, _, _) => cts->pipeD(e)
+  | Ast.EDo(exprs, _) => cts->doD(exprs)
+  | Ast.ETernary(_, _, _, _) => cts->ternaryD(e)
+  | Ast.ERecord(fields, spread, _) => cts->recordD(fields, spread)
+  | Ast.EField(target, name, _, _) => cat(
+      [cts->memberD(target), txt(".${name}")]
+    )
+  | Ast.EMatch(scrutinee, arms, _) => cts->matchD(scrutinee, arms)
+  | Ast.ELetIn(name, _, annot, value, body, _) => switch discardedLetExprs(e) {
+      | Some(exprs) => cts->doD(exprs)
+      | None => let ann = switch annot {
+          | Some(te) => " : ${showTypeExpr(te)}"
+          | None => ""
+        } in
+          cts->letLikeD("let ${name}${ann}", value, body)
+    }
+  | Ast.ELetBind(param, _, monad, value, body, _) => cts->letLikeD(
+      cts->letBindHead(monad, param),
+      value,
+      body
+    )
+  | Ast.ELoop(params, body, _) => cts->loopD(params, body)
+  | Ast.ERecur(args, _) => cat(
+      [txt("recur"), bracketed("(", ")", args |> map(x => cts->exprD(x)))]
+    )
+  | Ast.ETuple(elements, _) => bracketed(
+      "(",
+      ")",
+      elements |> map(x => cts->exprD(x))
+    )
+  | Ast.EArr(elements, _) => bracketed(
+      "[",
+      "]",
+      elements |> map(el => cts->seqElemD(el))
+    )
+  | Ast.EList(elements, _) => bracketed(
+      "@{",
+      "}",
+      elements |> map(el => cts->seqElemD(el))
+    )
+  | Ast.ESet(elements, _) => bracketed(
+      "#{",
+      "}",
+      elements |> map(el => cts->seqElemD(el))
+    )
+  | Ast.EMap(entries, _) => braced(
+      "#{",
+      "}",
+      entries
+        |> map(en => cat([cts->exprD(en.key), txt(": "), cts->exprD(en.value)]))
+    )
+}
+
+// --- statements --------------------------------------------------------------
+
+let aliasFieldText = (f: Ast.AliasField) =>
+  "${f.name}${f.optional ? "?" : ""}: ${showTypeExpr(f.fieldType)}"
+
+let ctorArms = (cts: Ctx, ctors, i) => switch Array.get(i, ctors) {
+  | None => []
+  | Some(c) => Array.prepend(
+      cat([hardline, withComments(cts, CTOR, c.span, txt("| ${ctorText(c)}"))]),
+      cts->ctorArms(ctors, i + 1)
+    )
+}
+
+/// A Doc rather than a flat string: a record alias with many or long fields must
+/// break one per line like a record literal does, and a comment between
+/// constructors needs a slot to print a leading line into.
+export let typeStmtD = (cts: Ctx, name, params, ctors, alias, aliasType) =>
+  let head = "type ${name}${generics(params)}" in
+    switch alias {
+      | Some(fields) => cat(
+          [
+            txt("${head} = "),
+            braced("{", "}", fields |> map(f => txt(aliasFieldText(f))))
+          ]
+        )
+      | None => switch aliasType {
+          | Some(te) => txt("${head} = ${showTypeExpr(te)}")
+          | None => Array.length(ctors) == 0
+              ? txt("extern ${head}")
+              : cat([txt("${head} ="), indent(cat(cts->ctorArms(ctors, 0)))])
+        }
+    }
+
+export let importStmtD = (names, from) =>
+  group(
+    cat(
+      [
+        txt("import "),
+        braced("{", "}", names |> map(n => txt(n.name))),
+        txt(" from ${strLit(from)}")
+      ]
+    )
+  )
+
+export let importNsStmtD = (alias, from) =>
+  txt("import * as ${alias} from ${strLit(from)}")
+
+/// Leading comments print above the node, trailing ones inline after it.
+export let exprD = (cts, e) =>
+  withComments(cts, EXPR, exprSpan(e), cts->exprRaw(e))
+
+// --- statements + program ----------------------------------------------------
+
+let expPrefix = exported => exported ? "export " : ""
+
+/// A field access `<tmp>.<name>` reading the given destructuring temp.
+let fieldOf = (e, tmp) => switch e {
+  | Ast.EField(Ast.ERef(target, _), name, _, _) => target == tmp
+      ? Some(name)
+      : None
+  | _ => None
+}
+
+/// How many of the `$d` temp's shorthand field-access lets follow it, so the
+/// group re-folds into a single `let { x, y } = e`.
+let destructureFieldsFrom = (stmts, j, tmp, acc) => switch Array.get(j, stmts) {
+  | Some(Ast.SLet(name, _, _, value, _, _, _)) => switch fieldOf(value, tmp) {
+      | Some(f) =>
+        // Shorthand only: `let { x }` re-folds, `let { x: y }` does not.
+        f == name
+          ? destructureFieldsFrom(stmts, j + 1, tmp, Array.append(f, acc))
+          : acc
+      | None => acc
+    }
+  | _ => acc
+}
+
+type StmtDoc = { doc: Doc, consumed: number }
+
+/// Print one statement, re-folding a `$d` destructuring temp plus its
+/// field-access lets back into one `let { … } = e`. Reports how many
+/// statements it consumed.
+let stmtDoc = (cts: Ctx, stmts, i, src) => switch Array.get(i, stmts) {
+  | None => { doc: txt(""), consumed: 1 }
+  | Some(s) => switch s {
+      | Ast.SImport(names, from, _) => {
+          doc: importStmtD(names, from),
+          consumed: 1
+        }
+      | Ast.SImportNs(alias, from, _) => {
+          doc: importNsStmtD(alias.name, from),
+          consumed: 1
+        }
+      | Ast.SType(name, params, ctors, alias, aliasType, exported, _, _) => {
+          doc: cat(
+            [
+              txt(expPrefix(exported)),
+              cts->typeStmtD(name, params, ctors, alias, aliasType)
+            ]
+          ),
+          consumed: 1
+        }
+      | Ast.SExtern(name, _, params, te, module, imported, curried, exported, _, _) => {
+          doc: txt(
+            "${expPrefix(exported)}${externStmt(name, params, te, module, imported, curried)}"
+          ),
+          consumed: 1
+        }
+      | Ast.SError(sp) =>
+        // ADR 0045: the span covers every byte skipped during recovery, so
+        // re-emitting it verbatim is what makes `fmt` on a broken file never
+        // destroy code it could not parse. `verbatim`, not `txt`: the raw bytes
+        // stay opaque to the layout engine — no re-indent, no re-wrap.
+        { doc: verbatim(Str.slice(sp.start, sp.end, src)), consumed: 1 }
+      | Ast.SExpr(value, _) => { doc: cts->exprD(value), consumed: 1 }
+      | Ast.SLet(name, _, annot, value, exported, _, _) => Str.startsWith(
+          "$",
+          name
+        )
+          ? let fields = destructureFieldsFrom(stmts, i + 1, name, []) in
+            {
+              doc: cat(
+                [
+                  txt(
+                    "${expPrefix(exported)}let { ${Str.join(", ", fields)} } = "
+                  ),
+                  cts->exprD(value)
+                ]
+              ),
+              consumed: Array.length(fields) + 1
+            }
+          : let ann = switch annot {
+            | Some(te) => " : ${showTypeExpr(te)}"
+            | None => ""
+          } in
+            {
+              doc: cat(
+                [
+                  txt("${expPrefix(exported)}let ${name}${ann} = "),
+                  cts->exprD(value)
+                ]
+              ),
+              consumed: 1
+            }
+    }
+}
+
+let stmtSpan = s => switch s {
+  | Ast.SLet(_, _, _, _, _, _, sp) => sp
+  | Ast.SType(_, _, _, _, _, _, _, sp) => sp
+  | Ast.SExtern(_, _, _, _, _, _, _, _, _, sp) => sp
+  | Ast.SImport(_, _, sp) => sp
+  | Ast.SImportNs(_, _, sp) => sp
+  | Ast.SExpr(_, sp) => sp
+  | Ast.SError(sp) => sp
+}
+
+/// A blank separator between two statements: a newline, only whitespace, then
+/// another newline somewhere in the source gap. Any run of blank lines
+/// collapses to one; a doc comment is not whitespace, so `let a\n/// d\nlet b`
+/// reads as adjacent.
+let blankBetweenFrom = (s, i, seenNl) => switch Str.get(i, s) {
+  | None => false
+  | Some("\n") => seenNl || blankBetweenFrom(s, i + 1, true)
+  | Some(" ") => blankBetweenFrom(s, i + 1, seenNl)
+  | Some("\t") => blankBetweenFrom(s, i + 1, seenNl)
+  | Some("r") => blankBetweenFrom(s, i + 1, seenNl)
+  | Some(_) => blankBetweenFrom(s, i + 1, false)
+}
+
+let blankBetween = gap => blankBetweenFrom(gap, 0, false)
+
+/// Where a statement's rendering begins in source: its first leading comment
+/// when it has one, else its own token — so a kept blank line lands before the
+/// comment block rather than inside it.
+let anchorStart = (cts: Ctx, s) =>
+  let sp = stmtSpan(s) in
+    switch Array.get(0, atKey(cts.leading, spanKey(STMT, sp))) {
+      | Some(c) => c.start
+      | None => sp.start
+    }
+
+let stmtParts = (cts: Ctx, stmts, i, src, prevEnd, acc) => switch Array.get(i, stmts) {
+  | None => (acc, prevEnd)
+  | Some(cur) => let sep = switch prevEnd {
+      | None => []
+      | Some(pe) => blankBetween(Str.slice(pe, anchorStart(cts, cur), src))
+          ? [hardline, hardline]
+          : [hardline]
+    } in
+    let printed = cts->stmtDoc(stmts, i, src) in
+    let lastIdx = i + printed.consumed - 1 in
+    let end = switch Array.get(lastIdx, stmts) {
+      | Some(last) => stmtSpan(last).end
+      | None => 0
+    } in
+      stmtParts(
+        cts,
+        stmts,
+        i + printed.consumed,
+        src,
+        Some(end),
+        Array.concat(
+          acc,
+          Array.append(withComments(cts, STMT, stmtSpan(cur), printed.doc), sep)
+        )
+      )
+}
+
+/// Comments after the last statement have no node to attach to; they print
+/// after it, keeping a blank line if the source had one.
+let tailParts = (tail, src, prevEnd) => switch Array.get(0, tail) {
+  | None => []
+  | Some(first) => let sep = switch prevEnd {
+      | None => []
+      | Some(pe) => blankBetween(Str.slice(pe, first.start, src))
+          ? [hardline, hardline]
+          : [hardline]
+    } in
+      Array.append(
+        join(hardline, tail |> map((c: Comment) => txt(c.text))),
+        sep
+      )
+}
+
+let programDoc = (cts: Ctx, stmts, src, tail) =>
+  let (parts, prevEnd) = stmtParts(cts, stmts, 0, src, None, []) in
+    cat(
+      Array.concat(
+        Array.concat(parts, tailParts(tail, src, prevEnd)),
+        [hardline]
+      )
+    )
+
+/// Every anchor in a program: each statement span plus every expression under
+/// it, so a comment binds to the tightest node that follows (or precedes) it.
+let stmtAnchors = s =>
+  Array.append(
+    { kind: STMT, sp: stmtSpan(s) },
+    switch s {
+      | Ast.SLet(_, _, _, value, _, _, _) => exprAnchors(value)
+      | Ast.SExpr(value, _) => exprAnchors(value)
+      | Ast.SType(_, _, ctors, _, _, _, _, _) =>
+        // A comment between two constructors anchors to the one it precedes.
+        ctors |> map((c: Ast.Ctor) => { kind: CTOR, sp: c.span })
+      | _ => []
+    }
+  )
+
+/// A comment inside an unparsable region is part of the bytes `SError` re-emits
+/// verbatim; attaching it too would print it twice.
+let inErrorSpanFrom = (stmts, i, c: Comment) => switch Array.get(i, stmts) {
+  | None => false
+  | Some(Ast.SError(sp)) => c.start >= sp.start && c.start < sp.end || inErrorSpanFrom(
+      stmts,
+      i + 1,
+      c
+    )
+  | Some(_) => inErrorSpanFrom(stmts, i + 1, c)
+}
+
+let inErrorSpan = (stmts, c: Comment) => inErrorSpanFrom(stmts, 0, c)
+
+/// `"use open"` is a directive, not a statement — the parser skips it, so the
+/// printer restores it verbatim.
+let hasOpenDirective = src => switch Array.get(0, Str.split("\n", Str.trim(src))) {
+  | Some(first) => Str.trim(first) == "\"use open\""
+  | None => false
+}
+
+/// Print an already-parsed program with comment and blank-line fidelity to `src`.
+export let formatProgram = (stmts, src) =>
+  // The two re-folds need program-level facts: a name the file rebinds must
+  // not be regrouped against the prelude entry it shadows.
+  let innerBound = Set.fromArray(Array.flatMap(stmtInnerNames, stmts)) in
+  let shadowed = Set.union(innerBound, Set.fromArray(topLevelNames(stmts))) in
+  let base = {
+    ...noComments,
+    flatArity: buildFlatArity(stmts, innerBound),
+    shadowed
+  } in
+  let attached = attachFrom(
+    Array.filter(c => !inErrorSpan(stmts, c), collectComments(src)),
+    0,
+    sortAnchors(Array.flatMap(stmtAnchors, stmts)),
+    src,
+    { table: base, tail: [] }
+  ) in
+  let body = render(
+    programDoc(attached.table, stmts, src, attached.tail),
+    WIDTH
+  ) in
+    hasOpenDirective(src) ? "\"use open\"\n\n${body}" : body
+
+// The `lex` + `parseRecovering` + `formatProgram` composition lives in the
+// caller (the CLI), not here: this module prints an AST and stays independent
+// of the front end, so the differential specs can drive it directly.

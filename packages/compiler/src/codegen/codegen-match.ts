@@ -322,7 +322,10 @@ const patTarget = (p: Pattern, base: string, ctx: GenCtx): string =>
 /** A field's refined type when its sub-pattern narrows it, else null (the field keeps its declared type — a bind/wildcard/literal needs no narrowing). */
 function fieldRefine(p: Pattern, fieldBase: string, ctx: GenCtx): string | null {
   if (p.kind === "pctor") return patTarget(p, fieldBase, ctx);
-  if (p.kind === "precord") {
+  // Tuple and array sub-patterns recurse: a ctor under `[Call(f, [g], _, _)]`
+  // is two slots down, and without this the predicate stopped at the top level
+  // while the handler destructured all the way (TS2339 on the inner field).
+  if (p.kind === "precord" || p.kind === "ptuple" || p.kind === "parr") {
     const t = patTarget(p, fieldBase, ctx);
     return t === fieldBase ? null : t;
   }

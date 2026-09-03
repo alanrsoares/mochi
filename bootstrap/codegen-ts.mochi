@@ -310,7 +310,12 @@ export let ctorFactoryTs = (typeName, params, c: Ast.Ctor, aliases: Map<string, 
 /// A lambda param's declared NAME (destructuring params take a positional
 /// placeholder — the type is what matters here, not the binder shape).
 let paramDeclName = (p, i) => switch p {
+  | Ast.LPSpanned(inner, _) => paramDeclName(inner, i)
   | Ast.LPName(name, _) => name
+  | Ast.LPLabeled(_, _, _, _) =>
+    // A trailing labeled group collapses to the one `$lab` record the runtime
+    // actually receives (ADR 0098 §2), so the declared name matches the JS.
+    "$lab"
   | _ => "_${show(i)}"
 }
 
@@ -490,7 +495,7 @@ let consInRow = (row, acc) => switch row {
   | _ => acc
 }
 
-let declaredTypeNames = (stmts, i, acc) => switch Array.get(i, stmts) {
+export let declaredTypeNames = (stmts, i, acc) => switch Array.get(i, stmts) {
   | None => acc
   | Some(Ast.SType(name, _, _, _, _, _, _, _)) => declaredTypeNames(
       stmts,
@@ -500,7 +505,7 @@ let declaredTypeNames = (stmts, i, acc) => switch Array.get(i, stmts) {
   | Some(_) => declaredTypeNames(stmts, i + 1, acc)
 }
 
-let referencedCons = (stmts, env, i, acc) => switch Array.get(i, stmts) {
+export let referencedCons = (stmts, env, i, acc) => switch Array.get(i, stmts) {
   | None => acc
   | Some(Ast.SLet(name, _, _, _, _, _, _)) => referencedCons(
       stmts,
@@ -525,7 +530,7 @@ let referencedCons = (stmts, env, i, acc) => switch Array.get(i, stmts) {
 /// `wanted` is the scheme scan; a guard predicate can name a builtin it missed,
 /// since it looks at binding types, not match-scrutinee types — `match(opt)` on
 /// an `Option<Stmt>` never surfaces `Option`. The body text covers that (ADR 0031).
-let builtinTypeNamesFor = (declared, wanted, body, i) => switch Array.get(i, builtinTypeDecls) {
+export let builtinTypeNamesFor = (declared, wanted, body, i) => switch Array.get(i, builtinTypeDecls) {
   | None => []
   | Some(bt) => let rest = builtinTypeNamesFor(declared, wanted, body, i + 1) in
       !Set.has(
@@ -598,7 +603,7 @@ export let recordAliasIndex = aliases =>
 
 /// The index an alias's OWN body renders against — itself removed, so it cannot
 /// come out as `export type Span = Span;`.
-let withoutOwnShape = (fields: [Ast.AliasField], params, aliases: Map<string, AliasInfo>, recs) => switch Array.get(0, params) {
+export let withoutOwnShape = (fields: [Ast.AliasField], params, aliases: Map<string, AliasInfo>, recs) => switch Array.get(0, params) {
   | Some(_) => recs
   | None => switch aliasShapeKey(fields, aliases) {
       | Some(k) => Map.delete(k, recs)
@@ -683,7 +688,7 @@ let scopedSpans = e => switch e {
       scopedSpans(fn),
       scopedSpansAt(args, 0)
     )
-  | Ast.ELetIn(_, _, value, body, _) => Array.concat(
+  | Ast.ELetIn(_, _, _, value, body, _) => Array.concat(
       scopedSpans(value),
       scopedSpans(body)
     )
@@ -691,7 +696,7 @@ let scopedSpans = e => switch e {
       scopedSpans(value),
       scopedSpans(body)
     )
-  | Ast.EPipe(left, right, _) => Array.concat(
+  | Ast.EPipe(left, right, _, _) => Array.concat(
       scopedSpans(left),
       scopedSpans(right)
     )
@@ -918,11 +923,11 @@ let hasJsxExpr = e => switch e {
   | Ast.ECall(_, _, Some("jsx"), _) => true
   | Ast.ECall(fn, args, _, _) => hasJsxExpr(fn) || anyOf(hasJsxExpr, args)
   | Ast.ELambda(_, body, _) => hasJsxExpr(body)
-  | Ast.ELetIn(_, _, value, body, _) => hasJsxExpr(value) || hasJsxExpr(body)
+  | Ast.ELetIn(_, _, _, value, body, _) => hasJsxExpr(value) || hasJsxExpr(body)
   | Ast.ELetBind(_, _, _, value, body, _) => hasJsxExpr(
       value
     ) || hasJsxExpr(body)
-  | Ast.EPipe(left, right, _) => hasJsxExpr(left) || hasJsxExpr(right)
+  | Ast.EPipe(left, right, _, _) => hasJsxExpr(left) || hasJsxExpr(right)
   | Ast.EDo(exprs, _) => anyOf(hasJsxExpr, exprs)
   | Ast.ETernary(cond, thenE, elseE, _) => hasJsxExpr(
       cond
@@ -1001,7 +1006,7 @@ let hasJsxStmts = stmts =>
 /// single file passes `#{}` / `[]`, a module in a graph passes its deps' ctor
 /// field keys (so destructuring an imported ctor emits the right names) and the
 /// `import type { … }` lines its driver computed from the emitted text.
-export let emitTsModule = (stmts, env, types, letParams, aliases: Map<string, AliasInfo>, imported, importLines, ns, jsDefs, runtimeDeps, runtimeImport) =>
+export let emitTsModuleWith = (stmts, env, types, letParams, aliases: Map<string, AliasInfo>, imported, importLines, ns, jsDefs, runtimeDeps, runtimeImport, docs) =>
   let declared = declaredTypeNames(stmts, 0, Set.fromArray([])) in
   let wanted = referencedCons(stmts, env, 0, Set.fromArray([])) in
   let recs = recordAliasIndex(aliases) in
@@ -1013,7 +1018,7 @@ export let emitTsModule = (stmts, env, types, letParams, aliases: Map<string, Al
     ns,
     jsDefs,
     runtimeDeps,
-    tsGenOpts(stmts, env, types, letParams, aliases)
+    { ...tsGenOpts(stmts, env, types, letParams, aliases), docs }
   ) in
   // `_tuple` is a TS-emit device with no AST reference for the dep scan to
   // find (ADR 0036), so pull it in from the emitted text.
@@ -1045,6 +1050,23 @@ export let emitTsModule = (stmts, env, types, letParams, aliases: Map<string, Al
     : "import type { ${Str.join(", ", Array.sort(typeDeps))} } from \"${runtimeImport}\";" in
     "${hasJsxStmts(stmts) ? "/** @jsx h */\n\n" : ""}${Str.join("\n\n", Array.filter(part => part != "", [Str.join("\n", header), Str.join("\n", importLines), typeImportLine, runtimeLine, body]))}"
       ++ "\n"
+
+/// The docstring-retaining default (ADR 0099); `--no-docs` callers reach for
+/// `emitTsModuleWith`.
+export let emitTsModule = (stmts, env, types, letParams, aliases: Map<string, AliasInfo>, imported, importLines, ns, jsDefs, runtimeDeps, runtimeImport) =>
+  stmts->emitTsModuleWith(
+    env,
+    types,
+    letParams,
+    aliases,
+    imported,
+    importLines,
+    ns,
+    jsDefs,
+    runtimeDeps,
+    runtimeImport,
+    true
+  )
 
 // ---- extern host declarations (ADR 0026 / 0064) ----------------------------
 //

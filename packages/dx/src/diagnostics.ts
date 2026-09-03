@@ -7,7 +7,10 @@
  */
 import { resolve } from "node:path";
 import type { ImportStmt, Program } from "@mochi/compiler/ast";
-import { checkGraphBootstrapRecovering } from "@mochi/compiler/bootstrap";
+import {
+  type BootstrapRecoveryGraphCache,
+  checkGraphBootstrapRecovering,
+} from "@mochi/compiler/bootstrap";
 import { toTypedProgram, toTypedProgramWith } from "@mochi/compiler/compile";
 import { checkErr, type Diagnostic } from "@mochi/compiler/errors";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
@@ -100,7 +103,13 @@ export function toPublish(
 }
 
 /** Options threaded into `moduleDiagnostics` / single-file `diagnostics` — `plugins` (styled-cva, …), same list Vite / `gen-mochi-dts` use. Omitted = default/builtin resolution (`resolvePlugins`, ADR 0011). `cache` reuses dependency inference across calls (`createModuleCache`); omitted = no reuse. */
-export type ModuleDiagnosticsOptions = { plugins?: LanguagePlugin[]; cache?: ModuleCache };
+export type ModuleDiagnosticsOptions = {
+  plugins?: LanguagePlugin[];
+  /** TS-host graph memo, retained for plugins until their ABI is bootstrap-native. */
+  cache?: ModuleCache;
+  /** Bootstrap graph memo for builtin-only diagnostics. */
+  bootstrapCache?: BootstrapRecoveryGraphCache;
+};
 
 /**
  * Graph diagnostics through the frozen bootstrap compiler. Project plugins are
@@ -111,30 +120,49 @@ export async function bootstrapModuleDiagnostics(
   path: string,
   src: string,
   readFile: (p: string) => Promise<string>,
+  cache?: BootstrapRecoveryGraphCache,
 ): Promise<PublishDiagnostic[]> {
-  const errors = await checkGraphBootstrapRecovering(path, src, readFile);
+  const errors = await checkGraphBootstrapRecovering(path, src, readFile, cache);
   return errors.map((error) => {
     const tagged = /^module '([^']+)': (.*)$/.exec(error.message);
     const errorPath = error.path ?? tagged?.[1];
     const messageBody = tagged?.[2] ?? error.message;
     const dependency = errorPath && resolve(errorPath) !== resolve(path);
+    const imports = [...src.matchAll(/from\s+["']([^"']+)["']/g)];
+    const lineStart = src.lastIndexOf("\n", Math.max(0, error.start - 1)) + 1;
+    const nextLine = src.indexOf("\n", error.end);
+    const lineEnd = nextLine === -1 ? src.length : nextLine;
+    const importAtError = /^\s*import\b.*\bfrom\s+["']([^"']+)["']/.exec(
+      src.slice(lineStart, lineEnd),
+    );
     let span = { start: error.start, end: error.end };
     let message = messageBody;
     if (dependency) {
-      const imports = [...src.matchAll(/from\s+["']([^"']+)["']/g)];
       const match = imports.find(
         (candidate) => resolveImport(path, candidate[1]!) === resolve(errorPath!),
       );
-      if (match) span = { start: match.index!, end: match.index! + match[0].length };
-      message = `module '${errorPath}' failed to compile: ${messageBody}`;
+      if (match) {
+        const start = src.lastIndexOf("\n", Math.max(0, match.index! - 1)) + 1;
+        const end = src.indexOf("\n", match.index!);
+        span = { start, end: end === -1 ? src.length : end };
+      }
+      message = `module '${match?.[1] ?? errorPath}' failed to compile: ${messageBody}`;
+    } else if (importAtError) {
+      span = { start: lineStart, end: lineEnd };
+      message = `module '${importAtError[1]}' failed to compile: ${messageBody}`;
     }
+    const help =
+      error.suggestions?.[0]?.title.toLowerCase() ??
+      (/^unbound variable /.test(messageBody)
+        ? "bind the name before using it, or check the spelling"
+        : undefined);
     return toPublish(
       src,
       {
         kind: "type",
         message,
         span,
-        help: error.suggestions?.[0]?.title.toLowerCase(),
+        help,
         suggestions: error.suggestions?.map((suggestion) => ({
           title: suggestion.title,
           replaceWith: suggestion.replaceWith,
@@ -189,9 +217,14 @@ export async function moduleDiagnostics(
   opts: ModuleDiagnosticsOptions = {},
 ): Promise<PublishDiagnostic[]> {
   const parsed = parseForDiagnostics(src, path, opts);
-  return isErr(parsed)
-    ? parsed.error
-    : moduleDiagnosticsFor(parsed.value, src, path, readFile, opts);
+  if (isErr(parsed)) return parsed.error;
+  // The shipped seed handles the builtin language graph, including recovery.
+  // Arbitrary project plugins still execute in the TypeScript host until their
+  // plugin ABI is bootstrap-native. The cache is a TS graph object, so callers
+  // that opt into it retain that host until bootstrap owns cache invalidation.
+  if (opts.plugins === undefined && opts.cache === undefined)
+    return bootstrapModuleDiagnostics(path, src, readFile, opts.bootstrapCache);
+  return moduleDiagnosticsFor(parsed.value, src, path, readFile, opts);
 }
 
 /**
@@ -261,7 +294,9 @@ export async function documentDiagnostics(
   const parsed = parseForDiagnostics(src, path, opts);
   if (isErr(parsed)) return parsed.error;
   return [
-    ...(await moduleDiagnosticsFor(parsed.value, src, path, readFile, opts)),
+    ...(opts.plugins === undefined && opts.cache === undefined
+      ? await bootstrapModuleDiagnostics(path, src, readFile, opts.bootstrapCache)
+      : await moduleDiagnosticsFor(parsed.value, src, path, readFile, opts)),
     ...unusedBindingDiagnosticsFor(parsed.value, src, path),
   ];
 }

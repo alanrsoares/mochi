@@ -62,3 +62,46 @@ DX boundaries are real responsibilities rather than accidental duplication.
 
 **Drop the TypeScript reference now.** A fixpoint alone proves reproducibility,
 not agreement with an independent implementation or strict TypeScript output.
+
+## Amendment — the formatter moves to Mochi-first core (2026-09-02)
+
+The original boundary listed the formatter under **TypeScript-owned DX**,
+alongside IDE queries, LSP, Vite, codemods, and apps. That grouping was correct
+when written: `bootstrap/format.mochi` was a partial hand-port with no command
+that reached it, no place in the fixpoint graph, and no coverage from
+`bootstrap:tsc` — the north-stars could not have caught a regression in it, so
+naming it a source of truth would have been aspiration rather than a rule with
+teeth. A warn-only `pre-push` hook stood in for the missing gate.
+
+Three conditions have since been met, in this order:
+
+1. **Byte parity, gated.** `test/bootstrap-format-file.spec.ts` formats every
+   non-JSX `.mochi` file in the repo through both implementations and compares
+   byte for byte, in the default `bun run check`. A one-sided change now fails
+   the gate, which retires the drift hook and makes authoring order free.
+2. **Reachable and shippable.** `mochic fmt [--write]` in `bootstrap/cli.mochi`
+   composes `lex → parseRecovering → formatProgram`, so `format` is reachable
+   from the `bootstrap:tsc` entry and typechecks strict-clean with the rest.
+3. **In the fixpoint graph.** `format`, and its `doc` and `show-type-expr`
+   dependencies, are registered in `scripts/fixpoint.ts`: stage2 ≡ stage3 ≡ TS.
+
+The boundary is therefore amended:
+
+- **Mochi-first core** additionally covers `bootstrap/{format,doc,show-type-expr}`.
+- **TypeScript-owned DX** is now IDE queries, LSP, Vite, codemods, and apps.
+
+`packages/dx/src/format.ts` remains the *shipped* formatter and the parity
+oracle — this amendment changes which implementation leads a change, not which
+one users run. Two consequences follow from that split:
+
+- Plugin `format` hooks stay a TypeScript-host seam; bootstrap has no format
+  hook protocol (ADR 0011 §6). JSX files are the one parity exclusion, and a
+  formatting rule that exists only inside a plugin hook is out of scope for
+  `format.mochi` until that protocol is designed.
+- The `@mochi/dx` API surface around the formatter (option records, the
+  `Result` shape, exports the LSP and CLI consume) is not core; it may change
+  in TypeScript alone so long as the printed bytes still match.
+
+Retiring `format.ts` altogether would mean routing `@mochi/dx`, the LSP, and
+the Vite plugin through built bootstrap output. That is the same
+seed/host-chain question ADR 0090 governs, and it stays a separate decision.

@@ -4,6 +4,7 @@ import type {
   Expr,
   Field,
   InterpPart,
+  LamParam,
   LoopParam,
   MapEntry,
   MatchArm,
@@ -1060,7 +1061,7 @@ const checkCtorFieldVars: (stmts: Stmt[]) => Option<PErr> = (stmts: Stmt[]) =>
       match(s)
         .with({ _tag: "SType" }, ({ name, params, ctors }) =>
           firstSome(
-            (c: { name: string; fields: CtorField[] }) =>
+            (c: { name: string; fields: CtorField[]; span: SpanAt }) =>
               firstSome(
                 (f: CtorField) =>
                   match(strayTypeVar(params, f.fieldType))
@@ -1109,20 +1110,151 @@ const qualRefsFrom: (
     )
     .with({ _tag: "TyUnion" }, ({ members }) => _Array_flatMap(qualRefsFrom, members))
     .exhaustive();
+const letInAnnots: (e: Expr) => TypeExpr[] = (e: Expr) =>
+  match(e)
+    .with({ _tag: "ENum" }, () => [] as TypeExpr[])
+    .with({ _tag: "EUnit" }, () => [] as TypeExpr[])
+    .with({ _tag: "EBool" }, () => [] as TypeExpr[])
+    .with({ _tag: "EStr" }, () => [] as TypeExpr[])
+    .with({ _tag: "ERef" }, () => [] as TypeExpr[])
+    .with({ _tag: "ECall" }, ({ fn, args }) => [
+      ...letInAnnots(fn),
+      ..._Array_flatMap(letInAnnots, args),
+    ])
+    .with({ _tag: "ELambda" }, ({ params, body }) => [
+      ...letInAnnots(body),
+      ..._Array_flatMap(
+        (p: LamParam) =>
+          match(p)
+            .with(
+              (
+                _v,
+              ): _v is Extract<LamParam, { _tag: "LPSpanned" }> & {
+                param: Extract<
+                  Extract<LamParam, { _tag: "LPSpanned" }>["param"],
+                  { _tag: "LPLabeled" }
+                > & {
+                  defaultValue: Extract<
+                    Extract<
+                      Extract<LamParam, { _tag: "LPSpanned" }>["param"],
+                      { _tag: "LPLabeled" }
+                    >["defaultValue"],
+                    { _tag: "Some" }
+                  >;
+                };
+              } => {
+                const _g: any = _v;
+                return (
+                  _g._tag === "LPSpanned" &&
+                  _g.param._tag === "LPLabeled" &&
+                  _g.param.defaultValue._tag === "Some"
+                );
+              },
+              ({
+                param: {
+                  defaultValue: { value: d },
+                },
+              }) => letInAnnots(d),
+            )
+            .with(
+              (
+                _v,
+              ): _v is Extract<LamParam, { _tag: "LPLabeled" }> & {
+                defaultValue: Extract<
+                  Extract<LamParam, { _tag: "LPLabeled" }>["defaultValue"],
+                  { _tag: "Some" }
+                >;
+              } => {
+                const _g: any = _v;
+                return _g._tag === "LPLabeled" && _g.defaultValue._tag === "Some";
+              },
+              ({ defaultValue: { value: d } }) => letInAnnots(d),
+            )
+            .otherwise(() => [] as TypeExpr[]),
+        params,
+      ),
+    ])
+    .with({ _tag: "ELetIn" }, ({ annot, value, body }) => [
+      ...letInAnnots(value),
+      ...letInAnnots(body),
+      ...match(annot)
+        .with({ _tag: "Some" }, ({ value: te }) => [te])
+        .with({ _tag: "None" }, () => [] as TypeExpr[])
+        .exhaustive(),
+    ])
+    .with({ _tag: "ELetBind" }, ({ value, body }) => [...letInAnnots(value), ...letInAnnots(body)])
+    .with({ _tag: "EPipe" }, ({ left, right }) => [...letInAnnots(left), ...letInAnnots(right)])
+    .with({ _tag: "EDo" }, ({ exprs }) => _Array_flatMap(letInAnnots, exprs))
+    .with({ _tag: "ETernary" }, ({ cond, thenE, elseE }) => [
+      ...letInAnnots(cond),
+      ...letInAnnots(thenE),
+      ...letInAnnots(elseE),
+    ])
+    .with({ _tag: "EMatch" }, ({ scrutinee, arms }) => [
+      ...letInAnnots(scrutinee),
+      ..._Array_flatMap(
+        (a: MatchArm) => [
+          ...match(a.guard)
+            .with({ _tag: "Some" }, ({ value: g }) => letInAnnots(g))
+            .with({ _tag: "None" }, () => [] as TypeExpr[])
+            .exhaustive(),
+          ...letInAnnots(a.body),
+        ],
+        arms,
+      ),
+    ])
+    .with({ _tag: "ERecord" }, ({ fields, spread }) => [
+      ...match(spread)
+        .with({ _tag: "Some" }, ({ value: sp }) => letInAnnots(sp))
+        .with({ _tag: "None" }, () => [] as TypeExpr[])
+        .exhaustive(),
+      ..._Array_flatMap((f: Field) => letInAnnots(f.value), fields),
+    ])
+    .with({ _tag: "EField" }, ({ target }) => letInAnnots(target))
+    .with({ _tag: "ELoop" }, ({ params, body }) => [
+      ..._Array_flatMap((prm: LoopParam) => letInAnnots(prm.init), params),
+      ...letInAnnots(body),
+    ])
+    .with({ _tag: "ERecur" }, ({ args }) => _Array_flatMap(letInAnnots, args))
+    .with({ _tag: "ETuple" }, ({ elements }) => _Array_flatMap(letInAnnots, elements))
+    .with({ _tag: "EArr" }, ({ elements }) => _Array_flatMap(seqElemAnnots, elements))
+    .with({ _tag: "EList" }, ({ elements }) => _Array_flatMap(seqElemAnnots, elements))
+    .with({ _tag: "ESet" }, ({ elements }) => _Array_flatMap(seqElemAnnots, elements))
+    .with({ _tag: "EMap" }, ({ entries }) =>
+      _Array_flatMap((en: MapEntry) => [...letInAnnots(en.key), ...letInAnnots(en.value)], entries),
+    )
+    .with({ _tag: "EInterp" }, ({ parts }) =>
+      _Array_flatMap(
+        (prt: InterpPart) =>
+          match(prt)
+            .with({ _tag: "IPLit" }, () => [] as TypeExpr[])
+            .with({ _tag: "IPExpr" }, ({ expr: ex }) => letInAnnots(ex))
+            .exhaustive(),
+        parts,
+      ),
+    )
+    .exhaustive();
+const seqElemAnnots: (el: SeqElem) => TypeExpr[] = (el: SeqElem) =>
+  match(el)
+    .with({ _tag: "SEExpr" }, ({ expr: e }) => letInAnnots(e))
+    .with({ _tag: "SESpread" }, ({ expr: e }) => letInAnnots(e))
+    .exhaustive();
 const writtenTypeExprs: (stmts: Stmt[]) => TypeExpr[] = (stmts: Stmt[]) =>
   _Array_flatMap(
     (s: Stmt) =>
       match(s)
         .with({ _tag: "SExtern" }, ({ typeExpr: te }) => [te])
-        .with({ _tag: "SLet" }, ({ annot }) =>
-          match(annot)
+        .with({ _tag: "SLet" }, ({ annot, value }) => [
+          ...match(annot)
             .with({ _tag: "Some" }, ({ value: te }) => [te])
             .with({ _tag: "None" }, () => [] as TypeExpr[])
             .exhaustive(),
-        )
+          ...letInAnnots(value),
+        ])
+        .with({ _tag: "SExpr" }, ({ value }) => letInAnnots(value))
         .with({ _tag: "SType" }, ({ ctors, alias, aliasType }) => [
           ..._Array_flatMap(
-            (c: { fields: CtorField[]; name: string }) =>
+            (c: { fields: CtorField[]; name: string; span: SpanAt }) =>
               map((f: CtorField) => f.fieldType, c.fields),
             ctors,
           ),

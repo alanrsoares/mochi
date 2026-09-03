@@ -570,7 +570,9 @@ const buildTasks = async (opts: Options): Promise<TaskSpec[]> => {
     isCheck && opts.filter === null
       ? [
           ...ROOT_GATES,
-          ...(opts.target === "check:full" ? ["test:full", "test:mochi:coverage"] : ["test"]),
+          ...(opts.target === "check:full"
+            ? ["test:full", "test:mochi:coverage", "seed:check"]
+            : ["test"]),
         ]
       : [];
 

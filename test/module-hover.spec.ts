@@ -2,6 +2,8 @@
 // hover works at all) and report types that mention the imported type. Without
 // the dep registry the file fails `check` and hover is null everywhere.
 import { expect, test } from "bun:test";
+import { createBootstrapGraphCache } from "@mochi/compiler/bootstrap";
+import { moduleBootstrapHoverAt } from "@mochi/dx/bootstrap-hover";
 import { hoverAt, moduleHoverAt } from "@mochi/dx/hover";
 import { styledCvaExtension } from "@mochi/plugin-styled-cva";
 import { memRead } from "@mochi/test-support";
@@ -28,6 +30,19 @@ test("hover on the scrutinee reports the imported variant type", async () => {
   const eOff = src.indexOf("switch e") + 7; // the `e` after `switch`
   const info = await moduleHoverAt(ENTRY, src, eOff, memRead({ [DEP]: DEP_SRC }));
   expect(info?.code).toContain("E");
+});
+
+test("bootstrap graph hover reports an imported constructor scheme", async () => {
+  const src = 'import { A } from "./ast.mochi"\nlet f = A(1)';
+  const aOff = src.lastIndexOf("A");
+  const info = await moduleBootstrapHoverAt(
+    ENTRY,
+    src,
+    aOff,
+    memRead({ [DEP]: DEP_SRC }),
+    createBootstrapGraphCache(),
+  );
+  expect(info?.code).toBe("number -> E");
 });
 
 test("hover on an import name reports its scheme and source module", async () => {

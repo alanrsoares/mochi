@@ -10,6 +10,10 @@
 //
 // Runs as emitted JS under Bun; the only npm deps are @onrails/{pattern,result}.
 import { compile, compileTs } from "./compile.mochi"
+import { formatProgram } from "./format.mochi"
+import { lex } from "./lexer.mochi"
+import { parseRecovering } from "./parser.mochi"
+import { emitDtsText } from "./dts.mochi"
 import { buildModules, buildModulesTs } from "./module.mochi"
 
 type Diag = { message: string, start: number, end: number }
@@ -19,6 +23,7 @@ extern writeFile : string -> string -> Result<string, string> = "./host.mjs" "wr
 extern argv : [string] = "./host.mjs" "argv"
 extern isCliEntry : () -> bool = "./host.mjs" "isCliEntry"
 extern print : string -> string = "./host.mjs" "print"
+extern emit : string -> string = "./host.mjs" "emit"
 extern die : string -> a = "./host.mjs" "die"
 extern formatError : string -> string -> Diag -> string = "./host.mjs" "formatError"
 
@@ -27,6 +32,30 @@ export let outPath = path => "${Str.slice(0, Str.length(path) - 6, path)}.js"
 
 // "foo.mochi" -> "foo.ts" — the typed-emit sibling (ADR 0090).
 export let tsOutPath = path => "${Str.slice(0, Str.length(path) - 6, path)}.ts"
+
+// "foo.mochi" -> "foo.d.mochi.ts" — the sidecar `allowArbitraryExtensions` resolves.
+export let dtsOutPath = path =>
+  "${Str.slice(0, Str.length(path) - 6, path)}.d.mochi.ts"
+
+// `mochic fmt` (ADR 0025). The recovering parse never fails (ADR 0045), so lex
+// is the only error channel here — an unparsable region round-trips verbatim
+// rather than costing the whole file its formatting. Mirrors `@mochi/dx`'s
+// `format`, minus the plugin `format` hooks, which stay a TS-host seam.
+export let formatSrc = src =>
+  let? toks = src->lex() in
+    Ok(formatProgram(parseRecovering(toks, None).stmts, src))
+
+// The formatted text, or the file's first lex error rendered `path:line:col:`.
+export let fmtText = path =>
+  let? src = path->readFile() in
+    src->formatSrc() |> Result.mapErr(e => path->formatError(src, e))
+
+// Format one file: to stdout by default, back over the source under `--write`.
+export let fmtOne = (path, write) =>
+  let? out = path->fmtText() in
+    write
+      ? writeFile(path, out) |> Result.map(p => print("wrote ${p}"))
+      : Ok(emit(out))
 
 // Single-file build: open-world compile, one written `.js`. Every arm of the
 // railway carries a string error (readFile's, or compile's via formatError).
@@ -42,6 +71,12 @@ export let buildOneTs = (path, runtimeImport) =>
   let? ts = compileTs(src, runtimeImport)
     |> Result.mapErr(e => path->formatError(src, e)) in
     tsOutPath(path)->writeFile(ts)
+
+export let buildOneDts = (path, runtimeImport) =>
+  let? src = path->readFile() in
+  let? dts = emitDtsText(src, runtimeImport)
+    |> Result.mapErr(e => path->formatError(src, e)) in
+    dtsOutPath(path)->writeFile(dts)
 
 // Write each compiled module's JS beside its source, logging as it goes. A
 // write failure short-circuits with the host's string error.
@@ -107,11 +142,29 @@ export let buildMulti = entry =>
 let _runEntry = isCliEntry(())
   ? switch Array.get(0, argv) {
     | None => die(
-        "usage: mochic <file.mochi>  |  mochic ts <file.mochi>  |  mochic build [--emit=ts] <entry.mochi>"
+        "usage: mochic <file.mochi>  |  mochic fmt [--write] <file.mochi>  |  mochic ts <file.mochi>  |  mochic dts <file.mochi>  |  mochic build [--emit=ts] <entry.mochi>"
       )
+    | Some("fmt") => let write = switch Array.get(1, argv) {
+        | Some("--write") => true
+        | _ => false
+      } in
+        switch Array.get(write ? 2 : 1, argv) {
+          | None => die("usage: mochic fmt [--write] <file.mochi>")
+          | Some(path) => switch fmtOne(path, write) {
+              | Ok(_) => ""
+              | Err(msg) => die(msg)
+            }
+        }
     | Some("ts") => switch Array.get(1, argv) {
         | None => die("usage: mochic ts <file.mochi>")
         | Some(path) => switch buildOneTs(path, "@mochi/runtime") {
+            | Ok(out) => print("wrote ${out}")
+            | Err(msg) => die(msg)
+          }
+      }
+    | Some("dts") => switch Array.get(1, argv) {
+        | None => die("usage: mochic dts <file.mochi>")
+        | Some(path) => switch buildOneDts(path, "@mochi/runtime") {
             | Ok(out) => print("wrote ${out}")
             | Err(msg) => die(msg)
           }

@@ -6,13 +6,33 @@ import { parse } from "./parser.mochi"
 let parseSrc = src => lex(src) |> Result.flatMap(parse)
 
 test("a let declaration preserves its name, doc, and lambda shape", () => switch parseSrc("/// increments\nlet inc = n => n + 1") {
-  | Ok([Ast.SLet("inc", _, None, Ast.ELambda([Ast.LPName("n", None)], _, _), false, Some("increments"), _)]) => true
+  | Ok([Ast.SLet("inc", _, None, Ast.ELambda([Ast.LPSpanned(Ast.LPName("n", None), [span])], _, _), false, Some("increments"), _)]) => span.start == 25 && span.end == 26
       |> ok
   | _ => false |> ok
 })
 
-test("fast pipe becomes a call with the piped value first", () => switch parseSrc("let value = 1->add(2)") {
-  | Ok([Ast.SLet("value", _, None, Ast.ECall(Ast.ERef("add", _), [Ast.ENum(1, "1", _), Ast.ENum(2, "2", _)], None, _), false, None, _)]) => true
+// The parser KEEPS the fast pipe (`fast: true`); the arg-prepending lowering to
+// `add(1, 2)` happens in infer/codegen, so the formatter can print `->` back.
+test("fast pipe is retained as a node, not desugared", () => switch parseSrc("let value = 1->add(2)") {
+  | Ok([Ast.SLet("value", _, None, Ast.EPipe(Ast.ENum(1, "1", _), Ast.ECall(Ast.ERef("add", _), [Ast.ENum(2, "2", _)], None, _), true, _), false, None, _)]) => true
+      |> ok
+  | _ => false |> ok
+})
+
+test("`|>` is retained too, and is not marked fast", () => switch parseSrc("let value = 1 |> add") {
+  | Ok([Ast.SLet("value", _, None, Ast.EPipe(Ast.ENum(1, "1", _), Ast.ERef("add", _), false, _), false, None, _)]) => true
+      |> ok
+  | _ => false |> ok
+})
+
+test("a let-in KEEPS its `: T` annotation on the node (ADR 0044)", () => switch parseSrc("let value = let x : number = 1 in x") {
+  | Ok([Ast.SLet("value", _, None, Ast.ELetIn("x", _, Some(Ast.TyName("number", _)), Ast.ENum(1, "1", _), Ast.ERef("x", _), _), false, None, _)]) => true
+      |> ok
+  | _ => false |> ok
+})
+
+test("an unannotated let-in carries None", () => switch parseSrc("let value = let x = 1 in x") {
+  | Ok([Ast.SLet("value", _, None, Ast.ELetIn("x", _, None, _, _, _), false, None, _)]) => true
       |> ok
   | _ => false |> ok
 })

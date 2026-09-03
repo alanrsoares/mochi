@@ -33,6 +33,18 @@ testEach("codegen emits runtime forms", [
     label: "native map",
     src: "let values = #{ \"a\": 1 }",
     want: "const values = new Map([[\"a\", 1]]);"
+  },
+  // The parser retains `->` as a node now, so the arg-prepending lowering lives
+  // here and in infer.mochi. Pin the emitted order: the piped value comes FIRST.
+  {
+    label: "fast pipe prepends the piped value",
+    src: "let value = 1->add(2)",
+    want: "const value = add(1, 2);"
+  },
+  {
+    label: "`|>` stays data-last",
+    src: "let value = 1 |> negate",
+    want: "const value = negate(1);"
   }
 ], row => switch genSrc(row.src) {
   | Ok(js) => js |> Str.contains(row.want) |> ok

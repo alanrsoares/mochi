@@ -11,6 +11,7 @@ import {
   Some,
   _Array_get,
   _Result_flatMap,
+  _Result_map,
   _Result_mapErr,
   _Str_endsWith,
   _Str_length,
@@ -24,6 +25,10 @@ import {
 import { match } from "@onrails/pattern";
 
 import { compile, compileTs } from "./compile";
+import { formatProgram } from "./format";
+import { lex } from "./lexer";
+import { parseRecovering } from "./parser";
+import { emitDtsText } from "./dts";
 import { buildModules, buildModulesTs } from "./module";
 
 import { readFile } from "./host.mjs";
@@ -32,6 +37,7 @@ const writeFile = _curry(2, $writeFile);
 import { argv } from "./host.mjs";
 import { isCliEntry } from "./host.mjs";
 import { print } from "./host.mjs";
+import { emit } from "./host.mjs";
 import { die } from "./host.mjs";
 import { formatError as $formatError } from "./host.mjs";
 const formatError = _curry(3, $formatError);
@@ -39,6 +45,29 @@ export const outPath: (path: string) => string = (path: string) =>
   `${_Str_slice(0, _Str_length(path) - 6, path)}.js`;
 export const tsOutPath: (path: string) => string = (path: string) =>
   `${_Str_slice(0, _Str_length(path) - 6, path)}.ts`;
+export const dtsOutPath: (path: string) => string = (path: string) =>
+  `${_Str_slice(0, _Str_length(path) - 6, path)}.d.mochi.ts`;
+export const formatSrc: (src: string) => Result<string, PErr> = (src: string) =>
+  _Result_flatMap(
+    (toks) => Ok(formatProgram(parseRecovering(toks, None).stmts, src)) as Result<string, PErr>,
+    lex(src),
+  );
+export const fmtText: (path: string) => Result<string, string> = (path: string) =>
+  _Result_flatMap(
+    (src) => _Result_mapErr((e: PErr) => formatError(path, src, e), formatSrc(src)),
+    readFile(path),
+  );
+export const fmtOne: _Curry<[path: string, write: boolean], Result<string, string>> = _curry(
+  2,
+  (path: string, write: boolean) =>
+    _Result_flatMap(
+      (out) =>
+        write
+          ? _Result_map((p: string) => print(`wrote ${p}`), writeFile(path, out))
+          : (Ok(emit(out)) as Result<string, string>),
+      fmtText(path),
+    ),
+);
 export const buildOne: (path: string) => Result<string, string> = (path: string) =>
   _Result_flatMap(
     (src) =>
@@ -57,6 +86,19 @@ export const buildOneTs: _Curry<
       _Result_flatMap(
         (ts) => writeFile(tsOutPath(path), ts),
         _Result_mapErr((e: PErr) => formatError(path, src, e), compileTs(src, runtimeImport)),
+      ),
+    readFile(path),
+  ),
+);
+export const buildOneDts: _Curry<
+  [path: string, runtimeImport: string],
+  Result<string, string>
+> = _curry(2, (path: string, runtimeImport: string) =>
+  _Result_flatMap(
+    (src) =>
+      _Result_flatMap(
+        (dts) => writeFile(dtsOutPath(path), dts),
+        _Result_mapErr((e: PErr) => formatError(path, src, e), emitDtsText(src, runtimeImport)),
       ),
     readFile(path),
   ),
@@ -161,7 +203,23 @@ const _runEntry = isCliEntry(undefined)
   ? match(_Array_get(0, argv))
       .with({ _tag: "None" }, () =>
         die(
-          "usage: mochic <file.mochi>  |  mochic ts <file.mochi>  |  mochic build [--emit=ts] <entry.mochi>",
+          "usage: mochic <file.mochi>  |  mochic fmt [--write] <file.mochi>  |  mochic ts <file.mochi>  |  mochic dts <file.mochi>  |  mochic build [--emit=ts] <entry.mochi>",
+        ),
+      )
+      .with({ _tag: "Some", value: "fmt" }, () =>
+        ((write: boolean) =>
+          match(_Array_get(write ? 2 : 1, argv))
+            .with({ _tag: "None" }, () => die("usage: mochic fmt [--write] <file.mochi>"))
+            .with({ _tag: "Some" }, ({ value: path }) =>
+              match(fmtOne(path, write))
+                .with({ _tag: "Ok" }, () => "")
+                .with({ _tag: "Err" }, ({ error: msg }) => die(msg))
+                .exhaustive(),
+            )
+            .exhaustive())(
+          match(_Array_get(1, argv))
+            .with({ _tag: "Some", value: "--write" }, () => true)
+            .otherwise(() => false),
         ),
       )
       .with({ _tag: "Some", value: "ts" }, () =>
@@ -169,6 +227,17 @@ const _runEntry = isCliEntry(undefined)
           .with({ _tag: "None" }, () => die("usage: mochic ts <file.mochi>"))
           .with({ _tag: "Some" }, ({ value: path }) =>
             match(buildOneTs(path, "@mochi/runtime"))
+              .with({ _tag: "Ok" }, ({ value: out }) => print(`wrote ${out}`))
+              .with({ _tag: "Err" }, ({ error: msg }) => die(msg))
+              .exhaustive(),
+          )
+          .exhaustive(),
+      )
+      .with({ _tag: "Some", value: "dts" }, () =>
+        match(_Array_get(1, argv))
+          .with({ _tag: "None" }, () => die("usage: mochic dts <file.mochi>"))
+          .with({ _tag: "Some" }, ({ value: path }) =>
+            match(buildOneDts(path, "@mochi/runtime"))
               .with({ _tag: "Ok" }, ({ value: out }) => print(`wrote ${out}`))
               .with({ _tag: "Err" }, ({ error: msg }) => die(msg))
               .exhaustive(),

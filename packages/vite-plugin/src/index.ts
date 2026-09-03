@@ -4,6 +4,8 @@
  * with JSX pragma support (defaults to Preact `h`) and ES module exports.
  */
 
+import { resolve } from "node:path";
+import { buildModulesBootstrapWith } from "@mochi/compiler/bootstrap/module";
 import { compileBootstrapSync } from "@mochi/compiler/bootstrap/sync";
 import { compile } from "@mochi/compiler/compile";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
@@ -136,10 +138,28 @@ export function mochiPlugin(options: MochiPluginOptions = {}): Plugin {
       // (default codegen rewrites to `.js` for the standalone CLI/graph).
       let transformedCode: string;
       if (plugins === undefined && options.open === undefined && runtime === true) {
-        const res = compileBootstrapSync(code);
-        if (res._tag === "Err")
-          throw new SyntaxError(`Mochi compilation failed for ${id}:\n[type] ${res.error.message}`);
-        transformedCode = res.value;
+        if (/^\s*import\b/m.test(code)) {
+          const graph = buildModulesBootstrapWith(id, {
+            open: false,
+            docs: true,
+            moduleExt: ".mochi",
+            strictEntry: false,
+          });
+          if (graph._tag === "Err")
+            throw new SyntaxError(
+              `Mochi compilation failed for ${id}:\n[type] ${graph.error.message}`,
+            );
+          const output = graph.value.find((module) => resolve(module.path) === resolve(id));
+          if (!output) throw new SyntaxError(`Mochi compilation omitted ${id}`);
+          transformedCode = output.js;
+        } else {
+          const res = compileBootstrapSync(code);
+          if (res._tag === "Err")
+            throw new SyntaxError(
+              `Mochi compilation failed for ${id}:\n[type] ${res.error.message}`,
+            );
+          transformedCode = res.value;
+        }
       } else {
         const res = compile(code, { runtime, moduleExt: ".mochi", plugins, open: options.open });
         if (isErr(res)) {

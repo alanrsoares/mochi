@@ -1,16 +1,40 @@
 import type { Tok } from "./lexer";
 import type { Expr, Stmt, TypeExpr } from "./ast";
-import type { St, Ty } from "./types";
+import type { SpanAt, St, Ty, TypeAt } from "./types";
 import type { PErr } from "./parser";
 import type { Scheme } from "./schemes";
 import type { AliasInfo } from "./codegen-ts";
 import type { InferApi, QualAliasField } from "./infer";
+import type { Occurrence } from "./symbols";
 
-export type Loaded = { path: string; stmts: Stmt[] };
+export type Opts = { open: boolean; docs: boolean; moduleExt: string; strictEntry: boolean };
+export type Loaded = { path: string; src: string; stmts: Stmt[] };
+export type ModuleOutput = { path: string; js: string };
+export type ExportOrigins = {
+  values: Map<string, SpanAt>;
+  types: Map<string, SpanAt>;
+  ctors: Map<string, SpanAt>;
+};
 export type MErr = { message: string; start: number; end: number };
 export type Acc = { state: Map<string, string>; order: Loaded[] };
 export type CtorInfo = { owner: string; arity: number };
 export type Registry = { ctors: Map<string, CtorInfo>; types: Map<string, string[]> };
+export type GraphRecovery = { outputs: ModuleOutput[]; errors: PErr[] };
+export type RecoveryAliasInfo = {
+  params: string[];
+  fields: QualAliasField[];
+  expr: Option<TypeExpr>;
+};
+export type RecoveryQualScope = { types: Set<string>; aliases: Map<string, AliasInfo> };
+export type RecoveryScheme = { vars: number[]; rvars: number[]; ty: Ty };
+export type RecoveryCtx = {
+  exportsByPath: Map<string, Map<string, Scheme>>;
+  regByPath: Map<string, Registry>;
+  keysByPath: Map<string, Map<string, string[]>>;
+  qualsByPath: Map<string, RecoveryQualScope>;
+  outputs: ModuleOutput[];
+};
+export type RecoveryGraphState = { ctx: RecoveryCtx; errors: PErr[] };
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
@@ -62,14 +86,111 @@ import { parse } from "./parser";
 import { checkWith } from "./check";
 import { exportedRegistry, exportedCtorKeys } from "./ctors";
 import { inferProgramImports, inferProgramImportsTypes, exportedSchemes } from "./infer";
-import { codegen } from "./codegen";
-import { emitTsModule, externModuleDts } from "./codegen-ts";
+import { codegenWith, jsGenOpts } from "./codegen";
+import { emitTsModuleWith, externModuleDts } from "./codegen-ts";
+import { showType, tVar } from "./types";
+import { widenLits } from "./schemes";
+import { index } from "./symbols";
+import { emitDtsFromTypedWith, emitDtsText, qualifierMapOf } from "./dts";
+import { openMode } from "./compile";
 import { builtins } from "./prelude.gen.mjs";
 import { namespaces } from "./prelude.gen.mjs";
 import { namespaceRuntime } from "./prelude.gen.mjs";
 import { preludeJsDefs } from "./prelude.gen.mjs";
 import { runtimeDeps } from "./prelude.gen.mjs";
 import * as Ast from "./ast";
+/**
+ * Host-facing `.d.ts` emit. Lives here for the same reason the TypeScript
+ * mirror puts `emitDtsForFile` in its module driver: declaration emit is a
+ * whole-file query the graph owns, not a single-expression one.
+ */
+export const emitDts: _Curry<[src: string, runtimeImport: string], Result<string, PErr>> = _curry(
+  2,
+  (src: string, runtimeImport: string) => emitDtsText(src, runtimeImport),
+);
+/**
+ * Host-facing lexical occurrence query. The index itself is source-owned;
+ * this re-export makes it reachable from the frozen graph without teaching
+ * host DX code about bootstrap's internal module layout.
+ */
+export const symbolOccurrences: (stmts: Stmt[]) => Occurrence[] = (stmts: Stmt[]) => index(stmts);
+
+const defaultOpts: Opts = { open: false, docs: true, moduleExt: ".js", strictEntry: false };
+
+const addCtorOrigins: <A, B, C>(
+  ctors: ({ name: A } & C)[],
+  typeSpan: B,
+  origins: Map<A, B>,
+) => Map<A, B> = _curry(3, <A, B, C>(ctors: ({ name: A } & C)[], typeSpan: B, origins: Map<A, B>) =>
+  reduce(
+    _curry(2, (acc: Map<A, B>, ctor: { name: A } & C) => _Map_set(ctor.name, typeSpan, acc)),
+    origins,
+    ctors,
+  ),
+);
+const exportedOriginsFrom: _Curry<
+  [stmts: Stmt[], i: number, origins: ExportOrigins],
+  ExportOrigins
+> = _curry(3, (stmts: Stmt[], i: number, origins: ExportOrigins) =>
+  match(_Array_get(i, stmts))
+    .with({ _tag: "None" }, () => origins)
+    .with(
+      (
+        _v,
+      ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
+        value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SLet" }>;
+      } => {
+        const _g: any = _v;
+        return _g._tag === "Some" && _g.value._tag === "SLet" && _g.value.exported === true;
+      },
+      ({ value: { name, nameSpan } }) =>
+        exportedOriginsFrom(stmts, i + 1, {
+          values: _Map_set(name, nameSpan, origins.values),
+          types: origins.types,
+          ctors: origins.ctors,
+        }),
+    )
+    .with(
+      (
+        _v,
+      ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
+        value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SExtern" }>;
+      } => {
+        const _g: any = _v;
+        return _g._tag === "Some" && _g.value._tag === "SExtern" && _g.value.exported === true;
+      },
+      ({ value: { name, nameSpan } }) =>
+        exportedOriginsFrom(stmts, i + 1, {
+          values: _Map_set(name, nameSpan, origins.values),
+          types: origins.types,
+          ctors: origins.ctors,
+        }),
+    )
+    .with(
+      (
+        _v,
+      ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
+        value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
+      } => {
+        const _g: any = _v;
+        return _g._tag === "Some" && _g.value._tag === "SType" && _g.value.exported === true;
+      },
+      ({ value: { name, ctors, span } }) =>
+        exportedOriginsFrom(stmts, i + 1, {
+          values: origins.values,
+          types: _Map_set(name, span, origins.types),
+          ctors: addCtorOrigins(ctors, span, origins.ctors),
+        }),
+    )
+    .with({ _tag: "Some" }, () => exportedOriginsFrom(stmts, i + 1, origins))
+    .exhaustive(),
+);
+export const exportedOrigins: (stmts: Stmt[]) => ExportOrigins = (stmts: Stmt[]) =>
+  exportedOriginsFrom(stmts, 0, {
+    values: new Map<string, SpanAt>(),
+    types: new Map<string, SpanAt>(),
+    ctors: new Map<string, SpanAt>(),
+  });
 
 import { readFile } from "./host.mjs";
 import { resolveImport as $resolveImport } from "./host.mjs";
@@ -80,6 +201,7 @@ const mErr: <A>(message: A) => { message: A; start: number; end: number } = <A>(
   start: 0,
   end: 0,
 });
+const recoveryScheme = { vars: [0], rvars: [], ty: tVar(0) };
 const atPath: <A, B, C>(
   path: string,
   e: { end: A; start: B; message: string } & C,
@@ -140,7 +262,7 @@ const visit: _Curry<[path: string, acc: Acc], Result<Acc, PErr>> = _curry(
                       ({ value: acc2 }) =>
                         Ok({
                           state: _Map_set(path, "done", acc2.state),
-                          order: _Array_append({ path: path, stmts: stmts }, acc2.order),
+                          order: _Array_append({ path: path, src: src, stmts: stmts }, acc2.order),
                         }) as Result<Acc, PErr>,
                     )
                     .exhaustive(),
@@ -269,9 +391,10 @@ const aliasesOf: (stmts: Stmt[]) => Map<string, AliasInfo> = (stmts: Stmt[]) =>
     new Map<string, AliasInfo>(),
     stmts,
   );
-const qualScopeOf: (stmts: Stmt[]) => { types: Set<string>; aliases: Map<string, AliasInfo> } = (
-  stmts: Stmt[],
-) => ({ types: exportedTypeNames(stmts), aliases: aliasesOf(stmts) });
+const qualScopeOf: (stmts: Stmt[]) => RecoveryQualScope = (stmts: Stmt[]) => ({
+  types: exportedTypeNames(stmts),
+  aliases: aliasesOf(stmts),
+});
 const withNamedCtor: <A, B, C, D, E, F, G, H, I, J, K>(
   name: A,
   info: { owner: B } & H,
@@ -414,7 +537,7 @@ const prefixCtorsInto: <A>(
 const resolveNames: <A, B, C, D, E, F, G, H, I, J, K, L>(
   names: ({ name: string; span: { end: A; start: B } & I } & J)[],
   from: string,
-  depExports: Map<string, C>,
+  depExports: Map<string, { vars: number[]; rvars: C[]; ty: Ty }>,
   depReg: { ctors: Map<string, { owner: D } & K>; types: Map<D, E> } & L,
   depKeys: Map<string, F>,
   res: {
@@ -422,23 +545,24 @@ const resolveNames: <A, B, C, D, E, F, G, H, I, J, K, L>(
     keys: Map<string, F>;
     reg: { ctors: Map<string, { owner: D } & K>; types: Map<D, E> };
     nsImports: H;
-    imports: Map<string, C>;
+    imports: Map<string, { vars: number[]; rvars: C[]; ty: Ty }>;
   },
+  recovering: boolean,
 ) => Result<
   {
     quals: G;
     keys: Map<string, F>;
     reg: { ctors: Map<string, { owner: D } & K>; types: Map<D, E> };
     nsImports: H;
-    imports: Map<string, C>;
+    imports: Map<string, { vars: number[]; rvars: C[]; ty: Ty }>;
   },
   { message: string; start: B; end: A }
 > = _curry(
-  6,
+  7,
   <A, B, C, D, E, F, G, H, I, J, K, L>(
     names: ({ name: string; span: { end: A; start: B } & I } & J)[],
     from: string,
-    depExports: Map<string, C>,
+    depExports: Map<string, { vars: number[]; rvars: C[]; ty: Ty }>,
     depReg: { ctors: Map<string, { owner: D } & K>; types: Map<D, E> } & L,
     depKeys: Map<string, F>,
     res: {
@@ -446,8 +570,9 @@ const resolveNames: <A, B, C, D, E, F, G, H, I, J, K, L>(
       keys: Map<string, F>;
       reg: { ctors: Map<string, { owner: D } & K>; types: Map<D, E> };
       nsImports: H;
-      imports: Map<string, C>;
+      imports: Map<string, { vars: number[]; rvars: C[]; ty: Ty }>;
     },
+    recovering: boolean,
   ) =>
     match(names)
       .with(
@@ -459,11 +584,27 @@ const resolveNames: <A, B, C, D, E, F, G, H, I, J, K, L>(
         ([n, ...rest]) =>
           match(_Map_get(n.name, depExports))
             .with({ _tag: "None" }, () =>
-              Err({
-                message: `'${from}' has no export '${n.name}'`,
-                start: n.span.start,
-                end: n.span.end,
-              }),
+              recovering
+                ? resolveNames(
+                    rest,
+                    from,
+                    depExports,
+                    depReg,
+                    depKeys,
+                    {
+                      imports: _Map_set(n.name, recoveryScheme, res.imports),
+                      nsImports: res.nsImports,
+                      reg: res.reg,
+                      keys: res.keys,
+                      quals: res.quals,
+                    },
+                    recovering,
+                  )
+                : Err({
+                    message: `'${from}' has no export '${n.name}'`,
+                    start: n.span.start,
+                    end: n.span.end,
+                  }),
             )
             .with({ _tag: "Some" }, ({ value: sc }) =>
               match(
@@ -477,7 +618,7 @@ const resolveNames: <A, B, C, D, E, F, G, H, I, J, K, L>(
               )
                 .with({ _tag: "Err" }, ({ error: e }) => Err(e))
                 .with({ _tag: "Ok" }, ({ value: res1 }) =>
-                  resolveNames(rest, from, depExports, depReg, depKeys, res1),
+                  resolveNames(rest, from, depExports, depReg, depKeys, res1, recovering),
                 )
                 .exhaustive(),
             )
@@ -489,7 +630,7 @@ const resolveNames: <A, B, C, D, E, F, G, H, I, J, K, L>(
 );
 const resolveImportsFrom: <A, B, C, D>(
   ctx: {
-    exportsByPath: Map<string, Map<string, A>>;
+    exportsByPath: Map<string, Map<string, { vars: number[]; rvars: A[]; ty: Ty }>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, B>>;
     qualsByPath: Map<string, C>;
@@ -501,23 +642,24 @@ const resolveImportsFrom: <A, B, C, D>(
     quals: Map<string, C>;
     keys: Map<string, B>;
     reg: Registry;
-    nsImports: Map<string, Map<string, A>>;
-    imports: Map<string, A>;
+    nsImports: Map<string, Map<string, { vars: number[]; rvars: A[]; ty: Ty }>>;
+    imports: Map<string, { vars: number[]; rvars: A[]; ty: Ty }>;
   },
+  recovering: boolean,
 ) => Result<
   {
     quals: Map<string, C>;
     keys: Map<string, B>;
     reg: Registry;
-    nsImports: Map<string, Map<string, A>>;
-    imports: Map<string, A>;
+    nsImports: Map<string, Map<string, { vars: number[]; rvars: A[]; ty: Ty }>>;
+    imports: Map<string, { vars: number[]; rvars: A[]; ty: Ty }>;
   },
   PErr
 > = _curry(
-  5,
+  6,
   <A, B, C, D>(
     ctx: {
-      exportsByPath: Map<string, Map<string, A>>;
+      exportsByPath: Map<string, Map<string, { vars: number[]; rvars: A[]; ty: Ty }>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, B>>;
       qualsByPath: Map<string, C>;
@@ -529,9 +671,10 @@ const resolveImportsFrom: <A, B, C, D>(
       quals: Map<string, C>;
       keys: Map<string, B>;
       reg: Registry;
-      nsImports: Map<string, Map<string, A>>;
-      imports: Map<string, A>;
+      nsImports: Map<string, Map<string, { vars: number[]; rvars: A[]; ty: Ty }>>;
+      imports: Map<string, { vars: number[]; rvars: A[]; ty: Ty }>;
     },
+    recovering: boolean,
   ) =>
     match(_Array_get(i, stmts))
       .with({ _tag: "None" }, () => Ok(res))
@@ -549,16 +692,20 @@ const resolveImportsFrom: <A, B, C, D>(
             ((depExports) =>
               ((depReg: Registry) =>
                 ((depKeys) =>
-                  match(resolveNames(names, from, depExports, depReg, depKeys, res))
+                  match(resolveNames(names, from, depExports, depReg, depKeys, res, recovering))
                     .with({ _tag: "Err" }, ({ error: e }) => Err(e))
                     .with({ _tag: "Ok" }, ({ value: res1 }) =>
-                      resolveImportsFrom(ctx, stmts, i + 1, path, res1),
+                      resolveImportsFrom(ctx, stmts, i + 1, path, res1, recovering),
                     )
                     .exhaustive())(_Map_getOr(new Map<string, B>(), dp, ctx.keysByPath)))(
                 _Map_getOr(emptyReg, dp, ctx.regByPath),
-              ))(_Map_getOr(new Map<string, A>(), dp, ctx.exportsByPath)))(
-            resolveImport(path, from),
-          ),
+              ))(
+              _Map_getOr(
+                new Map<string, { vars: number[]; rvars: A[]; ty: Ty }>(),
+                dp,
+                ctx.exportsByPath,
+              ),
+            ))(resolveImport(path, from)),
       )
       .with(
         (
@@ -574,31 +721,49 @@ const resolveImportsFrom: <A, B, C, D>(
             ((depExports) =>
               ((depReg: Registry) =>
                 ((depKeys) =>
-                  resolveImportsFrom(ctx, stmts, i + 1, path, {
-                    imports: res.imports,
-                    nsImports: _Map_set(alias.name, depExports, res.nsImports),
-                    reg: {
-                      ctors: prefixCtorsInto(
-                        _Map_keys(depReg.ctors),
-                        alias.name,
-                        depReg.ctors,
-                        res.reg.ctors,
-                      ),
-                      types: mergeMap(depReg.types, res.reg.types),
+                  resolveImportsFrom(
+                    ctx,
+                    stmts,
+                    i + 1,
+                    path,
+                    {
+                      imports: res.imports,
+                      nsImports: _Map_set(alias.name, depExports, res.nsImports),
+                      reg: {
+                        ctors: prefixCtorsInto(
+                          _Map_keys(depReg.ctors),
+                          alias.name,
+                          depReg.ctors,
+                          res.reg.ctors,
+                        ),
+                        types: mergeMap(depReg.types, res.reg.types),
+                      },
+                      keys: mergeMap(depKeys, res.keys),
+                      quals: match(_Map_get(dp, ctx.qualsByPath))
+                        .with({ _tag: "Some" }, ({ value: q }) =>
+                          _Map_set(alias.name, q, res.quals),
+                        )
+                        .with({ _tag: "None" }, () => res.quals)
+                        .exhaustive(),
                     },
-                    keys: mergeMap(depKeys, res.keys),
-                    quals: match(_Map_get(dp, ctx.qualsByPath))
-                      .with({ _tag: "Some" }, ({ value: q }) => _Map_set(alias.name, q, res.quals))
-                      .with({ _tag: "None" }, () => res.quals)
-                      .exhaustive(),
-                  }))(_Map_getOr(new Map<string, B>(), dp, ctx.keysByPath)))(
+                    recovering,
+                  ))(_Map_getOr(new Map<string, B>(), dp, ctx.keysByPath)))(
                 _Map_getOr(emptyReg, dp, ctx.regByPath),
-              ))(_Map_getOr(new Map<string, A>(), dp, ctx.exportsByPath)))(
-            resolveImport(path, from),
-          ),
+              ))(
+              _Map_getOr(
+                new Map<string, { vars: number[]; rvars: A[]; ty: Ty }>(),
+                dp,
+                ctx.exportsByPath,
+              ),
+            ))(resolveImport(path, from)),
       )
-      .with({ _tag: "Some" }, () => resolveImportsFrom(ctx, stmts, i + 1, path, res))
+      .with({ _tag: "Some" }, () => resolveImportsFrom(ctx, stmts, i + 1, path, res, recovering))
       .exhaustive(),
+);
+const openFor: _Curry<[loaded: Loaded, isEntry: boolean, opts: Opts], boolean> = _curry(
+  3,
+  (loaded: Loaded, isEntry: boolean, opts: Opts) =>
+    and(isEntry, opts.strictEntry) ? opts.open : openMode(loaded.src, opts.open),
 );
 const compileOne: <A>(
   ctx: {
@@ -615,20 +780,23 @@ const compileOne: <A>(
         >;
       }
     >;
-    outputs: { path: string; js: string }[];
+    outputs: ModuleOutput[];
   } & A,
   loaded: Loaded,
+  recovering: boolean,
+  isEntry: boolean,
+  opts: Opts,
 ) => Result<
   {
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
-    qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
-    outputs: { path: string; js: string }[];
+    qualsByPath: Map<string, RecoveryQualScope>;
+    outputs: ModuleOutput[];
   },
   PErr
 > = _curry(
-  2,
+  5,
   <A>(
     ctx: {
       exportsByPath: Map<string, Map<string, Scheme>>;
@@ -644,27 +812,37 @@ const compileOne: <A>(
           >;
         }
       >;
-      outputs: { path: string; js: string }[];
+      outputs: ModuleOutput[];
     } & A,
     loaded: Loaded,
+    recovering: boolean,
+    isEntry: boolean,
+    opts: Opts,
   ) =>
     match(
-      resolveImportsFrom(ctx, loaded.stmts, 0, loaded.path, {
-        imports: new Map<string, Scheme>(),
-        nsImports: new Map<string, Map<string, Scheme>>(),
-        reg: emptyReg,
-        keys: new Map<string, string[]>(),
-        quals: new Map<
-          string,
-          {
-            types: Set<string>;
-            aliases: Map<
-              string,
-              { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
-            >;
-          }
-        >(),
-      }),
+      resolveImportsFrom(
+        ctx,
+        loaded.stmts,
+        0,
+        loaded.path,
+        {
+          imports: new Map<string, Scheme>(),
+          nsImports: new Map<string, Map<string, Scheme>>(),
+          reg: emptyReg,
+          keys: new Map<string, string[]>(),
+          quals: new Map<
+            string,
+            {
+              types: Set<string>;
+              aliases: Map<
+                string,
+                { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+              >;
+            }
+          >(),
+        },
+        recovering,
+      ),
     )
       .with(
         { _tag: "Err" },
@@ -674,8 +852,8 @@ const compileOne: <A>(
               exportsByPath: Map<string, Map<string, Scheme>>;
               regByPath: Map<string, Registry>;
               keysByPath: Map<string, Map<string, string[]>>;
-              qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
-              outputs: { path: string; js: string }[];
+              qualsByPath: Map<string, RecoveryQualScope>;
+              outputs: ModuleOutput[];
             },
             PErr
           >,
@@ -690,8 +868,8 @@ const compileOne: <A>(
                   exportsByPath: Map<string, Map<string, Scheme>>;
                   regByPath: Map<string, Registry>;
                   keysByPath: Map<string, Map<string, string[]>>;
-                  qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
-                  outputs: { path: string; js: string }[];
+                  qualsByPath: Map<string, RecoveryQualScope>;
+                  outputs: ModuleOutput[];
                 },
                 PErr
               >,
@@ -702,7 +880,7 @@ const compileOne: <A>(
                 loaded.stmts,
                 builtins,
                 namespaces,
-                true,
+                openFor(loaded, isEntry, opts),
                 res.imports,
                 res.nsImports,
                 res.quals,
@@ -740,11 +918,8 @@ const compileOne: <A>(
                       exportsByPath: Map<string, Map<string, Scheme>>;
                       regByPath: Map<string, Registry>;
                       keysByPath: Map<string, Map<string, string[]>>;
-                      qualsByPath: Map<
-                        string,
-                        { types: Set<string>; aliases: Map<string, AliasInfo> }
-                      >;
-                      outputs: { path: string; js: string }[];
+                      qualsByPath: Map<string, RecoveryQualScope>;
+                      outputs: ModuleOutput[];
                     },
                     PErr
                   >,
@@ -770,21 +945,19 @@ const compileOne: <A>(
                       exportsByPath: Map<string, Map<string, Scheme>>;
                       regByPath: Map<string, Registry>;
                       keysByPath: Map<string, Map<string, string[]>>;
-                      qualsByPath: Map<
-                        string,
-                        { types: Set<string>; aliases: Map<string, AliasInfo> }
-                      >;
-                      outputs: { path: string; js: string }[];
+                      qualsByPath: Map<string, RecoveryQualScope>;
+                      outputs: ModuleOutput[];
                     },
                     PErr
                   >)(
-                  codegen(
+                  codegenWith(
                     loaded.stmts,
                     res.keys,
                     true,
                     namespaceRuntime,
                     preludeJsDefs,
                     runtimeDeps,
+                    { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt },
                   ),
                 ),
               )
@@ -797,7 +970,7 @@ const compileOne: <A>(
 const compileAll: _Curry<
   [
     ctx: {
-      outputs: { path: string; js: string }[];
+      outputs: ModuleOutput[];
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
@@ -813,13 +986,14 @@ const compileAll: _Curry<
       >;
     },
     graph: Loaded[],
+    opts: Opts,
   ],
-  Result<{ path: string; js: string }[], PErr>
+  Result<ModuleOutput[], PErr>
 > = _curry(
-  2,
+  3,
   (
     ctx: {
-      outputs: { path: string; js: string }[];
+      outputs: ModuleOutput[];
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
@@ -835,6 +1009,7 @@ const compileAll: _Curry<
       >;
     },
     graph: Loaded[],
+    opts: Opts,
   ) =>
     match(graph)
       .with(
@@ -842,7 +1017,7 @@ const compileAll: _Curry<
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => Ok(ctx.outputs) as Result<{ path: string; js: string }[], PErr>,
+        () => Ok(ctx.outputs) as Result<ModuleOutput[], PErr>,
       )
       .with(
         (_v) => {
@@ -850,12 +1025,9 @@ const compileAll: _Curry<
           return _g.length >= 1;
         },
         ([m, ...rest]) =>
-          match(compileOne(ctx, m))
-            .with(
-              { _tag: "Err" },
-              ({ error: e }) => Err(e) as Result<{ path: string; js: string }[], PErr>,
-            )
-            .with({ _tag: "Ok" }, ({ value: ctx1 }) => compileAll(ctx1, rest))
+          match(compileOne(ctx, m, false, eq(length(rest), 0), opts))
+            .with({ _tag: "Err" }, ({ error: e }) => Err(e) as Result<ModuleOutput[], PErr>)
+            .with({ _tag: "Ok" }, ({ value: ctx1 }) => compileAll(ctx1, rest, opts))
             .exhaustive(),
       )
       .otherwise(() => {
@@ -867,9 +1039,10 @@ const compileAll: _Curry<
  * Spelled out (not point-free `compileAll(ctx0)`): the TS backend types a
  * multi-param function uncurried, so a partial application is a tsc error.
  */
-export const compileGraph: (graph: Loaded[]) => Result<{ path: string; js: string }[], PErr> = (
-  graph: Loaded[],
-) =>
+export const compileGraphWith: _Curry<
+  [graph: Loaded[], opts: Opts],
+  Result<ModuleOutput[], PErr>
+> = _curry(2, (graph: Loaded[], opts: Opts) =>
   compileAll(
     {
       exportsByPath: new Map<string, Map<string, Scheme>>(),
@@ -885,17 +1058,890 @@ export const compileGraph: (graph: Loaded[]) => Result<{ path: string; js: strin
           >;
         }
       >(),
-      outputs: [] as { path: string; js: string }[],
+      outputs: [] as ModuleOutput[],
     },
     graph,
-  );
+    opts,
+  ),
+);
+export const compileGraph: (graph: Loaded[]) => Result<ModuleOutput[], PErr> = (graph: Loaded[]) =>
+  compileGraphWith(graph, defaultOpts);
+
+const compileAllRecovering: _Curry<
+  [
+    ctx: {
+      exportsByPath: Map<string, Map<string, Scheme>>;
+      regByPath: Map<string, Registry>;
+      keysByPath: Map<string, Map<string, string[]>>;
+      qualsByPath: Map<
+        string,
+        {
+          types: Set<string>;
+          aliases: Map<
+            string,
+            { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+          >;
+        }
+      >;
+      outputs: ModuleOutput[];
+    },
+    graph: Loaded[],
+    errors: PErr[],
+    opts: Opts,
+  ],
+  {
+    ctx: {
+      exportsByPath: Map<string, Map<string, Scheme>>;
+      regByPath: Map<string, Registry>;
+      keysByPath: Map<string, Map<string, string[]>>;
+      qualsByPath: Map<
+        string,
+        {
+          types: Set<string>;
+          aliases: Map<
+            string,
+            { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+          >;
+        }
+      >;
+      outputs: ModuleOutput[];
+    };
+    errors: PErr[];
+  }
+> = _curry(
+  4,
+  (
+    ctx: {
+      exportsByPath: Map<string, Map<string, Scheme>>;
+      regByPath: Map<string, Registry>;
+      keysByPath: Map<string, Map<string, string[]>>;
+      qualsByPath: Map<
+        string,
+        {
+          types: Set<string>;
+          aliases: Map<
+            string,
+            { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+          >;
+        }
+      >;
+      outputs: ModuleOutput[];
+    },
+    graph: Loaded[],
+    errors: PErr[],
+    opts: Opts,
+  ) =>
+    match(graph)
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length === 0;
+        },
+        () => ({ ctx: ctx, errors: errors }),
+      )
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length >= 1;
+        },
+        ([m, ...rest]) =>
+          match(compileOne(ctx, m, true, eq(length(rest), 0), opts))
+            .with({ _tag: "Err" }, ({ error: e }) =>
+              compileAllRecovering(ctx, rest, _Array_append(e, errors), opts),
+            )
+            .with({ _tag: "Ok" }, ({ value: ctx1 }) =>
+              compileAllRecovering(ctx1, rest, errors, opts),
+            )
+            .exhaustive(),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
+);
+/**
+ * freshRecoveryGraphState : unit -> RecoveryGraphState
+ * Opaque open-world graph context plus accumulated errors. Hosts retain this
+ * at dependency prefixes so recovery queries can resume at a sibling entry.
+ */
+export const freshRecoveryGraphState: () => RecoveryGraphState = () => ({
+  ctx: {
+    exportsByPath: new Map<string, Map<string, Scheme>>(),
+    regByPath: new Map<string, Registry>(),
+    keysByPath: new Map<string, Map<string, string[]>>(),
+    qualsByPath: new Map<string, RecoveryQualScope>(),
+    outputs: [] as ModuleOutput[],
+  },
+  errors: [] as PErr[],
+});
+/**
+ * recoverGraphFrom : RecoveryGraphState -> [Loaded] -> RecoveryGraphState
+ * Advance a graph recovery state by a dependency-ordered suffix.
+ */
+export const recoverGraphFromWith: <A>(
+  state: {
+    ctx: {
+      exportsByPath: Map<string, Map<string, Scheme>>;
+      regByPath: Map<string, Registry>;
+      keysByPath: Map<string, Map<string, string[]>>;
+      qualsByPath: Map<
+        string,
+        {
+          types: Set<string>;
+          aliases: Map<
+            string,
+            { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+          >;
+        }
+      >;
+      outputs: ModuleOutput[];
+    };
+    errors: PErr[];
+  } & A,
+  graph: Loaded[],
+  opts: Opts,
+) => {
+  ctx: {
+    exportsByPath: Map<string, Map<string, Scheme>>;
+    regByPath: Map<string, Registry>;
+    keysByPath: Map<string, Map<string, string[]>>;
+    qualsByPath: Map<
+      string,
+      {
+        types: Set<string>;
+        aliases: Map<
+          string,
+          { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+        >;
+      }
+    >;
+    outputs: ModuleOutput[];
+  };
+  errors: PErr[];
+} = _curry(
+  3,
+  <A>(
+    state: {
+      ctx: {
+        exportsByPath: Map<string, Map<string, Scheme>>;
+        regByPath: Map<string, Registry>;
+        keysByPath: Map<string, Map<string, string[]>>;
+        qualsByPath: Map<
+          string,
+          {
+            types: Set<string>;
+            aliases: Map<
+              string,
+              { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+            >;
+          }
+        >;
+        outputs: ModuleOutput[];
+      };
+      errors: PErr[];
+    } & A,
+    graph: Loaded[],
+    opts: Opts,
+  ) => compileAllRecovering(state.ctx, graph, state.errors, opts),
+);
+export const recoverGraphFrom: <A>(
+  state: {
+    ctx: {
+      exportsByPath: Map<string, Map<string, Scheme>>;
+      regByPath: Map<string, Registry>;
+      keysByPath: Map<string, Map<string, string[]>>;
+      qualsByPath: Map<
+        string,
+        {
+          types: Set<string>;
+          aliases: Map<
+            string,
+            { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+          >;
+        }
+      >;
+      outputs: ModuleOutput[];
+    };
+    errors: PErr[];
+  } & A,
+  graph: Loaded[],
+) => {
+  ctx: {
+    exportsByPath: Map<string, Map<string, Scheme>>;
+    regByPath: Map<string, Registry>;
+    keysByPath: Map<string, Map<string, string[]>>;
+    qualsByPath: Map<
+      string,
+      {
+        types: Set<string>;
+        aliases: Map<
+          string,
+          { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+        >;
+      }
+    >;
+    outputs: ModuleOutput[];
+  };
+  errors: PErr[];
+} = _curry(
+  2,
+  <A>(
+    state: {
+      ctx: {
+        exportsByPath: Map<string, Map<string, Scheme>>;
+        regByPath: Map<string, Registry>;
+        keysByPath: Map<string, Map<string, string[]>>;
+        qualsByPath: Map<
+          string,
+          {
+            types: Set<string>;
+            aliases: Map<
+              string,
+              { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+            >;
+          }
+        >;
+        outputs: ModuleOutput[];
+      };
+      errors: PErr[];
+    } & A,
+    graph: Loaded[],
+  ) => recoverGraphFromWith(state, graph, defaultOpts),
+);
+/**
+ * Recovery graph driver: keeps checking after failures and gives downstream
+ * imports a polymorphic placeholder rather than an unbound-name cascade.
+ */
+export const compileGraphRecoveringWith: _Curry<[graph: Loaded[], opts: Opts], GraphRecovery> =
+  _curry(2, (graph: Loaded[], opts: Opts) => {
+    const state: {
+      ctx: {
+        exportsByPath: Map<string, Map<string, Scheme>>;
+        regByPath: Map<string, Registry>;
+        keysByPath: Map<string, Map<string, string[]>>;
+        qualsByPath: Map<
+          string,
+          {
+            types: Set<string>;
+            aliases: Map<
+              string,
+              { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+            >;
+          }
+        >;
+        outputs: ModuleOutput[];
+      };
+      errors: PErr[];
+    } = recoverGraphFromWith(freshRecoveryGraphState(), graph, opts);
+    return { outputs: state.ctx.outputs, errors: state.errors };
+  });
+export const compileGraphRecovering: (graph: Loaded[]) => GraphRecovery = (graph: Loaded[]) =>
+  compileGraphRecoveringWith(graph, defaultOpts);
+const inferOne: <A, B>(
+  ctx: {
+    exportsByPath: Map<string, Map<string, Scheme>>;
+    regByPath: Map<string, Registry>;
+    keysByPath: Map<string, Map<string, string[]>>;
+    qualsByPath: Map<
+      string,
+      {
+        types: Set<string>;
+        aliases: Map<
+          string,
+          { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+        >;
+      }
+    >;
+    outputs: {
+      path: string;
+      types: { span: SpanAt; ty: Ty; display: string }[];
+      aliases: Map<string, AliasInfo>;
+    }[];
+    aliases: Map<string, AliasInfo>;
+  } & A,
+  loaded: { stmts: Stmt[]; path: string; src: string } & B,
+  opts: Opts,
+) => Result<
+  {
+    exportsByPath: Map<string, Map<string, Scheme>>;
+    regByPath: Map<string, Registry>;
+    keysByPath: Map<string, Map<string, string[]>>;
+    qualsByPath: Map<string, RecoveryQualScope>;
+    aliases: Map<string, AliasInfo>;
+    outputs: {
+      path: string;
+      types: { span: SpanAt; ty: Ty; display: string }[];
+      aliases: Map<string, AliasInfo>;
+    }[];
+  },
+  PErr
+> = _curry(
+  3,
+  <A, B>(
+    ctx: {
+      exportsByPath: Map<string, Map<string, Scheme>>;
+      regByPath: Map<string, Registry>;
+      keysByPath: Map<string, Map<string, string[]>>;
+      qualsByPath: Map<
+        string,
+        {
+          types: Set<string>;
+          aliases: Map<
+            string,
+            { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+          >;
+        }
+      >;
+      outputs: {
+        path: string;
+        types: { span: SpanAt; ty: Ty; display: string }[];
+        aliases: Map<string, AliasInfo>;
+      }[];
+      aliases: Map<string, AliasInfo>;
+    } & A,
+    loaded: { stmts: Stmt[]; path: string; src: string } & B,
+    opts: Opts,
+  ) =>
+    match(
+      resolveImportsFrom(
+        ctx,
+        loaded.stmts,
+        0,
+        loaded.path,
+        {
+          imports: new Map<string, Scheme>(),
+          nsImports: new Map<string, Map<string, Scheme>>(),
+          reg: emptyReg,
+          keys: new Map<string, string[]>(),
+          quals: new Map<
+            string,
+            {
+              types: Set<string>;
+              aliases: Map<
+                string,
+                { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+              >;
+            }
+          >(),
+        },
+        false,
+      ),
+    )
+      .with(
+        { _tag: "Err" },
+        ({ error: e }) =>
+          Err(atPath(loaded.path, e)) as Result<
+            {
+              exportsByPath: Map<string, Map<string, Scheme>>;
+              regByPath: Map<string, Registry>;
+              keysByPath: Map<string, Map<string, string[]>>;
+              qualsByPath: Map<string, RecoveryQualScope>;
+              aliases: Map<string, AliasInfo>;
+              outputs: {
+                path: string;
+                types: { span: SpanAt; ty: Ty; display: string }[];
+                aliases: Map<string, AliasInfo>;
+              }[];
+            },
+            PErr
+          >,
+      )
+      .with({ _tag: "Ok" }, ({ value: res }) =>
+        match(checkWith(loaded.stmts, res.reg, res.quals))
+          .with(
+            { _tag: "Err" },
+            ({ error: e }) =>
+              Err(atPath(loaded.path, e)) as Result<
+                {
+                  exportsByPath: Map<string, Map<string, Scheme>>;
+                  regByPath: Map<string, Registry>;
+                  keysByPath: Map<string, Map<string, string[]>>;
+                  qualsByPath: Map<string, RecoveryQualScope>;
+                  aliases: Map<string, AliasInfo>;
+                  outputs: {
+                    path: string;
+                    types: { span: SpanAt; ty: Ty; display: string }[];
+                    aliases: Map<string, AliasInfo>;
+                  }[];
+                },
+                PErr
+              >,
+          )
+          .with({ _tag: "Ok" }, () =>
+            match(
+              inferProgramImportsTypes(
+                loaded.stmts,
+                builtins,
+                namespaces,
+                openMode(loaded.src, opts.open),
+                res.imports,
+                res.nsImports,
+                res.quals,
+                None as Option<
+                  {
+                    name: string;
+                    parse: Option<
+                      (
+                        a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+                        b: number,
+                        c: (
+                          a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+                          b: number,
+                        ) => Result<[Expr, number], PErr>,
+                      ) => Result<Option<[Expr, number]>, PErr>
+                    >;
+                    inferCall: Option<
+                      (
+                        a: Expr,
+                        b: Expr[],
+                        c: Option<string>,
+                        d: St,
+                        e: InferApi,
+                      ) => Result<Option<[Ty, St]>, PErr>
+                    >;
+                  }[]
+                >,
+              ),
+            )
+              .with(
+                { _tag: "Err" },
+                ({ error: e }) =>
+                  Err(atPath(loaded.path, e)) as Result<
+                    {
+                      exportsByPath: Map<string, Map<string, Scheme>>;
+                      regByPath: Map<string, Registry>;
+                      keysByPath: Map<string, Map<string, string[]>>;
+                      qualsByPath: Map<string, RecoveryQualScope>;
+                      aliases: Map<string, AliasInfo>;
+                      outputs: {
+                        path: string;
+                        types: { span: SpanAt; ty: Ty; display: string }[];
+                        aliases: Map<string, AliasInfo>;
+                      }[];
+                    },
+                    PErr
+                  >,
+              )
+              .with(
+                { _tag: "Ok" },
+                ({ value: r }) =>
+                  Ok({
+                    exportsByPath: _Map_set(
+                      loaded.path,
+                      exportedSchemes(loaded.stmts, r.env),
+                      ctx.exportsByPath,
+                    ),
+                    regByPath: _Map_set(loaded.path, exportedRegistry(loaded.stmts), ctx.regByPath),
+                    keysByPath: _Map_set(
+                      loaded.path,
+                      exportedCtorKeys(loaded.stmts),
+                      ctx.keysByPath,
+                    ),
+                    qualsByPath: _Map_set(loaded.path, qualScopeOf(loaded.stmts), ctx.qualsByPath),
+                    aliases: mergeMap(r.aliases, ctx.aliases),
+                    outputs: [
+                      ...ctx.outputs,
+                      {
+                        path: loaded.path,
+                        types: map(
+                          (hit: TypeAt) => ({
+                            span: hit.span,
+                            ty: hit.ty,
+                            display: showType(widenLits(hit.ty)),
+                          }),
+                          r.types,
+                        ),
+                        aliases: mergeMap(r.aliases, ctx.aliases),
+                      },
+                    ],
+                  }) as Result<
+                    {
+                      exportsByPath: Map<string, Map<string, Scheme>>;
+                      regByPath: Map<string, Registry>;
+                      keysByPath: Map<string, Map<string, string[]>>;
+                      qualsByPath: Map<string, RecoveryQualScope>;
+                      aliases: Map<string, AliasInfo>;
+                      outputs: {
+                        path: string;
+                        types: { span: SpanAt; ty: Ty; display: string }[];
+                        aliases: Map<string, AliasInfo>;
+                      }[];
+                    },
+                    PErr
+                  >,
+              )
+              .exhaustive(),
+          )
+          .exhaustive(),
+      )
+      .exhaustive(),
+);
+const inferAll: <A>(
+  ctx: {
+    exportsByPath: Map<string, Map<string, Scheme>>;
+    regByPath: Map<string, Registry>;
+    keysByPath: Map<string, Map<string, string[]>>;
+    qualsByPath: Map<
+      string,
+      {
+        types: Set<string>;
+        aliases: Map<
+          string,
+          { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+        >;
+      }
+    >;
+    outputs: {
+      path: string;
+      types: { span: SpanAt; ty: Ty; display: string }[];
+      aliases: Map<string, AliasInfo>;
+    }[];
+    aliases: Map<string, AliasInfo>;
+  },
+  graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
+  opts: Opts,
+) => Result<
+  {
+    exportsByPath: Map<string, Map<string, Scheme>>;
+    regByPath: Map<string, Registry>;
+    keysByPath: Map<string, Map<string, string[]>>;
+    qualsByPath: Map<
+      string,
+      {
+        types: Set<string>;
+        aliases: Map<
+          string,
+          { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+        >;
+      }
+    >;
+    outputs: {
+      path: string;
+      types: { span: SpanAt; ty: Ty; display: string }[];
+      aliases: Map<string, AliasInfo>;
+    }[];
+    aliases: Map<string, AliasInfo>;
+  },
+  PErr
+> = _curry(
+  3,
+  <A>(
+    ctx: {
+      exportsByPath: Map<string, Map<string, Scheme>>;
+      regByPath: Map<string, Registry>;
+      keysByPath: Map<string, Map<string, string[]>>;
+      qualsByPath: Map<
+        string,
+        {
+          types: Set<string>;
+          aliases: Map<
+            string,
+            { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+          >;
+        }
+      >;
+      outputs: {
+        path: string;
+        types: { span: SpanAt; ty: Ty; display: string }[];
+        aliases: Map<string, AliasInfo>;
+      }[];
+      aliases: Map<string, AliasInfo>;
+    },
+    graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
+    opts: Opts,
+  ) =>
+    match(graph)
+      .with(
+        (_v) => _v.length === 0,
+        () =>
+          Ok(ctx) as Result<
+            {
+              exportsByPath: Map<string, Map<string, Scheme>>;
+              regByPath: Map<string, Registry>;
+              keysByPath: Map<string, Map<string, string[]>>;
+              qualsByPath: Map<
+                string,
+                {
+                  types: Set<string>;
+                  aliases: Map<
+                    string,
+                    { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+                  >;
+                }
+              >;
+              outputs: {
+                path: string;
+                types: { span: SpanAt; ty: Ty; display: string }[];
+                aliases: Map<string, AliasInfo>;
+              }[];
+              aliases: Map<string, AliasInfo>;
+            },
+            PErr
+          >,
+      )
+      .with(
+        (_v) => _v.length >= 1,
+        ([m, ...rest]) =>
+          match(inferOne(ctx, m, opts))
+            .with(
+              { _tag: "Err" },
+              ({ error: e }) =>
+                Err(e) as Result<
+                  {
+                    exportsByPath: Map<string, Map<string, Scheme>>;
+                    regByPath: Map<string, Registry>;
+                    keysByPath: Map<string, Map<string, string[]>>;
+                    qualsByPath: Map<
+                      string,
+                      {
+                        types: Set<string>;
+                        aliases: Map<
+                          string,
+                          { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+                        >;
+                      }
+                    >;
+                    outputs: {
+                      path: string;
+                      types: { span: SpanAt; ty: Ty; display: string }[];
+                      aliases: Map<string, AliasInfo>;
+                    }[];
+                    aliases: Map<string, AliasInfo>;
+                  },
+                  PErr
+                >,
+            )
+            .with({ _tag: "Ok" }, ({ value: ctx1 }) => inferAll(ctx1, rest, opts))
+            .exhaustive(),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
+);
+/**
+ * freshInferGraphState : unit -> InferGraphState
+ * Opaque imports-aware inference context for host-owned graph caching. A state
+ * records every dependency's exports plus its accumulated typed outputs.
+ */
+export const freshInferGraphState: <A, B, C, D, E, F, G, H, I, J, K>() => {
+  exportsByPath: Map<A, B>;
+  regByPath: Map<C, D>;
+  keysByPath: Map<E, F>;
+  qualsByPath: Map<G, H>;
+  aliases: Map<I, J>;
+  outputs: K[];
+} = <A, B, C, D, E, F, G, H, I, J, K>() => ({
+  exportsByPath: new Map<A, B>(),
+  regByPath: new Map<C, D>(),
+  keysByPath: new Map<E, F>(),
+  qualsByPath: new Map<G, H>(),
+  aliases: new Map<I, J>(),
+  outputs: [] as K[],
+});
+/**
+ * inferGraphTypesFrom : InferGraphState -> [Loaded] -> Result InferGraphState MErr
+ * Advance an existing dependency-ordered graph state. The host may retain a
+ * state at a shared dependency prefix, then infer only a sibling entry tail.
+ */
+export const inferGraphTypesFromWith: <A>(
+  state: {
+    exportsByPath: Map<string, Map<string, Scheme>>;
+    regByPath: Map<string, Registry>;
+    keysByPath: Map<string, Map<string, string[]>>;
+    qualsByPath: Map<
+      string,
+      {
+        types: Set<string>;
+        aliases: Map<
+          string,
+          { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+        >;
+      }
+    >;
+    outputs: {
+      path: string;
+      types: { span: SpanAt; ty: Ty; display: string }[];
+      aliases: Map<string, AliasInfo>;
+    }[];
+    aliases: Map<string, AliasInfo>;
+  },
+  graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
+  opts: Opts,
+) => Result<
+  {
+    exportsByPath: Map<string, Map<string, Scheme>>;
+    regByPath: Map<string, Registry>;
+    keysByPath: Map<string, Map<string, string[]>>;
+    qualsByPath: Map<
+      string,
+      {
+        types: Set<string>;
+        aliases: Map<
+          string,
+          { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+        >;
+      }
+    >;
+    outputs: {
+      path: string;
+      types: { span: SpanAt; ty: Ty; display: string }[];
+      aliases: Map<string, AliasInfo>;
+    }[];
+    aliases: Map<string, AliasInfo>;
+  },
+  PErr
+> = _curry(
+  3,
+  <A>(
+    state: {
+      exportsByPath: Map<string, Map<string, Scheme>>;
+      regByPath: Map<string, Registry>;
+      keysByPath: Map<string, Map<string, string[]>>;
+      qualsByPath: Map<
+        string,
+        {
+          types: Set<string>;
+          aliases: Map<
+            string,
+            { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+          >;
+        }
+      >;
+      outputs: {
+        path: string;
+        types: { span: SpanAt; ty: Ty; display: string }[];
+        aliases: Map<string, AliasInfo>;
+      }[];
+      aliases: Map<string, AliasInfo>;
+    },
+    graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
+    opts: Opts,
+  ) => inferAll(state, graph, opts),
+);
+export const inferGraphTypesFrom: <A>(
+  state: {
+    exportsByPath: Map<string, Map<string, Scheme>>;
+    regByPath: Map<string, Registry>;
+    keysByPath: Map<string, Map<string, string[]>>;
+    qualsByPath: Map<
+      string,
+      {
+        types: Set<string>;
+        aliases: Map<
+          string,
+          { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+        >;
+      }
+    >;
+    outputs: {
+      path: string;
+      types: { span: SpanAt; ty: Ty; display: string }[];
+      aliases: Map<string, AliasInfo>;
+    }[];
+    aliases: Map<string, AliasInfo>;
+  },
+  graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
+) => Result<
+  {
+    exportsByPath: Map<string, Map<string, Scheme>>;
+    regByPath: Map<string, Registry>;
+    keysByPath: Map<string, Map<string, string[]>>;
+    qualsByPath: Map<
+      string,
+      {
+        types: Set<string>;
+        aliases: Map<
+          string,
+          { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+        >;
+      }
+    >;
+    outputs: {
+      path: string;
+      types: { span: SpanAt; ty: Ty; display: string }[];
+      aliases: Map<string, AliasInfo>;
+    }[];
+    aliases: Map<string, AliasInfo>;
+  },
+  PErr
+> = _curry(
+  2,
+  <A>(
+    state: {
+      exportsByPath: Map<string, Map<string, Scheme>>;
+      regByPath: Map<string, Registry>;
+      keysByPath: Map<string, Map<string, string[]>>;
+      qualsByPath: Map<
+        string,
+        {
+          types: Set<string>;
+          aliases: Map<
+            string,
+            { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+          >;
+        }
+      >;
+      outputs: {
+        path: string;
+        types: { span: SpanAt; ty: Ty; display: string }[];
+        aliases: Map<string, AliasInfo>;
+      }[];
+      aliases: Map<string, AliasInfo>;
+    },
+    graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
+  ) => inferGraphTypesFromWith(state, graph, defaultOpts),
+);
+/**
+ * inferGraphTypes : [Loaded] -> Result [{ path, types, aliases }] MErr
+ * Infer every dependency-ordered module with the exact import environment its
+ * emitter would use. This is the bootstrap graph typed-query boundary.
+ */
+export const inferGraphTypesWith: <A>(
+  graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
+  opts: Opts,
+) => Result<
+  {
+    path: string;
+    types: { span: SpanAt; ty: Ty; display: string }[];
+    aliases: Map<string, AliasInfo>;
+  }[],
+  PErr
+> = _curry(2, <A>(graph: ({ stmts: Stmt[]; path: string; src: string } & A)[], opts: Opts) =>
+  _Result_flatMap(
+    (state) =>
+      Ok(state.outputs) as Result<
+        {
+          path: string;
+          types: { span: SpanAt; ty: Ty; display: string }[];
+          aliases: Map<string, AliasInfo>;
+        }[],
+        PErr
+      >,
+    inferGraphTypesFromWith(freshInferGraphState(), graph, opts),
+  ),
+);
+export const inferGraphTypes: <A>(
+  graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
+) => Result<
+  {
+    path: string;
+    types: { span: SpanAt; ty: Ty; display: string }[];
+    aliases: Map<string, AliasInfo>;
+  }[],
+  PErr
+> = <A>(graph: ({ stmts: Stmt[]; path: string; src: string } & A)[]) =>
+  inferGraphTypesWith(graph, defaultOpts);
 /**
  * buildModules : string -> Result [ModuleOutput] MErr
  * Resolve the graph then compile it — one sync railway (host IO is sync).
  */
-export const buildModules: (entry: string) => Result<{ path: string; js: string }[], PErr> = (
-  entry: string,
-) => _Result_flatMap((graph) => compileGraph(graph), loadGraph(entry));
+export const buildModulesWith: _Curry<
+  [entry: string, opts: Opts],
+  Result<ModuleOutput[], PErr>
+> = _curry(2, (entry: string, opts: Opts) =>
+  _Result_flatMap((graph) => compileGraphWith(graph, opts), loadGraph(entry)),
+);
+export const buildModules: (entry: string) => Result<ModuleOutput[], PErr> = (entry: string) =>
+  buildModulesWith(entry, defaultOpts);
 import { relSpec as $relSpec } from "./host.mjs";
 const relSpec = _curry(2, $relSpec);
 import { externDtsPath as $externDtsPath } from "./host.mjs";
@@ -1122,25 +2168,26 @@ const compileOneTs: <A, B>(
     aliases: Map<string, AliasInfo>;
     runtimeImport: string;
     typeOwner: Map<string, string>;
-    outputs: { path: string; js: string }[];
+    outputs: ModuleOutput[];
     externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
   } & A,
-  loaded: { stmts: Stmt[]; path: string } & B,
+  loaded: { stmts: Stmt[]; path: string; src: string } & B,
+  opts: Opts,
 ) => Result<
   {
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
-    qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
+    qualsByPath: Map<string, RecoveryQualScope>;
     aliases: Map<string, AliasInfo>;
     typeOwner: Map<string, string>;
     runtimeImport: string;
     externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
-    outputs: { path: string; js: string }[];
+    outputs: ModuleOutput[];
   },
   PErr
 > = _curry(
-  2,
+  3,
   <A, B>(
     ctx: {
       exportsByPath: Map<string, Map<string, Scheme>>;
@@ -1159,28 +2206,36 @@ const compileOneTs: <A, B>(
       aliases: Map<string, AliasInfo>;
       runtimeImport: string;
       typeOwner: Map<string, string>;
-      outputs: { path: string; js: string }[];
+      outputs: ModuleOutput[];
       externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
     } & A,
-    loaded: { stmts: Stmt[]; path: string } & B,
+    loaded: { stmts: Stmt[]; path: string; src: string } & B,
+    opts: Opts,
   ) =>
     match(
-      resolveImportsFrom(ctx, loaded.stmts, 0, loaded.path, {
-        imports: new Map<string, Scheme>(),
-        nsImports: new Map<string, Map<string, Scheme>>(),
-        reg: emptyReg,
-        keys: new Map<string, string[]>(),
-        quals: new Map<
-          string,
-          {
-            types: Set<string>;
-            aliases: Map<
-              string,
-              { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
-            >;
-          }
-        >(),
-      }),
+      resolveImportsFrom(
+        ctx,
+        loaded.stmts,
+        0,
+        loaded.path,
+        {
+          imports: new Map<string, Scheme>(),
+          nsImports: new Map<string, Map<string, Scheme>>(),
+          reg: emptyReg,
+          keys: new Map<string, string[]>(),
+          quals: new Map<
+            string,
+            {
+              types: Set<string>;
+              aliases: Map<
+                string,
+                { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+              >;
+            }
+          >(),
+        },
+        false,
+      ),
     )
       .with(
         { _tag: "Err" },
@@ -1190,12 +2245,12 @@ const compileOneTs: <A, B>(
               exportsByPath: Map<string, Map<string, Scheme>>;
               regByPath: Map<string, Registry>;
               keysByPath: Map<string, Map<string, string[]>>;
-              qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
+              qualsByPath: Map<string, RecoveryQualScope>;
               aliases: Map<string, AliasInfo>;
               typeOwner: Map<string, string>;
               runtimeImport: string;
               externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
-              outputs: { path: string; js: string }[];
+              outputs: ModuleOutput[];
             },
             PErr
           >,
@@ -1210,12 +2265,12 @@ const compileOneTs: <A, B>(
                   exportsByPath: Map<string, Map<string, Scheme>>;
                   regByPath: Map<string, Registry>;
                   keysByPath: Map<string, Map<string, string[]>>;
-                  qualsByPath: Map<string, { types: Set<string>; aliases: Map<string, AliasInfo> }>;
+                  qualsByPath: Map<string, RecoveryQualScope>;
                   aliases: Map<string, AliasInfo>;
                   typeOwner: Map<string, string>;
                   runtimeImport: string;
                   externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
-                  outputs: { path: string; js: string }[];
+                  outputs: ModuleOutput[];
                 },
                 PErr
               >,
@@ -1226,7 +2281,7 @@ const compileOneTs: <A, B>(
                 loaded.stmts,
                 builtins,
                 namespaces,
-                true,
+                openMode(loaded.src, opts.open),
                 res.imports,
                 res.nsImports,
                 res.quals,
@@ -1264,10 +2319,7 @@ const compileOneTs: <A, B>(
                       exportsByPath: Map<string, Map<string, Scheme>>;
                       regByPath: Map<string, Registry>;
                       keysByPath: Map<string, Map<string, string[]>>;
-                      qualsByPath: Map<
-                        string,
-                        { types: Set<string>; aliases: Map<string, AliasInfo> }
-                      >;
+                      qualsByPath: Map<string, RecoveryQualScope>;
                       aliases: Map<string, AliasInfo>;
                       typeOwner: Map<string, string>;
                       runtimeImport: string;
@@ -1275,7 +2327,7 @@ const compileOneTs: <A, B>(
                         string,
                         { imported: string; scheme: Scheme; curried: boolean }[]
                       >;
-                      outputs: { path: string; js: string }[];
+                      outputs: ModuleOutput[];
                     },
                     PErr
                   >,
@@ -1315,10 +2367,7 @@ const compileOneTs: <A, B>(
                           exportsByPath: Map<string, Map<string, Scheme>>;
                           regByPath: Map<string, Registry>;
                           keysByPath: Map<string, Map<string, string[]>>;
-                          qualsByPath: Map<
-                            string,
-                            { types: Set<string>; aliases: Map<string, AliasInfo> }
-                          >;
+                          qualsByPath: Map<string, RecoveryQualScope>;
                           aliases: Map<string, AliasInfo>;
                           typeOwner: Map<string, string>;
                           runtimeImport: string;
@@ -1326,7 +2375,7 @@ const compileOneTs: <A, B>(
                             string,
                             { imported: string; scheme: Scheme; curried: boolean }[]
                           >;
-                          outputs: { path: string; js: string }[];
+                          outputs: ModuleOutput[];
                         },
                         PErr
                       >)(
@@ -1343,7 +2392,7 @@ ${body}`,
                       ctx.typeOwner,
                     ),
                   ))(
-                  emitTsModule(
+                  emitTsModuleWith(
                     loaded.stmts,
                     r.env,
                     r.types,
@@ -1355,6 +2404,7 @@ ${body}`,
                     preludeJsDefs,
                     runtimeDeps,
                     ctx.runtimeImport,
+                    opts.docs,
                   ),
                 ),
               )
@@ -1386,7 +2436,7 @@ const externOutputs: <A, B, C>(
   );
 const compileAllTs: <A>(
   ctx: {
-    outputs: { path: string; js: string }[];
+    outputs: ModuleOutput[];
     externs: Map<string, { scheme: Scheme; imported: string; curried: boolean }[]>;
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
@@ -1405,12 +2455,13 @@ const compileAllTs: <A>(
     runtimeImport: string;
     typeOwner: Map<string, string>;
   },
-  graph: ({ stmts: Stmt[]; path: string } & A)[],
-) => Result<{ path: string; js: string }[], PErr> = _curry(
-  2,
+  graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
+  opts: Opts,
+) => Result<ModuleOutput[], PErr> = _curry(
+  3,
   <A>(
     ctx: {
-      outputs: { path: string; js: string }[];
+      outputs: ModuleOutput[];
       externs: Map<string, { scheme: Scheme; imported: string; curried: boolean }[]>;
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
@@ -1429,26 +2480,24 @@ const compileAllTs: <A>(
       runtimeImport: string;
       typeOwner: Map<string, string>;
     },
-    graph: ({ stmts: Stmt[]; path: string } & A)[],
+    graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
+    opts: Opts,
   ) =>
     match(graph)
       .with(
         (_v) => _v.length === 0,
         () =>
           Ok(_Array_concat(ctx.outputs, externOutputs(ctx.externs))) as Result<
-            { path: string; js: string }[],
+            ModuleOutput[],
             PErr
           >,
       )
       .with(
         (_v) => _v.length >= 1,
         ([m, ...rest]) =>
-          match(compileOneTs(ctx, m))
-            .with(
-              { _tag: "Err" },
-              ({ error: e }) => Err(e) as Result<{ path: string; js: string }[], PErr>,
-            )
-            .with({ _tag: "Ok" }, ({ value: ctx1 }) => compileAllTs(ctx1, rest))
+          match(compileOneTs(ctx, m, opts))
+            .with({ _tag: "Err" }, ({ error: e }) => Err(e) as Result<ModuleOutput[], PErr>)
+            .with({ _tag: "Ok" }, ({ value: ctx1 }) => compileAllTs(ctx1, rest, opts))
             .exhaustive(),
       )
       .otherwise(() => {
@@ -1461,12 +2510,17 @@ const compileAllTs: <A>(
  * `.mochi` module paths (the writer swaps the extension) followed by the extern
  * sidecars, which already carry their own `.d.ts` / `.d.mts` extension.
  */
-export const compileGraphTs: <A>(
-  graph: ({ stmts: Stmt[]; path: string } & A)[],
+export const compileGraphTsWith: <A>(
+  graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
   runtimeImport: string,
-) => Result<{ path: string; js: string }[], PErr> = _curry(
-  2,
-  <A>(graph: ({ stmts: Stmt[]; path: string } & A)[], runtimeImport: string) =>
+  opts: Opts,
+) => Result<ModuleOutput[], PErr> = _curry(
+  3,
+  <A>(
+    graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
+    runtimeImport: string,
+    opts: Opts,
+  ) =>
     compileAllTs(
       {
         exportsByPath: new Map<string, Map<string, Scheme>>(),
@@ -1486,17 +2540,360 @@ export const compileGraphTs: <A>(
         typeOwner: typeOwnerOf(graph),
         runtimeImport: runtimeImport,
         externs: new Map<string, { scheme: Scheme; imported: string; curried: boolean }[]>(),
-        outputs: [] as { path: string; js: string }[],
+        outputs: [] as ModuleOutput[],
       },
       graph,
+      opts,
     ),
+);
+export const compileGraphTs: <A>(
+  graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
+  runtimeImport: string,
+) => Result<ModuleOutput[], PErr> = _curry(
+  2,
+  <A>(graph: ({ stmts: Stmt[]; path: string; src: string } & A)[], runtimeImport: string) =>
+    compileGraphTsWith(graph, runtimeImport, defaultOpts),
+);
+const dtsOne: <A, B>(
+  ctx: {
+    exportsByPath: Map<string, Map<string, Scheme>>;
+    regByPath: Map<string, Registry>;
+    keysByPath: Map<string, Map<string, string[]>>;
+    qualsByPath: Map<
+      string,
+      {
+        types: Set<string>;
+        aliases: Map<
+          string,
+          { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+        >;
+      }
+    >;
+    target: string;
+    aliases: Map<string, AliasInfo>;
+    runtimeImport: string;
+    dts: string;
+  } & A,
+  loaded: { stmts: Stmt[]; path: string; src: string } & B,
+  opts: Opts,
+) => Result<
+  {
+    exportsByPath: Map<string, Map<string, Scheme>>;
+    regByPath: Map<string, Registry>;
+    keysByPath: Map<string, Map<string, string[]>>;
+    qualsByPath: Map<string, RecoveryQualScope>;
+    aliases: Map<string, AliasInfo>;
+    runtimeImport: string;
+    target: string;
+    dts: string;
+  },
+  PErr
+> = _curry(
+  3,
+  <A, B>(
+    ctx: {
+      exportsByPath: Map<string, Map<string, Scheme>>;
+      regByPath: Map<string, Registry>;
+      keysByPath: Map<string, Map<string, string[]>>;
+      qualsByPath: Map<
+        string,
+        {
+          types: Set<string>;
+          aliases: Map<
+            string,
+            { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+          >;
+        }
+      >;
+      target: string;
+      aliases: Map<string, AliasInfo>;
+      runtimeImport: string;
+      dts: string;
+    } & A,
+    loaded: { stmts: Stmt[]; path: string; src: string } & B,
+    opts: Opts,
+  ) =>
+    match(
+      resolveImportsFrom(
+        ctx,
+        loaded.stmts,
+        0,
+        loaded.path,
+        {
+          imports: new Map<string, Scheme>(),
+          nsImports: new Map<string, Map<string, Scheme>>(),
+          reg: emptyReg,
+          keys: new Map<string, string[]>(),
+          quals: new Map<
+            string,
+            {
+              types: Set<string>;
+              aliases: Map<
+                string,
+                { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+              >;
+            }
+          >(),
+        },
+        false,
+      ),
+    )
+      .with(
+        { _tag: "Err" },
+        ({ error: e }) =>
+          Err(atPath(loaded.path, e)) as Result<
+            {
+              exportsByPath: Map<string, Map<string, Scheme>>;
+              regByPath: Map<string, Registry>;
+              keysByPath: Map<string, Map<string, string[]>>;
+              qualsByPath: Map<string, RecoveryQualScope>;
+              aliases: Map<string, AliasInfo>;
+              runtimeImport: string;
+              target: string;
+              dts: string;
+            },
+            PErr
+          >,
+      )
+      .with({ _tag: "Ok" }, ({ value: res }) =>
+        match(checkWith(loaded.stmts, res.reg, res.quals))
+          .with(
+            { _tag: "Err" },
+            ({ error: e }) =>
+              Err(atPath(loaded.path, e)) as Result<
+                {
+                  exportsByPath: Map<string, Map<string, Scheme>>;
+                  regByPath: Map<string, Registry>;
+                  keysByPath: Map<string, Map<string, string[]>>;
+                  qualsByPath: Map<string, RecoveryQualScope>;
+                  aliases: Map<string, AliasInfo>;
+                  runtimeImport: string;
+                  target: string;
+                  dts: string;
+                },
+                PErr
+              >,
+          )
+          .with({ _tag: "Ok" }, () =>
+            match(
+              inferProgramImportsTypes(
+                loaded.stmts,
+                builtins,
+                namespaces,
+                openMode(loaded.src, opts.open),
+                res.imports,
+                res.nsImports,
+                res.quals,
+                None as Option<
+                  {
+                    name: string;
+                    parse: Option<
+                      (
+                        a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+                        b: number,
+                        c: (
+                          a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+                          b: number,
+                        ) => Result<[Expr, number], PErr>,
+                      ) => Result<Option<[Expr, number]>, PErr>
+                    >;
+                    inferCall: Option<
+                      (
+                        a: Expr,
+                        b: Expr[],
+                        c: Option<string>,
+                        d: St,
+                        e: InferApi,
+                      ) => Result<Option<[Ty, St]>, PErr>
+                    >;
+                  }[]
+                >,
+              ),
+            )
+              .with(
+                { _tag: "Err" },
+                ({ error: e }) =>
+                  Err(atPath(loaded.path, e)) as Result<
+                    {
+                      exportsByPath: Map<string, Map<string, Scheme>>;
+                      regByPath: Map<string, Registry>;
+                      keysByPath: Map<string, Map<string, string[]>>;
+                      qualsByPath: Map<string, RecoveryQualScope>;
+                      aliases: Map<string, AliasInfo>;
+                      runtimeImport: string;
+                      target: string;
+                      dts: string;
+                    },
+                    PErr
+                  >,
+              )
+              .with(
+                { _tag: "Ok" },
+                ({ value: r }) =>
+                  Ok({
+                    exportsByPath: _Map_set(
+                      loaded.path,
+                      exportedSchemes(loaded.stmts, r.env),
+                      ctx.exportsByPath,
+                    ),
+                    regByPath: _Map_set(loaded.path, exportedRegistry(loaded.stmts), ctx.regByPath),
+                    keysByPath: _Map_set(
+                      loaded.path,
+                      exportedCtorKeys(loaded.stmts),
+                      ctx.keysByPath,
+                    ),
+                    qualsByPath: _Map_set(loaded.path, qualScopeOf(loaded.stmts), ctx.qualsByPath),
+                    aliases: mergeMap(r.aliases, ctx.aliases),
+                    runtimeImport: ctx.runtimeImport,
+                    target: ctx.target,
+                    dts: eq(loaded.path, ctx.target)
+                      ? emitDtsFromTypedWith(
+                          loaded.stmts,
+                          r.env,
+                          mergeMap(r.aliases, ctx.aliases),
+                          qualifierMapOf(res.quals, localTypeNames(loaded.stmts)),
+                          ctx.runtimeImport,
+                          opts.docs,
+                        )
+                      : ctx.dts,
+                  }) as Result<
+                    {
+                      exportsByPath: Map<string, Map<string, Scheme>>;
+                      regByPath: Map<string, Registry>;
+                      keysByPath: Map<string, Map<string, string[]>>;
+                      qualsByPath: Map<string, RecoveryQualScope>;
+                      aliases: Map<string, AliasInfo>;
+                      runtimeImport: string;
+                      target: string;
+                      dts: string;
+                    },
+                    PErr
+                  >,
+              )
+              .exhaustive(),
+          )
+          .exhaustive(),
+      )
+      .exhaustive(),
+);
+const dtsAll: <A>(
+  ctx: {
+    dts: string;
+    exportsByPath: Map<string, Map<string, Scheme>>;
+    regByPath: Map<string, Registry>;
+    keysByPath: Map<string, Map<string, string[]>>;
+    qualsByPath: Map<
+      string,
+      {
+        types: Set<string>;
+        aliases: Map<
+          string,
+          { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+        >;
+      }
+    >;
+    target: string;
+    aliases: Map<string, AliasInfo>;
+    runtimeImport: string;
+  },
+  graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
+  opts: Opts,
+) => Result<string, PErr> = _curry(
+  3,
+  <A>(
+    ctx: {
+      dts: string;
+      exportsByPath: Map<string, Map<string, Scheme>>;
+      regByPath: Map<string, Registry>;
+      keysByPath: Map<string, Map<string, string[]>>;
+      qualsByPath: Map<
+        string,
+        {
+          types: Set<string>;
+          aliases: Map<
+            string,
+            { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+          >;
+        }
+      >;
+      target: string;
+      aliases: Map<string, AliasInfo>;
+      runtimeImport: string;
+    },
+    graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
+    opts: Opts,
+  ) =>
+    match(graph)
+      .with(
+        (_v) => _v.length === 0,
+        () => Ok(ctx.dts) as Result<string, PErr>,
+      )
+      .with(
+        (_v) => _v.length >= 1,
+        ([m, ...rest]) =>
+          match(dtsOne(ctx, m, opts))
+            .with({ _tag: "Err" }, ({ error: e }) => Err(e) as Result<string, PErr>)
+            .with({ _tag: "Ok" }, ({ value: ctx1 }) => dtsAll(ctx1, rest, opts))
+            .exhaustive(),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
+);
+/**
+ * emitDtsForFile : string -> string -> Result string MErr — `.d.ts` for one
+ * file, typed through its own import graph so `Alias.T` resolves (ADR 0046).
+ */
+export const emitDtsForFileWith: _Curry<
+  [entry: string, runtimeImport: string, opts: Opts],
+  Result<string, PErr>
+> = _curry(3, (entry: string, runtimeImport: string, opts: Opts) =>
+  _Result_flatMap(
+    (graph) =>
+      dtsAll(
+        {
+          exportsByPath: new Map<string, Map<string, Scheme>>(),
+          regByPath: new Map<string, Registry>(),
+          keysByPath: new Map<string, Map<string, string[]>>(),
+          qualsByPath: new Map<
+            string,
+            {
+              types: Set<string>;
+              aliases: Map<
+                string,
+                { expr: Option<TypeExpr>; fields: QualAliasField[]; params: string[] }
+              >;
+            }
+          >(),
+          aliases: new Map<string, AliasInfo>(),
+          runtimeImport: runtimeImport,
+          target: absPath(entry),
+          dts: "",
+        },
+        graph,
+        opts,
+      ),
+    loadGraph(entry),
+  ),
+);
+export const emitDtsForFile: _Curry<
+  [entry: string, runtimeImport: string],
+  Result<string, PErr>
+> = _curry(2, (entry: string, runtimeImport: string) =>
+  emitDtsForFileWith(entry, runtimeImport, defaultOpts),
 );
 /**
  * buildModulesTs : string -> string -> Result [ModuleOutput] MErr
  */
+export const buildModulesTsWith: _Curry<
+  [entry: string, runtimeImport: string, opts: Opts],
+  Result<ModuleOutput[], PErr>
+> = _curry(3, (entry: string, runtimeImport: string, opts: Opts) =>
+  _Result_flatMap((graph) => compileGraphTsWith(graph, runtimeImport, opts), loadGraph(entry)),
+);
 export const buildModulesTs: _Curry<
   [entry: string, runtimeImport: string],
-  Result<{ path: string; js: string }[], PErr>
+  Result<ModuleOutput[], PErr>
 > = _curry(2, (entry: string, runtimeImport: string) =>
-  _Result_flatMap((graph) => compileGraphTs(graph, runtimeImport), loadGraph(entry)),
+  buildModulesTsWith(entry, runtimeImport, defaultOpts),
 );

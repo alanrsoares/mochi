@@ -77,9 +77,9 @@ let exprSpan = e => switch e {
   | Ast.ERef(_, sp) => sp
   | Ast.ECall(_, _, _, sp) => sp
   | Ast.ELambda(_, _, sp) => sp
-  | Ast.ELetIn(_, _, _, _, sp) => sp
+  | Ast.ELetIn(_, _, _, _, _, sp) => sp
   | Ast.ELetBind(_, _, _, _, _, sp) => sp
-  | Ast.EPipe(_, _, sp) => sp
+  | Ast.EPipe(_, _, _, sp) => sp
   | Ast.EDo(_, sp) => sp
   | Ast.ETernary(_, _, _, sp) => sp
   | Ast.EMatch(_, _, sp) => sp
@@ -528,11 +528,11 @@ let checkExpr = (e, reg) => switch e {
   | Ast.ECall(fn, args, _, _) => checkExpr(fn, reg)
       |> Option.orElse(firstSome(a => checkExpr(a, reg), args))
   | Ast.ELambda(_, body, _) => checkExpr(body, reg)
-  | Ast.ELetIn(_, _, value, body, _) => checkExpr(value, reg)
+  | Ast.ELetIn(_, _, _, value, body, _) => checkExpr(value, reg)
       |> Option.orElse(checkExpr(body, reg))
   | Ast.ELetBind(_, _, _, value, body, _) => checkExpr(value, reg)
       |> Option.orElse(checkExpr(body, reg))
-  | Ast.EPipe(left, right, _) => checkExpr(left, reg)
+  | Ast.EPipe(left, right, _, _) => checkExpr(left, reg)
       |> Option.orElse(checkExpr(right, reg))
   | Ast.EDo(exprs, _) => firstSome(x => checkExpr(x, reg), exprs)
   | Ast.ETernary(cond, thenE, elseE, _) => checkExpr(cond, reg)
@@ -720,17 +720,102 @@ let qualRefsFrom = te => switch te {
   | Ast.TyUnion(members, _) => Array.flatMap(qualRefsFrom, members)
 }
 
+// Every `let … in` annotation inside an expression (ADR 0044) — the same
+// positions TS's forEachSubExpr feeds writtenTypeExprs, in post-order.
+let letInAnnots = e => switch e {
+  | Ast.ENum(_, _, _) => []
+  | Ast.EUnit(_) => []
+  | Ast.EBool(_, _) => []
+  | Ast.EStr(_, _) => []
+  | Ast.ERef(_, _) => []
+  | Ast.ECall(fn, args, _, _) => [
+      ...letInAnnots(fn),
+      ...Array.flatMap(letInAnnots, args)
+    ]
+  | Ast.ELambda(params, body, _) => [
+      ...letInAnnots(body),
+      ...Array.flatMap(
+        p => switch p {
+          | Ast.LPSpanned(Ast.LPLabeled(_, _, _, Some(d)), _) => letInAnnots(d)
+          | Ast.LPLabeled(_, _, _, Some(d)) => letInAnnots(d)
+          | _ => []
+        },
+        params
+      )
+    ]
+  | Ast.ELetIn(_, _, annot, value, body, _) => [
+      ...letInAnnots(value),
+      ...letInAnnots(body),
+      ...switch annot { | Some(te) => [te] | None => [] }
+    ]
+  | Ast.ELetBind(_, _, _, value, body, _) => [
+      ...letInAnnots(value),
+      ...letInAnnots(body)
+    ]
+  | Ast.EPipe(left, right, _, _) => [
+      ...letInAnnots(left),
+      ...letInAnnots(right)
+    ]
+  | Ast.EDo(exprs, _) => Array.flatMap(letInAnnots, exprs)
+  | Ast.ETernary(cond, thenE, elseE, _) => [
+      ...letInAnnots(cond),
+      ...letInAnnots(thenE),
+      ...letInAnnots(elseE)
+    ]
+  | Ast.EMatch(scrutinee, arms, _) => [
+      ...letInAnnots(scrutinee),
+      ...Array.flatMap(
+        (a: Ast.MatchArm) =>
+          [
+            ...switch a.guard { | Some(g) => letInAnnots(g) | None => [] },
+            ...letInAnnots(a.body)
+          ],
+        arms
+      )
+    ]
+  | Ast.ERecord(fields, spread, _) => [
+      ...switch spread { | Some(sp) => letInAnnots(sp) | None => [] },
+      ...Array.flatMap(f => letInAnnots(f.value), fields)
+    ]
+  | Ast.EField(target, _, _, _) => letInAnnots(target)
+  | Ast.ELoop(params, body, _) => [
+      ...Array.flatMap(prm => letInAnnots(prm.init), params),
+      ...letInAnnots(body)
+    ]
+  | Ast.ERecur(args, _) => Array.flatMap(letInAnnots, args)
+  | Ast.ETuple(elements, _) => Array.flatMap(letInAnnots, elements)
+  | Ast.EArr(elements, _) => Array.flatMap(seqElemAnnots, elements)
+  | Ast.EList(elements, _) => Array.flatMap(seqElemAnnots, elements)
+  | Ast.ESet(elements, _) => Array.flatMap(seqElemAnnots, elements)
+  | Ast.EMap(entries, _) => Array.flatMap(
+      en => [...letInAnnots(en.key), ...letInAnnots(en.value)],
+      entries
+    )
+  | Ast.EInterp(parts, _) => Array.flatMap(
+      prt => switch prt {
+        | Ast.IPLit(_) => []
+        | Ast.IPExpr(ex) => letInAnnots(ex)
+      },
+      parts
+    )
+}
+
+let seqElemAnnots = el => switch el {
+  | Ast.SEExpr(e) => letInAnnots(e)
+  | Ast.SESpread(e) => letInAnnots(e)
+}
+
 // The type expressions a program WRITES — the positions typeExprToType lowers.
-// `let … in` annotations are not walked here (the bootstrap mirror does not
-// carry them yet); everything else matches src/check.ts's writtenTypeExprs.
+// Mirrors src/check.ts's writtenTypeExprs, `let … in` annotations included.
 let writtenTypeExprs = stmts =>
   Array.flatMap(
     s => switch s {
       | Ast.SExtern(_, _, _, te, _, _, _, _, _, _) => [te]
-      | Ast.SLet(_, _, annot, _, _, _, _) => switch annot {
-          | Some(te) => [te]
-          | None => []
-        }
+      | Ast.SLet(_, _, annot, value, _, _, _) => [
+          ...switch annot { | Some(te) => [te] | None => [] },
+          ...letInAnnots(value)
+        ]
+      | Ast.SExpr(value, _) => letInAnnots(value)
       | Ast.SType(_, _, ctors, alias, aliasType, _, _, _) => [
           ...Array.flatMap(c => map(f => f.fieldType, c.fields), ctors),
           ...switch alias {

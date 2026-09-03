@@ -344,6 +344,7 @@ const bindParam: <A, B>(
   3,
   <A, B>(p: LamParam, env: Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, st: St) =>
     match(p)
+      .with({ _tag: "LPSpanned" }, ({ param: inner }) => bindParam(inner, env, st))
       .with({ _tag: "LPName" }, ({ name }) =>
         (([t, st1]: [Ty, St]) => _tuple(t, _Map_set(name, mono(t), env), st1))(freshVar(st)),
       )
@@ -499,16 +500,32 @@ const constrainParamAnnotsFrom: <A>(
                   .with(
                     (
                       _v,
-                    ): _v is Extract<LamParam, { _tag: "LPName" }> & {
-                      annot: Extract<
-                        Extract<LamParam, { _tag: "LPName" }>["annot"],
-                        { _tag: "Some" }
-                      >;
+                    ): _v is Extract<LamParam, { _tag: "LPSpanned" }> & {
+                      param: Extract<
+                        Extract<LamParam, { _tag: "LPSpanned" }>["param"],
+                        { _tag: "LPName" }
+                      > & {
+                        annot: Extract<
+                          Extract<
+                            Extract<LamParam, { _tag: "LPSpanned" }>["param"],
+                            { _tag: "LPName" }
+                          >["annot"],
+                          { _tag: "Some" }
+                        >;
+                      };
                     } => {
                       const _g: any = _v;
-                      return _g._tag === "LPName" && _g.annot._tag === "Some";
+                      return (
+                        _g._tag === "LPSpanned" &&
+                        _g.param._tag === "LPName" &&
+                        _g.param.annot._tag === "Some"
+                      );
                     },
-                    ({ annot: { value: te } }) =>
+                    ({
+                      param: {
+                        annot: { value: te },
+                      },
+                    }) =>
                       (([annotT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
                         _Result_flatMap(
                           (st2) => constrainParamAnnotsFrom(ctx, rest, restTypes, vars1, st2),
@@ -1176,6 +1193,7 @@ const domainIsOmittableRecord: _Curry<[t: Ty, st: St], boolean> = _curry(2, (t: 
 const isLabeledParam: (p: LamParam) => boolean = (p: LamParam) =>
   match(p)
     .with({ _tag: "LPLabeled" }, () => true)
+    .with({ _tag: "LPSpanned" }, ({ param: inner }) => isLabeledParam(inner))
     .otherwise(() => false);
 const splitLamParams: _Curry<
   [params: LamParam[], positional: LamParam[], labeled: LamParam[]],
@@ -1302,6 +1320,9 @@ const labFieldsFrom: <A>(
           },
           ([lab, ...rest]) =>
             match(lab)
+              .with({ _tag: "LPSpanned" }, ({ param: inner }) =>
+                labFieldsFrom(ctx, [inner, ...rest], env, vars, st),
+              )
               .with({ _tag: "LPLabeled" }, ({ name, annot, optional, defaultValue }) =>
                 (([fieldT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
                   _Result_flatMap(
@@ -3504,7 +3525,7 @@ const inferExprRaw: <A>(
           splitLamParams(params, [] as LamParam[], [] as LamParam[]),
         ),
       )
-      .with({ _tag: "ELetIn" }, ({ name, nameSpan: _nameSpan, value, body, span: _span }) =>
+      .with({ _tag: "ELetIn" }, ({ name, nameSpan: _nameSpan, annot, value, body, span: _span }) =>
         match(value)
           .with({ _tag: "ELambda" }, () =>
             ((lets: Stmt[]) =>
@@ -3518,15 +3539,42 @@ const inferExprRaw: <A>(
           .otherwise(() =>
             _Result_flatMap(
               ([valT, st1]) =>
-                ((sc: Scheme) =>
-                  ((vsp: SpanAt) =>
-                    (($ctx) => inferExpr($ctx, body, noteLet(vsp, st1)))(
-                      ctxWithLets(
-                        ctx,
-                        _Map_set(name, sc, ctx.env),
-                        _Map_set(name, vsp, ctx.letOwner),
+                _Result_flatMap(
+                  ([pinned, st2]) =>
+                    ((widen: boolean) =>
+                      ((sc: Scheme) =>
+                        ((vsp: SpanAt) =>
+                          (($ctx) => inferExpr($ctx, body, noteLet(vsp, st2)))(
+                            ctxWithLets(
+                              ctx,
+                              _Map_set(name, sc, ctx.env),
+                              _Map_set(name, vsp, ctx.letOwner),
+                            ),
+                          ))(exprSpan(value)))(generalize(ctx.env, pinned, st2, widen)))(
+                      match(annot)
+                        .with({ _tag: "Some" }, () => false)
+                        .with({ _tag: "None" }, () => true)
+                        .exhaustive(),
+                    ),
+                  match(annot)
+                    .with({ _tag: "Some" }, ({ value: te }) =>
+                      (([at, _, stA]: [Ty, Map<string, Ty>, St]) =>
+                        _Result_map(
+                          (stB: St) => _tuple(at, stB),
+                          checkFits(valT, at, stA, annotSpan(te)),
+                        ))(
+                        typeExprToType(
+                          te,
+                          new Map<string, Ty>(),
+                          st1,
+                          ctx.aliasMap,
+                          _Set_fromArray([] as string[]),
+                        ),
                       ),
-                    ))(exprSpan(value)))(generalize(ctx.env, valT, st1, true)),
+                    )
+                    .with({ _tag: "None" }, () => Ok(_tuple(valT, st1)) as Result<[Ty, St], PErr>)
+                    .exhaustive(),
+                ),
               inferExpr(ctx, value, st),
             ),
           ),
@@ -3547,6 +3595,15 @@ const inferExprRaw: <A>(
                 .exhaustive(),
             runInferCallHooks(inferCallHooksOf(ctx.plugins), fn, args, origin, st, api),
           ))({ inferExpr: _curry(2, (e: Expr, st0: St) => inferExpr(ctx, e, st0)), unify: u }),
+      )
+      .with({ _tag: "EPipe", fast: true }, ({ left, right, span: sp }) =>
+        match(right)
+          .with({ _tag: "ECall" }, ({ fn: rfn, args: rargs, origin }) =>
+            inferExpr(ctx, Ast.ECall(rfn, _Array_prepend(left, rargs), origin, sp), st),
+          )
+          .otherwise(() =>
+            inferExpr(ctx, Ast.ECall(right, [left], None as Option<string>, sp), st),
+          ),
       )
       .with({ _tag: "EPipe" }, ({ left, right, span: sp }) =>
         inferExpr(ctx, Ast.ECall(right, [left], None as Option<string>, sp), st),
@@ -4952,6 +5009,7 @@ const paramBound: _Curry<[p: LamParam, bound: Set<string>], Set<string>> = _curr
   2,
   (p: LamParam, bound: Set<string>) =>
     match(p)
+      .with({ _tag: "LPSpanned" }, ({ param: inner }) => paramBound(inner, bound))
       .with({ _tag: "LPName" }, ({ name }) => _Set_add(name, bound))
       .with({ _tag: "LPTuple" }, ({ names }) => addAllFrom(names, bound))
       .with({ _tag: "LPRecord" }, ({ fields }) => addAllFrom(fields, bound))
@@ -5003,6 +5061,9 @@ const labeledDefaultRefs: _Curry<
       },
       ([p, ...rest]) =>
         match(p)
+          .with({ _tag: "LPSpanned" }, ({ param: inner }) =>
+            labeledDefaultRefs([inner, ...rest], bound, acc),
+          )
           .with(
             (
               _v,
@@ -5673,21 +5734,13 @@ const letsOfFrom: (stmts: Stmt[]) => Stmt[] = (stmts: Stmt[]) =>
 const localLetsFrom: (e: Expr) => Stmt[] = (e: Expr) => {
   const collect: (a: Expr, b: Stmt[]) => Stmt[] = _curry(2, (current: Expr, acc: Stmt[]) =>
     match(current)
-      .with({ _tag: "ELetIn" }, ({ name, nameSpan, value, body, span }) =>
+      .with({ _tag: "ELetIn" }, ({ name, nameSpan, annot, value, body, span }) =>
         match(value)
           .with({ _tag: "ELambda" }, () =>
             collect(
               body,
               _Array_append(
-                Ast.SLet(
-                  name,
-                  nameSpan,
-                  None as Option<TypeExpr>,
-                  value,
-                  false,
-                  None as Option<string>,
-                  span,
-                ),
+                Ast.SLet(name, nameSpan, annot, value, false, None as Option<string>, span),
                 acc,
               ),
             ),

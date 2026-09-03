@@ -17,6 +17,73 @@ export type BootstrapDiagnostic = {
 };
 
 export type BootstrapModuleOutput = { path: string; js: string };
+export type BootstrapTypeAt = {
+  span: { start: number; end: number };
+  ty: unknown;
+  display: string;
+};
+export type BootstrapInferResult = {
+  env: Map<string, unknown>;
+  types: BootstrapTypeAt[];
+  aliases: Map<string, unknown>;
+  letParams: unknown[];
+};
+export type BootstrapGraphInferOutput = {
+  path: string;
+  types: BootstrapTypeAt[];
+  aliases: Map<string, unknown>;
+};
+export type BootstrapGraphInferState = { outputs: BootstrapGraphInferOutput[] };
+export type BootstrapRecoveryGraphState = { ctx: unknown; errors: BootstrapDiagnostic[] };
+export type BootstrapExportOrigins = {
+  values: Map<string, { start: number; end: number }>;
+  types: Map<string, { start: number; end: number }>;
+  ctors: Map<string, { start: number; end: number }>;
+};
+/** One lexical def/use occurrence recovered by the bootstrap symbol pass. */
+export type BootstrapOccurrence = {
+  name: string;
+  defStart: number;
+  defEnd: number;
+  start: number;
+  end: number;
+  role: string;
+};
+/** One dependency-ordered source module parsed by the frozen bootstrap graph. */
+export type BootstrapParsedModule = {
+  path: string;
+  src: string;
+  stmts: Array<{ _tag?: string; from?: string }>;
+  origins: BootstrapExportOrigins;
+};
+
+/**
+ * Caller-owned memo for bootstrap graph type queries. Entries are keyed by the
+ * exact dependency-ordered source graph, so a changed dependency naturally
+ * misses without a separate invalidation API.
+ */
+export type BootstrapGraphCache = {
+  entries: Map<string, BootstrapResult<BootstrapGraphInferOutput[], BootstrapDiagnostic>>;
+  prefixes: Map<string, BootstrapGraphInferState>;
+};
+
+export const createBootstrapGraphCache = (): BootstrapGraphCache => ({
+  entries: new Map(),
+  prefixes: new Map(),
+});
+
+/** Caller-owned memo for strict and recovering bootstrap graph diagnostics. */
+export type BootstrapRecoveryGraphCache = {
+  types: BootstrapGraphCache;
+  entries: Map<string, BootstrapDiagnostic[]>;
+  prefixes: Map<string, BootstrapRecoveryGraphState>;
+};
+
+export const createBootstrapRecoveryGraphCache = (): BootstrapRecoveryGraphCache => ({
+  types: createBootstrapGraphCache(),
+  entries: new Map(),
+  prefixes: new Map(),
+});
 
 export type BootstrapCore = {
   compile: (src: string) => BootstrapResult<string, BootstrapDiagnostic>;
@@ -26,6 +93,19 @@ export type BootstrapCore = {
     entry: string,
     runtimeImport: string,
   ) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic>;
+  /** Parse the entry and every dependency through the frozen bootstrap graph. */
+  loadGraph: (
+    entry: string,
+    src: string,
+    readFile: (path: string) => Promise<string>,
+  ) => Promise<BootstrapResult<BootstrapParsedModule[], BootstrapDiagnostic>>;
+  /** Infer source spans through the bootstrap graph with the entry served from an editor buffer. */
+  inferGraphTypes: (
+    entry: string,
+    src: string,
+    readFile: (path: string) => Promise<string>,
+    cache?: BootstrapGraphCache,
+  ) => Promise<BootstrapResult<BootstrapGraphInferOutput[], BootstrapDiagnostic>>;
   /** Check a graph using seed lexer/parser/infer, with the entry served from an editor buffer. */
   checkGraph: (
     entry: string,
@@ -34,8 +114,26 @@ export type BootstrapCore = {
   ) => Promise<BootstrapResult<undefined, BootstrapDiagnostic>>;
 };
 
-import { buildModulesBootstrap, buildModulesTsBootstrap, compileGraphBootstrap } from "./module.ts";
-import { compileBootstrapSync, compileTsBootstrapSync } from "./sync.ts";
+import {
+  buildModulesBootstrap,
+  buildModulesTsBootstrap,
+  compileGraphBootstrap,
+  exportedOriginsBootstrap,
+  freshInferGraphStateBootstrap,
+  freshRecoveryGraphStateBootstrap,
+  inferGraphTypesFromBootstrap,
+  recoverGraphFromBootstrap,
+} from "./module.ts";
+import { compileBootstrapSync, compileTsBootstrapSync, inferTypesBootstrapSync } from "./sync.ts";
+
+export {
+  emitDtsBootstrap,
+  emitDtsForFileBootstrap,
+  inferGraphTypesBootstrap,
+  symbolOccurrencesBootstrap,
+} from "./module.ts";
+export { inferTypesBootstrapSync } from "./sync.ts";
+
 import {
   lex as bootstrapLex,
   parse as bootstrapParse,
@@ -89,14 +187,15 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
       : error;
   };
 
-  const checkGraph: BootstrapCore["checkGraph"] = async (entry, src, readFile) => {
+  const loadGraph = async (
+    entry: string,
+    src: string,
+    readFile: (path: string) => Promise<string>,
+  ): Promise<BootstrapResult<BootstrapParsedModule[], BootstrapDiagnostic>> => {
     const entryPath = await import("node:path").then(({ resolve }) => resolve(entry));
     const { createRequire } = await import("node:module");
     const { dirname, resolve } = await import("node:path");
-    const loaded = new Map<
-      string,
-      { path: string; stmts: Array<{ _tag?: string; from?: string }> }
-    >();
+    const loaded = new Map<string, BootstrapParsedModule>();
     const visiting = new Set<string>();
     const read = (path: string): Promise<string> =>
       resolve(path) === entryPath ? Promise.resolve(src) : readFile(path);
@@ -138,25 +237,81 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
         if (error) return error;
       }
       visiting.delete(abs);
-      loaded.set(abs, { path: abs, stmts: parsed.value });
+      loaded.set(abs, {
+        path: abs,
+        src: text,
+        stmts: parsed.value,
+        origins: exportedOriginsBootstrap(parsed.value),
+      });
       return null;
     };
     const loadError = await visit(entryPath);
-    if (loadError) return { _tag: "Err", error: loadError };
-    const entryStmts = loaded.get(entryPath)?.stmts ?? [];
-    // The bootstrap graph driver deliberately runs open-world (its CLI can
-    // link host globals). For an import-free editor buffer, use the strict
-    // single-file railway so misspelled local names still become diagnostics.
+    return loadError
+      ? { _tag: "Err", error: loadError }
+      : { _tag: "Ok", value: [...loaded.values()] };
+  };
+
+  const inferGraphTypes = async (
+    entry: string,
+    src: string,
+    readFile: (path: string) => Promise<string>,
+    cache?: BootstrapGraphCache,
+  ): Promise<BootstrapResult<BootstrapGraphInferOutput[], BootstrapDiagnostic>> => {
+    const loaded = await loadGraph(entry, src, readFile);
+    if (loaded._tag === "Err") return loaded;
+    const graphKey = JSON.stringify(loaded.value.map(({ path, src: source }) => [path, source]));
+    const cached = cache?.entries.get(graphKey);
+    if (cached) return cached;
+    const entryPath = await import("node:path").then(({ resolve }) => resolve(entry));
+    const entryStmts = loaded.value.find((module) => module.path === entryPath)?.stmts ?? [];
+    let result: BootstrapResult<BootstrapGraphInferOutput[], BootstrapDiagnostic>;
     if (!entryStmts.some((stmt) => stmt._tag === "SImport" || stmt._tag === "SImportNs")) {
-      const strict = compileBootstrapSync(src);
-      return strict._tag === "Ok"
-        ? { _tag: "Ok", value: undefined }
-        : { _tag: "Err", error: enrich(strict.error, src) };
+      const inferred = inferTypesBootstrapSync(src);
+      result =
+        inferred._tag === "Err"
+          ? inferred
+          : {
+              _tag: "Ok",
+              value: [
+                { path: entryPath, types: inferred.value.types, aliases: inferred.value.aliases },
+              ],
+            };
+    } else {
+      const prefixKey = (end: number): string =>
+        JSON.stringify(loaded.value.slice(0, end).map(({ path, src: source }) => [path, source]));
+      let prefixLength = 0;
+      let state = freshInferGraphStateBootstrap();
+      for (let end = loaded.value.length - 1; end > 0; end--) {
+        const hit = cache?.prefixes.get(prefixKey(end));
+        if (hit) {
+          prefixLength = end;
+          state = hit;
+          break;
+        }
+      }
+      for (let index = prefixLength; index < loaded.value.length; index++) {
+        const next = inferGraphTypesFromBootstrap(state, [loaded.value[index]!]);
+        if (next._tag === "Err") {
+          result = next;
+          cache?.entries.set(graphKey, result);
+          return result;
+        }
+        state = next.value;
+        cache?.prefixes.set(prefixKey(index + 1), state);
+      }
+      result = { _tag: "Ok", value: state.outputs };
     }
-    const result = compileGraphBootstrap([...loaded.values()]);
+    cache?.entries.set(graphKey, result);
+    return result;
+  };
+
+  const checkGraph: BootstrapCore["checkGraph"] = async (entry, src, readFile) => {
+    const loaded = await loadGraph(entry, src, readFile);
+    if (loaded._tag === "Err") return loaded;
+    const result = compileGraphBootstrap(loaded.value);
     return result._tag === "Ok"
       ? { _tag: "Ok", value: undefined }
-      : { _tag: "Err", error: enrich(result.error, src) };
+      : { _tag: "Err", error: enrich(decodeModulePath(result.error), src) };
   };
 
   return {
@@ -164,9 +319,29 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
     compileTs: compileTsBootstrapSync,
     buildModules: buildModulesBootstrap,
     buildModulesTs: buildModulesTsBootstrap,
+    loadGraph,
+    inferGraphTypes,
     checkGraph,
   };
 };
+
+/**
+ * Graph diagnostics are tagged `module '<path>': <message>` by the driver, so
+ * a caller can tell which module failed. Editors want the bare message plus a
+ * `path`, which is the shape every other façade query already returns.
+ */
+const decodeModulePath = (error: BootstrapDiagnostic): BootstrapDiagnostic => {
+  const tagged = /^module '([^']+)': (.*)$/.exec(error.message);
+  return tagged ? { ...error, path: tagged[1], message: tagged[2]! } : error;
+};
+
+/** Dependency-ordered bootstrap parse graph for host query façades. */
+export const loadBootstrapGraph = async (
+  entry: string,
+  src: string,
+  readFile: (path: string) => Promise<string>,
+): Promise<BootstrapResult<BootstrapParsedModule[], BootstrapDiagnostic>> =>
+  (await loadBootstrapCore()).loadGraph(entry, src, readFile);
 
 /** Narrow graph-checking seam for editor integrations. */
 export const checkGraphBootstrap = async (
@@ -176,11 +351,21 @@ export const checkGraphBootstrap = async (
 ): Promise<BootstrapResult<undefined, BootstrapDiagnostic>> =>
   (await loadBootstrapCore()).checkGraph(entry, src, readFile);
 
+/** Graph typed-query seam for builtin editor integrations. */
+export const inferEntryGraphTypesBootstrap = async (
+  entry: string,
+  src: string,
+  readFile: (path: string) => Promise<string>,
+  cache?: BootstrapGraphCache,
+): Promise<BootstrapResult<BootstrapGraphInferOutput[], BootstrapDiagnostic>> =>
+  (await loadBootstrapCore()).inferGraphTypes(entry, src, readFile, cache);
+
 /** Graph check seam that preserves every recoverable parse diagnostic in the entry buffer. */
 export const checkGraphBootstrapRecovering = async (
   entry: string,
   src: string,
   readFile: (path: string) => Promise<string>,
+  cache?: BootstrapRecoveryGraphCache,
 ): Promise<BootstrapDiagnostic[]> => {
   const lexed = bootstrapLex(src) as
     | { _tag: "Ok"; value: unknown }
@@ -192,7 +377,18 @@ export const checkGraphBootstrapRecovering = async (
   };
   if (recovered.diagnostics.length > 0) return recovered.diagnostics;
 
+  const { createRequire } = await import("node:module");
   const { dirname, resolve } = await import("node:path");
+  const entryPath = resolve(entry);
+  const resolveGraphImport = (from: string, spec: string): string => {
+    if (spec.startsWith(".") || spec.startsWith("/"))
+      return resolve(dirname(from), `${spec.replace(/\.mochi$/, "")}.mochi`);
+    try {
+      return createRequire(from).resolve(spec);
+    } catch {
+      return resolve(dirname(from), `${spec}.mochi`);
+    }
+  };
   const visiting = new Set<string>();
   const loaded = new Map<
     string,
@@ -201,11 +397,20 @@ export const checkGraphBootstrapRecovering = async (
   const dependencyErrors: BootstrapDiagnostic[] = [];
   const visit = async (modulePath: string): Promise<void> => {
     const absolute = resolve(modulePath);
-    if (loaded.has(absolute) || visiting.has(absolute)) return;
+    if (loaded.has(absolute)) return;
+    if (visiting.has(absolute)) {
+      dependencyErrors.push({
+        message: `import cycle through '${absolute}'`,
+        start: 0,
+        end: 0,
+        path: absolute,
+      });
+      return;
+    }
     visiting.add(absolute);
     let source: string;
     try {
-      source = absolute === resolve(entry) ? src : await readFile(absolute);
+      source = absolute === entryPath ? src : await readFile(absolute);
     } catch {
       dependencyErrors.push({
         message: `cannot read module '${absolute}'`,
@@ -232,25 +437,61 @@ export const checkGraphBootstrapRecovering = async (
       dependencyErrors.push({ ...error, path: absolute });
     for (const statement of dependencyParsed.stmts) {
       if (statement._tag !== "SImport" && statement._tag !== "SImportNs") continue;
-      await visit(resolve(dirname(absolute), `${statement.from!.replace(/\.mochi$/, "")}.mochi`));
+      await visit(resolveGraphImport(absolute, statement.from!));
     }
     visiting.delete(absolute);
     loaded.set(absolute, { source, stmts: dependencyParsed.stmts });
   };
   await visit(entry);
   if (dependencyErrors.length > 0) return dependencyErrors;
-  for (const [modulePath, module] of loaded) {
-    if (modulePath === resolve(entry)) continue;
-    if (
-      module.stmts.some(
-        (statement) => statement._tag === "SImport" || statement._tag === "SImportNs",
-      )
+  const entryModule = loaded.get(entryPath);
+  if (!entryModule) return [{ message: `cannot read module '${entry}'`, start: 0, end: 0 }];
+  if (
+    !entryModule.stmts.some(
+      (statement) => statement._tag === "SImport" || statement._tag === "SImportNs",
     )
-      continue;
-    const checked = compileBootstrapSync(module.source);
-    if (checked._tag === "Err") dependencyErrors.push({ ...checked.error, path: modulePath });
+  ) {
+    const strict = await checkGraphBootstrap(entry, src, readFile);
+    return strict._tag === "Ok" ? [] : [strict.error];
   }
-  if (dependencyErrors.length > 0) return dependencyErrors;
-  const checked = await checkGraphBootstrap(entry, src, readFile);
-  return checked._tag === "Ok" ? [] : [checked.error];
+  const graph = [...loaded.entries()].map(([path, module]) => ({
+    path,
+    src: module.source,
+    stmts: module.stmts,
+  }));
+  const graphKey = JSON.stringify(graph.map(({ path, src: source }) => [path, source]));
+  const cached = cache?.entries.get(graphKey);
+  if (cached) return cached;
+  const decode = (error: BootstrapDiagnostic): BootstrapDiagnostic => {
+    const tagged = /^module '([^']+)': (.*)$/.exec(error.message);
+    return tagged ? { ...error, path: tagged[1], message: tagged[2]! } : error;
+  };
+  const strict = await inferEntryGraphTypesBootstrap(entry, src, readFile, cache?.types);
+  const strictErrors = strict._tag === "Err" ? [decode(strict.error)] : [];
+  const prefixKey = (end: number): string =>
+    JSON.stringify(graph.slice(0, end).map(({ path, src: source }) => [path, source]));
+  let prefixLength = 0;
+  let state = freshRecoveryGraphStateBootstrap();
+  for (let end = graph.length - 1; end > 0; end--) {
+    const hit = cache?.prefixes.get(prefixKey(end));
+    if (hit) {
+      prefixLength = end;
+      state = hit;
+      break;
+    }
+  }
+  for (let index = prefixLength; index < graph.length; index++) {
+    state = recoverGraphFromBootstrap(state, [graph[index]!]);
+    cache?.prefixes.set(prefixKey(index + 1), state);
+  }
+  const recoveredErrors = state.errors.map(decode);
+  const seen = new Set<string>();
+  const errors = [...strictErrors, ...recoveredErrors].filter((error) => {
+    const key = `${error.path ?? ""}:${error.start}:${error.end}:${error.message}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  cache?.entries.set(graphKey, errors);
+  return errors;
 };

@@ -5,6 +5,11 @@
  * typecheck succeeds.
  */
 import { dirname, resolve } from "node:path";
+import {
+  type BootstrapGraphCache,
+  inferEntryGraphTypesBootstrap,
+  loadBootstrapGraph,
+} from "@mochi/compiler/bootstrap";
 import { openMode, toTypedProgramRecovering, toTypedProgramWith } from "@mochi/compiler/compile";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import type { InferResult, TypeAt } from "@mochi/compiler/infer";
@@ -199,6 +204,28 @@ const originsForEntry = async (
   return origins;
 };
 
+/** Imported symbol origins from the frozen bootstrap parser graph. */
+const bootstrapOriginsForEntry = async (
+  entry: string,
+  src: string,
+  readFile: ReadFile,
+): Promise<Origins> => {
+  const graph = await loadBootstrapGraph(entry, src, readFile);
+  const origins = emptyOrigins();
+  if (graph._tag === "Err") return origins;
+  const entryPath = resolve(entry);
+  for (const module of graph.value) {
+    if (module.path === entryPath) continue;
+    for (const [name, span] of module.origins.values)
+      origins.value.set(name, { path: module.path, span });
+    for (const [name, span] of module.origins.types)
+      origins.type.set(name, { path: module.path, span });
+    for (const [name, span] of module.origins.ctors)
+      origins.ctor.set(name, { path: module.path, span });
+  }
+  return origins;
+};
+
 const indexModule = async (
   path: string,
   src: string,
@@ -245,6 +272,27 @@ const typeDefFrom = (
     () => null,
   );
 
+const bootstrapNominalName = (display: string): string | null =>
+  display.match(/[A-Z][A-Za-z0-9_]*/g)?.at(-1) ?? null;
+
+/** Bootstrap-native module go-to-type for builtin-only workspaces. */
+const bootstrapTypeDefinitionAt = async (
+  path: string,
+  src: string,
+  offset: number,
+  readFile: ReadFile,
+  cache?: BootstrapGraphCache,
+): Promise<Location | null> => {
+  const inferred = await inferEntryGraphTypesBootstrap(path, src, readFile, cache);
+  if (inferred._tag === "Err") return null;
+  const entryPath = resolve(path);
+  const entry = inferred.value.find((module) => module.path === entryPath);
+  const hit = entry && tightestHit(entry.types, offset, spanContainsClosed);
+  const name = hit && hit._tag === "Some" ? bootstrapNominalName(hit.value.display) : null;
+  if (!name) return null;
+  return (await bootstrapOriginsForEntry(path, src, readFile)).type.get(name) ?? null;
+};
+
 /**
  * Go-to-type at `offset`: jump to the nominal type decl of the expression under
  * the cursor (variant / record alias / prelude). Needs a successful typecheck;
@@ -262,7 +310,12 @@ export const typeDefinitionAt = (
 };
 
 /** Options threaded into module-* nav helpers that typecheck — `plugins` (styled-cva, …), same list hover/diagnostics take. */
-export type ModuleNavOptions = { plugins?: LanguagePlugin[]; cache?: ModuleCache };
+export type ModuleNavOptions = {
+  plugins?: LanguagePlugin[];
+  cache?: ModuleCache;
+  /** Caller-owned bootstrap graph memo for builtin-only type queries. */
+  bootstrapCache?: BootstrapGraphCache;
+};
 
 /** Module-aware go-to-type (imported variants/aliases via export origins). */
 export const moduleTypeDefinitionAt = async (
@@ -272,6 +325,16 @@ export const moduleTypeDefinitionAt = async (
   readFile: ReadFile,
   opts: ModuleNavOptions = {},
 ): Promise<Location | null> => {
+  if (opts.plugins === undefined) {
+    const bootstrap = await bootstrapTypeDefinitionAt(
+      path,
+      src,
+      offset,
+      readFile,
+      opts.bootstrapCache,
+    );
+    if (bootstrap) return bootstrap;
+  }
   const origins = await originsForEntry(path, readFile, src);
   const idx = indexSrc(path, src, origins);
   if (!idx) return null;
@@ -303,8 +366,9 @@ export const moduleDefinitionAt = async (
   if (externMember) return externMember;
   const modulePath = relativeModulePathAt(src, offset, path);
   if (modulePath) return modulePath;
+  const origins = await bootstrapOriginsForEntry(path, src, readFile);
   return matchMaybe(
-    flatMap(fromNullable(await indexModule(path, src, readFile)), (idx) => hitAt(idx, offset)),
+    flatMap(fromNullable(indexSrc(path, src, origins)), (idx) => hitAt(idx, offset)),
     (hit) => hit.binding.def,
     () => null,
   );

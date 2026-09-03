@@ -1,0 +1,216 @@
+// bootstrap/doc.mochi — Wadler/Prettier-style document IR and layout engine
+// (ADR 0025), in mochi. The formatter's output language: `format` lowers the AST
+// to a `Doc` and renders it at 80 columns.
+//
+// Mirrors src/doc/doc.ts. Two deliberate differences, both forced by the
+// language rather than chosen: the layout worklist is an explicit `Work` cons
+// list (mochi has no mutable array stack), and `forcesBreak` recomputes instead
+// of memoising through a `WeakMap` — documents are immutable, so the answer is
+// the same, only the cost differs.
+
+/// `DLine` is a space when its group prints flat and a newline+indent when it
+/// breaks; `soft` prints nothing when flat; `hard` always breaks. `DGroup` asks
+/// "does the flat rendering fit the rest of this line?" and picks a mode.
+/// `DBreakParent` is zero-width but forces every enclosing group to break — used
+/// after a trailing `//` comment so what follows lands on a fresh line (else it
+/// would be commented out) without emitting a newline of its own.
+export type Doc =
+  | DText(s: string)
+  // An opaque raw-bytes passthrough (ADR 0045): printed exactly as given, never
+  // re-indented or reflowed, and it always forces enclosing groups to break — a
+  // group cannot claim to have printed flat across bytes it never laid out.
+  | DVerbatim(s: string)
+  | DLine(hard: bool, soft: bool)
+  | DCat(parts: [Doc])
+  | DIndent(doc: Doc)
+  | DGroup(doc: Doc)
+  // Deferred until just before the next newline (prettier's `lineSuffix`). A
+  // trailing `//` comment must print AFTER whatever separator the enclosing
+  // list adds, or the separator lands inside the comment and the output no
+  // longer parses. Zero-width when measuring whether a line fits.
+  | DLineSuffix(doc: Doc)
+  | DBreakParent
+
+let INDENT = 2
+
+export let txt = s => DText(s)
+export let verbatim = s => DVerbatim(s)
+export let cat = parts => DCat(parts)
+export let line = DLine(false, false)
+export let softline = DLine(false, true)
+export let hardline = DLine(true, false)
+export let breakParent = DBreakParent
+export let indent = doc => DIndent(doc)
+export let group = doc => DGroup(doc)
+export let lineSuffix = doc => DLineSuffix(doc)
+
+let joinFrom = (sep, parts, i, acc) => switch Array.get(i, parts) {
+  | None => acc
+  | Some(p) => joinFrom(
+      sep,
+      parts,
+      i + 1,
+      i == 0 ? Array.append(p, acc) : Array.append(p, Array.append(sep, acc))
+    )
+}
+
+export let join = (sep, parts) => DCat(joinFrom(sep, parts, 0, []))
+
+// --- layout ------------------------------------------------------------------
+
+// `m` is "flat" or "break". An explicit cons list, so pushing work is O(1) and
+// nothing is mutated.
+type Item = { i: number, m: string, d: Doc }
+
+type Work =
+  | WNil
+  | WCons(head: Item, tail: Work)
+
+/// Prepend a cat's parts so `parts[0]` ends up at the head, processed first.
+let consParts = (parts, i, m, tail) =>
+  loop (k = Array.length(parts) - 1, w = tail) {
+    k < 0
+      ? w
+      : switch Array.get(k, parts) {
+        | None => w
+        | Some(d) => recur(k - 1, WCons({ i, m, d }, w))
+      }
+  }
+
+/// Would the documents on `work` (head-first, groups forced flat) stay within
+/// `width` columns before the line ends? A break-mode line or a hardline ends
+/// the line, so success is reported there.
+let fits = (width, start) =>
+  loop (rem = width, work = start) {
+    rem < 0
+      ? false
+      : switch work {
+        | WNil => true
+        | WCons({ i, m, d }, tail) => switch d {
+            | DText(s) => recur(rem - Str.length(s), tail)
+            | DVerbatim(_) =>
+              // Opaque, and may contain newlines: treat it like a hardline, so a
+              // group ending here need not fit past it.
+              true
+            | DCat(parts) => recur(rem, consParts(parts, i, m, tail))
+            | DIndent(inner) => recur(
+                rem,
+                WCons({ i: i + INDENT, m, d: inner }, tail)
+              )
+            | DGroup(inner) => recur(
+                rem,
+                WCons({ i, m: "flat", d: inner }, tail)
+              )
+            | DLine(hard, soft) => hard || m == "break"
+                ? true
+                : recur(rem - (soft ? 0 : 1), tail)
+            | DLineSuffix(inner) =>
+              // Deferred, but flushed at the NEXT newline — i.e. still on this
+              // line. Measuring it here keeps a trailing comment from pushing
+              // the line past the width, as it did before becoming a suffix.
+              recur(rem, WCons({ i, m, d: inner }, tail))
+            | DBreakParent =>
+              // Zero-width here; it only forces the group that CONTAINS it.
+              recur(rem, tail)
+          }
+      }
+  }
+
+let anyForcesBreak = (parts, i) => switch Array.get(i, parts) {
+  | None => false
+  | Some(p) => forcesBreak(p) || anyForcesBreak(parts, i + 1)
+}
+
+/// Does this document contain a hardline anywhere in its subtree? If so every
+/// enclosing group must break — a group can never print flat across a forced
+/// newline. Comments introduce hardlines, so a commented node breaks its parents.
+let forcesBreak = d => switch d {
+  | DBreakParent => true
+  | DVerbatim(_) => true
+  | DLine(hard, _) => hard
+  | DCat(parts) => anyForcesBreak(parts, 0)
+  | DIndent(inner) => forcesBreak(inner)
+  | DGroup(inner) => forcesBreak(inner)
+  | DLineSuffix(_) => false
+  | DText(_) => false
+}
+
+let spaces = n =>
+  loop (k = n, acc = "") { k <= 0 ? acc : recur(k - 1, "${acc} ") }
+
+/// Column of the end of `s`, which may itself contain newlines.
+let posAfter = (pos, s) =>
+  let parts = Str.split("\n", s) in
+    Array.length(parts) == 1
+      ? pos + Str.length(s)
+      : Str.length(
+        Option.unwrapOr("", Array.get(Array.length(parts) - 1, parts))
+      )
+
+/// Prepend deferred suffix items so the first one is processed first.
+let consItems = (items, tail) =>
+  loop (k = Array.length(items) - 1, w = tail) {
+    k < 0
+      ? w
+      : switch Array.get(k, items) {
+        | None => w
+        | Some(it) => recur(k - 1, WCons(it, w))
+      }
+  }
+
+export let render = (root, width) =>
+  loop (out = "", pos = 0, work = WCons(
+    { i: 0, m: "break", d: root },
+    WNil
+  ), sfx = []) {
+    switch work {
+      | WNil =>
+        // Pending suffixes with nothing left to print (a trailing comment on the
+        // last node) — replay them rather than dropping the text.
+        Array.length(sfx) == 0 ? out : recur(out, pos, consItems(sfx, WNil), [])
+      | WCons({ i, m, d }, tail) => switch d {
+          | DText(s) => recur("${out}${s}", pos + Str.length(s), tail, sfx)
+          | DVerbatim(s) =>
+            // Byte-for-byte; no indentation, wrapping, or reflow. `pos` is
+            // recomputed from its last line so column tracking stays accurate.
+            recur("${out}${s}", posAfter(pos, s), tail, sfx)
+          | DCat(parts) => recur(out, pos, consParts(parts, i, m, tail), sfx)
+          | DIndent(inner) => recur(
+              out,
+              pos,
+              WCons({ i: i + INDENT, m, d: inner }, tail),
+              sfx
+            )
+          | DLine(hard, soft) => m == "flat" && !hard
+              ? let s = soft ? "" : " " in
+                recur("${out}${s}", pos + Str.length(s), tail, sfx)
+              : Array.length(sfx) == 0
+              ? recur("${out}\n${spaces(i)}", i, tail, [])
+              : recur(out, pos, consItems(sfx, WCons({ i, m, d }, tail)), [])
+          | DGroup(inner) => forcesBreak(inner)
+              ? recur(out, pos, WCons({ i, m: "break", d: inner }, tail), sfx)
+              : let cand = WCons({ i, m: "flat", d: inner }, tail) in
+                fits(width - pos, cand)
+                  ? recur(out, pos, cand, sfx)
+                  : recur(
+                    out,
+                    pos,
+                    WCons({ i, m: "break", d: inner }, tail),
+                    sfx
+                  )
+          | DLineSuffix(inner) => recur(
+              out,
+              pos,
+              tail,
+              Array.append({ i, m, d: inner }, sfx)
+            )
+          | DBreakParent =>
+            // Zero-width; its only effect is through `forcesBreak`.
+            recur(out, pos, tail, sfx)
+        }
+    }
+  }
+
+/// Render on a single line (every group flat) — for contexts that never wrap:
+/// interpolation holes, `switch` scrutinees, and `when` guards.
+export let flat = d => render(d, 1000000000)

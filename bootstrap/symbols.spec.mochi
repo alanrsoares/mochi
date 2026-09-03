@@ -1,0 +1,41 @@
+import { assertEq, ok, test } from "@mochi/test"
+import { lex } from "./lexer.mochi"
+import { parse } from "./parser.mochi"
+import { index } from "./symbols.mochi"
+
+let indexed = src => lex(src) |> Result.flatMap(parse) |> Result.map(index)
+
+test("symbol index keeps shadowed local lets distinct", () => switch indexed("let x = 1\nlet f = let x = 2 in x\nx") {
+  | Ok(occurrences) => Array.length(
+      occurrences
+    ) == 5 && (occurrences
+      |> Array.get(2)
+      |> Option.map(o => o.defStart == 22 && o.start == 22)
+      |> Option.unwrapOr(
+        false
+      )) && (occurrences
+      |> Array.get(3)
+      |> Option.map(o => o.defStart == 22 && o.start == 31)
+      |> Option.unwrapOr(
+        false
+      )) && (occurrences
+      |> Array.get(4)
+      |> Option.map(o => o.defStart == 4 && o.start == 33)
+      |> Option.unwrapOr(false))
+      |> ok
+  | _ => false |> ok
+})
+
+test("pattern bindings cover only their match arm", () => switch indexed("let x = 1\nswitch x { | y => y }\nx") {
+  | Ok(occurrences) => assertEq(5, Array.length(occurrences))
+  | Err(_) => assertEq(true, false)
+})
+
+test("lambda parameter uses resolve to the parameter declaration", () => switch indexed("let x = 1\nlet f = x => x\nx") {
+  | Ok(occurrences) => occurrences
+      |> Array.get(2)
+      |> Option.map(o => o.name == "x" && o.defStart == 18 && o.start == 18)
+      |> Option.unwrapOr(false)
+      |> ok
+  | Err(_) => false |> ok
+})

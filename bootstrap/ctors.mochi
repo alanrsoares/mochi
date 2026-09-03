@@ -54,9 +54,10 @@ export let builtinTypeDecls = [
         name: "Some",
         fields: [
           { name: Some("value"), fieldType: Ast.TyName("a", builtinSpan) }
-        ]
+        ],
+        span: builtinSpan
       },
-      { name: "None", fields: [] }
+      { name: "None", fields: [], span: builtinSpan }
     ]
   },
   {
@@ -67,13 +68,15 @@ export let builtinTypeDecls = [
         name: "Ok",
         fields: [
           { name: Some("value"), fieldType: Ast.TyName("a", builtinSpan) }
-        ]
+        ],
+        span: builtinSpan
       },
       {
         name: "Err",
         fields: [
           { name: Some("error"), fieldType: Ast.TyName("e", builtinSpan) }
-        ]
+        ],
+        span: builtinSpan
       }
     ]
   }

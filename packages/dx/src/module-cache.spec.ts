@@ -7,6 +7,7 @@
 // Every assertion also pins a non-empty result: comparing two `null`s would
 // pass while measuring nothing.
 import { expect, test } from "bun:test";
+import { createBootstrapGraphCache } from "@mochi/compiler/bootstrap";
 import { createModuleCache } from "@mochi/compiler/module";
 import { moduleCompleteAt } from "@mochi/dx/complete";
 import { documentDiagnostics } from "@mochi/dx/diagnostics";
@@ -46,6 +47,30 @@ test("a shared cache does not change hover, completion, or go-to-type", async ()
   expect(items).toEqual(await moduleCompleteAt("/app.mochi", src, atCtor, read));
 
   const target = await moduleTypeDefinitionAt("/app.mochi", src, atBinding, read, { cache });
+  expect(target?.path).toBe("/shapes.mochi");
+  expect(target).toEqual(await moduleTypeDefinitionAt("/app.mochi", src, atBinding, read));
+});
+
+test("a shared bootstrap graph cache does not change completion or go-to-type", async () => {
+  const bootstrapCache = createBootstrapGraphCache();
+  const read = memRead(files);
+  const recordSrc = 'import { point } from "/point.mochi"\nlet x = point.';
+
+  const items = await moduleCompleteAt(
+    "/app.mochi",
+    recordSrc,
+    recordSrc.length,
+    async (path) => {
+      if (path === "/point.mochi") return "export let point = { x: 1, y: 2 }";
+      return read(path);
+    },
+    { bootstrapCache },
+  );
+  expect(items.map((item) => item.label)).toEqual(["x", "y"]);
+
+  const target = await moduleTypeDefinitionAt("/app.mochi", src, atBinding, read, {
+    bootstrapCache,
+  });
   expect(target?.path).toBe("/shapes.mochi");
   expect(target).toEqual(await moduleTypeDefinitionAt("/app.mochi", src, atBinding, read));
 });

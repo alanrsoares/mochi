@@ -6,10 +6,23 @@
 import { readdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { createBootstrapRecoveryGraphCache } from "@mochi/compiler/bootstrap";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import { createModuleCache } from "@mochi/compiler/module";
 import { isPreludePath, PRELUDE_PATH, preludeVirtualSource } from "@mochi/compiler/prelude-virtual";
 import type { Span } from "@mochi/compiler/span";
+import { moduleBootstrapHoverAt } from "@mochi/dx/bootstrap-hover";
+import {
+  bootstrapBindingAt,
+  bootstrapHighlightsOf,
+  bootstrapPrepareRenameOf,
+  bootstrapReferencesOf,
+  bootstrapRenameOf,
+} from "@mochi/dx/bootstrap-nav";
+import {
+  bootstrapDocumentSymbolsAt,
+  bootstrapWorkspaceSymbolsAt,
+} from "@mochi/dx/bootstrap-symbols";
 import { type CompletionItem as MochiCompletion, moduleCompleteAt } from "@mochi/dx/complete";
 import {
   bootstrapModuleDiagnostics,
@@ -173,8 +186,10 @@ export function startServer(opts: ServerOptions = {}): void {
   // whole import graph behind it (ADR 0095). Dropped wholesale when a plugin
   // manifest changes, since that changes what every call site means.
   let cache = createModuleCache();
+  let bootstrapCache = createBootstrapRecoveryGraphCache();
   const dxOpts = async (path: string) => ({
     cache,
+    bootstrapCache: bootstrapCache.types,
     plugins: loadProjectPlugins
       ? await pluginsForDocument(path, {
           allowedRoots,
@@ -195,10 +210,10 @@ export function startServer(opts: ServerOptions = {}): void {
     // Vendor plugins execute in the TypeScript host. Builtin-only workspaces
     // validate their full graph through the shipped bootstrap compiler.
     if (opts.plugins === undefined) {
-      const bootstrap = await bootstrapModuleDiagnostics(path, src, read);
+      const bootstrap = await bootstrapModuleDiagnostics(path, src, read, bootstrapCache);
       return [...bootstrap, ...unusedBindingDiagnostics(src, path)];
     }
-    return documentDiagnostics(path, src, read, opts);
+    return documentDiagnostics(path, src, read, { cache: opts.cache, plugins: opts.plugins });
   };
   const connection = createConnection(ProposedFeatures.all);
   const documents = new TextDocuments(TextDocument);
@@ -256,16 +271,22 @@ export function startServer(opts: ServerOptions = {}): void {
     const doc = documents.get(textDocument.uri);
     if (!doc) return null;
     const path = docPath(textDocument.uri);
-    const info = await moduleHoverAt(
-      path,
-      doc.getText(),
-      doc.offsetAt(position),
-      read,
-      await dxOpts(path),
-    );
-    if (!info) return null;
-    const fence = `\`\`\`mochi\n${info.code}\n\`\`\``;
-    const value = info.doc ? `${fence}\n\n${info.doc}` : fence;
+    const dx = await dxOpts(path);
+    const bootstrap =
+      dx.plugins === undefined
+        ? await moduleBootstrapHoverAt(
+            path,
+            doc.getText(),
+            doc.offsetAt(position),
+            read,
+            dx.bootstrapCache,
+          )
+        : null;
+    const result =
+      bootstrap ?? (await moduleHoverAt(path, doc.getText(), doc.offsetAt(position), read, dx));
+    if (!result) return null;
+    const fence = `\`\`\`mochi\n${result.code}\n\`\`\``;
+    const value = result.doc ? `${fence}\n\n${result.doc}` : fence;
     return { contents: { kind: MarkupKind.Markdown, value } };
   });
 
@@ -357,7 +378,13 @@ export function startServer(opts: ServerOptions = {}): void {
       const doc = documents.get(textDocument.uri);
       if (!doc) return [];
       const path = docPath(textDocument.uri);
-      const hits = await moduleHighlightsAt(path, doc.getText(), doc.offsetAt(position), read);
+      const dx = await dxOpts(path);
+      const src = doc.getText();
+      const offset = doc.offsetAt(position);
+      const binding = dx.plugins === undefined ? bootstrapBindingAt(src, offset) : null;
+      const hits = binding
+        ? bootstrapHighlightsOf(binding)
+        : await moduleHighlightsAt(path, src, offset, read);
       return hits.map((h) => ({
         range: rangeOf(doc, h.span),
         kind: h.role === "def" ? DocumentHighlightKind.Write : DocumentHighlightKind.Read,
@@ -370,13 +397,16 @@ export function startServer(opts: ServerOptions = {}): void {
     const doc = documents.get(textDocument.uri);
     if (!doc) return [];
     const path = docPath(textDocument.uri);
-    const refs = await moduleReferencesAt(
-      path,
-      doc.getText(),
-      doc.offsetAt(position),
-      read,
-      listFiles,
-    );
+    const dx = await dxOpts(path);
+    const src = doc.getText();
+    const offset = doc.offsetAt(position);
+    // A binding confined to this file cannot be imported, so the single-file
+    // bootstrap index is complete for it (ADR 0103); anything top-level still
+    // needs the graph-wide walk.
+    const binding = dx.plugins === undefined ? bootstrapBindingAt(src, offset) : null;
+    const refs = binding?.fileLocal
+      ? bootstrapReferencesOf(binding, path)
+      : await moduleReferencesAt(path, src, offset, read, listFiles);
     return Promise.all(refs.map((r) => rangeAtPath(r.location.path, r.location.span)));
   });
 
@@ -384,12 +414,14 @@ export function startServer(opts: ServerOptions = {}): void {
   connection.onPrepareRename(async ({ textDocument, position }) => {
     const doc = documents.get(textDocument.uri);
     if (!doc) return null;
-    const prep = await modulePrepareRenameAt(
-      docPath(textDocument.uri),
-      doc.getText(),
-      doc.offsetAt(position),
-      read,
-    );
+    const path = docPath(textDocument.uri);
+    const dx = await dxOpts(path);
+    const src = doc.getText();
+    const offset = doc.offsetAt(position);
+    const binding = dx.plugins === undefined ? bootstrapBindingAt(src, offset) : null;
+    const prep = binding?.fileLocal
+      ? bootstrapPrepareRenameOf(binding)
+      : await modulePrepareRenameAt(path, src, offset, read);
     return prep ? { range: rangeOf(doc, prep.span), placeholder: prep.name } : null;
   });
 
@@ -397,14 +429,13 @@ export function startServer(opts: ServerOptions = {}): void {
     const doc = documents.get(textDocument.uri);
     if (!doc) return null;
     const path = docPath(textDocument.uri);
-    const edits = await moduleRenameAt(
-      path,
-      doc.getText(),
-      doc.offsetAt(position),
-      newName,
-      read,
-      listFiles,
-    );
+    const dx = await dxOpts(path);
+    const src = doc.getText();
+    const offset = doc.offsetAt(position);
+    const binding = dx.plugins === undefined ? bootstrapBindingAt(src, offset) : null;
+    const edits = binding?.fileLocal
+      ? bootstrapRenameOf(binding, newName, path)
+      : await moduleRenameAt(path, src, offset, newName, read, listFiles);
     if (!edits) return null;
     const changes: Record<string, TextEdit[]> = {};
     for (const e of edits) {
@@ -417,11 +448,14 @@ export function startServer(opts: ServerOptions = {}): void {
   });
 
   /** Document / workspace symbols. */
-  connection.onDocumentSymbol(({ textDocument }): DocumentSymbol[] => {
+  connection.onDocumentSymbol(async ({ textDocument }): Promise<DocumentSymbol[]> => {
     const doc = documents.get(textDocument.uri);
+    const dx = doc ? await dxOpts(docPath(textDocument.uri)) : null;
+    const symbols =
+      doc && dx?.plugins === undefined ? bootstrapDocumentSymbolsAt(doc.getText()) : null;
     return !doc
       ? []
-      : documentSymbolsAt(doc.getText()).map((s) => ({
+      : (symbols ?? documentSymbolsAt(doc.getText())).map((s) => ({
           name: s.name,
           detail: s.detail,
           kind: symbolKind(s.kind),
@@ -437,7 +471,11 @@ export function startServer(opts: ServerOptions = {}): void {
     for (const doc of documents.all()) {
       if (!doc.uri.endsWith(".mochi")) continue;
       const path = docPath(doc.uri);
-      const syms = await workspaceSymbolsAt(path, query, read, doc.getText());
+      const dx = await dxOpts(path);
+      const syms =
+        dx.plugins === undefined
+          ? await bootstrapWorkspaceSymbolsAt(path, query, read, doc.getText())
+          : await workspaceSymbolsAt(path, query, read, doc.getText());
       for (const s of syms) {
         const k = `${s.path}:${s.span.start}:${s.name}`;
         if (seen.has(k)) continue;
@@ -579,6 +617,7 @@ export function startServer(opts: ServerOptions = {}): void {
     if (!manifestChanged) return;
     clearPluginsCache();
     cache = createModuleCache();
+    bootstrapCache = createBootstrapRecoveryGraphCache();
     for (const doc of documents.all()) {
       if (doc.uri.endsWith(".mochi")) scheduleValidate(doc);
     }

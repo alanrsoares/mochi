@@ -14,6 +14,23 @@ const RUNTIME_IMPORT = "../../packages/compiler/src/prelude/runtime";
 // Each program is closed-world: it references only prelude builtins and its own
 // bindings (no open-world globals that would emit as dangling TS names).
 const PROGRAMS: Record<string, string> = {
+  // A ctor nested under an array slot, and under a tuple slot, of an enclosing
+  // pattern (ADR 0031). The arm's type predicate has to refine all the way down
+  // or the handler destructures an un-narrowed union — TS2339 on `_0`/`args`.
+  nestedRefinement: `
+type E =
+  | Ref(string)
+  | Call(E, [E])
+let neqOperands = (fn: E, args: [E]) => switch (fn, args) {
+  | (Ref("not"), [Call(Ref("eq"), [l, r])]) => Some((l, r))
+  | _ => None
+}
+let firstCallee = (es: [E]) => switch es {
+  | [Call(Ref(n), _), _] => n
+  | _ => ""
+}
+let probe = neqOperands(Ref("not"), [Call(Ref("eq"), [Ref("a"), Ref("b")])])
+let probe2 = firstCallee([Call(Ref("f"), []), Ref("x")])`,
   shapes: `
 type Shape =
   | Circle(float)

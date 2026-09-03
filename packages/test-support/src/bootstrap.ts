@@ -57,7 +57,10 @@ const sourceHash = (): string => {
   return h.digest("hex").slice(0, 16);
 };
 
-const ready = (dir: string): boolean => existsSync(join(dir, "cli.js"));
+// Both must be present: a cache written before `format.mochi` joined the graph
+// has `cli.js` but no `format.js`, and would be reused as-is.
+const ready = (dir: string): boolean =>
+  existsSync(join(dir, "cli.js")) && existsSync(join(dir, "format.js"));
 
 const waitUntilReady = (dir: string): boolean => {
   const deadline = Date.now() + WAIT_MS;
@@ -138,12 +141,15 @@ const buildGraph = (): string => {
     // The host CLI normally runs the frozen bootstrap seed (ADR 0090). This
     // cache intentionally needs the independent TypeScript oracle instead: it
     // materialises today's bootstrap sources for parity and binary tests.
-    // `--open` is behaviorally inert for this closed graph but deliberately
-    // selects that oracle path.
-    execFileSync("bun", ["packages/cli/src/cli.ts", "build", "--open", join(tmp, "cli.mochi")], {
+    // The oracle has its own entry point since every CLI command routes to
+    // the self-hosted core.
+    execFileSync("bun", ["scripts/ts-oracle-build.ts", join(tmp, "cli.mochi")], {
       cwd: root,
     });
     try {
+      // A cache dir from an older layout (say, before `format.js` was emitted)
+      // exists but is not `ready` — a rename onto it would fail, so drop it.
+      if (existsSync(dest) && !ready(dest)) rmSync(dest, { recursive: true, force: true });
       renameSync(tmp, dest);
     } catch {
       rmSync(tmp, { recursive: true, force: true });
@@ -196,7 +202,22 @@ const stripped = (rel: string): string =>
 
 // Data-only modules whose ctors other modules import. Prepended into the eval
 // sandbox (guarded by existsSync so this works before/after each is extracted).
-const CTOR_MODULES = ["ast", "usefulness", "types", "ctors", "schemes", "scc", "lexer"];
+// Order matters: a dep must land before its dependents. `doc` / `show-type-expr`
+// are plain function modules rather than ctor modules, but they are prepended
+// the same way — `format.mochi` imports them by name, and stripping imports
+// would otherwise leave `cat` / `showTypeExpr` unbound.
+const CTOR_MODULES = [
+  "ast",
+  "usefulness",
+  "types",
+  "ctors",
+  "schemes",
+  "scc",
+  "lexer",
+  "str-scan",
+  "doc",
+  "show-type-expr",
+];
 
 // Modules prepended for their constructors only, not their whole body.
 const CTOR_DEFS_ONLY = new Set(["lexer"]);
@@ -282,11 +303,11 @@ const ctorDefsOnly = (js: string): string => {
 };
 
 /** Relative module id from an import path: `./extensions.js` → `extensions`, `./plugins/jsx.js` → `plugins/jsx`. */
-const importRel = (spec: string): string => spec.replace(/^\.\//, "").replace(/\.js$/, "");
+const importRel = (spec: string): string => spec.replace(/^\.\//, "").replace(/\.(js|mochi)$/, "");
 
 // Modules that must be prepended (in order) when eval'ing a bootstrap pass that
 // imports the LanguagePlugin seam (Wave 8).
-const PLUGIN_SEAM = ["plugins/jsx", "extensions"];
+const PLUGIN_SEAM = ["plugins/jsx", "plugins/preact", "extensions"];
 
 // Generated host-seam shims the plugin reaches through `extern`. Module wiring
 // is stripped for the sandbox, so inline the shim's own defs and bind the
@@ -341,14 +362,14 @@ export const bootstrapModuleJs = (nameOrPath: string): string => {
     for (const d of CTOR_MODULES) {
       if (needed.has(d)) continue;
       // `\.\.?/` — plugins/jsx.js reaches the root modules as `../lexer.js`.
-      if (new RegExp(`from "\\.\\.?/${d}\\.js"`).test(jsSrc)) {
+      if (new RegExp(`from "\\.\\.?/${d}\\.(js|mochi)"`).test(jsSrc)) {
         needed.add(d);
         consider(raw(d));
       }
     }
     for (const d of PLUGIN_SEAM) {
       if (needed.has(d)) continue;
-      if (jsSrc.includes(`from "./${d}.js"`)) {
+      if (new RegExp(`from "\\./${d}\\.(js|mochi)"`).test(jsSrc)) {
         needed.add(d);
         consider(raw(d));
       }

@@ -18,6 +18,10 @@ export type LamParam =
   | LPRecord(fields: [string])
   | LPTuple(names: [string])
   | LPLabeled(name: string, annot: Option<TypeExpr>, optional: bool, defaultValue: Option<Expr>)
+  // Source-authored parameters retain one exact span per bound name. Keeping
+  // the legacy shapes inside the wrapper lets synthetic compiler parameters
+  // remain spanless while editor-facing binders never need reconstructed text.
+  | LPSpanned(param: LamParam, nameSpans: [Span])
 
 type Field = { name: string, value: Expr }
 type MapEntry = { key: Expr, value: Expr }
@@ -44,9 +48,14 @@ export type Expr =
   // never mistaken for sugar.
   | ECall(fn: Expr, args: [Expr], origin: Option<string>, span: Span)
   | ELambda(params: [LamParam], body: Expr, span: Span)
-  | ELetIn(name: string, nameSpan: Span, value: Expr, body: Expr, span: Span)
+  // `annot` is the optional `let x : T = v in b` binding annotation (ADR 0044),
+  // kept in the AST so the formatter can print it back and infer can pin it.
+  | ELetIn(name: string, nameSpan: Span, annot: Option<TypeExpr>, value: Expr, body: Expr, span: Span)
   | ELetBind(param: LamParam, paramSpan: Span, monad: string, value: Expr, body: Expr, span: Span)
-  | EPipe(left: Expr, right: Expr, span: Span)
+  // `fast` distinguishes `a -> f(b)` from `a |> f`: both lower to a call, but the
+  // fast pipe PREPENDS its left (ADR 0069) while `|>` is data-last. Kept in the
+  // AST rather than desugared at parse time so the formatter can print it back.
+  | EPipe(left: Expr, right: Expr, fast: bool, span: Span)
   | EDo(exprs: [Expr], span: Span)
   | ETernary(cond: Expr, thenE: Expr, elseE: Expr, span: Span)
   | EMatch(scrutinee: Expr, arms: [MatchArm], span: Span)
@@ -99,7 +108,7 @@ export type TypeExpr =
   | TyUnion(members: [TypeExpr], span: Span)
 
 export type CtorField = { name: Option<string>, fieldType: TypeExpr }
-type Ctor = { name: string, fields: [CtorField] }
+export type Ctor = { name: string, fields: [CtorField], span: Span }
 export type AliasField = { name: string, fieldType: TypeExpr, optional: bool }
 
 export type Stmt =

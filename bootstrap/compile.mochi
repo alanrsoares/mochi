@@ -9,8 +9,10 @@ import { lex } from "./lexer.mochi"
 import { parse } from "./parser.mochi"
 import { check } from "./check.mochi"
 import { inferProgram, inferProgramTypes } from "./infer.mochi"
-import { codegen } from "./codegen.mochi"
-import { emitTsModule } from "./codegen-ts.mochi"
+import { codegenWith, jsGenOpts } from "./codegen.mochi"
+import { emitTsModuleWith } from "./codegen-ts.mochi"
+import { showType } from "./types.mochi"
+import { widenLits } from "./schemes.mochi"
 
 // Prelude tables from the standalone shim. builtins/namespaces carry the
 // inferrer's Ty; compile never inspects them, so a polymorphic `a` lets them
@@ -21,21 +23,118 @@ extern namespaceRuntime : Map<string, Map<string, string> > = "./prelude.gen.mjs
 extern preludeJsDefs : Map<string, string> = "./prelude.gen.mjs" "preludeJsDefs"
 extern runtimeDeps : Map<string, [string]> = "./prelude.gen.mjs" "runtimeDeps"
 
-// Type-check gate: strict inference, program passed through unchanged on success.
-let typecheck = prog =>
-  let? $env = prog->inferProgram(builtins, namespaces, false) in Ok(prog)
+/// Caller-supplied knobs: `open` selects open-world inference (host globals
+/// resolve to fresh vars), `docs` keeps `///` comments in the emitted text, and
+/// `moduleExt` is the suffix rewritten onto relative import paths — `.js` for
+/// the CLI, `.mochi` for Vite, so sibling modules re-enter its plugin. Ports
+/// `CompileOptions` from `src/compile/compile.ts`.
+/// `strictEntry` only reaches the module-graph drivers (`module.mochi`); a
+/// single file is always its own entry, so honouring the directive here would
+/// make the flag mean "ignore the directive", which no caller wants.
+type Opts = { open: bool, docs: bool, moduleExt: string, strictEntry: bool }
+
+/// The default every arity-preserving entrypoint below passes: strict
+/// inference, docstrings retained.
+export let defaultOpts : Opts = {
+  open: false,
+  docs: true,
+  moduleExt: ".js",
+  strictEntry: false
+}
+
+// First non-space, non-tab character at or after `i`.
+let afterBlanks = (s, i) => switch Str.get(i, s) {
+  | Some(" ") => s->afterBlanks(i + 1)
+  | Some("\t") => s->afterBlanks(i + 1)
+  | other => other
+}
+
+/// The `"use open"` file-local directive (`src/compile/open-mode.ts`). A file
+/// that intentionally reaches for host globals opts itself in, so a graph can
+/// mix strict modules with one adapter without an all-or-nothing caller flag.
+export let openDirective = src =>
+  let t = Str.trim(src) in
+    Str.startsWith(
+      "\"use open\"",
+      t
+    ) && switch t->afterBlanks(10) {
+      | None => true
+      | Some("\n") => true
+      | Some("r") => true
+      | _ => false
+    }
+
+/// The directive wins over the caller's default; it never turns open off.
+export let openMode = (src, requested) => requested || openDirective(src)
+
+// Type-check gate: inference under `open`, program passed through unchanged.
+let typecheckWith = (prog, open) =>
+  let? $env = prog->inferProgram(builtins, namespaces, open) in Ok(prog)
 
 // lex -> parse -> check. Shared by both backends: the JS one adds the
 // `typecheck` gate, the TS one re-runs inference for its span -> type table.
 let frontend = lex >> Result.flatMap(parse) >> Result.flatMap(check)
 
 // The front-end pipeline: lex -> parse -> check -> typecheck
-let pipeline = frontend >> Result.flatMap(typecheck)
+let pipelineWith = (src, open) =>
+  let? stmts = src->frontend() in stmts->typecheckWith(open)
+
+/// typedProgram : string -> Result (stmts, InferResult) Err — the AST *and* its
+/// inference, for passes that print declarations (`dts.mochi`) rather than
+/// answering span queries. `inferTypes` deliberately drops the AST.
+export let typedProgramWith = (src, opts: Opts) =>
+  let? stmts = src->frontend() in
+  let? r = stmts->inferProgramTypes(
+    builtins,
+    namespaces,
+    openMode(src, opts.open)
+  ) in
+    Ok((stmts, r))
+
+export let typedProgram = src => src->typedProgramWith(defaultOpts)
+
+/// inferTypes : string -> Result InferResult Err — strict typed-query seam
+/// for host DX. Keeps the recorded span -> type table instead of discarding it.
+export let inferTypesWith = (src, opts: Opts) =>
+  let? stmts = src->frontend() in
+  let? r = stmts->inferProgramTypes(
+    builtins,
+    namespaces,
+    openMode(src, opts.open)
+  ) in
+    Ok(
+      {
+        env: r.env,
+        types: r.types
+          |> map(hit =>
+            {
+              span: hit.span,
+              ty: hit.ty,
+              display: hit.ty->widenLits()->showType()
+            }),
+        aliases: r.aliases,
+        letParams: r.letParams
+      }
+    )
+
+export let inferTypes = src => src->inferTypesWith(defaultOpts)
+
+/// compileWith : string -> Opts -> Result string Err
+export let compileWith = (src, opts: Opts) =>
+  let? prog = src->pipelineWith(openMode(src, opts.open)) in
+    Ok(
+      prog->codegenWith(
+        #{},
+        true,
+        namespaceRuntime,
+        preludeJsDefs,
+        runtimeDeps,
+        { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt }
+      )
+    )
 
 /// compile : string -> Result string Err
-export let compile = src =>
-  let? prog = src->pipeline() in
-    Ok(prog->codegen(#{}, true, namespaceRuntime, preludeJsDefs, runtimeDeps))
+export let compile = src => src->compileWith(defaultOpts)
 
 // A single file resolves no imports, so it has no imported ctor keys and no
 // cross-module import lines. Annotated (ADR 0044): a bare `#{}` here would
@@ -47,11 +146,15 @@ let noImportedKeys : Map<string, [string]> = #{}
 /// TypeScript backend (ADR 0026 / 0090). Inference runs through
 /// `inferProgramTypes` so the emitter gets the span -> type table its
 /// annotation hooks are driven from, not just the final env.
-export let compileTs = (src, runtimeImport) =>
+export let compileTsWith = (src, runtimeImport, opts: Opts) =>
   let? stmts = src->frontend() in
-  let? r = stmts->inferProgramTypes(builtins, namespaces, false) in
+  let? r = stmts->inferProgramTypes(
+    builtins,
+    namespaces,
+    openMode(src, opts.open)
+  ) in
     Ok(
-      stmts->emitTsModule(
+      stmts->emitTsModuleWith(
         r.env,
         r.types,
         r.letParams,
@@ -61,6 +164,10 @@ export let compileTs = (src, runtimeImport) =>
         namespaceRuntime,
         preludeJsDefs,
         runtimeDeps,
-        runtimeImport
+        runtimeImport,
+        opts.docs
       )
     )
+
+export let compileTs = (src, runtimeImport) =>
+  src->compileTsWith(runtimeImport, defaultOpts)

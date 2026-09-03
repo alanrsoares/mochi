@@ -118,6 +118,7 @@ const cExpr = (e: Expr): Canon => {
         kind: "letin",
         name: e.name,
         nameSpan: cSpan(e.nameSpan),
+        annot: e.annot ? cTy(e.annot) : null,
         value: cExpr(e.value),
         body: cExpr(e.body),
         span: cSpan(e.span),
@@ -133,15 +134,15 @@ const cExpr = (e: Expr): Canon => {
         span: cSpan(e.span),
       };
     case "pipe":
-      if (e.fast && e.right.kind === "call")
-        return {
-          kind: "call",
-          fn: cExpr(e.right.fn),
-          args: [cExpr(e.left), ...e.right.args.map(cExpr)],
-          origin: e.right.origin ?? null,
-          span: cSpan(e.span),
-        };
-      return { kind: "pipe", left: cExpr(e.left), right: cExpr(e.right), span: cSpan(e.span) };
+      // Both parsers now KEEP the fast pipe as a node (it lowers in infer /
+      // codegen), so `fast` is compared rather than normalised away.
+      return {
+        kind: "pipe",
+        left: cExpr(e.left),
+        right: cExpr(e.right),
+        fast: e.fast === true,
+        span: cSpan(e.span),
+      };
     case "do":
       return { kind: "do", exprs: e.exprs.map(cExpr), span: cSpan(e.span) };
     case "ternary":
@@ -168,7 +169,16 @@ const cExpr = (e: Expr): Canon => {
         span: cSpan(e.span),
       };
     case "field":
-      return { kind: "field", target: cExpr(e.target), name: e.name, span: cSpan(e.span) };
+      // `optional` wraps the read in an Option at codegen. No surface syntax
+      // produces it — a plugin building the node does — so it is compared
+      // rather than dropped, which is how a plugin divergence would surface.
+      return {
+        kind: "field",
+        target: cExpr(e.target),
+        name: e.name,
+        optional: e.optional === true,
+        span: cSpan(e.span),
+      };
     case "tuple":
       return { kind: e.kind, elements: e.elements.map(cExpr), span: cSpan(e.span) };
     case "arr":
@@ -275,6 +285,7 @@ const cTy = (t: TypeExpr): Canon => {
 const cCtor = (c: Ctor): Canon => ({
   name: c.name,
   fields: c.fields.map((f) => ({ name: f.name, type: cTy(f.type) })),
+  span: cSpan(c.span),
 });
 
 const cAliasField = (f: AliasField): Canon => ({
@@ -290,6 +301,7 @@ const cStmt = (s: Stmt): Canon => {
         kind: "let",
         name: s.name,
         nameSpan: cSpan(s.nameSpan),
+        annot: s.annot ? cTy(s.annot) : null,
         value: cExpr(s.value),
         exported: s.exported === true,
         doc: s.doc ?? null,
@@ -304,6 +316,7 @@ const cStmt = (s: Stmt): Canon => {
         alias: s.alias ? s.alias.map(cAliasField) : null,
         aliasType: s.aliasType ? cTy(s.aliasType) : null,
         exported: s.exported === true,
+        doc: s.doc ?? null,
         span: cSpan(s.span),
       };
     case "extern":
@@ -311,6 +324,7 @@ const cStmt = (s: Stmt): Canon => {
         kind: "extern",
         name: s.name,
         nameSpan: cSpan(s.nameSpan),
+        params: s.params,
         typeExpr: cTy(s.typeExpr),
         module: s.module,
         imported: s.imported,
@@ -344,6 +358,9 @@ type Al = any;
 const opt = <T>(o: Al, f: (v: Al) => T): T | null => (o._tag === "Some" ? f(o.value) : null);
 
 const aParam = (p: Al): Canon => {
+  // `LPSpanned` only carries the per-name spans the canonical shape drops (the TS
+  // mirror keeps them inline on each variant); unwrap it before comparing.
+  if (p._tag === "LPSpanned") return aParam(p.param as Al);
   if (p._tag === "LPName") return { kind: "name", name: p.name, annot: opt(p.annot, aTy) };
   if (p._tag === "LPRecord") return { kind: "precord", fields: p.fields };
   if (p._tag === "LPLabeled")
@@ -386,6 +403,7 @@ const A_EXPR: Record<string, (e: Al) => Canon> = {
     kind: "letin",
     name: e.name,
     nameSpan: e.nameSpan,
+    annot: opt(e.annot, aTy),
     value: aExpr(e.value),
     body: aExpr(e.body),
     span: e.span,
@@ -400,7 +418,13 @@ const A_EXPR: Record<string, (e: Al) => Canon> = {
     span: e.span,
   }),
   EDo: (e) => ({ kind: "do", exprs: e.exprs.map(aExpr), span: e.span }),
-  EPipe: (e) => ({ kind: "pipe", left: aExpr(e.left), right: aExpr(e.right), span: e.span }),
+  EPipe: (e) => ({
+    kind: "pipe",
+    left: aExpr(e.left),
+    right: aExpr(e.right),
+    fast: e.fast === true,
+    span: e.span,
+  }),
   // al-side fields are `thenE`/`elseE` (`else` is a JS reserved word); canon
   // folds them back to the TS AST's `then`/`else`.
   ETernary: (e) => ({
@@ -430,7 +454,13 @@ const A_EXPR: Record<string, (e: Al) => Canon> = {
     spread: opt(e.spread, aExpr),
     span: e.span,
   }),
-  EField: (e) => ({ kind: "field", target: aExpr(e.target), name: e.name, span: e.span }),
+  EField: (e) => ({
+    kind: "field",
+    target: aExpr(e.target),
+    name: e.name,
+    optional: e.optional === true,
+    span: e.span,
+  }),
   ETuple: (e) => ({ kind: "tuple", elements: e.elements.map(aExpr), span: e.span }),
   EArr: (e) => ({
     kind: "arr",
@@ -528,6 +558,7 @@ const aTy = (t: Al): Canon => {
 const aCtor = (c: Al): Canon => ({
   name: c.name,
   fields: c.fields.map((f: Al) => ({ name: opt(f.name, (n) => n), type: aTy(f.fieldType) })),
+  span: c.span,
 });
 
 const A_STMT: Record<string, (s: Al) => Canon> = {
@@ -535,6 +566,7 @@ const A_STMT: Record<string, (s: Al) => Canon> = {
     kind: "let",
     name: s.name,
     nameSpan: s.nameSpan,
+    annot: opt(s.annot, aTy),
     value: aExpr(s.value),
     exported: s.exported,
     doc: opt(s.doc, (d) => d),
@@ -550,12 +582,14 @@ const A_STMT: Record<string, (s: Al) => Canon> = {
     ),
     aliasType: opt(s.aliasType, aTy),
     exported: s.exported,
+    doc: opt(s.doc, (d) => d),
     span: s.span,
   }),
   SExtern: (s) => ({
     kind: "extern",
     name: s.name,
     nameSpan: s.nameSpan,
+    params: s.params,
     typeExpr: aTy(s.typeExpr),
     module: s.module,
     imported: s.imported,
@@ -602,6 +636,128 @@ const alAst = (src: string): Canon[] => {
   return (pr.value as Al[]).map(aStmt);
 };
 
+// ---- canonicaliser coverage --------------------------------------------------
+//
+// A field a canonicaliser forgets is invisible to every diff below: the two
+// parsers can disagree on it forever and the gate stays green. `EPipe.fast` and
+// `ELetIn.annot` were both lost that way, each found only when the formatter
+// needed the field. This walks the raw ASTs and the canonical output over the
+// whole corpus and fails on any field that never reaches a diff.
+
+type KeySets = Map<string, Set<string>>;
+
+const isSpan = (o: Record<string, unknown>): boolean => {
+  const k = Object.keys(o);
+  return k.length === 2 && k.includes("start") && k.includes("end");
+};
+
+/** Wrappers the canonical shape flattens away: descend, but do not record. */
+const TRANSPARENT = new Set(["Some", "None", "SEExpr", "IPLit", "IPExpr", "LPSpanned"]);
+
+/**
+ * Collect `node kind -> field names` from a tree. Tagged nodes key on their own
+ * kind; an untagged object (a match arm, a loop param) keys on the enclosing
+ * `kind.field`, so its fields are covered too. Spans are leaves.
+ */
+const collectKeys = (
+  node: unknown,
+  tag: string,
+  at: string,
+  out: KeySets,
+  kindOf: (k: string) => string = (k) => k,
+): void => {
+  if (Array.isArray(node)) {
+    for (const x of node) collectKeys(x, tag, at, out, kindOf);
+    return;
+  }
+  if (typeof node !== "object" || node === null) return;
+  const rec = node as Record<string, unknown>;
+  if (isSpan(rec)) return;
+  const own = typeof rec[tag] === "string" ? (rec[tag] as string) : null;
+  const transparent = own !== null && TRANSPARENT.has(own);
+  const self = transparent ? at : own === null ? at : kindOf(own);
+  if (self && !transparent) {
+    const keys = out.get(self) ?? new Set<string>();
+    for (const k of Object.keys(rec)) if (k !== tag) keys.add(k);
+    out.set(self, keys);
+  }
+  for (const [k, v] of Object.entries(rec)) {
+    if (k === tag) continue;
+    collectKeys(v, tag, transparent ? self : `${self}.${k}`, out, kindOf);
+  }
+};
+
+/** Mochi ctor -> canonical kind. `E`/`P` strip to lowercase, `Ty` to `t…`. */
+const canonKind = (tag: string): string =>
+  ({
+    SLet: "let",
+    SType: "type",
+    SExtern: "extern",
+    SImport: "import",
+    SImportNs: "import",
+    SExpr: "expr",
+    SError: "error",
+    SESpread: "spread",
+    LPName: "name",
+    LPRecord: "precord",
+    LPTuple: "ptuple",
+    LPLabeled: "labeled",
+  })[tag] ?? tag.replace(/^Ty/, "T").replace(/^E/, "").toLowerCase();
+
+/** Fields the canonical shape renames: raw name -> canonical name, per kind. */
+const CANON_ALIAS: Record<string, Record<string, string>> = {
+  // TS `then`/`else` are reserved-ish words; bootstrap spells them out.
+  ternary: { thenE: "then", elseE: "else" },
+  labeled: { defaultValue: "default" },
+  // The TS stmt node calls it `expr`; the canonical shape calls it `value`,
+  // matching every other value-carrying statement.
+  expr: { expr: "value" },
+  // The bootstrap record types spell the field `fieldType`; `type` is reserved
+  // enough in the TS AST that the canonical shape follows the TS name.
+  "type.alias": { fieldType: "type" },
+  "type.ctors.fields": { fieldType: "type" },
+};
+
+/**
+ * Fields with no counterpart in the canonical shape, and why. Every entry is a
+ * known asymmetry between the two ASTs — NOT a licence to drop a new field.
+ */
+const CANON_EXEMPT: Record<string, readonly string[]> = {
+  // Secondary spans the bootstrap AST does not carry at all: the TS parser
+  // anchors each of these for hover/rename, bootstrap keeps only the node span.
+  // Comparing them would diff TS against a hole rather than against Mochi.
+  labeled: ["span"],
+  name: ["span"],
+  precord: ["fieldSpans"],
+  ptuple: ["nameSpans"],
+  "precord.fields": ["labelSpan"],
+  "record.fields": ["nameSpan"],
+  "loop.params": ["nameSpan"],
+  "type.alias": ["nameSpan"],
+  "type.ctors": ["span"],
+  type: ["nameSpan"],
+  tqual: ["nameSpan"],
+};
+
+const holes = (raw: KeySets, canon: KeySets, kindOf: (k: string) => string): string[] => {
+  const out: string[] = [];
+  for (const [tag, keys] of raw) {
+    const kind = kindOf(tag);
+    const have = canon.get(kind);
+    if (!have) {
+      out.push(`${tag}: no canonical node of kind '${kind}'`);
+      continue;
+    }
+    const exempt = CANON_EXEMPT[kind] ?? [];
+    const alias = CANON_ALIAS[kind] ?? {};
+    const lost = [...keys]
+      .map((k) => alias[k] ?? k)
+      .filter((k) => !have.has(k) && !exempt.includes(k));
+    if (lost.length > 0) out.push(`${tag} (${kind}): ${lost.join(", ")}`);
+  }
+  return out.sort();
+};
+
 // ---- the corpus: every .mochi file in the repo -------------------------------------
 
 const corpus = [...new Bun.Glob("**/*.mochi").scanSync({ cwd: root })]
@@ -613,12 +769,38 @@ test("corpus includes the bootstrap parser itself", () => {
   expect(corpus).toContain("bootstrap/lexer.mochi");
 });
 
+// Filled in by the per-file tests below rather than by a second pass over the
+// corpus: the key walk is cheap, re-parsing every file is not.
+const tsRaw: KeySets = new Map();
+const tsCanon: KeySets = new Map();
+const alRaw: KeySets = new Map();
+const alCanon: KeySets = new Map();
+
 for (const file of corpus) {
   test(`ASTs agree on ${file}`, () => {
     const src = readFileSync(join(root, file), "utf8");
-    expect(alAst(src)).toEqual(tsAst(src));
+    const ts = unwrapOk(parse(unwrapOk(lex(src)))).stmts;
+    const tsCanonical = ts.map(cStmt);
+    const lr = alLex(src);
+    if (lr._tag !== "Ok") throw new Error(`mochi lexer errored: ${lr.error.message}`);
+    const pr = alParse(lr.value);
+    if (pr._tag !== "Ok") throw new Error(`mochi parser errored: ${pr.error.message}`);
+    const alCanonical = (pr.value as Al[]).map(aStmt);
+    collectKeys(ts, "kind", "", tsRaw);
+    collectKeys(tsCanonical, "kind", "", tsCanon);
+    collectKeys(pr.value, "_tag", "", alRaw, canonKind);
+    collectKeys(alCanonical, "kind", "", alCanon);
+    expect(alCanonical).toEqual(tsCanonical);
   });
 }
+
+// Runs last, over what the corpus tests above already walked.
+test("every AST field reaches the canonical shape", () => {
+  expect({
+    ts: holes(tsRaw, tsCanon, (k) => k),
+    mochi: holes(alRaw, alCanon, (k) => k),
+  }).toEqual({ ts: [], mochi: [] });
+});
 
 // ---- targeted edge cases ---------------------------------------------------------
 
@@ -629,6 +811,13 @@ const cases: Record<string, string> = {
     "let x = 1\nlet r = { x }\nlet typed = (n: number) => n\nlet unwrap = value => switch value { | Some(n) as whole => n | None => 0 }",
   "let-in and tuple let-in":
     "let f = let a = 1 in add(a, 2)\nlet g = let (x, y) = (1, 2) in add(x, y)",
+  // Each of these fields was reaching NEITHER canonicaliser until the coverage
+  // test above; the cases pin them independently of what the corpus happens to use.
+  "top-level binding annotation": 'let a : number = 1\nlet b : "rose" | "amber" = "rose"',
+  "extern generics and doc comments":
+    '/// a shape\ntype Shape = Circle(r: number)\nextern id<a> : a -> a = "./x.mjs" "id"',
+  "let-in binding annotation (ADR 0044)":
+    'let f = let a : number = 1 in add(a, 2)\nlet g = let s : "rose" | "amber" = "rose" in s\nlet h = let u = 1 in u',
   "pipe chain": "let r = x |> f |> g(1) |> h",
   "fast pipe": "let r = x -> f(1) -> g(2)",
   "fast pipe tighter than concat (ADR 0073)": 'let s = "hi" ++ ctx->gen(1)',
