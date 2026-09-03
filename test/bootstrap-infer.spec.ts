@@ -135,7 +135,7 @@ const normalize = (s: string): string => {
 
 type Verdict =
   | { ok: true; schemes: Record<string, string> }
-  | { ok: false; start: number; end: number };
+  | { ok: false; message: string; start: number; end: number };
 
 // Names a file itself declares (ctors/lets/externs) — the subset of the
 // (much larger, prelude-seeded) env worth comparing per file. Both sides
@@ -158,7 +158,12 @@ const tsInferVerdict = (src: string): Verdict => {
   if (isErr(r)) {
     if (r.error[0]!.span === undefined)
       throw new Error(`TS infer error without a span: ${r.error[0]!.message}`);
-    return { ok: false, start: r.error[0]!.span.start, end: r.error[0]!.span.end };
+    return {
+      ok: false,
+      message: r.error[0]!.message,
+      start: r.error[0]!.span.start,
+      end: r.error[0]!.span.end,
+    };
   }
   const env = r.value;
   const schemes: Record<string, string> = {};
@@ -176,7 +181,8 @@ const alInferVerdict = (src: string, prog: Program): Verdict => {
   const pr = alParse(lr.value);
   if (pr._tag !== "Ok") throw new Error(`mochi parser errored: ${pr.error.message}`);
   const ir = alInfer.inferProgram(pr.value, alBuiltins, alNamespaces, true);
-  if (ir._tag !== "Ok") return { ok: false, start: ir.error.start, end: ir.error.end };
+  if (ir._tag !== "Ok")
+    return { ok: false, message: ir.error.message, start: ir.error.start, end: ir.error.end };
   const env = ir.value as Map<string, { vars: number[]; rvars: number[]; ty: unknown }>;
   const schemes: Record<string, string> = {};
   for (const name of declaredNames(prog)) {
@@ -248,7 +254,12 @@ const strictTsVerdict = (src: string): Verdict => {
   if (isErr(r)) {
     if (r.error[0]!.span === undefined)
       throw new Error(`TS infer error without a span: ${r.error[0]!.message}`);
-    return { ok: false, start: r.error[0]!.span.start, end: r.error[0]!.span.end };
+    return {
+      ok: false,
+      message: r.error[0]!.message,
+      start: r.error[0]!.span.start,
+      end: r.error[0]!.span.end,
+    };
   }
   return { ok: true, schemes: {} };
 };
@@ -260,7 +271,7 @@ const strictAlVerdict = (src: string): Verdict => {
   if (pr._tag !== "Ok") throw new Error(`mochi parser errored: ${pr.error.message}`);
   const ir = alInfer.inferProgram(pr.value, alBuiltins, new Map(), false);
   return ir._tag !== "Ok"
-    ? { ok: false, start: ir.error.start, end: ir.error.end }
+    ? { ok: false, message: ir.error.message, start: ir.error.start, end: ir.error.end }
     : { ok: true, schemes: {} };
 };
 
@@ -321,9 +332,6 @@ for (const [name, { src, ok }] of Object.entries(cases)) {
     const ts = strictTsVerdict(src);
     expect(ts.ok).toBe(ok);
     const al = strictAlVerdict(src);
-    expect(al.ok).toBe(ts.ok);
-    if (!ts.ok && !al.ok) {
-      expect({ start: al.start, end: al.end }).toEqual({ start: ts.start, end: ts.end });
-    }
+    expect(al).toEqual(ts);
   });
 }
