@@ -17,9 +17,14 @@ const root = repoRoot(import.meta.url);
 
 const HELD = ["bootstrap", "packages", "test"];
 
-/** `fixtures/` is deliberately broken input — `let x = notAName` is the test. */
+/**
+ * `fixtures/` is deliberately broken input; `conformance/` names public output
+ * bindings intentionally so the black-box corpus can observe them.
+ */
 const isExempt = (path: string): boolean =>
-  path.includes("node_modules") || path.includes("/fixtures/");
+  path.includes("node_modules") ||
+  path.includes("/fixtures/") ||
+  path.startsWith("test/conformance/");
 
 const held = HELD.flatMap((dir) =>
   [...new Bun.Glob(`${dir}/**/*.mochi`).scanSync({ cwd: root })].filter((p) => !isExempt(p)),

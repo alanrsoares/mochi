@@ -1,0 +1,10 @@
+[
+  {
+    "path": "value.mochi",
+    "js": "export const value = 42;\n"
+  },
+  {
+    "path": "main.mochi",
+    "js": "import { value } from \"./value.js\";\nexport const answer = value;\n"
+  }
+]

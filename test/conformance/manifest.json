@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "cases": [
+    { "id": "single-js", "kind": "compile", "source": "single-js.mochi", "expect": "single-js.expect.js" },
+    { "id": "unbound-name", "kind": "diagnostic", "source": "unbound-name.mochi", "expect": "unbound-name.expect.json" },
+    { "id": "runtime", "kind": "runtime", "source": "runtime.mochi", "exports": { "answer": 3 } },
+    { "id": "module-graph", "kind": "graph", "entry": "module-graph/main.mochi", "expect": "module-graph.expect.json" },
+    { "id": "typed-ts", "kind": "typed-ts", "source": "typed-ts.mochi", "expect": "typed-ts.expect.txt" }
+  ]
+}
