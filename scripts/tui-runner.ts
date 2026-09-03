@@ -584,7 +584,7 @@ const buildTasks = async (opts: Options): Promise<TaskSpec[]> => {
       ? [
           ...ROOT_GATES,
           ...(opts.target === "check:full"
-            ? ["test:full", "test:mochi:coverage", "seed:check"]
+            ? ["test:full", "test:mochi:coverage", "seed:check", "bootstrap:self-tsc"]
             : ["test"]),
         ]
       : [];

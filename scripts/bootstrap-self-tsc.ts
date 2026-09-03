@@ -113,4 +113,5 @@ if (import.meta.main) {
     for (const [k, n] of sorted(report.byFile)) console.log(`  ${String(n).padStart(3)}  ${k}`);
     console.log(`total: ${report.total} tsc errors (self-hosted emit)`);
   }
+  process.exitCode = report.total === 0 ? 0 : 1;
 }

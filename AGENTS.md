@@ -17,10 +17,11 @@ Read this, then `CONTEXT.md` for vocabulary and `docs/` for the language, compil
 
 ```bash
 bun run check                 # default gate = biome + tsc + workspace + fmt + tests (skip north-stars)
-bun run check:full            # CI / pre-push gate — adds fixpoint + bootstrap-tsc north-stars
+bun run check:full            # CI / pre-push gate — adds fixpoint + both bootstrap-tsc north-stars
 bun run mochi <file.mochi>       # compile one file to JS on stdout (also: ts, fmt, dts, build)
 bun packages/cli/src/cli.ts ts <file.mochi>   # emit typed TypeScript (build --emit=ts for the graph)
-bun run bootstrap:tsc         # north-star: count tsc --strict errors on the self-host (0)
+bun run bootstrap:tsc         # north-star: TS oracle emits self-hosted graph with 0 tsc --strict errors
+bun run bootstrap:self-tsc    # north-star: self-hosted emitter emits itself with 0 tsc --strict errors
 bun run test | test:full | typecheck | lint | lint:fix | format | build:ext | loc
 bun run lint:mochi [globs…]     # LSP diagnostics over .mochi sources (graph-aware; not in the gate)
 ```

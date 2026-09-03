@@ -102,14 +102,9 @@ Two invariants are enforced in CI-style scripts:
   `tsc --strict` errors. The north-star number is **0**; a ratchet fails the build if it
   regresses above 0.
 
-Both invariants run in CI: mochi compiles mochi, and the emitted TypeScript typechecks.
-
-`bun scripts/bootstrap-self-tsc.ts` is a third measure, **diagnostic rather than
-gating**: it emits the graph with the SELF-HOSTED backend and counts
-`tsc --strict` errors. It now reads **0**, matching `bootstrap:tsc` — Mochi
-compiling Mochi to typed TypeScript typechecks strict-clean, which is the
-stage-1 precondition ADR 0090 asks for. It is still ungated; treat a rise as a
-lead, not a build failure.
+`bun run bootstrap:self-tsc` is the third self-hosting invariant: it emits the
+graph with the SELF-HOSTED backend and requires **0** `tsc --strict` errors.
+`check:full` runs it alongside `fixpoint` and `bootstrap:tsc`.
 
 ### Development ownership
 
