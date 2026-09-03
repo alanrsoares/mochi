@@ -44,6 +44,7 @@ test("all bootstrap modules in the fixpoint graph are covered", () => {
       "parser",
       "ts-types",
       "plugins/jsx",
+      "plugins/preact",
       "scc",
       "schemes",
       "str-scan",

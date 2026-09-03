@@ -9,7 +9,7 @@ pre-commit:
 pre-push:
   jobs:
     - name: check:full
-      run: bun run check:full
+      run: bun run check:full -- --bail
 
 prepare-commit-msg:
   jobs:
