@@ -1,0 +1,20 @@
+import { ok, test } from "@mochi/test"
+import { lex } from "../lexer.mochi"
+import { parse } from "../parser.mochi"
+import { inferProgramWith } from "../infer.mochi"
+import { styledCvaPlugin } from "./styled-cva.mochi"
+
+let typecheck = src =>
+  let? toks = lex(src) in
+  let? stmts = parse(toks) in
+    inferProgramWith(stmts, #{}, #{}, true, Some([styledCvaPlugin]))
+
+test("tw variants constrain component props", () => switch typecheck("extern tw : a = \"@styled-cva/react\" \"default\"\nlet Badge = tw.div(\"base\", { variants: { $tone: { rose: \"a\", amber: \"b\" } } })\nlet bad = Badge({ $tone: \"taupe\" })\n") {
+  | Err(_) => true |> ok
+  | Ok(_) => false |> ok
+})
+
+test("tw rejects an unknown intrinsic tag", () => switch typecheck("extern tw : a = \"@styled-cva/react\" \"default\"\nlet Bad = tw.divv(\"base\")\n") {
+  | Err(e) => Str.contains("unknown HTML element 'divv'", e.message) |> ok
+  | Ok(_) => false |> ok
+})
