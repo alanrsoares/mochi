@@ -93,7 +93,8 @@ bun run mochi build app.mochi    # compile a whole module graph
 bun run mochi fmt --write app.mochi
 ```
 
-Try it without installing anything: **[open the playground](apps/docs)** (`bun run docs:dev`).
+Run the local playground with `bun run docs:dev`, or browse its
+[source](apps/docs).
 
 ## Coming from TypeScript
 

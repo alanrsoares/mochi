@@ -1,4 +1,4 @@
-// Async in mochi WITHOUT an async/await keyword. A `Task a e` is an ordinary
+// Async in mochi WITHOUT an async/await keyword. A `Task<A, E>` is an ordinary
 // prelude value (opaque lazy thunk) carrying an error channel — asynchrony and
 // failure both compose through the same `|>` pipeline as everything else.
 // `Task.run` hands back a Promise of the settled `Result` to JS at the edge,

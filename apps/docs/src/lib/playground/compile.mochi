@@ -1,4 +1,4 @@
-// Playground compile as a mochi `Task a e` (ADR 0006). The host is the sync
+// Playground compile as a mochi `Task<A, E>` (ADR 0006). The host is the sync
 // fallback in `compiler.ts` — same Result shape the UI worker path
 // uses. Diagnostics stay opaque (`a`); callers that need them stay on the TS
 // façade. `Task.run` at the edge yields `Promise (Result Emit a)`.

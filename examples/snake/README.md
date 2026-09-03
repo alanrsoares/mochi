@@ -5,7 +5,7 @@ A Canvas Snake game written in [Mochi](https://github.com/alanrsoares/mochi), se
 ## Quick Start
 
 ```bash
-bun example:snake
+bun run example:snake
 ```
 
 This builds the production app into `examples/snake/dist`, starts the local

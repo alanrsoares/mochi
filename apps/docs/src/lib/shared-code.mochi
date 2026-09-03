@@ -1,4 +1,4 @@
-// Playground share-link encode/decode as mochi `Task a e` (ADR 0006). Host is
+// Playground share-link encode/decode as mochi `Task<A, E>` (ADR 0006). Host is
 // `shared-code.ts` — same Result shape the UI uses. Failures are plain strings
 // (missing DecompressionStream, corrupt payload, …).
 

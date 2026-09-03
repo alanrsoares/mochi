@@ -4,7 +4,7 @@
  * (or `Task.run` on the mochi side) fires it.
  *
  * This is the one sanctioned `Promise`-of-`Result` in the repo: it mirrors the
- * mochi prelude's `Task a e` runtime shape, which `ResultAsync` does not. The
+ * mochi prelude's `Task<A, E>` runtime shape, which `ResultAsync` does not. The
  * aliased import keeps that intent explicit.
  */
 import type { Result, Task } from "@mochi/compiler/runtime";

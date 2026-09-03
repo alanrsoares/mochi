@@ -1,6 +1,6 @@
 /** Share-link payload encode/decode — ReScript-style `b:` / `z:` prefixes.
  *
- * Async work is a mochi `Task a e` (ADR 0006): `() => Promise<Result<a, e>>`
+ * Async work is a mochi `Task<A, E>` (ADR 0006): `() => Promise<Result<a, e>>`
  * with `{ _tag: "Ok" | "Err" }`. Callers kick off with `encodeSharedCode(s)()`
  * (same as `Task.run`).
  */

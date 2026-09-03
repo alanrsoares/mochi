@@ -2,7 +2,7 @@
  * Main-thread façade over the playground compile worker, with sync fallback
  * when Workers are unavailable (tests, older browsers).
  *
- * `compile` returns a mochi `Task a e` — `() => Promise<Result<a, e>>` with the
+ * `compile` returns a mochi `Task<A, E>` — `() => Promise<Result<a, e>>` with the
  * prelude's `{ _tag: "Ok" | "Err" }` shape (ADR 0006). Callers kick off with
  * `compile(src)()` (same as `Task.run`).
  */
