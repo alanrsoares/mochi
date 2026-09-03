@@ -20,7 +20,14 @@ import {
 import { match } from "@onrails/pattern";
 
 import { jsxPlugin } from "./plugins/jsx";
+import { preactPlugin } from "./plugins/preact";
 export const DEFAULT_PLUGINS = [jsxPlugin];
+/**
+ * Vendor adapters remain opt-in. Exporting Preact from the self-hosted graph
+ * makes the reference implementation available to hosts without making hooks
+ * part of the language's default surface.
+ */
+export const PREACT_PLUGIN = preactPlugin;
 /**
  * `pluginsOpt` is Option [LanguagePlugin]: None = default, Some([]) = opt-out.
  */

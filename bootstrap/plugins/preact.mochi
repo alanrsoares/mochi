@@ -1,0 +1,245 @@
+// bootstrap/plugins/preact.mochi — self-hosted Preact LanguagePlugin.
+//
+// Mirrors @mochi/plugin-preact's inferCall adapter. The hook API threads
+// inference state explicitly, so this is a vendor plugin rather than compiler
+// knowledge: applications opt in by passing `preactPlugin` to inferProgramWith.
+
+import * as Ast from "../ast.mochi"
+import {
+  tCon,
+  tArrow,
+  tRecord,
+  tTuple,
+  tUnit,
+  tUnion,
+  rExtend,
+  RowEmpty,
+  zonk,
+  freshVar
+} from "../types.mochi"
+
+let arrOf = elem => tCon("Array", [elem])
+
+// `T | (T -> T)` — a direct state value or a functional updater.
+let setStateDomain = state => tUnion([state, tArrow(state, state)])
+
+let isRef = (fn, name) => switch fn {
+  | Ast.ERef(actual, _) => actual == name
+  | _ => false
+}
+
+let preactSpan = e => switch e {
+  | Ast.ENum(_, _, sp) => sp
+  | Ast.EUnit(sp) => sp
+  | Ast.EBool(_, sp) => sp
+  | Ast.EStr(_, sp) => sp
+  | Ast.ERef(_, sp) => sp
+  | Ast.ECall(_, _, _, sp) => sp
+  | Ast.ELambda(_, _, sp) => sp
+  | Ast.ELetIn(_, _, _, _, _, sp) => sp
+  | Ast.ELetBind(_, _, _, _, _, sp) => sp
+  | Ast.EPipe(_, _, _, sp) => sp
+  | Ast.EDo(_, sp) => sp
+  | Ast.ETernary(_, _, _, sp) => sp
+  | Ast.EMatch(_, _, sp) => sp
+  | Ast.ELoop(_, _, sp) => sp
+  | Ast.ERecur(_, sp) => sp
+  | Ast.ERecord(_, _, sp) => sp
+  | Ast.EField(_, _, _, sp) => sp
+  | Ast.ETuple(_, sp) => sp
+  | Ast.EArr(_, sp) => sp
+  | Ast.EList(_, sp) => sp
+  | Ast.ESet(_, sp) => sp
+  | Ast.EMap(_, sp) => sp
+  | Ast.EInterp(_, sp) => sp
+}
+
+let inferArgs = (args, st, inferExpr) => switch args {
+  | [] => Ok(st)
+  | [arg, ...rest] => inferExpr(arg, st)
+      |> Result.flatMap(((_, st1)) => inferArgs(rest, st1, inferExpr))
+}
+
+let inferUseState = (fn, args, st, api) =>
+  isRef(fn, "useState") && Array.length(args) == 1
+    ? switch Array.get(0, args) {
+      | None => Ok(None)
+      | Some(init) => api.inferExpr(init, st)
+          |> Result.map(((state, st1)) =>
+            Some((
+              tTuple(
+                [
+                  zonk(state, st1),
+                  tArrow(setStateDomain(zonk(state, st1)), tUnit)
+                ]
+              ),
+              st1
+            )))
+    }
+    : Ok(None)
+
+let inferUseLazyState = (fn, args, st, api) =>
+  isRef(fn, "useLazyState") && Array.length(args) == 1
+    ? switch Array.get(0, args) {
+      | None => Ok(None)
+      | Some(thunk) => let (state, st1) = freshVar(st) in
+          api.inferExpr(thunk, st1)
+            |> Result.flatMap(((thunkT, st2)) =>
+              api.unify(thunkT, tArrow(tUnit, state), st2, preactSpan(thunk))
+                |> Result.map(st3 =>
+                  let value = zonk(state, st3) in
+                    Some((
+                      tTuple([value, tArrow(setStateDomain(value), tUnit)]),
+                      st3
+                    ))))
+    }
+    : Ok(None)
+
+let inferUseRef = (fn, args, st, api) =>
+  isRef(fn, "useRef") && Array.length(args) == 1
+    ? switch Array.get(0, args) {
+      | None => Ok(None)
+      | Some(init) => api.inferExpr(init, st)
+          |> Result.map(((state, st1)) =>
+            Some((
+              tRecord(rExtend("current", zonk(state, st1), RowEmpty)),
+              st1
+            )))
+    }
+    : Ok(None)
+
+let inferEffectLike = (fn, args, st, api, name) =>
+  isRef(fn, name) && Array.length(args) >= 1
+    ? switch Array.get(0, args) {
+      | None => Ok(None)
+      | Some(effect) => let (cleanup, st1) = freshVar(st) in
+          api.inferExpr(effect, st1)
+            |> Result.flatMap(((effectT, st2)) =>
+              api.unify(
+                effectT,
+                tArrow(tUnit, cleanup),
+                st2,
+                preactSpan(effect)
+              )
+                |> Result.flatMap(st3 =>
+                  Array.length(args) == 1
+                    ? let (dep, st4) = freshVar(st3) in
+                      Ok(Some((tArrow(arrOf(dep), tUnit), st4)))
+                    : inferArgs(Array.drop(1, args), st3, api.inferExpr)
+                      |> Result.map(st4 => Some((tUnit, st4)))))
+    }
+    : Ok(None)
+
+let inferUseCallback = (fn, args, st, api) =>
+  isRef(fn, "useCallback") && Array.length(args) >= 1
+    ? switch Array.get(0, args) {
+      | None => Ok(None)
+      | Some(callback) => api.inferExpr(callback, st)
+          |> Result.flatMap(((callbackT, st1)) =>
+            Array.length(args) == 1
+              ? let (dep, st2) = freshVar(st1) in
+                Ok(Some((tArrow(arrOf(dep), zonk(callbackT, st2)), st2)))
+              : inferArgs(Array.drop(1, args), st1, api.inferExpr)
+                |> Result.map(st2 => Some((zonk(callbackT, st2), st2))))
+    }
+    : Ok(None)
+
+let inferUseMemo = (fn, args, st, api) =>
+  isRef(fn, "useMemo") && Array.length(args) >= 1
+    ? switch Array.get(0, args) {
+      | None => Ok(None)
+      | Some(thunk) => let (value, st1) = freshVar(st) in
+          api.inferExpr(thunk, st1)
+            |> Result.flatMap(((thunkT, st2)) =>
+              api.unify(thunkT, tArrow(tUnit, value), st2, preactSpan(thunk))
+                |> Result.flatMap(st3 =>
+                  Array.length(args) == 1
+                    ? let (dep, st4) = freshVar(st3) in
+                      Ok(Some((tArrow(arrOf(dep), zonk(value, st4)), st4)))
+                    : inferArgs(Array.drop(1, args), st3, api.inferExpr)
+                      |> Result.map(st4 => Some((zonk(value, st4), st4)))))
+    }
+    : Ok(None)
+
+let inferHookDeps = (fn, args, st, api) =>
+  let expected = isRef(fn, "hookDeps0")
+    ? Some(0)
+    : isRef(fn, "hookDeps1")
+    ? Some(1)
+    : isRef(fn, "hookDeps2")
+    ? Some(2)
+    : isRef(fn, "hookDeps")
+    ? Some(3)
+    : None in
+    switch expected {
+      | Some(n) => Array.length(args) == n
+          ? inferArgs(args, st, api.inferExpr)
+            |> Result.map(st1 =>
+              let (elem, st2) = freshVar(st1) in Some((arrOf(elem), st2)))
+          : Ok(None)
+      | None => Ok(None)
+    }
+
+export let inferPreactCall = (fn, args, _origin, st, api) =>
+  let? first = inferUseState(fn, args, st, api) in
+    switch first {
+      | Some(_) => Ok(first)
+      | None => let? lazy = inferUseLazyState(fn, args, st, api) in
+          switch lazy {
+            | Some(_) => Ok(lazy)
+            | None => let? ref = inferUseRef(fn, args, st, api) in
+                switch ref {
+                  | Some(_) => Ok(ref)
+                  | None => let? effect = inferEffectLike(
+                      fn,
+                      args,
+                      st,
+                      api,
+                      "useEffect"
+                    ) in
+                      switch effect {
+                        | Some(_) => Ok(effect)
+                        | None => let? layout = inferEffectLike(
+                            fn,
+                            args,
+                            st,
+                            api,
+                            "useLayoutEffect"
+                          ) in
+                            switch layout {
+                              | Some(_) => Ok(layout)
+                              | None => let? callback = inferUseCallback(
+                                  fn,
+                                  args,
+                                  st,
+                                  api
+                                ) in
+                                  switch callback {
+                                    | Some(_) => Ok(callback)
+                                    | None => let? memo = inferUseMemo(
+                                        fn,
+                                        args,
+                                        st,
+                                        api
+                                      ) in
+                                        switch memo {
+                                          | Some(_) => Ok(memo)
+                                          | None => inferHookDeps(
+                                              fn,
+                                              args,
+                                              st,
+                                              api
+                                            )
+                                        }
+                                  }
+                            }
+                      }
+                }
+          }
+    }
+
+export let preactPlugin = {
+  name: "preact",
+  parse: None,
+  inferCall: Some(inferPreactCall)
+}

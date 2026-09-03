@@ -35,6 +35,7 @@ const MODULES = [
   "schemes",
   "scc",
   "plugins/jsx",
+  "plugins/preact",
   "extensions",
   "str-scan",
   "lexer",
