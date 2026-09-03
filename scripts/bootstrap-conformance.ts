@@ -5,7 +5,7 @@
  * facades. Do not import the hand-authored TypeScript compiler core here: this
  * is the gate intended to outlive that implementation.
  */
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { buildModulesBootstrapWith } from "@mochi/compiler/bootstrap/module";
@@ -20,7 +20,7 @@ type RuntimeCase = {
   id: string;
   kind: "runtime";
   source: string;
-  exports: Record<string, unknown>;
+  expect: string;
 };
 type GraphCase = { id: string; kind: "graph"; entry: string; expect: string };
 type TypedTsCase = { id: string; kind: "typed-ts"; source: string; expect: string };
@@ -29,10 +29,12 @@ type Manifest = { version: 1; cases: Case[] };
 
 const options = { open: false, docs: true, moduleExt: ".js", strictEntry: false };
 const fixtureRoot = resolve(import.meta.dir, "../test/conformance");
+const candidateRoot = join(fixtureRoot, ".candidate");
 
 const text = (path: string): string => readFileSync(join(fixtureRoot, path), "utf8");
 const expectedJson = (path: string): unknown => JSON.parse(text(path)) as unknown;
 const resultError = (id: string, message: string): string => `${id}: ${message}`;
+const json = (value: unknown): string => `${JSON.stringify(value, null, 2)}\n`;
 
 const typecheck = (id: string, source: string): string | null => {
   const dir = mkdtempSync(join(tmpdir(), "mochi-conformance-"));
@@ -82,11 +84,12 @@ const runCase = (test: Case): string | null => {
     const result = compileBootstrapSyncWith(text(test.source), options);
     if (result._tag === "Err")
       return resultError(test.id, `unexpected diagnostic ${result.error.message}`);
-    const names = Object.keys(test.exports);
+    const expected = expectedJson(test.expect) as Record<string, unknown>;
+    const names = Object.keys(expected);
     const actual = new Function(
       `"use strict";\n${result.value}\nreturn { ${names.join(", ")} };`,
     )() as unknown;
-    return JSON.stringify(actual) === JSON.stringify(test.exports)
+    return JSON.stringify(actual) === JSON.stringify(expected)
       ? null
       : resultError(test.id, `runtime result differs: ${JSON.stringify(actual)}`);
   }
@@ -112,6 +115,74 @@ const runCase = (test: Case): string | null => {
   return typecheck(test.id, result.value);
 };
 
+const candidateFor = (test: Case): { path: string; contents: string } => {
+  if (test.kind === "compile") {
+    const result = compileBootstrapSyncWith(text(test.source), options);
+    if (result._tag === "Err") throw new Error(resultError(test.id, result.error.message));
+    return { path: test.expect, contents: result.value };
+  }
+
+  if (test.kind === "diagnostic") {
+    const result = compileBootstrapSyncWith(text(test.source), options);
+    if (result._tag === "Ok") throw new Error(resultError(test.id, "expected a diagnostic"));
+    return {
+      path: test.expect,
+      contents: json({
+        message: result.error.message,
+        start: result.error.start,
+        end: result.error.end,
+      }),
+    };
+  }
+
+  if (test.kind === "runtime") {
+    const result = compileBootstrapSyncWith(text(test.source), options);
+    if (result._tag === "Err") throw new Error(resultError(test.id, result.error.message));
+    const expected = expectedJson(test.expect) as Record<string, unknown>;
+    const names = Object.keys(expected);
+    const actual = new Function(
+      `"use strict";\n${result.value}\nreturn { ${names.join(", ")} };`,
+    )() as unknown;
+    return { path: test.expect, contents: json(actual) };
+  }
+
+  if (test.kind === "graph") {
+    const entry = join(fixtureRoot, test.entry);
+    const result = buildModulesBootstrapWith(entry, options);
+    if (result._tag === "Err") throw new Error(resultError(test.id, result.error.message));
+    return {
+      path: test.expect,
+      contents: json(
+        result.value.map(({ path, js }) => ({ path: relative(dirname(entry), path), js })),
+      ),
+    };
+  }
+
+  const result = compileTsBootstrapSyncWith(text(test.source), "@mochi/runtime", options);
+  if (result._tag === "Err") throw new Error(resultError(test.id, result.error.message));
+  return { path: test.expect, contents: result.value };
+};
+
+/**
+ * Write candidate expectations for human review. This is deliberately separate
+ * from the normal runner: it never mutates the checked-in fixture tree.
+ */
+export const freezeBootstrapConformance = (out = candidateRoot): string[] => {
+  const manifest = JSON.parse(text("manifest.json")) as Manifest;
+  if (manifest.version !== 1)
+    throw new Error(`unsupported conformance manifest version ${manifest.version}`);
+  rmSync(out, { recursive: true, force: true });
+  const paths: string[] = [];
+  for (const test of manifest.cases) {
+    const candidate = candidateFor(test);
+    const path = join(out, candidate.path);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, candidate.contents);
+    paths.push(path);
+  }
+  return paths;
+};
+
 /** Execute every checked-in case. `null` means the corpus conforms. */
 export const runBootstrapConformance = (): string[] => {
   const manifest = JSON.parse(text("manifest.json")) as Manifest;
@@ -124,10 +195,15 @@ export const runBootstrapConformance = (): string[] => {
 };
 
 if (import.meta.main) {
-  const failures = runBootstrapConformance();
-  if (failures.length === 0) process.stdout.write("bootstrap conformance: PASS\n");
-  else {
-    process.stderr.write(`${failures.join("\n")}\n`);
-    process.exitCode = 1;
+  if (process.argv.includes("--freeze")) {
+    const paths = freezeBootstrapConformance();
+    process.stdout.write(`bootstrap conformance candidates: ${paths.length}\n`);
+  } else {
+    const failures = runBootstrapConformance();
+    if (failures.length === 0) process.stdout.write("bootstrap conformance: PASS\n");
+    else {
+      process.stderr.write(`${failures.join("\n")}\n`);
+      process.exitCode = 1;
+    }
   }
 }

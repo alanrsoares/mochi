@@ -28,6 +28,7 @@
     "bootstrap:tsc": "bun scripts/bootstrap-tsc.ts",
     "bootstrap:self-tsc": "bun scripts/bootstrap-self-tsc.ts",
     "bootstrap:conformance": "bun scripts/bootstrap-conformance.ts",
+    "bootstrap:conformance:freeze": "bun scripts/bootstrap-conformance.ts --freeze",
     "seed:freeze": "bun scripts/freeze-seed.ts",
     "seed:check": "bun scripts/freeze-seed.ts --check",
     "fmt:mochi": "bun scripts/fmt.ts",

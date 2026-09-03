@@ -87,3 +87,4 @@ test/.tsgen-graph/
 test/.mochi-cli-*/
 
 .claude
+test/conformance/.candidate/
