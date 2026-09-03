@@ -14,7 +14,7 @@
     "format": "biome format --write .",
     "typecheck": "tsc --noEmit",
     "test": "bun test --parallel=8 --path-ignore-patterns 'test/bootstrap-fixpoint-binary.spec.ts' --path-ignore-patterns 'test/bootstrap-seed-alias.spec.ts' --path-ignore-patterns 'test/bootstrap-self-tsc.spec.ts' --path-ignore-patterns 'test/bootstrap-tsc.spec.ts'",
-    "test:full": "bun test --bail",
+    "test:full": "bun test --parallel=8 --bail",
     "test:mochi:coverage": "bun scripts/mochi-coverage.ts",
     "build:ext": "bun scripts/build-extension.mjs",
     "loc": "bun scripts/find-long-files.ts",
