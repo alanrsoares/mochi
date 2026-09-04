@@ -6,15 +6,22 @@ import type { AliasInfo } from "./codegen-ts";
 
 /**
  * Caller-supplied knobs: `open` selects open-world inference (host globals
- * resolve to fresh vars), `docs` keeps `///` comments in the emitted text, and
- * `moduleExt` is the suffix rewritten onto relative import paths — `.js` for
- * the CLI, `.mochi` for Vite, so sibling modules re-enter its plugin. Ports
- * `CompileOptions` from `src/compile/compile.ts`.
+ * resolve to fresh vars), `runtime` inlines the prelude helpers a program
+ * uses, `docs` keeps `///` comments in the emitted text, and `moduleExt` is
+ * the suffix rewritten onto relative import paths — `.js` for the CLI,
+ * `.mochi` for Vite, so sibling modules re-enter its plugin. Ports the
+ * non-plugin `CompileOptions` from `src/compile/compile.ts`.
  * `strictEntry` only reaches the module-graph drivers (`module.mochi`); a
  * single file is always its own entry, so honouring the directive here would
  * make the flag mean "ignore the directive", which no caller wants.
  */
-export type Opts = { open: boolean; docs: boolean; moduleExt: string; strictEntry: boolean };
+export type Opts = {
+  open: boolean;
+  runtime: boolean;
+  docs: boolean;
+  moduleExt: string;
+  strictEntry: boolean;
+};
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
@@ -53,7 +60,13 @@ import { runtimeDeps } from "./prelude.gen.mjs";
  * The default every arity-preserving entrypoint below passes: strict
  * inference, docstrings retained.
  */
-export const defaultOpts: Opts = { open: false, docs: true, moduleExt: ".js", strictEntry: false };
+export const defaultOpts: Opts = {
+  open: false,
+  runtime: true,
+  docs: true,
+  moduleExt: ".js",
+  strictEntry: false,
+};
 const afterBlanks: _Curry<[s: string, i: number], Option<string>> = _curry(
   2,
   (s: string, i: number) =>
@@ -220,7 +233,7 @@ export const compileWith: _Curry<[src: string, opts: Opts], Result<string, PErr>
           codegenWith(
             prog,
             new Map<string, string[]>(),
-            true,
+            opts.runtime,
             namespaceRuntime,
             preludeJsDefs,
             runtimeDeps,

@@ -57,9 +57,10 @@ type SeedModule = {
 
 /**
  * The knobs the self-hosted core takes: `open` selects open-world inference (a
- * file's own `"use open"` directive still wins), `docs` keeps `///` comments in
- * the emitted text, and `moduleExt` is the suffix rewritten onto relative
- * import paths. Mirrors `CompileOptions` in `../compile/compile.ts`.
+ * file's own `"use open"` directive still wins), `runtime` inlines prelude
+ * helpers, `docs` keeps `///` comments in the emitted text, and `moduleExt` is
+ * the suffix rewritten onto relative import paths. Mirrors the non-plugin
+ * `CompileOptions` in `../compile/compile.ts`.
  *
  * `strictEntry` is an editor policy rather than a compiler one: dependencies
  * always honour their own `"use open"`, but under it the graph entry takes
@@ -68,6 +69,7 @@ type SeedModule = {
  */
 export type BootstrapOptions = {
   open: boolean;
+  runtime: boolean;
   docs: boolean;
   moduleExt: string;
   strictEntry: boolean;
@@ -76,6 +78,7 @@ export type BootstrapOptions = {
 /** Strict inference, docstrings retained, `.js` siblings, directive in charge. */
 export const defaultBootstrapOptions: BootstrapOptions = {
   open: false,
+  runtime: true,
   docs: true,
   moduleExt: ".js",
   strictEntry: false,

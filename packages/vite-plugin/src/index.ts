@@ -4,9 +4,10 @@
  * with JSX pragma support (defaults to Preact `h`) and ES module exports.
  */
 
+import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { buildModulesBootstrapWith } from "@mochi/compiler/bootstrap/module";
-import { compileBootstrapSync } from "@mochi/compiler/bootstrap/sync";
+import { compileBootstrapSyncWith } from "@mochi/compiler/bootstrap/sync";
 import { compile } from "@mochi/compiler/compile";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import {
@@ -137,10 +138,11 @@ export function mochiPlugin(options: MochiPluginOptions = {}): Plugin {
       // Keep sibling imports as `.mochi` so Vite re-enters this plugin
       // (default codegen rewrites to `.js` for the standalone CLI/graph).
       let transformedCode: string;
-      if (plugins === undefined && options.open === undefined && runtime === true) {
-        if (/^\s*import\b/m.test(code)) {
+      if (plugins === undefined) {
+        if (/^\s*import\b/m.test(code) && existsSync(id)) {
           const graph = buildModulesBootstrapWith(id, {
-            open: false,
+            open: options.open ?? false,
+            runtime,
             docs: true,
             moduleExt: ".mochi",
             strictEntry: false,
@@ -153,7 +155,13 @@ export function mochiPlugin(options: MochiPluginOptions = {}): Plugin {
           if (!output) throw new SyntaxError(`Mochi compilation omitted ${id}`);
           transformedCode = output.js;
         } else {
-          const res = compileBootstrapSync(code);
+          const res = compileBootstrapSyncWith(code, {
+            open: options.open ?? false,
+            runtime,
+            docs: true,
+            moduleExt: ".mochi",
+            strictEntry: false,
+          });
           if (res._tag === "Err")
             throw new SyntaxError(
               `Mochi compilation failed for ${id}:\n[type] ${res.error.message}`,

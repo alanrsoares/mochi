@@ -48,10 +48,17 @@ export let symbolOccurrences = stmts => index(stmts)
 
 // Caller knobs, structurally identical to compile.mochi's `Opts` (ADR 0005),
 // so they unify across the module boundary without a type import.
-type Opts = { open: bool, docs: bool, moduleExt: string, strictEntry: bool }
+type Opts = {
+  open: bool,
+  runtime: bool,
+  docs: bool,
+  moduleExt: string,
+  strictEntry: bool
+}
 
 let defaultOpts : Opts = {
   open: false,
+  runtime: true,
   docs: true,
   moduleExt: ".js",
   strictEntry: false
@@ -435,7 +442,7 @@ let compileOne = (ctx, loaded: Loaded, recovering, isEntry, opts: Opts) => switc
           | Ok(env) => let js = codegenWith(
               loaded.stmts,
               res.keys,
-              true,
+              opts.runtime,
               namespaceRuntime,
               preludeJsDefs,
               runtimeDeps,

@@ -13222,7 +13222,7 @@ var namespaceRuntime = _mapmap(_namespaceRuntime);
 var preludeJsDefs = _map(_preludeJsDefs);
 var runtimeDeps = _map(_runtimeDeps);
 
-var defaultOpts = { open: false, docs: true, moduleExt: ".js", strictEntry: false };
+var defaultOpts = { open: false, runtime: true, docs: true, moduleExt: ".js", strictEntry: false };
 var afterBlanks = _curry19(2, (s, i) => match18(_Str_get4(i, s)).with({ _tag: "Some", value: " " }, () => afterBlanks(s, i + 1)).with({ _tag: "Some", value: "\t" }, () => afterBlanks(s, i + 1)).otherwise((other) => other));
 var openDirective = (src) => {
   const t = _Str_trim(src);
@@ -13235,7 +13235,7 @@ var frontend = ($x) => _Result_flatMap8(check)((($x2) => _Result_flatMap8(parse)
 var pipelineWith = _curry19(2, (src, open) => _Result_flatMap8((stmts) => typecheckWith(stmts, open), frontend(src)));
 var typedProgramWith = _curry19(2, (src, opts) => _Result_flatMap8((stmts) => _Result_flatMap8((r) => Ok10(_tuple12(stmts, r)), inferProgramTypes(stmts, builtins, namespaces, openMode(src, opts.open))), frontend(src)));
 var inferTypesWith = _curry19(2, (src, opts) => _Result_flatMap8((stmts) => _Result_flatMap8((r) => Ok10({ env: r.env, types: map12((hit) => ({ span: hit.span, ty: hit.ty, display: showType(widenLits(hit.ty)) }), r.types), aliases: r.aliases, letParams: r.letParams }), inferProgramTypes(stmts, builtins, namespaces, openMode(src, opts.open))), frontend(src)));
-var compileWith = _curry19(2, (src, opts) => _Result_flatMap8((prog) => Ok10(codegenWith(prog, new Map, true, namespaceRuntime, preludeJsDefs, runtimeDeps, { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt })), pipelineWith(src, openMode(src, opts.open))));
+var compileWith = _curry19(2, (src, opts) => _Result_flatMap8((prog) => Ok10(codegenWith(prog, new Map, opts.runtime, namespaceRuntime, preludeJsDefs, runtimeDeps, { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt })), pipelineWith(src, openMode(src, opts.open))));
 var noImportedKeys = new Map;
 var compileTsWith = _curry19(3, (src, runtimeImport, opts) => _Result_flatMap8((stmts) => _Result_flatMap8((r) => Ok10(emitTsModuleWith(stmts, r.env, r.types, r.letParams, r.aliases, noImportedKeys, [], namespaceRuntime, preludeJsDefs, runtimeDeps, runtimeImport, opts.docs)), inferProgramTypes(stmts, builtins, namespaces, openMode(src, opts.open))), frontend(src)));
 var compileTs = _curry19(2, (src, runtimeImport) => compileTsWith(src, runtimeImport, defaultOpts));
@@ -13301,7 +13301,7 @@ var qualsFromAliases = _curry20(5, (aliases, quals, local, acc, i) => match19(_A
 var qualifierMapOf = _curry20(2, (quals, local) => qualsFromAliases(_Map_keys7(quals), quals, local, new Map, 0));
 var emitDtsFromTyped = _curry20(5, (stmts, env, aliases, qualify, runtimeImport) => emitDtsFromTypedWith(stmts, env, aliases, qualify, runtimeImport, true));
 var emitDtsTextWith = _curry20(3, (src, runtimeImport, opts) => _Result_map7(([stmts, r]) => emitDtsFromTypedWith(stmts, r.env, r.aliases, new Map, runtimeImport, opts.docs), typedProgramWith(src, opts)));
-var emitDtsText = _curry20(2, (src, runtimeImport) => emitDtsTextWith(src, runtimeImport, { open: false, docs: true, moduleExt: ".js", strictEntry: false }));
+var emitDtsText = _curry20(2, (src, runtimeImport) => emitDtsTextWith(src, runtimeImport, { open: false, runtime: true, docs: true, moduleExt: ".js", strictEntry: false }));
 
 import { readFileSync, writeFileSync } from "fs";
 import { createRequire } from "module";
@@ -13340,7 +13340,7 @@ var argv = process.argv.slice(2);
 
 var emitDts = _curry21(2, (src, runtimeImport) => emitDtsText(src, runtimeImport));
 var symbolOccurrences = (stmts) => index(stmts);
-var defaultOpts2 = { open: false, docs: true, moduleExt: ".js", strictEntry: false };
+var defaultOpts2 = { open: false, runtime: true, docs: true, moduleExt: ".js", strictEntry: false };
 var addCtorOrigins = _curry21(3, (ctors, typeSpan, origins) => reduce5(_curry21(2, (acc, ctor) => _Map_set11(ctor.name, typeSpan, acc)), origins, ctors));
 var exportedOriginsFrom = _curry21(3, (stmts, i, origins) => match20(_Array_get16(i, stmts)).with({ _tag: "None" }, () => origins).with((_v) => {
   const _g = _v;
@@ -13407,7 +13407,7 @@ var resolveImportsFrom = _curry21(6, (ctx, stmts, i, path, res, recovering) => m
   return _g._tag === "Some" && _g.value._tag === "SImportNs";
 }, ({ value: { alias, from } }) => ((dp) => ((depExports) => ((depReg) => ((depKeys) => resolveImportsFrom(ctx, stmts, i + 1, path, { imports: res.imports, nsImports: _Map_set11(alias.name, depExports, res.nsImports), reg: { ctors: prefixCtorsInto(_Map_keys8(depReg.ctors), alias.name, depReg.ctors, res.reg.ctors), types: mergeMap(depReg.types, res.reg.types) }, keys: mergeMap(depKeys, res.keys), quals: match20(_Map_get12(dp, ctx.qualsByPath)).with({ _tag: "Some" }, ({ value: q }) => _Map_set11(alias.name, q, res.quals)).with({ _tag: "None" }, () => res.quals).exhaustive() }, recovering))(_Map_getOr8(new Map, dp, ctx.keysByPath)))(_Map_getOr8(emptyReg, dp, ctx.regByPath)))(_Map_getOr8(new Map, dp, ctx.exportsByPath)))(resolveImport2(path, from))).with({ _tag: "Some" }, () => resolveImportsFrom(ctx, stmts, i + 1, path, res, recovering)).exhaustive());
 var openFor = _curry21(3, (loaded, isEntry, opts) => and13(isEntry, opts.strictEntry) ? opts.open : openMode(loaded.src, opts.open));
-var compileOne = _curry21(5, (ctx, loaded, recovering, isEntry, opts) => match20(resolveImportsFrom(ctx, loaded.stmts, 0, loaded.path, { imports: new Map, nsImports: new Map, reg: emptyReg, keys: new Map, quals: new Map }, recovering)).with({ _tag: "Err" }, ({ error: e }) => Err10(atPath(loaded.path, e))).with({ _tag: "Ok" }, ({ value: res }) => match20(checkWith(loaded.stmts, res.reg, res.quals)).with({ _tag: "Err" }, ({ error: e }) => Err10(atPath(loaded.path, e))).with({ _tag: "Ok" }, () => match20(inferProgramImports(loaded.stmts, builtins, namespaces, openFor(loaded, isEntry, opts), res.imports, res.nsImports, res.quals, None20)).with({ _tag: "Err" }, ({ error: e }) => Err10(atPath(loaded.path, e))).with({ _tag: "Ok" }, ({ value: env }) => ((js) => Ok13({ exportsByPath: _Map_set11(loaded.path, exportedSchemes(loaded.stmts, env), ctx.exportsByPath), regByPath: _Map_set11(loaded.path, exportedRegistry(loaded.stmts), ctx.regByPath), keysByPath: _Map_set11(loaded.path, exportedCtorKeys(loaded.stmts), ctx.keysByPath), qualsByPath: _Map_set11(loaded.path, qualScopeOf(loaded.stmts), ctx.qualsByPath), outputs: [...ctx.outputs, { path: loaded.path, js }] }))(codegenWith(loaded.stmts, res.keys, true, namespaceRuntime, preludeJsDefs, runtimeDeps, { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt }))).exhaustive()).exhaustive()).exhaustive());
+var compileOne = _curry21(5, (ctx, loaded, recovering, isEntry, opts) => match20(resolveImportsFrom(ctx, loaded.stmts, 0, loaded.path, { imports: new Map, nsImports: new Map, reg: emptyReg, keys: new Map, quals: new Map }, recovering)).with({ _tag: "Err" }, ({ error: e }) => Err10(atPath(loaded.path, e))).with({ _tag: "Ok" }, ({ value: res }) => match20(checkWith(loaded.stmts, res.reg, res.quals)).with({ _tag: "Err" }, ({ error: e }) => Err10(atPath(loaded.path, e))).with({ _tag: "Ok" }, () => match20(inferProgramImports(loaded.stmts, builtins, namespaces, openFor(loaded, isEntry, opts), res.imports, res.nsImports, res.quals, None20)).with({ _tag: "Err" }, ({ error: e }) => Err10(atPath(loaded.path, e))).with({ _tag: "Ok" }, ({ value: env }) => ((js) => Ok13({ exportsByPath: _Map_set11(loaded.path, exportedSchemes(loaded.stmts, env), ctx.exportsByPath), regByPath: _Map_set11(loaded.path, exportedRegistry(loaded.stmts), ctx.regByPath), keysByPath: _Map_set11(loaded.path, exportedCtorKeys(loaded.stmts), ctx.keysByPath), qualsByPath: _Map_set11(loaded.path, qualScopeOf(loaded.stmts), ctx.qualsByPath), outputs: [...ctx.outputs, { path: loaded.path, js }] }))(codegenWith(loaded.stmts, res.keys, opts.runtime, namespaceRuntime, preludeJsDefs, runtimeDeps, { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt }))).exhaustive()).exhaustive()).exhaustive());
 var compileAll = _curry21(3, (ctx, graph, opts) => match20(graph).with((_v) => {
   const _g = _v;
   return _g.length === 0;

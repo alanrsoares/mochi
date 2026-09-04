@@ -377,5 +377,11 @@ export let emitDtsText = (src, runtimeImport) =>
   emitDtsTextWith(
     src,
     runtimeImport,
-    { open: false, docs: true, moduleExt: ".js", strictEntry: false }
+    {
+      open: false,
+      runtime: true,
+      docs: true,
+      moduleExt: ".js",
+      strictEntry: false
+    }
   )

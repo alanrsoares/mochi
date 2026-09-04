@@ -24,19 +24,27 @@ extern preludeJsDefs : Map<string, string> = "./prelude.gen.mjs" "preludeJsDefs"
 extern runtimeDeps : Map<string, [string]> = "./prelude.gen.mjs" "runtimeDeps"
 
 /// Caller-supplied knobs: `open` selects open-world inference (host globals
-/// resolve to fresh vars), `docs` keeps `///` comments in the emitted text, and
-/// `moduleExt` is the suffix rewritten onto relative import paths — `.js` for
-/// the CLI, `.mochi` for Vite, so sibling modules re-enter its plugin. Ports
-/// `CompileOptions` from `src/compile/compile.ts`.
+/// resolve to fresh vars), `runtime` inlines the prelude helpers a program
+/// uses, `docs` keeps `///` comments in the emitted text, and `moduleExt` is
+/// the suffix rewritten onto relative import paths — `.js` for the CLI,
+/// `.mochi` for Vite, so sibling modules re-enter its plugin. Ports the
+/// non-plugin `CompileOptions` from `src/compile/compile.ts`.
 /// `strictEntry` only reaches the module-graph drivers (`module.mochi`); a
 /// single file is always its own entry, so honouring the directive here would
 /// make the flag mean "ignore the directive", which no caller wants.
-type Opts = { open: bool, docs: bool, moduleExt: string, strictEntry: bool }
+type Opts = {
+  open: bool,
+  runtime: bool,
+  docs: bool,
+  moduleExt: string,
+  strictEntry: bool
+}
 
 /// The default every arity-preserving entrypoint below passes: strict
 /// inference, docstrings retained.
 export let defaultOpts : Opts = {
   open: false,
+  runtime: true,
   docs: true,
   moduleExt: ".js",
   strictEntry: false
@@ -125,7 +133,7 @@ export let compileWith = (src, opts: Opts) =>
     Ok(
       prog->codegenWith(
         #{},
-        true,
+        opts.runtime,
         namespaceRuntime,
         preludeJsDefs,
         runtimeDeps,

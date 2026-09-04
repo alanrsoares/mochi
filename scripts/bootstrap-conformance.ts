@@ -42,7 +42,7 @@ type Case =
   | TypedTsGraphCase;
 type Manifest = { version: 1; coverage: { required: string[] }; cases: Case[] };
 
-const options = { open: false, docs: true, moduleExt: ".js", strictEntry: false };
+const options = { open: false, runtime: true, docs: true, moduleExt: ".js", strictEntry: false };
 const fixtureRoot = resolve(import.meta.dir, "../test/conformance");
 const candidateRoot = join(fixtureRoot, ".candidate");
 

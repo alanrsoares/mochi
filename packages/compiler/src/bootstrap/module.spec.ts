@@ -44,7 +44,7 @@ test("bundled graph facade emits .js sibling imports by default", () => {
 test("bundled graph facade honours a caller's moduleExt", () => {
   const result = buildModulesBootstrapWith(
     join(repoRoot(import.meta.url), "examples/modules/main.mochi"),
-    { open: false, docs: true, moduleExt: ".mochi", strictEntry: false },
+    { open: false, runtime: true, docs: true, moduleExt: ".mochi", strictEntry: false },
   );
   expect(unwrapOk(result).some((output) => output.js.includes('from "./geometry.mochi"'))).toBe(
     true,
@@ -92,7 +92,7 @@ test("bundled graph exposes lexical binding identity", () => {
 
 // --- graph options ---------------------------------------------------------
 //
-// The self-hosted graph takes `open` / `docs` / `moduleExt` / `strictEntry` as
+// The self-hosted graph takes `open` / `runtime` / `docs` / `moduleExt` / `strictEntry` as
 // real options. Before it did, the host CLI fell back to the TypeScript
 // compiler whenever a caller asked for anything but the defaults, and the graph
 // driver inferred every module open-world — so `mochi build` silently accepted
@@ -138,4 +138,16 @@ test("`docs: false` drops docstrings from the emitted JS", () => {
   );
   expect(withDocs[0]?.js).toContain("Doubles.");
   expect(without[0]?.js).not.toContain("Doubles.");
+});
+
+test("`runtime: false` leaves prelude helpers to the caller", () => {
+  const dir = inTmp({ "main.mochi": "export let answer = add(1, 2)\n" });
+  const entry = join(dir, "main.mochi");
+  const withRuntime = unwrapOk(buildModulesBootstrapWith(entry, defaultBootstrapOptions));
+  const withoutRuntime = unwrapOk(
+    buildModulesBootstrapWith(entry, { ...defaultBootstrapOptions, runtime: false }),
+  );
+  expect(withRuntime[0]?.js).toContain("const add = _curry");
+  expect(withoutRuntime[0]?.js).not.toContain("const add = _curry");
+  expect(withoutRuntime[0]?.js).toContain("add(1, 2)");
 });

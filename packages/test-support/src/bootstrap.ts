@@ -1,6 +1,5 @@
-// Shared harness for the self-hosted differential specs. Each bootstrap module
-// is compiled by the TS compiler, evaluated in isolation, and diffed against
-// the corresponding TS pass over a corpus.
+// Shared harness for self-hosted module specs. The frozen Mochi seed compiles
+// each current bootstrap module, which the specs then evaluate in isolation.
 //
 // Since ticket 0013 the modules share ast.mochi / types.mochi and pattern-match
 // IMPORTED ctors, which only type-checks under the closed-world `build` (not
@@ -11,12 +10,11 @@
 // injected as parameters.
 //
 // The graph build is cached cross-process under `.cache/bootstrap-build/<hash>/`
-// (keyed by bootstrap sources + `packages/compiler/src/**/*.ts`). Bun runs spec
+// (keyed by bootstrap sources + the bootstrap host facade). Bun runs spec
 // files in parallel workers; without a shared cache each worker rebuilt the graph
 // into its own temp dir. A `.building` claim + wait-for-peer keeps usually one
 // builder.
 
-import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   cpSync,
@@ -30,6 +28,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, join } from "node:path";
+import { buildModulesBootstrapWith } from "@mochi/compiler/bootstrap/module";
 import { repoRoot } from "./repo.ts";
 
 const root = repoRoot(import.meta.url);
@@ -46,7 +45,8 @@ const sourceHash = (): string => {
     // change to it must invalidate the cache — with `*` the stale build was
     // silently reused and the parity tests scored the previous source.
     ...new Bun.Glob("bootstrap/**/*.mochi").scanSync({ cwd: root }),
-    ...new Bun.Glob("packages/compiler/src/**/*.ts").scanSync({ cwd: root }),
+    ...new Bun.Glob("packages/compiler/src/bootstrap/**/*.ts").scanSync({ cwd: root }),
+    "packages/test-support/src/bootstrap.ts",
   ].toSorted();
   for (const p of files) {
     h.update(p);
@@ -138,14 +138,21 @@ const buildGraph = (): string => {
     cpSync(join(root, "bootstrap", name), join(tmp, name), { recursive: true });
   }
   try {
-    // The host CLI normally runs the frozen bootstrap seed (ADR 0090). This
-    // cache intentionally needs the independent TypeScript oracle instead: it
-    // materialises today's bootstrap sources for parity and binary tests.
-    // The oracle has its own entry point since every CLI command routes to
-    // the self-hosted core.
-    execFileSync("bun", ["scripts/ts-oracle-build.ts", join(tmp, "cli.mochi")], {
-      cwd: root,
+    // Compile current sources with the frozen Mochi seed. The cache deliberately
+    // never reaches through the hand-authored compiler core: conformance is the
+    // behavioral oracle (ADR 0105), while this just supplies executable modules
+    // to the isolated bootstrap-pass specs.
+    const built = buildModulesBootstrapWith(join(tmp, "cli.mochi"), {
+      open: true,
+      runtime: true,
+      docs: true,
+      moduleExt: ".js",
+      strictEntry: false,
     });
+    if (built._tag === "Err") throw new Error(`bootstrap build failed: ${built.error.message}`);
+    for (const output of built.value) {
+      writeFileSync(output.path.replace(/\.mochi$/, ".js"), output.js);
+    }
     try {
       // A cache dir from an older layout (say, before `format.js` was emitted)
       // exists but is not `ready` — a rename onto it would fail, so drop it.

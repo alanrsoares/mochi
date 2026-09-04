@@ -13135,7 +13135,7 @@ var namespaceRuntime = _mapmap(_namespaceRuntime);
 var preludeJsDefs = _map(_preludeJsDefs);
 var runtimeDeps = _map(_runtimeDeps);
 
-var defaultOpts = { open: false, docs: true, moduleExt: ".js", strictEntry: false };
+var defaultOpts = { open: false, runtime: true, docs: true, moduleExt: ".js", strictEntry: false };
 var afterBlanks = _curry18(2, (s, i) => match17(_Str_get4(i, s)).with({ _tag: "Some", value: " " }, () => afterBlanks(s, i + 1)).with({ _tag: "Some", value: "\t" }, () => afterBlanks(s, i + 1)).otherwise((other) => other));
 var openDirective = (src) => {
   const t = _Str_trim(src);
@@ -13150,7 +13150,7 @@ var typedProgramWith = _curry18(2, (src, opts) => _Result_flatMap8((stmts) => _R
 var typedProgram = (src) => typedProgramWith(src, defaultOpts);
 var inferTypesWith = _curry18(2, (src, opts) => _Result_flatMap8((stmts) => _Result_flatMap8((r) => Ok10({ env: r.env, types: map12((hit) => ({ span: hit.span, ty: hit.ty, display: showType(widenLits(hit.ty)) }), r.types), aliases: r.aliases, letParams: r.letParams }), inferProgramTypes(stmts, builtins, namespaces, openMode(src, opts.open))), frontend(src)));
 var inferTypes = (src) => inferTypesWith(src, defaultOpts);
-var compileWith = _curry18(2, (src, opts) => _Result_flatMap8((prog) => Ok10(codegenWith(prog, new Map, true, namespaceRuntime, preludeJsDefs, runtimeDeps, { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt })), pipelineWith(src, openMode(src, opts.open))));
+var compileWith = _curry18(2, (src, opts) => _Result_flatMap8((prog) => Ok10(codegenWith(prog, new Map, opts.runtime, namespaceRuntime, preludeJsDefs, runtimeDeps, { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt })), pipelineWith(src, openMode(src, opts.open))));
 var compile = (src) => compileWith(src, defaultOpts);
 var noImportedKeys = new Map;
 var compileTsWith = _curry18(3, (src, runtimeImport, opts) => _Result_flatMap8((stmts) => _Result_flatMap8((r) => Ok10(emitTsModuleWith(stmts, r.env, r.types, r.letParams, r.aliases, noImportedKeys, [], namespaceRuntime, preludeJsDefs, runtimeDeps, runtimeImport, opts.docs)), inferProgramTypes(stmts, builtins, namespaces, openMode(src, opts.open))), frontend(src)));

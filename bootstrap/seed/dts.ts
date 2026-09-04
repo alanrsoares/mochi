@@ -666,6 +666,7 @@ export const emitDtsText: _Curry<
 > = _curry(2, (src: string, runtimeImport: string) =>
   emitDtsTextWith(src, runtimeImport, {
     open: false,
+    runtime: true,
     docs: true,
     moduleExt: ".js",
     strictEntry: false,

@@ -7,7 +7,13 @@ import type { AliasInfo } from "./codegen-ts";
 import type { InferApi, QualAliasField } from "./infer";
 import type { Occurrence } from "./symbols";
 
-export type Opts = { open: boolean; docs: boolean; moduleExt: string; strictEntry: boolean };
+export type Opts = {
+  open: boolean;
+  runtime: boolean;
+  docs: boolean;
+  moduleExt: string;
+  strictEntry: boolean;
+};
 export type Loaded = { path: string; src: string; stmts: Stmt[] };
 export type ModuleOutput = { path: string; js: string };
 export type ExportOrigins = {
@@ -115,7 +121,13 @@ export const emitDts: _Curry<[src: string, runtimeImport: string], Result<string
  */
 export const symbolOccurrences: (stmts: Stmt[]) => Occurrence[] = (stmts: Stmt[]) => index(stmts);
 
-const defaultOpts: Opts = { open: false, docs: true, moduleExt: ".js", strictEntry: false };
+const defaultOpts: Opts = {
+  open: false,
+  runtime: true,
+  docs: true,
+  moduleExt: ".js",
+  strictEntry: false,
+};
 
 const addCtorOrigins: <A, B, C>(
   ctors: ({ name: A } & C)[],
@@ -953,7 +965,7 @@ const compileOne: <A>(
                   codegenWith(
                     loaded.stmts,
                     res.keys,
-                    true,
+                    opts.runtime,
                     namespaceRuntime,
                     preludeJsDefs,
                     runtimeDeps,

@@ -111,6 +111,7 @@ await match(cmd)
     const src = await Bun.file(path).text();
     const result = emitDtsForFileBootstrapWith(path, "@mochi/runtime", {
       open,
+      runtime: true,
       docs,
       moduleExt: ".js",
       strictEntry: false,
@@ -128,6 +129,7 @@ await match(cmd)
     const src = await Bun.file(path).text();
     const result = compileTsBootstrapSyncWith(src, "@mochi/runtime", {
       open,
+      runtime: true,
       docs,
       moduleExt: ".js",
       strictEntry: false,
@@ -146,11 +148,18 @@ await match(cmd)
     const result = emitTs
       ? buildModulesTsBootstrapWith(entry, "@mochi/runtime", {
           open,
+          runtime: true,
           docs,
           moduleExt: ".js",
           strictEntry: false,
         })
-      : buildModulesBootstrapWith(entry, { open, docs, moduleExt: ".js", strictEntry: false });
+      : buildModulesBootstrapWith(entry, {
+          open,
+          runtime: true,
+          docs,
+          moduleExt: ".js",
+          strictEntry: false,
+        });
     if (result._tag === "Err") {
       const src = await Bun.file(entry).text();
       dieBootstrap(entry, src, result.error);
@@ -174,6 +183,7 @@ await match(cmd)
     const src = await Bun.file(file).text();
     const result = compileBootstrapSyncWith(src, {
       open,
+      runtime: true,
       docs,
       moduleExt: ".js",
       strictEntry: false,

@@ -22,6 +22,7 @@ export const compileMochiGraph = async (entry: string): Promise<MochiJsByPath> =
   const abs = resolve(entry);
   const result = buildModulesBootstrapWith(abs, {
     open: false,
+    runtime: true,
     docs: true,
     // Relative imports stay `.mochi` so Bun re-enters this loader for siblings.
     moduleExt: ".mochi",

@@ -54,6 +54,14 @@ describe("vite-plugin-mochi", () => {
     expect(result?.code).not.toMatch(/export \{/);
   });
 
+  it("keeps configured non-plugin transforms on the bootstrap compiler", () => {
+    const plugin = testPlugin({ open: true, runtime: false });
+    const result = plugin.transform("/// Answer.\nexport let answer = add(1, 2)", "src/math.mochi");
+    expect(result?.code).toContain("Answer.");
+    expect(result?.code).not.toContain("const add = _curry");
+    expect(result?.code).toContain("add(1, 2)");
+  });
+
   it("prepends JSX pragma header for files containing JSX elements", () => {
     const plugin = testPlugin();
     const code =
