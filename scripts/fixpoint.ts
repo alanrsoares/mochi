@@ -7,7 +7,8 @@
 //   stage2: the seed binary rebuilds the whole graph (`mochic build cli.mochi`).
 //   stage3: a binary assembled from the stage-2 outputs rebuilds it again.
 // Self-hosting is proved when stage2 ≡ stage3 byte-for-byte for every module.
-// We also assert the independent parity stage2 ≡ the TS `build` output.
+// Behavioural regression evidence is the reviewed bootstrap conformance corpus
+// (ADR 0105); this script measures reproducibility only.
 //
 // The build is CLOSED-WORLD (`mochic build`, the module graph), not per-file
 // open-world: modules now share `ast.mochi`/`types.mochi` and pattern-match imported
@@ -138,19 +139,9 @@ const compileAllWith = (binDir: string, outDir: string, entry: string): Record<s
   return readModules(outDir);
 };
 
-const compileAllWithTs = (outDir: string): Record<string, string> => {
-  copyBootstrapSources(outDir);
-  // The differential oracle stays on the hand-authored TypeScript compiler. It
-  // has its own entry point now that the CLI's `--open` is a self-hosted option
-  // rather than a fallback into TypeScript.
-  bun(["scripts/ts-oracle-build.ts", join(outDir, "cli.mochi")]);
-  return readModules(outDir);
-};
-
 export type FixpointResult = {
   stage2: Record<string, string>;
   stage3: Record<string, string>;
-  tsSingle: Record<string, string>;
 };
 
 export const runFixpoint = (): FixpointResult => {
@@ -170,22 +161,16 @@ export const runFixpoint = (): FixpointResult => {
   // --- stage 3: stage-2 binary rebuilds it again ---
   const stage3 = compileAllWith(s2dir, join(work, "s3"), "cli.js");
 
-  // --- independent TypeScript parity build, isolated from the seed ---
-  const tsSingle = compileAllWithTs(join(work, "ts"));
-
-  return { stage2, stage3, tsSingle };
+  return { stage2, stage3 };
 };
 
 if (import.meta.main) {
-  const { stage2, stage3, tsSingle } = runFixpoint();
+  const { stage2, stage3 } = runFixpoint();
   let ok = true;
   for (const m of MODULES) {
     const fix = stage2[m] === stage3[m];
-    const par = stage2[m] === tsSingle[m];
-    if (!fix || !par) ok = false;
-    console.error(
-      `  ${m.padEnd(8)} stage2≡stage3: ${fix ? "✓" : "✗"}   stage2≡TS: ${par ? "✓" : "✗"}`,
-    );
+    if (!fix) ok = false;
+    console.error(`  ${m.padEnd(8)} stage2≡stage3: ${fix ? "✓" : "✗"}`);
   }
   rmSync(work, { recursive: true, force: true });
   console.error(ok ? "\nfixpoint: PASS (shipped binary reproduces itself)" : "\nfixpoint: FAIL");

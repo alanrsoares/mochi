@@ -48,6 +48,21 @@ deleted once the emitted TypeScript graph is the executable stage 1.
 
 ## Consequences
 
+### Amendment — 2026-09-04
+
+ADR 0105 accepted a reviewed, bootstrap-only conformance corpus as the
+independent behavioural validation required by this decision. `fixpoint` now
+checks only stage-2 == stage-3 reproducibility; the hand-authored TypeScript
+oracle build and `scripts/ts-oracle-build.ts` are retired. The core's remaining
+TypeScript implementation is removed incrementally under issue #70.
+
+- The bootstrap chain can now advance without dual-writing every core behavior
+  into the TypeScript mirror.
+- Strict TypeScript validation remains through `bootstrap:tsc` and
+  `bootstrap:self-tsc`; conformance supplies the behavioral regression signal.
+
+### Original consequences
+
 - The bootstrap chain can eventually run without a hand-authored TypeScript
   implementation of the core while retaining strict TypeScript validation.
 - `bootstrap/seed/` holds that emitted graph, SHA-256 manifested, and is what

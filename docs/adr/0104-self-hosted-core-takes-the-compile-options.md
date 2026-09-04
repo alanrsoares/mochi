@@ -51,9 +51,9 @@ verbatim, so a typo in a host-global-heavy file is still reported. It exists
 because `dx/diagnostics.ts` passes `open: false` on the entry for that reason,
 and the graph had no way to express it.
 
-ADR 0090's differential oracle keeps its own entry point,
-`scripts/ts-oracle-build.ts`. It previously rode in on `--open`; a flag that
-happens to fall through to TypeScript is not a door worth keeping.
+ADR 0090's temporary differential oracle was retired by ADR 0105's accepted
+conformance corpus. It previously rode in on `--open`; a flag that happens to
+fall through to TypeScript is not a door worth keeping.
 
 ## Consequences
 

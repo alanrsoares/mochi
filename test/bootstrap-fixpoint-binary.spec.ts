@@ -3,7 +3,8 @@
 // harness. See scripts/fixpoint.ts for the ceremony. Every bootstrap module —
 // including compile.mochi and cli.mochi themselves — must satisfy:
 //   stage2 ≡ stage3   (the binary reproduces its own emitted source), and
-//   stage2 ≡ TS `build`   (the two implementations agree).
+// Behaviour is guarded separately by the reviewed bootstrap conformance corpus
+// (ADR 0105), so this test stays focused on binary reproducibility.
 //
 // This is the sole self-hosting fixpoint guard: the closed-world `mochic build`
 // runs the full pipeline (check + infer + codegen), so it subsumes the old
@@ -12,15 +13,11 @@
 import { expect, test } from "bun:test";
 import { runFixpoint } from "../scripts/fixpoint";
 
-const { stage2, stage3, tsSingle } = runFixpoint();
+const { stage2, stage3 } = runFixpoint();
 const modules = Object.keys(stage2);
 
 test("every bootstrap module reaches a binary fixpoint (stage2 ≡ stage3)", () => {
   for (const m of modules) expect(stage3[m]).toBe(stage2[m]);
-});
-
-test("shipped-binary output ≡ TS compiler output for every module", () => {
-  for (const m of modules) expect(stage2[m]).toBe(tsSingle[m]);
 });
 
 test("all bootstrap modules in the fixpoint graph are covered", () => {

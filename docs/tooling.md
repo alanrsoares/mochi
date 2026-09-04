@@ -42,7 +42,7 @@ a typed `extern` whenever possible. For a narrow host-global seam, begin the fil
 ```bash
 bun run check          # biome + tsc + workspace + fmt + tests (skips north-stars)
 bun run check:full     # CI / pre-push — also runs fixpoint + bootstrap-tsc
-bun run fixpoint       # self-host reproduces itself (stage2 ≡ stage3 ≡ TS)
+bun run fixpoint       # self-host reproduces itself (stage2 ≡ stage3)
 bun run bootstrap:tsc  # count tsc --strict errors on the self-host (north-star: 0)
 ```
 

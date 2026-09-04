@@ -84,10 +84,9 @@ ADR 0078's amendment) but plugin `format` hooks stay a TypeScript-host seam.
 `fixpoint` (below) still compares *emitted output*. The checked-in
 `bootstrap/seed/` graph is the stage-1 TypeScript snapshot. It is a
 reviewed emitted artifact with a SHA-256 manifest, not an editable source;
-ADR 0090's chain is Mochi → that graph → stage-2 JS → stage-3 JS. The TypeScript
-implementation remains an independent differential oracle during the migration,
-reached through `scripts/ts-oracle-build.ts` — the CLI itself no longer has a
-TypeScript path. `mochi <file>`, `ts`, `dts` and `build` all run the frozen
+ADR 0090's chain is Mochi → that graph → stage-2 JS → stage-3 JS. ADR 0105's
+reviewed conformance corpus replaced the temporary TypeScript differential build;
+the CLI itself has no TypeScript path. `mochi <file>`, `ts`, `dts` and `build` all run the frozen
 graph under every flag, because the self-hosted core takes `open`, `docs`,
 `moduleExt` and `strictEntry` as real options
 ([ADR 0104](adr/0104-self-hosted-core-takes-the-compile-options.md)).
@@ -95,9 +94,10 @@ graph under every flag, because the self-hosted core takes `open`, `docs`,
 Two invariants are enforced in CI-style scripts:
 
 - **`bun run fixpoint`** — the frozen stage-1 TypeScript graph compiles `bootstrap/`,
-  and the output reproduces itself byte-for-byte across stages (stage2 ≡ stage3),
-  and matches the independent TS reference build (stage2 ≡ TS). Refresh the
-  snapshot with `bun run seed:freeze`.
+  and the output reproduces itself byte-for-byte across stages (stage2 ≡ stage3).
+  Refresh the snapshot with `bun run seed:freeze`.
+- **`bun run bootstrap:conformance`** — checked-in black-box contracts guard
+  emitted output, diagnostics, graph behavior, runtime behavior, and typed TS.
 - **`bun run bootstrap:tsc`** — emit the whole graph as TypeScript and count
   `tsc --strict` errors. The north-star number is **0**; a ratchet fails the build if it
   regresses above 0.
@@ -109,8 +109,7 @@ graph with the SELF-HOSTED backend and requires **0** `tsc --strict` errors.
 ### Development ownership
 
 For compiler behavior covered by `bootstrap/`, Mochi is the authoring source:
-make the semantic change in the self-hosted graph first, then port it to the
-TypeScript seed/reference and prove agreement with the two invariants above.
-This does **not** make the whole repository Mochi-only. The seed and host seams,
+make the semantic change in the self-hosted graph first and extend its conformance
+contract when it changes an observable. This does **not** make the whole repository Mochi-only. The seed and host seams,
 strict TS/declaration emission, and DX tooling remain TypeScript-owned. See
 [ADR 0078](adr/0078-mochi-first-self-hosted-core.md).
