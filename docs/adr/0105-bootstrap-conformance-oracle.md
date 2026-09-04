@@ -41,8 +41,12 @@ may create candidate expectations for review, but the normal gate never rewrites
 them.
 
 `bun run check:full` must run the corpus before #70 may remove the TypeScript
-core.  The existing stage-2/stage-3 fixpoint and `bootstrap:self-tsc` remain;
-the corpus supplies behavioural regression evidence that neither provides.
+core. The committed manifest names its required cases: JS emission; parse,
+type, and check diagnostics; runtime behavior; successful and cyclic module
+graphs; single-file and graph typed-TS emission. Removing one is a failed
+conformance run, not a quiet reduction in coverage. The existing stage-2/stage-3
+fixpoint and `bootstrap:self-tsc` remain; the corpus supplies behavioural
+regression evidence that neither provides.
 
 ## Consequences
 

@@ -1,0 +1,2 @@
+import { Box } from "./shapes.mochi"
+export let answer = Box(42)

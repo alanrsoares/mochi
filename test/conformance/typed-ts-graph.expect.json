@@ -1,0 +1,10 @@
+[
+  {
+    "path": "shapes.mochi",
+    "js": "export type Shape =\n  | { _tag: \"Dot\" }\n  | { _tag: \"Box\"; value: number };\n\nexport const Dot: Shape = { _tag: \"Dot\" };\nexport const Box = (value: number): Shape => ({ _tag: \"Box\", value });\n\n"
+  },
+  {
+    "path": "main.mochi",
+    "js": "import { Box } from \"./shapes\";\nexport const answer = Box(42);\n\n"
+  }
+]

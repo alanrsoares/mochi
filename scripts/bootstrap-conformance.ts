@@ -8,7 +8,10 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
-import { buildModulesBootstrapWith } from "@mochi/compiler/bootstrap/module";
+import {
+  buildModulesBootstrapWith,
+  buildModulesTsBootstrapWith,
+} from "@mochi/compiler/bootstrap/module";
 import {
   compileBootstrapSyncWith,
   compileTsBootstrapSyncWith,
@@ -26,15 +29,18 @@ type RuntimeCase = {
 type GraphCase = { id: string; kind: "graph"; entry: string; expect: string };
 type GraphDiagnosticCase = { id: string; kind: "graph-diagnostic"; entry: string; expect: string };
 type TypedTsCase = { id: string; kind: "typed-ts"; source: string; expect: string };
+type TypedTsGraphCase = { id: string; kind: "typed-ts-graph"; entry: string; expect: string };
 type CompactDiagnostic = { message: string; start: number; end: number };
+type EmittedModule = { path: string; js: string };
 type Case =
   | CompileCase
   | DiagnosticCase
   | RuntimeCase
   | GraphCase
   | GraphDiagnosticCase
-  | TypedTsCase;
-type Manifest = { version: 1; cases: Case[] };
+  | TypedTsCase
+  | TypedTsGraphCase;
+type Manifest = { version: 1; coverage: { required: string[] }; cases: Case[] };
 
 const options = { open: false, docs: true, moduleExt: ".js", strictEntry: false };
 const fixtureRoot = resolve(import.meta.dir, "../test/conformance");
@@ -69,6 +75,38 @@ const typecheck = (id: string, source: string): string | null => {
       "--strict",
       "--noEmit",
       file,
+    ]);
+    if (result.exitCode === 0) return null;
+    return resultError(id, (result.stdout.toString() + result.stderr.toString()).trim());
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+};
+
+const graphOutput = (entry: string, outputs: EmittedModule[]) =>
+  outputs.map(({ path, js }) => ({ path: relative(dirname(entry), path), js }));
+
+const typecheckGraph = (id: string, entry: string, outputs: EmittedModule[]): string | null => {
+  const dir = mkdtempSync(join(tmpdir(), "mochi-conformance-"));
+  try {
+    const files = outputs.map(({ path, js }) => {
+      const file = join(dir, relative(dirname(entry), path).replace(/\.mochi$/, ".ts"));
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, js);
+      return file;
+    });
+    const result = Bun.spawnSync([
+      "bun",
+      "x",
+      "tsc",
+      "--ignoreConfig",
+      "--strict",
+      "--noEmit",
+      "--module",
+      "esnext",
+      "--moduleResolution",
+      "bundler",
+      ...files,
     ]);
     if (result.exitCode === 0) return null;
     return resultError(id, (result.stdout.toString() + result.stderr.toString()).trim());
@@ -117,10 +155,7 @@ const runCase = (test: Case): string | null => {
     const result = buildModulesBootstrapWith(entry, options);
     if (result._tag === "Err")
       return resultError(test.id, `unexpected diagnostic ${result.error.message}`);
-    const actual = result.value.map(({ path, js }) => ({
-      path: relative(dirname(entry), path),
-      js,
-    }));
+    const actual = graphOutput(entry, result.value);
     return JSON.stringify(actual) === JSON.stringify(expectedJson(test.expect))
       ? null
       : resultError(test.id, `module output differs: ${JSON.stringify(actual)}`);
@@ -134,6 +169,17 @@ const runCase = (test: Case): string | null => {
     return JSON.stringify(actual) === JSON.stringify(expectedJson(test.expect))
       ? null
       : resultError(test.id, `graph diagnostic differs: ${JSON.stringify(actual)}`);
+  }
+
+  if (test.kind === "typed-ts-graph") {
+    const entry = join(fixtureRoot, test.entry);
+    const result = buildModulesTsBootstrapWith(entry, "@mochi/runtime", options);
+    if (result._tag === "Err")
+      return resultError(test.id, `unexpected diagnostic ${result.error.message}`);
+    const actual = graphOutput(entry, result.value);
+    if (JSON.stringify(actual) !== JSON.stringify(expectedJson(test.expect)))
+      return resultError(test.id, "emitted TypeScript graph differs");
+    return typecheckGraph(test.id, entry, result.value);
   }
 
   const result = compileTsBootstrapSyncWith(text(test.source), "@mochi/runtime", options);
@@ -178,9 +224,7 @@ const candidateFor = (test: Case): { path: string; contents: string } => {
     if (result._tag === "Err") throw new Error(resultError(test.id, result.error.message));
     return {
       path: test.expect,
-      contents: json(
-        result.value.map(({ path, js }) => ({ path: relative(dirname(entry), path), js })),
-      ),
+      contents: json(graphOutput(entry, result.value)),
     };
   }
 
@@ -191,9 +235,27 @@ const candidateFor = (test: Case): { path: string; contents: string } => {
     return { path: test.expect, contents: json(graphDiagnostic(entry, result.error)) };
   }
 
+  if (test.kind === "typed-ts-graph") {
+    const entry = join(fixtureRoot, test.entry);
+    const result = buildModulesTsBootstrapWith(entry, "@mochi/runtime", options);
+    if (result._tag === "Err") throw new Error(resultError(test.id, result.error.message));
+    return { path: test.expect, contents: json(graphOutput(entry, result.value)) };
+  }
+
   const result = compileTsBootstrapSyncWith(text(test.source), "@mochi/runtime", options);
   if (result._tag === "Err") throw new Error(resultError(test.id, result.error.message));
   return { path: test.expect, contents: result.value };
+};
+
+/** The reviewed minimum contract required before this corpus can replace TS parity. */
+const coverageErrorsFor = (manifest: Manifest): string[] => {
+  const ids = manifest.cases.map((test) => test.id);
+  const duplicated = ids.filter((id, index) => ids.indexOf(id) !== index);
+  const missing = manifest.coverage.required.filter((id) => !ids.includes(id));
+  return [
+    ...[...new Set(duplicated)].map((id) => `duplicate conformance case '${id}'`),
+    ...missing.map((id) => `required conformance case '${id}' is missing`),
+  ];
 };
 
 /**
@@ -204,6 +266,8 @@ export const freezeBootstrapConformance = (out = candidateRoot): string[] => {
   const manifest = JSON.parse(text("manifest.json")) as Manifest;
   if (manifest.version !== 1)
     throw new Error(`unsupported conformance manifest version ${manifest.version}`);
+  const coverageErrors = coverageErrorsFor(manifest);
+  if (coverageErrors.length > 0) throw new Error(coverageErrors.join("\n"));
   rmSync(out, { recursive: true, force: true });
   const paths: string[] = [];
   for (const test of manifest.cases) {
@@ -221,10 +285,13 @@ export const runBootstrapConformance = (): string[] => {
   const manifest = JSON.parse(text("manifest.json")) as Manifest;
   if (manifest.version !== 1)
     return [`unsupported conformance manifest version ${manifest.version}`];
-  return manifest.cases.flatMap((test) => {
-    const failure = runCase(test);
-    return failure ? [failure] : [];
-  });
+  return [
+    ...coverageErrorsFor(manifest),
+    ...manifest.cases.flatMap((test) => {
+      const failure = runCase(test);
+      return failure ? [failure] : [];
+    }),
+  ];
 };
 
 if (import.meta.main) {
