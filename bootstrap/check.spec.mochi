@@ -26,6 +26,17 @@ test("checker aggregates independent match diagnostics", () => switch lex("type 
     }
 })
 
+test("checker aggregates independent loop diagnostics", () => switch lex("let f = recur(0)\nlet g = loop (n = 0) { recur(n) + 1 }\nlet h = loop (x = 0, x = 1) { x }") {
+  | Err(_) => false |> ok
+  | Ok(tokens) => switch parse(tokens) {
+      | Err(_) => false |> ok
+      | Ok(stmts) => switch checkAll(stmts) {
+          | Ok(_) => false |> ok
+          | Err(errors) => Array.length(errors) == 3 |> ok
+        }
+    }
+})
+
 testEach("checker rejects invalid declarations and switches", [
   {
     label: "missing variant arm",

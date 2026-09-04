@@ -94,6 +94,14 @@ test("bootstrap checker aggregates independent match diagnostics", () => {
   expect(alCheckDiagnostics(src)).toEqual(checkDiagnostics(src));
 });
 
+test("bootstrap checker aggregates independent loop diagnostics", () => {
+  const src =
+    "let f = recur(0)\n" +
+    "let g = loop (n = 0) { recur(n) + 1 }\n" +
+    "let h = loop (x = 0, x = 1) { x }\n";
+  expect(alCheckDiagnostics(src)).toEqual(checkDiagnostics(src));
+});
+
 for (const file of corpus) {
   test(`check verdicts agree on ${file}`, () => {
     const src = readFileSync(join(root, file), "utf8");

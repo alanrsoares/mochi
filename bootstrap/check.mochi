@@ -1129,6 +1129,188 @@ let checkLoops = stmts =>
     stmts
   )
 
+// The collector mirrors TS's loop walk, including its diagnostic order. Keep
+// `checkLoopExpr` above for the legacy first-error railway; `checkAll` uses
+// this sibling so independent recur mistakes do not hide one another.
+let loopParamErrors = params =>
+  loop (i = 0, seen = Set.fromArray([]), errors = []) {
+    switch Array.get(i, params) {
+      | None => errors
+      | Some(p) => recur(
+          i + 1,
+          Set.add(p.name, seen),
+          Set.has(p.name, seen)
+            ? [
+              ...errors,
+              checkErr("duplicate loop param '${p.name}'", p.nameSpan)
+            ]
+            : errors
+        )
+    }
+  }
+
+let checkLoopDoAll = (exprs, frame, tail) =>
+  loop (i = 0, errors = []) {
+    switch Array.get(i, exprs) {
+      | None => errors
+      | Some(expr) => let isLast = Array.get(i + 1, exprs) |> Option.isNone in
+          recur(
+            i + 1,
+            [...errors, ...checkLoopExprs(expr, frame, isLast ? tail : false)]
+          )
+    }
+  }
+
+let checkLoopExprs = (e, frame: Option<LoopFrame>, tail) => switch e {
+  | Ast.ELoop(params, body, _) => [
+      ...loopParamErrors(params),
+      ...Array.flatMap(p => checkLoopExprs(p.init, frame, false), params),
+      ...checkLoopExprs(
+        body,
+        Some(
+          {
+            arity: Array.length(params),
+            names: params |> map(p => p.name) |> Set.fromArray
+          }
+        ),
+        true
+      )
+    ]
+  | Ast.ERecur(args, sp) => let siteErrors = switch frame {
+      | None => [checkErr("'recur' is only legal inside a loop body", sp)]
+      | Some(current) => [
+          ...!tail
+            ? [
+              checkErr(
+                "'recur' must be in tail position of its enclosing loop",
+                sp
+              )
+            ]
+            : [],
+          ...Array.length(args) != current.arity
+            ? [
+              checkErr(
+                "'recur' takes ${show(current.arity)} argument${current.arity == 1 ? "" : "s"} (one per loop param), got ${show(Array.length(args))}",
+                sp
+              )
+            ]
+            : []
+        ]
+    } in
+      [
+        ...siteErrors,
+        ...Array.flatMap(a => checkLoopExprs(a, frame, false), args)
+      ]
+  | Ast.ETernary(cond, thenE, elseE, _) => [
+      ...checkLoopExprs(cond, frame, false),
+      ...checkLoopExprs(thenE, frame, tail),
+      ...checkLoopExprs(elseE, frame, tail)
+    ]
+  | Ast.EMatch(scrutinee, arms, _) => [
+      ...checkLoopExprs(scrutinee, frame, false),
+      ...Array.flatMap(
+        arm =>
+          [
+            ...switch arm.guard {
+              | Some(guard) => checkLoopExprs(guard, frame, false)
+              | None => []
+            },
+            ...checkLoopExprs(arm.body, frame, tail)
+          ],
+        arms
+      )
+    ]
+  | Ast.ELetIn(name, nameSp, _, value, body, _) => [
+      ...switch frame {
+        | Some(current) when Set.has(name, current.names) => [
+            checkErr(
+              "'${name}' shadows a loop param inside the loop body; rename it",
+              nameSp
+            )
+          ]
+        | _ => []
+      },
+      ...checkLoopExprs(value, frame, false),
+      ...checkLoopExprs(body, frame, tail)
+    ]
+  | Ast.ELetBind(_, _, _, value, body, _) => [
+      ...checkLoopExprs(value, frame, false),
+      ...checkLoopExprs(body, None, false)
+    ]
+  | Ast.ELambda(_, body, _) => checkLoopExprs(body, None, false)
+  | Ast.ECall(fn, args, _, _) => [
+      ...checkLoopExprs(fn, frame, false),
+      ...Array.flatMap(a => checkLoopExprs(a, frame, false), args)
+    ]
+  | Ast.EPipe(left, right, _, _) => [
+      ...checkLoopExprs(left, frame, false),
+      ...checkLoopExprs(right, frame, false)
+    ]
+  | Ast.EDo(exprs, _) => checkLoopDoAll(exprs, frame, tail)
+  | Ast.ERecord(fields, spread, _) => [
+      ...switch spread {
+        | Some(value) => checkLoopExprs(value, frame, false)
+        | None => []
+      },
+      ...Array.flatMap(
+        field => checkLoopExprs(field.value, frame, false),
+        fields
+      )
+    ]
+  | Ast.EField(target, _, _, _) => checkLoopExprs(target, frame, false)
+  | Ast.ETuple(elements, _) => Array.flatMap(
+      el => checkLoopExprs(el, frame, false),
+      elements
+    )
+  | Ast.EArr(elements, _) => Array.flatMap(
+      el => switch el {
+        | Ast.SEExpr(value) => checkLoopExprs(value, frame, false)
+        | Ast.SESpread(value) => checkLoopExprs(value, frame, false)
+      },
+      elements
+    )
+  | Ast.EList(elements, _) => Array.flatMap(
+      el => switch el {
+        | Ast.SEExpr(value) => checkLoopExprs(value, frame, false)
+        | Ast.SESpread(value) => checkLoopExprs(value, frame, false)
+      },
+      elements
+    )
+  | Ast.ESet(elements, _) => Array.flatMap(
+      el => switch el {
+        | Ast.SEExpr(value) => checkLoopExprs(value, frame, false)
+        | Ast.SESpread(value) => checkLoopExprs(value, frame, false)
+      },
+      elements
+    )
+  | Ast.EMap(entries, _) => Array.flatMap(
+      entry =>
+        [
+          ...checkLoopExprs(entry.key, frame, false),
+          ...checkLoopExprs(entry.value, frame, false)
+        ],
+      entries
+    )
+  | Ast.EInterp(parts, _) => Array.flatMap(
+      part => switch part {
+        | Ast.IPLit(_) => []
+        | Ast.IPExpr(value) => checkLoopExprs(value, frame, false)
+      },
+      parts
+    )
+  | _ => []
+}
+
+let checkLoopsAll = stmts =>
+  Array.flatMap(
+    stmt => switch stmt {
+      | Ast.SLet(_, _, _, value, _, _, _) => checkLoopExprs(value, None, false)
+      | Ast.SExpr(value, _) => checkLoopExprs(value, None, false)
+      | _ => []
+    },
+    stmts
+  )
+
 // --- entry point ---
 
 // Merge every key of `from` that `into` lacks (the importer's own decls win on
@@ -1182,44 +1364,44 @@ export let checkWith = (stmts, imported, quals) => switch checkReservedNames(stm
 export let check = stmts =>
   stmts->checkWith({ ctors: #{}, types: #{} }, emptyQuals)
 
-/// Aggregate match/exhaustiveness diagnostics without changing the legacy
-/// single-error check railway. Declaration and loop collectors follow as
-/// separate slices; this entrypoint establishes the `[CErr]` result boundary.
+/// Aggregate expression-local match and loop diagnostics without changing the
+/// legacy single-error check railway. Declaration collectors follow as a
+/// separate slice; this entrypoint establishes the `[CErr]` result boundary.
 export let checkAllWith = (stmts, imported, quals) => switch checkReservedNames(stmts) {
   | Some(e) => Err([e])
   | None => switch checkCtorFieldVars(stmts) {
       | Some(e) => Err([e])
       | None => switch checkQualifiedTypeNames(stmts, quals) {
           | Some(e) => Err([e])
-          | None => switch checkLoops(stmts) {
-              | Some(e) => Err([e])
-              | None => switch buildRegistry(stmts) {
-                  | Err(e) => Err([e])
-                  | Ok(reg0) => let reg = {
-                      ctors: mergeMissing(
-                        Map.keys(imported.ctors),
-                        imported.ctors,
-                        reg0.ctors
-                      ),
-                      types: mergeMissing(
-                        Map.keys(imported.types),
-                        imported.types,
-                        reg0.types
-                      )
-                    } in
-                    let errors = Array.flatMap(
-                      stmt => switch stmt {
-                        | Ast.SLet(_, _, _, value, _, _, _) => checkExprs(
-                            value,
-                            reg
-                          )
-                        | Ast.SExpr(value, _) => checkExprs(value, reg)
-                        | _ => []
-                      },
-                      stmts
-                    ) in
-                      Array.length(errors) == 0 ? Ok(stmts) : Err(errors)
-                }
+          | None => switch buildRegistry(stmts) {
+              | Err(e) => Err([e])
+              | Ok(reg0) => let reg = {
+                  ctors: mergeMissing(
+                    Map.keys(imported.ctors),
+                    imported.ctors,
+                    reg0.ctors
+                  ),
+                  types: mergeMissing(
+                    Map.keys(imported.types),
+                    imported.types,
+                    reg0.types
+                  )
+                } in
+                let errors = [
+                  ...checkLoopsAll(stmts),
+                  ...Array.flatMap(
+                    stmt => switch stmt {
+                      | Ast.SLet(_, _, _, value, _, _, _) => checkExprs(
+                          value,
+                          reg
+                        )
+                      | Ast.SExpr(value, _) => checkExprs(value, reg)
+                      | _ => []
+                    },
+                    stmts
+                  )
+                ] in
+                  Array.length(errors) == 0 ? Ok(stmts) : Err(errors)
             }
         }
     }
