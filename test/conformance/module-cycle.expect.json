@@ -1,0 +1,6 @@
+{
+  "message": "import cycle through '<fixtures>/module-cycle/a.mochi'",
+  "start": 0,
+  "end": 0,
+  "entry": "module-cycle/a.mochi"
+}

@@ -18,6 +18,8 @@ Keep these checks green before handing off a core change:
 bun run fixpoint       # frozen stage 1 -> stage 2 == stage 3 == TS reference
 bun run bootstrap:tsc  # emitted graph remains strict-tsc clean
 bun run bootstrap:self-tsc # self-hosted TS emitter remains strict-tsc clean
+bun run bootstrap:conformance # reviewed behaviour corpus over the shipped seed
+bun run bootstrap:conformance:freeze # candidates in test/conformance/.candidate/ for review
 ```
 
 Refresh the stage-1 snapshot with `bun run seed:freeze` when today's sources

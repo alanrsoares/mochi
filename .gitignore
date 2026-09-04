@@ -10,6 +10,7 @@ dist
 # `.mochi`, or a hand-written/generated host runtime kept as `.mjs`, so all
 # `.js` in the tree is a build artifact and safe to ignore wholesale.
 *.js
+!test/conformance/**/*.expect.js
 
 # The stage-1 bootstrap binary is a reviewed emitted artifact (ADR 0090),
 # not ordinary `mochi build` output. Its manifest records the exact frozen graph.
@@ -87,3 +88,4 @@ test/.tsgen-graph/
 test/.mochi-cli-*/
 
 .claude
+test/conformance/.candidate/

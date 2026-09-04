@@ -21,4 +21,7 @@ test("bootstrap TS graph retains aliases from dependency scope", async () => {
   expect(compile?.js).not.toContain(
     "Result<string, { message: string; start: number; end: number }>",
   );
-}, 30_000);
+  // This builds the entire typed bootstrap graph. `test:full` runs serially so it
+  // does not starve its short property tests under CI contention; allow one minute
+  // for the graph build itself rather than treating scheduler delay as a failure.
+}, 60_000);

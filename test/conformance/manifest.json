@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "coverage": {
+    "required": [
+      "single-js",
+      "unbound-name",
+      "parse-error",
+      "type-error",
+      "non-exhaustive",
+      "runtime",
+      "runtime-variant",
+      "module-graph",
+      "module-cycle",
+      "typed-ts",
+      "typed-ts-graph"
+    ]
+  },
+  "cases": [
+    { "id": "single-js", "kind": "compile", "source": "single-js.mochi", "expect": "single-js.expect.js" },
+    { "id": "unbound-name", "kind": "diagnostic", "source": "unbound-name.mochi", "expect": "unbound-name.expect.json" },
+    { "id": "parse-error", "kind": "diagnostic", "source": "parse-error.mochi", "expect": "parse-error.expect.json" },
+    { "id": "type-error", "kind": "diagnostic", "source": "type-error.mochi", "expect": "type-error.expect.json" },
+    { "id": "non-exhaustive", "kind": "diagnostic", "source": "non-exhaustive.mochi", "expect": "non-exhaustive.expect.json" },
+    { "id": "runtime", "kind": "runtime", "source": "runtime.mochi", "expect": "runtime.expect.json" },
+    { "id": "runtime-variant", "kind": "runtime", "source": "runtime-variant.mochi", "expect": "runtime-variant.expect.json" },
+    { "id": "module-graph", "kind": "graph", "entry": "module-graph/main.mochi", "expect": "module-graph.expect.json" },
+    { "id": "module-cycle", "kind": "graph-diagnostic", "entry": "module-cycle/a.mochi", "expect": "module-cycle.expect.json" },
+    { "id": "typed-ts", "kind": "typed-ts", "source": "typed-ts.mochi", "expect": "typed-ts.expect.txt" },
+    { "id": "typed-ts-graph", "kind": "typed-ts-graph", "entry": "typed-ts-graph/main.mochi", "expect": "typed-ts-graph.expect.json" }
+  ]
+}

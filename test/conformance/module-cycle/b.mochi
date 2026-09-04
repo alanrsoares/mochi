@@ -1,0 +1,2 @@
+import { a } from "./a.mochi"
+export let b = a

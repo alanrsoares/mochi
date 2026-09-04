@@ -1,0 +1,2 @@
+import { value } from "./value.mochi"
+export let answer = value
