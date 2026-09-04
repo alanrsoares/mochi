@@ -28,6 +28,9 @@ type AlResult = { _tag: "Ok"; value: unknown } | { _tag: "Err"; error: AlErr };
 const alLex = evalAl(compileAl("bootstrap/lexer.mochi"), "lex") as (src: string) => AlResult;
 const alParse = evalAl(compileAl("bootstrap/parser.mochi"), "parse") as (toks: unknown) => AlResult;
 const alCheck = evalAl(compileAl("bootstrap/check.mochi"), "check") as (stmts: unknown) => AlResult;
+const alCheckAll = evalAl(compileAl("bootstrap/check.mochi"), "checkAll") as (
+  stmts: unknown,
+) => AlResult;
 
 // ---- one canonical verdict shape for both checkers -------------------------------
 
@@ -52,6 +55,27 @@ const alVerdict = (src: string): Verdict => {
     : { ok: false, message: cr.error.message, start: cr.error.start, end: cr.error.end };
 };
 
+const checkDiagnostics = (src: string): Verdict[] => {
+  const r = check(unwrapOk(parse(unwrapOk(lex(src)))));
+  return isOk(r)
+    ? []
+    : unwrapErr(r).map((e) => {
+        if (e.span === undefined) throw new Error("TS check error without a span");
+        return { ok: false, message: e.message, start: e.span.start, end: e.span.end };
+      });
+};
+
+const alCheckDiagnostics = (src: string): Verdict[] => {
+  const lr = alLex(src);
+  if (lr._tag !== "Ok") throw new Error(`mochi lexer errored: ${lr.error.message}`);
+  const pr = alParse(lr.value);
+  if (pr._tag !== "Ok") throw new Error(`mochi parser errored: ${pr.error.message}`);
+  const cr = alCheckAll(pr.value) as AlResult & { error: AlErr[] };
+  return cr._tag === "Ok"
+    ? []
+    : cr.error.map((e) => ({ ok: false, message: e.message, start: e.start, end: e.end }));
+};
+
 // ---- the corpus: every .mochi file in the repo -------------------------------------
 
 const corpus = [...new Bun.Glob("**/*.mochi").scanSync({ cwd: root })]
@@ -60,6 +84,14 @@ const corpus = [...new Bun.Glob("**/*.mochi").scanSync({ cwd: root })]
 
 test("corpus includes the bootstrap checker itself", () => {
   expect(corpus).toContain("bootstrap/check.mochi");
+});
+
+test("bootstrap checker aggregates independent match diagnostics", () => {
+  const src =
+    "type C = | A | B\n" +
+    "let f = c => switch c { | A => 1 }\n" +
+    "let g = c => switch c { | B => 2 }\n";
+  expect(alCheckDiagnostics(src)).toEqual(checkDiagnostics(src));
 });
 
 for (const file of corpus) {

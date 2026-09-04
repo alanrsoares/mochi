@@ -595,6 +595,99 @@ let checkExpr = (e, reg) => switch e {
     )
 }
 
+// Aggregate only the expression-local check findings for now. The legacy
+// `check` entrypoint remains first-error so the single-error compile railway
+// and module driver can migrate independently. This mirrors TS's post-order
+// match walk: children are reported before their containing switch.
+let checkExprs = (e, reg) => switch e {
+  | Ast.ENum(_, _, _) => []
+  | Ast.EUnit(_) => []
+  | Ast.EBool(_, _) => []
+  | Ast.EStr(_, _) => []
+  | Ast.ERef(_, _) => []
+  | Ast.ECall(fn, args, _, _) => [
+      ...checkExprs(fn, reg),
+      ...Array.flatMap(a => checkExprs(a, reg), args)
+    ]
+  | Ast.ELambda(_, body, _) => checkExprs(body, reg)
+  | Ast.ELetIn(_, _, _, value, body, _) => [
+      ...checkExprs(value, reg),
+      ...checkExprs(body, reg)
+    ]
+  | Ast.ELetBind(_, _, _, value, body, _) => [
+      ...checkExprs(value, reg),
+      ...checkExprs(body, reg)
+    ]
+  | Ast.EPipe(left, right, _, _) => [
+      ...checkExprs(left, reg),
+      ...checkExprs(right, reg)
+    ]
+  | Ast.EDo(exprs, _) => Array.flatMap(x => checkExprs(x, reg), exprs)
+  | Ast.ETernary(cond, thenE, elseE, _) => [
+      ...checkExprs(cond, reg),
+      ...checkExprs(thenE, reg),
+      ...checkExprs(elseE, reg)
+    ]
+  | Ast.EMatch(scrutinee, arms, sp) => [
+      ...checkExprs(scrutinee, reg),
+      ...Array.flatMap(
+        a =>
+          [
+            ...switch a.guard { | Some(g) => checkExprs(g, reg) | None => [] },
+            ...checkExprs(a.body, reg)
+          ],
+        arms
+      ),
+      ...switch checkMatch(arms, sp, reg) { | Some(e) => [e] | None => [] }
+    ]
+  | Ast.ERecord(fields, spread, _) => [
+      ...switch spread { | Some(s) => checkExprs(s, reg) | None => [] },
+      ...Array.flatMap(f => checkExprs(f.value, reg), fields)
+    ]
+  | Ast.EField(target, _, _, _) => checkExprs(target, reg)
+  | Ast.ELoop(params, body, _) => [
+      ...Array.flatMap(p => checkExprs(p.init, reg), params),
+      ...checkExprs(body, reg)
+    ]
+  | Ast.ERecur(args, _) => Array.flatMap(a => checkExprs(a, reg), args)
+  | Ast.ETuple(elements, _) => Array.flatMap(
+      el => checkExprs(el, reg),
+      elements
+    )
+  | Ast.EArr(elements, _) => Array.flatMap(
+      el => switch el {
+        | Ast.SEExpr(value) => checkExprs(value, reg)
+        | Ast.SESpread(value) => checkExprs(value, reg)
+      },
+      elements
+    )
+  | Ast.EList(elements, _) => Array.flatMap(
+      el => switch el {
+        | Ast.SEExpr(value) => checkExprs(value, reg)
+        | Ast.SESpread(value) => checkExprs(value, reg)
+      },
+      elements
+    )
+  | Ast.ESet(elements, _) => Array.flatMap(
+      el => switch el {
+        | Ast.SEExpr(value) => checkExprs(value, reg)
+        | Ast.SESpread(value) => checkExprs(value, reg)
+      },
+      elements
+    )
+  | Ast.EMap(entries, _) => Array.flatMap(
+      entry => [...checkExprs(entry.key, reg), ...checkExprs(entry.value, reg)],
+      entries
+    )
+  | Ast.EInterp(parts, _) => Array.flatMap(
+      part => switch part {
+        | Ast.IPLit(_) => []
+        | Ast.IPExpr(value) => checkExprs(value, reg)
+      },
+      parts
+    )
+}
+
 // --- reserved names + stray ctor-field type vars ---
 
 // Collection namespaces are built-in; binding one would shadow `List.map` and
@@ -1088,3 +1181,49 @@ export let checkWith = (stmts, imported, quals) => switch checkReservedNames(stm
 
 export let check = stmts =>
   stmts->checkWith({ ctors: #{}, types: #{} }, emptyQuals)
+
+/// Aggregate match/exhaustiveness diagnostics without changing the legacy
+/// single-error check railway. Declaration and loop collectors follow as
+/// separate slices; this entrypoint establishes the `[CErr]` result boundary.
+export let checkAllWith = (stmts, imported, quals) => switch checkReservedNames(stmts) {
+  | Some(e) => Err([e])
+  | None => switch checkCtorFieldVars(stmts) {
+      | Some(e) => Err([e])
+      | None => switch checkQualifiedTypeNames(stmts, quals) {
+          | Some(e) => Err([e])
+          | None => switch checkLoops(stmts) {
+              | Some(e) => Err([e])
+              | None => switch buildRegistry(stmts) {
+                  | Err(e) => Err([e])
+                  | Ok(reg0) => let reg = {
+                      ctors: mergeMissing(
+                        Map.keys(imported.ctors),
+                        imported.ctors,
+                        reg0.ctors
+                      ),
+                      types: mergeMissing(
+                        Map.keys(imported.types),
+                        imported.types,
+                        reg0.types
+                      )
+                    } in
+                    let errors = Array.flatMap(
+                      stmt => switch stmt {
+                        | Ast.SLet(_, _, _, value, _, _, _) => checkExprs(
+                            value,
+                            reg
+                          )
+                        | Ast.SExpr(value, _) => checkExprs(value, reg)
+                        | _ => []
+                      },
+                      stmts
+                    ) in
+                      Array.length(errors) == 0 ? Ok(stmts) : Err(errors)
+                }
+            }
+        }
+    }
+}
+
+export let checkAll = stmts =>
+  stmts->checkAllWith({ ctors: #{}, types: #{} }, emptyQuals)

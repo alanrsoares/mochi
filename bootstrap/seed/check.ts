@@ -968,6 +968,120 @@ const checkExpr: _Curry<
     )
     .exhaustive(),
 );
+const checkExprs: _Curry<
+  [e: Expr, reg: { ctors: Map<string, CtorInfo>; types: Map<string, string[]> }],
+  PErr[]
+> = _curry(2, (e: Expr, reg: { ctors: Map<string, CtorInfo>; types: Map<string, string[]> }) =>
+  match(e)
+    .with({ _tag: "ENum" }, () => [] as PErr[])
+    .with({ _tag: "EUnit" }, () => [] as PErr[])
+    .with({ _tag: "EBool" }, () => [] as PErr[])
+    .with({ _tag: "EStr" }, () => [] as PErr[])
+    .with({ _tag: "ERef" }, () => [] as PErr[])
+    .with({ _tag: "ECall" }, ({ fn, args }) => [
+      ...checkExprs(fn, reg),
+      ..._Array_flatMap((a: Expr) => checkExprs(a, reg), args),
+    ])
+    .with({ _tag: "ELambda" }, ({ body }) => checkExprs(body, reg))
+    .with({ _tag: "ELetIn" }, ({ value, body }) => [
+      ...checkExprs(value, reg),
+      ...checkExprs(body, reg),
+    ])
+    .with({ _tag: "ELetBind" }, ({ value, body }) => [
+      ...checkExprs(value, reg),
+      ...checkExprs(body, reg),
+    ])
+    .with({ _tag: "EPipe" }, ({ left, right }) => [
+      ...checkExprs(left, reg),
+      ...checkExprs(right, reg),
+    ])
+    .with({ _tag: "EDo" }, ({ exprs }) => _Array_flatMap((x: Expr) => checkExprs(x, reg), exprs))
+    .with({ _tag: "ETernary" }, ({ cond, thenE, elseE }) => [
+      ...checkExprs(cond, reg),
+      ...checkExprs(thenE, reg),
+      ...checkExprs(elseE, reg),
+    ])
+    .with({ _tag: "EMatch" }, ({ scrutinee, arms, span: sp }) => [
+      ...checkExprs(scrutinee, reg),
+      ..._Array_flatMap(
+        (a: MatchArm) => [
+          ...match(a.guard)
+            .with({ _tag: "Some" }, ({ value: g }) => checkExprs(g, reg))
+            .with({ _tag: "None" }, () => [] as PErr[])
+            .exhaustive(),
+          ...checkExprs(a.body, reg),
+        ],
+        arms,
+      ),
+      ...match(checkMatch(arms, sp, reg))
+        .with({ _tag: "Some" }, ({ value: e }) => [e])
+        .with({ _tag: "None" }, () => [] as PErr[])
+        .exhaustive(),
+    ])
+    .with({ _tag: "ERecord" }, ({ fields, spread }) => [
+      ...match(spread)
+        .with({ _tag: "Some" }, ({ value: s }) => checkExprs(s, reg))
+        .with({ _tag: "None" }, () => [] as PErr[])
+        .exhaustive(),
+      ..._Array_flatMap((f: Field) => checkExprs(f.value, reg), fields),
+    ])
+    .with({ _tag: "EField" }, ({ target }) => checkExprs(target, reg))
+    .with({ _tag: "ELoop" }, ({ params, body }) => [
+      ..._Array_flatMap((p: LoopParam) => checkExprs(p.init, reg), params),
+      ...checkExprs(body, reg),
+    ])
+    .with({ _tag: "ERecur" }, ({ args }) => _Array_flatMap((a: Expr) => checkExprs(a, reg), args))
+    .with({ _tag: "ETuple" }, ({ elements }) =>
+      _Array_flatMap((el: Expr) => checkExprs(el, reg), elements),
+    )
+    .with({ _tag: "EArr" }, ({ elements }) =>
+      _Array_flatMap(
+        (el: SeqElem) =>
+          match(el)
+            .with({ _tag: "SEExpr" }, ({ expr: value }) => checkExprs(value, reg))
+            .with({ _tag: "SESpread" }, ({ expr: value }) => checkExprs(value, reg))
+            .exhaustive(),
+        elements,
+      ),
+    )
+    .with({ _tag: "EList" }, ({ elements }) =>
+      _Array_flatMap(
+        (el: SeqElem) =>
+          match(el)
+            .with({ _tag: "SEExpr" }, ({ expr: value }) => checkExprs(value, reg))
+            .with({ _tag: "SESpread" }, ({ expr: value }) => checkExprs(value, reg))
+            .exhaustive(),
+        elements,
+      ),
+    )
+    .with({ _tag: "ESet" }, ({ elements }) =>
+      _Array_flatMap(
+        (el: SeqElem) =>
+          match(el)
+            .with({ _tag: "SEExpr" }, ({ expr: value }) => checkExprs(value, reg))
+            .with({ _tag: "SESpread" }, ({ expr: value }) => checkExprs(value, reg))
+            .exhaustive(),
+        elements,
+      ),
+    )
+    .with({ _tag: "EMap" }, ({ entries }) =>
+      _Array_flatMap(
+        (entry: MapEntry) => [...checkExprs(entry.key, reg), ...checkExprs(entry.value, reg)],
+        entries,
+      ),
+    )
+    .with({ _tag: "EInterp" }, ({ parts }) =>
+      _Array_flatMap(
+        (part: InterpPart) =>
+          match(part)
+            .with({ _tag: "IPLit" }, () => [] as PErr[])
+            .with({ _tag: "IPExpr" }, ({ expr: value }) => checkExprs(value, reg))
+            .exhaustive(),
+        parts,
+      ),
+    )
+    .exhaustive(),
+);
 const reservedNames: string[] = ["Array", "List", "Set", "Map", "Option", "Result", "Str"];
 const redeclarableTypes: string[] = ["Option", "Result"];
 const reservedErr: <A, B, C>(
@@ -1645,6 +1759,79 @@ export const checkWith: <A, B>(
 );
 export const check: (stmts: Stmt[]) => Result<Stmt[], PErr> = (stmts: Stmt[]) =>
   checkWith(
+    stmts,
+    { ctors: new Map<string, CtorInfo>(), types: new Map<string, string[]>() },
+    emptyQuals,
+  );
+/**
+ * Aggregate match/exhaustiveness diagnostics without changing the legacy
+ * single-error check railway. Declaration and loop collectors follow as
+ * separate slices; this entrypoint establishes the `[CErr]` result boundary.
+ */
+export const checkAllWith: <A, B>(
+  stmts: Stmt[],
+  imported: { types: Map<string, string[]>; ctors: Map<string, CtorInfo> } & A,
+  quals: Map<string, { types: Set<string> } & B>,
+) => Result<Stmt[], PErr[]> = _curry(
+  3,
+  <A, B>(
+    stmts: Stmt[],
+    imported: { types: Map<string, string[]>; ctors: Map<string, CtorInfo> } & A,
+    quals: Map<string, { types: Set<string> } & B>,
+  ) =>
+    match(checkReservedNames(stmts))
+      .with({ _tag: "Some" }, ({ value: e }) => Err([e]) as Result<Stmt[], PErr[]>)
+      .with({ _tag: "None" }, () =>
+        match(checkCtorFieldVars(stmts))
+          .with({ _tag: "Some" }, ({ value: e }) => Err([e]) as Result<Stmt[], PErr[]>)
+          .with({ _tag: "None" }, () =>
+            match(checkQualifiedTypeNames(stmts, quals))
+              .with({ _tag: "Some" }, ({ value: e }) => Err([e]) as Result<Stmt[], PErr[]>)
+              .with({ _tag: "None" }, () =>
+                match(checkLoops(stmts))
+                  .with({ _tag: "Some" }, ({ value: e }) => Err([e]) as Result<Stmt[], PErr[]>)
+                  .with({ _tag: "None" }, () =>
+                    match(buildRegistry(stmts))
+                      .with({ _tag: "Err" }, ({ error: e }) => Err([e]) as Result<Stmt[], PErr[]>)
+                      .with({ _tag: "Ok" }, ({ value: reg0 }) =>
+                        ((reg: Registry) =>
+                          ((errors: PErr[]) =>
+                            eq(length(errors), 0)
+                              ? (Ok(stmts) as Result<Stmt[], PErr[]>)
+                              : (Err(errors) as Result<Stmt[], PErr[]>))(
+                            _Array_flatMap(
+                              (stmt: Stmt) =>
+                                match(stmt)
+                                  .with({ _tag: "SLet" }, ({ value }) => checkExprs(value, reg))
+                                  .with({ _tag: "SExpr" }, ({ value }) => checkExprs(value, reg))
+                                  .otherwise(() => [] as PErr[]),
+                              stmts,
+                            ),
+                          ))({
+                          ctors: mergeMissing(
+                            _Map_keys(imported.ctors),
+                            imported.ctors,
+                            reg0.ctors,
+                          ),
+                          types: mergeMissing(
+                            _Map_keys(imported.types),
+                            imported.types,
+                            reg0.types,
+                          ),
+                        }),
+                      )
+                      .exhaustive(),
+                  )
+                  .exhaustive(),
+              )
+              .exhaustive(),
+          )
+          .exhaustive(),
+      )
+      .exhaustive(),
+);
+export const checkAll: (stmts: Stmt[]) => Result<Stmt[], PErr[]> = (stmts: Stmt[]) =>
+  checkAllWith(
     stmts,
     { ctors: new Map<string, CtorInfo>(), types: new Map<string, string[]>() },
     emptyQuals,

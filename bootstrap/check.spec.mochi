@@ -1,5 +1,5 @@
 import { assertEq, ok, test, testEach } from "@mochi/test"
-import { check } from "./check.mochi"
+import { check, checkAll } from "./check.mochi"
 import { lex } from "./lexer.mochi"
 import { parse } from "./parser.mochi"
 
@@ -13,6 +13,17 @@ test("an exhaustive variant switch is accepted", () => switch checkSrc("type Lig
 test("a catch-all makes a variant switch exhaustive", () => switch checkSrc("type Light = Red | Green | Blue\nlet go = light => switch light { | Red => 1 | _ => 0 }") {
   | Ok(_) => true |> ok
   | Err(_) => false |> ok
+})
+
+test("checker aggregates independent match diagnostics", () => switch lex("type C = | A | B\nlet f = c => switch c { | A => 1 }\nlet g = c => switch c { | B => 2 }") {
+  | Err(_) => false |> ok
+  | Ok(tokens) => switch parse(tokens) {
+      | Err(_) => false |> ok
+      | Ok(stmts) => switch checkAll(stmts) {
+          | Ok(_) => false |> ok
+          | Err(errors) => Array.length(errors) == 2 |> ok
+        }
+    }
 })
 
 testEach("checker rejects invalid declarations and switches", [
