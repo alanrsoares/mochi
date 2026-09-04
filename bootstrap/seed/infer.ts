@@ -167,6 +167,11 @@ import {
 import * as Ast from "./ast";
 import * as Types from "./types";
 const setLetBindMonad = _curry(2, ($receiver, $value) => ($receiver["monad"] = $value));
+/**
+ * Inference discovers that `p.field` reads an optional row field; preserve
+ * that runtime fact on the AST so JS codegen wraps it as `Option<T>`.
+ */
+const setFieldOptional = _curry(2, ($receiver, $value) => ($receiver["optional"] = $value));
 import { inferCallHooksOf, resolvePluginsDefault, runInferCallHooks } from "./extensions";
 import { builtinDeclsFor } from "./ctors";
 import {
@@ -2323,12 +2328,13 @@ const inferFieldAccess: <A>(
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
   },
+  field: Expr,
   target: Expr,
   name: string,
   sp: SpanAt,
   st: St,
 ) => Result<[Ty, St], PErr> = _curry(
-  5,
+  6,
   <A>(
     ctx: {
       env: Map<string, Scheme>;
@@ -2360,6 +2366,7 @@ const inferFieldAccess: <A>(
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
     },
+    field: Expr,
     target: Expr,
     name: string,
     sp: SpanAt,
@@ -2377,7 +2384,12 @@ const inferFieldAccess: <A>(
                     return _g._tag === "Some";
                   },
                   ({ value: [ft, optional] }) =>
-                    Ok(_tuple(optional ? tCon("Option", [ft]) : ft, st1)) as Result<[Ty, St], PErr>,
+                    optional
+                      ? (($written) =>
+                          Ok(_tuple(tCon("Option", [ft]), st1)) as Result<[Ty, St], PErr>)(
+                          setFieldOptional(field, true),
+                        )
+                      : (Ok(_tuple(ft, st1)) as Result<[Ty, St], PErr>),
                 )
                 .with({ _tag: "None" }, () =>
                   rowEndsEmpty(row)
@@ -3642,9 +3654,9 @@ const inferExprRaw: <A>(
           .with({ _tag: "ERef" }, ({ name: tname }) =>
             and(_Map_has(tname, ctx.ns), not(_Map_has(tname, ctx.env)))
               ? inferNsField(ctx, tname, name, sp, st)
-              : inferFieldAccess(ctx, target, name, sp, st),
+              : inferFieldAccess(ctx, e, target, name, sp, st),
           )
-          .otherwise(() => inferFieldAccess(ctx, target, name, sp, st)),
+          .otherwise(() => inferFieldAccess(ctx, e, target, name, sp, st)),
       )
       .with({ _tag: "ETuple" }, ({ elements }) =>
         _Result_flatMap(

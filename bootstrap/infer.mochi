@@ -80,6 +80,9 @@ import * as Types from "./types.mochi"
 // without a separate type table (ADR 0079). Parser tags `let?` as Result;
 // infer rewrites Option when the value's head constructor is Option.
 extern setLetBindMonad : a -> string -> () = set "monad"
+/// Inference discovers that `p.field` reads an optional row field; preserve
+/// that runtime fact on the AST so JS codegen wraps it as `Option<T>`.
+extern setFieldOptional : a -> bool -> () = set "optional"
 import {
   inferCallHooksOf,
   resolvePluginsDefault,
@@ -624,15 +627,15 @@ let rowEndsEmpty = row => switch row {
   | RowVar(_) => false
 }
 
-let inferFieldAccess = (ctx: Ctx<a>, target, name, sp, st: Types.St) =>
+let inferFieldAccess = (ctx: Ctx<a>, field, target, name, sp, st: Types.St) =>
   let? (targetT, st1) = ctx->inferExpr(target, st) in
   let zonked = zonk(targetT, st1) in
     switch zonked {
       | TyRecord(row) => switch lookupField(row, name) {
-          | Some((ft, optional)) => Ok((
-              optional ? tCon("Option", [ft]) : ft,
-              st1
-            ))
+          | Some((ft, optional)) => optional
+              ? let $written = setFieldOptional(field, true) in
+                Ok((tCon("Option", [ft]), st1))
+              : Ok((ft, st1))
           | None => rowEndsEmpty(row)
               ? Err(typeErr("record missing field '${name}'", sp))
               : inferDuckField(targetT, name, sp, st1)
@@ -905,8 +908,8 @@ let inferExprRaw = (ctx: Ctx<a>, e, st: Types.St) => switch e {
   | Ast.EField(target, name, _, sp) => switch target {
       | Ast.ERef(tname, _) => Map.has(tname, ctx.ns) && !Map.has(tname, ctx.env)
           ? ctx->inferNsField(tname, name, sp, st)
-          : ctx->inferFieldAccess(target, name, sp, st)
-      | _ => ctx->inferFieldAccess(target, name, sp, st)
+          : ctx->inferFieldAccess(e, target, name, sp, st)
+      | _ => ctx->inferFieldAccess(e, target, name, sp, st)
     }
   | Ast.ETuple(elements, _) => let? (elems, st1) = ctx->inferTupleElems(
       elements,

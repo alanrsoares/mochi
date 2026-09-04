@@ -15,3 +15,8 @@ test("type error is Err", () => switch compile("let x = mul(1, \"hi\")") {
   | Err(e) => e.message |> Str.contains("unify") |> ok
   | Ok(_) => false |> ok
 })
+
+test("optional record projection wraps in Option", () => switch compile("type Props = { id?: string }\nlet getId = (p: Props) => p.id") {
+  | Ok(js) => js |> Str.contains("_tag: \"Some\"") |> ok
+  | Err(_) => false |> ok
+})

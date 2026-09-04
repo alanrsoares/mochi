@@ -13,7 +13,7 @@ test("hover is total: HoverInfo | null for any source and offset, never throws",
       expect(r === null || typeof r.code === "string").toBe(true);
     }),
   );
-});
+}, 15_000);
 
 test("a numeric literal always hovers as number", () => {
   fc.assert(

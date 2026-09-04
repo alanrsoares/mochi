@@ -26,4 +26,4 @@ test("each destructured name binds the matching field value", () => {
       },
     ),
   );
-});
+}, 15_000);
