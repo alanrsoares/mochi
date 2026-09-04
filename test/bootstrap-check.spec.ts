@@ -102,6 +102,11 @@ test("bootstrap checker aggregates independent loop diagnostics", () => {
   expect(alCheckDiagnostics(src)).toEqual(checkDiagnostics(src));
 });
 
+test("bootstrap checker aggregates declaration diagnostics", () => {
+  const src = "let List = 1\n" + "type Box a = | Thing(b)\n" + "type Crate a = | Item(c)\n";
+  expect(alCheckDiagnostics(src)).toEqual(checkDiagnostics(src));
+});
+
 for (const file of corpus) {
   test(`check verdicts agree on ${file}`, () => {
     const src = readFileSync(join(root, file), "utf8");

@@ -751,6 +751,51 @@ let checkReservedNames = stmts =>
     stmts
   )
 
+let checkReservedNamesAll = stmts =>
+  Array.flatMap(
+    s => switch s {
+      | Ast.SType(name, _, _, _, _, _, _, sp) => Array.contains(
+          name,
+          redeclarableTypes
+        )
+          ? []
+          : Array.contains(name, reservedNames)
+          ? [reservedErr(name, sp)]
+          : []
+      | Ast.SLet(name, _, _, _, _, _, sp) => Array.contains(name, reservedNames)
+          ? [reservedErr(name, sp)]
+          : []
+      | Ast.SExtern(name, _, _, _, _, _, _, _, _, sp) => Array.contains(
+          name,
+          reservedNames
+        )
+          ? [reservedErr(name, sp)]
+          : []
+      | Ast.SImport(names, _, _) => Array.flatMap(
+          n =>
+            Array.contains(n.name, reservedNames)
+              ? [
+                checkErr(
+                  "'${n.name}' is a reserved collection namespace and cannot be imported",
+                  n.span
+                )
+              ]
+              : [],
+          names
+        )
+      | Ast.SImportNs(alias, _, _) => Array.contains(alias.name, reservedNames)
+          ? [
+            checkErr(
+              "'${alias.name}' is a reserved collection namespace and cannot be imported",
+              alias.span
+            )
+          ]
+          : []
+      | _ => []
+    },
+    stmts
+  )
+
 let isUpperStart = s => switch Str.codeAt(0, s) {
   | Some(c) => c >= 65 && c <= 90
   | None => false
@@ -795,6 +840,30 @@ let checkCtorFieldVars = stmts =>
               }))
       | _ => None
     })
+
+let checkCtorFieldVarsAll = stmts =>
+  Array.flatMap(
+    s => switch s {
+      | Ast.SType(name, params, ctors, _, _, _, _, _) => Array.flatMap(
+          c =>
+            Array.flatMap(
+              f => switch params->strayTypeVar(f.fieldType) {
+                | Some((vn, vsp)) => [
+                    vsp
+                      |> checkErr(
+                        "unknown type parameter '${vn}' in constructor '${c.name}' — declare it: type ${name} ${Str.join(" ", Array.append(vn, params))} = ..."
+                      )
+                  ]
+                | None => []
+              },
+              c.fields
+            ),
+          ctors
+        )
+      | _ => []
+    },
+    stmts
+  )
 
 // --- qualified type names (C5 slice d, ADR 0046) ---
 
@@ -962,6 +1031,36 @@ let checkQualifiedTypeNames = (stmts, quals) =>
               q.qualSpan
             )
           ),
+      Array.flatMap(qualRefsFrom, writtenTypeExprs(stmts))
+    )
+
+let checkQualifiedTypeNamesAll = (stmts, quals) =>
+  let nsAliases = Set.fromArray(
+    Array.flatMap(
+      s => switch s { | Ast.SImportNs(alias, _, _) => [alias.name] | _ => [] },
+      stmts
+    )
+  ) in
+    Array.flatMap(
+      q =>
+        Set.has(q.alias, nsAliases)
+          ? switch Map.get(q.alias, quals) {
+            | None => []
+            | Some(dep) => Set.has(q.name, dep.types)
+                ? []
+                : [
+                  checkErr(
+                    "module alias '${q.alias}' has no exported type '${q.name}' — export it from the imported module ('export type ${q.name} = …')",
+                    q.nameSpan
+                  )
+                ]
+          }
+          : [
+            checkErr(
+              "unknown module alias '${q.alias}' in type '${q.alias}.${q.name}' — a qualified type name needs a matching 'import * as ${q.alias} from \"…\"'",
+              q.qualSpan
+            )
+          ],
       Array.flatMap(qualRefsFrom, writtenTypeExprs(stmts))
     )
 
@@ -1364,47 +1463,37 @@ export let checkWith = (stmts, imported, quals) => switch checkReservedNames(stm
 export let check = stmts =>
   stmts->checkWith({ ctors: #{}, types: #{} }, emptyQuals)
 
-/// Aggregate expression-local match and loop diagnostics without changing the
-/// legacy single-error check railway. Declaration collectors follow as a
-/// separate slice; this entrypoint establishes the `[CErr]` result boundary.
-export let checkAllWith = (stmts, imported, quals) => switch checkReservedNames(stmts) {
-  | Some(e) => Err([e])
-  | None => switch checkCtorFieldVars(stmts) {
-      | Some(e) => Err([e])
-      | None => switch checkQualifiedTypeNames(stmts, quals) {
-          | Some(e) => Err([e])
-          | None => switch buildRegistry(stmts) {
-              | Err(e) => Err([e])
-              | Ok(reg0) => let reg = {
-                  ctors: mergeMissing(
-                    Map.keys(imported.ctors),
-                    imported.ctors,
-                    reg0.ctors
-                  ),
-                  types: mergeMissing(
-                    Map.keys(imported.types),
-                    imported.types,
-                    reg0.types
-                  )
-                } in
-                let errors = [
-                  ...checkLoopsAll(stmts),
-                  ...Array.flatMap(
-                    stmt => switch stmt {
-                      | Ast.SLet(_, _, _, value, _, _, _) => checkExprs(
-                          value,
-                          reg
-                        )
-                      | Ast.SExpr(value, _) => checkExprs(value, reg)
-                      | _ => []
-                    },
-                    stmts
-                  )
-                ] in
-                  Array.length(errors) == 0 ? Ok(stmts) : Err(errors)
-            }
-        }
-    }
+/// Aggregate independent declaration, loop, and match diagnostics without
+/// changing the legacy single-error check railway. Registry construction still
+/// stops at its first duplicate, just as the TypeScript checker does.
+export let checkAllWith = (stmts, imported, quals) => switch buildRegistry(stmts) {
+  | Err(e) => let errors = [
+      ...checkReservedNamesAll(stmts),
+      ...checkCtorFieldVarsAll(stmts),
+      ...checkQualifiedTypeNamesAll(stmts, quals),
+      ...checkLoopsAll(stmts),
+      e
+    ] in
+      Array.length(errors) == 0 ? Ok(stmts) : Err(errors)
+  | Ok(reg0) => let reg = {
+      ctors: mergeMissing(Map.keys(imported.ctors), imported.ctors, reg0.ctors),
+      types: mergeMissing(Map.keys(imported.types), imported.types, reg0.types)
+    } in
+    let errors = [
+      ...checkReservedNamesAll(stmts),
+      ...checkCtorFieldVarsAll(stmts),
+      ...checkQualifiedTypeNamesAll(stmts, quals),
+      ...checkLoopsAll(stmts),
+      ...Array.flatMap(
+        stmt => switch stmt {
+          | Ast.SLet(_, _, _, value, _, _, _) => checkExprs(value, reg)
+          | Ast.SExpr(value, _) => checkExprs(value, reg)
+          | _ => []
+        },
+        stmts
+      )
+    ] in
+      Array.length(errors) == 0 ? Ok(stmts) : Err(errors)
 }
 
 export let checkAll = stmts =>

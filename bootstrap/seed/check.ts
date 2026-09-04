@@ -1142,6 +1142,50 @@ const checkReservedNames: (stmts: Stmt[]) => Option<PErr> = (stmts: Stmt[]) =>
         .exhaustive(),
     stmts,
   );
+const checkReservedNamesAll: (stmts: Stmt[]) => PErr[] = (stmts: Stmt[]) =>
+  _Array_flatMap(
+    (s: Stmt) =>
+      match(s)
+        .with({ _tag: "SType" }, ({ name, span: sp }) =>
+          _Array_contains(name, redeclarableTypes)
+            ? ([] as PErr[])
+            : _Array_contains(name, reservedNames)
+              ? [reservedErr(name, sp)]
+              : ([] as PErr[]),
+        )
+        .with({ _tag: "SLet" }, ({ name, span: sp }) =>
+          _Array_contains(name, reservedNames) ? [reservedErr(name, sp)] : ([] as PErr[]),
+        )
+        .with({ _tag: "SExtern" }, ({ name, span: sp }) =>
+          _Array_contains(name, reservedNames) ? [reservedErr(name, sp)] : ([] as PErr[]),
+        )
+        .with({ _tag: "SImport" }, ({ names }) =>
+          _Array_flatMap(
+            (n: { name: string; span: SpanAt }) =>
+              _Array_contains(n.name, reservedNames)
+                ? [
+                    checkErr(
+                      `'${n.name}' is a reserved collection namespace and cannot be imported`,
+                      n.span,
+                    ),
+                  ]
+                : ([] as PErr[]),
+            names,
+          ),
+        )
+        .with({ _tag: "SImportNs" }, ({ alias }) =>
+          _Array_contains(alias.name, reservedNames)
+            ? [
+                checkErr(
+                  `'${alias.name}' is a reserved collection namespace and cannot be imported`,
+                  alias.span,
+                ),
+              ]
+            : ([] as PErr[]),
+        )
+        .otherwise(() => [] as PErr[]),
+    stmts,
+  );
 const isUpperStart: (s: string) => boolean = (s: string) =>
   match(_Str_codeAt(0, s))
     .with({ _tag: "Some" }, ({ value: c }) => and(c >= 65, c <= 90))
@@ -1201,6 +1245,38 @@ const checkCtorFieldVars: (stmts: Stmt[]) => Option<PErr> = (stmts: Stmt[]) =>
           ),
         )
         .otherwise(() => None as Option<PErr>),
+    stmts,
+  );
+const checkCtorFieldVarsAll: (stmts: Stmt[]) => PErr[] = (stmts: Stmt[]) =>
+  _Array_flatMap(
+    (s: Stmt) =>
+      match(s)
+        .with({ _tag: "SType" }, ({ name, params, ctors }) =>
+          _Array_flatMap(
+            (c: { name: string; fields: CtorField[]; span: SpanAt }) =>
+              _Array_flatMap(
+                (f: CtorField) =>
+                  match(strayTypeVar(params, f.fieldType))
+                    .with(
+                      (_v): _v is Extract<Option<[string, SpanAt]>, { _tag: "Some" }> => {
+                        const _g: any = _v;
+                        return _g._tag === "Some";
+                      },
+                      ({ value: [vn, vsp] }) => [
+                        checkErr(
+                          `unknown type parameter '${vn}' in constructor '${c.name}' — declare it: type ${name} ${_Str_join(" ", _Array_append(vn, params))} = ...`,
+                          vsp,
+                        ),
+                      ],
+                    )
+                    .with({ _tag: "None" }, () => [] as PErr[])
+                    .exhaustive(),
+                c.fields,
+              ),
+            ctors,
+          ),
+        )
+        .otherwise(() => [] as PErr[]),
     stmts,
   );
 const qualRefsFrom: (
@@ -1430,6 +1506,44 @@ const checkQualifiedTypeNames: <A>(
     );
   },
 );
+const checkQualifiedTypeNamesAll: <A>(
+  stmts: Stmt[],
+  quals: Map<string, { types: Set<string> } & A>,
+) => PErr[] = _curry(2, <A>(stmts: Stmt[], quals: Map<string, { types: Set<string> } & A>) => {
+  const nsAliases: Set<string> = _Set_fromArray(
+    _Array_flatMap(
+      (s: Stmt) =>
+        match(s)
+          .with({ _tag: "SImportNs" }, ({ alias }) => [alias.name])
+          .otherwise(() => [] as string[]),
+      stmts,
+    ),
+  );
+  return _Array_flatMap(
+    (q: { alias: string; name: string; nameSpan: SpanAt; qualSpan: SpanAt }) =>
+      _Set_has(q.alias, nsAliases)
+        ? match(_Map_get(q.alias, quals))
+            .with({ _tag: "None" }, () => [] as PErr[])
+            .with({ _tag: "Some" }, ({ value: dep }) =>
+              _Set_has(q.name, dep.types)
+                ? ([] as PErr[])
+                : [
+                    checkErr(
+                      `module alias '${q.alias}' has no exported type '${q.name}' — export it from the imported module ('export type ${q.name} = …')`,
+                      q.nameSpan,
+                    ),
+                  ],
+            )
+            .exhaustive()
+        : [
+            checkErr(
+              `unknown module alias '${q.alias}' in type '${q.alias}.${q.name}' — a qualified type name needs a matching 'import * as ${q.alias} from "…"'`,
+              q.qualSpan,
+            ),
+          ],
+    _Array_flatMap(qualRefsFrom, writtenTypeExprs(stmts)),
+  );
+});
 
 const duplicateLoopParam: <A, B, C, D>(
   params: ({ name: string; nameSpan: { end: A; start: B } & C } & D)[],
@@ -1980,9 +2094,9 @@ export const check: (stmts: Stmt[]) => Result<Stmt[], PErr> = (stmts: Stmt[]) =>
     emptyQuals,
   );
 /**
- * Aggregate expression-local match and loop diagnostics without changing the
- * legacy single-error check railway. Declaration collectors follow as a
- * separate slice; this entrypoint establishes the `[CErr]` result boundary.
+ * Aggregate independent declaration, loop, and match diagnostics without
+ * changing the legacy single-error check railway. Registry construction still
+ * stops at its first duplicate, just as the TypeScript checker does.
  */
 export const checkAllWith: <A, B>(
   stmts: Stmt[],
@@ -1995,42 +2109,41 @@ export const checkAllWith: <A, B>(
     imported: { types: Map<string, string[]>; ctors: Map<string, CtorInfo> } & A,
     quals: Map<string, { types: Set<string> } & B>,
   ) =>
-    match(checkReservedNames(stmts))
-      .with({ _tag: "Some" }, ({ value: e }) => Err([e]) as Result<Stmt[], PErr[]>)
-      .with({ _tag: "None" }, () =>
-        match(checkCtorFieldVars(stmts))
-          .with({ _tag: "Some" }, ({ value: e }) => Err([e]) as Result<Stmt[], PErr[]>)
-          .with({ _tag: "None" }, () =>
-            match(checkQualifiedTypeNames(stmts, quals))
-              .with({ _tag: "Some" }, ({ value: e }) => Err([e]) as Result<Stmt[], PErr[]>)
-              .with({ _tag: "None" }, () =>
-                match(buildRegistry(stmts))
-                  .with({ _tag: "Err" }, ({ error: e }) => Err([e]) as Result<Stmt[], PErr[]>)
-                  .with({ _tag: "Ok" }, ({ value: reg0 }) =>
-                    ((reg: Registry) =>
-                      ((errors: PErr[]) =>
-                        eq(length(errors), 0)
-                          ? (Ok(stmts) as Result<Stmt[], PErr[]>)
-                          : (Err(errors) as Result<Stmt[], PErr[]>))([
-                        ...checkLoopsAll(stmts),
-                        ..._Array_flatMap(
-                          (stmt: Stmt) =>
-                            match(stmt)
-                              .with({ _tag: "SLet" }, ({ value }) => checkExprs(value, reg))
-                              .with({ _tag: "SExpr" }, ({ value }) => checkExprs(value, reg))
-                              .otherwise(() => [] as PErr[]),
-                          stmts,
-                        ),
-                      ]))({
-                      ctors: mergeMissing(_Map_keys(imported.ctors), imported.ctors, reg0.ctors),
-                      types: mergeMissing(_Map_keys(imported.types), imported.types, reg0.types),
-                    }),
-                  )
-                  .exhaustive(),
-              )
-              .exhaustive(),
-          )
-          .exhaustive(),
+    match(buildRegistry(stmts))
+      .with({ _tag: "Err" }, ({ error: e }) =>
+        ((errors: PErr[]) =>
+          eq(length(errors), 0)
+            ? (Ok(stmts) as Result<Stmt[], PErr[]>)
+            : (Err(errors) as Result<Stmt[], PErr[]>))([
+          ...checkReservedNamesAll(stmts),
+          ...checkCtorFieldVarsAll(stmts),
+          ...checkQualifiedTypeNamesAll(stmts, quals),
+          ...checkLoopsAll(stmts),
+          e,
+        ]),
+      )
+      .with({ _tag: "Ok" }, ({ value: reg0 }) =>
+        ((reg: Registry) =>
+          ((errors: PErr[]) =>
+            eq(length(errors), 0)
+              ? (Ok(stmts) as Result<Stmt[], PErr[]>)
+              : (Err(errors) as Result<Stmt[], PErr[]>))([
+            ...checkReservedNamesAll(stmts),
+            ...checkCtorFieldVarsAll(stmts),
+            ...checkQualifiedTypeNamesAll(stmts, quals),
+            ...checkLoopsAll(stmts),
+            ..._Array_flatMap(
+              (stmt: Stmt) =>
+                match(stmt)
+                  .with({ _tag: "SLet" }, ({ value }) => checkExprs(value, reg))
+                  .with({ _tag: "SExpr" }, ({ value }) => checkExprs(value, reg))
+                  .otherwise(() => [] as PErr[]),
+              stmts,
+            ),
+          ]))({
+          ctors: mergeMissing(_Map_keys(imported.ctors), imported.ctors, reg0.ctors),
+          types: mergeMissing(_Map_keys(imported.types), imported.types, reg0.types),
+        }),
       )
       .exhaustive(),
 );
