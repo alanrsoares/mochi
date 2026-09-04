@@ -22,6 +22,7 @@ export type CtorInfo = { owner: string; arity: number };
 export type Registry = { ctors: Map<string, CtorInfo>; types: Map<string, string[]> };
 export type SeqCheck = { _tag: "SeqNotSeq" } | { _tag: "SeqTotal" } | { _tag: "SeqFail"; e: PErr };
 export type QualScope = { types: Set<string> };
+export type LoopFrame = { arity: number; names: Set<string> };
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
@@ -1315,6 +1316,241 @@ const checkQualifiedTypeNames: <A>(
     );
   },
 );
+
+const duplicateLoopParam: <A, B, C, D>(
+  params: ({ name: string; nameSpan: { end: A; start: B } & C } & D)[],
+) => Option<{ message: string; start: B; end: A }> = <A, B, C, D>(
+  params: ({ name: string; nameSpan: { end: A; start: B } & C } & D)[],
+) => {
+  let i: number = 0;
+  let seen: Set<string> = _Set_fromArray([] as string[]);
+  while (true) {
+    const _step = match(_Array_get(i, params))
+      .with({ _tag: "None" }, () => _done(None))
+      .with({ _tag: "Some" }, ({ value: p }) =>
+        _Set_has(p.name, seen)
+          ? _done(Some(checkErr(`duplicate loop param '${p.name}'`, p.nameSpan)))
+          : _recur(i + 1, _Set_add(p.name, seen)),
+      )
+      .exhaustive();
+    if (_step._tag === "recur") {
+      [i, seen] = _step.args;
+      continue;
+    }
+    return _step.value;
+  }
+};
+const checkLoopDo: _Curry<
+  [exprs: Expr[], frame: Option<LoopFrame>, tail: boolean],
+  Option<PErr>
+> = _curry(3, (exprs: Expr[], frame: Option<LoopFrame>, tail: boolean) => {
+  let i: number = 0;
+  while (true) {
+    const _step = match(_Array_get(i, exprs))
+      .with({ _tag: "None" }, () => _done(None as Option<PErr>))
+      .with({ _tag: "Some" }, ({ value: expr }) =>
+        _Option_isNone(_Array_get(i + 1, exprs))
+          ? _done(checkLoopExpr(expr, frame, tail))
+          : match(checkLoopExpr(expr, frame, false))
+              .with({ _tag: "Some" }, ({ value: error }) => _done(Some(error) as Option<PErr>))
+              .with({ _tag: "None" }, () => _recur(i + 1))
+              .exhaustive(),
+      )
+      .exhaustive();
+    if (_step._tag === "recur") {
+      i = _step.args[0];
+      continue;
+    }
+    return _step.value;
+  }
+});
+const checkLoopExpr: _Curry<
+  [e: Expr, frame: Option<LoopFrame>, tail: boolean],
+  Option<PErr>
+> = _curry(3, (e: Expr, frame: Option<LoopFrame>, tail: boolean) =>
+  match(e)
+    .with({ _tag: "ELoop" }, ({ params, body }) =>
+      _Option_orElse(
+        checkLoopExpr(
+          body,
+          Some({
+            arity: length(params),
+            names: _Set_fromArray(map((p: LoopParam) => p.name, params)),
+          }) as Option<LoopFrame>,
+          true,
+        ),
+        _Option_orElse(
+          firstSome((p: LoopParam) => checkLoopExpr(p.init, frame, false), params),
+          duplicateLoopParam(params),
+        ),
+      ),
+    )
+    .with({ _tag: "ERecur" }, ({ args, span: sp }) =>
+      match(frame)
+        .with(
+          { _tag: "None" },
+          () => Some(checkErr("'recur' is only legal inside a loop body", sp)) as Option<PErr>,
+        )
+        .with({ _tag: "Some" }, ({ value: current }) =>
+          not(tail)
+            ? (Some(
+                checkErr("'recur' must be in tail position of its enclosing loop", sp),
+              ) as Option<PErr>)
+            : not(eq(length(args), current.arity))
+              ? (Some(
+                  checkErr(
+                    `'recur' takes ${show(current.arity)} argument${eq(current.arity, 1) ? "" : "s"} (one per loop param), got ${show(length(args))}`,
+                    sp,
+                  ),
+                ) as Option<PErr>)
+              : firstSome((a: Expr) => checkLoopExpr(a, frame, false), args),
+        )
+        .exhaustive(),
+    )
+    .with({ _tag: "ETernary" }, ({ cond, thenE, elseE }) =>
+      _Option_orElse(
+        checkLoopExpr(elseE, frame, tail),
+        _Option_orElse(checkLoopExpr(thenE, frame, tail), checkLoopExpr(cond, frame, false)),
+      ),
+    )
+    .with({ _tag: "EMatch" }, ({ scrutinee, arms }) =>
+      _Option_orElse(
+        firstSome(
+          (arm: MatchArm) =>
+            match(arm.guard)
+              .with({ _tag: "Some" }, ({ value: guard }) =>
+                _Option_orElse(
+                  checkLoopExpr(arm.body, frame, tail),
+                  checkLoopExpr(guard, frame, false),
+                ),
+              )
+              .with({ _tag: "None" }, () => checkLoopExpr(arm.body, frame, tail))
+              .exhaustive(),
+          arms,
+        ),
+        checkLoopExpr(scrutinee, frame, false),
+      ),
+    )
+    .with({ _tag: "ELetIn" }, ({ name, nameSpan: nameSp, value, body }) =>
+      _Option_orElse(
+        checkLoopExpr(body, frame, tail),
+        _Option_orElse(
+          match(frame)
+            .with(
+              (_v): _v is Extract<Option<LoopFrame>, { _tag: "Some" }> => {
+                const _g: any = _v;
+                return (
+                  _g._tag === "Some" && (({ value: current }) => _Set_has(name, current.names))(_g)
+                );
+              },
+              ({ value: current }) =>
+                Some(
+                  checkErr(
+                    `'${name}' shadows a loop param inside the loop body; rename it`,
+                    nameSp,
+                  ),
+                ) as Option<PErr>,
+            )
+            .otherwise(() => None as Option<PErr>),
+          checkLoopExpr(value, frame, false),
+        ),
+      ),
+    )
+    .with({ _tag: "ELetBind" }, ({ value, body }) =>
+      _Option_orElse(
+        checkLoopExpr(body, None as Option<LoopFrame>, false),
+        checkLoopExpr(value, frame, false),
+      ),
+    )
+    .with({ _tag: "ELambda" }, ({ body }) => checkLoopExpr(body, None as Option<LoopFrame>, false))
+    .with({ _tag: "ECall" }, ({ fn, args }) =>
+      _Option_orElse(
+        firstSome((a: Expr) => checkLoopExpr(a, frame, false), args),
+        checkLoopExpr(fn, frame, false),
+      ),
+    )
+    .with({ _tag: "EPipe" }, ({ left, right }) =>
+      _Option_orElse(checkLoopExpr(right, frame, false), checkLoopExpr(left, frame, false)),
+    )
+    .with({ _tag: "EDo" }, ({ exprs }) => checkLoopDo(exprs, frame, tail))
+    .with({ _tag: "ERecord" }, ({ fields, spread }) =>
+      _Option_orElse(
+        firstSome((field: Field) => checkLoopExpr(field.value, frame, false), fields),
+        match(spread)
+          .with({ _tag: "Some" }, ({ value }) => checkLoopExpr(value, frame, false))
+          .with({ _tag: "None" }, () => None as Option<PErr>)
+          .exhaustive(),
+      ),
+    )
+    .with({ _tag: "EField" }, ({ target }) => checkLoopExpr(target, frame, false))
+    .with({ _tag: "ETuple" }, ({ elements }) =>
+      firstSome((el: Expr) => checkLoopExpr(el, frame, false), elements),
+    )
+    .with({ _tag: "EArr" }, ({ elements }) =>
+      firstSome(
+        (el: SeqElem) =>
+          match(el)
+            .with({ _tag: "SEExpr" }, ({ expr: value }) => checkLoopExpr(value, frame, false))
+            .with({ _tag: "SESpread" }, ({ expr: value }) => checkLoopExpr(value, frame, false))
+            .exhaustive(),
+        elements,
+      ),
+    )
+    .with({ _tag: "EList" }, ({ elements }) =>
+      firstSome(
+        (el: SeqElem) =>
+          match(el)
+            .with({ _tag: "SEExpr" }, ({ expr: value }) => checkLoopExpr(value, frame, false))
+            .with({ _tag: "SESpread" }, ({ expr: value }) => checkLoopExpr(value, frame, false))
+            .exhaustive(),
+        elements,
+      ),
+    )
+    .with({ _tag: "ESet" }, ({ elements }) =>
+      firstSome(
+        (el: SeqElem) =>
+          match(el)
+            .with({ _tag: "SEExpr" }, ({ expr: value }) => checkLoopExpr(value, frame, false))
+            .with({ _tag: "SESpread" }, ({ expr: value }) => checkLoopExpr(value, frame, false))
+            .exhaustive(),
+        elements,
+      ),
+    )
+    .with({ _tag: "EMap" }, ({ entries }) =>
+      firstSome(
+        (entry: MapEntry) =>
+          _Option_orElse(
+            checkLoopExpr(entry.value, frame, false),
+            checkLoopExpr(entry.key, frame, false),
+          ),
+        entries,
+      ),
+    )
+    .with({ _tag: "EInterp" }, ({ parts }) =>
+      firstSome(
+        (part: InterpPart) =>
+          match(part)
+            .with({ _tag: "IPLit" }, () => None as Option<PErr>)
+            .with({ _tag: "IPExpr" }, ({ expr: value }) => checkLoopExpr(value, frame, false))
+            .exhaustive(),
+        parts,
+      ),
+    )
+    .otherwise(() => None as Option<PErr>),
+);
+const checkLoops: (stmts: Stmt[]) => Option<PErr> = (stmts: Stmt[]) =>
+  firstSome(
+    (stmt: Stmt) =>
+      match(stmt)
+        .with({ _tag: "SLet" }, ({ value }) =>
+          checkLoopExpr(value, None as Option<LoopFrame>, false),
+        )
+        .with({ _tag: "SExpr" }, ({ value }) =>
+          checkLoopExpr(value, None as Option<LoopFrame>, false),
+        )
+        .otherwise(() => None as Option<PErr>),
+    stmts,
+  );
 const mergeMissing: <A, B>(keys: A[], from: Map<A, B>, into: Map<A, B>) => Map<A, B> = _curry(
   3,
   <A, B>(keys: A[], from: Map<A, B>, into: Map<A, B>) =>
@@ -1363,27 +1599,43 @@ export const checkWith: <A, B>(
             match(checkQualifiedTypeNames(stmts, quals))
               .with({ _tag: "Some" }, ({ value: e }) => Err(e) as Result<Stmt[], PErr>)
               .with({ _tag: "None" }, () =>
-                _Result_flatMap(
-                  (reg0) =>
-                    ((reg: Registry) =>
-                      match(
-                        firstSome(
-                          (s: Stmt) =>
-                            match(s)
-                              .with({ _tag: "SLet" }, ({ value }) => checkExpr(value, reg))
-                              .with({ _tag: "SExpr" }, ({ value }) => checkExpr(value, reg))
-                              .otherwise(() => None as Option<PErr>),
-                          stmts,
-                        ),
-                      )
-                        .with({ _tag: "Some" }, ({ value: e }) => Err(e) as Result<Stmt[], PErr>)
-                        .with({ _tag: "None" }, () => Ok(stmts) as Result<Stmt[], PErr>)
-                        .exhaustive())({
-                      ctors: mergeMissing(_Map_keys(imported.ctors), imported.ctors, reg0.ctors),
-                      types: mergeMissing(_Map_keys(imported.types), imported.types, reg0.types),
-                    }),
-                  buildRegistry(stmts),
-                ),
+                match(checkLoops(stmts))
+                  .with({ _tag: "Some" }, ({ value: e }) => Err(e) as Result<Stmt[], PErr>)
+                  .with({ _tag: "None" }, () =>
+                    _Result_flatMap(
+                      (reg0) =>
+                        ((reg: Registry) =>
+                          match(
+                            firstSome(
+                              (s: Stmt) =>
+                                match(s)
+                                  .with({ _tag: "SLet" }, ({ value }) => checkExpr(value, reg))
+                                  .with({ _tag: "SExpr" }, ({ value }) => checkExpr(value, reg))
+                                  .otherwise(() => None as Option<PErr>),
+                              stmts,
+                            ),
+                          )
+                            .with(
+                              { _tag: "Some" },
+                              ({ value: e }) => Err(e) as Result<Stmt[], PErr>,
+                            )
+                            .with({ _tag: "None" }, () => Ok(stmts) as Result<Stmt[], PErr>)
+                            .exhaustive())({
+                          ctors: mergeMissing(
+                            _Map_keys(imported.ctors),
+                            imported.ctors,
+                            reg0.ctors,
+                          ),
+                          types: mergeMissing(
+                            _Map_keys(imported.types),
+                            imported.types,
+                            reg0.types,
+                          ),
+                        }),
+                      buildRegistry(stmts),
+                    ),
+                  )
+                  .exhaustive(),
               )
               .exhaustive(),
           )

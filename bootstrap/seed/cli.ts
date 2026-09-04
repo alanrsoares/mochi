@@ -121,10 +121,7 @@ export const writeAll: <A>(outs: ({ path: string; js: string } & A)[]) => Result
           match(writeFile(outPath(o.path), o.js))
             .with({ _tag: "Err" }, ({ error: e }) => _done(Err(e) as Result<string, string>))
             .with({ _tag: "Ok" }, ({ value: w }) =>
-              (() => {
-                print(`  wrote ${w}`);
-                return _recur(rest);
-              })(),
+              ((_printed) => _recur(rest))(print(`  wrote ${w}`)),
             )
             .exhaustive(),
       )
@@ -162,10 +159,7 @@ export const writeAllTs: <A>(outs: ({ path: string; js: string } & A)[]) => Resu
             match(writeFile(tsWritePath(o.path, o.js), o.js))
               .with({ _tag: "Err" }, ({ error: e }) => _done(Err(e) as Result<string, string>))
               .with({ _tag: "Ok" }, ({ value: w }) =>
-                (() => {
-                  print(`  wrote ${w}`);
-                  return _recur(rest);
-                })(),
+                ((_printed) => _recur(rest))(print(`  wrote ${w}`)),
               )
               .exhaustive(),
         )

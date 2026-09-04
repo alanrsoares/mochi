@@ -872,6 +872,170 @@ let checkQualifiedTypeNames = (stmts, quals) =>
       Array.flatMap(qualRefsFrom, writtenTypeExprs(stmts))
     )
 
+// --- loop / recur validity (ADR 0056) ---
+
+// `recur` belongs to the nearest loop and is only sound in a tail position:
+// codegen lowers it to a mutable rebind plus `continue`. Lambda and let-bind
+// bodies begin new call frames, while ternary, switch, and let-in bodies retain
+// the enclosing tail position.
+type LoopFrame = { arity: number, names: Set<string> }
+
+let duplicateLoopParam = params =>
+  loop (i = 0, seen = Set.fromArray([])) {
+    switch Array.get(i, params) {
+      | None => None
+      | Some(p) => Set.has(p.name, seen)
+          ? Some(checkErr("duplicate loop param '${p.name}'", p.nameSpan))
+          : recur(i + 1, Set.add(p.name, seen))
+    }
+  }
+
+let checkLoopDo = (exprs, frame, tail) =>
+  loop (i = 0) {
+    switch Array.get(i, exprs) {
+      | None => None
+      | Some(expr) => Array.get(i + 1, exprs) |> Option.isNone
+          ? checkLoopExpr(expr, frame, tail)
+          : switch checkLoopExpr(expr, frame, false) {
+            | Some(error) => Some(error)
+            | None => recur(i + 1)
+          }
+    }
+  }
+
+let checkLoopExpr = (e, frame: Option<LoopFrame>, tail) => switch e {
+  | Ast.ELoop(params, body, _) => duplicateLoopParam(params)
+      |> Option.orElse(
+        firstSome(p => checkLoopExpr(p.init, frame, false), params)
+      )
+      |> Option.orElse(
+        checkLoopExpr(
+          body,
+          Some(
+            {
+              arity: Array.length(params),
+              names: params |> map(p => p.name) |> Set.fromArray
+            }
+          ),
+          true
+        )
+      )
+  | Ast.ERecur(args, sp) => switch frame {
+      | None => Some(checkErr("'recur' is only legal inside a loop body", sp))
+      | Some(current) => !tail
+          ? Some(
+            checkErr(
+              "'recur' must be in tail position of its enclosing loop",
+              sp
+            )
+          )
+          : Array.length(args) != current.arity
+          ? Some(
+            checkErr(
+              "'recur' takes ${show(current.arity)} argument${current.arity == 1 ? "" : "s"} (one per loop param), got ${show(Array.length(args))}",
+              sp
+            )
+          )
+          : firstSome(a => checkLoopExpr(a, frame, false), args)
+    }
+  | Ast.ETernary(cond, thenE, elseE, _) => checkLoopExpr(cond, frame, false)
+      |> Option.orElse(checkLoopExpr(thenE, frame, tail))
+      |> Option.orElse(checkLoopExpr(elseE, frame, tail))
+  | Ast.EMatch(scrutinee, arms, _) => checkLoopExpr(scrutinee, frame, false)
+      |> Option.orElse(
+        firstSome(
+          arm => switch arm.guard {
+            | Some(guard) => checkLoopExpr(guard, frame, false)
+                |> Option.orElse(checkLoopExpr(arm.body, frame, tail))
+            | None => checkLoopExpr(arm.body, frame, tail)
+          },
+          arms
+        )
+      )
+  | Ast.ELetIn(name, nameSp, _, value, body, _) => checkLoopExpr(
+      value,
+      frame,
+      false
+    )
+      |> Option.orElse(
+        switch frame {
+          | Some(current) when Set.has(name, current.names) => Some(
+              checkErr(
+                "'${name}' shadows a loop param inside the loop body; rename it",
+                nameSp
+              )
+            )
+          | _ => None
+        }
+      )
+      |> Option.orElse(checkLoopExpr(body, frame, tail))
+  | Ast.ELetBind(_, _, _, value, body, _) => checkLoopExpr(value, frame, false)
+      |> Option.orElse(checkLoopExpr(body, None, false))
+  | Ast.ELambda(_, body, _) => checkLoopExpr(body, None, false)
+  | Ast.ECall(fn, args, _, _) => checkLoopExpr(fn, frame, false)
+      |> Option.orElse(firstSome(a => checkLoopExpr(a, frame, false), args))
+  | Ast.EPipe(left, right, _, _) => checkLoopExpr(left, frame, false)
+      |> Option.orElse(checkLoopExpr(right, frame, false))
+  | Ast.EDo(exprs, _) => checkLoopDo(exprs, frame, tail)
+  | Ast.ERecord(fields, spread, _) => switch spread {
+      | Some(value) => checkLoopExpr(value, frame, false)
+      | None => None
+    }
+      |> Option.orElse(
+        firstSome(field => checkLoopExpr(field.value, frame, false), fields)
+      )
+  | Ast.EField(target, _, _, _) => checkLoopExpr(target, frame, false)
+  | Ast.ETuple(elements, _) => firstSome(
+      el => checkLoopExpr(el, frame, false),
+      elements
+    )
+  | Ast.EArr(elements, _) => firstSome(
+      el => switch el {
+        | Ast.SEExpr(value) => checkLoopExpr(value, frame, false)
+        | Ast.SESpread(value) => checkLoopExpr(value, frame, false)
+      },
+      elements
+    )
+  | Ast.EList(elements, _) => firstSome(
+      el => switch el {
+        | Ast.SEExpr(value) => checkLoopExpr(value, frame, false)
+        | Ast.SESpread(value) => checkLoopExpr(value, frame, false)
+      },
+      elements
+    )
+  | Ast.ESet(elements, _) => firstSome(
+      el => switch el {
+        | Ast.SEExpr(value) => checkLoopExpr(value, frame, false)
+        | Ast.SESpread(value) => checkLoopExpr(value, frame, false)
+      },
+      elements
+    )
+  | Ast.EMap(entries, _) => firstSome(
+      entry =>
+        checkLoopExpr(entry.key, frame, false)
+          |> Option.orElse(checkLoopExpr(entry.value, frame, false)),
+      entries
+    )
+  | Ast.EInterp(parts, _) => firstSome(
+      part => switch part {
+        | Ast.IPLit(_) => None
+        | Ast.IPExpr(value) => checkLoopExpr(value, frame, false)
+      },
+      parts
+    )
+  | _ => None
+}
+
+let checkLoops = stmts =>
+  firstSome(
+    stmt => switch stmt {
+      | Ast.SLet(_, _, _, value, _, _, _) => checkLoopExpr(value, None, false)
+      | Ast.SExpr(value, _) => checkLoopExpr(value, None, false)
+      | _ => None
+    },
+    stmts
+  )
+
 // --- entry point ---
 
 // Merge every key of `from` that `into` lacks (the importer's own decls win on
@@ -898,23 +1062,26 @@ export let checkWith = (stmts, imported, quals) => switch checkReservedNames(stm
       | Some(e) => Err(e)
       | None => switch checkQualifiedTypeNames(stmts, quals) {
           | Some(e) => Err(e)
-          | None => let? reg0 = buildRegistry(stmts) in
-            let reg = {
-              ctors: mergeMissing(
-                Map.keys(imported.ctors),
-                imported.ctors,
-                reg0.ctors
-              ),
-              types: mergeMissing(
-                Map.keys(imported.types),
-                imported.types,
-                reg0.types
-              )
-            } in
-              switch firstSome(s => switch s { | Ast.SLet(_, _, _, value, _, _, _) => checkExpr(value, reg) | Ast.SExpr(value, _) => checkExpr(value, reg) | _ => None }, stmts) {
-                | Some(e) => Err(e)
-                | None => Ok(stmts)
-              }
+          | None => switch checkLoops(stmts) {
+              | Some(e) => Err(e)
+              | None => let? reg0 = buildRegistry(stmts) in
+                let reg = {
+                  ctors: mergeMissing(
+                    Map.keys(imported.ctors),
+                    imported.ctors,
+                    reg0.ctors
+                  ),
+                  types: mergeMissing(
+                    Map.keys(imported.types),
+                    imported.types,
+                    reg0.types
+                  )
+                } in
+                  switch firstSome(s => switch s { | Ast.SLet(_, _, _, value, _, _, _) => checkExpr(value, reg) | Ast.SExpr(value, _) => checkExpr(value, reg) | _ => None }, stmts) {
+                    | Some(e) => Err(e)
+                    | None => Ok(stmts)
+                  }
+            }
         }
     }
 }

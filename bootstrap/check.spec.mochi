@@ -40,6 +40,41 @@ testEach("checker rejects invalid declarations and switches", [
     label: "undeclared constructor type variable",
     src: "type Box a = Item(a, b)",
     want: "unknown type parameter 'b'"
+  },
+  {
+    label: "recur outside a loop",
+    src: "let f = x => recur(x)",
+    want: "only legal inside a loop"
+  },
+  {
+    label: "recur outside tail position",
+    src: "let f = loop (i = 0) { recur(i) + 1 }",
+    want: "tail position"
+  },
+  {
+    label: "recur has loop arity",
+    src: "let f = loop (a = 0, b = 0) { a > 9 ? a : recur(a + 1) }",
+    want: "takes 2 arguments"
+  },
+  {
+    label: "loop params cannot repeat",
+    src: "let f = loop (a = 0, a = 1) { a }",
+    want: "duplicate loop param"
+  },
+  {
+    label: "let-in cannot shadow a loop param",
+    src: "let f = loop (a = 0) { let a = 1 in a > 0 ? a : recur(a) }",
+    want: "shadows a loop param"
+  },
+  {
+    label: "recur belongs to the nearest loop",
+    src: "let f = loop (a = 0, b = 0) { loop (c = 0) { c > 9 ? c : recur(a, b) } }",
+    want: "takes 1 argument"
+  },
+  {
+    label: "lambda is a loop boundary",
+    src: "let f = loop (i = 0) { map(x => recur(x), [1]) }",
+    want: "only legal inside a loop"
   }
 ], row => switch checkSrc(row.src) {
   | Err(e) => e.message |> Str.contains(row.want) |> ok

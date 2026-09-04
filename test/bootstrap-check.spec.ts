@@ -193,6 +193,28 @@ const cases: Record<string, { src: string; ok: boolean }> = {
     src: "type C = | R | G\nlet f = c => { ...{ x: switch c { | R => 1 } }, y: 2 }",
     ok: false,
   },
+  "loop: recur outside a loop": { src: "let f = x => recur(x)", ok: false },
+  "loop: recur must be tail": {
+    src: "let f = loop (i = 0) { recur(i) + 1 }",
+    ok: false,
+  },
+  "loop: recur arity matches params": {
+    src: "let f = loop (a = 0, b = 0) { a > 9 ? a : recur(a + 1) }",
+    ok: false,
+  },
+  "loop: params are distinct": { src: "let f = loop (a = 0, a = 1) { a }", ok: false },
+  "loop: let-in cannot shadow params": {
+    src: "let f = loop (a = 0) { let a = 1 in a > 0 ? a : recur(a) }",
+    ok: false,
+  },
+  "loop: recur belongs to nearest loop": {
+    src: "let f = loop (a = 0, b = 0) { loop (c = 0) { c > 9 ? c : recur(a, b) } }",
+    ok: false,
+  },
+  "loop: lambda body is a boundary": {
+    src: "let f = loop (i = 0) { map(x => recur(x), [1]) }",
+    ok: false,
+  },
   // ADR 0022 — or-patterns: coverage flattening + consistent-binds.
   "or-pattern: alts flatten to cover every ctor": {
     src: "type C = | R | G | B\nlet f = c => switch c { | R | G => 1 | B => 2 }",

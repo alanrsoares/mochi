@@ -86,10 +86,7 @@ export let writeAll = outs =>
       | [] => Ok("")
       | [o, ...rest] => switch writeFile(o.path->outPath(), o.js) {
           | Err(e) => Err(e)
-          | Ok(w) => do {
-              print("  wrote ${w}");
-              recur(rest)
-            }
+          | Ok(w) => let _printed = print("  wrote ${w}") in recur(rest)
         }
     }
   }
@@ -110,10 +107,7 @@ export let writeAllTs = outs =>
       | [] => Ok("")
       | [o, ...rest] => switch writeFile(tsWritePath(o.path, o.js), o.js) {
           | Err(e) => Err(e)
-          | Ok(w) => do {
-              print("  wrote ${w}");
-              recur(rest)
-            }
+          | Ok(w) => let _printed = print("  wrote ${w}") in recur(rest)
         }
     }
   }
