@@ -1,6 +1,7 @@
 /** The pipeline as a two-track railway: lex → parse → check → typecheck → codegen. Lex/parse fail with one Diagnostic; check/infer with Diagnostic[] (ADR 0004). Ok carries the emitted JS / typed program. */
 import { err, isErr, map, ok, type Result } from "@onrails/result";
 import type { Program } from "../ast/ast";
+import { compileBootstrapSyncWith } from "../bootstrap/sync";
 import { check, type Registry } from "../check/check";
 import { codegen } from "../codegen/codegen";
 import { type Diagnostic, oneDiag } from "../errors/errors";
@@ -118,7 +119,7 @@ export type CompileOptions = {
   open?: boolean;
 };
 
-export function compile(src: string, opts: CompileOptions = {}): Result<string, Diagnostic[]> {
+const compileWithTsCore = (src: string, opts: CompileOptions): Result<string, Diagnostic[]> => {
   const lexed = lex(src);
   if (isErr(lexed)) return err(oneDiag(lexed.error));
   const parsed = parse(lexed.value, { plugins: opts.plugins });
@@ -142,6 +143,25 @@ export function compile(src: string, opts: CompileOptions = {}): Result<string, 
           moduleExt: opts.moduleExt,
         }),
       );
+};
+
+/**
+ * Source → JS through the self-hosted compiler. The TypeScript pipeline remains
+ * the diagnostic-complete preflight until bootstrap carries staged, aggregate
+ * diagnostics and every host plugin validation is self-hosted.
+ */
+export function compile(src: string, opts: CompileOptions = {}): Result<string, Diagnostic[]> {
+  if (opts.plugins !== undefined) return compileWithTsCore(src, opts);
+  const preflight = compileWithTsCore(src, opts);
+  if (isErr(preflight)) return preflight;
+  const compiled = compileBootstrapSyncWith(src, {
+    open: opts.open ?? false,
+    runtime: opts.runtime ?? true,
+    docs: opts.docs ?? true,
+    moduleExt: opts.moduleExt ?? ".js",
+    strictEntry: false,
+  });
+  return compiled._tag === "Ok" ? ok(compiled.value) : preflight;
 }
 
 export { codegenTs } from "../codegen/codegen-ts";

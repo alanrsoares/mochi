@@ -185,6 +185,11 @@ test("field access on a record literal is parenthesized", () => {
   expect(js("let v = { x: 1 }.x")).toBe("const v = ({ x: 1 }).x;\n");
 });
 
+test("ordinary compile uses bootstrap optional projections", () => {
+  const out = unwrapOk(compile("type Props = { id?: string }\nlet getId = (p: Props) => p.id"));
+  expect(out).toContain('_tag: "Some"');
+});
+
 test("record as arrow body is parenthesized (else JS parses a block)", () => {
   expect(js("let mk = x => { v: x }")).toBe("const mk = (x) => ({ v: x });\n");
 });
