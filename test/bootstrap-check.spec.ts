@@ -107,6 +107,11 @@ test("bootstrap checker aggregates declaration diagnostics", () => {
   expect(alCheckDiagnostics(src)).toEqual(checkDiagnostics(src));
 });
 
+test("bootstrap checker rejects JavaScript keyword bindings", () => {
+  const src = "let static = 1\nlet f = await => let private = await in private\n";
+  expect(alCheckDiagnostics(src)).toEqual(checkDiagnostics(src));
+});
+
 for (const file of corpus) {
   test(`check verdicts agree on ${file}`, () => {
     const src = readFileSync(join(root, file), "utf8");
@@ -215,6 +220,7 @@ const cases: Record<string, { src: string; ok: boolean }> = {
   "reserved name as type": { src: "type List = | L", ok: false },
   "reserved name as extern": { src: 'extern Map : a -> a = "m" "x"', ok: false },
   "reserved name in import": { src: 'import { Set } from "./m"', ok: false },
+  "JavaScript reserved word as a binding": { src: "let static = 1", ok: false },
   "Option redeclaration wins": {
     src: "type Option a = | Some(value: a) | None\nlet f = o => switch o { | Some(x) => x | None => 0 }",
     ok: true,

@@ -796,6 +796,243 @@ let checkReservedNamesAll = stmts =>
     stmts
   )
 
+// Binding names lower unchanged into JavaScript. Object keys and field names
+// remain legal; only positions codegen emits as identifiers are rejected.
+let jsReserved = [
+  "break",
+  "case",
+  "catch",
+  "class",
+  "const",
+  "continue",
+  "debugger",
+  "default",
+  "delete",
+  "do",
+  "else",
+  "enum",
+  "export",
+  "extends",
+  "false",
+  "finally",
+  "for",
+  "function",
+  "if",
+  "import",
+  "in",
+  "instanceof",
+  "new",
+  "null",
+  "return",
+  "super",
+  "switch",
+  "this",
+  "throw",
+  "true",
+  "try",
+  "typeof",
+  "var",
+  "void",
+  "while",
+  "with",
+  "yield",
+  "let",
+  "static",
+  "implements",
+  "interface",
+  "package",
+  "private",
+  "protected",
+  "public",
+  "await"
+]
+
+let reservedWord = (name, sp) =>
+  Array.contains(name, jsReserved)
+    ? [
+      checkErr(
+        "'${name}' is a JavaScript reserved word and can't be used as a binding name; rename it",
+        sp
+      )
+    ]
+    : []
+
+let typeExprSpan = te => switch te {
+  | Ast.TyName(_, sp) => sp
+  | Ast.TyArrow(_, _, sp) => sp
+  | Ast.TyApp(_, _, sp) => sp
+  | Ast.TyTuple(_, sp) => sp
+  | Ast.TyList(_, sp) => sp
+  | Ast.TyQual(_, _, _, _, sp) => sp
+  | Ast.TyLit(_, sp) => sp
+  | Ast.TyUnion(_, sp) => sp
+}
+
+let checkReservedParam = (param, sp) => switch param {
+  | Ast.LPName(name, _) => reservedWord(name, sp)
+  | Ast.LPRecord(fields) => Array.flatMap(
+      name => reservedWord(name, sp),
+      fields
+    )
+  | Ast.LPTuple(names) => Array.flatMap(name => reservedWord(name, sp), names)
+  | Ast.LPLabeled(name, _, _, defaultValue) => [
+      ...reservedWord(name, sp),
+      ...switch defaultValue {
+        | Some(value) => checkReservedExpr(value)
+        | None => []
+      }
+    ]
+  | Ast.LPSpanned(inner, _) => checkReservedParam(inner, sp)
+}
+
+let checkReservedPattern = pat => switch pat {
+  | Ast.PAs(inner, name, nameSp, _) => [
+      ...checkReservedPattern(inner),
+      ...reservedWord(name, nameSp)
+    ]
+  | Ast.PBind(name, sp) => reservedWord(name, sp)
+  | Ast.PTuple(elems, _) => Array.flatMap(checkReservedPattern, elems)
+  | Ast.PRecord(fields, _) => Array.flatMap(
+      field => checkReservedPattern(field.pat),
+      fields
+    )
+  | Ast.PCtor(_, args, _, _) => Array.flatMap(checkReservedPattern, args)
+  | Ast.PArr(elems, rest, _) => [
+      ...Array.flatMap(checkReservedPattern, elems),
+      ...switch rest {
+        | Some(value) => checkReservedPattern(value)
+        | None => []
+      }
+    ]
+  | Ast.PList(elems, rest, _) => [
+      ...Array.flatMap(checkReservedPattern, elems),
+      ...switch rest {
+        | Some(value) => checkReservedPattern(value)
+        | None => []
+      }
+    ]
+  | Ast.POr(alts, _) => Array.flatMap(checkReservedPattern, alts)
+  | _ => []
+}
+
+let checkReservedSeqElem = el => switch el {
+  | Ast.SEExpr(value) => checkReservedExpr(value)
+  | Ast.SESpread(value) => checkReservedExpr(value)
+}
+
+let checkReservedExpr = expr => switch expr {
+  | Ast.ECall(fn, args, _, _) => [
+      ...checkReservedExpr(fn),
+      ...Array.flatMap(checkReservedExpr, args)
+    ]
+  | Ast.ELambda(params, body, sp) => [
+      ...Array.flatMap(param => checkReservedParam(param, sp), params),
+      ...checkReservedExpr(body)
+    ]
+  | Ast.ELetIn(name, nameSp, _, value, body, _) => [
+      ...reservedWord(name, nameSp),
+      ...checkReservedExpr(value),
+      ...checkReservedExpr(body)
+    ]
+  | Ast.ELetBind(param, paramSp, _, value, body, _) => [
+      ...checkReservedParam(param, paramSp),
+      ...checkReservedExpr(value),
+      ...checkReservedExpr(body)
+    ]
+  | Ast.EPipe(left, right, _, _) => [
+      ...checkReservedExpr(left),
+      ...checkReservedExpr(right)
+    ]
+  | Ast.EDo(exprs, _) => Array.flatMap(checkReservedExpr, exprs)
+  | Ast.ETernary(cond, thenE, elseE, _) => [
+      ...checkReservedExpr(cond),
+      ...checkReservedExpr(thenE),
+      ...checkReservedExpr(elseE)
+    ]
+  | Ast.EMatch(scrutinee, arms, _) => [
+      ...checkReservedExpr(scrutinee),
+      ...Array.flatMap(
+        arm =>
+          [
+            ...checkReservedPattern(arm.pattern),
+            ...switch arm.guard {
+              | Some(guard) => checkReservedExpr(guard)
+              | None => []
+            },
+            ...checkReservedExpr(arm.body)
+          ],
+        arms
+      )
+    ]
+  | Ast.ERecord(fields, spread, _) => [
+      ...switch spread {
+        | Some(value) => checkReservedExpr(value)
+        | None => []
+      },
+      ...Array.flatMap(field => checkReservedExpr(field.value), fields)
+    ]
+  | Ast.EField(target, _, _, _) => checkReservedExpr(target)
+  | Ast.ELoop(params, body, _) => [
+      ...Array.flatMap(
+        param => reservedWord(param.name, param.nameSpan),
+        params
+      ),
+      ...Array.flatMap(param => checkReservedExpr(param.init), params),
+      ...checkReservedExpr(body)
+    ]
+  | Ast.ERecur(args, _) => Array.flatMap(checkReservedExpr, args)
+  | Ast.ETuple(elements, _) => Array.flatMap(checkReservedExpr, elements)
+  | Ast.EArr(elements, _) => Array.flatMap(checkReservedSeqElem, elements)
+  | Ast.EList(elements, _) => Array.flatMap(checkReservedSeqElem, elements)
+  | Ast.ESet(elements, _) => Array.flatMap(checkReservedSeqElem, elements)
+  | Ast.EMap(entries, _) => Array.flatMap(
+      entry =>
+        [...checkReservedExpr(entry.key), ...checkReservedExpr(entry.value)],
+      entries
+    )
+  | Ast.EInterp(parts, _) => Array.flatMap(
+      part => switch part {
+        | Ast.IPLit(_) => []
+        | Ast.IPExpr(value) => checkReservedExpr(value)
+      },
+      parts
+    )
+  | _ => []
+}
+
+let checkReservedWordsAll = stmts =>
+  Array.flatMap(
+    stmt => switch stmt {
+      | Ast.SLet(name, nameSp, _, value, _, _, _) => [
+          ...reservedWord(name, nameSp),
+          ...checkReservedExpr(value)
+        ]
+      | Ast.SExpr(value, _) => checkReservedExpr(value)
+      | Ast.SExtern(name, nameSp, _, _, _, _, _, _, _, _) => reservedWord(
+          name,
+          nameSp
+        )
+      | Ast.SType(_, _, ctors, _, _, _, _, _) => Array.flatMap(
+          ctor =>
+            Array.flatMap(
+              field => switch field.name {
+                | Some(name) => reservedWord(
+                    name,
+                    typeExprSpan(field.fieldType)
+                  )
+                | None => []
+              },
+              ctor.fields
+            ),
+          ctors
+        )
+      | _ => []
+    },
+    stmts
+  )
+
+let checkReservedWords = stmts => checkReservedWordsAll(stmts) |> Array.head
+
 let isUpperStart = s => switch Str.codeAt(0, s) {
   | Some(c) => c >= 65 && c <= 90
   | None => false
@@ -1432,29 +1669,32 @@ let mergeMissing = (keys, from, into) => switch keys {
 /// catch-all). Mirrors src/check.ts's `check(prog, imported)`.
 export let checkWith = (stmts, imported, quals) => switch checkReservedNames(stmts) {
   | Some(e) => Err(e)
-  | None => switch checkCtorFieldVars(stmts) {
+  | None => switch checkReservedWords(stmts) {
       | Some(e) => Err(e)
-      | None => switch checkQualifiedTypeNames(stmts, quals) {
+      | None => switch checkCtorFieldVars(stmts) {
           | Some(e) => Err(e)
-          | None => switch checkLoops(stmts) {
+          | None => switch checkQualifiedTypeNames(stmts, quals) {
               | Some(e) => Err(e)
-              | None => let? reg0 = buildRegistry(stmts) in
-                let reg = {
-                  ctors: mergeMissing(
-                    Map.keys(imported.ctors),
-                    imported.ctors,
-                    reg0.ctors
-                  ),
-                  types: mergeMissing(
-                    Map.keys(imported.types),
-                    imported.types,
-                    reg0.types
-                  )
-                } in
-                  switch firstSome(s => switch s { | Ast.SLet(_, _, _, value, _, _, _) => checkExpr(value, reg) | Ast.SExpr(value, _) => checkExpr(value, reg) | _ => None }, stmts) {
-                    | Some(e) => Err(e)
-                    | None => Ok(stmts)
-                  }
+              | None => switch checkLoops(stmts) {
+                  | Some(e) => Err(e)
+                  | None => let? reg0 = buildRegistry(stmts) in
+                    let reg = {
+                      ctors: mergeMissing(
+                        Map.keys(imported.ctors),
+                        imported.ctors,
+                        reg0.ctors
+                      ),
+                      types: mergeMissing(
+                        Map.keys(imported.types),
+                        imported.types,
+                        reg0.types
+                      )
+                    } in
+                      switch firstSome(s => switch s { | Ast.SLet(_, _, _, value, _, _, _) => checkExpr(value, reg) | Ast.SExpr(value, _) => checkExpr(value, reg) | _ => None }, stmts) {
+                        | Some(e) => Err(e)
+                        | None => Ok(stmts)
+                      }
+                }
             }
         }
     }
@@ -1469,6 +1709,7 @@ export let check = stmts =>
 export let checkAllWith = (stmts, imported, quals) => switch buildRegistry(stmts) {
   | Err(e) => let errors = [
       ...checkReservedNamesAll(stmts),
+      ...checkReservedWordsAll(stmts),
       ...checkCtorFieldVarsAll(stmts),
       ...checkQualifiedTypeNamesAll(stmts, quals),
       ...checkLoopsAll(stmts),
@@ -1481,6 +1722,7 @@ export let checkAllWith = (stmts, imported, quals) => switch buildRegistry(stmts
     } in
     let errors = [
       ...checkReservedNamesAll(stmts),
+      ...checkReservedWordsAll(stmts),
       ...checkCtorFieldVarsAll(stmts),
       ...checkQualifiedTypeNamesAll(stmts, quals),
       ...checkLoopsAll(stmts),

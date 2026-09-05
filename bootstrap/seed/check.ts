@@ -1,5 +1,6 @@
 import type {
   AliasField,
+  Ctor,
   CtorField,
   Expr,
   Field,
@@ -1186,6 +1187,248 @@ const checkReservedNamesAll: (stmts: Stmt[]) => PErr[] = (stmts: Stmt[]) =>
         .otherwise(() => [] as PErr[]),
     stmts,
   );
+const jsReserved: string[] = [
+  "break",
+  "case",
+  "catch",
+  "class",
+  "const",
+  "continue",
+  "debugger",
+  "default",
+  "delete",
+  "do",
+  "else",
+  "enum",
+  "export",
+  "extends",
+  "false",
+  "finally",
+  "for",
+  "function",
+  "if",
+  "import",
+  "in",
+  "instanceof",
+  "new",
+  "null",
+  "return",
+  "super",
+  "switch",
+  "this",
+  "throw",
+  "true",
+  "try",
+  "typeof",
+  "var",
+  "void",
+  "while",
+  "with",
+  "yield",
+  "let",
+  "static",
+  "implements",
+  "interface",
+  "package",
+  "private",
+  "protected",
+  "public",
+  "await",
+];
+const reservedWord: <A, B, C>(
+  name: string,
+  sp: { end: A; start: B } & C,
+) => { message: string; start: B; end: A }[] = _curry(
+  2,
+  <A, B, C>(name: string, sp: { end: A; start: B } & C) =>
+    _Array_contains(name, jsReserved)
+      ? [
+          checkErr(
+            `'${name}' is a JavaScript reserved word and can't be used as a binding name; rename it`,
+            sp,
+          ),
+        ]
+      : ([] as { message: string; start: B; end: A }[]),
+);
+const typeExprSpan: (te: TypeExpr) => SpanAt = (te: TypeExpr) =>
+  match(te)
+    .with({ _tag: "TyName" }, ({ span: sp }) => sp)
+    .with({ _tag: "TyArrow" }, ({ span: sp }) => sp)
+    .with({ _tag: "TyApp" }, ({ span: sp }) => sp)
+    .with({ _tag: "TyTuple" }, ({ span: sp }) => sp)
+    .with({ _tag: "TyList" }, ({ span: sp }) => sp)
+    .with({ _tag: "TyQual" }, ({ span: sp }) => sp)
+    .with({ _tag: "TyLit" }, ({ span: sp }) => sp)
+    .with({ _tag: "TyUnion" }, ({ span: sp }) => sp)
+    .exhaustive();
+const checkReservedParam: _Curry<[param: LamParam, sp: SpanAt], PErr[]> = _curry(
+  2,
+  (param: LamParam, sp: SpanAt) =>
+    match(param)
+      .with({ _tag: "LPName" }, ({ name }) => reservedWord(name, sp))
+      .with({ _tag: "LPRecord" }, ({ fields }) =>
+        _Array_flatMap((name: string) => reservedWord(name, sp), fields),
+      )
+      .with({ _tag: "LPTuple" }, ({ names }) =>
+        _Array_flatMap((name: string) => reservedWord(name, sp), names),
+      )
+      .with({ _tag: "LPLabeled" }, ({ name, defaultValue }) => [
+        ...reservedWord(name, sp),
+        ...match(defaultValue)
+          .with({ _tag: "Some" }, ({ value }) => checkReservedExpr(value))
+          .with({ _tag: "None" }, () => [] as PErr[])
+          .exhaustive(),
+      ])
+      .with({ _tag: "LPSpanned" }, ({ param: inner }) => checkReservedParam(inner, sp))
+      .exhaustive(),
+);
+const checkReservedPattern: (pat: Pattern) => PErr[] = (pat: Pattern) =>
+  match(pat)
+    .with({ _tag: "PAs" }, ({ pat: inner, name, nameSpan: nameSp }) => [
+      ...checkReservedPattern(inner),
+      ...reservedWord(name, nameSp),
+    ])
+    .with({ _tag: "PBind" }, ({ name, span: sp }) => reservedWord(name, sp))
+    .with({ _tag: "PTuple" }, ({ elems }) => _Array_flatMap(checkReservedPattern, elems))
+    .with({ _tag: "PRecord" }, ({ fields }) =>
+      _Array_flatMap((field: PatField) => checkReservedPattern(field.pat), fields),
+    )
+    .with({ _tag: "PCtor" }, ({ args }) => _Array_flatMap(checkReservedPattern, args))
+    .with({ _tag: "PArr" }, ({ elems, rest }) => [
+      ..._Array_flatMap(checkReservedPattern, elems),
+      ...match(rest)
+        .with({ _tag: "Some" }, ({ value }) => checkReservedPattern(value))
+        .with({ _tag: "None" }, () => [] as PErr[])
+        .exhaustive(),
+    ])
+    .with({ _tag: "PList" }, ({ elems, rest }) => [
+      ..._Array_flatMap(checkReservedPattern, elems),
+      ...match(rest)
+        .with({ _tag: "Some" }, ({ value }) => checkReservedPattern(value))
+        .with({ _tag: "None" }, () => [] as PErr[])
+        .exhaustive(),
+    ])
+    .with({ _tag: "POr" }, ({ alts }) => _Array_flatMap(checkReservedPattern, alts))
+    .otherwise(() => [] as PErr[]);
+const checkReservedSeqElem: (el: SeqElem) => PErr[] = (el: SeqElem) =>
+  match(el)
+    .with({ _tag: "SEExpr" }, ({ expr: value }) => checkReservedExpr(value))
+    .with({ _tag: "SESpread" }, ({ expr: value }) => checkReservedExpr(value))
+    .exhaustive();
+const checkReservedExpr: (expr: Expr) => PErr[] = (expr: Expr) =>
+  match(expr)
+    .with({ _tag: "ECall" }, ({ fn, args }) => [
+      ...checkReservedExpr(fn),
+      ..._Array_flatMap(checkReservedExpr, args),
+    ])
+    .with({ _tag: "ELambda" }, ({ params, body, span: sp }) => [
+      ..._Array_flatMap((param: LamParam) => checkReservedParam(param, sp), params),
+      ...checkReservedExpr(body),
+    ])
+    .with({ _tag: "ELetIn" }, ({ name, nameSpan: nameSp, value, body }) => [
+      ...reservedWord(name, nameSp),
+      ...checkReservedExpr(value),
+      ...checkReservedExpr(body),
+    ])
+    .with({ _tag: "ELetBind" }, ({ param, paramSpan: paramSp, value, body }) => [
+      ...checkReservedParam(param, paramSp),
+      ...checkReservedExpr(value),
+      ...checkReservedExpr(body),
+    ])
+    .with({ _tag: "EPipe" }, ({ left, right }) => [
+      ...checkReservedExpr(left),
+      ...checkReservedExpr(right),
+    ])
+    .with({ _tag: "EDo" }, ({ exprs }) => _Array_flatMap(checkReservedExpr, exprs))
+    .with({ _tag: "ETernary" }, ({ cond, thenE, elseE }) => [
+      ...checkReservedExpr(cond),
+      ...checkReservedExpr(thenE),
+      ...checkReservedExpr(elseE),
+    ])
+    .with({ _tag: "EMatch" }, ({ scrutinee, arms }) => [
+      ...checkReservedExpr(scrutinee),
+      ..._Array_flatMap(
+        (arm: MatchArm) => [
+          ...checkReservedPattern(arm.pattern),
+          ...match(arm.guard)
+            .with({ _tag: "Some" }, ({ value: guard }) => checkReservedExpr(guard))
+            .with({ _tag: "None" }, () => [] as PErr[])
+            .exhaustive(),
+          ...checkReservedExpr(arm.body),
+        ],
+        arms,
+      ),
+    ])
+    .with({ _tag: "ERecord" }, ({ fields, spread }) => [
+      ...match(spread)
+        .with({ _tag: "Some" }, ({ value }) => checkReservedExpr(value))
+        .with({ _tag: "None" }, () => [] as PErr[])
+        .exhaustive(),
+      ..._Array_flatMap((field: Field) => checkReservedExpr(field.value), fields),
+    ])
+    .with({ _tag: "EField" }, ({ target }) => checkReservedExpr(target))
+    .with({ _tag: "ELoop" }, ({ params, body }) => [
+      ..._Array_flatMap(
+        (param: { name: string; nameSpan: SpanAt; init: Expr }) =>
+          reservedWord(param.name, param.nameSpan),
+        params,
+      ),
+      ..._Array_flatMap((param: LoopParam) => checkReservedExpr(param.init), params),
+      ...checkReservedExpr(body),
+    ])
+    .with({ _tag: "ERecur" }, ({ args }) => _Array_flatMap(checkReservedExpr, args))
+    .with({ _tag: "ETuple" }, ({ elements }) => _Array_flatMap(checkReservedExpr, elements))
+    .with({ _tag: "EArr" }, ({ elements }) => _Array_flatMap(checkReservedSeqElem, elements))
+    .with({ _tag: "EList" }, ({ elements }) => _Array_flatMap(checkReservedSeqElem, elements))
+    .with({ _tag: "ESet" }, ({ elements }) => _Array_flatMap(checkReservedSeqElem, elements))
+    .with({ _tag: "EMap" }, ({ entries }) =>
+      _Array_flatMap(
+        (entry: MapEntry) => [...checkReservedExpr(entry.key), ...checkReservedExpr(entry.value)],
+        entries,
+      ),
+    )
+    .with({ _tag: "EInterp" }, ({ parts }) =>
+      _Array_flatMap(
+        (part: InterpPart) =>
+          match(part)
+            .with({ _tag: "IPLit" }, () => [] as PErr[])
+            .with({ _tag: "IPExpr" }, ({ expr: value }) => checkReservedExpr(value))
+            .exhaustive(),
+        parts,
+      ),
+    )
+    .otherwise(() => [] as PErr[]);
+const checkReservedWordsAll: (stmts: Stmt[]) => PErr[] = (stmts: Stmt[]) =>
+  _Array_flatMap(
+    (stmt: Stmt) =>
+      match(stmt)
+        .with({ _tag: "SLet" }, ({ name, nameSpan: nameSp, value }) => [
+          ...reservedWord(name, nameSp),
+          ...checkReservedExpr(value),
+        ])
+        .with({ _tag: "SExpr" }, ({ value }) => checkReservedExpr(value))
+        .with({ _tag: "SExtern" }, ({ name, nameSpan: nameSp }) => reservedWord(name, nameSp))
+        .with({ _tag: "SType" }, ({ ctors }) =>
+          _Array_flatMap(
+            (ctor: Ctor) =>
+              _Array_flatMap(
+                (field: CtorField) =>
+                  match(field.name)
+                    .with({ _tag: "Some" }, ({ value: name }) =>
+                      reservedWord(name, typeExprSpan(field.fieldType)),
+                    )
+                    .with({ _tag: "None" }, () => [] as PErr[])
+                    .exhaustive(),
+                ctor.fields,
+              ),
+            ctors,
+          ),
+        )
+        .otherwise(() => [] as PErr[]),
+    stmts,
+  );
+const checkReservedWords: (stmts: Stmt[]) => Option<PErr> = (stmts: Stmt[]) =>
+  _Array_head(checkReservedWordsAll(stmts));
 const isUpperStart: (s: string) => boolean = (s: string) =>
   match(_Str_codeAt(0, s))
     .with({ _tag: "Some" }, ({ value: c }) => and(c >= 65, c <= 90))
@@ -2037,47 +2280,52 @@ export const checkWith: <A, B>(
     match(checkReservedNames(stmts))
       .with({ _tag: "Some" }, ({ value: e }) => Err(e) as Result<Stmt[], PErr>)
       .with({ _tag: "None" }, () =>
-        match(checkCtorFieldVars(stmts))
+        match(checkReservedWords(stmts))
           .with({ _tag: "Some" }, ({ value: e }) => Err(e) as Result<Stmt[], PErr>)
           .with({ _tag: "None" }, () =>
-            match(checkQualifiedTypeNames(stmts, quals))
+            match(checkCtorFieldVars(stmts))
               .with({ _tag: "Some" }, ({ value: e }) => Err(e) as Result<Stmt[], PErr>)
               .with({ _tag: "None" }, () =>
-                match(checkLoops(stmts))
+                match(checkQualifiedTypeNames(stmts, quals))
                   .with({ _tag: "Some" }, ({ value: e }) => Err(e) as Result<Stmt[], PErr>)
                   .with({ _tag: "None" }, () =>
-                    _Result_flatMap(
-                      (reg0) =>
-                        ((reg: Registry) =>
-                          match(
-                            firstSome(
-                              (s: Stmt) =>
-                                match(s)
-                                  .with({ _tag: "SLet" }, ({ value }) => checkExpr(value, reg))
-                                  .with({ _tag: "SExpr" }, ({ value }) => checkExpr(value, reg))
-                                  .otherwise(() => None as Option<PErr>),
-                              stmts,
-                            ),
-                          )
-                            .with(
-                              { _tag: "Some" },
-                              ({ value: e }) => Err(e) as Result<Stmt[], PErr>,
-                            )
-                            .with({ _tag: "None" }, () => Ok(stmts) as Result<Stmt[], PErr>)
-                            .exhaustive())({
-                          ctors: mergeMissing(
-                            _Map_keys(imported.ctors),
-                            imported.ctors,
-                            reg0.ctors,
-                          ),
-                          types: mergeMissing(
-                            _Map_keys(imported.types),
-                            imported.types,
-                            reg0.types,
-                          ),
-                        }),
-                      buildRegistry(stmts),
-                    ),
+                    match(checkLoops(stmts))
+                      .with({ _tag: "Some" }, ({ value: e }) => Err(e) as Result<Stmt[], PErr>)
+                      .with({ _tag: "None" }, () =>
+                        _Result_flatMap(
+                          (reg0) =>
+                            ((reg: Registry) =>
+                              match(
+                                firstSome(
+                                  (s: Stmt) =>
+                                    match(s)
+                                      .with({ _tag: "SLet" }, ({ value }) => checkExpr(value, reg))
+                                      .with({ _tag: "SExpr" }, ({ value }) => checkExpr(value, reg))
+                                      .otherwise(() => None as Option<PErr>),
+                                  stmts,
+                                ),
+                              )
+                                .with(
+                                  { _tag: "Some" },
+                                  ({ value: e }) => Err(e) as Result<Stmt[], PErr>,
+                                )
+                                .with({ _tag: "None" }, () => Ok(stmts) as Result<Stmt[], PErr>)
+                                .exhaustive())({
+                              ctors: mergeMissing(
+                                _Map_keys(imported.ctors),
+                                imported.ctors,
+                                reg0.ctors,
+                              ),
+                              types: mergeMissing(
+                                _Map_keys(imported.types),
+                                imported.types,
+                                reg0.types,
+                              ),
+                            }),
+                          buildRegistry(stmts),
+                        ),
+                      )
+                      .exhaustive(),
                   )
                   .exhaustive(),
               )
@@ -2116,6 +2364,7 @@ export const checkAllWith: <A, B>(
             ? (Ok(stmts) as Result<Stmt[], PErr[]>)
             : (Err(errors) as Result<Stmt[], PErr[]>))([
           ...checkReservedNamesAll(stmts),
+          ...checkReservedWordsAll(stmts),
           ...checkCtorFieldVarsAll(stmts),
           ...checkQualifiedTypeNamesAll(stmts, quals),
           ...checkLoopsAll(stmts),
@@ -2129,6 +2378,7 @@ export const checkAllWith: <A, B>(
               ? (Ok(stmts) as Result<Stmt[], PErr[]>)
               : (Err(errors) as Result<Stmt[], PErr[]>))([
             ...checkReservedNamesAll(stmts),
+            ...checkReservedWordsAll(stmts),
             ...checkCtorFieldVarsAll(stmts),
             ...checkQualifiedTypeNamesAll(stmts, quals),
             ...checkLoopsAll(stmts),

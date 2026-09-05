@@ -48,6 +48,11 @@ test("checker aggregates declaration diagnostics", () => switch lex("let List = 
     }
 })
 
+test("checker rejects JavaScript keyword bindings", () => switch checkSrc("let static = 1\nlet f = await => let private = await in private") {
+  | Ok(_) => false |> ok
+  | Err(e) => e.message |> Str.contains("JavaScript reserved word") |> ok
+})
+
 testEach("checker rejects invalid declarations and switches", [
   {
     label: "missing variant arm",
