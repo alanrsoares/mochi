@@ -210,7 +210,7 @@ import { resolveImport as $resolveImport } from "./host.mjs";
 const resolveImport = _curry(2, $resolveImport);
 import { absPath } from "./host.mjs";
 const mErr: <A>(message: A) => { message: A; start: number; end: number } = <A>(message: A) => ({
-  message,
+  message: message,
   start: 0,
   end: 0,
 });
@@ -275,7 +275,7 @@ const visit: _Curry<[path: string, acc: Acc], Result<Acc, PErr>> = _curry(
                       ({ value: acc2 }) =>
                         Ok({
                           state: _Map_set(path, "done", acc2.state),
-                          order: _Array_append({ path, src, stmts }, acc2.order),
+                          order: _Array_append({ path: path, src: src, stmts: stmts }, acc2.order),
                         }) as Result<Acc, PErr>,
                     )
                     .exhaustive(),
@@ -377,7 +377,7 @@ const aliasesOf: (stmts: Stmt[]) => Map<string, AliasInfo> = (stmts: Stmt[]) =>
             return _g._tag === "SType" && _g.alias._tag === "Some";
           },
           ({ name, params, alias: { value: fields } }) =>
-            _Map_set(name, { params, fields, expr: None as Option<TypeExpr> }, acc),
+            _Map_set(name, { params: params, fields: fields, expr: None as Option<TypeExpr> }, acc),
         )
         .with(
           (
@@ -392,7 +392,7 @@ const aliasesOf: (stmts: Stmt[]) => Map<string, AliasInfo> = (stmts: Stmt[]) =>
             _Map_set(
               name,
               {
-                params,
+                params: params,
                 fields: [] as QualAliasField[],
                 expr: Some(te) as Option<TypeExpr>,
               },
@@ -952,7 +952,7 @@ const compileOne: <A>(
                       ctx.keysByPath,
                     ),
                     qualsByPath: _Map_set(loaded.path, qualScopeOf(loaded.stmts), ctx.qualsByPath),
-                    outputs: [...ctx.outputs, { path: loaded.path, js }],
+                    outputs: [...ctx.outputs, { path: loaded.path, js: js }],
                   }) as Result<
                     {
                       exportsByPath: Map<string, Map<string, Scheme>>;
@@ -1194,7 +1194,7 @@ const compileAllRecovering: _Curry<
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => ({ ctx, errors }),
+        () => ({ ctx: ctx, errors: errors }),
       )
       .with(
         (_v) => {
@@ -2168,10 +2168,10 @@ const crossModuleTypeImports: _Curry<
   4,
   (ts: string, importer: string, localTypes: Set<string>, typeOwner: Map<string, string>) => {
     const byOwner: Map<string, string[]> = groupByOwner(_Map_keys(typeOwner), {
-      ts,
-      importer,
-      localTypes,
-      typeOwner,
+      ts: ts,
+      importer: importer,
+      localTypes: localTypes,
+      typeOwner: typeOwner,
       bound: valueImported(ts),
     });
     return map(
@@ -2207,7 +2207,7 @@ const externBindingsInto: <A>(
                       _Map_set(
                         dp,
                         _Array_append(
-                          { imported, scheme: sc, curried },
+                          { imported: imported, scheme: sc, curried: curried },
                           _Map_getOr(
                             [] as { imported: string; scheme: A; curried: boolean }[],
                             dp,
@@ -2613,7 +2613,7 @@ export const compileGraphTsWith: <A>(
         >(),
         aliases: new Map<string, AliasInfo>(),
         typeOwner: typeOwnerOf(graph),
-        runtimeImport,
+        runtimeImport: runtimeImport,
         externs: new Map<string, { scheme: Scheme; imported: string; curried: boolean }[]>(),
         outputs: [] as ModuleOutput[],
       },
@@ -2941,7 +2941,7 @@ export const emitDtsForFileWith: _Curry<
             }
           >(),
           aliases: new Map<string, AliasInfo>(),
-          runtimeImport,
+          runtimeImport: runtimeImport,
           target: absPath(entry),
           dts: "",
         },

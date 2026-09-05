@@ -396,7 +396,7 @@ const commentAt: _Curry<[src: string, i: number, end: number], Comment> = _curry
     const lineEnd: number = lineEndFrom(src, end + 1);
     return {
       start: i,
-      end,
+      end: end,
       text: trimEnd(_Str_slice(i, end, src)),
       blankAfter: eq(_Str_trim(_Str_slice(end + 1, lineEnd, src)), ""),
       trailing: false,
@@ -712,7 +712,7 @@ const attachFrom: <A>(
           anchors,
           src,
           match(attachOne(anchors, src, c, acc.table))
-            .with({ _tag: "Some" }, ({ value: table }) => ({ table, tail: acc.tail }))
+            .with({ _tag: "Some" }, ({ value: table }) => ({ table: table, tail: acc.tail }))
             .with({ _tag: "None" }, () => ({ table: acc.table, tail: _Array_append(c, acc.tail) }))
             .exhaustive(),
         ),
@@ -2172,7 +2172,7 @@ const ternaryArmsFrom: _Curry<
 > = _curry(2, (e: Expr, acc: { cond: Expr; thenE: Expr }[]) =>
   match(e)
     .with({ _tag: "ETernary" }, ({ cond, thenE, elseE }) =>
-      ternaryArmsFrom(elseE, _Array_append({ cond, thenE }, acc)),
+      ternaryArmsFrom(elseE, _Array_append({ cond: cond, thenE: thenE }, acc)),
     )
     .otherwise(() => _tuple(acc, e)),
 );
@@ -2999,7 +2999,7 @@ export const formatProgram: _Curry<[stmts: Stmt[], src: string], string> = _curr
     const base: Ctx = {
       ...noComments,
       flatArity: buildFlatArity(stmts, innerBound),
-      shadowed,
+      shadowed: shadowed,
     };
     const attached: Attached = attachFrom(
       filter((c: Comment) => not(inErrorSpan(stmts, c)), collectComments(src)),

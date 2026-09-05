@@ -750,7 +750,7 @@ export const ctorScheme: <A>(
       const result: Ty = tCon(typeName, pvarTypes);
       return (([ty, st2]: [Ty, St]) => {
         const sets: VarSets = collect(ty, emptyVarSets);
-        return _tuple({ vars: _Set_toArray(sets.tv), rvars: _Set_toArray(sets.rv), ty }, st2);
+        return _tuple({ vars: _Set_toArray(sets.tv), rvars: _Set_toArray(sets.rv), ty: ty }, st2);
       })(ctorFieldsArrowFrom(c.fields, pvars, st1, aliases, result));
     })(pvarsFrom(params, st)),
 );

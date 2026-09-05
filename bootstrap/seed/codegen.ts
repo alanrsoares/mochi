@@ -465,7 +465,7 @@ const absorbParams: _Curry<
           ((labVar: string) =>
             _tuple(
               _Array_append(Ast.LPName(labVar, None as Option<TypeExpr>), acc1),
-              _Array_append({ labVar, labs: labeled }, fills),
+              _Array_append({ labVar: labVar, labs: labeled }, fills),
               labN + 1,
             ))(eq(labN, 0) ? "$lab" : `$lab${show(labN)}`),
         );
@@ -3054,8 +3054,8 @@ export const codegenWith: <A>(
     const keys0: Map<string, string[]> = ctorKeysFromStmts(stmts, imported);
     const keys: Map<string, string[]> = seedBuiltinCtorKeys(stmts, keys0);
     const ctx0: GCtx = {
-      keys,
-      ns,
+      keys: keys,
+      ns: ns,
       annotateLet: opts.annotateLet,
       annotateCtor: opts.annotateCtor,
       annotateParams: opts.annotateParams,
@@ -3072,7 +3072,7 @@ export const codegenWith: <A>(
       docs: opts.docs,
     };
     const valueRefs: Set<string> = collectValueRefs(ctx0, stmts, 0, _Set_fromArray([] as string[]));
-    const ctx: GCtx = { ...ctx0, valueRefs };
+    const ctx: GCtx = { ...ctx0, valueRefs: valueRefs };
     const needsMatch: boolean = someOf(
       (s: Stmt) =>
         match(s)
@@ -3113,8 +3113,8 @@ export const runtimeDepNames: <A>(
       ctorKeysFromStmts(stmts, imported),
     );
     const ctx0: GCtx = {
-      keys,
-      ns,
+      keys: keys,
+      ns: ns,
       annotateLet: None,
       annotateCtor: None,
       annotateParams: None,
@@ -3131,7 +3131,7 @@ export const runtimeDepNames: <A>(
       docs: false,
     };
     const valueRefs: Set<string> = collectValueRefs(ctx0, stmts, 0, _Set_fromArray([] as string[]));
-    return runtimeRefNames({ ...ctx0, valueRefs }, stmts, jsDefs, runtimeDeps);
+    return runtimeRefNames({ ...ctx0, valueRefs: valueRefs }, stmts, jsDefs, runtimeDeps);
   },
 );
 /**

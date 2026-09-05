@@ -101,7 +101,7 @@ const consParts: _Curry<[parts: Doc[], i: number, m: string, tail: Work], Work> 
       } else {
         const _step = match(_Array_get(k, parts))
           .with({ _tag: "None" }, () => _done(w))
-          .with({ _tag: "Some" }, ({ value: d }) => _recur(k - 1, WCons({ i, m, d }, w)))
+          .with({ _tag: "Some" }, ({ value: d }) => _recur(k - 1, WCons({ i: i, m: m, d: d }, w)))
           .exhaustive();
         if (_step._tag === "recur") {
           [k, w] = _step.args;
@@ -139,16 +139,16 @@ const fits: _Curry<[width: number, start: Work], boolean> = _curry(
                 .with({ _tag: "DVerbatim" }, () => _done(true))
                 .with({ _tag: "DCat" }, ({ parts }) => _recur(rem, consParts(parts, i, m, tail)))
                 .with({ _tag: "DIndent" }, ({ doc: inner }) =>
-                  _recur(rem, WCons({ i: i + INDENT, m, d: inner }, tail)),
+                  _recur(rem, WCons({ i: i + INDENT, m: m, d: inner }, tail)),
                 )
                 .with({ _tag: "DGroup" }, ({ doc: inner }) =>
-                  _recur(rem, WCons({ i, m: "flat", d: inner }, tail)),
+                  _recur(rem, WCons({ i: i, m: "flat", d: inner }, tail)),
                 )
                 .with({ _tag: "DLine" }, ({ hard, soft }) =>
                   or(hard, eq(m, "break")) ? _done(true) : _recur(rem - (soft ? 0 : 1), tail),
                 )
                 .with({ _tag: "DLineSuffix" }, ({ doc: inner }) =>
-                  _recur(rem, WCons({ i, m, d: inner }, tail)),
+                  _recur(rem, WCons({ i: i, m: m, d: inner }, tail)),
                 )
                 .with({ _tag: "DBreakParent" }, () => _recur(rem, tail))
                 .exhaustive(),
@@ -264,7 +264,7 @@ export const render: _Curry<[root: Doc, width: number], string> = _curry(
                 _recur(out, pos, consParts(parts, i, m, tail), sfx),
               )
               .with({ _tag: "DIndent" }, ({ doc: inner }) =>
-                _recur(out, pos, WCons({ i: i + INDENT, m, d: inner }, tail), sfx),
+                _recur(out, pos, WCons({ i: i + INDENT, m: m, d: inner }, tail), sfx),
               )
               .with({ _tag: "DLine" }, ({ hard, soft }) =>
                 and(eq(m, "flat"), not(hard))
@@ -279,20 +279,25 @@ ${spaces(i)}`,
                         tail,
                         [] as Item[],
                       )
-                    : _recur(out, pos, consItems(sfx, WCons({ i, m, d }, tail)), [] as Item[]),
+                    : _recur(
+                        out,
+                        pos,
+                        consItems(sfx, WCons({ i: i, m: m, d: d }, tail)),
+                        [] as Item[],
+                      ),
               )
               .with({ _tag: "DGroup" }, ({ doc: inner }) =>
                 forcesBreak(inner)
-                  ? _recur(out, pos, WCons({ i, m: "break", d: inner }, tail), sfx)
+                  ? _recur(out, pos, WCons({ i: i, m: "break", d: inner }, tail), sfx)
                   : ((cand: Work) =>
                       fits(width - pos, cand)
                         ? _recur(out, pos, cand, sfx)
-                        : _recur(out, pos, WCons({ i, m: "break", d: inner }, tail), sfx))(
-                      WCons({ i, m: "flat", d: inner }, tail),
+                        : _recur(out, pos, WCons({ i: i, m: "break", d: inner }, tail), sfx))(
+                      WCons({ i: i, m: "flat", d: inner }, tail),
                     ),
               )
               .with({ _tag: "DLineSuffix" }, ({ doc: inner }) =>
-                _recur(out, pos, tail, _Array_append({ i, m, d: inner }, sfx)),
+                _recur(out, pos, tail, _Array_append({ i: i, m: m, d: inner }, sfx)),
               )
               .with({ _tag: "DBreakParent" }, () => _recur(out, pos, tail, sfx))
               .exhaustive(),

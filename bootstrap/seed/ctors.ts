@@ -146,7 +146,9 @@ const seedRegCtorsFrom: <A, B, C, D>(
           ctors,
           i + 1,
           owner,
-          _Map_has(c.name, acc) ? acc : _Map_set(c.name, { owner, arity: length(c.fields) }, acc),
+          _Map_has(c.name, acc)
+            ? acc
+            : _Map_set(c.name, { owner: owner, arity: length(c.fields) }, acc),
         ),
       )
       .exhaustive(),
@@ -182,7 +184,7 @@ const ctorErr: <A, B, C, D>(
 ) => { message: A; start: C; end: B } = _curry(
   2,
   <A, B, C, D>(message: A, sp: { end: B; start: C } & D) => ({
-    message,
+    message: message,
     start: sp.start,
     end: sp.end,
   }),
@@ -213,7 +215,7 @@ const ctorsInto: <A, B, C, D, E, F>(
                 i + 1,
                 owner,
                 sp,
-                _Map_set(c.name, { owner, arity: length(c.fields) }, acc),
+                _Map_set(c.name, { owner: owner, arity: length(c.fields) }, acc),
               ),
         )
         .exhaustive(),

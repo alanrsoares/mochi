@@ -57,7 +57,7 @@ import { widenLits } from "./schemes";
 
 export const tsEnv: <A, B>(vars: A, recs: B) => { vars: A; recs: B } = _curry(
   2,
-  <A, B>(vars: A, recs: B) => ({ vars, recs }),
+  <A, B>(vars: A, recs: B) => ({ vars: vars, recs: recs }),
 );
 /**
  * Pinned (ADR 0044): a bare `#{}` generalizes to `Map<unknown, unknown>`, which

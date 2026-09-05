@@ -48,7 +48,7 @@ const def: <A, B, C, D>(
 ) => { name: A; defStart: C; defEnd: B; start: C; end: B; role: string } = _curry(
   2,
   <A, B, C, D>(name: A, span: { end: B; start: C } & D) => ({
-    name,
+    name: name,
     defStart: span.start,
     defEnd: span.end,
     start: span.start,
@@ -74,7 +74,7 @@ const use: <A, B, C, D, E, F, G>(
       )
       .with({ _tag: "Some" }, ({ value: binding }) => [
         {
-          name,
+          name: name,
           defStart: binding.start,
           defEnd: binding.end,
           start: span.start,
@@ -94,7 +94,7 @@ const bind: <A, B, C, D>(
     name: A,
     span: { end: B; start: C } & D,
     env: Map<A, { name: A; start: C; end: B }>,
-  ) => _Map_set(name, { name, start: span.start, end: span.end }, env),
+  ) => _Map_set(name, { name: name, start: span.start, end: span.end }, env),
 );
 const bindSpannedNames: _Curry<
   [names: string[], spans: SpanAt[], env: Map<string, Binding>, i: number],
@@ -117,7 +117,7 @@ const bindSpannedNames: _Curry<
           occurrences: _Array_prepend(def(name, span), tail.occurrences),
         }))(bindSpannedNames(names, spans, bind(name, span, env), i + 1)),
     )
-    .otherwise(() => ({ env, occurrences: [] as Occurrence[] })),
+    .otherwise(() => ({ env: env, occurrences: [] as Occurrence[] })),
 );
 const bindParam: _Curry<
   [param: LamParam, env: Map<string, Binding>],
@@ -176,14 +176,14 @@ const bindParam: _Curry<
       },
       ({ param: { fields: names }, nameSpans: spans }) => bindSpannedNames(names, spans, env, 0),
     )
-    .otherwise(() => ({ env, occurrences: [] as Occurrence[] })),
+    .otherwise(() => ({ env: env, occurrences: [] as Occurrence[] })),
 );
 const bindParams: _Curry<
   [params: LamParam[], env: Map<string, Binding>, i: number],
   { env: Map<string, Binding>; occurrences: Occurrence[] }
 > = _curry(3, (params: LamParam[], env: Map<string, Binding>, i: number) =>
   match(_Array_get(i, params))
-    .with({ _tag: "None" }, () => ({ env, occurrences: [] as Occurrence[] }))
+    .with({ _tag: "None" }, () => ({ env: env, occurrences: [] as Occurrence[] }))
     .with({ _tag: "Some" }, ({ value: param }) =>
       ((head: { env: Map<string, Binding>; occurrences: Occurrence[] }) =>
         ((tail: { occurrences: Occurrence[]; env: Map<string, Binding> }) => ({
@@ -279,14 +279,14 @@ const walkPattern: _Curry<
       },
       ({ alts: [first] }) => walkPattern(first, env),
     )
-    .otherwise(() => ({ env, occurrences: [] as Occurrence[] })),
+    .otherwise(() => ({ env: env, occurrences: [] as Occurrence[] })),
 );
 const walkPatterns: _Curry<
   [patterns: Pattern[], env: Map<string, Binding>, i: number],
   { env: Map<string, Binding>; occurrences: Occurrence[] }
 > = _curry(3, (patterns: Pattern[], env: Map<string, Binding>, i: number) =>
   match(_Array_get(i, patterns))
-    .with({ _tag: "None" }, () => ({ env, occurrences: [] as Occurrence[] }))
+    .with({ _tag: "None" }, () => ({ env: env, occurrences: [] as Occurrence[] }))
     .with({ _tag: "Some" }, ({ value: pat }) =>
       ((head: { occurrences: Occurrence[]; env: Map<string, Binding> }) =>
         ((tail: { env: Map<string, Binding>; occurrences: Occurrence[] }) => ({
@@ -301,7 +301,7 @@ const walkPatFields: _Curry<
   { env: Map<string, Binding>; occurrences: Occurrence[] }
 > = _curry(3, (fields: PatField[], env: Map<string, Binding>, i: number) =>
   match(_Array_get(i, fields))
-    .with({ _tag: "None" }, () => ({ env, occurrences: [] as Occurrence[] }))
+    .with({ _tag: "None" }, () => ({ env: env, occurrences: [] as Occurrence[] }))
     .with({ _tag: "Some" }, ({ value: field }) =>
       ((head: { occurrences: Occurrence[]; env: Map<string, Binding> }) =>
         ((tail: { env: Map<string, Binding>; occurrences: Occurrence[] }) => ({
