@@ -668,7 +668,7 @@ const ctxWithEnv: <A, B>(
     },
     env: B,
   ) => ({
-    env: env,
+    env,
     open: ctx.open,
     ns: ctx.ns,
     aliasMap: ctx.aliasMap,
@@ -769,13 +769,13 @@ const ctxWithLets: <A, B, C>(
     env: B,
     letOwner: C,
   ) => ({
-    env: env,
+    env,
     open: ctx.open,
     ns: ctx.ns,
     aliasMap: ctx.aliasMap,
     plugins: ctx.plugins,
     loopStack: ctx.loopStack,
-    letOwner: letOwner,
+    letOwner,
   }),
 );
 const ctxWithLoop: <A, B, C>(
@@ -872,13 +872,13 @@ const ctxWithLoop: <A, B, C>(
     frame: Ty[],
     letOwner: C,
   ) => ({
-    env: env,
+    env,
     open: ctx.open,
     ns: ctx.ns,
     aliasMap: ctx.aliasMap,
     plugins: ctx.plugins,
     loopStack: _Array_prepend(frame, ctx.loopStack),
-    letOwner: letOwner,
+    letOwner,
   }),
 );
 const inferLoopParamsFrom: <A>(
@@ -1340,9 +1340,9 @@ const labFieldsFrom: <A>(
                                 _tuple(
                                   _Array_prepend(
                                     {
-                                      name: name,
+                                      name,
                                       fieldType: fieldT1,
-                                      omittable: omittable,
+                                      omittable,
                                       bodyType: bodyT,
                                     },
                                     fields,
@@ -5498,11 +5498,7 @@ const aliasMapFrom: _Curry<
             ({ name, params, alias: { value: fields } }) =>
               aliasMapFrom(
                 rest,
-                _Map_set(
-                  name,
-                  { params: params, fields: fields, expr: None as Option<TypeExpr> },
-                  acc,
-                ),
+                _Map_set(name, { params, fields, expr: None as Option<TypeExpr> }, acc),
               ),
           )
           .with(
@@ -5520,7 +5516,7 @@ const aliasMapFrom: _Curry<
                 _Map_set(
                   name,
                   {
-                    params: params,
+                    params,
                     fields: [] as QualAliasField[],
                     expr: Some(te) as Option<TypeExpr>,
                   },
@@ -6708,7 +6704,7 @@ const resolveLetParamsFrom: _Curry<[keys: string[], st: St], TypeAt[]> = _curry(
                   allSameConcrete(showType(first), uses)
                     ? match(_Map_get(k, st.letSpans))
                         .with({ _tag: "Some" }, ({ value: span }) =>
-                          _Array_prepend({ span: span, ty: first }, tail),
+                          _Array_prepend({ span, ty: first }, tail),
                         )
                         .with({ _tag: "None" }, () => tail)
                         .exhaustive()
@@ -6872,8 +6868,8 @@ const runInferImports: <A, B, C>(
                 env: env4,
                 open: openMode,
                 ns: ns0,
-                aliasMap: aliasMap,
-                plugins: plugins,
+                aliasMap,
+                plugins,
                 loopStack: [] as Ty[][],
                 letOwner: new Map<string, SpanAt>(),
               },

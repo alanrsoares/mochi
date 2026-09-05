@@ -88,7 +88,7 @@ const checkErr: <A, B, C, D>(
 ) => { message: A; start: C; end: B } = _curry(
   2,
   <A, B, C, D>(message: A, sp: { end: B; start: C } & D) => ({
-    message: message,
+    message,
     start: sp.start,
     end: sp.end,
   }),
@@ -1535,7 +1535,7 @@ const qualRefsFrom: (
     .with({ _tag: "TyTuple" }, ({ elems }) => _Array_flatMap(qualRefsFrom, elems))
     .with({ _tag: "TyList" }, ({ elem }) => qualRefsFrom(elem))
     .with({ _tag: "TyQual" }, ({ alias, name, nameSpan, args, span: sp }) => [
-      { alias: alias, name: name, nameSpan: nameSpan, qualSpan: sp },
+      { alias, name, nameSpan, qualSpan: sp },
       ..._Array_flatMap(qualRefsFrom, args),
     ])
     .with(

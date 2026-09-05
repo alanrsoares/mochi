@@ -222,8 +222,9 @@ let done = false;
  */
 const fit = (text: string): string => {
   const max = columns() - 1;
-  if (Bun.stringWidth(text) <= max) return text;
-  return `${Bun.stripANSI(text).slice(0, Math.max(0, max - 1))}…`;
+  return Bun.stringWidth(text) <= max
+    ? text
+    : `${Bun.stripANSI(text).slice(0, Math.max(0, max - 1))}…`;
 };
 
 /**

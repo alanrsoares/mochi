@@ -360,7 +360,7 @@ export const recordAt: _Curry<[span: SpanAt, t: Ty, st: St], St> = _curry(
   3,
   (span: SpanAt, t: Ty, st: St) => ({
     ...st,
-    recorded: _Array_prepend({ span: span, ty: t }, st.recorded),
+    recorded: _Array_prepend({ span, ty: t }, st.recorded),
   }),
 );
 const spanKeyOf: <A, B, C>(sp: { start: A; end: B } & C) => string = <A, B, C>(
@@ -396,7 +396,7 @@ export const noteUse: <A, B, C>(span: { start: A; end: B } & C, t: Ty, st: St) =
   },
 );
 export const fail: <A, B>(message: A) => Result<B, { message: A }> = <A, B>(message: A) =>
-  Err({ message: message });
+  Err({ message });
 export const freshVar: <A>(st: { next: number } & A) => [Ty, { next: number } & A] = <A>(
   st: { next: number } & A,
 ) => _tuple(tVar(st.next), { ...st, next: st.next + 1 });

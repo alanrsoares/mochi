@@ -351,11 +351,11 @@ const mkTok: <A, B, C>(
           const _g: any = _v;
           return _g.length === 0;
         },
-        () => ({ tok: tok, start: start, end: stop, doc: None as Option<string> }),
+        () => ({ tok, start, end: stop, doc: None as Option<string> }),
       )
       .otherwise((lines) => ({
-        tok: tok,
-        start: start,
+        tok,
+        start,
         end: stop,
         doc: Some(_Str_join("\n", lines)) as Option<string>,
       })),
@@ -366,7 +366,7 @@ const lexError: <A, B, C, D>(
   stop: C,
 ) => Result<D, { message: A; start: B; end: C }> = _curry(
   3,
-  <A, B, C, D>(message: A, start: B, stop: C) => Err({ message: message, start: start, end: stop }),
+  <A, B, C, D>(message: A, start: B, stop: C) => Err({ message, start, end: stop }),
 );
 const numValue: (raw: string) => number = (raw: string) =>
   _Option_unwrapOr(0 / 0, _Str_toNumber(raw));

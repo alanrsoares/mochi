@@ -38,21 +38,22 @@ export const bootstrapBindingAt = (src: string, offset: number): BootstrapBindin
   const parsed = parseRecovering(lexed.value, None) as { stmts: BootstrapStmt[] };
   const occurrences = symbolOccurrencesBootstrap(parsed.stmts);
   const at = occurrences.find((o) => o.start <= offset && offset <= o.end);
-  if (!at) return null;
-  return {
-    at,
-    // The index emits declarations ahead of the bodies they scope; sort so a
-    // caller can read the result as the file reads.
-    occurrences: occurrences
-      .filter((o) => o.defStart === at.defStart && o.defEnd === at.defEnd)
-      .sort((a, b) => a.start - b.start),
-    fileLocal: !parsed.stmts.some(
-      (stmt) =>
-        (stmt._tag === "SLet" || stmt._tag === "SExtern") &&
-        stmt.nameSpan?.start === at.defStart &&
-        stmt.nameSpan?.end === at.defEnd,
-    ),
-  };
+  return !at
+    ? null
+    : {
+        at,
+        // The index emits declarations ahead of the bodies they scope; sort so a
+        // caller can read the result as the file reads.
+        occurrences: occurrences
+          .filter((o) => o.defStart === at.defStart && o.defEnd === at.defEnd)
+          .sort((a, b) => a.start - b.start),
+        fileLocal: !parsed.stmts.some(
+          (stmt) =>
+            (stmt._tag === "SLet" || stmt._tag === "SExtern") &&
+            stmt.nameSpan?.start === at.defStart &&
+            stmt.nameSpan?.end === at.defEnd,
+        ),
+      };
 };
 
 const spanOf = (o: BootstrapOccurrence): Span => ({ start: o.start, end: o.end });

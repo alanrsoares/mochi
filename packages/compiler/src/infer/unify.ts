@@ -438,8 +438,7 @@ const fitsRows = (
   // expected extend
   const rw = rewriteRow(act, exp.label, s, f);
   if (isErr(rw)) {
-    if (exp.optional) return fitsRows(act, exp.rest, s, f, show);
-    return rw;
+    return exp.optional ? fitsRows(act, exp.rest, s, f, show) : rw;
   }
   if (rw.value.optional && !exp.optional)
     return fail(`record field '${exp.label}' is required but missing or optional`);

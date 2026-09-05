@@ -177,8 +177,9 @@ export const show: <A>(a: A) => string = (x: any) => {
     return ks.length === 0 ? x._tag : `${x._tag}(${ks.map((k: any) => show(x[k])).join(", ")})`;
   }
   const ks = Object.keys(x);
-  if (ks.length === 0) return String(x);
-  return `{ ${ks.map((k: any) => `${k}: ${show(x[k])}`).join(", ")} }`;
+  return ks.length === 0
+    ? String(x)
+    : `{ ${ks.map((k: any) => `${k}: ${show(x[k])}`).join(", ")} }`;
 };
 export const ignore: <A>(a: A) => undefined = (_x: any) => undefined;
 export const lt: { (a: number): (b: number) => boolean; (a: number, b: number): boolean } = _curry(

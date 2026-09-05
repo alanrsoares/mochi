@@ -227,7 +227,7 @@ const errAt: <A, B, C, D, E>(
 ) => Result<D, { message: A; start: C; end: B }> = _curry(
   2,
   <A, B, C, D, E>(message: A, lt: { end: B; start: C } & E) =>
-    Err({ message: message, start: lt.start, end: lt.end }),
+    Err({ message, start: lt.start, end: lt.end }),
 );
 const expectTok: <A>(
   t: Tok,
@@ -253,7 +253,7 @@ const expectId: <A>(
       .with(
         { _tag: "TId" },
         ({ value: name }) =>
-          Ok(_tuple({ name: name, span: spanOf(lt) }, pos + 1)) as Result<[Name, number], PErr>,
+          Ok(_tuple({ name, span: spanOf(lt) }, pos + 1)) as Result<[Name, number], PErr>,
       )
       .otherwise((t) => errAt(`expected id, got ${tokName(t)}`, lt));
   },
@@ -293,7 +293,7 @@ const expectLabel: <A>(
       .with(
         { _tag: "Some" },
         ({ value: name }) =>
-          Ok(_tuple({ name: name, span: spanOf(lt) }, pos + 1)) as Result<[Name, number], PErr>,
+          Ok(_tuple({ name, span: spanOf(lt) }, pos + 1)) as Result<[Name, number], PErr>,
       )
       .with({ _tag: "None" }, () => expectId(toks, pos))
       .exhaustive();
@@ -1194,7 +1194,7 @@ const binCallOrLeftSection: <A>(
         >)
       : _Result_flatMap(
           ([right, p]) =>
-            Ok({ left: mkBinCall(fnName, spanOf(lt), left, right), p: p, matched: true }) as Result<
+            Ok({ left: mkBinCall(fnName, spanOf(lt), left, right), p, matched: true }) as Result<
               { left: Expr; p: number; matched: boolean },
               PErr
             >,
@@ -1252,7 +1252,7 @@ const parseInfix: <A>(
           ([right, p]) =>
             Ok({
               left: Ast.EPipe(left, right, false, spanning(exprSpan(left), exprSpan(right))),
-              p: p,
+              p,
               matched: true,
             }) as Result<{ left: Expr; p: number; matched: boolean }, PErr>,
           parseAtomOrCall(toks, pos + 1, hooks),
@@ -1266,7 +1266,7 @@ const parseInfix: <A>(
                   ({ span: rightSpan }) =>
                     Ok({
                       left: Ast.EPipe(left, right, true, spanning(exprSpan(left), rightSpan)),
-                      p: p,
+                      p,
                       matched: true,
                     }) as Result<{ left: Expr; p: number; matched: boolean }, PErr>,
                 )
@@ -1283,7 +1283,7 @@ const parseInfix: <A>(
                     ((innerCall: Expr) =>
                       ((outerCall: Expr) =>
                         ((fn: Expr) =>
-                          Ok({ left: fn, p: p, matched: true }) as Result<
+                          Ok({ left: fn, p, matched: true }) as Result<
                             { left: Expr; p: number; matched: boolean },
                             PErr
                           >)(
@@ -1315,7 +1315,7 @@ const parseInfix: <A>(
                     ((opSpan: SpanAt) =>
                       ((inner: Expr) =>
                         ((result: Expr) =>
-                          Ok({ left: result, p: p, matched: true }) as Result<
+                          Ok({ left: result, p, matched: true }) as Result<
                             { left: Expr; p: number; matched: boolean },
                             PErr
                           >)(
@@ -1384,7 +1384,7 @@ const parseInfix: <A>(
                               ? "div"
                               : "mod",
                         )
-                      : (Ok({ left: left, p: pos, matched: false }) as Result<
+                      : (Ok({ left, p: pos, matched: false }) as Result<
                           { left: Expr; p: number; matched: boolean },
                           PErr
                         >);
@@ -1649,8 +1649,8 @@ const splitCallParts: _Curry<
 );
 const labeledField: (p: CallPart) => Field = (p: CallPart) =>
   match(p)
-    .with({ _tag: "CPLab" }, ({ name, value }) => ({ name: name, value: value }))
-    .with({ _tag: "CPPos" }, ({ value }) => ({ name: "", value: value }))
+    .with({ _tag: "CPLab" }, ({ name, value }) => ({ name, value }))
+    .with({ _tag: "CPPos" }, ({ value }) => ({ name: "", value }))
     .exhaustive();
 const unionSpans: <A>(
   parts: CallPart[],
@@ -2055,7 +2055,7 @@ const parseField: <A>(
         eq(tokAt(toks, p).tok, TColon as Tok)
           ? _Result_flatMap(
               ([value, p2]) =>
-                Ok(_tuple({ name: nm.name, value: value }, p2)) as Result<[Field, number], PErr>,
+                Ok(_tuple({ name: nm.name, value }, p2)) as Result<[Field, number], PErr>,
               parseExpr(toks, p + 1, hooks),
             )
           : not(eq(keywordText(lt.tok), None as Option<string>))
@@ -2297,8 +2297,7 @@ const parseMapEntry: <A>(
         _Result_flatMap(
           (p2) =>
             _Result_flatMap(
-              ([value, p3]) =>
-                Ok(_tuple({ key: key, value: value }, p3)) as Result<[MapEntry, number], PErr>,
+              ([value, p3]) => Ok(_tuple({ key, value }, p3)) as Result<[MapEntry, number], PErr>,
               parseExpr(toks, p2, hooks),
             ),
           expectTok(TColon as Tok, toks, p),
@@ -2372,7 +2371,7 @@ const parseHash: <A>(
                                           Ok(
                                             _tuple(
                                               Ast.EMap(
-                                                _Array_prepend({ key: first, value: value }, rest),
+                                                _Array_prepend({ key: first, value }, rest),
                                                 toEnd(start, toks, p6),
                                               ),
                                               p6,
@@ -2541,7 +2540,7 @@ const armsLoop: <A>(
                               armsLoop(
                                 toks,
                                 p5,
-                                _Array_append({ pattern: pattern, guard: guard, body: body }, acc),
+                                _Array_append({ pattern, guard, body }, acc),
                                 hooks,
                               ),
                             parseExpr(toks, p4, hooks),
@@ -2794,7 +2793,7 @@ const loopParamsLoop: <A>(
                   match(tokAt(toks, p1).tok)
                     .with({ _tag: "TComma" }, () => loopParamsLoop(toks, p1 + 1, next, hooks))
                     .otherwise(() => Ok(_tuple(next, p1)) as Result<[LoopParam[], number], PErr>))(
-                  _Array_append({ name: id.name, nameSpan: id.span, init: init }, acc),
+                  _Array_append({ name: id.name, nameSpan: id.span, init }, acc),
                 ),
               parseExpr(toks, p, hooks),
             ),
@@ -3191,7 +3190,7 @@ const parsePatField: <A>(
         eq(tokAt(toks, p).tok, TColon as Tok)
           ? _Result_flatMap(
               ([pat, p2]) =>
-                Ok(_tuple({ label: nm.name, pat: pat }, p2)) as Result<[PatField, number], PErr>,
+                Ok(_tuple({ label: nm.name, pat }, p2)) as Result<[PatField, number], PErr>,
               parsePattern(toks, p + 1),
             )
           : not(eq(keywordText(lt.tok), None as Option<string>))
@@ -3494,7 +3493,7 @@ const parseCtor: <A>(
                 _Result_flatMap(
                   (p3) =>
                     Ok(
-                      _tuple({ name: nm.name, fields: fields, span: toEnd(nm.span, toks, p3) }, p3),
+                      _tuple({ name: nm.name, fields, span: toEnd(nm.span, toks, p3) }, p3),
                     ) as Result<[Ctor, number], PErr>,
                   expectTok(TRparen as Tok, toks, p2),
                 ),
@@ -3537,7 +3536,7 @@ const parseAliasField: <A>(
               (p2) =>
                 _Result_flatMap(
                   ([t, p3]) =>
-                    Ok(_tuple({ name: nm.name, fieldType: t, optional: optional }, p3)) as Result<
+                    Ok(_tuple({ name: nm.name, fieldType: t, optional }, p3)) as Result<
                       [AliasField, number],
                       PErr
                     >,

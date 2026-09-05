@@ -1768,7 +1768,7 @@ export const emitTsModuleWith: <A, B, C, D, E, F, G, H, I>(
     const typeHeader: string[] = typeHeaderFrom(stmts, aliases, recs, 0);
     const body: string = codegenWith(stmts, imported, false, ns, jsDefs, runtimeDeps, {
       ...tsGenOpts(stmts, env, types, letParams, aliases),
-      docs: docs,
+      docs,
     });
     const deps0: string[] = runtimeDepNames(stmts, imported, ns, jsDefs, runtimeDeps);
     const deps: string[] = _Str_contains("_tuple(", body) ? _Array_append("_tuple", deps0) : deps0;

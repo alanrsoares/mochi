@@ -127,20 +127,19 @@ const touchField = (b: Builder, name: string, span: Span): void => {
 };
 
 const bindParam = (b: Builder, p: LamParam): void => {
-  if (p.kind === "name") {
-    if (p.annot) walkTypeExpr(b, p.annot);
-    if (!p.name.startsWith("$")) bindLocal(b, p.name, p.span);
-    return;
-  }
-  if (p.kind === "labeled") {
-    if (p.annot) walkTypeExpr(b, p.annot);
-    if (p.default) walkExpr(b, p.default);
-    if (!p.name.startsWith("$")) bindLocal(b, p.name, p.span);
-    return;
-  }
-  if (p.kind === "ptuple") {
-    for (let i = 0; i < p.names.length; i++) bindLocal(b, p.names[i]!, p.nameSpans[i]!);
-    return;
+  switch (p.kind) {
+    case "name":
+      if (p.annot) walkTypeExpr(b, p.annot);
+      if (!p.name.startsWith("$")) bindLocal(b, p.name, p.span);
+      return;
+    case "labeled":
+      if (p.annot) walkTypeExpr(b, p.annot);
+      if (p.default) walkExpr(b, p.default);
+      if (!p.name.startsWith("$")) bindLocal(b, p.name, p.span);
+      return;
+    case "ptuple":
+      for (let i = 0; i < p.names.length; i++) bindLocal(b, p.names[i]!, p.nameSpans[i]!);
+      return;
   }
   for (let i = 0; i < p.fields.length; i++) bindLocal(b, p.fields[i]!, p.fieldSpans[i]!);
 };

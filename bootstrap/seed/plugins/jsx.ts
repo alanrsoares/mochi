@@ -122,7 +122,7 @@ const jxErrAt: <A, B, C, D, E>(
 ) => Result<D, { message: A; start: C; end: B }> = _curry(
   2,
   <A, B, C, D, E>(message: A, lt: { end: B; start: C } & E) =>
-    Err({ message: message, start: lt.start, end: lt.end }),
+    Err({ message, start: lt.start, end: lt.end }),
 );
 const jxExpectTok: <A>(
   t: Tok,
@@ -148,7 +148,7 @@ const jxExpectId: <A>(
       .with(
         { _tag: "TId" },
         ({ value: name }) =>
-          Ok(_tuple({ name: name, span: jxSpanOf(lt) }, pos + 1)) as Result<
+          Ok(_tuple({ name, span: jxSpanOf(lt) }, pos + 1)) as Result<
             [Name, number],
             { message: string; start: number; end: number }
           >,
@@ -189,7 +189,7 @@ const jxExpectLabel: <A>(
       .with(
         { _tag: "Some" },
         ({ value: name }) =>
-          Ok(_tuple({ name: name, span: jxSpanOf(lt) }, pos + 1)) as Result<
+          Ok(_tuple({ name, span: jxSpanOf(lt) }, pos + 1)) as Result<
             [Name, number],
             { message: string; start: number; end: number }
           >,
