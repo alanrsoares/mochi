@@ -30,6 +30,8 @@ extern formatError : string -> string -> Diag -> string = "./host.mjs" "formatEr
 let formatErrors = (path, src, errors) =>
   Str.join("\n", errors |> map(e => path->formatError(src, e)))
 
+let formatModuleErrors = errors => Str.join("\n", errors |> map(e => e.message))
+
 // "foo.mochi" -> "foo.js"  (drops the 6-char `.mochi` suffix).
 export let outPath = path => "${Str.slice(0, Str.length(path) - 6, path)}.js"
 
@@ -121,7 +123,7 @@ export let writeAllTs = outs =>
 // declaration sidecar per extern host module.
 export let buildMultiTs = (entry, runtimeImport) =>
   buildModulesTs(entry, runtimeImport)
-    |> Result.mapErr(e => e.message)
+    |> Result.mapErr(formatModuleErrors)
     |> Result.flatMap(writeAllTs)
 
 // Multi-file build: resolve + compile the graph, then write all outputs. The
@@ -130,7 +132,7 @@ export let buildMultiTs = (entry, runtimeImport) =>
 // build does — span parity across modules is a later refinement).
 export let buildMulti = entry =>
   buildModules(entry)
-    |> Result.mapErr(e => e.message)
+    |> Result.mapErr(formatModuleErrors)
     |> Result.flatMap(writeAll)
 
 /// Invoke only when Bun executes cli.js / cli.ts directly. Importing it from a

@@ -9,7 +9,7 @@
 // parts (b) and (c); this half only parses and orders.
 import { lex } from "./lexer.mochi"
 import { parse } from "./parser.mochi"
-import { checkWith } from "./check.mochi"
+import { checkAllWith, checkWith } from "./check.mochi"
 import { exportedRegistry, exportedCtorKeys } from "./ctors.mochi"
 import {
   inferProgramImports,
@@ -532,10 +532,28 @@ type RecoveryCtx = {
 
 type RecoveryGraphState = { ctx: RecoveryCtx, errors: [MErr] }
 
+// The recovery rail is the graph's diagnostic boundary: unlike strict emit it
+// keeps visiting later modules. When strict compilation fails, re-run only its
+// checker prefix with `checkAllWith` so one module's independent structural
+// errors are retained before placeholder exports let downstream modules proceed.
+let checkErrorsRecovering = (ctx, loaded: Loaded) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, true) {
+  | Err(e) => [atPath(loaded.path, e)]
+  | Ok(res) => switch checkAllWith(loaded.stmts, res.reg, res.quals) {
+      | Err(es) => es |> map(e => atPath(loaded.path, e))
+      | Ok(_) => []
+    }
+}
+
 let compileAllRecovering = (ctx, graph, errors, opts) => switch graph {
   | [] => { ctx, errors }
   | [m, ...rest] => switch ctx->compileOne(m, true, Array.length(rest) == 0, opts) {
-      | Err(e) => compileAllRecovering(ctx, rest, Array.append(e, errors), opts)
+      | Err(e) => let checks = ctx->checkErrorsRecovering(m) in
+          compileAllRecovering(
+            ctx,
+            rest,
+            Array.concat(errors, Array.length(checks) == 0 ? [e] : checks),
+            opts
+          )
       | Ok(ctx1) => compileAllRecovering(ctx1, rest, errors, opts)
     }
 }
@@ -665,10 +683,17 @@ export let inferGraphTypesWith = (graph, opts: Opts) =>
 
 export let inferGraphTypes = graph => graph->inferGraphTypesWith(defaultOpts)
 
-/// buildModules : string -> Result [ModuleOutput] MErr
-/// Resolve the graph then compile it — one sync railway (host IO is sync).
-export let buildModulesWith = (entry, opts: Opts) =>
-  let? graph = entry->loadGraph() in graph->compileGraphWith(opts)
+/// buildModules : string -> Result [ModuleOutput] [MErr]
+/// Resolve the graph, collect every recoverable module diagnostic, then emit.
+/// Graph-load failures are singular but normalize to `[MErr]` at this public
+/// boundary, matching the single-file compiler railway.
+export let buildModulesWith = (entry, opts: Opts) => switch entry->loadGraph() {
+  | Err(e) => Err([e])
+  | Ok(graph) => let recovered = graph->compileGraphRecoveringWith(opts) in
+      Array.length(recovered.errors) == 0
+        ? graph->compileGraphWith(opts) |> Result.mapErr(e => [e])
+        : Err(recovered.errors)
+}
 
 export let buildModules = entry => entry->buildModulesWith(defaultOpts)
 
@@ -1030,10 +1055,17 @@ export let emitDtsForFileWith = (entry, runtimeImport, opts: Opts) =>
 export let emitDtsForFile = (entry, runtimeImport) =>
   entry->emitDtsForFileWith(runtimeImport, defaultOpts)
 
-/// buildModulesTs : string -> string -> Result [ModuleOutput] MErr
-export let buildModulesTsWith = (entry, runtimeImport, opts: Opts) =>
-  let? graph = entry->loadGraph() in
-    graph->compileGraphTsWith(runtimeImport, opts)
+/// buildModulesTs : string -> string -> Result [ModuleOutput] [MErr]
+/// Typed graph emit shares the recovery preflight with JS graph emit, so both
+/// CLI targets render the same complete diagnostic set.
+export let buildModulesTsWith = (entry, runtimeImport, opts: Opts) => switch entry->loadGraph() {
+  | Err(e) => Err([e])
+  | Ok(graph) => let recovered = graph->compileGraphRecoveringWith(opts) in
+      Array.length(recovered.errors) == 0
+        ? graph->compileGraphTsWith(runtimeImport, opts)
+          |> Result.mapErr(e => [e])
+        : Err(recovered.errors)
+}
 
 export let buildModulesTs = (entry, runtimeImport) =>
   entry->buildModulesTsWith(runtimeImport, defaultOpts)

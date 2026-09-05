@@ -61,6 +61,7 @@ import {
   _Option_mapOr,
   _Option_unwrapOr,
   _Result_flatMap,
+  _Result_mapErr,
   _Set_add,
   _Set_fromArray,
   _Set_has,
@@ -89,7 +90,7 @@ import { match } from "@onrails/pattern";
 
 import { lex } from "./lexer";
 import { parse } from "./parser";
-import { checkWith } from "./check";
+import { checkAllWith, checkWith } from "./check";
 import { exportedRegistry, exportedCtorKeys } from "./ctors";
 import { inferProgramImports, inferProgramImportsTypes, exportedSchemes } from "./infer";
 import { codegenWith, jsGenOpts } from "./codegen";
@@ -1079,6 +1080,50 @@ export const compileGraphWith: _Curry<
 export const compileGraph: (graph: Loaded[]) => Result<ModuleOutput[], PErr> = (graph: Loaded[]) =>
   compileGraphWith(graph, defaultOpts);
 
+const checkErrorsRecovering: <A, B, C, D>(
+  ctx: {
+    exportsByPath: Map<string, Map<string, { vars: number[]; rvars: A[]; ty: Ty }>>;
+    regByPath: Map<string, Registry>;
+    keysByPath: Map<string, Map<string, B>>;
+    qualsByPath: Map<string, { types: Set<string> } & C>;
+  } & D,
+  loaded: Loaded,
+) => PErr[] = _curry(
+  2,
+  <A, B, C, D>(
+    ctx: {
+      exportsByPath: Map<string, Map<string, { vars: number[]; rvars: A[]; ty: Ty }>>;
+      regByPath: Map<string, Registry>;
+      keysByPath: Map<string, Map<string, B>>;
+      qualsByPath: Map<string, { types: Set<string> } & C>;
+    } & D,
+    loaded: Loaded,
+  ) =>
+    match(
+      resolveImportsFrom(
+        ctx,
+        loaded.stmts,
+        0,
+        loaded.path,
+        {
+          imports: new Map<string, { vars: number[]; rvars: A[]; ty: Ty }>(),
+          nsImports: new Map<string, Map<string, { vars: number[]; rvars: A[]; ty: Ty }>>(),
+          reg: emptyReg,
+          keys: new Map<string, B>(),
+          quals: new Map<string, { types: Set<string> } & C>(),
+        },
+        true,
+      ),
+    )
+      .with({ _tag: "Err" }, ({ error: e }) => [atPath(loaded.path, e)])
+      .with({ _tag: "Ok" }, ({ value: res }) =>
+        match(checkAllWith(loaded.stmts, res.reg, res.quals))
+          .with({ _tag: "Err" }, ({ error: es }) => map((e: PErr) => atPath(loaded.path, e), es))
+          .with({ _tag: "Ok" }, () => [] as PErr[])
+          .exhaustive(),
+      )
+      .exhaustive(),
+);
 const compileAllRecovering: _Curry<
   [
     ctx: {
@@ -1159,7 +1204,13 @@ const compileAllRecovering: _Curry<
         ([m, ...rest]) =>
           match(compileOne(ctx, m, true, eq(length(rest), 0), opts))
             .with({ _tag: "Err" }, ({ error: e }) =>
-              compileAllRecovering(ctx, rest, _Array_append(e, errors), opts),
+              ((checks: PErr[]) =>
+                compileAllRecovering(
+                  ctx,
+                  rest,
+                  _Array_concat(errors, eq(length(checks), 0) ? [e] : checks),
+                  opts,
+                ))(checkErrorsRecovering(ctx, m)),
             )
             .with({ _tag: "Ok" }, ({ value: ctx1 }) =>
               compileAllRecovering(ctx1, rest, errors, opts),
@@ -1943,16 +1994,28 @@ export const inferGraphTypes: <A>(
 > = <A>(graph: ({ stmts: Stmt[]; path: string; src: string } & A)[]) =>
   inferGraphTypesWith(graph, defaultOpts);
 /**
- * buildModules : string -> Result [ModuleOutput] MErr
- * Resolve the graph then compile it — one sync railway (host IO is sync).
+ * buildModules : string -> Result [ModuleOutput] [MErr]
+ * Resolve the graph, collect every recoverable module diagnostic, then emit.
+ * Graph-load failures are singular but normalize to `[MErr]` at this public
+ * boundary, matching the single-file compiler railway.
  */
 export const buildModulesWith: _Curry<
   [entry: string, opts: Opts],
-  Result<ModuleOutput[], PErr>
+  Result<ModuleOutput[], PErr[]>
 > = _curry(2, (entry: string, opts: Opts) =>
-  _Result_flatMap((graph) => compileGraphWith(graph, opts), loadGraph(entry)),
+  match(loadGraph(entry))
+    .with({ _tag: "Err" }, ({ error: e }) => Err([e]) as Result<ModuleOutput[], PErr[]>)
+    .with({ _tag: "Ok" }, ({ value: graph }) =>
+      ((recovered: GraphRecovery) =>
+        eq(length(recovered.errors), 0)
+          ? _Result_mapErr((e: PErr) => [e], compileGraphWith(graph, opts))
+          : (Err(recovered.errors) as Result<ModuleOutput[], PErr[]>))(
+        compileGraphRecoveringWith(graph, opts),
+      ),
+    )
+    .exhaustive(),
 );
-export const buildModules: (entry: string) => Result<ModuleOutput[], PErr> = (entry: string) =>
+export const buildModules: (entry: string) => Result<ModuleOutput[], PErr[]> = (entry: string) =>
   buildModulesWith(entry, defaultOpts);
 import { relSpec as $relSpec } from "./host.mjs";
 const relSpec = _curry(2, $relSpec);
@@ -2895,17 +2958,29 @@ export const emitDtsForFile: _Curry<
   emitDtsForFileWith(entry, runtimeImport, defaultOpts),
 );
 /**
- * buildModulesTs : string -> string -> Result [ModuleOutput] MErr
+ * buildModulesTs : string -> string -> Result [ModuleOutput] [MErr]
+ * Typed graph emit shares the recovery preflight with JS graph emit, so both
+ * CLI targets render the same complete diagnostic set.
  */
 export const buildModulesTsWith: _Curry<
   [entry: string, runtimeImport: string, opts: Opts],
-  Result<ModuleOutput[], PErr>
+  Result<ModuleOutput[], PErr[]>
 > = _curry(3, (entry: string, runtimeImport: string, opts: Opts) =>
-  _Result_flatMap((graph) => compileGraphTsWith(graph, runtimeImport, opts), loadGraph(entry)),
+  match(loadGraph(entry))
+    .with({ _tag: "Err" }, ({ error: e }) => Err([e]) as Result<ModuleOutput[], PErr[]>)
+    .with({ _tag: "Ok" }, ({ value: graph }) =>
+      ((recovered: GraphRecovery) =>
+        eq(length(recovered.errors), 0)
+          ? _Result_mapErr((e: PErr) => [e], compileGraphTsWith(graph, runtimeImport, opts))
+          : (Err(recovered.errors) as Result<ModuleOutput[], PErr[]>))(
+        compileGraphRecoveringWith(graph, opts),
+      ),
+    )
+    .exhaustive(),
 );
 export const buildModulesTs: _Curry<
   [entry: string, runtimeImport: string],
-  Result<ModuleOutput[], PErr>
+  Result<ModuleOutput[], PErr[]>
 > = _curry(2, (entry: string, runtimeImport: string) =>
   buildModulesTsWith(entry, runtimeImport, defaultOpts),
 );

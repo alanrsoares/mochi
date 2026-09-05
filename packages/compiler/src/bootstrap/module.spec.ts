@@ -111,7 +111,26 @@ test("graph build rejects an unbound variable, like the single-file railway", ()
   });
   const result = buildModulesBootstrap(join(dir, "main.mochi"));
   expect(result._tag).toBe("Err");
-  if (result._tag === "Err") expect(result.error.message).toContain("unbound variable 'nope'");
+  if (result._tag === "Err") expect(result.error[0]?.message).toContain("unbound variable 'nope'");
+});
+
+test("graph build collects independent checker errors in one module", () => {
+  const dir = inTmp({
+    "dep.mochi": "export type Choice = | One | Two\n",
+    "main.mochi":
+      'import { One, Two } from "./dep.mochi"\n' +
+      "let first = value => switch value { | One => 1 }\n" +
+      "let second = value => switch value { | Two => 2 }\n",
+  });
+  const result = buildModulesBootstrap(join(dir, "main.mochi"));
+  expect(result._tag).toBe("Err");
+  if (result._tag === "Err") {
+    expect(result.error).toHaveLength(2);
+    expect(result.error.map((error) => error.message)).toEqual([
+      expect.stringContaining("missing Two"),
+      expect.stringContaining("missing One"),
+    ]);
+  }
 });
 
 test("a dependency's own `use open` directive is honoured", () => {

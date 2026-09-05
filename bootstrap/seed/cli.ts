@@ -51,6 +51,13 @@ const formatErrors: _Curry<[path: string, src: string, errors: PErr[]], string> 
       map((e: PErr) => formatError(path, src, e), errors),
     ),
 );
+const formatModuleErrors: <A>(errors: ({ message: string } & A)[]) => string = <A>(
+  errors: ({ message: string } & A)[],
+) =>
+  _Str_join(
+    "\n",
+    map((e: { message: string } & A) => e.message, errors),
+  );
 export const outPath: (path: string) => string = (path: string) =>
   `${_Str_slice(0, _Str_length(path) - 6, path)}.js`;
 export const tsOutPath: (path: string) => string = (path: string) =>
@@ -192,14 +199,11 @@ export const buildMultiTs: _Curry<
 > = _curry(2, (entry: string, runtimeImport: string) =>
   _Result_flatMap(
     writeAllTs,
-    _Result_mapErr((e: PErr) => e.message, buildModulesTs(entry, runtimeImport)),
+    _Result_mapErr(formatModuleErrors, buildModulesTs(entry, runtimeImport)),
   ),
 );
 export const buildMulti: (entry: string) => Result<string, string> = (entry: string) =>
-  _Result_flatMap(
-    writeAll,
-    _Result_mapErr((e: PErr) => e.message, buildModules(entry)),
-  );
+  _Result_flatMap(writeAll, _Result_mapErr(formatModuleErrors, buildModules(entry)));
 /**
  * Invoke only when Bun executes cli.js / cli.ts directly. Importing it from a
  * colocated unit spec must expose the helpers above without exiting the test process.

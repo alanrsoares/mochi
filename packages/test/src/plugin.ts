@@ -28,7 +28,8 @@ export const compileMochiGraph = async (entry: string): Promise<MochiJsByPath> =
     moduleExt: ".mochi",
     strictEntry: false,
   });
-  if (isErr(result)) throw new SyntaxError(formatCompileFailure(abs, result.error.message));
+  if (isErr(result))
+    throw new SyntaxError(formatCompileFailure(abs, result.error.map((e) => e.message).join("\n")));
   const graph: MochiJsByPath = new Map();
   for (const out of result.value) graph.set(out.path, out.js);
   return graph;

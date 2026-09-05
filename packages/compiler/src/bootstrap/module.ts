@@ -15,12 +15,12 @@ type SeedModule = {
   buildModulesWith: (
     entry: string,
     opts: BootstrapOptions,
-  ) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic>;
+  ) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic[]>;
   buildModulesTsWith: (
     entry: string,
     runtimeImport: string,
     opts: BootstrapOptions,
-  ) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic>;
+  ) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic[]>;
   compileGraphWith: (
     modules: BootstrapGraphModule[],
     opts: BootstrapOptions,
@@ -104,25 +104,25 @@ const seed = createRequire(import.meta.url)(
 export const buildModulesBootstrapWith = (
   entry: string,
   opts: BootstrapOptions,
-): BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic> =>
+): BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic[]> =>
   seed.buildModulesWith(entry, opts);
 
 export const buildModulesBootstrap = (
   entry: string,
-): BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic> =>
+): BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic[]> =>
   buildModulesBootstrapWith(entry, defaultBootstrapOptions);
 
 export const buildModulesTsBootstrapWith = (
   entry: string,
   runtimeImport: string,
   opts: BootstrapOptions,
-): BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic> =>
+): BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic[]> =>
   seed.buildModulesTsWith(entry, runtimeImport, opts);
 
 export const buildModulesTsBootstrap = (
   entry: string,
   runtimeImport: string,
-): BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic> =>
+): BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic[]> =>
   buildModulesTsBootstrapWith(entry, runtimeImport, defaultBootstrapOptions);
 
 export const compileGraphBootstrap = (

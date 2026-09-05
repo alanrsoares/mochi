@@ -149,7 +149,7 @@ export function mochiPlugin(options: MochiPluginOptions = {}): Plugin {
           });
           if (graph._tag === "Err")
             throw new SyntaxError(
-              `Mochi compilation failed for ${id}:\n[type] ${graph.error.message}`,
+              `Mochi compilation failed for ${id}:\n${graph.error.map((error) => `[type] ${error.message}`).join("\n")}`,
             );
           const output = graph.value.find((module) => resolve(module.path) === resolve(id));
           if (!output) throw new SyntaxError(`Mochi compilation omitted ${id}`);
