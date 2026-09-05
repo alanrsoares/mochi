@@ -18,7 +18,7 @@ import { unwrapOk } from "@onrails/result";
 const root = repoRoot(import.meta.url);
 
 type AlErr = { message: string; start: number; end: number };
-type AlResult = { _tag: "Ok"; value: string } | { _tag: "Err"; error: AlErr };
+type AlResult = { _tag: "Ok"; value: string } | { _tag: "Err"; error: AlErr[] };
 
 const compileAl = bootstrapModuleJs;
 
@@ -40,7 +40,9 @@ beforeAll(async () => {
   const shim = await import(join(root, "bootstrap/prelude.gen.mjs"));
   const { lex } = evalNames<{ lex: unknown }>(compileAl("bootstrap/lexer.mochi"), ["lex"]);
   const { parse } = evalNames<{ parse: unknown }>(compileAl("bootstrap/parser.mochi"), ["parse"]);
-  const { check } = evalNames<{ check: unknown }>(compileAl("bootstrap/check.mochi"), ["check"]);
+  const { checkAll } = evalNames<{ checkAll: unknown }>(compileAl("bootstrap/check.mochi"), [
+    "checkAll",
+  ]);
   const { inferProgram } = evalNames<{ inferProgram: unknown }>(
     compileAl("bootstrap/infer.mochi"),
     ["inferProgram"],
@@ -55,7 +57,7 @@ beforeAll(async () => {
     {
       lex,
       parse,
-      check,
+      checkAll,
       inferProgram,
       codegenWith,
       jsGenOpts,
@@ -80,17 +82,25 @@ test("check gate: non-exhaustive switch rejected with span, no JS", () => {
   const r = alCompile("type C = A | B\nlet f = c => switch c { | A => 1 }\n");
   expect(r._tag).toBe("Err");
   if (r._tag === "Err") {
-    expect(r.error.message).toContain("non-exhaustive");
-    expect(r.error.end).toBeGreaterThan(r.error.start);
+    expect(r.error[0]!.message).toContain("non-exhaustive");
+    expect(r.error[0]!.end).toBeGreaterThan(r.error[0]!.start);
   }
+});
+
+test("check gate: independent errors are collected", () => {
+  const r = alCompile(
+    "type C = A | B\nlet f = c => switch c { | A => 1 }\nlet g = c => switch c { | B => 2 }\n",
+  );
+  expect(r._tag).toBe("Err");
+  if (r._tag === "Err") expect(r.error).toHaveLength(2);
 });
 
 test("infer gate: type error rejected with span, no JS", () => {
   const r = alCompile('let x = mul(1, "hi")\n');
   expect(r._tag).toBe("Err");
   if (r._tag === "Err") {
-    expect(r.error.message).toContain("unify");
-    expect(r.error.end).toBeGreaterThan(r.error.start);
+    expect(r.error[0]!.message).toContain("unify");
+    expect(r.error[0]!.end).toBeGreaterThan(r.error[0]!.start);
   }
 });
 

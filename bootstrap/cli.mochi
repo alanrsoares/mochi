@@ -27,6 +27,9 @@ extern emit : string -> string = "./host.mjs" "emit"
 extern die : string -> a = "./host.mjs" "die"
 extern formatError : string -> string -> Diag -> string = "./host.mjs" "formatError"
 
+let formatErrors = (path, src, errors) =>
+  Str.join("\n", errors |> map(e => path->formatError(src, e)))
+
 // "foo.mochi" -> "foo.js"  (drops the 6-char `.mochi` suffix).
 export let outPath = path => "${Str.slice(0, Str.length(path) - 6, path)}.js"
 
@@ -61,7 +64,8 @@ export let fmtOne = (path, write) =>
 // railway carries a string error (readFile's, or compile's via formatError).
 export let buildOne = path =>
   let? src = path->readFile() in
-  let? js = src->compile() |> Result.mapErr(e => path->formatError(src, e)) in
+  let? js = src->compile()
+    |> Result.mapErr(es => path->formatErrors(src, es)) in
     outPath(path)->writeFile(js)
 
 // Single-file typed emit: one written `.ts` (ADR 0090). Same railway as
@@ -69,13 +73,13 @@ export let buildOne = path =>
 export let buildOneTs = (path, runtimeImport) =>
   let? src = path->readFile() in
   let? ts = compileTs(src, runtimeImport)
-    |> Result.mapErr(e => path->formatError(src, e)) in
+    |> Result.mapErr(es => path->formatErrors(src, es)) in
     tsOutPath(path)->writeFile(ts)
 
 export let buildOneDts = (path, runtimeImport) =>
   let? src = path->readFile() in
   let? dts = emitDtsText(src, runtimeImport)
-    |> Result.mapErr(e => path->formatError(src, e)) in
+    |> Result.mapErr(es => path->formatErrors(src, es)) in
     dtsOutPath(path)->writeFile(dts)
 
 // Write each compiled module's JS beside its source, logging as it goes. A

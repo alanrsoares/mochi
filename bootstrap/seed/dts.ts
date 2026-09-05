@@ -637,7 +637,7 @@ export const emitDtsFromTyped: <A>(
  */
 export const emitDtsTextWith: _Curry<
   [src: string, runtimeImport: string, opts: Opts],
-  Result<string, PErr>
+  Result<string, PErr[]>
 > = _curry(3, (src: string, runtimeImport: string, opts: Opts) =>
   _Result_map(
     ([stmts, r]: [
@@ -662,7 +662,7 @@ export const emitDtsTextWith: _Curry<
 );
 export const emitDtsText: _Curry<
   [src: string, runtimeImport: string],
-  Result<string, PErr>
+  Result<string, PErr[]>
 > = _curry(2, (src: string, runtimeImport: string) =>
   emitDtsTextWith(src, runtimeImport, {
     open: false,

@@ -1,5 +1,7 @@
-{
+[
+  {
   "message": "cannot unify number with \"no\"",
   "start": 17,
   "end": 21
-}
+  }
+]

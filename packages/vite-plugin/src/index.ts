@@ -164,7 +164,7 @@ export function mochiPlugin(options: MochiPluginOptions = {}): Plugin {
           });
           if (res._tag === "Err")
             throw new SyntaxError(
-              `Mochi compilation failed for ${id}:\n[type] ${res.error.message}`,
+              `Mochi compilation failed for ${id}:\n${res.error.map((error) => `[type] ${error.message}`).join("\n")}`,
             );
           transformedCode = res.value;
         }

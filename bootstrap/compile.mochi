@@ -7,7 +7,7 @@
 // the prelude tables come from the generated shim (ticket 0004).
 import { lex } from "./lexer.mochi"
 import { parse } from "./parser.mochi"
-import { check } from "./check.mochi"
+import { checkAll } from "./check.mochi"
 import { inferProgram, inferProgramTypes } from "./infer.mochi"
 import { codegenWith, jsGenOpts } from "./codegen.mochi"
 import { emitTsModuleWith } from "./codegen-ts.mochi"
@@ -77,11 +77,20 @@ export let openMode = (src, requested) => requested || openDirective(src)
 
 // Type-check gate: inference under `open`, program passed through unchanged.
 let typecheckWith = (prog, open) =>
-  let? $env = prog->inferProgram(builtins, namespaces, open) in Ok(prog)
+  prog->inferProgram(builtins, namespaces, open)
+    |> Result.map(_ => prog)
+    |> Result.mapErr(e => [e])
 
-// lex -> parse -> check. Shared by both backends: the JS one adds the
-// `typecheck` gate, the TS one re-runs inference for its span -> type table.
-let frontend = lex >> Result.flatMap(parse) >> Result.flatMap(check)
+// lex -> parse -> check. Normalize every frontend failure to `[CErr]`: lex
+// and parse presently have one primary error, while `checkAll` collects every
+// independent checker finding. Shared by both backends.
+let frontend = src => switch lex(src) {
+  | Err(e) => Err([e])
+  | Ok(tokens) => switch parse(tokens) {
+      | Err(e) => Err([e])
+      | Ok(stmts) => checkAll(stmts)
+    }
+}
 
 // The front-end pipeline: lex -> parse -> check -> typecheck
 let pipelineWith = (src, open) =>
@@ -92,12 +101,9 @@ let pipelineWith = (src, open) =>
 /// answering span queries. `inferTypes` deliberately drops the AST.
 export let typedProgramWith = (src, opts: Opts) =>
   let? stmts = src->frontend() in
-  let? r = stmts->inferProgramTypes(
-    builtins,
-    namespaces,
-    openMode(src, opts.open)
-  ) in
-    Ok((stmts, r))
+    stmts->inferProgramTypes(builtins, namespaces, openMode(src, opts.open))
+      |> Result.map(r => (stmts, r))
+      |> Result.mapErr(e => [e])
 
 export let typedProgram = src => src->typedProgramWith(defaultOpts)
 
@@ -105,32 +111,28 @@ export let typedProgram = src => src->typedProgramWith(defaultOpts)
 /// for host DX. Keeps the recorded span -> type table instead of discarding it.
 export let inferTypesWith = (src, opts: Opts) =>
   let? stmts = src->frontend() in
-  let? r = stmts->inferProgramTypes(
-    builtins,
-    namespaces,
-    openMode(src, opts.open)
-  ) in
-    Ok(
-      {
-        env: r.env,
-        types: r.types
-          |> map(hit =>
-            {
-              span: hit.span,
-              ty: hit.ty,
-              display: hit.ty->widenLits()->showType()
-            }),
-        aliases: r.aliases,
-        letParams: r.letParams
-      }
-    )
+    stmts->inferProgramTypes(builtins, namespaces, openMode(src, opts.open))
+      |> Result.map(r =>
+        {
+          env: r.env,
+          types: r.types
+            |> map(hit =>
+              {
+                span: hit.span,
+                ty: hit.ty,
+                display: hit.ty->widenLits()->showType()
+              }),
+          aliases: r.aliases,
+          letParams: r.letParams
+        })
+      |> Result.mapErr(e => [e])
 
 export let inferTypes = src => src->inferTypesWith(defaultOpts)
 
 /// compileWith : string -> Opts -> Result string Err
 export let compileWith = (src, opts: Opts) =>
-  let? prog = src->pipelineWith(openMode(src, opts.open)) in
-    Ok(
+  src->pipelineWith(openMode(src, opts.open))
+    |> Result.map(prog =>
       prog->codegenWith(
         #{},
         opts.runtime,
@@ -138,8 +140,7 @@ export let compileWith = (src, opts: Opts) =>
         preludeJsDefs,
         runtimeDeps,
         { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt }
-      )
-    )
+      ))
 
 /// compile : string -> Result string Err
 export let compile = src => src->compileWith(defaultOpts)
@@ -156,26 +157,22 @@ let noImportedKeys : Map<string, [string]> = #{}
 /// annotation hooks are driven from, not just the final env.
 export let compileTsWith = (src, runtimeImport, opts: Opts) =>
   let? stmts = src->frontend() in
-  let? r = stmts->inferProgramTypes(
-    builtins,
-    namespaces,
-    openMode(src, opts.open)
-  ) in
-    Ok(
-      stmts->emitTsModuleWith(
-        r.env,
-        r.types,
-        r.letParams,
-        r.aliases,
-        noImportedKeys,
-        [],
-        namespaceRuntime,
-        preludeJsDefs,
-        runtimeDeps,
-        runtimeImport,
-        opts.docs
-      )
-    )
+    stmts->inferProgramTypes(builtins, namespaces, openMode(src, opts.open))
+      |> Result.map(r =>
+        stmts->emitTsModuleWith(
+          r.env,
+          r.types,
+          r.letParams,
+          r.aliases,
+          noImportedKeys,
+          [],
+          namespaceRuntime,
+          preludeJsDefs,
+          runtimeDeps,
+          runtimeImport,
+          opts.docs
+        ))
+      |> Result.mapErr(e => [e])
 
 export let compileTs = (src, runtimeImport) =>
   src->compileTsWith(runtimeImport, defaultOpts)

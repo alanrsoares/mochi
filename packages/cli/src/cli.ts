@@ -54,11 +54,13 @@ function die(es: Diagnostic | Diagnostic[], src?: string): never {
 }
 
 /** The self-hosted graph's compact diagnostic, rendered by its host-equivalent format. */
-function dieBootstrap(path: string, src: string, error: BootstrapDiagnostic): never {
-  const before = src.slice(0, error.start);
-  const line = before.split("\n").length;
-  const col = error.start - before.lastIndexOf("\n");
-  console.error(`${path}:${line}:${col}: ${error.message}`);
+function dieBootstrap(path: string, src: string, errors: readonly BootstrapDiagnostic[]): never {
+  for (const error of errors) {
+    const before = src.slice(0, error.start);
+    const line = before.split("\n").length;
+    const col = error.start - before.lastIndexOf("\n");
+    console.error(`${path}:${line}:${col}: ${error.message}`);
+  }
   process.exit(1);
 }
 
@@ -116,7 +118,7 @@ await match(cmd)
       moduleExt: ".js",
       strictEntry: false,
     });
-    if (result._tag === "Err") dieBootstrap(path, src, result.error);
+    if (result._tag === "Err") dieBootstrap(path, src, [result.error]);
     process.stdout.write(result.value);
   })
   .with("ts", async () => {
@@ -162,7 +164,7 @@ await match(cmd)
         });
     if (result._tag === "Err") {
       const src = await Bun.file(entry).text();
-      dieBootstrap(entry, src, result.error);
+      dieBootstrap(entry, src, [result.error]);
     }
     const outputs = result.value;
     const ext = emitTs ? ".ts" : ".js";

@@ -50,6 +50,8 @@ const text = (path: string): string => readFileSync(join(fixtureRoot, path), "ut
 const expectedJson = (path: string): unknown => JSON.parse(text(path)) as unknown;
 const resultError = (id: string, message: string): string => `${id}: ${message}`;
 const json = (value: unknown): string => `${JSON.stringify(value, null, 2)}\n`;
+const compactDiagnostics = (errors: readonly CompactDiagnostic[]): CompactDiagnostic[] =>
+  errors.map(({ message, start, end }) => ({ message, start, end }));
 const evaluateRuntime = (js: string, names: string[]): unknown =>
   new Function(
     "match",
@@ -119,7 +121,10 @@ const runCase = (test: Case): string | null => {
   if (test.kind === "compile") {
     const result = compileBootstrapSyncWith(text(test.source), options);
     if (result._tag === "Err")
-      return resultError(test.id, `unexpected diagnostic ${result.error.message}`);
+      return resultError(
+        test.id,
+        `unexpected diagnostics ${JSON.stringify(compactDiagnostics(result.error))}`,
+      );
     return result.value === text(test.expect)
       ? null
       : resultError(test.id, "emitted JavaScript differs");
@@ -128,11 +133,7 @@ const runCase = (test: Case): string | null => {
   if (test.kind === "diagnostic") {
     const result = compileBootstrapSyncWith(text(test.source), options);
     if (result._tag === "Ok") return resultError(test.id, "expected a diagnostic");
-    const actual = {
-      message: result.error.message,
-      start: result.error.start,
-      end: result.error.end,
-    };
+    const actual = compactDiagnostics(result.error);
     return JSON.stringify(actual) === JSON.stringify(expectedJson(test.expect))
       ? null
       : resultError(test.id, `diagnostic differs: ${JSON.stringify(actual)}`);
@@ -141,7 +142,10 @@ const runCase = (test: Case): string | null => {
   if (test.kind === "runtime") {
     const result = compileBootstrapSyncWith(text(test.source), options);
     if (result._tag === "Err")
-      return resultError(test.id, `unexpected diagnostic ${result.error.message}`);
+      return resultError(
+        test.id,
+        `unexpected diagnostics ${JSON.stringify(compactDiagnostics(result.error))}`,
+      );
     const expected = expectedJson(test.expect) as Record<string, unknown>;
     const names = Object.keys(expected);
     const actual = evaluateRuntime(result.value, names);
@@ -184,7 +188,10 @@ const runCase = (test: Case): string | null => {
 
   const result = compileTsBootstrapSyncWith(text(test.source), "@mochi/runtime", options);
   if (result._tag === "Err")
-    return resultError(test.id, `unexpected diagnostic ${result.error.message}`);
+    return resultError(
+      test.id,
+      `unexpected diagnostics ${JSON.stringify(compactDiagnostics(result.error))}`,
+    );
   if (result.value !== text(test.expect)) return resultError(test.id, "emitted TypeScript differs");
   return typecheck(test.id, result.value);
 };
@@ -192,7 +199,8 @@ const runCase = (test: Case): string | null => {
 const candidateFor = (test: Case): { path: string; contents: string } => {
   if (test.kind === "compile") {
     const result = compileBootstrapSyncWith(text(test.source), options);
-    if (result._tag === "Err") throw new Error(resultError(test.id, result.error.message));
+    if (result._tag === "Err")
+      throw new Error(resultError(test.id, JSON.stringify(compactDiagnostics(result.error))));
     return { path: test.expect, contents: result.value };
   }
 
@@ -201,17 +209,14 @@ const candidateFor = (test: Case): { path: string; contents: string } => {
     if (result._tag === "Ok") throw new Error(resultError(test.id, "expected a diagnostic"));
     return {
       path: test.expect,
-      contents: json({
-        message: result.error.message,
-        start: result.error.start,
-        end: result.error.end,
-      }),
+      contents: json(compactDiagnostics(result.error)),
     };
   }
 
   if (test.kind === "runtime") {
     const result = compileBootstrapSyncWith(text(test.source), options);
-    if (result._tag === "Err") throw new Error(resultError(test.id, result.error.message));
+    if (result._tag === "Err")
+      throw new Error(resultError(test.id, JSON.stringify(compactDiagnostics(result.error))));
     const expected = expectedJson(test.expect) as Record<string, unknown>;
     const names = Object.keys(expected);
     const actual = evaluateRuntime(result.value, names);
@@ -243,7 +248,8 @@ const candidateFor = (test: Case): { path: string; contents: string } => {
   }
 
   const result = compileTsBootstrapSyncWith(text(test.source), "@mochi/runtime", options);
-  if (result._tag === "Err") throw new Error(resultError(test.id, result.error.message));
+  if (result._tag === "Err")
+    throw new Error(resultError(test.id, JSON.stringify(compactDiagnostics(result.error))));
   return { path: test.expect, contents: result.value };
 };
 

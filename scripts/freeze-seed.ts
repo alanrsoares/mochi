@@ -128,7 +128,7 @@ execFileSync(
 stripBundleSourceLabels(join(tmp, "compile.bundle.mjs"));
 writeFileSync(
   join(tmp, "compile.bundle.d.mts"),
-  `export type BootstrapDiagnostic = { message: string; start: number; end: number };\nexport type BootstrapResult<A> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: BootstrapDiagnostic };\nexport type BootstrapInferResult = { env: Map<string, unknown>; types: Array<{ span: { start: number; end: number }; ty: unknown; display: string }>; aliases: Map<string, unknown>; letParams: unknown[] };\nexport const compile: (src: string) => BootstrapResult<string>;\nexport const compileTs: (src: string, runtimeImport: string) => BootstrapResult<string>;\nexport const inferTypes: (src: string) => BootstrapResult<BootstrapInferResult>;\n`,
+  `export type BootstrapDiagnostic = { message: string; start: number; end: number };\nexport type BootstrapResult<A> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: BootstrapDiagnostic[] };\nexport type BootstrapInferResult = { env: Map<string, unknown>; types: Array<{ span: { start: number; end: number }; ty: unknown; display: string }>; aliases: Map<string, unknown>; letParams: unknown[] };\nexport const compile: (src: string) => BootstrapResult<string>;\nexport const compileTs: (src: string, runtimeImport: string) => BootstrapResult<string>;\nexport const inferTypes: (src: string) => BootstrapResult<BootstrapInferResult>;\n`,
 );
 execFileSync(
   "bun",

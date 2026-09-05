@@ -7,16 +7,16 @@ type SeedCompile = {
   compileWith: (
     src: string,
     opts: BootstrapOptions,
-  ) => BootstrapResult<string, BootstrapDiagnostic>;
+  ) => BootstrapResult<string, BootstrapDiagnostic[]>;
   compileTsWith: (
     src: string,
     runtimeImport: string,
     opts: BootstrapOptions,
-  ) => BootstrapResult<string, BootstrapDiagnostic>;
+  ) => BootstrapResult<string, BootstrapDiagnostic[]>;
   inferTypesWith: (
     src: string,
     opts: BootstrapOptions,
-  ) => BootstrapResult<BootstrapInferResult, BootstrapDiagnostic>;
+  ) => BootstrapResult<BootstrapInferResult, BootstrapDiagnostic[]>;
 };
 
 const seed = createRequire(import.meta.url)(
@@ -27,24 +27,24 @@ const seed = createRequire(import.meta.url)(
 export const compileBootstrapSyncWith = (
   src: string,
   opts: BootstrapOptions,
-): BootstrapResult<string, BootstrapDiagnostic> => seed.compileWith(src, opts);
+): BootstrapResult<string, BootstrapDiagnostic[]> => seed.compileWith(src, opts);
 
-export const compileBootstrapSync = (src: string): BootstrapResult<string, BootstrapDiagnostic> =>
+export const compileBootstrapSync = (src: string): BootstrapResult<string, BootstrapDiagnostic[]> =>
   compileBootstrapSyncWith(src, defaultBootstrapOptions);
 
 export const compileTsBootstrapSyncWith = (
   src: string,
   runtimeImport: string,
   opts: BootstrapOptions,
-): BootstrapResult<string, BootstrapDiagnostic> => seed.compileTsWith(src, runtimeImport, opts);
+): BootstrapResult<string, BootstrapDiagnostic[]> => seed.compileTsWith(src, runtimeImport, opts);
 
 export const compileTsBootstrapSync = (
   src: string,
   runtimeImport: string,
-): BootstrapResult<string, BootstrapDiagnostic> =>
+): BootstrapResult<string, BootstrapDiagnostic[]> =>
   compileTsBootstrapSyncWith(src, runtimeImport, defaultBootstrapOptions);
 
 export const inferTypesBootstrapSync = (
   src: string,
-): BootstrapResult<BootstrapInferResult, BootstrapDiagnostic> =>
+): BootstrapResult<BootstrapInferResult, BootstrapDiagnostic[]> =>
   seed.inferTypesWith(src, defaultBootstrapOptions);

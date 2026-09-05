@@ -47,7 +47,7 @@ type SeedModule = {
   ) => BootstrapGraphRecovery;
   exportedOrigins: (stmts: unknown) => BootstrapExportOrigins;
   symbolOccurrences: (stmts: unknown) => BootstrapOccurrence[];
-  emitDts: (src: string, runtimeImport: string) => BootstrapResult<string, BootstrapDiagnostic>;
+  emitDts: (src: string, runtimeImport: string) => BootstrapResult<string, BootstrapDiagnostic[]>;
   emitDtsForFileWith: (
     entry: string,
     runtimeImport: string,
@@ -166,7 +166,7 @@ export const symbolOccurrencesBootstrap = (stmts: unknown): BootstrapOccurrence[
 export const emitDtsBootstrap = (
   src: string,
   runtimeImport: string,
-): BootstrapResult<string, BootstrapDiagnostic> => seed.emitDts(src, runtimeImport);
+): BootstrapResult<string, BootstrapDiagnostic[]> => seed.emitDts(src, runtimeImport);
 
 /**
  * `.d.ts` for one file, typed through its own import graph so a namespace-

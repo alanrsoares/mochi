@@ -73,6 +73,20 @@ test("mochic rejects a bad file: line:col diagnostic, nonzero exit, no JS", () =
   expect(existsSync(js)).toBe(false);
 });
 
+test("mochic renders every independent checker diagnostic", () => {
+  const al = join(dir, "many-bad.mochi");
+  const js = join(dir, "many-bad.js");
+  writeFileSync(
+    al,
+    "type C = A | B\nlet f = c => switch c { | A => 1 }\nlet g = c => switch c { | B => 2 }\n",
+  );
+
+  const { code, stderr } = runMochic(al);
+  expect(code).not.toBe(0);
+  expect(stderr.match(/many-bad\.mochi:/g)).toHaveLength(2);
+  expect(existsSync(js)).toBe(false);
+});
+
 // ---- `mochic build <entry>` — the multi-module driver (ticket 0013) --------
 
 test("mochic build compiles a module graph, byte-≡ the TS driver, and runs", async () => {

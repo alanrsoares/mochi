@@ -86,8 +86,8 @@ export const createBootstrapRecoveryGraphCache = (): BootstrapRecoveryGraphCache
 });
 
 export type BootstrapCore = {
-  compile: (src: string) => BootstrapResult<string, BootstrapDiagnostic>;
-  compileTs: (src: string, runtimeImport: string) => BootstrapResult<string, BootstrapDiagnostic>;
+  compile: (src: string) => BootstrapResult<string, BootstrapDiagnostic[]>;
+  compileTs: (src: string, runtimeImport: string) => BootstrapResult<string, BootstrapDiagnostic[]>;
   buildModules: (entry: string) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic>;
   buildModulesTs: (
     entry: string,
@@ -269,7 +269,7 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
       const inferred = inferTypesBootstrapSync(src);
       result =
         inferred._tag === "Err"
-          ? inferred
+          ? { _tag: "Err", error: inferred.error[0]! }
           : {
               _tag: "Ok",
               value: [

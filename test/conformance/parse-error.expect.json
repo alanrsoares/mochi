@@ -1,5 +1,7 @@
-{
-  "message": "unexpected token eof",
-  "start": 13,
-  "end": 13
-}
+[
+  {
+    "message": "unexpected token eof",
+    "start": 13,
+    "end": 13
+  }
+]

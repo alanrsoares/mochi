@@ -14,12 +14,14 @@ import {
   _Result_map,
   _Result_mapErr,
   _Str_endsWith,
+  _Str_join,
   _Str_length,
   _Str_slice,
   _Str_startsWith,
   _curry,
   _done,
   _recur,
+  map,
 } from "@mochi/compiler/runtime";
 
 import { match } from "@onrails/pattern";
@@ -41,6 +43,14 @@ import { emit } from "./host.mjs";
 import { die } from "./host.mjs";
 import { formatError as $formatError } from "./host.mjs";
 const formatError = _curry(3, $formatError);
+const formatErrors: _Curry<[path: string, src: string, errors: PErr[]], string> = _curry(
+  3,
+  (path: string, src: string, errors: PErr[]) =>
+    _Str_join(
+      "\n",
+      map((e: PErr) => formatError(path, src, e), errors),
+    ),
+);
 export const outPath: (path: string) => string = (path: string) =>
   `${_Str_slice(0, _Str_length(path) - 6, path)}.js`;
 export const tsOutPath: (path: string) => string = (path: string) =>
@@ -73,7 +83,7 @@ export const buildOne: (path: string) => Result<string, string> = (path: string)
     (src) =>
       _Result_flatMap(
         (js) => writeFile(outPath(path), js),
-        _Result_mapErr((e: PErr) => formatError(path, src, e), compile(src)),
+        _Result_mapErr((es: PErr[]) => formatErrors(path, src, es), compile(src)),
       ),
     readFile(path),
   );
@@ -85,7 +95,7 @@ export const buildOneTs: _Curry<
     (src) =>
       _Result_flatMap(
         (ts) => writeFile(tsOutPath(path), ts),
-        _Result_mapErr((e: PErr) => formatError(path, src, e), compileTs(src, runtimeImport)),
+        _Result_mapErr((es: PErr[]) => formatErrors(path, src, es), compileTs(src, runtimeImport)),
       ),
     readFile(path),
   ),
@@ -98,7 +108,10 @@ export const buildOneDts: _Curry<
     (src) =>
       _Result_flatMap(
         (dts) => writeFile(dtsOutPath(path), dts),
-        _Result_mapErr((e: PErr) => formatError(path, src, e), emitDtsText(src, runtimeImport)),
+        _Result_mapErr(
+          (es: PErr[]) => formatErrors(path, src, es),
+          emitDtsText(src, runtimeImport),
+        ),
       ),
     readFile(path),
   ),

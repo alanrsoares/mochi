@@ -15,7 +15,7 @@ test("candidate freeze writes a separate review tree", () => {
   const dir = mkdtempSync(join(tmpdir(), "mochi-conformance-candidate-"));
   try {
     const paths = freezeBootstrapConformance(dir);
-    expect(paths).toHaveLength(11);
+    expect(paths).toHaveLength(12);
     expect(readFileSync(join(dir, "single-js.expect.js"), "utf8")).toContain("const answer");
   } finally {
     rmSync(dir, { recursive: true, force: true });

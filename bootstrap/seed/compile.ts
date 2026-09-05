@@ -26,10 +26,13 @@ export type Opts = {
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
+  Err,
   None,
   Ok,
   Some,
   _Result_flatMap,
+  _Result_map,
+  _Result_mapErr,
   _Str_get,
   _Str_startsWith,
   _Str_trim,
@@ -44,7 +47,7 @@ import { match } from "@onrails/pattern";
 
 import { lex } from "./lexer";
 import { parse } from "./parser";
-import { check } from "./check";
+import { checkAll } from "./check";
 import { inferProgram, inferProgramTypes } from "./infer";
 import { codegenWith, jsGenOpts } from "./codegen";
 import { emitTsModuleWith } from "./codegen-ts";
@@ -98,17 +101,25 @@ export const openMode: _Curry<[src: string, requested: boolean], boolean> = _cur
   2,
   (src: string, requested: boolean) => or(requested, openDirective(src)),
 );
-const typecheckWith: _Curry<[prog: Stmt[], open: boolean], Result<Stmt[], PErr>> = _curry(
+const typecheckWith: _Curry<[prog: Stmt[], open: boolean], Result<Stmt[], PErr[]>> = _curry(
   2,
   (prog: Stmt[], open: boolean) =>
-    _Result_flatMap(
-      ($env) => Ok(prog) as Result<Stmt[], PErr>,
-      inferProgram(prog, builtins, namespaces, open),
+    _Result_mapErr(
+      (e: PErr) => [e],
+      _Result_map((_: Map<string, Scheme>) => prog, inferProgram(prog, builtins, namespaces, open)),
     ),
 );
-const frontend: ($x: string) => Result<Stmt[], PErr> = ($x: string) =>
-  _Result_flatMap(check)((($x) => _Result_flatMap(parse)(lex($x)))($x));
-const pipelineWith: _Curry<[src: string, open: boolean], Result<Stmt[], PErr>> = _curry(
+const frontend: (src: string) => Result<Stmt[], PErr[]> = (src: string) =>
+  match(lex(src))
+    .with({ _tag: "Err" }, ({ error: e }) => Err([e]) as Result<Stmt[], PErr[]>)
+    .with({ _tag: "Ok" }, ({ value: tokens }) =>
+      match(parse(tokens))
+        .with({ _tag: "Err" }, ({ error: e }) => Err([e]) as Result<Stmt[], PErr[]>)
+        .with({ _tag: "Ok" }, ({ value: stmts }) => checkAll(stmts))
+        .exhaustive(),
+    )
+    .exhaustive();
+const pipelineWith: _Curry<[src: string, open: boolean], Result<Stmt[], PErr[]>> = _curry(
   2,
   (src: string, open: boolean) =>
     _Result_flatMap((stmts) => typecheckWith(stmts, open), frontend(src)),
@@ -130,26 +141,22 @@ export const typedProgramWith: _Curry<
         letParams: TypeAt[];
       },
     ],
-    PErr
+    PErr[]
   >
 > = _curry(2, (src: string, opts: Opts) =>
   _Result_flatMap(
     (stmts) =>
-      _Result_flatMap(
-        (r) =>
-          Ok(_tuple(stmts, r)) as Result<
-            [
-              Stmt[],
-              {
-                env: Map<string, Scheme>;
-                types: TypeAt[];
-                aliases: Map<string, AliasInfo>;
-                letParams: TypeAt[];
-              },
-            ],
-            PErr
-          >,
-        inferProgramTypes(stmts, builtins, namespaces, openMode(src, opts.open)),
+      _Result_mapErr(
+        (e: PErr) => [e],
+        _Result_map(
+          (r: {
+            env: Map<string, Scheme>;
+            types: TypeAt[];
+            aliases: Map<string, AliasInfo>;
+            letParams: TypeAt[];
+          }) => _tuple(stmts, r),
+          inferProgramTypes(stmts, builtins, namespaces, openMode(src, opts.open)),
+        ),
       ),
     frontend(src),
   ),
@@ -164,7 +171,7 @@ export const typedProgram: (src: string) => Result<
       letParams: TypeAt[];
     },
   ],
-  PErr
+  PErr[]
 > = (src: string) => typedProgramWith(src, defaultOpts);
 /**
  * inferTypes : string -> Result InferResult Err — strict typed-query seam
@@ -179,14 +186,20 @@ export const inferTypesWith: _Curry<
       aliases: Map<string, AliasInfo>;
       letParams: TypeAt[];
     },
-    PErr
+    PErr[]
   >
 > = _curry(2, (src: string, opts: Opts) =>
   _Result_flatMap(
     (stmts) =>
-      _Result_flatMap(
-        (r) =>
-          Ok({
+      _Result_mapErr(
+        (e: PErr) => [e],
+        _Result_map(
+          (r: {
+            letParams: TypeAt[];
+            aliases: Map<string, AliasInfo>;
+            types: TypeAt[];
+            env: Map<string, Scheme>;
+          }) => ({
             env: r.env,
             types: map(
               (hit: TypeAt) => ({
@@ -198,16 +211,9 @@ export const inferTypesWith: _Curry<
             ),
             aliases: r.aliases,
             letParams: r.letParams,
-          }) as Result<
-            {
-              env: Map<string, Scheme>;
-              types: { span: SpanAt; ty: Ty; display: string }[];
-              aliases: Map<string, AliasInfo>;
-              letParams: TypeAt[];
-            },
-            PErr
-          >,
-        inferProgramTypes(stmts, builtins, namespaces, openMode(src, opts.open)),
+          }),
+          inferProgramTypes(stmts, builtins, namespaces, openMode(src, opts.open)),
+        ),
       ),
     frontend(src),
   ),
@@ -219,34 +225,32 @@ export const inferTypes: (src: string) => Result<
     aliases: Map<string, AliasInfo>;
     letParams: TypeAt[];
   },
-  PErr
+  PErr[]
 > = (src: string) => inferTypesWith(src, defaultOpts);
 /**
  * compileWith : string -> Opts -> Result string Err
  */
-export const compileWith: _Curry<[src: string, opts: Opts], Result<string, PErr>> = _curry(
+export const compileWith: _Curry<[src: string, opts: Opts], Result<string, PErr[]>> = _curry(
   2,
   (src: string, opts: Opts) =>
-    _Result_flatMap(
-      (prog) =>
-        Ok(
-          codegenWith(
-            prog,
-            new Map<string, string[]>(),
-            opts.runtime,
-            namespaceRuntime,
-            preludeJsDefs,
-            runtimeDeps,
-            { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt },
-          ),
-        ) as Result<string, PErr>,
+    _Result_map(
+      (prog: Stmt[]) =>
+        codegenWith(
+          prog,
+          new Map<string, string[]>(),
+          opts.runtime,
+          namespaceRuntime,
+          preludeJsDefs,
+          runtimeDeps,
+          { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt },
+        ),
       pipelineWith(src, openMode(src, opts.open)),
     ),
 );
 /**
  * compile : string -> Result string Err
  */
-export const compile: (src: string) => Result<string, PErr> = (src: string) =>
+export const compile: (src: string) => Result<string, PErr[]> = (src: string) =>
   compileWith(src, defaultOpts);
 const noImportedKeys: Map<string, string[]> = new Map<string, string[]>();
 /**
@@ -257,13 +261,19 @@ const noImportedKeys: Map<string, string[]> = new Map<string, string[]>();
  */
 export const compileTsWith: _Curry<
   [src: string, runtimeImport: string, opts: Opts],
-  Result<string, PErr>
+  Result<string, PErr[]>
 > = _curry(3, (src: string, runtimeImport: string, opts: Opts) =>
   _Result_flatMap(
     (stmts) =>
-      _Result_flatMap(
-        (r) =>
-          Ok(
+      _Result_mapErr(
+        (e: PErr) => [e],
+        _Result_map(
+          (r: {
+            env: Map<string, Scheme>;
+            types: TypeAt[];
+            letParams: TypeAt[];
+            aliases: Map<string, AliasInfo>;
+          }) =>
             emitTsModuleWith(
               stmts,
               r.env,
@@ -278,13 +288,15 @@ export const compileTsWith: _Curry<
               runtimeImport,
               opts.docs,
             ),
-          ) as Result<string, PErr>,
-        inferProgramTypes(stmts, builtins, namespaces, openMode(src, opts.open)),
+          inferProgramTypes(stmts, builtins, namespaces, openMode(src, opts.open)),
+        ),
       ),
     frontend(src),
   ),
 );
-export const compileTs: _Curry<[src: string, runtimeImport: string], Result<string, PErr>> = _curry(
-  2,
-  (src: string, runtimeImport: string) => compileTsWith(src, runtimeImport, defaultOpts),
+export const compileTs: _Curry<
+  [src: string, runtimeImport: string],
+  Result<string, PErr[]>
+> = _curry(2, (src: string, runtimeImport: string) =>
+  compileTsWith(src, runtimeImport, defaultOpts),
 );

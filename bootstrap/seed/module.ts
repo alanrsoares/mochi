@@ -110,7 +110,7 @@ import * as Ast from "./ast";
  * mirror puts `emitDtsForFile` in its module driver: declaration emit is a
  * whole-file query the graph owns, not a single-expression one.
  */
-export const emitDts: _Curry<[src: string, runtimeImport: string], Result<string, PErr>> = _curry(
+export const emitDts: _Curry<[src: string, runtimeImport: string], Result<string, PErr[]>> = _curry(
   2,
   (src: string, runtimeImport: string) => emitDtsText(src, runtimeImport),
 );
