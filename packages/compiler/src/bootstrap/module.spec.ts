@@ -8,6 +8,7 @@ import { buildModules as tsBuildModules } from "../module/module.ts";
 import {
   buildModulesBootstrap,
   buildModulesBootstrapWith,
+  buildModulesTsBootstrapWith,
   defaultBootstrapOptions,
   editorBootstrapOptions,
   inferGraphTypesBootstrap,
@@ -133,6 +134,26 @@ test("graph build collects independent checker errors in one module", () => {
   }
 });
 
+// Recovery resolves imports twice so the placeholder pass cannot swallow this:
+// the strict error array replaces the one the caller would otherwise have kept,
+// so a module with both faults used to report the checker error alone.
+test("graph build keeps a missing export beside the checker errors it hides", () => {
+  const dir = inTmp({
+    "dep.mochi": "export type Choice = | One | Two\n",
+    "main.mochi":
+      'import { One, Missing } from "./dep.mochi"\n' +
+      "let first = value => switch value { | One => 1 }\n",
+  });
+  const result = buildModulesBootstrap(join(dir, "main.mochi"));
+  expect(result._tag).toBe("Err");
+  if (result._tag === "Err") {
+    expect(result.error.map((error) => error.message)).toEqual([
+      expect.stringContaining("has no export 'Missing'"),
+      expect.stringContaining("missing Two"),
+    ]);
+  }
+});
+
 test("a dependency's own `use open` directive is honoured", () => {
   const dir = inTmp({
     "dep.mochi": '"use open"\nexport let value = hostGlobal\n',
@@ -146,6 +167,18 @@ test("`strictEntry` judges the entry by the caller's flag, not its directive", (
   const entry = join(dir, "main.mochi");
   expect(buildModulesBootstrapWith(entry, defaultBootstrapOptions)._tag).toBe("Ok");
   expect(buildModulesBootstrapWith(entry, editorBootstrapOptions)._tag).toBe("Err");
+});
+
+// The TS rail reads the entry's own directive everywhere, so its recovery
+// preflight — which runs the JS rail — must not apply the JS entry rule, or the
+// preflight rejects an entry the TS compiler it guards would have accepted.
+test("typed graph emit honours the entry's `use open` even under `strictEntry`", () => {
+  const dir = inTmp({ "main.mochi": '"use open"\nexport let value = hostGlobal\n' });
+  const entry = join(dir, "main.mochi");
+  expect(buildModulesBootstrapWith(entry, editorBootstrapOptions)._tag).toBe("Err");
+  expect(buildModulesTsBootstrapWith(entry, "@mochi/runtime", editorBootstrapOptions)._tag).toBe(
+    "Ok",
+  );
 });
 
 test("`docs: false` drops docstrings from the emitted JS", () => {

@@ -1,5 +1,5 @@
 // @bun
-import { Err as Err11, None as None20, Ok as Ok13, Some as Some20, _Array_append as _Array_append14, _Array_concat as _Array_concat10, _Array_flatMap as _Array_flatMap4, _Array_get as _Array_get16, _Array_sort as _Array_sort3, _Map_get as _Map_get12, _Map_getOr as _Map_getOr8, _Map_keys as _Map_keys8, _Map_set as _Map_set11, _Option_mapOr, _Option_unwrapOr as _Option_unwrapOr10, _Result_flatMap as _Result_flatMap9, _Result_mapErr as _Result_mapErr2, _Set_add as _Set_add8, _Set_fromArray as _Set_fromArray8, _Set_has as _Set_has8, _Str_codeAt as _Str_codeAt7, _Str_get as _Str_get5, _Str_join as _Str_join9, _Str_length as _Str_length5, _Str_split as _Str_split4, _Str_startsWith as _Str_startsWith7, _Str_trim as _Str_trim2, _curry as _curry21, and as and13, eq as eq18, filter as filter6, length as length15, map as map14, not as not12, or as or11, reduce as reduce5 } from "@mochi/compiler/runtime";
+import { Err as Err11, None as None20, Ok as Ok13, Some as Some20, _Array_append as _Array_append14, _Array_concat as _Array_concat10, _Array_flatMap as _Array_flatMap4, _Array_get as _Array_get16, _Array_sort as _Array_sort3, _Map_get as _Map_get12, _Map_getOr as _Map_getOr8, _Map_has as _Map_has6, _Map_keys as _Map_keys8, _Map_set as _Map_set11, _Option_mapOr, _Option_unwrapOr as _Option_unwrapOr10, _Result_flatMap as _Result_flatMap9, _Result_mapErr as _Result_mapErr2, _Set_add as _Set_add8, _Set_fromArray as _Set_fromArray8, _Set_has as _Set_has8, _Str_codeAt as _Str_codeAt7, _Str_get as _Str_get5, _Str_join as _Str_join9, _Str_length as _Str_length5, _Str_split as _Str_split4, _Str_startsWith as _Str_startsWith7, _Str_trim as _Str_trim2, _curry as _curry21, and as and13, eq as eq18, filter as filter6, length as length15, map as map14, not as not12, or as or11, reduce as reduce5 } from "@mochi/compiler/runtime";
 import { match as match20 } from "@onrails/pattern";
 
 import { Err, None as None2, Ok, Some as Some2, _Array_append, _Array_head, _Array_tail, _Option_contains as _Option_contains2, _Option_exists, _Option_unwrapOr, _Str_codeAt, _Str_fromCode, _Str_get as _Str_get2, _Str_join, _Str_length, _Str_slice, _Str_toNumber, _curry as _curry2, _done as _done2, _recur as _recur2, and, eq as eq2, length, not, or } from "@mochi/compiler/runtime";
@@ -13498,14 +13498,23 @@ var compileAll = _curry21(3, (ctx, graph, opts) => match20(graph).with((_v) => {
 }));
 var compileGraphWith = _curry21(2, (graph, opts) => compileAll({ exportsByPath: new Map, regByPath: new Map, keysByPath: new Map, qualsByPath: new Map, outputs: [] }, graph, opts));
 var compileGraph = (graph) => compileGraphWith(graph, defaultOpts2);
-var checkErrorsRecovering = _curry21(2, (ctx, loaded) => match20(resolveImportsFrom(ctx, loaded.stmts, 0, loaded.path, { imports: new Map, nsImports: new Map, reg: emptyReg, keys: new Map, quals: new Map }, true)).with({ _tag: "Err" }, ({ error: e }) => [atPath(loaded.path, e)]).with({ _tag: "Ok" }, ({ value: res }) => match20(checkAllWith(loaded.stmts, res.reg, res.quals)).with({ _tag: "Err" }, ({ error: es }) => map14((e) => atPath(loaded.path, e), es)).with({ _tag: "Ok" }, () => []).exhaustive()).exhaustive());
+var depsPublished = _curry21(4, (ctx, stmts, i, path) => match20(_Array_get16(i, stmts)).with({ _tag: "None" }, () => true).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some" && _g.value._tag === "SImport";
+}, ({ value: { from } }) => and13(_Map_has6(resolveImport2(path, from), ctx.exportsByPath), depsPublished(ctx, stmts, i + 1, path))).with({ _tag: "Some" }, () => depsPublished(ctx, stmts, i + 1, path)).exhaustive());
+var checkErrorsRecovering = _curry21(2, (ctx, loaded) => {
+  const importErrors = depsPublished(ctx, loaded.stmts, 0, loaded.path) ? match20(resolveImportsFrom(ctx, loaded.stmts, 0, loaded.path, { imports: new Map, nsImports: new Map, reg: emptyReg, keys: new Map, quals: new Map }, false)).with({ _tag: "Err" }, ({ error: e }) => [atPath(loaded.path, e)]).with({ _tag: "Ok" }, () => []).exhaustive() : [];
+  return match20(resolveImportsFrom(ctx, loaded.stmts, 0, loaded.path, { imports: new Map, nsImports: new Map, reg: emptyReg, keys: new Map, quals: new Map }, true)).with({ _tag: "Err" }, ({ error: e }) => [atPath(loaded.path, e)]).with({ _tag: "Ok" }, ({ value: res }) => match20(checkAllWith(loaded.stmts, res.reg, res.quals)).with({ _tag: "Err" }, ({ error: es }) => _Array_concat10(importErrors, map14((e) => atPath(loaded.path, e), es))).with({ _tag: "Ok" }, () => importErrors).exhaustive()).exhaustive();
+});
+var sameErr = _curry21(2, (a, b) => and13(and13(eq18(a.message, b.message), eq18(a.start, b.start)), eq18(a.end, b.end)));
+var mergeRecovered = _curry21(2, (e, checks) => length15(filter6((c) => sameErr(c, e), checks)) > 0 ? checks : _Array_concat10(checks, [e]));
 var compileAllRecovering = _curry21(4, (ctx, graph, errors, opts) => match20(graph).with((_v) => {
   const _g = _v;
   return _g.length === 0;
 }, () => ({ ctx, errors })).with((_v) => {
   const _g = _v;
   return _g.length >= 1;
-}, ([m, ...rest]) => match20(compileOne(ctx, m, true, eq18(length15(rest), 0), opts)).with({ _tag: "Err" }, ({ error: e }) => ((checks) => compileAllRecovering(ctx, rest, _Array_concat10(errors, eq18(length15(checks), 0) ? [e] : checks), opts))(checkErrorsRecovering(ctx, m))).with({ _tag: "Ok" }, ({ value: ctx1 }) => compileAllRecovering(ctx1, rest, errors, opts)).exhaustive()).otherwise(() => {
+}, ([m, ...rest]) => match20(compileOne(ctx, m, true, eq18(length15(rest), 0), opts)).with({ _tag: "Err" }, ({ error: e }) => ((checks) => compileAllRecovering(ctx, rest, _Array_concat10(errors, mergeRecovered(e, checks)), opts))(checkErrorsRecovering(ctx, m))).with({ _tag: "Ok" }, ({ value: ctx1 }) => compileAllRecovering(ctx1, rest, errors, opts)).exhaustive()).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
 var freshRecoveryGraphState = () => ({ ctx: { exportsByPath: new Map, regByPath: new Map, keysByPath: new Map, qualsByPath: new Map, outputs: [] }, errors: [] });
@@ -13570,7 +13579,7 @@ var dtsAll = _curry21(3, (ctx, graph, opts) => match20(graph).with((_v) => _v.le
 }));
 var emitDtsForFileWith = _curry21(3, (entry, runtimeImport, opts) => _Result_flatMap9((graph) => dtsAll({ exportsByPath: new Map, regByPath: new Map, keysByPath: new Map, qualsByPath: new Map, aliases: new Map, runtimeImport, target: absPath(entry), dts: "" }, graph, opts), loadGraph(entry)));
 var emitDtsForFile = _curry21(2, (entry, runtimeImport) => emitDtsForFileWith(entry, runtimeImport, defaultOpts2));
-var buildModulesTsWith = _curry21(3, (entry, runtimeImport, opts) => match20(loadGraph(entry)).with({ _tag: "Err" }, ({ error: e }) => Err11([e])).with({ _tag: "Ok" }, ({ value: graph }) => ((recovered) => eq18(length15(recovered.errors), 0) ? _Result_mapErr2((e) => [e], compileGraphTsWith(graph, runtimeImport, opts)) : Err11(recovered.errors))(compileGraphRecoveringWith(graph, opts))).exhaustive());
+var buildModulesTsWith = _curry21(3, (entry, runtimeImport, opts) => match20(loadGraph(entry)).with({ _tag: "Err" }, ({ error: e }) => Err11([e])).with({ _tag: "Ok" }, ({ value: graph }) => ((recovered) => eq18(length15(recovered.errors), 0) ? _Result_mapErr2((e) => [e], compileGraphTsWith(graph, runtimeImport, opts)) : Err11(recovered.errors))(compileGraphRecoveringWith(graph, { ...opts, strictEntry: false }))).exhaustive());
 var buildModulesTs = _curry21(2, (entry, runtimeImport) => buildModulesTsWith(entry, runtimeImport, defaultOpts2));
 export {
   buildModules,

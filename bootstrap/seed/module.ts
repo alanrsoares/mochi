@@ -56,6 +56,7 @@ import {
   _Array_sort,
   _Map_get,
   _Map_getOr,
+  _Map_has,
   _Map_keys,
   _Map_set,
   _Option_mapOr,
@@ -78,6 +79,7 @@ import {
   compare,
   eq,
   filter,
+  gt,
   length,
   lte,
   map,
@@ -1080,6 +1082,34 @@ export const compileGraphWith: _Curry<
 export const compileGraph: (graph: Loaded[]) => Result<ModuleOutput[], PErr> = (graph: Loaded[]) =>
   compileGraphWith(graph, defaultOpts);
 
+const depsPublished: <A, B>(
+  ctx: { exportsByPath: Map<string, A> } & B,
+  stmts: Stmt[],
+  i: number,
+  path: string,
+) => boolean = _curry(
+  4,
+  <A, B>(ctx: { exportsByPath: Map<string, A> } & B, stmts: Stmt[], i: number, path: string) =>
+    match(_Array_get(i, stmts))
+      .with({ _tag: "None" }, () => true)
+      .with(
+        (
+          _v,
+        ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
+          value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SImport" }>;
+        } => {
+          const _g: any = _v;
+          return _g._tag === "Some" && _g.value._tag === "SImport";
+        },
+        ({ value: { from } }) =>
+          and(
+            _Map_has(resolveImport(path, from), ctx.exportsByPath),
+            depsPublished(ctx, stmts, i + 1, path),
+          ),
+      )
+      .with({ _tag: "Some" }, () => depsPublished(ctx, stmts, i + 1, path))
+      .exhaustive(),
+);
 const checkErrorsRecovering: <A, B, C, D>(
   ctx: {
     exportsByPath: Map<string, Map<string, { vars: number[]; rvars: A[]; ty: Ty }>>;
@@ -1098,8 +1128,29 @@ const checkErrorsRecovering: <A, B, C, D>(
       qualsByPath: Map<string, { types: Set<string> } & C>;
     } & D,
     loaded: Loaded,
-  ) =>
-    match(
+  ) => {
+    const importErrors: PErr[] = depsPublished(ctx, loaded.stmts, 0, loaded.path)
+      ? match(
+          resolveImportsFrom(
+            ctx,
+            loaded.stmts,
+            0,
+            loaded.path,
+            {
+              imports: new Map<string, { vars: number[]; rvars: A[]; ty: Ty }>(),
+              nsImports: new Map<string, Map<string, { vars: number[]; rvars: A[]; ty: Ty }>>(),
+              reg: emptyReg,
+              keys: new Map<string, B>(),
+              quals: new Map<string, { types: Set<string> } & C>(),
+            },
+            false,
+          ),
+        )
+          .with({ _tag: "Err" }, ({ error: e }) => [atPath(loaded.path, e)])
+          .with({ _tag: "Ok" }, () => [] as PErr[])
+          .exhaustive()
+      : ([] as PErr[]);
+    return match(
       resolveImportsFrom(
         ctx,
         loaded.stmts,
@@ -1118,11 +1169,25 @@ const checkErrorsRecovering: <A, B, C, D>(
       .with({ _tag: "Err" }, ({ error: e }) => [atPath(loaded.path, e)])
       .with({ _tag: "Ok" }, ({ value: res }) =>
         match(checkAllWith(loaded.stmts, res.reg, res.quals))
-          .with({ _tag: "Err" }, ({ error: es }) => map((e: PErr) => atPath(loaded.path, e), es))
-          .with({ _tag: "Ok" }, () => [] as PErr[])
+          .with({ _tag: "Err" }, ({ error: es }) =>
+            _Array_concat(
+              importErrors,
+              map((e: PErr) => atPath(loaded.path, e), es),
+            ),
+          )
+          .with({ _tag: "Ok" }, () => importErrors)
           .exhaustive(),
       )
-      .exhaustive(),
+      .exhaustive();
+  },
+);
+const sameErr: _Curry<[a: PErr, b: PErr], boolean> = _curry(2, (a: PErr, b: PErr) =>
+  and(and(eq(a.message, b.message), eq(a.start, b.start)), eq(a.end, b.end)),
+);
+const mergeRecovered: _Curry<[e: PErr, checks: PErr[]], PErr[]> = _curry(
+  2,
+  (e: PErr, checks: PErr[]) =>
+    length(filter((c: PErr) => sameErr(c, e), checks)) > 0 ? checks : _Array_concat(checks, [e]),
 );
 const compileAllRecovering: _Curry<
   [
@@ -1208,7 +1273,7 @@ const compileAllRecovering: _Curry<
                 compileAllRecovering(
                   ctx,
                   rest,
-                  _Array_concat(errors, eq(length(checks), 0) ? [e] : checks),
+                  _Array_concat(errors, mergeRecovered(e, checks)),
                   opts,
                 ))(checkErrorsRecovering(ctx, m)),
             )
@@ -2973,7 +3038,7 @@ export const buildModulesTsWith: _Curry<
         eq(length(recovered.errors), 0)
           ? _Result_mapErr((e: PErr) => [e], compileGraphTsWith(graph, runtimeImport, opts))
           : (Err(recovered.errors) as Result<ModuleOutput[], PErr[]>))(
-        compileGraphRecoveringWith(graph, opts),
+        compileGraphRecoveringWith(graph, { ...opts, strictEntry: false }),
       ),
     )
     .exhaustive(),

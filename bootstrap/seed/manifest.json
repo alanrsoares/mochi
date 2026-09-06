@@ -1,5 +1,5 @@
 {
-  "sourceRevision": "e2b6bcd13b0b8261a0f8213a6fc48437d8ecd238",
+  "sourceRevision": "60fbd36fe723ed17ed3469f83b300ec52a19bcf9",
   "emitted": {
     "ast.ts": "bddf8c6f50743a8da5cd4bb43a8ee15597c61dc89b7bdc3d3aef77c6508d8bce",
     "check.ts": "aa3ca60632f983dbc09079978a6bd553982d38cc6842aeb0ed40f2a30dd96b25",
@@ -19,8 +19,8 @@
     "host.mjs": "0a15008935778f509f16a64086d5d40698a946a68a91da1827ea3836814623cd",
     "infer.ts": "9916cb8551d996c0a22884a4ef9a5092d5e6e5c31072d3c360d5fab9f7aefd54",
     "lexer.ts": "92ccb9a8c79801951e81a0bb342907ce441428f8722e19f38f4bff1f2b8eb8ad",
-    "module.bundle.cjs": "59b2a07d037964bcecbcd755fb091441b7607b930b1ee9badecbfb6f37db6518",
-    "module.ts": "2b9dcde13847085f59f639d46f6c9ccf79e7ba31ecc5b36a84528494ab42a985",
+    "module.bundle.cjs": "4cccdf8ae3034c1273f40d660fc6fdc71971d18da257b69d2cfe3b51445f48d9",
+    "module.ts": "d52a28fcd451e19062b086128248fa66fcfcaee9b0ce582df1040d571c0b34bc",
     "parser.ts": "51c8a6f4c6f0eeb86ce6ad7518dc4d735bbf1f2717f8d7b2d203d30541eacec7",
     "plugins/jsx-schema.gen.d.mts": "16fd25cd96bf1e2ae11f17e711f91dcbb9f30e1f347737cdd144bf319046d5ef",
     "plugins/jsx-schema.gen.mjs": "94cb1f3512dcd8244cadba7ab74ed0db943bd2df02b907d105eaae26a96e6482",
@@ -57,8 +57,8 @@
     "host.mjs": "0a15008935778f509f16a64086d5d40698a946a68a91da1827ea3836814623cd",
     "infer.ts": "65c005687472aad9b72e034187a94a257a318cfd1af3f77cc7b14c67d9328e64",
     "lexer.ts": "a6d10dfc0de65218ac4a1b3437238320abfd5911f4b7e988e330785b2eec5f38",
-    "module.bundle.cjs": "59b2a07d037964bcecbcd755fb091441b7607b930b1ee9badecbfb6f37db6518",
-    "module.ts": "37c272cbf4fed952914195455e32bfbd087aed437774a97945afc9a74a63afbd",
+    "module.bundle.cjs": "4cccdf8ae3034c1273f40d660fc6fdc71971d18da257b69d2cfe3b51445f48d9",
+    "module.ts": "c2ab5acdf36fd15e0aac88a51165c97e138d6e6047f3bcb368496b9600c42cbc",
     "parser.ts": "e10ffc61081487d481547690d4b20b0a10218c7e3c9f3985ad9ffcfec7c2459c",
     "plugins/jsx-schema.gen.d.mts": "16fd25cd96bf1e2ae11f17e711f91dcbb9f30e1f347737cdd144bf319046d5ef",
     "plugins/jsx-schema.gen.mjs": "94cb1f3512dcd8244cadba7ab74ed0db943bd2df02b907d105eaae26a96e6482",
