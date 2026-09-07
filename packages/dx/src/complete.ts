@@ -376,17 +376,16 @@ const jsxAttrItems = (
       );
     }
     const attrType = intrinsic[trigger.attr];
-    if (Array.isArray(attrType)) {
-      return filterPrefix(
-        attrType.map((label) => ({
-          label,
-          kind: "literal" as const,
-          detail: trigger.attr,
-        })),
-        trigger.prefix,
-      );
-    }
-    return [];
+    return Array.isArray(attrType)
+      ? filterPrefix(
+          attrType.map((label) => ({
+            label,
+            kind: "literal" as const,
+            detail: trigger.attr,
+          })),
+          trigger.prefix,
+        )
+      : [];
   }
 
   const props = propsRowForTag(src, trigger, opts);
@@ -479,12 +478,13 @@ const bootstrapNamespaceMembers = async (
   const graph = await loadBootstrapGraph(path, src, readFile);
   if (graph._tag === "Err") return null;
   const target = graph.value.find((module) => module.path === resolveImport(path, imported.from));
-  if (!target) return null;
-  return [...target.origins.values.keys(), ...target.origins.ctors.keys()].map((label) => ({
-    label,
-    kind: "member" as const,
-    detail: `${trigger.receiver}.${label}`,
-  }));
+  return !target
+    ? null
+    : [...target.origins.values.keys(), ...target.origins.ctors.keys()].map((label) => ({
+        label,
+        kind: "member" as const,
+        detail: `${trigger.receiver}.${label}`,
+      }));
 };
 
 /**

@@ -69,8 +69,8 @@ test("variant decl → constructor factories (plain JS, no type annotations)", (
       `const Circle = (_0) => ({ _tag: "Circle", _0 });`,
       // Multi-field ctors curry too, so partial application works (§4.4).
       `const Rect = _curry(2, (_0, _1) => ({ _tag: "Rect", _0, _1 }));`,
-      `const c = Circle;`,
-      `const r = Rect;`,
+      "const c = Circle;",
+      "const r = Rect;",
       "",
     ].join("\n"),
   );
@@ -82,7 +82,7 @@ test("type-only local variant emits no runtime factories", () => {
 
 test("nullary constructor → value, not function", () => {
   expect(js("type Color = | Red | Green\nlet r = Red")).toBe(
-    [`const Red = { _tag: "Red" };`, `const r = Red;`, ""].join("\n"),
+    [`const Red = { _tag: "Red" };`, "const r = Red;", ""].join("\n"),
   );
 });
 

@@ -18,7 +18,7 @@ const root = repoRoot(import.meta.url);
 
 type Out = { path: string; js: string };
 type MErr = { message: string; start: number; end: number };
-type Res = { _tag: "Ok"; value: Out[] } | { _tag: "Err"; error: MErr };
+type Res = { _tag: "Ok"; value: Out[] } | { _tag: "Err"; error: MErr[] };
 
 let buildModules: (entry: string) => Res;
 
@@ -65,7 +65,7 @@ test("cross-module exhaustiveness fires: dropping an imported ctor arm fails", (
   );
   const r = buildModules(join(dir, "app.mochi"));
   expect(r._tag).toBe("Err");
-  if (r._tag === "Err") expect(r.error.message).toContain("non-exhaustive");
+  if (r._tag === "Err") expect(r.error[0]?.message).toContain("non-exhaustive");
 });
 
 test("reports a missing export against the import site", () => {
@@ -75,8 +75,8 @@ test("reports a missing export against the import site", () => {
   const r = buildModules(join(dir, "use.mochi"));
   expect(r._tag).toBe("Err");
   if (r._tag === "Err") {
-    expect(r.error.message).toContain("has no export 'nope'");
-    expect(r.error.end).toBeGreaterThan(r.error.start); // pinned to the name span
+    expect(r.error[0]?.message).toContain("has no export 'nope'");
+    expect(r.error[0]?.end).toBeGreaterThan(r.error[0]?.start ?? 0); // pinned to the name span
   }
 });
 
@@ -92,7 +92,7 @@ test("a named import does not leak sibling constructors (ADR 0082)", () => {
   );
   const r = buildModules(join(dir, "app.mochi"));
   expect(r._tag).toBe("Err");
-  if (r._tag === "Err") expect(r.error.message).toContain("unknown constructor 'Circle'");
+  if (r._tag === "Err") expect(r.error[0]?.message).toContain("unknown constructor 'Circle'");
 });
 
 test("same-name ctors from two deps collide at the second import (ADR 0082)", () => {
@@ -105,7 +105,7 @@ test("same-name ctors from two deps collide at the second import (ADR 0082)", ()
   );
   const r = buildModules(join(dir, "app.mochi"));
   expect(r._tag).toBe("Err");
-  if (r._tag === "Err") expect(r.error.message).toContain("duplicate constructor 'Empty'");
+  if (r._tag === "Err") expect(r.error[0]?.message).toContain("duplicate constructor 'Empty'");
 });
 
 // A record alias reached through `import * as` whose field names a SIBLING
@@ -160,7 +160,7 @@ const writeFixture = (files: Record<string, string>): string => {
 test("a nested alias resolves in the DECLARING module, not the importer", () => {
   const r = buildModules(join(writeFixture(NESTED_ALIAS), "app.mochi"));
   expect(r._tag).toBe("Ok");
-  if (r._tag === "Err") throw new Error(r.error.message);
+  if (r._tag === "Err") throw new Error(r.error.map((error) => error.message).join("\n"));
 });
 
 test("the TS driver agrees on the nested alias", async () => {

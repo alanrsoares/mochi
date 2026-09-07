@@ -88,11 +88,11 @@ export const createBootstrapRecoveryGraphCache = (): BootstrapRecoveryGraphCache
 export type BootstrapCore = {
   compile: (src: string) => BootstrapResult<string, BootstrapDiagnostic[]>;
   compileTs: (src: string, runtimeImport: string) => BootstrapResult<string, BootstrapDiagnostic[]>;
-  buildModules: (entry: string) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic>;
+  buildModules: (entry: string) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic[]>;
   buildModulesTs: (
     entry: string,
     runtimeImport: string,
-  ) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic>;
+  ) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic[]>;
   /** Parse the entry and every dependency through the frozen bootstrap graph. */
   loadGraph: (
     entry: string,

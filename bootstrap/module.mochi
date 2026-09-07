@@ -9,7 +9,7 @@
 // parts (b) and (c); this half only parses and orders.
 import { lex } from "./lexer.mochi"
 import { parse } from "./parser.mochi"
-import { checkWith } from "./check.mochi"
+import { checkAllWith, checkWith } from "./check.mochi"
 import { exportedRegistry, exportedCtorKeys } from "./ctors.mochi"
 import {
   inferProgramImports,
@@ -532,10 +532,77 @@ type RecoveryCtx = {
 
 type RecoveryGraphState = { ctx: RecoveryCtx, errors: [MErr] }
 
+// The recovery rail is the graph's diagnostic boundary: unlike strict emit it
+// keeps visiting later modules. When strict compilation fails, re-run only its
+// checker prefix with `checkAllWith` so one module's independent structural
+// errors are retained before placeholder exports let downstream modules proceed.
+// Recovery resolves imports twice on purpose. The `recovering: true` pass gives
+// the registry `checkAllWith` needs, but it swallows "'x' has no export 'y'" —
+// that is what placeholder schemes are FOR. So resolve strictly first, purely to
+// collect that diagnostic: without it, a module with both a missing import and a
+// checker error reports only the checker error, because this array replaces the
+// strict error the caller would otherwise have kept.
+// Whether every module this one imports FROM actually published its exports. A
+// dep that failed to compile publishes nothing, so each name taken from it reads
+// as missing — the cascade placeholder schemes exist to suppress. The strict
+// import pass below is only trustworthy once this holds.
+let depsPublished = (ctx, stmts, i, path) => switch Array.get(i, stmts) {
+  | None => true
+  | Some(Ast.SImport(_, from, _)) => Map.has(
+      resolveImport(path, from),
+      ctx.exportsByPath
+    ) && ctx->depsPublished(stmts, i + 1, path)
+  | Some(_) => ctx->depsPublished(stmts, i + 1, path)
+}
+
+// The empty accumulator stays inline at each call site, as at every other
+// `resolveImportsFrom` caller: hoisting it to a `let` strands `#{}` with no
+// parameter type to infer from, and the self-hosted TS emit stops typechecking.
+let checkErrorsRecovering = (ctx, loaded: Loaded) =>
+  let importErrors = ctx->depsPublished(loaded.stmts, 0, loaded.path)
+    ? switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
+      | Err(e) => [atPath(loaded.path, e)]
+      | Ok(_) => []
+    }
+    : [] in
+    switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, true) {
+      | Err(e) =>
+        // An error the recovering pass still raises is not import-shaped (a ctor
+        // clash, say) and stands alone — reporting `importErrors` beside it would
+        // double up on the same statement.
+        [atPath(loaded.path, e)]
+      | Ok(res) => switch checkAllWith(loaded.stmts, res.reg, res.quals) {
+          | Err(es) => Array.concat(
+              importErrors,
+              es |> map(e => atPath(loaded.path, e))
+            )
+          | Ok(_) => importErrors
+        }
+    }
+
+let sameErr = (a: MErr, b: MErr) =>
+  a.message == b.message && a.start == b.start && a.end == b.end
+
+// `e` is the strict rail's FIRST failure, `checks` the recovering rail's
+// independent ones — usually overlapping, since `e` is normally the first of
+// them. Union with a dedupe, so neither side can hide the other: `checks` alone
+// dropped an inference error like an unbound name (no checker error to report
+// it), while `[e]` alone dropped every check error after the first.
+let mergeRecovered = (e: MErr, checks) =>
+  Array.length(Array.filter(c => sameErr(c, e), checks)) > 0
+    ? checks
+    : Array.concat(checks, [e])
+
 let compileAllRecovering = (ctx, graph, errors, opts) => switch graph {
   | [] => { ctx, errors }
   | [m, ...rest] => switch ctx->compileOne(m, true, Array.length(rest) == 0, opts) {
-      | Err(e) => compileAllRecovering(ctx, rest, Array.append(e, errors), opts)
+      | Err(e) => let checks = ctx->checkErrorsRecovering(m) in
+          compileAllRecovering(
+            ctx,
+            rest,
+            Array.concat(errors, mergeRecovered(e, checks)),
+            opts
+          )
       | Ok(ctx1) => compileAllRecovering(ctx1, rest, errors, opts)
     }
 }
@@ -665,10 +732,17 @@ export let inferGraphTypesWith = (graph, opts: Opts) =>
 
 export let inferGraphTypes = graph => graph->inferGraphTypesWith(defaultOpts)
 
-/// buildModules : string -> Result [ModuleOutput] MErr
-/// Resolve the graph then compile it — one sync railway (host IO is sync).
-export let buildModulesWith = (entry, opts: Opts) =>
-  let? graph = entry->loadGraph() in graph->compileGraphWith(opts)
+/// buildModules : string -> Result [ModuleOutput] [MErr]
+/// Resolve the graph, collect every recoverable module diagnostic, then emit.
+/// Graph-load failures are singular but normalize to `[MErr]` at this public
+/// boundary, matching the single-file compiler railway.
+export let buildModulesWith = (entry, opts: Opts) => switch entry->loadGraph() {
+  | Err(e) => Err([e])
+  | Ok(graph) => let recovered = graph->compileGraphRecoveringWith(opts) in
+      Array.length(recovered.errors) == 0
+        ? graph->compileGraphWith(opts) |> Result.mapErr(e => [e])
+        : Err(recovered.errors)
+}
 
 export let buildModules = entry => entry->buildModulesWith(defaultOpts)
 
@@ -1030,10 +1104,25 @@ export let emitDtsForFileWith = (entry, runtimeImport, opts: Opts) =>
 export let emitDtsForFile = (entry, runtimeImport) =>
   entry->emitDtsForFileWith(runtimeImport, defaultOpts)
 
-/// buildModulesTs : string -> string -> Result [ModuleOutput] MErr
-export let buildModulesTsWith = (entry, runtimeImport, opts: Opts) =>
-  let? graph = entry->loadGraph() in
-    graph->compileGraphTsWith(runtimeImport, opts)
+/// buildModulesTs : string -> string -> Result [ModuleOutput] [MErr]
+/// Typed graph emit shares the recovery preflight with JS graph emit, so both
+/// CLI targets render the same complete diagnostic set.
+export let buildModulesTsWith = (entry, runtimeImport, opts: Opts) => switch entry->loadGraph() {
+  | Err(e) => Err([e])
+  | Ok(graph) =>
+    // The preflight runs the JS rail, whose `openFor` hands the ENTRY `opts.open`
+    // verbatim under `strictEntry`. Every TS path instead reads the entry's own
+    // `"use open"`, so preflighting with `strictEntry` on can reject an entry the
+    // TS compiler would accept — and then never call it. Clear the flag so both
+    // halves judge the entry by the same rule.
+    let recovered = graph->compileGraphRecoveringWith(
+      { ...opts, strictEntry: false }
+    ) in
+      Array.length(recovered.errors) == 0
+        ? graph->compileGraphTsWith(runtimeImport, opts)
+          |> Result.mapErr(e => [e])
+        : Err(recovered.errors)
+}
 
 export let buildModulesTs = (entry, runtimeImport) =>
   entry->buildModulesTsWith(runtimeImport, defaultOpts)

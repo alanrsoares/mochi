@@ -127,6 +127,20 @@ test("mochic build fails on a cross-module exhaustiveness gap, writes nothing", 
   expect(existsSync(join(dir, "bad2.js"))).toBe(false);
 });
 
+test("mochic build renders every independent graph checker diagnostic", () => {
+  writeFileSync(join(dir, "choice.mochi"), "export type Choice = One | Two\n");
+  writeFileSync(
+    join(dir, "many-graph-bad.mochi"),
+    'import { One, Two } from "./choice"\n' +
+      "let first = value => switch value { | One => 1 }\n" +
+      "let second = value => switch value { | Two => 2 }\n",
+  );
+  const { code, stderr } = runArgs("build", join(dir, "many-graph-bad.mochi"));
+  expect(code).not.toBe(0);
+  expect(stderr.match(/many-graph-bad\.mochi'/g)).toHaveLength(2);
+  expect(existsSync(join(dir, "many-graph-bad.js"))).toBe(false);
+});
+
 // ---- `mochic fmt [--write] <file>` — the self-hosted formatter -------------
 //
 // Byte parity with @mochi/dx's formatter is the subject of

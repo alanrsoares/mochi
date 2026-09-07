@@ -1,0 +1,3 @@
+import { One, Two } from "./choice.mochi"
+let first = value => switch value { | One => 1 }
+let second = value => switch value { | Two => 2 }

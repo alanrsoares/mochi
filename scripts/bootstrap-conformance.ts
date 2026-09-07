@@ -63,6 +63,8 @@ const graphDiagnostic = (entry: string, error: CompactDiagnostic) => ({
   end: error.end,
   entry: relative(fixtureRoot, entry),
 });
+const graphDiagnostics = (entry: string, errors: readonly CompactDiagnostic[]) =>
+  errors.map((error) => graphDiagnostic(entry, error));
 
 const typecheck = (id: string, source: string): string | null => {
   const dir = mkdtempSync(join(tmpdir(), "mochi-conformance-"));
@@ -78,8 +80,9 @@ const typecheck = (id: string, source: string): string | null => {
       "--noEmit",
       file,
     ]);
-    if (result.exitCode === 0) return null;
-    return resultError(id, (result.stdout.toString() + result.stderr.toString()).trim());
+    return result.exitCode === 0
+      ? null
+      : resultError(id, (result.stdout.toString() + result.stderr.toString()).trim());
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -110,80 +113,84 @@ const typecheckGraph = (id: string, entry: string, outputs: EmittedModule[]): st
       "bundler",
       ...files,
     ]);
-    if (result.exitCode === 0) return null;
-    return resultError(id, (result.stdout.toString() + result.stderr.toString()).trim());
+    return result.exitCode === 0
+      ? null
+      : resultError(id, (result.stdout.toString() + result.stderr.toString()).trim());
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 };
 
 const runCase = (test: Case): string | null => {
-  if (test.kind === "compile") {
-    const result = compileBootstrapSyncWith(text(test.source), options);
-    if (result._tag === "Err")
-      return resultError(
-        test.id,
-        `unexpected diagnostics ${JSON.stringify(compactDiagnostics(result.error))}`,
-      );
-    return result.value === text(test.expect)
-      ? null
-      : resultError(test.id, "emitted JavaScript differs");
-  }
-
-  if (test.kind === "diagnostic") {
-    const result = compileBootstrapSyncWith(text(test.source), options);
-    if (result._tag === "Ok") return resultError(test.id, "expected a diagnostic");
-    const actual = compactDiagnostics(result.error);
-    return JSON.stringify(actual) === JSON.stringify(expectedJson(test.expect))
-      ? null
-      : resultError(test.id, `diagnostic differs: ${JSON.stringify(actual)}`);
-  }
-
-  if (test.kind === "runtime") {
-    const result = compileBootstrapSyncWith(text(test.source), options);
-    if (result._tag === "Err")
-      return resultError(
-        test.id,
-        `unexpected diagnostics ${JSON.stringify(compactDiagnostics(result.error))}`,
-      );
-    const expected = expectedJson(test.expect) as Record<string, unknown>;
-    const names = Object.keys(expected);
-    const actual = evaluateRuntime(result.value, names);
-    return JSON.stringify(actual) === JSON.stringify(expected)
-      ? null
-      : resultError(test.id, `runtime result differs: ${JSON.stringify(actual)}`);
-  }
-
-  if (test.kind === "graph") {
-    const entry = join(fixtureRoot, test.entry);
-    const result = buildModulesBootstrapWith(entry, options);
-    if (result._tag === "Err")
-      return resultError(test.id, `unexpected diagnostic ${result.error.message}`);
-    const actual = graphOutput(entry, result.value);
-    return JSON.stringify(actual) === JSON.stringify(expectedJson(test.expect))
-      ? null
-      : resultError(test.id, `module output differs: ${JSON.stringify(actual)}`);
-  }
-
-  if (test.kind === "graph-diagnostic") {
-    const entry = join(fixtureRoot, test.entry);
-    const result = buildModulesBootstrapWith(entry, options);
-    if (result._tag === "Ok") return resultError(test.id, "expected a graph diagnostic");
-    const actual = graphDiagnostic(entry, result.error);
-    return JSON.stringify(actual) === JSON.stringify(expectedJson(test.expect))
-      ? null
-      : resultError(test.id, `graph diagnostic differs: ${JSON.stringify(actual)}`);
-  }
-
-  if (test.kind === "typed-ts-graph") {
-    const entry = join(fixtureRoot, test.entry);
-    const result = buildModulesTsBootstrapWith(entry, "@mochi/runtime", options);
-    if (result._tag === "Err")
-      return resultError(test.id, `unexpected diagnostic ${result.error.message}`);
-    const actual = graphOutput(entry, result.value);
-    if (JSON.stringify(actual) !== JSON.stringify(expectedJson(test.expect)))
-      return resultError(test.id, "emitted TypeScript graph differs");
-    return typecheckGraph(test.id, entry, result.value);
+  switch (test.kind) {
+    case "compile": {
+      const result = compileBootstrapSyncWith(text(test.source), options);
+      if (result._tag === "Err")
+        return resultError(
+          test.id,
+          `unexpected diagnostics ${JSON.stringify(compactDiagnostics(result.error))}`,
+        );
+      return result.value === text(test.expect)
+        ? null
+        : resultError(test.id, "emitted JavaScript differs");
+    }
+    case "diagnostic": {
+      const result = compileBootstrapSyncWith(text(test.source), options);
+      if (result._tag === "Ok") return resultError(test.id, "expected a diagnostic");
+      const actual = compactDiagnostics(result.error);
+      return JSON.stringify(actual) === JSON.stringify(expectedJson(test.expect))
+        ? null
+        : resultError(test.id, `diagnostic differs: ${JSON.stringify(actual)}`);
+    }
+    case "runtime": {
+      const result = compileBootstrapSyncWith(text(test.source), options);
+      if (result._tag === "Err")
+        return resultError(
+          test.id,
+          `unexpected diagnostics ${JSON.stringify(compactDiagnostics(result.error))}`,
+        );
+      const expected = expectedJson(test.expect) as Record<string, unknown>;
+      const names = Object.keys(expected);
+      const actual = evaluateRuntime(result.value, names);
+      return JSON.stringify(actual) === JSON.stringify(expected)
+        ? null
+        : resultError(test.id, `runtime result differs: ${JSON.stringify(actual)}`);
+    }
+    case "graph": {
+      const entry = join(fixtureRoot, test.entry);
+      const result = buildModulesBootstrapWith(entry, options);
+      if (result._tag === "Err")
+        return resultError(
+          test.id,
+          `unexpected diagnostics ${JSON.stringify(compactDiagnostics(result.error))}`,
+        );
+      const actual = graphOutput(entry, result.value);
+      return JSON.stringify(actual) === JSON.stringify(expectedJson(test.expect))
+        ? null
+        : resultError(test.id, `module output differs: ${JSON.stringify(actual)}`);
+    }
+    case "graph-diagnostic": {
+      const entry = join(fixtureRoot, test.entry);
+      const result = buildModulesBootstrapWith(entry, options);
+      if (result._tag === "Ok") return resultError(test.id, "expected a graph diagnostic");
+      const actual = graphDiagnostics(entry, result.error);
+      return JSON.stringify(actual) === JSON.stringify(expectedJson(test.expect))
+        ? null
+        : resultError(test.id, `graph diagnostic differs: ${JSON.stringify(actual)}`);
+    }
+    case "typed-ts-graph": {
+      const entry = join(fixtureRoot, test.entry);
+      const result = buildModulesTsBootstrapWith(entry, "@mochi/runtime", options);
+      if (result._tag === "Err")
+        return resultError(
+          test.id,
+          `unexpected diagnostics ${JSON.stringify(compactDiagnostics(result.error))}`,
+        );
+      const actual = graphOutput(entry, result.value);
+      if (JSON.stringify(actual) !== JSON.stringify(expectedJson(test.expect)))
+        return resultError(test.id, "emitted TypeScript graph differs");
+      return typecheckGraph(test.id, entry, result.value);
+    }
   }
 
   const result = compileTsBootstrapSyncWith(text(test.source), "@mochi/runtime", options);
@@ -197,54 +204,54 @@ const runCase = (test: Case): string | null => {
 };
 
 const candidateFor = (test: Case): { path: string; contents: string } => {
-  if (test.kind === "compile") {
-    const result = compileBootstrapSyncWith(text(test.source), options);
-    if (result._tag === "Err")
-      throw new Error(resultError(test.id, JSON.stringify(compactDiagnostics(result.error))));
-    return { path: test.expect, contents: result.value };
-  }
-
-  if (test.kind === "diagnostic") {
-    const result = compileBootstrapSyncWith(text(test.source), options);
-    if (result._tag === "Ok") throw new Error(resultError(test.id, "expected a diagnostic"));
-    return {
-      path: test.expect,
-      contents: json(compactDiagnostics(result.error)),
-    };
-  }
-
-  if (test.kind === "runtime") {
-    const result = compileBootstrapSyncWith(text(test.source), options);
-    if (result._tag === "Err")
-      throw new Error(resultError(test.id, JSON.stringify(compactDiagnostics(result.error))));
-    const expected = expectedJson(test.expect) as Record<string, unknown>;
-    const names = Object.keys(expected);
-    const actual = evaluateRuntime(result.value, names);
-    return { path: test.expect, contents: json(actual) };
-  }
-
-  if (test.kind === "graph") {
-    const entry = join(fixtureRoot, test.entry);
-    const result = buildModulesBootstrapWith(entry, options);
-    if (result._tag === "Err") throw new Error(resultError(test.id, result.error.message));
-    return {
-      path: test.expect,
-      contents: json(graphOutput(entry, result.value)),
-    };
-  }
-
-  if (test.kind === "graph-diagnostic") {
-    const entry = join(fixtureRoot, test.entry);
-    const result = buildModulesBootstrapWith(entry, options);
-    if (result._tag === "Ok") throw new Error(resultError(test.id, "expected a graph diagnostic"));
-    return { path: test.expect, contents: json(graphDiagnostic(entry, result.error)) };
-  }
-
-  if (test.kind === "typed-ts-graph") {
-    const entry = join(fixtureRoot, test.entry);
-    const result = buildModulesTsBootstrapWith(entry, "@mochi/runtime", options);
-    if (result._tag === "Err") throw new Error(resultError(test.id, result.error.message));
-    return { path: test.expect, contents: json(graphOutput(entry, result.value)) };
+  switch (test.kind) {
+    case "compile": {
+      const result = compileBootstrapSyncWith(text(test.source), options);
+      if (result._tag === "Err")
+        throw new Error(resultError(test.id, JSON.stringify(compactDiagnostics(result.error))));
+      return { path: test.expect, contents: result.value };
+    }
+    case "diagnostic": {
+      const result = compileBootstrapSyncWith(text(test.source), options);
+      if (result._tag === "Ok") throw new Error(resultError(test.id, "expected a diagnostic"));
+      return {
+        path: test.expect,
+        contents: json(compactDiagnostics(result.error)),
+      };
+    }
+    case "runtime": {
+      const result = compileBootstrapSyncWith(text(test.source), options);
+      if (result._tag === "Err")
+        throw new Error(resultError(test.id, JSON.stringify(compactDiagnostics(result.error))));
+      const expected = expectedJson(test.expect) as Record<string, unknown>;
+      const names = Object.keys(expected);
+      const actual = evaluateRuntime(result.value, names);
+      return { path: test.expect, contents: json(actual) };
+    }
+    case "graph": {
+      const entry = join(fixtureRoot, test.entry);
+      const result = buildModulesBootstrapWith(entry, options);
+      if (result._tag === "Err")
+        throw new Error(resultError(test.id, JSON.stringify(compactDiagnostics(result.error))));
+      return {
+        path: test.expect,
+        contents: json(graphOutput(entry, result.value)),
+      };
+    }
+    case "graph-diagnostic": {
+      const entry = join(fixtureRoot, test.entry);
+      const result = buildModulesBootstrapWith(entry, options);
+      if (result._tag === "Ok")
+        throw new Error(resultError(test.id, "expected a graph diagnostic"));
+      return { path: test.expect, contents: json(graphDiagnostics(entry, result.error)) };
+    }
+    case "typed-ts-graph": {
+      const entry = join(fixtureRoot, test.entry);
+      const result = buildModulesTsBootstrapWith(entry, "@mochi/runtime", options);
+      if (result._tag === "Err")
+        throw new Error(resultError(test.id, JSON.stringify(compactDiagnostics(result.error))));
+      return { path: test.expect, contents: json(graphOutput(entry, result.value)) };
+    }
   }
 
   const result = compileTsBootstrapSyncWith(text(test.source), "@mochi/runtime", options);

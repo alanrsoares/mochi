@@ -213,25 +213,27 @@ const inferTernary = (e: TernaryExpr, ctx: Ctx): Result<Type, Diagnostic> => {
  * A record param types as an open row (duck typing), like a lambda's.
  */
 const bindParam = (p: LamParam, env: Env, ctx: Ctx): Type => {
-  if (p.kind === "name") {
-    const t = freshVar(ctx.fresh);
-    env.set(p.name, mono(t));
-    return t;
-  }
-  if (p.kind === "ptuple") {
-    const elems = p.names.map((n) => {
+  switch (p.kind) {
+    case "name": {
       const t = freshVar(ctx.fresh);
-      env.set(n, mono(t));
+      env.set(p.name, mono(t));
       return t;
-    });
-    for (let i = 0; i < p.names.length; i++)
-      ctx.record?.(p.nameSpans[i]!, elems[i]!, { kind: "parameter", name: p.names[i]! });
-    return tTuple(elems);
-  }
-  if (p.kind === "labeled") {
-    const t = freshVar(ctx.fresh);
-    env.set(p.name, mono(t));
-    return t;
+    }
+    case "ptuple": {
+      const elems = p.names.map((n) => {
+        const t = freshVar(ctx.fresh);
+        env.set(n, mono(t));
+        return t;
+      });
+      for (let i = 0; i < p.names.length; i++)
+        ctx.record?.(p.nameSpans[i]!, elems[i]!, { kind: "parameter", name: p.names[i]! });
+      return tTuple(elems);
+    }
+    case "labeled": {
+      const t = freshVar(ctx.fresh);
+      env.set(p.name, mono(t));
+      return t;
+    }
   }
   let row: Row = freshRowVar(ctx.fresh);
   for (let i = 0; i < p.fields.length; i++) {
@@ -278,8 +280,7 @@ function inferTwoSlotBind(
   const payloadT = freshVar(ctx.fresh);
   const errT = freshVar(ctx.fresh);
   const uv = u(valT, tCon(ctor, [payloadT, errT]), ctx, e.value.span);
-  if (isErr(uv)) return uv;
-  return inferBindBody(e, ctx, payloadT, (resT) => tCon(ctor, [resT, errT]));
+  return isErr(uv) ? uv : inferBindBody(e, ctx, payloadT, (resT) => tCon(ctor, [resT, errT]));
 }
 
 /**
@@ -301,8 +302,7 @@ function inferLetBind(e: LetBindExpr, ctx: Ctx): Result<Type, Diagnostic> {
     e.monad = "Option";
     const payloadT = freshVar(ctx.fresh);
     const uv = u(valT.value, tCon("Option", [payloadT]), ctx, e.value.span);
-    if (isErr(uv)) return uv;
-    return inferBindBody(e, ctx, payloadT, (resT) => tCon("Option", [resT]));
+    return isErr(uv) ? uv : inferBindBody(e, ctx, payloadT, (resT) => tCon("Option", [resT]));
   }
   return err(
     typeErr(
@@ -447,8 +447,9 @@ function inferLambda(e: LambdaExpr, ctx: Ctx): Result<Type, Diagnostic> {
   }
   // Nullary `() => T` is `unit -> T` (ADR 0014) — empty reduceRight would erase
   // the arrow and leave leaf actions / thunks looking like plain values.
-  if (paramTypes.length === 0) return ok(tArrow(tUnit, bodyT.value));
-  return ok(paramTypes.reduceRight((acc, pt) => tArrow(pt, acc), bodyT.value));
+  return paramTypes.length === 0
+    ? ok(tArrow(tUnit, bodyT.value))
+    : ok(paramTypes.reduceRight((acc, pt) => tArrow(pt, acc), bodyT.value));
 }
 
 function inferLetIn(e: LetInExpr, ctx: Ctx): Result<Type, Diagnostic> {

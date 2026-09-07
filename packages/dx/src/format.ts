@@ -866,8 +866,9 @@ const labeledFieldD = (f: Field): Doc =>
 const callArgDocs = (e: CallExpr): Doc[] => {
   if (e.origin !== "labeled") return e.args.map(exprD);
   const last = e.args[e.args.length - 1];
-  if (last?.kind !== "record" || last.spread) return e.args.map(exprD);
-  return [...e.args.slice(0, -1).map(exprD), ...last.fields.map(labeledFieldD)];
+  return last?.kind !== "record" || last.spread
+    ? e.args.map(exprD)
+    : [...e.args.slice(0, -1).map(exprD), ...last.fields.map(labeledFieldD)];
 };
 
 const callD = (e: CallExpr, asCallee = false): Doc => {
@@ -1216,8 +1217,7 @@ const etaPartial = (e: LambdaExpr): CallExpr | null => {
   if (!isInert(body.fn) || prefix.some((a) => !isInert(a))) return null;
   if (mentionsRef(body.fn, name) || prefix.some((a) => mentionsRef(a, name))) return null;
   const arity = etaCalleeArity(body.fn);
-  if (arity === null || body.args.length !== arity) return null;
-  return { ...body, args: prefix };
+  return arity === null || body.args.length !== arity ? null : { ...body, args: prefix };
 };
 
 /**

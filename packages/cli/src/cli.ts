@@ -164,7 +164,7 @@ await match(cmd)
         });
     if (result._tag === "Err") {
       const src = await Bun.file(entry).text();
-      dieBootstrap(entry, src, [result.error]);
+      dieBootstrap(entry, src, result.error);
     }
     const outputs = result.value;
     const ext = emitTs ? ".ts" : ".js";

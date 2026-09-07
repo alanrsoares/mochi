@@ -342,9 +342,7 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
     };
   }
 
-  function parseLamParam(): LamParam {
-    return peek().t === "tilde" ? parseLabeledParam() : parseParam();
-  }
+  const parseLamParam = (): LamParam => (peek().t === "tilde" ? parseLabeledParam() : parseParam());
 
   function checkLabeledTrailing(params: LamParam[]): void {
     let seen = false;
@@ -411,18 +409,19 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
         pos.push(p.expr);
       }
     }
-    if (labs.length === 0) return { args: pos };
-    return {
-      args: [
-        ...pos,
-        {
-          kind: "record",
-          fields: labs.map((l) => ({ name: l.name, nameSpan: l.nameSpan, value: l.value })),
-          span: spanning(labs[0]!.nameSpan, labs[labs.length - 1]!.value.span),
-        },
-      ],
-      origin: "labeled",
-    };
+    return labs.length === 0
+      ? { args: pos }
+      : {
+          args: [
+            ...pos,
+            {
+              kind: "record",
+              fields: labs.map((l) => ({ name: l.name, nameSpan: l.nameSpan, value: l.value })),
+              span: spanning(labs[0]!.nameSpan, labs[labs.length - 1]!.value.span),
+            },
+          ],
+          origin: "labeled",
+        };
   }
 
   /**

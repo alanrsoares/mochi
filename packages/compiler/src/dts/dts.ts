@@ -414,10 +414,10 @@ function curriedOverloads(head: string, params: string[], ret: string): string {
  * 2^(n-1) lines; this costs one (ADR 0093). Only CONCRETE bindings can use it:
  * `infer` erases a generic head, so a generic binding keeps the nested arrow.
  */
-export function curriedFnType(params: readonly string[], ret: string): string {
-  if (params.length <= 1) return `(${params.join(", ")}) => ${ret}`;
-  return `_Curry<[${params.join(", ")}], ${ret}>`;
-}
+export const curriedFnType = (params: readonly string[], ret: string): string =>
+  params.length <= 1
+    ? `(${params.join(", ")}) => ${ret}`
+    : `_Curry<[${params.join(", ")}], ${ret}>`;
 
 /**
  * A prelude builtin's HM type rendered for the typed runtime (ADR 0026). The JS

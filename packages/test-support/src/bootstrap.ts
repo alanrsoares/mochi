@@ -149,7 +149,10 @@ const buildGraph = (): string => {
       moduleExt: ".js",
       strictEntry: false,
     });
-    if (built._tag === "Err") throw new Error(`bootstrap build failed: ${built.error.message}`);
+    if (built._tag === "Err")
+      throw new Error(
+        `bootstrap build failed: ${built.error.map((error) => error.message).join("\n")}`,
+      );
     for (const output of built.value) {
       writeFileSync(output.path.replace(/\.mochi$/, ".js"), output.js);
     }

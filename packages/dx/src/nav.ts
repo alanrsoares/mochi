@@ -289,8 +289,9 @@ const bootstrapTypeDefinitionAt = async (
   const entry = inferred.value.find((module) => module.path === entryPath);
   const hit = entry && tightestHit(entry.types, offset, spanContainsClosed);
   const name = hit && hit._tag === "Some" ? bootstrapNominalName(hit.value.display) : null;
-  if (!name) return null;
-  return (await bootstrapOriginsForEntry(path, src, readFile)).type.get(name) ?? null;
+  return !name
+    ? null
+    : ((await bootstrapOriginsForEntry(path, src, readFile)).type.get(name) ?? null);
 };
 
 /**

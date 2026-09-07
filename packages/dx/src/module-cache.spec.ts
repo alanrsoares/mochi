@@ -60,10 +60,7 @@ test("a shared bootstrap graph cache does not change completion or go-to-type", 
     "/app.mochi",
     recordSrc,
     recordSrc.length,
-    async (path) => {
-      if (path === "/point.mochi") return "export let point = { x: 1, y: 2 }";
-      return read(path);
-    },
+    async (path) => (path === "/point.mochi" ? "export let point = { x: 1, y: 2 }" : read(path)),
     { bootstrapCache },
   );
   expect(items.map((item) => item.label)).toEqual(["x", "y"]);

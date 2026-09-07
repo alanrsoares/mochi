@@ -212,7 +212,7 @@ describe("intrinsic HTML element prop validation (ADR 0096)", () => {
   });
 
   it("rejects unknown attributes on intrinsic tags with did-you-mean suggestion", () => {
-    const r = compile(`let btn = <button disbaled />`);
+    const r = compile("let btn = <button disbaled />");
     expect(isErr(r)).toBe(true);
     if (isErr(r)) {
       expect(
@@ -242,7 +242,7 @@ describe("intrinsic HTML element prop validation (ADR 0096)", () => {
       );
     }
 
-    const onclickErr = compile(`let el = <button onclick={() => ()} />`);
+    const onclickErr = compile("let el = <button onclick={() => ()} />");
     expect(isErr(onclickErr)).toBe(true);
     if (isErr(onclickErr)) {
       expect(

@@ -67,8 +67,7 @@ const hasJsxOrigin = (node: unknown): boolean => {
   if (Array.isArray(node)) return node.some(hasJsxOrigin);
   if (typeof node !== "object" || node === null) return false;
   const rec = node as Record<string, unknown>;
-  if (rec.origin === "jsx") return true;
-  return Object.values(rec).some(hasJsxOrigin);
+  return rec.origin === "jsx" ? true : Object.values(rec).some(hasJsxOrigin);
 };
 
 const exprSlices = (file: string): string[] => {

@@ -8,12 +8,13 @@
  *
  * Usage: bun scripts/tui-runner.ts [check | check:full | <script>]
  *          [--filter <glob>] [--bail] [--timeout <ms>]
- *          [--compact] [--tail <n>]
+ *          [--jobs <n>] [--compact] [--tail <n>]
  *
  * `--compact` is the machine-readable mode: no colour, no cursor tricks, no
  * per-line prefixes, and output only from the tasks that actually failed —
  * capped to the last `--tail` lines each. A green run prints one line total.
  */
+import { availableParallelism } from "node:os";
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import { match } from "@onrails/pattern";
@@ -46,6 +47,7 @@ type Options = {
   readonly timeout: number;
   readonly compact: boolean;
   readonly tail: number;
+  readonly jobs: number;
 };
 
 const ROOT = dirname(import.meta.dir);
@@ -53,12 +55,21 @@ const ROOT = dirname(import.meta.dir);
 /** Generous by design — this is a wedge detector, not a performance budget. */
 const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
 
+/**
+ * How many tasks may be in flight. On a dev box this exceeds the task count, so
+ * the gate still starts everything at once; on a 4-vCPU CI runner it stops
+ * `check:full` from putting eleven tasks — several of them CPU-bound compilers —
+ * on four cores, where the one task that cannot self-parallelise (`test:full` is
+ * `--parallel=1` by design) starves and eventually trips `--timeout`.
+ */
+const DEFAULT_JOBS = availableParallelism();
+
 /** Failing tools put the verdict last, so the tail is the part worth spending tokens on. */
 const DEFAULT_TAIL_LINES = 40;
 
 const USAGE =
   "usage: bun scripts/tui-runner.ts [check | check:full | <script>] " +
-  "[--filter <glob>] [--bail] [--timeout <ms>] [--compact] [--tail <n>]";
+  "[--filter <glob>] [--bail] [--timeout <ms>] [--jobs <n>] [--compact] [--tail <n>]";
 
 /** `never` return, so the `Err` branch below needs no value of its own. */
 const usageExit = (message: string): never => {
@@ -82,6 +93,7 @@ const readOptions = (argv: readonly string[]): Options => {
           timeout: { type: "string" },
           compact: { type: "boolean", default: false },
           tail: { type: "string" },
+          jobs: { type: "string" },
         },
       }),
     (error) => (error instanceof Error ? error.message : String(error)),
@@ -90,6 +102,7 @@ const readOptions = (argv: readonly string[]): Options => {
   const { values, positionals } = matchResult(parse(), (parsed) => parsed, usageExit);
   const timeout = Number(values.timeout ?? DEFAULT_TIMEOUT_MS);
   const tail = Number(values.tail ?? DEFAULT_TAIL_LINES);
+  const jobs = Number(values.jobs ?? DEFAULT_JOBS);
   return {
     target: positionals[0] ?? "check",
     filter: values.filter ?? null,
@@ -98,6 +111,7 @@ const readOptions = (argv: readonly string[]): Options => {
     // `--tail 0` means "no cap"; anything unparseable falls back to the default.
     compact: values.compact,
     tail: Number.isFinite(tail) && tail >= 0 ? tail : DEFAULT_TAIL_LINES,
+    jobs: Number.isFinite(jobs) && jobs >= 1 ? Math.floor(jobs) : DEFAULT_JOBS,
   };
 };
 
@@ -222,8 +236,9 @@ let done = false;
  */
 const fit = (text: string): string => {
   const max = columns() - 1;
-  if (Bun.stringWidth(text) <= max) return text;
-  return `${Bun.stripANSI(text).slice(0, Math.max(0, max - 1))}…`;
+  return Bun.stringWidth(text) <= max
+    ? text
+    : `${Bun.stripANSI(text).slice(0, Math.max(0, max - 1))}…`;
 };
 
 /**
@@ -611,6 +626,51 @@ const buildTasks = async (opts: Options): Promise<TaskSpec[]> => {
   return specs.map((spec, i) => ({ ...spec, color: taskColor(i) }));
 };
 
+// ── scheduling ───────────────────────────────────────────────────────────────
+
+/**
+ * Start order, not priority — a long pole queued behind the short ones sets the
+ * wall time of the whole gate. `test:full` is the longest by a wide margin,
+ * then the bootstrap north-stars; package `check`s outrank the root one-liners.
+ */
+const startWeight = (name: string): number =>
+  name.startsWith("test")
+    ? 3
+    : name.startsWith("bootstrap:") || name.startsWith("seed:")
+      ? 2
+      : name.includes(":")
+        ? 1
+        : 0;
+
+/**
+ * Run every task, at most `opts.jobs` at a time, heaviest started first.
+ * Results come back in TASK order regardless of completion order, so the summary
+ * and the pinned block stay keyed to the plan the run announced.
+ */
+const runPooled = async (
+  tasks: readonly TaskSpec[],
+  opts: Options,
+): Promise<readonly TaskResult[]> => {
+  const queue = tasks
+    .map((task, index) => ({ task, index }))
+    .toSorted((a, b) => startWeight(b.task.name) - startWeight(a.task.name));
+
+  const settled = new Map<number, TaskResult>();
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    // `next++` is atomic here: one thread, and no await between read and bump.
+    while (next < queue.length) {
+      const { task, index } = queue[next++] as { task: TaskSpec; index: number };
+      settled.set(index, await runTask(task, opts));
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(opts.jobs, queue.length) }, () => worker()));
+  return tasks.map(
+    (task, index) => settled.get(index) ?? { name: task.name, outcome: "cancelled", ms: 0 },
+  );
+};
+
 // ── summary ──────────────────────────────────────────────────────────────────
 
 /**
@@ -682,7 +742,7 @@ const main = async (): Promise<void> => {
     : null;
 
   try {
-    const results = await Promise.all(tasks.map((task) => runTask(task, opts)));
+    const results = await runPooled(tasks, opts);
     const failed = results.filter((r) => r.outcome === "failed" || r.outcome === "timeout");
     const passed = results.filter((r) => r.outcome === "passed");
     const cancelled = results.length - failed.length - passed.length;

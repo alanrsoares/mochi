@@ -360,17 +360,22 @@ const opt = <T>(o: Al, f: (v: Al) => T): T | null => (o._tag === "Some" ? f(o.va
 const aParam = (p: Al): Canon => {
   // `LPSpanned` only carries the per-name spans the canonical shape drops (the TS
   // mirror keeps them inline on each variant); unwrap it before comparing.
-  if (p._tag === "LPSpanned") return aParam(p.param as Al);
-  if (p._tag === "LPName") return { kind: "name", name: p.name, annot: opt(p.annot, aTy) };
-  if (p._tag === "LPRecord") return { kind: "precord", fields: p.fields };
-  if (p._tag === "LPLabeled")
-    return {
-      kind: "labeled",
-      name: p.name,
-      annot: opt(p.annot, aTy),
-      optional: p.optional,
-      default: opt(p.defaultValue, aExpr),
-    };
+  switch (p._tag) {
+    case "LPSpanned":
+      return aParam(p.param as Al);
+    case "LPName":
+      return { kind: "name", name: p.name, annot: opt(p.annot, aTy) };
+    case "LPRecord":
+      return { kind: "precord", fields: p.fields };
+    case "LPLabeled":
+      return {
+        kind: "labeled",
+        name: p.name,
+        annot: opt(p.annot, aTy),
+        optional: p.optional,
+        default: opt(p.defaultValue, aExpr),
+      };
+  }
   return { kind: "ptuple", names: p.names };
 };
 
