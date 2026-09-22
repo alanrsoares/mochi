@@ -1,7 +1,6 @@
-import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
+import * as seed from "../../../../bootstrap/seed/compile.bundle.mjs";
 import type { BootstrapDiagnostic, BootstrapInferResult, BootstrapResult } from "./index.ts";
-import { type BootstrapOptions, defaultBootstrapOptions } from "./module.ts";
+import { type BootstrapOptions, defaultBootstrapOptions } from "./options.ts";
 
 type SeedCompile = {
   compileWith: (
@@ -19,15 +18,13 @@ type SeedCompile = {
   ) => BootstrapResult<BootstrapInferResult, BootstrapDiagnostic[]>;
 };
 
-const seed = createRequire(import.meta.url)(
-  fileURLToPath(new URL("../../../../bootstrap/seed/compile.bundle.cjs", import.meta.url)),
-) as SeedCompile;
+const seedCompile = seed as unknown as SeedCompile;
 
 /** Synchronous seam for integrations with sync transform hooks. */
 export const compileBootstrapSyncWith = (
   src: string,
   opts: BootstrapOptions,
-): BootstrapResult<string, BootstrapDiagnostic[]> => seed.compileWith(src, opts);
+): BootstrapResult<string, BootstrapDiagnostic[]> => seedCompile.compileWith(src, opts);
 
 export const compileBootstrapSync = (src: string): BootstrapResult<string, BootstrapDiagnostic[]> =>
   compileBootstrapSyncWith(src, defaultBootstrapOptions);
@@ -36,7 +33,8 @@ export const compileTsBootstrapSyncWith = (
   src: string,
   runtimeImport: string,
   opts: BootstrapOptions,
-): BootstrapResult<string, BootstrapDiagnostic[]> => seed.compileTsWith(src, runtimeImport, opts);
+): BootstrapResult<string, BootstrapDiagnostic[]> =>
+  seedCompile.compileTsWith(src, runtimeImport, opts);
 
 export const compileTsBootstrapSync = (
   src: string,
@@ -47,4 +45,4 @@ export const compileTsBootstrapSync = (
 export const inferTypesBootstrapSync = (
   src: string,
 ): BootstrapResult<BootstrapInferResult, BootstrapDiagnostic[]> =>
-  seed.inferTypesWith(src, defaultBootstrapOptions);
+  seedCompile.inferTypesWith(src, defaultBootstrapOptions);
