@@ -49,17 +49,19 @@ const maybeWarnRestricted = (cfg: WorkspaceConfiguration): void => {
   );
 };
 
+const BUN_BIN = process.platform === "win32" ? "bun.exe" : "bun";
+
 /** Absolute `bun` binary. GUI apps often lack `~/.bun/bin` on PATH. */
 const resolveBun = (): string | undefined => {
   const fromEnv = process.env.MOCHI_BUN;
   if (fromEnv && existsSync(fromEnv)) return fromEnv;
   const dirs = (process.env.PATH ?? "").split(path.delimiter);
   for (const dir of dirs) {
-    const candidate = path.join(dir, "bun");
-    if (candidate && existsSync(candidate)) return candidate;
+    const candidate = path.join(dir, BUN_BIN);
+    if (existsSync(candidate)) return candidate;
   }
   const fallbacks = [
-    path.join(homedir(), ".bun", "bin", "bun"),
+    path.join(homedir(), ".bun", "bin", BUN_BIN),
     "/opt/homebrew/bin/bun",
     "/usr/local/bin/bun",
   ];
