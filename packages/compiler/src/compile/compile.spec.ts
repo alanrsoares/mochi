@@ -16,6 +16,15 @@ test("compile is strict by default and suggests a close binding", () => {
   expect(r.error[0]!.suggestions?.[0]?.replaceWith).toBe("count");
 });
 
+test("open mode keeps help when a binder does not cover the use", () => {
+  const r = compile("let go = () => {\n  let n = 1 in f(n);\n  g(n)\n}", { open: true });
+  expect(isErr(r)).toBe(true);
+  if (!isErr(r)) return;
+  expect(r.error[0]!.message).toBe("'n' is not in scope here");
+  expect(r.error[0]!.help).toContain("bound elsewhere");
+  expect(r.error[0]!.suggestions).toBeUndefined();
+});
+
 test("open-world inference requires an explicit flag or file directive", () => {
   expect(isErr(compile("let value = browserGlobal"))).toBe(true);
   expect(isErr(compile("let value = browserGlobal", { open: true }))).toBe(false);

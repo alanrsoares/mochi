@@ -174,7 +174,7 @@ const toDiagnostic = (d: BootstrapDiagnostic): Diagnostic => {
  * list still runs the TypeScript railway: bootstrap compile takes no plugin
  * argument yet.
  *
- * Bootstrap diagnostics win when they carry a suggestion. Otherwise a
+ * Bootstrap diagnostics win when they carry help or a suggestion. Otherwise a
  * TypeScript pass still reports what the self-hosted graph does not yet:
  * alias folding, every parse diagnostic, reserved namespaces such as Task,
  * and intrinsic JSX prop checks.
@@ -190,7 +190,8 @@ export function compile(src: string, opts: CompileOptions = {}): Result<string, 
   });
   if (compiled._tag === "Err") {
     const diags = compiled.error.map(toDiagnostic);
-    if (diags.some((d) => (d.suggestions?.length ?? 0) > 0)) return err(diags);
+    if (diags.some((d) => d.help !== undefined || (d.suggestions?.length ?? 0) > 0))
+      return err(diags);
     const ts = compileWithTsCore(src, opts);
     return isErr(ts) ? ts : err(diags);
   }
