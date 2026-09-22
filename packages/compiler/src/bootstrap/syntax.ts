@@ -1,5 +1,4 @@
-import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
+import { loadSeed } from "./seed-path.ts";
 
 type SeedSyntax = {
   lex: (src: string) => unknown;
@@ -7,9 +6,7 @@ type SeedSyntax = {
   parseRecovering: (tokens: unknown, plugins?: unknown) => unknown;
 };
 
-const seed = createRequire(import.meta.url)(
-  fileURLToPath(new URL("../../../../bootstrap/seed/syntax.bundle.cjs", import.meta.url)),
-) as SeedSyntax;
+const seed = loadSeed<SeedSyntax>("syntax.bundle.cjs");
 
 export const lex = seed.lex;
 export const parse = seed.parse;

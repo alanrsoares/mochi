@@ -28,7 +28,15 @@ extern die : string -> a = "./host.mjs" "die"
 extern formatError : string -> string -> Diag -> string = "./host.mjs" "formatError"
 
 let formatErrors = (path, src, errors) =>
-  Str.join("\n", errors |> map(e => path->formatError(src, e)))
+  Str.join(
+    "\n",
+    errors
+      |> map(e =>
+        path->formatError(
+          src,
+          { message: e.message, start: e.start, end: e.end }
+        ))
+  )
 
 let formatModuleErrors = errors => Str.join("\n", errors |> map(e => e.message))
 

@@ -1,5 +1,3 @@
-import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
 import type {
   BootstrapDiagnostic,
   BootstrapExportOrigins,
@@ -60,6 +58,7 @@ import {
   defaultBootstrapOptions,
   editorBootstrapOptions,
 } from "./options.ts";
+import { loadSeed } from "./seed-path.ts";
 
 export type { BootstrapOptions };
 export { defaultBootstrapOptions, editorBootstrapOptions };
@@ -71,9 +70,7 @@ export type BootstrapGraphRecovery = {
   errors: BootstrapDiagnostic[];
 };
 
-const seed = createRequire(import.meta.url)(
-  fileURLToPath(new URL("../../../../bootstrap/seed/module.bundle.cjs", import.meta.url)),
-) as SeedModule;
+const seed = loadSeed<SeedModule>("module.bundle.cjs");
 
 export const buildModulesBootstrapWith = (
   entry: string,

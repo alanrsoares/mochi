@@ -1,5 +1,11 @@
 // VS Code / Cursor extension entry point. Spawns the bundled mochi language
-// server over IPC and wires it to `.mochi` documents.
+// server and wires it to `.mochi` documents.
+//
+// The server is a CJS bundle, but the frozen seed it loads (`bootstrap/seed/*.bundle.cjs`)
+// is Bun's module format. Electron's Node cannot execute that, so the server
+// runs under Bun. Stdio, not Node IPC: Bun is spawned, not forked.
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 import * as path from "node:path";
 import {
   commands,
@@ -43,11 +49,37 @@ const maybeWarnRestricted = (cfg: WorkspaceConfiguration): void => {
   );
 };
 
+const BUN_BIN = process.platform === "win32" ? "bun.exe" : "bun";
+
+/** Absolute `bun` binary. GUI apps often lack `~/.bun/bin` on PATH. */
+const resolveBun = (): string | undefined => {
+  const fromEnv = process.env.MOCHI_BUN;
+  if (fromEnv && existsSync(fromEnv)) return fromEnv;
+  const dirs = (process.env.PATH ?? "").split(path.delimiter);
+  for (const dir of dirs) {
+    const candidate = path.join(dir, BUN_BIN);
+    if (existsSync(candidate)) return candidate;
+  }
+  const fallbacks = [
+    path.join(homedir(), ".bun", "bin", BUN_BIN),
+    "/opt/homebrew/bin/bun",
+    "/usr/local/bin/bun",
+  ];
+  return fallbacks.find((candidate) => existsSync(candidate));
+};
+
 const startLanguageClient = (context: ExtensionContext): void => {
+  const bun = resolveBun();
+  if (!bun) {
+    void window.showErrorMessage(
+      "mochi: language server needs Bun. Install it from https://bun.sh, or set MOCHI_BUN to the bun binary.",
+    );
+    return;
+  }
   const module = context.asAbsolutePath(path.join("out", "server.js"));
   const serverOptions: ServerOptions = {
-    run: { module, transport: TransportKind.ipc },
-    debug: { module, transport: TransportKind.ipc, options: { execArgv: ["--nolazy"] } },
+    run: { module, runtime: bun, transport: TransportKind.stdio },
+    debug: { module, runtime: bun, transport: TransportKind.stdio },
   };
   // Forward mochi.plugins.ts / .mjs create/change/delete events so the server
   // can hot-reload the vendor-plugin list without an LSP restart.

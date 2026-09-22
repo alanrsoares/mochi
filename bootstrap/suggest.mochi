@@ -1,0 +1,68 @@
+// Did-you-mean for unbound names. Ports `src/infer/suggest.ts`: Levenshtein
+// distance, same case class, budget `max(1, floor(len / 3))`. A tie keeps the
+// earlier candidate (`d < best`, not `<=`).
+
+let at = (xs, i, fallback) => switch Array.get(i, xs) {
+  | Some(v) => v
+  | None => fallback
+}
+
+let charsEq = (a, i, b, j) => switch (Str.get(i, a), Str.get(j, b)) {
+  | (Some(x), Some(y)) => x == y
+  | _ => false
+}
+
+let initRow = n =>
+  loop (j = 0, row = []) { j > n ? row : recur(j + 1, Array.append(j, row)) }
+
+let cellAt = (a, b, i, j, prev, cur) =>
+  let cost = charsEq(a, i - 1, b, j - 1) ? 0 : 1 in
+    min(
+      min(at(cur, j - 1, 0) + 1, at(prev, j, 0) + 1),
+      at(prev, j - 1, 0) + cost
+    )
+
+let fillRow = (a, b, i, prev, n) =>
+  loop (j = 1, cur = [i]) {
+    j > n ? cur : recur(j + 1, Array.append(cellAt(a, b, i, j, prev, cur), cur))
+  }
+
+let levFrom = (a, b, m, n) =>
+  loop (i = 1, prev = initRow(n)) {
+    i > m ? at(prev, n, n) : recur(i + 1, fillRow(a, b, i, prev, n))
+  }
+
+let lev = (a, b) =>
+  let m = Str.length(a) in
+  let n = Str.length(b) in m == 0 ? n : n == 0 ? m : levFrom(a, b, m, n)
+
+/// `^[A-Z]` — identifier heads are ASCII. Empty and non-letters are lower.
+let upperStart = s => switch Str.codeAt(0, s) {
+  | Some(n) => n >= 65 && n <= 90
+  | None => false
+}
+
+let sameCaseClass = (a, b) => upperStart(a) == upperStart(b)
+
+let skipName = (want, n) =>
+  n == "" || n == want || Str.startsWith(
+    "$",
+    n
+  ) || Str.startsWith("_", n) || !sameCaseClass(want, n)
+
+let consider = (want, budget, best, bestDist, n) =>
+  skipName(want, n)
+    ? (best, bestDist)
+    : let d = lev(want, n) in
+      d <= budget && d < bestDist ? (Some(n), d) : (best, bestDist)
+
+let closestFrom = (want, names, i, budget, best, bestDist) => switch Array.get(i, names) {
+  | None => best
+  | Some(n) => let (next, dist) = consider(want, budget, best, bestDist, n) in
+      closestFrom(want, names, i + 1, budget, next, dist)
+}
+
+/// Closest candidate within the edit-distance budget, or None.
+export let closestName = (want, names) =>
+  let budget = max(1, floor(Str.length(want) / 3)) in
+    closestFrom(want, names, 0, budget, None, Str.length(want) + 2)

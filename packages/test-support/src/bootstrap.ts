@@ -218,6 +218,8 @@ const stripped = (rel: string): string =>
 // would otherwise leave `cat` / `showTypeExpr` unbound.
 const CTOR_MODULES = [
   "ast",
+  "suggest",
+  "local-names",
   "usefulness",
   "types",
   "ctors",

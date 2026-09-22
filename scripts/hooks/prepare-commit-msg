@@ -13,6 +13,7 @@ grep -v -E \
   -e '^[[:space:]]*Co-[Aa]uthored-[Bb]y:' \
   -e '^[[:space:]]*Made-with:[[:space:]]*Cursor' \
   -e '^[[:space:]]*Made with Cursor' \
+  -e '^[[:space:]]*Made with \[Cursor\]' \
   -e '^[[:space:]]*Generated (by|with)\b' \
   -e '^[[:space:]]*🤖' \
   -e '^[[:space:]]*AI assisted\b' \

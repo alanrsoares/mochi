@@ -8,6 +8,7 @@ let typecheck = src =>
   let? toks = lex(src) in
   let? stmts = parse(toks) in
     inferProgramWith(stmts, #{}, #{}, true, Some([styledCvaPlugin]))
+      |> Result.mapErr(e => { message: e.message, start: e.start, end: e.end })
 
 test("tw variants constrain component props", () => switch typecheck("extern tw : a = \"@styled-cva/react\" \"default\"\nlet Badge = tw.div(\"base\", { variants: { $tone: { rose: \"a\", amber: \"b\" } } })\nlet bad = Badge({ $tone: \"taupe\" })\n") {
   | Err(_) => true |> ok

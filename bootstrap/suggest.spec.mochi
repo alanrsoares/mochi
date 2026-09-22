@@ -1,0 +1,17 @@
+import { ok, test } from "@mochi/test"
+import { closestName } from "./suggest.mochi"
+
+test("picks the nearest same-case name", () => switch closestName("coun", ["color", "count"]) {
+  | Some("count") => true |> ok
+  | _ => false |> ok
+})
+
+test("skips a different case class", () => switch closestName("coun", ["Count"]) {
+  | None => true |> ok
+  | _ => false |> ok
+})
+
+test("skips synthetic temps", () => switch closestName("coun", ["$count", "_count"]) {
+  | None => true |> ok
+  | _ => false |> ok
+})

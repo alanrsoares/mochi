@@ -42,6 +42,8 @@ const MODULES = [
   "lexer",
   "parser",
   "check",
+  "suggest",
+  "local-names",
   "infer",
   "codegen",
   "ts-types",
