@@ -75,6 +75,11 @@ testEach("checker rejects invalid declarations and switches", [
     want: "'Str' is a reserved collection namespace"
   },
   {
+    label: "reserved Task namespace",
+    src: "let Task = 1",
+    want: "'Task' is a reserved collection namespace"
+  },
+  {
     label: "undeclared constructor type variable",
     src: "type Box a = Item(a, b)",
     want: "unknown type parameter 'b'"

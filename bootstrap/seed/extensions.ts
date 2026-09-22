@@ -1,6 +1,7 @@
 import type { Tok } from "./lexer";
 import type { Expr } from "./ast";
 import type { SpanAt, St, Ty } from "./types";
+import type { BoundErr } from "./plugins/jsx";
 
 import type { Option, Result } from "@mochi/compiler/runtime";
 
@@ -41,7 +42,7 @@ export const resolvePlugins: <A>(pluginsOpt: Option<A[]>, builtins: A[]) => A[] 
       )
       .exhaustive(),
 );
-export const resolvePluginsDefault: <A, B, C, D>(
+export const resolvePluginsDefault: <A, B, C>(
   pluginsOpt: Option<
     {
       name: string;
@@ -62,10 +63,10 @@ export const resolvePluginsDefault: <A, B, C, D>(
           c: Option<string>,
           d: St,
           e: {
-            unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, C>;
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], C>;
-          } & D,
-        ) => Result<Option<[Ty, St]>, C>
+            unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
+          } & C,
+        ) => Result<Option<[Ty, St]>, BoundErr>
       >;
     }[]
   >,
@@ -88,12 +89,12 @@ export const resolvePluginsDefault: <A, B, C, D>(
       c: Option<string>,
       d: St,
       e: {
-        unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, C>;
-        inferExpr: (a: Expr, b: St) => Result<[Ty, St], C>;
-      } & D,
-    ) => Result<Option<[Ty, St]>, C>
+        unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
+        inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
+      } & C,
+    ) => Result<Option<[Ty, St]>, BoundErr>
   >;
-}[] = <A, B, C, D>(
+}[] = <A, B, C>(
   pluginsOpt: Option<
     {
       name: string;
@@ -114,10 +115,10 @@ export const resolvePluginsDefault: <A, B, C, D>(
           c: Option<string>,
           d: St,
           e: {
-            unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, C>;
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], C>;
-          } & D,
-        ) => Result<Option<[Ty, St]>, C>
+            unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
+          } & C,
+        ) => Result<Option<[Ty, St]>, BoundErr>
       >;
     }[]
   >,

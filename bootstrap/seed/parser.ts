@@ -19,6 +19,7 @@ import type {
   TypeExpr,
 } from "./ast";
 import type { SpanAt, St, Ty } from "./types";
+import type { BoundErr } from "./plugins/jsx";
 
 export type LocTok = { tok: Tok; start: number; end: number; doc: Option<string> };
 export type PErr = { message: string; start: number; end: number };
@@ -4489,7 +4490,7 @@ const stmtsLoop: _Curry<
  * The recovering parse (ADR 0045). `parse` is the hard-fail wrapper over this;
  * tooling that wants the partial tree calls this and says so.
  */
-export const parseRecovering: <A, B, C>(
+export const parseRecovering: <A, B>(
   toks: LocTok[],
   pluginsOpt: Option<
     {
@@ -4508,16 +4509,16 @@ export const parseRecovering: <A, B, C>(
           c: Option<string>,
           d: St,
           e: {
-            unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, B>;
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], B>;
-          } & C,
-        ) => Result<Option<[Ty, St]>, B>
+            unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
+          } & B,
+        ) => Result<Option<[Ty, St]>, BoundErr>
       >;
     }[]
   >,
 ) => { stmts: Stmt[]; diagnostics: PErr[] } = _curry(
   2,
-  <A, B, C>(
+  <A, B>(
     toks: LocTok[],
     pluginsOpt: Option<
       {
@@ -4536,10 +4537,10 @@ export const parseRecovering: <A, B, C>(
             c: Option<string>,
             d: St,
             e: {
-              unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, B>;
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], B>;
-            } & C,
-          ) => Result<Option<[Ty, St]>, B>
+              unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
+            } & B,
+          ) => Result<Option<[Ty, St]>, BoundErr>
         >;
       }[]
     >,
@@ -4568,7 +4569,7 @@ export const parse: (toks: LocTok[]) => Result<Stmt[], PErr> = (toks: LocTok[]) 
  * this reports the first diagnostic in source order.
  * `pluginsOpt`: None = default builtins (JSX on); Some([]) = hard opt-out.
  */
-export const parseWith: <A, B, C>(
+export const parseWith: <A, B>(
   toks: LocTok[],
   pluginsOpt: Option<
     {
@@ -4587,16 +4588,16 @@ export const parseWith: <A, B, C>(
           c: Option<string>,
           d: St,
           e: {
-            unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, B>;
-            inferExpr: (a: Expr, b: St) => Result<[Ty, St], B>;
-          } & C,
-        ) => Result<Option<[Ty, St]>, B>
+            unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
+          } & B,
+        ) => Result<Option<[Ty, St]>, BoundErr>
       >;
     }[]
   >,
 ) => Result<Stmt[], PErr> = _curry(
   2,
-  <A, B, C>(
+  <A, B>(
     toks: LocTok[],
     pluginsOpt: Option<
       {
@@ -4615,10 +4616,10 @@ export const parseWith: <A, B, C>(
             c: Option<string>,
             d: St,
             e: {
-              unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, B>;
-              inferExpr: (a: Expr, b: St) => Result<[Ty, St], B>;
-            } & C,
-          ) => Result<Option<[Ty, St]>, B>
+              unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
+              inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
+            } & B,
+          ) => Result<Option<[Ty, St]>, BoundErr>
         >;
       }[]
     >,

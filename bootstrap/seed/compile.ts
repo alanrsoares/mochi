@@ -56,7 +56,7 @@ import {
 import { match } from "@onrails/pattern";
 
 import { lex } from "./lexer";
-import { parse } from "./parser";
+import { parseRecovering } from "./parser";
 import { checkAll } from "./check";
 import { inferProgram, inferProgramTypes } from "./infer";
 import { codegenWith, jsGenOpts } from "./codegen";
@@ -152,18 +152,23 @@ const frontend: (src: string) => Result<Stmt[], Stamped[]> = (src: string) =>
       ({ error: e }) => Err([stampStage("lex", e)]) as Result<Stmt[], Stamped[]>,
     )
     .with({ _tag: "Ok" }, ({ value: tokens }) =>
-      match(parse(tokens))
-        .with(
-          { _tag: "Err" },
-          ({ error: e }) => Err([stampStage("parse", e)]) as Result<Stmt[], Stamped[]>,
-        )
-        .with({ _tag: "Ok" }, ({ value: stmts }) =>
-          _Result_mapErr(
-            (es: StageErr[]) => map((e: StageErr) => stampStage("check", e), es),
-            checkAll(stmts),
-          ),
-        )
-        .exhaustive(),
+      ((parsed: { stmts: Stmt[]; diagnostics: StageErr[] }) =>
+        match(parsed.diagnostics)
+          .with(
+            (_v) => {
+              const _g: any = _v;
+              return _g.length === 0;
+            },
+            () =>
+              _Result_mapErr(
+                (es: StageErr[]) => map((e: StageErr) => stampStage("check", e), es),
+                checkAll(parsed.stmts),
+              ),
+          )
+          .otherwise(
+            (ds) =>
+              Err(map((e: StageErr) => stampStage("parse", e), ds)) as Result<Stmt[], Stamped[]>,
+          ))(parseRecovering(tokens, None)),
     )
     .exhaustive();
 const pipelineWith: _Curry<[src: string, open: boolean], Result<Stmt[], Stamped[]>> = _curry(

@@ -39,7 +39,10 @@ let alCompile: (src: string) => AlResult;
 beforeAll(async () => {
   const shim = await import(join(root, "bootstrap/prelude.gen.mjs"));
   const { lex } = evalNames<{ lex: unknown }>(compileAl("bootstrap/lexer.mochi"), ["lex"]);
-  const { parse } = evalNames<{ parse: unknown }>(compileAl("bootstrap/parser.mochi"), ["parse"]);
+  const { parseRecovering } = evalNames<{ parseRecovering: unknown }>(
+    compileAl("bootstrap/parser.mochi"),
+    ["parseRecovering"],
+  );
   const { checkAll } = evalNames<{ checkAll: unknown }>(compileAl("bootstrap/check.mochi"), [
     "checkAll",
   ]);
@@ -56,7 +59,7 @@ beforeAll(async () => {
     ["compile"],
     {
       lex,
-      parse,
+      parseRecovering,
       checkAll,
       inferProgram,
       codegenWith,

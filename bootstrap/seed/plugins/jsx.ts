@@ -4,6 +4,14 @@ import type { Row, SpanAt, St, Ty } from "../types";
 import type { Ctx } from "../format";
 
 export type LocTok = { tok: Tok; start: number; end: number; doc: Option<string> };
+export type Hint = { title: string; start: number; end: number; replaceWith: string };
+export type BoundErr = {
+  message: string;
+  start: number;
+  end: number;
+  help: Option<string>;
+  suggestions: Hint[];
+};
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
@@ -15,12 +23,13 @@ import {
   _Array_append,
   _Array_get,
   _Map_get,
+  _Map_keys,
   _Option_exists,
-  _Option_flatMap,
   _Option_unwrapOr,
   _Result_flatMap,
   _Result_map,
   _Str_codeAt,
+  _Str_contains,
   _Str_length,
   _Str_slice,
   _Str_split,
@@ -29,10 +38,12 @@ import {
   _tuple,
   and,
   eq,
+  gt,
   length,
   lt,
   map,
   or,
+  sub,
 } from "@mochi/compiler/runtime";
 
 import { match } from "@onrails/pattern";
@@ -46,11 +57,14 @@ import {
   tUnion,
   rExtend,
   TyFn,
+  TyVar,
+  TyCon,
   TyRecord,
   RowExtend,
   RowEmpty,
   RowVar,
 } from "../types";
+import { closestName } from "../suggest";
 import * as Lexer from "../lexer";
 import {
   TLet,
@@ -843,32 +857,265 @@ const attrKindType: (kind: string) => Option<Ty> = (kind: string) =>
                   tUnion(map(tLit, _Str_split(",", _Str_slice(5, _Str_length(kind), kind)))),
                 ) as Option<Ty>)
               : (None as Option<Ty>);
-const intrinsicAttrType: _Curry<[tag: string, attr: string], Option<Ty>> = _curry(
+const mismatchHint: (name: string) => Option<string> = (name: string) =>
+  match(name)
+    .with("class", () => Some("In JSX, use 'className' instead of 'class'.") as Option<string>)
+    .with("for", () => Some("In JSX, use 'htmlFor' instead of 'for'.") as Option<string>)
+    .with("tabindex", () => Some("In JSX, use 'tabIndex' instead of 'tabindex'.") as Option<string>)
+    .with(
+      "autofocus",
+      () => Some("In JSX, use 'autoFocus' instead of 'autofocus'.") as Option<string>,
+    )
+    .with(
+      "autocomplete",
+      () => Some("In JSX, use 'autoComplete' instead of 'autocomplete'.") as Option<string>,
+    )
+    .with("readonly", () => Some("In JSX, use 'readOnly' instead of 'readonly'.") as Option<string>)
+    .with(
+      "maxlength",
+      () => Some("In JSX, use 'maxLength' instead of 'maxlength'.") as Option<string>,
+    )
+    .with(
+      "minlength",
+      () => Some("In JSX, use 'minLength' instead of 'minlength'.") as Option<string>,
+    )
+    .with(
+      "spellcheck",
+      () => Some("In JSX, use 'spellCheck' instead of 'spellcheck'.") as Option<string>,
+    )
+    .with(
+      "contenteditable",
+      () => Some("In JSX, use 'contentEditable' instead of 'contenteditable'.") as Option<string>,
+    )
+    .with("viewbox", () => Some("In JSX, use 'viewBox' instead of 'viewbox'.") as Option<string>)
+    .with(
+      "strokewidth",
+      () => Some("In JSX, use 'strokeWidth' instead of 'strokewidth'.") as Option<string>,
+    )
+    .with(
+      "strokelinecap",
+      () => Some("In JSX, use 'strokeLinecap' instead of 'strokelinecap'.") as Option<string>,
+    )
+    .with(
+      "strokelinejoin",
+      () => Some("In JSX, use 'strokeLinejoin' instead of 'strokelinejoin'.") as Option<string>,
+    )
+    .with(
+      "onclick",
+      () =>
+        Some(
+          "In JSX, event handlers are camelCase: use 'onClick' instead of 'onclick'.",
+        ) as Option<string>,
+    )
+    .with(
+      "onchange",
+      () =>
+        Some(
+          "In JSX, event handlers are camelCase: use 'onChange' instead of 'onchange'.",
+        ) as Option<string>,
+    )
+    .with(
+      "oninput",
+      () =>
+        Some(
+          "In JSX, event handlers are camelCase: use 'onInput' instead of 'oninput'.",
+        ) as Option<string>,
+    )
+    .with(
+      "onkeydown",
+      () =>
+        Some(
+          "In JSX, event handlers are camelCase: use 'onKeyDown' instead of 'onkeydown'.",
+        ) as Option<string>,
+    )
+    .with(
+      "onkeyup",
+      () =>
+        Some(
+          "In JSX, event handlers are camelCase: use 'onKeyUp' instead of 'onkeyup'.",
+        ) as Option<string>,
+    )
+    .with(
+      "onsubmit",
+      () =>
+        Some(
+          "In JSX, event handlers are camelCase: use 'onSubmit' instead of 'onsubmit'.",
+        ) as Option<string>,
+    )
+    .with(
+      "onfocus",
+      () =>
+        Some(
+          "In JSX, event handlers are camelCase: use 'onFocus' instead of 'onfocus'.",
+        ) as Option<string>,
+    )
+    .with(
+      "onblur",
+      () =>
+        Some(
+          "In JSX, event handlers are camelCase: use 'onBlur' instead of 'onblur'.",
+        ) as Option<string>,
+    )
+    .otherwise(() => None as Option<string>);
+
+const noJxSuggestions: Hint[] = [] as Hint[];
+const jxTypeErr: <A>(message: string, sp: SpanAt) => Result<A, BoundErr> = _curry(
   2,
-  (tag: string, attr: string) =>
-    _Option_flatMap(
-      attrKindType,
-      _Option_flatMap(_Map_get(attr), _Map_get(tag, jsxIntrinsicElements)),
+  <A>(message: string, sp: SpanAt) =>
+    Err({
+      message: message,
+      start: sp.start,
+      end: sp.end,
+      help: None as Option<string>,
+      suggestions: noJxSuggestions,
+    }),
+);
+const isHandlerName: (name: string) => boolean = (name: string) =>
+  and(and(_Str_startsWith("on", name), _Str_length(name) > 2), jxIsUpper(_Str_slice(2, 3, name)));
+const isFnOrOpen: (t: Ty) => boolean = (t: Ty) =>
+  match(t)
+    .with({ _tag: "TyFn" }, () => true)
+    .with({ _tag: "TyVar" }, () => true)
+    .with({ _tag: "TyCon" }, ({ name }) => eq(name, "any"))
+    .otherwise(() => false);
+const checkHandler: <A, B, C>(
+  name: string,
+  value: Expr,
+  st: A,
+  api: { inferExpr: (a: Expr, b: A) => Result<[Ty, St], BoundErr> } & C,
+  cont: (a: St) => Result<B, BoundErr>,
+) => Result<B, BoundErr> = _curry(
+  5,
+  <A, B, C>(
+    name: string,
+    value: Expr,
+    st: A,
+    api: { inferExpr: (a: Expr, b: A) => Result<[Ty, St], BoundErr> } & C,
+    cont: (a: St) => Result<B, BoundErr>,
+  ) =>
+    _Result_flatMap(
+      ([valT, st1]) =>
+        isFnOrOpen(zonk(valT, st1))
+          ? cont(st1)
+          : jxTypeErr(`Expected function for event handler '${name}'`, jxExprSpan(value)),
+      api.inferExpr(value, st),
     ),
 );
-const inferIntrinsicFields: <A, B, C, D, E>(
+const unknownProp: <A, B>(
   tag: string,
-  fields: ({ name: string; value: Expr } & D)[],
-  st: A,
-  api: {
-    unify: (a: B, b: Ty, c: A, d: SpanAt) => Result<A, C>;
-    inferExpr: (a: Expr, b: A) => Result<[B, A], C>;
-  } & E,
-) => Result<A, C> = _curry(
+  name: string,
+  value: Expr,
+  schema: Map<string, A>,
+) => Result<B, BoundErr> = _curry(
   4,
-  <A, B, C, D, E>(
+  <A, B>(tag: string, name: string, value: Expr, schema: Map<string, A>) => {
+    const hint: Option<string> = closestName(name, _Map_keys(schema));
+    const did: string = match(hint)
+      .with({ _tag: "Some" }, ({ value: s }) => ` Did you mean '${s}'?`)
+      .with({ _tag: "None" }, () => "")
+      .exhaustive();
+    return jxTypeErr(`Property '${name}' does not exist on '<${tag}>'.${did}`, jxExprSpan(value));
+  },
+);
+const inferIntrinsicFields: <A, B>(
+  tag: string,
+  fields: ({ name: string; value: Expr } & A)[],
+  st: St,
+  api: {
+    inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
+    unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
+  } & B,
+  schema: Option<Map<string, string>>,
+) => Result<St, BoundErr> = _curry(
+  5,
+  <A, B>(
     tag: string,
-    fields: ({ name: string; value: Expr } & D)[],
-    st: A,
+    fields: ({ name: string; value: Expr } & A)[],
+    st: St,
     api: {
-      unify: (a: B, b: Ty, c: A, d: SpanAt) => Result<A, C>;
-      inferExpr: (a: Expr, b: A) => Result<[B, A], C>;
-    } & E,
+      inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
+      unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
+    } & B,
+    schema: Option<Map<string, string>>,
+  ) =>
+    match(fields)
+      .with(
+        (_v) => _v.length === 0,
+        () => Ok(st) as Result<St, BoundErr>,
+      )
+      .with(
+        (_v) => _v.length >= 1,
+        ([f, ...rest]) =>
+          ((cont: (a: St) => Result<St, BoundErr>) =>
+            match(mismatchHint(f.name))
+              .with({ _tag: "Some" }, ({ value: msg }) => jxTypeErr(msg, jxExprSpan(f.value)))
+              .with({ _tag: "None" }, () =>
+                or(_Str_startsWith("data-", f.name), _Str_startsWith("aria-", f.name))
+                  ? _Result_flatMap(([_, st1]) => cont(st1), api.inferExpr(f.value, st))
+                  : match(schema)
+                      .with({ _tag: "None" }, () =>
+                        _Result_flatMap(([_, st1]) => cont(st1), api.inferExpr(f.value, st)),
+                      )
+                      .with({ _tag: "Some" }, ({ value: m }) =>
+                        ((expected: Option<string>) =>
+                          match(expected)
+                            .with({ _tag: "None" }, () => unknownProp(tag, f.name, f.value, m))
+                            .with({ _tag: "Some" }, ({ value: kind }) =>
+                              eq(kind, "event")
+                                ? checkHandler(f.name, f.value, st, api, cont)
+                                : eq(kind, "any")
+                                  ? _Result_flatMap(
+                                      ([_, st1]) => cont(st1),
+                                      api.inferExpr(f.value, st),
+                                    )
+                                  : match(attrKindType(kind))
+                                      .with({ _tag: "Some" }, ({ value: expectedT }) =>
+                                        _Result_flatMap(
+                                          ([valT, st1]) =>
+                                            _Result_flatMap(
+                                              (st2) => cont(st2),
+                                              api.unify(valT, expectedT, st1, jxExprSpan(f.value)),
+                                            ),
+                                          api.inferExpr(f.value, st),
+                                        ),
+                                      )
+                                      .with({ _tag: "None" }, () =>
+                                        _Result_flatMap(
+                                          ([_, st1]) => cont(st1),
+                                          api.inferExpr(f.value, st),
+                                        ),
+                                      )
+                                      .exhaustive(),
+                            )
+                            .exhaustive())(
+                          match(_Map_get(f.name, m))
+                            .with({ _tag: "Some" }, ({ value: k }) => Some(k) as Option<string>)
+                            .with({ _tag: "None" }, () =>
+                              isHandlerName(f.name)
+                                ? (Some("event") as Option<string>)
+                                : (None as Option<string>),
+                            )
+                            .exhaustive(),
+                        ),
+                      )
+                      .exhaustive(),
+              )
+              .exhaustive())((st1: St) => inferIntrinsicFields(tag, rest, st1, api, schema)),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
+);
+const inferFragmentFields: <A, B, C, D>(
+  fields: ({ name: string; value: Expr } & C)[],
+  st: A,
+  api: { inferExpr: (a: Expr, b: A) => Result<[B, A], BoundErr> } & D,
+) => Result<A, BoundErr> = _curry(
+  3,
+  <A, B, C, D>(
+    fields: ({ name: string; value: Expr } & C)[],
+    st: A,
+    api: { inferExpr: (a: Expr, b: A) => Result<[B, A], BoundErr> } & D,
   ) =>
     match(fields)
       .with(
@@ -878,49 +1125,91 @@ const inferIntrinsicFields: <A, B, C, D, E>(
       .with(
         (_v) => _v.length >= 1,
         ([f, ...rest]) =>
-          match(intrinsicAttrType(tag, f.name))
-            .with({ _tag: "Some" }, ({ value: expectedT }) =>
-              _Result_flatMap(
-                ([valT, st1]: [B, A]) =>
-                  _Result_flatMap(
-                    (st2: A) => inferIntrinsicFields(tag, rest, st2, api),
-                    api.unify(valT, expectedT, st1, jxExprSpan(f.value)),
-                  ),
+          eq(f.name, "key")
+            ? _Result_flatMap(
+                ([_, st1]) => inferFragmentFields(rest, st1, api),
                 api.inferExpr(f.value, st),
+              )
+            : jxTypeErr(
+                `JSX fragments only accept the 'key' prop, got '${f.name}'`,
+                jxExprSpan(f.value),
               ),
-            )
-            .with({ _tag: "None" }, () =>
-              _Result_flatMap(
-                ([_, st1]: [B, A]) => inferIntrinsicFields(tag, rest, st1, api),
-                api.inferExpr(f.value, st),
-              ),
-            )
-            .exhaustive(),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
       }),
 );
-const inferJsxCall: <A, B>(
+const unknownTagErr: <A>(tagName: string, sp: SpanAt) => Result<A, BoundErr> = _curry(
+  2,
+  <A>(tagName: string, sp: SpanAt) => {
+    const hint: Option<string> = closestName(tagName, _Map_keys(jsxIntrinsicElements));
+    const did: string = match(hint)
+      .with({ _tag: "Some" }, ({ value: s }) => ` Did you mean '<${s}>'?`)
+      .with({ _tag: "None" }, () => "")
+      .exhaustive();
+    return jxTypeErr(`Unknown JSX element '<${tagName}>'.${did}`, sp);
+  },
+);
+const inferStringTag: <A, B>(
+  tagName: string,
+  tagExpr: Expr,
+  fields: ({ name: string; value: Expr } & A)[],
+  st: St,
+  api: {
+    inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
+    unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
+  } & B,
+) => Result<St, BoundErr> = _curry(
+  5,
+  <A, B>(
+    tagName: string,
+    tagExpr: Expr,
+    fields: ({ name: string; value: Expr } & A)[],
+    st: St,
+    api: {
+      inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
+      unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
+    } & B,
+  ) =>
+    eq(tagName, "Fragment")
+      ? inferFragmentFields(fields, st, api)
+      : match(_Map_get(tagName, jsxIntrinsicElements))
+          .with({ _tag: "Some" }, ({ value: schema }) =>
+            inferIntrinsicFields(
+              tagName,
+              fields,
+              st,
+              api,
+              Some(schema) as Option<Map<string, string>>,
+            ),
+          )
+          .with({ _tag: "None" }, () =>
+            _Str_contains("-", tagName)
+              ? inferIntrinsicFields(tagName, fields, st, api, None as Option<Map<string, string>>)
+              : unknownTagErr(tagName, jxExprSpan(tagExpr)),
+          )
+          .exhaustive(),
+);
+const inferJsxCall: <A>(
   tagExpr: Expr,
   propsExpr: Expr,
   restArgs: Expr[],
   st: St,
   api: {
-    unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, A>;
-    inferExpr: (a: Expr, b: St) => Result<[Ty, St], A>;
-  } & B,
-) => Result<[Ty, St], A> = _curry(
+    unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
+    inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
+  } & A,
+) => Result<[Ty, St], BoundErr> = _curry(
   5,
-  <A, B>(
+  <A>(
     tagExpr: Expr,
     propsExpr: Expr,
     restArgs: Expr[],
     st: St,
     api: {
-      unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, A>;
-      inferExpr: (a: Expr, b: St) => Result<[Ty, St], A>;
-    } & B,
+      unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
+      inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
+    } & A,
   ) =>
     _Result_flatMap(
       ([tagT, st1]: [Ty, St]) =>
@@ -941,7 +1230,9 @@ const inferJsxCall: <A, B>(
                           jsxPropsWithSynthesizedChildren(propsT, propsExpr, expectedRow, restArgs),
                         ),
                       )
-                      .otherwise(() => Ok(_tuple(tPrim("VNode"), st3))),
+                      .otherwise(
+                        () => Ok(_tuple(tPrim("VNode"), st3)) as Result<[Ty, St], BoundErr>,
+                      ),
                   )
                   .otherwise(() =>
                     match(tagExpr)
@@ -950,12 +1241,16 @@ const inferJsxCall: <A, B>(
                           .with({ _tag: "ERecord" }, ({ fields }) =>
                             _Result_map(
                               (st4: St) => _tuple(tPrim("VNode"), st4),
-                              inferIntrinsicFields(tagName, fields, st3, api),
+                              inferStringTag(tagName, tagExpr, fields, st3, api),
                             ),
                           )
-                          .otherwise(() => Ok(_tuple(tPrim("VNode"), st3))),
+                          .otherwise(
+                            () => Ok(_tuple(tPrim("VNode"), st3)) as Result<[Ty, St], BoundErr>,
+                          ),
                       )
-                      .otherwise(() => Ok(_tuple(tPrim("VNode"), st3))),
+                      .otherwise(
+                        () => Ok(_tuple(tPrim("VNode"), st3)) as Result<[Ty, St], BoundErr>,
+                      ),
                   );
               },
               inferJsxChildren(restArgs, st2, api.inferExpr),
@@ -970,26 +1265,26 @@ const inferJsxCall: <A, B>(
  * `api.inferExpr` is `(expr, st) -> Result` — closes over Ctx so hooks stay
  * free of a recursive Ctx type (occurs-check).
  */
-export const inferJsxCallHook: <A, B, C>(
+export const inferJsxCallHook: <A, B>(
   _fn: A,
   args: Expr[],
   origin: Option<string>,
   st: St,
   api: {
-    unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, B>;
-    inferExpr: (a: Expr, b: St) => Result<[Ty, St], B>;
-  } & C,
-) => Result<Option<[Ty, St]>, B> = _curry(
+    unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
+    inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
+  } & B,
+) => Result<Option<[Ty, St]>, BoundErr> = _curry(
   5,
-  <A, B, C>(
+  <A, B>(
     _fn: A,
     args: Expr[],
     origin: Option<string>,
     st: St,
     api: {
-      unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, B>;
-      inferExpr: (a: Expr, b: St) => Result<[Ty, St], B>;
-    } & C,
+      unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
+      inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
+    } & B,
   ) =>
     match(origin)
       .with({ _tag: "Some" }, ({ value: o }) =>
@@ -1006,10 +1301,13 @@ export const inferJsxCallHook: <A, B, C>(
                     inferJsxCall(tagExpr, propsExpr, rest, st, api),
                   ),
               )
-              .otherwise(() => Ok(None as Option<[Ty, St]>))
-          : Ok(None as Option<[Ty, St]>),
+              .otherwise(() => Ok(None as Option<[Ty, St]>) as Result<Option<[Ty, St]>, BoundErr>)
+          : (Ok(None as Option<[Ty, St]>) as Result<Option<[Ty, St]>, BoundErr>),
       )
-      .with({ _tag: "None" }, () => Ok(None as Option<[Ty, St]>))
+      .with(
+        { _tag: "None" },
+        () => Ok(None as Option<[Ty, St]>) as Result<Option<[Ty, St]>, BoundErr>,
+      )
       .exhaustive(),
 );
 export const jsxPlugin = {

@@ -173,11 +173,6 @@ const toDiagnostic = (d: BootstrapDiagnostic): Diagnostic => {
  * Source → JS through the self-hosted compiler. A caller-supplied `plugins`
  * list still runs the TypeScript railway: bootstrap compile takes no plugin
  * argument yet.
- *
- * Bootstrap diagnostics win when they carry help or a suggestion. Otherwise a
- * TypeScript pass still reports what the self-hosted graph does not yet:
- * alias folding, every parse diagnostic, reserved namespaces such as Task,
- * and intrinsic JSX prop checks.
  */
 export function compile(src: string, opts: CompileOptions = {}): Result<string, Diagnostic[]> {
   if (opts.plugins !== undefined) return compileWithTsCore(src, opts);
@@ -188,15 +183,7 @@ export function compile(src: string, opts: CompileOptions = {}): Result<string, 
     moduleExt: opts.moduleExt ?? ".js",
     strictEntry: false,
   });
-  if (compiled._tag === "Err") {
-    const diags = compiled.error.map(toDiagnostic);
-    if (diags.some((d) => d.help !== undefined || (d.suggestions?.length ?? 0) > 0))
-      return err(diags);
-    const ts = compileWithTsCore(src, opts);
-    return isErr(ts) ? ts : err(diags);
-  }
-  const ts = compileWithTsCore(src, opts);
-  return isErr(ts) ? ts : ok(compiled.value);
+  return compiled._tag === "Ok" ? ok(compiled.value) : err(compiled.error.map(toDiagnostic));
 }
 
 export { codegenTs } from "../codegen/codegen-ts";

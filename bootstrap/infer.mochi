@@ -17,9 +17,9 @@
 //    not ported as a separate type.
 // 3. Prelude type tables are NOT reimplemented — the differential harness
 //    feeds TS preludeEnv/preludeNamespaces in as runtime args.
-// 4. SKIP AliasDef/foldAliases + hover's Ctx.record callback (display/
-//    tooling only). KEEP semantic alias expansion in typeExprToType (affects
-//    what a type unifies against — that's semantics, ported in section c).
+// 4. Semantic alias expansion stays in typeExprToType (it changes what a
+//    type unifies against). Unify errors still name a record alias when its
+//    expanded row is what `showType` printed — `nameAliases`, below.
 // 5. Harness compares per-name scheme STRINGS with alpha-normalized var ids.
 // 6. Corpus = TS-check-passing files, open:true + namespaces threaded;
 //    strict-mode error cases get their own targeted cases.
@@ -218,15 +218,77 @@ let typeErrSuggest : string -> Ast.Span -> string -> string -> IErr = (msg, sp, 
     ]
   }
 
-let u = (a, b, st: Types.St, sp) => switch unify(a, b, st) {
+// Record aliases expand to rows before unify, so a mismatch prints the row.
+// Where that row is exactly a nullary alias in scope, put the alias name
+// back into the message (`Point`, not `{ x: number, y: number }`).
+let lastSeg = name =>
+  let parts = Str.split(".", name) in
+    Option.unwrapOr(name, Array.get(Array.length(parts) - 1, parts))
+
+let aliasRowFrom = (fields, aliases, i) => switch Array.get(i, fields) {
+  | None => RowEmpty
+  | Some(f) => let (t, _vars, _st) = typeExprToType(
+      f.fieldType,
+      #{},
+      mkSt(0),
+      aliases,
+      Set.fromArray([])
+    ) in
+      rField(f.name, t, aliasRowFrom(fields, aliases, i + 1), f.optional)
+}
+
+let shownOfAlias : a -> b -> Option<string> = (info, aliases) =>
+  Array.length(info.params) != 0
+    ? None
+    : switch info.expr {
+      | Some(_) => None
+      | None => Array.length(info.fields) == 0
+          ? None
+          : Some(showType(tRecord(aliasRowFrom(info.fields, aliases, 0))))
+    }
+
+let longerPrint = (p, q) => Str.length(p.shown) >= Str.length(q.shown)
+
+let insertPrint = (p, xs) => switch xs {
+  | [] => [p]
+  | [q, ...rest] => longerPrint(p, q)
+      ? Array.prepend(p, xs)
+      : Array.prepend(q, insertPrint(p, rest))
+}
+
+let printsFrom = (keys, aliases, i, acc) => switch Array.get(i, keys) {
+  | None => acc
+  | Some(key) => switch Map.get(key, aliases) {
+      | None => printsFrom(keys, aliases, i + 1, acc)
+      | Some(info) => switch shownOfAlias(info, aliases) {
+          | None => printsFrom(keys, aliases, i + 1, acc)
+          | Some(shown) => printsFrom(
+              keys,
+              aliases,
+              i + 1,
+              insertPrint({ shown, name: lastSeg(key) }, acc)
+            )
+        }
+    }
+}
+
+let applyPrints = (msg, prints, i) => switch Array.get(i, prints) {
+  | None => msg
+  | Some(p) => applyPrints(Str.replace(p.shown, p.name, msg), prints, i + 1)
+}
+
+let nameAliases = (msg, aliases) =>
+  applyPrints(msg, printsFrom(Map.keys(aliases), aliases, 0, []), 0)
+
+let u = (ctx: Ctx<a>, left, right, st: Types.St, sp) => switch unify(left, right, st) {
   | Ok(newSt) => Ok(newSt)
-  | Err(e) => Err(typeErr(e.message, sp))
+  | Err(e) => Err(typeErr(nameAliases(e.message, ctx.aliasMap), sp))
 }
 
 /// `actual` may be used as `expected` (ADR 0098 optional fields).
-let checkFits = (actual, expected, st: Types.St, sp) => switch fits(actual, expected, st) {
+let checkFits = (ctx: Ctx<a>, actual, expected, st: Types.St, sp) => switch fits(actual, expected, st) {
   | Ok(newSt) => Ok(newSt)
-  | Err(e) => Err(typeErr(e.message, sp))
+  | Err(e) => Err(typeErr(nameAliases(e.message, ctx.aliasMap), sp))
 }
 
 // Scheme machinery lives in schemes.mochi (ticket 0030).
@@ -301,7 +363,7 @@ let constrainParamAnnotsFrom = (ctx: Ctx<a>, params, paramTypes, vars, st: Types
               ctx.aliasMap,
               Set.fromArray([])
             ) in
-            let? st2 = checkFits(paramT, annotT, st1, annotSpan(te)) in
+            let? st2 = ctx->checkFits(paramT, annotT, st1, annotSpan(te)) in
               ctx->constrainParamAnnotsFrom(rest, restTypes, vars1, st2)
           | _ => ctx->constrainParamAnnotsFrom(rest, restTypes, vars, st)
         }
@@ -385,7 +447,7 @@ let unifyRecurArgsFrom = (ctx: Ctx<a>, args, frame, i, st: Types.St) => switch A
   | Some(a) => let? (at, st1) = ctx->inferExpr(a, st) in
       switch Array.get(i, frame) {
         | None => ctx->unifyRecurArgsFrom(args, frame, i + 1, st1)
-        | Some(pt) => let? st2 = u(at, pt, st1, exprSpan(a)) in
+        | Some(pt) => let? st2 = ctx->u(at, pt, st1, exprSpan(a)) in
             ctx->unifyRecurArgsFrom(args, frame, i + 1, st2)
       }
 }
@@ -469,13 +531,18 @@ let labFieldsFrom = (ctx: Ctx<a>, labs, env, vars, st: Types.St) => switch labs 
               env
             )->inferExpr(d, st1) in
               switch annot {
-                | Some(_) => let? s3 = checkFits(dt, fieldT, s2, exprSpan(d)) in
+                | Some(_) => let? s3 = ctx->checkFits(
+                    dt,
+                    fieldT,
+                    s2,
+                    exprSpan(d)
+                  ) in
                     Ok((fieldT, s3))
                 | None =>
                   // No annotation: a literal default must not pin the field to a
                   // singleton type — `~tone = "rose"` is `string`, not `"rose"`.
                   let widened = widenLits(zonk(dt, s2)) in
-                  let? s3 = u(fieldT, widened, s2, exprSpan(d)) in
+                  let? s3 = ctx->u(fieldT, widened, s2, exprSpan(d)) in
                     Ok((widened, s3))
               }
         } in
@@ -524,13 +591,13 @@ let inferCallArgs = (ctx: Ctx<a>, fnT, args, st: Types.St, callSpan) => switch a
   | [arg, ...rest] => let? (argT, st1) = ctx->inferExpr(arg, st) in
       switch resolve(fnT, st1) {
         | TyFn(fromT, toT) => domainNeedsFits(fromT, st1)
-            ? let? st2 = checkFits(argT, fromT, st1, exprSpan(arg)) in
+            ? let? st2 = ctx->checkFits(argT, fromT, st1, exprSpan(arg)) in
               ctx->inferCallArgs(toT, rest, st2, callSpan)
             : let (resultT, st2) = freshVar(st1) in
-            let? st3 = u(fnT, tArrow(argT, resultT), st2, exprSpan(arg)) in
+            let? st3 = ctx->u(fnT, tArrow(argT, resultT), st2, exprSpan(arg)) in
               ctx->inferCallArgs(resultT, rest, st3, callSpan)
         | _ => let (resultT, st2) = freshVar(st1) in
-          let? st3 = u(fnT, tArrow(argT, resultT), st2, exprSpan(arg)) in
+          let? st3 = ctx->u(fnT, tArrow(argT, resultT), st2, exprSpan(arg)) in
             ctx->inferCallArgs(resultT, rest, st3, callSpan)
       }
 }
@@ -543,7 +610,7 @@ let inferNormalCall = (ctx: Ctx<a>, fn, args, st: Types.St) =>
         // domain is an all-optional record — every label omitted (ADR 0098 §2).
         switch resolve(fnT, st1) {
           | TyFn(fromT, toT) => domainIsOmittableRecord(fromT, st1)
-              ? let? st2 = checkFits(
+              ? let? st2 = ctx->checkFits(
                 tRecord(RowEmpty),
                 fromT,
                 st1,
@@ -551,10 +618,15 @@ let inferNormalCall = (ctx: Ctx<a>, fn, args, st: Types.St) =>
               ) in
                 Ok((toT, st2))
               : let (resultT, st2) = freshVar(st1) in
-              let? st3 = u(fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)) in
+              let? st3 = ctx->u(
+                fnT,
+                tArrow(tUnit, resultT),
+                st2,
+                exprSpan(fn)
+              ) in
                 Ok((resultT, st3))
           | _ => let (resultT, st2) = freshVar(st1) in
-            let? st3 = u(fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)) in
+            let? st3 = ctx->u(fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)) in
               Ok((resultT, st3))
         }
       | _ => ctx->inferCallArgs(fnT, args, st1, exprSpan(fn))
@@ -562,26 +634,26 @@ let inferNormalCall = (ctx: Ctx<a>, fn, args, st: Types.St) =>
 
 let inferTernary = (ctx: Ctx<a>, cond, thenE, elseE, st: Types.St) =>
   let? (condT, st1) = ctx->inferExpr(cond, st) in
-  let? st2 = u(condT, tBool, st1, exprSpan(cond)) in
+  let? st2 = ctx->u(condT, tBool, st1, exprSpan(cond)) in
   let? (thenT, st3) = ctx->inferExpr(thenE, st2) in
   let? (elseT, st4) = ctx->inferExpr(elseE, st3) in
-  let? st5 = u(thenT, elseT, st4, exprSpan(elseE)) in Ok((thenT, st5))
+  let? st5 = ctx->u(thenT, elseT, st4, exprSpan(elseE)) in Ok((thenT, st5))
 
 // Shared tail of `let?` / `let!`: bind `param` to the payload, then unify the
 // body against `mkBody(resT)` (Option b / Result b e / Task b e).
 let inferBindBody = (ctx: Ctx<a>, param, paramSpan, body, payloadT, mkBody, st: Types.St) =>
   let (paramT, bodyEnv, st1) = bindParam(param, ctx.env, st) in
-  let? st2 = u(paramT, payloadT, st1, paramSpan) in
+  let? st2 = ctx->u(paramT, payloadT, st1, paramSpan) in
   let? (bodyT, st3) = ctxWithEnv(ctx, bodyEnv)->inferExpr(body, st2) in
   let (resT, st4) = freshVar(st3) in
   let wantBody = mkBody(resT) in
-  let? st5 = u(bodyT, wantBody, st4, exprSpan(body)) in Ok((wantBody, st5))
+  let? st5 = ctx->u(bodyT, wantBody, st4, exprSpan(body)) in Ok((wantBody, st5))
 
 // Two-slot bind (`Result a e` / `Task a e`): value `M a e`, body `M b e`.
 let inferTwoSlotBind = (ctx: Ctx<a>, param, paramSpan, value, body, valT, ctor, st: Types.St) =>
   let (payloadT, st1) = freshVar(st) in
   let (errT, st2) = freshVar(st1) in
-  let? st3 = u(valT, tCon(ctor, [payloadT, errT]), st2, exprSpan(value)) in
+  let? st3 = ctx->u(valT, tCon(ctor, [payloadT, errT]), st2, exprSpan(value)) in
     ctx->inferBindBody(
       param,
       paramSpan,
@@ -599,7 +671,12 @@ let inferQuestionBind = (ctx: Ctx<a>, bind, param, paramSpan, value, body, valT,
   | TyCon(name, _) => name == "Option"
       ? let $written = setLetBindMonad(bind, "Option") in
       let (payloadT, st1) = freshVar(st) in
-      let? st2 = u(valT, tCon("Option", [payloadT]), st1, exprSpan(value)) in
+      let? st2 = ctx->u(
+        valT,
+        tCon("Option", [payloadT]),
+        st1,
+        exprSpan(value)
+      ) in
         ctx->inferBindBody(
           param,
           paramSpan,
@@ -686,15 +763,20 @@ let inferFieldAccess = (ctx: Ctx<a>, field, target, name, sp, st: Types.St) =>
               : Ok((ft, st1))
           | None => rowEndsEmpty(row)
               ? Err(typeErr("record missing field '${name}'", sp))
-              : inferDuckField(targetT, name, sp, st1)
+              : ctx->inferDuckField(targetT, name, sp, st1)
         }
-      | _ => inferDuckField(targetT, name, sp, st1)
+      | _ => ctx->inferDuckField(targetT, name, sp, st1)
     }
 
-let inferDuckField = (targetT, name, sp, st: Types.St) =>
+let inferDuckField = (ctx: Ctx<a>, targetT, name, sp, st: Types.St) =>
   let (fieldT, st2) = freshVar(st) in
   let (restRow, st3) = freshRowVar(st2) in
-  let? st4 = u(targetT, tRecord(rExtend(name, fieldT, restRow)), st3, sp) in
+  let? st4 = ctx->u(
+    targetT,
+    tRecord(rExtend(name, fieldT, restRow)),
+    st3,
+    sp
+  ) in
     Ok((fieldT, st4))
 
 let inferNsField = (ctx: Ctx<a>, tname, name, sp, st: Types.St) => switch Map.get(name, Map.getOr(#{}, tname, ctx.ns)) {
@@ -708,7 +790,7 @@ let inferInterpParts = (ctx: Ctx<a>, parts, st: Types.St) => switch parts {
   | [] => Ok(st)
   | [Ast.IPLit(_), ...rest] => ctx->inferInterpParts(rest, st)
   | [Ast.IPExpr(ex), ...rest] => let? (t, st1) = ctx->inferExpr(ex, st) in
-    let? st2 = u(t, tString, st1, exprSpan(ex)) in
+    let? st2 = ctx->u(t, tString, st1, exprSpan(ex)) in
       ctx->inferInterpParts(rest, st2)
 }
 
@@ -732,7 +814,7 @@ let inferSeqSlotsElems = (ctx: Ctx<a>, con, elem, elements, st: Types.St) => swi
       | Ast.SEExpr(_) => elem
       | Ast.SESpread(_) => tCon(con, [elem])
     } in
-    let? st2 = u(want, et, st1, exprSpan(ex)) in
+    let? st2 = ctx->u(want, et, st1, exprSpan(ex)) in
       ctx->inferSeqSlotsElems(con, elem, rest, st2)
 }
 let inferSeqSlots = (ctx: Ctx<a>, con, elements, st: Types.St) =>
@@ -743,9 +825,9 @@ let inferSeqSlots = (ctx: Ctx<a>, con, elements, st: Types.St) =>
 let inferMapEntries = (ctx: Ctx<a>, k, v, entries, st: Types.St) => switch entries {
   | [] => Ok(st)
   | [ent, ...rest] => let? (kt, st1) = ctx->inferExpr(ent.key, st) in
-    let? st2 = u(k, kt, st1, exprSpan(ent.key)) in
+    let? st2 = ctx->u(k, kt, st1, exprSpan(ent.key)) in
     let? (vt, st3) = ctx->inferExpr(ent.value, st2) in
-    let? st4 = u(v, vt, st3, exprSpan(ent.value)) in
+    let? st4 = ctx->u(v, vt, st3, exprSpan(ent.value)) in
       ctx->inferMapEntries(k, v, rest, st4)
 }
 let inferMapExpr = (ctx: Ctx<a>, entries, st: Types.St) =>
@@ -786,15 +868,15 @@ let inferArms = (ctx: Ctx<a>, scrutT, resultT, arms, st: Types.St) => switch arm
       arm.pattern,
       st
     ) in
-    let? st2 = u(scrutT, patT, st1, patSpan(arm.pattern)) in
+    let? st2 = ctx->u(scrutT, patT, st1, patSpan(arm.pattern)) in
     let armCtx = ctxWithEnv(ctx, mergeEnvBindings(bindings, ctx.env)) in
     let? st3 = switch arm.guard {
       | None => Ok(st2)
       | Some(g) => let? (guardT, stg) = armCtx->inferExpr(g, st2) in
-          u(tBool, guardT, stg, exprSpan(g))
+          ctx->u(tBool, guardT, stg, exprSpan(g))
     } in
     let? (bodyT, st4) = armCtx->inferExpr(arm.body, st3) in
-    let? st5 = u(resultT, bodyT, st4, exprSpan(arm.body)) in
+    let? st5 = ctx->u(resultT, bodyT, st4, exprSpan(arm.body)) in
       ctx->inferArms(scrutT, resultT, rest, st5)
 }
 let inferMatch = (ctx: Ctx<a>, scrutinee, arms, st: Types.St) =>
@@ -902,7 +984,7 @@ let inferExprRaw = (ctx: Ctx<a>, e, st: Types.St) => switch e {
               ctx.aliasMap,
               Set.fromArray([])
             ) in
-              checkFits(valT, at, stA, annotSpan(te))
+              ctx->checkFits(valT, at, stA, annotSpan(te))
                 |> Result.map(stB => (at, stB))
           | None => Ok((valT, st1))
         } in
@@ -927,7 +1009,7 @@ let inferExprRaw = (ctx: Ctx<a>, e, st: Types.St) => switch e {
     )
   | Ast.ECall(fn, args, origin, _) => let api = {
       inferExpr: (e, st0) => ctx->inferExpr(e, st0),
-      unify: u
+      unify: (left, right, st0, sp) => ctx->u(left, right, st0, sp)
     } in
     let? claimed = runInferCallHooks(
       inferCallHooksOf(ctx.plugins),
@@ -974,7 +1056,7 @@ let inferExprRaw = (ctx: Ctx<a>, e, st: Types.St) => switch e {
         let? (row, st1) = ctx->inferRecordRow(fields, st) in
         let? (baseT, st2) = ctx->inferExpr(spreadExpr, st1) in
         let (tailVar, st3) = freshRowVar(st2) in
-        let? st4 = u(baseT, tRecord(rWithTail(row, tailVar)), st3, sp) in
+        let? st4 = ctx->u(baseT, tRecord(rWithTail(row, tailVar)), st3, sp) in
           Ok((baseT, st4))
     }
   | Ast.EField(target, name, _, sp) => switch target {
@@ -1054,7 +1136,7 @@ let inferPatCtorArgs = (ctx: Ctx<a>, ctor, curT, args, st: Types.St, bindings, s
           argPat,
           st
         ) in
-        let? st2 = u(fromT, subT, st1, patSpan(argPat)) in
+        let? st2 = ctx->u(fromT, subT, st1, patSpan(argPat)) in
           ctx->inferPatCtorArgs(
             ctor,
             toT,
@@ -1086,7 +1168,7 @@ let inferPatTuple = (ctx: Ctx<a>, elems, st: Types.St) =>
 let inferSeqPatElems = (ctx: Ctx<a>, elem, elems, st: Types.St) => switch elems {
   | [] => Ok((#{}, st))
   | [ep, ...rest] => let? (subT, subBindings, st1) = ctx->inferPat(ep, st) in
-    let? st2 = u(elem, subT, st1, patSpan(ep)) in
+    let? st2 = ctx->u(elem, subT, st1, patSpan(ep)) in
     let? (restBindings, st3) = ctx->inferSeqPatElems(elem, rest, st2) in
       Ok((mergeBindingMaps(restBindings, subBindings), st3))
 }
@@ -1097,7 +1179,7 @@ let inferSeqPat = (ctx: Ctx<a>, con, elems, restPat, st: Types.St) =>
     switch restPat {
       | None => Ok((seqT, bindings, st2))
       | Some(r) => let? (subT, subBindings, st3) = ctx->inferPat(r, st2) in
-        let? st4 = u(subT, seqT, st3, patSpan(r)) in
+        let? st4 = ctx->u(subT, seqT, st3, patSpan(r)) in
           Ok((seqT, mergeBindingMaps(bindings, subBindings), st4))
     }
 
@@ -1143,29 +1225,29 @@ let inferPatRaw = (ctx: Ctx<a>, p, st: Types.St) => switch p {
 // types unify; and (guaranteed by check.mochi) they bind the same names, whose
 // types unify too. The arm's binder env is the FIRST alt's (unified) —
 // mirrors src/infer.ts's inferOrPat exactly.
-let unifyOrPatBinding = (name, altBindings, bindings, st: Types.St, sp) => switch Map.get(name, bindings) {
+let unifyOrPatBinding = (ctx: Ctx<a>, name, altBindings, bindings, st: Types.St, sp) => switch Map.get(name, bindings) {
   | None => Ok(st)
   | Some(prevT) => switch Map.get(name, altBindings) {
       | None => Ok(st)
-      | Some(ty) => u(prevT, ty, st, sp)
+      | Some(ty) => ctx->u(prevT, ty, st, sp)
     }
 }
-let unifyOrPatBindings = (names, altBindings, bindings, st: Types.St, sp) => switch names {
+let unifyOrPatBindings = (ctx: Ctx<a>, names, altBindings, bindings, st: Types.St, sp) => switch names {
   | [] => Ok(st)
-  | [name, ...rest] => let? st1 = unifyOrPatBinding(
+  | [name, ...rest] => let? st1 = ctx->unifyOrPatBinding(
       name,
       altBindings,
       bindings,
       st,
       sp
     ) in
-      unifyOrPatBindings(rest, altBindings, bindings, st1, sp)
+      ctx->unifyOrPatBindings(rest, altBindings, bindings, st1, sp)
 }
 let inferOrPatAlts = (ctx: Ctx<a>, alts, i, t, bindings, st: Types.St) => switch Array.get(i, alts) {
   | None => Ok(st)
   | Some(alt) => let? (altT, altBindings, st1) = ctx->inferPat(alt, st) in
-    let? st2 = u(t, altT, st1, patSpan(alt)) in
-    let? st3 = unifyOrPatBindings(
+    let? st2 = ctx->u(t, altT, st1, patSpan(alt)) in
+    let? st3 = ctx->unifyOrPatBindings(
       Map.keys(altBindings),
       altBindings,
       bindings,
@@ -1668,7 +1750,7 @@ let inferGroupFrom = (ctx: Ctx<a>, group, st: Types.St) => switch group {
           st
         ) in
           switch Map.get(name, ctx.env) {
-            | Some(selfSc) => let? st2 = u(selfSc.ty, t, st1, span) in
+            | Some(selfSc) => let? st2 = ctx->u(selfSc.ty, t, st1, span) in
               // Binding annotation (`let x : T = v`, ADR 0044 / 0081): pin to
               // the declared type before generalize, so a lit against a union
               // keeps the union instead of widening to `string`.
@@ -1680,7 +1762,7 @@ let inferGroupFrom = (ctx: Ctx<a>, group, st: Types.St) => switch group {
                     ctx.aliasMap,
                     Set.fromArray([])
                   ) in
-                    checkFits(t, at, stA, annotSpan(te))
+                    ctx->checkFits(t, at, stA, annotSpan(te))
                       |> Result.map(stB => (at, stB))
                 | None => Ok((t, st2))
               } in
@@ -1770,7 +1852,8 @@ let inferExprStmtsFrom = (ctx: Ctx<a>, stmts, st: Types.St) => switch stmts {
   | [] => Ok(st)
   | [s, ...rest] => switch s {
       | Ast.SExpr(value, span) => let? (t, st1) = ctx->inferExpr(value, st) in
-        let? st2 = u(t, tUnit, st1, span) in ctx->inferExprStmtsFrom(rest, st2)
+        let? st2 = ctx->u(t, tUnit, st1, span) in
+          ctx->inferExprStmtsFrom(rest, st2)
       | _ => ctx->inferExprStmtsFrom(rest, st)
     }
 }

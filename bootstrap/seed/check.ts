@@ -1083,7 +1083,7 @@ const checkExprs: _Curry<
     )
     .exhaustive(),
 );
-const reservedNames: string[] = ["Array", "List", "Set", "Map", "Option", "Result", "Str"];
+const reservedNames: string[] = ["Array", "List", "Set", "Map", "Option", "Result", "Task", "Str"];
 const redeclarableTypes: string[] = ["Option", "Result"];
 const reservedErr: <A, B, C>(
   name: string,
