@@ -1,4 +1,4 @@
-import type { PErr } from "./parser";
+import type { StageErr, Stamped } from "./compile";
 
 export type Diag = { message: string; start: number; end: number };
 
@@ -43,12 +43,20 @@ import { emit } from "./host.mjs";
 import { die } from "./host.mjs";
 import { formatError as $formatError } from "./host.mjs";
 const formatError = _curry(3, $formatError);
-const formatErrors: _Curry<[path: string, src: string, errors: PErr[]], string> = _curry(
+const formatErrors: <A>(
+  path: string,
+  src: string,
+  errors: ({ end: number; start: number; message: string } & A)[],
+) => string = _curry(
   3,
-  (path: string, src: string, errors: PErr[]) =>
+  <A>(path: string, src: string, errors: ({ end: number; start: number; message: string } & A)[]) =>
     _Str_join(
       "\n",
-      map((e: PErr) => formatError(path, src, e), errors),
+      map(
+        (e: { end: number; start: number; message: string } & A) =>
+          formatError(path, src, { message: e.message, start: e.start, end: e.end }),
+        errors,
+      ),
     ),
 );
 const formatModuleErrors: <A>(errors: ({ message: string } & A)[]) => string = <A>(
@@ -64,14 +72,14 @@ export const tsOutPath: (path: string) => string = (path: string) =>
   `${_Str_slice(0, _Str_length(path) - 6, path)}.ts`;
 export const dtsOutPath: (path: string) => string = (path: string) =>
   `${_Str_slice(0, _Str_length(path) - 6, path)}.d.mochi.ts`;
-export const formatSrc: (src: string) => Result<string, PErr> = (src: string) =>
+export const formatSrc: (src: string) => Result<string, StageErr> = (src: string) =>
   _Result_flatMap(
-    (toks) => Ok(formatProgram(parseRecovering(toks, None).stmts, src)) as Result<string, PErr>,
+    (toks) => Ok(formatProgram(parseRecovering(toks, None).stmts, src)) as Result<string, StageErr>,
     lex(src),
   );
 export const fmtText: (path: string) => Result<string, string> = (path: string) =>
   _Result_flatMap(
-    (src) => _Result_mapErr((e: PErr) => formatError(path, src, e), formatSrc(src)),
+    (src) => _Result_mapErr((e: StageErr) => formatError(path, src, e), formatSrc(src)),
     readFile(path),
   );
 export const fmtOne: _Curry<[path: string, write: boolean], Result<string, string>> = _curry(
@@ -90,7 +98,7 @@ export const buildOne: (path: string) => Result<string, string> = (path: string)
     (src) =>
       _Result_flatMap(
         (js) => writeFile(outPath(path), js),
-        _Result_mapErr((es: PErr[]) => formatErrors(path, src, es), compile(src)),
+        _Result_mapErr((es: Stamped[]) => formatErrors(path, src, es), compile(src)),
       ),
     readFile(path),
   );
@@ -102,7 +110,10 @@ export const buildOneTs: _Curry<
     (src) =>
       _Result_flatMap(
         (ts) => writeFile(tsOutPath(path), ts),
-        _Result_mapErr((es: PErr[]) => formatErrors(path, src, es), compileTs(src, runtimeImport)),
+        _Result_mapErr(
+          (es: Stamped[]) => formatErrors(path, src, es),
+          compileTs(src, runtimeImport),
+        ),
       ),
     readFile(path),
   ),
@@ -116,7 +127,7 @@ export const buildOneDts: _Curry<
       _Result_flatMap(
         (dts) => writeFile(dtsOutPath(path), dts),
         _Result_mapErr(
-          (es: PErr[]) => formatErrors(path, src, es),
+          (es: Stamped[]) => formatErrors(path, src, es),
           emitDtsText(src, runtimeImport),
         ),
       ),

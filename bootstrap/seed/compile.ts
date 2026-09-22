@@ -1,8 +1,8 @@
 import type { Stmt } from "./ast";
 import type { SpanAt, Ty, TypeAt } from "./types";
-import type { PErr } from "./parser";
 import type { Scheme } from "./schemes";
 import type { AliasInfo } from "./codegen-ts";
+import type { IErr } from "./infer";
 
 /**
  * Caller-supplied knobs: `open` selects open-world inference (host globals
@@ -21,6 +21,16 @@ export type Opts = {
   docs: boolean;
   moduleExt: string;
   strictEntry: boolean;
+};
+export type Suggestion = { title: string; start: number; end: number; replaceWith: string };
+export type StageErr = { message: string; start: number; end: number };
+export type Stamped = {
+  kind: string;
+  message: string;
+  start: number;
+  end: number;
+  help: Option<string>;
+  suggestions: Suggestion[];
 };
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
@@ -101,25 +111,62 @@ export const openMode: _Curry<[src: string, requested: boolean], boolean> = _cur
   2,
   (src: string, requested: boolean) => or(requested, openDirective(src)),
 );
-const typecheckWith: _Curry<[prog: Stmt[], open: boolean], Result<Stmt[], PErr[]>> = _curry(
+
+const noSuggestions: Suggestion[] = [] as Suggestion[];
+
+const stampStage: _Curry<[kind: string, e: StageErr], Stamped> = _curry(
+  2,
+  (kind: string, e: StageErr) => ({
+    kind: kind,
+    message: e.message,
+    start: e.start,
+    end: e.end,
+    help: None as Option<string>,
+    suggestions: noSuggestions,
+  }),
+);
+const stampType: <A, B, C, D, E, F>(
+  e: { suggestions: A; help: B; end: C; start: D; message: E } & F,
+) => { kind: string; message: E; start: D; end: C; help: B; suggestions: A } = <A, B, C, D, E, F>(
+  e: { suggestions: A; help: B; end: C; start: D; message: E } & F,
+) => ({
+  kind: "type",
+  message: e.message,
+  start: e.start,
+  end: e.end,
+  help: e.help,
+  suggestions: e.suggestions,
+});
+const typecheckWith: _Curry<[prog: Stmt[], open: boolean], Result<Stmt[], Stamped[]>> = _curry(
   2,
   (prog: Stmt[], open: boolean) =>
     _Result_mapErr(
-      (e: PErr) => [e],
+      (e: IErr) => [stampType(e)],
       _Result_map((_: Map<string, Scheme>) => prog, inferProgram(prog, builtins, namespaces, open)),
     ),
 );
-const frontend: (src: string) => Result<Stmt[], PErr[]> = (src: string) =>
+const frontend: (src: string) => Result<Stmt[], Stamped[]> = (src: string) =>
   match(lex(src))
-    .with({ _tag: "Err" }, ({ error: e }) => Err([e]) as Result<Stmt[], PErr[]>)
+    .with(
+      { _tag: "Err" },
+      ({ error: e }) => Err([stampStage("lex", e)]) as Result<Stmt[], Stamped[]>,
+    )
     .with({ _tag: "Ok" }, ({ value: tokens }) =>
       match(parse(tokens))
-        .with({ _tag: "Err" }, ({ error: e }) => Err([e]) as Result<Stmt[], PErr[]>)
-        .with({ _tag: "Ok" }, ({ value: stmts }) => checkAll(stmts))
+        .with(
+          { _tag: "Err" },
+          ({ error: e }) => Err([stampStage("parse", e)]) as Result<Stmt[], Stamped[]>,
+        )
+        .with({ _tag: "Ok" }, ({ value: stmts }) =>
+          _Result_mapErr(
+            (es: StageErr[]) => map((e: StageErr) => stampStage("check", e), es),
+            checkAll(stmts),
+          ),
+        )
         .exhaustive(),
     )
     .exhaustive();
-const pipelineWith: _Curry<[src: string, open: boolean], Result<Stmt[], PErr[]>> = _curry(
+const pipelineWith: _Curry<[src: string, open: boolean], Result<Stmt[], Stamped[]>> = _curry(
   2,
   (src: string, open: boolean) =>
     _Result_flatMap((stmts) => typecheckWith(stmts, open), frontend(src)),
@@ -141,13 +188,13 @@ export const typedProgramWith: _Curry<
         letParams: TypeAt[];
       },
     ],
-    PErr[]
+    Stamped[]
   >
 > = _curry(2, (src: string, opts: Opts) =>
   _Result_flatMap(
     (stmts) =>
       _Result_mapErr(
-        (e: PErr) => [e],
+        (e: IErr) => [stampType(e)],
         _Result_map(
           (r: {
             env: Map<string, Scheme>;
@@ -171,7 +218,7 @@ export const typedProgram: (src: string) => Result<
       letParams: TypeAt[];
     },
   ],
-  PErr[]
+  Stamped[]
 > = (src: string) => typedProgramWith(src, defaultOpts);
 /**
  * inferTypes : string -> Result InferResult Err — strict typed-query seam
@@ -186,13 +233,13 @@ export const inferTypesWith: _Curry<
       aliases: Map<string, AliasInfo>;
       letParams: TypeAt[];
     },
-    PErr[]
+    Stamped[]
   >
 > = _curry(2, (src: string, opts: Opts) =>
   _Result_flatMap(
     (stmts) =>
       _Result_mapErr(
-        (e: PErr) => [e],
+        (e: IErr) => [stampType(e)],
         _Result_map(
           (r: {
             letParams: TypeAt[];
@@ -225,12 +272,12 @@ export const inferTypes: (src: string) => Result<
     aliases: Map<string, AliasInfo>;
     letParams: TypeAt[];
   },
-  PErr[]
+  Stamped[]
 > = (src: string) => inferTypesWith(src, defaultOpts);
 /**
  * compileWith : string -> Opts -> Result string Err
  */
-export const compileWith: _Curry<[src: string, opts: Opts], Result<string, PErr[]>> = _curry(
+export const compileWith: _Curry<[src: string, opts: Opts], Result<string, Stamped[]>> = _curry(
   2,
   (src: string, opts: Opts) =>
     _Result_map(
@@ -250,7 +297,7 @@ export const compileWith: _Curry<[src: string, opts: Opts], Result<string, PErr[
 /**
  * compile : string -> Result string Err
  */
-export const compile: (src: string) => Result<string, PErr[]> = (src: string) =>
+export const compile: (src: string) => Result<string, Stamped[]> = (src: string) =>
   compileWith(src, defaultOpts);
 const noImportedKeys: Map<string, string[]> = new Map<string, string[]>();
 /**
@@ -261,12 +308,12 @@ const noImportedKeys: Map<string, string[]> = new Map<string, string[]>();
  */
 export const compileTsWith: _Curry<
   [src: string, runtimeImport: string, opts: Opts],
-  Result<string, PErr[]>
+  Result<string, Stamped[]>
 > = _curry(3, (src: string, runtimeImport: string, opts: Opts) =>
   _Result_flatMap(
     (stmts) =>
       _Result_mapErr(
-        (e: PErr) => [e],
+        (e: IErr) => [stampType(e)],
         _Result_map(
           (r: {
             env: Map<string, Scheme>;
@@ -296,7 +343,7 @@ export const compileTsWith: _Curry<
 );
 export const compileTs: _Curry<
   [src: string, runtimeImport: string],
-  Result<string, PErr[]>
+  Result<string, Stamped[]>
 > = _curry(2, (src: string, runtimeImport: string) =>
   compileTsWith(src, runtimeImport, defaultOpts),
 );

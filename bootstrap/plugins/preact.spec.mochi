@@ -8,6 +8,7 @@ let typecheck = (src, plugins) =>
   let? toks = lex(src) in
   let? stmts = parse(toks) in
     inferProgramWith(stmts, #{}, #{}, true, Some(plugins))
+      |> Result.mapErr(e => { message: e.message, start: e.start, end: e.end })
 
 test("useState pins the setter's state type", () => switch typecheck("extern useState : a -> (a, a -> b) = \"preact/hooks\" \"useState\"\nlet test = _ => let (n, setN) = useState(0) in setN(\"oops\")\n", [preactPlugin]) {
   | Err(_) => true |> ok

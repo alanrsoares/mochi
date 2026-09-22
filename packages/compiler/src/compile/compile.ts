@@ -1,6 +1,7 @@
 /** The pipeline as a two-track railway: lex → parse → check → typecheck → codegen. Lex/parse fail with one Diagnostic; check/infer with Diagnostic[] (ADR 0004). Ok carries the emitted JS / typed program. */
 import { err, isErr, map, ok, type Result } from "@onrails/result";
 import type { Program } from "../ast/ast";
+import type { BootstrapDiagnostic } from "../bootstrap/index.ts";
 import { compileBootstrapSyncWith } from "../bootstrap/sync";
 import { check, type Registry } from "../check/check";
 import { codegen } from "../codegen/codegen";
@@ -145,15 +146,41 @@ const compileWithTsCore = (src: string, opts: CompileOptions): Result<string, Di
       );
 };
 
+const DIAG_KINDS = ["lex", "parse", "check", "type"] as const;
+
+const isDiagKind = (kind: string | undefined): kind is Diagnostic["kind"] =>
+  kind !== undefined && (DIAG_KINDS as readonly string[]).includes(kind);
+
+/** Seed diagnostics are `{message,start,end}` plus optional kind, help, suggestions. */
+const toDiagnostic = (d: BootstrapDiagnostic): Diagnostic => {
+  const help = d.help?._tag === "Some" ? d.help.value : undefined;
+  const suggestions = (d.suggestions ?? []).map((s) => ({
+    location: { path: "", span: { start: s.start, end: s.end } },
+    replaceWith: s.replaceWith,
+    ...(s.title ? { title: s.title } : {}),
+  }));
+  return {
+    kind: isDiagKind(d.kind) ? d.kind : "type",
+    message: d.message,
+    span: { start: d.start, end: d.end },
+    ...(d.path ? { path: d.path } : {}),
+    ...(help ? { help } : {}),
+    ...(suggestions.length > 0 ? { suggestions } : {}),
+  };
+};
+
 /**
- * Source → JS through the self-hosted compiler. The TypeScript pipeline remains
- * the diagnostic-complete preflight until bootstrap carries staged, aggregate
- * diagnostics and every host plugin validation is self-hosted.
+ * Source → JS through the self-hosted compiler. A caller-supplied `plugins`
+ * list still runs the TypeScript railway: bootstrap compile takes no plugin
+ * argument yet.
+ *
+ * Bootstrap diagnostics win when they carry a suggestion. Otherwise a
+ * TypeScript pass still reports what the self-hosted graph does not yet:
+ * alias folding, every parse diagnostic, reserved namespaces such as Task,
+ * and intrinsic JSX prop checks.
  */
 export function compile(src: string, opts: CompileOptions = {}): Result<string, Diagnostic[]> {
   if (opts.plugins !== undefined) return compileWithTsCore(src, opts);
-  const preflight = compileWithTsCore(src, opts);
-  if (isErr(preflight)) return preflight;
   const compiled = compileBootstrapSyncWith(src, {
     open: opts.open ?? false,
     runtime: opts.runtime ?? true,
@@ -161,7 +188,14 @@ export function compile(src: string, opts: CompileOptions = {}): Result<string, 
     moduleExt: opts.moduleExt ?? ".js",
     strictEntry: false,
   });
-  return compiled._tag === "Ok" ? ok(compiled.value) : preflight;
+  if (compiled._tag === "Err") {
+    const diags = compiled.error.map(toDiagnostic);
+    if (diags.some((d) => (d.suggestions?.length ?? 0) > 0)) return err(diags);
+    const ts = compileWithTsCore(src, opts);
+    return isErr(ts) ? ts : err(diags);
+  }
+  const ts = compileWithTsCore(src, opts);
+  return isErr(ts) ? ts : ok(compiled.value);
 }
 
 export { codegenTs } from "../codegen/codegen-ts";

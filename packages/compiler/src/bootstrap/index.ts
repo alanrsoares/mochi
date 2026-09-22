@@ -8,12 +8,24 @@
  */
 export type BootstrapResult<A, E> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: E };
 
+export type BootstrapSuggestion = {
+  title: string;
+  start: number;
+  end: number;
+  replaceWith: string;
+};
+
+/** Mochi `Option<string>` as the seed emits it. */
+export type BootstrapHelp = { _tag: "Some"; value: string } | { _tag: "None" };
+
 export type BootstrapDiagnostic = {
   message: string;
   start: number;
   end: number;
   path?: string;
-  suggestions?: Array<{ title: string; start: number; end: number; replaceWith: string }>;
+  kind?: string;
+  help?: BootstrapHelp;
+  suggestions?: BootstrapSuggestion[];
 };
 
 export type BootstrapModuleOutput = { path: string; js: string };

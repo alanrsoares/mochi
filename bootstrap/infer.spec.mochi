@@ -12,7 +12,10 @@ let inferSrc = src =>
   lex(src)
     |> Result.flatMap(parse)
     |> Result.flatMap(check)
-    |> Result.flatMap(stmts => inferProgram(stmts, builtins, namespaces, false))
+    |> Result.flatMap(stmts =>
+      inferProgram(stmts, builtins, namespaces, false)
+        |> Result.mapErr(e =>
+          { message: e.message, start: e.start, end: e.end }))
 
 testEach("inference accepts well-typed programs", [
   {
@@ -71,7 +74,9 @@ let typesOf = src =>
     |> Result.flatMap(parse)
     |> Result.flatMap(check)
     |> Result.flatMap(stmts =>
-      inferProgramTypes(stmts, builtins, namespaces, false))
+      inferProgramTypes(stmts, builtins, namespaces, false)
+        |> Result.mapErr(e =>
+          { message: e.message, start: e.start, end: e.end }))
     |> Result.map(r => r.types)
 
 let lastOf = xs => Array.get(Array.length(xs) - 1, xs)
@@ -99,5 +104,36 @@ test("recorded types are zonked against the final substitution", () =>
 
 test("inference records every node, not just top-level bindings", () => switch typesOf("let f = value => add(value, 1)") {
   | Ok(types) => Array.length(types) > 4 |> ok
+  | Err(_) => false |> ok
+})
+
+test("unbound name suggests a close binding", () => switch lex("let count = 1\nlet n = coun") |> Result.flatMap(parse) |> Result.flatMap(check) {
+  | Err(_) => false |> ok
+  | Ok(stmts) => switch inferProgram(stmts, builtins, namespaces, false) {
+      | Ok(_) => false |> ok
+      | Err(e) => switch (e.help, Array.get(0, e.suggestions)) {
+          | (Some("did you mean 'count'?"), Some(s)) => s.replaceWith == "count"
+              |> ok
+          | _ => false |> ok
+        }
+    }
+})
+
+let inferOpen = src =>
+  lex(src)
+    |> Result.flatMap(parse)
+    |> Result.flatMap(check)
+    |> Result.flatMap(stmts =>
+      inferProgram(stmts, builtins, namespaces, true)
+        |> Result.mapErr(e =>
+          { message: e.message, start: e.start, end: e.end }))
+
+test("open mode rejects a ref outside its binder", () => switch inferOpen("let go = () => {\n  let n = 1 in f(n);\n  g(n)\n}") {
+  | Err(e) => e.message == "'n' is not in scope here" |> ok
+  | Ok(_) => false |> ok
+})
+
+test("open mode still accepts a host global", () => switch inferOpen("let read = () => localStorage") {
+  | Ok(_) => true |> ok
   | Err(_) => false |> ok
 })

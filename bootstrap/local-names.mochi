@@ -1,0 +1,175 @@
+// Names bound by a local binder anywhere in a program: lambda params,
+// `let … in`, monadic binds, `switch` binders, `loop` params.
+//
+// Open mode (`"use open"`) gives an unknown ref a fresh var, on the assumption
+// it is a host global. That is wrong for a name this module binds somewhere —
+// the use escaped its binder and the emitted JS would throw ReferenceError.
+// Top-level `let`s are absent on purpose: they sit in `env` everywhere, so a
+// ref to one never reaches the open-world branch. Ports `src/infer/local-names.ts`.
+
+import * as Ast from "./ast.mochi"
+
+let addNames = (names, out) => switch names {
+  | [] => out
+  | [n, ...rest] => addNames(rest, Set.add(n, out))
+}
+
+let patternNamesOpt = (p, out) => switch p {
+  | None => out
+  | Some(pat) => patternNames(pat, out)
+}
+
+let patternNamesAll = (pats, out) => switch pats {
+  | [] => out
+  | [p, ...rest] => patternNamesAll(rest, patternNames(p, out))
+}
+
+let patternNamesFields = (fields, out) => switch fields {
+  | [] => out
+  | [f, ...rest] => patternNamesFields(rest, patternNames(f.pat, out))
+}
+
+let patternNames = (p, out) => switch p {
+  | Ast.PAs(pat, name, _, _) => patternNames(pat, Set.add(name, out))
+  | Ast.PBind(name, _) => Set.add(name, out)
+  | Ast.PTuple(elems, _) => patternNamesAll(elems, out)
+  | Ast.PRecord(fields, _) => patternNamesFields(fields, out)
+  | Ast.PCtor(_, args, _, _) => patternNamesAll(args, out)
+  | Ast.PArr(elems, rest, _) => patternNamesOpt(
+      rest,
+      patternNamesAll(elems, out)
+    )
+  | Ast.PList(elems, rest, _) => patternNamesOpt(
+      rest,
+      patternNamesAll(elems, out)
+    )
+  | Ast.POr(alts, _) => patternNamesAll(alts, out)
+  | Ast.PWild(_) => out
+  | Ast.PUnit(_) => out
+  | Ast.PLit(_, _, _) => out
+  | Ast.PBool(_, _) => out
+  | Ast.PStr(_, _) => out
+}
+
+let exprNamesAll = (exprs, out) => switch exprs {
+  | [] => out
+  | [e, ...rest] => exprNamesAll(rest, exprNames(e, out))
+}
+
+let exprNamesOpt = (e, out) => switch e {
+  | None => out
+  | Some(ex) => exprNames(ex, out)
+}
+
+let seqNames = (elems, out) => switch elems {
+  | [] => out
+  | [Ast.SEExpr(e), ...rest] => seqNames(rest, exprNames(e, out))
+  | [Ast.SESpread(e), ...rest] => seqNames(rest, exprNames(e, out))
+}
+
+let fieldNames = (fields, out) => switch fields {
+  | [] => out
+  | [f, ...rest] => fieldNames(rest, exprNames(f.value, out))
+}
+
+let entryNames = (entries, out) => switch entries {
+  | [] => out
+  | [ent, ...rest] => entryNames(
+      rest,
+      exprNames(ent.value, exprNames(ent.key, out))
+    )
+}
+
+let interpNames = (parts, out) => switch parts {
+  | [] => out
+  | [Ast.IPLit(_), ...rest] => interpNames(rest, out)
+  | [Ast.IPExpr(e), ...rest] => interpNames(rest, exprNames(e, out))
+}
+
+let armNames = (arms, out) => switch arms {
+  | [] => out
+  | [arm, ...rest] => let out1 = patternNames(arm.pattern, out) in
+    let out2 = exprNamesOpt(arm.guard, out1) in
+      armNames(rest, exprNames(arm.body, out2))
+}
+
+let loopParamNames = (params, out) => switch params {
+  | [] => out
+  | [p, ...rest] => loopParamNames(
+      rest,
+      exprNames(p.init, Set.add(p.name, out))
+    )
+}
+
+let paramNames = (p, out) => switch p {
+  | Ast.LPSpanned(inner, _) => paramNames(inner, out)
+  | Ast.LPName(name, _) => Set.add(name, out)
+  | Ast.LPTuple(names) => addNames(names, out)
+  | Ast.LPRecord(fields) => addNames(fields, out)
+  | Ast.LPLabeled(name, _, _, defaultValue) => exprNamesOpt(
+      defaultValue,
+      Set.add(name, out)
+    )
+}
+
+let paramNamesAll = (params, out) => switch params {
+  | [] => out
+  | [p, ...rest] => paramNamesAll(rest, paramNames(p, out))
+}
+
+let exprNames = (e, out) => switch e {
+  | Ast.ENum(_, _, _) => out
+  | Ast.EUnit(_) => out
+  | Ast.EBool(_, _) => out
+  | Ast.EStr(_, _) => out
+  | Ast.ERef(_, _) => out
+  | Ast.EInterp(parts, _) => interpNames(parts, out)
+  | Ast.ECall(fn, args, _, _) => exprNamesAll(args, exprNames(fn, out))
+  | Ast.ELambda(params, body, _) => exprNames(body, paramNamesAll(params, out))
+  | Ast.ELetIn(name, _, _, value, body, _) => exprNames(
+      body,
+      exprNames(value, Set.add(name, out))
+    )
+  | Ast.ELetBind(param, _, _, value, body, _) => exprNames(
+      body,
+      paramNames(param, exprNames(value, out))
+    )
+  | Ast.EPipe(left, right, _, _) => exprNames(right, exprNames(left, out))
+  | Ast.EDo(exprs, _) => exprNamesAll(exprs, out)
+  | Ast.ETernary(cond, thenE, elseE, _) => exprNames(
+      elseE,
+      exprNames(thenE, exprNames(cond, out))
+    )
+  | Ast.EMatch(scrutinee, arms, _) => armNames(arms, exprNames(scrutinee, out))
+  | Ast.ERecord(fields, spread, _) => fieldNames(
+      fields,
+      exprNamesOpt(spread, out)
+    )
+  | Ast.EField(target, _, _, _) => exprNames(target, out)
+  | Ast.ELoop(params, body, _) => exprNames(body, loopParamNames(params, out))
+  | Ast.ERecur(args, _) => exprNamesAll(args, out)
+  | Ast.ETuple(elements, _) => exprNamesAll(elements, out)
+  | Ast.EArr(elements, _) => seqNames(elements, out)
+  | Ast.EList(elements, _) => seqNames(elements, out)
+  | Ast.ESet(elements, _) => seqNames(elements, out)
+  | Ast.EMap(entries, _) => entryNames(entries, out)
+}
+
+let namesFromStmts = (stmts, i, out) => switch Array.get(i, stmts) {
+  | None => out
+  | Some(Ast.SLet(_, _, _, value, _, _, _)) => namesFromStmts(
+      stmts,
+      i + 1,
+      exprNames(value, out)
+    )
+  | Some(Ast.SExpr(value, _)) => namesFromStmts(
+      stmts,
+      i + 1,
+      exprNames(value, out)
+    )
+  | Some(_) => namesFromStmts(stmts, i + 1, out)
+}
+
+/// Every local binder in `stmts`.
+export let localBinderNames = stmts =>
+  namesFromStmts(stmts, 0, Set.fromArray([]))

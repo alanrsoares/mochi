@@ -369,6 +369,8 @@ let emitTs = src =>
     |> Result.flatMap(check)
     |> Result.flatMap(stmts =>
       inferProgramTypes(stmts, builtins, namespaces, false)
+        |> Result.mapErr(e =>
+          { message: e.message, start: e.start, end: e.end })
         |> Result.map(r =>
           emitTsModule(
             stmts,

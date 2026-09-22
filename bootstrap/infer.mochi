@@ -67,6 +67,8 @@ import {
 // ============================================================
 
 import * as Ast from "./ast.mochi"
+import { localBinderNames } from "./local-names.mochi"
+import { closestName } from "./suggest.mochi"
 // The named imports below carry the VALUES; this namespace exists so the
 // threaded state can be NAMED in a type annotation. A record alias is
 // structural, but a bare named import crosses NOMINALLY (ADR 0046), so a plain
@@ -155,7 +157,20 @@ let patSpan = p => switch p {
 // --- inference-time error + context. unify.ts's span-less TypeErr becomes a
 // spanned IErr only at the `u()` seam below (mirrors src/infer.ts's `u`) ---
 
-type IErr = { message: string, start: number, end: number }
+type Suggestion = {
+  title: string,
+  start: number,
+  end: number,
+  replaceWith: string
+}
+let noSuggestions : [Suggestion] = []
+type IErr = {
+  message: string,
+  start: number,
+  end: number,
+  help: Option<string>,
+  suggestions: [Suggestion]
+}
 // src/ast.ts's TypeExpr nodes carry `span` as a plain field, so TS just writes
 // `s.annot.span`; a mochi variant needs the accessor. Kept local (parser.mochi has
 // its own copy) because the differential harness evaluates each bootstrap module
@@ -171,7 +186,37 @@ let annotSpan = t => switch t {
   | Ast.TyUnion(_, sp) => sp
 }
 
-let typeErr = (msg, sp) => { message: msg, start: sp.start, end: sp.end }
+let typeErr : string -> Ast.Span -> IErr = (msg, sp) =>
+  {
+    message: msg,
+    start: sp.start,
+    end: sp.end,
+    help: None,
+    suggestions: noSuggestions
+  }
+let typeErrHelp : string -> Ast.Span -> string -> IErr = (msg, sp, help) =>
+  {
+    message: msg,
+    start: sp.start,
+    end: sp.end,
+    help: Some(help),
+    suggestions: noSuggestions
+  }
+let typeErrSuggest : string -> Ast.Span -> string -> string -> IErr = (msg, sp, help, hint) =>
+  {
+    message: msg,
+    start: sp.start,
+    end: sp.end,
+    help: Some(help),
+    suggestions: [
+      {
+        title: "Did you mean '${hint}'?",
+        start: sp.start,
+        end: sp.end,
+        replaceWith: hint
+      }
+    ]
+  }
 
 let u = (a, b, st: Types.St, sp) => switch unify(a, b, st) {
   | Ok(newSt) => Ok(newSt)
@@ -283,7 +328,8 @@ let ctxWithEnv = (ctx: Ctx<a>, env) =>
     aliasMap: ctx.aliasMap,
     plugins: ctx.plugins,
     loopStack: ctx.loopStack,
-    letOwner: ctx.letOwner
+    letOwner: ctx.letOwner,
+    localNames: ctx.localNames
   }
 
 // Enter a scope where `letOwner` also carries the bindings a group / a `let …
@@ -298,7 +344,8 @@ let ctxWithLets = (ctx: Ctx<a>, env, letOwner) =>
     aliasMap: ctx.aliasMap,
     plugins: ctx.plugins,
     loopStack: ctx.loopStack,
-    letOwner
+    letOwner,
+    localNames: ctx.localNames
   }
 
 // Enter a loop body: params bound in env, frame pushed innermost-FIRST
@@ -311,7 +358,8 @@ let ctxWithLoop = (ctx: Ctx<a>, env, frame, letOwner) =>
     aliasMap: ctx.aliasMap,
     plugins: ctx.plugins,
     loopStack: Array.prepend(frame, ctx.loopStack),
-    letOwner
+    letOwner,
+    localNames: ctx.localNames
   }
 
 // loop params: inits infer in the OUTER ctx; each binds monomorphic —
@@ -776,8 +824,32 @@ let inferExprRaw = (ctx: Ctx<a>, e, st: Types.St) => switch e {
             }
           ))
       | None => ctx.open
-          ? let (t, st1) = freshVar(st) in Ok((t, st1))
-          : Err(typeErr("unbound variable '${name}'", sp))
+          ? Set.has(name, ctx.localNames)
+            ? Err(
+              typeErrHelp(
+                "'${name}' is not in scope here",
+                sp,
+                "it is bound elsewhere in this file, but not around this use — check the binder's extent"
+              )
+            )
+            : let (t, st1) = freshVar(st) in Ok((t, st1))
+          : switch closestName(name, Map.keys(ctx.env)) {
+            | Some(hint) => Err(
+                typeErrSuggest(
+                  "unbound variable '${name}'",
+                  sp,
+                  "did you mean '${hint}'?",
+                  hint
+                )
+              )
+            | None => Err(
+                typeErrHelp(
+                  "unbound variable '${name}'",
+                  sp,
+                  "bind the name before using it, or check the spelling"
+                )
+              )
+          }
     }
   | Ast.ELambda(params, body, _) =>
     // A trailing labeled group collapses to one record parameter appended
@@ -1881,7 +1953,7 @@ let runInferImports = (stmts, builtins, namespaces, openMode, imports, nsImports
   let lets = letsOfFrom(stmts) in
   let idxOf = idxOfMap(lets) in
   let sccs = stronglyConnected(adjOf(lets, idxOf)) in
-    switch processGroupsFrom({ env: env4, open: openMode, ns: ns0, aliasMap, plugins, loopStack: [], letOwner: #{} }, sccs, lets, st3) {
+    switch processGroupsFrom({ env: env4, open: openMode, ns: ns0, aliasMap, plugins, loopStack: [], letOwner: #{}, localNames: localBinderNames(stmts) }, sccs, lets, st3) {
       | Ok((finalCtx, st4)) => switch finalCtx->inferExprStmtsFrom(stmts, st4) {
           | Ok(st5) => Ok(
               {
@@ -1939,12 +2011,16 @@ type InferApi = {
 /// Structural, so it still unifies with the parser's own `LocTok`.
 type LocTok<t> = { tok: t, start: number, end: number, doc: Option<string> }
 
+/// Parse-hook failure. Not `IErr`: parse has no help or suggestions, and an
+/// inline record is not a legal type argument here.
+type HookErr = { message: string, start: number, end: number }
+
 /// A plugin as INFERENCE sees it. The parse hook is written INLINE rather than
 /// behind its own alias: a parameterized alias whose body is an arrow emits as
 /// an opaque brand, not a transparent type.
 type Plugin<t> = {
   name: string,
-  parse: Option<[LocTok<t>] -> number -> ([LocTok<t>] -> number -> Result<(Ast.Expr, number), IErr>) -> Result<Option<(Ast.Expr, number)> , IErr> >,
+  parse: Option<[LocTok<t>] -> number -> ([LocTok<t>] -> number -> Result<(Ast.Expr, number), HookErr>) -> Result<Option<(Ast.Expr, number)> , HookErr> >,
   inferCall: Option<Ast.Expr -> [Ast.Expr] -> Option<string> -> Types.St -> InferApi -> Result<Option<(Types.Ty, Types.St)> , IErr> >
 }
 
@@ -1960,7 +2036,8 @@ type Ctx<p> = {
   aliasMap: Map<string, QualAliasInfo>,
   plugins: [Plugin<p>],
   loopStack: [[Types.Ty]],
-  letOwner: Map<string, Ast.Span>
+  letOwner: Map<string, Ast.Span>,
+  localNames: Set<string>
 }
 
 let emptyQuals : Map<string, QualScope> = #{}

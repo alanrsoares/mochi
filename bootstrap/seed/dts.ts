@@ -1,11 +1,11 @@
 import type { Stmt, TypeExpr } from "./ast";
 import type { Row, Ty, TypeAt } from "./types";
-import type { PErr } from "./parser";
 import type { Scheme } from "./schemes";
 import type { AliasInfo } from "./codegen-ts";
 import type { QualAliasField } from "./infer";
 import type { CtorFieldLike, CtorLike } from "./codegen";
 import type { Opts } from "./module";
+import type { Stamped } from "./compile";
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
@@ -637,7 +637,7 @@ export const emitDtsFromTyped: <A>(
  */
 export const emitDtsTextWith: _Curry<
   [src: string, runtimeImport: string, opts: Opts],
-  Result<string, PErr[]>
+  Result<string, Stamped[]>
 > = _curry(3, (src: string, runtimeImport: string, opts: Opts) =>
   _Result_map(
     ([stmts, r]: [
@@ -662,7 +662,7 @@ export const emitDtsTextWith: _Curry<
 );
 export const emitDtsText: _Curry<
   [src: string, runtimeImport: string],
-  Result<string, PErr[]>
+  Result<string, Stamped[]>
 > = _curry(2, (src: string, runtimeImport: string) =>
   emitDtsTextWith(src, runtimeImport, {
     open: false,

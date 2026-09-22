@@ -76,19 +76,56 @@ export let openDirective = src =>
 export let openMode = (src, requested) => requested || openDirective(src)
 
 // Type-check gate: inference under `open`, program passed through unchanged.
+// One diagnostic shape for every stage. Lex/parse/check carry no help or
+// suggestions; infer fills those. `kind` is what the host maps onto Diagnostic.
+type Suggestion = {
+  title: string,
+  start: number,
+  end: number,
+  replaceWith: string
+}
+let noSuggestions : [Suggestion] = []
+type StageErr = { message: string, start: number, end: number }
+type Stamped = {
+  kind: string,
+  message: string,
+  start: number,
+  end: number,
+  help: Option<string>,
+  suggestions: [Suggestion]
+}
+let stampStage : string -> StageErr -> Stamped = (kind, e) =>
+  {
+    kind,
+    message: e.message,
+    start: e.start,
+    end: e.end,
+    help: None,
+    suggestions: noSuggestions
+  }
+let stampType = e =>
+  {
+    kind: "type",
+    message: e.message,
+    start: e.start,
+    end: e.end,
+    help: e.help,
+    suggestions: e.suggestions
+  }
+
 let typecheckWith = (prog, open) =>
   prog->inferProgram(builtins, namespaces, open)
     |> Result.map(_ => prog)
-    |> Result.mapErr(e => [e])
+    |> Result.mapErr(e => [stampType(e)])
 
-// lex -> parse -> check. Normalize every frontend failure to `[CErr]`: lex
-// and parse presently have one primary error, while `checkAll` collects every
-// independent checker finding. Shared by both backends.
+// lex -> parse -> check. Lex and parse have one primary error; `checkAll`
+// collects every independent checker finding. Shared by both backends.
 let frontend = src => switch lex(src) {
-  | Err(e) => Err([e])
+  | Err(e) => Err([stampStage("lex", e)])
   | Ok(tokens) => switch parse(tokens) {
-      | Err(e) => Err([e])
+      | Err(e) => Err([stampStage("parse", e)])
       | Ok(stmts) => checkAll(stmts)
+          |> Result.mapErr(es => es |> map(e => stampStage("check", e)))
     }
 }
 
@@ -103,7 +140,7 @@ export let typedProgramWith = (src, opts: Opts) =>
   let? stmts = src->frontend() in
     stmts->inferProgramTypes(builtins, namespaces, openMode(src, opts.open))
       |> Result.map(r => (stmts, r))
-      |> Result.mapErr(e => [e])
+      |> Result.mapErr(e => [stampType(e)])
 
 export let typedProgram = src => src->typedProgramWith(defaultOpts)
 
@@ -125,7 +162,7 @@ export let inferTypesWith = (src, opts: Opts) =>
           aliases: r.aliases,
           letParams: r.letParams
         })
-      |> Result.mapErr(e => [e])
+      |> Result.mapErr(e => [stampType(e)])
 
 export let inferTypes = src => src->inferTypesWith(defaultOpts)
 
@@ -172,7 +209,7 @@ export let compileTsWith = (src, runtimeImport, opts: Opts) =>
           runtimeImport,
           opts.docs
         ))
-      |> Result.mapErr(e => [e])
+      |> Result.mapErr(e => [stampType(e)])
 
 export let compileTs = (src, runtimeImport) =>
   src->compileTsWith(runtimeImport, defaultOpts)
