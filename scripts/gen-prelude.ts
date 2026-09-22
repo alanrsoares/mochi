@@ -25,6 +25,7 @@ import {
 } from "@mochi/compiler/prelude";
 import type { Row, Type } from "@mochi/compiler/types";
 import { match } from "@onrails/pattern";
+import { repoPath, syncGeneratedFile } from "./lib";
 
 export const SHIM_PATH = "bootstrap/prelude.gen.mjs";
 
@@ -134,14 +135,12 @@ export const runtimeDeps = _map(_runtimeDeps);
 // still compiles single-file open-world, unlike infer.mochi.
 const readTypes = (): string => {
   const { readFileSync } = require("node:fs");
-  const { join } = require("node:path");
-  return readFileSync(join(import.meta.dir, "..", "bootstrap/types.mochi"), "utf8");
+  return readFileSync(repoPath("bootstrap/types.mochi"), "utf8");
 };
 
 // Run directly: (re)write the checked-in shim.
 if (import.meta.main) {
-  const { join } = await import("node:path");
-  const out = join(import.meta.dir, "..", SHIM_PATH);
-  await Bun.write(out, buildShimSource());
-  console.error(`  wrote ${SHIM_PATH}`);
+  syncGeneratedFile(repoPath(SHIM_PATH), buildShimSource(), {
+    regenCommand: "bun run gen:prelude",
+  });
 }

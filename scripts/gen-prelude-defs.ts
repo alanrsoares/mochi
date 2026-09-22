@@ -12,13 +12,11 @@
 // output rather than the hand-spacing of the source. That is deterministic for a
 // given Bun version; a Bun upgrade that re-prints differently shows up as a
 // `--check` failure and is fixed by regenerating.
-import { readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
+import { repoPath, syncGeneratedFile } from "./lib";
 
 export const RUNTIME_PATH = "packages/compiler/src/prelude/runtime.ts";
 export const DEFS_PATH = "packages/compiler/src/prelude/js-defs.gen.ts";
-
-const ROOT = join(import.meta.dir, "..");
 
 /** `export const name = …` at column 0 opens a statement; its body lines are indented. */
 const DECL_HEAD = /^export const (\w+) = /;
@@ -106,7 +104,7 @@ const depsOf = (defs: readonly Def[]): Record<string, string[]> => {
 const quote = (s: string): string => JSON.stringify(s);
 
 export const buildDefsSource = (): string => {
-  const ts = readFileSync(join(ROOT, RUNTIME_PATH), "utf8");
+  const ts = readFileSync(repoPath(RUNTIME_PATH), "utf8");
   const defs = splitDefs(new Bun.Transpiler({ loader: "ts" }).transformSync(ts));
   const deps = depsOf(defs);
   const header = [
@@ -138,17 +136,7 @@ export const buildDefsSource = (): string => {
 };
 
 if (import.meta.main) {
-  const source = buildDefsSource();
-  const path = join(ROOT, DEFS_PATH);
-  if (process.argv.includes("--check")) {
-    const onDisk = readFileSync(path, "utf8");
-    if (onDisk !== source) {
-      console.error(`${DEFS_PATH} is stale — run \`bun run gen:prelude-defs\``);
-      process.exit(1);
-    }
-    console.error(`${DEFS_PATH} is up to date`);
-  } else {
-    writeFileSync(path, source);
-    console.error(`wrote ${DEFS_PATH}`);
-  }
+  syncGeneratedFile(repoPath(DEFS_PATH), buildDefsSource(), {
+    regenCommand: "bun run gen:prelude-defs",
+  });
 }

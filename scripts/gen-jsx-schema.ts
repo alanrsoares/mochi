@@ -15,19 +15,16 @@
 //
 // Regenerate with `bun run gen:jsx-schema`; `--check` verifies the checked-in
 // file matches (also guarded by `test/jsx-schema.spec.ts`).
-import { readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import {
   type ElementSchema,
   INTRINSIC_ELEMENTS,
   type IntrinsicAttrType,
   JSX_MISMATCH_HINTS,
 } from "../packages/compiler/src/extensions/plugins/jsx-schema";
+import { repoPath, syncGeneratedFile } from "./lib";
 
 export const SCHEMA_PATH = "packages/compiler/src/extensions/plugins/jsx-schema.ts";
 export const GEN_PATH = "bootstrap/plugins/jsx-schema.gen.mjs";
-
-const ROOT = join(import.meta.dir, "..");
 
 /** One attribute's kind as the seam spells it. */
 const kindOf = (attr: IntrinsicAttrType): string =>
@@ -97,17 +94,7 @@ export const buildSchemaSource = (): string => {
 };
 
 if (import.meta.main) {
-  const source = buildSchemaSource();
-  const path = join(ROOT, GEN_PATH);
-  if (process.argv.includes("--check")) {
-    const onDisk = readFileSync(path, "utf8");
-    if (onDisk !== source) {
-      console.error(`${GEN_PATH} is stale — run \`bun run gen:jsx-schema\``);
-      process.exit(1);
-    }
-    console.error(`${GEN_PATH} is up to date`);
-  } else {
-    writeFileSync(path, source);
-    console.error(`wrote ${GEN_PATH}`);
-  }
+  syncGeneratedFile(repoPath(GEN_PATH), buildSchemaSource(), {
+    regenCommand: "bun run gen:jsx-schema",
+  });
 }

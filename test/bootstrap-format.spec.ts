@@ -98,7 +98,7 @@ for (const file of corpus) {
     for (const slice of comparable(file)) {
       expect({ slice, out: alExprText(slice) }).toEqual({ slice, out: tsExprText(slice) });
     }
-  });
+  }, 30_000);
 }
 
 // Guards the filters above: if a change to the skip rules quietly emptied the

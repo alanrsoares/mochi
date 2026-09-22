@@ -2,8 +2,9 @@
 import { existsSync, rmSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { Glob } from "bun";
+import { REPO_ROOT } from "./lib";
 
-const root = join(import.meta.dir, "..");
+const root = REPO_ROOT;
 
 const dirs = [
   "out",
