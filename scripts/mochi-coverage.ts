@@ -1,4 +1,5 @@
-import { dirname, join } from "node:path";
+import { join } from "node:path";
+import { REPO_ROOT } from "./lib";
 
 type Coverage = {
   readonly functionsFound: number;
@@ -7,7 +8,7 @@ type Coverage = {
   readonly linesHit: number;
 };
 
-const ROOT = dirname(import.meta.dir);
+const ROOT = REPO_ROOT;
 const COVERAGE_DIR = "coverage/mochi";
 const MINIMUM_PERCENT = 65;
 

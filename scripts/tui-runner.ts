@@ -15,10 +15,22 @@
  * capped to the last `--tail` lines each. A green run prints one line total.
  */
 import { availableParallelism } from "node:os";
-import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import { match } from "@onrails/pattern";
-import { match as matchResult, tryAsync, trySync } from "@onrails/result";
+import { match as matchResult, trySync } from "@onrails/result";
+import {
+  columns,
+  createTerminalStyles,
+  duration,
+  findWorkspacePackages,
+  fit,
+  meter,
+  type Outcome,
+  type Phase,
+  REPO_ROOT,
+  SPINNER,
+  taskColor,
+} from "./lib";
 
 type TaskSpec = {
   readonly name: string;
@@ -26,13 +38,6 @@ type TaskSpec = {
   readonly cwd: string;
   readonly color: string;
 };
-
-/**
- * `cancelled` = killed by `--bail` after a sibling failed, so it is not a finding
- * of its own. `timeout` = the task blew `--timeout` and was SIGKILLed, which is a
- * finding: a wedged `tsc` used to hang the whole gate forever.
- */
-type Outcome = "passed" | "failed" | "cancelled" | "timeout";
 
 type TaskResult = {
   readonly name: string;
@@ -49,8 +54,6 @@ type Options = {
   readonly tail: number;
   readonly jobs: number;
 };
-
-const ROOT = dirname(import.meta.dir);
 
 /** Generous by design — this is a wedge detector, not a performance budget. */
 const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
@@ -128,51 +131,13 @@ const OPTS = readOptions(process.argv.slice(2));
 const COLOR = !OPTS.compact && Bun.enableANSIColors;
 const INTERACTIVE = !OPTS.compact && Boolean(process.stdout.isTTY);
 
-const sgr = (code: string): string => (COLOR ? code : "");
-const RESET = sgr("\x1b[0m");
-const BOLD = sgr("\x1b[1m");
-const DIM = sgr("\x1b[2m");
-const GRAY = sgr("\x1b[90m");
-const RED = sgr("\x1b[31m");
-const GREEN = sgr("\x1b[32m");
-const YELLOW = sgr("\x1b[33m");
-const CYAN = sgr("\x1b[96m");
+const { RESET, BOLD, DIM, GRAY, RED, GREEN, YELLOW, CYAN, PHASE_ICON, PHASE_COLOR } =
+  createTerminalStyles(COLOR);
 
-/** Hex, not raw SGR: `Bun.color(_, "ansi")` downsamples to whatever depth the terminal has. */
-const ansi = (hex: string): string => sgr(Bun.color(hex, "ansi") ?? "");
-
-const PALETTE = [
-  "#22d3ee",
-  "#f472b6",
-  "#60a5fa",
-  "#facc15",
-  "#4ade80",
-  "#2dd4bf",
-  "#c084fc",
-] as const;
-
-/** `PALETTE` is non-empty, but index access is checked — fall back to no colour. */
-const taskColor = (index: number): string => ansi(PALETTE[index % PALETTE.length] ?? "");
-
-const columns = (): number => process.stdout.columns ?? 80;
+const colorForTask = (index: number): string => taskColor(index, COLOR);
 const rule = (): string => `${GRAY}${"─".repeat(Math.max(0, columns() - 3))}${RESET}`;
-
-const duration = (ms: number): string =>
-  ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(2)}s`;
-
-/**
- * A partial cell for the leading edge, so the bar advances smoothly at 80ms
- * ticks instead of jumping a whole column every ~14% of a seven-task run.
- */
-const EIGHTHS = ["", "▏", "▎", "▍", "▌", "▋", "▊", "▉"] as const;
-
-const meter = (ratio: number, width: number, color: string): string => {
-  const cells = Math.max(0, Math.min(1, ratio)) * width;
-  const full = Math.floor(cells);
-  const edge = EIGHTHS[Math.floor((cells - full) * 8)] ?? "";
-  const body = `${"█".repeat(full)}${edge}`;
-  return `${color}${body}${RESET}${GRAY}${"░".repeat(Math.max(0, width - Bun.stringWidth(body)))}${RESET}`;
-};
+const renderMeter = (ratio: number, width: number, color: string): string =>
+  meter(ratio, width, color, RESET, GRAY);
 
 /** One buffered sink for every producer — seven tasks logging a line each is otherwise seven syscalls. */
 const out = Bun.stdout.writer({ highWaterMark: 64 * 1024 });
@@ -184,8 +149,6 @@ let allTasks: readonly TaskSpec[] = [];
 const label = (spec: TaskSpec): string => `${spec.color}${BOLD}${spec.name.padEnd(gutter)}${RESET}`;
 
 // ── pinned status block ──────────────────────────────────────────────────────
-
-type Phase = "pending" | "running" | Outcome;
 
 /**
  * One record per task instead of a map per field: `began` is the live clock a
@@ -200,26 +163,6 @@ type TaskState = {
 const states = new Map<string, TaskState>();
 const stateOf = (name: string): TaskState => states.get(name) ?? { phase: "pending" };
 
-const PHASE_ICON: Record<Phase, string> = {
-  pending: `${GRAY}◌${RESET}`,
-  running: "",
-  passed: `${GREEN}✔${RESET}`,
-  failed: `${RED}✖${RESET}`,
-  cancelled: `${GRAY}⊘${RESET}`,
-  timeout: `${RED}⏱${RESET}`,
-};
-
-const PHASE_COLOR: Record<Phase, string> = {
-  pending: GRAY,
-  running: CYAN,
-  passed: GREEN,
-  failed: RED,
-  cancelled: GRAY,
-  timeout: YELLOW,
-};
-
-const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
-
 /** Settled = no longer occupying a slot, whatever the verdict. */
 const isSettled = (phase: Phase): boolean => phase !== "pending" && phase !== "running";
 
@@ -227,19 +170,6 @@ let frame = 0;
 let runStarted = performance.now();
 let painted = 0;
 let done = false;
-
-/**
- * Clip to the terminal width. A status line that wraps occupies two physical
- * rows, which desynchronises the `\x1b[{n}F` line count and makes the block
- * eat its own scrollback. Colour is dropped on the clipped path so a truncated
- * escape can never leak into the next line.
- */
-const fit = (text: string): string => {
-  const max = columns() - 1;
-  return Bun.stringWidth(text) <= max
-    ? text
-    : `${Bun.stripANSI(text).slice(0, Math.max(0, max - 1))}…`;
-};
 
 /**
  * A running task counts up from its start; a settled one keeps its final cost.
@@ -275,7 +205,7 @@ const headerLine = (): string => {
   const tally = `${settled.length}/${allTasks.length}`;
   const failures = bad > 0 ? ` ${RED}✖${bad}${RESET}` : "";
   return (
-    `  ${meter(ratio, width, bad > 0 ? RED : GREEN)} ` +
+    `  ${renderMeter(ratio, width, bad > 0 ? RED : GREEN)} ` +
     `${BOLD}${tally}${RESET}${failures} ${GRAY}${duration(performance.now() - runStarted)}${RESET}`
   );
 };
@@ -545,47 +475,6 @@ const runTask = async (spec: TaskSpec, opts: Options): Promise<TaskResult> => {
 
 // ── task discovery ───────────────────────────────────────────────────────────
 
-type WorkspacePkg = { readonly name: string; readonly dir: string; readonly scripts: string[] };
-
-/**
- * Workspace members, read from the root `workspaces` globs rather than by
- * scanning the tree — a bare `package.json` walk descends into `node_modules/.bun`
- * and every `dist`. Handles both the array and the `{ packages, catalog }` form.
- */
-const workspacePackages = async (): Promise<WorkspacePkg[]> => {
-  const root = await Bun.file(join(ROOT, "package.json")).json();
-  const workspaces: unknown = root.workspaces;
-  const globs: string[] = Array.isArray(workspaces)
-    ? workspaces
-    : ((workspaces as { packages?: string[] } | undefined)?.packages ?? []);
-
-  const paths: string[] = [];
-  for (const glob of globs) {
-    for await (const rel of new Bun.Glob(`${glob}/package.json`).scan({ cwd: ROOT })) {
-      paths.push(rel);
-    }
-  }
-
-  // Read in parallel and drop the unreadable: an unparseable manifest in some
-  // unrelated package should cost that package its task, not the whole run.
-  const read = await Promise.all(
-    paths.map((rel) =>
-      tryAsync(Bun.file(join(ROOT, rel)).json())
-        .map((manifest): WorkspacePkg | null =>
-          typeof manifest?.name === "string"
-            ? {
-                name: manifest.name,
-                dir: join(ROOT, dirname(rel)),
-                scripts: Object.keys(manifest.scripts ?? {}),
-              }
-            : null,
-        )
-        .unwrapOr(null),
-    ),
-  );
-  return read.filter((pkg): pkg is WorkspacePkg => pkg !== null);
-};
-
 /** Root gates, named by script so this file never restates what they run. */
 const ROOT_GATES = ["lint", "typecheck", "fmt:check"] as const;
 
@@ -611,19 +500,19 @@ const buildTasks = async (opts: Options): Promise<TaskSpec[]> => {
       : [];
 
   const scope = opts.filter === null ? null : new Bun.Glob(opts.filter);
-  const members = (await workspacePackages())
+  const members = (await findWorkspacePackages(REPO_ROOT))
     .filter((pkg) => pkg.scripts.includes(script))
     .filter((pkg) => scope === null || scope.match(pkg.name));
 
   const specs = [
-    ...rootScripts.map((s) => ({ name: s, args: ["run", s], cwd: ROOT })),
+    ...rootScripts.map((s) => ({ name: s, args: ["run", s], cwd: REPO_ROOT })),
     ...members.map((pkg) => ({
       name: `${pkg.name}:${script}`,
       args: ["run", script],
       cwd: pkg.dir,
     })),
   ];
-  return specs.map((spec, i) => ({ ...spec, color: taskColor(i) }));
+  return specs.map((spec, i) => ({ ...spec, color: colorForTask(i) }));
 };
 
 // ── scheduling ───────────────────────────────────────────────────────────────
@@ -690,7 +579,7 @@ const summaryTable = (results: readonly TaskResult[]): string => {
       const spec = allTasks.find((t) => t.name === r.name);
       const name = spec === undefined ? r.name.padEnd(gutter) : label(spec);
       const bar =
-        r.outcome === "cancelled" ? "" : meter(r.ms / slowest, width, PHASE_COLOR[r.outcome]);
+        r.outcome === "cancelled" ? "" : renderMeter(r.ms / slowest, width, PHASE_COLOR[r.outcome]);
       return `  ${PHASE_ICON[r.outcome]} ${name} ${GRAY}${(times[i] ?? "").padStart(timeCol)}${RESET} ${bar}`;
     })
     .join("\n");

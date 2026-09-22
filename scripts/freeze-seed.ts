@@ -9,23 +9,27 @@
 // generic arrows is not idempotent). `bun run lint` covers the snapshot; generated
 // `_g: any`, unused bindings, and inline struct types are path-exempt in biome.json.
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { buildModulesTsBootstrap } from "@mochi/compiler/bootstrap/module";
+import {
+  BIOME_BIN,
+  BOOTSTRAP_CLI,
+  BOOTSTRAP_DIR,
+  BOOTSTRAP_SEED,
+  HOST_SHIMS,
+  REPO_ROOT,
+  readSeedManifest,
+  sha256,
+  walkFiles,
+} from "./lib";
 
-const REPO = resolve(import.meta.dir, "..");
-const BOOTSTRAP = join(REPO, "bootstrap");
-const ENTRY = join(BOOTSTRAP, "cli.mochi");
-const SEED = join(BOOTSTRAP, "seed");
-const HOST_SHIMS = ["host.mjs", "prelude.gen.mjs", "plugins/jsx-schema.gen.mjs"];
 // Package export, not `@mochi/runtime`: the latter is the published name the
 // CLI writes into *user* TS emit, and it does not resolve in-repo. Nested
 // seed modules (`plugins/jsx.ts`) cannot share one relative path.
 const RUNTIME = "@mochi/compiler/runtime";
-const BIOME = join(REPO, "node_modules/.bin/biome");
 
 // `--check` re-emits into a temp directory and diffs against the committed
 // seed instead of overwriting it. Nothing else notices a stale seed: the
@@ -34,35 +38,13 @@ const BIOME = join(REPO, "node_modules/.bin/biome");
 // artifact the CLI actually ships.
 const CHECK = process.argv.includes("--check");
 
-type SeedManifest = {
-  sourceRevision: string;
-  /** Hashes of the raw emit, before `biome format`. Absent in older seeds. */
-  emitted?: Record<string, string>;
-  files: Record<string, string>;
-};
-
-const readManifest = (): SeedManifest =>
-  JSON.parse(readFileSync(join(SEED, "manifest.json"), "utf8")) as SeedManifest;
-
-const sha256 = (buf: Buffer | string): string => createHash("sha256").update(buf).digest("hex");
-
-const walkFiles = (dir: string, prefix = ""): string[] => {
-  const out: string[] = [];
-  for (const name of readdirSync(dir, { withFileTypes: true })) {
-    const rel = prefix ? `${prefix}/${name.name}` : name.name;
-    if (name.isDirectory()) out.push(...walkFiles(join(dir, name.name), rel));
-    else out.push(rel);
-  }
-  return out;
-};
-
 const emptyDir = (dir: string): void => {
   mkdirSync(dir, { recursive: true });
   for (const name of readdirSync(dir)) rmSync(join(dir, name), { recursive: true, force: true });
 };
 
 const sourceRevision = (): string =>
-  execFileSync("git", ["rev-parse", "HEAD"], { cwd: REPO, encoding: "utf8" }).trim();
+  execFileSync("git", ["rev-parse", "HEAD"], { cwd: REPO_ROOT, encoding: "utf8" }).trim();
 
 const stripBundleSourceLabels = (file: string): void => {
   const source = readFileSync(file, "utf8");
@@ -70,20 +52,20 @@ const stripBundleSourceLabels = (file: string): void => {
 };
 
 const tmp = await mkdtemp(join(tmpdir(), "mochi-seed-"));
-const built = buildModulesTsBootstrap(ENTRY, RUNTIME);
+const built = buildModulesTsBootstrap(BOOTSTRAP_CLI, RUNTIME);
 if (built._tag === "Err") {
   rmSync(tmp, { recursive: true, force: true });
   throw new Error(`bootstrap emit failed: ${JSON.stringify(built.error)}`);
 }
 
 for (const { path, js } of built.value) {
-  const rel = relative(BOOTSTRAP, path);
+  const rel = relative(BOOTSTRAP_DIR, path);
   const outRel = /\.mochi$/.test(rel) ? rel.replace(/\.mochi$/, ".ts") : rel;
   const dest = join(tmp, outRel);
   mkdirSync(dirname(dest), { recursive: true });
   writeFileSync(dest, js);
 }
-for (const shim of HOST_SHIMS) cpSync(join(BOOTSTRAP, shim), join(tmp, shim));
+for (const shim of HOST_SHIMS) cpSync(join(BOOTSTRAP_DIR, shim), join(tmp, shim));
 
 // Keep a synchronous entry for host integrations whose hooks cannot await
 // dynamic seed loading (notably Vite's transform). The bundle embeds the seed
@@ -102,7 +84,7 @@ execFileSync(
     "--external",
     "@onrails/pattern",
   ],
-  { cwd: REPO, stdio: "inherit" },
+  { cwd: REPO_ROOT, stdio: "inherit" },
 );
 stripBundleSourceLabels(join(tmp, "compile.bundle.cjs"));
 // Browser consumers (the docs playground worker) cannot load the synchronous
@@ -123,7 +105,7 @@ execFileSync(
     "--external",
     "@onrails/pattern",
   ],
-  { cwd: REPO, stdio: "inherit" },
+  { cwd: REPO_ROOT, stdio: "inherit" },
 );
 stripBundleSourceLabels(join(tmp, "compile.bundle.mjs"));
 writeFileSync(
@@ -144,7 +126,7 @@ execFileSync(
     "--external",
     "@onrails/pattern",
   ],
-  { cwd: REPO, stdio: "inherit" },
+  { cwd: REPO_ROOT, stdio: "inherit" },
 );
 stripBundleSourceLabels(join(tmp, "module.bundle.cjs"));
 writeFileSync(
@@ -165,7 +147,7 @@ execFileSync(
     "--external",
     "@onrails/pattern",
   ],
-  { cwd: REPO, stdio: "inherit" },
+  { cwd: REPO_ROOT, stdio: "inherit" },
 );
 stripBundleSourceLabels(join(tmp, "syntax.bundle.cjs"));
 rmSync(join(tmp, "syntax-entry.ts"), { force: true });
@@ -186,7 +168,7 @@ const hashesOf = (dir: string): Record<string, string> => {
 const emitted = hashesOf(tmp);
 
 if (CHECK) {
-  const committed = readManifest();
+  const committed = readSeedManifest();
   rmSync(tmp, { recursive: true, force: true });
   if (committed.emitted === undefined) {
     console.error("bootstrap/seed/manifest.json predates the freshness check");
@@ -215,14 +197,20 @@ if (CHECK) {
   process.exit(0);
 }
 
-emptyDir(SEED);
-cpSync(tmp, SEED, { recursive: true });
+emptyDir(BOOTSTRAP_SEED);
+cpSync(tmp, BOOTSTRAP_SEED, { recursive: true });
 rmSync(tmp, { recursive: true, force: true });
-execFileSync(BIOME, ["format", "--write", "bootstrap/seed"], { cwd: REPO, stdio: "inherit" });
+execFileSync(BIOME_BIN, ["format", "--write", "bootstrap/seed"], {
+  cwd: REPO_ROOT,
+  stdio: "inherit",
+});
 // Second pass: biome's first wrap of huge generic arrows is not idempotent.
-execFileSync(BIOME, ["format", "--write", "bootstrap/seed"], { cwd: REPO, stdio: "inherit" });
+execFileSync(BIOME_BIN, ["format", "--write", "bootstrap/seed"], {
+  cwd: REPO_ROOT,
+  stdio: "inherit",
+});
 
-const files = hashesOf(SEED);
+const files = hashesOf(BOOTSTRAP_SEED);
 const manifest = { sourceRevision: sourceRevision(), emitted, files };
-writeFileSync(join(SEED, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+writeFileSync(join(BOOTSTRAP_SEED, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
 console.error(`froze ${Object.keys(files).length} files at ${manifest.sourceRevision}`);

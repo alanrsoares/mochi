@@ -1,27 +1,12 @@
-#!/usr/bin/env bun
 import { join } from "node:path";
-/**
- * Regenerates the codegen showcase panes on the docs landing page.
- *
- * The JS / TS / .d.ts text shown there used to be hand-maintained, which meant
- * it drifted from what the compiler actually emits. This runs the real CLI for
- * each backend, biome-formats the result at the panel's line width, and writes
- * the `.txt` files that `main.tsx` imports with `?raw`.
- *
- * The one edit we make is collapsing the inlined prelude helpers in the JS
- * emit into a comment — they're the same handful of runtime functions every
- * program gets, and they'd otherwise bury the four lines the panel is about.
- * Which names count as prelude is read off the TS emit's `@mochi/runtime`
- * import rather than hardcoded, so it stays in sync.
- */
 import { $ } from "bun";
+import { repoPath } from "./lib";
 
 /** Matches the panel's rendered width at text-xs in a half-grid column. */
 const LINE_WIDTH = 72;
 
-const repoRoot = join(import.meta.dir, "..");
-const cli = join(repoRoot, "packages/cli/src/cli.ts");
-const examples = join(repoRoot, "apps/docs/src/examples");
+const cli = repoPath("packages/cli/src/cli.ts");
+const examples = repoPath("apps/docs/src/examples");
 const source = join(examples, "emit-shape.mochi");
 
 const compile = async (target: "js" | "ts" | "dts"): Promise<string> => {

@@ -17,14 +17,22 @@
 // Each stage runs in its own directory under a repo-local workspace (so Node
 // module resolution finds @onrails/{pattern,result} in the repo node_modules).
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import { cpSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import {
+  BOOTSTRAP_DIR,
+  BOOTSTRAP_SEED,
+  fileSha256,
+  HOST_SHIMS,
+  REPO_ROOT,
+  readSeedManifest,
+  repoPath,
+} from "./lib";
 
-const root = join(import.meta.dir, "..");
-const work = join(root, ".fixpoint-work");
-const bootstrap = join(root, "bootstrap");
-const seedRoot = join(bootstrap, "seed");
+const root = REPO_ROOT;
+const work = repoPath(".fixpoint-work");
+const bootstrap = BOOTSTRAP_DIR;
+const seedRoot = BOOTSTRAP_SEED;
 
 // Every bootstrap module reachable from cli.mochi, in dependency order. `build`
 // discovers the graph itself; this list is what we read back and diff.
@@ -56,7 +64,7 @@ const MODULES = [
   "cli",
 ];
 // Runtime deps the emitted compiler imports (hand-written + generated shim).
-const RUNTIME_DEPS = ["host.mjs", "prelude.gen.mjs", "plugins/jsx-schema.gen.mjs"];
+const RUNTIME_DEPS = HOST_SHIMS;
 /**
  * The frozen seed is an OLDER graph than `MODULES` by construction: it is the
  * binary that compiles today's sources, so it predates any module those sources
@@ -64,8 +72,7 @@ const RUNTIME_DEPS = ["host.mjs", "prelude.gen.mjs", "plugins/jsx-schema.gen.mjs
  * every new compiler module would demand re-freezing the trust anchor just to
  * run the fixpoint (ADR 0090).
  */
-const seedManifest = (): SeedManifest =>
-  JSON.parse(readFileSync(join(seedRoot, "manifest.json"), "utf8")) as SeedManifest;
+const seedManifest = () => readSeedManifest(seedRoot);
 
 const seedFiles = (): string[] => Object.keys(seedManifest().files);
 
@@ -74,11 +81,6 @@ const seedEntry = (): string => {
   if (files.includes("cli.ts")) return "cli.ts";
   if (files.includes("cli.js")) return "cli.js";
   throw new Error("bootstrap seed missing cli.ts");
-};
-
-type SeedManifest = {
-  sourceRevision: string;
-  files: Record<string, string>;
 };
 
 const bun = (args: string[], cwd = root) => execFileSync("bun", args, { cwd, encoding: "utf8" });
@@ -103,9 +105,7 @@ const verifySeed = (): void => {
   for (const file of seedFiles()) {
     const expected = manifest.files[file];
     if (!expected) throw new Error(`bootstrap seed manifest omits '${file}'`);
-    const actual = createHash("sha256")
-      .update(readFileSync(join(seedRoot, file)))
-      .digest("hex");
+    const actual = fileSha256(join(seedRoot, file));
     if (actual !== expected) throw new Error(`bootstrap seed hash mismatch for '${file}'`);
   }
 };
