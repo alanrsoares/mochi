@@ -297,16 +297,40 @@ let nsTypeImportsFrom = (stmts, body, seen, i) => switch Array.get(i, stmts) {
   | Some(_) => nsTypeImportsFrom(stmts, body, seen, i + 1)
 }
 
+/// A `.d.ts` has no named-import pass. `recordAliasIndex` stores `bareName`,
+/// so `Ast.Span` is printed as `Span` — a type this file never imports.
+/// Blank every printed name the file does not itself declare; the row then
+/// prints structurally. A local nullary alias stays, so `export type Span`
+/// still names `Span` at use sites in the same file.
+let blankNonLocal = (keys, recs, locals, i) => switch Array.get(i, keys) {
+  | None => recs
+  | Some(k) => switch Map.get(k, recs) {
+      | None => blankNonLocal(keys, recs, locals, i + 1)
+      | Some(name) => blankNonLocal(
+          keys,
+          name != "" && !Set.has(name, locals) ? Map.set(k, "", recs) : recs,
+          locals,
+          i + 1
+        )
+    }
+}
+
+export let declarationRecs = (stmts, aliases) =>
+  let locals = nullaryLocalNames(stmts, 0, Set.fromArray([])) in
+  let indexed = recordAliasIndex(aliases) in
+    blankNonLocal(
+      Map.keys(indexed),
+      withoutAmbiguousAlias(indexed, aliases, locals),
+      locals,
+      0
+    )
+
 /// Emit `.d.ts` text from an already-typed program.
 export let emitDtsFromTypedWith = (stmts, env, aliases, qualify, runtimeImport, docs) =>
   // A name this file declares itself is already writable bare, so it shadows
   // any qualification the caller (or the file's own `tqual` nodes) supply.
   let local = declaredTypeNames(stmts, 0, Set.fromArray([])) in
-  let recs = withoutAmbiguousAlias(
-    recordAliasIndex(aliases),
-    aliases,
-    nullaryLocalNames(stmts, 0, Set.fromArray([]))
-  ) in
+  let recs = declarationRecs(stmts, aliases) in
   let quals = writtenQualsFrom(stmts, local, qualify, 0) in
   let types = typeDeclsFrom(stmts, aliases, recs, quals, docs, 0) in
   let bindings = bindingDeclsFrom(stmts, env, recs, quals, docs, 0) in

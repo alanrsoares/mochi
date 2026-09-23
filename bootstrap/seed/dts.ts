@@ -1,4 +1,4 @@
-import type { Stmt, TypeExpr } from "./ast";
+import type { Span, Stmt, TypeExpr } from "./ast";
 import type { Row, Ty, TypeAt } from "./types";
 import type { Scheme } from "./schemes";
 import type { QualAliasField, QualAliasInfo } from "./infer";
@@ -33,6 +33,7 @@ import {
   _Str_startsWith,
   _curry,
   add,
+  and,
   eq,
   length,
   map,
@@ -498,6 +499,51 @@ const nsTypeImportsFrom: _Curry<
     .exhaustive(),
 );
 /**
+ * A `.d.ts` has no named-import pass. `recordAliasIndex` stores `bareName`,
+ * so `Ast.Span` is printed as `Span` — a type this file never imports.
+ * Blank every printed name the file does not itself declare; the row then
+ * prints structurally. A local nullary alias stays, so `export type Span`
+ * still names `Span` at use sites in the same file.
+ */
+const blankNonLocal: <A>(
+  keys: A[],
+  recs: Map<A, string>,
+  locals: Set<string>,
+  i: number,
+) => Map<A, string> = _curry(
+  4,
+  <A>(keys: A[], recs: Map<A, string>, locals: Set<string>, i: number) =>
+    match(_Array_get(i, keys))
+      .with({ _tag: "None" }, () => recs)
+      .with({ _tag: "Some" }, ({ value: k }) =>
+        match(_Map_get(k, recs))
+          .with({ _tag: "None" }, () => blankNonLocal(keys, recs, locals, i + 1))
+          .with({ _tag: "Some" }, ({ value: name }) =>
+            blankNonLocal(
+              keys,
+              and(not(eq(name, "")), not(_Set_has(name, locals))) ? _Map_set(k, "", recs) : recs,
+              locals,
+              i + 1,
+            ),
+          )
+          .exhaustive(),
+      )
+      .exhaustive(),
+);
+export const declarationRecs: _Curry<
+  [stmts: Stmt[], aliases: Map<string, QualAliasInfo>],
+  Map<string, string>
+> = _curry(2, (stmts: Stmt[], aliases: Map<string, QualAliasInfo>) => {
+  const locals: Set<string> = nullaryLocalNames(stmts, 0, _Set_fromArray([] as string[]));
+  const indexed: Map<string, string> = recordAliasIndex(aliases);
+  return blankNonLocal(
+    _Map_keys(indexed),
+    withoutAmbiguousAlias(indexed, aliases, locals),
+    locals,
+    0,
+  );
+});
+/**
  * Emit `.d.ts` text from an already-typed program.
  */
 export const emitDtsFromTypedWith: <A>(
@@ -518,11 +564,7 @@ export const emitDtsFromTypedWith: <A>(
     docs: boolean,
   ) => {
     const local: Set<string> = declaredTypeNames(stmts, 0, _Set_fromArray([] as string[]));
-    const recs: Map<string, string> = withoutAmbiguousAlias(
-      recordAliasIndex(aliases),
-      aliases,
-      nullaryLocalNames(stmts, 0, _Set_fromArray([] as string[])),
-    );
+    const recs: Map<string, string> = declarationRecs(stmts, aliases);
     const quals: Map<string, string> = writtenQualsFrom(stmts, local, qualify, 0);
     const types: string[] = typeDeclsFrom(stmts, aliases, recs, quals, docs, 0);
     const bindings: string[] = bindingDeclsFrom(stmts, env, recs, quals, docs, 0);
