@@ -8480,10 +8480,10 @@ var runtimeDepNames = _curry17(5, (stmts, imported, ns, jsDefs, runtimeDeps) => 
 });
 var codegen = _curry17(6, (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps) => codegenWith(stmts, imported, useRuntime, ns, jsDefs, runtimeDeps, jsGenOpts));
 
-import { None as None18, Some as Some18, _Array_append as _Array_append13, _Array_concat as _Array_concat7, _Array_contains as _Array_contains4, _Array_dedupeBy, _Array_drop as _Array_drop4, _Array_get as _Array_get15, _Array_prepend as _Array_prepend9, _Array_reverse as _Array_reverse2, _Array_sort as _Array_sort2, _Array_sortBy, _Array_take as _Array_take3, _Map_delete as _Map_delete3, _Map_get as _Map_get9, _Map_keys as _Map_keys8, _Map_set as _Map_set8, _Map_size as _Map_size2, _Map_values as _Map_values2, _Option_flatMap as _Option_flatMap2, _Option_isSome as _Option_isSome4, _Option_map as _Option_map3, _Option_unwrapOr as _Option_unwrapOr10, _Set_add as _Set_add8, _Set_fromArray as _Set_fromArray8, _Set_has as _Set_has7, _Str_contains as _Str_contains2, _Str_fromCode as _Str_fromCode3, _Str_join as _Str_join7, _Str_split as _Str_split4, _Str_startsWith as _Str_startsWith6, _curry as _curry19, _tuple as _tuple11, and as and13, concat as concat2, eq as eq17, filter as filter6, length as length14, map as map11, not as not11, or as or10, reduce as reduce4, show as show8 } from "@mochi/compiler/runtime";
+import { None as None18, Some as Some18, _Array_append as _Array_append13, _Array_concat as _Array_concat7, _Array_contains as _Array_contains4, _Array_dedupeBy, _Array_drop as _Array_drop4, _Array_get as _Array_get15, _Array_prepend as _Array_prepend9, _Array_reverse as _Array_reverse2, _Array_sort as _Array_sort2, _Array_sortBy, _Array_take as _Array_take3, _Map_delete as _Map_delete3, _Map_get as _Map_get9, _Map_keys as _Map_keys8, _Map_set as _Map_set8, _Map_size as _Map_size2, _Map_values as _Map_values2, _Option_flatMap as _Option_flatMap2, _Option_isSome as _Option_isSome4, _Option_map as _Option_map3, _Option_unwrapOr as _Option_unwrapOr10, _Set_add as _Set_add8, _Set_fromArray as _Set_fromArray8, _Set_has as _Set_has7, _Str_contains as _Str_contains3, _Str_fromCode as _Str_fromCode3, _Str_join as _Str_join7, _Str_split as _Str_split4, _Str_startsWith as _Str_startsWith6, _curry as _curry19, _tuple as _tuple11, and as and13, concat as concat2, eq as eq17, filter as filter6, length as length14, map as map11, not as not11, or as or10, reduce as reduce4, show as show8 } from "@mochi/compiler/runtime";
 import { match as match18 } from "@onrails/pattern";
 
-import { None as None17, Some as Some17, _Array_append as _Array_append12, _Array_concat as _Array_concat6, _Array_get as _Array_get14, _Array_prepend as _Array_prepend8, _Array_sort, _Map_delete as _Map_delete2, _Map_get as _Map_get8, _Map_has as _Map_has5, _Map_keys as _Map_keys7, _Map_set as _Map_set7, _Map_size, _Option_flatMap, _Option_map as _Option_map2, _Option_unwrapOr as _Option_unwrapOr9, _Set_add as _Set_add7, _Set_fromArray as _Set_fromArray7, _Set_has as _Set_has6, _Str_codeAt as _Str_codeAt8, _Str_fromCode as _Str_fromCode2, _Str_get as _Str_get4, _Str_join as _Str_join6, _Str_length as _Str_length6, _Str_slice as _Str_slice4, _Str_startsWith as _Str_startsWith5, _Str_trim, _curry as _curry18, _tuple as _tuple10, and as and12, eq as eq16, filter as filter5, length as length13, map as map10, not as not10, or as or9, show as show7 } from "@mochi/compiler/runtime";
+import { None as None17, Some as Some17, _Array_append as _Array_append12, _Array_concat as _Array_concat6, _Array_get as _Array_get14, _Array_prepend as _Array_prepend8, _Array_sort, _Map_delete as _Map_delete2, _Map_get as _Map_get8, _Map_has as _Map_has5, _Map_keys as _Map_keys7, _Map_set as _Map_set7, _Map_size, _Option_flatMap, _Option_map as _Option_map2, _Option_unwrapOr as _Option_unwrapOr9, _Set_add as _Set_add7, _Set_fromArray as _Set_fromArray7, _Set_has as _Set_has6, _Str_codeAt as _Str_codeAt8, _Str_contains as _Str_contains2, _Str_fromCode as _Str_fromCode2, _Str_get as _Str_get4, _Str_join as _Str_join6, _Str_length as _Str_length6, _Str_slice as _Str_slice4, _Str_startsWith as _Str_startsWith5, _Str_trim, _curry as _curry18, _tuple as _tuple10, and as and12, eq as eq16, filter as filter5, length as length13, map as map10, not as not10, or as or9, show as show7 } from "@mochi/compiler/runtime";
 import { match as match17 } from "@onrails/pattern";
 var tsEnv = _curry18(2, (vars, recs) => ({ vars, recs }));
 var noVars = new Map;
@@ -8496,7 +8496,14 @@ var genericNames = (sc) => genericNamesFrom(_Array_concat6(sc.vars, sc.rvars), 0
 var genericNamesFrom = _curry18(3, (ids, i, names) => match17(_Array_get14(i, ids)).with({ _tag: "None" }, () => names).with({ _tag: "Some" }, ({ value: id }) => genericNamesFrom(ids, i + 1, _Map_set7(id, letterAt(i), names))).exhaustive());
 var primitiveTs = (name) => match17(name).with("number", () => "number").with("int", () => "number").with("float", () => "number").with("string", () => "string").with("bool", () => "boolean").with("unit", () => "undefined").otherwise(() => name);
 var namesOf = _curry18(2, (ts, env) => _Str_join6(", ", map10((t) => tsOfRaw(t, env), ts)));
-var nominal = _curry18(3, (name, args, env) => eq16(length13(args), 0) ? primitiveTs(name) : `${name}<${namesOf(args, env)}>`);
+var qualifiedCon = _curry18(2, (name, env) => match17(_Map_get8(name, env.recs)).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some" && (({ value: qual }) => _Str_contains2(".", qual))(_g);
+}, ({ value: qual }) => qual).otherwise(() => primitiveTs(name)));
+var nominal = _curry18(3, (name, args, env) => {
+  const shown = qualifiedCon(name, env);
+  return eq16(length13(args), 0) ? shown : `${shown}<${namesOf(args, env)}>`;
+});
 var tsRowFields = _curry18(2, (row, env) => match17(row).with({ _tag: "RowEmpty" }, () => _tuple10([], None17)).with({ _tag: "RowVar" }, ({ id }) => _tuple10([], Some17(id))).with({ _tag: "RowExtend" }, ({ label, fieldType, optional, rest }) => (([fields, tail]) => _tuple10(_Array_prepend8(`${label}${optional ? "?" : ""}: ${tsOfRaw(fieldType, env)}`, fields), tail))(tsRowFields(rest, env))).exhaustive());
 var shapeFieldsFrom = _curry18(2, (row, vars) => match17(row).with({ _tag: "RowEmpty" }, () => Some17([])).with({ _tag: "RowVar" }, () => None17).with({ _tag: "RowExtend" }, ({ label, fieldType, optional, rest }) => _Option_map2((fs) => _Array_prepend8(`${label}${optional ? "?" : ""}: ${shapeType(fieldType, vars)}`, fs), shapeFieldsFrom(rest, vars))).exhaustive());
 var shapeJoined = _curry18(2, (ts, vars) => _Str_join6(", ", map10((t) => shapeType(t, vars), ts)));
@@ -8690,7 +8697,7 @@ var referencedCons = _curry19(4, (stmts, env, i, acc) => match18(_Array_get15(i,
   const _g = _v;
   return _g._tag === "Some" && _g.value._tag === "SLet";
 }, ({ value: { name } }) => referencedCons(stmts, env, i + 1, _Str_startsWith6("$", name) ? acc : match18(_Map_get9(name, env)).with({ _tag: "Some" }, ({ value: sc }) => consInTy(sc.ty, acc)).with({ _tag: "None" }, () => acc).exhaustive())).with({ _tag: "Some" }, () => referencedCons(stmts, env, i + 1, acc)).exhaustive());
-var builtinTypeNamesFor = _curry19(4, (declared, wanted, body, i) => match18(_Array_get15(i, builtinTypeDecls)).with({ _tag: "None" }, () => []).with({ _tag: "Some" }, ({ value: bt }) => ((rest) => and13(not11(_Set_has7(bt.name, declared)), or10(_Set_has7(bt.name, wanted), _Str_contains2(bt.name, body))) ? _Array_prepend9(bt.name, rest) : rest)(builtinTypeNamesFor(declared, wanted, body, i + 1))).exhaustive());
+var builtinTypeNamesFor = _curry19(4, (declared, wanted, body, i) => match18(_Array_get15(i, builtinTypeDecls)).with({ _tag: "None" }, () => []).with({ _tag: "Some" }, ({ value: bt }) => ((rest) => and13(not11(_Set_has7(bt.name, declared)), or10(_Set_has7(bt.name, wanted), _Str_contains3(bt.name, body))) ? _Array_prepend9(bt.name, rest) : rest)(builtinTypeNamesFor(declared, wanted, body, i + 1))).exhaustive());
 var aliasRowOf = _curry19(3, (fields, aliases, i) => match18(_Array_get15(i, fields)).with({ _tag: "None" }, () => RowEmpty).with({ _tag: "Some" }, ({ value: f }) => (([t, _vars, _st]) => RowExtend(f.name, t, f.optional, aliasRowOf(fields, aliases, i + 1)))(typeExprToType(f.fieldType, new Map, mkSt(0), aliases, _Set_fromArray8([])))).exhaustive());
 var aliasShapeKey = _curry19(2, (fields, aliases) => rowShapeKey(aliasRowOf(fields, aliases, 0), new Map));
 var bareName = (name) => {
@@ -8776,7 +8783,7 @@ var emitTsModuleWith = _curry19(12, (stmts, env, types, letParams, aliases, impo
   const typeHeader = typeHeaderFrom(stmts, aliases, recs, 0);
   const body = codegenWith(stmts, imported, false, ns, jsDefs, runtimeDeps, { ...tsGenOpts(stmts, env, types, letParams, aliases), docs });
   const deps0 = runtimeDepNames(stmts, imported, ns, jsDefs, runtimeDeps);
-  const deps = _Str_contains2("_tuple(", body) ? _Array_append13("_tuple", deps0) : deps0;
+  const deps = _Str_contains3("_tuple(", body) ? _Array_append13("_tuple", deps0) : deps0;
   return ((deps) => ((runtimeLine) => ((header) => ((typeDeps) => ((typeImportLine) => concat2(`${hasJsxStmts(stmts) ? `/** @jsx h */
 
 ` : ""}${_Str_join7(`
@@ -8784,9 +8791,9 @@ var emitTsModuleWith = _curry19(12, (stmts, env, types, letParams, aliases, impo
 `, filter6((part) => not11(eq17(part, "")), [_Str_join7(`
 `, header), _Str_join7(`
 `, importLines), typeImportLine, runtimeLine, body]))}`, `
-`))(eq17(length14(typeDeps), 0) ? "" : `import type { ${_Str_join7(", ", _Array_sort2(typeDeps))} } from "${runtimeImport}";`))(_Array_concat7(_Str_contains2("_Curry<", `${_Str_join7(`
+`))(eq17(length14(typeDeps), 0) ? "" : `import type { ${_Str_join7(", ", _Array_sort2(typeDeps))} } from "${runtimeImport}";`))(_Array_concat7(_Str_contains3("_Curry<", `${_Str_join7(`
 `, header)}
-${body}`) ? ["_Curry"] : [], builtinTypeNamesFor(declared, wanted, body, 0))))(typeHeader))(eq17(length14(deps), 0) ? "" : `import { ${_Str_join7(", ", _Array_sort2(deps))} } from "${runtimeImport}";`))(filter6((d) => or10(and13(and13(and13(and13(and13(and13(and13(not11(eq17(d, "add")), not11(eq17(d, "sub"))), not11(eq17(d, "mul"))), not11(eq17(d, "div"))), not11(eq17(d, "lt"))), not11(eq17(d, "lte"))), not11(eq17(d, "gt"))), not11(eq17(d, "gte"))), _Str_contains2(d, body)), deps));
+${body}`) ? ["_Curry"] : [], builtinTypeNamesFor(declared, wanted, body, 0))))(typeHeader))(eq17(length14(deps), 0) ? "" : `import { ${_Str_join7(", ", _Array_sort2(deps))} } from "${runtimeImport}";`))(filter6((d) => or10(and13(and13(and13(and13(and13(and13(and13(not11(eq17(d, "add")), not11(eq17(d, "sub"))), not11(eq17(d, "mul"))), not11(eq17(d, "div"))), not11(eq17(d, "lt"))), not11(eq17(d, "lte"))), not11(eq17(d, "gt"))), not11(eq17(d, "gte"))), _Str_contains3(d, body)), deps));
 });
 var emitTsModule = _curry19(11, (stmts, env, types, letParams, aliases, imported, importLines, ns, jsDefs, runtimeDeps, runtimeImport) => emitTsModuleWith(stmts, env, types, letParams, aliases, imported, importLines, ns, jsDefs, runtimeDeps, runtimeImport, true));
 var freeIdsIn = _curry19(2, (t, acc) => match18(t).with({ _tag: "TyVar" }, ({ id }) => _Array_contains4(id, acc) ? acc : _Array_append13(id, acc)).with({ _tag: "TyCon" }, ({ args }) => freeIdsInAll(args, acc)).with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) => freeIdsIn(toT, freeIdsIn(fromT, acc))).with({ _tag: "TyRecord" }, ({ row }) => freeIdsInRow(row, acc)).with({ _tag: "TySingleton" }, () => acc).with({ _tag: "TyOneOf" }, ({ members }) => freeIdsInAll(members, acc)).exhaustive());

@@ -34,6 +34,7 @@ import {
   _Set_fromArray,
   _Set_has,
   _Str_codeAt,
+  _Str_contains,
   _Str_fromCode,
   _Str_get,
   _Str_join,
@@ -133,10 +134,31 @@ const namesOf: _Curry<[ts: Ty[], env: TsEnv], string> = _curry(2, (ts: Ty[], env
     map((t: Ty) => tsOfRaw(t, env), ts),
   ),
 );
+/**
+ * `aliasRow` falls back to a bare con (`Node`) so a cycle still unifies with
+ * the declaring module. A `.d.ts` records `Node` → `Ast.Node` in this index
+ * under the bare name, which is never a row-shape key. A value without a dot
+ * is an alias fold, not a qualifier, and prints as itself.
+ */
+const qualifiedCon: _Curry<[name: string, env: TsEnv], string> = _curry(
+  2,
+  (name: string, env: TsEnv) =>
+    match(_Map_get(name, env.recs))
+      .with(
+        (_v): _v is Extract<Option<string>, { _tag: "Some" }> => {
+          const _g: any = _v;
+          return _g._tag === "Some" && (({ value: qual }) => _Str_contains(".", qual))(_g);
+        },
+        ({ value: qual }) => qual,
+      )
+      .otherwise(() => primitiveTs(name)),
+);
 const nominal: _Curry<[name: string, args: Ty[], env: TsEnv], string> = _curry(
   3,
-  (name: string, args: Ty[], env: TsEnv) =>
-    eq(length(args), 0) ? primitiveTs(name) : `${name}<${namesOf(args, env)}>`,
+  (name: string, args: Ty[], env: TsEnv) => {
+    const shown: string = qualifiedCon(name, env);
+    return eq(length(args), 0) ? shown : `${shown}<${namesOf(args, env)}>`;
+  },
 );
 const tsRowFields: _Curry<[row: Row, env: TsEnv], [string[], Option<number>]> = _curry(
   2,

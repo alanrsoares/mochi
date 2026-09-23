@@ -74,8 +74,18 @@ let primitiveTs = name => switch name {
 let namesOf = (ts, env: TsEnv) =>
   Str.join(", ", ts |> map(t => tsOfRaw(t, env)))
 
+/// `aliasRow` falls back to a bare con (`Node`) so a cycle still unifies with
+/// the declaring module. A `.d.ts` records `Node` → `Ast.Node` in this index
+/// under the bare name, which is never a row-shape key. A value without a dot
+/// is an alias fold, not a qualifier, and prints as itself.
+let qualifiedCon = (name, env: TsEnv) => switch Map.get(name, env.recs) {
+  | Some(qual) when Str.contains(".", qual) => qual
+  | _ => primitiveTs(name)
+}
+
 let nominal = (name, args, env: TsEnv) =>
-  Array.length(args) == 0 ? primitiveTs(name) : "${name}<${namesOf(args, env)}>"
+  let shown = qualifiedCon(name, env) in
+    Array.length(args) == 0 ? shown : "${shown}<${namesOf(args, env)}>"
 
 let tsRowFields = (row, env: TsEnv) => switch row {
   | RowEmpty => ([], None)

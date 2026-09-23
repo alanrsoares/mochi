@@ -35,6 +35,7 @@ import {
   add,
   and,
   eq,
+  gt,
   length,
   map,
   not,
@@ -544,6 +545,58 @@ export const declarationRecs: _Curry<
   );
 });
 /**
+ * A recursive non-local alias cannot print structurally: the cycle hole is a
+ * bare con (`Node`), and this file never imports that name. Point the hole at
+ * the qualified spelling (`Ast.Node`) so the declaration keeps a reference the
+ * `import type * as` line can resolve. Inference is unchanged — `aliasRow`
+ * still falls back to the bare con.
+ */
+const qualConRecs: <A, B, C, D, E>(
+  keys: A[],
+  qualify: Map<A, B>,
+  aliases: Map<B, { expr: Option<C>; fields: D[] } & E>,
+  recs: Map<A, B>,
+  i: number,
+) => Map<A, B> = _curry(
+  5,
+  <A, B, C, D, E>(
+    keys: A[],
+    qualify: Map<A, B>,
+    aliases: Map<B, { expr: Option<C>; fields: D[] } & E>,
+    recs: Map<A, B>,
+    i: number,
+  ) =>
+    match(_Array_get(i, keys))
+      .with({ _tag: "None" }, () => recs)
+      .with({ _tag: "Some" }, ({ value: name }) =>
+        qualConRecs(
+          keys,
+          qualify,
+          aliases,
+          match(_Map_get(name, qualify))
+            .with({ _tag: "None" }, () => recs)
+            .with({ _tag: "Some" }, ({ value: qual }) =>
+              match(_Map_get(qual, aliases))
+                .with({ _tag: "None" }, () => recs)
+                .with({ _tag: "Some" }, ({ value: info }) =>
+                  match(info.expr)
+                    .with({ _tag: "Some" }, () => recs)
+                    .with({ _tag: "None" }, () =>
+                      and(length(info.fields) > 0, not(_Map_has(name, recs)))
+                        ? _Map_set(name, qual, recs)
+                        : recs,
+                    )
+                    .exhaustive(),
+                )
+                .exhaustive(),
+            )
+            .exhaustive(),
+          i + 1,
+        ),
+      )
+      .exhaustive(),
+);
+/**
  * Emit `.d.ts` text from an already-typed program.
  */
 export const emitDtsFromTypedWith: <A>(
@@ -564,8 +617,14 @@ export const emitDtsFromTypedWith: <A>(
     docs: boolean,
   ) => {
     const local: Set<string> = declaredTypeNames(stmts, 0, _Set_fromArray([] as string[]));
-    const recs: Map<string, string> = declarationRecs(stmts, aliases);
     const quals: Map<string, string> = writtenQualsFrom(stmts, local, qualify, 0);
+    const recs: Map<string, string> = qualConRecs(
+      _Map_keys(quals),
+      quals,
+      aliases,
+      declarationRecs(stmts, aliases),
+      0,
+    );
     const types: string[] = typeDeclsFrom(stmts, aliases, recs, quals, docs, 0);
     const bindings: string[] = bindingDeclsFrom(stmts, env, recs, quals, docs, 0);
     const declared: Set<string> = declaredTypeNames(stmts, 0, _Set_fromArray([] as string[]));

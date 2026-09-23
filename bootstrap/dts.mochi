@@ -325,13 +325,46 @@ export let declarationRecs = (stmts, aliases) =>
       0
     )
 
+/// A recursive non-local alias cannot print structurally: the cycle hole is a
+/// bare con (`Node`), and this file never imports that name. Point the hole at
+/// the qualified spelling (`Ast.Node`) so the declaration keeps a reference the
+/// `import type * as` line can resolve. Inference is unchanged — `aliasRow`
+/// still falls back to the bare con.
+let qualConRecs = (keys, qualify, aliases, recs, i) => switch Array.get(i, keys) {
+  | None => recs
+  | Some(name) => qualConRecs(
+      keys,
+      qualify,
+      aliases,
+      switch Map.get(name, qualify) {
+        | None => recs
+        | Some(qual) => switch Map.get(qual, aliases) {
+            | None => recs
+            | Some(info) => switch info.expr {
+                | Some(_) => recs
+                | None => Array.length(info.fields) > 0 && !Map.has(name, recs)
+                    ? Map.set(name, qual, recs)
+                    : recs
+              }
+          }
+      },
+      i + 1
+    )
+}
+
 /// Emit `.d.ts` text from an already-typed program.
 export let emitDtsFromTypedWith = (stmts, env, aliases, qualify, runtimeImport, docs) =>
   // A name this file declares itself is already writable bare, so it shadows
   // any qualification the caller (or the file's own `tqual` nodes) supply.
   let local = declaredTypeNames(stmts, 0, Set.fromArray([])) in
-  let recs = declarationRecs(stmts, aliases) in
   let quals = writtenQualsFrom(stmts, local, qualify, 0) in
+  let recs = qualConRecs(
+    Map.keys(quals),
+    quals,
+    aliases,
+    declarationRecs(stmts, aliases),
+    0
+  ) in
   let types = typeDeclsFrom(stmts, aliases, recs, quals, docs, 0) in
   let bindings = bindingDeclsFrom(stmts, env, recs, quals, docs, 0) in
   let declared = declaredTypeNames(stmts, 0, Set.fromArray([])) in

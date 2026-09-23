@@ -76,3 +76,28 @@ test("dts parity: a namespace-imported type qualifies through the graph", async 
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// A recursive record alias cannot be printed structurally: the cycle hole is a
+// nominal con. That hole must keep the namespace (`Ast.Node`), not the bare
+// name, and the sidecar must import the namespace that supplies it.
+test("dts parity: a recursive non-local alias keeps its qualified name", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "mochi-dts-"));
+  try {
+    const dep = join(dir, "ast.mochi");
+    const entry = join(dir, "main.mochi");
+    await writeFile(dep, "export type Node = { child: Node, tag: string }\n");
+    await writeFile(
+      entry,
+      'import * as Ast from "./ast.mochi"\nexport type Box = { node: Ast.Node }\n',
+    );
+    const src = await Bun.file(entry).text();
+    const ts = unwrapOk(await emitDtsForFile(entry, src, (p: string) => Bun.file(p).text(), {}));
+    const al = emitDtsForFileBootstrap(entry, "@mochi/runtime") as AlResult;
+    if (al._tag === "Err") throw new Error(`bootstrap failed: ${JSON.stringify(al.error)}`);
+    expect(al.value).toBe(ts);
+    expect(al.value).toContain("Ast.Node");
+    expect(al.value).not.toContain(": Node");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
